@@ -1,0 +1,100 @@
+# 📚 Anlaufstellen — der Index des Projekt-Brains
+
+> On-demand-Referenz (#1078): **wo welches Wissen liegt und wann man es liest.** Das Projekt-Brain ist `docs/`, dies der Index ([ADR 0015](../adr/0015-projekt-brain.md)). **Lese-Konvention:** erst hier die eine passende Seite wählen. Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`). Liegt der Checkout hinter `origin/main`, holt man die Seiten einmal gebündelt (`git archive` in den Scratchpad, dort `Read`); `git show origin/main:<pfad>` (mit `MSYS_NO_PATHCONV=1` in Git-Bash) bleibt die Ausnahme für Einzelfälle, weil es kein `Read`-Äquivalent gibt; das Messskript zählt es als Brain-Lesezugriff. Gegliedert nach den Wissensarten aus [ADR 0013](../adr/0013-docs-als-agentengepflegtes-wiki.md) (#1097). Jede Seite unter `docs/` ist von hier aus erreichbar. Die harten Regeln stehen ausschließlich in [AGENTS.md](../../AGENTS.md); hier steht nur *wo* und *wann*, kein Regeltext.
+>
+> **Nicht hierher gehören:** der laufende Stand (offene Arbeit, Reihenfolge, Blocker) → GitHub-Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`); abgeschlossene Arbeit → PR/Commit/Issue-Kommentar.
+
+## 📋 Regeln — wie hier gearbeitet wird
+
+Regeltext steht nur in diesen Dateien; alle anderen Seiten erklären oder schlagen nach.
+
+| Seite | Wann lesen |
+|---|---|
+| **[AGENTS.md](../../AGENTS.md)** | vor jeder Arbeit — SSOT aller harten Regeln, bei Konflikt maßgeblich |
+
+## ⚖️ Entscheidungen — ADRs (historisch, werden nicht umgeschrieben)
+
+Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständiger Index (generiert) und ADR-Vorlage samt Kopf-Format: [adr/README.md](../adr/README.md). Einordnung im Architekturbild: arc42 › Architekturentscheidungen.
+
+| ADR | Wann lesen |
+|---|---|
+| [0008 KI-Agenten-Harness](../adr/0008-ki-agenten-harness.md) | wenn du verstehen willst, warum das Repo von Agenten gebaut wird und was daraus folgt |
+| [0009 PR-Gating](../adr/0009-pr-gating-required-checks.md) | wenn Required-Checks, Branch-Schutz oder Direkt-Push zur Debatte stehen |
+| [0012 Harness-Autonomie](../adr/0012-harness-autonomie-audit-spur.md) | wenn es um Selbst-Merge von Leitplanken-Änderungen und die Audit-Spur geht |
+| [0013 docs/ als Wiki](../adr/0013-docs-als-agentengepflegtes-wiki.md) | bevor du Doku anlegst oder umziehst — welche Wissensart wohin gehört |
+| [0014 Leitplanken ohne Label-Riegel](../adr/0014-leitplanken-ohne-label-riegel.md) | wenn es um Gate-/Harness-Änderungen, die Pfadquelle und den Audit-Kommentar geht |
+| [0015 Projekt-Brain](../adr/0015-projekt-brain.md) | wenn es um Prinzipien, Token-Ziel und Messung des Projekt-Brains geht |
+| [0016 Langfuse-Takt](../adr/0016-langfuse-takt-woechentlich.md) | wenn es um den wöchentlichen Takt des Status-Tickets, das Langfuse-Sammelticket oder den Board-Takt (Harness-Sammelticket ab 10 Befund-Kommentaren, Spielquote, Positionskorrektur) geht |
+| [0017 Lebende Doku](../adr/0017-lebende-doku-generierte-abschnitte.md) | wenn Doku generiert, ein Gate beschrieben oder ein Diagramm eingeführt wird |
+| [0019 Langfuse-Plugin im User-Scope](../adr/0019-langfuse-plugin-im-user-scope.md) | wenn die Langfuse-Erfassung (Plugin, Hooks, User- vs. Projekt-Scope) geändert oder verdächtigt wird, nichts zu erfassen |
+| 0020 Architekturmodell LikeC4 | wenn das Architekturmodell unter `docs/architektur/`, `check:c4` oder die Ableitung der Architekturbilder aus `scripts/layers.cjs` angefasst wird |
+| [0021 Agenten-Sandbox über WSL2](../adr/0021-agenten-sandbox-wsl2.md) | wenn Sandbox, WSL2, Devcontainer oder die Netz-Allowlist der Agenten-Shell zur Debatte steht |
+| [0022 Dark Factory](../adr/0022-dark-factory-kern-und-verteilung.md) | wenn der Harness-Kern als Vorlage für andere Projekte herausgelöst, eine Datei als Kern, Modul oder Projekt eingeordnet, ein zweites Board oder Verifikation ohne Mensch (Holdout, Spezifikations-Gate) oder die Veröffentlichung des Harness (Sichtbarkeit, Lizenz, Marketplace, Beiträge) zur Debatte steht |
+| [0023 Transkript als Wahrheit](../adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | wenn Langfuse-Daten unvollständig wirken, der Hook des Langfuse-Plugins oder der Nachlieferer (Lock, Log, SessionStart/SessionEnd) geändert oder der Abgleich zurückgebaut werden soll |
+| 0024 Hexagon als Lesart | wenn Ports, Adapter oder die hexagonale Sicht in arc42 und im Architekturmodell angefasst werden oder jemand das Hexagon als Ordnerstruktur umsetzen will |
+| [0025 Sandbox als Laufumgebung](../adr/0025-sandbox-als-austauschbare-laufumgebung.md) | wenn die Agenten-Sandbox gewechselt, `sandbox-doctor --streng` gebaut oder geprüft werden soll, ob eine Umgebung als gesandboxt gilt (Vertrag V0 bis V7, Docker Sandboxes, eigene Container-Sandbox, Cloud-Sitzung, Standard- und Rückfallweg) |
+| [0026 Sammeltickets in Gruppen](../adr/0026-sammelticket-gruppen.md) | wenn Sammeltickets zu groß oder teuer werden, ein Sammelticket aufgeteilt oder eine Zeilengrenze erwogen werden soll |
+| [0027 Evidenzbasiert lockern](../adr/0027-regeln-lockern.md) | wenn eine Regel, ein Gate, eine Lens, ein Hook, ein Workflow-Schritt oder Prompt-Text entfernt, eingeschränkt oder gekürzt werden soll, oder ein Status-Lauf einen Lockern-Kandidaten meldet |
+| [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ablauf neben dem Ticket-Ablauf (Ticket-Skills mit gemeinsamem ablauf.md; Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
+| [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
+
+## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
+
+### Projekt und Architektur
+
+| Seite | Wann lesen |
+|---|---|
+| [README.md](../../README.md) | wenn du wissen willst, was das Projekt ist |
+| arc42-architektur.md | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
+| arc42 › Hexagonale Sicht | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
+| architektur/harness.c4 | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, Gate-Ketten `verify` und `verify:full`, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
+| glossar.md | wenn dir ein Begriff des Projekts fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md)) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
+| [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
+
+### Arbeitsablauf und Nachschlagen
+
+| Seite | Wann lesen |
+|---|---|
+| CONTRIBUTING.md | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, Im Container entwickeln (devcontainer / `docker compose up`, #388) |
+| [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du das nächste Ticket auswählst oder ein neues Issue im Board einsortierst |
+| [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Umgebungsvariable ein Werkzeug liest |
+| schichtregeln.md | bevor du einen neuen Import setzt oder ein Modul verschiebst (Architektur-Wächter) |
+| [doku-vorlagen.md](doku-vorlagen.md) | wenn du eine Wiki-Seite anlegst: Kopfzeilen „fachlich geprüft am" bzw. Schnappschuss-Hinweis |
+
+### Harness
+
+| Seite | Wann lesen |
+|---|---|
+| [agent-harness.md](../agent-harness.md) | wenn du verstehen willst, wie und warum der Agenten-Harness funktioniert (inkl. Langfassung der harten Regeln) |
+| [agent-harness-faq.md](../agent-harness-faq.md) | wenn du über eine Harness-Falle stolperst (Worktrees unter Windows, Hooks, Gates) |
+| [lessons-learned.md](../lessons-learned.md) | wenn du als Außenstehende:r wissen willst, welche Muster der Bau des Harness gezeigt hat (datierte Belege, was geändert wurde, was offen ist) |
+| [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
+| [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (Einrichtung, Eigenheiten) |
+| [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
+| [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
+| [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
+| [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
+| [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
+| [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
+| [lens-gegenprobe-2026-10-15.md](../lens-gegenprobe-2026-10-15.md) | Momentaufnahme: Gegenprobe `omitClaudeMd: true` für die Lens (Kontextdateien mit und ohne), Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
+| [planer-gegenprobe-2026-10-16.md](../planer-gegenprobe-2026-10-16.md) | Momentaufnahme: Gegenprobe Opus `high` und Sonnet gegen Opus `xhigh` für den Planer, Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
+| [langfuse-hook-patch.md](../langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst |
+
+### Betrieb, Assets, Tests
+
+| Seite | Wann lesen |
+|---|---|
+| `.devcontainer/` · `docker-compose.yml` | wenn du im Container entwickelst |
+| [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in `test/factories/` (`freshSim`); Harness-Wächter (Kopf-Marker `@harness-waechter`, geschützt) in [`test/harness/`](../../test/harness/); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
+
+## 📸 Schnappschüsse — datiert, werden nicht aktualisiert
+
+Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu verstehen; den aktuellen Stand zeigen Code, Evergreen-Seiten und Issues.
+
+| Seite | Wann lesen |
+|---|---|
+| architektur-analyse-2026-06.md | Historie: Infrastruktur-Fokus Juni 2026 |
+| architektur-analyse-2026-07-iSAQB.md | iSAQB-Runde 1 (2026-07-01), Herkunft von #492–#524 |
+| architektur-analyse-2026-07-02-iSAQB.md | iSAQB-Runde 2 (2026-07-02), Herkunft von #577–#595 |
+| architektur-analyse-2026-07-03-iSAQB.md | iSAQB-Runde 3 (2026-07-03): ADRs, DDD, Tests, Harness, Herkunft von #596–#612 |
+| architektur-analyse-2026-07-14-iSAQB.md | doku-freie iSAQB-Runde vom 2026-07-14, Herkunft von #861–#880 |

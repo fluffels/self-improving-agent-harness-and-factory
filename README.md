@@ -2,8 +2,6 @@
 
 Ein selbstoptimierender Harness für Coding-Agenten mit Claude Code.
 
-> Entwurf. Diese Datei wird die README des Factory-Repos, sobald es angelegt ist (ADR 0022, F10). Bis dahin liegt sie hier.
-
 ## Was der Harness ist
 
 Ein Regelwerk samt Werkzeugen, mit dem Coding-Agenten Tickets von der Auswahl bis zum Merge bearbeiten, ohne dass ein Mensch jeden Schritt begleitet:
@@ -13,7 +11,7 @@ Ein Regelwerk samt Werkzeugen, mit dem Coding-Agenten Tickets von der Auswahl bi
 - **Hooks und Skills:** Claude-Code-Hooks, Agenten-Definitionen und Skills für Planung, Umsetzung und Review.
 - **Ticket-Ablauf:** Auswahl nach Board-Position, Claim, Plan, Umsetzung im eigenen Worktree, Mehr-Perspektiven-Review, Pull Request mit Auto-Merge.
 
-Menschliche Stopps gibt es nur bei Irreversiblem und bei Außenwirkung. Das Zielbild heißt Dark Factory; der Harness strebt sie an und ist noch keine: die Abnahme gegen verborgene Testfälle (Holdout) fehlt noch.
+Menschliche Stopps gibt es nur bei Irreversiblem und bei Außenwirkung. Das Zielbild heißt Dark Factory; der Harness strebt sie an und ist noch keine.
 
 ## Voraussetzungen
 
@@ -23,11 +21,11 @@ Menschliche Stopps gibt es nur bei Irreversiblem und bei Außenwirkung. Das Ziel
 
 ## Status
 
-Inkubation: kein eigenes Repository, kein Release, keine Version.
+Vorab-Stand `v0.1.0` (annotierter Tag auf dem Import des Anfangsstands), öffentlich einsehbar, kein Release.
 
 ## Lizenz
 
-source-available: der Quelltext ist einsehbar, alle Rechte bleiben vorbehalten. Nutzung, Kopie und Ableitung sind nur mit Erlaubnis der Rechteinhaberin gestattet. Der Harness ist nicht Open Source. Der Lizenzentwurf steht in der Datei LICENSE neben dieser README.
+source-available: der Quelltext ist einsehbar, alle Rechte bleiben vorbehalten. Nutzung, Kopie und Ableitung sind nur mit Erlaubnis der Rechteinhaberin gestattet. Der Harness ist nicht Open Source. Der Lizenztext steht in der Datei LICENSE neben dieser README; er ist ein Entwurf ohne Rechtsberatung.
 
 ## Beiträge
 

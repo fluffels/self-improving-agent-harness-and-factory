@@ -1,0 +1,68 @@
+# Dependabot: hält die npm-Abhängigkeiten und die GitHub-Actions aktuell und öffnet Security-Update-PRs,
+# sobald ein Advisory bekannt wird. GitHub-nativ, kein externer Dienst.
+#
+# Gekoppelte Pakete kommen in EINEM PR, damit keine inkonsistenten Versionen entstehen (ein halbes
+# Major-Upgrade der eslint-Familie wäre rot). Ein Paket landet in der ERSTEN Gruppe, deren patterns passen:
+# darum die Familien-Gruppen vor der allgemeinen Minor/Patch-Sammelgruppe. Gruppieren ist kein Auto-Merge,
+# ein roter Gruppen-PR wird geprüft. Sonstige Majors fallen aus der Sammelgruppe und kommen einzeln.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "@eslint-community/*"
+          - "eslint-*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    # Der TypeScript-Major (ab 7) bleibt außen vor, solange kein veröffentlichtes typescript-eslint ihn
+    # trägt (harter Peer unter 6.1.0): sonst käme er wöchentlich als dauerhaft roter PR.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # Eine Gruppe über alle Action-Updates (auch major): Action-Bumps sind klein und als Batch gut zu prüfen.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "ci(actions)"

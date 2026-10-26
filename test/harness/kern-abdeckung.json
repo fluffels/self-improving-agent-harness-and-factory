@@ -1,0 +1,38 @@
+{
+  "scripts/layers.cjs": {
+    "art": "projekt",
+    "grund": "Schichtdaten des Projekts, Pfad steht in docs-gen/config.json"
+  },
+  "scripts/docs-gen/config.json": {
+    "art": "projekt",
+    "grund": "Projekt-Config des Doku-Generators"
+  },
+  "scripts/setup.mjs": {
+    "art": "projekt",
+    "grund": "Einrichtung dieses Projekts (npm-Skripte, Hooks, Werkzeuge)"
+  },
+  ".github/workflows/ci.yml": {
+    "art": "projekt",
+    "grund": "CI-Pipeline dieses Projekts (Gates, Builds, Smokes)"
+  },
+  ".github/workflows/verify-macos.yml": {
+    "art": "projekt",
+    "grund": "manueller verify-Lauf dieses Projekts auf macOS (ganze Datei über die Extraktionsliste)"
+  },
+  ".agents/skills/factory-ticket/SKILL.md": {
+    "art": "projekt",
+    "grund": "Ticket-Skill des Projekts (Ticket-Ablauf dieses Repos)"
+  },
+  ".claude/skills/factory-ticket/SKILL.md": {
+    "art": "projekt",
+    "grund": "Zeiger auf den Ticket-Skill des Projekts"
+  },
+  ".github/workflows/codeql.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Code-Scanning), kein Factory-Kern"
+  },
+  ".github/workflows/scorecard.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Scorecard), kein Factory-Kern"
+  }
+}

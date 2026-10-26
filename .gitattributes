@@ -1,0 +1,32 @@
+# Alle Textdateien mit LF auschecken (#1476): Doku-Wächter lesen Dateien zeilenweise und
+# sähen unter core.autocrlf=true sonst CRLF, die Linux-CI aber LF. text=auto lässt
+# Binärdateien (PNG, Fonts) unangetastet. Die spezielleren Regeln unten bleiben gültig.
+* text=auto eol=lf
+
+# Shell-Skripte MÜSSEN LF behalten – ein CRLF-Skript (#!/bin/sh\r) bricht im
+# Linux-Container (z.B. der Dev-Panel-Entrypoint, #334). Erzwingt LF unabhängig
+# von core.autocrlf / Checkout-Plattform.
+*.sh text eol=lf
+
+# Git-Hooks (#528) sind endungslose sh-Skripte und würden von *.sh nicht erfasst
+# – ohne LF bräche der pre-push-Hook mit "$'\r': command not found".
+.githooks/* text eol=lf
+
+# Claude-Code-Harness (#1026): Workflow-Skripte, Skills, Agenten und Settings reicht
+# Claude Code als Text an den Permission-Dialog weiter – der lehnt Steuerzeichen ab,
+# ein CRLF-Checkout (core.autocrlf=true) machte den Workflow unstartbar. Bewacht von
+# test/harness/line-endings.test.ts.
+.claude/** text eol=lf
+# Vorsorglich: Binär-Assets eines künftigen Skills nicht durch die Textregel oben
+# verbiegen lassen (spätere Zeile gewinnt).
+.claude/**/*.png binary
+.claude/**/*.jpg binary
+.claude/**/*.gif binary
+.claude/**/*.webp binary
+
+# Skill-Quellen (#1848): wie .claude/ (Steuerzeichen im Permission-Dialog); die Zeiger unter .claude/skills/ werden daraus generiert.
+.agents/** text eol=lf
+.agents/**/*.png binary
+.agents/**/*.jpg binary
+.agents/**/*.gif binary
+.agents/**/*.webp binary

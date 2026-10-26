@@ -1,0 +1,171 @@
+// Kein Shebang: dieses Skript wird ausschließlich über `node scripts/check-context-size.mjs`
+// (npm run check:contextsize) gestartet UND von test/context-size.test.ts importiert. Ein
+// `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
+/**
+ * Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
+ *
+ * Seit #1088 zählt JEDE AGENTS.md im Repo, nicht nur die Wurzel: Claude Code (und andere
+ * Tools) laden eine modul-lokale AGENTS.md automatisch, sobald dort eine Datei gelesen
+ * wird. Ohne Messung wären sie eine neue, ungebremste On-Demand-Quelle – bei wachsendem Umfang
+ * mit vielen Bereichen genau die Stelle, an die das Wurzel-Gate den Inhalt hindrängt.
+ * Modul-lokale Dateien bekommen ohne eigenen Eintrag MODULE_AGENTS_BUDGET (Default statt
+ * Pflicht-Registrierung: der Walk misst jede neue Datei ohnehin sofort, eine Registrierung
+ * brächte nur einen Gate-Config-Diff pro Content-PR). Bewusst KEIN Summen-Gate: modul-lokale
+ * Dateien laden nur bei Bedarf, ein Summen-Cap bestrafte genau das Auslagern, das das
+ * Wurzel-Gate erzwingen soll – die Summe steht darum nur als INFO in der CLI.
+ *
+ * Hintergrund (#719): anders als src/-Module (check:size, #390) hatte die Wurzel-AGENTS.md,
+ * die JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
+ * Jede neue Regel bekommt Begründung + Präzedenzfall-Verweis in AGENTS.md – einzeln
+ * sinnvoll, akkumuliert aber unbegrenzt in einer Datei, die pro Session mitläuft (reiner
+ * Token-Kostentreiber ohne Bremse). Der Auslagerungsmechanismus existiert schon
+ * (modul-lokale AGENTS.md; on-demand-Tiefendocs unter struktur.moduldoku der Projekt-Config) – nur erzwang bisher nichts, ihn auch zu benutzen, BEVOR die
+ * Wurzel wächst.
+ *
+ * Gemessen werden ZEICHEN, nicht Zeilen (#1064, vorher #977/#1061): in Markdown-Fließtext
+ * ist eine „Zeile" ein Absatz – AGENTS.md stand bei 159/200 Zeilen schon bei 75k Zeichen,
+ * das Zeilen-Gate war nie bindend, weil die Datei in die Breite wuchs. Zeichen sind der
+ * beste Token-Proxy, der in die build-freie `verify`-Kette passt (echte Tokens bräuchten
+ * Netz + API-Key bzw. einen Tokenizer als Dependency). Die Token-Zahl gibt die CLI nur als
+ * grobe INFO aus (≈ Zeichen / CHARS_PER_TOKEN) – das Budget selbst bleibt in Zeichen.
+ * CR (`\r`) zählt nicht mit: sonst misst ein Windows-Checkout (core.autocrlf) mehr als die CI.
+ *
+ * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-basis.mjs), analog zu
+ * check-size.mjs.
+ * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
+ * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (`ausnahmen.kontext` der Projekt-Config).
+ *
+ * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
+ */
+
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+// Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
+// unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
+import { collectMarkdown } from "./check-basis.mjs";
+import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Zeichen-Budget je Root-Kontextdatei (repo-relativer Pfad, #1064). Kalibriert am Bestand
+ *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
+ *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
+ *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
+ *  (Langbegründung nach docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
+ *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
+ *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; seit #1087 ist
+ *  CLAUDE.md gelöscht (AGENTS.md wird nativ geladen) und ihr Eintrag entfallen – dass sie nicht
+ *  zurückkehrt, bewacht test/harness/agents-md-native.test.ts.
+ *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
+export const CONTEXT_BUDGETS = [
+  { file: "AGENTS.md", budget: 28_000 },
+];
+
+/** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
+ *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md
+ *  (~10.300 Zeichen) + ~15 % Kopffreiheit. Ratchet nur nach unten. */
+export const MODULE_AGENTS_BUDGET = 12_000;
+
+/** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).
+ *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
+export const CHARS_PER_TOKEN = 4.2;
+
+/** Zeichen eines Textes, zeilenenden-neutral (CRLF zählt wie LF). */
+export function countChars(text) {
+  return text.replace(/\r/g, "").length;
+}
+
+/** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
+export function collectAgentsFiles(rootDir = ROOT) {
+  return collectMarkdown(rootDir).filter((f) => f === "AGENTS.md" || f.endsWith("/AGENTS.md"));
+}
+
+/** Zeichenzahl je Kontextdatei gegen ihr Budget: alle konfigurierten Dateien (auch
+ *  fehlende, mit 0 Zeichen) plus jede gefundene AGENTS.md; ein expliziter Eintrag gewinnt
+ *  über `moduleBudget`. `rootDir`/`budgets`/`moduleBudget` überschreibbar für Tests. */
+export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, moduleBudget = MODULE_AGENTS_BUDGET) {
+  const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
+  const files = [...new Set([...budgets.map((b) => b.file), ...collectAgentsFiles(rootDir)])].sort();
+  return files.map((file) => {
+    const abs = join(rootDir, file);
+    const chars = existsSync(abs) ? countChars(readFileSync(abs, "utf8")) : 0;
+    return { file, chars, budget: budgetOf.get(file) ?? moduleBudget };
+  });
+}
+
+/** Dateien strikt über ihrem eigenen Budget. */
+export function findOversized(sizes) {
+  return sizes.filter((s) => s.chars > s.budget);
+}
+
+/** Allowlist-Einträge, deren Datei nicht (mehr) über Budget liegt oder gar nicht gemessen
+ *  wird – EINE Implementierung für CLI und Test. */
+export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).kontext) {
+  const oversized = new Set(findOversized(sizes).map((s) => s.file));
+  return allowlist.filter((a) => !oversized.has(a.datei));
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────────────
+function main() {
+  const tty = process.stdout.isTTY;
+  const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
+  const red = (s) => paint("31", s);
+  const green = (s) => paint("32", s);
+  const dim = (s) => paint("2", s);
+  const fmt = (n) => n.toLocaleString("de-DE");
+  const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
+
+  let ALLOWLIST;
+  try {
+    ALLOWLIST = ausnahmenAus(ladeProjektConfig()).kontext;
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
+  const sizes = collectContextSizes();
+  const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
+  const oversized = findOversized(sizes);
+  const oversizedFiles = new Set(oversized.map((s) => s.file));
+
+  for (const s of sizes.filter((x) => !oversizedFiles.has(x.file)))
+    console.log(dim(`• ${s.file}: ${fmt(s.chars)}/${fmt(s.budget)} Zeichen (${tokens(s.chars)})`));
+
+  const violations = oversized.filter((s) => !allow.has(s.file));
+  const allowed = oversized.filter((s) => allow.has(s.file));
+  const stale = findStale(sizes, ALLOWLIST);
+
+  for (const a of allowed)
+    console.log(dim(`• geduldet: ${a.file} (${fmt(a.chars)} > ${fmt(a.budget)} Zeichen) – ${allow.get(a.file)}`));
+
+  for (const v of violations) console.error(red(`✖ ${v.file}: ${fmt(v.chars)} Zeichen > Budget ${fmt(v.budget)} (${tokens(v.chars)})`));
+
+  for (const s of stale)
+    console.error(
+      red(
+        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in .factory/projekt.json entfernen.`,
+      ),
+    );
+
+  const total = sizes.reduce((sum, s) => sum + s.chars, 0);
+  console.log(dim(`• INFO: ${sizes.length} Kontextdatei(en), zusammen ${fmt(total)} Zeichen (${tokens(total)}), kein Gate.`));
+
+  if (violations.length === 0 && stale.length === 0) {
+    console.log(
+      green(`✔ Kontextdateien im Budget (${sizes.length} geprüft, außer ${allowed.length} dokumentierte Ausnahme(n)).`),
+    );
+    return;
+  }
+
+  if (violations.length)
+    console.error(
+      `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
+        `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
+        `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
+        `ausnahmen.kontext in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
+    );
+  process.exit(1);
+}
+
+if (istDirektaufruf(import.meta.url)) main();

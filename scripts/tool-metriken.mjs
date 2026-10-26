@@ -1,0 +1,143 @@
+// Kein Shebang: wird von scripts/token-baseline.mjs und test/tool-metriken.test.ts importiert.
+/**
+ * Tool-Fehler nach Art und Wiederlesen je Agent (#1379). Pur und ohne IO, arbeitet auf den Tool-Events aus
+ * `brain-metrics.mjs` (`{ tool, input, resultChars, agent, fehler }`; `fehler` = Anfang des Fehlertexts, sonst null).
+ * Definition: docs/model-routing.md §5 „Messen“.
+ */
+import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
+
+/** `ERROR` allein ist kein Signal (der Hook setzt es bei jedem Exit ≠ 0); die Art steht im Text. */
+const ARTEN = [
+  ["zuGross", /^File content \(\d+ tokens\) exceeds maximum allowed tokens/],
+  ["exit", /^Exit code \d+/],
+  ["hook", /^PreToolUse:\S+ hook error/],
+  ["guard", /^(?:<tool_use_error>)?Blocked:/],
+  ["permission", /^Permission (?:to use|for this action)/],
+];
+
+/** Art eines Fehlertexts, `null` bei leerem Text. Unbekanntes ist `sonst`. */
+export function fehlerArt(text) {
+  const t = String(text ?? "").trim();
+  if (!t) return null;
+  for (const [art, re] of ARTEN) if (re.test(t)) return art;
+  return "sonst";
+}
+
+/** Anzahl je Art über alle Events mit Fehlertext. */
+export function fehlerArten(events) {
+  const out = {};
+  for (const ev of events ?? []) {
+    const art = fehlerArt(ev?.fehler);
+    if (art) out[art] = (out[art] ?? 0) + 1;
+  }
+  return out;
+}
+
+const GRUND_KLASSIFIKATOR = /Reason:\s*\[([^\]]+)\]/;
+// Am Präfix erkannt: der Text ist bei langen Befehlen gekappt, das Ende „has been denied“ fehlt dann.
+const REGEL_ABLEHNUNG = /^Permission to use \S+ (?:with |has been denied)/;
+
+/**
+ * Grund einer Permission-Ablehnung: der Auto-Mode-Klassifikator nennt ihn in `Reason: [..]`, eine Regel-Ablehnung
+ * (`Permission to use <Tool> with <Befehl oder Pfad> has been denied` oder `Permission to use <Tool> has been denied`, gekappt ohne Ende) hat keinen und heißt „Regel“. `null`, wenn der Text keine Permission-Meldung ist.
+ */
+export function permissionGrund(text) {
+  const t = String(text ?? "").trim();
+  if (fehlerArt(t) !== "permission") return null;
+  const m = GRUND_KLASSIFIKATOR.exec(t);
+  if (m) return m[1].trim();
+  return REGEL_ABLEHNUNG.test(t) ? "Regel" : "ohne Grund";
+}
+
+/** Anzahl je Grund über alle Permission-Ablehnungen. */
+export function permissionGruende(events) {
+  const out = {};
+  for (const ev of events ?? []) {
+    const grund = permissionGrund(ev?.fehler);
+    if (grund) out[grund] = (out[grund] ?? 0) + 1;
+  }
+  return out;
+}
+
+const EDITS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+const dateiKey = (p) => String(p ?? "").replace(/\\/g, "/").toLowerCase();
+const basename = (p) => String(p).split("/").pop();
+const pfad = (ev) => ev.input?.file_path ?? ev.input?.notebook_path ?? "";
+
+/**
+ * Wiederlesen je Agent × Datei. Gelesener Bereich = `[offset||1, offset||1 + (limit ?? 2000) − 1]`. Ein Read, der einen schon
+ * gelesenen Bereich desselben Agenten überlappt, ist Wiederlesen: `voll` (ohne offset/limit) oder `gezielt` (mit). Abschnitte ohne
+ * Überlappung sind Erst-Lesen. Ein eigenes Edit/Write auf die Datei setzt deren gelesene Bereiche zurück; ein Read mit Fehler zählt nicht.
+ * Tokens = Ergebnisgröße / CHARS_PER_TOKEN, eine obere Schranke (der Treffer kann kleiner sein als die Datei).
+ */
+export function wiederlesen(events) {
+  const gelesen = new Map(); // agent + Datei → [[von, bis], …]
+  const proDatei = new Map();
+  const out = { reads: 0, abschnittsweise: 0, voll: { n: 0, tokens: 0 }, gezielt: { n: 0, tokens: 0 }, top: [] };
+  for (const ev of events ?? []) {
+    const datei = dateiKey(pfad(ev));
+    const key = `${ev.agent ?? ""}|${datei}`;
+    if (EDITS.has(ev.tool)) {
+      gelesen.delete(key);
+      continue;
+    }
+    if (ev.tool !== "Read" || ev.fehler || !datei) continue;
+    out.reads += 1;
+    const teil = ev.input.offset !== undefined || ev.input.limit !== undefined;
+    const von = Number(ev.input.offset) || 1;
+    const bis = von + (Number(ev.input.limit) || 2000) - 1;
+    const bereiche = gelesen.get(key) ?? [];
+    const wieder = bereiche.some(([a, b]) => von <= b && bis >= a);
+    bereiche.push([von, bis]);
+    gelesen.set(key, bereiche);
+    if (!wieder) {
+      if (teil) out.abschnittsweise += 1; // nur Erst-Lesen in Abschnitten; gezieltes Wiederlesen zählt unter `gezielt`
+      continue;
+    }
+    const tokens = Math.round((ev.resultChars ?? 0) / CHARS_PER_TOKEN);
+    const klasse = teil ? out.gezielt : out.voll;
+    klasse.n += 1;
+    klasse.tokens += tokens;
+    const d = proDatei.get(datei) ?? { datei: basename(datei), n: 0, tokens: 0 };
+    d.n += 1;
+    d.tokens += tokens;
+    proDatei.set(datei, d);
+  }
+  out.top = [...proDatei.values()].sort((a, b) => b.n - a.n || b.tokens - a.tokens).slice(0, 5);
+  return out;
+}
+
+/**
+ * Prüfläufe (#1120): wie oft ein Agent die volle Gate-Kette (`npm run verify`, `verify:kompakt`, `verify:full`) bzw. die gezielte
+ * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>` (oder `node …verify-lauf.mjs`), nie Text in Commit-
+ * Message oder `echo`; von Guard, Hook oder Permission blockierte Events zählen nicht, ein roter Lauf (Exit ≠ 0) schon.
+ */
+const VOLL = new Set(["verify", "verify:kompakt", "verify:full"]);
+const BLOCKIERT = new Set(["guard", "hook", "permission"]);
+
+export function pruefLaeufe(events) {
+  const out = { voll: 0, gezielt: 0 };
+  for (const ev of events ?? []) {
+    if (ev?.tool !== "Bash" && ev?.tool !== "PowerShell") continue;
+    if (BLOCKIERT.has(fehlerArt(ev.fehler))) continue;
+    for (const words of commandsOf(ev.input?.command, ev.tool)) {
+      const art = pruefArt(words);
+      if (art) out[art] += 1;
+    }
+  }
+  return out;
+}
+
+function pruefArt(words) {
+  const [cmd, ...rest] = words;
+  if (cmd === "npm") {
+    // npm-Flags mit Wert (`--prefix <pfad>`, `-C <pfad>`) stehen vor `run`: ab dem ersten `run`/`run-script` lesen, Flags danach überspringen.
+    const i = rest.findIndex((w) => w === "run" || w === "run-script");
+    if (i < 0) return null;
+    const skript = rest.slice(i + 1).find((w) => !w.startsWith("-"));
+    if (VOLL.has(skript)) return "voll";
+    return skript === "verify:changed" ? "gezielt" : null;
+  }
+  if (cmd === "node" && rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
+  return null;
+}
