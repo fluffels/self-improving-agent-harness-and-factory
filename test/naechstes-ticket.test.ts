@@ -1229,6 +1229,7 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kein Lader)`);
     });
     test("ein Wurf ohne Error-Objekt ist ebenfalls nicht prüfbar (kein stilles Durchwinken)", () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- der Fall ist ein Wurf, der kein Error-Objekt ist
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => { throw "kaputt"; } }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kaputt)`);
     });
     test("--ticket: ein Issue eines anderen Repos (übertragene Nummer) ist nicht frei, ein Issue ohne Repo-Angabe wird geprüft", () => {
