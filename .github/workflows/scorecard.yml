@@ -1,6 +1,6 @@
 name: Scorecard
 
-# #875: OpenSSF Scorecard prüft die Sicherheits-Haltung des Repos (Pinned-Dependencies, Token-Permissions, Branch-Schutz …).
+# OpenSSF Scorecard prüft die Sicherheits-Haltung des Repos (Pinned-Dependencies, Token-Permissions, Branch-Schutz …).
 # BERICHTEND, kein Required-Check: das SARIF geht in den Security-Tab. Ohne Veröffentlichung an die OpenSSF-API
 # (`publish_results: false`), ohne PAT (`repo_token`) und ohne `id-token`; läuft nie auf PRs.
 # Wächter: test/harness/sicherheits-workflows.test.ts.

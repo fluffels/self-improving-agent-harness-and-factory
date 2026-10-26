@@ -250,7 +250,7 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
     assert.deepEqual(r, [{ path: P, line: 7, taken: 1, total: 2 }]);
   });
 
-  test("meldet NICHT: ungeänderte Zeile, nicht ausgeführte Zeile (DA 0), alle Zweige genommen, .d.ts, außerhalb src", () => {
+  test("meldet NICHT: ungeänderte Zeile, nicht ausgeführte Zeile (DA 0), alle Zweige genommen, .d.ts, außerhalb der Quellwurzel", () => {
     const text = [
       lcov({ 7: 4, 8: 0, 9: 2 }, ["BRDA:7,0,0,4", "BRDA:7,0,1,0", "BRDA:8,0,0,0", "BRDA:9,0,0,1", "BRDA:9,0,1,1"]),
       `SF:${Q}/t.d.ts`,
