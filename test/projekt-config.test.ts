@@ -20,6 +20,9 @@ interface Pc {
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
+  boardRepo(board: Record<string, unknown>, config: unknown): string;
+  gleichesRepo(a: unknown, b: unknown): boolean;
+  nurRepo<T extends { repo?: string }>(items: T[], repo: string): T[];
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -200,6 +203,34 @@ describe("pruefeProjektConfig", () => {
     const anders = gueltig();
     Object.assign((anders.boards as Record<string, unknown>[])[1], { nummer: 7, besitzer: "andere" });
     assert.deepEqual(pc.pruefeProjektConfig(anders), []);
+  });
+
+  test("boards[].repo (ADR 0022 F10): optional, owner/name; boardRepo fällt auf das Repo der Config zurück, nurRepo filtert fail-closed", () => {
+    const mit = (repo: unknown): string[] => {
+      const c = gueltig();
+      (c.boards as Record<string, unknown>[])[1].repo = repo;
+      return pc.pruefeProjektConfig(c);
+    };
+    assert.deepEqual(mit("acme/anders"), []);
+    assert.deepEqual(mit("acme/demo"), []); // das eigene Repo auf einem eigenen Board ist erlaubt
+    assert.match(mit("ohneOwner").join("\n"), /boards\.1\.repo/);
+    assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);
+    assert.match(mit(5).join("\n"), /boards\.1\.repo/);
+    assert.match(mit("").join("\n"), /boards\.1\.repo/);
+    assert.equal(pc.gleichesRepo("Acme/Demo", "acme/demo"), true);
+    assert.equal(pc.gleichesRepo("acme/demo", "acme/anders"), false);
+    assert.equal(pc.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
+    assert.equal(pc.gleichesRepo(undefined, "acme/demo"), false);
+    assert.equal(pc.gleichesRepo(undefined, undefined), false);
+    const c = gueltig();
+    assert.equal(pc.boardRepo(c.boards?.[0] ?? {}, c), "acme/demo");
+    assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");
+    const items = [{ number: 1, repo: "acme/demo" }, { number: 2, repo: "acme/anders" }, { number: 3, repo: "" }, { number: 4 }];
+    assert.deepEqual(pc.nurRepo(items, "acme/demo").map((i: { number: number }) => i.number), [1]);
+    assert.deepEqual(pc.nurRepo(items, "ACME/Demo").map((i: { number: number }) => i.number), [1]); // GitHub-Repos sind nicht groß-/kleinschreibungsabhängig
+    assert.deepEqual(pc.nurRepo([{ number: 7, repo: "Acme/Demo" }], "acme/demo").map((i: { number: number }) => i.number), [7]); // auch die Schreibung des Items zählt nicht
+    assert.deepEqual(pc.nurRepo(items, ""), []); // ein Item ohne Repo gehört nie zu einem leeren Repo
+    assert.deepEqual(pc.nurRepo(items, "acme/anders").map((i: { number: number }) => i.number), [2]);
   });
 
   test("spezifikation.hartAb (#1615): optional, sonst positive Ganzzahl", () => {

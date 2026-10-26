@@ -97,7 +97,7 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   };
 
   // Felder, die nur das Auswählen des nächsten Tickets liest (#1460 Z8): ohne sie im Rohitem leer bzw. 0.
-  const LEER = { contentId: "", body: "", labels: [], autor: null, blockedBy: 0 };
+  const LEER = { contentId: "", repo: "", body: "", labels: [], autor: null, blockedBy: 0 };
 
   test("normalizeItems: nur Issues, über Seiten hinweg in Board-Reihenfolge, mit node_id, Nummer und Status", () => {
     expect(N.normalizeItems(echt)).toEqual([
@@ -178,7 +178,7 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
 
 describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   const TITEL = "Harness-Härtung (gesammelt)";
-  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string; repo?: string };
   const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
   const LT = "Langfuse-Befunde (gesammelt)";
@@ -330,9 +330,9 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
 
   test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {
     const echt = [[{ node_id: "ITEM_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: OWNER, id: 1 }, null, { id: 2 }] }, fields: [] }]];
-    expect(K.normalizeItems(echt)).toEqual([{ id: "ITEM_x", number: 1331, status: "", title: TITEL, assignees: [OWNER], state: "open", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(echt)).toEqual([{ id: "ITEM_x", number: 1331, status: "", title: TITEL, assignees: [OWNER], state: "open", contentId: "", repo: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
     const roh = [[{ node_id: "ITEM_y", content_type: "Issue", content: { number: 2, title: 5, assignees: "x" }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 2, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 2, status: "", title: "", assignees: [], state: "", contentId: "", repo: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
   });
 
   test("normalizeItems liest Body, Label-Namen, Autor und GitHubs Blocker-Zähler (REST-Form samt issue_dependencies_summary, #1460 Z8)", () => {
@@ -343,6 +343,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
         number: 7,
         title: "T",
         state: "open",
+        repository_url: "https://api.github.com/repos/acme/demo",
         body: "blockiert durch #3",
         assignees: [],
         user: { login: OWNER, type: "User", id: 1 },
@@ -352,11 +353,18 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       fields: [],
     }]];
     expect(K.normalizeItems(echt)).toEqual([
-      { id: "ITEM_z", number: 7, status: "", title: "T", assignees: [], state: "open", contentId: "", body: "blockiert durch #3", labels: [FREMD.labels.harness, "forum"], autor: { login: OWNER, type: "User" }, blockedBy: 2 },
+      { id: "ITEM_z", number: 7, status: "", title: "T", assignees: [], state: "open", contentId: "", repo: "acme/demo", body: "blockiert durch #3", labels: [FREMD.labels.harness, "forum"], autor: { login: OWNER, type: "User" }, blockedBy: 2 },
     ]);
     // kaputte Felder werden abgehärtet statt zu werfen: Body kein Text, Autor ohne Login, Zähler keine Zahl
     const roh = [[{ node_id: "ITEM_y", content_type: "Issue", content: { number: 8, body: 5, user: { type: "User" }, labels: "x", issue_dependencies_summary: { blocked_by: "viel" } }, fields: [] }]];
-    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 8, status: "", title: "", assignees: [], state: "", contentId: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+    expect(K.normalizeItems(roh)).toEqual([{ id: "ITEM_y", number: 8, status: "", title: "", assignees: [], state: "", contentId: "", repo: "", body: "", labels: [], autor: null, blockedBy: 0 }]);
+  });
+
+  test("normalizeItems liest das Repo aus repository_url; ohne gültige URL bleibt es leer (Nummern verschiedener Repos kollidieren, ADR 0022 F10)", () => {
+    const item = (url: unknown) => [[{ node_id: "ITEM_r", content_type: "Issue", content: { number: 5, repository_url: url }, fields: [] }]];
+    expect(K.normalizeItems(item("https://api.github.com/repos/acme/demo"))[0]).toMatchObject({ number: 5, repo: "acme/demo" });
+    expect(K.normalizeItems(item("https://api.github.com/repos/acme/anders"))[0]).toMatchObject({ number: 5, repo: "acme/anders" });
+    for (const schlecht of [undefined, 5, "", "https://api.github.com/repos/acme", "https://api.github.com/repos/acme/demo/x", "https://api.github.com/users/acme/demo"]) expect(K.normalizeItems(item(schlecht))[0].repo, String(schlecht)).toBe("");
   });
 
   test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {
