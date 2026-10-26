@@ -1,0 +1,79 @@
+#!/usr/bin/env sh
+#
+# pre-push-Hook (#528, seit #592 nur noch SEKUNDÄR)
+# =================================================================
+# Seit #592 ist `main` server-seitig PR-gegated (Ruleset main-schutz: Merge nur
+# über PR mit grünen Required-Checks, ohne Bypass-Akteure) — die maßgebliche,
+# NICHT umgehbare Durchsetzung sind jetzt die CI-Required-Checks auf dem PR,
+# nicht mehr dieser lokale Hook (siehe ADR 0009). Ein Direkt-Push auf `main`
+# wird server-seitig ohnehin abgelehnt; dieser Hook ist damit nur noch ein
+# harmloses Zusatznetz für den Fall, dass die Protection je gelockert wird.
+#
+# Dieser Hook fährt die schnellen Gates (`npm run verify`, Kette:
+# package.json › scripts.verify) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
+# Bei Pushes anderer Branches fährt er nur `node scripts/check-diffsize.mjs` (reines git, schnell):
+# ein zu breiter Slice scheitert sonst erst in der PR-CI. Bei Rot bricht der Push ab; bewusst breit
+# nur per Commit-Zeile `<praefixe.commitZeile>Diffsize-Override: #<nr> warum` (Präfix der Projekt-Config) (eigener leerer Commit), danach erneut pushen.
+# Für die schnelle Vorab-Rückmeldung VOR dem PR `npm run verify` einfach manuell fahren.
+#
+# Bewusste Grenzen:
+#  - Auf `main` das volle `verify`, auf anderen Branches nur der Diffsize-Check — Feature-Branch-Pushes bleiben schnell.
+#  - Die lokale Basis (merge-base HEAD origin/main) zählt nie weniger als die CI-Basis (HEAD^1 des
+#    Merge-Checkouts); ein Trim-Commit nach dem Push kann also nur die CI-Messung verbessern.
+#  - Der Diffsize-Check misst HEAD, nicht den gepushten Ref: wer aus einem anderen Checkout einen Feature-Branch pusht, misst den
+#    falschen Slice (Zusatznetz, die CI bleibt der Riegel).
+#  - OHNE Builds/Boot-Smoke (das ist `verify:full`), damit der Hook zügig bleibt;
+#    die schweren Artefakt-Schritte deckt die CI ab.
+#  - Umgehung: `git push --no-verify` — greift aber NICHT an der Server-Protection
+#    vorbei; die Required-Checks auf dem PR bleiben verbindlich.
+#
+# Verdrahtet über `core.hooksPath = .githooks` (gesetzt von `npm run setup`),
+# also versioniert und ohne husky-Abhängigkeit — jeder frische Klon bekommt
+# denselben Schutz, sobald `npm run setup` einmal lief.
+#
+# git übergibt: $1 = Remote-Name, $2 = Remote-URL; auf stdin je Ref eine Zeile
+# "<local_ref> <local_oid> <remote_ref> <remote_oid>".
+
+protected_ref='refs/heads/main'
+push_to_main=0
+push_other=0
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+	if [ "$remote_ref" = "$protected_ref" ]; then
+		# Branch-Löschung (local_oid = lauter Nullen) hat nichts zu prüfen.
+		case "$local_oid" in
+		*[!0]*) push_to_main=1 ;;
+		esac
+	else
+		case "$local_oid" in
+		*[!0]*) push_other=1 ;;
+		esac
+	fi
+done
+
+if [ "$push_other" -eq 1 ]; then
+	if ! node scripts/check-diffsize.mjs; then
+		echo ""
+		echo "✖ pre-push: check:diffsize ist ROT — Push abgebrochen."
+		echo "  Slice verkleinern oder bewusst breit: leerer Commit mit der Zeile <praefixe.commitZeile>Diffsize-Override: #<nr> warum"
+		exit 1
+	fi
+fi
+
+if [ "$push_to_main" -eq 0 ]; then
+	# Kein Push auf main → hier nichts weiter zu tun (andere Branches prüften oben nur den Slice).
+	exit 0
+fi
+
+echo "⚓ pre-push (#528): Push auf main erkannt — schnelle Gates (npm run verify) laufen lokal …"
+
+if npm run verify; then
+	echo "✅ pre-push: alle Gates grün — Push auf main wird durchgelassen."
+	exit 0
+else
+	echo ""
+	echo "✖ pre-push: 'npm run verify' ist ROT — Push auf main abgebrochen."
+	echo "  Behebe die Ursache oben und pushe erneut."
+	echo "  Notfall-Umgehung (bewusst): git push --no-verify"
+	exit 1
+fi

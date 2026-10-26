@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "repo": "zz-org/zz-demo",
+  "boards": [
+    {
+      "rolle": "produkt",
+      "besitzer": "zz-org",
+      "besitzerTyp": "org",
+      "nummer": 7,
+      "projectId": "ZZ_board_produkt",
+      "statusFeldId": 901,
+      "statusFeldNodeId": "ZZ_feld_produkt",
+      "todoOptionId": "zz-todo"
+    },
+    {
+      "rolle": "factory",
+      "besitzer": "zz-org",
+      "besitzerTyp": "org",
+      "nummer": 8,
+      "projectId": "ZZ_board_factory",
+      "statusFeldId": 902,
+      "statusFeldNodeId": "ZZ_feld_factory",
+      "todoOptionId": "zz-todo"
+    }
+  ],
+  "praefixe": {
+    "commitZeile": "ZZ-",
+    "branch": "feature/zz-",
+    "worktree": "zz-"
+  },
+  "labels": {
+    "harness": "bereich:zz-harness",
+    "festgefahren": "status:zz-festgefahren",
+    "forum": "zz-forum",
+    "dependabotInbox": "bereich:zz-harness"
+  },
+  "agenten": {
+    "planer": "zz-planer",
+    "umsetzer": "zz-umsetzer",
+    "lens": "zz-lens",
+    "gruppe": "zz-gruppe",
+    "ticketSkill": "zz-ticket"
+  },
+  "skills": {
+    "abschluss": "zz-abschluss"
+  },
+  "rulesetSpiegel": ".github/ruleset-main-schutz.json",
+  "sprache": {
+    "umschrift": [
+      "fuer",
+      "ueber",
+      "koennen",
+      "koennte",
+      "muessen",
+      "muesste",
+      "wuerde",
+      "waere",
+      "waehrend",
+      "naechste",
+      "naechsten",
+      "naechstes",
+      "aenderung",
+      "aenderungen",
+      "groesse",
+      "schluessel",
+      "pruefung",
+      "pruefen",
+      "prueft",
+      "loesung",
+      "zurueck",
+      "spaeter",
+      "frueher",
+      "haeufig",
+      "moeglich",
+      "gemaess",
+      "fuehrt",
+      "ausfuehren",
+      "oeffnen",
+      "zusaetzlich",
+      "taeglich",
+      "ploetzlich",
+      "schoen",
+      "muede",
+      "hoeren",
+      "gruen",
+      "tuer",
+      "koenig",
+      "maedchen",
+      "faellt",
+      "laeuft",
+      "waehlen",
+      "erklaeren",
+      "ueberall"
+    ],
+    "spezifikation": {
+      "ziel": "Ziel",
+      "akzeptanzkriterien": [
+        "Akzeptanzkriterien",
+        "Teil-Akzeptanzkriterien"
+      ],
+      "nachMerge": "Nach dem Merge:",
+      "blocker": "blockiert durch",
+      "abhaengigkeit": [
+        "folgt nach #",
+        "folgt auf #",
+        "erst nach #",
+        "setzt # voraus",
+        "baut auf # auf",
+        "wartet auf #",
+        "nach dem Merge von #"
+      ],
+      "negativfall": {
+        "wort": "Negativfall",
+        "muster": "negativ-?f(?:a|ä)ll"
+      },
+      "begrenzung": {
+        "wort": "bekannte Muster:",
+        "muster": "bekannte\\s+Muster\\s*:"
+      },
+      "allquantor": {
+        "wort": "jede/alle … die … liest",
+        "muster": "\\b(?:jede[rsnm]?|alle[nrsm]?)\\b[^.!?]*\\b(?:die|der|das|den)\\b[^.!?]*\\b(?:liest|lesen|gelesen|verwendet|verwenden)\\b"
+      }
+    }
+  }
+}

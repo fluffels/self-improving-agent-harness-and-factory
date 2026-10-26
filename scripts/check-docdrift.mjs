@@ -1,0 +1,245 @@
+// Kein Shebang — analog zu scripts/check-docmap.mjs: dieses Skript wird über
+// `node scripts/check-docdrift.mjs` (npm run check:docdrift) gestartet UND von
+// test/docdrift.test.ts importiert. Ein `#!` bricht genau diesen Vitest/esbuild-Import.
+/**
+ * Harness-Drift-Wächter (#529) — hält die "Doku als Kontext-Selektor" ehrlich,
+ * jenseits der Datei-Landkarte (die bewacht #482 / check-docmap.mjs).
+ *
+ * Hintergrund: AGENTS.md lädt JEDE KI-Session als Kontext; README und die Befehls-
+ * Referenz docs/referenz/befehle.md (#1078) werden on-demand gelesen. Sie nennen (1) `npm run <x>`-Kommandos, die es in package.json
+ * geben MUSS, und (2) viele interne Markdown-Links + `#anker` zwischen den Docs.
+ * Beides kann leise veralten — ein Agent tippt dann ein totes Kommando oder folgt
+ * einem toten Link ins Leere. Der Datei-Landkarten-Wächter (#482) deckt das NICHT
+ * ab. Dieser Wächter macht genau diesen Drift **rot**:
+ *
+ *   1. Tote Kommandos: jedes in der Doku erwähnte `npm run <x>` (bzw. `npm test`)
+ *      existiert als Skript in package.json.
+ *   2. Undokumentierte Kern-Skripte: jedes package.json-Skript (außer der bewusst
+ *      ausgenommenen Entwickler-Convenience) wird in mind. einem der drei
+ *      Kern-Docs (AGENTS.md/README/docs/referenz/befehle.md) erwähnt.
+ *   3. Tote Links: jeder interne, repo-relative Markdown-Link zeigt auf eine
+ *      existierende Datei/ein Verzeichnis.
+ *   4. Tote Anker: jeder `#anker` (gleiche Datei oder auf eine .md) trifft eine
+ *      real vorhandene Überschrift (GitHub-Slug-Regel).
+ *
+ * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-docmap.mjs/
+ * check-size.mjs: läuft plattformübergreifend über `npm run check:docdrift` und
+ * im CI (als Teil von `npm run verify`). Die Parse-/Prüf-Logik wird zusätzlich
+ * von test/docdrift.test.ts importiert — EINE Quelle der Wahrheit.
+ *
+ * Ausführen mit:  npm run check:docdrift   (oder als Teil von: npm run verify)
+ */
+
+import { fileURLToPath } from "node:url";
+import { istDirektaufruf } from "./direktaufruf.mjs";
+import { readFileSync, existsSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
+import { collectMarkdown } from "./check-basis.mjs";
+import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+
+// Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
+export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Die Docs, die die Befehls-Referenz tragen — nur DIESE zählen als Beleg, dass ein
+ *  Kern-Skript dokumentiert ist (Rückwärts-Check). Seit #1078 liegt die vollständige
+ *  Befehlsliste on-demand in docs/referenz/befehle.md statt in der immer geladenen
+ *  CLAUDE.md; AGENTS.md und README bleiben, weil sie Alltags-Kommandos selbst nennen. */
+export const CORE_DOCS = ["AGENTS.md", "README.md", "docs/referenz/befehle.md"];
+
+/** package.json-Skripte, die bewusst NICHT dokumentiert sein müssen: reine
+ *  Entwickler-Convenience, kein Teil der Harness-Story (Gates/Builds/Tests). */
+export const DOC_EXEMPT_SCRIPTS = new Set([
+  "preview", // Vite-Vorschau des Host-Builds — lokale Convenience
+  "preview:offline", // dito für den Offline-Build
+  "test:watch", // Watch-Modus von Vitest — lokale Convenience (dokumentiert ist `npm test`)
+]);
+
+// ── Kommandos ───────────────────────────────────────────────────────────────────
+
+// `parseNpmRunMentions` (Kommando-Erkennung) wohnt in docs-gen/markdown.mjs, weil auch das Export-Werkzeug sie nutzt; hier weitergereicht.
+
+// ── Links & Anker ────────────────────────────────────────────────────────────────
+
+/** Interne Links: { target, path, anchor } — path repo-/datei-relativ wie geschrieben, anchor ohne
+ *  führendes `#` (oder ""). */
+export function extractLinks(md) {
+  return linkStellen(md).map(({ target, path, anchor }) => ({ target, path, anchor }));
+}
+
+// ── verify-Kette ─────────────────────────────────────────────────────────────────
+
+/** Liest die verify-Gate-Sequenz aus dem verify-Skript in package.json aus:
+ *  alle `npm run <x>`-Aufrufe in Reihenfolge, gefolgt von `npm test` → `"test"`. */
+export function parseVerifyChain(pkgScripts) {
+  // Dieselbe Auflösung wie Gate-Tabelle und Diagramm-Zahlen (kettenSchritte, je Schritt einmal); ohne verify-Skript leer.
+  const steps = typeof pkgScripts["verify"] === "string" ? kettenSchritte(pkgScripts, ["verify"], "verify") : [];
+  // Ein Schritt ohne Skriptnamen (Rohbefehl) ließe sich nicht gegen die Doku abgleichen: laut melden statt still fallen lassen (Z5g).
+  const unbenennbar = steps.filter((step) => !/^[a-zA-Z0-9:_-]+$/.test(step));
+  if (unbenennbar.length > 0) {
+    throw new Error(`verify enthält Schritte ohne Skriptnamen (nur \`npm run <x>\` und \`npm test\`, Argumente hinter \`--\` erlaubt): ${unbenennbar.join(" | ")}`);
+  }
+  return steps;
+}
+
+/** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).
+ *  Der `→`-Pfeil ist das kanonische Trennzeichen für dokumentierte verify-Ketten
+ *  in diesem Repo (docs/referenz/befehle.md, SKILL.md, agent-harness.md). */
+export function findDocumentedVerifyChains(md) {
+  const chains = [];
+  for (const m of md.matchAll(/\btypecheck(?:\s*→\s*[a-zA-Z0-9:_-]+)+\s*→\s*test\b/g)) {
+    chains.push(m[0].split(/\s*→\s*/).map((s) => s.trim()));
+  }
+  return chains;
+}
+
+/** Prüft alle in Markdown-Dateien dokumentierten verify-Ketten gegen die echte
+ *  Kette aus package.json. Gibt je unvollständiger Kette zurück:
+ *  { file, chain: string[], missing: string[], extra: string[] }: `missing` = Gates der echten Kette, die in der
+ *  Doku fehlen; `extra` = dokumentierte Gates, die es in der echten Kette nicht (mehr) gibt (#1349). Bevorzugt
+ *  steht in der Doku gar keine Handkopie, sondern ein Verweis auf `package.json` › `scripts.verify`. */
+export function auditVerifyChain(rootDir, mdFiles, content, pkgScripts) {
+  const real = parseVerifyChain(pkgScripts);
+  const violations = [];
+  for (const f of mdFiles) {
+    for (const chain of findDocumentedVerifyChains(content.get(f))) {
+      const missing = real.filter((g) => !chain.includes(g));
+      const extra = chain.filter((g) => !real.includes(g));
+      if (missing.length > 0 || extra.length > 0) violations.push({ file: f, chain, missing, extra });
+    }
+  }
+  return violations;
+}
+
+// ── Audit ────────────────────────────────────────────────────────────────────────
+
+const isMd = (p) => p.toLowerCase().endsWith(".md");
+
+/** Vergleicht Doku gegen Realität. Gibt strukturierte Befunde zurück (leere
+ *  Arrays = ok). `rootDir` überschreibbar für deterministische Tests. */
+export function auditDocDrift(rootDir = ROOT) {
+  const pkg = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+  const scripts = new Set(Object.keys(pkg.scripts ?? {}));
+  const mdFiles = collectMarkdown(rootDir);
+
+  // Doku-Inhalte einmal einlesen (Datei → Roh-Markdown).
+  const content = new Map();
+  for (const f of mdFiles) content.set(f, readFileSync(join(rootDir, f), "utf8"));
+
+  // Headings je Datei cachen (für Anker-Auflösung).
+  const headingCache = new Map();
+  const headingsOf = (file) => {
+    if (!headingCache.has(file)) {
+      const abs = join(rootDir, file);
+      headingCache.set(
+        file,
+        existsSync(abs) && statSync(abs).isFile() && isMd(file)
+          ? new Set(collectHeadingSlugs(readFileSync(abs, "utf8")))
+          : null,
+      );
+    }
+    return headingCache.get(file);
+  };
+
+  // 1. Tote Kommandos: `npm run <x>` in IRGENDEINEM md, das es nicht als Skript gibt.
+  const deadCommands = [];
+  for (const f of mdFiles) {
+    for (const name of parseNpmRunMentions(content.get(f))) {
+      if (!scripts.has(name)) deadCommands.push({ file: f, script: name });
+    }
+  }
+
+  // 2. Undokumentierte Kern-Skripte: package.json-Skript (außer Exempt) in KEINEM
+  //    der Kern-Docs erwähnt.
+  const coreDocMentions = new Set();
+  for (const f of CORE_DOCS) {
+    if (content.has(f)) for (const n of parseNpmRunMentions(content.get(f))) coreDocMentions.add(n);
+  }
+  const undocumentedScripts = [...scripts]
+    .filter((s) => !DOC_EXEMPT_SCRIPTS.has(s) && !coreDocMentions.has(s))
+    .sort();
+
+  // 3./4. Tote Links & Anker.
+  const deadLinks = [];
+  const deadAnchors = [];
+  for (const f of mdFiles) {
+    for (const { target, path, anchor } of extractLinks(content.get(f))) {
+      // Reiner Anker (#foo) → Ziel ist die Datei selbst.
+      const targetFile = path === "" ? f : linkZiel(f, path);
+
+      if (path !== "") {
+        const abs = join(rootDir, targetFile);
+        if (!existsSync(abs)) {
+          deadLinks.push({ file: f, target, resolved: targetFile });
+          continue; // Anker eines toten Ziels nicht separat melden
+        }
+      }
+      if (anchor) {
+        const heads = headingsOf(targetFile);
+        // Anker nur für Markdown-Ziele prüfen (bei .ts o.ä. ist #Lxx ein Zeilenanker).
+        if (heads && !heads.has(anchor)) {
+          deadAnchors.push({ file: f, target, resolved: targetFile, anchor });
+        }
+      }
+    }
+  }
+
+  // 5. verify-Ketten-Drift: dokumentierte typecheck→…→test-Sequenzen gegen echte Kette.
+  const verifyChainViolations = auditVerifyChain(rootDir, mdFiles, content, pkg.scripts ?? {});
+
+  return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations };
+}
+
+// ── CLI ────────────────────────────────────────────────────────────────────────
+function main() {
+  const tty = process.stdout.isTTY;
+  const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
+  const red = (s) => paint("31", s);
+  const green = (s) => paint("32", s);
+
+  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations } = auditDocDrift();
+
+  let bad = false;
+  for (const c of deadCommands) {
+    bad = true;
+    console.error(red(`✖ Totes Kommando: „npm run ${c.script}" in ${c.file} existiert nicht in package.json.`));
+  }
+  for (const s of undocumentedScripts) {
+    bad = true;
+    console.error(
+      red(
+        `✖ Undokumentiertes Kern-Skript „${s}" — in AGENTS.md/README/docs/referenz/befehle.md erwähnen oder (mit Begründung) in scripts/check-docdrift.mjs › DOC_EXEMPT_SCRIPTS aufnehmen.`,
+      ),
+    );
+  }
+  for (const l of deadLinks) {
+    bad = true;
+    console.error(red(`✖ Toter Link: „${l.target}" in ${l.file} zeigt auf ${l.resolved} (existiert nicht).`));
+  }
+  for (const a of deadAnchors) {
+    bad = true;
+    console.error(red(`✖ Toter Anker: „${a.target}" in ${a.file} — Überschrift „#${a.anchor}" gibt es in ${a.resolved} nicht.`));
+  }
+  for (const v of verifyChainViolations) {
+    bad = true;
+    console.error(
+      red(
+        `✖ Veraltete verify-Kette in ${v.file}${v.missing.length ? ` — fehlende Gates: ${v.missing.join(", ")}` : ""}${v.extra.length ? ` — überzählige Gates: ${v.extra.join(", ")}` : ""}. Auf den Verweis „package.json › scripts.verify“ umstellen oder die Kette angleichen.`,
+      ),
+    );
+  }
+
+  if (bad) {
+    console.error(`\nHarness-Doku-Drift. Kommandos/Links/Anker in der Doku bzw. package.json angleichen.`);
+    process.exit(1);
+  }
+  console.log(
+    green(
+      `✔ Harness-Doku deckt sich mit dem Code (${mdFiles.length} Markdown-Dateien, Kommandos/Links/Anker konsistent).`,
+    ),
+  );
+}
+
+if (istDirektaufruf(import.meta.url)) main();

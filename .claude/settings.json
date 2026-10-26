@@ -1,0 +1,269 @@
+{
+  "statusLine": { "type": "command", "command": "node scripts/statusline.mjs" },
+  "model": "sonnet",
+  "env": {
+    "CC_LANGFUSE_TRACE_TAGS": "factory"
+  },
+  "enabledPlugins": {
+    "langfuse-observability@langfuse-observability": true,
+    "data@synced": false,
+    "cowork-plugin-management@synced": false
+  },
+  "enabledMcpjsonServers": ["playwright"],
+  "disableClaudeAiConnectors": true,
+  "skillListingMaxDescChars": 300,
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(git:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh project:*)",
+      "Bash(gh api:*)",
+      "Bash(gh run:*)",
+      "Bash(gh label:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh auth status:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(pwd:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(diff:*)",
+      "mcp__playwright",
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation"
+    ],
+    "ask": [
+      "Bash(curl:*)",
+      "PowerShell(curl *)",
+      "Bash(wget:*)",
+      "PowerShell(wget *)",
+      "Bash(nc:*)",
+      "PowerShell(nc *)",
+      "Bash(ncat:*)",
+      "PowerShell(ncat *)",
+      "Bash(telnet:*)",
+      "PowerShell(telnet *)",
+      "Bash(ssh:*)",
+      "PowerShell(ssh *)",
+      "Bash(scp:*)",
+      "PowerShell(scp *)",
+      "Bash(git push --force-with-lease:*)",
+      "PowerShell(git push --force-with-lease *)",
+      "Bash(gh issue delete:*)",
+      "PowerShell(gh issue delete *)",
+      "Bash(gh issue transfer:*)",
+      "PowerShell(gh issue transfer *)",
+      "Bash(gh label delete:*)",
+      "PowerShell(gh label delete *)",
+      "Bash(gh project delete:*)",
+      "PowerShell(gh project delete *)",
+      "Bash(gh project item-delete:*)",
+      "PowerShell(gh project item-delete *)",
+      "Bash(gh project field-delete:*)",
+      "PowerShell(gh project field-delete *)",
+      "mcp__playwright__browser_run_code_unsafe"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(rm -r -f:*)",
+      "Bash(rm -f -r:*)",
+      "Bash(rm --recursive:*)",
+      "Bash(sudo:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(npm publish:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh issue create:*)",
+      "PowerShell(gh issue create *)",
+      "PowerShell(git push --force *)",
+      "PowerShell(git push -f *)",
+      "PowerShell(npm publish *)",
+      "PowerShell(gh repo delete *)",
+      "mcp__claude-in-chrome",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.claude.json)",
+      "Read(~/.config/agent-secrets.env)",
+      "Read(~/.langfuse-secret)",
+      "Read(/.env)",
+      "Read(/.env.local)",
+      "Read(/.env.development.local)",
+      "Read(/.env.production.local)",
+      "Read(/.env.test.local)",
+      "Read(/.env.*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "codeload.github.com",
+        "objects.githubusercontent.com",
+        "raw.githubusercontent.com",
+        "cdn.playwright.dev",
+        "playwright.download.prss.microsoft.com"
+      ]
+    },
+    "filesystem": {
+      "denyRead": [
+        "/mnt",
+        "~/.ssh",
+        "~/.config/gh",
+        "~/.claude/.credentials.json",
+        "~/.claude.json",
+        "~/.config/agent-secrets.env",
+        "~/.langfuse-secret",
+        "./.env",
+        "./.env.local",
+        "./.env.development.local",
+        "./.env.production.local",
+        "./.env.test.local"
+      ],
+      "denyWrite": [
+        "./scripts",
+        "./.githooks",
+        "./node_modules",
+        "./package-lock.json"
+      ]
+    },
+    "credentials": {
+      "envVars": [
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "CLAUDE_CODE_OAUTH_TOKEN",
+          "mode": "deny"
+        }
+      ]
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/haupt-sync.mjs",
+              "--danach",
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
+            ],
+            "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/sandbox-doctor.mjs",
+              "--sessionstart"
+            ],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/mcp-ausfall.mjs",
+              "--sessionstart"
+            ],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-vorbedingung.mjs",
+              "--sessionstart"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|SubagentHandback|Agent|SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/pretooluse-hook.mjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/stop-verify-hook.mjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/stop-verify-hook.mjs"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

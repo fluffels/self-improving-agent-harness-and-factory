@@ -1,0 +1,170 @@
+{
+  "version": 2,
+  "repo": "fluffels/self-improving-agent-harness-and-factory",
+  "boards": [
+    {
+      "rolle": "produkt",
+      "besitzer": "fluffels",
+      "besitzerTyp": "user",
+      "nummer": 1,
+      "projectId": "PVT_kwHOD8746c4Barq_",
+      "statusFeldId": 358708531,
+      "statusFeldNodeId": "PVTSSF_lAHOD8746c4Barq_zhVhdTM",
+      "todoOptionId": "f75ad846"
+    },
+    {
+      "rolle": "factory",
+      "besitzer": "fluffels",
+      "besitzerTyp": "user",
+      "nummer": 2,
+      "projectId": "PVT_kwHOD8746c4BnXAE",
+      "statusFeldId": 427556399,
+      "statusFeldNodeId": "PVTSSF_lAHOD8746c4BnXAEzhl7_i8",
+      "todoOptionId": "f75ad846"
+    }
+  ],
+  "praefixe": {
+    "commitZeile": "SIH-",
+    "branch": "feature/sih-",
+    "worktree": "sih-"
+  },
+  "labels": {
+    "harness": "area:harness",
+    "festgefahren": "status:festgefahren",
+    "forum": "forum",
+    "dependabotInbox": "area:harness"
+  },
+  "agenten": {
+    "planer": "sih-planer",
+    "umsetzer": "sih-umsetzer",
+    "lens": "sih-lens",
+    "gruppe": "sih-gruppe",
+    "ticketSkill": "sih-ticket"
+  },
+  "skills": {
+    "abschluss": "brain-input"
+  },
+  "struktur": {
+    "quelle": "scripts",
+    "moduldoku": "docs"
+  },
+  "bereiche": {
+    "aliase": {}
+  },
+  "ausnahmen": {
+    "groesse": [],
+    "kontext": []
+  },
+  "gates": {
+    "nichtInVerify": []
+  },
+  "berechtigungen": {
+    "allow": [
+      "mcp__playwright",
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation"
+    ],
+    "ask": [
+      "mcp__playwright__browser_run_code_unsafe"
+    ],
+    "deny": []
+  },
+  "sandbox": {
+    "allowedDomains": [],
+    "envVars": []
+  },
+  "spezifikation": {
+    "hartAb": 1
+  },
+  "sprache": {
+    "umschrift": [
+      "fuer",
+      "ueber",
+      "koennen",
+      "koennte",
+      "muessen",
+      "muesste",
+      "wuerde",
+      "waere",
+      "waehrend",
+      "naechste",
+      "naechsten",
+      "naechstes",
+      "aenderung",
+      "aenderungen",
+      "groesse",
+      "schluessel",
+      "pruefung",
+      "pruefen",
+      "prueft",
+      "loesung",
+      "zurueck",
+      "spaeter",
+      "frueher",
+      "haeufig",
+      "moeglich",
+      "gemaess",
+      "fuehrt",
+      "ausfuehren",
+      "oeffnen",
+      "zusaetzlich",
+      "taeglich",
+      "ploetzlich",
+      "schoen",
+      "muede",
+      "hoeren",
+      "gruen",
+      "tuer",
+      "koenig",
+      "maedchen",
+      "faellt",
+      "laeuft",
+      "waehlen",
+      "erklaeren",
+      "ueberall"
+    ],
+    "spezifikation": {
+      "ziel": "Ziel",
+      "akzeptanzkriterien": [
+        "Akzeptanzkriterien",
+        "Teil-Akzeptanzkriterien"
+      ],
+      "nachMerge": "Nach dem Merge:",
+      "blocker": "blockiert durch",
+      "abhaengigkeit": [
+        "folgt nach #",
+        "folgt auf #",
+        "erst nach #",
+        "setzt # voraus",
+        "baut auf # auf",
+        "wartet auf #",
+        "nach dem Merge von #"
+      ],
+      "negativfall": {
+        "wort": "Negativfall",
+        "muster": "negativ-?f(?:a|ä)ll"
+      },
+      "begrenzung": {
+        "wort": "bekannte Muster:",
+        "muster": "bekannte\\s+Muster\\s*:"
+      },
+      "allquantor": {
+        "wort": "jede/alle … die … liest",
+        "muster": "\\b(?:jede[rsnm]?|alle[nrsm]?)\\b[^.!?]*\\b(?:die|der|das|den)\\b[^.!?]*\\b(?:liest|lesen|gelesen|verwendet|verwenden)\\b"
+      }
+    }
+  },
+  "rulesetSpiegel": ".github/ruleset-main-schutz.json",
+  "projektliterale": {
+    "Stardew": "stardew",
+    "Save-Version": "CURRENT_SAVE_VERSION",
+    "kqDev": "kqdev",
+    "Hafen": "hafen",
+    "Phaser": "phaser",
+    "KubeQuest": "kubequest",
+    "kubernia": "kubernia",
+    "KQ": "KQ"
+  }
+}
