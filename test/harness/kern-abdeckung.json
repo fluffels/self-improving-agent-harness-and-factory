@@ -26,5 +26,13 @@
   ".claude/skills/factory-ticket/SKILL.md": {
     "art": "projekt",
     "grund": "Zeiger auf den Ticket-Skill des Projekts"
+  },
+  ".github/workflows/codeql.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Code-Scanning), kein Factory-Kern"
+  },
+  ".github/workflows/scorecard.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Scorecard), kein Factory-Kern"
   }
 }

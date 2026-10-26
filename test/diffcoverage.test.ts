@@ -257,7 +257,7 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
       "DA:1,1",
       "BRDA:1,0,0,0",
       "end_of_record",
-      "SF:scripts/x.mjs",
+      "SF:außerhalb/x.mjs",
       "DA:1,1",
       "BRDA:1,0,0,0",
       "end_of_record",
@@ -265,7 +265,7 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
     const changed: Changed = new Map([
       [P, new Set([8, 9])], // Zeile 7 nicht geändert
       [`${Q}/t.d.ts`, new Set([1])],
-      ["scripts/x.mjs", new Set([1])],
+      ["außerhalb/x.mjs", new Set([1])],
     ]);
     assert.deepEqual(teilweiseGetestet(changed, parseLcov(text), parseLcovBranches(text)), []);
   });
@@ -369,13 +369,13 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
   test("Typdeklarationen (.d.ts) fallen aus der Messung — sie enthalten keine ausführbare Zeile", () => {
     assert.equal(isMeasured(`${Q}/vite-env.d.ts`), false);
     assert.equal(isMeasured(`${Q}/sim/pods.ts`), true);
-    assert.equal(isMeasured("scripts/check-size.mjs"), false);
+    assert.equal(isMeasured("außerhalb/check-size.mjs"), false);
   });
 
   test("#1942: auch .mts, .mjs, .cjs und .js unter der Quellwurzel sind Gegenstand der Messung (Factory-Repo: Quellwurzel scripts), Typdeklarationen und Daten nicht", () => {
     for (const endung of ["ts", "mts", "mjs", "cjs", "js"]) assert.equal(isMeasured(`scripts/x.${endung}`, "scripts"), true, endung);
     for (const nein of ["scripts/x.d.ts", "scripts/x.d.mts", "scripts/x.d.cts", "scripts/x.json", "scripts/x.md", "scripts/x.mjs.map", "test/x.mjs", "scriptsx/y.mjs"]) assert.equal(isMeasured(nein, "scripts"), false, nein);
-    assert.equal(isMeasured("scripts/check-size.mjs"), false, "unter der Quellwurzel des Spiels (src) bleibt ein Skript außerhalb");
+    assert.equal(isMeasured("außerhalb/check-size.mjs"), false, "ein Skript außerhalb der Quellwurzel bleibt außerhalb");
   });
 
   test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {

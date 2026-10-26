@@ -15,8 +15,8 @@ export default defineConfig({
       // Deckungsgleich mit isMeasured (scripts/check-diffcoverage.mjs): ohne include zählt v8 nur im Testprozess geladene Dateien, eine nur als Kindprozess geprüfte Datei fehlte im lcov und machte check:diffcoverage hart rot (Test in coverage-config.test.ts).
       include: ["scripts/**/*.{ts,mts,mjs,cjs,js}"],
       exclude: ["scripts/**/*.d.{ts,mts,cts}"],
-      // Aggregat-Floors (Ratchet, nur nach oben): Startwerte aus der Messung der Probe von #1925 (Zeilen 90,94 %, Zweige 88,64 %), gemessen ohne include; die erste Messung mit include im Factory-Repo ist maßgeblich (Fortschreibung 0022-1942-messbasis). Kein Floor je Schicht: die Schichten des Factory-Repos sind klein; den Diff misst check:diffcoverage je Schicht.
-      thresholds: { lines: 90, branches: 88 },
+      // Aggregat-Floors (Ratchet, nur nach oben): abgerundet aus der ersten Messung mit include im Factory-Repo (Zeilen 89,33 %, Zweige 87,71 %; Fortschreibung 0022-1942-messbasis nennt sie maßgeblich). Kein Floor je Schicht: die Schichten des Factory-Repos sind klein; den Diff misst check:diffcoverage je Schicht.
+      thresholds: { lines: 89, branches: 87 },
     },
     maxWorkers: process.env.CI ? undefined : Math.max(2, Math.floor(availableParallelism() / 4)),
   },
