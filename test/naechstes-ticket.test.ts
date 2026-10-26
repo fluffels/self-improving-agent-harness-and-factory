@@ -1242,7 +1242,7 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     });
     test("pruefeTicket ohne Repo-Angabe (Einspeisung ohne io.repo) lehnt ein Issue mit Repo nicht ab", () => {
       const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: SPEZ, labels: [], assignees: [], user: { login: OWNER, type: "User" }, ...url(ANDERE) };
-      expect(N.pruefeTicket({ item: N.itemAusIssue(issue), offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG } as never).ticket).toMatchObject({ nr: 1 });
+      expect(N.pruefeTicket({ item: N.itemAusIssue(issue), offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG }).ticket).toMatchObject({ nr: 1 });
     });
     test("ein qualifizierter Verweis aufs eigene Repo zählt als lokal (gegen die offenen Issues, ohne Fremdabruf)", () => {
       const spion = { n: 0 };
