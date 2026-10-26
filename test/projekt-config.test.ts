@@ -221,6 +221,7 @@ describe("pruefeProjektConfig", () => {
     assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");
     const items = [{ number: 1, repo: "acme/demo" }, { number: 2, repo: "acme/anders" }, { number: 3, repo: "" }, { number: 4 }];
     assert.deepEqual(pc.nurRepo(items, "acme/demo").map((i: { number: number }) => i.number), [1]);
+    assert.deepEqual(pc.nurRepo(items, "ACME/Demo").map((i: { number: number }) => i.number), [1]); // GitHub-Repos sind nicht groß-/kleinschreibungsabhängig
     assert.deepEqual(pc.nurRepo(items, "acme/anders").map((i: { number: number }) => i.number), [2]);
   });
 

@@ -1177,6 +1177,17 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(j.ticket).toBeNull();
     expect(j.hinweise).toEqual([`1 Items von ${EIGEN} stehen auf dem Board factory, das die Issues von ${ANDERE} führt (verwaist, nicht in der Auswahl): #7`]);
   });
+  test("Board-Verzug: ein eigenes Item auf dem fremden Board ist kein Verzug, ein fehlendes eigenes Item schon", () => {
+    const frisch = (nummer: number) => ({ issues: [{ number: nummer, projektIds: ["PF"] }], projektIds: ["PF"] });
+    const mitFrisch = (nummer: number) => {
+      const i = io([], [item(7, { ...harness, ...url(EIGEN) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+      const lade = i.lade;
+      i.lade = () => ({ ...lade(), frisch: frisch(nummer) }) as never;
+      return json(["--bereich", "produkt"], i) as J & { verzug: number[] };
+    };
+    expect(mitFrisch(7).verzug).toEqual([]);
+    expect(mitFrisch(8).verzug).toEqual([8]);
+  });
   test("ein Notfall des eigenen Repos zählt weiter, auch wenn das Board der Seite fremd ist", () => {
     const i = io([item(9, { title: "🚨 CI rot auf main: x", ...url(EIGEN) })], [], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
     expect(N.fuehreAus(["--bereich", "agentic"], i).out.split("\n")[0]).toBe("#9\t🚨 CI rot auf main: x");
@@ -1200,8 +1211,8 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     });
     test("ein qualifizierter Verweis aufs eigene Repo zählt als lokal (gegen die offenen Issues, ohne Fremdabruf)", () => {
       const spion = { n: 0 };
-      const i = mitBlocker(`blockiert durch ${EIGEN}#50`, { fremdStatus: () => { spion.n++; return { offen: false }; } });
-      i.lade = () => ({ produkt: norm([item(1, { ...url(EIGEN), body: `blockiert durch ${EIGEN}#50` })]), factory: [], offene: new Set([50]) });
+      const i = mitBlocker(`blockiert durch ${EIGEN.toUpperCase()}#50`, { fremdStatus: () => { spion.n++; return { offen: false }; } });
+      i.lade = () => ({ produkt: norm([item(1, { ...url(EIGEN), body: `blockiert durch ${EIGEN.toUpperCase()}#50` })]), factory: [], offene: new Set([50]) });
       expect(grund(i)).toBe("offener Blocker #50");
       expect(spion.n).toBe(0);
     });

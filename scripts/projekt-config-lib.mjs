@@ -509,7 +509,7 @@ export function boardPfad(board) {
 export const boardRepo = (board, config) => (typeof board?.repo === "string" ? board.repo : config?.repo);
 
 /** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
-export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && i.repo === repo);
+export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && i.repo.toLowerCase() === String(repo).toLowerCase());
 
 const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 
