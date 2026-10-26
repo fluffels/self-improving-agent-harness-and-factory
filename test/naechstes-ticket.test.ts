@@ -1133,3 +1133,108 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     });
   });
 });
+
+describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
+  const EIGEN = FREMD.repo;
+  const ANDERE = `${FREMD_OWNER}/andere`;
+  const url = (repo: string) => ({ repository_url: `https://api.github.com/repos/${repo}` });
+  const harness = { labels: [{ name: HARNESS }] };
+  type RIo = Io & { repo: string; boardRepos: { produkt: string; factory: string }; fremdStatus?: (repo: string, nr: number) => unknown };
+  const io = (produkt: unknown[], factory: unknown[], extra: Partial<RIo> = {}): RIo => ({
+    owner: OWNER, namen: NAMEN, config: CFG, repo: EIGEN, boardRepos: { produkt: EIGEN, factory: EIGEN },
+    lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene: new Set<number>() }),
+    ...extra,
+  });
+  type J = Ergebnis & { hinweise?: string[] };
+  const json = (argv: string[], i: RIo) => JSON.parse(N.fuehreAus(["--json", ...argv], i).out) as J;
+
+  test("Nummernkollision: nur das Item des eigenen Repos zählt, auch wenn das fremde zuerst steht", () => {
+    const r = N.fuehreAus(["--bereich", "produkt"], io([item(5, { title: "fremd", ...url(ANDERE) }), item(5, { title: "eigen", ...url(EIGEN) })], []));
+    expect(r.out.split("\n")[0]).toBe("#5\teigen");
+    expect(N.fuehreAus(["--bereich", "produkt"], io([item(5, { title: "fremd", ...url(ANDERE) })], [])).code).toBe(1);
+  });
+  test("ein Item ohne Repo-Angabe zählt nie als eigenes (fail-closed)", () => {
+    expect(N.fuehreAus(["--bereich", "produkt"], io([item(5)], [])).code).toBe(1);
+  });
+  test("fremdes Board der eigenen Seite (Negativfall AK6): kein Ticket, Hinweis nennt das Repo der Auswahl, Exit 1", () => {
+    const i = io([item(1, url(EIGEN))], [item(2, { ...harness, ...url(ANDERE) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+    const r = N.fuehreAus(["--bereich", "agentic"], i);
+    expect(r.code).toBe(1);
+    expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
+    expect(r.out).toContain(`hinweis Das Board factory (Bereich Agentic Engineering) führt die Issues von ${ANDERE}, nicht die von ${EIGEN}: die Auswahl für diesen Bereich läuft in ${ANDERE}`);
+    expect(json(["--bereich", "agentic"], i).ticket).toBeNull();
+  });
+  test("das Gegenstück: im Repo des Boards liefert dieselbe Auswahl das Item; ein Produkt-Board eines anderen Repos bleibt leer", () => {
+    const i = io([item(1, url(ANDERE))], [item(2, { ...harness, ...url(EIGEN) })], { boardRepos: { produkt: ANDERE, factory: EIGEN } });
+    expect(N.fuehreAus(["--bereich", "agentic"], i).out.split("\n")[0]).toBe("#2\tT2");
+    const p = N.fuehreAus(["--bereich", "produkt"], i);
+    expect(p.code).toBe(1);
+    expect(p.out).toContain(`Das Board produkt (Bereich Produktentwicklung) führt die Issues von ${ANDERE}`);
+  });
+  test("eigene Items auf einem fremden Board stehen als verwaist im Hinweis, nicht in der Auswahl; kein Verzug", () => {
+    const i = io([], [item(7, { ...harness, ...url(EIGEN) }), item(8, { ...harness, ...url(ANDERE) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+    const j = json(["--bereich", "produkt"], i);
+    expect(j.ticket).toBeNull();
+    expect(j.hinweise).toEqual([`1 Items von ${EIGEN} stehen auf dem Board factory, das die Issues von ${ANDERE} führt (verwaist, nicht in der Auswahl): #7`]);
+  });
+  test("ein Notfall des eigenen Repos zählt weiter, auch wenn das Board der Seite fremd ist", () => {
+    const i = io([item(9, { title: "🚨 CI rot auf main: x", ...url(EIGEN) })], [], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+    expect(N.fuehreAus(["--bereich", "agentic"], i).out.split("\n")[0]).toBe("#9\t🚨 CI rot auf main: x");
+  });
+  test("Board ohne eigenen Eintrag in boardRepos gilt als fremd (kein stilles Durchwinken)", () => {
+    const i = io([item(1, url(EIGEN))], [], { boardRepos: {} as RIo["boardRepos"] });
+    expect(N.fuehreAus(["--bereich", "produkt"], i).code).toBe(1);
+  });
+
+  describe("Blocker über Repo-Grenzen", () => {
+    const mitBlocker = (body: string, extra: Partial<RIo> = {}) => io([item(1, { ...url(EIGEN), body })], [], extra);
+    const grund = (i: RIo) => json(["--bereich", "produkt"], i).uebersprungen[0]?.grund;
+    test("ein offener fremder Blocker sperrt, ein geschlossener nicht", () => {
+      expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => ({ offen: true }) }))).toBe(`offener Blocker ${ANDERE}#3`);
+      expect(N.fuehreAus(["--bereich", "produkt"], mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => ({ offen: false }) })).code).toBe(0);
+    });
+    test("nicht prüfbar (Fehlerstand, Wurf oder kein Lader) ist fail-closed", () => {
+      expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => ({ fehler: "nicht abrufbar" }) }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (nicht abrufbar)`);
+      expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => { throw new Error("HTTP 502"); } }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (HTTP 502)`);
+      expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kein Lader)`);
+    });
+    test("ein qualifizierter Verweis aufs eigene Repo zählt als lokal (gegen die offenen Issues, ohne Fremdabruf)", () => {
+      const spion = { n: 0 };
+      const i = mitBlocker(`blockiert durch ${EIGEN}#50`, { fremdStatus: () => { spion.n++; return { offen: false }; } });
+      i.lade = () => ({ produkt: norm([item(1, { ...url(EIGEN), body: `blockiert durch ${EIGEN}#50` })]), factory: [], offene: new Set([50]) });
+      expect(grund(i)).toBe("offener Blocker #50");
+      expect(spion.n).toBe(0);
+    });
+    test("--ticket nutzt denselben Lader", () => {
+      const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: `${SPEZ}blockiert durch ${ANDERE}#3`, labels: [], assignees: [], user: { login: OWNER, type: "User" } };
+      const i = { ...mitBlocker("x", { fremdStatus: () => ({ offen: true }) }), ladeEinzeln: () => ({ item: N.itemAusIssue(issue), offene: new Set<number>() }) };
+      expect(N.fuehreAus(["--ticket", "1"], i).out).toBe(`#1 nicht frei: offener Blocker ${ANDERE}#3\n`);
+    });
+  });
+
+  describe("fremdStatusLader: Stand per REST, Memo, Fehler werden zu { fehler }", () => {
+    const lader = (N as unknown as { fremdStatusLader: (o: { holeIssue: (repo: string, nr: number) => unknown }) => (repo: string, nr: number) => unknown }).fremdStatusLader;
+    test("open und closed, je Verweis einmal geladen (Repo ohne Groß-/Kleinschreibung)", () => {
+      const abrufe: string[] = [];
+      const f = lader({ holeIssue: (repo, nr) => { abrufe.push(`${repo}#${nr}`); return { state: nr === 1 ? "open" : "closed" }; } });
+      expect(f(ANDERE, 1)).toEqual({ offen: true });
+      expect(f(ANDERE.toUpperCase(), 1)).toEqual({ offen: true });
+      expect(f(ANDERE, 2)).toEqual({ offen: false });
+      expect(abrufe).toEqual([`${ANDERE}#1`, `${ANDERE}#2`]);
+    });
+    test("Wurf und Antwort ohne Stand: { fehler }", () => {
+      expect(lader({ holeIssue: () => { throw new Error("404"); } })(ANDERE, 1)).toEqual({ fehler: "nicht abrufbar" });
+      expect(lader({ holeIssue: () => ({}) })(ANDERE, 1)).toEqual({ fehler: "Antwort ohne Stand" });
+    });
+  });
+
+  test("echteIo trägt Repo, Board-Repos und die Fremdstand-Naht für fuehreAus", () => {
+    const cfg = (ladeCfg as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const e = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => { repo: string; boardRepos: Record<string, string>; fremdStatus: unknown } }).echteIo({ config: cfg, messfensterLader: () => () => ({ closedAt: null, n: 0 }) });
+    const L = ladeCfg as unknown as { boardRepo: (b: unknown, c: unknown) => string };
+    const B = boardLib as unknown as { REPO: string; boardFuerRolle: (r: string) => unknown };
+    expect(e.repo).toBe(B.REPO);
+    expect(e.boardRepos).toEqual({ produkt: L.boardRepo(B.boardFuerRolle("produkt"), { repo: B.REPO }), factory: L.boardRepo(B.boardFuerRolle("factory"), { repo: B.REPO }) });
+    expect(typeof e.fremdStatus).toBe("function");
+  });
+});

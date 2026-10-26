@@ -440,6 +440,24 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(P.blockerNummern("blocked by #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([4]);
     expect(P.blockerNummern("blockiert durch #4", { ...SPRACHE, blocker: "blocked by" })).toEqual([]);
   });
+  test("blockerVerweise: qualifizierte und lokale Verweise, mehrfach pro Zeile, Duplikate einmal, Fences und Klammertext ignoriert", () => {
+    const V = raw as unknown as { blockerVerweise: (body: unknown, sprache: unknown) => { repo: string | null; nummer: number }[] };
+    expect(V.blockerVerweise("blockiert durch #1, acme/demo#2, own.er/re-po#3 (nur solange x/y#9 offen)", SPRACHE)).toEqual([
+      { repo: null, nummer: 1 },
+      { repo: "acme/demo", nummer: 2 },
+      { repo: "own.er/re-po", nummer: 3 },
+    ]);
+    expect(V.blockerVerweise("blockiert durch #1\nblockiert durch #1, a/b#1, a/b#1", SPRACHE)).toEqual([
+      { repo: null, nummer: 1 },
+      { repo: "a/b", nummer: 1 },
+    ]);
+    expect(V.blockerVerweise("```\nblockiert durch a/b#4\n```\nsiehe a/b#5", SPRACHE)).toEqual([]);
+    expect(V.blockerVerweise(null, SPRACHE)).toEqual([]);
+  });
+  test("blockerNummern: ein qualifizierter Verweis ist kein Blocker im eigenen Repo", () => {
+    expect(P.blockerNummern("blockiert durch acme/demo#1883, #5", SPRACHE)).toEqual([5]);
+    expect(P.blockerNummern("blockiert durch a/b#1, c/d#1", SPRACHE)).toEqual([]);
+  });
   test("Sonderzeichen im Blocker-Wort und in den Sätzen sind Text, keine Regex", () => {
     const sp = { ...SPRACHE, blocker: "a.b+(c)", abhaengigkeit: ["x.y # [z]"] };
     expect(P.blockerNummern("a.b+(c) #3", sp)).toEqual([3]);

@@ -63,6 +63,7 @@ function pruefeBoard(b, praefix) {
   for (const k of ["projectId", "statusFeldNodeId", "todoOptionId"]) {
     if (!istText(b[k])) fehler.push(`${praefix}${k} muss ein nicht-leerer String sein`);
   }
+  if (b.repo !== undefined && !(istText(b.repo) && REPO_FORM.test(b.repo))) fehler.push(`${praefix}repo muss die Form owner/name haben (optional: das Repo, dessen Issues dieses Board führt; ohne Schlüssel gilt das Repo der Config)`);
   return fehler;
 }
 
@@ -503,6 +504,12 @@ export function pruefeProjektConfig(wert) {
 export function boardPfad(board) {
   return `${board.besitzerTyp === "org" ? "orgs" : "users"}/${board.besitzer}/projectsV2/${board.nummer}`;
 }
+
+/** Pur: das Repo (`owner/name`), dessen Issues das Board führt: `board.repo`, ohne Schlüssel das `repo` der Config. */
+export const boardRepo = (board, config) => (typeof board?.repo === "string" ? board.repo : config?.repo);
+
+/** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
+export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && i.repo === repo);
 
 const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 
