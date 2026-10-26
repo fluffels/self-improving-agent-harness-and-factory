@@ -1219,7 +1219,7 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     test("--ticket nutzt denselben Lader", () => {
       const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: `${SPEZ}blockiert durch ${ANDERE}#3`, labels: [], assignees: [], user: { login: OWNER, type: "User" } };
       const i = { ...mitBlocker("x", { fremdStatus: () => ({ offen: true }) }), ladeEinzeln: () => ({ item: N.itemAusIssue(issue), offene: new Set<number>() }) };
-      expect(N.fuehreAus(["--ticket", "1"], i).out).toBe(`#1 nicht frei: offener Blocker ${ANDERE}#3\n`);
+      expect(N.fuehreAus(["--ticket", "1"], i as never).out).toBe(`#1 nicht frei: offener Blocker ${ANDERE}#3\n`);
     });
   });
 
