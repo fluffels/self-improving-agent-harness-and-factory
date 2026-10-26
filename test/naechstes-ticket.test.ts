@@ -1162,7 +1162,9 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(r.code).toBe(1);
     expect(r.out.split("\n")[0]).toBe("kein freies Ticket im Bereich Agentic Engineering");
     expect(r.out).toContain(`hinweis Das Board factory (Bereich Agentic Engineering) führt die Issues von ${ANDERE}, nicht die von ${EIGEN}: die Auswahl für diesen Bereich läuft in ${ANDERE}`);
-    expect(json(["--bereich", "agentic"], i).ticket).toBeNull();
+    const j = json(["--bereich", "agentic"], i);
+    expect(j.ticket).toBeNull();
+    expect(j.hinweise).toEqual([`Das Board factory (Bereich Agentic Engineering) führt die Issues von ${ANDERE}, nicht die von ${EIGEN}: die Auswahl für diesen Bereich läuft in ${ANDERE}`]); // kein „0 Items verwaist“ bei einem leeren fremden Board
   });
   test("das Gegenstück: im Repo des Boards liefert dieselbe Auswahl das Item; ein Produkt-Board eines anderen Repos bleibt leer", () => {
     const i = io([item(1, url(ANDERE))], [item(2, { ...harness, ...url(EIGEN) })], { boardRepos: { produkt: ANDERE, factory: EIGEN } });
@@ -1180,13 +1182,30 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
   test("Board-Verzug: ein eigenes Item auf dem fremden Board ist kein Verzug, ein fehlendes eigenes Item schon", () => {
     const frisch = (nummer: number) => ({ issues: [{ number: nummer, projektIds: ["PF"] }], projektIds: ["PF"] });
     const mitFrisch = (nummer: number) => {
-      const i = io([], [item(7, { ...harness, ...url(EIGEN) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+      const i = io([], [item(7, { ...harness, ...url(EIGEN) }), item(8, { ...harness, ...url(ANDERE) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } }); // #8 des anderen Repos darf ein fehlendes eigenes #8 nicht verdecken
       const lade = i.lade;
       i.lade = () => ({ ...lade(), frisch: frisch(nummer) }) as never;
       return json(["--bereich", "produkt"], i) as J & { verzug: number[] };
     };
     expect(mitFrisch(7).verzug).toEqual([]);
     expect(mitFrisch(8).verzug).toEqual([8]);
+  });
+  test("verwaist: höchstens 10 Nummern im Hinweis, bei mehr ein „…“ (Reihenfolge: Bereichs-Hinweis zuerst)", () => {
+    const viele = (n: number) => Array.from({ length: n }, (_, k) => item(100 + k, { ...harness, ...url(EIGEN) }));
+    const verwaist = (n: number) => json(["--bereich", "agentic"], io([], viele(n), { boardRepos: { produkt: EIGEN, factory: ANDERE } })).hinweise ?? [];
+    const zehn = verwaist(10);
+    expect(zehn).toHaveLength(2);
+    expect(zehn[0]).toMatch(/^Das Board factory/);
+    expect(zehn[1]).toMatch(/^10 Items von .* #100, #101, #102, #103, #104, #105, #106, #107, #108, #109$/);
+    expect(verwaist(11)[1]).toMatch(/^11 Items von .* #100, .*, #109, …$/);
+  });
+  test("--maengel: nur Items des eigenen Repos auf dem eigenen Board, fremde Blocker über denselben Lader", () => {
+    const maengel = (i: RIo) => (JSON.parse(N.fuehreAus(["--json", "--maengel"], i).out) as { maengel: { nr: number }[] }).maengel.map((m) => m.nr);
+    const i = io([roh(1, url(EIGEN)), roh(2, url(ANDERE))], [roh(3, { ...harness, ...url(EIGEN) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
+    expect(maengel(i)).toEqual([1]);
+    const mitBlocker = (offen: boolean) => io([roh(4, { ...url(EIGEN), body: `blockiert durch ${ANDERE}#3` })], [], { fremdStatus: () => ({ offen }) });
+    expect(maengel(mitBlocker(false))).toEqual([4]);
+    expect(maengel(mitBlocker(true))).toEqual([]);
   });
   test("ein Notfall des eigenen Repos zählt weiter, auch wenn das Board der Seite fremd ist", () => {
     const i = io([item(9, { title: "🚨 CI rot auf main: x", ...url(EIGEN) })], [], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
@@ -1208,6 +1227,17 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => ({ fehler: "nicht abrufbar" }) }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (nicht abrufbar)`);
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => { throw new Error("HTTP 502"); } }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (HTTP 502)`);
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kein Lader)`);
+    });
+    test("ein Wurf ohne Error-Objekt ist ebenfalls nicht prüfbar (kein stilles Durchwinken)", () => {
+      expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => { throw "kaputt"; } }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kaputt)`);
+    });
+    test("--ticket: ein Issue eines anderen Repos (übertragene Nummer) ist nicht frei, ein Issue ohne Repo-Angabe wird geprüft", () => {
+      const issue = (extra: object) => ({ number: 1, node_id: "I_1", title: "T1", state: "open", body: SPEZ, labels: [], assignees: [], user: { login: OWNER, type: "User" }, ...extra });
+      const einzel = (extra: object) => ({ ...io([], []), ladeEinzeln: () => ({ item: N.itemAusIssue(issue(extra)), offene: new Set<number>() }) }) as never;
+      expect(N.fuehreAus(["--ticket", "1"], einzel(url(ANDERE))).out).toBe(`#1 nicht frei: gehört zu ${ANDERE}, nicht zu ${EIGEN}
+`);
+      expect(N.fuehreAus(["--ticket", "1"], einzel(url(EIGEN.toUpperCase()))).code).toBe(0);
+      expect(N.fuehreAus(["--ticket", "1"], einzel({})).code).toBe(0);
     });
     test("ein qualifizierter Verweis aufs eigene Repo zählt als lokal (gegen die offenen Issues, ohne Fremdabruf)", () => {
       const spion = { n: 0 };

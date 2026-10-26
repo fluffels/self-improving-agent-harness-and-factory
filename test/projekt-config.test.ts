@@ -222,6 +222,8 @@ describe("pruefeProjektConfig", () => {
     const items = [{ number: 1, repo: "acme/demo" }, { number: 2, repo: "acme/anders" }, { number: 3, repo: "" }, { number: 4 }];
     assert.deepEqual(pc.nurRepo(items, "acme/demo").map((i: { number: number }) => i.number), [1]);
     assert.deepEqual(pc.nurRepo(items, "ACME/Demo").map((i: { number: number }) => i.number), [1]); // GitHub-Repos sind nicht groß-/kleinschreibungsabhängig
+    assert.deepEqual(pc.nurRepo([{ number: 7, repo: "Acme/Demo" }], "acme/demo").map((i: { number: number }) => i.number), [7]); // auch die Schreibung des Items zählt nicht
+    assert.deepEqual(pc.nurRepo(items, ""), []); // ein Item ohne Repo gehört nie zu einem leeren Repo
     assert.deepEqual(pc.nurRepo(items, "acme/anders").map((i: { number: number }) => i.number), [2]);
   });
 

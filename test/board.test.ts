@@ -364,7 +364,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     const item = (url: unknown) => [[{ node_id: "ITEM_r", content_type: "Issue", content: { number: 5, repository_url: url }, fields: [] }]];
     expect(K.normalizeItems(item("https://api.github.com/repos/acme/demo"))[0]).toMatchObject({ number: 5, repo: "acme/demo" });
     expect(K.normalizeItems(item("https://api.github.com/repos/acme/anders"))[0]).toMatchObject({ number: 5, repo: "acme/anders" });
-    for (const schlecht of [undefined, 5, "", "https://api.github.com/repos/acme", "https://api.github.com/users/acme/demo"]) expect(K.normalizeItems(item(schlecht))[0].repo, String(schlecht)).toBe("");
+    for (const schlecht of [undefined, 5, "", "https://api.github.com/repos/acme", "https://api.github.com/repos/acme/demo/x", "https://api.github.com/users/acme/demo"]) expect(K.normalizeItems(item(schlecht))[0].repo, String(schlecht)).toBe("");
   });
 
   test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {

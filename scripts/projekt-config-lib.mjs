@@ -508,8 +508,11 @@ export function boardPfad(board) {
 /** Pur: das Repo (`owner/name`), dessen Issues das Board führt: `board.repo`, ohne Schlüssel das `repo` der Config. */
 export const boardRepo = (board, config) => (typeof board?.repo === "string" ? board.repo : config?.repo);
 
+/** Pur: sind zwei Repo-Angaben (`owner/name`) dasselbe Repo? GitHub unterscheidet Groß- und Kleinschreibung nicht; ein Nicht-String ist nie gleich. */
+export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
+
 /** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
-export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && i.repo.toLowerCase() === String(repo).toLowerCase());
+export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && gleichesRepo(i.repo, repo));
 
 const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 

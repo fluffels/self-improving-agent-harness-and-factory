@@ -36,7 +36,7 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, labelAus, ladeProjektConfig, nurRepo, spracheAus } from "./projekt-config-lib.mjs";
+import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, gleichesRepo, labelAus, ladeProjektConfig, nurRepo, spracheAus } from "./projekt-config-lib.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
 import { blockerVerweise, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
 import { ladeLaeufe, laufAus } from "./subagent-laeufe.mjs";
@@ -144,6 +144,7 @@ export function itemAusIssue(issue) {
  */
 export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus }) {
   const nr = item.number;
+  if (repo !== undefined && item.repo !== "" && !gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
   const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
@@ -257,8 +258,6 @@ function fuellstandGrund(c, fuellstand) {
 }
 
 const FREMDSTATUS_OHNE_LADER = () => ({ fehler: "kein Lader" });
-
-const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 
 /**
  * Überspringgrund der Blocker-Zeile (`""` = kein offener Blocker): ein Verweis ohne Repo oder auf das eigene Repo (`repo`) zählt gegen `offene`,
