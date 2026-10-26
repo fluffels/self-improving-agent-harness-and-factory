@@ -21,6 +21,7 @@ interface Pc {
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
+  gleichesRepo(a: unknown, b: unknown): boolean;
   nurRepo<T extends { repo?: string }>(items: T[], repo: string): T[];
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
@@ -216,6 +217,11 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);
     assert.match(mit(5).join("\n"), /boards\.1\.repo/);
     assert.match(mit("").join("\n"), /boards\.1\.repo/);
+    assert.equal(pc.gleichesRepo("Acme/Demo", "acme/demo"), true);
+    assert.equal(pc.gleichesRepo("acme/demo", "acme/anders"), false);
+    assert.equal(pc.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
+    assert.equal(pc.gleichesRepo(undefined, "acme/demo"), false);
+    assert.equal(pc.gleichesRepo(undefined, undefined), false);
     const c = gueltig();
     assert.equal(pc.boardRepo(c.boards?.[0] ?? {}, c), "acme/demo");
     assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");

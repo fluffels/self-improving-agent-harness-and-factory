@@ -512,7 +512,7 @@ export const boardRepo = (board, config) => (typeof board?.repo === "string" ? b
 export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 
 /** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
-export const nurRepo = (items, repo) => items.filter((i) => typeof i.repo === "string" && i.repo !== "" && gleichesRepo(i.repo, repo));
+export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
 
 const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 
