@@ -17,9 +17,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fixture } from "./support/tmp-fixture";
 import { FREMD, projektConfig } from "./support/fremd-config";
+import { liesMitProjektwerten } from "./support/ticket-ablauf";
 
 type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
@@ -408,7 +408,7 @@ describe("Diff-Größenbudget (#533)", () => {
 
   test("Doku nennt den Override so, wie das Skript ihn liest (#1269: keine Env-Variable mehr)", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
-      const text = readFileSync(new URL(`../${datei}`, import.meta.url), "utf8");
+      const text = liesMitProjektwerten(datei);
       assert.ok(text.includes(`${ECHT.diffsizeOverride}: #<nr>`), `${datei} beschreibt die Commit-Zeile`);
       assert.ok(!text.includes(`${altEnvPraefix(projektConfig())}DIFFSIZE_OVERRIDE=`), `${datei} verspricht keine Env-Variable mehr`);
     }
@@ -422,7 +422,7 @@ describe("Diff-Größenbudget (#533)", () => {
   ];
   for (const [schluessel, dateien] of BINDUNG) {
     test(`Doku-Bindung: ${schluessel} steht in ${dateien.join(", ")}`, () => {
-      const fehlt = dateien.filter((d) => !readFileSync(new URL(`../${d}`, import.meta.url), "utf8").includes(schluessel));
+      const fehlt = dateien.filter((d) => !liesMitProjektwerten(d).includes(schluessel));
       assert.deepEqual(fehlt, []);
     });
   }

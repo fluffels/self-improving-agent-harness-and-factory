@@ -1,0 +1,6 @@
+{
+  "docs/harness-glossar.md": { "Stardew": 1 },
+  "docs/harness-inventar.md": { "Agent": 6, "Worktree": 6 },
+  "docs/langfuse-hook-patch.md": { "kubernia": 3 },
+  "docs/model-routing.md": { "kubernia": 13 }
+}

@@ -15,7 +15,7 @@ Belege im Repo: [`eslint-suppressions.json`](../eslint-suppressions.json) (Kompl
 
 ## Reifestufen
 
-Aufwand ist qualitativ (klein, mittel, groß) und an den Kubernia-Tickets belegt, die die Stufe eingeführt haben; keine Stundenangaben, die niemand gemessen hat.
+Aufwand ist qualitativ (klein, mittel, groß) und an den Tickets des [Quellprojekts](https://github.com/fluffels/kubernia) belegt, die die Stufe eingeführt haben; keine Stundenangaben, die niemand gemessen hat.
 
 | Stufe | Was | Aufwand | Nutzen | Typische Brownfield-Hürde | Bestand einfrieren | Beleg hier |
 |---|---|---|---|---|---|---|
@@ -44,12 +44,12 @@ Hinweise zur Wahl: Für **JS/TS** und **Python** liefert das Werkzeug den Graphe
 
 ## docs-gen in ein anderes Repo übernehmen (Stufe 2 und 3)
 
-Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
+Der Generator-Kern hängt nicht am [Quellprojekts](https://github.com/fluffels/kubernia). Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
 
 **Ist-Zustand ist Übernahme per Kopie, kein Paket.** Zum Kopieren:
 
 - Kern: `scripts/docs-gen.mjs` (Engine), `scripts/docs-gen/markdown.mjs`, `adr.mjs`, `zeitleiste.mjs`, `schichten.mjs`, dazu `registry.mjs`: sie führt nur Kern- und Harness-Generatoren, eigene Generatoren des Projekts nennt die Config im Schlüssel `generatoren` (`{ <marker>: { datei, name } }`), eine eigene Registry ist nicht nötig, wenn die Harness-Generatoren, die `registry.mjs` statisch importiert (`gates`, `diagramme`, `harness-inventar`, `harness-kennzahlen` samt deren Importen), mitkopiert werden; sonst übergibt das Projekt eigene `generators`.
-- Nicht Kern: `harness-inventar`, `harness-kennzahlen`, `diagramme` und `ruleset-spiegel` setzen Claude Code und GitHub voraus (`harness-kennzahlen` zählt zudem npm-Ketten und GitHub-Workflows); `gates` setzt npm-Skripte voraus (für einen anderen Task-Runner, etwa Make, ist ein eigener Generator nötig); `save-versionen` und die Quest-Generatoren sind Kubernia-spezifisch und stehen nicht in der Registry, sondern in der Config von Kubernia (`generatoren`). Welche Kern- und Harness-Generatoren es gibt, zeigt die gruppierte [Registry](../scripts/docs-gen/registry.mjs).
+- Nicht Kern: `harness-inventar`, `harness-kennzahlen`, `diagramme` und `ruleset-spiegel` setzen Claude Code und GitHub voraus (`harness-kennzahlen` zählt zudem npm-Ketten und GitHub-Workflows); `gates` setzt npm-Skripte voraus (für einen anderen Task-Runner, etwa Make, ist ein eigener Generator nötig); `save-versionen` und die Quest-Generatoren sind projektspezifisch und stehen nicht in der Registry, sondern in der Config des Projekts (`generatoren`). Welche Kern- und Harness-Generatoren es gibt, zeigt die gruppierte [Registry](../scripts/docs-gen/registry.mjs).
 
 **Was das Projekt festlegt (alles in einer Config-Datei, `--config <pfad>`):**
 
