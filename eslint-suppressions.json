@@ -384,9 +384,6 @@
     }
   },
   "test/lockfile.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 7
     },

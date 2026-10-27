@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FREMD, projektConfig } from "./support/fremd-config";
+import { liesMitProjektwerten } from "./support/ticket-ablauf";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
@@ -55,7 +56,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  aus dem übergebenen package.json spiegelt — der „grüne" Ausgangszustand. */
 function lockMirroring(pkg: Pkg): Lock {
   const root: Record<string, unknown> = { name: pkg.name, version: pkg.version };
-  for (const b of DEP_BUCKETS) if (pkg[b]) root[b] = { ...(pkg[b] as object) };
+  for (const b of DEP_BUCKETS) if (pkg[b]) root[b] = { ...(pkg[b]) };
   return { name: pkg.name, version: pkg.version, lockfileVersion: 3, packages: { "": root } };
 }
 
@@ -82,9 +83,9 @@ describe("Lockfile-Integrität (#593)", () => {
     assert.equal(r.ok, false);
     const p = r.problems.find((x) => x.kind === "spec-mismatch");
     assert.ok(p, "spec-mismatch muss gemeldet werden");
-    assert.equal(p!.name, "beispiel-lib");
-    assert.equal(p!.pkgSpec, "^4.0.0");
-    assert.equal(p!.lockSpec, "^3.87.0");
+    assert.equal(p.name, "beispiel-lib");
+    assert.equal(p.pkgSpec, "^4.0.0");
+    assert.equal(p.lockSpec, "^3.87.0");
   });
 
   test("neue Dependency in package.json, aber nicht im Lockfile → missing", () => {
@@ -94,7 +95,7 @@ describe("Lockfile-Integrität (#593)", () => {
     assert.equal(r.ok, false);
     const p = r.problems.find((x) => x.kind === "missing" && x.name === "lodash");
     assert.ok(p, "fehlende Dependency muss gemeldet werden");
-    assert.equal(p!.bucket, "dependencies");
+    assert.equal(p.bucket, "dependencies");
   });
 
   test("Dependency aus package.json entfernt, aber noch im Lockfile → extra", () => {
@@ -104,7 +105,7 @@ describe("Lockfile-Integrität (#593)", () => {
     assert.equal(r.ok, false);
     const p = r.problems.find((x) => x.kind === "extra" && x.name === "vitest");
     assert.ok(p, "verwaiste Lockfile-Dependency muss gemeldet werden");
-    assert.equal(p!.bucket, "devDependencies");
+    assert.equal(p.bucket, "devDependencies");
   });
 
   test("Projekt-Version gebumpt ohne install → version-mismatch", () => {
@@ -144,7 +145,7 @@ describe("Lockfile-Integrität (#593)", () => {
       { kind: "spec-mismatch", bucket: "dependencies", name: "z", pkgSpec: "^1", lockSpec: "^2" },
     ];
     for (const k of kinds) {
-      const line = describeProblem(k as Problem);
+      const line = describeProblem(k);
       assert.ok(line.length > 0 && !line.includes("unbekannter Befund"), `Zeile für ${k.kind}`);
     }
   });
@@ -277,7 +278,7 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
 
   test("Doku nennt den Override so, wie das Skript ihn liest", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
-      const text = readFileSync(join(REPO_ROOT, datei), "utf8");
+      const text = liesMitProjektwerten(datei);
       assert.ok(text.includes(ECHT.lockfileOverride), `${datei} beschreibt ${ECHT.lockfileOverride}`);
     }
   });

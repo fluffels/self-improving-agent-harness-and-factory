@@ -18,6 +18,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ladeBesitzManifest } from "../support/besitz-anker";
+import { liesMitProjektwerten } from "../support/ticket-ablauf";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as inventar from "../../scripts/docs-gen/harness-inventar.mjs";
@@ -107,7 +108,7 @@ function vokabularProbleme(zeilen: Zeile[]): string[] {
 }
 
 /** Seitentext mit LF (unter Windows checkt `core.autocrlf` CRLF aus). */
-const seite = () => readFileSync(join(WURZEL, SEITE), "utf8").replace(/\r\n/g, "\n");
+const seite = () => liesMitProjektwerten(SEITE).replace(/\r\n/g, "\n");
 
 /** Zahl der Tabellen mit dem Inventar-Kopf. Pur. */
 const kopfZahl = (text: string) => text.split("\n").filter((z) => z.trim() === KOPF).length;
