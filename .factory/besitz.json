@@ -1,6 +1,12 @@
 {
   "version": 1,
   "eintraege": [
+    {"pfad":"scripts/codex-lib.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
+    {"pfad":"scripts/codex-rollen.mjs","ring":"kern","quelle":"Codex-Rollenquelle (#79)"},
+    {"pfad":"scripts/codex-belege.mjs","ring":"kern","quelle":"Codex-Belegdiagnose (#79)"},
+    {"pfad":"scripts/codex-setup.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
+    {"pfad":"scripts/codex-vorpruefung.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
+    {"pfad":"docs/codex/einstieg.md","ring":"kern","quelle":"Codex-Laufzeitabbildung (#79)"},
     {"pfad":"scripts/pretooluse-hook.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/hook-io.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/stdin-skript-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},

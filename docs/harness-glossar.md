@@ -35,7 +35,8 @@
 | Ticketlauf | Ein Lauf des Ticket-Skills von der Auswahl bis zum Merge. Seine Subagenten sind die Agenten `agenten.planer`, `agenten.umsetzer`, `agenten.lens` und `agenten.gruppe` der Projekt-Config; die Messskripte (`hauptchat-zerlegung`, `subagent-laufzeit`, `kontext-treiber`) erkennen sie am Namen aus der Config, nicht an einem Präfix. Ein verschachtelter Subagent zählt immer dazu. | [ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md) |
 | Bereich | Die Seite der Auswahl: `produkt` (nur Produkt-Board) oder `agentic` (nur Factory-Board), gesetzt vom Ticket-Skill und als `--bereich` an die Auswahl gereicht; 🚨 CI rot auf `main` und 🔒 Security gelten auf beiden Boards. | [ticket-reihenfolge.md](ticket-reihenfolge.md) |
 | Bereichs-Alias | Ein Name aus `bereiche.aliase` der Projekt-Config (Alias zu Kern-Bereich), den `--bereich` der Auswahl annimmt und auf `agentic` oder `produkt` abbildet; ohne Eintrag ist der Name unbekannt (Exit 2), ein Alias darf keinen Kern-Namen überdecken. Im Kern steht nur der Kern-Name, der Alias ist Projektwissen. | [Fortschreibung #1943](adr/fortschreibungen/0022-1943-bereich-produkt-und-ticket-skill-aus-quelle.md) |
-| Hook | Ein Skript, das Claude Code bei einem Ereignis automatisch ausführt (vor einem Tool-Aufruf, beim Stopp) und das einen Vorgang verweigern kann. | [Harness-FAQ](agent-harness-faq.md) |
+| Hook | Ein automatisch ausgeführter Ereignis-Handler (etwa vor einem Tool-Aufruf oder beim Stopp). Ereignisse, Payload und mögliche Blockadewirkung hängen von der Laufzeit ab; Claude-Registrierungen sind keine Codex-Registrierungen. | [Harness-FAQ](agent-harness-faq.md), [Codex](codex/einstieg.md) |
+| Codex-Vorprüfung | Lesender, derzeit sperrender Einstieg des Codex-Prototyps. Diagnostiziert Rollen-/MCP-Inventar und exportierte Langfuse-Belege; Offline-Daten erteilen keine autonome Freigabe. | [Codex](codex/einstieg.md#vorprüfung-und-nachweisformat) |
 
 ## Grenzen und Prüfungen
 

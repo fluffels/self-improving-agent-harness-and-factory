@@ -7,6 +7,8 @@ effort: medium
 
 # Agentic-Ticket abarbeiten
 
+Codex: [Einstieg](../../../docs/codex/einstieg.md).
+
 **Bereich: `agentic`.** Die Auswahl läuft mit `--bereich agentic` und sieht nur das Factory-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Kein Ausweichen auf das andere Board, keine Rückfrage.
 
 **Lies `.agents/skills/factory/ablauf.md` und folge ihm mit diesem Bereich.** Dort steht der ganze Ablauf (Claim, Planer, Umsetzer, Übergabe, Abnahme, Abschluss); diese Datei legt nur Bereich und Auslöser fest.

@@ -96,6 +96,7 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 | Budget-Pacing (`budget-pacing.mjs`, `budget-lib.mjs`, `statusline.mjs`) | taktet Mehr-Tickets-Läufe nach dem Wochenlimit des Kontos (Snapshot aus Statusline oder Headless-Probe) | `statusLine` liefert `rate_limits` nur für Pro/Max ([Statusline](https://code.claude.com/docs/en/statusline), gelesen 2026-10-15); [Mods](https://code.claude.com/docs/en/plugins/mods/overview.md) laufen unsandboxed und sind neu | behalten: Mods beobachten | ja |
 | Lebende Doku (`docs-gen.mjs`, `scripts/docs-gen/`, `schichten-kern.cjs`) | generierte Abschnitte | kein Gegenstück; Kern-Schnitt: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md) | behalten | ja |
 | `patch-abschnitte.mjs` | teilt einen Patch für die Lenses in Leseabschnitte | kein Gegenstück; gleicht den Lesezwang des Modells aus | behalten: Lockern-Kandidat ([ADR 0027](adr/0027-regeln-lockern.md)) | ja |
+| Codex-Adapter (`codex-lib.mjs`, `codex-rollen.mjs`, `codex-belege.mjs`, `codex-setup.mjs`, `codex-vorpruefung.mjs`) | erzeugt native Rollen/MCP aus gemeinsamen Quellen und sperrt unbelegte autonome Läufe | native Konfiguration vorhanden; Schutz- und Tracing-Abnahme fehlt ([Codex](codex/einstieg.md)) | behalten: Prototyp ohne autonome Freigabe | ja |
 
 ## C. Regeln mit Modell- oder Werkzeugbezug
 

@@ -8,6 +8,8 @@ effort: medium
 
 # Ticket des Produkt-Boards abarbeiten
 
+Codex: [Einstieg](../../../docs/codex/einstieg.md).
+
 **Bereich: `produkt`.** Die Auswahl läuft mit `--bereich produkt` und sieht nur das Produkt-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Es wird nie ein Harness-Ticket gezogen, keine Rückfrage.
 
 **Lies `.agents/skills/factory/ablauf.md` und folge ihm mit diesem Bereich.** Dort steht der ganze Ablauf (Claim, Planer, Umsetzer, Übergabe, Abnahme, Abschluss); diese Datei legt nur Bereich und Auslöser fest. Die Fortsetzung „mach mit #<nr> weiter“ gehört diesem Skill; eine Ticketnummer braucht keinen Bereich.
