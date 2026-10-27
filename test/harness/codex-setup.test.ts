@@ -87,7 +87,7 @@ test("separates Ausgabeziel: Vorschau schreibt nichts; Quellen bleiben im Quellr
   expect(lauf(root, [...args, "--write"]).code).toBe(1);
   expect(readFileSync(join(ziel, ".codex/config.toml"), "utf8")).toBe("Entwurf");
 });
-test.each([".mcp.json", ".factory/projekt.json", ".claude/agents/factory-planer.md", "AGENTS.md"])("fehlende Quelle %s stoppt vor Ausgabe", p => {
+test.each([".mcp.json", ".factory/projekt.json", ".claude/agents/factory-planer.md", "AGENTS.md", "scripts/codex-hook.mjs"])("fehlende Quelle %s stoppt vor Ausgabe", p => {
   const root = quelle(), ziel = join(temp(), "neu"); rmSync(join(root, p));
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]).code).toBe(1);
   expect(existsSync(ziel)).toBe(false);

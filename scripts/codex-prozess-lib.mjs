@@ -19,12 +19,12 @@ export function profil(config = PROFIL) {
   writeFileSync(join(env.CODEX_HOME, "config.toml"), config);
   return { root, env, entfernen: () => rmSync(root, { recursive: true, force: true }) };
 }
-export function beenden(child) {
-  if (child.exitCode !== null || !child.pid) return;
-  if (process.platform === "win32") {
-    try { execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); } catch { child.kill(); }
+export function beenden(child, { platform = process.platform, treeKill = execFileSync, killGroup = process.kill } = {}) {
+  if (child.exitCode !== null || child.signalCode || !child.pid) return;
+  if (platform === "win32") {
+    try { treeKill("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); } catch { child.kill(); }
   } else {
-    try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+    try { killGroup(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
   }
 }
 export function prozess(file, args, { cwd, env, input = "", timeoutMs = 3000, maxBytes = 1_000_000 }) {
@@ -45,12 +45,13 @@ export function prozess(file, args, { cwd, env, input = "", timeoutMs = 3000, ma
   });
 }
 /** Nur feste administrative RPCs; Modell-/Shell-RPCs werden hier nie angeboten. */
-export async function mitInventar(codex, p, fn) {
-  const child = spawn(codex, ["--strict-config", "app-server", "--stdio"], { cwd: p.root, env: p.env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
+export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 5000 } = {}) {
+  const child = start(codex, ["--strict-config", "app-server", "--stdio"], { cwd: p.root, env: p.env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
   const pending = new Map(); let seq = 0, bytes = 0;
   const stop = e => { for (const waiter of pending.values()) waiter.reject(e); pending.clear(); beenden(child); };
-  const timer = setTimeout(() => stop(new Error("Inventar-Frist überschritten")), 5000);
+  const timer = setTimeout(() => stop(new Error("Inventar-Frist überschritten")), timeoutMs);
   child.on("error", stop); child.stdin.on("error", stop); child.stderr.on("data", () => {});
+  child.on("close", () => stop(new Error("Inventar-Prozess beendet")));
   const lines = createInterface({ input: child.stdout });
   lines.on("line", line => {
     try {

@@ -104,6 +104,8 @@ Eine Aktion geht als JSON über stdin an `node scripts/codex-geschuetzt.mjs`:
 
 Nur `bash` und `powershell` sind unterstützte Shellwerte. Der Host liest keine Authdateien; die autorisierte Shellaktion selbst läuft mit der Umgebung des aufrufenden Hosts. Sie ist ausdrücklich kein Fremdtext-Eingang.
 
+Die GitHub-Sperre ist konservativ: Auch `gh` beziehungsweise `gh.exe` als Wort in einem Daten- oder Suchbefehl führt zum Stopp. Dieser kleine unterstützte Befehlssprachumfang ersetzt keine allgemeine Shell-Freigabe.
+
 `node scripts/codex-fremdtext.mjs http://127.0.0.1:<port>/v1` erhält ausschließlich die bereits beschafften Daten über stdin. Eine frische Elterninstanz nutzt eigene HOME-/CODEX_HOME-/AppData-Verzeichnisse, eine explizite Umgebungs-Allowlist, keine Authkopien, keine MCPs und deaktivierte Apps, Plugins, Memories, Shell, Multi-Agenten, Ziele, Bilder, Permissions und Websuche. Bis zu sicherem Hostauth ist ausschließlich ein ausdrücklich eingerichteter lokaler authfreier Provider unterstützt. Die separate Home-Umgebung ist **keine OS-Dateiisolierung**: CLI-Startkontext kann lokale Skillbeschreibungen enthalten. Die Sicherheitsgrenze für modellgesteuerte Zugriffe ist der belegte Toolentzug; OS-Datei- und Netzzugriffe beliebiger Programme werden nicht attestiert.
 
 Die echte Engine-Probe erzwingt Aufrufe über einen harmlosen SSE-Responses-Provider. Inventar: ausschließlich `request_user_input`; Default-Modus verweigert auch dieses Tool. `exec_command`, `apply_patch`, `functions.exec`, ein unbekanntes Tool und ein schreibendes MCP werden als `unsupported call` zurückgewiesen; externe Fixture-Marker bleiben unverändert. Die Textkontrolle liefert `FIXTURE_OK`. Reproduzierbar ohne echte Tokens:

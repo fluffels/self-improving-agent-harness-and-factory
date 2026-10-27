@@ -4,13 +4,15 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createServer } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
+import { spawnSync, type ChildProcess } from "node:child_process";
+import { fakeInventar, type Inventar } from "../support/codex-fixture";
 // @ts-expect-error: Node-Skripte ohne Declaration.
 import * as raw from "../../scripts/codex-prozess-lib.mjs";
 // @ts-expect-error: Node-Skripte ohne Declaration.
 import * as fremdRaw from "../../scripts/codex-fremdtext.mjs";
 type Profil = { root: string; env: Record<string, string>; entfernen: () => void };
-const c = raw as unknown as { profil: (s?: string) => Profil; umgebung: (h: string) => Record<string, string>; prozess: (f: string, a: string[], o: { cwd: string; env: Record<string, string>; input?: string; timeoutMs?: number; maxBytes?: number }) => Promise<{ code: number; stdout: string; stderr: string }> };
-const f = fremdRaw as unknown as { fremdtextProfil: (u: string) => string; verarbeiteFremdtext: (d: unknown, u: string, codex?: string) => Promise<string> };
+const c = raw as unknown as { profil: (s?: string) => Profil; umgebung: (h: string) => Record<string, string>; prozess: (f: string, a: string[], o: { cwd: string; env: Record<string, string>; input?: string; timeoutMs?: number; maxBytes?: number }) => Promise<{ code: number; stdout: string; stderr: string }>; mitInventar: Inventar; beenden: (child: { exitCode: number | null; signalCode?: string | null; pid?: number; kill: (s?: string) => void }, opts?: { platform?: string; treeKill?: (...a: unknown[]) => void; killGroup?: (...a: unknown[]) => void }) => void };
+const f = fremdRaw as unknown as { fremdtextProfil: (u: string) => string; verarbeiteFremdtext: (d: unknown, u: string, codex?: string, deps?: { inventar: Inventar; engine: typeof c.prozess }) => Promise<string> };
 const temps: Profil[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const p of temps.splice(0)) p.entfernen(); });
 function temp() { const p = c.profil(); temps.push(p); return p; }
@@ -26,8 +28,47 @@ test("allowlist Umgebung entzieht Auth/Apps/Proxy und eigene Homepfade", () => {
   expect(config).toContain('web_search="disabled"'); expect(config).not.toContain("mcp_servers");
   p.entfernen(); expect(existsSync(p.root)).toBe(false);
 });
-test.each(["https://example.test", "http://localhost:80", "http://user@127.0.0.1:9", "http://127.0.0.1/?key=x", "http://127.0.0.1/#x", "bad"])("nicht authfreier lokaler Provider stoppt: %s", u => {
+test.each(["https://127.0.0.1:9", "http://localhost:80", "http://user@127.0.0.1:9", "http://:pass@127.0.0.1:9", "http://127.0.0.1/?key=x", "http://127.0.0.1/#x", "bad"])("nicht authfreier lokaler Provider stoppt: %s", u => {
   expect(() => f.fremdtextProfil(u)).toThrow();
+});
+test.each(["x".repeat(100000), "ä".repeat(50000)])("exakt 100000 Bytes erreichen die Engine", async daten => {
+  const state: { root?: string } = {}, engine = vi.fn<typeof c.prozess>((_file, _args, o) => c.prozess(process.execPath, ["-e", "process.stdin.resume();process.stdin.on('end',()=>console.log('ENGINE_OK'))"], o));
+  expect(await f.verarbeiteFremdtext(daten, "http://127.0.0.1:9/v1", "fixture", { inventar: fakeInventar("ok", { "mcpServerStatus/list": { data: [] } }, state), engine })).toBe("ENGINE_OK\n");
+  expect(engine).toHaveBeenCalledOnce(); expect(existsSync(state.root ?? "")).toBe(false);
+});
+test("mehrbyte Überlauf stoppt vor Inventar", async () => {
+  const inv = vi.fn<Inventar>(), engine = vi.fn<typeof c.prozess>();
+  await expect(f.verarbeiteFremdtext("ä".repeat(50001), "http://127.0.0.1:9/v1", "fixture", { inventar: inv, engine })).rejects.toThrow(/groß/); expect(inv).not.toHaveBeenCalled();
+});
+test.each(["version", "mcp", "exit"])("Fremdtext-Laufzeitfehler %s beendet Kind und räumt Profil auf", async mode => {
+  const state: { root?: string; child?: ChildProcess } = {}, engine = vi.fn<typeof c.prozess>((_file, _args, o) => c.prozess(process.execPath, ["-e", "process.stdin.resume();process.stdin.on('end',()=>{process.exitCode=3})"], o));
+  await expect(f.verarbeiteFremdtext("fixture", "http://127.0.0.1:9/v1", "fixture", { inventar: fakeInventar(mode, { "mcpServerStatus/list": { data: mode === "mcp" ? [{}] : [] } }, state), engine })).rejects.toThrow(mode === "version" ? /Version/ : mode === "mcp" ? /MCP/ : /Elterninstanz/);
+  expect(engine).toHaveBeenCalledTimes(mode === "exit" ? 1 : 0); expect(state.root).toBeTypeOf("string"); expect(existsSync(state.root ?? "")).toBe(false); expect(state.child).toBeDefined(); expect([state.child?.exitCode, state.child?.signalCode]).not.toEqual([null, null]);
+});
+test.each([["json", /JSON/], ["rpc", /RPC/], ["size", /zu groß/], ["hang", /Frist/], ["pipe", /EPIPE|beendet/], ["close", /beendet/]])("echter Inventar-Kindprozess %s: kein Folgeschritt, Prozess geschlossen", async (mode, grund) => {
+  const p = temp(), state: { child?: ChildProcess } = {}, weiter = vi.fn(() => Promise.resolve("unerlaubt"));
+  await expect(fakeInventar(mode, {}, state)("fixture", p, async rpc => { await rpc("mcpServerStatus/list", {}); return weiter(); })).rejects.toThrow(grund);
+  expect(weiter).not.toHaveBeenCalled(); expect(state.child).toBeDefined(); expect([state.child?.exitCode, state.child?.signalCode]).not.toEqual([null, null]);
+});
+test("Inventar-Startfehler und Fremdtext-CLI-Aufruffehler", async () => {
+  const p = temp(), weiter = vi.fn(() => Promise.resolve("unerlaubt"));
+  await expect(c.mitInventar(join(p.root, "missing"), p, weiter)).rejects.toThrow(); expect(weiter).not.toHaveBeenCalled();
+  const r = spawnSync(process.execPath, ["scripts/codex-fremdtext.mjs"], { encoding: "utf8", input: "fixture" });
+  expect(r.status).toBe(1); expect(r.stderr).toContain("Aufruf:");
+});
+test("Ausgabelimit exakt erlaubt und stdin-Fehler abgebrochen", async () => {
+  const p = temp();
+  expect((await c.prozess(process.execPath, ["-e", "process.stdout.write('x'.repeat(100))"], { cwd: p.root, env: p.env, maxBytes: 100 })).stdout).toHaveLength(100);
+  await expect(c.prozess(process.execPath, ["-e", "process.stdin.destroy();setTimeout(()=>process.exit(),30)"], { cwd: p.root, env: p.env, input: "x".repeat(4000000) })).rejects.toThrow();
+});
+test("gezieltes Cleanup: bereits beendet, ohne PID sowie Windows/POSIX-Fallback", () => {
+  const kill = vi.fn(), treeKill = vi.fn(), killGroup = vi.fn();
+  c.beenden({ exitCode: 0, pid: 123, kill }, { treeKill, killGroup }); c.beenden({ exitCode: null, kill }, { treeKill, killGroup });
+  c.beenden({ exitCode: null, signalCode: "SIGKILL", pid: 123, kill }, { treeKill, killGroup });
+  expect(treeKill).not.toHaveBeenCalled(); expect(kill).not.toHaveBeenCalled();
+  c.beenden({ exitCode: null, pid: 123, kill }, { platform: "win32", treeKill: () => { throw Error("fixture"); } }); expect(kill).toHaveBeenCalledWith();
+  c.beenden({ exitCode: null, pid: 123, kill }, { platform: "linux", killGroup }); expect(killGroup).toHaveBeenCalledWith(-123, "SIGKILL");
+  c.beenden({ exitCode: null, pid: 123, kill }, { platform: "linux", killGroup: () => { throw Error("fixture"); } }); expect(kill).toHaveBeenCalledWith("SIGKILL");
 });
 test("lokale API ohne auth und übergroße/fehlende Daten", async () => {
   expect(f.fremdtextProfil("http://127.0.0.1:9/v1")).toContain("requires_openai_auth=false");

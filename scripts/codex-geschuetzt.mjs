@@ -12,11 +12,11 @@ export const hookBefehl = () => `"${process.execPath}" "${HOOK}"`;
 export function hookDatei() {
   return JSON.stringify({ hooks: { PreToolUse: [{ matcher: ".*", hooks: [{ type: "command", command: hookBefehl(), timeout: 3 }] }] } });
 }
-export async function nativesInventar(codex = "codex") {
+export async function nativesInventar(codex = "codex", abfragen = mitInventar) {
   const p = profil();
   writeFileSync(join(p.env.CODEX_HOME, "hooks.json"), hookDatei());
   try {
-    return await mitInventar(codex, p, async (rpc, init) => {
+    return await abfragen(codex, p, async (rpc, init) => {
       const entry = async () => {
         const r = await rpc("hooks/list", { cwds: [p.root] });
         if (r.data.length !== 1) throw new Error("Mehrdeutiges Hook-Inventar");
