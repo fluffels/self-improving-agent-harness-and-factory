@@ -85,7 +85,7 @@ export function bewerteBelege(belege, config) {
   const daten = liste(b.observations).filter(o => o && typeof o.id === "string" && o.id !== "" && typeof b.sessionId === "string" && b.sessionId !== "" && o.sessionId === b.sessionId && liste(o.tags).includes(tag));
   const main = daten.find(o => o.type === "GENERATION" && o.metadata?.agent_role === "main" && typeof o.metadata.agent_id === "string" && o.metadata.agent_id !== "" && hatUsage(o));
   if (!main) fehler.push("Langfuse: Hauptagent mit Verbrauch und Repo-Zuordnung fehlt");
-  const sub = daten.some(o => o.type === "GENERATION" && o.metadata?.agent_role === "subagent" && o.metadata.agent_id !== main?.metadata?.agent_id && o.metadata.parent_thread_id === main?.metadata?.agent_id && hatUsage(o));
+  const sub = daten.some(o => o.type === "GENERATION" && o.metadata?.agent_role === "subagent" && typeof o.metadata.agent_id === "string" && o.metadata.agent_id !== "" && o.metadata.agent_id !== main?.metadata?.agent_id && o.metadata.parent_thread_id === main?.metadata?.agent_id && hatUsage(o));
   if (!main || !sub) fehler.push("Langfuse: verknüpfter Subagent mit eigenem Verbrauch fehlt");
   if (!daten.some(o => o.type === "TOOL")) fehler.push("Langfuse: Werkzeugbeleg mit Repo-Zuordnung fehlt");
   return fehler;
