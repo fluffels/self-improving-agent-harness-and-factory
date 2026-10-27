@@ -120,6 +120,10 @@ describe("Codex-Belegdiagnose", () => {
     const b = belege(); const observations = b.observations.map(o => ({ ...o, usageDetails }));
     expect(c.bewerteBelege({ ...b, observations }, config).join("\n")).toContain("Hauptagent");
   });
+  test.each([undefined, null, {}, { input: 1, output: 0 }, { input: 1, output: -1 }, { input: "1", output: 2 }, { input: 1, output: Infinity }, { input: NaN, output: 2 }])("fehlender oder ungültiger Subagent-Verbrauch wird unabhängig abgelehnt", (usageDetails) => {
+    const b = belege(); const observations = b.observations.map((o, i) => i === 1 ? { ...o, usageDetails } : o);
+    expect(c.bewerteBelege({ ...b, observations }, config)).toEqual(["Langfuse: verknüpfter Subagent mit eigenem Verbrauch fehlt"]);
+  });
   test("Input null Tokens ist gültig", () => {
     const b = belege(); b.observations[0].usageDetails.input = 0;
     expect(c.bewerteBelege(b, config)).toEqual([]);
