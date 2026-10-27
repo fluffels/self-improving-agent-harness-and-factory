@@ -65,7 +65,7 @@ import {
   wirklichFehlend,
 } from "./board-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fremdesBoardText, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
 
@@ -81,12 +81,13 @@ const MODI = ["top", "after", "position", "missing", "umzug"];
  * oder doppelte Flags und ein Options-Terminator `--` (er steht nicht unter den Positionsargumenten) sind ungültig.
  */
 export function parseArgs(argv) {
-  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" } };
+  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" }, repo: { type: "string" } };
   for (const m of MODI) optionen[m] = { type: "boolean" };
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
   if (fehler) return null;
   const dry = werte["dry-run"] === true;
-  const reihe = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
+  if (werte.repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(werte.repo)) return null;
+  const reihe = tokens.filter((t) => !(t.kind === "option" && (t.name === "dry-run" || t.name === "repo")));
   let i = 0;
   let notfall = null;
   if (reihe[0]?.kind === "option" && reihe[0].name === "notfall") {
@@ -98,6 +99,7 @@ export function parseArgs(argv) {
   if (modus?.kind !== "option") return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
   const geparst = parseModus(modus.name, positionale, dry);
+  if (geparst && werte.repo !== undefined) geparst.repo = werte.repo;
   return geparst && notfall ? { ...geparst, notfall } : geparst;
 }
 
@@ -117,18 +119,18 @@ function parseModus(modus, positionale, dry) {
  * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
  */
 export function nimmFehlendeAuf(items, args, io = {}) {
-  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, config, log = console.log, warn = console.error } = io;
+  const { ghJson: lade = ghJson, addToBoardTodo: aufnehmenIns, config, repo = args.repo ?? REPO, log = console.log, warn = console.error } = io;
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length === 0) return items;
   const issues = {};
   for (const nr of fehlend) {
     try {
-      issues[nr] = lade(["api", `repos/${REPO}/issues/${nr}`]);
+      issues[nr] = lade(["api", `repos/${repo}/issues/${nr}`]);
     } catch {
       issues[nr] = null;
     }
   }
-  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, { config, ankerNr: args.anchor });
+  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, { config, ankerNr: args.anchor, repo });
   for (const a of abgelehnt) warn(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
   const neu = aufnehmen.map((a) => {
     if (args.dry) {
@@ -146,7 +148,7 @@ export function nimmFehlendeAuf(items, args, io = {}) {
  * der Issue-REST (für Nummern, deren Item keine Labels trägt). Liefert `{ rolle, doppelt }` (`doppelt`: Nummern auf beiden Boards) oder `{ fehler }`
  * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
  */
-export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config }) {
+export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config, repo }) {
   const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
   const rollen = new Map();
   for (const nr of numbers) {
@@ -157,17 +159,19 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
   const rolle = [...verschieden][0];
+  const fremd = repo === undefined ? null : fremdesBoardText(rolle, repo, config);
+  if (fremd) return { fehler: fremd };
   const fehler = anchor === null ? null : ankerFehler({ anchor, rolle, produkt, factory });
   if (fehler) return { fehler };
   return { rolle, doppelt: numbers.filter((nr) => stehtAuf(produkt, nr) && stehtAuf(factory, nr)) };
 }
 
 /** Bericht: offene Issues, die auf keinem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
-function reportMissing() {
+function reportMissing(repo) {
   try {
-    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle)) }));
-    const rest = missingFromBoard(loadOpenIssueNumbers(), beide.flatMap((b) => b.items));
-    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest)));
+    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle), { repo }) }));
+    const rest = missingFromBoard(loadOpenIssueNumbers(repo), beide.flatMap((b) => b.items));
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest, {}, repo)));
     console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
@@ -176,9 +180,9 @@ function reportMissing() {
 }
 
 /** Labels eines Issues per REST (für Nummern ohne Board-Item mit Labels); `null` bei einem Ladefehler (dann ist die Rolle nicht bestimmbar). */
-function ladeLabels(nr) {
+function ladeLabels(nr, repo) {
   try {
-    return (ghJson(["api", `repos/${REPO}/issues/${nr}`]).labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
+    return (ghJson(["api", `repos/${repo}/issues/${nr}`]).labels ?? []).map((l) => (typeof l === "string" ? l : l?.name));
   } catch {
     return null;
   }
@@ -189,20 +193,21 @@ const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { e
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
 async function einsortieren(args, config) {
-  const listen = { produkt: loadItems(boardFuerRolle("produkt")), factory: loadItems(boardFuerRolle("factory")) };
+  const repo = args.repo ?? REPO;
+  const listen = { produkt: loadItems(boardFuerRolle("produkt"), { repo }), factory: loadItems(boardFuerRolle("factory"), { repo }) };
   const labelsRest = {};
   for (const nr of args.numbers) {
-    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr);
+    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr, repo);
   }
-  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config });
+  const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config, repo });
   if (ziel.fehler) throw abbruch(ziel.fehler, 2);
   for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
   const board = boardFuerRolle(ziel.rolle);
   let items = listen[ziel.rolle];
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
-  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend));
-  items = nimmFehlendeAuf(items, args, { config, addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, ...opts }) });
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend, {}, repo));
+  items = nimmFehlendeAuf(items, args, { config, repo, addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
@@ -270,13 +275,14 @@ export async function fuehreUmzugAus(plan, io) {
 }
 
 async function umziehen(args, config) {
-  const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r)));
-  const plan = umzugsPlan(produkt, factory, config);
+  const repo = args.repo ?? REPO;
+  const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r), { repo }));
+  const plan = umzugsPlan(produkt, factory, config, repo);
   const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
   if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
   const gemeldet = await fuehreUmzugAus(plan, {
     dry: args.dry,
-    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS }),
+    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS, repo }),
     positioniere: (r, i, a) => setPosition(boardFuerRolle(r), i, a),
     entferne: (r, i) => entferneVomBoard(boardFuerRolle(r), i),
     schlafe: () => sleep(PAUSE_MS),
@@ -290,12 +296,12 @@ async function umziehen(args, config) {
 async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
+    console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
     process.exit(2);
   }
   mitKontingent("board-place");
   const config = ladeProjektConfig();
-  if (args.missing) return reportMissing();
+  if (args.missing) return reportMissing(args.repo ?? REPO);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {

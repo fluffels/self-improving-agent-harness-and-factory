@@ -19,7 +19,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText } from "./gh-cli.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { gleichesRepo, labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
 import {
   REPO,
   SAMMELTICKET_TITEL,
@@ -230,14 +230,14 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
   let fehler = false;
   for (const nr of fehlend) {
     try {
-      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) }, { config });
+      const { aufnehmen, abgelehnt } = aufnahmePlan([nr], { [nr]: io.ghJson(["api", `repos/${repo}/issues/${nr}`]) }, { config, repo });
       for (const a of abgelehnt) io.log(`::warning::Board-Wächter: #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
       for (const a of aufnehmen) {
         if (dry) {
           io.log(`Board-Wächter: #${a.number} fehlt im Board, würde als Todo aufgenommen (--dry-run).`);
           continue;
         }
-        const id = io.addToBoardTodo(a.rolle, a.nodeId, { token });
+        const id = io.addToBoardTodo(a.rolle, a.nodeId, { token, repo });
         io.log(`::warning::Board-Wächter: #${a.number} fehlte im Board, als Todo auf dem ${a.rolle}-Board aufgenommen.`);
         neu = { ...neu, [a.rolle]: [...neu[a.rolle], todoItem({ id, number: a.number, title: a.title })] };
       }
@@ -247,6 +247,17 @@ export function nimmFehlendeAuf({ offene, listen, token, dry = false, repo = REP
     }
   }
   return { listen: neu, fehler };
+}
+
+/**
+ * Fremdes Factory-Board (#76, ADR 0022 F10): führt das Factory-Board der Config die Issues eines anderen Repos als `repo`, pflegt der Takt dort
+ * Status- und Sammelticket. Hier läuft nur der Board-Wächter; Status-Ticket, Harness-Sammelticket und Quotenzeile entfallen. Liefert `{ fehler }`.
+ */
+function nurWaechter({ repo, dry, token, config, io, fuehrt }) {
+  io.log(`Factory-Teil übersprungen: Factory-Board führt ${fuehrt}, der Takt dort pflegt Status- und Sammelticket`);
+  if (!token) return { fehler: false };
+  const listen = { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) };
+  return { fehler: nimmFehlendeAuf({ offene: normalizeOffene(io.loadOpenIssuePages(repo)), listen, token, dry, repo, config }, io).fehler };
 }
 
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
@@ -270,6 +281,8 @@ export const ECHTE_IO = {
  */
 export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config }) {
   const harnessLabel = labelAus(config, "harness");
+  const fuehrt = zielRepoFuer([harnessLabel], config); // das Repo, dessen Issues das Factory-Board führt
+  if (!gleichesRepo(fuehrt, repo)) return nurWaechter({ repo, dry, token, config, io, fuehrt });
   let position = null;
   let positionFehler = null;
   try {
@@ -307,7 +320,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
-  const roh = token ? { produkt: io.loadItems("produkt", { token }), factory: io.loadItems("factory", { token }) } : null;
+  const roh = token ? { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) } : null;
   const doppelt = roh ? seitenListen(roh.produkt, roh.factory, config).doppelt : [];
   for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
   let items = roh ? factoryListe(roh.factory, doppelt, config) : null;

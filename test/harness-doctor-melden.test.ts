@@ -187,8 +187,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       const log: string[] = [];
       const libs = {
         REPO: "acme/proj",
-        OWNER: "acme",
-        ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [] }),
+        ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }),
         waehleSammelticket: (offene: { number: number }[]) => offene[0],
         postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
       };
@@ -208,7 +207,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     vi.stubEnv("GITHUB_ACTIONS", "");
     try {
       const aufrufe: Record<string, unknown>[] = [];
-      const libs = { REPO: "acme/proj", OWNER: "acme", ladeSammelKontext: () => ({ offene: [], kommentare: [] }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("keine Lücke, nichts zu posten") };
+      const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [], kommentare: [], owner: "acme" }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("keine Lücke, nichts zu posten") };
       const code = await melden.main(["--dry-run"], {
         ladeConfig: () => ({}),
         ladeLibs: () => Promise.resolve(libs),

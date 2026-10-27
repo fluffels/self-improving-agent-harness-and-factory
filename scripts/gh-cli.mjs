@@ -49,3 +49,20 @@ export function fehlerMeldung(err, { praefix = "", zusatz = "", max } = {}) {
 
 /** Wie `ghText`, die Ausgabe als JSON geparst. */
 export const ghJson = (args, opts = {}) => JSON.parse(ghText(args, opts));
+
+/**
+ * Pur (#76): erkennt einen Fehlschlag wegen fehlender Schreibrechte auf `repo` und liefert die klare Meldung, sonst `null`. Bekannte Muster:
+ * `HTTP 403`, `HTTP 404` (GitHub verbirgt ein Repo ohne Zugriff), `Resource not accessible by integration`, `Must have admin rights`.
+ * Grenze: andere Wortlauten (etwa bei einem anderen Fehlerformat von `gh`) erkennt sie nicht und gibt `null` zurück: der Aufrufer meldet dann den Rohtext.
+ */
+export function schreibrechtText(err, repo) {
+  const text = fehlerText(err);
+  if (!/HTTP (403|404)|Resource not accessible by integration|Must have admin rights/i.test(text)) return null;
+  return `keine Schreibrechte auf ${repo} (${text.replace(/\s+/g, " ").slice(0, 200)}): der Token braucht Issues-Schreibrecht im Ziel-Repo; nichts im eigenen Repo angelegt`;
+}
+
+/** Pur (#76): die Labels aus `labels`, die die Antwort eines Issue-POST nicht trägt (ein öffentliches Repo legt das Issue für Nicht-Mitarbeiter an und verwirft die Labels still). */
+export function fehlendeLabels(antwort, labels) {
+  const da = new Set((Array.isArray(antwort?.labels) ? antwort.labels : []).map((l) => (typeof l === "string" ? l : l?.name)));
+  return labels.filter((l) => !da.has(l));
+}

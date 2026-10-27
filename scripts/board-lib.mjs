@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, labelAus, ladeProjektConfig, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, gleichesRepo, ladeProjektConfig, nurRepo, repoAusUrl, zerlegeRepo } from "./projekt-config-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
 
@@ -37,12 +37,11 @@ export function boardFuerRolle(rolle) {
   return Object.freeze({ ...b });
 }
 
-/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
-export function boardRolleFuer(labels, config) {
-  if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
-  const harness = labelAus(config, "harness");
-  return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
-}
+/** Das Repo (`owner/name`), dessen Issues das Board der Rolle führt (`boards[].repo` der Config, sonst `config.repo`). Immer aus der Config, nie aus `GITHUB_REPOSITORY`. */
+export const zielRepo = (rolle) => boardRepo(boardFuerRolle(rolle), PROJEKT);
+
+// Die Trennregel (Rolle zu den Labels) liegt in projekt-config-lib (die CLI braucht sie ohne diesen Import); hier weiter exportiert.
+export { boardRolleFuer };
 
 /**
  * Pur: Fehlertext, wenn der `--after`-Anker nur auf dem anderen Board der Rolle steht (auf dem eigenen oder auf keinem Board: `null`).
@@ -90,7 +89,7 @@ export function seitenListen(produkt, factory, config) {
  * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
  * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
  */
-export function umzugsPlan(produkt, factory, config) {
+export function umzugsPlan(produkt, factory, config, repo = undefined) {
   const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
   const schritte = [];
   const gemeldet = [];
@@ -98,6 +97,11 @@ export function umzugsPlan(produkt, factory, config) {
     for (const i of liste) {
       const nach = boardRolleFuer(i.labels ?? [], config);
       if (i.state !== "open" || nach === von) continue;
+      const fremd = repo === undefined ? null : fremdesBoardText(nach, i.repo || repo, config);
+      if (fremd) {
+        gemeldet.push({ number: i.number, grund: `nicht umgezogen: ${fremd.split("\n")[0]}` });
+        continue;
+      }
       const kopf = { number: i.number, title: i.title ?? "", von, nach, quelleId: i.id };
       if (stehtAuf[nach].has(i.number)) schritte.push({ aktion: "entfernen", ...kopf });
       else if (i.status !== "Todo") gemeldet.push({ number: i.number, grund: `Status „${i.status === "" ? "leer" : i.status}“ statt Todo, nicht umgezogen` });
@@ -463,7 +467,7 @@ export function normalizeItems(pages) {
       contentId: typeof i.content.node_id === "string" ? i.content.node_id : "",
       number: i.content.number,
       // Das Repo des Issues (`owner/name`, aus `repository_url`); leer, wenn die Antwort es nicht trägt: `nurRepo` lässt solche Items weg.
-      repo: /\/repos\/([^/]+\/[^/]+)$/.exec(String(i.content.repository_url ?? ""))?.[1] ?? "",
+      repo: repoAusUrl(i.content.repository_url),
       status: i.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "",
       title: typeof i.content.title === "string" ? i.content.title : "",
       assignees: Array.isArray(i.content.assignees) ? i.content.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
@@ -522,7 +526,7 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
  * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
  * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title, rolle }], abgelehnt: [{ number, grund }] }`. Pur.
  */
-export function aufnahmePlan(fehlend, issues, { config, ankerNr = null } = {}) {
+export function aufnahmePlan(fehlend, issues, { config, ankerNr = null, repo = undefined } = {}) {
   const aufnehmen = [];
   const abgelehnt = [];
   for (const nr of fehlend) {
@@ -532,7 +536,12 @@ export function aufnahmePlan(fehlend, issues, { config, ankerNr = null } = {}) {
     else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
     else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
     else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
+    else {
+      const rolle = boardRolleFuer(i.labels ?? [], config);
+      const fremd = repo === undefined ? null : fremdesBoardText(rolle, repo, config);
+      if (fremd) abgelehnt.push({ number: nr, grund: fremd.split("\n")[0] });
+      else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle });
+    }
   }
   return { aufnehmen, abgelehnt };
 }
@@ -578,9 +587,14 @@ export async function mitWiederholung(
   }
 }
 
-/** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
-export function loadItems(board, opts = {}) {
-  return normalizeItems(loadItemPages(board, opts));
+/**
+ * Eine Listenabfrage über REST: die Issue-Items des Boards in Board-Reihenfolge, nur die des Repos `opts.repo` (Nummern zweier Repos kollidieren
+ * auf einem Board, das Issues beider führt; `nurRepo`). `repo` ist Pflicht (kein stiller Standardwert). `opts.token` = anderer GH_TOKEN.
+ */
+export function loadItems(board, { repo, ...opts } = {}) {
+  brauchtBoard(board, "loadItems");
+  if (typeof repo !== "string" || repo === "") throw new Error("loadItems: repo fehlt\nFix: das Repo (owner/name), dessen Items gelten, als { repo } übergeben");
+  return nurRepo(normalizeItems(loadItemPages(board, opts)), repo);
 }
 
 /** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
@@ -595,8 +609,8 @@ export function loadOpenIssuePages(repo = REPO) {
 }
 
 /** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
-export function loadOpenIssueNumbers() {
-  return loadOpenIssuePages().flat().filter((i) => !i.pull_request).map((i) => i.number);
+export function loadOpenIssueNumbers(repo = REPO) {
+  return loadOpenIssuePages(repo).flat().filter((i) => !i.pull_request).map((i) => i.number);
 }
 
 /** Die Mutationen als Konstanten, damit ein Wächter-Test ihre Klammern prüfen kann (eine überzählige `}` machte den Aufruf einmal unbrauchbar). */
@@ -737,7 +751,11 @@ const schlafeSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)
  */
 export function addToBoardTodo(board, nodeId, opts = {}) {
   brauchtBoard(board, "addToBoardTodo");
-  const { pauseMs = 0, schlafe = schlafeSync, ...ghOpts } = opts;
+  const { pauseMs = 0, schlafe = schlafeSync, repo, ...ghOpts } = opts;
+  if (typeof repo !== "string" || repo === "") throw new Error("addToBoardTodo: repo fehlt\nFix: das Repo (owner/name) des Issues als { repo } übergeben");
+  if (!gleichesRepo(boardRepo(board, PROJEKT), repo)) {
+    throw new Error(`addToBoardTodo: das ${board.rolle}-Board führt die Issues von ${boardRepo(board, PROJEKT)}, nicht die von ${repo}\nFix: das Issue im Ziel-Repo anlegen (gh issue transfer) oder das Label prüfen`);
+  }
   const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, ghOpts);
   const itemId = item.data.addProjectV2ItemById.item.id;
   if (pauseMs > 0) schlafe(pauseMs);

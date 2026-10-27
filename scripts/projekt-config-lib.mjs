@@ -514,7 +514,37 @@ export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "str
 /** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
 export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
 
-const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+/** Pur: das Repo (`owner/name`) aus der `repository_url` eines Issues (`…/repos/<owner>/<name>`); leer, wenn die URL es nicht trägt. */
+export const repoAusUrl = (url) => /\/repos\/([^/]+\/[^/]+)$/.exec(String(url ?? ""))?.[1] ?? "";
+
+/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
+export function boardRolleFuer(labels, config) {
+  if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
+  const harness = labelAus(config, "harness");
+  return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
+}
+
+const boardDerRolle = (rolle, config) => (Array.isArray(config?.boards) ? config.boards.find((b) => b.rolle === rolle) : undefined);
+
+/**
+ * Pur: das Ziel-Repo (`owner/name`) für ein Issue mit diesen Labels (ADR 0022 F10, #76): das Repo, dessen Issues das Board der Rolle führt
+ * (`boardRepo`); ohne Board oder ohne `boards[].repo` das eigene `repo` der Config. Ein Harness-Befund landet so dort, wo das Factory-Board
+ * ihn führt, ein Produkt-Befund bleibt im eigenen Repo.
+ */
+export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);
+
+/**
+ * Pur: Fehlertext, wenn das Board der Rolle `rolle` die Issues eines anderen Repos als `repo` führt (sonst `null`). Ein Schreibweg bricht damit
+ * klar ab, statt das Issue im falschen Repo auf das Board zu legen oder still ins eigene Repo auszuweichen.
+ */
+export function fremdesBoardText(rolle, repo, config) {
+  const board = boardDerRolle(rolle, config);
+  const fuehrt = boardRepo(board, config);
+  if (gleichesRepo(fuehrt, repo)) return null;
+  return `Das ${rolle}-Board (Nr. ${board?.nummer}) führt die Issues von ${fuehrt}, nicht die von ${repo}\nFix: das Issue im Ziel-Repo ${fuehrt} anlegen (gh issue transfer) oder das Label prüfen`;
+}
+
+const wurzelSchluessel =(p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 
 /** Pur (bis auf `ROOT`): der Pfad aus `FACTORY_PROJEKT_CONFIG`, wenn der Riegel passt (`VITEST` gesetzt, `FACTORY_PROJEKT_WURZEL` = Wurzel dieses Laders, normalisiert, unter Windows ohne Groß-/Kleinschreibung), sonst `undefined`. */
 function probeConfigAusUmgebung(env) {
@@ -658,13 +688,29 @@ export function configAusAufruf(argv, { lade = ladeProjektConfig } = {}) {
 
 const CLI_AUFRUF = "Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>";
 
+/** `--ziel-repo <label>`: gibt das Ziel-Repo für ein Issue mit diesem Label aus (Exit 0), 2 bei Aufruffehler, 1 bei Ladefehler. */
+function zielRepoAusgeben(label, positionale, pfad, { rootDir, out, err }) {
+  if (label === "" || positionale.length > 0) {
+    err(`✖ --ziel-repo braucht genau ein Label und kein weiteres Argument\n\n${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  try {
+    out(zielRepoFuer([label], ladeProjektConfig({ rootDir, pfad })));
+    return 0;
+  } catch (e) {
+    err(`✖ ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+}
+
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, out = console.log, err = console.error } = {}) {
-  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" } }, { positionale: true });
+  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" } }, { positionale: true });
   if (fehler) {
     err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
+  if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, { rootDir, out, err });
   const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
     err(`✖ Schlüssel fehlt\n\n${CLI_AUFRUF}`);

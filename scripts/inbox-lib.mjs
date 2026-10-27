@@ -6,8 +6,11 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ghJson, ghText } from "./gh-cli.mjs";
-import { OWNER, REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes } from "./board-lib.mjs";
+import { SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes, zielRepo } from "./board-lib.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+
+/** Das Ziel-Repo der Harness-Befunde (#76): das Repo, dessen Issues das Factory-Board führt (`boards[].repo`, sonst das eigene Repo). Dort liegt das Harness-Sammelticket. */
+export const ZIEL = zielRepo("factory");
 
 const BOARD_PLACE = fileURLToPath(new URL("./board-place.mjs", import.meta.url));
 
@@ -31,26 +34,26 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
   execFileSync(process.execPath, [BOARD_PLACE, "--notfall", art, "--top", String(nr)], { env: { ...process.env, GH_TOKEN: token }, stdio: "inherit" });
 }
 
-/** Das jüngste offene, ungeclaimte Harness-Sammelticket (per Einzelabruf bestätigt) oder null. `offene` aus `normalizeOffene`. */
-export const waehleSammelticket = (offene) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]), OWNER);
+/** Das jüngste offene, ungeclaimte Harness-Sammelticket in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
+export const waehleSammelticket = (offene, repo = ZIEL) =>
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]), repo.split("/")[0]);
 
-/** Postet `text` als Kommentar unter Issue `nr`. */
-export const postZeilen = (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]);
+/** Postet `text` als Kommentar unter Issue `nr` im Repo `repo` (Standard: das Ziel-Repo). */
+export const postZeilen = (nr, text, repo = ZIEL) => ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`]);
 
 /** Nummern der offenen Harness-Sammeltickets (exakter Titel, auch geclaimte) aus `normalizeOffene`. Pur. */
 export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === SAMMELTICKET_TITEL).map((i) => i.number);
 
 /**
- * Der gemeinsame Abruf der Inbox-Skripte: `{ rohe, offene, kommentare }` = offene Issues (REST-Seiten, `loadOpenIssuePages`), deren Normalform und die
- * Kommentare (`[{ user, body }]`, ungefiltert) aller offenen Harness-Sammeltickets. Das Vertrauensfilter wendet der Aufrufer an (`vertrauteBodies`,
+ * Der gemeinsame Abruf der Inbox-Skripte: `{ rohe, offene, kommentare, owner }` = offene Issues des Ziel-Repos (REST-Seiten, `loadOpenIssuePages`), deren Normalform,
+ * die Kommentare (`[{ user, body }]`, ungefiltert) aller offenen Harness-Sammeltickets dort und der Owner des Ziel-Repos (für `istVertraut`). Das Vertrauensfilter wendet der Aufrufer an (`vertrauteBodies`,
  * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`).
  */
 export function ladeSammelKontext(io = {}) {
-  const ladeOffene = io.ladeOffene ?? (() => loadOpenIssuePages());
-  const ladeKommentare = io.ladeKommentare ?? ((nr) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), REPO));
+  const ladeOffene = io.ladeOffene ?? (() => loadOpenIssuePages(ZIEL));
+  const ladeKommentare = io.ladeKommentare ?? ((nr, repo) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), repo));
   const rohe = ladeOffene();
   const offene = normalizeOffene(rohe);
-  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr).map((k) => ({ user: k.user, body: k.body })));
-  return { rohe, offene, kommentare };
+  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL).map((k) => ({ user: k.user, body: k.body })));
+  return { rohe, offene, kommentare, owner: ZIEL.split("/")[0] };
 }

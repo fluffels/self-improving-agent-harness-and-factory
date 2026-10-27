@@ -25,12 +25,9 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
-  OWNER,
-  REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
   boardFuerRolle,
-  boardRolleFuer,
   ergaenzeFehlende,
   ghJson,
   kandidatenSammelticket,
@@ -45,7 +42,8 @@ import {
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
-import { labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { fehlendeLabels, fehlerText, schreibrechtText } from "./gh-cli.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
@@ -132,30 +130,57 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
   return eigenKommentare > 0 ? { art: "warnung", aelter } : { art: "eigenes-schliessen", aelter };
 }
 
+/**
+ * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Beide Arten tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board,
+ * also im Repo, dessen Issues dieses Board führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
+ * der Besitzer des Ziel-Repos (Vertrauensgrenze der Einzelabrufe).
+ */
+export function sammelZiel(config) {
+  const labels = [labelAus(config, "harness")];
+  const repo = zielRepoFuer(labels, config);
+  return { rolle: boardRolleFuer(labels, config), repo, owner: repo.split("/")[0] };
+}
+
+/** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
+function legeAn({ repo, titel, body, harness }) {
+  let neu;
+  try {
+    neu = ghJson(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
+  } catch (e) {
+    throw new Error(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`, { cause: e });
+  }
+  if (fehlendeLabels(neu, [harness]).length > 0) {
+    throw new Error(`#${neu.number} in ${repo} angelegt, aber ohne Label ${harness} (kein Schreibrecht für Labels dort?)\nFix: Schreibrecht im Ziel-Repo klären, Label und Board-Position dort von Hand setzen`);
+  }
+  return neu;
+}
+
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const einzelAbruf = (nr) => ghJson(["api", `repos/${REPO}/issues/${nr}`]);
+const einzelAbrufIn = (repo) => (nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]);
 
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
-function pruefeDublette(nr, titel, vorgaenger) {
-  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages()), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
-  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, OWNER);
+function pruefeDublette(nr, titel, vorgaenger, { repo, owner }) {
+  const einzelAbruf = einzelAbrufIn(repo);
+  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo)), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
+  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, owner);
   return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
 }
 
 /** Wertet `pruefeDublette` aus: schließt das eigene Ticket bei einer Dublette (`true`), warnt sonst. */
-function schliesseWennDublette(nr, titel, vorgaenger) {
-  const d = pruefeDublette(nr, titel, vorgaenger);
+function schliesseWennDublette(nr, titel, vorgaenger, ziel) {
+  const { repo } = ziel;
+  const d = pruefeDublette(nr, titel, vorgaenger, ziel);
   if (d.art === "warnung") console.log(`::warning::#${nr} ist eine Dublette von #${d.aelter}, hat aber schon Kommentare: nicht geschlossen, Zeilen von Hand nach #${d.aelter} übertragen und #${nr} schließen.`);
   if (d.art !== "eigenes-schliessen") return false;
-  ghJson(["api", "-X", "POST", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`]);
-  ghJson(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
+  ghJson(["api", "-X", "POST", `repos/${repo}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`]);
+  ghJson(["api", "-X", "PATCH", `repos/${repo}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
   console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
   return true;
 }
 /** Zustand des Vorgängers `nr` per REST (`zustandVonIssue`); unlesbar gilt als offen (die Sperre ist die sichere Seite). */
-function vorgaengerZustand(nr) {
+function vorgaengerZustand(nr, repo) {
   try {
-    return zustandVonIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`]));
+    return zustandVonIssue(ghJson(["api", `repos/${repo}/issues/${nr}`]));
   } catch {
     return "unbekannt";
   }
@@ -191,9 +216,10 @@ export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false 
  * Setzt die Position des Sammeltickets `nr` nach `pruefSchritt` und prüft sie gegen die frisch geladene Board-Liste auf `board` (Pflicht, wirft sonst vor jedem Laden).
  * Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). `io` ist für Tests austauschbar (Default: echtes Board und echtes Warten).
  */
-export async function setzeUndPruefe({ nr, position, dry = false, board }, io = {}) {
+export async function setzeUndPruefe({ nr, position, dry = false, board, repo }, io = {}) {
   if (!board) throw new Error("setzeUndPruefe: board fehlt");
-  const lade = io.loadItems ?? (() => loadItems(board)); // Standard: immer das ausdrücklich übergebene Board
+  if (!repo) throw new Error("setzeUndPruefe: repo fehlt");
+  const lade = io.loadItems ?? (() => loadItems(board, { repo })); // Standard: immer das ausdrücklich übergebene Board
   const setze = io.setPosition ?? ((_board, id, afterId) => setPosition(board, id, afterId));
   const warte = io.sleep ?? sleep;
   let neuGesetzt = 0;
@@ -220,12 +246,14 @@ async function main(argv = process.argv.slice(2)) {
   const config = ladeProjektConfig();
   const harness = labelAus(config, "harness");
   // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-  const FACTORY_BOARD = boardFuerRolle(boardRolleFuer([harness], config));
+  const ziel = sammelZiel(config);
+  const FACTORY_BOARD = boardFuerRolle(ziel.rolle);
+  const { repo } = ziel;
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const offene = normalizeOffene(loadOpenIssuePages());
-  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbruf, OWNER);
+  const offene = normalizeOffene(loadOpenIssuePages(repo));
+  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbrufIn(repo), ziel.owner);
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
@@ -234,19 +262,25 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger), blocker: spracheAus(config).spezifikation.blocker });
-    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
+    let neu;
+    try {
+      neu = legeAn({ repo, titel, body, harness });
+    } catch (e) {
+      console.error(`✖ ${e.message}`);
+      process.exit(2);
+    }
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-    if (schliesseWennDublette(nr, titel, vorgaenger)) return;
-    const itemId = addToBoardTodo(FACTORY_BOARD, neu.node_id);
+    if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
+    const itemId = addToBoardTodo(FACTORY_BOARD, neu.node_id, { repo });
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
       if (k) setPosition(FACTORY_BOARD, k.id, k.afterId);
     } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
       // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
       const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
@@ -255,8 +289,8 @@ async function main(argv = process.argv.slice(2)) {
     }
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: FACTORY_BOARD });
-  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: FACTORY_BOARD, repo });
+  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
   else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);

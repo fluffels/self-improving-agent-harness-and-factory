@@ -68,3 +68,17 @@ describe("sammelticketNummern und ladeSammelKontext (Z3)", () => {
     expect(() => L.ladeSammelKontext({ ladeOffene: () => { throw new Error("gh kaputt"); }, ladeKommentare: () => [] })).toThrow(/gh kaputt/);
   });
 });
+
+describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
+  test("ladeSammelKontext reicht das Ziel-Repo an den Kommentar-Abruf und liefert dessen Owner", () => {
+    const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
+    const repos: string[] = [];
+    const k = L.ladeSammelKontext({
+      ladeOffene: () => rohe,
+      ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as (nr: number) => { user: unknown; body: string }[],
+    }) as unknown as { owner: string };
+    expect(repos).toHaveLength(1);
+    expect(repos[0]).toMatch(/^[^/]+\/[^/]+$/);
+    expect(k.owner).toBe(repos[0]?.split("/")[0]);
+  });
+});

@@ -9,7 +9,7 @@ import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 import { echteSpezifikation } from "./support/echte-sprache";
-import { FREMD_OWNER } from "./support/fremd-config";
+import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 
@@ -343,7 +343,7 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
   test("Verdrahtung: das Skript nutzt beide Funktionen, bestätigt per Direktabruf und prüft vor und nach der Positions-Schleife", () => {
     const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
     expect(skript).toMatch(/waehleBestaetigtes\(/);
-    expect(skript).toMatch(/repos\/\$\{REPO\}\/issues\/\$\{nr\}/);
+    expect(skript).toMatch(/repos\/\$\{repo\}\/issues\/\$\{nr\}/);
     expect(skript.match(/schliesseWennDublette\(/g)?.length).toBeGreaterThanOrEqual(3); // Definition und zwei Aufrufe
     expect(skript).toMatch(/Dublette von #/);
     expect(skript).toMatch(/state_reason=not_planned/);
@@ -353,7 +353,7 @@ describe("waehleBestaetigtes und dublettenEntscheidung (#1561 Z6: Anlegen ist id
 describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
   type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
   type Io = { loadItems: (b: string) => B[]; setPosition: (b: string, id: string, after: string | null) => void; sleep: (ms: number) => Promise<void> };
-  const S = (raw as unknown as { setzeUndPruefe: (a: { nr: number; position: number; dry?: boolean; board?: string }, io?: Partial<Io>) => Promise<string> }).setzeUndPruefe;
+  const S = (raw as unknown as { setzeUndPruefe: (a: { nr: number; position: number; dry?: boolean; board?: string; repo?: string }, io?: Partial<Io>) => Promise<string> }).setzeUndPruefe;
   const b = (number: number): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open" });
   const sammel = (): B => ({ ...b(20), title: "Harness-Härtung (gesammelt)" });
   const items = [b(1), b(2), b(3), b(4), b(5), b(6), sammel()];
@@ -373,19 +373,35 @@ describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
       },
       sleep: async () => {},
     };
-    expect(await S({ nr: 20, position: 3, board: "FB" }, io)).toBe("ok");
+    expect(await S({ nr: 20, position: 3, board: "FB", repo: "zz-org/zz-r" }, io)).toBe("ok");
     expect(gesetzt).toEqual(["FB:I20"]);
     expect(new Set(geladen)).toEqual(new Set(["FB"]));
   });
 
   test("ohne board wirft sie vor dem ersten Laden", async () => {
     let geladen = 0;
-    await expect(S({ nr: 20, position: 3 }, { loadItems: () => (geladen++, items), sleep: async () => {} })).rejects.toThrow(/board fehlt/);
+    await expect(S({ nr: 20, position: 3, repo: "zz-org/zz-r" }, { loadItems: () => (geladen++, items), sleep: async () => {} })).rejects.toThrow(/board fehlt/);
     expect(geladen).toBe(0);
   });
 
   test("Verdrahtung: der Aufruf in main übergibt das Factory-Board", () => {
     const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
-    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*FACTORY_BOARD/);
+    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*FACTORY_BOARD[^}]*repo/);
+  });
+});
+
+describe("sammelZiel (#76, ADR 0022 F10): das Sammelticket liegt im Repo, das das Factory-Board führt", () => {
+  const S = (raw as unknown as { sammelZiel: (c: unknown) => { rolle: string; repo: string; owner: string } }).sammelZiel;
+  const FABRIK = "zz-org/zz-fabrik";
+  test("fremdes Factory-Board: Ziel-Repo und Owner kommen von dort, ohne Schlüssel gilt das eigene Repo", () => {
+    const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+    expect(S(fremd)).toEqual({ rolle: "factory", repo: FABRIK, owner: "zz-org" });
+    expect(S(FREMD)).toEqual({ rolle: "factory", repo: FREMD.repo, owner: FREMD.repo.split("/")[0] });
+  });
+  test("setzeUndPruefe ohne repo wirft vor dem ersten Laden", async () => {
+    const wirft = (raw as unknown as { setzeUndPruefe: (a: object, io: object) => Promise<string> }).setzeUndPruefe;
+    let geladen = 0;
+    await expect(wirft({ nr: 1, position: 3, board: "FB" }, { loadItems: () => (geladen++, []) })).rejects.toThrow(/repo fehlt/);
+    expect(geladen).toBe(0);
   });
 });

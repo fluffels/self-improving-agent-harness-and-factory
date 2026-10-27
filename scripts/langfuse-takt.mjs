@@ -163,7 +163,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
       console.log("Status-Ticket steht schon im Kopf, Position bleibt.");
       return { ok: true, nr, itemId: null };
     }
-    const itemId = imBoardAnlegen(node, { token });
+    const itemId = imBoardAnlegen(node, { token, repo });
     setze(itemId, null, { token });
     console.log("Board-Position oben gesetzt.");
     return { ok: true, nr, itemId };

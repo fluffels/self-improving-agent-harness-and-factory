@@ -230,7 +230,8 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
   test("Sammel- und Status-Tickets leiten ihr Board aus dem eigenen Label ab und legen mit demselben Label an", () => {
     for (const f of ["sammelticket-anlegen", "langfuse-takt"]) {
       const q = readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8");
-      expect(q, f).toContain("boardFuerRolle(boardRolleFuer([harness], config))");
+      expect(q, f).toContain(f === "langfuse-takt" ? "boardFuerRolle(boardRolleFuer([harness], config))" : "boardFuerRolle(ziel.rolle)");
+      if (f === "sammelticket-anlegen") expect(q, f).toContain("boardRolleFuer(labels, config)");
       expect(q, f).toContain("labels[]=${harness}");
       expect(q, f).not.toContain("PRODUKT_BOARD");
     }
@@ -428,5 +429,35 @@ describe("parseArgs --umzug und entferneVomBoard (#1730)", () => {
   test("entferneVomBoard ohne Board wirft vor jedem gh-Aufruf", () => {
     const f = (L as unknown as { entferneVomBoard: (...a: unknown[]) => unknown }).entferneVomBoard;
     for (const falsch of [undefined, null, "produkt", {}]) expect(() => f(falsch, "ITEM_1")).toThrow(/Board fehlt[\s\S]*Fix:/);
+  });
+});
+
+describe("Fremdes Factory-Board in board-place (#76, ADR 0022 F10)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const Z = rawPlace as unknown as { zielRolle: (a: Record<string, unknown>) => { rolle?: string; fehler?: string }; parseArgs: (a: string[]) => Record<string, unknown> | null };
+  const f = (number: number): Item => ({ number, labels: [HARNESS] });
+
+  test("zielRolle: ein Harness-Issue des eigenen Repos hat kein Board (fehler mit Ziel-Repo), im Ziel-Repo gilt die Rolle", () => {
+    const r = Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: FREMD.repo });
+    expect(r.rolle).toBeUndefined();
+    expect(r.fehler).toMatch(new RegExp(`factory-Board.*${FABRIK}, nicht die von ${FREMD.repo}`));
+    expect(Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: FABRIK })).toMatchObject({ rolle: "factory" });
+    expect(Z.zielRolle({ numbers: [3], produkt: [{ number: 3, labels: [] }], factory: [], config: fremd, repo: FREMD.repo })).toMatchObject({ rolle: "produkt" });
+  });
+  test("umzugsPlan: ein Item, dessen Ziel-Board ein anderes Repo führt, wird gemeldet statt umgezogen", () => {
+    const item = { id: "I1", number: 1, status: "Todo", state: "open", contentId: "C1", labels: [HARNESS], repo: FREMD.repo };
+    const U = L as unknown as { umzugsPlan: (p: unknown[], f: unknown[], c: unknown, repo?: string) => { schritte: unknown[]; gemeldet: { grund: string }[] } };
+    const p = U.umzugsPlan([item], [], fremd, FREMD.repo);
+    expect(p.schritte).toEqual([]);
+    expect(p.gemeldet[0]?.grund).toContain(FABRIK);
+    expect(U.umzugsPlan([item], [], fremd).schritte).toHaveLength(1);
+  });
+  test("parseArgs --repo: gültig an jeder Stelle, kaputte Form ungültig", () => {
+    expect(Z.parseArgs(["--repo", "zz-org/zz-x", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-x" });
+    expect(Z.parseArgs(["--top", "5", "--repo", "zz-org/zz-x", "--dry-run"])).toMatchObject({ numbers: [5], dry: true, repo: "zz-org/zz-x" });
+    expect(Z.parseArgs(["--top", "5"])).not.toHaveProperty("repo");
+    for (const kaputt of ["zz", "a/b/c", "/b", "a/"]) expect(Z.parseArgs(["--repo", kaputt, "--top", "5"]), kaputt).toBeNull();
+    expect(Z.parseArgs(["--top", "5", "--repo"])).toBeNull();
   });
 });

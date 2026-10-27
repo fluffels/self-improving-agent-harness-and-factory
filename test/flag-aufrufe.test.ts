@@ -12,7 +12,7 @@ import { faelleAus,maskiere, nurSchalter, pruefeFall, STD, starte, type Zeile } 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const BEIDE = ["--von", "2026-01-01", "--bis", "2026-02-01"];
-const BOARD_USAGE = "Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)";
+const BOARD_USAGE = "Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)";
 const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]";
 const SPEZ_AUFRUF = [
   "Aufruf:",
