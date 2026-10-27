@@ -164,7 +164,7 @@ export function bereichsPraefix(config) {
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
-  const repo = zielRepoFuer(werte.label, io.config); // Ziel-Repo (#76): Harness-Label: das Repo des Factory-Boards, sonst das eigene
+  const repo = zielRepoFuer(werte.label, io.config); // Ziel-Repo (#76): das Repo, dessen Issues das Board der Rolle des Labels führt (ohne boards[].repo das eigene)
   if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
     return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
   }

@@ -528,7 +528,7 @@ const boardDerRolle = (rolle, config) => (Array.isArray(config?.boards) ? config
 
 /**
  * Pur: das Ziel-Repo (`owner/name`) für ein Issue mit diesen Labels (ADR 0022 F10, #76): das Repo, dessen Issues das Board der Rolle führt
- * (`boardRepo`); ohne Board oder ohne `boards[].repo` das eigene `repo` der Config. Ein Harness-Befund landet so dort, wo das Factory-Board
+ * ihn führt; ein Label, dessen Board dieses Repo selbst führt (oder ohne `boards[].repo`), bleibt im eigenen Repo.
  * ihn führt, ein Produkt-Befund bleibt im eigenen Repo.
  */
 export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);

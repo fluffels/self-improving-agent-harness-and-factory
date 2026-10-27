@@ -435,7 +435,7 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
         return [[]];
       },
       loadItems: (_r, o) => (aufrufe.items++, aufrufe.loadRepos.push((o as { repo?: string }).repo ?? "-"), []),
-      loadOpenIssuePages: ((repo: unknown) => (aufrufe.offenRepos.push(repo), [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))])) as unknown as Io["loadOpenIssuePages"],
+      loadOpenIssuePages: (repo: unknown) => (aufrufe.offenRepos.push(repo), [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))]),
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => (aufrufe.status++, { ok: true }),
       fuehreHarnessAus: () => (aufrufe.harness++, true),
