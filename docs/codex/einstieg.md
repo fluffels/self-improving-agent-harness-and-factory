@@ -2,7 +2,7 @@
 
 Der Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI 0.164.0. Autonome Ticketläufe sind nicht freigegeben. Der Einstieg aus [AGENTS.md](../../AGENTS.md) endet auch mit vollständig aussehenden Offline-Belegen mit Exit 1. Die Versionsprüfung ist absichtlich auf diesen geprüften Stand begrenzt; andere Versionen benötigen eine neue Prüfung. Ein beauftragter Implementierungs-PR ist keine bestandene Ende-zu-Ende-Abnahme.
 
-Der Prototyp aus [#79](https://github.com/fluffels/self-improving-agent-harness-and-factory/issues/79) umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige Unterstützung wird getrennt vervollständigt: [#84](https://github.com/fluffels/self-improving-agent-harness-and-factory/issues/84) implementiert Hooks und Quarantäne, [#85](https://github.com/fluffels/self-improving-agent-harness-and-factory/issues/85) korrigiert Tracing-Zuordnung und Ausfallerkennung, [#86](https://github.com/fluffels/self-improving-agent-harness-and-factory/issues/86) prüft das isolierte Gesamtsetup samt Probeauftrag. Erst die Gesamtabnahme kann eine autonome Freigabe begründen.
+Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige Unterstützung benötigt drei weitere Arbeitspakete: Hooks und Quarantäne, korrekte Tracing-Zuordnung samt Ausfallerkennung sowie ein isoliertes Gesamtsetup mit Probeauftrag. Die konkreten Nachfolger und Rohbelege sind im zugehörigen Implementierungs-PR verlinkt. Erst die Gesamtabnahme kann eine autonome Freigabe begründen.
 
 ## Gemeinsame Quellen und Rollen
 
@@ -64,7 +64,7 @@ Anschließend in einer neu geladenen, vertrauenswürdig eingerichteten Sitzung `
 
 Für Codex CLI 0.164.0 unter Windows wurde `command = "npx"` mit einem lokalen, offline installierten harmlosen MCP-Fixture-Paket geprüft. Ein isolierter temporärer App-Server erhielt `initialize`, `initialized` und `mcpServerStatus/list`. Serverinformationen und das deklarierte `ping`-Werkzeug waren sichtbar, `toolsError` war null; ein Fixture-Marker belegte den Initialize-Aufruf. Direkter Node-Start und `cmd /d /c npx` waren ebenfalls erfolgreich. Ein `cmd`-Wrapper ist für diesen belegten `npx`-Start daher nicht nötig. Diese Probe belegt weder das echte Playwright-Paket, einen Browseraufruf noch die Langfuse-Authentifizierung oder Modell-/Subagent-Erfassung. Hilfsprozesse wurden beendet. Die Probe nutzte keine persönlichen Konfigurationen oder Secrets und keine Modellabfrage; npm lief im Offlinemodus. Netzwerkverkehr des App-Servers wurde nicht mitgeschnitten.
 
-Zusätzliche [Rollen- und Browserproben](https://github.com/fluffels/self-improving-agent-harness-and-factory/pull/82#issuecomment-6444792898) belegen tatsächliche Aufrufe aller sieben Custom-Rollen mit Modell, Effort und Verbrauch sowie einen modellgesteuerten Playwright-Aufruf auf eine lokale Fixture mit erfolgreichem Schließen des Browsers. Ohne Kontextvererbung hatten die Rollen eigene Agent-IDs und direkte Elternbezüge. Der falsche Repo-Tag und fehlerhafte Identitäten bei Kontextvererbung bleiben Fehler in #85; die Proben belegen weder technische Quarantäne noch vollständiges Tracing. Die [negative Gesamtabnahme samt Negativproben](https://github.com/fluffels/self-improving-agent-harness-and-factory/pull/82#issuecomment-6445284204) bleibt maßgeblich für die noch fehlende Gesamtfreigabe.
+Die im Implementierungs-PR dokumentierten zusätzlichen Rollen- und Browserproben belegen tatsächliche Aufrufe aller sieben Custom-Rollen mit Modell, Effort und Verbrauch sowie einen modellgesteuerten Playwright-Aufruf auf eine lokale Fixture mit erfolgreichem Schließen des Browsers. Ohne Kontextvererbung hatten die Rollen eigene Agent-IDs und direkte Elternbezüge. Der falsche Repo-Tag und fehlerhafte Identitäten bei Kontextvererbung bleiben offen; die Proben belegen weder technische Quarantäne noch vollständiges Tracing. Die dort verlinkte negative Gesamtabnahme samt Negativproben bleibt maßgeblich für die noch fehlende Gesamtfreigabe.
 
 ## Offene Full-Access-Diskrepanz (K3/K6)
 
@@ -104,9 +104,9 @@ Eine spätere Änderung des sperrenden Einstiegs benötigt zusammen diese überp
 4. Vollständiger Export: Hauptagent, alle Rollen und relevante Werkzeuge mit Repo-/Session-/Elternverknüpfung und Verbrauch; Tracing-Ausfall stoppt nachvollziehbar.
 5. Abgegrenztes Probe-Ticket gemäß unabhängigem Review und Holdout-Abnahme, einschließlich Negativfällen. Ein Healthcheck allein genügt nicht.
 
-Der beobachtete `private-codex-exporter` 1.1.0 liegt außerhalb des Repositories und wird vom Setup weder installiert noch konfiguriert. Tatsächliche Custom-Rollen sind in den verlinkten Proben erfasst; kanonische Repo-Zuordnung, Identitäten bei Kontextvererbung und vollständige Werkzeugerfassung sind damit noch nicht belegt. Seine reproduzierbare Bereitstellung und Exportvollständigkeit gehören zu #85 und #86. Allgemeine Subagent-Generationen allein schließen diese Lücken nicht.
+Der beobachtete `private-codex-exporter` 1.1.0 liegt außerhalb des Repositories und wird vom Setup weder installiert noch konfiguriert. Tatsächliche Custom-Rollen sind in den dokumentierten Proben erfasst; kanonische Repo-Zuordnung, Identitäten bei Kontextvererbung und vollständige Werkzeugerfassung sind damit noch nicht belegt. Seine reproduzierbare Bereitstellung und Exportvollständigkeit gehören zu den Tracing- und Gesamtsetup-Arbeiten. Allgemeine Subagent-Generationen allein schließen diese Lücken nicht.
 
-Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt keine Freigabe. Die Schutz-, Tracing- und Gesamtanforderungen des ursprünglichen Gesamtumfangs von #79 bleiben in #84–#86 offen. Eine bestandene Teilabnahme des Prototyps ersetzt sie nicht.
+Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt keine Freigabe. Die Schutz-, Tracing- und Gesamtanforderungen bleiben in den verlinkten Nachfolgern offen. Eine bestandene Teilabnahme des Prototyps ersetzt sie nicht.
 
 ## Quellen
 
