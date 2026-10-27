@@ -54,7 +54,7 @@ export function zaehleSeite(text: string, begriffe: Record<string, RegExp>): Zae
   const t = maskiere(text.replace(/\r\n/g, "\n"));
   const out: Zaehlung = {};
   for (const name of Object.keys(begriffe).sort()) {
-    const n = (t.match(begriffe[name] as RegExp) ?? []).length;
+    const n = (t.match(begriffe[name]) ?? []).length;
     if (n > 0) out[name] = n;
   }
   return out;
@@ -85,7 +85,7 @@ export function kernSeiten(wurzel: string): string[] {
 export function zaehleSeiten(seiten: Record<string, string>, begriffe: Record<string, RegExp>): Baseline {
   const out: Baseline = {};
   for (const pfad of Object.keys(seiten).sort()) {
-    const z = zaehleSeite(seiten[pfad] as string, begriffe);
+    const z = zaehleSeite(seiten[pfad], begriffe);
     if (Object.keys(z).length > 0) out[pfad] = z;
   }
   return out;
