@@ -89,3 +89,12 @@ describe("Dependabot-Inbox-Action fügt Issue zum Board hinzu (#712)", () => {
     assert.doesNotMatch(yml, /area:architektur/);
   });
 });
+
+describe("Dependabot-Inbox legt nie im falschen Repo an (#76)", () => {
+  test("die Vorprüfung --ziel-repo steht vor gh issue create und bricht bei fremdem Ziel-Repo ab", () => {
+    const vor = yml.indexOf("node scripts/projekt-config.mjs --ziel-repo");
+    assert.ok(vor > 0, "--ziel-repo-Vorprüfung fehlt");
+    assert.ok(vor < yml.indexOf("gh issue create"), "die Vorprüfung muss vor gh issue create stehen");
+    assert.match(yml, /if \[ "\$\{ziel,,\}" != "\$\{REPO,,\}" \]; then\n\s+echo "::error::[^\n]*\n\s+exit 1/);
+  });
+});

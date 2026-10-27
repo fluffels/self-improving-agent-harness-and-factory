@@ -28,7 +28,7 @@ const T = raw as unknown as {
   fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
 };
 
-const CFG = { labels: { harness: FREMD.labels.harness, forum: FREMD.labels.forum } };
+const CFG = { repo: FREMD.repo, labels: { harness: FREMD.labels.harness, forum: FREMD.labels.forum } };
 
 /** Fake für `io.loadItems`: die Items stehen auf dem Factory-Board (dort arbeiten Status- und Harness-Takt), das Produkt-Board ist leer. */
 const nurFactory = (items: Item[]) => (rolle: string) => (rolle === "factory" ? items : []);
@@ -197,7 +197,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         fuehreHarnessAus: () => true,
         log: (z) => log.push(z),
       };
-      T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, io, ausloeser });
+      T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-15T12:00:00Z"), dry: true, repo: FREMD.repo, io, ausloeser });
       return log.join("\n");
     };
 
@@ -252,7 +252,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     const jetzt = new Date("2026-10-08T12:00:00Z");
     test("ein Sammelticket nur auf dem Produkt-Board löst keine Harness-Aktion aus, auf dem Factory-Board schon", () => {
       const nur = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
+      T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt, token: "t", io: mk([it(10), it(11), sammel], [it(1)], nur) });
       expect(nur.harness).toBe(0);
       const auf = { status: [] as unknown[], harness: 0 };
       T.fuehreTaktAus({ config: CFG, jetzt, repo: FREMD.repo, token: "t", io: mk([], [it(10), it(11), sammel], auf) });
@@ -260,14 +260,14 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     });
     test("das Status-Ticket bekommt die Factory-Liste, nie die Produkt-Liste", () => {
       const g = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(900)], [it(1), it(2)], g) });
+      T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt, token: "t", io: mk([it(900)], [it(1), it(2)], g) });
       const listen = g.status as Item[][];
       expect(listen).toHaveLength(1);
       expect(listen[0].map((i) => i.number)).toEqual([1, 2]);
     });
     test("ein Item auf beiden Boards, das laut Trennregel auf das Produkt-Board gehört, zählt nicht in der Factory-Liste", () => {
       const g = { status: [] as unknown[], harness: 0 };
-      T.fuehreTaktAus({ config: CFG, jetzt, token: "t", io: mk([it(5)], [it(5), it(6)], g) });
+      T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt, token: "t", io: mk([it(5)], [it(5), it(6)], g) });
       expect((g.status as Item[][])[0].map((i) => i.number)).toEqual([6]);
     });
   });
@@ -284,7 +284,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       fuehreHarnessAus: () => ((gerufen += 1), true),
       log: (z) => log.push(z),
     };
-    expect(T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, token: "t", io }).fehler).toBe(false);
+    expect(T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, token: "t", io }).fehler).toBe(false);
     expect(gerufen).toBe(0);
   });
 
@@ -297,11 +297,11 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       fuehreHarnessAus: () => true,
     };
     const log: string[] = [];
-    const ohneToken = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, positionLautAgentsMd: () => 4, log: (z: string) => log.push(z) } });
+    const ohneToken = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, positionLautAgentsMd: () => 4, log: (z: string) => log.push(z) } });
     expect(ohneToken.fehler).toBe(false);
     expect(log.join("\n")).toContain("PROJECT_TOKEN fehlt");
     const ohnePos = T.fuehreTaktAus({
-      config: CFG,
+      config: CFG, repo: FREMD.repo,
       jetzt: new Date("2026-10-08T12:00:00Z"),
       token: "t",
       io: { ...basis, positionLautAgentsMd: () => { throw new Error("keine Position"); }, log: () => undefined },
@@ -334,7 +334,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       addToBoardTodo: (rolle, id) => (zaehler.add.push(id), zaehler.rollen.push(rolle), (opts.add ?? (() => `ITEM_${id}`))()),
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
+    const r = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), dry: opts.dry, token: "token" in opts ? opts.token : "t", io });
     return { r, log, zaehler };
   }
 
@@ -402,7 +402,7 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
         addToBoardTodo: (_r: string, id: string) => `ITEM_${id}`,
         log: () => undefined,
       };
-      const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t", config: CFG }, io);
+      const r = W.nimmFehlendeAuf({ offene: [{ number: 20 }, { number: 21 }], listen: { produkt: [], factory: [] }, token: "t", repo: FREMD.repo, config: CFG }, io);
       expect(r.listen.factory.map((i) => i.number)).toEqual([20]);
       expect(r.listen.produkt.map((i) => i.number)).toEqual([21]);
     });
@@ -417,6 +417,64 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
     expect(zaehler.add).toEqual([]);
     expect(log.join("\n")).toMatch(/#11 fehlt im Board, nicht aufgenommen: Issue ist geschlossen/);
     expect(r.fehler).toBe(false);
+  });
+});
+
+describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, labels: labels.map((name) => ({ name })) });
+  const bauen = (offen: number[], labelsVon: (n: number) => string[], opt: { token?: string; werfe?: boolean } = {}) => {
+    const log: string[] = [];
+    const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0, offenRepos: [] as unknown[], items: 0 };
+    const io: Io = {
+      ghJson: (a) => {
+        const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
+        if (m) return issue(Number(m[1]), labelsVon(Number(m[1])));
+        if (a.join(" ").includes("/commits")) aufrufe.commits += 1;
+        return [[]];
+      },
+      loadItems: (_r, o) => (aufrufe.items++, aufrufe.loadRepos.push((o as { repo?: string }).repo ?? "-"), []),
+      loadOpenIssuePages: (repo: unknown) => (aufrufe.offenRepos.push(repo), [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))]),
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => (aufrufe.status++, { ok: true }),
+      fuehreHarnessAus: () => (aufrufe.harness++, true),
+      itemsUeberIssues: (_r, n) => n.map(() => null),
+      addToBoardTodo: (_r, id) => {
+        if (opt.werfe) throw new Error("Board kaputt");
+        return (aufrufe.add.push(id), `ITEM_${id}`);
+      },
+      log: (z) => log.push(z),
+    };
+    const token = "token" in opt ? opt.token : "t";
+    const r = T.fuehreTaktAus({ config: fremd, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token, io });
+    return { r, log: log.join("\n"), aufrufe };
+  };
+  test("Status-Ticket, Sammelticket und Quotenzeile entfallen mit Logzeile, der Lauf bleibt grün, der Wächter läuft mit dem eigenen Repo", () => {
+    const { r, log, aufrufe } = bauen([], () => []);
+    expect(log).toContain(`Factory-Teil übersprungen: Factory-Board führt ${FABRIK}, der Takt dort pflegt Status- und Sammelticket`);
+    expect(log).not.toMatch(/Status-Ticket \(|Harness-Sammelticket:|Produkt/);
+    expect(aufrufe).toMatchObject({ status: 0, harness: 0, commits: 0, loadRepos: [FREMD.repo, FREMD.repo] });
+    expect(r.fehler).toBe(false);
+  });
+  test("der Wächter nimmt ein Produkt-Issue auf, lehnt ein Harness-Issue des eigenen Repos mit Grund ab (Warnung, kein Fehler)", () => {
+    const { r, log, aufrufe } = bauen([5, 6], (n) => (n === 6 ? [FREMD.labels.harness] : []));
+    expect(aufrufe.add).toEqual(["N5"]);
+    expect(log).toMatch(new RegExp(`::warning::Board-Wächter: #6 fehlt im Board, nicht aufgenommen: Das factory-Board.*${FABRIK}`));
+    expect(r.fehler).toBe(false);
+  });
+  test("Wächter fragt die offenen Issues des eigenen Repos ab (nicht des Factory-Repos)", () => {
+    expect(bauen([5], () => []).aufrufe.offenRepos).toEqual([FREMD.repo]);
+  });
+  test("ohne Token keine Board-Abfrage und kein Fehler (nur die Logzeile)", () => {
+    const { r, aufrufe, log } = bauen([5], () => [], { token: "" });
+    expect(aufrufe.items).toBe(0);
+    expect(aufrufe.offenRepos).toEqual([]);
+    expect(log).toContain("Factory-Teil übersprungen");
+    expect(r.fehler).toBe(false);
+  });
+  test("ein Fehler beim Aufnehmen im Wächter wird als fehler: true weitergereicht", () => {
+    expect(bauen([5], () => [], { werfe: true }).r.fehler).toBe(true);
   });
 });
 
@@ -474,7 +532,7 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-12T12:00:00Z"), dry, io });
+    const r = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-12T12:00:00Z"), dry, io });
     return { log: log.join("\n"), angelegt, aufrufe, fehler: r.fehler };
   };
 
@@ -512,7 +570,7 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
     };
-    T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-12T12:00:00Z"), dry: true, io });
+    T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-12T12:00:00Z"), dry: true, io });
     expect(aufrufe).toHaveLength(0);
   });
 });

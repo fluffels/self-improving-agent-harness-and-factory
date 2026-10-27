@@ -112,7 +112,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
   const start = await inboxStart(argv, { skript: "harness-doctor-melden", praefix: `${KENNUNG}: Projekt-Config nicht lesbar: `, ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
-  const { OWNER, REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
+  const { REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   const projektToken = process.env.PROJECT_TOKEN;
   const io = {
     ermittle: () =>
@@ -122,8 +122,8 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
         pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null }).ergebnis,
       }),
     kontext: () => {
-      const { offene, kommentare } = ladeSammelKontext();
-      return { kommentare, owner: OWNER, ziel: waehleSammelticket(offene)?.number ?? null };
+      const { offene, kommentare, owner } = ladeSammelKontext();
+      return { kommentare, owner, ziel: waehleSammelticket(offene)?.number ?? null };
     },
     postZeilen,
     heute: new Date().toISOString().slice(0, 10),

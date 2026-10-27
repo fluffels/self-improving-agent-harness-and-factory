@@ -28,7 +28,7 @@ import * as rawLangfuse from "../scripts/langfuse-takt.mjs";
 import { FREMD } from "./support/fremd-config";
 
 type Board = { projectId: string; nummer: number; statusFeldId: number | string; statusFeldNodeId: string; todoOptionId: string };
-const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board };
+const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board; zielRepo: (r: string) => string };
 const produkt = L.boardFuerRolle("produkt");
 const factory = L.boardFuerRolle("factory");
 const T = rawTakt as unknown as {
@@ -87,7 +87,7 @@ describe("ECHTE_IO in board-takt löst die Rolle auf das richtige Board auf", ()
     ["produkt", produkt, factory],
     ["factory", factory, produkt],
   ] as const)("addToBoardTodo (%s) sendet projectId, Status-Feld und Todo-Option des eigenen Boards", (rolle, soll, fremd) => {
-    expect(T.ECHTE_IO.addToBoardTodo(rolle, "I_node", {})).toBe("ITEM_x");
+    expect(T.ECHTE_IO.addToBoardTodo(rolle, "I_node", { repo: L.zielRepo(rolle) })).toBe("ITEM_x");
     nur(soll, fremd);
     expect(flach()).toContain(`f=${soll.statusFeldNodeId}`);
     expect(flach()).not.toContain(fremd.statusFeldNodeId);
@@ -96,7 +96,7 @@ describe("ECHTE_IO in board-takt löst die Rolle auf das richtige Board auf", ()
     ["produkt", produkt, factory],
     ["factory", factory, produkt],
   ] as const)("loadItems (%s) liest Pfad und Status-Feld des eigenen Boards", (rolle, soll, fremd) => {
-    T.ECHTE_IO.loadItems(rolle, {});
+    T.ECHTE_IO.loadItems(rolle, { repo: L.zielRepo(rolle) });
     const t = flach();
     expect(t).toContain(`/projectsV2/${soll.nummer}/items`);
     expect(t).toContain(`fields=${soll.statusFeldId}`);
@@ -113,7 +113,7 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
   test("langfuse-takt fuehreStatusAus: Default `imBoardAnlegen` und `setze` treffen das Factory-Board", () => {
     const r = LF.fuehreStatusAus(
       { aktion: "nach-oben", nr: 9 },
-      { repo: "o/r", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], config: FREMD, io: { gh: () => ({ node_id: "I_n" }) } },
+      { repo: L.zielRepo("factory"), vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], config: FREMD, io: { gh: () => ({ node_id: "I_n" }) } },
     );
     expect(r).toMatchObject({ ok: true, itemId: "ITEM_x" });
     nur(factory, produkt);

@@ -6,7 +6,7 @@ import { FREMD } from "./support/fremd-config";
 const config: unknown = FREMD;
 
 type Plan = { aufnehmen: { number: number; nodeId: string; title: string; rolle: string }[]; abgelehnt: { number: number; grund: string }[] };
-const aufnahmePlan = (raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null }) => Plan }).aufnahmePlan;
+const aufnahmePlan = (raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null; repo?: string }) => Plan }).aufnahmePlan;
 
 const issue = (number: number, extra: Record<string, unknown> = {}) => ({ number, state: "open", node_id: `I_${number}`, title: `T${number}`, ...extra });
 
@@ -46,7 +46,7 @@ describe("aufnahmePlan (#1428 Z37)", () => {
 import * as placeRaw from "../scripts/board-place.mjs";
 
 type Item = { id: string; number: number; title: string; status?: string };
-type Io = { ghJson: (a: string[]) => unknown; addToBoardTodo: (nodeId: string) => string; log: (m: string) => void; warn: (m: string) => void; config?: unknown };
+type Io = { repo?: string; ghJson: (a: string[]) => unknown; addToBoardTodo: (nodeId: string) => string; log: (m: string) => void; warn: (m: string) => void; config?: unknown };
 const nimmFehlendeAuf = (placeRaw as unknown as { nimmFehlendeAuf: (items: Item[], args: { anchor: number | null; numbers: number[]; dry: boolean }, io: Io) => Item[] }).nimmFehlendeAuf;
 
 describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
@@ -55,6 +55,7 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
     const rufe = { api: [] as string[][], add: [] as string[], log: [] as string[], warn: [] as string[] };
     const io: Io = {
       config,
+      repo: FREMD.repo,
       ghJson: (a) => {
         rufe.api.push(a);
         const nr = Number(a[1].split("/").pop());
@@ -89,6 +90,16 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
     expect(rufe.log[0]).toMatch(/#5 fehlte im Board: aufgenommen/);
   });
 
+  test("der Abruf geht an das Repo aus io.repo, ohne io.repo an args.repo", () => {
+    const a = fakes({ 5: issue(5) });
+    nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: false }, { ...a.io, repo: "zz-org/zz-x" });
+    expect(a.rufe.api[0]?.[1]).toBe("repos/zz-org/zz-x/issues/5");
+    const b = fakes({ 5: issue(5) });
+    const { repo: _weg, ...ohneRepo } = b.io;
+    nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-y" } as never, ohneRepo);
+    expect(b.rufe.api[0]?.[1]).toBe("repos/zz-org/zz-y/issues/5");
+  });
+
   test("--dry-run: kein addToBoardTodo, Meldung „würde aufnehmen“, das Item steht trotzdem in der Liste", () => {
     const { rufe, io } = fakes({ 5: issue(5) });
     const r = nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: true }, io);
@@ -111,5 +122,22 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
     expect(rufe.add).toEqual(["I_8"]);
     expect(rufe.warn.map((w) => w.match(/#(\d+)/)?.[1]).sort()).toEqual(["7", "9"]);
     expect(r.map((i) => i.number)).toEqual([1, 8]);
+  });
+});
+
+describe("aufnahmePlan: fremdes Board (#76)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  test("ein Harness-Issue des eigenen Repos wird abgelehnt, der Grund nennt das führende Repo; ein Produkt-Issue und das Ziel-Repo selbst werden aufgenommen", () => {
+    const harness = { labels: [{ name: FREMD.labels.harness }] };
+    const p = aufnahmePlan([5, 6], { 5: issue(5, harness), 6: issue(6) }, { config: fremd, repo: FREMD.repo });
+    expect(p.aufnehmen.map((a) => a.number)).toEqual([6]);
+    expect(p.abgelehnt).toHaveLength(1);
+    expect(p.abgelehnt[0]).toMatchObject({ number: 5 });
+    expect(p.abgelehnt[0]?.grund).toContain(FABRIK);
+    expect(aufnahmePlan([5], { 5: issue(5, harness) }, { config: fremd, repo: FABRIK }).aufnehmen.map((a) => a.number)).toEqual([5]);
+  });
+  test("ohne repo bleibt das Verhalten unverändert (reine Rollenwahl)", () => {
+    expect(aufnahmePlan([5], { 5: issue(5, { labels: [{ name: FREMD.labels.harness }] }) }, { config: fremd }).aufnehmen).toHaveLength(1);
   });
 });

@@ -59,6 +59,7 @@ const esc = (namenRaw as unknown as { escapeRegex: (t: string) => string }).esca
 const T = taktRaw as unknown as { fuehreTaktAus: (a: Record<string, unknown>) => { fehler: boolean } };
 
 const BASIS = {
+  repo: "zz-org/zz-demo",
   sprache: echteSprache(),
   praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" },
   agenten: { planer: "ab-planer", umsetzer: "ab-umsetzer", lens: "ab-lens", gruppe: "ab-gruppe", ticketSkill: "ab" },
@@ -224,7 +225,7 @@ describe("board-takt: Harness-Label der Abfrage", () => {
       fuehreHarnessAus: () => true,
       log: () => undefined,
     };
-    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, config: FAB, io });
+    T.fuehreTaktAus({ jetzt: new Date("2026-10-08T12:00:00Z"), dry: true, repo: "zz-org/zz-demo", config: FAB, io });
     const abfrage = aufrufe.find((a) => a.includes("state=closed")) ?? "";
     expect(abfrage).toContain("labels=bereich%3Afabrik&since=");
     // Der Label-Parameter selbst wird geprüft, nicht ein Teilstring der URL (der Repo-Name kann „harness“ enthalten).

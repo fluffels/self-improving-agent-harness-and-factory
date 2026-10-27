@@ -68,3 +68,32 @@ describe("sammelticketNummern und ladeSammelKontext (Z3)", () => {
     expect(() => L.ladeSammelKontext({ ladeOffene: () => { throw new Error("gh kaputt"); }, ladeKommentare: () => [] })).toThrow(/gh kaputt/);
   });
 });
+
+describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
+  test("ladeSammelKontext reicht das Ziel-Repo an den Kommentar-Abruf und liefert dessen Owner", () => {
+    const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
+    const repos: string[] = [];
+    const k = L.ladeSammelKontext({
+      ladeOffene: () => rohe,
+      ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
+    }) as unknown as { owner: string };
+    expect(repos).toHaveLength(1);
+    expect(repos[0]).toMatch(/^[^/]+\/[^/]+$/);
+    expect(k.owner).toBe(repos[0]?.split("/")[0]);
+  });
+});
+
+describe("waehleSammelticket (#76): Vertrauen über den Owner des Ziel-Repos", () => {
+  const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => { number: number } | null };
+  const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }];
+  const einzel = (login: string) => (args: string[]) => ({ state: "open", assignees: [], user: { login, type: "User" }, args });
+  test("ein Ticket des Owners des Ziel-Repos wird gewählt, das Einzelabruf-Repo ist das Ziel-Repo", () => {
+    const abgerufen: string[][] = [];
+    const r = W.waehleSammelticket(offene, "own-a/ziel", (args) => (abgerufen.push(args), einzel("own-a")(args)));
+    expect(r?.number).toBe(5);
+    expect(abgerufen[0]).toEqual(["api", "repos/own-a/ziel/issues/5"]);
+  });
+  test("Negativfall: ein Ticket eines anderen Autors wird nicht gewählt", () => {
+    expect(W.waehleSammelticket(offene, "own-a/ziel", einzel("fremd"))).toBeNull();
+  });
+});
