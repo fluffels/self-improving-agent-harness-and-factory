@@ -1,5 +1,5 @@
 /* @harness-waechter: Codex-Konfiguration und ausschließlich lokale Setup-Dateien (#79). */
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
@@ -14,7 +14,7 @@ const mcp = { mcpServers: { playwright: { command: "npx", args: ["--probe"] } } 
 const endpoint = "https://example.test/api/public/mcp";
 const temps: string[] = [];
 function temp() { const p = mkdtempSync(join(tmpdir(), "codex-setup-")); temps.push(p); return p; }
-afterEach(() => { for (const p of temps.splice(0)) rmSync(p, { force: true, recursive: true }); });
+afterEach(() => { vi.unstubAllEnvs(); for (const p of temps.splice(0)) rmSync(p, { force: true, recursive: true }); });
 function quelle() {
   const root = temp();
   const original = JSON.parse(readFileSync(".factory/projekt.json", "utf8")) as { agenten: Record<string, string> };
@@ -111,7 +111,7 @@ test.each([".codex", ".codex/agents"])("auch ein innerer Ziel-Symlink %s wird ni
   expect(() => c.schreibeSetup(root, { ".codex/agents/probe.toml": "x" })).toThrow(/Symlink/);
   expect(existsSync(join(real, "probe.toml"))).toBe(false);
 });
-test.each([".git", ".agents", ".codex"])("keine Ausgabe unter Metadaten %s", p => {
+test.each([".git", ".agents", ".codex", ".aws", ".AWS"])("keine Ausgabe unter Metadaten %s", p => {
   const root = quelle(); const ziel = join(root, p, "ausgabe");
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]).code).toBe(1);
   expect(existsSync(ziel)).toBe(false);
@@ -119,6 +119,18 @@ test.each([".git", ".agents", ".codex"])("keine Ausgabe unter Metadaten %s", p =
 test("keine Ausgabe in globale Codex-Konfiguration", () => {
   const root = quelle();
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", homedir(), "--write"]).code).toBe(1);
+});
+test("individuelles CODEX_HOME sperrt sich selbst und Nachfahren, nicht seine Nachbarn", () => {
+  const root = quelle(), basis = temp(), home = join(basis, "privates-codex-home");
+  vi.stubEnv("CODEX_HOME", home);
+  for (const ziel of [home, join(home, "kind")]) {
+    const result = lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]);
+    expect(result.code).toBe(1); expect(result.err.join()).toContain("Globale Codex-Konfiguration");
+    expect(existsSync(ziel)).toBe(false);
+  }
+  const nachbar = join(basis, "anderer-ordner");
+  expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", nachbar]).code).toBe(0);
+  expect(existsSync(nachbar)).toBe(false);
 });
 test("alle Kollisionen prüfen, bevor eine neue Datei geschrieben wird", () => {
   const root = temp(); c.schreibeSetup(root, { ".codex/b": "alt" });
