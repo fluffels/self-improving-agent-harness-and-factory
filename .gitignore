@@ -10,7 +10,6 @@ sbom/
 # Codex-Setup ist aus gemeinsamen Quellen reproduzierbar; lokale Entwürfe und MCP-Adressen bleiben lokal.
 .codex/config.toml
 .codex/agents/
-.codex/berechtigungen.toml.example
 # Lokale Umgebungsvariablen: Werte gehören nie ins Repo, eine Vorlage `.env.example` (nur Namen) bleibt versioniert.
 .env
 .env.*.local

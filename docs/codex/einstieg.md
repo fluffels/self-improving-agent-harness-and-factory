@@ -1,72 +1,107 @@
 # Codex im Harness
 
-Der Codex-Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI 0.164.0. Die Freigabe autonomer Ticketläufe fehlt. Der Einstieg aus [AGENTS.md](../../AGENTS.md) endet deshalb auch bei vollständig aussehenden Offline-Belegen mit Exit 1. Ein ausdrücklich beauftragter Implementierungs-PR wie #79 ist keine bestandene Ende-zu-Ende-Abnahme dieses Adapters.
+Der Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI 0.164.0. Autonome Ticketläufe sind nicht freigegeben. Der Einstieg aus [AGENTS.md](../../AGENTS.md) endet auch mit vollständig aussehenden Offline-Belegen mit Exit 1. Die Versionsprüfung ist absichtlich auf diesen geprüften Stand begrenzt; andere Versionen benötigen eine neue Prüfung. Ein beauftragter Implementierungs-PR ist keine bestandene Ende-zu-Ende-Abnahme.
 
-## Gemeinsame Quellen und native Rollen
+## Gemeinsame Quellen und Rollen
 
-`AGENTS.md` bleibt die Regelquelle, `.agents/skills/` die Skillquelle. Codex benötigt keine Kopien der Claude-Skillzeiger. `scripts/codex-setup.mjs` erzeugt native `.codex/agents/*.toml` mit `name`, `description`, `developer_instructions` und Effort. Fachliche Quellen bleiben `.claude/agents/*.md`; deren Frontmatter und Claude-API-Beispiele sind keine Codex-Konfiguration:
+`AGENTS.md` bleibt die Regelquelle, `.agents/skills/` die Skillquelle. Der Generator benötigt keine Claude-Skillkopien. Die Rollen stehen einmal in `scripts/codex-rollen.mjs`; Setup, Quellenprüfung und Belegdiagnose verwenden dieselbe Tabelle. Native `.codex/agents/*.toml` enthalten `name`, `description`, Effort, Instruktionen und unterstützte Feature-Reduktionen. Die fachlichen Quellen bleiben `.claude/agents/*.md`; deren Frontmatter und Claude-API-Beispiele sind keine Codex-Konfiguration.
 
-| Phase | Codex-Rolle / Aufruf in dieser Sitzung | Gemeinsame Quelle |
+| Phase | Codex-Rolle | Fachliche Quelle |
 |---|---|---|
-| Planung | Name aus `agenten.planer`, `collaboration.spawn_agent` | `factory-planer.md` |
+| Planung | Name aus `agenten.planer` | `factory-planer.md` |
 | Umsetzung / Gruppen | `agenten.umsetzer` / `agenten.gruppe` | `factory-umsetzer.md` / `factory-gruppe.md` |
-| Architektur, Requirements, Tests | je eigener Auftrag an `agenten.lens` | `factory-lens.md`, Skill `review-lenses` |
+| Architektur, Requirements, Tests | je unabhängiger Auftrag an `agenten.lens` | `factory-lens.md`, Skill `review-lenses` |
 | Exploration | `explore` | `explore.md` |
 | Szenarien / Abnahme | `holdout-szenario` / `holdout-abnahme` | gleichnamige Dateien |
-| Rückmeldung / Fortsetzung | `collaboration.send_message` / `followup_task` | gemeinsamer Ticketablauf |
 | Quarantäne | **keine freigegebene Rolle** | Sicherheitsregeln in `AGENTS.md` |
 
-Eine generierte Rolle ist erst nach erneutem Laden und tatsächlicher Discovery nutzbar. Die angebotenen Rollen können davon abweichen; ein Fallback auf `default` ist keine Probe der Custom-Agent-Datei. Planung und Lenses erhalten `high`, Umsetzung und Explore `medium`; das Modell wird von der Elternsession geerbt. Der Probebericht nennt den tatsächlich aufgelösten Modellnamen. Claude-Aliase haben keine belegte Codex-Entsprechung; dies ist keine Kosten- oder Qualitätsäquivalenz zur Claude-Phasenmatrix.
+Eine erzeugte Rolle ist erst nach erneutem Laden und tatsächlicher Discovery nutzbar. Ein Spawn von `default` belegt keine Custom-Agent-Datei. Planung und Lenses verwenden `high`, Umsetzung und Explore `medium`; das Modell wird geerbt und im Probebericht anhand der Laufmetadaten benannt. Claude-Aliase haben keine belegte Codex-Entsprechung. Der Hauptagent übergibt den fachlichen Rollenvertrag aus der gemeinsamen Quelle; der Szenario-Agent erhält nur diesen Vertrag und das Ticket, keine zusätzliche Quellenbeschaffung.
+
+Alle Rollen reduzieren `apps`, `plugins`, `memories` und `request_permissions_tool`; der Szenario-Agent zusätzlich `shell_tool`. Die Lens behält die für isolierte Sabotage nötigen Werkzeuge. Diese Reduktionen sind **keine** vollständige Tool-Allowlist, Read-only-Sandbox oder Quarantäne. `sandbox_mode`, `approval_policy` und `mcp_servers` lassen sich durch eine Custom-Agent-Datei nicht unabhängig von der Elternsession überschreiben. Eine TOML-Datei oder ein Prompt-Verbot allein belegt keine Rechteisolation.
+
+## Konkrete Aufrufe
+
+Die aktuelle Schnittstelle bietet `collaboration.spawn_agent`, `send_message` und `followup_task`; sie ist vor dem Lauf erneut zu prüfen. `Agent` und `SendMessage` aus den Claude-Skills werden nicht blind umbenannt. Beispiel mit bereits geladener Projektkonfiguration und geprüftem Ticket:
+
+```javascript
+const planer = await collaboration.spawn_agent({
+  task_name: "planung", agent_type: config.agenten.planer, fork_turns: "none",
+  message: `Plane Ticket #${ticket.nummer}: ${ticket.body}`,
+});
+await collaboration.send_message({ target: planer.task_name, message: "Ergänzung zur laufenden Planung: ..." });
+await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
+```
+
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag` und `holdout-auftrag` sind nicht auf diese Aufrufe portiert.
 
 ## Reproduzierbares Setup
 
-Voraussetzungen: Repository samt Projektkonfiguration, Node gemäß `package.json`, installierte Codex CLI und ein erreichbarer **Streamable-HTTP-MCP-Dienst für Langfuse**. Seine URL ist keine Langfuse-Weboberfläche oder Public-API-URL. Der Adapter installiert oder hostet diesen Dienst nicht. Die konkrete Bereitstellung und das frische Gesamtsetup bleiben Teil der offenen Abnahme.
+Voraussetzungen: vollständiges Quellrepo, Node gemäß `package.json`, Codex CLI und ein erreichbarer Langfuse-MCP-Endpunkt. Langfuse stellt einen eigenen Streamable-HTTP-Endpunkt unter `/api/public/mcp` bereit; eine Weboberflächen-URL oder irgendein anderer Public-API-Endpunkt genügt nicht. Der Generator hostet keinen Dienst und liest keine Authentifizierungswerte.
 
 ```powershell
 npm.cmd ci
-node scripts/codex-setup.mjs --langfuse-url https://mcp.example.test/langfuse
-node scripts/codex-setup.mjs --langfuse-url https://mcp.example.test/langfuse --write
+node scripts/codex-setup.mjs --langfuse-url https://langfuse.example.test/api/public/mcp --ausgabe ./codex-vorschau
+node scripts/codex-setup.mjs --langfuse-url https://langfuse.example.test/api/public/mcp --ausgabe ./codex-vorschau --write
 ```
 
-Die Beispieladresse ersetzen. Ohne `--write` werden nur geplante Pfade ausgegeben. Identische Dateien bleiben unverändert; ein abweichender lokaler Entwurf stoppt das ganze Setup vor dem ersten Schreibvorgang. Es gibt keinen Force-Modus. Vor manueller Zusammenführung den Entwurf separat prüfen. Setup folgt keinen Symlinks; parallele Änderungen während der Generierung sind keine unterstützte Transaktion.
+Die Beispieladresse ersetzen. `--ausgabe` bestimmt den Ausgabeordner, darunter entsteht `.codex/`; ohne Option ist das Quellrepo das Ziel. `.mcp.json`, Projektkonfiguration und Rollenquellen werden immer aus dem Quellrepo des Skripts gelesen. Ein leerer Ausgabeordner braucht diese Quellen nicht selbst zu enthalten. Ohne `--write` gibt es nur eine Vorschau und keine Dateierstellung.
 
-Playwright-Befehl und Argumente kommen aus `.mcp.json`, nicht aus einer zweiten Versionsliste. Langfuse erhält eine Lese-Toolliste. Beide Server stehen auf `required = true`. Zugangsdaten kommen zur Laufzeit über `LANGFUSE_MCP_TOKEN` aus der Umgebung; der Generator liest keine Tokenwerte, Langfuse-Secret-Dateien oder privaten User-Settings. Ein Dienst mit anderem Auth-Verfahren ist noch nicht praktisch geprüft. Generierte Konfiguration bleibt lokal und ignoriert. In einem Konsumenten kommen die Generatoren über `.factory/besitz.json`; ein Sync in ein anderes Repository ist kein Setup-Schritt.
+Vor dem Schreiben werden reguläre Quelldateien, Zielroot samt bestehenden Vorfahren, alle Zielpfade und Kollisionen geprüft. Symlinks/Junctions werden nicht verfolgt, auch nicht in Vorfahren des Ausgabeordners. Metadatenverzeichnisse wie `.git`/`.agents` und die globale Codex-Konfiguration sind keine Ausgabeziele. Identische Dateien bleiben unberührt; ein abweichender Entwurf stoppt vor dem ersten Schreibvorgang. Es gibt weder Force-Modus noch automatische Zusammenführung oder Entfernung bestehender Konfiguration. Gleichzeitige fremde Dateisystemänderungen während der Generierung sind keine unterstützte Transaktion.
 
-Anschließend in einer **neuen, vertrauenswürdig eingerichteten Codex-Sitzung** die Config mit `codex --strict-config doctor --summary` prüfen, Rollenangebot und echte MCP-Toolaufrufe erfassen. `codex mcp list` oder Doctor allein belegen keine nutzbaren Verbindungen. In einer bereits laufenden Sitzung fehlen unter Umständen weiterhin Playwright oder neu erzeugte Rollen. Die CLI-Diagnose eines separaten Prozesses belegt nicht die Berechtigungen einer laufenden App-Sitzung.
+Playwright-Befehl und Argumente kommen aus `.mcp.json`; Langfuse erhält eine Lese-Toolliste. Beide Server sind `required = true`. Der Host bezieht einen **vollständigen** Authorization-Header aus der extern gesetzten Variable `LANGFUSE_MCP_AUTHORIZATION`:
 
-## Berechtigungen ohne ständige Unterbrechungen
+```toml
+env_http_headers = { Authorization = "LANGFUSE_MCP_AUTHORIZATION" }
+```
 
-Claude-`permissions.allow` wird von Codex nicht übernommen. `:workspace` hält unter anderem `.git`, `.agents` und `.codex` schreibgeschützt; eingeschränktes Netzwerk erzeugt zusätzliche Eskalationen für GitHub und Paketinstallation. Das kann Routine-Rückfragen trotz beauftragter Ticketarbeit erklären. Der angezeigte UI-Modus einer laufenden Sitzung wird vom Adapter nicht festgestellt.
+Beim direkten Langfuse-Endpunkt ist das ein Basic-Header mit Public-/Secret-Key. Der Header und seine Base64-Darstellung sind secretäquivalent. Sie gehören weder ins Repo noch in Logs, Ausgabe oder Prompts. Der Generator liest und erzeugt sie nicht und greift nicht auf Key-Dateien zu. Das Bereitstellen der Authentifizierung durch den MCP-Host ist kein Agentenskript zum Auslesen des Langfuse-Secret-Keys; die Regel aus `AGENTS.md` bleibt bestehen. Daraus folgt **keine** Isolation gegenüber geerbter Shell, Umgebungsvariablen oder privaten MCP-Verbindungen. Die konkrete sichere Bereitstellung und der echte authentifizierte MCP-Aufruf bleiben zu prüfen.
 
-Der Generator liefert einen **inaktiven** User-Scope-Baustein `.codex/berechtigungen.toml.example`: Profil `harness`, abgeleitet von `:workspace`, gezielte Schreibrechte auf diese drei Metadatenpfade und Netzwerkziele für GitHub/npm. Zur späteren Einrichtung gehören im User-Scope zusätzlich `default_permissions = "harness"` und `[features] network_proxy = true`. Domainregeln begrenzen Verkehr nur mit aktivem Proxy; zusätzliche Paketziele und Zugriff auf einen lokalen MCP-Dienst sind in einer echten Probe zu prüfen. Rechte für `.aws` werden nicht erweitert. Breite Shell-, `node`- oder `git`-Freigaben sind nicht Teil des Templates.
+Anschließend in einer neu geladenen, vertrauenswürdig eingerichteten Sitzung `codex --strict-config doctor --summary`, tatsächliche Rollen-Discovery und echte MCP-Aufrufe prüfen. Doctor oder eine Serverliste allein belegen keine nutzbare Verbindung. Generierte Konfiguration bleibt lokal; im Konsumenten kommen die Generatoren über das Besitz-Manifest. Ein Konsumenten-Sync gehört nicht zum Setup.
 
-Ein Repo-Template stellt eine laufende Sitzung nicht nachträglich um. **Approve for me** kann geeignete Genehmigungsanfragen automatisch prüfen; es hebt die Sandbox nicht auf. `approval_policy = "never"` allein lässt blockierte Befehle scheitern. Weder diese Einstellung noch pauschaler Vollzugriff ersetzen die fehlende Schutzabnahme. Der Adapter schreibt keine globale Konfiguration und aktiviert kein Permission-Profil automatisch.
+## Windows-Probe
+
+Für Codex CLI 0.164.0 unter Windows wurde `command = "npx"` mit einem lokalen, offline installierten harmlosen MCP-Fixture-Paket geprüft. Ein isolierter temporärer App-Server erhielt `initialize`, `initialized` und `mcpServerStatus/list`. Serverinformationen und das deklarierte `ping`-Werkzeug waren sichtbar, `toolsError` war null; ein Fixture-Marker belegte den Initialize-Aufruf. Direkter Node-Start und `cmd /d /c npx` waren ebenfalls erfolgreich. Ein `cmd`-Wrapper ist für diesen belegten `npx`-Start daher nicht nötig. Diese Probe belegt weder das echte Playwright-Paket, einen Browseraufruf noch die Langfuse-Authentifizierung oder Modell-/Subagent-Erfassung. Hilfsprozesse wurden beendet; die Probe nutzte keine persönlichen Konfigurationen, Secrets oder Netzabrufe.
+
+## Offene Full-Access-Diskrepanz (K3/K6)
+
+Ungeklärt bleibt, weshalb eine berichtete Full-Access-Oberfläche und unterschiedliche Genehmigungsanforderungen bei Hauptagent und allgemeinen Subagenten zusammen auftreten konnten. Die technische Ursache ist nicht nachgewiesen. Ein separater CLI-Doctor beschreibt nicht automatisch die Rechte einer laufenden App-Sitzung; aktuelle uneingeschränkte Befehle erklären frühere Grenzen ebenfalls nicht. Der Generator erzeugt deshalb kein pauschales `.git`-/`.agents`-/`.codex`-Schreibprofil und ändert keine globale Einstellung.
+
+Geplante Vergleichsprobe: zwei separat konfigurierte, harmlose Elternsessions mit dokumentierter Read-only- beziehungsweise Workspace-Grenze; jeweils dieselbe **explizite Custom-Rolle**, identischer Marker-Lese-/Schreibauftrag in einem Testordner und erfasstes tatsächliches Tool-/MCP-Angebot. Vorher private Connectoren und Secrets aus der Probeumgebung ausschließen. Sandbox-, Genehmigungs- und blockierte Zugriffsresultate mit Laufmetadaten vergleichen. `collaboration.spawn_agent` bietet hier kein `sandbox`-Feld; eine getrennte Kind-Sandbox darf nicht durch erfundene Argumente behauptet werden. Diese Vergleichsprobe ist offen. `approval_policy = "never"` allein erlaubt keine blockierten Aktionen; ein Moduswechsel ist kein Ersatz für die Schutzabnahme.
 
 ## Sicherheits- und Hook-Abbildung
 
-Codex unterstützt Hooks. Die folgenden bestehenden Registrierungen sind trotzdem **nicht portiert oder als wirksam nachgewiesen**. Der Prototyp registriert keine Claude-Hookdatei unter einem anderen Namen.
+Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **nicht portiert oder als wirksam nachgewiesen**:
 
-| Claude-Registrierung / Funktion | Codex-Stand und verbleibende Grenze |
+| Bestehender Schutz | Codex-Stand |
 |---|---|
-| `SessionStart`: `haupt-sync`, Sandbox-Diagnose, MCP-Ausfall, Langfuse-Health | Skripte manuell nutzbar; keine automatische Codex-Registrierung oder MCP-Discovery belegt |
-| `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte und Plugin sind kein Codex-Exporter; keine automatische Nachlieferung zugesagt |
-| `PreToolUse`: Worktree-, GitHub- und Stdin-Skript-Guard | Codex-Payload und Toolabdeckung separat zu prüfen; Lesen der Skripte schafft keinen technischen Schutz |
-| `Agent` / `SendMessage`: Lens-Auftrag und Holdout-Trennung | getrennte Rollen/Prompts möglich; keine technische Verhinderung falsch adressierter Szenarien belegt |
-| `SubagentHandback`: Umsetzer-Abschluss | keine belegte Entsprechung des Claude-Ereignisses |
-| `Stop` / `SubagentStop`: Commit-/Worktree-Prüfung | manuelle Endkontrolle möglich; automatische Erzwingung fehlt |
-| Git-/PR-Gates, Review-/Abnahme-Nachweise | dieselben Skripte und serverseitigen Required-Checks; kein Ersatz für PreToolUse-Schutz |
-| Fremdtext | `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten mit geerbter Shell/MCP sind keine Quarantäne |
+| `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
+| `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
+| `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
+| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
+| `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
+| Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
+| Fremdtext | bestehendes `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten sind keine Quarantäne |
 
-Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. `exec_command`, `spawn_agent` und `apply_patch` haben dokumentierte Matcher-Aliase, aber etwa `write_stdin` erzeugt kein neues `PreToolUse`; gehostete Websuche ist nicht überall erfasst. Die Sicherheitsprobe muss die tatsächlich angebotenen Werkzeuge und Nebenwirkungen testen, einschließlich direkter Dateiwerkzeuge, privater Connectoren und schreibender MCPs. Eine Prompt-Anweisung „nur lesen“ ist keine separate Sandbox.
+Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
 
-## Vorprüfung und Nachweisformat
+## Belegdiagnose und Entsperrkriterien
 
-`node scripts/codex-vorpruefung.mjs [--belege <JSON-Datei>]` liest ausschließlich. Exit 2 bedeutet Aufruffehler, Exit 1 einen gesperrten Einstieg. Es startet weder Claim noch Umsetzung. Die Belegdiagnose prüft Version, Rollen-/MCP-Inventar und Roh-Observations; **auch eine vollständige Datei schaltet keinen autonomen Lauf frei**. Offline-Dateien könnten manipuliert sein und sind keine signierte Laufzeitattestierung.
+`node scripts/codex-vorpruefung.mjs [--belege <JSON-Datei>]` liest ausschließlich. Exit 2 bedeutet Aufruffehler, Exit 1 den gesperrten Einstieg. Weder Claim noch Umsetzung werden gestartet. Vollständige Offline-Daten heben diese Sperre nicht auf; JSON ist selbst attestierbar und keine signierte Laufzeitattestierung.
 
-Belegdatei im temporären Ordner: `version` aus `codex --version` ohne Präfix, `sessionId` des Probe-Laufs, `rollen` als Liste tatsächlich entdeckter Namen, `tools` als Liste erfolgreich aufgerufener Server (`playwright`, `langfuse`), `observations` als Array aus dem Langfuse-MCP-Export. Die Diagnose erwartet `id`, dieselbe `sessionId`, `type`, `tags`, `metadata` und `usageDetails`; Repo-Tag ist `project:<Repositoryname>` aus `.factory/projekt.json`. Haupt-/Sub-Generationen benötigen `agent_role`, unterschiedliche `agent_id`, verknüpfte `parent_thread_id` und Verbrauch (`input`, `output`). Ein sichtbarer Spawn-Werkzeugaufruf allein genügt nicht. Die konkrete Exporter-Abbildung ist zu prüfen, nicht durch erfundene Metadaten zu ergänzen.
+Die Datei enthält `version`, `sessionId`, tatsächlich entdeckte `rollen`, erfolgreich aufgerufene MCP-Server in `tools` sowie rohe Langfuse-`observations`. Jede Observation braucht ID, dieselbe Session, Repo-Tag `project:<Repositoryname>` aus der Projektkonfiguration, Typ, Metadaten und für Generations gültigen Verbrauch (`input`, `output`). Haupt-/Unteragenten haben unterschiedliche nichtleere `agent_id`; `parent_thread_id` muss direkt oder transitiv über etwa den Umsetzer zum eindeutigen Hauptagenten führen. Zyklen, unverbundene Ketten und widersprüchliche Eltern-/Rollenidentitäten gelten nicht als Beleg.
 
-Noch erforderlich: frisches Gesamtsetup, tatsächlich nutzbare Custom-Rollen und MCPs, Negativproben ihrer Ausfälle, isolierte Quarantäneprobe, Hook-Denials samt Fehlerpfaden sowie ein abgegrenztes Probe-Ticket mit unabhängigem Review und Holdout-Abnahme. Langfuse muss dabei Hauptagent, Subagenten und Tools samt Verbrauch und richtiger Repo-Zuordnung zeigen. Erst diese Belege können eine Änderung der sperrenden Vorprüfung rechtfertigen. Der Healthcheck ist nur Erreichbarkeit.
+Für **jede** erwartete Custom-Rolle ist eine eigene verknüpfte Generation mit Verbrauch nötig. Der Rollenname stammt aus dem echten flachen Metadatum `agent_source.subagent.thread_spawn.agent_role` oder der gleich aufgebauten verschachtelten Struktur; widersprüchliche Formen werden abgelehnt. Ein `rollen`-Inventar, `metadata.agent_role = "subagent"`, eine Generation der Rolle `default` oder ein Spawn-Tool allein beweisen keine Custom-Rolle. Exportfelder werden nicht zum Bestehen erfunden. Unterschiedliche Exporterformate und Reproduzierbarkeit müssen real geprüft werden.
 
-## Offizielle Quellen
+Eine spätere Änderung des sperrenden Einstiegs benötigt zusammen diese überprüfbaren Nachweise:
 
-Dokumentationsbasis (Stand 2026-10-27): [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Hooks](https://learn.chatgpt.com/docs/hooks), [MCP](https://learn.chatgpt.com/docs/extend/mcp), [Permissions](https://learn.chatgpt.com/docs/permissions), [Permission modes](https://learn.chatgpt.com/docs/permission-modes) und [erweiterte Konfiguration](https://learn.chatgpt.com/docs/config-file/config-advanced). OTel gehört in den User-Scope; projektlokale OTel-Einträge werden ignoriert. OTel-Logs sind nicht automatisch Langfuse-Generationen. Die Quellen beschreiben Produktfähigkeiten, keine bestandene Probe dieses Harness.
+1. Frisches Gesamtsetup: native Rollen-Discovery und realer Einsatz aller relevanten Custom-Rollen; Rollen-/Modell-/Effort-Laufmetadaten und Quellenbezug stimmen.
+2. Echte Playwright-/Langfuse-Aufrufe samt sicherer Authentifizierung; jeweils fehlender Server und fehlende Rolle stoppen den abhängigen Ablauf.
+3. Isolierte Rechteprobe, geklärte Eltern-/Kind-Rechte und Hook-Denials einschließlich Fehler-/Timeoutpfaden, direkter Dateiwerkzeuge und Fremdtexte.
+4. Vollständiger Export: Hauptagent, alle Rollen und relevante Werkzeuge mit Repo-/Session-/Elternverknüpfung und Verbrauch; Tracing-Ausfall stoppt nachvollziehbar.
+5. Abgegrenztes Probe-Ticket gemäß unabhängigem Review und Holdout-Abnahme, einschließlich Negativfällen. Ein Healthcheck allein genügt nicht.
+
+Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt keine Freigabe. Bis dahin bleiben K3/K6 und die vollständige Erfüllung von #79 offen.
+
+## Quellen
+
+Dokumentationsbasis vom 2026-10-27: [Custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Hooks](https://learn.chatgpt.com/docs/hooks), [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), [Permissions](https://learn.chatgpt.com/docs/permissions), [App-Server](https://learn.chatgpt.com/docs/app-server), [erweiterte Konfiguration](https://learn.chatgpt.com/docs/config-file/config-advanced) und [Langfuse MCP/Auth](https://langfuse.com/docs/api-and-data-platform/features/mcp-server). OTel gehört in den User-Scope; OTel-Logs sind nicht automatisch Langfuse-Generationen. Produktdokumentation ersetzt keine Harness-Probe.
