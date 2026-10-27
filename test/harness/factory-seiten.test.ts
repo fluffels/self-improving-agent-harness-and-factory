@@ -10,15 +10,18 @@
  * `factory-seiten-baseline.json` verglichen: ein Anstieg ist rot („Platzhalter oder Link schreiben“), ein Rückgang ebenfalls („Baseline senken“).
  *
  * Generierte Abschnitte (`GEN`-Marker, `check:docgen`) zählen nicht: die Config löst dort selbst auf.
- * Rest der Baseline: `harness-inventar.md` trägt die echten Agentennamen als Schlüssel gegen die generierte Tabelle (`harness-inventar.test.ts`
- * vergleicht sie wörtlich); `model-routing.md` und `langfuse-hook-patch.md` tragen Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg)
- * und den Bereichsnamen des lokalen Plugin-Patches; `harness-glossar.md` verlinkt einen ADR-Anker, dessen Überschrift das Quellprojekt nennt.
+ * Rest der Baseline: `model-routing.md` und `langfuse-hook-patch.md` tragen Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
+ * historischer Ordnername) und den Bereichsnamen des lokalen Plugin-Patches; `harness-glossar.md` verlinkt einen ADR-Anker, dessen Überschrift das
+ * Quellprojekt nennt. Die Baseline steigt nur per reviewtem Commit (kein maschinelles Anhebungs-Gate wie bei `kern-reinheit`); Besitz-Seiten fallen
+ * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
  * Bewusste Grenze: Projektwörter außerhalb der Config (etwa Begriffe der Fachdomäne) und `.mmd`-Dateien erkennt der Wächter nicht; eine Herkunftsprosa
  * ohne Link steht in der Baseline. Die Baseline steigt nur per reviewtem Commit mit Begründung, nie, um ein Rot zu beseitigen. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
@@ -49,9 +52,9 @@ export function seitenBegriffe(config: BegriffsConfig): Record<string, RegExp> {
   return Object.fromEntries(Object.entries(begriffeAus(config)).filter(([name]) => !AUSGENOMMEN.has(name)));
 }
 
-/** Zählung je Begriff (nur > 0) nach der Maskierung, CRLF-neutral; rohe Regex-Treffer, Überlappungen zählen je Begriff. */
+/** Zählung je Begriff (nur > 0) nach der Maskierung; rohe Regex-Treffer, Überlappungen zählen je Begriff. */
 export function zaehleSeite(text: string, begriffe: Record<string, RegExp>): Zaehlung {
-  const t = maskiere(text.replace(/\r\n/g, "\n"));
+  const t = maskiere(text);
   const out: Zaehlung = {};
   for (const name of Object.keys(begriffe).sort()) {
     const n = (t.match(begriffe[name]) ?? []).length;
@@ -159,8 +162,8 @@ describe("Factory-Seiten (#77)", () => {
       assert.deepEqual(zaehleSeite(t, B), { Zelda: 2 });
     });
 
-    test("CRLF-Text zählt wie LF", () => {
-      assert.deepEqual(zaehleSeite("Zelda\r\nZelda\r\n", B), { Zelda: 2 });
+    test("ein Anker mit Buchstaben ist kein Querverweis: Zelda in zelda.md#abschnitt zählt", () => {
+      assert.deepEqual(zaehleSeite("[Zelda](zelda.md#abschnitt)", B), { Zelda: 2 });
     });
   });
 
@@ -172,8 +175,34 @@ describe("Factory-Seiten (#77)", () => {
       assert.equal(istKernSeite("docs/lessons-learned.md"), false);
       assert.equal(istKernSeite("docs/lens-gegenprobe-2026.md"), false);
       assert.equal(istKernSeite("docs/planer-gegenprobe-1.md"), false);
+      assert.equal(istKernSeite("docs/sub/x-gegenprobe-y.md"), true, "die Gegenprobe-Regel gilt nur direkt unter docs/");
       assert.equal(istKernSeite("docs/diagramme/a.mmd"), false);
       assert.equal(istKernSeite("README.md"), false);
+    });
+  });
+
+  describe("kernSeiten und zaehleSeiten", () => {
+    test("kernSeiten geht in Unterordner, lässt die Historie und Nicht-Markdown aus; ohne docs/ ist die Liste leer", () => {
+      const dir = mkdtempSync(join(tmpdir(), "factory-seiten-"));
+      try {
+        for (const f of ["docs/a.md", "docs/sub/b.md", "docs/adr/c.md", "docs/lessons-learned.md", "docs/x-gegenprobe-y.md", "docs/d.mmd", "README.md"]) {
+          mkdirSync(dirname(join(dir, f)), { recursive: true });
+          writeFileSync(join(dir, f), "x");
+        }
+        assert.deepEqual(kernSeiten(dir + "/"), ["docs/a.md", "docs/sub/b.md"]);
+        const leer = mkdtempSync(join(tmpdir(), "factory-seiten-leer-"));
+        try {
+          assert.deepEqual(kernSeiten(leer + "/"), []);
+        } finally {
+          rmSync(leer, { recursive: true, force: true });
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+    test("zaehleSeiten nennt nur Seiten mit Treffer", () => {
+      const B = seitenBegriffe({ ...FREMD, projektliterale: { Zelda: "zelda" } });
+      assert.deepEqual(zaehleSeiten({ "docs/a.md": "Zelda", "docs/b.md": "nichts" }, B), { "docs/a.md": { Zelda: 1 } });
     });
   });
 

@@ -44,7 +44,7 @@ Hinweise zur Wahl: Für **JS/TS** und **Python** liefert das Werkzeug den Graphe
 
 ## docs-gen in ein anderes Repo übernehmen (Stufe 2 und 3)
 
-Der Generator-Kern hängt nicht am [Quellprojekts](https://github.com/fluffels/kubernia). Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
+Der Generator-Kern hängt nicht am [Quellprojekt](https://github.com/fluffels/kubernia). Belegt ist das durch einen Test, der ein Mini-Repo (Python, ohne `package.json`, ohne `src/`) mit eigener Config, eigener Schicht-Definition und eigenem Generator (über `generatoren`) durch den Kern fährt ([`test/docgen-fremdrepo.test.ts`](../test/docgen-fremdrepo.test.ts)) und durch einen Wächter, der prüft, dass die Kern-Module nur `node:*` und andere Kern-Module importieren.
 
 **Ist-Zustand ist Übernahme per Kopie, kein Paket.** Zum Kopieren:
 
