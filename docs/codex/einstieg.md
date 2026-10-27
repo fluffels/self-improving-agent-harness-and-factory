@@ -2,7 +2,7 @@
 
 Der Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI 0.164.0. Autonome Ticketläufe sind nicht freigegeben. Der Einstieg aus [AGENTS.md](../../AGENTS.md) endet auch mit vollständig aussehenden Offline-Belegen mit Exit 1. Die Versionsprüfung ist absichtlich auf diesen geprüften Stand begrenzt; andere Versionen benötigen eine neue Prüfung. Ein beauftragter Implementierungs-PR ist keine bestandene Ende-zu-Ende-Abnahme.
 
-Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige Unterstützung benötigt drei weitere Arbeitspakete: Hooks und Quarantäne, korrekte Tracing-Zuordnung samt Ausfallerkennung sowie ein isoliertes Gesamtsetup mit Probeauftrag. Die konkreten Nachfolger und Rohbelege sind im zugehörigen Implementierungs-PR verlinkt. Erst die Gesamtabnahme kann eine autonome Freigabe begründen.
+Der Adapter umfasst Setup, Rollenquellen, Belegdiagnose und zwei begrenzte Schutzeinstiege: einen Einzelaktionshost und eine toolarme Fremdtext-Elterninstanz. Korrekte Tracing-Zuordnung samt Ausfallerkennung und ein isoliertes Gesamtsetup mit Probeauftrag bleiben separat abzunehmen. Erst die Gesamtabnahme kann eine autonome Freigabe begründen; freie App-/CLI-Shells sind durch diese Eingänge nicht geschützt.
 
 ## Gemeinsame Quellen und Rollen
 
@@ -34,7 +34,7 @@ await collaboration.send_message({ target: planer.task_name, message: "Ergänzun
 await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
 ```
 
-Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag` und `holdout-auftrag` sind nicht auf diese Aufrufe portiert.
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die fachlichen Auftragsguards sind im Codex-Adapter abgebildet; ein technischer Executor für Agenten-/Nachrichtenpfade fehlt weiterhin. Der geschützte Host stoppt diese abhängigen Abläufe vor dem Start.
 
 ## Reproduzierbares Setup
 
@@ -74,19 +74,47 @@ Geplante Vergleichsprobe: zwei separat konfigurierte, harmlose Elternsessions mi
 
 ## Sicherheits- und Hook-Abbildung
 
-Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **nicht portiert oder als wirksam nachgewiesen**:
+Das Setup erzeugt `.codex/hooks.json` und ein geschlossenes Referenzprofil `.codex/geschlossen.config.toml`. Der Host erzeugt für jede Aktion ein frisches temporäres Profil aus derselben Quelle, registriert ausschließlich den lokalen Adapter und prüft nativ `hooks/list`. Nur diese selbst erzeugte Registrierung erhält über `config/value/write` unter `hooks.state.<key>.trusted_hash` Vertrauen; anschließend werden Version, Fehlerliste, aktivierter vertrauenswürdiger Hook und leeres MCP-Inventar erneut geprüft. Fremde Profile und attestierende JSON-Dateien sind kein Host-Eingang.
 
-| Bestehender Schutz | Codex-Stand |
+**Natives Hook-Inventar ist kein Ausführungsnachweis.** Die reale CLI-Probe 0.164.0 mit harmlosem lokalem Responses-Provider zeigte trotz vertrauenswürdig gelistetem Hook einen veränderten Schreibmarker und keinen Hook-Eventmarker: Matcher `.*` sowie `exec_command`, `code_mode_host` aus/ein. Eine freie native Shell bleibt daher gesperrt. Der Einzelaktionshost startet keine Engine-Shell, sondern erzwingt den separaten Guardprozess selbst. Das native Inventar ist eine zusätzliche Vorbedingung, seine beobachtete Wirkungslosigkeit wird damit nicht als Denial ausgegeben.
+
+| Bestehender Schutz / Werkzeugpfad | Tatsächlich unterstützter Eingang und Grenze |
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
 | `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
-| `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
-| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
-| `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
+| `exec_command`: Worktree und Stdin | gemeinsamer Bash-/PowerShell-Worktree-Guard und Stdin-Guard im separaten Hostprozess; explizites absolutes Repo-cwd, `cmd` und bekannte Shell erforderlich; unbekannte Parameter verweigert |
+| GitHub | gemeinsamer API-Guard vorhanden; zusätzliche Claude-Settings sind nicht portiert, deshalb gesamter erkennbarer `gh`-CLI-Pfad im Host geschlossen |
+| `write_stdin` | kein neues PreToolUse; vollständig entzogen, Host bietet weder Session-ID noch Stdin-Fortsetzung |
+| `spawn_agent`, `send_message`, `followup_task` | gemeinsame Lens-Auftrags- und Holdout-Guards fachlich abgebildet; Nachricht bleibt Nachricht, Empfängerrolle wird nicht aus Payload erraten; ohne kontrollierten Executor stoppt der Host jeden dieser Abläufe |
+| `apply_patch`, Lens-Edit | ohne vollständige Patch-/Pfad-Erfassung kein Executor; alle Patches abgewiesen, damit auch jeder unerlaubte Lens-Edit |
+| direkte Dateiwerkzeuge, schreibende MCPs, `functions.exec` und innere Tools | keine Route im Host; toolarme Engine bietet diese Zugänge nicht an und weist erzwungene Aufrufe technisch zurück; keine Sicherheit für parallele freie App-Sitzungen |
+| Abschluss / `Stop` / `SubagentStop` | gemeinsamer Abschlusskern fachlich abgebildet; kein geschützter Agentenlauf mit Abschlussereignis implementiert, deshalb abhängiger Ablauf gesperrt |
 | Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
-| Fremdtext | bestehendes `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten sind keine Quarantäne |
+| Fremdtext | `fremdtext.mjs` bleibt Autorengate; bereits beschaffte Daten verarbeitet eine getrennte toolarme Elterninstanz ohne MCPs und geerbte Authvariablen; keine Websuche und keine zusätzliche Quellenbeschaffung |
 
-Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
+Im Host führen Guard-Wurf, Timeout, ungültiges JSON, unbekannte Entscheidung und jeder Exit ungleich 0 zu **null Executor-Aufrufen**. Nur vollständiges `allow` mit Exit 0 führt exakt eine Kopie der geprüften Aktion aus. Die gemeinsamen Shellparser behalten ihre dokumentierten Grenzen (etwa Programmcode in aufgerufenen Skripten); der Host ist keine Betriebssystem-Sandbox gegen beliebige Shellprogramme. Er schützt seinen eigenen Einstieg, weder beliebige Clients noch globale Konfigurationen.
+
+Auch Agentenregistries sind kein erlaubter Werkzeugpfad: `collaboration.list_agents` kann ungefragt Final-Payloads anderer Phasen ausgeben und damit Holdout-Inhalte an einen Umsetzer liefern. Im geschlossenen Profil fehlen solche Agentenwerkzeuge; der Host verweigert den unbekannten Namen. Eine konventionelle explizit beauftragte Umsetzung in einer freien Frontend-Sitzung belegt deshalb keine technische Holdout-Isolation.
+
+Eine Aktion geht als JSON über stdin an `node scripts/codex-geschuetzt.mjs`:
+
+```json
+{"tool_name":"exec_command","cwd":"<absoluter eigener Checkout>","tool_input":{"cmd":"Write-Output HOST_OK","shell":"powershell"}}
+```
+
+Nur `bash` und `powershell` sind unterstützte Shellwerte. Der Host liest keine Authdateien; die autorisierte Shellaktion selbst läuft mit der Umgebung des aufrufenden Hosts. Sie ist ausdrücklich kein Fremdtext-Eingang.
+
+`node scripts/codex-fremdtext.mjs http://127.0.0.1:<port>/v1` erhält ausschließlich die bereits beschafften Daten über stdin. Eine frische Elterninstanz nutzt eigene HOME-/CODEX_HOME-/AppData-Verzeichnisse, eine explizite Umgebungs-Allowlist, keine Authkopien, keine MCPs und deaktivierte Apps, Plugins, Memories, Shell, Multi-Agenten, Ziele, Bilder, Permissions und Websuche. Bis zu sicherem Hostauth ist ausschließlich ein ausdrücklich eingerichteter lokaler authfreier Provider unterstützt. Die separate Home-Umgebung ist **keine OS-Dateiisolierung**: CLI-Startkontext kann lokale Skillbeschreibungen enthalten. Die Sicherheitsgrenze für modellgesteuerte Zugriffe ist der belegte Toolentzug; OS-Datei- und Netzzugriffe beliebiger Programme werden nicht attestiert.
+
+Die echte Engine-Probe erzwingt Aufrufe über einen harmlosen SSE-Responses-Provider. Inventar: ausschließlich `request_user_input`; Default-Modus verweigert auch dieses Tool. `exec_command`, `apply_patch`, `functions.exec`, ein unbekanntes Tool und ein schreibendes MCP werden als `unsupported call` zurückgewiesen; externe Fixture-Marker bleiben unverändert. Die Textkontrolle liefert `FIXTURE_OK`. Reproduzierbar ohne echte Tokens:
+
+```powershell
+$env:CODEX_SCHUTZ_PROBE = (Get-Command codex).Source
+npx vitest run test/harness/codex-fremdtext.test.ts
+Remove-Item Env:CODEX_SCHUTZ_PROBE
+```
+
+Ohne diese Variable überspringt der portable Testsatz nur die echte installierte CLI-Probe. Prozessgrenzen, Payloads, gemeinsame Guards und Executor-Aufrufzahlen werden regulär getestet. Der Testprovider verwendet erfundene Fixture-Verbrauchswerte; sie sind kein echter Modellverbrauch oder Tracing-Beleg.
 
 ## Vorprüfung und Nachweisformat
 
