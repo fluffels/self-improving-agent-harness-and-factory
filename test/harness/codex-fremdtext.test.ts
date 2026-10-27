@@ -56,6 +56,16 @@ test("Inventar-Startfehler und Fremdtext-CLI-Aufruffehler", async () => {
   const r = spawnSync(process.execPath, ["scripts/codex-fremdtext.mjs"], { encoding: "utf8", input: "fixture" });
   expect(r.status).toBe(1); expect(r.stderr).toContain("Aufruf:");
 });
+test("Signalende während Pending-RPC schließt Cleanup ohne zweites close-Warten ab", async () => {
+  const p = temp(), state: { child?: ChildProcess } = {}, weiter = vi.fn(() => Promise.resolve("unerlaubt")); let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const work = fakeInventar("signal", {}, state)("fixture", p, weiter).then(() => "unerlaubt", (e: unknown) => e instanceof Error ? e.message : String(e));
+    const result = await Promise.race([work, new Promise<string>(r => { timer = setTimeout(() => r("hängt"), 2000); })]);
+    expect(result).toBe("Inventar-Prozess beendet"); expect(weiter).not.toHaveBeenCalled();
+    expect(state.child?.exitCode).toBeNull(); expect(state.child?.signalCode).toBe("SIGKILL");
+    p.entfernen(); expect(existsSync(p.root)).toBe(false);
+  } finally { clearTimeout(timer); }
+});
 test("Ausgabelimit exakt erlaubt und stdin-Fehler abgebrochen", async () => {
   const p = temp();
   expect((await c.prozess(process.execPath, ["-e", "process.stdout.write('x'.repeat(100))"], { cwd: p.root, env: p.env, maxBytes: 100 })).stdout).toHaveLength(100);

@@ -13,7 +13,7 @@ export function fakeInventar(mode: string, antworten: Record<string, unknown> = 
     const script = `const antworten=${JSON.stringify(antworten)},mode=${JSON.stringify(mode)};require('readline').createInterface({input:process.stdin}).on('line',l=>{
       const m=JSON.parse(l);if(!m.id)return;
       if(mode==='close'){process.exit();return;}
-      if(mode==='hang')return;
+      if(mode==='hang'||mode==='signal')return;
       if(mode==='json'){console.log('{');return;}
       if(mode==='size'){console.log('x'.repeat(1000001));return;}
       if(mode==='rpc'||(mode==='trust'&&m.method==='config/value/write')){console.log(JSON.stringify({id:m.id,error:{message:'fixture'}}));return;}
@@ -22,7 +22,9 @@ export function fakeInventar(mode: string, antworten: Record<string, unknown> = 
       if(mode==='pipe'){process.stdin.destroy();setTimeout(()=>process.exit(),20);}
     });`;
     return c.mitInventar("fixture", p, fn, { timeoutMs: mode === "hang" ? 100 : 3000, start: (_file, _args, options) => {
-      const child = spawn(process.execPath, ["-e", script], options); zustand.child = child; return child;
+      const child = spawn(process.execPath, ["-e", script], options); zustand.child = child;
+      if (mode === "signal") child.once("spawn", () => setTimeout(() => child.kill("SIGKILL"), 100));
+      return child;
     } });
   };
 }

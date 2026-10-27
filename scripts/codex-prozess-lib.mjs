@@ -70,6 +70,6 @@ export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 500
     return await fn(rpc, init);
   } finally {
     clearTimeout(timer); lines.close(); child.stdin.end(); beenden(child);
-    await new Promise(resolve => { if (child.exitCode !== null) resolve(); else child.once("close", resolve); });
+    await new Promise(resolve => { if (child.exitCode !== null || child.signalCode) resolve(); else child.once("close", resolve); });
   }
 }
