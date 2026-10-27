@@ -142,10 +142,10 @@ export function sammelZiel(config) {
 }
 
 /** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
-function legeAn({ repo, titel, body, harness }) {
+export function legeAn({ repo, titel, body, harness }, api = ghJson) {
   let neu;
   try {
-    neu = ghJson(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
+    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
   } catch (e) {
     throw new Error(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`, { cause: e });
   }

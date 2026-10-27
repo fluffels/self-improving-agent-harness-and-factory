@@ -1,5 +1,5 @@
 /* zerlegeRepo / repoName / repoOwner (#1821 L13/L20): eine Zerlegung von `repo`, kaputte Form wirft mit Fix-Zeile. */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/projekt-config-lib.mjs";
@@ -35,7 +35,7 @@ describe("repoName / repoOwner", () => {
 });
 
 /* Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10): das Repo, dessen Issues das Board der Rolle führt. */
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FREMD } from "./support/fremd-config";
@@ -87,11 +87,27 @@ describe("projekt-config --ziel-repo", () => {
     const err: string[] = [];
     return { code: ziel.cli(argv, { out: (s) => out.push(s), err: (s) => err.push(s) }), out, err };
   };
+  const ordner: string[] = [];
+  afterEach(() => {
+    for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
   const datei = (c: unknown) => {
-    const p = join(mkdtempSync(join(tmpdir(), "ziel-")), "c.json");
+    const d = mkdtempSync(join(tmpdir(), "ziel-"));
+    ordner.push(d);
+    const p = join(d, "c.json");
     writeFileSync(p, JSON.stringify(c));
     return p;
   };
+  test("nicht ladbare Config: Exit 1 mit ✖-Zeile, nichts auf stdout (die Dependabot-Vorprüfung braucht den Nicht-Null-Exit)", () => {
+    const d = mkdtempSync(join(tmpdir(), "ziel-"));
+    ordner.push(d);
+    const r = lauf(["--config", join(d, "gibt-es-nicht.json"), "--ziel-repo", "x"]);
+    assert.equal(r.code, 1);
+    assert.deepEqual(r.out, []);
+    assert.match(r.err[0] ?? "", /^✖ /);
+    writeFileSync(join(d, "kaputt.json"), "{ nicht json");
+    assert.equal(lauf(["--config", join(d, "kaputt.json"), "--ziel-repo", "x"]).code, 1);
+  });
   test("gibt das Ziel-Repo zum Label aus (Harness: Factory-Board-Repo, Produkt: eigenes Repo)", () => {
     const p = datei(mitFactoryRepo(FABRIK));
     assert.deepEqual(lauf(["--config", p, "--ziel-repo", FREMD.labels.harness]), { code: 0, out: [FABRIK], err: [] });

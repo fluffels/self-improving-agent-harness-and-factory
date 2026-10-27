@@ -424,9 +424,9 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
   const FABRIK = "zz-org/zz-fabrik";
   const fremd = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
   const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, labels: labels.map((name) => ({ name })) });
-  const bauen = (offen: number[], labelsVon: (n: number) => string[]) => {
+  const bauen = (offen: number[], labelsVon: (n: number) => string[], opt: { token?: string; werfe?: boolean } = {}) => {
     const log: string[] = [];
-    const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0 };
+    const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0, offenRepos: [] as unknown[], items: 0 };
     const io: Io = {
       ghJson: (a) => {
         const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
@@ -434,16 +434,20 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
         if (a.join(" ").includes("/commits")) aufrufe.commits += 1;
         return [[]];
       },
-      loadItems: (_r, o) => (aufrufe.loadRepos.push((o as { repo?: string }).repo ?? "-"), []),
-      loadOpenIssuePages: () => [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))],
+      loadItems: (_r, o) => (aufrufe.items++, aufrufe.loadRepos.push((o as { repo?: string }).repo ?? "-"), []),
+      loadOpenIssuePages: ((repo: unknown) => (aufrufe.offenRepos.push(repo), [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))])) as unknown as Io["loadOpenIssuePages"],
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => (aufrufe.status++, { ok: true }),
       fuehreHarnessAus: () => (aufrufe.harness++, true),
       itemsUeberIssues: (_r, n) => n.map(() => null),
-      addToBoardTodo: (_r, id) => (aufrufe.add.push(id), `ITEM_${id}`),
+      addToBoardTodo: (_r, id) => {
+        if (opt.werfe) throw new Error("Board kaputt");
+        return (aufrufe.add.push(id), `ITEM_${id}`);
+      },
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ config: fremd, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token: "t", io });
+    const token = "token" in opt ? opt.token : "t";
+    const r = T.fuehreTaktAus({ config: fremd, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token, io });
     return { r, log: log.join("\n"), aufrufe };
   };
   test("Status-Ticket, Sammelticket und Quotenzeile entfallen mit Logzeile, der Lauf bleibt grün, der Wächter läuft mit dem eigenen Repo", () => {
@@ -458,6 +462,19 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
     expect(aufrufe.add).toEqual(["N5"]);
     expect(log).toMatch(new RegExp(`::warning::Board-Wächter: #6 fehlt im Board, nicht aufgenommen: Das factory-Board.*${FABRIK}`));
     expect(r.fehler).toBe(false);
+  });
+  test("Wächter fragt die offenen Issues des eigenen Repos ab (nicht des Factory-Repos)", () => {
+    expect(bauen([5], () => []).aufrufe.offenRepos).toEqual([FREMD.repo]);
+  });
+  test("ohne Token keine Board-Abfrage und kein Fehler (nur die Logzeile)", () => {
+    const { r, aufrufe, log } = bauen([5], () => [], { token: "" });
+    expect(aufrufe.items).toBe(0);
+    expect(aufrufe.offenRepos).toEqual([]);
+    expect(log).toContain("Factory-Teil übersprungen");
+    expect(r.fehler).toBe(false);
+  });
+  test("ein Fehler beim Aufnehmen im Wächter wird als fehler: true weitergereicht", () => {
+    expect(bauen([5], () => [], { werfe: true }).r.fehler).toBe(true);
   });
 });
 

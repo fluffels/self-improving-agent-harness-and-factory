@@ -405,3 +405,27 @@ describe("sammelZiel (#76, ADR 0022 F10): das Sammelticket liegt im Repo, das da
     expect(geladen).toBe(0);
   });
 });
+
+describe("legeAn (#76): Anlegen im Ziel-Repo, klare Fehler statt Rückfall", () => {
+  const L = (raw as unknown as { legeAn: (a: { repo: string; titel: string; body: string; harness: string }, api: (args: string[]) => unknown) => { number: number } }).legeAn;
+  const a = { repo: "zz-org/zz-ziel", titel: "T", body: "B", harness: "zz:harness" };
+  test("legt per POST im Ziel-Repo mit dem Harness-Label an und gibt die Antwort zurück", () => {
+    const aufrufe: string[][] = [];
+    const r = L(a, (args) => (aufrufe.push(args), { number: 9, labels: [{ name: "zz:harness" }] }));
+    expect(r.number).toBe(9);
+    expect(aufrufe).toHaveLength(1);
+    expect(aufrufe[0]).toContain("repos/zz-org/zz-ziel/issues");
+    expect(aufrufe[0]).toContain("labels[]=zz:harness");
+  });
+  test("403: Meldung nennt das Ziel-Repo, genau ein POST, kein Rückfall", () => {
+    let n = 0;
+    expect(() => L(a, () => (n++, (() => { throw Object.assign(new Error("Command failed"), { stderr: "gh: HTTP 403" }); })()))).toThrow(/Anlegen in zz-org\/zz-ziel fehlgeschlagen: keine Schreibrechte auf zz-org\/zz-ziel/);
+    expect(n).toBe(1);
+  });
+  test("anderer Fehler: Rohtext statt Rechte-Meldung", () => {
+    expect(() => L(a, () => { throw new Error("Command failed\ngh: HTTP 500 kaputt"); })).toThrow(/Anlegen in zz-org\/zz-ziel fehlgeschlagen: .*HTTP 500/s);
+  });
+  test("Antwort ohne das Label: wirft mit Nummer, Label und Fix", () => {
+    expect(() => L(a, () => ({ number: 9, labels: [] }))).toThrow(/#9 in zz-org\/zz-ziel angelegt, aber ohne Label zz:harness[\s\S]*Fix:/);
+  });
+});

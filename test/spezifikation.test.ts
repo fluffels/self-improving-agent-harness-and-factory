@@ -363,13 +363,18 @@ describe("fuehreAus", () => {
 
 describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#1762 L20c)", () => {
   const CFG = { labels: { harness: HARNESS } };
-  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[] }, lade: (rolle: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
+  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[]; repo?: string }, lade: (rolle: string, repo: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
   const boards: Record<string, { number: number }[]> = { produkt: [{ number: 1 }], factory: [{ number: 2 }] };
   const zaehle = (nach: number, labels: string[]) => {
     const geladen: string[] = [];
-    const r = P({ nach, labels }, (rolle) => (geladen.push(rolle), boards[rolle]), CFG);
+    const r = P({ nach, labels, repo: "zz-org/zz-r" }, (rolle) => (geladen.push(rolle), boards[rolle]), CFG);
     return { r, geladen };
   };
+  test("beide Ladevorgänge bekommen das übergebene Repo (loadItems wirft sonst „repo fehlt“)", () => {
+    const repos: unknown[] = [];
+    P({ nach: 99, labels: [HARNESS], repo: "zz-org/zz-r" }, (_rolle, repo) => (repos.push(repo), []), CFG);
+    expect(repos).toEqual(["zz-org/zz-r", "zz-org/zz-r"]);
+  });
 
   test("Anker auf dem Ziel-Board: null, nur ein Laden", () => {
     expect(zaehle(2, [HARNESS])).toEqual({ r: null, geladen: ["factory"] });

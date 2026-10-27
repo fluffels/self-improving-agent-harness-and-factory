@@ -55,6 +55,12 @@ describe("schreibrechtText / fehlendeLabels (#76): fehlende Schreibrechte im Zie
       expect(t).toMatch(/nichts im eigenen Repo angelegt/);
     });
   }
+  test("Groß-/Kleinschreibung egal, und der Rohtext wird auf 200 Zeichen gekürzt", () => {
+    const t = S.schreibrechtText(new Error(`resource not accessible by integration ${"x".repeat(500)}`), "zz-org/zz-ziel") ?? "";
+    expect(t).toMatch(/keine Schreibrechte auf zz-org\/zz-ziel/);
+    expect(t).toContain("x".repeat(100));
+    expect(t).not.toContain("x".repeat(300));
+  });
   test("ein anderer Fehler (HTTP 500) ist keine Rechte-Meldung", () => {
     expect(S.schreibrechtText(new Error("Command failed\ngh: HTTP 500"), "zz-org/zz-ziel")).toBeNull();
   });

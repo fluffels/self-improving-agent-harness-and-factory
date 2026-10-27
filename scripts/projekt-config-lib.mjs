@@ -544,7 +544,7 @@ export function fremdesBoardText(rolle, repo, config) {
   return `Das ${rolle}-Board (Nr. ${board?.nummer}) führt die Issues von ${fuehrt}, nicht die von ${repo}\nFix: das Issue im Ziel-Repo ${fuehrt} anlegen (gh issue transfer) oder das Label prüfen`;
 }
 
-const wurzelSchluessel =(p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+const wurzelSchluessel = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 
 /** Pur (bis auf `ROOT`): der Pfad aus `FACTORY_PROJEKT_CONFIG`, wenn der Riegel passt (`VITEST` gesetzt, `FACTORY_PROJEKT_WURZEL` = Wurzel dieses Laders, normalisiert, unter Windows ohne Groß-/Kleinschreibung), sonst `undefined`. */
 function probeConfigAusUmgebung(env) {

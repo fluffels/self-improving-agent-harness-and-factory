@@ -90,6 +90,16 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
     expect(rufe.log[0]).toMatch(/#5 fehlte im Board: aufgenommen/);
   });
 
+  test("der Abruf geht an das Repo aus io.repo, ohne io.repo an args.repo", () => {
+    const a = fakes({ 5: issue(5) });
+    nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: false }, { ...a.io, repo: "zz-org/zz-x" });
+    expect(a.rufe.api[0]?.[1]).toBe("repos/zz-org/zz-x/issues/5");
+    const b = fakes({ 5: issue(5) });
+    const { repo: _weg, ...ohneRepo } = b.io;
+    nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-y" } as never, ohneRepo);
+    expect(b.rufe.api[0]?.[1]).toBe("repos/zz-org/zz-y/issues/5");
+  });
+
   test("--dry-run: kein addToBoardTodo, Meldung „würde aufnehmen“, das Item steht trotzdem in der Liste", () => {
     const { rufe, io } = fakes({ 5: issue(5) });
     const r = nimmFehlendeAuf(board, { anchor: null, numbers: [5], dry: true }, io);

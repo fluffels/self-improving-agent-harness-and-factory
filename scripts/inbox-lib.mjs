@@ -35,8 +35,8 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
 }
 
 /** Das jüngste offene, ungeclaimte Harness-Sammelticket in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
-export const waehleSammelticket = (offene, repo = ZIEL) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]), repo.split("/")[0]);
+export const waehleSammelticket = (offene, repo = ZIEL, api = ghJson) =>
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), repo.split("/")[0]);
 
 /** Postet `text` als Kommentar unter Issue `nr` im Repo `repo` (Standard: das Ziel-Repo). */
 export const postZeilen = (nr, text, repo = ZIEL) => ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`]);
