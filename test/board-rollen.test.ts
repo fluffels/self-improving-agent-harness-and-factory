@@ -231,7 +231,7 @@ describe("Verdrahtung: jeder Aufrufer übergibt sein Board ausdrücklich", () =>
     for (const f of ["sammelticket-anlegen", "langfuse-takt"]) {
       const q = readFileSync(new URL(`../scripts/${f}.mjs`, import.meta.url), "utf8");
       expect(q, f).toContain(f === "langfuse-takt" ? "boardFuerRolle(boardRolleFuer([harness], config))" : "boardFuerRolle(ziel.rolle)");
-      if (f === "sammelticket-anlegen") expect(q, f).toContain("boardRolleFuer(labels, config)");
+      expect(f === "langfuse-takt" || q.includes("boardRolleFuer(labels, config)"), f).toBe(true);
       expect(q, f).toContain("labels[]=${harness}");
       expect(q, f).not.toContain("PRODUKT_BOARD");
     }

@@ -86,7 +86,7 @@ export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
   if (fehler) return null;
   const dry = werte["dry-run"] === true;
-  if (werte.repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(werte.repo)) return null;
+  if (!repoFormOk(werte.repo)) return null;
   const reihe = tokens.filter((t) => !(t.kind === "option" && (t.name === "dry-run" || t.name === "repo")));
   let i = 0;
   let notfall = null;
@@ -99,9 +99,14 @@ export function parseArgs(argv) {
   if (modus?.kind !== "option") return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
   const geparst = parseModus(modus.name, positionale, dry);
-  if (geparst && werte.repo !== undefined) geparst.repo = werte.repo;
-  return geparst && notfall ? { ...geparst, notfall } : geparst;
+  return geparst && { ...geparst, ...zusatzOptionen(werte.repo, notfall) };
 }
+
+/** Die optionalen Felder `repo` und `notfall` des Parse-Ergebnisses (nur gesetzte). */
+const zusatzOptionen = (repo, notfall) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}) });
+
+/** `--repo` fehlt oder hat die Form `owner/name`. */
+const repoFormOk = (repo) => repo === undefined || /^[^/\s]+\/[^/\s]+$/.test(repo);
 
 function parseModus(modus, positionale, dry) {
   if (modus === "umzug") return positionale.length === 0 ? { umzug: true, dry } : null;
@@ -188,17 +193,23 @@ function ladeLabels(nr, repo) {
   }
 }
 
+/** Die Items beider Boards (nur die des Repos) und die Labels der Nummern, deren Item keine Labels trägt (REST). */
+function ladeListenUndLabels(numbers, repo) {
+  const listen = { produkt: loadItems(boardFuerRolle("produkt"), { repo }), factory: loadItems(boardFuerRolle("factory"), { repo }) };
+  const labelsRest = {};
+  for (const nr of numbers) {
+    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr, repo);
+  }
+  return { listen, labelsRest };
+}
+
 /** Fehler mit Exit-Code: `einsortieren` wirft statt `process.exit`, damit `mitWiederholung` vorübergehende Wettläufe wiederholen kann. */
 const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { exitCode });
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
 async function einsortieren(args, config) {
-  const repo = args.repo ?? REPO;
-  const listen = { produkt: loadItems(boardFuerRolle("produkt"), { repo }), factory: loadItems(boardFuerRolle("factory"), { repo }) };
-  const labelsRest = {};
-  for (const nr of args.numbers) {
-    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr, repo);
-  }
+  const { repo } = args;
+  const { listen, labelsRest } = ladeListenUndLabels(args.numbers, repo);
   const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config, repo });
   if (ziel.fehler) throw abbruch(ziel.fehler, 2);
   for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
@@ -275,7 +286,7 @@ export async function fuehreUmzugAus(plan, io) {
 }
 
 async function umziehen(args, config) {
-  const repo = args.repo ?? REPO;
+  const { repo } = args;
   const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r), { repo }));
   const plan = umzugsPlan(produkt, factory, config, repo);
   const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
@@ -294,14 +305,15 @@ async function umziehen(args, config) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
+  const geparst = parseArgs(argv);
+  const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
   if (!args) {
     console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
     process.exit(2);
   }
   mitKontingent("board-place");
   const config = ladeProjektConfig();
-  if (args.missing) return reportMissing(args.repo ?? REPO);
+  if (args.missing) return reportMissing(args.repo);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {

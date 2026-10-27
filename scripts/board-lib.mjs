@@ -531,19 +531,26 @@ export function aufnahmePlan(fehlend, issues, { config, ankerNr = null, repo = u
   const abgelehnt = [];
   for (const nr of fehlend) {
     const i = issues?.[nr] ?? null;
-    if (nr === ankerNr) abgelehnt.push({ number: nr, grund: "Anker wird nie automatisch aufgenommen" });
-    else if (!i || i.number !== nr) abgelehnt.push({ number: nr, grund: "Issue nicht ladbar oder unbekannt" });
-    else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
-    else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
-    else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
-    else {
-      const rolle = boardRolleFuer(i.labels ?? [], config);
-      const fremd = repo === undefined ? null : fremdesBoardText(rolle, repo, config);
-      if (fremd) abgelehnt.push({ number: nr, grund: fremd.split("\n")[0] });
-      else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle });
-    }
+    const grund = aufnahmeGrund(nr, i, ankerNr) ?? fremdGrund(i, repo, config);
+    if (grund) abgelehnt.push({ number: nr, grund });
+    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
   }
   return { aufnehmen, abgelehnt };
+}
+
+/** Pur: warum `aufnahmePlan` das Issue `i` (REST-Antwort oder null) der Nummer `nr` nicht aufnimmt, sonst `null`. */
+function aufnahmeGrund(nr, i, ankerNr) {
+  if (nr === ankerNr) return "Anker wird nie automatisch aufgenommen";
+  if (!i || i.number !== nr) return "Issue nicht ladbar oder unbekannt";
+  if (i.pull_request) return "ist ein Pull Request";
+  if (i.state !== "open") return "Issue ist geschlossen";
+  return typeof i.node_id !== "string" || i.node_id === "" ? "Antwort ohne node_id" : null;
+}
+
+/** Pur: erste Zeile des Fremd-Board-Texts, wenn das Board der Rolle des Issues `i` ein anderes Repo als `repo` führt (ohne `repo` nie), sonst `null`. */
+function fremdGrund(i, repo, config) {
+  if (repo === undefined) return null;
+  return fremdesBoardText(boardRolleFuer(i.labels ?? [], config), repo, config)?.split("\n")[0] ?? null;
 }
 
 /** Offene Issue-Nummern, die nicht im Board stehen (Abgleich, nur Bericht). Aufsteigend. */

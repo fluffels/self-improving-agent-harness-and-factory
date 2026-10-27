@@ -75,7 +75,7 @@ describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
     const repos: string[] = [];
     const k = L.ladeSammelKontext({
       ladeOffene: () => rohe,
-      ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as (nr: number) => { user: unknown; body: string }[],
+      ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
     }) as unknown as { owner: string };
     expect(repos).toHaveLength(1);
     expect(repos[0]).toMatch(/^[^/]+\/[^/]+$/);
