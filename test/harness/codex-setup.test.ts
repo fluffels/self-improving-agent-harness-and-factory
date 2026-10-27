@@ -1,6 +1,6 @@
 /* @harness-waechter: Codex-Konfiguration und ausschließlich lokale Setup-Dateien (#79). */
 import { afterEach, expect, test } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -53,10 +53,10 @@ test.each(["file:///tmp/x", "http://public.example.test", "https://user@example.
 test.each(["http://localhost:8080/mcp", "http://127.0.0.1:8080/mcp", "http://[::1]:8080/mcp"])("lokaler Endpunkt %s", u => {
   expect(c.setupDateien(mcp, config, u)[".codex/config.toml"]).toContain(u);
 });
-test.each([{}, { mcpServers: {} }, { mcpServers: { playwright: { command: "", args: [] } } }, { mcpServers: { playwright: { command: 4, args: [] } } }, { mcpServers: { playwright: { command: "npx" } } }, { mcpServers: { playwright: { command: "npx", args: [4] } } }])("kaputte MCP-Quelle stoppt", m => {
+test.each([{}, { mcpServers: {} }, { mcpServers: { playwright: { command: "", args: [] } } }, { mcpServers: { playwright: { command: 4, args: [] } } }, { mcpServers: { playwright: { command: "npx" } } }, { mcpServers: { playwright: { command: "npx", args: [4] } } }, { mcpServers: { playwright: { command: "npx", args: null } } }, { mcpServers: { playwright: { command: "npx", args: "--probe" } } }])("kaputte MCP-Quelle stoppt", m => {
   expect(() => c.setupDateien(m, config, endpoint)).toThrow(/Playwright/);
 });
-test.each([undefined, 4, "", "Planer", "planer_", "../escape", "a".repeat(65), "probe-lens"])("ungültige Rolle %s", name => {
+test.each([undefined, 4, "", "Planer", "planer_", "../escape", "a".repeat(65), "probe-lens", "1planer", "planer\n"])("ungültige Rolle %s", name => {
   expect(() => c.setupDateien(mcp, { agenten: { ...config.agenten, planer: name } }, endpoint)).toThrow(/Rollenname/);
 });
 test.each(["a", "a".repeat(64)])("erlaubte Namensgrenze", name => {
@@ -94,6 +94,13 @@ test("Verzeichnis statt Rollenquelle ist ungültig", () => {
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]).code).toBe(1);
   expect(existsSync(ziel)).toBe(false);
 });
+test("Quellen-Junction wird vor jeder Ausgabe abgelehnt", () => {
+  const root = quelle(), agents = join(root, ".claude/agents"), extern = temp(), ziel = join(temp(), "ausgabe");
+  for (const name of readdirSync(agents)) writeFileSync(join(extern, name), readFileSync(join(agents, name)));
+  rmSync(agents, { recursive: true }); symlinkSync(extern, agents, "junction");
+  const result = lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]);
+  expect(result.code).toBe(1); expect(result.err.join()).toContain("Symlink"); expect(existsSync(ziel)).toBe(false);
+});
 test("Ausgabeziel und seine Vorfahren dürfen keine Symlinks sein", () => {
   const root = quelle(), real = temp(), link = join(temp(), "link"); symlinkSync(real, link, "junction");
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", join(link, "kind"), "--write"]).code).toBe(1);
@@ -120,6 +127,9 @@ test("alle Kollisionen prüfen, bevor eine neue Datei geschrieben wird", () => {
 });
 test.each(["../escape", ".codex/../escape", ".codex/invalid?"])("kein abweichender Zielpfad %s", p => {
   expect(() => c.schreibeSetup(temp(), { [p]: "x" })).toThrow();
+});
+test("Regex-Endgrenze lässt keinen Zeilenumbruch im Zielpfad durch", () => {
+  expect(() => c.schreibeSetup(temp(), { ".codex/a\n": "x" })).toThrow(/Ungültiger Setup-Zielpfad/);
 });
 test("Setup-Aufruffehler schließen vor I/O", () => {
   expect(lauf(temp(), []).code).toBe(2);
