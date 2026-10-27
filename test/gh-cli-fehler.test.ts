@@ -44,3 +44,30 @@ describe("fehlerText", () => {
     expect(G.fehlerText("AGENTS.md muss die Position genau einmal nennen\nZeile 2")).toBe("AGENTS.md muss die Position genau einmal nennen\nZeile 2");
   });
 });
+
+describe("schreibrechtText / fehlendeLabels (#76): fehlende Schreibrechte im Ziel-Repo sind eine klare Meldung", () => {
+  const S = raw as unknown as { schreibrechtText: (e: unknown, repo: string) => string | null; fehlendeLabels: (a: unknown, l: string[]) => string[] };
+  for (const muster of ["gh: HTTP 403: Forbidden", "gh: HTTP 404: Not Found", "Resource not accessible by integration", "Must have admin rights to Repository"]) {
+    test(`erkennt: ${muster}`, () => {
+      const t = S.schreibrechtText(Object.assign(new Error("Command failed: gh api x"), { stderr: muster }), "zz-org/zz-ziel");
+      expect(t).toMatch(/keine Schreibrechte auf zz-org\/zz-ziel/);
+      expect(t).toContain(muster.slice(0, 20));
+      expect(t).toMatch(/nichts im eigenen Repo angelegt/);
+    });
+  }
+  test("Groß-/Kleinschreibung egal, und der Rohtext wird auf 200 Zeichen gekürzt", () => {
+    const t = S.schreibrechtText(new Error(`resource not accessible by integration ${"x".repeat(500)}`), "zz-org/zz-ziel") ?? "";
+    expect(t).toMatch(/keine Schreibrechte auf zz-org\/zz-ziel/);
+    expect(t).toContain("x".repeat(100));
+    expect(t).not.toContain("x".repeat(300));
+  });
+  test("ein anderer Fehler (HTTP 500) ist keine Rechte-Meldung", () => {
+    expect(S.schreibrechtText(new Error("Command failed\ngh: HTTP 500"), "zz-org/zz-ziel")).toBeNull();
+  });
+  test("fehlendeLabels nennt die Labels, die die Antwort nicht trägt (Strings und Objekte), und liefert [] bei vollständiger Antwort", () => {
+    expect(S.fehlendeLabels({ labels: [{ name: "a" }, "b"] }, ["a", "b", "c"])).toEqual(["c"]);
+    expect(S.fehlendeLabels({ labels: [{ name: "a" }] }, ["a"])).toEqual([]);
+    expect(S.fehlendeLabels({}, ["a"])).toEqual(["a"]);
+    expect(S.fehlendeLabels(null, ["a"])).toEqual(["a"]);
+  });
+});

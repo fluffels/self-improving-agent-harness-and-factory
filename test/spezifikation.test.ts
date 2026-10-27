@@ -15,9 +15,9 @@ type Io = {
   owner: string;
   config: unknown;
   leseDatei: (p: string) => string;
-  erzeuge: (a: { titel: string; body: string; labels: string[] }) => { number: number; html_url?: string };
-  pruefeAnker: (a: { nach: number; labels: string[] }) => string | null;
-  einsortiere: (a: { nr: number; nach: number | null; notfall: string | null }) => void;
+  erzeuge: (a: { titel: string; body: string; labels: string[]; repo: string }) => { number: number; html_url?: string; labels?: { name: string }[] };
+  pruefeAnker: (a: { nach: number; labels: string[]; repo: string }) => string | null;
+  einsortiere: (a: { nr: number; nach: number | null; notfall: string | null; repo: string }) => void;
   ladeIssue: (nr: number) => Issue;
   bearbeite: (nr: number, body: string) => void;
 };
@@ -30,7 +30,7 @@ const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   const aufrufe = { erzeuge: [] as unknown[], einsortiere: [] as unknown[], bearbeite: [] as unknown[] };
   const io: Io = {
-    config: { labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness }, sprache: echteSprache() },
+    config: { repo: FREMD.repo, boards: FREMD.boards, labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness }, sprache: echteSprache() },
     owner: OWNER,
     leseDatei: (p) => {
       if (!(p in dateien)) throw new Error("ENOENT");
@@ -38,7 +38,7 @@ function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
     },
     erzeuge: (a) => {
       aufrufe.erzeuge.push(a);
-      return { number: 900, html_url: "https://x/900" };
+      return { number: 900, html_url: "https://x/900", labels: a.labels.map((name) => ({ name })) };
     },
     pruefeAnker: () => null,
     einsortiere: (a) => void aufrufe.einsortiere.push(a),
@@ -165,24 +165,24 @@ describe("anlegen", () => {
   });
   test("Bereichs-Label der echten Config: `area:demo` ist gültig", () => {
     const echt = projektConfig();
-    const { io } = umgebung({ "b.md": GUT }, { config: { labels: echt.labels, sprache: echteSprache() } });
+    const { io } = umgebung({ "b.md": GUT }, { config: { repo: echt.repo, boards: echt.boards, labels: echt.labels, sprache: echteSprache() } });
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:demo", "--nach", "12"], io).code).toBe(0);
   });
   test("harness-Label ohne Doppelpunkt: jedes nicht leere Label genügt", () => {
-    const { io } = umgebung({ "b.md": GUT }, { config: { labels: { forum: "f", harness: "harness" }, sprache: echteSprache() } });
+    const { io } = umgebung({ "b.md": GUT }, { config: { repo: FREMD.repo, boards: FREMD.boards, labels: { forum: "f", harness: "harness" }, sprache: echteSprache() } });
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "irgendwas", "--nach", "12"], io).code).toBe(0);
   });
   test("`--nach #12` und `--nach 12` sind dieselbe Nummer: einsortiert wird mit 12 (nie NaN), der Nachhol-Befehl nennt 12", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], io).code).toBe(0);
-    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null }]);
+    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null, repo: FREMD.repo }]);
     const { io: kaputt } = umgebung({ "b.md": GUT }, {
       einsortiere: () => {
         throw new Error("x");
       },
     });
     const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], kaputt);
-    expect(r.err).toContain("--after 12 900");
+    expect(r.err).toContain(`--repo ${FREMD.repo} --after 12 900`);
     expect(r.err).not.toContain("#12 900");
   });
   test("Datei fehlt: Exit 2", () => {
@@ -193,15 +193,15 @@ describe("anlegen", () => {
     const r = S.fuehreAus([...ANLEGEN, "--label", "prio"], io);
     expect(r.code).toBe(0);
     expect(r.out).toContain("angelegt #900");
-    expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: [AREA, "prio"] }]);
+    expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: [AREA, "prio"], repo: FREMD.repo }]);
     expect(JSON.stringify(aufrufe.erzeuge)).not.toContain("assignee");
-    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null }]);
+    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null, repo: FREMD.repo }]);
   });
   test("--notfall: einsortiert wird als Notfall", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
     const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "rot-main"], io);
     expect(r.code).toBe(0);
-    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: null, notfall: "rot-main" }]);
+    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: null, notfall: "rot-main", repo: FREMD.repo }]);
   });
   test("nur das Einsortieren scheitert: Exit 2 mit Nummer und Nachhol-Befehl", () => {
     const { io } = umgebung({ "b.md": GUT }, {
@@ -212,7 +212,7 @@ describe("anlegen", () => {
     const r = S.fuehreAus(ANLEGEN, io);
     expect(r.code).toBe(2);
     expect(r.err).toContain("#900");
-    expect(r.err).toContain("node scripts/board-place.mjs --after 12 900");
+    expect(r.err).toContain(`node scripts/board-place.mjs --repo ${FREMD.repo} --after 12 900`);
     expect(r.err).toContain("Rate-Limit");
   });
   test("Anker auf dem falschen Board: Exit 2, nichts angelegt, Meldung mit Ursache und Ausweg", () => {
@@ -227,7 +227,7 @@ describe("anlegen", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("nichts angelegt");
     expect(r.err).toContain("Anker #12 steht auf dem Produkt-Board; einen Anker vom Factory-Board wählen");
-    expect(geprueft).toEqual([{ nach: 12, labels: [AREA] }]);
+    expect(geprueft).toEqual([{ nach: 12, labels: [AREA], repo: FREMD.repo }]);
     expect(aufrufe.erzeuge).toEqual([]);
     expect(aufrufe.einsortiere).toEqual([]);
   });
@@ -363,13 +363,18 @@ describe("fuehreAus", () => {
 
 describe("ankerPruefung: erst nur das Ziel-Board, das andere nur bei Bedarf (#1762 L20c)", () => {
   const CFG = { labels: { harness: HARNESS } };
-  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[] }, lade: (rolle: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
+  const P = (raw as unknown as { ankerPruefung: (a: { nach: number; labels: string[]; repo?: string }, lade: (rolle: string, repo: string) => { number: number }[], config?: unknown) => string | null }).ankerPruefung;
   const boards: Record<string, { number: number }[]> = { produkt: [{ number: 1 }], factory: [{ number: 2 }] };
   const zaehle = (nach: number, labels: string[]) => {
     const geladen: string[] = [];
-    const r = P({ nach, labels }, (rolle) => (geladen.push(rolle), boards[rolle]), CFG);
+    const r = P({ nach, labels, repo: "zz-org/zz-r" }, (rolle) => (geladen.push(rolle), boards[rolle]), CFG);
     return { r, geladen };
   };
+  test("beide Ladevorgänge bekommen das übergebene Repo (loadItems wirft sonst „repo fehlt“)", () => {
+    const repos: unknown[] = [];
+    P({ nach: 99, labels: [HARNESS], repo: "zz-org/zz-r" }, (_rolle, repo) => (repos.push(repo), []), CFG);
+    expect(repos).toEqual(["zz-org/zz-r", "zz-org/zz-r"]);
+  });
 
   test("Anker auf dem Ziel-Board: null, nur ein Laden", () => {
     expect(zaehle(2, [HARNESS])).toEqual({ r: null, geladen: ["factory"] });
@@ -451,7 +456,7 @@ describe("anlegen --blocker (#1860)", () => {
 });
 
 describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1860)", () => {
-  type Sammel = { ziel: number | null; kommentare: { user: { login: string; type?: string } | null; body: string }[] };
+  type Sammel = { ziel: number | null; owner?: string; kommentare: { user: { login: string; type?: string } | null; body: string }[] };
   type GIo = Io & { sammelKontext: () => Sammel; postZeilen: (nr: number, text: string) => void; heute: () => string };
   const ARGS = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
   const ZEILE = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
@@ -460,7 +465,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     const { io } = umgebung({});
     const gio: GIo = {
       ...io,
-      sammelKontext: () => ({ ziel: 1860, kommentare: [], ...sammel }),
+      sammelKontext: () => ({ ziel: 1860, owner: OWNER, kommentare: [], ...sammel }),
       postZeilen: (nr, text) => void posts.push({ nr, text }),
       heute: () => "2026-10-22",
       ...extra,
@@ -534,5 +539,65 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22" })).toBe(ZEILE);
     expect(fn.gescheitertBekannt(7, [{ user: { login: OWNER, type: "User" }, body: ZEILE }], OWNER)).toBe(true);
     expect(fn.gescheitertBekannt(7, [], OWNER)).toBe(false);
+  });
+});
+
+describe("Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremdConfig = { repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)), labels: { forum: FREMD.labels.forum, harness: HARNESS }, sprache: echteSprache() };
+  const ARGS = (label: string) => ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", label, "--nach", "12"];
+
+  test("Harness-Label: erzeuge, pruefeAnker und einsortiere bekommen das Ziel-Repo, der Nachhol-Befehl nennt --repo (AK2)", () => {
+    const geprueft: unknown[] = [];
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, { config: fremdConfig, pruefeAnker: (a) => (geprueft.push(a), null) });
+    expect(S.fuehreAus(ARGS(HARNESS), io).code).toBe(0);
+    expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: [HARNESS], repo: FABRIK }]);
+    expect(geprueft).toEqual([{ nach: 12, labels: [HARNESS], repo: FABRIK }]);
+    expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null, repo: FABRIK }]);
+    const { io: kaputt } = umgebung({ "b.md": GUT }, { config: fremdConfig, einsortiere: () => { throw new Error("x"); } });
+    expect(S.fuehreAus(ARGS(HARNESS), kaputt).err).toContain(`board-place.mjs --repo ${FABRIK} --after 12 900`);
+  });
+  test("Produkt-Label bleibt im eigenen Repo (AK5)", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, { config: fremdConfig });
+    expect(S.fuehreAus(ARGS(AREA), io).code).toBe(0);
+    expect((aufrufe.erzeuge[0] as { repo: string }).repo).toBe(FREMD.repo);
+  });
+  test("fehlende Schreibrechte (403): Exit 2, die Meldung nennt das Ziel-Repo, erzeuge genau einmal, kein Rückfall ins eigene Repo, nicht einsortiert", () => {
+    let aufrufe = 0;
+    const repos: string[] = [];
+    const { io, aufrufe: a } = umgebung({ "b.md": GUT }, {
+      config: fremdConfig,
+      erzeuge: (x) => {
+        aufrufe++;
+        repos.push(x.repo);
+        throw Object.assign(new Error("Command failed: gh api"), { stderr: "gh: HTTP 403: Resource not accessible by integration" });
+      },
+    });
+    const r = S.fuehreAus(ARGS(HARNESS), io);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(new RegExp(`keine Schreibrechte auf ${FABRIK}`));
+    expect(aufrufe).toBe(1);
+    expect(repos).toEqual([FABRIK]);
+    expect(a.einsortiere).toEqual([]);
+  });
+  test("Antwort ohne die Labels (Nicht-Mitarbeiter im öffentlichen Repo): Exit 2 mit Nummer und Fix, nicht einsortiert", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT }, { config: fremdConfig, erzeuge: () => ({ number: 901, labels: [] }) });
+    const r = S.fuehreAus(ARGS(HARNESS), io);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain(`#901 in ${FABRIK} angelegt, aber ohne Label ${HARNESS}`);
+    expect(r.err).toContain("Fix:");
+    expect(aufrufe.einsortiere).toEqual([]);
+  });
+  test("gescheitert vertraut dem Owner des Ziel-Repos, nicht dem eigenen", () => {
+    const zeile = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
+    const posts: unknown[] = [];
+    const { io } = umgebung({});
+    const kontext = (owner: string) => ({ ziel: 1860, owner, kommentare: [{ user: { login: "zz-org", type: "User" }, body: zeile }] });
+    const gio = (owner: string) => ({ ...io, sammelKontext: () => kontext(owner), postZeilen: (nr: number) => void posts.push(nr), heute: () => "2026-10-22" }) as unknown as Io;
+    const args = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
+    expect(S.fuehreAus(args, gio("zz-org")).out).toMatch(/schon/);
+    expect(posts).toEqual([]);
+    S.fuehreAus(args, gio("anderer-owner"));
+    expect(posts).toEqual([1860]);
   });
 });
