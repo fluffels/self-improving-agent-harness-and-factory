@@ -440,6 +440,27 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("ein toter Anker auf eine andere Seite unter docs/ ist rot, der Anker auf deren Überschrift grün (#77)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-seite-"));
+    try {
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        "docs/a.md": "# A\n[tot](b.md#gibt-es-nicht)\n[gut](b.md#titel)\n",
+        "docs/b.md": "# Titel\n",
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      const audit = auditIn(dir);
+      assert.deepEqual(audit.deadLinks, []);
+      assert.deepEqual(audit.deadAnchors.map((a) => `${a.file}: ${a.target}`), ["docs/a.md: b.md#gibt-es-nicht"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {

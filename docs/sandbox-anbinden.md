@@ -1,6 +1,6 @@
 # Sandbox anbinden
 
-> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg von Kubernia beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
+> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
 
 ## Docker Sandboxes (`sbx`)
 
@@ -14,7 +14,7 @@ Die offiziell dokumentierte Variante und der vorläufige Rückfallweg, nicht emp
 6. **Workspace (V1):** Mount (Standard, rw) oder Klonmodus. Ohne Host-Workspace (Claude Desktop über `sbx setup ssh --auto-create`, Host `claude.sbx`) wird das Projekt in der Sandbox geklont. Im Klonmodus bleiben nicht getrackte Dateien wie `.env` lesbar: keine Geheimnisse dort ablegen (V3). Ein Klon hat ein eigenes `.git` und damit eigene Ticket-Locks: Claims des Hosts sind dort unsichtbar, über Maschinen hinweg trennt nur der Assignee, und ein reiner Remote-Branch ist für `claims-pruefen` keine lokale Spur ([Wiederaufnahme](ticket-reihenfolge.md#wiederaufnahme-verwaister-claims)).
 7. **Prüfen:** `node scripts/sandbox-doctor.mjs --check` (später `--streng`, [#1437](https://github.com/fluffels/kubernia/issues/1437)).
 
-Eine Kubernia-Session in `sbx` ist nicht per Probe belegt (Liste „Unbelegt“ im ADR).
+Eine Harness-Session in `sbx` ist nicht per Probe belegt (Liste „Unbelegt“ im ADR).
 
 ## Cloud-Sitzung (Claude Code im Web)
 
