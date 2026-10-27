@@ -60,7 +60,7 @@ Anschließend in einer neu geladenen, vertrauenswürdig eingerichteten Sitzung `
 
 ## Windows-Probe
 
-Für Codex CLI 0.164.0 unter Windows wurde `command = "npx"` mit einem lokalen, offline installierten harmlosen MCP-Fixture-Paket geprüft. Ein isolierter temporärer App-Server erhielt `initialize`, `initialized` und `mcpServerStatus/list`. Serverinformationen und das deklarierte `ping`-Werkzeug waren sichtbar, `toolsError` war null; ein Fixture-Marker belegte den Initialize-Aufruf. Direkter Node-Start und `cmd /d /c npx` waren ebenfalls erfolgreich. Ein `cmd`-Wrapper ist für diesen belegten `npx`-Start daher nicht nötig. Diese Probe belegt weder das echte Playwright-Paket, einen Browseraufruf noch die Langfuse-Authentifizierung oder Modell-/Subagent-Erfassung. Hilfsprozesse wurden beendet; die Probe nutzte keine persönlichen Konfigurationen, Secrets oder Netzabrufe.
+Für Codex CLI 0.164.0 unter Windows wurde `command = "npx"` mit einem lokalen, offline installierten harmlosen MCP-Fixture-Paket geprüft. Ein isolierter temporärer App-Server erhielt `initialize`, `initialized` und `mcpServerStatus/list`. Serverinformationen und das deklarierte `ping`-Werkzeug waren sichtbar, `toolsError` war null; ein Fixture-Marker belegte den Initialize-Aufruf. Direkter Node-Start und `cmd /d /c npx` waren ebenfalls erfolgreich. Ein `cmd`-Wrapper ist für diesen belegten `npx`-Start daher nicht nötig. Diese Probe belegt weder das echte Playwright-Paket, einen Browseraufruf noch die Langfuse-Authentifizierung oder Modell-/Subagent-Erfassung. Hilfsprozesse wurden beendet. Die Probe nutzte keine persönlichen Konfigurationen oder Secrets und keine Modellabfrage; npm lief im Offlinemodus. Netzwerkverkehr des App-Servers wurde nicht mitgeschnitten.
 
 ## Offene Full-Access-Diskrepanz (K3/K6)
 
@@ -84,7 +84,7 @@ Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **n
 
 Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
 
-## Belegdiagnose und Entsperrkriterien
+## Vorprüfung und Nachweisformat
 
 `node scripts/codex-vorpruefung.mjs [--belege <JSON-Datei>]` liest ausschließlich. Exit 2 bedeutet Aufruffehler, Exit 1 den gesperrten Einstieg. Weder Claim noch Umsetzung werden gestartet. Vollständige Offline-Daten heben diese Sperre nicht auf; JSON ist selbst attestierbar und keine signierte Laufzeitattestierung.
 
@@ -100,7 +100,9 @@ Eine spätere Änderung des sperrenden Einstiegs benötigt zusammen diese überp
 4. Vollständiger Export: Hauptagent, alle Rollen und relevante Werkzeuge mit Repo-/Session-/Elternverknüpfung und Verbrauch; Tracing-Ausfall stoppt nachvollziehbar.
 5. Abgegrenztes Probe-Ticket gemäß unabhängigem Review und Holdout-Abnahme, einschließlich Negativfällen. Ein Healthcheck allein genügt nicht.
 
-Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt keine Freigabe. Bis dahin bleiben K3/K6 und die vollständige Erfüllung von #79 offen.
+Der beobachtete `private-codex-exporter` 1.1.0 liegt außerhalb des Repositories und wird vom Setup weder installiert noch konfiguriert. Seine reproduzierbare Bereitstellung, Exportvollständigkeit und Erfassung tatsächlich verwendeter Custom-Rollen sind offen. Eine einzelne Instanz mit allgemeinen Subagent-Generationen schließt diese Lücke nicht.
+
+Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt keine Freigabe. Bis dahin bleiben K3/K4/K6 und die vollständige Erfüllung von #79 offen.
 
 ## Quellen
 

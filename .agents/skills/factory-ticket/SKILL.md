@@ -8,7 +8,7 @@ effort: medium
 
 # Ticket des Produkt-Boards abarbeiten
 
-**Codex:** zuerst den Codex-Einstieg aus `AGENTS.md` prüfen ([Laufzeitabbildung](../../../docs/codex/einstieg.md)). Claude-`Agent`/`SendMessage` und das Modell-Frontmatter sind keine Codex-Konfiguration.
+Codex: [Einstieg](../../../docs/codex/einstieg.md).
 
 **Bereich: `produkt`.** Die Auswahl läuft mit `--bereich produkt` und sieht nur das Produkt-Board; die Notfälle (CI rot auf `main`, Security) gelten auf beiden Boards. Es wird nie ein Harness-Ticket gezogen, keine Rückfrage.
 
