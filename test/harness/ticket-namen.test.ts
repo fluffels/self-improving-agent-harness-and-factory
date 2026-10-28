@@ -101,6 +101,8 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(n.ticketAus("C:\\x\\.claude\\worktrees\\web\\ab-7\\src")).toBe(7);
     expect(n.ticketAus(".claude/worktrees/a/b/ab-12")).toBeNull();
     expect(n.ticketAus(".claude/worktrees/../ab-12")).toBeNull();
+    expect(n.ticketAus(".claude/worktrees/ab-12/ab-13")).toBe(12);
+    expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12/ab-13-lens-r1/x")).toBe(false);
     expect(n.lensPfadMuster.test("/.claude/worktrees/web/ab-12-lens-r1/x")).toBe(true);
     expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12-lens-r1/x")).toBe(true);
     expect(n.lensPfadMuster.test("/.claude/worktrees/../ab-12-lens-r1/x")).toBe(false);
