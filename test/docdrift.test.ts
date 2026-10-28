@@ -551,3 +551,35 @@ describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (
     }
   });
 });
+
+// Tote Test-Pfade in der Doku (#97 L4): Backtick-Token `test/…` muss existieren.
+describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { testPfadFehler: { file: string; pfad: string }[] } }).auditDocDrift;
+  const fixture = (dateien: Record<string, string>): { file: string; pfad: string }[] => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-testpfade-"));
+    try {
+      const alle = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n", "test/da.test.ts": "", ...dateien };
+      for (const [f, text] of Object.entries(alle)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      return auditIn(dir).testPfadFehler;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test("fehlender Test-Pfad ist rot, vorhandener Pfad und Ordner sind grün", () => {
+    const f = fixture({ "docs/a.md": "# A\nSiehe `test/weg.test.ts` und `test/da.test.ts` und `test/`.\n" });
+    assert.deepEqual(f, [{ file: "docs/a.md", pfad: "test/weg.test.ts" }]);
+  });
+
+  test("ADR und Dateien mit Datum im Namen sind ausgenommen", () => {
+    assert.deepEqual(fixture({ "docs/adr/0001-x.md": "`test/weg.test.ts`\n", "docs/notiz-2026-01-02.md": "`test/weg.test.ts`\n" }), []);
+  });
+
+  test("Platzhalter werden übersprungen, Suffix #/: abgeschnitten", () => {
+    assert.deepEqual(fixture({ "docs/a.md": "`test/<name>.test.ts` `test/*.test.ts` `test/{a,b}.ts` `test/da.test.ts#L5` `test/da.test.ts:12`\n" }), []);
+    assert.equal(fixture({ "docs/a.md": "`test/weg.test.ts:12`\n" }).length, 1);
+  });
+});
