@@ -51,7 +51,7 @@
  *    committet, nimmt den literalen Pfad (`git -C <worktree> commit`); der Hook wertet Variablenwerte nicht aus.
  *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
  *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
- *  - `ausserhalbRepo` ist rein lexikalisch: ein verlinkter (Linked) Worktree außerhalb des Hook-Ordners zählt als außerhalb.
+ *  - `ausserhalbRepo` ist rein lexikalisch: ein verlinkter (Linked) Worktree außerhalb des Repo-Ordners (`repoRoot`) zählt als außerhalb.
  *  - Text in Interpreter-Code (`node -e "…"`, `python -c`) wird nicht geparst: das grobe Netz wertet ein Wortpaar "git" + "commit"/"push" darin als Aufruf (auch
  *    `console.log('git commit')`) und blockt im Haupt-Checkout; im PowerShell-Pfad gilt dasselbe für Skript-Laufzeiten (#97 L11m).
  *

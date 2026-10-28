@@ -55,6 +55,16 @@ describe("main: Token fürs Ziel-Repo (#97)", () => {
     await main(["--repo", "zz-org/ziel", "--top", "5"], aufbau({ env: ohne }).deps);
     expect(ohne.GH_TOKEN).toBeUndefined();
   });
+
+  test("ohne Ziel-Token bleibt ein vorhandener Standard-GH_TOKEN unverändert (kein Überschreiben mit undefined)", async () => {
+    const eigen: Record<string, string> = { GH_TOKEN: "std", PROJECT_TOKEN: "pt" };
+    await main(["--top", "5"], aufbau({ env: eigen }).deps);
+    expect(eigen.GH_TOKEN).toBe("std");
+    const fremdOhne: Record<string, string> = { GH_TOKEN: "std" };
+    await main(["--repo", "zz-org/ziel", "--top", "5"], aufbau({ env: fremdOhne }).deps);
+    expect(fremdOhne.GH_TOKEN).toBe("std");
+    expect(Object.keys(fremdOhne)).toEqual(["GH_TOKEN"]);
+  });
 });
 
 describe("main: Fehlerwege laufen über beende", () => {
