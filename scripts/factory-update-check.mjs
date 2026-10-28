@@ -19,7 +19,7 @@ import { fehlerText, ghText } from "./gh-cli.mjs";
 const RELEASE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 
 /** Pur: `[major, minor, patch]` eines Release-Tags oder `null`. */
-function teile(tag) {
+export function teile(tag) {
   const m = typeof tag === "string" ? RELEASE.exec(tag) : null;
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 }
