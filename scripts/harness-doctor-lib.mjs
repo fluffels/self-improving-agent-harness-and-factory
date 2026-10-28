@@ -27,7 +27,7 @@ export const WOCHENLAUF_WORKFLOW = [
   "name: Harness-Doctor (Wochenlauf)",
   "",
   "# Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich",
-  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN, gepostet mit github.token; fehlt das Secret,",
+  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, in einem fremden Ziel-Repo mit PROJECT_TOKEN; fehlt das Secret,",
   "# meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).",
   "",
   "on:",

@@ -583,8 +583,8 @@ export function loadItemPages(board, opts = {}) {
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
-export function loadOpenIssuePages(repo = REPO) {
-  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
+export function loadOpenIssuePages(repo = REPO, opts = {}) {
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`], opts));
 }
 
 /** Nummern aller offenen Issues (REST; PRs herausgefiltert). */

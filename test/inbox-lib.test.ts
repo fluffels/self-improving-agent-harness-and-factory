@@ -83,6 +83,25 @@ describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
   });
 });
 
+describe("Token für das Ziel-Repo (#78 L13a)", () => {
+  test("ladeSammelKontext reicht den Ziel-Token an Offenen- und Kommentar-Abruf", () => {
+    const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
+    const tokens: unknown[] = [];
+    L.ladeSammelKontext({
+      token: "ziel-token",
+      ladeOffene: ((t: unknown) => (tokens.push(t), rohe)) as unknown as () => unknown,
+      ladeKommentare: ((_nr: number, _repo: string, t: unknown) => (tokens.push(t), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
+    } as unknown as Parameters<typeof L.ladeSammelKontext>[0]);
+    expect(tokens).toEqual(["ziel-token", "ziel-token"]);
+  });
+  test("postZeilen übergibt den Token an gh", () => {
+    const P = raw as unknown as { postZeilen: (nr: number, text: string, repo: string, token: string | undefined, exec: (...a: unknown[]) => string) => unknown };
+    const aufrufe: { env?: Record<string, string> }[] = [];
+    P.postZeilen(5, "x", "zz-org/ziel", "ziel-token", ((_c: unknown, _a: unknown, o: { env?: Record<string, string> }) => (aufrufe.push(o), "")) as never);
+    expect(aufrufe[0]?.env?.GH_TOKEN).toBe("ziel-token");
+  });
+});
+
 describe("waehleSammelticket: das Repo muss owner/name sein (#78)", () => {
   test("ein Repo ohne diese Form wirft mit Fix-Zeile, statt einen falschen Owner zu vertrauen", () => {
     const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => unknown };
