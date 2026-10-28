@@ -7,9 +7,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
-    // Optionale native Proben starten echte Sandbox-/Engine-Prozesse. Dateien dabei seriell ausführen,
-    // damit deren gemeinsame Windows-Prozesslast nicht die unveränderten Testfristen verbraucht.
-    fileParallelism: !process.env.CODEX_SCHUTZ_PROBE,
     // Coverage misst nur ein Lauf mit --coverage; lcovonly schreibt coverage/lcov.info, das check-diffcoverage.mjs gegen den Diff auswertet.
     coverage: {
       provider: "v8",

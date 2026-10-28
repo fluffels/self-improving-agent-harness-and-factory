@@ -2,7 +2,7 @@
 
 Der Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI 0.164.0. Autonome Ticketläufe sind nicht freigegeben. Der Einstieg aus [AGENTS.md](../../AGENTS.md) endet auch mit vollständig aussehenden Offline-Belegen mit Exit 1. Die Versionsprüfung ist absichtlich auf diesen geprüften Stand begrenzt; andere Versionen benötigen eine neue Prüfung. Ein beauftragter Implementierungs-PR ist keine bestandene Ende-zu-Ende-Abnahme.
 
-Der Adapter umfasst Setup, Rollenquellen, Belegdiagnose und zwei begrenzte Schutzeinstiege: einen Einzelaktionshost und eine toolarme Fremdtext-Elterninstanz. Korrekte Tracing-Zuordnung samt Ausfallerkennung und ein isoliertes Gesamtsetup mit Probeauftrag bleiben separat abzunehmen. Erst die Gesamtabnahme kann eine autonome Freigabe begründen; freie App-/CLI-Shells sind durch diese Eingänge nicht geschützt.
+Codex verwendet denselben Factoryablauf und dieselben fachlichen Quellen wie Claude. Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose; die Laufzeitanbindung soll als schmaler nativer Adapter erfolgen. Eine wirksame native Hook-Anbindung, Fremdtext-Abschirmung und korrekte Tracing-Zuordnung sind noch nicht nachgewiesen. Ein eigener Ausführungshost ersetzt diese offenen Grenzen nicht. Die Restanforderungen einschließlich eines isolierten Probeauftrags mit Gesamtabnahme sind in #84 gebündelt; erst diese Gesamtabnahme kann eine autonome Freigabe begründen.
 
 ## Gemeinsame Quellen und Rollen
 
@@ -34,7 +34,7 @@ await collaboration.send_message({ target: planer.task_name, message: "Ergänzun
 await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
 ```
 
-Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die fachlichen Auftragsguards sind im Codex-Adapter abgebildet; ein technischer Executor für Agenten-/Nachrichtenpfade fehlt weiterhin. Der geschützte Host stoppt diese abhängigen Abläufe vor dem Start.
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag` und `holdout-auftrag` sind nicht auf diese Aufrufe portiert.
 
 ## Reproduzierbares Setup
 
@@ -74,69 +74,19 @@ Geplante Vergleichsprobe: zwei separat konfigurierte, harmlose Elternsessions mi
 
 ## Sicherheits- und Hook-Abbildung
 
-Das Setup erzeugt `.codex/hooks.json` und ein geschlossenes Referenzprofil `.codex/geschlossen.config.toml`. Der Host erzeugt für jede Aktion ein frisches temporäres Profil aus derselben Quelle, registriert ausschließlich den lokalen Adapter und prüft nativ `hooks/list`. Nur diese selbst erzeugte Registrierung erhält über `config/value/write` unter `hooks.state.<key>.trusted_hash` Vertrauen; anschließend werden Version, Fehlerliste, aktivierter vertrauenswürdiger Hook und leeres MCP-Inventar erneut geprüft. Fremde Profile und attestierende JSON-Dateien sind kein Host-Eingang.
+Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **nicht portiert oder als wirksam nachgewiesen**:
 
-**Natives Hook-Inventar ist kein Ausführungsnachweis.** Die reale CLI-Probe 0.164.0 mit harmlosem lokalem Responses-Provider zeigte trotz vertrauenswürdig gelistetem Hook einen veränderten Schreibmarker und keinen Hook-Eventmarker: Matcher `.*` sowie `exec_command`, `code_mode_host` aus/ein. Eine freie native Shell bleibt daher gesperrt. Der Einzelaktionshost startet keine Engine-Shell, sondern erzwingt den separaten Guardprozess selbst. Das native Inventar ist eine zusätzliche Vorbedingung, seine beobachtete Wirkungslosigkeit wird damit nicht als Denial ausgegeben.
-
-| Bestehender Schutz / Werkzeugpfad | Tatsächlich unterstützter Eingang und Grenze |
+| Bestehender Schutz | Codex-Stand |
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
 | `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
-| `exec_command`: Worktree und Stdin | gemeinsame Guards vor nativem `command/exec`; kanonisches cwd innerhalb der festen Host-Worktreewurzel, starre `workspaceWrite`-Policy, Temp-Ausnahmen ausgeschlossen; unbekannte Parameter verweigert |
-| GitHub | gemeinsamer API-Guard vorhanden; zusätzliche Claude-Settings sind nicht portiert, deshalb gesamter erkennbarer `gh`-CLI-Pfad im Host geschlossen |
-| `write_stdin` | kein neues PreToolUse; vollständig entzogen, Host bietet weder Session-ID noch Stdin-Fortsetzung |
-| `spawn_agent`, `send_message`, `followup_task` | gemeinsame Lens-Auftrags- und Holdout-Guards fachlich abgebildet; Nachricht bleibt Nachricht, Empfängerrolle wird nicht aus Payload erraten; ohne kontrollierten Executor stoppt der Host jeden dieser Abläufe |
-| `apply_patch`, Lens-Edit | ohne vollständige Patch-/Pfad-Erfassung kein Executor; alle Patches abgewiesen, damit auch jeder unerlaubte Lens-Edit |
-| direkte Dateiwerkzeuge, schreibende MCPs, `functions.exec` und innere Tools | keine Route im Host; toolarme Engine bietet diese Zugänge nicht an und weist erzwungene Aufrufe technisch zurück; keine Sicherheit für parallele freie App-Sitzungen |
-| Abschluss / `Stop` / `SubagentStop` | gemeinsamer Abschlusskern fachlich abgebildet; kein geschützter Agentenlauf mit Abschlussereignis implementiert, deshalb abhängiger Ablauf gesperrt |
+| `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
+| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
+| `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
 | Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
-| Fremdtext | `fremdtext.mjs` bleibt Autorengate; bereits beschaffte Daten verarbeitet eine getrennte toolarme Elterninstanz ohne MCPs und geerbte Authvariablen; keine Websuche und keine zusätzliche Quellenbeschaffung |
+| Fremdtext | bestehendes `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten sind keine Quarantäne |
 
-Der öffentliche Host verwendet pro Aufruf genau ein frisches Profil mit eigener Hookregistrierung und unelevated-Sandbox sowie einen Appserver. Nach `initialize` folgen Hookinventar, Vertrauen ausschließlich der eigenen Registrierung, erneutes Inventar und MCP-Prüfung. Erst danach laufen Guard, echte Dateikontrollen und genau eine Nutzeraktion; zwischen Hostaufrufen werden weder Profil noch Sitzung wiederverwendet. Die Inventarfrist von 5000 ms umfasst `initialize`; danach gelten die bisherigen 3000 ms für den Guard und 40000 ms für den Sandboxtransport. Ein abgebrochener Transport bleibt verriegelt, auch bei einer späten Guardfreigabe; Canary und Profil werden erst nach dem tatsächlichen `close` entfernt.
-
-Das Profil legt seine privaten `.codex`-, `AppData/Roaming`- und `AppData/Local`-Verzeichnisse vor dem Start an. Der feste Guard erhält eine Kopie derselben bereinigten Umgebung; ein eigenständiger Guardaufruf besitzt stattdessen ein eigenes Temp-Profil bis zum Prozessende. Der Repositoryroot wird nicht als Guard-Home verwendet. Das ändert keine Betriebssystemidentität: die KnownFolder-Abfrage `UserProfile` kann weiterhin außerhalb des Temp-Profils auflösen; eine allgemeine Datei- oder Secretisolation wird daraus nicht abgeleitet.
-
-Im Host führen Guard-Wurf, Timeout, ungültiges JSON, unbekannte Entscheidung und jeder Exit ungleich 0 zu **null Executor-Aufrufen**. Nur vollständiges `allow` mit Exit 0 erreicht den nativen Sandbox-Executor. Der frühere direkte Shellstart wurde durch `command/exec` ersetzt; `process/spawn` und ein ungeschützter Fallback sind keine Route. Der Executor übernimmt weder eine Policy noch Schreibwurzeln vom Aufrufer. Vor jeder Aktion schreibt ein festes Kontrollprogramm zuerst einen Marker im eigenen Serverprofil und versucht danach den externen Canary zu überschreiben, unter derselben Policy wie die Nutzeraktion. Beide Dateiinhalte und der tatsächliche Denial werden geprüft; stdout allein ist kein Beleg. Das fasst zwei Kontrollen in einem Prozess zusammen, ohne eine Schreibwurzel hinzuzufügen. Eine nicht wirksame Sandbox, Versionsabweichung, fehlerhafte Kontrolle oder ein generischer RPC-Fehler stoppt vor der Nutzeraktion.
-
-Für CLI 0.164.0 unter Windows setzt ausschließlich das temporäre Profil `[windows] sandbox="unelevated"`. Ohne diesen Modus ließ selbst eine explizite `workspaceWrite`-Policy den externen Fixture-Schreibzugriff zu. Die belegte Kombination erlaubt den Innenwrite und verweigert externes `Set-Content`; `excludeSlashTmp=true`, `excludeTmpdirEnvVar=true` und `networkAccess=false` bleiben bei Kontrolle und Aktion gesetzt. Der separate Canary liegt außerhalb von Worktree **und** Serverprofil, da der eigene temporäre Server-cwd ebenfalls als Betriebsverzeichnis beschreibbar sein kann. Es erfolgen keine globale Sandbox-Einrichtung oder OS-Kontenänderungen. Ein fehlendes Backend stoppt; andere Plattformen erhalten keine ungeprüfte Freigabe aus einer Konfigurationsdatei.
-
-Die Schreibgrenze ist keine vollständige Secret-/Leseisolation: 0.164.0 bietet hier kein `readOnlyAccess`/`readableRoots`, und ein externer harmloser Lesemarker war lesbar. Der Host ist deshalb kein Fremdtext-Eingang; dessen separate toolarme Elterninstanz bleibt unverändert. Gemeinsame Git-Metadaten außerhalb des Worktrees erhalten keine Zusatzfreigabe; abhängige Git-Schreibbefehle können deshalb verweigert werden. Der native Windows-Denial kann als spezifischer RPC-Sandboxfehler statt als Exitcode eintreffen. Ein beliebiger RPC-Fehler zählt nicht als bestandene Negativkontrolle. `outputBytesCap` wird wegen der belegten Windows-Inkompatibilität nicht übergeben; der administrative Client behält sein begrenztes Antwortvolumen und seine Prozessfrist. `command/exec` ist ein eigener Erfassungspfad für die Tracing-Abnahme, kein behaupteter nativer Hook-/Modellspan.
-
-Auch Agentenregistries sind kein erlaubter Werkzeugpfad: `collaboration.list_agents` kann ungefragt Final-Payloads anderer Phasen ausgeben und damit Holdout-Inhalte an einen Umsetzer liefern. Im geschlossenen Profil fehlen solche Agentenwerkzeuge; der Host verweigert den unbekannten Namen. Eine konventionelle explizit beauftragte Umsetzung in einer freien Frontend-Sitzung belegt deshalb keine technische Holdout-Isolation.
-
-Eine Aktion geht als JSON über stdin an `node scripts/codex-geschuetzt.mjs`:
-
-```json
-{"tool_name":"exec_command","cwd":"<absoluter eigener Checkout>","tool_input":{"cmd":"Write-Output HOST_OK","shell":"powershell"}}
-```
-
-Nur `bash` und `powershell` sind unterstützte Shellwerte. Der Host liest keine Authdateien; Server und Shell erhalten die bestehende Umgebungs-Allowlist mit frischen Home-/AppData-Verzeichnissen. Geerbte Auth-, Proxy- und private Konfigurationsvariablen werden nicht übernommen. Die weiterhin mögliche Dateilektüre wird dadurch nicht als Secret-Isolation ausgegeben.
-
-Die GitHub-Sperre ist konservativ: Auch `gh` beziehungsweise `gh.exe` als Wort in einem Daten- oder Suchbefehl führt zum Stopp. Dieser kleine unterstützte Befehlssprachumfang ersetzt keine allgemeine Shell-Freigabe.
-
-`node scripts/codex-fremdtext.mjs http://127.0.0.1:<port>/v1` erhält ausschließlich die bereits beschafften Daten über stdin. Eine frische Elterninstanz nutzt eigene HOME-/CODEX_HOME-/AppData-Verzeichnisse, eine explizite Umgebungs-Allowlist, keine Authkopien, keine MCPs und deaktivierte Apps, Plugins, Memories, Shell, Multi-Agenten, Ziele, Bilder, Permissions und Websuche. Bis zu sicherem Hostauth ist ausschließlich ein ausdrücklich eingerichteter lokaler authfreier Provider unterstützt. Die separate Home-Umgebung ist **keine OS-Dateiisolierung**: CLI-Startkontext kann lokale Skillbeschreibungen enthalten. Die Sicherheitsgrenze für modellgesteuerte Zugriffe ist der belegte Toolentzug; OS-Datei- und Netzzugriffe beliebiger Programme werden nicht attestiert.
-
-Die echte Engine-Probe erzwingt Aufrufe über einen harmlosen SSE-Responses-Provider. Inventar: ausschließlich `request_user_input`; Default-Modus verweigert auch dieses Tool. `exec_command`, `apply_patch`, `functions.exec`, ein unbekanntes Tool und ein schreibendes MCP werden als `unsupported call` zurückgewiesen; externe Fixture-Marker bleiben unverändert. Die Textkontrolle liefert `FIXTURE_OK`. Reproduzierbar ohne echte Tokens:
-
-```powershell
-$env:CODEX_SCHUTZ_PROBE = (Get-Command codex).Source
-npx vitest run test/harness/codex-fremdtext.test.ts test/harness/codex-geschuetzt.test.ts test/harness/codex-sandbox.test.ts
-Remove-Item Env:CODEX_SCHUTZ_PROBE
-```
-
-Mit dieser Variable führt die Testkonfiguration Dateien seriell aus: parallele native Sandbox-/Engine-Prozesse können unter Windows die unveränderten Testfristen verbrauchen. Ohne diese Variable überspringt der portable Testsatz nur die echte installierte CLI-Probe und behält Dateiparallelität. Prozessgrenzen, Payloads, gemeinsame Guards und Executor-Aufrufzahlen werden regulär getestet. Der Testprovider verwendet erfundene Fixture-Verbrauchswerte; sie sind kein echter Modellverbrauch oder Tracing-Beleg. Der Inventartransport schließt zuerst stdin, wartet kurz auf reguläres EOF-Ende und erzwingt sonst das Prozessbaumende; vor der Profilentfernung ist das `close`-Ereignis abgewartet.
-
-### Begrenzte Windows-Prozesse
-
-Der generische `prozess()`-Adapter benötigt unter Windows x64 das vorhandene .NET Framework mit `Framework64/v4.0.30319/csc.exe` und Windows PowerShell für die ACL-Prüfung. Beim Modulimport bereitet er innerhalb eines eigenen Zehn-Sekunden-Budgets einen nativen Supervisor als EXE vor. Dies ist das einzige Backend; es gibt weder eine DLL-/PowerShell-Ausführungsroute noch eine adaptive Auswahl oder einen Fallback. Sein cwd liegt im privaten Requestverzeichnis, das Ziel-cwd steht separat im Request. Es werden keine Pakete installiert und keine Binärdateien ins Repo geschrieben. Die Prozessfrist beginnt am bisherigen Aufruf von `prozess()` und umfasst Requestdatei und Supervisorstart; sie wird nicht neu gestartet. Compiler-, Vorbereitungs- und Validierungsfehler stoppen vor dem Zielstart. Native Testfixtures verwenden dieselbe bereinigte und initialisierte Profilumgebung mit PATH, TEMP/TMP und eigenen Homepfaden wie der unterstützte Laufzeitpfad.
-
-Ein fester benutzerspezifischer Cache unter dem vom Betriebssystem ermittelten LocalApplicationData-Ordner bleibt zwischen Aufrufen erhalten; temporär gesetzte HOME-/LOCALAPPDATA-Werte wählen ihn nicht aus. Der Schlüssel bindet C#-Quelle, Protokollversion, EXE-Modus, x64 und Compileroptionen/-hash. Ein privates Staging wird kompiliert, auf vollständigen PE-Header, x64, ausführbares Image und fehlendes DLL-Kennzeichen geprüft und mit echter Jobanlage, Limit und Leerabfrage erprobt, bevor Manifest und Artefakt atomar veröffentlicht werden. Der EXE-Modus übernimmt keine früheren DLL-Artefakte; diese werden weder überschrieben noch automatisch gelöscht. Ein begrenztes Lock verhindert Teilprodukte bei Parallelimporten. Wiederverwendung prüft Pfad, Dateien, Eigentum, ACL, Quelle, Manifest und Exehash; sie startet die Einsatzprobe nicht erneut. Umleitungen und zusätzliche Zugriffsrechte werden abgelehnt. Cache und Artefakte erlauben ausschließlich der eigenen Benutzeridentität und SYSTEM Vollzugriff. Ein beschädigter Cache wird weder überschrieben noch durch einen direkten Zielstart umgangen. Gleichberechtigte lokale Prozesse können Cache und Manifest gemeinsam verändern; gegen sie versprechen die Hashes keine Herkunftsgarantie.
-
-Der Supervisor erzeugt das Ziel angehalten, ordnet es zwingend einem nicht vererbbaren Job Object ohne Breakaway zu und setzt es erst danach fort. Seine native Deadline läuft unabhängig vom Node-Eventloop. Ein zusätzlicher Node-Watchdog verwendet dieselbe Aufruffrist und fordert bei deren Ablauf das Ende des Supervisors an, auch wenn noch kein nativer Status vorliegt; bei blockiertem Node-Eventloop kann dieser Timer nicht laufen. Der erste Prozessfehler bleibt erhalten, die Requestdateien werden erst nach dem tatsächlichen `close` entfernt. Timeout und Elternende beenden den Job; der normale Abschluss wartet auf `ActiveProcesses=0`, der Node-Adapter zusätzlich auf geschlossene Ausgabeströme. `KILL_ON_JOB_CLOSE` beendet Nachkommen auch bei Supervisorabbruch. Argumente, cwd und explizite Umgebung werden strukturiert übertragen; stdin sowie stdout/stderr bleiben getrennte Datenkanäle. Dienste, WMI oder andere außerhalb der Jobvererbung gestartete Prozesse sind von dieser Prozessbaumgarantie nicht umfasst. Der POSIX-Pfad verwendet weiterhin Prozessgruppen; der Inventartransport besitzt seinen gesonderten EOF-/Cleanup-Pfad.
-
-Die zusätzlichen Windows-Nachweise laufen mit `npx vitest run test/harness/codex-prozess-windows.test.ts test/harness/codex-prozess-cache.test.ts`. Sie ergänzen den obigen unveränderten nativen Drei-Dateien-Lauf.
-
-Die Node-seitige Cache-, Manifest-, PE-, Ausgabe- und Fehlerlogik wird am Originalmodul auch unter Linux getestet; nur Compiler, Windows-ACL-Aufruf und nativer Kindprozess werden dafür ersetzt. Diese Tests attestieren keine Windows-Kernelwirkung. Echte C#-, ACL- und Prozessbaumproben bleiben zusätzliche Windows-Nachweise; für vollständige Läufe mit nativen Prozessen gilt der oben dokumentierte serielle Modus `CODEX_SCHUTZ_PROBE`.
+Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
 
 ## Vorprüfung und Nachweisformat
 
@@ -160,7 +110,7 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle und die AGENTS.md-Größe gegen das Codex-Standardlimit. PreToolUse teilt sieben Auswertungsmodule mit `codex-hook-lib.mjs`; der Adapter unterstützt den begrenzten Einzelaktionshost und verweigert weitere Werkzeugpfade ohne kontrollierten Executor. Die übrigen Hook-Pfade bleiben ohne Codex-Adapter mit benannter Grenze #84. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme #86.
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (heute alle Hooks ohne Codex-Adapter, Grenze #84) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme #84.
 
 ## Quellen
 

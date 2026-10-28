@@ -7,7 +7,7 @@
  *     `codex: null` braucht eine Grenze mit Ticketnummer (heute #84); ein Adapter muss dieselben Auswertungsmodule importieren;
  *     importiert ein `scripts/codex-*.mjs` ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen.
  *  V4 AGENTS.md ≤ 32768 Bytes (Codex-Standard `project_doc_max_bytes`); `check:contextsize` deckelt strenger, hier nur der Bezug.
- * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Gesamtabnahme #86).
+ * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Gesamtabnahme #84).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). */
 import { expect, test } from "vitest";
@@ -27,7 +27,7 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/sandbox-doctor.mjs", modul: ["scripts/sandbox-doctor.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/mcp-ausfall.mjs", modul: ["scripts/mcp-ausfall.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/langfuse-vorbedingung.mjs", modul: ["scripts/langfuse-vorbedingung.mjs"], codex: null, grenze: OFFEN },
-  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook-lib.mjs", grenze: "Begrenzter Einzelaktionshost; weitere Werkzeugpfade ohne kontrollierten Executor verweigert: #84", modul: ["scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
+  { hook: "scripts/pretooluse-hook.mjs", codex: null, grenze: OFFEN, modul: ["scripts/pretooluse-hook.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Statuszeile ist Claude-spezifisch: #84" },
 ];

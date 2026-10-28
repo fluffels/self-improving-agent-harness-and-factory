@@ -19,7 +19,7 @@ function quelle() {
   const root = temp();
   const original = JSON.parse(readFileSync(".factory/projekt.json", "utf8")) as { agenten: Record<string, string> };
   const cfg = { ...original, agenten: { ...original.agenten, ...config.agenten } };
-  const pfade = ["AGENTS.md", "docs/codex/einstieg.md", "scripts/codex-hook.mjs", ...["factory-planer", "factory-umsetzer", "factory-lens", "factory-gruppe", "explore", "holdout-szenario", "holdout-abnahme"].map(n => `.claude/agents/${n}.md`)];
+  const pfade = ["AGENTS.md", "docs/codex/einstieg.md", ...["factory-planer", "factory-umsetzer", "factory-lens", "factory-gruppe", "explore", "holdout-szenario", "holdout-abnahme"].map(n => `.claude/agents/${n}.md`)];
   for (const p of pfade) { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), "Quelle"); }
   mkdirSync(join(root, ".factory")); writeFileSync(join(root, ".factory/projekt.json"), JSON.stringify(cfg));
   writeFileSync(join(root, ".mcp.json"), JSON.stringify(mcp)); return root;
@@ -28,11 +28,7 @@ function lauf(root: string, args: string[]) { const out: string[] = [], err: str
 
 test("Auth ist externer vollständiger Authorization-Header; keine Berechtigungsaufweichung", () => {
   const files = c.setupDateien(mcp, config, endpoint);
-  expect(Object.keys(files)).toHaveLength(10);
-  expect(files[".codex/hooks.json"]).toContain("PreToolUse");
-  expect(files[".codex/hooks.json"]).toContain("codex-hook.mjs");
-  expect(files[".codex/geschlossen.config.toml"]).toContain("shell_tool=false");
-  expect(files[".codex/geschlossen.config.toml"]).toContain('[windows]\nsandbox="unelevated"');
+  expect(Object.keys(files)).toHaveLength(8);
   expect(files[".codex/config.toml"]).toContain('env_http_headers = { Authorization = "LANGFUSE_MCP_AUTHORIZATION" }');
   expect(files[".codex/config.toml"]).not.toMatch(/bearer_token_env_var|permissions|secret|Basic /);
   expect(files[".codex/config.toml"]).toContain('command = "npx"');
@@ -88,7 +84,7 @@ test("separates Ausgabeziel: Vorschau schreibt nichts; Quellen bleiben im Quellr
   expect(lauf(root, [...args, "--write"]).code).toBe(1);
   expect(readFileSync(join(ziel, ".codex/config.toml"), "utf8")).toBe("Entwurf");
 });
-test.each([".mcp.json", ".factory/projekt.json", ".claude/agents/factory-planer.md", "AGENTS.md", "scripts/codex-hook.mjs"])("fehlende Quelle %s stoppt vor Ausgabe", p => {
+test.each([".mcp.json", ".factory/projekt.json", ".claude/agents/factory-planer.md", "AGENTS.md"])("fehlende Quelle %s stoppt vor Ausgabe", p => {
   const root = quelle(), ziel = join(temp(), "neu"); rmSync(join(root, p));
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"]).code).toBe(1);
   expect(existsSync(ziel)).toBe(false);
