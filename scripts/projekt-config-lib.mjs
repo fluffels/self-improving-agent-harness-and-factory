@@ -12,6 +12,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { arbeitsplatzMaengel, istRelativPosix } from "./arbeitsplatz-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { REPO_FORM, istRepoForm, spracheMaengel } from "./spezifikation-lib.mjs";
@@ -197,7 +198,7 @@ function pruefeStruktur(s) {
   const pfade = ["quelle", "moduldoku"].flatMap((k) => {
     if (k === "moduldoku" && s[k] === null) return [];
     if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRepoRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
+    return istRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
   });
   return [...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
 }
@@ -208,7 +209,7 @@ function pruefeEscapeKopien(liste) {
   if (!Array.isArray(liste)) return ["struktur.escapeKopien muss eine Liste repo-relativer Pfade sein"];
   const fehler = liste.flatMap((p, i) => {
     if (!istText(p)) return [`struktur.escapeKopien[${i}] muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRepoRelativPosix(p) ? [] : [`struktur.escapeKopien[${i}] muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(p)}`];
+    return istRelativPosix(p) ? [] : [`struktur.escapeKopien[${i}] muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(p)}`];
   });
   const doppelt = liste.filter((p, i) => istText(p) && liste.indexOf(p) !== i);
   return [...fehler, ...[...new Set(doppelt)].map((p) => `struktur.escapeKopien enthält ${p} doppelt`)];
@@ -224,12 +225,6 @@ export function escapeKopienAus(config) {
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}
 Fix: struktur.escapeKopien als Liste repo-relativer POSIX-Pfade eintragen`);
   return wert === undefined ? [] : [...wert];
-}
-
-/** Pur: ein repo-relativer POSIX-Pfad (`src`, `docs/module`): kein absoluter Pfad, kein Laufwerk, keine `.`/`..`-Segmente, kein Backslash, kein End- oder Doppel-Slash. */
-function istRepoRelativPosix(pfad) {
-  if (pfad.includes("\\") || pfad.includes(":")) return false;
-  return pfad.split("/").every((teil) => teil !== "" && teil !== "." && teil !== "..");
 }
 
 /** Pur: die Umschrift-Wortliste (`sprache.umschrift`) für den Umlaut-Wächter; wirft ohne nicht-leere Liste (kein stiller Deutsch-Standardwert, #1711). */
@@ -272,7 +267,7 @@ function pruefeAusnahmen(a) {
       const wo = `ausnahmen.${name}[${i}]`;
       if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { datei, grund } sein`);
       if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
-      else if (!istRepoRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
+      else if (!istRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
       else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
       else gesehen.add(e.datei);
       if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
@@ -512,6 +507,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
+  if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));
   return fehler;
 }
 
