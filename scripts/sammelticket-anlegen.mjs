@@ -158,12 +158,27 @@ export function legeAn({ repo, titel, body, harness }, api = ghJson) {
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 const einzelAbrufIn = (repo) => (nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]);
 
+/**
+ * Führt einen Lesezugriff auf das Ziel-Repo `repo` aus (#78 L14). Scheitert er, steht eine Zeile `✖ <Meldung>` (bei fehlenden Rechten `kein Lesezugriff auf <repo> …`,
+ * sonst der Fehlertext) auf stderr und das Skript endet mit Exit 1: nichts im eigenen Repo angelegt, kein Stacktrace. `naht` (Tests): `err`, `exit`.
+ */
+export function lesbarImZiel(repo, fn, { err = console.error, exit = process.exit } = {}) {
+  try {
+    return fn();
+  } catch (e) {
+    err(`✖ ${schreibrechtText(e, repo, "lesen") ?? fehlerText(e)}`);
+    return exit(1);
+  }
+}
+
 /** Dubletten-Check für das frisch angelegte Ticket `nr`: lädt die offenen Issues frisch, bestätigt das älteste Original per Direktabruf. */
 function pruefeDublette(nr, titel, vorgaenger, { repo, owner }) {
   const einzelAbruf = einzelAbrufIn(repo);
-  const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo)), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
-  const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, owner);
-  return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
+  return lesbarImZiel(repo, () => {
+    const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo)), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
+    const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, owner);
+    return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
+  });
 }
 
 /** Wertet `pruefeDublette` aus: schließt das eigene Ticket bei einer Dublette (`true`), warnt sonst. */
@@ -252,8 +267,10 @@ async function main(argv = process.argv.slice(2)) {
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const offene = normalizeOffene(loadOpenIssuePages(repo));
-  const vorhanden = waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbrufIn(repo), ziel.owner);
+  const vorhanden = lesbarImZiel(repo, () => {
+    const offene = normalizeOffene(loadOpenIssuePages(repo));
+    return waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbrufIn(repo), ziel.owner);
+  });
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;

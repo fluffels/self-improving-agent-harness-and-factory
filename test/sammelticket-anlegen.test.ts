@@ -429,3 +429,31 @@ describe("legeAn (#76): Anlegen im Ziel-Repo, klare Fehler statt Rückfall", () 
     expect(() => L(a, () => ({ number: 9, labels: [] }))).toThrow(/#9 in zz-org\/zz-ziel angelegt, aber ohne Label zz:harness[\s\S]*Fix:/);
   });
 });
+
+describe("lesbarImZiel (#78 L14): ein nicht lesbares Ziel-Repo ist eine Meldung mit Exit 1, kein Stacktrace", () => {
+  type Naht = { err: (t: string) => void; exit: (c: number) => never };
+  const lies = (raw as unknown as { lesbarImZiel: (repo: string, fn: () => unknown, naht: Naht) => unknown }).lesbarImZiel;
+  const naht = () => {
+    const meldungen: string[] = [];
+    const codes: number[] = [];
+    return { meldungen, codes, naht: { err: (t: string) => void meldungen.push(t), exit: (c: number) => { codes.push(c); throw new Error("exit"); } } as Naht };
+  };
+  test("404: klare Lese-Meldung mit Ziel-Repo, Exit 1", () => {
+    const n = naht();
+    expect(() => lies("zz-org/ziel", () => { throw Object.assign(new Error("Command failed"), { stderr: "gh: Not Found (HTTP 404)" }); }, n.naht)).toThrow("exit");
+    expect(n.codes).toEqual([1]);
+    expect(n.meldungen.join("")).toMatch(/^✖ kein Lesezugriff auf zz-org\/ziel/);
+    expect(n.meldungen.join("")).not.toMatch(/\n\s+at /);
+  });
+  test("anderer Fehler: Rohtext, ebenfalls Exit 1", () => {
+    const n = naht();
+    expect(() => lies("zz-org/ziel", () => { throw new Error("Command failed\ngh: HTTP 500 kaputt"); }, n.naht)).toThrow("exit");
+    expect(n.meldungen.join("")).toMatch(/HTTP 500/);
+    expect(n.meldungen.join("")).not.toMatch(/Lesezugriff/);
+  });
+  test("Gutfall: liefert das Ergebnis, keine Meldung", () => {
+    const n = naht();
+    expect(lies("zz-org/ziel", () => 42, n.naht)).toBe(42);
+    expect(n.meldungen).toEqual([]);
+  });
+});
