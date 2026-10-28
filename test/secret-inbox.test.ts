@@ -423,3 +423,33 @@ describe("main über Deps", () => {
     expect(await S.main([], { ...a.deps, ladeConfig: kaputt })).toBe(2);
   });
 });
+
+describe("main über Deps: bestehendes Secret-Ticket im Ziel-Repo", () => {
+  const ticket = { rohe: [{ number: 6, title: "🔒 Security: Secret rotieren/widerrufen", user: { login: "o" } }], offene: [{ number: 6, titel: "🔒 Security: Secret rotieren/widerrufen" }] };
+  const lauf = async (bericht: unknown[]) => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const gh = {
+      text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), args.includes("--slurp") ? "[[]]" : "https://github.com/o/ziel/issues/77\n"),
+      json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: S.issueBody(S.befundeAusGitleaks([gl()])) }),
+    };
+    const libs = { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "zt", ladeSammelKontext: () => ({ ...ticket }), vertrauteIssues: (r: { user: { login: string } }[]) => r.filter((i) => i.user.login === "o"), platziereOben: () => undefined };
+    const code = await S.main(["--bericht", "b.json"], { ladeConfig: () => ({ labels: { harness: "area:test" } }), ladeLibs: () => Promise.resolve(libs), lies: () => JSON.stringify(bericht), gh, log: () => {}, err: () => {} });
+    return { code, aufrufe: aufrufe.filter((a) => !a.args.includes("--slurp")) };
+  };
+  test("neuer Fund: Ticket lesen, aktualisieren und kommentieren im Ziel-Repo mit Ziel-Token", async () => {
+    const { code, aufrufe } = await lauf([gl(), gl({ Fingerprint: "neu:fp" })]);
+    expect(code).toBe(0);
+    const ziele = aufrufe.map((a) => a.args.join(" "));
+    expect(ziele.some((a) => a === "api repos/o/ziel/issues/6")).toBe(true);
+    expect(ziele.some((a) => a.startsWith("api -X PATCH repos/o/ziel/issues/6 "))).toBe(true);
+    expect(ziele.some((a) => a.startsWith("api repos/o/ziel/issues/6/comments "))).toBe(true);
+    for (const a of aufrufe.filter((x) => x.args.some((s) => s.includes("repos/o/ziel")))) expect(a.opt).toEqual({ token: "zt" });
+  });
+  test("keine Funde mehr: Schließen im Ziel-Repo", async () => {
+    const { code, aufrufe } = await lauf([]);
+    expect(code).toBe(0);
+    const zu = aufrufe.find((a) => a.args[1] === "close");
+    expect(zu?.args).toEqual(expect.arrayContaining(["6", "--repo", "o/ziel"]));
+    expect(zu?.opt).toEqual({ token: "zt" });
+  });
+});

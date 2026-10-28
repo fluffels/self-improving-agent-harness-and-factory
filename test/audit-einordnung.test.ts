@@ -187,3 +187,30 @@ describe("main: --dry-run über Deps (#1837)", () => {
     expect(log.join("\n")).not.toContain("[dry-run]");
   });
 });
+
+describe("main: Ziel-Repo der Alarm-Tickets", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const kritisch = { vulnerabilities: { braces: { severity: "critical", via: [{ url: `https://github.com/advisories/${G1}`, name: "braces", severity: "critical" }] } } };
+  test("ZIEL ≠ eigenes Repo: der Alarm entsteht im Ziel-Repo mit Ziel-Token und wird dort einsortiert", async () => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const platziert: unknown[][] = [];
+    const gh = { text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), "https://github.com/o/ziel/issues/77\n"), json: () => ({}) };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "o/ziel",
+      zielToken: () => "zt",
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+      offeneTitel: () => [],
+      platziereOben: (...a: unknown[]) => platziert.push(a),
+      postZeilen: () => undefined,
+      waehleSammelticket: (o: { number: number }[]) => o[0],
+    };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    expect(await main([], deps)).toBe(0);
+    const anlegen = aufrufe.find((a) => a.args[1] === "create");
+    expect(anlegen?.args[anlegen.args.indexOf("--repo") + 1]).toBe("o/ziel");
+    expect(anlegen?.opt).toEqual({ token: "zt" });
+    expect(platziert).toEqual([["77", "security", process.env.PROJECT_TOKEN, "o/ziel"]]);
+  });
+});

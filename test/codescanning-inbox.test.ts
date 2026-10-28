@@ -1096,3 +1096,41 @@ describe("Nachfolger vertraut geschlossener Alerts (#1952)", () => {
     });
   });
 });
+
+describe("main: Ziel-Repo des Spitzen-Tickets", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  test("ZIEL ≠ eigenes Repo: Anlegen und Einsortieren gehen ins Ziel-Repo, Alerts kommen aus dem eigenen", async () => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const platziert: unknown[][] = [];
+    const pfade: string[] = [];
+    const gh = { text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), "https://github.com/o/ziel/issues/77\n"), json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: "" }) };
+    const libs = {
+      OWNER: OWNER,
+      REPO: "o/r",
+      ZIEL: "o/ziel",
+      zielToken: () => "zt",
+      SAMMELTICKET_TITEL_LISTE: SAMMELTICKET_TITEL_LISTE as string[],
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5, titel: "Sammel" }], kommentare: [] }),
+      vertrauteIssues: () => [],
+      offeneTitel: () => [],
+      platziereOben: (...a: unknown[]) => platziert.push(a),
+      postZeilen: () => undefined,
+      waehleSammelticket: (o: { number: number }[]) => o[0],
+    };
+    const seiten = (pfad: string) => (pfade.push(pfad), pfad.includes("state=dismissed") ? [] : [roh()]);
+    const deps = { ladeConfig: () => ({ labels: { harness: "area:harness" } }), ladeLibs: () => Promise.resolve(libs), ladeSeiten: seiten, gh, log: () => {}, err: () => {} };
+    const alt = process.env.PROJECT_TOKEN;
+    process.env.PROJECT_TOKEN = "pt";
+    try {
+      expect(await main([], deps)).toBe(0);
+    } finally {
+      if (alt === undefined) delete process.env.PROJECT_TOKEN;
+      else process.env.PROJECT_TOKEN = alt;
+    }
+    const anlegen = aufrufe.find((a) => a.args[1] === "create");
+    expect(anlegen?.args[anlegen.args.indexOf("--repo") + 1]).toBe("o/ziel");
+    expect(anlegen?.opt).toEqual({ token: "zt" });
+    expect(platziert).toEqual([["77", "security", "pt", "o/ziel"]]);
+    expect(pfade.every((p) => p.startsWith("repos/o/r/code-scanning/"))).toBe(true);
+  });
+});

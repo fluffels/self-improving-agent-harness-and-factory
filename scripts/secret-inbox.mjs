@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeBoardLibs, zielZugang } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { ladeProjektConfig, labelAus } from "./projekt-config-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Secret rotieren/widerrufen";
@@ -275,9 +275,8 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
     log(`::error::Secret-Inbox: Projekt-Config nicht lesbar: ${fehlerText(e)}`);
     return AUFRUF_EXIT;
   }
-  const { OWNER, REPO, ladeSammelKontext, vertrauteIssues, platziereOben } = libs;
-  const { ziel, zielOpt } = zielZugang(libs);
-  const harnessLabel = labelAus(config, "harness");
+  const { REPO, ladeSammelKontext, vertrauteIssues } = libs;
+  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
   const io = {
     repo: REPO,
     ladeBericht: werte.bericht === undefined ? undefined : () => lies(werte.bericht),
@@ -291,27 +290,28 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
       }
     },
     ladeKontext: () => {
-      const { rohe, offene } = ladeSammelKontext({ ladeKommentare: () => [] });
-      const vertraut = new Set(vertrauteIssues(rohe, OWNER).map((i) => i.number));
+      const kontext = ladeSammelKontext({ ladeKommentare: () => [] });
+      const { rohe, offene } = kontext;
+      const vertraut = new Set(vertrauteIssues(rohe, vertrauterOwner(kontext, libs)).map((i) => i.number));
       const mit = (titel) => offene.filter((i) => i.titel === titel && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       const erstes = mit(ZIEL_TITEL)[0];
-      const offenesIssue = erstes ? { number: erstes.number, body: String(gh.json(["api", `repos/${ziel}/issues/${erstes.number}`], zielOpt).body ?? "") } : null;
+      const offenesIssue = erstes ? { number: erstes.number, body: aktion.holeBody(erstes.number) } : null;
       return { offenesIssue, checkIssues: mit(CHECK_TITEL).map((i) => ({ number: i.number })) };
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,
-    legeIssueAn: (titel, body) => gh.text(["issue", "create", "--repo", ziel, "--title", titel, "--label", harnessLabel, "--body", body], zielOpt).trim().split("/").pop(),
+    legeIssueAn: aktion.legeIssueAn,
     sortiereEin: (nr, art) => {
       try {
-        platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
+        aktion.platziere(nr, art);
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, body) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `body=${body}`], zielOpt),
-    kommentiere: (nr, text) => gh.text(["api", `repos/${ziel}/issues/${nr}/comments`, "-f", `body=${text}`], zielOpt),
-    schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
+    aktualisiere: aktion.aktualisiere,
+    kommentiere: aktion.kommentiere,
+    schliesse: aktion.schliesse,
   };
   return lauf({ io, trocken: werte["dry-run"] === true });
 }

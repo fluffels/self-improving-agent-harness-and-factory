@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fehlerText, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart, zielZugang } from "./inbox-start-lib.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
+import { ladeBoardLibs, inboxStart, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -180,14 +180,13 @@ function trockenLauf(aktionen, log) {
 }
 
 /** Legt je Alarm ein Ticket an und platziert es oben. Rückgabe: true, wenn mindestens einer scheiterte. */
-function legeAlarmeAn(alarme, { REPO, ziel, zielOpt, platziereOben, log }) {
+function legeAlarmeAn(alarme, { aktion, log }) {
   let rot = false;
   for (const a of alarme) {
     try {
-      const url = ghText(["issue", "create", "--repo", ziel, "--title", a.titel, "--body", a.body], zielOpt).trim();
-      const nr = url.split("/").pop();
+      const nr = aktion.legeIssueAn(a.titel, a.body);
       log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
-      platziereOben(nr, "security", process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
+      aktion.platziere(nr, "security");
     } catch (fehl) {
       log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(fehl)}`);
       rot = true;
@@ -208,15 +207,16 @@ function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log 
   return true;
 }
 
-/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
-  const { OWNER, REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
-  const { ziel, zielOpt } = zielZugang(libs);
-  const { rohe, offene, kommentare } = ladeSammelKontext();
-  const bekannt = ladeBekannte({ kommentare, rohe, OWNER, offeneTitel });
+  const { REPO, ladeSammelKontext, offeneTitel, postZeilen, waehleSammelticket } = libs;
+  const aktion = zielAktionen({ gh, libs });
+  const kontext = ladeSammelKontext();
+  const { rohe, offene, kommentare } = kontext;
+  const bekannt = ladeBekannte({ kommentare, rohe, OWNER: vertrauterOwner(kontext, libs), offeneTitel });
   const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
   const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(alertsLaden(REPO))], bekannt });
   if (aktionen.length === 0) {
@@ -227,7 +227,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const zeilen = aktionen.filter((a) => a.art === "zeile");
   const alarme = aktionen.filter((a) => a.art === "alarm");
   if (trocken) return trockenLauf(aktionen, log);
-  const alarmRot = legeAlarmeAn(alarme, { REPO, ziel, zielOpt, platziereOben, log });
+  const alarmRot = legeAlarmeAn(alarme, { aktion, log });
   const zeilenRot = zeilen.length > 0 && !postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log });
   return alarmRot || zeilenRot ? 1 : 0;
 }

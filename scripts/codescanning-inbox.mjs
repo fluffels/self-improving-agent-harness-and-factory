@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart, zielZugang } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
@@ -469,14 +469,13 @@ function gemerkt(lade) {
   };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `ladeDatei(pfad, commit)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, ladeDatei, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `ladeDatei(pfad, commit)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, ladeDatei, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, ladeConfig, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
-  const harnessLabel = labelAus(config, "harness");
-  const { OWNER, REPO, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
-  const { ziel, zielOpt } = zielZugang(libs);
+  const { REPO, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
+  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
   let offene = [];
   const io = {
     repo: REPO,
@@ -486,28 +485,29 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
     ladeKontext: () => {
       const kontext = ladeSammelKontext();
       const { rohe, kommentare } = kontext;
+      const owner = vertrauterOwner(kontext, libs);
       offene = kontext.offene;
-      const vertraut = new Set(vertrauteIssues(rohe, OWNER).map((i) => i.number));
-      // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
+      const vertraut = new Set(vertrauteIssues(rohe, owner).map((i) => i.number));
+      // Das Spitzen-Ticket legt ein vertrauter Account an (github-actions[bot] bzw. der Token-Inhaber, Owner des Ziel-Repos); ein gleichnamiges Ticket eines Fremden zählt nicht.
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
-      const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${ziel}/issues/${ziele[0].number}`], zielOpt).body ?? "") } : null;
-      return kontextAus({ libs, rohe, kommentare, owner: OWNER, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
+      const offenesIssue = ziele[0] ? { number: ziele[0].number, body: aktion.holeBody(ziele[0].number) } : null;
+      return kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,
-    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", ziel, "--title", titel, "--label", harnessLabel, "--body", body], zielOpt).trim().split("/").pop(),
+    legeIssueAn: aktion.legeIssueAn,
     sortiereEin: (nr) => {
       try {
-        platziereOben(nr, "security", process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
+        aktion.platziere(nr, "security");
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `body=${body}`], zielOpt),
+    aktualisiere: aktion.aktualisiere,
     kommentiere: postZeilen,
-    schliesse: (nr, kommentar = KOMMENTAR_LEER) => ghText(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
+    schliesse: (nr, kommentar = KOMMENTAR_LEER) => aktion.schliesse(nr, kommentar),
     zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
     postZeilen,
   };
