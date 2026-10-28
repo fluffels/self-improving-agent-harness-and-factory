@@ -130,6 +130,7 @@ describe("OS-Port des Originaladapters", () => {
         return child;
       },
     }));
+    // @ts-expect-error: Node-Skript ohne Declaration.
     adapter = await import("../../scripts/codex-prozess-windows.mjs") as PortableModule;
   });
   afterEach(() => { vi.doUnmock("node:child_process"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
