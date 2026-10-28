@@ -1,7 +1,7 @@
 /* @harness-waechter: strikte Codex-Abbildung gemeinsamer Guards (#84). */
-import { expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 // @ts-expect-error: Node-Skripte ohne Declaration.
@@ -14,6 +14,25 @@ const config = JSON.parse(readFileSync(".factory/projekt.json", "utf8")) as { ag
 const root = process.cwd();
 const holdoutKopf = ["SZENARIEN", "#99"].join(" ");
 const pruefe = (tool_name: string, tool_input: unknown, extra = {}) => c.pruefeHook(JSON.stringify({ cwd: root, tool_name, tool_input, ...extra }), root, config);
+describe("Git-Kontext je Codex-Guardauswertung", () => {
+  afterEach(() => { vi.doUnmock("node:child_process"); vi.resetModules(); });
+  test.each(["bash", "powershell"].flatMap(shell => [{ shell, suffix: "" }, { shell, suffix: sep }]))("$shell teilt nur innerhalb einer Auswertung denselben Kontextcache (Root-Ende '$suffix')", async ({ shell, suffix }) => {
+    const lookup = vi.fn((...args: Parameters<typeof execFileSync>) => execFileSync(...args));
+    vi.doMock("node:child_process", async () => ({ ...await vi.importActual<typeof import("node:child_process")>("node:child_process"), execFileSync: lookup }));
+    vi.resetModules();
+    // @ts-expect-error: Node-Skript ohne Declaration.
+    const actual = await import("../../scripts/codex-hook-lib.mjs") as { bewerteAktion: (a: unknown, r: string, cfg: unknown) => { entscheidung: string } };
+    for (const cwd of [root, resolve(root, "test")]) {
+      lookup.mockClear();
+      const action = { cwd, tool_name: "exec_command", tool_input: { cmd: "git commit -m fixture", shell } };
+      expect(actual.bewerteAktion(action, root + suffix, config).entscheidung).toBe("allow");
+      const contexts = () => lookup.mock.calls.filter(call => call[1]?.[0] === "rev-parse").map(call => (call[2] as { cwd: string }).cwd);
+      expect(contexts()).toEqual(cwd === root ? [root] : [root, cwd]);
+      expect(actual.bewerteAktion(action, root + suffix, config).entscheidung).toBe("allow");
+      expect(contexts()).toEqual(cwd === root ? [root, root] : [root, cwd, root, cwd]);
+    }
+  });
+});
 test.each(["", "{", "null", "[]", '{"cwd":"relative","tool_input":{}}', '{"cwd":"/tmp","tool_name":"x","tool_input":null}'])("kaputte Payload stoppt: %s", s => {
   expect(c.pruefeHook(s, root, config).entscheidung).toBe("deny");
 });

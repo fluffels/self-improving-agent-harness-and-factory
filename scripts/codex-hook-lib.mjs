@@ -1,5 +1,5 @@
 // Strikter Codex-Adapter; gemeinsame pure Guards, kein fail-open Dispatcher.
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { decide, resolveGitContext } from "./worktree-guard-hook.mjs";
 import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
@@ -19,11 +19,14 @@ function shellEntscheidung(a, root) {
   const i = a.tool_input;
   if (!text(i.cmd) || !["bash", "powershell"].includes(i.shell)) throw new Error("Bekannte Shell und cmd erforderlich");
   if (Object.keys(i).some(k => !["cmd", "shell"].includes(k))) throw new Error("Unbekannter Shell-Wrapper/Parameter");
-  if (!resolveGitContext(a.cwd, root).relevant) throw new Error("cwd ist kein Checkout dieses Repos");
+  root = resolve(root);
+  const deps = { kontextCache: new Map() };
+  const kontext = dir => resolveGitContext(resolve(dir), root, deps);
+  if (!kontext(a.cwd).relevant) throw new Error("cwd ist kein Checkout dieses Repos");
   // Die zusätzlichen ask-Regeln der Claude-Settings gelten nicht nativ für Codex.
   // Bis zu deren vollständiger Abbildung bleibt der GitHub-CLI-Pfad ganz geschlossen.
   if (/\bgh(?:\.exe)?\b/i.test(i.cmd)) throw new Error("GitHub-CLI benötigt zusätzliches kontrolliertes Freigabeprofil");
-  const args = { command: i.cmd, cwd: a.cwd, repoRoot: root };
+  const args = { command: i.cmd, cwd: a.cwd, repoRoot: root, deps: { ...deps, kontext } };
   return [i.shell === "bash" ? decide(args) : bewertePowerShell(args), bewerteGh(i.cmd, { shell: i.shell }), bewerteStdinSkript(i.cmd)];
 }
 function agentEntscheidung(a, config) {
