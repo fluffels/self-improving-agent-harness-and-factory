@@ -222,9 +222,10 @@ describe("main: Ziel-Repo des Labels (#78 L12b)", () => {
   });
   test("Ziel-Repo gleich dem eigenen: kein Token-Wechsel (Standard-GH_TOKEN), Einsortieren im eigenen Repo", async () => {
     vi.stubEnv("PROJECT_TOKEN", "pt");
-    const { platziert, angelegt, deps } = aufbau();
+    const { platziert, angelegt, geladen, deps } = aufbau();
     expect(await main([], { ...deps, ladeConfig: () => FREMD })).toBe(0);
     expect(angelegt).toEqual([[FREMD.labels.harness, FREMD.repo, undefined]]);
+    expect(geladen.find((g) => g[0] === FREMD.repo)?.[1], "auch der Ticket-Abruf im eigenen Repo nutzt den Standard-Token").toBeUndefined();
     expect(platziert).toEqual([[7, "wiedervorlage", "pt", FREMD.repo]]);
   });
 });

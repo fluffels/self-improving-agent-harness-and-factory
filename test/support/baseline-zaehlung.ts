@@ -31,19 +31,8 @@ export interface VergleichsTexte {
   verwaist: (einheit: string, begriffe: Zaehlung) => string[];
 }
 
-/** Meldungen der Kern-Reinheit. */
-export const KERN_TEXTE: VergleichsTexte = {
-  neu: (einheit, begriff, n) => `${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei${hinweis(begriff)}`,
-  ueber: (einheit, begriff, n, bn) => `${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))${hinweis(begriff)}`,
-  unter: (einheit, begriff, n, bn) => (n === 0 ? `${einheit}: '${begriff}' kommt nicht mehr vor, Baseline-Eintrag entfernen` : `${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`),
-  verwaist: (einheit) => [`${einheit}: Baseline-Eintrag ohne Literale oder ohne Einheit, Eintrag entfernen`],
-};
-
-/** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
-const hinweis = (begriff: string): string => (begriff === "Env" ? " (Kern-Umgebungsvariablen heißen FACTORY_<NAME> und werden über umgebungsWert gelesen)" : "");
-
-/** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend. Erst die Einheiten der Zählung, danach Baseline-Einheiten ohne Zählung. */
-export function vergleiche(ist: Baseline, baseline: Baseline, texte: VergleichsTexte = KERN_TEXTE): string[] {
+/** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend. Erst die Einheiten der Zählung, danach Baseline-Einheiten ohne Zählung. Die Texte bringt der Wächter mit (kein Standard). */
+export function vergleiche(ist: Baseline, baseline: Baseline, texte: VergleichsTexte): string[] {
   const out: string[] = [];
   for (const [einheit, z] of Object.entries(ist)) {
     const b = baseline[einheit] ?? {};

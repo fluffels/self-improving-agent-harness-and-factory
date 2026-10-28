@@ -49,6 +49,7 @@ const auditDocDrift: () => {
   deadLinks: { file: string; target: string; resolved: string }[];
   deadAnchors: { file: string; target: string; resolved: string; anchor: string }[];
   verifyChainViolations: { file: string; chain: string[]; missing: string[] }[];
+  testPfadFehler: unknown[];
 } = checkDocDrift.auditDocDrift;
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
@@ -117,6 +118,10 @@ describe("Harness-Doku-Drift (#529)", () => {
       [],
       "Diese Dateien dokumentieren eine unvollständige verify-Kette – an package.json angleichen.",
     );
+  });
+
+  test("keine toten Test-Pfade in der Doku (#97)", () => {
+    assert.deepEqual(audit.testPfadFehler, []);
   });
 
   // ── Red-Green: die Mechanik greift wirklich (ein immer-grüner Wächter wäre wertlos) ──
@@ -523,5 +528,80 @@ describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
   test("vorhandener Zeiger ist grün, fehlender Ordner wird übersprungen", () => {
     assert.deepEqual(fixture("# ADR 0001: X\n[F](fortschreibungen/0001-5-thema.md)\n"), []);
     assert.deepEqual(fixture("# ADR 0001: X\n", false), []);
+  });
+});
+
+// adr.ordner aus der Config (#97 L2(c)): ein Projekt mit anderem ADR-Ordner bekommt dieselbe Prüfung.
+describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (#97)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { fortschreibungsFehler: string[] } }).auditDocDrift;
+  test("abweichender adr.ordner: fehlender Zeiger ist rot", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-adrordner-"));
+    try {
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        "scripts/docs-gen/config.json": JSON.stringify({ adr: { ordner: "doku/entscheidungen" } }),
+        "doku/entscheidungen/0001-x.md": "# ADR 0001: X\n",
+        "doku/entscheidungen/fortschreibungen/0001-5-thema.md": "# Fortschreibung #5 (2026-10-01): Thema\n",
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      const f = auditIn(dir).fortschreibungsFehler;
+      assert.equal(f.length, 1);
+      assert.match(f[0], /Zeiger "fortschreibungen\/0001-5-thema\.md"/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Tote Test-Pfade in der Doku (#97 L4): Backtick-Token `test/…` muss existieren.
+describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { testPfadFehler: { file: string; pfad: string }[] } }).auditDocDrift;
+  const fixture = (dateien: Record<string, string>): { file: string; pfad: string }[] => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-testpfade-"));
+    try {
+      const alle = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n", "test/da.test.ts": "", ...dateien };
+      for (const [f, text] of Object.entries(alle)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      return auditIn(dir).testPfadFehler;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test("fehlender Test-Pfad ist rot, vorhandener Pfad und Ordner sind grün", () => {
+    const f = fixture({ "docs/a.md": "# A\nSiehe `test/weg.test.ts` und `test/da.test.ts` und `test/`.\n" });
+    assert.deepEqual(f, [{ file: "docs/a.md", pfad: "test/weg.test.ts" }]);
+  });
+
+  test("ADR und Dateien mit Datum im Namen sind ausgenommen", () => {
+    assert.deepEqual(fixture({ "docs/adr/0001-x.md": "`test/weg.test.ts`\n", "docs/notiz-2026-01-02.md": "`test/weg.test.ts`\n" }), []);
+  });
+
+  test("ADR-Ordner aus der Config: ein ADR dort ist ausgenommen, ein Pfad in einer anderen Doku-Datei bleibt rot", () => {
+    const cfg = JSON.stringify({ adr: { ordner: "doku/entscheidungen" } });
+    assert.deepEqual(fixture({ "scripts/docs-gen/config.json": cfg, "doku/entscheidungen/0001-x.md": "`test/weg.test.ts`\n" }), []);
+    assert.equal(fixture({ "scripts/docs-gen/config.json": cfg, "docs/adr/0001-x.md": "`test/weg.test.ts`\n" }).length, 1);
+  });
+
+  test("ohne gültigen adr.ordner (leer, kein String, kein adr-Block) gilt docs/adr", () => {
+    for (const cfg of [{ adr: { ordner: "" } }, { adr: { ordner: 5 } }, { adr: "x" }, {}]) {
+      assert.deepEqual(fixture({ "scripts/docs-gen/config.json": JSON.stringify(cfg), "docs/adr/0001-x.md": "`test/weg.test.ts`\n" }), [], JSON.stringify(cfg));
+    }
+  });
+
+  test("kaputte Config (null, kein JSON): klare Meldung statt TypeError", () => {
+    assert.throws(() => fixture({ "scripts/docs-gen/config.json": "null" }), /kein JSON-Objekt/);
+    assert.throws(() => fixture({ "scripts/docs-gen/config.json": "{kaputt" }), /kein gültiges JSON/);
+  });
+
+  test("Platzhalter werden übersprungen, Suffix #/: abgeschnitten", () => {
+    assert.deepEqual(fixture({ "docs/a.md": "`test/<name>.test.ts` `test/*.test.ts` `test/{a,b}.ts` `test/da.test.ts#L5` `test/da.test.ts:12`\n" }), []);
+    assert.equal(fixture({ "docs/a.md": "`test/weg.test.ts:12`\n" }).length, 1);
   });
 });

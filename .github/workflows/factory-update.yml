@@ -31,6 +31,8 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      # labels.dependabotInbox (nicht labels.harness) ist das Inbox-Label: das Issue entsteht im eigenen Repo, ein Bezieher setzt
+      # labels.harness evtl. auf ein fremdes Board; pruefeInboxZiel (projekt-config-lib.mjs) sichert, dass es nicht dorthin führt.
       - name: Label der Meldung aus der Projekt-Config lesen
         id: label
         run: |

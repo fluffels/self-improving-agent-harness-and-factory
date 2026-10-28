@@ -29,6 +29,7 @@ interface Doctor {
   TODO_OPTION_NAME: string;
   WOCHENLAUF_PFAD: string;
   WOCHENLAUF_WORKFLOW: string;
+  ohneActionPins(text: string): string;
 }
 const doctor = rawDoctor as unknown as Doctor;
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -136,7 +137,33 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
     for (const o of funde) assert.equal(o, doctor.TODO_OPTION_NAME);
   });
 
-  test("die Vorlage der Wochenlauf-Datei ist die Datei im Repo (#1800)", () => {
-    assert.equal(lies(doctor.WOCHENLAUF_PFAD).replace(/\r\n/g, "\n"), doctor.WOCHENLAUF_WORKFLOW);
+  test("die Vorlage der Wochenlauf-Datei ist die Datei im Repo (#1800), Action-Pins (SHA und Versionskommentar) ausgenommen", () => {
+    assert.equal(doctor.ohneActionPins(lies(doctor.WOCHENLAUF_PFAD).replace(/\r\n/g, "\n")), doctor.ohneActionPins(doctor.WOCHENLAUF_WORKFLOW));
+  });
+
+  describe("ohneActionPins", () => {
+    const SHA_A = "a".repeat(40);
+    const SHA_B = "b".repeat(40);
+    const schritt = (sha: string, kommentar: string): string => `steps:\n  - uses: actions/checkout@${sha}${kommentar}\n  - run: echo hi\n`;
+
+    test("ein anderer SHA und ein anderer Versionskommentar sind gleich, der Rest des Texts bleibt", () => {
+      assert.equal(doctor.ohneActionPins(schritt(SHA_A, " # v1.0.0")), doctor.ohneActionPins(schritt(SHA_B, " # v2.3.4")));
+      assert.equal(doctor.ohneActionPins(schritt(SHA_A, "")), "steps:\n  - uses: actions/checkout@<pin>\n  - run: echo hi\n");
+    });
+
+    test("eine andere Action, ein anderer Schritt und ein fehlender Pin (Tag statt SHA) bleiben ein Unterschied", () => {
+      const basis = doctor.ohneActionPins(schritt(SHA_A, " # v1"));
+      assert.notEqual(doctor.ohneActionPins(schritt(SHA_A, " # v1").replace("checkout", "setup-node")), basis);
+      assert.notEqual(doctor.ohneActionPins(schritt(SHA_A, " # v1").replace("echo hi", "echo ho")), basis);
+      assert.notEqual(doctor.ohneActionPins("steps:\n  - uses: actions/checkout@v4 # v1\n  - run: echo hi\n"), basis);
+      assert.notEqual(doctor.ohneActionPins(schritt(SHA_A.slice(1), " # v1")), basis, "ein zu kurzer SHA ist kein Pin");
+    });
+
+    test("nur SHA und Versionskommentar werden neutralisiert: ein Kommentar in der Zeile davor und ein 41-stelliger Hex nicht", () => {
+      assert.equal(doctor.ohneActionPins(`# eigener Kommentar\n  - uses: x/y@${SHA_A} # v1\n# danach\n`), "# eigener Kommentar\n  - uses: x/y@<pin>\n# danach\n");
+      assert.equal(doctor.ohneActionPins(`  - uses: x/y@${SHA_A}a # v1\n`), `  - uses: x/y@${SHA_A}a # v1\n`);
+      const kein = `  - uses: x/y@${"g".repeat(40)} # v1\n`;
+      assert.equal(doctor.ohneActionPins(kein), kein, "40 Zeichen, die kein Hex sind, sind kein Pin");
+    });
   });
 });

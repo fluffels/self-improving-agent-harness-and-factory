@@ -104,7 +104,7 @@ export const abs = (c, base, p) => c.P.resolve(base, fromMsysPath(p, c.platform)
 /**
  * Liegt der statisch aufgelöste Pfad `p` nachweislich außerhalb des Session-Repos (`deps.repoRoot`, vom Entscheider gesetzt; fehlt er, gilt nichts als
  * außerhalb)? Ein dort nicht existierendes Ziel kann weder Haupt-Checkout noch dessen Linked Worktree sein (#78 L1a): `git init <tmp> && git -C <tmp> commit`
- * ist dann kein geschützter Ort. Lexikalisch (Symlinks nicht aufgelöst).
+ * ist dann kein geschützter Ort. Rein lexikalisch (Symlinks/Junctions nicht aufgelöst): ein verlinkter Worktree außerhalb des Repo-Ordners zählt als außerhalb.
  */
 export function ausserhalbRepo(c, p) {
   const root = c.deps.repoRoot;

@@ -491,7 +491,7 @@ export function fremdStatusLader({ holeIssue = (repo, nr) => ghJson(["api", `rep
 
 /** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
 function ladeBelegung(messfenster) {
-  const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
+  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
   try {
     git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
   } catch {

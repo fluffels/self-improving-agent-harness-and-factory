@@ -682,3 +682,56 @@ describe("quotenQuellen und holeQuotenCommits (#78)", () => {
     expect(lib.zaehleTaktMerges([k, c("docs: s (#100)")], null, new Set([100]))).toBe(1);
   });
 });
+
+describe("Lesefehler und env im Takt (#97 L7 c, L11 b/d)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const PRODUKT = "zz-org/zz-produkt";
+  const jetzt = new Date("2026-10-08T12:00:00Z");
+  const fremdFactory = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const zweiRepos = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "produkt" ? { ...b, repo: PRODUKT } : b)) };
+  const fehler404 = () => Object.assign(new Error("Command failed"), { stderr: "gh: Not Found (HTTP 404)" });
+  const bauen = (offen: () => unknown[], extra: Partial<Io> & { env?: Record<string, string> } = {}) => {
+    const log: string[] = [];
+    const io = {
+      ghJson: () => [[]],
+      loadItems: () => [],
+      loadOpenIssuePages: offen,
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: () => true,
+      itemsUeberIssues: (_r: string, n: number[]) => n.map(() => null),
+      log: (z: string) => log.push(z),
+      ...extra,
+    } as Io;
+    return { io, log };
+  };
+  test("nurWaechter: ein Lesefehler (404) wird eine Zeile mit dem Weg zur Abhilfe und ein Fehler-Exit, kein Absturz", () => {
+    const { io, log } = bauen(() => { throw fehler404(); });
+    const r = T.fuehreTaktAus({ config: fremdFactory, repo: FREMD.repo, jetzt, token: "t", io });
+    expect(r.fehler).toBe(true);
+    expect(log.join("\n")).toContain(`kein Lesezugriff auf ${FREMD.repo}`);
+    expect(log.join("\n")).toContain("PROJECT_TOKEN");
+  });
+  test("Vollweg: ein Lesefehler wird ebenso gemeldet; ein anderer Fehler zeigt den Rohtext", () => {
+    const a = bauen(() => { throw fehler404(); });
+    expect(T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt, token: "t", io: a.io }).fehler).toBe(true);
+    expect(a.log.join("\n")).toContain(`kein Lesezugriff auf ${FREMD.repo}`);
+    const b = bauen(() => { throw new Error("HTTP 500 kaputt"); });
+    expect(T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt, token: "t", io: b.io }).fehler).toBe(true);
+    expect(b.log.join("\n")).toContain("HTTP 500 kaputt");
+    expect(b.log.join("\n")).not.toContain("Lesezugriff");
+  });
+  test("die Commits liest je Repo der Token aus io.env (nicht aus der Prozess-Umgebung): fremdes Repo PROJECT_TOKEN, eigenes der Standard", () => {
+    const tokens: Record<string, string | undefined> = {};
+    const { io } = bauen(() => [[]], {
+      env: { PROJECT_TOKEN: "pt" },
+      ghJson: (a: string[], o?: { token?: string }) => {
+        const m = /repos[/]([^/]+[/][^/]+)[/]commits/.exec(a.join(" "));
+        if (m) tokens[m[1]] = o?.token;
+        return [[]];
+      },
+    });
+    T.fuehreTaktAus({ config: zweiRepos, repo: FREMD.repo, jetzt, token: "t", io });
+    expect(tokens).toEqual({ [FREMD.repo]: undefined, [PRODUKT]: "pt" });
+  });
+});

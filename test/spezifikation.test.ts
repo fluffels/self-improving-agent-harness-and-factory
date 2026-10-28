@@ -3,6 +3,10 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as boardLibRaw from "../scripts/board-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as specLibRaw from "../scripts/spezifikation-lib.mjs";
 import { echteSprache } from "./support/echte-sprache";
 import { FREMD, projektConfig, FREMD_OWNER } from "./support/fremd-config";
 
@@ -21,6 +25,7 @@ type Io = {
   ladeIssue: (nr: number) => Issue;
   bearbeite: (nr: number, body: string) => void;
 };
+const EIGENES = (boardLibRaw as unknown as { REPO: string }).REPO;
 const S = raw as unknown as { fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; aufrufPruefen: (argv: string[]) => { fehler?: string; befehl?: string; werte?: Record<string, unknown>; positional?: string[] } };
 
 const GUT = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n- Negativfall: ohne Spezifikation wird nichts angelegt.\n";
@@ -661,6 +666,14 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: "zz-org/ziel" });
     expect(gh[0]?.[3]).toBe("repos/zz-org/ziel/issues");
   });
+  test("erzeuge (#97 L7 b): ein fremdes Ziel-Repo schreibt mit PROJECT_TOKEN, das eigene mit dem Standard", () => {
+    const opts: unknown[] = [];
+    const io = E.echteIo(config, { ghJson: (_a: string[], o: unknown) => (opts.push(o), { number: 1 }), env: { PROJECT_TOKEN: "pt" } });
+    io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: "zz-org/ziel" });
+    io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: EIGENES });
+    io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: EIGENES.toUpperCase() });
+    expect(opts).toEqual([{ token: "pt" }, { token: undefined }, { token: undefined }]);
+  });
   test("einsortiere startet board-place mit --repo <repo> (nach und notfall)", () => {
     const { io, exec } = bau();
     io.einsortiere({ nr: 9, nach: 4, notfall: null, repo: "zz-org/ziel" });
@@ -680,5 +693,23 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
   });
   test("sammelRepo ist das Ziel-Repo der Harness-Befunde (für die Rechte-Meldung)", () => {
     expect(bau().io.sammelRepo).toMatch(/^[^/]+\/[^/]+$/);
+  });
+});
+
+describe("Repo-Form und Blocker-Zeile (#97 L11 f)", () => {
+  const L = {
+    ...(raw as unknown as { mitBlockerZeile: (body: string, nummern: unknown[], sprache: { blocker: string }) => string }),
+    ...(specLibRaw as unknown as { blockerVerweisText: (b: unknown) => string }),
+  };
+  const SPR = echteSprache().spezifikation as { blocker: string };
+  test("mitBlockerZeile: owner/name ohne Groß/Klein verglichen, der Verweis steht nur einmal", () => {
+    const body = "Text\n\nblockiert durch Acme/Demo#13\n";
+    expect(L.mitBlockerZeile(body, [{ repo: "acme/demo", nummer: 13 }], SPR)).toBe(body);
+    expect(L.mitBlockerZeile(body, [{ repo: "acme/demo", nummer: 14 }], SPR)).toContain("acme/demo#14");
+  });
+  test("blockerVerweisText nutzt die gemeinsame Repo-Form (istRepoForm): ohne owner/name wirft er", () => {
+    expect(L.blockerVerweisText({ repo: "acme/demo", nummer: 1 })).toBe("acme/demo#1");
+    for (const bad of ["acme", "a/b/c", "", "a b/c"]) expect(() => L.blockerVerweisText({ repo: bad, nummer: 1 }), bad).toThrow(/owner\/name/);
+    expect(() => L.blockerVerweisText({ nummer: 1 })).toThrow(/owner\/name/);
   });
 });

@@ -30,8 +30,8 @@ import { ZIEL, ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
-import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
-import { fehlendeLabels, fehlerText, ghJson, schreibrechtText } from "./gh-cli.mjs";
+import { configAusAufruf, istRepoForm, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
@@ -59,11 +59,11 @@ const BEFEHLE = {
 
 /** `--blocker`-Wert: `<nr>`/`#<nr>` → Nummer, `owner/name#<nr>` → `{ repo, nummer }`, sonst `null`. */
 const blockerArg = (t) => {
-  const q = /^([\w.-]+\/[\w.-]+)#([1-9][0-9]*)$/.exec(String(t ?? ""));
-  return q ? { repo: q[1], nummer: Number(q[2]) } : positiveZahl(t);
+  const q = /^([^#]+)#([1-9][0-9]*)$/.exec(String(t ?? ""));
+  return q && istRepoForm(q[1]) ? { repo: q[1], nummer: Number(q[2]) } : positiveZahl(t);
 };
 
-const positiveZahl =(t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
+const positiveZahl = (t) => (/^#?([1-9][0-9]*)$/.exec(String(t ?? "")) ? Number(String(t).replace("#", "")) : null);
 
 /**
  * Prüft den Aufruf vor jedem I/O (`befehlLesen`): Unterbefehl, dann die Flag-Menge dieses Unterbefehls (`--blocker` nur mit Ticketnummer oder `owner/name#<nr>`, Liste in `werte.blocker`); `reparieren` nimmt genau ein
@@ -155,7 +155,7 @@ function erzeugeImZiel(werte, body, repo, io) {
 
 /** Hängt die Blocker-Zeile (`<blocker> #a, #b`) mit den Nummern an, die der Body noch nicht als Blocker nennt; nichts Fehlendes: der Body bleibt unverändert. Pur. */
 export function mitBlockerZeile(body, nummern, sprache) {
-  const schluessel = (b) => (typeof b === "number" ? `#${b}` : `${b.repo}#${b.nummer}`);
+  const schluessel = (b) => (typeof b === "number" ? `#${b}` : `${b.repo.toLowerCase()}#${b.nummer}`); // owner/name ohne Groß/Klein (GitHub), sonst käme eine Blocker-Zeile doppelt
   const da = new Set(blockerVerweise(body, sprache).map((v) => schluessel(v.repo === null ? v.nummer : v)));
   const fehlt = nummern.filter((n) => !da.has(schluessel(n)));
   return fehlt.length === 0 ? body : `${body.replace(/\s+$/, "")}\n\n${blockerZeile(fehlt, sprache)}\n`;
@@ -265,15 +265,15 @@ export function ankerPruefung({ nach, labels, repo }, lade, config) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-/** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`). */
-export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems } = {}) => {
+/** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`). */
+export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env } = {}) => {
   return {
     owner: OWNER,
     config,
     sammelRepo: ZIEL,
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
     erzeuge: ({ titel, body, labels, repo }) =>
-      gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])]),
+      gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
     pruefeAnker: (a) => ankerPruefung(a, (rolle, repo) => lade(boardFuerRolle(rolle), { repo }), config),
     einsortiere: ({ nr, nach, notfall, repo }) => {
       const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];

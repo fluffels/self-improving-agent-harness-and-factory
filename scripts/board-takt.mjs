@@ -18,7 +18,7 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { fehlerMeldung, fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
+import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { gleichesRepo, labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
 import {
   REPO,
@@ -52,7 +52,7 @@ import {
 import { aufnahmePlan } from "./board-plan-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
-import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, holeQuotenCommits, istHarnessCommit, quotenQuellen, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
+import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
 
 // Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
@@ -269,7 +269,22 @@ function nurWaechter({ repo, dry, token, config, io, fuehrt }) {
   io.log(`Factory-Teil übersprungen: Factory-Board führt ${fuehrt}, der Takt dort pflegt Status- und Sammelticket`);
   if (!token) return { fehler: false };
   const listen = { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) };
-  return { fehler: nimmFehlendeAuf({ offene: normalizeOffene(io.loadOpenIssuePages(repo)), listen, token, dry, repo, config }, io).fehler };
+  const gelesen = leseOffene(io, repo);
+  if (gelesen.fehler) return { fehler: true };
+  return { fehler: nimmFehlendeAuf({ offene: gelesen.offene, listen, token, dry, repo, config }, io).fehler };
+}
+
+/**
+ * Die offenen Issues des Repos `repo` (#97): ein Lesefehler (etwa ein Fremd-Repo ohne Lesezugriff des Tokens) wird als Zeile mit dem Weg zur Abhilfe
+ * gemeldet (`schreibrechtText`, sonst der Fehlertext), nicht als Absturz. Liefert `{ offene }` oder `{ fehler: true }`.
+ */
+function leseOffene(io, repo) {
+  try {
+    return { offene: normalizeOffene(io.loadOpenIssuePages(repo)) };
+  } catch (e) {
+    io.log(`Offene Issues von ${repo} nicht lesbar: ${schreibrechtText(e, repo, "lesen") ?? fehlerText(e)}`);
+    return { fehler: true };
+  }
 }
 
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
@@ -302,7 +317,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   } catch (err) {
     positionFehler = err.message;
   }
-  const offene = normalizeOffene(io.loadOpenIssuePages(repo));
+  const gelesen = leseOffene(io, repo);
+  if (gelesen.fehler) return { fehler: true };
+  const offene = gelesen.offene;
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
   const geschlossen = io.ghJson(harnessIssuesAnfrage({ repo, label: harnessLabel, seit }))
     .flat()
@@ -332,7 +349,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
   const commits = holeQuotenCommits({
     quellen: quotenQuellen({ config, repo }),
-    lies: (r) => io.ghJson(["api", "--paginate", "--slurp", `repos/${r}/commits?sha=main&since=${fruehestens}&per_page=100`], { token: tokenFuerZiel({ ziel: r, eigenes: repo, env: process.env }) }).flat(),
+    lies: quotenCommitLeser({ gh: io.ghJson, repo, since: fruehestens, env: io.env ?? process.env }),
   });
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
@@ -375,7 +392,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   return { fehler };
 }
 
-function main() {
+function main(env = process.env) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const aufruf = flagsLesen(process.argv.slice(2), { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
@@ -383,13 +400,14 @@ function main() {
     process.exitCode = AUFRUF_EXIT;
     return;
   }
-  if (process.env.PROJECT_TOKEN) mitKontingent("board-takt", { token: process.env.PROJECT_TOKEN });
+  if (env.PROJECT_TOKEN) mitKontingent("board-takt", { token: env.PROJECT_TOKEN });
   const { fehler } = fuehreTaktAus({
     jetzt: new Date(),
     dry: aufruf.werte["dry-run"] === true,
     repo: REPO,
-    ausloeser: process.env.GITHUB_EVENT_NAME || "schedule",
-    token: process.env.PROJECT_TOKEN,
+    ausloeser: env.GITHUB_EVENT_NAME || "schedule",
+    token: env.PROJECT_TOKEN,
+    io: { ...ECHTE_IO, env },
     config: ladeProjektConfig(),
   });
   if (fehler) process.exitCode = 1;

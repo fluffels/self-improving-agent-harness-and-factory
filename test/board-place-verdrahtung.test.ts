@@ -19,6 +19,7 @@ function aufbau(extra: Record<string, unknown> = {}) {
     umziehen: (args: Record<string, unknown>) => void aufrufe.push({ was: "umzug", args }),
     mitWiederholung: (fn: () => unknown) => fn(),
     beende: (c: number) => void exits.push(c),
+    env: {},
     ...extra,
   };
   return { aufrufe, exits, deps };
@@ -39,6 +40,30 @@ describe("main: das Ziel-Repo wird an jeden Modus durchgereicht", () => {
     await main(["--top", "5"], a.deps);
     await main(["--missing"], a.deps);
     expect(a.aufrufe.map((x) => x.args?.repo)).toEqual([EIGENES, EIGENES]);
+  });
+});
+
+describe("main: Token fürs Ziel-Repo (#97)", () => {
+  test("ein fremdes Ziel-Repo nutzt PROJECT_TOKEN als GH_TOKEN, das eigene den Standard (undefined)", async () => {
+    const fremd: Record<string, string> = { PROJECT_TOKEN: "pt" };
+    await main(["--repo", "zz-org/ziel", "--top", "5"], aufbau({ env: fremd }).deps);
+    expect(fremd.GH_TOKEN).toBe("pt");
+    const eigen: Record<string, string> = { PROJECT_TOKEN: "pt" };
+    await main(["--top", "5"], aufbau({ env: eigen }).deps);
+    expect(eigen.GH_TOKEN).toBeUndefined();
+    const ohne: Record<string, string> = {};
+    await main(["--repo", "zz-org/ziel", "--top", "5"], aufbau({ env: ohne }).deps);
+    expect(ohne.GH_TOKEN).toBeUndefined();
+  });
+
+  test("ohne Ziel-Token bleibt ein vorhandener Standard-GH_TOKEN unverändert (kein Überschreiben mit undefined)", async () => {
+    const eigen: Record<string, string> = { GH_TOKEN: "std", PROJECT_TOKEN: "pt" };
+    await main(["--top", "5"], aufbau({ env: eigen }).deps);
+    expect(eigen.GH_TOKEN).toBe("std");
+    const fremdOhne: Record<string, string> = { GH_TOKEN: "std" };
+    await main(["--repo", "zz-org/ziel", "--top", "5"], aufbau({ env: fremdOhne }).deps);
+    expect(fremdOhne.GH_TOKEN).toBe("std");
+    expect(Object.keys(fremdOhne)).toEqual(["GH_TOKEN"]);
   });
 });
 

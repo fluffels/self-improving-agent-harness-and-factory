@@ -15,3 +15,13 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 11);
 
 - **Entscheidung (Quote und Takt zählen beide Repos):** führen Produkt- und Factory-Board verschiedene Repos, lesen Takt, Selbst-Audit und Quotenzeile die Commits von `main` beider Repos und stufen jeden Commit nach der Rolle seines Repos ein (Commit aus dem Repo des Factory-Boards ist ein Factory-Merge, aus dem des Produkt-Boards ein Produkt-Merge), weil Ticketnummern nur je Repo eindeutig sind und die Nummernregel sonst falsch zählt. Ein nicht lesbares Repo bricht den Takt ab und steht im Audit als Lücke mit Grund (fail-closed, nie eine Teilmenge). Führen beide Boards dasselbe Repo, gilt weiter die Nummernregel. Das Lesen des Produkt-Repos braucht `PROJECT_TOKEN` mit Lesezugriff.
 - **Weitere Ziel-Repo-Wege:** Wiedervorlage legt Tickets im Ziel-Repo an (die Duplikat-Prüfung liest Ziel- und eigenes Repo), Harness-Doctor-Melden und `spezifikation gescheitert` posten im Ziel-Repo; ein fremdes Ziel-Repo nimmt `PROJECT_TOKEN` (`tokenFuerZiel`), das eigene den Standard-Token.
+
+## Nachtrag #97: Token an jedem Ziel-Repo-Aufruf, Repo als Pflicht, kein Rückfall aufs eigene Repo
+
+Verknüpft [Nachtrag #78](#nachtrag-78-zählung-über-beide-repos-weitere-schreibwege); der Nachtrag stellt nichts davon um.
+
+- **Token und Schreibweise:** `spezifikation anlegen` und `sammelticket-anlegen` reichen den Token (`tokenFuerZiel`) an jeden `gh`-Aufruf gegen das Ziel-Repo; das eigene Repo gilt auch in anderer Schreibweise (Groß-/Kleinschreibung) als eigenes und nimmt den Standard-Token. `board-place` setzt den Token einmal beim Start aus dem Ziel-Repo (`--repo`), `spezifikation anlegen` startet es als Kindprozess und reicht die Umgebung weiter.
+- **Repo ist Pflicht:** `loadOpenIssuePages` und `itemsUeberIssues` (auch im Takt) verlangen das Repo ausdrücklich, kein stiller Standard; ein Lesefehler im Takt wird über `schreibrechtText` eine Meldung mit Weg zur Abhilfe.
+- **Entscheidung (`quelle.repo` ohne Rückfall):** das Factory-Repo des Update-Checks und der Seiten-Links kommt aus `quelle.repo` im Sync-Stand, sonst aus einem ausdrücklich gesetzten `boards[factory].repo`, nie vom eigenen Repo; sonst „nicht bestimmbar“, weil ein Rückfall auf das eigene Repo auf ein Fremdprojekt den falschen Upstream zeigte.
+- **Entscheidung (`seitenliterale`):** Fachdomänen-Wörter für den Factory-Seiten-Wächter stehen in der Projekt-Config (`seitenliterale`), nicht als feste Liste im Wächter, weil der Kern kein Projektwort tragen darf.
+- **Entscheidung (`struktur.moduldoku: null`):** ein Projekt ohne Modul-Tiefendocs schaltet `check:docmap` damit ab (Exit 0 mit Hinweis); `""` bleibt ein Fehler, damit ein Tippfehler nicht still das Gate abschaltet.

@@ -42,6 +42,8 @@ import { FREMD } from "./support/fremd-config";
 
 interface ZielLib {
   zielRepoFuer(labels: unknown, config: unknown): string;
+  repoDerRolle(rolle: string, config: unknown): string | undefined;
+  boardDerRolle(rolle: string, config: unknown): { rolle: string } | undefined;
   fremdesBoardText(rolle: string, repo: string, config: unknown): string | null;
   repoAusUrl(url: unknown): string;
   cli(argv: string[], o?: { out?: (s: string) => void; err?: (s: string) => void }): number;
@@ -49,6 +51,16 @@ interface ZielLib {
 const ziel = raw as unknown as ZielLib;
 const FABRIK = "zz-org/zz-fabrik";
 const mitFactoryRepo = (repo?: string) => ({ ...FREMD, labels: repo ? { ...FREMD.labels, dependabotInbox: "bereich:zz-inbox" } : FREMD.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? (repo ? { ...b, repo } : { ...b, repo: undefined }) : b)) });
+
+describe("repoDerRolle / boardDerRolle", () => {
+  test("das Repo des Boards der Rolle, ohne boards[].repo das der Config, ohne Board das der Config", () => {
+    assert.equal(ziel.repoDerRolle("factory", mitFactoryRepo(FABRIK)), FABRIK);
+    assert.equal(ziel.repoDerRolle("factory", mitFactoryRepo()), FREMD.repo);
+    assert.equal(ziel.repoDerRolle("gibtsnicht", mitFactoryRepo(FABRIK)), FREMD.repo);
+    assert.equal(ziel.boardDerRolle("factory", mitFactoryRepo(FABRIK))?.rolle, "factory");
+    assert.equal(ziel.boardDerRolle("factory", {}), undefined);
+  });
+});
 
 describe("zielRepoFuer", () => {
   test("das Harness-Label geht an das Repo des Factory-Boards, ein Produkt-Label bleibt im eigenen Repo (AK5)", () => {

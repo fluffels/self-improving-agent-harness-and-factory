@@ -21,7 +21,15 @@ const LINK = {
   admin: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository",
 };
 
-/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich). */
+/**
+ * Pur: neutralisiert die Action-Pins eines Workflow-Texts: `uses: x@<40 Hex>` samt Versionskommentar wird zu `uses: x@<pin>`.
+ * Dependabot hebt Pins an; der Vergleich mit der Vorlage soll daran nicht rot werden. Ein Pin, der fehlt (Tag statt SHA), bleibt stehen und ist ein Unterschied.
+ */
+export function ohneActionPins(text) {
+  return text.replace(/(uses:[ \t]*[^\s@]+@)[0-9a-f]{40}\b(?:[ \t]+#[^\r\n]*)?/g, "$1<pin>");
+}
+
+/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich, Action-Pins ausgenommen). */
 export const WOCHENLAUF_PFAD = ".github/workflows/harness-doctor.yml";
 export const WOCHENLAUF_WORKFLOW = [
   "name: Harness-Doctor (Wochenlauf)",
