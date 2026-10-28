@@ -24,7 +24,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
 /** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
-const PIN_PFLICHT = ["codeql.yml", "scorecard.yml"] as const;
+const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml", "audit-einordnung.yml"] as const;
 
 type Obj = Record<string, unknown>;
 const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
