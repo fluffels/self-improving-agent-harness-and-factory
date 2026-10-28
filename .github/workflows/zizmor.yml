@@ -1,0 +1,51 @@
+name: zizmor
+
+# Statische Sicherheitsprüfung der Workflows (#92) mit zizmor. BERICHTEND, kein Required-Check: Funde landen als SARIF im
+# Security-Tab (Code-Scanning, Kategorie `zizmor`) und kommen über die Code-Scanning-Inbox (codescanning-inbox.yml) als Zeilen
+# ins Sammelticket; der Lauf sperrt den Merge nicht (`--no-exit-codes`).
+#
+# OFFLINE: `--offline`, kein Token an zizmor, keine Online-Audits (die bräuchten die GitHub-API und ein Token). Die CLI läuft im
+# Container, per Digest gepinnt (v1.31.1, Digest des Multi-Arch-Index aus ghcr.io/zizmorcore/zizmor); bewusst nicht zizmor-action
+# (nicht in der Actions-Freigabe). Ein Digest-Update ist Handarbeit: Dependabot sieht `docker run` in einem Schritt nicht.
+# Schreibrecht `security-events` hat nur dieser Job (SARIF-Upload). Der Jobname beschattet nie einen Required-Check
+# (Wächter: required-check-shadowing.test.ts); Pins und `--offline` hält test/harness/sicherheits-workflows.test.ts.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: zizmor-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyse:
+    name: Workflow-Audit (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: zizmor offline ausführen
+        run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo
+          ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
+          --offline --format sarif --no-exit-codes . > zizmor.sarif
+
+      - name: SARIF hochladen
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
