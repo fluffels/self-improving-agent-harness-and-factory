@@ -45,6 +45,8 @@ updates:
       prefix-development: "chore(deps-dev)"
     # Der TypeScript-Major (ab 7) bleibt außen vor, solange kein veröffentlichtes typescript-eslint ihn
     # trägt (harter Peer unter 6.1.0): sonst käme er wöchentlich als dauerhaft roter PR.
+    # Alarm: der Eintrag `typescript-7-eslint` in .github/wiedervorlagen.json legt zum Fälligkeitstag ein
+    # Ticket an, das dieses `ignore` prüfen und lösen lässt.
     ignore:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]

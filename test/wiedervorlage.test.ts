@@ -130,8 +130,8 @@ describe("Wächter", () => {
   test("der Workflow checkt das volle Repo aus (Import-Hülle von board-place.mjs), richtet Node ein und ruft das Skript", () => {
     const yml = readFileSync(new URL("../.github/workflows/wiedervorlage.yml", import.meta.url), "utf8");
     expect(yml).not.toContain("sparse-checkout:");
-    expect(yml).toMatch(/actions[/]checkout@v7/);
-    expect(yml).toMatch(/actions[/]setup-node@v7/);
+    expect(yml).toMatch(/actions[/]checkout@[0-9a-f]{40} # v7/);
+    expect(yml).toMatch(/actions[/]setup-node@[0-9a-f]{40} # v7/);
     expect(yml).toContain("node scripts/wiedervorlage.mjs");
     expect(yml).toContain("PROJECT_TOKEN");
   });

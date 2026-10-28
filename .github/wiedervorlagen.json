@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "typescript-7-eslint",
+    "faellig": "2027-01-28",
+    "titel": "TypeScript 7: trägt typescript-eslint den Major inzwischen?",
+    "text": "Prüfen, ob ein veröffentlichtes typescript-eslint TypeScript 7 im Peer-Bereich trägt (`npm view typescript-eslint peerDependencies`). Wenn ja: das `ignore` für den `typescript`-Major in `.github/dependabot.yml` (Ökosystem npm) löschen und TypeScript 7 in einem eigenen PR heben. Wenn nein: `faellig` um etwa drei Monate schieben."
+  }
+]
