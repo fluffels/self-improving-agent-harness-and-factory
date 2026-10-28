@@ -66,7 +66,7 @@ windowsTest("native Vorbereitung liefert einen ausführbaren Supervisor", () => 
 });
 
 windowsTest("argv mit leeren Strings, Unicode, Quotes, Backslashes und Shellzeichen bleibt Daten", async () => {
-  const args = ["", "Leer raum", "ü🐈", 'vor"nach', "C:\\space dir\\", '\\"', "a\\\\", "&|<>$()`%!"];
+  const args = ["", "Leer raum", "ü🐈", 'vor"nach', "C:" + "\\space dir\\", '\\"', "a\\\\", "&|<>$()`%!"];
   const o = setup(); o.env.FIXTURE_VALUE = "explizit ü";
   const result = await p.prozess(process.execPath, ["-e", "console.log(JSON.stringify({args:process.argv.slice(1),cwd:process.cwd(),env:process.env.FIXTURE_VALUE,home:process.env.HOME}))", ...args], o);
   expect(JSON.parse(result.stdout)).toEqual({ args, cwd: o.cwd, env: "explizit ü", home: o.env.HOME });

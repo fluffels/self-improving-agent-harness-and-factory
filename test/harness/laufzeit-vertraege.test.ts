@@ -27,7 +27,7 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/sandbox-doctor.mjs", modul: ["scripts/sandbox-doctor.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/mcp-ausfall.mjs", modul: ["scripts/mcp-ausfall.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/langfuse-vorbedingung.mjs", modul: ["scripts/langfuse-vorbedingung.mjs"], codex: null, grenze: OFFEN },
-  { hook: "scripts/pretooluse-hook.mjs", codex: null, grenze: OFFEN, modul: ["scripts/pretooluse-hook.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
+  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook-lib.mjs", grenze: "Begrenzter Einzelaktionshost; weitere Werkzeugpfade ohne kontrollierten Executor verweigert: #84", modul: ["scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Statuszeile ist Claude-spezifisch: #84" },
 ];
