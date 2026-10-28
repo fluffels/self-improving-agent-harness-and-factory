@@ -104,14 +104,16 @@ export async function windowsProzess(file, args, { cwd, env, input, timeoutMs, m
     return await new Promise((resolve, reject) => {
       const child = spawn(supervisor, [request], { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
       const out = [], err = []; let bytes = 0, failure;
-      const stop = e => { failure ??= e; child.kill(); };
+      const stop = e => { if (failure) return; failure = e; child.kill(); };
       const collect = list => chunk => {
         bytes += chunk.length;
         if (bytes > maxBytes) stop(new Error("Prozess-Ausgabe zu groß")); else list.push(chunk);
       };
       child.stdout.on("data", collect(out)); child.stderr.on("data", collect(err));
       child.on("error", stop); child.stdin.on("error", stop);
+      const timer = setTimeout(() => stop(new Error("Prozess-Frist überschritten")), Math.max(0, deadline - Date.now()));
       child.on("close", () => {
+        clearTimeout(timer);
         try {
           if (failure) throw failure;
           const result = readFileSync(status, "utf8");

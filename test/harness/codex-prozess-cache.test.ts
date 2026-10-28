@@ -97,11 +97,12 @@ type PortableModule = typeof w & { windowsProzess: (file: string, args: string[]
 describe("OS-Port des Originaladapters", () => {
   let sandbox: string, cache: string, adapter: PortableModule;
   let prepareFault: string, statusText: string, streamFault: string, compilerCalls: number, nativeCalls: number, requestDir: string;
+  let closeSupervisor: () => void, kills: number;
   const peBytes = () => { const data = Buffer.alloc(128); data.writeUInt16LE(0x5a4d); data.writeUInt32LE(64, 60); data.writeUInt32LE(0x4550, 64); data.writeUInt16LE(0x8664, 68); return data; };
   beforeEach(async () => {
     sandbox = mkdtempSync(join(tmpdir(), "codex-cache-port-")); cache = join(sandbox, "cache"); mkdirSync(cache);
     const compiler = join(sandbox, "Microsoft.NET/Framework64/v4.0.30319/csc.exe"); mkdirSync(dirname(compiler), { recursive: true }); writeFileSync(compiler, "fixture compiler");
-    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0;
+    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0; kills = 0;
     vi.stubEnv("SystemRoot", sandbox); vi.resetModules();
     vi.doMock("node:child_process", async () => ({
       ...await vi.importActual<typeof import("node:child_process")>("node:child_process"),
@@ -119,8 +120,12 @@ describe("OS-Port des Originaladapters", () => {
       },
       spawn: (_file: string, args: string[]) => {
         requestDir = dirname(args[0]);
-        const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), stdin: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit("close", 1)); return true; } });
+        if (streamFault === "slow-spawn-hang") vi.setSystemTime(Date.now() + 20);
+        const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), stdin: new EventEmitter(), kill: () => { kills++; if (!streamFault.includes("hang")) queueMicrotask(() => child.emit("close", 1)); return true; } });
+        closeSupervisor = () => { child.emit("close", 1); };
         Object.assign(child.stdin, { end: (input: string) => queueMicrotask(() => {
+          if (streamFault === "error-hang") child.stdin.emit("error", Error("fixture first error"));
+          if (streamFault.includes("hang")) return;
           writeFileSync(join(requestDir, "status.txt"), statusText);
           if (streamFault === "stdin") child.stdin.emit("error", Error("fixture pipe"));
           if (streamFault === "spawn") child.emit("error", Error("fixture spawn"));
@@ -133,7 +138,35 @@ describe("OS-Port des Originaladapters", () => {
     // @ts-expect-error: Node-Skript ohne Declaration.
     adapter = await import("../../scripts/codex-prozess-windows.mjs") as PortableModule;
   });
-  afterEach(() => { vi.doUnmock("node:child_process"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
+  afterEach(() => { vi.useRealTimers(); vi.doUnmock("node:child_process"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
+
+  test.each(["hang", "error-hang"])("äußerer Watchdog beendet %s und wartet vor Cleanup auf close", async fault => {
+    adapter.windowsVorbereiten(); streamFault = fault; vi.useFakeTimers();
+    const result = adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "", timeoutMs: 30, maxBytes: 100 });
+    let settled = false;
+    const observed = result.then(() => { settled = true; return "erfolg"; }, (e: unknown) => { settled = true; return (e as Error).message; });
+    await vi.advanceTimersByTimeAsync(29);
+    expect(kills).toBe(fault === "hang" ? 0 : 1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(kills).toBe(1); expect(settled).toBe(false); expect(existsSync(requestDir)).toBe(true);
+    closeSupervisor();
+    expect(await observed).toBe(fault === "hang" ? "Prozess-Frist überschritten" : "fixture first error");
+    expect(existsSync(requestDir)).toBe(false); expect(vi.getTimerCount()).toBe(0);
+  });
+  test("Watchdog rechnet die synchrone Startzeit auf dieselbe Frist an", async () => {
+    adapter.windowsVorbereiten(); streamFault = "slow-spawn-hang"; vi.useFakeTimers();
+    const result = adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "", timeoutMs: 30, maxBytes: 100 });
+    const observed = result.catch((e: unknown) => (e as Error).message);
+    await vi.advanceTimersByTimeAsync(9); expect(kills).toBe(0);
+    await vi.advanceTimersByTimeAsync(1); expect(kills).toBe(1);
+    closeSupervisor(); expect(await observed).toBe("Prozess-Frist überschritten"); expect(vi.getTimerCount()).toBe(0);
+  });
+  test("reguläres close entfernt den äußeren Timer ohne späteren Kill", async () => {
+    adapter.windowsVorbereiten(); vi.useFakeTimers();
+    const result = adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "", timeoutMs: 30, maxBytes: 100 });
+    await vi.advanceTimersByTimeAsync(0); expect((await result).code).toBe(23);
+    expect(vi.getTimerCount()).toBe(0); await vi.advanceTimersByTimeAsync(30); expect(kills).toBe(0);
+  });
 
   test("kalte Veröffentlichung und validierte Wiederverwendung laufen am Originalmodul", () => {
     const exe = adapter.windowsVorbereiten();
@@ -159,6 +192,6 @@ describe("OS-Port des Originaladapters", () => {
   });
   test.each(["stdin", "spawn", "output"])("Prozessportfehler %s schließt ab und räumt auf", async fault => {
     adapter.windowsVorbereiten(); streamFault = fault;
-    await expect(adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "zu viel", timeoutMs: 3000, maxBytes: fault === "output" ? 1 : 100 })).rejects.toThrow(fault === "stdin" ? "pipe" : fault === "spawn" ? "spawn" : "Ausgabe"); expect(existsSync(requestDir)).toBe(false);
+    await expect(adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "zu viel", timeoutMs: 3000, maxBytes: fault === "output" ? 1 : 100 })).rejects.toThrow(fault === "stdin" ? "pipe" : fault === "spawn" ? "spawn" : "Ausgabe"); expect(existsSync(requestDir)).toBe(false); expect(kills).toBe(1);
   });
 });
