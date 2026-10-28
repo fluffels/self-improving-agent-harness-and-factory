@@ -10,6 +10,7 @@
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
  *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach setzt der Agent den Tag und erstellt je Bezieher den Sync-PR.
  *  - Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret = Pre-Flight); ohne ihn bleibt die Checkliste.
+ * Bekannte Grenze: der Titel-Marker `🏷️ Tag ` ist breit; ein von Hand angelegtes, vertrauenswürdiges Issue mit diesem Titelanfang zählt als Tag-Ticket (das Emoji-Präfix ist diesem Takt vorbehalten).
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
  * Aufruf: node scripts/tag-takt.mjs [--dry-run]   (Workflow: .github/workflows/board-takt.yml)
@@ -180,8 +181,8 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     "- [ ] Trockenlauf-Sync in einem Bezieher: `node scripts/factory-sync.mjs --quelle <checkout auf " + sha.slice(0, 7) + "> --entwurf --trocken` (Pfade der Bezieher: `node scripts/arbeitsplatz.mjs pfade`)",
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
-    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
+    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
   ].join("\n");

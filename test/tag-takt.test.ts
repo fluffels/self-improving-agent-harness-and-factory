@@ -271,6 +271,11 @@ describe("Härtung (Review Runde 1)", () => {
     expect(logZeilen({ ladeLog: () => "", ladeOffene: () => [tagOffen()], schliesse: werfen }).code).toBe(1);
     expect(logZeilen({ ladeLog: () => "", ladeOffene: () => [tagOffen()] }).code).toBe(0);
   });
+  it("Lesefehler von ladeOffene: Exit 1 mit ::error::", () => {
+    const r = logZeilen({ ladeOffene: () => { throw new Error("gh weg"); } });
+    expect(r.code).toBe(1);
+    expect(r.z).toContain("::error::Tag-Takt: Lesen fehlgeschlagen");
+  });
   it("kein Release-Tag in lauf: Exit 0, kein Log-Lesen, keine Schreib-IO", () => {
     const r = logZeilen({ tags: () => [], ladeLog: () => { throw new Error("nie"); }, legeIssueAn: () => { throw new Error("nie"); } });
     expect(r.code).toBe(0);
@@ -282,14 +287,22 @@ describe("Härtung (Review Runde 1)", () => {
     expect(logZeilen({ ladeOffene: () => [tagOffen()] }).z).not.toContain("::warning::");
   });
   it("Alter zählt die älteste Änderung, nicht die jüngste", () => {
-    const gemischt = T.besitzCommits([commit({ datum: vor(8) }), commit({ datum: vor(1), sha: "b".repeat(40) })], MANIFEST);
+    // git log liefert den neuesten Commit zuerst: der älteste steht hinten bzw. in der Mitte.
+    const gemischt = T.besitzCommits([commit({ datum: vor(1) }), commit({ datum: vor(8), sha: "b".repeat(40) })], MANIFEST);
     expect(entscheide({ besitz: gemischt }).aktion).toBe("anlegen");
-    const junge = T.besitzCommits([commit({ datum: vor(1) }), commit({ datum: vor(20), sha: "b".repeat(40) })].slice(0, 1), MANIFEST);
-    expect(entscheide({ besitz: junge }).aktion).toBe("nichts");
+    const mitte = T.besitzCommits([commit({ datum: vor(2) }), commit({ datum: vor(9), sha: "b".repeat(40) }), commit({ datum: vor(1), sha: "c".repeat(40) })], MANIFEST);
+    expect(entscheide({ besitz: mitte }).aktion).toBe("anlegen");
+    const texte: string[] = [];
+    const dreiLog = (d: number[]) => d.map((tage, k) => `${String(k).repeat(40)}${vor(tage)}fix: n (#${k + 1})
+
+scripts/a.mjs
+`).join("");
+    logZeilen({ ladeLog: () => dreiLog([2, 9, 1]), legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; } });
+    expect(texte[0]).toContain(`Älteste ungetaggte Änderung: ${vor(9).slice(0, 10)}`);
   });
   it("istAktuell: Titel allein oder Body allein abweichend führt zur Aktualisierung", () => {
     let soll = { titel: "", body: "" };
-    logZeilen({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, t: string, b: string) => { soll = { titel: t, body: b }; } });
+    expect(logZeilen({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, t: string, b: string) => { soll = { titel: t, body: b }; } }).code).toBe(0);
     for (const abw of [{ titel: "🏷️ Tag v9.9.9 anders" }, { body: "anderer Body" }]) {
       const aufrufe: string[] = [];
       logZeilen({ ladeOffene: () => [tagOffen({ ...soll, ...abw, titel: abw.titel ?? soll.titel })], aktualisiere: () => aufrufe.push("a") });
@@ -313,6 +326,9 @@ describe("Härtung (Review Runde 1)", () => {
     expect(b53).not.toContain("#51 fix");
     const lang = bodyVon({ prs: viele(1, () => `fix: ${"x".repeat(200)} (#1)`) });
     expect(lang).not.toContain("x".repeat(121));
+    const exakt = bodyVon({ prs: viele(1, () => "x".repeat(200)) });
+    expect(exakt).toContain("x".repeat(120));
+    expect(exakt).not.toContain("x".repeat(121));
     expect(bodyVon({ prs: viele(1, () => "|`") })).toContain("- aaaaaaa - (");
     expect(bodyVon({ prs: viele(1, () => "fix: a\nb (#1)") })).not.toContain("a\nb");
   });
@@ -328,6 +344,8 @@ describe("Härtung (Review Runde 1)", () => {
     ["fix: Text BREAKING CHANGE: mitten", "v1.2.4"],
     ["feature: x", "v1.2.4"],
     ["featx: y", "v1.2.4"],
+    ["fix: wow!: x", "v1.2.4"],
+    ["fix: kein feat: x", "v1.2.4"],
   ])("Versionsgrenze %j → %s", (text, erwartet) => {
     expect(T.naechsterTag("v1.2.3", [commit({ betreff: text.split("\n")[0], body: text })])).toBe(erwartet);
   });
@@ -336,6 +354,7 @@ describe("Härtung (Review Runde 1)", () => {
     expect(T.ciZustand([ci("failure"), ci("success")]).zustand).toBe("rot");
     expect(T.ciZustand([null, ci("success")]).zustand).toBe("gruen");
     expect(T.ciZustand([ci("success", { html_url: 5 })]).url).toBeNull();
+    expect(T.ciZustand([ci("success", { html_url: "https://example.invalid/r" })]).url).toBe("https://example.invalid/r");
   });
   it("besitzCommits mit kaputtem Manifest: nur das Manifest selbst zählt, kein Absturz", () => {
     for (const m of [{}, null]) {
