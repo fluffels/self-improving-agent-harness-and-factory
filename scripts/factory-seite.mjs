@@ -26,7 +26,7 @@ function syncTag(wurzel) {
 }
 
 /** Liest das Repo des Factory-Boards; `undefined` bei fehlender oder ungültiger Config. */
-function factoryRepo(wurzel) {
+export function factoryRepo(wurzel) {
   try {
     const config = ladeProjektConfig({ rootDir: wurzel, pruefen: false });
     const board = config?.boards?.find((b) => b?.rolle === "factory");
