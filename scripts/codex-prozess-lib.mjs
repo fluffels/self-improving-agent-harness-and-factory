@@ -47,8 +47,15 @@ export function prozess(file, args, { cwd, env, input = "", timeoutMs = 3000, ma
   });
 }
 /** Transport für Inventar und kontrolliertes command/exec; Modell-RPCs sind kein Hostpfad. */
+async function inventarBeenden(child, geschlossen) {
+  const grace = setTimeout(() => beenden(child), 250);
+  try { child.stdin.end(); }
+  catch (e) { beenden(child); throw e; }
+  finally { await geschlossen; clearTimeout(grace); }
+}
 export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 5000 } = {}) {
   const child = start(codex, ["--strict-config", "app-server", "--stdio"], { cwd: p.root, env: p.env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
+  const geschlossen = new Promise(resolve => child.once("close", resolve));
   const pending = new Map(); let seq = 0, bytes = 0;
   const stop = e => { for (const waiter of pending.values()) waiter.reject(e); pending.clear(); beenden(child); };
   const timer = setTimeout(() => stop(new Error("Inventar-Frist überschritten")), timeoutMs);
@@ -71,7 +78,7 @@ export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 500
     child.stdin.write('{"method":"initialized","params":{}}\n');
     return await fn(rpc, init);
   } finally {
-    clearTimeout(timer); lines.close(); child.stdin.end(); beenden(child);
-    await new Promise(resolve => { if (child.exitCode !== null || child.signalCode) resolve(); else child.once("close", resolve); });
+    clearTimeout(timer); lines.close();
+    await inventarBeenden(child, geschlossen);
   }
 }

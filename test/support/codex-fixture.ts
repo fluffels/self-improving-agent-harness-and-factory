@@ -10,7 +10,7 @@ const c = raw as unknown as { mitInventar: (s: string, p: Profil, fn: (rpc: Rpc,
 export function fakeInventar(mode: string, antworten: Record<string, unknown> = {}, zustand: { root?: string; child?: ChildProcess } = {}): Inventar {
   return (_codex, p, fn) => {
     zustand.root = p.root;
-    const script = `const antworten=${JSON.stringify(antworten)},mode=${JSON.stringify(mode)};require('readline').createInterface({input:process.stdin}).on('line',l=>{
+    const script = `const antworten=${JSON.stringify(antworten)},mode=${JSON.stringify(mode)};if(mode==='eofhang')setTimeout(()=>process.exit(42),1500);require('readline').createInterface({input:process.stdin}).on('line',l=>{
       const m=JSON.parse(l);if(!m.id)return;
       if(mode==='close'){process.exit();return;}
       if(mode==='hang'||mode==='signal')return;
@@ -23,6 +23,7 @@ export function fakeInventar(mode: string, antworten: Record<string, unknown> = 
     });`;
     return c.mitInventar("fixture", p, fn, { timeoutMs: mode === "hang" ? 100 : 3000, start: (_file, _args, options) => {
       const child = spawn(process.execPath, ["-e", script], options); zustand.child = child;
+      if (mode === "enderror") child.stdin!.end = () => { throw new Error("fixture cleanup"); };
       if (mode === "signal") child.once("spawn", () => setTimeout(() => child.kill("SIGKILL"), 100));
       return child;
     } });

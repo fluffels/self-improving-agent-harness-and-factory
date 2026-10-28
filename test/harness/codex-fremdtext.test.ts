@@ -16,6 +16,12 @@ const f = fremdRaw as unknown as { fremdtextProfil: (u: string) => string; verar
 const temps: Profil[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const p of temps.splice(0)) p.entfernen(); });
 function temp() { const p = c.profil(); temps.push(p); return p; }
+
+test.each<[string | undefined, boolean]>([[undefined, true], ["fixture", false]])("native Probe %s erhält Dateiparallelität %s", async (probe, parallel) => {
+  vi.stubEnv("CODEX_SCHUTZ_PROBE", probe); vi.resetModules();
+  const config = await import("../../vite.config") as { default: { test: { fileParallelism: boolean } } };
+  expect(config.default.test.fileParallelism).toBe(parallel);
+});
 test("allowlist Umgebung entzieht Auth/Apps/Proxy und eigene Homepfade", () => {
   vi.stubEnv("LANGFUSE_MCP_AUTHORIZATION", "fixture-only"); vi.stubEnv("OPENAI_API_KEY", "fixture-only"); vi.stubEnv("CODEX_EXEC_SERVER_URL", "fixture-only"); vi.stubEnv("HTTP_PROXY", "fixture-only");
   const p = temp();
@@ -69,6 +75,20 @@ test("Signalende während Pending-RPC schließt Cleanup ohne zweites close-Warte
     expect(state.child?.exitCode).toBeNull(); expect(state.child?.signalCode).toBe("SIGKILL");
     p.entfernen(); expect(existsSync(p.root)).toBe(false);
   } finally { clearTimeout(timer); }
+});
+
+test.each(["ok", "eofhang", "enderror"])("Inventar-Cleanup %s wartet auf close vor Profilentfernung", async mode => {
+  const p = temp(), state: { child?: ChildProcess } = {};
+  let geschlossen = false;
+  const work = fakeInventar(mode, {}, state)("fixture", p, () => {
+    state.child!.once("close", () => { geschlossen = true; });
+    return Promise.resolve("kontrolle");
+  });
+  expect(await work.catch((e: unknown) => e instanceof Error ? e.message : String(e))).toBe(mode === "enderror" ? "fixture cleanup" : "kontrolle");
+  expect(geschlossen).toBe(true);
+  expect(state.child?.exitCode).toBe(mode === "ok" ? 0 : process.platform === "win32" ? 1 : null);
+  expect(state.child?.signalCode).toBe(mode === "ok" || process.platform === "win32" ? null : "SIGKILL");
+  p.entfernen(); expect(existsSync(p.root)).toBe(false);
 });
 test("Ausgabelimit exakt erlaubt und stdin-Fehler abgebrochen", async () => {
   const p = temp();

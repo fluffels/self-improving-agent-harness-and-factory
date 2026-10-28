@@ -120,7 +120,7 @@ npx vitest run test/harness/codex-fremdtext.test.ts test/harness/codex-geschuetz
 Remove-Item Env:CODEX_SCHUTZ_PROBE
 ```
 
-Ohne diese Variable überspringt der portable Testsatz nur die echte installierte CLI-Probe. Prozessgrenzen, Payloads, gemeinsame Guards und Executor-Aufrufzahlen werden regulär getestet. Der Testprovider verwendet erfundene Fixture-Verbrauchswerte; sie sind kein echter Modellverbrauch oder Tracing-Beleg.
+Mit dieser Variable führt die Testkonfiguration Dateien seriell aus: parallele native Sandbox-/Engine-Prozesse können unter Windows die unveränderten Testfristen verbrauchen. Ohne diese Variable überspringt der portable Testsatz nur die echte installierte CLI-Probe und behält Dateiparallelität. Prozessgrenzen, Payloads, gemeinsame Guards und Executor-Aufrufzahlen werden regulär getestet. Der Testprovider verwendet erfundene Fixture-Verbrauchswerte; sie sind kein echter Modellverbrauch oder Tracing-Beleg. Der Inventartransport schließt zuerst stdin, wartet kurz auf reguläres EOF-Ende und erzwingt sonst das Prozessbaumende; vor der Profilentfernung ist das `close`-Ereignis abgewartet.
 
 ## Vorprüfung und Nachweisformat
 
