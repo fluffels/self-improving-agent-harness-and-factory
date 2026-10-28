@@ -11,6 +11,9 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawAdr from "../../scripts/docs-gen/adr.mjs";
+const fortschreibungsFehler = (rawAdr as unknown as { fortschreibungsFehler: (n: string, t: string, a: Record<string, string>) => string[] }).fortschreibungsFehler;
 const fenceMaske = (rawMarkdown as unknown as { fenceMaske: (zeilen: string[]) => boolean[] }).fenceMaske;
 
 const FORM = /^## Fortschreibung #\d+(\/#\d+)* \(\d{4}-\d{2}-\d{2}\): \S/;
@@ -67,8 +70,6 @@ describe("ADR-Fortschreibungen: Überschriftenform (#1663 L51)", () => {
 /* Fortschreibungen als eigene Dateien (#1860): neue Fortschreibungen stehen unter docs/adr/fortschreibungen/, nicht mehr am Ende des ADR
  * (Anhängen am Dateiende kollidiert bei parallelen PRs und lässt die Reihenfolge driften). Der Bestand der angehängten Abschnitte ist
  * eingefroren (Ratchet: nur senken); jede Datei trägt Namensform, Kopfzeile und einen Zeiger im ADR. */
-const DATEI_NAME = /^(\d{4})-(\d+)-[a-z0-9-]+\.md$/;
-const DATEI_KOPF = /^# Fortschreibung #(\d+(?:\/#\d+)*) \(\d{4}-\d{2}-\d{2}\): \S/;
 const ANGEHAENGT = /^## Fortschreibung/;
 
 /** Bestand angehängter `## Fortschreibung`-Abschnitte je ADR (Stand #1860); neue ADRs und jedes Plus: 0. Nur senken. */
@@ -104,21 +105,6 @@ function ratchetFehler(adrs: Record<string, string>, bestand: Record<string, num
   return [...ueber, ...stale];
 }
 
-/** Meldungen zu einer Fortschreibungs-Datei (Name, Kopfzeile, Zeiger im ADR). Pur, `adrs` = Dateinamen und Texte der ADRs. */
-function dateiFehler(name: string, text: string, adrs: Record<string, string>): string[] {
-  const m = DATEI_NAME.exec(name);
-  if (!m) return [`${name}: Name muss <NNNN>-<ticket>-<slug>.md sein`];
-  const [, adrNr, ticket] = m;
-  const fehler: string[] = [];
-  const adrName = Object.keys(adrs).find((n) => n.startsWith(`${adrNr}-`));
-  if (!adrName) return [`${name}: kein ADR ${adrNr}`];
-  const kopf = DATEI_KOPF.exec(text.split(/\r?\n/).find((l) => l.startsWith("# ")) ?? "");
-  if (!kopf) fehler.push(`${name}: erste Überschrift muss "# Fortschreibung #<nr> (JJJJ-MM-TT): <Titel>" lauten`);
-  else if (kopf[1].split("/#")[0] !== ticket) fehler.push(`${name}: Ticket der Kopfzeile (#${kopf[1].split("/#")[0]}) passt nicht zum Dateinamen (#${ticket})`);
-  if (!adrs[adrName].includes(`fortschreibungen/${name}`)) fehler.push(`${name}: ${adrName} enthält keinen Zeiger "fortschreibungen/${name}"`);
-  return fehler;
-}
-
 describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
   const dir = join(process.cwd(), "docs", "adr");
   const adrNamen = readdirSync(dir).filter((n) => /^\d{4}-.*\.md$/.test(n));
@@ -131,7 +117,7 @@ describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
   });
 
   test("jede Datei unter docs/adr/fortschreibungen/ hat Namen, Kopfzeile und Zeiger im ADR", () => {
-    const fehler = dateien.flatMap((n) => dateiFehler(n, readFileSync(join(unter, n), "utf8"), adrs));
+    const fehler = dateien.flatMap((n) => fortschreibungsFehler(n, readFileSync(join(unter, n), "utf8"), adrs));
     expect(fehler).toEqual([]);
   });
 
@@ -163,12 +149,12 @@ describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
     ["Ticket weicht vom Namen ab", "0013-1-a.md", "# Fortschreibung #2 (2026-10-22): T\n", adrMock],
     ["Zeiger fehlt", "0013-1-a.md", "# Fortschreibung #1 (2026-10-22): T\n", { "0013-x.md": "Text\n" }],
   ])("Negativfall erkannt: %s", (_n, name, text, a) => {
-    expect(dateiFehler(name, text, a).length).toBeGreaterThan(0);
+    expect(fortschreibungsFehler(name, text, a).length).toBeGreaterThan(0);
   });
 
   test("gültige Datei und Sammel-Ticketform bleiben ohne Fund", () => {
-    expect(dateiFehler("0013-1-a.md", "# Fortschreibung #1 (2026-10-22): T\n", adrMock)).toEqual([]);
-    expect(dateiFehler("0013-1-a.md", "# Fortschreibung #1/#2 (2026-10-22): T\n", adrMock)).toEqual([]);
+    expect(fortschreibungsFehler("0013-1-a.md", "# Fortschreibung #1 (2026-10-22): T\n", adrMock)).toEqual([]);
+    expect(fortschreibungsFehler("0013-1-a.md", "# Fortschreibung #1/#2 (2026-10-22): T\n", adrMock)).toEqual([]);
   });
 
   test("Zählung: Fences zählen nicht, jede Überschrift mit „## Fortschreibung“ zählt", () => {
@@ -189,8 +175,8 @@ describe("ADR-Fortschreibungen als Dateien und Ratchet (#1860)", () => {
   test("Zeiger je Datei: eine zweite Datei desselben ADR ohne eigenen Zeiger wird gemeldet (L29)", () => {
     const adrs = { "0013-x.md": "Text\nSiehe fortschreibungen/0013-1-a.md\n" };
     const kopf = (n: number) => `# Fortschreibung #${n} (2026-10-22): T\n`;
-    expect(dateiFehler("0013-1-a.md", kopf(1), adrs)).toEqual([]);
-    expect(dateiFehler("0013-2-b.md", kopf(2), adrs).join("\n")).toContain("0013-2-b.md");
-    expect(dateiFehler("0013-2-b.md", kopf(2), adrs)).toHaveLength(1);
+    expect(fortschreibungsFehler("0013-1-a.md", kopf(1), adrs)).toEqual([]);
+    expect(fortschreibungsFehler("0013-2-b.md", kopf(2), adrs).join("\n")).toContain("0013-2-b.md");
+    expect(fortschreibungsFehler("0013-2-b.md", kopf(2), adrs)).toHaveLength(1);
   });
 });

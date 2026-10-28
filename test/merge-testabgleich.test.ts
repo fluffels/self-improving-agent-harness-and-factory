@@ -1,10 +1,11 @@
 /* Merge-Testabgleich (#1579): Kern pur (Testtitel, verlorene Tests je Seite) und die Orchestrierung gegen ein echtes Temp-Repo mit Merge. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach } from "vitest";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -168,6 +169,51 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
     const r = M.pruefeMerge({ git: g, lies: lies(root) });
     assert.equal(r.code, 2);
     assert.match(r.text, /weder ein Merge in Arbeit/);
+  });
+
+  describe("CLI: Kein-Merge-Vertrag (#90)", () => {
+    const SKRIPT = fileURLToPath(new URL("../scripts/merge-testabgleich.mjs", import.meta.url));
+    const cli = (cwd: string) => spawnSync("node", [SKRIPT], { cwd, encoding: "utf8" });
+    const mergeCommit = (root: string, g: (a: string[]) => string, text: string) => {
+      konfliktMerge(g);
+      schreibe(root, "test/x.test.ts", text + "\n");
+      g(["commit", "-qam", "merge"]);
+    };
+
+    test("„Already up to date“ ohne Merge-Commit auf HEAD: Exit 2, die Meldung nennt ihn", () => {
+      const root = mkdtempSync(join(tmpdir(), "merge-abgleich-"));
+      ordner.push(root);
+      const g = git(root);
+      g(["init", "-q", "-b", "main"]);
+      schreibe(root, "test/x.test.ts", quelle("alt") + "\n");
+      g(["add", "-A"]);
+      g(["commit", "-q", "-m", "basis"]);
+      g(["checkout", "-q", "-b", "feature"]);
+      schreibe(root, "test/x.test.ts", quelle("alt", "neu") + "\n");
+      g(["commit", "-qam", "feature"]);
+      assert.match(g(["merge", "main"]), /Already up to date/);
+      const r = cli(root);
+      assert.equal(r.status, 2, r.stderr);
+      assert.match(r.stderr, /\(Exit 2: nichts zu prüfen, z\.B\. nach „Already up to date“\)/);
+    });
+
+    test("„Already up to date“ mit HEAD auf einem älteren Merge-Commit: der Merge wird erneut geprüft (sauber: Exit 0)", () => {
+      const { root, g } = aufbau();
+      mergeCommit(root, g, quelle("alt", "von uns", "von main"));
+      assert.match(g(["merge", "main"]), /Already up to date/);
+      const r = cli(root);
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      assert.match(r.stdout, /kein Test.*verloren/);
+    });
+
+    test("Kontrollprobe: derselbe Fall mit verlorenem Test von main: Exit 1", () => {
+      const { root, g } = aufbau();
+      mergeCommit(root, g, quelle("alt", "von uns"));
+      assert.match(g(["merge", "main"]), /Already up to date/);
+      const r = cli(root);
+      assert.equal(r.status, 1, r.stderr);
+      assert.match(r.stderr, /„von main“/);
+    });
   });
 });
 

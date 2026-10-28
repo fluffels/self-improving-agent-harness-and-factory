@@ -33,6 +33,11 @@ AGENTS.md @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/besitz-extraktion.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
+/scripts/factory-sync-lib.mjs @fluffels
+/scripts/factory-seite.mjs @fluffels
+/scripts/inbox-lib.mjs @fluffels
+/scripts/inbox-start-lib.mjs @fluffels
+/scripts/internalrefs-lib.mjs @fluffels
 /scripts/harness-doctor.mjs @fluffels
 /scripts/harness-doctor-lib.mjs @fluffels
 /scripts/harness-doctor-melden.mjs @fluffels
