@@ -11,35 +11,38 @@
  *
  * Generierte Abschnitte (`GEN`-Marker, `check:docgen`) zählen nicht: die Config löst dort selbst auf.
  * Rest der Baseline: `model-routing.md` trägt Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
- * historischer Ordnername); `harness-glossar.md` verlinkt einen ADR-Anker, dessen Überschrift das
- * Quellprojekt nennt. Die Baseline steigt nur per reviewtem Commit (kein maschinelles Anhebungs-Gate wie bei `kern-reinheit`); Besitz-Seiten fallen
+ * historischer Ordnername). Die Baseline steigt nie: ein Test sperrt jede Anhebung gegen die Diff-Basis (`anhebungen` aus `test/support/baseline-zaehlung.ts`, wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
  * Zusätzlich zur Config zählen die Fachdomänen-Wörter `SEITEN_ZUSATZ` (Spiel, Spielquote): sie sind kein Config-Wert, würden als `projektliterale` aber
  * jede Kern-Einheit und jeden Kern-Test treffen; die Seiten sprechen von Produkt. Das Ziel eines Links in `adr/` zählt nicht: sein Anker trägt
  * die unveränderliche Überschrift der Historie.
  * Bewusste Grenze: andere Projektwörter außerhalb der Config und `.mmd`-Dateien erkennt der Wächter nicht; eine Herkunftsprosa
- * ohne Link steht in der Baseline. Die Baseline steigt nur per reviewtem Commit mit Begründung, nie, um ein Rot zu beseitigen. */
+ * ohne Link steht in der Baseline. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 import { FREMD, projektConfig } from "../support/fremd-config";
 import type { BegriffsConfig } from "./kern-reinheit.test";
 
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
+const { collectMarkdown } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[] };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
 /** Diese Begriffe teilen sich Quell- und Zielprojekt (Owner, Repo, Board, Label, Skill): sie sind kein Zeichen eines Projektbezugs der Seite. */
 const AUSGENOMMEN = new Set(["Owner", "Repo", "Board-ID", "Label", "Skill"]);
-
-type Zaehlung = Record<string, number>;
-type Baseline = Record<string, Zaehlung>;
 
 /** Generierte Abschnitte (`<!-- GEN:x START -->` bis `END`) und Herkunftsbezüge raus: Markdown-Link mit http(s)-Ziel (samt Linktext), nackte URL, Querverweis `owner/repo#nr` bzw. `repo#nr`. Generiertes löst die Config selbst auf (Agentennamen im Diagramm), es ist kein Text der Seite. */
 export function maskiere(text: string): string {
@@ -61,14 +64,8 @@ export function seitenBegriffe(config: BegriffsConfig): Record<string, RegExp> {
 }
 
 /** Zählung je Begriff (nur > 0) nach der Maskierung; rohe Regex-Treffer, Überlappungen zählen je Begriff. */
-export function zaehleSeite(text: string, begriffe: Record<string, RegExp>): Zaehlung {
-  const t = maskiere(text);
-  const out: Zaehlung = {};
-  for (const name of Object.keys(begriffe).sort()) {
-    const n = (t.match(begriffe[name]) ?? []).length;
-    if (n > 0) out[name] = n;
-  }
-  return out;
+export function zaehleSeite(text: string, begriffe: Record<string, RegExp>): Record<string, number> {
+  return zaehle(maskiere(text), begriffe);
 }
 
 /** Ist `pfad` (repo-relativ, `/`) eine Kern-Wissen-Seite: Markdown unter `docs/`, ohne Historie. */
@@ -80,16 +77,7 @@ export function istKernSeite(pfad: string): boolean {
 
 /** Alle Kern-Wissen-Seiten unter `wurzel` (sortiert, repo-relativ). */
 export function kernSeiten(wurzel: string): string[] {
-  const out: string[] = [];
-  const geh = (rel: string): void => {
-    for (const name of readdirSync(wurzel + rel)) {
-      const p = `${rel}${name}`;
-      if (statSync(wurzel + p).isDirectory()) geh(`${p}/`);
-      else if (istKernSeite(p)) out.push(p);
-    }
-  };
-  if (existsSync(wurzel + "docs")) geh("docs/");
-  return out.sort();
+  return collectMarkdown(wurzel, ["docs"]).filter(istKernSeite);
 }
 
 /** Die Zählung aller Seiten (nur Seiten mit Treffer), Schlüssel sortiert. */
@@ -102,21 +90,21 @@ export function zaehleSeiten(seiten: Record<string, string>, begriffe: Record<st
   return out;
 }
 
+const SEITEN_TEXTE: VergleichsTexte = {
+  neu: (pfad, name, n) => `${pfad}: Projektwert '${name}' ${n}x statt 0x. Fix: Projektwert als Platzhalter <gruppe.schlüssel> oder die Herkunft als Link schreiben`,
+  ueber: (pfad, name, n, bn) => `${pfad}: Projektwert '${name}' ${n}x statt ${bn}x. Fix: Projektwert als Platzhalter <gruppe.schlüssel> oder die Herkunft als Link schreiben`,
+  unter: (pfad, name, n, bn) => `${pfad}: Projektwert '${name}' nur noch ${n}x, die Baseline kennt ${bn}x. Fix: Baseline senken (${BASELINE})`,
+  verwaist: (pfad, z) => Object.entries(z).map(([name, bn]) => SEITEN_TEXTE.unter(pfad, name, 0, bn)),
+};
+
 /** Meldungen: Anstieg (Ist > Baseline) und Rückgang (Ist < Baseline) je Seite und Begriff. */
 export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
-  const out: string[] = [];
-  const pfade = [...new Set([...Object.keys(ist), ...Object.keys(baseline)])].sort();
-  for (const pfad of pfade) {
-    const a = ist[pfad] ?? {};
-    const b = baseline[pfad] ?? {};
-    for (const name of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
-      const nIst = a[name] ?? 0;
-      const nBase = b[name] ?? 0;
-      if (nIst > nBase) out.push(`${pfad}: Projektwert '${name}' ${nIst}x statt ${nBase}x. Fix: Projektwert als Platzhalter <gruppe.schlüssel> oder die Herkunft als Link schreiben`);
-      else if (nIst < nBase) out.push(`${pfad}: Projektwert '${name}' nur noch ${nIst}x, die Baseline kennt ${nBase}x. Fix: Baseline senken (${BASELINE})`);
-    }
-  }
-  return out;
+  return vergleicheZaehlung(ist, baseline, SEITEN_TEXTE);
+}
+
+/** Der erlaubte Höchstwert je Seite der aktuellen Baseline: der Stand an der Diff-Basis, für eine dort unbekannte Seite leer (jeder Wert wäre eine Anhebung). */
+export function basisWerte(baseline: Baseline, basis: Baseline): Baseline {
+  return Object.fromEntries(Object.keys(baseline).map((pfad) => [pfad, basis[pfad] ?? {}]));
 }
 
 const lesen = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
@@ -136,6 +124,41 @@ describe("Factory-Seiten (#77)", () => {
       assert.deepEqual(Object.keys(z), Object.keys(z).sort());
       for (const n of Object.values(z)) assert.ok(n > 0);
     }
+  });
+
+  const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+  const basis: string | null = checkBasis.resolveBase(git, process.env) ?? null;
+
+  // In der CI (fail-closed) muss die Basis auflösbar sein; lokal ohne Basis entfällt die Prüfung (Muster von `kern-reinheit`).
+  test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
+    assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
+    let alt: Baseline = {};
+    try {
+      alt = JSON.parse(git(["show", `${basis}:${BASELINE}`])) as Baseline;
+    } catch {
+      // die Datei gibt es an der Basis noch nicht: jeder Wert ist neu
+    }
+    const baseline = JSON.parse(lesen(BASELINE)) as Baseline;
+    assert.deepEqual(anhebungen(baseline, basisWerte(baseline, alt)), []);
+  });
+
+  describe("Anhebungssperre (basisWerte)", () => {
+    test("ein höherer Wert als an der Basis ist rot und nennt Seite, Begriff und beide Werte", () => {
+      const m = anhebungen({ "docs/a.md": { Zelda: 2 } }, basisWerte({ "docs/a.md": { Zelda: 2 } }, { "docs/a.md": { Zelda: 1 } }));
+      assert.equal(m.length, 1);
+      assert.match(m[0] ?? "", /^docs\/a\.md: Baseline 'Zelda' 2 über dem Wert an der Diff-Basis \(1\), anheben ist verboten/);
+    });
+    test("ein neuer Begriff auf bekannter Seite und eine neue Seite sind ebenfalls Anhebungen", () => {
+      assert.equal(anhebungen({ "docs/a.md": { Zelda: 1, Agent: 1 } }, basisWerte({ "docs/a.md": { Zelda: 1, Agent: 1 } }, { "docs/a.md": { Zelda: 1 } })).length, 1);
+      assert.equal(anhebungen({ "docs/neu.md": { Zelda: 1 } }, basisWerte({ "docs/neu.md": { Zelda: 1 } }, {})).length, 1);
+    });
+    test("gleicher oder kleinerer Wert und eine entfernte Seite sind grün", () => {
+      const basis = { "docs/a.md": { Zelda: 2 }, "docs/b.md": { Agent: 1 } };
+      assert.deepEqual(anhebungen({ "docs/a.md": { Zelda: 2 } }, basisWerte({ "docs/a.md": { Zelda: 2 } }, basis)), []);
+      assert.deepEqual(anhebungen({ "docs/a.md": { Zelda: 1 } }, basisWerte({ "docs/a.md": { Zelda: 1 } }, basis)), []);
+      assert.deepEqual(anhebungen({}, basisWerte({}, basis)), []);
+    });
   });
 
   describe("Fixture-Config", () => {
