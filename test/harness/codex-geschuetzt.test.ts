@@ -70,7 +70,9 @@ function hostFehler(mode: string) {
       if (method === "mcpServerStatus/list") return Promise.resolve({ data: mode === "mcp" ? [{}] : [] });
       if (method === "command/exec") {
         state.commands++;
-        const a = params as { command: string[] }; state.marker = a.command[4];
+        const a = params as { command: string[] };
+        if (a.command[1] !== "-e") return Promise.resolve({ exitCode: 0, stdout: "UNEXPECTED_USER", stderr: "" });
+        state.marker = a.command[4];
         writeFileSync(a.command[3], mode === "positive" ? "falsch" : "SANDBOX_KONTROLLE");
         if (mode === "outside") writeFileSync(state.marker, "UEBERNOMMEN");
         if (mode === "rpc") throw Error("fixture RPC");
