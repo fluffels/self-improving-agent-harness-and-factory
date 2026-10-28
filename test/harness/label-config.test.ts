@@ -369,3 +369,32 @@ describe("Literal-Scan: keine Label-Werte in den Einheiten", () => {
     expect(labelLiterale(lies(pfad), werte)).toEqual([]);
   });
 });
+
+describe("pruefeProjektConfig: labels.dependabotInbox führt ins eigene Repo (#90 L23)", () => {
+  const pruefe = (projektRaw as unknown as { pruefeProjektConfig: (c: unknown) => string[] }).pruefeProjektConfig;
+  type Board = { rolle: string; repo?: string };
+  const mit = (aender: (c: { boards: Board[]; labels: Record<string, string> }) => void): string[] => {
+    const c = JSON.parse(JSON.stringify(P.ladeProjektConfig())) as { boards: Board[]; labels: Record<string, string> };
+    aender(c);
+    return pruefe(c);
+  };
+  const factory = (c: { boards: Board[] }): Board => c.boards.find((b) => b.rolle === "factory") as Board;
+
+  test("Upstream (Factory-Board ohne repo, gleiches Label) und die echte Config sind gültig", () => {
+    expect(pruefe(P.ladeProjektConfig())).toEqual([]);
+    expect(mit((c) => { c.labels.dependabotInbox = c.labels.harness; delete factory(c).repo; })).toEqual([]);
+  });
+  test("Bezieher: Factory-Board mit fremdem repo und gleichem Label für harness und dependabotInbox ist rot", () => {
+    const fehler = mit((c) => { factory(c).repo = "fremd-org/fabrik"; c.labels.dependabotInbox = c.labels.harness; });
+    expect(fehler).toHaveLength(1);
+    expect(fehler[0]).toMatch(/labels\.dependabotInbox "[^"]+" führt auf das Board von fremd-org\/fabrik[\s\S]*Fix:/);
+  });
+  test("Upstream mit Nicht-Harness-Label, das auf ein fremdes Produkt-Board führt, ist rot", () => {
+    const fehler = mit((c) => { delete factory(c).repo; c.labels.dependabotInbox = "area:andere"; });
+    expect(fehler).toHaveLength(1);
+    expect(fehler[0]).toContain("area:andere");
+  });
+  test("bei fehlerhaften Labels meldet nur der Label-Fehler, kein Folgefehler", () => {
+    expect(mit((c) => { delete (c.labels as Record<string, string | undefined>).harness; })).toEqual(["labels.harness fehlt (Pflichtschlüssel)"]);
+  });
+});

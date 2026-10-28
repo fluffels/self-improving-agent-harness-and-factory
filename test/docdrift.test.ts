@@ -491,3 +491,37 @@ describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator au
     assert.throws(() => parse({ verify: "npm run x", x: "npm run y && npm run a", y: "npm run x && npm run a", a: "x" }), /Zyklus/);
   });
 });
+
+// ADR-Zeiger als Kern-Check (#90): jede Fortschreibungs-Datei braucht Zeiger im ADR, auch beim Bezieher.
+describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { fortschreibungsFehler: string[] } }).auditDocDrift;
+  const kopf = "# Fortschreibung #5 (2026-10-01): Thema\n";
+  const fixture = (adrText: string, mitOrdner = true): string[] => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-adrzeiger-"));
+    try {
+      const dateien: Record<string, string> = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n", "docs/adr/0001-x.md": adrText };
+      if (mitOrdner) {
+        dateien["docs/adr/fortschreibungen/0001-5-thema.md"] = kopf;
+        dateien["docs/adr/fortschreibungen/README.md"] = "# Fortschreibungen\n"; // Index-Datei ohne <NNNN>-Namen: kein Fund
+      }
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      return auditIn(dir).fortschreibungsFehler;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test("fehlender Zeiger im ADR ist rot", () => {
+    const f = fixture("# ADR 0001: X\n");
+    assert.equal(f.length, 1);
+    assert.match(f[0], /Zeiger "fortschreibungen\/0001-5-thema\.md"/);
+  });
+
+  test("vorhandener Zeiger ist grün, fehlender Ordner wird übersprungen", () => {
+    assert.deepEqual(fixture("# ADR 0001: X\n[F](fortschreibungen/0001-5-thema.md)\n"), []);
+    assert.deepEqual(fixture("# ADR 0001: X\n", false), []);
+  });
+});

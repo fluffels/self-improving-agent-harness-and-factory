@@ -48,7 +48,7 @@ interface ZielLib {
 }
 const ziel = raw as unknown as ZielLib;
 const FABRIK = "zz-org/zz-fabrik";
-const mitFactoryRepo = (repo?: string) => ({ ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? (repo ? { ...b, repo } : { ...b, repo: undefined }) : b)) });
+const mitFactoryRepo = (repo?: string) => ({ ...FREMD, labels: repo ? { ...FREMD.labels, dependabotInbox: "bereich:zz-inbox" } : FREMD.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? (repo ? { ...b, repo } : { ...b, repo: undefined }) : b)) });
 
 describe("zielRepoFuer", () => {
   test("das Harness-Label geht an das Repo des Factory-Boards, ein Produkt-Label bleibt im eigenen Repo (AK5)", () => {
