@@ -1,6 +1,6 @@
 /* @harness-waechter: Windows-Prozesse vor dem ersten Zielbefehl einem Job zuordnen. */
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -41,6 +41,25 @@ windowsTest("Jobtimeout beendet einen nachweislich gestarteten Nachkommen vor se
   await expect(p.prozess(process.execPath, [parent, child, ready, marker], o)).rejects.toThrow("Prozess-Frist überschritten");
   expect(existsSync(ready)).toBe(true);
   await new Promise(r => setTimeout(r, 1500)); expect(existsSync(marker)).toBe(false);
+});
+
+windowsTest.each(["Restbytes", "negative Länge", "übergroße Länge", "abgeschnitten", "UTF8", "NUL", "negative Anzahl", "übergroße Anzahl", "Volumen", "leerer Umgebungsname", "Gleichheitszeichen im Umgebungsnamen"])("Requestparser verweigert %s vor Zielaktion", mode => {
+  const o = setup(), marker = join(o.cwd, "parser-marker"), request = join(o.cwd, "request.bin"), status = join(o.cwd, "status.txt");
+  const env = mode === "leerer Umgebungsname" ? { "": "fixture" } : mode === "Gleichheitszeichen im Umgebungsnamen" ? { "x=y": "fixture" } : o.env;
+  let data = w.windowsRequest({ file: process.execPath + (mode === "NUL" ? "\0rest" : ""), args: ["-e", "require('fs').writeFileSync(process.argv[1],'unerlaubt')", marker], cwd: o.cwd, env, deadline: Date.now() + 3000, status });
+  if (mode === "Restbytes") data = Buffer.concat([data, Buffer.from([1])]);
+  if (mode === "negative Länge") data.writeInt32LE(-1, 0);
+  if (mode === "übergroße Länge") data.writeInt32LE(10000001, 0);
+  if (mode === "abgeschnitten") data = data.subarray(0, data.length - 1);
+  if (mode === "UTF8") { data[4] = 0xc0; data[5] = 0x80; }
+  if (mode === "negative Anzahl" || mode === "übergroße Anzahl") {
+    let offset = 0; for (let i = 0; i < 3; i++) offset += 4 + data.readInt32LE(offset);
+    data.writeInt32LE(mode === "negative Anzahl" ? -1 : 100001, offset + 8);
+  }
+  if (mode === "Volumen") data = Buffer.alloc(10000001);
+  writeFileSync(request, data);
+  const result = spawnSync(w.windowsVorbereiten(), [request], { env: o.env, windowsHide: true, stdio: "pipe" });
+  expect(result.status).toBe(1); expect(existsSync(marker)).toBe(false);
 });
 describe.skipIf(process.platform !== "win32")("nativer Jobvertrag", () => {
 beforeAll(() => {

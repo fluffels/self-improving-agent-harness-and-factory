@@ -52,18 +52,17 @@ function publish(root, key, expected, source, compiler, deadline) {
   } finally { if (existsSync(stage)) rmSync(stage, { recursive: true }); }
 }
 
-export function windowsVorbereiten() {
-  if (supervisor) return supervisor;
+// Interner Prüfeinstieg für feste Quellfixtures; verändert niemals den Executorpfad.
+export function windowsCacheProbe(source) {
   const deadline = Date.now() + SETUP_MS;
   const compiler = join(process.env.SystemRoot, "Microsoft.NET/Framework64/v4.0.30319/csc.exe");
-  const source = readFileSync(SOURCE);
   const expected = { protocol: PROTOCOL, arch: "x64", options: OPTIONS, compilerHash: hash(readFileSync(compiler)), sourceHash: hash(source) };
   const key = hash(JSON.stringify(expected));
   const powershell = join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe");
   const check = () => execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-File", ACL, "-Key", key], { windowsHide: true, encoding: "utf8", timeout: budget(deadline) }).trim();
   const root = check(), artifact = join(root, key), lock = join(root, `${key}.lock`);
   regular(root, true);
-  if (existsSync(artifact)) { supervisor = validate(artifact, expected); return supervisor; }
+  if (existsSync(artifact)) return validate(artifact, expected);
   let ownLock = false;
   try {
     while (!ownLock) {
@@ -72,13 +71,18 @@ export function windowsVorbereiten() {
       catch (e) {
         if (e.code !== "EEXIST") throw e;
         regular(lock, true);
-        if (existsSync(artifact)) { check(); supervisor = validate(artifact, expected); return supervisor; }
+        if (existsSync(artifact)) { check(); return validate(artifact, expected); }
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(25, budget(deadline)));
       }
     }
     if (!existsSync(artifact)) publish(root, key, expected, source, compiler, deadline);
-    check(); supervisor = validate(artifact, expected); return supervisor;
+    check(); return validate(artifact, expected);
   } finally { if (ownLock) rmdirSync(lock); }
+}
+
+export function windowsVorbereiten() {
+  if (!supervisor) supervisor = windowsCacheProbe(readFileSync(SOURCE));
+  return supervisor;
 }
 
 export function windowsRequest({ file, args, cwd, env, deadline, status }) {

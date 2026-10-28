@@ -154,7 +154,7 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (heute alle Hooks ohne Codex-Adapter, Grenze #84) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme #86.
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle und die AGENTS.md-Größe gegen das Codex-Standardlimit. PreToolUse teilt sieben Auswertungsmodule mit `codex-hook-lib.mjs`; der Adapter unterstützt den begrenzten Einzelaktionshost und verweigert weitere Werkzeugpfade ohne kontrollierten Executor. Die übrigen Hook-Pfade bleiben ohne Codex-Adapter mit benannter Grenze #84. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme #86.
 
 ## Quellen
 

@@ -1,20 +1,24 @@
 /* @harness-waechter: Nur private, vollständig veröffentlichte native Artefakte ausführen. */
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
+// @ts-expect-error: Node-Skript ohne Declaration.
+import * as raw from "../../scripts/codex-prozess-windows.mjs";
+const w = raw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string };
 
 const windowsTest = test.skipIf(process.platform !== "win32");
-let fixture: string, moduleUrl: string, artifact: string, root: string, marker: string;
-const prepare = "const w=await import(process.argv[1]);console.log(w.windowsVorbereiten())";
-const action = "const w=await import(process.argv[1]);w.windowsVorbereiten();await w.windowsProzess(process.execPath,['-e',\"require('fs').writeFileSync(process.argv[1],'unerlaubt')\",process.argv[2]],{cwd:process.cwd(),env:{SystemRoot:process.env.SystemRoot},input:'',timeoutMs:3000,maxBytes:1000})";
-function launch(code: string) { return spawnSync(process.execPath, ["--input-type=module", "-e", code, moduleUrl, marker], { encoding: "utf8" }); }
-function parallelPrepare() {
+let fixture: string, moduleUrl: string, sourceFile: string, artifact: string, root: string, marker: string;
+const prepare = "const fs=await import('node:fs');const w=await import(process.argv[1]);console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])))";
+const action = "const fs=await import('node:fs');const w=await import(process.argv[1]);w.windowsCacheProbe(fs.readFileSync(process.argv[2]));const cp=await import('node:child_process');process.exit(cp.spawnSync(process.execPath,['-e',\"require('fs').writeFileSync(process.argv[1],'unerlaubt')\",process.argv[3]]).status)";
+function launch(code: string) { return spawnSync(process.execPath, ["--input-type=module", "-e", code, moduleUrl, sourceFile, marker], { encoding: "utf8" }); }
+function parallelPrepare(lock: string) {
   return new Promise<string>((resolveResult, reject) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", prepare, moduleUrl], { stdio: ["ignore", "pipe", "pipe"] });
+    const waiting = "const fs=await import('node:fs');const end=Date.now()+9000;while(!fs.existsSync(process.argv[4])){if(Date.now()>end)throw Error('Lock nicht sichtbar');await new Promise(r=>setTimeout(r,5))};";
+    const child = spawn(process.execPath, ["--input-type=module", "-e", waiting + prepare.replace("const fs=await import('node:fs');", ""), moduleUrl, sourceFile, marker, lock], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = ""; child.stdout.on("data", b => { out += String(b); }); child.stderr.on("data", b => { err += String(b); });
     child.once("error", reject); child.once("close", code => { if (code === 0) resolveResult(out.trim()); else reject(Error(err)); });
   });
@@ -22,11 +26,17 @@ function parallelPrepare() {
 beforeAll(async () => {
   if (process.platform !== "win32") return;
   fixture = mkdtempSync(join(tmpdir(), "codex-cache-test-")); marker = join(fixture, "zielmarker");
-  for (const name of ["codex-prozess-windows.mjs", "codex-prozess-cache.ps1"]) copyFileSync(resolve("scripts", name), join(fixture, name));
-  writeFileSync(join(fixture, "codex-prozess-windows.cs"), readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8") + `\n// Fixture ${randomUUID()}\n`);
-  moduleUrl = pathToFileURL(join(fixture, "codex-prozess-windows.mjs")).href;
-  const paths = await Promise.all([parallelPrepare(), parallelPrepare()]);
-  expect(paths[0]).toBe(paths[1]); artifact = dirname(paths[0]); root = dirname(artifact);
+  sourceFile = join(fixture, "source.cs");
+  writeFileSync(sourceFile, readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8") + `\n// Fixture ${randomUUID()}\n`);
+  moduleUrl = pathToFileURL(resolve("scripts/codex-prozess-windows.mjs")).href;
+  const active = w.windowsVorbereiten(); root = dirname(dirname(active));
+  const expected = JSON.parse(readFileSync(join(dirname(active), "manifest.json"), "utf8")) as Record<string, unknown>;
+  delete expected.exeHash; expected.sourceHash = createHash("sha256").update(readFileSync(sourceFile)).digest("hex");
+  const key = createHash("sha256").update(JSON.stringify(expected)).digest("hex");
+  const parallel = parallelPrepare(join(root, `${key}.lock`));
+  const originalPath = w.windowsCacheProbe(readFileSync(sourceFile));
+  expect(await parallel).toBe(originalPath); artifact = dirname(originalPath);
+  expect(w.windowsVorbereiten()).toBe(active);
 });
 afterAll(() => {
   if (artifact) {
