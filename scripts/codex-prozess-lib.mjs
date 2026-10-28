@@ -60,9 +60,16 @@ async function inventarBeenden(child, geschlossen) {
 export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 5000 } = {}) {
   const child = start(codex, ["--strict-config", "app-server", "--stdio"], { cwd: p.root, env: p.env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
   const geschlossen = new Promise(resolve => child.once("close", resolve));
-  const pending = new Map(); let seq = 0, bytes = 0;
-  const stop = e => { for (const waiter of pending.values()) waiter.reject(e); pending.clear(); beenden(child); };
-  const timer = setTimeout(() => stop(new Error("Inventar-Frist überschritten")), timeoutMs);
+  const pending = new Map(); let seq = 0, bytes = 0, failure, timer;
+  const stop = e => {
+    if (failure) return;
+    failure = e; for (const waiter of pending.values()) waiter.reject(e); pending.clear(); beenden(child);
+  };
+  const phase = ms => {
+    if (failure) throw failure;
+    clearTimeout(timer); timer = setTimeout(() => stop(new Error("Inventar-Frist überschritten")), ms);
+  };
+  phase(timeoutMs);
   child.on("error", stop); child.stdin.on("error", stop); child.stderr.on("data", () => {});
   child.on("close", () => stop(new Error("Inventar-Prozess beendet")));
   const lines = createInterface({ input: child.stdout });
@@ -75,12 +82,13 @@ export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 500
     } catch (e) { stop(e); }
   });
   const rpc = (method, params) => new Promise((resolve, reject) => {
+    if (failure) { reject(failure); return; }
     const id = ++seq; pending.set(id, { resolve, reject }); child.stdin.write(JSON.stringify({ id, method, params }) + "\n");
   });
   try {
     const init = await rpc("initialize", { clientInfo: { name: "harness_schutz", version: "1.0.0" }, capabilities: { experimentalApi: true } });
     child.stdin.write('{"method":"initialized","params":{}}\n');
-    return await fn(rpc, init);
+    return await fn(rpc, init, phase);
   } finally {
     clearTimeout(timer); lines.close();
     await inventarBeenden(child, geschlossen);

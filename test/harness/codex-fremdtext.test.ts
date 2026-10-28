@@ -5,6 +5,8 @@ import { createServer } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
 import { spawnSync, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { fakeInventar, type Inventar } from "../support/codex-fixture";
 // @ts-expect-error: Node-Skripte ohne Declaration.
 import * as raw from "../../scripts/codex-prozess-lib.mjs";
@@ -14,8 +16,42 @@ type Profil = { root: string; env: Record<string, string>; entfernen: () => void
 const c = raw as unknown as { profil: (s?: string) => Profil; umgebung: (h: string) => Record<string, string>; prozess: (f: string, a: string[], o: { cwd: string; env: Record<string, string>; input?: string; timeoutMs?: number; maxBytes?: number }) => Promise<{ code: number; stdout: string; stderr: string }>; mitInventar: Inventar; beenden: (child: { exitCode: number | null; signalCode?: string | null; pid?: number; kill: (s?: string) => void }, opts?: { platform?: string; treeKill?: (...a: unknown[]) => void; killGroup?: (...a: unknown[]) => void }) => void };
 const f = fremdRaw as unknown as { fremdtextProfil: (u: string) => string; verarbeiteFremdtext: (d: unknown, u: string, codex?: string, deps?: { inventar: Inventar; engine: typeof c.prozess }) => Promise<string> };
 const temps: Profil[] = [];
-afterEach(() => { vi.unstubAllEnvs(); for (const p of temps.splice(0)) p.entfernen(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); for (const p of temps.splice(0)) p.entfernen(); });
 function temp() { const p = c.profil(); temps.push(p); return p; }
+type PhaseRpc = (method: string, params: unknown) => Promise<unknown>;
+type Phase = (ms: number) => void;
+type PhasenTransport = (s: string, p: Profil, fn: (rpc: PhaseRpc, init: unknown, phase: Phase) => Promise<unknown>, opts: { start: () => ChildProcess; timeoutMs: number }) => Promise<unknown>;
+function phasenFixture(antwort = true) {
+  const stdout = new PassThrough(), stderr = new PassThrough();
+  const child = Object.assign(new EventEmitter(), { stdout, stderr, exitCode: null, stdin: Object.assign(new EventEmitter(), {
+    write: vi.fn((line: string) => { const m = JSON.parse(line) as { id?: number; method: string }; if (antwort && m.method === "initialize") queueMicrotask(() => stdout.write(JSON.stringify({ id: m.id, result: {} }) + "\n")); }),
+    end: () => { queueMicrotask(() => { child.emit("close", 0); }); },
+  }) });
+  return { child, start: () => child as unknown as ChildProcess };
+}
+test("Transport-Inventarfrist umfasst initialize und endet vor Folgeschritten", async () => {
+  vi.useFakeTimers(); const p = temp(), fixture = phasenFixture(false), weiter = vi.fn();
+  let settled = false;
+  const transport = c.mitInventar as unknown as PhasenTransport;
+  const result = transport("fixture", p, weiter, { start: fixture.start, timeoutMs: 10 }).catch((e: unknown) => { settled = true; return (e as Error).message; });
+  await vi.advanceTimersByTimeAsync(10);
+  expect(settled).toBe(true);
+  expect(await result).toBe("Inventar-Frist überschritten"); expect(weiter).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
+});
+test.each(["timeout", "close"])("Phasenfrist %s verriegelt spätere RPCs und bewahrt den ersten Fehler", async mode => {
+  vi.useFakeTimers(); const p = temp(), fixture = phasenFixture(), transport = c.mitInventar as unknown as PhasenTransport;
+  let rpc!: PhaseRpc, phase!: Phase, settled = false;
+  const result = transport("fixture", p, async (r, _init, f) => { rpc = r; phase = f; phase(20); return rpc("never", {}); }, { start: fixture.start, timeoutMs: 10 }).then(() => "erfolg", (e: unknown) => { settled = true; return (e as Error).message; });
+  await vi.advanceTimersByTimeAsync(10); expect(settled).toBe(false);
+  if (mode === "close") fixture.child.emit("close", 0); else await vi.advanceTimersByTimeAsync(10);
+  const first = mode === "close" ? "Inventar-Prozess beendet" : "Inventar-Frist überschritten";
+  expect(await result).toBe(first);
+  expect(() => phase(40)).toThrow(first);
+  const late = rpc("late", {}).catch((e: unknown) => (e as Error).message);
+  expect(fixture.child.stdin.write.mock.calls.map(([s]) => (JSON.parse(s) as { method: string }).method)).toEqual(["initialize", "initialized", "never"]);
+  expect(await late).toBe(first);
+  expect(vi.getTimerCount()).toBe(0);
+});
 
 test.each<[string | undefined, boolean]>([[undefined, true], ["fixture", false]])("native Probe %s erhält Dateiparallelität %s", async (probe, parallel) => {
   vi.stubEnv("CODEX_SCHUTZ_PROBE", probe); vi.resetModules();

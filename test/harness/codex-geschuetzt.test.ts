@@ -4,15 +4,101 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { fakeInventar, type Inventar } from "../support/codex-fixture";
+import { fakeInventar, type Inventar, type Profil, type Rpc } from "../support/codex-fixture";
 // @ts-expect-error: Node-Skripte ohne Declaration.
 import * as raw from "../../scripts/codex-geschuetzt.mjs";
 type Aktion = { tool_name: string; cwd: string; tool_input: Record<string, unknown> };
 type Optionen = { executor: (a: Aktion) => unknown; inventar: () => Promise<unknown>; guard: (a: Aktion) => Promise<unknown>; timeoutMs?: number };
-const c = raw as unknown as { geschuetzteAktion: (a: Aktion, o: Optionen) => Promise<unknown>; nativesInventar: (s: string, fn: Inventar) => Promise<unknown>; hookBefehl: () => string };
+type HostTransport = (s: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }, phase: (ms: number) => void) => Promise<unknown>, opts: { timeoutMs: number }) => Promise<unknown>;
+const c = raw as unknown as { geschuetzteAktion: (a: Aktion, o: Optionen) => Promise<unknown>; geschuetzterHost: (a: Aktion, o: { abfragen: HostTransport; guard: Optionen["guard"] }) => Promise<unknown>; nativesInventar: (s: string, fn: Inventar) => Promise<unknown>; hookBefehl: () => string };
 const aktion: Aktion = { tool_name: "exec_command", cwd: process.cwd(), tool_input: { cmd: "echo fixture", shell: "powershell" } };
 const gueltig = { version: "0.164.0", geschlossen: true, hooks: [{ eventName: "preToolUse", enabled: true, trustStatus: "trusted" }], errors: [] };
 const inventar = () => Promise.resolve(structuredClone(gueltig));
+test("Host verwendet ein frisches kombiniertes Profil und eine geordnete Sitzung pro Aufruf", async () => {
+  const profiles: string[] = [], phases: number[] = [], methods: string[] = [], policies: unknown[] = [];
+  let closed = false, marker = "";
+  const guard = vi.fn(() => { expect(methods.filter(m => m === "command/exec")).toHaveLength(0); return Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' }); });
+  const abfragen: HostTransport = async (_s, p, fn, opts) => {
+    closed = false; profiles.push(p.root); expect(opts.timeoutMs).toBe(5000);
+    expect(readFileSync(join(p.env.CODEX_HOME, "config.toml"), "utf8")).toContain('sandbox="unelevated"');
+    expect(readFileSync(join(p.env.CODEX_HOME, "hooks.json"), "utf8")).toContain("PreToolUse");
+    const h = { ...gueltig.hooks[0], command: c.hookBefehl(), key: "fixture", currentHash: "fixture" };
+    const rpc: Rpc = (method, params) => {
+      methods.push(method); expect(closed).toBe(false);
+      if (method === "hooks/list") return Promise.resolve({ data: [{ hooks: [h], errors: [] }] });
+      if (method === "mcpServerStatus/list") return Promise.resolve({ data: [] });
+      if (method === "command/exec") {
+        const a = params as { command: string[]; sandboxPolicy: unknown }; policies.push(a.sandboxPolicy);
+        if (a.command[1] === "-e") { writeFileSync(a.command[3], "SANDBOX_KONTROLLE"); marker = a.command[4]; return Promise.resolve({ exitCode: 1 }); }
+        return Promise.resolve({ exitCode: 0, stdout: "HOST_OK", stderr: "" });
+      }
+      return Promise.resolve({});
+    };
+    try { return await fn(rpc, { userAgent: "fixture/0.164.0 " }, ms => { phases.push(ms); }); }
+    finally { expect(existsSync(p.root)).toBe(true); expect(existsSync(marker)).toBe(true); closed = true; }
+  };
+  for (let i = 0; i < 2; i++) {
+    methods.length = 0; policies.length = 0;
+    expect(await c.geschuetzterHost(aktion, { abfragen, guard })).toEqual({ code: 0, stdout: "HOST_OK", stderr: "" });
+    expect(closed).toBe(true); expect(existsSync(profiles[i])).toBe(false); expect(existsSync(marker)).toBe(false);
+    expect(methods).toEqual(["hooks/list", "config/value/write", "hooks/list", "mcpServerStatus/list", "command/exec", "command/exec"]);
+    expect(policies[0]).toEqual(policies[1]);
+  }
+  expect(profiles[0]).not.toBe(profiles[1]); expect(phases).toEqual([3000, 40000, 3000, 40000]); expect(guard).toHaveBeenCalledTimes(2);
+});
+test("kombinierter Host startet genau einen echten Fixture-Server und wartet auf dessen close", async () => {
+  const state: { root?: string; starts?: number; closes?: number; methods?: string[] } = {};
+  const h = { ...gueltig.hooks[0], command: c.hookBefehl(), key: "fixture", currentHash: "fixture" };
+  const abfragen = fakeInventar("host", { "hooks/list": [{ data: [{ hooks: [h], errors: [] }] }, { data: [{ hooks: [h], errors: [] }] }], "config/value/write": {}, "mcpServerStatus/list": { data: [] } }, state);
+  expect(await c.geschuetzterHost(aktion, { abfragen, guard: () => Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' }) })).toEqual({ code: 0, stdout: "HOST_FIXTURE_OK", stderr: "" });
+  expect(state.starts).toBe(1); expect(state.closes).toBe(1); expect(state.methods?.filter(m => m === "initialize")).toHaveLength(1);
+  expect(state.methods?.filter(m => m === "command/exec")).toHaveLength(2); expect(existsSync(state.root!)).toBe(false);
+});
+function hostFehler(mode: string) {
+  const state = { root: "", marker: "", closed: false, commands: 0 };
+  const guard = vi.fn(() => {
+    if (mode === "guard-error") return Promise.reject(Error("fixture guard"));
+    if (mode === "guard-late") return new Promise(r => setTimeout(() => r({ code: 0, stdout: '{"entscheidung":"allow"}' }), 3500));
+    return Promise.resolve({ code: 0, stdout: mode === "guard-deny" ? '{"entscheidung":"deny"}' : '{"entscheidung":"allow"}' });
+  });
+  const abfragen: HostTransport = async (_s, p, fn) => {
+    state.root = p.root;
+    const h = { ...gueltig.hooks[0], command: c.hookBefehl(), key: "fixture", currentHash: "fixture", trustStatus: mode === "untrusted" ? "untrusted" : "trusted" };
+    const rpc: Rpc = (method, params) => {
+      if (method === "hooks/list") return Promise.resolve({ data: [{ hooks: mode === "missing" ? [] : [h], errors: [] }] });
+      if (method === "config/value/write" && mode === "trust") throw Error("fixture trust");
+      if (method === "mcpServerStatus/list") return Promise.resolve({ data: mode === "mcp" ? [{}] : [] });
+      if (method === "command/exec") {
+        state.commands++;
+        const a = params as { command: string[] }; state.marker = a.command[4];
+        writeFileSync(a.command[3], mode === "positive" ? "falsch" : "SANDBOX_KONTROLLE");
+        if (mode === "outside") writeFileSync(state.marker, "UEBERNOMMEN");
+        if (mode === "rpc") throw Error("fixture RPC");
+        return Promise.resolve({ exitCode: mode === "control-allow" ? 0 : 1 });
+      }
+      return Promise.resolve({});
+    };
+    try { return await fn(rpc, { userAgent: mode === "version" ? "fixture/0.165.0 " : "fixture/0.164.0 " }, () => {}); }
+    finally { expect(existsSync(p.root)).toBe(true); expect(state.marker === "" || existsSync(state.marker)).toBe(true); state.closed = true; }
+  };
+  return { state, guard, abfragen };
+}
+test.each(["missing", "untrusted", "trust", "version", "mcp", "guard-error", "guard-deny", "positive", "outside", "control-allow", "rpc"])("gemeinsamer Host stoppt Phase %s vor Nutzeraktion und bereinigt nach Transportende", async mode => {
+  const f = hostFehler(mode);
+  await expect(c.geschuetzterHost(aktion, f)).rejects.toThrow();
+  const control = ["positive", "outside", "control-allow", "rpc"].includes(mode);
+  expect(f.state.commands).toBe(control ? 1 : 0); expect(f.guard).toHaveBeenCalledTimes(control || mode.startsWith("guard-") ? 1 : 0);
+  expect(f.state.closed).toBe(true); expect(existsSync(f.state.root)).toBe(false); expect(f.state.marker === "" || !existsSync(f.state.marker)).toBe(true);
+});
+test("späte Guardfreigabe nach 3000ms erreicht keinen command/exec", async () => {
+  vi.useFakeTimers(); const f = hostFehler("guard-late");
+  let failed = false;
+  try {
+    const result = c.geschuetzterHost(aktion, f).catch((e: unknown) => { failed = true; return (e as Error).message; });
+    await vi.advanceTimersByTimeAsync(3000); expect(failed).toBe(true); expect(await result).toBe("Guard-Frist überschritten");
+    await vi.advanceTimersByTimeAsync(500); expect(f.state.commands).toBe(0); expect(f.state.closed).toBe(true); expect(existsSync(f.state.root)).toBe(false);
+  } finally { vi.useRealTimers(); }
+});
 test.each([
   ["throw", () => Promise.reject(Error("kaputt"))],
   ["hang", () => new Promise(() => {})],
@@ -68,6 +154,8 @@ test.each(["write_stdin", "apply_patch", "spawn_agent", "send_message", "followu
   const inv = vi.fn(inventar), guard = vi.fn(), executor = vi.fn();
   await expect(c.geschuetzteAktion({ ...aktion, tool_name }, { inventar: inv, guard, executor })).rejects.toThrow();
   expect(inv).not.toHaveBeenCalled(); expect(executor).not.toHaveBeenCalled();
+  await expect(c.geschuetzterHost({ ...aktion, tool_name }, { abfragen: inv, guard })).rejects.toThrow();
+  expect(inv).not.toHaveBeenCalled(); expect(guard).not.toHaveBeenCalled();
 });
 test("hängerndes Inventar und unbekannte Entscheidung starten keinen Executor", async () => {
   const executor = vi.fn(), guard = vi.fn();

@@ -4,10 +4,10 @@ import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
 import * as raw from "../../scripts/codex-prozess-lib.mjs";
 export type Profil = { root: string; env: Record<string, string>; entfernen: () => void };
 export type Rpc = (method: string, params: unknown) => Promise<Record<string, unknown>>;
-export type Inventar = (codex: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }) => Promise<unknown>) => Promise<unknown>;
+export type Inventar = (codex: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }, phase: (ms: number) => void) => Promise<unknown>) => Promise<unknown>;
 type Optionen = { start: (file: string, args: string[], options: SpawnOptions) => ChildProcess; timeoutMs: number };
-const c = raw as unknown as { mitInventar: (s: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }) => Promise<unknown>, o: Optionen) => Promise<unknown> };
-export function fakeInventar(mode: string, antworten: Record<string, unknown> = {}, zustand: { root?: string; child?: ChildProcess } = {}): Inventar {
+const c = raw as unknown as { mitInventar: (s: string, p: Profil, fn: Parameters<Inventar>[2], o: Optionen) => Promise<unknown> };
+export function fakeInventar(mode: string, antworten: Record<string, unknown> = {}, zustand: { root?: string; child?: ChildProcess; starts?: number; closes?: number; methods?: string[] } = {}): Inventar {
   return (_codex, p, fn) => {
     zustand.root = p.root;
     const script = `const antworten=${JSON.stringify(antworten)},mode=${JSON.stringify(mode)};if(mode==='eofhang')setTimeout(()=>process.exit(42),1500);require('readline').createInterface({input:process.stdin}).on('line',l=>{
@@ -17,12 +17,19 @@ export function fakeInventar(mode: string, antworten: Record<string, unknown> = 
       if(mode==='json'){console.log('{');return;}
       if(mode==='size'){console.log('x'.repeat(1000001));return;}
       if(mode==='rpc'||(mode==='trust'&&m.method==='config/value/write')){console.log(JSON.stringify({id:m.id,error:{code:-32603,message:'fixture'}}));return;}
+      if(mode==='host'&&m.method==='command/exec'){
+        const cmd=m.params.command,control=cmd[1]==='-e';if(control)require('node:fs').writeFileSync(cmd[3],'SANDBOX_KONTROLLE');
+        console.log(JSON.stringify({id:m.id,result:{exitCode:control?1:0,stdout:'HOST_FIXTURE_OK',stderr:''}}));return;
+      }
       console.log(JSON.stringify({id:999,result:{ignored:true}}));
       const r=antworten[m.method];console.log(JSON.stringify({id:m.id,result:m.method==='initialize'?{userAgent:mode==='version'?'fixture/0.165.0 (fixture)':'fixture/0.164.0 (fixture)'}:Array.isArray(r)?r.shift():r}));
       if(mode==='pipe'){process.stdin.destroy();setTimeout(()=>process.exit(),20);}
     });`;
     return c.mitInventar("fixture", p, fn, { timeoutMs: mode === "hang" ? 100 : 3000, start: (_file, _args, options) => {
-      const child = spawn(process.execPath, ["-e", script], options); zustand.child = child;
+      const child = spawn(process.execPath, ["-e", script], options); zustand.child = child; zustand.starts = (zustand.starts ?? 0) + 1;
+      child.once("close", () => { zustand.closes = (zustand.closes ?? 0) + 1; });
+      const write = child.stdin!.write.bind(child.stdin!);
+      child.stdin!.write = ((chunk: string) => { (zustand.methods ??= []).push((JSON.parse(chunk) as { method: string }).method); return write(chunk); }) as typeof write;
       if (mode === "enderror") child.stdin!.end = () => { throw new Error("fixture cleanup"); };
       if (mode === "signal") child.once("spawn", () => setTimeout(() => child.kill("SIGKILL"), 100));
       return child;

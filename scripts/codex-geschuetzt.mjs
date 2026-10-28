@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { normalisiere } from "./codex-hook-lib.mjs";
 import { profil, prozess, mitInventar, umgebung } from "./codex-prozess-lib.mjs";
-import { sandboxAktion } from "./codex-sandbox.mjs";
+import { SANDBOX_MS, SANDBOX_PROFIL, sandboxAktion, sandboxVorbereiten } from "./codex-sandbox.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const HOOK = fileURLToPath(new URL("codex-hook.mjs", import.meta.url));
+const GUARD_MS = 3000;
 export const hookBefehl = () => `"${process.execPath}" "${HOOK}"`;
 export function hookDatei() {
   return JSON.stringify({ hooks: { PreToolUse: [{ matcher: ".*", hooks: [{ type: "command", command: hookBefehl(), timeout: 3 }] }] } });
@@ -17,22 +18,23 @@ export async function nativesInventar(codex = "codex", abfragen = mitInventar) {
   const p = profil();
   writeFileSync(join(p.env.CODEX_HOME, "hooks.json"), hookDatei());
   try {
-    return await abfragen(codex, p, async (rpc, init) => {
-      const entry = async () => {
-        const r = await rpc("hooks/list", { cwds: [p.root] });
-        if (r.data.length !== 1) throw new Error("Mehrdeutiges Hook-Inventar");
-        return r.data[0];
-      };
-      let e = await entry();
-      const h = e.hooks[0];
-      if (e.errors.length || e.hooks.length !== 1 || h.command !== hookBefehl()) throw new Error("Unerwartete Hook-Quelle");
-      // Ausschließlich die eben selbst erzeugte Registrierung vertrauen, niemals beliebigen Profilen.
-      await rpc("config/value/write", { keyPath: `hooks.state.${JSON.stringify(h.key)}`, value: { trusted_hash: h.currentHash }, mergeStrategy: "replace" });
-      e = await entry();
-      const mcp = await rpc("mcpServerStatus/list", {});
-      return { version: init.userAgent.split("/")[1].split(" ")[0], geschlossen: mcp.data.length === 0, hooks: e.hooks, errors: e.errors };
-    });
+    return await abfragen(codex, p, (rpc, init) => inventarInSitzung(rpc, init, p));
   } finally { p.entfernen(); }
+}
+export async function inventarInSitzung(rpc, init, p) {
+  const entry = async () => {
+    const r = await rpc("hooks/list", { cwds: [p.root] });
+    if (r.data.length !== 1) throw new Error("Mehrdeutiges Hook-Inventar");
+    return r.data[0];
+  };
+  let e = await entry();
+  const h = e.hooks[0];
+  if (e.errors.length || e.hooks.length !== 1 || h.command !== hookBefehl()) throw new Error("Unerwartete Hook-Quelle");
+  // Ausschließlich die eben selbst erzeugte Registrierung vertrauen, niemals beliebigen Profilen.
+  await rpc("config/value/write", { keyPath: `hooks.state.${JSON.stringify(h.key)}`, value: { trusted_hash: h.currentHash }, mergeStrategy: "replace" });
+  e = await entry();
+  const mcp = await rpc("mcpServerStatus/list", {});
+  return { version: init.userAgent.split("/")[1].split(" ")[0], geschlossen: mcp.data.length === 0, hooks: e.hooks, errors: e.errors };
 }
 export function pruefeInventar(i) {
   if (i?.version !== "0.164.0" || i.geschlossen !== true || !Array.isArray(i.errors) || i.errors.length !== 0) throw new Error("Geschlossenes natives Inventar fehlt");
@@ -46,7 +48,7 @@ async function frist(fn, ms) {
   finally { clearTimeout(timer); }
 }
 async function guardProzess(a) {
-  return prozess(process.execPath, [HOOK, "--host"], { cwd: ROOT, env: umgebung(ROOT), input: JSON.stringify(a), timeoutMs: 3000 });
+  return prozess(process.execPath, [HOOK, "--host"], { cwd: ROOT, env: umgebung(ROOT), input: JSON.stringify(a), timeoutMs: GUARD_MS });
 }
 export async function geschuetzteAktion(aktion, { inventar = nativesInventar, guard = guardProzess, executor = sandboxAktion, timeoutMs = 5000 } = {}) {
   const serialisiert = JSON.stringify(normalisiere(aktion));
@@ -59,7 +61,27 @@ export async function geschuetzteAktion(aktion, { inventar = nativesInventar, gu
   if (d?.entscheidung !== "allow" || Object.keys(d).some(k => !["entscheidung", "grund"].includes(k))) throw new Error("Keine vollständige Guard-Freigabe");
   return executor(JSON.parse(serialisiert));
 }
+export async function geschuetzterHost(aktion, { abfragen = mitInventar, guard = guardProzess } = {}) {
+  const a = normalisiere(aktion);
+  if (a.tool_name !== "exec_command") throw new Error("Abhängiger Ablauf gestoppt: Executor für diesen Werkzeugpfad fehlt");
+  const p = profil(SANDBOX_PROFIL); let schritt;
+  try {
+    writeFileSync(join(p.env.CODEX_HOME, "hooks.json"), hookDatei());
+    return await abfragen("codex", p, async (rpc, init, phase) => {
+      const i = await inventarInSitzung(rpc, init, p);
+      return geschuetzteAktion(a, {
+        inventar: () => Promise.resolve(i), timeoutMs: GUARD_MS,
+        guard: geprueft => { phase(GUARD_MS); return guard(geprueft); },
+        executor: geprueft => {
+          phase(SANDBOX_MS); schritt = sandboxVorbereiten(geprueft, { p });
+          schritt.initialisieren();
+          return schritt.ausfuehren(rpc, init);
+        },
+      });
+    }, { timeoutMs: 5000 });
+  } finally { try { schritt?.entfernen(); } finally { p.entfernen(); } }
+}
 if (istDirektaufruf(import.meta.url)) {
-  try { console.log(JSON.stringify(await geschuetzteAktion(JSON.parse(readFileSync(0, "utf8"))))); }
+  try { console.log(JSON.stringify(await geschuetzterHost(JSON.parse(readFileSync(0, "utf8"))))); }
   catch (e) { console.error(`Codex-Aktion gestoppt: ${e.message}`); process.exitCode = 1; }
 }

@@ -33,12 +33,29 @@ type Rpc = (method: string, params: Params) => Promise<Record<string, unknown>>;
 type Profil = { root: string; env: Record<string, string> };
 type Aktion = { cwd: string; tool_input: { cmd: string; shell: string } };
 type Abfragen = (s: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }) => Promise<unknown>, opts: { timeoutMs: number }) => Promise<unknown>;
-const c = raw as unknown as { pruefeCwdGrenze: (rest: string) => void; sandboxAktion: (a: Aktion, deps?: { root: string; abfragen?: Abfragen }) => Promise<{ code: number; stdout: string; stderr: string }> };
+type SandboxSchritt = { ausfuehren: (rpc: Rpc, init: { userAgent: string }) => Promise<unknown>; initialisieren: () => void; entfernen: () => void };
+const c = raw as unknown as { pruefeCwdGrenze: (rest: string) => void; sandboxAktion: (a: Aktion, deps?: { root: string; abfragen?: Abfragen }) => Promise<{ code: number; stdout: string; stderr: string }>; sandboxVorbereiten: (a: Aktion, deps: { root: string; p: Profil }) => SandboxSchritt };
 const temps: string[] = [];
 afterEach(() => { fsFault.stage = ""; fsFault.profil = ""; fsFault.canary = ""; for (const dir of [...temps.splice(0), ...fsFault.created.splice(0)]) rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), "codex-sandbox-test-")); temps.push(dir); return dir; };
 const aktion = (cwd: string): Aktion => ({ cwd, tool_input: { cmd: "Write-Output FIXTURE_OK", shell: "powershell" } });
 const denial = (rpcCode: unknown = -32603, rpcMessage: unknown = "exec failed: sandbox error: sandbox denied exec error, exit code: 1") => Object.assign(new Error("RPC verweigert"), { rpcCode, rpcMessage });
+test("Sandboxschritt nutzt die bestehende Sitzung und überlässt Cleanup ihrem Besitzer", async () => {
+  const root = temp(), profilRoot = temp(), p = { root: profilRoot, env: {} }, calls: Params[] = [];
+  const schritt = c.sandboxVorbereiten(aktion(root), { root, p });
+  schritt.initialisieren();
+  const rpc: Rpc = (_method, args) => {
+    calls.push(args);
+    if (calls.length === 1) { writeFileSync(args.command[3], "SANDBOX_KONTROLLE"); return Promise.resolve({ exitCode: 1 }); }
+    return Promise.resolve({ exitCode: 0, stdout: "FIXTURE_OK", stderr: "" });
+  };
+  try {
+    expect(await schritt.ausfuehren(rpc, { userAgent: "fixture/0.164.0 " })).toEqual({ code: 0, stdout: "FIXTURE_OK", stderr: "" });
+    expect(calls).toHaveLength(2); expect(calls[0].sandboxPolicy).toEqual(calls[1].sandboxPolicy);
+    expect(existsSync(dirname(calls[0].command[4]))).toBe(true); expect(existsSync(profilRoot)).toBe(true);
+  } finally { schritt.entfernen(); }
+  expect(existsSync(dirname(calls[0].command[4]))).toBe(false); expect(existsSync(profilRoot)).toBe(true);
+});
 test.each(["..", `..${sep}nachbar`, tmpdir()])("relative cwd-Grenze verweigert %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).toThrow("außerhalb"); });
 test.each(["", "unterordner", "..prefix"])("relative cwd-Grenze erlaubt %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).not.toThrow(); });
 test.each(["profil", "mkdir", "config", "canary", "marker"])("Initialisierungsfehler %s hinterlässt keine Ressourcen und startet keinen Server", async stage => {
@@ -47,6 +64,19 @@ test.each(["profil", "mkdir", "config", "canary", "marker"])("Initialisierungsfe
   expect(abfragen).not.toHaveBeenCalled();
   expect(fsFault.profil === "" || !existsSync(fsFault.profil)).toBe(true);
   expect(fsFault.canary === "" || !existsSync(fsFault.canary)).toBe(true);
+});
+test("kombinierter Host bereinigt auch Markerinitialisierungsfehler erst nach Sitzungsende", async () => {
+  // @ts-expect-error: Node-Skript ohne Declaration.
+  const host = await import("../../scripts/codex-geschuetzt.mjs") as { hookBefehl: () => string; geschuetzterHost: (a: unknown, o: unknown) => Promise<unknown> };
+  fsFault.stage = "marker"; let closed = false;
+  const abfragen: Abfragen = async (_s, p, fn) => {
+    const h = { eventName: "preToolUse", enabled: true, trustStatus: "trusted", command: host.hookBefehl(), key: "fixture", currentHash: "fixture" };
+    const rpc = (method: string) => Promise.resolve(method === "hooks/list" ? { data: [{ hooks: [h], errors: [] }] } : method === "mcpServerStatus/list" ? { data: [] } : {});
+    try { return await (fn as unknown as (call: (method: string) => Promise<unknown>, init: unknown, phase: () => void) => Promise<unknown>)(rpc, { userAgent: "fixture/0.164.0 " }, () => {}); }
+    finally { expect(existsSync(p.root)).toBe(true); expect(existsSync(fsFault.canary)).toBe(true); closed = true; }
+  };
+  await expect(host.geschuetzterHost({ ...aktion(process.cwd()), tool_name: "exec_command" }, { abfragen, guard: () => Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' }) })).rejects.toThrow("fixture ENOSPC");
+  expect(closed).toBe(true); expect(existsSync(fsFault.canary)).toBe(false); expect(existsSync(fsFault.profil)).toBe(false);
 });
 
 function fixture(mode = "ok") {
