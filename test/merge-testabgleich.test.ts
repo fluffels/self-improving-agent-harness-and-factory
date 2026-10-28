@@ -194,7 +194,7 @@ describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
       assert.match(g(["merge", "main"]), /Already up to date/);
       const r = cli(root);
       assert.equal(r.status, 2, r.stderr);
-      assert.match(r.stderr, /\(Exit 2: nichts zu prüfen\)/);
+      assert.match(r.stderr, /\(Exit 2: nichts zu prüfen, z\.B\. nach „Already up to date“\)/);
     });
 
     test("„Already up to date“ mit HEAD auf einem älteren Merge-Commit: der Merge wird erneut geprüft (sauber: Exit 0)", () => {

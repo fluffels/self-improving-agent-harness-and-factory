@@ -421,6 +421,14 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("git --attr-source HEAD push", wt), false, "im Worktree bleibt es erlaubt");
   });
 
+  test("Wegwerf-Repo außerhalb (#90): ein vorhandener -C-Pfad blockt nicht, ein für den Hook nicht auffindbarer (z.B. MSYS-Pfad) blockt aus dem Haupt-Checkout", () => {
+    const aussen = resolve("/c/scratch/probe");
+    assert.equal(run(`git -C '${aussen}' commit -m x`), false, "vorhandener Pfad außerhalb des Repos: kein Haupt-Checkout");
+    const weg = fsFake([wt], [aussen]);
+    assert.equal(run(`git -C '${aussen}' commit -m x`, repoRoot, weg), true, "nicht auffindbar: konservativ, der Ausgangsort (Haupt-Checkout) zählt mit");
+    assert.equal(run(`git -C '${aussen}' commit -m x`, wt, weg), false, "aus dem Worktree bleibt es erlaubt");
+  });
+
   test("nicht existierendes -C-Ziel: xargs-Platzhalter blockt im Haupt-Checkout, im Worktree bleibt es erlaubt", () => {
     const missing = join(repoRoot, "gibt-es-nicht");
     assert.equal(decide({ cwd: repoRoot, command: "git -C gibt-es-nicht push", repoRoot, deps: fsFake([wt], [missing]) }).block, true);
