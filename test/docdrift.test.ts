@@ -658,6 +658,27 @@ describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz 
     assert.equal(fixture({ ...STAND, ...manifest([{ pfad: "docs/a.md", ring: "oberflaeche" }]), "docs/a.md": verweis }).length, 1);
   });
 
+  test("T8 Bezieher: Block-Fenster hat beide Grenzen, kaputte Marker schonen nichts", () => {
+    const m = (eintraege: unknown[], text: string) => fixture({ ...STAND, ...manifest(eintraege), "AGENTS.md": text });
+    const block = [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }];
+    const davor = `# T\n\`test/weg0.test.ts\`\n${markerStart("kern")}\n\`test/weg.test.ts\`\n${markerEnde("kern")}\n`;
+    assert.deepEqual(m(block, davor), [{ file: "AGENTS.md", pfad: "test/weg0.test.ts" }]);
+    const ohneStart = `# T\n\`test/weg0.test.ts\`\n\`test/weg.test.ts\`\n${markerEnde("kern")}\n`;
+    assert.equal(m(block, ohneStart).length, 2);
+    const vertauscht = `# T\n${markerEnde("kern")}\n\`test/weg.test.ts\`\n${markerStart("kern")}\n`;
+    assert.equal(m(block, vertauscht).length, 1);
+  });
+
+  test("T9 Bezieher: Ordner-Verweis ist nur Ziel bei Pfadgrenze, Block-Einheit ist kein Datei-Ziel", () => {
+    const e = (pfad: string) => [kern, { pfad, ring: "kern" }];
+    const ordner = fixture({ ...STAND, ...manifest(e("test/kern/x.test.ts")), "docs/a.md": "# A\n`test/kern`\n" });
+    assert.equal(ordner.length, 1);
+    const praefix = fixture({ ...STAND, ...manifest(e("test/kern.test.ts")), "docs/a.md": "# A\n`test/ker`\n" });
+    assert.deepEqual(praefix, []);
+    const schluessel = [kern, { pfad: "test/x.json", schluessel: "a", ring: "kern" }];
+    assert.deepEqual(fixture({ ...STAND, ...manifest(schluessel), "docs/a.md": "# A\n`test/x.json`\n" }), []);
+  });
+
   test("T7 fail-closed: kaputter Stand oder fehlendes/kaputtes Manifest gibt volle Prüfung", () => {
     const kaputtStand = { ".factory/sync-stand.json": "{kaputt" };
     assert.equal(fixture({ ...kaputtStand, ...manifest([kern]), "docs/a.md": verweis }).length, 1);

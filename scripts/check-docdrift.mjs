@@ -211,7 +211,7 @@ function einheitSpannen(einheiten, file, text) {
     else if (e.block !== undefined) {
       const a = text.indexOf(markerStart(e.block));
       const b = text.indexOf(markerEnde(e.block));
-      if (a >= 0 && b >= 0 && a < b) spannen.push([a, b]);
+      if (a >= 0 && b >= 0) spannen.push([a, b]); // a > b: leere Spanne, weil Fenster `>= a && <= b`
     }
   }
   return spannen;
