@@ -701,7 +701,7 @@ describe("Repo-Form und Blocker-Zeile (#97 L11 f)", () => {
     ...(raw as unknown as { mitBlockerZeile: (body: string, nummern: unknown[], sprache: { blocker: string }) => string }),
     ...(specLibRaw as unknown as { blockerVerweisText: (b: unknown) => string }),
   };
-  const SPR = echteSprache().spezifikation;
+  const SPR = echteSprache().spezifikation as { blocker: string };
   test("mitBlockerZeile: owner/name ohne Groß/Klein verglichen, der Verweis steht nur einmal", () => {
     const body = "Text\n\nblockiert durch Acme/Demo#13\n";
     expect(L.mitBlockerZeile(body, [{ repo: "acme/demo", nummer: 13 }], SPR)).toBe(body);

@@ -714,7 +714,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const gh = (a: string[], o?: { token?: string }) => {
       if (a[0] === "issue") return [];
       const m = /repos\/([^/]+\/[^/]+)\/commits/.exec(a[3] ?? "");
-      if (m) token[m[1] as string] = o?.token;
+      if (m) token[m[1]] = o?.token;
       return [[produkt(1)]];
     };
     S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config, env: { PROJECT_TOKEN: "ptok" } });

@@ -725,12 +725,12 @@ describe("Lesefehler und env im Takt (#97 L7 c, L11 b/d)", () => {
     const tokens: Record<string, string | undefined> = {};
     const { io } = bauen(() => [[]], {
       env: { PROJECT_TOKEN: "pt" },
-      ghJson: ((a: string[], o?: { token?: string }) => {
+      ghJson: (a: string[], o?: { token?: string }) => {
         const m = /repos[/]([^/]+[/][^/]+)[/]commits/.exec(a.join(" "));
-        if (m) tokens[m[1] as string] = o?.token;
+        if (m) tokens[m[1]] = o?.token;
         return [[]];
-      }) as Io["ghJson"],
-    } as never);
+      },
+    });
     T.fuehreTaktAus({ config: zweiRepos, repo: FREMD.repo, jetzt, token: "t", io });
     expect(tokens).toEqual({ [FREMD.repo]: undefined, [PRODUKT]: "pt" });
   });
