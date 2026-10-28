@@ -15,7 +15,10 @@
  * Quellprojekt nennt. Die Baseline steigt nur per reviewtem Commit (kein maschinelles Anhebungs-Gate wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
- * Bewusste Grenze: Projektwörter außerhalb der Config (etwa Begriffe der Fachdomäne) und `.mmd`-Dateien erkennt der Wächter nicht; eine Herkunftsprosa
+ * Zusätzlich zur Config zählen die Fachdomänen-Wörter `SEITEN_ZUSATZ` (Spiel, Spielquote): sie sind kein Config-Wert, würden als `projektliterale` aber
+ * jede Kern-Einheit und jeden Kern-Test treffen; die Seiten sprechen von Produkt. Das Ziel eines Links in `adr/` zählt nicht: sein Anker trägt
+ * die unveränderliche Überschrift der Historie.
+ * Bewusste Grenze: andere Projektwörter außerhalb der Config und `.mmd`-Dateien erkennt der Wächter nicht; eine Herkunftsprosa
  * ohne Link steht in der Baseline. Die Baseline steigt nur per reviewtem Commit mit Begründung, nie, um ein Rot zu beseitigen. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -44,12 +47,17 @@ export function maskiere(text: string): string {
     .replace(/<!-- GEN:[\w-]+ START -->[\s\S]*?<!-- GEN:[\w-]+ END -->/g, " ")
     .replace(/\[[^\]\n]*\]\(<?https?:\/\/[^)\s>]*>?[^)\n]*\)/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
-    .replace(/(?:[\w.-]+\/)?[\w.-]+#\d+/g, " ");
+    .replace(/(?:[\w.-]+\/)?[\w.-]+#\d+/g, " ")
+    .replace(/\]\((?:\.{1,2}\/)*(?:docs\/)?adr\/[^)\s]*\)/g, "]()");
 }
 
-/** Begriffe der Config ohne die geteilten (Owner, Repo, Board-ID, Label, Skill). */
+/** Fachdomänen-Wörter, die jede Seite meidet (kein Config-Wert): Produkt-Begriffe statt Spiel-Begriffen. Gleiche Wortgrenzen wie ein Projektliteral. */
+export const SEITEN_ZUSATZ: Record<string, string> = { Spiel: "Spiel", Spielquote: "Spielquote" };
+
+/** Begriffe der Config ohne die geteilten (Owner, Repo, Board-ID, Label, Skill), dazu `SEITEN_ZUSATZ`. */
 export function seitenBegriffe(config: BegriffsConfig): Record<string, RegExp> {
-  return Object.fromEntries(Object.entries(begriffeAus(config)).filter(([name]) => !AUSGENOMMEN.has(name)));
+  const mitZusatz = { ...config, projektliterale: { ...config.projektliterale, ...SEITEN_ZUSATZ } };
+  return Object.fromEntries(Object.entries(begriffeAus(mitZusatz)).filter(([name]) => !AUSGENOMMEN.has(name)));
 }
 
 /** Zählung je Begriff (nur > 0) nach der Maskierung; rohe Regex-Treffer, Überlappungen zählen je Begriff. */
@@ -160,6 +168,17 @@ describe("Factory-Seiten (#77)", () => {
     test("ein generierter Abschnitt zählt nicht, der Text davor und danach schon", () => {
       const t = "Zelda\n<!-- GEN:a START -->\nZelda zz-lens\n<!-- GEN:a END -->\nZelda";
       assert.deepEqual(zaehleSeite(t, B), { Zelda: 2 });
+    });
+
+    test("Spiel und Spielquote zählen als ganze Wörter in jeder Config, Beispiel und Spielstand nicht", () => {
+      assert.deepEqual(zaehleSeite("Das Spiel, die Spielquote, ein Beispiel, der Spielstand.", B), { Spiel: 1, Spielquote: 1 });
+    });
+
+    test("das Ziel eines Links in adr/ zählt nicht (Anker der Historie), ein Ziel außerhalb und der Linktext schon", () => {
+      assert.deepEqual(zaehleSeite("[ADR](../adr/0022-x.md#ohne-spiel-generator) [ADR](adr/0016-y.md#spielquote-im-takt) [ADR](docs/adr/0016-y.md#zelda)", B), {});
+      assert.deepEqual(zaehleSeite("[Spiel](adr/0016-y.md#a)", B), { Spiel: 1 });
+      assert.deepEqual(zaehleSeite("[ADR](docs/spiel-regeln.md#spiel)", B), { Spiel: 2 }, "ein Ziel außerhalb von adr/ zählt");
+      assert.deepEqual(zaehleSeite("[ADR](ordner/adr/x.md#spiel)", B), { Spiel: 1 }, "adr/ nur am Anfang des Pfads");
     });
 
     test("ein Anker mit Buchstaben ist kein Querverweis: Zelda in zelda.md#abschnitt zählt", () => {

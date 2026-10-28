@@ -165,7 +165,7 @@ Was Langfuse je Merkmal trägt und was nur ein Skript über die Transkripte miss
 - **95–98 % der Tokens sind Cache-Reads**, also der pro Call neu gelesene Kontext. Weniger Calls und ein kleinerer Grundkontext sparen mehr als kürzere Antworten.
 - **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur #1064 hat den `<agenten.planer>` gerufen; #1026 lief über den Skill und übersprang ihn trotzdem.
-- **Grenze der Baseline:** alle vier sind Harness-/Doku-Tickets ohne Spielcode unter `src/`. Ein `src/`-Lauf wird bei Gelegenheit ergänzt; bis dahin nur Harness-Tickets gegen diese Zeilen vergleichen.
+- **Grenze der Baseline:** alle vier sind Harness-/Doku-Tickets ohne Produktcode unter `src/`. Ein `src/`-Lauf wird bei Gelegenheit ergänzt; bis dahin nur Harness-Tickets gegen diese Zeilen vergleichen.
 
 ### Langfuse-Nachmessung 28.09.–05.10.2026 (vor #1065)
 
