@@ -62,5 +62,13 @@
   ".github/workflows/secret-scan.yml": {
     "art": "modul",
     "grund": "Sicherheits-Modul (Secret-Scan), kein Factory-Kern"
+  },
+  ".github/workflows/zizmor.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Workflow-Audit zizmor), kein Factory-Kern"
+  },
+  ".github/workflows/dependency-review.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Dependency Review), kein Factory-Kern"
   }
 }

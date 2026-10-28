@@ -39,7 +39,7 @@ const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && 
 function verzeichnisse(updates: Obj[]): string[] {
   const out = new Set<string>(["/"]);
   for (const u of updates) {
-    const liste = [u.directory, ...(Array.isArray(u.directories) ? u.directories : [])];
+    const liste: unknown[] = [u.directory, ...(Array.isArray(u.directories) ? (u.directories as unknown[]) : [])];
     for (const d of liste) if (typeof d === "string" && !d.includes("*")) out.add(d);
   }
   return [...out];
