@@ -36,7 +36,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmRunMentions } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
@@ -195,7 +195,7 @@ export function auditDocDrift(rootDir = ROOT) {
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: auditFortschreibungen(rootDir), testPfadFehler: auditTestPfade(rootDir, mdFiles, content) };
 }
 
-/** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Grenze: nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
+/** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
 function auditTestPfade(rootDir, mdFiles, content) {
   const adrPrefix = `${adrOrdner(rootDir)}/`;
   const fehler = [];
@@ -210,10 +210,10 @@ function auditTestPfade(rootDir, mdFiles, content) {
   return fehler;
 }
 
-/** ADR-Ordner aus scripts/docs-gen/config.json › adr.ordner (#97); ohne Config oder Eintrag `docs/adr`. */
+/** ADR-Ordner aus scripts/docs-gen/config.json › adr.ordner (#97); ohne Config oder Eintrag `docs/adr`. Eine kaputte Config (kein JSON, kein Objekt) wirft eine Meldung (`leseConfigObjekt`). */
 function adrOrdner(rootDir) {
-  const cfg = join(rootDir, "scripts", "docs-gen", "config.json");
-  const wert = existsSync(cfg) ? JSON.parse(readFileSync(cfg, "utf8")).adr?.ordner : undefined;
+  const cfg = "scripts/docs-gen/config.json";
+  const wert = existsSync(join(rootDir, cfg)) ? leseConfigObjekt(rootDir, cfg, "Doku-Generator-Config").adr?.ordner : undefined;
   return typeof wert === "string" && wert !== "" ? wert : "docs/adr";
 }
 
@@ -235,7 +235,14 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: adrFehler, testPfadFehler } = auditDocDrift();
+  let audit;
+  try {
+    audit = auditDocDrift();
+  } catch (e) {
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
+    process.exit(1);
+  }
+  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: adrFehler, testPfadFehler } = audit;
 
   let bad = false;
   for (const c of deadCommands) {

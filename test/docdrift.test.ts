@@ -119,6 +119,10 @@ describe("Harness-Doku-Drift (#529)", () => {
     );
   });
 
+  test("keine toten Test-Pfade in der Doku (#97)", () => {
+    assert.deepEqual(audit.testPfadFehler, []);
+  });
+
   // ── Red-Green: die Mechanik greift wirklich (ein immer-grüner Wächter wäre wertlos) ──
 
   test("parseNpmRunMentions erkennt `npm run x` und `npm test`, nicht `npm install`", () => {
@@ -576,6 +580,23 @@ describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
 
   test("ADR und Dateien mit Datum im Namen sind ausgenommen", () => {
     assert.deepEqual(fixture({ "docs/adr/0001-x.md": "`test/weg.test.ts`\n", "docs/notiz-2026-01-02.md": "`test/weg.test.ts`\n" }), []);
+  });
+
+  test("ADR-Ordner aus der Config: ein ADR dort ist ausgenommen, ein Pfad in einer anderen Doku-Datei bleibt rot", () => {
+    const cfg = JSON.stringify({ adr: { ordner: "doku/entscheidungen" } });
+    assert.deepEqual(fixture({ "scripts/docs-gen/config.json": cfg, "doku/entscheidungen/0001-x.md": "`test/weg.test.ts`\n" }), []);
+    assert.equal(fixture({ "scripts/docs-gen/config.json": cfg, "docs/adr/0001-x.md": "`test/weg.test.ts`\n" }).length, 1);
+  });
+
+  test("ohne gültigen adr.ordner (leer, kein String, kein adr-Block) gilt docs/adr", () => {
+    for (const cfg of [{ adr: { ordner: "" } }, { adr: { ordner: 5 } }, { adr: "x" }, {}]) {
+      assert.deepEqual(fixture({ "scripts/docs-gen/config.json": JSON.stringify(cfg), "docs/adr/0001-x.md": "`test/weg.test.ts`\n" }), [], JSON.stringify(cfg));
+    }
+  });
+
+  test("kaputte Config (null, kein JSON): klare Meldung statt TypeError", () => {
+    assert.throws(() => fixture({ "scripts/docs-gen/config.json": "null" }), /kein JSON-Objekt/);
+    assert.throws(() => fixture({ "scripts/docs-gen/config.json": "{kaputt" }), /kein gültiges JSON/);
   });
 
   test("Platzhalter werden übersprungen, Suffix #/: abgeschnitten", () => {

@@ -257,6 +257,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         const gepostet: unknown[][] = [];
         const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
         await melden.main([], { env: { GITHUB_ACTIONS: "true" }, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
+        assert.equal(gepostet.length, 1);
         assert.equal(gepostet[0]?.[3], undefined);
       } finally {
         vi.unstubAllEnvs();

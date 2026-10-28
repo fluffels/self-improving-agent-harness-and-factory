@@ -860,6 +860,23 @@ describe("struktur.moduldoku: null als Opt-out von check:docmap (#97 L7)", { tim
   });
 });
 
+describe("struktur.moduldoku: null in den Funktionen selbst (#97 Runde 1)", () => {
+  test("auditDocMap und parseDeepDocMaps stürzen bei null nicht ab, sondern melden Opt-out bzw. leer", async () => {
+    const dm = (await import("../scripts/check-docmap.mjs")) as unknown as {
+      auditDocMap: (root: string, s: { quelle: string; moduldoku: string | null }) => { entfaellt?: boolean; modules: string[]; orphans: string[] };
+      parseDeepDocMaps: (root: string, s: { quelle: string; moduldoku: string | null }) => Set<string>;
+    };
+    const d = tmp();
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "a.ts"), "x\n");
+    const s ={ quelle: "lib", moduldoku: null };
+    assert.deepEqual([...dm.parseDeepDocMaps(d, s)], []);
+    const a = dm.auditDocMap(d, s);
+    assert.equal(a.entfaellt, true);
+    assert.deepEqual([a.modules, a.orphans], [[], []]);
+  });
+});
+
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
   const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
 

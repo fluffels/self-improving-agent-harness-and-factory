@@ -65,6 +65,7 @@ import {
 } from "./board-lib.mjs";
 import { aufnahmePlan, brauchtRepo } from "./board-plan-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
+import { tokenFuerZiel } from "./gh-cli.mjs";
 import { fremdesBoardText, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
@@ -323,11 +324,21 @@ export async function umziehen(args, config, io = ECHTE_PLACE_IO) {
 }
 
 /**
+ * Token fürs Ziel-Repo (#97): ein fremdes Repo liest und schreibt mit `PROJECT_TOKEN` (`tokenFuerZiel`), das eigene mit dem Standard. Setzt `GH_TOKEN` in `env`,
+ * das jeder `gh`-Aufruf dieses Einzelprozesses erbt (Labels, Items, Aufnahme, Position); liefert den gesetzten Token oder `undefined`.
+ */
+export function setzeZielToken(repo, env) {
+  const token = tokenFuerZiel({ ziel: repo, eigenes: REPO, env });
+  if (token) env.GH_TOKEN = token;
+  return token;
+}
+
+/**
  * Einstieg (#78 L13h). `deps` (Tests): `kontingent`, `ladeConfig`, `einsortieren`, `reportMissing`, `umziehen`, `mitWiederholung`, `beende` (Standard `process.exit`);
  * die Verdrahtung gibt das Ziel-Repo (`--repo`, Standard das eigene) an jeden Modus weiter.
  */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const { kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
+  const { env, kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
     kontingent: () => mitKontingent("board-place"),
     ladeConfig: ladeProjektConfig,
     einsortieren,
@@ -335,10 +346,12 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     umziehen,
     mitWiederholung,
     beende: process.exit,
+    env: process.env,
     ...deps,
   };
   const geparst = parseArgs(argv);
   const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
+  if (args) setzeZielToken(args.repo, env);
   if (!args) {
     console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
     return beende(2);
