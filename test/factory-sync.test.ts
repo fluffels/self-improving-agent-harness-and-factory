@@ -1219,7 +1219,7 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
       assert.match(f, /x\.txt: Besitz wurde im Projekt verändert/);
       const zeilen = drift.pruefeDrift(lesen).fehler;
       assert.match(zeilen.find((z) => z.includes("nicht von einem Tag")) ?? "", /Weg: von einem Tag neu syncen/);
-      assert.match(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /Weg: Änderung upstream/);
+      assert.match(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /Weg: Änderung upstream im Factory-Repo, dort neu taggen/);
       assert.doesNotMatch(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /von einem Tag neu syncen/);
     });
   });
