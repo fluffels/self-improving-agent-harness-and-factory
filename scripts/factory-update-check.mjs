@@ -4,17 +4,16 @@
  *   node scripts/factory-update-check.mjs [--json]
  *
  * Ohne `.factory/sync-stand.json` ist dieses Repo selbst Quelle: „nichts zu prüfen“, Exit 0. Sonst liest es die Tags des Factory-Repos
- * (Board mit Rolle `factory` der Config, `scripts/factory-seite.mjs › factoryRepo`) per `gh api repos/<repo>/tags --paginate --jq .[].name` und vergleicht
+ * (`quelle.repo` des Sync-Stands, sonst ausdrücklich gesetztes `repo` des Boards mit Rolle `factory`; `scripts/factory-seite.mjs › factoryRepo`) per `gh api repos/<repo>/tags --paginate --jq .[].name` und vergleicht
  * numerisch; nur Tags der Form `v1.2.3` oder `1.2.3` zählen (Pre-Release und Fremdtags nicht). Exit 0 (mit oder ohne Update), 2 bei Aufruf-
  * oder Config-Fehler (mit `Fix:`), 3 wenn das Factory-Repo nicht lesbar ist (der Wochen-Workflow warnt dann, bleibt aber grün).
  * `--json` schreibt `{"update":null|{"alt","neu","text"}}`. Der Sync selbst bleibt ein bewusster Schritt: der Check ändert nichts.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { factoryRepo } from "./factory-seite.mjs";
+import { liesSyncStand } from "./factory-sync-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 
 const RELEASE = /^v?(\d+)\.(\d+)\.(\d+)$/;
@@ -45,32 +44,17 @@ export function updateMeldung({ stand, tags }) {
   return { alt, neu, text };
 }
 
-/** Der Sync-Stand als Objekt, `null` ohne Datei, `undefined` bei kaputter Datei. */
-function leseStand(wurzel) {
-  let roh;
-  try {
-    roh = readFileSync(join(wurzel, ".factory", "sync-stand.json"), "utf8");
-  } catch {
-    return null;
-  }
-  try {
-    return JSON.parse(roh);
-  } catch {
-    return undefined;
-  }
-}
-
 const ergebnis = (code, out = "", err = "") => ({ out, err, code });
 
 /** Ablauf ohne Prozess-Seiteneffekte; `io` = `{ wurzel, gh(args) → Text }`. */
 export function fuehreAus(argv, io) {
   const { werte, fehler } = flagsLesen(argv, { json: { type: "boolean" } });
   if (fehler) return ergebnis(AUFRUF_EXIT, "", `${fehler.text}\nAufruf: node scripts/factory-update-check.mjs [--json]\n`);
-  const stand = leseStand(io.wurzel);
-  if (stand === null) return ergebnis(0, werte.json ? `${JSON.stringify({ update: null })}\n` : "Kein Sync-Stand: dieses Repo ist selbst Quelle, nichts zu prüfen.\n");
-  if (stand === undefined) return ergebnis(AUFRUF_EXIT, "", "FEHLER: .factory/sync-stand.json ist kein gültiges JSON. Fix: Sync neu fahren (node scripts/factory-sync.mjs --quelle <pfad> --tag <name>).\n");
+  const { zustand, stand } = liesSyncStand(io.wurzel);
+  if (zustand === "fehlt") return ergebnis(0, werte.json ? `${JSON.stringify({ update: null })}\n` : "Kein Sync-Stand: dieses Repo ist selbst Quelle, nichts zu prüfen.\n");
+  if (zustand === "kaputt") return ergebnis(AUFRUF_EXIT, "", "FEHLER: .factory/sync-stand.json ist kein gültiges JSON-Objekt. Fix: Sync neu fahren (node scripts/factory-sync.mjs --quelle <pfad> --tag <name>).\n");
   const repo = factoryRepo(io.wurzel);
-  if (!repo) return ergebnis(AUFRUF_EXIT, "", "FEHLER: Factory-Repo nicht bestimmbar. Fix: Board mit Rolle factory in .factory/projekt.json eintragen.\n");
+  if (!repo) return ergebnis(AUFRUF_EXIT, "", "FEHLER: Factory-Repo nicht bestimmbar. Fix: von einem Tag neu syncen (schreibt quelle.repo) oder boards[factory].repo in .factory/projekt.json setzen.\n");
   let tags;
   try {
     tags = io.gh(["api", `repos/${repo}/tags`, "--paginate", "--jq", ".[].name"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean);
@@ -79,7 +63,7 @@ export function fuehreAus(argv, io) {
   }
   const update = updateMeldung({ stand, tags });
   if (werte.json) return ergebnis(0, `${JSON.stringify({ update })}\n`);
-  return ergebnis(0, update ? `${update.text}\n` : `Kein neuer Factory-Release (Stand ${stand?.quelle?.tag ?? "unbekannt"}).\n`);
+  return ergebnis(0, update ? `${update.text}\n` : `Kein neuer Factory-Release (Stand ${stand.quelle?.tag ?? "unbekannt"}).\n`);
 }
 
 if (istDirektaufruf(import.meta.url)) {

@@ -539,7 +539,11 @@ export function boardRolleFuer(labels, config) {
   return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
 }
 
-const boardDerRolle = (rolle, config) => (Array.isArray(config?.boards) ? config.boards.find((b) => b.rolle === rolle) : undefined);
+/** Pur: das Board der Rolle `rolle` (`config.boards[]`) oder `undefined`. */
+export const boardDerRolle = (rolle, config) => (Array.isArray(config?.boards) ? config.boards.find((b) => b.rolle === rolle) : undefined);
+
+/** Pur: das Repo, dessen Issues das Board der Rolle führt (`boards[].repo`, sonst `config.repo`). */
+export const repoDerRolle = (rolle, config) => boardRepo(boardDerRolle(rolle, config), config);
 
 /**
  * Pur: das Ziel-Repo (`owner/name`) für ein Issue mit diesen Labels (ADR 0022 F10, #76): das Repo, dessen Issues das Board der Rolle führt

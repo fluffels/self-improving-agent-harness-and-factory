@@ -7,7 +7,7 @@
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { fehlerText } from "./gh-cli.mjs";
-import { boardRepo, gleichesRepo, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { gleichesRepo, repoDerRolle, zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
 export const PRODUKT_QUOTE = 3;
@@ -98,7 +98,7 @@ export function zaehleTaktMerges(commits, seit = null, sammelIssues = new Set())
  */
 export function quotenQuellen({ config, repo }) {
   const eigen = { repo: config?.repo ?? repo };
-  const von = (rolle) => boardRepo(Array.isArray(config?.boards) ? config.boards.find((b) => b.rolle === rolle) : undefined, eigen);
+  const von = (rolle) => repoDerRolle(rolle, { ...config, repo: eigen.repo });
   const factory = von("factory");
   const produkt = von("produkt");
   if (typeof factory === "string" && typeof produkt === "string" && !gleichesRepo(factory, produkt)) return [{ repo: factory, rolle: "harness" }, { repo: produkt, rolle: "produkt" }];
