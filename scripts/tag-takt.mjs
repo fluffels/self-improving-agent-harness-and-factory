@@ -133,7 +133,6 @@ export function bestaetigeTagAnlegen(e, { zweit }) {
   let da;
   try {
     const frisch = zweit();
-    if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
     da = frisch.filter((i) => String(i?.titel).startsWith(TAG_MARKER)).map((i) => `#${i.number}`);
   } catch (err) {
     return { aktion: "nichts", grund: "Anlegen abgebrochen: Zweitabfrage fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
@@ -299,7 +298,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
     ladeManifest: () => JSON.parse(readFileSync(MANIFEST, "utf8")),
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
-    ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=5`, "--jq", ".workflow_runs"]),
+    ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
       const kontext = ladeSammelKontext({ ladeKommentare: () => [] });
       return vertrauteIssues(kontext.rohe, vertrauterOwner(kontext, libs))
