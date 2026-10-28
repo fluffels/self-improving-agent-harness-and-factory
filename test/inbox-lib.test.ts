@@ -38,6 +38,15 @@ describe("platziereOben", () => {
   test("ohne Token wirft es, bevor etwas startet", () => {
     expect(() => L.platziereOben(1, "security", "")).toThrow(/PROJECT_TOKEN/);
   });
+  test("#78: mit repo steht --repo <repo> vor --notfall, ohne repo kein --repo", () => {
+    const P = raw as unknown as { platziereOben: (nr: number, art: string, token: string, repo: string | undefined, exec: (...a: unknown[]) => void) => void };
+    const aufrufe: string[][] = [];
+    const exec = (...a: unknown[]) => void aufrufe.push((a[1] as string[]).slice(1));
+    P.platziereOben(5, "security", "t", "zz-org/ziel", exec);
+    P.platziereOben(6, "security", "t", undefined, exec);
+    expect(aufrufe[0]).toEqual(["--repo", "zz-org/ziel", "--notfall", "security", "--top", "5"]);
+    expect(aufrufe[1]).toEqual(["--notfall", "security", "--top", "6"]);
+  });
 });
 
 describe("sammelticketNummern und ladeSammelKontext (Z3)", () => {
