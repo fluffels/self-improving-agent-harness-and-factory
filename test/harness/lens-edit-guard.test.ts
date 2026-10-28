@@ -5,9 +5,9 @@
  * Verhalten über die öffentliche API (`bewerteLensEdit`, `entscheideHook`) plus die Verdrahtung im Frontmatter der
  * Lens-Definition. Grenzen (Bash-Sabotage, Symlinks) stehen im Kopf des Skripts und sind hier bewusst nicht getestet.
  */
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import { FREMD, projektConfig } from "../support/fremd-config";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -109,6 +109,9 @@ describe("Lens-Worktree eines fremden Klons (#78 L3f/L9d): Präfix aus der Confi
   mkdirSync(join(klon, ".factory"), { recursive: true });
   writeFileSync(join(klon, ".factory", "projekt.json"), JSON.stringify({ praefixe: { branch: "fremd/", worktree: "qq-" } }));
   const ohne = mkdtempSync(join(tmpdir(), "lens-ohne-")).replace(/\\/g, "/");
+  afterAll(() => {
+    for (const d of [klon, ohne]) rmSync(d, { recursive: true, force: true });
+  });
   const ZIEL = "qq-"; // Präfix des Ziel-Repos, verschieden vom Session-Präfix (FREMD)
 
   test("Lens-Worktree mit dem Präfix des Ziel-Repos: erlaubt, obwohl die Session ein anderes Präfix hat", () => {
