@@ -161,7 +161,7 @@ const BLOCK_REASON = (top, deps) =>
  *  nichts blockt, aber ein Ziel/Inhalt nicht statisch bestimmbar ist (siehe Kopfkommentar). Sonst durchlassen. */
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map() };
+  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map(), repoRoot };
   let found;
   try {
     found = analyse(command, cwd, d);
