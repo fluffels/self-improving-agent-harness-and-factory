@@ -79,7 +79,7 @@ Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 002
 
 1. **Vorher.** Die README-Gate-Tabelle nannte 7 von 12 Gates ([ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md), Kontext); ein Architektur-PNG ohne Quelle, entfernt in `102cb7a` (#1369); falsche Aussagen in der README, die #1354 gesammelt hat.
 2. **Das Muster.** Bitte → Mauer ([agent-harness.md › Leitplanken-Schichten](agent-harness.md#leitplanken-schichten-bitte-und-mauer)): jede wiederholte Bitte an einen Agenten wird zum Gate.
-3. **Nachher, belegt aus Git.** Generierte Gate-Tabelle und Inventar (`110a0b4`), Schichten Soll und Ist in README und arc42 §5 (`10d27a6`), Agenten-Ablauf, Sequenz und Leitplanken-Schichten (`102cb7a`), Spiel-Diagramme (`1d83039`). Jeder Beleg ist mit `git show <sha> --stat` reproduzierbar.
+3. **Nachher, belegt aus Git.** Generierte Gate-Tabelle und Inventar (`110a0b4`), Schichten Soll und Ist in README und arc42 §5 (`10d27a6`), Agenten-Ablauf, Sequenz und Leitplanken-Schichten (`102cb7a`), Produkt-Diagramme (`1d83039`). Jeder Beleg ist mit `git show <sha> --stat` reproduzierbar.
 4. **Diagramme.** Die generierten Schichten- und Agenten-Diagramme in [README](../README.md), arc42 und [agent-harness.md](agent-harness.md#leitplanken-schichten-bitte-und-mauer) (Quellen: #1368, #1369).
 5. **Übertragung.** Die Reifestufen oben, Bestand per Baseline einfrieren, das Werkzeug-Mapping, der Fremd-Repo-Test als Beleg.
 6. **Grenzen, ehrlich.** MCP-Server sind nie Quelle eines Gates; der Ist-Graph wird bei Wachstum unleserlich und muss verdichtet werden; ein handgeschriebenes LikeC4-Modell driftet ohne Abgleichtest; ein Generator für Nicht-npm-Task-Runner fehlt.

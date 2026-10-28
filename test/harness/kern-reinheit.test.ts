@@ -18,6 +18,7 @@ import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } 
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
 import { ladeBesitzManifest } from "../support/besitz-anker";
+import { type Baseline, anhebungen, diffBasisModus, vergleiche, zaehle } from "../support/baseline-zaehlung";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -72,8 +73,6 @@ interface Manifest {
   version: number;
   eintraege: Eintrag[];
 }
-type Zaehlung = Record<string, number>;
-type Baseline = Record<string, Zaehlung>;
 
 /** Loser Eingabetyp von `begriffeAus`: aus dem gemeinsamen Config-Typ abgeleitet, Teil-Fixtures bleiben gültig. */
 export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektliterale"> & {
@@ -90,41 +89,6 @@ export function pfadLiterale(pfade: string[], begriffe: Record<string, RegExp>):
     for (const [name, re] of Object.entries(begriffe)) {
       if ((pfad.match(re) ?? []).length > 0) out.push(`${pfad}: Projektliteral '${name}' im Pfad`);
     }
-  }
-  return out;
-}
-
-/** Zählung je Begriff (nur > 0), CRLF-neutral. */
-export function zaehle(text: string, begriffe: Record<string, RegExp>): Zaehlung {
-  const t = text.replace(/\r\n/g, "\n");
-  const out: Zaehlung = {};
-  for (const [name, re] of Object.entries(begriffe)) {
-    const n = (t.match(re) ?? []).length;
-    if (n > 0) out[name] = n;
-  }
-  return out;
-}
-
-/** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
-const hinweis = (begriff: string): string => (begriff === "Env" ? " (Kern-Umgebungsvariablen heißen FACTORY_<NAME> und werden über umgebungsWert gelesen)" : "");
-
-/** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend. */
-export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
-  const out: string[] = [];
-  for (const [einheit, z] of Object.entries(ist)) {
-    const b = baseline[einheit] ?? {};
-    for (const [begriff, n] of Object.entries(z)) {
-      const bn = b[begriff];
-      if (bn === undefined) out.push(`${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei${hinweis(begriff)}`);
-      else if (n > bn) out.push(`${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))${hinweis(begriff)}`);
-      else if (n < bn) out.push(`${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`);
-    }
-    for (const begriff of Object.keys(b)) {
-      if (!(begriff in z)) out.push(`${einheit}: '${begriff}' kommt nicht mehr vor, Baseline-Eintrag entfernen`);
-    }
-  }
-  for (const einheit of Object.keys(baseline)) {
-    if (!(einheit in ist)) out.push(`${einheit}: Baseline-Eintrag ohne Literale oder ohne Einheit, Eintrag entfernen`);
   }
   return out;
 }
@@ -159,24 +123,6 @@ export function erlaubt(
     out[einheitId(e)] = t === null ? {} : zaehle(t, begriffe);
   }
   return out;
-}
-
-/** Meldungen: Baseline-Werte über dem erlaubten Basiswert. */
-export function anhebungen(baseline: Baseline, erl: Baseline): string[] {
-  const out: string[] = [];
-  for (const [einheit, basis] of Object.entries(erl)) {
-    for (const [begriff, n] of Object.entries(baseline[einheit] ?? {})) {
-      const b = basis[begriff] ?? 0;
-      if (n > b) out.push(`${einheit}: Baseline '${begriff}' ${n} über dem Wert an der Diff-Basis (${b}), anheben ist verboten`);
-    }
-  }
-  return out;
-}
-
-/** Anheben-Prüfung gegen die Diff-Basis: `pruefen` (Basis da), `entfaellt` (lokal ohne Basis), `rot` (CI ohne Basis, fail-closed). */
-export function diffBasisModus(basis: string | null, env: Record<string, string | undefined>): "pruefen" | "entfaellt" | "rot" {
-  if (basis !== null) return "pruefen";
-  return env.CI === "true" ? "rot" : "entfaellt";
 }
 
 /** Offene Ausnahmen der Schichtdaten-Regel (#1612): Einheit → Grund mit Ticket. Die Liste darf nur schrumpfen. */

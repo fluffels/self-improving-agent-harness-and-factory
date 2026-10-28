@@ -149,7 +149,7 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
   const ergebnis = [{ ok: true, punkt: "Labels" }, { ok: false, punkt: "Ruleset", befund: "fehlt", fix: "anlegen" }];
   test("in Actions ohne PROJECT_TOKEN: genau die Secret-Lücke, der Doctor wird nie gefragt", () => {
     const l = melden.ermittleLuecken({ env: { GITHUB_ACTIONS: "true" }, repo: "acme/demo", pruefe: () => assert.fail("kein Prüfaufruf ohne Token") });
-    assert.deepEqual(l, [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: "gh secret set PROJECT_TOKEN --repo acme/demo" }]);
+    assert.deepEqual(l, [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: "Wert per stdin, ohne TTY: `<wert-quelle> | gh secret set PROJECT_TOKEN --repo acme/demo` (z. B. `Get-Clipboard | …`)" }]);
   });
   test("mit Token oder außerhalb von Actions: nur die Lücken des Doctors", () => {
     const umgebungen: Record<string, string>[] = [{ GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }, {}];
@@ -224,6 +224,38 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       assert.equal(typeof aufrufe[0].gh, "function");
       assert.equal(aufrufe[0].langfuse, null);
       assert.equal("umgebung" in aufrufe[0], false, "der Wochenlauf prüft keine Altnamen der Runner-Umgebung");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  test("L13a: Ziel-Repo fremd → postZeilen bekommt Ziel-Repo und PROJECT_TOKEN, eigenes Ziel-Repo → kein Token", async () => {
+    vi.stubEnv("GITHUB_ACTIONS", "true");
+    vi.stubEnv("PROJECT_TOKEN", "");
+    try {
+      for (const [ziel, erwartet] of [["acme/ziel", undefined], ["acme/proj", undefined]] as const) {
+        const gepostet: unknown[][] = [];
+        const libs = {
+          REPO: "acme/proj",
+          ZIEL: ziel,
+          ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }),
+          waehleSammelticket: (o: { number: number }[]) => o[0],
+          postZeilen: (...a: unknown[]) => gepostet.push(a),
+        };
+        assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined }), 0);
+        assert.deepEqual(gepostet[0]?.slice(2, 4), [ziel, erwartet], ziel);
+      }
+      vi.stubEnv("PROJECT_TOKEN", "pt");
+      const gepostet: unknown[][] = [];
+      const libs = {
+        REPO: "acme/proj",
+        ZIEL: "acme/ziel",
+        ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }),
+        waehleSammelticket: (o: { number: number }[]) => o[0],
+        postZeilen: (...a: unknown[]) => gepostet.push(a),
+      };
+      const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
+      assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
+      assert.deepEqual(gepostet[0]?.slice(2, 4), ["acme/ziel", "pt"]);
     } finally {
       vi.unstubAllEnvs();
     }

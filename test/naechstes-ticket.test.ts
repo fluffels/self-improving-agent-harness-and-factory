@@ -29,7 +29,7 @@ import * as boardLib from "../scripts/board-lib.mjs";
 
 type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
-type Eingabe = { items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
+type Eingabe = { repo?: string; items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
 type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number };
@@ -59,10 +59,12 @@ const roh = (nr: number, c: Record<string, unknown> = {}, status = "Todo") => ({
   node_id: `ITEM_${nr}`,
   content_type: "Issue",
   fields: [{ name: "Status", value: { name: { raw: status } } }],
-  content: { number: nr, title: `T${nr}`, state: "open", assignees: [], user: { login: OWNER, type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
+  content: { number: nr, title: `T${nr}`, state: "open", repository_url: `https://api.github.com/repos/${FREMD.repo}`, assignees: [], user: { login: OWNER, type: "User" }, labels: [], body: "", issue_dependencies_summary: { blocked_by: 0 }, ...c },
 });
 // Zwei Boards (#1729): die Eingabe der alten Form (ein Board) steht auf dem Produkt-Board; Harness-Items rücken laut Trennregel auf die Factory-Seite.
 const CFG = { labels: { harness: HARNESS, forum: FREMD.labels.forum }, sprache: (ladeCfg as unknown as { ladeProjektConfig: () => { sprache: unknown } }).ladeProjektConfig().sprache };
+// Die Auswahl kennt ihr Repo immer (kein Sonderweg ohne `io.repo`, #78): Standard-Items tragen dessen `repository_url`.
+const REPO_IO = { repo: FREMD.repo, boardRepos: { produkt: FREMD.repo, factory: FREMD.repo } };
 const zweiBoards = (e: Eingabe): ZweiBoards => ({ ...e, produkt: e.items, factory: [] });
 const frei = (items: unknown[], extra: Partial<Eingabe> & { bereich?: string | null } = {}) =>
   (N.waehleNaechstes as (e: unknown) => Ergebnis)({ items: norm(items), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG, ...extra });
@@ -154,7 +156,7 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
 
 describe("fuehreAus", () => {
   const io = (eingabe: Eingabe | Error) => ({
-    owner: OWNER, namen: NAMEN,
+    owner: OWNER, namen: NAMEN, ...REPO_IO,
     config: CFG,
     lade: () => {
       if (eingabe instanceof Error) throw eingabe;
@@ -184,7 +186,7 @@ describe("fuehreAus", () => {
 describe("Bereich (#1552)", () => {
   const harness = { labels: [{ name: HARNESS }] };
   const io = (items: unknown[], spion?: { n: number }) => ({
-    owner: OWNER, namen: NAMEN,
+    owner: OWNER, namen: NAMEN, ...REPO_IO,
     config: CFG,
     lade: () => {
       if (spion) spion.n++;
@@ -398,11 +400,11 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
   });
   test("unlesbare Zeile: fail-closed, der Body-Text taucht nirgends auf", () => {
     const eingabe = { items: norm([item(1, { body: `Messfenster: n ≥ GEHEIM ${UMS} nach #1` })]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--json", "--bereich", "produkt"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG });
+    const r = N.fuehreAus(["--json", "--bereich", "produkt"], { owner: OWNER, namen: NAMEN, ...REPO_IO, lade: () => zweiBoards(eingabe), config: CFG });
     expect(r.code).toBe(1);
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
-    expect(N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
+    expect(N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, ...REPO_IO, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
   });
 });
 
@@ -510,7 +512,7 @@ describe("messfensterLader (#1589)", () => {
 describe("Einzelprüfung --ticket (#1621)", () => {
   const issue = (nr: number, c: Record<string, unknown> = {}) => item(nr, c).content;
   const pruefe = (nr: number, c: Record<string, unknown> = {}, extra: Partial<Eingabe> = {}) =>
-    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG, ...extra });
+    N.pruefeTicket({ item: N.itemAusIssue(issue(nr, c)), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG, ...extra });
   const grund = (r: Ergebnis) => r.uebersprungen[0]?.grund;
   const zeile = `Messfenster: n ≥ 12 ${UMS} nach #1590`;
 
@@ -554,7 +556,7 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     const aufrufe = { lade: 0, einzeln: 0 };
     return {
       aufrufe,
-      owner: OWNER, namen: NAMEN,
+      owner: OWNER, namen: NAMEN, ...REPO_IO,
       config: CFG,
       lade: () => {
         aufrufe.lade++;
@@ -675,14 +677,14 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(n).toBe(0);
   });
   test("--ticket: dieselbe Prüfung", () => {
-    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG });
+    const r = GateN.pruefeTicket({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG });
     expect(r.ticket).toBeNull();
     expect(r.uebersprungen[0].grund).toContain("kein Negativfall");
   });
 
   const io = (items: unknown[], extra: Partial<GateIo> = {}) => {
     const eingang: GateIo = {
-      owner: OWNER, namen: NAMEN,
+      owner: OWNER, namen: NAMEN, ...REPO_IO,
       config: CFG,
       lade: () => zweiBoards({ items: norm(items), offene: new Set<number>() }),
       ...extra,
@@ -748,7 +750,7 @@ describe("Spezifikations-Gate (#1615)", () => {
   });
   test("--ticket: nicht frei wegen Spezifikation zeigt `reparieren #nr` mit Exit 1", () => {
     const r = GateN.fuehreAus(["--ticket", "7"], {
-      owner: OWNER, namen: NAMEN,
+      owner: OWNER, namen: NAMEN, ...REPO_IO,
       config: CFG,
       lade: () => ({ produkt: [], factory: [], offene: new Set<number>() }),
       ladeEinzeln: () => ({ item: N.itemAusIssue(roh(7, { body: OHNE_NEGATIV }).content), offene: new Set<number>() }) as never,
@@ -772,7 +774,7 @@ describe("Zwei Boards (#1729)", () => {
   type Opt = { argv?: string[]; spion?: { n: number } };
   const lauf = (produkt: unknown[], factory: unknown[], o: Opt = {}) =>
     N.fuehreAus(o.argv ?? ["--json", "--bereich", "produkt"], {
-      owner: OWNER, namen: NAMEN,
+      owner: OWNER, namen: NAMEN, ...REPO_IO,
       config: CFG,
       lade: () => {
         if (o.spion) o.spion.n++;
@@ -866,7 +868,7 @@ describe("Zwei Boards (#1729)", () => {
     expect("hinweise" in json(lauf([item(1)], []))).toBe(false);
   });
   test("Lader-Fehler: Exit 2 mit Meldung", () => {
-    const r = N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("kein Netz"); } });
+    const r = N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, ...REPO_IO, config: CFG, lade: () => { throw new Error("kein Netz"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
   });
@@ -874,7 +876,7 @@ describe("Zwei Boards (#1729)", () => {
 
 describe("Aufruf ohne --bereich und ohne --ticket", () => {
   const io = (spion: { n: number }) => ({
-    owner: OWNER, namen: NAMEN,
+    owner: OWNER, namen: NAMEN, ...REPO_IO,
     config: CFG,
     lade: () => {
       spion.n++;
@@ -936,7 +938,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
   const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- nur Happy Path\n";
   const H = { labels: [{ name: HARNESS }] };
   const lauf = (produkt: unknown[], factory: unknown[] = [], argv: string[] = ["--maengel"], extra: Partial<MIo> = {}, offene = new Set<number>()) =>
-    M.fuehreAus(argv, { owner: OWNER, namen: NAMEN, config: CFG, hartAb: 1, lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene }), ...extra });
+    M.fuehreAus(argv, { owner: OWNER, namen: NAMEN, ...REPO_IO, config: CFG, hartAb: 1, lade: () => ({ produkt: norm(produkt), factory: norm(factory), offene }), ...extra });
 
   test("aufrufLesen: --maengel braucht weder --bereich noch --ticket, schließt --ticket aus", () => {
     expect(M.aufrufLesen(["--maengel"])).toMatchObject({ maengel: true, bereich: null, ticket: null, json: false });
@@ -1002,7 +1004,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(() => liste({ produkt: [], factory: [], bereich: "unfug", config: CFG, offene: new Set(), namen: {} })).toThrow(/bereich erwartet agentic oder produkt/);
   });
   test("Ladefehler: Exit 2 mit Ursache, kein Stacktrace", () => {
-    const r = M.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, config: CFG, lade: () => { throw new Error("gh kaputt"); } });
+    const r = M.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, ...REPO_IO, config: CFG, lade: () => { throw new Error("gh kaputt"); } });
     expect(r.code).toBe(2);
     expect(r.err).toContain("gh kaputt");
   });
@@ -1019,7 +1021,7 @@ describe("Board-Verzug (#1866)", () => {
   const frischer = (number: number, projektIds: string[] = []) => ({ number, titel: `T${number}`, projektIds });
   const lauf = (frisch: Frisch | undefined, argv = ["--json", "--bereich", "produkt"]) =>
     N.fuehreAus(argv, {
-      owner: OWNER, namen: NAMEN,
+      owner: OWNER, namen: NAMEN, ...REPO_IO,
       config: CFG,
       lade: () => ({ produkt: norm([item(1)]), factory: norm([item(10, { labels: [{ name: HARNESS }] })]), offene: new Set<number>(), ...(frisch ? { frisch } : {}) }),
     });
@@ -1097,12 +1099,12 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     expect(gefragt).toEqual([]);
   });
   test("--ticket umgeht die Schwelle: die Einzelprüfung nimmt das Sammelticket auch bei Füllstand 3", () => {
-    const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, config: CFG } as never);
+    const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG } as never);
     expect(pruefe.ticket?.nr).toBe(1);
   });
   test("fuehreAus: der Lader aus der io entscheidet; ohne ihn bleibt das Sammelticket liegen", () => {
     const eingabe = { items: norm([item(1, SAMMEL), item(2, { labels: [{ name: HARNESS }] })]), offene: new Set<number>() };
-    const lauf = (fuellstand?: Fuell) => N.fuehreAus(["--bereich", "agentic"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG, fuellstand } as never);
+    const lauf = (fuellstand?: Fuell) => N.fuehreAus(["--bereich", "agentic"], { owner: OWNER, namen: NAMEN, ...REPO_IO, lade: () => zweiBoards(eingabe), config: CFG, fuellstand } as never);
     expect(lauf(() => 10).out.split("\n")[0]).toBe("#1\tT1".replace("T1", "Harness-Härtung (gesammelt)"));
     const r = lauf(() => 4);
     expect(r.out.split("\n")[0]).toBe("#2\tT2");
@@ -1111,7 +1113,7 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
   });
   test("Mängelliste und Einzelprüfung fragen den Füllstand nie", () => {
     const eingabe = { items: norm([item(1, SAMMEL)]), offene: new Set<number>() };
-    const r = N.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, lade: () => zweiBoards(eingabe), config: CFG, fuellstand: () => { throw new Error("darf nicht fragen"); } } as never);
+    const r = N.fuehreAus(["--maengel"], { owner: OWNER, namen: NAMEN, ...REPO_IO, lade: () => zweiBoards(eingabe), config: CFG, fuellstand: () => { throw new Error("darf nicht fragen"); } } as never);
     expect(r).toMatchObject({ code: 0, err: "" }); // ein Wurf des Laders wäre hier Exit 2
   });
 
@@ -1154,7 +1156,7 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(N.fuehreAus(["--bereich", "produkt"], io([item(5, { title: "fremd", ...url(ANDERE) })], [])).code).toBe(1);
   });
   test("ein Item ohne Repo-Angabe zählt nie als eigenes (fail-closed)", () => {
-    expect(N.fuehreAus(["--bereich", "produkt"], io([item(5)], [])).code).toBe(1);
+    expect(N.fuehreAus(["--bereich", "produkt"], io([item(5, { repository_url: undefined })], [])).code).toBe(1);
   });
   test("fremdes Board der eigenen Seite (Negativfall AK6): kein Ticket, Hinweis nennt das Repo der Auswahl, Exit 1", () => {
     const i = io([item(1, url(EIGEN))], [item(2, { ...harness, ...url(ANDERE) })], { boardRepos: { produkt: EIGEN, factory: ANDERE } });
@@ -1232,17 +1234,21 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- der Fall ist ein Wurf, der kein Error-Objekt ist
       expect(grund(mitBlocker(`blockiert durch ${ANDERE}#3`, { fremdStatus: () => { throw "kaputt"; } }))).toBe(`Blocker ${ANDERE}#3 nicht prüfbar (kaputt)`);
     });
-    test("--ticket: ein Issue eines anderen Repos (übertragene Nummer) ist nicht frei, ein Issue ohne Repo-Angabe wird geprüft", () => {
+    test("--ticket: ein Issue eines anderen Repos (übertragene Nummer) ist nicht frei, ein Issue ohne Repo-Angabe ist fail-closed nicht frei", () => {
       const issue = (extra: object) => ({ number: 1, node_id: "I_1", title: "T1", state: "open", body: SPEZ, labels: [], assignees: [], user: { login: OWNER, type: "User" }, ...extra });
       const einzel = (extra: object) => ({ ...io([], []), ladeEinzeln: () => ({ item: N.itemAusIssue(issue(extra)), offene: new Set<number>() }) }) as never;
       expect(N.fuehreAus(["--ticket", "1"], einzel(url(ANDERE))).out).toBe(`#1 nicht frei: gehört zu ${ANDERE}, nicht zu ${EIGEN}
 `);
       expect(N.fuehreAus(["--ticket", "1"], einzel(url(EIGEN.toUpperCase()))).code).toBe(0);
-      expect(N.fuehreAus(["--ticket", "1"], einzel({})).code).toBe(0);
+      expect(N.fuehreAus(["--ticket", "1"], einzel({}))).toMatchObject({ code: 1, out: "#1 nicht frei: Repo des Issues unbekannt (fail-closed)\n" });
     });
-    test("pruefeTicket ohne Repo-Angabe (Einspeisung ohne io.repo) lehnt ein Issue mit Repo nicht ab", () => {
+    test("pruefeTicket und die Auswahl ohne Repo-Angabe (io.repo) sind kein Sonderweg: das Issue ist nicht frei, die Auswahl bricht mit Exit 2 ab", () => {
       const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: SPEZ, labels: [], assignees: [], user: { login: OWNER, type: "User" }, ...url(ANDERE) };
-      expect(N.pruefeTicket({ item: N.itemAusIssue(issue), offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG }).ticket).toMatchObject({ nr: 1 });
+      expect(N.pruefeTicket({ item: N.itemAusIssue(issue), offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG }).ticket).toBeNull();
+      const ohneRepo = { ...io([item(1)], []), repo: undefined };
+      const r = N.fuehreAus(["--bereich", "produkt"], ohneRepo);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("io.repo fehlt");
     });
     test("ein qualifizierter Verweis aufs eigene Repo zählt als lokal (gegen die offenen Issues, ohne Fremdabruf)", () => {
       const spion = { n: 0 };
@@ -1252,7 +1258,7 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
       expect(spion.n).toBe(0);
     });
     test("--ticket nutzt denselben Lader", () => {
-      const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: `${SPEZ}blockiert durch ${ANDERE}#3`, labels: [], assignees: [], user: { login: OWNER, type: "User" } };
+      const issue = { number: 1, node_id: "I_1", title: "T1", state: "open", body: `${SPEZ}blockiert durch ${ANDERE}#3`, labels: [], assignees: [], user: { login: OWNER, type: "User" }, ...url(EIGEN) };
       const i = { ...mitBlocker("x", { fremdStatus: () => ({ offen: true }) }), ladeEinzeln: () => ({ item: N.itemAusIssue(issue), offene: new Set<number>() }) };
       expect(N.fuehreAus(["--ticket", "1"], i as never).out).toBe(`#1 nicht frei: offener Blocker ${ANDERE}#3\n`);
     });

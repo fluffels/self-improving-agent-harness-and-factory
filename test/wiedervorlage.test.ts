@@ -130,8 +130,8 @@ describe("Wächter", () => {
   test("der Workflow checkt das volle Repo aus (Import-Hülle von board-place.mjs), richtet Node ein und ruft das Skript", () => {
     const yml = readFileSync(new URL("../.github/workflows/wiedervorlage.yml", import.meta.url), "utf8");
     expect(yml).not.toContain("sparse-checkout:");
-    expect(yml).toMatch(/actions[/]checkout@v7/);
-    expect(yml).toMatch(/actions[/]setup-node@v7/);
+    expect(yml).toMatch(/actions[/]checkout@[0-9a-f]{40} # v7/);
+    expect(yml).toMatch(/actions[/]setup-node@[0-9a-f]{40} # v7/);
     expect(yml).toContain("node scripts/wiedervorlage.mjs");
     expect(yml).toContain("PROJECT_TOKEN");
   });
@@ -162,8 +162,8 @@ describe("main: --dry-run über Deps (#1837)", () => {
     const angelegt: [string, string, string][] = [];
     const log: string[] = [];
     const deps = {
-      ladeConfig: () => ({ labels: { harness: FREMD.labels.harness } }),
-      ladeLibs: () => Promise.resolve({ REPO: "o/r", platziereOben: (nr: number) => sortiert.push(nr) }),
+      ladeConfig: () => FREMD,
+      ladeLibs: () => Promise.resolve({ REPO: FREMD.repo, platziereOben: (nr: number) => sortiert.push(nr) }),
       eintraegeLaden: () => [e("a", "2000-01-01")],
       ticketsLaden: () => [] as T[],
       legen: (eintrag: E, label: string, repo: string) => (angelegt.push([eintrag.id, label, repo]), 7),
@@ -183,9 +183,48 @@ describe("main: --dry-run über Deps (#1837)", () => {
     vi.stubEnv("PROJECT_TOKEN", "t");
     const { sortiert, angelegt, log, deps } = aufbau();
     expect(await main([], deps)).toBe(0);
-    expect(angelegt).toEqual([["a", FREMD.labels.harness, "o/r"]]);
+    expect(angelegt).toEqual([["a", FREMD.labels.harness, FREMD.repo]]);
     expect(sortiert).toEqual([7]);
     expect(log.join("\n")).toContain("Angelegt: #7");
     expect(log.join("\n")).not.toContain("[dry-run]");
+  });
+});
+
+describe("main: Ziel-Repo des Labels (#78 L12b)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const aufbau = () => {
+    const platziert: unknown[][] = [];
+    const angelegt: unknown[][] = [];
+    const geladen: unknown[][] = [];
+    const deps = {
+      ladeConfig: () => fremd,
+      ladeLibs: () => Promise.resolve({ REPO: FREMD.repo, platziereOben: (...a: unknown[]) => platziert.push(a) }),
+      eintraegeLaden: () => [e("a", "2000-01-01")],
+      ticketsLaden: (...a: unknown[]) => (geladen.push(a), [] as T[]),
+      legen: (...a: unknown[]) => (angelegt.push(a.slice(1)), 7),
+      log: () => undefined,
+      err: () => undefined,
+    };
+    return { platziert, angelegt, geladen, deps };
+  };
+  test("Harness-Label mit fremdem Factory-Board: Anlegen, Ticket-Abruf und Einsortieren im Ziel-Repo, mit PROJECT_TOKEN", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { platziert, angelegt, geladen, deps } = aufbau();
+    expect(await main([], deps)).toBe(0);
+    expect(angelegt).toEqual([[FREMD.labels.harness, FABRIK, "pt"]]);
+    expect(geladen.map((g) => g[0])).toContain(FABRIK);
+    expect(geladen.map((g) => g[0]), "das eigene Repo liest die Duplikat-Prüfung immer mit (Ticket vor dem Umzug)").toContain(FREMD.repo);
+    expect(geladen.find((g) => g[0] === FABRIK)?.[1]).toBe("pt");
+    expect(platziert).toEqual([[7, "wiedervorlage", "pt", FABRIK]]);
+  });
+  test("Ziel-Repo gleich dem eigenen: kein Token-Wechsel (Standard-GH_TOKEN), Einsortieren im eigenen Repo", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { platziert, angelegt, deps } = aufbau();
+    expect(await main([], { ...deps, ladeConfig: () => FREMD })).toBe(0);
+    expect(angelegt).toEqual([[FREMD.labels.harness, FREMD.repo, undefined]]);
+    expect(platziert).toEqual([[7, "wiedervorlage", "pt", FREMD.repo]]);
   });
 });

@@ -63,6 +63,7 @@
     "/scripts/cleanup-worktrees.mjs",
     "/scripts/transkript.mjs",
     "/scripts/board-lib.mjs",
+    "/scripts/board-plan-lib.mjs",
     "/scripts/produktquote-lib.mjs",
     "/scripts/projekt-config.mjs",
     "/scripts/projekt-config-lib.mjs",

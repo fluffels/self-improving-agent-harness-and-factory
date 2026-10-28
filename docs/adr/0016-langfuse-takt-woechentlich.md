@@ -141,7 +141,7 @@ Grenzen: Das Fenster ist eine Commit-Seite (100 Commits), ohne Factory-Merge dar
 
 Anlass: Teil 3 von F11. Die Teilung nach Ansicht („Spiel“, „Agentic Engineering“ auf dem Produkt-Board, Zeile oben zu den Ansichten) wird durch die zwei Boards abgelöst.
 
-Entscheidung: `board-place.mjs --umzug` hat alle offenen `area:harness`-Items auf das Factory-Board gesetzt und vom Produkt-Board entfernt; die beiden Ansichten sind per `deleteProjectV2View` gelöscht (ausdrücklich freigegeben). Beide Boards tragen nur „View 1“, die Auswahl läuft über beide Boards (Fortschreibung #1729). Mechanik und Grenzen: [ticket-reihenfolge.md](../ticket-reihenfolge.md#spielquote-über-zwei-boards-1729).
+Entscheidung: `board-place.mjs --umzug` hat alle offenen `area:harness`-Items auf das Factory-Board gesetzt und vom Produkt-Board entfernt; die beiden Ansichten sind per `deleteProjectV2View` gelöscht (ausdrücklich freigegeben). Beide Boards tragen nur „View 1“, die Auswahl läuft über beide Boards (Fortschreibung #1729). Mechanik und Grenzen: [ticket-reihenfolge.md](../ticket-reihenfolge.md#produktquote-über-zwei-boards-1729).
 
 ## Fortschreibung #1787 (2026-10-19): Härtungs-Takt nach fünf Ticket-Merges jeder Art
 

@@ -420,6 +420,33 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(r.skipped, true);
   });
 
+  test("Diff sprengt den Puffer (ENOBUFS) → ROT 'Diff nicht lesbar', nicht still grün (#78 L3a)", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => {
+        if (args[0] !== "diff") return "basesha";
+        throw Object.assign(new Error("spawnSync git ENOBUFS"), { code: "ENOBUFS" });
+      },
+      readFile: () => lcovOk,
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, true);
+    assert.equal(r.skipped, false);
+    assert.equal(r.diffUnlesbar, true);
+  });
+
+  test("anderer Diff-Fehler (flacher Checkout, Basis fehlt) bleibt No-op-grün (#78 L3a)", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => {
+        if (args[0] !== "diff") return "basesha";
+        throw Object.assign(new Error("bad revision"), { code: "128" });
+      },
+      readFile: () => lcovOk,
+      env: { FACTORY_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, false);
+    assert.equal(r.skipped, true);
+  });
+
   test("fehlendes lcov → ROT mit Hinweis, nicht still grün (ein Gate, das nichts gemessen hat)", () => {
     const r = checkDiffCoverage({
       runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/sim/pods.ts`, ["@@ -0,0 +1 @@", "+x"]) : "basesha"),

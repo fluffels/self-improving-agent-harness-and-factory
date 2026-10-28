@@ -689,6 +689,25 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(aufrufe[1].join(" ")).toMatch(/--paginate --slurp repos\/o\/r\/commits\?sha=main&since=2026-10-05T00:01:00\.000Z/);
   });
 
+  test("ladeAuditDaten: getrennte Board-Repos (#78): Commits beider Repos mit Rolle ihres Repos; ein nicht lesbares Repo macht die Commits zur Lücke", () => {
+    const config = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt", repo: "o/p" }, { rolle: "factory" }] };
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] }];
+      if (a[3]?.includes("/issues?")) return [[{ number: 76 }]];
+      if (a[3]?.includes("repos/o/p/commits")) return [[spiel(2)]];
+      return [[spiel(1)]];
+    };
+    const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config });
+    expect(d.commits?.map((c) => (c as { quellRolle?: string }).quellRolle)).toEqual(["harness", "produkt"]);
+    const kaputt = (a: string[]) => {
+      if (a[3]?.includes("repos/o/p/commits")) throw new Error("HTTP 404");
+      return gh(a);
+    };
+    const l = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: kaputt, repo: "o/f", config });
+    expect(l.commits).toBeNull();
+    expect(l.commitsLuecke).toMatch(/Commits von o\/p nicht lesbar.*HTTP 404/);
+  });
+
   test("ladeAuditDaten: dritter Aufruf wirft oder labels.harness fehlt: nur die Quote ist Lücke, Commits und Takt-Daten bleiben (#1798)", () => {
     const gh = (a: string[]) => {
       if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] }];

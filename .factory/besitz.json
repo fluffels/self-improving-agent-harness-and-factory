@@ -65,6 +65,7 @@
     {"pfad":"scripts/projekt-config-lib.mjs","ring":"kern","quelle":"Plan #1611 (ADR 0022 F2)"},
     {"pfad":"scripts/ticket-namen.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1742)"},
     {"pfad":"scripts/board-lib.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1744)"},
+    {"pfad":"scripts/board-plan-lib.mjs","ring":"kern","quelle":"Herauslösung aus board-lib.mjs (#78, ADR 0022 F3)"},
     {"pfad":"scripts/produktquote-lib.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1744)"},
     {"pfad":"scripts/board-place.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/naechstes-ticket.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
