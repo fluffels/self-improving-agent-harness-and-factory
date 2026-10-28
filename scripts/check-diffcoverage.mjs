@@ -250,7 +250,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
  *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. */
 export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen(), quelle = strukturAus(ladeProjektConfig()).quelle } = {}) {
-  const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
+  const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }));
   const read = readFile ?? ((p) => readFileSync(p, "utf8"));
   const base = resolveBase(git, env);
 
@@ -265,7 +265,10 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen 
     // Addition dieses Slices aus — fremde Zeilen im Nenner, potenziell falsches Rot. `A...B`
     // misst gegen die Merge-Base.
     diff = git(["diff", "-U0", `${base}...HEAD`, "--", quelle]);
-  } catch {
+  } catch (err) {
+    // Ein zu großer Diff (ENOBUFS) ist ein Messfehler, kein flacher Checkout: rot statt still grün.
+    // Jeder andere Fehler (Basis nicht auflösbar, flacher Checkout) bleibt bewusst No-op-grün.
+    if (err && err.code === "ENOBUFS") return { skipped: false, failed: true, base, diffUnlesbar: true };
     return { skipped: true, failed: false, base };
   }
 
@@ -360,6 +363,11 @@ function main() {
     meldeUngueltigeOverrides(r.invalidOverrides, { dim });
     console.log(green(`✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Quellcode (${quelle}/**/*.ts).`));
     return;
+  }
+  if (r.diffUnlesbar) {
+    console.error(red("✖ Diff nicht lesbar (Ausgabe über dem Puffer, ENOBUFS) — es wurde NICHTS gemessen."));
+    console.error("Slice verkleinern (check:diffsize) oder den Diff lokal prüfen.");
+    process.exit(1);
   }
   if (r.noReport) {
     console.error(red("✖ Kein Coverage-Report gefunden — es wurde NICHTS gemessen."));

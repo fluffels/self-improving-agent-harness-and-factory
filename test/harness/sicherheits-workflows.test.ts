@@ -10,8 +10,8 @@
  *
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer
- * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt nur
- * für `PIN_PFLICHT`; die übrigen Workflows pinnt #983. (4) Container-Images brauchen `@sha256:<64 hex>`; der Scan-Umfang ist geschlossen
+ * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt für jede
+ * Workflow-Datei (`PIN_PFLICHT` liest das Verzeichnis). (4) Container-Images brauchen `@sha256:<64 hex>`; der Scan-Umfang ist geschlossen
  * (`docker run|create` in `run`-Blöcken, `container:`, `services.*.image`), alles andere (`docker pull/build/compose`, Images aus
  * Skripten, Variablen als Image) bleibt ungeprüft.
  *
@@ -26,8 +26,8 @@ import { parse } from "yaml";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
-/** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
-const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml", "audit-einordnung.yml", "secret-scan.yml", "zizmor.yml", "dependency-review.yml"] as const;
+/** Pin-Pflicht gilt für alle Workflows (#78): jede `uses:`-Zeile mit Commit-SHA und Versionskommentar. */
+const PIN_PFLICHT = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
 
 type Obj = Record<string, unknown>;
 const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -276,7 +276,7 @@ function hatOberstePermissions(yml: string): boolean {
   }
 }
 
-describe("jeder Workflow hat oberste permissions (#1663)", () => {
+describe("jeder Workflow hat oberste permissions", () => {
   const dateien = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
   test("es gibt Workflows", () => expect(dateien.length).toBeGreaterThan(0));
   test.each(dateien)("%s", (datei) => {

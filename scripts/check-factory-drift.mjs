@@ -14,7 +14,7 @@ import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-
 
 const MANIFEST_PFAD = ".factory/besitz.json";
 const STAND_PFAD = ".factory/sync-stand.json";
-const WEG = "Weg: Änderung upstream im Factory-Repo und neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
 
 const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`)";
 

@@ -121,4 +121,12 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
     expect(t).toContain("updateProjectV2ItemPosition");
     expect(t).toContain(`o=${factory.todoOptionId}`);
   });
+  test("langfuse-takt fuehreStatusAus (#78 L14): ein 404 beim Lesen und ein 403 beim Anlegen sind klare Meldungen mit dem Ziel-Repo", () => {
+    const http = (code: string) => () => { throw Object.assign(new Error("Command failed: gh api x"), { stderr: `gh: ${code}` }); };
+    const lauf = (aktion: string, gh: () => never) =>
+      LF.fuehreStatusAus({ aktion, nr: 9 }, { repo: "zz-org/ziel", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "tok", items: [], config: FREMD, io: { gh } });
+    expect(() => lauf("nach-oben", http("HTTP 404: Not Found"))).toThrow(/kein Lesezugriff auf zz-org\/ziel/);
+    expect(() => lauf("anlegen", http("HTTP 403: Forbidden"))).toThrow(/keine Schreibrechte auf zz-org\/ziel/);
+    expect(() => lauf("nach-oben", http("HTTP 500"))).toThrow(/HTTP 500/);
+  });
 });

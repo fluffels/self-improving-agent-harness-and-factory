@@ -71,3 +71,29 @@ describe("schreibrechtText / fehlendeLabels (#76): fehlende Schreibrechte im Zie
     expect(S.fehlendeLabels(null, ["a"])).toEqual(["a"]);
   });
 });
+
+describe("tokenFuerZiel (#78 L13a): fremdes Ziel-Repo braucht PROJECT_TOKEN, das eigene den Standard", () => {
+  const T = raw as unknown as { tokenFuerZiel: (o: { ziel: string; eigenes: string; env: Record<string, string | undefined> }) => string | undefined };
+  test("gleiches Repo: kein Token (Standard GH_TOKEN gilt)", () => {
+    expect(T.tokenFuerZiel({ ziel: "zz-org/a", eigenes: "zz-org/a", env: { PROJECT_TOKEN: "p" } })).toBeUndefined();
+  });
+  test("fremdes Repo mit Token: PROJECT_TOKEN", () => {
+    expect(T.tokenFuerZiel({ ziel: "zz-org/b", eigenes: "zz-org/a", env: { PROJECT_TOKEN: "p" } })).toBe("p");
+  });
+  test("fremdes Repo ohne Token: undefined (leer zählt als ohne)", () => {
+    expect(T.tokenFuerZiel({ ziel: "zz-org/b", eigenes: "zz-org/a", env: {} })).toBeUndefined();
+    expect(T.tokenFuerZiel({ ziel: "zz-org/b", eigenes: "zz-org/a", env: { PROJECT_TOKEN: "" } })).toBeUndefined();
+  });
+});
+
+describe("schreibrechtText art lesen (#78 L14)", () => {
+  const S = raw as unknown as { schreibrechtText: (e: unknown, repo: string, art?: string) => string | null };
+  test("lesen: Meldung nennt den fehlenden Lesezugriff, nicht das Schreibrecht", () => {
+    const t = S.schreibrechtText(new Error("Command failed\ngh: HTTP 404: Not Found"), "zz-org/zz-ziel", "lesen") ?? "";
+    expect(t).toMatch(/kein Lesezugriff auf zz-org\/zz-ziel/);
+    expect(t).not.toMatch(/Schreibrechte/);
+  });
+  test("lesen: HTTP 500 bleibt null", () => {
+    expect(S.schreibrechtText(new Error("gh: HTTP 500"), "zz-org/zz-ziel", "lesen")).toBeNull();
+  });
+});

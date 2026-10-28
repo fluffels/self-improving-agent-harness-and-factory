@@ -768,6 +768,37 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     }
   });
 
+  test("#78 L1a: Ziel außerhalb des Session-Repos und seiner Worktrees (eigenes Temp-Repo) ist kein geschützter Ort", () => {
+    const frei = join(base, "frei");
+    mkdirSync(frei, { recursive: true });
+    const neu = slash(join(base, "noch-nicht-da"));
+    for (const cwd of [main, sub]) {
+      assert.equal(blockt(cwd, `git -C '${slash(frei)}' init`), false, "init, Ziel existiert");
+      assert.equal(blockt(cwd, `git -C '${slash(frei)}' commit -m x`), false, "commit, Ziel existiert");
+      assert.equal(blockt(cwd, `cd '${slash(frei)}' && git init && git commit -m x`), false, "cd + init + commit");
+      assert.equal(blockt(cwd, `git init '${neu}' && git -C '${neu}' commit -m x`), false, "Ziel entsteht erst im Befehl (git init <dir>)");
+      assert.equal(blockt(cwd, `mkdir -p '${neu}' && cd '${neu}' && git init && git commit -m x`), false, "mkdir + cd + init + commit");
+      assert.equal(blockt(cwd, `git -C '${neu}' commit -m x`), false, "nicht existierendes Ziel außerhalb");
+    }
+  });
+
+  test("#78 L1a Review R1: cd auf ein fehlendes Ziel außerhalb bleibt konservativ, misslingt es, läuft der Commit im Haupt-Checkout", () => {
+    const weg = slash(join(base, "nie-angelegt"));
+    for (const cwd of [main, sub]) {
+      assert.equal(blockt(cwd, `cd '${weg}'; git commit -m x`), true, "cd scheitert, Commit läuft am Ausgangsort");
+      assert.equal(blockt(cwd, `cd '${weg}' || git commit -m x`), true, "Fehlerzweig von ||");
+    }
+  });
+
+  test("#78 L1a Negativ: Haupt-Checkout bleibt gesperrt, auch neben Befehlen im Temp-Ordner und bei dynamischem Ziel", () => {
+    const frei = slash(join(base, "frei"));
+    assert.equal(blockt(main, `cd '${frei}' && git init && cd '${slash(main)}' && git commit -m x`), true, "Rückkehr in den Haupt-Checkout");
+    assert.equal(blockt(main, `git -C '${frei}' init; git commit -m x`), true, "ein Commit ohne -C bleibt im Haupt-Checkout");
+    assert.equal(blockt(main, `git -C '${slash(main)}' commit -m x`), true);
+    assert.equal(blockt(main, `git -C "$DIR" commit -m x`), true, "dynamisches Ziel bleibt gesperrt");
+    assert.equal(blockt(main, `git init '${slash(join(base, "neu2"))}' && git commit -m x`), true, "init <dir> ändert den Ort des Commits nicht");
+  });
+
   test.skipIf(process.platform !== "win32")("Windows: MSYS-Pfade (/c/…) werden in cd und -C aufgelöst", () => {
     const msys = (p: string) => slash(p).replace(/^([A-Za-z]):/, (_m, d: string) => "/" + d.toLowerCase());
     assert.equal(blockt(linked, `git -C '${msys(main)}' push`), true);

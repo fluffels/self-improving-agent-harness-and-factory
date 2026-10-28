@@ -1,12 +1,16 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as raw from "../scripts/board-lib.mjs";
+import * as raw from "../scripts/board-plan-lib.mjs";
 import { FREMD } from "./support/fremd-config";
 
 const config: unknown = FREMD;
 
 type Plan = { aufnehmen: { number: number; nodeId: string; title: string; rolle: string }[]; abgelehnt: { number: number; grund: string }[] };
-const aufnahmePlan = (raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null; repo?: string }) => Plan }).aufnahmePlan;
+type PlanOpt = { config?: unknown; ankerNr?: number | null; repo?: string };
+const planLib = raw as unknown as { aufnahmePlan: (f: number[], i: Record<number, unknown>, o?: PlanOpt) => Plan };
+// `repo` ist Pflicht (#78): die Tests geben das Repo der Fremd-Config mit, ein ausdrückliches `repo: undefined` bleibt möglich.
+const aufnahmePlan = (f: number[], i: Record<number, unknown>, o: PlanOpt = {}): Plan => planLib.aufnahmePlan(f, i, { repo: FREMD.repo, ...o });
 
 const issue = (number: number, extra: Record<string, unknown> = {}) => ({ number, state: "open", node_id: `I_${number}`, title: `T${number}`, ...extra });
 
@@ -38,6 +42,14 @@ describe("aufnahmePlan (#1428 Z37)", () => {
   test("gemischt: Reihenfolge der Eingabe bleibt", () => {
     const p = aufnahmePlan([9, 3], { 9: issue(9), 3: issue(3) }, { config });
     expect(p.aufnehmen.map((a) => a.number)).toEqual([9, 3]);
+  });
+});
+
+describe("board-plan-lib: pur und ohne Zyklus (#78)", () => {
+  test("importiert board-lib nie (board-lib importiert sie); alle Importe sind Projekt-Config oder Node-Builtins", () => {
+    const quelle = readFileSync(new URL("../scripts/board-plan-lib.mjs", import.meta.url), "utf8");
+    const importe = [...quelle.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
+    expect(importe).toEqual(["./projekt-config-lib.mjs"]);
   });
 });
 
@@ -137,7 +149,8 @@ describe("aufnahmePlan: fremdes Board (#76)", () => {
     expect(p.abgelehnt[0]?.grund).toContain(FABRIK);
     expect(aufnahmePlan([5], { 5: issue(5, harness) }, { config: fremd, repo: FABRIK }).aufnehmen.map((a) => a.number)).toEqual([5]);
   });
-  test("ohne repo bleibt das Verhalten unverändert (reine Rollenwahl)", () => {
-    expect(aufnahmePlan([5], { 5: issue(5, { labels: [{ name: FREMD.labels.harness }] }) }, { config: fremd }).aufnehmen).toHaveLength(1);
+  test("ohne repo wirft aufnahmePlan (kein stiller Standardwert)", () => {
+    expect(() => aufnahmePlan([5], { 5: issue(5) }, { config: fremd, repo: undefined })).toThrow(/aufnahmePlan: repo fehlt[^]*Fix:/);
+    expect(() => aufnahmePlan([5], { 5: issue(5) }, { config: fremd, repo: "" })).toThrow(/repo fehlt/);
   });
 });

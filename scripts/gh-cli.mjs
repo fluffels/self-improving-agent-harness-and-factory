@@ -55,11 +55,19 @@ export const ghJson = (args, opts = {}) => JSON.parse(ghText(args, opts));
  * `HTTP 403`, `HTTP 404` (GitHub verbirgt ein Repo ohne Zugriff), `Resource not accessible by integration`, `Must have admin rights`.
  * Grenze: andere Wortlauten (etwa bei einem anderen Fehlerformat von `gh`) erkennt sie nicht und gibt `null` zurück: der Aufrufer meldet dann den Rohtext.
  */
-export function schreibrechtText(err, repo) {
+export function schreibrechtText(err, repo, art = "schreiben") {
   const text = fehlerText(err);
   if (!/HTTP (403|404)|Resource not accessible by integration|Must have admin rights/i.test(text)) return null;
+  const kurz = text.replace(/\s+/g, " ").slice(0, 200);
+  if (art === "lesen") return `kein Lesezugriff auf ${repo} (${kurz}): der Token braucht Lesezugriff auf die Issues im Ziel-Repo (Projekt-Token, \`PROJECT_TOKEN\`)`;
   return `keine Schreibrechte auf ${repo} (${text.replace(/\s+/g, " ").slice(0, 200)}): der Token braucht Issues-Schreibrecht im Ziel-Repo; nichts im eigenen Repo angelegt`;
 }
+
+/**
+ * Pur (#78): der Token für Aufrufe gegen das Ziel-Repo `ziel`. Ein fremdes Repo (≠ `eigenes`) braucht `PROJECT_TOKEN` (der Actions-`github.token` gilt nur im eigenen Repo);
+ * gleiches Repo oder kein Token: `undefined`, dann gilt `GH_TOKEN`/der Standard.
+ */
+export const tokenFuerZiel = ({ ziel, eigenes, env }) => (ziel !== eigenes && env.PROJECT_TOKEN ? env.PROJECT_TOKEN : undefined);
 
 /** Pur (#76): die Labels aus `labels`, die die Antwort eines Issue-POST nicht trägt (ein öffentliches Repo legt das Issue für Nicht-Mitarbeiter an und verwirft die Labels still). */
 export function fehlendeLabels(antwort, labels) {
