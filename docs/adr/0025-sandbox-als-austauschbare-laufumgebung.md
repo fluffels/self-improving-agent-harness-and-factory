@@ -168,6 +168,10 @@ Eine Variante, in der mindestens eine Ticket-Ablauf-Zeile (Worktree/`npm ci`/`ve
 
 #1434 bestätigt den Standardweg, #1657 den Rückfallweg, #1831 die Cloud-Sitzung, #1832 die eigene Container-Sandbox; #1833 misst über alle Varianten plus einen Lauf unter nativem Windows.
 
+### Konkretisierung
+
+Konkretisierung vorgeschlagen in [ADR 0030](0030-team-betrieb-pod.md) (Team-Betrieb im Pod, Sandbox V1/V2 auf Kubernetes).
+
 ### Neu entscheiden, wenn
 
 #1434 und #1657 vorliegen (dann die endgültige Wahl als weitere Fortschreibung); #1831, #1832 oder #1833 ein Ergebnis bringen; der Cloud-GitHub-Proxy GraphQL zulässt; Claude Code natives Windows sandboxt; `sbx` sein Credential-Modell ändert.
