@@ -24,7 +24,8 @@ function projekt(opts: { tag?: string; config?: boolean }): string {
   }
   return dir;
 }
-const tagsJson = (...namen: string[]) => JSON.stringify(namen.map((name) => ({ name })));
+/** `gh api --paginate --jq .[].name` liefert je Tag eine Zeile, über alle Seiten. */
+const tagsJson = (...namen: string[]) => `${namen.join("\n")}\n`;
 
 describe("vergleicheTags", () => {
   test("liefert den höchsten Release-Tag, numerisch statt textlich; Pre-Release und Fremdtags zählen nicht", () => {
@@ -71,14 +72,14 @@ describe("fuehreAus", () => {
     assert.equal(text.code, 0);
     assert.match(text.out, /v1\.0\.0.*v1\.2\.0/s);
     const json = fuehreAus(["--json"], { wurzel, gh });
-    assert.deepEqual(JSON.parse(json.out).update.neu, "v1.2.0");
+    assert.equal((JSON.parse(json.out) as { update: { neu: string } }).update.neu, "v1.2.0");
     assert.ok(aufrufe[0].includes("repos/o/factory/tags"));
   });
   test("aktueller Stand: kein Update, --json update null", () => {
     const wurzel = projekt({ tag: "v1.2.0" });
     const r = fuehreAus(["--json"], { wurzel, gh: () => tagsJson("v1.2.0") });
     assert.equal(r.code, 0);
-    assert.equal(JSON.parse(r.out).update, null);
+    assert.equal((JSON.parse(r.out) as { update: unknown }).update, null);
   });
   test("fehlendes Factory-Repo: Exit 2 mit Fix:", () => {
     const r = fuehreAus([], { wurzel: projekt({ tag: "v1.0.0", config: false }), gh: () => assert.fail("kein gh") });
