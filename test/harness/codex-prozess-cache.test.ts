@@ -16,37 +16,93 @@ let fixture: string, moduleUrl: string, sourceFile: string, artifact: string, ro
 const prepare = "const fs=await import('node:fs');const w=await import(process.argv[1]);console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])))";
 const action = "const fs=await import('node:fs');const w=await import(process.argv[1]);w.windowsCacheProbe(fs.readFileSync(process.argv[2]));const cp=await import('node:child_process');process.exit(cp.spawnSync(process.execPath,['-e',\"require('fs').writeFileSync(process.argv[1],'unerlaubt')\",process.argv[3]]).status)";
 function launch(code: string) { return spawnSync(process.execPath, ["--input-type=module", "-e", code, moduleUrl, sourceFile, marker], { encoding: "utf8" }); }
-function parallelPrepare(lock: string) {
-  return new Promise<string>((resolveResult, reject) => {
-    const waiting = "const fs=await import('node:fs');const end=Date.now()+9000;while(!fs.existsSync(process.argv[4])){if(Date.now()>end)throw Error('Lock nicht sichtbar');await new Promise(r=>setTimeout(r,5))};";
-    const child = spawn(process.execPath, ["--input-type=module", "-e", waiting + prepare.replace("const fs=await import('node:fs');", ""), moduleUrl, sourceFile, marker, lock], { stdio: ["ignore", "pipe", "pipe"] });
+function parallelPrepare(lock: string, observed: string) {
+  let readyResolve!: () => void, readyReject!: (e: unknown) => void;
+  const ready = new Promise<void>((resolveReady, rejectReady) => { readyResolve = resolveReady; readyReject = rejectReady; });
+  const result = new Promise<string>((resolveResult, reject) => {
+    const waiting = "const fs=await import('node:fs');const w=await import(process.argv[1]);console.log('READY');const end=Date.now()+9000;while(!fs.existsSync(process.argv[4])){if(Date.now()>end)throw Error('Lock nicht sichtbar');await new Promise(r=>setTimeout(r,5))};fs.writeFileSync(process.argv[5],'LOCK_ACK');";
+    const child = spawn(process.execPath, ["--input-type=module", "-e", waiting + "console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])))", moduleUrl, sourceFile, marker, lock, observed], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = ""; child.stdout.on("data", b => { out += String(b); }); child.stderr.on("data", b => { err += String(b); });
-    child.once("error", reject); child.once("close", code => { if (code === 0) resolveResult(out.trim()); else reject(Error(err)); });
+    child.stdout.on("data", () => { if (out.startsWith("READY\n")) readyResolve(); });
+    child.once("error", reject); child.once("close", code => { if (code === 0) resolveResult(out.replace(/^READY\r?\n/, "").trim()); else reject(Error(err)); });
   });
+  void result.catch(readyReject);
+  return { ready, result };
 }
+async function parallelPublizieren(publish: () => string, peer: { ready: Promise<void>; result: Promise<string> }) {
+  const [original, parallel] = await Promise.allSettled([peer.ready.then(publish), peer.result]);
+  if (original.status === "rejected") throw original.reason;
+  if (parallel.status === "rejected") throw parallel.reason;
+  expect(parallel.value).toBe(original.value); return original.value;
+}
+function nachLockAck<T>(timeout: number, beobachtet: () => boolean, warten: () => void, jetzt: () => number, compile: (remaining: number) => T): T {
+  const deadline = jetzt() + timeout;
+  while (!beobachtet()) {
+    if (jetzt() >= deadline) throw Error("Peer hat Publisherlock nicht beobachtet");
+    warten();
+  }
+  const remaining = deadline - jetzt();
+  if (remaining <= 0) throw Error("Peer hat Publisherlock nicht beobachtet");
+  return compile(remaining);
+}
+test("Compilerbarriere hält einen gezielt verzögerten LOCK_ACK vor echtem Compile zurück", () => {
+  let ack = false;
+  const compile = vi.fn(() => { expect(ack).toBe(true); return "kompiliert"; });
+  expect(nachLockAck(10, () => ack, () => { ack = true; }, () => 0, compile)).toBe("kompiliert");
+  expect(compile).toHaveBeenCalledWith(10);
+});
+test.each([false, true])("Compilerbarriere überschreitet bei LOCK_ACK=%s ihr vorhandenes Budget nicht", ack => {
+  const compile = vi.fn<(remaining: number) => void>(), warten = vi.fn(); let tick = 0;
+  expect(() => nachLockAck(10, () => ack, warten, () => tick++ * 10, compile)).toThrow("Peer hat Publisherlock nicht beobachtet");
+  expect(compile).not.toHaveBeenCalled(); expect(warten).not.toHaveBeenCalled();
+});
+test("Publisher wartet auf Bereitschaft eines gezielt verzögerten Peers", async () => {
+  let freigeben!: () => void;
+  const ready = new Promise<void>(r => { freigeben = r; }), publish = vi.fn(() => "fixture-artefakt");
+  const work = parallelPublizieren(publish, { ready, result: Promise.resolve("fixture-artefakt") });
+  try { await Promise.resolve(); expect(publish).not.toHaveBeenCalled(); }
+  finally { freigeben(); await work; }
+  expect(publish).toHaveBeenCalledTimes(1);
+});
 describe.skipIf(process.platform !== "win32")("nativer Cache", () => {
 beforeAll(async () => {
   if (process.platform !== "win32") return;
+  const stages: { phase: string; ms: number }[] = [];
+  const measure = <T>(phase: string, fn: () => T): T => { const start = Date.now(); try { return fn(); } finally { stages.push({ phase, ms: Date.now() - start }); } };
+  try {
   fixture = mkdtempSync(join(tmpdir(), "codex-cache-test-")); marker = join(fixture, "zielmarker");
   sourceFile = join(fixture, "source.cs");
   writeFileSync(sourceFile, readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8") + `\n// Fixture ${randomUUID()}\n`);
   moduleUrl = pathToFileURL(resolve("scripts/codex-prozess-windows.mjs")).href;
-  const active = w.windowsVorbereiten(); root = dirname(dirname(active));
+  const active = measure("active", () => w.windowsVorbereiten()); root = dirname(dirname(active));
   const expected = JSON.parse(readFileSync(join(dirname(active), "manifest.json"), "utf8")) as Record<string, unknown>;
   delete expected.exeHash; expected.sourceHash = createHash("sha256").update(readFileSync(sourceFile)).digest("hex");
   const key = createHash("sha256").update(JSON.stringify(expected)).digest("hex");
-  const outcomes = await Promise.allSettled([
-    Promise.resolve().then(() => w.windowsCacheProbe(readFileSync(sourceFile))),
-    parallelPrepare(join(root, `${key}.lock`)),
-  ]);
-  const original = outcomes[0], parallel = outcomes[1];
-  if (original.status === "rejected") throw original.reason;
-  if (parallel.status === "rejected") throw parallel.reason;
-  expect(parallel.value).toBe(original.value); artifact = dirname(original.value);
+  artifact = join(root, key);
+  const lock = join(root, `${key}.lock`), observed = join(fixture, "peer-observed");
+  const native = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  let compiles = 0;
+  vi.doMock("node:child_process", () => ({ ...native, execFileSync: (file: string, args: string[], options: { timeout: number }) => {
+    if (!file.endsWith("csc.exe")) return measure(args[0] === "--pruefe" ? "native" : "acl", () => native.execFileSync(file, args, options));
+    compiles++; expect(existsSync(lock)).toBe(true);
+    return measure("lock-ack-and-compiler", () => nachLockAck(options.timeout, () => existsSync(observed),
+      () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5), Date.now, remaining => {
+        expect(readFileSync(observed, "utf8")).toBe("LOCK_ACK"); expect(existsSync(lock)).toBe(true);
+        return measure("compiler", () => native.execFileSync(file, args, { ...options, timeout: remaining }));
+      }));
+  } }));
+  vi.resetModules();
+  // @ts-expect-error: Node-Skript ohne Declaration.
+  const publisher = await import("../../scripts/codex-prozess-windows.mjs") as typeof w;
+  const peer = parallelPrepare(lock, observed);
+  const result = await parallelPublizieren(() => publisher.windowsCacheProbe(readFileSync(sourceFile)), peer);
+  artifact = dirname(result);
+  expect(compiles).toBe(1); expect(readFileSync(observed, "utf8")).toBe("LOCK_ACK"); expect(existsSync(lock)).toBe(false);
   expect(w.windowsVorbereiten()).toBe(active);
+  } finally { vi.doUnmock("node:child_process"); vi.resetModules(); console.info(JSON.stringify({ cacheFixtureStages: stages })); }
 });
 afterAll(() => {
-  if (artifact) {
+  if (artifact && existsSync(artifact)) {
     expect(dirname(realpathSync(artifact))).toBe(realpathSync(root));
     rmSync(artifact, { recursive: true });
   }
