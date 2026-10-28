@@ -457,3 +457,39 @@ describe("lesbarImZiel (#78 L14): ein nicht lesbares Ziel-Repo ist eine Meldung 
     expect(n.meldungen).toEqual([]);
   });
 });
+
+describe("Token und Lesezugriff im Ziel-Repo (#97 L7 b, L11 j, L12 a)", () => {
+  const A = raw as unknown as {
+    zielOpts: (repo: string, env?: Record<string, string>) => { token?: string };
+    legeAn: (a: { repo: string; titel: string; body: string; harness: string }, api: (args: string[], o: { token?: string }) => unknown, env?: Record<string, string>) => unknown;
+    einzelAbrufIn: (repo: string, gh: (args: string[], o: { token?: string }) => unknown, env?: Record<string, string>) => (nr: number) => unknown;
+  };
+  const EIGENES = (rawLib as unknown as { REPO: string }).REPO;
+  const ENV = { PROJECT_TOKEN: "pt" };
+  test("zielOpts: fremdes Ziel-Repo nutzt PROJECT_TOKEN, das eigene (auch anders geschrieben) den Standard", () => {
+    expect(A.zielOpts("zz-org/ziel", ENV)).toEqual({ token: "pt" });
+    expect(A.zielOpts(EIGENES, ENV)).toEqual({ token: undefined });
+    expect(A.zielOpts(EIGENES.toUpperCase(), ENV)).toEqual({ token: undefined });
+    expect(A.zielOpts("zz-org/ziel", {})).toEqual({ token: undefined });
+  });
+  test("legeAn und der Einzelabruf reichen den Token des Ziel-Repos an gh", () => {
+    const opts: unknown[] = [];
+    const gh = (_a: string[], o: unknown) => (opts.push(o), { number: 3, labels: [{ name: "x" }] });
+    A.legeAn({ repo: "zz-org/ziel", titel: "t", body: "b", harness: "x" }, gh, ENV);
+    A.legeAn({ repo: EIGENES, titel: "t", body: "b", harness: "x" }, gh, ENV);
+    A.einzelAbrufIn("zz-org/ziel", gh, ENV)(3);
+    A.einzelAbrufIn(EIGENES, gh, ENV)(3);
+    expect(opts).toEqual([{ token: "pt" }, { token: undefined }, { token: "pt" }, { token: undefined }]);
+  });
+  test("Verdrahtung (L12 a): jeder Lesezugriff auf die offenen Issues des Ziel-Repos steht in einem lesbarImZiel-Block", () => {
+    const q = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
+    const treffer = [...q.matchAll(/loadOpenIssuePages\(repo/g)];
+    expect(treffer).toHaveLength(2);
+    for (const m of treffer) {
+      const davor = q.slice(0, m.index);
+      const funktion = Math.max(davor.lastIndexOf("\nfunction "), davor.lastIndexOf("\nasync function "));
+      expect(davor.lastIndexOf("lesbarImZiel(repo"), "lesbarImZiel öffnet vor dem Lesen, innerhalb derselben Funktion").toBeGreaterThan(funktion);
+      expect(q.slice(m.index, m.index + 40), "mit Token-Optionen des Ziel-Repos").toContain("zielOpts(repo)");
+    }
+  });
+});

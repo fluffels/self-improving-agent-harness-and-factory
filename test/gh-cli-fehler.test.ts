@@ -97,3 +97,14 @@ describe("schreibrechtText art lesen (#78 L14)", () => {
     expect(S.schreibrechtText(new Error("gh: HTTP 500"), "zz-org/zz-ziel", "lesen")).toBeNull();
   });
 });
+
+describe("tokenFuerZiel (#97 L11 c): Repo-Namen ohne Groß/Klein verglichen", () => {
+  const T = raw as unknown as { tokenFuerZiel: (o: { ziel: string; eigenes: string; env: Record<string, string | undefined> }) => string | undefined };
+  test("anders geschriebenes eigenes Repo bekommt keinen PROJECT_TOKEN", () => {
+    expect(T.tokenFuerZiel({ ziel: "Zz-Org/A", eigenes: "zz-org/a", env: { PROJECT_TOKEN: "p" } })).toBeUndefined();
+    expect(T.tokenFuerZiel({ ziel: "zz-org/a", eigenes: "ZZ-ORG/A", env: { PROJECT_TOKEN: "p" } })).toBeUndefined();
+  });
+  test("ein wirklich fremdes Repo bleibt fremd, auch bei gleichem Namensteil", () => {
+    expect(T.tokenFuerZiel({ ziel: "Zz-Org/b", eigenes: "zz-org/a", env: { PROJECT_TOKEN: "p" } })).toBe("p");
+  });
+});
