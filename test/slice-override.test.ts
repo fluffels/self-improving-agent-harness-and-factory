@@ -28,6 +28,7 @@ interface Zeilen {
   diffsizeOverride: string;
   diffcovOverride: string;
   lockfileOverride: string;
+  syncDringlich: string;
 }
 const so = raw as unknown as {
   meldeUngueltigeOverrides: (invalid: string[] | undefined, o?: { dim?: (s: string) => string; log?: (s: string) => void }) => void;
@@ -64,6 +65,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       diffsizeOverride: "AB-Diffsize-Override",
       diffcovOverride: "AB-Diffcov-Override",
       lockfileOverride: "AB-Lockfile-Override",
+      syncDringlich: "AB-Sync-Dringlich",
     });
     expect(Z.diffcovOverride).toBe(`${FREMD.praefixe.commitZeile}Diffcov-Override`);
   });
