@@ -46,7 +46,7 @@ function ohneGenBloecke(text: string): string {
   return text
     .split("\n")
     .map((zeile) => {
-      const art = (GEN_MARKER.exec(zeile) as RegExpExecArray | null)?.[3];
+      const art = (GEN_MARKER as RegExp).exec(zeile)?.[3];
       if (art === "START") offen = true;
       const raus = offen || art !== undefined;
       if (art === "END") offen = false;
