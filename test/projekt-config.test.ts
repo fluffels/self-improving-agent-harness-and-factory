@@ -863,7 +863,7 @@ describe("struktur.moduldoku: null als Opt-out von check:docmap (#97 L7)", { tim
 });
 
 describe("struktur.moduldoku: null in den Funktionen selbst (#97 Runde 1)", () => {
-  test("auditDocMap und parseDeepDocMaps stürzen bei null nicht ab, sondern melden Opt-out bzw. leer", async () => {
+  test("auditDocMap und parseDeepDocMaps stürzen bei null nicht ab, sondern melden Opt-out bzw. leer", () => {
     const dm = rawDocmap as unknown as {
       auditDocMap: (root: string, s: { quelle: string; moduldoku: string | null }) => { entfaellt?: boolean; modules: string[]; orphans: string[] };
       parseDeepDocMaps: (root: string, s: { quelle: string; moduldoku: string | null }) => Set<string>;
