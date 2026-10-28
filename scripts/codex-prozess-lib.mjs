@@ -10,7 +10,7 @@ if (process.platform === "win32") windowsVorbereiten();
 
 export const PROFIL = 'web_search="disabled"\n[features]\napps=false\nplugins=false\nremote_plugin=false\nmemories=false\nshell_tool=false\nrequest_permissions_tool=false\nmulti_agent=false\ncode_mode_host=false\ngoals=false\nview_image=false\n';
 export function umgebung(home) {
-  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, ".codex"), APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata") };
+  const env = { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, ".codex"), APPDATA: join(home, "AppData", "Roaming"), LOCALAPPDATA: join(home, "AppData", "Local") };
   for (const key of ["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP"]) {
     if (process.env[key]) env[key] = process.env[key];
   }
@@ -19,7 +19,7 @@ export function umgebung(home) {
 export function profil(config = PROFIL) {
   const root = mkdtempSync(join(tmpdir(), "codex-schutz-")), home = join(root, "home"), env = umgebung(home);
   try {
-    mkdirSync(env.CODEX_HOME, { recursive: true });
+    for (const key of ["CODEX_HOME", "APPDATA", "LOCALAPPDATA"]) mkdirSync(env[key], { recursive: true });
     writeFileSync(join(env.CODEX_HOME, "config.toml"), config);
     return { root, env, entfernen: () => rmSync(root, { recursive: true, force: true }) };
   } catch (e) { rmSync(root, { recursive: true, force: true }); throw e; }

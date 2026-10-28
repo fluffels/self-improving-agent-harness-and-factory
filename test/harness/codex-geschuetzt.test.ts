@@ -8,18 +8,72 @@ import { fakeInventar, type Inventar, type Profil, type Rpc } from "../support/c
 // @ts-expect-error: Node-Skripte ohne Declaration.
 import * as raw from "../../scripts/codex-geschuetzt.mjs";
 type Aktion = { tool_name: string; cwd: string; tool_input: Record<string, unknown> };
-type Optionen = { executor: (a: Aktion) => unknown; inventar: () => Promise<unknown>; guard: (a: Aktion) => Promise<unknown>; timeoutMs?: number };
+type Guard = (a: Aktion, env?: NodeJS.ProcessEnv) => Promise<unknown>;
+type Optionen = { executor: (a: Aktion) => unknown; inventar: () => Promise<unknown>; guard: Guard; timeoutMs?: number };
 type HostTransport = (s: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }, phase: (ms: number) => void) => Promise<unknown>, opts: { timeoutMs: number }) => Promise<unknown>;
-const c = raw as unknown as { geschuetzteAktion: (a: Aktion, o: Optionen) => Promise<unknown>; geschuetzterHost: (a: Aktion, o: { abfragen: HostTransport; guard: Optionen["guard"] }) => Promise<unknown>; nativesInventar: (s: string, fn: Inventar) => Promise<unknown>; hookBefehl: () => string };
+const c = raw as unknown as { geschuetzteAktion: (a: Aktion, o: Optionen) => Promise<unknown>; geschuetzterHost: (a: Aktion, o: { abfragen: HostTransport; guard: Guard }) => Promise<unknown>; nativesInventar: (s: string, fn: Inventar) => Promise<unknown>; hookBefehl: () => string };
 const aktion: Aktion = { tool_name: "exec_command", cwd: process.cwd(), tool_input: { cmd: "echo fixture", shell: "powershell" } };
 const gueltig = { version: "0.164.0", geschlossen: true, hooks: [{ eventName: "preToolUse", enabled: true, trustStatus: "trusted" }], errors: [] };
 const inventar = () => Promise.resolve(structuredClone(gueltig));
+test.each([false, true])("eigenständiger fester Guard besitzt ein Temp-Profil bis Prozess-close (Fehler=%s)", async failure => {
+  const actual = await vi.importActual<{ profil: () => Profil }>("../../scripts/codex-prozess-lib.mjs");
+  let owned: Profil | undefined, closed = false, release!: () => void;
+  const pending = new Promise((resolveGuard, rejectGuard) => { release = () => { if (failure) rejectGuard(Error("fixture guard failed")); else resolveGuard({ code: 0, stdout: '{"entscheidung":"allow"}' }); }; });
+  const processPort = vi.fn((_file: string, _args: string[], opts: { env: NodeJS.ProcessEnv; timeoutMs: number }) => {
+    expect(opts.timeoutMs).toBe(3000); expect(owned !== undefined).toBe(true);
+    expect(opts.env.HOME === owned!.env.HOME).toBe(true); expect(opts.env.HOME === process.cwd()).toBe(false);
+    return pending;
+  });
+  vi.doMock("../../scripts/codex-prozess-lib.mjs", () => ({ ...actual, prozess: processPort, profil: () => {
+    owned = actual.profil(); const original = owned.entfernen;
+    return { ...owned, entfernen: () => { expect(closed).toBe(true); original(); } };
+  } }));
+  vi.resetModules();
+  let work: Promise<unknown> | undefined;
+  try {
+    // @ts-expect-error: Node-Skript ohne Declaration.
+    const fresh = await import("../../scripts/codex-geschuetzt.mjs") as { geschuetzteAktion: (a: Aktion, opts: unknown) => Promise<unknown> };
+    const executor = vi.fn(() => "ausgeführt");
+    work = fresh.geschuetzteAktion(aktion, { inventar, executor }).catch((e: unknown) => (e as Error).message);
+    await vi.waitFor(() => { expect(processPort).toHaveBeenCalledTimes(1); });
+    expect(existsSync(owned!.root)).toBe(true); closed = true; release();
+    expect(await work).toBe(failure ? "fixture guard failed" : "ausgeführt"); expect(existsSync(owned!.root)).toBe(false);
+    expect(executor).toHaveBeenCalledTimes(failure ? 0 : 1);
+  } finally { closed = true; release(); await work; owned?.entfernen(); vi.doUnmock("../../scripts/codex-prozess-lib.mjs"); vi.resetModules(); }
+});
+test("gemeinsamer fester Guard nutzt das vorhandene Profil ohne zweites Profil", async () => {
+  const actual = await vi.importActual<{ profil: () => Profil }>("../../scripts/codex-prozess-lib.mjs"), profiles: Profil[] = [], f = hostFehler("ok");
+  const processPort = vi.fn((_file: string, _args: string[], opts: { env: NodeJS.ProcessEnv }) => {
+    expect(profiles.length).toBe(1); expect(opts.env.HOME === profiles[0].env.HOME).toBe(true);
+    return Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' });
+  });
+  vi.doMock("../../scripts/codex-prozess-lib.mjs", () => ({ ...actual, prozess: processPort, profil: () => {
+    const p = actual.profil(); profiles.push(p);
+    return { ...p, entfernen: () => { expect(f.state.closed).toBe(true); p.entfernen(); } };
+  } }));
+  vi.resetModules();
+  try {
+    // @ts-expect-error: Node-Skript ohne Declaration.
+    const fresh = await import("../../scripts/codex-geschuetzt.mjs") as { geschuetzterHost: (a: Aktion, opts: unknown) => Promise<{ code: number }> };
+    expect((await fresh.geschuetzterHost(aktion, { abfragen: f.abfragen })).code).toBe(0);
+    expect(profiles.length).toBe(1); expect(existsSync(profiles[0].root)).toBe(false); expect(processPort).toHaveBeenCalledTimes(1);
+  } finally { for (const p of profiles) p.entfernen(); vi.doUnmock("../../scripts/codex-prozess-lib.mjs"); vi.resetModules(); }
+});
 test("Host verwendet ein frisches kombiniertes Profil und eine geordnete Sitzung pro Aufruf", async () => {
   const profiles: string[] = [], phases: number[] = [], methods: string[] = [], policies: unknown[] = [];
   let closed = false, marker = "";
-  const guard = vi.fn(() => { expect(methods.filter(m => m === "command/exec")).toHaveLength(0); return Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' }); });
+  let expectedEnv: NodeJS.ProcessEnv;
+  const guard = vi.fn((_a: Aktion, env?: NodeJS.ProcessEnv) => {
+    expect(methods.filter(m => m === "command/exec")).toHaveLength(0);
+    expect(env !== undefined).toBe(true); expect(env === expectedEnv).toBe(false);
+    expect(Object.keys(env!).sort()).toEqual(Object.keys(expectedEnv).sort());
+    expect(Object.entries(expectedEnv).every(([k, v]) => env![k] === v)).toBe(true);
+    env!.HOME = "fixture-guard-mutation";
+    expect(expectedEnv.HOME === "fixture-guard-mutation").toBe(false);
+    return Promise.resolve({ code: 0, stdout: '{"entscheidung":"allow"}' });
+  });
   const abfragen: HostTransport = async (_s, p, fn, opts) => {
-    closed = false; profiles.push(p.root); expect(opts.timeoutMs).toBe(5000);
+    closed = false; profiles.push(p.root); expectedEnv = p.env; expect(opts.timeoutMs).toBe(5000);
     expect(readFileSync(join(p.env.CODEX_HOME, "config.toml"), "utf8")).toContain('sandbox="unelevated"');
     expect(readFileSync(join(p.env.CODEX_HOME, "hooks.json"), "utf8")).toContain("PreToolUse");
     const h = { ...gueltig.hooks[0], command: c.hookBefehl(), key: "fixture", currentHash: "fixture" };
@@ -35,11 +89,12 @@ test("Host verwendet ein frisches kombiniertes Profil und eine geordnete Sitzung
       return Promise.resolve({});
     };
     try { return await fn(rpc, { userAgent: "fixture/0.164.0 " }, ms => { phases.push(ms); }); }
-    finally { expect(existsSync(p.root)).toBe(true); expect(existsSync(marker)).toBe(true); closed = true; }
+    finally { expect(existsSync(p.root)).toBe(true); expect(marker === "" || existsSync(marker)).toBe(true); closed = true; }
   };
   for (let i = 0; i < 2; i++) {
     methods.length = 0; policies.length = 0;
-    expect(await c.geschuetzterHost(aktion, { abfragen, guard })).toEqual({ code: 0, stdout: "HOST_OK", stderr: "" });
+    const requested = { ...aktion, env: { HOME: process.cwd(), PAYLOAD_ENV: "must-not-be-used" } };
+    expect(await c.geschuetzterHost(requested, { abfragen, guard })).toEqual({ code: 0, stdout: "HOST_OK", stderr: "" });
     expect(closed).toBe(true); expect(existsSync(profiles[i])).toBe(false); expect(existsSync(marker)).toBe(false);
     expect(methods).toEqual(["hooks/list", "config/value/write", "hooks/list", "mcpServerStatus/list", "command/exec", "command/exec"]);
     expect(policies[0]).toEqual(policies[1]);

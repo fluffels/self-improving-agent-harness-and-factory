@@ -1,8 +1,7 @@
 /* @harness-waechter: Windows-Prozesse vor dem ersten Zielbefehl einem Job zuordnen. */
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 // @ts-expect-error: Node-Skript ohne Declaration.
@@ -13,13 +12,13 @@ type Options = { cwd: string; env: NodeJS.ProcessEnv; input: string | Buffer; ti
 type Result = { code: number; stdout: string; stderr: string };
 type Request = { file: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; deadline: number; status: string };
 const w = winRaw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string; windowsAufruf: (request: string) => { file: string; args: string[] }; windowsProzess: (file: string, args: string[], options: Options) => Promise<Result>; windowsRequest: (request: Request) => Buffer };
-const p = processRaw as { prozess: typeof w.windowsProzess; umgebung: (root: string) => NodeJS.ProcessEnv };
+const p = processRaw as { prozess: typeof w.windowsProzess; umgebung: (root: string) => NodeJS.ProcessEnv; profil: () => { root: string; env: NodeJS.ProcessEnv } };
 const roots: string[] = [];
 const pending: Promise<unknown>[] = [];
 afterEach(async () => { await Promise.allSettled(pending.splice(0)); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 function setup(): Options {
-  const cwd = mkdtempSync(join(tmpdir(), "codex-job-test-")); roots.push(cwd);
-  return { cwd, env: p.umgebung(cwd), input: "", timeoutMs: 3000, maxBytes: 8_000_000 };
+  const profile = p.profil(), cwd = profile.root; roots.push(cwd);
+  return { cwd, env: profile.env, input: "", timeoutMs: 3000, maxBytes: 8_000_000 };
 }
 const windowsTest = test.skipIf(process.platform !== "win32");
 const failures = [
@@ -33,9 +32,10 @@ function variantAufruf(request: string) {
   return { file: join(process.env.SystemRoot!, "System32/WindowsPowerShell/v1.0/powershell.exe"), args: ["-NoProfile", "-NonInteractive", "-File", join(dirname(variantDll), "loader.ps1"), "-AssemblyPath", variantDll, ...(request === "--pruefe" ? ["-Pruefe"] : ["-RequestPath", request])] };
 }
 test("native Fixture übernimmt die bereinigte Produktionsumgebung", () => {
-  const options = setup(), expected = p.umgebung(options.cwd);
+  const options = setup(), expected = p.umgebung(options.env.HOME!);
   expect(Object.keys(options.env).sort()).toEqual(Object.keys(expected).sort());
   expect(Object.entries(expected).every(([key, value]) => options.env[key] === value)).toBe(true);
+  expect(existsSync(options.env.APPDATA!)).toBe(true); expect(existsSync(options.env.LOCALAPPDATA!)).toBe(true);
 });
 windowsTest("Jobtimeout beendet einen nachweislich gestarteten Nachkommen vor seinem Marker", async () => {
   const o = setup(), ready = join(o.cwd, "bereit"), marker = join(o.cwd, "kind-marker"); o.timeoutMs = 700;
@@ -68,8 +68,7 @@ windowsTest.each(["Restbytes", "negative Länge", "übergroße Länge", "abgesch
 describe.skipIf(process.platform !== "win32")("nativer Jobvertrag", () => {
 beforeAll(() => {
   if (process.platform !== "win32") return;
-  variantsRoot = mkdtempSync(join(tmpdir(), "codex-job-variants-"));
-  variantEnv = p.umgebung(variantsRoot);
+  const profile = p.profil(); variantsRoot = profile.root; variantEnv = profile.env;
   let source = readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8");
   const classAnchor = "public class Request";
   expect(source.split(classAnchor)).toHaveLength(2);

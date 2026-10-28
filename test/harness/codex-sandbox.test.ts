@@ -19,7 +19,7 @@ vi.mock("node:fs", async importOriginal => {
       return dir;
     },
     mkdirSync: (...args: Parameters<typeof fs.mkdirSync>) => {
-      if (fsFault.stage === "mkdir" && String(args[0]).endsWith(".codex")) throw fehler();
+      if ((fsFault.stage === "mkdir" && String(args[0]).endsWith(".codex")) || (fsFault.stage === "roaming" && String(args[0]).endsWith("Roaming")) || (fsFault.stage === "local" && String(args[0]).endsWith("Local"))) throw fehler();
       return fs.mkdirSync(...args);
     },
     writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
@@ -58,7 +58,7 @@ test("Sandboxschritt nutzt die bestehende Sitzung und überlässt Cleanup ihrem 
 });
 test.each(["..", `..${sep}nachbar`, tmpdir()])("relative cwd-Grenze verweigert %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).toThrow("außerhalb"); });
 test.each(["", "unterordner", "..prefix"])("relative cwd-Grenze erlaubt %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).not.toThrow(); });
-test.each(["profil", "mkdir", "config", "canary", "marker"])("Initialisierungsfehler %s hinterlässt keine Ressourcen und startet keinen Server", async stage => {
+test.each(["profil", "mkdir", "roaming", "local", "config", "canary", "marker"])("Initialisierungsfehler %s hinterlässt keine Ressourcen und startet keinen Server", async stage => {
   const root = temp(), abfragen = vi.fn(); fsFault.stage = stage;
   await expect(c.sandboxAktion(aktion(root), { root, abfragen })).rejects.toThrow("fixture ENOSPC");
   expect(abfragen).not.toHaveBeenCalled();

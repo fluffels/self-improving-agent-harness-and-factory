@@ -4,6 +4,8 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createServer } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
@@ -18,6 +20,15 @@ const f = fremdRaw as unknown as { fremdtextProfil: (u: string) => string; verar
 const temps: Profil[] = [];
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); for (const p of temps.splice(0)) p.entfernen(); });
 function temp() { const p = c.profil(); temps.push(p); return p; }
+test("Profil erzeugt private Windows-AppData-Verzeichnisse und umgebung bleibt pure", () => {
+  const p = temp();
+  expect(p.env.APPDATA === join(p.env.HOME, "AppData", "Roaming")).toBe(true);
+  expect(p.env.LOCALAPPDATA === join(p.env.HOME, "AppData", "Local")).toBe(true);
+  expect(existsSync(p.env.APPDATA)).toBe(true); expect(existsSync(p.env.LOCALAPPDATA)).toBe(true);
+  const root = mkdtempSync(join(tmpdir(), "codex-env-pure-")), absent = join(root, "nicht-angelegt");
+  try { c.umgebung(absent); expect(existsSync(absent)).toBe(false); }
+  finally { rmSync(root, { recursive: true }); }
+});
 type PhaseRpc = (method: string, params: unknown) => Promise<unknown>;
 type Phase = (ms: number) => void;
 type PhasenTransport = (s: string, p: Profil, fn: (rpc: PhaseRpc, init: unknown, phase: Phase) => Promise<unknown>, opts: { start: () => ChildProcess; timeoutMs: number }) => Promise<unknown>;

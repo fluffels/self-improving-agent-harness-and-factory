@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { normalisiere } from "./codex-hook-lib.mjs";
-import { profil, prozess, mitInventar, umgebung } from "./codex-prozess-lib.mjs";
+import { profil, prozess, mitInventar } from "./codex-prozess-lib.mjs";
 import { SANDBOX_MS, SANDBOX_PROFIL, sandboxAktion, sandboxVorbereiten } from "./codex-sandbox.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -47,8 +47,10 @@ async function frist(fn, ms) {
   try { return await Promise.race([Promise.resolve().then(fn), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Guard-Frist überschritten")), ms); })]); }
   finally { clearTimeout(timer); }
 }
-async function guardProzess(a) {
-  return prozess(process.execPath, [HOOK, "--host"], { cwd: ROOT, env: umgebung(ROOT), input: JSON.stringify(a), timeoutMs: GUARD_MS });
+async function guardProzess(a, env) {
+  const p = env === undefined ? profil() : undefined;
+  try { return await prozess(process.execPath, [HOOK, "--host"], { cwd: ROOT, env: { ...(env ?? p.env) }, input: JSON.stringify(a), timeoutMs: GUARD_MS }); }
+  finally { p?.entfernen(); }
 }
 export async function geschuetzteAktion(aktion, { inventar = nativesInventar, guard = guardProzess, executor = sandboxAktion, timeoutMs = 5000 } = {}) {
   const serialisiert = JSON.stringify(normalisiere(aktion));
@@ -71,7 +73,7 @@ export async function geschuetzterHost(aktion, { abfragen = mitInventar, guard =
       const i = await inventarInSitzung(rpc, init, p);
       return geschuetzteAktion(a, {
         inventar: () => Promise.resolve(i), timeoutMs: GUARD_MS,
-        guard: geprueft => { phase(GUARD_MS); return guard(geprueft); },
+        guard: geprueft => { phase(GUARD_MS); return guard(geprueft, { ...p.env }); },
         executor: geprueft => {
           phase(SANDBOX_MS); schritt = sandboxVorbereiten(geprueft, { p });
           schritt.initialisieren();
