@@ -99,12 +99,12 @@ test("fehlendes Executable ist Fehler", async () => {
   await expect(c.prozess(`${p.root}/fehlt`, [], { cwd: p.root, env: p.env })).rejects.toThrow();
 });
 test("Timeout beendet auch den gestarteten Kindprozess vor seinem Schreibmarker", async () => {
-  const p = temp(), marker = join(p.root, "kind-marker.txt");
-  const child = `setTimeout(()=>require('fs').writeFileSync(${JSON.stringify(marker)},'unerlaubt'),900)`;
-  const script = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(child)}],{stdio:'ignore'});setTimeout(()=>process.exit(),1300)`;
-  const kontrolle = await c.prozess(process.execPath, ["-e", script], { cwd: p.root, env: p.env, timeoutMs: 2500 });
+  const p = temp(), marker = join(p.root, "kind-marker ' $ ü.txt"), child = join(p.root, "kind.cjs"), parent = join(p.root, "eltern.cjs");
+  writeFileSync(child, "setTimeout(()=>require('node:fs').writeFileSync(process.argv[2],'unerlaubt'),900)");
+  writeFileSync(parent, "require('node:child_process').spawn(process.execPath,[process.argv[2],process.argv[3]],{stdio:'ignore'});setTimeout(()=>process.exit(),1300)");
+  const kontrolle = await c.prozess(process.execPath, [parent, child, marker], { cwd: p.root, env: p.env, timeoutMs: 2500 });
   expect(kontrolle.code).toBe(0); expect(readFileSync(marker, "utf8")).toBe("unerlaubt"); unlinkSync(marker);
-  await expect(c.prozess(process.execPath, ["-e", script], { cwd: p.root, env: p.env, timeoutMs: 300 })).rejects.toThrow();
+  await expect(c.prozess(process.execPath, [parent, child, marker], { cwd: p.root, env: p.env, timeoutMs: 300 })).rejects.toThrow("Prozess-Frist überschritten");
   await new Promise(r => setTimeout(r, 1000));
   expect(existsSync(marker)).toBe(false);
 });
