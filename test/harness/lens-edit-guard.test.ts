@@ -7,7 +7,9 @@
  */
 import { describe, expect, test } from "vitest";
 import { FREMD, projektConfig } from "../support/fremd-config";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -99,6 +101,36 @@ describe("bewerteLensEdit", () => {
 
   test("fehlender oder leerer Pfad: abgelehnt (fail-closed)", () => {
     for (const p of [undefined, null, "", "   ", 42]) expect(G.bewerteLensEdit(p, "", DEPS).block, String(p)).toBe(true);
+  });
+});
+
+describe("Lens-Worktree eines fremden Klons (#78 L3f/L9d): Präfix aus der Config des Ziel-Repos", () => {
+  const klon = mkdtempSync(join(tmpdir(), "lens-klon-")).replace(/\\/g, "/");
+  mkdirSync(join(klon, ".factory"), { recursive: true });
+  writeFileSync(join(klon, ".factory", "projekt.json"), JSON.stringify({ praefixe: { branch: "fremd/", worktree: "qq-" } }));
+  const ohne = mkdtempSync(join(tmpdir(), "lens-ohne-")).replace(/\\/g, "/");
+  const ZIEL = "qq-"; // Präfix des Ziel-Repos, verschieden vom Session-Präfix (FREMD)
+
+  test("Lens-Worktree mit dem Präfix des Ziel-Repos: erlaubt, obwohl die Session ein anderes Präfix hat", () => {
+    expect(ZIEL).not.toBe(W);
+    expect(G.bewerteLensEdit(`${klon}/.claude/worktrees/${ZIEL}12-lens-r1/x.ts`, "", DEPS).block).toBe(false);
+  });
+  test("Ziel-Repo mit eigener Config: das Session-Präfix gilt dort nicht", () => {
+    expect(G.bewerteLensEdit(`${klon}/.claude/worktrees/${W}12-lens-r1/x.ts`, "", DEPS).block).toBe(true);
+  });
+  test("Feature-Worktree des Ziel-Repos bleibt abgelehnt", () => {
+    expect(G.bewerteLensEdit(`${klon}/.claude/worktrees/${ZIEL}12/x.ts`, "", DEPS).block).toBe(true);
+  });
+  test("Ziel-Repo ohne Config: Rückfall auf das Präfix der Session", () => {
+    expect(G.bewerteLensEdit(`${ohne}/.claude/worktrees/${W}12-lens-r1/x.ts`, "", DEPS).block).toBe(false);
+    expect(G.bewerteLensEdit(`${ohne}/.claude/worktrees/${ZIEL}12-lens-r1/x.ts`, "", DEPS).block).toBe(true);
+  });
+  test("Datei außerhalb jedes .claude/worktrees/ bleibt abgelehnt, auch im Klon", () => {
+    expect(G.bewerteLensEdit(`${klon}/src/x.ts`, "", DEPS).block).toBe(true);
+    expect(G.bewerteLensEdit(`${klon}/${ZIEL}12-lens-r1/x.ts`, "", DEPS).block).toBe(true);
+  });
+  test("die Ablehnung nennt den Weg für einen fremden Klon", () => {
+    expect(G.bewerteLensEdit(`${klon}/src/x.ts`, "", DEPS).reason).toMatch(/git -C <klon> worktree add/);
   });
 });
 
