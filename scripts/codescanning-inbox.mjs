@@ -69,25 +69,35 @@ const instanzAus = (inst) => ({
   commit: String(inst?.commit_sha ?? ""),
 });
 
+/** Regel-ID (nur `[A-Za-z0-9/_.-]`, sonst `unbekannt`), Stufe (security-severity oder null) und Schwere einer Regel. Pur. */
+function regelAus(regel) {
+  const id = String(regel?.id ?? "");
+  const stufe = regel?.security_severity_level;
+  return {
+    regel: /^[A-Za-z0-9/_.-]+$/.test(id) ? id : "unbekannt",
+    stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
+    schwere: String(regel?.severity ?? "").toLowerCase(),
+  };
+}
+
+/** Ein Roh-Alert, normalisiert; wirft bei einer Nummer ohne Ganzzahl. Pur. */
+function alertAus(a) {
+  if (!Number.isInteger(a?.number)) throw new Error(`Unerwartete Form eines Alerts: ${JSON.stringify(a)?.slice(0, 120)}`);
+  return {
+    nummer: a.number,
+    tool: String(a?.tool?.name ?? "unbekannt"),
+    ...regelAus(a?.rule),
+    state: String(a?.state ?? ""),
+    ...instanzAus(a?.most_recent_instance),
+    geschlossenVon: a?.dismissed_by ?? null,
+    grund: String(a?.dismissed_reason ?? ""),
+  };
+}
+
 /** Normalisiert die Roh-Liste (jeder Zustand); wirft bei Nicht-Liste oder Nummer ohne Ganzzahl. Pur. */
 function alertListeAus(liste) {
   if (!Array.isArray(liste)) throw new Error("Unerwartete Code-Scanning-Antwort (keine Liste).");
-  return liste.map((a) => {
-    if (!Number.isInteger(a?.number)) throw new Error(`Unerwartete Form eines Alerts: ${JSON.stringify(a)?.slice(0, 120)}`);
-    const id = String(a?.rule?.id ?? "");
-    const stufe = a?.rule?.security_severity_level;
-    return {
-      nummer: a.number,
-      tool: String(a?.tool?.name ?? "unbekannt"),
-      regel: /^[A-Za-z0-9/_.-]+$/.test(id) ? id : "unbekannt",
-      stufe: typeof stufe === "string" && stufe !== "" ? stufe.toLowerCase() : null,
-      schwere: String(a?.rule?.severity ?? "").toLowerCase(),
-      state: String(a?.state ?? ""),
-      ...instanzAus(a?.most_recent_instance),
-      geschlossenVon: a?.dismissed_by ?? null,
-      grund: String(a?.dismissed_reason ?? ""),
-    };
-  });
+  return liste.map((a) => alertAus(a));
 }
 
 /** Vorgänger-Kandidaten: nur dismissed Alerts, die ein VERTRAUTER Account (`istVertraut`) geschlossen hat. Pur. */
@@ -151,6 +161,30 @@ export function codeScanningNummernIn(text) {
   return nummern;
 }
 
+/** Alert-Nummern aus offenen `- [ ] Code-Scanning:`-Zeilen in Kommentaren vertrauter Autoren. Pur. */
+function nummernAusKommentaren(kommentare, owner) {
+  const nummern = new Set();
+  for (const k of kommentare) {
+    if (!istVertraut(k?.user ?? null, owner)) continue;
+    for (const z of String(k?.body ?? "").split(/\r?\n/)) {
+      if (/^\s*[-*]\s+\[ \]\s+Code-Scanning:/.test(z)) nummernIn(z).forEach((n) => nummern.add(n));
+    }
+  }
+  return nummern;
+}
+
+/** Regel-Slugs und Alert-Nummern aus den Wiedervorlagen `codescanning-<slug>`. Pur. */
+function wiedervorlageAus(wiedervorlagen) {
+  const regeln = new Set();
+  const alerts = new Set();
+  for (const e of wiedervorlagen) {
+    if (typeof e?.id !== "string" || !e.id.startsWith(WV_PRAEFIX)) continue;
+    regeln.add(e.id.slice(WV_PRAEFIX.length));
+    if (Array.isArray(e.alerts)) e.alerts.filter(Number.isInteger).forEach((n) => alerts.add(n));
+  }
+  return { regeln, alerts };
+}
+
 /**
  * Bekannte Alerts: Nummern aus offenen Zeilen `- [ ] Code-Scanning:` in Kommentaren VERTRAUTER Autoren (`istVertraut`), Regeln (als Slug) aus
  * Wiedervorlagen-IDs `codescanning-<slug>`. `sammelTitel` (Pflicht, Liste): Titel der Sammeltickets (deckt kein Alert ab; der Aufrufer liefert sie aus
@@ -158,20 +192,8 @@ export function codeScanningNummernIn(text) {
  */
 export function bekannteAlerts({ kommentare, owner, wiedervorlagen, offeneTitel = [], offeneIssues = [], sammelTitel }) {
   if (!Array.isArray(sammelTitel)) throw new TypeError("bekannteAlerts: sammelTitel muss eine Liste sein (kein stiller Default, sonst zählten Sammeltickets als deckend)");
-  const nummern = new Set();
-  const regeln = new Set();
-  const alerts = new Set();
-  for (const k of kommentare) {
-    if (!istVertraut(k?.user ?? null, owner)) continue;
-    for (const z of String(k?.body ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Code-Scanning:/.test(z)) nummernIn(z).forEach((n) => nummern.add(n));
-    }
-  }
-  for (const e of wiedervorlagen) {
-    if (typeof e?.id !== "string" || !e.id.startsWith(WV_PRAEFIX)) continue;
-    regeln.add(e.id.slice(WV_PRAEFIX.length));
-    if (Array.isArray(e.alerts)) e.alerts.filter(Number.isInteger).forEach((n) => alerts.add(n));
-  }
+  const nummern = nummernAusKommentaren(kommentare, owner);
+  const { regeln, alerts } = wiedervorlageAus(wiedervorlagen);
   const ghsa = bekannteGhsa({ kommentare: vertrauteBodies(kommentare, owner), wiedervorlagen, offeneTitel });
   const ausgenommen = new Set([ZIEL_TITEL, ...sammelTitel]);
   const issues = offeneIssues
@@ -300,12 +322,22 @@ function schliessKommentar(issue) {
 export function fuehreAus({ plan, io, trocken = false }) {
   const { issue, zeilen } = plan;
   const log = io.log ?? console.log;
-  if (trocken) {
-    if (issue.art !== "nichts") log(`[dry-run] Ticket: ${issue.art}${issue.nummer ? ` #${issue.nummer}` : ""}`);
-    if (issue.body) log(`[dry-run] ${issue.body}`);
-    for (const g of zeilen) log(`[dry-run] ${zeilenText(g)}`);
-    return 0;
-  }
+  if (trocken) return trockenAus(plan, log);
+  const issueRot = fuehreIssueAus(issue, io, log);
+  const zeilenRot = zeilen.length > 0 && postZeilenAus(zeilen, io, log);
+  return issueRot || zeilenRot ? 1 : 0;
+}
+
+/** Trockenlauf: gibt Ticket-Plan und Zeilen nur aus. */
+function trockenAus({ issue, zeilen }, log) {
+  if (issue.art !== "nichts") log(`[dry-run] Ticket: ${issue.art}${issue.nummer ? ` #${issue.nummer}` : ""}`);
+  if (issue.body) log(`[dry-run] ${issue.body}`);
+  for (const g of zeilen) log(`[dry-run] ${zeilenText(g)}`);
+  return 0;
+}
+
+/** Legt das Spitzen-Ticket an, aktualisiert oder schließt es. Rückgabe: true bei Fehler. */
+function fuehreIssueAus(issue, io, log) {
   let rot = false;
   try {
     if (issue.art === "anlegen") {
@@ -328,22 +360,24 @@ export function fuehreAus({ plan, io, trocken = false }) {
     log(`::error::Spitzen-Ticket unvollständig: ${fehlerText(err)}`);
     rot = true;
   }
-  if (zeilen.length > 0) {
-    try {
-      const ziel = io.zielSammelticket();
-      if (!ziel) {
-        log("::error::Kein ungeclaimtes Harness-Sammelticket für die Code-Scanning-Zeilen.");
-        rot = true;
-      } else {
-        io.postZeilen(ziel, zeilen.map(zeilenText).join("\n"));
-        log(`${zeilen.length} Zeile(n) in #${ziel}.`);
-      }
-    } catch (err) {
-      log(`::error::Zeilen nicht gepostet: ${fehlerText(err)}`);
-      rot = true;
+  return rot;
+}
+
+/** Postet die Zeilen ins Sammelticket. Rückgabe: true bei Fehler. */
+function postZeilenAus(zeilen, io, log) {
+  try {
+    const ziel = io.zielSammelticket();
+    if (!ziel) {
+      log("::error::Kein ungeclaimtes Harness-Sammelticket für die Code-Scanning-Zeilen.");
+      return true;
     }
+    io.postZeilen(ziel, zeilen.map(zeilenText).join("\n"));
+    log(`${zeilen.length} Zeile(n) in #${ziel}.`);
+    return false;
+  } catch (err) {
+    log(`::error::Zeilen nicht gepostet: ${fehlerText(err)}`);
+    return true;
   }
-  return rot ? 1 : 0;
 }
 
 /** Gruppiert `abgedeckt` nach deckendem Issue: Map Issue → { nummern, gruende }. Pur. */
