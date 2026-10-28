@@ -110,7 +110,7 @@ describe("Config-Block arbeitsplatz (K1)", () => {
 describe("Resolver arbeitsplatzAus (K2)", () => {
   test("ohne Block: eingebettet, Repo = Basis, Worktree-Ordner <repo>/.claude/worktrees, Name aus config.repo", () => {
     const basis = resolve("x", "proj").split("\\").join("/");
-    const a = L.arbeitsplatzAus(FREMD, basis);
+    const a = L.arbeitsplatzAus(FREMD, "x\\proj"); // relativ und mit Backslash: resolve und Slash-Umwandlung greifen auf beiden Plattformen
     expect(a.betriebsart).toBe("eingebettet");
     expect(a.wurzel).toBe(basis);
     expect(a.repos).toEqual([{ name: FREMD.repo.split("/")[1], pfad: basis, worktreeOrdner: `${basis}/.claude/worktrees` }]);
