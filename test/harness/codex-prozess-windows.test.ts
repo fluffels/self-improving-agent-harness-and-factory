@@ -11,7 +11,7 @@ import * as processRaw from "../../scripts/codex-prozess-lib.mjs";
 type Options = { cwd: string; env: NodeJS.ProcessEnv; input: string | Buffer; timeoutMs: number; maxBytes: number };
 type Result = { code: number; stdout: string; stderr: string };
 type Request = { file: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; deadline: number; status: string };
-const w = winRaw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string; windowsAufruf: (request: string) => { file: string; args: string[] }; windowsProzess: (file: string, args: string[], options: Options) => Promise<Result>; windowsRequest: (request: Request) => Buffer };
+const w = winRaw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string; windowsProzess: (file: string, args: string[], options: Options) => Promise<Result>; windowsRequest: (request: Request) => Buffer };
 const p = processRaw as { prozess: typeof w.windowsProzess; umgebung: (root: string) => NodeJS.ProcessEnv; profil: () => { root: string; env: NodeJS.ProcessEnv } };
 const roots: string[] = [];
 const pending: Promise<unknown>[] = [];
@@ -27,10 +27,7 @@ const failures = [
   ["Jobzuordnung", "Check(AssignProcessToJobObject(job, p.process),", "Check(fault != \"Jobzuordnung\" && AssignProcessToJobObject(job, p.process),"],
   ["Zielresume", "Check(ResumeThread(p.thread) != uint.MaxValue,", "Check(fault != \"Zielresume\" && ResumeThread(p.thread) != uint.MaxValue,"],
 ];
-let variantsRoot: string, variantDll: string, variantEnv: NodeJS.ProcessEnv;
-function variantAufruf(request: string) {
-  return { file: join(process.env.SystemRoot!, "System32/WindowsPowerShell/v1.0/powershell.exe"), args: ["-NoProfile", "-NonInteractive", "-File", join(dirname(variantDll), "loader.ps1"), "-AssemblyPath", variantDll, ...(request === "--pruefe" ? ["-Pruefe"] : ["-RequestPath", request])] };
-}
+let variantsRoot: string, variantExe: string, variantEnv: NodeJS.ProcessEnv;
 test("native Fixture übernimmt die bereinigte Produktionsumgebung", () => {
   const options = setup(), expected = p.umgebung(options.env.HOME!);
   expect(Object.keys(options.env).sort()).toEqual(Object.keys(expected).sort());
@@ -62,7 +59,7 @@ windowsTest.each(["Restbytes", "negative Länge", "übergroße Länge", "abgesch
   }
   if (mode === "Volumen") data = Buffer.alloc(10000001);
   writeFileSync(request, data);
-  const call = w.windowsAufruf(request), result = spawnSync(call.file, call.args, { cwd: o.cwd, env: o.env, windowsHide: true, stdio: "pipe" });
+  const result = spawnSync(w.windowsVorbereiten(), [request], { cwd: o.cwd, env: o.env, windowsHide: true, stdio: "pipe" });
   expect(result.status).toBe(1); expect(existsSync(marker)).toBe(false);
 });
 describe.skipIf(process.platform !== "win32")("nativer Jobvertrag", () => {
@@ -78,14 +75,13 @@ beforeAll(() => {
   }
   const sourcePath = join(variantsRoot, "fixture.cs");
   writeFileSync(sourcePath, source + `\n// Fixture ${randomUUID()}\n`);
-  variantDll = w.windowsCacheProbe(readFileSync(sourcePath));
-  const call = variantAufruf("--pruefe");
-  execFileSync(call.file, call.args, { env: variantEnv, windowsHide: true, timeout: 10000 });
+  variantExe = w.windowsCacheProbe(readFileSync(sourcePath));
+  execFileSync(variantExe, ["--pruefe"], { env: variantEnv, windowsHide: true, timeout: 10000 });
 });
-afterAll(() => { if (variantsRoot) rmSync(variantsRoot, { recursive: true, force: true }); if (variantDll) rmSync(dirname(variantDll), { recursive: true, force: true }); });
+afterAll(() => { if (variantsRoot) rmSync(variantsRoot, { recursive: true, force: true }); if (variantExe) rmSync(dirname(variantExe), { recursive: true, force: true }); });
 
 windowsTest("native Vorbereitung liefert einen ausführbaren Supervisor", () => {
-  expect(w.windowsVorbereiten()).toMatch(/\.dll$/);
+  expect(w.windowsVorbereiten()).toMatch(/\.exe$/);
 });
 
 windowsTest("argv mit leeren Strings, Unicode, Quotes, Backslashes und Shellzeichen bleibt Daten", async () => {
@@ -114,7 +110,7 @@ windowsTest("native Deadline beendet einen vor Nodeblock nachweislich laufenden 
   writeFileSync(descendant, "require('fs').writeFileSync(process.argv[2],String(process.pid));setTimeout(()=>require('fs').writeFileSync(process.argv[3],'unerlaubt'),1800)");
   writeFileSync(parent, "require('child_process').spawn(process.execPath,[process.argv[2],process.argv[3],process.argv[4]],{detached:true,stdio:'ignore'}).unref();setInterval(()=>{},1000)");
   writeFileSync(request, w.windowsRequest({ file: process.execPath, args: [parent, descendant, ready, marker], cwd: o.cwd, env: o.env, deadline: start + 1500, status }));
-  const call = w.windowsAufruf(request), child = spawn(call.file, call.args, { cwd: o.cwd, env: o.env, stdio: ["ignore", "ignore", "ignore"], windowsHide: true });
+  const child = spawn(w.windowsVorbereiten(), [request], { cwd: o.cwd, env: o.env, stdio: ["ignore", "ignore", "ignore"], windowsHide: true });
   const closed = new Promise(r => child.once("close", r));
   try {
     while (!existsSync(ready)) {
@@ -144,7 +140,7 @@ windowsTest("Supervisorabbruch schließt den Job und beendet gestartete Nachkomm
   const o = setup(), marker = join(o.cwd, "abbruch-marker"), request = join(o.cwd, "request.json"), status = join(o.cwd, "status.json");
   const script = "require('child_process').spawn(process.execPath,['-e',\"setTimeout(()=>require('fs').writeFileSync(process.argv[1],'unerlaubt'),900)\",process.argv[1]],{stdio:'ignore'});console.log('bereit');setInterval(()=>{},1000)";
   writeFileSync(request, w.windowsRequest({ file: process.execPath, args: ["-e", script, marker], cwd: o.cwd, env: o.env, deadline: Date.now() + 3000, status }));
-  const call = w.windowsAufruf(request), child = spawn(call.file, call.args, { cwd: o.cwd, env: o.env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+  const child = spawn(w.windowsVorbereiten(), [request], { cwd: o.cwd, env: o.env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   try {
     await new Promise<void>((resolveReady, rejectReady) => { child.stdout.once("data", () => resolveReady()); child.once("error", rejectReady); child.once("exit", () => rejectReady(Error("vor Bereitschaft beendet"))); });
     const closed = new Promise(r => child.once("close", r)); child.kill(); await closed;
@@ -156,7 +152,7 @@ windowsTest.each(failures)("Fehler bei %s lässt keine Zielaktion zu", async ope
   const o = setup(), marker = join(o.cwd, "unerlaubte-aktion"), request = join(o.cwd, "request.bin"), status = join(o.cwd, "status.txt");
   writeFileSync(request, w.windowsRequest({ file: process.execPath, args: ["-e", "require('fs').writeFileSync(process.argv[1],'unerlaubt')", marker], cwd: o.cwd, env: o.env, deadline: Date.now() + 3000, status }));
   const work = new Promise<number | null>((resolveExit, reject) => {
-    const call = variantAufruf(request), child = spawn(call.file, call.args, { cwd: o.cwd, env: { ...o.env, JOB_FIXTURE: operation }, windowsHide: true, stdio: ["ignore", "ignore", "ignore"] });
+    const child = spawn(variantExe, [request], { cwd: o.cwd, env: { ...o.env, JOB_FIXTURE: operation }, windowsHide: true, stdio: ["ignore", "ignore", "ignore"] });
     child.once("error", reject); child.once("close", resolveExit);
   }); pending.push(work);
   expect(await work).toBe(1); expect(readFileSync(status, "utf8")).toContain(operation);

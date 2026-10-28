@@ -42,8 +42,8 @@ if ([IO.Directory]::Exists($artifact) -or [IO.File]::Exists($artifact)) {
   if (-not [IO.Directory]::Exists($artifact)) { throw 'Cachetyp' }
   Check-Acl $artifact
   $files = [IO.Directory]::GetFileSystemEntries($artifact)
-  if ($files.Count -ne 4) { throw 'Cachedateien' }
-  foreach ($name in @('source.cs', 'supervisor.dll', 'loader.ps1', 'manifest.json')) {
+  if ($files.Count -ne 3) { throw 'Cachedateien' }
+  foreach ($name in @('source.cs', 'supervisor.exe', 'manifest.json')) {
     $file = [IO.Path]::Combine($artifact, $name)
     if (-not [IO.File]::Exists($file)) { throw 'Cachedateityp' }
     Check-Acl $file

@@ -9,7 +9,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as raw from "../../scripts/codex-prozess-windows.mjs";
-const w = raw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string; windowsAufruf: (request: string) => { file: string; args: string[] } };
+const w = raw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string };
 
 const windowsTest = test.skipIf(process.platform !== "win32");
 let fixture: string, moduleUrl: string, sourceFile: string, artifact: string, root: string, marker: string;
@@ -76,14 +76,14 @@ beforeAll(async () => {
   moduleUrl = pathToFileURL(resolve("scripts/codex-prozess-windows.mjs")).href;
   const active = measure("active", () => w.windowsVorbereiten()); root = dirname(dirname(active));
   const expected = JSON.parse(readFileSync(join(dirname(active), "manifest.json"), "utf8")) as Record<string, unknown>;
-  delete expected.dllHash; expected.sourceHash = createHash("sha256").update(readFileSync(sourceFile)).digest("hex");
+  delete expected.exeHash; expected.sourceHash = createHash("sha256").update(readFileSync(sourceFile)).digest("hex");
   const key = createHash("sha256").update(JSON.stringify(expected)).digest("hex");
   artifact = join(root, key);
   const lock = join(root, `${key}.lock`), observed = join(fixture, "peer-observed");
   const native = await vi.importActual<typeof import("node:child_process")>("node:child_process");
   let compiles = 0;
   vi.doMock("node:child_process", () => ({ ...native, execFileSync: (file: string, args: string[], options: { timeout: number }) => {
-    if (!file.endsWith("csc.exe")) return measure(args.includes("-Pruefe") ? "native" : "acl", () => native.execFileSync(file, args, options));
+    if (!file.endsWith("csc.exe")) return measure(args[0] === "--pruefe" ? "native" : "acl", () => native.execFileSync(file, args, options));
     compiles++; expect(existsSync(lock)).toBe(true);
     return measure("lock-ack-and-compiler", () => nachLockAck(options.timeout, () => existsSync(observed),
       () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5), Date.now, remaining => {
@@ -110,20 +110,21 @@ afterAll(() => {
 });
 
 windowsTest("kalte parallele Vorbereitung veröffentlicht genau ein vollständiges Artefakt; Folgeimport nutzt Hash und Pfad", () => {
-  expect(readdirSync(artifact).sort()).toEqual(["loader.ps1", "manifest.json", "source.cs", "supervisor.dll"]);
-  const first = readFileSync(join(artifact, "supervisor.dll"));
+  expect(readdirSync(artifact).sort()).toEqual(["manifest.json", "source.cs", "supervisor.exe"]);
+  const first = readFileSync(join(artifact, "supervisor.exe"));
   const again = launch(prepare); expect(again.status).toBe(0); expect(dirname(again.stdout.trim())).toBe(artifact);
-  expect(createHash("sha256").update(readFileSync(join(artifact, "supervisor.dll"))).digest("hex")).toBe(createHash("sha256").update(first).digest("hex"));
+  expect(createHash("sha256").update(readFileSync(join(artifact, "supervisor.exe"))).digest("hex")).toBe(createHash("sha256").update(first).digest("hex"));
 });
 
-windowsTest.each(["dll", "loader", "manifest", "architektur", "dll-flag"])("beschädigter Cache %s stoppt vor jeder Zielaktion", mode => {
-  const name = mode === "manifest" ? "manifest.json" : mode === "loader" ? "loader.ps1" : "supervisor.dll", file = join(artifact, name), original = readFileSync(file);
+windowsTest.each(["exe", "manifest", "architektur", "dll-flag", "exe-flag"])("beschädigter Cache %s stoppt vor jeder Zielaktion", mode => {
+  const name = mode === "manifest" ? "manifest.json" : "supervisor.exe", file = join(artifact, name), original = readFileSync(file);
   try {
     const changed = Buffer.from(original);
     if (mode === "manifest") writeFileSync(file, "{}");
     else {
       if (mode === "architektur") changed.writeUInt16LE(0x14c, changed.readUInt32LE(60) + 4);
-      else if (mode === "dll-flag") changed.writeUInt16LE(0, changed.readUInt32LE(60) + 22);
+      else if (mode === "dll-flag") changed.writeUInt16LE(0x2002, changed.readUInt32LE(60) + 22);
+      else if (mode === "exe-flag") changed.writeUInt16LE(0, changed.readUInt32LE(60) + 22);
       else changed[changed.length - 1] ^= 1;
       writeFileSync(file, changed);
     }
@@ -155,13 +156,12 @@ describe("OS-Port des Originaladapters", () => {
   let sandbox: string, cache: string, adapter: PortableModule;
   let prepareFault: string, statusText: string, streamFault: string, compilerCalls: number, nativeCalls: number, requestDir: string;
   let closeSupervisor: () => void, kills: number;
-  let probes: { file: string; args: string[]; loaderHash: string }[];
-  const peBytes = () => { const data = Buffer.alloc(128); data.writeUInt16LE(0x5a4d); data.writeUInt32LE(64, 60); data.writeUInt32LE(0x4550, 64); data.writeUInt16LE(0x8664, 68); data.writeUInt16LE(0x2000, 86); return data; };
+  let probes: { file: string; args: string[]; binaryHash: string }[], launches: { file: string; args: string[] }[];
+  const peBytes = () => { const data = Buffer.alloc(128); data.writeUInt16LE(0x5a4d); data.writeUInt32LE(64, 60); data.writeUInt32LE(0x4550, 64); data.writeUInt16LE(0x8664, 68); data.writeUInt16LE(2, 86); return data; };
   beforeEach(async () => {
     sandbox = mkdtempSync(join(tmpdir(), "codex-cache-port-")); cache = join(sandbox, "cache"); mkdirSync(cache);
     const compiler = join(sandbox, "Microsoft.NET/Framework64/v4.0.30319/csc.exe"); mkdirSync(dirname(compiler), { recursive: true }); writeFileSync(compiler, "fixture compiler");
-    const host = join(sandbox, "System32/WindowsPowerShell/v1.0/powershell.exe"); mkdirSync(dirname(host), { recursive: true }); writeFileSync(host, "fixture host");
-    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0; kills = 0; probes = [];
+    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0; kills = 0; probes = []; launches = [];
     vi.stubEnv("SystemRoot", sandbox); vi.resetModules();
     vi.doMock("node:child_process", async () => ({
       ...await vi.importActual<typeof import("node:child_process")>("node:child_process"),
@@ -173,17 +173,19 @@ describe("OS-Port des Originaladapters", () => {
           if (prepareFault === "short") writeFileSync(output.slice(5), data.subarray(0, 63));
           else {
             if (prepareFault === "arch") data.writeUInt16LE(0x14c, 68);
-            if (prepareFault === "dll-flag") data.writeUInt16LE(0, 86);
+            if (prepareFault === "dll-flag") data.writeUInt16LE(0x2002, 86);
+            if (prepareFault === "exe-flag") data.writeUInt16LE(0, 86);
             if (prepareFault === "header") { data.writeUInt32LE(120, 60); data.writeUInt32LE(0x4550, 120); data.writeUInt16LE(0x8664, 124); }
-            if (prepareFault === "header-edge") { data.writeUInt32LE(104, 60); data.writeUInt32LE(0x4550, 104); data.writeUInt16LE(0x8664, 108); data.writeUInt16LE(0x2000, 126); }
+            if (prepareFault === "header-edge") { data.writeUInt32LE(104, 60); data.writeUInt32LE(0x4550, 104); data.writeUInt16LE(0x8664, 108); data.writeUInt16LE(2, 126); }
             writeFileSync(output.slice(5), data);
           }
           return Buffer.alloc(0);
         }
-        nativeCalls++; probes.push({ file, args, loaderHash: createHash("sha256").update(readFileSync(args[3])).digest("hex") }); if (prepareFault === "native") throw Error("fixture native failed");
+        nativeCalls++; probes.push({ file, args, binaryHash: createHash("sha256").update(readFileSync(file)).digest("hex") }); if (prepareFault === "native") throw Error("fixture native failed");
         return Buffer.alloc(0);
       },
       spawn: (_file: string, args: string[], options: { cwd: string }) => {
+        launches.push({ file: _file, args });
         requestDir = dirname(args.at(-1)!);
         expect(options.cwd).toBe(requestDir);
         if (streamFault === "slow-spawn-hang") vi.setSystemTime(Date.now() + 20);
@@ -236,33 +238,37 @@ describe("OS-Port des Originaladapters", () => {
 
   test("kalte Veröffentlichung und validierte Wiederverwendung laufen am Originalmodul", () => {
     const exe = adapter.windowsVorbereiten();
-    expect(readdirSync(dirname(exe)).sort()).toEqual(["loader.ps1", "manifest.json", "source.cs", "supervisor.dll"]);
+    expect(readdirSync(dirname(exe)).sort()).toEqual(["manifest.json", "source.cs", "supervisor.exe"]);
     expect(adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toBe(exe);
     expect(compilerCalls).toBe(1); expect(nativeCalls).toBe(1);
     expect(readdirSync(cache)).toEqual([dirname(exe).slice(cache.length + 1)]);
   });
-  test.each([["compiler", "fixture compiler failed"], ["native", "fixture native failed"], ["short", "Supervisor-PE fehlt"], ["arch", "Supervisor-Architektur"], ["header", "Supervisor-Architektur"], ["dll-flag", "Supervisor-DLL fehlt"]])("Vorbereitungsfehler %s veröffentlicht nichts", (fault, error) => {
+  test.each([["compiler", "fixture compiler failed"], ["native", "fixture native failed"], ["short", "Supervisor-PE fehlt"], ["arch", "Supervisor-Architektur"], ["header", "Supervisor-Architektur"], ["dll-flag", "Supervisor-EXE fehlt"], ["exe-flag", "Supervisor-EXE fehlt"]])("Vorbereitungsfehler %s veröffentlicht nichts", (fault, error) => {
     prepareFault = fault; expect(() => adapter.windowsVorbereiten()).toThrow(error); expect(readdirSync(cache)).toEqual([]);
   });
-  test("vollständiger DLL-Header genau an der Dateigrenze bleibt gültig", () => {
-    prepareFault = "header-edge"; expect(adapter.windowsVorbereiten()).toMatch(/supervisor\.dll$/);
+  test("vollständiger EXE-Header genau an der Dateigrenze bleibt gültig", () => {
+    prepareFault = "header-edge"; expect(adapter.windowsVorbereiten()).toMatch(/supervisor\.exe$/);
   });
   test("beschädigtes Manifest wird ohne neue Kompilierung abgewiesen", () => {
     const exe = adapter.windowsVorbereiten(); writeFileSync(join(dirname(exe), "manifest.json"), "{}");
     expect(() => adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toThrow("Manifest"); expect(compilerCalls).toBe(1);
   });
-  test("manipulierter Loader stoppt vor Ziel und ohne neue Kompilierung", () => {
-    const dll = adapter.windowsVorbereiten(); writeFileSync(join(dirname(dll), "loader.ps1"), "manipuliert");
-    expect(() => adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toThrow("Manifest"); expect(compilerCalls).toBe(1);
+  test("nur das validierte EXE-Artefakt erhält den Request und dieselbe native Einsatzprobe", async () => {
+    const exe = adapter.windowsVorbereiten();
+    await adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "", timeoutMs: 3000, maxBytes: 100 });
+    expect(launches[0].file).toBe(exe); expect(launches[0].args).toEqual([join(requestDir, "request.bin")]);
+    const manifest = JSON.parse(readFileSync(join(dirname(exe), "manifest.json"), "utf8")) as Record<string, unknown>;
+    expect(manifest).toMatchObject({ protocol: 3, mode: "native-exe", options: ["/nologo", "/target:exe", "/platform:x64"] });
+    expect(probes).toHaveLength(1); expect(probes[0].file).toMatch(/supervisor\.exe$/); expect(probes[0].binaryHash).toBe(manifest.exeHash); expect(probes[0].args).toEqual(["--pruefe"]);
   });
-  test("nur fester Systemhost und validierter Loader/DLL erhalten den Request als Argument", () => {
-    const dll = adapter.windowsVorbereiten(), call = adapter.windowsAufruf("request fixture.bin");
-    expect(call.file).toBe(join(sandbox, "System32/WindowsPowerShell/v1.0/powershell.exe"));
-    expect(call.args).toEqual(["-NoProfile", "-NonInteractive", "-File", join(dirname(dll), "loader.ps1"), "-AssemblyPath", dll, "-RequestPath", "request fixture.bin"]);
-    const manifest = JSON.parse(readFileSync(join(dirname(dll), "manifest.json"), "utf8")) as Record<string, unknown>;
-    expect(manifest).toMatchObject({ mode: "powershell-dll", options: ["/nologo", "/target:library", "/platform:x64"], hostOptions: ["-NoProfile", "-NonInteractive", "-File"], hostHash: createHash("sha256").update("fixture host").digest("hex"), loaderHash: createHash("sha256").update(readFileSync(resolve("scripts/codex-prozess-loader.ps1"))).digest("hex") });
-    expect(probes).toHaveLength(1); expect(probes[0].file).toBe(call.file); expect(probes[0].loaderHash).toBe(manifest.loaderHash);
-    expect(probes[0].args.slice(0, 3)).toEqual(call.args.slice(0, 3)); expect(probes[0].args[3]).toMatch(/loader\.ps1$/); expect(probes[0].args[5]).toMatch(/supervisor\.dll$/); expect(probes[0].args[6]).toBe("-Pruefe");
+  test("früheres DLL-Artefakt bleibt unberührt und wird nicht als EXE übernommen", () => {
+    const old = join(cache, createHash("sha256").update("previous-dll-mode").digest("hex")); mkdirSync(old);
+    for (const name of ["source.cs", "supervisor.dll", "loader.ps1", "manifest.json"]) writeFileSync(join(old, name), "retained-dll-artifact");
+    const exe = adapter.windowsVorbereiten();
+    expect(dirname(exe) === old).toBe(false); expect(exe).toMatch(/supervisor\.exe$/);
+    expect(readFileSync(join(old, "supervisor.dll"), "utf8")).toBe("retained-dll-artifact");
+    expect(readdirSync(old).sort()).toEqual(["loader.ps1", "manifest.json", "source.cs", "supervisor.dll"]);
+    expect(compilerCalls).toBe(1); expect(nativeCalls).toBe(1);
   });
   test("byteweise getrennte Ausgabe und Status bleiben getrennt; Request wird entfernt", async () => {
     adapter.windowsVorbereiten(); const result = await adapter.windowsProzess("fixture", ["", "a b"], { cwd: sandbox, env: { FIXTURE: undefined }, input: "ü🐈", timeoutMs: 3000, maxBytes: 100 });
