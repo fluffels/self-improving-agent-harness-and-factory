@@ -63,7 +63,7 @@ function pruefeBoard(b, praefix) {
   for (const k of ["projectId", "statusFeldNodeId", "todoOptionId"]) {
     if (!istText(b[k])) fehler.push(`${praefix}${k} muss ein nicht-leerer String sein`);
   }
-  if (b.repo !== undefined && !(istText(b.repo) && REPO_FORM.test(b.repo))) fehler.push(`${praefix}repo muss die Form owner/name haben (optional: das Repo, dessen Issues dieses Board führt; ohne Schlüssel gilt das Repo der Config)`);
+  if (b.repo !== undefined && !istRepoForm(b.repo)) fehler.push(`${praefix}repo muss die Form owner/name haben (optional: das Repo, dessen Issues dieses Board führt; ohne Schlüssel gilt das Repo der Config)`);
   return fehler;
 }
 
@@ -477,7 +477,7 @@ export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
   const fehler = [];
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
-  if (!istText(wert.repo) || !REPO_FORM.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
+  if (!istRepoForm(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
   fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
   if (wert.projektliterale !== undefined) {

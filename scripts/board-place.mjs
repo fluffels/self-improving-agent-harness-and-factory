@@ -311,7 +311,7 @@ async function umziehen(args, config) {
  */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const { kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
-    kontingent: mitKontingent,
+    kontingent: () => mitKontingent("board-place"),
     ladeConfig: ladeProjektConfig,
     einsortieren,
     reportMissing,
@@ -326,7 +326,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
     return beende(2);
   }
-  kontingent("board-place");
+  kontingent();
   const config = ladeConfig();
   if (args.missing) return meldeFehlende(args.repo);
   if (args.umzug) {

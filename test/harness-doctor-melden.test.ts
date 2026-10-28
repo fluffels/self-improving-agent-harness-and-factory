@@ -254,7 +254,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         postZeilen: (...a: unknown[]) => gepostet.push(a),
       };
       const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
-      assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe as never }), 0);
+      assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
       assert.deepEqual(gepostet[0]?.slice(2, 4), ["acme/ziel", "pt"]);
     } finally {
       vi.unstubAllEnvs();
