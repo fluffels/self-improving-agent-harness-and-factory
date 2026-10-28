@@ -51,6 +51,8 @@
  *    committet, nimmt den literalen Pfad (`git -C <worktree> commit`); der Hook wertet Variablenwerte nicht aus.
  *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
  *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
+ *  - Text in Interpreter-Code (`node -e "…"`, `python -c`) wird nicht geparst: das grobe Netz wertet ein Wortpaar "git" + "commit"/"push" darin als Aufruf (auch
+ *    `console.log('git commit')`) und blockt im Haupt-Checkout; im PowerShell-Pfad gilt dasselbe für Skript-Laufzeiten (#97 L11m).
  *
  * Reines Node-Skript (nur Builtins). Die Entscheidungslogik ist pur/exportiert und testbar
  * (execFile/stat/homedir/platform injizierbar) — EINE Quelle für Hook-CLI und Test.
