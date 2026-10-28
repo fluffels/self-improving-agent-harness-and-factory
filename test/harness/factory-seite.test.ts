@@ -28,12 +28,12 @@ const ordner: string[] = [];
 afterEach(() => {
   for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
 });
-function projekt(opts: { tag?: string; stand?: string; config?: string }): string {
+function projekt(opts: { tag?: string; repo?: string; stand?: string; config?: string }): string {
   const dir = mkdtempSync(join(tmpdir(), "factory-seite-"));
   ordner.push(dir);
   mkdirSync(join(dir, ".factory"));
   if (opts.stand !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), opts.stand);
-  if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag } }));
+  if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag, ...(opts.repo === undefined ? {} : { repo: opts.repo }) } }));
   if (opts.config !== undefined) writeFileSync(join(dir, ".factory", "projekt.json"), opts.config);
   return dir;
 }
@@ -54,9 +54,17 @@ describe("factorySeiteIn", () => {
     const d = projekt({ tag: "v2", config: config(boards) });
     assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "https://github.com/o/factory/blob/v2/docs/a.md#x");
   });
-  test("Factory-Board ohne repo: Repo der Config", () => {
+  test("Sync-Stand mit quelle.repo: Link auf dieses Repo, vor dem Board", () => {
+    assert.equal(factorySeiteIn(projekt({ tag: "v2", repo: "q/quelle", config: config(boards) }), "docs/a.md", "x"), "https://github.com/q/quelle/blob/v2/docs/a.md#x");
+    assert.equal(factorySeiteIn(projekt({ tag: "v2", repo: "q/quelle" }), "docs/a.md", "x"), "https://github.com/q/quelle/blob/v2/docs/a.md#x");
+  });
+  test("Factory-Board ohne repo und alter Stand ohne quelle.repo: lokaler Pfad, kein Rückfall aufs Config-Repo", () => {
     const d = projekt({ tag: "v2", config: config([{ rolle: "factory" }]) });
-    assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "https://github.com/o/projekt/blob/v2/docs/a.md#x");
+    assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "docs/a.md#x");
+  });
+  test("quelle.repo ohne owner/name-Form zählt nicht", () => {
+    const d = projekt({ tag: "v2", repo: "kein-repo", config: config([{ rolle: "factory" }]) });
+    assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "docs/a.md#x");
   });
   test("Upstream (kein Sync-Stand): lokaler Pfad", () => {
     assert.equal(factorySeiteIn(projekt({ config: config(boards) }), "docs/a.md", "x"), "docs/a.md#x");

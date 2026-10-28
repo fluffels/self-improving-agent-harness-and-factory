@@ -211,6 +211,8 @@ export const NOTFAELLE = [
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
   // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.
   { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
+  // Der Titel entsteht in scripts/secret-inbox.mjs (wöchentliches Prüf-Ticket für die Security-Tabs, #92).
+  { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
@@ -583,12 +585,13 @@ export function loadItemPages(board, opts = {}) {
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
-export function loadOpenIssuePages(repo = REPO, opts = {}) {
+export function loadOpenIssuePages(repo, opts = {}) {
+  brauchtRepo(repo, "loadOpenIssuePages");
   return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`], opts));
 }
 
 /** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
-export function loadOpenIssueNumbers(repo = REPO) {
+export function loadOpenIssueNumbers(repo) {
   return loadOpenIssuePages(repo).flat().filter((i) => !i.pull_request).map((i) => i.number);
 }
 
@@ -678,8 +681,9 @@ export function teilantwortAusStdout(stdout) {
  * `nummern` per GraphQL (`issue.projectItems`, gebündelte Aliase), gefiltert auf das eigene Board; null-Einträge für Issues, die
  * nicht im Board stehen.
  */
-export function itemsUeberIssues(board, nummern, opts = {}, repo = REPO) {
+export function itemsUeberIssues(board, nummern, opts = {}, repo) {
   brauchtBoard(board, "itemsUeberIssues");
+  brauchtRepo(repo, "itemsUeberIssues");
   return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(board, graphqlTeilantwort(b.query, opts), b.nummern));
 }
 

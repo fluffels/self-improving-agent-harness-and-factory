@@ -66,6 +66,7 @@
     "/scripts/board-plan-lib.mjs",
     "/scripts/produktquote-lib.mjs",
     "/scripts/projekt-config.mjs",
+    "/scripts/arbeitsplatz-lib.mjs",
     "/scripts/projekt-config-lib.mjs",
     "/scripts/ticket-namen.mjs",
     "/scripts/board-place.mjs",

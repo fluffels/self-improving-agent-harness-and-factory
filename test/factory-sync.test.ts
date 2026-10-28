@@ -430,10 +430,32 @@ describe("factory-sync (Fremdrepo-Fixture)", { timeout: 30_000 }, () => {
       assert.equal(r.code, 0, r.err);
       assert.deepEqual(aufrufe, []);
     });
-    test("win32 in einem Ziel ohne Git-Repo: kein Index, kein Fehler", () => {
+    test("win32 in einem Ziel ohne Git-Repo: kein Index, kein Fehler, aber der Hinweis", () => {
       const q = baueQuelle();
       taggen(q, "v1", { exec: ["scripts/a.mjs"] });
-      assert.equal(laufe(["--quelle", q, "--ziel", baueZiel(), "--tag", "v1"], undefined, { plattform: "win32" }).code, 0);
+      const r = laufe(["--quelle", q, "--ziel", baueZiel(), "--tag", "v1"], undefined, { plattform: "win32" });
+      assert.equal(r.code, 0);
+      assert.match(r.out, /Hinweis: Ausführbit nicht gesetzt: Ziel ohne Git-Arbeitsbaum \(scripts\/a\.mjs\)/);
+    });
+    test("win32 mit injiziertem git ohne Arbeitsbaum: der Hinweis erscheint, kein Index-Aufruf", () => {
+      const q = baueQuelle();
+      taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+      const aufrufe: string[][] = [];
+      const r = laufe(["--quelle", q, "--ziel", baueZiel(), "--tag", "v1"], undefined, {
+        plattform: "win32",
+        git: (args: string[]) => {
+          aufrufe.push(args);
+          return { ok: true, out: Buffer.from("false\n") };
+        },
+      });
+      assert.equal(r.code, 0);
+      assert.match(r.out, /Ausführbit nicht gesetzt/);
+      assert.ok(aufrufe.every((a) => !a.includes("update-index")));
+    });
+    test("win32 ohne neues Skript: kein Hinweis", () => {
+      const q = baueQuelle();
+      taggen(q, "v1");
+      assert.doesNotMatch(laufe(["--quelle", q, "--ziel", baueZiel(), "--tag", "v1"], undefined, { plattform: "win32" }).out, /Ausführbit/);
     });
   });
 
@@ -567,6 +589,14 @@ describe("check-factory-drift", { timeout: 30_000 }, () => {
     assert.equal(drift1(z).code, 0);
     for (const p of ["scripts/a.mjs", "AGENTS.md", ".claude/settings.json", ".factory/besitz.json"]) schreibe(z, p, lies(z, p).replace(/\n/g, "\r\n"));
     assert.equal(drift1(z).code, 0);
+  });
+  test("Sync-Stand mit JSON-Inhalt null, Liste oder Zahl ist kaputt, nie „selbst Quelle“", () => {
+    for (const inhalt of ["null", "[]", "5", "{kaputt"]) {
+      const r = drift.pruefeDrift((p: string) => (p === ".factory/sync-stand.json" ? inhalt : null));
+      assert.equal(r.entfaellt, false, inhalt);
+      assert.match(r.fehler.join("|"), /kein gültiges JSON-Objekt/, inhalt);
+    }
+    assert.equal(drift.pruefeDrift(() => null).entfaellt, true);
   });
   test("pruefeDrift lehnt einen unsicheren Manifest-Pfad ab statt außerhalb zu lesen", () => {
     const z = gesyncterZiel();
@@ -1037,6 +1067,22 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
     assert.deepEqual(st.quelle, { commit: commitVon(q), tag: "v1", sauber: true });
     assert.deepEqual(Object.keys(st.quelle), ["commit", "tag", "sauber"]);
     assert.equal(drift1(z).code, 0, drift1(z).err);
+  });
+
+  test("quelle.repo: der Stand trägt das repo der Quell-Config, am Ende der Herkunft; ohne gültige Form keins", () => {
+    const q = baueQuelle();
+    schreibe(q, ".factory/projekt.json", JSON.stringify({ version: 2, repo: "q/quelle" }));
+    const z = baueZiel();
+    assert.equal(vomTag(q, z).code, 0);
+    const st = JSON.parse(lies(z, ".factory/sync-stand.json")) as { quelle: Record<string, unknown> };
+    assert.deepEqual(st.quelle, { commit: commitVon(q), tag: "v1", sauber: true, repo: "q/quelle" });
+    for (const config of [JSON.stringify({ repo: "kein-repo" }), JSON.stringify({ repo: 5 }), JSON.stringify({ version: 2 })]) {
+      const q2 = baueQuelle();
+      schreibe(q2, ".factory/projekt.json", config);
+      const z2 = baueZiel();
+      assert.equal(vomTag(q2, z2).code, 0, config);
+      assert.ok(!("repo" in (JSON.parse(lies(z2, ".factory/sync-stand.json")) as { quelle: object }).quelle), config);
+    }
   });
 
   test("AK2: bei einem annotierten Tag steht der aufgelöste Commit im Stand, nicht das Tag-Objekt", () => {

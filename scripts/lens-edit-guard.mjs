@@ -17,10 +17,9 @@
  * Präfixe und Agentenname kommen je Aufruf aus der Projekt-Config (`ticket-namen.mjs`); ist sie nicht nutzbar, lehnt der Guard ab (fail-closed).
  * Nur Node-Builtins.
  */
-import { readFileSync } from "node:fs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { emit, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
-import { PROJEKT_CONFIG, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { ROLLEN_PFADE, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund, worktreeNamenOderGrund } from "./ticket-namen.mjs";
 
 // Pfadform: Groß-/Kleinschreibung egal (Windows-Pfade), der Ordnername selbst für das Aufräumen exakt (kein Flag oben).
@@ -33,10 +32,9 @@ const lensWorktree = (namen) => namen.lensPfadMuster;
 function zielNamen(norm) {
   const i = norm.search(/\/\.claude\/worktrees\//i);
   if (i <= 0) return null;
-  const pfad = `${norm.slice(0, i)}/${PROJEKT_CONFIG}`;
   let config;
   try {
-    config = JSON.parse(readFileSync(pfad, "utf8"));
+    config = ladeProjektConfig({ rootDir: norm.slice(0, i), pruefen: false }); // expliziter rootDir: die Probe-Variable greift nicht
   } catch {
     return null;
   }

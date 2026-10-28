@@ -5,6 +5,7 @@
  * Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `execFileSync("gh"` außerhalb dieser Datei.
  */
 import { execFileSync } from "node:child_process";
+import { gleichesRepo } from "./projekt-config-lib.mjs";
 
 /** Standard-Puffer: Seiten von `gh api --paginate` und Lauflisten sind groß. */
 export const GH_MAX_BUFFER = 256 * 1024 * 1024;
@@ -67,7 +68,7 @@ export function schreibrechtText(err, repo, art = "schreiben") {
  * Pur (#78): der Token für Aufrufe gegen das Ziel-Repo `ziel`. Ein fremdes Repo (≠ `eigenes`) braucht `PROJECT_TOKEN` (der Actions-`github.token` gilt nur im eigenen Repo);
  * gleiches Repo oder kein Token: `undefined`, dann gilt `GH_TOKEN`/der Standard.
  */
-export const tokenFuerZiel = ({ ziel, eigenes, env }) => (ziel !== eigenes && env.PROJECT_TOKEN ? env.PROJECT_TOKEN : undefined);
+export const tokenFuerZiel = ({ ziel, eigenes, env }) => (!gleichesRepo(ziel, eigenes) && env.PROJECT_TOKEN ? env.PROJECT_TOKEN : undefined);
 
 /** Pur (#76): die Labels aus `labels`, die die Antwort eines Issue-POST nicht trägt (ein öffentliches Repo legt das Issue für Nicht-Mitarbeiter an und verwirft die Labels still). */
 export function fehlendeLabels(antwort, labels) {

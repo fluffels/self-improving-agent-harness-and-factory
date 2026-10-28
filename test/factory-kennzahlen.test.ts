@@ -559,56 +559,56 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   const S = raw as unknown as {
     selbstAudit: (e: Eingabe) => A[];
     auditAbschnitt: (a: A[]) => string[];
-    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[]) => unknown; repo?: string; config?: unknown }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[], o?: { token?: string }) => unknown; repo?: string; config?: unknown; env?: Record<string, string> }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
     configOderFehler: (lade?: () => unknown) => { config: unknown; configFehler?: string };
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
   };
   const commit = (message: string, login = FREMD_OWNER) => ({ author: { login }, commit: { message, committer: { date: "2026-10-12T10:00:00Z" } } });
-  const spiel = (n: number) => commit(`feat(sim): s${n} (#${100 + n}) (#${200 + n})`);
+  const produkt = (n: number) => commit(`feat(app): s${n} (#${100 + n}) (#${200 + n})`);
   const harness = (n: number) => commit(`feat(harness): h${n} (#${300 + n}) (#${400 + n})`);
   const CFG = { labels: { harness: FREMD.labels.harness } };
   const von = (e: Eingabe, name: string) => S.selbstAudit({ commits: [], sammelAbschluss: "2026-10-01T00:00:00Z", zeilen: [], ...e }).find((a) => a.mechanismus === name)!;
 
   test("Produktquote: 1:3 ok, 2:2 ABWEICHUNG, unter 4 Merges Lücke (keine Aussage), Bots zählen nicht", () => {
-    expect(von({ commits: [harness(1), spiel(1), spiel(2), spiel(3)] }, "Produktquote").status).toBe("ok");
-    expect(von({ commits: [harness(1), harness(2), spiel(1), spiel(2)] }, "Produktquote").status).toBe("ABWEICHUNG");
-    const wenig = von({ commits: [harness(1), spiel(1), spiel(2)] }, "Produktquote");
+    expect(von({ commits: [harness(1), produkt(1), produkt(2), produkt(3)] }, "Produktquote").status).toBe("ok");
+    expect(von({ commits: [harness(1), harness(2), produkt(1), produkt(2)] }, "Produktquote").status).toBe("ABWEICHUNG");
+    const wenig = von({ commits: [harness(1), produkt(1), produkt(2)] }, "Produktquote");
     expect(wenig.status).toBe("Lücke");
     expect(wenig.messung).toMatch(/keine Aussage/);
     // vier Commits, davon zwei von Bots: nur zwei zählen, also keine Aussage statt ok
-    expect(von({ commits: [spiel(1), spiel(2), commit("feat(sim): x (#1)", "dependabot[bot]"), commit("feat(sim): y (#2)", "dependabot[bot]")] }, "Produktquote").status).toBe("Lücke");
+    expect(von({ commits: [produkt(1), produkt(2), commit("feat(app): x (#1)", "dependabot[bot]"), commit("feat(app): y (#2)", "dependabot[bot]")] }, "Produktquote").status).toBe("Lücke");
   });
 
   test("Produktquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
     const harnessIssues = new Set([900]);
     const alsProdukt = commit("feat(harness): zu Spiel-Issue (#901)");
     const alsFactory = commit("docs(adr): zu Harness-Issue (#900)");
-    const r = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)], harnessIssues }, "Produktquote");
+    const r = von({ commits: [alsProdukt, alsFactory, produkt(1), produkt(2)], harnessIssues }, "Produktquote");
     expect(r.messung).toContain("1 Factory- auf 3 Produkt-Merges");
     expect(r.messung).toContain("Zuordnung nach Label der referenzierten Issues");
     expect(r.status).toBe("ok");
     // ohne Label-Menge Rückfall auf den Scope: dann zählt das feat(harness) als Factory, und der Messtext sagt es
-    const rueckfall = von({ commits: [alsProdukt, alsFactory, spiel(1), spiel(2)] }, "Produktquote").messung;
+    const rueckfall = von({ commits: [alsProdukt, alsFactory, produkt(1), produkt(2)] }, "Produktquote").messung;
     expect(rueckfall).toContain("1 Factory- auf 3 Produkt-Merges");
     expect(rueckfall).toContain("Rückfall: Zuordnung nach Commit-Scope");
   });
 
   test("Produktquote: Label und Scope laufen auseinander, das Label entscheidet (#1798)", () => {
     // zwei feat(harness) auf Spiel-Issues (#901, #902), ein docs auf ein Harness-Issue (#900): nach Label 1 Factory, nach Scope 2
-    const cs = [commit("feat(harness): a (#901)"), commit("feat(harness): b (#902)"), commit("docs(adr): c (#900)"), spiel(1), spiel(2)];
+    const cs = [commit("feat(harness): a (#901)"), commit("feat(harness): b (#902)"), commit("docs(adr): c (#900)"), produkt(1), produkt(2)];
     expect(von({ commits: cs, harnessIssues: new Set([900]) }, "Produktquote").messung).toContain("1 Factory- auf 4 Produkt-Merges");
     expect(von({ commits: cs }, "Produktquote").messung).toContain("2 Factory- auf 3 Produkt-Merges");
   });
 
   test("Produktquote: Lücke mit Grund bei harnessLuecke, der Takt bleibt gemessen (#1798)", () => {
-    const e = { commits: [spiel(1)], harnessLuecke: "Harness-Issues nicht ladbar: x" };
+    const e = { commits: [produkt(1)], harnessLuecke: "Harness-Issues nicht ladbar: x" };
     expect(von(e, "Produktquote")).toMatchObject({ status: "Lücke", messung: "Harness-Issues nicht ladbar: x" });
     expect(von(e, "Härtungs-Takt").status).toBe("ok");
   });
 
   test("Härtungs-Takt: reine Messung, nie ABWEICHUNG (ein still liegendes Sammelticket ist gewollt); Sammelticket-Merges zählen nicht; Vorgänger in Arbeit pausiert; ohne Abschluss Lücke", () => {
-    const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
+    const n = (k: number) => Array.from({ length: k }, (_, i) => produkt(i));
     expect(von({ commits: n(9) }, "Härtungs-Takt").status).toBe("ok");
     const viele = von({ commits: n(40) }, "Härtungs-Takt");
     expect(viele.status).toBe("ok");
@@ -676,7 +676,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
         ];
       }
       if (a[3]?.includes("/issues?")) return [[{ number: 500 }, { number: 501, pull_request: {} }]];
-      return [[spiel(1), { ...spiel(2), commit: { message: "feat: spät (#9)", committer: { date: "2026-10-20T00:00:00Z" } } }]];
+      return [[produkt(1), { ...produkt(2), commit: { message: "feat: spät (#9)", committer: { date: "2026-10-20T00:00:00Z" } } }]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
@@ -694,8 +694,8 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const gh = (a: string[]) => {
       if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] }];
       if (a[3]?.includes("/issues?")) return [[{ number: 76 }]];
-      if (a[3]?.includes("repos/o/p/commits")) return [[spiel(2)]];
-      return [[spiel(1)]];
+      if (a[3]?.includes("repos/o/p/commits")) return [[produkt(2)]];
+      return [[produkt(1)]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config });
     expect(d.commits?.map((c) => (c as { quellRolle?: string }).quellRolle)).toEqual(["harness", "produkt"]);
@@ -708,11 +708,24 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(l.commitsLuecke).toMatch(/Commits von o\/p nicht lesbar.*HTTP 404/);
   });
 
+  test("ladeAuditDaten (#97 L11 b): env kommt vom Aufrufer; die Commits des fremden Repos liest der PROJECT_TOKEN, die des eigenen der Standard", () => {
+    const config = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt", repo: "o/p" }, { rolle: "factory" }] };
+    const token: Record<string, string | undefined> = {};
+    const gh = (a: string[], o?: { token?: string }) => {
+      if (a[0] === "issue") return [];
+      const m = /repos\/([^/]+\/[^/]+)\/commits/.exec(a[3] ?? "");
+      if (m) token[m[1]] = o?.token;
+      return [[produkt(1)]];
+    };
+    S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config, env: { PROJECT_TOKEN: "ptok" } });
+    expect(token).toEqual({ "o/f": undefined, "o/p": "ptok" });
+  });
+
   test("ladeAuditDaten: dritter Aufruf wirft oder labels.harness fehlt: nur die Quote ist Lücke, Commits und Takt-Daten bleiben (#1798)", () => {
     const gh = (a: string[]) => {
       if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-05T00:00:00Z", assignees: [] }];
       if (a[3]?.includes("/issues?")) throw new Error("issues weg");
-      return [[spiel(1)]];
+      return [[produkt(1)]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.harnessIssues ?? null).toBeNull();
@@ -721,7 +734,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
     expect(von({ ...d, zeilen: [] }, "Produktquote").status).toBe("Lücke");
     expect(von({ ...d, zeilen: [] }, "Härtungs-Takt").status).toBe("ok");
-    const ohneLabel = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [] : [[spiel(1)]]), config: { labels: {} } });
+    const ohneLabel = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh: (a) => (a[0] === "issue" ? [] : [[produkt(1)]]), config: { labels: {} } });
     expect(ohneLabel.harnessLuecke).toMatch(/labels.harness/);
     expect(ohneLabel.commits).toHaveLength(1);
   });
@@ -730,7 +743,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const aufrufe: string[] = [];
     const gh = (a: string[]) => {
       aufrufe.push(a[3] ?? a[0] ?? "");
-      return a[0] === "issue" ? [] : [[spiel(1)]];
+      return a[0] === "issue" ? [] : [[produkt(1)]];
     };
     const geladen = S.configOderFehler(() => { throw new Error("agenten.planer fehlt"); });
     expect(geladen).toEqual({ config: null, configFehler: "agenten.planer fehlt" });
@@ -750,7 +763,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     const gh = (a: string[]) => {
       aufrufe.push(a);
       if (a[0] === "issue") return [{ number: 20, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null, assignees: [] }];
-      return [[spiel(1)]];
+      return [[produkt(1)]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-29T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBeNull();
@@ -769,7 +782,7 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
           { number: 32, title: "Harness-Härtung (gesammelt)", state: "OPEN", closedAt: null },
         ];
       }
-      return [[{ author: { login: FREMD_OWNER }, commit: { message: "feat(sim): ohne Datum (#1)" } }, spiel(1)]];
+      return [[{ author: { login: FREMD_OWNER }, commit: { message: "feat(app): ohne Datum (#1)" } }, produkt(1)]];
     };
     const d = S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: CFG });
     expect(d.sammelAbschluss).toBe("2026-10-05T00:00:00Z");
@@ -786,8 +799,8 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
   });
 
   test("Härtungs-Takt: nur die Titelzeile entscheidet, ein Sammelticket im Body schließt einen Merge nicht aus", () => {
-    const n = (k: number) => Array.from({ length: k }, (_, i) => spiel(i));
-    const imBody = commit("feat(sim): normal (#50)\n\nFolge #40, siehe #40");
+    const n = (k: number) => Array.from({ length: k }, (_, i) => produkt(i));
+    const imBody = commit("feat(app): normal (#50)\n\nFolge #40, siehe #40");
     expect(von({ commits: [...n(9), imBody], sammelIssues: new Set([40]) }, "Härtungs-Takt").messung).toMatch(/^10 Ticket-Merges/);
   });
 

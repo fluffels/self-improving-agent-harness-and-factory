@@ -179,6 +179,15 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     blockt(`Set-Location ${HAUPT}; bash -c "git commit -m x"`, WT);
   });
 
+  test("Skript-Laufzeiten (node -e, python -c …): Text wird nicht geparst, ein Wortpaar git commit/push zählt grob als Aufruf, wie im Bash-Pfad (#97 L11m)", () => {
+    blockt(`node -e "console.log('git commit -m x')"`, HAUPT);
+    blockt(`node -e "execSync('git push')"`, HAUPT);
+    blockt(`python3 -c "os.system('git commit -m x')"`, HAUPT);
+    laeuft(`node -e "console.log('git commit -m x')"`, WT);
+    laeuft(`node -e "console.log('hallo')"`, HAUPT);
+    blockt("git commit -m x", HAUPT); // Gegenprobe
+  });
+
   test("tief verschachtelte Interpreter-Strings blocken weiter (grobe Regel greift bei Tiefe über 3)", () => {
     const tief = (n: number): string => (n === 0 ? "git commit -m x" : `pwsh -c "${tief(n - 1).replace(/"/g, "'")}"`);
     blockt(tief(5), HAUPT);

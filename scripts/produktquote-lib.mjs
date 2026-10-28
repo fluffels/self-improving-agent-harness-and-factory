@@ -6,8 +6,8 @@
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { fehlerText } from "./gh-cli.mjs";
-import { boardRepo, gleichesRepo, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
+import { gleichesRepo, repoDerRolle, zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
 export const PRODUKT_QUOTE = 3;
@@ -98,12 +98,19 @@ export function zaehleTaktMerges(commits, seit = null, sammelIssues = new Set())
  */
 export function quotenQuellen({ config, repo }) {
   const eigen = { repo: config?.repo ?? repo };
-  const von = (rolle) => boardRepo(Array.isArray(config?.boards) ? config.boards.find((b) => b.rolle === rolle) : undefined, eigen);
+  const von = (rolle) => repoDerRolle(rolle, { ...config, repo: eigen.repo });
   const factory = von("factory");
   const produkt = von("produkt");
   if (typeof factory === "string" && typeof produkt === "string" && !gleichesRepo(factory, produkt)) return [{ repo: factory, rolle: "harness" }, { repo: produkt, rolle: "produkt" }];
   return [{ repo, rolle: null }];
 }
+
+/**
+ * Pur (#97): der `lies(repo)` für `holeQuotenCommits`: die Commits von main seit `since` über `gh api` (`gh(args, { token })`), je Repo mit dem Token des
+ * Ziels (`tokenFuerZiel`: ein fremdes Repo liest der Projekt-Token). `env` kommt vom Aufrufer (kein verstecktes `process.env`).
+ */
+export const quotenCommitLeser = ({ gh, repo, since, env }) => (r) =>
+  gh(["api", "--paginate", "--slurp", `repos/${r}/commits?sha=main&since=${since}&per_page=100`], { token: tokenFuerZiel({ ziel: r, eigenes: repo, env }) }).flat();
 
 /**
  * Die Commits von main aller Quellen (`quotenQuellen`), je mit der Rolle ihres Repos als `quellRolle` gekennzeichnet. `lies(repo)` liefert die

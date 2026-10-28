@@ -1,4 +1,5 @@
-/* Wächter für die berichtenden Sicherheits-Workflows: `codeql.yml` und `scorecard.yml`.
+/* Wächter für die berichtenden Sicherheits-Workflows (#875): `codeql.yml` und `scorecard.yml`; dazu (#92) `zizmor.yml`
+ * (nur `--offline`, kein Token, `security-events: write` nur im Analyse-Job) und `dependency-review.yml` (ohne jedes Schreibrecht).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regeln, darum im geschützten test/harness/ (#1165).
  *
@@ -10,7 +11,9 @@
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer
  * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt für jede
- * Workflow-Datei (`PIN_PFLICHT` liest das Verzeichnis); ein neuer Workflow ohne Pins macht den Test rot.
+ * Workflow-Datei (`PIN_PFLICHT` liest das Verzeichnis). (4) Container-Images brauchen `@sha256:<64 hex>`; der Scan-Umfang ist geschlossen
+ * (`docker run|create` in `run`-Blöcken, `container:`, `services.*.image`), alles andere (`docker pull/build/compose`, Images aus
+ * Skripten, Variablen als Image) bleibt ungeprüft.
  *
  * Ausführen mit:  npm test
  */
@@ -286,5 +289,235 @@ describe("jeder Workflow hat oberste permissions", () => {
     expect(hatOberstePermissions("permissions: [\n")).toBe(false);
     expect(hatOberstePermissions("permissions: {}\njobs: {}\n")).toBe(true);
     expect(hatOberstePermissions("permissions:\n  contents: read\n")).toBe(true);
+  });
+});
+
+/** Docker-Flags, die den nächsten Token als Wert verbrauchen (das Image ist der erste Token, der weder Flag noch Flag-Wert ist). */
+const WERT_FLAGS = new Set(["-v", "--volume", "-e", "--env", "--env-file", "-w", "--workdir", "-u", "--user", "--name", "--entrypoint", "-p", "--publish", "--network", "--platform", "--mount", "-l", "--label", "--pull", "-h", "--hostname"]);
+
+/** Image-Referenzen aller `docker run|create`-Aufrufe eines `run`-Blocks (Zeilenfortsetzung `\` und gefaltete Blöcke sind schon ein Text). */
+function imagesImRun(run: string): string[] {
+  const tokens = run.replace(/\\\r?\n/g, " ").split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length - 2; i++) {
+    if (tokens[i] !== "docker" || !["run", "create"].includes(tokens[i + 1])) continue;
+    let j = i + 2;
+    while (j < tokens.length && tokens[j].startsWith("-")) j += WERT_FLAGS.has(tokens[j]) ? 2 : 1;
+    if (j < tokens.length) out.push(tokens[j]);
+  }
+  return out;
+}
+
+/** Alle Container-Images eines Workflows: `docker run|create` in `run`-Blöcken sowie `container:` und `services.*.image` (ohne `@sha256:<64 hex>`: Fund). */
+function ungepinnteImages(yml: string): string[] {
+  const wf: unknown = parse(String(yml ?? ""));
+  const jobs = istObj(wf) && istObj(wf.jobs) ? Object.values(wf.jobs).filter(istObj) : [];
+  const bilder: string[] = [];
+  for (const j of jobs) {
+    if (typeof j.container === "string") bilder.push(j.container);
+    else if (istObj(j.container) && typeof j.container.image === "string") bilder.push(j.container.image);
+    for (const s of istObj(j.services) ? Object.values(j.services).filter(istObj) : []) if (typeof s.image === "string") bilder.push(s.image);
+    for (const st of Array.isArray(j.steps) ? j.steps.filter(istObj) : []) if (typeof st.run === "string") bilder.push(...imagesImRun(st.run));
+  }
+  return bilder.filter((b) => !/@sha256:[0-9a-f]{64}$/.test(b));
+}
+
+describe("Container-Images brauchen einen Digest (#92)", () => {
+  // Ehrliche Grenze (Scan-Umfang geschlossen): `docker run|create` in `run`-Blöcken, `container:` und `services.*.image`. Nicht erkannt:
+  // `docker pull`/`build`, `docker compose`, Images aus Skripten, Variablen als Image (`$IMAGE`), Flags hinter dem Image.
+  const DIGEST = `sha256:${"a".repeat(64)}`;
+  const wf = (schritt: string, job = "") => `on: push\npermissions: {}\njobs:\n  a:\n    runs-on: x\n${job}    steps:\n      - run: ${schritt}\n`;
+  test("echte Datei secret-scan.yml: Image per Digest", () => {
+    const yml = lies(".github", "workflows", "secret-scan.yml");
+    expect(imagesImRun(String((parse(yml) as { jobs: { scan: { steps: { run?: string }[] } } }).jobs.scan.steps.find((s) => s.run?.includes("docker run"))?.run))).toHaveLength(1);
+    expect(ungepinnteImages(yml)).toEqual([]);
+  });
+  test("alle PIN_PFLICHT-Workflows ohne ungepinnte Images", () => {
+    for (const d of PIN_PFLICHT) expect(ungepinnteImages(lies(".github", "workflows", d)), d).toEqual([]);
+  });
+  test("Image mit Digest ist ok, auch mit Tag davor und Flags vorher", () => {
+    expect(ungepinnteImages(wf(`docker run --rm -v "$PWD:/r" -e A=b ghcr.io/x/y:v1@${DIGEST} git /r`))).toEqual([]);
+  });
+  test("Negativ: Tag ohne Digest", () => expect(ungepinnteImages(wf("docker run --rm -v \"$PWD:/r\" ghcr.io/x/y:v1 git /r"))).toEqual(["ghcr.io/x/y:v1"]));
+  test("Negativ: docker create ohne Digest zählt wie docker run", () => expect(ungepinnteImages(wf("docker create --name c ghcr.io/x/y:v1"))).toEqual(["ghcr.io/x/y:v1"]));
+  test("Negativ: Kurzform ohne Registry und ohne Tag", () => expect(ungepinnteImages(wf("docker run --rm alpine echo"))).toEqual(["alpine"]));
+  test("Negativ: gefalteter Block mit Zeilenfortsetzung", () => {
+    expect(ungepinnteImages(wf("|\n          docker run --rm \\\n            -v a:b \\\n            ghcr.io/x/y:v1 cmd"))).toEqual(["ghcr.io/x/y:v1"]);
+  });
+  test("Negativ: zu kurzer Digest", () => expect(ungepinnteImages(wf("docker run ghcr.io/x/y@sha256:abc"))).toEqual(["ghcr.io/x/y@sha256:abc"]));
+  test("Negativ: container: als Text und als Objekt, services.*.image", () => {
+    expect(ungepinnteImages(wf("echo", "    container: node:22\n"))).toEqual(["node:22"]);
+    expect(ungepinnteImages(wf("echo", "    container:\n      image: node:22\n"))).toEqual(["node:22"]);
+    expect(ungepinnteImages(wf("echo", "    services:\n      db:\n        image: postgres:16\n"))).toEqual(["postgres:16"]);
+    expect(ungepinnteImages(wf("echo", `    services:\n      db:\n        image: postgres:16@${DIGEST}\n`))).toEqual([]);
+  });
+  test("ohne Docker-Aufruf kein Fund", () => expect(ungepinnteImages(wf("echo docker run"))).toEqual([]));
+});
+
+/** Alle Schritte aller Jobs eines geparsten Workflows. */
+function alleSchritte(wf: Obj): Obj[] {
+  const jobs = istObj(wf.jobs) ? Object.values(wf.jobs).filter(istObj) : [];
+  return jobs.flatMap((j) => (Array.isArray(j.steps) ? j.steps.filter(istObj) : []));
+}
+
+/** Regelverstöße von `zizmor.yml` (leer = ok): offline, ohne Token, Schreibrecht nur im Upload-Job, SARIF-Kategorie `zizmor`. */
+function pruefeZizmor(yml: string): string[] {
+  const fehler: string[] = [];
+  let wf: unknown;
+  try {
+    wf = parse(String(yml ?? ""));
+  } catch {
+    return ["YAML nicht lesbar"];
+  }
+  if (!istObj(wf)) return ["kein Workflow-Objekt"];
+  if (wf.permissions === undefined) fehler.push("permissions: auf oberster Ebene fehlt");
+  else if (schreibRechte(wf.permissions).length) fehler.push("oberste permissions enthalten write");
+  const jobs = istObj(wf.jobs) ? Object.entries(wf.jobs).filter((e): e is [string, Obj] => istObj(e[1])) : [];
+  const schritte = (j: Obj): Obj[] => (Array.isArray(j.steps) ? j.steps.filter(istObj) : []);
+  const mitUpload = (j: Obj) => schritte(j).some((s) => typeof s.uses === "string" && s.uses.startsWith("github/codeql-action/upload-sarif@"));
+  const schreibend = jobs.filter(([, j]) => schreibRechte(j.permissions).includes("security-events: write"));
+  if (schreibend.length !== 1) fehler.push(`security-events: write in ${schreibend.length} Jobs statt genau einem`);
+  else if (!mitUpload(schreibend[0][1])) fehler.push("security-events: write nicht im Job mit upload-sarif");
+  for (const [name, j] of jobs) {
+    const rechte = schreibRechte(j.permissions).filter((r) => r !== "security-events: write");
+    if (rechte.length) fehler.push(`Job ${name}: unerlaubte Schreibrechte (${rechte.join(", ")})`);
+    fehler.push(...checkoutFehler(name, j));
+  }
+  const zizmorRuns = alleSchritte(wf).flatMap((s) => (typeof s.run === "string" && /zizmor/.test(s.run) ? [s.run] : []));
+  if (zizmorRuns.length === 0) fehler.push("kein zizmor-Aufruf");
+  for (const r of zizmorRuns) if (!/(^|\s)--offline(\s|$)/.test(r)) fehler.push("zizmor-Aufruf ohne --offline");
+  const upload = alleSchritte(wf).filter((s) => typeof s.uses === "string" && s.uses.startsWith("github/codeql-action/upload-sarif@"));
+  if (!upload.some((s) => istObj(s.with) && s.with.category === "zizmor")) fehler.push("upload-sarif ohne category: zizmor");
+  if (/secrets\.|github\.token|GH_TOKEN|GITHUB_TOKEN/.test(ohneKommentare(yml))) fehler.push("Token an zizmor-Workflow übergeben");
+  for (const u of ungepinnteUses(String(yml ?? ""))) fehler.push(`Action nicht per SHA mit Versionskommentar gepinnt: ${u}`);
+  return fehler;
+}
+
+/** Regelverstöße von `dependency-review.yml` (leer = ok): nur berichtend, ohne jedes Schreibrecht, `fail-on-severity: high`, kein PR-Kommentar. */
+function pruefeDepReview(yml: string): string[] {
+  const fehler: string[] = [];
+  let wf: unknown;
+  try {
+    wf = parse(String(yml ?? ""));
+  } catch {
+    return ["YAML nicht lesbar"];
+  }
+  if (!istObj(wf)) return ["kein Workflow-Objekt"];
+  const on = istObj(wf.on) ? wf.on : {};
+  if (!("pull_request" in on)) fehler.push("Trigger pull_request fehlt");
+  if ("pull_request_target" in on) fehler.push("pull_request_target verwendet");
+  if (wf.permissions === undefined) fehler.push("permissions: auf oberster Ebene fehlt");
+  const jobs = istObj(wf.jobs) ? Object.entries(wf.jobs).filter((e): e is [string, Obj] => istObj(e[1])) : [];
+  for (const r of [wf.permissions, ...jobs.map(([, j]) => j.permissions)]) if (schreibRechte(r).length) fehler.push(`Schreibrecht (${schreibRechte(r).join(", ")})`);
+  for (const [name, j] of jobs) fehler.push(...checkoutFehler(name, j));
+  const dr = alleSchritte(wf).filter((s) => typeof s.uses === "string" && s.uses.startsWith("actions/dependency-review-action@"));
+  if (dr.length === 0) fehler.push("kein dependency-review-action-Schritt");
+  for (const s of dr) {
+    const w = istObj(s.with) ? s.with : {};
+    if (w["fail-on-severity"] !== "high") fehler.push("fail-on-severity ist nicht high");
+    if (w["comment-summary-in-pr"] !== undefined && w["comment-summary-in-pr"] !== "never") fehler.push("PR-Kommentar aktiviert");
+  }
+  for (const u of ungepinnteUses(String(yml ?? ""))) fehler.push(`Action nicht per SHA mit Versionskommentar gepinnt: ${u}`);
+  return fehler;
+}
+
+describe("zizmor.yml und dependency-review.yml (#92)", () => {
+  const D = `sha256:${"b".repeat(64)}`;
+  const zizmor = (o: { top?: string; job?: string; run?: string; category?: string; extra?: string; env?: string } = {}) =>
+    [
+      "on: push",
+      o.top ?? "permissions: {}",
+      "jobs:",
+      "  analyse:",
+      "    permissions:",
+      o.job ?? "      contents: read\n      security-events: write",
+      "    steps:",
+      CHECKOUT,
+      `      - run: ${o.run ?? `docker run --rm -v "$PWD:/repo" ghcr.io/zizmorcore/zizmor:1@${D} --offline --format sarif .`}`,
+      o.env ?? "",
+      `      - uses: github/codeql-action/upload-sarif@${SHA} # v4.39.1`,
+      `        with:\n          category: ${o.category ?? "zizmor"}`,
+      o.extra ?? "",
+    ].join("\n");
+  const depRev = (o: { top?: string; job?: string; with?: string; trig?: string; checkout?: string } = {}) =>
+    [
+      `on:\n${o.trig ?? "  pull_request:"}`,
+      o.top ?? "permissions: {}",
+      "jobs:",
+      "  pruefen:",
+      "    permissions:",
+      o.job ?? "      contents: read",
+      "    steps:",
+      o.checkout ?? "      - run: echo vorher",
+      `      - uses: actions/dependency-review-action@${SHA} # v5.0.0`,
+      `        with:\n${o.with ?? "          fail-on-severity: high"}`,
+    ].join("\n");
+  const nur = (f: string[], teil: string) => expect(f, f.join(" | ")).toEqual([expect.stringContaining(teil)]);
+
+  test("echte Dateien halten alle Regeln", () => {
+    expect(pruefeZizmor(lies(".github", "workflows", "zizmor.yml"))).toEqual([]);
+    expect(pruefeDepReview(lies(".github", "workflows", "dependency-review.yml"))).toEqual([]);
+  });
+  test("gültige Grundformen", () => {
+    expect(pruefeZizmor(zizmor())).toEqual([]);
+    expect(pruefeDepReview(depRev())).toEqual([]);
+  });
+
+  test("zizmor: security-events: write in einem zweiten Job", () => {
+    const z = zizmor({ extra: "  zweiter:\n    permissions:\n      security-events: write\n    steps: []" });
+    expect(pruefeZizmor(z).some((x) => x.includes("in 2 Jobs"))).toBe(true);
+  });
+  test("zizmor: security-events: write in einem Job ohne upload-sarif", () => {
+    const z = zizmor().replace(/ {6}- uses: github\/codeql-action\/upload-sarif@[^\n]*\n {8}with:\n {10}category: zizmor/, "      - run: echo");
+    nur(pruefeZizmor(z).filter((x) => !x.includes("category")), "nicht im Job mit upload-sarif");
+  });
+  test("zizmor: ohne --offline", () => nur(pruefeZizmor(zizmor({ run: `docker run --rm ghcr.io/zizmorcore/zizmor:1@${D} --format sarif .` })), "ohne --offline"));
+  test("zizmor: --offline nur als Teilstring zählt nicht", () => nur(pruefeZizmor(zizmor({ run: `docker run --rm ghcr.io/zizmorcore/zizmor:1@${D} --offline-x --format sarif .` })), "ohne --offline"));
+  test("zizmor: kein zizmor-Aufruf", () => nur(pruefeZizmor(zizmor({ run: "echo hallo" })), "kein zizmor-Aufruf"));
+  test("zizmor: Token an den Lauf", () => nur(pruefeZizmor(zizmor({ env: "        env:\n          GH_TOKEN: ${{ github.token }}" })), "Token"));
+  test("zizmor: andere Kategorie", () => nur(pruefeZizmor(zizmor({ category: "x" })), "category: zizmor"));
+  test("zizmor: weiteres Schreibrecht und write oben", () => {
+    nur(pruefeZizmor(zizmor({ job: "      contents: write\n      security-events: write" })), "unerlaubte Schreibrechte (contents: write)");
+    nur(pruefeZizmor(zizmor({ top: "permissions:\n  contents: write" })), "oberste permissions");
+  });
+
+  test("Dependency Review: Schreibrecht im Job, oben, write-all", () => {
+    nur(pruefeDepReview(depRev({ job: "      contents: read\n      pull-requests: write" })), "Schreibrecht (pull-requests: write)");
+    nur(pruefeDepReview(depRev({ top: "permissions: write-all" })), "Schreibrecht (write-all)");
+  });
+  test("Dependency Review: Checkout ohne persist-credentials: false", () => {
+    nur(pruefeDepReview(depRev({ checkout: CHECKOUT.replace("persist-credentials: false", "fetch-depth: 1") })), "Checkout ohne persist-credentials: false");
+    expect(pruefeDepReview(depRev({ checkout: CHECKOUT }))).toEqual([]);
+  });
+  test("Dependency Review: ohne dependency-review-action-Schritt", () => {
+    const y = depRev().replace(/ {6}- uses: actions\/dependency-review-action@[^\n]*\n {8}with:\n {10}fail-on-severity: high/, "      - run: echo");
+    nur(pruefeDepReview(y), "kein dependency-review-action-Schritt");
+  });
+  test("Dependency Review: permissions oben fehlen", () => {
+    nur(pruefeDepReview(depRev({ top: "name: x" })), "permissions: auf oberster Ebene fehlt");
+  });
+  test("zizmor: Checkout ohne persist-credentials: false", () => {
+    const y = zizmor().replace(CHECKOUT, CHECKOUT.replace("persist-credentials: false", "fetch-depth: 1"));
+    nur(pruefeZizmor(y), "Checkout ohne persist-credentials: false");
+  });
+  test("zizmor: permissions oben fehlen", () => nur(pruefeZizmor(zizmor({ top: "name: x" })), "permissions: auf oberster Ebene fehlt"));
+  test("zizmor: kein Job mit security-events: write", () => {
+    nur(pruefeZizmor(zizmor({ job: "      contents: read" })), "security-events: write in 0 Jobs statt genau einem");
+  });
+  test("Dependency Review: security-events: write ist auch hier verboten", () => nur(pruefeDepReview(depRev({ job: "      security-events: write" })), "Schreibrecht"));
+  test("Dependency Review: falsche Schwelle, PR-Kommentar", () => {
+    nur(pruefeDepReview(depRev({ with: "          fail-on-severity: critical" })), "fail-on-severity");
+    nur(pruefeDepReview(depRev({ with: "          fail-on-severity: high\n          comment-summary-in-pr: always" })), "PR-Kommentar");
+  });
+  test("Dependency Review: pull_request_target statt pull_request", () => {
+    const f = pruefeDepReview(depRev({ trig: "  pull_request_target:" }));
+    expect(f).toContain("pull_request_target verwendet");
+    expect(f).toContain("Trigger pull_request fehlt");
+  });
+  test("kaputte und leere Eingabe ist fail-closed", () => {
+    for (const p of [pruefeZizmor, pruefeDepReview]) {
+      expect(p("").length).toBeGreaterThan(0);
+      expect(p(":::\n\t- [").length).toBeGreaterThan(0);
+    }
   });
 });

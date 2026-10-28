@@ -21,7 +21,15 @@ const LINK = {
   admin: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository",
 };
 
-/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich). */
+/**
+ * Pur: neutralisiert die Action-Pins eines Workflow-Texts: `uses: x@<40 Hex>` samt Versionskommentar wird zu `uses: x@<pin>`.
+ * Dependabot hebt Pins an; der Vergleich mit der Vorlage soll daran nicht rot werden. Ein Pin, der fehlt (Tag statt SHA), bleibt stehen und ist ein Unterschied.
+ */
+export function ohneActionPins(text) {
+  return text.replace(/(uses:[ \t]*[^\s@]+@)[0-9a-f]{40}\b(?:[ \t]+#[^\r\n]*)?/g, "$1<pin>");
+}
+
+/** Die Wochenlauf-Datei, die `--einrichten` installiert (Vorlage = Datei im Repo, ein Wächter hält beide gleich, Action-Pins ausgenommen). */
 export const WOCHENLAUF_PFAD = ".github/workflows/harness-doctor.yml";
 export const WOCHENLAUF_WORKFLOW = [
   "name: Harness-Doctor (Wochenlauf)",
@@ -228,7 +236,10 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
   const noetig = spiegel?.requiredChecks ?? [];
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = fehlen(noetig, kontexte).map((c) => luecke(`Required-Check ${c}`, `Required-Check "${c}" fehlt auf ${branch}`, `"${c}" in ${rs} unter Required status checks ergänzen`, LINK.ruleset));
-  return fehlend.length ? fehlend : [gut("Ruleset")];
+  const werkzeuge = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
+  const csFehlend = fehlen((spiegel?.codeScanning ?? []).map((e) => e.tool), werkzeuge).map((w) => luecke(`Code-Scanning ${w}`, `Code-Scanning "${w}" fehlt auf ${branch}`, `Regel in ${rs} ergänzen (Pre-Flight)`, LINK.ruleset));
+  const alle = [...fehlend, ...csFehlend];
+  return alle.length ? alle : [gut("Ruleset")];
 }
 
 /**

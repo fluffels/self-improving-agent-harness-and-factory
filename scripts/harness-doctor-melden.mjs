@@ -107,19 +107,19 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh` und `langfuse: null`, ohne `umgebung`). */
-export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf } = {}) {
+/** Einstieg. `deps` (Tests): `env` (Standard `process.env`), `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh` und `langfuse: null`, ohne `umgebung`). */
+export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf, env = process.env } = {}) {
   const start = await inboxStart(argv, { skript: "harness-doctor-melden", praefix: `${KENNUNG}: Projekt-Config nicht lesbar: `, ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
   const { REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   const ziel = libs.ZIEL ?? REPO; // Ziel-Repo der Harness-Befunde (#78): ein fremdes braucht PROJECT_TOKEN zum Lesen und Posten
-  const zielToken = tokenFuerZiel({ ziel, eigenes: REPO, env: process.env });
-  const projektToken = process.env.PROJECT_TOKEN;
+  const zielToken = tokenFuerZiel({ ziel, eigenes: REPO, env });
+  const projektToken = env.PROJECT_TOKEN;
   const io = {
     ermittle: () =>
       ermittleLuecken({
-        env: process.env,
+        env,
         repo: REPO,
         pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null }).ergebnis,
       }),

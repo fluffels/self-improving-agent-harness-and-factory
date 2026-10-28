@@ -17,6 +17,7 @@ export interface ProjektConfig {
   agenten: { planer: string; umsetzer: string; lens: string; gruppe: string; ticketSkill: string };
   skills: { abschluss: string };
   projektliterale?: Record<string, string>;
+  seitenliterale?: Record<string, string>;
 }
 
 const lib = raw as unknown as { ladeProjektConfig(opt?: { pfad?: string }): ProjektConfig; repoName(config: { repo: string }): string };

@@ -399,6 +399,33 @@ describe("harness-doctor --pruefen", () => {
     assert.match(luecken(r)[0], /Langfuse: Langfuse aus\. Fix:/);
   });
 
+  describe("Code-Scanning-Regel (#92 L2)", () => {
+    const REGELN = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
+    const required = { type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } };
+    const cs = (tool: string) => ({ type: "code_scanning", parameters: { code_scanning_tools: [{ tool, alerts_threshold: "errors", security_alerts_threshold: "high_or_higher" }] } });
+    const MIT = { ...SPIEGEL, codeScanning: [{ tool: "CodeQL", sicherheitsSchwelle: "high_or_higher", alertSchwelle: "errors" }] };
+    test("Spiegel nennt CodeQL, live gesetzt: gut", () => {
+      assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }, { spiegel: MIT }).code, 0);
+    });
+    test("Spiegel nennt CodeQL, live fehlt die Regel: Lücke mit Fix", () => {
+      const r = lauf({}, { spiegel: MIT });
+      assert.equal(r.code, 1);
+      assert.equal(luecken(r).length, 1);
+      assert.match(luecken(r)[0], /Code-Scanning "CodeQL" fehlt.*Fix: Regel in Ruleset "main-schutz" ergänzen \(Pre-Flight\)/);
+    });
+    test("Regel für ein anderes Werkzeug zählt nicht", () => {
+      assert.equal(luecken(lauf({ [REGELN]: [required, cs("Semgrep")] }, { spiegel: MIT })).length, 1);
+    });
+    test("Regel ohne parameters: Lücke statt Absturz", () => {
+      const r = lauf({ [REGELN]: [required, { type: "code_scanning" }] }, { spiegel: MIT });
+      assert.equal(luecken(r).length, 1);
+      assert.match(luecken(r)[0], /Code-Scanning "CodeQL" fehlt/);
+    });
+    test("Spiegel ohne codeScanning: live egal", () => {
+      assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }).code, 0);
+    });
+  });
+
   test("Ohne Spiegel reicht ein Required-Check", () => {
     const { rulesetSpiegel: _weg, ...ohne } = CONFIG;
     void _weg;

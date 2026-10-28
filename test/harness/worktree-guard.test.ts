@@ -363,6 +363,11 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`if false; then\ncd '${wt}'\nfi\ngit push`), true, "cd in einem Block");
     assert.equal(run(`cd '${wt}' && node scripts/x.mjs && npx vitest run && git commit -m x`), false, "Interpreter in der Kette");
     assert.equal(run(`cd '${wt}' && echo git push`), false, "reiner Text");
+    assert.equal(run(`node -e "console.log('git commit -m x')"`, repoRoot), true, "Text in Interpreter-Code (node -e) wird nicht geparst, das Wortpaar zählt grob als Aufruf (#97 L11m)");
+    assert.equal(run(`node -e "execSync('git push')"`, repoRoot), true);
+    assert.equal(run(`node -e "console.log('hallo')"`, repoRoot), false);
+    assert.equal(run(`node -e "console.log('git commit -m x')"`, wt), false, "im Worktree läuft er durch");
+    assert.equal(run("git commit -m x", repoRoot), true, "Gegenprobe: der direkte Aufruf im Haupt-Checkout blockt");
     assert.equal(run(`if true; then cd '${wt}' && git push; fi`), false, "cd und git im selben then-Zweig: exakt ausgewertet");
     assert.equal(run(`if true; then cd '${wt}'; fi; git push`), true, "cd im Zweig wirkt danach nur bedingt: der Ausgangsort bleibt Ziel");
     assert.equal(run(`cd '${wt}' && git -C sub push && git push`), false);

@@ -35,6 +35,7 @@ import {
   loadItems,
   loadOpenIssuePages,
   normalizeOffene,
+  REPO,
   planMitKorrektur,
   positionLautAgentsMd,
   positionOderWarnung,
@@ -42,7 +43,7 @@ import {
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
-import { fehlendeLabels, fehlerText, schreibrechtText } from "./gh-cli.mjs";
+import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zerlegeRepo, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 
@@ -141,11 +142,14 @@ export function sammelZiel(config) {
   return { rolle: boardRolleFuer(labels, config), repo, owner: zerlegeRepo(repo).owner };
 }
 
+/** Die gh-Optionen für Aufrufe gegen das Ziel-Repo `repo` (#97): ein fremdes Repo liest und schreibt der `PROJECT_TOKEN`, das eigene den Standard (`tokenFuerZiel`). */
+export const zielOpts = (repo, env = process.env) => ({ token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
+
 /** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
-export function legeAn({ repo, titel, body, harness }, api = ghJson) {
+export function legeAn({ repo, titel, body, harness }, api = ghJson, env = process.env) {
   let neu;
   try {
-    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`]);
+    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`], zielOpts(repo, env));
   } catch (e) {
     throw new Error(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`, { cause: e });
   }
@@ -156,7 +160,7 @@ export function legeAn({ repo, titel, body, harness }, api = ghJson) {
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const einzelAbrufIn = (repo) => (nr) => ghJson(["api", `repos/${repo}/issues/${nr}`]);
+export const einzelAbrufIn = (repo, gh = ghJson, env = process.env) => (nr) => gh(["api", `repos/${repo}/issues/${nr}`], zielOpts(repo, env));
 
 /**
  * Führt einen Lesezugriff auf das Ziel-Repo `repo` aus (#78 L14). Scheitert er, steht eine Zeile `✖ <Meldung>` (bei fehlenden Rechten `kein Lesezugriff auf <repo> …`,
@@ -175,7 +179,7 @@ export function lesbarImZiel(repo, fn, { err = console.error, exit = process.exi
 function pruefeDublette(nr, titel, vorgaenger, { repo, owner }) {
   const einzelAbruf = einzelAbrufIn(repo);
   return lesbarImZiel(repo, () => {
-    const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo)), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
+    const kandidaten = kandidatenSammelticket(normalizeOffene(loadOpenIssuePages(repo, zielOpts(repo))), titel, { nach: vorgaenger }).filter((i) => i.number < nr);
     const aelter = waehleBestaetigtes(kandidaten, einzelAbruf, owner);
     return dublettenEntscheidung({ eigenNr: nr, titel, eigenKommentare: einzelAbruf(nr).comments ?? 0, andere: aelter ? [aelter] : [], vorgaenger });
   });
@@ -187,15 +191,15 @@ function schliesseWennDublette(nr, titel, vorgaenger, ziel) {
   const d = pruefeDublette(nr, titel, vorgaenger, ziel);
   if (d.art === "warnung") console.log(`::warning::#${nr} ist eine Dublette von #${d.aelter}, hat aber schon Kommentare: nicht geschlossen, Zeilen von Hand nach #${d.aelter} übertragen und #${nr} schließen.`);
   if (d.art !== "eigenes-schliessen") return false;
-  ghJson(["api", "-X", "POST", `repos/${repo}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`]);
-  ghJson(["api", "-X", "PATCH", `repos/${repo}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"]);
+  ghJson(["api", "-X", "POST", `repos/${repo}/issues/${nr}/comments`, "-f", `body=Dublette von #${d.aelter} (Wettlauf beim Anlegen)`], zielOpts(repo));
+  ghJson(["api", "-X", "PATCH", `repos/${repo}/issues/${nr}`, "-f", "state=closed", "-f", "state_reason=not_planned"], zielOpts(repo));
   console.log(`Dublette von #${d.aelter} (Wettlauf beim Anlegen): #${nr} geschlossen (stand es schon im Board, bleibt das Item dort geschlossen liegen). Das Original ist #${d.aelter}.`);
   return true;
 }
 /** Zustand des Vorgängers `nr` per REST (`zustandVonIssue`); unlesbar gilt als offen (die Sperre ist die sichere Seite). */
 function vorgaengerZustand(nr, repo) {
   try {
-    return zustandVonIssue(ghJson(["api", `repos/${repo}/issues/${nr}`]));
+    return zustandVonIssue(ghJson(["api", `repos/${repo}/issues/${nr}`], zielOpts(repo)));
   } catch {
     return "unbekannt";
   }
@@ -268,7 +272,7 @@ async function main(argv = process.argv.slice(2)) {
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
   const vorhanden = lesbarImZiel(repo, () => {
-    const offene = normalizeOffene(loadOpenIssuePages(repo));
+    const offene = normalizeOffene(loadOpenIssuePages(repo, zielOpts(repo)));
     return waehleBestaetigtes(kandidatenSammelticket(offene, titel, { nach: vorgaenger }), einzelAbrufIn(repo), ziel.owner);
   });
   let nr;

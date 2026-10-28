@@ -34,5 +34,41 @@
   ".github/workflows/scorecard.yml": {
     "art": "modul",
     "grund": "Sicherheits-Modul (Scorecard), kein Factory-Kern"
+  },
+  "scripts/codescanning-inbox.mjs": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Code-Scanning-Inbox), kein Factory-Kern"
+  },
+  "scripts/audit-einordnung.mjs": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"
+  },
+  "scripts/ghsa-lib.mjs": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (GHSA-Bausteine der Audit-Einordnung), kein Factory-Kern"
+  },
+  ".github/workflows/codescanning-inbox.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Code-Scanning-Inbox), kein Factory-Kern"
+  },
+  ".github/workflows/audit-einordnung.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"
+  },
+  "scripts/secret-inbox.mjs": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Secret-Inbox), kein Factory-Kern"
+  },
+  ".github/workflows/secret-scan.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Secret-Scan), kein Factory-Kern"
+  },
+  ".github/workflows/zizmor.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Workflow-Audit zizmor), kein Factory-Kern"
+  },
+  ".github/workflows/dependency-review.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Dependency Review), kein Factory-Kern"
   }
 }

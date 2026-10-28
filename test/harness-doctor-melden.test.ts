@@ -18,7 +18,7 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string): boolean;
-  main(argv: string[], deps: { ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
+  main(argv: string[], deps: { env?: Record<string, string>; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -228,37 +228,41 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       vi.unstubAllEnvs();
     }
   });
-  test("L13a: Ziel-Repo fremd → postZeilen bekommt Ziel-Repo und PROJECT_TOKEN, eigenes Ziel-Repo → kein Token", async () => {
-    vi.stubEnv("GITHUB_ACTIONS", "true");
-    vi.stubEnv("PROJECT_TOKEN", "");
-    try {
-      for (const [ziel, erwartet] of [["acme/ziel", undefined], ["acme/proj", undefined]] as const) {
-        const gepostet: unknown[][] = [];
-        const libs = {
-          REPO: "acme/proj",
-          ZIEL: ziel,
-          ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }),
-          waehleSammelticket: (o: { number: number }[]) => o[0],
-          postZeilen: (...a: unknown[]) => gepostet.push(a),
-        };
-        assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined }), 0);
-        assert.deepEqual(gepostet[0]?.slice(2, 4), [ziel, erwartet], ziel);
-      }
-      vi.stubEnv("PROJECT_TOKEN", "pt");
+  describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
+    const lauf = async (ziel: string, env: Record<string, string>) => {
       const gepostet: unknown[][] = [];
       const libs = {
         REPO: "acme/proj",
-        ZIEL: "acme/ziel",
+        ZIEL: ziel,
         ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }),
         waehleSammelticket: (o: { number: number }[]) => o[0],
         postZeilen: (...a: unknown[]) => gepostet.push(a),
       };
       const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
-      assert.equal(await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
-      assert.deepEqual(gepostet[0]?.slice(2, 4), ["acme/ziel", "pt"]);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+      const code = await melden.main([], { env, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe });
+      assert.equal(code, 0);
+      return gepostet[0]?.slice(2, 4);
+    };
+    test("fremdes Ziel-Repo mit PROJECT_TOKEN: postZeilen bekommt Ziel-Repo und Token", async () => {
+      assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/ziel", "pt"]);
+    });
+    test("eigenes Ziel-Repo (auch anders geschrieben): kein Token, obwohl PROJECT_TOKEN gesetzt ist", async () => {
+      assert.deepEqual(await lauf("acme/proj", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/proj", undefined]);
+      assert.deepEqual(await lauf("Acme/Proj", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["Acme/Proj", undefined]);
+    });
+    test("fremdes Ziel-Repo ohne PROJECT_TOKEN in der env: kein Token (die Prozess-Umgebung zählt nicht)", async () => {
+      vi.stubEnv("PROJECT_TOKEN", "aus-dem-prozess");
+      try {
+        assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }).then((r) => r?.[1]), "x");
+        const gepostet: unknown[][] = [];
+        const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
+        await melden.main([], { env: { GITHUB_ACTIONS: "true" }, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
+        assert.equal(gepostet.length, 1);
+        assert.equal(gepostet[0]?.[3], undefined);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
   test("unbekanntes Flag → Exit 2 vor jeder Config", async () => {
     const code = await melden.main(["--quatsch"], { ladeConfig: () => assert.fail("keine Config"), ladeLibs: () => assert.fail("kein Import"), log: () => undefined, err: () => undefined });

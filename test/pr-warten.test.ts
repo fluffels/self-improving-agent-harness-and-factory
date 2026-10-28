@@ -383,3 +383,83 @@ describe("parseArgs: strikt (#1790)", () => {
     expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 240, intervall: 30 });
   });
 });
+
+describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
+  const C = raw as unknown as {
+    codeScanningWerkzeuge: (regeln: unknown) => string[];
+    pflichtListe: (basis: readonly string[], werkzeuge: readonly string[]) => string[];
+    holeWerkzeuge: (pr: string, gh: (a: string[], o: object) => string) => { werkzeuge: string[]; hinweis: string | null };
+    mitHinweis: (r: Erg, hinweis: string | null) => Erg;
+  };
+  const regel = (...tools: string[]) => ({ type: "code_scanning", parameters: { code_scanning_tools: tools.map((tool) => ({ tool, alerts_threshold: "errors", security_alerts_threshold: "high_or_higher" })) } });
+  test("Regel da: Werkzeugname", () => expect(C.codeScanningWerkzeuge([{ type: "deletion" }, regel("CodeQL")])).toEqual(["CodeQL"]));
+  test("Regel fehlt: leer", () => expect(C.codeScanningWerkzeuge([{ type: "required_status_checks", parameters: {} }])).toEqual([]));
+  test("mehrere Regeln und Werkzeuge", () => expect(C.codeScanningWerkzeuge([regel("CodeQL", "Semgrep"), regel("Trivy")])).toEqual(["CodeQL", "Semgrep", "Trivy"]));
+  test.each([null, "x", {}, [null], [{ type: "code_scanning" }], [{ type: "code_scanning", parameters: { code_scanning_tools: "kaputt" } }], [{ type: "code_scanning", parameters: { code_scanning_tools: [{}, null, { tool: " " }] } }]])("kaputte Regeln (%j): leer, kein Absturz", (r) => {
+    expect(C.codeScanningWerkzeuge(r)).toEqual([]);
+  });
+  test("rotes CodeQL mit Regel → ROT", () => {
+    const r = P.bewerte(offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]), C.pflichtListe(["Tests"], ["CodeQL"]));
+    expect(r.exit).toBe(1);
+    expect(r.zeilen).toEqual(["ROT CodeQL https://x/runs/CodeQL"]);
+  });
+  test("Negativ: rotes CodeQL ohne Regel → nur HINWEIS", () => {
+    const r = P.bewerte(offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]), C.pflichtListe(["Tests"], []));
+    expect(r.exit).toBe(2);
+    expect(r.zeilen.some((z) => z.startsWith("HINWEIS CodeQL"))).toBe(true);
+    expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+  });
+  test("leere Pflicht-Liste bleibt leer (fail-closed), auch mit Werkzeugen", () => expect(C.pflichtListe([], ["CodeQL"])).toEqual([]));
+  test("holeWerkzeuge liest Basis-Branch und Regeln", () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => (aufrufe.push(a), a[0] === "pr" ? JSON.stringify({ baseRefName: "trunk" }) : JSON.stringify([regel("CodeQL")]));
+    expect(C.holeWerkzeuge("7", gh)).toEqual({ werkzeuge: ["CodeQL"], hinweis: null });
+    expect(aufrufe[1].join(" ")).toContain("rules/branches/trunk");
+  });
+  test("nicht lesbare Regeln: keine Werkzeuge, HINWEIS, kein Absturz", () => {
+    const gh = (a: string[]) => {
+      if (a[0] === "pr") return JSON.stringify({ baseRefName: "main" });
+      throw new Error("HTTP 403\nrest");
+    };
+    expect(C.holeWerkzeuge("7", gh)).toEqual({ werkzeuge: [], hinweis: "HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403" });
+  });
+  describe("lauf: die echte Verdrahtung aus holeWerkzeuge, holePflicht und warten", () => {
+    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number }) => Erg };
+    const stand = offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]);
+    const ghMit = (regeln: () => string) => (a: string[]) => {
+      if (a[0] === "api") return regeln();
+      if (a.includes("--required")) return JSON.stringify([{ name: "Tests" }]);
+      return a.includes("baseRefName") ? JSON.stringify({ baseRefName: "main" }) : JSON.stringify(stand);
+    };
+    const uhr = () => {
+      let t = 0;
+      return { schlafe: (ms: number) => void (t += ms), jetzt: () => t };
+    };
+    const arg = { pr: "7", maxSekunden: 60, intervall: 30 };
+    test("Regel gesetzt, CodeQL rot: ROT, Exit 1", () => {
+      expect(L.lauf(arg, { gh: ghMit(() => JSON.stringify([regel("CodeQL")])), ...uhr() })).toEqual({ exit: 1, zeilen: ["ROT CodeQL https://x/runs/CodeQL"] });
+    });
+    test("keine Regel: das rote CodeQL ist nur ein HINWEIS, kein ROT", () => {
+      const r = L.lauf(arg, { gh: ghMit(() => "[]"), ...uhr() });
+      expect(r.exit).toBe(2);
+      expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+      expect(r.zeilen.some((z) => z.startsWith("HINWEIS CodeQL"))).toBe(true);
+    });
+    test("Regeln nicht lesbar: HINWEIS-Zeile steht als letzte Zeile, CodeQL gatet nicht", () => {
+      const r = L.lauf(arg, {
+        gh: ghMit(() => {
+          throw new Error("HTTP 403");
+        }),
+        ...uhr(),
+      });
+      expect(r.exit).toBe(2);
+      expect(r.zeilen.at(-1)).toBe("HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403");
+      expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+    });
+  });
+  test("mitHinweis hängt die Zeile an außer bei MERGED", () => {
+    expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, "HINWEIS x")).toEqual({ exit: 2, zeilen: ["OFFEN", "HINWEIS x"] });
+    expect(C.mitHinweis({ exit: 0, zeilen: ["MERGED a"] }, "HINWEIS x")).toEqual({ exit: 0, zeilen: ["MERGED a"] });
+    expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, null)).toEqual({ exit: 2, zeilen: ["OFFEN"] });
+  });
+});

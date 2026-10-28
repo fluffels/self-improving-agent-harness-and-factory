@@ -17,6 +17,12 @@
 
 import { fenceMaske } from "./docs-gen/markdown.mjs";
 
+/** Die Form `owner/name` eines Repos (SSOT, #97): weder Zerlegung noch Prüfung dürfen davon abweichen; `projekt-config-lib` führt sie weiter (`zerlegeRepo`, `istRepoForm`). Liegt hier, weil `projekt-config-lib` diese Datei importiert (kein Zyklus). */
+export const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
+
+/** Pur: hat `repo` genau die Form `owner/name`? Ein Nicht-String nie. */
+export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(repo);
+
 const LISTENPUNKT = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 
 const istText = (v) => typeof v === "string" && v.trim() !== "";
@@ -157,7 +163,7 @@ export function blockerNummern(body, sprache) {
 /** Ein Blocker als Verweistext: Nummer → `#n`, `{ repo, nummer }` → `owner/name#n` (wirft bei einem Repo ohne `owner/name`-Form). Pur. */
 export function blockerVerweisText(b) {
   if (typeof b === "number") return `#${b}`;
-  if (!/^[\w.-]+\/[\w.-]+$/.test(String(b?.repo ?? ""))) throw new Error("Blocker-Repo muss die Form owner/name haben");
+  if (!istRepoForm(b?.repo)) throw new Error("Blocker-Repo muss die Form owner/name haben");
   return `${b.repo}#${b.nummer}`;
 }
 

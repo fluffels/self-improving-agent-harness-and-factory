@@ -13,6 +13,8 @@ import { projektConfig, repoName } from "./support/fremd-config";
 import { escapeRegex } from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDocmap from "../scripts/check-docmap.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
@@ -30,7 +32,7 @@ interface Pc {
   sandboxAus(config: unknown): { allowedDomains: string[]; envVars: { name: string; mode: string }[] };
   ergaenzungAusText(text: string | null): { allow: string[]; sandbox: { allowedDomains: string[]; envVars: unknown[] } };
   umschriftAus(config: unknown): string[];
-  strukturAus(config: unknown): { quelle: string; moduldoku: string };
+  strukturAus(config: unknown): { quelle: string; moduldoku: string | null };
   escapeKopienAus(config: unknown): string[];
   bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
@@ -112,6 +114,9 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+    assert.match(mit((c) => (c.seitenliterale = [])), /seitenliterale muss ein Objekt/);
+    assert.match(mit((c) => (c.seitenliterale = { Spiel: "" })), /seitenliterale\.Spiel/);
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), seitenliterale: { Spiel: "Spiel" } }), []);
     assert.match(mit((c) => delete c.skills), /skills/);
     assert.match(mit((c) => (c.skills = {})), /skills\.abschluss fehlt/);
     assert.match(mit((c) => (c.skills = { abschluss: "" })), /skills\.abschluss muss/);
@@ -637,7 +642,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
-    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "arbeitsplatz-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
@@ -830,12 +835,56 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
   });
 });
 
+describe("struktur.moduldoku: null als Opt-out von check:docmap (#97 L7)", { timeout: 60_000 }, () => {
+  const fremdrepo = (struktur: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur }));
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "a.ts"), "x\n");
+    return d;
+  };
+  const lauf = (d: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", "check-docmap.mjs")], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("moduldoku: null: Hinweis, Exit 0, auch bei verwaistem Modul", () => {
+    const r = lauf(fremdrepo({ quelle: "lib", moduldoku: null }));
+    assert.equal(r.status, 0, r.text);
+    assert.match(r.text, /check:docmap entfällt \(struktur\.moduldoku: null\)/);
+  });
+  test("eine falsche quelle bleibt auch mit moduldoku: null fail-closed, strukturAus und Prüfung akzeptieren null", () => {
+    assert.throws(() => pc.strukturAus({ struktur: { quelle: "", moduldoku: null } }), /struktur[\s\S]*Fix:/);
+    assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: null } }), { quelle: "lib", moduldoku: null });
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), struktur: { quelle: "lib", moduldoku: null } }), []);
+    assert.match(pc.pruefeProjektConfig({ ...gueltig(), struktur: { quelle: "lib", moduldoku: "" } }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
+  });
+});
+
+describe("struktur.moduldoku: null in den Funktionen selbst (#97 Runde 1)", () => {
+  test("auditDocMap und parseDeepDocMaps stürzen bei null nicht ab, sondern melden Opt-out bzw. leer", () => {
+    const dm = rawDocmap as unknown as {
+      auditDocMap: (root: string, s: { quelle: string; moduldoku: string | null }) => { entfaellt?: boolean; modules: string[]; orphans: string[] };
+      parseDeepDocMaps: (root: string, s: { quelle: string; moduldoku: string | null }) => Set<string>;
+    };
+    const d = tmp();
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "a.ts"), "x\n");
+    const s ={ quelle: "lib", moduldoku: null };
+    assert.deepEqual([...dm.parseDeepDocMaps(d, s)], []);
+    const a = dm.auditDocMap(d, s);
+    assert.equal(a.entfaellt, true);
+    assert.deepEqual([a.modules, a.orphans], [[], []]);
+  });
+});
+
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
   const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
 
   test("strukturAus: liefert quelle und moduldoku, die der echten Config zeigen auf vorhandene Ordner (die Werte prüft ein Projekt-Test)", () => {
     const echt = pc.strukturAus(pc.ladeProjektConfig());
-    for (const p of [echt.quelle, echt.moduldoku]) assert.ok(existsSync(join(WURZEL, p)), `struktur-Pfad ${p} fehlt im Repo`);
+    for (const p of [echt.quelle, echt.moduldoku].filter((x) => x !== null)) assert.ok(existsSync(join(WURZEL, p)), `struktur-Pfad ${p} fehlt im Repo`);
     assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: "docs/mod" } }), { quelle: "lib", moduldoku: "docs/mod" });
   });
   test("strukturAus: ohne Block, Nicht-Objekt oder leeren Pfad wirft mit Schlüssel und Fix-Zeile (kein stiller Standardwert)", () => {

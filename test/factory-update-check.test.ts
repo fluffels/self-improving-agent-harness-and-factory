@@ -19,14 +19,15 @@ afterEach(() => {
   for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function projekt(opts: { tag?: string; config?: boolean; stand?: string }): string {
+function projekt(opts: { tag?: string; repo?: string; config?: boolean | "ohne-repo"; stand?: string }): string {
   const dir = mkdtempSync(join(tmpdir(), "factory-update-"));
   ordner.push(dir);
   mkdirSync(join(dir, ".factory"));
-  if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag } }));
+  if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag, ...(opts.repo === undefined ? {} : { repo: opts.repo }) } }));
   if (opts.stand !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), opts.stand);
   if (opts.config !== false) {
-    const boards = [{ rolle: "factory", besitzer: "o", besitzerTyp: "user", nummer: 2, repo: "o/factory" }];
+    const board = { rolle: "factory", besitzer: "o", besitzerTyp: "user", nummer: 2 };
+    const boards = [opts.config === "ohne-repo" ? board : { ...board, repo: "o/factory" }];
     writeFileSync(join(dir, ".factory", "projekt.json"), JSON.stringify({ version: 2, repo: "o/projekt", boards }));
   }
   return dir;
@@ -114,6 +115,30 @@ describe("fuehreAus", () => {
     const r = fuehreAus(["--json"], { wurzel, gh: () => tagsJson("v1.2.0") });
     assert.equal(r.code, 0);
     assert.equal((JSON.parse(r.out) as { update: unknown }).update, null);
+  });
+  test("Sync-Stand mit quelle.repo: die Tags dieses Repos, nicht die des Boards oder des Projekts", () => {
+    const aufrufe: string[][] = [];
+    const gh = (args: string[]) => {
+      aufrufe.push(args);
+      return tagsJson("v1.0.0");
+    };
+    assert.equal(fuehreAus([], { wurzel: projekt({ tag: "v1.0.0", repo: "q/quelle", config: "ohne-repo" }), gh }).code, 0);
+    assert.equal(fuehreAus([], { wurzel: projekt({ tag: "v1.0.0", repo: "q/quelle" }), gh }).code, 0);
+    assert.ok(aufrufe.every((a) => a.includes("repos/q/quelle/tags")));
+  });
+  test("alter Stand ohne quelle.repo, Factory-Board ohne repo: nicht bestimmbar, Exit 2, kein Rückfall aufs eigene Repo", () => {
+    const r = fuehreAus([], { wurzel: projekt({ tag: "v1.0.0", config: "ohne-repo" }), gh: () => assert.fail("kein gh") });
+    assert.equal(r.code, 2);
+    assert.match(r.err, /nicht bestimmbar/);
+    assert.match(r.err, /quelle\.repo/);
+  });
+  test("Sync-Stand mit JSON-Inhalt null (oder Liste): kaputt, Exit 2 mit Fix: neu syncen, nicht „selbst Quelle“", () => {
+    for (const stand of ["null", "[]", "5"]) {
+      const r = fuehreAus([], { wurzel: projekt({ stand }), gh: () => assert.fail("kein gh") });
+      assert.equal(r.code, 2, stand);
+      assert.match(r.err, /Fix:.*neu/s);
+      assert.doesNotMatch(r.out, /Quelle/);
+    }
   });
   test("fehlendes Factory-Repo: Exit 2 mit Fix:", () => {
     const r = fuehreAus([], { wurzel: projekt({ tag: "v1.0.0", config: false }), gh: () => assert.fail("kein gh") });
