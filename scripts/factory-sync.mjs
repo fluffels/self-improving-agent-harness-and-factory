@@ -174,8 +174,24 @@ function parseArgs(argv) {
   return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, fehler: fehler?.text ?? beide };
 }
 
+/** Unter Windows kennt das Dateisystem kein Ausführbit: ein neu geschriebenes Skript (Hooks) landete mit 100644
+ *  im Index des Ziels und liefe nach dem Checkout unter Linux/macOS nicht. Darum den Modus 100755 im Index setzen
+ *  und per `ls-files -s` gegenprüfen. Liefert `null` (ok, oder Ziel ohne Git-Arbeitsbaum: kein Index, nichts zu setzen)
+ *  oder die Fehlermeldung samt Fix-Zeile. `git(args)` ist injizierbar. */
+function setzeAusfuehrbitImIndex(ziel, pfade, git) {
+  if (pfade.length === 0) return null;
+  const imRepo = git(["-C", ziel, "rev-parse", "--is-inside-work-tree"]);
+  if (!imRepo.ok || imRepo.out.toString("utf8").trim() !== "true") return null;
+  git(["-C", ziel, "update-index", "--add", "--chmod=+x", "--", ...pfade]);
+  const stand = git(["-C", ziel, "ls-files", "-s", "--", ...pfade]);
+  const modi = new Map(stand.out.toString("utf8").split("\n").filter((z) => z !== "").map((z) => [z.split("\t")[1], z.split(" ")[0]]));
+  const falsch = pfade.filter((p) => modi.get(p) !== "100755");
+  if (falsch.length === 0) return null;
+  return `Ausführbit im Index von '${ziel}' fehlt (erwartet 100755): ${falsch.join(", ")}\nFix: git -C <ziel> update-index --add --chmod=+x -- ${falsch.join(" ")}`;
+}
+
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
-export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s) } = {}) {
+export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
   const opt = parseArgs(argv);
   const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken]";
   if (opt.fehler !== null) {
@@ -219,13 +235,22 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     err("factory-sync: nichts geschrieben");
     return 1;
   }
+  const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
     out(`${opt.trocken ? "würde " : ""}${d.neu ? "neu" : "geändert"}: ${pfad}`);
     if (opt.trocken) continue;
     const voll = join(ziel, ...pfad.split("/"));
     mkdirSync(dirname(voll), { recursive: true });
     writeFileSync(voll, d.text);
-    if (d.neu && d.ausfuehrbar && process.platform !== "win32") chmodSync(voll, 0o755);
+    if (d.neu && d.ausfuehrbar) {
+      if (plattform !== "win32") chmodSync(voll, 0o755);
+      else ausfuehrbarePfade.push(pfad);
+    }
+  }
+  const indexFehler = setzeAusfuehrbitImIndex(ziel, ausfuehrbarePfade, git);
+  if (indexFehler !== null) {
+    err(`factory-sync: ${indexFehler}`);
+    return 1;
   }
   for (const m of plan.meldungen) out(`Hinweis: ${m}`);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");

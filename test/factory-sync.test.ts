@@ -36,6 +36,8 @@ interface Opt {
   cwd?: string;
   out?: (s: string) => void;
   err?: (s: string) => void;
+  plattform?: string;
+  git?: (args: string[]) => { ok: boolean; out: Buffer };
 }
 interface TagLeser {
   fehler?: string;
@@ -183,10 +185,10 @@ interface Lauf {
   out: string;
   err: string;
 }
-function laufe(argv: string[], cwd?: string): Lauf {
+function laufe(argv: string[], cwd?: string, extra: Partial<Opt> = {}): Lauf {
   const out: string[] = [];
   const err: string[] = [];
-  const code = sync.cli(argv, { cwd, out: (s) => out.push(s), err: (s) => err.push(s) });
+  const code = sync.cli(argv, { cwd, out: (s) => out.push(s), err: (s) => err.push(s), ...extra });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
 const TAG_QUELLE = { commit: "0".repeat(40), tag: "v1", sauber: true };
@@ -383,6 +385,55 @@ describe("factory-sync (Fremdrepo-Fixture)", { timeout: 30_000 }, () => {
       assert.match(laufe([]).err, /--quelle/);
       assert.equal(laufe(["--quelle", baueQuelle(), "--wat"]).code, 2);
       assert.equal(laufe(["--quelle", join(tmp(), "gibt-es-nicht"), "--ziel", baueZiel()]).code, 2);
+    });
+  });
+
+  describe("Ausführbit im Ziel-Index unter Windows (#78 L3b)", () => {
+    const modus = (z: string): string => git(z, ["ls-files", "-s", "--", "scripts/a.mjs"]).split(" ")[0];
+    function zielRepo(): string {
+      const z = baueZiel();
+      git(z, ["init", "-q"]);
+      return z;
+    }
+    test("win32: das Skript landet mit 100755 im Index, auch wenn das Dateisystem kein Ausführbit kennt", () => {
+      const q = baueQuelle();
+      taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+      const z = zielRepo();
+      const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v1"], undefined, { plattform: "win32" });
+      assert.equal(r.code, 0, r.err);
+      assert.equal(modus(z), "100755");
+    });
+    test("win32: bleibt der Index-Modus 100644, endet der Sync mit Exit 1 und einer Fix-Zeile", () => {
+      const q = baueQuelle();
+      taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+      const z = zielRepo();
+      const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v1"], undefined, {
+        plattform: "win32",
+        git: (args: string[]) => ({ ok: true, out: Buffer.from(args.includes("rev-parse") ? "true\n" : args.includes("ls-files") ? "100644 abc 0\tscripts/a.mjs\n" : "") }),
+      });
+      assert.equal(r.code, 1);
+      assert.match(r.err, /100755/);
+      assert.match(r.err, /update-index --add --chmod=\+x/);
+    });
+    test("nicht win32: kein Index-Eingriff (chmod am Dateisystem genügt)", () => {
+      const q = baueQuelle();
+      taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+      const z = zielRepo();
+      const aufrufe: string[][] = [];
+      const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v1"], undefined, {
+        plattform: "linux",
+        git: (args: string[]) => {
+          aufrufe.push(args);
+          return { ok: true, out: Buffer.alloc(0) };
+        },
+      });
+      assert.equal(r.code, 0, r.err);
+      assert.deepEqual(aufrufe, []);
+    });
+    test("win32 in einem Ziel ohne Git-Repo: kein Index, kein Fehler", () => {
+      const q = baueQuelle();
+      taggen(q, "v1", { exec: ["scripts/a.mjs"] });
+      assert.equal(laufe(["--quelle", q, "--ziel", baueZiel(), "--tag", "v1"], undefined, { plattform: "win32" }).code, 0);
     });
   });
 
