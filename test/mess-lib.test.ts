@@ -75,8 +75,8 @@ describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)
     expect(B.bereinige("a   b\n c")).toBe("a b c");
   });
   test("Arbeitsplatz (#87): der Repo-Ordner vor dem Worktree-Namen wird mit verschluckt", () => {
-    expect(B.bereinige(`C:/ap/.claude/worktrees/web/${WT}12/src/a.ts`, { worktree: WT })).toBe("<wt>/src/a.ts");
-    expect(B.bereinige(`C:/ap/.claude/worktrees/${WT}12/src/a.ts`, { worktree: WT })).toBe("<wt>/src/a.ts");
+    expect(B.bereinige(`C:/work/projekt/.claude/worktrees/web/${WT}12/src/a.ts`, { worktree: WT })).toBe("<wt>/src/a.ts");
+    expect(B.bereinige(`C:/work/projekt/.claude/worktrees/${WT}12/src/a.ts`, { worktree: WT })).toBe("<wt>/src/a.ts");
   });
   test("Wurzel in beiden Schreibweisen, mit und ohne Schrägstrich am Ende der Wurzel und im Text", () => {
     for (const wurzel of ["C:/work/projekt", "C:\\work\\projekt\\", "/c/work/projekt", "/c/work/projekt/"]) {
@@ -162,7 +162,7 @@ describe("Ticketnummer und Ticketfilter (#1609)", () => {
 describe("normPfad (#1646: eine Normalisierung für bereinige und Kontext-Treiber)", () => {
   const N = raw as unknown as { normPfad: (p: string, o?: { wurzel?: string | null; worktree?: string | null }) => string };
   test("Arbeitsplatz (#87): der Repo-Ordner vor dem Worktree-Namen entfällt", () => {
-    expect(N.normPfad(`C:/ap/.claude/worktrees/web/${WT}12/src/a.ts`, { worktree: WT })).toBe("src/a.ts");
+    expect(N.normPfad(`C:/work/projekt/.claude/worktrees/web/${WT}12/src/a.ts`, { worktree: WT })).toBe("src/a.ts");
   });
   test("Worktree-Präfix und Wurzel fallen weg, klein, POSIX", () => {
     expect(N.normPfad(`C:\\Dev\\Proj\\.claude\\worktrees\\${WT}5-x\\Scripts\\A.mjs`, { wurzel: "C:/dev/proj", worktree: WT })).toBe("scripts/a.mjs");

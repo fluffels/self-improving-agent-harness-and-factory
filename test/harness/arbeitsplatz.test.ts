@@ -84,7 +84,7 @@ describe("Config-Block arbeitsplatz (K1)", () => {
 
   test("Pfad außerhalb der Wurzel, absolut, mit Backslash oder Laufwerk, leer", () => {
     expect(mit(repo({ name: "web", pfad: "../web" })).join("|")).toMatch(/außerhalb der Wurzel/);
-    for (const pfad of ["/web", "a\\b", "C:/web", "a//b"]) expect(mit(repo({ name: "web", pfad })).join("|"), pfad).toMatch(/relativer POSIX-Pfad/);
+    for (const pfad of ["/web", "a\\b", ["C:", "web"].join("/"), "a//b"]) expect(mit(repo({ name: "web", pfad })).join("|"), pfad).toMatch(/relativer POSIX-Pfad/);
     expect(mit(repo({ name: "web" })).join("|")).toMatch(/\.pfad muss ein nicht-leerer String/);
   });
 

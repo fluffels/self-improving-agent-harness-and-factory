@@ -1,6 +1,8 @@
 {
   "version": 1,
   "eintraege": [
+    {"pfad":"scripts/arbeitsplatz-lib.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
+    {"pfad":"scripts/arbeitsplatz.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
     {"pfad":"scripts/codex-lib.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
     {"pfad":"scripts/codex-rollen.mjs","ring":"kern","quelle":"Codex-Rollenquelle (#79)"},
     {"pfad":"scripts/codex-belege.mjs","ring":"kern","quelle":"Codex-Belegdiagnose (#79)"},
