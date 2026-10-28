@@ -50,6 +50,14 @@ describe("Feldauswahl", () => {
     expect(() => S.befundeAusAlerts("x")).toThrow();
     expect(() => S.befundeAusAlerts([alert({ number: "4" })])).toThrow();
   });
+  test("fehlende Felder: Zeile `?`, leere Zelle `-`, Eintrag null wirft nicht", () => {
+    expect(S.befundeAusGitleaks([{ RuleID: "r" }, null])).toEqual([
+      { quelle: "gitleaks", typ: "r", ort: "-:?", commit: "-", kennung: "-" },
+      { quelle: "gitleaks", typ: "-", ort: "-:?", commit: "-", kennung: "-" },
+    ]);
+    expect(S.befundeAusAlerts([alert()], new Map([[4, { path: "x" }]]))[0].ort).toBe("x:?");
+    expect(S.befundeAusAlerts([null, alert()])).toHaveLength(1);
+  });
   test("Tabellenzellen: Pipes und Umbrüche werden entschärft", () => {
     const [b] = S.befundeAusGitleaks([gl({ File: "a|b\nc`d" })]);
     expect(b.ort).toBe("a b c d:7");
@@ -200,6 +208,19 @@ describe("lauf", () => {
       },
     });
     expect(S.lauf({ io })).toBe(1);
+  });
+  test("Alerts ohne Listenform: Exit 1 (nie still „keine Funde“)", () => {
+    expect(S.lauf({ io: io0({ ladeBericht: bericht([]), ladeAlerts: () => ({}) }) })).toBe(1);
+  });
+  test("offene Tickets nicht lesbar: Exit 1, nichts geändert", () => {
+    const io = io0({
+      ladeBericht: bericht([gl()]),
+      ladeKontext: () => {
+        throw new Error("HTTP 500");
+      },
+    });
+    expect(S.lauf({ io })).toBe(1);
+    expect(io.gesehen).toEqual([]);
   });
   test("ungültiger oder nicht lesbarer Bericht: Exit 1, nichts geändert", () => {
     for (const lade of [() => "{kein json", () => "{}", () => "null", () => {

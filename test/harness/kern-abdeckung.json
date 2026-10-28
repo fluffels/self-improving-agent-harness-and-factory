@@ -54,5 +54,13 @@
   ".github/workflows/audit-einordnung.yml": {
     "art": "modul",
     "grund": "Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"
+  },
+  "scripts/secret-inbox.mjs": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Secret-Inbox), kein Factory-Kern"
+  },
+  ".github/workflows/secret-scan.yml": {
+    "art": "modul",
+    "grund": "Sicherheits-Modul (Secret-Scan), kein Factory-Kern"
   }
 }
