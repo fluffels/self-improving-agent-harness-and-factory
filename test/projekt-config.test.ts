@@ -211,7 +211,12 @@ describe("pruefeProjektConfig", () => {
       (c.boards as Record<string, unknown>[])[1].repo = repo;
       return pc.pruefeProjektConfig(c);
     };
-    assert.deepEqual(mit("acme/anders"), []);
+    // dependabotInbox = harness würde das Inbox-Issue im fremden Repo anlegen (#90 L23): ungleiches Label nötig
+    assert.match(mit("acme/anders").join("\n"), /labels\.dependabotInbox .*acme\/anders/);
+    const bez = gueltig();
+    (bez.boards as Record<string, unknown>[])[1].repo = "acme/anders";
+    (bez.labels as Record<string, string>).dependabotInbox = "area:inbox";
+    assert.deepEqual(pc.pruefeProjektConfig(bez), []);
     assert.deepEqual(mit("acme/demo"), []); // das eigene Repo auf einem eigenen Board ist erlaubt
     assert.match(mit("ohneOwner").join("\n"), /boards\.1\.repo/);
     assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);
