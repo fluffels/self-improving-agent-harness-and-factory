@@ -14,7 +14,9 @@ import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
-import { spracheMaengel } from "./spezifikation-lib.mjs";
+import { REPO_FORM, istRepoForm, spracheMaengel } from "./spezifikation-lib.mjs";
+
+export { istRepoForm };
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -322,11 +324,6 @@ export function gatesAus(config) {
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block gates (nichtInVerify: Liste von { gate, grund }) in ${PROJEKT_CONFIG} korrigieren`);
   return { nichtInVerify: wert.nichtInVerify ?? [] };
 }
-
-const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
-
-/** Pur: hat `repo` genau die Form `owner/name` (dieselbe Prüfung wie `zerlegeRepo`)? Ein Nicht-String nie. */
-export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(repo);
 
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
 export function zerlegeRepo(repo) {

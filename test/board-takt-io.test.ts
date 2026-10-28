@@ -33,7 +33,7 @@ const produkt = L.boardFuerRolle("produkt");
 const factory = L.boardFuerRolle("factory");
 const T = rawTakt as unknown as {
   ECHTE_IO: {
-    itemsUeberIssues: (r: string, n: number[], o: object) => Array<{ id: string } | null>;
+    itemsUeberIssues: (r: string, n: number[], o: { repo?: string }) => Array<{ id: string } | null>;
     addToBoardTodo: (r: string, nodeId: string, o: object) => string;
     loadItems: (r: string, o: object) => unknown[];
   };
@@ -73,15 +73,19 @@ beforeEach(() => {
 
 describe("ECHTE_IO in board-takt löst die Rolle auf das richtige Board auf", () => {
   test("itemsUeberIssues ordnet je Rolle das Item des eigenen Boards zu", () => {
-    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], {})[0]?.id).toBe("ITEM_produkt");
-    expect(T.ECHTE_IO.itemsUeberIssues("factory", [7], {})[0]?.id).toBe("ITEM_fremd");
+    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], { repo: "zz-org/ziel" })[0]?.id).toBe("ITEM_produkt");
+    expect(flach(), "das Ziel-Repo geht als 4. Argument an board-lib (L11 j)").toContain('repository(owner:"zz-org",name:"ziel")');
+    expect(T.ECHTE_IO.itemsUeberIssues("factory", [7], { repo: "zz-org/ziel" })[0]?.id).toBe("ITEM_fremd");
   });
   test("itemsUeberIssues: steht das Issue nur im anderen Board, liefert es null (Negativfall)", () => {
     issueAntwort = { data: { repository: { i0: { ...issueInBeidenBoards.data.repository.i0, projectItems: { nodes: [{ id: "ITEM_fremd", project: { id: factory.projectId } }] } } } } };
-    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], {})).toEqual([null]);
+    expect(T.ECHTE_IO.itemsUeberIssues("produkt", [7], { repo: "zz-org/ziel" })).toEqual([null]);
+  });
+  test("itemsUeberIssues ohne repo wirft mit Fix-Zeile (kein stiller Standard, L11 g)", () => {
+    expect(() => T.ECHTE_IO.itemsUeberIssues("produkt", [7], {})).toThrow(/repo fehlt\nFix:/);
   });
   test("itemsUeberIssues: unbekannte Rolle wirft", () => {
-    expect(() => T.ECHTE_IO.itemsUeberIssues("nirgends", [7], {})).toThrow(/Unbekannte Board-Rolle/);
+    expect(() => T.ECHTE_IO.itemsUeberIssues("nirgends", [7], { repo: "zz-org/ziel" })).toThrow(/Unbekannte Board-Rolle/);
   });
   test.each([
     ["produkt", produkt, factory],

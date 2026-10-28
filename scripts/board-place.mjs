@@ -185,6 +185,23 @@ function reportMissing(repo) {
   }
 }
 
+/**
+ * Die echte I/O von `einsortieren` und `umziehen` (#97): Board-Lesen und -Schreiben, Labels, Pause und Ausgabe. Beide Funktionen nehmen sie als
+ * letzten, optionalen Parameter, damit ihre Verdrahtung (Repo, Reihenfolge, Abbruch) ohne Netz testbar ist.
+ */
+export const ECHTE_PLACE_IO = {
+  loadItems: (board, opts) => loadItems(board, opts),
+  ladeLabels: (nr, repo) => ladeLabels(nr, repo),
+  itemsUeberIssues: (board, nummern, opts, repo) => itemsUeberIssues(board, nummern, opts, repo),
+  addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts),
+  setPosition: (board, id, afterId) => setPosition(board, id, afterId),
+  entferneVomBoard: (board, id) => entferneVomBoard(board, id),
+  positionOderWarnung,
+  schlafe: () => sleep(PAUSE_MS),
+  log: (z) => console.log(z),
+  warn: (z) => console.error(z),
+};
+
 /** Labels eines Issues per REST (für Nummern ohne Board-Item mit Labels); `null` bei einem Ladefehler (dann ist die Rolle nicht bestimmbar). */
 function ladeLabels(nr, repo) {
   try {
@@ -195,11 +212,11 @@ function ladeLabels(nr, repo) {
 }
 
 /** Die Items beider Boards (nur die des Repos) und die Labels der Nummern, deren Item keine Labels trägt (REST). */
-function ladeListenUndLabels(numbers, repo) {
-  const listen = { produkt: loadItems(boardFuerRolle("produkt"), { repo }), factory: loadItems(boardFuerRolle("factory"), { repo }) };
+function ladeListenUndLabels(numbers, repo, io) {
+  const listen = { produkt: io.loadItems(boardFuerRolle("produkt"), { repo }), factory: io.loadItems(boardFuerRolle("factory"), { repo }) };
   const labelsRest = {};
   for (const nr of numbers) {
-    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = ladeLabels(nr, repo);
+    if (![...listen.produkt, ...listen.factory].some((i) => i.number === nr && Array.isArray(i.labels))) labelsRest[nr] = io.ladeLabels(nr, repo);
   }
   return { listen, labelsRest };
 }
@@ -208,43 +225,43 @@ function ladeListenUndLabels(numbers, repo) {
 const abbruch = (message, exitCode = 1) => Object.assign(new Error(message), { exitCode });
 
 /** Ein Durchlauf: laden, aufnehmen, planen, positionieren. Wirft bei jedem Fehler (`exitCode` am Fehler, Standard 1). */
-async function einsortieren(args, config) {
+export async function einsortieren(args, config, io = ECHTE_PLACE_IO) {
   const { repo } = args;
-  const { listen, labelsRest } = ladeListenUndLabels(args.numbers, repo);
+  const { listen, labelsRest } = ladeListenUndLabels(args.numbers, repo, io);
   const ziel = zielRolle({ numbers: args.numbers, anchor: args.anchor ?? null, ...listen, labelsRest, config, repo });
   if (ziel.fehler) throw abbruch(ziel.fehler, 2);
-  for (const nr of ziel.doppelt) console.error(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
+  for (const nr of ziel.doppelt) io.warn(`⚠ #${nr} steht auf beiden Boards; eingeordnet auf dem ${ziel.rolle}-Board (Trennregel).`);
   const board = boardFuerRolle(ziel.rolle);
   let items = listen[ziel.rolle];
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
-  if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(board, fehlend, {}, repo));
-  items = nimmFehlendeAuf(items, args, { config, repo, addToBoardTodo: (nodeId, opts) => addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
+  if (fehlend.length > 0) items = ergaenzeFehlende(items, io.itemsUeberIssues(board, fehlend, {}, repo));
+  items = nimmFehlendeAuf(items, args, { config, repo, addToBoardTodo: (nodeId, opts) => io.addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
   }
-  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : positionOderWarnung());
-  if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
+  const { korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : io.positionOderWarnung());
+  if (plan.klemmung.geklemmt) io.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   const { steps, missing, anchorMissing } = plan;
   if (anchorMissing) throw abbruch(`Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
   if (korrektur) {
-    console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
+    io.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
     if (!args.dry) {
-      setPosition(board, korrektur.id, korrektur.afterId);
-      await sleep(PAUSE_MS);
+      io.setPosition(board, korrektur.id, korrektur.afterId);
+      await io.schlafe();
     }
   }
   for (const [n, { item, afterId }] of steps.entries()) {
-    console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
+    io.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);
     if (args.dry) continue;
     try {
-      setPosition(board, item.id, afterId);
+      io.setPosition(board, item.id, afterId);
     } catch (e) {
       const rest = steps.slice(n).map((x) => `#${x.item.number}`).join(", ");
       throw abbruch(`${abortMessage(e.message)}. Offen bleiben ${rest}`);
     }
-    await sleep(PAUSE_MS);
+    await io.schlafe();
   }
   if (missing.length > 0) throw abbruch(`Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}`);
 }
@@ -286,22 +303,22 @@ export async function fuehreUmzugAus(plan, io) {
   return plan.gemeldet.length;
 }
 
-async function umziehen(args, config) {
+export async function umziehen(args, config, io = ECHTE_PLACE_IO) {
   const { repo } = args;
-  const [produkt, factory] = ["produkt", "factory"].map((r) => loadItems(boardFuerRolle(r), { repo }));
+  const [produkt, factory] = ["produkt", "factory"].map((r) => io.loadItems(boardFuerRolle(r), { repo }));
   const plan = umzugsPlan(produkt, factory, config, repo);
   const u = plan.schritte.filter((s) => s.aktion === "umziehen").length;
-  if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return console.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
+  if (plan.schritte.length === 0 && plan.gemeldet.length === 0) return io.log("Umzug: nichts zu tun (0 Items auf dem falschen Board).");
   const gemeldet = await fuehreUmzugAus(plan, {
     dry: args.dry,
-    aufnehmen: (r, c) => addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS, repo }),
-    positioniere: (r, i, a) => setPosition(boardFuerRolle(r), i, a),
-    entferne: (r, i) => entferneVomBoard(boardFuerRolle(r), i),
-    schlafe: () => sleep(PAUSE_MS),
-    log: console.log,
-    warn: console.error,
+    aufnehmen: (r, c) => io.addToBoardTodo(boardFuerRolle(r), c, { pauseMs: PAUSE_MS, repo }),
+    positioniere: (r, i, a) => io.setPosition(boardFuerRolle(r), i, a),
+    entferne: (r, i) => io.entferneVomBoard(boardFuerRolle(r), i),
+    schlafe: io.schlafe,
+    log: io.log,
+    warn: io.warn,
   });
-  console.log(`Umzug: ${u} umziehen, ${plan.schritte.length - u} entfernen, ${gemeldet} gemeldet${args.dry ? " (Trockenlauf)" : ""}.`);
+  io.log(`Umzug: ${u} umziehen, ${plan.schritte.length - u} entfernen, ${gemeldet} gemeldet${args.dry ? " (Trockenlauf)" : ""}.`);
   if (gemeldet > 0) throw abbruch(`${gemeldet} Item(s) nicht umgezogen (siehe Warnungen).`);
 }
 
