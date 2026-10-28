@@ -7,6 +7,8 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { performance } from "node:perf_hooks";
+import { jobquelle } from "../support/codex-jobquelle";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as raw from "../../scripts/codex-prozess-windows.mjs";
 const w = raw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string };
@@ -16,15 +18,19 @@ let fixture: string, moduleUrl: string, sourceFile: string, artifact: string, ro
 const prepare = "const fs=await import('node:fs');const w=await import(process.argv[1]);console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])))";
 const action = "const fs=await import('node:fs');const w=await import(process.argv[1]);w.windowsCacheProbe(fs.readFileSync(process.argv[2]));const cp=await import('node:child_process');process.exit(cp.spawnSync(process.execPath,['-e',\"require('fs').writeFileSync(process.argv[1],'unerlaubt')\",process.argv[3]]).status)";
 function launch(code: string) { return spawnSync(process.execPath, ["--input-type=module", "-e", code, moduleUrl, sourceFile, marker], { encoding: "utf8" }); }
-function parallelPrepare(lock: string, observed: string) {
+function parallelPrepare(lock: string, observed: string, observe: (data: unknown) => void) {
   let readyResolve!: () => void, readyReject!: (e: unknown) => void;
   const ready = new Promise<void>((resolveReady, rejectReady) => { readyResolve = resolveReady; readyReject = rejectReady; });
   const result = new Promise<string>((resolveResult, reject) => {
-    const waiting = "const fs=await import('node:fs');const w=await import(process.argv[1]);console.log('READY');const end=Date.now()+9000;while(!fs.existsSync(process.argv[4])){if(Date.now()>end)throw Error('Lock nicht sichtbar');await new Promise(r=>setTimeout(r,5))};fs.writeFileSync(process.argv[5],'LOCK_ACK');";
-    const child = spawn(process.execPath, ["--input-type=module", "-e", waiting + "console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])))", moduleUrl, sourceFile, marker, lock, observed], { stdio: ["ignore", "pipe", "pipe"] });
+    const waiting = "const fs=await import('node:fs'),cp=await import('node:child_process'),mod=await import('node:module');const start=performance.now(),trace=[];const mark=phase=>trace.push({phase,atMs:performance.now()-start});const run=cp.default.execFileSync;cp.default.execFileSync=(file,args,opts)=>{const phase=file.endsWith('csc.exe')?'compiler':args[0]==='--pruefe'?'native':'acl',t=performance.now();mark(phase+'-start');try{return run(file,args,opts)}finally{trace.push({phase,ms:performance.now()-t})}};mod.syncBuiltinESMExports();try{const w=await import(process.argv[1]);mark('ready-send');process.stdout.write('READY\\n',()=>mark('ready-callback'));const end=Date.now()+9000;while(!fs.existsSync(process.argv[4])){if(Date.now()>end)throw Error('Lock nicht sichtbar');await new Promise(r=>setTimeout(r,5))};mark('lock-observed');fs.writeFileSync(process.argv[5],'LOCK_ACK');mark('cache-start');console.log(w.windowsCacheProbe(fs.readFileSync(process.argv[2])));mark('cache-end')}finally{console.error('CACHE_CHILD_TRACE:'+JSON.stringify(trace))}";
+    const child = spawn(process.execPath, ["--input-type=module", "-e", waiting, moduleUrl, sourceFile, marker, lock, observed], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = ""; child.stdout.on("data", b => { out += String(b); }); child.stderr.on("data", b => { err += String(b); });
-    child.stdout.on("data", () => { if (out.startsWith("READY\n")) readyResolve(); });
-    child.once("error", reject); child.once("close", code => { if (code === 0) resolveResult(out.replace(/^READY\r?\n/, "").trim()); else reject(Error(err)); });
+    child.stdout.on("data", () => { if (out.startsWith("READY\n")) { observe({ phase: "ready-parent-received" }); readyResolve(); } });
+    child.once("error", reject); child.once("close", code => {
+      const line = err.split(/\r?\n/).find(s => s.startsWith("CACHE_CHILD_TRACE:"));
+      observe({ phase: "peer-close", code, childTrace: line ? JSON.parse(line.slice("CACHE_CHILD_TRACE:".length)) as unknown : null });
+      if (code === 0) resolveResult(out.replace(/^READY\r?\n/, "").trim()); else reject(Error(err));
+    });
   });
   void result.catch(readyReject);
   return { ready, result };
@@ -65,10 +71,20 @@ test("Publisher wartet auf Bereitschaft eines gezielt verzögerten Peers", async
   expect(publish).toHaveBeenCalledTimes(1);
 });
 describe.skipIf(process.platform !== "win32")("nativer Cache", () => {
-beforeAll(async () => {
+let preparation: Promise<void> | undefined;
+beforeAll(() => { preparation = prepareCacheFixture(); return preparation; });
+async function prepareCacheFixture() {
   if (process.platform !== "win32") return;
+  const started = performance.now(), traceDir = mkdtempSync(join(tmpdir(), "codex-cache-trace-")), traceFile = join(traceDir, "stages.json");
   const stages: { phase: string; ms: number }[] = [];
-  const measure = <T>(phase: string, fn: () => T): T => { const start = Date.now(); try { return fn(); } finally { stages.push({ phase, ms: Date.now() - start }); } };
+  const events: unknown[] = [];
+  const mark = (data: unknown) => { events.push({ atMs: performance.now() - started, data }); };
+  const measure = <T>(phase: string, fn: () => T): T => {
+    const start = performance.now(); mark({ phase, event: "start" });
+    try { return fn(); }
+    catch (e) { mark({ phase, event: "error", code: (e as NodeJS.ErrnoException).code, error: (e as Error).message }); throw e; }
+    finally { const ms = performance.now() - start; stages.push({ phase, ms }); mark({ phase, event: "end", ms }); }
+  };
   try {
   fixture = mkdtempSync(join(tmpdir(), "codex-cache-test-")); marker = join(fixture, "zielmarker");
   sourceFile = join(fixture, "source.cs");
@@ -83,6 +99,7 @@ beforeAll(async () => {
   const native = await vi.importActual<typeof import("node:child_process")>("node:child_process");
   let compiles = 0;
   vi.doMock("node:child_process", () => ({ ...native, execFileSync: (file: string, args: string[], options: { timeout: number }) => {
+    mark({ phase: "call-budget", operation: file.endsWith("csc.exe") ? "compiler" : args[0] === "--pruefe" ? "native" : "acl", budgetMs: options.timeout });
     if (!file.endsWith("csc.exe")) return measure(args[0] === "--pruefe" ? "native" : "acl", () => native.execFileSync(file, args, options));
     compiles++; expect(existsSync(lock)).toBe(true);
     return measure("lock-ack-and-compiler", () => nachLockAck(options.timeout, () => existsSync(observed),
@@ -94,14 +111,22 @@ beforeAll(async () => {
   vi.resetModules();
   // @ts-expect-error: Node-Skript ohne Declaration.
   const publisher = await import("../../scripts/codex-prozess-windows.mjs") as typeof w;
-  const peer = parallelPrepare(lock, observed);
-  const result = await parallelPublizieren(() => publisher.windowsCacheProbe(readFileSync(sourceFile)), peer);
+  const peer = measure("peer-spawn", () => parallelPrepare(lock, observed, mark));
+  const result = await parallelPublizieren(() => measure("publish", () => publisher.windowsCacheProbe(readFileSync(sourceFile))), peer);
   artifact = dirname(result);
   expect(compiles).toBe(1); expect(readFileSync(observed, "utf8")).toBe("LOCK_ACK"); expect(existsSync(lock)).toBe(false);
   expect(w.windowsVorbereiten()).toBe(active);
-  } finally { vi.doUnmock("node:child_process"); vi.resetModules(); console.info(JSON.stringify({ cacheFixtureStages: stages })); }
-});
-afterAll(() => {
+  } finally {
+    vi.doUnmock("node:child_process"); vi.resetModules(); mark({ phase: "settled-before-cleanup" });
+    const logStart = performance.now();
+    writeFileSync(traceFile, JSON.stringify({ elapsedMs: performance.now() - started, stages, events }) + "\n");
+    const logWriteMs = performance.now() - logStart;
+    writeFileSync(join(traceDir, "log-io.json"), JSON.stringify({ logWriteMs }) + "\n");
+    console.info(JSON.stringify({ cacheFixtureStages: stages, traceFile, logWriteMs }));
+  }
+}
+afterAll(async () => {
+  await preparation?.catch(() => {});
   if (artifact && existsSync(artifact)) {
     expect(dirname(realpathSync(artifact))).toBe(realpathSync(root));
     rmSync(artifact, { recursive: true });
@@ -278,6 +303,23 @@ describe("OS-Port des Originaladapters", () => {
   test("beschädigtes Manifest wird ohne neue Kompilierung abgewiesen", () => {
     const exe = adapter.windowsVorbereiten(); writeFileSync(join(dirname(exe), "manifest.json"), "{}");
     expect(() => adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toThrow("Manifest"); expect(compilerCalls).toBe(1);
+  });
+  test("stabile Jobfaultquelle aus getrennten Fixturepfaden nutzt validierten Cache ohne Produktmemo zu ersetzen", () => {
+    const original = readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8");
+    expect(() => jobquelle("")).toThrow("Quellanker");
+    expect(() => jobquelle(original + "\npublic class Request")).toThrow("Quellanker");
+    const a = join(sandbox, "first.cs"), b = join(sandbox, "second.cs");
+    writeFileSync(a, jobquelle(original)); writeFileSync(b, jobquelle(original));
+    expect(readFileSync(a)).toEqual(readFileSync(b));
+    const product = adapter.windowsVorbereiten(), before = compilerCalls;
+    const first = adapter.windowsCacheProbe(readFileSync(a));
+    expect(first).not.toBe(product); expect(compilerCalls).toBe(before + 1);
+    expect(adapter.windowsCacheProbe(readFileSync(b))).toBe(first); expect(compilerCalls).toBe(before + 1);
+    const manifest = join(dirname(first), "manifest.json"), valid = readFileSync(manifest);
+    writeFileSync(manifest, "{}"); expect(() => adapter.windowsCacheProbe(readFileSync(b))).toThrow("Manifest"); writeFileSync(manifest, valid);
+    expect(adapter.windowsCacheProbe(Buffer.from(jobquelle(original + "\n// changed production")))).not.toBe(first);
+    expect(adapter.windowsCacheProbe(Buffer.from(readFileSync(a, "utf8").replace('fault != "Joblimit"', 'fault != "ChangedJoblimit"')))).not.toBe(first);
+    expect(compilerCalls).toBe(before + 3); expect(adapter.windowsVorbereiten()).toBe(product);
   });
   test("nur das validierte EXE-Artefakt erhält den Request und dieselbe native Einsatzprobe", async () => {
     const exe = adapter.windowsVorbereiten();

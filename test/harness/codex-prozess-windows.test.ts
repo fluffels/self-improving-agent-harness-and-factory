@@ -1,9 +1,12 @@
 /* @harness-waechter: Windows-Prozesse vor dem ersten Zielbefehl einem Job zuordnen. */
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
-import { spawn, spawnSync, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { spawn, spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync, existsSync, rmSync, mkdtempSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
+import { jobfehler as failures, jobquelle } from "../support/codex-jobquelle";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as winRaw from "../../scripts/codex-prozess-windows.mjs";
 // @ts-expect-error: Node-Skript ohne Declaration.
@@ -21,12 +24,6 @@ function setup(): Options {
   return { cwd, env: profile.env, input: "", timeoutMs: 3000, maxBytes: 8_000_000 };
 }
 const windowsTest = test.skipIf(process.platform !== "win32");
-const failures = [
-  ["Jobanlage", "job = CreateJobObject(IntPtr.Zero, null);", "job = fault == \"Jobanlage\" ? IntPtr.Zero : CreateJobObject(IntPtr.Zero, null);"],
-  ["Joblimit", "Check(SetInformationJobObject(job, 9, ref limits, Marshal.SizeOf(typeof(Limits))),", "Check(fault != \"Joblimit\" && SetInformationJobObject(job, 9, ref limits, Marshal.SizeOf(typeof(Limits))),"],
-  ["Jobzuordnung", "Check(AssignProcessToJobObject(job, p.process),", "Check(fault != \"Jobzuordnung\" && AssignProcessToJobObject(job, p.process),"],
-  ["Zielresume", "Check(ResumeThread(p.thread) != uint.MaxValue,", "Check(fault != \"Zielresume\" && ResumeThread(p.thread) != uint.MaxValue,"],
-];
 let variantsRoot: string, variantExe: string, variantEnv: NodeJS.ProcessEnv;
 test("native Fixture übernimmt die bereinigte Produktionsumgebung", () => {
   const options = setup(), expected = p.umgebung(options.env.HOME!);
@@ -63,22 +60,42 @@ windowsTest.each(["Restbytes", "negative Länge", "übergroße Länge", "abgesch
   expect(result.status).toBe(1); expect(existsSync(marker)).toBe(false);
 });
 describe.skipIf(process.platform !== "win32")("nativer Jobvertrag", () => {
-beforeAll(() => {
+let preparation: Promise<void> | undefined;
+beforeAll(() => { preparation = prepareFaultFixture(); return preparation; });
+async function prepareFaultFixture() {
   if (process.platform !== "win32") return;
+  const start = performance.now(), traceDir = mkdtempSync(join(tmpdir(), "codex-job-trace-")), stages: unknown[] = [];
+  const measure = <T>(phase: string, budgetMs: number | undefined, run: () => T): T => {
+    const atMs = performance.now() - start; stages.push({ phase, event: "start", atMs, budgetMs });
+    try { const result = run(); stages.push({ phase, event: "return", ms: performance.now() - start - atMs }); return result; }
+    catch (e) { stages.push({ phase, event: "error", ms: performance.now() - start - atMs, error: (e as Error).message, code: (e as NodeJS.ErrnoException).code }); throw e; }
+  };
+  try {
   const profile = p.profil(); variantsRoot = profile.root; variantEnv = profile.env;
-  let source = readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8");
-  const classAnchor = "public class Request";
-  expect(source.split(classAnchor)).toHaveLength(2);
-  source = source.replace(classAnchor, 'static string fault = Environment.GetEnvironmentVariable("JOB_FIXTURE");\n  public class Request');
-  for (const [operation, anchor, replacement] of failures) {
-    expect(operation).toBeTruthy(); expect(source.split(anchor)).toHaveLength(2); source = source.replace(anchor, replacement);
-  }
+  const source = jobquelle(readFileSync(resolve("scripts/codex-prozess-windows.cs"), "utf8"));
+  stages.push({ phase: "source", sourceHash: createHash("sha256").update(source).digest("hex") });
   const sourcePath = join(variantsRoot, "fixture.cs");
-  writeFileSync(sourcePath, source + `\n// Fixture ${randomUUID()}\n`);
-  variantExe = w.windowsCacheProbe(readFileSync(sourcePath));
-  execFileSync(variantExe, ["--pruefe"], { env: variantEnv, windowsHide: true, timeout: 10000 });
-});
-afterAll(() => { if (variantsRoot) rmSync(variantsRoot, { recursive: true, force: true }); if (variantExe) rmSync(dirname(variantExe), { recursive: true, force: true }); });
+  writeFileSync(sourcePath, source);
+  const native = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  vi.doMock("node:child_process", () => ({ ...native, execFileSync: (file: string, args: string[], options: { timeout: number }) => {
+    const phase = file.endsWith("csc.exe") ? "compiler" : args[0] === "--pruefe" ? "native" : "acl";
+    const key = args.indexOf("-Key"); if (key !== -1) stages.push({ phase: "key", key: args[key + 1] });
+    return measure(phase, options.timeout, () => native.execFileSync(file, args, options));
+  } }));
+  vi.resetModules();
+  // @ts-expect-error: Node-Skript ohne Declaration.
+  const fixtureAdapter = await import("../../scripts/codex-prozess-windows.mjs") as typeof w;
+  variantExe = measure("cache", 10000, () => fixtureAdapter.windowsCacheProbe(readFileSync(sourcePath)));
+  measure("variant-env-probe", 10000, () => native.execFileSync(variantExe, ["--pruefe"], { env: variantEnv, windowsHide: true, timeout: 10000 }));
+  } finally {
+    vi.doUnmock("node:child_process"); vi.resetModules();
+    const traceFile = join(traceDir, "stages.json"), logStart = performance.now();
+    writeFileSync(traceFile, JSON.stringify({ elapsedMs: performance.now() - start, stages }) + "\n");
+    const logWriteMs = performance.now() - logStart; writeFileSync(join(traceDir, "log-io.json"), JSON.stringify({ logWriteMs }) + "\n");
+    console.info(JSON.stringify({ jobFixtureTrace: traceFile, logWriteMs }));
+  }
+}
+afterAll(async () => { await preparation?.catch(() => {}); if (variantsRoot) rmSync(variantsRoot, { recursive: true, force: true }); });
 
 windowsTest("native Vorbereitung liefert einen ausführbaren Supervisor", () => {
   expect(w.windowsVorbereiten()).toMatch(/\.exe$/);
