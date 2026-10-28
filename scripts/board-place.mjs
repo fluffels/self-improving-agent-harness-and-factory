@@ -305,34 +305,48 @@ async function umziehen(args, config) {
   if (gemeldet > 0) throw abbruch(`${gemeldet} Item(s) nicht umgezogen (siehe Warnungen).`);
 }
 
-async function main(argv = process.argv.slice(2)) {
+/**
+ * Einstieg (#78 L13h). `deps` (Tests): `kontingent`, `ladeConfig`, `einsortieren`, `reportMissing`, `umziehen`, `mitWiederholung`, `beende` (Standard `process.exit`);
+ * die Verdrahtung gibt das Ziel-Repo (`--repo`, Standard das eigene) an jeden Modus weiter.
+ */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const { kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
+    kontingent: mitKontingent,
+    ladeConfig: ladeProjektConfig,
+    einsortieren,
+    reportMissing,
+    umziehen,
+    mitWiederholung,
+    beende: process.exit,
+    ...deps,
+  };
   const geparst = parseArgs(argv);
   const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
   if (!args) {
     console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
-    process.exit(2);
+    return beende(2);
   }
-  mitKontingent("board-place");
-  const config = ladeProjektConfig();
-  if (args.missing) return reportMissing(args.repo);
+  kontingent("board-place");
+  const config = ladeConfig();
+  if (args.missing) return meldeFehlende(args.repo);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
-      return await umziehen(args, config);
+      return await ziehUm(args, config);
     } catch (e) {
       console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-      process.exit(e.exitCode ?? 1);
+      return beende(e.exitCode ?? 1);
     }
   }
   try {
     // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
-    await mitWiederholung(
-      () => einsortieren(args, config),
+    await wiederhole(
+      () => einsortiere(args, config),
       { schlafe: sleep },
     );
   } catch (e) {
     console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-    process.exit(e.exitCode ?? 1);
+    return beende(e.exitCode ?? 1);
   }
 }
 
