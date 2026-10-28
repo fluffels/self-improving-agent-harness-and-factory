@@ -157,16 +157,30 @@ describe("OS-Port des Originaladapters", () => {
   let prepareFault: string, statusText: string, streamFault: string, compilerCalls: number, nativeCalls: number, requestDir: string;
   let closeSupervisor: () => void, kills: number;
   let probes: { file: string; args: string[]; binaryHash: string }[], launches: { file: string; args: string[] }[];
+  let peerSource: string, peerTarget: string;
+  let peerAclDeny: boolean;
   const peBytes = () => { const data = Buffer.alloc(128); data.writeUInt16LE(0x5a4d); data.writeUInt32LE(64, 60); data.writeUInt32LE(0x4550, 64); data.writeUInt16LE(0x8664, 68); data.writeUInt16LE(2, 86); return data; };
   beforeEach(async () => {
     sandbox = mkdtempSync(join(tmpdir(), "codex-cache-port-")); cache = join(sandbox, "cache"); mkdirSync(cache);
     const compiler = join(sandbox, "Microsoft.NET/Framework64/v4.0.30319/csc.exe"); mkdirSync(dirname(compiler), { recursive: true }); writeFileSync(compiler, "fixture compiler");
-    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0; kills = 0; probes = []; launches = [];
+    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0; kills = 0; probes = []; launches = []; peerSource = ""; peerTarget = ""; peerAclDeny = false;
     vi.stubEnv("SystemRoot", sandbox); vi.resetModules();
+    const filesystem = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.doMock("node:fs", () => ({ ...filesystem, mkdirSync: (...args: Parameters<typeof filesystem.mkdirSync>) => {
+      if (String(args[0]).endsWith(".lock")) {
+        if (prepareFault === "lock-denied") throw Object.assign(Error("fixture lock denied"), { code: "EACCES" });
+        if (prepareFault === "peer-publish") filesystem.renameSync(peerSource, peerTarget);
+      }
+      return filesystem.mkdirSync(...args);
+    } }));
     vi.doMock("node:child_process", async () => ({
       ...await vi.importActual<typeof import("node:child_process")>("node:child_process"),
       execFileSync: (file: string, args: string[]) => {
-        if (file.endsWith("powershell.exe") && args.includes("-Key")) return cache;
+        if (file.endsWith("powershell.exe") && args.includes("-Key")) {
+          if (prepareFault === "setup-timeout") vi.setSystemTime(Date.now() + 10001);
+          if (peerAclDeny && existsSync(peerTarget)) throw Error("fixture peer ACL denied");
+          return cache;
+        }
         if (file.endsWith("csc.exe")) {
           compilerCalls++; if (prepareFault === "compiler") throw Error("fixture compiler failed");
           const output = args.find(a => a.startsWith("/out:"))!; const data = peBytes();
@@ -206,7 +220,7 @@ describe("OS-Port des Originaladapters", () => {
     // @ts-expect-error: Node-Skript ohne Declaration.
     adapter = await import("../../scripts/codex-prozess-windows.mjs") as PortableModule;
   });
-  afterEach(() => { vi.useRealTimers(); vi.doUnmock("node:child_process"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
+  afterEach(() => { vi.useRealTimers(); vi.doUnmock("node:child_process"); vi.doUnmock("node:fs"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
 
   test.each(["hang", "error-hang"])("äußerer Watchdog beendet %s und wartet vor Cleanup auf close", async fault => {
     adapter.windowsVorbereiten(); streamFault = fault; vi.useFakeTimers();
@@ -243,8 +257,20 @@ describe("OS-Port des Originaladapters", () => {
     expect(compilerCalls).toBe(1); expect(nativeCalls).toBe(1);
     expect(readdirSync(cache)).toEqual([dirname(exe).slice(cache.length + 1)]);
   });
-  test.each([["compiler", "fixture compiler failed"], ["native", "fixture native failed"], ["short", "Supervisor-PE fehlt"], ["arch", "Supervisor-Architektur"], ["header", "Supervisor-Architektur"], ["dll-flag", "Supervisor-EXE fehlt"], ["exe-flag", "Supervisor-EXE fehlt"]])("Vorbereitungsfehler %s veröffentlicht nichts", (fault, error) => {
+  test.each([["compiler", "fixture compiler failed"], ["native", "fixture native failed"], ["short", "Supervisor-PE fehlt"], ["arch", "Supervisor-Architektur"], ["header", "Supervisor-Architektur"], ["dll-flag", "Supervisor-EXE fehlt"], ["exe-flag", "Supervisor-EXE fehlt"], ["lock-denied", "fixture lock denied"]])("Vorbereitungsfehler %s veröffentlicht nichts", (fault, error) => {
     prepareFault = fault; expect(() => adapter.windowsVorbereiten()).toThrow(error); expect(readdirSync(cache)).toEqual([]);
+  });
+  test("abgelaufenes Setupbudget stoppt nach ACL vor Lock, Compiler und nativer Probe", () => {
+    vi.useFakeTimers(); prepareFault = "setup-timeout";
+    expect(() => adapter.windowsVorbereiten()).toThrow("Supervisor-Einrichtung überschreitet Frist");
+    expect(compilerCalls).toBe(0); expect(nativeCalls).toBe(0); expect(readdirSync(cache)).toEqual([]);
+  });
+  test.each([false, true])("Publikation eines anderen Lockbesitzers wird validiert, sein Lock bleibt erhalten (ACL-Fehler=%s)", deny => {
+    const exe = adapter.windowsVorbereiten(); peerTarget = dirname(exe); peerSource = `${peerTarget}-pending`; renameSync(peerTarget, peerSource);
+    const lock = `${peerTarget}.lock`; mkdirSync(lock); prepareFault = "peer-publish"; peerAclDeny = deny;
+    const result = (() => { try { return adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs"))); } catch (e) { return (e as Error).message; } })();
+    expect(result).toBe(deny ? "fixture peer ACL denied" : exe);
+    expect(existsSync(lock)).toBe(true); expect(compilerCalls).toBe(1); expect(nativeCalls).toBe(1);
   });
   test("vollständiger EXE-Header genau an der Dateigrenze bleibt gültig", () => {
     prepareFault = "header-edge"; expect(adapter.windowsVorbereiten()).toMatch(/supervisor\.exe$/);
