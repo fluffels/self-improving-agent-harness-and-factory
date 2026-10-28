@@ -363,7 +363,7 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/** Pur: prüft `skills` (Name →nicht-leerer String); `abschluss` ist Pflicht (der Skill, den ein Ticketlauf am Ende fährt). */
+/** Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflicht (der Skill, den ein Ticketlauf am Ende fährt). */
 function pruefeSkills(s) {
   if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
   const fehler = [];
