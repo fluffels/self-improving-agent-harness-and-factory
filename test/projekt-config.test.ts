@@ -217,6 +217,12 @@ describe("pruefeProjektConfig", () => {
     (bez.boards as Record<string, unknown>[])[1].repo = "acme/anders";
     (bez.labels as Record<string, string>).dependabotInbox = "area:inbox";
     assert.deepEqual(pc.pruefeProjektConfig(bez), []);
+    // Folgefehler-Guard: ein Board-Fehler (nummer 0) bleibt die einzige Meldung, kein Inbox-Folgefehler darüber
+    const kaputt = gueltig();
+    Object.assign((kaputt.boards as Record<string, unknown>[])[1], { repo: "acme/anders", nummer: 0 });
+    const f = pc.pruefeProjektConfig(kaputt).join("\n");
+    assert.match(f, /boards\.1\.nummer/);
+    assert.doesNotMatch(f, /dependabotInbox/);
     assert.deepEqual(mit("acme/demo"), []); // das eigene Repo auf einem eigenen Board ist erlaubt
     assert.match(mit("ohneOwner").join("\n"), /boards\.1\.repo/);
     assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);

@@ -1,7 +1,7 @@
 /* Factory-Update-Check (#90 L17): neuerer Release-Tag der Factory gegenüber dem Sync-Stand. Pure Funktionen und CLI ohne Netz (gh injiziert). */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -14,10 +14,17 @@ const { vergleicheTags, updateMeldung, fuehreAus } = raw as {
   fuehreAus: (argv: string[], io: { wurzel: string; gh: (args: string[]) => string }) => { out: string; err: string; code: number };
 };
 
-function projekt(opts: { tag?: string; config?: boolean }): string {
+const ordner: string[] = [];
+afterEach(() => {
+  for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+
+function projekt(opts: { tag?: string; config?: boolean; stand?: string }): string {
   const dir = mkdtempSync(join(tmpdir(), "factory-update-"));
+  ordner.push(dir);
   mkdirSync(join(dir, ".factory"));
   if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag } }));
+  if (opts.stand !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), opts.stand);
   if (opts.config !== false) {
     const boards = [{ rolle: "factory", besitzer: "o", besitzerTyp: "user", nummer: 2, repo: "o/factory" }];
     writeFileSync(join(dir, ".factory", "projekt.json"), JSON.stringify({ version: 2, repo: "o/projekt", boards }));
@@ -31,6 +38,10 @@ describe("vergleicheTags", () => {
   test("liefert den höchsten Release-Tag, numerisch statt textlich; Pre-Release und Fremdtags zählen nicht", () => {
     assert.equal(vergleicheTags(["v1.9.0", "v1.10.0", "1.2.3", "v2.0.0-rc1", "latest", "v1.10", "xv3.0.0"]), "v1.10.0");
   });
+  test("Tag ohne v zählt und kann der höchste sein; der Patch entscheidet bei gleichem Major und Minor", () => {
+    assert.equal(vergleicheTags(["1.3.0", "v1.2.0"]), "1.3.0");
+    assert.equal(vergleicheTags(["v1.0.0", "v1.0.1", "v1.0.0"]), "v1.0.1");
+  });
   test("ohne Release-Tag null", () => {
     assert.equal(vergleicheTags(["latest", "v1.0.0-beta"]), null);
   });
@@ -43,6 +54,9 @@ describe("updateMeldung", () => {
     assert.equal(m?.alt, "v1.0.0");
     assert.equal(m?.neu, "v1.1.0");
     assert.match(m?.text ?? "", /factory-sync\.mjs --quelle <pfad> --tag v1\.1\.0/);
+  });
+  test("ein Patch-Release ist ein Update", () => {
+    assert.equal(updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.0.1"] })?.neu, "v1.0.1");
   });
   test("gleicher oder älterer Tag: null", () => {
     assert.equal(updateMeldung({ stand: stand("v1.1.0"), tags: ["v1.0.0", "v1.1.0"] }), null);
@@ -61,6 +75,16 @@ describe("fuehreAus", () => {
     assert.equal(r.code, 0);
     assert.match(r.out, /nichts zu prüfen/);
   });
+  test("upstream mit --json: update null, kein gh-Aufruf", () => {
+    const r = fuehreAus(["--json"], { wurzel: projekt({}), gh: () => assert.fail("gh darf nicht laufen") });
+    assert.equal(r.code, 0);
+    assert.deepEqual(JSON.parse(r.out), { update: null });
+  });
+  test("kaputter Sync-Stand: Exit 2 mit Fix:, nie still grün", () => {
+    const r = fuehreAus([], { wurzel: projekt({ stand: "{kaputt" }), gh: () => assert.fail("kein gh") });
+    assert.equal(r.code, 2);
+    assert.match(r.err, /Fix:/);
+  });
   test("neuerer Tag: Meldung, --json liefert alt und neu; gh fragt das Factory-Repo aus der Config", () => {
     const aufrufe: string[][] = [];
     const gh = (args: string[]) => {
@@ -74,6 +98,11 @@ describe("fuehreAus", () => {
     const json = fuehreAus(["--json"], { wurzel, gh });
     assert.equal((JSON.parse(json.out) as { update: { neu: string } }).update.neu, "v1.2.0");
     assert.ok(aufrufe[0].includes("repos/o/factory/tags"));
+  });
+  test("aktueller Stand im Text: Meldung nennt den Stand", () => {
+    const r = fuehreAus([], { wurzel: projekt({ tag: "v1.2.0" }), gh: () => "v1.2.0\r\nv1.1.0\r\n" });
+    assert.equal(r.code, 0);
+    assert.match(r.out, /Kein neuer Factory-Release \(Stand v1\.2\.0\)/);
   });
   test("aktueller Stand: kein Update, --json update null", () => {
     const wurzel = projekt({ tag: "v1.2.0" });

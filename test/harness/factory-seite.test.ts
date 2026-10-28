@@ -5,9 +5,9 @@
  * Wächter: jeder Aufruf `factorySeiteIn(<x>, "<pfad>", "<anker>")` mit zwei String-Literalen in `scripts/` (alle `.mjs`, rekursiv) muss auf eine
  * lokal vorhandene Datei und auf einen vorhandenen Überschrift-Anker zeigen (`collectHeadingSlugs`). Scan-Umfang (geschlossen): `.mjs` unter
  * `scripts/`, Aufruf in einer Zeile, Literale in doppelten Anführungszeichen. Berechnete Argumente liegen außerhalb. Link-Prüfung: #93. */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,8 +24,13 @@ const { collectHeadingSlugs } = rawMd as { collectHeadingSlugs: (md: string) => 
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
+const ordner: string[] = [];
+afterEach(() => {
+  for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 function projekt(opts: { tag?: string; stand?: string; config?: string }): string {
   const dir = mkdtempSync(join(tmpdir(), "factory-seite-"));
+  ordner.push(dir);
   mkdirSync(join(dir, ".factory"));
   if (opts.stand !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), opts.stand);
   if (opts.tag !== undefined) writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: opts.tag } }));
@@ -58,6 +63,10 @@ describe("factorySeiteIn", () => {
   });
   test("fehlender Tag: lokaler Pfad", () => {
     const d = projekt({ stand: JSON.stringify({ quelle: {} }), config: config(boards) });
+    assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "docs/a.md#x");
+  });
+  test("Tag kein String: lokaler Pfad statt Link auf blob/5", () => {
+    const d = projekt({ stand: JSON.stringify({ quelle: { tag: 5 } }), config: config(boards) });
     assert.equal(factorySeiteIn(d, "docs/a.md", "x"), "docs/a.md#x");
   });
   test("fehlendes Repo (kein Factory-Board, keine Config): lokaler Pfad", () => {

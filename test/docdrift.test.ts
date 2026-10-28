@@ -500,7 +500,10 @@ describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-adrzeiger-"));
     try {
       const dateien: Record<string, string> = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n", "docs/adr/0001-x.md": adrText };
-      if (mitOrdner) dateien["docs/adr/fortschreibungen/0001-5-thema.md"] = kopf;
+      if (mitOrdner) {
+        dateien["docs/adr/fortschreibungen/0001-5-thema.md"] = kopf;
+        dateien["docs/adr/fortschreibungen/README.md"] = "# Fortschreibungen\n"; // Index-Datei ohne <NNNN>-Namen: kein Fund
+      }
       for (const [f, text] of Object.entries(dateien)) {
         mkdirSync(dirname(join(dir, f)), { recursive: true });
         writeFileSync(join(dir, f), text);
