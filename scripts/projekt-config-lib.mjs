@@ -354,6 +354,18 @@ function pruefeLabels(l) {
   return fehler;
 }
 
+/**
+ * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23). Das Inbox-Issue legt der Lauf im Repo an, in dem Dependabot arbeitet;
+ * führt `labels.dependabotInbox` auf ein Board eines fremden Repos, entstünde es dort (ein Bezieher setzt ein anderes Label als `labels.harness`).
+ * Nur bei sonst gültigen Labels und Boards geprüft, damit Folgefehler die Ursache nicht verdecken.
+ */
+function pruefeInboxZiel(wert) {
+  const label = wert.labels?.dependabotInbox;
+  const ziel = zielRepoFuer([label], wert);
+  if (gleichesRepo(ziel, wert.repo)) return [];
+  return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
+}
+
 /** Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflicht (der Skill, den ein Ticketlauf am Ende fährt). */
 function pruefeSkills(s) {
   if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
@@ -479,7 +491,10 @@ export function pruefeProjektConfig(wert) {
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
   if (!istRepoForm(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
-  fehler.push(...pruefePraefixe(wert.praefixe), ...pruefeLabels(wert.labels), ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
+  const boardFehler = fehler.length;
+  const labelFehler = pruefeLabels(wert.labels);
+  fehler.push(...pruefePraefixe(wert.praefixe), ...labelFehler, ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
+  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert));
   if (wert.projektliterale !== undefined) {
     if (!istObjekt(wert.projektliterale)) {
       fehler.push("projektliterale muss ein Objekt (Name → String) sein");

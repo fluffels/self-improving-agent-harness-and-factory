@@ -37,17 +37,31 @@ import { FREMD, projektConfig } from "../support/fremd-config";
 import type { BegriffsConfig } from "./kern-reinheit.test";
 
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
-const { collectMarkdown } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[] };
+const { collectMarkdown, GEN_MARKER } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[]; GEN_MARKER: RegExp };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
 /** Diese Begriffe teilen sich Quell- und Zielprojekt (Owner, Repo, Board, Label, Skill): sie sind kein Zeichen eines Projektbezugs der Seite. */
 const AUSGENOMMEN = new Set(["Owner", "Repo", "Board-ID", "Label", "Skill"]);
 
+/** Zeilen vom GEN-START- bis zum END-Marker (einschließlich) raus; erkannt über `GEN_MARKER` aus `markdown.mjs`, kein eigener Nachbau. */
+function ohneGenBloecke(text: string): string {
+  let offen = false;
+  return text
+    .split("\n")
+    .map((zeile) => {
+      const art = GEN_MARKER.exec(zeile)?.[3];
+      if (art === "START") offen = true;
+      const raus = offen || art !== undefined;
+      if (art === "END") offen = false;
+      return raus ? "" : zeile;
+    })
+    .join("\n");
+}
+
 /** Generierte Abschnitte (`<!-- GEN:x START -->` bis `END`) und Herkunftsbezüge raus: Markdown-Link mit http(s)-Ziel (samt Linktext), nackte URL, Querverweis `owner/repo#nr` bzw. `repo#nr`. Generiertes löst die Config selbst auf (Agentennamen im Diagramm), es ist kein Text der Seite. */
 export function maskiere(text: string): string {
-  return text
-    .replace(/<!-- GEN:[\w-]+ START -->[\s\S]*?<!-- GEN:[\w-]+ END -->/g, " ")
+  return ohneGenBloecke(text)
     .replace(/\[[^\]\n]*\]\(<?https?:\/\/[^)\s>]*>?[^)\n]*\)/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
     .replace(/(?:[\w.-]+\/)?[\w.-]+#\d+/g, " ")

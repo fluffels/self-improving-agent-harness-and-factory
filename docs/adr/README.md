@@ -24,6 +24,7 @@
 | [0027](/docs/adr/0027-regeln-lockern.md) | Regeln, Gates und Lenses evidenzbasiert lockern | akzeptiert | 16.10.2026 |
 | [0028](/docs/adr/0028-ein-ticket-ablauf.md) | Genau ein Ticket-Ablauf, der Workflow-Pfad entfällt | akzeptiert | 16.10.2026 |
 | [0029](/docs/adr/0029-harness-cockpit.md) | Harness-Cockpit als Ring „Oberfläche“ im Factory-Repo, Eigenbau, nur lesend | akzeptiert | 16.10.2026 |
+| [0030](/docs/adr/0030-team-betrieb-pod.md) | Team-Betrieb im Pod, Anforderungen und offene Entscheidungen | vorgeschlagen | 28.10.2026 |
 
 <!-- GEN:adr-liste END -->
 

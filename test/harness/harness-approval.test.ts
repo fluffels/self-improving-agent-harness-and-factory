@@ -598,8 +598,8 @@ describe("Feste Stopps bleiben (#1363)", () => {
 
 /** Skripte, die kein geschützter Eintrag der Quelle abdeckt (Präfix- oder Gleichheits-Vergleich). */
 function ungeschuetzt(skripte: string[], src: ProtectedSource): string[] {
-  const eintraege = [...sourcePaths(src)];
-  return skripte.filter((s) => !eintraege.some((p) => p !== "" && s.startsWith(p)));
+  const muster = Object.values(src).flat();
+  return skripte.filter((s) => !trifftLeitplanke(s, muster));
 }
 
 describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
@@ -608,8 +608,8 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.ok(skripte.includes("scripts/worktree-aufraeumen.mjs"), "der Stop-Hook importiert worktree-aufraeumen.mjs");
     assert.ok(skripte.includes("scripts/umsetzer-abschluss.mjs"), "der Stop-Hook importiert umsetzer-abschluss.mjs");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
-    const owners = codeownersPaths(codeowners);
-    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+    const owners = codeownersMuster(codeowners);
+    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
   });
 
   test("jedes Gate-Skript (scripts/check-*.mjs) und jeder lokale Import davon ist geschützt (E1)", () => {
@@ -621,8 +621,8 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.ok(skripte.includes("scripts/ci-laeufe.mjs"), "check-festgefahren.mjs importiert ci-laeufe.mjs");
     assert.ok(skripte.includes("scripts/docs-gen/markdown.mjs"), "check-docdrift.mjs importiert docs-gen/markdown.mjs (Unterordner)");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
-    const owners = codeownersPaths(codeowners);
-    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+    const owners = codeownersMuster(codeowners);
+    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
   });
 
   test("jedes Skript der harness-Liste und jeder lokale Import davon ist geschützt (E2)", () => {
@@ -631,8 +631,14 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     const skripte = lokaleImporteTransitiv(harnessSkripte, read);
     assert.ok(skripte.includes("scripts/kontingent-lib.mjs"), "board-takt.mjs importiert kontingent-lib.mjs");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
-    const owners = codeownersPaths(codeowners);
-    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+    const owners = codeownersMuster(codeowners);
+    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
+  });
+
+  test("Red-Green: ein Glob-Muster deckt nicht das ganze Verzeichnis (#90 L20)", () => {
+    assert.deepEqual(ungeschuetzt(["scripts/x-lib.mjs"], { harness: ["/scripts/*-mcp.mjs"] }), ["scripts/x-lib.mjs"]);
+    assert.deepEqual(ungeschuetzt(["scripts/a-mcp.mjs"], { harness: ["/scripts/*-mcp.mjs"] }), []);
+    assert.deepEqual(codeownersMuster("# k\n/scripts/*-mcp.mjs @team"), ["/scripts/*-mcp.mjs"]);
   });
 
   test("Red-Green: ein ungeschütztes Modul in der Importkette wird gefunden", () => {
