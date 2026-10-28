@@ -112,6 +112,9 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (b1(c).todoOptionId = 3)), /boards\.1\.todoOptionId/);
     assert.match(mit((c) => (c.projektliterale = [])), /projektliterale/);
     assert.match(mit((c) => (c.projektliterale = { Zelda: "" })), /projektliterale\.Zelda/);
+    assert.match(mit((c) => (c.seitenliterale = [])), /seitenliterale muss ein Objekt/);
+    assert.match(mit((c) => (c.seitenliterale = { Spiel: "" })), /seitenliterale\.Spiel/);
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), seitenliterale: { Spiel: "Spiel" } }), []);
     assert.match(mit((c) => delete c.skills), /skills/);
     assert.match(mit((c) => (c.skills = {})), /skills\.abschluss fehlt/);
     assert.match(mit((c) => (c.skills = { abschluss: "" })), /skills\.abschluss muss/);

@@ -238,6 +238,22 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(r.out.some((z) => z.startsWith("HINWEIS")), false);
   });
 
+  test("eine Wochenlauf-Datei mit anderen Action-Pins (Dependabot) gleicht der Vorlage; ein anderer Schritt oder ein fehlender Pin ist ein HINWEIS", () => {
+    const root = neuerRoot();
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    const sha = /@[0-9a-f]{40} # v[\d.]+/;
+    assert.ok(sha.test(doctor.WOCHENLAUF_WORKFLOW), "die Vorlage trägt Pins: sonst prüft dieser Test nichts");
+    const lauf = (text: string): string[] => {
+      writeFileSync(datei(root), text);
+      return fahre(root, welt(), EINR(root)).out;
+    };
+    const ok = `OK Workflow ${doctor.WOCHENLAUF_PFAD}`;
+    assert.ok(lauf(doctor.WOCHENLAUF_WORKFLOW.replace(new RegExp(sha, "g"), `@${"c".repeat(40)} # v9.9.9`)).includes(ok));
+    assert.ok(!lauf(doctor.WOCHENLAUF_WORKFLOW.replace("setup-node", "cache")).includes(ok), "andere Action");
+    assert.ok(!lauf(doctor.WOCHENLAUF_WORKFLOW.replace("node-version-file", "node-version")).includes(ok), "anderer Schritt");
+    assert.ok(!lauf(doctor.WOCHENLAUF_WORKFLOW.replace(sha, "@v4")).includes(ok), "fehlender Pin");
+  });
+
   test("ein frisches Projekt ohne .github/workflows: die Wochenlauf-Datei wird samt Ordner angelegt", () => {
     const root = neuerRoot();
     rmSync(join(root, ".github"), { recursive: true });

@@ -14,7 +14,7 @@
  * historischer Ordnername). Die Baseline steigt nie: ein Test sperrt jede Anhebung gegen die Diff-Basis (`anhebungen` aus `test/support/baseline-zaehlung.ts`, wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
- * Zusätzlich zur Config zählen die Fachdomänen-Wörter `SEITEN_ZUSATZ` (Spiel, Spielquote): sie sind kein Config-Wert, würden als `projektliterale` aber
+ * Zusätzlich zählen die `seitenliterale` der Config (hier Spiel, Spielquote): als `projektliterale` würden sie
  * jede Kern-Einheit und jeden Kern-Test treffen; die Seiten sprechen von Produkt. Das Ziel eines Links in `adr/` zählt nicht: sein Anker trägt
  * die unveränderliche Überschrift der Historie.
  * Bewusste Grenze: andere Projektwörter außerhalb der Config und `.mmd`-Dateien erkennt der Wächter nicht; eine Herkunftsprosa
@@ -68,12 +68,9 @@ export function maskiere(text: string): string {
     .replace(/\]\((?:\.{1,2}\/)*(?:docs\/)?adr\/[^)\s]*\)/g, "]()");
 }
 
-/** Fachdomänen-Wörter, die jede Seite meidet (kein Config-Wert): Produkt-Begriffe statt Spiel-Begriffen. Gleiche Wortgrenzen wie ein Projektliteral. */
-export const SEITEN_ZUSATZ: Record<string, string> = { Spiel: "Spiel", Spielquote: "Spielquote" };
-
-/** Begriffe der Config ohne die geteilten (Owner, Repo, Board-ID, Label, Skill), dazu `SEITEN_ZUSATZ`. */
+/** Begriffe der Config ohne die geteilten (Owner, Repo, Board-ID, Label, Skill), dazu die `seitenliterale` der Config (Fachdomänen-Wörter, die jede Seite meidet, gleiche Wortgrenzen wie ein Projektliteral). */
 export function seitenBegriffe(config: BegriffsConfig): Record<string, RegExp> {
-  const mitZusatz = { ...config, projektliterale: { ...config.projektliterale, ...SEITEN_ZUSATZ } };
+  const mitZusatz = { ...config, projektliterale: { ...config.projektliterale, ...config.seitenliterale } };
   return Object.fromEntries(Object.entries(begriffeAus(mitZusatz)).filter(([name]) => !AUSGENOMMEN.has(name)));
 }
 
@@ -176,7 +173,7 @@ describe("Factory-Seiten (#77)", () => {
   });
 
   describe("Fixture-Config", () => {
-    const config = { ...FREMD, projektliterale: { Zelda: "zelda" } } as unknown as BegriffsConfig;
+    const config = { ...FREMD, projektliterale: { Zelda: "zelda" }, seitenliterale: { Spiel: "Spiel", Spielquote: "Spielquote" } } as unknown as BegriffsConfig;
     const B = seitenBegriffe(config);
 
     test("die Begriffe kommen aus der Config; Owner, Repo, Board-ID, Label und Skill sind ausgenommen", () => {
@@ -207,8 +204,19 @@ describe("Factory-Seiten (#77)", () => {
       assert.deepEqual(zaehleSeite(t, B), { Zelda: 2 });
     });
 
-    test("Spiel und Spielquote zählen als ganze Wörter in jeder Config, Beispiel und Spielstand nicht", () => {
+    test("die seitenliterale der Config zählen als ganze Wörter, Beispiel und Spielstand nicht", () => {
       assert.deepEqual(zaehleSeite("Das Spiel, die Spielquote, ein Beispiel, der Spielstand.", B), { Spiel: 1, Spielquote: 1 });
+    });
+
+    test("ohne seitenliterale zählt Spiel nicht; ein Fremd-Wort aus den seitenliteralen schon (kein fest eingebautes Wortpaar)", () => {
+      const ohne = seitenBegriffe({ ...FREMD, projektliterale: { Zelda: "zelda" } });
+      assert.deepEqual(zaehleSeite("Das Spiel und die Quest.", ohne), {});
+      const fremd = seitenBegriffe({ ...FREMD, seitenliterale: { Quest: "Quest" } });
+      assert.deepEqual(zaehleSeite("Das Spiel und die Quest.", fremd), { Quest: 1 });
+    });
+
+    test("die echte Config trägt Spiel und Spielquote als seitenliterale", () => {
+      assert.deepEqual(projektConfig().seitenliterale, { Spiel: "Spiel", Spielquote: "Spielquote" });
     });
 
     test("das Ziel eines Links in adr/ zählt nicht (Anker der Historie), ein Ziel außerhalb und der Linktext schon", () => {

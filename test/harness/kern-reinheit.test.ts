@@ -18,7 +18,7 @@ import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } 
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
 import { ladeBesitzManifest } from "../support/besitz-anker";
-import { type Baseline, anhebungen, diffBasisModus, vergleiche, zaehle } from "../support/baseline-zaehlung";
+import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -75,12 +75,28 @@ interface Manifest {
 }
 
 /** Loser Eingabetyp von `begriffeAus`: aus dem gemeinsamen Config-Typ abgeleitet, Teil-Fixtures bleiben gültig. */
-export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektliterale"> & {
+export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektliterale" | "seitenliterale"> & {
   boards: (Pick<ProjektConfig["boards"][number], "besitzer"> & Partial<Pick<ProjektConfig["boards"][number], "statusFeldId">>)[];
   labels: Record<string, string>;
   agenten: Record<string, string>;
   skills?: Record<string, string>;
 };
+
+/** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
+const hinweis = (begriff: string): string => (begriff === "Env" ? " (Kern-Umgebungsvariablen heißen FACTORY_<NAME> und werden über umgebungsWert gelesen)" : "");
+
+/** Meldungen der Kern-Reinheit. */
+const KERN_TEXTE: VergleichsTexte = {
+  neu: (einheit, begriff, n) => `${einheit}: neues Projektliteral '${begriff}' (${n}x), Kern-Einheiten bleiben literalfrei${hinweis(begriff)}`,
+  ueber: (einheit, begriff, n, bn) => `${einheit}: '${begriff}' ${n}x über Baseline ${bn} (neue Prosa und Literale in Kern-Einheiten ohne Projektwort schreiben (Baseline sinkt nur))${hinweis(begriff)}`,
+  unter: (einheit, begriff, n, bn) => (n === 0 ? `${einheit}: '${begriff}' kommt nicht mehr vor, Baseline-Eintrag entfernen` : `${einheit}: '${begriff}' nur noch ${n}x, Baseline auf ${n} senken (steht ${bn})`),
+  verwaist: (einheit) => [`${einheit}: Baseline-Eintrag ohne Literale oder ohne Einheit, Eintrag entfernen`],
+};
+
+/** Meldungen (leer = grün): Ist gegen Baseline, nur sinkend, mit den Texten der Kern-Reinheit. */
+function vergleiche(ist: Baseline, baseline: Baseline): string[] {
+  return vergleicheZaehlung(ist, baseline, KERN_TEXTE);
+}
 
 /** Pfade (#1748): je Pfad und Begriff, der im Pfad vorkommt, eine Meldung. Pur; die Regex der Begriffe sind global, darum `match` statt `test`. */
 export function pfadLiterale(pfade: string[], begriffe: Record<string, RegExp>): string[] {

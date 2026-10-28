@@ -481,6 +481,13 @@ export function ergaenzungAusText(text) {
   return ergaenzungAus(config);
 }
 
+/** Pur: prüft ein optionales Literal-Objekt (`projektliterale`, `seitenliterale`: Name → nicht-leerer String); fehlt es, gibt es keinen Fehler. */
+function pruefeLiterale(wert, schluessel) {
+  if (wert[schluessel] === undefined) return [];
+  if (!istObjekt(wert[schluessel])) return [`${schluessel} muss ein Objekt (Name → String) sein`];
+  return Object.entries(wert[schluessel]).filter(([, lit]) => !istText(lit)).map(([name]) => `${schluessel}.${name} muss ein nicht-leerer String sein`);
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -492,15 +499,7 @@ export function pruefeProjektConfig(wert) {
   const labelFehler = pruefeLabels(wert.labels);
   fehler.push(...pruefePraefixe(wert.praefixe), ...labelFehler, ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
   if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert));
-  if (wert.projektliterale !== undefined) {
-    if (!istObjekt(wert.projektliterale)) {
-      fehler.push("projektliterale muss ein Objekt (Name → String) sein");
-    } else {
-      for (const [name, lit] of Object.entries(wert.projektliterale)) {
-        if (!istText(lit)) fehler.push(`projektliterale.${name} muss ein nicht-leerer String sein`);
-      }
-    }
-  }
+  fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
