@@ -56,6 +56,10 @@ test("Inventar-Startfehler und Fremdtext-CLI-Aufruffehler", async () => {
   const r = spawnSync(process.execPath, ["scripts/codex-fremdtext.mjs"], { encoding: "utf8", input: "fixture" });
   expect(r.status).toBe(1); expect(r.stderr).toContain("Aufruf:");
 });
+test("RPC-Fehler bewahrt strukturierten Code ohne Rohtext in der Fehlermeldung", async () => {
+  const p = temp();
+  await expect(fakeInventar("rpc")("fixture", p, () => Promise.resolve())).rejects.toMatchObject({ message: "Inventar-RPC fehlgeschlagen", rpcCode: -32603, rpcMessage: "fixture" });
+});
 test("Signalende während Pending-RPC schließt Cleanup ohne zweites close-Warten ab", async () => {
   const p = temp(), state: { child?: ChildProcess } = {}, weiter = vi.fn(() => Promise.resolve("unerlaubt")); let timer: ReturnType<typeof setTimeout> | undefined;
   try {

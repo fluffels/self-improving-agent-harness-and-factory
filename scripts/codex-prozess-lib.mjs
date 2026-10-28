@@ -58,7 +58,7 @@ export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 500
       bytes += Buffer.byteLength(line);
       if (bytes > 1_000_000) throw new Error("Inventar zu groß");
       const m = JSON.parse(line), waiter = pending.get(m.id);
-      if (waiter) { pending.delete(m.id); if (m.error) waiter.reject(new Error("Inventar-RPC fehlgeschlagen")); else waiter.resolve(m.result); }
+      if (waiter) { pending.delete(m.id); if (m.error) waiter.reject(Object.assign(new Error("Inventar-RPC fehlgeschlagen"), { rpcCode: m.error.code, rpcMessage: m.error.message })); else waiter.resolve(m.result); }
     } catch (e) { stop(e); }
   });
   const rpc = (method, params) => new Promise((resolve, reject) => {

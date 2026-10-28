@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { normalisiere } from "./codex-hook-lib.mjs";
 import { profil, prozess, mitInventar, umgebung } from "./codex-prozess-lib.mjs";
+import { sandboxAktion } from "./codex-sandbox.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const HOOK = fileURLToPath(new URL("codex-hook.mjs", import.meta.url));
@@ -47,13 +48,7 @@ async function frist(fn, ms) {
 async function guardProzess(a) {
   return prozess(process.execPath, [HOOK, "--host"], { cwd: ROOT, env: umgebung(ROOT), input: JSON.stringify(a), timeoutMs: 3000 });
 }
-async function ausfuehren(a) {
-  const shells = { bash: ["bash", ["--noprofile", "--norc", "-c"]], powershell: ["powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]] };
-  const [file, args] = shells[a.tool_input.shell];
-  // Hier läuft exakt der vorab geprüfte Befehl; keine stdin-Sitzung und kein späterer write_stdin.
-  return prozess(file, [...args, a.tool_input.cmd], { cwd: a.cwd, env: process.env, timeoutMs: 30000 });
-}
-export async function geschuetzteAktion(aktion, { inventar = nativesInventar, guard = guardProzess, executor = ausfuehren, timeoutMs = 5000 } = {}) {
+export async function geschuetzteAktion(aktion, { inventar = nativesInventar, guard = guardProzess, executor = sandboxAktion, timeoutMs = 5000 } = {}) {
   const serialisiert = JSON.stringify(normalisiere(aktion));
   // Andere fachlich abgebildete Routen besitzen noch keinen kontrollierten Executor.
   if (aktion.tool_name !== "exec_command") throw new Error("Abhängiger Ablauf gestoppt: Executor für diesen Werkzeugpfad fehlt");

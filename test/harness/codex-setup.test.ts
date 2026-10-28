@@ -32,6 +32,7 @@ test("Auth ist externer vollständiger Authorization-Header; keine Berechtigungs
   expect(files[".codex/hooks.json"]).toContain("PreToolUse");
   expect(files[".codex/hooks.json"]).toContain("codex-hook.mjs");
   expect(files[".codex/geschlossen.config.toml"]).toContain("shell_tool=false");
+  expect(files[".codex/geschlossen.config.toml"]).toContain('[windows]\nsandbox="unelevated"');
   expect(files[".codex/config.toml"]).toContain('env_http_headers = { Authorization = "LANGFUSE_MCP_AUTHORIZATION" }');
   expect(files[".codex/config.toml"]).not.toMatch(/bearer_token_env_var|permissions|secret|Basic /);
   expect(files[".codex/config.toml"]).toContain('command = "npx"');

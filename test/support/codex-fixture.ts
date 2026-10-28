@@ -16,7 +16,7 @@ export function fakeInventar(mode: string, antworten: Record<string, unknown> = 
       if(mode==='hang'||mode==='signal')return;
       if(mode==='json'){console.log('{');return;}
       if(mode==='size'){console.log('x'.repeat(1000001));return;}
-      if(mode==='rpc'||(mode==='trust'&&m.method==='config/value/write')){console.log(JSON.stringify({id:m.id,error:{message:'fixture'}}));return;}
+      if(mode==='rpc'||(mode==='trust'&&m.method==='config/value/write')){console.log(JSON.stringify({id:m.id,error:{code:-32603,message:'fixture'}}));return;}
       console.log(JSON.stringify({id:999,result:{ignored:true}}));
       const r=antworten[m.method];console.log(JSON.stringify({id:m.id,result:m.method==='initialize'?{userAgent:mode==='version'?'fixture/0.165.0 (fixture)':'fixture/0.164.0 (fixture)'}:Array.isArray(r)?r.shift():r}));
       if(mode==='pipe'){process.stdin.destroy();setTimeout(()=>process.exit(),20);}

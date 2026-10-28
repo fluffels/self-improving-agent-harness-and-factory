@@ -82,7 +82,7 @@ Das Setup erzeugt `.codex/hooks.json` und ein geschlossenes Referenzprofil `.cod
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
 | `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
-| `exec_command`: Worktree und Stdin | gemeinsamer Bash-/PowerShell-Worktree-Guard und Stdin-Guard im separaten Hostprozess; explizites absolutes Repo-cwd, `cmd` und bekannte Shell erforderlich; unbekannte Parameter verweigert |
+| `exec_command`: Worktree und Stdin | gemeinsame Guards vor nativem `command/exec`; kanonisches cwd innerhalb der festen Host-Worktreewurzel, starre `workspaceWrite`-Policy, Temp-Ausnahmen ausgeschlossen; unbekannte Parameter verweigert |
 | GitHub | gemeinsamer API-Guard vorhanden; zusätzliche Claude-Settings sind nicht portiert, deshalb gesamter erkennbarer `gh`-CLI-Pfad im Host geschlossen |
 | `write_stdin` | kein neues PreToolUse; vollständig entzogen, Host bietet weder Session-ID noch Stdin-Fortsetzung |
 | `spawn_agent`, `send_message`, `followup_task` | gemeinsame Lens-Auftrags- und Holdout-Guards fachlich abgebildet; Nachricht bleibt Nachricht, Empfängerrolle wird nicht aus Payload erraten; ohne kontrollierten Executor stoppt der Host jeden dieser Abläufe |
@@ -92,7 +92,11 @@ Das Setup erzeugt `.codex/hooks.json` und ein geschlossenes Referenzprofil `.cod
 | Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
 | Fremdtext | `fremdtext.mjs` bleibt Autorengate; bereits beschaffte Daten verarbeitet eine getrennte toolarme Elterninstanz ohne MCPs und geerbte Authvariablen; keine Websuche und keine zusätzliche Quellenbeschaffung |
 
-Im Host führen Guard-Wurf, Timeout, ungültiges JSON, unbekannte Entscheidung und jeder Exit ungleich 0 zu **null Executor-Aufrufen**. Nur vollständiges `allow` mit Exit 0 führt exakt eine Kopie der geprüften Aktion aus. Die gemeinsamen Shellparser behalten ihre dokumentierten Grenzen (etwa Programmcode in aufgerufenen Skripten); der Host ist keine Betriebssystem-Sandbox gegen beliebige Shellprogramme. Er schützt seinen eigenen Einstieg, weder beliebige Clients noch globale Konfigurationen.
+Im Host führen Guard-Wurf, Timeout, ungültiges JSON, unbekannte Entscheidung und jeder Exit ungleich 0 zu **null Executor-Aufrufen**. Nur vollständiges `allow` mit Exit 0 erreicht den nativen Sandbox-Executor. Der frühere direkte Shellstart wurde durch `command/exec` ersetzt; `process/spawn` und ein ungeschützter Fallback sind keine Route. Der Executor übernimmt weder eine Policy noch Schreibwurzeln vom Aufrufer. Er prüft vor jeder Aktion eine gesunde Ausgabekontrolle und einen externen Schreibmarker mit identischer Policy. Eine nicht wirksame Sandbox, Versionsabweichung, fehlerhafte Kontrolle oder ein generischer RPC-Fehler stoppt vor der Nutzeraktion.
+
+Für CLI 0.164.0 unter Windows setzt ausschließlich das temporäre Profil `[windows] sandbox="unelevated"`. Ohne diesen Modus ließ selbst eine explizite `workspaceWrite`-Policy den externen Fixture-Schreibzugriff zu. Die belegte Kombination erlaubt den Innenwrite und verweigert externes `Set-Content`; `excludeSlashTmp=true`, `excludeTmpdirEnvVar=true` und `networkAccess=false` bleiben bei Kontrolle und Aktion gesetzt. Der separate Canary liegt außerhalb von Worktree **und** Serverprofil, da der eigene temporäre Server-cwd ebenfalls als Betriebsverzeichnis beschreibbar sein kann. Es erfolgen keine globale Sandbox-Einrichtung oder OS-Kontenänderungen. Ein fehlendes Backend stoppt; andere Plattformen erhalten keine ungeprüfte Freigabe aus einer Konfigurationsdatei.
+
+Die Schreibgrenze ist keine vollständige Secret-/Leseisolation: 0.164.0 bietet hier kein `readOnlyAccess`/`readableRoots`, und ein externer harmloser Lesemarker war lesbar. Der Host ist deshalb kein Fremdtext-Eingang; dessen separate toolarme Elterninstanz bleibt unverändert. Gemeinsame Git-Metadaten außerhalb des Worktrees erhalten keine Zusatzfreigabe; abhängige Git-Schreibbefehle können deshalb verweigert werden. Der native Windows-Denial kann als spezifischer RPC-Sandboxfehler statt als Exitcode eintreffen. Ein beliebiger RPC-Fehler zählt nicht als bestandene Negativkontrolle. `outputBytesCap` wird wegen der belegten Windows-Inkompatibilität nicht übergeben; der administrative Client behält sein begrenztes Antwortvolumen und seine Prozessfrist. `command/exec` ist ein eigener Erfassungspfad für die Tracing-Abnahme, kein behaupteter nativer Hook-/Modellspan.
 
 Auch Agentenregistries sind kein erlaubter Werkzeugpfad: `collaboration.list_agents` kann ungefragt Final-Payloads anderer Phasen ausgeben und damit Holdout-Inhalte an einen Umsetzer liefern. Im geschlossenen Profil fehlen solche Agentenwerkzeuge; der Host verweigert den unbekannten Namen. Eine konventionelle explizit beauftragte Umsetzung in einer freien Frontend-Sitzung belegt deshalb keine technische Holdout-Isolation.
 
@@ -102,7 +106,7 @@ Eine Aktion geht als JSON über stdin an `node scripts/codex-geschuetzt.mjs`:
 {"tool_name":"exec_command","cwd":"<absoluter eigener Checkout>","tool_input":{"cmd":"Write-Output HOST_OK","shell":"powershell"}}
 ```
 
-Nur `bash` und `powershell` sind unterstützte Shellwerte. Der Host liest keine Authdateien; die autorisierte Shellaktion selbst läuft mit der Umgebung des aufrufenden Hosts. Sie ist ausdrücklich kein Fremdtext-Eingang.
+Nur `bash` und `powershell` sind unterstützte Shellwerte. Der Host liest keine Authdateien; Server und Shell erhalten die bestehende Umgebungs-Allowlist mit frischen Home-/AppData-Verzeichnissen. Geerbte Auth-, Proxy- und private Konfigurationsvariablen werden nicht übernommen. Die weiterhin mögliche Dateilektüre wird dadurch nicht als Secret-Isolation ausgegeben.
 
 Die GitHub-Sperre ist konservativ: Auch `gh` beziehungsweise `gh.exe` als Wort in einem Daten- oder Suchbefehl führt zum Stopp. Dieser kleine unterstützte Befehlssprachumfang ersetzt keine allgemeine Shell-Freigabe.
 
@@ -112,7 +116,7 @@ Die echte Engine-Probe erzwingt Aufrufe über einen harmlosen SSE-Responses-Prov
 
 ```powershell
 $env:CODEX_SCHUTZ_PROBE = (Get-Command codex).Source
-npx vitest run test/harness/codex-fremdtext.test.ts
+npx vitest run test/harness/codex-fremdtext.test.ts test/harness/codex-geschuetzt.test.ts test/harness/codex-sandbox.test.ts
 Remove-Item Env:CODEX_SCHUTZ_PROBE
 ```
 

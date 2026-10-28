@@ -5,6 +5,7 @@
     {"pfad":"scripts/codex-hook.mjs","ring":"kern","quelle":"Codex-Schutzadapter (#84)"},
     {"pfad":"scripts/codex-geschuetzt.mjs","ring":"kern","quelle":"Codex-Einzelaktionshost (#84)"},
     {"pfad":"scripts/codex-prozess-lib.mjs","ring":"kern","quelle":"Codex-Prozessgrenzen (#84)"},
+    {"pfad":"scripts/codex-sandbox.mjs","ring":"kern","quelle":"Codex-Sandbox-Executor (#84)"},
     {"pfad":"scripts/codex-fremdtext.mjs","ring":"kern","quelle":"Codex-Fremdtext-Elternrunner (#84)"},
     {"pfad":"scripts/codex-lib.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
     {"pfad":"scripts/codex-rollen.mjs","ring":"kern","quelle":"Codex-Rollenquelle (#79)"},

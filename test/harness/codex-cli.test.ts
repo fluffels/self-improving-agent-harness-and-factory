@@ -15,7 +15,7 @@ vi.mock("node:fs", async importOriginal => {
 
 const vorher = { argv: process.argv, exitCode: process.exitCode };
 beforeEach(() => { vi.resetModules(); io.entry = ""; io.input = ""; io.lesefehler = false; });
-afterEach(() => { process.argv = vorher.argv; process.exitCode = vorher.exitCode; io.entry = ""; vi.restoreAllMocks(); });
+afterEach(() => { process.argv = vorher.argv; process.exitCode = vorher.exitCode; io.entry = ""; vi.doUnmock("../../scripts/codex-sandbox.mjs"); vi.restoreAllMocks(); });
 
 async function cli(entry: string, args: string[], input: string) {
   io.entry = entry; io.input = input;
@@ -59,7 +59,9 @@ test.each(["{", JSON.stringify({ tool_name: "functions.exec", cwd: process.cwd()
   const r = await cli("codex-geschuetzt.mjs", [], input);
   expect(r.code).toBe(1); expect(r.out).toBe(""); expect(r.err).toContain("Codex-Aktion gestoppt:");
 });
-test("echter Default-Guard und Shell-Executor ohne installierte Codex-CLI", async () => {
+test("echter Default-Guard vor Sandbox-Executor ohne installierte Codex-CLI", async () => {
+  const executor = vi.fn(() => Promise.resolve({ code: 0, stdout: "PORTABLE_HOST_OK", stderr: "" }));
+  vi.doMock("../../scripts/codex-sandbox.mjs", () => ({ sandboxAktion: executor }));
   // @ts-expect-error: Node-Skript ohne Declaration.
   const raw: unknown = await import("../../scripts/codex-geschuetzt.mjs");
   const c = raw as { geschuetzteAktion: (a: unknown, o: { inventar: () => Promise<unknown> }) => Promise<{ code: number; stdout: string }> };
@@ -68,5 +70,7 @@ test("echter Default-Guard und Shell-Executor ohne installierte Codex-CLI", asyn
   const a = { tool_name: "exec_command", cwd: process.cwd(), tool_input };
   const r = await c.geschuetzteAktion(a, { inventar });
   expect(r.code).toBe(0); expect(r.stdout.trim()).toBe("PORTABLE_HOST_OK");
+  expect(executor).toHaveBeenCalledExactlyOnceWith(a);
   await expect(c.geschuetzteAktion({ ...a, tool_input: { ...tool_input, cmd: "echo GH.EXE" } }, { inventar })).rejects.toThrow("Guard-Prozess nicht erfolgreich");
+  expect(executor).toHaveBeenCalledOnce();
 });

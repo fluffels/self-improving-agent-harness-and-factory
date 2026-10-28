@@ -1,6 +1,8 @@
 /* @harness-waechter: kein Seiteneffekt vor vollständiger Freigabe (#84). */
 import { expect, test, vi } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fakeInventar, type Inventar } from "../support/codex-fixture";
 // @ts-expect-error: Node-Skripte ohne Declaration.
@@ -93,4 +95,16 @@ test.skipIf(!process.env.CODEX_SCHUTZ_PROBE)("öffentliche Host-CLI mit echtem I
   const r = spawnSync(process.execPath, ["scripts/codex-geschuetzt.mjs"], { encoding: "utf8", input: JSON.stringify({ ...aktion, tool_input }) });
   const ergebnis = JSON.parse(r.stdout) as { code: number; stdout: string };
   expect(r.status).toBe(0); expect(ergebnis.code).toBe(0); expect(ergebnis.stdout).toContain("HOST_CLI_OK");
+});
+test.skipIf(!process.env.CODEX_SCHUTZ_PROBE)("öffentliche Host-CLI verweigert normalen externen Fixture-Schreibzugriff", () => {
+  const dir = mkdtempSync(join(tmpdir(), "codex-externe-fixture-")), marker = join(dir, "geschuetzt.txt");
+  try {
+    writeFileSync(marker, "unveraendert");
+    const tool_input = process.platform === "win32"
+      ? { shell: "powershell", cmd: `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value UEBERNOMMEN` }
+      : { shell: "bash", cmd: `printf UEBERNOMMEN > ${JSON.stringify(marker)}` };
+    const r = spawnSync(process.execPath, ["scripts/codex-geschuetzt.mjs"], { encoding: "utf8", input: JSON.stringify({ ...aktion, tool_input }) });
+    expect(readFileSync(marker, "utf8")).toBe("unveraendert");
+    expect(r.status === 0 ? (JSON.parse(r.stdout) as { code: number }).code : r.status).not.toBe(0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
