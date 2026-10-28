@@ -1,5 +1,5 @@
 /**
- * Gemeinsame Bausteine der Inbox-Skripte (`audit-einordnung.mjs`, `codescanning-inbox.mjs`, `wiedervorlage.mjs`): Ticket ganz oben im Board
+ * Gemeinsame Bausteine der Inbox-Skripte (`audit-einordnung.mjs`, `codescanning-inbox.mjs`, `secret-inbox.mjs`, `wiedervorlage.mjs`): Ticket ganz oben im Board
  * einsortieren, das Sammelticket für Befundzeilen wählen, Zeilen dort posten und Titel offener Tickets nur vertrauter Autoren lesen.
  * `vertrauteIssues`/`offeneTitel` sind pur und getestet (test/inbox-lib.test.ts); der Rest ruft `gh` bzw. `board-place.mjs`.
  */

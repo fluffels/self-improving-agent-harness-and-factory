@@ -236,7 +236,10 @@ function pruefeRuleset(gh, repo, repoInfo, spiegel) {
   const noetig = spiegel?.requiredChecks ?? [];
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = fehlen(noetig, kontexte).map((c) => luecke(`Required-Check ${c}`, `Required-Check "${c}" fehlt auf ${branch}`, `"${c}" in ${rs} unter Required status checks ergänzen`, LINK.ruleset));
-  return fehlend.length ? fehlend : [gut("Ruleset")];
+  const werkzeuge = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => (r.parameters?.code_scanning_tools ?? []).map((w) => w.tool));
+  const csFehlend = fehlen((spiegel?.codeScanning ?? []).map((e) => e.tool), werkzeuge).map((w) => luecke(`Code-Scanning ${w}`, `Code-Scanning "${w}" fehlt auf ${branch}`, `Regel in ${rs} ergänzen (Pre-Flight)`, LINK.ruleset));
+  const alle = [...fehlend, ...csFehlend];
+  return alle.length ? alle : [gut("Ruleset")];
 }
 
 /**

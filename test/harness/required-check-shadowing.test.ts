@@ -221,6 +221,17 @@ describe("Ruleset-Spiegel – Form (Z1)", () => {
     assert.throws(() => leseKontexte('{"name":"n","requiredChecks":["a"]}'), /bypassActors muss eine Liste sein/);
     assert.throws(() => leseKontexte('{"name":"n","requiredChecks":["a"],"bypassActors":{}}'), /bypassActors muss eine Liste sein/);
   });
+  test("codeScanning: optional (fehlt → leer), kaputt wirft (#92 L2)", () => {
+    const mit = (cs: string) => `{"name":"n","requiredChecks":["a"],"bypassActors":[],"codeScanning":${cs}}`;
+    const lies = (j: string) => (pruefeRulesetSpiegel(JSON.parse(j), "Spiegel") as unknown as { codeScanning: unknown[] }).codeScanning;
+    assert.deepEqual(lies('{"name":"n","requiredChecks":["a"],"bypassActors":[]}'), []);
+    assert.equal(lies(mit('[{"tool":"CodeQL","sicherheitsSchwelle":"high_or_higher","alertSchwelle":"errors"}]')).length, 1);
+    assert.throws(() => leseKontexte(mit('"x"')), /codeScanning muss eine Liste sein/);
+    assert.throws(() => leseKontexte(mit("[null]")), /codeScanning\[0\]/);
+    assert.throws(() => leseKontexte(mit('[{"tool":"","sicherheitsSchwelle":"a","alertSchwelle":"b"}]')), /codeScanning\[0\]/);
+    assert.throws(() => leseKontexte(mit('[{"tool":"CodeQL","sicherheitsSchwelle":" ","alertSchwelle":"b"}]')), /codeScanning\[0\]/);
+    assert.throws(() => leseKontexte(mit('[{"tool":"CodeQL","sicherheitsSchwelle":"a"}]')), /codeScanning\[0\]/);
+  });
   test("der echte Spiegel nennt den Ruleset-Namen und hat die Bypass-Liste", () => {
     const r = JSON.parse(readFileSync(RULESET_SPIEGEL, "utf8")) as { name?: unknown; bypassActors?: unknown };
     assert.equal(r.name, "main-schutz");
