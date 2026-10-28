@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../../scripts/arbeitsplatz-lib.mjs";
@@ -109,10 +109,11 @@ describe("Config-Block arbeitsplatz (K1)", () => {
 
 describe("Resolver arbeitsplatzAus (K2)", () => {
   test("ohne Block: eingebettet, Repo = Basis, Worktree-Ordner <repo>/.claude/worktrees, Name aus config.repo", () => {
-    const a = L.arbeitsplatzAus(FREMD, "C:\\x\\proj");
+    const basis = resolve("x", "proj").split("\\").join("/");
+    const a = L.arbeitsplatzAus(FREMD, basis);
     expect(a.betriebsart).toBe("eingebettet");
-    expect(a.wurzel).toBe("C:/x/proj");
-    expect(a.repos).toEqual([{ name: FREMD.repo.split("/")[1], pfad: "C:/x/proj", worktreeOrdner: "C:/x/proj/.claude/worktrees" }]);
+    expect(a.wurzel).toBe(basis);
+    expect(a.repos).toEqual([{ name: FREMD.repo.split("/")[1], pfad: basis, worktreeOrdner: `${basis}/.claude/worktrees` }]);
     expect(L.arbeitsplatzAus({}, "/a/b").repos[0].name).toBe("b");
   });
 
