@@ -46,7 +46,6 @@ import {
   addToBoardTodo,
   boardFuerRolle,
   boardRolleFuer,
-  aufnahmePlan,
   entferneVomBoard,
   ergaenzeFehlende,
   fehlendeNummern,
@@ -64,8 +63,9 @@ import {
   umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
+import { aufnahmePlan, brauchtRepo } from "./board-plan-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { fremdesBoardText, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fremdesBoardText, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
 
@@ -106,7 +106,7 @@ export function parseArgs(argv) {
 const zusatzOptionen = (repo, notfall) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}) });
 
 /** `--repo` fehlt oder hat die Form `owner/name`. */
-const repoFormOk = (repo) => repo === undefined || /^[^/\s]+\/[^/\s]+$/.test(repo);
+const repoFormOk = (repo) => repo === undefined || istRepoForm(repo);
 
 function parseModus(modus, positionale, dry) {
   if (modus === "umzug") return positionale.length === 0 ? { umzug: true, dry } : null;
@@ -154,6 +154,7 @@ export function nimmFehlendeAuf(items, args, io = {}) {
  * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
  */
 export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config, repo }) {
+  brauchtRepo(repo, "zielRolle");
   const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
   const rollen = new Map();
   for (const nr of numbers) {
@@ -164,7 +165,7 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
   const rolle = [...verschieden][0];
-  const fremd = repo === undefined ? null : fremdesBoardText(rolle, repo, config);
+  const fremd = fremdesBoardText(rolle, repo, config);
   if (fremd) return { fehler: fremd };
   const fehler = anchor === null ? null : ankerFehler({ anchor, rolle, produkt, factory });
   if (fehler) return { fehler };

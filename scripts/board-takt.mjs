@@ -29,7 +29,6 @@ import {
   boardFuerRolle,
   boardRolleFuer,
   alsDatum,
-  aufnahmePlan,
   frischeOffeneIssues,
   ghJson,
   itemsUeberIssues,
@@ -50,6 +49,7 @@ import {
   wirklichFehlend,
 } from "./board-lib.mjs";
 
+import { aufnahmePlan } from "./board-plan-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, istHarnessCommit, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";

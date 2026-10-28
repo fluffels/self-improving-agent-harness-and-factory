@@ -18,6 +18,8 @@ import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as boardRaw from "../../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as planRaw from "../../scripts/board-plan-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as fremdRaw from "../../scripts/fremdtext-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as festRaw from "../../scripts/check-festgefahren.mjs";
@@ -37,9 +39,9 @@ type It = { number: number; labels: string[]; id?: string; state?: string; statu
 const B = boardRaw as unknown as {
   boardRolleFuer: (l: unknown, c?: unknown) => string;
   seitenListen: (p: It[], f: It[], c?: unknown) => { produkt: It[]; factory: It[]; doppelt: number[]; falsch: number[] };
-  umzugsPlan: (p: It[], f: It[], c?: unknown) => { schritte: { number: number; nach: string }[] };
-  aufnahmePlan: (n: number[], i: Record<number, unknown>, o?: { config?: unknown }) => { aufnehmen: { rolle: string }[] };
+  umzugsPlan: (p: It[], f: It[], c?: unknown, repo?: string) => { schritte: { number: number; nach: string }[] };
 };
+const PL = planRaw as unknown as { aufnahmePlan: (n: number[], i: Record<number, unknown>, o?: { config?: unknown; repo?: string }) => { aufnehmen: { rolle: string }[] } };
 const F = fremdRaw as unknown as {
   fremdeingangLabels: (c: unknown) => string[];
   istFremdeingang: (i: unknown, owner: string, o?: { config?: unknown }) => { fremdeingang: boolean; label?: string };
@@ -135,16 +137,16 @@ describe("boardRolleFuer (K3: Fixture-Label bereich:fabrik)", () => {
     const s = B.seitenListen([fab(1), echt(2)], [echt(3), fab(4)], FAB);
     expect(s.factory.map((i) => i.number)).toEqual([4, 1]);
     expect(s.produkt.map((i) => i.number)).toEqual([2, 3]);
-    expect(B.umzugsPlan([fab(1), echt(2)], [], FAB).schritte.map((x) => [x.number, x.nach])).toEqual([[1, "factory"]]);
+    expect(B.umzugsPlan([fab(1), echt(2)], [], FAB, BASIS.repo).schritte.map((x) => [x.number, x.nach])).toEqual([[1, "factory"]]);
     const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, labels });
-    const a = B.aufnahmePlan([1, 2], { 1: issue(1, ["bereich:fabrik"]), 2: issue(2, [ECHT.harness]) }, { config: FAB });
+    const a = PL.aufnahmePlan([1, 2], { 1: issue(1, ["bereich:fabrik"]), 2: issue(2, [ECHT.harness]) }, { config: FAB, repo: BASIS.repo });
     expect(a.aufnehmen.map((x) => x.rolle)).toEqual(["factory", "produkt"]);
   });
   test("seitenListen, umzugsPlan und aufnahmePlan ohne Config werfen", () => {
     const i: It = { number: 1, labels: [], id: "I", state: "open" };
     expect(() => B.seitenListen([i], [], undefined)).toThrow(FIX);
-    expect(() => B.umzugsPlan([i], [], undefined)).toThrow(FIX);
-    expect(() => B.aufnahmePlan([1], { 1: { number: 1, state: "open", node_id: "N", labels: [] } })).toThrow(FIX);
+    expect(() => B.umzugsPlan([i], [], undefined, BASIS.repo)).toThrow(FIX);
+    expect(() => PL.aufnahmePlan([1], { 1: { number: 1, state: "open", node_id: "N", labels: [] } }, { repo: BASIS.repo })).toThrow(FIX);
   });
 });
 

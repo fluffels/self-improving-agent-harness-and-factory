@@ -83,6 +83,14 @@ describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
   });
 });
 
+describe("waehleSammelticket: das Repo muss owner/name sein (#78)", () => {
+  test("ein Repo ohne diese Form wirft mit Fix-Zeile, statt einen falschen Owner zu vertrauen", () => {
+    const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => unknown };
+    const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }];
+    for (const kaputt of ["ohneOwner", "a/b/c", "/b", ""]) expect(() => W.waehleSammelticket(offene, kaputt, () => ({})), kaputt).toThrow(/owner.name[^]*Fix:/);
+  });
+});
+
 describe("waehleSammelticket (#76): Vertrauen über den Owner des Ziel-Repos", () => {
   const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => { number: number } | null };
   const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }];

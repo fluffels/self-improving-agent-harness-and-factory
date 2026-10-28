@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { ghJson, ghText } from "./gh-cli.mjs";
 import { SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes, zielRepo } from "./board-lib.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Das Ziel-Repo der Harness-Befunde (#76): das Repo, dessen Issues das Factory-Board führt (`boards[].repo`, sonst das eigene Repo). Dort liegt das Harness-Sammelticket. */
 export const ZIEL = zielRepo("factory");
@@ -36,7 +37,7 @@ export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
 
 /** Das jüngste offene, ungeclaimte Harness-Sammelticket in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
 export const waehleSammelticket = (offene, repo = ZIEL, api = ghJson) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), repo.split("/")[0]);
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), zerlegeRepo(repo).owner);
 
 /** Postet `text` als Kommentar unter Issue `nr` im Repo `repo` (Standard: das Ziel-Repo). */
 export const postZeilen = (nr, text, repo = ZIEL) => ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`]);
@@ -55,5 +56,5 @@ export function ladeSammelKontext(io = {}) {
   const rohe = ladeOffene();
   const offene = normalizeOffene(rohe);
   const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL).map((k) => ({ user: k.user, body: k.body })));
-  return { rohe, offene, kommentare, owner: ZIEL.split("/")[0] };
+  return { rohe, offene, kommentare, owner: zerlegeRepo(ZIEL).owner };
 }

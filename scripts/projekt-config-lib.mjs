@@ -325,6 +325,9 @@ export function gatesAus(config) {
 
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
 
+/** Pur: hat `repo` genau die Form `owner/name` (dieselbe Prüfung wie `zerlegeRepo`)? Ein Nicht-String nie. */
+export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(repo);
+
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
 export function zerlegeRepo(repo) {
   const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
@@ -510,9 +513,6 @@ export const boardRepo = (board, config) => (typeof board?.repo === "string" ? b
 
 /** Pur: sind zwei Repo-Angaben (`owner/name`) dasselbe Repo? GitHub unterscheidet Groß- und Kleinschreibung nicht; ein Nicht-String ist nie gleich. */
 export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
-
-/** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
-export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
 
 /** Pur: das Repo (`owner/name`) aus der `repository_url` eines Issues (`…/repos/<owner>/<name>`); leer, wenn die URL es nicht trägt. */
 export const repoAusUrl = (url) => /\/repos\/([^/]+\/[^/]+)$/.exec(String(url ?? ""))?.[1] ?? "";

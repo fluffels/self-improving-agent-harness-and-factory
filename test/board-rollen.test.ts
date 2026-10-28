@@ -9,6 +9,8 @@ import * as rawLib from "../scripts/board-lib.mjs";
 import { FREMD, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPlace from "../scripts/board-place.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPlan from "../scripts/board-plan-lib.mjs";
 
 type Board = { rolle: string; besitzer: string; nummer: number; projectId: string };
 type Lib = {
@@ -23,10 +25,11 @@ type Lib = {
   itemAusIssueAntwort: (...a: unknown[]) => unknown;
   seitenListen: (p: Item[], f: Item[], c?: unknown) => { produkt: Item[]; factory: Item[]; doppelt: number[]; falsch: number[] };
   kopfRang: (i: { title?: string }) => number;
-  aufnahmePlan: (fehlend: number[], issues: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null }) => { aufnehmen: { number: number; rolle: string }[] };
+  nurRepo: (items: { number?: number; repo?: string }[], repo: string) => { number?: number; repo?: string }[];
 };
 type Item = { number: number; title?: string; labels?: string[] };
 const L = rawLib as unknown as Lib;
+const P = rawPlan as unknown as { aufnahmePlan: (fehlend: number[], issues: Record<number, unknown>, o?: { config?: unknown; ankerNr?: number | null; repo?: string }) => { aufnehmen: { number: number; rolle: string }[] } };
 const echt = FREMD; // injiziert: der getestete Code liest die Config nicht selbst
 const real = projektConfig(); // nur für `boardFuerRolle`, das die Projekt-Config des Repos liest
 const HARNESS = FREMD.labels.harness;
@@ -118,7 +121,7 @@ describe("kopfRang und aufnahmePlan.rolle (#1729)", () => {
   });
   test("jeder aufzunehmende Eintrag trägt die Rolle laut Trennregel", () => {
     const issue = (n: number, labels: unknown[]) => ({ number: n, state: "open", node_id: `N${n}`, title: "t", labels });
-    const r = L.aufnahmePlan([1, 2, 3], { 1: issue(1, [{ name: HARNESS }]), 2: issue(2, []), 3: { ...issue(3, []), labels: undefined } }, { config: echt });
+    const r = P.aufnahmePlan([1, 2, 3], { 1: issue(1, [{ name: HARNESS }]), 2: issue(2, []), 3: { ...issue(3, []), labels: undefined } }, { config: echt, repo: FREMD.repo });
     expect(r.aufnehmen.map((a) => [a.number, a.rolle])).toEqual([[1, "factory"], [2, "produkt"], [3, "produkt"]]);
   });
 });
@@ -138,8 +141,26 @@ describe("ankerFehler: die Ankerregel von board-place und spezifikation (#1740)"
   });
 });
 
+describe("nurRepo: Items eines Repos (ADR 0022 F10)", () => {
+  test("nur Items des Repos, ohne Groß-/Kleinschreibung; ein Item ohne Repo gehört nie dazu (fail-closed)", () => {
+    const items = [{ number: 1, repo: "acme/demo" }, { number: 2, repo: "acme/anders" }, { number: 3, repo: "" }, { number: 4 }];
+    const nr = (liste: { number?: number }[]) => liste.map((i) => i.number);
+    expect(nr(L.nurRepo(items, "acme/demo"))).toEqual([1]);
+    expect(nr(L.nurRepo(items, "ACME/Demo"))).toEqual([1]);
+    expect(nr(L.nurRepo([{ number: 7, repo: "Acme/Demo" }], "acme/demo"))).toEqual([7]);
+    expect(nr(L.nurRepo(items, ""))).toEqual([]);
+    expect(nr(L.nurRepo(items, "acme/anders"))).toEqual([2]);
+  });
+});
+
 describe("zielRolle: das Board für board-place (#1729)", () => {
-  const Z = rawPlace as unknown as { zielRolle: (a: { numbers: number[]; anchor?: number | null; produkt: Item[]; factory: Item[]; labelsRest?: Record<number, unknown>; config?: unknown }) => { rolle?: string; doppelt?: number[]; fehler?: string } };
+  type ZielEingabe = { numbers: number[]; anchor?: number | null; produkt: Item[]; factory: Item[]; labelsRest?: Record<number, unknown>; config?: unknown; repo?: string };
+  const zielRoh = (rawPlace as unknown as { zielRolle: (a: ZielEingabe) => { rolle?: string; doppelt?: number[]; fehler?: string } }).zielRolle;
+  // `repo` ist Pflicht (#78): Standard ist das Repo der Fremd-Config, ein ausdrückliches `repo: undefined` bleibt möglich.
+  const Z = { zielRolle: (a: ZielEingabe) => zielRoh({ repo: FREMD.repo, ...a }) };
+  test("ohne repo wirft zielRolle (kein stiller Standardwert)", () => {
+    expect(() => Z.zielRolle({ numbers: [1], produkt: [], factory: [], config: echt, repo: undefined })).toThrow(/zielRolle: repo fehlt[^]*Fix:/);
+  });
   const f = (nr: number): Item => ({ number: nr, labels: H });
   const p = (nr: number): Item => ({ number: nr, labels: [] });
   test("alle Nummern Factory: Factory; alle Produkt: Produkt", () => {
@@ -242,7 +263,7 @@ describe("umzugsPlan: Items auf dem falschen Board umziehen (#1730)", () => {
   type U = Item & { id: string; status: string; state: string; contentId: string };
   type Schritt = { aktion: string; number: number; title: string; von: string; nach: string; quelleId: string; contentId?: string };
   type Plan = { schritte: Schritt[]; gemeldet: { number: number; grund: string }[]; ende: { produkt: string | null; factory: string | null } };
-  const plan = (p: U[], f: U[]): Plan => (L as unknown as { umzugsPlan: (p: U[], f: U[], c: unknown) => Plan }).umzugsPlan(p, f, echt);
+  const plan = (p: U[], f: U[]): Plan => (L as unknown as { umzugsPlan: (p: U[], f: U[], c: unknown, repo: string) => Plan }).umzugsPlan(p, f, echt, FREMD.repo);
   const it = (number: number, labels: string[] = [], extra: Partial<U> = {}): U => ({ id: `ITEM_${number}`, number, status: "Todo", state: "open", contentId: `I_${number}`, labels, ...extra });
   const H = [HARNESS];
 
@@ -451,7 +472,7 @@ describe("Fremdes Factory-Board in board-place (#76, ADR 0022 F10)", () => {
     const p = U.umzugsPlan([item], [], fremd, FREMD.repo);
     expect(p.schritte).toEqual([]);
     expect(p.gemeldet[0]?.grund).toContain(FABRIK);
-    expect(U.umzugsPlan([item], [], fremd).schritte).toHaveLength(1);
+    expect(() => U.umzugsPlan([item], [], fremd)).toThrow(/umzugsPlan: repo fehlt[^]*Fix:/);
   });
   test("parseArgs --repo: gültig an jeder Stelle, kaputte Form ungültig", () => {
     expect(Z.parseArgs(["--repo", "zz-org/zz-x", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-x" });

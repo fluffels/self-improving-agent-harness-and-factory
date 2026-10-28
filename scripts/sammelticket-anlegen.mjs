@@ -43,7 +43,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zerlegeRepo, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
@@ -138,7 +138,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 export function sammelZiel(config) {
   const labels = [labelAus(config, "harness")];
   const repo = zielRepoFuer(labels, config);
-  return { rolle: boardRolleFuer(labels, config), repo, owner: repo.split("/")[0] };
+  return { rolle: boardRolleFuer(labels, config), repo, owner: zerlegeRepo(repo).owner };
 }
 
 /** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */

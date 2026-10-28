@@ -22,7 +22,6 @@ interface Pc {
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
   gleichesRepo(a: unknown, b: unknown): boolean;
-  nurRepo<T extends { repo?: string }>(items: T[], repo: string): T[];
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -205,7 +204,7 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(pc.pruefeProjektConfig(anders), []);
   });
 
-  test("boards[].repo (ADR 0022 F10): optional, owner/name; boardRepo fällt auf das Repo der Config zurück, nurRepo filtert fail-closed", () => {
+  test("boards[].repo (ADR 0022 F10): optional, owner/name; boardRepo fällt auf das Repo der Config zurück", () => {
     const mit = (repo: unknown): string[] => {
       const c = gueltig();
       (c.boards as Record<string, unknown>[])[1].repo = repo;
@@ -225,12 +224,6 @@ describe("pruefeProjektConfig", () => {
     const c = gueltig();
     assert.equal(pc.boardRepo(c.boards?.[0] ?? {}, c), "acme/demo");
     assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");
-    const items = [{ number: 1, repo: "acme/demo" }, { number: 2, repo: "acme/anders" }, { number: 3, repo: "" }, { number: 4 }];
-    assert.deepEqual(pc.nurRepo(items, "acme/demo").map((i: { number: number }) => i.number), [1]);
-    assert.deepEqual(pc.nurRepo(items, "ACME/Demo").map((i: { number: number }) => i.number), [1]); // GitHub-Repos sind nicht groß-/kleinschreibungsabhängig
-    assert.deepEqual(pc.nurRepo([{ number: 7, repo: "Acme/Demo" }], "acme/demo").map((i: { number: number }) => i.number), [7]); // auch die Schreibung des Items zählt nicht
-    assert.deepEqual(pc.nurRepo(items, ""), []); // ein Item ohne Repo gehört nie zu einem leeren Repo
-    assert.deepEqual(pc.nurRepo(items, "acme/anders").map((i: { number: number }) => i.number), [2]);
   });
 
   test("spezifikation.hartAb (#1615): optional, sonst positive Ganzzahl", () => {
@@ -279,6 +272,18 @@ describe("Bereichs-Aliase (#1943)", () => {
     assert.deepEqual(pc.bereichAliaseAus(undefined), {});
     for (const kaputt of [null, [], "x", 5]) assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: kaputt } }), {}, JSON.stringify(kaputt));
     assert.deepEqual(pc.bereichAliaseAus({ bereiche: { aliase: { spiel: "produkt" } } }), { spiel: "produkt" });
+  });
+});
+
+describe("istRepoForm: dieselbe Formprüfung wie zerlegeRepo (#78)", () => {
+  test("genau owner/name ohne Leerraum; jede Abweichung ist falsch und zerlegeRepo wirft dazu", () => {
+    const f = pc as unknown as { istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string } };
+    assert.equal(f.istRepoForm("acme/demo"), true);
+    assert.deepEqual(f.zerlegeRepo("acme/demo"), { owner: "acme", name: "demo" });
+    for (const kaputt of ["acme", "a/b/c", "/b", "a/", "a /b", "", undefined, 5]) {
+      assert.equal(f.istRepoForm(kaputt), false, String(kaputt));
+      assert.throws(() => f.zerlegeRepo(kaputt), /owner.name/);
+    }
   });
 });
 
@@ -621,7 +626,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
-    for (const f of ["board-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
