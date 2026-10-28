@@ -1,5 +1,5 @@
 {
-  "$kommentar": "Spiegel des Rulesets main-schutz (Server-Konfiguration, nicht in Git). Quelle für den Required-Check-Shadowing-Wächter (test/harness/required-check-shadowing.test.ts) und das Leitplanken-Diagramm (docs/diagramme/leitplanken-schichten.mmd). Ändert sich das Ruleset, hier im selben PR nachziehen. Abgleich mit der Wirklichkeit: gh api repos/{owner}/{repo}/rulesets/25905018 (requiredChecks = rules[type=required_status_checks].parameters.required_status_checks[].context, bypassActors = bypass_actors; der Abgleich braucht Schreibrecht, darum nicht in der CI).",
+  "$kommentar": "Spiegel des Rulesets main-schutz (Server-Konfiguration, nicht in Git). Quelle für den Required-Check-Shadowing-Wächter (test/harness/required-check-shadowing.test.ts) und das Leitplanken-Diagramm (docs/diagramme/leitplanken-schichten.mmd). Ändert sich das Ruleset, hier im selben PR nachziehen. Abgleich mit der Wirklichkeit: gh api repos/{owner}/{repo}/rulesets/25905018 (requiredChecks = rules[type=required_status_checks].parameters.required_status_checks[].context, bypassActors = bypass_actors, codeScanning = rules[type=code_scanning].parameters.code_scanning_tools[] (tool, security_alerts_threshold, alerts_threshold); der Abgleich braucht Schreibrecht, darum nicht in der CI).",
   "id": 25905018,
   "name": "main-schutz",
   "stand": "2026-10-26",
@@ -7,6 +7,9 @@
     "Tests, Typecheck & Builds",
     "Security-Audit (npm audit)",
     "PR-Text interne Bezuege pruefen"
+  ],
+  "codeScanning": [
+    { "tool": "CodeQL", "sicherheitsSchwelle": "high_or_higher", "alertSchwelle": "errors" }
   ],
   "bypassActors": []
 }
