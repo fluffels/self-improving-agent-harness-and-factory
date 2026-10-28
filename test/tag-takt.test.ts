@@ -221,3 +221,125 @@ describe("lauf", () => {
     expect(aufrufe.some((a) => a.startsWith("platziere"))).toBe(false);
   });
 });
+
+describe("Härtung (Review Runde 1)", () => {
+  const leer = { zustand: "unbekannt", url: null };
+  const bodyVon = (o: Record<string, unknown> = {}) => T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: leer, ...o });
+  const logZeilen = (o: Io, trocken = false) => {
+    const z: string[] = [];
+    const code = T.lauf({ io: { ...baseIo(), log: (t: string) => z.push(t), ...o }, trocken });
+    return { code, z: z.join("\n") };
+  };
+  const logText = `\x1e${"1".repeat(40)}\x1f${vor(1)}\x1ffeat: a (#1)\x1f\n\nscripts/a.mjs\n\x1e${"2".repeat(40)}\x1f${vor(2)}\x1ffix: b (#2)\x1f\n\nscripts/a.mjs\n\x1e${"3".repeat(40)}\x1f${vor(3)}\x1ffix: c (#3)\x1f\n\nscripts/a.mjs\n`;
+  function baseIo(): Io {
+    return {
+      istBezieher: () => false,
+      tags: () => ["v1.2.3"],
+      ladeLog: () => logText,
+      ladeManifest: () => MANIFEST,
+      headSha: () => "d".repeat(40),
+      ladeLaeufe: () => [],
+      ladeOffene: () => [],
+      frischeOffene: () => [],
+      dringlichKey: KEY,
+      jetzt: () => JETZT,
+      projectToken: "t",
+      legeIssueAn: () => "77",
+      sortiereEin: () => true,
+      aktualisiere: () => undefined,
+      schliesse: () => undefined,
+    };
+  }
+
+  it("Tags ohne v-Präfix: das eigene Ticket wird wiedergefunden (kein zweites Ticket)", () => {
+    const aufrufe: string[] = [];
+    const io = { tags: () => ["1.2.3"], ladeOffene: () => [tagOffen({ titel: T.tagTitel("1.3.0") })], legeIssueAn: () => aufrufe.push("anlegen"), aktualisiere: () => aufrufe.push("aktualisiere") };
+    logZeilen(io);
+    expect(aufrufe).toEqual(["aktualisiere"]);
+    expect(T.tagTitel("1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
+  });
+  it("Schreibfehler enden mit Exit 1 und ::error::", () => {
+    const werfen = () => {
+      throw new Error("gh kaputt");
+    };
+    for (const o of [{ sortiereEin: () => false }, { legeIssueAn: werfen }]) {
+      const r = logZeilen(o);
+      expect(r.code, JSON.stringify(Object.keys(o))).toBe(1);
+      expect(r.z).toContain("::error::");
+    }
+    expect(logZeilen({ ladeOffene: () => [tagOffen()], aktualisiere: werfen }).code).toBe(1);
+    expect(logZeilen({ ladeLog: () => "", ladeOffene: () => [tagOffen()], schliesse: werfen }).code).toBe(1);
+    expect(logZeilen({ ladeLog: () => "", ladeOffene: () => [tagOffen()] }).code).toBe(0);
+  });
+  it("kein Release-Tag in lauf: Exit 0, kein Log-Lesen, keine Schreib-IO", () => {
+    const r = logZeilen({ tags: () => [], ladeLog: () => { throw new Error("nie"); }, legeIssueAn: () => { throw new Error("nie"); } });
+    expect(r.code).toBe(0);
+  });
+  it("Warnungen erscheinen als ::warning:: im Log, ein einzelnes offenes Ticket warnt nicht", () => {
+    const zwei = [tagOffen({ number: 50 }), tagOffen({ number: 40 })];
+    expect(logZeilen({ ladeOffene: () => zwei }).z).toContain("::warning::Mehrere offene Tag-Tickets");
+    expect(entscheide({ besitz: reihe(4), offene: [tagOffen()] }).warnungen).toEqual([]);
+    expect(logZeilen({ ladeOffene: () => [tagOffen()] }).z).not.toContain("::warning::");
+  });
+  it("Alter zählt die älteste Änderung, nicht die jüngste", () => {
+    const gemischt = T.besitzCommits([commit({ datum: vor(8) }), commit({ datum: vor(1), sha: "b".repeat(40) })], MANIFEST);
+    expect(entscheide({ besitz: gemischt }).aktion).toBe("anlegen");
+    const junge = T.besitzCommits([commit({ datum: vor(1) }), commit({ datum: vor(20), sha: "b".repeat(40) })].slice(0, 1), MANIFEST);
+    expect(entscheide({ besitz: junge }).aktion).toBe("nichts");
+  });
+  it("istAktuell: Titel allein oder Body allein abweichend führt zur Aktualisierung", () => {
+    let soll = { titel: "", body: "" };
+    logZeilen({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, t: string, b: string) => { soll = { titel: t, body: b }; } });
+    for (const abw of [{ titel: "🏷️ Tag v9.9.9 anders" }, { body: "anderer Body" }]) {
+      const aufrufe: string[] = [];
+      logZeilen({ ladeOffene: () => [tagOffen({ ...soll, ...abw, titel: abw.titel ?? soll.titel })], aktualisiere: () => aufrufe.push("a") });
+      expect(aufrufe, JSON.stringify(abw)).toEqual(["a"]);
+    }
+  });
+
+  it("CI-Text: rot, läuft, unbekannt, Link nur mit URL", () => {
+    expect(bodyVon({ ci: { zustand: "rot", url: "https://example.invalid/r" } })).toContain("CI-Status dieses Commits: ROT ([Lauf](https://example.invalid/r))");
+    expect(bodyVon({ ci: { zustand: "laeuft", url: null } })).toContain("läuft noch");
+    expect(bodyVon({ ci: { zustand: "irgendwas", url: null } })).toContain("CI-Status dieses Commits: unbekannt");
+    expect(bodyVon()).not.toContain("[Lauf]");
+  });
+  it("PR-Liste: genau 50 ohne Rest, bei 53 fehlen die letzten, Zellen gekürzt und bereinigt", () => {
+    const viele = (n: number, betreff: (i: number) => string) => T.besitzCommits(Array.from({ length: n }, (_, i) => commit({ betreff: betreff(i) })), MANIFEST);
+    const b50 = bodyVon({ prs: viele(50, (i) => `fix: n (#${i + 1})`) });
+    expect(b50).not.toContain("weitere");
+    expect(b50).toContain("#50 fix");
+    const b53 = bodyVon({ prs: viele(53, (i) => `fix: n (#${i + 1})`) });
+    expect(b53).toContain("#50 fix");
+    expect(b53).not.toContain("#51 fix");
+    const lang = bodyVon({ prs: viele(1, () => `fix: ${"x".repeat(200)} (#1)`) });
+    expect(lang).not.toContain("x".repeat(121));
+    expect(bodyVon({ prs: viele(1, () => "|`") })).toContain("- aaaaaaa - (");
+    expect(bodyVon({ prs: viele(1, () => "fix: a\nb (#1)") })).not.toContain("a\nb");
+  });
+  it("Zweitabfrage ohne Liste oder mit Eintrag ohne Titel stürzt nicht ab (fail-closed)", () => {
+    const anlegen = entscheide({ besitz: reihe(4) });
+    for (const antwort of [null, {}]) expect(T.bestaetigeTagAnlegen(anlegen, { zweit: () => antwort }).aktion, JSON.stringify(antwort)).toBe("nichts");
+    expect(T.bestaetigeTagAnlegen(anlegen, { zweit: () => [{ number: 1 }, null] })).toBe(anlegen);
+  });
+  it.each([
+    ["feat!: x", "v2.0.0"],
+    ["fix: a\n\nBREAKING-CHANGE: x", "v2.0.0"],
+    ["fix: a\n\n* BREAKING CHANGE: x", "v2.0.0"],
+    ["fix: Text BREAKING CHANGE: mitten", "v1.2.4"],
+    ["feature: x", "v1.2.4"],
+    ["featx: y", "v1.2.4"],
+  ])("Versionsgrenze %j → %s", (text, erwartet) => {
+    expect(T.naechsterTag("v1.2.3", [commit({ betreff: text.split("\n")[0], body: text })])).toBe(erwartet);
+  });
+  it("ciZustand: neuester Lauf zuerst, Null-Einträge tolerant, URL nur als String", () => {
+    const ci = (conclusion: string, extra = {}) => ({ path: ".github/workflows/ci.yml", status: "completed", conclusion, ...extra });
+    expect(T.ciZustand([ci("failure"), ci("success")]).zustand).toBe("rot");
+    expect(T.ciZustand([null, ci("success")]).zustand).toBe("gruen");
+    expect(T.ciZustand([ci("success", { html_url: 5 })]).url).toBeNull();
+  });
+  it("besitzCommits mit kaputtem Manifest: nur das Manifest selbst zählt, kein Absturz", () => {
+    for (const m of [{}, null]) {
+      expect(T.besitzCommits([commit({ dateien: [".factory/besitz.json"] }), commit()], m)).toHaveLength(1);
+    }
+  });
+});

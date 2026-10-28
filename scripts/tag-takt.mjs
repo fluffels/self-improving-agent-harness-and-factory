@@ -27,7 +27,7 @@ import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 
-export const TAG_MARKER = "🏷️ Tag v";
+export const TAG_MARKER = "🏷️ Tag ";
 export const MIN_PRS = 3;
 export const MAX_ALTER_TAGE = 7;
 const MAX_ZEILEN = 50;
@@ -130,14 +130,14 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
  */
 export function bestaetigeTagAnlegen(e, { zweit }) {
   if (e.aktion !== "anlegen") return e;
-  let frisch;
+  let da;
   try {
-    frisch = zweit();
+    const frisch = zweit();
     if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
+    da = frisch.filter((i) => String(i?.titel).startsWith(TAG_MARKER)).map((i) => `#${i.number}`);
   } catch (err) {
     return { aktion: "nichts", grund: "Anlegen abgebrochen: Zweitabfrage fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
   }
-  const da = frisch.filter((i) => String(i.titel).startsWith(TAG_MARKER)).map((i) => `#${i.number}`);
   if (da.length === 0) return e;
   return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes Tag-Ticket ${da.join(", ")} nur per Zweitabfrage gefunden.`] };
 }
@@ -181,6 +181,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     "- [ ] Trockenlauf-Sync in einem Bezieher: `node scripts/factory-sync.mjs --quelle <checkout auf " + sha.slice(0, 7) + "> --entwurf --trocken` (Pfade der Bezieher: `node scripts/arbeitsplatz.mjs pfade`)",
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
+    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
@@ -298,7 +299,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
     ladeManifest: () => JSON.parse(readFileSync(MANIFEST, "utf8")),
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
-    ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&per_page=30`, "--jq", ".workflow_runs"]),
+    ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=5`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
       const kontext = ladeSammelKontext({ ladeKommentare: () => [] });
       return vertrauteIssues(kontext.rohe, vertrauterOwner(kontext, libs))

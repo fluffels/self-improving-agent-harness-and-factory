@@ -13,7 +13,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 # 3. Tag-Takt (#103): derselbe Lauf zählt die Besitz-PRs seit dem letzten Release-Tag und hält ab 3 PRs, über 7 Tage Alter oder einem
 #    Dringlich-Signal genau ein Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (scripts/tag-takt.mjs; braucht die volle Historie und lesenden
 #    Zugriff auf die Workflow-Läufe für den CI-Status).
-# Die Entscheidungen stehen in scripts/board-takt.mjs und scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein gespeicherter
+# Die Entscheidungen stehen in scripts/board-takt.mjs, scripts/langfuse-takt.mjs und scripts/tag-takt.mjs (pur, getestet, idempotent: kein gespeicherter
 # Zähler, jedes Mal aus offenen Issues, Commit-Liste und Board-Liste abgeleitet).
 #
 # Die Concurrency-Group serialisiert gleichzeitige Auslösungen (Cron + Dispatch): der zweite Lauf wartet und
