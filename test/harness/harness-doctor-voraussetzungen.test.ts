@@ -162,6 +162,8 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
     test("nur SHA und Versionskommentar werden neutralisiert: ein Kommentar in der Zeile davor und ein 41-stelliger Hex nicht", () => {
       assert.equal(doctor.ohneActionPins(`# eigener Kommentar\n  - uses: x/y@${SHA_A} # v1\n# danach\n`), "# eigener Kommentar\n  - uses: x/y@<pin>\n# danach\n");
       assert.equal(doctor.ohneActionPins(`  - uses: x/y@${SHA_A}a # v1\n`), `  - uses: x/y@${SHA_A}a # v1\n`);
+      const kein = `  - uses: x/y@${"g".repeat(40)} # v1\n`;
+      assert.equal(doctor.ohneActionPins(kein), kein, "40 Zeichen, die kein Hex sind, sind kein Pin");
     });
   });
 });
