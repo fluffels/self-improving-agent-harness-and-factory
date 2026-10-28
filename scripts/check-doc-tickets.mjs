@@ -6,7 +6,7 @@
  * check-docdrift.mjs) um die eine Dimension, die dieser NICHT prüft: **inhaltliche
  * Aktualität**.
  *
- * Hintergrund: docs/agent-harness.md § „Roadmap / bekannte Lücken" listet
+ * Hintergrund: Factory-Seite docs/agent-harness.md § „Roadmap / bekannte Lücken" listet
  * Harness-Verbesserungen, die noch **offen** sind. Diese Liste veraltet leise —
  * genau so wie die alte „#492 (RNG-Determinismus) ist offen"-Zeile, die noch
  * dastand, obwohl das Gate längst existierte (ein realer Fund dieser Klasse). check:docdrift
