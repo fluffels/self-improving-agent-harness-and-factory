@@ -1,0 +1,32 @@
+name: Dependency Review
+
+# Dependency Review (#92) auf PRs: vergleicht die Abhängigkeits-Änderungen des PR mit bekannten Advisories.
+# BERICHTEND, kein Required-Check: ein Fund ab `high` färbt diesen Check rot, sperrt den Merge aber nicht
+# (`scripts/pr-warten.mjs` meldet ein Rot eines Nicht-Pflicht-Checks nur als HINWEIS). Bewusst keine Lizenzregel,
+# kein PR-Kommentar (`comment-summary-in-pr` bleibt aus) und keine Schreibrechte: der Job liest nur den Diff.
+# Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing.test.ts).
+# Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).
+# Voraussetzung: das Dependency Graph des Repos ist an (Repo-Einstellung, hier nicht änderbar); sonst scheitert der Lauf sichtbar.
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruefen:
+    name: Abhängigkeiten prüfen (Dependency Review)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Abhängigkeiten gegen Advisories prüfen
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never

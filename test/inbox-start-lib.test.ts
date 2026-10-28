@@ -79,3 +79,63 @@ describe("ladeProjektOderAbbruch (board-lib, Config-Fehler beim Import)", () => 
     expect(err).toEqual(["✖ kaputt"]);
   });
 });
+
+describe("zielZugang", () => {
+  const Z = rawLib as unknown as { zielZugang: (l: Record<string, unknown>) => { ziel: string; zielOpt: { token: string | undefined } } };
+  test("Ziel-Repo und dessen Token, wenn die Libs sie liefern", () => {
+    expect(Z.zielZugang({ REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "t" })).toEqual({ ziel: "o/ziel", zielOpt: { token: "t" } });
+  });
+  test("ohne ZIEL und zielToken: eigenes Repo, kein Token", () => {
+    expect(Z.zielZugang({ REPO: "o/r" })).toEqual({ ziel: "o/r", zielOpt: { token: undefined } });
+  });
+});
+
+describe("zielAktionen und vertrauterOwner", () => {
+  const A = rawLib as unknown as {
+    zielAktionen: (a: { gh: { text: (a: string[], o: unknown) => string; json: (a: string[], o: unknown) => unknown }; libs: Record<string, unknown>; label?: string }) => Record<string, (...a: unknown[]) => unknown>;
+    vertrauterOwner: (k: { owner?: string }, l: { OWNER: string }) => string;
+  };
+  const aufbau = (libs: Record<string, unknown> = {}, label?: string) => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const platziert: unknown[][] = [];
+    const gh = {
+      text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), "https://github.com/o/ziel/issues/77\n"),
+      json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: "alt" }),
+    };
+    const alle = { REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "zt", platziereOben: (...a: unknown[]) => platziert.push(a), ...libs };
+    return { aktion: A.zielAktionen({ gh, libs: alle, label }), aufrufe, platziert };
+  };
+  test("alle Aktionen gehen mit dem Ziel-Token ins Ziel-Repo, nie ins eigene", () => {
+    const { aktion, aufrufe } = aufbau({}, "L");
+    expect(aktion.holeBody(6)).toBe("alt");
+    expect(aktion.legeIssueAn("T", "B")).toBe("77");
+    aktion.aktualisiere(6, "neu");
+    aktion.kommentiere(6, "k");
+    aktion.schliesse(6, "weg");
+    expect(aufrufe.map((a) => a.args.join(" "))).toEqual([
+      "api repos/o/ziel/issues/6",
+      "issue create --repo o/ziel --title T --label L --body B",
+      "api -X PATCH repos/o/ziel/issues/6 -f body=neu",
+      "api repos/o/ziel/issues/6/comments -f body=k",
+      "issue close 6 --repo o/ziel --reason completed --comment weg",
+    ]);
+    for (const a of aufrufe) expect(a.opt).toEqual({ token: "zt" });
+  });
+  test("ohne Label kein --label", () => {
+    const { aktion, aufrufe } = aufbau();
+    aktion.legeIssueAn("T", "B");
+    expect(aufrufe[0].args).not.toContain("--label");
+  });
+  test("platziere: Ziel-Repo als viertes Argument, beim eigenen Repo keines", () => {
+    const a = aufbau();
+    a.aktion.platziere(5, "security");
+    expect(a.platziert).toEqual([[5, "security", process.env.PROJECT_TOKEN, "o/ziel"]]);
+    const b = aufbau({ ZIEL: undefined });
+    b.aktion.platziere(5, "security");
+    expect(b.platziert[0][3]).toBeUndefined();
+  });
+  test("vertrauterOwner: Owner des Ziel-Repos, sonst der eigene", () => {
+    expect(A.vertrauterOwner({ owner: "z" }, { OWNER: "o" })).toBe("z");
+    expect(A.vertrauterOwner({}, { OWNER: "o" })).toBe("o");
+  });
+});
