@@ -223,8 +223,7 @@ function besitzAusnahme(rootDir) {
   let einheiten;
   try {
     const manifest = JSON.parse(readFileSync(join(rootDir, ...BESITZ_MANIFEST.split("/")), "utf8"));
-    if (!Array.isArray(manifest?.eintraege)) return null;
-    einheiten = manifest.eintraege.filter(wirdVerteilt);
+    einheiten = manifest.eintraege.filter(wirdVerteilt); // kein Array: wirft, fail-closed
   } catch {
     return null;
   }
