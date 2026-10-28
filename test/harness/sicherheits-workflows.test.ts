@@ -1,4 +1,4 @@
-/* Wächter für die berichtenden Sicherheits-Workflows (#875): `codeql.yml` und `scorecard.yml`.
+/* Wächter für die berichtenden Sicherheits-Workflows: `codeql.yml` und `scorecard.yml`.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regeln, darum im geschützten test/harness/ (#1165).
  *
@@ -273,7 +273,7 @@ function hatOberstePermissions(yml: string): boolean {
   }
 }
 
-describe("jeder Workflow hat oberste permissions (#1663)", () => {
+describe("jeder Workflow hat oberste permissions", () => {
   const dateien = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
   test("es gibt Workflows", () => expect(dateien.length).toBeGreaterThan(0));
   test.each(dateien)("%s", (datei) => {

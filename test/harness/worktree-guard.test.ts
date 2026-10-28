@@ -782,6 +782,14 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     }
   });
 
+  test("#78 L1a Review R1: cd auf ein fehlendes Ziel außerhalb bleibt konservativ, misslingt es, läuft der Commit im Haupt-Checkout", () => {
+    const weg = slash(join(base, "nie-angelegt"));
+    for (const cwd of [main, sub]) {
+      assert.equal(blockt(cwd, `cd '${weg}'; git commit -m x`), true, "cd scheitert, Commit läuft am Ausgangsort");
+      assert.equal(blockt(cwd, `cd '${weg}' || git commit -m x`), true, "Fehlerzweig von ||");
+    }
+  });
+
   test("#78 L1a Negativ: Haupt-Checkout bleibt gesperrt, auch neben Befehlen im Temp-Ordner und bei dynamischem Ziel", () => {
     const frei = slash(join(base, "frei"));
     assert.equal(blockt(main, `cd '${frei}' && git init && cd '${slash(main)}' && git commit -m x`), true, "Rückkehr in den Haupt-Checkout");

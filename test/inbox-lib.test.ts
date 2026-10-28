@@ -1,9 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/inbox-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { REPO as EIGENES_REPO } from "../scripts/board-lib.mjs";
 import { FREMD_OWNER } from "./support/fremd-config";
 
 const L = raw as unknown as {
+  zielToken: (repo?: string, env?: Record<string, string | undefined>) => string | undefined;
+  postZeilen: (nr: number, text: string, repo?: string, token?: string, exec?: (...a: unknown[]) => string) => string;
   vertrauteIssues: (s: unknown, owner: string) => { title: string }[];
   offeneTitel: (s: unknown, owner: string) => string[];
   platziereOben: (nr: number, art: string, token?: string) => void;
@@ -131,5 +135,22 @@ describe("waehleSammelticket (#76): Vertrauen über den Owner des Ziel-Repos", (
   });
   test("Negativfall: ein Ticket eines anderen Autors wird nicht gewählt", () => {
     expect(W.waehleSammelticket(offene, "own-a/ziel", einzel("fremd"))).toBeNull();
+  });
+});
+
+describe("zielToken und Standard-Token der Schreibwege (#78 L13a, Review R1)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  test("fremdes Ziel-Repo nimmt PROJECT_TOKEN, das eigene Repo und ein fehlender PROJECT_TOKEN den Standard (undefined)", () => {
+    expect(L.zielToken("zz-org/fremd", { PROJECT_TOKEN: "p" })).toBe("p");
+    expect(L.zielToken(EIGENES_REPO as string, { PROJECT_TOKEN: "p" })).toBeUndefined();
+    expect(L.zielToken("zz-org/fremd", {})).toBeUndefined();
+  });
+  test("postZeilen ohne Token-Argument nimmt für ein fremdes Ziel-Repo PROJECT_TOKEN als GH_TOKEN, für das eigene keinen", () => {
+    vi.stubEnv("PROJECT_TOKEN", "p");
+    const tokens: unknown[] = [];
+    const exec = (_c: unknown, _a: unknown, o: { env?: Record<string, string> }) => (tokens.push(o.env?.GH_TOKEN === "p" ? "p" : "std"), "");
+    L.postZeilen(1, "t", "zz-org/fremd", undefined, exec as never);
+    L.postZeilen(1, "t", EIGENES_REPO as string, undefined, exec as never);
+    expect(tokens).toEqual(["p", "std"]);
   });
 });

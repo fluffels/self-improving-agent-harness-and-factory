@@ -446,6 +446,21 @@ describe("anlegen --blocker (#1860)", () => {
     expect(neu).toMatch(/^blockiert durch #12, #13$/m);
     expect(neu.startsWith(body)).toBe(true);
   });
+  test("#78 Review R1: gleiche Nummer in anderem Repo ist ein anderer Blocker, gleiche qualifizierte Nummer keine Dublette", () => {
+    const eigen = `${GUT}
+blockiert durch #13
+`;
+    const a = umgebung({ "b.md": eigen });
+    expect(S.fuehreAus(MIT("acme/demo#13"), a.io).code).toBe(0);
+    expect((a.aufrufe.erzeuge[0] as { body: string }).body).toContain("\nblockiert durch acme/demo#13\n");
+    const fremd = `${GUT}
+blockiert durch acme/demo#13
+`;
+    const b = umgebung({ "b.md": fremd });
+    expect(S.fuehreAus(MIT("acme/demo#13"), b.io).code).toBe(0);
+    const neu = (b.aufrufe.erzeuge[0] as { body: string }).body;
+    expect(neu.split("acme/demo#13").length - 1).toBe(1);
+  });
   test("L9e: --blocker nimmt owner/name#<nr> und schreibt die qualifizierte Zeile; die Prüfung lehnt kaputte Formen ab", () => {
     expect(S.aufrufPruefen(MIT("12", "acme/demo#13")).werte).toMatchObject({ blocker: [12, { repo: "acme/demo", nummer: 13 }] });
     for (const bad of ["acme/demo", "acme/demo#0", "a/b/c#1", "acme/demo#x", "#acme/demo#1"]) expect(S.aufrufPruefen(MIT(bad)).fehler, bad).toMatch(/--blocker/);

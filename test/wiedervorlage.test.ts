@@ -216,6 +216,7 @@ describe("main: Ziel-Repo des Labels (#78 L12b)", () => {
     expect(await main([], deps)).toBe(0);
     expect(angelegt).toEqual([[FREMD.labels.harness, FABRIK, "pt"]]);
     expect(geladen.map((g) => g[0])).toContain(FABRIK);
+    expect(geladen.map((g) => g[0]), "das eigene Repo liest die Duplikat-Prüfung immer mit (Ticket vor dem Umzug)").toContain(FREMD.repo);
     expect(geladen.find((g) => g[0] === FABRIK)?.[1]).toBe("pt");
     expect(platziert).toEqual([[7, "wiedervorlage", "pt", FABRIK]]);
   });
