@@ -40,7 +40,7 @@ import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Die Doku-Datei mit der Roadmap-Tabelle. */
+/** Die Doku-Datei mit der Roadmap-Tabelle. Im Bezieher ein Stub: Roadmap-Ticketnummern sind Factory-Repo-Nummern und werden dort geprüft; ein Link auf den Tag hilft nicht. */
 export const HARNESS_DOC = "docs/agent-harness.md";
 
 /** Marker, zwischen denen die als „offen" dokumentierten Ticket-Nummern stehen.

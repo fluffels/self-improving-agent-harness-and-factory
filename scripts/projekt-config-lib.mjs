@@ -179,12 +179,12 @@ export function spracheAus(config) {
 
 /**
  * Pur: der Block `struktur` der Config (`quelle`: Wurzel des Quellcodes, `moduldoku`: Ordner der Modul-Tiefendocs; beide repo-relativ, POSIX) für die Kern-Checks
- * `check:size` und `check:docmap`; wirft ohne beide nicht-leeren Strings (kein stiller Standardwert, #1843). Nicht zu verwechseln mit der Quellwurzel der Schichtdaten.
+ * `check:size` und `check:docmap`; `moduldoku: null` ist der Opt-out für Repos ohne Modul-Tiefendocs (check:docmap entfällt); wirft ohne beide nicht-leeren Strings (kein stiller Standardwert, #1843). Nicht zu verwechseln mit der Quellwurzel der Schichtdaten.
  */
 export function strukturAus(config) {
   const wert = config?.struktur;
-  if (!istObjekt(wert) || !istText(wert.quelle) || !istText(wert.moduldoku)) {
-    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
+  if (!istObjekt(wert) || !istText(wert.quelle) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
+    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
@@ -195,6 +195,7 @@ export function strukturAus(config) {
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
   const pfade = ["quelle", "moduldoku"].flatMap((k) => {
+    if (k === "moduldoku" && s[k] === null) return [];
     if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
     return istRepoRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
   });

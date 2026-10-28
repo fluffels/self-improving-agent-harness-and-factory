@@ -81,7 +81,7 @@ export function pruefeWindowsSperre({ platform, projektText, lokalText }) {
 
 const windowsAbhilfe = () => `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (${natives()}).`;
 
-/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur. */
+/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur bis auf den Seiten-Verweis: factorySeiteIn liest Sync-Stand und Config. */
 export function sessionStartAusgabe(eingabe) {
   if (!pruefeWindowsSperre(eingabe)) return "";
   return JSON.stringify({

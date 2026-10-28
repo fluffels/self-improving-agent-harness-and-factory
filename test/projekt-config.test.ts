@@ -30,7 +30,7 @@ interface Pc {
   sandboxAus(config: unknown): { allowedDomains: string[]; envVars: { name: string; mode: string }[] };
   ergaenzungAusText(text: string | null): { allow: string[]; sandbox: { allowedDomains: string[]; envVars: unknown[] } };
   umschriftAus(config: unknown): string[];
-  strukturAus(config: unknown): { quelle: string; moduldoku: string };
+  strukturAus(config: unknown): { quelle: string; moduldoku: string | null };
   escapeKopienAus(config: unknown): string[];
   bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
@@ -833,12 +833,39 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
   });
 });
 
+describe("struktur.moduldoku: null als Opt-out von check:docmap (#97 L7)", { timeout: 60_000 }, () => {
+  const fremdrepo = (struktur: unknown): string => {
+    const d = tmp();
+    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur }));
+    mkdirSync(join(d, "lib"));
+    writeFileSync(join(d, "lib", "a.ts"), "x\n");
+    return d;
+  };
+  const lauf = (d: string) => {
+    const r = spawnSync(process.execPath, [join(d, "scripts", "check-docmap.mjs")], { encoding: "utf8", cwd: d, timeout: 20_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+  test("moduldoku: null: Hinweis, Exit 0, auch bei verwaistem Modul", () => {
+    const r = lauf(fremdrepo({ quelle: "lib", moduldoku: null }));
+    assert.equal(r.status, 0, r.text);
+    assert.match(r.text, /check:docmap entfällt \(struktur\.moduldoku: null\)/);
+  });
+  test("eine falsche quelle bleibt auch mit moduldoku: null fail-closed, strukturAus und Prüfung akzeptieren null", () => {
+    assert.throws(() => pc.strukturAus({ struktur: { quelle: "", moduldoku: null } }), /struktur[\s\S]*Fix:/);
+    assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: null } }), { quelle: "lib", moduldoku: null });
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), struktur: { quelle: "lib", moduldoku: null } }), []);
+    assert.match(pc.pruefeProjektConfig({ ...gueltig(), struktur: { quelle: "lib", moduldoku: "" } }).join("|"), /struktur\.moduldoku muss ein nicht-leerer String/);
+  });
+});
+
 describe("Struktur-Pfade als Projektwert (#1843)", () => {
   const mit = (s: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), struktur: s });
 
   test("strukturAus: liefert quelle und moduldoku, die der echten Config zeigen auf vorhandene Ordner (die Werte prüft ein Projekt-Test)", () => {
     const echt = pc.strukturAus(pc.ladeProjektConfig());
-    for (const p of [echt.quelle, echt.moduldoku]) assert.ok(existsSync(join(WURZEL, p)), `struktur-Pfad ${p} fehlt im Repo`);
+    for (const p of [echt.quelle, echt.moduldoku].filter((x) => x !== null)) assert.ok(existsSync(join(WURZEL, p)), `struktur-Pfad ${p} fehlt im Repo`);
     assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: "docs/mod" } }), { quelle: "lib", moduldoku: "docs/mod" });
   });
   test("strukturAus: ohne Block, Nicht-Objekt oder leeren Pfad wirft mit Schlüssel und Fix-Zeile (kein stiller Standardwert)", () => {

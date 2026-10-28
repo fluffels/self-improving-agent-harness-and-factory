@@ -246,11 +246,14 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
  *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
  *  check:diffsize (scripts/slice-override.mjs), damit es lokal, im PR und auf main gleich wirkt. */
 
+/** Git-Optionen des Diff-Laufs; maxBuffer groß, damit ein breiter Diff nicht an ENOBUFS scheitert. */
+export const GIT_OPTIONEN = { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 };
+
 /** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
  *  Coverage-Lauf und ohne Repo-Zustand deterministisch läuft. */
 export function checkDiffCoverage({ runGit, readFile, env = process.env, zeilen = ladeCommitZeilen(), quelle = strukturAus(ladeProjektConfig()).quelle } = {}) {
-  const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }));
+  const git = runGit ?? ((args) => execFileSync("git", args, GIT_OPTIONEN));
   const read = readFile ?? ((p) => readFileSync(p, "utf8"));
   const base = resolveBase(git, env);
 

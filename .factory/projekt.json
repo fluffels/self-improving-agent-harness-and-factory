@@ -47,7 +47,7 @@
   },
   "struktur": {
     "quelle": "scripts",
-    "moduldoku": "docs"
+    "moduldoku": null
   },
   "bereiche": {
     "aliase": {}

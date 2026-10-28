@@ -101,6 +101,10 @@ function main() {
     console.error(`✖ ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   }
+  if (struktur.moduldoku === null) {
+    console.log("check:docmap entfällt (struktur.moduldoku: null)");
+    return;
+  }
   const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
   if (modules.length === 0) {
     // Fail-closed (#1942): ohne Quell-Modul (kein Ordner, keine .ts) prüft das Gate nichts, grün wäre eine Behauptung ohne Beleg.

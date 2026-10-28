@@ -39,6 +39,7 @@ type Verdict = { buckets: Record<string, Bucket>; missing: string[]; below: stri
 type CheckDiffCoverageModule = {
   LAYER_DIFF_FLOORS: Record<string, number | null>;
   LCOV_PATH: string;
+  GIT_OPTIONEN: { encoding: string; maxBuffer: number };
   normalizePath: (p: string) => string;
   isMeasured: (path: string, quelle?: string) => boolean;
   parseDiffLines: (text: string) => Changed;
@@ -62,6 +63,7 @@ import * as checkCovRaw from "../scripts/check-diffcoverage.mjs";
 const {
   LAYER_DIFF_FLOORS,
   LCOV_PATH,
+  GIT_OPTIONEN,
   normalizePath,
   isMeasured,
   parseDiffLines,
@@ -100,6 +102,13 @@ function diffFor(path: string, hunks: string[]): string {
 function lcovFor(path: string, hits: Record<number, number>): string {
   return [`TN:`, `SF:${path}`, ...Object.entries(hits).map(([l, n]) => `DA:${l},${n}`), `end_of_record`].join("\n");
 }
+
+describe("Diff-Coverage: Git-Optionen (#97 L11j)", () => {
+  test("maxBuffer ist mindestens 256 MiB, damit ein breiter Diff nicht an ENOBUFS scheitert", () => {
+    assert.ok(GIT_OPTIONEN.maxBuffer >= 256 * 1024 * 1024);
+    assert.equal(GIT_OPTIONEN.encoding, "utf8");
+  });
+});
 
 describe("Diff-Coverage: Diff-Parsing", () => {
   test("Hunk-Header liefert genau die Zeilen der NEUEN Seite", () => {
