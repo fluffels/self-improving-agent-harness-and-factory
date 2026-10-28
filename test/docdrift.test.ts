@@ -525,3 +525,29 @@ describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
     assert.deepEqual(fixture("# ADR 0001: X\n", false), []);
   });
 });
+
+// adr.ordner aus der Config (#97 L2(c)): ein Projekt mit anderem ADR-Ordner bekommt dieselbe Prüfung.
+describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (#97)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { fortschreibungsFehler: string[] } }).auditDocDrift;
+  test("abweichender adr.ordner: fehlender Zeiger ist rot", () => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-adrordner-"));
+    try {
+      const dateien: Record<string, string> = {
+        "package.json": JSON.stringify({ scripts: {} }),
+        "AGENTS.md": "# Titel\n",
+        "scripts/docs-gen/config.json": JSON.stringify({ adr: { ordner: "doku/entscheidungen" } }),
+        "doku/entscheidungen/0001-x.md": "# ADR 0001: X\n",
+        "doku/entscheidungen/fortschreibungen/0001-5-thema.md": "# Fortschreibung #5 (2026-10-01): Thema\n",
+      };
+      for (const [f, text] of Object.entries(dateien)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      const f = auditIn(dir).fortschreibungsFehler;
+      assert.equal(f.length, 1);
+      assert.match(f[0], /Zeiger "fortschreibungen\/0001-5-thema\.md"/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

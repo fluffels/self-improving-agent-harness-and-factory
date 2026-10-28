@@ -193,9 +193,16 @@ export function auditDocDrift(rootDir = ROOT) {
   return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations, fortschreibungsFehler: auditFortschreibungen(rootDir) };
 }
 
+/** ADR-Ordner aus scripts/docs-gen/config.json › adr.ordner (#97); ohne Config oder Eintrag `docs/adr`. */
+function adrOrdner(rootDir) {
+  const cfg = join(rootDir, "scripts", "docs-gen", "config.json");
+  const wert = existsSync(cfg) ? JSON.parse(readFileSync(cfg, "utf8")).adr?.ordner : undefined;
+  return typeof wert === "string" && wert !== "" ? wert : "docs/adr";
+}
+
 /** 6. ADR-Zeiger (#90): jede `*.md` unter docs/adr/fortschreibungen/ hat Namen, Kopfzeile und Zeiger im ADR; fehlt der Ordner, entfällt die Prüfung. */
 function auditFortschreibungen(rootDir) {
-  const adrDir = join(rootDir, "docs", "adr");
+  const adrDir = join(rootDir, adrOrdner(rootDir));
   const unter = join(adrDir, "fortschreibungen");
   if (!existsSync(unter)) return [];
   const adrs = Object.fromEntries(readdirSync(adrDir).filter((n) => /^\d{4}-.*\.md$/.test(n)).map((n) => [n, readFileSync(join(adrDir, n), "utf8")]));
