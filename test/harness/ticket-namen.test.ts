@@ -41,6 +41,7 @@ type Namen = {
   ticketAus: (t: string) => number | null;
   patchMuster: { ticketRunde: RegExp; voll: RegExp; delta: RegExp };
   dateiMuster: RegExp;
+  lensPfadMuster: RegExp;
   ticketBranchMuster: RegExp;
 };
 const docsGen = docsGenRaw as unknown as { escapeRegex: (t: string) => string };
@@ -94,6 +95,16 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(n.ticketAus("feature/ab-12x")).toBeNull();
     expect(n.ticketAus(".claude/worktrees/ab-12/src")).toBe(12);
     expect(n.ticketAus(undefined as unknown as string)).toBeNull();
+  });
+  test("Arbeitsplatz (#87): ein Repo-Segment vor dem Worktree-Namen wird erkannt, ein fremdes Muster nicht", () => {
+    expect(n.ticketAus(".claude/worktrees/web/ab-12/src")).toBe(12);
+    expect(n.ticketAus("C:\\x\\.claude\\worktrees\\web\\ab-7\\src")).toBe(7);
+    expect(n.ticketAus(".claude/worktrees/a/b/ab-12")).toBeNull();
+    expect(n.ticketAus(".claude/worktrees/../ab-12")).toBeNull();
+    expect(n.lensPfadMuster.test("/.claude/worktrees/web/ab-12-lens-r1/x")).toBe(true);
+    expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12-lens-r1/x")).toBe(true);
+    expect(n.lensPfadMuster.test("/.claude/worktrees/../ab-12-lens-r1/x")).toBe(false);
+    expect(n.lensPfadMuster.test("/.claude/worktrees/a/b/ab-12-lens-r1/x")).toBe(false);
   });
   test("Namen entstehen aus den Präfixen", () => {
     expect(n.worktreeName(12)).toBe("ab-12");
