@@ -27,6 +27,9 @@ import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as besitzRoh from "../scripts/besitz-lib.mjs";
+const { markerEnde, markerStart } = besitzRoh as { markerEnde: (id: string) => string; markerStart: (id: string) => string };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { linkStellen as linkStellenRoh, linkZiel as linkZielRoh } from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../scripts/check-basis.mjs";
@@ -603,5 +606,84 @@ describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
   test("Platzhalter werden übersprungen, Suffix #/: abgeschnitten", () => {
     assert.deepEqual(fixture({ "docs/a.md": "`test/<name>.test.ts` `test/*.test.ts` `test/{a,b}.ts` `test/da.test.ts#L5` `test/da.test.ts:12`\n" }), []);
     assert.equal(fixture({ "docs/a.md": "`test/weg.test.ts:12`\n" }).length, 1);
+  });
+});
+
+// Bezieher-Modus (#110): Factory-Besitz verweist auf Tests, die der Bezieher nicht erhält.
+describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz (#110)", () => {
+  const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { testPfadFehler: { file: string; pfad: string }[] } }).auditDocDrift;
+  const STAND = { ".factory/sync-stand.json": "{}" };
+  const manifest = (eintraege: unknown[]): Record<string, string> => ({ ".factory/besitz.json": JSON.stringify({ version: 1, eintraege }) });
+  const fixture = (dateien: Record<string, string>): { file: string; pfad: string }[] => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-bezieher-"));
+    try {
+      const alle = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n", "test/da.test.ts": "", ...dateien };
+      for (const [f, text] of Object.entries(alle)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      return auditIn(dir).testPfadFehler;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const kern = { pfad: "docs/a.md", ring: "kern" };
+  const verweis = "# A\n`test/weg.test.ts`\n";
+
+  test("T1 Factory-Repo (kein Sync-Stand): toter Pfad in Besitz-Datei bleibt Fehler", () => {
+    assert.equal(fixture({ ...manifest([kern]), "docs/a.md": verweis }).length, 1);
+  });
+
+  test("T2 Bezieher: Verweis aus verteilter Besitz-Datei auf Nicht-Besitz ist kein Fehler", () => {
+    assert.deepEqual(fixture({ ...STAND, ...manifest([kern]), "docs/a.md": verweis }), []);
+  });
+
+  test("T3 Bezieher: Ziel, das selbst Besitz ist (Datei oder Ordner), wird weiter geprüft", () => {
+    const eintraege = [kern, { pfad: "test/kern.test.ts", ring: "kern" }, { pfad: "test/kern/x.test.ts", ring: "kern" }];
+    const f = fixture({ ...STAND, ...manifest(eintraege), "docs/a.md": "# A\n`test/kern.test.ts` `test/kern/`\n" });
+    assert.equal(f.length, 2);
+  });
+
+  test("T4 Bezieher: Projekt-eigene Datei bleibt voll geprüft", () => {
+    assert.equal(fixture({ ...STAND, ...manifest([kern]), "docs/projekt.md": verweis }).length, 1);
+  });
+
+  test("T5 Bezieher: Block-Einheit schont nur den Blockbereich", () => {
+    const text = `# T\n${markerStart("kern")}\n\`test/weg.test.ts\`\n${markerEnde("kern")}\n\`test/weg2.test.ts\`\n`;
+    const f = fixture({ ...STAND, ...manifest([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]), "AGENTS.md": text });
+    assert.deepEqual(f, [{ file: "AGENTS.md", pfad: "test/weg2.test.ts" }]);
+  });
+
+  test("T6 Bezieher: nicht verteilte Einheit (Ring oberflaeche) schont nichts", () => {
+    assert.equal(fixture({ ...STAND, ...manifest([{ pfad: "docs/a.md", ring: "oberflaeche" }]), "docs/a.md": verweis }).length, 1);
+  });
+
+  test("T8 Bezieher: Block-Fenster hat beide Grenzen, kaputte Marker schonen nichts", () => {
+    const m = (eintraege: unknown[], text: string) => fixture({ ...STAND, ...manifest(eintraege), "AGENTS.md": text });
+    const block = [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }];
+    const davor = `# T\n\`test/weg0.test.ts\`\n${markerStart("kern")}\n\`test/weg.test.ts\`\n${markerEnde("kern")}\n`;
+    assert.deepEqual(m(block, davor), [{ file: "AGENTS.md", pfad: "test/weg0.test.ts" }]);
+    const ohneStart = `# T\n\`test/weg0.test.ts\`\n\`test/weg.test.ts\`\n${markerEnde("kern")}\n`;
+    assert.equal(m(block, ohneStart).length, 2);
+    const vertauscht = `# T\n${markerEnde("kern")}\n\`test/weg.test.ts\`\n${markerStart("kern")}\n`;
+    assert.equal(m(block, vertauscht).length, 1);
+  });
+
+  test("T9 Bezieher: Ordner-Verweis ist nur Ziel bei Pfadgrenze, Block-Einheit ist kein Datei-Ziel", () => {
+    const e = (pfad: string) => [kern, { pfad, ring: "kern" }];
+    const ordner = fixture({ ...STAND, ...manifest(e("test/kern/x.test.ts")), "docs/a.md": "# A\n`test/kern`\n" });
+    assert.equal(ordner.length, 1);
+    const praefix = fixture({ ...STAND, ...manifest(e("test/kern.test.ts")), "docs/a.md": "# A\n`test/ker`\n" });
+    assert.deepEqual(praefix, []);
+    const schluessel = [kern, { pfad: "test/x.json", schluessel: "a", ring: "kern" }];
+    assert.deepEqual(fixture({ ...STAND, ...manifest(schluessel), "docs/a.md": "# A\n`test/x.json`\n" }), []);
+  });
+
+  test("T7 fail-closed: kaputter Stand oder fehlendes/kaputtes Manifest gibt volle Prüfung", () => {
+    const kaputtStand = { ".factory/sync-stand.json": "{kaputt" };
+    assert.equal(fixture({ ...kaputtStand, ...manifest([kern]), "docs/a.md": verweis }).length, 1);
+    assert.equal(fixture({ ...STAND, "docs/a.md": verweis }).length, 1);
+    assert.equal(fixture({ ...STAND, ".factory/besitz.json": "{kaputt", "docs/a.md": verweis }).length, 1);
+    assert.equal(fixture({ ...STAND, ".factory/besitz.json": JSON.stringify({ eintraege: 5 }), "docs/a.md": verweis }).length, 1);
   });
 });
