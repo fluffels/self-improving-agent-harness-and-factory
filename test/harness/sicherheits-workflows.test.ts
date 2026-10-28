@@ -10,7 +10,9 @@
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer
  * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt nur
- * für `PIN_PFLICHT`; die übrigen Workflows pinnt #983.
+ * für `PIN_PFLICHT`; die übrigen Workflows pinnt #983. (4) Container-Images brauchen `@sha256:<64 hex>`; der Scan-Umfang ist geschlossen
+ * (`docker run|create` in `run`-Blöcken, `container:`, `services.*.image`), alles andere (`docker pull/build/compose`, Images aus
+ * Skripten, Variablen als Image) bleibt ungeprüft.
  *
  * Ausführen mit:  npm test
  */
@@ -24,7 +26,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
 /** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
-const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml", "audit-einordnung.yml"] as const;
+const PIN_PFLICHT = ["codeql.yml", "scorecard.yml", "codescanning-inbox.yml", "audit-einordnung.yml", "secret-scan.yml"] as const;
 
 type Obj = Record<string, unknown>;
 const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -287,4 +289,65 @@ describe("jeder Workflow hat oberste permissions (#1663)", () => {
     expect(hatOberstePermissions("permissions: {}\njobs: {}\n")).toBe(true);
     expect(hatOberstePermissions("permissions:\n  contents: read\n")).toBe(true);
   });
+});
+
+/** Docker-Flags, die den nächsten Token als Wert verbrauchen (das Image ist der erste Token, der weder Flag noch Flag-Wert ist). */
+const WERT_FLAGS = new Set(["-v", "--volume", "-e", "--env", "--env-file", "-w", "--workdir", "-u", "--user", "--name", "--entrypoint", "-p", "--publish", "--network", "--platform", "--mount", "-l", "--label", "--pull", "-h", "--hostname"]);
+
+/** Image-Referenzen aller `docker run|create`-Aufrufe eines `run`-Blocks (Zeilenfortsetzung `\` und gefaltete Blöcke sind schon ein Text). */
+function imagesImRun(run: string): string[] {
+  const tokens = run.replace(/\\\r?\n/g, " ").split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length - 2; i++) {
+    if (tokens[i] !== "docker" || !["run", "create"].includes(tokens[i + 1])) continue;
+    let j = i + 2;
+    while (j < tokens.length && tokens[j].startsWith("-")) j += WERT_FLAGS.has(tokens[j]) ? 2 : 1;
+    if (j < tokens.length) out.push(tokens[j]);
+  }
+  return out;
+}
+
+/** Alle Container-Images eines Workflows: `docker run|create` in `run`-Blöcken sowie `container:` und `services.*.image` (ohne `@sha256:<64 hex>`: Fund). */
+function ungepinnteImages(yml: string): string[] {
+  const wf: unknown = parse(String(yml ?? ""));
+  const jobs = istObj(wf) && istObj(wf.jobs) ? Object.values(wf.jobs).filter(istObj) : [];
+  const bilder: string[] = [];
+  for (const j of jobs) {
+    if (typeof j.container === "string") bilder.push(j.container);
+    else if (istObj(j.container) && typeof j.container.image === "string") bilder.push(j.container.image);
+    for (const s of istObj(j.services) ? Object.values(j.services).filter(istObj) : []) if (typeof s.image === "string") bilder.push(s.image);
+    for (const st of Array.isArray(j.steps) ? j.steps.filter(istObj) : []) if (typeof st.run === "string") bilder.push(...imagesImRun(st.run));
+  }
+  return bilder.filter((b) => !/@sha256:[0-9a-f]{64}$/.test(b));
+}
+
+describe("Container-Images brauchen einen Digest (#92)", () => {
+  // Ehrliche Grenze (Scan-Umfang geschlossen): `docker run|create` in `run`-Blöcken, `container:` und `services.*.image`. Nicht erkannt:
+  // `docker pull`/`build`, `docker compose`, Images aus Skripten, Variablen als Image (`$IMAGE`), Flags hinter dem Image.
+  const DIGEST = `sha256:${"a".repeat(64)}`;
+  const wf = (schritt: string, job = "") => `on: push\npermissions: {}\njobs:\n  a:\n    runs-on: x\n${job}    steps:\n      - run: ${schritt}\n`;
+  test("echte Datei secret-scan.yml: Image per Digest", () => {
+    const yml = lies(".github", "workflows", "secret-scan.yml");
+    expect(imagesImRun(String((parse(yml) as { jobs: { scan: { steps: { run?: string }[] } } }).jobs.scan.steps.find((s) => s.run?.includes("docker run"))?.run))).toHaveLength(1);
+    expect(ungepinnteImages(yml)).toEqual([]);
+  });
+  test("alle PIN_PFLICHT-Workflows ohne ungepinnte Images", () => {
+    for (const d of PIN_PFLICHT) expect(ungepinnteImages(lies(".github", "workflows", d)), d).toEqual([]);
+  });
+  test("Image mit Digest ist ok, auch mit Tag davor und Flags vorher", () => {
+    expect(ungepinnteImages(wf(`docker run --rm -v "$PWD:/r" -e A=b ghcr.io/x/y:v1@${DIGEST} git /r`))).toEqual([]);
+  });
+  test("Negativ: Tag ohne Digest", () => expect(ungepinnteImages(wf("docker run --rm -v \"$PWD:/r\" ghcr.io/x/y:v1 git /r"))).toEqual(["ghcr.io/x/y:v1"]));
+  test("Negativ: Kurzform ohne Registry und ohne Tag", () => expect(ungepinnteImages(wf("docker run --rm alpine echo"))).toEqual(["alpine"]));
+  test("Negativ: gefalteter Block mit Zeilenfortsetzung", () => {
+    expect(ungepinnteImages(wf("|\n          docker run --rm \\\n            -v a:b \\\n            ghcr.io/x/y:v1 cmd"))).toEqual(["ghcr.io/x/y:v1"]);
+  });
+  test("Negativ: zu kurzer Digest", () => expect(ungepinnteImages(wf("docker run ghcr.io/x/y@sha256:abc"))).toEqual(["ghcr.io/x/y@sha256:abc"]));
+  test("Negativ: container: als Text und als Objekt, services.*.image", () => {
+    expect(ungepinnteImages(wf("echo", "    container: node:22\n"))).toEqual(["node:22"]);
+    expect(ungepinnteImages(wf("echo", "    container:\n      image: node:22\n"))).toEqual(["node:22"]);
+    expect(ungepinnteImages(wf("echo", "    services:\n      db:\n        image: postgres:16\n"))).toEqual(["postgres:16"]);
+    expect(ungepinnteImages(wf("echo", `    services:\n      db:\n        image: postgres:16@${DIGEST}\n`))).toEqual([]);
+  });
+  test("ohne Docker-Aufruf kein Fund", () => expect(ungepinnteImages(wf("echo docker run"))).toEqual([]));
 });
