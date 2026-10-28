@@ -132,6 +132,8 @@ Der Supervisor erzeugt das Ziel angehalten, ordnet es zwingend einem nicht verer
 
 Die zusätzlichen Windows-Nachweise laufen mit `npx vitest run test/harness/codex-prozess-windows.test.ts test/harness/codex-prozess-cache.test.ts`. Sie ergänzen den obigen unveränderten nativen Drei-Dateien-Lauf.
 
+Die Node-seitige Cache-, Manifest-, PE-, Ausgabe- und Fehlerlogik wird am Originalmodul auch unter Linux getestet; nur Compiler, Windows-ACL-Aufruf und nativer Kindprozess werden dafür ersetzt. Diese Tests attestieren keine Windows-Kernelwirkung. Echte C#-, ACL- und Prozessbaumproben bleiben zusätzliche Windows-Nachweise; für vollständige Läufe mit nativen Prozessen gilt der oben dokumentierte serielle Modus `CODEX_SCHUTZ_PROBE`.
+
 ## Vorprüfung und Nachweisformat
 
 `node scripts/codex-vorpruefung.mjs [--belege <JSON-Datei>]` liest ausschließlich. Exit 2 bedeutet Aufruffehler, Exit 1 den gesperrten Einstieg. Weder Claim noch Umsetzung werden gestartet. Vollständige Offline-Daten heben diese Sperre nicht auf; JSON ist selbst attestierbar und keine signierte Laufzeitattestierung.

@@ -1,11 +1,12 @@
 /* @harness-waechter: Nur private, vollständig veröffentlichte native Artefakte ausführen. */
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as raw from "../../scripts/codex-prozess-windows.mjs";
 const w = raw as { windowsVorbereiten: () => string; windowsCacheProbe: (source: Buffer) => string };
@@ -23,6 +24,7 @@ function parallelPrepare(lock: string) {
     child.once("error", reject); child.once("close", code => { if (code === 0) resolveResult(out.trim()); else reject(Error(err)); });
   });
 }
+describe.skipIf(process.platform !== "win32")("nativer Cache", () => {
 beforeAll(async () => {
   if (process.platform !== "win32") return;
   fixture = mkdtempSync(join(tmpdir(), "codex-cache-test-")); marker = join(fixture, "zielmarker");
@@ -33,9 +35,14 @@ beforeAll(async () => {
   const expected = JSON.parse(readFileSync(join(dirname(active), "manifest.json"), "utf8")) as Record<string, unknown>;
   delete expected.exeHash; expected.sourceHash = createHash("sha256").update(readFileSync(sourceFile)).digest("hex");
   const key = createHash("sha256").update(JSON.stringify(expected)).digest("hex");
-  const parallel = parallelPrepare(join(root, `${key}.lock`));
-  const originalPath = w.windowsCacheProbe(readFileSync(sourceFile));
-  expect(await parallel).toBe(originalPath); artifact = dirname(originalPath);
+  const outcomes = await Promise.allSettled([
+    Promise.resolve().then(() => w.windowsCacheProbe(readFileSync(sourceFile))),
+    parallelPrepare(join(root, `${key}.lock`)),
+  ]);
+  const original = outcomes[0], parallel = outcomes[1];
+  if (original.status === "rejected") throw original.reason;
+  if (parallel.status === "rejected") throw parallel.reason;
+  expect(parallel.value).toBe(original.value); artifact = dirname(original.value);
   expect(w.windowsVorbereiten()).toBe(active);
 });
 afterAll(() => {
@@ -83,4 +90,74 @@ windowsTest("zusätzliche ACL-Berechtigung stoppt vor jeder Zielaktion", () => {
     execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-File", script, artifact, "add", backup], { windowsHide: true });
     const result = launch(action); expect(result.status).toBe(1); expect(existsSync(marker)).toBe(false);
   } finally { execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-File", script, artifact, "restore", backup], { windowsHide: true }); }
+});
+});
+
+type PortableModule = typeof w & { windowsProzess: (file: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv; input: string; timeoutMs: number; maxBytes: number }) => Promise<{ code: number; stdout: string; stderr: string }> };
+describe("OS-Port des Originaladapters", () => {
+  let sandbox: string, cache: string, adapter: PortableModule;
+  let prepareFault: string, statusText: string, streamFault: string, compilerCalls: number, nativeCalls: number, requestDir: string;
+  const peBytes = () => { const data = Buffer.alloc(128); data.writeUInt16LE(0x5a4d); data.writeUInt32LE(64, 60); data.writeUInt32LE(0x4550, 64); data.writeUInt16LE(0x8664, 68); return data; };
+  beforeEach(async () => {
+    sandbox = mkdtempSync(join(tmpdir(), "codex-cache-port-")); cache = join(sandbox, "cache"); mkdirSync(cache);
+    const compiler = join(sandbox, "Microsoft.NET/Framework64/v4.0.30319/csc.exe"); mkdirSync(dirname(compiler), { recursive: true }); writeFileSync(compiler, "fixture compiler");
+    prepareFault = ""; statusText = "exit:23"; streamFault = ""; compilerCalls = 0; nativeCalls = 0;
+    vi.stubEnv("SystemRoot", sandbox); vi.resetModules();
+    vi.doMock("node:child_process", async () => ({
+      ...await vi.importActual<typeof import("node:child_process")>("node:child_process"),
+      execFileSync: (file: string, args: string[]) => {
+        if (file.endsWith("powershell.exe")) return cache;
+        if (file.endsWith("csc.exe")) {
+          compilerCalls++; if (prepareFault === "compiler") throw Error("fixture compiler failed");
+          const output = args.find(a => a.startsWith("/out:"))!; const data = peBytes();
+          if (prepareFault === "short") writeFileSync(output.slice(5), data.subarray(0, 63));
+          else { if (prepareFault === "arch") data.writeUInt16LE(0x14c, 68); writeFileSync(output.slice(5), data); }
+          return Buffer.alloc(0);
+        }
+        nativeCalls++; if (prepareFault === "native") throw Error("fixture native failed");
+        return Buffer.alloc(0);
+      },
+      spawn: (_file: string, args: string[]) => {
+        requestDir = dirname(args[0]);
+        const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), stdin: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit("close", 1)); return true; } });
+        Object.assign(child.stdin, { end: (input: string) => queueMicrotask(() => {
+          writeFileSync(join(requestDir, "status.txt"), statusText);
+          if (streamFault === "stdin") child.stdin.emit("error", Error("fixture pipe"));
+          if (streamFault === "spawn") child.emit("error", Error("fixture spawn"));
+          const bytes = Buffer.from(input); child.stdout.emit("data", bytes.subarray(0, 1)); child.stdout.emit("data", bytes.subarray(1));
+          child.stderr.emit("data", Buffer.from("separat")); child.emit("close", 0);
+        }) });
+        return child;
+      },
+    }));
+    adapter = await import("../../scripts/codex-prozess-windows.mjs") as PortableModule;
+  });
+  afterEach(() => { vi.doUnmock("node:child_process"); vi.unstubAllEnvs(); vi.resetModules(); rmSync(sandbox, { recursive: true }); });
+
+  test("kalte Veröffentlichung und validierte Wiederverwendung laufen am Originalmodul", () => {
+    const exe = adapter.windowsVorbereiten();
+    expect(readdirSync(dirname(exe)).sort()).toEqual(["manifest.json", "source.cs", "supervisor.exe"]);
+    expect(adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toBe(exe);
+    expect(compilerCalls).toBe(1); expect(nativeCalls).toBe(1);
+    expect(readdirSync(cache)).toEqual([dirname(exe).slice(cache.length + 1)]);
+  });
+  test.each([["compiler", "fixture compiler failed"], ["native", "fixture native failed"], ["short", "Supervisor-PE fehlt"], ["arch", "Supervisor-Architektur"]])("Vorbereitungsfehler %s veröffentlicht nichts", (fault, error) => {
+    prepareFault = fault; expect(() => adapter.windowsVorbereiten()).toThrow(error); expect(readdirSync(cache)).toEqual([]);
+  });
+  test("beschädigtes Manifest wird ohne neue Kompilierung abgewiesen", () => {
+    const exe = adapter.windowsVorbereiten(); writeFileSync(join(dirname(exe), "manifest.json"), "{}");
+    expect(() => adapter.windowsCacheProbe(readFileSync(resolve("scripts/codex-prozess-windows.cs")))).toThrow("Manifest"); expect(compilerCalls).toBe(1);
+  });
+  test("byteweise getrennte Ausgabe und Status bleiben getrennt; Request wird entfernt", async () => {
+    adapter.windowsVorbereiten(); const result = await adapter.windowsProzess("fixture", ["", "a b"], { cwd: sandbox, env: { FIXTURE: undefined }, input: "ü🐈", timeoutMs: 3000, maxBytes: 100 });
+    expect(result).toEqual({ code: 23, stdout: "ü🐈", stderr: "separat" }); expect(existsSync(requestDir)).toBe(false);
+  });
+  test.each([["timeout", "Frist"], ["error:fixture", "fixture"], ["exit:bad", "Supervisorstatus"]])("Status %s ist Fehler", async (status, error) => {
+    adapter.windowsVorbereiten(); statusText = status;
+    await expect(adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "", timeoutMs: 3000, maxBytes: 100 })).rejects.toThrow(error); expect(existsSync(requestDir)).toBe(false);
+  });
+  test.each(["stdin", "spawn", "output"])("Prozessportfehler %s schließt ab und räumt auf", async fault => {
+    adapter.windowsVorbereiten(); streamFault = fault;
+    await expect(adapter.windowsProzess("fixture", [], { cwd: sandbox, env: {}, input: "zu viel", timeoutMs: 3000, maxBytes: fault === "output" ? 1 : 100 })).rejects.toThrow(fault === "stdin" ? "pipe" : fault === "spawn" ? "spawn" : "Ausgabe"); expect(existsSync(requestDir)).toBe(false);
+  });
 });
