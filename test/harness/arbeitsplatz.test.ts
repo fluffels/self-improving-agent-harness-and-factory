@@ -59,6 +59,7 @@ describe("Config-Block arbeitsplatz (K1)", () => {
 
   test("Repo: kein Objekt und unbekannter Schlüssel", () => {
     expect(mit({ ...GUELTIG, repos: ["web"] }).join("|")).toMatch(/repos\[0\] muss ein Objekt/);
+    expect(L.arbeitsplatzMaengel({ wurzel: ".", repos: [null] })).toEqual(["arbeitsplatz.repos[0] muss ein Objekt { name, pfad } sein"]);
     expect(mit(repo({ name: "web", pfad: "web", x: 1 })).join("|")).toMatch(/repos\[0\]\.x ist unbekannt/);
   });
 
@@ -71,6 +72,7 @@ describe("Config-Block arbeitsplatz (K1)", () => {
   test("Name beginnt wie ein Worktree-Name, ein ähnlicher Name ohne Ziffer ist erlaubt", () => {
     expect(mit(repo({ name: `${WT}7`, pfad: "web" })).join("|")).toMatch(/beginnt wie ein Worktree-Name/);
     expect(mit(repo({ name: `${WT}x`, pfad: "web" }))).toEqual([]);
+    expect(mit(repo({ name: `${WT.toUpperCase()}7`, pfad: "web" })).join("|")).toMatch(/beginnt wie ein Worktree-Name/);
   });
 
   test("doppelte Namen, auch nur in der Groß-/Kleinschreibung", () => {
@@ -93,6 +95,7 @@ describe("Config-Block arbeitsplatz (K1)", () => {
       expect(mit(repo({ name: "web", pfad })).join("|"), pfad).toMatch(/überschneidet den Worktree-Ordner/);
     }
     expect(mit(repo({ name: "web", pfad: ".claude-x/web" }))).toEqual([]);
+    expect(mit(repo({ name: "web", pfad: ".claude/worktreesx" }))).toEqual([]);
   });
 
   test("istRepoName und istRelativPosix", () => {
@@ -122,6 +125,10 @@ describe("Resolver arbeitsplatzAus (K2)", () => {
       { name: "web", pfad: `${w}/web`, worktreeOrdner: `${w}/.claude/worktrees/web` },
       { name: "api", pfad: `${w}/dienste/api`, worktreeOrdner: `${w}/.claude/worktrees/api` },
     ]);
+  });
+
+  test("Wurzel / bleibt /", () => {
+    expect(L.arbeitsplatzAus({ ...FREMD, arbeitsplatz: { wurzel: "/", repos: GUELTIG.repos } }, "/basis").wurzel).toBe("/");
   });
 
   test("absolute Wurzel wird übernommen, Backslashes werden zu Schrägstrichen", () => {
@@ -176,6 +183,10 @@ describe("harnessSpuren (K5, pur)", () => {
     "?? .agents/",
     "!! .factory/",
     "?? .codex/",
+    "?? .Claude/",
+    "!! .FACTORY/",
+    "?? .Agents/x",
+    "?? .CODEX/",
     `?? ${WT}7/`,
     `?? ${WT}7-lens-r1/`,
     `?? ${WT.toUpperCase()}7/`,
@@ -190,6 +201,7 @@ describe("harnessSpuren (K5, pur)", () => {
   test("Rename-Eintrag: das Folgefeld ist kein eigener Eintrag", () => {
     expect(pfade(z("R  neu", "?? AGENTS.md"))).toEqual([]);
     expect(pfade(z("R  neu", "?? AGENTS.md", "?? CLAUDE.md"))).toEqual(["?? CLAUDE.md"]);
+    expect(pfade(z("C  kopie", "?? AGENTS.md"))).toEqual([]);
   });
 
   test("leere Ausgabe und ohne dateiMuster gibt es keine Worktree-Treffer", () => {
@@ -238,7 +250,7 @@ describe("cli: Aufruf, pfade, worktree, sauber (Fehlerwege)", () => {
   });
 
   test("worktree: Aufruf-Fehler (nr, slug, Repo mehrdeutig oder unbekannt)", () => {
-    for (const argv of [["worktree", "0", "x"], ["worktree", "abc", "x"], ["worktree", "7"], ["worktree", "7", "a b"]]) {
+    for (const argv of [["worktree", "0", "x"], ["worktree", "abc", "x"], ["worktree", "7x", "x"], ["worktree", "x7", "x"], ["worktree", "7"], ["worktree", "7", "a b"]]) {
       expect(lauf([...argv, "--wurzel", dir, "--repo", "web"]).code, argv.join(" ")).toBe(2);
     }
     expect(lauf(["worktree", "7", "x", "--wurzel", dir]).err).toMatch(/mehrere Repos.*web, api/);
@@ -273,6 +285,16 @@ describe("cli: Aufruf, pfade, worktree, sauber (Fehlerwege)", () => {
     expect(ok.code).toBe(0);
     expect(ok.out).toMatch(/✔ web: keine Harness-Spur[\s\S]*✔ api/);
     expect(lauf(["sauber", "--wurzel", dir, "--repo", "nix"]).code).toBe(2);
+    const gemischt = lauf(["sauber", "--wurzel", dir], { git: (_a, cwd) => (cwd.endsWith("/web") ? { ok: false, stdout: "kein Repo" } : { ok: true, stdout: "?? AGENTS.md\0" }) });
+    expect(gemischt.code).toBe(1);
+    expect(gemischt.err).toMatch(/✖ web: git status schlug fehl[\s\S]*✖ api: \?\? AGENTS\.md/);
+  });
+
+  test("ohne --wurzel gilt das Repo des Skripts (eingebettet), ohne Option zu arbeitsplatzMaengel gilt der Standard", () => {
+    const l = lauf(["pfade"]);
+    expect(l.code).toBe(0);
+    expect(l.out).toMatch(/betriebsart: eingebettet/);
+    expect(L.arbeitsplatzMaengel(GUELTIG)).toEqual([]);
   });
 });
 

@@ -55,7 +55,7 @@ function pfadMaengel(pfad, wo) {
 /** Pur: Mängel eines Repo-Namens (Form, Worktree-Präfix am Anfang). */
 function nameMaengel(name, wo, worktreePraefix) {
   if (!istRepoName(name)) return [`${wo}.name "${String(name)}" ist ungültig (${REPO_NAME_QUELLE}, ohne Schrägstrich und Leerraum)`];
-  if (istText(worktreePraefix) && name.startsWith(worktreePraefix) && /^\d/.test(name.slice(worktreePraefix.length))) {
+  if (istText(worktreePraefix) && name.toLowerCase().startsWith(worktreePraefix.toLowerCase()) && /^\d/.test(name.slice(worktreePraefix.length))) {
     return [`${wo}.name "${name}" beginnt wie ein Worktree-Name (${worktreePraefix}<nr>)`];
   }
   return [];
@@ -96,8 +96,8 @@ export function arbeitsplatzMaengel(block, { worktreePraefix } = {}) {
 const posixAus = (pfad) => pfad.replace(/\\/g, "/").replace(/(?<=.)\/+$/, "");
 
 /**
- * Pur: leitet Betriebsart, Wurzel, Repo-Pfade und Worktree-Ordner je Repo ab, alles mit Schrägstrichen. `basis` ist der Ordner mit der
- * Projekt-Config. Ohne Block (eingebettet) ist die Wurzel die Basis und der einzige Repo die Basis selbst. Wirft bei kaputtem Block mit „Fix:“-Zeile.
+ * Pur: leitet Betriebsart, Wurzel, Repo-Pfade und Worktree-Ordner je Repo ab, alles mit Schrägstrichen. `basis` ist der Ordner, der
+ * `.factory/projekt.json` enthält. Ohne Block (eingebettet) ist die Wurzel die Basis und der einzige Repo die Basis selbst. Wirft bei kaputtem Block mit „Fix:“-Zeile.
  */
 export function arbeitsplatzAus(config, basis) {
   const block = config?.arbeitsplatz;
