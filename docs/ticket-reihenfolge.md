@@ -109,7 +109,7 @@ Die Regel steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md); hi
 - **Anlegen:** `node scripts/sammelticket-anlegen.mjs harness` ([Sammelticket anlegen](#sammelticket-anlegen), prüft die Position), nie von Hand.
 - **Schon erledigt?** Vor einer Zeile `gh pr list --state merged --limit 1000 --search "<Stichwort>"`; ein gemergter PR, der sie erledigt, macht die Zeile überflüssig. Eintragen, Wettlauf und Nachfolger: [Harness-Sammelticket](#sammelticket-harness-härtung-gesammelt-1199).
 - **Langfuse-Ausnahme:** Befunde aus Langfuse-Daten gehen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Mechanik](#langfuse-befunde-gesammelt)).
-- **Notfall-Marker beim Einsortieren:** `🚨`, `🔒 Security:`, `🤖`, `⏰ Wiedervorlage:` (Art `wiedervorlage`, [Wiedervorlage](#wiedervorlage-1628)), `🔍 Security-Tabs prüfen` (Art `security-tabs`, [Secret-Inbox](#secret-inbox-92)), Forum (`board-place.mjs --notfall`, der Titel trägt den Marker) und das Wochen-Status-Ticket (Workflow) stehen ganz oben ([Reihenfolge pflegen](#reihenfolge-pflegen--im-board-nicht-in-einer-datei)).
+- **Notfall-Marker beim Einsortieren:** `🚨`, `🔒 Security:`, `🤖`, `⏰ Wiedervorlage:` (Art `wiedervorlage`, [Wiedervorlage](#wiedervorlage-1628)), `🔍 Security-Tabs prüfen` (Art `security-tabs`, [Secret-Inbox](#secret-inbox-92)), `🏷️ Tag v` (Art `tag`, Tag-Takt, [Sync-Ablauf](agent-harness.md)), Forum (`board-place.mjs --notfall`, der Titel trägt den Marker) und das Wochen-Status-Ticket (Workflow) stehen ganz oben ([Reihenfolge pflegen](#reihenfolge-pflegen--im-board-nicht-in-einer-datei)).
 
 ## Sammelticket anlegen
 
