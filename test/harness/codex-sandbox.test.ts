@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
+import { spawnSync } from "node:child_process";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as raw from "../../scripts/codex-sandbox.mjs";
 const fsFault = vi.hoisted(() => ({ stage: "", profil: "", canary: "", created: [] as string[] }));
@@ -49,15 +50,16 @@ test.each(["profil", "mkdir", "config", "canary", "marker"])("Initialisierungsfe
 });
 
 function fixture(mode = "ok") {
-  const calls: Params[] = [], state = { profil: "", marker: "" };
+  const calls: Params[] = [], state = { profil: "", marker: "", kontrolle: "" };
   const abfragen: Abfragen = async (_s, p, fn, opts) => {
     state.profil = p.root; expect(opts.timeoutMs).toBe(40000);
     expect(readFileSync(join(p.env.CODEX_HOME, "config.toml"), "utf8")).toContain('sandbox="unelevated"');
     return fn((method, args) => {
       expect(method).toBe("command/exec"); calls.push(args);
-      if (calls.length === 1) return Promise.resolve({ exitCode: mode === "kontrolle-exit" ? 1 : 0, stdout: mode === "kontrolle-text" ? "falsch" : "SANDBOX_KONTROLLE" });
-      if (calls.length === 2) {
-        state.marker = args.command[3];
+      if (calls.length === 1) {
+        expect(args.command).toHaveLength(5);
+        state.kontrolle = args.command[3]; state.marker = args.command[4];
+        if (mode !== "kontrolle-fehlt") writeFileSync(state.kontrolle, mode === "kontrolle-text" ? "falsch" : "SANDBOX_KONTROLLE");
         if (mode === "marker") writeFileSync(state.marker, "UEBERNOMMEN");
         if (mode === "rpc-deny") throw denial();
         if (mode === "rpc-code") throw denial(-32600);
@@ -75,20 +77,41 @@ test.each(["ok", "rpc-deny"])("identische starre Policy für Kontrollen und Akti
   const root = temp(), f = fixture(mode); vi.stubEnv("OPENAI_API_KEY", "fixture-only");
   const a = { ...aktion(root), sandboxPolicy: { type: "dangerFullAccess" }, writableRoots: [tmpdir()] };
   expect(await c.sandboxAktion(a, { root, abfragen: f.abfragen })).toEqual({ code: 0, stdout: "FIXTURE_OK", stderr: "" });
-  expect(f.calls).toHaveLength(3);
+  expect(f.calls).toHaveLength(2);
   for (const a of f.calls) {
     expect(a.sandboxPolicy).toEqual({ type: "workspaceWrite", writableRoots: [root], excludeSlashTmp: true, excludeTmpdirEnvVar: true, networkAccess: false });
     expect(a.cwd).toBe(root); expect(a.env).not.toHaveProperty("OPENAI_API_KEY"); expect(a).not.toHaveProperty("outputBytesCap");
   }
-  expect(f.calls[2].command).toEqual(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Write-Output FIXTURE_OK"]);
-  expect(f.calls[2].timeoutMs).toBe(30000); expect(existsSync(f.state.profil)).toBe(false); expect(existsSync(dirname(f.state.marker))).toBe(false);
+  expect(f.calls[0].command.slice(0, 2)).toEqual([process.execPath, "-e"]);
+  expect(f.calls[0].command[2]).toContain("writeFileSync(process.argv[1]");
+  expect(f.calls[0].command[2]).toContain("writeFileSync(process.argv[2]");
+  expect(f.calls[1].command).toEqual(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Write-Output FIXTURE_OK"]);
+  expect(f.calls[1].timeoutMs).toBe(30000); expect(existsSync(f.state.profil)).toBe(false); expect(existsSync(dirname(f.state.marker))).toBe(false);
 });
-test.each(["version", "kontrolle-exit", "kontrolle-text", "allow", "marker", "canary-typ", "rpc-code", "rpc-typ", "rpc-text", "rpc-throw", "exit-typ", "stdout-typ", "stderr-typ"])("Sandboxfehler %s stoppt und räumt auf", async mode => {
+test.each(["version", "kontrolle-fehlt", "kontrolle-text", "allow", "marker", "canary-typ", "rpc-code", "rpc-typ", "rpc-text", "rpc-throw", "exit-typ", "stdout-typ", "stderr-typ"])("Sandboxfehler %s stoppt und räumt auf", async mode => {
   const root = temp(), f = fixture(mode);
   await expect(c.sandboxAktion(aktion(root), { root, abfragen: f.abfragen })).rejects.toThrow();
-  expect(f.calls.length).toBe(mode === "version" ? 0 : mode.startsWith("kontrolle") ? 1 : mode.endsWith("-typ") && mode !== "canary-typ" && mode !== "rpc-typ" ? 3 : 2);
+  expect(f.calls.length).toBe(mode === "version" ? 0 : mode.endsWith("-typ") && mode !== "canary-typ" && mode !== "rpc-typ" ? 2 : 1);
   expect(existsSync(f.state.profil)).toBe(false);
   expect(f.state.marker === "" || !existsSync(dirname(f.state.marker))).toBe(true);
+});
+
+test("ignorierte Sandbox: echtes Kontrollprogramm verändert Außenmarker und stoppt vor Nutzeraktion", async () => {
+  const root = temp(); let calls = 0, profil = "", marker = "";
+  const abfragen: Abfragen = (_s, p, fn) => {
+    profil = p.root;
+    return fn((_method, args) => {
+      calls++;
+      if (calls > 1) return Promise.resolve({ exitCode: 0, stdout: "NUTZERAKTION_ERREICHT", stderr: "" });
+      marker = args.command[4];
+      const r = spawnSync(args.command[0], args.command.slice(1), { cwd: args.cwd, env: args.env, encoding: "utf8" });
+      expect(readFileSync(args.command[3], "utf8")).toBe("SANDBOX_KONTROLLE");
+      expect(readFileSync(marker, "utf8")).toBe("UEBERNOMMEN");
+      return Promise.resolve({ exitCode: r.status, stdout: r.stdout, stderr: r.stderr });
+    }, { userAgent: "fixture/0.164.0 " });
+  };
+  await expect(c.sandboxAktion(aktion(root), { root, abfragen })).rejects.toThrow("Sandbox-Schreibgrenze nicht durchgesetzt");
+  expect(calls).toBe(1); expect(existsSync(profil)).toBe(false); expect(existsSync(dirname(marker))).toBe(false);
 });
 test("cwd außerhalb der kanonischen Hostwurzel startet keinen Server", async () => {
   const root = temp(), outside = temp(), abfragen = vi.fn();
@@ -99,16 +122,21 @@ test("cwd außerhalb der kanonischen Hostwurzel startet keinen Server", async ()
 test("Unterordner und Bash behalten dieselbe Hostwurzel", async () => {
   const root = temp(), sub = join(root, "unterordner"), f = fixture(); mkdirSync(sub);
   await c.sandboxAktion({ cwd: sub, tool_input: { shell: "bash", cmd: "echo FIXTURE_OK" } }, { root, abfragen: f.abfragen });
-  expect(f.calls[2].cwd).toBe(sub); expect(f.calls[2].command).toEqual(["bash", "--noprofile", "--norc", "-c", "echo FIXTURE_OK"]);
-  expect(f.calls[2].sandboxPolicy).toMatchObject({ writableRoots: [root] });
+  expect(f.calls[1].cwd).toBe(sub); expect(f.calls[1].command).toEqual(["bash", "--noprofile", "--norc", "-c", "echo FIXTURE_OK"]);
+  expect(f.calls[1].sandboxPolicy).toMatchObject({ writableRoots: [root] });
 });
-test.skipIf(!process.env.CODEX_SCHUTZ_PROBE)("native Sandbox: echter Innenwrite erlaubt und Außenwrite verweigert", async () => {
-  const root = temp(), outside = temp(), inside = join(root, "innen.txt"), marker = join(outside, "aussen.txt"); writeFileSync(marker, "unveraendert");
-  const input = (file: string) => process.platform === "win32"
-    ? { shell: "powershell", cmd: `Set-Content -LiteralPath '${file.replaceAll("'", "''")}' -Value INNEN` }
-    : { shell: "bash", cmd: `printf INNEN > ${JSON.stringify(file)}` };
-  expect((await c.sandboxAktion({ cwd: root, tool_input: input(inside) }, { root })).code).toBe(0);
+const nativesInput = (file: string) => process.platform === "win32"
+  ? { shell: "powershell", cmd: `Set-Content -LiteralPath '${file.replaceAll("'", "''")}' -Value INNEN` }
+  : { shell: "bash", cmd: `printf INNEN > ${JSON.stringify(file)}` };
+
+test.skipIf(!process.env.CODEX_SCHUTZ_PROBE)("native Sandbox: echter Innenwrite erlaubt", async () => {
+  const root = temp(), inside = join(root, "innen.txt");
+  expect((await c.sandboxAktion({ cwd: root, tool_input: nativesInput(inside) }, { root })).code).toBe(0);
   expect(readFileSync(inside, "utf8").trim()).toBe("INNEN");
-  await expect(c.sandboxAktion({ cwd: root, tool_input: input(marker) }, { root })).rejects.toThrow();
+});
+
+test.skipIf(!process.env.CODEX_SCHUTZ_PROBE)("native Sandbox: echter Außenwrite verweigert", async () => {
+  const root = temp(), outside = temp(), marker = join(outside, "aussen.txt"); writeFileSync(marker, "unveraendert");
+  await expect(c.sandboxAktion({ cwd: root, tool_input: nativesInput(marker) }, { root })).rejects.toThrow();
   expect(readFileSync(marker, "utf8")).toBe("unveraendert");
 });
