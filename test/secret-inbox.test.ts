@@ -453,3 +453,26 @@ describe("main über Deps: bestehendes Secret-Ticket im Ziel-Repo", () => {
     expect(zu?.opt).toEqual({ token: "zt" });
   });
 });
+
+describe("main über Deps: Ticket des Ziel-Owners (Ziel-Owner ≠ eigener Owner)", () => {
+  test("ein Ticket vom Owner des Ziel-Repos gilt als eigenes: es wird aktualisiert, nicht neu angelegt", async () => {
+    const titel = "🔒 Security: Secret rotieren/widerrufen";
+    const aufrufe: string[][] = [];
+    const gh = {
+      text: (args: string[]) => (aufrufe.push(args), args.includes("--slurp") ? "[[]]" : "https://github.com/z/ziel/issues/77\n"),
+      json: () => ({ body: S.issueBody(S.befundeAusGitleaks([gl()])) }),
+    };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "z/ziel",
+      ladeSammelKontext: () => ({ rohe: [{ number: 6, title: titel, user: { login: "z" } }], offene: [{ number: 6, titel }], owner: "z" }),
+      vertrauteIssues: (r: { user: { login: string } }[], owner: string) => r.filter((i) => i.user.login === owner),
+      platziereOben: () => undefined,
+    };
+    const deps = { ladeConfig: () => ({ labels: { harness: "area:test" } }), ladeLibs: () => Promise.resolve(libs), lies: () => JSON.stringify([gl(), gl({ Fingerprint: "neu:fp" })]), gh, log: () => {}, err: () => {} };
+    expect(await S.main(["--bericht", "b.json"], deps)).toBe(0);
+    expect(aufrufe.some((a) => a.includes("PATCH") && a.includes("repos/z/ziel/issues/6"))).toBe(true);
+    expect(aufrufe.filter((a) => a[1] === "create").map((a) => a[a.indexOf("--title") + 1])).not.toContain(titel);
+  });
+});

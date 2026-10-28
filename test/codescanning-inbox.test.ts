@@ -1134,3 +1134,43 @@ describe("main: Ziel-Repo des Spitzen-Tickets", () => {
     expect(pfade.every((p) => p.startsWith("repos/o/r/code-scanning/"))).toBe(true);
   });
 });
+
+describe("main: bestehendes Spitzen-Ticket des Ziel-Owners im Ziel-Repo", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
+  const lauf = async (alerts: unknown[]) => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const gh = { text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), "https://github.com/z/ziel/issues/77\n"), json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: "alter Body" }) };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "z/ziel",
+      zielToken: () => "zt",
+      SAMMELTICKET_TITEL_LISTE: SAMMELTICKET_TITEL_LISTE as string[],
+      ladeSammelKontext: () => ({ rohe: [{ number: 6, title: TITEL, user: { login: "z" } }], offene: [{ number: 6, titel: TITEL }, { number: 5, titel: "Sammel" }], kommentare: [], owner: "z" }),
+      vertrauteIssues: (r: { user: { login: string } }[], owner: string) => r.filter((i) => i.user.login === owner),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: () => undefined,
+      waehleSammelticket: (o: { number: number }[]) => o[1],
+    };
+    const seiten = (pfad: string) => (pfad.includes("state=dismissed") ? [] : alerts);
+    const deps = { ladeConfig: () => ({ labels: { harness: "area:harness" } }), ladeLibs: () => Promise.resolve(libs), ladeSeiten: seiten, gh, log: () => {}, err: () => {} };
+    return { code: await main([], deps), aufrufe: aufrufe.map((a) => ({ ...a, text: a.args.join(" ") })) };
+  };
+  test("neuer Alert: das Ticket des Ziel-Owners wird im Ziel-Repo gelesen und aktualisiert, nicht neu angelegt", async () => {
+    const { code, aufrufe } = await lauf([roh()]);
+    expect(code).toBe(0);
+    expect(aufrufe.some((a) => a.text === "api repos/z/ziel/issues/6" && JSON.stringify(a.opt) === JSON.stringify({ token: "zt" }))).toBe(true);
+    const patch = aufrufe.find((a) => a.text.startsWith("api -X PATCH repos/z/ziel/issues/6 "));
+    expect(patch?.opt).toEqual({ token: "zt" });
+    expect(aufrufe.some((a) => a.args[1] === "create")).toBe(false);
+  });
+  test("keine Alerts mehr: das Ticket wird im Ziel-Repo geschlossen", async () => {
+    const { code, aufrufe } = await lauf([]);
+    expect(code).toBe(0);
+    const zu = aufrufe.find((a) => a.args[1] === "close");
+    expect(zu?.args).toEqual(expect.arrayContaining(["6", "--repo", "z/ziel"]));
+    expect(zu?.opt).toEqual({ token: "zt" });
+  });
+});

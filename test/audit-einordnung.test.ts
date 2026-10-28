@@ -214,3 +214,25 @@ describe("main: Ziel-Repo der Alarm-Tickets", () => {
     expect(platziert).toEqual([["77", "security", process.env.PROJECT_TOKEN, "o/ziel"]]);
   });
 });
+
+describe("main: Vertrauen gegen den Owner des Ziel-Repos", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  test("eine Audit-Zeile des Ziel-Owners im Sammelticket-Kommentar macht die GHSA bekannt: kein neuer Alarm", async () => {
+    const kritisch = { vulnerabilities: { braces: { severity: "critical", via: [{ url: `https://github.com/advisories/${G1}`, name: "braces", severity: "critical" }] } } };
+    const aufrufe: string[][] = [];
+    const gh = { text: (args: string[]) => (aufrufe.push(args), "https://github.com/z/ziel/issues/77\n"), json: () => ({}) };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "z/ziel",
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [{ user: { login: "z", type: "User" }, body: `- [ ] Audit: ${G1} braces (critical, prod)` }], owner: "z" }),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: () => undefined,
+      waehleSammelticket: (o: { number: number }[]) => o[0],
+    };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    expect(await main([], deps)).toBe(0);
+    expect(aufrufe.filter((a) => a[1] === "create")).toEqual([]);
+  });
+});
