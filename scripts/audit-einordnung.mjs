@@ -16,7 +16,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, zielZugang } from "./inbox-start-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 
 export { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies };
@@ -125,7 +125,7 @@ export function zeilenText(b) {
 export function alarmText(b) {
   return {
     titel: `${ALARM_PRAEFIX} ${b.ghsa} in ${b.paket}`,
-    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Spielkontext ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: docs/ticket-reihenfolge.md › Audit-Einordnung.`,
+    body: `${b.ghsa}: ${b.paket} (critical, ausgelieferte Produktiv-Abhängigkeit). Fix: ${b.fixVerfuegbar ? `ja${b.fixVersion ? ` v${b.fixVersion}` : ""}` : "nein"}.\n\nPrüfauftrag: im Einsatz dieses Projekts ausnutzbar? Wenn ja: fixen (Update/overrides). Wenn nein: Eintrag \`audit-${b.ghsa.toLowerCase()}\` in \`.github/wiedervorlagen.json\` anlegen (fällig +30 Tage) und dieses Ticket schließen. Mechanik: docs/ticket-reihenfolge.md › Audit-Einordnung.`,
   };
 }
 
@@ -180,14 +180,14 @@ function trockenLauf(aktionen, log) {
 }
 
 /** Legt je Alarm ein Ticket an und platziert es oben. Rückgabe: true, wenn mindestens einer scheiterte. */
-function legeAlarmeAn(alarme, { REPO, platziereOben, log }) {
+function legeAlarmeAn(alarme, { REPO, ziel, zielOpt, platziereOben, log }) {
   let rot = false;
   for (const a of alarme) {
     try {
-      const url = ghText(["issue", "create", "--repo", REPO, "--title", a.titel, "--body", a.body]).trim();
+      const url = ghText(["issue", "create", "--repo", ziel, "--title", a.titel, "--body", a.body], zielOpt).trim();
       const nr = url.split("/").pop();
       log(`Alarm angelegt: #${nr} (${a.befund.ghsa})`);
-      platziereOben(nr, "security");
+      platziereOben(nr, "security", process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
     } catch (fehl) {
       log(`::error::Alarm für ${a.befund.ghsa} unvollständig: ${fehlerText(fehl)}`);
       rot = true;
@@ -214,6 +214,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
   const { OWNER, REPO, ladeSammelKontext, offeneTitel, platziereOben, postZeilen, waehleSammelticket } = libs;
+  const { ziel, zielOpt } = zielZugang(libs);
   const { rohe, offene, kommentare } = ladeSammelKontext();
   const bekannt = ladeBekannte({ kommentare, rohe, OWNER, offeneTitel });
   const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
@@ -226,7 +227,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const zeilen = aktionen.filter((a) => a.art === "zeile");
   const alarme = aktionen.filter((a) => a.art === "alarm");
   if (trocken) return trockenLauf(aktionen, log);
-  const alarmRot = legeAlarmeAn(alarme, { REPO, platziereOben, log });
+  const alarmRot = legeAlarmeAn(alarme, { REPO, ziel, zielOpt, platziereOben, log });
   const zeilenRot = zeilen.length > 0 && !postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log });
   return alarmRot || zeilenRot ? 1 : 0;
 }

@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeBoardLibs } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, zielZugang } from "./inbox-start-lib.mjs";
 import { ladeProjektConfig, labelAus } from "./projekt-config-lib.mjs";
 
 export const ZIEL_TITEL = "🔒 Security: Secret rotieren/widerrufen";
@@ -97,8 +97,8 @@ export function issueBody(befunde) {
 /** Quellen, die in der Tabelle eines Ticket-Bodys vorkommen. Pur. */
 const quellenImBody = (body) => [QUELLE_GITLEAKS, QUELLE_ALERT].filter((q) => String(body ?? "").includes(`| ${q} |`));
 
-/** Kennungen (Fingerprint bzw. Alert-Nummer), die im alten Body noch nicht standen. Pur. */
-const neueKennungen = (befunde, altBody) => befunde.filter((b) => !String(altBody ?? "").includes(b.kennung)).map((b) => b.kennung);
+/** Kennungen (Fingerprint bzw. Alert-Nummer), die im alten Body noch nicht als Tabellenzelle standen (exakt, kein Teilstring: `…:1` steckt in `…:12`). Pur. */
+const neueKennungen = (befunde, altBody) => befunde.filter((b) => !String(altBody ?? "").includes(`| ${b.kennung} |`)).map((b) => b.kennung);
 
 /**
  * Plan fürs Secret-Ticket. `offenesIssue` = `{ number, body }` oder null; `gelesen` = Menge der Quellen, die dieser Lauf lesen konnte.
@@ -108,7 +108,7 @@ export function plane({ befunde, offenesIssue, gelesen = new Set([QUELLE_GITLEAK
   if (befunde.length > 0) {
     const body = issueBody(befunde);
     if (!offenesIssue) return { art: "anlegen", body };
-    if (offenesIssue.body === body) return { art: "nichts", nummer: offenesIssue.number };
+    if (String(offenesIssue.body ?? "").replaceAll("\r\n", "\n") === body) return { art: "nichts", nummer: offenesIssue.number };
     return { art: "aktualisieren", nummer: offenesIssue.number, body, neue: neueKennungen(befunde, offenesIssue.body) };
   }
   if (!offenesIssue) return { art: "nichts" };
@@ -141,12 +141,12 @@ export function planeCheck({ offene, repo }) {
 const KOMMENTAR_LEER = "Keine offenen Secret-Funde mehr, automatisch geschlossen.";
 
 /** Legt ein Ticket an und sortiert es oben ein. Rückgabe: true bei Fehler. */
-function legeObenAn({ titel, body }, io, log) {
+function legeObenAn({ titel, body, art }, io, log) {
   try {
     const nr = io.legeIssueAn(titel, body);
     log(`Ticket angelegt: #${nr} (${titel})`);
     if (!io.projectToken) log("::warning::PROJECT_TOKEN fehlt: das Ticket steht nicht oben im Board.");
-    else if (!io.sortiereEin(nr)) {
+    else if (!io.sortiereEin(nr, art)) {
       log(`::error::Einsortieren von #${nr} an die Board-Spitze fehlgeschlagen.`);
       return true;
     }
@@ -159,7 +159,7 @@ function legeObenAn({ titel, body }, io, log) {
 
 /** Führt den Secret-Plan aus. Rückgabe: true bei Fehler. */
 function fuehreSecretAus(plan, io, log) {
-  if (plan.art === "anlegen") return legeObenAn({ titel: ZIEL_TITEL, body: plan.body }, io, log);
+  if (plan.art === "anlegen") return legeObenAn({ titel: ZIEL_TITEL, body: plan.body, art: "security" }, io, log);
   try {
     if (plan.art === "aktualisieren") {
       io.aktualisiere(plan.nummer, plan.body);
@@ -181,7 +181,7 @@ function fuehreSecretAus(plan, io, log) {
 /** Führt den Prüf-Ticket-Plan aus. Rückgabe: true bei Fehler. */
 function fuehreCheckAus(plan, io, log) {
   let rot = false;
-  if (plan.art === "anlegen") rot = legeObenAn({ titel: CHECK_TITEL, body: plan.body }, io, log);
+  if (plan.art === "anlegen") rot = legeObenAn({ titel: CHECK_TITEL, body: plan.body, art: "security-tabs" }, io, log);
   for (const nr of plan.schliessen) {
     try {
       io.schliesse(nr, "Doppeltes Prüf-Ticket, es bleibt genau eines offen.");
@@ -259,8 +259,8 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()`, `lies(pfad)`, `ladeAlerts(repo)`, `ladeOrt(repo, nr)`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig = () => ladeProjektConfig(), lies = (p) => readFileSync(p, "utf8"), log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()`, `lies(pfad)`, `gh` (`{ text(args, opt), json(args, opt) }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig = () => ladeProjektConfig(), lies = (p) => readFileSync(p, "utf8"), gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
   const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, bericht: { type: "string" } });
   if (fehler) {
     err(`${fehler.text}\nAufruf: node scripts/secret-inbox.mjs [--bericht <pfad>] [--dry-run]`);
@@ -276,41 +276,42 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
     return AUFRUF_EXIT;
   }
   const { OWNER, REPO, ladeSammelKontext, vertrauteIssues, platziereOben } = libs;
+  const { ziel, zielOpt } = zielZugang(libs);
   const harnessLabel = labelAus(config, "harness");
   const io = {
     repo: REPO,
     ladeBericht: werte.bericht === undefined ? undefined : () => lies(werte.bericht),
-    ladeAlerts: () => JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${REPO}/secret-scanning/alerts?state=open&per_page=100`])).flat(),
+    ladeAlerts: () => JSON.parse(gh.text(["api", "--paginate", "--slurp", `repos/${REPO}/secret-scanning/alerts?state=open&per_page=100`])).flat(),
     // Nur die Felder des ersten Fundorts; `--jq` lässt jeden Wert außen vor.
     ladeOrt: (nr) => {
       try {
-        return JSON.parse(ghText(["api", `repos/${REPO}/secret-scanning/alerts/${nr}/locations?per_page=1`, "--jq", ".[0].details // {} | {path,start_line,commit_sha}"]));
+        return JSON.parse(gh.text(["api", `repos/${REPO}/secret-scanning/alerts/${nr}/locations?per_page=1`, "--jq", ".[0].details // {} | {path,start_line,commit_sha}"]));
       } catch {
         return null;
       }
     },
     ladeKontext: () => {
-      const { rohe, offene } = ladeSammelKontext();
+      const { rohe, offene } = ladeSammelKontext({ ladeKommentare: () => [] });
       const vertraut = new Set(vertrauteIssues(rohe, OWNER).map((i) => i.number));
       const mit = (titel) => offene.filter((i) => i.titel === titel && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       const erstes = mit(ZIEL_TITEL)[0];
-      const offenesIssue = erstes ? { number: erstes.number, body: String(ghJson(["api", `repos/${REPO}/issues/${erstes.number}`]).body ?? "") } : null;
+      const offenesIssue = erstes ? { number: erstes.number, body: String(gh.json(["api", `repos/${ziel}/issues/${erstes.number}`], zielOpt).body ?? "") } : null;
       return { offenesIssue, checkIssues: mit(CHECK_TITEL).map((i) => ({ number: i.number })) };
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,
-    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", harnessLabel, "--body", body]).trim().split("/").pop(),
-    sortiereEin: (nr) => {
+    legeIssueAn: (titel, body) => gh.text(["issue", "create", "--repo", ziel, "--title", titel, "--label", harnessLabel, "--body", body], zielOpt).trim().split("/").pop(),
+    sortiereEin: (nr, art) => {
       try {
-        platziereOben(nr, "security", process.env.PROJECT_TOKEN);
+        platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
-    kommentiere: (nr, text) => ghText(["api", `repos/${REPO}/issues/${nr}/comments`, "-f", `body=${text}`]),
-    schliesse: (nr, kommentar) => ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", kommentar]),
+    aktualisiere: (nr, body) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `body=${body}`], zielOpt),
+    kommentiere: (nr, text) => gh.text(["api", `repos/${ziel}/issues/${nr}/comments`, "-f", `body=${text}`], zielOpt),
+    schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
   };
   return lauf({ io, trocken: werte["dry-run"] === true });
 }

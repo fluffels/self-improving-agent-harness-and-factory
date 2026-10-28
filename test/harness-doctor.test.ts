@@ -416,6 +416,11 @@ describe("harness-doctor --pruefen", () => {
     test("Regel für ein anderes Werkzeug zählt nicht", () => {
       assert.equal(luecken(lauf({ [REGELN]: [required, cs("Semgrep")] }, { spiegel: MIT })).length, 1);
     });
+    test("Regel ohne parameters: Lücke statt Absturz", () => {
+      const r = lauf({ [REGELN]: [required, { type: "code_scanning" }] }, { spiegel: MIT });
+      assert.equal(luecken(r).length, 1);
+      assert.match(luecken(r)[0], /Code-Scanning "CodeQL" fehlt/);
+    });
     test("Spiegel ohne codeScanning: live egal", () => {
       assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }).code, 0);
     });

@@ -31,3 +31,9 @@ export async function inboxStart(argv, { skript, praefix, ladeConfig = () => lad
     return { code: AUFRUF_EXIT };
   }
 }
+
+/**
+ * Das Ziel-Repo der Harness-Befunde (#76) und der Aufruf-Zusatz (`{ token }`) für `gh`-Aufrufe dorthin: `libs.ZIEL` bzw. `libs.zielToken()`, ohne beide das eigene Repo `libs.REPO`
+ * ohne Token. Tickets der Inboxen werden dort gesucht, angelegt, aktualisiert und geschlossen (ein Repo für alles, sonst fände ein Lauf sein eigenes Ticket nie wieder). Pur.
+ */
+export const zielZugang = (libs) => ({ ziel: libs.ZIEL ?? libs.REPO, zielOpt: { token: libs.zielToken ? libs.zielToken() : undefined } });

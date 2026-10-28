@@ -211,6 +211,8 @@ export const NOTFAELLE = [
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
   // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.
   { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
+  // Der Titel entsteht in scripts/secret-inbox.mjs (wöchentliches Prüf-Ticket für die Security-Tabs, #92).
+  { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */

@@ -339,6 +339,7 @@ describe("Container-Images brauchen einen Digest (#92)", () => {
     expect(ungepinnteImages(wf(`docker run --rm -v "$PWD:/r" -e A=b ghcr.io/x/y:v1@${DIGEST} git /r`))).toEqual([]);
   });
   test("Negativ: Tag ohne Digest", () => expect(ungepinnteImages(wf("docker run --rm -v \"$PWD:/r\" ghcr.io/x/y:v1 git /r"))).toEqual(["ghcr.io/x/y:v1"]));
+  test("Negativ: docker create ohne Digest zählt wie docker run", () => expect(ungepinnteImages(wf("docker create --name c ghcr.io/x/y:v1"))).toEqual(["ghcr.io/x/y:v1"]));
   test("Negativ: Kurzform ohne Registry und ohne Tag", () => expect(ungepinnteImages(wf("docker run --rm alpine echo"))).toEqual(["alpine"]));
   test("Negativ: gefalteter Block mit Zeilenfortsetzung", () => {
     expect(ungepinnteImages(wf("|\n          docker run --rm \\\n            -v a:b \\\n            ghcr.io/x/y:v1 cmd"))).toEqual(["ghcr.io/x/y:v1"]);
@@ -438,7 +439,7 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
       `        with:\n          category: ${o.category ?? "zizmor"}`,
       o.extra ?? "",
     ].join("\n");
-  const depRev = (o: { top?: string; job?: string; with?: string; trig?: string } = {}) =>
+  const depRev = (o: { top?: string; job?: string; with?: string; trig?: string; checkout?: string } = {}) =>
     [
       `on:\n${o.trig ?? "  pull_request:"}`,
       o.top ?? "permissions: {}",
@@ -447,6 +448,7 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
       "    permissions:",
       o.job ?? "      contents: read",
       "    steps:",
+      o.checkout ?? "      - run: echo vorher",
       `      - uses: actions/dependency-review-action@${SHA} # v5.0.0`,
       `        with:\n${o.with ?? "          fail-on-severity: high"}`,
     ].join("\n");
@@ -482,6 +484,25 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
   test("Dependency Review: Schreibrecht im Job, oben, write-all", () => {
     nur(pruefeDepReview(depRev({ job: "      contents: read\n      pull-requests: write" })), "Schreibrecht (pull-requests: write)");
     nur(pruefeDepReview(depRev({ top: "permissions: write-all" })), "Schreibrecht (write-all)");
+  });
+  test("Dependency Review: Checkout ohne persist-credentials: false", () => {
+    nur(pruefeDepReview(depRev({ checkout: CHECKOUT.replace("persist-credentials: false", "fetch-depth: 1") })), "Checkout ohne persist-credentials: false");
+    expect(pruefeDepReview(depRev({ checkout: CHECKOUT }))).toEqual([]);
+  });
+  test("Dependency Review: ohne dependency-review-action-Schritt", () => {
+    const y = depRev().replace(/ {6}- uses: actions\/dependency-review-action@[^\n]*\n {8}with:\n {10}fail-on-severity: high/, "      - run: echo");
+    nur(pruefeDepReview(y), "kein dependency-review-action-Schritt");
+  });
+  test("Dependency Review: permissions oben fehlen", () => {
+    nur(pruefeDepReview(depRev({ top: "name: x" })), "permissions: auf oberster Ebene fehlt");
+  });
+  test("zizmor: Checkout ohne persist-credentials: false", () => {
+    const y = zizmor().replace(CHECKOUT, CHECKOUT.replace("persist-credentials: false", "fetch-depth: 1"));
+    nur(pruefeZizmor(y), "Checkout ohne persist-credentials: false");
+  });
+  test("zizmor: permissions oben fehlen", () => nur(pruefeZizmor(zizmor({ top: "name: x" })), "permissions: auf oberster Ebene fehlt"));
+  test("zizmor: kein Job mit security-events: write", () => {
+    nur(pruefeZizmor(zizmor({ job: "      contents: read" })), "security-events: write in 0 Jobs statt genau einem");
   });
   test("Dependency Review: security-events: write ist auch hier verboten", () => nur(pruefeDepReview(depRev({ job: "      security-events: write" })), "Schreibrecht"));
   test("Dependency Review: falsche Schwelle, PR-Kommentar", () => {

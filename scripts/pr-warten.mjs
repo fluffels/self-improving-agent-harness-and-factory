@@ -19,7 +19,7 @@
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ghJson, ghText } from "./gh-cli.mjs";
+import { ghText } from "./gh-cli.mjs";
 
 const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
 const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
@@ -190,21 +190,29 @@ export function holeWerkzeuge(pr, gh = ghText) {
   }
 }
 
+/**
+ * Ein Wartelauf für PR `a.pr`: Werkzeuge der Ruleset-Regel `code_scanning` einmal lesen, dann warten (Pflicht-Checks plus diese Werkzeuge gaten), Hinweiszeile anhängen.
+ * `gh` (Aufrufe von `gh pr view/checks`, `gh api`), `schlafe` und `jetzt` sind die Test-Nähte; Standard ist echtes `gh` und Wanduhr. Rückgabe `{ exit, zeilen }`.
+ */
+export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), jetzt = () => Date.now() } = {}) {
+  const w = holeWerkzeuge(a.pr, gh); // einmal je Lauf
+  return mitHinweis(warten({
+    hole: () => JSON.parse(gh(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 })),
+    pflicht: () => pflichtListe(holePflicht(a.pr, gh), w.werkzeuge),
+    schlafe,
+    jetzt,
+    maxMs: a.maxSekunden * 1000,
+    intervallMs: a.intervall * 1000,
+  }), w.hinweis);
+}
+
 function main() {
   const a = parseArgs(process.argv.slice(2));
   if (a.fehler || !a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
     console.error(`${a.fehler ? `${a.fehler}\n` : ""}Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]`);
     process.exit(3);
   }
-  const w = holeWerkzeuge(a.pr); // einmal je Lauf
-  const r = mitHinweis(warten({
-    hole: () => ghJson(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }),
-    pflicht: () => pflichtListe(holePflicht(a.pr), w.werkzeuge),
-    schlafe: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
-    jetzt: () => Date.now(),
-    maxMs: a.maxSekunden * 1000,
-    intervallMs: a.intervall * 1000,
-  }), w.hinweis);
+  const r = lauf(a);
   console.log(r.zeilen.join("\n"));
   process.exit(r.exit);
 }

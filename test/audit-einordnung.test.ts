@@ -21,7 +21,7 @@ describe("ordneEin", () => {
     const [a] = A.ordneEin({ befunde: [befund({ schwere: "critical", prod: true })], bekannt: [] });
     expect(a.art).toBe("alarm");
     expect(a.titel).toBe(`🔒 Security: ${G1} in braces`);
-    expect(a.body).toContain("im Spielkontext ausnutzbar?");
+    expect(a.body).toContain("im Einsatz dieses Projekts ausnutzbar?");
   });
 
   test("critical + dev: nur Zeile, nie Alarm", () => {

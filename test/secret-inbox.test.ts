@@ -16,6 +16,7 @@ const S = raw as unknown as {
   planeCheck: (a: { offene: { number: number }[]; repo?: string }) => Plan;
   statusAus: (e: unknown) => string | null;
   lauf: (a: { io: Record<string, unknown>; trocken?: boolean }) => number;
+  main: (argv: string[], deps: Record<string, unknown>) => Promise<number>;
 };
 
 // Offensichtlich fiktive, zusammengesetzte Werte: kein Scanner soll anschlagen, der Test prüft nur, dass sie nie im Text landen.
@@ -153,7 +154,7 @@ function io0(o: Record<string, unknown> = {}) {
     projectToken: "t",
     log: () => {},
     legeIssueAn: (titel: string, body: string) => (gesehen.push(["anlegen", titel, body]), "77"),
-    sortiereEin: (nr: string) => (gesehen.push(["oben", nr]), true),
+    sortiereEin: (nr: string, art: string) => (gesehen.push(["oben", nr, art]), true),
     aktualisiere: (nr: number, body: string) => gesehen.push(["aktualisieren", nr, body]),
     kommentiere: (nr: number, text: string) => gesehen.push(["kommentar", nr, text]),
     schliesse: (nr: number, text: string) => gesehen.push(["schliessen", nr, text]),
@@ -168,7 +169,7 @@ describe("lauf", () => {
     expect(S.lauf({ io })).toBe(0);
     const titel = io.gesehen.filter((g) => (g as string[])[0] === "anlegen").map((g) => (g as string[])[1]);
     expect(titel).toEqual([S.ZIEL_TITEL, S.CHECK_TITEL]);
-    expect(io.gesehen.filter((g) => (g as string[])[0] === "oben")).toHaveLength(2);
+    expect(io.gesehen.filter((g) => (g as string[])[0] === "oben").map((g) => (g as string[])[2])).toEqual(["security", "security-tabs"]);
   });
   test("Idempotenz: genau ein Prüf-Ticket offen, kein zweites angelegt, Doppelte geschlossen", () => {
     const io = io0({ ladeBericht: bericht([]), ladeKontext: () => ({ offenesIssue: null, checkIssues: [{ number: 5 }, { number: 8 }] }) });
@@ -275,5 +276,150 @@ describe("statusAus", () => {
     expect(S.statusAus(new Error("x (HTTP 403)"))).toBe("403");
     expect(S.statusAus({ stderr: "gh: Not Found (HTTP 404)" })).toBe("404");
     expect(S.statusAus(new Error("kaputt"))).toBeNull();
+  });
+});
+
+describe("plane: Kennungen und Body-Vergleich", () => {
+  const fp = (s: string) => gl({ Fingerprint: `0123456789abcdef:src/a.ts:github-pat:${s}` });
+  test("neue Kennung wird exakt erkannt, auch wenn sie Teilstring einer alten ist (…:1 in …:12)", () => {
+    const alt = S.befundeAusGitleaks([fp("12")]);
+    const neu = S.befundeAusGitleaks([fp("12"), fp("1")]);
+    const plan = S.plane({ befunde: neu, offenesIssue: { number: 3, body: S.issueBody(alt) } });
+    expect(plan.art).toBe("aktualisieren");
+    expect(plan.neue).toEqual([neu[1].kennung]);
+  });
+  test("Body mit CRLF (von Hand bearbeitet) gilt als unverändert", () => {
+    const befunde = S.befundeAusGitleaks([gl()]);
+    const body = S.issueBody(befunde).replace(/\n/g, "\r\n");
+    expect(S.plane({ befunde, offenesIssue: { number: 3, body } })).toEqual({ art: "nichts", nummer: 3 });
+  });
+  test("Fenster: 50 Funde ohne Restzeile, 51 mit „und 1 weitere“", () => {
+    const viele = (n: number) => S.befundeAusGitleaks(Array.from({ length: n }, (_, i) => gl({ Fingerprint: `fp:${i}` })));
+    expect(S.issueBody(viele(50))).not.toMatch(/^… und \d+ weitere/m);
+    expect(S.issueBody(viele(51))).toMatch(/^… und 1 weitere/m);
+  });
+});
+
+describe("lauf: Fehlerpfade der Ticket-Aktionen und Log-Zweige", () => {
+  const werfe = () => {
+    throw new Error("HTTP 500");
+  };
+  const mitTicket = (befunde: unknown[], body: string) => ({ ladeBericht: () => JSON.stringify(befunde), ladeKontext: () => ({ offenesIssue: { number: 3, body }, checkIssues: [{ number: 5 }] }) });
+  const bodyMit = (...f: unknown[]) => S.issueBody(S.befundeAusGitleaks(f));
+  test("Anlegen wirft: Exit 1", () => {
+    expect(S.lauf({ io: io0({ ladeBericht: () => JSON.stringify([gl()]), legeIssueAn: werfe }) })).toBe(1);
+  });
+  test("Aktualisieren wirft: Exit 1", () => {
+    expect(S.lauf({ io: io0({ ...mitTicket([gl(), gl({ Fingerprint: "n:1" })], bodyMit(gl())), aktualisiere: werfe }) })).toBe(1);
+  });
+  test("Kommentar zu neuen Funden wirft: Exit 1", () => {
+    expect(S.lauf({ io: io0({ ...mitTicket([gl(), gl({ Fingerprint: "n:1" })], bodyMit(gl())), kommentiere: werfe }) })).toBe(1);
+  });
+  test("Schließen des Secret-Tickets wirft: Exit 1", () => {
+    expect(S.lauf({ io: io0({ ...mitTicket([], bodyMit(gl())), schliesse: werfe }) })).toBe(1);
+  });
+  test("Schließen eines doppelten Prüf-Tickets wirft: Exit 1", () => {
+    const io = io0({ ladeBericht: () => "[]", ladeKontext: () => ({ offenesIssue: null, checkIssues: [{ number: 5 }, { number: 8 }] }), schliesse: werfe });
+    expect(S.lauf({ io })).toBe(1);
+  });
+  test("verschwundener Fund: aktualisiert, aber kein leerer „Neu seit“-Kommentar", () => {
+    const io = io0(mitTicket([gl()], bodyMit(gl(), gl({ Fingerprint: "alt:2" }))));
+    expect(S.lauf({ io })).toBe(0);
+    expect(io.gesehen.map((g) => (g as string[])[0])).toEqual(["aktualisieren"]);
+  });
+  test("Quelle nicht lesbar: Warnung nennt Ticket und Quelle; sonst „nichts Neues“ im Log", () => {
+    const log: string[] = [];
+    const body = S.issueBody(S.befundeAusAlerts([alert()]));
+    const io = io0({ ladeBericht: () => "[]", ladeAlerts: werfe, log: (m: string) => log.push(m), ladeKontext: () => ({ offenesIssue: { number: 3, body }, checkIssues: [{ number: 5 }] }) });
+    S.lauf({ io });
+    expect(log).toContain("::warning::Ticket #3 bleibt offen: Quelle(n) github-alert in diesem Lauf nicht lesbar.");
+    const still: string[] = [];
+    S.lauf({ io: io0({ ladeBericht: () => "[]", log: (m: string) => still.push(m), ladeKontext: () => ({ offenesIssue: null, checkIssues: [{ number: 5 }] }) }) });
+    expect(still).toContain("Secret-Inbox: nichts Neues.");
+  });
+});
+
+describe("main über Deps", () => {
+  const config = { labels: { harness: "area:test" } };
+  type Aufruf = { args: string[]; opt: unknown };
+  function aufbau(o: { libs?: Record<string, unknown>; rohe?: unknown[]; offene?: unknown[]; bericht?: unknown[] } = {}) {
+    const aufrufe: Aufruf[] = [];
+    const platziert: unknown[][] = [];
+    const log: string[] = [];
+    const rohe = o.rohe ?? [];
+    const offene = o.offene ?? [];
+    const gh = {
+      text: (args: string[], opt: unknown) => {
+        aufrufe.push({ args, opt });
+        if (args[0] === "issue" && args[1] === "create") return "https://github.com/o/ziel/issues/77\n";
+        return args.includes("--slurp") ? "[[]]" : "";
+      },
+      json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: "" }),
+    };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "o/ziel",
+      zielToken: () => "zt",
+      ladeSammelKontext: () => ({ rohe, offene }),
+      vertrauteIssues: (r: { user: { login: string } }[], owner: string) => r.filter((i) => i.user.login === owner),
+      platziereOben: (...a: unknown[]) => platziert.push(a),
+      ...o.libs,
+    };
+    const deps = { ladeConfig: () => config, ladeLibs: () => Promise.resolve(libs), lies: () => JSON.stringify(o.bericht ?? [gl()]), gh, log: (m: string) => log.push(m), err: (m: string) => log.push(m) };
+    const erstellt = () => aufrufe.filter((a) => a.args[0] === "issue" && a.args[1] === "create").map((a) => a.args[a.args.indexOf("--title") + 1]);
+    return { deps, aufrufe, platziert, log, erstellt };
+  }
+  const mitToken = async <T,>(fn: () => Promise<T>) => {
+    const alt = process.env.PROJECT_TOKEN;
+    process.env.PROJECT_TOKEN = "pt";
+    try {
+      return await fn();
+    } finally {
+      if (alt === undefined) delete process.env.PROJECT_TOKEN;
+      else process.env.PROJECT_TOKEN = alt;
+    }
+  };
+  test("ein fremdes Issue mit passendem Titel täuscht weder Secret- noch Prüf-Ticket vor (#1433)", async () => {
+    const fremd = (number: number, titel: string) => ({ rohe: { number, title: titel, user: { login: "fremd" } }, offen: { number, titel } });
+    const f = [fremd(5, S.CHECK_TITEL), fremd(6, S.ZIEL_TITEL)];
+    const a = aufbau({ rohe: f.map((x) => x.rohe), offene: f.map((x) => x.offen) });
+    expect(await mitToken(() => S.main(["--bericht", "b.json"], a.deps))).toBe(0);
+    expect(a.erstellt()).toEqual([S.ZIEL_TITEL, S.CHECK_TITEL]);
+    expect(a.aufrufe.some((x) => x.args.includes("PATCH") || x.args[1] === "close")).toBe(false);
+  });
+  test("ein vertrautes offenes Prüf-Ticket wird wiederverwendet (nicht neu angelegt)", async () => {
+    const a = aufbau({ rohe: [{ number: 5, title: S.CHECK_TITEL, user: { login: "o" } }], offene: [{ number: 5, titel: S.CHECK_TITEL }] });
+    expect(await mitToken(() => S.main(["--bericht", "b.json"], a.deps))).toBe(0);
+    expect(a.erstellt()).toEqual([S.ZIEL_TITEL]);
+  });
+  test("Ziel-Repo ≠ eigenes Repo: Anlegen, Einsortieren und Token gehen ins Ziel-Repo, Alerts kommen aus dem eigenen", async () => {
+    const a = aufbau();
+    expect(await mitToken(() => S.main(["--bericht", "b.json"], a.deps))).toBe(0);
+    const anlegen = a.aufrufe.filter((x) => x.args[1] === "create");
+    expect(anlegen).toHaveLength(2);
+    for (const c of anlegen) {
+      expect(c.args[c.args.indexOf("--repo") + 1]).toBe("o/ziel");
+      expect(c.opt).toEqual({ token: "zt" });
+    }
+    expect(a.platziert.map((p) => [p[1], p[3]])).toEqual([["security", "o/ziel"], ["security-tabs", "o/ziel"]]);
+    expect(a.aufrufe.some((x) => x.args.some((s) => s.includes("repos/o/r/secret-scanning/alerts")))).toBe(true);
+  });
+  test("ohne ZIEL und zielToken in den Libs gilt das eigene Repo", async () => {
+    const a = aufbau({ libs: { ZIEL: undefined, zielToken: undefined } });
+    expect(await mitToken(() => S.main(["--bericht", "b.json"], a.deps))).toBe(0);
+    const c = a.aufrufe.find((x) => x.args[1] === "create")!;
+    expect(c.args[c.args.indexOf("--repo") + 1]).toBe("o/r");
+    expect(c.opt).toEqual({ token: undefined });
+    expect(a.platziert.map((p) => p[3])).toEqual([undefined, undefined]);
+  });
+  test("unbekanntes Flag, --bericht ohne Wert und nicht lesbare Config: Exit 2", async () => {
+    expect(await S.main(["--gibtsnicht"], aufbau().deps)).toBe(2);
+    expect(await S.main(["--bericht"], aufbau().deps)).toBe(2);
+    const a = aufbau();
+    const kaputt = () => {
+      throw new Error("kaputt");
+    };
+    expect(await S.main([], { ...a.deps, ladeConfig: kaputt })).toBe(2);
   });
 });

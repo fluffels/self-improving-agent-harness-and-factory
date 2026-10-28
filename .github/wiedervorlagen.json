@@ -3,7 +3,7 @@
     "id": "codeql-wochenlauf",
     "faellig": "2026-11-03",
     "titel": "CodeQL-Wochenlauf nach dem Umzug auf Schedule prüfen",
-    "text": "Der erste Schedule-Lauf von `codeql.yml` war Mo 2026-11-02 04:23 UTC. Prüfen: `gh run list --workflow codeql.yml -L 10 --json event,conclusion,createdAt` zeigt einen `schedule`-Lauf mit Erfolg, und `gh api \"repos/<repo>/code-scanning/analyses?ref=refs/heads/main&per_page=20\" --jq \".[].category\"` nennt `/language:javascript-typescript` und `/language:actions`. Ersatzbeleg ohne Schedule-Lauf: ein `workflow_dispatch`-Lauf auf main. Fehlt der Lauf, den Cron von `codeql.yml` prüfen. Danach dieses Ticket schließen und den Eintrag löschen."
+    "text": "Der erste Schedule-Lauf von `codeql.yml` ist Mo 2026-11-02 04:23 UTC. Prüfen: `gh run list --workflow codeql.yml -L 10 --json event,conclusion,createdAt` zeigt einen `schedule`-Lauf mit Erfolg, und `gh api \"repos/<repo>/code-scanning/analyses?ref=refs/heads/main&per_page=20\" --jq \".[].category\"` nennt `/language:javascript-typescript` und `/language:actions`. Ersatzbeleg ohne Schedule-Lauf: ein `workflow_dispatch`-Lauf auf main. Fehlt der Lauf, den Cron von `codeql.yml` prüfen. Danach dieses Ticket schließen und den Eintrag löschen."
   },
   {
     "id": "typescript-7-eslint",

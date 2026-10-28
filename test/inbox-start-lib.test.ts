@@ -79,3 +79,13 @@ describe("ladeProjektOderAbbruch (board-lib, Config-Fehler beim Import)", () => 
     expect(err).toEqual(["✖ kaputt"]);
   });
 });
+
+describe("zielZugang", () => {
+  const Z = rawLib as unknown as { zielZugang: (l: Record<string, unknown>) => { ziel: string; zielOpt: { token: string | undefined } } };
+  test("Ziel-Repo und dessen Token, wenn die Libs sie liefern", () => {
+    expect(Z.zielZugang({ REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "t" })).toEqual({ ziel: "o/ziel", zielOpt: { token: "t" } });
+  });
+  test("ohne ZIEL und zielToken: eigenes Repo, kein Token", () => {
+    expect(Z.zielZugang({ REPO: "o/r" })).toEqual({ ziel: "o/r", zielOpt: { token: undefined } });
+  });
+});

@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, zielZugang } from "./inbox-start-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
@@ -476,6 +476,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const { trocken, config, libs } = start;
   const harnessLabel = labelAus(config, "harness");
   const { OWNER, REPO, platziereOben, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
+  const { ziel, zielOpt } = zielZugang(libs);
   let offene = [];
   const io = {
     repo: REPO,
@@ -490,23 +491,23 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
       // Das Spitzen-Ticket legt github-actions[bot] an (GH_TOKEN = github.token); ein gleichnamiges Ticket eines Fremden zählt nicht.
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
-      const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${REPO}/issues/${ziele[0].number}`]).body ?? "") } : null;
+      const offenesIssue = ziele[0] ? { number: ziele[0].number, body: String(ghJson(["api", `repos/${ziel}/issues/${ziele[0].number}`], zielOpt).body ?? "") } : null;
       return kontextAus({ libs, rohe, kommentare, owner: OWNER, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,
-    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", REPO, "--title", titel, "--label", harnessLabel, "--body", body]).trim().split("/").pop(),
+    legeIssueAn: (titel, body) => ghText(["issue", "create", "--repo", ziel, "--title", titel, "--label", harnessLabel, "--body", body], zielOpt).trim().split("/").pop(),
     sortiereEin: (nr) => {
       try {
-        platziereOben(nr, "security", process.env.PROJECT_TOKEN);
+        platziereOben(nr, "security", process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),
+    aktualisiere: (nr, body) => ghText(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `body=${body}`], zielOpt),
     kommentiere: postZeilen,
-    schliesse: (nr, kommentar = KOMMENTAR_LEER) => ghText(["issue", "close", String(nr), "--repo", REPO, "--reason", "completed", "--comment", kommentar]),
+    schliesse: (nr, kommentar = KOMMENTAR_LEER) => ghText(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
     zielSammelticket: () => waehleSammelticket(offene)?.number ?? null,
     postZeilen,
   };

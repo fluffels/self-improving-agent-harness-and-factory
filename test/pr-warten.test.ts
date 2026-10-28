@@ -423,6 +423,40 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     };
     expect(C.holeWerkzeuge("7", gh)).toEqual({ werkzeuge: [], hinweis: "HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403" });
   });
+  describe("lauf: die echte Verdrahtung aus holeWerkzeuge, holePflicht und warten", () => {
+    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number }) => Erg };
+    const stand = offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]);
+    const ghMit = (regeln: () => string) => (a: string[]) => {
+      if (a[0] === "api") return regeln();
+      if (a.includes("--required")) return JSON.stringify([{ name: "Tests" }]);
+      return a.includes("baseRefName") ? JSON.stringify({ baseRefName: "main" }) : JSON.stringify(stand);
+    };
+    const uhr = () => {
+      let t = 0;
+      return { schlafe: (ms: number) => void (t += ms), jetzt: () => t };
+    };
+    const arg = { pr: "7", maxSekunden: 60, intervall: 30 };
+    test("Regel gesetzt, CodeQL rot: ROT, Exit 1", () => {
+      expect(L.lauf(arg, { gh: ghMit(() => JSON.stringify([regel("CodeQL")])), ...uhr() })).toEqual({ exit: 1, zeilen: ["ROT CodeQL https://x/runs/CodeQL"] });
+    });
+    test("keine Regel: das rote CodeQL ist nur ein HINWEIS, kein ROT", () => {
+      const r = L.lauf(arg, { gh: ghMit(() => "[]"), ...uhr() });
+      expect(r.exit).toBe(2);
+      expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+      expect(r.zeilen.some((z) => z.startsWith("HINWEIS CodeQL"))).toBe(true);
+    });
+    test("Regeln nicht lesbar: HINWEIS-Zeile steht als letzte Zeile, CodeQL gatet nicht", () => {
+      const r = L.lauf(arg, {
+        gh: ghMit(() => {
+          throw new Error("HTTP 403");
+        }),
+        ...uhr(),
+      });
+      expect(r.exit).toBe(2);
+      expect(r.zeilen.at(-1)).toBe("HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403");
+      expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+    });
+  });
   test("mitHinweis hängt die Zeile an außer bei MERGED", () => {
     expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, "HINWEIS x")).toEqual({ exit: 2, zeilen: ["OFFEN", "HINWEIS x"] });
     expect(C.mitHinweis({ exit: 0, zeilen: ["MERGED a"] }, "HINWEIS x")).toEqual({ exit: 0, zeilen: ["MERGED a"] });
