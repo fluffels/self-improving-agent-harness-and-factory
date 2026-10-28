@@ -10,8 +10,8 @@
  * `factory-seiten-baseline.json` verglichen: ein Anstieg ist rot („Platzhalter oder Link schreiben“), ein Rückgang ebenfalls („Baseline senken“).
  *
  * Generierte Abschnitte (`GEN`-Marker, `check:docgen`) zählen nicht: die Config löst dort selbst auf.
- * Rest der Baseline: `model-routing.md` und `langfuse-hook-patch.md` tragen Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
- * historischer Ordnername) und den Bereichsnamen des lokalen Plugin-Patches; `harness-glossar.md` verlinkt einen ADR-Anker, dessen Überschrift das
+ * Rest der Baseline: `model-routing.md` trägt Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
+ * historischer Ordnername); `harness-glossar.md` verlinkt einen ADR-Anker, dessen Überschrift das
  * Quellprojekt nennt. Die Baseline steigt nur per reviewtem Commit (kein maschinelles Anhebungs-Gate wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
