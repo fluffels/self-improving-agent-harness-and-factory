@@ -4,6 +4,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { windowsVorbereiten, windowsProzess } from "./codex-prozess-windows.mjs";
+
+if (process.platform === "win32") windowsVorbereiten();
 
 export const PROFIL = 'web_search="disabled"\n[features]\napps=false\nplugins=false\nremote_plugin=false\nmemories=false\nshell_tool=false\nrequest_permissions_tool=false\nmulti_agent=false\ncode_mode_host=false\ngoals=false\nview_image=false\n';
 export function umgebung(home) {
@@ -30,6 +33,7 @@ export function beenden(child, { platform = process.platform, treeKill = execFil
   }
 }
 export function prozess(file, args, { cwd, env, input = "", timeoutMs = 3000, maxBytes = 1_000_000 }) {
+  if (process.platform === "win32") return windowsProzess(file, args, { cwd, env, input, timeoutMs, maxBytes });
   return new Promise((resolve, reject) => {
     const child = spawn(file, args, { cwd, env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "", bytes = 0, fehler;
