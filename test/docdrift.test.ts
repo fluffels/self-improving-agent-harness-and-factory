@@ -49,6 +49,7 @@ const auditDocDrift: () => {
   deadLinks: { file: string; target: string; resolved: string }[];
   deadAnchors: { file: string; target: string; resolved: string; anchor: string }[];
   verifyChainViolations: { file: string; chain: string[]; missing: string[] }[];
+  testPfadFehler: unknown[];
 } = checkDocDrift.auditDocDrift;
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
