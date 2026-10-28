@@ -104,6 +104,11 @@ describe("fuehreAus", () => {
     assert.equal(r.code, 0);
     assert.match(r.out, /Kein neuer Factory-Release \(Stand v1\.2\.0\)/);
   });
+  test("Sync-Stand ohne Tag: Meldung „Stand unbekannt“, Exit 0, kein Absturz", () => {
+    const r = fuehreAus([], { wurzel: projekt({ stand: "{}" }), gh: () => "v1.0.0\n" });
+    assert.equal(r.code, 0);
+    assert.match(r.out, /Stand unbekannt/);
+  });
   test("aktueller Stand: kein Update, --json update null", () => {
     const wurzel = projekt({ tag: "v1.2.0" });
     const r = fuehreAus(["--json"], { wurzel, gh: () => tagsJson("v1.2.0") });
