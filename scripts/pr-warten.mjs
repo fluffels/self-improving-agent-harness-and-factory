@@ -160,20 +160,51 @@ export function holePflicht(pr, gh = ghText) {
   return JSON.parse(text).map((c) => c.name);
 }
 
+/** Pur: die Werkzeugnamen der Regel `code_scanning` aus den Branch-Regeln (`gh api repos/{owner}/{repo}/rules/branches/<base>`); kaputte Form → leer. */
+export function codeScanningWerkzeuge(regeln) {
+  if (!Array.isArray(regeln)) return [];
+  return regeln
+    .filter((r) => r?.type === "code_scanning")
+    .flatMap((r) => (Array.isArray(r.parameters?.code_scanning_tools) ? r.parameters.code_scanning_tools : []))
+    .map((t) => t?.tool)
+    .filter((n) => typeof n === "string" && n.trim() !== "");
+}
+
+/** Pur: Pflicht-Checks plus Code-Scanning-Werkzeuge. Eine leere Basis bleibt leer (fail-closed: dann gatet jeder Check). */
+export const pflichtListe = (basis, werkzeuge) => (basis.length ? [...basis, ...werkzeuge] : []);
+
+/** Pur: hängt die Hinweiszeile an, außer nach MERGED (Exit 0) oder ohne Hinweis. */
+export const mitHinweis = (r, hinweis) => (hinweis && r.exit !== 0 ? { ...r, zeilen: [...r.zeilen, hinweis] } : r);
+
+/**
+ * Code-Scanning-Werkzeuge der live gesetzten Ruleset-Regel `code_scanning` des Basis-Branches (nicht des Spiegels). Ein Server-Block gatet wie ein Required Check,
+ * darum gatet `pr-warten` sie mit. Nicht lesbar: keine Werkzeuge, dafür ein `HINWEIS` (kein Absturz).
+ */
+export function holeWerkzeuge(pr, gh = ghText) {
+  try {
+    const base = JSON.parse(gh(["pr", "view", pr, "--json", "baseRefName"], { timeout: 30_000 })).baseRefName;
+    const regeln = JSON.parse(gh(["api", `repos/{owner}/{repo}/rules/branches/${base}?per_page=100`], { timeout: 30_000 }));
+    return { werkzeuge: codeScanningWerkzeuge(regeln), hinweis: null };
+  } catch (err) {
+    return { werkzeuge: [], hinweis: `HINWEIS Ruleset-Regeln nicht lesbar: ${String(err?.message ?? err).split("\n")[0].slice(0, 120)}` };
+  }
+}
+
 function main() {
   const a = parseArgs(process.argv.slice(2));
   if (a.fehler || !a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
     console.error(`${a.fehler ? `${a.fehler}\n` : ""}Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]`);
     process.exit(3);
   }
-  const r = warten({
+  const w = holeWerkzeuge(a.pr); // einmal je Lauf
+  const r = mitHinweis(warten({
     hole: () => ghJson(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }),
-    pflicht: () => holePflicht(a.pr),
+    pflicht: () => pflichtListe(holePflicht(a.pr), w.werkzeuge),
     schlafe: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
     jetzt: () => Date.now(),
     maxMs: a.maxSekunden * 1000,
     intervallMs: a.intervall * 1000,
-  });
+  }), w.hinweis);
   console.log(r.zeilen.join("\n"));
   process.exit(r.exit);
 }
