@@ -15,9 +15,11 @@ export function umgebung(home) {
 }
 export function profil(config = PROFIL) {
   const root = mkdtempSync(join(tmpdir(), "codex-schutz-")), home = join(root, "home"), env = umgebung(home);
-  mkdirSync(env.CODEX_HOME, { recursive: true });
-  writeFileSync(join(env.CODEX_HOME, "config.toml"), config);
-  return { root, env, entfernen: () => rmSync(root, { recursive: true, force: true }) };
+  try {
+    mkdirSync(env.CODEX_HOME, { recursive: true });
+    writeFileSync(join(env.CODEX_HOME, "config.toml"), config);
+    return { root, env, entfernen: () => rmSync(root, { recursive: true, force: true }) };
+  } catch (e) { rmSync(root, { recursive: true, force: true }); throw e; }
 }
 export function beenden(child, { platform = process.platform, treeKill = execFileSync, killGroup = process.kill } = {}) {
   if (child.exitCode !== null || child.signalCode || !child.pid) return;
@@ -44,7 +46,7 @@ export function prozess(file, args, { cwd, env, input = "", timeoutMs = 3000, ma
     child.stdin.end(input);
   });
 }
-/** Nur feste administrative RPCs; Modell-/Shell-RPCs werden hier nie angeboten. */
+/** Transport für Inventar und kontrolliertes command/exec; Modell-RPCs sind kein Hostpfad. */
 export async function mitInventar(codex, p, fn, { start = spawn, timeoutMs = 5000 } = {}) {
   const child = start(codex, ["--strict-config", "app-server", "--stdio"], { cwd: p.root, env: p.env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
   const pending = new Map(); let seq = 0, bytes = 0;

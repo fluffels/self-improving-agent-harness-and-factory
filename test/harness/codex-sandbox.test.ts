@@ -5,6 +5,28 @@ import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 // @ts-expect-error: Node-Skript ohne Declaration.
 import * as raw from "../../scripts/codex-sandbox.mjs";
+const fsFault = vi.hoisted(() => ({ stage: "", profil: "", canary: "", created: [] as string[] }));
+vi.mock("node:fs", async importOriginal => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  const fehler = () => Object.assign(new Error("fixture ENOSPC"), { code: "ENOSPC" });
+  return { ...fs,
+    mkdtempSync: (...args: Parameters<typeof fs.mkdtempSync>) => {
+      const prefix = String(args[0]), art = prefix.includes("codex-schreibgrenze-") ? "canary" : prefix.includes("codex-schutz-") ? "profil" : "";
+      if (art !== "" && fsFault.stage === art) throw fehler();
+      const dir = fs.mkdtempSync(...args);
+      if (fsFault.stage !== "" && art !== "") { fsFault[art] = String(dir); fsFault.created.push(String(dir)); }
+      return dir;
+    },
+    mkdirSync: (...args: Parameters<typeof fs.mkdirSync>) => {
+      if (fsFault.stage === "mkdir" && String(args[0]).endsWith(".codex")) throw fehler();
+      return fs.mkdirSync(...args);
+    },
+    writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
+      if ((fsFault.stage === "config" && String(args[0]).endsWith("config.toml")) || (fsFault.stage === "marker" && String(args[0]).endsWith("marker.txt"))) throw fehler();
+      return fs.writeFileSync(...args);
+    },
+  };
+});
 type Params = { command: string[]; cwd: string; sandboxPolicy: unknown; env: Record<string, string>; timeoutMs: number };
 type Rpc = (method: string, params: Params) => Promise<Record<string, unknown>>;
 type Profil = { root: string; env: Record<string, string> };
@@ -12,12 +34,19 @@ type Aktion = { cwd: string; tool_input: { cmd: string; shell: string } };
 type Abfragen = (s: string, p: Profil, fn: (rpc: Rpc, init: { userAgent: string }) => Promise<unknown>, opts: { timeoutMs: number }) => Promise<unknown>;
 const c = raw as unknown as { pruefeCwdGrenze: (rest: string) => void; sandboxAktion: (a: Aktion, deps?: { root: string; abfragen?: Abfragen }) => Promise<{ code: number; stdout: string; stderr: string }> };
 const temps: string[] = [];
-afterEach(() => { for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(() => { fsFault.stage = ""; fsFault.profil = ""; fsFault.canary = ""; for (const dir of [...temps.splice(0), ...fsFault.created.splice(0)]) rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), "codex-sandbox-test-")); temps.push(dir); return dir; };
 const aktion = (cwd: string): Aktion => ({ cwd, tool_input: { cmd: "Write-Output FIXTURE_OK", shell: "powershell" } });
 const denial = (rpcCode: unknown = -32603, rpcMessage: unknown = "exec failed: sandbox error: sandbox denied exec error, exit code: 1") => Object.assign(new Error("RPC verweigert"), { rpcCode, rpcMessage });
 test.each(["..", `..${sep}nachbar`, tmpdir()])("relative cwd-Grenze verweigert %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).toThrow("außerhalb"); });
 test.each(["", "unterordner", "..prefix"])("relative cwd-Grenze erlaubt %s", rest => { expect(() => c.pruefeCwdGrenze(rest)).not.toThrow(); });
+test.each(["profil", "mkdir", "config", "canary", "marker"])("Initialisierungsfehler %s hinterlässt keine Ressourcen und startet keinen Server", async stage => {
+  const root = temp(), abfragen = vi.fn(); fsFault.stage = stage;
+  await expect(c.sandboxAktion(aktion(root), { root, abfragen })).rejects.toThrow("fixture ENOSPC");
+  expect(abfragen).not.toHaveBeenCalled();
+  expect(fsFault.profil === "" || !existsSync(fsFault.profil)).toBe(true);
+  expect(fsFault.canary === "" || !existsSync(fsFault.canary)).toBe(true);
+});
 
 function fixture(mode = "ok") {
   const calls: Params[] = [], state = { profil: "", marker: "" };

@@ -13,10 +13,11 @@ export function pruefeCwdGrenze(rest) {
 export async function sandboxAktion(a, { root = ROOT, abfragen = mitInventar } = {}) {
   root = realpathSync(root);
   const cwd = realpathSync(a.cwd); pruefeCwdGrenze(relative(root, cwd));
-  const p = profil(SANDBOX_PROFIL), canary = mkdtempSync(join(tmpdir(), "codex-schreibgrenze-")), marker = join(canary, "marker.txt");
-  writeFileSync(marker, "unveraendert");
-  const sandboxPolicy = { type: "workspaceWrite", writableRoots: [root], excludeSlashTmp: true, excludeTmpdirEnvVar: true, networkAccess: false };
+  const p = profil(SANDBOX_PROFIL); let canary;
   try {
+    canary = mkdtempSync(join(tmpdir(), "codex-schreibgrenze-"));
+    const marker = join(canary, "marker.txt"); writeFileSync(marker, "unveraendert");
+    const sandboxPolicy = { type: "workspaceWrite", writableRoots: [root], excludeSlashTmp: true, excludeTmpdirEnvVar: true, networkAccess: false };
     return await abfragen("codex", p, async (rpc, init) => {
       if (!init.userAgent.includes("/0.164.0 ")) throw new Error("Nicht geprüfte Sandbox-Version");
       const exec = command => rpc("command/exec", { command, cwd, sandboxPolicy: structuredClone(sandboxPolicy), env: { ...p.env }, timeoutMs: 3000 });
@@ -34,5 +35,5 @@ export async function sandboxAktion(a, { root = ROOT, abfragen = mitInventar } =
       if (!Number.isInteger(r.exitCode) || typeof r.stdout !== "string" || typeof r.stderr !== "string") throw new Error("Ungültiges Sandbox-Ergebnis");
       return { code: r.exitCode, stdout: r.stdout, stderr: r.stderr };
     }, { timeoutMs: 40000 });
-  } finally { try { rmSync(canary, { recursive: true, force: true }); } finally { p.entfernen(); } }
+  } finally { try { if (canary) rmSync(canary, { recursive: true, force: true }); } finally { p.entfernen(); } }
 }
