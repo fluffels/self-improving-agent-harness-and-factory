@@ -446,6 +446,13 @@ describe("anlegen --blocker (#1860)", () => {
     expect(neu).toMatch(/^blockiert durch #12, #13$/m);
     expect(neu.startsWith(body)).toBe(true);
   });
+  test("L9e: --blocker nimmt owner/name#<nr> und schreibt die qualifizierte Zeile; die Prüfung lehnt kaputte Formen ab", () => {
+    expect(S.aufrufPruefen(MIT("12", "acme/demo#13")).werte).toMatchObject({ blocker: [12, { repo: "acme/demo", nummer: 13 }] });
+    for (const bad of ["acme/demo", "acme/demo#0", "a/b/c#1", "acme/demo#x", "#acme/demo#1"]) expect(S.aufrufPruefen(MIT(bad)).fehler, bad).toMatch(/--blocker/);
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    expect(S.fuehreAus(MIT("12", "acme/demo#13"), io).code).toBe(0);
+    expect((aufrufe.erzeuge[0] as { body: string }).body).toMatch(/^blockiert durch #12, acme\/demo#13$/m);
+  });
   test("eine schon vorhandene Zeile wird nicht doppelt angehängt, eine fehlende Nummer ergänzt", () => {
     const { io, aufrufe } = umgebung({ "b.md": `${GUT}\nblockiert durch #12\n` });
     S.fuehreAus(MIT("12"), io);
@@ -535,6 +542,18 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(b.code).toBe(2);
     expect(b.err).toContain("kaputt-post");
   });
+  test("L13b/L14: ein 403 beim Posten und ein 404 beim Lesen sind die klare Rechte-Meldung mit dem Ziel-Repo, nicht der Rohtext", () => {
+    const http = (code: string) => () => { throw Object.assign(new Error("Command failed: gh api x"), { stderr: `gh: ${code}` }); };
+    const post = S.fuehreAus(ARGS, gumgebung({}, { postZeilen: http("HTTP 403: Forbidden"), sammelRepo: "zz-org/ziel" } as Partial<GIo>).io);
+    expect(post.code).toBe(2);
+    expect(post.err).toMatch(/keine Schreibrechte auf zz-org\/ziel/);
+    const lesen = S.fuehreAus(ARGS, gumgebung({}, { sammelKontext: http("HTTP 404: Not Found"), sammelRepo: "zz-org/ziel" } as Partial<GIo>).io);
+    expect(lesen.code).toBe(2);
+    expect(lesen.err).toMatch(/kein Lesezugriff auf zz-org\/ziel/);
+    const sonst = S.fuehreAus(ARGS, gumgebung({}, { postZeilen: http("HTTP 500"), sammelRepo: "zz-org/ziel" } as Partial<GIo>).io);
+    expect(sonst.err).toContain("HTTP 500");
+    expect(sonst.err).not.toMatch(/Schreibrechte/);
+  });
   test("pure Bausteine", () => {
     expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22" })).toBe(ZEILE);
     expect(fn.gescheitertBekannt(7, [{ user: { login: OWNER, type: "User" }, body: ZEILE }], OWNER)).toBe(true);
@@ -599,5 +618,52 @@ describe("Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10)", () => {
     expect(posts).toEqual([]);
     S.fuehreAus(args, gio("anderer-owner"));
     expect(posts).toEqual([1860]);
+  });
+});
+
+describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
+  type Echt = {
+    erzeuge: (a: { titel: string; body: string; labels: string[]; repo: string }) => unknown;
+    pruefeAnker: (a: { nach: number; labels: string[]; repo: string }) => string | null;
+    einsortiere: (a: { nr: number; nach: number | null; notfall: string | null; repo: string }) => void;
+    sammelRepo: string;
+  };
+  const E = raw as unknown as { echteIo: (config: unknown, deps: Record<string, unknown>) => Echt };
+  const config = { repo: FREMD.repo, boards: FREMD.boards, labels: { forum: FREMD.labels.forum, harness: FREMD.labels.harness }, sprache: echteSprache() };
+  function bau() {
+    const gh: string[][] = [];
+    const exec: unknown[][] = [];
+    const lade: unknown[][] = [];
+    const io = E.echteIo(config, {
+      ghJson: (a: string[]) => (gh.push(a), { number: 1 }),
+      exec: (...a: unknown[]) => void exec.push(a),
+      lade: (...a: unknown[]) => (lade.push(a), [{ number: 5 }]),
+    });
+    return { io, gh, exec, lade };
+  }
+  test("erzeuge schreibt in das übergebene Repo", () => {
+    const { io, gh } = bau();
+    io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: "zz-org/ziel" });
+    expect(gh[0]?.[3]).toBe("repos/zz-org/ziel/issues");
+  });
+  test("einsortiere startet board-place mit --repo <repo> (nach und notfall)", () => {
+    const { io, exec } = bau();
+    io.einsortiere({ nr: 9, nach: 4, notfall: null, repo: "zz-org/ziel" });
+    io.einsortiere({ nr: 9, nach: null, notfall: "x", repo: "zz-org/ziel" });
+    for (const aufruf of exec) {
+      const args = (aufruf[1] as string[]).slice(1);
+      expect(args.slice(0, 2)).toEqual(["--repo", "zz-org/ziel"]);
+    }
+    expect((exec[0]?.[1] as string[]).slice(3)).toEqual(["--after", "4", "9"]);
+    expect((exec[1]?.[1] as string[]).slice(3)).toEqual(["--notfall", "x", "--top", "9"]);
+  });
+  test("pruefeAnker lädt die Board-Items im übergebenen Repo", () => {
+    const { io, lade } = bau();
+    io.pruefeAnker({ nach: 5, labels: [HARNESS], repo: "zz-org/ziel" });
+    expect(lade.length).toBeGreaterThan(0);
+    for (const a of lade) expect(a[1]).toEqual({ repo: "zz-org/ziel" });
+  });
+  test("sammelRepo ist das Ziel-Repo der Harness-Befunde (für die Rechte-Meldung)", () => {
+    expect(bau().io.sammelRepo).toMatch(/^[^/]+\/[^/]+$/);
   });
 });
