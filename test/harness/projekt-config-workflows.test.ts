@@ -145,8 +145,8 @@ describe("Sparse-Checkout der Workflows", () => {
     for (const n of nutzer) {
       const yml = lies(`.github/workflows/${n}`);
       assert.ok(!yml.includes("sparse-checkout:"), `${n}: board-place.mjs braucht seine ganze Import-Hülle, kein Sparse-Checkout`);
-      assert.match(yml, /actions[/]checkout@v7/, `${n}: Checkout fehlt`);
-      assert.match(yml, /actions[/]setup-node@v7/, `${n}: setup-node fehlt`);
+      assert.match(yml, /actions[/]checkout@[0-9a-f]{40} # v7/, `${n}: Checkout fehlt`);
+      assert.match(yml, /actions[/]setup-node@[0-9a-f]{40} # v7/,`${n}: setup-node fehlt`);
     }
   });
   test("alle echten Workflows: jede Sparse-Liste trägt die Import-Hülle ihrer Skripte", () => {

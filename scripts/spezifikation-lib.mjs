@@ -127,18 +127,21 @@ function abschnitt(body, namen) {
   return gefunden ? zeilen : null;
 }
 
+/** Ein Blocker-Verweis: die Issue-URL (`https://github.com/<o>/<n>/issues/<nr>`, Gruppen 1-2) oder `[owner/name]#<nr>` (Gruppen 3-4). */
+const VERWEIS = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)|(?:([\w.-]+\/[\w.-]+))?#(\d+)/g;
+
 /**
  * Die Verweise hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, owner/name#13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer
  * oder dem Zeilenende, Groß-/Kleinschreibung egal. Je Verweis `{ repo, nummer }`; `repo` ist `owner/name` bei einem qualifizierten Verweis, sonst `null` (das eigene Repo);
- * gleiche Verweise zählen einmal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
+ * Verweise als Issue-URL zählen wie `owner/name#nr`; gleiche Verweise zählen einmal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
  */
 export function blockerVerweise(body, sprache) {
   const w = wortschatz(sprache);
   const verweise = new Map();
   for (const zeile of ohneFences(body)) {
     for (const m of zeile.matchAll(w.blockerRe())) {
-      for (const v of m[1].matchAll(/(?:([\w.-]+\/[\w.-]+))?#(\d+)/g)) {
-        const verweis = { repo: v[1] ?? null, nummer: Number(v[2]) };
+      for (const v of m[1].matchAll(VERWEIS)) {
+        const verweis = { repo: v[1] ?? v[3] ?? null, nummer: Number(v[2] ?? v[4]) };
         verweise.set(`${verweis.repo ?? ""}#${verweis.nummer}`, verweis);
       }
     }
@@ -151,15 +154,22 @@ export function blockerNummern(body, sprache) {
   return [...new Set(blockerVerweise(body, sprache).filter((v) => v.repo === null).map((v) => v.nummer))];
 }
 
+/** Ein Blocker als Verweistext: Nummer → `#n`, `{ repo, nummer }` → `owner/name#n` (wirft bei einem Repo ohne `owner/name`-Form). Pur. */
+export function blockerVerweisText(b) {
+  if (typeof b === "number") return `#${b}`;
+  if (!/^[\w.-]+\/[\w.-]+$/.test(String(b?.repo ?? ""))) throw new Error("Blocker-Repo muss die Form owner/name haben");
+  return `${b.repo}#${b.nummer}`;
+}
+
 /**
- * Die Blocker-Zeile als Text: `<blocker> #a, #b`, mit `zusatz` hinter einem Leerzeichen (z.B. „(nur solange #a offen ist)“). Gegenstück zu `blockerNummern`
+ * Die Blocker-Zeile als Text: `<blocker> #a, #b` (Nummern oder `{ repo, nummer }` → `owner/name#n`), mit `zusatz` hinter einem Leerzeichen (z.B. „(nur solange #a offen ist)“). Gegenstück zu `blockerNummern`
  * (SSOT für das Schreiben); wirft bei leerer Nummernliste und bei leerem Wort `sprache.blocker`. Pur.
  */
 export function blockerZeile(nummern, sprache, zusatz = "") {
   if (!Array.isArray(nummern) || nummern.length === 0) throw new Error("blockerZeile braucht mindestens eine Ticketnummer");
   const wort = sprache?.blocker;
   if (typeof wort !== "string" || wort.trim() === "") throw new Error("sprache.blocker fehlt oder ist leer: die Blocker-Zeile braucht das Wort der Projekt-Config");
-  return `${wort} ${nummern.map((n) => `#${n}`).join(", ")}${zusatz === "" ? "" : ` ${zusatz}`}`;
+  return `${wort} ${nummern.map(blockerVerweisText).join(", ")}${zusatz === "" ? "" : ` ${zusatz}`}`;
 }
 
 /** Text ohne Code-Fences und ohne Inline-Code (dort steht Beispieltext, keine Abhängigkeit). */

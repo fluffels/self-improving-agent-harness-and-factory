@@ -9,7 +9,8 @@
  */
 import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, gleichesRepo, ladeProjektConfig, nurRepo, repoAusUrl, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, gleichesRepo, ladeProjektConfig, repoAusUrl, zerlegeRepo } from "./projekt-config-lib.mjs";
+import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
 
@@ -89,7 +90,8 @@ export function seitenListen(produkt, factory, config) {
  * (auch leer) oder ohne Issue-Node-ID wird gemeldet (`gemeldet`) und nicht angefasst. `ende`: ID des letzten Items je Board, das der Lauf nicht
  * selbst entfernt (null = leer), der Anker für das erste umgezogene Item. Geschlossene Items bleiben als Historie. Eingaben bleiben unverändert.
  */
-export function umzugsPlan(produkt, factory, config, repo = undefined) {
+export function umzugsPlan(produkt, factory, config, repo) {
+  brauchtRepo(repo, "umzugsPlan");
   const stehtAuf = { produkt: new Set(produkt.map((i) => i.number)), factory: new Set(factory.map((i) => i.number)) };
   const schritte = [];
   const gemeldet = [];
@@ -97,7 +99,7 @@ export function umzugsPlan(produkt, factory, config, repo = undefined) {
     for (const i of liste) {
       const nach = boardRolleFuer(i.labels ?? [], config);
       if (i.state !== "open" || nach === von) continue;
-      const fremd = repo === undefined ? null : fremdesBoardText(nach, i.repo || repo, config);
+      const fremd = fremdesBoardText(nach, i.repo || repo, config);
       if (fremd) {
         gemeldet.push({ number: i.number, grund: `nicht umgezogen: ${fremd.split("\n")[0]}` });
         continue;
@@ -520,39 +522,6 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
   return afterId === null ? null : (items.find((i) => i.id === afterId)?.number ?? null);
 }
 
-/**
- * Aufnahme-Plan für Nummern, die weder die REST-Liste noch der GraphQL-Fallback im Board fand (#1428 Z37): ein frisch angelegtes Issue
- * stand nie im Board, `board-place` meldete nur „nicht gefunden“. `issues`: Nummer → REST-Antwort von `repos/<repo>/issues/<nr>` (oder
- * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
- * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title, rolle }], abgelehnt: [{ number, grund }] }`. Pur.
- */
-export function aufnahmePlan(fehlend, issues, { config, ankerNr = null, repo = undefined } = {}) {
-  const aufnehmen = [];
-  const abgelehnt = [];
-  for (const nr of fehlend) {
-    const i = issues?.[nr] ?? null;
-    const grund = aufnahmeGrund(nr, i, ankerNr) ?? fremdGrund(i, repo, config);
-    if (grund) abgelehnt.push({ number: nr, grund });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
-  }
-  return { aufnehmen, abgelehnt };
-}
-
-/** Pur: warum `aufnahmePlan` das Issue `i` (REST-Antwort oder null) der Nummer `nr` nicht aufnimmt, sonst `null`. */
-function aufnahmeGrund(nr, i, ankerNr) {
-  if (nr === ankerNr) return "Anker wird nie automatisch aufgenommen";
-  if (!i || i.number !== nr) return "Issue nicht ladbar oder unbekannt";
-  if (i.pull_request) return "ist ein Pull Request";
-  if (i.state !== "open") return "Issue ist geschlossen";
-  return typeof i.node_id !== "string" || i.node_id === "" ? "Antwort ohne node_id" : null;
-}
-
-/** Pur: erste Zeile des Fremd-Board-Texts, wenn das Board der Rolle des Issues `i` ein anderes Repo als `repo` führt (ohne `repo` nie), sonst `null`. */
-function fremdGrund(i, repo, config) {
-  if (repo === undefined) return null;
-  return fremdesBoardText(boardRolleFuer(i.labels ?? [], config), repo, config)?.split("\n")[0] ?? null;
-}
-
 /** Offene Issue-Nummern, die nicht im Board stehen (Abgleich, nur Bericht). Aufsteigend. */
 export function missingFromBoard(openNumbers, items) {
   const known = new Set(items.map((i) => i.number));
@@ -594,13 +563,16 @@ export async function mitWiederholung(
   }
 }
 
+/** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
+export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
+
 /**
  * Eine Listenabfrage über REST: die Issue-Items des Boards in Board-Reihenfolge, nur die des Repos `opts.repo` (Nummern zweier Repos kollidieren
  * auf einem Board, das Issues beider führt; `nurRepo`). `repo` ist Pflicht (kein stiller Standardwert). `opts.token` = anderer GH_TOKEN.
  */
 export function loadItems(board, { repo, ...opts } = {}) {
   brauchtBoard(board, "loadItems");
-  if (typeof repo !== "string" || repo === "") throw new Error("loadItems: repo fehlt\nFix: das Repo (owner/name), dessen Items gelten, als { repo } übergeben");
+  brauchtRepo(repo, "loadItems");
   return nurRepo(normalizeItems(loadItemPages(board, opts)), repo);
 }
 
@@ -611,8 +583,8 @@ export function loadItemPages(board, opts = {}) {
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
-export function loadOpenIssuePages(repo = REPO) {
-  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
+export function loadOpenIssuePages(repo = REPO, opts = {}) {
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`], opts));
 }
 
 /** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
@@ -759,10 +731,9 @@ const schlafeSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)
 export function addToBoardTodo(board, nodeId, opts = {}) {
   brauchtBoard(board, "addToBoardTodo");
   const { pauseMs = 0, schlafe = schlafeSync, repo, ...ghOpts } = opts;
-  if (typeof repo !== "string" || repo === "") throw new Error("addToBoardTodo: repo fehlt\nFix: das Repo (owner/name) des Issues als { repo } übergeben");
-  if (!gleichesRepo(boardRepo(board, PROJEKT), repo)) {
-    throw new Error(`addToBoardTodo: das ${board.rolle}-Board führt die Issues von ${boardRepo(board, PROJEKT)}, nicht die von ${repo}\nFix: das Issue im Ziel-Repo anlegen (gh issue transfer) oder das Label prüfen`);
-  }
+  brauchtRepo(repo, "addToBoardTodo");
+  const fremd = fremdesBoardText(board.rolle, repo, PROJEKT);
+  if (fremd) throw new Error(`addToBoardTodo: ${fremd}`);
   const item = graphql(MUTATION_ADD, { p: board.projectId, c: nodeId }, ghOpts);
   const itemId = item.data.addProjectV2ItemById.item.id;
   if (pauseMs > 0) schlafe(pauseMs);

@@ -23,6 +23,8 @@
  *    `GIT_DIR`/`GIT_WORK_TREE`. Ziel ist je Verzeichnis aus `D`: `-C`-Kette (relativ, `~` per `os.homedir()`,
  *    MSYS-Pfade), `--git-dir`/`--work-tree`, Wrapper mit Ortswechsel (`env -C`, `sudo -D`). Ein nicht existierendes
  *    `-C`-Ziel und `~` prüfen zusätzlich Ausgangsort und Session-`cwd`.
+ *    Ein nicht existierendes statisches `-C`-/`cd`-Ziel außerhalb des Session-Repos (`git init <tmp> && git -C <tmp> commit`, `mkdir x && cd x`) ist
+ *    kein geschützter Ort (#78); innerhalb des Repos und bei dynamischem Ziel bleibt es bei Block bzw. Rückfrage.
  *  - Wrapper (`sudo`, `env`, `timeout`, `xargs`, `nice`, `command`, `builtin` …) werden mit ihren Optionen
  *    übersprungen; `find -exec`-Unterkommandos werden einzeln bewertet. Interpreter (`bash|sh|zsh|dash|ksh -c`,
  *    `eval`, Heredoc/Here-String/Pipe als Eingabe, Funktionen und Aliase im selben Befehl) werden rekursiv
@@ -161,7 +163,7 @@ const BLOCK_REASON = (top, deps) =>
  *  nichts blockt, aber ein Ziel/Inhalt nicht statisch bestimmbar ist (siehe Kopfkommentar). Sonst durchlassen. */
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map() };
+  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map(), repoRoot };
   let found;
   try {
     found = analyse(command, cwd, d);

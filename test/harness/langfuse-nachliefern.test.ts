@@ -250,6 +250,13 @@ describe("Payload (Golden)", () => {
     expect(p.resourceSpans[0].resource.attributes).toEqual([O.attr("service.name", `${REPO_NAME}-abgleich`)]);
   });
 
+  test("Projekt-Tags aus CC_LANGFUSE_TRACE_TAGS kommen additiv dazu, ohne Dubletten; der Repo-Name bleibt erstes Tag (#78)", () => {
+    const tags = (env: Record<string, string>) => attrs(spansVon(baue([eintrag(1, { ticket: T9 })], { env }).chunks[0].payload)[0])["langfuse.trace.tags"];
+    expect(tags({ CC_LANGFUSE_TRACE_TAGS: "factory, zweites" })).toEqual([REPO_NAME, "factory", "zweites", "abgleich", T9]);
+    expect(tags({ CC_LANGFUSE_TRACE_TAGS: `${REPO_NAME},factory,factory,` })).toEqual([REPO_NAME, "factory", "abgleich", T9]);
+    expect(tags({})).toEqual([REPO_NAME, "abgleich", T9]);
+  });
+
   test.each([
     ["ohne Umgebung", {}, undefined, undefined],
     ["Environment", { LANGFUSE_TRACING_ENVIRONMENT: "dev" }, "dev", undefined],

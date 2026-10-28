@@ -57,6 +57,11 @@
       "grund": "Runner der Aufruf-Fehler-Tests (Kern und Projekt)"
     },
     {
+      "muster": "test/support/baseline-zaehlung.ts",
+      "art": "test-hilfe",
+      "grund": "Zählung, Vergleich und Anhebungssperre der Baseline-Wächter"
+    },
+    {
       "muster": "test/support/regex.ts",
       "art": "test-hilfe",
       "grund": "Regex-Hilfe der Kern-Tests"

@@ -63,7 +63,7 @@ function pruefeBoard(b, praefix) {
   for (const k of ["projectId", "statusFeldNodeId", "todoOptionId"]) {
     if (!istText(b[k])) fehler.push(`${praefix}${k} muss ein nicht-leerer String sein`);
   }
-  if (b.repo !== undefined && !(istText(b.repo) && REPO_FORM.test(b.repo))) fehler.push(`${praefix}repo muss die Form owner/name haben (optional: das Repo, dessen Issues dieses Board führt; ohne Schlüssel gilt das Repo der Config)`);
+  if (b.repo !== undefined && !istRepoForm(b.repo)) fehler.push(`${praefix}repo muss die Form owner/name haben (optional: das Repo, dessen Issues dieses Board führt; ohne Schlüssel gilt das Repo der Config)`);
   return fehler;
 }
 
@@ -325,6 +325,9 @@ export function gatesAus(config) {
 
 const REPO_FORM = /^([^/\s]+)\/([^/\s]+)$/;
 
+/** Pur: hat `repo` genau die Form `owner/name` (dieselbe Prüfung wie `zerlegeRepo`)? Ein Nicht-String nie. */
+export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(repo);
+
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
 export function zerlegeRepo(repo) {
   const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
@@ -486,7 +489,7 @@ export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
   const fehler = [];
   if (wert.version !== 2) fehler.push("version muss 2 sein (Schema mit boards-Liste)");
-  if (!istText(wert.repo) || !REPO_FORM.test(wert.repo)) fehler.push("repo muss die Form owner/name haben");
+  if (!istRepoForm(wert.repo)) fehler.push("repo muss die Form owner/name haben");
   fehler.push(...pruefeBoards(wert.boards));
   const boardFehler = fehler.length;
   const labelFehler = pruefeLabels(wert.labels);
@@ -525,9 +528,6 @@ export const boardRepo = (board, config) => (typeof board?.repo === "string" ? b
 
 /** Pur: sind zwei Repo-Angaben (`owner/name`) dasselbe Repo? GitHub unterscheidet Groß- und Kleinschreibung nicht; ein Nicht-String ist nie gleich. */
 export const gleichesRepo = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
-
-/** Pur: nur die Items, die zum Repo `repo` gehören (`item.repo` aus `normalizeItems`); ein Item ohne Repo-Angabe fällt weg (fail-closed: eine fremde Nummer darf nie als eigene gelten). */
-export const nurRepo = (items, repo) => items.filter((i) => i.repo !== "" && gleichesRepo(i.repo, repo));
 
 /** Pur: das Repo (`owner/name`) aus der `repository_url` eines Issues (`…/repos/<owner>/<name>`); leer, wenn die URL es nicht trägt. */
 export const repoAusUrl = (url) => /\/repos\/([^/]+\/[^/]+)$/.exec(String(url ?? ""))?.[1] ?? "";

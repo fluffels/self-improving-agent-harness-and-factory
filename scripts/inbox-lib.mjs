@@ -5,9 +5,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ghJson, ghText } from "./gh-cli.mjs";
-import { SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes, zielRepo } from "./board-lib.mjs";
+import { ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
+import { REPO, SAMMELTICKET_TITEL, kandidatenSammelticket, loadOpenIssuePages, normalizeOffene, waehleBestaetigtes, zielRepo } from "./board-lib.mjs";
 import { issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { zerlegeRepo } from "./projekt-config-lib.mjs";
 
 /** Das Ziel-Repo der Harness-Befunde (#76): das Repo, dessen Issues das Factory-Board führt (`boards[].repo`, sonst das eigene Repo). Dort liegt das Harness-Sammelticket. */
 export const ZIEL = zielRepo("factory");
@@ -28,18 +29,25 @@ export function vertrauteIssues(seiten, owner) {
 /** Titel der offenen Issues vertrauter Autoren. Pur. */
 export const offeneTitel = (seiten, owner) => vertrauteIssues(seiten, owner).map((i) => i.title);
 
-/** Sortiert Ticket `nr` per `board-place.mjs --notfall <art> --top` ganz oben ein. Wirft ohne Token und bei einem Fehler des Skripts. */
-export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN) {
+/**
+ * Sortiert Ticket `nr` per `board-place.mjs --notfall <art> --top` ganz oben ein; mit `repo` (#78) steht das Ticket in diesem Ziel-Repo (`--repo`),
+ * sonst im eigenen. Wirft ohne Token und bei einem Fehler des Skripts. `exec` ist die Test-Naht des Prozessaufrufs.
+ */
+export function platziereOben(nr, art, token = process.env.PROJECT_TOKEN, repo = undefined, exec = execFileSync) {
   if (!token) throw new Error("PROJECT_TOKEN fehlt: das Ticket steht nicht oben im Board.");
-  execFileSync(process.execPath, [BOARD_PLACE, "--notfall", art, "--top", String(nr)], { env: { ...process.env, GH_TOKEN: token }, stdio: "inherit" });
+  exec(process.execPath, [BOARD_PLACE, ...(repo ? ["--repo", repo] : []), "--notfall", art, "--top", String(nr)], { env: { ...process.env, GH_TOKEN: token }, stdio: "inherit" });
 }
 
 /** Das jüngste offene, ungeclaimte Harness-Sammelticket in `repo` (Standard: das Ziel-Repo; per Einzelabruf bestätigt, Vertrauen über dessen Owner) oder null. `offene` aus `normalizeOffene`. */
-export const waehleSammelticket = (offene, repo = ZIEL, api = ghJson) =>
-  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), repo.split("/")[0]);
+export const waehleSammelticket = (offene, repo = ZIEL, api = (args) => ghJson(args, { token: zielToken(repo) })) =>
+  waehleBestaetigtes(kandidatenSammelticket(offene, SAMMELTICKET_TITEL), (nr) => api(["api", `repos/${repo}/issues/${nr}`]), zerlegeRepo(repo).owner);
 
-/** Postet `text` als Kommentar unter Issue `nr` im Repo `repo` (Standard: das Ziel-Repo). */
-export const postZeilen = (nr, text, repo = ZIEL) => ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`]);
+/** Token für Aufrufe gegen `repo` (Standard: das Ziel-Repo): `PROJECT_TOKEN` bei einem fremden Ziel-Repo, sonst `undefined` (Standard-`GH_TOKEN`), siehe `tokenFuerZiel`. */
+export const zielToken = (repo = ZIEL, env = process.env) => tokenFuerZiel({ ziel: repo, eigenes: REPO, env });
+
+/** Postet `text` als Kommentar unter Issue `nr` im Repo `repo` (Standard: das Ziel-Repo) mit `token` (Standard: `zielToken(repo)`). `exec` ist die Test-Naht von `ghText`. */
+export const postZeilen = (nr, text, repo = ZIEL, token = zielToken(repo), exec = undefined) =>
+  ghText(["api", `repos/${repo}/issues/${nr}/comments`, "-f", `body=${text}`], { token, ...(exec ? { exec } : {}) });
 
 /** Nummern der offenen Harness-Sammeltickets (exakter Titel, auch geclaimte) aus `normalizeOffene`. Pur. */
 export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === SAMMELTICKET_TITEL).map((i) => i.number);
@@ -50,10 +58,11 @@ export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === 
  * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`).
  */
 export function ladeSammelKontext(io = {}) {
-  const ladeOffene = io.ladeOffene ?? (() => loadOpenIssuePages(ZIEL));
-  const ladeKommentare = io.ladeKommentare ?? ((nr, repo) => issueKommentare(nr, (args) => JSON.parse(ghText(args)), repo));
-  const rohe = ladeOffene();
+  const token = "token" in io ? io.token : zielToken();
+  const ladeOffene = io.ladeOffene ?? ((t) => loadOpenIssuePages(ZIEL, { token: t }));
+  const ladeKommentare = io.ladeKommentare ?? ((nr, repo, t) => issueKommentare(nr, (args) => JSON.parse(ghText(args, { token: t })), repo));
+  const rohe = ladeOffene(token);
   const offene = normalizeOffene(rohe);
-  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL).map((k) => ({ user: k.user, body: k.body })));
-  return { rohe, offene, kommentare, owner: ZIEL.split("/")[0] };
+  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL, token).map((k) => ({ user: k.user, body: k.body })));
+  return { rohe, offene, kommentare, owner: zerlegeRepo(ZIEL).owner };
 }

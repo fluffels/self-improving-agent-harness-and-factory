@@ -454,6 +454,15 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(V.blockerVerweise("```\nblockiert durch a/b#4\n```\nsiehe a/b#5", SPRACHE)).toEqual([]);
     expect(V.blockerVerweise(null, SPRACHE)).toEqual([]);
   });
+  test("L9e: blockerVerweise erkennt Issue-URLs, Roundtrip mit blockerZeile (Nummern und {repo, nummer})", () => {
+    const V = raw as unknown as { blockerVerweise: (b: unknown, s: unknown) => { repo: string | null; nummer: number }[]; blockerZeile: (n: unknown[], s: unknown, z?: string) => string };
+    expect(V.blockerVerweise("blockiert durch https://github.com/acme/demo/issues/7, #2", SPRACHE)).toEqual([{ repo: "acme/demo", nummer: 7 }, { repo: null, nummer: 2 }]);
+    expect(V.blockerVerweise("blockiert durch https://github.com/acme/demo/issues/7, acme/demo#7", SPRACHE)).toEqual([{ repo: "acme/demo", nummer: 7 }]);
+    const zeile = V.blockerZeile([3, { repo: "acme/demo", nummer: 7 }], SPRACHE);
+    expect(zeile).toBe("blockiert durch #3, acme/demo#7");
+    expect(V.blockerVerweise(zeile, SPRACHE)).toEqual([{ repo: null, nummer: 3 }, { repo: "acme/demo", nummer: 7 }]);
+    expect(() => V.blockerZeile([{ repo: "kaputt", nummer: 7 }], SPRACHE)).toThrow(/owner\/name/);
+  });
   test("blockerNummern: ein qualifizierter Verweis ist kein Blocker im eigenen Repo", () => {
     expect(P.blockerNummern("blockiert durch acme/demo#1883, #5", SPRACHE)).toEqual([5]);
     expect(P.blockerNummern("blockiert durch a/b#1, c/d#1", SPRACHE)).toEqual([]);

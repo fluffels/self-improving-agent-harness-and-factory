@@ -1,9 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/inbox-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { REPO as EIGENES_REPO } from "../scripts/board-lib.mjs";
 import { FREMD_OWNER } from "./support/fremd-config";
 
 const L = raw as unknown as {
+  zielToken: (repo?: string, env?: Record<string, string | undefined>) => string | undefined;
+  postZeilen: (nr: number, text: string, repo?: string, token?: string, exec?: (...a: unknown[]) => string) => string;
   vertrauteIssues: (s: unknown, owner: string) => { title: string }[];
   offeneTitel: (s: unknown, owner: string) => string[];
   platziereOben: (nr: number, art: string, token?: string) => void;
@@ -37,6 +41,15 @@ describe("offeneTitel", () => {
 describe("platziereOben", () => {
   test("ohne Token wirft es, bevor etwas startet", () => {
     expect(() => L.platziereOben(1, "security", "")).toThrow(/PROJECT_TOKEN/);
+  });
+  test("#78: mit repo steht --repo <repo> vor --notfall, ohne repo kein --repo", () => {
+    const P = raw as unknown as { platziereOben: (nr: number, art: string, token: string, repo: string | undefined, exec: (...a: unknown[]) => void) => void };
+    const aufrufe: string[][] = [];
+    const exec = (...a: unknown[]) => void aufrufe.push((a[1] as string[]).slice(1));
+    P.platziereOben(5, "security", "t", "zz-org/ziel", exec);
+    P.platziereOben(6, "security", "t", undefined, exec);
+    expect(aufrufe[0]).toEqual(["--repo", "zz-org/ziel", "--notfall", "security", "--top", "5"]);
+    expect(aufrufe[1]).toEqual(["--notfall", "security", "--top", "6"]);
   });
 });
 
@@ -83,6 +96,33 @@ describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
   });
 });
 
+describe("Token für das Ziel-Repo (#78 L13a)", () => {
+  test("ladeSammelKontext reicht den Ziel-Token an Offenen- und Kommentar-Abruf", () => {
+    const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
+    const tokens: unknown[] = [];
+    L.ladeSammelKontext({
+      token: "ziel-token",
+      ladeOffene: ((t: unknown) => (tokens.push(t), rohe)) as unknown as () => unknown,
+      ladeKommentare: ((_nr: number, _repo: string, t: unknown) => (tokens.push(t), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
+    } as unknown as Parameters<typeof L.ladeSammelKontext>[0]);
+    expect(tokens).toEqual(["ziel-token", "ziel-token"]);
+  });
+  test("postZeilen übergibt den Token an gh", () => {
+    const P = raw as unknown as { postZeilen: (nr: number, text: string, repo: string, token: string | undefined, exec: (...a: unknown[]) => string) => unknown };
+    const aufrufe: { env?: Record<string, string> }[] = [];
+    P.postZeilen(5, "x", "zz-org/ziel", "ziel-token", ((_c: unknown, _a: unknown, o: { env?: Record<string, string> }) => (aufrufe.push(o), "")) as never);
+    expect(aufrufe[0]?.env?.GH_TOKEN).toBe("ziel-token");
+  });
+});
+
+describe("waehleSammelticket: das Repo muss owner/name sein (#78)", () => {
+  test("ein Repo ohne diese Form wirft mit Fix-Zeile, statt einen falschen Owner zu vertrauen", () => {
+    const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => unknown };
+    const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }];
+    for (const kaputt of ["ohneOwner", "a/b/c", "/b", ""]) expect(() => W.waehleSammelticket(offene, kaputt, () => ({})), kaputt).toThrow(/owner.name[^]*Fix:/);
+  });
+});
+
 describe("waehleSammelticket (#76): Vertrauen über den Owner des Ziel-Repos", () => {
   const W = raw as unknown as { waehleSammelticket: (offene: unknown[], repo: string, api: (a: string[]) => unknown) => { number: number } | null };
   const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }];
@@ -95,5 +135,22 @@ describe("waehleSammelticket (#76): Vertrauen über den Owner des Ziel-Repos", (
   });
   test("Negativfall: ein Ticket eines anderen Autors wird nicht gewählt", () => {
     expect(W.waehleSammelticket(offene, "own-a/ziel", einzel("fremd"))).toBeNull();
+  });
+});
+
+describe("zielToken und Standard-Token der Schreibwege (#78 L13a, Review R1)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  test("fremdes Ziel-Repo nimmt PROJECT_TOKEN, das eigene Repo und ein fehlender PROJECT_TOKEN den Standard (undefined)", () => {
+    expect(L.zielToken("zz-org/fremd", { PROJECT_TOKEN: "p" })).toBe("p");
+    expect(L.zielToken(EIGENES_REPO as string, { PROJECT_TOKEN: "p" })).toBeUndefined();
+    expect(L.zielToken("zz-org/fremd", {})).toBeUndefined();
+  });
+  test("postZeilen ohne Token-Argument nimmt für ein fremdes Ziel-Repo PROJECT_TOKEN als GH_TOKEN, für das eigene keinen", () => {
+    vi.stubEnv("PROJECT_TOKEN", "p");
+    const tokens: unknown[] = [];
+    const exec = (_c: unknown, _a: unknown, o: { env?: Record<string, string> }) => (tokens.push(o.env?.GH_TOKEN === "p" ? "p" : "std"), "");
+    L.postZeilen(1, "t", "zz-org/fremd", undefined, exec as never);
+    L.postZeilen(1, "t", EIGENES_REPO as string, undefined, exec as never);
+    expect(tokens).toEqual(["p", "std"]);
   });
 });

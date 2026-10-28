@@ -46,7 +46,6 @@ import {
   addToBoardTodo,
   boardFuerRolle,
   boardRolleFuer,
-  aufnahmePlan,
   entferneVomBoard,
   ergaenzeFehlende,
   fehlendeNummern,
@@ -64,8 +63,9 @@ import {
   umzugsPlan,
   wirklichFehlend,
 } from "./board-lib.mjs";
+import { aufnahmePlan, brauchtRepo } from "./board-plan-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
-import { fremdesBoardText, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { fremdesBoardText, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 export { NOTFALL_ARTEN };
 
@@ -106,7 +106,7 @@ export function parseArgs(argv) {
 const zusatzOptionen = (repo, notfall) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}) });
 
 /** `--repo` fehlt oder hat die Form `owner/name`. */
-const repoFormOk = (repo) => repo === undefined || /^[^/\s]+\/[^/\s]+$/.test(repo);
+const repoFormOk = (repo) => repo === undefined || istRepoForm(repo);
 
 function parseModus(modus, positionale, dry) {
   if (modus === "umzug") return positionale.length === 0 ? { umzug: true, dry } : null;
@@ -154,6 +154,7 @@ export function nimmFehlendeAuf(items, args, io = {}) {
  * bei gemischten Rollen, einem `--after`-Anker nur auf dem anderen Board oder nicht bestimmbarer Rolle. Pur.
  */
 export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest = {}, config, repo }) {
+  brauchtRepo(repo, "zielRolle");
   const stehtAuf = (liste, nr) => liste.find((i) => i.number === nr);
   const rollen = new Map();
   for (const nr of numbers) {
@@ -164,7 +165,7 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };
   const rolle = [...verschieden][0];
-  const fremd = repo === undefined ? null : fremdesBoardText(rolle, repo, config);
+  const fremd = fremdesBoardText(rolle, repo, config);
   if (fremd) return { fehler: fremd };
   const fehler = anchor === null ? null : ankerFehler({ anchor, rolle, produkt, factory });
   if (fehler) return { fehler };
@@ -304,34 +305,48 @@ async function umziehen(args, config) {
   if (gemeldet > 0) throw abbruch(`${gemeldet} Item(s) nicht umgezogen (siehe Warnungen).`);
 }
 
-async function main(argv = process.argv.slice(2)) {
+/**
+ * Einstieg (#78 L13h). `deps` (Tests): `kontingent`, `ladeConfig`, `einsortieren`, `reportMissing`, `umziehen`, `mitWiederholung`, `beende` (Standard `process.exit`);
+ * die Verdrahtung gibt das Ziel-Repo (`--repo`, Standard das eigene) an jeden Modus weiter.
+ */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const { kontingent, ladeConfig, einsortieren: einsortiere, reportMissing: meldeFehlende, umziehen: ziehUm, mitWiederholung: wiederhole, beende } = {
+    kontingent: () => mitKontingent("board-place"),
+    ladeConfig: ladeProjektConfig,
+    einsortieren,
+    reportMissing,
+    umziehen,
+    mitWiederholung,
+    beende: process.exit,
+    ...deps,
+  };
   const geparst = parseArgs(argv);
   const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
   if (!args) {
     console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
-    process.exit(2);
+    return beende(2);
   }
-  mitKontingent("board-place");
-  const config = ladeProjektConfig();
-  if (args.missing) return reportMissing(args.repo);
+  kontingent();
+  const config = ladeConfig();
+  if (args.missing) return meldeFehlende(args.repo);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
-      return await umziehen(args, config);
+      return await ziehUm(args, config);
     } catch (e) {
       console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-      process.exit(e.exitCode ?? 1);
+      return beende(e.exitCode ?? 1);
     }
   }
   try {
     // Wettlauf (#1628): ein frisch angelegtes Issue hat teils noch keinen GraphQL-Node; vorübergehende Fehler werden mit Pause wiederholt.
-    await mitWiederholung(
-      () => einsortieren(args, config),
+    await wiederhole(
+      () => einsortiere(args, config),
       { schlafe: sleep },
     );
   } catch (e) {
     console.error(`✖ ${e.exitCode ? e.message : `Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`}`);
-    process.exit(e.exitCode ?? 1);
+    return beende(e.exitCode ?? 1);
   }
 }
 

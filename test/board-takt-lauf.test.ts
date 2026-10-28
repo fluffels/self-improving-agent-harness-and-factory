@@ -3,6 +3,8 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../scripts/produktquote-lib.mjs";
 import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
@@ -15,7 +17,7 @@ type Io = {
   positionLautAgentsMd: () => number;
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
-  itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string }) => ({ number: number } | null)[];
+  itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string; repo?: string }) => ({ number: number } | null)[];
   frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number; mitBoard?: boolean }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
   ladeKommentare?: (nr: number, repo: string) => unknown[];
@@ -426,7 +428,7 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
   const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, labels: labels.map((name) => ({ name })) });
   const bauen = (offen: number[], labelsVon: (n: number) => string[], opt: { token?: string; werfe?: boolean } = {}) => {
     const log: string[] = [];
-    const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0, offenRepos: [] as unknown[], items: 0 };
+    const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0, offenRepos: [] as unknown[], items: 0, itemsRepos: [] as unknown[] };
     const io: Io = {
       ghJson: (a) => {
         const m = /issues[/]([0-9]+)$/.exec(a.join(" "));
@@ -439,7 +441,7 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
       positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => (aufrufe.status++, { ok: true }),
       fuehreHarnessAus: () => (aufrufe.harness++, true),
-      itemsUeberIssues: (_r, n) => n.map(() => null),
+      itemsUeberIssues: (_r, n, o) => (aufrufe.itemsRepos.push(o.repo), n.map(() => null)),
       addToBoardTodo: (_r, id) => {
         if (opt.werfe) throw new Error("Board kaputt");
         return (aufrufe.add.push(id), `ITEM_${id}`);
@@ -462,6 +464,15 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
     expect(aufrufe.add).toEqual(["N5"]);
     expect(log).toMatch(new RegExp(`::warning::Board-Wächter: #6 fehlt im Board, nicht aufgenommen: Das factory-Board.*${FABRIK}`));
     expect(r.fehler).toBe(false);
+  });
+  test("die GraphQL-Zweitabfrage bekommt das eigene Repo (nicht den Standard)", () => {
+    expect(bauen([5], () => []).aufrufe.itemsRepos).toEqual([FREMD.repo, FREMD.repo]);
+  });
+  test("mehrere abgelehnte Harness-Issues: EINE Sammel-Warnung mit Anzahl und Nummern statt je Issue", () => {
+    const { log } = bauen([6, 7, 8], (n) => (n === 8 ? [] : [FREMD.labels.harness]));
+    const warnungen = log.split("\n").filter((z) => z.includes("nicht aufgenommen"));
+    expect(warnungen).toHaveLength(1);
+    expect(warnungen[0]).toMatch(/2 Issues fehlen im Board, nicht aufgenommen \(#6, #7\)/);
   });
   test("Wächter fragt die offenen Issues des eigenen Repos ab (nicht des Factory-Repos)", () => {
     expect(bauen([5], () => []).aufrufe.offenRepos).toEqual([FREMD.repo]);
@@ -572,5 +583,102 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
     };
     T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-12T12:00:00Z"), dry: true, io });
     expect(aufrufe).toHaveLength(0);
+  });
+});
+
+describe("Takt über Repo-Grenzen (#78)", () => {
+  const PRODUKT_REPO = "zz-org/zz-produkt";
+  const getrennt = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "produkt" ? { ...b, repo: PRODUKT_REPO } : b)) };
+  const SAMMEL = { number: 100, title: "Harness-Härtung (gesammelt)", closed_at: "2026-10-01T00:00:00Z", created_at: "2026-09-20T00:00:00Z" };
+  const W = (nr: number, titel: string) => c(`${titel} (#${nr})`, "2026-10-06T10:00:00Z");
+
+  function bauen(proRepo: Record<string, unknown[] | Error>, config: unknown = getrennt) {
+    const log: string[] = [];
+    const gelesen: { repo: string; token?: string }[] = [];
+    const io: Io = {
+      ghJson: (args, opts?: unknown) => {
+        const text = args.join(" ");
+        if (text.includes("state=closed")) return [[SAMMEL, { number: 76, title: "Takt", closed_at: "2026-10-05T00:00:00Z", created_at: "2026-10-04T00:00:00Z" }]];
+        const m = /repos[/]([^/]+[/][^/]+)[/]commits/.exec(text);
+        if (!m) return [[]];
+        const r = proRepo[m[1]];
+        gelesen.push({ repo: m[1], token: (opts as { token?: string } | undefined)?.token });
+        if (r instanceof Error) throw r;
+        return [r ?? []];
+      },
+      loadItems: nurFactory([]),
+      loadOpenIssuePages: () => [[]],
+      positionLautAgentsMd: () => 4,
+      ladeKommentare: () => [],
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: () => true,
+      log: (z) => log.push(z),
+    };
+    const lauf = () => T.fuehreTaktAus({ config, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io });
+    return { lauf, log, gelesen };
+  }
+
+  test("beide Repos werden gelesen; bei gleicher Nummer #76 zählt die Herkunft: Factory-Repo = Harness, Produkt-Repo = Produkt", () => {
+    const { lauf, log, gelesen } = bauen({
+      [FREMD.repo]: [W(76, "feat(x): a"), W(200, "feat(x): d")],
+      [PRODUKT_REPO]: [W(76, "feat(sim): b"), W(5, "feat(sim): c")],
+    });
+    lauf();
+    expect(gelesen.map((g) => g.repo).sort()).toEqual([FREMD.repo, PRODUKT_REPO].sort());
+    expect(log.join("\n")).toMatch(/2 Harness- auf 2 Produkt-Merges/);
+  });
+
+  test("ein Repo ist nicht lesbar: der Lauf bricht mit dem Repo im Text ab, keine Quote aus einer Teilmenge", () => {
+    const { lauf, log } = bauen({ [FREMD.repo]: [W(1, "feat(x): a")], [PRODUKT_REPO]: new Error("HTTP 404") });
+    expect(lauf).toThrow(new RegExp(`Commits von ${PRODUKT_REPO} nicht lesbar.*HTTP 404`));
+    expect(log.join("\n")).not.toContain("Produkt-Merges");
+  });
+
+  test("das fremde Repo liest der Projekt-Token, das eigene den Standard-Token", () => {
+    const vorher = process.env.PROJECT_TOKEN;
+    process.env.PROJECT_TOKEN = "projekt-token";
+    try {
+      const { lauf, gelesen } = bauen({});
+      lauf();
+      expect(gelesen.find((g) => g.repo === PRODUKT_REPO)?.token).toBe("projekt-token");
+      expect(gelesen.find((g) => g.repo === FREMD.repo)?.token).toBeUndefined();
+    } finally {
+      if (vorher === undefined) delete process.env.PROJECT_TOKEN;
+      else process.env.PROJECT_TOKEN = vorher;
+    }
+  });
+
+  test("ein Board-Repo wie das eigene (Single-Repo): nur das eigene Repo, Nummernregel wie bisher", () => {
+    const { lauf, log, gelesen } = bauen({ [FREMD.repo]: [W(76, "feat(x): a"), W(5, "feat(sim): b")] }, CFG);
+    lauf();
+    expect(gelesen.map((g) => g.repo)).toEqual([FREMD.repo]);
+    expect(log.join("\n")).toMatch(/1 Harness- auf 1 Produkt-Merges/);
+  });
+});
+
+describe("quotenQuellen und holeQuotenCommits (#78)", () => {
+  const lib = rawLib as unknown as {
+    quotenQuellen: (a: { config: unknown; repo: string }) => { repo: string; rolle: string | null }[];
+    holeQuotenCommits: (a: { quellen: { repo: string; rolle: string | null }[]; lies: (r: string) => unknown[] }) => { quellRolle?: string }[];
+    zaehleTaktMerges: (c: unknown[], seit: string | null, s: Set<number>) => number;
+  };
+  const boards = (produktRepo?: string, factoryRepo?: string) => [
+    { rolle: "produkt", ...(produktRepo ? { repo: produktRepo } : {}) },
+    { rolle: "factory", ...(factoryRepo ? { repo: factoryRepo } : {}) },
+  ];
+  test("verschiedene Board-Repos: beide mit Rolle; sonst das eigene Repo ohne Rolle (auch bei Groß/Klein-Unterschied, ohne boards)", () => {
+    expect(lib.quotenQuellen({ config: { repo: "a/f", boards: boards("a/p") }, repo: "a/f" })).toEqual([{ repo: "a/f", rolle: "harness" }, { repo: "a/p", rolle: "produkt" }]);
+    expect(lib.quotenQuellen({ config: { repo: "a/f", boards: boards() }, repo: "a/f" })).toEqual([{ repo: "a/f", rolle: null }]);
+    expect(lib.quotenQuellen({ config: { repo: "a/f", boards: boards("A/F") }, repo: "a/f" })).toEqual([{ repo: "a/f", rolle: null }]);
+    expect(lib.quotenQuellen({ config: undefined, repo: "a/f" })).toEqual([{ repo: "a/f", rolle: null }]);
+  });
+  test("holeQuotenCommits kennzeichnet je Rolle, ohne Rolle unverändert", () => {
+    const lies = (r: string) => [{ r }];
+    expect(lib.holeQuotenCommits({ quellen: [{ repo: "a/f", rolle: "harness" }, { repo: "a/p", rolle: "produkt" }], lies })).toEqual([{ r: "a/f", quellRolle: "harness" }, { r: "a/p", quellRolle: "produkt" }]);
+    expect(lib.holeQuotenCommits({ quellen: [{ repo: "a/f", rolle: null }], lies })).toEqual([{ r: "a/f" }]);
+  });
+  test("der Takt filtert Sammelticket-Nummern nur bei Commits ohne Produkt-Herkunft (Nummernkollision)", () => {
+    const k = { ...c("feat(x): p (#100)"), quellRolle: "produkt" };
+    expect(lib.zaehleTaktMerges([k, c("docs: s (#100)")], null, new Set([100]))).toBe(1);
   });
 });

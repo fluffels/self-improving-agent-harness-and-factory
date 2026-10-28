@@ -1,4 +1,4 @@
-/* Wächter für die berichtenden Sicherheits-Workflows (#875): `codeql.yml` und `scorecard.yml`.
+/* Wächter für die berichtenden Sicherheits-Workflows: `codeql.yml` und `scorecard.yml`.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regeln, darum im geschützten test/harness/ (#1165).
  *
@@ -9,8 +9,8 @@
  *
  * Gelesen wird mit der `yaml`-Bibliothek (Struktur: Trigger, Permissions, Jobs, Schritte, `with`). Ehrliche Grenzen:
  * (1) Die Pin-Prüfung liest zeilenweise, weil der Versionskommentar im Syntaxbaum nicht steht; sie kennt nur `uses:` in einer
- * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt nur
- * für `PIN_PFLICHT`; die übrigen Workflows pinnt #983.
+ * Zeile. (2) `secrets.`-Verwendung wird im kommentarbereinigten Text gesucht, nicht strukturell. (3) Pin-Pflicht gilt für jede
+ * Workflow-Datei (`PIN_PFLICHT` liest das Verzeichnis); ein neuer Workflow ohne Pins macht den Test rot.
  *
  * Ausführen mit:  npm test
  */
@@ -23,8 +23,8 @@ import { parse } from "yaml";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const lies = (...teile: string[]) => readFileSync(join(ROOT, ...teile), "utf8");
 
-/** Workflows mit Pin-Pflicht; #983 erweitert die Liste auf alle. */
-const PIN_PFLICHT = ["codeql.yml", "scorecard.yml"] as const;
+/** Pin-Pflicht gilt für alle Workflows (#78): jede `uses:`-Zeile mit Commit-SHA und Versionskommentar. */
+const PIN_PFLICHT = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
 
 type Obj = Record<string, unknown>;
 const istObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -273,7 +273,7 @@ function hatOberstePermissions(yml: string): boolean {
   }
 }
 
-describe("jeder Workflow hat oberste permissions (#1663)", () => {
+describe("jeder Workflow hat oberste permissions", () => {
   const dateien = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
   test("es gibt Workflows", () => expect(dateien.length).toBeGreaterThan(0));
   test.each(dateien)("%s", (datei) => {
