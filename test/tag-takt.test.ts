@@ -291,7 +291,8 @@ describe("Härtung (Review Runde 1)", () => {
     const gemischt = T.besitzCommits([commit({ datum: vor(1) }), commit({ datum: vor(8), sha: "b".repeat(40) })], MANIFEST);
     expect(entscheide({ besitz: gemischt }).aktion).toBe("anlegen");
     const mitte = T.besitzCommits([commit({ datum: vor(2) }), commit({ datum: vor(9), sha: "b".repeat(40) }), commit({ datum: vor(1), sha: "c".repeat(40) })], MANIFEST);
-    expect(entscheide({ besitz: mitte }).aktion).toBe("anlegen");
+    // 3 Commits lösen schon über MIN_PRS aus: darum den Auslöser prüfen, nicht nur die Aktion.
+    expect(entscheide({ besitz: mitte }).grund).toContain("älteste ungetaggte Änderung über");
     const texte: string[] = [];
     const dreiLog = (d: number[]) => d.map((tage, k) => `\x1e${String(k).repeat(40)}\x1f${vor(tage)}\x1ffix: n (#${k + 1})\x1f\n\nscripts/a.mjs\n`).join("");
     logZeilen({ ladeLog: () => dreiLog([2, 9, 1]), legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; } });
