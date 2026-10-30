@@ -414,14 +414,14 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
  * `env` ist die einzige Quelle der Umgebung (Token, Event, Kontingent-Log) und geht auch als `io.env` an die Commit-Leser. Nähte (Tests): `argv`,
  * `io`, `kontingent`, `lauf`, `ladeConfig`, `err`, `jetzt`.
  */
-export function main(env = process.env, { argv = process.argv.slice(2), io = ECHTE_IO, kontingent = mitKontingent, lauf = fuehreTaktAus, ladeConfig = ladeProjektConfig, err = console.error, jetzt = () => new Date() } = {}) {
+export function main(env = process.env, { argv = process.argv.slice(2), io = ECHTE_IO, kontingent = (opt) => mitKontingent("board-takt", opt), lauf = fuehreTaktAus, ladeConfig = ladeProjektConfig, err = console.error, jetzt = () => new Date() } = {}) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const aufruf = flagsLesen(argv, { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
     err(`board-takt: ${aufruf.fehler.text}\nAufruf: node scripts/board-takt.mjs [--dry-run]`);
     return AUFRUF_EXIT;
   }
-  if (env.PROJECT_TOKEN) kontingent("board-takt", { token: env.PROJECT_TOKEN });
+  if (env.PROJECT_TOKEN) kontingent({ token: env.PROJECT_TOKEN });
   const { fehler } = lauf({
     jetzt: jetzt(),
     dry: aufruf.werte["dry-run"] === true,

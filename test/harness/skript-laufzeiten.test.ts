@@ -1,4 +1,4 @@
-/* Skript-Laufzeiten (#101 L4c/L5e): EINE Tabelle in shell-tabellen.mjs für PowerShell-Guard und Stdin-Skript-Guard. */
+/* @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). Skript-Laufzeiten (#101 L4c/L5e): EINE Tabelle in shell-tabellen.mjs für PowerShell-Guard und Stdin-Skript-Guard. */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.

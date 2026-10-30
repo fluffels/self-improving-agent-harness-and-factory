@@ -18,7 +18,7 @@ function aufbau(ergebnis: { fehler: boolean } = { fehler: false }) {
   const naehte = {
     argv: [] as string[],
     io: { marker: "m" },
-    kontingent: (name: string, opt: unknown) => { kontingent.push({ name, opt }); },
+    kontingent: (opt: unknown) => { kontingent.push({ name: "board-takt", opt }); },
     lauf: (a: Aufruf) => { lauf.push(a); return ergebnis; },
     ladeConfig: () => FREMD,
     err: (s: string) => err.push(s),

@@ -1,5 +1,6 @@
 // blockSpanne und MANIFEST_PFAD der Besitz-Lib (#101 L25/L26): eine Auslegung der Block-Spanne für einheitText und docdrift.
 import { describe, expect, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRoh from "../scripts/besitz-lib.mjs";
 
 const { blockSpanne, einheitText, markerEnde, markerStart, MANIFEST_PFAD } = besitzRoh as unknown as {

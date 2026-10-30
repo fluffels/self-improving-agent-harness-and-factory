@@ -97,13 +97,13 @@ describe("ECHTE_PLACE_IO: die übrigen Methoden (#101 L6a)", () => {
     expect(weg).toContain("i=ITEM_9");
   });
   test("addToBoardTodo holt das Issue ins Board und setzt Todo (zwei Mutationen), Rückgabe ist die Item-ID", () => {
-    textAntwort = (q) => (q.includes("addProjectV2ItemById") ? JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "PVTI_z9" } } } }) : "{}");
-    expect(P.ECHTE_PLACE_IO.addToBoardTodo(factory, "I_abc", { repo: L.zielRepo("factory"), token: "t" })).toBe("PVTI_z9");
+    textAntwort = (q) => (q.includes("addProjectV2ItemById") ? JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "ITEM_z9" } } } }) : "{}");
+    expect(P.ECHTE_PLACE_IO.addToBoardTodo(factory, "I_abc", { repo: L.zielRepo("factory"), token: "t" })).toBe("ITEM_z9");
     const [add, status] = aufrufe.map((a) => a.args.join(" "));
     expect(add).toContain("c=I_abc");
     expect(aufrufe.map((a) => a.opt)).toEqual([{ token: "t" }, { token: "t" }]);
     expect(status).toContain("updateProjectV2ItemFieldValue");
-    expect(status).toContain("i=PVTI_z9");
+    expect(status).toContain("i=ITEM_z9");
     expect(status).toContain(`o=${factory.todoOptionId}`);
   });
   test("positionOderWarnung ist die der Board-Lib", () => {

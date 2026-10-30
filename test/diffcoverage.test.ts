@@ -115,7 +115,7 @@ describe("Diff-Coverage: Git-Optionen (#97 L11j)", () => {
   test("ohne runGit ruft der Standardweg git mit GIT_OPTIONEN auf (nicht nur {encoding})", () => {
     execFileSyncMock.mockReset();
     execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => (args[0] === "diff" ? "" : "basesha"));
-    checkDiffCoverage({ readFile: () => "", env: { FACTORY_DIFF_BASE: "basesha" } });
+    checkDiffCoverage({ readFile: () => "", env: { FACTORY_DIFF_BASE: "basesha" } } as unknown as Parameters<typeof checkDiffCoverage>[0]);
     const aufrufe = execFileSyncMock.mock.calls as unknown[][];
     assert.ok(aufrufe.length > 0, "der Standardweg muss execFileSync nutzen");
     for (const [befehl, , optionen] of aufrufe) {
