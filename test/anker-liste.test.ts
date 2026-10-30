@@ -2,9 +2,26 @@
  * `lauf` bekommt git und Dateizugriff injiziert. Jedes Muster hat einen Positivfall, dazu Negativfälle (Kommentar, String, Vergleichs-Fehlgriffe). */
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { formatiere, guardListe, lauf, MUSTER } from "../scripts/guard-liste.mjs";
+import * as ankerRoh from "../scripts/anker-liste.mjs";
 
 type Eintrag = { datei: string; funktion: string; zeile: number; anker: { zeile: number; muster: string }[] };
+interface Lauf {
+  code: number;
+  out: string;
+  err: string;
+}
+interface Umgebung {
+  git: (args: string[]) => string;
+  lesen: (pfad: string) => string | undefined;
+  istQuelle: (pfad: string) => boolean;
+}
+const ankerListe = ankerRoh as unknown as {
+  guardListe: (a: { diffText: string; neueDateien?: { pfad: string; inhalt: string }[]; lies: (pfad: string) => string | undefined; istQuelle: (pfad: string) => boolean }) => Eintrag[];
+  formatiere: (e: Eintrag[]) => string;
+  lauf: (argv: string[], u: Umgebung) => Lauf;
+  MUSTER: { name: string }[];
+};
+const { guardListe, formatiere, lauf, MUSTER } = ankerListe;
 const istQuelle = (p: string) => p.startsWith("scripts/") && p.endsWith(".mjs");
 
 /** Eine neue Datei mit allen Zeilen als Diff-Zeilen. */
@@ -44,7 +61,7 @@ describe("guardListe: Musterliste", () => {
   });
 
   test("die Tabelle hat genau die getesteten Muster (neues Muster braucht einen Positivfall)", () => {
-    expect([...new Set(MUSTER.map((m: { name: string }) => m.name))].sort()).toEqual([...new Set(FAELLE.map(([n]) => n))].sort());
+    expect([...new Set(MUSTER.map((m) => m.name))].sort()).toEqual([...new Set(FAELLE.map(([n]) => n))].sort());
   });
 
   test("Default-Parameter im Funktionskopf, auch bei Arrow", () => {
@@ -85,7 +102,7 @@ describe("guardListe: Musterliste", () => {
   });
 
   test("mehrzeiliger Blockkommentar wird übersprungen, der Code danach zählt wieder", () => {
-    const r = neu("function f() {\n/*\n a || b\n*/\n  if (x) return;\n}") as Eintrag[];
+    const r = neu("function f() {\n/*\n a || b\n*/\n  if (x) return;\n}");
     expect(r[0]?.anker).toEqual([{ zeile: 5, muster: "if" }]);
   });
 
@@ -151,7 +168,7 @@ describe("guardListe: Funktionszuordnung", () => {
   ].join("\n");
 
   test("Modulebene, Deklaration, Arrow, Funktionsausdruck, Methode und verschachtelte Funktion", () => {
-    const r = neu(ZUORDNUNG) as Eintrag[];
+    const r = neu(ZUORDNUNG);
     expect(r.map((e) => [e.funktion, e.zeile, e.anker.map((a) => a.zeile)])).toEqual([
       ["(Modulebene)", 1, [1]],
       ["deklariert", 2, [3]],
@@ -163,7 +180,7 @@ describe("guardListe: Funktionszuordnung", () => {
   });
 
   test("if/for/catch-Zeilen mit Block sind keine Methodenköpfe", () => {
-    const r = neu("function f() {\n  while (a) {\n    if (b) {}\n  }\n}") as Eintrag[];
+    const r = neu("function f() {\n  while (a) {\n    if (b) {}\n  }\n}");
     expect(r.map((e) => e.funktion)).toEqual(["f"]);
   });
 });
@@ -209,7 +226,7 @@ describe("formatiere und lauf", () => {
     const r = lauf([], { ...umgebung(), git: () => { throw new Error("nein"); } });
     expect(r.code).toBe(1);
     expect(r.out).toBe("");
-    expect(r.err).toMatch(/^✖ guard-liste: keine Vergleichs-Basis auflösbar\nFix: /);
+    expect(r.err).toMatch(/^✖ anker-liste: keine Vergleichs-Basis auflösbar\nFix: /);
   });
 
   test("lauf: --basis hat Vorrang vor FACTORY_DIFF_BASE, ohne --basis gilt die Umgebung", () => {
@@ -229,6 +246,6 @@ describe("formatiere und lauf", () => {
   test("lauf mit unbekanntem Flag: Exit 2 mit Aufrufzeile", () => {
     const r = lauf(["--bogus"], umgebung());
     expect(r.code).toBe(2);
-    expect(r.err).toBe("✖ guard-liste: Unbekanntes Argument: --bogus\nAufruf: node scripts/guard-liste.mjs [--basis <ref>] [--json]\n");
+    expect(r.err).toBe("✖ anker-liste: Unbekanntes Argument: --bogus\nAufruf: node scripts/anker-liste.mjs [--basis <ref>] [--json]\n");
   });
 });

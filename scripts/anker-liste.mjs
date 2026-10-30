@@ -3,7 +3,7 @@
  * Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen, damit der Selbstcheck des
  * Umsetzers und Lens 3 von derselben, nicht selbst gewählten Liste ausgehen. Kein Gate, Exit 0 (außer Aufruf-Fehler und fehlende Basis).
  *
- * Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
+ * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
  * Strings, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`.
  * Quelle: Projekt-Config `struktur.quelle` über `isMeasured` (keine festen Endungen); Testdateien liegen außerhalb und fehlen.
@@ -17,7 +17,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const AUFRUF = "Aufruf: node scripts/guard-liste.mjs [--basis <ref>] [--json]";
+const AUFRUF = "Aufruf: node scripts/anker-liste.mjs [--basis <ref>] [--json]";
 const MODULEBENE = "(Modulebene)";
 
 /** Geschlossene Musterliste. `auf: "text"` prüft die Zeile ohne String-Inhalte und Kommentar, sonst zusätzlich ohne Regex-Literale. */
@@ -121,10 +121,10 @@ export function formatiere(ergebnis) {
 /** Die CLI mit injiziertem `git(args)`, `lesen(pfad)` und `istQuelle`; Ergebnis `{ code, out, err }`. */
 export function lauf(argv, { git, lesen, istQuelle }) {
   const r = flagsLesen(argv, { basis: { type: "string" }, json: { type: "boolean" } });
-  if (r.fehler) return { code: 2, out: "", err: `✖ guard-liste: ${r.fehler.text}\n${AUFRUF}\n` };
+  if (r.fehler) return { code: 2, out: "", err: `✖ anker-liste: ${r.fehler.text}\n${AUFRUF}\n` };
   const basis = resolveBase(git, r.werte.basis === undefined ? process.env : { FACTORY_DIFF_BASE: r.werte.basis });
   if (basis === null) {
-    return { code: 1, out: "", err: "✖ guard-liste: keine Vergleichs-Basis auflösbar\nFix: --basis <ref> angeben oder `git fetch origin` ausführen\n" };
+    return { code: 1, out: "", err: "✖ anker-liste: keine Vergleichs-Basis auflösbar\nFix: --basis <ref> angeben oder `git fetch origin` ausführen\n" };
   }
   const neueDateien = git(["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/)
