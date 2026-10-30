@@ -40,6 +40,7 @@ AGENTS.md @fluffels
 /scripts/internalrefs-lib.mjs @fluffels
 /scripts/harness-doctor.mjs @fluffels
 /scripts/harness-doctor-lib.mjs @fluffels
+/scripts/harness-doctor-sicherheit.mjs @fluffels
 /scripts/harness-doctor-melden.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels

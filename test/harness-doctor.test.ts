@@ -51,10 +51,14 @@ const CONFIG = {
 };
 const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n  G: ${{ secrets.GITHUB_TOKEN }}\nrun: gh issue list --label forum\n";
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };
+const SICHER = { security_and_analysis: Object.fromEntries(["secret_scanning", "secret_scanning_push_protection", "secret_scanning_non_provider_patterns", "secret_scanning_validity_checks", "dependabot_security_updates"].map((k) => [k, { status: "enabled" }])) };
+const REPO_OK = { private: false, default_branch: "main", permissions: { admin: true }, ...SICHER };
+const CODEQL = { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL" }] } };
 const GESUND: Record<string, unknown> = {
   "api -i user": "HTTP/2.0 200 OK\nX-Oauth-Scopes: gist, project, repo\n\n{}",
-  "api repos/acme/demo": { private: false, default_branch: "main", permissions: { admin: true } },
-  "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all" },
+  "api repos/acme/demo": REPO_OK,
+  "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: true },
+  "api repos/acme/demo/private-vulnerability-reporting": { enabled: true },
   "api --paginate --slurp repos/acme/demo/actions/secrets": [{ secrets: [{ name: "PROJECT_TOKEN" }] }],
   "api --paginate --slurp repos/acme/demo/actions/organization-secrets": [{ secrets: [] }],
   "api --paginate --slurp repos/acme/demo/labels?per_page=100": [[{ name: "area:werk" }, { name: "status:steckt" }, { name: "forum" }]],
@@ -62,7 +66,7 @@ const GESUND: Record<string, unknown> = {
   "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 8 },
   "api orgs/acme/projectsV2/7/fields/5": feld,
   "api orgs/acme/projectsV2/8/fields/5": feld,
-  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }],
+  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }, CODEQL],
 };
 const SPIEGEL = { name: "main-schutz", requiredChecks: ["CI", "Audit"], bypassActors: [] };
 
@@ -254,13 +258,13 @@ describe("harness-doctor --pruefen", () => {
     const r = lauf();
     assert.equal(r.code, 0);
     assert.equal(r.out.filter((z) => z.includes("Fix:")).length, 0);
-    assert.deepEqual(r.out.filter((z) => z.startsWith("Harness-Doctor:")), ["Harness-Doctor: keine Lücke"]);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("Harness-Doctor:")), ["Harness-Doctor: keine Lücke, alles prüfbar"]);
   });
 
   const faelle: [string, Record<string, unknown>, RegExp][] = [
     ["Actions aus", { "api repos/acme/demo/actions/permissions": { enabled: false } }, /Actions.*Fix: gh api -X PUT/],
     ["Actions local_only", { "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "local_only" } }, /Actions.*Fix:/],
-    ["kein Admin", { "api repos/acme/demo": { private: false, default_branch: "main", permissions: { admin: false } } }, /Admin-Recht.*Fix:/],
+    ["kein Admin", { "api repos/acme/demo": { ...REPO_OK, permissions: { admin: false } } }, /Admin-Recht.*Fix:/],
     ["Scope ohne project", { "api -i user": "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo\n\n{}" }, /Token-Scope.*Fix: gh auth refresh -s project/],
     ["Secret fehlt", { "api --paginate --slurp repos/acme/demo/actions/secrets": [{ secrets: [] }] }, /Secret PROJECT_TOKEN.*Fix: gh secret set PROJECT_TOKEN --repo acme\/demo/],
     ["Board node_id", { "api orgs/acme/projectsV2/7": { node_id: "falsch", number: 7 } }, /Board produkt: projectId.*Fix:/],
@@ -274,9 +278,9 @@ describe("harness-doctor --pruefen", () => {
     ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /Labels: Labels nicht lesbar.*Fix:/],
     ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
     ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
-    ["keine Regel", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, /Ruleset: kein Required status check.*Fix:/],
+    ["keine Regel", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /Ruleset: kein Required status check.*Fix:/],
     ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
-    ["privat ohne Ruleset", { "api repos/acme/demo": { private: true, default_branch: "main", permissions: { admin: true } }, "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [] }, /ADR 0022.*Fix: Repo öffentlich/],
+    ["privat ohne Ruleset", { "api repos/acme/demo": { ...REPO_OK, private: true }, "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /ADR 0022.*Fix: Repo öffentlich/],
   ];
   for (const [name, over, muster] of faelle) {
     test(`Lücke: ${name}`, () => {
@@ -295,11 +299,11 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("K4: fehlender Required-Check ergibt Exit 1 mit Fix-Zeile; zwei fehlende ergeben zwei Zeilen", () => {
-    const eins = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }] });
+    const eins = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }, CODEQL] });
     assert.equal(eins.code, 1);
     assert.equal(luecken(eins).length, 1);
     assert.match(luecken(eins)[0], /Required-Check "Audit" fehlt.*Fix: "Audit" in Ruleset "main-schutz"/);
-    const zwei = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }] });
+    const zwei = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }, CODEQL] });
     assert.equal(luecken(zwei).length, 2);
   });
 
@@ -310,24 +314,39 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("Standardzweig mit anderem Namen: Regeln kommen von diesem Zweig", () => {
-    const repo = { private: false, default_branch: "trunk", permissions: { admin: true } };
+    const repo = { ...REPO_OK, default_branch: "trunk" };
     assert.equal(lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": GESUND["api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100"] }).code, 0);
     const r = lauf({ "api repos/acme/demo": repo });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Ruleset:.*trunk/);
+    const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    assert.match(luecken(ohneCs)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf trunk/);
+  });
+
+  test("privates Repo ohne Code-Scanning-Regel: der Befund nennt die Grenze der Rulesets (privat und Zweig sind verdrahtet)", () => {
+    const r = lauf({ "api repos/acme/demo": { ...REPO_OK, private: true } , "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    assert.match(luecken(r)[0], /^LÜCKE Code-Scanning: .*auf main \(private Repos auf GitHub Free/);
+  });
+
+  test("Antwort null für Repo und Actions: Lücken statt Absturz, die acht Sicherheitspunkte nicht prüfbar", () => {
+    const r = lauf({ "api repos/acme/demo": "null", "api repos/acme/demo/actions/permissions": "null", "api repos/acme/demo/private-vulnerability-reporting": "null" });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Admin-Recht: ")));
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Actions: ")));
+    for (const p of ["Secret Scanning", "PVR", "SHA-Pinning"]) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `)), p);
   });
 
   test("Regeln über zwei Seiten (--slurp): Checks beider Seiten zählen, ein Check nur auf Seite 2 fehlend ist eine Lücke", () => {
     const seite = (c: string) => [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: c }] } }];
     const k = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
-    assert.equal(lauf({ [k]: [seite("CI"), seite("Audit")] }).code, 0);
-    const r = lauf({ [k]: [seite("CI"), seite("Anderes")] });
+    assert.equal(lauf({ [k]: [[...seite("CI"), CODEQL], seite("Audit")] }).code, 0);
+    const r = lauf({ [k]: [[...seite("CI"), CODEQL], seite("Anderes")] });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Required-Check "Audit" fehlt/);
   });
 
   test("Regel ohne parameters zählt als ohne Checks", () => {
-    const r = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks" }] });
+    const r = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks" }, CODEQL] });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Ruleset: kein Required status check/);
   });
@@ -388,7 +407,10 @@ describe("harness-doctor --pruefen", () => {
   test("das nicht angemeldete Token trägt das Feld fatal (einrichten prüft es statt des Punktnamens), ein fehlender Scope nicht", () => {
     const leer = { secrets: [], variablen: [], labels: [], boards: [] };
     const nichtAngemeldet = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: () => { throw new Error("gh auth login"); }, langfuse: null });
-    assert.deepEqual(nichtAngemeldet.filter((p) => p.punkt !== "Sprache").map((p) => [p.punkt, p.fatal]), [["Token", true]]);
+    assert.deepEqual(nichtAngemeldet.filter((p) => p.punkt === "Token").map((p) => [p.punkt, p.fatal]), [["Token", true]]);
+    const sicherheit = nichtAngemeldet.filter((p) => !["Token", "Sprache"].includes(p.punkt));
+    assert.equal(sicherheit.length, 8, "die acht Sicherheitspunkte stehen auch ohne Token da");
+    for (const p of sicherheit) assert.deepEqual([p.ok, (p as { nichtPruefbar?: boolean }).nichtPruefbar, p.fatal], [false, true, undefined]);
     const ohneScope = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: (a) => (a.join(" ") === "api -i user" ? "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo\n\n{}" : (() => { throw new Error("404"); })()), langfuse: null });
     assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
   });
@@ -408,10 +430,10 @@ describe("harness-doctor --pruefen", () => {
       assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }, { spiegel: MIT }).code, 0);
     });
     test("Spiegel nennt CodeQL, live fehlt die Regel: Lücke mit Fix", () => {
-      const r = lauf({}, { spiegel: MIT });
+      const r = lauf({ [REGELN]: [required] }, { spiegel: MIT });
       assert.equal(r.code, 1);
       assert.equal(luecken(r).length, 1);
-      assert.match(luecken(r)[0], /Code-Scanning "CodeQL" fehlt.*Fix: Regel in Ruleset "main-schutz" ergänzen \(Pre-Flight\)/);
+      assert.match(luecken(r)[0], /LÜCKE Code-Scanning: Code-Scanning "CodeQL" fehlt.*Fix: Regel in Ruleset "main-schutz" ergänzen \(Pre-Flight\)/);
     });
     test("Regel für ein anderes Werkzeug zählt nicht", () => {
       assert.equal(luecken(lauf({ [REGELN]: [required, cs("Semgrep")] }, { spiegel: MIT })).length, 1);
@@ -421,8 +443,11 @@ describe("harness-doctor --pruefen", () => {
       assert.equal(luecken(r).length, 1);
       assert.match(luecken(r)[0], /Code-Scanning "CodeQL" fehlt/);
     });
-    test("Spiegel ohne codeScanning: live egal", () => {
+    test("Spiegel ohne codeScanning: live mindestens ein Werkzeug", () => {
       assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }).code, 0);
+      const r = lauf({ [REGELN]: [required] });
+      assert.equal(luecken(r).length, 1);
+      assert.match(luecken(r)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf main/);
     });
   });
 
@@ -485,5 +510,72 @@ describe("voraussetzungenAus", () => {
   test("Label-Literale: Flag mit und ohne Anführungszeichen, Env-Schlüssel; Variablen und Ausdrücke nicht; Dedup ohne Groß-/Kleinschreibung", () => {
     const v = ab('run: gh x --label forum --add-label "Area:Werk" --label "$VAR" --label \'a:b,c:d,\' --label=eq:wert\nenv:\n  ALARM_LABEL: "area:neu"\n  INBOX_LABEL: ${{ x.y }}\n  OTHER: nein\n');
     assert.deepEqual([...v.labels].sort(), ["area:werk", "a:b", "area:neu", "c:d", "eq:wert", "forum"].sort());
+  });
+});
+
+describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", () => {
+  const PUNKTE = ["Secret Scanning", "Push Protection", "Non-Provider-Patterns", "Validity Checks", "PVR", "Dependabot Security Updates", "Code-Scanning", "SHA-Pinning"];
+  const REGELN = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
+  const AUS = { security_and_analysis: Object.fromEntries(Object.keys(SICHER.security_and_analysis).map((k) => [k, { status: "disabled" }])) };
+  const alleAus = {
+    "api repos/acme/demo": { ...REPO_OK, ...AUS },
+    "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: false },
+    "api repos/acme/demo/private-vulnerability-reporting": { enabled: false },
+    [REGELN]: [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }],
+  };
+  const welten: [string, Record<string, unknown>][] = [
+    ["gesund", {}],
+    ["alles kaputt", alleAus],
+    ["Token fatal", { "api -i user": new Error("gh auth login") }],
+    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 403") }],
+  ];
+  test.each(welten)("%s: jeder Punkt genau eine Zeile OK, LÜCKE oder NICHT PRÜFBAR mit Fix", (_, over) => {
+    const r = lauf(over);
+    for (const p of PUNKTE) {
+      const z = r.out.filter((x) => new RegExp(`^(?:OK|LÜCKE|NICHT PRÜFBAR) ${p}(?::|$)`).test(x));
+      assert.equal(z.length, 1, p);
+      assert.match(z[0], new RegExp(`^(?:OK ${p}|LÜCKE ${p}: .+ Fix: .+|NICHT PRÜFBAR ${p}: .+ Fix: .+)$`));
+    }
+  });
+
+  test("alles kaputt: Lücken statt nicht prüfbar, Summenzeile zählt getrennt", () => {
+    const r = lauf(alleAus);
+    assert.equal(r.code, 1);
+    for (const p of PUNKTE) assert.ok(r.out.some((z) => z.startsWith(`LÜCKE ${p}: `)), p);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("Harness-Doctor:")), ["Harness-Doctor: 8 Lücke(n), 0 nicht prüfbar"]);
+  });
+
+  test("nur ein nicht prüfbarer Punkt: Exit 1, Summe 0 Lücke(n), 1 nicht prüfbar", () => {
+    const r = lauf({ "api repos/acme/demo/private-vulnerability-reporting": new Error("HTTP 404: Not Found") });
+    assert.equal(r.code, 1);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("NICHT PRÜFBAR")), [r.out.find((z) => z.startsWith("NICHT PRÜFBAR PVR: ")) as string]);
+    assert.match(r.out.find((z) => z.startsWith("NICHT PRÜFBAR PVR: ")) as string, /HTTP 404.*Fix: /);
+    assert.equal(luecken(r).length, 0);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("Harness-Doctor:")), ["Harness-Doctor: 0 Lücke(n), 1 nicht prüfbar"]);
+  });
+
+  test("gemischt: zwei Lücken und ein nicht prüfbarer Punkt", () => {
+    const r = lauf({
+      "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: false },
+      "api repos/acme/demo/private-vulnerability-reporting": { enabled: false },
+      "api repos/acme/demo": { ...REPO_OK, security_and_analysis: { ...SICHER.security_and_analysis, secret_scanning_validity_checks: undefined } },
+    });
+    assert.deepEqual(r.out.filter((z) => z.startsWith("Harness-Doctor:")), ["Harness-Doctor: 2 Lücke(n), 1 nicht prüfbar"]);
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Validity Checks: ")));
+  });
+
+  test("Repo 403 ohne Admin-Recht: fünf Punkte nicht prüfbar, nie OK", () => {
+    const r = lauf({ "api repos/acme/demo": new Error("HTTP 403") });
+    for (const p of ["Secret Scanning", "Push Protection", "Non-Provider-Patterns", "Validity Checks", "Dependabot Security Updates"]) {
+      assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `) && z.includes("HTTP 403")), p);
+      assert.ok(!r.out.includes(`OK ${p}`), p);
+    }
+  });
+
+  test("Token fatal: alle acht Punkte nicht prüfbar mit dem Token-Fix, Exit 1", () => {
+    const r = lauf({ "api -i user": new Error("gh auth login") });
+    assert.equal(r.code, 1);
+    for (const p of PUNKTE) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `) && z.endsWith("Fix: erst den Token-Punkt beheben")), p);
+    assert.deepEqual(r.aufrufe, ["api -i user"]);
   });
 });

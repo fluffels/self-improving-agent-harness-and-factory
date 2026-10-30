@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMelden from "../scripts/harness-doctor-melden.mjs";
 
-interface Luecke { punkt: string; befund: string; fix: string }
+interface Luecke { punkt: string; befund: string; fix: string; nichtPruefbar?: boolean }
 interface Kommentar { user: { login: string; type: string } | null; body: string }
 interface Io {
   ermittle: () => Luecke[];
@@ -17,7 +17,7 @@ interface Io {
 interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
-  istBekannt(punkt: string, kommentare: Kommentar[], owner: string): boolean;
+  istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string): boolean;
   main(argv: string[], deps: { env?: Record<string, string>; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
@@ -26,7 +26,8 @@ const OWNER = "acme";
 const ICH = { login: "acme", type: "User" };
 const L1: Luecke = { punkt: "Secret PROJECT_TOKEN", befund: "PROJECT_TOKEN fehlt (ein Workflow liest es)", fix: "gh secret set PROJECT_TOKEN --repo acme/demo" };
 const L2: Luecke = { punkt: "Label forum", befund: 'Label "forum" fehlt', fix: 'gh label create "forum" --repo acme/demo' };
-const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} 2026-10-01 Harness-Doctor (Wochenlauf): LÜCKE ${l.punkt}: ${l.befund} Fix: ${l.fix}`;
+const NP: Luecke = { punkt: "PVR", befund: "private-vulnerability-reporting nicht lesbar (HTTP 404)", fix: "mit einem Konto mit Admin-Recht prüfen", nichtPruefbar: true };
+const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} 2026-10-01 Harness-Doctor (Wochenlauf): ${l.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${l.punkt}: ${l.befund} Fix: ${l.fix}`;
 
 interface Welt { luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
 function fahre(w: Welt, trocken = false): { code: number; log: string[]; posts: { nr: number; text: string }[] } {
@@ -93,6 +94,33 @@ describe("harness-doctor-melden: lauf", () => {
     assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: zeile({ ...L1, befund: "ganz anderer Text" }) }], OWNER), true);
     assert.equal(melden.istBekannt("Secret PROJECT", [{ user: ICH, body: zeile(L1) }], OWNER), false);
     assert.equal(melden.istBekannt(L1.punkt, [{ user: { login: "github-actions[bot]", type: "Bot" }, body: zeile(L1) }], OWNER), true);
+  });
+
+  test("ein nicht prüfbarer Punkt wird als Zeile NICHT PRÜFBAR ins Sammelticket geschrieben (factory#116)", () => {
+    const r = fahre({ luecken: [NP] });
+    assert.equal(r.posts.length, 1);
+    assert.equal(r.posts[0].text, "- [ ] 2026-10-21 Harness-Doctor (Wochenlauf): NICHT PRÜFBAR PVR: private-vulnerability-reporting nicht lesbar (HTTP 404) Fix: mit einem Konto mit Admin-Recht prüfen");
+  });
+
+  test("Abgleich mit der Art: eine offene NICHT-PRÜFBAR-Zeile hält still, eine LÜCKE-Zeile desselben Punkts verdeckt sie nicht und umgekehrt", () => {
+    assert.deepEqual(fahre({ luecken: [NP], kommentare: [{ user: ICH, body: zeile(NP) }] }).posts, []);
+    assert.equal(fahre({ luecken: [NP], kommentare: [{ user: ICH, body: zeile({ ...NP, nichtPruefbar: false }) }] }).posts.length, 1);
+    assert.equal(fahre({ luecken: [{ ...NP, nichtPruefbar: false }], kommentare: [{ user: ICH, body: zeile(NP) }] }).posts.length, 1);
+    assert.equal(melden.istBekannt("PVR", [{ user: ICH, body: zeile(NP) }], OWNER, "NICHT PRÜFBAR"), true);
+    assert.equal(melden.istBekannt("PVR", [{ user: ICH, body: zeile(NP) }], OWNER), false);
+  });
+
+  test("schluesselFuer ohne Art ist der alte LÜCKE-Schlüssel", () => {
+    assert.equal((rawMelden as { schluesselFuer: (p: string) => string }).schluesselFuer("Secret X"), "Harness-Doctor (Wochenlauf): LÜCKE Secret X: ");
+  });
+
+  test("ermittleLuecken reicht nichtPruefbar durch", () => {
+    const l = melden.ermittleLuecken({ env: {}, repo: "acme/demo", pruefe: () => [{ ok: false, punkt: "PVR", befund: "b", fix: "f", nichtPruefbar: true } as never] });
+    assert.equal(l[0].nichtPruefbar, true);
+  });
+
+  test("alte LÜCKE-Zeilen gelten weiter (ohne Art-Angabe ist die Art LÜCKE)", () => {
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: zeile(L1) }], OWNER, "LÜCKE"), true);
   });
 
   test("offene Zeile mit *-Spiegelstrich, eingerückt oder mit Windows-Zeilenenden zählt als bekannt", () => {
