@@ -150,24 +150,27 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
 
+/** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config (einmal geladen). */
+export function echteUmgebung() {
+  const quelle = strukturAus(ladeProjektConfig()).quelle;
+  return {
+    git: (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }),
+    lesen: (pfad) => {
+      try {
+        return readFileSync(join(ROOT, pfad), "utf8");
+      } catch {
+        return undefined;
+      }
+    },
+    istQuelle: (pfad) => isMeasured(pfad, quelle),
+  };
+}
+
 if (istDirektaufruf(import.meta.url)) {
   direktaufruf(process.argv.slice(2), {
     pruefe: (argv) => ({ fehler: flagsLesen(argv, FLAGS).fehler?.text }),
     fehlerErgebnis: (argv) => lauf(argv, {}),
-    io: () => {
-      const quelle = strukturAus(ladeProjektConfig()).quelle;
-      return {
-      git: (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }),
-      lesen: (pfad) => {
-        try {
-          return readFileSync(join(ROOT, pfad), "utf8");
-        } catch {
-          return undefined;
-        }
-      },
-      istQuelle: (pfad) => isMeasured(pfad, quelle),
-      };
-    },
+    io: echteUmgebung,
     fuehreAus: (argv, io) => lauf(argv, io),
   });
 }

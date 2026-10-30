@@ -19,9 +19,10 @@ const ankerListe = ankerRoh as unknown as {
   guardListe: (a: { diffText: string; neueDateien?: { pfad: string; inhalt: string }[]; lies: (pfad: string) => string | undefined; istQuelle: (pfad: string) => boolean }) => Eintrag[];
   formatiere: (e: Eintrag[]) => string;
   lauf: (argv: string[], u: Umgebung) => Lauf;
+  echteUmgebung: () => Umgebung;
   MUSTER: { name: string }[];
 };
-const { guardListe, formatiere, lauf, MUSTER } = ankerListe;
+const { guardListe, formatiere, lauf, MUSTER, echteUmgebung } = ankerListe;
 const istQuelle = (p: string) => p.startsWith("scripts/") && p.endsWith(".mjs");
 
 /** Eine neue Datei mit allen Zeilen als Diff-Zeilen. */
@@ -103,7 +104,7 @@ describe("guardListe: Musterliste", () => {
   });
 
   test("Default-Parameter: ungleich (!=) und Zuweisung im Rumpf hinter der Kopfklammer zählen nicht, geschachtelte Klammer im Kopf schon", () => {
-    for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;", "const s = o => (o.x = 1);", "const g = x => h(y != 1);"]) {
+    for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;", "const s = o => (o.x = 1);", "const g = x => h(y = 1);"]) {
       expect(neu(z)[0]?.anker.map((a) => a.muster) ?? [], z).not.toContain("Default-Parameter");
     }
     expect(neu("function f(a = g(1)) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
@@ -246,6 +247,15 @@ describe("formatiere und lauf", () => {
     git: git({ "rev-parse": "abc\n", "diff -U0 abc": kopf, "ls-files": "scripts/neu.mjs\ndocs/x.md\n", ...extra }),
     lesen: (p: string) => (p === "scripts/neu.mjs" ? "if (n) {}\n" : "if (a) {}\n"),
     istQuelle,
+  });
+
+  test("echteUmgebung: git im Repo, lesbare Datei als Text, fehlende Datei undefined, Quelle aus der Projekt-Config", () => {
+    const u = echteUmgebung();
+    expect(u.git(["rev-parse", "--is-inside-work-tree"]).trim()).toBe("true");
+    expect(u.lesen("package.json")).toContain('"name"');
+    expect(u.lesen("gibt/es/nicht.mjs")).toBeUndefined();
+    expect(u.istQuelle("scripts/anker-liste.mjs")).toBe(true);
+    expect(u.istQuelle("test/anker-liste.test.ts")).toBe(false);
   });
 
   test("lauf liest ungetrackte Nicht-Quelldateien gar nicht erst", () => {
