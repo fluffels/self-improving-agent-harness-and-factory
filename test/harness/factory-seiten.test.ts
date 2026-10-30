@@ -45,7 +45,7 @@ import type { BegriffsConfig } from "./kern-reinheit.test";
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 const { collectMarkdown, GEN_MARKER } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[]; GEN_MARKER: RegExp };
 
-const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel: string) => string[] };
+const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel: string) => string[]; NUMMER: RegExp };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
@@ -129,7 +129,7 @@ export function basisWerte(baseline: Baseline, basis: Baseline): Baseline {
 const TICKET_BASELINE = "test/harness/ticketnummern-baseline.json";
 const AGENTS = "AGENTS.md";
 /** Eine nackte Ticketnummer (3 oder 4 Ziffern) nach der Maskierung: kein Präfix (`quellprojekt#`, `owner/repo#`), kein Dateianker davor, kein Wortzeichen dahinter. */
-const NACKTE_NUMMER = /(?<![\p{L}\p{N}_.-])#\d{3,4}(?![\p{L}\p{N}_])/gu;
+const NACKTE_NUMMER = herkunftsform.NUMMER; // eine Quelle: was der Wächter zählt, stellt das Werkzeug um
 const TICKET_BEGRIFFE = { Ticketnummer: NACKTE_NUMMER };
 
 /** Die Zählung nackter Ticketnummern je Einheit (Seite oder `AGENTS.md`), nur Einheiten mit Treffer. Überschriften und Code zählen mit. */
@@ -343,7 +343,7 @@ describe("Ticketnummern (#95)", () => {
       assert.equal(z("(#992/#1087)"), 2);
     });
     test("Herkunftsformen, Anker, Zahlen anderer Länge und Wortreste zählen nicht", () => {
-      for (const t of ["quellprojekt#1234", "factory#123", "kubernia#1883", "owner/repo#12", "x.md#1234", "#12", "#12345", "#123abc", "#1234_x"]) assert.equal(z(t), 0, t);
+      for (const t of ["quellprojekt#1234", "factory#123", "kubernia#1883", "owner/repo#12", "x.md#1234", "#12", "#12345", "#123abc", "#1234_x", "ä#1234", "PR-#1234", "a_#1234"]) assert.equal(z(t), 0, t);
     });
     test("ein http-Link samt Text, eine URL und ein GEN-Block zählen nicht", () => {
       assert.equal(z("[#1949](https://github.com/o/r/issues/1949) https://x.de/#1234"), 0);

@@ -39,8 +39,6 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 - **Kontext sparen:** Patch einmal lesen, Brain-Seiten per `Read`, Kontext-Diät je Lens (Skill `review-lenses`). Such- und Rechercheaufträge an den Subagenten `Explore`, außer der Zielort ist bekannt und es braucht nur wenige Aufrufe.
 - **Öffentliches Repo — keine internen Bezüge (quellprojekt#990).** Keine Arbeitgeber-/Kundenprojektnamen in Code, Doku, Commits, PRs oder Tickets — **auch nicht als Herkunftsnennung einer Idee** (die Sache benennen, nicht die Herkunft). Bewacht von `npm run check:internalrefs`; Begriffe nur mit `node scripts/check-internalrefs.mjs --add "<begriff>"` ergänzen (base64, nie Klartext).
 
-- **Ticketnummern mit Herkunft (factory#95).** In Factory-Seiten und dieser Datei steht keine nackte Nummer `#nnn(n)`: `quellprojekt#<nr>` für ein Ticket des Quellprojekts, `factory#<nr>` für eines des Factory-Repos (Überschriften ausgenommen). Neue nackte Nummern lässt `test/harness/factory-seiten.test.ts` rot werden; `node scripts/herkunftsform.mjs` stellt um.
-
 **Arbeitsweise:**
 - **Kein Grün-durch-Aufweichen.** Ein rotes Gate wird durch Beheben der Ursache grün, **nie** durch Senken einer Schwelle, Neu-Ziehen einer Baseline über echten Zuwachs oder Ausschalten (Lockern ohne Rot: [ADR 0027](docs/adr/0027-regeln-lockern.md)). Ratchets (Floors, Baselines, Kontext-Budget) bewegen sich nur in die strenge Richtung; ein Budget wächst nur bewusst per reviewtem Commit mit Begründung, nie maschinell, nie gegen ein Rot. Druckventile (`ALLOWLIST`, Commit-Zeile `<praefixe.commitZeile>*-Override:`) nur mit offenem Ticket (bei Harness-Befunden zählt das ungeclaimte Sammelticket samt Zeile) bzw. Pflicht-Begründung. Gilt für **jedes** Gate.
 - **Kein Secret-Key im Agentenlauf.** Agentenläufe starten keine Skripte, die den Langfuse-Secret-Key lesen (`langfuse-nachliefern`, `token-baseline --langfuse`) ([Sicherheit der Agenten](docs/sicherheit-agenten.md)).
@@ -89,6 +87,7 @@ Hauptchat `sonnet`, Umsetzung `<agenten.umsetzer>` (Sonnet), Planung und Review 
 
 Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks auf dem PR sind der maßgebliche Riegel. Jedes Gate muss grün sein; ein rotes Gate wird durch Beheben der Ursache grün, nie durch Aufweichen.
 
+- **Ticketnummern mit Herkunft (factory#95).** In den Factory-Seiten (`docs/`, ohne Historie) und in dieser Datei steht keine nackte Nummer `#nnn(n)`: `quellprojekt#<nr>` für ein Ticket des Quellprojekts, `factory#<nr>` für eines des Factory-Repos (Überschriften und Code ausgenommen). Neue nackte Nummern lassen `test/harness/factory-seiten.test.ts` rot werden; `scripts/herkunftsform.mjs` stellt einmalig um, neue Nummern schreibt man von Hand in der richtigen Form.
 - **Lint muss grün bleiben** (`npm run lint`, `--max-warnings 0`, typbewusst ab `recommendedTypeChecked`).
 - **Komplexität je Funktion** (`scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in `eslint-suppressions.json`, Neues bricht sofort, stale Einträge `npm run lint:prune`.
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `SIH-Diffsize-Override: #<nr> warum`.

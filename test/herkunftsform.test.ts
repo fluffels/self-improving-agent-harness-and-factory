@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -33,6 +33,17 @@ describe("umschreiben: Ziel der Nummer", () => {
   it("Klammer, Schrägstrich, Sternchen, eckige Klammer und Zeilenanfang erlauben die Umstellung; beide Nummern in (#992/#1087)", () => {
     expect(u("(#992/#1087) *#1234* [#1234]\n#1234 am Anfang")).toBe("(quellprojekt#992/quellprojekt#1087) *quellprojekt#1234* [quellprojekt#1234]\nquellprojekt#1234 am Anfang");
   });
+  it("Wort-, Bindestrich-, Unterstrich- und Nicht-ASCII-Zeichen direkt vor dem # verhindern die Umstellung", () => {
+    const t = "PR-#1234 a_#1234 v1#1234 ä#1234 Größe#1234";
+    expect(u(t)).toBe(t);
+  });
+  it("sieben und mehr # sind keine Überschrift (Obergrenze 6) und werden umgestellt", () => {
+    expect(u("####### x #1234")).toBe("####### x quellprojekt#1234");
+    expect(u("###### x #1234")).toBe("###### x #1234");
+  });
+  it("ab 101 ist gültig: die Nummer 101 gehört dann zum Quellprojekt, 100 wirft", () => {
+    expect(H.umschreiben("#1234 #101 #100", { ab: 101 }).text).toBe("quellprojekt#1234 quellprojekt#101 factory#100");
+  });
   it("Buchstaben, Ziffern, Unterstrich direkt nach der Nummer verhindern die Umstellung", () => {
     expect(u("#123abc #1234_x #1234ä")).toBe("#123abc #1234_x #1234ä");
   });
@@ -61,6 +72,7 @@ describe("umschreiben: unverändert", () => {
     expect(u("#1234\n<!-- GEN:x START -->\n#1234\n<!-- GEN:x END -->\n#1234")).toBe("quellprojekt#1234\n<!-- GEN:x START -->\n#1234\n<!-- GEN:x END -->\nquellprojekt#1234");
   });
   it("Linkziele, http-Links samt Text und nackte URLs, aber nicht der Text eines relativen Links", () => {
+    expect(u("[#1234](<https://github.com/o/r/issues/1>)")).toBe("[#1234](<https://github.com/o/r/issues/1>)");
     expect(u("[a](#1234) [a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [#1234](x.md)")).toBe(
       "[a](#1234) [a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [quellprojekt#1234](x.md)",
     );
@@ -121,6 +133,18 @@ describe("main", () => {
     expect(readFileSync(dir + "AGENTS.md", "utf8")).toBe("y quellprojekt#1235\n");
     expect(readFileSync(dir + "docs/adr/b.md", "utf8")).toBe("#1234\n");
     expect(readFileSync(dir + "README.md", "utf8")).toBe("#1236\n");
+  });
+  it("die Ausgabe nennt je Datei mit Treffern die Zahlen und keine Zeile für Dateien ohne Treffer", () => {
+    const dir = repo();
+    writeFileSync(join(dir, "docs/leer.md"), "nichts\n");
+    const zeilen: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((z: string) => void zeilen.push(z));
+    try {
+      H.main(["--ab", "120"], dir);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(zeilen).toEqual(["docs/a.md: 1x quellprojekt#, 0x factory#", "AGENTS.md: 1x quellprojekt#, 0x factory#", "Probelauf (nichts geschrieben): 2 Nummern"]);
   });
   it("ohne --ab: Exit 2 und nichts geschrieben", () => {
     const dir = repo();

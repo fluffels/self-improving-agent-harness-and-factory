@@ -8,6 +8,7 @@
  *  `ab` ist die erste Nummer, die das Factory-Repo noch nicht vergeben hat (höchste Issue- oder PR-Nummer + 1); Pflicht, kein Standard.
  * Unverändert bleiben: Überschriftszeilen (ihr Anker trägt die Nummer), Code-Fences und Inline-Code, GEN-Blöcke, Linkziele `](…)`, URLs und der
  * Linktext von http(s)-Links sowie schon präfixierte Formen (`owner/repo#12`, `x.md#1234`, `quellprojekt#1234`). Idempotent, Zeilenenden bleiben.
+ * Migrationswerkzeug: die Schwelle `ab` ist nur zum Zeitpunkt des Laufs eindeutig; neue Nummern schreibt man von Hand in der richtigen Form (der Wächter meldet sie).
  * Bewusste Grenze: Nummern mit ein oder zwei Ziffern sind außerhalb des Umfangs (der Wächter `factory-seiten` zählt nur 3 und 4 Ziffern).
  *
  * Aufruf: node scripts/herkunftsform.mjs --ab <n> [--schreiben] [<datei> …]
@@ -60,11 +61,11 @@ function zeile(text, ab, zaehler) {
 }
 
 /**
- * Stellt alle nackten Ticketnummern (3 oder 4 Ziffern) eines Dokuments um. `ab` = erste Nummer des Quellprojekts (ganze Zahl ≥ 101).
+ * Stellt alle nackten Ticketnummern (3 oder 4 Ziffern) eines Dokuments um. `ab` = erste vom Factory-Repo noch nicht vergebene Nummer (ganze Zahl ≥ 101).
  * Liefert den neuen Text und die Zahl der Umstellungen je Form.
  */
 export function umschreiben(text, { ab }) {
-  if (!Number.isInteger(ab) || ab < 101) throw new Error(`ab muss eine ganze Zahl ab 101 sein (erste Nummer des Quellprojekts), war: ${String(ab)}`);
+  if (!Number.isInteger(ab) || ab < 101) throw new Error(`ab muss eine ganze Zahl ab 101 sein (erste vom Factory-Repo noch nicht vergebene Nummer), war: ${String(ab)}`);
   const zaehler = { quellprojekt: 0, factory: 0 };
   let gen = false;
   const stuecke = text.split(/(?<=\n)/);
@@ -83,7 +84,7 @@ export function umschreiben(text, { ab }) {
 export function parseArgs(argv) {
   const r = flagsLesen(argv, { ab: { type: "string" }, schreiben: { type: "boolean" } }, { positionale: true, pflicht: ["ab"] });
   const ab = /^\d+$/.test(r.werte.ab ?? "") ? Number(r.werte.ab) : null;
-  const ungueltig = r.fehler === null && (ab === null || ab < 101) ? "--ab <n> muss eine ganze Zahl ab 101 sein (erste Nummer des Quellprojekts, höchste Issue-/PR-Nummer des Factory-Repos + 1)" : null;
+  const ungueltig = r.fehler === null && (ab === null || ab < 101) ? "--ab <n> muss eine ganze Zahl ab 101 sein (erste vom Factory-Repo noch nicht vergebene Nummer: höchste Issue-/PR-Nummer + 1)" : null;
   return { schreiben: r.werte.schreiben === true, ab, dateien: r.positionale, fehler: r.fehler?.text ?? ungueltig };
 }
 

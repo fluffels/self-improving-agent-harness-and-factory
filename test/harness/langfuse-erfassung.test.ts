@@ -499,7 +499,7 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.match(mr, /Neue Läufe werden hier unter C fortgeführt/);
     const zeile = mr.split("\n").find((z) => z.startsWith("| quellprojekt#1278-Merge bis quellprojekt#1276-Claim")) ?? "";
     assert.notEqual(zeile, "");
-    assert.doesNotMatch(zeile, /ab quellprojekt#1280 der dünne Hauptchat/);
+    assert.doesNotMatch(zeile, /ab (quellprojekt)?#1280 der dünne Hauptchat/);
     assert.match(zeile, /issuecomment-6019725674/, "der Sockel-Wert verlinkt den Beleg je Lauf");
   });
 });
