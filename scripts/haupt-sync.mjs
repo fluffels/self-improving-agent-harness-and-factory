@@ -239,8 +239,8 @@ const FRISCH_SNIPPET = [
 ].join("\n");
 
 /** Default der Naht `deps.pruefeFrisch(dir)`: `{ grund }` (leer = ok). Ein nicht startbarer Prozess zählt als Grund (fail-closed). */
-export function pruefeFrischEcht(dir) {
-  const r = spawnSyncEcht(process.execPath, ["--input-type=module", "-e", FRISCH_SNIPPET, dir], { encoding: "utf8", timeout: 15_000, windowsHide: true });
+export function pruefeFrischEcht(dir, spawn = spawnSyncEcht) {
+  const r = spawn(process.execPath, ["--input-type=module", "-e", FRISCH_SNIPPET, dir], { encoding: "utf8", timeout: 15_000, windowsHide: true });
   if (r.error) return { grund: `frische Config-Prüfung nicht startbar (${String(r.error.message).slice(0, 100)})` };
   return r.status === 0 ? { grund: "" } : { grund: String(r.stderr || `frische Config-Prüfung scheiterte (Exit ${r.status})`).trim() };
 }
@@ -265,16 +265,13 @@ export function fuehreSyncAus(dir, deps = {}) {
     if (e.aktion === "pull") {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
-      // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
-      const { grund } = namenOderGrund("haupt-sync", deps);
-      if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
       const geaendert = git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean);
       ergebnis.harness = ordneHarnessAenderungen(geaendert);
-      // Der Prozess lädt die Config mit dem alten Validator; berührt der Pull scripts/ oder .factory/, prüft ein frischer Prozess die neue Config mit dem neuen Validator.
-      if (geaendert.some((d) => d.startsWith("scripts/") || d.startsWith(".factory/"))) {
-        const frisch = (deps.pruefeFrisch ?? pruefeFrischEcht)(dir);
-        if (frisch?.grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${frisch.grund}`;
-      }
+      // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
+      // Der Prozess lädt die Config mit dem alten Validator; berührt der Pull scripts/ oder .factory/, entscheidet nur die frische Prüfung (neue Config, neuer Validator), die alte würde fälschlich rot melden.
+      const beruehrt = geaendert.some((d) => d.startsWith("scripts/") || d.startsWith(".factory/"));
+      const { grund } = beruehrt ? ((deps.pruefeFrisch ?? pruefeFrischEcht)(dir) ?? { grund: "" }) : namenOderGrund("haupt-sync", deps);
+      if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
     }
   } catch (e) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;

@@ -245,6 +245,18 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
     } finally {
       t.aufraeumen();
     }
+    const v = aufbau();
+    try {
+      v.schiebe("scripts/neu.mjs", "x\n");
+      const frischOk = frisch("");
+      const altKaputt = { praefixe: { branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
+      const e = S.fuehreSyncAus(v.haupt, { config: altKaputt, pruefeFrisch: frischOk.pruefeFrisch } as never);
+      expect(frischOk.aufrufe).toEqual([v.haupt]);
+      expect(e.notiz).toBe("");
+      expect(S.exitCodeFuer(e)).toBe(0);
+    } finally {
+      v.aufraeumen();
+    }
     const u = aufbau();
     try {
       u.schiebe("docs/neu.md", "x\n");
@@ -267,6 +279,14 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
     } finally {
       rmSync(leer, { recursive: true, force: true });
     }
+  });
+
+  test("frische Prüfung: nicht startbarer Prozess und leerer stderr sind ein Grund (fail-closed)", () => {
+    const echt = (raw as unknown as { pruefeFrischEcht: (d: string, s: (...a: unknown[]) => unknown) => { grund: string } }).pruefeFrischEcht;
+    expect(echt("x", () => ({ error: new Error("ETIMEDOUT"), status: null })).grund).toContain("nicht startbar");
+    expect(echt("x", () => ({ status: 3, stderr: "" })).grund).toContain("Exit 3");
+    expect(echt("x", () => ({ status: 1, stderr: "Grund Z\n" })).grund).toBe("Grund Z");
+    expect(echt("x", () => ({ status: 0 })).grund).toBe("");
   });
 
   test("Pull, der .claude/ ändert, setzt den Neustart-Hinweis", () => {
