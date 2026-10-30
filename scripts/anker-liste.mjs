@@ -63,10 +63,11 @@ const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
 const kopfName = (text) => KOPF.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined);
 
-/** Die Parameterliste eines Funktionskopfs: von der ersten `(` bis zur passenden `)`; ohne Klammer (`x => …`) leer. */
+/** Die Parameterliste eines Funktionskopfs: von der ersten `(` bis zur passenden `)`; ohne Klammer vor dem `=>` (`x => …`) leer; ohne schließende Klammer (Kopf über mehrere Zeilen) der Rest der Zeile. */
 function parameterListe(text) {
   const start = text.indexOf("(");
-  if (start < 0) return "";
+  const pfeil = text.indexOf("=>");
+  if (start < 0 || (pfeil >= 0 && pfeil < start)) return "";
   let tiefe = 0;
   for (let i = start; i < text.length; i++) {
     tiefe += text[i] === "(" ? 1 : text[i] === ")" ? -1 : 0;

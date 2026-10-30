@@ -103,10 +103,14 @@ describe("guardListe: Musterliste", () => {
   });
 
   test("Default-Parameter: ungleich (!=) und Zuweisung im Rumpf hinter der Kopfklammer zählen nicht, geschachtelte Klammer im Kopf schon", () => {
-    for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;"]) {
+    for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;", "const s = o => (o.x = 1);", "const g = x => h(y != 1);"]) {
       expect(neu(z)[0]?.anker.map((a) => a.muster) ?? [], z).not.toContain("Default-Parameter");
     }
     expect(neu("function f(a = g(1)) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
+    // Das `=` steht erst hinter einer inneren Klammer: nur die Tiefenzählung findet es.
+    expect(neu("function f(cb: () => void = noop) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
+    // Kopf ohne schließende Klammer auf der Zeile (mehrzeilig): der Rest der Zeile zählt.
+    expect(neu("function f(a = 1,\n  b) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
   });
 
   test("ein Regex-Literal am Zeilenanfang verbirgt seine Zeichen ebenfalls", () => {
