@@ -112,6 +112,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
       const x = je(e, "SHA-Pinning");
       expect(x.ok).toBe(false);
       expect(x.nichtPruefbar).toBe(true);
+      expect(x.fix).toMatch("fehler" in actions ? /Admin-Recht/ : /in den Einstellungen von Hand prüfen/);
     }
   });
 
@@ -155,6 +156,8 @@ describe("pruefeSicherheit: Code-Scanning gegen den Spiegel", () => {
     expect(x).toHaveLength(1);
     expect(x[0].befund).toMatch(/"CodeQL", "Semgrep" fehlt/);
     expect(x[0].fix).toContain('Ruleset "rs"');
+    expect(x[0].befund).toContain("auf main");
+    expect(x[0].befund).not.toMatch(/private Repos/);
   });
 
   test("nur eines von zwei Werkzeugen vorhanden: das fehlende wird genannt", () => {
