@@ -182,7 +182,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
-    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf listet nur Dateiänderungen; check:docdrift und die Wächter-Tests des Bezieher laufen erst dort; rot: Folge-Fix in der Factory und Patch-Tag)",
+    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf listet nur Dateiänderungen; check:docdrift und die Wächter-Tests des Beziehers laufen erst dort; rot: Folge-Fix in der Factory und Patch-Tag)",
     "- [ ] Ticket schließen, sobald der Tag steht und die Sync-PRs grün sind (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",

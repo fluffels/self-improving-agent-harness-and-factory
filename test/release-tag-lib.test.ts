@@ -16,7 +16,7 @@ describe("teile", () => {
     assert.deepEqual(teile("1.2.3"), [1, 2, 3]);
   });
   test("alles andere ist null: zu kurz, Pre-Release, Präfix, kein String", () => {
-    for (const tag of ["v1.2", "v1.2.3-rc1", "xv1.2.3", "v1.2.3.4", undefined, 5]) assert.equal(teile(tag), null, String(tag));
+    for (const tag of ["v1.2", "v1.2.3-rc1", "xv1.2.3", "v1.2.3.4", undefined, 5, ["v1.2.3"]]) assert.equal(teile(tag), null, String(tag));
   });
 });
 
@@ -36,6 +36,9 @@ describe("vergleicheTags", () => {
   test("Tag ohne v zählt und kann der höchste sein; der Patch entscheidet bei gleichem Major und Minor", () => {
     assert.equal(vergleicheTags(["1.3.0", "v1.2.0"]), "1.3.0");
     assert.equal(vergleicheTags(["v1.0.0", "v1.0.1", "v1.0.0"]), "v1.0.1");
+  });
+  test("bei gleichwertigen Tags gewinnt der erste", () => {
+    assert.equal(vergleicheTags(["1.0.0", "v1.0.0"]), "1.0.0");
   });
   test("ohne Release-Tag null", () => {
     assert.equal(vergleicheTags(["latest", "v1.0.0-beta"]), null);

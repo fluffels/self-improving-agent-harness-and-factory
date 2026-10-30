@@ -10,7 +10,7 @@
  *
  * Bekannte Grenzen der Erkennung: `GUARD` kennt nur `istDirektaufruf(import.meta.url)` aus `direktaufruf.mjs`. `IMPORT` ist eine
  * geschlossene Liste für relative Importe `./<name>.mjs` aus `scripts/*.mjs` (oberste Ebene): `from "…"`/`from '…'`, Seiteneffekt-Import
- * `import "…"` und `import("…")` mit Literal. Nicht erkannt: Unterordner, `../`, berechnete Spezifizierer.
+ * `import "…"` und `import("…")` mit Literal. Nicht erkannt: Unterordner, `../`, berechnete Spezifizierer, `from"./x.mjs"` ohne Leerzeichen; ein Kommentar mit `istDirektaufruf(import.meta.url)` macht eine Lib zum Einstieg (Fehlalarm).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
@@ -87,7 +87,15 @@ describe("Erkennung und Bewertung (Negativfälle gegen die Funktionen selbst)", 
     expect(einstiegsPaare({ a: 'import "./b.mjs";', b: guard })).toEqual(["a -> b"]);
     expect(einstiegsPaare({ a: 'const m = await import("./b.mjs");', b: guard })).toEqual(["a -> b"]);
   });
-  test("Importe aus node:-Modulen und Unterordnern sind keine Paare", () => {
-    expect(einstiegsPaare({ a: 'import { x } from "node:fs";\nimport { y } from "../b.mjs";', b: guard })).toEqual([]);
+  test("Importe aus node:-Modulen, Eltern- und Unterordnern sind keine Paare", () => {
+    expect(einstiegsPaare({ a: 'import { x } from "node:fs";\nimport { y } from "../b.mjs";\nimport { z } from "./sub/b.mjs";', b: guard })).toEqual([]);
+  });
+  test("Skriptnamen mit Bindestrich werden erkannt (der Fall dieses Wächters: tag-takt -> factory-update-check)", () => {
+    expect(einstiegsPaare({ "tag-takt": 'import { t } from "./factory-update-check.mjs";', "factory-update-check": guard })).toEqual(["tag-takt -> factory-update-check"]);
+  });
+  test("ein Wort vor from/import ist kein Import; mehrere Paare stehen sortiert, ein doppelter Import zählt einmal", () => {
+    expect(einstiegsPaare({ a: 'reimport("./b.mjs"); xfrom "./b.mjs";', b: guard })).toEqual([]);
+    const a = 'import { x } from "./c.mjs";\nimport { y } from "./c.mjs";\nimport { z } from "./b.mjs";';
+    expect(einstiegsPaare({ a, b: guard, c: guard })).toEqual(["a -> b", "a -> c"]);
   });
 });
