@@ -65,6 +65,18 @@ describe("tag-takt main", () => {
     expect(a.platziert).toEqual([["77", "tag", "pt", "o/ziel"]]);
     expect(a.log.join("\n")).toContain("Tag-Ticket angelegt: #77");
   });
+  it("offenes Tag-Ticket mit altem Body: PATCH mit Titel und Body im Ziel-Repo, Exit 0", async () => {
+    const a = aufbau();
+    const offen = { number: 40, title: T.tagTitel("v1.2.4"), body: "alt", assignees: [] };
+    a.deps.start = () => Promise.resolve({ config: FREMD, libs: { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "zt", ladeSammelKontext: () => ({ rohe: [offen] }), vertrauteIssues: (r: unknown[]) => r, frischeOffeneIssues: () => [], platziereOben: () => undefined }, trocken: false });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toHaveLength(1);
+    const { args, opt } = a.text[0];
+    expect(args.slice(0, 4)).toEqual(["api", "-X", "PATCH", "repos/o/ziel/issues/40"]);
+    expect(args[args.indexOf("-f") + 1]).toBe(`title=${T.tagTitel("v1.2.4")}`);
+    expect(args.some((x) => x.startsWith("body=Besitz-Änderungen"))).toBe(true);
+    expect(opt).toEqual({ token: "zt" });
+  });
   it("Einsortieren wirft: Fehlermeldung und Exit 1", async () => {
     const a = aufbau();
     (a.deps.start as () => Promise<{ libs: Record<string, unknown> }>) = () => Promise.resolve({ config: FREMD, libs: { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "zt", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [], platziereOben: () => { throw new Error("Board kaputt"); } } } as never);
