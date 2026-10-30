@@ -142,6 +142,16 @@ describe("CI-Zustand und Body", () => {
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
     expect(T.tagTitel("v1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
   });
+  it("Checkliste: CI des Sync-PR je Bezieher nach dem Sync-PR, Schließen erst bei grüner CI, Patch-Tag nie verschoben (#101 L21 L30)", () => {
+    const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
+    const sync = punkte.findIndex((z) => z.includes("Sync-PR je Bezieher"));
+    const ci = punkte.findIndex((z) => z.includes("CI des Sync-PR je Bezieher grün"));
+    expect(sync).toBeGreaterThan(-1);
+    expect(ci).toBe(sync + 1);
+    expect(punkte[ci]).toContain("der Trockenlauf fährt kein verify");
+    expect(punkte[ci]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
+    expect(punkte[punkte.length - 1]).toContain("Tag und Sync-PRs stehen und deren CI grün ist");
+  });
   it("begrenzt die PR-Liste auf 50 Zeilen und bereinigt Zellen", () => {
     const viele = T.besitzCommits(Array.from({ length: 53 }, (_, i) => commit({ betreff: i === 0 ? "fix: a|b`c (#1)" : `fix: n (#${i + 2})` })), MANIFEST);
     const b = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: viele, aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null } });
@@ -310,7 +320,7 @@ describe("Härtung (Review Runde 1)", () => {
 
   it("CI-Text: rot, läuft, unbekannt, Link nur mit URL", () => {
     expect(bodyVon({ ci: { zustand: "rot", url: "https://example.invalid/r" } })).toContain("CI-Status dieses Commits: ROT ([Lauf](https://example.invalid/r))");
-    expect(bodyVon({ ci: { zustand: "laeuft", url: null } })).toContain("läuft noch");
+    expect(bodyVon({ ci: { zustand: "laeuft", url: null } })).toContain("läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)");
     expect(bodyVon({ ci: { zustand: "irgendwas", url: null } })).toContain("CI-Status dieses Commits: unbekannt");
     expect(bodyVon()).not.toContain("[Lauf]");
   });
