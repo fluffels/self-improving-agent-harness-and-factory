@@ -43,18 +43,30 @@ const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\nrun: gh issue list --
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };
 const LABEL_KEY = "api --paginate --slurp repos/acme/demo/labels?per_page=100";
 const SECRETS_KEY = "api --paginate --slurp repos/acme/demo/actions/secrets";
+const SICHER = { security_and_analysis: Object.fromEntries(["secret_scanning", "secret_scanning_push_protection", "secret_scanning_non_provider_patterns", "secret_scanning_validity_checks", "dependabot_security_updates"].map((k) => [k, { status: "enabled" }])) };
+const REPO_OK = { private: false, default_branch: "main", permissions: { admin: true }, ...SICHER };
+const CODEQL = { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL" }] } };
 const GESUND: Record<string, unknown> = {
   "api -i user": "HTTP/2.0 200 OK\nX-Oauth-Scopes: gist, project, repo\n\n{}",
-  "api repos/acme/demo": { private: false, default_branch: "main", permissions: { admin: true } },
-  "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all" },
+  "api repos/acme/demo": REPO_OK,
+  "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: true },
+  "api repos/acme/demo/private-vulnerability-reporting": { enabled: true },
   [SECRETS_KEY]: [{ secrets: [{ name: "PROJECT_TOKEN" }] }],
   "api --paginate --slurp repos/acme/demo/actions/organization-secrets": [{ secrets: [] }],
   "api orgs/acme/projectsV2/7": { node_id: "p_eins", number: 7 },
   "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 8 },
   "api orgs/acme/projectsV2/7/fields/5": feld,
   "api orgs/acme/projectsV2/8/fields/5": feld,
-  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }]],
+  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }, CODEQL]],
 };
+
+/** Schreibt dieser `gh api`-Aufruf? `-X`/`--method` außer GET, oder Felder (-f, -F, --field, --raw-field, --input) ohne `-X GET` (dann ist `gh api` ein POST). */
+function schreibt(args: string[]): boolean {
+  const i = args.findIndex((a) => a === "-X" || a === "--method" || a.startsWith("--method="));
+  const methode = i < 0 ? null : (args[i].startsWith("--method=") ? args[i].slice(9) : args[i + 1]).toUpperCase();
+  if (methode !== null) return methode !== "GET";
+  return args.some((a) => ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) || /^--(?:raw-)?field=|^--input=/.test(a));
+}
 
 const cfgPfad = (root: string): string => join(root, ".factory", "projekt.json"); // die Standard-Config (PROJEKT_CONFIG)
 const ordner: string[] = [];
@@ -81,7 +93,7 @@ function fahre(root: string, w: Welt, argv: string[], sammelStatus = 0, sammelAu
   const gh = (args: string[]): string => {
     r.ghAufrufe++;
     const k = args.join(" ");
-    if (args.includes("-X")) {
+    if (schreibt(args)) {
       r.schreibend.push(k);
       const name = /name=(.*)$/.exec(k)?.[1] ?? "";
       if (w.postFehler.has(name)) throw new Error(`HTTP 422: ${name}`);
@@ -144,7 +156,7 @@ describe("harness-doctor --einrichten", () => {
       root,
       welt(undefined, {
         [SECRETS_KEY]: [{ secrets: [] }],
-        "api repos/acme/demo": { private: false, default_branch: "main", permissions: { admin: false } },
+        "api repos/acme/demo": { ...REPO_OK, permissions: { admin: false } },
         "api repos/acme/demo/actions/permissions": { enabled: false },
         "api orgs/acme/projectsV2/7": { node_id: "falsch", number: 7 },
         "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[]],
@@ -157,6 +169,35 @@ describe("harness-doctor --einrichten", () => {
       assert.ok(anleitungen.some((z) => z.startsWith(`ANLEITUNG ${punkt}:`) && /Fix: .+ Link: https:\/\/\S+$/.test(z)), `${punkt}: ${anleitungen.join("\n")}`);
     }
     assert.equal(r.code, 1);
+  });
+
+  test("die acht Sicherheitspunkte sind nur Anleitungen mit Link: kein schreibender gh-Aufruf außer dem Label-POST (factory#116)", () => {
+    const root = neuerRoot();
+    const aus = Object.fromEntries(Object.keys(SICHER.security_and_analysis).map((k) => [k, { status: "disabled" }]));
+    const w = welt(["area:werk", "forum"], {
+      "api repos/acme/demo": { ...REPO_OK, security_and_analysis: aus },
+      "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: false },
+      "api repos/acme/demo/private-vulnerability-reporting": { enabled: false },
+      "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }]],
+    });
+    const r = fahre(root, w, EINR(root));
+    for (const p of ["Secret Scanning", "Push Protection", "Non-Provider-Patterns", "Validity Checks", "PVR", "Dependabot Security Updates", "Code-Scanning", "SHA-Pinning"]) {
+      const z = r.out.filter((x) => x.startsWith(`ANLEITUNG ${p}: `));
+      assert.equal(z.length, 1, p);
+      assert.match(z[0], /Fix: .+ Link: https:\/\//, p);
+      assert.ok(!r.out.some((x) => /^(PLAN|ANGELEGT)/.test(x) && x.includes(p)), p);
+    }
+    assert.equal(r.schreibend.length, 1, "nur der Label-POST");
+    assert.match(r.schreibend[0], /^api -X POST repos\/acme\/demo\/labels /);
+    assert.equal(r.code, 1);
+  });
+
+  test("fatales Token: auch die acht Sicherheitspunkte sind nur Anleitungen, ohne weiteren gh-Aufruf", () => {
+    const root = neuerRoot();
+    const r = fahre(root, welt(undefined, { "api -i user": new Error("nicht angemeldet") }), EINR(root));
+    assert.equal(r.out.filter((z) => /^ANLEITUNG (Secret Scanning|Push Protection|Non-Provider-Patterns|Validity Checks|PVR|Dependabot Security Updates|Code-Scanning|SHA-Pinning): .* Link: https:\/\//.test(z)).length, 8);
+    assert.deepEqual(r.schreibend, []);
+    assert.equal(r.ghAufrufe, 1);
   });
 
   test("eine abweichende Wochenlauf-Datei bleibt unangetastet (HINWEIS)", () => {

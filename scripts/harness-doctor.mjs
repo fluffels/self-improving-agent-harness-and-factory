@@ -147,18 +147,25 @@ function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv }) {
     err(konfigFehlerText(e));
     return AUFRUF_EXIT;
   }
+  return ausgabe(ergebnis, out);
+}
+
+/** Je Punkt eine Zeile (`OK`, `LÜCKE` oder `NICHT PRÜFBAR`), dann die Summenzeile; Exit 1 bei mindestens einer Lücke oder einem nicht prüfbaren Punkt. */
+function ausgabe(ergebnis, out) {
   let luecken = 0;
+  let nichtPruefbar = 0;
   for (const p of ergebnis) {
-    if (!p.ok) {
-      luecken++;
-      out(`LÜCKE ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
-    } else {
+    if (p.ok) {
       out(`OK ${p.punkt}`);
       if (p.hinweis) out(`HINWEIS ${p.punkt}: ${p.hinweis}`);
+      continue;
     }
+    if (p.nichtPruefbar) nichtPruefbar++;
+    else luecken++;
+    out(`${p.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
   }
-  out(luecken ? `Harness-Doctor: ${luecken} Lücke(n)` : "Harness-Doctor: keine Lücke");
-  return luecken ? 1 : 0;
+  out(luecken + nichtPruefbar ? `Harness-Doctor: ${luecken} Lücke(n), ${nichtPruefbar} nicht prüfbar` : "Harness-Doctor: keine Lücke, alles prüfbar");
+  return luecken + nichtPruefbar ? 1 : 0;
 }
 
 export function main(
