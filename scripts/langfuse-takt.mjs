@@ -10,6 +10,7 @@
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
+import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 
 export { STATUS_TITEL };
@@ -70,22 +71,9 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
 /**
  * Zweitabfrage vor dem Anlegen (fail-closed): die REST-Liste der offenen Issues hinkt bei frischen Tickets nach, ein zweites Status-Ticket
  * entstand so schon. Nur bei `aktion: "anlegen"` fragt `zweit()` (liefert `[{ number, titel }]`, z.B. `frischeOffeneIssues`) einen zweiten
- * Weg: kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur
- * (`zweit` ist injiziert); liefert eine neue Entscheidung.
+ * Weg (Logik: `bestaetigeAnlegen` in inbox-start-lib.mjs): kennt er ein offenes `STATUS_TITEL` oder wirft er, wird daraus `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur.
  */
-export function bestaetigeAnlegen(e, { zweit }) {
-  if (e.aktion !== "anlegen") return e;
-  let frisch;
-  try {
-    frisch = zweit();
-    if (!Array.isArray(frisch)) throw new Error("Antwort ist keine Liste.");
-  } catch (err) {
-    return { aktion: "nichts", grund: "Anlegen abgebrochen: die Zweitabfrage über GraphQL ist fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
-  }
-  const da = frisch.filter((i) => i.titel === STATUS_TITEL).map((i) => `#${i.number}`);
-  if (da.length === 0) return e;
-  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht, GraphQL schon (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes „${STATUS_TITEL}“ ${da.join(", ")} nur per GraphQL gefunden.`] };
-}
+export const bestaetigeAnlegen = (e, { zweit }) => bestaetigeAnlegenLib(e, { zweit, passt: (i) => i?.titel === STATUS_TITEL, was: `„${STATUS_TITEL}“` });
 
 /** Soll das Status-Ticket bewegt werden? `nach-oben` nur, wenn es nicht schon im Kopf von `items` steht; anlegen bewegt immer. Pur. */
 export function sollBewegen(e, items) {

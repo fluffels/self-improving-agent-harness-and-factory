@@ -23,7 +23,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { teile, vergleicheTags } from "./factory-update-check.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { inboxStart, vertrauterOwner, zielZugang } from "./inbox-start-lib.mjs";
+import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
@@ -128,18 +128,7 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
  * Zweitabfrage vor dem Anlegen (fail-closed): die REST-Liste hinkt bei frischen Tickets nach. `zweit()` liefert `[{ number, titel }]`; kennt es ein offenes
  * Tag-Ticket oder wirft es, wird aus `anlegen` ein `nichts` mit Warnung. Jede andere Aktion bleibt unberührt. Pur.
  */
-export function bestaetigeTagAnlegen(e, { zweit }) {
-  if (e.aktion !== "anlegen") return e;
-  let da;
-  try {
-    const frisch = zweit();
-    da = frisch.filter((i) => String(i?.titel).startsWith(TAG_MARKER)).map((i) => `#${i.number}`);
-  } catch (err) {
-    return { aktion: "nichts", grund: "Anlegen abgebrochen: Zweitabfrage fehlgeschlagen (fail-closed, der nächste Lauf versucht es erneut)", warnungen: [...e.warnungen, `Zweitabfrage vor dem Anlegen fehlgeschlagen: ${fehlerText(err)}`] };
-  }
-  if (da.length === 0) return e;
-  return { aktion: "nichts", grund: `Anlegen abgebrochen: die REST-Liste kannte ${da.join(", ")} noch nicht (frisch angelegt)`, warnungen: [...e.warnungen, `REST-Liste hinkt: offenes Tag-Ticket ${da.join(", ")} nur per Zweitabfrage gefunden.`] };
-}
+export const bestaetigeTagAnlegen = (e, { zweit }) => bestaetigeAnlegen(e, { zweit, passt: (i) => String(i?.titel).startsWith(TAG_MARKER), was: "Tag-Ticket" });
 
 /** Pur: CI-Zustand des main-Commits aus den Workflow-Läufen (`[{ path, status, conclusion, html_url }]`, neueste zuerst) als `{ zustand: gruen|rot|laeuft|unbekannt, url }`. */
 export function ciZustand(laeufe) {
@@ -281,22 +270,22 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-const git = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
-/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `ladeManifest`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), ladeManifest = () => JSON.parse(readFileSync(MANIFEST, "utf8")) } = {}) {
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;
-  const { REPO, ladeSammelKontext, vertrauteIssues, frischeOffeneIssues, platziereOben } = libs;
+  const { REPO, ladeSammelKontext, vertrauteIssues, frischeOffeneIssues } = libs;
   const { ziel, zielOpt } = zielZugang(libs);
-  const wurzel = process.cwd();
+  const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
   const io = {
     log,
     istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
     tags: () => git(["tag", "--merged", "HEAD"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
-    ladeManifest: () => JSON.parse(readFileSync(MANIFEST, "utf8")),
+    ladeManifest,
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
     ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
@@ -309,20 +298,17 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     dringlichKey: commitZeilenAus(config).syncDringlich,
     jetzt: () => new Date(),
     projectToken: process.env.PROJECT_TOKEN,
-    legeIssueAn: (titel, body) => {
-      const label = labelAus(config, "harness");
-      return gh.text(["issue", "create", "--repo", ziel, "--title", titel, ...(label ? ["--label", label] : []), "--body", body], zielOpt).trim().split("/").pop();
-    },
+    legeIssueAn: aktion.legeIssueAn,
     sortiereEin: (nr, art) => {
       try {
-        platziereOben(nr, art, process.env.PROJECT_TOKEN, ziel === REPO ? undefined : ziel);
+        aktion.platziere(nr, art);
         return true;
       } catch {
         return false;
       }
     },
-    aktualisiere: (nr, titel, body) => gh.text(["api", "-X", "PATCH", `repos/${ziel}/issues/${nr}`, "-f", `title=${titel}`, "-f", `body=${body}`], zielOpt),
-    schliesse: (nr, kommentar) => gh.text(["issue", "close", String(nr), "--repo", ziel, "--reason", "completed", "--comment", kommentar], zielOpt),
+    aktualisiere: (nr, titel, body) => aktion.aktualisiere(nr, body, titel),
+    schliesse: aktion.schliesse,
   };
   return lauf({ io, trocken: s.trocken });
 }
