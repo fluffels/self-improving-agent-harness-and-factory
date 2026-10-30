@@ -81,7 +81,7 @@ function sammelticket({ trocken, spawn, out }) {
 
 /**
  * `--einrichten [--dry-run]`: legt nur Umkehrbares an (fehlende Labels, die Wochenlauf-Datei, das Sammelticket); alles andere (Ruleset,
- * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
+ * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
  * Exit: 0 nichts offen; 1 Anleitung offen, Plan nicht leer (Dry-Run) oder Fehler; 2 Aufruf-Fehler oder Config.
  */
 function einrichten({ werte, rootDir, gh, spawn, out, err }) {

@@ -29,7 +29,7 @@ export const LINK_SICHERHEIT = {
 
 const FIX_FEHLER = "mit einem Konto mit Admin-Recht prüfen (gh auth status), dann erneut prüfen";
 const FIX_FELD = "Funktion im Plan nicht verfügbar oder Feld unbekannt: in den Einstellungen von Hand prüfen";
-const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
+export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
 
 const gut = (punkt, hinweis) => ({ punkt, ok: true, ...(hinweis ? { hinweis } : {}) });
 const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix, link: LINK_SICHERHEIT[punkt] });

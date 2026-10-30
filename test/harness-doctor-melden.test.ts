@@ -110,6 +110,15 @@ describe("harness-doctor-melden: lauf", () => {
     assert.equal(melden.istBekannt("PVR", [{ user: ICH, body: zeile(NP) }], OWNER), false);
   });
 
+  test("schluesselFuer ohne Art ist der alte LÜCKE-Schlüssel", () => {
+    assert.equal((rawMelden as { schluesselFuer: (p: string) => string }).schluesselFuer("Secret X"), "Harness-Doctor (Wochenlauf): LÜCKE Secret X: ");
+  });
+
+  test("ermittleLuecken reicht nichtPruefbar durch", () => {
+    const l = melden.ermittleLuecken({ env: {}, repo: "acme/demo", pruefe: () => [{ ok: false, punkt: "PVR", befund: "b", fix: "f", nichtPruefbar: true } as never] });
+    assert.equal((l[0] as Luecke).nichtPruefbar, true);
+  });
+
   test("alte LÜCKE-Zeilen gelten weiter (ohne Art-Angabe ist die Art LÜCKE)", () => {
     assert.equal(melden.istBekannt(L1.punkt, [{ user: ICH, body: zeile(L1) }], OWNER, "LÜCKE"), true);
   });

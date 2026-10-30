@@ -319,6 +319,21 @@ describe("harness-doctor --pruefen", () => {
     const r = lauf({ "api repos/acme/demo": repo });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Ruleset:.*trunk/);
+    const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    assert.match(luecken(ohneCs)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf trunk/);
+  });
+
+  test("privates Repo ohne Code-Scanning-Regel: der Befund nennt die Grenze der Rulesets (privat und Zweig sind verdrahtet)", () => {
+    const r = lauf({ "api repos/acme/demo": { ...REPO_OK, private: true } , "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    assert.match(luecken(r)[0], /^LÜCKE Code-Scanning: .*auf main \(private Repos auf GitHub Free/);
+  });
+
+  test("Antwort null für Repo und Actions: Lücken statt Absturz, die acht Sicherheitspunkte nicht prüfbar", () => {
+    const r = lauf({ "api repos/acme/demo": "null", "api repos/acme/demo/actions/permissions": "null", "api repos/acme/demo/private-vulnerability-reporting": "null" });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Admin-Recht: ")));
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Actions: ")));
+    for (const p of ["Secret Scanning", "PVR", "SHA-Pinning"]) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `)), p);
   });
 
   test("Regeln über zwei Seiten (--slurp): Checks beider Seiten zählen, ein Check nur auf Seite 2 fehlend ist eine Lücke", () => {
@@ -430,7 +445,9 @@ describe("harness-doctor --pruefen", () => {
     });
     test("Spiegel ohne codeScanning: live mindestens ein Werkzeug", () => {
       assert.equal(lauf({ [REGELN]: [required, cs("CodeQL")] }).code, 0);
-      assert.equal(luecken(lauf({ [REGELN]: [required] })).length, 1);
+      const r = lauf({ [REGELN]: [required] });
+      assert.equal(luecken(r).length, 1);
+      assert.match(luecken(r)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf main/);
     });
   });
 

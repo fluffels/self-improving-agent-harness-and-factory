@@ -79,6 +79,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
   const SA_FALSCH: [string, unknown][] = [
     ["security_and_analysis fehlt (kein Admin-Recht)", {}],
     ["security_and_analysis ist null", { security_and_analysis: null }],
+    ["Antwort null", null],
     ["security_and_analysis ist leer", { security_and_analysis: {} }],
     ["Status unbekannt", { security_and_analysis: Object.fromEntries(Object.values(SA_SCHLUESSEL).map((k) => [k, { status: "paused" }])) }],
     ["Schlüssel ohne status", { security_and_analysis: Object.fromEntries(Object.values(SA_SCHLUESSEL).map((k) => [k, {}])) }],
@@ -106,7 +107,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
   });
 
   test("SHA-Pinning: Fehler und fehlendes Feld sind nicht prüfbar", () => {
-    for (const actions of [{ fehler: "HTTP 404: Not Found" }, { wert: {} }, { wert: { sha_pinning_required: "ja" } }]) {
+    for (const actions of [{ fehler: "HTTP 404: Not Found" }, { wert: {} }, { wert: null }, { wert: { sha_pinning_required: "ja" } }]) {
       const e = gesund();
       e.actions = actions;
       const x = je(e, "SHA-Pinning");
@@ -117,7 +118,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
   });
 
   test("PVR: 422, 404 und leere Antwort sind nicht prüfbar", () => {
-    for (const pvr of [{ fehler: "HTTP 422: Unprocessable" }, { fehler: "HTTP 404: Not Found" }, { wert: {} }, { wert: { enabled: "true" } }]) {
+    for (const pvr of [{ fehler: "HTTP 422: Unprocessable" }, { fehler: "HTTP 404: Not Found" }, { wert: {} }, { wert: null }, { wert: { enabled: "true" } }]) {
       const e = gesund();
       e.pvr = pvr;
       const x = je(e, "PVR");
@@ -133,6 +134,21 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
     expect(x.ok).toBe(false);
     expect(x.nichtPruefbar).toBe(true);
     expect(x.befund).toContain("HTTP 404");
+  });
+
+  test("Regeln mit Antwort null: kein Wurf, Code-Scanning ist Lücke, nicht OK", () => {
+    const e = gesund();
+    e.regeln = { wert: null };
+    const x = je(e, "Code-Scanning");
+    expect(x.ok).toBe(false);
+  });
+
+  test("security_and_analysis fehlt: Grund und Fix nennen das Admin-Recht", () => {
+    const e = gesund();
+    e.repo = { wert: {} };
+    const x = je(e, "Secret Scanning");
+    expect(x.befund).toMatch(/sichtbar nur mit Admin-Recht/);
+    expect(x.fix).toMatch(/Admin-Recht/);
   });
 
   test("ein Fix der Quelle (fataler Token) gilt für alle Punkte", () => {
@@ -157,6 +173,7 @@ describe("pruefeSicherheit: Code-Scanning gegen den Spiegel", () => {
     expect(x[0].befund).toMatch(/"CodeQL", "Semgrep" fehlt/);
     expect(x[0].fix).toContain('Ruleset "rs"');
     expect(x[0].befund).toContain("auf main");
+    expect(x[0].fix).toContain('Ruleset "rs"');
     expect(x[0].befund).not.toMatch(/private Repos/);
   });
 
@@ -167,6 +184,7 @@ describe("pruefeSicherheit: Code-Scanning gegen den Spiegel", () => {
     const x = je(e, "Code-Scanning");
     expect(x.ok).toBe(false);
     expect(x.befund).toMatch(/"Semgrep"/);
+    expect(x.fix).toMatch(/das Ruleset/);
     expect(x.befund).not.toMatch(/"CodeQL"/);
   });
 

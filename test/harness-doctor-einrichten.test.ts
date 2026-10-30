@@ -62,10 +62,19 @@ const GESUND: Record<string, unknown> = {
 
 /** Schreibt dieser `gh api`-Aufruf? `-X`/`--method` außer GET, oder Felder (-f, -F, --field, --raw-field, --input) ohne `-X GET` (dann ist `gh api` ein POST). */
 function schreibt(args: string[]): boolean {
-  const i = args.findIndex((a) => a === "-X" || a === "--method" || a.startsWith("--method="));
-  const methode = i < 0 ? null : (args[i].startsWith("--method=") ? args[i].slice(9) : args[i + 1]).toUpperCase();
-  if (methode !== null) return methode !== "GET";
+  if (args[0] !== "api") return true; // Allowlist: außer `gh api` ist jeder Unterbefehl (repo edit, secret set, label create …) verdächtig
+  const i = args.findIndex((a) => a === "-X" || a === "--method" || /^-X./.test(a) || a.startsWith("--method="));
+  const roh = i < 0 ? null : a2(args, i);
+  if (roh !== null) return roh.toUpperCase() !== "GET";
   return args.some((a) => ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) || /^--(?:raw-)?field=|^--input=/.test(a));
+}
+
+/** Methode eines `-X`-/`--method`-Arguments an Stelle `i`: getrennt (`-X PUT`), zusammengeschrieben (`-XPUT`) oder mit `=`. */
+function a2(args: string[], i: number): string {
+  const a = args[i];
+  if (a.startsWith("--method=")) return a.slice(9);
+  if (/^-X./.test(a)) return a.slice(2);
+  return args[i + 1] ?? "POST";
 }
 
 const cfgPfad = (root: string): string => join(root, ".factory", "projekt.json"); // die Standard-Config (PROJEKT_CONFIG)
@@ -190,6 +199,18 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(r.schreibend.length, 1, "nur der Label-POST");
     assert.match(r.schreibend[0], /^api -X POST repos\/acme\/demo\/labels /);
     assert.equal(r.code, 1);
+  });
+
+  test("die Schreib-Erkennung kennt -XPUT, --method=, Felder und schreibende Unterbefehle außerhalb von gh api", () => {
+    assert.equal(schreibt(["api", "-XPUT", "repos/a/b/x"]), true);
+    assert.equal(schreibt(["api", "-X", "PATCH", "repos/a/b"]), true);
+    assert.equal(schreibt(["api", "--method=POST", "repos/a/b"]), true);
+    assert.equal(schreibt(["api", "repos/a/b", "-f", "x=1"]), true);
+    assert.equal(schreibt(["repo", "edit", "a/b", "--enable-secret-scanning"]), true);
+    assert.equal(schreibt(["secret", "set", "X"]), true);
+    assert.equal(schreibt(["api", "-X", "GET", "-f", "per_page=1", "repos/a/b"]), false);
+    assert.equal(schreibt(["api", "-XGET", "repos/a/b"]), false);
+    assert.equal(schreibt(["api", "--paginate", "--slurp", "repos/a/b/labels?per_page=100"]), false);
   });
 
   test("fatales Token: auch die acht Sicherheitspunkte sind nur Anleitungen, ohne weiteren gh-Aufruf", () => {

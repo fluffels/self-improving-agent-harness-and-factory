@@ -9,7 +9,7 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
-import { LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
+import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
@@ -228,7 +228,7 @@ function pruefeBoard(gh, board, i) {
 function pruefeRuleset(regelnQuelle, repoInfo, spiegel) {
   const branch = repoInfo.default_branch ?? "main";
   const privat = repoInfo.private === true;
-  const grenze = privat ? " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)" : "";
+  const grenze = privat ? GRENZE_PRIVAT : "";
   const fixAnlegen = privat ? "Repo öffentlich machen oder einen Plan mit Rulesets wählen, dann das Ruleset anlegen" : `Ruleset auf ${branch} mit Required status checks anlegen`;
   if (regelnQuelle.fehler !== undefined) return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${regelnQuelle.fehler})${grenze}`, fixAnlegen, LINK.ruleset)];
   const regeln = regelnQuelle.wert;
