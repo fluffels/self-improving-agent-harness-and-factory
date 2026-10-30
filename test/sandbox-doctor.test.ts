@@ -33,7 +33,7 @@ type Doktor = {
   projektDomains: (settingsText: string) => string[];
   projektDenyVariablen: (settingsText: string) => string[];
   pruefeWindowsSperre: (a: { platform: string; projektText: string | null; lokalText: string | null }) => boolean;
-  sessionStartAusgabe: (a: { platform: string; projektText: string | null; lokalText: string | null }) => string;
+  sessionStartAusgabe: (a: { platform: string; projektText: string | null; lokalText: string | null }, seite: string) => string;
   main: (argv: string[], env?: Record<string, string | undefined>, out?: (t: string) => void, err?: (t: string) => void, io?: { platform?: string; projektText?: string | null; lokalText?: string | null }) => number;
 };
 const D = raw as unknown as Doktor;
@@ -77,7 +77,7 @@ describe("pruefeWindowsSperre (#1486)", () => {
 
 describe("sessionStartAusgabe (#1486)", () => {
   test("bei Sperre: JSON mit systemMessage und additionalContext samt Abhilfe", () => {
-    const j = JSON.parse(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: null })) as {
+    const j = JSON.parse(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: null }, "SEITE-X")) as {
       systemMessage: string;
       hookSpecificOutput: { hookEventName: string; additionalContext: string };
     };
@@ -85,10 +85,13 @@ describe("sessionStartAusgabe (#1486)", () => {
     expect(j.systemMessage).toContain("settings.local.json");
     expect(j.systemMessage).toContain('"enabled":false');
     expect(j.hookSpecificOutput.additionalContext).toContain("Override nicht selbst eintragen");
+    // Seiten-Verweis kommt vom Aufrufer: kein Dateisystem- oder Config-Zugriff in der Funktion (#101 L4d).
+    expect(j.systemMessage).toContain("(SEITE-X)");
+    expect(j.hookSpecificOutput.additionalContext).toContain("(SEITE-X)");
   });
   test("ohne Sperre: leere Ausgabe", () => {
-    expect(D.sessionStartAusgabe({ platform: "linux", projektText: STRIKT, lokalText: null })).toBe("");
-    expect(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: JSON.stringify({ sandbox: { enabled: false } }) })).toBe("");
+    expect(D.sessionStartAusgabe({ platform: "linux", projektText: STRIKT, lokalText: null }, "SEITE-X")).toBe("");
+    expect(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: JSON.stringify({ sandbox: { enabled: false } }) }, "SEITE-X")).toBe("");
   });
 });
 

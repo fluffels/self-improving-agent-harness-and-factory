@@ -521,3 +521,81 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
     }
   });
 });
+
+/* Wächter (#101): Checkout ohne gespeicherte Credentials, Dependabot-Cooldown, Ausnahme für gefährliche Trigger.
+ * Grenzen: nur `actions/checkout@` als `uses:` (Struktur per `yaml`), der Cooldown wird nur auf `default-days` geprüft,
+ * und die zizmor-Ausnahme am Trigger wird zeilenweise gesucht (Kommentare stehen nicht im Syntaxbaum). */
+const WORKFLOW_DATEIEN = readdirSync(join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
+
+/** Checkout-Schritte ohne `with.persist-credentials: false` (Namen als `datei:job`). */
+function checkoutOhneSchutz(datei: string, yml: string): string[] {
+  const wf: unknown = parse(yml);
+  if (!istObj(wf) || !istObj(wf.jobs)) return [`${datei}: keine Jobs`];
+  const fehler: string[] = [];
+  for (const [job, j] of Object.entries(wf.jobs)) {
+    const schritte = istObj(j) && Array.isArray(j.steps) ? j.steps.filter(istObj) : [];
+    for (const s of schritte) {
+      if (typeof s.uses !== "string" || !s.uses.startsWith("actions/checkout@")) continue;
+      if (!istObj(s.with) || s.with["persist-credentials"] !== false) fehler.push(`${datei}:${job}`);
+    }
+  }
+  return fehler;
+}
+
+/** `updates[]` ohne `cooldown.default-days` ≥ 1. */
+function ohneCooldown(yml: string): string[] {
+  const d: unknown = parse(yml);
+  const updates: unknown[] = istObj(d) && Array.isArray(d.updates) ? d.updates : [];
+  if (updates.length === 0) return ["keine updates"];
+  return updates.flatMap((u) => {
+    const tage = istObj(u) && istObj(u.cooldown) ? u.cooldown["default-days"] : undefined;
+    const name = istObj(u) ? String(u["package-ecosystem"]) : "?";
+    return typeof tage === "number" && tage >= 1 ? [] : [name];
+  });
+}
+
+/** Workflows mit `workflow_run`/`pull_request_target` ohne zizmor-Ausnahme samt Grund am Trigger oder mit `ref:` im Checkout. */
+function gefaehrlicherTrigger(datei: string, yml: string): string[] {
+  const wf: unknown = parse(yml);
+  const on = istObj(wf) ? wf.on : undefined;
+  const heikel = istObj(on) ? Object.keys(on).filter((t) => t === "workflow_run" || t === "pull_request_target") : [];
+  if (heikel.length === 0) return [];
+  const fehler: string[] = [];
+  for (const t of heikel) {
+    const z = yml.split(/\r?\n/).find((l) => l.startsWith(`  ${t}:`)) ?? "";
+    if (!/# zizmor: ignore\[dangerous-triggers\]\s+\S/.test(z)) fehler.push(`${datei}: ${t} ohne zizmor-Ausnahme samt Grund`);
+  }
+  for (const s of alleSchritte(istObj(wf) ? wf : {})) {
+    if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && istObj(s.with) && "ref" in s.with) fehler.push(`${datei}: Checkout mit ref`);
+  }
+  return fehler;
+}
+
+describe("Checkout, Cooldown und gefährliche Trigger (#101)", () => {
+  test.each(WORKFLOW_DATEIEN)("%s: jeder Checkout mit persist-credentials: false", (f) => {
+    expect(checkoutOhneSchutz(f, lies(".github", "workflows", f))).toEqual([]);
+  });
+  test.each(WORKFLOW_DATEIEN)("%s: gefährliche Trigger mit Ausnahme samt Grund, ohne ref", (f) => {
+    expect(gefaehrlicherTrigger(f, lies(".github", "workflows", f))).toEqual([]);
+  });
+  test("dependabot.yml: jedes updates[] mit cooldown.default-days >= 1", () => {
+    expect(ohneCooldown(lies(".github", "dependabot.yml"))).toEqual([]);
+  });
+  test("Negativfälle: jede Regel verfälscht für sich", () => {
+    const wf = (checkout: string, on = "  push:") => `on:\n${on}\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@${SHA} # v7\n${checkout}`;
+    expect(checkoutOhneSchutz("x.yml", wf(""))).toEqual(["x.yml:a"]);
+    expect(checkoutOhneSchutz("x.yml", wf("        with:\n          persist-credentials: true"))).toEqual(["x.yml:a"]);
+    expect(checkoutOhneSchutz("x.yml", wf("        with:\n          persist-credentials: false"))).toEqual([]);
+    expect(checkoutOhneSchutz("x.yml", "on: push")).toEqual(["x.yml: keine Jobs"]);
+    expect(ohneCooldown("updates:\n  - package-ecosystem: npm\n")).toEqual(["npm"]);
+    expect(ohneCooldown("updates:\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 0\n")).toEqual(["npm"]);
+    expect(ohneCooldown("updates:\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 7\n")).toEqual([]);
+    expect(ohneCooldown("version: 2")).toEqual(["keine updates"]);
+    const ok = "  workflow_run:  # zizmor: ignore[dangerous-triggers] Checkout zieht main\n    workflows: [CI]";
+    const sicher = "        with:\n          persist-credentials: false";
+    expect(gefaehrlicherTrigger("x.yml", wf(sicher, ok))).toEqual([]);
+    expect(gefaehrlicherTrigger("x.yml", wf(sicher, "  workflow_run:\n    workflows: [CI]"))).toEqual(["x.yml: workflow_run ohne zizmor-Ausnahme samt Grund"]);
+    expect(gefaehrlicherTrigger("x.yml", wf(sicher, "  pull_request_target:  # zizmor: ignore[dangerous-triggers]"))).toEqual(["x.yml: pull_request_target ohne zizmor-Ausnahme samt Grund"]);
+    expect(gefaehrlicherTrigger("x.yml", wf(`${sicher}\n          ref: x`, ok))).toEqual(["x.yml: Checkout mit ref"]);
+  });
+});

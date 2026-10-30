@@ -136,11 +136,21 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git tag -a v1.3.0 ${"b".repeat(40)}`, "git push origin v1.3.0", "Trockenlauf-Sync in einem Bezieher", "CI des Sync-PR je Bezieher grün", "sobald der Tag steht und die Sync-PRs grün sind", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git tag -a v1.3.0 ${"b".repeat(40)}`, "git push origin v1.3.0", "Trockenlauf-Sync in einem Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
     expect(T.tagTitel("v1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
+  });
+  it("Checkliste: CI des Sync-PR je Bezieher nach dem Sync-PR, Schließen erst bei grüner CI, Patch-Tag nie verschoben (#101 L21 L30)", () => {
+    const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
+    const sync = punkte.findIndex((z) => z.includes("Sync-PR je Bezieher"));
+    const ci = punkte.findIndex((z) => z.includes("CI des Sync-PR je Bezieher grün"));
+    expect(sync).toBeGreaterThan(-1);
+    expect(ci).toBe(sync + 1);
+    expect(punkte[ci]).toContain("der Trockenlauf fährt kein verify");
+    expect(punkte[ci]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
+    expect(punkte[punkte.length - 1]).toContain("Tag und Sync-PRs stehen und deren CI grün ist");
   });
   it("begrenzt die PR-Liste auf 50 Zeilen und bereinigt Zellen", () => {
     const viele = T.besitzCommits(Array.from({ length: 53 }, (_, i) => commit({ betreff: i === 0 ? "fix: a|b`c (#1)" : `fix: n (#${i + 2})` })), MANIFEST);
@@ -310,7 +320,7 @@ describe("Härtung (Review Runde 1)", () => {
 
   it("CI-Text: rot, läuft, unbekannt, Link nur mit URL", () => {
     expect(bodyVon({ ci: { zustand: "rot", url: "https://example.invalid/r" } })).toContain("CI-Status dieses Commits: ROT ([Lauf](https://example.invalid/r))");
-    expect(bodyVon({ ci: { zustand: "laeuft", url: null } })).toContain("läuft noch");
+    expect(bodyVon({ ci: { zustand: "laeuft", url: null } })).toContain("läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)");
     expect(bodyVon({ ci: { zustand: "irgendwas", url: null } })).toContain("CI-Status dieses Commits: unbekannt");
     expect(bodyVon()).not.toContain("[Lauf]");
   });

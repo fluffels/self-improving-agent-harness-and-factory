@@ -138,6 +138,7 @@ describe("Prüf-Ticket", () => {
     expect(t).toContain("`revoked`");
     expect(t).toContain("`false_positive`");
     expect(t).toContain("schließt sich selbst, sobald der Fund behoben ist");
+    expect(t).toContain("CodeQL, Scorecard, zizmor");
     expect(t.match(/^- \[ \]/gm)).toHaveLength(4);
   });
 });

@@ -215,6 +215,90 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
     }
   });
 
+  test("frische Prüfung nach dem Fast-Forward (#101 L10): ok bleibt still, ein Grund steht in der Notiz und macht --streng rot, ohne scripts/ oder .factory/ läuft sie nicht", () => {
+    const frisch = (grund: string) => {
+      const aufrufe: string[] = [];
+      return { aufrufe, pruefeFrisch: (d: string) => (aufrufe.push(d), { grund }) };
+    };
+    for (const pfad of ["scripts/neu.mjs", ".factory/projekt.json"]) {
+      const t = aufbau();
+      try {
+        t.schiebe(pfad, "x\n");
+        const ok = frisch("");
+        const e = S.fuehreSyncAus(t.haupt, { config: undefined, pruefeFrisch: ok.pruefeFrisch } as never);
+        expect(ok.aufrufe).toEqual([t.haupt]);
+        expect(e.gepullt).toBe(true);
+        expect(e.notiz).not.toContain("Validator");
+        expect(S.exitCodeFuer(e)).toBe(0);
+      } finally {
+        t.aufraeumen();
+      }
+    }
+    const t = aufbau();
+    try {
+      t.schiebe("scripts/neu.mjs", "x\n");
+      const kaputt = frisch("Validator: agenten.gruppe fehlt");
+      const e = S.fuehreSyncAus(t.haupt, { pruefeFrisch: kaputt.pruefeFrisch } as never);
+      expect(e.gepullt).toBe(true);
+      expect(e.notiz).toContain("Validator: agenten.gruppe fehlt");
+      expect(S.exitCodeFuer(e)).toBe(1);
+    } finally {
+      t.aufraeumen();
+    }
+    const v = aufbau();
+    try {
+      v.schiebe("scripts/neu.mjs", "x\n");
+      const frischOk = frisch("");
+      const altKaputt = { praefixe: { branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
+      const e = S.fuehreSyncAus(v.haupt, { config: altKaputt, pruefeFrisch: frischOk.pruefeFrisch } as never);
+      expect(frischOk.aufrufe).toEqual([v.haupt]);
+      expect(e.notiz).toBe("");
+      expect(S.exitCodeFuer(e)).toBe(0);
+    } finally {
+      v.aufraeumen();
+    }
+    const w = aufbau();
+    try {
+      w.schiebe("scripts/neu.mjs", "x\n");
+      const e = S.fuehreSyncAus(w.haupt, { pruefeFrisch: () => undefined } as never);
+      expect(e.gepullt).toBe(true);
+      expect(e.notiz).toContain("ohne Ergebnis");
+      expect(S.exitCodeFuer(e)).toBe(1);
+    } finally {
+      w.aufraeumen();
+    }
+    const u = aufbau();
+    try {
+      u.schiebe("docs/neu.md", "x\n");
+      const keine = frisch("darf nie laufen");
+      const e = S.fuehreSyncAus(u.haupt, { pruefeFrisch: keine.pruefeFrisch } as never);
+      expect(e.gepullt).toBe(true);
+      expect(keine.aufrufe).toEqual([]);
+      expect(e.notiz).toBe("");
+    } finally {
+      u.aufraeumen();
+    }
+  });
+
+  test("Default der frischen Prüfung: ok gegen diesen Checkout, Grund gegen ein Verzeichnis ohne Skripte", () => {
+    const echt = (raw as unknown as { pruefeFrischEcht: (d: string) => { grund: string } }).pruefeFrischEcht;
+    expect(echt(fileURLToPath(new URL("../..", import.meta.url))).grund).toBe("");
+    const leer = mkdtempSync(join(tmpdir(), "haupt-sync-leer-"));
+    try {
+      expect(echt(leer).grund).not.toBe("");
+    } finally {
+      rmSync(leer, { recursive: true, force: true });
+    }
+  });
+
+  test("frische Prüfung: nicht startbarer Prozess und leerer stderr sind ein Grund (fail-closed)", () => {
+    const echt = (raw as unknown as { pruefeFrischEcht: (d: string, s: (...a: unknown[]) => unknown) => { grund: string } }).pruefeFrischEcht;
+    expect(echt("x", () => ({ error: new Error("ETIMEDOUT"), status: null })).grund).toContain("nicht startbar");
+    expect(echt("x", () => ({ status: 3, stderr: "" })).grund).toContain("Exit 3");
+    expect(echt("x", () => ({ status: 1, stderr: "Grund Z\n" })).grund).toBe("Grund Z");
+    expect(echt("x", () => ({ status: 0 })).grund).toBe("");
+  });
+
   test("Pull, der .claude/ ändert, setzt den Neustart-Hinweis", () => {
     const t = aufbau();
     try {

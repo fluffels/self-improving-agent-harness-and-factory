@@ -155,6 +155,14 @@ describe("Worktree-Befehl (K2, K3)", () => {
     expect(L.worktreeBefehl(args(ein, ein.repos[0]))).toBe(erwartet);
   });
 
+  test("AGENTS.md nennt den Arbeitsplatz-Befehl, und er passt zur Usage des Skripts (#101 L15)", () => {
+    const zeile = readFileSync(join(__dirname, "..", "..", "AGENTS.md"), "utf8").split("\n").find((l) => l.includes("Eigener Worktree von frisch geholtem"));
+    const befehl = /im Arbeitsplatz `(node scripts\/arbeitsplatz\.mjs worktree <nr> <slug>)`/.exec(zeile ?? "")?.[1];
+    expect(befehl).toBeTruthy();
+    const usage = readFileSync(join(__dirname, "..", "..", "scripts", "arbeitsplatz.mjs"), "utf8");
+    expect(usage).toContain(`"        ${befehl} [--repo <name>] [--wurzel <pfad>]"`);
+  });
+
   test("Arbeitsplatz: git -C auf das Repo, Worktree außerhalb unter <wurzel>/.claude/worktrees/<name>", () => {
     const w = ap.wurzel;
     expect(L.worktreeBefehl(args(ap, ap.repos[0]))).toBe(
@@ -291,10 +299,16 @@ describe("cli: Aufruf, pfade, worktree, sauber (Fehlerwege)", () => {
     expect(gemischt.err).toMatch(/✖ web: git status schlug fehl[\s\S]*✖ api: \?\? AGENTS\.md/);
   });
 
-  test("ohne --wurzel gilt das Repo des Skripts (eingebettet), ohne Option zu arbeitsplatzMaengel gilt der Standard", () => {
-    const l = lauf(["pfade"]);
-    expect(l.code).toBe(0);
-    expect(l.out).toMatch(/betriebsart: eingebettet/);
+  test("ohne --wurzel gilt die Wurzel der Option (im Skript: sein Repo), hier eine Temp-Config ohne Arbeitsplatz-Block statt der echten Repo-Config (#101 L14); ohne Option zu arbeitsplatzMaengel gilt der Standard", () => {
+    const eingebettet = realpathSync.native(schreibe());
+    try {
+      const l = lauf(["pfade"], { wurzel: eingebettet });
+      expect(l.code).toBe(0);
+      expect(l.out).toMatch(/betriebsart: eingebettet/);
+      expect(l.out).toContain(`wurzel: ${eingebettet.split("\\").join("/")}`);
+    } finally {
+      rmSync(eingebettet, { recursive: true, force: true });
+    }
     expect(L.arbeitsplatzMaengel(GUELTIG)).toEqual([]);
   });
 });
