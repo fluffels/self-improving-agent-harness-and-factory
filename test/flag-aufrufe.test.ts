@@ -61,6 +61,14 @@ const ZEILEN: Zeile[] = [
     meldungen: { unbekannt: "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>", ohneWert: "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>", doppelt: "Aufruf: node scripts/fremdtext.mjs --issue <nr> | --pr <nr>" },
   },
   {
+    skript: "guard-liste",
+    exit: 2,
+    erste: (m) => `✖ guard-liste: ${m}`,
+    aufruf: /^Aufruf: node scripts\/guard-liste\.mjs \[--basis <ref>\] \[--json\]$/m,
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--basis"], doppelt: ["--json", "--json"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--basis braucht einen Wert", doppelt: "--json ist doppelt angegeben" },
+  },
+  {
     skript: "langfuse-nachliefern",
     exit: 2,
     erste: (m) => m,
