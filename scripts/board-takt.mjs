@@ -15,6 +15,7 @@
  *
  * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts. Exit 0 grün, 1 Fehler, 2 Aufruf-Fehler (vor jedem I/O).
  */
+import { execFileSync } from "node:child_process";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
@@ -287,6 +288,20 @@ function leseOffene(io, repo) {
   }
 }
 
+/**
+ * Datum (ISO) des frühesten Root-Commits von HEAD (`git log --max-parents=0`), für den Zeitraum des ersten Status-Tickets (#101 L31); null, wenn git es nicht liefert
+ * (flache Kopie, kein Repo, Fehler). `git` ist die Test-Naht (`args -> stdout`).
+ */
+export function ersterCommitDatum(git = (args) => execFileSync("git", args, { encoding: "utf8" })) {
+  try {
+    const daten = git(["log", "--max-parents=0", "--format=%cI", "HEAD"]).split(/\r?\n/).map((z) => z.trim()).filter((z) => !Number.isNaN(Date.parse(z)));
+    daten.sort((x, y) => Date.parse(x) - Date.parse(y));
+    return daten[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
 export const ECHTE_IO = {
   ghJson,
@@ -301,6 +316,7 @@ export const ECHTE_IO = {
   fuehreHarnessAus,
   log: (z) => console.log(z),
   env: process.env,
+  ersterCommitDatum,
 };
 
 /**
@@ -367,7 +383,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;
   if (!dry && e.aktion !== "nichts") {
-    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [], config });
+    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [], config, start: io.ersterCommitDatum?.() ?? null });
     fehler = !r.ok;
     if (items) items = ziehListeNach(items, r);
   }
@@ -402,8 +418,7 @@ export function main(env = process.env, { argv = process.argv.slice(2), io = ECH
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const aufruf = flagsLesen(argv, { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
-    err(`board-takt: ${aufruf.fehler.text}
-Aufruf: node scripts/board-takt.mjs [--dry-run]`);
+    err(`board-takt: ${aufruf.fehler.text}\nAufruf: node scripts/board-takt.mjs [--dry-run]`);
     return AUFRUF_EXIT;
   }
   if (env.PROJECT_TOKEN) kontingent("board-takt", { token: env.PROJECT_TOKEN });

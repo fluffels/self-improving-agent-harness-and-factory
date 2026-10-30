@@ -61,3 +61,21 @@ describe("board-takt main", () => {
     expect(T.ECHTE_IO.env).toBe(process.env);
   });
 });
+
+describe("ersterCommitDatum (#101 L31)", () => {
+  const E = raw as unknown as { ersterCommitDatum: (git: (a: string[]) => string) => string | null };
+  test("fragt die Root-Commits von HEAD ab und nimmt das früheste Datum (auch bei verschiedenen Zeitzonen)", () => {
+    const argumente: string[][] = [];
+    const git = (a: string[]) => (argumente.push(a), "2026-10-26T19:26:44+01:00\r\n2026-10-26T17:00:00Z\n\n");
+    expect(E.ersterCommitDatum(git)).toBe("2026-10-26T17:00:00Z");
+    expect(argumente).toEqual([["log", "--max-parents=0", "--format=%cI", "HEAD"]]);
+  });
+  test("git wirft oder liefert nichts Lesbares: null", () => {
+    expect(E.ersterCommitDatum(() => { throw new Error("shallow"); })).toBeNull();
+    expect(E.ersterCommitDatum(() => "")).toBeNull();
+    expect(E.ersterCommitDatum(() => "kein Datum\n")).toBeNull();
+  });
+  test("ECHTE_IO trägt die Funktion als ersterCommitDatum", () => {
+    expect((raw as { ECHTE_IO: { ersterCommitDatum: unknown } }).ECHTE_IO.ersterCommitDatum).toBe(E.ersterCommitDatum);
+  });
+});

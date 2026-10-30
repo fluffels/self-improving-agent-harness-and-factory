@@ -19,7 +19,7 @@ type Takt = {
   MIN_ABSTAND_STUNDEN: number;
   MIN_TICKET_MERGES_PUSH: number;
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
-  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date; repo?: string }) => string;
+  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date; repo?: string; start?: string | null }) => string;
 };
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 const T = raw as unknown as Takt;
@@ -137,8 +137,40 @@ describe("statusBody", () => {
     const ohne = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" });
     expect(ohne).toContain("--von <Start des Zeitraums> --bis <Claim-Zeit>");
   });
-  test("ohne Vorgänger: Bezug auf #1293", () => {
-    expect(T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" })).toContain("#1293");
+  describe("ohne Vorgänger: Start des Zeitraums ist der erste Commit auf main (#101 L31)", () => {
+    // jetzt 2026-10-07: letzte volle Woche 2026-09-28 bis 2026-10-04, die Woche davor beginnt 2026-09-21.
+    const jetzt = "2026-10-07T00:00:00Z";
+    const ohne = (start?: string | null) => T.statusBody({ vorgaenger: null, jetzt, start });
+    test("altes Repo: Zeitraum ab erstem Commit, normales Wochenbudget, --von mit dem Start", () => {
+      const b = ohne("2020-01-01T10:00:00Z");
+      expect(b).toContain("seit dem ersten Commit auf main (2020-01-01T10:00:00Z) bis zum Claim");
+      expect(b).toContain("**Wochenbudget:** letzte volle Woche 2026-09-28");
+      expect(b).toContain("--von 2020-01-01T10:00:00Z --bis <Claim-Zeit>");
+    });
+    test("Start nach dem Beginn der Woche davor: Wochenbudget entfällt (zwei volle Wochen fehlen)", () => {
+      const b = ohne("2026-09-28T10:00:00Z");
+      expect(b).toMatch(/Wochenbudget:\*\* entfällt, .*2026-09-28T10:00:00Z/);
+      expect(b).not.toContain("**Wochenbudget:** letzte volle Woche");
+    });
+    test("Grenzfall: Start am ersten Tag der Woche davor zählt als volle Woche, ein Tag später nicht", () => {
+      expect(ohne("2026-09-21T08:00:00Z")).toContain("**Wochenbudget:** letzte volle Woche");
+      expect(ohne("2026-09-22T00:00:00Z")).toContain("**Wochenbudget:** entfällt");
+    });
+    test("Start nicht lesbar: Fallback ohne #1293, normales Budget, --von-Platzhalter", () => {
+      for (const start of [undefined, null]) {
+        const b = ohne(start);
+        expect(b).toContain("seit dem Beginn der Historie von main bis zum Claim");
+        expect(b).not.toContain("#1293");
+        expect(b).toContain("**Wochenbudget:** letzte volle Woche");
+        expect(b).toContain("--von <Start des Zeitraums> --bis");
+      }
+    });
+    test("ein Vorgänger gilt vor dem Start: Zeitraum und --von nennen den Abschluss, das Budget bleibt normal", () => {
+      const b = T.statusBody({ vorgaenger: { number: 7, closedAt: "2026-10-01T10:00:00Z" }, jetzt, start: "2026-10-02T00:00:00Z" });
+      expect(b).toContain("seit dem Abschluss von #7 (2026-10-01T10:00:00Z)");
+      expect(b).toContain("--von 2026-10-01T10:00:00Z");
+      expect(b).toContain("**Wochenbudget:** letzte volle Woche");
+    });
   });
 });
 

@@ -525,9 +525,10 @@ describe("fuehreHarnessAus: Fehlertext und Rückgabe (#1609)", () => {
 describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
   const STATUS = "Langfuse-Status überprüfen";
   // Fünf Commits seit dem Vorgänger: der Cron entscheidet „anlegen“ (kein offenes Status-Ticket in der REST-Liste).
-  const lauf = (frisch: Io["frischeOffeneIssues"], dry = false) => {
+  const lauf = (frisch: Io["frischeOffeneIssues"], dry = false, ersterCommit?: () => string | null) => {
     const log: string[] = [];
     const angelegt: string[] = [];
+    const starts: unknown[] = [];
     const aufrufe: { repo: string; label: string; anzahl: number; mitBoard?: boolean }[] = [];
     const commits = Array.from({ length: 5 }, (_, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: "2026-10-07T12:00:00Z" } }, author: { login: OWNER, type: "User" } }));
     const io: Io = {
@@ -539,12 +540,13 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
         return frisch ? frisch(a) : [];
       },
       positionLautAgentsMd: () => 4,
-      fuehreStatusAus: (e) => (angelegt.push(e.aktion), { ok: true }),
+      fuehreStatusAus: (e, ctx) => (angelegt.push(e.aktion), starts.push((ctx as { start?: unknown }).start), { ok: true }),
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
+      ...(ersterCommit ? { ersterCommitDatum: ersterCommit } : {}),
     };
     const r = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-12T12:00:00Z"), dry, io });
-    return { log: log.join("\n"), angelegt, aufrufe, fehler: r.fehler };
+    return { log: log.join("\n"), angelegt, aufrufe, fehler: r.fehler, starts };
   };
 
   test("GraphQL kennt noch kein Status-Ticket: es wird angelegt, die Abfrage trägt Repo, Harness-Label und 50", () => {
@@ -553,6 +555,11 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
     expect(r.aufrufe).toHaveLength(1);
     expect(r.aufrufe[0]).toMatchObject({ label: FREMD.labels.harness, anzahl: 50, mitBoard: false });
     expect(r.aufrufe[0]?.repo).toMatch(/^[^/]+\/[^/]+$/);
+  });
+  test("das Datum des ersten Commits geht beim Anlegen als start an fuehreStatusAus; ohne Naht oder bei null ist start null (#101 L31)", () => {
+    expect(lauf(() => [], false, () => "2026-09-01T10:00:00+02:00").starts).toEqual(["2026-09-01T10:00:00+02:00"]);
+    expect(lauf(() => []).starts).toEqual([null]);
+    expect(lauf(() => [], false, () => null).starts).toEqual([null]);
   });
   test("GraphQL kennt ein offenes Status-Ticket, das die REST-Liste noch nicht hat: nichts angelegt, Warnung mit Nummer", () => {
     const r = lauf(() => [{ number: 1865, titel: STATUS }]);
