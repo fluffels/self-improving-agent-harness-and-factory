@@ -6,6 +6,12 @@
     "text": "Der erste Schedule-Lauf von `codeql.yml` ist Mo 2026-11-02 04:23 UTC. Prüfen: `gh run list --workflow codeql.yml -L 10 --json event,conclusion,createdAt` zeigt einen `schedule`-Lauf mit Erfolg, und `gh api \"repos/<repo>/code-scanning/analyses?ref=refs/heads/main&per_page=20\" --jq \".[].category\"` nennt `/language:javascript-typescript` und `/language:actions`. Ersatzbeleg ohne Schedule-Lauf: ein `workflow_dispatch`-Lauf auf main. Fehlt der Lauf, den Cron von `codeql.yml` prüfen. Danach dieses Ticket schließen und den Eintrag löschen."
   },
   {
+    "id": "planer-kosten-nach-112",
+    "faellig": "2026-11-13",
+    "titel": "Planer-Kosten auf geschätzter Basis nachmessen (#112)",
+    "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø (alle und ohne Sammeltickets) gegen 1,38 $ vergleichen, Sammeltickets getrennt. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
+  },
+  {
     "id": "typescript-7-eslint",
     "faellig": "2027-01-28",
     "titel": "TypeScript 7: trägt typescript-eslint den Major inzwischen?",
