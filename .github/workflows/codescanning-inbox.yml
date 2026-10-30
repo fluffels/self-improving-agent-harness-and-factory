@@ -1,6 +1,6 @@
 name: Code-Scanning-Inbox
 
-# Wöchentlicher Lauf (#1436): macht neue offene Code-Scanning-Alerts (CodeQL, Scorecard) zu Board-Arbeit. CodeQL high/critical wird EIN
+# Wöchentlicher Lauf (#1436): macht neue offene Code-Scanning-Alerts (CodeQL, Scorecard, zizmor) zu Board-Arbeit. CodeQL high/critical wird EIN
 # Ticket "🔒 Security: Code-Scanning-Befunde auflösen" ganz oben im Board (Dedupe über den Titel, Schließen bei null Funden); alles andere
 # eine Zeile je (Tool, Regel) im jüngsten ungeclaimten Harness-Sammelticket (Dedupe über die Alert-Nummer).
 # Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.

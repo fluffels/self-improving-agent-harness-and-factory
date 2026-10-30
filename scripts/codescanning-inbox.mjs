@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Code-Scanning-Inbox (#1436): macht neue offene Code-Scanning-Alerts (CodeQL, Scorecard) zu Board-Arbeit.
+ * Code-Scanning-Inbox (#1436): macht neue offene Code-Scanning-Alerts (CodeQL, Scorecard, zizmor) zu Board-Arbeit.
  *  (a) Spitze: CodeQL-Alerts mit security-severity high/critical (ohne Stufe: severity error) → EIN Ticket
  *      `🔒 Security: Code-Scanning-Befunde auflösen` ganz oben im Board (`board-place.mjs --notfall security --top`); Dedupe über den Titel,
  *      automatisch geschlossen bei null Funden. Nur CodeQL kann die Spitze nehmen: Scorecard meldet Posture-Funde mit `error`/`high`,

@@ -135,6 +135,9 @@ describe("Lens-Worktree eines fremden Klons (#78 L3f/L9d): Präfix aus der Confi
   test("die Ablehnung nennt den Weg für einen fremden Klon", () => {
     expect(G.bewerteLensEdit(`${klon}/src/x.ts`, "", DEPS).reason).toMatch(/git -C <klon> worktree add/);
   });
+  test("der Weg ist vollständig: --detach und der erwartete HEAD, wie in der FAQ (#101 L3b)", () => {
+    expect(G.bewerteLensEdit(`${klon}/src/x.ts`, "", DEPS).reason).toContain("git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>");
+  });
 });
 
 describe("entscheideHook", () => {
