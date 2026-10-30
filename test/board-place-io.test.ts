@@ -104,7 +104,7 @@ describe("einsortieren: Sortier-Korrektur des Harness-Sammeltickets (#101 L6a)",
     expect(log.join("\n")).toContain("Sammelticket #12 stand auf Rang 5, zurück auf Rang 3 (Position laut AGENTS.md)");
     const gesetzt = positionen(proto);
     expect(gesetzt.length).toBeGreaterThanOrEqual(2);
-    expect(gesetzt[0][0]).toBe("I12");
+    expect(gesetzt[0]).toEqual(["I12", "I2"]);
   });
   test("Trockenlauf: Log ja, aber kein setPosition und keine Pause", async () => {
     const { io, proto, log } = fake(falsch(), { positionOderWarnung: () => 3 });

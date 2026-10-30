@@ -30,7 +30,7 @@ type Board = { projectId: string; statusFeldNodeId: string; todoOptionId: string
 const P = rawPlace as unknown as {
   ECHTE_PLACE_IO: {
     itemsUeberIssues: (b: unknown, n: number[], o: object, repo: string) => unknown[];
-    loadItems: (b: unknown, o: { repo: string }) => unknown[];
+    loadItems: (b: unknown, o: { repo: string; token?: string }) => unknown[];
     ladeLabels: (nr: number, repo: string) => string[] | null;
     addToBoardTodo: (b: unknown, nodeId: string, o: object) => string;
     setPosition: (b: unknown, id: string, after: string | null) => void;
@@ -68,7 +68,8 @@ describe("ECHTE_PLACE_IO: die übrigen Methoden (#101 L6a)", () => {
 
   test("loadItems liest die Items des Boards (Seiten-Abruf auf das Board, Optionen unverändert), gefiltert aufs Repo", () => {
     textAntwort = () => "[[]]";
-    expect(P.ECHTE_PLACE_IO.loadItems(factory, { repo: L.zielRepo("factory") })).toEqual([]);
+    expect(P.ECHTE_PLACE_IO.loadItems(factory, { repo: L.zielRepo("factory"), token: "t" })).toEqual([]);
+    expect(aufrufe[0].opt).toEqual({ token: "t" });
     expect(aufrufe).toHaveLength(1);
     expect(aufrufe[0].args.slice(0, 3)).toEqual(["api", "--paginate", "--slurp"]);
     expect(aufrufe[0].args[3]).toContain("/items?per_page=100");
@@ -96,12 +97,13 @@ describe("ECHTE_PLACE_IO: die übrigen Methoden (#101 L6a)", () => {
     expect(weg).toContain("i=ITEM_9");
   });
   test("addToBoardTodo holt das Issue ins Board und setzt Todo (zwei Mutationen), Rückgabe ist die Item-ID", () => {
-    textAntwort = (q) => (q.includes("addProjectV2ItemById") ? JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "ITEM_neu" } } } }) : "{}");
-    expect(P.ECHTE_PLACE_IO.addToBoardTodo(factory, "I_node", { repo: L.zielRepo("factory") })).toBe("ITEM_neu");
+    textAntwort = (q) => (q.includes("addProjectV2ItemById") ? JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "PVTI_z9" } } } }) : "{}");
+    expect(P.ECHTE_PLACE_IO.addToBoardTodo(factory, "I_abc", { repo: L.zielRepo("factory"), token: "t" })).toBe("PVTI_z9");
     const [add, status] = aufrufe.map((a) => a.args.join(" "));
-    expect(add).toContain("c=I_node");
+    expect(add).toContain("c=I_abc");
+    expect(aufrufe.map((a) => a.opt)).toEqual([{ token: "t" }, { token: "t" }]);
     expect(status).toContain("updateProjectV2ItemFieldValue");
-    expect(status).toContain("i=ITEM_neu");
+    expect(status).toContain("i=PVTI_z9");
     expect(status).toContain(`o=${factory.todoOptionId}`);
   });
   test("positionOderWarnung ist die der Board-Lib", () => {
