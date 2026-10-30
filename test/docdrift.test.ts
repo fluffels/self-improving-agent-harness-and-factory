@@ -669,7 +669,7 @@ describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz 
     assert.equal(m(block, vertauscht).length, 1);
   });
 
-  test("T9 Bezieher: Ordner-Verweis ist nur Ziel bei Pfadgrenze, Block-Einheit ist kein Datei-Ziel", () => {
+  test("T9 Bezieher: Ordner-Verweis ist nur Ziel bei Pfadgrenze, Schlüssel-Einheit ist kein Datei-Ziel", () => {
     const e = (pfad: string) => [kern, { pfad, ring: "kern" }];
     const ordner = fixture({ ...STAND, ...manifest(e("test/kern/x.test.ts")), "docs/a.md": "# A\n`test/kern`\n" });
     assert.equal(ordner.length, 1);

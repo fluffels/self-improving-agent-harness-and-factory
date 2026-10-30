@@ -19,7 +19,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
-| Prüfschritte in `verify` | 13 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify` | 14 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 140 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 90 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 16 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
@@ -120,6 +120,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen) |
 | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
+| `npm run check:docmap` | `verify` | Tiefendoc-Abdeckung jeder Quell-Datei (entfällt mit Hinweis ohne `struktur.moduldoku`) |
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
 | `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config) |
@@ -164,9 +165,9 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Absicherung:** Engine und Generatoren laufen gegen ein Fixture-Root (Red-Green je Fehlerfall), dazu ein Echt-Repo-Test; Vergleich unabhängig von CRLF/LF, feste Sortierung ohne Locale. Engine und Config liegen unter `scripts/docs-gen*` und sind Leitplanken-Pfade.
 
 ### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
-- **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/README/`docs/referenz/befehle.md` dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel); (7) jeder Backtick-Pfad unter `test/` existiert (Grenzen: ADRs und Dateien mit Datum im Namen sind ausgenommen, nackte Dateinamen und Markdown-Links prüft das nicht, der Testordner ist fest `test/`, der Datumsausschluss eine Heuristik); in einem Bezieher (gültiger Sync-Stand, lesbares Manifest) zählt ein Verweis aus einer verteilten Besitz-Einheit (ganze Datei oder Block, keine JSON-Schlüssel) nur, wenn das Ziel selbst Besitz ist, Projekt-Text bleibt voll geprüft (#110). Gescannt wird jedes Markdown im Repo, unter `.claude/` (#1091) genau die versionierten Ordner `skills`/`agents`/`workflows` (Allowlist `VERSIONED_CLAUDE_DIRS`, gegen `.gitignore` abgeglichen; Worktrees und Lokales bleiben draußen). Auch als `test/docdrift.test.ts`.
+- **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/README/`docs/referenz/befehle.md` dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel); (5) jede in der Doku kopierte verify-Kette stimmt mit `package.json › scripts.verify` überein; (6) jede Datei unter `docs/adr/fortschreibungen/` hat Namen, Kopfzeile und einen Zeiger im ADR (#90); (7) jeder Backtick-Pfad unter `test/` existiert (Grenzen: ADRs und Dateien mit Datum im Namen sind ausgenommen, nackte Dateinamen und Markdown-Links prüft das nicht, der Testordner ist fest `test/`, der Datumsausschluss eine Heuristik); in einem Bezieher (gültiger Sync-Stand, lesbares Manifest) zählt ein Verweis aus einer verteilten Besitz-Einheit (ganze Datei oder Block, keine JSON-Schlüssel) nur, wenn das Ziel selbst Besitz ist, Projekt-Text bleibt voll geprüft (#110). Gescannt wird jedes Markdown im Repo, unter `.claude/` (#1091) genau die versionierten Ordner `skills`/`agents`/`workflows` (Allowlist `VERSIONED_CLAUDE_DIRS`, gegen `.gitignore` abgeglichen; Worktrees und Lokales bleiben draußen). Auch als `test/docdrift.test.ts`.
 - **WARUM:** AGENTS.md (in **jeder** KI-Session geladen), README und die on-demand-Referenzen unter `docs/referenz/` nennen Kommandos + verweisen quer auf andere Harness-Docs. Ein totes Kommando oder ein toter Link/Anker schickt einen Agenten ins Leere — der Datei-Landkarten-Wächter (#482) deckt genau diese Fehlklasse **nicht** ab.
-- **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
+- **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften). Tote Test-Pfade (7): Red-Green in `test/docdrift.test.ts` (toter Pfad, Bezieher-Ausnahme für verteilten Besitz #97/#110); der CLI-Pfad (Exit 0 sauber, Exit 1 je Fehlerklasse (1)–(7), kaputte Config ohne Stacktrace) in `test/docdrift-cli.test.ts`.
 
 ### Kern-Reinheits-Wächter (`test/harness/kern-reinheit.test.ts`, #1610)
 - **WAS:** das Besitz-Manifest `.factory/besitz.json` listet den Factory-Besitz (Datei, Markdown-Block zwischen `factory-besitz`-Markern, JSON-Schlüssel); der Wächter zählt je Einheit Projektliterale (Owner, Repo, Board-ID, Commit-Zeilen-Präfix, Branch, Worktree, `Env` (der Commit-Zeilen-Präfix ohne Bindestrich, mit Unterstrich: Umgebungsvariablen eines Kern-Werkzeugs heißen `FACTORY_<NAME>`, [Inventar](referenz/befehle.md#umgebungsvariablen)), Label mit `:`, Agent und die `projektliterale` der Projekt-Config; die Begriffe leitet der Wächter aus `.factory/projekt.json` ab) gegen `test/harness/kern-literale-baseline.json`; er zählt auf dem normalisierten Text (Werte in Projektwert-Stellen zählen nicht mit). Neues Literal, Wert über oder unter der Baseline und verwaiste Einträge sind rot; die Baseline darf gegen die Diff-Basis nicht steigen (CI fail-closed).
@@ -519,7 +520,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>13 Gates"]
+    verify["npm run verify<br/>14 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]

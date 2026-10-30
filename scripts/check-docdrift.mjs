@@ -21,6 +21,9 @@
  *      existierende Datei/ein Verzeichnis.
  *   4. Tote Anker: jeder `#anker` (gleiche Datei oder auf eine .md) trifft eine
  *      real vorhandene Überschrift (GitHub-Slug-Regel).
+ *   5. Verify-Ketten-Kopien: jede in der Doku kopierte verify-Kette stimmt mit package.json › scripts.verify überein.
+ *   6. ADR-Fortschreibungen (#90): jede Datei unter docs/adr/fortschreibungen/ hat Namen, Kopfzeile
+ *      und einen Zeiger im ADR.
  *   7. Tote Test-Pfade (#97): jeder Backtick-Token `test/…` existiert (ADRs und Dateien mit
  *      Datum im Namen ausgenommen; nackte Dateinamen und Markdown-Links prüft das nicht).
  *      Im Bezieher (gültiger Sync-Stand, lesbares Manifest) prüft das Gate einen Verweis aus

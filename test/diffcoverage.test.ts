@@ -9,12 +9,16 @@
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:diffcoverage)
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { FREMD, projektConfig } from "./support/fremd-config";
+
+// #101: node:child_process ersetzt, damit der Standardweg ohne runGit (execFileSync mit GIT_OPTIONEN) prüfbar ist, ohne git zu starten.
+const execFileSyncMock = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (orig) => ({ ...(await orig<typeof import("node:child_process")>()), execFileSync: execFileSyncMock }));
 
 // Schicht-SSOT (bewusst CommonJS, siehe scripts/layers.cjs) — damit der Floor-Test
 // unten an die ECHTEN Schicht-Buckets gebunden ist statt an vier abgeschriebene Namen.
@@ -107,6 +111,18 @@ describe("Diff-Coverage: Git-Optionen (#97 L11j)", () => {
   test("maxBuffer ist mindestens 256 MiB, damit ein breiter Diff nicht an ENOBUFS scheitert", () => {
     assert.ok(GIT_OPTIONEN.maxBuffer >= 256 * 1024 * 1024);
     assert.equal(GIT_OPTIONEN.encoding, "utf8");
+  });
+  test("ohne runGit ruft der Standardweg git mit GIT_OPTIONEN auf (nicht nur {encoding})", () => {
+    execFileSyncMock.mockReset();
+    execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => (args[0] === "diff" ? "" : "basesha"));
+    checkDiffCoverage({ readFile: () => "", env: { FACTORY_DIFF_BASE: "basesha" } });
+    const aufrufe = execFileSyncMock.mock.calls as unknown[][];
+    assert.ok(aufrufe.length > 0, "der Standardweg muss execFileSync nutzen");
+    for (const [befehl, , optionen] of aufrufe) {
+      assert.equal(befehl, "git");
+      assert.deepEqual(optionen, GIT_OPTIONEN);
+    }
+    assert.ok(aufrufe.some(([, args]) => (args as string[])[0] === "diff"), "der Diff-Aufruf läuft über denselben Weg");
   });
 });
 
