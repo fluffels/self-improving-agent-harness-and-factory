@@ -257,6 +257,16 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
     } finally {
       v.aufraeumen();
     }
+    const w = aufbau();
+    try {
+      w.schiebe("scripts/neu.mjs", "x\n");
+      const e = S.fuehreSyncAus(w.haupt, { pruefeFrisch: () => undefined } as never);
+      expect(e.gepullt).toBe(true);
+      expect(e.notiz).toContain("ohne Ergebnis");
+      expect(S.exitCodeFuer(e)).toBe(1);
+    } finally {
+      w.aufraeumen();
+    }
     const u = aufbau();
     try {
       u.schiebe("docs/neu.md", "x\n");

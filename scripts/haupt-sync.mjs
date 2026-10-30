@@ -270,7 +270,7 @@ export function fuehreSyncAus(dir, deps = {}) {
       // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
       // Der Prozess lädt die Config mit dem alten Validator; berührt der Pull scripts/ oder .factory/, entscheidet nur die frische Prüfung (neue Config, neuer Validator), die alte würde fälschlich rot melden.
       const beruehrt = geaendert.some((d) => d.startsWith("scripts/") || d.startsWith(".factory/"));
-      const { grund } = beruehrt ? ((deps.pruefeFrisch ?? pruefeFrischEcht)(dir) ?? { grund: "" }) : namenOderGrund("haupt-sync", deps);
+      const { grund } = beruehrt ? ((deps.pruefeFrisch ?? pruefeFrischEcht)(dir) ?? { grund: "frische Config-Prüfung ohne Ergebnis" }) : namenOderGrund("haupt-sync", deps);
       if (grund) ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}${grund}`;
     }
   } catch (e) {

@@ -19,7 +19,7 @@ describe("SKRIPT_LAUFZEITEN", () => {
   });
   test("Stdin-Skript-Guard bezieht Node und Python aus der Tabelle, Python-Versionsnamen bleiben Familie", () => {
     for (const n of [...T.NODE_LAUFZEITEN, ...T.PYTHON_LAUFZEITEN, "python3.12"]) expect(blockt(`${n} - <<EOF\nx\nEOF`), n).toBe(true);
-    for (const n of ["perl", "ruby", "nodejs", "python3x", "pythonx", "python3.12x", "xpython3.12", "python3."]) expect(blockt(`${n} - <<EOF\nx\nEOF`), n).toBe(false);
+    for (const n of ["perl", "ruby", "nodejs", "python3x", "pythonx", "python3x12", "python3.12x", "xpython3.12", "python3."]) expect(blockt(`${n} - <<EOF\nx\nEOF`), n).toBe(false);
   });
   test("keine zweite Namensliste in den Guards", () => {
     expect(quelle("worktree-guard-powershell.mjs")).toContain("SKRIPT_LAUFZEITEN.flatMap");

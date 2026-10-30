@@ -29,8 +29,7 @@ describe.each(ZEILEN)("Notfall-Marker in docs/ticket-reihenfolge.md: Zeile $name
     expect(zeilen[0]).toContain(token);
   });
 
-  test.each(NOTFAELLE.map((n) => n.art))("Art %s steht als Name in der Zeile (nur Zeile mit --notfall)", (art) => {
-    if (!mitArt) return;
+  test.skipIf(!mitArt).each(NOTFAELLE.map((n) => n.art))("Art %s steht als Name in der Zeile (nur Zeile mit --notfall)", (art) => {
     expect(zeilen[0]).toContain(`\`${art}\``);
   });
 });
