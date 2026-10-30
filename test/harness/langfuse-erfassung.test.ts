@@ -209,7 +209,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Tokenfresser:**", "Tokenfresser:")));
-    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (#1425):**", "Vermeidbare Arbeit (#1425):")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (quellprojekt#1425):**", "Vermeidbare Arbeit (quellprojekt#1425):")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
   });
 
@@ -494,12 +494,12 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   });
 
   test("Gruppe C ist dauerhaft definiert, „Haupt“ meint den dünnen Hauptchat, der Vermerk steht nicht mehr in der Verdichtungszeile", () => {
-    assert.match(mr, /\| C \(Umsetzer-Subagent, #1280\) \|/);
-    assert.match(mr, /„Haupt“ und „Sockel Haupt“ meinen ab #1280 den dünnen Hauptchat/);
+    assert.match(mr, /\| C \(Umsetzer-Subagent, quellprojekt#1280\) \|/);
+    assert.match(mr, /„Haupt“ und „Sockel Haupt“ meinen ab quellprojekt#1280 den dünnen Hauptchat/);
     assert.match(mr, /Neue Läufe werden hier unter C fortgeführt/);
-    const zeile = mr.split("\n").find((z) => z.startsWith("| #1278-Merge bis #1276-Claim")) ?? "";
+    const zeile = mr.split("\n").find((z) => z.startsWith("| quellprojekt#1278-Merge bis quellprojekt#1276-Claim")) ?? "";
     assert.notEqual(zeile, "");
-    assert.doesNotMatch(zeile, /ab #1280 der dünne Hauptchat/);
+    assert.doesNotMatch(zeile, /ab quellprojekt#1280 der dünne Hauptchat/);
     assert.match(zeile, /issuecomment-6019725674/, "der Sockel-Wert verlinkt den Beleg je Lauf");
   });
 });

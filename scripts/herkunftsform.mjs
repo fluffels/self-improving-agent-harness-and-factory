@@ -17,7 +17,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { collectMarkdown, GEN_MARKER } from "./docs-gen/markdown.mjs";
+import { collectMarkdown, fenceMaske, GEN_MARKER } from "./docs-gen/markdown.mjs";
+import { flagsLesen } from "./flag-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 /** Eine nackte Ticketnummer: kein Wort-, Punkt- oder Bindestrich-Zeichen davor (sonst Präfix oder Dateianker), keine Wortzeichen dahinter. */
@@ -25,7 +26,6 @@ export const NUMMER = /(?<![\p{L}\p{N}_.-])#(\d{3,4})(?![\p{L}\p{N}_])/gu;
 /** Geschützte Stücke einer Zeile (Capture-Split, ungerade Indizes): http(s)-Link samt Text, nackte URL, Inline-Code, Linkziel. */
 const GESCHUETZT = /(\[[^\]\n]*\]\(<?https?:\/\/[^)\s>]*>?[^)\n]*\)|https?:\/\/\S+|`[^`\n]*`|\]\([^)\n]*\))/;
 const UEBERSCHRIFT = /^\s{0,3}#{1,6}(\s|$)/;
-const FENCE = /^\s{0,3}(```|~~~)/;
 
 /** Ist `pfad` (repo-relativ, `/`) eine Factory-Seite: Markdown unter `docs/` ohne Historie (Spiegel von `istKernSeite` im Wächter `factory-seiten`). */
 export function istFactorySeite(pfad) {
@@ -66,35 +66,25 @@ function zeile(text, ab, zaehler) {
 export function umschreiben(text, { ab }) {
   if (!Number.isInteger(ab) || ab < 101) throw new Error(`ab muss eine ganze Zahl ab 101 sein (erste Nummer des Quellprojekts), war: ${String(ab)}`);
   const zaehler = { quellprojekt: 0, factory: 0 };
-  let fence = false;
   let gen = false;
-  const zeilen = text.split(/(?<=\n)/).map((z) => {
+  const stuecke = text.split(/(?<=\n)/);
+  const imFence = fenceMaske(stuecke.map((z) => z.replace(/\r?\n$/, "")));
+  const zeilen = stuecke.map((z, i) => {
     const art = GEN_MARKER.exec(z.replace(/\r?\n$/, ""))?.[3];
     if (art === "START") gen = true;
     const raus = gen || art !== undefined;
     if (art === "END") gen = false;
-    if (raus) return z;
-    if (FENCE.test(z)) {
-      fence = !fence;
-      return z;
-    }
-    return fence || UEBERSCHRIFT.test(z) ? z : zeile(z, ab, zaehler);
+    return raus || imFence[i] || UEBERSCHRIFT.test(z) ? z : zeile(z, ab, zaehler);
   });
   return { text: zeilen.join(""), ...zaehler };
 }
 
 /** Liest die Aufrufargumente; `fehler` ist gesetzt, wenn der Aufruf nicht stimmt. */
 export function parseArgs(argv) {
-  const out = { schreiben: false, ab: null, dateien: [], fehler: null };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--schreiben") out.schreiben = true;
-    else if (a === "--ab") out.ab = /^\d+$/.test(argv[i + 1] ?? "") ? Number(argv[++i]) : null;
-    else if (a.startsWith("--")) out.fehler = `unbekanntes Flag ${a}`;
-    else out.dateien.push(a);
-  }
-  if (out.fehler === null && (out.ab === null || out.ab < 101)) out.fehler = "--ab <n> ist Pflicht (ganze Zahl ab 101: erste Nummer des Quellprojekts, höchste Issue-/PR-Nummer des Factory-Repos + 1)";
-  return out;
+  const r = flagsLesen(argv, { ab: { type: "string" }, schreiben: { type: "boolean" } }, { positionale: true, pflicht: ["ab"] });
+  const ab = /^\d+$/.test(r.werte.ab ?? "") ? Number(r.werte.ab) : null;
+  const ungueltig = r.fehler === null && (ab === null || ab < 101) ? "--ab <n> muss eine ganze Zahl ab 101 sein (erste Nummer des Quellprojekts, höchste Issue-/PR-Nummer des Factory-Repos + 1)" : null;
+  return { schreiben: r.werte.schreiben === true, ab, dateien: r.positionale, fehler: r.fehler?.text ?? ungueltig };
 }
 
 /** CLI: Probelauf oder Schreiben; gibt den Exit-Code zurück. */

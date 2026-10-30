@@ -13,6 +13,10 @@
  * Rest der Baseline: `model-routing.md` trägt Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
  * historischer Ordnername). Die Baseline steigt nie: ein Test sperrt jede Anhebung gegen die Diff-Basis (`anhebungen` aus `test/support/baseline-zaehlung.ts`, wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
+ * Ticketnummern (#95): jede nackte drei- oder vierstellige Nummer `#<nr>` zählt je Seite und in der `AGENTS.md` gegen `ticketnummern-baseline.json` (nur sinkend, gleiche
+ * Anhebungssperre; fehlt die Datei an der Diff-Basis, gilt die Zählung der Seiten dort). Die Herkunftsform `quellprojekt#<nr>` (Ticket des Quellprojekts), `factory#<nr>` (Ticket des
+ * Factory-Repos) und `owner/repo#nr` maskiert `maskiere` schon als Herkunftsbezug. `scripts/herkunftsform.mjs` stellt um. Grenzen: Überschriften (ihr Anker trägt die Nummer) und Code zählen mit
+ * und stehen in der Baseline; Nummern mit ein oder zwei Ziffern zählen nicht; jedes `wort#nr` gilt als Herkunftsbezug, auch ein erfundenes Präfix.
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
  * Zusätzlich zählen die `seitenliterale` der Config (hier Spiel, Spielquote): als `projektliterale` würden sie
  * jede Kern-Einheit und jeden Kern-Test treffen; die Seiten sprechen von Produkt. Das Ziel eines Links in `adr/` zählt nicht: sein Anker trägt

@@ -959,6 +959,6 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   test("Messdoku nennt den Marker und ist ohne Platzhalter-Zusage für #1099", () => {
     const doku = read(ROUTING_SSOT);
     assert.match(doku, /pflege: start/);
-    assert.doesNotMatch(doku, /kommen mit #1099/);
+    assert.doesNotMatch(doku, /kommen mit (quellprojekt)?#1099/);
   });
 });

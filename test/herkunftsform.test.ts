@@ -94,7 +94,7 @@ describe("parseArgs", () => {
   });
   it("Flags und Dateien", () => {
     expect(H.parseArgs(["--ab", "120", "--schreiben", "a.md"])).toEqual({ schreiben: true, ab: 120, dateien: ["a.md"], fehler: null });
-    expect(H.parseArgs(["--ab", "120", "--x"]).fehler).toMatch(/unbekanntes Flag --x/);
+    expect(H.parseArgs(["--ab", "120", "--x"]).fehler).toMatch(/--x/);
   });
 });
 
