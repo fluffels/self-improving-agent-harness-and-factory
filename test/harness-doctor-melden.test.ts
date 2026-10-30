@@ -116,7 +116,7 @@ describe("harness-doctor-melden: lauf", () => {
 
   test("ermittleLuecken reicht nichtPruefbar durch", () => {
     const l = melden.ermittleLuecken({ env: {}, repo: "acme/demo", pruefe: () => [{ ok: false, punkt: "PVR", befund: "b", fix: "f", nichtPruefbar: true } as never] });
-    assert.equal((l[0] as Luecke).nichtPruefbar, true);
+    assert.equal(l[0].nichtPruefbar, true);
   });
 
   test("alte LÜCKE-Zeilen gelten weiter (ohne Art-Angabe ist die Art LÜCKE)", () => {
