@@ -21,7 +21,7 @@ import { readFileSync } from "node:fs";
 import { MANIFEST_PFAD as MANIFEST, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { teile, vergleicheTags } from "./factory-update-check.mjs";
-import { liesSyncStand } from "./factory-sync-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { inboxStart, vertrauterOwner, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";

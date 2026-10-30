@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { STAND_PFAD, syncStandAusText } from "./factory-sync-lib.mjs";
+import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";

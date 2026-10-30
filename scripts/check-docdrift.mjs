@@ -47,7 +47,7 @@ import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
 import { blockSpanne, istGanzeDatei, MANIFEST_PFAD, wirdVerteilt } from "./besitz-lib.mjs";
-import { liesSyncStand } from "./factory-sync-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
 export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
