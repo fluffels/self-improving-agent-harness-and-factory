@@ -121,6 +121,15 @@ describe("zielAktionen und vertrauterOwner", () => {
     ]);
     for (const a of aufrufe) expect(a.opt).toEqual({ token: "zt" });
   });
+  test("aktualisiere: -f title= nur mit Titel, vor dem Body (#101 L18)", () => {
+    const { aktion, aufrufe } = aufbau();
+    aktion.aktualisiere(6, "neu", "Neuer Titel");
+    aktion.aktualisiere(6, "neu", undefined);
+    expect(aufrufe.map((a) => a.args.join(" "))).toEqual([
+      "api -X PATCH repos/o/ziel/issues/6 -f title=Neuer Titel -f body=neu",
+      "api -X PATCH repos/o/ziel/issues/6 -f body=neu",
+    ]);
+  });
   test("ohne Label kein --label", () => {
     const { aktion, aufrufe } = aufbau();
     aktion.legeIssueAn("T", "B");
@@ -137,5 +146,34 @@ describe("zielAktionen und vertrauterOwner", () => {
   test("vertrauterOwner: Owner des Ziel-Repos, sonst der eigene", () => {
     expect(A.vertrauterOwner({ owner: "z" }, { OWNER: "o" })).toBe("z");
     expect(A.vertrauterOwner({}, { OWNER: "o" })).toBe("o");
+  });
+});
+
+describe("bestaetigeAnlegen (#101 L17, fail-closed, gemeinsam für Status- und Tag-Takt)", () => {
+  type E = { aktion: string; grund: string; warnungen: string[] };
+  const B = rawLib as unknown as { bestaetigeAnlegen: (e: E, a: { zweit: () => unknown; passt: (i: { number: number; titel: string }) => boolean; was?: string }) => E };
+  const anlegen: E = { aktion: "anlegen", grund: "g", warnungen: ["alt"] };
+  const passt = (i: { titel: string }) => i.titel === "X";
+  test("Zweitabfrage wirft: nichts, alte Warnung bleibt, Fehlertext in der Warnung", () => {
+    const r = B.bestaetigeAnlegen(anlegen, { zweit: () => { throw new Error("Rate-Limit"); }, passt });
+    expect(r.aktion).toBe("nichts");
+    expect(r.warnungen).toHaveLength(2);
+    expect(r.warnungen[0]).toBe("alt");
+    expect(r.warnungen[1]).toContain("Rate-Limit");
+  });
+  test("keine Liste (undefined, null, Objekt): wie ein Fehler, nichts", () => {
+    for (const antwort of [undefined, null, {}]) expect(B.bestaetigeAnlegen(anlegen, { zweit: () => antwort, passt }).aktion, JSON.stringify(antwort) ?? "undefined").toBe("nichts");
+  });
+  test("Treffer: nichts mit Nummern in Grund und Warnung, das Wort `was` in der Warnung", () => {
+    const r = B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 9, titel: "X" }, { number: 10, titel: "Y" }], passt, was: "Demo-Ticket" });
+    expect(r.aktion).toBe("nichts");
+    expect(r.grund).toContain("#9");
+    expect(r.grund).not.toContain("#10");
+    expect(r.warnungen[1]).toContain("Demo-Ticket #9");
+  });
+  test("kein Treffer: dieselbe Entscheidung zurück; andere Aktionen fragen nie", () => {
+    expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 1, titel: "Y" }], passt })).toBe(anlegen);
+    const nichts: E = { aktion: "nach-oben", grund: "g", warnungen: [] };
+    expect(B.bestaetigeAnlegen(nichts, { zweit: () => { throw new Error("nie fragen"); }, passt })).toBe(nichts);
   });
 });

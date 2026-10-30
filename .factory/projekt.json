@@ -56,11 +56,6 @@
     "groesse": [],
     "kontext": []
   },
-  "gates": {
-    "nichtInVerify": [
-      { "gate": "check:docmap", "grund": "keine .ts-Module unter der Quellwurzel scripts, das Gate wäre fail-closed rot; es bleibt ein Skript (Fortschreibung #1942)" }
-    ]
-  },
   "berechtigungen": {
     "allow": [
       "mcp__playwright",

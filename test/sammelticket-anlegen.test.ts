@@ -481,15 +481,92 @@ describe("Token und Lesezugriff im Ziel-Repo (#97 L7 b, L11 j, L12 a)", () => {
     A.einzelAbrufIn(EIGENES, gh, ENV)(3);
     expect(opts).toEqual([{ token: "pt" }, { token: undefined }, { token: "pt" }, { token: undefined }]);
   });
-  test("Verdrahtung (L12 a): jeder Lesezugriff auf die offenen Issues des Ziel-Repos steht in einem lesbarImZiel-Block", () => {
-    const q = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
-    const treffer = [...q.matchAll(/loadOpenIssuePages\(repo/g)];
-    expect(treffer).toHaveLength(2);
-    for (const m of treffer) {
-      const davor = q.slice(0, m.index);
-      const funktion = Math.max(davor.lastIndexOf("\nfunction "), davor.lastIndexOf("\nasync function "));
-      expect(davor.lastIndexOf("lesbarImZiel(repo"), "lesbarImZiel öffnet vor dem Lesen, innerhalb derselben Funktion").toBeGreaterThan(funktion);
-      expect(q.slice(m.index, m.index + 40), "mit Token-Optionen des Ziel-Repos").toContain("zielOpts(repo)");
-    }
+  describe("Lesen und Schließen im Ziel-Repo als Verhalten (#101 L5b, L5c, L6c; ersetzt den Quelltext-Test zu L12 a)", () => {
+    type N = Record<string, unknown>;
+    const Z = raw as unknown as {
+      findeVorhandenes: (a: { repo: string; titel: string; vorgaenger: number | null; owner: string }, n: N) => { number: number } | null;
+      schliesseWennDublette: (nr: number, titel: string, vorgaenger: number | null, ziel: { repo: string; owner: string }, n: N) => boolean;
+      vorgaengerZustand: (nr: number, repo: string, n: N) => string;
+    };
+    const REPO_ZIEL = "zz-org/ziel";
+    const TITEL = "Harness-Härtung (gesammelt)";
+    const seite = (...nummern: number[]) => [nummern.map((number) => ({ number, title: TITEL, created_at: "2026-10-01T00:00:00Z", assignees: [] }))];
+    const aufbau = (o: { seiten?: unknown; einzel?: (nr: number) => unknown } = {}) => {
+      const gh: { args: string[]; opt: unknown }[] = [];
+      const lade: { repo: string; opt: unknown }[] = [];
+      const log: string[] = [];
+      const err: string[] = [];
+      const naht: N = {
+        env: { PROJECT_TOKEN: "pt" },
+        gh: (args: string[], opt: unknown) => {
+          gh.push({ args, opt });
+          const m = /issues[/](\d+)$/.exec(args[args.length - 1] ?? "");
+          return m && args.length === 2 ? (o.einzel ?? ((nr: number) => ({ state: "open", assignees: [], user: ownerUser, comments: 0, number: nr })))(Number(m[1])) : {};
+        },
+        ladeSeiten: (repo: string, opt: unknown) => {
+          lade.push({ repo, opt });
+          if (o.seiten instanceof Error) throw o.seiten;
+          return o.seiten ?? seite();
+        },
+        log: (t: string) => log.push(t),
+        err: (t: string) => err.push(t),
+        exit: (c: number) => { throw new Error(`exit ${c}`); },
+      };
+      return { naht, gh, lade, log, err };
+    };
+    const ziel = { repo: REPO_ZIEL, owner: OWNER };
+
+    test("Dublette: das eigene Ticket wird kommentiert und geschlossen, im Ziel-Repo mit dem Projekt-Token; das Original bleibt", () => {
+      const a = aufbau({ seiten: seite(5, 9) });
+      expect(Z.schliesseWennDublette(9, TITEL, null, ziel, a.naht)).toBe(true);
+      const schreib = a.gh.filter((g) => g.args.includes("-X")).map((g) => g.args.join(" "));
+      expect(schreib).toEqual([
+        `api -X POST repos/${REPO_ZIEL}/issues/9/comments -f body=Dublette von #5 (Wettlauf beim Anlegen)`,
+        `api -X PATCH repos/${REPO_ZIEL}/issues/9 -f state=closed -f state_reason=not_planned`,
+      ]);
+      expect(a.gh.every((g) => JSON.stringify(g.opt) === JSON.stringify({ token: "pt" }))).toBe(true);
+      expect(a.lade).toEqual([{ repo: REPO_ZIEL, opt: { token: "pt" } }]);
+      expect(a.log.join("\n")).toContain("#9 geschlossen");
+    });
+    test("keine Dublette (nur das eigene Ticket offen): nichts geschrieben, false", () => {
+      const a = aufbau({ seiten: seite(9) });
+      expect(Z.schliesseWennDublette(9, TITEL, null, ziel, a.naht)).toBe(false);
+      expect(a.gh.some((g) => g.args.includes("-X"))).toBe(false);
+    });
+    test("Dublette, aber das eigene Ticket hat schon Kommentare: Warnung, nicht geschlossen", () => {
+      const a = aufbau({ seiten: seite(5, 9), einzel: (nr) => ({ state: "open", assignees: [], user: ownerUser, comments: nr === 9 ? 2 : 0 }) });
+      expect(Z.schliesseWennDublette(9, TITEL, null, ziel, a.naht)).toBe(false);
+      expect(a.log.join("\n")).toContain("::warning::#9 ist eine Dublette von #5");
+      expect(a.gh.some((g) => g.args.includes("-X"))).toBe(false);
+    });
+    test("das eigene Repo liest und schreibt mit dem Standard-Token (kein PROJECT_TOKEN)", () => {
+      const a = aufbau({ seiten: seite(5, 9) });
+      const eigen = (rawLib as unknown as { REPO: string }).REPO;
+      Z.schliesseWennDublette(9, TITEL, null, { repo: eigen, owner: OWNER }, a.naht);
+      expect(a.gh.length).toBeGreaterThan(0);
+      expect(a.gh.every((g) => (g.opt as { token?: string }).token === undefined)).toBe(true);
+      expect(a.lade.every((l) => (l.opt as { token?: string }).token === undefined)).toBe(true);
+    });
+    test("Ziel nicht lesbar (Dubletten-Check): ✖-Meldung, Exit 1, kein Stacktrace, nichts geschrieben", () => {
+      const a = aufbau({ seiten: Object.assign(new Error("Command failed"), { stderr: "gh: Not Found (HTTP 404)" }) });
+      expect(() => Z.schliesseWennDublette(9, TITEL, null, ziel, a.naht)).toThrow("exit 1");
+      expect(a.err.join("")).toMatch(/^✖ kein Lesezugriff auf zz-org\/ziel/);
+      expect(a.err.join("")).not.toMatch(/\n\s+at /);
+      expect(a.gh).toEqual([]);
+    });
+    test("findeVorhandenes: bestätigtes Ticket (Direktabruf) kommt zurück, mit Ziel-Token; ein unlesbares Ziel endet mit Exit 1 und Meldung", () => {
+      const a = aufbau({ seiten: seite(5, 7) });
+      expect(Z.findeVorhandenes({ repo: REPO_ZIEL, titel: TITEL, vorgaenger: null, owner: OWNER }, a.naht)).toMatchObject({ number: 7 });
+      expect(a.lade).toEqual([{ repo: REPO_ZIEL, opt: { token: "pt" } }]);
+      const b = aufbau({ seiten: Object.assign(new Error("Command failed"), { stderr: "gh: Not Found (HTTP 404)" }) });
+      expect(() => Z.findeVorhandenes({ repo: REPO_ZIEL, titel: TITEL, vorgaenger: null, owner: OWNER }, b.naht)).toThrow("exit 1");
+      expect(b.err.join("")).toMatch(/^✖ kein Lesezugriff auf zz-org\/ziel/);
+    });
+    test("vorgaengerZustand liest mit dem Token des Ziel-Repos; Fehler ergibt unbekannt", () => {
+      const a = aufbau({ einzel: () => ({ state: "open", assignees: [{ login: OWNER }] }) });
+      expect(Z.vorgaengerZustand(12, REPO_ZIEL, a.naht)).toBe("in-arbeit");
+      expect(a.gh).toEqual([{ args: ["api", `repos/${REPO_ZIEL}/issues/12`], opt: { token: "pt" } }]);
+      expect(Z.vorgaengerZustand(12, REPO_ZIEL, { ...a.naht, gh: () => { throw new Error("404"); } })).toBe("unbekannt");
+    });
   });
 });

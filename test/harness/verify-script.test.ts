@@ -94,6 +94,10 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     }
   });
 
+  it("#101: `check:docmap` läuft in `verify` (entfällt ohne struktur.moduldoku mit Exit 0, kostet nichts)", () => {
+    expect(scripts.verify).toMatch(/\bnpm run check:docmap\b/);
+  });
+
   it("jedes Gate aus `gates.nichtInVerify` ist ein Skript und steht nicht in `verify` (kein veralteter Eintrag)", () => {
     for (const gate of PROJEKT_GATES) {
       expect(scripts[gate], `gates.nichtInVerify nennt "${gate}", das Skript fehlt in package.json`).toBeTruthy();
