@@ -77,7 +77,7 @@ function dateiAnker(datei, inhalt, zeilen) {
   inhalt.split(/\r?\n/).forEach((roh, i) => {
     const n = i + 1;
     const t = roh.trim();
-    const kommentar = imBlock || t.startsWith("/*") || t.startsWith("//") || t.startsWith("*");
+    const kommentar = imBlock || t.startsWith("/*") || t.startsWith("*");
     if (t.startsWith("/*") || imBlock) imBlock = !t.includes("*/");
     if (kommentar) return;
     const name = kopfName(roh.replace(STRINGS, '""'));
@@ -128,7 +128,7 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   }
   const neueDateien = git(["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/)
-    .filter((pfad) => pfad !== "" && istQuelle(normalizePath(pfad)))
+    .filter((pfad) => istQuelle(normalizePath(pfad)))
     .map((pfad) => ({ pfad, inhalt: lesen(pfad) }));
   const ergebnis = guardListe({ diffText: git(["diff", "-U0", basis]), neueDateien, lies: lesen, istQuelle });
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };

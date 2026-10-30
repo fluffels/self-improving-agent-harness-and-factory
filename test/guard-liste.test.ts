@@ -1,6 +1,6 @@
 /* Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen. Kern ist pur; die CLI-Hülle
  * `lauf` bekommt git und Dateizugriff injiziert. Jedes Muster hat einen Positivfall, dazu Negativfälle (Kommentar, String, Vergleichs-Fehlgriffe). */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { formatiere, guardListe, lauf, MUSTER } from "../scripts/guard-liste.mjs";
 
@@ -69,6 +69,24 @@ describe("guardListe: Musterliste", () => {
     ]) {
       expect(muster(z), z).toEqual([]);
     }
+  });
+
+  test("zusammengesetzte Zuweisungen liefern nur ihr eigenes Muster, nicht das der Kurzform", () => {
+    expect(muster("  a ??= 1;")).toEqual(["??="]);
+    expect(muster("  a ||= 1;")).toEqual(["||="]);
+    expect(muster("  a &&= 1;")).toEqual(["&&="]);
+    expect(muster("  const x = a ?.5 : 1;")).toEqual([]);
+  });
+
+  test("Default-Parameter nur im Funktionskopf und nicht bei ==, !=, <=, >=, =>", () => {
+    expect(muster("  g(a = 1);")).toEqual([]);
+    expect(neu("function f(a) { return a === b && a !== c && a <= d && a >= e; }")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
+    expect(neu("const g = (a, b) => h(a === b || a !== b);")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
+  });
+
+  test("mehrzeiliger Blockkommentar wird übersprungen, der Code danach zählt wieder", () => {
+    const r = neu("function f() {\n/*\n a || b\n*/\n  if (x) return;\n}") as Eintrag[];
+    expect(r[0]?.anker).toEqual([{ zeile: 5, muster: "if" }]);
   });
 
   test("ein Regex-Literal verbirgt seine Zeichen vor den anderen Mustern", () => {
@@ -192,6 +210,20 @@ describe("formatiere und lauf", () => {
     expect(r.code).toBe(1);
     expect(r.out).toBe("");
     expect(r.err).toMatch(/^✖ guard-liste: keine Vergleichs-Basis auflösbar\nFix: /);
+  });
+
+  test("lauf: --basis hat Vorrang vor FACTORY_DIFF_BASE, ohne --basis gilt die Umgebung", () => {
+    vi.stubEnv("FACTORY_DIFF_BASE", "envref");
+    try {
+      const aufrufe: string[] = [];
+      const g = git({ "rev-parse": "abc\n", "diff -U0 abc": kopf, "ls-files": "" });
+      const protokoll = (args: string[]) => (aufrufe.push(args.join(" ")), g(args));
+      lauf(["--basis", "x"], { ...umgebung(), git: protokoll });
+      lauf([], { ...umgebung(), git: protokoll });
+      expect(aufrufe.filter((a) => a.startsWith("rev-parse"))).toEqual(["rev-parse --verify --quiet x^{commit}", "rev-parse --verify --quiet envref^{commit}"]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("lauf mit unbekanntem Flag: Exit 2 mit Aufrufzeile", () => {
