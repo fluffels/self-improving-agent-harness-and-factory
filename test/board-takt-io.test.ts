@@ -131,7 +131,7 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
       bodies.push(args.filter((a) => a.startsWith("body=")).join(""));
       return { number: 11, node_id: "I_n" };
     };
-    LF.fuehreStatusAus({ aktion: "anlegen" }, { repo: "zz-org/ziel", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "", items: [], config: FREMD, io: { gh }, start: "2026-10-01T08:00:00Z" } as never);
+    LF.fuehreStatusAus({ aktion: "anlegen" }, { repo: "zz-org/ziel", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "", items: [], config: FREMD, io: { gh }, start: "2026-10-01T08:00:00Z" });
     expect(bodies[0]).toContain("seit dem ersten Commit auf main (2026-10-01T08:00:00Z)");
   });
   test("langfuse-takt fuehreStatusAus (#78 L14): ein 404 beim Lesen und ein 403 beim Anlegen sind klare Meldungen mit dem Ziel-Repo", () => {

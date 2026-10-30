@@ -21,6 +21,8 @@ type Io = {
   frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number; mitBoard?: boolean }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
   ladeKommentare?: (nr: number, repo: string) => unknown[];
+  env?: Record<string, string>;
+  ersterCommitDatum?: () => string | null;
   log: (z: string) => void;
 };
 const T = raw as unknown as {
