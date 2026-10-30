@@ -125,6 +125,15 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
     expect(t).toContain("updateProjectV2ItemPosition");
     expect(t).toContain(`o=${factory.todoOptionId}`);
   });
+  test("langfuse-takt fuehreStatusAus (#101 L31): start landet im Body des angelegten Status-Tickets", () => {
+    const bodies: string[] = [];
+    const gh = (args: string[]) => {
+      bodies.push(args.filter((a) => a.startsWith("body=")).join(""));
+      return { number: 11, node_id: "I_n" };
+    };
+    LF.fuehreStatusAus({ aktion: "anlegen" }, { repo: "zz-org/ziel", vorgaenger: null, jetzt: new Date("2026-10-16T00:00:00Z"), token: "", items: [], config: FREMD, io: { gh }, start: "2026-10-01T08:00:00Z" } as never);
+    expect(bodies[0]).toContain("seit dem ersten Commit auf main (2026-10-01T08:00:00Z)");
+  });
   test("langfuse-takt fuehreStatusAus (#78 L14): ein 404 beim Lesen und ein 403 beim Anlegen sind klare Meldungen mit dem Ziel-Repo", () => {
     const http = (code: string) => () => { throw Object.assign(new Error("Command failed: gh api x"), { stderr: `gh: ${code}` }); };
     const lauf = (aktion: string, gh: () => never) =>
