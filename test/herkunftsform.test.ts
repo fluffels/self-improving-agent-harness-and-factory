@@ -40,11 +40,14 @@ describe("umschreiben: Ziel der Nummer", () => {
 
 describe("umschreiben: unverändert", () => {
   it("schon präfixierte Formen und Dateianker", () => {
-    const t = "kubernia#1883 owner/repo#1234 x.md#1234 quellprojekt#1234 a-b#1234 a_b#1234";
+    const t = "kubernia#1883 owner/repo#1234 x.md#1234 quellprojekt#1234 a-b#1234 a_b#1234 v1.#1234";
     expect(u(t)).toBe(t);
   });
   it("Überschriftszeilen (Anker), auch eingerückt bis drei Leerzeichen", () => {
     expect(u("## Titel (#1875)\n   # Eins #1234\n")).toBe("## Titel (#1875)\n   # Eins #1234\n");
+  });
+  it("ab vier Leerzeichen Einrückung ist es keine Überschrift mehr", () => {
+    expect(u("    # Eins #1234")).toBe("    # Eins quellprojekt#1234");
   });
   it("eine Zeile mit `#` ohne Leerzeichen ist keine Überschrift und wird umgestellt", () => {
     expect(u("#1234 steht vorn")).toBe("quellprojekt#1234 steht vorn");
@@ -58,8 +61,8 @@ describe("umschreiben: unverändert", () => {
     expect(u("#1234\n<!-- GEN:x START -->\n#1234\n<!-- GEN:x END -->\n#1234")).toBe("quellprojekt#1234\n<!-- GEN:x START -->\n#1234\n<!-- GEN:x END -->\nquellprojekt#1234");
   });
   it("Linkziele, http-Links samt Text und nackte URLs, aber nicht der Text eines relativen Links", () => {
-    expect(u("[a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [#1234](x.md)")).toBe(
-      "[a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [quellprojekt#1234](x.md)",
+    expect(u("[a](#1234) [a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [#1234](x.md)")).toBe(
+      "[a](#1234) [a](x.md#1234) [#1949](https://github.com/o/r/issues/1949) https://x.de/#1234 [quellprojekt#1234](x.md)",
     );
   });
 });
