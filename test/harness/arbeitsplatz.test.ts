@@ -155,6 +155,14 @@ describe("Worktree-Befehl (K2, K3)", () => {
     expect(L.worktreeBefehl(args(ein, ein.repos[0]))).toBe(erwartet);
   });
 
+  test("AGENTS.md nennt den Arbeitsplatz-Befehl, und er passt zur Usage des Skripts (#101 L15)", () => {
+    const zeile = readFileSync(join(__dirname, "..", "..", "AGENTS.md"), "utf8").split("\n").find((l) => l.includes("Eigener Worktree von frisch geholtem"));
+    const befehl = /im Arbeitsplatz `(node scripts\/arbeitsplatz\.mjs worktree <nr> <slug>)`/.exec(zeile ?? "")?.[1];
+    expect(befehl).toBeTruthy();
+    const usage = readFileSync(join(__dirname, "..", "..", "scripts", "arbeitsplatz.mjs"), "utf8");
+    expect(usage).toContain(`"        ${befehl} [--repo <name>] [--wurzel <pfad>]"`);
+  });
+
   test("Arbeitsplatz: git -C auf das Repo, Worktree außerhalb unter <wurzel>/.claude/worktrees/<name>", () => {
     const w = ap.wurzel;
     expect(L.worktreeBefehl(args(ap, ap.repos[0]))).toBe(
