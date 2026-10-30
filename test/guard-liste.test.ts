@@ -80,7 +80,7 @@ describe("guardListe: Musterliste", () => {
 
   test("Default-Parameter nur im Funktionskopf und nicht bei ==, !=, <=, >=, =>", () => {
     expect(muster("  g(a = 1);")).toEqual([]);
-    expect(neu("function f(a) { return a === b && a !== c && a <= d && a >= e; }")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
+    expect(neu("function f(a) { return g(a === b && a !== c && a <= d && a >= e); }")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
     expect(neu("const g = (a, b) => h(a === b || a !== b);")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
   });
 
