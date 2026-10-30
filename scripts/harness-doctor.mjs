@@ -11,8 +11,11 @@
  *
  * `--pruefen` meldet den Block `sprache.spezifikation` der Config als Lücke `Sprache`, wenn er fehlt oder unvollständig ist (das Spezifikations-Gate hat keinen Standardwert). Es meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
  *
- * Je Lücke eine Zeile `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>`; Exit 0 ohne Lücke, 1 mit mindestens einer, 2 bei Aufruf-Fehler oder
- * unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf). Reines Node-Skript ohne Modell-Tokens; `gh` und
+ * Je Punkt eine Zeile mit drei möglichen Ausgängen: `OK <Punkt>`, `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>` oder `NICHT PRÜFBAR <Punkt>: <Grund> Fix: <Anweisung>` (der
+ * Zustand ist nicht belegbar: Endpunkt-Fehler oder fehlendes Feld, nie still grün). Exit 0 ohne Lücke und ohne nicht prüfbaren Punkt, 1 mit mindestens einem von beiden
+ * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
+ * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
+ * SHA-Pinning; factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
  * und den Workflows (`voraussetzungenAus`); der Wächter test/harness/harness-doctor-voraussetzungen.test.ts hält die Ableitung vollständig.
  *

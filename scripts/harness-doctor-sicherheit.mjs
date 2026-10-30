@@ -5,7 +5,7 @@
  * acht Ergebnisse in der Reihenfolge von `SICHERHEIT_PUNKTE`, nie weniger und nie still grün: ein Fehler des Endpunkts (403, 404, Netz) und ein
  * fehlendes oder unbekanntes Feld ergeben „nicht prüfbar“ (`ok: false, nichtPruefbar: true`), nur ein belegter Wert ergibt OK oder LÜCKE.
  * Lücken nennen den Klickpfad in den Einstellungen, nie einen schreibenden `gh`-Befehl: `--einrichten` ändert diese Punkte nicht.
- * Grenze: `secret_scanning_validity_checks` steht nicht in der REST-Doku von „Get a repository“; fehlt der Schlüssel live, ist der Punkt nicht prüfbar.
+ * Grenze: `secret_scanning_validity_checks` steht nicht in der REST-Doku von „Get a repository“; die Live-Probe mit Admin-Recht zeigt ihn; fehlt er in einem Projekt, ist der Punkt nicht prüfbar.
  */
 
 export const LINK_RULESET = "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository";

@@ -156,6 +156,7 @@
     {"pfad":"scripts/projektwerte.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1746)"},
     {"pfad":"scripts/harness-doctor.mjs","ring":"kern","quelle":"Plan #1799 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-lib.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
+    {"pfad":"scripts/harness-doctor-sicherheit.mjs","ring":"kern","quelle":"Plan factory#116 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-melden.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":".github/workflows/harness-doctor.yml","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/release-tag-lib.mjs","ring":"kern","quelle":"Release-Tags lesen und vergleichen, geteilt von Factory-Update-Check und Tag-Takt (Folge #103, #109)"},
