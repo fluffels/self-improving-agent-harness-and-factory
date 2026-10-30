@@ -46,7 +46,7 @@ import { collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmR
 import { collectMarkdown } from "./check-basis.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
-import { istGanzeDatei, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { blockSpanne, istGanzeDatei, MANIFEST_PFAD, wirdVerteilt } from "./besitz-lib.mjs";
 import { liesSyncStand } from "./factory-sync-lib.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
@@ -204,17 +204,14 @@ export function auditDocDrift(rootDir = ROOT) {
 }
 
 /** Manifest der Besitz-Einheiten (Vorbild check-factory-drift.mjs). */
-const BESITZ_MANIFEST = ".factory/besitz.json";
-
-/** Textspannen der verteilten Einheiten für `file`: Ganz-Datei = alles, Block = zwischen den Markern; JSON-Schlüssel entfallen. */
+/** Textspannen der verteilten Einheiten für `file`: Ganz-Datei = alles, Block = zwischen den Markern (`blockSpanne`, kaputte Marker: keine Spanne); JSON-Schlüssel entfallen. */
 function einheitSpannen(einheiten, file, text) {
   const spannen = [];
   for (const e of einheiten.filter((x) => x.pfad === file)) {
     if (istGanzeDatei(e)) spannen.push([0, text.length]);
     else if (e.block !== undefined) {
-      const a = text.indexOf(markerStart(e.block));
-      const b = text.indexOf(markerEnde(e.block));
-      if (a >= 0 && b >= 0) spannen.push([a, b]); // a > b: leere Spanne, weil Fenster `>= a && <= b`
+      const spanne = blockSpanne(text, e.block);
+      if (spanne) spannen.push(spanne);
     }
   }
   return spannen;
@@ -225,8 +222,9 @@ function besitzAusnahme(rootDir) {
   if (liesSyncStand(rootDir).zustand !== "ok") return null;
   let einheiten;
   try {
-    const manifest = JSON.parse(readFileSync(join(rootDir, ...BESITZ_MANIFEST.split("/")), "utf8"));
+    const manifest = JSON.parse(readFileSync(join(rootDir, ...MANIFEST_PFAD.split("/")), "utf8"));
     einheiten = manifest.eintraege.filter(wirdVerteilt); // kein Array: wirft, fail-closed
+    if (!einheiten.every((e) => typeof e.pfad === "string")) return null; // Eintrag ohne Pfad: Manifest kaputt, volle Prüfung
   } catch {
     return null;
   }

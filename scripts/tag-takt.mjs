@@ -18,7 +18,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { teile, vergleicheTags } from "./factory-update-check.mjs";
 import { liesSyncStand } from "./factory-sync-lib.mjs";
@@ -33,7 +33,6 @@ export const MIN_PRS = 3;
 export const MAX_ALTER_TAGE = 7;
 const MAX_ZEILEN = 50;
 const TAG_MS = 86_400_000;
-const MANIFEST = ".factory/besitz.json";
 const CI_WORKFLOW = ".github/workflows/ci.yml";
 
 /** Titel des Tag-Tickets. Pur. */

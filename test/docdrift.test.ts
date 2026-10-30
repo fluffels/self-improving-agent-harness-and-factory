@@ -686,4 +686,10 @@ describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz 
     assert.equal(fixture({ ...STAND, ".factory/besitz.json": "{kaputt", "docs/a.md": verweis }).length, 1);
     assert.equal(fixture({ ...STAND, ".factory/besitz.json": JSON.stringify({ eintraege: 5 }), "docs/a.md": verweis }).length, 1);
   });
+
+  test("T10 fail-closed: ein Eintrag ohne String-pfad gibt volle Prüfung statt TypeError (#101 L27)", () => {
+    for (const kaputt of [{ ring: "kern" }, { pfad: 5, ring: "kern" }, null]) {
+      assert.equal(fixture({ ...STAND, ...manifest([kern, kaputt]), "docs/a.md": verweis }).length, 1);
+    }
+  });
 });
