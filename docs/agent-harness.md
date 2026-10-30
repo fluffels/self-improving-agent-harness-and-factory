@@ -545,7 +545,7 @@ flowchart LR
 
 **Bitte** ist alles, was lokal läuft und ein Agent umgehen könnte (Regeln, Hooks, `verify`, pre-push). **Mauer** ist, was der Server durchsetzt: Required Checks, das Ruleset `main-schutz` auf `main` (ohne Bypass-Akteure), der Festgefahren-Wächter und der Alarm bei rotem `main`. Die Namen der Required Checks stehen wörtlich in der Vorlage [`docs/diagramme/leitplanken-schichten.mmd`](diagramme/leitplanken-schichten.mmd); der Generator liest sie aus dem Ruleset-Spiegel [`.github/ruleset-main-schutz.json`](../.github/ruleset-main-schutz.json) (dieselbe Quelle wie der Shadowing-Wächter), verlangt je Kontext einen gleichnamigen Job in `.github/workflows` und wird rot, wenn die Vorlage nicht alle Kontexte nennt; „ohne Bypass“ steht nur, solange der Spiegel keine Bypass-Akteure führt. Der Spiegel selbst ist von Hand gepflegt: Abgleich mit dem echten Ruleset per `gh api repos/{owner}/{repo}/rulesets/<id>` (ID: Feld `id` im Spiegel; `bypass_actors` liefert die API nur mit Schreibrecht, darum prüft die CI das nicht).
 
-### Belege: der Rot→Fix→Grün-Bogen
+### Belege: der Rot→Fix→Grün-Bogen in echt
 
 Die Schleife oben ist ein Mechanismus – drei Lehren aus Fällen, in denen sie tatsächlich gegriffen hat:
 
