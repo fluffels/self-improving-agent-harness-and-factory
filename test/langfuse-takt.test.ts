@@ -396,6 +396,13 @@ describe("bestaetigeAnlegen (#1866, fail-closed)", () => {
     expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [] })).toBe(anlegen);
     expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 5, titel: "Anderes" }] })).toBe(anlegen);
   });
+  test("ein null-Eintrag in der Liste wird übersprungen (kein TypeError), ein Treffer dahinter zählt", () => {
+    const mitNull = (liste: unknown[]) => B.bestaetigeAnlegen(anlegen, { zweit: () => liste as never });
+    expect(mitNull([null, { number: 5, titel: "Anderes" }])).toBe(anlegen);
+    const r = mitNull([null, { number: 1865, titel: T.STATUS_TITEL }]);
+    expect(r.aktion).toBe("nichts");
+    expect(r.grund).toContain("#1865");
+  });
   test("andere Aktionen bleiben unberührt und fragen GraphQL nicht", () => {
     for (const aktion of ["nichts", "nach-oben"]) {
       const e: E = { aktion, nr: 3, grund: "g", warnungen: [] };

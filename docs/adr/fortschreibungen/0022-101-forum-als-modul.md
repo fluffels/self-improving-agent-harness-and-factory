@@ -1,7 +1,8 @@
-# Fortschreibung #101 (2026-10-30): Forum bleibt Modul
+# Fortschreibung #101 (2026-10-30): Forum bleibt Modul, check:docmap in verify
 
 Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
 
 - **Entscheidung (Forum ist Modul, nicht Besitz):** Forum-Action, Forum-Skill und Quarantäne-Leser (`forum-leser`) stehen nicht im Besitz-Manifest; ein Projekt, das ein Forum führt, baut sie selbst und hält die Regeln des Kerns ein. Die Doku sagt dazu einheitlich „Modul: gilt für Projekte, die es führen; nicht im Besitz-Manifest“ statt „Stand im Factory-Repo: nicht portiert“, weil „nicht portiert“ einen offenen Rest nahelegte, der keiner ist.
 - **`labels.forum` bleibt Pflicht:** das Label ist der Fremdeingang-Marker des Fremdtext-Gates (ein Issue mit diesem Label setzt kein Lauf automatisch um), nicht Teil des Moduls.
 - **Prüfauftrag erledigt:** der Eintrag `forum` in `NOTFAELLE` (`scripts/board-lib.mjs`) nennt als `quelle` eine `forum-inbox.yml`, die hier nicht existiert; er bleibt unverändert, weil Tests und Board-Platzierung ihn als Marker kennen und er für Projekte mit Forum gilt.
+- **Entscheidung (`check:docmap` läuft in `verify`):** löst die Zeile „nur Skript, nicht in `verify`“ der Fortschreibung [#1942](0022-1942-messbasis.md) ab. Das Gate meldet ohne `struktur.moduldoku` einen Hinweis mit Exit 0 (es prüft nichts, ohne fail-closed zu sein) und kostet etwa 0,1 s; damit gibt es keinen Grund mehr, es aus der Kette zu lassen, und ein Projekt mit Modul-Doku bekommt die Prüfung ohne Zusatzschritt. Der Block `gates.nichtInVerify` in `.factory/projekt.json` entfällt, weil er genau diese Aussage trug; `check:docmap` ohne Quell-Module bleibt in einem Bezieher ohne `moduldoku` ein Hinweis, nicht rot.
