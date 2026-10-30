@@ -86,3 +86,45 @@ describe("umziehen mit Fake-IO", () => {
     expect(log.join("\n")).toMatch(/Umzug: 1 umziehen, 0 entfernen, 0 gemeldet/);
   });
 });
+
+describe("einsortieren: Sortier-Korrektur des Harness-Sammeltickets (#101 L6a)", () => {
+  const SAMMEL_TITEL = "Harness-Härtung (gesammelt)";
+  const harness = [FREMD.labels.harness];
+  // Rang 5 liegt hinter der Position 3: das Sammelticket steht falsch und muss vor dem Verschieben zurück.
+  const falsch = () => ({
+    produkt: [] as Item[],
+    factory: [item(1), item(2), item(3), item(4), item(12, { title: SAMMEL_TITEL, labels: harness }), item(99, { labels: harness, title: "Neu" })],
+  });
+  const args = { anchor: null, numbers: [99], dry: false, repo: FREMD.repo };
+  const positionen = (proto: { was: string; args: unknown[] }[]) => proto.filter((p) => p.was === "setPosition").map((p) => p.args.slice(1));
+
+  test("falsch stehendes Sammelticket: erst die Korrektur (Move und Log), dann das eigentliche Einsortieren", async () => {
+    const { io, proto, log } = fake(falsch(), { positionOderWarnung: () => 3 });
+    await P.einsortieren(args, FREMD, io);
+    expect(log.join("\n")).toContain("Sammelticket #12 stand auf Rang 5, zurück auf Rang 3 (Position laut AGENTS.md)");
+    const gesetzt = positionen(proto);
+    expect(gesetzt.length).toBeGreaterThanOrEqual(2);
+    expect(gesetzt[0][0]).toBe("I12");
+  });
+  test("Trockenlauf: Log ja, aber kein setPosition und keine Pause", async () => {
+    const { io, proto, log } = fake(falsch(), { positionOderWarnung: () => 3 });
+    await P.einsortieren({ ...args, dry: true }, FREMD, io);
+    expect(log.join("\n")).toContain("Sammelticket #12 stand auf Rang 5");
+    expect(proto.some((p) => p.was === "setPosition" || p.was === "schlafe")).toBe(false);
+  });
+  test("mit --notfall keine Korrektur: die Position wird nicht einmal gefragt, das Sammelticket bleibt liegen", async () => {
+    let gefragt = 0;
+    const daten = falsch();
+    daten.factory[5] = item(99, { labels: harness, title: "🚨 CI rot auf main" });
+    const { io, proto, log } = fake(daten, { positionOderWarnung: () => (gefragt++, 3) });
+    await P.einsortieren({ ...args, top: true, notfall: "rot-main" }, FREMD, io);
+    expect(gefragt).toBe(0);
+    expect(log.join("\n")).not.toContain("zurück auf Rang");
+    expect(positionen(proto).some((p) => p[0] === "I12")).toBe(false);
+  });
+  test("Sammelticket steht richtig: keine Korrektur", async () => {
+    const { io, log } = fake({ produkt: [], factory: [item(12, { title: SAMMEL_TITEL, labels: harness }), item(1), item(99, { labels: harness })] }, { positionOderWarnung: () => 3 });
+    await P.einsortieren(args, FREMD, io);
+    expect(log.join("\n")).not.toContain("zurück auf Rang");
+  });
+});
