@@ -300,6 +300,7 @@ export const ECHTE_IO = {
   fuehreStatusAus,
   fuehreHarnessAus,
   log: (z) => console.log(z),
+  env: process.env,
 };
 
 /**
@@ -349,7 +350,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
   const commits = holeQuotenCommits({
     quellen: quotenQuellen({ config, repo }),
-    lies: quotenCommitLeser({ gh: io.ghJson, repo, since: fruehestens, env: io.env ?? process.env }),
+    lies: quotenCommitLeser({ gh: io.ghJson, repo, since: fruehestens, env: io.env }),
   });
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
@@ -392,30 +393,35 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   return { fehler };
 }
 
-function main(env = process.env) {
+/**
+ * Einstieg: liest Aufruf und Umgebung, fährt den Takt und liefert den Exit-Code (0, 1 bei Fehler im Lauf, `AUFRUF_EXIT` bei falschem Aufruf).
+ * `env` ist die einzige Quelle der Umgebung (Token, Event, Kontingent-Log) und geht auch als `io.env` an die Commit-Leser. Nähte (Tests): `argv`,
+ * `io`, `kontingent`, `lauf`, `ladeConfig`, `err`, `jetzt`.
+ */
+export function main(env = process.env, { argv = process.argv.slice(2), io = ECHTE_IO, kontingent = mitKontingent, lauf = fuehreTaktAus, ladeConfig = ladeProjektConfig, err = console.error, jetzt = () => new Date() } = {}) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
-  const aufruf = flagsLesen(process.argv.slice(2), { "dry-run": { type: "boolean" } });
+  const aufruf = flagsLesen(argv, { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
-    console.error(`board-takt: ${aufruf.fehler.text}\nAufruf: node scripts/board-takt.mjs [--dry-run]`);
-    process.exitCode = AUFRUF_EXIT;
-    return;
+    err(`board-takt: ${aufruf.fehler.text}
+Aufruf: node scripts/board-takt.mjs [--dry-run]`);
+    return AUFRUF_EXIT;
   }
-  if (env.PROJECT_TOKEN) mitKontingent("board-takt", { token: env.PROJECT_TOKEN });
-  const { fehler } = fuehreTaktAus({
-    jetzt: new Date(),
+  if (env.PROJECT_TOKEN) kontingent("board-takt", { token: env.PROJECT_TOKEN });
+  const { fehler } = lauf({
+    jetzt: jetzt(),
     dry: aufruf.werte["dry-run"] === true,
     repo: REPO,
     ausloeser: env.GITHUB_EVENT_NAME || "schedule",
     token: env.PROJECT_TOKEN,
-    io: { ...ECHTE_IO, env },
-    config: ladeProjektConfig(),
+    io: { ...io, env },
+    config: ladeConfig(),
   });
-  if (fehler) process.exitCode = 1;
+  return fehler ? 1 : 0;
 }
 
 if (istDirektaufruf(import.meta.url)) {
   try {
-    main();
+    process.exitCode = main();
   } catch (err) {
     console.log(fehlerMeldung(err));
     process.exitCode = 1;

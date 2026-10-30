@@ -592,7 +592,7 @@ describe("Takt über Repo-Grenzen (#78)", () => {
   const SAMMEL = { number: 100, title: "Harness-Härtung (gesammelt)", closed_at: "2026-10-01T00:00:00Z", created_at: "2026-09-20T00:00:00Z" };
   const W = (nr: number, titel: string) => c(`${titel} (#${nr})`, "2026-10-06T10:00:00Z");
 
-  function bauen(proRepo: Record<string, unknown[] | Error>, config: unknown = getrennt) {
+  function bauen(proRepo: Record<string, unknown[] | Error>, config: unknown = getrennt, env: Record<string, string> = {}) {
     const log: string[] = [];
     const gelesen: { repo: string; token?: string }[] = [];
     const io: Io = {
@@ -613,6 +613,7 @@ describe("Takt über Repo-Grenzen (#78)", () => {
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
+      env,
     };
     const lauf = () => T.fuehreTaktAus({ config, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io });
     return { lauf, log, gelesen };
@@ -635,17 +636,10 @@ describe("Takt über Repo-Grenzen (#78)", () => {
   });
 
   test("das fremde Repo liest der Projekt-Token, das eigene den Standard-Token", () => {
-    const vorher = process.env.PROJECT_TOKEN;
-    process.env.PROJECT_TOKEN = "projekt-token";
-    try {
-      const { lauf, gelesen } = bauen({});
-      lauf();
-      expect(gelesen.find((g) => g.repo === PRODUKT_REPO)?.token).toBe("projekt-token");
-      expect(gelesen.find((g) => g.repo === FREMD.repo)?.token).toBeUndefined();
-    } finally {
-      if (vorher === undefined) delete process.env.PROJECT_TOKEN;
-      else process.env.PROJECT_TOKEN = vorher;
-    }
+    const { lauf, gelesen } = bauen({}, undefined, { PROJECT_TOKEN: "projekt-token" });
+    lauf();
+    expect(gelesen.find((g) => g.repo === PRODUKT_REPO)?.token).toBe("projekt-token");
+    expect(gelesen.find((g) => g.repo === FREMD.repo)?.token).toBeUndefined();
   });
 
   test("ein Board-Repo wie das eigene (Single-Repo): nur das eigene Repo, Nummernregel wie bisher", () => {
@@ -701,6 +695,7 @@ describe("Lesefehler und env im Takt (#97 L7 c, L11 b/d)", () => {
       fuehreHarnessAus: () => true,
       itemsUeberIssues: (_r: string, n: number[]) => n.map(() => null),
       log: (z: string) => log.push(z),
+      env: {},
       ...extra,
     } as Io;
     return { io, log };
