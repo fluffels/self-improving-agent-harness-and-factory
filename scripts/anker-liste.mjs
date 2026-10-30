@@ -150,7 +150,7 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
 
-/** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config (einmal geladen). */
+/** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config. */
 export function echteUmgebung() {
   const quelle = strukturAus(ladeProjektConfig()).quelle;
   return {

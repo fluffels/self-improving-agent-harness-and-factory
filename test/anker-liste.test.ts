@@ -1,5 +1,6 @@
 /* Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen. Kern ist pur; die CLI-Hülle
  * `lauf` bekommt git und Dateizugriff injiziert. Jedes Muster hat einen Positivfall, dazu Negativfälle (Kommentar, String, Vergleichs-Fehlgriffe). */
+import { tmpdir } from "node:os";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ankerRoh from "../scripts/anker-liste.mjs";
@@ -256,6 +257,18 @@ describe("formatiere und lauf", () => {
     expect(u.lesen("gibt/es/nicht.mjs")).toBeUndefined();
     expect(u.istQuelle("scripts/anker-liste.mjs")).toBe(true);
     expect(u.istQuelle("test/anker-liste.test.ts")).toBe(false);
+  });
+
+  test("echteUmgebung ist im Repo-Root verankert, auch wenn der Aufruf aus einem anderen Verzeichnis kommt", () => {
+    const vorher = process.cwd();
+    process.chdir(tmpdir());
+    try {
+      const u = echteUmgebung();
+      expect(u.git(["rev-parse", "--is-inside-work-tree"]).trim()).toBe("true");
+      expect(u.lesen("package.json")).toContain('"name"');
+    } finally {
+      process.chdir(vorher);
+    }
   });
 
   test("lauf liest ungetrackte Nicht-Quelldateien gar nicht erst", () => {
