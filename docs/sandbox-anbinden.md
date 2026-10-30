@@ -1,6 +1,6 @@
 # Sandbox anbinden
 
-> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung #1827. Den WSL2-Weg beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
+> Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung quellprojekt#1827. Den WSL2-Weg beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
 
 ## Docker Sandboxes (`sbx`)
 
@@ -20,7 +20,7 @@ Eine Harness-Session in `sbx` ist nicht per Probe belegt (Liste „Unbelegt“ i
 
 Nicht empfohlen bis Probe [#1831](https://github.com/fluffels/kubernia/issues/1831). Der Vertrag verlangt dort: Netzstufe „Custom“ ohne Voll-Wildcard (V2), kein Token in den Umgebungsvariablen (V3), GitHub über den Proxy, weitere Schlüssel als Network Secrets.
 Hürden: `gh pr` und `gh issue` scheitern (GraphQL), Ersatz ist `gh api` per REST; User-Plugins fehlen; ein Remote außerhalb GitHub geht nur ohne Push zurück.
-Die Fakten mit Quelle stehen nur im ADR, Abschnitt Fortschreibung #1827.
+Die Fakten mit Quelle stehen nur im ADR, Abschnitt Fortschreibung quellprojekt#1827.
 
 ## Eigene Container-Sandbox anbinden
 

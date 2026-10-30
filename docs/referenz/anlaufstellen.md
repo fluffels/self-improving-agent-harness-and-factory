@@ -1,6 +1,6 @@
 # 📚 Anlaufstellen — der Index des Projekt-Brains
 
-> On-demand-Referenz (#1078): **wo welches Wissen liegt und wann man es liest.** Das Projekt-Brain ist `docs/`, dies der Index ([ADR 0015](../adr/0015-projekt-brain.md)). **Lese-Konvention:** erst hier die eine passende Seite wählen. Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`). Liegt der Checkout hinter `origin/main`, holt man die Seiten einmal gebündelt (`git archive` in den Scratchpad, dort `Read`); `git show origin/main:<pfad>` (mit `MSYS_NO_PATHCONV=1` in Git-Bash) bleibt die Ausnahme für Einzelfälle, weil es kein `Read`-Äquivalent gibt; das Messskript zählt es als Brain-Lesezugriff. Gegliedert nach den Wissensarten aus [ADR 0013](../adr/0013-docs-als-agentengepflegtes-wiki.md) (#1097). Jede Seite unter `docs/` ist von hier aus erreichbar. Die harten Regeln stehen ausschließlich in [AGENTS.md](../../AGENTS.md); hier steht nur *wo* und *wann*, kein Regeltext.
+> On-demand-Referenz (quellprojekt#1078): **wo welches Wissen liegt und wann man es liest.** Das Projekt-Brain ist `docs/`, dies der Index ([ADR 0015](../adr/0015-projekt-brain.md)). **Lese-Konvention:** erst hier die eine passende Seite wählen. Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`). Liegt der Checkout hinter `origin/main`, holt man die Seiten einmal gebündelt (`git archive` in den Scratchpad, dort `Read`); `git show origin/main:<pfad>` (mit `MSYS_NO_PATHCONV=1` in Git-Bash) bleibt die Ausnahme für Einzelfälle, weil es kein `Read`-Äquivalent gibt; das Messskript zählt es als Brain-Lesezugriff. Gegliedert nach den Wissensarten aus [ADR 0013](../adr/0013-docs-als-agentengepflegtes-wiki.md) (quellprojekt#1097). Jede Seite unter `docs/` ist von hier aus erreichbar. Die harten Regeln stehen ausschließlich in [AGENTS.md](../../AGENTS.md); hier steht nur *wo* und *wann*, kein Regeltext.
 >
 > **Nicht hierher gehören:** der laufende Stand (offene Arbeit, Reihenfolge, Blocker) → GitHub-Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`); abgeschlossene Arbeit → PR/Commit/Issue-Kommentar.
 
@@ -55,7 +55,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | Seite | Wann lesen |
 |---|---|
-| CONTRIBUTING.md | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, Im Container entwickeln (devcontainer / `docker compose up`, #388) |
+| CONTRIBUTING.md | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, Im Container entwickeln (devcontainer / `docker compose up`, quellprojekt#388) |
 | [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du das nächste Ticket auswählst oder ein neues Issue im Board einsortierst |
 | [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Umgebungsvariable ein Werkzeug liest |
 | schichtregeln.md | bevor du einen neuen Import setzt oder ein Modul verschiebst (Architektur-Wächter) |
@@ -95,7 +95,7 @@ Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu ve
 | Seite | Wann lesen |
 |---|---|
 | architektur-analyse-2026-06.md | Historie: Infrastruktur-Fokus Juni 2026 |
-| architektur-analyse-2026-07-iSAQB.md | iSAQB-Runde 1 (2026-07-01), Herkunft von #492–#524 |
-| architektur-analyse-2026-07-02-iSAQB.md | iSAQB-Runde 2 (2026-07-02), Herkunft von #577–#595 |
-| architektur-analyse-2026-07-03-iSAQB.md | iSAQB-Runde 3 (2026-07-03): ADRs, DDD, Tests, Harness, Herkunft von #596–#612 |
-| architektur-analyse-2026-07-14-iSAQB.md | doku-freie iSAQB-Runde vom 2026-07-14, Herkunft von #861–#880 |
+| architektur-analyse-2026-07-iSAQB.md | iSAQB-Runde 1 (2026-07-01), Herkunft von quellprojekt#492–quellprojekt#524 |
+| architektur-analyse-2026-07-02-iSAQB.md | iSAQB-Runde 2 (2026-07-02), Herkunft von quellprojekt#577–quellprojekt#595 |
+| architektur-analyse-2026-07-03-iSAQB.md | iSAQB-Runde 3 (2026-07-03): ADRs, DDD, Tests, Harness, Herkunft von quellprojekt#596–quellprojekt#612 |
+| architektur-analyse-2026-07-14-iSAQB.md | doku-freie iSAQB-Runde vom 2026-07-14, Herkunft von quellprojekt#861–quellprojekt#880 |
