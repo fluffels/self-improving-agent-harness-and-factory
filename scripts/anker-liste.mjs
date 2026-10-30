@@ -4,8 +4,9 @@
  * Umsetzers und Lens 3 von derselben, nicht selbst gewählten Liste ausgehen. Kein Gate, Exit 0 (außer Aufruf-Fehler und fehlende Basis).
  *
  * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
- * Strings, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
+ * Strings, Ausdrücke in `${…}` eines Template-Literals, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`.
+ * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
  * Quelle: Projekt-Config `struktur.quelle` über `isMeasured` (keine festen Endungen); Testdateien liegen außerhalb und fehlen.
  */
 import { execFileSync } from "node:child_process";
@@ -15,9 +16,11 @@ import { fileURLToPath } from "node:url";
 import { isMeasured, normalizePath, parseDiffLines, resolveBase } from "./check-basis.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
+import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const AUFRUF = "Aufruf: node scripts/anker-liste.mjs [--basis <ref>] [--json]";
+const FLAGS = { basis: { type: "string" }, json: { type: "boolean" } };
 const MODULEBENE = "(Modulebene)";
 
 /** Geschlossene Musterliste. `auf: "text"` prüft die Zeile ohne String-Inhalte und Kommentar, sonst zusätzlich ohne Regex-Literale. */
@@ -49,7 +52,7 @@ export const MUSTER = [
 ];
 
 const STRINGS = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
-const REGEX_LITERAL = /([=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
+const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
 const KOPF = [
   /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*\(/,
   /^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
@@ -60,12 +63,24 @@ const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
 const kopfName = (text) => KOPF.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined);
 
+/** Die Parameterliste eines Funktionskopfs: von der ersten `(` bis zur passenden `)`; ohne Klammer (`x => …`) leer. */
+function parameterListe(text) {
+  const start = text.indexOf("(");
+  if (start < 0) return "";
+  let tiefe = 0;
+  for (let i = start; i < text.length; i++) {
+    tiefe += text[i] === "(" ? 1 : text[i] === ")" ? -1 : 0;
+    if (tiefe === 0) return text.slice(start, i + 1);
+  }
+  return text.slice(start);
+}
+
 /** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen mit Default-Parameter zusätzlich. */
 function ankerNamen(zeile) {
   const text = zeile.replace(STRINGS, '""').replace(/\/\/.*$/, "");
   const ohneRegex = text.replace(REGEX_LITERAL, "$1 R");
   const namen = MUSTER.filter((m) => m.re.test(m.auf === "text" ? text : ohneRegex)).map((m) => m.name);
-  const parameter = kopfName(text) === undefined ? "" : ohneRegex.slice(ohneRegex.indexOf("("), ohneRegex.lastIndexOf(")") + 1);
+  const parameter = kopfName(text) === undefined ? "" : parameterListe(ohneRegex);
   return DEFAULT_PARAMETER.test(parameter) ? [...namen, "Default-Parameter"] : namen;
 }
 
@@ -100,7 +115,7 @@ export function guardListe({ diffText, neueDateien = [], lies, istQuelle }) {
     if (typeof inhalt === "string") quellen.set(pfad, { inhalt, zeilen });
   }
   for (const { pfad, inhalt } of neueDateien) {
-    if (istQuelle(normalizePath(pfad))) quellen.set(normalizePath(pfad), { inhalt, zeilen: null });
+    if (typeof inhalt === "string" && istQuelle(normalizePath(pfad))) quellen.set(normalizePath(pfad), { inhalt, zeilen: null });
   }
   return [...quellen].flatMap(([datei, { inhalt, zeilen }]) => dateiAnker(datei, inhalt, zeilen));
 }
@@ -120,7 +135,7 @@ export function formatiere(ergebnis) {
 
 /** Die CLI mit injiziertem `git(args)`, `lesen(pfad)` und `istQuelle`; Ergebnis `{ code, out, err }`. */
 export function lauf(argv, { git, lesen, istQuelle }) {
-  const r = flagsLesen(argv, { basis: { type: "string" }, json: { type: "boolean" } });
+  const r = flagsLesen(argv, FLAGS);
   if (r.fehler) return { code: 2, out: "", err: `✖ anker-liste: ${r.fehler.text}\n${AUFRUF}\n` };
   const basis = resolveBase(git, r.werte.basis === undefined ? process.env : { FACTORY_DIFF_BASE: r.werte.basis });
   if (basis === null) {
@@ -136,9 +151,11 @@ export function lauf(argv, { git, lesen, istQuelle }) {
 
 if (istDirektaufruf(import.meta.url)) {
   direktaufruf(process.argv.slice(2), {
-    pruefe: (argv) => ({ fehler: flagsLesen(argv, { basis: { type: "string" }, json: { type: "boolean" } }).fehler?.text }),
+    pruefe: (argv) => ({ fehler: flagsLesen(argv, FLAGS).fehler?.text }),
     fehlerErgebnis: (argv) => lauf(argv, {}),
-    io: () => ({
+    io: () => {
+      const quelle = strukturAus(ladeProjektConfig()).quelle;
+      return {
       git: (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }),
       lesen: (pfad) => {
         try {
@@ -147,8 +164,9 @@ if (istDirektaufruf(import.meta.url)) {
           return undefined;
         }
       },
-      istQuelle: (pfad) => isMeasured(pfad),
-    }),
+      istQuelle: (pfad) => isMeasured(pfad, quelle),
+      };
+    },
     fuehreAus: (argv, io) => lauf(argv, io),
   });
 }

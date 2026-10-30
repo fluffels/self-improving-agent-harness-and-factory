@@ -83,6 +83,7 @@ describe("guardListe: Musterliste", () => {
       "  const x = a === b;",
       "  const y = a?: string;",
       "  const h = a // b || c",
+      "  const x = a / b;",
     ]) {
       expect(muster(z), z).toEqual([]);
     }
@@ -99,6 +100,18 @@ describe("guardListe: Musterliste", () => {
     expect(muster("  g(a = 1);")).toEqual([]);
     expect(neu("function f(a) { return g(a === b && a !== c && a <= d && a >= e); }")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
     expect(neu("const g = (a, b) => h(a === b || a !== b);")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
+  });
+
+  test("Default-Parameter: ungleich (!=) und Zuweisung im Rumpf hinter der Kopfklammer zählen nicht, geschachtelte Klammer im Kopf schon", () => {
+    for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;"]) {
+      expect(neu(z)[0]?.anker.map((a) => a.muster) ?? [], z).not.toContain("Default-Parameter");
+    }
+    expect(neu("function f(a = g(1)) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
+  });
+
+  test("ein Regex-Literal am Zeilenanfang verbirgt seine Zeichen ebenfalls", () => {
+    expect(muster("  /a?.b|c && d/,")).toEqual(["Regex-Literal"]);
+    expect(muster("  /a?.b|c && d/.test(x);")).toEqual(["Regex-Literal"]);
   });
 
   test("mehrzeiliger Blockkommentar wird übersprungen, der Code danach zählt wieder", () => {
@@ -131,6 +144,20 @@ describe("guardListe: Auswahl der Zeilen und Dateien", () => {
   test("Datei außerhalb der Quelle, Testdatei und nicht lesbare Datei fehlen", () => {
     const gesamt = diff("test/a.test.ts", "@@ -0,0 +1,4 @@") + diff("scripts/weg.mjs", "@@ -0,0 +1,4 @@");
     expect(guardListe({ diffText: gesamt, neueDateien: [{ pfad: "docs/x.mjs", inhalt: DATEI }], lies: () => undefined, istQuelle })).toEqual([]);
+  });
+
+  test("Testdatei im Diff fehlt, auch wenn sie lesbar ist und Anker trägt (Quell-Filter, nicht nur Lesbarkeit)", () => {
+    expect(guardListe({ diffText: diff("test/a.test.ts", "@@ -0,0 +1,4 @@"), lies: () => DATEI, istQuelle })).toEqual([]);
+  });
+
+  test("ohne neueDateien (Default) wird nur der Diff ausgewertet", () => {
+    const r = guardListe({ diffText: diff("scripts/a.mjs", "@@ -0,0 +2,1 @@"), lies: () => DATEI, istQuelle });
+    expect(r[0]?.anker).toEqual([{ zeile: 2, muster: "if" }]);
+  });
+
+  test("nicht lesbare neue Datei (kein Inhalt) fehlt, statt zu werfen", () => {
+    const leer = { pfad: "scripts/n.mjs" } as unknown as { pfad: string; inhalt: string };
+    expect(guardListe({ diffText: "", neueDateien: [leer], lies: () => undefined, istQuelle })).toEqual([]);
   });
 
   test("neue ungetrackte Datei: alle Zeilen; Windows-Pfad wird normalisiert", () => {
@@ -179,9 +206,15 @@ describe("guardListe: Funktionszuordnung", () => {
     ]);
   });
 
-  test("if/for/catch-Zeilen mit Block sind keine Methodenköpfe", () => {
-    const r = neu("function f() {\n  while (a) {\n    if (b) {}\n  }\n}");
+  test.each(["if", "for", "while", "switch", "catch", "return"])("%s-Zeile mit Block ist kein Methodenkopf", (wort) => {
+    const r = neu(`function f() {\n  ${wort} (a) {\n    g(a || b);\n  }\n}`);
     expect(r.map((e) => e.funktion)).toEqual(["f"]);
+  });
+
+  test("Arrow ohne Klammern und gleichnamige Methoden zweier Klassen", () => {
+    expect(neu("const g = x => {\n  if (x) return;\n};").map((e) => e.funktion)).toEqual(["g"]);
+    const r = neu("class A {\n  m() {\n    if (a) {}\n  }\n}\nclass B {\n  m() {\n    if (b) {}\n  }\n}");
+    expect(r.map((e) => [e.funktion, e.zeile])).toEqual([["m", 2], ["m", 7]]);
   });
 });
 
@@ -209,6 +242,13 @@ describe("formatiere und lauf", () => {
     git: git({ "rev-parse": "abc\n", "diff -U0 abc": kopf, "ls-files": "scripts/neu.mjs\ndocs/x.md\n", ...extra }),
     lesen: (p: string) => (p === "scripts/neu.mjs" ? "if (n) {}\n" : "if (a) {}\n"),
     istQuelle,
+  });
+
+  test("lauf liest ungetrackte Nicht-Quelldateien gar nicht erst", () => {
+    const lesen = vi.fn((p: string) => (p === "scripts/neu.mjs" ? "if (n) {}\n" : "if (a) {}\n"));
+    lauf(["--basis", "HEAD"], { ...umgebung(), lesen });
+    expect(lesen.mock.calls.map((c) => c[0])).not.toContain("docs/x.md");
+    expect(lesen.mock.calls.map((c) => c[0])).toContain("scripts/neu.mjs");
   });
 
   test("lauf: Diff plus ungetrackte Quelldateien, docs bleibt draußen", () => {
