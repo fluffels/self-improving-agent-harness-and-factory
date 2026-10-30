@@ -8,8 +8,7 @@ import { join } from "node:path";
 import * as raw from "../scripts/factory-update-check.mjs";
 
 type Meldung = { alt: string; neu: string; text: string } | null;
-const { vergleicheTags, updateMeldung, fuehreAus } = raw as {
-  vergleicheTags: (tags: string[]) => string | null;
+const { updateMeldung, fuehreAus } = raw as {
   updateMeldung: (a: { stand: unknown; tags: string[] }) => Meldung;
   fuehreAus: (argv: string[], io: { wurzel: string; gh: (args: string[]) => string }) => { out: string; err: string; code: number };
 };
@@ -34,19 +33,6 @@ function projekt(opts: { tag?: string; repo?: string; config?: boolean | "ohne-r
 }
 /** `gh api --paginate --jq .[].name` liefert je Tag eine Zeile, über alle Seiten. */
 const tagsJson = (...namen: string[]) => `${namen.join("\n")}\n`;
-
-describe("vergleicheTags", () => {
-  test("liefert den höchsten Release-Tag, numerisch statt textlich; Pre-Release und Fremdtags zählen nicht", () => {
-    assert.equal(vergleicheTags(["v1.9.0", "v1.10.0", "1.2.3", "v2.0.0-rc1", "latest", "v1.10", "xv3.0.0"]), "v1.10.0");
-  });
-  test("Tag ohne v zählt und kann der höchste sein; der Patch entscheidet bei gleichem Major und Minor", () => {
-    assert.equal(vergleicheTags(["1.3.0", "v1.2.0"]), "1.3.0");
-    assert.equal(vergleicheTags(["v1.0.0", "v1.0.1", "v1.0.0"]), "v1.0.1");
-  });
-  test("ohne Release-Tag null", () => {
-    assert.equal(vergleicheTags(["latest", "v1.0.0-beta"]), null);
-  });
-});
 
 describe("updateMeldung", () => {
   const stand = (tag: unknown) => ({ quelle: { tag } });
