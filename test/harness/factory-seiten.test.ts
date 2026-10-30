@@ -32,12 +32,16 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import * as checkBasis from "../../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawHerkunftsform from "../../scripts/herkunftsform.mjs";
 import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 import { FREMD, projektConfig } from "../support/fremd-config";
 import type { BegriffsConfig } from "./kern-reinheit.test";
 
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 const { collectMarkdown, GEN_MARKER } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[]; GEN_MARKER: RegExp };
+
+const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel: string) => string[] };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
@@ -116,6 +120,38 @@ export function vergleiche(ist: Baseline, baseline: Baseline): string[] {
 /** Der erlaubte Höchstwert je Seite der aktuellen Baseline: der Stand an der Diff-Basis, für eine dort unbekannte Seite leer (jeder Wert wäre eine Anhebung). */
 export function basisWerte(baseline: Baseline, basis: Baseline): Baseline {
   return Object.fromEntries(Object.keys(baseline).map((pfad) => [pfad, basis[pfad] ?? {}]));
+}
+
+const TICKET_BASELINE = "test/harness/ticketnummern-baseline.json";
+const AGENTS = "AGENTS.md";
+/** Eine nackte Ticketnummer (3 oder 4 Ziffern) nach der Maskierung: kein Präfix (`quellprojekt#`, `owner/repo#`), kein Dateianker davor, kein Wortzeichen dahinter. */
+const NACKTE_NUMMER = /(?<![\p{L}\p{N}_.-])#\d{3,4}(?![\p{L}\p{N}_])/gu;
+const TICKET_BEGRIFFE = { Ticketnummer: NACKTE_NUMMER };
+
+/** Die Zählung nackter Ticketnummern je Einheit (Seite oder `AGENTS.md`), nur Einheiten mit Treffer. Überschriften und Code zählen mit. */
+export function zaehleNummern(einheiten: Record<string, string>): Baseline {
+  return zaehleSeiten(einheiten, TICKET_BEGRIFFE);
+}
+
+const NUMMER_FIX = "Nummer des Quellprojekts als quellprojekt#<nr>, Nummer des Factory-Repos als factory#<nr> schreiben";
+const NUMMER_TEXTE: VergleichsTexte = {
+  neu: (pfad, name, n) => `${pfad}: nackte ${name} ${n}x statt 0x. Fix: ${NUMMER_FIX}`,
+  ueber: (pfad, name, n, bn) => `${pfad}: nackte ${name} ${n}x statt ${bn}x. Fix: ${NUMMER_FIX}`,
+  unter: (pfad, name, n, bn) => `${pfad}: nackte ${name} nur noch ${n}x, die Baseline kennt ${bn}x. Fix: Baseline senken (${TICKET_BASELINE})`,
+  verwaist: (pfad, z) => Object.entries(z).map(([name, bn]) => NUMMER_TEXTE.unter(pfad, name, 0, bn)),
+};
+
+/** Meldungen: Anstieg und Rückgang nackter Ticketnummern je Einheit gegen die Ticketnummern-Baseline. */
+export function vergleicheNummern(ist: Baseline, baseline: Baseline): string[] {
+  return vergleicheZaehlung(ist, baseline, NUMMER_TEXTE);
+}
+
+/**
+ * Der erlaubte Höchstwert je Einheit der Ticketnummern-Baseline: der Stand der Baseline-Datei an der Diff-Basis. Gibt es die Datei dort noch nicht
+ * (`alt` ist null, der Einführungs-PR), gilt die Zählung der Einheiten an der Diff-Basis (`basisTexte`, eine fehlende Einheit zählt leer).
+ */
+export function nummernObergrenze(baseline: Baseline, alt: Baseline | null, basisTexte: Record<string, string>): Baseline {
+  return basisWerte(baseline, alt ?? zaehleNummern(basisTexte));
 }
 
 const lesen = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
@@ -287,5 +323,119 @@ describe("Factory-Seiten (#77)", () => {
       assert.match(m[0] ?? "", /^docs\/a\.md: .*nur noch 1x.*kennt 2x.*Baseline senken/);
       assert.match(m[1] ?? "", /^docs\/b\.md: .*nur noch 0x/);
     });
+  });
+});
+
+describe("Ticketnummern (#95)", () => {
+  const einheiten = (): string[] => [...kernSeiten(WURZEL), AGENTS];
+  const echteTexte = (): Record<string, string> => Object.fromEntries(einheiten().map((p) => [p, lesen(p)]));
+  const baseline = (): Baseline => JSON.parse(lesen(TICKET_BASELINE)) as Baseline;
+  const z = (text: string): number => zaehleNummern({ "docs/a.md": text })["docs/a.md"]?.Ticketnummer ?? 0;
+
+  describe("Zählung", () => {
+    test("eine nackte drei- oder vierstellige Nummer zählt, auch beide in (#992/#1087)", () => {
+      assert.equal(z("siehe #1234"), 1);
+      assert.equal(z("siehe #123."), 1);
+      assert.equal(z("(#992/#1087)"), 2);
+    });
+    test("Herkunftsformen, Anker, Zahlen anderer Länge und Wortreste zählen nicht", () => {
+      for (const t of ["quellprojekt#1234", "factory#123", "kubernia#1883", "owner/repo#12", "x.md#1234", "#12", "#12345", "#123abc", "#1234_x"]) assert.equal(z(t), 0, t);
+    });
+    test("ein http-Link samt Text, eine URL und ein GEN-Block zählen nicht", () => {
+      assert.equal(z("[#1949](https://github.com/o/r/issues/1949) https://x.de/#1234"), 0);
+      assert.equal(z("<!-- GEN:a START -->\n#1234\n<!-- GEN:a END -->"), 0);
+    });
+    test("Überschrift, Inline-Code und Code-Fence zählen mit (die Umstellung lässt sie bewusst aus)", () => {
+      assert.equal(z("## Titel (#1875)"), 1);
+      assert.equal(z("`#1234`"), 1);
+      assert.equal(z("```\n#1234\n```"), 1);
+    });
+    test("zaehleNummern nennt nur Einheiten mit Treffer", () => {
+      assert.deepEqual(zaehleNummern({ "docs/a.md": "#1234", "docs/b.md": "nichts" }), { "docs/a.md": { Ticketnummer: 1 } });
+    });
+  });
+
+  describe("Vergleich", () => {
+    test("gleiche Zählung ist grün", () => {
+      assert.deepEqual(vergleicheNummern({ "docs/a.md": { Ticketnummer: 2 } }, { "docs/a.md": { Ticketnummer: 2 } }), []);
+    });
+    test("eine zusätzliche Nummer (auch auf einer Seite ohne Eintrag) ist rot und nennt den Fix", () => {
+      const m = vergleicheNummern({ "docs/a.md": { Ticketnummer: 2 }, "docs/b.md": { Ticketnummer: 1 } }, { "docs/a.md": { Ticketnummer: 1 } });
+      assert.equal(m.length, 2);
+      assert.match(m[0] ?? "", /^docs\/a\.md: nackte Ticketnummer 2x statt 1x\. Fix: Nummer des Quellprojekts als quellprojekt#<nr>, Nummer des Factory-Repos als factory#<nr>/);
+      assert.match(m[1] ?? "", /^docs\/b\.md: nackte Ticketnummer 1x statt 0x/);
+    });
+    test("ein Rückgang ist rot und verlangt, die Baseline zu senken", () => {
+      const m = vergleicheNummern({ "docs/a.md": { Ticketnummer: 1 } }, { "docs/a.md": { Ticketnummer: 2 }, "docs/b.md": { Ticketnummer: 1 } });
+      assert.equal(m.length, 2);
+      assert.match(m[0] ?? "", /^docs\/a\.md: nackte Ticketnummer nur noch 1x, die Baseline kennt 2x\. Fix: Baseline senken \(test\/harness\/ticketnummern-baseline\.json\)/);
+      assert.match(m[1] ?? "", /^docs\/b\.md: .*nur noch 0x/);
+    });
+  });
+
+  describe("echte Seiten", () => {
+    test("Seiten und AGENTS.md entsprechen der Baseline: keine neue nackte Ticketnummer, keine veraltete Zeile", () => {
+      assert.deepEqual(vergleicheNummern(zaehleNummern(echteTexte()), baseline()), []);
+    });
+    test("Negativfall: eine angehängte nackte Nummer an einer Seite oder an AGENTS.md macht den Wächter rot", () => {
+      for (const pfad of ["docs/model-routing.md", AGENTS, "docs/referenz/befehle.md"]) {
+        const texte = { ...echteTexte(), [pfad]: lesen(pfad) + "\nSiehe #1234.\n" };
+        const m = vergleicheNummern(zaehleNummern(texte), baseline());
+        assert.equal(m.length, 1, pfad);
+        assert.match(m[0] ?? "", new RegExp(`^${pfad.replace(".", "\\.")}: nackte Ticketnummer \\d+x statt \\d+x`));
+      }
+    });
+    test("die Baseline ist sortiert, kennt nur Ticketnummer und Werte > 0", () => {
+      const b = baseline();
+      assert.deepEqual(Object.keys(b), Object.keys(b).sort());
+      for (const w of Object.values(b)) {
+        assert.deepEqual(Object.keys(w), ["Ticketnummer"]);
+        assert.ok((w.Ticketnummer ?? 0) > 0);
+      }
+    });
+    test("die Standardliste der Umstellung ist genau die Menge der gezählten Einheiten", () => {
+      assert.deepEqual([...herkunftsform.standardDateien(WURZEL)].sort(), einheiten().sort());
+    });
+  });
+
+  describe("Anhebungssperre (nummernObergrenze)", () => {
+    const B = (n: number): Baseline => ({ "docs/a.md": { Ticketnummer: n } });
+    test("mit Datei an der Basis gilt deren Wert: höher ist rot, gleich oder kleiner grün", () => {
+      assert.equal(anhebungen(B(3), nummernObergrenze(B(3), B(2), {})).length, 1);
+      assert.deepEqual(anhebungen(B(2), nummernObergrenze(B(2), B(2), {})), []);
+      assert.deepEqual(anhebungen(B(1), nummernObergrenze(B(1), B(2), {})), []);
+    });
+    test("ohne Datei an der Basis (Einführungs-PR) gilt die Zählung der Seiten an der Basis: höher ist rot, gleich oder kleiner grün", () => {
+      const basisTexte = { "docs/a.md": "#1234 #1235" };
+      assert.equal(anhebungen(B(3), nummernObergrenze(B(3), null, basisTexte)).length, 1);
+      assert.deepEqual(anhebungen(B(2), nummernObergrenze(B(2), null, basisTexte)), []);
+      assert.deepEqual(anhebungen(B(1), nummernObergrenze(B(1), null, basisTexte)), []);
+    });
+    test("ohne Datei an der Basis ist eine dort fehlende Seite leer gezählt: jeder Wert ist eine Anhebung", () => {
+      assert.equal(anhebungen(B(1), nummernObergrenze(B(1), null, {})).length, 1);
+    });
+    test("mit Datei an der Basis zählen die Seiten dort nicht (Datei hat Vorrang)", () => {
+      assert.equal(anhebungen(B(2), nummernObergrenze(B(2), B(1), { "docs/a.md": "#1234 #1235 #1236" })).length, 1);
+    });
+  });
+
+  const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+  const basis: string | null = checkBasis.resolveBase(git, process.env) ?? null;
+  const ausBasis = (pfad: string): string | null => {
+    try {
+      return execFileSync("git", ["show", `${basis}:${pfad}`], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      return null; // die Datei gibt es an der Basis nicht
+    }
+  };
+
+  test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Ticketnummern-Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
+    assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
+    const datei = ausBasis(TICKET_BASELINE);
+    const alt = datei === null ? null : (JSON.parse(datei) as Baseline);
+    const b = baseline();
+    const basisTexte = alt === null ? Object.fromEntries(Object.keys(b).map((p) => [p, ausBasis(p) ?? ""])) : {};
+    assert.deepEqual(anhebungen(b, nummernObergrenze(b, alt, basisTexte)), []);
   });
 });
