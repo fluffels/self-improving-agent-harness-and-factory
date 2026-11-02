@@ -15,6 +15,9 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Besitz-Manifes
 ## Bekannte Grenzen
 
 - Geprüft werden Form und Namensmenge der Wahl, nicht, ob der Bezieher die Workflows eines Moduls braucht oder die nötigen Secrets und Repo-Einstellungen hat (das bleibt Sache des Doctors).
+- `ghsa-lib.mjs` gehört zum Modul `codescanning-inbox`, wird aber auch von `audit-einordnung.mjs` (kein Besitz) importiert: wer die Audit-Einordnung ohne dieses Modul nutzt, hat einen Import ins Leere (Teil der Sammelticket-Zeile zur Audit-Einordnung).
+- Die Projektwert-Fläche (`projektwertDateien`) nimmt jede `.yml` des Manifests auf, auch die eines abgewählten Moduls: eine liegengebliebene `codeql.yml` ohne `codeql.sprachen` hält das Drift-Gate rot, bis sie von Hand entfernt ist (die Sync-Meldung „im Ziel nicht gelöscht“ ist dann Pflicht, nicht optional).
+- `MODUL_STANDARD` (`dependabot-inbox`) ist die einzige Namensliste im Code; `test/harness/kern-reinheit.test.ts` hält sie gegen das echte Manifest.
 - Die Import-Regel sieht nur statische relative Importe und `export … from`, keine dynamischen Importe.
 - Ein Bezieher mit eigener Kopie eines Modul-Workflows bekommt beim Wählen ein `ABGLEICH` (Erst-Übernahme-Schutz, [Fortschreibung #118](0022-118-erst-uebernahme-und-vorlage.md)).
 - **Re-Evaluierung:** wenn `audit-einordnung` als Modul verteilt wird oder ein Modul eigene Pflicht-Checks braucht (dann müsste der Doctor sie nur bei gewähltem Modul verlangen).

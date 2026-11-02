@@ -352,11 +352,18 @@ describe("YAML-Zeilen-Marker und Listenwerte (factory#119)", () => {
   test("derselbe Marker in einer Markdown-Datei außerhalb des Frontmatters bleibt ein Fehler", () => {
     assert.throws(() => lib.projektwertStellen(YML, "w.md"), /außerhalb des führenden Frontmatters/);
   });
+  test("auch eine .yaml-Datei ist Marker-Fläche und wird aus dem Manifest aufgenommen", () => {
+    assert.equal(lib.rendereProjektwerte(YML, CFG, "w.yaml").split("\n")[5], "        language: [javascript-typescript, actions]");
+    assert.deepEqual(lib.projektwertDateien(["w.yaml"], []), ["w.yaml"]);
+  });
+  test("<codeql.sprachen> in der Prosa ist kein Platzhalter (nur die Tabellen-Gruppen)", () => {
+    assert.equal(lib.platzhalterMuster().exec("Wert <codeql.sprachen> hier"), null);
+  });
   test("ein Marker mit unbekannter Gruppe wirft", () => {
     assert.throws(() => lib.projektwertStellen("# factory:projektwert fremd.x\nk: v\n", "w.yml"), /w\.yml:1: .*unbekannte Projektwert-Gruppe/);
   });
-  test("eine leere Liste, ein leeres Element und ein Backtick im Element brechen ab", () => {
-    for (const sprachen of [[], [""], ["a`b"]]) assert.throws(() => lib.projektwertWert({ codeql: { sprachen } }, "codeql.sprachen"), /Fix:|Backtick/);
+  test("eine leere Liste, ein leeres Element, ein Nicht-Text und ein Backtick im Element brechen ab", () => {
+    for (const sprachen of [[], [""], [1], ["a`b"]]) assert.throws(() => lib.projektwertWert({ codeql: { sprachen } }, "codeql.sprachen"), /Fix:|Backtick/);
   });
   test("der Block rendert die Gruppe codeql nicht, auch wenn die Config sie trägt", () => {
     assert.ok(!lib.rendereProjektwerte(`${S}\n${E}\n`, CFG).includes("codeql"));

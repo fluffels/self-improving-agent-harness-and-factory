@@ -67,6 +67,8 @@ describe("modulFormFehler", () => {
     ["keine Liste", { module: "codeql" }],
     ["Großbuchstabe", { module: ["CodeQL"] }],
     ["kein Text", { module: [1] }],
+    ["gültiger Anfang, ungültiger Rest", { module: ["codeQL"] }],
+    ["Leerzeichen im Namen", { module: ["code ql"] }],
   ])("module ungültig: %s", (_n, c) => {
     const f = lib.modulFormFehler(c);
     expect(f.length).toBeGreaterThan(0);
@@ -82,6 +84,8 @@ describe("modulFormFehler", () => {
     ["leere Sprache", { module: ["codeql"], codeql: { sprachen: [""] } }],
     ["sprachen keine Liste", { module: ["codeql"], codeql: { sprachen: "python" } }],
     ["codeql kein Objekt", { codeql: "python" }],
+    ["codeql null", { codeql: null }],
+    ["Sprache mit Sonderzeichen", { module: ["codeql"], codeql: { sprachen: ["c++"] } }],
   ])("codeql.sprachen fehlt oder ist ungültig: %s", (_n, c) => {
     const f = lib.modulFormFehler(c);
     expect(f.length).toBeGreaterThan(0);
@@ -113,6 +117,7 @@ describe("modulFehler (Manifest)", () => {
   });
   test.each([
     ["kaputter Name", { modul: "Code QL", ring: "kern" }, "Name"],
+    ["Name mit ungültigem Rest", { modul: "code ql", ring: "kern" }, "Name"],
     ["an einem Block", { modul: "codeql", ring: "kern", block: "b" }, "ganzen Datei"],
     ["an einem Schlüssel", { modul: "codeql", ring: "kern", schluessel: "k" }, "ganzen Datei"],
     ["mit art vorlage", { modul: "codeql", ring: "kern", art: "vorlage" }, "art"],
@@ -144,6 +149,9 @@ describe("modulPunkt (Doctor)", () => {
     expect(lib.modulPunkt({}, undefined)).toBeNull();
     expect(lib.modulPunkt({}, { eintraege: [{ pfad: "d.mjs" }] })).toBeNull();
   });
+  test("ein Manifest ohne Module, aber eine Config mit module-Namen ist eine Lücke (unbekannter Name)", () => {
+    expect(lib.modulPunkt({ module: ["x"] }, { eintraege: [{ pfad: "d.mjs" }] })).toMatchObject({ ok: false });
+  });
   test("unbekannter Name und fehlende Sprachen sind Lücken", () => {
     expect(lib.modulPunkt({ module: ["nope"] }, manifest)).toMatchObject({ ok: false });
     expect(lib.modulPunkt({ module: ["nope"] }, manifest)?.fix).toContain("Namen");
@@ -159,6 +167,9 @@ describe("pruefeManifest und modul", () => {
     expect(pruefeManifest(m(2, "codeql"), lies).join("\n")).toContain("modul braucht version 3");
     expect(pruefeManifest(m(3, "codeql"), lies)).toEqual([]);
     expect(pruefeManifest(m(3), lies)).toEqual([]);
+  });
+  test("modul mit Version 1 ist ein Fehler", () => {
+    expect(pruefeManifest(m(1, "codeql"), lies).join("\n")).toContain("modul braucht version 3");
   });
   test("Version 4 ist unbekannt", () => {
     expect(pruefeManifest(m(4), lies).join("\n")).toContain("version 4 unbekannt");

@@ -43,7 +43,7 @@ function waehleModule(manifest, zielConfig) {
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
  * Ergebnis: `fehler` (nicht leer: nichts schreiben), `meldungen`, `dateien` (Pfad → { text, neu, ausfuehrbar }, nur Geändertes),
- * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat.
+ * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat oder das Manifest Einheiten mit `modul` kennt (Modulwahl).
  */
 export function planeSync({
   quelleLies,
@@ -160,7 +160,7 @@ export function planeSync({
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     res.meldungen.push(
-      nurFactory?.modul !== undefined && !wahl.gewaehlt.includes(nurFactory.modul)
+      nurFactory?.modul !== undefined && !modulGewaehlt(nurFactory, wahl.gewaehlt)
         ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
         : nurFactory === undefined
         ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`

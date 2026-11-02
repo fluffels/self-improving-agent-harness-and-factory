@@ -78,7 +78,7 @@ function modulWahlAus(manifest, lies) {
   } catch {
     // unlesbar: bleibt null
   }
-  if (config === null || typeof config !== "object") {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
     return { gewaehlt: [], unbestimmt: true, fehler: [`Modul-Auswahl nicht bestimmbar (${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON-Objekt). Weg: Config reparieren (Schlüssel module), dann erneut prüfen`] };
   }
   const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });

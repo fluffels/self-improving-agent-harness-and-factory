@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Geschlossene Liste der Blatt-Module (Repo-Pfade). */
-export const BLAETTER = ["scripts/relativ-pfad.mjs", "scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs"];
+export const BLAETTER = ["scripts/relativ-pfad.mjs", "scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs", "scripts/modul-wahl-lib.mjs"];
 
 /** Bestehende Re-Exports (Datei -> offenes Ticket). Nur kürzen; ein Eintrag ohne Befund lässt den Test rot werden. */
 export const ALLOWLIST: Record<string, string> = {};

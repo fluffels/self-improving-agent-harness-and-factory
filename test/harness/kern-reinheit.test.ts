@@ -373,6 +373,7 @@ export function istZaehlung(eintraege: Eintrag[], lies: (pfad: string) => string
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
+const modulStandard = (rawModul as unknown as { MODUL_STANDARD: string[] }).MODUL_STANDARD;
 const modulImportErlaubt = (rawModul as unknown as { modulImportErlaubt: (von: { modul?: string }, nach: { modul?: string }) => boolean }).modulImportErlaubt;
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
@@ -787,6 +788,10 @@ describe("modulImportVerstoesse (Modul-Regel, factory#119)", () => {
     assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./fremd.mjs";' })), []);
     assert.deepEqual(modulImportVerstoesse([ein("AGENTS.md", { block: "s" }), ein("scripts/a.mjs", { modul: "a" })], mit({ "AGENTS.md": 'from "./a.mjs"' })), []);
     assert.deepEqual(modulImportVerstoesse(E, () => null), []);
+    assert.deepEqual(modulImportVerstoesse([ein("scripts/k.md"), ein("scripts/a.mjs", { modul: "a" })], mit({ "scripts/k.md": 'from "./a.mjs"' })), [], "eine Ganz-Datei-Markdown wird nicht als Code gelesen");
+  });
+  test("ein doppelter Import desselben Ziels wird einmal gemeldet", () => {
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./a.mjs"; import { y } from "./a.mjs";' })), ["scripts/k.mjs -> scripts/a.mjs"]);
   });
 });
 
@@ -956,6 +961,11 @@ describe("Kern-Reinheit (#1610)", () => {
 
   test("kein Importeur verletzt die Ring-Importregel (RING_IMPORTE, #1663, ADR 0029)", () => {
     assert.deepEqual(ringVerstoesse(manifest.eintraege, lesenWurzel), []);
+  });
+
+  test("der Standard der Modulwahl nennt nur Module, die das echte Manifest kennt (MODUL_STANDARD, factory#119)", () => {
+    const namen = new Set(manifest.eintraege.map((e) => e.modul));
+    for (const n of modulStandard) assert.ok(namen.has(n), n);
   });
 
   test("kein Kern-Code importiert eine Moduleinheit und kein Modul ein anderes (modul, factory#119)", () => {

@@ -204,8 +204,17 @@ describe("Drift-Gate und Sicherheits-Module", () => {
   test("ein unbekannter Name ist rot mit Fix", () => {
     expect(drift.pruefeDrift(projekt(cfg({ module: ["gibtsnicht", "zizmor", "codeql"], codeql: { sprachen: ["a"] } }))).fehler.join("\n")).toMatch(/Modul-Wahl: .*gibtsnicht.*Fix:/s);
   });
+  test("eine unbestimmbare Wahl meldet auch bei einem Stand ohne Moduleinheiten nur den einen Fehler", () => {
+    const f = drift.pruefeDrift(projekt("{kaputt", mitModul.filter((e) => e.pfad === DEPENDABOT))).fehler;
+    expect(f).toHaveLength(1);
+    expect(f[0]).toContain("Modul-Auswahl nicht bestimmbar");
+  });
+  test("ein Formfehler der Wahl ist rot mit Fix (module keine Liste, codeql ohne Sprachen)", () => {
+    expect(drift.pruefeDrift(projekt(cfg({ module: "zizmor" }))).fehler.join("\n")).toMatch(/Modul-Wahl: module muss eine Liste.*Fix:/s);
+    expect(drift.pruefeDrift(projekt(cfg({ module: ["codeql", "zizmor", "dependabot-inbox"] }))).fehler.join("\n")).toMatch(/Modul-Wahl: .*codeql\.sprachen.*Fix:/s);
+  });
   test("eine kaputte oder fehlende Config ergibt genau einen Fehler, keinen je Einheit", () => {
-    for (const config of ["{kaputt", null, "[]x"]) {
+    for (const config of ["{kaputt", null, "[]x", "[]", "5", "null"]) {
       const f = drift.pruefeDrift(projekt(config)).fehler;
       expect(f).toHaveLength(1);
       expect(f[0]).toContain("Modul-Auswahl nicht bestimmbar");
