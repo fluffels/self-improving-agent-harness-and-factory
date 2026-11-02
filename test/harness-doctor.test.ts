@@ -319,6 +319,7 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(r.code, 1);
     assert.equal(luecken(r).length, 1, r.out.join("\n"));
     assert.match(luecken(r)[0], /^LÜCKE Required-Check Kern: Required-Check "Kern" fehlt auf main Fix: "Kern" in Ruleset "main-schutz"/);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("HINWEIS Required-Check")), [], "eine Lücke ohne hinweis trägt keine HINWEIS-Zeile");
     const regeln = [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }, { context: "Kern" }] } }, CODEQL];
     const gruen = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": regeln }, { besitz: KERN_BESITZ });
     assert.equal(gruen.code, 0, gruen.out.join("\n"));
@@ -329,7 +330,7 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({}, { besitz }).code, 0);
   });
 
-  for (const [name, besitz] of [["fehlt", null], ["kein JSON", "{ nicht json"], ["ungültiges pflichtChecks", JSON.stringify({ version: 1, eintraege: [{ pfad: "x.yml", ring: "kern", quelle: "t", pflichtChecks: [] }] })]] as [string, string | null][]) {
+  for (const [name, besitz] of [["fehlt", null], ["kein JSON", "{ nicht json"], ["JSON null", "null"], ["Eintrag kein Objekt", JSON.stringify({ version: 1, eintraege: ["x"] })], ["ungültiges pflichtChecks", JSON.stringify({ version: 1, eintraege: [{ pfad: "x.yml", ring: "kern", quelle: "t", pflichtChecks: [] }] })]] as [string, string | null][]) {
     test(`besitz.json nicht lesbar (${name}): HINWEIS und NICHT PRÜFBAR statt grün, Exit 1, Spiegel-Checks laufen weiter`, () => {
       const r = lauf({}, { besitz });
       assert.equal(r.code, 1, r.out.join("\n"));
@@ -466,6 +467,23 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
   });
 
+  test("Kern-Pflicht-Checks nicht prüfbar auch ohne gültigen Token (braucht kein gh)", () => {
+    const r = lauf({ "api -i user": new Error("gh auth login") }, { besitz: null });
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Kern-Pflicht-Checks: ")), r.out.join("\n"));
+  });
+
+  test("pruefe ohne pflichtChecks und ohne Spiegel wirft nie und meldet keinen Required-Check", () => {
+    const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+    const gh = (a: string[]): string => {
+      if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      throw new Error("404");
+    };
+    const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh, langfuse: null });
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")), []);
+    assert.ok(punkte.some((p) => p.punkt === "Ruleset" && p.ok));
+  });
+
   test("pruefe ohne abgeleitete pflichtChecks fällt auf die Checks des Spiegels zurück (kein stilles Weglassen, factory#117)", () => {
     const leer = { secrets: [], variablen: [], labels: [], boards: [] };
     const gh = (a: string[]): string => {
@@ -579,7 +597,7 @@ describe("voraussetzungenAus: Pflicht-Checks des Kerns (factory#117)", () => {
     assert.deepEqual(ab(wert(eintrag(".github/workflows/k.yml")), null).pflichtChecks, ["Kern", "CI"]);
   });
   test("Manifest nicht lesbar: nur der Spiegel, besitzFehler gesetzt (fail-closed)", () => {
-    for (const besitz of [{ fehler: "Datei fehlt" }, undefined, { wert: {} }, { wert: { eintraege: [null] } }, wert(eintrag(".github/workflows/k.yml", { pflichtChecks: [] }))]) {
+    for (const besitz of [{ fehler: "Datei fehlt" }, undefined, { wert: {} }, { wert: null }, { wert: { eintraege: [null] } }, { wert: { eintraege: ["x", 3] } }, wert(eintrag(".github/workflows/k.yml", { pflichtChecks: [] }))]) {
       const v = ab(besitz);
       assert.deepEqual(v.pflichtChecks, ["CI", "Audit"], JSON.stringify(besitz));
       assert.ok(typeof v.besitzFehler === "string" && v.besitzFehler !== "", JSON.stringify(besitz));

@@ -514,6 +514,8 @@ describe("pruefeManifest", () => {
     assert.match(meld(ein(wf, { schluessel: "k", pflichtChecks: ["Job"] }), '{"k":1}'), /nur an einer ganzen Workflow-Datei/);
     assert.match(meld(ein("scripts/x.mjs", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
     assert.match(meld(ein(".github/workflows/sub/x.yml", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
+    assert.match(meld(ein("x/.github/workflows/w.yml", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
+    assert.match(meld(ein(".github/workflows/w.yml.bak", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
     for (const schlecht of [[], ["a", 3], "Job", [" "], null, [["a"]]]) {
       assert.match(meld(ein(wf, { pflichtChecks: schlecht })), /nicht leere Liste nicht leerer Texte/, JSON.stringify(schlecht));
     }
