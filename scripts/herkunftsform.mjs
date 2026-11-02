@@ -18,6 +18,7 @@
  * Exit 0 = ok, 2 = falscher Aufruf.
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { collectMarkdown, fenceMaske, GEN_MARKER } from "./docs-gen/markdown.mjs";
@@ -44,7 +45,7 @@ export function istFactorySeite(pfad) {
 
 /** Standardliste: alle Factory-Seiten, Agententexte (`.claude/agents`) und Skill-Quellen (`.agents/skills`, nicht die Zeiger unter `.claude/skills/`) unter `wurzel` sowie `AGENTS.md`. */
 export function standardDateien(wurzel = WURZEL) {
-  return [...collectMarkdown(wurzel, ["docs"]).filter(istFactorySeite), ...collectMarkdown(wurzel, [".claude/agents", ".agents/skills"]), "AGENTS.md"];
+  return [...collectMarkdown(wurzel, ["docs"]).filter(istFactorySeite), ...collectMarkdown(wurzel, [".claude/agents", QUELL_VERZEICHNIS]), "AGENTS.md"];
 }
 
 /** Stellt die nackten Nummern eines Textstücks um; `zaehler` zählt die Umstellungen je Form. Pur bis auf `zaehler`. */
