@@ -788,7 +788,9 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   });
 
   test("ohne Git-Repo: NICHT PRÜFBAR statt grün", () => {
-    const r = lauf({}, { dateien });
+    // AGENTS.md liegt im Root: Root-Kontextdatei ist OK, nur Zeilenenden (kein Git) trägt den Exit 1.
+    const r = lauf({}, { dateien, vorbereiten: (root) => writeFileSync(join(root, "AGENTS.md"), "regeln\n") });
+    assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join(String.fromCharCode(10)));
     assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Zeilenenden: ")), r.out.join("\n"));
     assert.equal(r.code, 1);
   });
