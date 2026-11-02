@@ -811,6 +811,12 @@ describe("Prüfwurzel aus --config (factory#127 L27)", () => {
     assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
   });
 
+  test("ohne --config bleibt die Wurzel des Aufrufers: Standard-Config dort, keine Prüfwurzel-Zeile", () => {
+    const r = lauf({}, { argv: ["--pruefen"] });
+    assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
+    assert.equal(r.code, 0, r.err.join(String.fromCharCode(10)) + r.out.join(String.fromCharCode(10)));
+  });
+
   test("--einrichten leitet keine Prüfwurzel ab", () => {
     const r = lauf({}, { fremderRoot: true, argv: ["--einrichten", "--dry-run", "--config", "<factory-config>"] });
     assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
