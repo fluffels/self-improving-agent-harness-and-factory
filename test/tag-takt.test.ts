@@ -235,6 +235,43 @@ describe("L14: entfernte Exporte sind ein Major", () => {
     expect(gleich.text).toContain("`v1.3.0`");
     expect(gleich.text).not.toContain("Entfernte Exporte");
   });
+  // Blocker A (Runde 1): der verteilte Satz ist die Vereinigung des Manifests am Tag und an HEAD; gelöscht und umbenannt zählen.
+  const MANIFEST_TAG = JSON.stringify({ eintraege: [{ pfad: "scripts/alt.mjs", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] });
+  const mitTag = (dateienImLog: string[], zeige: (r: string, p: string) => string | null, kopf: unknown = MANIFEST, tagManifest: string | null = MANIFEST_TAG) => {
+    const texte: string[] = [];
+    const eins = (k: number) => `\x1e${String(k).repeat(40)}\x1f${vor(k)}\x1ffeat: a (#${k})\x1f\n\n${dateienImLog.join("\n")}\n`;
+    T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => eins(1) + eins(2) + eins(3), ladeManifest: () => kopf, headSha: () => "d".repeat(40), ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: (r: string, p: string) => (p === ".factory/besitz.json" ? (r === "v1.2.3" ? tagManifest : null) : zeige(r, p)), log: () => undefined }, trocken: false });
+    return texte[0] ?? "";
+  };
+  it("lauf: am Tag verteilte, inzwischen gelöschte Datei (nicht mehr im Manifest von HEAD): Major mit Zeile", () => {
+    const text = mitTag(["scripts/alt.mjs"], (ref, pfad) => (ref === "v1.2.3" && pfad === "scripts/alt.mjs" ? "export const alt = 1;" : null));
+    expect(text).toContain("`v2.0.0`");
+    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+  });
+  it("lauf: umbenannte verteilte Datei (Log nennt alten und neuen Pfad): der alte Pfad zählt als gelöscht, Major", () => {
+    const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" ? (ref === "v1.2.3" ? "export const alt = 1;" : null) : "export const a = 1;"));
+    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+  });
+  it("lauf: fehlt das Manifest am Tag, bleibt es beim Manifest von HEAD (kein Absturz, keine Zeile)", () => {
+    const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" && ref !== "v1.2.3" ? null : "export const x = 1;"), MANIFEST, null);
+    expect(text).toContain("`v1.3.0`");
+    expect(text).not.toContain("Entfernte Exporte");
+  });
+  it("lauf: eine verteilte Ganzdatei außerhalb von scripts/ löst keinen Major aus (Anker ^scripts/)", () => {
+    const kopf = { eintraege: [{ pfad: ".claude/hooks", ring: "kern" }] };
+    const text = mitTag([".claude/hooks/x.mjs"], (ref) => (ref === "v1.2.3" ? "export const x = 1;" : null), kopf, JSON.stringify(kopf));
+    expect(text).toContain("`v1.3.0`");
+    expect(text).not.toContain("Entfernte Exporte");
+  });
+  it("exporteAus: `export var` zählt, ein Komma am Ende der Liste ergibt keinen leeren Namen", () => {
+    expect([...X.exporteAus("export var x = 1;")]).toEqual(["x"]);
+    expect([...X.exporteAus("export { a, };")]).toEqual(["a"]);
+  });
+  it("verteilteSkripte und besitzCommits: ein Manifest ohne `eintraege` (oder undefined) ergibt leer statt Absturz", () => {
+    expect(X.verteilteSkripte([commit()], {})).toEqual([]);
+    expect(X.verteilteSkripte([commit()], undefined)).toEqual([]);
+    expect(T.besitzCommits([commit()], {})).toEqual([]);
+  });
 });
 
 describe("lauf", () => {

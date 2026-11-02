@@ -49,7 +49,7 @@ const zelle = (x) =>
     .trim()
     .slice(0, 120) || "-";
 
-/** Pur: Commits aus `git log --first-parent --format=%x1e%H%x1f%cI%x1f%B%x1f --name-only` als `{ sha, datum, betreff, body, dateien[] }`. */
+/** Pur: Commits aus `git log --first-parent --format=%x1e%H%x1f%cI%x1f%B%x1f --name-only --no-renames` als `{ sha, datum, betreff, body, dateien[] }`. */
 export function commitsAusLog(text) {
   return String(text)
     .split("\x1e")
@@ -201,7 +201,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "```",
     "",
     "Checkliste:",
-    `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder das Arbeitsplatz-Inventar des Beziehers; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
+    `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder \`arbeitsplatz.repos\` in der Projekt-Config des Arbeitsplatzes, der sie führt; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach \`npm run docs:gen\` und \`npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>\` fahren und mitcommitten; bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
@@ -214,22 +214,30 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
 
 const KOMMENTAR_ERLEDIGT = "Keine ungetaggten Besitz-PRs mehr (Tag gesetzt), automatisch geschlossen.";
 
-/** Liest alles Nötige; wirft bei einem Git-Fehler. `io.liesCi` darf werfen (dann `unbekannt`). */
-/** Entfernte Exporte je verteilter Skript-Datei zwischen Tag und `sha`: `[{ datei, namen }]`. Ohne `io.zeigeDatei` oder wenn die Datei am Tag fehlte (neu): leer. */
-function entfernteJeDatei(io, { letzterTag, besitz, sha }) {
+/** Entfernte Exporte je verteilter Skript-Datei zwischen Tag und `sha`: `[{ datei, namen }]`. Ohne `io.zeigeDatei` oder wenn die Datei am Tag fehlte (neu): leer. `manifest` = Vereinigung von Tag und HEAD. */
+function entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) {
   if (!io.zeigeDatei) return [];
   const treffer = [];
-  for (const datei of verteilteSkripte(besitz, io.ladeManifest())) {
+  for (const datei of verteilteSkripte(besitz, manifest)) {
     const namen = entfernteExporte(io.zeigeDatei(letzterTag, datei), io.zeigeDatei(sha, datei));
     if (namen.length > 0) treffer.push({ datei, namen });
   }
   return treffer;
 }
 
+/** Das Manifest am Tag (fehlt oder kaputt: leer), damit eine inzwischen gelöschte oder umbenannte verteilte Datei als verteilt zählt. */
+function tagManifest(io, letzterTag) {
+  const g = manifestAusText(io.zeigeDatei && letzterTag ? io.zeigeDatei(letzterTag, MANIFEST) : null);
+  return g.manifest ?? { eintraege: [] };
+}
+
+/** Liest alles Nötige; wirft bei einem Git-Fehler. `io.ladeLaeufe` darf werfen (dann `unbekannt`). */
 function sammle(io, log) {
   const letzterTag = vergleicheTags(io.tags());
   const commits = letzterTag ? commitsAusLog(io.ladeLog(letzterTag)) : [];
-  const besitz = besitzCommits(commits, io.ladeManifest());
+  const kopf = io.ladeManifest();
+  const manifest = { eintraege: [...tagManifest(io, letzterTag).eintraege, ...kopf.eintraege] };
+  const besitz = besitzCommits(commits, manifest);
   const sha = io.headSha();
   let ci = { zustand: "unbekannt", url: null };
   try {
@@ -237,7 +245,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha }) };
+  return { letzterTag, besitz, sha, ci, entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -340,7 +348,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     log,
     istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
     tags: () => git(["tag", "--merged", "HEAD"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
-    ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
+    ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", "--no-renames", `${tag}..HEAD`, "--"]),
     ladeManifest,
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
     zeigeDatei: (ref, pfad) => {

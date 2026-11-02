@@ -227,7 +227,7 @@ function setzeAusfuehrbitImIndex(ziel, pfade, git, out) {
   return `Ausführbit im Index von '${ziel}' fehlt (erwartet 100755): ${falsch.join(", ")}\nFix: git -C <ziel> update-index --add --chmod=+x -- ${falsch.join(" ")}`;
 }
 
-/** Hinweiszeilen, wenn eine Kontextdatei nach dem Sync über dem Budget des (alten) Stands läge; Text aus dem Plan, sonst aus dem Ziel; geduldete Ausnahmen des Ziels ohne Hinweis. */
+/** Hinweiszeilen, wenn eine Kontextdatei nach dem Sync über dem Budget des ausführenden Werkzeugs läge; Text aus dem Plan, sonst aus dem Ziel; geduldete Ausnahmen des Ziels ohne Hinweis. */
 function kontextHinweise(plan, ziel) {
   const lies = (datei) => plan.dateien.get(datei)?.text ?? liesDatei(ziel)(datei);
   let ausnahmen = [];

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
@@ -82,7 +82,7 @@ afterEach(() => {
 
 const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean; relativ?: boolean } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   opt.vorbereiten?.(root);
@@ -98,8 +98,8 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
   mkdirSync(join(root, ".factory"), { recursive: true });
   writeFileSync(join(root, ".factory", "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
-  const fremd = opt.fremderRoot ? mkdtempSync(join(tmpdir(), "doctor-fremd-")) : root;
-  if (fremd !== root) ordner.push(fremd);
+  const fremd = opt.relativ ? dirname(root) : opt.fremderRoot ? mkdtempSync(join(tmpdir(), "doctor-fremd-")) : root;
+  if (fremd !== root && !opt.relativ) ordner.push(fremd);
   const welt: Record<string, unknown> = { ...GESUND, ...over };
   // Regeln liefert `gh api --paginate --slurp` als Seiten; eine flache Regelliste in den Fixtures ist eine Seite (Seitenform steht in "Regeln über zwei Seiten").
   for (const [k, w] of Object.entries(welt)) if (k.includes("/rules/branches/") && Array.isArray(w) && !w.some(Array.isArray)) welt[k] = [w];
@@ -113,7 +113,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     return typeof w === "string" ? w : JSON.stringify(w);
   };
   const r: Lauf = { code: -1, out: [], err: [], aufrufe };
-  r.code = doctor.main((opt.argv ?? ["--pruefen", "--config", "<config>"]).map((a) => (a === "<config>" ? join(root, "projekt.json") : a === "<factory-config>" ? join(root, ".factory", "projekt.json") : a)), {
+  r.code = doctor.main((opt.argv ?? ["--pruefen", "--config", "<config>"]).map((a) => (a === "<config>" ? join(root, "projekt.json") : a === "<factory-config>" ? join(root, ".factory", "projekt.json") : a === "<relativ>" ? relative(fremd, join(root, ".factory", "projekt.json")) : a)), {
     rootDir: fremd,
     gh,
     env: opt.env ?? {},
@@ -806,6 +806,12 @@ describe("Prüfwurzel aus --config (factory#127 L27)", () => {
     const r = lauf({}, { fremderRoot: true, argv: ["--pruefen", "--config", "<factory-config>"] });
     assert.ok(r.out.some((z) => z.startsWith("Prüfwurzel: ") && z.includes("doctor-") && !z.includes("doctor-fremd-")), r.out.join(String.fromCharCode(10)));
     assert.equal(r.code, 0, r.out.join(String.fromCharCode(10)));
+  });
+
+  test("ein relatives --config mit Unterordner wird einmal aufgelöst (Aufrufer-Wurzel ist der Elternordner des Beziehers)", () => {
+    const r = lauf({}, { relativ: true, argv: ["--pruefen", "--config", "<relativ>"] });
+    assert.ok(r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
+    assert.equal(r.code, 0, r.err.join(String.fromCharCode(10)) + r.out.join(String.fromCharCode(10)));
   });
 
   test("eine Config außerhalb von .factory behält die Wurzel des Aufrufers (keine Prüfwurzel-Zeile)", () => {

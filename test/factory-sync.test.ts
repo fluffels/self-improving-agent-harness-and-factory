@@ -1304,6 +1304,14 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, HINWEIS);
   });
+  test("ändert der Plan die Kontextdatei nicht, wird der Zieltext gemessen (Rückfall): Hinweis kommt trotzdem", () => {
+    const z = baueZiel();
+    schreibe(z, "AGENTS.md", `# Projekt\n\n${blockText("neuer Stopp")}\n\n${GROSS}`);
+    schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
+    const r = vomTag(baueQuelle(), z, ["--trocken"]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, HINWEIS);
+  });
   test("unter Budget und geduldete Ausnahme: keine Hinweiszeile", () => {
     const klein = vomTag(baueQuelle(), baueZiel(), ["--trocken"]);
     assert.equal(klein.code, 0, klein.err);

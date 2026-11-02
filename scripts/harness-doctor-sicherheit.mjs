@@ -10,7 +10,7 @@
 
 import { ausFehler as ausFehlerRoh, gut, luecke as lueckeRoh, nichtPruefbar as nichtPruefbarRoh } from "./harness-doctor-ergebnis.mjs";
 
-export const LINK_RULESET ="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository";
+export const LINK_RULESET = "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository";
 export const LINK_ACTIONS = "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository";
 const DOKU = "https://docs.github.com/en/code-security";
 

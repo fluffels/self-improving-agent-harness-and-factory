@@ -7,6 +7,8 @@
  * Befund ist selbst rot (Liste nur kürzen).
  *
  * Blatt ist, wer als erste Zeile `// Blatt-Modul …` trägt (Glossar „Blatt-Modul“); die Liste wird daraus abgeleitet, ein neues Blatt braucht nur die Kopfzeile.
+ * Zweiter Block: ein Blatt-Modul importiert nur `node:`-Builtins oder andere Blätter (Negativfixtures unten).
+ * Entscheidung (L13): der eigene Import-Parser bleibt, weil die Namen der Bindungen gebraucht werden (Re-Export-Erkennung); `importeAus` liefert nur Spezifizierer.
  * Grenzen: Ein Blatt ohne diese Kopfzeile wird nicht erkannt (die Kopfzeile ist die Anmeldung, nicht die Importprüfung). Erkannt werden nur Imports und Exports in Klammerform mit doppelten
  * Anführungszeichen; `import * as ns` samt `export { ns }` und ein Re-Export über ein Zwischenmodul (das selbst kein Blatt ist) nicht.
  *
@@ -74,6 +76,14 @@ export function reexportFunde(pfad: string, text: string, blaetter: Record<strin
   return funde;
 }
 
+/** Pur: Meldungen zu den Importen eines Blatt-Moduls: jeder statische Import und Re-Export muss `node:` oder ein anderes Blatt (aufgelöster Repo-Pfad in `blaetter`) sein. */
+export function blattImportMeldungen(pfad: string, text: string, blaetter: readonly string[]): string[] {
+  const spezifizierer = [...text.matchAll(/^(?:import|export)\b[^"';]*?\bfrom\s*"([^"]+)"|^import\s*"([^"]+)"/gm)].map((m) => m[1] ?? m[2]);
+  return spezifizierer
+    .filter((spec) => !spec.startsWith("node:") && !(spec.startsWith(".") && blaetter.includes(posix.join(dirname(pfad), spec))))
+    .map((spec) => `${pfad}: importiert "${spec}" (ein Blatt-Modul importiert nur node:-Builtins oder andere Blätter)`);
+}
+
 const mjsPfade = (rel: string): string[] => dateienUnter(WURZEL, rel, /\.mjs$/);
 const lies = (pfad: string): string => readFileSync(join(WURZEL, pfad), "utf8");
 
@@ -124,6 +134,30 @@ describe("Blatt-Importe (factory#114)", () => {
       expect(istBlatt("// Kein Blatt-Modul, nur Prosa")).toBe(false);
       expect(istBlatt("// Blatt-Modulgrenze")).toBe(false);
       expect(istBlatt("/* Blatt-Modul */")).toBe(false);
+    });
+  });
+
+  test("jedes Blatt-Modul importiert nur node:-Builtins oder andere Blätter", () => {
+    expect(BLAETTER.length).toBeGreaterThan(3);
+    expect(BLAETTER.flatMap((b) => blattImportMeldungen(b, lies(b), BLAETTER))).toEqual([]);
+  });
+
+  describe("blattImportMeldungen (Fixtures)", () => {
+    const BL = ["scripts/a.mjs", "scripts/b.mjs"];
+    const m = (text: string, pfad = "scripts/a.mjs") => blattImportMeldungen(pfad, text, BL);
+    test("erlaubt: node:-Builtins und andere Blätter, auch mehrzeilig und als Re-Export", () => {
+      expect(m('import { x } from "node:fs";\nimport { y } from "./b.mjs";\nexport { z } from "./b.mjs";')).toEqual([]);
+      expect(m('import {\n  x,\n  y,\n} from "./b.mjs";')).toEqual([]);
+    });
+    test("Negativ: ein Nicht-Blatt, ein Paket und ein Seiteneffekt-Import sind Funde", () => {
+      expect(m('import { x } from "./lib.mjs";')).toEqual(['scripts/a.mjs: importiert "./lib.mjs" (ein Blatt-Modul importiert nur node:-Builtins oder andere Blätter)']);
+      expect(m('import { parse } from "yaml";')).toHaveLength(1);
+      expect(m('import "./seiteneffekt.mjs";')).toHaveLength(1);
+      expect(m('export * from "./lib.mjs";')).toHaveLength(1);
+    });
+    test("Unterordner werden relativ zur Datei aufgelöst", () => {
+      expect(m('import { x } from "../a.mjs";', "scripts/sub/c.mjs")).toEqual([]);
+      expect(m('import { x } from "./a.mjs";', "scripts/sub/c.mjs")).toHaveLength(1);
     });
   });
 

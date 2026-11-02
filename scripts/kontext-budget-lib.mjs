@@ -1,7 +1,7 @@
 // Blatt-Modul (nur Node-Builtins) und Lib ohne Direktaufruf-Guard; `check-context-size.mjs` und `factory-sync.mjs` importieren sie (Konvention #1398: Einstiege importieren nicht voneinander).
 /* Kontext-Budget (SSOT): Zeichen-Budget je Root-Kontextdatei und die Zählung. `check-context-size.mjs` misst damit das Repo, `factory-sync.mjs` warnt damit
- * im Trockenlauf und beim Sync, bevor der Sync-PR im Ziel rot wird. Grenze: gilt das Budget des eigenen (alten) Stands; ändert der neue Tag das Budget,
- * stimmt der Hinweis erst nach dem Sync. Alles pur, nur Builtins. */
+ * im Trockenlauf und beim Sync, bevor der Sync-PR im Ziel rot wird. Grenze: es gilt das Budget des ausführenden Werkzeugs (Checklisten-Trockenlauf: das der Quelle;
+ * eigenes Werkzeug des Beziehers: sein altes); ändert der neue Tag das Budget, stimmt der Hinweis dort erst nach dem Sync. Alles pur, nur Builtins. */
 
 /** Zeichen-Budget je Root-Kontextdatei (repo-relativer Pfad, #1064). Kalibriert am Bestand
  *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
