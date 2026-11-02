@@ -86,8 +86,8 @@ describe("abweichendeZeilen", () => {
       const x = a.split("\n");
       const y = b.split("\n");
       const t: number[][] = Array.from({ length: x.length + 1 }, () => new Array<number>(y.length + 1).fill(0));
-      for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) t[i]![j] = x[i - 1] === y[j - 1] ? t[i - 1]![j - 1]! + 1 : Math.max(t[i - 1]![j]!, t[i]![j - 1]!);
-      const lcs = t[x.length]![y.length]!;
+      for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) t[i][j] = x[i - 1] === y[j - 1] ? t[i - 1][j - 1] + 1 : Math.max(t[i - 1][j], t[i][j - 1]);
+      const lcs = t[x.length][y.length];
       return Math.max(x.length - lcs, y.length - lcs);
     };
     const folgen: string[][] = [[]];
