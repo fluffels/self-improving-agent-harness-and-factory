@@ -647,7 +647,7 @@ describe("kernEnvNamen und sammleKernEnv", () => {
 });
 
 describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
-  test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
+  test("board-lib ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     // Die Hülle wird aus den Imports abgeleitet (factory#114), keine Handliste: ein neuer Blatt-Import bricht den Test nicht still.
     const huelle = importHuelle("scripts/board-lib.mjs", (pfad) => readFileSync(join(WURZEL, pfad), "utf8"));
@@ -1222,9 +1222,9 @@ describe("factoryLinks.ausnahmen (factory#130)", () => {
     assert.ok(trifft("docs/lessons-learned.md", "docs/lessons-learned.md"));
     assert.ok(!trifft("docs/lessons-learned.md", "docs/lessons-learned.md.alt.md"));
     assert.ok(!trifft("docs/*.md", "docs/a.md.alt"));
-    for (const wörtlich of ["docs/c++.md", "docs/(alt).md", "docs/a^b$c|d.md", "docs/{1}.md"]) {
+    for (const wörtlich of ["docs/c++.md", "docs/(alt).md", "docs/a^b$c|d.md", "docs/a.b.md"]) {
       assert.ok(trifft(wörtlich, wörtlich), wörtlich);
     }
-    assert.ok(!trifft("docs/c++.md", "docs/cc.md") && !trifft("docs/(alt).md", "docs/alt.md") && !trifft("docs/a|b.md", "docs/a.md"));
+    assert.ok(!trifft("docs/c++.md", "docs/cc.md") && !trifft("docs/(alt).md", "docs/alt.md") && !trifft("docs/a|b.md", "docs/a.md") && !trifft("docs/a.b.md", "docs/axb.md"));
   });
 });

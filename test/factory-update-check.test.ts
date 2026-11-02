@@ -42,6 +42,11 @@ describe("updateMeldung", () => {
     assert.equal(m?.neu, "v1.1.0");
     assert.match(m?.text ?? "", /factory-sync\.mjs --quelle <pfad> --tag v1\.1\.0/);
   });
+  test("L23: nennt das Werkzeug der Quelle für ein Manifest, das das eigene nicht kennt", () => {
+    const text = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "";
+    assert.match(text, /„version N unbekannt“/);
+    assert.match(text, /node <quelle>\/scripts\/factory-sync\.mjs --quelle <quelle> --tag <tag>/);
+  });
   test("ein Patch-Release ist ein Update", () => {
     assert.equal(updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.0.1"] })?.neu, "v1.0.1");
   });

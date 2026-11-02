@@ -32,42 +32,34 @@ export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] =
 /** Marker eines Schnappschuss-Blocks (Glossar „Schnappschuss-Block“): die Kern-Konstanten aus `docs-gen/markdown.mjs`, eine Quelle für beide Wächter. */
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
-const marker = rawMarkdown as unknown as { SCHNAPPSCHUSS_START: string; SCHNAPPSCHUSS_ENDE: string };
+const marker = rawMarkdown as unknown as {
+  SCHNAPPSCHUSS_START: string;
+  SCHNAPPSCHUSS_ENDE: string;
+  schnappschussBloecke(zeilen: string[]): { bloecke: [number, number][]; fehler: { zeile: number; art: "verschachtelt" | "ende-ohne-start" | "ohne-ende" }[] };
+};
 export const SCHNAPPSCHUSS_START = marker.SCHNAPPSCHUSS_START;
 export const SCHNAPPSCHUSS_ENDE = marker.SCHNAPPSCHUSS_ENDE;
 const ISO_DATUM = /\d{4}-\d{2}-\d{2}/;
+const FEHLER_TEXT = { verschachtelt: "Schnappschuss-Block verschachtelt", "ende-ohne-start": "Schnappschuss-Ende ohne Start", "ohne-ende": "Schnappschuss-Block ohne Ende" };
 
-/** Findet Reste in den übergebenen Dateien; leer = sauber. */
+/** Findet Reste in den übergebenen Dateien; leer = sauber. Die Blöcke bestimmt `schnappschussBloecke` (Kern); hier bleiben die Datumsprüfung und die Regeln. */
 export function findeReste(dateien: Datei[], regeln: Rest[], ausnahmen: Ausnahme[] = AUSNAHMEN): string[] {
   const treffer: string[] = [];
   for (const d of dateien) {
     if (ausnahmen.some((a) => d.pfad.startsWith(a.praefix))) continue;
     const aktiv = regeln.filter((r) => !REGEL_AUSNAHMEN.some((a) => a.pfad === d.pfad && a.regel === r.name));
-    let blockStart = 0; // Zeilennummer des offenen Schnappschuss-Blocks, 0 = außerhalb
-    let blockDatiert = false; // trägt der offene Block zwischen Start und Ende ein ISO-Datum
-    d.inhalt.split("\n").forEach((zeile, i) => {
-      const marker = zeile.trim();
-      if (marker === SCHNAPPSCHUSS_START) {
-        if (blockStart) treffer.push(`${d.pfad}:${i + 1}: Schnappschuss-Block verschachtelt`);
-        else {
-          blockStart = i + 1;
-          blockDatiert = false;
-        }
-        return;
-      }
-      if (marker === SCHNAPPSCHUSS_ENDE) {
-        if (!blockStart) treffer.push(`${d.pfad}:${i + 1}: Schnappschuss-Ende ohne Start`);
-        else if (!blockDatiert) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Datum`);
-        blockStart = 0;
-        return;
-      }
-      if (blockStart) {
-        if (ISO_DATUM.test(zeile)) blockDatiert = true;
-        return;
-      }
-      for (const r of aktiv) if (r.muster.test(zeile)) treffer.push(`${d.pfad}:${i + 1}: ${r.name}`);
+    const zeilen = d.inhalt.split("\n");
+    const { bloecke, fehler } = marker.schnappschussBloecke(zeilen);
+    const offen = fehler.find((f) => f.art === "ohne-ende")?.zeile ?? zeilen.length; // ein Start ohne Ende blendet bis Dateiende aus (fail-closed durch den Fund)
+    const imBlock = (i: number): boolean => i >= offen || bloecke.some(([s, e]) => i >= s && i <= e);
+    const funde: { zeile: number; text: string }[] = [];
+    for (const f of fehler) funde.push({ zeile: f.zeile, text: FEHLER_TEXT[f.art] });
+    for (const [s, e] of bloecke) if (!zeilen.slice(s + 1, e).some((z) => ISO_DATUM.test(z))) funde.push({ zeile: s, text: "Schnappschuss-Block ohne Datum" });
+    zeilen.forEach((zeile, i) => {
+      if (!imBlock(i)) for (const r of aktiv) if (r.muster.test(zeile)) funde.push({ zeile: i, text: r.name });
     });
-    if (blockStart) treffer.push(`${d.pfad}:${blockStart}: Schnappschuss-Block ohne Ende`);
+    funde.sort((x, y) => x.zeile - y.zeile);
+    for (const f of funde) treffer.push(`${d.pfad}:${f.zeile + 1}: ${f.text}`);
   }
   return treffer;
 }

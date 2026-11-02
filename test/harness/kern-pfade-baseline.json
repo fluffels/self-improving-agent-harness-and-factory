@@ -1,36 +1,25 @@
 {
   "paare": [
-    ".agents/skills/factory/SKILL.md -> .factory/projekt.json",
-    ".agents/skills/factory/ablauf.md -> .factory/projekt.json",
     ".agents/skills/factory/ablauf.md -> docs/ticket-reihenfolge.md",
     ".agents/skills/factory/ablauf.md -> test/harness/holdout.test.ts",
     ".agents/skills/factory/ablauf.md -> test/harness/ticket-ablauf.test.ts",
-    ".agents/skills/review-lenses/SKILL.md -> .factory/projekt.json",
-    ".agents/skills/review-lenses/SKILL.md -> .factory/sync-stand.json",
     ".agents/skills/review-lenses/SKILL.md -> docs/arc42-architektur.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/glossar.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/harness-glossar.md",
     ".agents/skills/review-lenses/SKILL.md -> docs/model-routing.md",
     ".agents/skills/review-lenses/SKILL.md -> test/merge-testabgleich.test.ts",
-    ".claude/agents/factory-lens.md -> .factory/projekt.json",
     ".claude/agents/factory-lens.md -> docs/referenz/anlaufstellen.md",
-    ".claude/agents/factory-planer.md -> .factory/projekt.json",
-    ".claude/agents/factory-planer.md -> .factory/sync-stand.json",
     ".claude/agents/factory-planer.md -> docs/arc42-architektur.md",
     ".claude/agents/factory-planer.md -> docs/glossar.md",
     ".claude/agents/factory-planer.md -> docs/harness-glossar.md",
     ".claude/agents/factory-planer.md -> test/harness/entfernte-pfade.test.ts",
     ".claude/agents/factory-umsetzer.md -> .factory/besitz.json",
-    ".claude/agents/factory-umsetzer.md -> .factory/projekt.json",
     ".claude/agents/factory-umsetzer.md -> docs/referenz/anlaufstellen.md",
     ".claude/agents/factory-umsetzer.md -> test/harness/kern-literale-baseline.json",
     ".claude/agents/holdout-szenario.md -> docs/glossar.md",
     ".claude/agents/holdout-szenario.md -> docs/harness-glossar.md",
     "AGENTS.md -> .claude/CLAUDE.md",
-    "AGENTS.md -> .factory/projekt.json",
-    "AGENTS.md -> .factory/sync-stand.json",
     "AGENTS.md -> .github/protected-paths.json",
-    "docs/codex/einstieg.md -> test/harness/laufzeit-vertraege.test.ts",
-    "docs/factory/entscheidungsprotokoll.md -> .factory/projekt.json"
+    "docs/codex/einstieg.md -> test/harness/laufzeit-vertraege.test.ts"
   ]
 }

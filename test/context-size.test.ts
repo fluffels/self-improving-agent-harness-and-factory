@@ -18,20 +18,22 @@ import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkContextSize from "../scripts/check-context-size.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as budgetLib from "../scripts/kontext-budget-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as pcl from "../scripts/projekt-config-lib.mjs";
 
 type Budget = { file: string; budget: number };
 type Sized = { file: string; chars: number; budget: number };
 type Allow = { datei: string; grund: string };
 
-const CONTEXT_BUDGETS: Budget[] = checkContextSize.CONTEXT_BUDGETS;
+const CONTEXT_BUDGETS: Budget[] = budgetLib.CONTEXT_BUDGETS;
 const ALLOWLIST: Allow[] = (pcl as unknown as { ausnahmenAus(c: unknown): { kontext: Allow[] }; ladeProjektConfig(): unknown }).ausnahmenAus((pcl as unknown as { ladeProjektConfig(): unknown }).ladeProjektConfig()).kontext;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
 // gleiches Muster wie test/harness/agents-md-native.test.ts.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const countChars: (text: string) => number = checkContextSize.countChars;
+const countChars: (text: string) => number = budgetLib.countChars;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const findStale: (sizes: Sized[], allowlist: Allow[]) => Allow[] = checkContextSize.findStale;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access

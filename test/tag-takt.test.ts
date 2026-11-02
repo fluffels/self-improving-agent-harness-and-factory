@@ -12,7 +12,7 @@ const T = raw as unknown as {
   tagTitel: (t: string) => string;
   commitsAusLog: (t: string) => Commit[];
   besitzCommits: (c: Commit[], m: unknown) => Commit[];
-  naechsterTag: (t: string, c: Commit[]) => string;
+  naechsterTag: (t: string, c: Commit[], entfernt?: { datei: string; namen: string[] }[]) => string;
   dringlichSignal: (b: Commit[], k: string) => { grund: string; sha: string } | null;
   entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
@@ -136,11 +136,33 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git tag -a v1.3.0 ${"b".repeat(40)}`, "git push origin v1.3.0", "Trockenlauf-Sync in einem Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf-Sync je Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
     expect(T.tagTitel("v1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
+  });
+  it("L5: Tag-Befehl aus einem Worktree auf dem Commit, mit Hook-Hinweis und Aufräumen", () => {
+    const sha = "b".repeat(40);
+    const block = body.slice(body.indexOf("```") + 3, body.indexOf("```", body.indexOf("```") + 3)).split("\n").filter(Boolean);
+    const wt = ".claude/worktrees/tag-v1.3.0";
+    expect(block).toEqual(["git fetch origin --tags", `gh run list --commit ${sha} --workflow ci.yml`, `git worktree add --detach ${wt} ${sha}`, `git -C ${wt} tag -a v1.3.0 ${sha} -m "v1.3.0"`, `git -C ${wt} push origin v1.3.0`, `git worktree remove ${wt}`]);
+    expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
+    expect(body).not.toMatch(/^git tag -a/m);
+  });
+  it("L1: Trockenlauf gegen frischen Stand des Beziehers (Export von origin/main), nie lokaler Checkout dahinter, mit --ziel", () => {
+    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf-Sync")) ?? "";
+    for (const teil of ["nie gegen einen lokalen Checkout hinter `origin/main`", "gh repo clone <bezieher> <leerer-ordner> -- --depth 1", "git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>", "--ziel <leerer-ordner> --entwurf --trocken", "keinen Bezieher", "Kontextgröße gegen das Budget"]) {
+      expect(punkt, teil).toContain(teil);
+    }
+  });
+  it("L4 und L23: Schritte im Ziel nach dem Sync (docs:gen, check:factorylinks --schreiben, nie Wächter-gebundene Sätze) und das Werkzeug der Quelle", () => {
+    const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
+    const sync = punkte.find((z) => z.includes("Sync-PR je Bezieher mit")) ?? "";
+    expect(sync).toContain("npm run docs:gen");
+    expect(sync).toContain("npm run check:factorylinks -- --schreiben --quelle");
+    expect(sync).toContain("nie Wächter-gebundene Sätze");
+    expect(sync).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
   });
   it("Checkliste: CI des Sync-PR je Bezieher nach dem Sync-PR, Schließen erst bei grüner CI, Patch-Tag nie verschoben (#101 L21 L30)", () => {
     const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
@@ -157,6 +179,98 @@ describe("CI-Zustand und Body", () => {
     const b = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: viele, aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null } });
     expect(b).toContain("… und 3 weitere");
     expect(b).toContain("fix: a b c (#1)");
+  });
+});
+
+describe("L14: entfernte Exporte sind ein Major", () => {
+  const X = raw as unknown as {
+    exporteAus: (t: string | null) => Set<string>;
+    entfernteExporte: (alt: string | null, neu: string | null) => string[];
+    verteilteSkripte: (b: Commit[], m: unknown) => string[];
+  };
+  const alt = "export const a = 1;\nexport let b = 2;\nexport function c() {}\nexport async function d() {}\nexport class E {}\nconst f = 1;\nexport { f, f as g };\n";
+  it("erkennt alle Export-Formen (äußerer Name bei as), Nicht-Exporte nicht", () => {
+    expect([...X.exporteAus(alt)].sort()).toEqual(["E", "a", "b", "c", "d", "f", "g"]);
+    expect([...X.exporteAus("function intern() {}\n// export const x\n  export const eingerueckt = 1;")]).toEqual([]);
+    expect(X.exporteAus(null).size).toBe(0);
+  });
+  it("entfernteExporte: entfernt, umbenannt, gelöscht (null); neu und unverändert nicht", () => {
+    expect(X.entfernteExporte("export const a = 1;\nexport const b = 2;", "export const a = 1;")).toEqual(["b"]);
+    expect(X.entfernteExporte("export function a() {}", "export function a2() {}")).toEqual(["a"]);
+    expect(X.entfernteExporte("export const a = 1;\nexport const b = 2;", null)).toEqual(["a", "b"]);
+    expect(X.entfernteExporte("export const a = 1;", "export const a = 1;\nexport const neu = 2;")).toEqual([]);
+  });
+  it("verteilteSkripte: nur Skript-Dateien unter einem verteilten Ganzdatei-Eintrag", () => {
+    const m = { eintraege: [{ pfad: "scripts/a.mjs", ring: "kern" }, { pfad: "scripts/lib", ring: "kern" }, { pfad: "scripts/o.mjs", ring: "oberflaeche" }, { pfad: "scripts/b.mjs", ring: "kern", block: "x" }] };
+    const b = [commit({ dateien: ["scripts/a.mjs", "scripts/lib/z.cjs", "scripts/lib/readme.md", "scripts/o.mjs", "scripts/b.mjs", "src/x.mjs"] }), commit({ dateien: ["scripts/a.mjs"] })];
+    expect(X.verteilteSkripte(b, m)).toEqual(["scripts/a.mjs", "scripts/lib/z.cjs"]);
+  });
+  it("naechsterTag: entfernter Export hebt auf Major, auch über feat; ohne bleibt es Minor", () => {
+    const feat = [commit({ betreff: "feat: x (#1)", body: "feat: x (#1)" })];
+    expect(T.naechsterTag("v1.2.3", feat, [{ datei: "scripts/a.mjs", namen: ["b"] }])).toBe("v2.0.0");
+    expect(T.naechsterTag("v1.2.3", feat, [])).toBe("v1.3.0");
+    expect(T.naechsterTag("v1.2.3", feat)).toBe("v1.3.0");
+  });
+  it("tagBody nennt die entfernten Exporte je Datei", () => {
+    const b = T.tagBody({ tag: "v2.0.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null }, entfernt: [{ datei: "scripts/a.mjs", namen: ["b", "c"] }] });
+    expect(b).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b, c");
+  });
+  const dateien: Record<string, Record<string, string | null>> = {
+    "v1.2.3": { "scripts/a.mjs": "export const a = 1;\nexport const b = 2;", "scripts/n.mjs": null },
+    [`${"d".repeat(40)}`]: { "scripts/a.mjs": "export const a = 1;", "scripts/n.mjs": "export const n = 1;" },
+  };
+  const ioMit = (zeige: (r: string, p: string) => string | null) => {
+    const texte: string[] = [];
+    const eins = (k: number) => `\x1e${String(k).repeat(40)}\x1f${vor(k)}\x1ffeat: a (#${k})\x1f\n\nscripts/a.mjs\nscripts/n.mjs\n`;
+    const log = eins(1) + eins(2) + eins(3);
+    const code = T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => log, ladeManifest: () => MANIFEST, headSha: () => "d".repeat(40), ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: zeige, log: () => undefined }, trocken: false });
+    return { code, text: texte[0] ?? "" };
+  };
+  it("lauf: Datei am Tag vorhanden, jetzt ohne Export: Major und Zeile; am Tag fehlende (neue) Datei zählt nicht", () => {
+    const r = ioMit((ref, pfad) => dateien[ref]?.[pfad] ?? null);
+    expect(r.text).toContain("`v2.0.0`");
+    expect(r.text).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b");
+    expect(r.text).not.toContain("scripts/n.mjs`:");
+    const gleich = ioMit((ref, pfad) => (pfad === "scripts/n.mjs" ? null : dateien["v1.2.3"][pfad] ?? null));
+    expect(gleich.text).toContain("`v1.3.0`");
+    expect(gleich.text).not.toContain("Entfernte Exporte");
+  });
+  // Blocker A (Runde 1): der verteilte Satz ist die Vereinigung des Manifests am Tag und an HEAD; gelöscht und umbenannt zählen.
+  const MANIFEST_TAG = JSON.stringify({ eintraege: [{ pfad: "scripts/alt.mjs", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] });
+  const mitTag = (dateienImLog: string[], zeige: (r: string, p: string) => string | null, kopf: unknown = MANIFEST, tagManifest: string | null = MANIFEST_TAG) => {
+    const texte: string[] = [];
+    const eins = (k: number) => `\x1e${String(k).repeat(40)}\x1f${vor(k)}\x1ffeat: a (#${k})\x1f\n\n${dateienImLog.join("\n")}\n`;
+    T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => eins(1) + eins(2) + eins(3), ladeManifest: () => kopf, headSha: () => "d".repeat(40), ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: (r: string, p: string) => (p === ".factory/besitz.json" ? (r === "v1.2.3" ? tagManifest : null) : zeige(r, p)), log: () => undefined }, trocken: false });
+    return texte[0] ?? "";
+  };
+  it("lauf: am Tag verteilte, inzwischen gelöschte Datei (nicht mehr im Manifest von HEAD): Major mit Zeile", () => {
+    const text = mitTag(["scripts/alt.mjs"], (ref, pfad) => (ref === "v1.2.3" && pfad === "scripts/alt.mjs" ? "export const alt = 1;" : null));
+    expect(text).toContain("`v2.0.0`");
+    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+  });
+  it("lauf: umbenannte verteilte Datei (Log nennt alten und neuen Pfad): der alte Pfad zählt als gelöscht, Major", () => {
+    const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" ? (ref === "v1.2.3" ? "export const alt = 1;" : null) : "export const a = 1;"));
+    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+  });
+  it("lauf: fehlt das Manifest am Tag, bleibt es beim Manifest von HEAD (kein Absturz, keine Zeile)", () => {
+    const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" && ref !== "v1.2.3" ? null : "export const x = 1;"), MANIFEST, null);
+    expect(text).toContain("`v1.3.0`");
+    expect(text).not.toContain("Entfernte Exporte");
+  });
+  it("lauf: eine verteilte Ganzdatei außerhalb von scripts/ löst keinen Major aus (Anker ^scripts/)", () => {
+    const kopf = { eintraege: [{ pfad: ".claude/hooks", ring: "kern" }] };
+    const text = mitTag([".claude/hooks/x.mjs"], (ref) => (ref === "v1.2.3" ? "export const x = 1;" : null), kopf, JSON.stringify(kopf));
+    expect(text).toContain("`v1.3.0`");
+    expect(text).not.toContain("Entfernte Exporte");
+  });
+  it("exporteAus: `export var` zählt, ein Komma am Ende der Liste ergibt keinen leeren Namen", () => {
+    expect([...X.exporteAus("export var x = 1;")]).toEqual(["x"]);
+    expect([...X.exporteAus("export { a, };")]).toEqual(["a"]);
+  });
+  it("verteilteSkripte und besitzCommits: ein Manifest ohne `eintraege` (oder undefined) ergibt leer statt Absturz", () => {
+    expect(X.verteilteSkripte([commit()], {})).toEqual([]);
+    expect(X.verteilteSkripte([commit()], undefined)).toEqual([]);
+    expect(T.besitzCommits([commit()], {})).toEqual([]);
   });
 });
 
@@ -204,6 +318,24 @@ describe("lauf", () => {
     expect(T.lauf({ io: io(), trocken: true })).toBe(0);
     expect(aufrufe).toEqual([]);
     expect(log.join("\n")).toContain("[dry-run] 🏷️ Tag v1.3.0");
+  });
+  it("L3: geclaimtes Ticket: --dry-run gibt den Vorschlag trotzdem aus, ohne --dry-run bleibt es bei nichts und ohne Schreib-IO", () => {
+    const geclaimt = { ladeOffene: () => [tagOffen({ assignees: ["x"] })] };
+    expect(T.lauf({ io: io(geclaimt), trocken: true })).toBe(0);
+    const t = log.join("\n");
+    expect(t).toContain("nichts");
+    expect(t).toContain("[dry-run] 🏷️ Tag v1.3.0 setzen und syncen");
+    expect(t).toContain("[dry-run] - Vorgeschlagener Tag");
+    T.lauf({ io: io(geclaimt) });
+    expect(aufrufe).toEqual([]);
+    expect(log.join("\n")).not.toContain("[dry-run]");
+    T.lauf({ io: io({ ladeLog: () => "", ...geclaimt }), trocken: true });
+    expect(log.join("\n")).not.toContain("[dry-run]");
+    // ohne Claim und ohne Auslöser (zwei jüngere Besitz-PRs) gibt es keinen Vorschlag, auch nicht im Dry-Run
+    const zwei = `\x1e${"1".repeat(40)}\x1f${vor(1)}\x1ffix: a (#1)\x1f\n\nscripts/a.mjs\n\x1e${"2".repeat(40)}\x1f${vor(2)}\x1ffix: b (#2)\x1f\n\nscripts/a.mjs\n`;
+    T.lauf({ io: io({ ladeLog: () => zwei }), trocken: true });
+    expect(log.join("\n")).toContain("Tag-Takt: nichts");
+    expect(log.join("\n")).not.toContain("[dry-run]");
   });
   it("ein werfender CI-Leser legt trotzdem an, mit Status unbekannt", () => {
     const text: string[] = [];

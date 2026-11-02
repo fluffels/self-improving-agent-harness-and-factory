@@ -30,7 +30,7 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
 }
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/").endsWith("/AGENTS.md") });
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
@@ -41,7 +41,7 @@ describe("Root-Kontextdatei", () => {
   });
 
   test.each(["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"])("%s im Root ist eine Lücke mit Fix", (rel) => {
-    const p = punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith(`/${rel}`) }), "Root-Kontextdatei");
+    const p = punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/") === `/x/${rel}` }), "Root-Kontextdatei");
     expect(p.ok).toBe(false);
     expect(p.nichtPruefbar).toBeUndefined();
     expect(p.befund).toContain(rel);
@@ -57,13 +57,13 @@ describe("Root-Kontextdatei", () => {
   });
 
   test("eine CLAUDE.md ohne AGENTS.md bleibt eine Lücke (kein NICHT PRÜFBAR)", () => {
-    const p = punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/CLAUDE.md") }), "Root-Kontextdatei");
+    const p = punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: (pfad) => pfad.replaceAll("\\", "/") === "/x/CLAUDE.md" }), "Root-Kontextdatei");
     expect(p.ok).toBe(false);
     expect(p.nichtPruefbar).toBeUndefined();
   });
 
   test("src/CLAUDE.md im Unterordner trifft nicht", () => {
-    expect(punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/src/CLAUDE.md") }), "Root-Kontextdatei").ok).toBe(true);
+    expect(punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/") === "/x/src/CLAUDE.md" }), "Root-Kontextdatei").ok).toBe(true);
   });
 });
 
@@ -108,13 +108,13 @@ describe("Zeilenenden", () => {
   });
 
   test("leerer Index: NICHT PRÜFBAR statt grün, Root-Kontextdatei bleibt bewertet", () => {
-    const e = lauf([], { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/CLAUDE.md") });
+    const e = lauf([], { existiert: (pfad) => pfad.replaceAll("\\", "/") === "/x/CLAUDE.md" });
     expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
     expect(punkt(e, "Root-Kontextdatei").ok).toBe(false);
   });
 
   test("wirft git: NICHT PRÜFBAR mit Grund und Fix, Root-Kontextdatei bleibt bewertet", () => {
-    const e = pruefe({ rootDir: "/x", git: () => { throw new Error("fatal: not a git repository"); }, existiert: (p) => p.replaceAll("\\", "/").endsWith("/AGENTS.md") });
+    const e = pruefe({ rootDir: "/x", git: () => { throw new Error("fatal: not a git repository"); }, existiert: (p) => p.replaceAll("\\", "/") === "/x/AGENTS.md" });
     expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
     expect(punkt(e, "Zeilenenden").befund).toContain("not a git repository");
     expect(punkt(e, "Zeilenenden").fix).toBeTruthy();

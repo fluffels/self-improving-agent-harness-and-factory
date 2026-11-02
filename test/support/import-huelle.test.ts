@@ -21,6 +21,17 @@ describe("importHuelle", () => {
     const eltern: Record<string, string> = { "s/a.mjs": 'import b from "../lib/b.mjs";', "lib/b.mjs": "" };
     assert.deepEqual(importHuelle("s/a.mjs", (p) => eltern[p] ?? ""), ["lib/b.mjs", "s/a.mjs"]);
   });
+  test("gemeinsame Auslegung (factory#127): endungslose Importe, require und einfache Anführungszeichen zählen, ein unauflösbarer Import wirft", () => {
+    const q: Record<string, string> = { "s/a.cjs": "const b = require('./b');", "s/b.cjs": "" };
+    const leser = (p: string): string => {
+      const t = q[p];
+      if (t === undefined) throw new Error(`fehlt ${p}`);
+      return t;
+    };
+    assert.deepEqual(importHuelle("s/a.cjs", leser), ["s/a.cjs", "s/b.cjs"]);
+    assert.throws(() => importHuelle("s/a.cjs", (p) => (p === "s/a.cjs" ? q[p] ?? "" : leser("s/nix"))), /nicht auflösbar/);
+    assert.throws(() => importHuelle("s/p.cjs", () => "const y = require('yaml');"), /weder node: noch relativ/);
+  });
   test("ein Paketimport bricht ab", () => {
     assert.throws(() => importHuelle("s/c.mjs", (p) => quellen[p] ?? ""), /weder node: noch relativ/);
   });

@@ -15,7 +15,9 @@
  * Pfad-Hülle (factory#114): dieselbe Regel für Skript-, Test- und Doku-Pfade in Code. Je Token (durch Leerraum getrennt) in Inline-Code oder in einem Code-Fence
  * einer verteilten Markdown-Einheit, das dem Muster `PFAD_MUSTER` entspricht (Wurzel `scripts|test|docs|.github|.claude|.agents|.factory`, Endung `mjs|cjs|js|ts|json|md|yaml|yml`;
  * ein Suffix `:zeile` oder `#anker` fällt weg), muss das Ziel ein verteilter Manifest-Pfad sein. Jedes andere (Quelle, Ziel)-Paar steht in `kern-pfade-baseline.json`
- * (nur sinkend). Bewusste Grenze (Pfad-Hülle): Pfade im Fließtext ohne Code, Pfade mit Platzhalter, Glob oder Klammer (`<nr>`, `*`, `{a,b}`), andere Wurzeln und Endungen,
+ * (nur sinkend). Ausgenommen sind Ziele, die im Bezieher entstehen und nie verteilt werden (`PROJEKT_CONFIG`, `STAND_PFAD`, `BEZIEHER_DATEIEN`): ein für uns behobenes
+ * False Positive (die Dateien gehören dem Bezieher, ihr Pfad ist im Kern richtig), kein Lockern im Sinne von ADR 0027; jeder andere nicht verteilte Pfad bleibt ein Paar.
+ * Bewusste Grenze (Pfad-Hülle): Pfade im Fließtext ohne Code, Pfade mit Platzhalter, Glob oder Klammer (`<nr>`, `*`, `{a,b}`), andere Wurzeln und Endungen,
  * Ordner ohne Dateiendung, und ein Pfad, der nur als Teil eines längeren Tokens steht (`./scripts/x.mjs` zählt, `$(pwd)/scripts/x.mjs` nicht). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -26,6 +28,11 @@ import { ladeBesitzManifest } from "../support/besitz-anker";
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+// Die beiden Bezieher-Dateien, die der Kern nennt, aber nie verteilt: die Namen kommen aus ihren Besitzern, nicht als Literal.
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { PROJEKT_CONFIG } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { STAND_PFAD } from "../../scripts/sync-stand-lib.mjs";
 const { linkStellen, linkZiel, fenceMaske } = rawMarkdown as unknown as {
   linkStellen: (md: string) => { path: string }[];
   linkZiel: (datei: string, pfad: string) => string;
@@ -64,6 +71,9 @@ export function markdownZiele(quelle: string, text: string): string[] {
 
 /** Ein Pfad in Code: Wurzelordner des Repos, Datei mit bekannter Endung; danach kein Namensrest (`.bak`, `-x`), `:zeile` und `#anker` fallen weg. */
 const PFAD_MUSTER = /^(\.\/)?(scripts|test|docs|\.github|\.claude|\.agents|\.factory)\/[^\s<>*{}]+\.(mjs|cjs|js|ts|json|md|ya?ml)(?![\w/-]|\.\w)/;
+
+/** Dateien, die der Kern nennt und nie verteilt, weil sie im Bezieher entstehen (Projekt-Config, Sync-Stand): als Ziel der Pfad-Hülle erlaubt. */
+const BEZIEHER_DATEIEN = new Set<string>([PROJEKT_CONFIG, STAND_PFAD]);
 
 /** Repo-relative Pfade aus Inline-Code und Code-Fences von `text` (ohne `./`, dedupliziert). */
 export function pfadZiele(text: string): string[] {
@@ -104,7 +114,7 @@ export function fremdeLinks(eintraege: Eintrag[], lies: (pfad: string) => string
 
 /** Die Pfad-Paare `quelle -> ziel` aus Code (Pfad-Hülle), deren Ziel kein verteilter Manifest-Pfad ist (sortiert, ohne Doppelte). */
 export function fremdePfade(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  return fremdePaare(eintraege, lies, (_quelle, einheit) => pfadZiele(einheit));
+  return fremdePaare(eintraege, lies, (_quelle, einheit) => pfadZiele(einheit).filter((ziel) => !BEZIEHER_DATEIEN.has(ziel)));
 }
 
 interface Meldungen {
@@ -279,6 +289,10 @@ describe("Pfad-Hülle (factory#114)", () => {
       const ring = (rawBesitz as unknown as { NUR_FACTORY: string[] }).NUR_FACTORY[0];
       assert.ok(ring, "NUR_FACTORY ist leer: der Test braucht einen nicht verteilten Ring");
       assert.deepEqual(fremdePfade([e("docs/a.md"), e("scripts/k.mjs", { ring }), e("scripts/fremd.mjs")], lies), ["docs/a.md -> scripts/k.mjs"]);
+    });
+    test("die Projekt-Config und der Sync-Stand sind erlaubte Ziele (sie leben im Bezieher), jeder andere nicht verteilte .factory-Pfad bleibt ein Paar", () => {
+      const dok = (p: string): string | null => (p === "docs/c.md" ? `\`${PROJEKT_CONFIG}\` \`${STAND_PFAD}\` \`.factory/andere.json\`` : null);
+      assert.deepEqual(fremdePfade([e("docs/c.md")], dok), ["docs/c.md -> .factory/andere.json"]);
     });
     test("nur der Block zwischen den Markern zählt; Nicht-Markdown, JSON-Schlüssel und fehlende Dateien werden übersprungen", () => {
       const eintraege = [e("docs/blk.md", { block: "k" }), e("scripts/k.mjs"), e("docs/fehlt.md"), e("docs/a.md", { schluessel: "s" })];

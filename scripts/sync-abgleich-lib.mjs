@@ -1,4 +1,4 @@
-// Erst-Übernahme-Schutz und Vorlage-Einheiten des Sync-Werkzeugs (factory#118): Blatt-Lib, nur Node-Builtins, keine lokalen Importe.
+// Blatt-Modul: Erst-Übernahme-Schutz und Vorlage-Einheiten des Sync-Werkzeugs (factory#118). Nur Node-Builtins, keine lokalen Importe.
 // Erst-Übernahme: eine ganze Datei, die noch nicht im alten Sync-Stand steht und im Ziel anders vorliegt, überschreibt der Sync nie still;
 // erst `--uebernehmen <pfad>` gibt sie frei. Vorlage (`"art": "vorlage"` im Manifest): wird nur angelegt, wenn sie fehlt, und nie überschrieben.
 

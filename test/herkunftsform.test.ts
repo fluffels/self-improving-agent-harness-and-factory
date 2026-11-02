@@ -94,7 +94,7 @@ describe("umschreiben: Hülle", () => {
     expect(u("a #1234\r\nb #1234")).toBe("a quellprojekt#1234\r\nb quellprojekt#1234");
   });
   it("ohne Treffer ist der Text gleich und die Zähler sind 0", () => {
-    expect(H.umschreiben("nichts", { ab: AB })).toEqual({ text: "nichts", quellprojekt: 0, factory: 0 });
+    expect(H.umschreiben("nichts", { ab: AB })).toEqual({ text: "nichts", quellprojekt: 0, factory: 0, factoryLang: 0 });
   });
   it("ein unbrauchbares `ab` wirft", () => {
     expect(() => H.umschreiben("x", { ab: 100 })).toThrow(/ab muss/);
@@ -151,6 +151,24 @@ describe("main", () => {
       spy.mockRestore();
     }
     expect(zeilen).toEqual(["docs/a.md: 1x quellprojekt#, 0x factory#", "AGENTS.md: 1x quellprojekt#, 0x factory#", "Probelauf (nichts geschrieben): 2 Nummern"]);
+  });
+  it("Probelauf: factory#-Umstellungen mit mindestens 3 Ziffern heißen „von Hand prüfen“, kurze und --schreiben nicht", () => {
+    const dir = repo();
+    writeFileSync(join(dir, "docs/c.md"), "a #105 b #7 c #42 d #1234\n");
+    const lauf = (argv: string[]) => {
+      const zeilen: string[] = [];
+      const spy = vi.spyOn(console, "log").mockImplementation((z: string) => void zeilen.push(z));
+      try {
+        H.main(argv, dir);
+      } finally {
+        spy.mockRestore();
+      }
+      return zeilen.filter((z) => z.startsWith("docs/c.md"));
+    };
+    expect(lauf(["--ab", "120"])).toEqual(["docs/c.md: 1x quellprojekt#, 3x factory# (davon 1 mit mindestens 3 Ziffern: von Hand prüfen, Quellprojekt-Nummer unter --ab?)"]);
+    expect(lauf(["--ab", "120", "--schreiben"])).toEqual(["docs/c.md: 1x quellprojekt#, 3x factory#"]);
+    writeFileSync(join(dir, "docs/c.md"), "b #7 c #42 d #1234\n");
+    expect(lauf(["--ab", "120"])).toEqual(["docs/c.md: 1x quellprojekt#, 2x factory#"]);
   });
   it("ohne --ab: Exit 2 und nichts geschrieben", () => {
     const dir = repo();
