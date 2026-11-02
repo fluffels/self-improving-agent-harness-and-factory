@@ -68,6 +68,7 @@ export interface Eintrag {
   schluessel?: string;
   ring: string;
   quelle: string;
+  pflichtChecks?: unknown;
 }
 interface Manifest {
   version: number;
@@ -501,6 +502,20 @@ describe("pruefeManifest", () => {
     assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
     for (const unsicher of ["/etc/x", "../x", "a/../x", "a\\b", "a//b", "C:/x", "", "a/./b"]) {
       assert.match(meld(ok([ein(unsicher)]), "t"), /Pfad unsicher/, unsicher);
+    }
+  });
+  test("pflichtChecks: nur als nicht leere Textliste an ganzen Workflow-Dateien (factory#117)", () => {
+    const meld = (e: Eintrag, t = "t"): string => pruefeManifest(ok([e]), lies(t)).join("|");
+    const wf = ".github/workflows/w.yml";
+    assert.deepEqual(pruefeManifest(ok([ein(wf, { pflichtChecks: ["Job"] })]), lies("t")), []);
+    assert.deepEqual(pruefeManifest(ok([ein(".github/workflows/w.yaml", { pflichtChecks: ["Job", "Zwei"] })]), lies("t")), []);
+    assert.deepEqual(pruefeManifest(ok([ein(wf)]), lies("t")), []);
+    assert.match(meld(ein(wf, { block: "x", pflichtChecks: ["Job"] }), `${markerStart("x")}${markerEnde("x")}`), /nur an einer ganzen Workflow-Datei/);
+    assert.match(meld(ein(wf, { schluessel: "k", pflichtChecks: ["Job"] }), '{"k":1}'), /nur an einer ganzen Workflow-Datei/);
+    assert.match(meld(ein("scripts/x.mjs", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
+    assert.match(meld(ein(".github/workflows/sub/x.yml", { pflichtChecks: ["Job"] })), /nur an einer ganzen Workflow-Datei/);
+    for (const schlecht of [[], ["a", 3], "Job", [" "], null, [["a"]]]) {
+      assert.match(meld(ein(wf, { pflichtChecks: schlecht })), /nicht leere Liste nicht leerer Texte/, JSON.stringify(schlecht));
     }
   });
 });

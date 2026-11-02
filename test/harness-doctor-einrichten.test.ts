@@ -90,6 +90,7 @@ const neuerRoot = (workflow: string | null = WORKFLOW): string => {
   writeFileSync(join(root, "ruleset.json"), JSON.stringify({ name: "main-schutz", requiredChecks: ["CI"], bypassActors: [] }));
   mkdirSync(join(root, ".factory"), { recursive: true });
   writeFileSync(cfgPfad(root), JSON.stringify(CONFIG));
+  writeFileSync(join(root, ".factory", "besitz.json"), JSON.stringify({ version: 1, eintraege: [] })); // ohne lesbares Manifest wäre der Lauf nicht prüfbar (factory#117)
   return root;
 };
 
@@ -174,7 +175,7 @@ describe("harness-doctor --einrichten", () => {
     );
     assert.deepEqual(r.schreibend, []);
     const anleitungen = r.out.filter((z) => z.startsWith("ANLEITUNG"));
-    for (const punkt of ["Secret PROJECT_TOKEN", "Admin-Recht", "Actions", "Board produkt", "Ruleset"]) {
+    for (const punkt of ["Secret PROJECT_TOKEN", "Admin-Recht", "Actions", "Board produkt", "Ruleset", "Required-Check CI"]) {
       assert.ok(anleitungen.some((z) => z.startsWith(`ANLEITUNG ${punkt}:`) && /Fix: .+ Link: https:\/\/\S+$/.test(z)), `${punkt}: ${anleitungen.join("\n")}`);
     }
     assert.equal(r.code, 1);
