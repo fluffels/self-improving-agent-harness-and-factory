@@ -1,7 +1,8 @@
 // Sync-Werkzeug (ADR 0022 F9): überträgt den Besitz laut `.factory/besitz.json` aus einer Factory-Quelle in ein Projekt.
-// `node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken]`; Exit 0 ok, 1 Fehler, 2 Aufruf.
+// `node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken] [--uebernehmen <pfad>]…`; Exit 0 ok, 1 Fehler, 2 Aufruf.
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
+// Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
 // Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich. Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -10,6 +11,7 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { erstUebernahme, istVorlage, normalisiereUebernahmePfad } from "./sync-abgleich-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
@@ -30,6 +32,7 @@ export function planeSync({
   zielLies,
   quelleAusfuehrbar = () => false,
   quelleStand = { commit: "unbekannt", sauber: false },
+  uebernehmen = [],
   zielConfig = () => {
     throw new Error("keine Projekt-Config des Ziels übergeben");
   },
@@ -56,7 +59,7 @@ export function planeSync({
   // Rollen-Pfade (#1871): jede Besitz-Rolle muss eine ganze, verteilte Einheit sein; die Rollen des Projekts stehen nicht im Manifest.
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
-    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istGanzeDatei(e) && wirdVerteilt(e));
+    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istGanzeDatei(e) && wirdVerteilt(e) && !istVorlage(e));
     if (!ganz) res.fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
   }
   if (res.fehler.length > 0) return res;
@@ -65,7 +68,9 @@ export function planeSync({
   }
 
   const nachPfad = new Map();
-  const verteilt = manifest.eintraege.filter(wirdVerteilt);
+  const alle = manifest.eintraege.filter(wirdVerteilt);
+  const verteilt = alle.filter((e) => !istVorlage(e));
+  const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
   const erg = LEER();
   if (verteilt.some(istErgaenzbar)) {
@@ -92,6 +97,13 @@ export function planeSync({
       res.fehler.push(err.message.startsWith(`${pfad}:`) ? err.message : `${pfad}: ${err.message}`);
     }
   }
+  const abgleich = erstUebernahme({
+    kandidaten: [...ziele].filter(([pfad]) => nachPfad.get(pfad).some(istGanzeDatei)).map(([pfad, z]) => ({ pfad, zielLf: z.zielLf, ergebnis: z.ergebnis })),
+    altEinheiten: Object.keys(alt?.einheiten ?? {}),
+    uebernehmen,
+  });
+  res.fehler.push(...abgleich.fehler);
+  res.meldungen.push(...abgleich.hinweise);
   if (res.fehler.length > 0) return res;
   const ziehe = (pfad, ergebnis, zielRoh, ausfuehrbar) => {
     if (zielRoh !== null && normalisiereEol(zielRoh) === ergebnis) {
@@ -103,6 +115,10 @@ export function planeSync({
   };
   for (const [pfad, z] of ziele) ziehe(pfad, z.ergebnis, z.zielRoh, quelleAusfuehrbar(pfad));
   ziehe(MANIFEST_PFAD, normalisiereEol(manifestText), zielLies(MANIFEST_PFAD), false);
+  for (const e of alle.filter(istVorlage)) {
+    if (zielLies(e.pfad) !== null) res.unveraendert++;
+    else res.dateien.set(e.pfad, { text: rendereProjektwerte(normalisiereEol(quelleLies(e.pfad)), zielConfig, e.pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(e.pfad) });
+  }
 
   const einheiten = {};
   for (const e of verteilt) einheiten[einheitId(e)] = einheitHash(e, ziele.get(e.pfad).srcText, erg.quelle);
@@ -114,9 +130,12 @@ export function planeSync({
   res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
-  const alt = leseAltStand(zielLies);
   for (const id of Object.keys(alt?.einheiten ?? {})) {
     if (id in sortiert) continue;
+    if (alle.some((e) => istVorlage(e) && einheitId(e) === id)) {
+      res.meldungen.push(`Einheit '${id}' ist jetzt Vorlage, nicht mehr im Sync-Stand, das Projekt pflegt sie selbst`);
+      continue;
+    }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     res.meldungen.push(
       nurFactory === undefined
@@ -162,10 +181,10 @@ const liesDatei = (wurzel) => (pfad) => {
 function parseArgs(argv) {
   const unbekannt = (flag) => `unbekannte Option '${flag}'`;
   const meldung = { unbekannt, positional: unbekannt, "ohne-wert": (flag) => `${flag} braucht ${flag === "--tag" ? "einen Namen" : "einen Pfad"}`, fehlt: "--quelle <pfad> fehlt" };
-  const optionen = { quelle: { type: "string" }, ziel: { type: "string" }, tag: { type: "string" }, entwurf: { type: "boolean" }, trocken: { type: "boolean" } };
+  const optionen = { quelle: { type: "string" }, ziel: { type: "string" }, tag: { type: "string" }, entwurf: { type: "boolean" }, trocken: { type: "boolean" }, uebernehmen: { type: "string", multiple: true } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["quelle"], meldung });
   const beide = fehler === null && werte.tag !== undefined && werte.entwurf === true ? "--tag und --entwurf schließen sich aus" : null;
-  return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, fehler: fehler?.text ?? beide };
+  return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, uebernehmen: (werte.uebernehmen ?? []).map(normalisiereUebernahmePfad), fehler: fehler?.text ?? beide };
 }
 
 /** Unter Windows kennt das Dateisystem kein Ausführbit: ein neu geschriebenes Skript (Hooks) landete mit 100644
@@ -190,7 +209,7 @@ function setzeAusfuehrbitImIndex(ziel, pfade, git, out) {
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
 export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
   const opt = parseArgs(argv);
-  const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken]";
+  const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken] [--uebernehmen <pfad>]…";
   if (opt.fehler !== null) {
     err(`factory-sync: ${opt.fehler}\n${usage}`);
     return 2;
@@ -226,15 +245,15 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     }
     leser = { quelleLies: v.lies, quelleAusfuehrbar: v.ausfuehrbar, quelleStand: v.stand };
   }
-  const plan = planeSync({ ...leser, zielLies: liesDatei(ziel), zielConfig: () => ladeProjektConfig({ rootDir: ziel }) });
+  const plan = planeSync({ ...leser, uebernehmen: opt.uebernehmen, zielLies: liesDatei(ziel), zielConfig: () => ladeProjektConfig({ rootDir: ziel }) });
   if (plan.fehler.length > 0) {
-    for (const f of plan.fehler) err(`factory-sync: ${f}`);
+    for (const f of plan.fehler) err(f.startsWith("ABGLEICH ") ? f : `factory-sync: ${f}`);
     err("factory-sync: nichts geschrieben");
     return 1;
   }
   const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
-    out(`${opt.trocken ? "würde " : ""}${d.neu ? "neu" : "geändert"}: ${pfad}`);
+    out(`${opt.trocken ? "würde " : ""}${d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert"}: ${pfad}`);
     if (opt.trocken) continue;
     const voll = join(ziel, ...pfad.split("/"));
     mkdirSync(dirname(voll), { recursive: true });

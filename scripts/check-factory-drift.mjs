@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
+import { istVorlage } from "./sync-abgleich-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
@@ -99,7 +100,7 @@ export function pruefeDrift(lies) {
   else if (stand.quelle.sauber !== true) fehler.push("Sync-Stand stammt von einem unsauberen Quellstand (sauber: false)");
   const herkunftFehler = fehler.length;
   const ids = new Set();
-  for (const e of (manifest.eintraege ?? []).filter(wirdVerteilt)) {
+  for (const e of (manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && !istVorlage(e))) {
     const id = einheitId(e);
     ids.add(id);
     if (!(id in stand.einheiten)) {
@@ -114,9 +115,11 @@ export function pruefeDrift(lies) {
     else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${hinweis}`);
   }
   const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
+  const vorlagen = new Set((manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
   for (const id of Object.keys(stand.einheiten)) {
     if (ids.has(id)) continue;
-    if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
+    if (vorlagen.has(id)) fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
+    else if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
     else fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
   }
   return { entfaellt: false, fehler: fehler.map((f, i) => `${f}. ${i < herkunftFehler ? TAG_WEG : WEG}`), einheiten: ids.size };

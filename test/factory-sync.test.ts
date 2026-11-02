@@ -787,8 +787,11 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     schreibe(z, ".claude/settings.json", '{\n  "model": "x"\n}\n');
     const config = pwConfig("wk-planer");
     schreibe(z, ".factory/projekt.json", config);
+    const eigeneVorlage = "version: 2\n# eigene Fassung des Projekts\n";
+    schreibe(z, ".github/dependabot.yml", eigeneVorlage);
     const r = vomTag(echteQuelle(), z);
     assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, ".github/dependabot.yml"), eigeneVorlage, "eine Vorlage überschreibt der Sync nie (factory#118)");
     assert.match(lies(z, ".claude/agents/factory-planer.md"), /\nname: wk-planer\n/, "Projektwert aus der Config des Ziels");
     const perm = (JSON.parse(lies(z, ".claude/settings.json")) as { permissions: Record<string, string[]> }).permissions;
     assert.ok((perm.deny ?? []).includes("mcp__claude-in-chrome"), "der Kern-Anteil kommt an (sonst wäre die Prüfung darunter vakuös)");
