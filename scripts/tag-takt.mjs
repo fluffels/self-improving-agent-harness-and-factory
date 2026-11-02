@@ -107,7 +107,7 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
   if (!letzterTag) return { aktion: "nichts", grund: "kein Release-Tag in der Historie", warnungen };
   const offen = tagOffene[0];
   if (offen) {
-    if (offen.assignees.length > 0) return { aktion: "nichts", grund: `Ticket #${offen.number} ist geclaimt`, warnungen };
+    if (offen.assignees.length > 0) return { aktion: "nichts", grund: `Ticket #${offen.number} ist geclaimt`, warnungen, geclaimt: offen.number };
     if (besitz.length === 0) {
       if (tagOffene.length > 1) return { aktion: "nichts", grund: "nichts Ungetaggtes, aber mehrere offene Tickets (keine Selbst-Schließung)", warnungen };
       return { aktion: "schliessen", nummer: offen.number, grund: "keine ungetaggten Besitz-PRs mehr", warnungen };
@@ -237,6 +237,7 @@ const istAktuell = (offen, soll) => offen?.titel === soll.titel && offen.body ==
 function plane({ io, daten, offene, trocken }) {
   let e = entscheideTagTakt({ letzterTag: daten.letzterTag, besitz: daten.besitz, jetzt: io.jetzt(), offene, dringlichKey: io.dringlichKey });
   if (e.aktion === "anlegen" && !trocken) e = bestaetigeTagAnlegen(e, { zweit: io.frischeOffene });
+  if (trocken && e.geclaimt && daten.besitz.length > 0) return { ...e, soll: sollTicket(e, daten) };
   if (e.aktion !== "anlegen" && e.aktion !== "aktualisieren") return e;
   const soll = sollTicket(e, daten);
   if (e.aktion === "aktualisieren" && istAktuell(offene.find((i) => i.number === e.nummer), soll)) return { ...e, aktion: "nichts", grund: "Ticket ist aktuell", soll };

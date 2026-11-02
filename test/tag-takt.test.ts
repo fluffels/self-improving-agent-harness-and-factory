@@ -205,6 +205,19 @@ describe("lauf", () => {
     expect(aufrufe).toEqual([]);
     expect(log.join("\n")).toContain("[dry-run] 🏷️ Tag v1.3.0");
   });
+  it("L3: geclaimtes Ticket: --dry-run gibt den Vorschlag trotzdem aus, ohne --dry-run bleibt es bei nichts und ohne Schreib-IO", () => {
+    const geclaimt = { ladeOffene: () => [tagOffen({ assignees: ["x"] })] };
+    expect(T.lauf({ io: io(geclaimt), trocken: true })).toBe(0);
+    const t = log.join("\n");
+    expect(t).toContain("nichts");
+    expect(t).toContain("[dry-run] 🏷️ Tag v1.3.0 setzen und syncen");
+    expect(t).toContain("[dry-run] - Vorgeschlagener Tag");
+    T.lauf({ io: io(geclaimt) });
+    expect(aufrufe).toEqual([]);
+    expect(log.join("\n")).not.toContain("[dry-run]");
+    T.lauf({ io: io({ ladeLog: () => "", ...geclaimt }), trocken: true });
+    expect(log.join("\n")).not.toContain("[dry-run]");
+  });
   it("ein werfender CI-Leser legt trotzdem an, mit Status unbekannt", () => {
     const text: string[] = [];
     T.lauf({ io: io({ ladeLaeufe: () => { throw new Error("403"); }, legeIssueAn: (_t: string, b: string) => { text.push(b); return "5"; } }) });
