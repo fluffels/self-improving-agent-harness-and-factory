@@ -10,7 +10,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { erstUebernahme, istVorlage, normalisiereUebernahmePfad } from "./sync-abgleich-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
@@ -40,21 +40,12 @@ export function planeSync({
 }) {
   const res = { fehler: [], meldungen: [], dateien: new Map(), unveraendert: 0, stand: null };
   const manifestText = quelleLies(MANIFEST_PFAD);
-  if (manifestText === null) {
-    res.fehler.push(`Quelle hat kein ${MANIFEST_PFAD}`);
+  const geladen = manifestAusText(manifestText);
+  if (geladen.fehler !== undefined) {
+    res.fehler.push(`Quelle: ${geladen.text}`);
     return res;
   }
-  let manifest;
-  try {
-    manifest = JSON.parse(manifestText);
-  } catch {
-    res.fehler.push(`${MANIFEST_PFAD} der Quelle ist kein gültiges JSON`);
-    return res;
-  }
-  if (!Array.isArray(manifest.eintraege)) {
-    res.fehler.push(`${MANIFEST_PFAD} der Quelle hat keine Liste 'eintraege'`);
-    return res;
-  }
+  const { manifest } = geladen;
   res.fehler.push(...pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`));
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) res.fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   // Rollen-Pfade (#1871): jede Besitz-Rolle muss eine ganze, verteilte Einheit sein; die Rollen des Projekts stehen nicht im Manifest.

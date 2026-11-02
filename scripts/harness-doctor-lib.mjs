@@ -9,7 +9,7 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
-import { MANIFEST_PFAD, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
 import { ausFehler, GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, nichtPruefbar, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -362,8 +362,9 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
   const workflows = workflowsLesen(rootDir);
-  const manifest = join(rootDir, MANIFEST_PFAD);
-  const besitz = existsSync(manifest) ? hole(() => JSON.parse(readFileSync(manifest, "utf8"))) : { fehler: "Datei fehlt" };
+  const manifestVoll = join(rootDir, MANIFEST_PFAD);
+  const geladen = manifestAusText(existsSync(manifestVoll) ? readFileSync(manifestVoll, "utf8") : null);
+  const besitz = geladen.fehler === undefined ? { wert: geladen.manifest } : { fehler: geladen.text };
   if (mitWochenlauf && !workflows.some((w) => w.pfad === basename(WOCHENLAUF_PFAD))) workflows.push({ pfad: basename(WOCHENLAUF_PFAD), text: WOCHENLAUF_WORKFLOW });
   const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows, spiegel, besitz }), spiegel, gh, langfuse, umgebung });
   if (dateien) ergebnis.push(...dateien({ rootDir }));
