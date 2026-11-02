@@ -1,5 +1,5 @@
 /* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): zwei Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
- * `NICHT PRÜFBAR` (nie still grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
+ * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
  *   `Root-Kontextdatei`: keine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt): sie schaltet das native Laden von AGENTS.md ab.
@@ -96,7 +96,10 @@ export function gitStandard(rootDir) {
 
 function kontextPunkt(rootDir, existiert) {
   const gefunden = blockierendeKontextdateien(rootDir, existiert);
-  if (gefunden.length === 0) return gut("Root-Kontextdatei");
+  if (gefunden.length === 0) {
+    if (existiert(join(rootDir, "AGENTS.md"))) return gut("Root-Kontextdatei");
+    return nichtPruefbar("Root-Kontextdatei", "keine AGENTS.md im Root: es gibt keine Kontextdatei, die geladen werden könnte", "AGENTS.md im Root des Projekts anlegen (die eine Kontextdatei) oder den Doctor im Projekt-Root starten, dann erneut prüfen");
+  }
   return luecke(
     "Root-Kontextdatei",
     `${gefunden.join(", ")} liegt im Root und schaltet das native Laden von AGENTS.md ab`,

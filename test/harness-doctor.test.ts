@@ -751,6 +751,19 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.ok(r.out.includes("OK Zeilenenden"), r.out.join(String.fromCharCode(10)));
   });
 
+  test("Negativfall ohne geprüfte Projektdatei: ohne AGENTS.md im Root ist Root-Kontextdatei NICHT PRÜFBAR statt leer grün, Exit 1", () => {
+    const ohneAgents = (root: string) => {
+      repo({ "notiz.md": "x\n" })(root);
+      const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
+      g("rm", "-q", "-f", "AGENTS.md");
+    };
+    const r = lauf({}, { dateien: "echt", vorbereiten: ohneAgents });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Root-Kontextdatei: ") && z.includes("AGENTS.md") && z.includes("Fix: ")), r.out.join(String.fromCharCode(10)));
+    assert.ok(!r.out.includes("OK Root-Kontextdatei"));
+    assert.ok(r.out.includes("OK Zeilenenden"), r.out.join(String.fromCharCode(10)));
+  });
+
   test("ohne Git-Repo: NICHT PRÜFBAR statt grün", () => {
     const r = lauf({}, { dateien });
     assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Zeilenenden: ")), r.out.join("\n"));

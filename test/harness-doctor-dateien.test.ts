@@ -30,7 +30,7 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
 }
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: opt.existiert ?? (() => false) });
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/").endsWith("/AGENTS.md") });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
@@ -46,6 +46,20 @@ describe("Root-Kontextdatei", () => {
     expect(p.nichtPruefbar).toBeUndefined();
     expect(p.befund).toContain(rel);
     expect(p.fix).toContain("AGENTS.md");
+  });
+
+  test("ohne AGENTS.md im Root: NICHT PRÜFBAR mit Grund und Fix statt leer grün, Zeilenenden bleibt bewertet", () => {
+    const e = pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => false });
+    expect(punkt(e, "Root-Kontextdatei")).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(punkt(e, "Root-Kontextdatei").befund).toContain("AGENTS.md");
+    expect(punkt(e, "Root-Kontextdatei").fix).toBeTruthy();
+    expect(punkt(e, "Zeilenenden").ok).toBe(true);
+  });
+
+  test("eine CLAUDE.md ohne AGENTS.md bleibt eine Lücke (kein NICHT PRÜFBAR)", () => {
+    const p = punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/CLAUDE.md") }), "Root-Kontextdatei");
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
   });
 
   test("src/CLAUDE.md im Unterordner trifft nicht", () => {
@@ -100,7 +114,7 @@ describe("Zeilenenden", () => {
   });
 
   test("wirft git: NICHT PRÜFBAR mit Grund und Fix, Root-Kontextdatei bleibt bewertet", () => {
-    const e = pruefe({ rootDir: "/x", git: () => { throw new Error("fatal: not a git repository"); }, existiert: () => false });
+    const e = pruefe({ rootDir: "/x", git: () => { throw new Error("fatal: not a git repository"); }, existiert: (p) => p.replaceAll("\\", "/").endsWith("/AGENTS.md") });
     expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
     expect(punkt(e, "Zeilenenden").befund).toContain("not a git repository");
     expect(punkt(e, "Zeilenenden").fix).toBeTruthy();
