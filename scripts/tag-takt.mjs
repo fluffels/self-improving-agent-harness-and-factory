@@ -18,7 +18,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { MANIFEST_PFAD as MANIFEST, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
@@ -34,6 +34,9 @@ export const MAX_ALTER_TAGE = 7;
 const MAX_ZEILEN = 50;
 const TAG_MS = 86_400_000;
 const CI_WORKFLOW = ".github/workflows/ci.yml";
+const SKRIPT_DATEI = /^scripts\/.*\.(?:mjs|cjs)$/;
+const EXPORT_DEKLARATION = /^export\s+(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/gm;
+const EXPORT_LISTE = /^export\s*\{([^}]*)\}/gm;
 
 /** Titel des Tag-Tickets. Pur. */
 export const tagTitel = (tag) => `🏷️ Tag ${tag} setzen und syncen`;
@@ -74,13 +77,40 @@ export function besitzCommits(commits, manifest) {
     });
 }
 
-/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` Major, `feat` Minor, sonst Patch); `v` bleibt erhalten. */
-export function naechsterTag(letzterTag, commits) {
+/** Pur: die exportierten Namen eines ES-Moduls (`export const|let|var|function|async function|class NAME` und `export { a, b as c }`, bei `as` zählt der äußere Name) als Set. */
+export function exporteAus(text) {
+  const namen = new Set();
+  const src = String(text ?? "");
+  for (const m of src.matchAll(EXPORT_DEKLARATION)) namen.add(m[1]);
+  for (const m of src.matchAll(EXPORT_LISTE)) {
+    for (const teil of m[1].split(",")) {
+      const name = teil.trim().split(/\s+as\s+/).pop();
+      if (name) namen.add(name);
+    }
+  }
+  return namen;
+}
+
+/** Pur: die Namen, die `altText` exportiert und `neuText` nicht mehr (`null` = Datei gelöscht: alle). Sortiert. */
+export function entfernteExporte(altText, neuText) {
+  const neu = exporteAus(neuText);
+  return [...exporteAus(altText)].filter((n) => !neu.has(n)).sort();
+}
+
+/** Pur: die in den Besitz-Commits berührten Skript-Dateien (`scripts/**.mjs|cjs`), die ein verteilter Ganzdatei-Eintrag des Manifests abdeckt. Sortiert, ohne Doppelte. */
+export function verteilteSkripte(besitz, manifest) {
+  const pfade = (manifest?.eintraege ?? []).filter((e) => wirdVerteilt(e) && istGanzeDatei(e)).map((e) => e.pfad);
+  const gedeckt = (d) => pfade.some((p) => d === p || d.startsWith(`${p}/`));
+  return [...new Set(besitz.flatMap((c) => c.dateien).filter((d) => SKRIPT_DATEI.test(d) && gedeckt(d)))].sort();
+}
+
+/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` oder ein entfernter Export, `entfernt` = `[{ datei, namen }]`, Major; `feat` Minor, sonst Patch); `v` bleibt erhalten. */
+export function naechsterTag(letzterTag, commits, entfernt = []) {
   const [major, minor, patch] = teile(letzterTag);
   const breaking = (c) => /^[a-z]+(\([^)]*\))?!:/.test(c.betreff) || /^(?:\* )?BREAKING[ -]CHANGE:/m.test(c.body);
   const feature = (c) => /^feat(\([^)]*\))?:/.test(c.betreff);
   const stufe = [major + 1, 0, 0];
-  const neu = commits.some(breaking) ? stufe : commits.some(feature) ? [major, minor + 1, 0] : [major, minor, patch + 1];
+  const neu = commits.some(breaking) || entfernt.length > 0 ? stufe : commits.some(feature) ? [major, minor + 1, 0] : [major, minor, patch + 1];
   return `${letzterTag.startsWith("v") ? "v" : ""}${neu.join(".")}`;
 }
 
@@ -142,7 +172,7 @@ export function ciZustand(laeufe) {
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
-export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci }) {
+export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [] }) {
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
   return [
@@ -151,6 +181,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
     `- Vorgeschlagener Tag: \`${tag}\` (Basis ${letzterTag}, Vorschlag nach Conventional Commits)`,
     `- Älteste ungetaggte Änderung: ${aeltestes.datum.slice(0, 10)} (${aeltestes.sha.slice(0, 7)})`,
     `- main-Commit: \`${sha}\``,
+    ...entfernt.map((x) => `- Entfernte Exporte (Major): \`${x.datei}\`: ${x.namen.join(", ")}`),
     `- CI-Status dieses Commits: ${CI_TEXT[ci.zustand] ?? CI_TEXT.unbekannt}${ci.url ? ` ([Lauf](${ci.url}))` : ""}`,
     "",
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
@@ -180,6 +211,19 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci })
 const KOMMENTAR_ERLEDIGT = "Keine ungetaggten Besitz-PRs mehr (Tag gesetzt), automatisch geschlossen.";
 
 /** Liest alles Nötige; wirft bei einem Git-Fehler. `io.liesCi` darf werfen (dann `unbekannt`). */
+/** Entfernte Exporte je verteilter Skript-Datei zwischen Tag und `sha`: `[{ datei, namen }]`. Ohne `io.zeigeDatei` oder wenn die Datei am Tag fehlte (neu): leer. */
+function entfernteJeDatei(io, { letzterTag, besitz, sha }) {
+  if (!io.zeigeDatei) return [];
+  const treffer = [];
+  for (const datei of verteilteSkripte(besitz, io.ladeManifest())) {
+    const alt = io.zeigeDatei(letzterTag, datei);
+    if (alt === null || alt === undefined) continue;
+    const namen = entfernteExporte(alt, io.zeigeDatei(sha, datei));
+    if (namen.length > 0) treffer.push({ datei, namen });
+  }
+  return treffer;
+}
+
 function sammle(io, log) {
   const letzterTag = vergleicheTags(io.tags());
   const commits = letzterTag ? commitsAusLog(io.ladeLog(letzterTag)) : [];
@@ -191,7 +235,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci };
+  return { letzterTag, besitz, sha, ci, entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -223,11 +267,11 @@ function fuehreAus(e, io, log) {
 }
 
 /** Pur: Soll-Titel und Soll-Body des Tickets. */
-function sollTicket(e, { letzterTag, besitz, sha, ci }) {
-  const tag = naechsterTag(letzterTag, besitz);
+function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt }) {
+  const tag = naechsterTag(letzterTag, besitz, entfernt);
   const aeltestes = besitz.reduce((a, c) => (Date.parse(c.datum) < Date.parse(a.datum) ? c : a));
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
-  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci }) };
+  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt }) };
 }
 
 /** Pur: stimmt das offene Ticket mit dem Soll überein? */
@@ -289,6 +333,13 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", `${tag}..HEAD`, "--"]),
     ladeManifest,
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
+    zeigeDatei: (ref, pfad) => {
+      try {
+        return git(["show", `${ref}:${pfad}`]);
+      } catch {
+        return null;
+      }
+    },
     ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
       const kontext = ladeSammelKontext({ ladeKommentare: () => [] });

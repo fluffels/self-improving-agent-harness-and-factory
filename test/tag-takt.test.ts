@@ -160,6 +160,61 @@ describe("CI-Zustand und Body", () => {
   });
 });
 
+describe("L14: entfernte Exporte sind ein Major", () => {
+  const X = raw as unknown as {
+    exporteAus: (t: string | null) => Set<string>;
+    entfernteExporte: (alt: string | null, neu: string | null) => string[];
+    verteilteSkripte: (b: Commit[], m: unknown) => string[];
+  };
+  const alt = "export const a = 1;\nexport let b = 2;\nexport function c() {}\nexport async function d() {}\nexport class E {}\nconst f = 1;\nexport { f, f as g };\n";
+  it("erkennt alle Export-Formen (äußerer Name bei as), Nicht-Exporte nicht", () => {
+    expect([...X.exporteAus(alt)].sort()).toEqual(["E", "a", "b", "c", "d", "f", "g"]);
+    expect([...X.exporteAus("function intern() {}\n// export const x\n  export const eingerueckt = 1;")]).toEqual([]);
+    expect(X.exporteAus(null).size).toBe(0);
+  });
+  it("entfernteExporte: entfernt, umbenannt, gelöscht (null); neu und unverändert nicht", () => {
+    expect(X.entfernteExporte("export const a = 1;\nexport const b = 2;", "export const a = 1;")).toEqual(["b"]);
+    expect(X.entfernteExporte("export function a() {}", "export function a2() {}")).toEqual(["a"]);
+    expect(X.entfernteExporte("export const a = 1;\nexport const b = 2;", null)).toEqual(["a", "b"]);
+    expect(X.entfernteExporte("export const a = 1;", "export const a = 1;\nexport const neu = 2;")).toEqual([]);
+  });
+  it("verteilteSkripte: nur Skript-Dateien unter einem verteilten Ganzdatei-Eintrag", () => {
+    const m = { eintraege: [{ pfad: "scripts/a.mjs", ring: "kern" }, { pfad: "scripts/lib", ring: "kern" }, { pfad: "scripts/o.mjs", ring: "oberflaeche" }, { pfad: "scripts/b.mjs", ring: "kern", block: "x" }] };
+    const b = [commit({ dateien: ["scripts/a.mjs", "scripts/lib/z.cjs", "scripts/lib/readme.md", "scripts/o.mjs", "scripts/b.mjs", "src/x.mjs"] }), commit({ dateien: ["scripts/a.mjs"] })];
+    expect(X.verteilteSkripte(b, m)).toEqual(["scripts/a.mjs", "scripts/lib/z.cjs"]);
+  });
+  it("naechsterTag: entfernter Export hebt auf Major, auch über feat; ohne bleibt es Minor", () => {
+    const feat = [commit({ betreff: "feat: x (#1)", body: "feat: x (#1)" })];
+    expect(T.naechsterTag("v1.2.3", feat, [{ datei: "scripts/a.mjs", namen: ["b"] }])).toBe("v2.0.0");
+    expect(T.naechsterTag("v1.2.3", feat, [])).toBe("v1.3.0");
+    expect(T.naechsterTag("v1.2.3", feat)).toBe("v1.3.0");
+  });
+  it("tagBody nennt die entfernten Exporte je Datei", () => {
+    const b = T.tagBody({ tag: "v2.0.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null }, entfernt: [{ datei: "scripts/a.mjs", namen: ["b", "c"] }] });
+    expect(b).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b, c");
+  });
+  const dateien: Record<string, Record<string, string | null>> = {
+    "v1.2.3": { "scripts/a.mjs": "export const a = 1;\nexport const b = 2;", "scripts/n.mjs": null },
+    [`${"d".repeat(40)}`]: { "scripts/a.mjs": "export const a = 1;", "scripts/n.mjs": "export const n = 1;" },
+  };
+  const ioMit = (zeige: (r: string, p: string) => string | null) => {
+    const texte: string[] = [];
+    const eins = (k: number) => `\x1e${String(k).repeat(40)}\x1f${vor(k)}\x1ffeat: a (#${k})\x1f\n\nscripts/a.mjs\nscripts/n.mjs\n`;
+    const log = eins(1) + eins(2) + eins(3);
+    const code = T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => log, ladeManifest: () => MANIFEST, headSha: () => "d".repeat(40), ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: zeige, log: () => undefined }, trocken: false });
+    return { code, text: texte[0] ?? "" };
+  };
+  it("lauf: Datei am Tag vorhanden, jetzt ohne Export: Major und Zeile; am Tag fehlende (neue) Datei zählt nicht", () => {
+    const r = ioMit((ref, pfad) => dateien[ref]?.[pfad] ?? null);
+    expect(r.text).toContain("`v2.0.0`");
+    expect(r.text).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b");
+    expect(r.text).not.toContain("scripts/n.mjs`:");
+    const gleich = ioMit((ref, pfad) => (pfad === "scripts/n.mjs" ? null : dateien["v1.2.3"][pfad] ?? null));
+    expect(gleich.text).toContain("`v1.3.0`");
+    expect(gleich.text).not.toContain("Entfernte Exporte");
+  });
+});
+
 describe("lauf", () => {
   const log: string[] = [];
   const aufrufe: string[] = [];
