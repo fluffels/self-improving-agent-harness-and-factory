@@ -29,12 +29,13 @@
  * Nur Node-Builtins.
  */
 import { execFileSync, spawnSync as spawnSyncEcht } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readStdin } from "./hook-io.mjs";
-import { KERN_TICKET_SKILL, TICKET_SKILL_NAME, TICKET_SKILL_ORDNER } from "./projekt-config-lib.mjs";
+import { arbeitsplatzAus, standardzweigVon } from "./arbeitsplatz-lib.mjs";
+import { KERN_TICKET_SKILL, TICKET_SKILL_NAME, TICKET_SKILL_ORDNER, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
@@ -42,16 +43,16 @@ import { namenOderGrund } from "./ticket-namen.mjs";
  * Was tut der Sync? Pur. `hinter`/`vor` = Commits, die `main` gegenüber `origin/main` hinten/vorn liegt.
  * Liefert `{ aktion: "pull" | "melden" | "nichts", grund }`.
  */
-export function entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor }) {
+export function entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor, zweig = "main" }) {
   if (istLinkedWorktree) return { aktion: "nichts", grund: "Linked Worktree (läuft von origin/main, wird nicht angefasst)" };
   if (!Number.isInteger(hinter) || hinter < 0 || !Number.isInteger(vor) || vor < 0) {
     return { aktion: "nichts", grund: "Rückstand nicht bestimmbar" };
   }
   if (hinter === 0) return { aktion: "nichts", grund: "aktuell" };
-  if (branch !== "main") return { aktion: "melden", grund: `Branch ${branch}, nicht main (nicht angefasst)` };
+  if (branch !== zweig) return { aktion: "melden", grund: `Branch ${branch}, nicht ${zweig} (nicht angefasst)` };
   if (!sauber) return { aktion: "melden", grund: "Arbeitsbaum nicht sauber (nicht angefasst)" };
-  if (vor > 0) return { aktion: "melden", grund: `main hat ${vor} lokale Commits, kein Fast-Forward (nicht angefasst)` };
-  return { aktion: "pull", grund: "main ist sauber und nur zurück: Fast-Forward" };
+  if (vor > 0) return { aktion: "melden", grund: `${zweig} hat ${vor} lokale Commits, kein Fast-Forward (nicht angefasst)` };
+  return { aktion: "pull", grund: `${zweig} ist sauber und nur zurück: Fast-Forward` };
 }
 
 /**
@@ -64,7 +65,7 @@ export function exitCodeFuer(ergebnis) {
   if (ergebnis.notiz) return 1;
   if (ergebnis.aktion === "melden") return 1;
   if (ergebnis.sauber === false) return 1;
-  if (typeof ergebnis.branch === "string" && ergebnis.branch !== "" && ergebnis.branch !== "main") return 1;
+  if (typeof ergebnis.branch === "string" && ergebnis.branch !== "" && ergebnis.branch !== (ergebnis.zweig ?? "main")) return 1;
   return 0;
 }
 
@@ -195,10 +196,12 @@ export function bildResteFuer(dir) {
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, harness, nodeHinweis, nodeModulesHinweis, notiz }`. */
 export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
-  if (ergebnis.notiz) zeilen.push(`Haupt-Sync: ${ergebnis.notiz}`);
-  if (ergebnis.aktion === "melden") zeilen.push(`Haupt-Checkout: ${ergebnis.hinter} Commits hinter origin/main (${ergebnis.grund}).`);
+  const zweig = ergebnis.zweig ?? "main"; // Arbeitsplatz (#88): Standardzweig des Repos, `repo` ist sein Name
+  const repo = ergebnis.repo ? `Repo ${ergebnis.repo}: ` : "";
+  if (ergebnis.notiz) zeilen.push(`Haupt-Sync: ${repo}${ergebnis.notiz}`);
+  if (ergebnis.aktion === "melden") zeilen.push(`Haupt-Checkout: ${repo}${ergebnis.hinter} Commits hinter origin/${zweig} (${ergebnis.grund}).`);
   if (ergebnis.gepullt) {
-    zeilen.push(`Haupt-Checkout: main per Fast-Forward um ${ergebnis.hinter} Commits auf origin/main gehoben.`);
+    zeilen.push(`Haupt-Checkout: ${repo}${zweig} per Fast-Forward um ${ergebnis.hinter} Commits auf origin/${zweig} gehoben.`);
     const h = ergebnis.harness ?? { skill: [], agenten: [], sonstige: [], lockGeaendert: false };
     const alle = [...h.skill, ...h.agenten, ...h.sonstige];
     if (alle.length && sitzungsbasis) {
@@ -247,7 +250,8 @@ export function pruefeFrischEcht(dir, spawn = spawnSyncEcht) {
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
 export function fuehreSyncAus(dir, deps = {}) {
-  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined };
+  const zweig = deps.zweig ?? "main"; // Arbeitsplatz (#88): Standardzweig des Repos
+  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: "", branch: "", sauber: undefined, ...(deps.zweig === undefined ? {} : { zweig }) };
   try {
     ergebnis.basis = git(dir, ["rev-parse", "HEAD"]);
     const istLinkedWorktree = resolve(dir, git(dir, ["rev-parse", "--git-dir"])) !== resolve(dir, git(dir, ["rev-parse", "--git-common-dir"]));
@@ -258,13 +262,14 @@ export function fuehreSyncAus(dir, deps = {}) {
       ergebnis.notiz = `git fetch fehlgeschlagen (${String(e.message).split("\n")[0].slice(0, 100)}), Rückstand aus dem letzten bekannten Stand`;
     }
     const branch = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
-    const [vor, hinter] = git(dir, ["rev-list", "--left-right", "--count", "HEAD...origin/main"]).split(/\s+/).map(Number);
+    const [vor, hinter] = git(dir, ["rev-list", "--left-right", "--count", `HEAD...origin/${zweig}`]).split(/\s+/).map(Number);
     const sauber = git(dir, ["status", "--porcelain", "--untracked-files=no"]) === "";
-    const e = entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor });
+    const e = entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor, zweig });
     Object.assign(ergebnis, e, { hinter, branch, sauber });
     if (e.aktion === "pull") {
-      git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
+      git(dir, ["merge", "--ff-only", `origin/${zweig}`], { timeout: 30_000 });
       ergebnis.gepullt = true;
+      if (deps.harness === false) return ergebnis; // Projekt-Repo im Arbeitsplatz: kein Harness darin, nichts zu ordnen oder neu zu prüfen
       const geaendert = git(dir, ["diff", "--name-only", ergebnis.basis, "HEAD"]).split("\n").filter(Boolean);
       ergebnis.harness = ordneHarnessAenderungen(geaendert);
       // Ohne nutzbare Config bleibt der Fast-Forward (fail-open), der Grund steht in `notiz` und macht `--streng` rot.
@@ -277,6 +282,41 @@ export function fuehreSyncAus(dir, deps = {}) {
     ergebnis.notiz = `${ergebnis.notiz ? `${ergebnis.notiz}; ` : ""}Fehler (${String(e.message).split("\n")[0].slice(0, 100)}), nichts verändert`;
   }
   return ergebnis;
+}
+
+/**
+ * Wohin synct der Aufruf? `{ aufloesung: null }` eingebettet (der Ordner ist das Repo; auch bei fehlender oder nicht lesbarer Config, fail-open wie bisher),
+ * `{ aufloesung }` im Arbeitsplatz (Block `arbeitsplatz` in der Config von `dir`), `{ fehler }` bei kaputtem Block (mit Fix-Zeile). `lade` ist injizierbar. Wirft nie.
+ */
+export function syncZiel(dir, { lade = (d) => ladeProjektConfig({ rootDir: d, pruefen: false }) } = {}) {
+  let config;
+  try {
+    config = lade(dir);
+  } catch {
+    return { aufloesung: null };
+  }
+  if (config?.arbeitsplatz === undefined) return { aufloesung: null };
+  try {
+    return { aufloesung: arbeitsplatzAus(config, dir) };
+  } catch (e) {
+    return { fehler: String(e instanceof Error ? e.message : e).replace(/\s*\r?\n\s*/g, " ") };
+  }
+}
+
+/**
+ * Haupt-Sync im Arbeitsplatz (ADR 0022 Fortschreibung, #88): jedes Repo der Config für sich (Fast-Forward auf `origin/<Standardzweig>`), Ergebnisse je Repo
+ * mit `repo` (Name) und ohne Sitzungsbasis (der Harness kommt dort nicht per Repo-Pull). Ein fehlender Repo-Pfad oder ein git-Fehler in einem Repo ist eine `notiz`
+ * mit Fix-Zeile; die übrigen Repos werden trotzdem gehoben (ein Fast-Forward je Repo ist unabhängig). Wirft nie.
+ */
+export function fuehreArbeitsplatzSyncAus(aufloesung, deps = {}) {
+  return aufloesung.repos.map((repo) => {
+    const zweig = standardzweigVon(repo);
+    const fix = `Fix: Pfad in arbeitsplatz.repos prüfen (git -C ${repo.pfad} status)`;
+    if (!existsSync(repo.pfad)) return { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: `Repo-Pfad ${repo.pfad} fehlt, nichts synchronisiert. ${fix}`, branch: "", sauber: undefined, zweig, repo: repo.name };
+    const r = fuehreSyncAus(repo.pfad, { ...deps, zweig, harness: false });
+    const notiz = r.basis === "" && r.notiz ? `${r.notiz}. ${fix}` : r.notiz; // `rev-parse HEAD` scheiterte: kein Repo oder kein git
+    return { ...r, notiz, basis: "", repo: repo.name };
+  });
 }
 
 /** Die Ausgabe des Hooks: Klartext (`--text`, ohne Sitzungsbasis) oder die SessionStart-JSON (mit Sitzungsbasis); leer ohne Text. Pur. */
@@ -326,10 +366,14 @@ function main() {
   const stdinText = danach ? readStdin() : "";
   try {
     const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-    const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
-    const out = ausgabe(ergebnis, aufruf.text);
+    const ziel = syncZiel(dir);
+    let ergebnisse;
+    if (ziel.fehler) ergebnisse = [{ aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: ziel.fehler, branch: "", sauber: undefined }];
+    else if (ziel.aufloesung) ergebnisse = fuehreArbeitsplatzSyncAus(ziel.aufloesung);
+    else ergebnisse = [{ ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) }];
+    const out = ergebnisse.map((e) => ausgabe(e, aufruf.text)).filter(Boolean).join(aufruf.text ? "\n" : "");
     if (out) console.log(out);
-    if (aufruf.streng && exitCodeFuer(ergebnis) !== 0) {
+    if (aufruf.streng && ergebnisse.some((e) => exitCodeFuer(e) !== 0)) {
       console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");
       process.exitCode = 1;
     }
