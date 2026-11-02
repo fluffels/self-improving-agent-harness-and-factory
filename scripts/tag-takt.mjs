@@ -219,9 +219,7 @@ function entfernteJeDatei(io, { letzterTag, besitz, sha }) {
   if (!io.zeigeDatei) return [];
   const treffer = [];
   for (const datei of verteilteSkripte(besitz, io.ladeManifest())) {
-    const alt = io.zeigeDatei(letzterTag, datei);
-    if (alt === null || alt === undefined) continue;
-    const namen = entfernteExporte(alt, io.zeigeDatei(sha, datei));
+    const namen = entfernteExporte(io.zeigeDatei(letzterTag, datei), io.zeigeDatei(sha, datei));
     if (namen.length > 0) treffer.push({ datei, namen });
   }
   return treffer;

@@ -1294,6 +1294,16 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
       assert.match(r.out, HINWEIS, JSON.stringify(extra));
     }
   });
+  test("gemessen wird der Stand nach dem Sync (Plan), nicht der des Ziels; unlesbare Ziel-Config verhindert den Hinweis nicht", () => {
+    const q = baueQuelle();
+    schreibe(q, "AGENTS.md", `# Quelle\n\n${blockText(GROSS)}\n`);
+    const z = baueZiel();
+    assert.doesNotMatch(vomTag(baueQuelle(), z, ["--trocken"]).out, /Kontextbudget/);
+    schreibe(z, ".factory/projekt.json", JSON.stringify({ ...JSON.parse(pwConfig("wk-planer")), ausnahmen: 5 }));
+    const r = vomTag(q, z, ["--trocken"]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, HINWEIS);
+  });
   test("unter Budget und geduldete Ausnahme: keine Hinweiszeile", () => {
     const klein = vomTag(baueQuelle(), baueZiel(), ["--trocken"]);
     assert.equal(klein.code, 0, klein.err);
