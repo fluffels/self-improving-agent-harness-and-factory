@@ -74,5 +74,21 @@
   "scripts/herkunftsform.mjs": {
     "art": "projekt",
     "grund": "Migrationswerkzeug dieses Repos (Herkunftsform der Ticketnummern, #95): der Wächter factory-seiten zählt die Nummern, Bezieher stellen die synchronisierten Seiten nicht um"
+  },
+  ".github/CODEOWNERS": {
+    "art": "projekt",
+    "grund": "Wächter-Zuordnung dieses Repos (Personen, Pfade), jedes Projekt hat eigene"
+  },
+  ".github/protected-paths.json": {
+    "art": "projekt",
+    "grund": "Leitplanken-Liste dieses Repos, Quelle von CODEOWNERS und Wächter-Tests"
+  },
+  ".github/ruleset-main-schutz.json": {
+    "art": "projekt",
+    "grund": "Spiegel des Rulesets dieses Repos (Pfad steht in der Projekt-Config unter rulesetSpiegel)"
+  },
+  ".github/wiedervorlagen.json": {
+    "art": "projekt",
+    "grund": "Wiedervorlagen dieses Repos (Daten des Projekts)"
   }
 }

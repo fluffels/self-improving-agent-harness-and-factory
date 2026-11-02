@@ -5,7 +5,7 @@
 # Major-Upgrade der eslint-Familie wäre rot). Ein Paket landet in der ERSTEN Gruppe, deren patterns passen:
 # darum die Familien-Gruppen vor der allgemeinen Minor/Patch-Sammelgruppe. Gruppieren ist kein Auto-Merge,
 # ein roter Gruppen-PR wird geprüft. Sonstige Majors fallen aus der Sammelgruppe und kommen einzeln.
-# Cooldown (#101): neue Versionen werden 7 Tage nach Veröffentlichung nicht vorgeschlagen (Lieferketten-Schutz gegen frisch
+# Cooldown: neue Versionen werden 7 Tage nach Veröffentlichung nicht vorgeschlagen (Lieferketten-Schutz gegen frisch
 # gekaperte Releases). Security-Updates (Advisories) sind davon ausgenommen und kommen ohne Verzögerung (Dependabot-Doku, `cooldown`).
 version: 2
 updates:
@@ -49,8 +49,8 @@ updates:
       prefix-development: "chore(deps-dev)"
     # Der TypeScript-Major (ab 7) bleibt außen vor, solange kein veröffentlichtes typescript-eslint ihn
     # trägt (harter Peer unter 6.1.0): sonst käme er wöchentlich als dauerhaft roter PR.
-    # Alarm: der Eintrag `typescript-7-eslint` in .github/wiedervorlagen.json legt zum Fälligkeitstag ein
-    # Ticket an, das dieses `ignore` prüfen und lösen lässt.
+    # Ein Eintrag in der Wiedervorlagen-Datei des Projekts kann zum Fälligkeitstag ein Ticket anlegen,
+    # das dieses `ignore` prüfen und lösen lässt.
     ignore:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
