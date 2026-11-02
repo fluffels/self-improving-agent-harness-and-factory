@@ -1,4 +1,4 @@
-# Fortschreibung factory#94 (2026-11-02): Kern-Tests aufteilen, Bezieher-Fitness-Checks im Harness-Doctor
+# Fortschreibung #94 (2026-11-02): Kern-Tests aufteilen, Bezieher-Fitness-Checks im Harness-Doctor
 
 Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Harness-Doctor, Fortschreibung [#116](0022-116-doctor-sicherheitspunkte.md)); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
 

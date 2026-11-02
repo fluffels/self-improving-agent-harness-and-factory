@@ -107,6 +107,13 @@ describe("Zeilenenden", () => {
     expect(befund).toContain("(+3 weitere)");
   });
 
+  test("Kürzung: genau 5 Pfade stehen ohne Zusatz", () => {
+    const funf = Array.from({ length: 5 }, (_, i) => ({ pfad: `docs/v${i}.md`, eol: "unspecified" }));
+    const befund = punkt(lauf([...gesund, ...funf]), "Zeilenenden").befund ?? "";
+    expect(befund).toContain("docs/v4.md");
+    expect(befund).not.toContain("weitere");
+  });
+
   test("pfadeOhneEolRegel: lf und crlf zählen als Regel, alles andere nicht", () => {
     const aus = ["a", "eol", "lf", "b", "eol", "crlf", "c", "eol", "unspecified", "d", "eol", "auto", ""].join("\0");
     expect(pfadeOhneEolRegel(aus)).toEqual(["c", "d"]);
