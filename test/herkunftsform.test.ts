@@ -27,8 +27,14 @@ describe("umschreiben: Ziel der Nummer", () => {
     expect(r.factory).toBe(2);
     expect(r.quellprojekt).toBe(1);
   });
-  it("ein- und zweistellige sowie fünfstellige Nummern bleiben", () => {
-    expect(u("#5 #12 #12345 #99")).toBe("#5 #12 #12345 #99");
+  it("ein- und zweistellige Nummern werden factory# (Nummern des Quellprojekts schreibt man vorher von Hand), fünfstellige bleiben", () => {
+    const r = H.umschreiben("#5 #12 #99 #12345", { ab: AB });
+    expect(r.text).toBe("factory#5 factory#12 factory#99 #12345");
+    expect(r.factory).toBe(3);
+    expect(r.quellprojekt).toBe(0);
+  });
+  it("eine Kurzform in Code, Überschrift und als Wortrest bleibt", () => {
+    expect(u("`#5` #6a\n## Titel #7")).toBe("`#5` #6a\n## Titel #7");
   });
   it("Klammer, Schrägstrich, Sternchen, eckige Klammer und Zeilenanfang erlauben die Umstellung; beide Nummern in (#992/#1087)", () => {
     expect(u("(#992/#1087) *#1234* [#1234]\n#1234 am Anfang")).toBe("(quellprojekt#992/quellprojekt#1087) *quellprojekt#1234* [quellprojekt#1234]\nquellprojekt#1234 am Anfang");
@@ -169,5 +175,17 @@ describe("Standardliste", () => {
     expect(H.istFactorySeite("docs/sub/x-gegenprobe-1.md")).toBe(true);
     expect(H.istFactorySeite("docs/a.mmd")).toBe(false);
     expect(H.istFactorySeite("README.md")).toBe(false);
+  });
+  it("standardDateien: Seiten, Agententexte und Skill-Quellen, nicht die Skill-Zeiger, dazu AGENTS.md", () => {
+    const dir = mkdtempSync(join(tmpdir(), "herkunftsform-std-")) + "/";
+    for (const f of ["docs/a.md", "docs/adr/b.md", ".claude/agents/x.md", ".agents/skills/s/SKILL.md", ".claude/skills/s/SKILL.md", "README.md"]) {
+      mkdirSync(dirname(join(dir, f)), { recursive: true });
+      writeFileSync(join(dir, f), "x\n");
+    }
+    try {
+      expect(H.standardDateien(dir)).toEqual(["docs/a.md", ".agents/skills/s/SKILL.md", ".claude/agents/x.md", "AGENTS.md"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

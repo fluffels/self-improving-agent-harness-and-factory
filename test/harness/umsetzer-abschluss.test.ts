@@ -427,7 +427,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   // Bekannte Grenze: ob eine Entscheidung im konkreten PR-Text steht, ist nicht prüfbar; gebunden ist nur der Auftrag in der Prosa.
   test("Bindung: Entscheidungen kommen in den PR-Text, auch die der Gruppen-Umsetzer (#1740 L3)", () => {
     assert.match(UMSETZER, /im PR-Text \(„Entscheidung: X, weil Y“\)/);
-    assert.match(abschnitt(UMSETZER, /^\*\*Gruppen \(#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
+    assert.match(abschnitt(UMSETZER, /^\*\*Gruppen \(quellprojekt#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
   });
 });
 

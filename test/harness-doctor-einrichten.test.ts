@@ -66,7 +66,7 @@ function schreibt(args: string[]): boolean {
   const i = args.findIndex((a) => a === "-X" || a === "--method" || /^-X./.test(a) || a.startsWith("--method="));
   const roh = i < 0 ? null : a2(args, i);
   if (roh !== null) return roh.toUpperCase() !== "GET";
-  return args.some((a) => ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) || /^--(?:raw-)?field=|^--input=/.test(a));
+  return args.some((a) => ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) || /^-[fF]./.test(a) || /^--(?:raw-)?field=|^--input=/.test(a));
 }
 
 /** Methode eines `-X`-/`--method`-Arguments an Stelle `i`: getrennt (`-X PUT`), zusammengeschrieben (`-XPUT`) oder mit `=`. */
@@ -207,6 +207,8 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(schreibt(["api", "-X", "PATCH", "repos/a/b"]), true);
     assert.equal(schreibt(["api", "--method=POST", "repos/a/b"]), true);
     assert.equal(schreibt(["api", "repos/a/b", "-f", "x=1"]), true);
+    assert.equal(schreibt(["api", "repos/a/b", "-Fa=1"]), true);
+    assert.equal(schreibt(["api", "repos/a/b", "-fa=1"]), true);
     assert.equal(schreibt(["repo", "edit", "a/b", "--enable-secret-scanning"]), true);
     assert.equal(schreibt(["secret", "set", "X"]), true);
     assert.equal(schreibt(["api", "-X", "GET", "-f", "per_page=1", "repos/a/b"]), false);
@@ -282,6 +284,15 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(gleich.sammel.length, 1, "die Standard-Config ausdrücklich genannt ist nicht abweichend");
     const ohne = fahre(root, welt(), ["--einrichten"]);
     assert.equal(ohne.sammel.length, 1, "ohne --config ebenso");
+  });
+
+  test("nicht lesbare Bestandspunkte behalten ihren Anleitungs-Link (Admin-Recht, Actions, Board)", () => {
+    for (const [punkt, key] of [["Admin-Recht", "api repos/acme/demo"], ["Actions", "api repos/acme/demo/actions/permissions"], ["Board produkt", "api orgs/acme/projectsV2/7"]] as const) {
+      const root = neuerRoot();
+      const r = fahre(root, welt(undefined, { [key]: new Error("HTTP 500") }), EINR(root));
+      const z = r.out.find((x) => x.startsWith(`ANLEITUNG ${punkt}:`)) ?? "";
+      assert.match(z, /Fix: .+ Link: https:\/\//, `${punkt}: ${r.out.join(" | ")}`);
+    }
   });
 
   test("eine Anleitung ohne Link bleibt ohne „Link:“ (Labels nicht lesbar)", () => {
