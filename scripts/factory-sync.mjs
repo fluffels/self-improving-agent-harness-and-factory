@@ -9,9 +9,10 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { erstUebernahme, istVorlage, normalisiereUebernahmePfad } from "./sync-abgleich-lib.mjs";
+import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
@@ -206,6 +207,18 @@ function setzeAusfuehrbitImIndex(ziel, pfade, git, out) {
   return `Ausführbit im Index von '${ziel}' fehlt (erwartet 100755): ${falsch.join(", ")}\nFix: git -C <ziel> update-index --add --chmod=+x -- ${falsch.join(" ")}`;
 }
 
+/** Hinweiszeilen, wenn eine Kontextdatei nach dem Sync über dem Budget des (alten) Stands läge; Text aus dem Plan, sonst aus dem Ziel; geduldete Ausnahmen des Ziels ohne Hinweis. */
+function kontextHinweise(plan, ziel) {
+  const lies = (datei) => plan.dateien.get(datei)?.text ?? liesDatei(ziel)(datei);
+  let ausnahmen = [];
+  try {
+    ausnahmen = ausnahmenAus(ladeProjektConfig({ rootDir: ziel })).kontext;
+  } catch {
+    // Config des Ziels nicht lesbar: ohne Ausnahmen messen, die Warnung ist nur ein Hinweis.
+  }
+  return ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
+}
+
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
 export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
   const opt = parseArgs(argv);
@@ -269,6 +282,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
     return 1;
   }
   for (const m of plan.meldungen) out(`Hinweis: ${m}`);
+  for (const h of kontextHinweise(plan, ziel)) out(h);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");
   out(`factory-sync: ${plan.dateien.size} ${opt.trocken ? "zu ändern" : "geändert"}, ${plan.unveraendert} unverändert`);
   return 0;

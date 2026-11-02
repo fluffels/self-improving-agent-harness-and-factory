@@ -15,7 +15,11 @@ import * as rawSync from "../scripts/factory-sync.mjs";
 import * as rawDrift from "../scripts/check-factory-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawKb from "../scripts/kontext-budget-lib.mjs";
 import { ganzesWortMuster } from "./support/regex";
+
+const kb = rawKb as unknown as { ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
 
 interface Span {
   start: number;
@@ -1271,5 +1275,38 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
       assert.match(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /Weg: Änderung upstream im Factory-Repo, dort neu taggen/);
       assert.doesNotMatch(zeilen.find((z) => z.includes("x.txt: Besitz")) ?? "", /von einem Tag neu syncen/);
     });
+  });
+});
+
+describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, () => {
+  const GROSS = `${"Projekttext, der das Budget sprengt.\n".repeat(900)}`;
+  const zielMit = (ausnahme = false): string => {
+    const z = baueZiel();
+    schreibe(z, "AGENTS.md", `${ZIEL_AGENTS}\n${GROSS}`);
+    schreibe(z, ".factory/projekt.json", ausnahme ? JSON.stringify({ ...JSON.parse(pwConfig("wk-planer")), ausnahmen: { kontext: [{ datei: "AGENTS.md", grund: "Auslagerung offen #1" }] } }) : pwConfig("wk-planer"));
+    return z;
+  };
+  const HINWEIS = /Hinweis: Kontextbudget: AGENTS\.md hätte \d+ Zeichen > Budget 28000; im Ziel wird check:contextsize rot, Projekt-Block kürzen \(nie Wächter-gebundene Sätze\)/;
+  test("über Budget: Hinweiszeile im Trockenlauf und im echten Lauf, Exit 0", () => {
+    for (const extra of [["--trocken"], []]) {
+      const r = vomTag(baueQuelle(), zielMit(), extra);
+      assert.equal(r.code, 0, r.err);
+      assert.match(r.out, HINWEIS, JSON.stringify(extra));
+    }
+  });
+  test("unter Budget und geduldete Ausnahme: keine Hinweiszeile", () => {
+    const klein = vomTag(baueQuelle(), baueZiel(), ["--trocken"]);
+    assert.equal(klein.code, 0, klein.err);
+    assert.doesNotMatch(klein.out, /Kontextbudget/);
+    const geduldet = vomTag(baueQuelle(), zielMit(true), ["--trocken"]);
+    assert.equal(geduldet.code, 0, geduldet.err);
+    assert.doesNotMatch(geduldet.out, /Kontextbudget/);
+  });
+  test("ueberBudget: Zählung ohne CR, fehlende Datei zählt nicht", () => {
+    const budgets = [{ file: "A", budget: 4 }];
+    assert.deepEqual(kb.ueberBudget({ lies: () => "ab\r\ncd", budgets }), [{ file: "A", chars: 5, budget: 4 }]);
+    assert.deepEqual(kb.ueberBudget({ lies: () => "ab\r\nc", budgets }), []);
+    assert.deepEqual(kb.ueberBudget({ lies: () => null, budgets }), []);
+    assert.deepEqual(kb.ueberBudget({ lies: () => "ab\r\ncd", budgets, ausnahmen: [{ datei: "A" }] }), []);
   });
 });
