@@ -20,8 +20,6 @@ import { istRelativPosix } from "./relativ-pfad.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 
-export { gleichesRepo, istRepoForm, zerlegeRepo };
-
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));

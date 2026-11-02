@@ -7,7 +7,8 @@
  * hier; der Link-Wächter `check-factory-links.mjs` (factory#130) prüft die gebauten Links. Der Wächter `test/harness/factory-seite.test.ts` prüft die Literal-Aufrufe von `factorySeiteIn`.
  */
 import { liesSyncStand } from "./sync-stand-lib.mjs";
-import { boardDerRolle, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { boardDerRolle, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
 
 /** Pur: die Basis-URL eines Repos (`owner/name`) auf GitHub. */
 export const repoBasis = (repo) => `https://github.com/${repo}`;

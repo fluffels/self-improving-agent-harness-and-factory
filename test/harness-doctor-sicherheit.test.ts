@@ -2,7 +2,7 @@
  * die Negativfälle (Endpunkt-Fehler, fehlendes Feld) dürfen nie OK ergeben. */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { LINK_SICHERHEIT as rawLinks, SICHERHEIT_PUNKTE as rawPunkte, pruefeSicherheit as rawPruefe } from "../scripts/harness-doctor-sicherheit.mjs";
+import { analysePunkt as rawAnalyse, LINK_SICHERHEIT as rawLinks, SICHERHEIT_PUNKTE as rawPunkte, pruefeSicherheit as rawPruefe } from "../scripts/harness-doctor-sicherheit.mjs";
 
 type Quelle = { wert?: unknown; fehler?: string; fix?: string };
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string; link?: string; hinweis?: string }
@@ -10,6 +10,7 @@ interface Eingabe { repo: Quelle; actions: Quelle; regeln: Quelle; pvr: Quelle; 
 const pruefe = rawPruefe as (e: Eingabe) => Ergebnis[];
 const PUNKTE = rawPunkte as string[];
 const LINKS = rawLinks as Record<string, string>;
+const analysePunkt = rawAnalyse as (punkt: string, repo: Quelle) => Ergebnis;
 
 const SA_SCHLUESSEL: Record<string, string> = {
   "Secret Scanning": "secret_scanning",
@@ -136,11 +137,19 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
     expect(x.befund).toContain("HTTP 404");
   });
 
-  test("Regeln mit Antwort null: kein Wurf, Code-Scanning ist Lücke, nicht OK", () => {
+  test("Regeln mit Antwort null: kein Wurf, Code-Scanning ist nicht prüfbar (keine belegte Lücke), nicht OK", () => {
     const e = gesund();
     e.regeln = { wert: null };
     const x = je(e, "Code-Scanning");
     expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBe(true);
+    expect(x.befund).toMatch(/Regeln auf main.*keine Liste/);
+  });
+
+  test("ein Punkt ohne Zuordnung ist nicht prüfbar statt Wurf", () => {
+    const x = analysePunkt("Unbekannt", { wert: {} });
+    expect(x).toMatchObject({ punkt: "Unbekannt", ok: false, nichtPruefbar: true });
+    expect(x.befund).toMatch(/Unbekannt.*keine Prüfung/);
   });
 
   test("security_and_analysis fehlt: Grund und Fix nennen das Admin-Recht", () => {
@@ -149,6 +158,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
     const x = je(e, "Secret Scanning");
     expect(x.befund).toMatch(/sichtbar nur mit Admin-Recht/);
     expect(x.fix).toMatch(/Admin-Recht/);
+    expect(x.link).toBe(LINKS["Secret Scanning"]);
   });
 
   test("ein Fix der Quelle (fataler Token) gilt für alle Punkte", () => {
@@ -159,6 +169,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
       expect(x.ok).toBe(false);
       expect(x.nichtPruefbar).toBe(true);
       expect(x.fix).toBe("erst den Token-Punkt beheben");
+      expect(x.link).toBe(LINKS[x.punkt]);
     }
   });
 });
@@ -173,7 +184,6 @@ describe("pruefeSicherheit: Code-Scanning gegen den Spiegel", () => {
     expect(x[0].befund).toMatch(/"CodeQL", "Semgrep" fehlt/);
     expect(x[0].fix).toContain('Ruleset "rs"');
     expect(x[0].befund).toContain("auf main");
-    expect(x[0].fix).toContain('Ruleset "rs"');
     expect(x[0].befund).not.toMatch(/private Repos/);
   });
 
