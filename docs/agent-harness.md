@@ -19,7 +19,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
-| Prüfschritte in `verify` | 14 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 150 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 90 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 16 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
@@ -120,6 +120,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen) |
 | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
+| `npm run check:factorylinks` | `verify` | Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf vorhandene Pfade und Anker (entfällt ohne Sync-Stand) |
 | `npm run check:docmap` | `verify` | Tiefendoc-Abdeckung jeder Quell-Datei (entfällt mit Hinweis ohne `struktur.moduldoku`) |
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
@@ -520,7 +521,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>14 Gates"]
+    verify["npm run verify<br/>15 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]
