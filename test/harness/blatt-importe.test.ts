@@ -155,6 +155,11 @@ describe("Blatt-Importe (factory#114)", () => {
       expect(m('import "./seiteneffekt.mjs";')).toHaveLength(1);
       expect(m('export * from "./lib.mjs";')).toHaveLength(1);
     });
+    test("Negativ: ein verbotener Import nach der Kopfzeile und über mehrere Zeilen ist ein Fund", () => {
+      const kopf = "// Blatt-Modul: nur Builtins\n";
+      expect(m(`${kopf}import { x } from "./lib.mjs";`)).toHaveLength(1);
+      expect(m(`${kopf}import {\n  x,\n  y,\n} from "./lib.mjs";`)).toEqual(['scripts/a.mjs: importiert "./lib.mjs" (ein Blatt-Modul importiert nur node:-Builtins oder andere Blätter)']);
+    });
     test("Unterordner werden relativ zur Datei aufgelöst", () => {
       expect(m('import { x } from "../a.mjs";', "scripts/sub/c.mjs")).toEqual([]);
       expect(m('import { x } from "./a.mjs";', "scripts/sub/c.mjs")).toHaveLength(1);
