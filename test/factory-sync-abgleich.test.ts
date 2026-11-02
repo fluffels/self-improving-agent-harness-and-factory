@@ -61,6 +61,11 @@ describe("abweichendeZeilen", () => {
     assert.equal(abgleich.abweichendeZeilen("a\nb\nc\n", "a\nx\nc\n"), 2);
     assert.equal(abgleich.abweichendeZeilen("a\nb\n", "a\nn\nb\n"), 1);
     assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "c\nd\na\nb\n"), 4);
+    // Überlappung von gemeinsamem Anfang und Ende (Suffix-Grenze): eine doppelte Zeile zählt einmal, in beiden Richtungen
+    assert.equal(abgleich.abweichendeZeilen("x\nx\n", "x\n"), 1);
+    assert.equal(abgleich.abweichendeZeilen("x\n", "x\nx\n"), 1);
+    // Zweig jetzt[j - 1] des LCS-Kerns: -x -y +z +q +w
+    assert.equal(abgleich.abweichendeZeilen("x\na\ny\n", "z\na\nq\nw\n"), 5);
   });
 });
 
@@ -80,7 +85,14 @@ describe("artFehler / istVorlage", () => {
   });
   test("pruefeManifest meldet die art-Fehler mit der Einheit", () => {
     const m = { version: 1, eintraege: [{ pfad: "x", ring: "kern", quelle: "t", art: "besitz" }] };
-    assert.match(lib.pruefeManifest(m, () => "t").join("|"), /x: unbekannte art 'besitz'/);
+    assert.match(lib.pruefeManifest({ ...m, version: 2 }, () => "t").join("|"), /x: unbekannte art 'besitz'/);
+  });
+  test("art braucht Manifest-Version 2: ein altes Werkzeug lehnt Version 2 ab, das neue Version 1 mit art", () => {
+    const e = { pfad: "x", ring: "kern", quelle: "t", art: "vorlage" };
+    assert.match(lib.pruefeManifest({ version: 1, eintraege: [e] }, () => "t").join("|"), /art braucht version 2/);
+    assert.deepEqual(lib.pruefeManifest({ version: 2, eintraege: [e] }, () => "t"), []);
+    assert.deepEqual(lib.pruefeManifest({ version: 1, eintraege: [{ pfad: "x", ring: "kern", quelle: "t" }] }, () => "t"), []);
+    assert.match(lib.pruefeManifest({ version: 3, eintraege: [] }, () => "t").join("|"), /version 3 unbekannt/);
   });
 });
 
@@ -101,6 +113,8 @@ describe("erstUebernahme", () => {
     assert.deepEqual(r.fehler, []);
     assert.match(r.hinweise.join("|"), /Erst-Übernahme: 'scripts\/a\.mjs'/);
     assert.equal(abgleich.normalisiereUebernahmePfad("./a/b"), "a/b");
+    assert.equal(abgleich.normalisiereUebernahmePfad("././a"), "a");
+    assert.equal(abgleich.normalisiereUebernahmePfad("scripts/./a.mjs"), "scripts/./a.mjs");
   });
   test("unbekannter --uebernehmen-Pfad ist ein Fehler, ein Pfad ohne Abgleichbedarf nur ein Hinweis", () => {
     const r = abgleich.erstUebernahme({ kandidaten: [k("a", null)], altEinheiten: [], uebernehmen: ["tippfehler", "a"] });
@@ -115,7 +129,7 @@ const ROLLEN = Object.entries(pc.ROLLEN_PFADE)
   .filter(([rolle]) => !pc.PROJEKT_ROLLEN.includes(rolle))
   .map(([, pfad]) => ({ pfad, ring: "kern", quelle: "t" }));
 const MANIFEST = {
-  version: 1,
+  version: 2,
   eintraege: [...ROLLEN, { pfad: "scripts/a.mjs", ring: "kern", quelle: "t" }, { pfad: ".github/dependabot.yml", ring: "kern-nach-entkopplung", art: "vorlage", quelle: "t" }],
 };
 const DEP_QUELLE = "version: 2\nupdates: []\n";
@@ -167,6 +181,7 @@ describe("Erst-Übernahme im Sync", { timeout: 30_000 }, () => {
     assert.equal(r.code, 1, "eine Vorlage ist nicht übernehmbar (Tippfehler-Schutz)");
     const ok = laufe(q, z, ["--uebernehmen", "scripts/a.mjs"]);
     assert.equal(ok.code, 0, ok.err);
+    assert.match(ok.out, /Erst-Übernahme: 'scripts\/a\.mjs'/);
     assert.equal(lies(z, "scripts/a.mjs"), "export const a = 1;\n");
     const stand = JSON.parse(lies(z, ".factory/sync-stand.json")) as { einheiten: Record<string, string> };
     assert.ok("scripts/a.mjs" in stand.einheiten);

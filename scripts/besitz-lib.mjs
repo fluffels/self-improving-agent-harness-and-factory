@@ -96,7 +96,8 @@ export function pflichtChecksFehler(e) {
 /** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
 export function pruefeManifest(m, lies) {
   const out = [];
-  if (m.version !== 1) out.push(`version ${String(m.version)} unbekannt (erwartet 1)`);
+  if (m.version !== 1 && m.version !== 2) out.push(`version ${String(m.version)} unbekannt (erwartet 1 oder 2)`);
+  else if (m.version === 1 && m.eintraege.some((e) => e.art !== undefined)) out.push("art braucht version 2 (ein altes Sync-Werkzeug kennt art nicht und bräche sonst nicht ab)");
   const ids = new Set();
   const ganze = new Set();
   const teile = new Set();

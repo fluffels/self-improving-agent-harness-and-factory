@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "eintraege": [
     {"pfad":"scripts/arbeitsplatz-lib.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
     {"pfad":"scripts/arbeitsplatz.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},

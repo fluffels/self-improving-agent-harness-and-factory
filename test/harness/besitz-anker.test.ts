@@ -33,7 +33,7 @@ describe("besitzAnker", () => {
 describe("ladeBesitzManifest", () => {
   test("liefert das echte Manifest mit Version und Einträgen, jeder Eintrag mit Pfad und Ring", () => {
     const m = ladeBesitzManifest();
-    assert.equal(m.version, 1);
+    assert.equal(m.version, 2);
     assert.ok(m.eintraege.length > 50);
     assert.ok(m.eintraege.every((e) => typeof e.pfad === "string" && e.pfad !== "" && typeof e.ring === "string"));
   });

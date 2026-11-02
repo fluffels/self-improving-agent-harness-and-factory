@@ -497,7 +497,7 @@ describe("pruefeManifest", () => {
     assert.match(meld(ok([ein("a"), ein("a")]), "t"), /doppelte Einheit/);
     assert.match(meld(ok([ein("a", { ring: "x" })]), "t"), /unbekannter Ring/);
     assert.match(meld(ok([ein("a")]), null), /existiert nicht/);
-    assert.match(meld({ version: 2, eintraege: [] }, "t"), /version/);
+    assert.match(meld({ version: 3, eintraege: [] }, "t"), /version/);
     assert.match(meld(ok([ein("a", { quelle: " " })]), "t"), /quelle fehlt/);
     assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
     for (const unsicher of ["/etc/x", "../x", "a/../x", "a\\b", "a//b", "C:/x", "", "a/./b"]) {
