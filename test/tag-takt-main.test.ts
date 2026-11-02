@@ -67,6 +67,10 @@ describe("tag-takt main", () => {
       expect(await T.main([], b.deps)).toBe(0);
       expect(b.platziert.map((p) => p[2])).not.toContain("aus-prozess");
       expect(b.log.join("\n")).toContain("PROJECT_TOKEN fehlt");
+      const c = aufbau();
+      delete c.deps.env; // Standard: process.env
+      expect(await T.main([], c.deps)).toBe(0);
+      expect(c.platziert).toEqual([["77", "tag", "aus-prozess", "o/ziel"]]);
     } finally {
       if (alt === undefined) delete process.env.PROJECT_TOKEN;
       else process.env.PROJECT_TOKEN = alt;
