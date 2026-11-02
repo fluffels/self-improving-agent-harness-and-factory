@@ -505,7 +505,7 @@ export function platzhalterMuster() {
   return new RegExp(`<(${PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
 }
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
-const CONFIG_PFAD = PROJEKT_CONFIG;
+const CONFIG_PFAD = ".factory/projekt.json";
 
 /** Stellen eines LF-Textes: `{ bloecke: [{ start, ende }], zeilen: [{ marker, folge, schluessel, einrueckung, name }] }` (Zeilenindizes ab 0).
  *  Ein Markdown-Marker zählt nur allein auf seiner Zeile, ein Zeilen-Marker nur im führenden Frontmatter direkt vor einer `key:`-Zeile.

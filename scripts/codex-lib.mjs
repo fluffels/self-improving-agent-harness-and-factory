@@ -59,7 +59,7 @@ export function quellDatei(root, pfad) {
   return p;
 }
 export function pruefeQuellen(root, config) {
-  const pfade = [".mcp.json", PROJEKT_CONFIG, "AGENTS.md", "docs/codex/einstieg.md", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
+  const pfade = [".mcp.json", ".factory/projekt.json", "AGENTS.md", "docs/codex/einstieg.md", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
   for (const p of pfade) quellDatei(root, p);
 }
 function sichererPfad(root, pfad) {
