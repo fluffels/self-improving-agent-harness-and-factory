@@ -9,6 +9,7 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
+import { MANIFEST_PFAD, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
 import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -107,8 +108,28 @@ const SECRET_VAR = /\b(secrets|vars)\.([A-Za-z_]\w*)/g;
 
 const ohneAnfuehrung = (s) => s.replace(/^(["'])(.*)\1$/, "$2");
 
-/** Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards }`. */
-export function voraussetzungenAus({ config, workflows }) {
+/**
+ * Pur: die Pflicht-Checks der verteilten Kern-Workflows aus dem Besitz-Manifest (factory#117): `{ checks, fehler }`. `besitz` ist `{ wert }` oder `{ fehler }`, `undefined` gilt als nicht gelesen (fail-closed).
+ * Ein Eintrag zählt nur, wenn er verteilt wird und seine Datei (Basisname) in `workflows` liegt; ein ungültiges `pflichtChecks` macht das ganze Manifest unlesbar (eine halb gelesene Soll-Liste prüfte still zu wenig).
+ */
+function kernPflichtChecks({ besitz, workflows }) {
+  if (besitz === undefined || besitz.fehler !== undefined) return { checks: [], fehler: besitz?.fehler ?? "nicht gelesen" };
+  const eintraege = besitz.wert?.eintraege;
+  if (!Array.isArray(eintraege)) return { checks: [], fehler: "kein Array eintraege" };
+  if (eintraege.some((e) => e === null || typeof e !== "object" || pflichtChecksFehler(e).length > 0)) return { checks: [], fehler: "pflichtChecks ungültig" };
+  const dateien = new Set(workflows.map((w) => basename(w.pfad)));
+  const checks = eintraege.filter((e) => wirdVerteilt(e) && e.pflichtChecks !== undefined && dateien.has(basename(e.pfad))).flatMap((e) => e.pflichtChecks);
+  return { checks, fehler: null };
+}
+
+/** Pur: die Soll-Liste der Required Checks: Spiegel zuerst, dann der Kern, ohne Doppelte (exakter Vergleich). */
+const vereinigt = (spiegel, kern) => [...new Set([...(spiegel?.requiredChecks ?? []), ...kern])];
+
+/**
+ * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards, pflichtChecks, besitzFehler }`. `pflichtChecks` ist die Vereinigung aus den
+ * Required Checks des Ruleset-Spiegels (zuerst) und den `pflichtChecks` der verteilten Kern-Workflows im Manifest, ohne Doppelte; `besitzFehler` nennt den Grund, wenn das Manifest nicht lesbar ist.
+ */
+export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
   const secrets = new Set();
   const variablen = new Set();
   const labels = new Map();
@@ -121,7 +142,8 @@ export function voraussetzungenAus({ config, workflows }) {
     for (const m of text.matchAll(LABEL_FLAG)) for (const l of (m[1] ?? m[2] ?? m[3]).split(",")) merke(l.trim());
     for (const [, wert] of text.matchAll(LABEL_ENV)) if (!wert.includes("${{") && !wert.includes("$")) merke(ohneAnfuehrung(wert));
   }
-  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [] };
+  const kern = kernPflichtChecks({ besitz, workflows });
+  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler };
 }
 
 const erste = (e) => fehlerText(e).split("\n")[0];
@@ -225,7 +247,7 @@ function pruefeBoard(gh, board, i) {
   return probleme.length ? probleme.map(l) : [gut(name)];
 }
 
-function pruefeRuleset(regelnQuelle, repoInfo, spiegel) {
+function pruefeRuleset(regelnQuelle, repoInfo, spiegel, noetig) {
   const branch = repoInfo.default_branch ?? "main";
   const privat = repoInfo.private === true;
   const grenze = privat ? GRENZE_PRIVAT : "";
@@ -233,10 +255,9 @@ function pruefeRuleset(regelnQuelle, repoInfo, spiegel) {
   if (regelnQuelle.fehler !== undefined) return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${regelnQuelle.fehler})${grenze}`, fixAnlegen, LINK.ruleset)];
   const regeln = regelnQuelle.wert;
   const kontexte = regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context));
-  if (kontexte.length === 0) return [luecke("Ruleset", `kein Required status check auf ${branch}${grenze}`, fixAnlegen, LINK.ruleset)];
-  const noetig = spiegel?.requiredChecks ?? [];
   const rs = spiegel?.name ? `Ruleset "${spiegel.name}"` : "das Ruleset";
   const fehlend = fehlen(noetig, kontexte).map((c) => luecke(`Required-Check ${c}`, `Required-Check "${c}" fehlt auf ${branch}`, `"${c}" in ${rs} unter Required status checks ergänzen`, LINK.ruleset));
+  if (kontexte.length === 0) return [luecke("Ruleset", `kein Required status check auf ${branch}${grenze}`, fixAnlegen, LINK.ruleset), ...fehlend];
   return fehlend.length ? fehlend : [gut("Ruleset")];
 }
 
@@ -264,6 +285,20 @@ export function pruefeAltnamen({ env, config, namen }) {
   return luecken.length ? luecken : [gut("Umgebungsvariablen")];
 }
 
+/** Prüfpunkt, wenn das Besitz-Manifest nicht lesbar ist: die Kern-Pflicht-Checks sind unbekannt, nie grün (factory#117). */
+const besitzNichtPruefbar = (grund) => ({
+  punkt: "Kern-Pflicht-Checks",
+  ok: false,
+  nichtPruefbar: true,
+  befund: `${MANIFEST_PFAD} nicht lesbar (${grund}): welche Required Checks die Kern-Workflows brauchen, ist unbekannt`,
+  fix: `${MANIFEST_PFAD} aus Git oder per Sync von einem Factory-Tag wiederherstellen, dann erneut prüfen`,
+  hinweis: "nur die Checks des Ruleset-Spiegels geprüft, Kern-Pflicht-Checks nicht prüfbar",
+});
+
+const besitzPunkt = (v) => (v.besitzFehler ? [besitzNichtPruefbar(v.besitzFehler)] : []);
+/** Soll-Liste der Required Checks: die Ableitung, sonst (direkter Aufruf ohne sie) der Spiegel, damit er nie verloren geht. */
+const sollChecks = (v, spiegel) => v.pflichtChecks ?? spiegel?.requiredChecks ?? [];
+
 /** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis?, nichtPruefbar? }]` (`nichtPruefbar`: ok false, aber keine belegte Lücke). Wirft nie. */
 export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung = null }) {
   const repo = config.repo;
@@ -283,7 +318,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     voraussetzungen.boards.forEach((b, i) => ergebnis.push(...pruefeBoard(gh, b, i)));
     const branch = r.repo.default_branch ?? "main";
     const regeln = hole(() => seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`));
-    ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel));
+    ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel, sollChecks(voraussetzungen, spiegel)));
     ergebnis.push(...pruefeSicherheit({ ...quellen, regeln, pvr: hole(() => json(gh, ["api", `repos/${repo}/private-vulnerability-reporting`])), spiegel, branch, privat: r.repo.private === true }));
   } else {
     const aus = { fehler: "gh nicht angemeldet oder ohne Zugriff", fix: "erst den Token-Punkt beheben" };
@@ -296,6 +331,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)"));
   }
   if (umgebung) ergebnis.push(...pruefeAltnamen({ env: umgebung.env, config, namen: umgebung.namen }));
+  ergebnis.push(...besitzPunkt(voraussetzungen)); // liest nur das Manifest, braucht kein Token
   return ergebnis;
 }
 
@@ -325,8 +361,10 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
   const workflows = workflowsLesen(rootDir);
+  const manifest = join(rootDir, MANIFEST_PFAD);
+  const besitz = existsSync(manifest) ? hole(() => JSON.parse(readFileSync(manifest, "utf8"))) : { fehler: "Datei fehlt" };
   if (mitWochenlauf && !workflows.some((w) => w.pfad === basename(WOCHENLAUF_PFAD))) workflows.push({ pfad: basename(WOCHENLAUF_PFAD), text: WOCHENLAUF_WORKFLOW });
-  const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows }), spiegel, gh, langfuse, umgebung });
+  const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows, spiegel, besitz }), spiegel, gh, langfuse, umgebung });
   if (dateien) ergebnis.push(...dateien({ rootDir }));
   return { config, ergebnis };
 }
