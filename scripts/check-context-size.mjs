@@ -46,7 +46,7 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { CONTEXT_BUDGETS, countChars } from "./kontext-budget-lib.mjs";
-import { ausnahmenAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -128,7 +128,7 @@ function main() {
   for (const s of stale)
     console.error(
       red(
-        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in .factory/projekt.json entfernen.`,
+        `✖ Ausnahme stale: ${s.datei} liegt nicht mehr über Budget – Eintrag unter ausnahmen.kontext in ${PROJEKT_CONFIG} entfernen.`,
       ),
     );
 
@@ -147,7 +147,7 @@ function main() {
       `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
         `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
         `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `ausnahmen.kontext in .factory/projekt.json aufnehmen (datei, grund mit #<nr>).`,
+        `ausnahmen.kontext in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
     );
   process.exit(1);
 }

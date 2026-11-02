@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { factoryRepo } from "./factory-seite.mjs";
+import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { WERKZEUG_HINWEIS, teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
@@ -36,7 +37,7 @@ export function fuehreAus(argv, io) {
   if (zustand === "fehlt") return ergebnis(0, werte.json ? `${JSON.stringify({ update: null })}\n` : "Kein Sync-Stand: dieses Repo ist selbst Quelle, nichts zu prüfen.\n");
   if (zustand === "kaputt") return ergebnis(AUFRUF_EXIT, "", "FEHLER: .factory/sync-stand.json ist kein gültiges JSON-Objekt. Fix: Sync neu fahren (node scripts/factory-sync.mjs --quelle <pfad> --tag <name>).\n");
   const repo = factoryRepo(io.wurzel);
-  if (!repo) return ergebnis(AUFRUF_EXIT, "", "FEHLER: Factory-Repo nicht bestimmbar. Fix: von einem Tag neu syncen (schreibt quelle.repo) oder boards[factory].repo in .factory/projekt.json setzen.\n");
+  if (!repo) return ergebnis(AUFRUF_EXIT, "", `FEHLER: Factory-Repo nicht bestimmbar. Fix: von einem Tag neu syncen (schreibt quelle.repo) oder boards[factory].repo in ${PROJEKT_CONFIG} setzen.\n`);
   let tags;
   try {
     tags = io.gh(["api", `repos/${repo}/tags`, "--paginate", "--jq", ".[].name"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean);

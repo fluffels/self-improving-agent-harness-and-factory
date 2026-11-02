@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { altEnvPraefix } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
@@ -505,7 +505,7 @@ export function platzhalterMuster() {
   return new RegExp(`<(${PROJEKTWERT_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
 }
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
-const CONFIG_PFAD = ".factory/projekt.json";
+const CONFIG_PFAD = PROJEKT_CONFIG;
 
 /** Stellen eines LF-Textes: `{ bloecke: [{ start, ende }], zeilen: [{ marker, folge, schluessel, einrueckung, name }] }` (Zeilenindizes ab 0).
  *  Ein Markdown-Marker zählt nur allein auf seiner Zeile, ein Zeilen-Marker nur im führenden Frontmatter direkt vor einer `key:`-Zeile.

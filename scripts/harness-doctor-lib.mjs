@@ -230,7 +230,7 @@ function pruefeLabels(gh, repo, soll) {
 function pruefeBoard(gh, board, i) {
   const name = `Board ${board.rolle ?? i}`;
   const pfad = boardPfad(board);
-  const hilfe = `boards[${i}] in .factory/projekt.json prüfen (gh api ${pfad}/fields listet die Felder)`;
+  const hilfe = `boards[${i}] in ${PROJEKT_CONFIG} prüfen (gh api ${pfad}/fields listet die Felder)`;
   const l = (befund) => luecke(name, befund, hilfe, LINK.projektFelder);
   const lesefehler = (was, quelle) => ausFehler(name, was, { ...quelle, fix: hilfe }, LINK.projektFelder);
   let b;
