@@ -272,16 +272,29 @@ describe("harness-doctor --pruefen", () => {
     ["Feld node_id", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, node_id: "anders" } }, /statusFeldNodeId.*Fix:/],
     ["Option Todo fehlt", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: { raw: "Done" } }] } }, /todoOptionId.*Fix:/],
     ["Status-Feld falscher Name", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, name: "Priorität" } }, /statusFeldId zeigt auf das Feld "Priorität".*Fix:/],
-    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 404") }, /Admin-Recht: Repo acme\/demo nicht lesbar.*Fix:/],
-    ["Actions nicht lesbar", { "api repos/acme/demo/actions/permissions": new Error("HTTP 403") }, /Actions: .*nicht lesbar.*Fix:/],
-    ["Secrets nicht lesbar", { "api --paginate --slurp repos/acme/demo/actions/secrets": new Error("HTTP 403") }, /Secret: secrets nicht lesbar.*Fix:/],
-    ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /Labels: Labels nicht lesbar.*Fix:/],
-    ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
-    ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
     ["keine Regel", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /Ruleset: kein Required status check.*Fix:/],
-    ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
     ["privat ohne Ruleset", { "api repos/acme/demo": { ...REPO_OK, private: true }, "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /ADR 0022.*Fix: Repo öffentlich/],
   ];
+  const unlesbar: [string, Record<string, unknown>, RegExp][] = [
+    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 404") }, /NICHT PRÜFBAR Admin-Recht: Repo acme\/demo nicht lesbar.*Fix:/],
+    ["Actions nicht lesbar", { "api repos/acme/demo/actions/permissions": new Error("HTTP 403") }, /NICHT PRÜFBAR Actions: .*nicht lesbar.*Fix:/],
+    ["Secrets nicht lesbar", { "api --paginate --slurp repos/acme/demo/actions/secrets": new Error("HTTP 403") }, /NICHT PRÜFBAR Secret: secrets nicht lesbar.*Fix:/],
+    ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /NICHT PRÜFBAR Labels: Labels nicht lesbar.*Fix:/],
+    ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /NICHT PRÜFBAR Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
+    ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /NICHT PRÜFBAR Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
+    ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /NICHT PRÜFBAR Ruleset: Regeln.*nicht lesbar.*Fix:/],
+  ];
+  for (const [name, over, muster] of unlesbar) {
+    test(`nicht prüfbar: ${name}`, () => {
+      const r = lauf(over);
+      assert.equal(r.code, 1);
+      assert.equal(luecken(r).length, 0, r.out.join("\n"));
+      const z = r.out.filter((x) => x.startsWith("NICHT PRÜFBAR"));
+      assert.equal(z.length, 1, r.out.join("\n"));
+      assert.match(z[0], muster);
+    });
+  }
+
   for (const [name, over, muster] of faelle) {
     test(`Lücke: ${name}`, () => {
       const r = lauf(over);
