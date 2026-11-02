@@ -125,7 +125,7 @@ describe("Blatt-Importe (factory#114)", () => {
 
   describe("Blatt-Erkennung über die Kopfzeile (factory#127)", () => {
     test("die abgeleitete Liste enthält die bekannten Blätter (kein Leerlauf)", () => {
-      for (const b of ["scripts/relativ-pfad.mjs", "scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs", "scripts/harness-doctor-ergebnis.mjs"]) expect(BLAETTER, b).toContain(b);
+      for (const b of ["scripts/relativ-pfad.mjs", "scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs", "scripts/harness-doctor-ergebnis.mjs", "scripts/modul-wahl-lib.mjs"]) expect(BLAETTER, b).toContain(b);
     });
     test("nur die erste Zeile `// Blatt-Modul` zählt; ein Blatt ohne Kopfzeile wird nicht erkannt", () => {
       expect(istBlatt("// Blatt-Modul ohne Importe (#101): x\nexport const a = 1;")).toBe(true);
