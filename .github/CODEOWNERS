@@ -74,6 +74,7 @@ AGENTS.md @fluffels
 /scripts/arbeitsplatz-lib.mjs @fluffels
 /scripts/projekt-config-lib.mjs @fluffels
 /scripts/relativ-pfad.mjs @fluffels
+/scripts/pfad-glob.mjs @fluffels
 /scripts/repo-form.mjs @fluffels
 /scripts/sync-stand-lib.mjs @fluffels
 /scripts/ticket-namen.mjs @fluffels
