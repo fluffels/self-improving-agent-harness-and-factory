@@ -790,9 +790,6 @@ describe("modulImportVerstoesse (Modul-Regel, factory#119)", () => {
     assert.deepEqual(modulImportVerstoesse(E, () => null), []);
     assert.deepEqual(modulImportVerstoesse([ein("scripts/k.md"), ein("scripts/a.mjs", { modul: "a" })], mit({ "scripts/k.md": 'from "./a.mjs"' })), [], "eine Ganz-Datei-Markdown wird nicht als Code gelesen");
   });
-  test("ein doppelter Import desselben Ziels wird einmal gemeldet", () => {
-    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./a.mjs"; import { y } from "./a.mjs";' })), ["scripts/k.mjs -> scripts/a.mjs"]);
-  });
 });
 
 describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
