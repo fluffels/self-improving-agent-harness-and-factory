@@ -14,9 +14,10 @@
  *      `PROJEKT_JSON_BESTAND` (factory#127: umgestellt; die Liste bleibt als Ausnahme-Mechanik und muss genau dem Ist entsprechen).
  *      Grenze: nur `.mjs`/`.cjs`, keine JSON-Dateien und keine Strings, die den Pfad erst zur Laufzeit zusammensetzen. */
 import { describe, expect, test } from "vitest";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dateienUnter } from "../support/dateien";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
@@ -62,14 +63,8 @@ export function npmRunBefunde(einheiten: Eintrag[], lies: (p: string) => string 
 }
 
 /** Alle .mjs/.cjs unter scripts/ rekursiv: relativer Pfad -> Quelltext. */
-function scriptQuellen(dir: string, rel = ""): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
-    const pfad = rel ? `${rel}/${e.name}` : e.name;
-    if (e.isDirectory()) Object.assign(out, scriptQuellen(dir, pfad));
-    else if (/\.(mjs|cjs)$/.test(e.name)) out[pfad] = readFileSync(join(dir, pfad), "utf8");
-  }
-  return out;
+function scriptQuellen(wurzel: string): Record<string, string> {
+  return Object.fromEntries(dateienUnter(wurzel, "scripts", /\.(mjs|cjs)$/).map((p) => [p.slice("scripts/".length), readFileSync(join(wurzel, p), "utf8")]));
 }
 
 /** Bestand (factory#127): Dateien, die `.factory/projekt.json` noch als Literal tragen, statt über `projekt-config-lib` zu gehen. Nur schrumpfen. */
@@ -137,7 +132,7 @@ describe("Besitz-Verweise (#101)", () => {
   });
 
   test("(L25) das Manifest-Pfad-Literal steht in scripts/** (rekursiv) nur in der Lib", () => {
-    const dateien = scriptQuellen(`${WURZEL}scripts`);
+    const dateien = scriptQuellen(WURZEL);
     expect(Object.keys(dateien).length).toBeGreaterThan(20);
     expect(Object.keys(dateien).some((n) => n.includes("/"))).toBe(true); // Leerlauf-Schutz: Unterordner liegen im Scan
     expect(Object.keys(dateien).some((n) => n.endsWith(".cjs"))).toBe(true); // ... ebenso .cjs
@@ -145,7 +140,7 @@ describe("Besitz-Verweise (#101)", () => {
   });
 
   test("(factory#114) das Projekt-Config-Literal steht außerhalb der Config-Lib nur in der Bestandsliste, und diese ist genau der Ist-Stand", () => {
-    const funde = literalFunde(PROJEKT_JSON, scriptQuellen(`${WURZEL}scripts`), "projekt-config-lib.mjs");
+    const funde = literalFunde(PROJEKT_JSON, scriptQuellen(WURZEL), "projekt-config-lib.mjs");
     expect(funde).toEqual([...PROJEKT_JSON_BESTAND].sort());
   });
 

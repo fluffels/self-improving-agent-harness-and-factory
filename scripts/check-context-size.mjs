@@ -50,7 +50,7 @@ import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-confi
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-export { CONTEXT_BUDGETS, countChars };
+// CONTEXT_BUDGETS/countChars nicht weiterreichen: das Blatt gehört `kontext-budget-lib.mjs`, Abnehmer importieren dort (factory#114).
 
 /** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
  *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md

@@ -12,13 +12,15 @@
  * (`--paginate`) und ist nicht Teil dieser Regel. Gelesen wird `scripts/` rekursiv; erkannt werden Argument-Arrays mit einfachen oder doppelten Anführungszeichen und Befehls-Strings `gh issue|pr list` auf Nicht-Kommentarzeilen (je Zeile bewertet: steht das Limit erst auf einer Folgezeile, ist das ein Fund); dynamisch zusammengesetzte Argumente (`["issue", sub]`) sieht er nicht. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { dateienUnter } from "../support/dateien";
 
-const WURZEL = process.cwd();
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Alle Skriptdateien unter scripts/ samt Unterordnern (relativ zu scripts/); der Test unten prüft genau diese Liste. */
 function skriptDateien(): string[] {
-  return readdirSync(join(WURZEL, "scripts"), { recursive: true, encoding: "utf8" }).filter((n) => /\.(mjs|cjs|js)$/.test(n));
+  return dateienUnter(WURZEL, "scripts", /\.(mjs|cjs|js)$/).map((p) => p.slice("scripts/".length));
 }
 
 /** Pur: Zeilen eines Workflow-Texts mit `gh issue|pr list` ohne `--limit` (Fortsetzungszeilen mit `\` zusammengefügt). */

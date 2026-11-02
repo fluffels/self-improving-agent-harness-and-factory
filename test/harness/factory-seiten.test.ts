@@ -143,9 +143,9 @@ export function zaehleNummern(einheiten: Record<string, string>): Baseline {
   return zaehleSeiten(einheiten, TICKET_BEGRIFFE);
 }
 
-/** Die gezählten Einheiten: Kern-Seiten, Agententexte, Skill-Quellen und `AGENTS.md` (gleiche Menge wie die Standardliste der Umstellung). */
+/** Die gezählten Einheiten: Kern-Seiten, Agententexte, Skill-Quellen und `AGENTS.md`; abgeleitet aus der Standardliste der Umstellung (eine Quelle, factory#127). */
 export function einheitenListe(wurzel: string): string[] {
-  return [...kernSeiten(wurzel), ...collectMarkdown(wurzel, [".claude/agents", ".agents/skills"]), AGENTS];
+  return herkunftsform.standardDateien(wurzel);
 }
 
 const UEBERSCHRIFT = /^\s{0,3}#{1,6}(\s|$)/;
@@ -442,9 +442,6 @@ describe("Ticketnummern (#95)", () => {
         assert.deepEqual(Object.keys(w), ["Ticketnummer"]);
         assert.ok((w.Ticketnummer ?? 0) > 0);
       }
-    });
-    test("die Standardliste der Umstellung ist genau die Menge der gezählten Einheiten", () => {
-      assert.deepEqual([...herkunftsform.standardDateien(WURZEL)].sort(), einheiten().sort());
     });
   });
 

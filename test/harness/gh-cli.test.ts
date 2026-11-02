@@ -4,12 +4,15 @@
  *
  * Bewusste Grenzen: erkannt werden nur literale `execFileSync|execFile|spawnSync|spawn("gh"`; nicht `execSync("gh …")`, kein Template-Literal
  * und keine Variable als Kommando. */
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { dateienUnter } from "../support/dateien";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ghCli from "../../scripts/gh-cli.mjs";
 
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const DIREKT = /\b(?:execFileSync|execFile|spawnSync|spawn)\(\s*["']gh["']/;
 
 /** Dateien (relativ) mit einem direkten gh-Prozessaufruf. Pur. */
@@ -20,16 +23,7 @@ function direkteGhAufrufe(dateien: Record<string, string>): string[] {
 }
 
 function scriptDateien(): Record<string, string> {
-  const aus: Record<string, string> = {};
-  const geh = (rel: string) => {
-    for (const e of readdirSync(join(process.cwd(), rel), { withFileTypes: true })) {
-      const p = `${rel}/${e.name}`;
-      if (e.isDirectory()) geh(p);
-      else if (e.name.endsWith(".mjs")) aus[p] = readFileSync(join(process.cwd(), p), "utf8");
-    }
-  };
-  geh("scripts");
-  return aus;
+  return Object.fromEntries(dateienUnter(WURZEL, "scripts", /\.mjs$/).map((p) => [p, readFileSync(join(WURZEL, p), "utf8")]));
 }
 
 describe("gh-Wrapper (#1428 Z32)", () => {
