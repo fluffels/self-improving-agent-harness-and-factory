@@ -290,8 +290,7 @@ describe("harness-doctor --pruefen", () => {
       assert.equal(r.code, 1);
       assert.equal(luecken(r).length, 0, r.out.join("\n"));
       const z = r.out.filter((x) => x.startsWith("NICHT PRÜFBAR"));
-      assert.equal(z.length, 1, r.out.join("\n"));
-      assert.match(z[0], muster);
+      assert.ok(z.some((x) => muster.test(x)), r.out.join("\n")); // ein unlesbares Repo macht auch die Sicherheitspunkte nicht prüfbar
     });
   }
 
@@ -331,7 +330,7 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": GESUND["api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100"] }).code, 0);
     const r = lauf({ "api repos/acme/demo": repo });
     assert.equal(r.code, 1);
-    assert.match(luecken(r)[0], /Ruleset:.*trunk/);
+    assert.ok(r.out.some((z) => /^NICHT PRÜFBAR Ruleset: .*trunk/.test(z)), r.out.join("\n"));
     const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
     assert.match(luecken(ohneCs)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf trunk/);
   });

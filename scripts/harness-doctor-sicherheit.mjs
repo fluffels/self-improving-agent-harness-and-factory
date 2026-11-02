@@ -33,9 +33,10 @@ export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rules
 
 const gut = (punkt, hinweis) => ({ punkt, ok: true, ...(hinweis ? { hinweis } : {}) });
 const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix, link: LINK_SICHERHEIT[punkt] });
-const nichtPruefbar = (punkt, grund, fix = FIX_FELD) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix, link: LINK_SICHERHEIT[punkt] });
+/** Ein nicht prüfbarer Punkt: `ok: false` ohne belegte Lücke (der Zustand ist unbekannt); `link` hat Vorrang vor dem Sicherheits-Link des Punkts. */
+export const nichtPruefbar = (punkt, grund, fix = FIX_FELD, link = LINK_SICHERHEIT[punkt]) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix, link });
 /** Nicht prüfbar, weil die Quelle selbst fehlschlug; `quelle.fix` (etwa „erst den Token-Punkt beheben“) hat Vorrang. */
-const ausFehler = (punkt, was, quelle) => nichtPruefbar(punkt, `${was} nicht lesbar (${quelle.fehler})`, quelle.fix ?? FIX_FEHLER);
+export const ausFehler = (punkt, was, quelle, link = LINK_SICHERHEIT[punkt]) => nichtPruefbar(punkt, `${was} nicht lesbar (${quelle.fehler})`, quelle.fix ?? FIX_FEHLER, link);
 
 /** Die fünf Punkte aus `security_and_analysis`: Schlüssel und Klickpfad der Lücke. */
 const SECURITY_AND_ANALYSIS = {

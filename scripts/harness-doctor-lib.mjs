@@ -9,7 +9,7 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
-import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
+import { ausFehler, GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, nichtPruefbar, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
@@ -158,13 +158,13 @@ const hole = (lesen) => {
 };
 
 function pruefeRepo(repo, quelle) {
-  if (quelle.fehler !== undefined) return { repo: {}, ergebnis: [luecke("Admin-Recht", `Repo ${repo} nicht lesbar (${quelle.fehler})`, "gh auth status prüfen und das Konto mit Zugriff auf das Repo anmelden", LINK.admin)] };
+  if (quelle.fehler !== undefined) return { repo: {}, ergebnis: [ausFehler("Admin-Recht", `Repo ${repo}`, { fehler: quelle.fehler, fix: "gh auth status prüfen und das Konto mit Zugriff auf das Repo anmelden" }, LINK.admin)] };
   const admin = quelle.wert?.permissions?.admin === true ? gut("Admin-Recht") : luecke("Admin-Recht", `das Konto hat kein Admin-Recht an ${repo}`, `dem Konto Admin-Recht an ${repo} geben (Einstellungen, Collaborators)`, LINK.admin);
   return { repo: quelle.wert ?? {}, ergebnis: [admin] };
 }
 
 function pruefeActions(repo, quelle) {
-  if (quelle.fehler !== undefined) return luecke("Actions", `Actions-Einstellung nicht lesbar (${quelle.fehler})`, "Admin-Recht und Token prüfen", LINK.actions);
+  if (quelle.fehler !== undefined) return ausFehler("Actions", "Actions-Einstellung", { fehler: quelle.fehler, fix: "Admin-Recht und Token prüfen" }, LINK.actions);
   const a = quelle.wert ?? {};
   if (a.enabled !== true || a.allowed_actions === "local_only") {
     return luecke("Actions", "Actions sind im Repo nicht erlaubt", `gh api -X PUT repos/${repo}/actions/permissions -F enabled=true -f allowed_actions=all`, LINK.actions);
@@ -182,7 +182,7 @@ function pruefeGeheimnisse(gh, repo, art, namen) {
   try {
     ist = seiten(gh, `repos/${repo}/${pfad}`, schluessel).map((s) => s.name);
   } catch (e) {
-    return [luecke(punkt, `${art} nicht lesbar (${erste(e)})`, "Admin-Recht und Token prüfen", link)];
+    return [ausFehler(punkt, art, { fehler: erste(e), fix: "Admin-Recht und Token prüfen" }, link)];
   }
   try {
     ist.push(...seiten(gh, `repos/${repo}/${org}`, schluessel).map((s) => s.name));
@@ -198,7 +198,7 @@ function pruefeLabels(gh, repo, soll) {
   try {
     ist = seiten(gh, `repos/${repo}/labels?per_page=100`).map((l) => l.name);
   } catch (e) {
-    return [luecke("Labels", `Labels nicht lesbar (${erste(e)})`, "Token prüfen")];
+    return [ausFehler("Labels", "Labels", { fehler: erste(e), fix: "Token prüfen" }, undefined)];
   }
   const l = fehlen(soll, ist, ohneCase).map((n) => luecke(`Label ${n}`, `Label "${n}" fehlt`, `gh label create "${n}" --repo ${repo}`, undefined, { art: "label", name: n }));
   return l.length ? l : [gut("Labels")];
@@ -209,17 +209,18 @@ function pruefeBoard(gh, board, i) {
   const pfad = boardPfad(board);
   const hilfe = `boards[${i}] in .factory/projekt.json prüfen (gh api ${pfad}/fields listet die Felder)`;
   const l = (befund) => luecke(name, befund, hilfe, LINK.projektFelder);
+  const lesefehler = (was, quelle) => ausFehler(name, was, { ...quelle, fix: hilfe }, LINK.projektFelder);
   let b;
   try {
     b = json(gh, ["api", pfad]) ?? {};
   } catch (e) {
-    return [l(`Board nicht lesbar (${erste(e)})`)];
+    return [lesefehler("Board", { fehler: erste(e) })];
   }
   let f;
   try {
     f = json(gh, ["api", `${pfad}/fields/${board.statusFeldId}`]) ?? {};
   } catch (e) {
-    return [l(`Status-Feld ${board.statusFeldId} ("${STATUS_FELD_NAME}") nicht lesbar (${erste(e)})`)];
+    return [lesefehler(`Status-Feld ${board.statusFeldId} ("${STATUS_FELD_NAME}")`, { fehler: erste(e) })];
   }
   const probleme = Object.values(BOARD_PRUEFUNG).map((p) => p(board, b, f)).filter(Boolean);
   return probleme.length ? probleme.map(l) : [gut(name)];
@@ -230,7 +231,7 @@ function pruefeRuleset(regelnQuelle, repoInfo, spiegel) {
   const privat = repoInfo.private === true;
   const grenze = privat ? GRENZE_PRIVAT : "";
   const fixAnlegen = privat ? "Repo öffentlich machen oder einen Plan mit Rulesets wählen, dann das Ruleset anlegen" : `Ruleset auf ${branch} mit Required status checks anlegen`;
-  if (regelnQuelle.fehler !== undefined) return [luecke("Ruleset", `Regeln auf ${branch} nicht lesbar (${regelnQuelle.fehler})${grenze}`, fixAnlegen, LINK.ruleset)];
+  if (regelnQuelle.fehler !== undefined) return [nichtPruefbar("Ruleset", `Regeln auf ${branch} nicht lesbar (${regelnQuelle.fehler})${grenze}`, fixAnlegen, LINK.ruleset)];
   const regeln = regelnQuelle.wert;
   const kontexte = regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context));
   if (kontexte.length === 0) return [luecke("Ruleset", `kein Required status check auf ${branch}${grenze}`, fixAnlegen, LINK.ruleset)];
