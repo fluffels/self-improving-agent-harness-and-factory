@@ -2,13 +2,15 @@
  * Die gesunde Welt ist ein Fake; jeder Test verfälscht genau eine Antwort und erwartet genau diese Lücke samt `Fix:`-Zeile. */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeDateien as rawDateien } from "../scripts/harness-doctor-dateien.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -80,9 +82,10 @@ afterEach(() => {
 
 const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
+  opt.vorbereiten?.(root);
   if (opt.workflow !== null) {
     mkdirSync(join(root, ".github", "workflows"), { recursive: true });
     writeFileSync(join(root, ".github", "workflows", "a.yml"), opt.workflow ?? WORKFLOW);
@@ -110,6 +113,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     rootDir: root,
     gh,
     env: opt.env ?? {},
+    ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
     ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
@@ -701,5 +705,73 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
     assert.equal(r.code, 1);
     for (const p of PUNKTE) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `) && z.endsWith("Fix: erst den Token-Punkt beheben")), p);
     assert.deepEqual(r.aufrufe, ["api -i user"]);
+  });
+});
+
+describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Beziehers", () => {
+  const dateien = rawDateien as (a: { rootDir: string }) => unknown[];
+  /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
+  const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n") => (root: string) => {
+    writeFileSync(join(root, ".gitattributes"), regel);
+    writeFileSync(join(root, "AGENTS.md"), "regeln\n");
+    for (const [rel, text] of Object.entries(extra)) writeFileSync(join(root, rel), text);
+    const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
+    g("init", "-q");
+    g("add", "-A");
+  };
+  const mitClaude = (root: string) => {
+    repo()(root);
+    writeFileSync(join(root, "CLAUDE.md"), "x\n");
+  };
+
+  test("gesund: beide Punkte OK, Exit 0", () => {
+    const r = lauf({}, { dateien, vorbereiten: repo() });
+    assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
+    assert.ok(r.out.includes("OK Zeilenenden"));
+    assert.equal(r.code, 0);
+  });
+
+  test("Negativfall: eine CLAUDE.md im Root des Beziehers macht den Punkt rot, Exit 0 wird 1", () => {
+    const r = lauf({}, { dateien, vorbereiten: mitClaude });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Root-Kontextdatei: CLAUDE.md ") && z.includes("Fix: ")), r.out.join("\n"));
+    assert.ok(r.out.includes("OK Zeilenenden"));
+  });
+
+  test("Negativfall: eine CRLF-Datei im Index (die Regel `* -text` normalisiert nicht) macht Zeilenenden rot", () => {
+    const r = lauf({}, { dateien, vorbereiten: repo({ "alt.md": "a\r\nb\r\n" }, "* -text\n") });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Zeilenenden: ") && z.includes("alt.md")), r.out.join("\n"));
+  });
+
+  test("Default-Verdrahtung: main ohne eingespritzte Dateipunkte liefert beide Punkte aus dem echten Beziehers-Ordner", () => {
+    const r = lauf({}, { dateien: "echt", vorbereiten: mitClaude });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Root-Kontextdatei: CLAUDE.md ")), r.out.join(String.fromCharCode(10)));
+    assert.ok(r.out.includes("OK Zeilenenden"), r.out.join(String.fromCharCode(10)));
+  });
+
+  test("Negativfall ohne geprüfte Projektdatei: ohne AGENTS.md im Root ist Root-Kontextdatei NICHT PRÜFBAR statt leer grün, Exit 1", () => {
+    const ohneAgents = (root: string) => {
+      repo({ "notiz.md": "x\n" })(root);
+      const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
+      g("rm", "-q", "-f", "AGENTS.md");
+    };
+    const r = lauf({}, { dateien: "echt", vorbereiten: ohneAgents });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Root-Kontextdatei: ") && z.includes("AGENTS.md") && z.includes("Fix: ")), r.out.join(String.fromCharCode(10)));
+    assert.ok(!r.out.includes("OK Root-Kontextdatei"));
+    assert.ok(r.out.includes("OK Zeilenenden"), r.out.join(String.fromCharCode(10)));
+  });
+
+  test("ohne Git-Repo: NICHT PRÜFBAR statt grün", () => {
+    const r = lauf({}, { dateien });
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Zeilenenden: ")), r.out.join("\n"));
+    assert.equal(r.code, 1);
+  });
+
+  test("--einrichten gibt keine Dateipunkte aus", () => {
+    const r = lauf({}, { dateien, argv: ["--einrichten", "--dry-run", "--config", "<config>"], vorbereiten: mitClaude });
+    assert.ok(!r.out.some((z) => z.includes("Root-Kontextdatei") || z.includes("Zeilenenden")), r.out.join("\n"));
   });
 });

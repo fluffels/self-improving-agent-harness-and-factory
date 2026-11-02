@@ -27,6 +27,10 @@
  * Neu-Auschecken (`git checkout -- .claude` bzw. frischer Worktree). Ein direkter
  * CR-Scan des Working Trees wäre in der Linux-CI immer grün und darum kein Gate.
  *
+ * Aufteilung (factory#94): Die Parser und die Bezieher-Regel (jede Textdatei hat eine eol-Regel, `.claude/` und `.agents/` strikt `lf`) liegen im Besitz
+ * (scripts/harness-doctor-dateien.mjs, Doctor-Punkt `Zeilenenden`) und laufen so in jedem Bezieher. Dieser Test bleibt Kern-Test: Unit-Anteil der Parser,
+ * Binär-Fixture, `text=auto` und die strenge globale Regel `eol=lf` des Factory-Repos selbst.
+ *
  * Fitness-Function-Kategorie (Struktur-Regel, kein Verhaltens-Test), Präzedenz
  * test/harness/agents-md-native.test.ts. Ausführen mit:  npm test
  */
@@ -34,8 +38,13 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pfadeMitCrlfImIndex as rawCrlf, pfadeOhneLf as rawOhneLf } from "../../scripts/harness-doctor-dateien.mjs";
 import { besitzAnker } from "../support/besitz-anker";
 import { fixture } from "../support/tmp-fixture";
+
+const pfadeOhneLf = rawOhneLf as (checkAttrZ: string) => string[];
+const pfadeMitCrlfImIndex = rawCrlf as (eolAusgabe: string) => string[];
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const git = (args: string[], input?: string) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8", input });
@@ -46,32 +55,6 @@ function attrWerte(attr: string, pfade: string[]): Map<string, string> {
   const werte = new Map<string, string>();
   for (let i = 0; i + 2 < teile.length; i += 3) werte.set(teile[i], teile[i + 2]);
   return werte;
-}
-
-/**
- * Parst die `-z`-Ausgabe von `git check-attr -z eol -- <pfade>` (NUL-getrennte Tripel
- * pfad/attribut/wert) und liefert alle Pfade, deren `eol` NICHT `lf` ist.
- */
-function pfadeOhneLf(checkAttrZ: string): string[] {
-  const teile = checkAttrZ.split("\0");
-  const ohneLf: string[] = [];
-  for (let i = 0; i + 2 < teile.length; i += 3) {
-    if (teile[i + 2] !== "lf") ohneLf.push(teile[i]);
-  }
-  return ohneLf;
-}
-
-/**
- * Parst `git ls-files --eol` (Zeilen `i/<index> w/<arbeitskopie> attr/<attr>\t<pfad>`) und
- * liefert die Pfade, deren Index-Zeilenende `crlf` oder `mixed` ist.
- */
-function pfadeMitCrlfImIndex(eolAusgabe: string): string[] {
-  const funde: string[] = [];
-  for (const zeile of eolAusgabe.split("\n")) {
-    const [kopf, pfad] = zeile.split("\t");
-    if (pfad !== undefined && /^i\/(crlf|mixed)\b/.test(kopf)) funde.push(pfad);
-  }
-  return funde;
 }
 
 const eolOhneLf = (pfade: string[]) => pfadeOhneLf(git(["check-attr", "--stdin", "-z", "eol"], pfade.join("\0")));
