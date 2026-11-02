@@ -82,7 +82,7 @@ afterEach(() => {
 
 const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   opt.vorbereiten?.(root);
@@ -96,6 +96,10 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     writeFileSync(join(root, ".factory", "besitz.json"), opt.besitz ?? BESITZ_LEER);
   }
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
+  mkdirSync(join(root, ".factory"), { recursive: true });
+  writeFileSync(join(root, ".factory", "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
+  const fremd = opt.fremderRoot ? mkdtempSync(join(tmpdir(), "doctor-fremd-")) : root;
+  if (fremd !== root) ordner.push(fremd);
   const welt: Record<string, unknown> = { ...GESUND, ...over };
   // Regeln liefert `gh api --paginate --slurp` als Seiten; eine flache Regelliste in den Fixtures ist eine Seite (Seitenform steht in "Regeln über zwei Seiten").
   for (const [k, w] of Object.entries(welt)) if (k.includes("/rules/branches/") && Array.isArray(w) && !w.some(Array.isArray)) welt[k] = [w];
@@ -109,8 +113,8 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     return typeof w === "string" ? w : JSON.stringify(w);
   };
   const r: Lauf = { code: -1, out: [], err: [], aufrufe };
-  r.code = doctor.main((opt.argv ?? ["--pruefen", "--config", "<config>"]).map((a) => (a === "<config>" ? join(root, "projekt.json") : a)), {
-    rootDir: root,
+  r.code = doctor.main((opt.argv ?? ["--pruefen", "--config", "<config>"]).map((a) => (a === "<config>" ? join(root, "projekt.json") : a === "<factory-config>" ? join(root, ".factory", "projekt.json") : a)), {
+    rootDir: fremd,
     gh,
     env: opt.env ?? {},
     ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
@@ -792,5 +796,23 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   test("--einrichten gibt keine Dateipunkte aus", () => {
     const r = lauf({}, { dateien, argv: ["--einrichten", "--dry-run", "--config", "<config>"], vorbereiten: mitClaude });
     assert.ok(!r.out.some((z) => z.includes("Root-Kontextdatei") || z.includes("Zeilenenden")), r.out.join("\n"));
+  });
+});
+
+describe("Prüfwurzel aus --config (factory#127 L27)", () => {
+  test("--pruefen --config <bezieher>/.factory/projekt.json prüft die Dateien des Beziehers, nicht das Verzeichnis des Aufrufers", () => {
+    const r = lauf({}, { fremderRoot: true, argv: ["--pruefen", "--config", "<factory-config>"] });
+    assert.ok(r.out.some((z) => z.startsWith("Prüfwurzel: ") && z.includes("doctor-") && !z.includes("doctor-fremd-")), r.out.join(String.fromCharCode(10)));
+    assert.equal(r.code, 0, r.out.join(String.fromCharCode(10)));
+  });
+
+  test("eine Config außerhalb von .factory behält die Wurzel des Aufrufers (keine Prüfwurzel-Zeile)", () => {
+    const r = lauf({}, { fremderRoot: true });
+    assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
+  });
+
+  test("--einrichten leitet keine Prüfwurzel ab", () => {
+    const r = lauf({}, { fremderRoot: true, argv: ["--einrichten", "--dry-run", "--config", "<factory-config>"] });
+    assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
   });
 });
