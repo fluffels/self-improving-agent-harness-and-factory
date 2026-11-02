@@ -136,11 +136,33 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git tag -a v1.3.0 ${"b".repeat(40)}`, "git push origin v1.3.0", "Trockenlauf-Sync in einem Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf-Sync je Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
     expect(T.tagTitel("v1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
+  });
+  it("L5: Tag-Befehl aus einem Worktree auf dem Commit, mit Hook-Hinweis und Aufräumen", () => {
+    const sha = "b".repeat(40);
+    const block = body.slice(body.indexOf("```") + 3, body.indexOf("```", body.indexOf("```") + 3)).split("\n").filter(Boolean);
+    const wt = ".claude/worktrees/tag-v1.3.0";
+    expect(block).toEqual(["git fetch origin --tags", `gh run list --commit ${sha} --workflow ci.yml`, `git worktree add --detach ${wt} ${sha}`, `git -C ${wt} tag -a v1.3.0 ${sha} -m "v1.3.0"`, `git -C ${wt} push origin v1.3.0`, `git worktree remove ${wt}`]);
+    expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
+    expect(body).not.toMatch(/^git tag -a/m);
+  });
+  it("L1: Trockenlauf gegen frischen Stand des Beziehers (Export von origin/main), nie lokaler Checkout dahinter, mit --ziel", () => {
+    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf-Sync")) ?? "";
+    for (const teil of ["nie gegen einen lokalen Checkout hinter `origin/main`", "gh repo clone <bezieher> <leerer-ordner> -- --depth 1", "git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>", "--ziel <leerer-ordner> --entwurf --trocken", "keinen Bezieher", "Kontextgröße gegen das Budget"]) {
+      expect(punkt, teil).toContain(teil);
+    }
+  });
+  it("L4 und L23: Schritte im Ziel nach dem Sync (docs:gen, check:factorylinks --schreiben, nie Wächter-gebundene Sätze) und das Werkzeug der Quelle", () => {
+    const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
+    const sync = punkte.find((z) => z.includes("Sync-PR je Bezieher mit")) ?? "";
+    expect(sync).toContain("npm run docs:gen");
+    expect(sync).toContain("npm run check:factorylinks -- --schreiben --quelle");
+    expect(sync).toContain("nie Wächter-gebundene Sätze");
+    expect(sync).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
   });
   it("Checkliste: CI des Sync-PR je Bezieher nach dem Sync-PR, Schließen erst bei grüner CI, Patch-Tag nie verschoben (#101 L21 L30)", () => {
     const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));

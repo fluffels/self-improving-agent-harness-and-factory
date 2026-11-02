@@ -15,14 +15,14 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { factoryRepo } from "./factory-seite.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
+import { WERKZEUG_HINWEIS, teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
 
 /** Pur: `null` ohne Update, sonst `{ alt, neu, text }` (Text nennt den Sync-Befehl). */
 export function updateMeldung({ stand, tags }) {
   const alt = stand?.quelle?.tag;
   const neu = vergleicheTags(tags);
   if (!teile(alt) || neu === null || vergleiche(neu, alt) <= 0) return null;
-  const text = `Neuer Factory-Release ${neu} (Stand ${alt}). Sync: node scripts/factory-sync.mjs --quelle <pfad> --tag ${neu}`;
+  const text = `Neuer Factory-Release ${neu} (Stand ${alt}). Sync: node scripts/factory-sync.mjs --quelle <pfad> --tag ${neu}. ${WERKZEUG_HINWEIS}`;
   return { alt, neu, text };
 }
 

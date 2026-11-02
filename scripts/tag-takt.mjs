@@ -25,7 +25,7 @@ import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
-import { teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 
 export const TAG_MARKER = "🏷️ Tag ";
@@ -173,6 +173,7 @@ const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Ta
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
 export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [] }) {
+  const wt = `.claude/worktrees/tag-${tag}`;
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
   return [
@@ -187,20 +188,22 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
     ...zeilen,
     "",
-    "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün):",
+    "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
     "",
     "```",
     "git fetch origin --tags",
     `gh run list --commit ${sha} --workflow ci.yml`,
-    `git tag -a ${tag} ${sha} -m "${tag}"`,
-    `git push origin ${tag}`,
+    `git worktree add --detach ${wt} ${sha}`,
+    `git -C ${wt} tag -a ${tag} ${sha} -m "${tag}"`,
+    `git -C ${wt} push origin ${tag}`,
+    `git worktree remove ${wt}`,
     "```",
     "",
     "Checkliste:",
-    "- [ ] Trockenlauf-Sync in einem Bezieher: `node scripts/factory-sync.mjs --quelle <checkout auf " + sha.slice(0, 7) + "> --entwurf --trocken` (Pfade der Bezieher: `node scripts/arbeitsplatz.mjs pfade`)",
+    `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder das Arbeitsplatz-Inventar des Beziehers; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
-    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`)`,
+    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“, anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach `npm run docs:gen` und `npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>` fahren und mitcommitten; bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
     "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf fährt kein verify); rot durch Factory-Besitz: Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
     "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
