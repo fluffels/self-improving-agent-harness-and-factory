@@ -825,4 +825,11 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.equal(vorwaerts(d.lockDir).replace(/^[A-Za-z]:/, ""), "/ap/.claude/ab-locks");
     assert.deepEqual(d.orte.map((o) => [o.name, vorwaerts(o.cwd ?? "").replace(/^[A-Za-z]:/, "")]), [["web", "/ap/web"]]);
   });
+
+  test("eingebettet bleibt die Fehlerzeile bei einem git-Fehler ohne Fix-Zeile einzeilig und unverändert (kein angehängtes undefined)", () => {
+    const { deps } = baue({});
+    const r = M.fuehreAus([], { ...deps, git: () => { throw new Error("erste Zeile\nzweite Zeile"); } });
+    assert.equal(r.code, 2);
+    assert.equal(r.err, "✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: erste Zeile\n");
+  });
 });

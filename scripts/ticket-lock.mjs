@@ -190,10 +190,13 @@ function raeumeAuf(deps) {
 }
 
 function claim(deps, nr, wiederaufnahme = false) {
-  try {
-    deps.git(["fetch", "-q", "--prune", "origin"]);
-  } catch {
-    /* fail-open: ohne Netz zählen die lokalen Refs */
+  for (const ort of orteVon(deps)) {
+    try {
+      if (ort.cwd === undefined) deps.git(["fetch", "-q", "--prune", "origin"]);
+      else deps.git(["fetch", "-q", "--prune", "origin"], ort.cwd);
+    } catch {
+      /* fail-open je Repo: ohne Netz zählen die lokalen Refs */
+    }
   }
   const b = ermittleBelegung(deps, nr);
   if (b.belegt) {

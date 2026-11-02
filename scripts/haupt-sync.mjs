@@ -322,9 +322,12 @@ export function fuehreArbeitsplatzSyncAus(aufloesung, deps = {}) {
   });
 }
 
-/** Die Ausgabe des Hooks: Klartext (`--text`, ohne Sitzungsbasis) oder die SessionStart-JSON (mit Sitzungsbasis); leer ohne Text. Pur. */
+/**
+ * Die Ausgabe des Hooks: Klartext (`--text`, ohne Sitzungsbasis) oder die SessionStart-JSON (mit Sitzungsbasis); leer ohne Text. `ergebnis` ist ein Ergebnis
+ * oder eine Liste (Arbeitsplatz, #88): die Texte werden verbunden und erst dann einmal in die JSON gehüllt, damit die Hook-Ausgabe ein gültiges Objekt bleibt. Pur.
+ */
 export function ausgabe(ergebnis, text) {
-  const t = baueText(ergebnis, { sitzungsbasis: !text });
+  const t = (Array.isArray(ergebnis) ? ergebnis : [ergebnis]).map((e) => baueText(e, { sitzungsbasis: !text })).filter(Boolean).join("\n");
   if (!t) return "";
   return text ? t : JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: t } });
 }
@@ -371,10 +374,12 @@ function main() {
     const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const ziel = syncZiel(dir);
     let ergebnisse;
-    if (ziel.fehler) ergebnisse = [{ aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: ziel.fehler, branch: "", sauber: undefined }];
-    else if (ziel.aufloesung) ergebnisse = fuehreArbeitsplatzSyncAus(ziel.aufloesung);
-    else ergebnisse = [{ ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) }];
-    const out = ergebnisse.map((e) => ausgabe(e, aufruf.text)).filter(Boolean).join(aufruf.text ? "\n" : "");
+    // Die Hinweise zum Arbeitsverzeichnis gelten auch im Arbeitsplatz (Node-Version, node_modules, Bilddateien im Root); eingebettet stehen sie im einen Ergebnis.
+    const hinweise = { nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir), bildReste: bildResteFuer(dir) };
+    if (ziel.fehler) ergebnisse = [{ aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, notiz: ziel.fehler, branch: "", sauber: undefined }, hinweise];
+    else if (ziel.aufloesung) ergebnisse = [...fuehreArbeitsplatzSyncAus(ziel.aufloesung), hinweise];
+    else ergebnisse = [{ ...fuehreSyncAus(dir), ...hinweise }];
+    const out = ausgabe(ergebnisse, aufruf.text);
     if (out) console.log(out);
     if (aufruf.streng && ergebnisse.some((e) => exitCodeFuer(e) !== 0)) {
       console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");

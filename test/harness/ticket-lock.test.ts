@@ -835,4 +835,57 @@ describe("Arbeitsplatz: Belegung über alle Repos und Lock-Ort (#88)", () => {
     assert.equal(d.orte[0].cwd, undefined);
     assert.match(d.lockDir.split("\\").join("/"), new RegExp(`/${WTP}locks$`));
   });
+
+  /** Wie `apDeps`, aber mit Aktivität: `logSek` je Repo (`git log -1` im cwd des Repos), `frischePfade` (Reflog je Worktree-Pfad), `fetches` zeichnet die cwd der fetch-Aufrufe auf. */
+  const FRISCH_SEK = (JETZT - 5 * MIN) / 1000;
+  function aktivDeps(jeRepo: Record<string, { refs?: string[]; worktrees?: string[]; logSek?: number; fetchFehler?: boolean }>, frischePfade: string[] = []) {
+    const fetches: (string | undefined)[] = [];
+    const d: Deps = {
+      ...deps(),
+      orte: [A, B],
+      git: (args: string[], cwd?: string) => {
+        const a = args.join(" ");
+        const r = jeRepo[cwd ?? ""] ?? {};
+        if (a.startsWith("fetch")) {
+          fetches.push(cwd);
+          if (r.fetchFehler) throw new Error("kein Netz");
+          return "";
+        }
+        if (a.startsWith("for-each-ref")) return (r.refs ?? []).join("\n");
+        if (a.startsWith("worktree list")) return [`worktree ${cwd}`, ...(r.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n\n");
+        if (a.startsWith("log -1")) return String(r.logSek ?? 0);
+        if (a.includes("reflog")) return String(frischePfade.some((p) => a.includes(`-C ${p} `)) ? FRISCH_SEK : 0);
+        if (a.includes("status --porcelain")) return "";
+        throw new Error(`unerwartet: ${a}`);
+      },
+      mtime: () => Number.NaN,
+    };
+    return { d, fetches };
+  }
+  const WT_A = `/w/.claude/worktrees/a/${WTP}88`;
+  const WT_B = `/w/.claude/worktrees/b/${WTP}88`;
+
+  test("claim holt je Repo mit dessen cwd (fail-open: scheitert der fetch in Repo a, läuft Repo b trotzdem und der Claim gelingt)", () => {
+    const { d, fetches } = aktivDeps({ [A.cwd]: { fetchFehler: true }, [B.cwd]: {} });
+    assert.equal(M.fuehreAus(["claim", "88"], d).code, 0);
+    assert.deepEqual(fetches, [A.cwd, B.cwd]);
+  });
+
+  test("Aktivität: ein frischer Branch-Kopf nur in Repo B macht #88 aktiv (git log läuft im Repo des Branches)", () => {
+    const { d } = aktivDeps({ [A.cwd]: {}, [B.cwd]: { refs: [`origin/${BRP}88-x`], logSek: FRISCH_SEK } });
+    const r = M.fuehreAus(["pruefe", "88"], d);
+    assert.equal(r.out, "aktiv\n");
+    assert.equal(r.code, 4);
+  });
+
+  test("Negativfall: nur der Haupt-Checkout und ein frischer Worktree einer anderen Nummer sind frisch: #88 ist übernehmbar", () => {
+    const fremd = `/w/.claude/worktrees/b/${WTP}89`;
+    const { d } = aktivDeps({ [A.cwd]: {}, [B.cwd]: { worktrees: [WT_B, fremd] } }, [B.cwd, fremd]);
+    assert.equal(M.fuehreAus(["pruefe", "88"], d).out, "uebernehmbar\n");
+  });
+
+  test("zwei Worktrees der Nummer in Repo A und B: der frische in B zählt (Maximum über alle, nicht der erste)", () => {
+    const { d } = aktivDeps({ [A.cwd]: { worktrees: [WT_A] }, [B.cwd]: { worktrees: [WT_B] } }, [WT_B]);
+    assert.equal(M.fuehreAus(["pruefe", "88"], d).out, "aktiv\n");
+  });
 });

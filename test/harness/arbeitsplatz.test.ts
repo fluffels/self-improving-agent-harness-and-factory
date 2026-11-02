@@ -416,7 +416,7 @@ describe("Standardzweig je Repo (#88)", () => {
   const web = (standardzweig: unknown) => mit(repo({ name: "web", pfad: "web", standardzweig }));
 
   test("gültige Namen: develop, release/1.x, trunk-2", () => {
-    for (const z of ["develop", "release/1.x", "trunk-2", "main"]) expect(web(z), z).toEqual([]);
+    for (const z of ["develop", "release/1.x", "trunk-2", "main", "x.lockfoo", "feature.locked"]) expect(web(z), z).toEqual([]);
   });
 
   test("ungültige Namen mit Mängeltext: Leerraum, .., .lock-Ende, führender / oder -, leer, Shell-Zeichen, kein String", () => {
@@ -495,5 +495,18 @@ describe("Orte und git je Repo (#88)", () => {
       }
     })();
     expect(msg).toBe("git status scheiterte in Repo b (/w/b): fatal: cannot change to '/w/b'\nFix: Pfad in arbeitsplatz.repos prüfen (git -C /w/b status)");
+  });
+
+  test("gitOrteAus ohne basis: eine relative wurzel gilt relativ zum Repo dieses Skripts (Standard-Basis, der Normalfall der Skripte)", () => {
+    const harness = resolve(__dirname, "..", "..").split("\\").join("/");
+    const { orte } = W.gitOrteAus({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [{ name: "web", pfad: "web" }] } });
+    expect(orte[0].cwd).toBe(`${harness}/web`);
+  });
+
+  test("ein git-Fehler ohne Meldung nennt trotzdem einen Grund, nie undefined", () => {
+    const git = () => {
+      throw new Error("");
+    };
+    expect(() => W.gitJeRepo(W.gitOrteAus(config, "/basis").orte, ["status"], git)).toThrow(/scheiterte in Repo a \(\/w\/a\): unbekannter Fehler\nFix:/);
   });
 });

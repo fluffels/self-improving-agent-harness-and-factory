@@ -1038,4 +1038,72 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
     expect(AP.exitCodeFuer({ branch: "develop", zweig: "develop" })).toBe(0);
     expect(AP.exitCodeFuer({ branch: "develop" })).toBe(1);
   });
+
+  /** Die CLI im Ordner `dir` (CLAUDE_PROJECT_DIR): Exit-Code und stdout, auch bei Exit 1. */
+  const cli = (dir: string, ...args: string[]) => {
+    const skript = fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url));
+    try {
+      return { code: 0, out: execFileSync(process.execPath, [skript, ...args], { encoding: "utf8", env: sauberEnv({ CLAUDE_PROJECT_DIR: dir }), stdio: ["ignore", "pipe", "pipe"] }) };
+    } catch (e) {
+      const x = e as { status: number; stdout: string };
+      return { code: x.status, out: x.stdout };
+    }
+  };
+
+  test("Hook-Modus (ohne --text) mit zwei Repos im Rückstand: genau ein gültiges SessionStart-Objekt mit beiden Repos (nicht zwei aneinandergehängte)", () => {
+    const t = aufbauAp();
+    try {
+      t.a.schiebe("neu-a.txt");
+      t.b.schiebe("neu-b.txt");
+      const r = cli(t.wurzel);
+      expect(r.code).toBe(0);
+      const json = JSON.parse(r.out) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+      expect(json.hookSpecificOutput.hookEventName).toBe("SessionStart");
+      expect(json.hookSpecificOutput.additionalContext).toContain("Repo a: main per Fast-Forward");
+      expect(json.hookSpecificOutput.additionalContext).toContain("Repo b: develop per Fast-Forward");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("Negativfall: ein kaputter Block arbeitsplatz endet in der CLI als Notiz mit Fix-Zeile, --streng liefert Exit 1 und STOPP", () => {
+    const t = aufbauAp();
+    try {
+      writeFileSync(join(t.wurzel, ".factory", "projekt.json"), JSON.stringify({ arbeitsplatz: { wurzel: ".", repos: [] } }));
+      const r = cli(t.wurzel, "--text", "--streng");
+      expect(r.code).toBe(1);
+      expect(r.out).toMatch(/Haupt-Sync: .*arbeitsplatz\.repos.* Fix: /);
+      expect(r.out).toContain("STOPP");
+      expect(cli(t.wurzel).code).toBe(0); // der Hook selbst bleibt fail-open
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("die Hinweise zum Arbeitsverzeichnis (Bilddateien im Root) erscheinen auch im Arbeitsplatz", () => {
+    const t = aufbauAp();
+    try {
+      writeFileSync(join(t.wurzel, "shot.png"), "x");
+      const r = cli(t.wurzel, "--text");
+      expect(r.out).toContain("Bilddateien im Hauptcheckout-Root: shot.png");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("ein fetch-Fehler in einem erreichbaren Repo bekommt keine Fix-Zeile zum Pfad (nur wenn git das Repo gar nicht öffnen konnte)", () => {
+    const t = aufbauAp();
+    try {
+      git(t.b.klon, "remote", "set-url", "origin", join(t.wurzel, "gibt-es-nicht.git"));
+      const [, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      expect(rb.notiz).toContain("git fetch fehlgeschlagen");
+      expect(rb.notiz).not.toContain("Fix:");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("syncZiel: eine Config, die zu null geparst wird, ist eingebettet (wirft nie)", () => {
+    expect(AP.syncZiel("/x", { lade: () => null })).toEqual({ aufloesung: null });
+  });
 });

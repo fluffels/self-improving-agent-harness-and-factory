@@ -1332,4 +1332,16 @@ describe("Arbeitsplatz: Belegung über alle Repos (#88, AK5)", () => {
     const echte = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => unknown }).echteIo;
     expect(() => echte({ config: { ...FREMD, arbeitsplatz: { wurzel: ".", repos: [] } }, messfensterLader: () => () => ({ closedAt: null, n: 0 }) })).toThrow(/arbeitsplatz\.repos[\s\S]*Fix:/);
   });
+  test("belegungAusGit (die git-Seite von ladeBelegung): fetch je Repo mit dessen cwd und fail-open, danach Belegung aus allen Repos", () => {
+    const aufrufe: string[] = [];
+    const git = (args: string[], cwd?: string) => {
+      aufrufe.push(`${cwd}: ${args[0]}`);
+      if (args[0] === "fetch" && cwd === "/w/a") throw new Error("kein Netz");
+      if (args[0] === "for-each-ref") return "";
+      return [`worktree ${cwd}`, ...(cwd === "/w/b" ? [`worktree /w/.claude/worktrees/b/${WTP}88`] : [])].join("\n\n");
+    };
+    const r = (N as unknown as { belegungAusGit: (o: { name: string; cwd?: string }[], g: typeof git) => { refs: string[]; worktrees: string[] } }).belegungAusGit([A, B], git);
+    expect(aufrufe.filter((a) => a.endsWith("fetch"))).toEqual(["/w/a: fetch", "/w/b: fetch"]);
+    expect(r.worktrees).toContain(`/w/.claude/worktrees/b/${WTP}88`);
+  });
 });

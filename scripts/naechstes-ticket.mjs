@@ -493,17 +493,26 @@ export function fremdStatusLader({ holeIssue = (repo, nr) => ghJson(["api", `rep
   };
 }
 
-/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
-function ladeBelegung(messfenster, orte) {
-  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
+/**
+ * Die git-Seite der Belegung (#88): `fetch --prune` je Repo mit dessen `cwd` (fail-open: ohne Netz zählen die lokalen Remote-Refs), dann Branches und Worktrees
+ * über alle Repos vereinigt; scheitert git in einem, bricht der Lauf mit Fix-Zeile ab. `git(args, cwd)` ist injizierbar.
+ */
+export function belegungAusGit(orte, gitFn) {
   for (const ort of orte) {
     try {
-      git(["fetch", "--prune", "origin"], ort.cwd); // fail-open je Repo: ohne Netz zählen die lokalen Remote-Refs
+      if (ort.cwd === undefined) gitFn(["fetch", "--prune", "origin"]);
+      else gitFn(["fetch", "--prune", "origin"], ort.cwd);
     } catch {
       /* lokale Refs genügen */
     }
   }
-  const { refs, worktrees } = belegungJeRepo(orte, git); // Vereinigung über alle Repos; scheitert git in einem, bricht der Lauf mit Fix-Zeile ab
+  return belegungJeRepo(orte, gitFn);
+}
+
+/** Gemeinsame Belegungs-I/O beider Wege: offene Issues, Branch-Refs, Worktrees, offene PRs; der Messfenster-Lader kommt fertig herein. */
+function ladeBelegung(messfenster, orte) {
+  const offene = new Set(normalizeOffene(loadOpenIssuePages(REPO)).map((i) => i.number));
+  const { refs, worktrees } = belegungAusGit(orte, git);
   const prHeads = prHeadsAus(ghJson(["api", "--paginate", "--slurp", `repos/${REPO}/pulls?state=open&per_page=100`]));
   return { offene, refs, worktrees, prHeads, messfenster };
 }
