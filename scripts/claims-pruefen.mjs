@@ -333,6 +333,12 @@ export function fuehreAus(argv, depsOderFabrik) {
   return ergebnisAus(code, zeilen.join("\n"));
 }
 
+/**
+ * Argumente für die eigenen offenen Zuweisungen (#88): `--repo` nennt das Repo ausdrücklich, damit `gh` im Arbeitsplatz (Arbeitsverzeichnis ist kein Git-Repo)
+ * nicht am cwd hängt und eingebettet dasselbe Repo trifft wie bisher. Pur.
+ */
+export const zugewiesenArgs = (repo = REPO) => ["issue", "list", "--repo", repo, "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"];
+
 /** Echte I/O: git und gh über die gemeinsamen Wrapper, Lock-Verzeichnis im gemeinsamen git-Verzeichnis. */
 export function echteDeps({ config: vorgabe, basis } = {}) {
   const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
@@ -345,7 +351,7 @@ export function echteDeps({ config: vorgabe, basis } = {}) {
     orte,
     graphql: (query) => JSON.parse(ghText(["api", "graphql", "-f", `query=${query}`])),
     zugewiesen: () => {
-      const liste = ghJson(["issue", "list", "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"]);
+      const liste = ghJson(zugewiesenArgs());
       if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
       return liste.map((i) => i.number);
     },

@@ -33,6 +33,7 @@ const M = raw as unknown as {
   STANDARD_STUNDEN: number;
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
+  zugewiesenArgs: (repo?: string) => string[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown; worktreeOrdner?: string }) => boolean;
@@ -831,5 +832,11 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     const r = M.fuehreAus([], { ...deps, git: () => { throw new Error("erste Zeile\nzweite Zeile"); } });
     assert.equal(r.code, 2);
     assert.equal(r.err, "✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: erste Zeile\n");
+  });
+  test("die eigenen Zuweisungen nennen das Repo ausdrücklich (--repo), damit gh im Arbeitsplatz ohne Git-cwd läuft; ein anderes Repo wird übernommen", () => {
+    const a = M.zugewiesenArgs("o/r");
+    assert.deepEqual(a.slice(0, 4), ["issue", "list", "--repo", "o/r"]);
+    assert.ok(a.includes("--assignee") && a.includes("@me") && a.includes("200"));
+    assert.match(M.zugewiesenArgs()[3], /^[^/\s]+\/[^/\s]+$/, "Standard: das Repo der Config in der Form owner/name");
   });
 });
