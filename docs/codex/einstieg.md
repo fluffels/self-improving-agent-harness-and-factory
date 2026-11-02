@@ -110,7 +110,7 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (heute alle Hooks ohne Codex-Adapter, Grenze #84) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme #86.
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (heute alle Hooks ohne Codex-Adapter, Grenze factory#84) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#86.
 
 ## Quellen
 
