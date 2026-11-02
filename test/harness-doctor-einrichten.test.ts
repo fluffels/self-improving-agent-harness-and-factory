@@ -286,6 +286,15 @@ describe("harness-doctor --einrichten", () => {
     assert.equal(ohne.sammel.length, 1, "ohne --config ebenso");
   });
 
+  test("nicht lesbare Bestandspunkte behalten ihren Anleitungs-Link (Admin-Recht, Actions, Board)", () => {
+    for (const [punkt, key] of [["Admin-Recht", "api repos/acme/demo"], ["Actions", "api repos/acme/demo/actions/permissions"], ["Board produkt", "api orgs/acme/projectsV2/7"]] as const) {
+      const root = neuerRoot();
+      const r = fahre(root, welt(undefined, { [key]: new Error("HTTP 500") }), EINR(root));
+      const z = r.out.find((x) => x.startsWith(`ANLEITUNG ${punkt}:`)) ?? "";
+      assert.match(z, /Fix: .+ Link: https:\/\//, `${punkt}: ${r.out.join(" | ")}`);
+    }
+  });
+
   test("eine Anleitung ohne Link bleibt ohne „Link:“ (Labels nicht lesbar)", () => {
     const root = neuerRoot();
     const r = fahre(root, welt(undefined, { [LABEL_KEY]: new Error("HTTP 500") }), EINR(root));

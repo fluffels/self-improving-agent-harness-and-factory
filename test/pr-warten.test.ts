@@ -358,6 +358,12 @@ describe("bewerte: Rerun überschreibt den früheren Lauf (#1740 L34)", () => {
     expect(r.exit).toBe(2);
     expect(r.zeilen[0]).toContain("wartend: Security-Audit (npm audit), verify");
   });
+  test("Negativ L12: ein laufender StatusContext löst einen CANCELLED-CheckRun ohne Workflow nicht ab (bleibt rot)", () => {
+    const app = { __typename: "CheckRun", name: "app-check", status: "COMPLETED", conclusion: "CANCELLED", startedAt: alt, completedAt: alt, detailsUrl: "https://x/app" };
+    const r = P.bewerte(offen([app, ctx("ext/status", "PENDING")]));
+    expect(r.exit).toBe(1);
+    expect(r.zeilen.join(" ")).toContain("ROT app-check");
+  });
   test("Negativ L12: CANCELLED mit allen Geschwistern fertig bleibt rot; Geschwister eines anderen Workflows lösen nicht ab", () => {
     expect(P.bewerte(offen([wf("audit", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "COMPLETED", "SUCCESS", alt)])).exit).toBe(1);
     expect(P.bewerte(offen([wf("audit", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "Nightly", "IN_PROGRESS", null, "0001-01-01T00:00:00Z")])).exit).toBe(1);

@@ -11,7 +11,7 @@
  *      wird dort rot). Grenze: ob der Anker im Ziel existiert, prüft `check:docdrift` (deadAnchors), nicht dieser Test; Anker in Block-Zielen ungeprüft.
  *  (L25) Das Literal des Manifest-Pfads steht in `scripts/**` (rekursiv, `.mjs`/`.cjs`) nur in `besitz-lib.mjs` (Kommentarzeilen ausgenommen).
  *      Das Literal der Projekt-Config `.factory/projekt.json` steht außerhalb von `projekt-config-lib.mjs` nur in der schrumpfenden Bestandsliste
- *      `PROJEKT_JSON_BESTAND` (factory#114: je Datei auf die Lib umstellen, dann streichen; die Liste muss genau dem Ist entsprechen).
+ *      `PROJEKT_JSON_BESTAND` (factory#127: je Datei auf die Lib umstellen, dann streichen; die Liste muss genau dem Ist entsprechen).
  *      Grenze: nur `.mjs`/`.cjs`, keine JSON-Dateien und keine Strings, die den Pfad erst zur Laufzeit zusammensetzen. */
 import { describe, expect, test } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -72,7 +72,7 @@ function scriptQuellen(dir: string, rel = ""): Record<string, string> {
   return out;
 }
 
-/** Bestand (factory#114): Dateien, die `.factory/projekt.json` noch als Literal tragen, statt über `projekt-config-lib` zu gehen. Nur schrumpfen. */
+/** Bestand (factory#127): Dateien, die `.factory/projekt.json` noch als Literal tragen, statt über `projekt-config-lib` zu gehen. Nur schrumpfen. */
 const PROJEKT_JSON_BESTAND = [
   "besitz-lib.mjs", "check-context-size.mjs", "check-doc-tickets.mjs", "check-docmap.mjs", "check-factory-drift.mjs", "check-size.mjs",
   "codex-lib.mjs", "codex-setup.mjs", "factory-update-check.mjs", "harness-doctor-lib.mjs", "spezifikation-lib.mjs",

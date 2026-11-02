@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Herkunftsform für Ticketnummern (#95): stellt nackte drei- und vierstellige Ticketnummern `#<nr>` in Factory-Seiten (Markdown unter `docs/`
- * ohne Historie) und in `AGENTS.md` auf eine Form um, die ihre Herkunft nennt. Bezieher übernehmen die Seiten; eine nackte Nummer wäre dort
+ * Herkunftsform für Ticketnummern (#95): stellt nackte Ticketnummern `#<nr>` mit ein bis vier Ziffern in Factory-Seiten (Markdown unter `docs/`
+ * ohne Historie), Agententexten (`.claude/agents`), Skill-Quellen (`.agents/skills`) und in `AGENTS.md` auf eine Form um, die ihre Herkunft nennt. Bezieher übernehmen die Seiten; eine nackte Nummer wäre dort
  * mehrdeutig (Ticket des Quellprojekts oder des eigenen Repos).
  *  - `n >= ab`  → `quellprojekt#<n>` (Ticket des Quellprojekts, dem der Harness entstammt)
  *  - `n < ab` → `factory#<n>` (Ticket des Factory-Repos; bis 99 nur die Kurzform, siehe unten)
@@ -14,7 +14,7 @@
  * `KURZE_NUMMER` (1 und 2 Ziffern) ohne Baseline und außerhalb von Überschriften und Code.
  *
  * Aufruf: node scripts/herkunftsform.mjs --ab <n> [--schreiben] [<datei> …]
- * Standard ist ein Probelauf (schreibt nichts, nennt die Zahl der Umstellungen je Datei); ohne Dateiangabe: alle Factory-Seiten und `AGENTS.md`.
+ * Standard ist ein Probelauf (schreibt nichts, nennt die Zahl der Umstellungen je Datei); ohne Dateiangabe: alle Factory-Seiten, Agententexte, Skill-Quellen und `AGENTS.md`.
  * Exit 0 = ok, 2 = falscher Aufruf.
  */
 import { readFileSync, writeFileSync } from "node:fs";
