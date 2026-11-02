@@ -61,7 +61,7 @@ function gitImOrt(ort, args, git) {
   } catch (e) {
     if (ort.cwd === undefined) throw e;
     const grund = String(e instanceof Error ? e.message : e).split(/\r?\n/).find((z) => z.trim() !== "") ?? "unbekannter Fehler";
-    throw new Error(`git ${args.join(" ")} scheiterte in Repo ${ort.name} (${ort.cwd}): ${grund}\nFix: Pfad in arbeitsplatz.repos prüfen (git -C ${ort.cwd} status)`);
+    throw new Error(`git ${args.join(" ")} scheiterte in Repo ${ort.name} (${ort.cwd}): ${grund}\nFix: Pfad in arbeitsplatz.repos prüfen (git -C ${ort.cwd} status)`, { cause: e });
   }
 }
 

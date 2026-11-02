@@ -886,7 +886,7 @@ describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout
 });
 
 describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 60_000 }, () => {
-  type Zeile = { aktion: string; hinter: number; gepullt: boolean; notiz: string; basis: string; zweig?: string; repo?: string; branch: string };
+  type Zeile = { harness?: unknown; aktion: string; hinter: number; gepullt: boolean; notiz: string; basis: string; zweig?: string; repo?: string; branch: string };
   const AP = raw as unknown as {
     syncZiel: (dir: string, o?: { lade?: (d: string) => unknown }) => { aufloesung: { repos: { name: string; pfad: string }[] } | null; fehler?: string };
     fuehreArbeitsplatzSyncAus: (a: unknown, deps?: object) => Zeile[];
@@ -932,7 +932,9 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
     try {
       t.a.schiebe("neu-a.txt");
       t.b.schiebe("neu-b.txt");
-      const [ra, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      // `config: {}` wäre für ein Harness-Repo ungültig (Notiz mit Grund); im Arbeitsplatz-Repo wird weder geordnet noch die Config geprüft
+      const [ra, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung(), { config: {} });
+      expect([ra.notiz, rb.notiz, ra.harness, rb.harness]).toEqual(["", "", undefined, undefined]);
       expect([ra.repo, ra.gepullt, ra.zweig, ra.basis]).toEqual(["a", true, "main", ""]);
       expect([rb.repo, rb.gepullt, rb.zweig, rb.basis]).toEqual(["b", true, "develop", ""]);
       expect(git(t.a.klon, "rev-parse", "HEAD")).toBe(git(t.a.klon, "rev-parse", "origin/main"));

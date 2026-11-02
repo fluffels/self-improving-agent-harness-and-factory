@@ -23,6 +23,9 @@
  * Ticket. Hat der Sync eine Ticket-Skill-Quelle (`.agents/skills/`), deren Zeiger (`.claude/skills`) oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
  * der laufenden Session stammt noch vom alten Stand.
  *
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): steht in der Config von `CLAUDE_PROJECT_DIR` ein Block `arbeitsplatz`, hebt der Sync jedes Repo der Config für sich (`syncZiel`, `fuehreArbeitsplatzSyncAus`): Fast-Forward auf `origin/<standardzweig>` (Default `main`),
+ * Ausgabe mit `Repo <name>:`, ohne `Sitzungsbasis:` (der Harness kommt dort nicht per Repo-Pull), ohne Harness-Ordnung und Config-Neuprüfung (ein Projekt-Repo trägt keinen Harness). Ein fehlender Pfad oder ein git-Fehler in einem Repo ist eine Notiz mit
+ * `Fix:`-Zeile, die übrigen Repos werden trotzdem gehoben; `--streng` liefert Exit 1, sobald ein Repo abweicht. Ein kaputter Block ergibt eine Notiz mit Fix-Zeile, eine fehlende oder nicht lesbare Config bleibt eingebettet.
  * Aufruf-Fehler (unbekanntes Flag, fehlender Wert, doppeltes Flag, Positionsargument): Exit 2 vor Sync und Folge-Skript.
  *
  * Hook-Ausgabe: `hookSpecificOutput.additionalContext` (SessionStart). Wächter: test/harness/haupt-sync.test.ts.

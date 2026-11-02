@@ -77,7 +77,7 @@
   },
   "scripts/claims-pruefen.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/cleanup-worktrees.mjs": {

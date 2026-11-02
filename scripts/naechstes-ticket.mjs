@@ -27,7 +27,6 @@
  * Ein Board führt die Issues EINES Repos (`boards[].repo` der Projekt-Config, sonst `repo`; ADR 0022 F10): die Auswahl sieht nur Items des eigenen Repos (Nummern verschiedener Repos kollidieren nicht),
  * ein Board eines anderen Repos bleibt leer („fremdes Board“, Hinweis nennt das Repo, in dem die Auswahl läuft), eigene Items darauf stehen als „verwaist“. Ein Blocker darf auch `owner/name#n`
  * heißen: ein fremder Verweis wird per REST geprüft, nicht prüfbar zählt als offen (fail-closed).
- *
  * Arbeitsplatz (ADR 0022 Fortschreibung, #88): git läuft je Repo aus `arbeitsplatz.repos` der Projekt-Config (`gitOrteAus`), nicht im Arbeitsverzeichnis; Branches und Worktrees werden über alle Repos vereinigt,
  * ein Worktree `<praefixe.worktree><nr>` in einem Repo belegt die Nummer also für alle. `fetch --prune` bleibt je Repo fail-open; scheitert `for-each-ref` oder `worktree list` in einem Repo, bricht der Lauf mit einer Fix-Zeile ab (Exit 2).
  * Grenze: offene PRs fragt das Skript nur im Repo `repo` der Config; die Branches der anderen Repos erscheinen nach dem `fetch` als Remote-Refs.

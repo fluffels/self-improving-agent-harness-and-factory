@@ -17,7 +17,7 @@
  * aktiv), 2 = falscher Aufruf oder Fehler.
  *
  * Mechanik: die Lock-Datei `<git-common-dir>/<praefixe.worktree>locks/<nr>.json` (gemeinsam für alle Worktrees einer Maschine, nie unter
- * `.claude/worktrees/`) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
+ * `.claude/worktrees/`; im Arbeitsplatz `<wurzel>/.claude/<praefixe.worktree>locks/<nr>.json`, weil ein Ticket nicht an ein Repo gebunden ist und das Arbeitsverzeichnis kein Repo ist, #88) entsteht atomar per `openSync(…, "wx")`: genau ein Aufrufer gewinnt. Inhalt `{ nr, nonceHash, erstellt, sandbox }` (SHA-256 der Nonce; Altformat mit Klartext-`nonce` bleibt gültig; `sandbox` = `AGENT_SANDBOX` oder `null`) plus bei Bedarf `zuletzt: { zeit, quelle: "commit"|"schritt" }` (+ `schritt`), `uebergabe`, `gestoppt`. Das Format (Pfad, Parser, `lebenszeichenMs`) steht in `ticket-lock-lib.mjs`.
  * `claim` prüft vorher, ob ein Worktree `<praefixe.worktree><nr>` oder ein Branch `<praefixe.branch><nr>-*` (lokal oder remote) existiert (Exit 4). Ein
  * fremder Lock, dessen jüngstes Lebenszeichen (`lebenszeichenMs`) jünger als `VERWAIST_MS` (2 h) ist, gilt (Exit 4); ein älterer wird per `renameSync` auf `<nr>.json.verwaist-<Hash-Präfix>`
  * beiseite gelegt (nur einer gewinnt das Umbenennen) und neu angelegt. `pruefe` mit `--nonce` verlangt den eigenen Lock (`fremd`
@@ -31,6 +31,8 @@
  * kein Freigabeweg ohne Nonce (Absicht);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): git läuft je Repo aus `arbeitsplatz.repos` der Projekt-Config (`gitOrteAus`), Branches und Worktrees werden über alle Repos vereinigt: ein Worktree `<praefixe.worktree><nr>` in einem Repo
+ * belegt die Nummer für alle, das Lebenszeichen ist das Maximum über alle Worktrees und Branch-Köpfe der Nummer. Scheitert git in einem Repo, endet der Lauf mit Exit 2 und einer `Fix:`-Zeile, statt mit den übrigen Repos weiterzumachen.
  * Reines Node-Skript (nur Builtins + git). Die Entscheidungen sind pur exportiert, git und Dateisystem injizierbar.
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";

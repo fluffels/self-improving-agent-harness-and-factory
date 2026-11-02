@@ -26,6 +26,8 @@
  *                    nie `--force`; der Lock erst nach verifiziertem Entfernen). Ein Lock ohne Worktree und ohne Branch wird auch ohne PR gelöscht (Epic).
  *   behalten         alles andere, mit Grund.
  * Das Skript entfernt nie einen Assignee und ändert nie ein Issue.
+ * Arbeitsplatz (ADR 0022 Fortschreibung, #88): Worktrees, Branches und git-Aufrufe je Repo aus `arbeitsplatz.repos` der Projekt-Config, der Lock-Ort liegt unter `<wurzel>/.claude`; `worktree remove` läuft im Repo des Worktrees und nur für einen
+ * Worktree direkt in dessen Worktree-Ordner (`pfadErlaubt`). Grenze: je Lauf führt ein Claim einen Worktree (den ersten in Config-Reihenfolge), hat ein Ticket Worktrees in mehreren Repos, räumt der nächste Lauf den Rest ab. Scheitert git in einem Repo: Exit 2 mit `Fix:`-Zeile.
  *
  * Exit 0 = ok, 1 = ein Aufräumschritt ist gescheitert (der Rest wird gemeldet), 2 = Aufruf-, git- oder gh-Fehler (nichts aufgeräumt),
  * 5 = GitHub-API-Kontingent knapp.
@@ -148,6 +150,16 @@ export function pfadErlaubt({ pfad, hauptcheckout, nr, namen = ladeTicketNamen()
   return !/[\\/]/.test(rel) && ticketAusRef(`worktrees/${rel}`, namen) === nr && !lensWorktreeName(namen).test(rel);
 }
 
+/** Im Arbeitsplatz trägt der Worktree sein Repo (`ort`), eingebettet bleibt das Objekt unverändert. */
+const mitOrt = (worktree, block) => (block.ort ? { ...worktree, ort: block.ort } : worktree);
+
+/** Erste Zeile einer Fehlermeldung, dazu die `Fix:`-Zeile eines Repo-Fehlers (#88), damit sie nicht abgeschnitten wird. */
+const fehlerZeilen = (e) => {
+  const zeilen = String(e?.message ?? e).split(/\r?\n/);
+  const fix = zeilen.find((z) => z.startsWith("Fix:"));
+  return fix ? `${zeilen[0]}\n${fix}` : zeilen[0];
+};
+
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */
 export function sammle(deps) {
   const jetzt = deps.jetzt();
@@ -215,7 +227,7 @@ export function sammle(deps) {
       prs: issue?.prs ?? [],
       festgefahren: Boolean(deps.festgefahrenLabel && issue && (issue.labels.includes(deps.festgefahrenLabel) || issue.prs.some((p) => p.labels.includes(deps.festgefahrenLabel)))),
       lock,
-      worktree: w && { pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked, ...(w.ort ? { ort: w.ort } : {}) },
+      worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
       branch: meine.length > 0,
       branchLokal: meine.some((r) => r.lokal),
       lebenszeichenMs: lz.length ? Math.max(...lz) : null,
@@ -299,9 +311,7 @@ export function fuehreAus(argv, depsOderFabrik) {
   try {
     stand = sammle(deps);
   } catch (e) {
-    const zeilen = String(e?.message ?? e).split(/\r?\n/);
-    const fix = zeilen.find((z) => z.startsWith("Fix:")); // die Fix-Zeile eines Repo-Fehlers (#88) nicht abschneiden
-    return ergebnisAus(2, "", `✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: ${zeilen[0]}${fix ? `\n${fix}` : ""}`);
+    return ergebnisAus(2, "", `✖ claims-pruefen: git oder gh fehlgeschlagen, nichts aufgeräumt: ${fehlerZeilen(e)}`);
   }
   const schwelleMs = args.stunden * STUNDE;
   const urteile = stand.claims.map((claim) => ({ claim, urteil: beurteileClaim({ claim, jetzt: stand.jetzt, schwelleMs }) }));
