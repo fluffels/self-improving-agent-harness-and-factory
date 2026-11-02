@@ -12,6 +12,9 @@ import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { SICHERHEIT_PUNKTE as rawSicherheitPunkte } from "../scripts/harness-doctor-sicherheit.mjs";
+const SICHERHEIT_PUNKTE = rawSicherheitPunkte as string[];
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
@@ -277,14 +280,26 @@ describe("harness-doctor --pruefen", () => {
     ["Feld node_id", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, node_id: "anders" } }, /statusFeldNodeId.*Fix:/],
     ["Option Todo fehlt", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, options: [{ id: "abc", name: { raw: "Done" } }] } }, /todoOptionId.*Fix:/],
     ["Status-Feld falscher Name", { "api orgs/acme/projectsV2/7/fields/5": { ...feld, name: "Priorität" } }, /statusFeldId zeigt auf das Feld "Priorität".*Fix:/],
-    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 404") }, /Admin-Recht: Repo acme\/demo nicht lesbar.*Fix:/],
-    ["Actions nicht lesbar", { "api repos/acme/demo/actions/permissions": new Error("HTTP 403") }, /Actions: .*nicht lesbar.*Fix:/],
-    ["Secrets nicht lesbar", { "api --paginate --slurp repos/acme/demo/actions/secrets": new Error("HTTP 403") }, /Secret: secrets nicht lesbar.*Fix:/],
-    ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /Labels: Labels nicht lesbar.*Fix:/],
-    ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
-    ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
-    ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
   ];
+  const unlesbar: [string, Record<string, unknown>, RegExp][] = [
+    ["Repo nicht lesbar", { "api repos/acme/demo": new Error("HTTP 404") }, /NICHT PRÜFBAR Admin-Recht: Repo acme\/demo nicht lesbar.*Fix:/],
+    ["Actions nicht lesbar", { "api repos/acme/demo/actions/permissions": new Error("HTTP 403") }, /NICHT PRÜFBAR Actions: .*nicht lesbar.*Fix:/],
+    ["Secrets nicht lesbar", { "api --paginate --slurp repos/acme/demo/actions/secrets": new Error("HTTP 403") }, /NICHT PRÜFBAR Secret: secrets nicht lesbar.*Fix:/],
+    ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /NICHT PRÜFBAR Labels: Labels nicht lesbar.*Fix:/],
+    ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /NICHT PRÜFBAR Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
+    ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /NICHT PRÜFBAR Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
+    ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /NICHT PRÜFBAR Ruleset: Regeln.*nicht lesbar.*Fix:/],
+  ];
+  for (const [name, over, muster] of unlesbar) {
+    test(`nicht prüfbar: ${name}`, () => {
+      const r = lauf(over);
+      assert.equal(r.code, 1);
+      assert.equal(luecken(r).length, 0, r.out.join("\n"));
+      const z = r.out.filter((x) => x.startsWith("NICHT PRÜFBAR"));
+      assert.ok(z.some((x) => muster.test(x)), r.out.join("\n")); // ein unlesbares Repo macht auch die Sicherheitspunkte nicht prüfbar
+    });
+  }
+
   for (const [name, over, muster] of faelle) {
     test(`Lücke: ${name}`, () => {
       const r = lauf(over);
@@ -370,7 +385,7 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": GESUND["api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100"] }).code, 0);
     const r = lauf({ "api repos/acme/demo": repo });
     assert.equal(r.code, 1);
-    assert.match(luecken(r)[0], /Ruleset:.*trunk/);
+    assert.ok(r.out.some((z) => /^NICHT PRÜFBAR Ruleset: .*trunk/.test(z)), r.out.join("\n"));
     const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
     assert.match(luecken(ohneCs)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf trunk/);
   });
@@ -680,7 +695,8 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
     }
   });
 
-  test("Token fatal: alle acht Punkte nicht prüfbar mit dem Token-Fix, Exit 1", () => {
+  test(`Token fatal: alle ${SICHERHEIT_PUNKTE.length} Punkte nicht prüfbar mit dem Token-Fix, Exit 1`, () => {
+    assert.deepEqual(PUNKTE, SICHERHEIT_PUNKTE);
     const r = lauf({ "api -i user": new Error("gh auth login") });
     assert.equal(r.code, 1);
     for (const p of PUNKTE) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `) && z.endsWith("Fix: erst den Token-Punkt beheben")), p);

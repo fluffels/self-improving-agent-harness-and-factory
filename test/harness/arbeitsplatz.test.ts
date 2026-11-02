@@ -13,6 +13,8 @@ import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../../scripts/arbeitsplatz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as pfadRaw from "../../scripts/relativ-pfad.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as cliRaw from "../../scripts/arbeitsplatz.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
@@ -27,8 +29,8 @@ const L = libRaw as unknown as {
   worktreeBefehl: (o: { aufloesung: Aufloesung; repo: Repo; worktreeName: string; branchName: string }) => string;
   harnessSpuren: (z: string, o?: { dateiMuster?: RegExp }) => { status: string; pfad: string }[];
   istRepoName: (n: unknown) => boolean;
-  istRelativPosix: (p: string) => boolean;
 };
+const P = pfadRaw as unknown as { istRelativPosix: (p: string) => boolean };
 const C = cliRaw as unknown as {
   cli: (argv: string[], o?: { wurzel?: string; git?: (a: string[], cwd: string) => { ok: boolean; stdout: string }; out?: (s: string) => void; err?: (s: string) => void }) => number;
 };
@@ -101,9 +103,9 @@ describe("Config-Block arbeitsplatz (K1)", () => {
   test("istRepoName und istRelativPosix", () => {
     expect(L.istRepoName("web-1.x_y")).toBe(true);
     expect(L.istRepoName("a b")).toBe(false);
-    expect(L.istRelativPosix("src/a")).toBe(true);
-    expect(L.istRelativPosix("src/")).toBe(false);
-    expect(L.istRelativPosix("../a")).toBe(false);
+    expect(P.istRelativPosix("src/a")).toBe(true);
+    expect(P.istRelativPosix("src/")).toBe(false);
+    expect(P.istRelativPosix("../a")).toBe(false);
   });
 });
 

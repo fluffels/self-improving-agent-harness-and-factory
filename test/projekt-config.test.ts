@@ -5,14 +5,17 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { altName } from "./support/env-alt";
 import { projektConfig, repoName } from "./support/fremd-config";
+import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawForm from "../scripts/repo-form.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDocmap from "../scripts/check-docmap.mjs";
 
@@ -23,7 +26,6 @@ interface Pc {
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
-  gleichesRepo(a: unknown, b: unknown): boolean;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -43,6 +45,8 @@ interface Pc {
   sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[] };
 }
 const pc = rawPc as unknown as Pc;
+/** Blatt-Modul `repo-form.mjs` (factory#114): wird direkt importiert, die Config-Lib reicht es nicht weiter. */
+const form = rawForm as unknown as { gleichesRepo(a: unknown, b: unknown): boolean; istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string } };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 
@@ -232,11 +236,11 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);
     assert.match(mit(5).join("\n"), /boards\.1\.repo/);
     assert.match(mit("").join("\n"), /boards\.1\.repo/);
-    assert.equal(pc.gleichesRepo("Acme/Demo", "acme/demo"), true);
-    assert.equal(pc.gleichesRepo("acme/demo", "acme/anders"), false);
-    assert.equal(pc.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
-    assert.equal(pc.gleichesRepo(undefined, "acme/demo"), false);
-    assert.equal(pc.gleichesRepo(undefined, undefined), false);
+    assert.equal(form.gleichesRepo("Acme/Demo", "acme/demo"), true);
+    assert.equal(form.gleichesRepo("acme/demo", "acme/anders"), false);
+    assert.equal(form.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
+    assert.equal(form.gleichesRepo(undefined, "acme/demo"), false);
+    assert.equal(form.gleichesRepo(undefined, undefined), false);
     const c = gueltig();
     assert.equal(pc.boardRepo(c.boards?.[0] ?? {}, c), "acme/demo");
     assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");
@@ -293,7 +297,7 @@ describe("Bereichs-Aliase (#1943)", () => {
 
 describe("istRepoForm: dieselbe Formprüfung wie zerlegeRepo (#78)", () => {
   test("genau owner/name ohne Leerraum; jede Abweichung ist falsch und zerlegeRepo wirft dazu", () => {
-    const f = pc as unknown as { istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string } };
+    const f = form;
     assert.equal(f.istRepoForm("acme/demo"), true);
     assert.deepEqual(f.zerlegeRepo("acme/demo"), { owner: "acme", name: "demo" });
     for (const kaputt of ["acme", "a/b/c", "/b", "a/", "a /b", "", undefined, 5]) {
@@ -641,8 +645,12 @@ describe("kernEnvNamen und sammleKernEnv", () => {
 describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
-    mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
-    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "arbeitsplatz-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "repo-form.mjs", "relativ-pfad.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    // Die Hülle wird aus den Imports abgeleitet (factory#114), keine Handliste: ein neuer Blatt-Import bricht den Test nicht still.
+    const huelle = importHuelle("scripts/board-lib.mjs", (pfad) => readFileSync(join(WURZEL, pfad), "utf8"));
+    for (const f of huelle) {
+      mkdirSync(dirname(join(d, f)), { recursive: true });
+      copyFileSync(join(WURZEL, f), join(d, f));
+    }
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);

@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 /**
- * Herkunftsform für Ticketnummern (#95): stellt nackte drei- und vierstellige Ticketnummern `#<nr>` in Factory-Seiten (Markdown unter `docs/`
- * ohne Historie) und in `AGENTS.md` auf eine Form um, die ihre Herkunft nennt. Bezieher übernehmen die Seiten; eine nackte Nummer wäre dort
+ * Herkunftsform für Ticketnummern (#95): stellt nackte Ticketnummern `#<nr>` mit ein bis vier Ziffern in Factory-Seiten (Markdown unter `docs/`
+ * ohne Historie), Agententexten (`.claude/agents`), Skill-Quellen (`.agents/skills`) und in `AGENTS.md` auf eine Form um, die ihre Herkunft nennt. Bezieher übernehmen die Seiten; eine nackte Nummer wäre dort
  * mehrdeutig (Ticket des Quellprojekts oder des eigenen Repos).
  *  - `n >= ab`  → `quellprojekt#<n>` (Ticket des Quellprojekts, dem der Harness entstammt)
- *  - `100 <= n < ab` → `factory#<n>` (Ticket des Factory-Repos)
+ *  - `n < ab` → `factory#<n>` (Ticket des Factory-Repos; bis 99 nur die Kurzform, siehe unten)
  *  `ab` ist die erste Nummer, die das Factory-Repo noch nicht vergeben hat (höchste Issue- oder PR-Nummer + 1); Pflicht, kein Standard.
  * Unverändert bleiben: Überschriftszeilen (ihr Anker trägt die Nummer), Code-Fences und Inline-Code, GEN-Blöcke, Linkziele `](…)`, URLs und der
  * Linktext von http(s)-Links sowie schon präfixierte Formen (`owner/repo#12`, `x.md#1234`, `quellprojekt#1234`). Idempotent, Zeilenenden bleiben.
  * Migrationswerkzeug: die Schwelle `ab` ist nur zum Zeitpunkt des Laufs eindeutig; neue Nummern schreibt man von Hand in der richtigen Form (der Wächter meldet sie).
- * Bewusste Grenze: Nummern mit ein oder zwei Ziffern sind außerhalb des Umfangs (der Wächter `factory-seiten` zählt nur 3 und 4 Ziffern).
+ * Nummern mit ein oder zwei Ziffern gehören fast immer dem Factory-Repo (`factory#`); Nummern des Quellprojekts schreibt man vorher von Hand als `quellprojekt#<n>`.
+ * Bewusste Grenze: Überschriften und Code bleiben unberührt (auch für die Kurzform); `NUMMER` (3 und 4 Ziffern) zählt der Wächter `factory-seiten` gegen eine Baseline,
+ * `KURZE_NUMMER` (1 und 2 Ziffern) ohne Baseline und außerhalb von Überschriften und Code.
  *
  * Aufruf: node scripts/herkunftsform.mjs --ab <n> [--schreiben] [<datei> …]
- * Standard ist ein Probelauf (schreibt nichts, nennt die Zahl der Umstellungen je Datei); ohne Dateiangabe: alle Factory-Seiten und `AGENTS.md`.
+ * Standard ist ein Probelauf (schreibt nichts, nennt die Zahl der Umstellungen je Datei); ohne Dateiangabe: alle Factory-Seiten, Agententexte, Skill-Quellen und `AGENTS.md`.
  * Exit 0 = ok, 2 = falscher Aufruf.
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { collectMarkdown, fenceMaske, GEN_MARKER } from "./docs-gen/markdown.mjs";
@@ -24,25 +27,30 @@ import { flagsLesen } from "./flag-lib.mjs";
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 /** Eine nackte Ticketnummer: kein Wort-, Punkt- oder Bindestrich-Zeichen davor (sonst Präfix oder Dateianker), keine Wortzeichen dahinter. */
 export const NUMMER = /(?<![\p{L}\p{N}_.-])#(\d{3,4})(?![\p{L}\p{N}_])/gu;
+/** Dieselbe Form mit ein oder zwei Ziffern: der Wächter `factory-seiten` verbietet sie ohne Baseline (außerhalb von Überschriften und Code). */
+export const KURZE_NUMMER = /(?<![\p{L}\p{N}_.-])#(\d{1,2})(?![\p{L}\p{N}_])/gu;
+/** Alle Längen (1 bis 4 Ziffern), was die Umstellung ersetzt. */
+const ALLE_NUMMERN = /(?<![\p{L}\p{N}_.-])#(\d{1,4})(?![\p{L}\p{N}_])/gu;
 /** Geschützte Stücke einer Zeile (Capture-Split, ungerade Indizes): http(s)-Link samt Text, nackte URL, Inline-Code, Linkziel. */
 const GESCHUETZT = /(\[[^\]\n]*\]\(<?https?:\/\/[^)\s>]*>?[^)\n]*\)|https?:\/\/\S+|`[^`\n]*`|\]\([^)\n]*\))/;
 const UEBERSCHRIFT = /^\s{0,3}#{1,6}(\s|$)/;
 
 /** Ist `pfad` (repo-relativ, `/`) eine Factory-Seite: Markdown unter `docs/` ohne Historie (Spiegel von `istKernSeite` im Wächter `factory-seiten`). */
+// (Agententexte und Skill-Quellen kommen in `standardDateien` hinzu.)
 export function istFactorySeite(pfad) {
   if (!pfad.startsWith("docs/") || !pfad.endsWith(".md")) return false;
   if (pfad.startsWith("docs/adr/") || pfad === "docs/lessons-learned.md") return false;
   return !/^docs\/[^/]*-gegenprobe-[^/]*\.md$/.test(pfad);
 }
 
-/** Standardliste: alle Factory-Seiten unter `wurzel` (sortiert) und `AGENTS.md`. */
+/** Standardliste: alle Factory-Seiten, Agententexte (`.claude/agents`) und Skill-Quellen (`.agents/skills`, nicht die Zeiger unter `.claude/skills/`) unter `wurzel` sowie `AGENTS.md`. */
 export function standardDateien(wurzel = WURZEL) {
-  return [...collectMarkdown(wurzel, ["docs"]).filter(istFactorySeite), "AGENTS.md"];
+  return [...collectMarkdown(wurzel, ["docs"]).filter(istFactorySeite), ...collectMarkdown(wurzel, [".claude/agents", QUELL_VERZEICHNIS]), "AGENTS.md"];
 }
 
 /** Stellt die nackten Nummern eines Textstücks um; `zaehler` zählt die Umstellungen je Form. Pur bis auf `zaehler`. */
 function stueck(text, ab, zaehler) {
-  return text.replace(NUMMER, (treffer, ziffern) => {
+  return text.replace(ALLE_NUMMERN, (treffer, ziffern) => {
     if (Number(ziffern) >= ab) {
       zaehler.quellprojekt += 1;
       return `quellprojekt${treffer}`;
@@ -61,7 +69,7 @@ function zeile(text, ab, zaehler) {
 }
 
 /**
- * Stellt alle nackten Ticketnummern (3 oder 4 Ziffern) eines Dokuments um. `ab` = erste vom Factory-Repo noch nicht vergebene Nummer (ganze Zahl ≥ 101).
+ * Stellt alle nackten Ticketnummern (1 bis 4 Ziffern) eines Dokuments um. `ab` = erste vom Factory-Repo noch nicht vergebene Nummer (ganze Zahl ≥ 101).
  * Liefert den neuen Text und die Zahl der Umstellungen je Form.
  */
 export function umschreiben(text, { ab }) {

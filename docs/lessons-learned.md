@@ -93,7 +93,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Geändert:** Roter `main` geht vor; vor dem Auto-Merge einer Gate-Verschärfung wird `main` eingemergt und das Gate erneut gefahren.
 
-**Beleg:** [alle Issues dazu](https://github.com/fluffels/kubernia/issues?q=is%3Aissue+%22CI+rot+auf+main%22+in%3Atitle), [Belege Rot, Fix, Grün](agent-harness.md#belege-der-rotfixgrün-bogen-in-echt).
+**Beleg:** Issues „CI rot auf main“ im Quellprojekt, [Belege Rot, Fix, Grün](agent-harness.md#belege-der-rotfixgrün-bogen-in-echt).
 
 ### Die Prüfer haben selbst Lücken
 
