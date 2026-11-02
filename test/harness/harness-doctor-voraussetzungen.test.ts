@@ -24,6 +24,10 @@ import { parse } from "yaml";
 import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../../scripts/harness-doctor.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../../scripts/besitz-lib.mjs";
+
+const lib = rawLib as unknown as { istWorkflowEinheit: (e: { pfad: string; block?: string; schluessel?: string }) => boolean };
 
 interface Vor { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null }
 interface Doctor {
@@ -80,7 +84,7 @@ const jobsVon = (text: string): { id: string; name?: string; kontext: string | n
     return { id, ...(name === undefined ? {} : { name }), kontext: roh.includes("${{") || j?.uses !== undefined ? null : roh };
   });
 };
-const ganzeWorkflows = besitz.eintraege.filter((e) => e.block === undefined && e.schluessel === undefined && /^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad));
+const ganzeWorkflows = besitz.eintraege.filter(lib.istWorkflowEinheit);
 const ohneCase = (liste: string[]): Set<string> => new Set(liste.map((l) => l.toLowerCase()));
 
 describe("Scanner (Fixtures, nicht vakuös)", () => {

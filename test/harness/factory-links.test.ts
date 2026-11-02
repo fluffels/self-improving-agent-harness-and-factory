@@ -114,6 +114,15 @@ describe("sammleLinks: Ausnahmen", () => {
   test("ein Marker im Code-Fence öffnet keinen Block: der Link danach wird erfasst", () => {
     assert.ok(lib.sammleLinks(root(), { repo: REPO }).some((l) => l.datei === "docs/code.md" && l.zeile === 4));
   });
+  test("ein Schnappschuss-Start ohne Ende maskiert nichts (fail-closed): die Links danach werden erfasst", () => {
+    const r = fixture({ "docs/o.md": `${eintrag}\n${SCHNAPPSCHUSS_START}\n${eintrag}\n${eintrag}` });
+    assert.deepEqual(markiert(lib.sammleLinks(r, { repo: REPO })), ["docs/o.md:1", "docs/o.md:3", "docs/o.md:4"]);
+  });
+  test("JSON-Schlüssel- und Nicht-Markdown-Einheiten sowie ein Block ohne Marker maskieren nichts", () => {
+    const r = fixture({ "docs/k.md": eintrag, "docs/b.md": eintrag });
+    const links = lib.sammleLinks(r, { repo: REPO, einheiten: ["docs/k.md#/schluessel", "docs/b.md#fehlt", "scripts/x.mjs"] });
+    assert.deepEqual(markiert(links), ["docs/b.md:1", "docs/k.md:1"]);
+  });
   test("derselbe Link direkt nach dem Besitz-Block-Ende wird erfasst (Gegenprobe)", () => {
     assert.ok(lib.sammleLinks(root(), { repo: REPO, einheiten: ["AGENTS.md#kern"] }).some((l) => l.datei === "AGENTS.md" && l.zeile === 4));
   });

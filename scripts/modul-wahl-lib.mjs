@@ -1,4 +1,4 @@
-// Sicherheits-Module als wählbarer Besitz (factory#119): Blatt-Lib ohne lokale Importe (die Libs für Besitz und Config nutzen sie, ein Zyklus wäre sonst unvermeidbar).
+// Blatt-Modul ohne Importe (factory#119): Sicherheits-Module als wählbarer Besitz; die Libs für Besitz und Config nutzen sie, ein Zyklus wäre sonst unvermeidbar.
 // Eine Besitz-Einheit mit Manifest-Feld `modul` wird nur an Bezieher verteilt, die den Namen in der Config-Liste `module` gewählt haben; ohne den Schlüssel gilt `MODUL_STANDARD`.
 // Die erlaubten Namen sind die `modul`-Felder des Manifests (eine Quelle). Pfade der Config für Meldungen reicht der Aufrufer als `configPfad` herein.
 // Bekannte Grenze: geprüft wird nur die Form und die Namensmenge, nicht ob der Bezieher die Workflows des Moduls tatsächlich braucht.

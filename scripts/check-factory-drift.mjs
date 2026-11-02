@@ -9,13 +9,13 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, manifestAusText, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
 import { modulFormFehler, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
-const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
+const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `" + PROJEKT_CONFIG + "` auslagern";
 
 const TAG_WEG = "Weg: von einem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`)";
 
@@ -98,14 +98,11 @@ export function pruefeDrift(lies) {
     return rot(`${STAND_PFAD} ist kaputt (Version, Manifest-Hash oder Einheiten fehlen)`);
   }
   const manifestText = lies(MANIFEST_PFAD);
-  if (manifestText === null) return rot(`${MANIFEST_PFAD} fehlt`);
+  const geladen = manifestAusText(manifestText);
+  if (geladen.fehler === "fehlt") return rot(geladen.text);
   if (textHash(manifestText) !== stand.manifest) return rot(`${MANIFEST_PFAD} weicht vom Sync-Stand ab (Besitz-Liste verändert)`);
-  let manifest;
-  try {
-    manifest = JSON.parse(manifestText);
-  } catch {
-    return rot(`${MANIFEST_PFAD} ist kein gültiges JSON`);
-  }
+  if (geladen.fehler !== undefined) return rot(geladen.text);
+  const { manifest } = geladen;
   const fehler = [];
   const wahl = modulWahlAus(manifest, lies);
   let ergaenzung = leereErgaenzung();
@@ -139,8 +136,8 @@ export function pruefeDrift(lies) {
     if (hash === null) fehler.push(`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`);
     else if (hash !== stand.einheiten[id]) fehler.push(`${id}: Besitz wurde im Projekt verändert${hinweis}`);
   }
-  const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
-  const vorlagen = new Set((manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
+  const nichtVerteilt = new Map(manifest.eintraege.filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
+  const vorlagen = new Set(manifest.eintraege.filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
   for (const id of Object.keys(stand.einheiten)) {
     if (ids.has(id) || (wahl.unbestimmt && modulIds.has(id))) continue;
     if (abgewaehlt.has(id)) modulRot.push(`${id}: im Sync-Stand, Modul '${abgewaehlt.get(id)}' ist aber nicht gewählt (module in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Modul wieder wählen`);

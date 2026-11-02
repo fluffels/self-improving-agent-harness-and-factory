@@ -172,6 +172,10 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       assert.deepEqual(pruefe(`${start}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
       assert.deepEqual(pruefe(`2026-10-01\n${start}\n${rest}\n${ende}\n2026-10-02`), ["docs/s.md:2: Schnappschuss-Block ohne Datum"]);
     });
+    test("die Funde stehen nach Zeile sortiert, auch wenn Marker-Funde vor den Rest-Funden gesammelt werden", () => {
+      assert.deepEqual(pruefe(`${rest}\n${start}\n${rest}\n${ende}`), ["docs/s.md:1: Workflow-Auftrag", "docs/s.md:2: Schnappschuss-Block ohne Datum"]);
+      assert.deepEqual(pruefe(`${rest}\n${datum}\n${ende}`), ["docs/s.md:1: Workflow-Auftrag", "docs/s.md:3: Schnappschuss-Ende ohne Start"]);
+    });
     test("ein unvollständiges Datum zählt nicht", () => {
       assert.deepEqual(pruefe(`${start}\n2026-10\n${rest}\n${ende}`), ["docs/s.md:1: Schnappschuss-Block ohne Datum"]);
     });

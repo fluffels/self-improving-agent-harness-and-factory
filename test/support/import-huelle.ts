@@ -1,25 +1,20 @@
 /* Import-Hülle eines Skripts (factory#114, vorher in projekt-config-workflows.test.ts): alle relativ erreichbaren Dateien samt Einstieg.
  *
  * Tests, die ein Skript in einem Temp-Verzeichnis ohne den Rest des Repos starten (Kopierliste, Sparse-Checkout), leiten die Dateiliste
- * hieraus ab, statt sie von Hand zu führen: ein neuer Blatt-Import bricht so keinen Test still. Bewusste Grenze: erkannt wird nur
- * `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein dynamisches `import()`, keine einfachen Anführungszeichen).
+ * hieraus ab, statt sie von Hand zu führen: ein neuer Blatt-Import bricht so keinen Test still. Die Kette läuft über `lokaleImporteTransitiv`
+ * (eine Auslegung für Wächter und Hülle, factory#127); darüber hinaus wirft die Hülle bei jedem Import, der weder `node:` noch relativ ist.
+ * Grenzen der gemeinsamen Auslegung (`importeAus`): erkannt werden `from "…"`, `import "…"`, `import()` und `require()` mit festem Literal; ein
+ * dynamischer Pfad bleibt unsichtbar, ein Import in einem Kommentar zählt mit (fail-closed).
  */
-import { dirname, posix } from "node:path";
+import { importeAus, lokaleImporteTransitiv } from "../harness/hook-importe";
 
 /** Import-Hülle (Repo-Pfade) eines Skripts samt Einstieg; wirft bei einem Import, der weder `node:` noch relativ ist. Pur bis auf `leser`. */
 export function importHuelle(einstieg: string, leser: (pfad: string) => string): string[] {
-  const gesehen = new Set<string>();
-  const offen = [einstieg];
-  while (offen.length > 0) {
-    const pfad = offen.pop() as string;
-    if (gesehen.has(pfad)) continue;
-    gesehen.add(pfad);
-    for (const m of leser(pfad).matchAll(/\bfrom\s+"([^"]+)"/g)) {
-      const ziel = m[1] ?? "";
-      if (ziel.startsWith("node:")) continue;
-      if (!ziel.startsWith(".")) throw new Error(`${pfad}: Import '${ziel}' ist weder node: noch relativ`);
-      offen.push(posix.join(dirname(pfad), ziel));
+  const huelle = lokaleImporteTransitiv([einstieg], leser);
+  for (const pfad of huelle) {
+    for (const ziel of importeAus(leser(pfad))) {
+      if (!ziel.startsWith("node:") && !ziel.startsWith(".")) throw new Error(`${pfad}: Import '${ziel}' ist weder node: noch relativ`);
     }
   }
-  return [...gesehen].sort();
+  return huelle;
 }

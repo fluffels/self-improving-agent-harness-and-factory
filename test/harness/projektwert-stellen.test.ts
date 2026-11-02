@@ -81,7 +81,9 @@ describe("Projektwert-Stellen in Agenten und Skills", () => {
     expect(B.projektwertStellen(ohne).zeilen).toEqual([]);
   });
 
-  test("besitz-lib trägt denselben Config-Pfad wie projekt-config-lib", () => {
-    expect(lies("scripts/besitz-lib.mjs")).toContain(`"${P.PROJEKT_CONFIG}"`);
+  test("besitz-lib bezieht den Config-Pfad aus projekt-config-lib, ohne eigenes Literal", () => {
+    const text = lies("scripts/besitz-lib.mjs");
+    expect(text).toContain("const CONFIG_PFAD = PROJEKT_CONFIG;");
+    expect(text).not.toContain(`"${P.PROJEKT_CONFIG}"`);
   });
 });

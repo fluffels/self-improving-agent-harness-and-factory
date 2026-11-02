@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { altEnvPraefix } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -60,6 +60,43 @@ export function einheitId(e) {
   return e.pfad;
 }
 
+/** Gegenstück zu `einheitId`: `pfad`, `pfad#block` oder `pfad#/schluessel` -> Einheit (`{ pfad }`, `{ pfad, block }`, `{ pfad, schluessel }`). */
+export function einheitAusId(id) {
+  const i = id.indexOf("#");
+  if (i < 0) return { pfad: id };
+  const rest = id.slice(i + 1);
+  return rest.startsWith("/") ? { pfad: id.slice(0, i), schluessel: rest.slice(1) } : { pfad: id.slice(0, i), block: rest };
+}
+
+/** Zeichenspannen `[a, b]` der Einheiten von `pfad` in `text`: ganze Datei `[0, Länge]`, Block per `blockSpanne` (erstes Marker-Vorkommen; kaputte Marker: keine Spanne), JSON-Schlüssel keine (kein Doku-Text). */
+export function besitzSpannen(einheiten, pfad, text) {
+  const spannen = [];
+  for (const e of einheiten.filter((x) => x.pfad === pfad)) {
+    if (istGanzeDatei(e)) spannen.push([0, text.length]);
+    else if (e.block !== undefined) {
+      const s = blockSpanne(text, e.block);
+      if (s) spannen.push(s);
+    }
+  }
+  return spannen;
+}
+
+/** Besitz-Manifest aus dem Dateitext (`null` = Datei fehlt): `{ manifest }` oder `{ fehler: "fehlt"|"json"|"eintraege", text }` mit der einheitlichen Meldung; die Fehlerpolitik bleibt beim Aufrufer. */
+export function manifestAusText(text) {
+  if (text === null) return { fehler: "fehlt", text: `${MANIFEST_PFAD} fehlt` };
+  let manifest;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    return { fehler: "json", text: `${MANIFEST_PFAD} ist kein gültiges JSON` };
+  }
+  if (!Array.isArray(manifest?.eintraege)) return { fehler: "eintraege", text: `${MANIFEST_PFAD} hat keine Liste 'eintraege'` };
+  return { manifest };
+}
+
+/** Ist die Einheit eine ganze Workflow-Datei (`.github/workflows/<name>.yml|yaml`)? */
+export const istWorkflowEinheit = (e) => istGanzeDatei(e) && /^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad);
+
 const zaehleVorkommen = (text, s) => text.split(s).length - 1;
 
 /** Text der Einheit oder `null`, wenn Block/Schlüssel nicht auflösbar ist. */
@@ -88,7 +125,7 @@ export function pfadSicher(pfad) {
 /** Fehler des optionalen Felds `pflichtChecks` einer Einheit (leer = gültig oder nicht gesetzt): nur an ganzen Workflow-Dateien, eine nicht leere Liste nicht leerer Texte (die Job-Namen, die ein Bezieher als Required Check braucht, factory#117). */
 export function pflichtChecksFehler(e) {
   if (e.pflichtChecks === undefined) return [];
-  if (!istGanzeDatei(e) || !/^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad)) return ["pflichtChecks nur an einer ganzen Workflow-Datei (.github/workflows/<name>.yml)"];
+  if (!istWorkflowEinheit(e)) return ["pflichtChecks nur an einer ganzen Workflow-Datei (.github/workflows/<name>.yml)"];
   const l = e.pflichtChecks;
   if (!Array.isArray(l) || l.length === 0 || l.some((n) => typeof n !== "string" || n.trim() === "")) return ["pflichtChecks muss eine nicht leere Liste nicht leerer Texte sein"];
   return [];
@@ -475,7 +512,7 @@ export function platzhalterMuster() {
   return new RegExp(`<(${TABELLEN_GRUPPEN.join("|")})\\.(\\w+)>`, "g");
 }
 const YAML_BLANK = /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/;
-const CONFIG_PFAD = ".factory/projekt.json";
+const CONFIG_PFAD = PROJEKT_CONFIG;
 
 /** Stellen eines LF-Textes: `{ bloecke: [{ start, ende }], zeilen: [{ marker, folge, schluessel, einrueckung, name }] }` (Zeilenindizes ab 0).
  *  Ein Markdown-Marker zählt nur allein auf seiner Zeile, ein Zeilen-Marker nur im führenden Frontmatter direkt vor einer `key:`-Zeile.
@@ -656,12 +693,8 @@ export function projektwertLauf(wurzel, ladeConfig, { schreiben = false } = {}) 
     const voll = join(wurzel, ...rel.split("/"));
     return existsSync(voll) ? readFileSync(voll, "utf8") : null;
   };
-  let manifestPfade = [];
-  try {
-    manifestPfade = JSON.parse(lies(MANIFEST_PFAD) ?? "{}").eintraege?.map((e) => e.pfad) ?? [];
-  } catch {
-    // ein kaputtes Manifest meldet das Drift-Gate selbst
-  }
+  // ein fehlendes oder kaputtes Manifest meldet das Drift-Gate selbst
+  const manifestPfade = manifestAusText(lies(MANIFEST_PFAD)).manifest?.eintraege.map((e) => e?.pfad) ?? [];
   let config;
   const configLaden = () => {
     if (config === undefined) {

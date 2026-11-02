@@ -9,9 +9,10 @@ import { fehlerText } from "./gh-cli.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
-import { MANIFEST_PFAD, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
+import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
+import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { modulPunkt } from "./modul-wahl-lib.mjs";
-import { ausFehler, GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, nichtPruefbar, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
@@ -151,8 +152,8 @@ const erste = (e) => fehlerText(e).split("\n")[0];
 const json = (gh, args) => JSON.parse(gh(args));
 /** Seiten von `gh api --paginate --slurp` zu einer Liste (`schluessel` = Feld je Seite, sonst die Seite selbst). */
 const seiten = (gh, pfad, schluessel) => json(gh, ["api", "--paginate", "--slurp", pfad]).flatMap((s) => (schluessel ? (s[schluessel] ?? []) : s));
-const luecke = (punkt, befund, fix, link, aktion) => ({ punkt, ok: false, befund, fix, ...(link ? { link } : {}), ...(aktion ? { aktion } : {}) });
-const gut = (punkt) => ({ punkt, ok: true });
+/** Quelle fehlgeschlagen; jede Quelle dieses Moduls bringt ihren `fix` selbst mit. */
+const ausFehler = (punkt, was, quelle, link) => ausFehlerRoh(punkt, was, quelle, undefined, link);
 const fehlen = (soll, ist, gleich = (a, b) => a === b) => soll.filter((s) => !ist.some((i) => gleich(s, i)));
 const ohneCase = (a, b) => a.toLowerCase() === b.toLowerCase();
 
@@ -230,7 +231,7 @@ function pruefeLabels(gh, repo, soll) {
 function pruefeBoard(gh, board, i) {
   const name = `Board ${board.rolle ?? i}`;
   const pfad = boardPfad(board);
-  const hilfe = `boards[${i}] in .factory/projekt.json prüfen (gh api ${pfad}/fields listet die Felder)`;
+  const hilfe = `boards[${i}] in ${PROJEKT_CONFIG} prüfen (gh api ${pfad}/fields listet die Felder)`;
   const l = (befund) => luecke(name, befund, hilfe, LINK.projektFelder);
   const lesefehler = (was, quelle) => ausFehler(name, was, { ...quelle, fix: hilfe }, LINK.projektFelder);
   let b;
@@ -365,8 +366,9 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
   const workflows = workflowsLesen(rootDir);
-  const manifest = join(rootDir, MANIFEST_PFAD);
-  const besitz = existsSync(manifest) ? hole(() => JSON.parse(readFileSync(manifest, "utf8"))) : { fehler: "Datei fehlt" };
+  const manifestVoll = join(rootDir, MANIFEST_PFAD);
+  const geladen = manifestAusText(existsSync(manifestVoll) ? readFileSync(manifestVoll, "utf8") : null);
+  const besitz = geladen.fehler === undefined ? { wert: geladen.manifest } : { fehler: geladen.text };
   if (mitWochenlauf && !workflows.some((w) => w.pfad === basename(WOCHENLAUF_PFAD))) workflows.push({ pfad: basename(WOCHENLAUF_PFAD), text: WOCHENLAUF_WORKFLOW });
   const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows, spiegel, besitz }), spiegel, gh, langfuse, umgebung });
   if (dateien) ergebnis.push(...dateien({ rootDir }));

@@ -293,6 +293,15 @@ describe("Vorlagen im Sync und im Drift-Gate", { timeout: 30_000 }, () => {
     const f = drift.pruefeDrift((p) => (p === ".factory/sync-stand.json" ? JSON.stringify({ version: 2, quelle: { commit: "a", tag: "v1", sauber: true }, manifest: lib.textHash(manifestText), einheiten: { ".github/dependabot.yml": "x" } }) : p === ".factory/besitz.json" ? manifestText : null)).fehler;
     assert.match(f.join("|"), /\.github\/dependabot\.yml: im Sync-Stand, ist aber Vorlage/);
   });
+  test("das Manifest fehlt, ist kein JSON oder hat keine Liste: ein roter Befund mit der einheitlichen Meldung", () => {
+    const stand = (m: string) => JSON.stringify({ version: 2, quelle: { commit: "a", tag: "v1", sauber: true }, manifest: lib.textHash(m), einheiten: {} });
+    const pruefe = (text: string | null) => drift.pruefeDrift((p) => (p === ".factory/sync-stand.json" ? stand(text ?? "") : p === ".factory/besitz.json" ? text : null)).fehler.join("|");
+    assert.match(pruefe(null), /\.factory\/besitz\.json fehlt/);
+    assert.match(pruefe("kein json"), /\.factory\/besitz\.json ist kein gültiges JSON/);
+    assert.match(pruefe('{"version":2}'), /\.factory\/besitz\.json hat keine Liste 'eintraege'/);
+    const abweichend = drift.pruefeDrift((p) => (p === ".factory/sync-stand.json" ? stand("x") : p === ".factory/besitz.json" ? "kein json" : null)).fehler.join("|");
+    assert.match(abweichend, /weicht vom Sync-Stand ab/, "der Hash-Vergleich kommt vor dem JSON-Fehler");
+  });
   test("ein Rollen-Pfad als Vorlage ist ein Fehler (nichts geschrieben)", () => {
     const q = baueQuelle();
     const z = tmp();

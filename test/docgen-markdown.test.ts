@@ -120,6 +120,7 @@ const ext = md as unknown as {
   linkStellen: (s: string) => { start: number; ende: number }[];
   SCHNAPPSCHUSS_START: string;
   SCHNAPPSCHUSS_ENDE: string;
+  schnappschussBloecke: (z: string[]) => { bloecke: [number, number][]; fehler: { zeile: number; art: string }[] };
 };
 
 describe("codeMaskiert (factory#130)", () => {
@@ -173,5 +174,26 @@ describe("Schnappschuss-Marker (factory#130)", () => {
   test("sind die Kern-Konstanten", () => {
     assert.equal(ext.SCHNAPPSCHUSS_START, "<!-- schnappschuss:start -->");
     assert.equal(ext.SCHNAPPSCHUSS_ENDE, "<!-- schnappschuss:ende -->");
+  });
+});
+
+describe("schnappschussBloecke (eine Auslegung für beide Wächter)", () => {
+  const S = ext.SCHNAPPSCHUSS_START;
+  const E = ext.SCHNAPPSCHUSS_ENDE;
+  const lauf = (...z: string[]) => ext.schnappschussBloecke(z);
+  test("geschlossene Blöcke, Marker getrimmt", () => {
+    assert.deepEqual(lauf("a", `  ${S} `, "x", E, "b", S, E), { bloecke: [[1, 3], [5, 6]], fehler: [] });
+  });
+  test("Marker nur allein auf der Zeile", () => {
+    assert.deepEqual(lauf(`Text ${S}`, E), { bloecke: [], fehler: [{ zeile: 1, art: "ende-ohne-start" }] });
+  });
+  test("verschachtelt: der zweite Start ist der Fund, der Block bleibt der erste", () => {
+    assert.deepEqual(lauf(S, S, E), { bloecke: [[0, 2]], fehler: [{ zeile: 1, art: "verschachtelt" }] });
+  });
+  test("Ende ohne Start", () => {
+    assert.deepEqual(lauf(S, E, E), { bloecke: [[0, 1]], fehler: [{ zeile: 2, art: "ende-ohne-start" }] });
+  });
+  test("Start ohne Ende: Fund auf der Start-Zeile, kein Block", () => {
+    assert.deepEqual(lauf("a", S, "b"), { bloecke: [], fehler: [{ zeile: 1, art: "ohne-ende" }] });
   });
 });

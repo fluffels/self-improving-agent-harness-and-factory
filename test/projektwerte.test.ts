@@ -241,6 +241,23 @@ describe("projektwerte CLI", () => {
     assert.ok(roh.abweichungen.length > 0);
     assert.ok(roh.abweichungen.every((a) => roh.fehler.includes(a)));
   });
+  test("projektwertLauf liest zusätzlich die Markdown-Pfade des Manifests; ein kaputtes oder fehlendes Manifest bricht nicht ab", () => {
+    const w = projekt();
+    const cfg = (): Cfg => JSON.parse(lies(w, ".factory/projekt.json")) as Cfg;
+    schreibe(w, "docs/x.md", `${S}\nohne Ende\n`);
+    assert.deepEqual(lib.projektwertLauf(w, cfg).fehler.filter((f) => f.includes("docs/x.md")), []);
+    schreibe(w, ".factory/besitz.json", JSON.stringify({ eintraege: [{ pfad: "docs/x.md" }] }));
+    assert.ok(lib.projektwertLauf(w, cfg).fehler.some((f) => f.includes("docs/x.md")));
+    schreibe(w, ".factory/besitz.json", "kein json");
+    assert.deepEqual(lib.projektwertLauf(w, cfg).fehler.filter((f) => f.includes("docs/x.md")), []);
+  });
+  test("projektwertLauf: ein Null-Eintrag im Manifest bricht nicht ab, die übrigen Pfade werden gelesen", () => {
+    const w = projekt();
+    const cfg = (): Cfg => JSON.parse(lies(w, ".factory/projekt.json")) as Cfg;
+    schreibe(w, "docs/x.md", `${S}\nohne Ende\n`);
+    schreibe(w, ".factory/besitz.json", JSON.stringify({ eintraege: [null, { pfad: "docs/x.md" }] }));
+    assert.ok(lib.projektwertLauf(w, cfg).fehler.some((f) => f.includes("docs/x.md")));
+  });
   test("fehlender Schlüssel in der Config bricht ab (ohne Config-Datei ebenso)", () => {
     const w = projekt();
     schreibe(w, ".claude/agents/planer.md", FM.replace("agenten.planer", "agenten.fehlt"));

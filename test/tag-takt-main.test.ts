@@ -1,5 +1,8 @@
 /* main() des Tag-Takts über injizierte Nähte (#101 L23, Muster test/secret-inbox.test.ts): Trockenlauf, Anlegen, git- und gh-Fehler. */
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
 import { FREMD } from "./support/fremd-config";
@@ -34,6 +37,11 @@ function aufbau(o: { git?: (a: string[]) => string; ghText?: (a: string[]) => st
   };
   return { deps, log, text, platziert };
 }
+
+const ordner: string[] = [];
+afterEach(() => {
+  for (const o of ordner.splice(0)) rmSync(o, { recursive: true, force: true });
+});
 
 describe("tag-takt main", () => {
   it("Trockenlauf: Vorschau mit [dry-run]-Zeilen, kein gh-Schreibaufruf, Exit 0", async () => {
@@ -106,9 +114,56 @@ describe("tag-takt main", () => {
     expect(await T.main([], a.deps)).toBe(1);
     expect(a.log.join("\n")).toContain("::error::Tag-Ticket (anlegen) nicht geschrieben");
   });
+  it("ladeLog liest ohne Umbenennungs-Erkennung (--no-renames): der alte Pfad einer Umbenennung bleibt sichtbar", async () => {
+    const a = aufbau();
+    const args: string[][] = [];
+    const roh = a.deps.git as (x: string[]) => string;
+    a.deps.git = (x: string[]) => { args.push(x); return roh(x); };
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(args.find((x) => x[0] === "log")).toContain("--no-renames");
+  });
+  it("git show wirft (zeigeDatei): die Datei zählt als fehlend, der Takt läuft weiter", async () => {
+    const a = aufbau({ git: (args) => { if (args[0] === "show") throw new Error("fatal: Pfad nicht im Tag"); return args[0] === "tag" ? "v1.2.3\n" : args[0] === "rev-parse" ? `${SHA}\n` : commitLog(3); } });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toHaveLength(1);
+    expect(a.log.join("\n")).toContain("Tag-Ticket angelegt: #77");
+  });
+  it("Standard-ladeManifest liest relativ zur übergebenen wurzel, nicht zum cwd", async () => {
+    const w = mkdtempSync(join(tmpdir(), "tt-"));
+    ordner.push(w);
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, ".factory", "besitz.json"), JSON.stringify({ eintraege: [{ pfad: "scripts/nur-in-der-wurzel.mjs", ring: "kern" }] }));
+    const log = Array.from({ length: 3 }, (_, i) => `\x1e${String(i).repeat(40)}\x1f${new Date().toISOString()}\x1ffix: x (#${i + 1})\x1f\n\nscripts/nur-in-der-wurzel.mjs\n`).join("");
+    const a = aufbau({ git: (args) => (args[0] === "tag" ? "v1.2.3\n" : args[0] === "rev-parse" ? `${SHA}\n` : args[0] === "show" ? "" : log) });
+    delete a.deps.ladeManifest;
+    a.deps.wurzel = w;
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toHaveLength(1);
+  });
   it("Start-Fehler (Aufruf/Config): der Code des Starts wird durchgereicht", async () => {
     const a = aufbau({ start: { code: 2 } });
     expect(await T.main(["--bogus"], a.deps)).toBe(2);
     expect(a.text).toEqual([]);
+  });
+});
+
+describe("manifestLaden (Standard-Lader)", () => {
+  const laden = (raw as unknown as { manifestLaden: (wurzel: string) => unknown }).manifestLaden;
+  const wurzel = (inhalt?: string): string => {
+    const w = mkdtempSync(join(tmpdir(), "tt-"));
+    ordner.push(w);
+    mkdirSync(join(w, ".factory"));
+    if (inhalt !== undefined) writeFileSync(join(w, ".factory", "besitz.json"), inhalt);
+    return w;
+  };
+  it("liefert das Manifest unter der Wurzel", () => {
+    expect(laden(wurzel('{"eintraege":[]}'))).toEqual({ eintraege: [] });
+  });
+  it.each([
+    [undefined, /\.factory\/besitz\.json fehlt/],
+    ["kein json", /kein gültiges JSON/],
+    ['{"version":1}', /keine Liste 'eintraege'/],
+  ])("wirft die einheitliche Meldung bei %j", (inhalt, muster) => {
+    expect(() => laden(wurzel(inhalt))).toThrow(muster);
   });
 });
