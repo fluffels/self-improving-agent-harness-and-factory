@@ -22,7 +22,7 @@ describe("bewerte", () => {
   test.each(["FAILURE", "CANCELLED", "TIMED_OUT"])("roter CheckRun (%s) → Exit 1, eine Zeile je rotem Check", (c) => {
     const r = P.bewerte(offen([lauf("a", "COMPLETED", "SUCCESS"), lauf("b", "COMPLETED", c), lauf("c", "COMPLETED", "FAILURE")]));
     expect(r.exit).toBe(1);
-    expect(r.zeilen).toEqual(["ROT b https://x/runs/b", "ROT c https://x/runs/c"]);
+    expect(r.zeilen.filter((z) => z.startsWith("ROT "))).toEqual(["ROT b https://x/runs/b", "ROT c https://x/runs/c"]);
   });
   test.each(["FAILURE", "ERROR"])("roter StatusContext (%s) → Exit 1", (s) => {
     expect(P.bewerte(offen([ctx("ci", s)])).exit).toBe(1);

@@ -11,6 +11,7 @@
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
+ *   Zusatz bei ROT durch CANCELLED ohne laufenden Geschwister-Lauf: `HINWEIS <check> CANCELLED …: kein gh run rerun, leerer Commit mit Push` (ein Rerun behält das Ereignis samt `draft`).
  * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
@@ -82,13 +83,17 @@ export function bewerte(pr, pflicht = null) {
   const neueste = juengste(pr?.statusCheckRollup);
   const alle = neueste.map((e) => {
     const c = eintrag(e);
-    return c.art === "rot" && abgeloest(e, neueste) ? { ...c, art: "offen" } : c;
+    if (c.art !== "rot") return c;
+    if (abgeloest(e, neueste)) return { ...c, art: "offen" };
+    return { ...c, abgebrochen: String(e?.conclusion ?? "").toUpperCase() === "CANCELLED" };
   });
   // Nicht-Pflicht-Checks sperren den Merge nicht: sie zählen weder zu rot noch zu grün noch zu wartend.
   const gatet = Array.isArray(pflicht) && pflicht.length ? new Set(pflicht) : null;
   const checks = gatet ? alle.filter((c) => gatet.has(c.name)) : alle;
   const hinweise = alle.filter((c) => c.art === "rot" && !checks.includes(c)).map((c) => `HINWEIS ${c.name} ${c.url} (kein Pflicht-Check, kein Merge-Gate)`);
-  const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...hinweise] });
+  // Ein CANCELLED ohne laufenden Geschwister-Lauf: ein Rerun behielte Ereignis samt `draft` (ci.yml), ein neuer Kopf löst frisch aus.
+  const rerun = checks.filter((c) => c.abgebrochen).map((c) => `HINWEIS ${c.name} CANCELLED ohne laufenden Geschwister-Lauf: kein \`gh run rerun\` (behält Ereignis samt draft), leerer Commit mit Push`);
+  const mit = (exit, zeilen) => ({ exit, zeilen: [...zeilen, ...rerun, ...hinweise] });
   if (pr?.mergeable === "CONFLICTING") return mit(3, ["KONFLIKT"]);
   const rot = checks.filter((c) => c.art === "rot");
   if (rot.length) return mit(1, rot.map((c) => `ROT ${c.name} ${c.url}`.trim()));

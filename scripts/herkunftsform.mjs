@@ -13,6 +13,9 @@
  * Bewusste Grenze: Überschriften und Code bleiben unberührt (auch für die Kurzform); `NUMMER` (3 und 4 Ziffern) zählt der Wächter `factory-seiten` gegen eine Baseline,
  * `KURZE_NUMMER` (1 und 2 Ziffern) ohne Baseline und außerhalb von Überschriften und Code.
  *
+ * Grenze der Schwelle: Quellprojekt-Nummern unter `--ab` sind von Factory-Nummern nicht zu unterscheiden. Der Probelauf nennt darum je Datei, wie viele `factory#`-Umstellungen
+ * mindestens 3 Ziffern haben (Hinweis „von Hand prüfen“): kurze Nummern sind fast immer Factory-Nummern, lange können Quellprojekt-Nummern sein.
+ *
  * Aufruf: node scripts/herkunftsform.mjs --ab <n> [--schreiben] [<datei> …]
  * Standard ist ein Probelauf (schreibt nichts, nennt die Zahl der Umstellungen je Datei); ohne Dateiangabe: alle Factory-Seiten, Agententexte, Skill-Quellen und `AGENTS.md`.
  * Exit 0 = ok, 2 = falscher Aufruf.
@@ -56,6 +59,7 @@ function stueck(text, ab, zaehler) {
       return `quellprojekt${treffer}`;
     }
     zaehler.factory += 1;
+    if (ziffern.length >= 3) zaehler.factoryLang += 1;
     return `factory${treffer}`;
   });
 }
@@ -74,7 +78,7 @@ function zeile(text, ab, zaehler) {
  */
 export function umschreiben(text, { ab }) {
   if (!Number.isInteger(ab) || ab < 101) throw new Error(`ab muss eine ganze Zahl ab 101 sein (erste vom Factory-Repo noch nicht vergebene Nummer), war: ${String(ab)}`);
-  const zaehler = { quellprojekt: 0, factory: 0 };
+  const zaehler = { quellprojekt: 0, factory: 0, factoryLang: 0 };
   let gen = false;
   const stuecke = text.split(/(?<=\n)/);
   const imFence = fenceMaske(stuecke.map((z) => z.replace(/\r?\n$/, "")));
@@ -111,7 +115,8 @@ export function main(argv = process.argv.slice(2), wurzel = WURZEL) {
     if (n === 0) continue;
     summe += n;
     if (a.schreiben) writeFileSync(voll, r.text);
-    console.log(`${pfad}: ${r.quellprojekt}x quellprojekt#, ${r.factory}x factory#`);
+    const pruefen = !a.schreiben && r.factoryLang > 0 ? ` (davon ${r.factoryLang} mit mindestens 3 Ziffern: von Hand prüfen, Quellprojekt-Nummer unter --ab?)` : "";
+    console.log(`${pfad}: ${r.quellprojekt}x quellprojekt#, ${r.factory}x factory#${pruefen}`);
   }
   console.log(`${a.schreiben ? "umgestellt" : "Probelauf (nichts geschrieben)"}: ${summe} Nummern`);
   return 0;
