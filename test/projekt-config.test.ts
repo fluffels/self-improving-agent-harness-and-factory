@@ -5,10 +5,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { altName } from "./support/env-alt";
 import { projektConfig, repoName } from "./support/fremd-config";
+import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -641,8 +642,12 @@ describe("kernEnvNamen und sammleKernEnv", () => {
 describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
-    mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
-    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "arbeitsplatz-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "repo-form.mjs", "relativ-pfad.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    // Die Hülle wird aus den Imports abgeleitet (factory#114), keine Handliste: ein neuer Blatt-Import bricht den Test nicht still.
+    const huelle = importHuelle("scripts/board-lib.mjs", (pfad) => readFileSync(join(WURZEL, pfad), "utf8"));
+    for (const f of huelle) {
+      mkdirSync(dirname(join(d, f)), { recursive: true });
+      copyFileSync(join(WURZEL, f), join(d, f));
+    }
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
