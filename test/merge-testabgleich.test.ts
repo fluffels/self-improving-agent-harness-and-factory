@@ -19,6 +19,18 @@ const M = raw as unknown as {
   formatiere: (v: Verloren[]) => string;
   pruefeMerge: (a: { git: (args: string[]) => string; lies: (p: string) => string | null }) => { code: number; text: string };
 };
+/**
+ * `git` im Temp-Repo mit festen, je Aufruf um eine Sekunde steigenden Commit-Daten: die Prüfung darf nicht von der Wanduhr abhängen (gleiche Sekunde für Basis,
+ * Feature und main, Reihenfolge der Merge-Basis), auch nicht unter Last, wenn die Läufe sich verzögern.
+ */
+let tick = 0;
+const gitMitFestenDaten = (cwd: string) => (args: string[]) => {
+  tick += 1;
+  const datum = new Date(Date.UTC(2030, 0, 1, 0, 0, 0) + tick * 1000).toISOString();
+  return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_AUTHOR_DATE: datum, GIT_COMMITTER_DATE: datum } });
+};
+/** Jeder Test legt ein Temp-Repo an und startet mehrere `git`-Prozesse (die CLI-Tests dazu `node`): im vollen Lauf unter Last (1 bis 2,6 s gemessen) reicht der Standard von 5 s nicht sicher. */
+const REPO_TIMEOUT_MS = 30_000;
 const quelle = (...titel: string[]) => titel.map((t) => `test("${t}", () => {});`).join("\n");
 
 describe("testTitel", () => {
@@ -76,13 +88,12 @@ describe("verloreneTests", () => {
   });
 });
 
-describe("pruefeMerge gegen ein echtes Temp-Repo", () => {
+describe("pruefeMerge gegen ein echtes Temp-Repo", { timeout: REPO_TIMEOUT_MS }, () => {
   const ordner: string[] = [];
   afterEach(() => {
     for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
   });
-  const git = (cwd: string) => (args: string[]) =>
-    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const git = gitMitFestenDaten;
   const schreibe = (root: string, pfad: string, text: string) => {
     mkdirSync(dirname(join(root, pfad)), { recursive: true });
     writeFileSync(join(root, pfad), text);
@@ -260,13 +271,12 @@ describe("Wächter-Lauf-Hinweis", () => {
   });
 });
 
-describe("pruefeMerge nennt den Wächter-Lauf", () => {
+describe("pruefeMerge nennt den Wächter-Lauf", { timeout: REPO_TIMEOUT_MS }, () => {
   const ordner: string[] = [];
   afterEach(() => {
     for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
   });
-  const gitIn = (cwd: string) => (args: string[]) =>
-    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const gitIn = gitMitFestenDaten;
   /** Basis mit docs/a.md und docs/b.md; main ändert die Datei `mainDatei`, der Feature-Branch `featureDatei` (konfliktfrei, wenn verschieden). */
   const merge = (featureDatei: string, mainDatei: string) => {
     const root = mkdtempSync(join(tmpdir(), "merge-abgleich-w-"));
