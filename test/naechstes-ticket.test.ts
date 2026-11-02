@@ -10,8 +10,11 @@ import * as refs from "../scripts/ticket-refs.mjs";
 import * as namenRoh from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ladeCfg from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as wRaw from "../scripts/worktree-aufraeumen.mjs";
 import { FREMD, projektConfig, FREMD_OWNER, FREMD_NAMEN } from "./support/fremd-config";
 
+const W = wRaw as unknown as { belegungJeRepo: (orte: { name: string; cwd?: string }[], git: (args: string[], cwd?: string) => string) => { refs: string[]; worktrees: string[] } };
 const ticketNamen = (namenRoh as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 
 const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
@@ -1288,5 +1291,57 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(e.repo).toBe(B.REPO);
     expect(e.boardRepos).toEqual({ produkt: L.boardRepo(B.boardFuerRolle("produkt"), { repo: B.REPO }), factory: L.boardRepo(B.boardFuerRolle("factory"), { repo: B.REPO }) });
     expect(typeof e.fremdStatus).toBe("function");
+  });
+});
+
+describe("Arbeitsplatz: Belegung über alle Repos (#88, AK5)", () => {
+  type Ort = { name: string; cwd?: string };
+  const A: Ort = { name: "a", cwd: "/w/a" };
+  const B: Ort = { name: "b", cwd: "/w/b" };
+  /** Fake-git nach `cwd`: Worktree-Pfade und Refs je Repo; `scheitert` wirft wie ein kaputter Pfad. */
+  const gitVon = (welt: Record<string, { worktrees?: string[]; refs?: string[]; scheitert?: boolean }>) => (args: string[], cwd?: string) => {
+    const w = welt[cwd ?? ""] ?? {};
+    if (w.scheitert) throw new Error(`fatal: cannot change to '${cwd}'`);
+    if (args[0] === "for-each-ref") return (w.refs ?? []).join("\n");
+    return [`worktree ${cwd}`, ...(w.worktrees ?? []).map((p) => `worktree ${p}`)].join("\n\n");
+  };
+  const belegung = (welt: Parameters<typeof gitVon>[0]) => W.belegungJeRepo([A, B], gitVon(welt));
+
+  test("ein Worktree <wt><nr> in Repo B belegt die Nummer, auch wenn Repo A keinen hat: die Auswahl überspringt sie und nimmt das nächste Item", () => {
+    const { refs, worktrees } = belegung({ [A.cwd ?? ""]: {}, [B.cwd ?? ""]: { worktrees: [`/w/.claude/worktrees/b/${WTP}88`] } });
+    const r = frei([item(88), item(89)], { refs, worktrees });
+    expect(r.ticket?.nr).toBe(89);
+    expect(r.uebersprungen.map((u) => u.nr)).toEqual([88]);
+  });
+
+  test("ein Branch in Repo A belegt die Nummer ebenfalls (Vereinigung, nicht nur das erste Repo)", () => {
+    const { refs, worktrees } = belegung({ [A.cwd ?? ""]: { refs: [`origin/${BRP}88-x`] }, [B.cwd ?? ""]: {} });
+    expect(frei([item(88), item(89)], { refs, worktrees }).ticket?.nr).toBe(89);
+  });
+
+  test("Negativfall: ohne Belegung in einem der Repos bleibt 88 frei", () => {
+    const { refs, worktrees } = belegung({ [A.cwd ?? ""]: {}, [B.cwd ?? ""]: { worktrees: [`/w/.claude/worktrees/b/${WTP}90`] } });
+    expect(frei([item(88), item(89)], { refs, worktrees }).ticket?.nr).toBe(88);
+  });
+
+  test("Negativfall: scheitert git in einem Repo, wirft belegungJeRepo mit Repo-Name und Fix-Zeile statt still weiterzumachen", () => {
+    expect(() => belegung({ [A.cwd ?? ""]: {}, [B.cwd ?? ""]: { scheitert: true } })).toThrow(/Repo b \(\/w\/b\)[\s\S]*\nFix: Pfad in arbeitsplatz\.repos prüfen/);
+  });
+
+  test("echteIo: ein kaputter Block arbeitsplatz bricht den Start vorab mit Fix-Zeile ab (Exit 2 über configFehler)", () => {
+    const echte = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => unknown }).echteIo;
+    expect(() => echte({ config: { ...FREMD, arbeitsplatz: { wurzel: ".", repos: [] } }, messfensterLader: () => () => ({ closedAt: null, n: 0 }) })).toThrow(/arbeitsplatz\.repos[\s\S]*Fix:/);
+  });
+  test("belegungAusGit (die git-Seite von ladeBelegung): fetch je Repo mit dessen cwd und fail-open, danach Belegung aus allen Repos", () => {
+    const aufrufe: string[] = [];
+    const git = (args: string[], cwd?: string) => {
+      aufrufe.push(`${cwd}: ${args[0]}`);
+      if (args[0] === "fetch" && cwd === "/w/a") throw new Error("kein Netz");
+      if (args[0] === "for-each-ref") return "";
+      return [`worktree ${cwd}`, ...(cwd === "/w/b" ? [`worktree /w/.claude/worktrees/b/${WTP}88`] : [])].join("\n\n");
+    };
+    const r = (N as unknown as { belegungAusGit: (o: { name: string; cwd?: string }[], g: typeof git) => { refs: string[]; worktrees: string[] } }).belegungAusGit([A, B], git);
+    expect(aufrufe.filter((a) => a.endsWith("fetch"))).toEqual(["/w/a: fetch", "/w/b: fetch"]);
+    expect(r.worktrees).toContain(`/w/.claude/worktrees/b/${WTP}88`);
   });
 });

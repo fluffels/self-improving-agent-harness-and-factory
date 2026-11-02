@@ -34,6 +34,7 @@ const M = rawLock as unknown as {
 };
 const L = rawLib as unknown as {
   lockVerzeichnis: (o: { gemeinsam: string; praefixWorktree: string }) => string;
+  lockVerzeichnisFuer: (o: { aufloesung: { betriebsart: string; wurzel: string }; praefixWorktree: string; gemeinsam: () => string }) => string;
   parseLock: (t: string) => Lock | null;
   lebenszeichenMs: (l: Lock | null) => number | null;
   oeffentlicheSicht: (l: Lock) => Lock;
@@ -103,6 +104,16 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
     assert.equal(L.lockVerzeichnis({ gemeinsam: "/g", praefixWorktree: "zd-" }).replace(/\\/g, "/"), "/g/zd-locks");
   });
 
+  test("lockVerzeichnisFuer: im Arbeitsplatz <wurzel>/.claude/<wt>locks und der git-common-dir-Thunk läuft nie (#88), eingebettet wie lockVerzeichnis", () => {
+    const wirft = () => {
+      throw new Error("kein Repo im Arbeitsverzeichnis");
+    };
+    const ap = L.lockVerzeichnisFuer({ aufloesung: { betriebsart: "arbeitsplatz", wurzel: "/w" }, praefixWorktree: WTP, gemeinsam: wirft });
+    assert.equal(ap.replace(/\\/g, "/"), `/w/.claude/${WTP}locks`);
+    const ein = L.lockVerzeichnisFuer({ aufloesung: { betriebsart: "eingebettet", wurzel: "/w" }, praefixWorktree: WTP, gemeinsam: () => "/g" });
+    assert.equal(ein.replace(/\\/g, "/"), `/g/${WTP}locks`);
+    assert.throws(() => L.lockVerzeichnisFuer({ aufloesung: { betriebsart: "eingebettet", wurzel: "/w" }, praefixWorktree: WTP, gemeinsam: wirft }), /kein Repo/);
+  });
   test("lockDir der echten Deps liegt im gemeinsamen git-Verzeichnis unter <praefixe.worktree>locks", () => {
     echt ??= M.echteDeps({ config: FREMD });
     assert.ok(String(echt.lockDir).replace(/\\/g, "/").endsWith(`/${WTP}locks`));
