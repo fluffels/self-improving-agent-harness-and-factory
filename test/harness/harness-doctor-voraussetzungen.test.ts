@@ -27,7 +27,7 @@ import * as rawDoctor from "../../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/besitz-lib.mjs";
 
-const lib = rawLib as unknown as { istWorkflowEinheit(e: { pfad: string; block?: string; schluessel?: string }): boolean };
+const lib = rawLib as unknown as { istWorkflowEinheit: (e: { pfad: string; block?: string; schluessel?: string }) => boolean };
 
 interface Vor { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null }
 interface Doctor {
