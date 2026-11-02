@@ -82,6 +82,15 @@ describe("manifestAusText", () => {
   });
 });
 
+describe("pflichtChecksFehler nutzt istWorkflowEinheit", () => {
+  const { pflichtChecksFehler } = besitzRoh as unknown as { pflichtChecksFehler: (e: E & { pflichtChecks?: unknown }) => string[] };
+  test("an einer Workflow-Datei gültig, an jeder anderen Einheit ein Fehler", () => {
+    expect(pflichtChecksFehler({ pfad: ".github/workflows/ci.yml", pflichtChecks: ["verify"] })).toEqual([]);
+    expect(pflichtChecksFehler({ pfad: "scripts/a.mjs", pflichtChecks: ["verify"] })).toHaveLength(1);
+    expect(pflichtChecksFehler({ pfad: ".github/workflows/ci.yml", block: "k", pflichtChecks: ["verify"] })).toHaveLength(1);
+  });
+});
+
 describe("istWorkflowEinheit", () => {
   test("nur eine ganze Workflow-Datei im Workflow-Ordner", () => {
     expect(istWorkflowEinheit({ pfad: ".github/workflows/ci.yml" })).toBe(true);
