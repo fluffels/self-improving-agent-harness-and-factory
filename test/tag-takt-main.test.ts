@@ -1,4 +1,7 @@
 /* main() des Tag-Takts über injizierte Nähte (#101 L23, Muster test/secret-inbox.test.ts): Trockenlauf, Anlegen, git- und gh-Fehler. */
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
@@ -110,5 +113,25 @@ describe("tag-takt main", () => {
     const a = aufbau({ start: { code: 2 } });
     expect(await T.main(["--bogus"], a.deps)).toBe(2);
     expect(a.text).toEqual([]);
+  });
+});
+
+describe("manifestLaden (Standard-Lader)", () => {
+  const laden = (raw as unknown as { manifestLaden: (wurzel: string) => unknown }).manifestLaden;
+  const wurzel = (inhalt?: string): string => {
+    const w = mkdtempSync(join(tmpdir(), "tt-"));
+    mkdirSync(join(w, ".factory"));
+    if (inhalt !== undefined) writeFileSync(join(w, ".factory", "besitz.json"), inhalt);
+    return w;
+  };
+  it("liefert das Manifest unter der Wurzel", () => {
+    expect(laden(wurzel('{"eintraege":[]}'))).toEqual({ eintraege: [] });
+  });
+  it.each([
+    [undefined, /\.factory\/besitz\.json fehlt/],
+    ["kein json", /kein gültiges JSON/],
+    ['{"version":1}', /keine Liste 'eintraege'/],
+  ])("wirft die einheitliche Meldung bei %j", (inhalt, muster) => {
+    expect(() => laden(wurzel(inhalt))).toThrow(muster);
   });
 });

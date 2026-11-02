@@ -18,6 +18,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
@@ -319,15 +320,16 @@ export function lauf({ io, trocken = false }) {
 
 const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
-/** Standard-Lader des Manifests: wirft die einheitliche Meldung (`manifestAusText`), wenn es fehlt oder kaputt ist. */
-function manifestLaden() {
-  const g = manifestAusText(existsSync(MANIFEST) ? readFileSync(MANIFEST, "utf8") : null);
+/** Standard-Lader des Manifests unter `wurzel`: wirft die einheitliche Meldung (`manifestAusText`), wenn es fehlt oder kaputt ist. */
+export function manifestLaden(wurzel) {
+  const voll = join(wurzel, ...MANIFEST.split("/"));
+  const g = manifestAusText(existsSync(voll) ? readFileSync(voll, "utf8") : null);
   if (g.fehler !== undefined) throw new Error(g.text);
   return g.manifest;
 }
 
 /** Einstieg. `deps` (Tests): `start`, `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = manifestLaden } = {}) {
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel) } = {}) {
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;

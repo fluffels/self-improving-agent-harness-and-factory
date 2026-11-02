@@ -168,6 +168,25 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
       else process.env[ALT] = vorher;
     }
   });
+  test.each([
+    [undefined, /besitz\.json nicht lesbar \(\.factory\/besitz\.json fehlt\)/],
+    ["kein json", /nicht lesbar \(\.factory\/besitz\.json ist kein gültiges JSON\)/],
+    ['{"version":1}', /nicht lesbar \(\.factory\/besitz\.json hat keine Liste 'eintraege'\)/],
+  ])("pruefLauf meldet ein unlesbares Manifest (%j) mit der einheitlichen Meldung, ein gültiges nicht", (inhalt, muster) => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    const lauf = () => (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { befund?: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null }).ergebnis.map((e) => e.befund ?? "").join("\n");
+    if (inhalt !== undefined) {
+      mkdirSync(join(root, ".factory"));
+      writeFileSync(join(root, ".factory", "besitz.json"), inhalt);
+    }
+    assert.match(lauf(), muster);
+    mkdirSync(join(root, ".factory"), { recursive: true });
+    writeFileSync(join(root, ".factory", "besitz.json"), '{"eintraege":[]}');
+    assert.doesNotMatch(lauf(), /besitz\.json nicht lesbar/);
+  });
   test("pruefLauf ohne umgebung (Wochenlauf) prüft den Altnamen nicht, auch bei gesetzter Prozess-Umgebung", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);
