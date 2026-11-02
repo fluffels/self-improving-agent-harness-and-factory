@@ -237,6 +237,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/kopf-items-doku.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/harness/berechtigungen-kern.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

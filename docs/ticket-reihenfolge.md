@@ -183,7 +183,6 @@ Ein Prüfpunkt mit Datum („nach 4 Wochen Schwelle prüfen“) steht als Eintra
 - **Ansehen ohne Änderung:** `node scripts/wiedervorlage.mjs --dry-run`.
 
 ## Audit-Einordnung (#1628)
-> **Stand im Factory-Repo:** Workflow und Skript fehlen hier noch (Rest des Exports, Zeile in factory#97); der Abschnitt beschreibt den Ablauf für Projekte, die sie führen.
 
 Der Workflow `audit-einordnung.yml` ruft täglich `scripts/audit-einordnung.mjs`: voller `npm audit` (inkl. Dev), `npm audit --omit=dev` (ergibt „ausgeliefert“) und die offenen Dependabot-Alerts (bei 403 nur eine Warnung). Dieselbe GHSA aus mehreren Quellen ist ein Befund. Bekannt, also still, ist ein Advisory, dessen GHSA in einer offenen `- [ ] Audit:`-Zeile eines Harness-Sammeltickets, in einem Eintrag `audit-<ghsa kleingeschrieben>` der [Wiedervorlagen](#wiedervorlage-1628) (bewusst akzeptiert) oder im Titel eines offenen `🔒 Security:`-Tickets steht. Der Rest wird eingeordnet:
 

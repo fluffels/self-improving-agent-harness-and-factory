@@ -5,7 +5,7 @@ description: Gestaffelter Mehr-Perspektiven-Review des Ticket-Diffs: erst `npm r
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
 
-**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind nicht portiert. Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md). Der gesperrte Codex-Einstieg aus `AGENTS.md` gilt auch hier.
+**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind für Codex nicht registriert oder nicht als wirksam nachgewiesen (Grenze bis zur Freigabe des Codex-Adapters). Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md). Der gesperrte Codex-Einstieg aus `AGENTS.md` gilt auch hier.
 
 Ein **gestaffelter** Review des aktuellen Ticket-Diffs — Vorbild sind produktiv eingesetzte KI-Entwicklungspipelines (quellprojekt#532). Die Idee: **erst die billigen, verlässlichen deterministischen Gates, dann die teuren LLM-Lenses — und die Lenses nur, wenn die Gates grün sind.** Das gibt zuerst das sicherste Feedback und verbrennt keine Tokens auf einem Diff, der schon an einem Gate scheitert.
 

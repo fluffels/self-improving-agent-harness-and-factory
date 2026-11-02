@@ -74,7 +74,7 @@ Geplante Vergleichsprobe: zwei separat konfigurierte, harmlose Elternsessions mi
 
 ## Sicherheits- und Hook-Abbildung
 
-Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **nicht portiert oder als wirksam nachgewiesen**:
+Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **für Codex nicht registriert oder nicht als wirksam nachgewiesen** (Grenze bis zur Freigabe des Codex-Adapters):
 
 | Bestehender Schutz | Codex-Stand |
 |---|---|
