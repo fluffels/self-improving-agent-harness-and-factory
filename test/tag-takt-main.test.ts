@@ -30,20 +30,9 @@ function aufbau(o: { git?: (a: string[]) => string; ghText?: (a: string[]) => st
       json: () => [],
     },
     log: (s: string) => log.push(s), err: (s: string) => log.push(s),
-    git, wurzel: "Z:/gibt-es-nicht", ladeManifest: () => MANIFEST,
+    git, wurzel: "Z:/gibt-es-nicht", ladeManifest: () => MANIFEST, env: { PROJECT_TOKEN: "pt" },
   };
   return { deps, log, text, platziert };
-}
-
-async function mitToken<R>(f: () => Promise<R>): Promise<R> {
-  const alt = process.env.PROJECT_TOKEN;
-  process.env.PROJECT_TOKEN = "pt";
-  try {
-    return await f();
-  } finally {
-    if (alt === undefined) delete process.env.PROJECT_TOKEN;
-    else process.env.PROJECT_TOKEN = alt;
-  }
 }
 
 describe("tag-takt main", () => {
@@ -56,7 +45,7 @@ describe("tag-takt main", () => {
   });
   it("anlegen: Ticket im Ziel-Repo mit Ziel-Token und Label, danach oben einsortiert, Exit 0", async () => {
     const a = aufbau();
-    expect(await mitToken(() => T.main([], a.deps))).toBe(0);
+    expect(await T.main([], a.deps)).toBe(0);
     expect(a.text).toHaveLength(1);
     const { args, opt } = a.text[0];
     expect(args.slice(0, 5)).toEqual(["issue", "create", "--repo", "o/ziel", "--title"]);
@@ -64,6 +53,24 @@ describe("tag-takt main", () => {
     expect(opt).toEqual({ token: "zt" });
     expect(a.platziert).toEqual([["77", "tag", "pt", "o/ziel"]]);
     expect(a.log.join("\n")).toContain("Tag-Ticket angelegt: #77");
+  });
+  it("Token kommt aus dem injizierten env, nicht aus process.env (factory#114 L9b)", async () => {
+    const a = aufbau();
+    const alt = process.env.PROJECT_TOKEN;
+    delete process.env.PROJECT_TOKEN;
+    try {
+      expect(await T.main([], a.deps)).toBe(0);
+      expect(a.platziert).toEqual([["77", "tag", "pt", "o/ziel"]]);
+      process.env.PROJECT_TOKEN = "aus-prozess";
+      const b = aufbau();
+      b.deps.env = {};
+      expect(await T.main([], b.deps)).toBe(0);
+      expect(b.platziert.map((p) => p[2])).not.toContain("aus-prozess");
+      expect(b.log.join("\n")).toContain("PROJECT_TOKEN fehlt");
+    } finally {
+      if (alt === undefined) delete process.env.PROJECT_TOKEN;
+      else process.env.PROJECT_TOKEN = alt;
+    }
   });
   it("offenes Tag-Ticket mit altem Body: PATCH mit Titel und Body im Ziel-Repo, Exit 0", async () => {
     const a = aufbau();
@@ -80,7 +87,7 @@ describe("tag-takt main", () => {
   it("Einsortieren wirft: Fehlermeldung und Exit 1", async () => {
     const a = aufbau();
     (a.deps.start as () => Promise<{ libs: Record<string, unknown> }>) = () => Promise.resolve({ config: FREMD, libs: { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", zielToken: () => "zt", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [], platziereOben: () => { throw new Error("Board kaputt"); } } } as never);
-    expect(await mitToken(() => T.main([], a.deps))).toBe(1);
+    expect(await T.main([], a.deps)).toBe(1);
     expect(a.log.join("\n")).toContain("Einsortieren von #77 an die Board-Spitze fehlgeschlagen");
   });
   it("git-Fehler beim Lesen: ::error:: und Exit 1, kein Schreibaufruf", async () => {
@@ -92,7 +99,7 @@ describe("tag-takt main", () => {
   });
   it("gh-Fehler beim Anlegen: ::error:: und Exit 1", async () => {
     const a = aufbau({ ghText: () => { throw new Error("HTTP 403"); } });
-    expect(await mitToken(() => T.main([], a.deps))).toBe(1);
+    expect(await T.main([], a.deps)).toBe(1);
     expect(a.log.join("\n")).toContain("::error::Tag-Ticket (anlegen) nicht geschrieben");
   });
   it("Start-Fehler (Aufruf/Config): der Code des Starts wird durchgereicht", async () => {
