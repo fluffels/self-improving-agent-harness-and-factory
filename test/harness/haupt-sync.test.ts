@@ -884,3 +884,156 @@ describe("--danach: ein Folge-Hook läuft erst nach dem Sync (#1568)", { timeout
     expect(args("SessionEnd").some((a) => a.some((x) => x.endsWith("/scripts/langfuse-abgleich-hook.mjs")))).toBe(true);
   });
 });
+
+describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 60_000 }, () => {
+  type Zeile = { aktion: string; hinter: number; gepullt: boolean; notiz: string; basis: string; zweig?: string; repo?: string; branch: string };
+  const AP = raw as unknown as {
+    syncZiel: (dir: string, o?: { lade?: (d: string) => unknown }) => { aufloesung: { repos: { name: string; pfad: string }[] } | null; fehler?: string };
+    fuehreArbeitsplatzSyncAus: (a: unknown, deps?: object) => Zeile[];
+    exitCodeFuer: (e: Partial<Zeile>) => number;
+    baueText: (e: Partial<Zeile>, o?: { sitzungsbasis?: boolean }) => string;
+  };
+  const block = { wurzel: ".", repos: [{ name: "a", pfad: "a" }, { name: "b", pfad: "b", standardzweig: "develop" }] };
+
+  /** Nicht-Git-Wurzel mit zwei Klonen (a auf main, b auf develop), je ein bare Remote und ein zweiter Klon, der Commits schiebt. */
+  function aufbauAp() {
+    const wurzel = mkdtempSync(join(tmpdir(), "haupt-sync-ap-"));
+    const repoMit = (name: string, zweig: string) => {
+      const remote = join(wurzel, `${name}-remote.git`);
+      mkdirSync(remote);
+      git(remote, "init", "--bare", `--initial-branch=${zweig}`);
+      const klon = join(wurzel, name);
+      git(wurzel, "clone", remote, klon);
+      git(klon, "checkout", "-B", zweig);
+      writeFileSync(join(klon, "a.txt"), "1\n");
+      git(klon, "add", "-A");
+      git(klon, "commit", "-m", "start");
+      git(klon, "push", "-u", "origin", zweig);
+      const zweit = join(wurzel, `${name}-zweit`);
+      git(wurzel, "clone", remote, zweit);
+      git(zweit, "checkout", zweig);
+      const schiebe = (datei: string) => {
+        writeFileSync(join(zweit, datei), "x\n");
+        git(zweit, "add", "-A");
+        git(zweit, "commit", "-m", `aendere ${datei}`);
+        git(zweit, "push", "origin", zweig);
+      };
+      return { klon, schiebe };
+    };
+    const a = repoMit("a", "main");
+    const b = repoMit("b", "develop");
+    mkdirSync(join(wurzel, ".factory"));
+    writeFileSync(join(wurzel, ".factory", "projekt.json"), JSON.stringify({ arbeitsplatz: block }));
+    return { wurzel, a, b, aufloesung: () => AP.syncZiel(wurzel).aufloesung, aufraeumen: () => rmSync(wurzel, { recursive: true, force: true }) };
+  }
+
+  test("A auf main liegt zurück und wird gehoben, B mit standardzweig develop über origin/develop; keine Sitzungsbasis, Text mit Repo-Name und Zweig", () => {
+    const t = aufbauAp();
+    try {
+      t.a.schiebe("neu-a.txt");
+      t.b.schiebe("neu-b.txt");
+      const [ra, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      expect([ra.repo, ra.gepullt, ra.zweig, ra.basis]).toEqual(["a", true, "main", ""]);
+      expect([rb.repo, rb.gepullt, rb.zweig, rb.basis]).toEqual(["b", true, "develop", ""]);
+      expect(git(t.a.klon, "rev-parse", "HEAD")).toBe(git(t.a.klon, "rev-parse", "origin/main"));
+      expect(git(t.b.klon, "rev-parse", "HEAD")).toBe(git(t.b.klon, "rev-parse", "origin/develop"));
+      expect(AP.baueText(rb)).toContain("Repo b: develop per Fast-Forward um 1 Commits auf origin/develop gehoben.");
+      expect(AP.baueText(rb)).not.toContain("Sitzungsbasis");
+      expect(AP.exitCodeFuer(ra) + AP.exitCodeFuer(rb)).toBe(0);
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("B auf einem fremden Branch: melden (nicht angefasst) und Exit 1 des strengen Modus; A wird trotzdem gehoben", () => {
+    const t = aufbauAp();
+    try {
+      t.a.schiebe("neu-a.txt");
+      t.b.schiebe("neu-b.txt");
+      git(t.b.klon, "checkout", "-b", "feature/x");
+      const vorher = git(t.b.klon, "rev-parse", "HEAD");
+      const [ra, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      expect(ra.gepullt).toBe(true);
+      expect(rb.aktion).toBe("melden");
+      expect(AP.exitCodeFuer(rb)).toBe(1);
+      expect(git(t.b.klon, "rev-parse", "HEAD")).toBe(vorher);
+      expect(AP.baueText(rb)).toContain("Repo b: 1 Commits hinter origin/develop (Branch feature/x, nicht develop (nicht angefasst))");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("Negativfall: ein fehlender Repo-Pfad ist eine Notiz mit Fix-Zeile und Exit 1, das andere Repo wird trotzdem gehoben", () => {
+    const t = aufbauAp();
+    try {
+      t.a.schiebe("neu-a.txt");
+      rmSync(t.b.klon, { recursive: true, force: true });
+      const [ra, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      expect(ra.gepullt).toBe(true);
+      expect(rb.notiz).toMatch(/fehlt, nichts synchronisiert\. Fix: Pfad in arbeitsplatz\.repos prüfen/);
+      expect(AP.exitCodeFuer(rb)).toBe(1);
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("Negativfall: ein Repo-Pfad, der kein Git-Repo ist, endet mit Fix-Zeile in der Notiz statt mit einem Abbruch", () => {
+    const t = aufbauAp();
+    try {
+      rmSync(join(t.b.klon, ".git"), { recursive: true, force: true });
+      const [, rb] = AP.fuehreArbeitsplatzSyncAus(t.aufloesung());
+      expect(rb.notiz).toMatch(/Fehler \(.*nichts verändert\. Fix: Pfad in arbeitsplatz\.repos prüfen \(git -C .*b status\)/);
+      expect(AP.exitCodeFuer(rb)).toBe(1);
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("CLI: in der Nicht-Git-Wurzel hebt --text --streng beide Repos und endet mit Exit 0; mit einem fremden Branch in B Exit 1 und STOPP", () => {
+    const t = aufbauAp();
+    try {
+      const skript = fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url));
+      const lauf = () => {
+        try {
+          return { code: 0, out: execFileSync(process.execPath, [skript, "--text", "--streng"], { encoding: "utf8", env: sauberEnv({ CLAUDE_PROJECT_DIR: t.wurzel }), stdio: ["ignore", "pipe", "pipe"] }) };
+        } catch (e) {
+          const x = e as { status: number; stdout: string };
+          return { code: x.status, out: x.stdout };
+        }
+      };
+      t.a.schiebe("neu-a.txt");
+      const ok = lauf();
+      expect(ok.code, ok.out).toBe(0);
+      expect(ok.out).toContain("Repo a: main per Fast-Forward");
+      expect(ok.out).not.toMatch(/Sitzungsbasis|Stand vor diesem Sync/);
+      git(t.b.klon, "checkout", "-b", "feature/x");
+      t.b.schiebe("neu-b.txt");
+      const stopp = lauf();
+      expect(stopp.code).toBe(1);
+      expect(stopp.out).toContain("Repo b:");
+      expect(stopp.out).toContain("STOPP");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("syncZiel: ohne Block eingebettet, mit Block Arbeitsplatz, kaputter Block ergibt fehler mit Fix, nicht ladbare Config ergibt eingebettet (fail-open)", () => {
+    expect(AP.syncZiel("/x", { lade: () => ({ repo: "o/r" }) })).toEqual({ aufloesung: null });
+    expect(AP.syncZiel("/x", { lade: () => { throw new Error("nicht lesbar"); } })).toEqual({ aufloesung: null });
+    const ap = AP.syncZiel("/x", { lade: () => ({ arbeitsplatz: block }) });
+    expect(ap.aufloesung?.repos.map((r) => r.name)).toEqual(["a", "b"]);
+    const kaputt = AP.syncZiel("/x", { lade: () => ({ arbeitsplatz: { wurzel: ".", repos: [] } }) });
+    expect(kaputt.aufloesung).toBeUndefined();
+    expect(kaputt.fehler).toMatch(/arbeitsplatz\.repos.* Fix: /);
+    expect(kaputt.fehler).not.toContain("\n");
+  });
+
+  test("entscheideSync und exitCodeFuer vergleichen gegen den Zweig des Repos, ohne Angabe gegen main", () => {
+    const e = raw as unknown as { entscheideSync: (e: object) => { aktion: string; grund: string } };
+    const ein = { istLinkedWorktree: false, sauber: true, hinter: 2, vor: 0 };
+    expect(e.entscheideSync({ ...ein, branch: "develop", zweig: "develop" }).aktion).toBe("pull");
+    expect(e.entscheideSync({ ...ein, branch: "main", zweig: "develop" }).aktion).toBe("melden");
+    expect(AP.exitCodeFuer({ branch: "develop", zweig: "develop" })).toBe(0);
+    expect(AP.exitCodeFuer({ branch: "develop" })).toBe(1);
+  });
+});

@@ -30,7 +30,7 @@ const M = raw as unknown as {
   letzteAktivitaet: (o: { commitMs?: number[]; reflogMs?: number[]; dateiMs?: number[]; nodeModulesMs?: number | null }) => number | null;
   aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; fehler?: string };
   fuehreAus: (argv: string[], deps: Deps) => Erg;
-  echteDeps: (o?: { config?: unknown }) => Deps;
+  echteDeps: (o?: { config?: unknown; basis?: string }) => Deps;
   ALTLAST_MS: number;
   gehoertZu: (lock: Record<string, unknown> | null, nonce: string) => boolean;
   aufzuraeumen: (o: { eintraege: { name: string; mtime: number }[]; jetzt: number }) => string[];
@@ -770,5 +770,69 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
     assert.equal(M.entscheidePruefung({ ...o, nonce: "b", gestopptOffen: true } as typeof o), "fremd");
     assert.equal(M.entscheidePruefung({ ...o, nonce: null, gestopptOffen: true } as unknown as typeof o), "aktiv");
     assert.equal(M.entscheidePruefung({ ...o, vorhanden: false, gestopptOffen: true } as typeof o), "frei");
+  });
+});
+
+describe("Arbeitsplatz: Belegung über alle Repos und Lock-Ort (#88)", () => {
+  type Ort = { name: string; cwd: string };
+  const A: Ort = { name: "a", cwd: "/w/a" };
+  const B: Ort = { name: "b", cwd: "/w/b" };
+  /** Gefälschtes git je Repo (`cwd`): Refs und Worktrees je Ort, `scheitert` lässt ein Repo wie einen kaputten Pfad antworten. */
+  type JeRepo = Record<string, { refs?: string[]; worktrees?: string[]; scheitert?: boolean }>;
+  const apDeps = (jeRepo: JeRepo): Deps => ({
+    ...deps(),
+    orte: [A, B],
+    git: (args: string[], cwd?: string) => {
+      const a = args.join(" ");
+      const r = jeRepo[cwd ?? ""] ?? {};
+      if (a.startsWith("fetch")) return "";
+      if (r.scheitert) throw new Error(`fatal: cannot change to '${cwd}'\nzweite Zeile`);
+      if (a.startsWith("for-each-ref")) return (r.refs ?? []).join("\n");
+      if (a.startsWith("worktree list")) return [`worktree ${cwd}`, ...(r.worktrees ?? []).map((w) => `worktree ${w}`)].join("\n\n");
+      if (a.startsWith("log -1")) return "0";
+      throw new Error(`unerwartet: ${a}`);
+    },
+  });
+
+  test("ein Worktree <wt><nr> nur in Repo B belegt die Nummer (Exit 4), ohne ihn in Repo A", () => {
+    const r = M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: { worktrees: [`/w/.claude/worktrees/b/${WTP}88`] } }));
+    assert.equal(r.code, 4);
+    assert.match(r.err, /Worktree oder Branch/);
+    assert.equal(existsSync(join(dir, `${WTP}locks`, "88.json")), false);
+  });
+
+  test("ein Branch <br><nr>-* nur in Repo B belegt die Nummer (Exit 4)", () => {
+    const r = M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: { refs: [`origin/${BRP}88-x`] } }));
+    assert.equal(r.code, 4);
+  });
+
+  test("eine andere Nummer in Repo B belegt 88 nicht: Claim gewinnt", () => {
+    const r = M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: { worktrees: [`/w/.claude/worktrees/b/${WTP}89`], refs: [`${BRP}89-x`] } }));
+    assert.equal(r.code, 0);
+  });
+
+  test("Negativfall: scheitert git in Repo B, bricht der Lauf mit Repo-Name und Fix-Zeile ab (Exit 2, kein Lock)", () => {
+    const r = M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: { scheitert: true } }));
+    assert.equal(r.code, 2);
+    assert.match(r.err, /Repo b \(\/w\/b\)/);
+    assert.match(r.err, /fatal: cannot change to/);
+    assert.match(r.err, /Fix: Pfad in arbeitsplatz\.repos prüfen/);
+    assert.doesNotMatch(r.err, /zweite Zeile/);
+    assert.equal(existsSync(join(dir, `${WTP}locks`, "88.json")), false);
+  });
+
+  test("echteDeps im Arbeitsplatz: der Lock liegt unter <wurzel>/.claude/<wt>locks, ohne git-common-dir, und die Orte tragen den Repo-Pfad", () => {
+    const wurzel = join(dir, "ap").split("\\").join("/");
+    const config = { ...FREMD, arbeitsplatz: { wurzel, repos: [{ name: "web", pfad: "web" }, { name: "api", pfad: "dienste/api" }] } };
+    const d = M.echteDeps({ config, basis: dir }) as { lockDir: string; orte: { name: string; cwd: string }[] };
+    assert.equal(d.lockDir, join(wurzel, ".claude", `${WTP}locks`));
+    assert.deepEqual(d.orte.map((o) => [o.name, o.cwd]), [["web", `${wurzel}/web`], ["api", `${wurzel}/dienste/api`]]);
+  });
+
+  test("echteDeps eingebettet: ein Ort ohne cwd, der Lock im git-common-dir (unverändert)", () => {
+    const d = M.echteDeps({ config: FREMD }) as { lockDir: string; orte: { cwd?: string }[] };
+    assert.equal(d.orte.length, 1);
+    assert.equal(d.orte[0].cwd, undefined);
+    assert.match(d.lockDir.split("\\").join("/"), new RegExp(`/${WTP}locks$`));
   });
 });

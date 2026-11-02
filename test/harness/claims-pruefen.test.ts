@@ -35,9 +35,9 @@ const M = raw as unknown as {
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
-  pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown }) => boolean;
+  pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown; worktreeOrdner?: string }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
-  echteDeps: (o?: { config?: unknown }) => { festgefahrenLabel: string; lockDir: string };
+  echteDeps: (o?: { config?: unknown; basis?: string }) => { festgefahrenLabel: string; lockDir: string; orte: { name: string; cwd?: string }[] };
 };
 
 const H = 60 * 60_000;
@@ -741,5 +741,88 @@ describe("echteDeps: Config", () => {
   test("Negativfall: ohne labels.festgefahren bricht echteDeps ab und nennt den Schlüssel", () => {
     const { festgefahren: _weg, ...rest } = AB.labels;
     assert.throws(() => M.echteDeps({ config: { ...AB, labels: rest } }), /labels\.festgefahren/);
+  });
+});
+
+describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
+  const A = { name: "a", cwd: "/w/a", worktreeOrdner: "/w/.claude/worktrees/a" };
+  const B = { name: "b", cwd: "/w/b", worktreeOrdner: "/w/.claude/worktrees/b" };
+  const NR = 88;
+  const WT_B = `${B.worktreeOrdner}/${WTP}${NR}`;
+
+  test("pfadErlaubt mit worktreeOrdner: nur direkt im Ordner des Repos, nie der eines anderen Repos, eine tiefere Ebene, ein Lens-Name oder eine fremde Nummer", () => {
+    const ok = (pfad: string, o: { ordner?: string; nr?: number } = {}) => M.pfadErlaubt({ pfad, hauptcheckout: "/w/a", nr: o.nr ?? NR, namen: NAMEN, worktreeOrdner: o.ordner ?? A.worktreeOrdner });
+    assert.equal(ok(`${A.worktreeOrdner}/${WTP}${NR}`), true);
+    assert.equal(ok(`${B.worktreeOrdner}/${WTP}${NR}`), false, "der Ordner von Repo B zählt für Repo A nicht");
+    assert.equal(ok(`${B.worktreeOrdner}/${WTP}${NR}`, { ordner: B.worktreeOrdner }), true);
+    assert.equal(ok(`${A.worktreeOrdner}/${WTP}${NR}/tief`), false);
+    assert.equal(ok(`${A.worktreeOrdner}/${WTP}${NR}-lens-r1`), false);
+    assert.equal(ok(`${A.worktreeOrdner}/${WTP}${NR}`, { nr: 89 }), false);
+    assert.equal(ok(`/w/a/.claude/worktrees/${WTP}${NR}`), false, "der eingebettete Ort ist im Arbeitsplatz nicht erlaubt");
+  });
+
+  /** Zwei Repos: Repo B führt den Worktree zu #88 (geschlossen, PR gemergt), Repo A hat nichts. `fehlerIn` lässt git in diesem Repo scheitern. */
+  function arbeitsplatzWelt(o: { fehlerIn?: string; worktree?: string } = {}) {
+    const wt = o.worktree ?? WT_B;
+    const b = baue({
+      locks: { [`${NR}.json`]: lock({ nr: NR, erstellt: "2026-10-16T00:10:00.000Z" }) },
+      issues: { [NR]: { state: "CLOSED", prs: [{ number: 5, state: "MERGED", headRefOid: OID }] } },
+    });
+    const aufrufe: string[] = [];
+    let imB = [{ pfad: B.cwd, head: "m1" }, { pfad: wt, head: OID, branch: `${BRP}${NR}-x` }];
+    const block = (w: { pfad: string; head: string; branch?: string }) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n\n`;
+    const git = (args: string[], cwd?: string) => {
+      const a = args.join(" ");
+      aufrufe.push(`${cwd ?? "-"}: ${a}`);
+      if (o.fehlerIn !== undefined && cwd === o.fehlerIn) throw new Error(`fatal: cannot change to '${cwd}'\nzweite Zeile`);
+      if (a === "worktree list --porcelain") return cwd === A.cwd ? block({ pfad: A.cwd, head: "m0" }) : imB.map(block).join("");
+      if (a.startsWith("for-each-ref")) return cwd === B.cwd ? `refs/heads/${BRP}${NR}-x\t${sek("2026-10-16T00:21:00Z")}` : "";
+      if (/^-C \S+ status --porcelain$/.test(a)) return "";
+      const rm = /^worktree remove (\S+)$/.exec(a);
+      if (rm) {
+        imB = imB.filter((w) => w.pfad !== rm[1]);
+        return "";
+      }
+      throw new Error(`unerwartet: ${a}`);
+    };
+    const deps = { ...b.deps, git, orte: [A, B], existiert: (p: string) => imB.some((w) => w.pfad === p) };
+    return { deps, aufrufe, geloescht: b.geloescht };
+  }
+
+  test("ein Ticket mit Worktree nur in Repo B wird gefunden und dort aufgeräumt: worktree remove läuft mit dem cwd von B, dann der Lock", () => {
+    const { deps, aufrufe, geloescht } = arbeitsplatzWelt();
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(r.out.startsWith(`AUFGERAEUMT #${NR}: Worktree ${WT_B}, Lock `), r.out);
+    assert.ok(aufrufe.includes(`${B.cwd}: worktree remove ${WT_B}`), aufrufe.join("\n"));
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove") && !a.startsWith(`${B.cwd}:`)), false, "nie im falschen Repo");
+    assert.deepEqual(geloescht, [`/locks/${NR}.json`]);
+  });
+
+  test("Negativfall: ein Worktree im Ordner von Repo A, den Repo B registriert hat, wird nie entfernt", () => {
+    const { deps, aufrufe, geloescht } = arbeitsplatzWelt({ worktree: `${A.worktreeOrdner}/${WTP}${NR}` });
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /FEHLER #88: Worktree-Pfad liegt nicht unter dem Worktree-Ordner/);
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.deepEqual(geloescht, []);
+  });
+
+  test("Negativfall: scheitert git in Repo B, endet der Lauf mit Exit 2 samt Repo-Name und Fix-Zeile, nichts wird entfernt oder gelöscht", () => {
+    const { deps, aufrufe, geloescht } = arbeitsplatzWelt({ fehlerIn: B.cwd });
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 2);
+    assert.match(r.err, /Repo b \(\/w\/b\)/);
+    assert.match(r.err, /\nFix: Pfad in arbeitsplatz\.repos prüfen/);
+    assert.doesNotMatch(r.err, /zweite Zeile/);
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.deepEqual(geloescht, []);
+  });
+
+  test("echteDeps im Arbeitsplatz: Lock-Ort unter der Wurzel und ein Ort je Repo mit cwd", () => {
+    const AB = { praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "ab" }, labels: { harness: "h", festgefahren: "z", forum: "f", dependabotInbox: "h" } };
+    const d = M.echteDeps({ config: { ...AB, arbeitsplatz: { wurzel: "/ap", repos: [{ name: "web", pfad: "web" }] } }, basis: "/irgendwo" });
+    assert.equal(vorwaerts(d.lockDir).replace(/^[A-Za-z]:/, ""), "/ap/.claude/ab-locks");
+    assert.deepEqual(d.orte.map((o) => [o.name, vorwaerts(o.cwd ?? "").replace(/^[A-Za-z]:/, "")]), [["web", "/ap/web"]]);
   });
 });

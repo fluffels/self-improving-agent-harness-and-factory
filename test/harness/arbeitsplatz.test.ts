@@ -20,8 +20,13 @@ import * as cliRaw from "../../scripts/arbeitsplatz.mjs";
 import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as wRaw from "../../scripts/worktree-aufraeumen.mjs";
 
-type Repo = { name: string; pfad: string; worktreeOrdner: string };
+type Repo = { name: string; pfad: string; worktreeOrdner: string; standardzweig?: string };
+type Ort = { name: string; cwd?: string; standardzweig: string };
+type GitFn = (args: string[], cwd?: string) => string;
+
 type Aufloesung = { betriebsart: string; wurzel: string; repos: Repo[] };
 const L = libRaw as unknown as {
   arbeitsplatzMaengel: (b: unknown, o?: { worktreePraefix?: string }) => string[];
@@ -29,6 +34,12 @@ const L = libRaw as unknown as {
   worktreeBefehl: (o: { aufloesung: Aufloesung; repo: Repo; worktreeName: string; branchName: string }) => string;
   harnessSpuren: (z: string, o?: { dateiMuster?: RegExp }) => { status: string; pfad: string }[];
   istRepoName: (n: unknown) => boolean;
+};
+const L2 = libRaw as unknown as { standardzweigVon: (r: Repo) => string };
+const W = wRaw as unknown as {
+  gitOrteAus: (c: unknown, basis?: string) => { aufloesung: Aufloesung; orte: Ort[] };
+  gitJeRepo: (orte: Ort[], args: string[], git: GitFn) => { ort: Ort; text: string }[];
+  registrierteWorktreesJeRepo: (orte: Ort[], git: GitFn) => { ort: Ort; bloecke: { pfad: string }[] }[];
 };
 const P = pfadRaw as unknown as { istRelativPosix: (p: string) => boolean };
 const C = cliRaw as unknown as {
@@ -398,5 +409,91 @@ describe("Integration mit echtem Git (K3, K5)", { timeout: 120_000 }, () => {
     expect(r.err).not.toMatch(/dist/);
     entfernen(join(web, ".claude"));
     expect(sauber().code, "nur .gitignore (ungetrackt, keine Harness-Datei) und dist/ bleiben").toBe(0);
+  });
+});
+
+describe("Standardzweig je Repo (#88)", () => {
+  const web = (standardzweig: unknown) => mit(repo({ name: "web", pfad: "web", standardzweig }));
+
+  test("gültige Namen: develop, release/1.x, trunk-2", () => {
+    for (const z of ["develop", "release/1.x", "trunk-2", "main"]) expect(web(z), z).toEqual([]);
+  });
+
+  test("ungültige Namen mit Mängeltext: Leerraum, .., .lock-Ende, führender / oder -, leer, Shell-Zeichen, kein String", () => {
+    for (const z of ["a b", "..", "a..b", "x.lock", "/x", "-x", "", "x/", "x;rm", "$(x)", "a//b", "x.", 7, null]) {
+      expect(web(z).join("|"), String(z)).toMatch(/standardzweig .* ist ungültig/);
+    }
+  });
+
+  test("standardzweigVon: ohne Angabe main, sonst der Wert; der Resolver nimmt das Feld nur auf, wenn es gesetzt ist", () => {
+    const a = L.arbeitsplatzAus({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [{ name: "web", pfad: "web", standardzweig: "develop" }, { name: "api", pfad: "api" }] } }, "/basis");
+    expect(a.repos.map((r) => L2.standardzweigVon(r))).toEqual(["develop", "main"]);
+    expect(Object.hasOwn(a.repos[1], "standardzweig")).toBe(false);
+    expect(L2.standardzweigVon(L.arbeitsplatzAus(FREMD, "/proj").repos[0])).toBe("main");
+  });
+
+  test("worktreeBefehl im Arbeitsplatz basiert auf origin/<Standardzweig>, eingebettet bleibt origin/main", () => {
+    const n = N.ticketNamen(FREMD);
+    const ap = L.arbeitsplatzAus({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [{ name: "web", pfad: "web", standardzweig: "develop" }, { name: "api", pfad: "api" }] } }, "/basis");
+    const befehl = (r: Repo) => L.worktreeBefehl({ aufloesung: ap, repo: r, worktreeName: n.worktreeName(7), branchName: n.branchName(7, "x") });
+    expect(befehl(ap.repos[0])).toMatch(/ -b \S+ origin\/develop$/);
+    expect(befehl(ap.repos[1])).toMatch(/ -b \S+ origin\/main$/);
+    const ein = L.arbeitsplatzAus(FREMD, "/proj");
+    expect(L.worktreeBefehl({ aufloesung: ein, repo: { ...ein.repos[0], standardzweig: "develop" }, worktreeName: n.worktreeName(7), branchName: n.branchName(7, "x") })).toMatch(/ origin\/main$/);
+  });
+});
+
+describe("Orte und git je Repo (#88)", () => {
+  const config = { ...FREMD, arbeitsplatz: { wurzel: "/w", repos: [{ name: "a", pfad: "a" }, { name: "b", pfad: "b", standardzweig: "develop" }] } };
+
+  test("gitOrteAus: im Arbeitsplatz ein Ort je Repo mit cwd und Standardzweig, eingebettet ein Ort ohne cwd", () => {
+    const ap = W.gitOrteAus(config, "/basis");
+    expect(ap.aufloesung.betriebsart).toBe("arbeitsplatz");
+    expect(ap.orte.map((o) => [o.name, o.cwd, o.standardzweig])).toEqual([["a", "/w/a", "main"], ["b", "/w/b", "develop"]]);
+    const ein = W.gitOrteAus(FREMD, "/basis");
+    expect(ein.orte).toHaveLength(1);
+    expect(ein.orte[0].cwd).toBeUndefined();
+  });
+
+  test("gitOrteAus wirft bei kaputtem Block mit Fix-Zeile", () => {
+    expect(() => W.gitOrteAus({ ...FREMD, arbeitsplatz: { wurzel: "/w", repos: [] } }, "/basis")).toThrow(/Fix:/);
+  });
+
+  test("registrierteWorktreesJeRepo: Blöcke je Repo, git läuft im cwd des jeweiligen Repos", () => {
+    const aufrufe: string[] = [];
+    const git = (args: string[], cwd?: string) => {
+      aufrufe.push(`${cwd}: ${args.join(" ")}`);
+      return `worktree ${cwd}\nHEAD x\n\nworktree /w/.claude/worktrees/${cwd?.slice(-1)}/${WT}1\nHEAD y\n`;
+    };
+    const r = W.registrierteWorktreesJeRepo(W.gitOrteAus(config, "/basis").orte, git);
+    expect(r.map((x) => [x.ort.name, x.bloecke.map((b) => b.pfad)])).toEqual([
+      ["a", ["/w/a", `/w/.claude/worktrees/a/${WT}1`]],
+      ["b", ["/w/b", `/w/.claude/worktrees/b/${WT}1`]],
+    ]);
+    expect(aufrufe).toEqual(["/w/a: worktree list --porcelain", "/w/b: worktree list --porcelain"]);
+  });
+
+  test("eingebettet wird git ohne cwd gerufen (ein Mock mit nur args bleibt gültig) und ein Fehler unverändert weitergeworfen", () => {
+    const args: unknown[][] = [];
+    W.gitJeRepo(W.gitOrteAus(FREMD, "/basis").orte, ["status"], (...a: unknown[]) => (args.push(a), ""));
+    expect(args).toEqual([[["status"]]]);
+    const kaputt = new Error("fatal: kein Repo");
+    expect(() => W.gitJeRepo(W.gitOrteAus(FREMD, "/basis").orte, ["status"], () => { throw kaputt; })).toThrow(kaputt);
+  });
+
+  test("Arbeitsplatz: ein Fehler in Repo b nennt Name, Pfad, erste Zeile und die Fix-Zeile", () => {
+    const git = (_a: string[], cwd?: string) => {
+      if (cwd === "/w/b") throw new Error("fatal: cannot change to '/w/b'\nweitere Zeile");
+      return "";
+    };
+    const msg = (() => {
+      try {
+        W.gitJeRepo(W.gitOrteAus(config, "/basis").orte, ["status"], git);
+        return "";
+      } catch (e) {
+        return String((e as Error).message);
+      }
+    })();
+    expect(msg).toBe("git status scheiterte in Repo b (/w/b): fatal: cannot change to '/w/b'\nFix: Pfad in arbeitsplatz.repos prüfen (git -C /w/b status)");
   });
 });
