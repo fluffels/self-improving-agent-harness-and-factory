@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { erstUebernahme, istVorlage, normalisiereUebernahmePfad } from "./sync-abgleich-lib.mjs";
+import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
@@ -22,6 +22,64 @@ export { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn };
 export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
 const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
+
+/** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
+function manifestFehler(manifest, quelleLies) {
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`);
+  if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
+  for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
+    if (PROJEKT_ROLLEN.includes(rolle)) continue;
+    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istGanzeDatei(e) && wirdVerteilt(e) && !istVorlage(e));
+    if (!ganz) fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
+  }
+  return fehler;
+}
+
+/** Meldungen für Rollen-Dateien des Projekts, die im Ziel fehlen. */
+function fehlendeRollen(zielLies) {
+  return PROJEKT_ROLLEN.filter((rolle) => zielLies(ROLLEN_PFADE[rolle]) === null).map(
+    (rolle) => `Rollen-Pfad '${ROLLEN_PFADE[rolle]}' (${rolle}) fehlt im Ziel; das Projekt legt seine Datei dort selbst an`,
+  );
+}
+
+/** Ergänzungen (Block-/Schlüssel-Einheiten) aus Quelle und Ziel, nur gelesen, wenn eine verteilte Einheit ergänzbar ist. → `{ erg, fehler }`. */
+function liesErgaenzungen(verteilt, quelleLies, zielLies) {
+  const erg = LEER();
+  const fehler = [];
+  if (!verteilt.some(istErgaenzbar)) return { erg, fehler };
+  for (const [seite, lies] of [["quelle", quelleLies], ["ziel", zielLies]]) {
+    try {
+      erg[seite] = liesErgaenzung(lies);
+    } catch (err) {
+      fehler.push(`${seite === "quelle" ? "Quelle" : "Ziel"}: ${err.message}`);
+    }
+  }
+  return { erg, fehler };
+}
+
+/** Eine neu anzulegende Vorlage (wird nie überschrieben): Text mit den Projektwerten des Ziels. */
+function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
+  return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
+}
+
+/** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
+function altStandMeldungen(alt, sortiert, alle, manifest) {
+  const meldungen = [];
+  for (const id of Object.keys(alt?.einheiten ?? {})) {
+    if (id in sortiert) continue;
+    if (alle.some((e) => istVorlage(e) && einheitId(e) === id)) {
+      meldungen.push(`Einheit '${id}' ist jetzt Vorlage, nicht mehr im Sync-Stand, das Projekt pflegt sie selbst`);
+      continue;
+    }
+    const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
+    meldungen.push(
+      nurFactory === undefined
+        ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
+        : `Einheit '${id}' wird nicht mehr verteilt (Ring ${nurFactory.ring}), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`,
+    );
+  }
+  return meldungen;
+}
 
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
@@ -46,35 +104,18 @@ export function planeSync({
     return res;
   }
   const { manifest } = geladen;
-  res.fehler.push(...pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`));
-  if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) res.fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
-  // Rollen-Pfade (#1871): jede Besitz-Rolle muss eine ganze, verteilte Einheit sein; die Rollen des Projekts stehen nicht im Manifest.
-  for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
-    if (PROJEKT_ROLLEN.includes(rolle)) continue;
-    const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istGanzeDatei(e) && wirdVerteilt(e) && !istVorlage(e));
-    if (!ganz) res.fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
-  }
+  res.fehler.push(...manifestFehler(manifest, quelleLies));
   if (res.fehler.length > 0) return res;
-  for (const rolle of PROJEKT_ROLLEN) {
-    if (zielLies(ROLLEN_PFADE[rolle]) === null) res.meldungen.push(`Rollen-Pfad '${ROLLEN_PFADE[rolle]}' (${rolle}) fehlt im Ziel; das Projekt legt seine Datei dort selbst an`);
-  }
+  res.meldungen.push(...fehlendeRollen(zielLies));
 
   const nachPfad = new Map();
   const alle = manifest.eintraege.filter(wirdVerteilt);
   const verteilt = alle.filter((e) => !istVorlage(e));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
-  const erg = LEER();
-  if (verteilt.some(istErgaenzbar)) {
-    for (const [seite, lies] of [["quelle", quelleLies], ["ziel", zielLies]]) {
-      try {
-        erg[seite] = liesErgaenzung(lies);
-      } catch (err) {
-        res.fehler.push(`${seite === "quelle" ? "Quelle" : "Ziel"}: ${err.message}`);
-      }
-    }
-    if (res.fehler.length > 0) return res;
-  }
+  const { erg, fehler: ergFehler } = liesErgaenzungen(verteilt, quelleLies, zielLies);
+  res.fehler.push(...ergFehler);
+  if (res.fehler.length > 0) return res;
   const ziele = new Map(); // Pfad -> { ergebnis (LF), quelleText }
   for (const [pfad, eintraege] of nachPfad) {
     const srcText = normalisiereEol(quelleLies(pfad));
@@ -109,7 +150,7 @@ export function planeSync({
   ziehe(MANIFEST_PFAD, normalisiereEol(manifestText), zielLies(MANIFEST_PFAD), false);
   for (const e of alle.filter(istVorlage)) {
     if (zielLies(e.pfad) !== null) res.unveraendert++;
-    else res.dateien.set(e.pfad, { text: rendereProjektwerte(normalisiereEol(quelleLies(e.pfad)), zielConfig, e.pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(e.pfad) });
+    else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar));
   }
 
   const einheiten = {};
@@ -122,19 +163,7 @@ export function planeSync({
   res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
-  for (const id of Object.keys(alt?.einheiten ?? {})) {
-    if (id in sortiert) continue;
-    if (alle.some((e) => istVorlage(e) && einheitId(e) === id)) {
-      res.meldungen.push(`Einheit '${id}' ist jetzt Vorlage, nicht mehr im Sync-Stand, das Projekt pflegt sie selbst`);
-      continue;
-    }
-    const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
-    res.meldungen.push(
-      nurFactory === undefined
-        ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
-        : `Einheit '${id}' wird nicht mehr verteilt (Ring ${nurFactory.ring}), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`,
-    );
-  }
+  res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest));
   return res;
 }
 
@@ -176,7 +205,7 @@ function parseArgs(argv) {
   const optionen = { quelle: { type: "string" }, ziel: { type: "string" }, tag: { type: "string" }, entwurf: { type: "boolean" }, trocken: { type: "boolean" }, uebernehmen: { type: "string", multiple: true } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["quelle"], meldung });
   const beide = fehler === null && werte.tag !== undefined && werte.entwurf === true ? "--tag und --entwurf schließen sich aus" : null;
-  return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, uebernehmen: (werte.uebernehmen ?? []).map(normalisiereUebernahmePfad), fehler: fehler?.text ?? beide };
+  return { quelle: werte.quelle ?? null, ziel: werte.ziel ?? null, tag: werte.tag ?? null, entwurf: werte.entwurf === true, trocken: werte.trocken === true, uebernehmen: werte.uebernehmen ?? [], fehler: fehler?.text ?? beide };
 }
 
 /** Unter Windows kennt das Dateisystem kein Ausführbit: ein neu geschriebenes Skript (Hooks) landete mit 100644
