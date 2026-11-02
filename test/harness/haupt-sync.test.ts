@@ -1106,4 +1106,18 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
   test("syncZiel: eine Config, die zu null geparst wird, ist eingebettet (wirft nie)", () => {
     expect(AP.syncZiel("/x", { lade: () => null })).toEqual({ aufloesung: null });
   });
+
+  test("alle Repos aktuell und keine Hinweise: die Ausgabe ist leer, im Hook-Modus und mit --text (kein Objekt mit nur Leerzeichen)", () => {
+    const t = aufbauAp();
+    try {
+      expect(cli(t.wurzel).out).toBe("");
+      expect(cli(t.wurzel, "--text").out).toBe("");
+      t.a.schiebe("neu-a.txt");
+      const eins = cli(t.wurzel, "--text").out;
+      expect(eins.endsWith("\n")).toBe(true); // console.log hängt genau einen Umbruch an
+      expect(eins.endsWith("\n\n")).toBe(false);
+    } finally {
+      t.aufraeumen();
+    }
+  });
 });
