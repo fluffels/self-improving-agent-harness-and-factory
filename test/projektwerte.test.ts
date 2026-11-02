@@ -16,7 +16,7 @@ interface Lib {
   PROJEKTWERT_START: string;
   PROJEKTWERT_ENDE: string;
   projektwertStellen(t: string, pfad?: string): { bloecke: { start: number; ende: number }[]; zeilen: { folge: number; schluessel: string }[] };
-  leereProjektwerte(t: string): string;
+  leereProjektwerte(t: string, pfad?: string): string;
   rendereProjektwerte(t: string, c: Cfg | (() => Cfg), pfad?: string): string;
   projektwertWert(c: Cfg, k: string): string;
   platzhalterMuster(): RegExp;
@@ -347,5 +347,45 @@ describe("Grenzfälle der Lib", () => {
   test("fehlende oder leere Gruppe nennt den Ort des Blocks; Gruppe null bricht mit Meldung ab", () => {
     assert.throws(() => lib.rendereProjektwerte(`a\n${S}\n${E}\n`, { praefixe: {}, agenten: {} }, "a.md"), /a\.md:2: .*Gruppe 'labels'/s);
     assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, { praefixe: {}, agenten: null, labels: {} }, "a.md"), /Gruppe 'agenten'/);
+  });
+});
+
+describe("YAML-Zeilen-Marker und Listenwerte (factory#119)", () => {
+  const YML = "jobs:\n  a:\n    strategy:\n      matrix:\n# factory:projektwert codeql.sprachen\n        language: [alt]\n";
+  const CFG: Cfg = { ...CONFIG, codeql: { sprachen: ["javascript-typescript", "actions"] } };
+  test("ein Marker vor einer eingerückten Zeile einer .yml-Datei wird zur Flow-Liste gerendert", () => {
+    assert.equal(lib.rendereProjektwerte(YML, CFG, "w.yml").split("\n")[5], "        language: [javascript-typescript, actions]");
+  });
+  test("ein Listenelement mit Quoting-Bedarf steht in JSON-Form", () => {
+    assert.equal(lib.rendereProjektwerte(YML, { codeql: { sprachen: ["on", "a b"] } }, "w.yml").split("\n")[5], '        language: ["on", "a b"]');
+  });
+  test("leereProjektwerte leert die YAML-Zeile, Abweichung und Idempotenz stimmen", () => {
+    assert.equal(lib.leereProjektwerte(YML, "w.yml").split("\n")[5], "        language:");
+    const gerendert = lib.rendereProjektwerte(YML, CFG, "w.yml");
+    assert.deepEqual(lib.projektwertAbweichungen("w.yml", gerendert, CFG), []);
+    assert.equal(lib.projektwertAbweichungen("w.yml", YML, CFG).length, 1);
+    assert.equal(lib.rendereProjektwerte(gerendert, CFG, "w.yml"), gerendert);
+  });
+  test("derselbe Marker in einer Markdown-Datei außerhalb des Frontmatters bleibt ein Fehler", () => {
+    assert.throws(() => lib.projektwertStellen(YML, "w.md"), /außerhalb des führenden Frontmatters/);
+  });
+  test("auch eine .yaml-Datei ist Marker-Fläche und wird aus dem Manifest aufgenommen", () => {
+    assert.equal(lib.rendereProjektwerte(YML, CFG, "w.yaml").split("\n")[5], "        language: [javascript-typescript, actions]");
+    assert.deepEqual(lib.projektwertDateien(["w.yaml"], []), ["w.yaml"]);
+  });
+  test("<codeql.sprachen> in der Prosa ist kein Platzhalter (nur die Tabellen-Gruppen)", () => {
+    assert.equal(lib.platzhalterMuster().exec("Wert <codeql.sprachen> hier"), null);
+  });
+  test("ein Marker mit unbekannter Gruppe wirft", () => {
+    assert.throws(() => lib.projektwertStellen("# factory:projektwert fremd.x\nk: v\n", "w.yml"), /w\.yml:1: .*unbekannte Projektwert-Gruppe/);
+  });
+  test("eine leere Liste, ein leeres Element, ein Nicht-Text und ein Backtick im Element brechen ab", () => {
+    for (const sprachen of [[], [""], [1], ["a`b"]]) assert.throws(() => lib.projektwertWert({ codeql: { sprachen } }, "codeql.sprachen"), /Fix:|Backtick/);
+  });
+  test("der Block rendert die Gruppe codeql nicht, auch wenn die Config sie trägt", () => {
+    assert.ok(!lib.rendereProjektwerte(`${S}\n${E}\n`, CFG).includes("codeql"));
+  });
+  test("projektwertDateien nimmt .yml aus dem Manifest auf, andere Endungen nicht", () => {
+    assert.deepEqual(lib.projektwertDateien([".github/workflows/c.yml", "scripts/x.mjs", "a.md"], []), [".github/workflows/c.yml", "a.md"]);
   });
 });

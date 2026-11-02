@@ -127,7 +127,7 @@ describe("artFehler / istVorlage", () => {
     assert.match(lib.pruefeManifest({ version: 1, eintraege: [e] }, () => "t").join("|"), /art braucht version 2/);
     assert.deepEqual(lib.pruefeManifest({ version: 2, eintraege: [e] }, () => "t"), []);
     assert.deepEqual(lib.pruefeManifest({ version: 1, eintraege: [{ pfad: "x", ring: "kern", quelle: "t" }] }, () => "t"), []);
-    assert.match(lib.pruefeManifest({ version: 3, eintraege: [] }, () => "t").join("|"), /version 3 unbekannt/);
+    assert.match(lib.pruefeManifest({ version: 4, eintraege: [] }, () => "t").join("|"), /version 4 unbekannt/);
   });
 });
 

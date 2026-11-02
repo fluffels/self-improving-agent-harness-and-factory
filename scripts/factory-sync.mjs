@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
@@ -63,7 +64,7 @@ function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
 }
 
 /** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
-function altStandMeldungen(alt, sortiert, alle, manifest) {
+function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
   const meldungen = [];
   for (const id of Object.keys(alt?.einheiten ?? {})) {
     if (id in sortiert) continue;
@@ -73,7 +74,9 @@ function altStandMeldungen(alt, sortiert, alle, manifest) {
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     meldungen.push(
-      nurFactory === undefined
+      nurFactory?.modul !== undefined && !modulGewaehlt(nurFactory, gewaehlteModule)
+        ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
+        : nurFactory === undefined
         ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
         : `Einheit '${id}' wird nicht mehr verteilt (Ring ${nurFactory.ring}), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`,
     );
@@ -82,9 +85,26 @@ function altStandMeldungen(alt, sortiert, alle, manifest) {
 }
 
 /**
+ * Modulwahl des Ziels (factory#119): `{ gewaehlt, fehler, meldungen }`. Nur wenn das Quell-Manifest Einheiten mit `modul` hat, wird die Ziel-Config gelesen;
+ * ohne den Schlüssel `module` gilt der Standard, die Namen prüft `modulWahl` gegen das Quell-Manifest (ein neues Modul ist sofort wählbar).
+ */
+function waehleModule(manifest, zielConfig) {
+  if (!manifest.eintraege.some((e) => e.modul !== undefined)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
+  let config;
+  try {
+    config = zielConfig();
+  } catch (err) {
+    return { gewaehlt: [], fehler: [`Ziel-Config: ${err.message}`], meldungen: [] };
+  }
+  const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
+  const liste = (l) => (l.length > 0 ? l.join(", ") : "keine");
+  return { gewaehlt: w.gewaehlt, fehler: w.fehler, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
+}
+
+/**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
  * Ergebnis: `fehler` (nicht leer: nichts schreiben), `meldungen`, `dateien` (Pfad → { text, neu, ausfuehrbar }, nur Geändertes),
- * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat.
+ * `unveraendert` (Zahl) und der `stand`. `zielConfig` liefert die Projekt-Config des Ziels, nur gerufen, wenn eine Datei Projektwert-Stellen hat oder das Manifest Einheiten mit `modul` kennt (Modulwahl).
  */
 export function planeSync({
   quelleLies,
@@ -106,10 +126,13 @@ export function planeSync({
   const { manifest } = geladen;
   res.fehler.push(...manifestFehler(manifest, quelleLies));
   if (res.fehler.length > 0) return res;
-  res.meldungen.push(...fehlendeRollen(zielLies));
+  const wahl = waehleModule(manifest, zielConfig);
+  res.fehler.push(...wahl.fehler);
+  if (res.fehler.length > 0) return res;
+  res.meldungen.push(...wahl.meldungen, ...fehlendeRollen(zielLies));
 
   const nachPfad = new Map();
-  const alle = manifest.eintraege.filter(wirdVerteilt);
+  const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
   const verteilt = alle.filter((e) => !istVorlage(e));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
@@ -163,7 +186,7 @@ export function planeSync({
   res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
-  res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest));
+  res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest, wahl.gewaehlt));
   return res;
 }
 

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "eintraege": [
     {"pfad":"scripts/arbeitsplatz-lib.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
     {"pfad":"scripts/arbeitsplatz.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
@@ -134,7 +134,7 @@
     {"pfad":".github/workflows/board-takt.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/festgefahren.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/dependabot.yml","ring":"kern-nach-entkopplung","art":"vorlage","quelle":"Vorlage (factory#118)"},
-    {"pfad":".github/workflows/dependabot-inbox.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":".github/workflows/dependabot-inbox.yml","ring":"kern-nach-entkopplung","modul":"dependabot-inbox","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/internalrefs-pr-text.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)","pflichtChecks":["PR-Text interne Bezuege pruefen"]},
     {"pfad":"scripts/factory-seite.mjs","ring":"kern","quelle":"Factory-Seiten-Verweis in Laufzeitmeldungen (#90)"},
     {"pfad":"scripts/check-factory-links.mjs","ring":"kern","quelle":"Factory-Link-Wächter als Kern (factory#130)"},
@@ -183,6 +183,16 @@
     {"pfad":"scripts/cockpit/registry.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
     {"pfad":"scripts/cockpit/seite.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
     {"pfad":"scripts/cockpit/server.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
-    {"pfad":"scripts/cockpit/quellen/langfuse.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"}
+    {"pfad":"scripts/cockpit/quellen/langfuse.mjs","ring":"oberflaeche","quelle":"Plan #1764 (Regel ADR 0029)"},
+    {"pfad":".github/workflows/codeql.yml","ring":"kern","modul":"codeql","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/scorecard.yml","ring":"kern","modul":"scorecard","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/secret-scan.yml","ring":"kern","modul":"secret-scan","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":"scripts/secret-inbox.mjs","ring":"kern","modul":"secret-scan","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/dependency-review.yml","ring":"kern","modul":"dependency-review","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/zizmor.yml","ring":"kern","modul":"zizmor","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/codescanning-inbox.yml","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":"scripts/codescanning-inbox.mjs","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":"scripts/ghsa-lib.mjs","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":"scripts/modul-wahl-lib.mjs","ring":"kern","quelle":"Sicherheits-Modul (factory#119)"}
   ]
 }

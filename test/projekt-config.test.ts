@@ -96,6 +96,14 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(pc.pruefeProjektConfig(ohne), []);
   });
 
+  test("Sicherheits-Module (factory#119): codeql gewählt ohne Sprachen ist ein Config-Fehler mit Fix", () => {
+    const mit = (extra: Record<string, unknown>): string => meld({ ...gueltig(), ...extra });
+    assert.match(mit({ module: ["codeql"] }), /codeql\.sprachen.*Fix:/s);
+    assert.match(mit({ module: ["codeql"], codeql: { sprachen: [] } }), /codeql\.sprachen/);
+    assert.equal(mit({ module: ["codeql"], codeql: { sprachen: ["python"] } }), "");
+    assert.match(mit({ module: "codeql" }), /module muss eine Liste/);
+  });
+
   test("Negativfälle je Pflichtschlüssel", () => {
     const mit = (mut: (c: Cfg) => void): string => {
       const c = gueltig();

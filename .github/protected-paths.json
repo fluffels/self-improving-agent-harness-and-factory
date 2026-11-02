@@ -72,6 +72,7 @@
     "/scripts/projekt-config.mjs",
     "/scripts/arbeitsplatz-lib.mjs",
     "/scripts/projekt-config-lib.mjs",
+    "/scripts/modul-wahl-lib.mjs",
     "/scripts/relativ-pfad.mjs",
     "/scripts/pfad-glob.mjs",
     "/scripts/repo-form.mjs",
