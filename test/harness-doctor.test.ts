@@ -12,6 +12,8 @@ import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { SICHERHEIT_PUNKTE } from "../scripts/harness-doctor-sicherheit.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
@@ -584,7 +586,8 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
     }
   });
 
-  test("Token fatal: alle acht Punkte nicht prüfbar mit dem Token-Fix, Exit 1", () => {
+  test(`Token fatal: alle ${SICHERHEIT_PUNKTE.length} Punkte nicht prüfbar mit dem Token-Fix, Exit 1`, () => {
+    assert.deepEqual(PUNKTE, SICHERHEIT_PUNKTE);
     const r = lauf({ "api -i user": new Error("gh auth login") });
     assert.equal(r.code, 1);
     for (const p of PUNKTE) assert.ok(r.out.some((z) => z.startsWith(`NICHT PRÜFBAR ${p}: `) && z.endsWith("Fix: erst den Token-Punkt beheben")), p);
