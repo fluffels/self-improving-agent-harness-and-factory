@@ -75,6 +75,32 @@ describe("abweichendeZeilen", () => {
     // die Seite mit mehr abweichenden Zeilen zählt, in beiden Richtungen
     assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "a\nX\n"), 3);
     assert.equal(abgleich.abweichendeZeilen("a\nX\n", "a\nb\nc\nd\n"), 3);
+    // Index-Versatz im Vergleich (y[j - 1]), Treffer aus der Vorzeile (vor[j - 1]), Text ohne abschließenden Zeilenumbruch (Suffix-Vergleich)
+    assert.equal(abgleich.abweichendeZeilen("c\na\nc\n", "a\n"), 2);
+    assert.equal(abgleich.abweichendeZeilen("z\nb\nq\n", "w\nb\nb\nv\n"), 3);
+    assert.equal(abgleich.abweichendeZeilen("a\nb", "a\nc"), 1);
+  });
+  test("stimmt mit einer Referenz ohne Abkürzungen überein: alle Zeilenfolgen über drei Zeilen bis Länge 4, mit und ohne abschließenden Zeilenumbruch", () => {
+    // Referenz: volle LCS-Tabelle über alle Zeilen, ohne gemeinsamen Anfang und Ende abzuschneiden
+    const referenz = (a: string, b: string): number => {
+      const x = a.split("\n");
+      const y = b.split("\n");
+      const t: number[][] = Array.from({ length: x.length + 1 }, () => new Array<number>(y.length + 1).fill(0));
+      for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) t[i]![j] = x[i - 1] === y[j - 1] ? t[i - 1]![j - 1]! + 1 : Math.max(t[i - 1]![j]!, t[i]![j - 1]!);
+      const lcs = t[x.length]![y.length]!;
+      return Math.max(x.length - lcs, y.length - lcs);
+    };
+    const folgen: string[][] = [[]];
+    for (let n = 1; n <= 4; n++) for (const f of folgen.filter((g) => g.length === n - 1)) for (const z of ["a", "b", "c"]) folgen.push([...f, z]);
+    const texte = folgen.flatMap((f) => [f.join("\n"), f.length > 0 ? f.join("\n") + "\n" : "\n"]);
+    let paare = 0;
+    for (const a of texte) {
+      for (const b of texte) {
+        assert.equal(abgleich.abweichendeZeilen(a, b), referenz(a, b), JSON.stringify([a, b]));
+        paare++;
+      }
+    }
+    assert.ok(paare > 10000);
   });
 });
 
