@@ -10,7 +10,7 @@ export const istRepoForm = (repo) => typeof repo === "string" && REPO_FORM.test(
 /** Pur: zerlegt `owner/name` in `{ owner, name }`; wirft mit Fix-Zeile, wenn `repo` nicht genau diese Form hat (kein stiller Standardwert, #1745). */
 export function zerlegeRepo(repo) {
   const m = typeof repo === "string" ? REPO_FORM.exec(repo) : null;
-  if (!m) throw new Error("repo fehlt oder hat nicht die Form owner/name\nFix: repo als owner/name angeben (in der Projekt-Config der Schlüssel repo in .factory/projekt.json)");
+  if (!m) throw new Error("repo fehlt oder hat nicht die Form owner/name\nFix: repo als owner/name angeben (in der Projekt-Config, Schlüssel repo)");
   return { owner: m[1], name: m[2] };
 }
 
