@@ -141,7 +141,17 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }
 
-function pruefen({ werte, rootDir, gh, langfuse, env, out, err, kernEnv, dateien }) {
+/** Prüfwurzel von `--pruefen`: liegt die Config als `<wurzel>/.factory/projekt.json`, ist `<wurzel>` der Bezieher; sonst bleibt `rootDir`. */
+function pruefWurzel(rootDir, config) {
+  if (config === undefined) return { wurzel: rootDir, abgeleitet: false };
+  const pfad = resolve(rootDir, config);
+  const wurzel = resolve(pfad, "..", "..");
+  return resolve(wurzel, PROJEKT_CONFIG) === pfad ? { wurzel, abgeleitet: true } : { wurzel: rootDir, abgeleitet: false };
+}
+
+function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien }) {
+  const { wurzel: rootDir, abgeleitet } = pruefWurzel(aufruferRoot, werte.config);
+  if (abgeleitet) out(`Prüfwurzel: ${rootDir}`);
   let namen;
   try {
     namen = kernEnv(SKRIPTE); // Dateien lesen nur hier am Rand, die Prüflogik bekommt die Namen
