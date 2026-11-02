@@ -122,6 +122,9 @@ function kernPflichtChecks({ besitz, workflows }) {
   return { checks, fehler: null };
 }
 
+/** Pur: die Soll-Liste der Required Checks: Spiegel zuerst, dann der Kern, ohne Doppelte (exakter Vergleich). */
+const vereinigt = (spiegel, kern) => [...new Set([...(spiegel?.requiredChecks ?? []), ...kern])];
+
 /**
  * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards, pflichtChecks, besitzFehler }`. `pflichtChecks` ist die Vereinigung aus den
  * Required Checks des Ruleset-Spiegels (zuerst) und den `pflichtChecks` der verteilten Kern-Workflows im Manifest, ohne Doppelte; `besitzFehler` nennt den Grund, wenn das Manifest nicht lesbar ist.
@@ -140,8 +143,7 @@ export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
     for (const [, wert] of text.matchAll(LABEL_ENV)) if (!wert.includes("${{") && !wert.includes("$")) merke(ohneAnfuehrung(wert));
   }
   const kern = kernPflichtChecks({ besitz, workflows });
-  const pflichtChecks = [...new Set([...(spiegel?.requiredChecks ?? []), ...kern.checks])];
-  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks, besitzFehler: kern.fehler };
+  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler };
 }
 
 const erste = (e) => fehlerText(e).split("\n")[0];
@@ -293,6 +295,10 @@ const besitzNichtPruefbar = (grund) => ({
   hinweis: "nur die Checks des Ruleset-Spiegels geprüft, Kern-Pflicht-Checks nicht prüfbar",
 });
 
+const besitzPunkt = (v) => (v.besitzFehler ? [besitzNichtPruefbar(v.besitzFehler)] : []);
+/** Soll-Liste der Required Checks: die Ableitung, sonst (direkter Aufruf ohne sie) der Spiegel, damit er nie verloren geht. */
+const sollChecks = (v, spiegel) => v.pflichtChecks ?? spiegel?.requiredChecks ?? [];
+
 /** Führt alle Prüfpunkte aus: `[{ punkt, ok, befund?, fix?, hinweis?, nichtPruefbar? }]` (`nichtPruefbar`: ok false, aber keine belegte Lücke). Wirft nie. */
 export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung = null }) {
   const repo = config.repo;
@@ -312,7 +318,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     voraussetzungen.boards.forEach((b, i) => ergebnis.push(...pruefeBoard(gh, b, i)));
     const branch = r.repo.default_branch ?? "main";
     const regeln = hole(() => seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`));
-    ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel, voraussetzungen.pflichtChecks ?? spiegel?.requiredChecks ?? []));
+    ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel, sollChecks(voraussetzungen, spiegel)));
     ergebnis.push(...pruefeSicherheit({ ...quellen, regeln, pvr: hole(() => json(gh, ["api", `repos/${repo}/private-vulnerability-reporting`])), spiegel, branch, privat: r.repo.private === true }));
   } else {
     const aus = { fehler: "gh nicht angemeldet oder ohne Zugriff", fix: "erst den Token-Punkt beheben" };
@@ -325,7 +331,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(lf.status === 0 ? gut("Langfuse") : luecke("Langfuse", text || "Langfuse nicht erreichbar", "Langfuse starten (node scripts/langfuse-vorbedingung.mjs zeigt den Befund)"));
   }
   if (umgebung) ergebnis.push(...pruefeAltnamen({ env: umgebung.env, config, namen: umgebung.namen }));
-  if (voraussetzungen.besitzFehler) ergebnis.push(besitzNichtPruefbar(voraussetzungen.besitzFehler)); // liest nur das Manifest, braucht kein Token
+  ergebnis.push(...besitzPunkt(voraussetzungen)); // liest nur das Manifest, braucht kein Token
   return ergebnis;
 }
 

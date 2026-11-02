@@ -16,7 +16,7 @@ import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
-  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown[]>; spiegel: undefined; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
+  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
   voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
 }
 const doctor = rawDoctor as unknown as Doctor;
@@ -464,6 +464,17 @@ describe("harness-doctor --pruefen", () => {
     for (const p of sicherheit) assert.deepEqual([p.ok, (p as { nichtPruefbar?: boolean }).nichtPruefbar, p.fatal], [false, true, undefined]);
     const ohneScope = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh: (a) => (a.join(" ") === "api -i user" ? "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo\n\n{}" : (() => { throw new Error("404"); })()), langfuse: null });
     assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
+  });
+
+  test("pruefe ohne abgeleitete pflichtChecks fällt auf die Checks des Spiegels zurück (kein stilles Weglassen, factory#117)", () => {
+    const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+    const gh = (a: string[]): string => {
+      if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      throw new Error("404");
+    };
+    const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: { name: "s", requiredChecks: ["CI"] }, gh, langfuse: null });
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")).map((p) => p.punkt), ["Required-Check CI"]);
   });
 
   test("Langfuse nicht erreichbar: Lücke mit Befund aus stderr und Fix", () => {
