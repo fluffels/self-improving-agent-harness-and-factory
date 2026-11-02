@@ -56,16 +56,21 @@ const schreibe = (wurzel: string, rel: string, text: string): void => {
 const lies = (wurzel: string, rel: string): string => readFileSync(join(wurzel, ...rel.split("/")), "utf8");
 
 describe("abweichendeZeilen", () => {
-  test("gleich 0, geänderte Zeile 2, eingefügte 1, verschobener Block zählt", () => {
+  test("gleich 0, geänderte Zeile 1 (nicht 2), zwei geänderte Zeilen 2, eingefügte 1, verschobener Block zählt", () => {
     assert.equal(abgleich.abweichendeZeilen("a\nb\nc\n", "a\nb\nc\n"), 0);
-    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\n", "a\nx\nc\n"), 2);
+    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\n", "a\nx\nc\n"), 1);
+    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\ne\nf\ng\n", "a\nb\nX\nd\ne\nf\nY\n"), 2);
     assert.equal(abgleich.abweichendeZeilen("a\nb\n", "a\nn\nb\n"), 1);
-    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "c\nd\na\nb\n"), 4);
+    assert.equal(abgleich.abweichendeZeilen("a\nb\n", "a\n"), 1);
+    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "c\nd\na\nb\n"), 2);
     // Überlappung von gemeinsamem Anfang und Ende (Suffix-Grenze): eine doppelte Zeile zählt einmal, in beiden Richtungen
     assert.equal(abgleich.abweichendeZeilen("x\nx\n", "x\n"), 1);
     assert.equal(abgleich.abweichendeZeilen("x\n", "x\nx\n"), 1);
-    // Zweig jetzt[j - 1] des LCS-Kerns: -x -y +z +q +w
-    assert.equal(abgleich.abweichendeZeilen("x\na\ny\n", "z\na\nq\nw\n"), 5);
+    // Zweig jetzt[j - 1] des LCS-Kerns (-x -y +z +q +w): die größere Seite zählt, 3 (ohne den Zweig wäre lcs 0 und das Ergebnis 4)
+    assert.equal(abgleich.abweichendeZeilen("x\na\ny\n", "z\na\nq\nw\n"), 3);
+    // die Seite mit mehr abweichenden Zeilen zählt, in beiden Richtungen
+    assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "a\nX\n"), 3);
+    assert.equal(abgleich.abweichendeZeilen("a\nX\n", "a\nb\nc\nd\n"), 3);
   });
 });
 
@@ -104,7 +109,7 @@ describe("erstUebernahme", () => {
   });
   test("neu und abweichend: exakte ABGLEICH-Zeile mit Zahl, alle Pfade in einem Lauf, dazu die Weg-Zeile", () => {
     const r = abgleich.erstUebernahme({ kandidaten: [k("scripts/a.mjs", "x\ny\n", "x\nz\n"), k("scripts/b.mjs", "eigen\n")], altEinheiten: [], uebernehmen: [] });
-    assert.equal(r.fehler[0], "ABGLEICH scripts/a.mjs: Ziel hat eine eigene Fassung (abweichende Zeilen: 2)");
+    assert.equal(r.fehler[0], "ABGLEICH scripts/a.mjs: Ziel hat eine eigene Fassung (abweichende Zeilen: 1)");
     assert.match(r.fehler[1] ?? "", /^ABGLEICH scripts\/b\.mjs: Ziel hat eine eigene Fassung/);
     assert.match(r.fehler[2] ?? "", /^ABGLEICH Weg: .*--uebernehmen scripts\/a\.mjs --uebernehmen scripts\/b\.mjs/);
   });
@@ -162,7 +167,7 @@ describe("Erst-Übernahme im Sync", { timeout: 30_000 }, () => {
     const vorher = dateien(z);
     const r = laufe(q, z);
     assert.equal(r.code, 1, r.out);
-    assert.match(r.err, /^ABGLEICH scripts\/a\.mjs: Ziel hat eine eigene Fassung \(abweichende Zeilen: 2\)/m);
+    assert.match(r.err, /^ABGLEICH scripts\/a\.mjs: Ziel hat eine eigene Fassung \(abweichende Zeilen: 1\)/m);
     assert.match(r.err, /nichts geschrieben/);
     assert.deepEqual(dateien(z), vorher);
     assert.ok(!existsSync(join(z, ".factory/sync-stand.json")));

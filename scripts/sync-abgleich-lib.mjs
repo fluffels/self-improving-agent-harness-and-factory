@@ -21,7 +21,7 @@ export function artFehler(e) {
 /** Pfad-Form für `--uebernehmen`: Schrägstriche, ohne führendes `./`. */
 export const normalisiereUebernahmePfad = (p) => p.replace(/\\/g, "/").replace(/^(\.\/)+/, "");
 
-/** Zahl abweichender Zeilen zweier LF-Texte, wie `+`/`−` in `git diff` (Zeilen beider Seiten außerhalb der längsten gemeinsamen Teilfolge). */
+/** Zahl abweichender Zeilen zweier LF-Texte: je Seite die Zeilen außerhalb der längsten gemeinsamen Teilfolge, gezählt wird die größere Seite (eine geänderte Zeile ist 1, eine angehängte oder fehlende Zeile ebenfalls 1). */
 export function abweichendeZeilen(aLf, bLf) {
   const a = aLf.split("\n");
   const b = bLf.split("\n");
@@ -42,7 +42,7 @@ export function abweichendeZeilen(aLf, bLf) {
     vor = jetzt;
   }
   const lcs = vor[y.length];
-  return x.length - lcs + (y.length - lcs);
+  return Math.max(x.length - lcs, y.length - lcs);
 }
 
 /**
