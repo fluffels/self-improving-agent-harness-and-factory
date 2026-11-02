@@ -27,9 +27,12 @@ const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
 export const KONFLIKT_ABSTAND_MS = 15_000;
 export const FELDER = "state,mergeable,statusCheckRollup,autoMergeRequest,mergeCommit";
 
+/** Ist der Rollup-Eintrag ein StatusContext (kein CheckRun)? Pur. */
+const istStatusContext = (e) => e?.__typename === "StatusContext" || Boolean(e?.context);
+
 /** Ein Rollup-Eintrag (CheckRun oder StatusContext) → `{ name, art: "rot" | "gruen" | "offen", url }`. */
 function eintrag(e) {
-  if (e?.__typename === "StatusContext" || e?.context) {
+  if (istStatusContext(e)) {
     const s = String(e.state ?? "").toUpperCase();
     return { name: e.context ?? "?", art: ROT.has(s) ? "rot" : s === "SUCCESS" ? "gruen" : "offen", url: e.targetUrl ?? "" };
   }
@@ -49,7 +52,7 @@ const stempel = (e) => (String(e?.status ?? "").toUpperCase() === "COMPLETED" ? 
 export function juengste(rollup) {
   const je = new Map();
   for (const e of rollup ?? []) {
-    const status = e?.__typename === "StatusContext" || e?.context;
+    const status = istStatusContext(e);
     const key = status ? `ctx\u0000${e.context ?? "?"}` : `run\u0000${e?.workflowName ?? ""}\u0000${e?.name ?? "?"}`;
     const alt = je.get(key);
     // Bei gleichem Stempel gewinnt der spätere Eintrag der Liste (gh liefert sie in Startreihenfolge).
@@ -64,9 +67,8 @@ export function juengste(rollup) {
  * (oder gibt es keine), bleibt er rot (fail-closed). Pur.
  */
 function abgeloest(e, rollup) {
-  if (e?.__typename === "StatusContext" || e?.context) return false;
-  if (String(e?.conclusion ?? "").toUpperCase() !== "CANCELLED") return false;
-  return rollup.some((o) => o !== e && !(o?.__typename === "StatusContext" || o?.context) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
+  if (String(e?.conclusion ?? "").toUpperCase() !== "CANCELLED") return false; // ein StatusContext trägt keine `conclusion`
+  return rollup.some((o) => o !== e && !istStatusContext(o) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
 }
 
 /**

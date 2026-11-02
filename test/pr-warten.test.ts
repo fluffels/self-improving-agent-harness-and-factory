@@ -364,6 +364,24 @@ describe("bewerte: Rerun überschreibt den früheren Lauf (#1740 L34)", () => {
     expect(r.exit).toBe(1);
     expect(r.zeilen.join(" ")).toContain("ROT app-check");
   });
+  test("gesperrter CANCELLED ohne laufenden Geschwister-Lauf: ROT plus HINWEIS auf leeren Commit statt `gh run rerun`", () => {
+    const r = P.bewerte(offen([wf("verify", "CI", "COMPLETED", "CANCELLED", alt)]));
+    expect(r.exit).toBe(1);
+    const h = r.zeilen.filter((z) => z.startsWith("HINWEIS verify"));
+    expect(h).toHaveLength(1);
+    expect(h[0]).toContain("kein `gh run rerun`");
+    expect(h[0]).toContain("leerer Commit mit Push");
+  });
+  test("Negativ: FAILURE und ein abgelöster CANCELLED (Geschwister läuft) bekommen keinen Rerun-HINWEIS", () => {
+    expect(P.bewerte(offen([wf("verify", "CI", "COMPLETED", "FAILURE", alt)])).zeilen.join("\n")).not.toContain("rerun");
+    expect(P.bewerte(offen([wf("a", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "IN_PROGRESS", null, "0001-01-01T00:00:00Z")])).zeilen.join("\n")).not.toContain("rerun");
+  });
+  test("StatusContext gilt nicht als abgelöst: ein roter Status bleibt ROT neben einem laufenden CheckRun", () => {
+    const run = { __typename: "CheckRun", name: "app", status: "IN_PROGRESS", conclusion: null, startedAt: "0001-01-01T00:00:00Z", detailsUrl: "https://x/app" };
+    const r = P.bewerte(offen([ctx("ext/status", "FAILURE"), run]));
+    expect(r.exit).toBe(1);
+    expect(r.zeilen.join(" ")).toContain("ROT ext/status");
+  });
   test("Negativ L12: CANCELLED mit allen Geschwistern fertig bleibt rot; Geschwister eines anderen Workflows lösen nicht ab", () => {
     expect(P.bewerte(offen([wf("audit", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "CI", "COMPLETED", "SUCCESS", alt)])).exit).toBe(1);
     expect(P.bewerte(offen([wf("audit", "CI", "COMPLETED", "CANCELLED", alt), wf("verify", "Nightly", "IN_PROGRESS", null, "0001-01-01T00:00:00Z")])).exit).toBe(1);
