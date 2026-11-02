@@ -27,7 +27,7 @@ const dekodiert = (s) => {
 };
 
 /**
- * Pur: ordnet eine URL zu (die Umkehrung von `factorySeite`): `null` (nicht dieses Repo, oder bewusst nicht erfasst: Repo-Wurzel, `/issues`, `/pull`) oder
+ * Pur: ordnet eine URL zu (die Umkehrung von `factorySeite`): `null` (nicht dieses Repo, oder bewusst nicht erfasst: Repo-Wurzel, `/issues`, `/pull`, `/pulls`) oder
  * `{ form, ref, pfad, anker, refOffset }`; `form` ist `blob`, `tree` oder `fremd` (jede andere URL auf dieses Repo). Pfad und Anker sind dekodiert,
  * `refOffset` ist die Position des Refs in der URL. Groß-/Kleinschreibung des Repos ist egal.
  */
@@ -36,7 +36,7 @@ export function factoryUrlTeile(url, repo) {
   if (url.slice(0, basis.length).toLowerCase() !== basis.toLowerCase()) return null;
   const rest = url.slice(basis.length);
   if (rest !== "" && !/^[/?#]/.test(rest)) return null; // anderes Repo mit gleichem Namensanfang
-  if (/^\/?$/.test(rest) || /^[?#]/.test(rest) || /^\/(?:issues|pull)(?:[/?#]|$)/.test(rest)) return null;
+  if (/^\/?$/.test(rest) || /^[?#]/.test(rest) || /^\/(?:issues|pulls?)(?:[/?#]|$)/.test(rest)) return null;
   const m = /^\/(blob|tree)\/([^/?#]+)\/([^?#]+)(?:#(.*))?$/.exec(rest);
   if (!m) return { form: "fremd", ref: "", pfad: "", anker: "", refOffset: 0 };
   return { form: m[1], ref: m[2], pfad: dekodiert(m[3]), anker: dekodiert(m[4] ?? ""), refOffset: basis.length + m[1].length + 2 };

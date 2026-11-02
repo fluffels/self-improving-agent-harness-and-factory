@@ -138,6 +138,12 @@ describe("factoryUrlTeile (factory#130): Rundweg mit factorySeite", () => {
       assert.equal(factoryUrlTeile(u, "o/f"), null, u);
     }
   });
+  test("Issue- und PR-Listen ohne Suffix und mit Suffix sind nicht erfasst; ein längerer Pfadanfang ist `fremd`", () => {
+    for (const u of ["https://github.com/o/f/issues", "https://github.com/o/f/pull", "https://github.com/o/f/pulls", "https://github.com/o/f/issues?q=x", "https://github.com/o/f/pulls#a", "https://github.com/o/f/issues/"]) {
+      assert.equal(factoryUrlTeile(u, "o/f"), null, u);
+    }
+    for (const u of ["https://github.com/o/f/issuesx/1", "https://github.com/o/f/pullsx"]) assert.equal(factoryUrlTeile(u, "o/f")?.form, "fremd", u);
+  });
   test("jede andere URL auf das Repo ist `fremd` (z.B. /commit/<sha>, /blob/<ref> ohne Pfad)", () => {
     for (const u of ["https://github.com/o/f/commit/abc123", "https://github.com/o/f/blob/v1"]) assert.equal(factoryUrlTeile(u, "o/f")?.form, "fremd", u);
   });

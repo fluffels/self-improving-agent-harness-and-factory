@@ -99,6 +99,18 @@ describe("sammleLinks: Ausnahmen", () => {
     const links = lib.sammleLinks(root(), { repo: REPO, einheiten: ["AGENTS.md#kern", "docs/ganz.md"] });
     assert.deepEqual(markiert(links), ["AGENTS.md:4", "docs/a-gegenprobe-b.md:1", "docs/adr/x.md:1", "docs/code.md:4", "docs/lessons-learned.md:1", "docs/s.md:4", "docs/x.md:1"]);
   });
+  test("mehrere Besitz-Blöcke in einer Datei: Links in jedem Block bleiben unerfasst, dazwischen und danach zählen sie", () => {
+    const a = "<!-- factory-besitz:start a -->", ea = "<!-- factory-besitz:ende a -->", b = "<!-- factory-besitz:start b -->", eb = "<!-- factory-besitz:ende b -->";
+    const r = fixture({ "AGENTS.md": [a, eintrag, ea, eintrag, b, eintrag, eb, eintrag].join("\n") });
+    assert.deepEqual(markiert(lib.sammleLinks(r, { repo: REPO, einheiten: ["AGENTS.md#a", "AGENTS.md#b"] })), ["AGENTS.md:4", "AGENTS.md:8"]);
+  });
+  test("Marker mit CRLF-Zeilenende oder Einrückung öffnen und schließen ihren Block", () => {
+    const r = fixture({
+      "docs/s.md": [SCHNAPPSCHUSS_START, eintrag, SCHNAPPSCHUSS_ENDE, eintrag].join("\r\n"),
+      "AGENTS.md": ["  <!-- factory-besitz:start kern -->", eintrag, "  <!-- factory-besitz:ende kern -->", eintrag].join("\r\n"),
+    });
+    assert.deepEqual(markiert(lib.sammleLinks(r, { repo: REPO, einheiten: ["AGENTS.md#kern"] })), ["AGENTS.md:4", "docs/s.md:4"]);
+  });
   test("ein Marker im Code-Fence öffnet keinen Block: der Link danach wird erfasst", () => {
     assert.ok(lib.sammleLinks(root(), { repo: REPO }).some((l) => l.datei === "docs/code.md" && l.zeile === 4));
   });
@@ -184,9 +196,36 @@ describe("Prüfmodus", () => {
     assert.deepEqual(arten(root), ["projekt"]);
     assert.match(run([], root).err, /\[projekt\]/);
   });
+  test("Besitz-Einheiten des Sync-Stands gelten in Prüfung und Aufruf: ein Link im Besitz-Block ist kein Befund", () => {
+    const block = (inhalt: string) => `<!-- factory-besitz:start kern -->
+${inhalt}
+<!-- factory-besitz:ende kern -->
+`;
+    const root = fixture({
+      ".factory/projekt.json": CONFIG(),
+      ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", commit: "c1" }, einheiten: { "AGENTS.md#kern": "h" } }),
+      ".factory/factory-links.json": gut(),
+      "docs/x.md": tagLinks("v1"),
+      "AGENTS.md": block(`[z](${u("v0", "tot.md")})`),
+    });
+    assert.deepEqual(lib.auditFactoryLinks(root).befunde, []);
+    assert.equal(run([], root).code, 0);
+  });
+  test("Sync-Stand ohne quelle-Objekt und Index ohne ziele sind Befunde, kein Absturz", () => {
+    const ohneQuelle = fixture({ ".factory/projekt.json": CONFIG(), ".factory/sync-stand.json": JSON.stringify({ einheiten: {} }), "docs/x.md": tagLinks("v1") });
+    assert.deepEqual(arten(ohneQuelle), ["sync-stand"]);
+    assert.equal(lib.schreibeFactoryLinks(ohneQuelle, ohneQuelle).befunde[0].art, "sync-stand");
+    assert.deepEqual(arten(projekt(tagLinks("v1"), JSON.stringify({ repo: REPO, tag: "v1", commit: "c1" }))), ["nicht-im-index", "nicht-im-index"]);
+  });
+  test("der Ausnahmen-Hinweis erscheint nur bei einem ref-Befund", () => {
+    assert.doesNotMatch(run([], projekt(tagLinks("v1"), null)).err, /Hinweis: historische/);
+    assert.match(run([], projekt(tagLinks("v0"), gut())).err, /Hinweis: historische/);
+  });
   test("--wurzel wählt den Projektbaum; pruefeIndex ohne Link und Eintrag ist grün", () => {
     const root = projekt(tagLinks("v1"), gut());
-    assert.equal(run(["--wurzel", root], fixture({ "leer.txt": "" })).code, 0);
+    const r = run(["--wurzel", root], fixture({ "leer.txt": "" }));
+    assert.equal(r.code, 0);
+    assert.match(r.out, /2 Factory-Links auf 2 Ziele am Sync-Tag ohne Befund/);
     assert.deepEqual(lib.pruefeIndex({ links: [], index: { repo: REPO, tag: "v1", commit: "c1", ziele: {} }, sync: { quelle: { tag: "v1", commit: "c1" } }, repo: REPO }), []);
   });
   test("Aufruf: --quelle ohne --schreiben und umgekehrt sind Exit 2", () => {
@@ -294,6 +333,24 @@ describe("Schreibmodus e2e mit temporärem Git-Repo als Quelle", () => {
     assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
     assert.equal(lies(root, "docs/alt/b.md"), alt);
     assert.equal(lies(root, "docs/x.md"), `[a](${u("v9", "a.md")})\n`);
+  });
+  test("Besitz-Block des Sync-Stands wird beim Schreiben nicht umgeschrieben, der Link außerhalb schon", () => {
+    const k = klon();
+    const block = `<!-- factory-besitz:start kern -->
+[a](${u("v1", "a.md")})
+<!-- factory-besitz:ende kern -->
+`;
+    const root = fixture({
+      ".factory/projekt.json": CONFIG(),
+      ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v9", commit: k.commit }, einheiten: { "AGENTS.md#kern": "h" } }),
+      "docs/x.md": `[a](${u("v1", "a.md")})
+`,
+      "AGENTS.md": block,
+    });
+    assert.equal(run(["--schreiben", "--quelle", k.dir], root).code, 0);
+    assert.equal(lies(root, "AGENTS.md"), block);
+    assert.equal(lies(root, "docs/x.md"), `[a](${u("v9", "a.md")})
+`);
   });
   test("Ref anderer Länge, mehrere Links in einer Zeile: kein Link wird zerschnitten", () => {
     const k = klon();

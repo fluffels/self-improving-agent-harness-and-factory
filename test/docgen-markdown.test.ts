@@ -146,6 +146,13 @@ describe("externeLinkStellen (factory#130)", () => {
   test("`[t](<url>)` zählt einmal, nicht zusätzlich als Autolink", () => {
     assert.equal(ext.externeLinkStellen("[t](<https://x.de/y>)").length, 1);
   });
+  test("ein Autolink direkt hinter einem Inline-Link bleibt erhalten, die Liste ist nach Position sortiert", () => {
+    const text = "[a](https://x/a)<https://x/b> <https://x/c> [d](https://x/d)";
+    assert.deepEqual(
+      ext.externeLinkStellen(text).map((x) => x.url),
+      ["https://x/a", "https://x/b", "https://x/c", "https://x/d"],
+    );
+  });
   test("Code-Fences und Inline-Code zählen nicht, relative Ziele fehlen", () => {
     const text = ["```", "[a](https://x.de/fence)", "```", "`[b](https://x.de/inline)` [c](rel.md) [d](https://x.de/echt)"].join("\n");
     assert.deepEqual(
