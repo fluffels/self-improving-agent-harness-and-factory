@@ -7,7 +7,10 @@
  *      per Name liest (REST `fields.find((f) => f.name === "X")`, GraphQL `field(name: "X")`), heißt wie das Status-Feld des Doctors; die
  *      Statusvergleiche der Board-Skripte (nennen `statusFeld` oder importieren `board-lib.mjs`) sind die Todo-Option des Doctors.
  *   4. Die Vorlage der Wochenlauf-Datei, die `--einrichten` installiert (WOCHENLAUF_WORKFLOW), ist die Datei im Repo (Zeilenenden egal).
- * Bekannte Grenzen: nur Literale und die genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
+ *   5. Pflicht-Checks des Kerns (factory#117): jeder Name in `pflichtChecks` einer Besitz-Einheit ist ein Job-`name:` ihrer Workflow-Datei und steht
+ *      im Factory-Spiegel; umgekehrt steht jeder Spiegel-Check, den ein Besitz-Workflow erzeugt (Kontext = `name:` oder Job-Schlüssel), in den `pflichtChecks` dieser Einheit.
+ * Bekannte Grenzen: Punkt 5 vergleicht nur literale Job-Namen; Matrix- und Ausdrucks-Namen (`${{ }}`) und Jobs mit `uses:` (Kontext „caller / callee“) erkennt er nicht.
+ * Weitere Grenzen: nur Literale und die genannten Schreibweisen; ein Label aus einer Berechnung oder `secrets[...]` sieht kein Scanner.
  * Gescannt wird `scripts/*.mjs` auf oberster Ebene (nicht rekursiv, keine `.cjs`). Feldzugriffe mit einfachen Anführungszeichen,
  * umgedrehtem Vergleich, Destructuring, `.filter`/`.some` oder einer Variablen als Feldname erkennt der Feld-Scanner nicht.
  *
@@ -15,15 +18,16 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../../scripts/harness-doctor.mjs";
 
-interface Vor { secrets: string[]; variablen: string[]; labels: string[] }
+interface Vor { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null }
 interface Doctor {
-  voraussetzungenAus(a: { config: unknown; workflows: { pfad: string; text: string }[] }): Vor;
+  voraussetzungenAus(a: { config: unknown; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): Vor;
   BOARD_PRUEFPUNKTE: string[];
   STATUS_FELD_NAME: string;
   TODO_OPTION_NAME: string;
@@ -64,7 +68,19 @@ const optionVergleiche = (text: string): string[] => [...text.matchAll(/\bstatus
 const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<string, string>; boards: Record<string, unknown>[] };
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
 const skripte = dateien("scripts", /\.mjs$/).filter((s) => !["scripts/harness-doctor.mjs", "scripts/harness-doctor-lib.mjs"].includes(s.pfad));
-const vor = doctor.voraussetzungenAus({ config, workflows });
+const spiegel = JSON.parse(lies(".github/ruleset-main-schutz.json")) as { requiredChecks: string[] };
+const besitz = JSON.parse(lies(".factory/besitz.json")) as { eintraege: { pfad: string; block?: string; schluessel?: string; ring: string; pflichtChecks?: string[] }[] };
+const vor = doctor.voraussetzungenAus({ config, workflows, spiegel, besitz: { wert: besitz } });
+/** Jobs eines Workflows: Schlüssel und literaler `name:` (ein Ausdruck mit `${{` gilt als unbekannt); `kontext` ist der Check-Name, den GitHub meldet (`name` oder sonst der Schlüssel), `null` bei Ausdruck oder `uses:`. */
+const jobsVon = (text: string): { id: string; name?: string; kontext: string | null }[] => {
+  const jobs = (parse(text) as { jobs?: Record<string, { name?: unknown; uses?: unknown } | null> } | null)?.jobs ?? {};
+  return Object.entries(jobs).map(([id, j]) => {
+    const name = typeof j?.name === "string" ? j.name : undefined;
+    const roh = name ?? id;
+    return { id, ...(name === undefined ? {} : { name }), kontext: roh.includes("${{") || j?.uses !== undefined ? null : roh };
+  });
+};
+const ganzeWorkflows = besitz.eintraege.filter((e) => e.block === undefined && e.schluessel === undefined && /^\.github\/workflows\/[^/]+\.ya?ml$/.test(e.pfad));
 const ohneCase = (liste: string[]): Set<string> => new Set(liste.map((l) => l.toLowerCase()));
 
 describe("Scanner (Fixtures, nicht vakuös)", () => {
@@ -92,6 +108,49 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
     const v = doctor.voraussetzungenAus({ config, workflows: [{ pfad: "x.yml", text: "a: ${{ vars.FOO }}" }] });
     assert.ok(v.variablen.includes("FOO"));
     assert.ok(!doctor.voraussetzungenAus({ config, workflows: [] }).variablen.includes("FOO"));
+  });
+});
+
+describe("Pflicht-Checks des Kerns (factory#117)", () => {
+  test("jobsVon (Fixtures, nicht vakuös): Name, Schlüssel als Kontext, Ausdruck und uses: unbekannt", () => {
+    assert.deepEqual(jobsVon("jobs:\n  a:\n    name: Eins\n  b:\n    runs-on: x\n  c:\n    name: \"M ${{ matrix.v }}\"\n  d:\n    uses: ./w.yml\n"), [
+      { id: "a", name: "Eins", kontext: "Eins" },
+      { id: "b", kontext: "b" },
+      { id: "c", name: "M ${{ matrix.v }}", kontext: null },
+      { id: "d", kontext: null },
+    ]);
+    assert.deepEqual(jobsVon("name: nur Workflow\n"), []);
+  });
+
+  test("jeder Name in pflichtChecks ist ein Job-name: seines Workflows und steht im Factory-Spiegel", () => {
+    const mit = besitz.eintraege.filter((e) => e.pflichtChecks !== undefined);
+    assert.ok(mit.length > 0, "kein Eintrag mit pflichtChecks: vakuös");
+    for (const e of mit) {
+      assert.ok(existsSync(WURZEL + e.pfad), `${e.pfad}: Datei fehlt`);
+      const namen = jobsVon(lies(e.pfad)).flatMap((j) => (j.name === undefined ? [] : [j.name]));
+      for (const n of e.pflichtChecks ?? []) {
+        assert.ok(namen.includes(n), `${e.pfad}: pflichtChecks nennt "${n}", aber kein Job dieser Datei heißt so (Job-name: ${namen.join(", ")})`);
+        assert.ok(spiegel.requiredChecks.includes(n), `${e.pfad}: "${n}" steht nicht in requiredChecks des Ruleset-Spiegels`);
+      }
+    }
+  });
+
+  test("jeder Spiegel-Check, den ein Besitz-Workflow erzeugt, steht in pflichtChecks dieser Einheit", () => {
+    let funde = 0;
+    for (const e of ganzeWorkflows) {
+      for (const j of jobsVon(lies(e.pfad))) {
+        if (j.kontext === null || !spiegel.requiredChecks.includes(j.kontext)) continue;
+        funde++;
+        assert.ok((e.pflichtChecks ?? []).includes(j.kontext), `${e.pfad} erzeugt den Required Check "${j.kontext}" des Spiegels, pflichtChecks der Besitz-Einheit nennt ihn nicht`);
+      }
+    }
+    assert.ok(funde > 0, "kein Spiegel-Check in einem Besitz-Workflow gefunden: vakuös");
+  });
+
+  test("die Ableitung des echten Repos: Spiegel und Kern, Manifest lesbar", () => {
+    assert.equal(vor.besitzFehler, null);
+    for (const n of spiegel.requiredChecks) assert.ok(vor.pflichtChecks.includes(n), n);
+    for (const e of besitz.eintraege) for (const n of e.pflichtChecks ?? []) assert.ok(vor.pflichtChecks.includes(n), n);
   });
 });
 
