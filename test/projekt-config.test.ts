@@ -15,6 +15,8 @@ import { escapeRegex } from "../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawForm from "../scripts/repo-form.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDocmap from "../scripts/check-docmap.mjs";
 
 interface Pc {
@@ -24,7 +26,6 @@ interface Pc {
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
-  gleichesRepo(a: unknown, b: unknown): boolean;
   cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -44,6 +45,8 @@ interface Pc {
   sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[] };
 }
 const pc = rawPc as unknown as Pc;
+/** Blatt-Modul `repo-form.mjs` (factory#114): wird direkt importiert, die Config-Lib reicht es nicht weiter. */
+const form = rawForm as unknown as { gleichesRepo(a: unknown, b: unknown): boolean; istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string } };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 
@@ -233,11 +236,11 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit("a/b/c").join("\n"), /boards\.1\.repo/);
     assert.match(mit(5).join("\n"), /boards\.1\.repo/);
     assert.match(mit("").join("\n"), /boards\.1\.repo/);
-    assert.equal(pc.gleichesRepo("Acme/Demo", "acme/demo"), true);
-    assert.equal(pc.gleichesRepo("acme/demo", "acme/anders"), false);
-    assert.equal(pc.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
-    assert.equal(pc.gleichesRepo(undefined, "acme/demo"), false);
-    assert.equal(pc.gleichesRepo(undefined, undefined), false);
+    assert.equal(form.gleichesRepo("Acme/Demo", "acme/demo"), true);
+    assert.equal(form.gleichesRepo("acme/demo", "acme/anders"), false);
+    assert.equal(form.gleichesRepo("acme/demo", undefined), false); // ein Nicht-String ist nie gleich, auf jeder Seite
+    assert.equal(form.gleichesRepo(undefined, "acme/demo"), false);
+    assert.equal(form.gleichesRepo(undefined, undefined), false);
     const c = gueltig();
     assert.equal(pc.boardRepo(c.boards?.[0] ?? {}, c), "acme/demo");
     assert.equal(pc.boardRepo({ ...(c.boards?.[0] ?? {}), repo: "acme/anders" }, c), "acme/anders");
@@ -294,7 +297,7 @@ describe("Bereichs-Aliase (#1943)", () => {
 
 describe("istRepoForm: dieselbe Formprüfung wie zerlegeRepo (#78)", () => {
   test("genau owner/name ohne Leerraum; jede Abweichung ist falsch und zerlegeRepo wirft dazu", () => {
-    const f = pc as unknown as { istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string } };
+    const f = form;
     assert.equal(f.istRepoForm("acme/demo"), true);
     assert.deepEqual(f.zerlegeRepo("acme/demo"), { owner: "acme", name: "demo" });
     for (const kaputt of ["acme", "a/b/c", "/b", "a/", "a /b", "", undefined, 5]) {

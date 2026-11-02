@@ -1,6 +1,6 @@
 /* Blatt-Importe-Wächter (factory#114): Blatt-Module werden direkt importiert, ihre Namen werden nicht über einen Re-Export weitergereicht.
  *
- * Ein Blatt-Modul besitzt seine Namen (`repo-form.mjs`: `istRepoForm` …, `sync-stand-lib.mjs`: `STAND_PFAD` …). Reicht eine Lib sie per
+ * Ein Blatt-Modul besitzt seine Namen (`repo-form.mjs`: `istRepoForm` …, `sync-stand-lib.mjs`: `STAND_PFAD` …, `relativ-pfad.mjs`: `istRelativPosix`). Reicht eine Lib sie per
  * `export { … }` weiter, wächst deren Import-Hülle um Abnehmer, die den Blatt-Besitz nicht kennen, und der Besitz wird unauffindbar.
  * Rot wird jedes `export { … }` (mit oder ohne `from`) und jedes `export * from` in `scripts/**` (`.mjs`), das einen Namen aus einem
  * Blatt-Modul weiterreicht. Ausnahmen nur in der schrumpfenden `ALLOWLIST` (Datei -> `#<nr>` des offenen Tickets); ein Eintrag ohne
@@ -19,14 +19,14 @@ import { fileURLToPath } from "node:url";
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Geschlossene Liste der Blatt-Module (Repo-Pfade). */
-export const BLAETTER = ["scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs"];
+export const BLAETTER = ["scripts/relativ-pfad.mjs", "scripts/repo-form.mjs", "scripts/sync-stand-lib.mjs"];
 
 /** Bestehende Re-Exports (Datei -> offenes Ticket). Nur kürzen; ein Eintrag ohne Befund lässt den Test rot werden. */
 export const ALLOWLIST: Record<string, string> = {};
 
 /** Die Namen, die ein Blatt-Modul selbst deklariert (`export const|function|class|let NAME`). */
 export function blattNamen(text: string): Set<string> {
-  return new Set([...text.matchAll(/^export\s+(?:async\s+)?(?:const|let|function\*?|class)\s+([\w$]+)/gm)].map((m) => m[1] as string));
+  return new Set([...text.matchAll(/^export\s+(?:async\s+)?(?:const|let|function\*?|class)\s+([\w$]+)/gm)].map((m) => m[1]));
 }
 
 /** `a`, `a as b` -> `{ lokal: "a", aussen: "b" }`. */
@@ -41,21 +41,21 @@ export function reexportFunde(pfad: string, text: string, blaetter: Record<strin
   const aufloesen = (spec: string): string => posix.join(dirname(pfad), spec);
   const importiert = new Map<string, string>(); // lokaler Name -> Blatt-Pfad
   for (const m of text.matchAll(/^import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/gm)) {
-    const blatt = aufloesen(m[2] as string);
+    const blatt = aufloesen(m[2]);
     const namen = blaetter[blatt];
     if (!namen) continue;
-    for (const { lokal, aussen } of posten(m[1] as string)) if (namen.has(lokal)) importiert.set(aussen, blatt);
+    for (const { lokal, aussen } of posten(m[1])) if (namen.has(lokal)) importiert.set(aussen, blatt);
   }
   const funde: string[] = [];
   for (const m of text.matchAll(/^export\s*\{([^}]*)\}(?:\s*from\s*"([^"]+)")?/gm)) {
     const quelle = m[2] === undefined ? undefined : aufloesen(m[2]);
-    for (const { lokal } of posten(m[1] as string)) {
+    for (const { lokal } of posten(m[1])) {
       const aus = quelle === undefined ? importiert.get(lokal) : blaetter[quelle]?.has(lokal) ? quelle : undefined;
       if (aus) funde.push(`${pfad}: ${lokal} (aus ${aus})`);
     }
   }
   for (const m of text.matchAll(/^export\s*\*(?:\s*as\s+[\w$]+)?\s*from\s*"([^"]+)"/gm)) {
-    const quelle = aufloesen(m[1] as string);
+    const quelle = aufloesen(m[1]);
     if (blaetter[quelle]) funde.push(`${pfad}: export * (aus ${quelle})`);
   }
   return funde;
@@ -78,6 +78,7 @@ describe("Blatt-Importe (factory#114)", () => {
     // Leerlauf-Schutz: die Blätter besitzen Namen, der Scan sieht Unterordner.
     expect(blaetter["scripts/repo-form.mjs"]?.has("istRepoForm")).toBe(true);
     expect(blaetter["scripts/sync-stand-lib.mjs"]?.has("STAND_PFAD")).toBe(true);
+    expect(blaetter["scripts/relativ-pfad.mjs"]?.has("istRelativPosix")).toBe(true);
     const pfade = mjsPfade("scripts");
     expect(pfade.length).toBeGreaterThan(20);
     expect(pfade.some((p) => p.split("/").length > 2)).toBe(true);

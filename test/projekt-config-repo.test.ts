@@ -3,21 +3,23 @@ import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as formRaw from "../scripts/repo-form.mjs";
 
 interface Lib {
-  zerlegeRepo(repo: unknown): { owner: string; name: string };
   repoName(config: unknown): string;
   repoOwner(config: unknown): string;
 }
 const lib = raw as unknown as Lib;
+const form = formRaw as unknown as { zerlegeRepo(repo: unknown): { owner: string; name: string } }; // Blatt-Modul, direkt importiert (factory#114)
 
 describe("zerlegeRepo", () => {
   test("owner/name wird zerlegt", () => {
-    assert.deepEqual(lib.zerlegeRepo("a/b"), { owner: "a", name: "b" });
+    assert.deepEqual(form.zerlegeRepo("a/b"), { owner: "a", name: "b" });
   });
   for (const kaputt of ["x", "a/b/c", "", "/b", "a/", "a /b", 5, undefined]) {
     test(`wirft mit Fix-Zeile bei ${JSON.stringify(kaputt)}`, () => {
-      assert.throws(() => lib.zerlegeRepo(kaputt), /owner\/name[\s\S]*Fix:/);
+      assert.throws(() => form.zerlegeRepo(kaputt), /owner\/name[\s\S]*Fix:/);
     });
   }
 });

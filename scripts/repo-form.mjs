@@ -1,5 +1,4 @@
-// Blatt-Modul ohne Importe (#101): die Form `owner/name` eines Repos, ihre Prüfung und Zerlegung. Einzige Quelle; `projekt-config-lib` und
-// `spezifikation-lib` führen sie weiter, `gh-cli`, `inbox-lib`, `sync-stand-lib` und `claims-pruefen` importieren direkt (kein Zyklus über die Config-Lib).
+// Blatt-Modul ohne Importe (#101): die Form `owner/name` eines Repos, ihre Prüfung und Zerlegung. Einzige Quelle; alle Abnehmer importieren direkt (kein Re-Export, factory#114; kein Zyklus über die Config-Lib).
 
 /** Die Form `owner/name` eines Repos (SSOT): GitHub-Zeichen `[\w.-]` je Teil, genau ein Schrägstrich. Streng, weil Owner/Name ungeprüft in GraphQL-Texte gehen. */
 export const REPO_FORM = /^([\w.-]+)\/([\w.-]+)$/;

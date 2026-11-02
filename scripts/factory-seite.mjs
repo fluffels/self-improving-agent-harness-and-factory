@@ -7,7 +7,8 @@
  * (Link statt Pfad prüfen) steht in #93; der Wächter `test/harness/factory-seite.test.ts` prüft die Literal-Aufrufe von `factorySeiteIn`.
  */
 import { liesSyncStand } from "./sync-stand-lib.mjs";
-import { boardDerRolle, istRepoForm, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { boardDerRolle, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
 
 /** Pur: `https://github.com/<repo>/blob/<tag>/<pfad>#<anker>` mit `repo` und `tag`, sonst `<pfad>#<anker>`; ohne Anker ohne `#`. */
 export function factorySeite({ pfad, anker, repo, tag }) {
