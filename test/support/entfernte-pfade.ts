@@ -29,9 +29,12 @@ export const AUSNAHMEN: Ausnahme[] = [
 /** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
 export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [];
 
-/** Marker eines Schnappschuss-Blocks: datierter Text, der die damaligen Namen bewusst trägt (Glossar „Schnappschuss-Block“). */
-export const SCHNAPPSCHUSS_START = "<!-- schnappschuss:start -->";
-export const SCHNAPPSCHUSS_ENDE = "<!-- schnappschuss:ende -->";
+/** Marker eines Schnappschuss-Blocks (Glossar „Schnappschuss-Block“): die Kern-Konstanten aus `docs-gen/markdown.mjs`, eine Quelle für beide Wächter. */
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+const marker = rawMarkdown as unknown as { SCHNAPPSCHUSS_START: string; SCHNAPPSCHUSS_ENDE: string };
+export const SCHNAPPSCHUSS_START = marker.SCHNAPPSCHUSS_START;
+export const SCHNAPPSCHUSS_ENDE = marker.SCHNAPPSCHUSS_ENDE;
 const ISO_DATUM = /\d{4}-\d{2}-\d{2}/;
 
 /** Findet Reste in den übergebenen Dateien; leer = sauber. */

@@ -112,3 +112,66 @@ describe("pruefeMermaid: Größenwächter (#1411)", () => {
     assert.deepEqual(m.mermaidBloecke("x\n```mermaid\nflowchart TB\n```\n```ts\nlet a;\n```\n```mermaid\noffen"), ["flowchart TB"]);
   });
 });
+
+// Externe Link-Stellen, Code-Maske und Schnappschuss-Marker (factory#130).
+const ext = md as unknown as {
+  codeMaskiert: (s: string) => string;
+  externeLinkStellen: (s: string) => { start: number; ende: number; url: string }[];
+  linkStellen: (s: string) => { start: number; ende: number }[];
+  SCHNAPPSCHUSS_START: string;
+  SCHNAPPSCHUSS_ENDE: string;
+};
+
+describe("codeMaskiert (factory#130)", () => {
+  test("behält die Länge und die Zeilenumbrüche, auch bei CRLF, Fence und Inline-Code", () => {
+    const text = ["a `x` b", "```", "[l](u)", "```", "ende"].join("\r\n");
+    const m = ext.codeMaskiert(text);
+    assert.equal(m.length, text.length);
+    assert.equal(m.split("\r\n").length, 5);
+    assert.ok(!m.includes("[l]") && !m.includes("`x`"));
+    assert.ok(m.includes("ende"));
+  });
+});
+
+describe("externeLinkStellen (factory#130)", () => {
+  test("Inline-Link, Bild, spitze Klammern mit Leerzeichen und Autolink; die Spanne ist die URL im Original", () => {
+    const text = "[a](https://x.de/a) ![b](https://x.de/b.png) [c](<https://x.de/c d>) <https://x.de/e>";
+    const s = ext.externeLinkStellen(text);
+    assert.deepEqual(
+      s.map((x) => x.url),
+      ["https://x.de/a", "https://x.de/b.png", "https://x.de/c d", "https://x.de/e"],
+    );
+    for (const x of s) assert.equal(text.slice(x.start, x.ende), x.url);
+  });
+  test("`[t](<url>)` zählt einmal, nicht zusätzlich als Autolink", () => {
+    assert.equal(ext.externeLinkStellen("[t](<https://x.de/y>)").length, 1);
+  });
+  test("ein Autolink direkt hinter einem Inline-Link bleibt erhalten, die Liste ist nach Position sortiert", () => {
+    const text = "[a](https://x/a)<https://x/b> <https://x/c> [d](https://x/d)";
+    assert.deepEqual(
+      ext.externeLinkStellen(text).map((x) => x.url),
+      ["https://x/a", "https://x/b", "https://x/c", "https://x/d"],
+    );
+  });
+  test("Code-Fences und Inline-Code zählen nicht, relative Ziele fehlen", () => {
+    const text = ["```", "[a](https://x.de/fence)", "```", "`[b](https://x.de/inline)` [c](rel.md) [d](https://x.de/echt)"].join("\n");
+    assert.deepEqual(
+      ext.externeLinkStellen(text).map((x) => x.url),
+      ["https://x.de/echt"],
+    );
+  });
+  test("Aufteilung: jeder Inline-Link steht in genau einer der beiden Listen (intern: linkStellen, extern: externeLinkStellen)", () => {
+    const text = "[i](a.md) [e](https://x.de) [m](mailto:a@b.de) [p](//cdn/x) ![b](b.png) [s](<c d.md>)";
+    const intern = ext.linkStellen(text).length;
+    const extern = ext.externeLinkStellen(text).length;
+    assert.equal(intern, 3);
+    assert.equal(extern, 3, "https, mailto und protokoll-relativ sind die externen Ziele");
+  });
+});
+
+describe("Schnappschuss-Marker (factory#130)", () => {
+  test("sind die Kern-Konstanten", () => {
+    assert.equal(ext.SCHNAPPSCHUSS_START, "<!-- schnappschuss:start -->");
+    assert.equal(ext.SCHNAPPSCHUSS_ENDE, "<!-- schnappschuss:ende -->");
+  });
+});

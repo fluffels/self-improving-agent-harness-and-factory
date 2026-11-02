@@ -4,7 +4,7 @@
  *
  * Wächter: jeder Aufruf `factorySeiteIn(<x>, "<pfad>", "<anker>")` mit zwei String-Literalen in `scripts/` (alle `.mjs`, rekursiv) muss auf eine
  * lokal vorhandene Datei und auf einen vorhandenen Überschrift-Anker zeigen (`collectHeadingSlugs`). Scan-Umfang (geschlossen): `.mjs` unter
- * `scripts/`, Aufruf in einer Zeile, Literale in doppelten Anführungszeichen. Berechnete Argumente liegen außerhalb. Link-Prüfung: #93. */
+ * `scripts/`, Aufruf in einer Zeile, Literale in doppelten Anführungszeichen. Berechnete Argumente liegen außerhalb. Link-Prüfung: `check-factory-links.mjs` (factory#130); dort steht die Zerlegung, hier ihr Rundweg und der Wächter, dass nur diese Datei Factory-URLs baut. */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -16,7 +16,9 @@ import * as rawSeite from "../../scripts/factory-seite.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMd from "../../scripts/docs-gen/markdown.mjs";
 
-const { factorySeite, factorySeiteIn } = rawSeite as {
+const { factorySeite, factorySeiteIn, factoryUrlTeile, repoBasis } = rawSeite as {
+  repoBasis: (repo: string) => string;
+  factoryUrlTeile: (url: string, repo: string) => { form: string; ref: string; pfad: string; anker: string; refOffset: number } | null;
   factorySeite: (a: { pfad: string; anker?: string; repo?: string; tag?: string }) => string;
   factorySeiteIn: (wurzel: string, pfad: string, anker?: string) => string;
 };
@@ -111,5 +113,62 @@ describe("Wächter: Literal-Aufrufe zeigen auf vorhandene Seiten und Anker", () 
     }
     assert.ok(n >= 4, `erwartet mindestens 4 Literal-Aufrufe, gefunden ${n}`);
     assert.deepEqual(fehler, []);
+  });
+});
+
+describe("factoryUrlTeile (factory#130): Rundweg mit factorySeite", () => {
+  const FAELLE: { pfad: string; anker?: string; repo: string; tag: string }[] = [
+    { pfad: "docs/a.md", anker: "x", repo: "o/f", tag: "v1" },
+    { pfad: "docs/a.md", repo: "o/f", tag: "v1" },
+    { pfad: "docs/b/c.md", anker: "langfuse-status-überprüfen-1293", repo: "o/f", tag: "v1.2.3" },
+  ];
+  test("Pfad, Anker und Ref kommen zurück (blob), auch bei anderer Groß-/Kleinschreibung des Repos", () => {
+    for (const k of FAELLE) {
+      const url = factorySeite(k);
+      assert.deepEqual(factoryUrlTeile(url, k.repo), { form: "blob", ref: k.tag, pfad: k.pfad, anker: k.anker ?? "", refOffset: repoBasis(k.repo).length + "/blob/".length }, url);
+      assert.equal(factoryUrlTeile(url, k.repo.toUpperCase())?.pfad, k.pfad);
+      assert.equal(url.slice(factoryUrlTeile(url, k.repo)!.refOffset).startsWith(k.tag), true, "refOffset zeigt auf den Ref");
+    }
+  });
+  test("tree-Form wird erkannt", () => {
+    assert.deepEqual(factoryUrlTeile("https://github.com/o/f/tree/v1/docs/adr", "o/f"), { form: "tree", ref: "v1", pfad: "docs/adr", anker: "", refOffset: "https://github.com/o/f/tree/".length });
+  });
+  test("andere Repos, /issues, /pull und die Repo-Wurzel sind nicht erfasst (null)", () => {
+    for (const u of ["https://github.com/o/factory-x/blob/v1/a.md", "https://github.com/o/f/issues/3", "https://github.com/o/f/pull/3", "https://github.com/o/f", "https://github.com/o/f/", "https://github.com/o/f#x", "https://example.org/a"]) {
+      assert.equal(factoryUrlTeile(u, "o/f"), null, u);
+    }
+  });
+  test("Issue- und PR-Listen ohne Suffix und mit Suffix sind nicht erfasst; ein längerer Pfadanfang ist `fremd`", () => {
+    for (const u of ["https://github.com/o/f/issues", "https://github.com/o/f/pull", "https://github.com/o/f/pulls", "https://github.com/o/f/issues?q=x", "https://github.com/o/f/pulls#a", "https://github.com/o/f/issues/"]) {
+      assert.equal(factoryUrlTeile(u, "o/f"), null, u);
+    }
+    for (const u of ["https://github.com/o/f/issuesx/1", "https://github.com/o/f/pullsx"]) assert.equal(factoryUrlTeile(u, "o/f")?.form, "fremd", u);
+  });
+  test("jede andere URL auf das Repo ist `fremd` (z.B. /commit/<sha>, /blob/<ref> ohne Pfad)", () => {
+    for (const u of ["https://github.com/o/f/commit/abc123", "https://github.com/o/f/blob/v1"]) assert.equal(factoryUrlTeile(u, "o/f")?.form, "fremd", u);
+  });
+  test("repoBasis", () => {
+    assert.equal(repoBasis("o/f"), "https://github.com/o/f");
+  });
+});
+
+/**
+ * Wächter: Factory-URLs (`/blob/`, `/tree/`) baut und zerlegt nur `scripts/factory-seite.mjs` (factory#130). Scan-Umfang (geschlossen): die Teilzeichenketten
+ * `/blob/` und `/tree/` in `scripts/**` (`.mjs`, `.cjs`, `.js`). Grenze: anders zusammengesetzte Segmente (`["blob", ref].join("/")`, `(blob|tree)` im
+ * Regex) bleiben unerkannt.
+ */
+describe("Wächter: URL-Bau mit /blob/ und /tree/ nur in factory-seite.mjs", () => {
+  const skripte = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = join(dir, e.name);
+      return e.isDirectory() ? skripte(p) : /\.(?:mjs|cjs|js)$/.test(e.name) ? [p] : [];
+    });
+  const treffer = skripte(join(WURZEL, "scripts")).filter((p) => /\/(?:blob|tree)\//.test(readFileSync(p, "utf8")));
+  const rel = (p: string): string => p.slice(WURZEL.length).replaceAll("\\", "/");
+  test("Positivkontrolle: factory-seite.mjs trägt die Muster", () => {
+    assert.ok(treffer.map(rel).includes("scripts/factory-seite.mjs"));
+  });
+  test("keine andere Skript-Datei trägt sie", () => {
+    assert.deepEqual(treffer.map(rel).filter((p) => p !== "scripts/factory-seite.mjs"), []);
   });
 });
