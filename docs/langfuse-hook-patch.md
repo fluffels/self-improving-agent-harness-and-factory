@@ -88,7 +88,7 @@ Klasse **„Hook meldet Erfolg, Ingestion kommt nicht an, kein Fehlersignal“**
 
 ## Output der Subagenten ist im Transkript unterzählt (#1568)
 
-Die Subagenten-Dateien (`subagents/*.jsonl`) zeichnen `output_tokens` nur beim Stand `message_start` auf, die Hauptdatei ist vollständig. Langfuse bekommt aus dem Transkript nur die aufgezeichneten Werte, der Output der Subagenten steht dort darum zu niedrig; geschätzte Werte schickt der Nachlieferer nie (Langfuse soll nur exakte Daten tragen, ein Vergleich Transkript gegen Langfuse bleibt damit Δ = 0). Die Schätzung als Untergrenze (`outputGeschaetzt`, `costGeschaetzt`) lebt nur in den Messskripten; Verfahren und Kalibrierung: [model-routing.md › Planer-Kosten](model-routing.md#planer-kosten-1558).
+Die Subagenten-Dateien (`subagents/*.jsonl`) zeichneten bis 2026-10-26 `output_tokens` nur beim Stand `message_start` auf (die Hauptdatei war vollständig); seit 2026-10-27 liegt die Output-Quote bei 98 bis 100 % ([Output-Grenze](model-routing.md#planer-kosten-1558)). Langfuse bekommt aus dem Transkript nur die aufgezeichneten Werte, der Output der Subagenten stand dort für frühere Läufe darum zu niedrig; geschätzte Werte schickt der Nachlieferer nie (Langfuse soll nur exakte Daten tragen, ein Vergleich Transkript gegen Langfuse bleibt damit Δ = 0). Die Schätzung als Untergrenze (`outputGeschaetzt`, `costGeschaetzt`) lebt nur in den Messskripten; Verfahren und Kalibrierung: [model-routing.md › Planer-Kosten](model-routing.md#planer-kosten-1558).
 
 ## Alternative ohne Patch
 

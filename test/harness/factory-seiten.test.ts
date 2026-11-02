@@ -13,10 +13,12 @@
  * Rest der Baseline: `model-routing.md` trägt Messabschnitte des Quellprojekts (Skill- und Tag-Name als Beleg, ein
  * historischer Ordnername). Die Baseline steigt nie: ein Test sperrt jede Anhebung gegen die Diff-Basis (`anhebungen` aus `test/support/baseline-zaehlung.ts`, wie bei `kern-reinheit`); Besitz-Seiten fallen
  * zusätzlich unter die strengere Regel von `kern-reinheit` (ohne Herkunfts-Maske).
- * Ticketnummern (#95): jede nackte drei- oder vierstellige Nummer `#<nr>` zählt je Seite und in der `AGENTS.md` gegen `ticketnummern-baseline.json` (nur sinkend, gleiche
- * Anhebungssperre; fehlt die Datei an der Diff-Basis, gilt die Zählung der Seiten dort). Die Herkunftsform `quellprojekt#<nr>` (Ticket des Quellprojekts), `factory#<nr>` (Ticket des
+ * Ticketnummern (#95): jede nackte drei- oder vierstellige Nummer `#<nr>` zählt je Seite, Agententext (`.claude/agents`), Skill-Quelle (`.agents/skills`) und in der `AGENTS.md` gegen
+ * `ticketnummern-baseline.json` (nur sinkend, gleiche Anhebungssperre; fehlt die Datei oder der Eintrag der Einheit an der Diff-Basis, gilt die Zählung der Einheit dort).
+ * Nackte Nummern mit ein oder zwei Ziffern gelten ohne Baseline und ohne Toleranz, außer in Überschriften, Code (Fence und Inline), GEN-Blöcken, Link-Zielen und Herkunftsbezügen
+ * (bewusste Grenze: dort bleibt die Kurzform ungeprüft; ein Beispiel wie `#5` steht in Inline-Code). Die Herkunftsform `quellprojekt#<nr>` (Ticket des Quellprojekts), `factory#<nr>` (Ticket des
  * Factory-Repos) und `owner/repo#nr` maskiert `maskiere` schon als Herkunftsbezug. `scripts/herkunftsform.mjs` stellt um. Grenzen: Überschriften (ihr Anker trägt die Nummer) und Code zählen mit
- * und stehen in der Baseline; Nummern mit ein oder zwei Ziffern zählen nicht; jedes `wort#nr` gilt als Herkunftsbezug, auch ein erfundenes Präfix.
+ * und stehen in der Baseline; jedes `wort#nr` gilt als Herkunftsbezug, auch ein erfundenes Präfix.
  * Gescannt: `docs/**` Markdown ohne die Historie (`docs/adr/**`, `docs/lessons-learned.md`, `docs/*-gegenprobe-*.md`); `docs/diagramme/*.mmd` ist generiert.
  * Zusätzlich zählen die `seitenliterale` der Config (hier Spiel, Spielquote): als `projektliterale` würden sie
  * jede Kern-Einheit und jeden Kern-Test treffen; die Seiten sprechen von Produkt. Das Ziel eines Links in `adr/` zählt nicht: sein Anker trägt
@@ -43,9 +45,13 @@ import { FREMD, projektConfig } from "../support/fremd-config";
 import type { BegriffsConfig } from "./kern-reinheit.test";
 
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
-const { collectMarkdown, GEN_MARKER } = rawMarkdown as unknown as { collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[]; GEN_MARKER: RegExp };
+const { collectMarkdown, GEN_MARKER, fenceMaske } = rawMarkdown as unknown as {
+  collectMarkdown: (wurzel: string, wurzeln?: string[]) => string[];
+  GEN_MARKER: RegExp;
+  fenceMaske: (zeilen: string[]) => boolean[];
+};
 
-const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel: string) => string[]; NUMMER: RegExp };
+const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel: string) => string[]; NUMMER: RegExp; KURZE_NUMMER: RegExp };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
@@ -137,6 +143,23 @@ export function zaehleNummern(einheiten: Record<string, string>): Baseline {
   return zaehleSeiten(einheiten, TICKET_BEGRIFFE);
 }
 
+/** Die gezählten Einheiten: Kern-Seiten, Agententexte, Skill-Quellen und `AGENTS.md` (gleiche Menge wie die Standardliste der Umstellung). */
+export function einheitenListe(wurzel: string): string[] {
+  return [...kernSeiten(wurzel), ...collectMarkdown(wurzel, [".claude/agents", ".agents/skills"]), AGENTS];
+}
+
+const UEBERSCHRIFT = /^\s{0,3}#{1,6}(\s|$)/;
+/**
+ * Ein- und zweistellige nackte Nummern `#n` einer Einheit, ohne Toleranz und ohne Baseline. Außer Betracht: Überschriften, Code-Fences, Inline-Code,
+ * GEN-Blöcke und Herkunftsbezüge (`maskiere`). Die Nummer eines Factory-Tickets ist `factory#<n>`, die eines Quellprojekt-Tickets `quellprojekt#<n>`;
+ * ein Beispiel wie `#5` steht in Inline-Code.
+ */
+export function kurzeNummern(text: string): string[] {
+  const zeilen = maskiere(text).split("\n");
+  const imFence = fenceMaske(zeilen);
+  return zeilen.flatMap((z, i) => (imFence[i] || UEBERSCHRIFT.test(z) ? [] : [...z.replace(/`[^`\n]*`|\]\([^)\n]*\)/g, " ").matchAll(herkunftsform.KURZE_NUMMER)].map((m) => m[0])));
+}
+
 const NUMMER_FIX = "Nummer des Quellprojekts als quellprojekt#<nr>, Nummer des Factory-Repos als factory#<nr> schreiben";
 const NUMMER_TEXTE: VergleichsTexte = {
   neu: (pfad, name, n) => `${pfad}: nackte ${name} ${n}x statt 0x. Fix: ${NUMMER_FIX}`,
@@ -152,10 +175,11 @@ export function vergleicheNummern(ist: Baseline, baseline: Baseline): string[] {
 
 /**
  * Der erlaubte Höchstwert je Einheit der Ticketnummern-Baseline: der Stand der Baseline-Datei an der Diff-Basis. Gibt es die Datei dort noch nicht
- * (`alt` ist null, der Einführungs-PR), gilt die Zählung der Einheiten an der Diff-Basis (`basisTexte`, eine fehlende Einheit zählt leer).
+ * (`alt` ist null, der Einführungs-PR) oder keinen Eintrag für die Einheit (eine neu gezählte Einheit wie ein Agententext), gilt die Zählung der Einheit
+ * an der Diff-Basis (`basisTexte`, eine dort fehlende Einheit zählt leer): eine neue Einheit darf also nie mehr Nummern tragen, als der Text dort hatte.
  */
 export function nummernObergrenze(baseline: Baseline, alt: Baseline | null, basisTexte: Record<string, string>): Baseline {
-  return basisWerte(baseline, alt ?? zaehleNummern(basisTexte));
+  return basisWerte(baseline, { ...zaehleNummern(basisTexte), ...alt });
 }
 
 const lesen = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
@@ -331,7 +355,7 @@ describe("Factory-Seiten (#77)", () => {
 });
 
 describe("Ticketnummern (#95)", () => {
-  const einheiten = (): string[] => [...kernSeiten(WURZEL), AGENTS];
+  const einheiten = (): string[] => einheitenListe(WURZEL);
   const echteTexte = (): Record<string, string> => Object.fromEntries(einheiten().map((p) => [p, lesen(p)]));
   const baseline = (): Baseline => JSON.parse(lesen(TICKET_BASELINE)) as Baseline;
   const z = (text: string): number => zaehleNummern({ "docs/a.md": text })["docs/a.md"]?.Ticketnummer ?? 0;
@@ -356,6 +380,28 @@ describe("Ticketnummern (#95)", () => {
     });
     test("zaehleNummern nennt nur Einheiten mit Treffer", () => {
       assert.deepEqual(zaehleNummern({ "docs/a.md": "#1234", "docs/b.md": "nichts" }), { "docs/a.md": { Ticketnummer: 1 } });
+    });
+  });
+
+  describe("Kurze Nummern (ein oder zwei Ziffern, ohne Baseline)", () => {
+    test("eine nackte ein- oder zweistellige Nummer zählt", () => {
+      assert.deepEqual(kurzeNummern("siehe #5, (#12/#99) und #7."), ["#5", "#12", "#99", "#7"]);
+    });
+    test("Herkunftsformen, Anker, Wortreste, drei Ziffern zählen nicht", () => {
+      assert.deepEqual(kurzeNummern("factory#5 quellprojekt#12 owner/repo#7 x.md#3 a_#4 PR-#5 #12abc #123 #1234"), []);
+    });
+    test("Überschrift, Inline-Code, Code-Fence, GEN-Block und http-Link zählen nicht", () => {
+      assert.deepEqual(kurzeNummern("## Titel (#5)\n`#5` und `a #6`\n```\n#7\n```\n<!-- GEN:a START -->\n#8\n<!-- GEN:a END -->\n[#9](https://x.de/9) [Anker](#6-budget)"), []);
+    });
+    test("der Text vor und nach Inline-Code zählt", () => {
+      assert.deepEqual(kurzeNummern("#5 `#6` #7"), ["#5", "#7"]);
+    });
+    test("echte Einheiten: keine nackte ein- oder zweistellige Nummer (auch nicht in Agententexten und Skills)", () => {
+      const treffer = einheitenListe(WURZEL).flatMap((p) => kurzeNummern(lesen(p)).map((n) => `${p}: ${n}`));
+      assert.deepEqual(treffer, [], "Fix: factory#<n> für ein Factory-Ticket, quellprojekt#<n> für ein Quellprojekt-Ticket, ein Beispiel in Inline-Code");
+    });
+    test("Negativfall: eine angehängte nackte Nummer macht eine Einheit rot", () => {
+      for (const pfad of ["docs/model-routing.md", AGENTS, ".claude/agents/factory-planer.md"]) assert.deepEqual(kurzeNummern(lesen(pfad) + "\nSiehe #5.\n"), ["#5"], pfad);
     });
   });
 
@@ -421,6 +467,13 @@ describe("Ticketnummern (#95)", () => {
     test("mit Datei an der Basis zählen die Seiten dort nicht (Datei hat Vorrang)", () => {
       assert.equal(anhebungen(B(2), nummernObergrenze(B(2), B(1), { "docs/a.md": "#1234 #1235 #1236" })).length, 1);
     });
+    test("eine Einheit ohne Eintrag in der Datei an der Basis gilt mit ihrer Zählung an der Basis: höher ist rot, gleich oder kleiner grün", () => {
+      const alt = { "docs/b.md": { Ticketnummer: 1 } };
+      const texte = { "docs/a.md": "#1234 #1235" };
+      assert.equal(anhebungen(B(3), nummernObergrenze(B(3), alt, texte)).length, 1);
+      assert.deepEqual(anhebungen(B(2), nummernObergrenze(B(2), alt, texte)), []);
+      assert.equal(anhebungen(B(1), nummernObergrenze(B(1), alt, {})).length, 1, "eine dort fehlende Einheit zählt leer");
+    });
   });
 
   const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -439,7 +492,7 @@ describe("Ticketnummern (#95)", () => {
     const datei = ausBasis(TICKET_BASELINE);
     const alt = datei === null ? null : (JSON.parse(datei) as Baseline);
     const b = baseline();
-    const basisTexte = alt === null ? Object.fromEntries(Object.keys(b).map((p) => [p, ausBasis(p) ?? ""])) : {};
+    const basisTexte = Object.fromEntries(Object.keys(b).map((p) => [p, ausBasis(p) ?? ""]));
     assert.deepEqual(anhebungen(b, nummernObergrenze(b, alt, basisTexte)), []);
   });
 });

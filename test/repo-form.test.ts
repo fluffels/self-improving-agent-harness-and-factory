@@ -8,14 +8,11 @@ import * as standRaw from "../scripts/sync-stand-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as pfadRaw from "../scripts/relativ-pfad.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as syncLibRaw from "../scripts/factory-sync-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as claimsRaw from "../scripts/claims-pruefen.mjs";
 
 const F = formRaw as unknown as { istRepoForm(r: unknown): boolean; zerlegeRepo(r: unknown): { owner: string; name: string }; gleichesRepo(a: unknown, b: unknown): boolean };
 const S = standRaw as unknown as { STAND_PFAD: string; syncStandAusText(t: unknown): { zustand: string; stand: unknown }; quelleRepoAusText(t: unknown): string | undefined };
 const P = pfadRaw as unknown as { istRelativPosix(p: string): boolean };
-const SL = syncLibRaw as unknown as Record<string, unknown>;
 const C = claimsRaw as unknown as { aliasAbfragen(n: number[], repo?: string): { query: string }[] };
 
 describe("istRepoForm / zerlegeRepo: strenge Form, weil owner/name ungeprüft in GraphQL-Text gehen", () => {
@@ -55,8 +52,7 @@ describe("sync-stand-lib", () => {
     expect(S.syncStandAusText("{x").zustand).toBe("kaputt");
     expect(S.syncStandAusText('{"a":1}')).toEqual({ zustand: "ok", stand: { a: 1 } });
   });
-  test("factory-sync-lib führt die Namen unverändert weiter (Bezieher importieren von dort)", () => {
-    for (const k of ["STAND_PFAD", "syncStandAusText", "quelleRepoAusText", "liesSyncStand"]) expect(SL[k], k).toBe((standRaw as Record<string, unknown>)[k]);
+  test("sync-stand-lib besitzt STAND_PFAD", () => {
     expect(S.STAND_PFAD).toBe(".factory/sync-stand.json");
   });
   test("Blatt: sync-stand-lib, repo-form und relativ-pfad importieren weder child_process noch eine Config-Lib", () => {

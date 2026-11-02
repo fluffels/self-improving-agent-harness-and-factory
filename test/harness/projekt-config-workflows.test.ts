@@ -4,7 +4,7 @@
  * Heute checkt kein Workflow sparse aus; der Wächter greift, sobald einer es tut. ci, dependabot-inbox und forum-inbox rufen
  * `scripts/board-place.mjs` (große Import-Hülle) auf und checken darum das volle Repo aus: auch das bewacht dieser Test.
  *
- * Bewusste Grenzen: `importHuelle` erkennt nur `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein
+ * Bewusste Grenzen: `importHuelle` (test/support/import-huelle.ts) erkennt nur `from "<pfad>"` in doppelten Anführungszeichen (kein `import "./x.mjs"`, kein
  * dynamisches `import()`, keine einfachen Anführungszeichen); `sparseListe` liest nur den ersten Sparse-Block je Workflow;
  * erkannt werden nur Aufrufe der Form `node scripts/<name>.mjs`.
  *
@@ -13,9 +13,9 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { besitzAnker } from "../support/besitz-anker";
+import { importHuelle } from "../support/import-huelle";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const EINSTIEG = "scripts/projekt-config.mjs";
@@ -23,24 +23,6 @@ const LIB = "scripts/projekt-config-lib.mjs";
 const lies = (pfad: string): string => readFileSync(WURZEL + pfad, "utf8");
 /** Dateinamen der verteilten Besitz-Workflows (Leerlauf-Schutz-Anker; wirft, wenn das Manifest keinen nennt). */
 const besitzWorkflows = (): string[] => besitzAnker((p) => /^\.github\/workflows\/[^/]+\.yml$/.test(p)).map((p) => p.slice(".github/workflows/".length));
-
-/** Import-Hülle (Repo-Pfade) eines Skripts samt Einstieg; wirft bei einem Import, der weder `node:` noch relativ ist. Pur bis auf `leser`. */
-export function importHuelle(einstieg: string, leser: (pfad: string) => string): string[] {
-  const gesehen = new Set<string>();
-  const offen = [einstieg];
-  while (offen.length > 0) {
-    const pfad = offen.pop() as string;
-    if (gesehen.has(pfad)) continue;
-    gesehen.add(pfad);
-    for (const m of leser(pfad).matchAll(/\bfrom\s+"([^"]+)"/g)) {
-      const ziel = m[1] ?? "";
-      if (ziel.startsWith("node:")) continue;
-      if (!ziel.startsWith(".")) throw new Error(`${pfad}: Import '${ziel}' ist weder node: noch relativ`);
-      offen.push(posix.join(dirname(pfad), ziel));
-    }
-  }
-  return [...gesehen].sort();
-}
 
 /** Dateien der Sparse-Checkout-Liste (`sparse-checkout: |` mit eingerückten Pfadzeilen). */
 export function sparseListe(yml: string): string[] {
@@ -62,28 +44,7 @@ export function sparseProbleme(yml: string, leser: (pfad: string) => string): st
   return [...new Set(probleme)];
 }
 
-describe("importHuelle / sparseListe", () => {
-  const quellen: Record<string, string> = {
-    "s/a.mjs": 'import { x } from "node:fs";\nimport { y } from "./b.mjs";',
-    "s/b.mjs": 'import { z } from "node:path";',
-    "s/c.mjs": 'import { y } from "./fremd-paket";\nimport q from "lodash";',
-  };
-  test("Hülle folgt relativen Importen, ignoriert node:", () => {
-    assert.deepEqual(importHuelle("s/a.mjs", (p) => quellen[p] ?? ""), ["s/a.mjs", "s/b.mjs"]);
-  });
-  test("zyklische und mehrfach erreichte Importe terminieren, jede Datei einmal", () => {
-    const zyklus: Record<string, string> = { "s/x.mjs": 'import a from "./y.mjs";', "s/y.mjs": 'import b from "./x.mjs";' };
-    assert.deepEqual(importHuelle("s/x.mjs", (p) => zyklus[p] ?? ""), ["s/x.mjs", "s/y.mjs"]);
-    const diamant: Record<string, string> = { "s/a.mjs": 'import b from "./b.mjs";\nimport c from "./c.mjs";', "s/b.mjs": 'import c from "./c.mjs";', "s/c.mjs": "" };
-    assert.deepEqual(importHuelle("s/a.mjs", (p) => diamant[p] ?? ""), ["s/a.mjs", "s/b.mjs", "s/c.mjs"]);
-  });
-  test("ein Import aus dem Elternordner zählt als relativ", () => {
-    const eltern: Record<string, string> = { "s/a.mjs": 'import b from "../lib/b.mjs";', "lib/b.mjs": "" };
-    assert.deepEqual(importHuelle("s/a.mjs", (p) => eltern[p] ?? ""), ["lib/b.mjs", "s/a.mjs"]);
-  });
-  test("ein Paketimport bricht ab", () => {
-    assert.throws(() => importHuelle("s/c.mjs", (p) => quellen[p] ?? ""), /weder node: noch relativ/);
-  });
+describe("sparseListe", () => {
   test("sparseListe liest die Zeilen, ohne Liste leer", () => {
     assert.deepEqual(sparseListe("with:\n  sparse-checkout: |\n    a\n    b/c\n  x: 1\n"), ["a", "b/c"]);
     assert.deepEqual(sparseListe("with:\n  x: 1\n"), []);

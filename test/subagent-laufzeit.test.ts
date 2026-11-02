@@ -296,11 +296,28 @@ describe("laufzeiten: Aufzeichnungsbasis des Outputs (#1909)", () => {
     const l = [...viele(N, 7, 900, 0), ...viele(N, 7, 525, 60)];
     expect(w(S.laufzeiten({ laeufe: l, schnitt: t(30) }))).toBeNull();
   });
-  test("renderMarkdown nennt Kosten geschätzt (Median) und Output-Quote je Gruppe", () => {
+  test("renderMarkdown nennt Kosten geschätzt (Ø) und Output-Quote je Gruppe", () => {
     const md = S.renderMarkdown(S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25)] }));
-    expect(md).toContain("Kosten geschätzt ($, Median)");
+    expect(md).toContain("Kosten geschätzt ($, Ø)");
     expect(md).toContain("Output-Quote");
     expect(md).toMatch(/\| alle gemessenen \| 1 \|.*\| 25 % \|/);
+  });
+  test("kostenGeschaetztSchnitt = Σ geschätzt / Zahl der bepreisten Läufe, Spalte Ø (factory#114 L10c)", () => {
+    const r = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 7, Z25), quoteLauf("Plane #3", 7, Z25)] });
+    const g = r.aggregat.gesamt as unknown as { kostenGeschaetztSchnitt: number | null; kostenGeschaetztSumme: number };
+    expect(g.kostenGeschaetztSchnitt).toBeCloseTo(g.kostenGeschaetztSumme / 3, 8);
+    expect(S.renderMarkdown(r)).toContain("Kosten geschätzt ($, Ø)");
+    // Ungleich teure Läufe: Ø (Mittelwert) ist nicht der Median, und die Markdown-Zeile trägt den Ø.
+    const ungleich = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 7, Z25), quoteLauf("Plane #3", 7, 3_000_000)] });
+    const u = ungleich.aggregat.gesamt as unknown as { kostenGeschaetztSchnitt: number; kostenGeschaetzt: number; kostenGeschaetztSumme: number };
+    expect(u.kostenGeschaetztSchnitt).toBeCloseTo(u.kostenGeschaetztSumme / 3, 8);
+    expect(u.kostenGeschaetztSchnitt).toBeGreaterThan(u.kostenGeschaetzt * 10);
+    expect(S.renderMarkdown(ungleich)).toContain(`| ${(u.kostenGeschaetztSumme / 3).toFixed(2)} |`);
+    // Ein Lauf ohne Preis zählt nicht im Nenner.
+    const ohne = S.laufzeiten({ laeufe: [quoteLauf("Plane #1", 7, Z25), quoteLauf("Plane #2", 7, Z25), ohnePreisLauf("Plane #3")] });
+    const o = ohne.aggregat.gesamt as unknown as { kostenGeschaetztSchnitt: number | null; kostenGeschaetztSumme: number; ohnePreis: number };
+    expect(o.ohnePreis).toBe(1);
+    expect(o.kostenGeschaetztSchnitt).toBeCloseTo(o.kostenGeschaetztSumme / 2, 8);
   });
 });
 

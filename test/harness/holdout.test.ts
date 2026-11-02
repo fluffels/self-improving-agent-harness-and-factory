@@ -92,7 +92,7 @@ export function uebergabeProbleme(skill: string, lenses: string, umsetzer: strin
   const nachfolger = skill.split(NL).find((z) => z.startsWith("- **`uebergabe`**")) ?? "";
   if (!nachfolger) probleme.push("Bullet uebergabe (Nachfolger-Vorlage) fehlt im Skill");
   else if (szenarioBezug(nachfolger)) probleme.push("Nachfolger-Vorlage (Bullet uebergabe) trägt Szenario-Bezug");
-  const gruppen = umsetzer.split(NL).find((z) => z.startsWith("**Gruppen (#1647")) ?? "";
+  const gruppen = umsetzer.split(NL).find((z) => z.startsWith("**Gruppen (quellprojekt#1647")) ?? "";
   if (!gruppen) probleme.push("Absatz Gruppen fehlt in der Umsetzer-Definition");
   else if (szenarioBezug(gruppen)) probleme.push("Gruppen-Vorlage trägt Szenario-Bezug");
   return probleme;
@@ -122,7 +122,7 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     const bullet = "- **`uebergabe`** (Phasen-Schnitt";
     assert.ok(SKILL.includes(bullet));
     assert.match(uebergabeProbleme(SKILL.replace(bullet, bullet + " <Szenarien>"), LENSES, UMSETZER).join(NL), /Nachfolger-Vorlage/);
-    const gruppen = "**Gruppen (#1647, ADR 0026):**";
+    const gruppen = "**Gruppen (quellprojekt#1647, ADR 0026):**";
     assert.ok(UMSETZER.includes(gruppen));
     assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace(gruppen, gruppen + " SZENARIEN")).join(NL), /Gruppen-Vorlage/);
   });
@@ -137,7 +137,7 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     assert.equal(bloecke.length, 1);
     assert.match(uebergabeProbleme(SKILL + NL + bloecke[0], LENSES, UMSETZER).join(NL), /genau eine Abnahme-Vorlage, gefunden 2/);
     assert.match(uebergabeProbleme(SKILL.replace("- **`uebergabe`** (Phasen-Schnitt", "- **`xuebergabe`** (Phasen-Schnitt"), LENSES, UMSETZER).join(NL), /Bullet uebergabe .* fehlt/);
-    assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace("**Gruppen (#1647", "**Gruppe (#1647")).join(NL), /Absatz Gruppen fehlt/);
+    assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace("**Gruppen (quellprojekt#1647", "**Gruppe (quellprojekt#1647")).join(NL), /Absatz Gruppen fehlt/);
   });
 
   test("szenarioBezug: Platzhalter und Kopf zählen, gewöhnliche Wörter und Fremdplatzhalter nicht", () => {

@@ -1,4 +1,7 @@
 {
+  ".agents/skills/review-lenses/SKILL.md": { "Ticketnummer": 4 },
+  ".claude/agents/factory-planer.md": { "Ticketnummer": 1 },
+  ".claude/agents/factory-umsetzer.md": { "Ticketnummer": 1 },
   "AGENTS.md": { "Ticketnummer": 1 },
   "docs/agent-harness.md": { "Ticketnummer": 12 },
   "docs/langfuse-hook-patch.md": { "Ticketnummer": 7 },
