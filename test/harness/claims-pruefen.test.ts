@@ -38,7 +38,7 @@ const M = raw as unknown as {
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown; worktreeOrdner?: string }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
-  echteDeps: (o?: { config?: unknown; basis?: string }) => { festgefahrenLabel: string; lockDir: string; orte: { name: string; cwd?: string }[] };
+  echteDeps: (o?: { config?: unknown; basis?: string; ghJson?: (a: string[]) => unknown }) => { festgefahrenLabel: string; lockDir: string; orte: { name: string; cwd?: string }[]; zugewiesen: () => number[] };
 };
 
 const H = 60 * 60_000;
@@ -818,6 +818,17 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.doesNotMatch(r.err, /zweite Zeile/);
     assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
     assert.deepEqual(geloescht, []);
+  });
+
+  test("echteDeps().zugewiesen ruft gh mit --repo auf (Repro des Abnahme-Befunds: im Arbeitsplatz ohne Git-cwd scheitert gh issue list sonst)", () => {
+    const AB = { praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "ab" }, labels: { harness: "h", festgefahren: "z", forum: "f", dependabotInbox: "h" } };
+    const aufrufe: string[][] = [];
+    const d = M.echteDeps({ config: { ...AB, arbeitsplatz: { wurzel: "/ap", repos: [{ name: "web", pfad: "web" }] } }, basis: "/irgendwo", ghJson: (a) => (aufrufe.push(a), [{ number: 3 }, { number: 9 }]) });
+    assert.deepEqual(d.zugewiesen(), [3, 9]);
+    assert.equal(aufrufe.length, 1);
+    assert.deepEqual(aufrufe[0], M.zugewiesenArgs());
+    assert.equal(aufrufe[0][aufrufe[0].indexOf("--repo") + 1], M.zugewiesenArgs()[3]);
+    assert.match(aufrufe[0][aufrufe[0].indexOf("--repo") + 1], /^[^/\s]+\/[^/\s]+$/);
   });
 
   test("echteDeps im Arbeitsplatz: Lock-Ort unter der Wurzel und ein Ort je Repo mit cwd", () => {

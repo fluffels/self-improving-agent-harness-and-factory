@@ -340,7 +340,7 @@ export function fuehreAus(argv, depsOderFabrik) {
 export const zugewiesenArgs = (repo = REPO) => ["issue", "list", "--repo", repo, "--assignee", "@me", "--state", "open", "--json", "number", "--limit", "200"];
 
 /** Echte I/O: git und gh über die gemeinsamen Wrapper, Lock-Verzeichnis im gemeinsamen git-Verzeichnis. */
-export function echteDeps({ config: vorgabe, basis } = {}) {
+export function echteDeps({ config: vorgabe, basis, ghJson: ghJsonFn = ghJson } = {}) {
   const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   const config = vorgabe ?? ladeProjektConfig();
   const { aufloesung, orte } = gitOrteAus(config, basis);
@@ -351,7 +351,7 @@ export function echteDeps({ config: vorgabe, basis } = {}) {
     orte,
     graphql: (query) => JSON.parse(ghText(["api", "graphql", "-f", `query=${query}`])),
     zugewiesen: () => {
-      const liste = ghJson(zugewiesenArgs());
+      const liste = ghJsonFn(zugewiesenArgs());
       if (liste.length >= 200) process.stderr.write("Warnung: 200 offene Zuweisungen, die Liste ist an der Grenze und kann unvollständig sein\n");
       return liste.map((i) => i.number);
     },
