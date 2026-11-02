@@ -32,6 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+# factory:projektwert codeql.sprachen
         language: [javascript-typescript, actions]
     steps:
       - name: Repository auschecken

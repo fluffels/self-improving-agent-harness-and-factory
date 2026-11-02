@@ -349,6 +349,27 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(lauf({}, { besitz }).code, 0);
   });
 
+  const MODUL_BESITZ = JSON.stringify({ version: 3, eintraege: [{ pfad: ".github/workflows/z.yml", ring: "kern", quelle: "t", modul: "zizmor" }, { pfad: ".github/workflows/s.yml", ring: "kern", quelle: "t", modul: "scorecard" }] });
+  test("Sicherheits-Module (factory#119): fehlender Schlüssel module ist die Lücke Sicherheits-Module mit Fix", () => {
+    const r = lauf({}, { besitz: MODUL_BESITZ });
+    assert.equal(r.code, 1, r.out.join("\n"));
+    assert.equal(luecken(r).length, 1, r.out.join("\n"));
+    assert.match(luecken(r)[0], /^LÜCKE Sicherheits-Module: der Schlüssel module fehlt in .*Fix: module in /);
+  });
+  test("Sicherheits-Module: eine Teilauswahl ist OK mit HINWEIS auf die nicht gewählten Module, alle gewählt ohne HINWEIS", () => {
+    const teil = lauf({}, { besitz: MODUL_BESITZ, config: { ...CONFIG, module: ["zizmor"] } });
+    assert.equal(teil.code, 0, teil.out.join("\n"));
+    assert.ok(teil.out.includes("OK Sicherheits-Module"));
+    assert.ok(teil.out.includes("HINWEIS Sicherheits-Module: nicht gewählt: scorecard"), teil.out.join("\n"));
+    const alle = lauf({}, { besitz: MODUL_BESITZ, config: { ...CONFIG, module: ["zizmor", "scorecard"] } });
+    assert.ok(alle.out.includes("OK Sicherheits-Module"));
+    assert.ok(!alle.out.some((z) => z.startsWith("HINWEIS Sicherheits-Module")));
+  });
+  test("Sicherheits-Module: ein Manifest ohne Module oder nicht lesbar meldet den Punkt nicht", () => {
+    assert.ok(!lauf().out.some((z) => z.includes("Sicherheits-Module")));
+    assert.ok(!lauf({}, { besitz: null }).out.some((z) => z.includes("Sicherheits-Module")));
+  });
+
   for (const [name, besitz] of [["fehlt", null], ["kein JSON", "{ nicht json"], ["JSON null", "null"], ["Eintrag kein Objekt", JSON.stringify({ version: 1, eintraege: ["x"] })], ["ungültiges pflichtChecks", JSON.stringify({ version: 1, eintraege: [{ pfad: "x.yml", ring: "kern", quelle: "t", pflichtChecks: [] }] })]] as [string, string | null][]) {
     test(`besitz.json nicht lesbar (${name}): HINWEIS und NICHT PRÜFBAR statt grün, Exit 1, Spiegel-Checks laufen weiter`, () => {
       const r = lauf({}, { besitz });

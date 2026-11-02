@@ -12,6 +12,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar, leereErgaenzung, MANIFEST_PFAD, pfadSicher, projektwertLauf, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
+import { modulFormFehler, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `.factory/projekt.json` auslagern";
@@ -66,6 +67,25 @@ export function pruefeErgaenzung(lies) {
 }
 
 /**
+ * Modulwahl des Projekts (factory#119): `{ gewaehlt, fehler, unbestimmt }`. Ohne Einheiten mit `modul` im Manifest gibt es nichts zu wählen; eine fehlende oder
+ * unlesbare Config macht die Wahl `unbestimmt` (fail-closed, genau ein Fehler statt einem je Einheit); unbekannte Namen und Formfehler sind Fehler mit Fix.
+ */
+function modulWahlAus(manifest, lies) {
+  if (!(manifest.eintraege ?? []).some((e) => e.modul !== undefined)) return { gewaehlt: [], fehler: [], unbestimmt: false };
+  let config = null;
+  try {
+    config = JSON.parse(lies(PROJEKT_CONFIG) ?? "null");
+  } catch {
+    // unlesbar: bleibt null
+  }
+  if (config === null || typeof config !== "object") {
+    return { gewaehlt: [], unbestimmt: true, fehler: [`Modul-Auswahl nicht bestimmbar (${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON-Objekt). Weg: Config reparieren (Schlüssel module), dann erneut prüfen`] };
+  }
+  const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
+  return { gewaehlt: w.gewaehlt, fehler: [...modulFormFehler(config), ...w.fehler].map((f) => `Modul-Wahl: ${f}`), unbestimmt: false };
+}
+
+/**
  * Prüft den Besitz gegen den Sync-Stand. `lies(pfad)` liefert den Dateitext (relativ zur Projektwurzel) oder `null`.
  * Rückgabe: `{ entfaellt, fehler, einheiten }`; jeder Fehler nennt den Weg.
  */
@@ -87,6 +107,7 @@ export function pruefeDrift(lies) {
     return rot(`${MANIFEST_PFAD} ist kein gültiges JSON`);
   }
   const fehler = [];
+  const wahl = modulWahlAus(manifest, lies);
   let ergaenzung = leereErgaenzung();
   let configKaputt = false;
   try {
@@ -100,7 +121,11 @@ export function pruefeDrift(lies) {
   else if (stand.quelle.sauber !== true) fehler.push("Sync-Stand stammt von einem unsauberen Quellstand (sauber: false)");
   const herkunftFehler = fehler.length;
   const ids = new Set();
-  for (const e of (manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && !istVorlage(e))) {
+  const modulRot = [];
+  const verteilt = (manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && !istVorlage(e));
+  const abgewaehlt = new Map(verteilt.filter((e) => e.modul !== undefined && !wahl.unbestimmt && !modulGewaehlt(e, wahl.gewaehlt)).map((e) => [einheitId(e), e.modul]));
+  const modulIds = new Set(verteilt.filter((e) => e.modul !== undefined).map(einheitId));
+  for (const e of verteilt.filter((e) => !abgewaehlt.has(einheitId(e)) && !(wahl.unbestimmt && e.modul !== undefined))) {
     const id = einheitId(e);
     ids.add(id);
     if (!(id in stand.einheiten)) {
@@ -117,12 +142,13 @@ export function pruefeDrift(lies) {
   const nichtVerteilt = new Map((manifest.eintraege ?? []).filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
   const vorlagen = new Set((manifest.eintraege ?? []).filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
   for (const id of Object.keys(stand.einheiten)) {
-    if (ids.has(id)) continue;
-    if (vorlagen.has(id)) fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
+    if (ids.has(id) || (wahl.unbestimmt && modulIds.has(id))) continue;
+    if (abgewaehlt.has(id)) modulRot.push(`${id}: im Sync-Stand, Modul '${abgewaehlt.get(id)}' ist aber nicht gewählt (module in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Modul wieder wählen`);
+    else if (vorlagen.has(id)) fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
     else if (nichtVerteilt.has(id)) fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
     else fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
   }
-  return { entfaellt: false, fehler: fehler.map((f, i) => `${f}. ${i < herkunftFehler ? TAG_WEG : WEG}`), einheiten: ids.size };
+  return { entfaellt: false, fehler: [...fehler.map((f, i) => `${f}. ${i < herkunftFehler ? TAG_WEG : WEG}`), ...modulRot, ...wahl.fehler], einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

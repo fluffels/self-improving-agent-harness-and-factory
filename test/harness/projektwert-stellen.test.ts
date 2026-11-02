@@ -15,7 +15,7 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
 interface Stellen {
   bloecke: unknown[];
-  zeilen: { schluessel: string }[];
+  zeilen: { schluessel: string; name?: string }[];
 }
 const B = rawBesitz as unknown as {
   projektwertStellen: (text: string, pfad?: string) => Stellen;
@@ -44,6 +44,9 @@ const BLOECKE: string[] = [
   ".agents/skills/factory/ablauf.md",
 ];
 
+/** Der CodeQL-Workflow (Sicherheits-Modul, factory#119): die Sprachen kommen aus der Config, nie fest im Workflow. */
+const CODEQL = ".github/workflows/codeql.yml";
+
 const lf = (pfad: string): string => lies(pfad).replace(/\r\n/g, "\n");
 
 describe("Projektwert-Stellen in Agenten und Skills", () => {
@@ -54,6 +57,20 @@ describe("Projektwert-Stellen in Agenten und Skills", () => {
 
   test.each(BLOECKE)("%s trägt genau einen Projektwert-Block", (pfad) => {
     expect(B.projektwertStellen(lf(pfad), pfad).bloecke).toHaveLength(1);
+  });
+
+  test("codeql.yml trägt genau einen Zeilen-Marker codeql.sprachen, direkt vor der Zeile language", () => {
+    const st = B.projektwertStellen(lf(CODEQL), CODEQL).zeilen;
+    expect(st.map((z) => z.schluessel)).toEqual(["codeql.sprachen"]);
+    expect(st[0]).toMatchObject({ name: "language" });
+  });
+
+  test("der Wächter erkennt fehlende Sprachen-Marker im Workflow (Negativfall am Text)", () => {
+    const ohne = lf(CODEQL)
+      .split("\n")
+      .filter((z) => !z.startsWith("# factory:projektwert"))
+      .join("\n");
+    expect(B.projektwertStellen(ohne, CODEQL).zeilen).toEqual([]);
   });
 
   test("der Wächter erkennt eine fehlende Stelle (Negativfall am Text)", () => {

@@ -10,6 +10,7 @@ import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./proj
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 import { MANIFEST_PFAD, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
+import { modulPunkt } from "./modul-wahl-lib.mjs";
 import { ausFehler, GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, nichtPruefbar, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
@@ -113,20 +114,20 @@ const ohneAnfuehrung = (s) => s.replace(/^(["'])(.*)\1$/, "$2");
  * Ein Eintrag zählt nur, wenn er verteilt wird und seine Datei (Basisname) in `workflows` liegt; ein ungültiges `pflichtChecks` macht das ganze Manifest unlesbar (eine halb gelesene Soll-Liste prüfte still zu wenig).
  */
 function kernPflichtChecks({ besitz, workflows }) {
-  if (besitz === undefined || besitz.fehler !== undefined) return { checks: [], fehler: besitz?.fehler ?? "nicht gelesen" };
+  if (besitz === undefined || besitz.fehler !== undefined) return { checks: [], fehler: besitz?.fehler ?? "nicht gelesen", manifest: null };
   const eintraege = besitz.wert?.eintraege;
-  if (!Array.isArray(eintraege)) return { checks: [], fehler: "kein Array eintraege" };
-  if (eintraege.some((e) => e === null || typeof e !== "object" || pflichtChecksFehler(e).length > 0)) return { checks: [], fehler: "pflichtChecks ungültig" };
+  if (!Array.isArray(eintraege)) return { checks: [], fehler: "kein Array eintraege", manifest: null };
+  if (eintraege.some((e) => e === null || typeof e !== "object" || pflichtChecksFehler(e).length > 0)) return { checks: [], fehler: "pflichtChecks ungültig", manifest: null };
   const dateien = new Set(workflows.map((w) => basename(w.pfad)));
   const checks = eintraege.filter((e) => wirdVerteilt(e) && e.pflichtChecks !== undefined && dateien.has(basename(e.pfad))).flatMap((e) => e.pflichtChecks);
-  return { checks, fehler: null };
+  return { checks, fehler: null, manifest: besitz.wert };
 }
 
 /** Pur: die Soll-Liste der Required Checks: Spiegel zuerst, dann der Kern, ohne Doppelte (exakter Vergleich). */
 const vereinigt = (spiegel, kern) => [...new Set([...(spiegel?.requiredChecks ?? []), ...kern])];
 
 /**
- * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards, pflichtChecks, besitzFehler }`. `pflichtChecks` ist die Vereinigung aus den
+ * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards, pflichtChecks, besitzFehler, manifest }` (`manifest`: das gelesene Besitz-Manifest oder `null`). `pflichtChecks` ist die Vereinigung aus den
  * Required Checks des Ruleset-Spiegels (zuerst) und den `pflichtChecks` der verteilten Kern-Workflows im Manifest, ohne Doppelte; `besitzFehler` nennt den Grund, wenn das Manifest nicht lesbar ist.
  */
 export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
@@ -143,7 +144,7 @@ export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
     for (const [, wert] of text.matchAll(LABEL_ENV)) if (!wert.includes("${{") && !wert.includes("$")) merke(ohneAnfuehrung(wert));
   }
   const kern = kernPflichtChecks({ besitz, workflows });
-  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler };
+  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler, manifest: kern.manifest };
 }
 
 const erste = (e) => fehlerText(e).split("\n")[0];
@@ -326,6 +327,8 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     ergebnis.push(...pruefeSicherheit({ repo: aus, actions: aus, regeln: aus, pvr: aus, spiegel }));
   }
   ergebnis.push(...pruefeSprache(config)); // liest nur die Config, braucht kein Token
+  const module = modulPunkt(config, voraussetzungen.manifest, { configPfad: PROJEKT_CONFIG }); // Sicherheits-Module (factory#119), ebenfalls ohne Token
+  if (module !== null) ergebnis.push(module);
   if (langfuse) {
     const lf = langfuse();
     const text = String(lf.stderr || lf.stdout || "").trim().split("\n")[0];

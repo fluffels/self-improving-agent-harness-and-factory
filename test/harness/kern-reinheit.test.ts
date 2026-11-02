@@ -18,6 +18,8 @@ import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } 
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
 import { ladeBesitzManifest } from "../support/besitz-anker";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawModul from "../../scripts/modul-wahl-lib.mjs";
 import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
@@ -69,6 +71,7 @@ export interface Eintrag {
   ring: string;
   quelle: string;
   pflichtChecks?: unknown;
+  modul?: string;
 }
 interface Manifest {
   version: number;
@@ -283,6 +286,25 @@ export function ringVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => str
   return out;
 }
 
+/** Modul-Regel (factory#119): lokale Importe jeder Ganz-Datei-Code-Einheit, die auf eine Einheit mit `modul` zeigen, obwohl der Importeur ohne `modul` ist
+ *  oder zu einem anderen Modul gehört ("<von> -> <nach>"): ein Bezieher, der das Modul nicht wählt, bekäme sonst einen Import ins Leere.
+ *  Regel selbst: `modulImportErlaubt` (modul-wahl-lib.mjs). Bekannte Muster: statische relative Importe und `export … from` (`relativeImporte`); dynamische Importe
+ *  und Pfade, die zur Laufzeit gebaut werden, sieht die Regel nicht. Abhilfe: das Ziel in ein Kern-Modul ohne `modul` ziehen oder dem Importeur dasselbe Modul geben. */
+export function modulImportVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
+  const ganze = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e]));
+  const out: string[] = [];
+  for (const [von, evon] of ganze) {
+    const text = CODE_ENDUNG.test(von) ? lies(von) : null;
+    if (text === null) continue;
+    for (const spec of relativeImporte(text)) {
+      const nach = kandidatenPfade(posix.normalize(posix.join(posix.dirname(von), spec))).find((p) => ganze.has(p));
+      const enach = nach === undefined ? undefined : ganze.get(nach);
+      if (nach !== undefined && enach !== undefined && !modulImportErlaubt(evon, enach) && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
+    }
+  }
+  return out;
+}
+
 /** Einheiten im Ring kern-nach-entkopplung (Ganz-Datei-Code), die dort nicht gebraucht werden: keine Literal-Einträge in der Baseline
  *  und alle lokalen Importe zeigen auf Besitz im Ring kern oder auf die Projekt-Config (Importe ohne Besitz-Ziel zählen als Grund zu bleiben).
  *  Abhilfe: Ring auf `kern` setzen. Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
@@ -351,6 +373,7 @@ export function istZaehlung(eintraege: Eintrag[], lies: (pfad: string) => string
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
+const modulImportErlaubt = (rawModul as unknown as { modulImportErlaubt: (von: { modul?: string }, nach: { modul?: string }) => boolean }).modulImportErlaubt;
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
 const NEU = {
@@ -497,7 +520,7 @@ describe("pruefeManifest", () => {
     assert.match(meld(ok([ein("a"), ein("a")]), "t"), /doppelte Einheit/);
     assert.match(meld(ok([ein("a", { ring: "x" })]), "t"), /unbekannter Ring/);
     assert.match(meld(ok([ein("a")]), null), /existiert nicht/);
-    assert.match(meld({ version: 3, eintraege: [] }, "t"), /version/);
+    assert.match(meld({ version: 4, eintraege: [] }, "t"), /version/);
     assert.match(meld(ok([ein("a", { quelle: " " })]), "t"), /quelle fehlt/);
     assert.match(meld(ok([ein("a", { block: "x", schluessel: "k" })]), "t"), /zugleich/);
     for (const unsicher of ["/etc/x", "../x", "a/../x", "a\\b", "a//b", "C:/x", "", "a/./b"]) {
@@ -748,6 +771,25 @@ describe("huellenVerstoesse / pruefeHuelle (#1613)", () => {
   });
 });
 
+describe("modulImportVerstoesse (Modul-Regel, factory#119)", () => {
+  const E = [ein("scripts/k.mjs"), ein("scripts/k2.mjs"), ein("scripts/a.mjs", { modul: "a" }), ein("scripts/a2.mjs", { modul: "a" }), ein("scripts/b.mjs", { modul: "b" }), ein("AGENTS.md", { block: "s" })];
+  const mit = (m: Record<string, string>): ((p: string) => string | null) => (p) => m[p] ?? null;
+  test("Kern importiert Kern, ein Modul importiert Kern und sein eigenes Modul: grün", () => {
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./k2.mjs";' })), []);
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./k.mjs"; export { y } from "./a2.mjs";' })), []);
+  });
+  test("Negativfall: Kern importiert ein Modul, ein Modul ein anderes Modul (auch endungslos und per export from)", () => {
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./a.mjs";' })), ["scripts/k.mjs -> scripts/a.mjs"]);
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/a.mjs": 'import { x } from "./b";' })), ["scripts/a.mjs -> scripts/b.mjs"]);
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'export { x } from "./a.mjs";' })), ["scripts/k.mjs -> scripts/a.mjs"]);
+  });
+  test("Nicht-Besitz-Ziel, Nicht-Code, Block-Einheit und fehlende Datei werden nicht gemeldet", () => {
+    assert.deepEqual(modulImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./fremd.mjs";' })), []);
+    assert.deepEqual(modulImportVerstoesse([ein("AGENTS.md", { block: "s" }), ein("scripts/a.mjs", { modul: "a" })], mit({ "AGENTS.md": 'from "./a.mjs"' })), []);
+    assert.deepEqual(modulImportVerstoesse(E, () => null), []);
+  });
+});
+
 describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
   const E = [
     ein("scripts/a.mjs"),
@@ -914,6 +956,10 @@ describe("Kern-Reinheit (#1610)", () => {
 
   test("kein Importeur verletzt die Ring-Importregel (RING_IMPORTE, #1663, ADR 0029)", () => {
     assert.deepEqual(ringVerstoesse(manifest.eintraege, lesenWurzel), []);
+  });
+
+  test("kein Kern-Code importiert eine Moduleinheit und kein Modul ein anderes (modul, factory#119)", () => {
+    assert.deepEqual(modulImportVerstoesse(manifest.eintraege, lesenWurzel), []);
   });
 
   test("keine Einheit bleibt im Ring kern-nach-entkopplung, die nichts entkoppeln muss (kein Baseline-Eintrag, nur Kern-Importe, #1740)", () => {

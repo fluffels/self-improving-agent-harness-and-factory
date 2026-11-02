@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage, normalisiereUebernahmePfad } from "./sync-abgleich-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
@@ -21,6 +22,23 @@ export { leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn };
 export const PROJEKT_PFAD = PROJEKT_CONFIG;
 
 const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
+
+/**
+ * Modulwahl des Ziels (factory#119): `{ gewaehlt, fehler, meldungen }`. Nur wenn das Quell-Manifest Einheiten mit `modul` hat, wird die Ziel-Config gelesen;
+ * ohne den Schlüssel `module` gilt der Standard, die Namen prüft `modulWahl` gegen das Quell-Manifest (ein neues Modul ist sofort wählbar).
+ */
+function waehleModule(manifest, zielConfig) {
+  if (!manifest.eintraege.some((e) => e.modul !== undefined)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
+  let config;
+  try {
+    config = zielConfig();
+  } catch (err) {
+    return { gewaehlt: [], fehler: [`Ziel-Config: ${err.message}`], meldungen: [] };
+  }
+  const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
+  const liste = (l) => (l.length > 0 ? l.join(", ") : "keine");
+  return { gewaehlt: w.gewaehlt, fehler: w.fehler, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
+}
 
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
@@ -63,12 +81,16 @@ export function planeSync({
     if (!ganz) res.fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
   }
   if (res.fehler.length > 0) return res;
+  const wahl = waehleModule(manifest, zielConfig);
+  res.fehler.push(...wahl.fehler);
+  if (res.fehler.length > 0) return res;
+  res.meldungen.push(...wahl.meldungen);
   for (const rolle of PROJEKT_ROLLEN) {
     if (zielLies(ROLLEN_PFADE[rolle]) === null) res.meldungen.push(`Rollen-Pfad '${ROLLEN_PFADE[rolle]}' (${rolle}) fehlt im Ziel; das Projekt legt seine Datei dort selbst an`);
   }
 
   const nachPfad = new Map();
-  const alle = manifest.eintraege.filter(wirdVerteilt);
+  const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
   const verteilt = alle.filter((e) => !istVorlage(e));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
@@ -138,7 +160,9 @@ export function planeSync({
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     res.meldungen.push(
-      nurFactory === undefined
+      nurFactory?.modul !== undefined && !wahl.gewaehlt.includes(nurFactory.modul)
+        ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
+        : nurFactory === undefined
         ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
         : `Einheit '${id}' wird nicht mehr verteilt (Ring ${nurFactory.ring}), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`,
     );
