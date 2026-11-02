@@ -12,7 +12,8 @@ import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { SICHERHEIT_PUNKTE } from "../scripts/harness-doctor-sicherheit.mjs";
+import { SICHERHEIT_PUNKTE as rawSicherheitPunkte } from "../scripts/harness-doctor-sicherheit.mjs";
+const SICHERHEIT_PUNKTE = rawSicherheitPunkte as string[];
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 

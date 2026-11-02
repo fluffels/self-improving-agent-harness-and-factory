@@ -158,6 +158,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
     const x = je(e, "Secret Scanning");
     expect(x.befund).toMatch(/sichtbar nur mit Admin-Recht/);
     expect(x.fix).toMatch(/Admin-Recht/);
+    expect(x.link).toBe(LINKS["Secret Scanning"]);
   });
 
   test("ein Fix der Quelle (fataler Token) gilt für alle Punkte", () => {
@@ -168,6 +169,7 @@ describe("pruefeSicherheit: Negativfall, nie OK ohne Beleg", () => {
       expect(x.ok).toBe(false);
       expect(x.nichtPruefbar).toBe(true);
       expect(x.fix).toBe("erst den Token-Punkt beheben");
+      expect(x.link).toBe(LINKS[x.punkt]);
     }
   });
 });
