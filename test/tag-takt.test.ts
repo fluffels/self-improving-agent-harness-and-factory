@@ -12,7 +12,7 @@ const T = raw as unknown as {
   tagTitel: (t: string) => string;
   commitsAusLog: (t: string) => Commit[];
   besitzCommits: (c: Commit[], m: unknown) => Commit[];
-  naechsterTag: (t: string, c: Commit[]) => string;
+  naechsterTag: (t: string, c: Commit[], entfernt?: { datei: string; namen: string[] }[]) => string;
   dringlichSignal: (b: Commit[], k: string) => { grund: string; sha: string } | null;
   entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
