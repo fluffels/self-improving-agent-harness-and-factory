@@ -58,7 +58,7 @@ describe("Skill-Pfade (quellprojekt#1211)", { timeout: 30_000 }, () => {
 
   it("lässt URLs, relative Pfade und Escape-Sequenzen durch", () => {
     expect(findeAbsolutePfade("https://example.org/a und docs/referenz/x.md")).toEqual([]);
-    expect(findeAbsolutePfade("`.claude/worktrees/kq-<nr>`")).toEqual([]);
+    expect(findeAbsolutePfade("`.claude/worktrees/<nr>`")).toEqual([]);
     expect(findeAbsolutePfade("siehe docs/a/b und und/oder/so")).toEqual([]);
     expect(findeAbsolutePfade("log('Phase " + "A:" + "\\n')")).toEqual([]);
     expect(findeAbsolutePfade("Termin 12:30 und foo:bar")).toEqual([]);
