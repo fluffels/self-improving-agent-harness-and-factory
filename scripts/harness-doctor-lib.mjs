@@ -10,7 +10,8 @@ import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./proj
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
-import { ausFehler, GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, nichtPruefbar, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
+import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
+import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 
 /** Links der Anleitungen (nur `--einrichten`): Seiten der GitHub-Doku bzw. des Werkzeugs, je Voraussetzung, die der Doctor nie selbst setzt. */
 const LINK = {
@@ -150,8 +151,8 @@ const erste = (e) => fehlerText(e).split("\n")[0];
 const json = (gh, args) => JSON.parse(gh(args));
 /** Seiten von `gh api --paginate --slurp` zu einer Liste (`schluessel` = Feld je Seite, sonst die Seite selbst). */
 const seiten = (gh, pfad, schluessel) => json(gh, ["api", "--paginate", "--slurp", pfad]).flatMap((s) => (schluessel ? (s[schluessel] ?? []) : s));
-const luecke = (punkt, befund, fix, link, aktion) => ({ punkt, ok: false, befund, fix, ...(link ? { link } : {}), ...(aktion ? { aktion } : {}) });
-const gut = (punkt) => ({ punkt, ok: true });
+/** Quelle fehlgeschlagen; jede Quelle dieses Moduls bringt ihren `fix` selbst mit. */
+const ausFehler = (punkt, was, quelle, link) => ausFehlerRoh(punkt, was, quelle, undefined, link);
 const fehlen = (soll, ist, gleich = (a, b) => a === b) => soll.filter((s) => !ist.some((i) => gleich(s, i)));
 const ohneCase = (a, b) => a.toLowerCase() === b.toLowerCase();
 
