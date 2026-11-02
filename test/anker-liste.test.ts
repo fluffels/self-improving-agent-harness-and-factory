@@ -1,9 +1,15 @@
 /* Guard-Liste (#112): je geänderter Funktion die Anker (Verzweigungs- und Guard-Stellen) der Diff-Zeilen. Kern ist pur; die CLI-Hülle
  * `lauf` bekommt git und Dateizugriff injiziert. Jedes Muster hat einen Positivfall, dazu Negativfälle (Kommentar, String, Vergleichs-Fehlgriffe). */
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ankerRoh from "../scripts/anker-liste.mjs";
+
+const normal = (p: string) => realpathSync(p).replace(/\\/g, "/");
+const repoWurzel = normal(fileURLToPath(new URL("..", import.meta.url)));
+const wurzel = (u: { git: (a: string[]) => string }) => normal(u.git(["rev-parse", "--show-toplevel"]).trim());
 
 type Eintrag = { datei: string; funktion: string; zeile: number; anker: { zeile: number; muster: string }[] };
 interface Lauf {
@@ -252,7 +258,7 @@ describe("formatiere und lauf", () => {
 
   test("echteUmgebung: git im Repo, lesbare Datei als Text, fehlende Datei undefined, Quelle aus der Projekt-Config", () => {
     const u = echteUmgebung();
-    expect(u.git(["rev-parse", "--is-inside-work-tree"]).trim()).toBe("true");
+    expect(wurzel(u)).toBe(repoWurzel);
     expect(u.lesen("package.json")).toContain('"name"');
     expect(u.lesen("gibt/es/nicht.mjs")).toBeUndefined();
     expect(u.istQuelle("scripts/anker-liste.mjs")).toBe(true);
@@ -264,7 +270,7 @@ describe("formatiere und lauf", () => {
     process.chdir(tmpdir());
     try {
       const u = echteUmgebung();
-      expect(u.git(["rev-parse", "--is-inside-work-tree"]).trim()).toBe("true");
+      expect(wurzel(u)).toBe(repoWurzel);
       expect(u.lesen("package.json")).toContain('"name"');
     } finally {
       process.chdir(vorher);

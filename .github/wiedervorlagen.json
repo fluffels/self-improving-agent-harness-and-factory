@@ -9,7 +9,13 @@
     "id": "planer-kosten-nach-112",
     "faellig": "2026-11-13",
     "titel": "Planer-Kosten auf geschätzter Basis nachmessen (#112)",
-    "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø (alle und ohne Sammeltickets) gegen 1,38 $ vergleichen, Sammeltickets getrennt. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
+    "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø gegen 1,38 $ vergleichen. Ø = Spalte ‚Kosten geschätzt ($, Ø)‘ (Σ/n), nicht der Median; auslösend ist die Gruppe ‚ab Schnitt, ohne Sammeltickets‘ gegen 1,38 $; alle Läufe und Sammeltickets nur berichten. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
+  },
+  {
+    "id": "audit-ghsa-g3hv-75wg-m249",
+    "faellig": "2026-12-02",
+    "titel": "GHSA-g3hv-75wg-m249: minimatch (moderate, dev) erneut prüfen",
+    "text": "npm audit prüfen; Fix verfügbar → Update; sonst mit Begründung verlängern; dann Eintrag löschen"
   },
   {
     "id": "typescript-7-eslint",
