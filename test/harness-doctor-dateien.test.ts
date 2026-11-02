@@ -1,0 +1,141 @@
+/* Harness-Doctor, Dateipunkte (factory#94): `pruefeDateien` mit injizierten `git` und `existiert`, dazu eine echte Git-Fixture.
+ * Jeder Test verfälscht genau eine Quelle und erwartet genau diesen Punkt; kein Fehlschlag von Git darf OK ergeben. */
+import { execFileSync } from "node:child_process";
+import { describe, expect, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
+import { fixture } from "./support/tmp-fixture";
+
+interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
+type Git = (args: string[], input?: string) => string;
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean }) => Ergebnis[];
+const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
+const BEISPIELE = rawBeispiele as string[];
+
+/** Eine Datei der Fake-Welt: Pfad, Index-Zeilenende (`lf`, `crlf`, `mixed`, `-text`, `none`), Wert von `eol`, Attribut-Text von ls-files. */
+interface Datei { pfad: string; index?: string; eol?: string; attr?: string }
+const lf = (pfad: string): Datei => ({ pfad, eol: "lf" });
+
+/** Fake-Git: `ls-files --eol` und `check-attr --stdin -z eol` aus einer Dateiliste; Pfade ohne Eintrag (die Beispiele) haben `eol` aus `beispielEol`. */
+function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
+  return (args, input) => {
+    if (args[0] === "ls-files") return dateien.map((d) => `i/${d.index ?? "lf"}    w/lf    attr/${d.attr ?? ""} \t${d.pfad}`).join("\n");
+    if (args[0] === "check-attr") {
+      const werte = new Map(dateien.map((d) => [d.pfad, d.eol ?? "unspecified"]));
+      return (input ?? "").split("\0").filter(Boolean).flatMap((p) => [p, "eol", werte.get(p) ?? beispielEol]).concat([""]).join("\0");
+    }
+    throw new Error(`unerwarteter Git-Aufruf: ${args.join(" ")}`);
+  };
+}
+const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
+const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: opt.existiert ?? (() => false) });
+const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
+
+describe("Root-Kontextdatei", () => {
+  test("ohne blockierende Datei: OK, und beide Punkte stehen immer da", () => {
+    const e = lauf(gesund);
+    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden"]);
+    expect(e.every((p) => p.ok)).toBe(true);
+  });
+
+  test.each(["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"])("%s im Root ist eine Lücke mit Fix", (rel) => {
+    const p = punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith(`/${rel}`) }), "Root-Kontextdatei");
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain(rel);
+    expect(p.fix).toContain("AGENTS.md");
+  });
+
+  test("src/CLAUDE.md im Unterordner trifft nicht", () => {
+    expect(punkt(lauf(gesund, { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/src/CLAUDE.md") }), "Root-Kontextdatei").ok).toBe(true);
+  });
+});
+
+describe("Zeilenenden", () => {
+  test(".claude/x.md mit eol=crlf ist eine Lücke, tools/a.bat mit eol=crlf nicht", () => {
+    const schlecht = punkt(lauf([...gesund, { pfad: ".claude/x.md", eol: "crlf" }]), "Zeilenenden");
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toContain(".claude/x.md");
+    expect(schlecht.fix).toContain("eol=lf");
+    expect(punkt(lauf([...gesund, { pfad: "tools/a.bat", eol: "crlf" }]), "Zeilenenden").ok).toBe(true);
+  });
+
+  test("docs/a.md ohne eol-Regel (unspecified) ist eine Lücke, `-text` im Attribut und Index nicht", () => {
+    const schlecht = punkt(lauf([...gesund, { pfad: "docs/b.md", eol: "unspecified" }]), "Zeilenenden");
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toContain("docs/b.md");
+    expect(punkt(lauf([...gesund, { pfad: "bild.png", index: "-text", eol: "unspecified" }]), "Zeilenenden").ok).toBe(true);
+    expect(punkt(lauf([...gesund, { pfad: "x.bin", attr: "-text", eol: "unspecified" }]), "Zeilenenden").ok).toBe(true);
+    expect(punkt(lauf([...gesund, { pfad: "leer.txt", index: "none", eol: "unspecified" }]), "Zeilenenden").ok).toBe(true);
+  });
+
+  test("ein Beispielpfad ohne eol=lf ist eine Lücke (neue Hooks, Skills und Agenten sind mit abgedeckt)", () => {
+    expect(BEISPIELE.length).toBeGreaterThan(0);
+    const schlecht = punkt(lauf(gesund, { beispielEol: "unspecified" }), "Zeilenenden");
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toContain(BEISPIELE[0]);
+  });
+
+  test("CRLF und gemischt im Index sind Lücken, auch bei gesetzter eol-Regel", () => {
+    for (const index of ["crlf", "mixed"]) {
+      const p = punkt(lauf([...gesund, { pfad: "docs/c.md", index, eol: "lf" }]), "Zeilenenden");
+      expect(p.ok, index).toBe(false);
+      expect(p.befund).toContain("docs/c.md");
+    }
+  });
+
+  test("leerer Index: NICHT PRÜFBAR statt grün, Root-Kontextdatei bleibt bewertet", () => {
+    const e = lauf([], { existiert: (pfad) => pfad.replaceAll("\\", "/").endsWith("/CLAUDE.md") });
+    expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(punkt(e, "Root-Kontextdatei").ok).toBe(false);
+  });
+
+  test("wirft git: NICHT PRÜFBAR mit Grund und Fix, Root-Kontextdatei bleibt bewertet", () => {
+    const e = pruefe({ rootDir: "/x", git: () => { throw new Error("fatal: not a git repository"); }, existiert: () => false });
+    expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(punkt(e, "Zeilenenden").befund).toContain("not a git repository");
+    expect(punkt(e, "Zeilenenden").fix).toBeTruthy();
+    expect(punkt(e, "Root-Kontextdatei").ok).toBe(true);
+  });
+
+  test("Kürzung: höchstens 5 Pfade, dann (+n weitere)", () => {
+    const viele = Array.from({ length: 8 }, (_, i) => ({ pfad: `docs/v${i}.md`, eol: "unspecified" }));
+    const befund = punkt(lauf([...gesund, ...viele]), "Zeilenenden").befund ?? "";
+    expect(befund).toContain("docs/v4.md");
+    expect(befund).not.toContain("docs/v5.md");
+    expect(befund).toContain("(+3 weitere)");
+  });
+
+  test("pfadeOhneEolRegel: lf und crlf zählen als Regel, alles andere nicht", () => {
+    const aus = ["a", "eol", "lf", "b", "eol", "crlf", "c", "eol", "unspecified", "d", "eol", "auto", ""].join("\0");
+    expect(pfadeOhneEolRegel(aus)).toEqual(["c", "d"]);
+  });
+});
+
+describe("echte Git-Fixture (Negativfall auf Dateiebene)", () => {
+  function repo(gitattributes: string, dateien: Record<string, string>): string {
+    const root = fixture({ ".gitattributes": gitattributes, ...dateien });
+    const g = (...args: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...args], { encoding: "utf8" });
+    g("init", "-q");
+    g("add", "-A");
+    return root;
+  }
+  const kurzeProbe = (root: string) => punkt(pruefe({ rootDir: root }), "Zeilenenden");
+
+  test("`* -text` mit CRLF-Datei ist eine Lücke, `* text=auto eol=lf` mit LF-Datei ist OK", () => {
+    const schlecht = kurzeProbe(repo("* -text\n", { "a.md": "x\r\ny\r\n" }));
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toContain("CRLF");
+    const gut = kurzeProbe(repo("* text=auto eol=lf\n", { "a.md": "x\ny\n", ".claude/agents/a.md": "x\n" }));
+    expect(gut).toMatchObject({ punkt: "Zeilenenden", ok: true });
+  });
+
+  test("ein Ordner ohne Git-Repo ist NICHT PRÜFBAR", () => {
+    const root = fixture({ "a.md": "x\n" });
+    // Das tmp-Verzeichnis liegt unter keinem Repo (git wirft); läge es in einem, ist der Index dieses Ordners leer: beides ist nicht prüfbar.
+    const p = kurzeProbe(root);
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBe(true);
+  });
+});

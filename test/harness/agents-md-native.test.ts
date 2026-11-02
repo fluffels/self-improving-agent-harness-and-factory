@@ -23,6 +23,10 @@
  * nur die Voraussetzung dafür (keine CLAUDE.md) und fängt die abgelegten Rollen-Begriffe
  * (RETIRED_ROLE_CLAIMS) neben einer CLAUDE.md-Erwähnung, nicht jede Falschbeschreibung.
  *
+ * Aufteilung (factory#94): Die Regel „keine Root-Kontextdatei“ (Punkt 1) läuft als Doctor-Punkt `Root-Kontextdatei` im Besitz
+ * (scripts/harness-doctor-dateien.mjs) in jedem Bezieher; dieser Test hält den Unit-Anteil (Erkennung der Varianten) und prüft das Factory-Repo selbst.
+ * Der Prosa-Scan (Punkt 2) bleibt hier Kern-Test des Factory-Repos: seine Begriffe stammen aus der Geschichte der Quelle.
+ *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/docdrift (#390/#482/#529),
  * nicht mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
  * `scripts/check-` ist Gate-Config (Audit-Kommentar-Pflicht), und
@@ -48,6 +52,8 @@ import { fileURLToPath } from "node:url";
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { blockierendeKontextdateien as rawBlockierende } from "../../scripts/harness-doctor-dateien.mjs";
 import { FREMD } from "../support/fremd-config";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
@@ -65,18 +71,8 @@ const listTrackedFiles: (rootDir?: string) => string[] = checkBasis.listTrackedF
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-/**
- * Die Projekt-Memory-Dateien, deren bloße Existenz das native Laden von AGENTS.md abschaltet
- * (Claude-Code-Doku › Memory › AGENTS.md). `~/.claude/CLAUDE.md` zählt nicht – die liegt
- * außerhalb des Repos. Eine CLAUDE.md in einem Unterordner (z.B. `src/`) ist ebenfalls kein
- * Projekt-Memory des Roots und bleibt hier bewusst außen vor.
- */
-const BLOCKING_MEMORY_FILES = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"];
-
-/** Welche der blockierenden Memory-Dateien liegen im Root `rootDir` (per existsSync, auch ungetrackt)? */
-function blockingMemoryFiles(rootDir: string): string[] {
-  return BLOCKING_MEMORY_FILES.filter((rel) => existsSync(join(rootDir, rel)));
-}
+/** Erkennung der blockierenden Root-Kontextdateien: Quelle ist der Besitz (Doctor-Punkt `Root-Kontextdatei`, factory#94), hier nur der Unit-Anteil. */
+const blockingMemoryFiles = rawBlockierende as (rootDir: string) => string[];
 
 /**
  * Rollen-Behauptungen über CLAUDE.md, die es nicht mehr gibt – samt neuer Heimat für die
@@ -174,7 +170,7 @@ describe("Keine CLAUDE.md verdrängt das native Laden von AGENTS.md (#1087)", ()
       mkdirSync(join(dir, "src"));
       writeFileSync(join(dir, "src", "CLAUDE.md"), "x");
       assert.deepEqual(blockingMemoryFiles(dir), [], "CLAUDE.md im Unterordner ist kein Root-Memory");
-      // Bewusst ein festes Literal statt BLOCKING_MEMORY_FILES: sonst fiele mit einem gestrichenen
+      // Bewusst ein festes Literal statt BLOCKIERENDE_KONTEXTDATEIEN: sonst fiele mit einem gestrichenen
       // Pfad auch sein Prüffall weg, und die Selbstprobe bliebe grün (Sabotage-Befund im Review).
       for (const rel of ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"]) {
         const sub = mkdtempSync(join(tmpdir(), "agents-native-"));

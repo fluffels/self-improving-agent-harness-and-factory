@@ -231,7 +231,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       vi.unstubAllEnvs();
     }
   });
-  test("Wochenlauf ruft den Doctor-Lauf mit rootDir und gh, langfuse null und ohne umgebung", async () => {
+  test("Wochenlauf ruft den Doctor-Lauf mit rootDir und gh, langfuse null, dateien und ohne umgebung", async () => {
     vi.stubEnv("GITHUB_ACTIONS", "");
     try {
       const aufrufe: Record<string, unknown>[] = [];
@@ -251,6 +251,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
       assert.equal(typeof aufrufe[0].rootDir, "string");
       assert.equal(typeof aufrufe[0].gh, "function");
       assert.equal(aufrufe[0].langfuse, null);
+      assert.equal(typeof aufrufe[0].dateien, "function", "der Wochenlauf prüft die Dateipunkte des Beziehers (factory#94)");
       assert.equal("umgebung" in aufrufe[0], false, "der Wochenlauf prüft keine Altnamen der Runner-Umgebung");
     } finally {
       vi.unstubAllEnvs();
