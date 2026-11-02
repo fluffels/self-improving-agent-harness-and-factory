@@ -294,6 +294,11 @@ describe("lauf", () => {
     expect(log.join("\n")).not.toContain("[dry-run]");
     T.lauf({ io: io({ ladeLog: () => "", ...geclaimt }), trocken: true });
     expect(log.join("\n")).not.toContain("[dry-run]");
+    // ohne Claim und ohne Auslöser (zwei jüngere Besitz-PRs) gibt es keinen Vorschlag, auch nicht im Dry-Run
+    const zwei = `\x1e${"1".repeat(40)}\x1f${vor(1)}\x1ffix: a (#1)\x1f\n\nscripts/a.mjs\n\x1e${"2".repeat(40)}\x1f${vor(2)}\x1ffix: b (#2)\x1f\n\nscripts/a.mjs\n`;
+    T.lauf({ io: io({ ladeLog: () => zwei }), trocken: true });
+    expect(log.join("\n")).toContain("Tag-Takt: nichts");
+    expect(log.join("\n")).not.toContain("[dry-run]");
   });
   it("ein werfender CI-Leser legt trotzdem an, mit Status unbekannt", () => {
     const text: string[] = [];

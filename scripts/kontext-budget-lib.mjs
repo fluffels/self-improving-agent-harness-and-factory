@@ -32,7 +32,7 @@ export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] })
   for (const { file, budget } of budgets) {
     if (geduldet.has(file)) continue;
     const text = lies(file);
-    const chars = text === null || text === undefined ? 0 : countChars(text);
+    const chars = text === null ? 0 : countChars(text);
     if (chars > budget) treffer.push({ file, chars, budget });
   }
   return treffer;
