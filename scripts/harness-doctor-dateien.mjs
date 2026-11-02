@@ -85,7 +85,7 @@ const luecke = (punkt, befund, fix) => ({ punkt, ok: false, befund, fix });
 const nichtPruefbar = (punkt, grund, fix) => ({ punkt, ok: false, nichtPruefbar: true, befund: grund, fix });
 
 /** Git-Aufruf im Bezieher (`rootDir`); `input` geht über stdin (Windows begrenzt die Kommandozeile). Wirft mit der ersten Fehlerzeile. */
-function gitStandard(rootDir) {
+export function gitStandard(rootDir) {
   return (args, input) => {
     const r = spawnSync("git", ["-C", rootDir, "-c", "core.quotepath=off", ...args], { encoding: "utf8", input, windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
     if (r.error) throw r.error;

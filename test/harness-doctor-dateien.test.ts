@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
+import { gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
 import { fixture } from "./support/tmp-fixture";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
@@ -11,6 +11,7 @@ type Git = (args: string[], input?: string) => string;
 const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean }) => Ergebnis[];
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
+const gitStandard = rawGitStandard as (rootDir: string) => Git;
 
 /** Eine Datei der Fake-Welt: Pfad, Index-Zeilenende (`lf`, `crlf`, `mixed`, `-text`, `none`), Wert von `eol`, Attribut-Text von ls-files. */
 interface Datei { pfad: string; index?: string; eol?: string; attr?: string }
@@ -61,6 +62,13 @@ describe("Zeilenenden", () => {
     expect(punkt(lauf([...gesund, { pfad: "tools/a.bat", eol: "crlf" }]), "Zeilenenden").ok).toBe(true);
   });
 
+  test(".agents/x.md mit eol=crlf ist eine Lücke (streng), ein verschachteltes test/.claude/a.bat mit crlf nicht", () => {
+    const schlecht = punkt(lauf([...gesund, { pfad: ".agents/x.md", eol: "crlf" }]), "Zeilenenden");
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toContain(".agents/x.md");
+    expect(punkt(lauf([...gesund, { pfad: "test/.claude/a.bat", eol: "crlf" }]), "Zeilenenden").ok).toBe(true);
+  });
+
   test("docs/a.md ohne eol-Regel (unspecified) ist eine Lücke, `-text` im Attribut und Index nicht", () => {
     const schlecht = punkt(lauf([...gesund, { pfad: "docs/b.md", eol: "unspecified" }]), "Zeilenenden");
     expect(schlecht.ok).toBe(false);
@@ -97,6 +105,13 @@ describe("Zeilenenden", () => {
     expect(punkt(e, "Zeilenenden").befund).toContain("not a git repository");
     expect(punkt(e, "Zeilenenden").fix).toBeTruthy();
     expect(punkt(e, "Root-Kontextdatei").ok).toBe(true);
+  });
+
+  test("check-attr scheitert bei leerer Ausgabe: NICHT PRÜFBAR statt still grün (Status-Guard)", () => {
+    const ok = fakeGit(gesund);
+    const e = pruefe({ rootDir: "/x", git: (args, input) => (args[0] === "check-attr" ? (() => { throw new Error("git check-attr endete mit 128"); })() : ok(args, input)), existiert: () => false });
+    expect(punkt(e, "Zeilenenden")).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(punkt(e, "Zeilenenden").befund).toContain("check-attr");
   });
 
   test("Kürzung: höchstens 5 Pfade, dann (+n weitere)", () => {
@@ -136,6 +151,11 @@ describe("echte Git-Fixture (Negativfall auf Dateiebene)", () => {
     expect(schlecht.befund).toContain("CRLF");
     const gut = kurzeProbe(repo("* text=auto eol=lf\n", { "a.md": "x\ny\n", ".claude/agents/a.md": "x\n" }));
     expect(gut).toMatchObject({ punkt: "Zeilenenden", ok: true });
+  });
+
+  test("gitStandard wirft bei Exit ungleich 0, auch wenn stdout leer bleibt (kein stilles Grün)", () => {
+    const root = fixture({ "a.md": "x" + String.fromCharCode(10) });
+    expect(() => gitStandard(root)(["gibt-es-nicht"])).toThrow();
   });
 
   test("ein Ordner ohne Git-Repo ist NICHT PRÜFBAR", () => {

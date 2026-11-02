@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: (a: { rootDir: string }) => unknown[]; vorbereiten?: (root: string) => void } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   opt.vorbereiten?.(root);
@@ -105,7 +105,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     rootDir: root,
     gh,
     env: opt.env ?? {},
-    dateien: opt.dateien ?? (() => []), // die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
+    ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
     ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
@@ -618,6 +618,13 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     const r = lauf({}, { dateien, vorbereiten: repo({ "alt.md": "a\r\nb\r\n" }, "* -text\n") });
     assert.equal(r.code, 1);
     assert.ok(r.out.some((z) => z.startsWith("LÜCKE Zeilenenden: ") && z.includes("alt.md")), r.out.join("\n"));
+  });
+
+  test("Default-Verdrahtung: main ohne eingespritzte Dateipunkte liefert beide Punkte aus dem echten Beziehers-Ordner", () => {
+    const r = lauf({}, { dateien: "echt", vorbereiten: mitClaude });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Root-Kontextdatei: CLAUDE.md ")), r.out.join(String.fromCharCode(10)));
+    assert.ok(r.out.includes("OK Zeilenenden"), r.out.join(String.fromCharCode(10)));
   });
 
   test("ohne Git-Repo: NICHT PRÜFBAR statt grün", () => {
