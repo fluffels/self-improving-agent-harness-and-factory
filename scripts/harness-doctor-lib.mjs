@@ -354,10 +354,10 @@ export function konfigFehlerText(e) {
 
 /**
  * Lädt Config und Ruleset-Spiegel und führt alle Prüfpunkte aus: `{ config, ergebnis }`. Wirft bei unlesbarer Config oder unlesbarem Spiegel,
- * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `umgebung: null` den Altnamen-Punkt (`{ env, namen }` prüft ihn: `namen` sind die `FACTORY_…`-Namen aus `kernEnvNamen`, die der Aufrufer am Rand bestimmt; die Lib liest dafür keine Dateien); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
+ * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `dateien: null` die Dateipunkte (`dateien({ rootDir })` liefert Ergebnisse wie `pruefeDateien`, factory#94; der Aufrufer reicht die Funktion am Rand herein), `umgebung: null` den Altnamen-Punkt (`{ env, namen }` prüft ihn: `namen` sind die `FACTORY_…`-Namen aus `kernEnvNamen`, die der Aufrufer am Rand bestimmt; die Lib liest dafür keine Dateien); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
  * als Workflow mit, falls die Datei fehlt (dann erscheinen ihre Secrets schon im Plan von `--einrichten`).
  */
-export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null }) {
+export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null, dateien = null }) {
   if (umgebung && !Array.isArray(umgebung.namen)) throw new Error("umgebung braucht { env, namen }: die Kern-Namen bestimmt der Aufrufer am Rand (kernEnvNamen)");
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
@@ -366,6 +366,7 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const besitz = existsSync(manifest) ? hole(() => JSON.parse(readFileSync(manifest, "utf8"))) : { fehler: "Datei fehlt" };
   if (mitWochenlauf && !workflows.some((w) => w.pfad === basename(WOCHENLAUF_PFAD))) workflows.push({ pfad: basename(WOCHENLAUF_PFAD), text: WOCHENLAUF_WORKFLOW });
   const ergebnis = pruefe({ config, voraussetzungen: voraussetzungenAus({ config, workflows, spiegel, besitz }), spiegel, gh, langfuse, umgebung });
+  if (dateien) ergebnis.push(...dateien({ rootDir }));
   return { config, ergebnis };
 }
 
