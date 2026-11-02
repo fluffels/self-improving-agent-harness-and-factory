@@ -68,6 +68,10 @@ describe("abweichendeZeilen", () => {
     assert.equal(abgleich.abweichendeZeilen("x\n", "x\nx\n"), 1);
     // Zweig jetzt[j - 1] des LCS-Kerns (-x -y +z +q +w): die größere Seite zählt, 3 (ohne den Zweig wäre lcs 0 und das Ergebnis 4)
     assert.equal(abgleich.abweichendeZeilen("x\na\ny\n", "z\na\nq\nw\n"), 3);
+    // Treffer-Zweig des LCS-Kerns (vor[j - 1] + 1): eine wiederholte Zeile zählt nur einmal als gemeinsam
+    assert.equal(abgleich.abweichendeZeilen("z\nb\nb\nq\n", "w\nb\nv\n"), 3);
+    // Auslesen des LCS an der Grenze vor[y.length]: die letzte Zeile des mittleren Fensters gehört zur gemeinsamen Teilfolge
+    assert.equal(abgleich.abweichendeZeilen("a\np\n", "q\na\n"), 1);
     // die Seite mit mehr abweichenden Zeilen zählt, in beiden Richtungen
     assert.equal(abgleich.abweichendeZeilen("a\nb\nc\nd\n", "a\nX\n"), 3);
     assert.equal(abgleich.abweichendeZeilen("a\nX\n", "a\nb\nc\nd\n"), 3);
