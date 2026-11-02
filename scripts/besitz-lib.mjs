@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { altEnvPraefix } from "./projekt-config-lib.mjs";
+import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
@@ -110,7 +111,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    out.push(...pflichtChecksFehler(e).map((f) => `${id}: ${f}`));
+    out.push(...[...pflichtChecksFehler(e), ...artFehler(e)].map((f) => `${id}: ${f}`));
     if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);
