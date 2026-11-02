@@ -16,8 +16,8 @@ import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
-  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown[]>; spiegel: undefined; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
-  voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[] }): { secrets: string[]; variablen: string[]; labels: string[] };
+  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
+  voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
 }
 const doctor = rawDoctor as unknown as Doctor;
 type Befund = { punkt: string; ok: boolean; befund?: string; fix?: string };
@@ -75,8 +75,9 @@ afterEach(() => {
   for (const o of ordner.splice(0)) rmSync(o, { recursive: true, force: true });
 });
 
+const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[] } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   if (opt.workflow !== null) {
@@ -84,6 +85,10 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     writeFileSync(join(root, ".github", "workflows", "a.yml"), opt.workflow ?? WORKFLOW);
   }
   writeFileSync(join(root, "ruleset.json"), JSON.stringify(opt.spiegel ?? SPIEGEL));
+  if (opt.besitz !== null) {
+    mkdirSync(join(root, ".factory"), { recursive: true });
+    writeFileSync(join(root, ".factory", "besitz.json"), opt.besitz ?? BESITZ_LEER);
+  }
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
   const welt: Record<string, unknown> = { ...GESUND, ...over };
   // Regeln liefert `gh api --paginate --slurp` als Seiten; eine flache Regelliste in den Fixtures ist eine Seite (Seitenform steht in "Regeln über zwei Seiten").
@@ -278,9 +283,7 @@ describe("harness-doctor --pruefen", () => {
     ["Labels nicht lesbar", { "api --paginate --slurp repos/acme/demo/labels?per_page=100": new Error("HTTP 403") }, /Labels: Labels nicht lesbar.*Fix:/],
     ["Status-Feld 404", { "api orgs/acme/projectsV2/7/fields/5": new Error("HTTP 404") }, /Board produkt: Status-Feld 5 \("Status"\) nicht lesbar.*Fix: boards\[0\]/],
     ["Board wirft", { "api orgs/acme/projectsV2/7": new Error("HTTP 404") }, /Board produkt: Board nicht lesbar.*Fix: boards\[0\]/],
-    ["keine Regel", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /Ruleset: kein Required status check.*Fix:/],
     ["Ruleset 403", { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": new Error("HTTP 403") }, /Ruleset: Regeln.*nicht lesbar.*Fix:/],
-    ["privat ohne Ruleset", { "api repos/acme/demo": { ...REPO_OK, private: true }, "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] }, /ADR 0022.*Fix: Repo öffentlich/],
   ];
   for (const [name, over, muster] of faelle) {
     test(`Lücke: ${name}`, () => {
@@ -288,6 +291,55 @@ describe("harness-doctor --pruefen", () => {
       assert.equal(r.code, 1);
       assert.equal(luecken(r).length, 1, r.out.join("\n"));
       assert.match(luecken(r)[0], muster);
+    });
+  }
+
+  const OHNE_CHECK = { "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [CODEQL] };
+  test("ohne Required Check: die Ruleset-Lücke, danach je Pflicht-Check des Spiegels eine eigene Zeile (factory#117)", () => {
+    const r = lauf(OHNE_CHECK);
+    assert.equal(r.code, 1);
+    const l = luecken(r);
+    assert.equal(l.length, 3, r.out.join("\n"));
+    assert.match(l[0], /^LÜCKE Ruleset: kein Required status check.*Fix:/);
+    assert.match(l[1], /^LÜCKE Required-Check CI: Required-Check "CI" fehlt auf main Fix: "CI" in Ruleset "main-schutz"/);
+    assert.match(l[2], /^LÜCKE Required-Check Audit: /);
+  });
+
+  test("privat ohne Ruleset: die Grenze steht nur an der Ruleset-Zeile, die Namen folgen", () => {
+    const r = lauf({ ...OHNE_CHECK, "api repos/acme/demo": { ...REPO_OK, private: true } });
+    const l = luecken(r);
+    assert.match(l[0], /^LÜCKE Ruleset: .*ADR 0022.*Fix: Repo öffentlich/);
+    assert.deepEqual(l.slice(1).map((z) => z.split(":")[0]), ["LÜCKE Required-Check CI", "LÜCKE Required-Check Audit"]);
+    assert.ok(l.slice(1).every((z) => !z.includes("ADR 0022")));
+  });
+
+  const KERN_BESITZ = JSON.stringify({ version: 1, eintraege: [{ pfad: ".github/workflows/a.yml", ring: "kern", quelle: "t", pflichtChecks: ["Kern"] }] });
+  test("Kern-Pflicht-Check fehlt im Ruleset: Lücke Required-Check <name>; mit dem Namen in den Regeln grün (factory#117)", () => {
+    const r = lauf({}, { besitz: KERN_BESITZ });
+    assert.equal(r.code, 1);
+    assert.equal(luecken(r).length, 1, r.out.join("\n"));
+    assert.match(luecken(r)[0], /^LÜCKE Required-Check Kern: Required-Check "Kern" fehlt auf main Fix: "Kern" in Ruleset "main-schutz"/);
+    assert.deepEqual(r.out.filter((z) => z.startsWith("HINWEIS Required-Check")), [], "eine Lücke ohne hinweis trägt keine HINWEIS-Zeile");
+    const regeln = [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }, { context: "Kern" }] } }, CODEQL];
+    const gruen = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": regeln }, { besitz: KERN_BESITZ });
+    assert.equal(gruen.code, 0, gruen.out.join("\n"));
+  });
+
+  test("Kern-Pflicht-Check einer Datei, die nicht im Repo liegt, zählt nicht", () => {
+    const besitz = JSON.stringify({ version: 1, eintraege: [{ pfad: ".github/workflows/fehlt.yml", ring: "kern", quelle: "t", pflichtChecks: ["Kern"] }] });
+    assert.equal(lauf({}, { besitz }).code, 0);
+  });
+
+  for (const [name, besitz] of [["fehlt", null], ["kein JSON", "{ nicht json"], ["JSON null", "null"], ["Eintrag kein Objekt", JSON.stringify({ version: 1, eintraege: ["x"] })], ["ungültiges pflichtChecks", JSON.stringify({ version: 1, eintraege: [{ pfad: "x.yml", ring: "kern", quelle: "t", pflichtChecks: [] }] })]] as [string, string | null][]) {
+    test(`besitz.json nicht lesbar (${name}): HINWEIS und NICHT PRÜFBAR statt grün, Exit 1, Spiegel-Checks laufen weiter`, () => {
+      const r = lauf({}, { besitz });
+      assert.equal(r.code, 1, r.out.join("\n"));
+      assert.ok(r.aufrufe.length > 0);
+      assert.ok(r.out.includes("OK Ruleset"));
+      assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Kern-Pflicht-Checks: .factory/besitz.json nicht lesbar (")), r.out.join("\n"));
+      assert.ok(r.out.some((z) => z.startsWith("HINWEIS Kern-Pflicht-Checks: ")));
+      assert.equal(r.out.at(-1), "Harness-Doctor: 0 Lücke(n), 1 nicht prüfbar");
+      assert.ok(r.out.every((z) => !z.includes(tmpdir())), "kein absoluter Pfad in der Ausgabe");
     });
   }
 
@@ -415,6 +467,34 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(ohneScope.find((p) => p.punkt === "Token-Scope")?.fatal, undefined);
   });
 
+  test("Kern-Pflicht-Checks nicht prüfbar auch ohne gültigen Token (braucht kein gh)", () => {
+    const r = lauf({ "api -i user": new Error("gh auth login") }, { besitz: null });
+    assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Kern-Pflicht-Checks: ")), r.out.join("\n"));
+  });
+
+  test("pruefe ohne pflichtChecks und ohne Spiegel wirft nie und meldet keinen Required-Check", () => {
+    const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+    const gh = (a: string[]): string => {
+      if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      throw new Error("404");
+    };
+    const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh, langfuse: null });
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")), []);
+    assert.ok(punkte.some((p) => p.punkt === "Ruleset" && p.ok));
+  });
+
+  test("pruefe ohne abgeleitete pflichtChecks fällt auf die Checks des Spiegels zurück (kein stilles Weglassen, factory#117)", () => {
+    const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+    const gh = (a: string[]): string => {
+      if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      throw new Error("404");
+    };
+    const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: { name: "s", requiredChecks: ["CI"] }, gh, langfuse: null });
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")).map((p) => p.punkt), ["Required-Check CI"]);
+  });
+
   test("Langfuse nicht erreichbar: Lücke mit Befund aus stderr und Fix", () => {
     const r = lauf({}, { langfuse: 1 });
     assert.equal(r.code, 1);
@@ -494,6 +574,34 @@ describe("harness-doctor --pruefen", () => {
     const r = spawnSync(process.execPath, [SKRIPT, "--pruefen", "--config", join(root, "kaputt.json")], { encoding: "utf8", windowsHide: true });
     assert.equal(r.status, 2);
     assert.match(r.stderr, /Fix:/);
+  });
+});
+
+describe("voraussetzungenAus: Pflicht-Checks des Kerns (factory#117)", () => {
+  const eintrag = (pfad: string, extra: Record<string, unknown> = {}) => ({ pfad, ring: "kern", quelle: "t", pflichtChecks: ["Kern", "CI"], ...extra });
+  const ab = (besitz: unknown, spiegel: unknown = { requiredChecks: ["CI", "Audit"] }, dateien = ["k.yml"]) =>
+    doctor.voraussetzungenAus({ config: {}, workflows: dateien.map((pfad) => ({ pfad, text: "" })), spiegel, besitz });
+  const wert = (...eintraege: unknown[]) => ({ wert: { version: 1, eintraege } });
+
+  test("Vereinigung ohne Doppelte, Spiegel zuerst; der Pfad mit Ordner passt auf den Basisnamen", () => {
+    const v = ab(wert(eintrag(".github/workflows/k.yml")));
+    assert.deepEqual(v.pflichtChecks, ["CI", "Audit", "Kern"]);
+    assert.equal(v.besitzFehler, null);
+  });
+  test("zählt nicht: Datei nicht im Repo, Ring oberflaeche, Eintrag ohne pflichtChecks", () => {
+    const v = ab(wert(eintrag(".github/workflows/fehlt.yml"), eintrag(".github/workflows/k.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/k.yml", { pflichtChecks: undefined })));
+    assert.deepEqual(v.pflichtChecks, ["CI", "Audit"]);
+    assert.equal(v.besitzFehler, null);
+  });
+  test("ohne Spiegel: nur die Kern-Checks", () => {
+    assert.deepEqual(ab(wert(eintrag(".github/workflows/k.yml")), null).pflichtChecks, ["Kern", "CI"]);
+  });
+  test("Manifest nicht lesbar: nur der Spiegel, besitzFehler gesetzt (fail-closed)", () => {
+    for (const besitz of [{ fehler: "Datei fehlt" }, undefined, { wert: {} }, { wert: null }, { wert: { eintraege: [null] } }, { wert: { eintraege: ["x", 3] } }, wert(eintrag(".github/workflows/k.yml", { pflichtChecks: [] }))]) {
+      const v = ab(besitz);
+      assert.deepEqual(v.pflichtChecks, ["CI", "Audit"], JSON.stringify(besitz));
+      assert.ok(typeof v.besitzFehler === "string" && v.besitzFehler !== "", JSON.stringify(besitz));
+    }
   });
 });
 
