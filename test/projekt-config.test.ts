@@ -15,6 +15,8 @@ import { escapeRegex } from "../scripts/ticket-namen.mjs";
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDocmap from "../scripts/check-docmap.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawGlob from "../scripts/pfad-glob.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
@@ -37,6 +39,7 @@ interface Pc {
   bereichAliaseAus(config: unknown): Record<string, string>;
   ausnahmenAus(config: unknown): { groesse: { datei: string; grund: string }[]; kontext: { datei: string; grund: string }[] };
   gatesAus(config: unknown): { nichtInVerify: { gate: string; grund: string }[] };
+  factoryLinkAusnahmenAus(config: unknown): string[];
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
   kernEnvNamen(ordner: string): string[];
   sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
@@ -520,6 +523,7 @@ describe("Accessoren vertragen eine fehlende Config (null/undefined)", () => {
     ["umschriftAus", (c) => acc.umschriftAus(c), { fehler: /sprache\.umschrift fehlt/ }],
     ["ausnahmenAus", (c) => acc.ausnahmenAus(c), { wert: { groesse: [], kontext: [] } }],
     ["gatesAus", (c) => acc.gatesAus(c), { wert: { nichtInVerify: [] } }],
+    ["factoryLinkAusnahmenAus", (c) => acc.factoryLinkAusnahmenAus(c), { wert: [] }],
     ["repoName", (c) => acc.repoName(c), { fehler: /repo fehlt/ }],
     ["repoOwner", (c) => acc.repoOwner(c), { fehler: /repo fehlt/ }],
     ["berechtigungenAus", (c) => acc.berechtigungenAus(c), { wert: { allow: [], ask: [], deny: [] } }],
@@ -642,7 +646,7 @@ describe("kein stiller Standardwert (AK3)", { timeout: 30_000 }, () => {
   test("board-lib und gh-cli ohne .factory/projekt.json: Import bricht mit Projekt-Config-Meldung, ohne Projektnamen", () => {
     const d = tmp();
     mkdirSync(join(d, "scripts", "docs-gen"), { recursive: true });
-    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "arbeitsplatz-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "repo-form.mjs", "relativ-pfad.mjs", "skill-pfade.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
+    for (const f of ["board-lib.mjs", "board-plan-lib.mjs", "gh-cli.mjs", "projekt-config-lib.mjs", "arbeitsplatz-lib.mjs", "fremdtext-lib.mjs", "flag-lib.mjs", "spezifikation-lib.mjs", "repo-form.mjs", "relativ-pfad.mjs", "skill-pfade.mjs", "pfad-glob.mjs", "docs-gen/markdown.mjs"]) copyFileSync(join(WURZEL, "scripts", f), join(d, "scripts", f));
     const r = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(pathToFileURL(join(d, "scripts/board-lib.mjs")).href)})`], { encoding: "utf8", cwd: d });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /Projekt-Config/);
@@ -1163,5 +1167,46 @@ describe("check:contextsize, check:anysuppress und check:diffcoverage: Ausnahmen
       assert.match(r.text, /✖ [\s\S]*struktur[\s\S]*Fix:/, skript);
       assert.doesNotMatch(r.text, /^\s+at /m, skript);
     }
+  });
+});
+
+describe("factoryLinks.ausnahmen (factory#130)", () => {
+  const mit = (a: unknown): string[] => pc.pruefeProjektConfig({ ...gueltig(), factoryLinks: a });
+  const liste = (l: unknown): string[] => mit({ ausnahmen: l });
+  const glob = rawGlob as unknown as { globRegex(m: string): RegExp };
+
+  test("gültige Globs und ein fehlender Schlüssel sind ok", () => {
+    assert.deepEqual(liste(["docs/adr/**", "docs/*-gegenprobe-*.md", "docs/lessons-learned.md", "**/x.md", "a?.md"]), []);
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({}), []);
+  });
+  test("jeder ungültige Glob ist ein Fehler mit dem Schlüssel im Text", () => {
+    for (const falsch of ["[a]", "{a,b}", "!x", "../x", "a/./b", "/abs", "C:/x", "a\\b", "", "a//b", "a/", "a**b", "***", 5]) {
+      const f = liste([falsch]);
+      assert.equal(f.length, 1, JSON.stringify(falsch));
+      assert.match(f[0], /factoryLinks\.ausnahmen\[0\]/, JSON.stringify(falsch));
+    }
+  });
+  test("Duplikate, Nicht-Liste, Nicht-Objekt und unbekannte Schlüssel werden gemeldet", () => {
+    assert.match(liste(["a.md", "a.md"]).join("|"), /steht doppelt/);
+    assert.match(liste("x").join("|"), /factoryLinks\.ausnahmen muss eine Liste/);
+    assert.match(mit("x").join("|"), /factoryLinks muss ein Objekt/);
+    assert.match(mit({ andere: [] }).join("|"), /factoryLinks\.andere ist kein bekannter Schlüssel/);
+  });
+  test("factoryLinkAusnahmenAus: ohne Schlüssel leer, sonst die Liste; kaputt wirft mit Fix-Zeile", () => {
+    assert.deepEqual(pc.factoryLinkAusnahmenAus({}), []);
+    assert.deepEqual(pc.factoryLinkAusnahmenAus({ factoryLinks: {} }), []);
+    assert.deepEqual(pc.factoryLinkAusnahmenAus({ factoryLinks: { ausnahmen: ["a/**"] } }), ["a/**"]);
+    assert.throws(() => pc.factoryLinkAusnahmenAus({ factoryLinks: { ausnahmen: ["[a]"] } }), /factoryLinks[\s\S]*Fix:/);
+  });
+  test("globRegex: `**` ist null oder mehr Segmente, `*` und `?` bleiben im Segment, `.` ist wörtlich", () => {
+    const trifft = (m: string, p: string): boolean => glob.globRegex(m).test(p);
+    assert.ok(trifft("docs/adr/**", "docs/adr/a.md") && trifft("docs/adr/**", "docs/adr/f/b.md"));
+    assert.ok(!trifft("docs/adr/**", "docs/adrx/a.md"));
+    assert.ok(trifft("docs/*-gegenprobe-*.md", "docs/lens-gegenprobe-1.md"));
+    assert.ok(!trifft("docs/*-gegenprobe-*.md", "docs/x/lens-gegenprobe-1.md"));
+    assert.ok(trifft("a?.md", "ab.md") && !trifft("a?.md", "a/.md"));
+    assert.ok(!trifft("a.md", "axmd"));
+    assert.ok(trifft("**/x.md", "x.md") && trifft("**/x.md", "a/b/x.md") && !trifft("**/x.md", "a/bx.md"));
   });
 });
