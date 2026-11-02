@@ -19,6 +19,10 @@
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
  * und den Workflows (`voraussetzungenAus`); der Wächter test/harness/harness-doctor-voraussetzungen.test.ts hält die Ableitung vollständig.
  *
+ * Die Soll-Liste der Required Checks ist der Ruleset-Spiegel plus die `pflichtChecks` der verteilten Kern-Workflows in `.factory/besitz.json` (factory#117; ein Eintrag zählt nur, wenn seine Datei im Repo liegt);
+ * ein fehlender Name ist die Lücke `Required-Check <name>`. Hat das Ruleset gar keinen Required Check, folgt der Lücke `Ruleset` je Name eine eigene Zeile (`--einrichten`: je eine ANLEITUNG).
+ * Ist `.factory/besitz.json` nicht lesbar (fehlt, kein JSON, ungültiges `pflichtChecks`), steht `NICHT PRÜFBAR Kern-Pflicht-Checks` samt `HINWEIS` da (Exit 1): geprüft sind dann nur die Checks des Spiegels.
+ *
  * Bekannte Grenzen: private Repos auf GitHub Free kennen keine Rulesets (ADR 0022), dort ist das fehlende Ruleset eine Lücke mit dieser
  * Erklärung; `allowed_actions: selected` gilt als erlaubt (welche Actions, prüft der Doctor nicht); geprüft werden nur Repo- und Org-Secrets
  * bzw. -Variablen der Actions (keine Environment-Secrets); Required Checks zählen nur aus Rulesets (klassischer Branch-Schutz wird nicht gelesen); ein fein granulares Token hat keinen Scope-Header, dann nur ein HINWEIS.
@@ -166,6 +170,7 @@ function ausgabe(ergebnis, out) {
     if (p.nichtPruefbar) nichtPruefbar++;
     else luecken++;
     out(`${p.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
+    if (p.hinweis) out(`HINWEIS ${p.punkt}: ${p.hinweis}`);
   }
   out(luecken + nichtPruefbar ? `Harness-Doctor: ${luecken} Lücke(n), ${nichtPruefbar} nicht prüfbar` : "Harness-Doctor: keine Lücke, alles prüfbar");
   return luecken + nichtPruefbar ? 1 : 0;
