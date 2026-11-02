@@ -87,7 +87,7 @@ Hauptchat `sonnet`, Umsetzung `<agenten.umsetzer>` (Sonnet), Planung und Review 
 
 Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks auf dem PR sind der maßgebliche Riegel. Jedes Gate muss grün sein; ein rotes Gate wird durch Beheben der Ursache grün, nie durch Aufweichen.
 
-- **Ticketnummern mit Herkunft (factory#95).** In den Factory-Seiten (`docs/`, ohne Historie) und in dieser Datei steht keine nackte Nummer `#nnn(n)`: `quellprojekt#<nr>` für ein Ticket des Quellprojekts, `factory#<nr>` für eines des Factory-Repos (Überschriften und Code ausgenommen). Neue nackte Nummern lassen `test/harness/factory-seiten.test.ts` rot werden; `scripts/herkunftsform.mjs` stellt einmalig um, neue Nummern schreibt man von Hand in der richtigen Form.
+- **Ticketnummern mit Herkunft (factory#95).** In den Factory-Seiten (`docs/`, ohne Historie), den Agenten- und Skill-Texten und in dieser Datei steht keine nackte Nummer `#n` bis `#nnnn`: `quellprojekt#<nr>` für ein Ticket des Quellprojekts, `factory#<nr>` für eines des Factory-Repos (Überschriften und Code ausgenommen). Neue nackte Nummern lassen `test/harness/factory-seiten.test.ts` rot werden; `scripts/herkunftsform.mjs` stellt einmalig um, neue Nummern schreibt man von Hand in der richtigen Form.
 - **Lint muss grün bleiben** (`npm run lint`, `--max-warnings 0`, typbewusst ab `recommendedTypeChecked`).
 - **Komplexität je Funktion** (`scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in `eslint-suppressions.json`, Neues bricht sofort, stale Einträge `npm run lint:prune`.
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `SIH-Diffsize-Override: #<nr> warum`.
