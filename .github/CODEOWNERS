@@ -83,6 +83,7 @@ AGENTS.md @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels
 /scripts/kontingent-lib.mjs @fluffels
+/scripts/kontext-budget-lib.mjs @fluffels
 /scripts/statusline.mjs @fluffels
 /scripts/budget-lib.mjs @fluffels
 /scripts/budget-pacing.mjs @fluffels

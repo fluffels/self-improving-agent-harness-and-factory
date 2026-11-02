@@ -80,6 +80,7 @@
     "/scripts/langfuse-takt.mjs",
     "/scripts/board-takt.mjs",
     "/scripts/kontingent-lib.mjs",
+    "/scripts/kontext-budget-lib.mjs",
     "/scripts/statusline.mjs",
     "/scripts/budget-lib.mjs",
     "/scripts/budget-pacing.mjs",

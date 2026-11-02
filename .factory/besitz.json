@@ -164,6 +164,7 @@
     {"pfad":"scripts/harness-doctor-dateien.mjs","ring":"kern","quelle":"Plan factory#94 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-melden.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":".github/workflows/harness-doctor.yml","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
+    {"pfad":"scripts/kontext-budget-lib.mjs","ring":"kern","quelle":"Kontext-Budget, geteilt von check-context-size und Sync-Hinweis (factory#127 L2)"},
     {"pfad":"scripts/release-tag-lib.mjs","ring":"kern","quelle":"Release-Tags lesen und vergleichen, geteilt von Factory-Update-Check und Tag-Takt (Folge #103, #109)"},
     {"pfad":"scripts/factory-update-check.mjs","ring":"kern","quelle":"Factory-Update-Check (#90 L17)"},
     {"pfad":"scripts/tag-takt.mjs","ring":"kern","quelle":"Tag-Takt (#103)"},
