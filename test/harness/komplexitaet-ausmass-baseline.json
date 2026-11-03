@@ -1,0 +1,193 @@
+{
+  "scripts/abnahme.mjs": {
+    "complexity": 4
+  },
+  "scripts/besitz-extraktion.mjs": {
+    "complexity": 18
+  },
+  "scripts/besitz-lib.mjs": {
+    "complexity": 24,
+    "max-depth": 1
+  },
+  "scripts/board-lib.mjs": {
+    "complexity": 3
+  },
+  "scripts/board-place.mjs": {
+    "complexity": 3
+  },
+  "scripts/board-takt.mjs": {
+    "complexity": 23
+  },
+  "scripts/brain-metrics.mjs": {
+    "complexity": 11,
+    "max-depth": 1
+  },
+  "scripts/budget-lib.mjs": {
+    "complexity": 13
+  },
+  "scripts/check-diffcoverage.mjs": {
+    "complexity": 8
+  },
+  "scripts/check-diffsize.mjs": {
+    "complexity": 8
+  },
+  "scripts/check-docdrift.mjs": {
+    "complexity": 4
+  },
+  "scripts/check-factory-drift.mjs": {
+    "complexity": 4
+  },
+  "scripts/check-lockfile.mjs": {
+    "complexity": 7
+  },
+  "scripts/check-review-nachweis.mjs": {
+    "complexity": 12
+  },
+  "scripts/claims-pruefen.mjs": {
+    "complexity": 12
+  },
+  "scripts/cleanup-worktrees.mjs": {
+    "complexity": 35
+  },
+  "scripts/docs-gen.mjs": {
+    "complexity": 9
+  },
+  "scripts/docs-gen/diagramme.mjs": {
+    "complexity": 3
+  },
+  "scripts/docs-gen/gates.mjs": {
+    "complexity": 3
+  },
+  "scripts/docs-gen/harness-inventar.mjs": {
+    "complexity": 8
+  },
+  "scripts/docs-gen/harness-kennzahlen.mjs": {
+    "complexity": 4
+  },
+  "scripts/docs-gen/registry.mjs": {
+    "complexity": 4
+  },
+  "scripts/factory-sync-lib.mjs": {
+    "complexity": 2
+  },
+  "scripts/factory-sync.mjs": {
+    "complexity": 34
+  },
+  "scripts/flag-lib.mjs": {
+    "complexity": 7
+  },
+  "scripts/gh-guard-hook.mjs": {
+    "complexity": 2
+  },
+  "scripts/harness-doctor.mjs": {
+    "complexity": 5
+  },
+  "scripts/haupt-sync.mjs": {
+    "complexity": 22
+  },
+  "scripts/hauptchat-zerlegung.mjs": {
+    "complexity": 12,
+    "max-depth": 2
+  },
+  "scripts/kontext-treiber.mjs": {
+    "complexity": 18
+  },
+  "scripts/kontingent-lib.mjs": {
+    "complexity": 1
+  },
+  "scripts/langfuse-abgleich-kern.mjs": {
+    "complexity": 10
+  },
+  "scripts/langfuse-abgleich.mjs": {
+    "complexity": 43
+  },
+  "scripts/langfuse-lock.mjs": {
+    "complexity": 4
+  },
+  "scripts/langfuse-nachliefern.mjs": {
+    "complexity": 61
+  },
+  "scripts/langfuse-otlp.mjs": {
+    "complexity": 5
+  },
+  "scripts/langfuse-takt.mjs": {
+    "complexity": 8
+  },
+  "scripts/langfuse-vorbedingung.mjs": {
+    "complexity": 4
+  },
+  "scripts/lauf-ergebnis.mjs": {
+    "complexity": 5
+  },
+  "scripts/mcp-ausfall.mjs": {
+    "complexity": 21,
+    "max-depth": 2
+  },
+  "scripts/nachweis-lib.mjs": {
+    "complexity": 2
+  },
+  "scripts/naechstes-ticket.mjs": {
+    "complexity": 6
+  },
+  "scripts/patch-zugriff.mjs": {
+    "complexity": 21,
+    "max-depth": 7
+  },
+  "scripts/pr-warten.mjs": {
+    "complexity": 9
+  },
+  "scripts/pretooluse-hook.mjs": {
+    "complexity": 2
+  },
+  "scripts/projekt-config-lib.mjs": {
+    "complexity": 14
+  },
+  "scripts/sammelticket-anlegen.mjs": {
+    "complexity": 7
+  },
+  "scripts/sandbox-doctor.mjs": {
+    "complexity": 9
+  },
+  "scripts/schichten-kern.cjs": {
+    "complexity": 19
+  },
+  "scripts/skills-sync.mjs": {
+    "complexity": 8
+  },
+  "scripts/spezifikation.mjs": {
+    "complexity": 5
+  },
+  "scripts/statusline.mjs": {
+    "max-depth": 1
+  },
+  "scripts/stop-verify-hook.mjs": {
+    "complexity": 15
+  },
+  "scripts/subagent-laeufe.mjs": {
+    "complexity": 5
+  },
+  "scripts/ticket-lock.mjs": {
+    "complexity": 6
+  },
+  "scripts/token-baseline.mjs": {
+    "complexity": 18
+  },
+  "scripts/tool-metriken.mjs": {
+    "complexity": 2
+  },
+  "scripts/transkript-calls.mjs": {
+    "complexity": 21
+  },
+  "scripts/umsetzer-abschluss.mjs": {
+    "complexity": 26
+  },
+  "scripts/wiedervorlage.mjs": {
+    "complexity": 11
+  },
+  "scripts/worktree-aufraeumen.mjs": {
+    "complexity": 10
+  },
+  "scripts/worktree-guard-powershell.mjs": {
+    "complexity": 3
+  }
+}
