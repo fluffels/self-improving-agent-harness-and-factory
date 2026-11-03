@@ -509,7 +509,7 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
   const mitTag = (o: Record<string, unknown> = {}) => T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null }, ...o });
   it("liest je Besitz-Commit alle Zeilen mit Text, ignoriert leere Texte und Nicht-Besitz-Commits", () => {
     const besitz = T.besitzCommits([
-      commit({ pr: "#7", body: `feat: a\n\n${MKEY}: Konfig X ergänzen\n* ${MKEY}: Datei Y löschen\n${MKEY}:   ` }),
+      commit({ betreff: "feat: a (#7)", body: `feat: a (#7)\n\n${MKEY}: Konfig X ergänzen\n* ${MKEY}: Datei Y löschen\n${MKEY}:   ` }),
       commit({ pr: "#8", body: `feat: b\n\n${MKEY}: nur Projekt`, dateien: ["src/app.ts"] }),
       commit({ pr: "#9", body: "feat: c" }),
     ], MANIFEST);
