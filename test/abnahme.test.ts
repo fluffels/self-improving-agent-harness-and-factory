@@ -310,6 +310,11 @@ describe("auswerten: ungültiger Bericht oder Worktree, Exit 1, nichts gepostet"
     expect(r.err).toContain(meldung);
     expect(r.posts).toEqual([]);
   });
+  test("falsche Nummer im Kopf: die Meldung nennt beide Nummern und warnt vor der PR-Nummer (L30)", () => {
+    const r = lauf(BERICHT(ok, "ABNAHME #8 · holdout-abnahme"));
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Kopf nennt #8, erwartet die Ticketnummer #7, nicht die PR-Nummer");
+  });
   test("ein erfundenes Kriterium kann ein fehlendes nicht ersetzen", () => {
     const r = lauf(BERICHT(["K1: erfuellt — a", "K2: erfuellt — b", "K4: erfuellt — c"]));
     expect(r.code).toBe(1);
