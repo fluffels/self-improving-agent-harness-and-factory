@@ -1080,6 +1080,7 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
     const q = baueQuelle();
     schreibe(q, ".factory/projekt.json", JSON.stringify({ version: 2, repo: "q/quelle" }));
     const z = baueZiel();
+    schreibe(z, ".factory/projekt.json", "{}"); // mit bekanntem Factory-Repo braucht der Link-Schritt die Ziel-Config (factory#131)
     assert.equal(vomTag(q, z).code, 0);
     const st = JSON.parse(lies(z, ".factory/sync-stand.json")) as { quelle: Record<string, unknown> };
     assert.deepEqual(st.quelle, { commit: commitVon(q), tag: "v1", sauber: true, repo: "q/quelle" });
