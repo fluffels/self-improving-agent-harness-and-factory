@@ -370,6 +370,9 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
+/** Der Skill-Schlüssel, dessen Wert `null` sein darf (kein Abschluss-Skill, factory#139). */
+export const NULLBARER_SKILL = "abschluss";
+
 /**
  * Pur: prüft `skills` (Name → nicht-leerer String); `abschluss` ist Pflichtschlüssel (der Skill, den ein Ticketlauf am Ende fährt),
  * sein Wert darf `null` sein (kein Abschluss-Skill, factory#139); der Schlüssel selbst fehlt nie.
@@ -377,10 +380,10 @@ function pruefeInboxZiel(wert) {
 function pruefeSkills(s) {
   if (!istObjekt(s)) return ["skills muss ein Objekt (Name → String) mit dem Pflichtschlüssel abschluss sein"];
   const fehler = [];
-  if (!Object.hasOwn(s, "abschluss")) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
+  if (!Object.hasOwn(s, NULLBARER_SKILL)) fehler.push("skills.abschluss fehlt (Pflichtschlüssel)");
   for (const [k, v] of Object.entries(s)) {
-    if (k === "abschluss" && v === null) continue;
-    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String${k === "abschluss" ? " oder null (kein Abschluss-Skill)" : ""} sein`);
+    if (k === NULLBARER_SKILL && v === null) continue;
+    if (!istText(v)) fehler.push(`skills.${k} muss ein nicht-leerer String${k === NULLBARER_SKILL ? " oder null (kein Abschluss-Skill)" : ""} sein`);
   }
   return fehler;
 }

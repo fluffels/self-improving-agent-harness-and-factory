@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, NULLBARER_SKILL, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -566,7 +566,7 @@ export function leereProjektwerte(text, pfad = "<text>") {
 }
 
 /** Der eine Projektwert, der `null` sein darf (kein Abschluss-Skill, factory#139); in der Tabelle steht `—`. */
-const NULLBARER_PROJEKTWERT = "skills.abschluss";
+const NULLBARER_PROJEKTWERT = `skills.${NULLBARER_SKILL}`;
 
 /** Wert zum Schlüssel (`gruppe.name`) aus der Config; wirft bei fehlendem oder nicht-textlichem Wert und bei Zeichen, die den Block brechen. */
 export function projektwertWert(config, schluessel) {
@@ -787,7 +787,7 @@ export function begriffeAus(config) {
   const labels = Object.values(config.labels).filter((l) => l.includes(":"));
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
-  const skills = Object.values(config.skills ?? {});
+  const skills = Object.values(config.skills ?? {}).filter((s) => typeof s === "string");
   if (skills.length > 0) out.Skill = new RegExp(`(?<![\\w-])(?:${alternative(skills)})(?![\\w-])`, "g");
   // Das `u`-Flag lehnt `\-` außerhalb einer Zeichenklasse ab, darum bleibt der Bindestrich unmaskiert.
   for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(literal).replaceAll(String.raw`\-`, "-")}(?![\\p{L}\\p{N}_])`, "giu");

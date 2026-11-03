@@ -309,10 +309,10 @@ export function modulPunkt(config, manifest, { configPfad = "die Projekt-Config"
   const w = modulWahl(config, manifest, { configPfad });
   if (!manifest || (!manifestKenntModule(manifest) && w.fehlt)) return null;
   if (w.fehlt) {
-    return luecke(punkt, `der Schlüssel module fehlt in ${configPfad} (es gilt nur ${MODUL_STANDARD.join(", ")})`, `module in ${configPfad} als Liste der gewünschten Sicherheits-Module eintragen (wählbar: ${w.erlaubt.join(", ") || "siehe Manifest"}); [] wählt bewusst keines`);
+    return luecke(punkt, `der Schlüssel module fehlt in ${configPfad} (es gilt nur ${MODUL_STANDARD.join(", ")})`, `module in ${configPfad} als Liste der gewünschten Sicherheits-Module eintragen (wählbar: ${w.erlaubt.join(", ")}); [] wählt bewusst keines`);
   }
   const fehler = [...modulFormFehler(config), ...w.fehler];
-  if (fehler.length > 0) return luecke(punkt, fehler[0].split("\n")[0], fehler[0].split("\nFix: ")[1] ?? `module in ${configPfad} korrigieren`);
+  if (fehler.length > 0) return luecke(punkt, fehler[0].split("\n")[0], fehler[0].split("\nFix: ")[1]);
   return gut(punkt, w.nichtGewaehlt.length > 0 ? `nicht gewählt: ${w.nichtGewaehlt.join(", ")}` : undefined);
 }
 

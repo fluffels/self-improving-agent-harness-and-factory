@@ -5,6 +5,7 @@
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
 // Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
+// Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -18,6 +19,8 @@ import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFI
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
+import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
+import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
@@ -31,7 +34,8 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`);
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${/^version .* unbekannt/.test(m) ? `
+Fix: ${WERKZEUG_HINWEIS}` : ""}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
@@ -164,7 +168,7 @@ export function planeSync({
     uebernehmen,
   });
   res.fehler.push(...abgleich.fehler);
-  res.meldungen.push(...abgleich.hinweise);
+  res.meldungen.push(...abgleich.hinweise, ...testHilfeKopienAbweichend({ quelleLies, zielLies }));
   if (res.fehler.length > 0) return res;
   const ziehe = (pfad, ergebnis, zielRoh, ausfuehrbar) => {
     if (zielRoh !== null && normalisiereEol(zielRoh) === ergebnis) {
