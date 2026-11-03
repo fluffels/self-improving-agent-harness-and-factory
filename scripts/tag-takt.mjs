@@ -337,7 +337,7 @@ export function lauf({ io, trocken = false }) {
 // ---- IO (ungetestet) ----
 
 /** git-Aufruf mit abgefangenem stderr (ein erwarteter Fehlschlag, z. B. `git show` einer neuen Datei, schreibt nichts ins Log); die Meldung bleibt im geworfenen Fehler. */
-export const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+export const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 
 /** Standard-Lader des Manifests unter `wurzel`: wirft die einheitliche Meldung (`manifestAusText`), wenn es fehlt oder kaputt ist. */
 export function manifestLaden(wurzel) {
