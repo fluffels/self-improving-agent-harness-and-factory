@@ -79,6 +79,13 @@ describe("planeFactoryLinks (pur)", () => {
   });
 });
 
+describe("sammleLinksAus (pur)", () => {
+  test("ein Leser ohne Text (null) überspringt die Datei", () => {
+    const l = rawLinks as unknown as { sammleLinksAus(a: { dateien: string[]; lies: (p: string) => string | null }, o: { repo: string }): unknown[] };
+    assert.deepEqual(l.sammleLinksAus({ dateien: ["weg.md"], lies: () => null }, { repo: REPO }), []);
+  });
+});
+
 describe("factoryRepoAus (pur)", () => {
   const config = { boards: [{ rolle: "factory", repo: "b/board" }] };
   test("der Repo des Sync-Stands schlägt das Board, ohne Stand-Repo gilt das Board, sonst undefined", () => {
@@ -134,9 +141,12 @@ const MANIFEST = {
     { pfad: "AGENTS.md", block: "stopps", ring: "kern", quelle: "t" },
   ],
 };
-function baueQuelle(opt: { mitRepo?: boolean; stopp?: string } = {}): string {
+function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<string, string> } = {}): string {
   const q = tmp();
-  schreibe(q, ".factory/besitz.json", `${JSON.stringify(MANIFEST, null, 2)}\n`);
+  const vorlagen = Object.keys(opt.vorlagen ?? {});
+  const manifest = vorlagen.length === 0 ? MANIFEST : { version: 2, eintraege: [...MANIFEST.eintraege, ...vorlagen.map((pfad) => ({ pfad, ring: "kern", quelle: "t", art: "vorlage" }))] };
+  schreibe(q, ".factory/besitz.json", `${JSON.stringify(manifest, null, 2)}\n`);
+  for (const [pfad, text] of Object.entries(opt.vorlagen ?? {})) schreibe(q, pfad, text);
   if (opt.mitRepo !== false) schreibe(q, ".factory/projekt.json", JSON.stringify({ repo: REPO }));
   schreibe(q, "AGENTS.md", `# Quelle\n\n${stoppBlock(opt.stopp ?? "neuer Stopp")}\n`);
   for (const e of MANIFEST.eintraege) if (e.pfad !== "AGENTS.md") schreibe(q, e.pfad, "rolle\n");
@@ -165,7 +175,7 @@ const wachter = (z: string): { code: number; err: string } => {
 };
 const INDEX = ".factory/factory-links.json";
 
-describe("factory-sync --tag: Link-Schritt", () => {
+describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
   test("AK1: Refs und Index werden mit dem Sync auf den neuen Tag gesetzt, danach ist das Link-Gate grün", () => {
     const q = baueQuelle();
     const z = baueZiel({ "docs/x.md": `Text\n[a](${u("v1", "AGENTS.md", "quelle")})\n` });
@@ -270,6 +280,58 @@ describe("factory-sync --tag: Link-Schritt", () => {
     assert.equal(r2.code, 1);
     assert.match(r2.err, /\[config\]/);
     assert.deepEqual(baum(z2), vorher);
+  });
+
+  test("eine neue Vorlage aus dem Sync-Plan mit Factory-Link wird umgestellt und indiziert, ein toter Anker darin bricht ab", () => {
+    const q = baueQuelle({ vorlagen: { "docs/neu.md": `[a](${u("v1", "AGENTS.md", "quelle")})\n` } });
+    const z = baueZiel();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/neu.md"), `[a](${u("v2", "AGENTS.md", "quelle")})\n`);
+    assert.ok(r.out.split("\n").includes("neu (Vorlage): docs/neu.md"));
+    assert.match(lies(z, INDEX), /"AGENTS.md": \["quelle"\]/);
+    assert.equal(wachter(z).code, 0);
+    const q2 = baueQuelle({ vorlagen: { "docs/neu.md": `x\n[a](${u("v1", "AGENTS.md", "weg")})\n` } });
+    const z2 = baueZiel();
+    const vorher = baum(z2);
+    taggen(q2, "v2");
+    const r2 = laufe(["--quelle", q2, "--ziel", z2, "--tag", "v2"]);
+    assert.equal(r2.code, 1);
+    assert.match(r2.err, /docs\/neu\.md:2: \[anker-tot\]/);
+    assert.deepEqual(baum(z2), vorher);
+  });
+
+  test("eine vorhandene Vorlage mit altem Ref wird vom Link-Schritt geändert und nicht als unverändert gezählt", () => {
+    const q = baueQuelle({ vorlagen: { "docs/vorlage.md": "leer\n" } });
+    const z = baueZiel({ "docs/vorlage.md": `[a](${u("v1", "AGENTS.md", "quelle")})\n` });
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    const zeilen = r.out.split("\n");
+    assert.ok(zeilen.includes("geändert: docs/vorlage.md"));
+    assert.equal(lies(z, "docs/vorlage.md"), `[a](${u("v2", "AGENTS.md", "quelle")})\n`);
+    const gezaehlt = zeilen.filter((s) => /^(geändert|neu)/.test(s)).length;
+    assert.ok(zeilen.includes(`factory-sync: ${gezaehlt} geändert, 0 unverändert`));
+  });
+
+  test("ein Factory-Link im Besitz-Block der Quelle bleibt unangetastet (Einheiten des neuen Sync-Stands), auch im Erst-Sync", () => {
+    const link = `[a](${u("v1", "AGENTS.md", "weg")})`;
+    const q = baueQuelle({ stopp: link });
+    const z = baueZiel();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "AGENTS.md"), `# Projekt\n\n${stoppBlock(link)}\n`);
+  });
+
+  test("ohne Ziel-Config bricht der Sync bei bekanntem Factory-Repo mit [config] ab, nichts geschrieben", () => {
+    const q = baueQuelle();
+    const z = baueZiel();
+    rmSync(join(z, ".factory", "projekt.json"));
+    const vorher = baum(z);
+    taggen(q, "v2");
+    const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /\[config\]/);
+    assert.deepEqual(baum(z), vorher);
   });
 
   test("ein zweiter Sync auf denselben Tag ändert nichts mehr", () => {
