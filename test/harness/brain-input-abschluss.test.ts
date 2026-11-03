@@ -51,6 +51,8 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "nie als Frage", muster: /nie als Frage/ },
     { name: "nur aus Evidenz", muster: /nur aus Evidenz/ },
     { name: "gemergter PR erledigt es nicht mehr", muster: /gemergter PR/ },
+    { name: "sofort, Hauptchat direkt nach dem Bericht", muster: /\*\*sofort\*\* ein[^\n]*direkt nach dem Bericht/ },
+    { name: "Sammelticket nur im Factory-Repo", muster: /Sammelticket lebt nur im Factory-Repo/ },
   ],
   ".agents/skills/factory/ablauf.md": [
     { name: "BEFUNDE:-Feld im Sitzungsabschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*BEFUNDE:/ },
@@ -58,6 +60,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "wirksamer Name aus projekt-config.mjs abschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*node scripts\/projekt-config\.mjs abschluss[^\n]*`keiner` entfällt der Aufruf/ },
     { name: "Abschluss-Skill im Abschluss", muster: new RegExp(`Skill\\(\\{ skill: "${SKILL_RE}" \\}\\)`) },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
+    { name: "sofortiger Eintrag nach dem Umsetzer-Bericht", muster: /\*\*Direkt nach dem Umsetzer-Bericht\*\*[^\n]*sofort ein/ },
   ],
   ".claude/agents/factory-umsetzer.md": [
     { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
