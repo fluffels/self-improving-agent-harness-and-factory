@@ -36,7 +36,7 @@ describe("L4: Versionsfehler trägt den Werkzeug-Hinweis", () => {
   });
 });
 
-const LISTE = (eintraege: object[]) => JSON.stringify({ version: 1, eintraege });
+const LISTE = (eintraege: unknown[]) => JSON.stringify({ version: 1, eintraege });
 const HILFE = { muster: "test/support/a.ts", art: "test-hilfe", grund: "g" };
 const quelleMit = (eintraege: object[], extra: Record<string, string> = {}) => leser({ [ext.EXTRAKTION_PFAD]: LISTE(eintraege), "test/support/a.ts": "x\n", ...extra });
 
