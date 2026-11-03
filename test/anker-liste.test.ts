@@ -238,6 +238,7 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
     ["Objekt-Eigenschaft async Pfeil", "  inherit: async (x) => x ?? 1,"],
     ["Objekt-Eigenschaft function", "  inherit: function (x) { return x ?? 1; },"],
     ["Kontrolle const", "const inherit = (x) => x ?? 1;"],
+    ["Objekt-Eigenschaft Pfeil ohne Klammern", "  inherit: x => x ?? 1,"],
   ])("%s: der ??-Anker gehört zu inherit, nicht zu a", (_n, zeile) => {
     const r = neu(`${mehrzeilig}${zeile}\n`);
     expect(r.map((e) => [e.funktion, e.anker.map((a) => a.muster)])).toEqual([
@@ -292,6 +293,7 @@ describe("formatiere und lauf", () => {
     expect(u.lesen("package.json")).toContain('"name"');
     expect(u.lesen("gibt/es/nicht.mjs")).toBeUndefined();
     expect(u.istQuelle("scripts/anker-liste.mjs")).toBe(true);
+    expect(u.istQuelle("test/support/baseline-zaehlung.ts")).toBe(true);
     expect(u.istQuelle("test/anker-liste.test.ts")).toBe(false);
   });
 

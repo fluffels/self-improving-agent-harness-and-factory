@@ -154,9 +154,9 @@ export function lauf(argv, { git, lesen, istQuelle }) {
 
 const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
 
-/** Pur: Quellwurzel (`isMeasured`) oder das Verzeichnis einer Nicht-Testdatei als eigene Wurzel (`test/support/x.ts`); Testdateien, Doku und Root-Dateien nie. */
+/** Pur: Quellwurzel (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
 export function istGemessen(pfad, quelle) {
-  return isMeasured(pfad, quelle) || (!TESTDATEI.test(pfad) && isMeasured(pfad, posix.dirname(pfad)));
+  return !TESTDATEI.test(pfad) && (isMeasured(pfad, quelle) || isMeasured(pfad, posix.dirname(pfad)));
 }
 
 /** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config. */

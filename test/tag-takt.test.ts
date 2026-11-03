@@ -68,6 +68,7 @@ describe("Versionsvorschlag", () => {
     ["1.2.3", [commit({ betreff: "chore: a" })], "1.2.4"],
     ["v0.6.0", [commit({ betreff: "feat!: a" })], "v0.7.0"],
     ["v0.6.0", [commit({ betreff: "fix: a", body: "fix: a\n\nBREAKING CHANGE: weg" })], "v0.7.0"],
+    ["v0.6.3", [commit({ betreff: "feat!: a" })], "v0.7.0"],
     ["v0.6.3", [commit({ betreff: "fix: a" })], "v0.6.4"],
   ])("%s mit Commits → %s", (tag, commits, erwartet) => {
     expect(T.naechsterTag(tag, commits)).toBe(erwartet);
