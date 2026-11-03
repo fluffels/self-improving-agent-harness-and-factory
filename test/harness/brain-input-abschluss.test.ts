@@ -90,6 +90,7 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
     expect(abschlussLuecken(skill, rohLesen(skill).replace(/mach mit <nr> weiter/g, "weiter")).length).toBeGreaterThan(0);
     expect(abschlussLuecken(skill, rohLesen(skill).replace("weiter“, „weiter“) oder Ad-hoc-Auftrag", "weiter“, „weiter“)\n\n- oder Ad-hoc-Auftrag")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace("Danach der wirksame Abschluss-Skill, falls gesetzt", "Danach etwas")).length).toBeGreaterThan(0);
+    expect(abschlussLuecken(skill, rohLesen(skill).replace("node scripts/projekt-config.mjs abschluss", "etwas")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/nur aus Evidenz/g, "gern")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/gemergter PR/g, "PR")).length).toBeGreaterThan(0);
   });
