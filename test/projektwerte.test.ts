@@ -97,6 +97,13 @@ describe("leereProjektwerte / rendereProjektwerte", () => {
     const ohne = { praefixe: CONFIG.praefixe, agenten: CONFIG.agenten, labels: CONFIG.labels };
     assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, ohne, "a.md"), /Gruppe 'skills'/);
   });
+  test("skills.abschluss null (kein Abschluss-Skill) wird als — gerendert, der Platzhalter löst auf; ein anderer null-Wert bleibt ein Fehler (factory#139)", () => {
+    const ohne = { ...CONFIG, skills: { abschluss: null } };
+    assert.ok(lib.rendereProjektwerte(`${S}\n${E}\n`, ohne).includes("| `skills.abschluss` | — |"));
+    assert.deepEqual(lib.platzhalterBefunde("a.md", `${S}\n${E}\n<skills.abschluss>`, ohne), []);
+    assert.throws(() => lib.projektwertWert({ agenten: { planer: null } }, "agenten.planer"), /kein nichtleerer Text/);
+    assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, { ...CONFIG, skills: { abschluss: null, x: null } }), /skills\.x/);
+  });
   test("die Config wird erst bei einer Stelle gerufen", () => {
     let n = 0;
     lib.rendereProjektwerte(`${FM}`, () => ((n++), CONFIG));
