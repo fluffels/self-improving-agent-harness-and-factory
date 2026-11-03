@@ -75,7 +75,7 @@ describe("planeFactoryLinks (pur)", () => {
   test("ohne Links steht im Index `\"ziele\": {}`", () => {
     const p = plane({ "x.md": "nichts\n" });
     assert.equal(p.dateien.get(".factory/factory-links.json"), `{\n  "repo": "o/f",\n  "tag": "v2",\n  "commit": "c0ffee",\n  "ziele": {}\n}\n`);
-    assert.deepEqual(JSON.parse(p.dateien.get(".factory/factory-links.json") ?? "").ziele, {});
+    assert.deepEqual((JSON.parse(p.dateien.get(".factory/factory-links.json") ?? "") as { ziele: unknown }).ziele, {});
   });
 });
 
