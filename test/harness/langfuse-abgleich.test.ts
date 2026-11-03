@@ -617,6 +617,12 @@ describe("Score außerhalb (#1862)", () => {
     expect(md([drin])).not.toMatch(/außerhalb des Projekts/);
   });
 
+  test("Bericht: der Hinweis verweist über die Factory-Seite auf Fehlende Sessions › Läufe außerhalb des Repos (factory#139)", () => {
+    const b = [bew({ ausserhalb: true })];
+    const md = A.renderMarkdown(b, A.summenzeile(b));
+    expect(md).toContain("docs/langfuse-hook-patch.md#fehlende-sessions-1382 › Fehlende Sessions › Läufe außerhalb des Repos.");
+  });
+
   test("Bericht: der Kostenbefehl in der Hinweiszeile trägt die volle Session-ID", () => {
     const id = "abcdef12-3456-7890-abcd-ef1234567890";
     const md = A.renderMarkdown([{ ...bew({ ausserhalb: true }), session: id }], A.summenzeile([bew({ ausserhalb: true })]));

@@ -21,7 +21,10 @@ import { dirname, join } from "node:path";
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkAny from "../scripts/check-any-suppressions.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as configRaw from "../scripts/projekt-config-lib.mjs";
 
+const configLib = configRaw as unknown as { strukturAus: (c: unknown) => { quelle: string }; ladeProjektConfig: () => unknown };
 type CountMap = Record<string, number>;
 type Diff = {
   increases: { file: string; count: number; allowed: number }[];
@@ -63,9 +66,10 @@ describe("no-explicit-any-Suppression-Ratchet (#604)", () => {
     );
   });
 
-  test("Baseline betrifft nur Produktionscode (src/**) – kein Test/Tooling", () => {
-    const nonSrc = Object.keys(baseline).filter((f) => !f.startsWith("src/"));
-    assert.deepEqual(nonSrc, [], `Nicht-src-Einträge in der Baseline: ${nonSrc.join(", ")}`);
+  test("Baseline betrifft nur Produktionscode (struktur.quelle) – kein Test/Tooling", () => {
+    const praefix = `${configLib.strukturAus(configLib.ladeProjektConfig()).quelle}/`;
+    const nonSrc = Object.keys(baseline).filter((f) => !f.startsWith(praefix));
+    assert.deepEqual(nonSrc, [], `Einträge außerhalb von ${praefix} in der Baseline: ${nonSrc.join(", ")}`);
   });
 
   test("countAnySuppressions erkennt alle Disable-Formen, die no-explicit-any stummschalten", () => {

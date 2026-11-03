@@ -192,7 +192,9 @@
     {"pfad":".github/workflows/zizmor.yml","ring":"kern","modul":"zizmor","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":".github/workflows/codescanning-inbox.yml","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":"scripts/codescanning-inbox.mjs","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
-    {"pfad":"scripts/ghsa-lib.mjs","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":"scripts/ghsa-lib.mjs","ring":"kern","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/audit-einordnung.yml","ring":"kern","modul":"audit-einordnung","quelle":"Modul (factory#139)"},
+    {"pfad":"scripts/audit-einordnung.mjs","ring":"kern","modul":"audit-einordnung","quelle":"Modul (factory#139)"},
     {"pfad":"scripts/modul-wahl-lib.mjs","ring":"kern","quelle":"Sicherheits-Modul (factory#119)"}
   ]
 }

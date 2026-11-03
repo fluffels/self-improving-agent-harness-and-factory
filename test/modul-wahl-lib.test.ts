@@ -1,17 +1,10 @@
-/* Sicherheits-Module (factory#119): Blatt-Lib für Auswahl, Form- und Manifest-Prüfung und den Doctor-Punkt. */
+/* Sicherheits-Module (factory#119): Blatt-Lib für Auswahl, Form- und Manifest-Prüfung. */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/modul-wahl-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../scripts/besitz-lib.mjs";
 
-interface Punkt {
-  punkt: string;
-  ok: boolean;
-  befund?: string;
-  fix?: string;
-  hinweis?: string;
-}
 interface Wahl {
   gewaehlt: string[];
   erlaubt: string[];
@@ -28,7 +21,8 @@ const lib = raw as unknown as {
   modulFormFehler(c: unknown): string[];
   modulWahl(c: unknown, m: unknown, o?: { configPfad: string }): Wahl;
   modulFehler(e: Record<string, unknown>): string[];
-  modulPunkt(c: unknown, m: unknown, o?: { configPfad: string }): Punkt | null;
+  manifestKenntModule(m: unknown): boolean;
+  modulAufteilung(v: { pfad: string; modul?: string }[], id: (e: { pfad: string }) => string, w: { gewaehlt: string[]; unbestimmt: boolean }): { aktiv: { pfad: string }[]; abgewaehlt: Map<string, string>; modulIds: Set<string> };
 };
 const pruefeManifest = (rawBesitz as unknown as { pruefeManifest: (m: unknown, lies: (p: string) => string | null) => string[] }).pruefeManifest;
 
@@ -128,35 +122,32 @@ describe("modulFehler (Manifest)", () => {
   });
 });
 
-describe("modulPunkt (Doctor)", () => {
-  test("Schlüssel fehlt: Lücke mit Fix", () => {
-    const p = lib.modulPunkt({}, manifest, { configPfad: "cfg.json" }) as Punkt;
-    expect(p).toMatchObject({ punkt: "Sicherheits-Module", ok: false });
-    expect(p.befund).toContain("module");
-    expect(p.fix).toContain("cfg.json");
+describe("manifestKenntModule und modulAufteilung", () => {
+  const id = (e: { pfad: string }) => e.pfad;
+  const verteilt = manifest.eintraege;
+  test("kennt Module nur bei einem modul-Feld (auch ohne Manifest)", () => {
+    expect(lib.manifestKenntModule(manifest)).toBe(true);
+    expect(lib.manifestKenntModule({ eintraege: [{ pfad: "d.mjs" }] })).toBe(false);
+    expect(lib.manifestKenntModule(null)).toBe(false);
+    expect(lib.manifestKenntModule({})).toBe(false);
   });
-  test("Teilauswahl: OK mit Hinweis auf die nicht gewählten Module", () => {
-    expect(lib.modulPunkt({ module: ["zizmor"] }, manifest)).toEqual({ punkt: "Sicherheits-Module", ok: true, hinweis: "nicht gewählt: codeql" });
+  test("teilt nach der Wahl: gewählte und Einheiten ohne Modul aktiv, andere abgewählt", () => {
+    const t = lib.modulAufteilung(verteilt, id, { gewaehlt: ["zizmor"], unbestimmt: false });
+    expect(t.aktiv.map(id)).toEqual(["b.yml", "d.mjs"]);
+    expect([...t.abgewaehlt]).toEqual([["a.yml", "codeql"], ["c.yml", "codeql"]]);
+    expect([...t.modulIds]).toEqual(["a.yml", "b.yml", "c.yml"]);
   });
-  test("alle gewählt: OK ohne Hinweis", () => {
-    expect(lib.modulPunkt({ module: ["zizmor", "codeql"], codeql: { sprachen: ["python"] } }, manifest)).toEqual({ punkt: "Sicherheits-Module", ok: true });
+  test("unbestimmte Wahl: nur Einheiten ohne Modul aktiv, nichts abgewählt", () => {
+    const t = lib.modulAufteilung(verteilt, id, { gewaehlt: [], unbestimmt: true });
+    expect(t.aktiv.map(id)).toEqual(["d.mjs"]);
+    expect(t.abgewaehlt.size).toBe(0);
+    expect(t.modulIds.size).toBe(3);
   });
-  test("leere Wahl ist bewusst: OK mit Hinweis auf alle", () => {
-    expect(lib.modulPunkt({ module: [] }, manifest)).toEqual({ punkt: "Sicherheits-Module", ok: true, hinweis: "nicht gewählt: codeql, zizmor" });
-  });
-  test("kein Punkt, wenn es nichts zu prüfen gibt: Manifest fehlt oder kennt keine Module und die Config wählt nichts", () => {
-    expect(lib.modulPunkt({ module: ["x"] }, null)).toBeNull();
-    expect(lib.modulPunkt({}, undefined)).toBeNull();
-    expect(lib.modulPunkt({}, { eintraege: [{ pfad: "d.mjs" }] })).toBeNull();
-  });
-  test("ein Manifest ohne Module, aber eine Config mit module-Namen ist eine Lücke (unbekannter Name)", () => {
-    expect(lib.modulPunkt({ module: ["x"] }, { eintraege: [{ pfad: "d.mjs" }] })).toMatchObject({ ok: false });
-  });
-  test("unbekannter Name und fehlende Sprachen sind Lücken", () => {
-    expect(lib.modulPunkt({ module: ["nope"] }, manifest)).toMatchObject({ ok: false });
-    expect(lib.modulPunkt({ module: ["nope"] }, manifest)?.fix).toContain("Namen");
-    expect(lib.modulPunkt({ module: ["codeql"] }, manifest)).toMatchObject({ ok: false });
-    expect(lib.modulPunkt({ module: ["codeql"] }, manifest)?.fix).toContain("codeql.sprachen");
+  test("Import-Regel: ein Modul importiert Kern-Einheiten (ghsa-lib), nie ein fremdes Modul", () => {
+    const audit = { modul: "audit-einordnung" };
+    expect(lib.modulImportErlaubt(audit, {})).toBe(true);
+    expect(lib.modulImportErlaubt(audit, { modul: "codescanning-inbox" })).toBe(false);
+    expect(lib.modulImportErlaubt({}, audit)).toBe(false);
   });
 });
 

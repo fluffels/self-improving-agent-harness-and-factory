@@ -54,7 +54,7 @@ const K = kontextRoh as unknown as {
 };
 const M = messRoh as unknown as { bereinige: (t: string, o?: object) => string; normPfad: (p: string, o?: object) => string };
 const H = hauptchatRoh as unknown as {
-  hauptchatNamen: (d: { config: unknown }) => { ticketAgenten: Set<string>; repoName: string; abschlussSkill: string };
+  hauptchatNamen: (d: { config: unknown; env?: Record<string, string> }) => { ticketAgenten: Set<string>; repoName: string; abschlussSkill: string | null; abschlussSkills: Set<string> };
   zerlegeHauptchat: (e: object) => Record<string, { calls: number }> & { rows: { quelle: string; calls: number }[] };
   renderMarkdown: (r: unknown, o?: object) => string;
   ERGEBNIS_SCHLUESSEL: readonly string[];
@@ -312,7 +312,14 @@ describe("hauptchat-zerlegung: Agenten und Repo-Name aus der Config", () => {
     expect(() => H.hauptchatNamen({ config: { ...CFG, repo: undefined } })).toThrow(/repo[\s\S]*Fix:/);
     expect(() => H.hauptchatNamen({ config: ohneAgent("gruppe") })).toThrow(/agenten\.gruppe/);
     expect(() => H.hauptchatNamen({ config: { ...CFG, skills: undefined } })).toThrow(/skills\.abschluss[\s\S]*Fix:/);
-    expect(H.hauptchatNamen({ config: CFG })).toMatchObject({ abschlussSkill: "acme-abschluss" });
+    expect(H.hauptchatNamen({ config: CFG, env: {} })).toMatchObject({ abschlussSkill: "acme-abschluss" });
+  });
+  test("Abschluss-Skill optional (factory#139): null wirft nicht, abschlussSkills ist Repo-Wert plus wirksamer Wert ohne null", () => {
+    const ohne = { ...CFG, skills: { abschluss: null } };
+    expect([...H.hauptchatNamen({ config: ohne, env: {} }).abschlussSkills]).toEqual([]);
+    expect([...H.hauptchatNamen({ config: ohne, env: { FACTORY_ABSCHLUSS_SKILL: "lokal" } }).abschlussSkills]).toEqual(["lokal"]);
+    expect([...H.hauptchatNamen({ config: CFG, env: { FACTORY_ABSCHLUSS_SKILL: "lokal" } }).abschlussSkills].sort()).toEqual(["acme-abschluss", "lokal"]);
+    expect(() => H.hauptchatNamen({ config: { ...CFG, skills: { abschluss: "" } }, env: {} })).toThrow(/skills\.abschluss[\s\S]*Fix:/);
   });
   const sitzung = {
     id: "s",

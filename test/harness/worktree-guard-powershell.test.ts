@@ -79,6 +79,12 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     blockt(`& 'C:\\Program Files\\Git\\cmd\\git.exe' push`);
   });
 
+  test("Tag-Push mit -C (factory#139): fremdes Repo und fehlender Ordner laufen, der Haupt-Checkout bleibt geblockt", () => {
+    laeuft("git -C /fremdes/repo push origin v1.0.0");
+    laeuft("git -C /gibt/es/nicht push");
+    blockt("git push origin v1.0.0");
+  });
+
   test("der Ausweichweg: Set-Location in den Haupt-Checkout, dann commit (auch aus dem Worktree heraus)", () => {
     blockt(`Set-Location ${HAUPT}; git commit -m x`, WT);
     blockt(`cd ${HAUPT} && git push`, WT);

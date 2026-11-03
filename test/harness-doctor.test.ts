@@ -388,9 +388,8 @@ describe("harness-doctor --pruefen", () => {
     assert.ok(alle.out.includes("OK Sicherheits-Module"));
     assert.ok(!alle.out.some((z) => z.startsWith("HINWEIS Sicherheits-Module")));
   });
-  test("Sicherheits-Module: ein Manifest ohne Module oder nicht lesbar meldet den Punkt nicht", () => {
+  test("Sicherheits-Module: ein Manifest ohne Module meldet den Punkt nicht", () => {
     assert.ok(!lauf().out.some((z) => z.includes("Sicherheits-Module")));
-    assert.ok(!lauf({}, { besitz: null }).out.some((z) => z.includes("Sicherheits-Module")));
   });
 
   for (const [name, besitz] of [["fehlt", null], ["kein JSON", "{ nicht json"], ["JSON null", "null"], ["Eintrag kein Objekt", JSON.stringify({ version: 1, eintraege: ["x"] })], ["ungültiges pflichtChecks", JSON.stringify({ version: 1, eintraege: [{ pfad: "x.yml", ring: "kern", quelle: "t", pflichtChecks: [] }] })]] as [string, string | null][]) {
@@ -401,7 +400,8 @@ describe("harness-doctor --pruefen", () => {
       assert.ok(r.out.includes("OK Ruleset"));
       assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Kern-Pflicht-Checks: .factory/besitz.json nicht lesbar (")), r.out.join("\n"));
       assert.ok(r.out.some((z) => z.startsWith("HINWEIS Kern-Pflicht-Checks: ")));
-      assert.equal(r.out.at(-1), "Harness-Doctor: 0 Lücke(n), 1 nicht prüfbar");
+      assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Sicherheits-Module: .factory/besitz.json nicht lesbar (") && z.includes("Fix:")), r.out.join("\n")); // factory#139
+      assert.equal(r.out.at(-1), "Harness-Doctor: 0 Lücke(n), 2 nicht prüfbar");
       assert.ok(r.out.every((z) => !z.includes(tmpdir())), "kein absoluter Pfad in der Ausgabe");
     });
   }

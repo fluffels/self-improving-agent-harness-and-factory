@@ -62,7 +62,7 @@
   },
   "scripts/check-factory-drift.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/check-lockfile.mjs": {
