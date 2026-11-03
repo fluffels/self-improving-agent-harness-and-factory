@@ -1,4 +1,4 @@
-# Fortschreibung factory#131 (2026-11-03): Factory-Links im Sync (F9/F10)
+# Fortschreibung #131 (2026-11-03): Factory-Links im Sync (F9/F10)
 
 Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F9, Sync überschreibt nur Besitz) und die Fortschreibung [#130](0022-130-factory-link-waechter-als-kern.md) (Punkt „Index bleibt Projektbesitz“); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
 
