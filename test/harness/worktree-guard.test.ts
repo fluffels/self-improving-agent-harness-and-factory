@@ -325,6 +325,14 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`git -C '${repoRoot}' commit -m x`), true);
   });
 
+  test("Tag-Push mit -C (factory#139): fremdes Repo und fehlender Ordner laufen, der Haupt-Checkout bleibt geblockt", () => {
+    const fremd = resolve("/c/git/fremdes-repo");
+    const fehlt = resolve("/c/git/gibt-es-nicht");
+    assert.equal(run(`git -C '${fremd}' push origin v1.0.0`), false, "fremdes Repo");
+    assert.equal(run(`git -C '${fehlt}' push`, repoRoot, fsFake([wt], [fehlt])), false, "nicht vorhandener Ordner außerhalb");
+    assert.equal(run("git push origin v1.0.0"), true, "Haupt-Checkout");
+  });
+
   test("BLOCKT (neu): git -C auf den Haupt-Checkout aus einem Worktree", () => {
     assert.equal(run(`git -C '${repoRoot}' commit -m x`, wt), true);
     assert.equal(run("git commit -m x", wt), false, "im Worktree selbst bleibt es erlaubt");
