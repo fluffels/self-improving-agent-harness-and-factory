@@ -4,7 +4,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Geprüft: je Seite die rohen Treffer jedes Begriffs aus `begriffeAus(config)` (Präfixe, Env, Branch, Worktree, Agenten, `projektliterale`; Owner,
- * Repo, Board-ID, Label und Skill bleiben außen, die teilen sich die Configs von Quell- und Zielprojekt). Inline-Code und Code-Fences zählen mit:
+ * Repo, Board-ID und Label bleiben außen, die teilen sich die Configs von Quell- und Zielprojekt; der Abschluss-Skill ist Projektwert `<skills.abschluss>` und zählt). Inline-Code und Code-Fences zählen mit:
  * `kq-<nr>` und ein Agentenname in einem Kommando sind Projektwerte. Vorher werden Herkunftsbezüge maskiert: ein Markdown-Link mit http(s)-Ziel samt
  * Linktext, eine nackte URL und ein Querverweis `owner/repo#nr` bzw. `repo#nr`. Die Zählung je Seite und Begriff (nur Werte > 0) wird exakt mit
  * `factory-seiten-baseline.json` verglichen: ein Anstieg ist rot („Platzhalter oder Link schreiben“), ein Rückgang ebenfalls („Baseline senken“).
@@ -55,8 +55,8 @@ const herkunftsform = rawHerkunftsform as unknown as { standardDateien: (wurzel:
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/factory-seiten-baseline.json";
-/** Diese Begriffe teilen sich Quell- und Zielprojekt (Owner, Repo, Board, Label, Skill): sie sind kein Zeichen eines Projektbezugs der Seite. */
-const AUSGENOMMEN = new Set(["Owner", "Repo", "Board-ID", "Label", "Skill"]);
+/** Diese Begriffe teilen sich Quell- und Zielprojekt (Owner, Repo, Board, Label): sie sind kein Zeichen eines Projektbezugs der Seite. */
+const AUSGENOMMEN = new Set(["Owner", "Repo", "Board-ID", "Label"]);
 
 /** Zeilen vom GEN-START- bis zum END-Marker (einschließlich) raus; erkannt über `GEN_MARKER` aus `markdown.mjs`, kein eigener Nachbau. */
 function ohneGenBloecke(text: string): string {
@@ -240,14 +240,21 @@ describe("Factory-Seiten (#77)", () => {
     const config = { ...FREMD, projektliterale: { Zelda: "zelda" }, seitenliterale: { Spiel: "Spiel", Spielquote: "Spielquote" } } as unknown as BegriffsConfig;
     const B = seitenBegriffe(config);
 
-    test("die Begriffe kommen aus der Config; Owner, Repo, Board-ID, Label und Skill sind ausgenommen", () => {
-      assert.ok("Zelda" in B && "Praefix" in B && "Agent" in B && "Worktree" in B);
+    test("die Begriffe kommen aus der Config; Owner, Repo, Board-ID und Label sind ausgenommen, Skill zählt", () => {
+      assert.ok("Zelda" in B && "Praefix" in B && "Agent" in B && "Worktree" in B && "Skill" in B);
       for (const n of AUSGENOMMEN) assert.ok(!(n in B), n);
     });
 
     test("ein Literal und ein Präfix zählen im Fließtext und im Inline-Code", () => {
       const t = "Zelda läuft. Im Code `zz-12` und `ZZ-Plan:`, dazu `--agent zz-lens`.";
       assert.deepEqual(zaehleSeite(t, B), { Agent: 1, Praefix: 1, Worktree: 2, Zelda: 1 });
+    });
+
+    test("der Name des Abschluss-Skills zählt in einem Seitentext; ohne Abschluss-Skill (null) gibt es keinen Skill-Begriff", () => {
+      assert.deepEqual(zaehleSeite("Der Skill `zz-abschluss` läuft.", B), { Skill: 1, Worktree: 1 }, "der Skill-Name trägt das Worktree-Präfix, der Skill-Begriff zählt je einmal");
+      const ohneSkill = seitenBegriffe({ ...FREMD, skills: { abschluss: null } } as unknown as BegriffsConfig);
+      assert.ok(!("Skill" in ohneSkill));
+      assert.deepEqual(zaehleSeite("Der Skill null läuft.", ohneSkill), {});
     });
 
     test("Code-Fences zählen mit", () => {
