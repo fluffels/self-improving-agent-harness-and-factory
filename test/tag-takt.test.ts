@@ -66,6 +66,10 @@ describe("Versionsvorschlag", () => {
     ["v1.2.3", [commit({ betreff: "feat: b" }), commit({ betreff: "refactor(x)!: c" })], "v2.0.0"],
     ["1.2.3", [commit({ betreff: "fix: a", body: "fix: a\n\nBREAKING CHANGE: weg" })], "2.0.0"],
     ["1.2.3", [commit({ betreff: "chore: a" })], "1.2.4"],
+    ["v0.6.0", [commit({ betreff: "feat!: a" })], "v0.7.0"],
+    ["v0.6.0", [commit({ betreff: "fix: a", body: "fix: a\n\nBREAKING CHANGE: weg" })], "v0.7.0"],
+    ["v0.6.3", [commit({ betreff: "feat!: a" })], "v0.7.0"],
+    ["v0.6.3", [commit({ betreff: "fix: a" })], "v0.6.4"],
   ])("%s mit Commits → %s", (tag, commits, erwartet) => {
     expect(T.naechsterTag(tag, commits)).toBe(erwartet);
   });
@@ -158,10 +162,12 @@ describe("CI-Zustand und Body", () => {
       expect(punkt, teil).toContain(teil);
     }
   });
-  it("L4 und L23: Schritte im Ziel nach dem Sync (docs:gen, check:factorylinks --schreiben, nie Wächter-gebundene Sätze) und das Werkzeug der Quelle", () => {
+  it("L4 und L23: Schritte im Ziel nach dem Sync (docs:gen; Refs und Index schreibt der Sync mit, check:factorylinks --schreiben nur als Reparaturweg; nie Wächter-gebundene Sätze) und das Werkzeug der Quelle", () => {
     const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
     const sync = punkte.find((z) => z.includes("Sync-PR je Bezieher mit")) ?? "";
     expect(sync).toContain("npm run docs:gen");
+    expect(sync).toContain("schreibt der Sync mit");
+    expect(sync).toContain("nur als Reparaturweg");
     expect(sync).toContain("npm run check:factorylinks -- --schreiben --quelle");
     expect(sync).toContain("nie Wächter-gebundene Sätze");
     expect(sync).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
@@ -207,6 +213,11 @@ describe("L14: entfernte Exporte sind ein Major", () => {
     const b = [commit({ dateien: ["scripts/a.mjs", "scripts/lib/z.cjs", "scripts/lib/readme.md", "scripts/o.mjs", "scripts/b.mjs", "src/x.mjs"] }), commit({ dateien: ["scripts/a.mjs"] })];
     expect(X.verteilteSkripte(b, m)).toEqual(["scripts/a.mjs", "scripts/lib/z.cjs"]);
   });
+  it("naechsterTag unter v1: entfernter Export hebt nur das Minor (SemVer §4), ab v1 den Major", () => {
+    const fix = [commit({ betreff: "fix: a" })];
+    expect(T.naechsterTag("v0.6.0", fix, [{ datei: "scripts/a.mjs", namen: ["b"] }])).toBe("v0.7.0");
+    expect(T.naechsterTag("v1.2.3", fix, [{ datei: "scripts/a.mjs", namen: ["b"] }])).toBe("v2.0.0");
+  });
   it("naechsterTag: entfernter Export hebt auf Major, auch über feat; ohne bleibt es Minor", () => {
     const feat = [commit({ betreff: "feat: x (#1)", body: "feat: x (#1)" })];
     expect(T.naechsterTag("v1.2.3", feat, [{ datei: "scripts/a.mjs", namen: ["b"] }])).toBe("v2.0.0");
@@ -215,7 +226,7 @@ describe("L14: entfernte Exporte sind ein Major", () => {
   });
   it("tagBody nennt die entfernten Exporte je Datei", () => {
     const b = T.tagBody({ tag: "v2.0.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null }, entfernt: [{ datei: "scripts/a.mjs", namen: ["b", "c"] }] });
-    expect(b).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b, c");
+    expect(b).toContain("- Entfernte Exporte (Breaking): `scripts/a.mjs`: b, c");
   });
   const dateien: Record<string, Record<string, string | null>> = {
     "v1.2.3": { "scripts/a.mjs": "export const a = 1;\nexport const b = 2;", "scripts/n.mjs": null },
@@ -231,7 +242,7 @@ describe("L14: entfernte Exporte sind ein Major", () => {
   it("lauf: Datei am Tag vorhanden, jetzt ohne Export: Major und Zeile; am Tag fehlende (neue) Datei zählt nicht", () => {
     const r = ioMit((ref, pfad) => dateien[ref]?.[pfad] ?? null);
     expect(r.text).toContain("`v2.0.0`");
-    expect(r.text).toContain("- Entfernte Exporte (Major): `scripts/a.mjs`: b");
+    expect(r.text).toContain("- Entfernte Exporte (Breaking): `scripts/a.mjs`: b");
     expect(r.text).not.toContain("scripts/n.mjs`:");
     const gleich = ioMit((ref, pfad) => (pfad === "scripts/n.mjs" ? null : dateien["v1.2.3"][pfad] ?? null));
     expect(gleich.text).toContain("`v1.3.0`");
@@ -248,11 +259,11 @@ describe("L14: entfernte Exporte sind ein Major", () => {
   it("lauf: am Tag verteilte, inzwischen gelöschte Datei (nicht mehr im Manifest von HEAD): Major mit Zeile", () => {
     const text = mitTag(["scripts/alt.mjs"], (ref, pfad) => (ref === "v1.2.3" && pfad === "scripts/alt.mjs" ? "export const alt = 1;" : null));
     expect(text).toContain("`v2.0.0`");
-    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+    expect(text).toContain("- Entfernte Exporte (Breaking): `scripts/alt.mjs`: alt");
   });
   it("lauf: umbenannte verteilte Datei (Log nennt alten und neuen Pfad): der alte Pfad zählt als gelöscht, Major", () => {
     const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" ? (ref === "v1.2.3" ? "export const alt = 1;" : null) : "export const a = 1;"));
-    expect(text).toContain("- Entfernte Exporte (Major): `scripts/alt.mjs`: alt");
+    expect(text).toContain("- Entfernte Exporte (Breaking): `scripts/alt.mjs`: alt");
   });
   it("lauf: fehlt das Manifest am Tag, bleibt es beim Manifest von HEAD (kein Absturz, keine Zeile)", () => {
     const text = mitTag(["scripts/alt.mjs", "scripts/a.mjs"], (ref, pfad) => (pfad === "scripts/alt.mjs" && ref !== "v1.2.3" ? null : "export const x = 1;"), MANIFEST, null);

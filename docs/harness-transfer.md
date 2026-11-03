@@ -67,7 +67,7 @@ Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest;
 
 Für Projekte, in deren Repo vom Harness nichts liegen darf, gilt die Betriebsart Arbeitsplatz statt der eingebetteten Vorlage: [ADR 0022, Fortschreibung quellprojekt#1829](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1829-2026-10-22-betrieb-ohne-harness-im-projekt-repo-arbeitsplatz).
 
-Der Abschluss-Skill am Sitzungsende ist optional (factory#139): ein Bezieher setzt `skills.abschluss` in `.factory/projekt.json` auf `null` (empfohlen, kein Skill) oder auf den Namen eines eigenen Skills, etwa den eines persönlichen Second Brains nach dem Starter-Kit (`brain-input`). Eine Maintainerin kann ihn lokal per `FACTORY_ABSCHLUSS_SKILL` setzen (`aus` schaltet ihn ab); `node scripts/projekt-config.mjs abschluss` nennt den wirksamen Namen oder `keiner`. Das Projekt-Brain (`docs/`, [ADR 0015](adr/0015-projekt-brain.md)) bleibt in jedem Fall Pflicht.
+Der Abschluss-Skill am Sitzungsende ist optional (factory#139): ein Bezieher setzt `skills.abschluss` in `.factory/projekt.json` auf `null` (empfohlen, kein Skill) oder auf den Namen eines eigenen Skills, etwa den Brain-Skill eines Starter-Kits. Eine Maintainerin kann ihn lokal per `FACTORY_ABSCHLUSS_SKILL` setzen (`aus` schaltet ihn ab); `node scripts/projekt-config.mjs abschluss` nennt den wirksamen Namen oder `keiner`. Das Projekt-Brain (`docs/`, [ADR 0015](adr/0015-projekt-brain.md)) bleibt in jedem Fall Pflicht.
 
 Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als source-available: der Quelltext ist einsehbar, die Nutzung bleibt vorbehalten, er ist nicht als Open Source lizenziert.
 

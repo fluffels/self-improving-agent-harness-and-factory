@@ -2,6 +2,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
@@ -69,6 +71,25 @@ describe("tag-takt main", () => {
     expect(await T.main([], a.deps)).toBe(0);
     const body = String(a.text[0].args[a.text[0].args.indexOf("--body") + 1]);
     expect(body).toContain("Konfig-Schluessel ergaenzen");
+  });
+  it("main verdrahtet dringlichKey: Sync-Dringlich unter der Schwelle legt das Ticket an, der Grund steht im Body (factory#139)", async () => {
+    const key = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
+    const eintrag = `\x1e${"1".repeat(40)}\x1f${new Date().toISOString()}\x1ffix: x (#1)\n\n${key}: Sicherheitsfix\x1f\n\nscripts/a.mjs\n`;
+    const a = aufbau({ git: (args: string[]) => (args[0] === "tag" ? "v1.2.3\n" : args[0] === "rev-parse" ? `${SHA}\n` : eintrag) });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toHaveLength(1);
+    const body = String(a.text[0].args[a.text[0].args.indexOf("--body") + 1]);
+    expect(body).toContain("Dringlich: Sicherheitsfix");
+  });
+  it("gitEcht fängt stderr ab: ein fehlschlagender git-Aufruf schreibt nicht in das stderr des Prozesses, die Meldung bleibt im Fehler", () => {
+    const w = mkdtempSync(join(tmpdir(), "tt-git-"));
+    ordner.push(w);
+    const skript = join(w, "kind.mjs");
+    const lib = pathToFileURL(join(process.cwd(), "scripts", "tag-takt.mjs")).href;
+    writeFileSync(skript, `import { gitEcht } from ${JSON.stringify(lib)};\ntry { gitEcht(["show", "HEAD:gibt-es-nicht.txt"]); } catch (e) { process.stdout.write(String(e.message)); }\n`);
+    const r = spawnSync(process.execPath, [skript], { encoding: "utf8", cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] });
+    expect(r.stderr).toBe("");
+    expect(r.stdout).toContain("fatal");
   });
   it("Token kommt aus dem injizierten env, nicht aus process.env (factory#114 L9b)", async () => {
     const a = aufbau();

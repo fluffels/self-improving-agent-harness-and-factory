@@ -170,3 +170,32 @@ describe("pruefeManifest und modul", () => {
     expect(pruefeManifest(k, lies).join("\n")).toContain("modul muss ein Name");
   });
 });
+
+describe("modul mit Nicht-Text-Wert (#145): eine Einheit gilt als Moduleinheit nur mit Text", () => {
+  const id = (e: { pfad: string }) => e.pfad;
+  const fremd = { pfad: "x.yml", modul: 5 };
+  const mitFremd = { eintraege: [...manifest.eintraege, fremd] };
+  test("manifestKenntModule, modulNamenAus, modulGewaehlt und modulAufteilung behandeln modul: 5 gleich (keine Moduleinheit)", () => {
+    expect(lib.modulNamenAus(mitFremd)).toEqual(["codeql", "zizmor"]);
+    expect(lib.manifestKenntModule({ eintraege: [fremd] })).toBe(false);
+    expect(lib.modulGewaehlt(fremd as never, [])).toBe(true);
+    for (const unbestimmt of [false, true]) {
+      const t = lib.modulAufteilung([fremd] as never, id, { gewaehlt: [], unbestimmt });
+      expect(t.aktiv.map(id)).toEqual(["x.yml"]);
+      expect(t.abgewaehlt.size).toBe(0);
+      expect(t.modulIds.size).toBe(0);
+    }
+  });
+  test("modulFehler meldet den Wert trotzdem (Validierung prüft roh)", () => {
+    expect(lib.modulFehler({ pfad: "x.yml", ring: "kern", modul: 5 }).join("\n")).toContain("Name");
+  });
+});
+
+describe("jede Meldung trägt eine Fix-Zeile (#145)", () => {
+  test("modulFormFehler und modulWahl().fehler", () => {
+    const formen = [{ module: "x" }, { module: ["A"] }, { module: ["a", "a"] }, { module: ["codeql"] }, { codeql: null }, { codeql: { sprachen: "x" } }];
+    const meldungen = [...formen.flatMap((c) => lib.modulFormFehler(c)), ...lib.modulWahl({ module: ["gibtsnicht", "auch-nicht"] }, manifest).fehler, ...lib.modulWahl({ module: ["x"] }, { eintraege: [] }).fehler];
+    expect(meldungen.length).toBeGreaterThanOrEqual(8);
+    for (const m of meldungen) expect(m).toMatch(/\nFix: \S/);
+  });
+});

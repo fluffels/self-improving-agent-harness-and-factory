@@ -12,14 +12,17 @@ const CODEQL = "codeql";
 
 const istListe = (w) => Array.isArray(w);
 
+/** Ist die Einheit eine Moduleinheit? Nur ein Text in `modul` zählt; alles andere (auch `modul: 5`) behandeln Wahl und Aufteilung wie keines, die Validierung (`modulFehler`) meldet es. */
+export const istModulEinheit = (e) => typeof e.modul === "string";
+
 /** Alle Modulnamen des Manifests, sortiert und ohne Doppelte. */
-export const modulNamenAus = (manifest) => [...new Set((manifest?.eintraege ?? []).map((e) => e.modul).filter((m) => typeof m === "string"))].sort();
+export const modulNamenAus = (manifest) => [...new Set((manifest?.eintraege ?? []).filter(istModulEinheit).map((e) => e.modul))].sort();
 
 /** Gewählte Module der Config; fehlt der Schlüssel, gilt der Standard. */
 export const gewaehlteModule = (config) => (istListe(config?.module) ? config.module : MODUL_STANDARD);
 
 /** Wird die Einheit verteilt? Ohne `modul` immer, sonst nur bei gewähltem Modul. */
-export const modulGewaehlt = (e, gewaehlt) => e.modul === undefined || gewaehlt.includes(e.modul);
+export const modulGewaehlt = (e, gewaehlt) => !istModulEinheit(e) || gewaehlt.includes(e.modul);
 
 /** Darf `von` die Einheit `nach` lokal importieren? Eine Einheit ohne `modul` importiert keine Moduleinheit, eine Moduleinheit nur ihr eigenes Modul oder Einheiten ohne `modul`. */
 export const modulImportErlaubt = (von, nach) => nach.modul === undefined || nach.modul === von.modul;
@@ -58,6 +61,7 @@ export function modulWahl(config, manifest, { configPfad = "die Projekt-Config" 
 
 /** Manifest-Fehler des Felds `modul` an einer Einheit (leer = gültig oder nicht gesetzt): Name nach Muster, nur an ganzen Dateien, weder Vorlage noch `pflichtChecks`, nicht im Ring `oberflaeche`. */
 export function modulFehler(e) {
+  // Roh prüfen, nicht über istModulEinheit: `modul: 5` ist eine Moduleinheit mit ungültigem Namen und muss gemeldet werden.
   if (e.modul === undefined) return [];
   if (typeof e.modul !== "string" || !NAME_MUSTER.test(e.modul)) return ["modul muss ein Name aus Kleinbuchstaben, Ziffern und '-' sein"];
   const f = [];
@@ -78,7 +82,7 @@ export const manifestKenntModule = (manifest) => modulNamenAus(manifest).length 
 export function modulAufteilung(verteilt, idVon, { gewaehlt, unbestimmt }) {
   const aufteilung = { aktiv: [], abgewaehlt: new Map(), modulIds: new Set() };
   for (const e of verteilt) {
-    if (e.modul === undefined) aufteilung.aktiv.push(e);
+    if (!istModulEinheit(e)) aufteilung.aktiv.push(e);
     else {
       aufteilung.modulIds.add(idVon(e));
       if (!unbestimmt && !modulGewaehlt(e, gewaehlt)) aufteilung.abgewaehlt.set(idVon(e), e.modul);
