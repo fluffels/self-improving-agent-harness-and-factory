@@ -83,6 +83,7 @@ describe("sammleLinksAus (pur)", () => {
   test("ein Leser ohne Text (null) überspringt die Datei", () => {
     const l = rawLinks as unknown as { sammleLinksAus(a: { dateien: string[]; lies: (p: string) => string | null }, o: { repo: string }): unknown[] };
     assert.deepEqual(l.sammleLinksAus({ dateien: ["weg.md"], lies: () => null }, { repo: REPO }), []);
+    assert.deepEqual(l.sammleLinksAus({ dateien: ["weg.md"], lies: () => undefined as unknown as null }, { repo: REPO }), []);
   });
 });
 
@@ -141,12 +142,20 @@ const MANIFEST = {
     { pfad: "AGENTS.md", block: "stopps", ring: "kern", quelle: "t" },
   ],
 };
-function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<string, string> } = {}): string {
+function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<string, string>; besitzDateien?: Record<string, string> } = {}): string {
   const q = tmp();
   const vorlagen = Object.keys(opt.vorlagen ?? {});
-  const manifest = vorlagen.length === 0 ? MANIFEST : { version: 2, eintraege: [...MANIFEST.eintraege, ...vorlagen.map((pfad) => ({ pfad, ring: "kern", quelle: "t", art: "vorlage" }))] };
+  const besitzDateien = Object.keys(opt.besitzDateien ?? {});
+  const manifest = {
+    version: vorlagen.length === 0 ? 1 : 2,
+    eintraege: [
+      ...MANIFEST.eintraege,
+      ...besitzDateien.map((pfad) => ({ pfad, ring: "kern", quelle: "t" })),
+      ...vorlagen.map((pfad) => ({ pfad, ring: "kern", quelle: "t", art: "vorlage" })),
+    ],
+  };
   schreibe(q, ".factory/besitz.json", `${JSON.stringify(manifest, null, 2)}\n`);
-  for (const [pfad, text] of Object.entries(opt.vorlagen ?? {})) schreibe(q, pfad, text);
+  for (const [pfad, text] of Object.entries({ ...opt.vorlagen, ...opt.besitzDateien })) schreibe(q, pfad, text);
   if (opt.mitRepo !== false) schreibe(q, ".factory/projekt.json", JSON.stringify({ repo: REPO }));
   schreibe(q, "AGENTS.md", `# Quelle\n\n${stoppBlock(opt.stopp ?? "neuer Stopp")}\n`);
   for (const e of MANIFEST.eintraege) if (e.pfad !== "AGENTS.md") schreibe(q, e.pfad, "rolle\n");
@@ -249,6 +258,8 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
     assert.equal(r.code, 1);
     assert.match(r.err, /docs\/x\.md:3: \[anker-tot\]/);
     assert.match(r.err, /nichts geschrieben/);
+    assert.match(r.err, /Weg: den Link im Ziel korrigieren/);
+    assert.doesNotMatch(r.err, /des Ziels anlegen/);
     assert.deepEqual(baum(z), vorher);
     assert.equal(existsSync(join(z, ".factory", "sync-stand.json")), false);
     assert.equal(existsSync(join(z, INDEX)), false);
@@ -331,7 +342,18 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
     const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
     assert.equal(r.code, 1);
     assert.match(r.err, /\[config\]/);
+    assert.match(r.err, /Weg: \.factory\/projekt\.json des Ziels anlegen/);
+    assert.doesNotMatch(r.err, /den Link im Ziel korrigieren/);
     assert.deepEqual(baum(z), vorher);
+  });
+
+  test("eine geplante Nicht-Markdown-Besitzdatei mit Factory-URL wird vom Link-Schritt nicht gelesen", () => {
+    const skript = `// [a](${u("v1", "AGENTS.md", "weg")})\n`;
+    const q = baueQuelle({ besitzDateien: { "scripts/x.mjs": skript } });
+    const z = baueZiel();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "scripts/x.mjs"), skript);
   });
 
   test("ein zweiter Sync auf denselben Tag ändert nichts mehr", () => {
