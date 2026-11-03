@@ -255,6 +255,23 @@ describe("factory-sync --tag: Link-Schritt", () => {
     assert.equal(existsSync(join(z, INDEX)), false);
   });
 
+  test("factoryLinks.ausnahmen der Ziel-Config nimmt Dateien aus, ein ungültiger Block ist ein Fehler ohne Schreiben", () => {
+    const q = baueQuelle();
+    const text = `[a](${u("v1", "AGENTS.md", "weg")})\n`;
+    const z = baueZiel({ "docs/alt.md": text });
+    schreibe(z, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: ["docs/alt.md"] } }));
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/alt.md"), text);
+    const z2 = baueZiel({ "docs/alt.md": text });
+    schreibe(z2, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: 5 } }));
+    const vorher = baum(z2);
+    const r2 = laufe(["--quelle", q, "--ziel", z2, "--tag", "v2"]);
+    assert.equal(r2.code, 1);
+    assert.match(r2.err, /\[config\]/);
+    assert.deepEqual(baum(z2), vorher);
+  });
+
   test("ein zweiter Sync auf denselben Tag ändert nichts mehr", () => {
     const q = baueQuelle();
     const z = baueZiel({ "docs/x.md": `[a](${u("v1", "AGENTS.md", "quelle")})\n` });
