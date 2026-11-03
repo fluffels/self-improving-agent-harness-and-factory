@@ -115,13 +115,13 @@ function fetteTitel(text: string): string[] {
 }
 
 /** Regel 7: Meldungen (leer = grün) zu Projektwissen im Ablauf. `ablauf` ohne Projektwert-Block, `kernBlock` der Kern-Block der AGENTS.md. */
-export function projektwissenImAblauf(ablauf: string, kernBlock: string, abschlussSkill: string): string[] {
+export function projektwissenImAblauf(ablauf: string, kernBlock: string, abschlussSkill: string | null): string[] {
   const out: string[] = [];
   for (const m of ablauf.matchAll(/#\d+/g)) out.push(`Ticketnummer ${m[0]}`);
   for (const m of ablauf.matchAll(ANKER_RE)) {
     if (/-\d{3,}(?!\d)/.test(m[1].replace(ISO_DATUM, ""))) out.push(`Ticketnummer im Linkanker #${m[1]}`);
   }
-  if (abschlussSkill !== "" && ablauf.includes(abschlussSkill)) out.push(`Literal des Abschluss-Skills '${abschlussSkill}' (Platzhalter <skills.abschluss> nutzen)`);
+  if (typeof abschlussSkill === "string" && abschlussSkill !== "" && ablauf.includes(abschlussSkill)) out.push(`Literal des Abschluss-Skills '${abschlussSkill}' (Platzhalter <skills.abschluss> nutzen)`);
   const titel = fetteTitel(kernBlock);
   for (const m of ablauf.matchAll(VERWEIS_RE)) {
     const name = m[1].trim();
@@ -230,6 +230,7 @@ describe("Regel 7: Projektwissen im Ablauf (projektwissenImAblauf)", () => {
     assert.match(pruefe("Skill abschluss-x rufen").join(), /abschluss-x/);
     assert.deepEqual(pruefe("Skill <skills.abschluss> rufen"), []);
     assert.deepEqual(projektwissenImAblauf("irgendwas", KERN, ""), []);
+    assert.deepEqual(projektwissenImAblauf("steht null im Text", KERN, null), []);
   });
   test("ein Verweis auf einen Abschnitt außerhalb des Kern-Blocks ist rot (auch mit › und (§)", () => {
     assert.match(pruefe("AGENTS.md § Zu großes Ticket;").join(), /Zu großes Ticket/);
@@ -260,9 +261,9 @@ describe("Regel 7: Projektwissen im Ablauf (projektwissenImAblauf)", () => {
 
 describe("Ticket-Ablauf: das echte Repo", () => {
   test("Regel 7: der Ablauf trägt kein Projektwissen (Nummern, Abschluss-Skill, Projekt-Block-Namen)", () => {
-    const cfg = JSON.parse(lies(".factory/projekt.json")) as { skills?: { abschluss?: string } };
-    const abschluss = cfg.skills?.abschluss ?? "";
-    assert.ok(abschluss !== "", "skills.abschluss fehlt in .factory/projekt.json");
+    const cfg = JSON.parse(lies(".factory/projekt.json")) as { skills?: { abschluss?: string | null } };
+    assert.ok(cfg.skills !== undefined && "abschluss" in cfg.skills, "skills.abschluss fehlt in .factory/projekt.json");
+    const abschluss = cfg.skills.abschluss ?? null;
     const kern = einheitText({ pfad: "AGENTS.md", block: "kern" }, lies("AGENTS.md"));
     assert.ok(kern !== null && kern !== "", "Kern-Block der AGENTS.md nicht gefunden");
     const ablauf = leereProjektwerte(lies(TICKET_ABLAUF));

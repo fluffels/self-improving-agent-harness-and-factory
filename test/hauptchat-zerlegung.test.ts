@@ -1,7 +1,7 @@
 /* Hauptchat-Kosten nach Tätigkeit (#1356): Turn-Erkennung, Kategorien, Ticket-Fenster, Fork-Zuordnung.
  * Rein pur: synthetische Transkript-Zeilen mit synthetischen Pfaden, kein IO.
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -37,6 +37,7 @@ type Eingabe = {
   brainRoots?: string[];
   closedAtOf?: (nr: number) => string | null;
   config?: Record<string, unknown>;
+  env?: Record<string, string>;
 };
 const hcTyp = hcModule as {
   zerlegeHauptchat: (e: Eingabe) => Ergebnis;
@@ -490,6 +491,32 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
     const r = lauf([slash(0, SKILL), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill(ABSCHLUSS)), call(4, OPUS), call(5, OPUS)]);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2);
     assert.equal(calls(r, "Brain", OPUS), 3);
+  });
+
+  test("Abschluss-Skill optional (factory#139): null wirft nicht, der lokale Name aus FACTORY_ABSCHLUSS_SKILL zählt als Brain", () => {
+    const ohne = { ...CONFIG, skills: { abschluss: null } };
+    const run = (main: Row[], env: Record<string, string>) => hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], config: ohne, env });
+    const ohneVariable = run([user(0, "x"), call(1, OPUS, skill("lokal-skill"))], {});
+    assert.equal(calls(ohneVariable, "Brain", OPUS), 0);
+    const mitVariable = run([user(0, "x"), call(1, OPUS, skill("lokal-skill"))], { FACTORY_ABSCHLUSS_SKILL: "lokal-skill" });
+    assert.equal(calls(mitVariable, "Brain", OPUS), 1);
+    const slashLokal = run([slash(0, "lokal-skill"), call(1, OPUS)], { FACTORY_ABSCHLUSS_SKILL: "lokal-skill" });
+    assert.equal(calls(slashLokal, "Brain", OPUS), 1);
+  });
+
+  test("ohne env-Argument gilt process.env (so läuft die CLI): FACTORY_ABSCHLUSS_SKILL kommt in abschlussSkills", () => {
+    const ohne = { ...CONFIG, skills: { abschluss: null } };
+    vi.stubEnv("FACTORY_ABSCHLUSS_SKILL", "lokal-aus-prozess");
+    try {
+      assert.ok((hcRoh as unknown as { hauptchatNamen: (d: object) => { abschlussSkills: Set<string> } }).hauptchatNamen({ config: ohne }).abschlussSkills.has("lokal-aus-prozess"));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test("der Repo-Name des Abschluss-Skills zählt weiter, auch wenn die Variable `aus` sagt", () => {
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "x"), call(1, OPUS, skill(ABSCHLUSS))] }], env: { FACTORY_ABSCHLUSS_SKILL: "aus" } });
+    assert.equal(calls(r, "Brain", OPUS), 1);
   });
 
   test("ein Turn, der mit dem Abschluss-Slash beginnt, bleibt ganz Brain", () => {

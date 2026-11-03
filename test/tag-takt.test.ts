@@ -14,6 +14,7 @@ const T = raw as unknown as {
   besitzCommits: (c: Commit[], m: unknown) => Commit[];
   naechsterTag: (t: string, c: Commit[], entfernt?: { datei: string; namen: string[] }[]) => string;
   dringlichSignal: (b: Commit[], k: string) => { grund: string; sha: string } | null;
+  bezieherMigrationen: (b: Commit[], k: string) => { pr: string; text: string }[];
   entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
@@ -22,6 +23,7 @@ const T = raw as unknown as {
 };
 
 const KEY = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
+const MKEY = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
 const JETZT = new Date("2026-06-20T12:00:00Z");
 const TAG_MS = 86_400_000;
 const MANIFEST = { eintraege: [{ pfad: "scripts/a.mjs", ring: "kern" }, { pfad: "docs/x", ring: "kern" }, { pfad: "scripts/cockpit/c.mjs", ring: "oberflaeche" }] };
@@ -500,5 +502,34 @@ describe("Härtung (Review Runde 1)", () => {
     for (const m of [{}, null]) {
       expect(T.besitzCommits([commit({ dateien: [".factory/besitz.json"] }), commit()], m)).toHaveLength(1);
     }
+  });
+});
+
+describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
+  const mitTag = (o: Record<string, unknown> = {}) => T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "unbekannt", url: null }, ...o });
+  it("liest je Besitz-Commit alle Zeilen mit Text, ignoriert leere Texte und Nicht-Besitz-Commits", () => {
+    const besitz = T.besitzCommits([
+      commit({ betreff: "feat: a (#7)", body: `feat: a (#7)\n\n${MKEY}: Konfig X ergänzen\n* ${MKEY}: Datei Y löschen\n${MKEY}:   ` }),
+      commit({ pr: "#8", body: `feat: b\n\n${MKEY}: nur Projekt`, dateien: ["src/app.ts"] }),
+      commit({ pr: "#9", body: "feat: c" }),
+    ], MANIFEST);
+    expect(T.bezieherMigrationen(besitz, MKEY)).toEqual([{ pr: "#7", text: "Konfig X ergänzen" }, { pr: "#7", text: "Datei Y löschen" }]);
+  });
+  it("tagBody rendert den Abschnitt mit den Zeilen, ohne Zeilen „keine gemeldet“", () => {
+    const mit = mitTag({ migrationen: [{ pr: "#7", text: "Konfig X ergänzen" }] });
+    expect(mit).toContain("Bezieher-Migration");
+    expect(mit).toContain("- #7 Konfig X ergänzen");
+    expect(mit).not.toContain("keine gemeldet");
+    expect(mitTag()).toContain("keine gemeldet");
+  });
+  it("Checkliste: Claim vor Worktree, Plan-Nachweis ohne, verify:kompakt, Migrationen, Befund-Ablage", () => {
+    const b = mitTag();
+    for (const teil of ["ticket-lock.mjs claim", "Exit 4", "Plan: ohne — Factory-Sync v1.3.0", "npm run verify:kompakt", "Bezieher-Migrationen", "abgelöster Kern-Tests", "Harness-Sammelticket der Factory"]) expect(b, teil).toContain(teil);
+  });
+  it("lauf reicht die Migrationen aus dem Log in den Ticket-Body (migrationKey)", () => {
+    const texte: string[] = [];
+    const eins = (n: number) => `\x1e${String(n).repeat(40)}\x1f${vor(n)}\x1ffeat: a (#${n})\n\n${MKEY}: Konfig neu\x1f\n\nscripts/a.mjs\n`;
+    T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => eins(1) + eins(2) + eins(3), ladeManifest: () => MANIFEST, headSha: () => "d".repeat(40), ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, migrationKey: MKEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: () => null, log: () => undefined }, trocken: false });
+    expect(texte.join("\n")).toContain("Konfig neu");
   });
 });

@@ -62,6 +62,14 @@ describe("tag-takt main", () => {
     expect(a.platziert).toEqual([["77", "tag", "pt", "o/ziel"]]);
     expect(a.log.join("\n")).toContain("Tag-Ticket angelegt: #77");
   });
+  it("main verdrahtet migrationKey: die Zeile aus einem Besitz-Commit landet im angelegten Body (factory#139)", async () => {
+    const mkey = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
+    const eintrag = `\x1e${"1".repeat(40)}\x1f${new Date().toISOString()}\x1ffeat: x (#1)\n\n${mkey}: Konfig-Schluessel ergaenzen\x1f\n\nscripts/a.mjs\n`;
+    const a = aufbau({ git: (args: string[]) => (args[0] === "tag" ? "v1.2.3\n" : args[0] === "rev-parse" ? `${SHA}\n` : commitLog(3) + eintrag) });
+    expect(await T.main([], a.deps)).toBe(0);
+    const body = String(a.text[0].args[a.text[0].args.indexOf("--body") + 1]);
+    expect(body).toContain("Konfig-Schluessel ergaenzen");
+  });
   it("Token kommt aus dem injizierten env, nicht aus process.env (factory#114 L9b)", async () => {
     const a = aufbau();
     const alt = process.env.PROJECT_TOKEN;

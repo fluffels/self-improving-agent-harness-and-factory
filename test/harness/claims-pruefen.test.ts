@@ -831,6 +831,22 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.match(aufrufe[0][aufrufe[0].indexOf("--repo") + 1], /^[^/\s]+\/[^/\s]+$/);
   });
 
+  test("echteDeps().zugewiesen warnt ab 200 Einträgen (Listengrenze), darunter nicht (factory#139)", async () => {
+    const { vi } = await import("vitest");
+    const AB = { praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "ab" }, labels: { harness: "h", festgefahren: "z", forum: "f", dependabotInbox: "h" } };
+    const liste = (n: number) => Array.from({ length: n }, (_, i) => ({ number: i + 1 }));
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      assert.equal(M.echteDeps({ config: AB, ghJson: () => liste(200) }).zugewiesen().length, 200);
+      assert.match(String(spy.mock.calls[0]?.[0]), /200 offene Zuweisungen/);
+      spy.mockClear();
+      assert.equal(M.echteDeps({ config: AB, ghJson: () => liste(199) }).zugewiesen().length, 199);
+      assert.equal(spy.mock.calls.length, 0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test("echteDeps im Arbeitsplatz: Lock-Ort unter der Wurzel und ein Ort je Repo mit cwd", () => {
     const AB = { praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" }, agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g", ticketSkill: "ab" }, labels: { harness: "h", festgefahren: "z", forum: "f", dependabotInbox: "h" } };
     const d = M.echteDeps({ config: { ...AB, arbeitsplatz: { wurzel: "/ap", repos: [{ name: "web", pfad: "web" }] } }, basis: "/irgendwo" });

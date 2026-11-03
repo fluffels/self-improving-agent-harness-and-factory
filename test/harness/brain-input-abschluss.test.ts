@@ -1,5 +1,5 @@
 /* Wächter für den Sitzungsabschluss (#1572 Z5, #1723): der Ticket-Skill (Schritt 5) ruft den Abschluss-Skill
- * (`skills.abschluss`) IMMER auf; der Schritt entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert. Seit #1723 nennen AGENTS.md, der Skill
+ * (`skills.abschluss`, optional seit factory#139: `node scripts/projekt-config.mjs abschluss` nennt den wirksamen Namen oder `keiner`) IMMER auf, sofern wirksam gesetzt; der Schritt entfällt nur, wenn dieser Aufruf mit unbekanntem Skill scheitert. Seit #1723 nennen AGENTS.md, der Skill
  * und der Umsetzer auch das Feld `BEFUNDE:` und den Fortsetzungs-Pfad („mach mit <nr> weiter“).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
@@ -47,16 +47,20 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
   "AGENTS.md": [
     { name: "Bullet", muster: /\*\*Abschluss ohne offene Befunde\.\*\*/ },
     { name: "Fortsetzungsauftrag ohne Skill", muster: /mach mit <nr> weiter/ },
-    { name: "Abschluss-Skill", muster: new RegExp(`\`${SKILL_RE}\``) },
+    { name: "wirksamer Abschluss-Skill, sofern gesetzt", muster: /Danach der wirksame Abschluss-Skill, falls gesetzt/ },
     { name: "nie als Frage", muster: /nie als Frage/ },
     { name: "nur aus Evidenz", muster: /nur aus Evidenz/ },
     { name: "gemergter PR erledigt es nicht mehr", muster: /gemergter PR/ },
+    { name: "sofort, Hauptchat direkt nach dem Bericht", muster: /\*\*sofort\*\* ein[^\n]*direkt nach dem Bericht/ },
+    { name: "Sammelticket nur im Factory-Repo", muster: /Sammelticket lebt nur im Factory-Repo/ },
   ],
   ".agents/skills/factory/ablauf.md": [
     { name: "BEFUNDE:-Feld im Sitzungsabschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*BEFUNDE:/ },
     { name: "Fortsetzungs-Pfad im Schritt 5", muster: new RegExp(`\\*\\*Sitzungsabschluss\\.\\*\\*[^\\n]*mach mit <nr> weiter[^\\n]*${SKILL_RE}`) },
+    { name: "wirksamer Name aus projekt-config.mjs abschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*node scripts\/projekt-config\.mjs abschluss[^\n]*`keiner` entfällt der Aufruf/ },
     { name: "Abschluss-Skill im Abschluss", muster: new RegExp(`Skill\\(\\{ skill: "${SKILL_RE}" \\}\\)`) },
     { name: "Verweis auf die Regel", muster: /AGENTS\.md § Abschluss ohne offene Befunde/ },
+    { name: "sofortiger Eintrag nach dem Umsetzer-Bericht", muster: /\*\*Direkt nach dem Umsetzer-Bericht\*\*[^\n]*sofort ein/ },
   ],
   ".claude/agents/factory-umsetzer.md": [
     { name: "Formatzeile mit Ziel-Ticket oder keine", muster: /^BEFUNDE: .*→ #<nr>.*keine/m },
@@ -88,7 +92,8 @@ describe("Abschluss ohne offene Befunde, auch im Fortsetzungs-Pfad (#1723)", () 
     const skill = ".agents/skills/factory/ablauf.md";
     expect(abschlussLuecken(skill, rohLesen(skill).replace(/mach mit <nr> weiter/g, "weiter")).length).toBeGreaterThan(0);
     expect(abschlussLuecken(skill, rohLesen(skill).replace("weiter“, „weiter“) oder Ad-hoc-Auftrag", "weiter“, „weiter“)\n\n- oder Ad-hoc-Auftrag")).length).toBeGreaterThan(0);
-    expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replaceAll(`\`${SKILL}\``, "`x`")).length).toBeGreaterThan(0);
+    expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace("Danach der wirksame Abschluss-Skill, falls gesetzt", "Danach etwas")).length).toBeGreaterThan(0);
+    expect(abschlussLuecken(skill, rohLesen(skill).replace("node scripts/projekt-config.mjs abschluss", "etwas")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/nur aus Evidenz/g, "gern")).length).toBeGreaterThan(0);
     expect(abschlussLuecken("AGENTS.md", rohLesen("AGENTS.md").replace(/gemergter PR/g, "PR")).length).toBeGreaterThan(0);
   });

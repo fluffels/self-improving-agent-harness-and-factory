@@ -68,15 +68,22 @@ export function modulFehler(e) {
   return f;
 }
 
-/** Doctor-Punkt `Sicherheits-Module`: fehlender Schlüssel ist eine Lücke, eine Teilauswahl OK mit Hinweis auf die nicht gewählten Module; `null`, wenn das Manifest fehlt (das meldet der Doctor als Kern-Pflicht-Checks nicht prüfbar) oder keine Module kennt und die Config nichts wählt (es gibt nichts zu wählen). */
-export function modulPunkt(config, manifest, { configPfad = "die Projekt-Config" } = {}) {
-  const punkt = "Sicherheits-Module";
-  const w = modulWahl(config, manifest, { configPfad });
-  if (!manifest || (w.erlaubt.length === 0 && w.fehlt)) return null;
-  if (w.fehlt) {
-    return { punkt, ok: false, befund: `der Schlüssel module fehlt in ${configPfad} (es gilt nur ${MODUL_STANDARD.join(", ")})`, fix: `module in ${configPfad} als Liste der gewünschten Sicherheits-Module eintragen (wählbar: ${w.erlaubt.join(", ") || "siehe Manifest"}); [] wählt bewusst keines` };
+/** Kennt das Manifest wählbare Module? Ohne gibt es nichts zu wählen. */
+export const manifestKenntModule = (manifest) => modulNamenAus(manifest).length > 0;
+
+/**
+ * Teilt die verteilten Einheiten nach der Modulwahl: `{ aktiv, abgewaehlt, modulIds }`. `aktiv` sind Einheiten ohne Modul und Einheiten gewählter Module (bei `unbestimmt`
+ * nur die ohne Modul), `abgewaehlt` mappt Einheits-ID auf den Modulnamen eines nicht gewählten Moduls, `modulIds` sind alle Moduleinheiten. `idVon` bildet die Einheits-ID.
+ */
+export function modulAufteilung(verteilt, idVon, { gewaehlt, unbestimmt }) {
+  const aufteilung = { aktiv: [], abgewaehlt: new Map(), modulIds: new Set() };
+  for (const e of verteilt) {
+    if (e.modul === undefined) aufteilung.aktiv.push(e);
+    else {
+      aufteilung.modulIds.add(idVon(e));
+      if (!unbestimmt && !modulGewaehlt(e, gewaehlt)) aufteilung.abgewaehlt.set(idVon(e), e.modul);
+      else if (!unbestimmt) aufteilung.aktiv.push(e);
+    }
   }
-  const fehler = [...modulFormFehler(config), ...w.fehler];
-  if (fehler.length > 0) return { punkt, ok: false, befund: fehler[0].split("\n")[0], fix: fehler[0].split("\nFix: ")[1] ?? `module in ${configPfad} korrigieren` };
-  return w.nichtGewaehlt.length > 0 ? { punkt, ok: true, hinweis: `nicht gewählt: ${w.nichtGewaehlt.join(", ")}` } : { punkt, ok: true };
+  return aufteilung;
 }

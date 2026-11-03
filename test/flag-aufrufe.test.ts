@@ -230,7 +230,7 @@ const ZEILEN: Zeile[] = [
     skript: "projekt-config",
     exit: 2,
     erste: (m) => `✖ ${m}`,
-    aufruf: new RegExp(`^${maskiere("Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>")}$`, "m"),
+    aufruf: new RegExp(`^${maskiere("Fix: node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad> | abschluss")}$`, "m"),
     faelle: { unbekannt: ["--bogus", "repo"], ohneWert: ["--config"], doppelt: ["--config", "a", "--config", "b", "repo"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--config braucht einen Wert", doppelt: "--config ist doppelt angegeben" },
   },

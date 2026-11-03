@@ -28,7 +28,7 @@ interface Pc {
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
-  cli(argv: string[], opt?: { rootDir?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
+  cli(argv: string[], opt?: { rootDir?: string; env?: Record<string, string | undefined>; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
   spracheAus(config: unknown): { umschrift?: string[]; spezifikation: Record<string, unknown> };
@@ -43,6 +43,7 @@ interface Pc {
   gatesAus(config: unknown): { nichtInVerify: { gate: string; grund: string }[] };
   factoryLinkAusnahmenAus(config: unknown): string[];
   umgebungsWert(env: Record<string, string | undefined>, name: string): string | undefined;
+  wirksamerAbschluss(config: unknown, env?: Record<string, string | undefined>): string | null;
   kernEnvNamen(ordner: string): string[];
   sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
   sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[] };
@@ -135,6 +136,9 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => delete c.skills), /skills/);
     assert.match(mit((c) => (c.skills = {})), /skills\.abschluss fehlt/);
     assert.match(mit((c) => (c.skills = { abschluss: "" })), /skills\.abschluss muss/);
+    assert.match(mit((c) => (c.skills = { abschluss: 5 })), /skills\.abschluss muss/);
+    assert.equal(meld({ ...gueltig(), skills: { abschluss: null } }), "");
+    assert.match(mit((c) => (c.skills = { abschluss: null, anderer: null })), /skills\.anderer muss/);
     assert.match(mit((c) => (c.skills = [])), /skills muss/);
     assert.match(mit((c) => (c.rulesetSpiegel = "")), /rulesetSpiegel/);
     assert.match(mit((c) => (c.rulesetSpiegel = 5)), /rulesetSpiegel/);
@@ -463,7 +467,38 @@ describe("trenneConfigArg", () => {
   });
 });
 
+describe("wirksamerAbschluss (Abschluss-Skill optional, factory#139)", () => {
+  const mitSkill = (abschluss: string | null) => ({ skills: { abschluss } });
+  test("Repo-Wert ohne Variable, auch null", () => {
+    assert.equal(pc.wirksamerAbschluss(mitSkill("repo-skill"), {}), "repo-skill");
+    assert.equal(pc.wirksamerAbschluss(mitSkill(null), {}), null);
+    assert.equal(pc.wirksamerAbschluss(mitSkill("repo-skill"), { FACTORY_ABSCHLUSS_SKILL: "" }), "repo-skill");
+  });
+  test("die Variable geht vor dem Repo-Wert, `aus` schaltet ab", () => {
+    assert.equal(pc.wirksamerAbschluss(mitSkill("repo-skill"), { FACTORY_ABSCHLUSS_SKILL: "lokal" }), "lokal");
+    assert.equal(pc.wirksamerAbschluss(mitSkill(null), { FACTORY_ABSCHLUSS_SKILL: "lokal" }), "lokal");
+    assert.equal(pc.wirksamerAbschluss(mitSkill("repo-skill"), { FACTORY_ABSCHLUSS_SKILL: "aus" }), null);
+  });
+});
+
 describe("cli", () => {
+  test("abschluss gibt den wirksamen Namen oder keiner aus", () => {
+    const d = tmp();
+    const schreibe = (a: string | null): string => {
+      const p = join(d, `c-${String(a)}.json`);
+      writeFileSync(p, JSON.stringify({ ...gueltig(), skills: { abschluss: a } }));
+      return p;
+    };
+    const lauf2 = (a: string | null, env: Record<string, string>): { code: number; out: string[] } => {
+      const out: string[] = [];
+      const code = pc.cli(["abschluss", "--config", schreibe(a)], { rootDir: WURZEL, env, out: (s: string) => out.push(s), err: () => undefined });
+      return { code, out };
+    };
+    assert.deepEqual(lauf2("repo-skill", {}), { code: 0, out: ["repo-skill"] });
+    assert.deepEqual(lauf2(null, {}), { code: 0, out: ["keiner"] });
+    assert.deepEqual(lauf2("repo-skill", { FACTORY_ABSCHLUSS_SKILL: "lokal" }), { code: 0, out: ["lokal"] });
+    assert.deepEqual(lauf2("repo-skill", { FACTORY_ABSCHLUSS_SKILL: "aus" }), { code: 0, out: ["keiner"] });
+  });
   const lauf = (argv: string[], rootDir = WURZEL): { code: number; out: string[]; err: string[] } => {
     const out: string[] = [];
     const err: string[] = [];

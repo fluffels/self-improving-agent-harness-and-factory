@@ -173,7 +173,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; config?: unknown } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
@@ -188,6 +188,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     };
     const gh = (a: string[]) => {
       ghAufrufe.push(a);
+      if (/\/pulls\/\d+$/.test(a[1] ?? "")) {
+        if (o.draftLive === "fehler") throw new Error("gh kaputt (pulls)");
+        if (o.draftLive === "ohne-feld") return {};
+        return { draft: o.draftLive ?? o.env?.FACTORY_PR_DRAFT === "true" };
+      }
       if (a.join(" ").includes("/comments")) {
         if (o.ghFehler === "kommentare") throw new Error("gh kaputt");
         return [o.kommentare ?? [kommentar]];
@@ -233,7 +238,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   });
   test("GITHUB_REPOSITORY bestimmt Repo und vertrauten Owner; ohne Fehler ist es kein Entwurf; FACTORY_PR_DRAFT=false ist rot", () => {
     const { r, ghAufrufe } = lauf({ env: { GITHUB_REPOSITORY: "x/y" } });
-    expect(ghAufrufe[0][1]).toBe("repos/x/y/issues/9");
+    expect(ghAufrufe.slice(0, 2).map((a) => a[1])).toEqual(["repos/x/y/pulls/42", "repos/x/y/issues/9"]);
     rot(r.fehler, /Spur fehlt/); // Kommentar von „owner“, vertraut wäre nur „x“
     const gruen = lauf({ env: { FACTORY_PR_DRAFT: "true" } }).r;
     expect(gruen.entwurf).toBe(false);
@@ -280,7 +285,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       if (a[0] === "log") return `${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
       return "";
     };
-    const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: AK }), env: { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
+    const r = m.checkAbnahmeNachweis({ runGit: git, gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : a[1].includes("/pulls/") ? { draft: false } : { body: AK }), env: { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42" }, ladeConfig: () => CONFIG });
     rot(r.fehler, /kein bekannter Commit/);
   });
   test("Entwurf: nur Bericht, ok mit Fehlern; auch bei gh-Fehler", () => {
@@ -289,6 +294,36 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(r.entwurf).toBe(true);
     expect(r.fehler.length).toBeGreaterThan(0);
     expect(lauf({ ghFehler: "issue", env: { FACTORY_PR_DRAFT: "true" } }).r.entwurf).toBe(true);
+  });
+  test("Entwurf (L10): der Live-Stand des PR gewinnt gegen den Ereigniswert; Abruf-Fehler ist rot; ohne PR-Nummer gilt die Umgebung", () => {
+    // Rerun-Fall: Umgebung veraltet „Entwurf“, PR ist längst bereit → streng.
+    const streng = lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "true" }, draftLive: false }).r;
+    expect(streng.ok).toBe(false);
+    expect(streng.entwurf).toBe(false);
+    rot(streng.fehler, /Zeile fehlt/);
+    // Umgekehrt: Umgebung „bereit“, PR ist Entwurf → nur Bericht.
+    const bericht = lauf({ messages: "nur Code", env: { FACTORY_PR_DRAFT: "false" }, draftLive: true }).r;
+    expect(bericht.ok).toBe(true);
+    expect(bericht.entwurf).toBe(true);
+    // Live-Abruf wirft → rot (fail-closed), auch bei Umgebung „Entwurf“.
+    const kaputt = lauf({ env: { FACTORY_PR_DRAFT: "true" }, draftLive: "fehler" }).r;
+    expect(kaputt.ok).toBe(false);
+    rot(kaputt.fehler, /gh kaputt \(pulls\)/);
+    // Antwort ohne draft-Feld ist nicht lesbar → rot.
+    const leer = lauf({ env: { FACTORY_PR_DRAFT: "true" }, draftLive: "ohne-feld" }).r;
+    expect(leer.ok).toBe(false);
+    rot(leer.fehler, /nicht lesbar/);
+    // Ohne PR-Nummer: kein Live-Abruf, die Umgebung gilt wie bisher.
+    const { r, ghAufrufe } = lauf({ messages: "nur Code", env: { FACTORY_PR_NUMBER: "", FACTORY_PR_DRAFT: "true" }, draftLive: false });
+    expect(r.entwurf).toBe(true);
+    expect(ghAufrufe.some((a) => /\/pulls\//.test(a[1] ?? ""))).toBe(false);
+  });
+  test("PR-Nummer mit Beiwerk (42x, x42) ist keine Nummer: kein Live-Abruf, die Umgebung gilt (factory#139)", () => {
+    for (const nummer of ["42x", "x42"]) {
+      const { r, ghAufrufe } = lauf({ messages: "nur Code", env: { FACTORY_PR_NUMBER: nummer, FACTORY_PR_DRAFT: "true" }, draftLive: false });
+      expect(r.entwurf, nummer).toBe(true);
+      expect(ghAufrufe.some((a) => /\/pulls\//.test(a[1] ?? "")), nummer).toBe(false);
+    }
   });
   test("Override: grün ohne gh-Aufruf; Widerruf gilt nicht mehr", () => {
     const ov = `${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug gestartet`;
@@ -344,7 +379,7 @@ describe("echtes git: head-Regel", { timeout: 30_000 }, () => {
     const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${abn} urteil=K1:erfuellt -->` };
     return m.checkAbnahmeNachweis({
       runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }),
-      gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : { body: "## Akzeptanzkriterien\n1. eins\n" }),
+      gh: (a) => (a.join(" ").includes("/comments") ? [[kommentar]] : a[1].includes("/pulls/") ? { draft: false } : { body: "## Akzeptanzkriterien\n1. eins\n" }),
       env: { FACTORY_DIFF_BASE: r.basis, FACTORY_PR_BODY: "Closes #9", FACTORY_PR_NUMBER: "42", ...env },
       ladeConfig: () => CONFIG,
     });

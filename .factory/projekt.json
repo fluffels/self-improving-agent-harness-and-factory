@@ -45,7 +45,7 @@
   "skills": {
     "abschluss": "brain-input"
   },
-  "module": ["codeql", "scorecard", "secret-scan", "dependency-review", "zizmor", "codescanning-inbox", "dependabot-inbox"],
+  "module": ["codeql", "scorecard", "secret-scan", "dependency-review", "zizmor", "codescanning-inbox", "audit-einordnung", "dependabot-inbox"],
   "codeql": {
     "sprachen": ["javascript-typescript", "actions"]
   },

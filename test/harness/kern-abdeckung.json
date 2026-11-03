@@ -27,14 +27,6 @@
     "art": "projekt",
     "grund": "Zeiger auf den Ticket-Skill des Projekts"
   },
-  "scripts/audit-einordnung.mjs": {
-    "art": "modul",
-    "grund": "Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"
-  },
-  ".github/workflows/audit-einordnung.yml": {
-    "art": "modul",
-    "grund": "Sicherheits-Modul (Audit-Einordnung), kein Factory-Kern"
-  },
   "scripts/herkunftsform.mjs": {
     "art": "projekt",
     "grund": "Migrationswerkzeug dieses Repos (Herkunftsform der Ticketnummern, #95): der Wächter factory-seiten zählt die Nummern, Bezieher stellen die synchronisierten Seiten nicht um"
