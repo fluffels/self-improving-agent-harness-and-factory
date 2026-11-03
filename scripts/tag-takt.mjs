@@ -105,12 +105,12 @@ export function verteilteSkripte(besitz, manifest) {
   return [...new Set(besitz.flatMap((c) => c.dateien).filter((d) => SKRIPT_DATEI.test(d) && gedeckt(d)))].sort();
 }
 
-/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` oder ein entfernter Export, `entfernt` = `[{ datei, namen }]`, Major; `feat` Minor, sonst Patch); `v` bleibt erhalten. */
+/** Pur: der vorgeschlagene nächste Tag nach Conventional Commits (`!` oder `BREAKING CHANGE:` oder ein entfernter Export, `entfernt` = `[{ datei, namen }]`, Major; `feat` Minor, sonst Patch); unter v1 (0.y.z) hebt Breaking nur das Minor (SemVer §4), v1.0.0 setzt man bewusst; `v` bleibt erhalten. */
 export function naechsterTag(letzterTag, commits, entfernt = []) {
   const [major, minor, patch] = teile(letzterTag);
   const breaking = (c) => /^[a-z]+(\([^)]*\))?!:/.test(c.betreff) || /^(?:\* )?BREAKING[ -]CHANGE:/m.test(c.body);
   const feature = (c) => /^feat(\([^)]*\))?:/.test(c.betreff);
-  const stufe = [major + 1, 0, 0];
+  const stufe = major === 0 ? [0, minor + 1, 0] : [major + 1, 0, 0];
   const neu = commits.some(breaking) || entfernt.length > 0 ? stufe : commits.some(feature) ? [major, minor + 1, 0] : [major, minor, patch + 1];
   return `${letzterTag.startsWith("v") ? "v" : ""}${neu.join(".")}`;
 }
@@ -188,7 +188,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- Vorgeschlagener Tag: \`${tag}\` (Basis ${letzterTag}, Vorschlag nach Conventional Commits)`,
     `- Älteste ungetaggte Änderung: ${aeltestes.datum.slice(0, 10)} (${aeltestes.sha.slice(0, 7)})`,
     `- main-Commit: \`${sha}\``,
-    ...entfernt.map((x) => `- Entfernte Exporte (Major): \`${x.datei}\`: ${x.namen.join(", ")}`),
+    ...entfernt.map((x) => `- Entfernte Exporte (Breaking): \`${x.datei}\`: ${x.namen.join(", ")}`),
     `- CI-Status dieses Commits: ${CI_TEXT[ci.zustand] ?? CI_TEXT.unbekannt}${ci.url ? ` ([Lauf](${ci.url}))` : ""}`,
     "",
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
@@ -336,7 +336,8 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+/** git-Aufruf mit abgefangenem stderr (ein erwarteter Fehlschlag, z. B. `git show` einer neuen Datei, schreibt nichts ins Log); die Meldung bleibt im geworfenen Fehler. */
+export const gitEcht = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 
 /** Standard-Lader des Manifests unter `wurzel`: wirft die einheitliche Meldung (`manifestAusText`), wenn es fehlt oder kaputt ist. */
 export function manifestLaden(wurzel) {
