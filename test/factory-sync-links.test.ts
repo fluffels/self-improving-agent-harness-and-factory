@@ -142,7 +142,7 @@ const MANIFEST = {
     { pfad: "AGENTS.md", block: "stopps", ring: "kern", quelle: "t" },
   ],
 };
-function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<string, string>; besitzDateien?: Record<string, string> } = {}): string {
+function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<string, string>; besitzDateien?: Record<string, string>; manifestQuelle?: string } = {}): string {
   const q = tmp();
   const vorlagen = Object.keys(opt.vorlagen ?? {});
   const besitzDateien = Object.keys(opt.besitzDateien ?? {});
@@ -150,7 +150,7 @@ function baueQuelle(opt: { mitRepo?: boolean; stopp?: string; vorlagen?: Record<
     version: vorlagen.length === 0 ? 1 : 2,
     eintraege: [
       ...MANIFEST.eintraege,
-      ...besitzDateien.map((pfad) => ({ pfad, ring: "kern", quelle: "t" })),
+      ...besitzDateien.map((pfad) => ({ pfad, ring: "kern", quelle: opt.manifestQuelle ?? "t" })),
       ...vorlagen.map((pfad) => ({ pfad, ring: "kern", quelle: "t", art: "vorlage" })),
     ],
   };
@@ -347,13 +347,13 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
     assert.deepEqual(baum(z), vorher);
   });
 
-  test("eine geplante Nicht-Markdown-Besitzdatei mit Factory-URL wird vom Link-Schritt nicht gelesen", () => {
-    const skript = `// [a](${u("v1", "AGENTS.md", "weg")})\n`;
-    const q = baueQuelle({ besitzDateien: { "scripts/x.mjs": skript } });
+  test("eine geplante Nicht-Markdown-Datei (das Manifest) mit Factory-URL wird vom Link-Schritt nicht gelesen", () => {
+    const link = `[a](${u("v1", "AGENTS.md", "weg")})`;
+    const q = baueQuelle({ besitzDateien: { "scripts/x.mjs": "x\n" }, manifestQuelle: link });
     const z = baueZiel();
     const r = syncVomTag(q, z, "v2");
     assert.equal(r.code, 0, r.err);
-    assert.equal(lies(z, "scripts/x.mjs"), skript);
+    assert.ok(lies(z, ".factory/besitz.json").includes(link));
   });
 
   test("ein zweiter Sync auf denselben Tag ändert nichts mehr", () => {
