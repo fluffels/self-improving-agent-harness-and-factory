@@ -1,4 +1,4 @@
-# Fortschreibung factory#145 (2026-11-03): Rückfall-Trigger des optionalen Abschluss-Skills messbar
+# Fortschreibung #145 (2026-11-03): Rückfall-Trigger des optionalen Abschluss-Skills messbar
 
 Präzisiert die Ledger-Zeile 2026-11-03 (factory#139) in [ADR 0027](../0027-regeln-lockern.md); die Zeile selbst bleibt unverändert (Punkt 8), die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
 
