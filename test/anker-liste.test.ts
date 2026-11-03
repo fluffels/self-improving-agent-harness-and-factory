@@ -256,7 +256,7 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
 describe("istGemessen", () => {
   const istGemessen = (ankerRoh as unknown as { istGemessen: (p: string, q: string) => boolean }).istGemessen;
   test.each(["test/support/x.ts", "scripts/a.mjs"])("%s ist gemessen", (p) => expect(istGemessen(p, "scripts")).toBe(true));
-  test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts"])("%s ist nicht gemessen", (p) =>
+  test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts", "test/x.test.mjs", "scripts/a.test.mjs"])("%s ist nicht gemessen", (p) =>
     expect(istGemessen(p, "scripts")).toBe(false),
   );
 });
