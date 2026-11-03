@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
@@ -89,7 +89,7 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
  * ohne den Schlüssel `module` gilt der Standard, die Namen prüft `modulWahl` gegen das Quell-Manifest (ein neues Modul ist sofort wählbar).
  */
 function waehleModule(manifest, zielConfig) {
-  if (!manifest.eintraege.some((e) => e.modul !== undefined)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
+  if (!manifestKenntModule(manifest)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
   let config;
   try {
     config = zielConfig();
