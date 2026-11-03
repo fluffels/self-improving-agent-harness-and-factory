@@ -191,20 +191,14 @@ describe("factory-sync --tag: Link-Schritt", () => {
   test("AK2: eine vom Sync als unverändert gezählte Datei, die der Link-Schritt ändert, zählt als geändert", () => {
     const q = baueQuelle();
     const z = baueZiel();
-    schreibe(z, "AGENTS.md", `# Projekt
-
-${stoppBlock("neuer Stopp")}
-
-[a](${u("v1", "AGENTS.md", "quelle")})
-`);
+    schreibe(z, "AGENTS.md", `# Projekt\n\n${stoppBlock("neuer Stopp")}\n\n[a](${u("v1", "AGENTS.md", "quelle")})\n`);
     const r = syncVomTag(q, z, "v2");
     assert.equal(r.code, 0, r.err);
-    assert.match(r.out, /(^|
-)geändert: AGENTS.md/);
+    const zeilen = r.out.split("\n");
+    assert.ok(zeilen.includes("geändert: AGENTS.md"));
     assert.match(r.out, /, 0 unverändert/);
-    const zeilen = r.out.split("
-").filter((s) => /^(geändert|neu)/.test(s)).length;
-    assert.match(r.out, new RegExp(`factory-sync: ${zeilen} geändert`));
+    const gezaehlt = zeilen.filter((s) => /^(geändert|neu)/.test(s)).length;
+    assert.ok(zeilen.includes(`factory-sync: ${gezaehlt} geändert, 0 unverändert`));
   });
 
   test("AK3: --trocken meldet und schreibt nichts, auch mit Link-Befund Exit 1", () => {
