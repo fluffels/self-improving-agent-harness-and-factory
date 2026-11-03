@@ -48,6 +48,9 @@ describe("L7: testHilfeKopienAbweichend", () => {
     const r = ext.testHilfeKopienAbweichend({ quelleLies: quelleMit([HILFE]), zielLies: leser({ "test/support/a.ts": "y\n" }) });
     expect(r).toEqual(["Projektkopie test/support/a.ts weicht von der Quelle ab (Test-Hilfe, nicht verteilt; von Hand abgleichen oder entfernen)"]);
   });
+  test("Quelle CRLF, Ziel LF: nichts", () => {
+    expect(ext.testHilfeKopienAbweichend({ quelleLies: quelleMit([HILFE], { "test/support/a.ts": "x\r\n" }), zielLies: leser({ "test/support/a.ts": "x\n" }) })).toEqual([]);
+  });
   test("nur CRLF: nichts", () => {
     expect(ext.testHilfeKopienAbweichend({ quelleLies: quelleMit([HILFE]), zielLies: leser({ "test/support/a.ts": "x\r\n" }) })).toEqual([]);
   });
@@ -61,7 +64,7 @@ describe("L7: testHilfeKopienAbweichend", () => {
   test("Eintraege ohne Liste, Nicht-Objekte und Hilfe ohne Quelldatei: nichts, kein Absturz", () => {
     const ziel = leser({ "test/support/a.ts": "y\n" });
     expect(ext.testHilfeKopienAbweichend({ quelleLies: leser({ [ext.EXTRAKTION_PFAD]: JSON.stringify({ eintraege: "x" }) }), zielLies: ziel })).toEqual([]);
-    expect(ext.testHilfeKopienAbweichend({ quelleLies: leser({ [ext.EXTRAKTION_PFAD]: LISTE([null, 5, HILFE]) }), zielLies: ziel })).toEqual([]);
+    expect(ext.testHilfeKopienAbweichend({ quelleLies: leser({ [ext.EXTRAKTION_PFAD]: LISTE([null, 5, { art: "test-hilfe", grund: "g" }, HILFE]) }), zielLies: ziel })).toEqual([]);
     expect(ext.testHilfeKopienAbweichend({ quelleLies: leser({ [ext.EXTRAKTION_PFAD]: LISTE([HILFE]) }), zielLies: ziel })).toEqual([]);
   });
   test("Quelle ohne Liste oder mit kaputtem JSON: leer", () => {

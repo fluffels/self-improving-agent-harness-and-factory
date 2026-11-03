@@ -84,6 +84,11 @@ export function betroffeneDateien(suppressions: Record<string, Record<string, un
     .sort();
 }
 
+/** Je Datei der Baseline der an der Diff-Basis erlaubte Stand (neue Datei: nichts erlaubt). */
+export function erlaubteWerte(baseline: Baseline, alt: Baseline): Baseline {
+  return Object.fromEntries(Object.keys(baseline).map((d) => [d, alt[d] ?? {}]));
+}
+
 /** ESLints eigene Ausgabeform der Suppressions-Datei: 2 Leerzeichen, kein End-Newline. */
 export function eslintForm(text: string): string {
   return JSON.stringify(JSON.parse(text), null, 2);
@@ -92,6 +97,9 @@ export function eslintForm(text: string): string {
 async function messeIst(): Promise<Baseline> {
   const echt = new ESLint({ cwd: WURZEL });
   const grenze = await grenzen(echt, "scripts/x.mjs");
+  // das ganze Optionsobjekt der echten Config (auch skipBlankLines/skipComments), keine zweite Fassung
+  const echteRegeln = ((await echt.calculateConfigForFile("scripts/x.mjs")) as Linter.Config).rules ?? {};
+  const zeilenOptionen = (echteRegeln["max-lines-per-function"] as unknown[])[1] as Record<string, unknown>;
   const dateien = betroffeneDateien(JSON.parse(lesen(SUPPRESSIONS)) as Record<string, Record<string, unknown>>);
   const eslint = new ESLint({
     cwd: WURZEL,
@@ -103,7 +111,7 @@ async function messeIst(): Promise<Baseline> {
         rules: {
           complexity: ["error", grenze.complexity],
           "max-depth": ["error", grenze["max-depth"]],
-          "max-lines-per-function": ["error", { max: grenze["max-lines-per-function"], skipBlankLines: true, skipComments: true }],
+          "max-lines-per-function": ["error", zeilenOptionen],
         },
       },
     ],
@@ -129,13 +137,14 @@ describe("Komplexitäts-Ausmaß je Datei", () => {
     for (const z of Object.values(baseline)) for (const n of Object.values(z)) assert.ok(n > 0);
   });
 
-  const git = (args: string[]): string => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const git = (args: string[]): string =>
+    execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
   const basis: string | null = checkBasis.resolveBase(git, process.env) ?? null;
 
   test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
     assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
-    let alt: Baseline = {};
+    let alt: Baseline;
     try {
       alt = JSON.parse(git(["show", `${basis}:${BASELINE}`])) as Baseline;
     } catch {
@@ -143,8 +152,7 @@ describe("Komplexitäts-Ausmaß je Datei", () => {
       return;
     }
     const baseline = JSON.parse(lesen(BASELINE)) as Baseline;
-    const erlaubt = Object.fromEntries(Object.keys(baseline).map((d) => [d, alt[d] ?? {}]));
-    assert.deepEqual(anhebungen(baseline, erlaubt), []);
+    assert.deepEqual(anhebungen(baseline, erlaubteWerte(baseline, alt)), []);
   });
 
   test("eslint-suppressions.json hat ESLints eigene Form (2 Leerzeichen, ohne End-Newline)", () => {
@@ -177,6 +185,12 @@ describe("Komplexitäts-Ausmaß je Datei", () => {
       assert.equal(vergleiche({ "a.mjs": { complexity: 3, "max-depth": 1 } }, b).length, 1);
       assert.equal(vergleiche({}, b).length, 1);
       assert.deepEqual(vergleiche(b, b), []);
+    });
+    test("Anhebung gegen die Basis: angehoben, gleich und neue Datei", () => {
+      const alt = { "a.mjs": { complexity: 3 } };
+      assert.equal(anhebungen({ "a.mjs": { complexity: 4 } }, erlaubteWerte({ "a.mjs": { complexity: 4 } }, alt)).length, 1);
+      assert.deepEqual(anhebungen(alt, erlaubteWerte(alt, alt)), []);
+      assert.equal(anhebungen({ "n.mjs": { complexity: 1 } }, erlaubteWerte({ "n.mjs": { complexity: 1 } }, alt)).length, 1);
     });
     test("betroffeneDateien nimmt nur Dateien mit einer der drei Regeln", () => {
       assert.deepEqual(betroffeneDateien({ "b.ts": { x: {} }, "a.mjs": { "max-depth": {} } }), ["a.mjs"]);
