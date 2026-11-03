@@ -20,6 +20,7 @@ interface Lib {
   rendereProjektwerte(t: string, c: Cfg | (() => Cfg), pfad?: string): string;
   projektwertWert(c: Cfg, k: string): string;
   platzhalterMuster(): RegExp;
+  platzhalterBefunde(pfad: string, t: string, c: Cfg): string[];
   projektwertAbweichungen(pfad: string, t: string, c: Cfg): string[];
   projektwertDateien(manifest: string[], liste: string[]): string[];
   projektwertLauf(w: string, c: () => Cfg, o?: { schreiben?: boolean }): { dateien: number; fehler: string[]; geaendert: string[]; abweichungen: string[] };

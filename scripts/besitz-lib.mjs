@@ -565,9 +565,13 @@ export function leereProjektwerte(text, pfad = "<text>") {
   return zeilen.join("\n");
 }
 
+/** Der eine Projektwert, der `null` sein darf (kein Abschluss-Skill, factory#139); in der Tabelle steht `—`. */
+const NULLBARER_PROJEKTWERT = "skills.abschluss";
+
 /** Wert zum Schlüssel (`gruppe.name`) aus der Config; wirft bei fehlendem oder nicht-textlichem Wert und bei Zeichen, die den Block brechen. */
 export function projektwertWert(config, schluessel) {
   const wert = schluessel.split(".").reduce((o, k) => (o !== null && typeof o === "object" ? o[k] : undefined), config);
+  if (wert === null && schluessel === NULLBARER_PROJEKTWERT) return null;
   const liste = Array.isArray(wert) && wert.length > 0 && wert.every((w) => typeof w === "string" && w !== "");
   if (!liste && (typeof wert !== "string" || wert === "")) {
     throw new Error(`Projektwert '${schluessel}' fehlt oder ist kein nichtleerer Text (oder keine nicht leere Liste von Texten) in ${CONFIG_PFAD}\nFix: Schlüssel in ${CONFIG_PFAD} ergänzen oder den Marker korrigieren`);
@@ -578,6 +582,8 @@ export function projektwertWert(config, schluessel) {
   return wert;
 }
 
+const tabellenWert = (w) => (w === null ? "—" : `\`${w}\``);
+
 function blockZeilen(config) {
   const kopf = `Projektwerte aus \`${CONFIG_PFAD}\` (generiert von \`node scripts/projektwerte.mjs --write\`, nicht von Hand ändern).`;
   const out = [PROJEKTWERT_START, kopf, "", "| Schlüssel | Wert |", "| --- | --- |"];
@@ -585,7 +591,7 @@ function blockZeilen(config) {
     if (config?.[g] === null || typeof config?.[g] !== "object") {
       throw new Error(`Projektwert-Gruppe '${g}' fehlt in ${CONFIG_PFAD}\nFix: Gruppe in ${CONFIG_PFAD} ergänzen`);
     }
-    for (const k of Object.keys(config[g])) out.push(`| \`${g}.${k}\` | \`${projektwertWert(config, `${g}.${k}`)}\` |`);
+    for (const k of Object.keys(config[g])) out.push(`| \`${g}.${k}\` | ${tabellenWert(projektwertWert(config, `${g}.${k}`))} |`);
   }
   out.push(PROJEKTWERT_ENDE);
   return out;
