@@ -44,6 +44,12 @@ describe("besitzAnker und Modul-Wahl (factory#146)", () => {
     assert.deepEqual(besitzAnker(() => true, eintraege, []), ["kern.md"]);
   });
 
+  test("Negativfall: filtert die Wahl alles weg, wirft der Helfer und nennt die gewählten Module", () => {
+    const nurModul = [M("m/a.yml", "a")];
+    assert.throws(() => besitzAnker(() => true, nurModul, []), /gewählte Module: keine/);
+    assert.throws(() => besitzAnker(() => true, nurModul, ["b"]), /gewählte Module: b\)/);
+  });
+
   test("echtes Manifest bei Wahl dependabot-inbox: kein Pfad eines nicht gewählten Moduls, alle des gewählten", () => {
     const alle = ladeBesitzManifest<{ pfad: string; ring: string; modul?: string }>().eintraege;
     const abgewaehlt = alle.filter((e) => e.modul !== undefined && e.modul !== "dependabot-inbox").map((e) => e.pfad);
