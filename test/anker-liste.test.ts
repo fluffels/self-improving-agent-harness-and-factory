@@ -230,6 +230,36 @@ describe("guardListe: Funktionszuordnung", () => {
   });
 });
 
+describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
+  const mehrzeilig = "function a() {\n  if (x) {\n    y();\n  }\n}\n";
+  test.each([
+    ["Klassenmethode", "  inherit(x) { return x ?? 1; }"],
+    ["Objekt-Eigenschaft Pfeil", "  inherit: (x) => x ?? 1,"],
+    ["Objekt-Eigenschaft async Pfeil", "  inherit: async (x) => x ?? 1,"],
+    ["Objekt-Eigenschaft function", "  inherit: function (x) { return x ?? 1; },"],
+    ["Kontrolle const", "const inherit = (x) => x ?? 1;"],
+  ])("%s: der ??-Anker gehört zu inherit, nicht zu a", (_n, zeile) => {
+    const r = neu(`${mehrzeilig}${zeile}\n`);
+    expect(r.map((e) => [e.funktion, e.anker.map((a) => a.muster)])).toEqual([
+      ["a", ["if"]],
+      ["inherit", ["??"]],
+    ]);
+  });
+
+  test("Kontrollfluss-Zeile mit Block bleibt kein Kopf", () => {
+    const r = neu("function a() {\n  if (x) { g(y ?? 1); }\n}\n");
+    expect(r.map((e) => e.funktion)).toEqual(["a"]);
+  });
+});
+
+describe("istGemessen", () => {
+  const istGemessen = (ankerRoh as unknown as { istGemessen: (p: string, q: string) => boolean }).istGemessen;
+  test.each(["test/support/x.ts", "scripts/a.mjs"])("%s ist gemessen", (p) => expect(istGemessen(p, "scripts")).toBe(true));
+  test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts"])("%s ist nicht gemessen", (p) =>
+    expect(istGemessen(p, "scripts")).toBe(false),
+  );
+});
+
 describe("formatiere und lauf", () => {
   const eintrag = (anker: { zeile: number; muster: string }[]): Eintrag => ({ datei: "scripts/a.mjs", funktion: "f", zeile: 10, anker });
 
