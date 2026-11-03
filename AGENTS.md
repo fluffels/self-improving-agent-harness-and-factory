@@ -89,7 +89,7 @@ Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks 
 
 - **Ticketnummern mit Herkunft (factory#95).** In den Factory-Seiten (`docs/`, ohne Historie), den Agenten- und Skill-Texten und in dieser Datei steht keine nackte Nummer `#n` bis `#nnnn`: `quellprojekt#<nr>` für ein Ticket des Quellprojekts, `factory#<nr>` für eines des Factory-Repos (Überschriften und Code ausgenommen). Neue nackte Nummern lassen `test/harness/factory-seiten.test.ts` rot werden; `scripts/herkunftsform.mjs` stellt einmalig um, neue Nummern schreibt man von Hand in der richtigen Form.
 - **Lint muss grün bleiben** (`npm run lint`, `--max-warnings 0`, typbewusst ab `recommendedTypeChecked`).
-- **Komplexität je Funktion** (`scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in `eslint-suppressions.json`, Neues bricht sofort, stale Einträge `npm run lint:prune`.
+- **Komplexität je Funktion** (`scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in `eslint-suppressions.json` (das Ausmaß des Bestands je Datei steigt nie: `test/harness/komplexitaet-ausmass.test.ts`), Neues bricht sofort, stale Einträge `npm run lint:prune`.
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `SIH-Diffsize-Override: #<nr> warum`.
 - **Abhängigkeiten:** nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`; Ausnahme: Dependabot oder `SIH-Lockfile-Override: #<nr> warum`).
 
