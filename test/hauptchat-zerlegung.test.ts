@@ -508,7 +508,7 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
     const ohne = { ...CONFIG, skills: { abschluss: null } };
     vi.stubEnv("FACTORY_ABSCHLUSS_SKILL", "lokal-aus-prozess");
     try {
-      assert.ok(hc.hauptchatNamen({ config: ohne }).abschlussSkills.has("lokal-aus-prozess"));
+      assert.ok((hcRoh as unknown as { hauptchatNamen: (d: object) => { abschlussSkills: Set<string> } }).hauptchatNamen({ config: ohne }).abschlussSkills.has("lokal-aus-prozess"));
     } finally {
       vi.unstubAllEnvs();
     }
