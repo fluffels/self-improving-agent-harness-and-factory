@@ -24,7 +24,7 @@ const T = raw as unknown as {
 
 const KEY = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
 const MKEY = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
-const JETZT =new Date("2026-06-20T12:00:00Z");
+const JETZT = new Date("2026-06-20T12:00:00Z");
 const TAG_MS = 86_400_000;
 const MANIFEST = { eintraege: [{ pfad: "scripts/a.mjs", ring: "kern" }, { pfad: "docs/x", ring: "kern" }, { pfad: "scripts/cockpit/c.mjs", ring: "oberflaeche" }] };
 const vor = (tage: number) => new Date(JETZT.getTime() - tage * TAG_MS).toISOString();

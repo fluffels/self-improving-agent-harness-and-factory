@@ -318,6 +318,13 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(r.entwurf).toBe(true);
     expect(ghAufrufe.some((a) => /\/pulls\//.test(a[1] ?? ""))).toBe(false);
   });
+  test("PR-Nummer mit Beiwerk (42x, x42) ist keine Nummer: kein Live-Abruf, die Umgebung gilt (factory#139)", () => {
+    for (const nummer of ["42x", "x42"]) {
+      const { r, ghAufrufe } = lauf({ messages: "nur Code", env: { FACTORY_PR_NUMBER: nummer, FACTORY_PR_DRAFT: "true" }, draftLive: false });
+      expect(r.entwurf, nummer).toBe(true);
+      expect(ghAufrufe.some((a) => /\/pulls\//.test(a[1] ?? "")), nummer).toBe(false);
+    }
+  });
   test("Override: grün ohne gh-Aufruf; Widerruf gilt nicht mehr", () => {
     const ov = `${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug gestartet`;
     const { r, ghAufrufe } = lauf({ messages: ov });

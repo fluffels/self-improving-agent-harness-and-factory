@@ -1,7 +1,7 @@
 /* Hauptchat-Kosten nach Tätigkeit (#1356): Turn-Erkennung, Kategorien, Ticket-Fenster, Fork-Zuordnung.
  * Rein pur: synthetische Transkript-Zeilen mit synthetischen Pfaden, kein IO.
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -502,6 +502,16 @@ describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
     assert.equal(calls(mitVariable, "Brain", OPUS), 1);
     const slashLokal = run([slash(0, "lokal-skill"), call(1, OPUS)], { FACTORY_ABSCHLUSS_SKILL: "lokal-skill" });
     assert.equal(calls(slashLokal, "Brain", OPUS), 1);
+  });
+
+  test("ohne env-Argument gilt process.env (so läuft die CLI): FACTORY_ABSCHLUSS_SKILL kommt in abschlussSkills", () => {
+    const ohne = { ...CONFIG, skills: { abschluss: null } };
+    vi.stubEnv("FACTORY_ABSCHLUSS_SKILL", "lokal-aus-prozess");
+    try {
+      assert.ok(hc.hauptchatNamen({ config: ohne }).abschlussSkills.has("lokal-aus-prozess"));
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("der Repo-Name des Abschluss-Skills zählt weiter, auch wenn die Variable `aus` sagt", () => {
