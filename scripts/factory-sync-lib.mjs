@@ -52,9 +52,9 @@ function ergaenzterWert(e, srcText, span, erg) {
   return JSON.stringify(ziel, null, 2).replace(/\n/g, `\n${einrueckung}`);
 }
 
-/** Nicht-fataler Hinweis (leer, wenn nichts fehlt): Der Sync ersetzt nur Kern-Blöcke, fehlen im Ziel die Projekt-Marker, nennt er die fehlenden Zeilen wörtlich. */
+/** Nicht-fataler Hinweis (leer, wenn nichts fehlt): Der Sync ersetzt nur Kern-Blöcke, fehlen im Ziel die Projekt-Marker, nennt er die fehlenden Zeilen wörtlich. Aufruf nur nach `wendeTeileAn`: eine Block-Einheit in einer fehlenden Zieldatei wirft dort schon, `zielLf` ist hier also nie `null`. Bekannte Grenze: der Hinweis gilt für jede Datei mit Block-Einheit (heute nur AGENTS.md), und ein Marker zählt, wenn er irgendwo im Text steht. */
 export function projektMarkerHinweis(pfad, eintraege, zielLf) {
-  if (zielLf === null || !eintraege.some((e) => e.block !== undefined)) return [];
+  if (!eintraege.some((e) => e.block !== undefined)) return [];
   const fehlend = [PROJEKT_BLOCK_START, PROJEKT_BLOCK_ENDE].filter((m) => !zielLf.includes(m));
   if (fehlend.length === 0) return [];
   const erwartet = fehlend.length === 2 ? `Erwartet je eine Zeile ${fehlend[0]} und ${fehlend[1]}` : `Erwartet: ${fehlend[0]}`;
