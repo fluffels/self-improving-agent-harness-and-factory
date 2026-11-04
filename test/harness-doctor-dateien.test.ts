@@ -232,7 +232,7 @@ describe("Projektdateien (factory#170)", () => {
   });
 });
 
-describe("Langfuse-Takt (SIH-189)", () => {
+describe("Langfuse-Takt", () => {
   const takt = (existiert: (p: string) => boolean, config?: unknown) => punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert, config }), "Langfuse-Takt");
   const norm = (p: string) => p.replaceAll("\\", "/");
   const ohneDatei = (fehlend: string) => (p: string) => norm(p) !== `/x/${fehlend}`;
@@ -255,5 +255,20 @@ describe("Langfuse-Takt (SIH-189)", () => {
     const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };
     expect(p.ok).toBe(true);
     expect(p.hinweis).toContain("c/d");
+  });
+});
+
+describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)", () => {
+  const alles = () => true;
+  const lies = (root: string) => punkt(pruefe({ rootDir: root, git: fakeGit(gesund), existiert: alles }), "Langfuse-Takt") as Ergebnis & { hinweis?: string };
+
+  test("die .factory/projekt.json des Roots wird gelesen: ein fremdes Factory-Board ergibt den Hinweis", () => {
+    const root = fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] }) });
+    expect(lies(root).hinweis).toContain("c/d");
+  });
+
+  test("ohne oder mit kaputter Config: OK ohne Hinweis, kein Absturz", () => {
+    expect(lies(fixture({}))).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(lies(fixture({ ".factory/projekt.json": "{kaputt" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 });

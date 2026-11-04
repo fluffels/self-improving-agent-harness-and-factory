@@ -1,4 +1,4 @@
-/* Langfuse im Bezieher (SIH-189): Status-Ticket und Sammelticket „Langfuse-Befunde (gesammelt)“ laufen im Bezieher ohne Projektwort der Quell-Config.
+/* Langfuse im Bezieher: Status-Ticket und Sammelticket „Langfuse-Befunde (gesammelt)“ laufen im Bezieher ohne Projektwort der Quell-Config.
  * Geprüft gegen die echte Config der Quelle (`begriffeAus` samt `projektliterale` und `seitenliterale`; Owner, Repo, Board-ID, Label teilen sich Quelle und Ziel):
  * kein Treffer im Text. Links auf das Factory-Repo sind Herkunft und werden vorher maskiert (wie in test/harness/factory-seiten.test.ts).
  * Der Sync-Stand der Repo-Wurzel wird vorgetäuscht (Bezieher: Tag und Quelle), jede andere Wurzel liest den echten. */

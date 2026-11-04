@@ -44,7 +44,7 @@ describe("Erstbezug-Seite und PROJEKTDATEIEN", () => {
     expect(liste.filter((d) => verteilt.has(d.pfad)).map((d) => d.pfad)).toEqual([]);
   });
 
-  describe("Abschnitt „Langfuse einrichten“ (SIH-189)", () => {
+  describe("Abschnitt „Langfuse einrichten“", () => {
     const seite = lies("docs/erstbezug.md");
     const abschnitt = (seite.split(/^## Langfuse einrichten$/m)[1] ?? "").split(/^## /m)[0] ?? "";
 

@@ -8,7 +8,7 @@
  *   `Projektdateien` (factory#170): jede Datei der geschlossenen Liste `PROJEKTDATEIEN` (vom Sync nicht geliefert, aber von einem Gate oder Kern-Skript unter festem Pfad gebraucht)
  *   existiert; geprüft wird nur das Vorhandensein (eine leere Datei zählt), nie der Inhalt. Der Fix nennt einmal die Vorlage aus der Quelle und je fehlender Datei mit Besonderheit deren Zusatz.
  *
- *   `Langfuse-Takt` (SIH-189): `.github/workflows/board-takt.yml` und `scripts/langfuse-takt.mjs` existieren (Ring kern-nach-entkopplung kommt per Sync); Hinweis, wenn das Factory-Board ein fremdes Repo führt.
+ *   `Langfuse-Takt`: `.github/workflows/board-takt.yml` und `scripts/langfuse-takt.mjs` existieren (Ring kern-nach-entkopplung kommt per Sync); Hinweis, wenn das Factory-Board ein fremdes Repo führt.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
@@ -169,7 +169,7 @@ export function projektdateienPunkt(rootDir, existiert) {
 /** Dateien des Langfuse-Takts: der Workflow (Ring `kern-nach-entkopplung`) und das Skript; ohne sie läuft weder Status-Ticket noch Sammelticket „Langfuse-Befunde (gesammelt)“. */
 export const LANGFUSE_TAKT_DATEIEN = Object.freeze([".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"]);
 
-const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync`, siehe Schritt 4 in docs/erstbezug.md): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung des Besitz-Manifests (.factory/besitz.json) und gehört damit zum Besitz, den jeder Bezieher bekommt";
+const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync`, siehe Schritt 4 in docs/erstbezug.md): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung und gehört damit zum Besitz, den jeder Bezieher bekommt";
 
 /** Das Repo, dessen Issues das Factory-Board der Config führt, wenn es nicht das eigene ist (sonst null; ohne Config oder Board ebenfalls null). */
 function fremdesFactoryRepo(config) {
@@ -178,7 +178,7 @@ function fremdesFactoryRepo(config) {
 }
 
 /**
- * Punkt `Langfuse-Takt` (SIH-189): beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
+ * Punkt `Langfuse-Takt`: beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
  * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber als Hinweis, dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs).
  */
 export function langfuseTaktPunkt(rootDir, existiert, config) {
