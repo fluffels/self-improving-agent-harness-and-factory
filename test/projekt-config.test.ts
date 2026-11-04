@@ -1315,3 +1315,17 @@ describe("factoryLinks.ausnahmen (factory#130)", () => {
     assert.ok(!trifft("docs/c++.md", "docs/cc.md") && !trifft("docs/(alt).md", "docs/alt.md") && !trifft("docs/a|b.md", "docs/a.md") && !trifft("docs/a.b.md", "docs/axb.md"));
   });
 });
+
+describe("Block design (factory#172)", () => {
+  test("gültiger Block ist grün, Formfehler werden gemeldet, ohne Block bleibt alles gültig", () => {
+    const c = gueltig() as Cfg & { design?: unknown };
+    c.design = { label: "ui", freigabe: "design-ok", system: "docs/design/system.md" };
+    assert.deepEqual(pc.pruefeProjektConfig(c), []);
+    c.design = { label: "ui", freigabe: "ui", system: "x" };
+    assert.match(meld(c), /verschieden/);
+    c.design = { label: "ui" };
+    assert.match(meld(c), /design\.freigabe/);
+    c.design = "ui";
+    assert.match(meld(c), /design muss ein Objekt/);
+  });
+});
