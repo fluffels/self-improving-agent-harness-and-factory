@@ -1,0 +1,171 @@
+/* Gate-Befehle (factory#182): Block `befehle` der Projekt-Config und Läufer `scripts/gate-befehl.mjs`. */
+import { afterEach, describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as raw from "../scripts/gate-befehl-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPc from "../scripts/projekt-config-lib.mjs";
+
+type Config = Record<string, unknown>;
+interface Lauf { status?: number | null; error?: Error }
+interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, ...rest: unknown[]) => Lauf; cwd: string; out: (t: string) => void; err: (t: string) => void }
+const lib = raw as unknown as {
+  STANDARD_BEFEHLE: Record<string, string>;
+  GATE_BEFEHL_NAMEN: string[];
+  pruefeBefehle(block: unknown): string[];
+  befehlAus(config: Config, name: string): string;
+  cli(argv: string[], opt: Optionen): number;
+};
+const pc = rawPc as unknown as { pruefeProjektConfig(c: unknown): string[]; ladeProjektConfig(o: { pfad: string }): Config };
+
+const WURZEL = fileURLToPath(new URL("../", import.meta.url));
+const HEUTE = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage" };
+
+/** Fake-Umgebung: `spawn` protokolliert den Aufruf; `ausgabe` sammelt stdout und stderr. */
+const umgebung = (config: Config = {}, lauf: Lauf = { status: 0 }) => {
+  const aufrufe: { befehl: string; opt: unknown; rest: unknown[] }[] = [];
+  const out: string[] = [];
+  const err: string[] = [];
+  let geladen = 0;
+  const opt: Optionen = {
+    lade: () => { geladen++; return config; },
+    spawn: (befehl, o, ...rest) => { aufrufe.push({ befehl, opt: o, rest }); return lauf; },
+    cwd: "/wurzel",
+    out: (t) => out.push(t),
+    err: (t) => err.push(t),
+  };
+  return { opt, aufrufe, out, err, geladen: () => geladen };
+};
+
+const dirs: string[] = [];
+afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+
+describe("Standardbefehle ohne Block (K2)", () => {
+  test("befehlAus liefert für alle fünf Namen genau die heutigen Befehle", () => {
+    assert.deepEqual(lib.GATE_BEFEHL_NAMEN, Object.keys(HEUTE));
+    for (const [name, befehl] of Object.entries(HEUTE)) assert.equal(lib.befehlAus({}, name), befehl, name);
+  });
+  test("cli startet je Name genau diesen String als Shell-Befehl, ohne Args-Array", () => {
+    for (const [name, befehl] of Object.entries(HEUTE)) {
+      const u = umgebung();
+      assert.equal(lib.cli([name], u.opt), 0);
+      assert.equal(u.aufrufe.length, 1);
+      assert.equal(u.aufrufe[0].befehl, befehl);
+      assert.deepEqual(u.aufrufe[0].opt, { shell: true, stdio: "inherit", cwd: "/wurzel" });
+      assert.deepEqual(u.aufrufe[0].rest, []);
+    }
+  });
+  test("Drift-Wächter: jedes npm-Skript der Standardbefehle existiert in package.json", () => {
+    const skripte = (JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8")) as { scripts: Record<string, string> }).scripts;
+    for (const befehl of Object.values(lib.STANDARD_BEFEHLE)) {
+      const m = /^npm run (\S+)$/.exec(befehl);
+      if (m) assert.ok(Object.hasOwn(skripte, m[1]), `${befehl}: Skript fehlt`);
+    }
+  });
+});
+
+describe("Teil-Block", () => {
+  test("ein gesetzter Name gilt, die übrigen bleiben Standard; {} ist gültig", () => {
+    const c = { befehle: { verify: "mvn -q verify" } };
+    assert.equal(lib.befehlAus(c, "verify"), "mvn -q verify");
+    assert.equal(lib.befehlAus(c, "coverage"), HEUTE.coverage);
+    assert.deepEqual(lib.pruefeBefehle({}), []);
+    assert.equal(lib.befehlAus({ befehle: {} }, "install"), "npm ci");
+  });
+  test("cli fährt den Befehl aus dem Block", () => {
+    const u = umgebung({ befehle: { verify: "exit 3" } });
+    lib.cli(["verify"], u.opt);
+    assert.equal(u.aufrufe[0].befehl, "exit 3");
+  });
+});
+
+describe("Form des Blocks (K1)", () => {
+  test("jede Abweichung ergibt eine Meldung", () => {
+    for (const falsch of [null, [], "x", 42]) assert.equal(lib.pruefeBefehle(falsch).length, 1, JSON.stringify(falsch));
+    assert.equal(lib.pruefeBefehle(undefined).length, 0);
+    const unbekannt = lib.pruefeBefehle({ build: "x" });
+    assert.equal(unbekannt.length, 1);
+    assert.match(unbekannt[0], /befehle\.build.*kein bekannter Name/);
+    for (const wert of ["", "  ", 42, null, "a\nb", "a\rb"]) {
+      const f = lib.pruefeBefehle({ verify: wert });
+      assert.equal(f.length, 1, JSON.stringify(wert));
+      assert.match(f[0], /befehle\.verify/);
+    }
+    assert.deepEqual(lib.pruefeBefehle({ ...HEUTE }), []);
+  });
+  test("die Schema-Prüfung der Projekt-Config bindet den Block ein", () => {
+    const config = pc.ladeProjektConfig({ pfad: "test/fixtures/projekt-fremd.json" });
+    assert.deepEqual(pc.pruefeProjektConfig(config), []);
+    const fehler = pc.pruefeProjektConfig({ ...config, befehle: { verify: "" } });
+    assert.ok(fehler.some((f) => f.includes("befehle.verify")), fehler.join("; "));
+  });
+  test("echter Lader: kaputter Block endet mit Exit 2, Meldung nennt Feld und Fix", () => {
+    const d = mkdtempSync(join(tmpdir(), "gate-befehl-"));
+    dirs.push(d);
+    const config = JSON.parse(readFileSync(join(WURZEL, "test/fixtures/projekt-fremd.json"), "utf8")) as Config;
+    config.befehle = { verify: "" };
+    const pfad = join(d, "projekt.json");
+    writeFileSync(pfad, JSON.stringify(config));
+    const u = umgebung();
+    u.opt.lade = () => pc.ladeProjektConfig({ pfad });
+    assert.equal(lib.cli(["verify"], u.opt), 2);
+    assert.equal(u.aufrufe.length, 0);
+    assert.match(u.err.join("\n"), /befehle\.verify[\s\S]*Fix:/);
+  });
+});
+
+describe("Namen und Aufruf (K3)", () => {
+  test("unbekannte Namen enden mit Exit 2 und Fix-Zeile, ohne den Lader zu rufen", () => {
+    for (const name of ["verifyFull", "constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      const u = umgebung();
+      assert.equal(lib.cli([name], u.opt), 2, name);
+      assert.match(u.err.join("\n"), /Fix:/, name);
+      assert.equal(u.geladen(), 0, name);
+      assert.equal(u.aufrufe.length, 0, name);
+    }
+  });
+  test("kein Name, zwei Namen und unbekanntes Flag enden mit Exit 2", () => {
+    for (const argv of [[], ["verify", "install"], ["--unbekannt"], ["verify", "--unbekannt"]]) {
+      const u = umgebung();
+      assert.equal(lib.cli(argv, u.opt), 2, argv.join(" "));
+      assert.equal(u.aufrufe.length, 0);
+    }
+  });
+  test("befehlAus wirft bei unbekanntem Namen mit Fix", () => {
+    assert.throws(() => lib.befehlAus({}, "constructor"), /Fix:/);
+  });
+});
+
+describe("Ausführung (K3)", () => {
+  test("der Exit-Code des Befehls wird weitergegeben", () => {
+    assert.equal(lib.cli(["verify"], umgebung({}, { status: 0 }).opt), 0);
+    assert.equal(lib.cli(["verify"], umgebung({}, { status: 3 }).opt), 3);
+  });
+  test("Signal (Status null) ist fail-closed 1", () => {
+    assert.equal(lib.cli(["verify"], umgebung({}, { status: null }).opt), 1);
+  });
+  test("Startfehler ist 1 mit Meldung", () => {
+    const u = umgebung({}, { error: new Error("ENOENT") });
+    assert.equal(lib.cli(["verify"], u.opt), 1);
+    assert.match(u.err.join("\n"), /ENOENT/);
+  });
+  test("--zeigen gibt genau den Befehl aus und startet nichts", () => {
+    const u = umgebung({ befehle: { verify: "mvn -q verify" } });
+    assert.equal(lib.cli(["verify", "--zeigen"], u.opt), 0);
+    assert.deepEqual(u.out, ["mvn -q verify"]);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("Smoke im echten Repo: --zeigen und unbekannter Name", () => {
+    const ok = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "verify", "--zeigen"], { cwd: WURZEL, encoding: "utf8" });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(ok.stdout.trim(), "npm run verify");
+    const falsch = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "gibtsnicht"], { cwd: WURZEL, encoding: "utf8" });
+    assert.equal(falsch.status, 2);
+    assert.match(falsch.stderr, /Fix:/);
+  });
+});

@@ -6,10 +6,10 @@
  * server-seitig PR-gegated (Ruleset main-schutz ohne Bypass-Akteure, ADR 0009) — der
  * maßgebliche, nicht umgehbare Riegel sind die Required-Checks auf dem PR. Das
  * frühe lokale Feedback vor dem PR holt sich der Agent per manuellem
- * `npm run verify`. Der committete, per `npm run setup` via `core.hooksPath`
+ * `node scripts/gate-befehl.mjs verify`. Der committete, per `npm run setup` via `core.hooksPath`
  * verdrahtete pre-push-Hook bleibt als Restnetz für den Fall, dass die
  * Protection je gelockert wird: Bei einem Push auf `main` fährt er
- * `npm run verify` lokal und bricht bei Rot ab (Umgehung bewusst per
+ * den Gate-Befehl `verify` lokal und bricht bei Rot ab (Umgehung bewusst per
  * `git push --no-verify`). Bei anderen Branches fährt er nur `check:diffsize` (#1740).
  *
  * Diese Fitness-Function sichert ab, dass der Schutz nicht leise wegbröckelt:
@@ -23,9 +23,10 @@
  * des Diffsize-Zweigs mit Attrappe. Ausführen mit:  npm test
  */
 import { afterEach, describe, it, expect } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { dirname, join } from "node:path";
+import { importHuelle } from "../support/import-huelle";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -37,8 +38,8 @@ const setup = readRepo("scripts/setup.mjs");
 
 describe("#528 pre-push-Hook: schnelle Gates vor Push auf main", () => {
   it("fährt die verify-Kette (nicht nur ein Einzel-Gate)", () => {
-    expect(hook, "pre-push muss npm run verify aufrufen").toMatch(
-      /\bnpm run verify\b/,
+    expect(hook, "pre-push muss den Gate-Befehl verify aufrufen (factory#182)").toMatch(
+      /node scripts\/gate-befehl\.mjs verify\b/,
     );
     // NICHT verify:full — Builds/Boot-Smoke sind bewusst der CI überlassen,
     // damit der Hook zügig bleibt.
@@ -64,8 +65,8 @@ describe("#528 pre-push-Hook: schnelle Gates vor Push auf main", () => {
       earlyExit,
       "pre-push muss ohne Push auf main früh mit exit 0 aussteigen",
     ).not.toBeNull();
-    const verifyCall = hook.search(/^\s*if\s+npm run verify\b/m);
-    expect(verifyCall, "pre-push muss `if npm run verify` enthalten").toBeGreaterThan(-1);
+    const verifyCall = hook.search(/^\s*if\s+node scripts\/gate-befehl\.mjs verify\b/m);
+    expect(verifyCall, "pre-push muss `if node scripts/gate-befehl.mjs verify` enthalten").toBeGreaterThan(-1);
     expect(
       earlyExit!.index + earlyExit![0].length,
       "der Früh-Ausstieg muss VOR dem verify-Aufruf stehen",
@@ -136,40 +137,41 @@ describe.skipIf(!hatSh)("#1740 pre-push-Hook: Diffsize bei Pushes anderer Branch
 describe.skipIf(!hatSh)("#1762 L21c pre-push-Hook: welches Gate läuft bei welchem Push", () => {
   const dirs: string[] = [];
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
-  // Temp-Ordner mit Attrappe `scripts/check-diffsize.mjs` und einem falschen `npm` vorn im PATH; beide protokollieren ihren Aufruf.
+  // Temp-Ordner mit Attrappen `scripts/check-diffsize.mjs` und `scripts/gate-befehl.mjs` (factory#182); beide protokollieren ihren Aufruf.
   const lauf = (refs: { ref: string; oid?: string }[], { verifyExit = 0, diffsizeExit = 0 } = {}) => {
     const d = mkdtempSync(join(tmpdir(), "prepush-"));
     dirs.push(d);
     const log = join(d, "aufrufe.log").replaceAll("\\", "/");
     mkdirSync(join(d, "scripts"));
-    mkdirSync(join(d, "bin"));
     writeFileSync(
       join(d, "scripts", "check-diffsize.mjs"),
       `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(log)}, "diffsize\\n"); process.exit(${diffsizeExit});`,
     );
-    writeFileSync(join(d, "bin", "npm"), `#!/bin/sh\necho "npm $*" >> "${log}"\nexit ${verifyExit}\n`, { mode: 0o755 });
+    writeFileSync(
+      join(d, "scripts", "gate-befehl.mjs"),
+      `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(log)}, "gate-befehl " + process.argv.slice(2).join(" ") + "\\n"); process.exit(${verifyExit});`,
+    );
     const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
     const input = refs.map(({ ref, oid = OID }) => `${ref} ${oid} ${ref} ${"0".repeat(40)}\n`).join("");
     const r = spawnSync("sh", [hookPfad, "origin", "x"], {
       cwd: d,
       input,
       encoding: "utf8",
-      env: { ...process.env, PATH: join(d, "bin") + delimiter + (process.env.PATH ?? "") },
     });
     const aufrufe = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : [];
     return { r, aufrufe };
   };
 
-  it("Push auf main fährt npm run verify und keinen Diffsize-Check", () => {
+  it("Push auf main fährt den Gate-Befehl verify und keinen Diffsize-Check", () => {
     const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }]);
     expect(r.status, r.stdout + r.stderr).toBe(0);
-    expect(aufrufe).toEqual(["npm run verify"]);
+    expect(aufrufe).toEqual(["gate-befehl verify"]);
   });
 
   it("rotes verify bricht den Push auf main ab", () => {
     const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }], { verifyExit: 1 });
     expect(r.status, r.stdout + r.stderr).toBe(1);
-    expect(aufrufe).toEqual(["npm run verify"]);
+    expect(aufrufe).toEqual(["gate-befehl verify"]);
   });
 
   it("Push eines anderen Branches fährt check-diffsize und kein verify", () => {
@@ -187,12 +189,43 @@ describe.skipIf(!hatSh)("#1762 L21c pre-push-Hook: welches Gate läuft bei welch
   it("main und Feature-Branch zugleich: erst Diffsize, dann verify", () => {
     const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }, { ref: "refs/heads/feature/x" }]);
     expect(r.status, r.stdout + r.stderr).toBe(0);
-    expect(aufrufe).toEqual(["diffsize", "npm run verify"]);
+    expect(aufrufe).toEqual(["diffsize", "gate-befehl verify"]);
   });
 
   it("rotes Diffsize bricht ab, bevor verify läuft", () => {
     const { r, aufrufe } = lauf([{ ref: "refs/heads/main" }, { ref: "refs/heads/feature/x" }], { diffsizeExit: 1 });
     expect(r.status, r.stdout + r.stderr).toBe(1);
     expect(aufrufe).toEqual(["diffsize"]);
+  });
+});
+
+describe.skipIf(!hatSh)("factory#182 pre-push-Hook: Gate-Befehl aus der Projekt-Config (e2e)", () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  // Temp-Baum mit der echten Import-Hülle des Läufers und einer Config mit `befehle.verify`; der Hook läuft mit cwd dort.
+  const lauf = (verify: string) => {
+    const d = mkdtempSync(join(tmpdir(), "prepush-gate-"));
+    dirs.push(d);
+    const wurzel = fileURLToPath(new URL("../../", import.meta.url));
+    for (const rel of importHuelle("scripts/gate-befehl.mjs", (p) => readFileSync(join(wurzel, p), "utf8"))) {
+      mkdirSync(dirname(join(d, rel)), { recursive: true });
+      copyFileSync(join(wurzel, rel), join(d, rel));
+    }
+    const config = JSON.parse(readFileSync(join(wurzel, "test/fixtures/projekt-fremd.json"), "utf8")) as Record<string, unknown>;
+    config.befehle = { verify };
+    mkdirSync(join(d, ".factory"));
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(config));
+    const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
+    return spawnSync("sh", [hookPfad, "origin", "x"], { cwd: d, input: `refs/heads/main ${OID} refs/heads/main ${"0".repeat(40)}\n`, encoding: "utf8" });
+  };
+  it("befehle.verify \"exit 3\" macht den Push auf main rot und nennt den Gate-Befehl", () => {
+    const r = lauf("exit 3");
+    expect(r.status, r.stdout + r.stderr).toBe(1);
+    expect(r.stdout).toContain("Gate-Befehl 'verify' ist ROT");
+  });
+  it("befehle.verify \"exit 0\" lässt den Push auf main durch", () => {
+    const r = lauf("exit 0");
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain("alle Gates grün");
   });
 });

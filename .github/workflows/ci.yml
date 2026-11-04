@@ -39,7 +39,7 @@ jobs:
           cache: npm
 
       - name: Abhängigkeiten installieren
-        run: npm ci
+        run: node scripts/gate-befehl.mjs install
 
       # Auf einem PR ist die Diff-Basis der erste Elternteil des Merge-Commits, auf main der Vorgänger-Commit.
       - name: Diff-Basis bestimmen
@@ -54,14 +54,14 @@ jobs:
           fi
           echo "FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"
 
-      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: sie steht in package.json › scripts.verify, nicht hier
+      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: der Gate-Befehl verify (Projekt-Config, Standard `npm run verify`), nicht hier
       # kopiert, damit die lokale Reihenfolge nicht von der CI driftet und kein Gate lokal vergessen wird. Coverage und
       # Diff-Coverage sind eigene Schritte dahinter (zusammen = `npm run verify:full`), weil die Instrumentierung die Suite verlangsamt.
       - name: Verify, alle Gates in einer Kette
-        run: npm run verify
+        run: node scripts/gate-befehl.mjs verify
 
       - name: Coverage-Gate
-        run: npm run test:coverage
+        run: node scripts/gate-befehl.mjs coverage
 
       # Misst nur die im Slice geänderten Zeilen (coverage/lcov.info aus dem Lauf davor, geschnitten mit dem Diff), darum NACH
       # test:coverage; FACTORY_DIFF_BASE kommt aus „Diff-Basis bestimmen“ oben.
