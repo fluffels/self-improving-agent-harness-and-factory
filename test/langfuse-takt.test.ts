@@ -156,8 +156,12 @@ describe("statusBody", () => {
   });
   test("der Mechanik-Link hat beschreibenden Linktext statt des nackten Pfads (L36)", () => {
     const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
-    const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
-    rmSync(dir, { recursive: true, force: true });
+    let x: string;
+    try {
+      x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     expect(x).toMatch(/\*\*Mechanik:\*\* \[Wiederkehrendes Ticket[^\]]*\]\(https:/);
     expect(x).not.toMatch(/\[docs\//);
   });

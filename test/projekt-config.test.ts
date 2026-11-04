@@ -835,7 +835,7 @@ describe("ungültige sprache: jeder Einstieg endet mit ✖-Zeile und Fix, ohne S
 });
 
 describe("struktur: Erstbezug-Verweis und Probe-Config (factory#162 L34)", () => {
-  test("strukturAus ohne struktur verweist zur Laufzeit auf die Erstbezug-Seite der Factory", () => {
+  test("strukturAus ohne struktur nennt im Fehlertext die Erstbezug-Seite der Factory", () => {
     assert.throws(() => pc.strukturAus({}), /struktur fehlt[\s\S]*docs\/erstbezug\.md#schrittfolge/);
   });
   test("die Probe-Config trägt einen gültigen Block struktur (Ratsche gegen ein vergessenes Pflichtfeld)", () => {

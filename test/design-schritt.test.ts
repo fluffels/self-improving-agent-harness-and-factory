@@ -125,6 +125,12 @@ describe("scripts/design-schritt.mjs: lauf", () => {
     S.lauf(["--issue", "162"], { design: BLOCK, labels: (nr) => (gesehen.push(nr), []) });
     expect(gesehen).toEqual(["162"]);
   });
+  test("lädt die Config, trägt echteQuellen deren design-Block und ruft den Lader ohne Formprüfung auf (L47)", () => {
+    const optionen: unknown[] = [];
+    const q = S.echteQuellen((o) => (optionen.push(o), { design: BLOCK }));
+    expect(q.design).toBe(BLOCK);
+    expect(optionen).toEqual([{ pruefen: false }]);
+  });
   test("scheitert das Laden der Config, ist das Ergebnis Exit 2 ohne design-Zeile, nie ein stilles aus (L47)", () => {
     const q = S.echteQuellen(() => {
       throw new Error("kein gültiges JSON");
