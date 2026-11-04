@@ -11,6 +11,9 @@ import { readFileSync } from "node:fs";
 
 const lies = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
+/** Höchstlänge einer Tabellenzeile des Harness-Glossars (Zeichen); längere Erklärungen gehören auf die Quell-Seite. */
+const MAX_ZEILE = 1200;
+
 describe("Glossar-Abgleich (#1561 Z5)", () => {
   test("der Planer führt den Glossar-Abgleich als Pflichtpunkt des Plans und je Epic-Kind", () => {
     const planer = lies(".claude/agents/factory-planer.md");
@@ -18,6 +21,13 @@ describe("Glossar-Abgleich (#1561 Z5)", () => {
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/harness-glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /je Kind der Glossar-Abgleich/);
     assert.match(planer, /keine neuen Begriffe“; neue Ein- oder Ausgabe[^\n]*hexagonalen Sicht[^\n]*`docs\/arc42-architektur\.md`/);
+  });
+
+  test("keine Glossar-Tabellenzeile ist länger als die Grenze, Details stehen auf der verlinkten Brain-Seite", () => {
+    const zeilen = lies("docs/harness-glossar.md").split("\n").filter((z) => z.startsWith("| "));
+    assert.ok(zeilen.length > 20, "Tabellenzeilen gefunden");
+    const zuLang = zeilen.filter((z) => z.length > MAX_ZEILE).map((z) => `${z.length}: ${z.slice(0, 40)}`);
+    assert.deepEqual(zuLang, [], `Glossar-Zeile über ${MAX_ZEILE} Zeichen: Details auf die verlinkte Brain-Seite verschieben`);
   });
 
   test("die Requirement-Treue-Lens prüft neue Begriffe gegen das Glossar, im Skill", () => {
