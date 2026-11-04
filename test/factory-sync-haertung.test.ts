@@ -36,6 +36,17 @@ describe("L4: Versionsfehler trägt den Werkzeug-Hinweis", () => {
   });
 });
 
+describe("L2: versionUnbekannt aus MANIFEST_VERSIONEN", () => {
+  const b = rawBesitz as unknown as { MANIFEST_VERSIONEN: number[]; versionUnbekannt(m: string): boolean; pruefeManifest(m: unknown, l: Lies): string[] };
+  test("nur die Versions-Meldung zählt, jede bekannte Version nicht", () => {
+    const meldungen = b.pruefeManifest({ version: 9, eintraege: [] }, () => "t");
+    expect(meldungen.some(b.versionUnbekannt)).toBe(true);
+    expect(b.versionUnbekannt("x: unbekannte art 'besitz'")).toBe(false);
+    for (const v of b.MANIFEST_VERSIONEN) expect(b.pruefeManifest({ version: v, eintraege: [] }, () => "t").some(b.versionUnbekannt)).toBe(false);
+    expect(b.MANIFEST_VERSIONEN).not.toContain(9);
+  });
+});
+
 const LISTE = (eintraege: unknown[]) => JSON.stringify({ version: 1, eintraege });
 const HILFE = { muster: "test/support/a.ts", art: "test-hilfe", grund: "g" };
 const quelleMit = (eintraege: object[], extra: Record<string, string> = {}) => leser({ [ext.EXTRAKTION_PFAD]: LISTE(eintraege), "test/support/a.ts": "x\n", ...extra });

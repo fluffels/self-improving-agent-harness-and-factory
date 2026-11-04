@@ -179,6 +179,8 @@ describe("modul mit Nicht-Text-Wert (#145): eine Einheit gilt als Moduleinheit n
     expect(lib.modulNamenAus(mitFremd)).toEqual(["codeql", "zizmor"]);
     expect(lib.manifestKenntModule({ eintraege: [fremd] })).toBe(false);
     expect(lib.modulGewaehlt(fremd as never, [])).toBe(true);
+    expect(lib.modulImportErlaubt({}, fremd as never)).toBe(true);
+    expect(lib.modulImportErlaubt({ modul: "codeql" }, fremd as never)).toBe(true);
     for (const unbestimmt of [false, true]) {
       const t = lib.modulAufteilung([fremd] as never, id, { gewaehlt: [], unbestimmt });
       expect(t.aktiv.map(id)).toEqual(["x.yml"]);

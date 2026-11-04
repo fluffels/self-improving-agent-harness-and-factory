@@ -86,6 +86,19 @@ describe("planeSync und Sicherheits-Module", () => {
     expect(p.meldungen.join("\n")).toContain("Module: gewählt dependabot-inbox; nicht gewählt codeql, zizmor");
     expect(p.dateien.has("scripts/a.mjs")).toBe(true);
   });
+  test("(a2) liegt im Ziel eine Datei am Pfad einer nicht gewählten Moduleinheit, kommt ein Hinweis (kein Fehler, nichts geschrieben)", () => {
+    const p = plane(() => undefined, { [CODEQL]: "eigene Kopie\n" });
+    expect(p.fehler).toEqual([]);
+    expect(p.meldungen.join("\n")).toContain(`Modul 'codeql' nicht gewählt, im Ziel liegt ${CODEQL} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
+    expect(p.meldungen.join("\n")).not.toContain(`im Ziel liegt ${ZIZMOR}`);
+    expect(p.dateien.has(CODEQL)).toBe(false);
+  });
+  test("(a3) ein gewähltes Modul mit Zieldatei gibt keinen Hinweis", () => {
+    const p = plane((c) => {
+      c.module = ["zizmor"];
+    }, { [ZIZMOR]: "alt\n" });
+    expect(p.meldungen.join("\n")).not.toContain("im Ziel liegt");
+  });
   test("(b) eine Teilauswahl verteilt genau die gewählten Moduleinheiten", () => {
     const p = plane((c) => {
       c.module = ["zizmor"];

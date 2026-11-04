@@ -131,10 +131,16 @@ export function pflichtChecksFehler(e) {
   return [];
 }
 
+/** Manifest-Versionen, die dieses Werkzeug kennt (eine Quelle für Prüfung und Sync-Hinweis). */
+export const MANIFEST_VERSIONEN = [1, 2, 3];
+/** Ist `meldung` der Fehlertext von `pruefeManifest` zu einer unbekannten Version? */
+export const versionUnbekannt = (meldung) => meldung.startsWith("version ") && meldung.includes(" unbekannt");
+
 /** Manifest-Fehler (leer = gültig). `lies` liefert den Dateitext oder `null`. */
 export function pruefeManifest(m, lies) {
   const out = [];
-  if (![1, 2, 3].includes(m.version)) out.push(`version ${String(m.version)} unbekannt (erwartet 1, 2 oder 3)`);
+  // Die Prüfung von `modul` bleibt roh (`!== undefined`): sie validiert, ob der Wert ein Name ist (`modulFehler`), Wahl und Aufteilung nutzen `istModulEinheit`.
+  if (!MANIFEST_VERSIONEN.includes(m.version)) out.push(`version ${String(m.version)} unbekannt (erwartet 1, 2 oder 3)`);
   else {
     if (m.version === 1 && m.eintraege.some((e) => e.art !== undefined)) out.push("art braucht version 2 (ein altes Sync-Werkzeug kennt art nicht und bräche sonst nicht ab)");
     if (m.version < 3 && m.eintraege.some((e) => e.modul !== undefined)) out.push("modul braucht version 3 (ein altes Sync-Werkzeug kennt modul nicht und verteilte sonst jedes Modul)");

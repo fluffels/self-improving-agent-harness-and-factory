@@ -17,8 +17,8 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
-import { manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
+import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
 import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
@@ -35,7 +35,7 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${/^version .* unbekannt/.test(m) ? `
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${versionUnbekannt(m) ? `
 Fix: ${WERKZEUG_HINWEIS}` : ""}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
@@ -73,6 +73,13 @@ function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
   return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
 }
 
+/** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (vermutlich Projektkopie; geschrieben wird nichts). */
+function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies) {
+  return manifest.eintraege
+    .filter((e) => wirdVerteilt(e) && istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null)
+    .map((e) => `Modul '${e.modul}' nicht gewählt, im Ziel liegt ${e.pfad} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
+}
+
 /** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
 function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
   const meldungen = [];
@@ -84,7 +91,7 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
     meldungen.push(
-      nurFactory?.modul !== undefined && !modulGewaehlt(nurFactory, gewaehlteModule)
+      nurFactory !== undefined && istModulEinheit(nurFactory) && !modulGewaehlt(nurFactory, gewaehlteModule)
         ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
         : nurFactory === undefined
         ? `Einheit '${id}' ist kein Besitz mehr, im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
@@ -144,6 +151,7 @@ export function planeSync({
   const nachPfad = new Map();
   const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
   const verteilt = alle.filter((e) => !istVorlage(e));
+  res.meldungen.push(...projektkopienAbgewaehlt(manifest, wahl.gewaehlt, zielLies));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
   const { erg, fehler: ergFehler } = liesErgaenzungen(verteilt, quelleLies, zielLies);
