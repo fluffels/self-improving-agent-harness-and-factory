@@ -271,6 +271,7 @@ describe("Langfuse-Takt", () => {
     expect(p.ok).toBe(false);
     expect(p.befund).toContain("Ziel");
     expect(p.fix).toContain("Board mit Rolle factory");
+    expect(takt(() => true, { labels: { harness: "h" }, boards: [] }).ok).toBe(false); // kein Repo: kein Ziel
     expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 
