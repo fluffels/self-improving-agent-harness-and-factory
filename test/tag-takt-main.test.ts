@@ -18,7 +18,7 @@ const commitLog = (n: number) =>
   Array.from({ length: n }, (_, i) => `\x1e${String(i).repeat(40)}\x1f${new Date().toISOString()}\x1ffix: x (#${i + 1})\x1f\n\nscripts/a.mjs\n`).join("");
 const MANIFEST = { eintraege: [{ pfad: "scripts/a.mjs", ring: "kern" }] };
 
-function aufbau(o: { git?: (a: string[]) => string; ghText?: (a: string[]) => string; start?: unknown; commits?: number } = {}) {
+function aufbau(o: { ghJson?: (a: string[]) => unknown; git?: (a: string[]) => string; ghText?: (a: string[]) => string; start?: unknown; commits?: number } = {}) {
   const log: string[] = [];
   const text: Aufruf[] = [];
   const platziert: unknown[][] = [];
@@ -32,7 +32,7 @@ function aufbau(o: { git?: (a: string[]) => string; ghText?: (a: string[]) => st
     start: () => Promise.resolve(o.start ?? { config: FREMD, libs, trocken: false }),
     gh: {
       text: (args: string[], opt: unknown) => { text.push({ args, opt }); return (o.ghText ?? (() => "https://github.com/o/ziel/issues/77\n"))(args); },
-      json: () => [],
+      json: (args: string[]) => (o.ghJson ?? (() => []))(args),
     },
     log: (s: string) => log.push(s), err: (s: string) => log.push(s),
     git, wurzel: "Z:/gibt-es-nicht", ladeManifest: () => MANIFEST, env: { PROJECT_TOKEN: "pt" },
@@ -194,5 +194,52 @@ describe("manifestLaden (Standard-Lader)", () => {
     ['{"version":1}', /keine Liste 'eintraege'/],
   ])("wirft die einheitliche Meldung bei %j", (inhalt, muster) => {
     expect(() => laden(wurzel(inhalt))).toThrow(muster);
+  });
+});
+
+describe("tag-takt main: Milestones (factory#194)", () => {
+  const TAG_DATUM = "2026-06-10T00:00:00+00:00";
+  const gitMit = (datum: string) => (args: string[]) => (args[0] === "tag" ? "v1.2.3\n" : args[0] === "rev-parse" ? `${SHA}\n` : args[0] === "for-each-ref" ? `${datum}\n` : commitLog(1));
+  const seiten = (closed: string | null) => [[{ number: 7, title: "Erste Stufe", closed_at: closed }]];
+  const aus = (o: { datum?: string; json?: (a: string[]) => unknown }) =>
+    aufbau({ git: gitMit(o.datum ?? TAG_DATUM), ghJson: (a) => (a.some((x) => x.includes("/milestones?")) ? (o.json ?? (() => seiten("2026-06-15T00:00:00Z")))(a) : []) });
+
+  it("ein nach dem Tag geschlossener Milestone legt das Ticket schon bei 1 Besitz-PR an; die REST-Abfrage ist paginiert und nur für geschlossene", async () => {
+    const aufrufe: string[][] = [];
+    const a = aus({ json: (args) => (aufrufe.push(args), seiten("2026-06-15T00:00:00Z")) });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toHaveLength(1);
+    expect(String(a.text[0].args[a.text[0].args.indexOf("--body") + 1])).toContain("Milestone „Erste Stufe“ geschlossen");
+    expect(aufrufe[0]).toEqual(["api", "--paginate", "--slurp", "repos/o/r/milestones?state=closed&per_page=100"]);
+  });
+  it("Negativfall: ein vor dem Tag geschlossener Milestone ändert nichts (1 Besitz-PR: nichts), wie ohne Milestones", async () => {
+    const a = aus({ json: () => seiten("2026-06-01T00:00:00Z") });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toEqual([]);
+    expect(await T.main([], aufbau({ git: gitMit(TAG_DATUM) }).deps)).toBe(0);
+  });
+  it("ohne geschlossene Milestones wird das Tag-Datum gar nicht gelesen", async () => {
+    const gelesen: string[][] = [];
+    const a = aufbau({ git: (args) => (args[0] === "for-each-ref" ? (gelesen.push(args), "x") : gitMit(TAG_DATUM)(args)), ghJson: () => [] });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(gelesen).toEqual([]);
+  });
+  it("unlesbare Milestones oder nicht parsebares Tag-Datum: Warnung, kein Milestone-Auslöser, Lauf geht weiter (fail-open)", async () => {
+    const kaputt = aus({ json: () => { throw new Error("boom"); } });
+    expect(await T.main([], kaputt.deps)).toBe(0);
+    expect(kaputt.text).toEqual([]);
+    expect(kaputt.log.join("\n")).toContain("::warning::Milestones nicht lesbar (boom): Milestone-Auslöser entfällt");
+    const form = aus({ json: () => ({}) });
+    expect(await T.main([], form.deps)).toBe(0);
+    expect(form.log.join("\n")).toContain("::warning::Milestones nicht lesbar");
+    const datum = aus({ datum: "kein Datum" });
+    expect(await T.main([], datum.deps)).toBe(0);
+    expect(datum.text).toEqual([]);
+    expect(datum.log.join("\n")).toContain("Datum von v1.2.3 nicht lesbar");
+  });
+  it("ein wieder geöffneter Milestone (closed_at null) zählt nicht", async () => {
+    const a = aus({ json: () => seiten(null) });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(a.text).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-// Blatt-Modul (factory#181): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`).
+// Blatt-Modul (factory#181): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, `struktur.docmapEinheit`).
 // Importiert nur Node-Builtins, `pfad-glob.mjs` und `relativ-pfad.mjs`; nie `projekt-config-lib` oder `check-basis` (Zyklus), darum sagen die
 // Meldungen „in der Projekt-Config“ ohne Dateipfad. Kein Projektliteral.
 //
@@ -13,6 +13,9 @@ import { istRelativPosix } from "./relativ-pfad.mjs";
 
 /** Endungen der JS/TS-Familie (`.d.ts` zählt über `.ts` mit); gilt, wenn `struktur.endungen` fehlt. */
 export const STANDARD_ENDUNGEN = Object.freeze([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
+
+/** Doku-Einheiten von `check:docmap` (`struktur.docmapEinheit`): eine Datei oder ein Ordner je Modul; Standard `datei`. */
+export const DOCMAP_EINHEITEN = Object.freeze(["datei", "ordner"]);
 
 const ENDUNG = /^(\.[A-Za-z0-9_-]+)+$/;
 const istText = (v) => typeof v === "string" && v.trim() !== "";
@@ -42,7 +45,12 @@ function endungenMaengel(liste) {
   });
 }
 
-/** Pur: Fehlertexte für `quelle`, `endungen` und `ohne` des Blocks `struktur`; leer = gültig. Ein fehlender Block ist hier kein Fehler (`quellenAus` verlangt ihn). */
+function einheitMaengel(wert) {
+  if (wert === undefined || DOCMAP_EINHEITEN.includes(wert)) return [];
+  return [`struktur.docmapEinheit muss "datei" oder "ordner" sein: ${JSON.stringify(wert)}`];
+}
+
+/** Pur: Fehlertexte für `quelle`, `endungen`, `ohne` und `docmapEinheit` des Blocks `struktur`; leer = gültig. Ein fehlender Block ist hier kein Fehler (`quellenAus` verlangt ihn). */
 export function quellenMaengel(struktur) {
   if (!istObjekt(struktur)) return [];
   const q = struktur.quelle;
@@ -50,7 +58,7 @@ export function quellenMaengel(struktur) {
   if (Array.isArray(q)) quelle = q.length === 0 ? ["struktur.quelle darf als Liste nicht leer sein"] : globMaengel(q, "struktur.quelle");
   else quelle = stringMaengel(q);
   const ohne = struktur.ohne === undefined ? [] : globMaengel(struktur.ohne, "struktur.ohne");
-  return [...quelle, ...endungenMaengel(struktur.endungen), ...ohne];
+  return [...quelle, ...endungenMaengel(struktur.endungen), ...ohne, ...einheitMaengel(struktur.docmapEinheit)];
 }
 
 /** Die Quellwurzeln, Endungen und Ausschlüsse aus der Config: `{ quelle (roh), wurzeln, endungen, ohne }`; wirft mit Fix-Zeile bei fehlendem `quelle` oder kaputter Form (fail-closed). */

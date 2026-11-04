@@ -16,7 +16,7 @@ const T = raw as unknown as {
   naechsterTag: (t: string, c: Commit[], entfernt?: { datei: string; namen: string[] }[]) => string;
   dringlichSignal: (b: Commit[], k: string) => { grund: string; sha: string } | null;
   bezieherMigrationen: (b: Commit[], k: string) => { pr: string; text: string }[];
-  entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string }) => Entscheidung;
+  entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string; milestones?: { nummer: number; titel: string; closedAt: string }[] }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
@@ -101,6 +101,46 @@ describe("Schwellen", () => {
   });
   it("ohne Release-Tag entsteht nichts", () => {
     expect(entscheide({ letzterTag: null, besitz: reihe(5) }).aktion).toBe("nichts");
+  });
+});
+
+describe("Milestone-Auslöser (factory#194)", () => {
+  const ms = (titel = "Erste Stufe", closedAt = "2026-06-19T00:00:00Z") => ({ nummer: 1, titel, closedAt });
+  it("ein seit dem Tag geschlossener Milestone löst das Anlegen schon bei 1 Besitz-PR aus und steht im Auslöser", () => {
+    const e = entscheide({ besitz: reihe(1), milestones: [ms()] });
+    expect(e.aktion).toBe("anlegen");
+    expect(e.ausloeser).toEqual(["Milestone „Erste Stufe“ geschlossen"]);
+  });
+  it("mehrere geschlossene Milestones ergeben je einen Auslöser, in der übergebenen Reihenfolge", () => {
+    const e = entscheide({ besitz: reihe(1), milestones: [ms("Eins"), ms("Zwei")] });
+    expect(e.ausloeser).toEqual(["Milestone „Eins“ geschlossen", "Milestone „Zwei“ geschlossen"]);
+  });
+  it("Titel mit | und Zeilenumbruch wird bereinigt", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms("A|B\nC")] }).ausloeser?.[0]).toBe("Milestone „A B C“ geschlossen");
+  });
+  it("Steuerzeichen im Titel werden zu Leerzeichen und der Titel wird auf 80 Zeichen gekürzt (Auslöser und Grund)", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms("A\u0000B\tC\u007fD")] }).ausloeser?.[0]).toBe("Milestone „A B C D“ geschlossen");
+    const lang = entscheide({ besitz: reihe(1), milestones: [ms("x".repeat(100))] }).ausloeser?.[0] ?? "";
+    expect(lang).toBe(`Milestone „${"x".repeat(79)}…“ geschlossen`);
+    expect(entscheide({ besitz: [], milestones: [ms("A\u0000B")] }).grund).toContain("Milestone „A B“");
+    expect(entscheide({ besitz: [], milestones: [ms("x".repeat(100))] }).grund).toContain(`„${"x".repeat(79)}…“`);
+  });
+  it("ohne Besitz-PRs entsteht nichts, der Grund nennt Milestone und den Tag", () => {
+    const e = entscheide({ besitz: [], milestones: [ms()] });
+    expect(e.aktion).toBe("nichts");
+    expect(e.grund).toContain("Milestone „Erste Stufe“");
+    expect(e.grund).toContain("nichts Ungetaggtes seit v1.2.3");
+  });
+  it("offenes ungeclaimtes Ticket wird aktualisiert, ein geclaimtes bleibt unberührt, nie ein zweites", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms()], offene: [tagOffen()] })).toMatchObject({ aktion: "aktualisieren", nummer: 40 });
+    expect(entscheide({ besitz: reihe(1), milestones: [ms()], offene: [tagOffen({ assignees: ["x"] })] }).aktion).toBe("nichts");
+  });
+  it("Negativfall: ohne Parameter, mit leerer Liste gilt dieselbe Entscheidung wie bisher", () => {
+    for (const besitz of [reihe(1), reihe(3)]) {
+      const ohne = entscheide({ besitz });
+      expect(entscheide({ besitz, milestones: [] })).toEqual(ohne);
+    }
+    expect(entscheide({ besitz: reihe(1), milestones: [] }).aktion).toBe("nichts");
   });
 });
 

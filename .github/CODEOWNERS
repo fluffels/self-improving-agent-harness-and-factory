@@ -39,6 +39,7 @@ AGENTS.md @fluffels
 /scripts/sync-abgleich-lib.mjs @fluffels
 /scripts/factory-seite.mjs @fluffels
 /scripts/release-tag-lib.mjs @fluffels
+/scripts/milestone-lib.mjs @fluffels
 /scripts/factory-links-lib.mjs @fluffels
 /scripts/inbox-lib.mjs @fluffels
 /scripts/inbox-start-lib.mjs @fluffels
