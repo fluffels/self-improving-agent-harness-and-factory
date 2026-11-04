@@ -672,6 +672,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/gate-fundquote.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/tool-metriken.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
