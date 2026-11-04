@@ -152,7 +152,7 @@ export function pruefeNodeModules(lockText, hiddenText) {
     return null;
   }
   if (!lock || typeof lock !== "object") return null;
-  if (hiddenText === null || hiddenText === undefined) return "node_modules hat keinen Install-Stand (.package-lock.json fehlt): vor npm-Skripten im Hauptcheckout einmal `npm ci`.";
+  if (hiddenText === null || hiddenText === undefined) return "node_modules hat keinen Install-Stand (.package-lock.json fehlt): vor dem Start von Werkzeugen im Hauptcheckout einmal `node scripts/gate-befehl.mjs install`.";
   let installiert;
   try {
     installiert = JSON.parse(String(hiddenText))?.packages;
@@ -165,7 +165,7 @@ export function pruefeNodeModules(lockText, hiddenText) {
     if (pfad === "" || !pfad.startsWith("node_modules/") || p?.optional || p?.link) continue;
     if (installiert[pfad]?.version !== p?.version) abweichend += 1;
   }
-  return abweichend === 0 ? null : `node_modules passt nicht zu package-lock.json (${abweichend} Pakete): vor npm-Skripten im Hauptcheckout einmal \`npm ci\`.`;
+  return abweichend === 0 ? null : `node_modules passt nicht zu package-lock.json (${abweichend} Pakete): vor dem Start von Werkzeugen im Hauptcheckout einmal \`node scripts/gate-befehl.mjs install\`.`;
 }
 
 /** Hinweis zu node_modules in `dir` (siehe `pruefeNodeModules`); ohne package-lock.json oder bei Lesefehlern `""` (fail-open). */
