@@ -42,6 +42,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { ghJson } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ALTLAST_MS, INAKTIV_MS, VERWAIST_MS, herzschlagMs, lebenszeichenMs, lockVerzeichnisFuer, parseLock } from "./ticket-lock-lib.mjs";
 import { ticketNamen, ladeTicketNamen } from "./ticket-namen.mjs";
@@ -457,7 +458,7 @@ export function echteDeps({ config: vorgabe, basis } = {}) {
       }
     },
     // Offene PRs zu einem Branch (factory#193): wirft bei gh-Fehlern, `freigeben` ist dann fail-closed.
-    offenePrs: (branch, cwd) => JSON.parse(execFileSync("gh", ["pr", "list", "--head", branch, "--state", "open", "--json", "number"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true })).length,
+    offenePrs: (branch, cwd) => ghJson(["pr", "list", "--head", branch, "--state", "open", "--limit", "1", "--json", "number"], { exec: (cmd, args, o) => execFileSync(cmd, args, { ...o, cwd }) }).length,
     benenneUm: renameSync,
     loesche: unlinkSync,
     legeVerzeichnisAn: (d) => mkdirSync(d, { recursive: true }),
