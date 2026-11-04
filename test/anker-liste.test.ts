@@ -97,6 +97,13 @@ describe("guardListe: Musterliste", () => {
     }
   });
 
+  test("Ausdrücke in ${…} eines einzeiligen Template-Literals zählen (klammerbalanciert), der Text außerhalb und Strings darin nicht", () => {
+    expect(muster('  const s = `x ${a ? "x" : "y"}`;')).toEqual(["ternär"]);
+    expect(muster("  const s = `x ${b ?? c}`;")).toEqual(["??"]);
+    expect(muster("  const s = `${f({ a: 1 }) || d} und ${g ?? h}`;")).toEqual(["??", "||"]);
+    expect(muster("  const s = `a ? b : c`;")).toEqual([]);
+    expect(muster('  const s = `${f("a ? b")}`;')).toEqual([]);
+  });
   test("zusammengesetzte Zuweisungen liefern nur ihr eigenes Muster, nicht das der Kurzform", () => {
     expect(muster("  a ??= 1;")).toEqual(["??="]);
     expect(muster("  a ||= 1;")).toEqual(["||="]);
