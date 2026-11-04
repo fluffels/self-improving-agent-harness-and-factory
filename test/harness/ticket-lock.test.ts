@@ -91,7 +91,7 @@ const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 beforeEach(() => {
   fetchAufrufe = [];
   ghAufrufe = [];
-  dir =mkdtempSync(join(tmpdir(), "lock-"));
+  dir = mkdtempSync(join(tmpdir(), "lock-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -316,6 +316,21 @@ describe("wiederherstellen", () => {
     const b = lauf(["claim", "8"]);
     lauf(["freigeben", "8", "--nonce", nonceVon(b)], { refs: [`${BRP}8-x`, `origin/${BRP}8-x`] });
     assert.deepEqual(ghAufrufe, [`${BRP}8-x`]);
+  });
+
+  test("Vermerk ohne oder mit unlesbarer Zeit gilt nicht als jung (Exit 4), ein Altformat-Lock mit Klartext-nonce bleibt freigebbar und wiederherstellbar", () => {
+    const a = lauf(["claim", "5"]);
+    const nonce = nonceVon(a);
+    for (const zeit of [undefined, "kaputt"]) {
+      writeFileSync(lockDatei(5, "json.freigegeben"), JSON.stringify({ nr: 5, nonceHash: sha(nonce), zeit }));
+      unlinkSync(lockDatei(5));
+      assert.equal(lauf(["wiederherstellen", "5", "--nonce", nonce]).code, 4, `zeit=${String(zeit)}`);
+      unlinkSync(lockDatei(5, "json.freigegeben"));
+      writeFileSync(lockDatei(5), JSON.stringify({ nr: 5, nonceHash: sha(nonce), erstellt: new Date(JETZT).toISOString() }));
+    }
+    writeFileSync(lockDatei(11), JSON.stringify({ nr: 11, nonce: "alt", erstellt: new Date(JETZT).toISOString() }));
+    assert.equal(lauf(["freigeben", "11", "--nonce", "alt"]).code, 0);
+    assert.equal(lauf(["wiederherstellen", "11", "--nonce", "alt"]).code, 0, "der Vermerk trägt den Hash des Klartext-Locks");
   });
 
   test("aufrufLesen: wiederherstellen braucht --nonce; aufzuraeumen räumt .freigegeben erst ab ALTLAST_MS ab", () => {
@@ -909,6 +924,18 @@ describe("Arbeitsplatz: Belegung über alle Repos und Lock-Ort (#88)", () => {
   test("eine andere Nummer in Repo B belegt 88 nicht: Claim gewinnt", () => {
     const r = M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: { worktrees: [`/w/.claude/worktrees/b/${WTP}89`], refs: [`${BRP}89-x`] } }));
     assert.equal(r.code, 0);
+  });
+
+  test("freigeben fragt gh je Ort mit dessen cwd: Branch nur in B → B; gleicher Branch in A und B → beide, je einmal (factory#193)", () => {
+    const nonce = nonceVon(M.fuehreAus(["claim", "88"], apDeps({ [A.cwd]: {}, [B.cwd]: {} })));
+    const fragen: string[] = [];
+    const mitGh = (jeRepo: JeRepo): Deps => ({ ...apDeps(jeRepo), offenePrs: (branch: string, cwd?: string) => { fragen.push(`${cwd}|${branch}`); return 0; } });
+    assert.equal(M.fuehreAus(["freigeben", "88", "--nonce", nonce], mitGh({ [A.cwd]: {}, [B.cwd]: { refs: [`${BRP}88-x`] } })).code, 0);
+    assert.deepEqual(fragen, [`${B.cwd}|${BRP}88-x`]);
+    fragen.length = 0;
+    const nonce2 = nonceVon(M.fuehreAus(["claim", "89"], apDeps({ [A.cwd]: {}, [B.cwd]: {} })));
+    assert.equal(M.fuehreAus(["freigeben", "89", "--nonce", nonce2], mitGh({ [A.cwd]: { refs: [`${BRP}89-x`] }, [B.cwd]: { refs: [`${BRP}89-x`, `origin/${BRP}89-x`] } })).code, 0);
+    assert.deepEqual(fragen, [`${A.cwd}|${BRP}89-x`, `${B.cwd}|${BRP}89-x`]);
   });
 
   test("Negativfall: scheitert git in Repo B, bricht der Lauf mit Repo-Name und Fix-Zeile ab (Exit 2, kein Lock)", () => {

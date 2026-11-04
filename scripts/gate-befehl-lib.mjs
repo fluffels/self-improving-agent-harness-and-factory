@@ -27,7 +27,7 @@ const PFAD_MUSTER = /^[\w./\\:@+=,-]+$/;
 /** Flag, das nur die Befehlszeile ausgibt, statt sie zu starten. */
 export const ZEIGEN_FLAG = "--zeigen";
 
-const istName =(name) => typeof name === "string" && Object.hasOwn(STANDARD_BEFEHLE, name);
+const istName = (name) => typeof name === "string" && Object.hasOwn(STANDARD_BEFEHLE, name);
 const istBefehl = (w) => typeof w === "string" && w.trim() !== "";
 
 /** Pur: Formfehler des optionalen Blocks `befehle` (leer = gültig, auch ohne Block). */
