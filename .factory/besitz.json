@@ -177,6 +177,8 @@
     {"pfad":"scripts/harness-doctor-sicherheit.mjs","ring":"kern","quelle":"Plan factory#116 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-dateien.mjs","ring":"kern","quelle":"Plan factory#94 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-ergebnis.mjs","ring":"kern","quelle":"Gemeinsame Ergebnis-Form der Doctor-Punkte (factory#127 L15a)"},
+    {"pfad":"scripts/meldung-lib.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},
+    {"pfad":"scripts/melden.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},
     {"pfad":"scripts/harness-doctor-melden.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":".github/workflows/harness-doctor.yml","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/kontext-budget-lib.mjs","ring":"kern","quelle":"Kontext-Budget, geteilt von check-context-size und Sync-Hinweis (factory#127 L2)"},

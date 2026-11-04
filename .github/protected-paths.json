@@ -82,6 +82,7 @@
     "/scripts/pfad-glob.mjs",
     "/scripts/repo-form.mjs",
     "/scripts/sync-stand-lib.mjs",
+    "/scripts/meldung-lib.mjs",
     "/scripts/ticket-namen.mjs",
     "/scripts/regex-lib.mjs",
     "/scripts/board-place.mjs",
