@@ -231,6 +231,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Sammelticket an die Spitze factory#1
     expect(h([it(10), rotMain(1), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
     // geschlossene Notfälle zählen nicht, ein geclaimter offener schon
     expect(h([it(1, { title: "🚨 CI rot auf main", state: "closed" }), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    expect(h([it(1, { title: "🚨 CI rot auf main", state: "closed" }), status(2), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
     expect(h([it(1, { title: "🚨 CI rot auf main", assignees: [OWNER] }), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I1" });
   });
 
