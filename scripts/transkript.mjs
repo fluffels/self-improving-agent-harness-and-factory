@@ -25,12 +25,16 @@ export function transkriptZeilen(jsonlText) {
 
 /**
  * Jüngste Assistant-Nachricht mit einer `ERGEBNIS:`-Zeile (#1342): entweder die `message` eines
- * `SubagentHandback`-Aufrufs oder ein Text-Block. `null`, wenn es keine gibt.
+ * `SubagentHandback`-Aufrufs oder ein Text-Block. Die Suche endet an der jüngsten User-Nachricht mit Text (factory#193: Fortsetzung
+ * oder Hook-Feedback); `tool_result`-Einträge sind keine Grenze. `null`, wenn es keine gibt.
  */
 export function letzteErgebnisNachricht(zeilen) {
   const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
+  // Eine User-Nachricht mit Text (Fortsetzung, Hook-Feedback) beginnt eine neue Runde: ältere Berichte zählen nicht mehr; reine `tool_result`-Einträge nicht.
+  const istTextNachricht = (m) => typeof m?.content === "string" || (Array.isArray(m?.content) && m.content.some((b) => b?.type === "text"));
   for (let i = zeilen.length - 1; i >= 0; i--) {
     const msg = zeilen[i]?.message ?? zeilen[i];
+    if ((msg?.role === "user" || zeilen[i]?.type === "user") && istTextNachricht(msg)) return null;
     if (msg?.role !== "assistant" && zeilen[i]?.type !== "assistant") continue;
     const c = msg?.content;
     const kandidaten = typeof c === "string" ? [c] : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null)) : [];

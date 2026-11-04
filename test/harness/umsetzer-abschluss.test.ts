@@ -608,7 +608,7 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   test("liefert die jüngste Nachricht mit ERGEBNIS-Zeile, übergeht Tool-Blöcke und abgeschnittene Zeilen", () => {
     const p = datei([
       zeile("assistant", [{ type: "text", text: "ERGEBNIS: abgebrochen" }]),
-      zeile("user", "egal"),
+      zeile("user", [{ type: "tool_result", tool_use_id: "t0", content: "egal" }]),
       zeile("assistant", [{ type: "tool_use", name: "Bash" }]),
       zeile("assistant", [{ type: "text", text: "nur eine Statuszeile" }]),
       '{"abgeschnitten',
