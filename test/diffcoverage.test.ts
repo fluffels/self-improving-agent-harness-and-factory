@@ -75,11 +75,8 @@ const {
   LAYER_DIFF_FLOORS,
   LCOV_PATH,
   GIT_OPTIONEN,
-  normalizePath,
   isMeasured,
   parseDiffLines,
-  parseLcov,
-  parseLcovBranches,
   teilweiseGetestet,
   evaluateByLayer,
   pfadAngaben,
@@ -89,7 +86,13 @@ const {
   checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as covRaw from "../scripts/coverage-berichte.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as relRaw from "../scripts/relativ-pfad.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+const { parseLcov, parseLcovBranches } = covRaw as unknown as Pick<CheckDiffCoverageModule, "parseLcov" | "parseLcovBranches">;
+const { normalizePath } = relRaw as unknown as Pick<CheckDiffCoverageModule, "normalizePath">;
 const { commitZeilen, commitZeilenAus } = sliceRaw as unknown as {
   commitZeilen: (praefix: string, planer: string) => Record<string, string>;
   commitZeilenAus: (config: unknown) => Record<string, string>;

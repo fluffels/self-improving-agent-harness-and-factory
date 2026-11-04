@@ -32,10 +32,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import { isMeasured, normalizePath, parseDiffLines, resolveBase } from "./check-basis.mjs";
-import { ladeAbdeckung, parseLcov, parseLcovBranches, STANDARD_BERICHTE, berichteAus } from "./coverage-berichte.mjs";
-// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398), die lcov-Leser in coverage-berichte.mjs (factory#185); hier re-exportiert, damit Aufrufer und Tests unverändert bleiben.
-export { isMeasured, normalizePath, parseDiffLines, parseLcov, parseLcovBranches };
+import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
+import { ladeAbdeckung, STANDARD_BERICHTE, berichteAus } from "./coverage-berichte.mjs";
+// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398), die lcov-Leser in coverage-berichte.mjs (factory#185, Blatt: nicht re-exportiert).
+export { isMeasured, parseDiffLines };
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istGlob, quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";

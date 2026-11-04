@@ -44,8 +44,7 @@ export function resolveBase(runGit, env = process.env) {
 
 // ── Diff-Zeilen und Messbereich (aus check-diffcoverage, #112) ───────────────────
 
-// `normalizePath` wohnt in relativ-pfad.mjs (Blatt, factory#185) und wird hier re-exportiert, damit Aufrufer unverändert bleiben.
-export { normalizePath };
+// `normalizePath` wohnt in relativ-pfad.mjs (Blatt, factory#185); Aufrufer importieren es von dort.
 
 /** Parst `git diff -U0` und liefert je Datei die Zeilennummern der NEUEN Seite.
  *
