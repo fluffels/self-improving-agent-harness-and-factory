@@ -70,7 +70,7 @@ describe("check:size über Quellwurzeln und Endungsliste (factory#181)", () => {
 describe("check:anysuppress über Quellwurzeln (factory#181)", () => {
   const disable = "// eslint-disable-next-line @typescript-eslint/no-explicit-any\nconst a: any = 1;\n";
   test("zwei Wurzeln, nur .ts, ohne gilt; Endungsliste ohne .ts prüft nichts; String-Form wie bisher", () => {
-    const d = fixture({ "a/x.ts": disable, "a/x.spec.ts": disable, "b/y.ts": disable, "b/Z.java": disable, "c/w.ts": disable });
+    const d = fixture({ "a/x.ts": disable, "a/x.spec.ts": disable, "b/y.ts": disable, "b/Z.java": disable, "c/w.ts": disable, "a/sauber.ts": "const a = 1;\n" });
     const q = { wurzeln: ["a", "b"], endungen: [".java", ".ts"], ohne: ["**/*.spec.ts"] };
     assert.deepEqual(collectSuppressions(d, q), { "a/x.ts": 1, "b/y.ts": 1 });
     assert.deepEqual(collectSuppressions(d, { ...q, endungen: [".java"] }), {});
@@ -120,6 +120,20 @@ describe("check:size CLI: rote Formen mit Fix-Zeile (factory#181)", () => {
     assert.equal(r.status, 1, r.ausgabe);
     assert.match(r.ausgabe, muster);
     assert.match(r.ausgabe, /Fix:/);
+  });
+});
+
+describe("CLI-Verdrahtung der Listenform (factory#181)", () => {
+  const liste = { quelle: ["scripts", "test"], moduldoku: null };
+  test("check:size misst auch die zweite Wurzel: eine Datei über dem Budget dort macht das Gate rot", () => {
+    const r = lauf("check-size.mjs", liste);
+    assert.equal(r.status, 1, r.ausgabe);
+    assert.match(r.ausgabe, /✖ test\/[^\n]*Zeilen > Budget/);
+  });
+  test("check:anysuppress zählt auch die zweite Wurzel: neue Disables dort sind rot gegen die Baseline", () => {
+    const r = lauf("check-any-suppressions.mjs", liste);
+    assert.equal(r.status, 1, r.ausgabe);
+    assert.match(r.ausgabe, /test\/any-suppressions\.test\.ts/);
   });
 });
 

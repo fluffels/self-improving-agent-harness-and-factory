@@ -35,7 +35,7 @@ describe("quellenMaengel (factory#181)", () => {
     assert.match(lib.quellenMaengel({ quelle: "a?" }).join("|"), /als Liste schreiben/);
   });
   test("endungen: Form, Punkt, Dubletten", () => {
-    for (const e of ["java", [], ["java"], [".java", ".java"], [".ja va"], [3], ["."], [".a."]]) {
+    for (const e of ["java", [], ["java"], ["x.java"], [".java", ".java"], [".ja va"], [3], ["."], [".a."]]) {
       assert.match(lib.quellenMaengel({ quelle: "a", endungen: e }).join("|"), /struktur\.endungen/, JSON.stringify(e));
     }
   });
@@ -44,8 +44,9 @@ describe("quellenMaengel (factory#181)", () => {
       assert.match(lib.quellenMaengel({ quelle: "a", ohne: o }).join("|"), /struktur\.ohne/, JSON.stringify(o));
     }
   });
-  test("kein Objekt: nichts zu prüfen (das meldet der Aufrufer)", () => {
+  test("kein Objekt (auch eine Liste): nichts zu prüfen (das meldet der Aufrufer)", () => {
     assert.deepEqual(lib.quellenMaengel(undefined), []);
+    assert.deepEqual(lib.quellenMaengel(["x"]), []);
   });
 });
 

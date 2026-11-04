@@ -79,7 +79,7 @@ const istOrdner = (pfad) => {
 const uebersprungen = (name) => name === "node_modules" || name.startsWith(".");
 
 function ordnerWalk(rootDir, rel, regex, treffer) {
-  for (const ent of readdirSync(join(rootDir, ...rel.split("/").filter(Boolean)), { withFileTypes: true })) {
+  for (const ent of readdirSync(join(rootDir, ...rel.split("/")), { withFileTypes: true })) {
     if (!ent.isDirectory() || uebersprungen(ent.name)) continue;
     const kind = rel === "" ? ent.name : `${rel}/${ent.name}`;
     if (regex.test(kind)) treffer.push(kind);
