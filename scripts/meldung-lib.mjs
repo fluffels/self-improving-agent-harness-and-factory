@@ -2,7 +2,7 @@
  * Meldungen an die Meldestelle (factory#153): der eine Weg, auf dem ein Bezieher Harness-Befunde an sein Eingangs-Repo schickt (Schlüssel `meldestelle`
  * der Projekt-Config, Standard das Repo des Boards mit Rolle `factory`). Drei Bausteine, alle pur bis auf die Prüfung:
  *  - `factoryStand`/`meldungsText`: jede Meldung trägt als letzte Zeile den Factory-Stand aus `.factory/sync-stand.json` (Tag und Commit); ohne Sync-Stand
- *    (das Repo ist selbst upstream) bleibt der Text unverändert, ein unlesbarer Stand steht als `unbekannt` da.
+ *    (das Repo ist selbst upstream) bleibt der Text unverändert, ein unlesbarer Stand sperrt das Senden (`bereiteMeldung`: keine Meldung ohne Herkunftsangabe, Fix-Zeile nennt die Datei).
  *  - `textSauber`: startet `check-internalrefs.mjs --text` als Kindprozess; nur Exit 0 ist sauber, alles andere (Treffer, Aufruffehler, Signal, Startfehler)
  *    sperrt das Senden (fail-closed). Das Skript nennt den Begriff nie.
  *  - `meldestelleToken`: das Token gegen die Meldestelle (`MELDESTELLE_TOKEN`, Rückfall `PROJECT_TOKEN`); das eigene Repo braucht keins.
@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tokenFuerZiel } from "./gh-cli.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { STAND_PFAD, liesSyncStand } from "./sync-stand-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PRUEFER = join(WURZEL, "scripts", "check-internalrefs.mjs");
@@ -47,10 +47,17 @@ export function textSauber(text, exec = spawnSync) {
 
 /**
  * Die Meldung zu den Zeilen: `{ ok: true, text }` oder `{ ok: false, grund }`, wenn die Sperrprüfung anschlägt. `pruefe(text)` (Standard `textSauber`) sieht den
- * ganzen Text samt Stand-Zeile; `stand` ist die Stand-Zeile (Standard: aus `.factory/sync-stand.json` unter `wurzel`).
+ * ganzen Text samt Stand-Zeile; `stand` ist die Stand-Zeile (`null`: keine; Standard: aus `.factory/sync-stand.json` unter `wurzel`, ist die Datei dann unlesbar, wird nichts gesendet).
  */
-export function bereiteMeldung(zeilen, { wurzel = WURZEL, pruefe = textSauber, stand = factoryStand(liesSyncStand(wurzel)) } = {}) {
-  const text = meldungsText(zeilen, stand);
+export function bereiteMeldung(zeilen, { wurzel = WURZEL, pruefe = textSauber, stand = undefined } = {}) {
+  let zeile = stand;
+  if (zeile === undefined) {
+    const gelesen = liesSyncStand(wurzel);
+    if (gelesen.zustand === "kaputt") return { ok: false, grund: `Meldung nicht gesendet: ${STAND_PFAD} ist nicht lesbar (kein JSON-Objekt), die Meldung hätte keine Herkunftsangabe
+Fix: die Datei reparieren (git checkout -- ${STAND_PFAD} oder factory-update erneut ausführen)` };
+    zeile = factoryStand(gelesen);
+  }
+  const text = meldungsText(zeilen, zeile);
   if (!pruefe(text)) return { ok: false, grund: "Meldung nicht gesendet: check-internalrefs --text meldet einen Treffer\nFix: die Zeile neutral formulieren (die Sache benennen, keine internen Namen)" };
   return { ok: true, text };
 }

@@ -115,9 +115,18 @@ describe("bereiteMeldung", () => {
     test("Stand mit Tag und Commit: Fußzeile", () => {
       expect(mit(wurzel('{"quelle":{"tag":"v1.2.3","commit":"abcdef0123"}}'))).toBe("- [ ] a\n\nfactory: v1.2.3 (abcdef0)");
     });
-    test("ohne Datei bleibt der Text unverändert; kaputtes JSON: unbekannt", () => {
+    test("ohne Datei bleibt der Text unverändert", () => {
       expect(mit(wurzel(null))).toBe("- [ ] a");
-      expect(mit(wurzel("{kaputt"))).toBe("- [ ] a\n\nfactory: unbekannt (Sync-Stand unlesbar)");
+    });
+    test("unlesbarer Stand: nichts wird gesendet, die Fix-Zeile nennt die Datei, die Sperrprüfung läuft nicht", () => {
+      for (const inhalt of ["{", "[]", "null"]) {
+        let geprueft = 0;
+        const m = (lib.bereiteMeldung as unknown as (z: string[], o: { wurzel: string; pruefe: () => boolean }) => { ok: boolean; text?: string; grund?: string })(["- [ ] a"], { wurzel: wurzel(inhalt), pruefe: () => (geprueft++, true) });
+        expect(m.ok, inhalt).toBe(false);
+        expect(m.text).toBeUndefined();
+        expect(m.grund).toMatch(/\.factory\/sync-stand\.json ist nicht lesbar[\s\S]*Fix:/);
+        expect(geprueft).toBe(0);
+      }
     });
   });
 });
