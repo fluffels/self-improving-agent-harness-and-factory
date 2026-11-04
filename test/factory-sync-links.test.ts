@@ -546,6 +546,16 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     assert.match(wachter(z).err, /stub-anker|stub-link/);
   });
 
+  test("L30: eine Seite in factoryLinks.ausnahmen der Ziel-Config bekommt keinen Stub, die andere schon", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    schreibe(z, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: ["docs/ohne.md"] } }));
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)), ["neu (Anker-Stub): docs/seite.md"]);
+    assert.equal(existsSync(join(z, "docs/ohne.md")), false);
+  });
+
   test("--trocken meldet die Stubs und schreibt nichts", () => {
     const q = quelleMitSeiten();
     const z = zielMitPackage();
