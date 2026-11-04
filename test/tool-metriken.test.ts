@@ -219,6 +219,7 @@ describe("pruefLaeufe (#1120)", () => {
       sh("node scripts/gate-befehl.mjs --zeigen verify"),
       sh('echo "node scripts/gate-befehl.mjs verify"'),
       sh("node scripts/gate-befehl.mjs"),
+      sh("node scripts/anderes.mjs verify"),
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
