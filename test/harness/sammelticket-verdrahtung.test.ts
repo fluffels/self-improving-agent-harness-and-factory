@@ -6,6 +6,9 @@
  * Sammelticket `nr`). Gibt der Aufruf `nr` oder `position` nicht weiter, wird die Korrektur für das falsche Ticket oder an der
  * falschen Stelle berechnet, und kein Test der puren Funktion bemerkt es. Darum prüft dieser Wächter den Quelltext: jeder Aufruf
  * reicht `items`, `nr` und `position` durch. Grenze: erkannt werden Aufrufe mit Objekt-Literal; ein dynamisch gebautes Argument fiele durch (dann rot).
+ *
+ * Zweiter Block (factory#156): die Codequalität-Verdrahtung in `main` und `setzeErstePosition` (Ziel aus dem Label der Art, Platzierung über
+ * `codequalitaetPlan`, Aufruf ohne `--top`). Grenze: die Prüfung hängt am Wortlaut; ein Umbenennen oder Umformatieren macht sie rot (fail-closed), nie leer grün.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
@@ -52,13 +55,15 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
     const main = rumpf("export async function main(");
     expect(main).toMatch(/const label = sammelLabel\(config, args\.art\);/);
     expect(main).toMatch(/sammelZiel\(config, label\)/);
-    expect(main).toMatch(/legeAn\(\{[^}]*harness: label[^}]*\}\)/);
+    expect(main).toMatch(/legeAn\(\{[^}]*harness: label\s*[,}][^}]*\}?\)/);
   });
 
   test("setzeErstePosition platziert codequalitaet über codequalitaetPlan und läuft auch ohne --top", () => {
     const f = rumpf("function setzeErstePosition(");
     expect(f).toMatch(/if \(!top && art !== "codequalitaet"\) return;/);
     expect(f).toMatch(/art === "codequalitaet" \? \{ korrektur: null, plan: codequalitaetPlan\(items, nr\) \}/);
-    expect(rumpf("export async function main(")).toMatch(/setzeErstePosition\(\{ art: args\.art,/);
+    const main = rumpf("export async function main(");
+    expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: codequalitaet braucht kein --top
+    expect(main).not.toMatch(/if \(args\.top\)\s*setzeErstePosition/);
   });
 });
