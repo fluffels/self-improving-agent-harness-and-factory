@@ -473,6 +473,43 @@ blockiert durch acme/demo#13
     expect(S.fuehreAus(MIT("12", "acme/demo#13"), io).code).toBe(0);
     expect((aufrufe.erzeuge[0] as { body: string }).body).toMatch(/^blockiert durch #12, acme\/demo#13$/m);
   });
+  describe("native Abhängigkeit (verknuepfeBlocker)", () => {
+    const mitKnoten = (extra: Partial<Io> & { verknuepfeBlocker?: (a: unknown) => void } = {}) => {
+      const verknuepft: unknown[] = [];
+      const u = umgebung({ "b.md": GUT });
+      const io = {
+        ...u.io,
+        erzeuge: (a: Parameters<Io["erzeuge"]>[0]) => ({ ...u.io.erzeuge(a), node_id: "N900" }),
+        verknuepfeBlocker: (a: unknown) => void verknuepft.push(a),
+        ...extra,
+      };
+      return { io: io as unknown as Io, verknuepft, aufrufe: u.aufrufe };
+    };
+    test("je Blocker genau ein Aufruf: Nummer = Ziel-Repo, owner/name#n = genanntes Repo", () => {
+      const { io, verknuepft } = mitKnoten();
+      expect(S.fuehreAus(MIT("12", "acme/demo#7"), io).code).toBe(0);
+      expect(verknuepft).toEqual([
+        { issueNodeId: "N900", blocker: { repo: FREMD.repo, nummer: 12 }, repo: FREMD.repo },
+        { issueNodeId: "N900", blocker: { repo: "acme/demo", nummer: 7 }, repo: FREMD.repo },
+      ]);
+    });
+    test("ohne --blocker kein Aufruf", () => {
+      const { io, verknuepft } = mitKnoten();
+      S.fuehreAus(ANLEGEN, io);
+      expect(verknuepft).toEqual([]);
+    });
+    test("Fehler der Verknüpfung: Warnung auf stderr, Exit 0, Einsortieren unverändert", () => {
+      const { io, aufrufe } = mitKnoten({
+        verknuepfeBlocker: () => {
+          throw new Error("kaputt");
+        },
+      });
+      const r = S.fuehreAus(MIT("12"), io);
+      expect(r.code).toBe(0);
+      expect(r.err).toMatch(/native Abhängigkeit nicht gesetzt.*kaputt.*Blocker-Zeile im Body bleibt maßgeblich/s);
+      expect(aufrufe.einsortiere).toHaveLength(1);
+    });
+  });
   test("eine schon vorhandene Zeile wird nicht doppelt angehängt, eine fehlende Nummer ergänzt", () => {
     const { io, aufrufe } = umgebung({ "b.md": `${GUT}\nblockiert durch #12\n` });
     S.fuehreAus(MIT("12"), io);
