@@ -196,9 +196,9 @@ describe("check:diffcoverage und anker-liste lesen die Listenform (factory#185)"
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.match(r.stderr, /coverage\.berichte\[0\]\.format[\s\S]*Fix:/);
   });
-  test("anker-liste echteUmgebung nimmt die Liste: istQuelle trifft Wurzeln und Hilfsdateien, nicht Doku", () => {
+  test("anker-liste echteUmgebung nimmt die Liste: istQuelle trifft Wurzeln und Hilfsdateien außerhalb der Wurzeln (Ordner-Klausel), nicht Doku", () => {
     const echt = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as object;
-    const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur: liste }) });
+    const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur: { ...liste, quelle: ["scripts", "lib"] } }) });
     const code = `import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "anker-liste.mjs")).href)}).then((m) => { const u = m.echteUmgebung(); console.log(JSON.stringify([u.istQuelle("test/support/x.ts"), u.istQuelle("scripts/a.mjs"), u.istQuelle("docs/a.md")])); process.exit(0); }, (e) => { console.error(e.message); process.exit(3); })`;
     const r = spawnSync(process.execPath, ["-e", code], {
       encoding: "utf8",
