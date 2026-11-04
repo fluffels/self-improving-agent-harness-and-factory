@@ -21,6 +21,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
+import { strukturOrdnerBefunde } from './check-basis.mjs'
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from './projekt-config-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -146,6 +147,9 @@ function main() {
     console.error(`✖ ${e instanceof Error ? e.message : String(e)}`)
     process.exit(1)
   }
+  const befunde = strukturOrdnerBefunde(ROOT, { quelle }, ['quelle'])
+  befunde.forEach((b) => console.error(red(`✖ ${b}`)))
+  if (befunde.length > 0) process.exit(1)
   const sizes = collectSizes(ROOT, quelle)
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]))
   const oversized = findOversized(sizes, LOC_BUDGET)
