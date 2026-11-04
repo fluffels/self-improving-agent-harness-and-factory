@@ -764,13 +764,13 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(namen(rufe)).toEqual(["findeVorhandenes", "legeAn"]);
   });
 
-  test("langfuse --top: ein falsch stehendes ungeclaimtes Harness-Sammelticket wird zuerst zurückgeschoben (Korrektur vor dem Plan)", async () => {
+  test("langfuse --top: nur das neue Ticket wird bewegt (an die Spitze, ohne ein anderes Item umzuschieben)", async () => {
     const items = [...listeVoll(), it(20, "Harness-Härtung (gesammelt)")];
     const { deps, rufe } = fakes({ loadItems: () => items });
     await M(["langfuse", "--top"], deps);
     const set = rufe.filter((r) => r[0] === "setPosition");
-    expect(set[0][2]).toBe("I20");
-    expect(set.length).toBeGreaterThan(1);
+    expect(set.length).toBeGreaterThan(0);
+    expect(set.every((r) => r[2] === "I50")).toBe(true);
   });
 
   test("harness: ein Dubletten-Fund erst im zweiten Check (nach der Positions-Prüfung) beendet ohne Positionsmeldung; bei schon vorhandenem Ticket läuft er nicht", async () => {
