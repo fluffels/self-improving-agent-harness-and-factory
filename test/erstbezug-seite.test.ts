@@ -40,6 +40,7 @@ describe("Erstbezug-Seite und PROJEKTDATEIEN", () => {
   test("kein Eintrag ist eine ganze, verteilte Besitz-Einheit (der Sync würde sie liefern)", () => {
     const manifest = JSON.parse(lies(".factory/besitz.json")) as { eintraege: { pfad: string }[] };
     const verteilt = new Set(manifest.eintraege.filter((e) => besitz.istGanzeDatei(e) && besitz.wirdVerteilt(e)).map((e) => e.pfad));
+    expect(verteilt.has("scripts/harness-doctor-dateien.mjs")).toBe(true);
     expect(liste.filter((d) => verteilt.has(d.pfad)).map((d) => d.pfad)).toEqual([]);
   });
 });

@@ -157,7 +157,7 @@ export const PROJEKTDATEIEN = Object.freeze([
 ]);
 
 /** Punkt `Projektdateien`: jede Datei aus `PROJEKTDATEIEN` muss existieren (nur Vorhandensein, eine leere Datei zählt); jeder Zusatz-Fix bleibt sichtbar (nie gekürzt). */
-export function projektdateienPunkt(rootDir, existiert = existsSync) {
+export function projektdateienPunkt(rootDir, existiert) {
   const fehlt = PROJEKTDATEIEN.filter((d) => !existiert(join(rootDir, d.pfad)));
   if (fehlt.length === 0) return gut("Projektdateien");
   return luecke("Projektdateien", `fehlen ${fehlt.length}: ${fehlt.map((d) => d.pfad).join(", ")}`, [VORLAGE_FIX, ...fehlt.filter((d) => d.fix).map((d) => `${d.pfad}: ${d.fix}`)].join("; "));

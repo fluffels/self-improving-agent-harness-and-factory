@@ -2,7 +2,7 @@
 
 > 🧭 **Fachlich geprüft am: 2026-11-04.** Evergreen. Zielgruppe: wer den Harness in ein **neues, leeres** Repo holt (Bezieher). Für ein Bestands-Repo mit eigener Geschichte gilt [harness-transfer.md](harness-transfer.md). Diese Seite sagt, **welche Dateien das Projekt selbst anlegt**, **in welcher Reihenfolge** und **was der Sync nicht liefert**. Die Regeltexte stehen in [AGENTS.md](../AGENTS.md).
 
-Der Sync liefert den Besitz (Skripte, Agenten, Skills, Workflows, Kern-Tests, Kern-Seiten). Er liefert **nicht** die Dateien, in denen ein Projekt seine eigenen Werte trägt. Diese **Projektdateien** legt das Projekt selbst an; der Probe-Befehl `node scripts/harness-doctor.mjs --pruefen` meldet fehlende Dateien als Punkt `Projektdateien` samt Fix-Text (geschlossene Liste `PROJEKTDATEIEN` in `scripts/harness-doctor-dateien.mjs`, Tabelle unten). Es gibt dafür keine Besitz-Einträge der Art `vorlage`: eine ganze Datei wie `package.json` oder `AGENTS.md` lässt sich nicht verteilen, ohne die Werte des Projekts zu überschreiben, und die Dateien des Factory-Repos sind im Einsatz und grün, die Vorlage veraltet also nicht.
+Der Sync liefert den Besitz (Skripte, Agenten, Skills, Workflows, Kern-Tests, Kern-Seiten). Er liefert **nicht** die Dateien, in denen ein Projekt seine eigenen Werte trägt. Diese **Projektdateien** legt das Projekt selbst an; der Probe-Befehl `node scripts/harness-doctor.mjs --pruefen` meldet fehlende Dateien als Punkt `Projektdateien` samt Fix-Text (geschlossene Liste `PROJEKTDATEIEN` in `scripts/harness-doctor-dateien.mjs`, Tabelle unten). Es gibt dafür keine Besitz-Einträge der Art `vorlage`: `AGENTS.md` trägt Block-Einheiten am selben Pfad (`art: vorlage` gilt nur für ganze Dateien), `.factory/projekt.json` muss schon vor dem Sync da sein, und eine angelegte Vorlage würde die Werte des Factory-Repos (Owner, Pfade, Floors) still ins Projekt pflanzen, ohne dass der Doctor sie meldet.
 
 ## Schrittfolge
 
@@ -21,13 +21,13 @@ Der Doctor ist ein reines Node-Skript ohne Bindung an eine Agenten-Laufzeit; der
 
 ## Projektdateien
 
-Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder ein Kern-Test sie unter festem Pfad braucht und der Sync sie nicht liefert. Geprüft wird nur das Vorhandensein, nie der Inhalt. Nicht in der Liste: `.claude/settings.json` (der Sync legt sie an), `.gitattributes` (Doctor-Punkt `Zeilenenden`) und der Ruleset-Spiegel (Schritt 2).
+Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder ein Kern-Test sie unter festem Pfad braucht und der Sync sie nicht liefert. Geprüft wird nur das Vorhandensein, nie der Inhalt. Ausnahme `docs/referenz/befehle.md` und `docs/referenz/anlaufstellen.md`: der Sync mit `--tag` legt sie als Anker-Stub an (Kern-Links zeigen darauf), der Doctor meldet sie danach nicht mehr, das Projekt baut sie aus. Nicht in der Liste: `.claude/settings.json` (der Sync legt sie an), `.gitattributes` (Doctor-Punkt `Zeilenenden`) und der Ruleset-Spiegel (Schritt 2).
 
 | Pfad | Wer braucht sie | Was an der Vorlage anpassen |
 | --- | --- | --- |
 | `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die vier Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage |
 | `.factory/projekt.json` | jedes Kern-Skript | alle Werte, auch `struktur`; Alt-Werte des Factory-Repos löschen |
-| `.agents/skills/factory-ticket/SKILL.md` | Ticket-Ablauf; Rolle `ticketSkill` | Name laut `agenten.ticketSkill` (`npm run skills:sync` erzeugt den Zeiger) |
+| `.agents/skills/factory-ticket/SKILL.md` | Ticket-Ablauf; Rolle `ticketSkill` | fester Pfad (`ROLLEN_PFADE.ticketSkill`), Inhalt für das Projekt; `npm run skills:sync` erzeugt den Zeiger |
 | `package.json` | `verify`, alle `npm run`-Befehle | `scripts` und `devDependencies` der Quelle; Name, Version, Projekt-Skripte; im Skript `test` das Flag `--passWithNoTests`, solange es keinen Test gibt |
 | `tsconfig.json` | Typprüfung, Lint | `include` auf die eigenen Ordner |
 | `eslint.config.js` | Lint in `verify` | Projektordner und Ignore-Liste |
@@ -38,6 +38,6 @@ Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder e
 | `.github/CODEOWNERS` | der Kern-Test gleicht sie mit `protected-paths.json` ab | Owner |
 | `.github/protected-paths.json` | Leitplanken-Pfade, Audit-Kommentar | Pfade des Projekts ergänzen |
 | `docs/referenz/befehle.md` | Doku-Drift-Gate | die Seite beschreibt die Befehle **des** Projekts: Test-Bezüge auf Wächter streichen, die es im Projekt nicht gibt (sonst „Toter Test-Pfad“) |
-| `docs/referenz/anlaufstellen.md` | Doku-Index (`check:docmap`) | die Seiten des Projekts; Kern-Seiten bleiben |
+| `docs/referenz/anlaufstellen.md` | Kern-Links zeigen darauf (Anker-Stub vom Sync) | die Seiten des Projekts; Kern-Seiten bleiben |
 
 Wer eine Zeile ergänzt oder streicht, ändert die Liste `PROJEKTDATEIEN` und diese Tabelle im selben Schritt; `test/erstbezug-seite.test.ts` hält beide gleich.
