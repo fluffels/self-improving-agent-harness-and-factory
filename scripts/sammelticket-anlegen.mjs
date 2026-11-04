@@ -332,11 +332,11 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     process.exit(2);
   }
   const config = d.ladeConfig();
-  const harness = sammelLabel(config, args.art);
-  if (harness === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
+  const label = sammelLabel(config, args.art);
+  if (label === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
   d.kontingent();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
-  const ziel = sammelZiel(config, harness);
+  const ziel = sammelZiel(config, label);
   const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;
   const titel = TITEL[args.art];
@@ -354,7 +354,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
     let neu;
     try {
-      neu = legeAn({ repo, titel, body, harness });
+      neu = legeAn({ repo, titel, body, harness: label });
     } catch (e) {
       console.error(`✖ ${e.message}`);
       process.exit(2);

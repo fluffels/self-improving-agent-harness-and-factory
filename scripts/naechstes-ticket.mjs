@@ -170,7 +170,7 @@ export function imBereich(item, bereich, config) {
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
- * `fuellstand(nr)`: Füllstand des Harness- oder Codequalität-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; das ungeclaimte Harness-Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
+ * `fuellstand(nr)`: Füllstand des Harness- oder Codequalität-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; ein ungeclaimtes Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */

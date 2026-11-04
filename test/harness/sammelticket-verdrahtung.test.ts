@@ -40,3 +40,25 @@ describe("korrekturFuer ist in main verdrahtet", () => {
     expect(aufrufe(main).length, "main ruft korrekturFuer nicht mehr auf").toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () => {
+  /** Rumpf von `main` bzw. `setzeErstePosition`: ab der Definition bis zur nächsten Top-Level-Funktion. */
+  const rumpf = (kopf: string): string => {
+    const ab = QUELLE.slice(QUELLE.indexOf(kopf));
+    return ab.slice(0, ab.search(/\n\}\n/));
+  };
+
+  test("das Ziel wird aus dem Label der Art gewählt (Produkt-Board bei codequalitaet), nicht aus dem Harness-Label", () => {
+    const main = rumpf("export async function main(");
+    expect(main).toMatch(/const label = sammelLabel\(config, args\.art\);/);
+    expect(main).toMatch(/sammelZiel\(config, label\)/);
+    expect(main).toMatch(/legeAn\(\{[^}]*harness: label[^}]*\}\)/);
+  });
+
+  test("setzeErstePosition platziert codequalitaet über codequalitaetPlan und läuft auch ohne --top", () => {
+    const f = rumpf("function setzeErstePosition(");
+    expect(f).toMatch(/if \(!top && art !== "codequalitaet"\) return;/);
+    expect(f).toMatch(/art === "codequalitaet" \? \{ korrektur: null, plan: codequalitaetPlan\(items, nr\) \}/);
+    expect(rumpf("export async function main(")).toMatch(/setzeErstePosition\(\{ art: args\.art,/);
+  });
+});
