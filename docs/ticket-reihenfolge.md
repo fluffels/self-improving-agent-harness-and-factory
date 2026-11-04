@@ -165,7 +165,7 @@ Die breite, regelmäßige Auswertung der Langfuse-Daten. **Den Takt hält ein Wo
 
 Das Sammelticket „Langfuse-Befunde (gesammelt)" (`<labels.harness>`) bündelt Befunde aus Langfuse-Daten, analog zum [Harness-Sammelticket](#sammelticket-harness-härtung-gesammelt-1199). Es ersetzt die früheren Einweg-Folgetickets je Status-Lauf.
 
-- **Im Bezieher ([ADR 0031](adr/0031-fabrik-ohne-zugriff-auf-bezieher.md)):** Status-Ticket und Langfuse-Befunde liegen auf dem Board des Beziehers. Harness-Befunde daraus gehen anonymisiert (Text vorher durch `node scripts/check-internalrefs.mjs --text`) über den Meldeweg aus factory#153 an die Fabrik, Projekt-Befunde bleiben im Bezieher; die Fabrik schreibt nie dorthin. Die Umsetzung dieses Wegs ist ein eigenes Issue.
+- **Im Bezieher ([ADR 0031](adr/0031-fabrik-ohne-zugriff-auf-bezieher.md)):** Status-Ticket und Langfuse-Befunde liegen auf dem Board des Beziehers. Harness-Befunde daraus gehen anonymisiert (Text vorher durch `node scripts/check-internalrefs.mjs --text`) über den Meldeweg aus factory#153 an die Fabrik, Projekt-Befunde bleiben im Bezieher; die Fabrik schreibt nie dorthin. Die Umsetzung dieses Wegs ist factory#195.
 - **Was hinein gehört:** Befunde, die aus Langfuse-Daten oder einem Status-Lauf stammen (Kosten, Tokens, Erfassungslücken, Kandidaten zum Lockern eines Gates, einer Lens oder einer Regel). Alles andere zum Harness bleibt im Harness-Sammelticket.
 - **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
   ```bash
