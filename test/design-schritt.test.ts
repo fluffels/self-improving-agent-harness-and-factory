@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/design-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -109,7 +111,7 @@ describe("designZustand und design-schritt (factory#162 L47)", () => {
 describe("scripts/design-schritt.mjs: lauf", () => {
   const S = schritt as unknown as {
     lauf: (argv: string[], u: { design: unknown; labels: (nr: string) => string[] }) => { code: number; out: string; err: string };
-    echteQuellen: (lade: (o: { pruefen: boolean }) => { design?: unknown }) => { design: unknown; labels: (nr: string) => string[] };
+    echteQuellen: (lade?: (o: { pruefen: boolean }) => { design?: unknown }) => { design: unknown; labels: (nr: string) => string[] };
   };
   const u = (labels: string[], design: unknown = BLOCK) => ({ design, labels: () => labels });
   test("Ausgabe design: <zustand>, Exit 3 nur bei entwurf-fehlt", () => {
@@ -130,6 +132,20 @@ describe("scripts/design-schritt.mjs: lauf", () => {
     const q = S.echteQuellen((o) => (optionen.push(o), { design: BLOCK }));
     expect(q.design).toBe(BLOCK);
     expect(optionen).toEqual([{ pruefen: false }]);
+  });
+  const aufraeumen: string[] = [];
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const d of aufraeumen.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  test("ohne Lader-Argument gilt die Projekt-Config des Laufs (Standard-Verdrahtung des Direktaufrufs, L47)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "design-schritt-"));
+    aufraeumen.push(dir);
+    const pfad = join(dir, "projekt.json");
+    writeFileSync(pfad, JSON.stringify({ design: BLOCK }));
+    vi.stubEnv("FACTORY_PROJEKT_CONFIG", pfad);
+    vi.stubEnv("FACTORY_PROJEKT_WURZEL", fileURLToPath(new URL("../", import.meta.url)));
+    expect(S.echteQuellen().design).toEqual(BLOCK);
   });
   test("scheitert das Laden der Config, ist das Ergebnis Exit 2 ohne design-Zeile, nie ein stilles aus (L47)", () => {
     const q = S.echteQuellen(() => {
