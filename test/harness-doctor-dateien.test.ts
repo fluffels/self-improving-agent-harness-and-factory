@@ -238,7 +238,7 @@ describe("Langfuse-Takt", () => {
   const ohneDatei = (fehlend: string) => (p: string) => norm(p) !== `/x/${fehlend}`;
 
   test("beide Dateien vorhanden: OK, ohne Hinweis bei eigenem Board", () => {
-    const eigen = { repo: "a/b", boards: [{ rolle: "factory" }] };
+    const eigen = { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory" }] };
     expect(takt(() => true, eigen)).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 
@@ -251,23 +251,38 @@ describe("Langfuse-Takt", () => {
   });
 
   test("ein Nulleintrag in boards und eine Config ohne Factory-Board brechen den Punkt nicht", () => {
-    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] }).ok).toBe(true);
-    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] })).toHaveProperty("hinweis");
-    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [null, { rolle: "factory", repo: "c/d" }] }).ok).toBe(true);
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [null, { rolle: "factory", repo: "c/d" }] })).toHaveProperty("hinweis");
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 
   test("das Factory-Board des eigenen Repos (auch in anderer Schreibweise) gibt keinen Hinweis", () => {
-    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "a/b" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
-    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "A/B" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "a/b" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "A/B" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 
   test("eine Config ohne boards oder mit boards ohne Liste bricht den Punkt nicht und gibt keinen Hinweis", () => {
-    expect(takt(() => true, { repo: "a/b" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
-    expect(takt(() => true, { repo: "a/b", boards: "x" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" } })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: "x" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("factory#202 L21: ohne bestimmbares Ziel (kein labels.harness) ist der Punkt eine Lücke mit Fix auf die Config; mit Label und ohne Factory-Board ist das eigene Repo das Ziel", () => {
+    const p = takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] });
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("Ziel");
+    expect(p.fix).toContain("Board mit Rolle factory");
+    expect(takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("factory#202 L21: die Zielbestimmung folgt dem Takt (zielRepoFuer des Harness-Labels), nicht der bloßen Rolle factory", () => {
+    // Das Board der Rolle factory führt c/d, also ist c/d das Ziel; ein Produkt-Board mit fremdem Repo ändert daran nichts.
+    const p = takt(() => true, { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "produkt", repo: "x/y" }, { rolle: "factory", repo: "c/d" }] }) as Ergebnis & { hinweis?: string };
+    expect(p.hinweis).toContain("c/d");
+    expect(p.hinweis).not.toContain("x/y");
   });
 
   test("Factory-Board führt ein fremdes Repo: OK mit Hinweis, der Takt dort pflegt Status- und Sammelticket", () => {
-    const fremd = { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] };
+    const fremd = { repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "c/d" }] };
     const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };
     expect(p.ok).toBe(true);
     expect(p.hinweis).toContain("c/d");
@@ -279,16 +294,16 @@ describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)",
   const lies = (root: string) => punkt(pruefe({ rootDir: root, git: fakeGit(gesund), existiert: alles }), "Langfuse-Takt") as Ergebnis & { hinweis?: string };
 
   test("die .factory/projekt.json des Roots wird gelesen: ein fremdes Factory-Board ergibt den Hinweis", () => {
-    const root = fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] }) });
+    const root = fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "c/d" }] }) });
     expect(lies(root).hinweis).toContain("c/d");
   });
 
   test("factory#195: im Bezieher (Sync-Stand vorhanden) nennt der Hinweis das Status-Ticket im eigenen Repo; Upstream behält den bisherigen Text", () => {
-    const projekt = { ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] }) };
+    const projekt = { ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "c/d" }] }) };
     const bezieher = lies(fixture({ ...projekt, ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
     expect(bezieher.hinweis).toContain("legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an");
     expect(bezieher.hinweis).toContain("c/d");
-    const eigenes = lies(fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "a/b" }] }), ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
+    const eigenes = lies(fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "a/b" }] }), ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
     expect(eigenes).toEqual({ punkt: "Langfuse-Takt", ok: true }); // Factory-Board im eigenen Repo: kein Hinweis, auch im Bezieher
     const upstream = lies(fixture(projekt));
     expect(upstream.hinweis).toContain("dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter");

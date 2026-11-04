@@ -54,7 +54,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 import { FIXTURE_WURZELN, KODIER_PRAEFIX, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, decodeTerm, encodeTerm, internalrefsAus, internalrefsMaengel, pfadBefunde } from "./internalrefs-lib.mjs";
 import { PROJEKT_CONFIG, ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { setzeJsonSchluessel } from "./besitz-lib.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -246,7 +246,7 @@ export function addProjektTerm(term, wurzel, schluessel) {
 
 /** Weiche für `--add`/`--add-name`: im Bezieher (Sync-Stand vorhanden, auch kaputt) in die Projektliste, in der Fabrik in die Kernliste dieser Datei. */
 function begriffAufnehmen(flag, wert, { self, wurzel }) {
-  if (liesSyncStand(wurzel).zustand !== "fehlt") return addProjektTerm(wert, wurzel, flag === "add-name" ? "namen" : "begriffe");
+  if (istBezieher(wurzel)) return addProjektTerm(wert, wurzel, flag === "add-name" ? "namen" : "begriffe");
   return addTerm(wert, self, flag === "add-name" ? "ENCODED_NAME_TERMS" : "ENCODED_TERMS");
 }
 

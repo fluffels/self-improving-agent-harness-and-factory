@@ -658,6 +658,36 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(pruef.board).toEqual(board);
   });
 
+  describe("im Bezieher (factory#202 L20, ADR 0031)", () => {
+    const mitExit = async (art: string[], bezieher: boolean) => {
+      const exit = vi.spyOn(process, "exit").mockImplementation(((c?: number) => { throw new Error(`exit ${c}`); }) as never);
+      const fehler = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      try {
+        const { deps, rufe } = fakes({ bezieher });
+        const ergebnis = await M(art, deps).then(() => "ok", (e: Error) => e.message);
+        return { ergebnis, rufe, fehler: fehler.mock.calls.map((a) => String(a[0])).join("\n") };
+      } finally {
+        exit.mockRestore();
+        fehler.mockRestore();
+      }
+    };
+    test("harness bricht mit Exit 2 und Fix-Zeile ab, nichts wird angelegt", async () => {
+      const { ergebnis, rufe, fehler } = await mitExit(["harness"], true);
+      expect(ergebnis).toBe("exit 2");
+      expect(fehler).toContain("Kern-Befunde als Kommentar ins Harness-Sammelticket des Factory-Repos");
+      expect(namen(rufe)).not.toContain("legeAn");
+    });
+    test("harness in der Fabrik (kein Bezieher) läuft wie bisher", async () => {
+      const { ergebnis, rufe } = await mitExit(["harness"], false);
+      expect(ergebnis).toBe("ok");
+      expect(namen(rufe)).toContain("legeAn");
+    });
+    test("langfuse bleibt im Bezieher erlaubt", async () => {
+      const { ergebnis } = await mitExit(["langfuse"], true);
+      expect(ergebnis).toBe("ok");
+    });
+  });
+
   test("harness: steht das neue Ticket falsch (hinten), setzt main es per setPosition auf das Factory-Board um", async () => {
     const { deps, rufe } = fakes();
     await M(["harness"], deps);

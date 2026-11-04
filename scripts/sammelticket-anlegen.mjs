@@ -49,7 +49,7 @@ import {
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -343,7 +343,7 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
 }
 
 /** Bezieher (factory#195): Sync-Stand in der Wurzel vorhanden; `bezieher` und `wurzel` in `d` sind Test-Nähte. */
-const istBezieher = (d) => d.bezieher ?? liesSyncStand(d.wurzel ?? WURZEL).zustand !== "fehlt";
+const istBezieher = (d) => d.bezieher ?? istBezieherWurzel(d.wurzel ?? WURZEL);
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
@@ -353,6 +353,10 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
     process.exit(2);
+  }
+  if (args.art === "harness" && d.bezieher) {
+    console.error("✖ Im Bezieher gibt es kein Harness-Sammelticket (ADR 0031: nur im Factory-Repo).\nFix: Kern-Befunde als Kommentar ins Harness-Sammelticket des Factory-Repos eintragen (AGENTS.md › Harness-Befunde).");
+    return process.exit(2);
   }
   const config = d.ladeConfig();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.

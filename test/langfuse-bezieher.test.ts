@@ -13,6 +13,7 @@ vi.mock("../scripts/sync-stand-lib.mjs", async (original) => {
   const echt = await original<Record<string, unknown>>();
   return {
     ...echt,
+    istBezieher: (wurzel: string) => resolve(wurzel) === REPO_WURZEL || (echt.istBezieher as (w: string) => boolean)(wurzel),
     liesSyncStand: (wurzel: string) =>
       resolve(wurzel) === REPO_WURZEL ? { stand: { quelle: { tag: "v9.9.9", repo: "q/quelle" } } } : (echt.liesSyncStand as (w: string) => unknown)(wurzel),
   };

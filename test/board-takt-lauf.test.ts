@@ -28,7 +28,7 @@ const T = raw as unknown as {
   istHarnessCommit: (c: unknown, h?: Set<number> | null) => boolean;
   zaehleProduktMerges: (c: unknown[], seit?: string | null, h?: Set<number> | null) => number;
   quotenBericht: (c: unknown[], seit?: string | null, h?: Set<number> | null) => { harness: number; produkt: number };
-  fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown }) => { fehler: boolean };
+  fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo?: string; ausloeser?: string; token?: string; io: Io; config?: unknown; bezieher?: boolean }) => { fehler: boolean };
 };
 
 const CFG = { repo: FREMD.repo, labels: { harness: FREMD.labels.harness, forum: FREMD.labels.forum } };
@@ -69,7 +69,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
   const sammel = it(12, { title: "Harness-Härtung (gesammelt)" });
   const STATUS = "Langfuse-Status überprüfen";
 
-  function lauf(commits: unknown[], opts: { offeneStatus?: boolean; offeneSammel?: boolean; kommentare?: unknown[] | Error } = {}) {
+  function lauf(commits: unknown[], opts: { offeneStatus?: boolean; offeneSammel?: boolean; kommentare?: unknown[] | Error; bezieher?: boolean } = {}) {
     const log: string[] = [];
     const geladen: number[] = [];
     const aufrufe: { harness: { items: Item[] }[]; status: unknown[]; ghArgs: string[] } = { harness: [], status: [], ghArgs: [] };
@@ -104,7 +104,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       },
       log: (z) => log.push(z),
     };
-    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io });
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io, bezieher: opts.bezieher });
     return { r, log, aufrufe, geladen };
   }
 
@@ -127,6 +127,15 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(aufrufe.harness[0].items[0].number).toBe(50);
     expect(geladen).toEqual([12]);
     expect(log.join("\n")).toContain("Füllstand 10/10");
+    expect(r.fehler).toBe(false);
+  });
+
+  test("im Bezieher (factory#202 L20, ADR 0031) entfällt das Harness-Sammelticket trotz zehn Kommentaren; Status-Ticket läuft weiter, kein Kommentar wird geladen", () => {
+    const { r, aufrufe, geladen, log } = lauf([spiel(1)], { offeneStatus: true, kommentare: befunde(10), bezieher: true });
+    expect(aufrufe.status).toHaveLength(1);
+    expect(aufrufe.harness).toHaveLength(0);
+    expect(geladen).toEqual([]);
+    expect(log).toContain("Harness-Sammelticket: nichts (Bezieher, ADR 0031: nur im Factory-Repo)");
     expect(r.fehler).toBe(false);
   });
 

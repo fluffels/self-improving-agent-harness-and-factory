@@ -370,6 +370,19 @@ export const ECHTE_IO = {
   ersterCommitDatum,
 };
 
+/** Der Harness-Sammelticket-Teil des Takts: Voraussetzung prüfen, Füllstand entscheiden, ausführen. Liefert true bei einem Fehler. */
+function harnessSchritt({ items, offene, repo, io, commits, abHarness, harnessIssues, dry, token }) {
+  const voraussetzung = harnessVoraussetzung({ items });
+  if (!voraussetzung.ok) {
+    io.log(voraussetzung.meldung);
+    return Boolean(voraussetzung.fehler);
+  }
+  const h = entscheideMitFuellstand({ items, offene, repo, io });
+  io.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Füllstand ${h.fuellstand ?? "?"}/${HARNESS_TAKT_KOMMENTARE}; Fenster ab ${abHarness}`);
+  io.log(quotenBericht(commits, abHarness, harnessIssues).zeile);
+  return !dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token);
+}
+
 /**
  * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
  * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
@@ -424,17 +437,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     if (w.fehler) fehler = true;
   }
 
-  // Harness-Sammelticket: Füllstand (eigenes Fenster), auf der nachgezogenen Liste.
-  const voraussetzung = harnessVoraussetzung({ items });
-  if (!voraussetzung.ok) {
-    io.log(voraussetzung.meldung);
-    if (voraussetzung.fehler) fehler = true;
-  } else {
-    const h = entscheideMitFuellstand({ items, offene, repo, io });
-    io.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Füllstand ${h.fuellstand ?? "?"}/${HARNESS_TAKT_KOMMENTARE}; Fenster ab ${abHarness}`);
-    io.log(quotenBericht(commits, abHarness, harnessIssues).zeile);
-    if (!dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token)) fehler = true;
-  }
+  // Harness-Sammelticket: im Bezieher entfällt es (factory#202 L20, ADR 0031), sonst Füllstand (eigenes Fenster) auf der nachgezogenen Liste.
+  if (bezieher) io.log("Harness-Sammelticket: nichts (Bezieher, ADR 0031: nur im Factory-Repo)");
+  else if (harnessSchritt({ items, offene, repo, io, commits, abHarness, harnessIssues, dry, token })) fehler = true;
   return { fehler };
 }
 
