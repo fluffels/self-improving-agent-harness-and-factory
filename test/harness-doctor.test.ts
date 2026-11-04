@@ -630,6 +630,15 @@ describe("harness-doctor --pruefen", () => {
     }
   });
 
+  test("factory#162 L33: fehlender Ruleset-Spiegel nennt die Vorlage der Quelle, die Dateipunkte erscheinen vor dem Abbruch, Exit bleibt 2", () => {
+    const punkt = { punkt: "Projektdateien", ok: false, befund: "fehlen 1: tsconfig.json", fix: "Vorlage aus der Quelle" };
+    const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => [punkt] });
+    assert.equal(r.code, 2);
+    assert.equal(r.aufrufe.length, 0);
+    assert.match(r.err.join("\n"), /Fix: Ruleset-Spiegel[\s\S]*\.github\/ruleset-main-schutz\.json/);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Projektdateien: fehlen 1: tsconfig.json ")), r.out.join("\n"));
+  });
+
   test("CLI-Verdrahtung: unlesbare Config per Prozess ergibt Exit 2 und Fix auf stderr (ohne gh und Langfuse)", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-cli-"));
     ordner.push(root);
