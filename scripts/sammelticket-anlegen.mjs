@@ -342,10 +342,13 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
   for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
 }
 
+/** Bezieher (factory#195): Sync-Stand in der Wurzel vorhanden; `bezieher` und `wurzel` in `d` sind Test-Nähte. */
+const istBezieher = (d) => d.bezieher ?? liesSyncStand(d.wurzel ?? WURZEL).zustand !== "fehlt";
+
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
-  d.bezieher ??= liesSyncStand(d.wurzel ?? WURZEL).zustand !== "fehlt"; // Sync-Stand vorhanden: Bezieher (factory#195); `wurzel`/`bezieher` sind Test-Nähte
+  d.bezieher = istBezieher(d);
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
