@@ -354,18 +354,13 @@ export const repoOwner = (config) => zerlegeRepo(config?.repo).owner;
 function pruefeLabels(l) {
   if (!istObjekt(l)) return [`labels muss ein Objekt (Name → String) mit den Pflichtschlüsseln ${PFLICHT_LABELS.join(", ")} sein`];
   const fehler = [];
-  for (const k of PFLICHT_LABELS) {
-    if (!Object.hasOwn(l, k)) fehler.push(`labels.${k} fehlt (Pflichtschlüssel)`);
-  }
-  for (const [k, v] of Object.entries(l)) {
-    if (!istText(v)) fehler.push(`labels.${k} muss ein nicht-leerer String sein`);
-  }
+  for (const k of PFLICHT_LABELS) if (!Object.hasOwn(l, k)) fehler.push(`labels.${k} fehlt (Pflichtschlüssel)`);
+  for (const [k, v] of Object.entries(l)) if (!istText(v)) fehler.push(`labels.${k} muss ein nicht-leerer String sein`);
   return fehler;
 }
 
 /**
- * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23). Das Inbox-Issue legt der Lauf im Repo an, in dem Dependabot arbeitet;
- * führt `labels.dependabotInbox` auf ein Board eines fremden Repos, entstünde es dort (ein Bezieher setzt ein anderes Label als `labels.harness`).
+ * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23): das Inbox-Issue entstünde sonst im fremden Repo des Boards.
  * Nur bei sonst gültigen Labels und Boards geprüft, damit Folgefehler die Ursache nicht verdecken.
  */
 function pruefeInboxZiel(wert) {
@@ -375,17 +370,13 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/**
- * Pur (factory#156): das optionale Label `labels.codequalitaet` (Opt-in für das Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein
- * Produkt-Board führen: das Ticket liegt im eigenen Repo des Beziehers, nicht auf dem Factory-Board (gleicher Wert wie `labels.harness` wäre falsch).
- * Nur bei sonst gültigen Labels und Boards geprüft.
- */
+/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
 function pruefeCodequalitaetZiel(wert) {
   const label = wert.labels?.codequalitaet;
-  if (label === undefined) return [];
-  if (boardRolleFuer([label], wert) === "produkt") return [];
-  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${boardRolleFuer([label], wert)})
-Fix: für labels.codequalitaet ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen (dann gibt es kein Codequalität-Sammelticket)`];
+  const rolle = label === undefined ? "produkt" : boardRolleFuer([label], wert);
+  if (rolle === "produkt") return [];
+  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${rolle})
+Fix: ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen`];
 }
 
 /** Der Skill-Schlüssel, dessen Wert `null` sein darf (kein Abschluss-Skill, factory#139). */

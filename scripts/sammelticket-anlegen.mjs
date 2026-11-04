@@ -325,7 +325,7 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }) {
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent`; ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: mitKontingent, ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), ...deps };
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
@@ -334,10 +334,10 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const config = d.ladeConfig();
   const harness = sammelLabel(config, args.art);
   if (harness === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
-  d.kontingent("sammelticket-anlegen");
+  d.kontingent();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
   const ziel = sammelZiel(config, harness);
-  const BOARD = boardFuerRolle(ziel.rolle);
+  const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
@@ -363,15 +363,15 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = addToBoardTodo(BOARD, neu.node_id, { repo });
+    const itemId = addToBoardTodo(board, neu.node_id, { repo });
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(BOARD, k.id, k.afterId);
-    } else setzeErstePosition({ art: args.art, top: args.top, board: BOARD, repo, itemId, nr, titel });
+      if (k) setPosition(board, k.id, k.afterId);
+    } else setzeErstePosition({ art: args.art, top: args.top, board: board, repo, itemId, nr, titel });
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: BOARD, repo });
+  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: board, repo });
   if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);

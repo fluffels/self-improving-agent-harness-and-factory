@@ -398,7 +398,7 @@ describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
 
   test("Verdrahtung: der Aufruf in main übergibt das Ziel-Board (Factory- oder Produkt-Board je Art)", () => {
     const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
-    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*BOARD[^}]*repo/);
+    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*board\b[^}]*repo/);
   });
 });
 
