@@ -28,7 +28,7 @@ export function fruehesterMilestone(milestones) {
 
 /** Titel für Hinweise und Ticket-Texte: Steuerzeichen und Zeilenumbrüche werden zu Leerzeichen, auf 80 Zeichen gekürzt. */
 export function titelBereinigt(titel) {
-  const ohneSteuer = [...String(titel ?? "")].map((c) => (c.charCodeAt(0) < 32 || c === "\u007f" || c === "\u2028" || c === "\u2029" ? " " : c)).join("");
+  const ohneSteuer = [...String(titel ?? "")].map((c) => (c.charCodeAt(0) < 32 || c === "\u007f" ? " " : c)).join("");
   const t = ohneSteuer.replace(/\s+/g, " ").trim();
   return t.length > 80 ? `${t.slice(0, 79)}…` : t;
 }

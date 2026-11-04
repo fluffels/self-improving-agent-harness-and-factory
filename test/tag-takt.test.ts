@@ -118,6 +118,13 @@ describe("Milestone-Auslöser (factory#194)", () => {
   it("Titel mit | und Zeilenumbruch wird bereinigt", () => {
     expect(entscheide({ besitz: reihe(1), milestones: [ms("A|B\nC")] }).ausloeser?.[0]).toBe("Milestone „A B C“ geschlossen");
   });
+  it("Steuerzeichen im Titel werden zu Leerzeichen und der Titel wird auf 80 Zeichen gekürzt (Auslöser und Grund)", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms("A\u0000B\tC\u007fD")] }).ausloeser?.[0]).toBe("Milestone „A B C D“ geschlossen");
+    const lang = entscheide({ besitz: reihe(1), milestones: [ms("x".repeat(100))] }).ausloeser?.[0] ?? "";
+    expect(lang).toBe(`Milestone „${"x".repeat(79)}…“ geschlossen`);
+    expect(entscheide({ besitz: [], milestones: [ms("A\u0000B")] }).grund).toContain("Milestone „A B“");
+    expect(entscheide({ besitz: [], milestones: [ms("x".repeat(100))] }).grund).toContain(`„${"x".repeat(79)}…“`);
+  });
   it("ohne Besitz-PRs entsteht nichts, der Grund nennt Milestone und den Tag", () => {
     const e = entscheide({ besitz: [], milestones: [ms()] });
     expect(e.aktion).toBe("nichts");
