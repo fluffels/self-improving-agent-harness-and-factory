@@ -153,7 +153,7 @@ function cruise(rootDir, args, pruefbefehl) {
 
 /**
  * Konsistenz der `schichten.cruise`-Argumente mit den Quellwurzeln des Modells (#1428 Z13, factory#184): die Config nennt das Cruise-Ziel und das
- * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als `SCHICHT_MODELL.quellwurzel`, verdichtete das Diagramm
+ * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als die Quellwurzeln des Modells, verdichtete das Diagramm
  * still das Falsche. Prüft nur, was vorhanden ist: ein `dependency-cruiser`-Aufruf braucht die Ziele `<quellwurzel ohne Slash>` (je Wurzel eins, in Modell-Reihenfolge) als
  * erste Argumente danach, ein `--collapse` das Muster `^(<quellwurzel>|…|node_modules)/[^/]+/`. Liefert die Meldung oder `null`. Pur.
  */

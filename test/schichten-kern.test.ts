@@ -135,6 +135,13 @@ describe("musterAus", () => {
     assert.ok(new RegExp(kern.musterAus("a/", ["main"], true, [".java"])).test("a/main.java"));
     assert.ok(!new RegExp(kern.musterAus("a/", ["main"], false, [".java"])).test("a/mainXjava"));
   });
+
+  test("mehrteilige Endung .d.ts: beide Punkte escaped", () => {
+    const r = new RegExp(kern.musterAus("a/", ["main"], true, [".d.ts"]));
+    assert.ok(r.test("a/main.d.ts"));
+    assert.ok(!r.test("a/main.dXts"));
+    assert.ok(!r.test("a/mainXd.ts"));
+  });
 });
 
 describe("Modell mit mehreren Wurzeln und Endungen", () => {
@@ -169,6 +176,7 @@ describe("Modell mit mehreren Wurzeln und Endungen", () => {
     const g2 = kern.coverageGlobsAus(modellAus({ quellwurzel: "a/", endungen: [".java", ".kt"] }));
     assert.equal(g2.web, "a/{web,api}{.java,.kt,/**}");
     assert.equal(g2.einstieg, "a/{main}{.java,.kt}");
+    assert.equal(g2.kern, "a/{!(web|api|main)/**,!(web.java|web.kt|api.java|api.kt|main.java|main.kt)}");
   });
 });
 
@@ -183,6 +191,12 @@ describe("pruefeModell: Negativfälle (AK4)", () => {
   test("leere Endungsliste, Endung ohne Punkt", () => {
     rot({ ...basis(), endungen: [] }, /endungen/);
     rot({ ...basis(), endungen: ["java"] }, /endungen: "java"/);
+  });
+
+  test("mehrteilige Endung .d.ts gültig, Endung mit Präfix davor rot, kein Modell rot", () => {
+    assert.doesNotThrow(() => kern.pruefeModell({ ...basis(), endungen: [".d.ts"] }));
+    rot({ ...basis(), endungen: ["x.java"] }, /endungen: "x.java"/);
+    rot(undefined, /SCHICHT_MODELL ungültig/);
   });
 
   test("weitere Endungs-Mängel", () => {

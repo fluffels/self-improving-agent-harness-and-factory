@@ -76,7 +76,7 @@ function endungenMaengel(modell) {
   return probleme;
 }
 
-/** Mit `quellwurzeln` muss jedes Muster mit einer dieser Wurzeln beginnen (sonst klassifiziert es Pfade ausserhalb der Wurzeln). */
+/** Mit `quellwurzeln` muss jedes Muster mit der Wurzel-Alternative `^(w1|w2|…)` in Modell-Reihenfolge beginnen (sonst klassifiziert es Pfade ausserhalb der Wurzeln). */
 function musterPraefixMaengel(modell, schichten) {
   const wurzeln = modell?.quellwurzeln;
   if (!Array.isArray(wurzeln) || wurzeln.some((w) => typeof w !== "string")) return [];
