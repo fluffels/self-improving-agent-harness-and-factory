@@ -4,9 +4,10 @@
  * docs/adr/fortschreibungen/0022-182-gate-befehle.md): Die Gate-Befehle eines Projekts stehen in seiner Config
  * (`befehle`), die Texte nennen den Läufer, nie das Build-Werkzeug. Rot ist jede Fundstelle von `npm ci`,
  * `npm run verify`, `npm run verify:kompakt`, `npm run verify:changed` oder `npm run test:coverage`
- * (auch als `run-script`, mit `-s` oder mit vorangestelltem `--prefix <pfad>` / `-C <pfad>`); `verify:full`, `check:*`,
- * `npm install` und `npx …` bleiben frei. Zusatzregel: das Wort nach `gate-befehl.mjs` ist ein Name aus
- * `GATE_BEFEHL_NAMEN` oder der Platzhalter `<name>`.
+ * (auch als `run-script`, mit `-s` oder mit vorangestelltem `--prefix <pfad>` / `-C <pfad>`), dazu (factory#193) `npx vitest`,
+ * `npx eslint` und `npm test` (auch mit Präfix): gezielte Testläufe gehen über `node scripts/gate-befehl.mjs testGezielt <datei>`;
+ * `verify:full`, `check:*`, `npm install` und andere `npx …` bleiben frei. Zusatzregel: das Wort nach `gate-befehl.mjs`
+ * ist ein Name aus `GATE_BEFEHL_NAMEN` oder der Platzhalter `<name>`.
  *
  * Scan-Umfang (geschlossene Liste): (a) `AGENTS.md` ohne Projekt-Block (fehlt ein Marker, wird nichts maskiert),
  * (b) alle versionierten `.claude/agents/*.md`, (c) alle versionierten `.agents/skills/**\/*.md`, (d) die `.md`-Einträge
@@ -14,7 +15,7 @@
  * (die Dateien selbst sind gitignoriert und lokal erzeugt), (f) die Nicht-Kommentarzeilen von `.github/workflows/ci.yml`.
  * Ausnahmen stehen in `AUSNAHMEN` mit Grund.
  * Grenze: kein Semantik-Prüfer. Begriffe wie „das verify:kompakt der Stufe 0“ ohne `npm`, andere Werkzeugaufrufe
- * (`npx vitest`, `npm --prefix … test`) und Dateien außerhalb des Umfangs bleiben frei; nur im Factory-Repo
+ * und Dateien außerhalb des Umfangs bleiben frei; nur im Factory-Repo
  * (der Wächter liegt nicht im Besitz-Manifest).
  */
 import { describe, expect, it } from "vitest";
@@ -54,6 +55,8 @@ const NPM_VOR = String.raw`(?:(?:--prefix|-C)\s+\S+\s+|-\S+\s+)*`;
 const REGELN = [
   { name: "npm ci", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}ci(?![\w:-])`) },
   { name: "npm run <gate-skript>", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}run(?:-script)?\s+(?:-\S+\s+)*${SKRIPTE}(?![\w:-])`) },
+  { name: "npx vitest|eslint", muster: new RegExp(String.raw`\bnpx\s+(?:vitest|eslint)\b`) },
+  { name: "npm test", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}test\b`) },
 ];
 const LAEUFER = /gate-befehl\.mjs\s+(?:--\S+\s+)*([^\s`'"|;&)]+)/g;
 
@@ -182,8 +185,13 @@ describe("Regeln auf synthetischem Text", () => {
       expect(funde("a.md", z), z).toHaveLength(1);
     }
   });
+  it("Test-Werkzeug-Aufrufe sind Funde (npx vitest/eslint, npm test, auch mit Präfix)", () => {
+    for (const z of ["npx vitest run x", "npx eslint scripts/a.mjs", "npx  vitest", "npm test", "npm --prefix x test -- y", "npm -C x test", "npm -s test"]) {
+      expect(funde("a.md", z), z).toHaveLength(1);
+    }
+  });
   it("Grenzfälle ohne Fund", () => {
-    for (const z of ["npm run verify:full", "npm run check:size", "npm install", "das verify:kompakt der Stufe 0", "npx vitest run x", "npm --prefix x test -- y"]) {
+    for (const z of ["npm run verify:full", "npm run check:size", "npm install", "das verify:kompakt der Stufe 0", "npx playwright test", "npx vitestx", "npm run test:unit", "node scripts/gate-befehl.mjs testGezielt a.ts"]) {
       expect(funde("a.md", z), z).toEqual([]);
     }
   });
