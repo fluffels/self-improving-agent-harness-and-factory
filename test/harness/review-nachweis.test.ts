@@ -42,7 +42,7 @@ const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
 const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
 const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
 /** Zeilen der Fremd-Config; die Wrapper reichen sie durch. */
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string } };
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; reviewOverride: string } };
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
@@ -318,6 +318,13 @@ describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => 
     assert.match(bewerteZ(`runden=5 zusatzpass=1:x ${LENSES} verdikt=ok`).join(" "), /überschreitet/);
     assert.deepEqual(bewerteZ(`runden=5 zusatzpass=2:x ${LENSES} verdikt=ok`), []);
   });
+  test("zusatzpass über MAX_ZUSATZPAESSE ist rot (Freigabe gibt nur die Maintainerin), genau MAX_ZUSATZPAESSE ist ok (factory#162 L10)", () => {
+    const max = MAX_ZUSATZPAESSE;
+    assert.deepEqual(bewerteZ(`runden=${3 + max} zusatzpass=${max}:x ${LENSES} verdikt=ok`), []);
+    const m = bewerteZ(`runden=${3 + max + 1} zusatzpass=${max + 1}:x ${LENSES} verdikt=ok`).join(" ");
+    assert.match(m, /zusatzpass=\d+ überschreitet/);
+    assert.match(m, /Review-Override/);
+  });
   test("die Gate-Meldung nennt die Zahl der Zusatzpässe aus MAX_ZUSATZPAESSE", () => {
     const m = bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" ");
     assert.ok(m.includes(`Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe`), m);
@@ -393,11 +400,11 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   const BASE = "b".repeat(40);
   const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
   /** Gefälschtes git für `checkReviewNachweis`: ein Code-Slice (src/a.ts) und ein Nachweis-Commit mit der gegebenen Review-Zeile. */
-  const fakeGit = (review: string) => (a: string[]): string => {
+  const fakeGit = (review: string, extra = "") => (a: string[]): string => {
     const j = a.join(" ");
     if (j.startsWith("merge-base")) return BASE;
     if (j === "rev-parse HEAD") return "d".repeat(40);
-    if (j.startsWith("log --reverse")) return `${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}\n`;
+    if (j.startsWith("log --reverse")) return `${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}\n${extra}`;
     if (j.startsWith("diff --name-only")) return "src/a.ts\n";
     if (j.startsWith("rev-parse --verify")) return SHA;
     if (j.startsWith("rev-list --count")) return "1";
@@ -411,6 +418,13 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     const r = checkReviewNachweis({ runGit: fakeGit(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), env: {} });
     assert.equal(r.ok, true);
     assert.equal(r.zusatzpass?.grund, "Maintainerin gab Pass frei");
+  });
+  test("mehr als MAX_ZUSATZPAESSE Zusatzpässe: rot, mit Review-Override samt Freigabe-Beleg grün (factory#162 L10)", () => {
+    const review = `runden=${3 + MAX_ZUSATZPAESSE + 1} zusatzpass=${MAX_ZUSATZPAESSE + 1}:x ${LENSES} verdikt=ok`;
+    assert.equal(checkReviewNachweis({ runGit: fakeGit(review), env: {} }).ok, false);
+    const frei = checkReviewNachweis({ runGit: fakeGit(review, `${Z.reviewOverride}: #162 Maintainerin gab den vierten Zusatzpass frei (Beleg: Kommentar)\n`), env: {} });
+    assert.equal(frei.ok, true);
+    assert.match((frei as { override?: string }).override as string, /vierten Zusatzpass/);
   });
   test("ohne Zusatzpass oder mit ungültigem: das Feld ist null", () => {
     assert.equal(checkReviewNachweis({ runGit: fakeGit(`runden=2 ${LENSES} verdikt=ok`), env: {} }).zusatzpass, null);

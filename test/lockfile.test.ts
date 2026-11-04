@@ -17,9 +17,11 @@
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:lockfile)
  */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FREMD, projektConfig } from "./support/fremd-config";
@@ -156,6 +158,65 @@ describe("Lockfile-Integrität (#593)", () => {
     const lock = JSON.parse(readFileSync(join(REPO_ROOT, "package-lock.json"), "utf8"));
     const r = auditLockfile({ pkg, lock });
     assert.equal(r.ok, true, "Repo-Lockfile driftet: " + r.problems.map(describeProblem).join(" | "));
+  });
+});
+
+// ── Getrackte Lockfiles in Unterordnern (L49) ──────────────────────────────────────
+
+const checkLockfile = (rootDir: string): Audit => (checkLock as unknown as { checkLockfile(r: string): Audit }).checkLockfile(rootDir);
+const temps: string[] = [];
+afterEach(() => {
+  for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+/** Temp-Git-Repo mit den Dateien (Pfad → JSON); alles wird getrackt, `ungetrackt` nicht. */
+function repoMit(dateien: Record<string, unknown>, ungetrackt: string[] = []): string {
+  const d = mkdtempSync(join(tmpdir(), "lockfile-"));
+  temps.push(d);
+  execFileSync("git", ["init", "-q"], { cwd: d });
+  for (const [pfad, inhalt] of Object.entries(dateien)) {
+    mkdirSync(dirname(join(d, pfad)), { recursive: true });
+    writeFileSync(join(d, pfad), JSON.stringify(inhalt));
+  }
+  execFileSync("git", ["add", "--", ...Object.keys(dateien).filter((p) => !ungetrackt.includes(p))], { cwd: d });
+  return d;
+}
+const SUB_PKG: Pkg = { name: "sub", version: "1.0.0", dependencies: { a: "^1.0.0" } };
+
+describe("checkLockfile: jedes getrackte package-lock.json (L49)", () => {
+  const wurzel = { "package.json": BASE_PKG, "package-lock.json": lockMirroring(BASE_PKG) };
+  test("eine Wurzel ohne package.json ist ein Aufruf-Fehler (wirft), kein Befund (factory#162)", () => {
+    assert.throws(() => checkLockfile(repoMit({ "sub/package.json": SUB_PKG, "sub/package-lock.json": lockMirroring(SUB_PKG) })));
+  });
+  test("Wurzel unverändert: ohne Unterordner synchron ok, Drift rot ohne Dateiangabe", () => {
+    assert.equal(checkLockfile(repoMit(wurzel)).ok, true);
+    const drift = checkLockfile(repoMit({ ...wurzel, "package.json": { ...BASE_PKG, version: "9.9.9" } }));
+    assert.equal(drift.ok, false);
+    assert.equal(drift.problems[0].datei, undefined);
+  });
+  test("Drift in sub/ ist rot und nennt die Datei", () => {
+    const r = checkLockfile(repoMit({ ...wurzel, "sub/package.json": { ...SUB_PKG, version: "2.0.0" }, "sub/package-lock.json": lockMirroring(SUB_PKG) }));
+    assert.equal(r.ok, false);
+    assert.equal(r.problems[0].datei, "sub/package-lock.json");
+    assert.match(describeProblem(r.problems[0]), /sub\/package-lock\.json/);
+  });
+  test("synchrones sub/ ist grün; sub/ mit package.json ohne Lockfile und ungetrackter Lockfile werden übersprungen", () => {
+    const sub = { "sub/package.json": SUB_PKG, "sub/package-lock.json": lockMirroring(SUB_PKG) };
+    assert.equal(checkLockfile(repoMit({ ...wurzel, ...sub })).ok, true);
+    assert.equal(checkLockfile(repoMit({ ...wurzel, "ohne/package.json": SUB_PKG })).ok, true);
+    const driftUngetrackt = { "sub/package.json": { ...SUB_PKG, version: "2.0.0" }, "sub/package-lock.json": lockMirroring(SUB_PKG) };
+    assert.equal(checkLockfile(repoMit({ ...wurzel, ...driftUngetrackt }, ["sub/package-lock.json"])).ok, true);
+  });
+  test("ein getrackter Lockfile ohne package.json daneben ist rot", () => {
+    const r = checkLockfile(repoMit({ ...wurzel, "sub/package-lock.json": lockMirroring(SUB_PKG) }));
+    assert.equal(r.ok, false);
+    assert.match(describeProblem(r.problems[0]), /sub\/package-lock\.json/);
+  });
+  test("kein Git-Repo: wirft (fail-closed)", () => {
+    const d = mkdtempSync(join(tmpdir(), "lockfile-"));
+    temps.push(d);
+    writeFileSync(join(d, "package.json"), JSON.stringify(BASE_PKG));
+    writeFileSync(join(d, "package-lock.json"), JSON.stringify(lockMirroring(BASE_PKG)));
+    assert.throws(() => checkLockfile(d));
   });
 });
 

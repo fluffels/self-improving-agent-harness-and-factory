@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WURZEL, lies, repoDateien } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as besitzLibModul from "../../scripts/besitz-lib.mjs";
+import * as projektwertLaufModul from "../../scripts/projektwert-lauf.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skillsSyncModul from "../../scripts/skills-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -25,7 +25,7 @@ import { ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "../../scri
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex } from "../../scripts/ticket-namen.mjs";
 const maskiere = escapeRegex as (s: string) => string;
-const projektwertLauf = (besitzLibModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
+const projektwertLauf = (projektwertLaufModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
 
 /** Quelle und Verzeichnisname des Ticket-Skills der Rolle ticketSkill (fester Kern-Pfad, in jedem Projekt vorhanden). */
 const TICKET_QUELLE = (ROLLEN_PFADE as Record<string, string>).ticketSkill;

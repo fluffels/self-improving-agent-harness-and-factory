@@ -89,6 +89,16 @@ export function erlaubteWerte(baseline: Baseline, alt: Baseline): Baseline {
   return Object.fromEntries(Object.keys(baseline).map((d) => [d, alt[d] ?? {}]));
 }
 
+/** Die Baseline an der Diff-Basis: `null`, wenn die Datei dort fehlt (`git cat-file -e` scheitert, der erste Stand gilt); ungültiges JSON wirft. */
+export function basisBaseline(git: (args: string[]) => string, basis: string): Baseline | null {
+  try {
+    git(["cat-file", "-e", `${basis}:${BASELINE}`]);
+  } catch {
+    return null;
+  }
+  return JSON.parse(git(["show", `${basis}:${BASELINE}`])) as Baseline;
+}
+
 /** ESLints eigene Ausgabeform der Suppressions-Datei: 2 Leerzeichen, kein End-Newline. */
 export function eslintForm(text: string): string {
   return JSON.stringify(JSON.parse(text), null, 2);
@@ -144,13 +154,9 @@ describe("Komplexitäts-Ausmaß je Datei", () => {
 
   test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
     assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
-    let alt: Baseline;
-    try {
-      alt = JSON.parse(git(["show", `${basis}:${BASELINE}`])) as Baseline;
-    } catch {
-      // die Datei gibt es an der Basis noch nicht: der erste Stand gilt
-      return;
-    }
+    // die Datei gibt es an der Basis noch nicht: der erste Stand gilt; ungültiges JSON an der Basis wirft (rot)
+    const alt = basisBaseline(git, basis);
+    if (alt === null) return;
     const baseline = JSON.parse(lesen(BASELINE)) as Baseline;
     assert.deepEqual(anhebungen(baseline, erlaubteWerte(baseline, alt)), []);
   });
@@ -162,6 +168,20 @@ describe("Komplexitäts-Ausmaß je Datei", () => {
 
   describe("Mechanik", () => {
     const g = { complexity: 15, "max-depth": 4, "max-lines-per-function": 120 };
+    test("basisBaseline: fehlende Datei an der Basis → null (erster Stand gilt), gültig → Inhalt, kaputtes JSON wirft (factory#162 L3)", () => {
+      const fake = (zeigt: string | null) => (args: string[]): string => {
+        if (args[0] === "cat-file") {
+          if (zeigt === null) throw new Error("fatal: path does not exist");
+          return "";
+        }
+        assert.equal(args[0], "show");
+        assert.equal(args[1], `abc:${BASELINE}`);
+        return zeigt ?? "";
+      };
+      assert.equal(basisBaseline(fake(null), "abc"), null);
+      assert.deepEqual(basisBaseline(fake('{"a.mjs":{"complexity":2}}'), "abc"), { "a.mjs": { complexity: 2 } });
+      assert.throws(() => basisBaseline(fake("{kaputt"), "abc"), SyntaxError);
+    });
     test("ausmass summiert Wert minus Grenze je Regel", () => {
       const z = ausmass(
         [

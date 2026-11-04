@@ -358,12 +358,13 @@ export function linkZiel(datei, pfad) {
   return r === "." ? "" : r;
 }
 
+/** Der Markup-Schritt von Überschriften: `[text](url)` wird `text`, Inline-Markup-Zeichen entfallen (gemeinsam für `slugify` und die Stub-Überschriften). */
+export const entferneMarkup = (text) => text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_~]/g, "");
+
 /** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
  *  Leerzeichen → Bindestrich. Duplikate hängt der Aufrufer mit -1/-2 an. */
 export function slugify(headingText) {
-  return headingText
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) → text
-    .replace(/[`*_~]/g, "") // Inline-Markup-Zeichen entfernen
+  return entferneMarkup(headingText)
     .trim()
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s_-]/gu, "") // nur Buchstaben/Zahlen/Space/_/- behalten

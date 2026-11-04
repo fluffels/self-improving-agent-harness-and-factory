@@ -13,7 +13,7 @@ const OWNER = FREMD_OWNER;
 
 type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Korrektur = { nr: number; id: string; afterId: string | null; vonRang: number; nachRang: number };
-type Plan = { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean; sammelticket: number | null } };
+type Plan = { steps: { item: B; afterId: string | null }[] };
 type Lib = {
   REPO: string;
   notfallTitelFehler: (items: B[], numbers: number[], art: string) => string | null;
@@ -30,10 +30,8 @@ type Lib = {
 type Place = {
   parseArgs: (argv: string[]) => object | null;
 };
-type MitKorrektur = { planMitKorrektur: (items: B[], args: object, n: number) => { korrektur: Korrektur | null; items: B[]; plan: Plan } };
 const L = rawLib as unknown as Lib;
 const P = rawPlace as unknown as Place;
-const planMitKorrektur = (rawLib as unknown as MitKorrektur).planMitKorrektur; // in board-lib, nicht im Einstiegsskript (#1398)
 
 const TITEL = "Harness-Härtung (gesammelt)";
 const STATUS = "Langfuse-Status überprüfen";
@@ -197,38 +195,29 @@ describe("sammelticketKorrektur (#1390 Z10)", () => {
   });
 });
 
-describe("planMitKorrektur: Komposition von board-place (#1390 Z10, Form des Vorfalls)", () => {
-  // Vorfall: das neue Sammelticket stand am Board-Ende, ein neues --top-Ticket landete dahinter.
+describe("board-place ohne Klemmung und Selbstkorrektur (factory#162)", () => {
+  // Früher klemmte --top hinter ein Sammelticket und schob es zurück; jetzt gilt der Anker wörtlich.
   const ende = [...Array.from({ length: 10 }, (_, i) => b(i + 1)), sammel(1390), b(1400)];
   const plan = (argv: string[], items = ende) => {
     const args = P.parseArgs(argv);
     expect(args, argv.join(" ")).not.toBeNull();
-    return planMitKorrektur(items, args as object, 4);
+    return L.planFuerArgs(items, args as object);
   };
 
-  test("--top landet hinter dem korrigierten Sammelticket, nicht am Board-Ende; die Korrektur wird gemeldet", () => {
+  test("--top landet an der Spitze, auch wenn ein ungeclaimtes Sammelticket am Board-Ende steht; das Sammelticket bleibt unberührt", () => {
     const r = plan(["--top", "1400"]);
-    expect(r.korrektur).toMatchObject({ nr: 1390, nachRang: 4 });
-    expect(r.plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[1400, "I1390"]]);
-    expect(reihe(r.items).slice(0, 5)).toEqual([1, 2, 3, 1390, 4]);
-    expect(r.plan.klemmung).toEqual({ geklemmt: true, sammelticket: 1390 });
+    expect(r.steps.map((s) => [s.item.number, s.afterId])).toEqual([[1400, null]]);
+    expect("klemmung" in r).toBe(false);
   });
 
-  test("ohne Korrektur (steht richtig): identisch zu planFuerArgs", () => {
-    const richtig = [b(1), b(2), b(3), sammel(1390), b(5), b(1400)];
-    const r = plan(["--top", "1400"], richtig);
-    expect(r.korrektur).toBeNull();
-    expect(r.plan.steps).toEqual(L.planFuerArgs(richtig, { anchor: null, numbers: [1400] }).steps);
+  test("--after und --position gelten wörtlich, auch vor dem Sammelticket", () => {
+    expect(plan(["--after", "2", "1400"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[1400, "I2"]]);
+    expect(plan(["--position", "2", "1400"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[1400, "I1"]]);
   });
 
-  test("--notfall korrigiert nicht; das Sammelticket selbst (--position 4 <nr>) auch nicht", () => {
-    expect(plan(["--notfall", "rot-main", "--top", "1400"]).korrektur).toBeNull();
-    expect(plan(["--position", "4", "1390"]).korrektur).toBeNull();
-  });
-
-  test("geclaimtes Sammelticket am Ende: keine Korrektur", () => {
-    const geclaimt = [...Array.from({ length: 10 }, (_, i) => b(i + 1)), sammel(1390, { assignees: [OWNER] })];
-    expect(plan(["--top", "1400"], [...geclaimt, b(1400)]).korrektur).toBeNull();
+  test("das Sammelticket selbst (--position 4 <nr>) und --notfall planen wie zuvor", () => {
+    expect(plan(["--position", "4", "1390"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[1390, "I3"]]);
+    expect(plan(["--notfall", "rot-main", "--top", "1400"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[1400, null]]);
   });
 });
 

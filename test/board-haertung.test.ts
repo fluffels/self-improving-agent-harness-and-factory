@@ -1,5 +1,5 @@
 /* Board-Skripte, Härtung (#1392): Query-Syntax-Wächter, freier Todo-Rang, Teilantwort-Verdrahtung, gemeinsame Helfer und die
- * einheitliche Regel „fehlt die Position, entfällt nur der Teil, der sie braucht“.
+ * Voraussetzung des Harness-Teils im Board-Takt.
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface (Technik wie test/board.test.ts). */
 import { describe, expect, test, vi } from "vitest";
@@ -31,13 +31,8 @@ type Lib = {
   ghJson: unknown;
 };
 const L = rawLib as unknown as Lib;
-// planMitKorrektur und positionOderWarnung liegen in board-lib (ein Skript importiert nicht aus dem anderen, #1398).
-const place = rawLib as unknown as {
-  planMitKorrektur: (items: Item[], args: { anchor: number | null; numbers: number[]; notfall?: string }, n: number | null) => { korrektur: unknown; plan: { steps: { item: Item }[] } };
-  positionOderWarnung: (lies?: () => number) => number | null;
-};
 const takt = rawTakt as unknown as {
-  harnessVoraussetzung: (a: { items: Item[] | null; position: number | null; positionFehler?: string | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
+  harnessVoraussetzung: (a: { items: Item[] | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
 };
 
 /** Klammern `{}` und `()` außerhalb von Strings: nie negativ, am Ende ausgeglichen. */
@@ -187,58 +182,11 @@ describe("gemeinsame Helfer (#1392 Z22, Z23)", () => {
   });
 });
 
-describe("fehlende Position: nur der Teil entfällt, der sie braucht (#1392 Z24)", () => {
-  const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
-
-  test("board-takt: ohne Position wird der Harness-Teil übersprungen, mit sichtbarem Fehler (Exit 1)", () => {
-    const r = takt.harnessVoraussetzung({ items: [it(1)], position: null, positionFehler: "AGENTS.md muss die Position genau einmal nennen\nZeile 2" });
-    expect(r.ok).toBe(false);
-    expect(r.fehler).toBe(true);
-    expect(r.meldung).toMatch(/^::error::/);
-    expect(r.meldung).toContain("genau einmal");
-    expect(r.meldung).toContain("Zeile 2");
-  });
-
-  test("board-takt: ohne Token nur eine Warnung (kein Fehler), mit Position und Token läuft der Teil", () => {
-    const ohneToken = takt.harnessVoraussetzung({ items: null, position: 4 });
+describe("Harness-Teil des Takts braucht nur die Board-Liste (#1392 Z24, factory#162)", () => {
+  test("board-takt: ohne Token nur eine Warnung (kein Fehler), mit Token läuft der Teil; eine Position braucht der Takt nicht mehr", () => {
+    const ohneToken = takt.harnessVoraussetzung({ items: null });
     expect(ohneToken).toMatchObject({ ok: false, fehler: false });
     expect(ohneToken.meldung).toMatch(/^::warning::/);
-    expect(takt.harnessVoraussetzung({ items: [], position: 4 })).toEqual({ ok: true });
-  });
-
-  test("board-takt: eine ungültige Position (0, Bruch, Text) zählt als fehlend", () => {
-    for (const p of [0, 1.5, Number.NaN, "4" as unknown as number]) expect(takt.harnessVoraussetzung({ items: [], position: p }).ok, String(p)).toBe(false);
-  });
-
-  test("board-place: positionOderWarnung liefert null und warnt, statt abzubrechen", () => {
-    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    expect(
-      place.positionOderWarnung(() => {
-        throw new Error("keine Position");
-      }),
-    ).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Sammelticket-Selbstkorrektur übersprungen"));
-    warn.mockRestore();
-    expect(place.positionOderWarnung(() => 4)).toBe(4);
-  });
-
-  test("board-place: positionOderWarnung trägt Folgezeilen und stderr der Ursache (#1609)", () => {
-    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    place.positionOderWarnung(() => {
-      throw Object.assign(new Error("Lesen fehlgeschlagen\nzweite Zeile"), { stderr: "gh: HTTP 502" });
-    });
-    const text = String(warn.mock.calls[0]?.[0]);
-    warn.mockRestore();
-    expect(text).toContain("zweite Zeile");
-    expect(text).toContain("gh: HTTP 502");
-  });
-
-  test("planMitKorrektur ohne Position (null) plant ohne Korrektur, auch wenn ein Sammelticket falsch steht", () => {
-    const sammel = it(20, { title: "Harness-Härtung (gesammelt)" });
-    const items = [...Array.from({ length: 10 }, (_, i) => it(i + 1)), sammel, it(30)];
-    const ohne = place.planMitKorrektur(items, { anchor: null, numbers: [30] }, null);
-    expect(ohne.korrektur).toBeNull();
-    const mit = place.planMitKorrektur(items, { anchor: null, numbers: [30] }, 4);
-    expect(mit.korrektur).not.toBeNull();
+    expect(takt.harnessVoraussetzung({ items: [] })).toEqual({ ok: true });
   });
 });

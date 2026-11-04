@@ -65,7 +65,7 @@ const A = {
   diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
   renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
-  OHNE_ZUGANG: string;
+  ohneZugang: () => string;
   AUFRUFHILFE: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null; ausserhalb?: boolean }) => Bewertung;
   summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number; preisabweichung: number | null };
@@ -945,7 +945,7 @@ describe("pruefen (Ablauf)", () => {
   });
 
   test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
-    expect(A.OHNE_ZUGANG).toContain('Filter providedModelName none of ["claude"]');
+    expect(A.ohneZugang()).toContain('Filter providedModelName none of ["claude"]');
   });
 
   test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist bleibt Lücke und wird nie als „vollständig, Score ausstehend“ gezeigt", async () => {

@@ -5,20 +5,20 @@
  * lief einmal nicht bis zur Position, das Ticket stand am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin.
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
- *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top hinter den Sammelblock)
+ *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top an die Spitze)
  *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Codequalität-Sammelticket im eigenen Repo (factory#156)
  *
- * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` korrigiert es nur die
+ * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` prüft es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
  * auf Position bringen (`sammelticketKorrektur`), dann prüfen: die Board-Liste liefert Neues verzögert, darum bis zu 5 Ladeversuche mit
  * Pause; steht das Ticket falsch, wird es bis zu zweimal neu gesetzt (sonst Exit 1). Erscheint es nie in der Liste, warnt das Skript
- * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
+ * (Exit 0); ein volles Sammelticket holt der Board-Takt (`board-takt.mjs`) an die Spitze, die Position korrigiert niemand nachträglich.
  * Race-fest (#1561): `vorhanden` wird per Direktabruf (`repos/<repo>/issues/<nr>`) bestätigt, weil die Listen-Abfrage nachhinkt (ein gerade geschlossenes
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
  * `codequalitaet` ist freiwillig: nur mit `labels.codequalitaet` in der Projekt-Config (Label, das auf das Produkt-Board des eigenen Repos führt); ohne
- * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf (und den Sammelblock) des Produkt-Boards.
+ * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf des Produkt-Boards (ohne Klemmung hinter andere Sammeltickets, factory#162).
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
@@ -36,15 +36,13 @@ import {
   ghJson,
   kandidatenSammelticket,
   kopfEnde,
-  planFuerArgs,
   waehleBestaetigtes,
   loadItems,
   loadOpenIssuePages,
   normalizeOffene,
   REPO,
-  planMitKorrektur,
+  planFuerArgs,
   positionLautAgentsMd,
-  positionOderWarnung,
   sammelticketKorrektur,
   setPosition,
   todoItem,
@@ -159,7 +157,7 @@ export function sammelLabel(config, art) {
 
 /**
  * Pur (factory#156): der Platzierungsplan des neuen Codequalität-Sammeltickets `nr` (steht schon in `items`): hinter dem Kopf des Boards (letztes Kopf-Item als Anker,
- * ohne Kopf die Spitze), `planFuerArgs` klemmt es weiter hinter die ungeclaimten Sammeltickets. Das Füllstand-Gate in naechstes-ticket.mjs hält es bis zur Schwelle zurück.
+ * ohne Kopf die Spitze), ohne Klemmung hinter andere Sammeltickets (factory#162). Das Füllstand-Gate in naechstes-ticket.mjs hält es bis zur Schwelle zurück.
  */
 export function codequalitaetPlan(items, nr) {
   const ende = kopfEnde(items);
@@ -312,14 +310,11 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
   return neuGesetzt === 0 ? "unbekannt" : "falsch";
 }
 
-/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` hinter den Sammelblock, `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
+/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` an die Spitze (wörtlich, ohne Klemmung), `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
 function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }) {
   if (!top && art !== "codequalitaet") return;
   const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-  // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
-  // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
-  const { korrektur, plan } = art === "codequalitaet" ? { korrektur: null, plan: codequalitaetPlan(items, nr) } : planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-  if (korrektur) setPosition(board, korrektur.id, korrektur.afterId);
+  const plan = art === "codequalitaet" ? codequalitaetPlan(items, nr) : planFuerArgs(items, { anchor: null, numbers: [nr] });
   for (const { item, afterId } of plan.steps) setPosition(board, item.id, afterId);
 }
 
@@ -368,7 +363,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
       const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
       if (k) setPosition(board, k.id, k.afterId);
-    } else setzeErstePosition({ art: args.art, top: args.top, board: board, repo, itemId, nr, titel });
+    } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel });
   }
   if (args.art !== "harness") return;
   const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: board, repo });

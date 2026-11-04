@@ -25,7 +25,9 @@ import * as projektRaw from "../../scripts/projekt-config-lib.mjs";
 const { ROLLEN_PFADE, BEREICHE } = projektRaw as unknown as { ROLLEN_PFADE: Record<string, string>; BEREICHE: Record<string, string> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRaw from "../../scripts/besitz-lib.mjs";
-const { einheitText, leereProjektwerte } = besitzRaw as unknown as {
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as projektwertRaw from "../../scripts/projektwert-lib.mjs";
+const { einheitText, leereProjektwerte } = { ...besitzRaw, ...projektwertRaw } as unknown as {
   einheitText: (e: { pfad: string; block: string }, text: string) => string | null;
   leereProjektwerte: (text: string) => string;
 };
