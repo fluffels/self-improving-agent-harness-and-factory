@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -461,6 +461,23 @@ describe("planeAnkerStubs (pur, factory#167)", () => {
     assert.deepEqual(e.r.hinweise, ["Anker-Stub: docs/s.md gibt es am Tag v2 nicht, keine Stub-Seite (check:factorylinks meldet stub-ziel)"]);
   });
 
+  test("Überschriften aller Ebenen bis 6 werden unverändert übernommen, Markup (** _) entfällt slug-neutral", () => {
+    const seite = "# T\n\n### Tief\n\n###### Ganz **Fett** und_so\n";
+    const e = stubs(kern("#tief", "#ganz-fett-undso"), { "docs/s.md": seite });
+    const text = e.r.dateien.get("docs/s.md") ?? "";
+    assert.match(text, /^### Tief$/m);
+    assert.match(text, /^###### Ganz Fett undso$/m);
+    assert.deepEqual(wirkt(e).befunde, []);
+  });
+
+  test("der Kern verlinkt die erste von zwei gleichnamigen Überschriften: die spätere kommt nicht in den Stub; verlinkt er die zweite, bekommt die frühere ihren eigenen Link", () => {
+    const erste = stubs(kern("#eins"), { "docs/s.md": SEITE });
+    assert.deepEqual(mdLib.collectHeadingSlugs(erste.r.dateien.get("docs/s.md") ?? ""), ["titel-code", "eins"]);
+    const zweite = stubs(kern("#eins-1"), { "docs/s.md": SEITE });
+    assert.deepEqual([zweite.r.ueberschriften, zweite.r.links], [3, 3]);
+    assert.ok((zweite.r.dateien.get("docs/s.md") ?? "").includes(`Kern: [docs/s.md#eins](${u("v2", "docs/s.md", "eins")})`));
+  });
+
   test("eine Seite ohne Ebene-1-Überschrift beginnt mit dem Absatz", () => {
     const e = stubs(kern("#drei"), { "docs/s.md": "## Drei\n" });
     assert.match(e.r.dateien.get("docs/s.md") ?? "", /^Anker-Stub: .*\n\n## Drei\n\nKern: \[docs\/s\.md#drei\]/);
@@ -497,7 +514,7 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     const g = wachter(z);
     assert.equal(g.code, 0, g.err);
     const a = audit(z);
-    for (const k of ["deadLinks", "deadAnchors", "deadCommands", "undocumentedScripts", "testPfadFehler", "fortschreibungsFehler"]) assert.deepEqual(a[k] ?? [], [], k);
+    for (const [k, v] of Object.entries(a)) if (Array.isArray(v) && k !== "mdFiles" && k !== "scripts") assert.deepEqual(v, [], k);
   });
 
   test("AK3: eine vorhandene (gekürzte, CRLF) Seite bleibt byte-gleich; nur die fehlende wird angelegt, der Wächter meldet die gekürzte", () => {
@@ -531,6 +548,7 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /factory-sync: 0 geändert/);
     assert.ok(!/Anker-Stub\)/.test(r.out));
+    assert.ok(!/^Hinweis: Anker-Stubs:/m.test(r.out));
   });
 
   test("ein Sync auf einen anderen Tag lässt die Stub-Links auf den neuen Tag zeigen, beide Prüfungen bleiben grün", () => {
@@ -560,6 +578,47 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     const r = laufe(["--quelle", q, "--ziel", z, "--entwurf"]);
     assert.equal(r.code, 0, r.err);
     assert.ok(!/Anker-Stub\)/.test(r.out));
+    assert.ok(!/^Hinweis: Anker-Stubs:/m.test(r.out));
     assert.equal(existsSync(join(z, "docs", "seite.md")), false);
+  });
+
+  test("ein Kern-Link auf eine Seite und einen Anker, die es am Tag nicht gibt: die Hinweise stehen in der Ausgabe, die übrigen Stubs entstehen", () => {
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#gibt-es-nicht) und [b](docs/weg.md#x).", besitzDateien: { ".claude/agents/x.md": "[c](../../docs/seite.md#erster)\n" } });
+    schreibe(q, "docs/seite.md", SEITE_E2E);
+    const z = zielMitPackage();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^Hinweis: Anker-Stub: docs\/seite\.md hat am Tag v2 keine Überschrift #gibt-es-nicht /m);
+    assert.match(r.out, /^Hinweis: Anker-Stub: docs\/weg\.md gibt es am Tag v2 nicht, keine Stub-Seite /m);
+    assert.equal(existsSync(join(z, "docs", "weg.md")), false);
+    assert.equal(existsSync(join(z, "docs", "seite.md")), true);
+  });
+
+  test("AK3: ein Ordner auf dem Seitenpfad (nicht lesbar als Text, aber da) bekommt keinen Stub", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    mkdirSync(join(z, "docs", "seite.md"), { recursive: true });
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)), ["neu (Anker-Stub): docs/ohne.md"]);
+  });
+
+  test("AK3: ein Symlink (auch hängend) auf dem Seitenpfad gilt als vorhandene Seite, es wird nie darüber geschrieben", (ctx) => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    const ausserhalb = tmp();
+    const ziel = join(ausserhalb, "fremd.md");
+    try {
+      mkdirSync(join(z, "docs"), { recursive: true });
+      symlinkSync(ziel, join(z, "docs", "seite.md"));
+    } catch {
+      ctx.skip();
+      return;
+    }
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(existsSync(ziel), false);
+    assert.ok(lstatSync(join(z, "docs", "seite.md")).isSymbolicLink());
+    assert.deepEqual(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)), ["neu (Anker-Stub): docs/ohne.md"]);
   });
 });

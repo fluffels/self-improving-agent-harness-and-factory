@@ -215,10 +215,11 @@ function stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag }) {
 /**
  * Pur: legt zu jedem Kern-Link-Ziel, das es nicht gibt (`lies(ziel)` ist `null`, Ziel ohne Einheit), eine Stub-Seite an (factory#167): die erste Ebene-1-Überschrift und jede Überschrift,
  * auf die der Kern verlinkt (samt früherer gleichnamiger), je mit Factory-Link auf `ziel#anker` am Tag `tag`; der Text kommt vom Leser des Tags. Eine vorhandene Seite wird nie angefasst.
+ * `vorhanden(pfad)` (Vorgabe: `lies` liefert Text) ist die Frage, ob das Ziel die Seite schon hat; der Sync fragt auch nach Symlinks, die `lies` als `null` meldet, damit nie über einen Symlink geschrieben wird.
  * Ergebnis `{ dateien: Map<pfad, text>, hinweise, ueberschriften, links }`; ein Ziel oder Anker, den es am Tag nicht gibt, ist ein Hinweis (`check:factorylinks` meldet es als `stub-ziel`/`stub-anker`).
  */
-export function planeAnkerStubs({ lies, einheiten, repo, tag, leser }) {
-  const offen = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies }).filter((k) => lies(k.ziel) === null || lies(k.ziel) === undefined);
+export function planeAnkerStubs({ lies, einheiten, repo, tag, leser, vorhanden = (pfad) => lies(pfad) != null }) {
+  const offen = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies }).filter((k) => !vorhanden(k.ziel));
   const jeZiel = new Map();
   for (const k of offen) jeZiel.set(k.ziel, new Set([...(jeZiel.get(k.ziel) ?? []), k.anker]));
   leser.vorladen([...jeZiel.keys()].filter((p) => leser.pfade.includes(p)));

@@ -289,7 +289,7 @@ function verschmelzeLinkDateien(plan, geaendert, platte) {
 }
 
 /**
- * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs und Index im `plan.dateien`.
+ * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs, Index und angelegte Anker-Stub-Seiten (factory#167) im `plan.dateien`; bei einem Befund liegen die Stubs dort auch, die Kommandozeile schreibt dann nichts.
  * Ohne bestimmbares Factory-Repo (weder `quelle.repo` noch Board mit Rolle factory) gibt es nur einen Hinweis; eine unlesbare Ziel-Config bei bekanntem Repo ist ein Fehler.
  */
 function linkSchritt({ plan, ziel, leser }) {
@@ -305,7 +305,8 @@ function linkSchritt({ plan, ziel, leser }) {
   }
   const platte = liesDatei(ziel);
   const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
-  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser });
+  const vorhanden = (pfad) => plan.dateien.has(pfad) || existiertImZiel(join(ziel, ...pfad.split("/")));
+  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, vorhanden });
   for (const [pfad, text] of stubs.dateien) plan.dateien.set(pfad, { text, neu: true, ausfuehrbar: false, stub: true });
   const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
@@ -313,6 +314,16 @@ function linkSchritt({ plan, ziel, leser }) {
   verschmelzeLinkDateien(plan, r.dateien, platte);
   const stubHinweise = stubs.dateien.size === 0 ? [] : [`Anker-Stubs: ${stubs.dateien.size} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
   return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+}
+
+/** Gibt es den Pfad im Ziel (auch als Symlink oder Ordner, hängend eingeschlossen)? Anker-Stubs schreiben nie über etwas, das schon da ist. */
+function existiertImZiel(voll) {
+  try {
+    lstatSync(voll);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `neu (Vorlage)`, `neu` oder `geändert`. */
