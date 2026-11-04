@@ -11,8 +11,11 @@
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
-import { factorySeite } from "./factory-seite.mjs";
+import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -100,7 +103,7 @@ export function wochenFenster(jetzt) {
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
  */
-export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
+export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurzel = WURZEL }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
@@ -114,15 +117,16 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null }) {
     : schonGemessen
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
-  const docs = (pfad, anker) => factorySeite({ pfad, anker, repo, tag: "main" });
+  // Bezieher (Sync-Stand mit Tag): `factorySeiteIn` verlinkt die Factory-Seite auf dem gesyncten Tag; sonst (Upstream) der Link auf `main` des Repos.
+  const docs = (pfad, anker, aufgeloest) => (/^https?:/.test(aufgeloest) ? aufgeloest : factorySeite({ pfad, anker, repo, tag: "main" }));
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
-    `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${docs("docs/model-routing.md", "langfuse-status-überprüfen-1293")}).`,
-    `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs("docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}).`,
+    `- **Checkliste:** [Checkliste Langfuse-Status überprüfen](${docs("docs/model-routing.md", "langfuse-status-überprüfen-1293", factorySeiteIn(wurzel, "docs/model-routing.md", "langfuse-status-überprüfen-1293"))}).`,
+    `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs("docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293", factorySeiteIn(wurzel, "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293"))}).`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
   ].join("\n");
 }
