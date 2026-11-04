@@ -156,6 +156,10 @@ describe("Kopfzeilen im Transkript", () => {
   test("ein Befehl ohne Gate-Bezug erzeugt keinen Lauf", () => {
     expect(laeufe([{ command: "git status", text: "sauber" }, { command: "npm run docs:gen", text: ausgabe("docs:gen") }])).toEqual([]);
   });
+  test("Kettenkopf von verify:kompakt ohne Summenzeile ist unvollständig", () => {
+    const l = laeufe([{ command: "npm run verify:kompakt", text: ausgabe("verify:kompakt") }]);
+    expect(l[0]).toMatchObject({ gezaehlt: false, grund: "unvollständig" });
+  });
   test("doppelte tool_use-IDs zählen einmal", () => {
     const a = { id: "dup", command: "npm run lint", text: ausgabe("lint") };
     expect(gf.laeufeAusTranskript([...zeilen([a]), ...zeilen([a])], { sessionId: "s", liesDatei: lies, ctx })).toHaveLength(1);
