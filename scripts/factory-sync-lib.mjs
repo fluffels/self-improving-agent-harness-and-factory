@@ -13,6 +13,7 @@ import {
   einheitId,
   einheitText,
   jsonSchluesselSpanne,
+  markerHinweis,
   normalisierterEinheitText,
   rendereProjektwerte,
   setzeBlock,
@@ -54,7 +55,7 @@ export function wendeTeileAn(eintraege, srcText, zielLf, zielConfig, erg) {
   let arbeit = zielLf;
   for (const e of eintraege) {
     if (e.block !== undefined) {
-      if (arbeit === null) throw new Error(`${einheitId(e)}: Datei fehlt im Ziel, die Marker fehlen`);
+      if (arbeit === null) throw new Error(`${einheitId(e)}: Datei fehlt im Ziel, die Marker fehlen. ${markerHinweis(e.block)}`);
       arbeit = setzeBlock(arbeit, e.block, rendereProjektwerte(einheitText(e, srcText), zielConfig, einheitId(e)));
     } else {
       if (arbeit === null) arbeit = "{\n}\n";

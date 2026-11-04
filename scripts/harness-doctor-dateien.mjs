@@ -1,10 +1,12 @@
-/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): zwei Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
+/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): drei Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
  *   `Root-Kontextdatei`: keine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt): sie schaltet das native Laden von AGENTS.md ab.
  *   `Zeilenenden`: `.claude/**`, `.agents/**` und `LF_BEISPIELE` haben `eol=lf`, jede andere Textdatei eine eol-Regel (`lf` oder ausdrücklich `crlf`),
  *   der Index enthält kein `crlf` und kein `mixed`. Binärdateien (Index `-text`, Attribut `-text`) und leere Dateien sind ausgenommen.
+ *   `Projektdateien` (factory#170): jede Datei der geschlossenen Liste `PROJEKTDATEIEN` (vom Sync nicht geliefert, aber von einem Gate oder Kern-Skript unter festem Pfad gebraucht)
+ *   existiert; geprüft wird nur das Vorhandensein (eine leere Datei zählt), nie der Inhalt. Der Fix nennt einmal die Vorlage aus der Quelle und je fehlender Datei mit Besonderheit deren Zusatz.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
@@ -12,7 +14,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
+import { PROJEKT_CONFIG, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Memory-Dateien im Root, deren Existenz das native Laden von AGENTS.md abschaltet; `~/.claude/CLAUDE.md` und Unterordner zählen nicht. */
@@ -132,7 +136,34 @@ function zeilenendenPunkt(git) {
   return teile.length ? luecke("Zeilenenden", teile.join("; "), fix) : gut("Zeilenenden");
 }
 
-/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden]`, immer beide, nie weniger. */
+const VORLAGE_FIX = "Vorlage aus der Quelle: Datei gleichen Pfads im Factory-Checkout des Syncs übernehmen und anpassen (Anleitung: Seite docs/erstbezug.md des Factory-Repos)";
+
+/** Projektdateien, die der Sync nicht liefert, die aber ein Gate in `verify`, ein Kern-Skript oder ein Kern-Test unter festem Pfad braucht (geschlossene Liste; `fix` ist ein Zusatz zum Standard-Fix). */
+export const PROJEKTDATEIEN = Object.freeze([
+  { pfad: "AGENTS.md", fix: `mit den Zeilen ${markerStart("kern")} und ${markerEnde("kern")} (Kern-Block) sowie ${PROJEKT_BLOCK_START} und ${PROJEKT_BLOCK_ENDE} (Projekt-Block) anlegen` },
+  { pfad: PROJEKT_CONFIG },
+  { pfad: ROLLEN_PFADE.ticketSkill, fix: `danach \`npm run skills:sync\`` },
+  { pfad: "package.json", fix: `scripts und devDependencies der Quelle übernehmen, dann \`npm install\`, Lockfile committen` },
+  { pfad: "tsconfig.json" },
+  { pfad: "eslint.config.js" },
+  { pfad: "eslint-suppressions.json", fix: `danach \`npm run lint:prune\`` },
+  { pfad: "vite.config.ts" },
+  { pfad: "scripts/docs-gen/config.json", fix: `schichten.layers auf die eigene Schicht-Definition zeigen lassen (Vorlage: scripts/layers.cjs der Quelle)` },
+  { pfad: ".github/workflows/ci.yml" },
+  { pfad: ".github/CODEOWNERS" },
+  { pfad: ".github/protected-paths.json" },
+  { pfad: "docs/referenz/befehle.md" },
+  { pfad: "docs/referenz/anlaufstellen.md" },
+]);
+
+/** Punkt `Projektdateien`: jede Datei aus `PROJEKTDATEIEN` muss existieren (nur Vorhandensein, eine leere Datei zählt); jeder Zusatz-Fix bleibt sichtbar (nie gekürzt). */
+export function projektdateienPunkt(rootDir, existiert = existsSync) {
+  const fehlt = PROJEKTDATEIEN.filter((d) => !existiert(join(rootDir, d.pfad)));
+  if (fehlt.length === 0) return gut("Projektdateien");
+  return luecke("Projektdateien", `fehlen ${fehlt.length}: ${fehlt.map((d) => d.pfad).join(", ")}`, [VORLAGE_FIX, ...fehlt.filter((d) => d.fix).map((d) => `${d.pfad}: ${d.fix}`)].join("; "));
+}
+
+/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien]`, immer alle drei, nie weniger. */
 export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync }) {
-  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git)];
+  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert)];
 }

@@ -103,6 +103,7 @@ describe("setzeBlock", () => {
   });
   test("fehlende, doppelte oder vertauschte Marker sind ein Fehler", () => {
     assert.throws(() => lib.setzeBlock("nichts", "b", "x"), /genau einmal/);
+    assert.throws(() => lib.setzeBlock("nichts", "b", "x"), (e: Error) => e.message.includes(S) && e.message.includes(E));
     assert.throws(() => lib.setzeBlock(`${S}${S}${E}`, "b", "x"), /genau einmal/);
     assert.throws(() => lib.setzeBlock(`${E}${S}`, "b", "x"), /vor dem Start/);
   });
@@ -343,6 +344,12 @@ describe("factory-sync (Fremdrepo-Fixture)", { timeout: 30_000 }, () => {
       const z = baueZiel();
       schreibe(z, "AGENTS.md", "# Projekt ohne Marker\n");
       abgelehnt(baueQuelle(), z, /AGENTS\.md: Block 'stopps': .*genau einmal/);
+      abgelehnt(baueQuelle(), z, /<!-- factory-besitz:start stopps -->.*<!-- factory-besitz:ende stopps -->/);
+    });
+    test("Datei fehlt im Ziel: die Meldung nennt die Marker-Zeilen", () => {
+      const z = baueZiel();
+      rmSync(join(z, "AGENTS.md"));
+      abgelehnt(baueQuelle(), z, /<!-- factory-besitz:start stopps -->.*<!-- factory-besitz:ende stopps -->/);
     });
     test("Ziel-JSON ungültig oder mit doppeltem Schlüssel", () => {
       const q = baueQuelle();

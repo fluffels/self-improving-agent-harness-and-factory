@@ -1,9 +1,12 @@
 /* Harness-Doctor, Dateipunkte (factory#94): `pruefeDateien` mit injizierten `git` und `existiert`, dazu eine echte Git-Fixture.
  * Jeder Test verfälscht genau eine Quelle und erwartet genau diesen Punkt; kein Fehlschlag von Git darf OK ergeben. */
 import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
+import { gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
 import { fixture } from "./support/tmp-fixture";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
@@ -11,6 +14,7 @@ type Git = (args: string[], input?: string) => string;
 const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean }) => Ergebnis[];
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
+const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
 const gitStandard = rawGitStandard as (rootDir: string) => Git;
 
 /** Eine Datei der Fake-Welt: Pfad, Index-Zeilenende (`lf`, `crlf`, `mixed`, `-text`, `none`), Wert von `eol`, Attribut-Text von ls-files. */
@@ -30,13 +34,13 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
 }
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" });
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
-  test("ohne blockierende Datei: OK, und beide Punkte stehen immer da", () => {
+  test("ohne blockierende Datei: OK, und alle drei Punkte stehen immer da", () => {
     const e = lauf(gesund);
-    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien"]);
     expect(e.every((p) => p.ok)).toBe(true);
   });
 
@@ -178,5 +182,51 @@ describe("echte Git-Fixture (Negativfall auf Dateiebene)", () => {
     const p = kurzeProbe(root);
     expect(p.ok).toBe(false);
     expect(p.nichtPruefbar).toBe(true);
+  });
+});
+
+describe("Projektdateien (factory#170)", () => {
+  const ohne = (...fehlend: string[]) => (p: string) => !fehlend.some((f) => p.replaceAll("\\", "/") === `/x/${f}`);
+  const projektPunkt = (existiert: (p: string) => boolean) => punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert }), "Projektdateien");
+
+  test("alles vorhanden: OK", () => {
+    expect(projektPunkt(() => true)).toMatchObject({ punkt: "Projektdateien", ok: true });
+  });
+  test("zwei fehlen: LÜCKE mit beiden Pfaden und genau einem Standard-Fix ohne Zusatz", () => {
+    const p = projektPunkt(ohne("tsconfig.json", "vite.config.ts"));
+    expect(p.ok).toBe(false);
+    expect(p.befund).toBe("fehlen 2: tsconfig.json, vite.config.ts");
+    expect(p.fix).toContain("Vorlage aus der Quelle");
+    expect(p.fix).not.toContain("tsconfig.json: ");
+    expect(p.fix?.match(/Vorlage aus der Quelle/g)).toHaveLength(1);
+  });
+  test("nur AGENTS.md fehlt: der Fix nennt die vier Marker-Zeilen", () => {
+    const p = projektPunkt(ohne("AGENTS.md"));
+    for (const m of ["<!-- factory-besitz:start kern -->", "<!-- factory-besitz:ende kern -->", "<!-- factory-projekt:start -->", "<!-- factory-projekt:ende -->"]) expect(p.fix).toContain(m);
+  });
+  test("alles fehlt: jeder Fix bleibt sichtbar, nichts wird gekürzt", () => {
+    const p = projektPunkt(() => false);
+    expect(p.befund).toContain(`fehlen ${PROJEKTDATEIEN.length}:`);
+    for (const d of PROJEKTDATEIEN.filter((x) => x.fix)) expect(p.fix).toContain(`${d.pfad}: ${d.fix}`);
+    expect(p.befund).not.toContain("weitere");
+  });
+  test("eine leere Datei zählt als vorhanden (echtes Dateisystem, nur der Pfad wird geprüft)", () => {
+    const root = mkdtempSync(join(tmpdir(), "pd-"));
+    try {
+      for (const d of PROJEKTDATEIEN) {
+        mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
+        writeFileSync(join(root, d.pfad), "");
+      }
+      expect(punkt(pruefe({ rootDir: root, git: fakeGit(gesund) }), "Projektdateien").ok).toBe(true);
+      rmSync(join(root, "tsconfig.json"));
+      expect(punkt(pruefe({ rootDir: root, git: fakeGit(gesund) }), "Projektdateien").befund).toBe("fehlen 1: tsconfig.json");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  test("Sonder-Fixes: Ticket-Skill nennt skills:sync, eslint-suppressions lint:prune", () => {
+    const p = projektPunkt(() => false);
+    expect(p.fix).toContain("npm run skills:sync");
+    expect(p.fix).toContain("npm run lint:prune");
   });
 });

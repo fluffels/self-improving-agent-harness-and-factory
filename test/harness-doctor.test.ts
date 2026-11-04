@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeDateien as rawDateien } from "../scripts/harness-doctor-dateien.mjs";
+import { PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawDateien } from "../scripts/harness-doctor-dateien.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -755,9 +755,13 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
 describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Beziehers", () => {
   const dateien = rawDateien as (a: { rootDir: string }) => unknown[];
   /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
-  const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n") => (root: string) => {
+  const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n", ausser: string[] = []) => (root: string) => {
     writeFileSync(join(root, ".gitattributes"), regel);
-    writeFileSync(join(root, "AGENTS.md"), "regeln\n");
+    for (const d of rawProjektdateien as { pfad: string }[]) {
+      if (ausser.includes(d.pfad)) continue;
+      mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
+      writeFileSync(join(root, d.pfad), d.pfad === "AGENTS.md" ? "regeln\n" : "");
+    }
     for (const [rel, text] of Object.entries(extra)) writeFileSync(join(root, rel), text);
     const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
     g("init", "-q");
@@ -768,11 +772,19 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     writeFileSync(join(root, "CLAUDE.md"), "x\n");
   };
 
-  test("gesund: beide Punkte OK, Exit 0", () => {
+  test("gesund: alle drei Punkte OK, Exit 0", () => {
     const r = lauf({}, { dateien, vorbereiten: repo() });
     assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Zeilenenden"));
+    assert.ok(r.out.includes("OK Projektdateien"));
     assert.equal(r.code, 0);
+  });
+
+  test("Negativfall: fehlt tsconfig.json, erscheint LÜCKE Projektdateien mit Pfad und Fix, Exit 1", () => {
+    const r = lauf({}, { dateien, vorbereiten: repo({}, "* text=auto eol=lf\n", ["tsconfig.json"]) });
+    assert.equal(r.code, 1);
+    assert.ok(r.out.some((z) => z.startsWith("LÜCKE Projektdateien: fehlen 1: tsconfig.json ") && z.includes("Fix: Vorlage aus der Quelle")), r.out.join("\n"));
+    assert.ok(r.out.includes("OK Root-Kontextdatei"));
   });
 
   test("Negativfall: eine CLAUDE.md im Root des Beziehers macht den Punkt rot, Exit 0 wird 1", () => {

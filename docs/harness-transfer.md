@@ -63,6 +63,8 @@ Der Generator-Kern hängt nicht am [Quellprojekt](https://github.com/fluffels/ku
 
 ## Form der Vorlage ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md))
 
+Der Weg in ein neues, leeres Repo (Bootstrap-Commit, Ruleset, erster Pull Request, die Projektdateien, die der Sync nicht liefert): [Erstbezug](erstbezug.md).
+
 Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Die Veröffentlichung ist entschieden: Factory-Repo öffentlich unter `fluffels`, alle Rechte vorbehalten, kein Marketplace-Eintrag, keine externen Beiträge ([Fortschreibung quellprojekt#1706](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1706-2026-10-16-veröffentlichungsentscheidung)); das Repo entsteht mit F10.
 
 Für Projekte, in deren Repo vom Harness nichts liegen darf, gilt die Betriebsart Arbeitsplatz statt der eingebetteten Vorlage: [ADR 0022, Fortschreibung quellprojekt#1829](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1829-2026-10-22-betrieb-ohne-harness-im-projekt-repo-arbeitsplatz).
