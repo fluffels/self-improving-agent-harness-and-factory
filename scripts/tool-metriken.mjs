@@ -109,7 +109,7 @@ export function wiederlesen(events) {
 
 /**
  * Prüfläufe (#1120): wie oft ein Agent die volle Gate-Kette (`npm run verify`, `verify:kompakt`, `verify:full`) bzw. die gezielte
- * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>` (oder `node …verify-lauf.mjs`), nie Text in Commit-
+ * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>`, `node …verify-lauf.mjs` oder der Läufer `node …gate-befehl.mjs verify|verifyKompakt|verifyChanged`, nie Text in Commit-
  * Message oder `echo`; von Guard, Hook oder Permission blockierte Events zählen nicht, ein roter Lauf (Exit ≠ 0) schon.
  */
 const VOLL = new Set(["verify", "verify:kompakt", "verify:full"]);
@@ -138,6 +138,15 @@ function pruefArt(words) {
     if (VOLL.has(skript)) return "voll";
     return skript === "verify:changed" ? "gezielt" : null;
   }
-  if (cmd === "node" && rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
-  return null;
+  return cmd === "node" ? nodeArt(rest) : null;
+}
+
+/** `node`-Aufrufe: der Verify-Lauf oder der Läufer `gate-befehl.mjs <name>` (nur verify, verifyKompakt, verifyChanged zählen). */
+function nodeArt(rest) {
+  if (rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
+  const i = rest.findIndex((w) => /(?:^|[/\\])gate-befehl\.mjs$/.test(w));
+  if (i < 0) return null;
+  const name = rest[i + 1];
+  if (name === "verify" || name === "verifyKompakt") return "voll";
+  return name === "verifyChanged" ? "gezielt" : null;
 }

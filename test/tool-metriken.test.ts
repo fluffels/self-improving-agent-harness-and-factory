@@ -203,6 +203,25 @@ describe("pruefLaeufe (#1120)", () => {
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
+  test("zählt den Läufer gate-befehl.mjs (verify, verifyKompakt voll, verifyChanged gezielt)", () => {
+    const evs = [
+      sh("node scripts/gate-befehl.mjs verify"),
+      sh("cd x && node scripts/gate-befehl.mjs verifyKompakt 2>&1 | tail -5"),
+      sh("node C:/x/wt/scripts/gate-befehl.mjs verifyKompakt", "PowerShell"),
+      sh("node scripts/gate-befehl.mjs verifyChanged"),
+    ];
+    assert.deepEqual(z(evs), { voll: 3, gezielt: 1 });
+  });
+  test("Negativ: Läufer mit install, coverage, --zeigen, echo oder ohne Namen zählt nicht", () => {
+    const evs = [
+      sh("node scripts/gate-befehl.mjs install"),
+      sh("node scripts/gate-befehl.mjs coverage"),
+      sh("node scripts/gate-befehl.mjs --zeigen verify"),
+      sh('echo "node scripts/gate-befehl.mjs verify"'),
+      sh("node scripts/gate-befehl.mjs"),
+    ];
+    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
+  });
   test("Ein roter Lauf (Exit code 1) zählt", () => {
     assert.deepEqual(z([sh("npm run verify", "Bash", "Exit code 1\nfoo")]), { voll: 1, gezielt: 0 });
   });
