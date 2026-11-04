@@ -1013,7 +1013,7 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
     assert.throws(() => pc.strukturAus({ struktur: s }), /noch nicht unterstützt[\s\S]*Fix:/);
     assert.match(mit({ ...s, endungen: ["java"] }).join("|"), /struktur\.endungen\[0\]/);
     assert.match(mit({ ...s, quelle: ["a/../b"] }).join("|"), /struktur\.quelle\[0\]/);
-    assert.match(mit({ ...s, moduldoku: "docs/*" }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/);
+    for (const m of ["docs/*", "docs/modul?"]) assert.match(mit({ ...s, moduldoku: m }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/, m);
   });
 });
 
