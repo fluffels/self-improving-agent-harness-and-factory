@@ -256,7 +256,7 @@ export function mehrdeutigText(mehrdeutig) {
 }
 
 /** Die Messfehler (fehlende Berichte, fehlende Datei im Bericht, mehrdeutiger Pfad) als Fehlertext oder `null`; bewusst NICHT über das Override abkürzbar. */
-function messfehlerText(r, red) {
+export function messfehlerText(r, red) {
   if (r.noReport) return `${red("✖ Kein Coverage-Bericht gefunden — es wurde NICHTS gemessen.")}\n\n${fehlenderBerichtText(r.fehlendeBerichte)}`;
   if (r.missing.length > 0) {
     return `${red(`✖ ${r.missing.length} geänderte Quelldatei(en) fehlen im Coverage-Bericht:`)}\n${r.missing.map((p) => `    ${p}`).join("\n")}\n\nFür sie wurde NICHTS gemessen — Bericht veraltet. Neu messen:  ${COVERAGE_BEFEHL}`;

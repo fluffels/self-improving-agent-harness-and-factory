@@ -60,6 +60,7 @@ type CheckDiffCoverageModule = {
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
   pfadAngaben: (quellen: string | Quellen) => string[];
   fehlenderBerichtText: (fehlend: string[]) => string;
+  messfehlerText: (r: Record<string, unknown>, red: (s: string) => string) => string | null;
   mehrdeutigText: (m: { pfad: string; schluessel: string; kandidaten: string[] }[]) => string;
   checkDiffCoverage: (opts: { quelle?: string | Quellen; berichte?: Bericht[]; rootDir?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
@@ -84,6 +85,7 @@ const {
   pfadAngaben,
   fehlenderBerichtText,
   mehrdeutigText,
+  messfehlerText,
   checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -786,6 +788,14 @@ describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", 
     const t = mehrdeutigText([{ pfad: PFAD_A, schluessel: "de/beispiel/Rechner.java", kandidaten: [PFAD_A, PFAD_B] }]);
     assert.match(t, /de\/beispiel\/Rechner\.java[\s\S]*modul-b/);
     assert.match(t, /Fix: [^\n]*struktur\.quelle/);
+  });
+  test("messfehlerText unterscheidet fehlenden Bericht, fehlende Datei im Bericht und mehrdeutigen Pfad; ohne Messfehler gibt es null", () => {
+    const rot = (s: string): string => s;
+    const leer = { noReport: false, missing: [], mehrdeutig: [] };
+    assert.equal(messfehlerText(leer, rot), null);
+    assert.match(messfehlerText({ ...leer, noReport: true, fehlendeBerichte: ["a/jacoco.xml"] }, rot) ?? "", /Kein Coverage-Bericht[\s\S]*Erwartet: a\/jacoco\.xml[\s\S]*gate-befehl\.mjs coverage/);
+    assert.match(messfehlerText({ ...leer, missing: ["x/A.java"] }, rot) ?? "", /fehlen im Coverage-Bericht:\n {4}x\/A\.java[\s\S]*gate-befehl\.mjs coverage/);
+    assert.match(messfehlerText({ ...leer, mehrdeutig: [{ pfad: PFAD_A, schluessel: "k", kandidaten: [PFAD_A, PFAD_B] }] }, rot) ?? "", /mehrdeutigem JaCoCo-Pfad[\s\S]*Fix:/);
   });
   test("ein fehlender Bericht (Glob ohne Treffer) ist noReport und nennt das Muster; der Text nennt den Befehl", () => {
     const rootDir = fixture({ [PFAD_A]: "x" });
