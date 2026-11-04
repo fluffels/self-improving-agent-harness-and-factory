@@ -20,9 +20,10 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, join } from 'node:path'
 import { strukturOrdnerBefunde } from './check-basis.mjs'
-import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from './projekt-config-lib.mjs'
+import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from './projekt-config-lib.mjs'
+import { quellDateien, quellenAus, STANDARD_ENDUNGEN } from './quellwurzeln-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -50,25 +51,15 @@ export function countLines(text) {
   return lines.length
 }
 
-/** Quelldateien der JS/TS-Familie (Deklarationsdateien `.d.ts` zählen wie bisher mit); Daten und Doku zählen nicht. */
-const QUELLDATEI = /\.(ts|mts|cts|js|mjs|cjs)$/
-
-/** Sammelt alle Quelldateien der JS/TS-Familie unter `<quelle>/` (ts, mts, cts, js, mjs, cjs; repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl,
- *  größte zuerst. `rootDir` ist überschreibbar, damit der Test deterministisch
- *  dasselbe Repo misst – unabhängig vom aktuellen Arbeitsverzeichnis. `quelle` ist die Quellwurzel;
- *  ohne Angabe gilt `struktur.quelle` der Projekt-Config (wirft ohne diesen Schlüssel, kein stiller Standardwert). */
-export function collectSizes(rootDir = ROOT, quelle = strukturAus(ladeProjektConfig()).quelle) {
-  const out = []
-  const walk = (dir) => {
-    for (const ent of readdirSync(dir, { withFileTypes: true })) {
-      const abs = join(dir, ent.name)
-      if (ent.isDirectory()) walk(abs)
-      else if (ent.isFile() && QUELLDATEI.test(ent.name))
-        out.push({ file: relative(rootDir, abs).split(sep).join('/'), loc: countLines(readFileSync(abs, 'utf8')) })
-    }
-  }
-  walk(join(rootDir, quelle))
-  return out.sort((a, b) => b.loc - a.loc)
+/** Sammelt alle Quelldateien unter den Quellwurzeln (repo-relativer POSIX-Pfad) mit ihrer Zeilenzahl, größte zuerst. `quellen` ist ein String (eine wörtliche
+ *  Wurzel, Endungen der JS/TS-Familie; Deklarationsdateien `.d.ts` zählen wie bisher mit) oder `{ wurzeln, endungen }` aus `quellenAus` (Globs, eigene Endungen,
+ *  factory#181). `struktur.ohne` gilt hier bewusst nicht: ein großer Spec ist auch ein God-File. `rootDir` ist überschreibbar, damit der Test deterministisch
+ *  dasselbe Repo misst; ohne Angabe gilt `struktur` der Projekt-Config (wirft ohne `quelle`, kein stiller Standardwert). */
+export function collectSizes(rootDir = ROOT, quellen = quellenAus(ladeProjektConfig())) {
+  const { wurzeln, endungen } = typeof quellen === 'string' ? { wurzeln: [quellen], endungen: STANDARD_ENDUNGEN } : quellen
+  return quellDateien(rootDir, { wurzeln, endungen })
+    .map((file) => ({ file, loc: countLines(readFileSync(join(rootDir, ...file.split('/')), 'utf8')) }))
+    .sort((a, b) => b.loc - a.loc)
 }
 
 /** Zeilenzahl je `.claude/workflows/*.js` (repo-relativer POSIX-Pfad); ohne Ordner leer. */
@@ -137,20 +128,20 @@ function main() {
   const green = (s) => paint('32', s)
   const dim = (s) => paint('2', s)
 
-  let quelle
+  let quellen
   let ALLOWLIST
   try {
     const config = ladeProjektConfig()
-    quelle = strukturAus(config).quelle
+    quellen = quellenAus(config)
     ALLOWLIST = ausnahmenAus(config).groesse
   } catch (e) {
     console.error(`✖ ${e instanceof Error ? e.message : String(e)}`)
     process.exit(1)
   }
-  const befunde = strukturOrdnerBefunde(ROOT, { quelle }, ['quelle'])
+  const befunde = strukturOrdnerBefunde(ROOT, { quelle: quellen.quelle }, ['quelle'])
   befunde.forEach((b) => console.error(red(`✖ ${b}`)))
   if (befunde.length > 0) process.exit(1)
-  const sizes = collectSizes(ROOT, quelle)
+  const sizes = collectSizes(ROOT, quellen)
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]))
   const oversized = findOversized(sizes, LOC_BUDGET)
   const oversizedFiles = new Set(oversized.map((s) => s.file))

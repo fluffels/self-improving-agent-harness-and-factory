@@ -22,6 +22,7 @@ import { globMaengel } from "./pfad-glob.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
+import { quellenMaengel } from "./quellwurzeln-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -188,23 +189,24 @@ export function spracheAus(config) {
  */
 export function strukturAus(config) {
   const wert = config?.struktur;
-  if (!istObjekt(wert) || !istText(wert.quelle) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
+  if (!istObjekt(wert) || !(istText(wert.quelle) || Array.isArray(wert.quelle)) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
     throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
+  if (Array.isArray(wert.quelle)) throw new Error(`struktur.quelle als Liste (mehrere Quellwurzeln) wird von diesem Leser noch nicht unterstützt\nFix: struktur.quelle als einen Pfad schreiben oder auf die Umstellung dieses Lesers warten`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  const pfade = ["quelle", "moduldoku"].flatMap((k) => {
+  const pfade = ["moduldoku"].flatMap((k) => {
     if (k === "moduldoku" && s[k] === null) return [];
     if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
     return istRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
   });
-  return [...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
+  return [...quellenMaengel(s), ...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
 }
 
 /** Pur: prüft den optionalen Schlüssel `struktur.escapeKopien` (Liste repo-relativer POSIX-Pfade ohne Doppelte); fehlt er, ist nichts zu prüfen. */
