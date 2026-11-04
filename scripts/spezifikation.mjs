@@ -202,7 +202,22 @@ function anlegen(werte, io, sprache) {
   } catch (e) {
     return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number, repo)}`);
   }
-  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`);
+  const warnung = verknuepfeBlocker(neu, werte.blocker, repo, io);
+  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`, warnung);
+}
+
+/** Setzt je Blocker die native GitHub-Abhängigkeit (nur für das neue Ticket, die Blocker-Zeile bleibt maßgeblich): Zahl = Ziel-Repo, `{ repo, nummer }` = genanntes Repo. Fehler: Warnungstext (Exit bleibt 0), sonst `""`. */
+function verknuepfeBlocker(neu, blocker, repo, io) {
+  let warnungen = "";
+  for (const b of blocker) {
+    const ref = typeof b === "number" ? { repo, nummer: b } : b;
+    try {
+      io.verknuepfeBlocker({ issueNodeId: neu.node_id, blocker: ref, repo });
+    } catch (e) {
+      warnungen += `⚠ native Abhängigkeit nicht gesetzt (${ref.repo}#${ref.nummer}: ${einzeilig(fehlerText(e))}), die Blocker-Zeile im Body bleibt maßgeblich\n`;
+    }
+  }
+  return warnungen;
 }
 
 function reparieren(werte, nrText, io, sprache) {
@@ -236,7 +251,7 @@ function reparieren(werte, nrText, io, sprache) {
   return ergebnis(0, `repariert #${nr}\n`);
 }
 
-/** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `pruefeAnker` (Fehlertext oder `null`), `einsortiere`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
+/** Ausführung mit injizierbarer I/O (`leseDatei`, `erzeuge`, `pruefeAnker` (Fehlertext oder `null`), `einsortiere`, `verknuepfeBlocker`, `ladeIssue`, `bearbeite`, `owner`): `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
   const p = aufrufPruefen(argv);
   if (p.fehler) return aufrufFehler(`${p.fehler}\n${AUFRUF}`);
@@ -266,6 +281,8 @@ export function ankerPruefung({ nach, labels, repo }, lade, config) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
+const ADD_BLOCKED_BY = "mutation($i:ID!,$b:ID!){ addBlockedBy(input:{issueId:$i, blockingIssueId:$b}) { issue { number } } }";
+
 /** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`). */
 export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env } = {}) => {
   return {
@@ -275,6 +292,10 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
     erzeuge: ({ titel, body, labels, repo }) =>
       gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
+    verknuepfeBlocker: ({ issueNodeId, blocker, repo }) => {
+      const knoten = gh(["api", `repos/${blocker.repo}/issues/${blocker.nummer}`], { token: tokenFuerZiel({ ziel: blocker.repo, eigenes: REPO, env }) }).node_id;
+      gh(["api", "graphql", "-f", `query=${ADD_BLOCKED_BY}`, "-f", `i=${issueNodeId}`, "-f", `b=${knoten}`], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
+    },
     pruefeAnker: (a) => ankerPruefung(a, (rolle, repo) => lade(boardFuerRolle(rolle), { repo }), config),
     einsortiere: ({ nr, nach, notfall, repo }) => {
       const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];
