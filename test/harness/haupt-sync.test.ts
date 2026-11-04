@@ -734,7 +734,7 @@ describe("node_modules gegen package-lock.json (#1428 Z2)", { timeout: 30_000 },
   });
   test("abweichende Version und fehlendes Pflichtpaket werden gezählt", () => {
     const h = hidden({ "node_modules/a": { version: "1.0.1" } });
-    expect(N.pruefeNodeModules(L, h)).toMatch(/\(2 Pakete\).*npm ci/);
+    expect(N.pruefeNodeModules(L, h)).toMatch(/\(2 Pakete\).*node scripts\/gate-befehl\.mjs install/);
     expect(N.pruefeNodeModules(L, hidden({ "node_modules/a": { version: "1.0.0" } }))).toMatch(/\(1 Pakete\)/);
   });
   test("Workspace-Einträge außerhalb von node_modules/ und Links zählen nicht als fehlend", () => {
@@ -743,7 +743,7 @@ describe("node_modules gegen package-lock.json (#1428 Z2)", { timeout: 30_000 },
     expect(N.pruefeNodeModules(lock({ "node_modules/y": { version: "1.0.0" } }), hidden({}))).toMatch(/\(1 Pakete\)/);
   });
   test("kein Install-Stand: eigener Hinweis", () => {
-    expect(N.pruefeNodeModules(L, null)).toMatch(/keinen Install-Stand/);
+    expect(N.pruefeNodeModules(L, null)).toMatch(/keinen Install-Stand.*node scripts\/gate-befehl\.mjs install/);
   });
   test("kaputtes JSON in Lock oder Install-Stand: fail-open (null)", () => {
     expect(N.pruefeNodeModules("{ kaputt", hidden({}))).toBeNull();

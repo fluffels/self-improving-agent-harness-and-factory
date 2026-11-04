@@ -11,9 +11,21 @@ export const STANDARD_BEFEHLE = Object.freeze({
   verifyKompakt: "npm run verify:kompakt",
   verifyChanged: "npm run verify:changed",
   coverage: "npm run test:coverage",
+  testGezielt: "npx vitest run",
 });
 
 export const GATE_BEFEHL_NAMEN = Object.freeze(Object.keys(STANDARD_BEFEHLE));
+
+/** Art des Prüflaufs je Gate-Befehl (Werkzeugmessung zählt `voll`/`gezielt`; null = kein Prüflauf); Schlüssel = `GATE_BEFEHL_NAMEN`. */
+export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null });
+
+/** Der einzige Name, der Pfade annimmt; sie werden in doppelten Anführungszeichen an die Befehlszeile angehängt. */
+export const PFAD_NAME = "testGezielt";
+/** Erlaubte Zeichen eines angehängten Pfads (keine Shell-Metazeichen, kein Leerzeichen). */
+const PFAD_MUSTER = /^[\w./\\:@+=,-]+$/;
+
+/** Flag, das nur die Befehlszeile ausgibt, statt sie zu starten. */
+export const ZEIGEN_FLAG = "--zeigen";
 
 const istName = (name) => typeof name === "string" && Object.hasOwn(STANDARD_BEFEHLE, name);
 const istBefehl = (w) => typeof w === "string" && w.trim() !== "";
@@ -55,13 +67,18 @@ function aufrufFehler(err, text) {
   return AUFRUF_EXIT;
 }
 
-/** Einstieg: `<name> [--zeigen]`; gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
+/** Einstieg: `<name> [--zeigen]` (`testGezielt` zusätzlich mit Pfaden); gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
 export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error }) {
-  const { werte, positionale, fehler } = flagsLesen(argv, { zeigen: { type: "boolean" } }, { positionale: true });
-  const hinweis = "Fix: node scripts/gate-befehl.mjs <name> [--zeigen] mit name aus " + GATE_BEFEHL_NAMEN.join(", ");
+  const { werte, positionale, fehler } = flagsLesen(argv, { [ZEIGEN_FLAG.slice(2)]: { type: "boolean" } }, { positionale: true });
+  const hinweis = `Fix: node scripts/gate-befehl.mjs <name> [${ZEIGEN_FLAG}] mit name aus ${GATE_BEFEHL_NAMEN.join(", ")}`;
   if (fehler) return aufrufFehler(err, `${fehler.text}\n${hinweis}`);
-  if (positionale.length !== 1) return aufrufFehler(err, `genau ein Gate-Befehl-Name erwartet.\n${hinweis}`);
   const name = positionale[0];
+  const mitPfaden = name === PFAD_NAME;
+  if (!mitPfaden && positionale.length !== 1) return aufrufFehler(err, `genau ein Gate-Befehl-Name erwartet (Pfade nimmt nur ${PFAD_NAME} an).\n${hinweis}`);
+  const pfade = mitPfaden ? positionale.slice(1) : [];
+  if (mitPfaden && pfade.length === 0) return aufrufFehler(err, `${PFAD_NAME} braucht mindestens einen Pfad.\nFix: node scripts/gate-befehl.mjs ${PFAD_NAME} <datei> [<datei> …]`);
+  const schlecht = pfade.find((x) => !PFAD_MUSTER.test(x));
+  if (schlecht !== undefined) return aufrufFehler(err, `Pfad „${schlecht}“ enthält unerlaubte Zeichen (erlaubt: Buchstaben, Ziffern, _ . / \\ : @ + = , -).\nFix: einen einfachen Pfad ohne Leerzeichen und Shell-Zeichen angeben.`);
   let befehl;
   try {
     if (!istName(name)) befehlAus({}, name);
@@ -69,7 +86,8 @@ export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.e
   } catch (e) {
     return aufrufFehler(err, e.message);
   }
-  if (werte.zeigen) {
+  if (pfade.length > 0) befehl = `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
+  if (werte[ZEIGEN_FLAG.slice(2)]) {
     out(befehl);
     return 0;
   }

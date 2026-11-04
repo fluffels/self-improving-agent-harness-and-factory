@@ -25,18 +25,30 @@ export function transkriptZeilen(jsonlText) {
 
 /**
  * Jüngste Assistant-Nachricht mit einer `ERGEBNIS:`-Zeile (#1342): entweder die `message` eines
- * `SubagentHandback`-Aufrufs oder ein Text-Block. `null`, wenn es keine gibt.
+ * `SubagentHandback`-Aufrufs oder ein Text-Block. Die Suche endet an der jüngsten User-Nachricht mit Text (factory#193: Fortsetzung
+ * oder Hook-Feedback); `tool_result`-Einträge sind keine Grenze. `null`, wenn es keine gibt.
  */
 export function letzteErgebnisNachricht(zeilen) {
   const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
   for (let i = zeilen.length - 1; i >= 0; i--) {
     const msg = zeilen[i]?.message ?? zeilen[i];
-    if (msg?.role !== "assistant" && zeilen[i]?.type !== "assistant") continue;
-    const c = msg?.content;
-    const kandidaten = typeof c === "string" ? [c] : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null)) : [];
+    const rolle = msg?.role ?? zeilen[i]?.type;
+    if (rolle === "user" && istTextNachricht(msg)) return null;
+    if (rolle !== "assistant") continue;
+    const kandidaten = berichtKandidaten(msg?.content);
     for (let j = kandidaten.length - 1; j >= 0; j--) if (hatErgebnis(kandidaten[j])) return kandidaten[j];
   }
   return null;
+}
+
+/** Eine User-Nachricht mit Text (Fortsetzung, Hook-Feedback) beginnt eine neue Runde; ein reines `tool_result` nicht. */
+const istTextNachricht = (m) => typeof m?.content === "string" || (Array.isArray(m?.content) && m.content.some((b) => b?.type === "text"));
+
+/** Texte, in denen ein Bericht stehen kann: String-Inhalt, Text-Blöcke und die `message` eines `SubagentHandback`-Aufrufs, in Reihenfolge. */
+function berichtKandidaten(c) {
+  if (typeof c === "string") return [c];
+  if (!Array.isArray(c)) return [];
+  return c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null));
 }
 
 /**

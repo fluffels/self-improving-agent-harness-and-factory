@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as tmModule from "../scripts/tool-metriken.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { GATE_BEFEHL_NAMEN } from "../scripts/gate-befehl-lib.mjs";
+import { PRUEFLAUF_ART } from "../scripts/gate-befehl-lib.mjs";
 
-const gateNamen = GATE_BEFEHL_NAMEN as readonly string[];
+const prueflaufArt = PRUEFLAUF_ART as Readonly<Record<string, "voll" | "gezielt" | null>>;
 
 type Ev = { ts?: string; tool: string; input: Record<string, unknown>; resultChars: number; agent?: string | null; fehler?: string | null };
 type Lesen = { reads: number; abschnittsweise: number; voll: { n: number; tokens: number }; gezielt: { n: number; tokens: number }; top: { datei: string; n: number; tokens: number }[] };
@@ -207,6 +207,7 @@ describe("pruefLaeufe (#1120)", () => {
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
+  // Gate-Befehle (factory#182): der Läufer `node scripts/gate-befehl.mjs <name>` ersetzt `npm run …`.
   test("zählt den Läufer gate-befehl.mjs (verify, verifyKompakt voll, verifyChanged gezielt)", () => {
     const evs = [
       sh("node scripts/gate-befehl.mjs verify"),
@@ -217,8 +218,9 @@ describe("pruefLaeufe (#1120)", () => {
       sh("node gate-befehl.mjs verify"),
     ];
     assert.deepEqual(z(evs), { voll: 5, gezielt: 1 });
+    assert.deepEqual(z([sh("node ./scripts/gate-befehl.mjs verifyChanged", "PowerShell")]), { voll: 0, gezielt: 1 });
   });
-  test("Negativ: Läufer mit install, coverage, --zeigen, echo oder ohne Namen zählt nicht", () => {
+  test("Negativ: Läufer mit install, coverage, --zeigen, echo, ohne Namen oder fremdem Skript zählt nicht", () => {
     const evs = [
       sh("node scripts/gate-befehl.mjs install"),
       sh("node scripts/gate-befehl.mjs coverage"),
@@ -228,49 +230,27 @@ describe("pruefLaeufe (#1120)", () => {
       sh("node scripts/anderes.mjs verify"),
       sh("node scripts/gate-befehl.mjs verify --zeigen"),
       sh("node scripts/gate-befehl.mjs verifyKompakt --zeigen"),
+      sh("node scripts/gate-befehl.mjs gibtsnicht"),
+      sh("node scripts/gate-befehl.mjs toString"),
       sh("node verify"),
+      sh("node verifyKompakt foo.mjs"),
       sh("node scripts/gate-befehl.mjs.bak verify"),
       sh("node scripts/mein-gate-befehl.mjs verify"),
+      sh("node scripts/my-gate-befehl.mjs verify"),
+      sh("node scripts/xgate-befehl.mjs verify"),
+      // Nur der Name direkt hinter dem Skript zählt, ein späterer Gate-Name nicht.
+      sh("node scripts/gate-befehl.mjs install verify"),
+      sh("node scripts/gate-befehl.mjs gibtsnicht verify"),
+      // Nur `node` ist der Läufer: ein anderes Kommando mit dem Skriptnamen als Argument zählt nicht.
+      sh("git add scripts/gate-befehl.mjs verify"),
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
   test("Ein roter Lauf (Exit code 1) zählt", () => {
     assert.deepEqual(z([sh("npm run verify", "Bash", "Exit code 1\nfoo")]), { voll: 1, gezielt: 0 });
   });
-  // Gate-Befehle (factory#182): der Läufer `node scripts/gate-befehl.mjs <name>` ersetzt `npm run …`.
-  const GATE_ZAEHLT: Record<string, "voll" | "gezielt"> = { verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt" };
-  const GATE_ZAEHLT_NICHT = ["install", "coverage"];
-  test("zählt den Gate-Befehl verify/verifyKompakt als voll, verifyChanged als gezielt", () => {
-    assert.deepEqual(z([sh("node scripts/gate-befehl.mjs verify")]), { voll: 1, gezielt: 0 });
-    assert.deepEqual(z([sh("cd x && node scripts/gate-befehl.mjs verifyKompakt")]), { voll: 1, gezielt: 0 });
-    assert.deepEqual(z([sh("node ./scripts/gate-befehl.mjs verifyChanged", "PowerShell")]), { voll: 0, gezielt: 1 });
-  });
-  test("zählt install, coverage und --zeigen nicht", () => {
-    const evs = [
-      sh("node scripts/gate-befehl.mjs install"),
-      sh("node scripts/gate-befehl.mjs coverage"),
-      sh("node scripts/gate-befehl.mjs verify --zeigen"),
-      sh("node scripts/gate-befehl.mjs"),
-      sh("node scripts/gate-befehl.mjs gibtsnicht"),
-      sh("node scripts/gate-befehl.mjs toString"),
-    ];
-    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
-  });
-  test("zählt nur das Skript gate-befehl.mjs selbst: ohne Skript, mit Präfix/Suffix am Dateinamen nicht", () => {
-    const evs = [
-      sh("node verify"),
-      sh("node verifyKompakt foo.mjs"),
-      sh("node scripts/my-gate-befehl.mjs verify"),
-      sh("node scripts/xgate-befehl.mjs verify"),
-      sh("node scripts/gate-befehl.mjs.bak verify"),
-    ];
-    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
-    assert.deepEqual(z([sh("node C:\\x\\scripts\\gate-befehl.mjs verify", "PowerShell")]), { voll: 1, gezielt: 0 });
-  });
-  test("jeder Gate-Befehl-Name ist abgebildet oder ausdrücklich ausgenommen", () => {
-    for (const name of gateNamen) {
-      assert.ok(name in GATE_ZAEHLT || GATE_ZAEHLT_NICHT.includes(name), `neuer Gate-Befehl „${name}“: in pruefArt abbilden oder als „zählt nicht“ eintragen`);
-      const erwartet = GATE_ZAEHLT[name];
+  test("jeder Gate-Befehl-Name ist in PRUEFLAUF_ART abgebildet und wird entsprechend gezählt", () => {
+    for (const [name, erwartet] of Object.entries(prueflaufArt)) {
       const soll = { voll: erwartet === "voll" ? 1 : 0, gezielt: erwartet === "gezielt" ? 1 : 0 };
       assert.deepEqual(z([sh(`node scripts/gate-befehl.mjs ${name}`)]), soll, name);
     }

@@ -17,6 +17,8 @@ interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, .
 const lib = raw as unknown as {
   STANDARD_BEFEHLE: Record<string, string>;
   GATE_BEFEHL_NAMEN: string[];
+  PRUEFLAUF_ART: Record<string, string | null>;
+  ZEIGEN_FLAG: string;
   pruefeBefehle(block: unknown): string[];
   befehlAus(config: Config, name: string): string;
   cli(argv: string[], opt: Optionen): number;
@@ -24,7 +26,7 @@ const lib = raw as unknown as {
 const pc = rawPc as unknown as { pruefeProjektConfig(c: unknown): string[]; ladeProjektConfig(o: { pfad: string }): Config };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
-const HEUTE = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage" };
+const HEUTE = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage", testGezielt: "npx vitest run" };
 
 /** Fake-Umgebung: `spawn` protokolliert den Aufruf; `ausgabe` sammelt stdout und stderr. */
 const umgebung = (config: Config = {}, lauf: Lauf = { status: 0 }) => {
@@ -46,12 +48,12 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 describe("Standardbefehle ohne Block (K2)", () => {
-  test("befehlAus liefert für alle fünf Namen genau die heutigen Befehle", () => {
+  test("befehlAus liefert für alle Namen genau die Standardbefehle", () => {
     assert.deepEqual(lib.GATE_BEFEHL_NAMEN, Object.keys(HEUTE));
     for (const [name, befehl] of Object.entries(HEUTE)) assert.equal(lib.befehlAus({}, name), befehl, name);
   });
   test("cli startet je Name genau diesen String als Shell-Befehl, ohne Args-Array", () => {
-    for (const [name, befehl] of Object.entries(HEUTE)) {
+    for (const [name, befehl] of Object.entries(HEUTE).filter(([n]) => n !== "testGezielt")) {
       const u = umgebung();
       assert.equal(lib.cli([name], u.opt), 0);
       assert.equal(u.aufrufe.length, 1);
@@ -145,6 +147,56 @@ describe("Namen und Aufruf (K3)", () => {
   });
 });
 
+describe("testGezielt mit angehängten Pfaden (factory#193)", () => {
+  test("die Pfade werden in doppelten Anführungszeichen an den Standardbefehl angehängt", () => {
+    const u = umgebung();
+    assert.equal(lib.cli(["testGezielt", "test/a.test.ts", "test/b/c.test.ts"], u.opt), 0);
+    assert.equal(u.aufrufe[0].befehl, 'npx vitest run "test/a.test.ts" "test/b/c.test.ts"');
+  });
+  test("der Block ersetzt den Anfang, die Pfade hängen dahinter; Windows-Pfade und erlaubte Zeichen gehen durch", () => {
+    const u = umgebung({ befehle: { testGezielt: "mvn -q test" } });
+    assert.equal(lib.cli(["testGezielt", "src\\a-b_c.test.ts", "C:/x/y@1+2=3,4.ts"], u.opt), 0);
+    assert.equal(u.aufrufe[0].befehl, 'mvn -q test "src\\a-b_c.test.ts" "C:/x/y@1+2=3,4.ts"');
+  });
+  test("--zeigen gibt die Zeile samt Pfaden aus und startet nichts", () => {
+    const u = umgebung();
+    assert.equal(lib.cli(["testGezielt", "test/a.test.ts", "--zeigen"], u.opt), 0);
+    assert.deepEqual(u.out, ['npx vitest run "test/a.test.ts"']);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("ohne Pfad endet testGezielt mit Exit 2 und Fix-Zeile", () => {
+    const u = umgebung();
+    assert.equal(lib.cli(["testGezielt"], u.opt), 2);
+    assert.match(u.err.join("\n"), /Fix:/);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("Shell-Metazeichen im Pfad enden mit Exit 2, nichts wird gestartet", () => {
+    for (const pfad of ["a;b", "a b", "a&b", "a|b", "$(x)", "`x`", 'a"b', "a'b", "a>b", "a<b", "a*b", "a\nb", "a%b", "a!b", "a^b", "a(b)", "a#b", "~x", ""]) {
+      const u = umgebung();
+      assert.equal(lib.cli(["testGezielt", "test/ok.ts", pfad], u.opt), 2, JSON.stringify(pfad));
+      assert.match(u.err.join("\n"), /Fix:/, JSON.stringify(pfad));
+      assert.equal(u.aufrufe.length, 0, JSON.stringify(pfad));
+    }
+  });
+  test("bei jedem anderen Namen sind Pfade ein Aufruf-Fehler", () => {
+    for (const name of lib.GATE_BEFEHL_NAMEN.filter((n) => n !== "testGezielt")) {
+      const u = umgebung();
+      assert.equal(lib.cli([name, "test/a.test.ts"], u.opt), 2, name);
+      assert.equal(u.aufrufe.length, 0, name);
+    }
+  });
+  test("PRUEFLAUF_ART zählt testGezielt nicht", () => {
+    assert.equal(lib.PRUEFLAUF_ART.testGezielt, null);
+  });
+  test("Smoke im echten Repo: --zeigen mit Pfaden und Metazeichen", () => {
+    const ok = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "testGezielt", "test/a.test.ts", "--zeigen"], { cwd: WURZEL, encoding: "utf8" });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(ok.stdout.trim(), 'npx vitest run "test/a.test.ts"');
+    const falsch = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "testGezielt", "a;b", "--zeigen"], { cwd: WURZEL, encoding: "utf8" });
+    assert.equal(falsch.status, 2);
+  });
+});
+
 describe("Ausführung (K3)", () => {
   test("der Exit-Code des Befehls wird weitergegeben", () => {
     assert.equal(lib.cli(["verify"], umgebung({}, { status: 0 }).opt), 0);
@@ -157,6 +209,10 @@ describe("Ausführung (K3)", () => {
     const u = umgebung({}, { error: new Error("ENOENT") });
     assert.equal(lib.cli(["verify"], u.opt), 1);
     assert.match(u.err.join("\n"), /ENOENT/);
+  });
+  test("PRUEFLAUF_ART deckt genau die Gate-Befehl-Namen ab (gleiche Reihenfolge), ZEIGEN_FLAG ist --zeigen", () => {
+    assert.deepEqual(Object.keys(lib.PRUEFLAUF_ART), lib.GATE_BEFEHL_NAMEN);
+    assert.equal(lib.ZEIGEN_FLAG, "--zeigen");
   });
   test("--zeigen gibt genau den Befehl aus und startet nichts", () => {
     const u = umgebung({ befehle: { verify: "mvn -q verify" } });

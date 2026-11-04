@@ -1,4 +1,6 @@
 /* PR-Warten (#1559): Kern pur, kein gh-Aufruf, kein echter Schlaf. */
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/pr-warten.mjs";
@@ -466,7 +468,7 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     expect(C.holeWerkzeuge("7", gh)).toEqual({ werkzeuge: [], hinweis: "HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403" });
   });
   describe("lauf: die echte Verdrahtung aus holeWerkzeuge, holePflicht und warten", () => {
-    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number }) => Erg };
+    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number; schreibe?: (p: string, t: string) => void; meldeFehler?: (z: string) => void }) => Erg; diagnosePfad: (pr: string) => string };
     const stand = offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]);
     const ghMit = (regeln: () => string) => (a: string[]) => {
       if (a[0] === "api") return regeln();
@@ -475,7 +477,7 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     };
     const uhr = () => {
       let t = 0;
-      return { schlafe: (ms: number) => void (t += ms), jetzt: () => t };
+      return { schlafe: (ms: number) => void (t += ms), jetzt: () => t, schreibe: () => undefined, meldeFehler: () => undefined };
     };
     const arg = { pr: "7", maxSekunden: 60, intervall: 30 };
     test("Regel gesetzt, CodeQL rot: ROT, Exit 1", () => {
@@ -497,6 +499,31 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
       expect(r.exit).toBe(2);
       expect(r.zeilen.at(-1)).toBe("HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403");
       expect(r.zeilen.some((z) => z.startsWith("ROT"))).toBe(false);
+    });
+    test("Exit 2: letzter Rohstand in die Diagnose-Datei im OS-Temp, Pfad auf stderr, stdout-Zeilen unverändert", () => {
+      const geschrieben: [string, string][] = [];
+      const err: string[] = [];
+      const r = L.lauf(arg, { gh: ghMit(() => "[]"), ...uhr(), schreibe: (p, t) => void geschrieben.push([p, t]), meldeFehler: (z) => void err.push(z) });
+      expect(r.exit).toBe(2);
+      expect(geschrieben).toHaveLength(1);
+      expect(geschrieben[0][0]).toBe(L.diagnosePfad("7"));
+      expect(geschrieben[0][0]).toBe(join(tmpdir(), "pr-warten-7.json"));
+      expect(JSON.parse(geschrieben[0][1])).toEqual({ state: stand.state, mergeable: stand.mergeable, statusCheckRollup: stand.statusCheckRollup });
+      expect(err).toEqual([`Diagnose: ${L.diagnosePfad("7")}`]);
+      expect(r.zeilen.some((z) => z.startsWith("Diagnose"))).toBe(false);
+    });
+    test("Negativ: bei Exit 1 keine Diagnose-Datei; ein Schreibfehler ändert das Ergebnis nicht", () => {
+      const geschrieben: string[] = [];
+      L.lauf(arg, { gh: ghMit(() => JSON.stringify([regel("CodeQL")])), ...uhr(), schreibe: (p) => void geschrieben.push(p) });
+      expect(geschrieben).toEqual([]);
+      const r = L.lauf(arg, {
+        gh: ghMit(() => "[]"),
+        ...uhr(),
+        schreibe: () => {
+          throw new Error("EACCES");
+        },
+      });
+      expect(r.exit).toBe(2);
     });
   });
   test("mitHinweis hängt die Zeile an außer bei MERGED", () => {
