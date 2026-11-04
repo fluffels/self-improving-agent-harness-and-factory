@@ -28,7 +28,8 @@ Die Auswahl kennt keinen Modus über beide Seiten: jeder Aufruf nennt `--bereich
 Die Auswahl lädt beide Boards (Trennregel: Label `<labels.harness>` ergibt das Factory-Board, alles andere das Produkt-Board). **Ein Board führt die Issues eines Repos** (`boards[].repo` der Projekt-Config, ohne Schlüssel das `repo` der Config; ADR 0022 F10): die Auswahl sieht nur Items des eigenen Repos (`content.repository_url`, Nummern verschiedener Repos kollidieren sonst); ein Board eines anderen Repos („fremdes Board“) bleibt leer, ein `hinweis` nennt das Repo, in dem die Auswahl läuft, und eigene Items darauf stehen als „verwaist“. Ein Blocker darf `<blocker> owner/name#<nr>` heißen: der Stand kommt per REST, nicht prüfbar sperrt (fail-closed). Reihenfolge der Entscheidung:
 
 1. **Kopf-Items zuerst:** Notfälle, Dependabot, Forum, Wiedervorlage, Prüf-Ticket, Tag-Ticket und das Status-Ticket (Titelmarker, `istKopfItem`), geordnet nach `kopfRang` (Notfall-Art vor Status-Ticket), bei Gleichstand Produkt vor Factory; es zählen die Kopf-Items der eigenen Seite plus die Notfälle (🚨, 🔒) beider Boards.
-2. **Dann das oberste freie Item der eigenen Seite** (`agentic` Factory, `produkt` Produkt), ohne Ausweichen auf die andere. Ist nichts frei, Exit 1 mit dem Bereichsnamen.
+2. **Dann die Items des frühesten offenen [Milestones](#milestones-release-planung-factory194)** der eigenen Seite, in Board-Reihenfolge (Vorrang, keine Sperre; ohne Milestones entfällt die Stufe).
+3. **Dann das oberste freie Item der eigenen Seite** (`agentic` Factory, `produkt` Produkt), ohne Ausweichen auf die andere. Ist nichts frei, Exit 1 mit dem Bereichsnamen.
 
 Ein Item nur auf dem falschen Board zählt auf seiner Trennregel-Seite (hinten angehängt, ein Sammelhinweis), ein Item auf beiden Boards nur auf dem Board laut Trennregel (`hinweis`, `::warning::` im Board-Takt, Meldung in `board-place`); die Wächter melden nur, sie entfernen nichts (Reparatur: `node scripts/board-place.mjs --umzug [--dry-run]`, Absatz „Umzug“ unten). `board-place` wählt sein Board über die Labels der Nummern (gemischte Nummern oder ein `--after`-Anker auf dem anderen Board: Exit 2), `board-takt` nimmt fehlende Issues nach der Trennregel auf und führt Status-Ticket, Harness-Takt und Sammelticket-Korrektur auf dem Factory-Board aus.
 
@@ -233,6 +234,22 @@ Der Workflow [`harness-doctor.yml`](../.github/workflows/harness-doctor.yml) ruf
 ## GitHub-API-Kontingent (#1549, Bezug #1358)
 
 Core und GraphQL haben je 5000 Punkte pro Stunde, geteilt von allen Agenten und Workflows desselben Tokens. `board-place`, `naechstes-ticket`, `sammelticket-anlegen` und `board-takt` (nur mit `PROJECT_TOKEN`) rufen am Anfang `mitKontingent` aus [`scripts/kontingent-lib.mjs`](../scripts/kontingent-lib.mjs) auf: unter 10 % Rest brechen sie lokal mit Exit 5 und der Reset-Zeit ab (unter GitHub Actions nur `::warning::`, damit `main` nicht rot wird); ist `gh api rate_limit` nicht lesbar, läuft der Lauf weiter. Beim Beenden schreibt jedes Skript eine JSONL-Zeile mit dem Verbrauch (Delta der `used`-Werte; enthält den Verbrauch paralleler Agenten) nach `<Temp>/<Repo-Name>-gh-kosten.jsonl` (Override `FACTORY_GH_KOSTEN_LOG`), unter Actions als `::notice title=gh-Kosten`. `node scripts/gh-kontingent.mjs` zeigt den Stand, `--bericht` aggregiert das Log je Skript. Der Zähler von `rate_limit` hinkt hinter den Aufrufen her: ein einzelner Lauf kann 0 zeigen, belastbar ist die Summe vieler Läufe. Das CI-Warten läuft mit `--interval 30` (Standard 10 s). Board- und Issue-Listen laufen über REST (siehe oben). Gemessen werden nur diese vier Skripte; direkte `gh`-Aufrufe der Agenten erfasst Langfuse als Bash-Observations. Die vorab geprüften Arten sind je Skript wählbar (`arten`: `naechstes-ticket` prüft nur `core`).
+
+## Milestones (Release-Planung, factory#194)
+
+**Zweck.** GitHub-Milestones planen die Releases: ein Milestone bündelt die Tickets eines Release-Ziels, die Ticket-Auswahl zieht sie vor, und sein Schließen stößt den [Tag-Takt](agent-harness.md) an. Es gibt keine Pflicht und keine Config: ein Projekt ohne Milestones merkt nichts.
+
+**Benennung.** Der Name ist das Release-Ziel in wenigen Worten („Erster Bezieher-Sync“), keine Versionsnummer: die Version ergibt sich beim Taggen aus den Conventional Commits (`naechsterTag`). Die Reihenfolge bestimmt die Fälligkeit (`due_on`), nicht der Name.
+
+**Zuordnung.** Je Issue höchstens ein Milestone: `gh issue edit <nr> --milestone "<name>"` (lösen: `--remove-milestone`). Kopf-Items (Notfälle, Status-, Tag-Ticket) und Sammeltickets tragen keinen; bei einem Epic tragen die Kinder ihn. Anlegen und Schließen eines Milestones entscheidet die Maintainerin.
+
+**Wirkung auf die Auswahl.** `naechstes-ticket` bestimmt den frühesten offenen Milestone unter den offenen Todo-Items ohne Kopfrolle der eigenen Seite: Fälligkeit aufsteigend, ohne Fälligkeit dahinter, bei Gleichstand die kleinere Nummer. Dessen Items kommen nach den Kopf-Items und vor allen anderen (Vorrang statt Sperre: sind sie belegt oder blockiert, fällt die Auswahl auf die übrige Board-Reihenfolge zurück). Die Takt-Sammeltickets (Harness-Härtung, Codequalität) laufen in dieser Stufe mit und bleiben unter ihrer Füllstand-Schwelle übersprungen. Eine Hinweiszeile `Milestone-Vorrang: „<name>“ (fällig <Datum> | ohne Fälligkeit)` nennt die Stufe; `--ticket` bleibt unverändert.
+
+**Wirkung auf den Tag-Takt.** Wird ein Milestone geschlossen (Workflow-Ereignis `milestone: closed` in `board-takt.yml`, zusätzlich zu Push und Montagslauf), legt `tag-takt.mjs` das Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ an: Auslöser ist ein Milestone, dessen `closed_at` nach dem Erstellungsdatum des letzten Release-Tags liegt, schon bei einem ungetaggten Besitz-PR. Ohne ungetaggten Besitz-PR gibt es nichts zu taggen (`nichts`, mit Grund im Log); ein offenes Tag-Ticket wird wie bisher aktualisiert, nie verdoppelt. Taggen bleibt Pre-Flight („ja, taggen“).
+
+**Negativfall.** Ohne Milestones, mit Items ohne Milestone und mit nur geschlossenen Milestones verhalten sich Auswahl und Tag-Takt wie vorher. Ein unlesbarer Milestone-Stand ist fail-open: die Auswahl wertet ihn als „ohne Milestone“, der Tag-Takt meldet `::warning::` und lässt den Milestone-Auslöser weg.
+
+**Grenzen.** Ein Bezieher nutzt die Milestones seines eigenen Repos (der Tag-Takt tut dort nichts). Milestone-Titel stehen nur bereinigt (Zeilenumbrüche und Steuerzeichen raus, höchstens 80 bzw. 120 Zeichen) in Hinweis und Ticket-Body.
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 

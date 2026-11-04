@@ -36,6 +36,7 @@
     "/scripts/sync-abgleich-lib.mjs",
     "/scripts/factory-seite.mjs",
     "/scripts/release-tag-lib.mjs",
+    "/scripts/milestone-lib.mjs",
     "/scripts/factory-links-lib.mjs",
     "/scripts/inbox-lib.mjs",
     "/scripts/inbox-start-lib.mjs",

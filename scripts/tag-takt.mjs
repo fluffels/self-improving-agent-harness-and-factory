@@ -12,6 +12,9 @@
  *    je 7 Tage kämen 22 PRs heraus, aber nur aus der Anlaufwoche mit zwei überlappenden Fenstern, das trägt keine Schwelle). Das Alters-Signal (7 Tage) und `Sync-Dringlich` bleiben; neu messen, wenn das Alters-Signal öfter auslöst als die Zahl.
  *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach holen die Bezieher das Update selbst (`factory-update.yml`, ADR 0031).
  *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Trockenlauf läuft nur gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch).
+ *  - Milestones (factory#194): ein Milestone, der nach dem Erstellungsdatum des letzten Release-Tags geschlossen wurde, ist ein weiterer Auslöser („Milestone „<titel>“ geschlossen“), schon bei einem
+ *    Besitz-PR (ohne ungetaggten Besitz-PR gibt es nichts zu taggen: `nichts` mit Grund). Gelesen über REST (`milestones?state=closed`) und `git for-each-ref` (`creatordate`); fail-open mit Warnung, ohne Milestones unverändert.
+ *    Der Takt läuft dafür auch beim Ereignis `milestone: closed` (board-takt.yml).
  * Bekannte Grenze: der Titel-Marker `🏷️ Tag ` ist breit; ein von Hand angelegtes, vertrauenswürdiges Issue mit diesem Titelanfang zählt als Tag-Ticket (das Emoji-Präfix ist diesem Takt vorbehalten).
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
@@ -31,6 +34,7 @@ import { labelAus, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { geschlosseneMilestones, geschlossenSeit } from "./milestone-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -138,11 +142,29 @@ export function bezieherMigrationen(besitz, migrationKey) {
 /** Pur: das Alter der ältesten Änderung in ganzen Tagen (Kommazahl) oder `null`; `datum` ISO. */
 const alterTage = (besitz, jetzt) => (besitz.length === 0 ? null : (jetzt.getTime() - Math.min(...besitz.map((c) => Date.parse(c.datum)))) / TAG_MS);
 
+/** Pur: die Auslöser für ein neues Tag-Ticket: Anzahl, Alter, Dringlich-Signal und seit dem Tag geschlossene Milestones (factory#194; nur mit mindestens einem Besitz-PR, sonst gäbe es nichts zu taggen). */
+function ausloeserVon({ letzterTag, besitz, jetzt, dringlichKey, milestones }) {
+  const tage = alterTage(besitz, jetzt);
+  const dringlich = dringlichSignal(besitz, dringlichKey);
+  const ausloeser = [];
+  if (besitz.length >= MIN_PRS) ausloeser.push(`${besitz.length} Besitz-PRs seit ${letzterTag} (ab ${MIN_PRS})`);
+  if (tage !== null && tage > MAX_ALTER_TAGE) ausloeser.push(`älteste ungetaggte Änderung über ${MAX_ALTER_TAGE} Tage alt`);
+  if (dringlich) ausloeser.push(`Dringlich: ${zelle(dringlich.grund)} (${dringlich.sha.slice(0, 7)})`);
+  if (besitz.length > 0) for (const m of milestones) ausloeser.push(`Milestone „${zelle(m.titel)}“ geschlossen`);
+  return ausloeser;
+}
+
+/** Pur: der Log-Grund für `nichts` ohne Auslöser; ein geschlossener Milestone ohne Besitz-PR wird genannt. */
+function keinAusloeserGrund({ letzterTag, besitz, milestones }) {
+  if (besitz.length === 0 && milestones.length > 0) return `Milestone „${zelle(milestones[0].titel)}“ geschlossen, aber nichts Ungetaggtes seit ${letzterTag}`;
+  return `${besitz.length} Besitz-PRs, jünger als ${MAX_ALTER_TAGE} Tage, kein Dringlich-Signal`;
+}
+
 /**
- * Pur: die Entscheidung des Takts. `offene` = vertraute offene Issues `[{ number, titel, assignees }]`; Rückgabe `{ aktion, grund, warnungen, nummer?, ausloeser? }`
+ * Pur: die Entscheidung des Takts. `milestones` (optional) = seit dem letzten Tag geschlossene Milestones `[{ nummer, titel, closedAt }]` (`geschlossenSeit`); sie sind ein zusätzlicher Auslöser. `offene` = vertraute offene Issues `[{ number, titel, assignees }]`; Rückgabe `{ aktion, grund, warnungen, nummer?, ausloeser? }`
  * mit `aktion` `anlegen | aktualisieren | schliessen | nichts`. Ohne Release-Tag nichts; ein geclaimtes Ticket bleibt unberührt.
  */
-export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlichKey }) {
+export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlichKey, milestones = [] }) {
   const warnungen = [];
   const tagOffene = offene.filter((i) => i.titel.startsWith(TAG_MARKER)).sort((a, b) => a.number - b.number);
   if (tagOffene.length > 1) warnungen.push(`Mehrere offene Tag-Tickets (${tagOffene.map((i) => `#${i.number}`).join(", ")}): das älteste gilt, keines wird geschlossen.`);
@@ -156,13 +178,8 @@ export function entscheideTagTakt({ letzterTag, besitz, jetzt, offene, dringlich
     }
     return { aktion: "aktualisieren", nummer: offen.number, grund: `offenes Ticket #${offen.number}`, warnungen };
   }
-  const tage = alterTage(besitz, jetzt);
-  const dringlich = dringlichSignal(besitz, dringlichKey);
-  const ausloeser = [];
-  if (besitz.length >= MIN_PRS) ausloeser.push(`${besitz.length} Besitz-PRs seit ${letzterTag} (ab ${MIN_PRS})`);
-  if (tage !== null && tage > MAX_ALTER_TAGE) ausloeser.push(`älteste ungetaggte Änderung über ${MAX_ALTER_TAGE} Tage alt`);
-  if (dringlich) ausloeser.push(`Dringlich: ${zelle(dringlich.grund)} (${dringlich.sha.slice(0, 7)})`);
-  if (ausloeser.length === 0) return { aktion: "nichts", grund: `${besitz.length} Besitz-PRs, jünger als ${MAX_ALTER_TAGE} Tage, kein Dringlich-Signal`, warnungen };
+  const ausloeser = ausloeserVon({ letzterTag, besitz, jetzt, dringlichKey, milestones });
+  if (ausloeser.length === 0) return { aktion: "nichts", grund: keinAusloeserGrund({ letzterTag, besitz, milestones }), warnungen };
   return { aktion: "anlegen", grund: ausloeser.join("; "), ausloeser, warnungen };
 }
 
@@ -246,6 +263,24 @@ function tagManifest(io, letzterTag) {
   return g.manifest ?? { eintraege: [] };
 }
 
+/**
+ * Die seit dem letzten Tag geschlossenen Milestones (factory#194), fail-open: ohne `io.ladeMilestones` leer; unlesbar oder ein nicht parsebares Tag-Datum ergibt eine Warnung ohne Milestone-Auslöser.
+ * Das Tag-Datum wird nur gelesen, wenn überhaupt ein Milestone geschlossen ist.
+ */
+function ladeMilestoneAusloeser(io, letzterTag, log) {
+  if (!io.ladeMilestones || !letzterTag) return [];
+  try {
+    const geschlossen = geschlosseneMilestones(io.ladeMilestones());
+    if (geschlossen.length === 0) return [];
+    const datum = io.tagDatum(letzterTag);
+    if (Number.isNaN(Date.parse(datum))) throw new Error(`Datum von ${letzterTag} nicht lesbar`);
+    return geschlossenSeit(geschlossen, datum);
+  } catch (err) {
+    log(`::warning::Milestones nicht lesbar (${fehlerText(err)}): Milestone-Auslöser entfällt`);
+    return [];
+  }
+}
+
 /** Liest alles Nötige; wirft bei einem Git-Fehler. `io.ladeLaeufe` darf werfen (dann `unbekannt`). */
 function sammle(io, log) {
   const letzterTag = vergleicheTags(io.tags());
@@ -260,7 +295,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
+  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -304,7 +339,7 @@ const istAktuell = (offen, soll) => offen?.titel === soll.titel && offen.body ==
 
 /** Entscheidung samt Soll-Ticket (`soll` bei anlegen/aktualisieren); ein bereits aktuelles Ticket wird zu `nichts`. */
 function plane({ io, daten, offene, trocken }) {
-  let e = entscheideTagTakt({ letzterTag: daten.letzterTag, besitz: daten.besitz, jetzt: io.jetzt(), offene, dringlichKey: io.dringlichKey });
+  let e = entscheideTagTakt({ letzterTag: daten.letzterTag, besitz: daten.besitz, jetzt: io.jetzt(), offene, dringlichKey: io.dringlichKey, milestones: daten.milestones });
   if (e.aktion === "anlegen" && !trocken) e = bestaetigeTagAnlegen(e, { zweit: io.frischeOffene });
   if (trocken && e.geclaimt && daten.besitz.length > 0) return { ...e, soll: sollTicket(e, daten) };
   if (e.aktion !== "anlegen" && e.aktion !== "aktualisieren") return e;
@@ -374,6 +409,8 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
         return null;
       }
     },
+    ladeMilestones: () => gh.json(["api", "--paginate", "--slurp", `repos/${REPO}/milestones?state=closed&per_page=100`]),
+    tagDatum: (tag) => git(["for-each-ref", "--format=%(creatordate:iso-strict)", `refs/tags/${tag}`]).trim(),
     ladeLaeufe: (sha) => gh.json(["api", `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"]),
     ladeOffene: () => {
       const kontext = ladeSammelKontext({ ladeKommentare: () => [] });

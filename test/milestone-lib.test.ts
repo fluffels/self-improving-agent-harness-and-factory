@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error reines ESM-Skript ohne Typen
-import { fruehesterMilestone, geschlosseneMilestones, geschlossenSeit, milestoneAus, titelBereinigt, vorrangHinweis } from "../scripts/milestone-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as raw from "../scripts/milestone-lib.mjs";
+
+type Ms = { nummer: number; titel: string; state: string; faellig: string | null };
+type Zu = { nummer: number; titel: string; closedAt: string };
+const L = raw as unknown as {
+  milestoneAus: (r: unknown) => Ms | null;
+  fruehesterMilestone: (l: Ms[]) => Ms | null;
+  titelBereinigt: (t: string) => string;
+  vorrangHinweis: (m: Ms) => string;
+  geschlosseneMilestones: (p: unknown) => Zu[];
+  geschlossenSeit: (l: Zu[], s: string) => Zu[];
+};
+const { fruehesterMilestone, geschlosseneMilestones, geschlossenSeit, milestoneAus, titelBereinigt, vorrangHinweis } = L;
 
 const m = (nummer: number, faellig: string | null, state = "open") => ({ nummer, titel: `M${nummer}`, state, faellig });
 

@@ -16,7 +16,7 @@ const T = raw as unknown as {
   naechsterTag: (t: string, c: Commit[], entfernt?: { datei: string; namen: string[] }[]) => string;
   dringlichSignal: (b: Commit[], k: string) => { grund: string; sha: string } | null;
   bezieherMigrationen: (b: Commit[], k: string) => { pr: string; text: string }[];
-  entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string }) => Entscheidung;
+  entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string; milestones?: { nummer: number; titel: string; closedAt: string }[] }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
@@ -101,6 +101,35 @@ describe("Schwellen", () => {
   });
   it("ohne Release-Tag entsteht nichts", () => {
     expect(entscheide({ letzterTag: null, besitz: reihe(5) }).aktion).toBe("nichts");
+  });
+});
+
+describe("Milestone-Auslöser (factory#194)", () => {
+  const ms = (titel = "Erste Stufe", closedAt = "2026-06-19T00:00:00Z") => ({ nummer: 1, titel, closedAt });
+  it("ein seit dem Tag geschlossener Milestone löst das Anlegen schon bei 1 Besitz-PR aus und steht im Auslöser", () => {
+    const e = entscheide({ besitz: reihe(1), milestones: [ms()] });
+    expect(e.aktion).toBe("anlegen");
+    expect(e.ausloeser).toEqual(["Milestone „Erste Stufe“ geschlossen"]);
+  });
+  it("Titel mit | und Zeilenumbruch wird bereinigt", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms("A|B\nC")] }).ausloeser?.[0]).toBe("Milestone „A B C“ geschlossen");
+  });
+  it("ohne Besitz-PRs entsteht nichts, der Grund nennt Milestone und den Tag", () => {
+    const e = entscheide({ besitz: [], milestones: [ms()] });
+    expect(e.aktion).toBe("nichts");
+    expect(e.grund).toContain("Milestone „Erste Stufe“");
+    expect(e.grund).toContain("nichts Ungetaggtes seit v1.2.3");
+  });
+  it("offenes ungeclaimtes Ticket wird aktualisiert, ein geclaimtes bleibt unberührt, nie ein zweites", () => {
+    expect(entscheide({ besitz: reihe(1), milestones: [ms()], offene: [tagOffen()] })).toMatchObject({ aktion: "aktualisieren", nummer: 40 });
+    expect(entscheide({ besitz: reihe(1), milestones: [ms()], offene: [tagOffen({ assignees: ["x"] })] }).aktion).toBe("nichts");
+  });
+  it("Negativfall: ohne Parameter, mit leerer Liste gilt dieselbe Entscheidung wie bisher", () => {
+    for (const besitz of [reihe(1), reihe(3)]) {
+      const ohne = entscheide({ besitz });
+      expect(entscheide({ besitz, milestones: [] })).toEqual(ohne);
+    }
+    expect(entscheide({ besitz: reihe(1), milestones: [] }).aktion).toBe("nichts");
   });
 });
 
