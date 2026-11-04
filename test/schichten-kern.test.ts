@@ -136,6 +136,14 @@ describe("musterAus", () => {
     assert.ok(!new RegExp(kern.musterAus("a/", ["main"], false, [".java"])).test("a/mainXjava"));
   });
 
+  test("Backslash und Regex-Zeichen einer Endung werden wörtlich genommen", () => {
+    const r = new RegExp(kern.musterAus("a/", ["main"], true, [".a\\b", ".c+"]));
+    assert.ok(r.test("a/main.a\\b"));
+    assert.ok(r.test("a/main.c+"));
+    assert.ok(!r.test("a/main.ab"));
+    assert.ok(!r.test("a/main.cc"));
+  });
+
   test("mehrteilige Endung .d.ts: beide Punkte escaped", () => {
     const r = new RegExp(kern.musterAus("a/", ["main"], true, [".d.ts"]));
     assert.ok(r.test("a/main.d.ts"));

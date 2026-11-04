@@ -34,7 +34,7 @@ function alt(teile) {
  *  Deckt je Wurzel die Einzeldatei UND den Modul-Ordner ab; `nurDatei` (Einstieg/Assets) nur die Einzeldatei.
  *  `quellwurzeln`: ein String (eine Wurzel) oder eine Liste; `endungen`: Endungen mit Punkt (Standard `.ts`). */
 function musterAus(quellwurzeln, wurzeln, nurDatei, endungen = [STANDARD_ENDUNG]) {
-  const ende = endungen.map((e) => `${e.replace(/\./g, "\\.")}$`);
+  const ende = endungen.map((e) => `${[...e].map((c) => (/[\w-]/.test(c) ? c : `\\${c}`)).join("")}$`);
   return `^${alt([quellwurzeln].flat())}(${wurzeln.join("|")})${nurDatei ? alt(ende) : `(${[...ende, "/"].join("|")})`}`;
 }
 
