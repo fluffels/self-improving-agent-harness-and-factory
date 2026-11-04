@@ -212,7 +212,7 @@ describe("pruefeModell: Negativfälle (AK4)", () => {
   });
 
   test("mehrteilige Endung .d.ts gültig, Endung mit Präfix davor rot, kein Modell rot", () => {
-    assert.doesNotThrow(() => kern.pruefeModell({ ...basis(), endungen: [".d.ts"] }));
+    assert.doesNotThrow(() => kern.pruefeModell(modellAus({ quellwurzel: "src/", endungen: [".d.ts"] })));
     rot({ ...basis(), endungen: ["x.java"] }, /endungen: "x.java"/);
     rot(undefined, /SCHICHT_MODELL ungültig/);
   });

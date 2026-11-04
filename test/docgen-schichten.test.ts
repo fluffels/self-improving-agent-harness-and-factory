@@ -42,6 +42,12 @@ const basis = (): Modell => ({
   extern: [{ id: "engine", label: "Engine", muster: ENGINE }],
 });
 
+/** Das Basis-Modell unter einer anderen Quellwurzel: auch die Muster ziehen um (sie müssen mit der Quellwurzel beginnen). */
+const mitQuellwurzel = (w: string): Modell => {
+  const m = basis();
+  return { ...m, quellwurzel: w, schichten: m.schichten.map((s) => ({ ...s, muster: s.muster === null ? null : s.muster.replace("^src/", `^${w}`) })) };
+};
+
 const dirs: string[] = [];
 function fixture(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "schichten-"));
@@ -152,7 +158,14 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     wirft((m) => m.schichten[1].wurzeln.push(""), /ungültige Wurzel ""/);
     wirft((m) => m.schichten[1].wurzeln.push("a.b"), /ungültige Wurzel "a\.b"/);
     wirft((m) => m.schichten[1].wurzeln.push("(x|"), /ungültige Wurzel/);
-    wirft((m) => m.schichten[1].wurzeln.push("Gross"), /ungültige Wurzel/);
+    wirft((m) => m.schichten[1].wurzeln.push("_x"), /ungültige Wurzel/);
+    wirft((m) => m.schichten[1].wurzeln.push("a/b"), /ungültige Wurzel/);
+  });
+  test("wurzeln: Großbuchstaben erlaubt, aber nicht als Dublette zu einer kleingeschriebenen Wurzel", () => {
+    const gross = basis();
+    gross.schichten[1].wurzeln.push("Gross");
+    assert.doesNotThrow(() => kern.pruefeModell(gross));
+    wirft((m) => m.schichten[2].wurzeln.push(m.schichten[1].wurzeln[0].toUpperCase()), /steht in zwei Schichten/);
   });
   test("wurzeln: dieselbe Wurzel in zwei Schichten (Z5d)", () => {
     wirft((m) => m.schichten[2].wurzeln.push(m.schichten[1].wurzeln[0]), /Wurzel "[a-z-]+" steht in zwei Schichten/);
@@ -187,7 +200,7 @@ describe("Modell-Prüfung (Negativfälle)", () => {
       (m as { quellwurzel: unknown }).quellwurzel = w;
       assert.throws(() => kern.pruefeModell(m), /quellwurzel/, JSON.stringify(w));
     }
-    for (const w of ["src/", "wetter/", "lib/core/", "app_1/"]) assert.doesNotThrow(() => kern.pruefeModell({ ...basis(), quellwurzel: w }));
+    for (const w of ["src/", "wetter/", "lib/core/", "app_1/"]) assert.doesNotThrow(() => kern.pruefeModell(mitQuellwurzel(w)));
   });
   test("Generator wirft bei layers-Datei mit trivialem Prüfer ohne quellwurzel", () => {
     const m = basis() as unknown as Record<string, unknown>;
@@ -203,7 +216,7 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     }
   });
   test("schichtVon: die Quellwurzel des Modells bestimmt die Auffang-Schicht, nicht ein festes src/", () => {
-    const lib: Modell = { ...basis(), quellwurzel: "lib/" };
+    const lib = mitQuellwurzel("lib/");
     assert.equal(api.schichtVon("lib/x/", lib), "domaene");
     assert.equal(api.schichtVon("src/x/", lib), null);
     assert.equal(api.schichtVon("lib/x/", basis()), null);
