@@ -17,6 +17,9 @@ import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
 import { inboxStart } from "./inbox-start-lib.mjs";
 import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 /** Titel-Präfix der Wiedervorlage-Tickets; derselbe Marker steht als Notfall-Art `wiedervorlage` in `NOTFAELLE` (board-lib.mjs). */
 export const TITEL_PRAEFIX = "⏰ Wiedervorlage:";
@@ -102,7 +105,7 @@ export function planeAktionen({ faellige: liste, tickets }) {
 export function ticketText(e) {
   return {
     titel: `${TITEL_PRAEFIX} ${e.titel}`,
-    body: `${markerFuer(e.id)}\n\n${e.text}\n\nFällig seit ${e.faellig}. Abarbeiten: prüfen, dann in **einem** PR den Eintrag \`${e.id}\` aus \`.github/wiedervorlagen.json\` löschen und dieses Ticket schließen; soll der Termin nur wandern, stattdessen \`faellig\` neu setzen (die id bleibt, der Lauf legt dann zum neuen Datum ein neues Ticket an) und dieses Ticket schließen (Mechanik: docs/ticket-reihenfolge.md › Wiedervorlage).`,
+    body: `${markerFuer(e.id)}\n\n${e.text}\n\nFällig seit ${e.faellig}. Abarbeiten: prüfen, dann in **einem** PR den Eintrag \`${e.id}\` aus \`.github/wiedervorlagen.json\` löschen und dieses Ticket schließen; soll der Termin nur wandern, stattdessen \`faellig\` neu setzen (die id bleibt, der Lauf legt dann zum neuen Datum ein neues Ticket an) und dieses Ticket schließen (Mechanik: ${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "wiedervorlage-1628")}).`,
   };
 }
 

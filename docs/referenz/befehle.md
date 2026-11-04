@@ -11,7 +11,7 @@ npm run setup   # einmalig: Node-Check, Skill-Zeiger, npm install, Git-Hooks, al
 npm run verify  # alle schnellen Gates auf einmal (wann sie grün sein müssen: AGENTS.md)
 ```
 
-Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](../../AGENTS.md) und [AGENTS.md › Wo die TODOs leben](../../AGENTS.md), nicht hier.
+Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](../../AGENTS.md) und [AGENTS.md › Auswahl des nächsten Tickets](../../AGENTS.md), nicht hier.
 
 ## Alle Befehle
 
@@ -87,7 +87,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, quellprojekt#593) | `npm run check:lockfile` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, quellprojekt#396) | `npm audit --omit=dev --audit-level=high` |
 
-> Aus IntelliJ/WebStorm gibt es dieselben Befehle als Ein-Klick-Run-Configs: CONTRIBUTING.md › Aus IntelliJ starten.
+> Aus IntelliJ/WebStorm gibt es dieselben Befehle als Ein-Klick-Run-Configs.
 
 ## Umgebungsvariablen
 

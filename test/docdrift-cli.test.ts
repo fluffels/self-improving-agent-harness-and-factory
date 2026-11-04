@@ -7,7 +7,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,10 @@ const fixture = (dateien: Record<string, string> = {}): string => {
   temps.push(d);
   cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
   const pkg = { scripts: { verify: "npm run typecheck && npm test", typecheck: "tsc", test: "vitest" } };
-  const alle: Record<string, string> = { "package.json": JSON.stringify(pkg), "README.md": SAUBER_README, ...dateien };
+  // Die kopierten Skripte tragen Abschnittsverweise auf Seiten, die das Fixture nicht hat (factory#157): als verteilter Besitz eines Beziehers bleiben sie ohne Ziel still.
+  const skripte = readdirSync(join(d, "scripts"), { recursive: true, encoding: "utf8" }).map((f) => f.replaceAll("\\", "/")).filter((f) => /\.(mjs|cjs|js)$/.test(f));
+  const besitz = { version: 1, eintraege: skripte.map((f) => ({ pfad: `scripts/${f}`, ring: "kern" })) };
+  const alle: Record<string, string> = { "package.json": JSON.stringify(pkg), "README.md": SAUBER_README, ".factory/sync-stand.json": "{}", ".factory/besitz.json": JSON.stringify(besitz), ...dateien };
   for (const [pfad, text] of Object.entries(alle)) {
     mkdirSync(dirname(join(d, pfad)), { recursive: true });
     writeFileSync(join(d, pfad), text);
@@ -62,6 +65,7 @@ describe("check:docdrift als Prozess (#101)", { timeout: 60_000 }, () => {
       /✖ ADR-Fortschreibung: 0001-5-x\.md: 0001-a\.md enthält keinen Zeiger/,
     ],
     ["(7) toter Test-Pfad", { "README.md": `${SAUBER_README}\`test/weg.test.ts\`\n` }, /✖ Toter Test-Pfad: „test\/weg\.test\.ts" in README\.md/],
+    ["(8) toter Abschnitt (factory#157)", { "docs/x.md": "# X\n", "README.md": `${SAUBER_README}Siehe docs/x.md › Gibts nicht.\n` }, /✖ Toter Abschnitt: „Gibts nicht\." \(docs\/x\.md ›\) in README\.md/],
   ];
   for (const [name, dateien, muster] of FEHLER) {
     test(`${name}: Exit 1 mit Meldung`, () => {

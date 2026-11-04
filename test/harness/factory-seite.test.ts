@@ -22,6 +22,14 @@ const { factorySeite, factorySeiteIn, factoryUrlTeile, repoBasis } = rawSeite as
   factorySeite: (a: { pfad: string; anker?: string; repo?: string; tag?: string }) => string;
   factorySeiteIn: (wurzel: string, pfad: string, anker?: string) => string;
 };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawBesitzRoh from "../../scripts/besitz-lib.mjs";
+const rawBesitz = rawBesitzRoh as unknown as {
+  MANIFEST_PFAD: string;
+  manifestAusText: (t: string) => { manifest: { eintraege: unknown[] } };
+  wirdVerteilt: (e: unknown) => boolean;
+  istGanzeDatei: (e: unknown) => boolean;
+};
 const { collectHeadingSlugs } = rawMd as { collectHeadingSlugs: (md: string) => string[] };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -170,5 +178,35 @@ describe("Wächter: URL-Bau mit /blob/ und /tree/ nur in factory-seite.mjs", () 
   });
   test("keine andere Skript-Datei trägt sie", () => {
     assert.deepEqual(treffer.map(rel).filter((p) => p !== "scripts/factory-seite.mjs"), []);
+  });
+});
+
+// Wächter (factory#157): Laufzeitmeldungen nennen Factory-Seiten über `factorySeiteIn`, nicht als Text `docs/x.md › Abschnitt`.
+// Scan-Umfang (geschlossen): `.mjs` unter `scripts/`, die das Besitz-Manifest als Ganz-Datei verteilt; gemeldet werden Nicht-Kommentarzeilen
+// (getrimmt nicht mit `*`, `//` oder `/*` beginnend) mit `docs/<x>.md ›` oder `docs/<x>.md §`; ausgenommen ist ein Treffer direkt hinter `[` (Linktext).
+const TEXTVERWEIS = /docs\/[\w./-]+\.md (›|§)/g;
+describe("Wächter: Kern-Skripte verweisen in Laufzeitmeldungen nicht per Text auf Factory-Seiten (factory#157)", () => {
+  const textverweise = (zeilen: string[]): string[] =>
+    zeilen.flatMap((zeile, i) => {
+      if (/^\s*(\*|\/\/|\/\*)/.test(zeile)) return [];
+      return [...zeile.matchAll(TEXTVERWEIS)].filter((m) => zeile[m.index - 1] !== "[").map(() => `Zeile ${i + 1}: ${zeile.trim().slice(0, 80)}`);
+    });
+
+  test("kein Kern-Skript trägt `docs/x.md ›` oder `docs/x.md §` in einer Nicht-Kommentarzeile", () => {
+    const manifest = rawBesitz.manifestAusText(readFileSync(join(WURZEL, rawBesitz.MANIFEST_PFAD), "utf8"));
+    const dateien = (manifest.manifest.eintraege as { pfad: string; ring: string; block?: string; schluessel?: string }[])
+      .filter((e) => rawBesitz.wirdVerteilt(e) && rawBesitz.istGanzeDatei(e) && /^scripts\/.*\.mjs$/.test(e.pfad))
+      .map((e) => e.pfad);
+    assert.ok(dateien.length > 100, `erwartet viele verteilte Skripte, gefunden ${dateien.length}`);
+    const fehler = dateien.flatMap((pfad) => textverweise(readFileSync(join(WURZEL, pfad), "utf8").split("\n")).map((f) => `${pfad} ${f}`));
+    assert.deepEqual(fehler, [], "Laufzeitmeldung auf `factorySeiteIn(WURZEL, \"<pfad>\", \"<anker>\")` umstellen.");
+  });
+
+  test("die Erkennung trifft Text, lässt Kommentar, Linktext und factorySeiteIn-Aufruf durch", () => {
+    assert.equal(textverweise(['  "Mechanik: docs/a.md › Abschnitt."']).length, 1);
+    assert.equal(textverweise(["  `siehe docs/a.md § Abschnitt`"]).length, 1);
+    assert.deepEqual(textverweise([" * docs/a.md › Abschnitt", "// docs/a.md § X", "/* docs/a.md › X */"]), []);
+    assert.deepEqual(textverweise(["`- [docs/a.md › Abschnitt](${url})`"]), []);
+    assert.deepEqual(textverweise(['"Mechanik: " + factorySeiteIn(WURZEL, "docs/a.md", "abschnitt")']), []);
   });
 });

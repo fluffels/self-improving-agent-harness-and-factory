@@ -19,6 +19,10 @@ import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeBoardLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { ladeProjektConfig, labelAus } from "./projekt-config-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export const ZIEL_TITEL = "🔒 Security: Secret rotieren/widerrufen";
 export const CHECK_TITEL = "🔍 Security-Tabs prüfen";
@@ -90,7 +94,7 @@ export function issueBody(befunde) {
     "",
     "Secret-Alerts nie mit dem Wert in den Kontext holen: `gh api repos/<repo>/secret-scanning/alerts --jq '.[] | {number,state,secret_type_display_name,html_url}'`.",
     "",
-    "Mechanik: docs/ticket-reihenfolge.md › Secret-Inbox. Das Ticket schließt sich, wenn der nächste Lauf keinen Fund mehr meldet.",
+    "Mechanik: " + factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "secret-inbox-92") + ". Das Ticket schließt sich, wenn der nächste Lauf keinen Fund mehr meldet.",
   ].join("\n");
 }
 
@@ -127,7 +131,7 @@ export function checkBody(repo = "<repo>") {
     "- [ ] **Dependabot-Alerts.** `gh api \"repos/" + repo + "/dependabot/alerts?state=open\" --jq '.[] | {number,package:.dependency.package.name,severity:.security_advisory.severity}'`. Upgrade; der Alert schließt sich selbst, sobald die Abhängigkeit behoben ist.",
     "- [ ] **Security-Advisories und PVR-Meldungen.** `gh api repos/" + repo + "/security-advisories --jq '.[] | {ghsa_id,state,severity}'`. Meldungen beantworten bzw. einordnen; sie schließen sich nur durch eine Entscheidung (veröffentlichen, schließen).",
     "",
-    "Mechanik: docs/ticket-reihenfolge.md › Secret-Inbox.",
+    "Mechanik: " + factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "secret-inbox-92") + ".",
   ].join("\n");
 }
 

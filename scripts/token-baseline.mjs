@@ -42,6 +42,10 @@ import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } 
 import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 // Ausgelagert (#1562, hook-taugliche Module ohne gh-/git-Kette); hier re-exportiert, damit Verbraucher und Tests unverändert bleiben.
 export { PRICES, PRICES_STAND, periodAt, priceParts, priceCall, callsFromTranscript, fetchSessionObservations };
@@ -577,7 +581,7 @@ function ohnePreisZeile(summary) {
 export function langfuseZugang(env) {
   return zugangAus(
     env,
-    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe docs/model-routing.md › Checkliste Punkt 1.",
+    "--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY; Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): dort queryMetrics (View observations, Filter sessionId und type = GENERATION, Dimension usageType, Metrik usageByType), siehe " + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-status-überprüfen-1293") + ", Punkt 1.",
   );
 }
 
