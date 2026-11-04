@@ -144,6 +144,18 @@ describe("musterAus", () => {
     assert.ok(!r.test("a/main.cc"));
   });
 
+  test("Grenze: Verzeichnis-Schicht nimmt alle Dateien darunter, Datei-Schicht nur ihre Endungen", () => {
+    const wurzeln = ["src/main/java/", "src/test/java/"];
+    const dir = new RegExp(kern.musterAus(wurzeln, ["domain"], false, [".java"]));
+    assert.ok(dir.test("src/main/java/domain/Konto.ts"));
+    assert.ok(dir.test("src/test/java/domain/Konto.java"));
+    assert.ok(dir.test("src/main/java/domain.java"));
+    assert.ok(!dir.test("src/main/java/domain.ts"));
+    const datei = new RegExp(kern.musterAus(wurzeln, ["main"], true, [".java"]));
+    assert.ok(datei.test("src/main/java/main.java"));
+    assert.ok(!datei.test("src/main/java/main.ts"));
+  });
+
   test("mehrteilige Endung .d.ts: beide Punkte escaped", () => {
     const r = new RegExp(kern.musterAus("a/", ["main"], true, [".d.ts"]));
     assert.ok(r.test("a/main.d.ts"));
