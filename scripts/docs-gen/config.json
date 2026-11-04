@@ -11,7 +11,7 @@
       "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
       "check:factorylinks": "Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf vorhandene Pfade und Anker, Kern-Links auf Factory-Seiten sind durch Anker-Stubs gedeckt (entfällt ohne Sync-Stand)",
-      "check:docmap": "Tiefendoc-Abdeckung jeder Quell-Datei (entfällt mit Hinweis ohne `struktur.moduldoku`)",
+      "check:docmap": "Tiefendoc-Abdeckung jeder Quell-Einheit (Datei oder Ordner, `struktur.docmapEinheit`; entfällt mit Hinweis ohne `struktur.moduldoku`)",
       "check:docgen":"generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
       "check:factorydrift": "Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config)",

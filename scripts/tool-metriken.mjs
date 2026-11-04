@@ -5,7 +5,7 @@
  * Definition: docs/model-routing.md §5 „Messen“.
  */
 import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
-import { GATE_BEFEHL_NAMEN } from "./gate-befehl-lib.mjs";
+import { PRUEFLAUF_ART, ZEIGEN_FLAG } from "./gate-befehl-lib.mjs";
 
 /** `ERROR` allein ist kein Signal (der Hook setzt es bei jedem Exit ≠ 0); die Art steht im Text. */
 const ARTEN = [
@@ -116,7 +116,6 @@ export function wiederlesen(events) {
  * Grenze: misst nur Claude-Transkripte.
  */
 const VOLL = new Set(["verify", "verify:kompakt", "verify:full"]);
-const GATE_ART = Object.freeze({ verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt" });
 const BLOCKIERT = new Set(["guard", "hook", "permission"]);
 
 export function pruefLaeufe(events) {
@@ -135,9 +134,9 @@ export function pruefLaeufe(events) {
 /** `node …/gate-befehl.mjs <name>` → Art des Gate-Befehls (nur der Name direkt hinter dem Skript, ohne `--zeigen`), sonst null. */
 function gateBefehlArt(rest) {
   const i = rest.findIndex((w) => /(?:^|[/\\])gate-befehl\.mjs$/.test(w));
-  if (i < 0 || rest.includes("--zeigen")) return null;
+  if (i < 0 || rest.includes(ZEIGEN_FLAG)) return null;
   const name = rest[i + 1];
-  return GATE_BEFEHL_NAMEN.includes(name) ? GATE_ART[name] : null;
+  return Object.hasOwn(PRUEFLAUF_ART, name) ? PRUEFLAUF_ART[name] : null;
 }
 
 function pruefArt(words) {

@@ -4,9 +4,10 @@
  * docs/adr/fortschreibungen/0022-182-gate-befehle.md): Die Gate-Befehle eines Projekts stehen in seiner Config
  * (`befehle`), die Texte nennen den Läufer, nie das Build-Werkzeug. Rot ist jede Fundstelle von `npm ci`,
  * `npm run verify`, `npm run verify:kompakt`, `npm run verify:changed` oder `npm run test:coverage`
- * (auch als `run-script`, mit `-s` oder mit vorangestelltem `--prefix <pfad>` / `-C <pfad>`); `verify:full`, `check:*`,
- * `npm install` und `npx …` bleiben frei. Zusatzregel: das Wort nach `gate-befehl.mjs` ist ein Name aus
- * `GATE_BEFEHL_NAMEN` oder der Platzhalter `<name>`.
+ * (auch als `run-script`, mit `-s` oder mit vorangestelltem `--prefix <pfad>` / `-C <pfad>`), dazu (factory#193) `npx vitest`,
+ * `npx eslint` und `npm test` (auch mit Präfix): gezielte Testläufe gehen über `node scripts/gate-befehl.mjs testGezielt <datei>`;
+ * `verify:full`, `check:*`, `npm install` und andere `npx …` bleiben frei. Zusatzregel: das Wort nach `gate-befehl.mjs`
+ * ist ein Name aus `GATE_BEFEHL_NAMEN` oder der Platzhalter `<name>`.
  *
  * Scan-Umfang (geschlossene Liste): (a) `AGENTS.md` ohne Projekt-Block (fehlt ein Marker, wird nichts maskiert),
  * (b) alle versionierten `.claude/agents/*.md`, (c) alle versionierten `.agents/skills/**\/*.md`, (d) die `.md`-Einträge
@@ -14,7 +15,7 @@
  * (die Dateien selbst sind gitignoriert und lokal erzeugt), (f) die Nicht-Kommentarzeilen von `.github/workflows/ci.yml`.
  * Ausnahmen stehen in `AUSNAHMEN` mit Grund.
  * Grenze: kein Semantik-Prüfer. Begriffe wie „das verify:kompakt der Stufe 0“ ohne `npm`, andere Werkzeugaufrufe
- * (`npx vitest`, `npm --prefix … test`) und Dateien außerhalb des Umfangs bleiben frei; nur im Factory-Repo
+ * und Dateien außerhalb des Umfangs bleiben frei; nur im Factory-Repo
  * (der Wächter liegt nicht im Besitz-Manifest).
  */
 import { describe, expect, it } from "vitest";
@@ -28,6 +29,9 @@ import * as codexRaw from "../../scripts/codex-lib.mjs";
 import { SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START } from "../support/entfernte-pfade";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as markdownRaw from "../../scripts/docs-gen/markdown.mjs";
+import { projektBlockZeilen } from "../support/projekt-block";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRaw from "../../scripts/ticket-namen.mjs";
 import { lies, repoDateien } from "./repo-texte";
 
 type Einheit = { pfad: string; block?: string; schluessel?: string };
@@ -37,15 +41,22 @@ const besitz = besitzRaw as unknown as {
   besitzSpannen(einheiten: Einheit[], pfad: string, text: string): [number, number][];
   manifestAusText(text: string | null): { manifest?: { eintraege: Einheit[] } };
 };
-const NAMEN = (gateRaw as unknown as { GATE_BEFEHL_NAMEN: readonly string[] }).GATE_BEFEHL_NAMEN;
+const gate = gateRaw as unknown as { GATE_BEFEHL_NAMEN: readonly string[]; STANDARD_BEFEHLE: Readonly<Record<string, string>> };
+const { escapeRegex } = namenRaw as unknown as { escapeRegex: (text: string) => string };
+const NAMEN = gate.GATE_BEFEHL_NAMEN;
+const STANDARD_WERTE = Object.values(gate.STANDARD_BEFEHLE);
 const codex = codexRaw as unknown as { setupDateien(m: unknown, c: unknown, u: string): Record<string, string> };
 const markdown = markdownRaw as unknown as { schnappschussBloecke(zeilen: string[]): { bloecke: [number, number][] } };
 
-const SKRIPTE = "(?:verify:kompakt|verify:changed|verify|test:coverage)";
+/** Skriptnamen der `npm run <skript>`-Standardbefehle, längste zuerst (Alternative ohne Vorrang-Fehler). */
+const SKRIPT_NAMEN = STANDARD_WERTE.flatMap((w) => /^npm run (\S+)$/.exec(w)?.[1] ?? []).sort((a, b) => b.length - a.length);
+const SKRIPTE = `(?:${SKRIPT_NAMEN.map(escapeRegex).join("|")})`;
 const NPM_VOR = String.raw`(?:(?:--prefix|-C)\s+\S+\s+|-\S+\s+)*`;
 const REGELN = [
   { name: "npm ci", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}ci(?![\w:-])`) },
   { name: "npm run <gate-skript>", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}run(?:-script)?\s+(?:-\S+\s+)*${SKRIPTE}(?![\w:-])`) },
+  { name: "npx vitest|eslint", muster: new RegExp(String.raw`\bnpx\s+(?:vitest|eslint)\b`) },
+  { name: "npm test", muster: new RegExp(String.raw`\bnpm\s+${NPM_VOR}test\b`) },
 ];
 const LAEUFER = /gate-befehl\.mjs\s+(?:--\S+\s+)*([^\s`'"|;&)]+)/g;
 
@@ -59,16 +70,6 @@ const AUSNAHMEN: Ausnahme[] = [
 const hat = (art: Ausnahme["art"]) => AUSNAHMEN.some((a) => a.art === art);
 
 const FIX = `durch \`node scripts/gate-befehl.mjs <name>\` ersetzen (Namen: ${NAMEN.join(", ")})`;
-
-/** Zeilen (0-basiert, einschließlich) des vollständigen Projekt-Blocks einer AGENTS.md; fehlt ein Marker, nichts (fail-closed). */
-function projektBlockZeilen(text: string): [number, number] | null {
-  const von = text.indexOf(besitz.PROJEKT_BLOCK_START);
-  if (von < 0) return null;
-  const bis = text.indexOf(besitz.PROJEKT_BLOCK_ENDE, von + besitz.PROJEKT_BLOCK_START.length);
-  if (bis < 0) return null;
-  const zeile = (i: number) => text.slice(0, i).split("\n").length - 1;
-  return [zeile(von), zeile(bis)];
-}
 
 /** Funde eines Textes: `pfad:zeile: regel — fix`. `istAgentsMd` schaltet die Projekt-Block-Ausnahme, `zeilenOffset` rechnet Block-Spannen auf Dateizeilen um. */
 function funde(pfad: string, text: string, opt: { istAgentsMd?: boolean; zeilenOffset?: number; yaml?: boolean } = {}): string[] {
@@ -170,7 +171,12 @@ describe("Gate-Befehle in den Kern-Texten (factory#186)", () => {
 });
 
 describe("Regeln auf synthetischem Text", () => {
-  const FESTE = ["npm ci", "npm run verify", "npm run verify:kompakt", "npm run verify:changed", "npm run test:coverage"];
+  // Jeder Standardbefehl ist ein Fund; neue Werte in STANDARD_BEFEHLE brauchen eine Regel (sonst rot).
+  const FESTE = STANDARD_WERTE;
+  it("Leerlauf-Schutz: die Standardbefehle sind nicht leer, die Skriptliste ist aus ihnen abgeleitet", () => {
+    expect(FESTE.length).toBeGreaterThanOrEqual(5);
+    expect(SKRIPT_NAMEN).toContain("verify");
+  });
   it.each(FESTE)("%s in einer Agentendatei ist ein Fund", (befehl) => {
     expect(funde(".claude/agents/x.md", `Fahre \`${befehl}\` einmal.`)).toHaveLength(1);
   });
@@ -179,8 +185,13 @@ describe("Regeln auf synthetischem Text", () => {
       expect(funde("a.md", z), z).toHaveLength(1);
     }
   });
+  it("Test-Werkzeug-Aufrufe sind Funde (npx vitest/eslint, npm test, auch mit Präfix)", () => {
+    for (const z of ["npx vitest run x", "npx eslint scripts/a.mjs", "npx  vitest", "npm test", "npm --prefix x test -- y", "npm -C x test", "npm -s test"]) {
+      expect(funde("a.md", z), z).toHaveLength(1);
+    }
+  });
   it("Grenzfälle ohne Fund", () => {
-    for (const z of ["npm run verify:full", "npm run check:size", "npm install", "das verify:kompakt der Stufe 0", "npx vitest run x", "npm --prefix x test -- y"]) {
+    for (const z of ["npm run verify:full", "npm run check:size", "npm install", "das verify:kompakt der Stufe 0", "npx playwright test", "npx vitestx", "npm run test:unit", "node scripts/gate-befehl.mjs testGezielt a.ts"]) {
       expect(funde("a.md", z), z).toEqual([]);
     }
   });

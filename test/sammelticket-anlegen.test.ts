@@ -726,6 +726,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(set.length).toBeGreaterThan(0);
     expect(set.every((r) => JSON.stringify(r[1]) === JSON.stringify(BOARD("factory")))).toBe(true);
     expect(set.some((r) => r[2] === "I50")).toBe(true);
+    expect(set.find((r) => r[2] === "I50")?.[3]).toBeNull(); // Spitze: afterId null, nicht hinter einem Item
     expect(namen(rufe)).not.toContain("setzeUndPruefe");
   });
 

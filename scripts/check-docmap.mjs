@@ -31,7 +31,7 @@ import { dirname, join, posix } from "node:path";
 import { strukturOrdnerBefunde } from "./check-basis.mjs";
 import { globRegex } from "./pfad-glob.mjs";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
-import { quellDateien, quellenMaengel } from "./quellwurzeln-lib.mjs";
+import { quellDateien, quellenAus } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -51,17 +51,8 @@ const configStruktur = () => {
 
 /** Pur: `{ wurzeln, endungen, ohne, einheit }` aus einem Struktur-Block; `quelle` darf ein String (eine Wurzel) oder eine Liste sein; wirft mit Fix-Zeile bei kaputter Form. */
 export function docmapQuellen(struktur) {
-  const fehler = quellenMaengel(struktur);
-  if (fehler.length > 0) {
-    throw new Error(`${fehler.join("; ")} in der Projekt-Config\nFix: struktur.quelle, struktur.endungen, struktur.ohne und struktur.docmapEinheit ("datei" oder "ordner") in der Projekt-Config korrigieren`);
-  }
-  const q = struktur.quelle;
-  return {
-    wurzeln: typeof q === "string" ? [q] : [...q],
-    endungen: [...(struktur.endungen ?? DOCMAP_STANDARD_ENDUNGEN)],
-    ohne: [...(struktur.ohne ?? [])],
-    einheit: struktur.docmapEinheit ?? "datei",
-  };
+  const q = quellenAus({ struktur });
+  return { wurzeln: q.wurzeln, endungen: struktur.endungen === undefined ? [...DOCMAP_STANDARD_ENDUNGEN] : q.endungen, ohne: q.ohne, einheit: struktur.docmapEinheit ?? "datei" };
 }
 
 const hatEndung = (pfad, endungen) => endungen.some((e) => pfad.endsWith(e));
