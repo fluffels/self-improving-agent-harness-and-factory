@@ -153,24 +153,29 @@ Die breite, regelmäßige Auswertung der Langfuse-Daten. **Den Takt hält ein Wo
 
 **Zweitabfrage vor dem Anlegen (fail-closed):** die REST-Liste der offenen Issues hinkt bei frischen Tickets nach (zwei Status-Tickets in 43 Minuten). Entscheidet der Takt „anlegen“, fragt er vorher per GraphQL die 50 jüngsten offenen Issues mit dem Harness-Label (`frischeOffeneIssues`, `bestaetigeAnlegen`): kennt GraphQL ein offenes „Langfuse-Status überprüfen“ oder scheitert die Abfrage, wird daraus „nichts“ mit Warnung (der nächste Lauf versucht es erneut). Andere Aktionen fragen nicht.
 
+**Im Bezieher (factory#195, [Fortschreibung](adr/fortschreibungen/0031-195-langfuse-im-bezieher.md)):** führt das Factory-Board der Config das Repo der Fabrik (Normalfall; `.factory/sync-stand.json` vorhanden), legt der Takt das Status-Ticket im **eigenen** Repo an, auf dem eigenen Produkt-Board und ohne Harness-Label (`langfuseZiel` in `projekt-config-lib.mjs`: führt das Factory-Board das eigene Repo, gilt es mit Harness-Label wie oben). Den Vorgänger findet er per GraphQL-Titelsuche (`statusSucheAnfrage`), weil das Label fehlt; widersprechen sich Suche und die REST-Liste der offenen Issues (Suchindex hinkt) oder scheitert die Suche, bleibt das Status-Ticket aus (Warnung, fail-closed). Gezählt werden nur die Commits von `main` des eigenen Repos. Harness-Sammelticket und Produktquote pflegt dort der Takt der Fabrik; der Board-Wächter läuft im Bezieher mit. Upstream (ohne Sync-Stand) bleibt, wie oben beschrieben.
+
 **Body-Vorlage:** liefert `statusBody` im Skript (Zeitraum, Wochenfenster, Links, Abschluss); nicht hier doppeln.
 
 **Abschluss, in dieser Reihenfolge:**
 
 1. Bericht als Kommentar im Ticket (Einzelläufe, Zahlen, Befunde je Checklistenpunkt).
 2. **Große Befunde** (eng: ein struktureller Defekt in Erfassung oder Prozess, der eigene Planung und einen eigenen PR braucht) als eigene Issues, nach Priorität einsortiert.
-3. **Kleine Befunde** als Kommentar-Zeilen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Abschnitt unten](#langfuse-befunde-gesammelt)); danach `node scripts/board-place.mjs --top <nr>`, damit es direkt drankommt. Keine kleinen Befunde, kein Sammelticket.
+3. **Kleine Befunde** als Kommentar-Zeilen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Abschnitt unten](#langfuse-befunde-gesammelt)); danach `node scripts/board-place.mjs --top <nr>`, damit es direkt drankommt. Keine kleinen Befunde, kein Sammelticket. Im Bezieher liegt es im eigenen Repo (`node scripts/sammelticket-anlegen.mjs langfuse --top`), Harness-Befunde gehen den Weg im Abschnitt unten.
 4. Im Factory-Repo: PR mit der Verdichtungszeile in model-routing.md und `Closes #<nr>`. Im Bezieher (`.factory/sync-stand.json` vorhanden) hat das Projekt die Seite nicht: die Verdichtungszeile steht nur im Bericht-Kommentar (Schritt 1), danach das Ticket schließen. Einen Nachfolger legt der Workflow an (auch bei unerreichbarem Langfuse).
 
 ### Langfuse-Befunde (gesammelt)
 
 Das Sammelticket „Langfuse-Befunde (gesammelt)" (`<labels.harness>`) bündelt Befunde aus Langfuse-Daten, analog zum [Harness-Sammelticket](#sammelticket-harness-härtung-gesammelt-1199). Es ersetzt die früheren Einweg-Folgetickets je Status-Lauf.
 
-- **Im Bezieher ([ADR 0031](adr/0031-fabrik-ohne-zugriff-auf-bezieher.md)):** Status-Ticket und Langfuse-Befunde liegen auf dem Board des Beziehers. Harness-Befunde daraus gehen anonymisiert (Text vorher durch `node scripts/check-internalrefs.mjs --text`) über den Meldeweg aus factory#153 an die Fabrik, Projekt-Befunde bleiben im Bezieher; die Fabrik schreibt nie dorthin. Die Umsetzung dieses Wegs ist factory#195.
+- **Im Bezieher ([ADR 0031](adr/0031-fabrik-ohne-zugriff-auf-bezieher.md), factory#195):** Status-Ticket und das Sammelticket „Langfuse-Befunde (gesammelt)“ liegen im eigenen Repo auf dem eigenen Board (`node scripts/sammelticket-anlegen.mjs langfuse` legt es dort ohne Harness-Label an). Projekt-Befunde bleiben im Bezieher. Harness-Befunde daraus gehen anonymisiert an die Fabrik: der Text läuft zuerst durch `node scripts/check-internalrefs.mjs --text` (Treffer: nichts senden, umformulieren), erst dann über den Bezieher-Weg als Kommentar-Zeile ins Harness-Sammelticket der Fabrik; fehlt das Schreibrecht oder ist die Fabrik fremd, gilt der Meldeweg aus factory#153. Die Fabrik schreibt nie in den Bezieher.
+  ```bash
+  printf '%s' "<Zeile>" | node scripts/check-internalrefs.mjs --text && gh issue comment <nr> --repo "$(node scripts/projekt-config.mjs --ziel-repo "$(node scripts/projekt-config.mjs labels.harness)")" --body "<Zeile>"
+  ```
 - **Was hinein gehört:** Befunde, die aus Langfuse-Daten oder einem Status-Lauf stammen (Kosten, Tokens, Erfassungslücken, Kandidaten zum Lockern eines Gates, einer Lens oder einer Regel). Alles andere zum Harness bleibt im Harness-Sammelticket.
 - **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
   ```bash
-  ziel=$(node scripts/projekt-config.mjs --ziel-repo "$(node scripts/projekt-config.mjs labels.harness)")   # Ziel-Repo wie beim Harness-Sammelticket (Label `<labels.harness>`)
+  ziel=$(node scripts/projekt-config.mjs --langfuse-repo)   # Ziel-Repo des Langfuse-Sammeltickets: Upstream wie beim Harness-Sammelticket (Label `<labels.harness>`), im Bezieher das eigene Repo
   gh issue list --repo "$ziel" --state open --limit 1000 --json number,title,assignees --jq '.[] | select(.title=="Langfuse-Befunde (gesammelt)" and (.assignees|length)==0) | .number'
   gh pr list --repo "$ziel" --state merged --limit 1000 --search "<Stichwort>"   # schon durch einen gemergten PR erledigt? Dann keine Zeile
   gh issue comment <nr> --repo "$ziel" --body "- [ ] <Befund>"

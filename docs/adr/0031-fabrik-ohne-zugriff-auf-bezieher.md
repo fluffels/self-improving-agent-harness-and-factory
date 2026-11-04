@@ -39,3 +39,7 @@ Entscheidung: C, weil nur der Pull für eigene und fremde Bezieher gleich gilt u
 ## Re-Evaluierung
 
 Neu bewerten, wenn drei Updates in Folge ohne Meldung des Beziehers rot beim Bezieher endeten (dann fehlt ein früheres Signal), oder wenn ein fremder Bezieher ausdrücklich ein Schreibrecht für die Fabrik anbietet.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0031-195-langfuse-im-bezieher.md) (Konvention: [README](README.md#format)); dort die erste: [factory#195](fortschreibungen/0031-195-langfuse-im-bezieher.md) setzt Punkt 4 um (Status-Ticket und Langfuse-Sammelticket im Bezieher).

@@ -5,6 +5,7 @@
  *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
  *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, Füllstand) an die Spitze des
  *     Boards holen (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket); unter der Schwelle schiebt der Takt nichts.
+ * Im Bezieher (Sync-Stand vorhanden), dessen Factory-Board das Repo der Fabrik führt, legt der Takt nur das Status-Ticket im eigenen Repo an (`bezieherTakt`, factory#195); das Harness-Sammelticket pflegt dort die Fabrik.
  * Die Entscheidungen sind pur und getestet (test/board-takt.test.ts, test/langfuse-takt.test.ts), nur die gh-Aufrufe in `main` sind es nicht.
  *
  * Idempotent und ohne gespeicherten Zähler: jedes Mal wird aus den offenen Issues, der Commit-Liste von main und der Board-Liste
