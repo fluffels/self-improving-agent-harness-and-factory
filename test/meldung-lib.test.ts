@@ -121,7 +121,7 @@ describe("bereiteMeldung", () => {
     test("unlesbarer Stand: nichts wird gesendet, die Fix-Zeile nennt die Datei, die Sperrprüfung läuft nicht", () => {
       for (const inhalt of ["{", "[]", "null"]) {
         let geprueft = 0;
-        const m = (lib.bereiteMeldung as unknown as (z: string[], o: { wurzel: string; pruefe: () => boolean }) => { ok: boolean; text?: string; grund?: string })(["- [ ] a"], { wurzel: wurzel(inhalt), pruefe: () => (geprueft++, true) });
+        const m = (lib.bereiteMeldung)(["- [ ] a"], { wurzel: wurzel(inhalt), pruefe: () => (geprueft++, true) });
         expect(m.ok, inhalt).toBe(false);
         expect(m.text).toBeUndefined();
         expect(m.grund).toMatch(/\.factory\/sync-stand\.json ist nicht lesbar[\s\S]*Fix:/);
