@@ -28,10 +28,19 @@ export function designAus(config) {
   return { label: block.label, freigabe: block.freigabe, system: block.system };
 }
 
-/** Pur: `""` (Ticket darf weiter) oder der Grund, dass der Design-Entwurf fehlt. Label-Vergleich ohne Groß-/Kleinschreibung. */
-export function designGrund(labels, config) {
-  const d = designAus(config);
-  if (d === null) return "";
+/** Pur (factory#162 L47): `aus` (kein Block oder das Ticket trägt das Design-Label nicht), `entwurf-fehlt` (Design-Label ohne Freigabe-Label) oder
+ *  `freigegeben` (beide Labels). `design` ist der Block der Config (`config.design`); ein ungültiger Block wirft. Label-Vergleich ohne Groß-/Kleinschreibung. */
+export function designZustand(design, labels) {
+  const d = designAus({ design });
+  if (d === null) return "aus";
   const hat = (l) => labels.some((x) => gleich(String(x), l));
-  return hat(d.label) && !hat(d.freigabe) ? `Design-Entwurf nicht freigegeben (Design-Label ${d.label} ohne Freigabe-Label ${d.freigabe})` : "";
+  if (!hat(d.label)) return "aus";
+  return hat(d.freigabe) ? "freigegeben" : "entwurf-fehlt";
+}
+
+/** Pur: `""` (Ticket darf weiter) oder der Grund, dass der Design-Entwurf fehlt. */
+export function designGrund(labels, config) {
+  if (designZustand(config?.design, labels) !== "entwurf-fehlt") return "";
+  const d = designAus(config);
+  return `Design-Entwurf nicht freigegeben (Design-Label ${d.label} ohne Freigabe-Label ${d.freigabe})`;
 }
