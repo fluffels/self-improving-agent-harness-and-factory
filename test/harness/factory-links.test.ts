@@ -415,7 +415,7 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     assert.deepEqual(lib.auditFactoryLinks(root).befunde, []);
     const r = run([], root);
     assert.equal(r.code, 0);
-    assert.match(r.out, /1 Anker-Stub/);
+    assert.match(r.out, /(^|\D)1 Anker-Stubs ohne Befund/);
   });
   test("Negativfall: Überschrift ohne Factory-Link ist rot, die Meldung nennt die Soll-URL und beide Orte", () => {
     const b = stubBefunde(stubRoot("# Z\n\n## Abschnitt\n\nText\n"));
@@ -459,6 +459,24 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     assert.deepEqual(arten(stubRoot(`# Z\n\nKern: [Z](${u("v1", "docs/z.md")})\n`, o)), ["stub-link"]);
     assert.deepEqual(arten(stubRoot("# Z\n\nText\n", o)), ["stub-link"]);
   });
+  test("ohne Anker deckt auch ein Factory-Link auf eine Stelle der Seite (pfad#anker am Sync-Tag); ein Link auf eine andere Seite nicht", () => {
+    const o = { kern: "[Z](docs/z.md)", ziele: { "docs/z.md": ["abschnitt"] } };
+    assert.deepEqual(arten(stubRoot(`# Z\n\n## Abschnitt\n\n${stub()}\n`, o)), []);
+    assert.deepEqual(arten(stubRoot(`# Z\n\n## Abschnitt\n\n[Y](${u("v2", "docs/y.md", "abschnitt")})\n`, { ...o, ziele: { "docs/y.md": ["abschnitt"] } })), ["stub-link"]);
+  });
+  test("Abschnitt: eine höhere Überschrift beendet ihn; ein Factory-Link in Zeile 1 des Ziels deckt einen Link ohne Anker; ein Link in der Zeile der nächsten Überschrift gehört nicht mehr dazu", () => {
+    assert.deepEqual(arten(stubRoot(`# Z\n\n### Abschnitt\n\nText\n\n## Höher\n\n${stub()}\n`, { kern: "[Z](docs/z.md#abschnitt)" })), ["stub-link"]);
+    const o = { kern: "[Z](docs/z.md)", ziele: { "docs/z.md": ["abschnitt"] } };
+    assert.deepEqual(arten(stubRoot(`${stub()}\n\n# Z\n`, o)), []);
+    const inUeberschrift = `# Z\n\n## Abschnitt\n\nText\n\n## Anderes ${stub()}\n`;
+    assert.deepEqual(arten(stubRoot(inUeberschrift)), ["stub-link"]);
+  });
+  test("Kern-Links auf dieselbe Seite mit verschiedenen Ankern sind je ein Befund; ein Query-Anhang am Link ändert die Prüfung nicht", () => {
+    const ziel = `# Z\n\n## Abschnitt\n\n${stub()}\n\n## Anderes\n\nText\n`;
+    const b = stubBefunde(stubRoot(ziel, { kern: "[a](docs/z.md#abschnitt)\n[b](docs/z.md#anderes)", ziele: { "docs/z.md": ["abschnitt"] } }));
+    assert.deepEqual(b.map((x) => [x.art, x.zeile]), [["stub-link", 7]]);
+    assert.deepEqual(arten(stubRoot("# Z\n\n## Anders\n", { kern: "[Z](docs/z.md?plain=1#abschnitt)" })), ["stub-anker"]);
+  });
   test("nicht geprüft: Link außerhalb des Besitz-Blocks, Ziel mit Einheit, Link im Code-Fence, Nicht-Markdown-Ziel, reiner Anker", () => {
     const kern = "[a](docs/y.md#x)\n```\n[b](docs/fehlt.md#x)\n```\n[c](scripts/x.mjs#L1)\n[d](#lokal)";
     const agents = `[aussen](docs/fehlt.md#x)\n${block(kern)}`;
@@ -487,6 +505,16 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     });
     assert.deepEqual(arten(root), []);
     assert.deepEqual(arten(stubRoot("# Z\r\n\r\n## Abschnitt\r\n\r\nText\r\n", { agents: "# A\n", einheiten: { "docs/k.md": "h" }, extra: { "docs/k.md": "[Z](z.md#abschnitt)\n" } })), ["stub-link"]);
+  });
+  test("eine Nicht-Markdown-Einheit liefert keine Stubs; ein Sync-Stand ohne einheiten stürzt nicht ab", () => {
+    const skript = stubRoot(null, { agents: "# A\n", einheiten: { "scripts/x.mjs": "h" }, extra: { "scripts/x.mjs": "// [a](docs/fehlt.md#x)\n" } });
+    assert.deepEqual(arten(skript), []);
+    const ohne = fixture({
+      ".factory/projekt.json": CONFIG(),
+      ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v2", commit: "c2" } }),
+      ".factory/factory-links.json": JSON.stringify({ repo: REPO, tag: "v2", commit: "c2", ziele: {} }),
+    });
+    assert.doesNotThrow(() => lib.auditFactoryLinks(ohne));
   });
   test("ohne Sync-Stand gibt es keine Stubs zu prüfen", () => {
     const root = fixture({ ".factory/projekt.json": CONFIG(), "AGENTS.md": block("[Z](docs/z.md#abschnitt)") });

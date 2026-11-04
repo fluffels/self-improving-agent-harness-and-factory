@@ -155,7 +155,7 @@ function stubBefund(k, { lies, repo, tag }) {
   const bereich = k.anker === "" ? { von: 0, bis: Infinity } : abschnitt(text, k.anker);
   if (!bereich) return befund("stub-anker", stubText(k, `keine Überschrift mit dem Anker #${k.anker} in ${k.ziel}`, soll), { datei: k.quelle, zeile: k.zeile });
   const gedeckt = sammleLinksAus({ dateien: [k.ziel], lies }, { repo }).some(
-    (l) => l.form === "blob" && l.zeile - 1 >= bereich.von && l.zeile - 1 < bereich.bis && factorySeite({ pfad: l.pfad, anker: l.anker, repo, tag: l.ref }) === soll,
+    (l) => l.form === "blob" && l.zeile - 1 >= bereich.von && l.zeile - 1 < bereich.bis && factorySeite({ pfad: l.pfad, anker: k.anker === "" ? "" : l.anker, repo, tag: l.ref }) === soll,
   );
   const ort = k.anker === "" ? "in der Datei" : `unter der Überschrift #${k.anker}`;
   return gedeckt ? null : befund("stub-link", stubText(k, `${k.ziel} trägt ${ort} keinen Factory-Link auf ${soll}`, soll), { datei: k.ziel, zeile: k.anker === "" ? 1 : bereich.von + 1 });
