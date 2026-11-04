@@ -346,9 +346,9 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
-    console.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
+    d.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
   } else if (args.dry) {
-    console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
+    d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
     const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
@@ -360,7 +360,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
       process.exit(2);
     }
     nr = neu.number;
-    console.log(`Angelegt: #${nr}`);
+    d.log(`Angelegt: #${nr}`);
     await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
     const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
@@ -373,9 +373,9 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   if (args.art !== "harness") return;
   const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
   if (!vorhanden && !args.dry && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
-  if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
-  else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
-  else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
+  if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
+  else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
+  else if (args.dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
   else {
     console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
     process.exit(1);

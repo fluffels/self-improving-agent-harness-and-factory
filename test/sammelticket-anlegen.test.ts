@@ -700,7 +700,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
   test("schon vorhanden: nichts angelegt, nichts gesetzt; harness prüft nur die Position des vorhandenen Tickets", async () => {
     const { deps, rufe, log } = fakes({ findeVorhandenes: () => ({ number: 33 }) });
     await M(["langfuse"], deps);
-    expect(log).toEqual([]);
+    expect(log.join(" | ")).toMatch(/gibt es schon: #33, nichts wird angelegt/);
     expect(namen(rufe)).toEqual([]);
     const h = fakes({ findeVorhandenes: () => ({ number: 33 }) });
     await M(["harness"], h.deps);
@@ -718,6 +718,30 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     const { deps, rufe } = fakes({ schliesseWennDublette: () => true });
     await M(["harness"], deps);
     expect(namen(rufe)).toEqual(["findeVorhandenes", "legeAn"]);
+  });
+
+  test("langfuse --top: ein falsch stehendes ungeclaimtes Harness-Sammelticket wird zuerst zurückgeschoben (Korrektur vor dem Plan)", async () => {
+    const items = [...listeVoll(), it(20, "Harness-Härtung (gesammelt)")];
+    const { deps, rufe } = fakes({ loadItems: () => items });
+    await M(["langfuse", "--top"], deps);
+    const set = rufe.filter((r) => r[0] === "setPosition");
+    expect(set[0]![2]).toBe("I20");
+    expect(set.length).toBeGreaterThan(1);
+  });
+
+  test("harness: ein Dubletten-Fund erst im zweiten Check (nach der Positions-Prüfung) beendet ohne Positionsmeldung; bei schon vorhandenem Ticket läuft er nicht", async () => {
+    let n = 0;
+    const zweiter = fakes({ schliesseWennDublette: () => ++n === 2 });
+    await M(["harness"], zweiter.deps);
+    expect(n).toBe(2);
+    expect(zweiter.log.join(" | ")).not.toMatch(/Position geprüft/);
+    const ok = fakes();
+    await M(["harness"], ok.deps);
+    expect(ok.log.join(" | ")).toMatch(/Position geprüft: #50/);
+    let m = 0;
+    const vorh = fakes({ findeVorhandenes: () => ({ number: 33 }), schliesseWennDublette: () => (m++, true) });
+    await M(["harness"], vorh.deps);
+    expect(m).toBe(0);
   });
 
   test("Vorgänger: vorgaengerZustand wird mit Vorgänger und Ziel-Repo gefragt, offen landet die Blocker-Zeile im Body", async () => {
