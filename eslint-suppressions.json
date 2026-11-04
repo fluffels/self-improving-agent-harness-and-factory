@@ -39,7 +39,7 @@
   },
   "scripts/check-diffcoverage.mjs": {
     "complexity": {
-      "count": 3
+      "count": 2
     }
   },
   "scripts/check-diffsize.mjs": {
