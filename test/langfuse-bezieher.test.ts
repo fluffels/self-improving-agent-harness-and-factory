@@ -2,7 +2,8 @@
  * Geprüft gegen die echte Config der Quelle (`begriffeAus` samt `projektliterale` und `seitenliterale`; Owner, Repo, Board-ID, Label teilen sich Quelle und Ziel):
  * kein Treffer im Text. Links auf das Factory-Repo sind Herkunft und werden vorher maskiert (wie in test/harness/factory-seiten.test.ts).
  * Der Sync-Stand der Repo-Wurzel wird vorgetäuscht (Bezieher: Tag und Quelle), jede andere Wurzel liest den echten. */
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 
@@ -82,5 +83,33 @@ describe("Langfuse-Tickets im Bezieher: ohne Projektwort", () => {
     expect(literal).not.toBe("");
     expect(treffer(`${statusText()}\nUnser ${literal} läuft`, begriffe).length).toBeGreaterThan(0);
     expect(treffer(`[Seite](https://github.com/x/${literal}/blob/v1/docs/a.md)`, begriffe)).toEqual([]);
+  });
+});
+
+describe("Prüfliste „Langfuse-Status überprüfen“ (docs/model-routing.md): bezieherfest", () => {
+  const seite = readFileSync(join(REPO_WURZEL, "docs", "model-routing.md"), "utf8");
+  const start = seite.indexOf("### Langfuse-Status überprüfen (#1293)");
+  const ende = seite.indexOf("### Langfuse-Erfassung belegen");
+  const liste = seite.slice(start, ende);
+  /** Der Text vor der Verdichtungstabelle: Einleitung und Punkte 1 bis 11 samt Satz über die Verdichtungszeile. */
+  const vorTabelle = liste.slice(0, liste.indexOf("| Zeitraum |"));
+
+  test("Abschnitt gefunden", () => {
+    expect(start).toBeGreaterThan(0);
+    expect(ende).toBeGreaterThan(start);
+  });
+
+  test("die Verdichtungszeile gehört nur ins Factory-Repo, im Bezieher in den Bericht-Kommentar (die Seite ist Factory-Besitz)", () => {
+    expect(vorTabelle).not.toContain("hierher kommt je Lauf");
+    expect(vorTabelle).toMatch(/im Factory-Repo hierher/);
+    expect(vorTabelle).toMatch(/im Bezieher[^.]*nur in den Bericht-Kommentar/);
+  });
+
+  test("Labels stehen als Platzhalter, Quellprojekt-Zielwerte sind als Factory-Wert gekennzeichnet", () => {
+    expect(vorTabelle).not.toMatch(/`area:harness`|`status:festgefahren`|--label status:festgefahren/);
+    expect(vorTabelle).toContain("<labels.harness>");
+    expect(vorTabelle).toContain("<labels.festgefahren>");
+    expect(vorTabelle).toMatch(/1,38 \$ geschätzt \(Factory-Wert/);
+    expect(vorTabelle).toMatch(/Factory-Vergleichswert[^.]*4,08/);
   });
 });
