@@ -12,12 +12,16 @@
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
  *   Zusatz bei ROT durch CANCELLED ohne laufenden Geschwister-Lauf: `HINWEIS <check> CANCELLED …: kein gh run rerun, leerer Commit mit Push` (ein Rerun behält das Ereignis samt `draft`).
+ * Bei Exit 2 steht der letzte Rohstand (`state`, `mergeable`, `statusCheckRollup`) in `<os.tmpdir()>/pr-warten-<pr>.json` (je Aufruf überschrieben), der Pfad als `Diagnose: <pfad>` auf stderr; die stdout-Zeilen bleiben der Vertrag.
  * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
  * `statusCheckRollup` liefert `gh` mit der Standardgrenze (rund 100 Einträge); die CI hat deutlich weniger Checks.
  * Der Kern `bewerte` ist pur, `holePflicht` nimmt den `gh`-Aufruf als Parameter (getestet); nur CLI und Schlaf sind dünne, ungetestete IO.
  */
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
@@ -217,16 +221,33 @@ export function holeWerkzeuge(pr, gh = ghText) {
  * Ein Wartelauf für PR `a.pr`: Werkzeuge der Ruleset-Regel `code_scanning` einmal lesen, dann warten (Pflicht-Checks plus diese Werkzeuge gaten), Hinweiszeile anhängen.
  * `gh` (Aufrufe von `gh pr view/checks`, `gh api`), `schlafe` und `jetzt` sind die Test-Nähte; Standard ist echtes `gh` und Wanduhr. Rückgabe `{ exit, zeilen }`.
  */
-export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), jetzt = () => Date.now() } = {}) {
+export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), jetzt = () => Date.now(), schreibe = writeFileSync, meldeFehler = console.error } = {}) {
   const w = holeWerkzeuge(a.pr, gh); // einmal je Lauf
-  return mitHinweis(warten({
-    hole: () => JSON.parse(gh(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 })),
+  let roh = null;
+  const r = mitHinweis(warten({
+    hole: () => (roh = JSON.parse(gh(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }))),
     pflicht: () => pflichtListe(holePflicht(a.pr, gh), w.werkzeuge),
     schlafe,
     jetzt,
     maxMs: a.maxSekunden * 1000,
     intervallMs: a.intervall * 1000,
   }), w.hinweis);
+  if (r.exit === 2 && roh) schreibeDiagnose(a.pr, roh, schreibe, meldeFehler);
+  return r;
+}
+
+/** Pfad der Diagnose-Datei eines PR (OS-Temp, je Aufruf überschrieben). */
+export const diagnosePfad = (pr) => join(tmpdir(), `pr-warten-${pr}.json`);
+
+/** Letzter Rohstand bei Exit 2 (OFFEN): `state`, `mergeable`, `statusCheckRollup`; Pfad auf stderr. Ein Schreibfehler bleibt folgenlos. */
+function schreibeDiagnose(pr, roh, schreibe, meldeFehler) {
+  const pfad = diagnosePfad(pr);
+  try {
+    schreibe(pfad, `${JSON.stringify({ state: roh.state, mergeable: roh.mergeable, statusCheckRollup: roh.statusCheckRollup }, null, 2)}\n`);
+    meldeFehler(`Diagnose: ${pfad}`);
+  } catch {
+    /* Diagnose ist Zusatz, kein Vertrag */
+  }
 }
 
 function main() {
