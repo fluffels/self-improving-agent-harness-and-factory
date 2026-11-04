@@ -97,6 +97,8 @@
     "/scripts/spezifikation-lib.mjs",
     "/scripts/design-lib.mjs",
     "/scripts/projekt-config-bloecke.mjs",
+    "/scripts/gate-befehl.mjs",
+    "/scripts/gate-befehl-lib.mjs",
     "/scripts/docs-gen/markdown.mjs",
     "/scripts/skill-pfade.mjs",
     "/scripts/subagent-laeufe.mjs",

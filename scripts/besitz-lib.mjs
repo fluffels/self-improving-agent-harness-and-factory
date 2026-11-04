@@ -29,6 +29,8 @@ export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === un
 
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
+/** Fehlertext-Zusatz: die erwarteten Marker-Zeilen eines Blocks. */
+export const markerHinweis = (id) => `Erwartet je eine Zeile ${markerStart(id)} und ${markerEnde(id)}`;
 
 /** Pfad des Besitz-Manifests (eine Quelle; kein Skript außerhalb dieser Lib schreibt das Literal). */
 export const MANIFEST_PFAD = ".factory/besitz.json";
@@ -492,7 +494,7 @@ export function setzeJsonSchluessel(text, schluessel, wertText) {
 export function setzeBlock(text, block, blockText) {
   const na = zaehleVorkommen(text, markerStart(block));
   const nb = zaehleVorkommen(text, markerEnde(block));
-  if (na !== 1 || nb !== 1) throw new Error(`Block '${block}': Marker müssen im Ziel je genau einmal stehen (start ${na}, ende ${nb})`);
+  if (na !== 1 || nb !== 1) throw new Error(`Block '${block}': Marker müssen im Ziel je genau einmal stehen (start ${na}, ende ${nb}). ${markerHinweis(block)}`);
   const a = text.indexOf(markerStart(block));
   const b = text.indexOf(markerEnde(block));
   if (b < a) throw new Error(`Block '${block}': Ende-Marker steht vor dem Start-Marker`);

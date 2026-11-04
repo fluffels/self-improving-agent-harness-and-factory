@@ -27,6 +27,9 @@ import { fileURLToPath } from "node:url";
 import * as rawNamen from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawGate from "../../scripts/gate-befehl-lib.mjs";
+const STANDARD_BEFEHLE = (rawGate as unknown as { STANDARD_BEFEHLE: Record<string, string> }).STANDARD_BEFEHLE;
 
 // Begründete Ausnahme wie in repo-texte.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -116,14 +119,18 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     for (const [gate, producer] of REPORT_DEPENDENT_GATES) {
       const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);
       const ci = readRepo(".github/workflows/ci.yml");
-      const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
+      const nachErzeuger = (s: string, erzeuger = `npm run ${producer}`) => s.indexOf(`npm run ${gate}`) > s.indexOf(erzeuger);
+      // In der CI läuft der Erzeuger über den Gate-Befehl `coverage` (factory#182); dessen Standard ist der npm-Lauf.
+      const ciErzeuger = "node scripts/gate-befehl.mjs coverage";
+      expect(STANDARD_BEFEHLE.coverage, "Standard von coverage ist der Erzeuger").toBe(`npm run ${producer}`);
+      expect(ci.indexOf(ciErzeuger), `der Erzeuger "${ciErzeuger}" muss in ci.yml vorkommen`).toBeGreaterThan(-1);
       expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
       // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
       expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
       // NICHT in der schnellen verify-Kette — dort läuft der Erzeuger nicht.
       expect(needle.test(scripts.verify), `"${gate}" gehört nicht in die verify-Kette`).toBe(false);
       expect(needle.test(ci), `"${gate}" muss als eigener CI-Schritt laufen`).toBe(true);
-      expect(nachErzeuger(ci), `"${gate}" muss in der CI NACH "${producer}" stehen`).toBe(true);
+      expect(nachErzeuger(ci, ciErzeuger), `"${gate}" muss in der CI NACH "${producer}" stehen`).toBe(true);
     }
   });
 
@@ -151,7 +158,8 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
 
   it("die CI ruft die `verify`-Kette auf, statt die Gates einzeln zu duplizieren", () => {
     const ci = readRepo(".github/workflows/ci.yml");
-    expect(ci, "ci.yml muss npm run verify aufrufen").toMatch(/\bnpm run verify\b/);
+    expect(ci, "ci.yml muss den Gate-Befehl verify aufrufen").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+    expect(STANDARD_BEFEHLE.verify, "Standard von verify ist die verify-Kette").toBe("npm run verify");
     // Die alten, einzeln duplizierten Gate-Steps dürfen NICHT mehr da sein –
     // sonst ist die SSOT wieder aufgeweicht (Gate läuft doppelt / kann driften).
     for (const gate of ["check:arch", "check:size", "check:docmap"]) {

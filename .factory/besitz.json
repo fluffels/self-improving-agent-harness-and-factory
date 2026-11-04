@@ -60,6 +60,8 @@
     {"pfad":"scripts/spezifikation-lib.mjs","ring":"kern","quelle":"ADR 0022 F12 (#1615)"},
     {"pfad":"scripts/design-lib.mjs","ring":"kern","quelle":"Design-Schritt (factory#172)"},
     {"pfad":"scripts/projekt-config-bloecke.mjs","ring":"kern","quelle":"Schnitt von projekt-config-lib (factory#162 L22): Form-Prüfer der Config-Blöcke"},
+    {"pfad":"scripts/gate-befehl.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
+    {"pfad":"scripts/gate-befehl-lib.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
     {"pfad":"scripts/projekt-config-lib.mjs","ring":"kern","quelle":"Plan #1611 (ADR 0022 F2)"},
     {"pfad":"scripts/ticket-namen.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1742)"},
     {"pfad":"scripts/board-lib.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1744)"},
