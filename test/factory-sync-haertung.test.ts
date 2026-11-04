@@ -37,7 +37,7 @@ describe("L4: Versionsfehler trägt den Werkzeug-Hinweis", () => {
 });
 
 describe("L2: versionUnbekannt aus MANIFEST_VERSIONEN", () => {
-  const b = rawBesitz as unknown as { MANIFEST_VERSIONEN: number[]; versionUnbekannt(m: string): boolean; pruefeManifest(m: unknown, l: Lies): string[] };
+  const b = rawBesitz as unknown as { MANIFEST_VERSIONEN: number[]; versionUnbekannt: (m: string) => boolean; pruefeManifest(m: unknown, l: Lies): string[] };
   test("nur die Versions-Meldung zählt, jede bekannte Version nicht", () => {
     const meldungen = b.pruefeManifest({ version: 9, eintraege: [] }, () => "t");
     expect(meldungen.some(b.versionUnbekannt)).toBe(true);

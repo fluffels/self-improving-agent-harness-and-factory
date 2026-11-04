@@ -163,7 +163,7 @@ describe("Lockfile-Integrität (#593)", () => {
 
 // ── Getrackte Lockfiles in Unterordnern (L49) ──────────────────────────────────────
 
-const checkLockfile: (rootDir: string) => Audit = checkLock.checkLockfile;
+const checkLockfile = (rootDir: string): Audit => (checkLock as unknown as { checkLockfile(r: string): Audit }).checkLockfile(rootDir);
 const temps: string[] = [];
 afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true });
