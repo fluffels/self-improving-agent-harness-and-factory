@@ -12,7 +12,7 @@
     "complexity": 3
   },
   "scripts/board-takt.mjs": {
-    "complexity": 21
+    "complexity": 10
   },
   "scripts/brain-metrics.mjs": {
     "complexity": 11,

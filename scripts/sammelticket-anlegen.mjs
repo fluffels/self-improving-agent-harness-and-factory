@@ -48,7 +48,8 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -175,18 +176,41 @@ export function sammelZiel(config, label = labelAus(config, "harness")) {
   return { rolle: boardRolleFuer(labels, config), repo, owner: zerlegeRepo(repo).owner };
 }
 
+/**
+ * Pur (factory#195): Label und Ziel des Sammeltickets der Art `art`. `harness` und `codequalitaet` wie bisher (`sammelLabel`, `sammelZiel`; ohne Label für `codequalitaet` `{ label: null, ziel: null }`);
+ * `langfuse` folgt `langfuseZiel` (im Bezieher das eigene Repo, `label` darf dort `null` sein: kein Label beim Anlegen). Wirft wie `langfuseZiel`. Liefert `{ label, ziel }`.
+ */
+export function zielFuerArt(config, art, { bezieher = false } = {}) {
+  if (art === "langfuse") {
+    const lz = langfuseZiel(config, { bezieher });
+    return { label: lz.label, ziel: { rolle: lz.rolle, repo: lz.repo, owner: zerlegeRepo(lz.repo).owner } };
+  }
+  const label = sammelLabel(config, art);
+  return { label, ziel: label === null ? null : sammelZiel(config, label) };
+}
+
+/** `zielFuerArt`, aber ein Konfigurationsfehler endet mit `✖`-Zeile und Exit 2 statt mit einem Stacktrace. */
+function zielOderAbbruch(config, art, bezieher) {
+  try {
+    return zielFuerArt(config, art, { bezieher });
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
+    return process.exit(2);
+  }
+}
+
 /** Die gh-Optionen für Aufrufe gegen das Ziel-Repo `repo` (#97): ein fremdes Repo liest und schreibt der `PROJECT_TOKEN`, das eigene den Standard (`tokenFuerZiel`). */
 export const zielOpts = (repo, env = process.env) => ({ token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
 
-/** Legt das Sammelticket im Ziel-Repo an; fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
+/** Legt das Sammelticket im Ziel-Repo an (`harness` = Label oder `null`: ohne Label, factory#195); fehlende Schreibrechte oder verworfene Labels sind ein klarer Fehler, nie ein Rückfall ins eigene Repo. */
 export function legeAn({ repo, titel, body, harness }, api = ghJson, env = process.env) {
   let neu;
   try {
-    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", `labels[]=${harness}`], zielOpts(repo, env));
+    neu = api(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`])], zielOpts(repo, env));
   } catch (e) {
     throw new Error(`Anlegen in ${repo} fehlgeschlagen: ${schreibrechtText(e, repo) ?? fehlerText(e)}`, { cause: e });
   }
-  if (fehlendeLabels(neu, [harness]).length > 0) {
+  if (harness !== null && fehlendeLabels(neu, [harness]).length > 0) {
     throw new Error(`#${neu.number} in ${repo} angelegt, aber ohne Label ${harness} (kein Schreibrecht für Labels dort?)\nFix: Schreibrecht im Ziel-Repo klären, Label und Board-Position dort von Hand setzen`);
   }
   return neu;
@@ -318,20 +342,24 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
   for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
 }
 
+/** Bezieher (factory#195): Sync-Stand in der Wurzel vorhanden; `bezieher` und `wurzel` in `d` sind Test-Nähte. */
+const istBezieher = (d) => d.bezieher ?? liesSyncStand(d.wurzel ?? WURZEL).zustand !== "fehlt";
+
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
+  d.bezieher = istBezieher(d);
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
     process.exit(2);
   }
   const config = d.ladeConfig();
-  const label = sammelLabel(config, args.art);
-  if (label === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
-  d.kontingent();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
-  const ziel = sammelZiel(config, label);
+  // Langfuse im Bezieher (factory#195): das eigene Repo, ohne Harness-Label auf dem Produkt-Board (`zielFuerArt`).
+  const { label, ziel } = zielOderAbbruch(config, args.art, d.bezieher);
+  if (ziel === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
+  d.kontingent();
   const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;
   const titel = TITEL[args.art];

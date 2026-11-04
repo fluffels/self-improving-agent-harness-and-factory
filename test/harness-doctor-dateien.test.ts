@@ -283,6 +283,18 @@ describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)",
     expect(lies(root).hinweis).toContain("c/d");
   });
 
+  test("factory#195: im Bezieher (Sync-Stand vorhanden) nennt der Hinweis das Status-Ticket im eigenen Repo; Upstream behält den bisherigen Text", () => {
+    const projekt = { ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] }) };
+    const bezieher = lies(fixture({ ...projekt, ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
+    expect(bezieher.hinweis).toContain("legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an");
+    expect(bezieher.hinweis).toContain("c/d");
+    const eigenes = lies(fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "a/b" }] }), ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
+    expect(eigenes).toEqual({ punkt: "Langfuse-Takt", ok: true }); // Factory-Board im eigenen Repo: kein Hinweis, auch im Bezieher
+    const upstream = lies(fixture(projekt));
+    expect(upstream.hinweis).toContain("dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter");
+    expect(upstream.hinweis).not.toContain("im eigenen Repo");
+  });
+
   test("ohne oder mit kaputter Config: OK ohne Hinweis, kein Absturz", () => {
     expect(lies(fixture({}))).toEqual({ punkt: "Langfuse-Takt", ok: true });
     expect(lies(fixture({ ".factory/projekt.json": "{kaputt" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
