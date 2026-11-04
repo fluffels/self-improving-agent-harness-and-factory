@@ -134,6 +134,31 @@ describe("Einheit ordner", () => {
   });
 });
 
+describe("Runde 1: Grenzen der Kandidaten-Erkennung", () => {
+  test("mehrere Endungen: beide Dateiarten sind abgedeckt, eine fehlende Datei der zweiten Endung ist ein Geist", () => {
+    const d = fixture({ [`${JAVA}/A.java`]: "x", [`${JAVA}/B.kt`]: "x", "doku/m.md": `\`${JAVA}/A.java\` \`${JAVA}/B.kt\` \`${JAVA}/Weg.kt\`\n` });
+    const a = dm.auditDocMap(d, { quelle: [JAVA], endungen: [".java", ".kt"], moduldoku: "doku" });
+    assert.deepEqual([a.orphans, a.ghosts], [[], [`${JAVA}/Weg.kt`]]);
+  });
+  test.each(["*/src/main/java", "?/src/main/java"])("Glob-Wurzel %s: ein Pfad außerhalb des Globs ist weder Kandidat noch Geist, ein Pfad darunter deckt ab", (wurzel) => {
+    const d = fixture({
+      "a/src/main/java/A.java": "x", "c/src/test/java/C.java": "x",
+      "doku/m.md": "`a/src/main/java/A.java` `c/src/test/java/C.java` `tools/Gen.java`\n",
+    });
+    const a = dm.auditDocMap(d, { quelle: [wurzel], endungen: [".java"], moduldoku: "doku" });
+    assert.deepEqual([a.orphans, a.ghosts], [[], []]);
+    assert.deepEqual([...dm.parseDeepDocMaps(d, { quelle: [wurzel], endungen: [".java"], moduldoku: "doku" })], ["a/src/main/java/A.java"]);
+  });
+  test.each([["literal", JAVA], ["Glob", "*/src/main/java"], ["Glob mit ?", "?/src/main/java"]])("Ordner-Einheit, Wurzel %s mit direkter Datei: die Erwähnung der Wurzel (mit und ohne End-Slash) deckt ab", (_n, wurzel) => {
+    const s: Struktur = { quelle: [wurzel], endungen: [".java"], docmapEinheit: "ordner", moduldoku: "doku" };
+    for (const erwaehnung of [JAVA, `${JAVA}/`]) {
+      const d = fixture({ [`${JAVA}/A.java`]: "x", "doku/m.md": `\`${erwaehnung}\`\n` });
+      const a = dm.auditDocMap(d, s);
+      assert.deepEqual([a.modules, a.orphans, a.ghosts], [[JAVA], [], []]);
+    }
+  });
+});
+
 describe("Scan-Grenzen der Backtick-Pfade", () => {
   test("ein Pfad direkt hinter einem Backtick-Lauf wird wie zuvor erfasst (kein paarweises Verbrauchen)", () => {
     const d = fixture({ "lib/b.ts": "x", "doku/m.md": "`x`lib/b.ts`\n" });
