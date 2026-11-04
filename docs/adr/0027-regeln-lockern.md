@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert AGENTS.md › „Kein Grün-durch-Aufweichen“ um die Gegenrichtung und [ADR 0016](0016-langfuse-takt-woechentlich.md) (Status-Lauf, Checkliste Punkt 8). Bezug: [ADR 0012](0012-harness-autonomie-audit-spur.md) (Kreislauf aus Härtung gegen Hypothetisches), [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (Audit-Kommentar statt Riegel). Teil von #1350 (Baustein 4).
+**Akzeptiert.** Präzisiert AGENTS.md › „Kein Grün-durch-Aufweichen“ um die Gegenrichtung und [ADR 0016](0016-langfuse-takt-woechentlich.md) (Status-Lauf, Checkliste Punkt 8). Bezug: [ADR 0012](0012-harness-autonomie-audit-spur.md) (Kreislauf aus Härtung gegen Hypothetisches), [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (Audit-Kommentar statt Riegel). Teil von #1350 (Baustein 4). Fortschreibung: [factory#202](fortschreibungen/0027-202-gate-fundquote.md) (Evidenz für Gates liefert `scripts/gate-fundquote.mjs`).
 
 ## Kontext
 
