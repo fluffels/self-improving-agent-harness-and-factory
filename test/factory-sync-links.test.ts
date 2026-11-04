@@ -594,6 +594,16 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     assert.equal(existsSync(join(z, "docs", "seite.md")), true);
   });
 
+  test("AK3: eine Seite, die derselbe Sync als Vorlage neu anlegt, wird nie vom Stub überschrieben", () => {
+    const q = baueQuelle({ stopp: "Siehe [a](docs/neu.md#x).", vorlagen: { "docs/neu.md": "# Neu\n\n## X\n\nVorlagentext\n" } });
+    const z = zielMitPackage();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^neu \(Vorlage\): docs\/neu\.md$/m);
+    assert.ok(!/^neu \(Anker-Stub\): docs\/neu\.md$/m.test(r.out));
+    assert.match(lies(z, "docs/neu.md"), /Vorlagentext/);
+  });
+
   test("AK3: ein Ordner auf dem Seitenpfad (nicht lesbar als Text, aber da) bekommt keinen Stub", () => {
     const q = quelleMitSeiten();
     const z = zielMitPackage();
