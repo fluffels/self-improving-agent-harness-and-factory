@@ -136,6 +136,10 @@ describe("Namen und Aufruf (K3)", () => {
       assert.equal(u.aufrufe.length, 0);
     }
   });
+  test("befehlAus wirft bei kaputtem Block mit Feld und Fix, auch ohne Schema-Prüfung davor", () => {
+    for (const wert of ["", "a\nb"]) assert.throws(() => lib.befehlAus({ befehle: { verify: wert } }, "verify"), /befehle\.verify[\s\S]*Fix:/);
+    assert.equal(lib.befehlAus(undefined as unknown as Config, "install"), "npm ci");
+  });
   test("befehlAus wirft bei unbekanntem Namen mit Fix", () => {
     assert.throws(() => lib.befehlAus({}, "constructor"), /Fix:/);
   });

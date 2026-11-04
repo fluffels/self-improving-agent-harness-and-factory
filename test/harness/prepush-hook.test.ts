@@ -203,7 +203,7 @@ describe.skipIf(!hatSh)("factory#182 pre-push-Hook: Gate-Befehl aus der Projekt-
   const dirs: string[] = [];
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
   // Temp-Baum mit der echten Import-Hülle des Läufers und einer Config mit `befehle.verify`; der Hook läuft mit cwd dort.
-  const lauf = (verify: string) => {
+  const baum = (verify: string) => {
     const d = mkdtempSync(join(tmpdir(), "prepush-gate-"));
     dirs.push(d);
     const wurzel = fileURLToPath(new URL("../../", import.meta.url));
@@ -215,6 +215,10 @@ describe.skipIf(!hatSh)("factory#182 pre-push-Hook: Gate-Befehl aus der Projekt-
     config.befehle = { verify };
     mkdirSync(join(d, ".factory"));
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(config));
+    return d;
+  };
+  const lauf = (verify: string) => {
+    const d = baum(verify);
     const hookPfad = fileURLToPath(new URL("../../.githooks/pre-push", import.meta.url)).replaceAll("\\", "/");
     return spawnSync("sh", [hookPfad, "origin", "x"], { cwd: d, input: `refs/heads/main ${OID} refs/heads/main ${"0".repeat(40)}\n`, encoding: "utf8" });
   };
@@ -222,6 +226,11 @@ describe.skipIf(!hatSh)("factory#182 pre-push-Hook: Gate-Befehl aus der Projekt-
     const r = lauf("exit 3");
     expect(r.status, r.stdout + r.stderr).toBe(1);
     expect(r.stdout).toContain("Gate-Befehl 'verify' ist ROT");
+  });
+  it("der Befehl läuft im Wurzelordner des Läufers, auch bei Aufruf aus einem Unterordner", () => {
+    const d = baum("node -e \"process.exit(require('fs').existsSync('.factory/projekt.json') ? 0 : 5)\"");
+    const r = spawnSync(process.execPath, ["gate-befehl.mjs", "verify"], { cwd: join(d, "scripts"), encoding: "utf8" });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
   });
   it("befehle.verify \"exit 0\" lässt den Push auf main durch", () => {
     const r = lauf("exit 0");
