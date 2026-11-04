@@ -77,7 +77,7 @@ function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
 /** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (vermutlich Projektkopie; geschrieben wird nichts). */
 function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies) {
   return manifest.eintraege
-    .filter((e) => wirdVerteilt(e) && istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null)
+    .filter((e) => istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null)
     .map((e) => `Modul '${e.modul}' nicht gewählt, im Ziel liegt ${e.pfad} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
 }
 

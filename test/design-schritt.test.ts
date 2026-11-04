@@ -109,6 +109,7 @@ describe("designZustand und design-schritt (factory#162 L47)", () => {
 describe("scripts/design-schritt.mjs: lauf", () => {
   const S = schritt as unknown as {
     lauf: (argv: string[], u: { design: unknown; labels: (nr: string) => string[] }) => { code: number; out: string; err: string };
+    echteQuellen: (lade: (o: { pruefen: boolean }) => { design?: unknown }) => { design: unknown; labels: (nr: string) => string[] };
   };
   const u = (labels: string[], design: unknown = BLOCK) => ({ design, labels: () => labels });
   test("Ausgabe design: <zustand>, Exit 3 nur bei entwurf-fehlt", () => {
@@ -123,6 +124,15 @@ describe("scripts/design-schritt.mjs: lauf", () => {
     const gesehen: string[] = [];
     S.lauf(["--issue", "162"], { design: BLOCK, labels: (nr) => (gesehen.push(nr), []) });
     expect(gesehen).toEqual(["162"]);
+  });
+  test("scheitert das Laden der Config, ist das Ergebnis Exit 2 ohne design-Zeile, nie ein stilles aus (L47)", () => {
+    const q = S.echteQuellen(() => {
+      throw new Error("kein gültiges JSON");
+    });
+    const r = S.lauf(["--issue", "1"], q);
+    expect(r.code).toBe(2);
+    expect(r.out).toBe("");
+    expect(r.err).toContain("kein gültiges JSON");
   });
   test("Aufruf-Fehler (ohne --issue, keine Zahl, unbekannte Option) sind Exit 2; ein ungültiger Block ebenso", () => {
     for (const argv of [[], ["--issue"], ["--issue", "abc"], ["--issue", "0"], ["--issue", "1", "--x"], ["5"]]) {

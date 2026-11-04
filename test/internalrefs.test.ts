@@ -574,6 +574,19 @@ describe("Projektliste (factory#169)", () => {
     assert.deepEqual(cfg.internalrefs.begriffe, [kod(DUMMY)]);
   });
 
+  test("--add in einer LF-Config schreibt kein CR in den neuen Block (factory#162)", () => {
+    const w = tempOrdner("ir-lf-");
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, SYNC), "{}");
+    const kopf = `{\n  "praefixe": {"a": 1},\n  "internalrefs": {\n    "namen": ["${kod("zzzalt")}"]\n  }`;
+    const rest = ',\n  "liste": ["eins"]\n}\n';
+    writeFileSync(join(w, ".factory", "projekt.json"), kopf + rest);
+    assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
+    const text = configText(w);
+    assert.ok(!text.includes("\r"), "kein CR in einer LF-Config");
+    assert.ok(text.endsWith(rest), "Text nach dem Block byte-gleich");
+  });
+
   test("addProjektTerm: leerer Begriff und fehlende Config schreiben nichts; ein kaputter Sync-Stand zählt als Bezieher", () => {
     const w = wurzelMit(undefined);
     assert.equal(addProjektTerm("  ", w, "begriffe").ok, false);

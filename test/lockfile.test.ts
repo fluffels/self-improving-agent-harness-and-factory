@@ -184,6 +184,9 @@ const SUB_PKG: Pkg = { name: "sub", version: "1.0.0", dependencies: { a: "^1.0.0
 
 describe("checkLockfile: jedes getrackte package-lock.json (L49)", () => {
   const wurzel = { "package.json": BASE_PKG, "package-lock.json": lockMirroring(BASE_PKG) };
+  test("eine Wurzel ohne package.json ist ein Aufruf-Fehler (wirft), kein Befund (factory#162)", () => {
+    assert.throws(() => checkLockfile(repoMit({ "sub/package.json": SUB_PKG, "sub/package-lock.json": lockMirroring(SUB_PKG) })));
+  });
   test("Wurzel unverändert: ohne Unterordner synchron ok, Drift rot ohne Dateiangabe", () => {
     assert.equal(checkLockfile(repoMit(wurzel)).ok, true);
     const drift = checkLockfile(repoMit({ ...wurzel, "package.json": { ...BASE_PKG, version: "9.9.9" } }));

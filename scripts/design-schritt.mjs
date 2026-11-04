@@ -36,10 +36,10 @@ export function lauf(argv, { design, labels }) {
 }
 
 /** Die echten Quellen; scheitert das Laden der Config, wirft `labels` den Fehler (Exit 2 statt stilles `aus`). */
-const echteQuellen = () => {
+export const echteQuellen = (lade = ladeProjektConfig) => {
   try {
     return {
-      design: ladeProjektConfig({ pruefen: false }).design,
+      design: lade({ pruefen: false }).design,
       labels: (nr) => ghText(["issue", "view", nr, "--json", "labels", "-q", ".labels[].name"]).split(/\r?\n/).filter(Boolean),
     };
   } catch (e) {

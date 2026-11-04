@@ -7,7 +7,7 @@
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
  * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib` und `projekt-config-bloecke`
+ * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib` und `projekt-config-bloecke`
  * (deren Hülle: `relativ-pfad`, `pfad-glob`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -22,7 +22,6 @@ import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
-import { factorySeiteIn } from "./factory-seite.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -186,7 +185,7 @@ export function spracheAus(config) {
 export function strukturAus(config) {
   const wert = config?.struktur;
   if (!istObjekt(wert) || !istText(wert.quelle) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
-    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen (Schrittfolge: ${factorySeiteIn(ROOT, "docs/erstbezug.md", "schrittfolge")})`);
+    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen (Schrittfolge: Erstbezug-Leitfaden der Factory, docs/erstbezug.md#schrittfolge)`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
