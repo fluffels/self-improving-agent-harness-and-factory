@@ -6,7 +6,8 @@
  * Hintergrund: `npm install` darf `package-lock.json` neu schreiben. In jedem Ticket-Lauf
  * wurde der Lockfile im frischen Worktree dirty und musste von Hand zurückgesetzt werden
  * (#998, #1107: einmal versehentlich mitcommittet). `npm ci` installiert exakt nach
- * Lockfile und schreibt ihn nie – identisch zur CI.
+ * Lockfile und schreibt ihn nie – identisch zur CI. Seit factory#186 nennen die Kern-Texte statt `npm ci` den Läufer
+ * `node scripts/gate-befehl.mjs install` (Standard des Befehls `install`: `npm ci`); beide Formen zählen als die Installation.
  *
  * Geprüft wird je Texteinheit (Absatz bzw. einzelner Listenpunkt – eine ganze Liste ist
  * KEINE Einheit, sonst schlügen fremde Punkte derselben Liste an): jede Einheit, die einen
@@ -35,6 +36,8 @@ import { workflowDateien } from "./repo-texte";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as gateRaw from "../../scripts/gate-befehl-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
 
 // Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein
@@ -50,6 +53,9 @@ const PFLICHT_QUELLEN = [
   ".agents/skills/review-lenses/SKILL.md",
   "docs/agent-harness-faq.md",
 ];
+
+/** Der Läufer des Gate-Befehls `install` (factory#186), die Form der Kern-Texte. */
+const LAEUFER_INSTALL = /gate-befehl\.mjs install\b/;
 
 /** Mindestzahl gefundener Worktree-Installations-Absätze (Leerlauf-Schutz). */
 const MIN_TREFFER = PFLICHT_QUELLEN.length;
@@ -75,13 +81,18 @@ interface Treffer {
 /** Einheiten mit Worktree-Bezug UND npm-Installationsbefehl. */
 function worktreeInstallAbsaetze(datei: string, text: string): Treffer[] {
   return einheiten(text)
-    .filter((a) => /worktree/i.test(a) && /\bnpm (ci|install)\b/.test(a))
+    .filter((a) => /worktree/i.test(a) && (/\bnpm (ci|install)\b/.test(a) || LAEUFER_INSTALL.test(a)))
     .map((absatz) => ({ datei, absatz }));
 }
 
-/** Verstöße: Worktree-Absatz ohne `npm ci` oder mit `npm install`. */
+/** Verstöße: Worktree-Absatz ohne `npm ci` bzw. den Läufer `install` oder mit `npm install`. */
 function verstoesse(treffer: Treffer[]): Treffer[] {
-  return treffer.filter((t) => !/\bnpm ci\b/.test(t.absatz) || /\bnpm install\b/.test(t.absatz));
+  return treffer.filter((t) => !(/\bnpm ci\b/.test(t.absatz) || LAEUFER_INSTALL.test(t.absatz)) || /\bnpm install\b/.test(t.absatz));
+}
+
+/** Der Standard des Gate-Befehls `install` muss `npm ci` bleiben, ein Projekt-Befehl darf nicht `npm install` sein (pur, testbar). */
+function installBefehlFehler(befehl: string): string | null {
+  return /^npm ci\b/.test(befehl) || !/\bnpm install\b/.test(befehl) ? null : `Gate-Befehl install nutzt npm install: ${befehl}`;
 }
 
 function alleTreffer(): Treffer[] {
@@ -138,6 +149,29 @@ describe("Worktree-Setup nutzt npm ci (#1119)", () => {
     const t = worktreeInstallAbsaetze("x.md", text);
     assert.equal(t.length, 1);
     assert.deepEqual(verstoesse(t), []);
+  });
+
+  test("Happy Path: der Läufer install im Worktree-Absatz ist ok", () => {
+    const t = worktreeInstallAbsaetze("x.md", "Im frischen Worktree einmal `node scripts/gate-befehl.mjs install`.");
+    assert.equal(t.length, 1);
+    assert.deepEqual(verstoesse(t), []);
+  });
+
+  test("Negativfall: Läufer neben npm install im Worktree-Absatz wird gemeldet", () => {
+    const t = worktreeInstallAbsaetze("x.md", "Im Worktree `node scripts/gate-befehl.mjs install`, sonst `npm install`.");
+    assert.equal(verstoesse(t).length, 1);
+  });
+
+  test("Grenzfall: Läufer mit anderem Namen ist keine Installation", () => {
+    assert.deepEqual(worktreeInstallAbsaetze("x.md", "Im Worktree `node scripts/gate-befehl.mjs verify`."), []);
+  });
+
+  test("Standard-Befehl install ist npm ci, ein Projekt-Befehl mit npm install wird gemeldet", () => {
+    const standard = (gateRaw as unknown as { STANDARD_BEFEHLE: Record<string, string> }).STANDARD_BEFEHLE;
+    assert.equal(installBefehlFehler(standard.install), null);
+    assert.ok(installBefehlFehler("npm install --no-save"));
+    const projekt = JSON.parse(readFileSync(ROOT + ".factory/projekt.json", "utf8")) as { befehle?: { install?: string } };
+    if (projekt.befehle?.install !== undefined) assert.equal(installBefehlFehler(projekt.befehle.install), null);
   });
 
   test("Happy Path: npm ci im Worktree-Absatz ist ok", () => {
