@@ -5,7 +5,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { altEnvPraefix, NULLBARER_SKILL, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { altEnvPraefix, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { NULLBARER_SKILL } from "./projekt-config-bloecke.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
