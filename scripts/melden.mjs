@@ -32,8 +32,8 @@ export const alsListenpunkt = (zeile) => {
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const { ladeConfig, ladeLibs, env, log, err, bereite, api } = { ...STANDARD, ...deps };
   const { werte, fehler } = flagsLesen(argv, { zeile: { type: "string", multiple: true }, "dry-run": { type: "boolean" } });
-  if (fehler || !werte.zeile?.length) {
-    err(`${fehler?.text ?? "--zeile fehlt"}\n${AUFRUF}`);
+  if (fehler || !werte.zeile?.length || werte.zeile.some((z) => z.trim() === "")) {
+    err(`${fehler?.text ?? "--zeile fehlt oder ist leer"}\n${AUFRUF}`);
     return AUFRUF_EXIT;
   }
   let libs;

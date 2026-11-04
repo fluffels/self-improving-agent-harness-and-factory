@@ -1,7 +1,8 @@
 /* Meldestelle (factory#153): Stand-Zeile, Sperrprüfung vor dem Senden, Token, der Einstieg `melden.mjs` und der Wächter über alle Schreiber.
  * Der echte Negativfall holt den verbotenen Begriff über `decodeTerms()` zur Laufzeit, er steht nie im Klartext im Repo. */
-import { describe, expect, test } from "vitest";
-import { readdirSync, readFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "vitest";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -35,6 +36,11 @@ describe("factoryStand und meldungsText (AK2)", () => {
   test("ok ohne Tag: ohne Tag; ohne Commit: unbekannt", () => {
     expect(lib.factoryStand(ok(undefined, "abcdef0123456789"))).toBe("factory: ohne Tag (abcdef0)");
     expect(lib.factoryStand(ok("v1.0.0", undefined))).toBe("factory: v1.0.0 (unbekannt)");
+  });
+  test("Grenzfälle der Felder: Stand ohne quelle, leere Strings und Nicht-Strings zählen als fehlend", () => {
+    expect(lib.factoryStand({ zustand: "ok", stand: {} })).toBe("factory: ohne Tag (unbekannt)");
+    expect(lib.factoryStand(ok("", ""))).toBe("factory: ohne Tag (unbekannt)");
+    expect(lib.factoryStand({ zustand: "ok", stand: { quelle: { tag: null, commit: 5 } } } as unknown as Stand)).toBe("factory: ohne Tag (unbekannt)");
   });
   test("kein Sync-Stand (Upstream): keine Zeile; kaputter Stand: unbekannt, trotzdem eine Zeile", () => {
     expect(lib.factoryStand({ zustand: "fehlt", stand: null })).toBeNull();
@@ -91,10 +97,28 @@ describe("bereiteMeldung", () => {
     expect(m.text).toBeUndefined();
     expect(m.grund).toMatch(/check-internalrefs --text[\s\S]*Fix:/);
   });
-  test("ohne übergebenen Stand liest sie .factory/sync-stand.json der Wurzel (hier: Stand oder keiner, nie ein Wurf)", () => {
-    const m = lib.bereiteMeldung(["- [ ] a"], { pruefe: () => true });
-    expect(m.ok).toBe(true);
-    expect(m.text?.startsWith("- [ ] a")).toBe(true);
+  describe("liest .factory/sync-stand.json der Wurzel (AK2)", () => {
+    const wurzeln: string[] = [];
+    afterEach(() => {
+      for (const w of wurzeln.splice(0)) rmSync(w, { recursive: true, force: true });
+    });
+    const wurzel = (stand: string | null): string => {
+      const w = mkdtempSync(join(tmpdir(), "meldung-"));
+      wurzeln.push(w);
+      if (stand !== null) {
+        mkdirSync(join(w, ".factory"));
+        writeFileSync(join(w, ".factory", "sync-stand.json"), stand);
+      }
+      return w;
+    };
+    const mit = (w: string) => (lib.bereiteMeldung as unknown as (z: string[], o: { wurzel: string; pruefe: () => boolean }) => { text: string })(["- [ ] a"], { wurzel: w, pruefe: () => true }).text;
+    test("Stand mit Tag und Commit: Fußzeile", () => {
+      expect(mit(wurzel('{"quelle":{"tag":"v1.2.3","commit":"abcdef0123"}}'))).toBe("- [ ] a\n\nfactory: v1.2.3 (abcdef0)");
+    });
+    test("ohne Datei bleibt der Text unverändert; kaputtes JSON: unbekannt", () => {
+      expect(mit(wurzel(null))).toBe("- [ ] a");
+      expect(mit(wurzel("{kaputt"))).toBe("- [ ] a\n\nfactory: unbekannt (Sync-Stand unlesbar)");
+    });
   });
 });
 
@@ -162,6 +186,13 @@ describe("melden.mjs (AK1, AK2, AK3)", () => {
     const r = await fahre(["--zeile", "x"], { postWirft: true });
     expect(r.code).toBe(1);
     expect(r.err.join("\n")).toMatch(/keine Schreibrechte auf eingang\/privat[\s\S]*Fix:/);
+  });
+  test("leere oder nur aus Leerraum bestehende Zeile: Exit 2, nichts gepostet", async () => {
+    for (const z of ["", "   "]) {
+      const r = await fahre(["--zeile", z]);
+      expect(r.code).toBe(2);
+      expect(r.posts).toEqual([]);
+    }
   });
   test("Config-/Import-Fehler: Exit 2", async () => {
     const code = await melden.main(["--zeile", "x"], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), err: () => undefined, log: () => undefined });

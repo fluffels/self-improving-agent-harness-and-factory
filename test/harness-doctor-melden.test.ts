@@ -79,6 +79,11 @@ describe("harness-doctor-melden: lauf", () => {
     assert.equal(ohne.posts[0].text, zeile(L1).replace("2026-10-01", "2026-10-21"));
   });
 
+  test("Meldestelle (factory#153): der Trockenlauf zeigt die Stand-Fußzeile", () => {
+    const r = fahre({ luecken: [L1], stand: "factory: v0.6.0 (abc1234)" }, true);
+    assert.ok(r.log.some((z) => z.startsWith("[dry-run] ") && z.endsWith("factory: v0.6.0 (abc1234)")));
+  });
+
   test("Meldestelle (factory#153): Treffer der Sperrprüfung → nichts gepostet, Exit 1, auch im Trockenlauf; Fehlerzeile mit Fix", () => {
     for (const trocken of [false, true]) {
       const r = fahre({ luecken: [L1], treffer: true }, trocken);
