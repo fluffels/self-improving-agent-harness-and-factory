@@ -30,17 +30,24 @@ export function transkriptZeilen(jsonlText) {
  */
 export function letzteErgebnisNachricht(zeilen) {
   const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
-  // Eine User-Nachricht mit Text (Fortsetzung, Hook-Feedback) beginnt eine neue Runde: ältere Berichte zählen nicht mehr; reine `tool_result`-Einträge nicht.
-  const istTextNachricht = (m) => typeof m?.content === "string" || (Array.isArray(m?.content) && m.content.some((b) => b?.type === "text"));
   for (let i = zeilen.length - 1; i >= 0; i--) {
     const msg = zeilen[i]?.message ?? zeilen[i];
     if ((msg?.role === "user" || zeilen[i]?.type === "user") && istTextNachricht(msg)) return null;
     if (msg?.role !== "assistant" && zeilen[i]?.type !== "assistant") continue;
-    const c = msg?.content;
-    const kandidaten = typeof c === "string" ? [c] : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null)) : [];
+    const kandidaten = berichtKandidaten(msg?.content);
     for (let j = kandidaten.length - 1; j >= 0; j--) if (hatErgebnis(kandidaten[j])) return kandidaten[j];
   }
   return null;
+}
+
+/** Eine User-Nachricht mit Text (Fortsetzung, Hook-Feedback) beginnt eine neue Runde; ein reines `tool_result` nicht. */
+const istTextNachricht = (m) => typeof m?.content === "string" || (Array.isArray(m?.content) && m.content.some((b) => b?.type === "text"));
+
+/** Texte, in denen ein Bericht stehen kann: String-Inhalt, Text-Blöcke und die `message` eines `SubagentHandback`-Aufrufs, in Reihenfolge. */
+function berichtKandidaten(c) {
+  if (typeof c === "string") return [c];
+  if (!Array.isArray(c)) return [];
+  return c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null));
 }
 
 /**
