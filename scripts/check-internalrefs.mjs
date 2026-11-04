@@ -261,7 +261,7 @@ function bericht(violations, checked, { red, green, label, out, err }) {
     err(
       `\n${refs} interne Referenz(en) gefunden. Bitte neutral umformulieren ` +
         `(die Sache benennen, nicht die Herkunft) — Begründung siehe Kopf von ` +
-        `scripts/check-internalrefs.mjs und AGENTS.md › Konventionen. Einmal gemergt lässt sich das ` +
+        `scripts/check-internalrefs.mjs und AGENTS.md › Öffentliches Repo — keine internen Bezüge. Einmal gemergt lässt sich das ` +
         `nicht mehr vollständig zurücknehmen (PR-Refs bleiben).`,
     );
   }

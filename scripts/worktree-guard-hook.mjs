@@ -160,7 +160,7 @@ function neuerWorktreeHinweis(deps) {
 const BLOCK_REASON = (top, deps) =>
   `git commit/push würde im geteilten main-Checkout (${top}) laufen und ist blockiert. ` +
   `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
-  `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
+  `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Eigener Worktree): ` +
   `${neuerWorktreeHinweis(deps)} (#735)`;
 
 /** Gesamtentscheidung: `block` nur, wenn (a) das Kommando commit/push ist, (b) cwd bekannt ist, (c) mindestens ein

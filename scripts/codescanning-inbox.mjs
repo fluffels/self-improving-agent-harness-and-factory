@@ -30,6 +30,9 @@ import { escapeRegex } from "./ticket-namen.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export const ZIEL_TITEL = "🔒 Security: Code-Scanning-Befunde auflösen";
 const SPITZEN_TOOLS = ["CodeQL"];
@@ -245,7 +248,7 @@ export function issueBody(gruppen, repo = "<owner>/<repo>") {
     "",
     ...zeilen,
     "",
-    `Prüfauftrag: je Regel beheben, mit Grund dismissen oder per Wiedervorlage \`codescanning-<slug>\` zurückstellen. Details: \`gh api repos/${repo}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${repo}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: docs/ticket-reihenfolge.md › Code-Scanning-Inbox.`,
+    `Prüfauftrag: je Regel beheben, mit Grund dismissen oder per Wiedervorlage \`codescanning-<slug>\` zurückstellen. Details: \`gh api repos/${repo}/code-scanning/alerts/<nummer>\`. Dismiss: \`gh api -X PATCH repos/${repo}/code-scanning/alerts/<nummer> -f state=dismissed -f dismissed_reason="won't fix" -f dismissed_comment="<Grund, Ticket>"\` (Gründe: \`won't fix\`, \`false positive\`, \`used in tests\`). Die Liste wird wöchentlich aktualisiert; bei null Funden schließt der Lauf dieses Ticket selbst. Mechanik: ${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "code-scanning-inbox-1436")}.`,
   ].join("\n");
 }
 
