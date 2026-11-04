@@ -374,7 +374,7 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
 
 interface StubErgebnis { dateien: Map<string, string>; hinweise: string[]; ueberschriften: number; links: number }
 const stubLib = rawLinks as unknown as {
-  planeAnkerStubs(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string; leser: Leser }): StubErgebnis;
+  planeAnkerStubs(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string; leser: Leser; ausnahmen?: string[] }): StubErgebnis;
   stubBefunde(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string }): { befunde: { art: string }[]; geprueft: number };
 };
 const mdLib = rawMd as unknown as { linkStellen(md: string): unknown[]; collectHeadingSlugs(md: string): string[] };
@@ -437,6 +437,23 @@ describe("planeAnkerStubs (pur, factory#167)", () => {
     const leser: Leser = { pfade: ["docs/s.md"], lies: () => SEITE, vorladen: () => {} };
     const r = stubLib.planeAnkerStubs({ lies, einheiten: [...EINHEIT, "docs/s.md"], repo: REPO, tag: "v2", leser });
     assert.equal(r.dateien.size, 0);
+  });
+
+  test("L30: ein Ziel, das eine Ausnahme-Glob trifft, bekommt keinen Stub, ein anderes schon", () => {
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? kern("#zwei-link") + "[a](../../docs/t.md#drei)\n" : null);
+    const leser: Leser = { pfade: ["docs/s.md", "docs/t.md"], lies: () => SEITE, vorladen: () => {} };
+    const r = stubLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag: "v2", leser, ausnahmen: ["docs/s.md"] });
+    assert.deepEqual([...r.dateien.keys()], ["docs/t.md"]);
+    assert.deepEqual([...stubLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag: "v2", leser }).dateien.keys()], ["docs/s.md", "docs/t.md"]);
+  });
+
+  test("L30: Überschrift mit Link und Backticks: Stub-Text ohne Markup, gleicher Anker wie am Tag", () => {
+    const seite = "# T\n\n## Der `code` [Link](rel.md) und *Stern*\n";
+    const e = stubs(kern("#der-code-link-und-stern"), { "docs/s.md": seite });
+    const text = e.r.dateien.get("docs/s.md") ?? "";
+    assert.ok(text.includes("## Der code Link und Stern\n"));
+    assert.deepEqual(mdLib.collectHeadingSlugs(text), ["t", "der-code-link-und-stern"]);
+    assert.deepEqual(wirkt(e).befunde, []);
   });
 
   test("eine Pseudo-Überschrift im Codeblock zählt nicht", () => {

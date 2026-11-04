@@ -314,7 +314,7 @@ function linkSchritt({ plan, ziel, leser }) {
   const platte = liesDatei(ziel);
   const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
   const vorhanden = (pfad) => plan.dateien.has(pfad) || existiertImZiel(join(ziel, ...pfad.split("/")));
-  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, vorhanden });
+  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, ausnahmen, vorhanden });
   for (const [pfad, text] of stubs.dateien) plan.dateien.set(pfad, { text, neu: true, ausfuehrbar: false, stub: true });
   const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
