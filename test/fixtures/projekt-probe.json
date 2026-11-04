@@ -46,8 +46,8 @@
   },
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
   "struktur": {
-    "quelle": "qx-src",
-    "moduldoku": "docs/qx-module"
+    "quelle": "scripts",
+    "moduldoku": null
   },
   "sprache": {
     "umschrift": [

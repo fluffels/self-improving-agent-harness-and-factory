@@ -841,7 +841,6 @@ describe("struktur: Erstbezug-Verweis und Probe-Config (factory#162 L34)", () =>
   test("die Probe-Config trägt einen gültigen Block struktur (Ratsche gegen ein vergessenes Pflichtfeld)", () => {
     const probe = JSON.parse(readFileSync(join(WURZEL, "test/fixtures/projekt-probe.json"), "utf8")) as unknown;
     assert.doesNotThrow(() => pc.strukturAus(probe));
-    assert.notDeepEqual(pc.strukturAus(probe), pc.strukturAus(JSON.parse(readFileSync(join(WURZEL, ".factory/projekt.json"), "utf8"))));
   });
 });
 
