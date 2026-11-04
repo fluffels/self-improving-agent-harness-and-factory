@@ -55,14 +55,15 @@ export const sammelticketNummern = (offene) => offene.filter((i) => i.titel === 
 /**
  * Der gemeinsame Abruf der Inbox-Skripte: `{ rohe, offene, kommentare, owner }` = offene Issues des Ziel-Repos (REST-Seiten, `loadOpenIssuePages`), deren Normalform,
  * die Kommentare (`[{ user, body }]`, ungefiltert) aller offenen Harness-Sammeltickets dort und der Owner des Ziel-Repos (für `istVertraut`). Das Vertrauensfilter wendet der Aufrufer an (`vertrauteBodies`,
- * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`).
+ * `istBekannt`). `io` ist für Tests austauschbar (Default: echtes `gh`); `io.repo` (factory#153) liest statt des Ziel-Repos die Meldestelle.
  */
 export function ladeSammelKontext(io = {}) {
-  const token = "token" in io ? io.token : zielToken();
-  const ladeOffene = io.ladeOffene ?? ((t) => loadOpenIssuePages(ZIEL, { token: t }));
+  const repo = io.repo ?? ZIEL;
+  const token = "token" in io ? io.token : zielToken(repo);
+  const ladeOffene = io.ladeOffene ?? ((t) => loadOpenIssuePages(repo, { token: t }));
   const ladeKommentare = io.ladeKommentare ?? ((nr, repo, t) => issueKommentare(nr, (args) => JSON.parse(ghText(args, { token: t })), repo));
   const rohe = ladeOffene(token);
   const offene = normalizeOffene(rohe);
-  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, ZIEL, token).map((k) => ({ user: k.user, body: k.body })));
-  return { rohe, offene, kommentare, owner: zerlegeRepo(ZIEL).owner };
+  const kommentare = sammelticketNummern(offene).flatMap((nr) => ladeKommentare(nr, repo, token).map((k) => ({ user: k.user, body: k.body })));
+  return { rohe, offene, kommentare, owner: zerlegeRepo(repo).owner };
 }

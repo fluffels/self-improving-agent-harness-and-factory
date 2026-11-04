@@ -12,7 +12,7 @@ const L = raw as unknown as {
   offeneTitel: (s: unknown, owner: string) => string[];
   platziereOben: (nr: number, art: string, token?: string) => void;
   sammelticketNummern: (offene: { number: number; titel: string }[]) => number[];
-  ladeSammelKontext: (io: { ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
+  ladeSammelKontext: (io: { repo?: string; ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
 };
 
 const OWNER = FREMD_OWNER;
@@ -83,6 +83,17 @@ describe("sammelticketNummern und ladeSammelKontext (Z3)", () => {
 });
 
 describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
+  test("io.repo (factory#153) steuert Abruf, Kommentare und Owner; ohne io.repo bleibt das Ziel-Repo", () => {
+    const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
+    const repos: string[] = [];
+    const k = L.ladeSammelKontext({
+      repo: "eingang/meldungen",
+      ladeOffene: () => rohe,
+      ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
+    }) as unknown as { owner: string };
+    expect(repos).toEqual(["eingang/meldungen"]);
+    expect(k.owner).toBe("eingang");
+  });
   test("ladeSammelKontext reicht das Ziel-Repo an den Kommentar-Abruf und liefert dessen Owner", () => {
     const rohe = [[{ number: 3, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" }]];
     const repos: string[] = [];

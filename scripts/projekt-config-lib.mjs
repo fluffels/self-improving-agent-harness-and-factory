@@ -324,6 +324,9 @@ export function ergaenzungAusText(text) {
   return ergaenzungAus(config);
 }
 
+/** Pur: Fehler zum optionalen Schlüssel `meldestelle` (Form `owner/name`); fehlt er, ist nichts zu prüfen. */
+const pruefeMeldestelle = (wert) => (wert === undefined || istRepoForm(wert) ? [] : ["meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen"]);
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -337,6 +340,7 @@ export function pruefeProjektConfig(wert) {
   if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
+  fehler.push(...pruefeMeldestelle(wert.meldestelle));
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
@@ -386,6 +390,9 @@ export const repoDerRolle = (rolle, config) => boardRepo(boardDerRolle(rolle, co
  * ihn führt, ein Produkt-Befund bleibt im eigenen Repo.
  */
 export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);
+
+/** Pur: die Meldestelle (`owner/name`, factory#153): das Repo, dessen Harness-Sammelticket die Befunde dieses Projekts aufnimmt; `config.meldestelle`, sonst das Repo des Boards mit Rolle `factory`. */
+export const meldestelleAus = (config) => (istRepoForm(config?.meldestelle) ? config.meldestelle : repoDerRolle("factory", config));
 
 /**
  * Pur (factory#195, ADR 0031 Punkt 4): wohin Status-Ticket und Sammelticket „Langfuse-Befunde“ gehören. Upstream (`bezieher` falsch): Harness-Label, Board und Repo laut Trennregel

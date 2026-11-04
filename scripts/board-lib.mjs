@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { ghJson, ghText } from "./gh-cli.mjs";
-import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, ladeProjektConfig, repoAusUrl } from "./projekt-config-lib.mjs";
+import { BOARD_ROLLEN, boardPfad, boardRepo, boardRolleFuer, fremdesBoardText, ladeProjektConfig, meldestelleAus, repoAusUrl } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
@@ -42,6 +42,9 @@ export function boardFuerRolle(rolle) {
 
 /** Das Repo (`owner/name`), dessen Issues das Board der Rolle führt (`boards[].repo` der Config, sonst `config.repo`). Immer aus der Config, nie aus `GITHUB_REPOSITORY`. */
 export const zielRepo = (rolle) => boardRepo(boardFuerRolle(rolle), PROJEKT);
+
+/** Die Meldestelle dieses Projekts (factory#153): Schlüssel `meldestelle` der Config, sonst das Repo des Boards mit Rolle `factory`. */
+export const MELDESTELLE = meldestelleAus(PROJEKT);
 
 // Die Trennregel (Rolle zu den Labels) liegt in projekt-config-lib (die CLI braucht sie ohne diesen Import); hier weiter exportiert.
 export { boardRolleFuer };

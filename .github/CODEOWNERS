@@ -50,6 +50,7 @@ AGENTS.md @fluffels
 /scripts/harness-doctor-ergebnis.mjs @fluffels
 /scripts/harness-doctor-dateien.mjs @fluffels
 /scripts/harness-doctor-melden.mjs @fluffels
+/scripts/meldung-lib.mjs @fluffels
 /scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
