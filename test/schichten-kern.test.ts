@@ -154,6 +154,8 @@ describe("musterAus", () => {
     const datei = new RegExp(kern.musterAus(wurzeln, ["main"], true, [".java"]));
     assert.ok(datei.test("src/main/java/main.java"));
     assert.ok(!datei.test("src/main/java/main.ts"));
+    assert.ok(!datei.test("src/main/java/main/X.java"));
+    assert.ok(!datei.test("src/main/java/main.javax"));
   });
 
   test("mehrteilige Endung .d.ts: beide Punkte escaped", () => {

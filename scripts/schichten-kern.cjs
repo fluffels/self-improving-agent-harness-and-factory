@@ -33,8 +33,8 @@ function alt(teile) {
 /** Pfad-Muster einer Schicht aus ihren Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente unter der Quellwurzel).
  *  Deckt je Wurzel die Einzeldatei UND den Modul-Ordner ab; `nurDatei` (Einstieg/Assets) nur die Einzeldatei.
  *  `quellwurzeln`: ein String (eine Wurzel) oder eine Liste; `endungen`: Endungen mit Punkt (Standard `.ts`).
- *  Grenze: `endungen` wirken nur auf Datei-Schichten (`nurDatei`) und die Coverage-Globs; eine Verzeichnis-Schicht nimmt
- *  alle Dateien unter ihrem Ordner, gleich welcher Endung (das Muster `(Endung$|/)` ist für TS eingefroren). */
+ *  Grenze: `endungen` wirken auf die Datei-Token (Einzeldatei je Wurzel, in RegExp und Coverage-Glob); unter einem
+ *  Schicht-Ordner (`/` bzw. `/**`) zählt jede Datei, gleich welcher Endung (das Muster `(Endung$|/)` ist für TS eingefroren). */
 function musterAus(quellwurzeln, wurzeln, nurDatei, endungen = [STANDARD_ENDUNG]) {
   const ende = endungen.map((e) => `${[...e].map((c) => (/[\w-]/.test(c) ? c : `\\${c}`)).join("")}$`);
   return `^${alt([quellwurzeln].flat())}(${wurzeln.join("|")})${nurDatei ? alt(ende) : `(${[...ende, "/"].join("|")})`}`;
