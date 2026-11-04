@@ -53,6 +53,7 @@ import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -347,7 +348,7 @@ const istBezieher = (d) => d.bezieher ?? istBezieherWurzel(d.wurzel ?? WURZEL);
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, verknuepfeBlocker: echteVerknuepfung({ eigenes: REPO }), ...deps };
   d.bezieher = istBezieher(d);
   const args = parseArgs(argv);
   if (!args) {
@@ -378,7 +379,8 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
+    const vZustand = vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo);
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vZustand, blocker: spracheAus(config).spezifikation.blocker });
     let neu;
     try {
       neu = d.legeAn({ repo, titel, body, harness: label });
@@ -390,6 +392,10 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     d.log(`Angelegt: #${nr}`);
     await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
+    if (vZustand !== "zu") { // die Blocker-Zeile steht im Body; zusätzlich die native Kante (Blocked-Icon im Board), Scheitern nur Warnung (factory#202 L1)
+      const warnung = verknuepfeBlocker(neu, [{ repo, nummer: vorgaenger }], repo, { verknuepfeBlocker: d.verknuepfeBlocker });
+      if (warnung) d.log(warnung.trimEnd());
+    }
     const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
     if (args.art === "harness") {
       const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
