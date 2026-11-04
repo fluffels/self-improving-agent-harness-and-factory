@@ -351,6 +351,28 @@ describe("factory-sync (Fremdrepo-Fixture)", { timeout: 30_000 }, () => {
       abgelehnt(baueQuelle(), z, /AGENTS\.md: Block 'stopps': .*genau einmal/);
       abgelehnt(baueQuelle(), z, /<!-- factory-besitz:start stopps -->.*<!-- factory-besitz:ende stopps -->/);
     });
+    test("fehlende Projekt-Marker: Hinweis mit beiden Zeilen, Exit 0, AGENTS.md ohne Zusatz geändert", () => {
+      const z = baueZiel();
+      const r = vomTag(baueQuelle(), z);
+      assert.equal(r.code, 0, r.err);
+      assert.match(r.out, /^Hinweis: AGENTS\.md: Projekt-Marker fehlen \(der Sync bricht nicht ab\)\. Erwartet je eine Zeile <!-- factory-projekt:start --> und <!-- factory-projekt:ende -->/m);
+      assert.equal(lies(z, "AGENTS.md"), ZIEL_AGENTS.replace("alter Stopp", "neuer Stopp"));
+    });
+    test("nur ein Projekt-Marker fehlt: der Hinweis nennt genau diese Zeile", () => {
+      const z = baueZiel();
+      schreibe(z, "AGENTS.md", `<!-- factory-projekt:start -->\n${ZIEL_AGENTS}`);
+      const r = vomTag(baueQuelle(), z);
+      assert.equal(r.code, 0, r.err);
+      assert.match(r.out, /^Hinweis: AGENTS\.md: Projekt-Marker fehlen .*Erwartet: <!-- factory-projekt:ende --> um den Projekt-Block/m);
+      assert.doesNotMatch(r.out, /Erwartet.*<!-- factory-projekt:start -->/);
+    });
+    test("beide Projekt-Marker vorhanden: kein Hinweis", () => {
+      const z = baueZiel();
+      schreibe(z, "AGENTS.md", `<!-- factory-projekt:start -->\n${ZIEL_AGENTS}<!-- factory-projekt:ende -->\n`);
+      const r = vomTag(baueQuelle(), z);
+      assert.equal(r.code, 0, r.err);
+      assert.doesNotMatch(r.out, /Projekt-Marker/);
+    });
     test("Datei fehlt im Ziel: die Meldung nennt die Marker-Zeilen", () => {
       const z = baueZiel();
       rmSync(join(z, "AGENTS.md"));

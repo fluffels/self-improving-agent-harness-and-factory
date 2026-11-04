@@ -140,7 +140,7 @@ const VORLAGE_FIX = "Vorlage aus der Quelle: Datei gleichen Pfads im Factory-Che
 
 /** Projektdateien, die der Sync nicht liefert, die aber ein Gate in `verify`, ein Kern-Skript oder ein Kern-Test unter festem Pfad braucht (geschlossene Liste; `fix` ist ein Zusatz zum Standard-Fix). */
 export const PROJEKTDATEIEN = Object.freeze([
-  { pfad: "AGENTS.md", fix: `mit den Zeilen ${markerStart("kern")} und ${markerEnde("kern")} (Kern-Block) sowie ${PROJEKT_BLOCK_START} und ${PROJEKT_BLOCK_ENDE} (Projekt-Block) anlegen` },
+  { pfad: "AGENTS.md", fix: `mit den Zeilen ${markerStart("kern")} und ${markerEnde("kern")} (Kern-Block) sowie ${PROJEKT_BLOCK_START} und ${PROJEKT_BLOCK_ENDE} (Projekt-Block, der Sync weist sonst darauf hin) anlegen` },
   { pfad: PROJEKT_CONFIG },
   { pfad: ROLLEN_PFADE.ticketSkill, fix: `danach \`npm run skills:sync\`` },
   { pfad: "package.json", fix: `scripts und devDependencies der Quelle übernehmen, dann \`npm install\`, Lockfile committen` },
