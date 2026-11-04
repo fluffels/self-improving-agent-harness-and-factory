@@ -96,6 +96,7 @@
     "/scripts/gh-cli.mjs",
     "/scripts/naechstes-ticket.mjs",
     "/scripts/spezifikation-lib.mjs",
+    "/scripts/blocker-lib.mjs",
     "/scripts/design-lib.mjs",
     "/scripts/design-schritt.mjs",
     "/scripts/projekt-config-bloecke.mjs",

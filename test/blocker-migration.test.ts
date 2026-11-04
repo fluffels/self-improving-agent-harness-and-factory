@@ -1,12 +1,20 @@
 import { describe, expect, test } from "vitest";
-// @ts-expect-error reines ESM-Skript ohne Typen
-import * as M from "../scripts/blocker-migration.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as raw from "../scripts/blocker-migration.mjs";
 import { echteSpezifikation } from "./support/echte-sprache";
 
 const SPRACHE = echteSpezifikation();
 const REPO = "o/r";
 type Kante = { nummer: number; blockerNummer: number; issueNodeId: string; blockerNodeId: string };
-const fehlend = M.fehlendeKanten as (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
+type Seite = { issues: object[]; weiter: string | null };
+type Ergebnis = { code: number; out: string; err: string };
+type Io = { repo: string; sprache: unknown; ladeSeite: (nach: string | null) => Seite; setze: (i: string, b: string) => void };
+const M = raw as unknown as {
+  fehlendeKanten: (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
+  migriere: (a: { anwenden: boolean }, io: Io) => Ergebnis;
+  fuehreAus: (argv: string[], io: object) => Ergebnis;
+};
+const fehlend = M.fehlendeKanten;
 const issue = (nummer: number, body = "", nativ: { nummer: number; repo?: string }[] = []) => ({
   nummer,
   id: `I${nummer}`,
@@ -100,7 +108,14 @@ describe("migriere (injizierte I/O)", () => {
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/#1 ← #2.*403/);
   });
-  test("Aufruffehler: unbekanntes Flag ergibt Exit 2", () => {
+  test("Aufruffehler: unbekanntes Flag und ein Repo ohne owner/name-Form ergeben Exit 2", () => {
     expect(M.fuehreAus(["--bogus"], {}).code).toBe(2);
+    expect(M.fuehreAus(["--repo", "ohne-slash"], {}).code).toBe(2);
+  });
+  test("--repo und --anwenden gelangen in den Lauf", () => {
+    const mut: unknown[][] = [];
+    const r = M.fuehreAus(["--repo", "a/b", "--anwenden"], io(mut, { repo: undefined }));
+    expect(r.out).toMatch(/in a\/b/);
+    expect(mut).toEqual([["I1", "I2"]]);
   });
 });

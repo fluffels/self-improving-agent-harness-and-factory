@@ -99,6 +99,7 @@ AGENTS.md @fluffels
 /scripts/gh-cli.mjs @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
 /scripts/spezifikation-lib.mjs @fluffels
+/scripts/blocker-lib.mjs @fluffels
 /scripts/design-lib.mjs @fluffels
 /scripts/design-schritt.mjs @fluffels
 /scripts/projekt-config-bloecke.mjs @fluffels

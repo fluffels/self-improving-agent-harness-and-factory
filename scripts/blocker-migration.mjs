@@ -97,7 +97,7 @@ export function fuehreAus(argv, io = {}) {
   const repo = io.repo ?? werte.repo ?? REPO;
   if (!istRepoForm(repo)) return { code: AUFRUF_EXIT, out: "", err: `✖ Repo „${repo}“ ist nicht von der Form owner/name\n${AUFRUF}\n` };
   const echt = Object.keys(io).length === 0 ? echteIo(repo) : io;
-  return migriere({ anwenden: werte.anwenden === true }, { repo, ...echt });
+  return migriere({ anwenden: werte.anwenden === true }, { ...echt, repo });
 }
 
 /** Echte Anbindung über `gh` (GraphQL, Token des Ziel-Repos). */

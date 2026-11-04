@@ -80,7 +80,7 @@ Kompakter Output, kein Fließtext-Essay. **Die allererste Zeile deines Berichts 
 
 Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
 
-- je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind), session-taugliche Größe (passt zu `check:diffsize`);
+- je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind; angelegt später mit `spezifikation.mjs anlegen … --blocker`, das setzt auch die native Kante), session-taugliche Größe (passt zu `check:diffsize`);
 - Duplikat-Check vorab per `gh issue list --search`;
 - nur mit Block `design`: jedes Kind mit Oberfläche bekommt ein vorgelagertes Design-Ticket ohne Design-Label; das Kind trägt das Design-Label, ein Akzeptanzkriterium, das den Design-Entwurf nennt, und `blockiert durch #<design-ticket>`;
 - Reihenfolge der Kinder und Text für den Übersichts-Kommentar im Epic;
