@@ -144,9 +144,6 @@
   "scripts/sandbox-doctor.mjs": {
     "complexity": 9
   },
-  "scripts/schichten-kern.cjs": {
-    "complexity": 19
-  },
   "scripts/skills-sync.mjs": {
     "complexity": 8
   },
