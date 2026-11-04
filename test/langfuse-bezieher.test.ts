@@ -168,6 +168,15 @@ describe("--langfuse-repo (factory#195)", () => {
     ZIEL.cli(["--config", join(ziel, "c.json"), "--ziel-repo", FREMD.labels.harness], { rootDir: ziel, out: (s) => gleich.push(s), err: () => undefined });
     expect(r.out).toEqual(gleich);
   });
+  test("nicht ladbare Config: Exit 1 mit ✖-Zeile, nichts auf stdout", () => {
+    const root = fixture({});
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = ZIEL.cli(["--config", join(root, "gibt-es-nicht.json"), "--langfuse-repo"], { rootDir: root, out: (s) => out.push(s), err: (s) => err.push(s) });
+    expect(code).toBe(1);
+    expect(out).toEqual([]);
+    expect(err[0]).toMatch(/^✖ /);
+  });
   test("ein überzähliges Argument ist ein Aufruffehler (Exit 2)", () => {
     expect(lauf(SYNC, FREMD, ["x"]).code).toBe(2);
   });

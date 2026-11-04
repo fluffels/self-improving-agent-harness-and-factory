@@ -441,9 +441,9 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
 /**
  * Einstieg: liest Aufruf und Umgebung, fährt den Takt und liefert den Exit-Code (0, 1 bei Fehler im Lauf, `AUFRUF_EXIT` bei falschem Aufruf).
  * `env` ist die einzige Quelle der Umgebung (Token, Event, Kontingent-Log) und geht auch als `io.env` an die Commit-Leser. Nähte (Tests): `argv`,
- * `io`, `kontingent`, `lauf`, `ladeConfig`, `err`, `jetzt`.
+ * `io`, `kontingent`, `lauf`, `ladeConfig`, `err`, `jetzt`, `wurzel` (Wurzel für die Bezieher-Erkennung am Sync-Stand).
  */
-export function main(env = process.env, { argv = process.argv.slice(2), io = ECHTE_IO, kontingent = (opt) => mitKontingent("board-takt", opt), lauf = fuehreTaktAus, ladeConfig = ladeProjektConfig, err = console.error, jetzt = () => new Date() } = {}) {
+export function main(env = process.env, { argv = process.argv.slice(2), io = ECHTE_IO, kontingent = (opt) => mitKontingent("board-takt", opt), lauf = fuehreTaktAus, ladeConfig = ladeProjektConfig, err = console.error, jetzt = () => new Date(), wurzel = WURZEL } = {}) {
   // Aufruf-Fehler vor jedem I/O: sonst schriebe `mitKontingent` seinen Hinweis vor den Fehler (#1817).
   const aufruf = flagsLesen(argv, { "dry-run": { type: "boolean" } });
   if (aufruf.fehler) {
@@ -459,7 +459,7 @@ export function main(env = process.env, { argv = process.argv.slice(2), io = ECH
     token: env.PROJECT_TOKEN,
     io: { ...io, env },
     config: ladeConfig(),
-    bezieher: liesSyncStand(WURZEL).zustand !== "fehlt", // Sync-Stand vorhanden: Bezieher (factory#195)
+    bezieher: liesSyncStand(wurzel).zustand !== "fehlt", // Sync-Stand vorhanden: Bezieher (factory#195)
   });
   return fehler ? 1 : 0;
 }

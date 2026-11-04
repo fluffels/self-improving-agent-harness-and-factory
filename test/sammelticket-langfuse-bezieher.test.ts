@@ -1,11 +1,12 @@
 /* Sammelticket „Langfuse-Befunde (gesammelt)“ im Bezieher (factory#195, ADR 0031 Punkt 4): es entsteht im eigenen Repo auf dem eigenen Board, ohne Harness-Label.
  * Upstream (ohne Sync-Stand) behält Repo, Board und Label wie bisher (Negativfall). Technik wie test/sammelticket-anlegen.test.ts (Nähte von `main`). */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
 import { FREMD } from "./support/fremd-config";
+import { fixture } from "./support/tmp-fixture";
 
 const FABRIK = "zz-org/zz-fabrik";
 type Ziel = { rolle: string; repo: string; owner: string };
@@ -52,12 +53,12 @@ describe("legeAn ohne Label", () => {
 });
 
 describe("main langfuse (factory#195)", () => {
-  const lauf = async (bezieher: boolean) => {
+  const lauf = async (bezieher: boolean | { wurzel: string }) => {
     const angelegt: { repo: string; harness: string | null }[] = [];
     const boards: unknown[] = [];
     await X.main(["langfuse"], {
       ladeConfig: () => fremd,
-      bezieher,
+      ...(typeof bezieher === "boolean" ? { bezieher } : { wurzel: bezieher.wurzel }),
       log: () => undefined,
       kontingent: () => undefined,
       findeVorhandenes: () => null,
@@ -75,6 +76,30 @@ describe("main langfuse (factory#195)", () => {
     const { angelegt, boards } = await lauf(true);
     expect(angelegt).toEqual([expect.objectContaining({ repo: FREMD.repo, harness: null })]);
     expect(boards).toEqual([lib.boardFuerRolle("produkt")]);
+  });
+
+  test("der Bezieher wird am Sync-Stand der Wurzel erkannt (ohne injiziertes bezieher)", async () => {
+    const mit = await lauf({ wurzel: fixture({ ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }) });
+    expect(mit.angelegt).toEqual([expect.objectContaining({ repo: FREMD.repo, harness: null })]);
+    const ohne = await lauf({ wurzel: fixture({}) });
+    expect(ohne.angelegt).toEqual([expect.objectContaining({ repo: FABRIK })]);
+  });
+
+  test("kein Board führt das eigene Repo: ✖-Zeile und Exit 2 statt Stacktrace, nichts wird angelegt", async () => {
+    const keins = { ...FREMD, boards: FREMD.boards.map((b) => ({ ...b, repo: FABRIK })) };
+    const fehler = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const ende = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${String(code)}`);
+    }) as never);
+    try {
+      let angelegt = 0;
+      await expect(X.main(["langfuse"], { ladeConfig: () => keins, bezieher: true, log: () => undefined, kontingent: () => undefined, legeAn: () => (angelegt++, { number: 1 }) })).rejects.toThrow("exit 2");
+      expect(fehler.mock.calls.flat().join(" ")).toMatch(/^✖ Kein Board der Config führt das eigene Repo/);
+      expect(angelegt).toBe(0);
+    } finally {
+      fehler.mockRestore();
+      ende.mockRestore();
+    }
   });
 
   test("Negativfall Upstream: das Repo des Factory-Boards, Harness-Label, Factory-Board", async () => {
