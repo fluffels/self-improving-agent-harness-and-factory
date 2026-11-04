@@ -72,7 +72,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (Einrichtung, Eigenheiten) |
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
-| [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
+| [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, Java-Profil (Maven, Angular, ArchUnit), docs-gen übernehmen |
 | [erstbezug.md](../erstbezug.md) | wenn du den Harness in ein neues, leeres Repo holst: Schrittfolge, Projektdateien mit Vorlagen, Probe `harness-doctor --pruefen` |
 | [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
