@@ -289,6 +289,10 @@ describe("strukturOrdnerBefunde (factory#168)", () => {
     assert.match(b[0], /handbuch\/module/);
     assert.match(b[0], /null setzen/);
   });
+  test("Schlüssel fehlt in struktur: übersprungen statt Befund „undefined/“", () => {
+    const d = fixture({ "lib/a.ts": "x" });
+    assert.deepEqual(strukturOrdnerBefunde(d, { quelle: "lib" }, ["quelle", "moduldoku"]), []);
+  });
   test("verschachtelter Pfad wird gefunden", () => {
     const d = fixture({ "a/b/c.ts": "x" });
     assert.deepEqual(strukturOrdnerBefunde(d, { quelle: "a/b" }), []);

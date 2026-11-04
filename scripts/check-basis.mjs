@@ -182,7 +182,7 @@ export function collectMarkdown(rootDir = ROOT) {
 
 /** Prüft, ob die Ordner aus `struktur` (`quelle`, `moduldoku`) existieren, damit Gates, die sie durchsuchen, einen klaren Befund
  *  melden statt mit ENOENT-Stacktrace zu enden. Ein vorhandener, leerer Ordner ist kein Befund; `null` (Opt-out von `moduldoku`)
- *  wird übersprungen. Rückgabe: Meldungstexte ohne Präfix (leer = alles da). */
+ *  wird übersprungen, ebenso ein Schlüssel, der in `struktur` fehlt (erwartet eine von `strukturAus` geprüfte Struktur). Rückgabe: Meldungstexte ohne Präfix (leer = alles da). */
 export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"]) {
   const befunde = [];
   for (const k of schluessel) {
