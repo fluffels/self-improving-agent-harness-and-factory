@@ -876,16 +876,51 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
       assert.doesNotMatch(r.text, /^\s+at /m, skript);
     }
   });
-  test("#1942: check:docmap prüft sonst nichts und ist dann rot: Quellwurzel ohne .ts-Datei oder ohne Ordner (kein stilles Grün, kein Stacktrace)", () => {
-    const leer = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
-    rmSync(join(leer, "lib", "gross.ts"));
-    writeFileSync(join(leer, "lib", "typen.d.ts"), "export {};\n");
-    const fehlt = fremdrepo({ quelle: "gibts-nicht", moduldoku: "handbuch/module" });
-    for (const d of [leer, fehlt]) {
-      const r = lauf(d, "check-docmap.mjs");
-      assert.equal(r.status, 1, r.text);
-      assert.match(r.text, /✖ check:docmap prüft nichts: keine `[\w-]+\/\*\*\/\*\.ts`/);
-      assert.doesNotMatch(r.text, /^\s+at /m);
+  test("factory#168: fehlt struktur.quelle, melden size, docmap und anysuppress ✖ mit Schlüssel, Config und Fix-Zeile, Exit 1, kein Stacktrace", () => {
+    const d = fremdrepo({ quelle: "gibts-nicht", moduldoku: "handbuch/module" });
+    for (const skript of ["check-size.mjs", "check-docmap.mjs", "check-any-suppressions.mjs"]) {
+      const r = lauf(d, skript);
+      assert.equal(r.status, 1, skript + ": " + r.text);
+      assert.match(r.text, /✖ [\s\S]*struktur\.quelle/, skript);
+      assert.match(r.text, /\.factory\/projekt\.json/, skript);
+      assert.match(r.text, /Fix:/, skript);
+      assert.doesNotMatch(r.text, /^\s+at /m, skript);
+      assert.doesNotMatch(r.text, /ENOENT/, skript);
+    }
+  });
+  test("factory#168: fehlt struktur.moduldoku, meldet check:docmap ✖ mit Schlüssel und Fix-Zeile statt Stacktrace", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/gibts-nicht" });
+    const r = lauf(d, "check-docmap.mjs");
+    assert.equal(r.status, 1, r.text);
+    assert.match(r.text, /✖ [\s\S]*struktur\.moduldoku/);
+    assert.match(r.text, /Fix:[\s\S]*null setzen/);
+    assert.doesNotMatch(r.text, /^\s+at /m);
+    assert.doesNotMatch(r.text, /ENOENT/);
+  });
+  test("factory#168: vorhandene Quellwurzel ohne passende .ts: check:docmap meldet Hinweis, Exit 0, kein ✖", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    rmSync(join(d, "lib", "gross.ts"));
+    writeFileSync(join(d, "lib", "typen.d.ts"), "export {};\n");
+    const r = lauf(d, "check-docmap.mjs");
+    assert.equal(r.status, 0, r.text);
+    assert.match(r.text, /Hinweis: check:docmap prüft noch nichts: keine `lib\/\*\*\/\*\.ts`/);
+    assert.doesNotMatch(r.text, /✖|vollständig/);
+  });
+  test("factory#168: leere Quellwurzel plus Tiefendoc mit Geister-Eintrag bleibt rot", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    rmSync(join(d, "lib", "gross.ts"));
+    writeFileSync(join(d, "handbuch", "module", "m.md"), "`lib/weg.ts` ist beschrieben.\n");
+    const r = lauf(d, "check-docmap.mjs");
+    assert.equal(r.status, 1, r.text);
+    assert.match(r.text, /Geister-Eintrag/);
+  });
+  test("factory#168 Negativfall: ein vorhandener, leerer Quellordner ist grün und kein Befund", () => {
+    const d = fremdrepo({ quelle: "lib", moduldoku: "handbuch/module" });
+    rmSync(join(d, "lib", "gross.ts"));
+    for (const skript of ["check-size.mjs", "check-any-suppressions.mjs", "check-docmap.mjs"]) {
+      const r = lauf(d, skript);
+      assert.equal(r.status, 0, skript + ": " + r.text);
+      assert.doesNotMatch(r.text, /✖|struktur\.quelle/, skript);
     }
   });
 });

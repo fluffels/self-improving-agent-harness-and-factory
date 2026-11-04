@@ -12,7 +12,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
@@ -254,5 +254,44 @@ describe("Quellwurzel aus der Config (#1843)", () => {
     assert.ok(kind.length > 0 && kind.every((s) => s.file.startsWith("test/support/")), "der Kindlauf misst die Quellwurzel der Fremd-Config");
     assert.deepEqual(kind, collectSizes(undefined, "test/support"));
     assert.notDeepEqual(kind, collectSizes(), "die echte Quellwurzel misst anderes");
+  });
+});
+
+type StrukturOrdnerBefunde = (rootDir: string, struktur: { quelle: string; moduldoku?: string | null }, schluessel?: string[]) => string[];
+const strukturOrdnerBefunde = (rawBasis as unknown as { strukturOrdnerBefunde: StrukturOrdnerBefunde }).strukturOrdnerBefunde;
+
+describe("strukturOrdnerBefunde (factory#168)", () => {
+  test("fehlender Ordner: Befund nennt Schlüssel, Config, Fix-Zeile und .gitkeep", () => {
+    const d = fixture({ "x.txt": "x" });
+    const b = strukturOrdnerBefunde(d, { quelle: "backend", moduldoku: null });
+    assert.equal(b.length, 1);
+    assert.match(b[0], /struktur\.quelle/);
+    assert.match(b[0], /\.factory\/projekt\.json/);
+    assert.match(b[0], /Fix:/);
+    assert.match(b[0], /\.gitkeep/);
+    assert.doesNotMatch(b[0], /null setzen/);
+  });
+  test("vorhandener leerer Ordner ist kein Befund", () => {
+    const d = fixture({ "backend/.leer": "" });
+    rmSync(join(d, "backend", ".leer"));
+    assert.deepEqual(strukturOrdnerBefunde(d, { quelle: "backend" }), []);
+  });
+  test("Pfad ist eine Datei: Befund statt ENOTDIR", () => {
+    const d = fixture({ "backend": "datei" });
+    assert.equal(strukturOrdnerBefunde(d, { quelle: "backend" }).length, 1);
+  });
+  test("moduldoku: null wird übersprungen, fehlendes moduldoku nennt null als Opt-out", () => {
+    const d = fixture({ "lib/a.ts": "x" });
+    assert.deepEqual(strukturOrdnerBefunde(d, { quelle: "lib", moduldoku: null }, ["quelle", "moduldoku"]), []);
+    const b = strukturOrdnerBefunde(d, { quelle: "lib", moduldoku: "handbuch/module" }, ["quelle", "moduldoku"]);
+    assert.equal(b.length, 1);
+    assert.match(b[0], /struktur\.moduldoku/);
+    assert.match(b[0], /handbuch\/module/);
+    assert.match(b[0], /null setzen/);
+  });
+  test("verschachtelter Pfad wird gefunden", () => {
+    const d = fixture({ "a/b/c.ts": "x" });
+    assert.deepEqual(strukturOrdnerBefunde(d, { quelle: "a/b" }), []);
+    assert.equal(strukturOrdnerBefunde(d, { quelle: "a/x" }).length, 1);
   });
 });

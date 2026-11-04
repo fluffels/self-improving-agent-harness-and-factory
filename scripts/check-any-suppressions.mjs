@@ -37,6 +37,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { strukturOrdnerBefunde } from "./check-basis.mjs";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -145,6 +146,9 @@ Aufruf: node scripts/check-any-suppressions.mjs [--write]`);
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
+  const befunde = strukturOrdnerBefunde(ROOT, { quelle }, ["quelle"]);
+  befunde.forEach((b) => console.error(red(`✖ ${b}`)));
+  if (befunde.length > 0) process.exit(1);
   const current = collectSuppressions(ROOT, quelle);
   const total = Object.values(current).reduce((a, b) => a + b, 0);
 

@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
-import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus } from "./projekt-config-lib.mjs";
+import { strukturOrdnerBefunde } from "./check-basis.mjs";
+import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
 import { escapeRegex } from "./ticket-namen.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,12 +108,11 @@ function main() {
     console.log("check:docmap entfällt (struktur.moduldoku: null)");
     return;
   }
+  // Fehlt ein Ordner, ist das rot mit Fix-Zeile (factory#168); eine vorhandene, noch leere Quellwurzel ist nur ein Hinweis (unten).
+  const befunde = strukturOrdnerBefunde(ROOT, struktur, ["quelle", "moduldoku"]);
+  befunde.forEach((b) => console.error(red(`✖ ${b}`)));
+  if (befunde.length > 0) process.exit(1);
   const { modules, ghosts, orphans, staleAllowlist } = auditDocMap(ROOT, struktur);
-  if (modules.length === 0) {
-    // Fail-closed (#1942): ohne Quell-Modul (kein Ordner, keine .ts) prüft das Gate nichts, grün wäre eine Behauptung ohne Beleg.
-    console.error(red(`✖ check:docmap prüft nichts: keine \`${struktur.quelle}/**/*.ts\` gefunden (Quellwurzel struktur.quelle in ${PROJEKT_CONFIG} prüfen).`));
-    process.exit(1);
-  }
 
   let bad = false;
   for (const f of ghosts) {
@@ -133,6 +133,10 @@ function main() {
   if (bad) {
     console.error(`\nDoku↔Code-Drift. Tiefendoc-Abdeckung in ${struktur.moduldoku}/*.md ergänzen.`);
     process.exit(1);
+  }
+  if (modules.length === 0) {
+    console.log(`Hinweis: check:docmap prüft noch nichts: keine \`${struktur.quelle}/**/*.ts\` in der vorhandenen Quellwurzel (Exit 0)`);
+    return;
   }
   console.log(
     green(`✔ Tiefendoc-Abdeckung vollständig (${modules.length} Quell-Module (${struktur.quelle}) alle in ${struktur.moduldoku}/*.md erwähnt).`),

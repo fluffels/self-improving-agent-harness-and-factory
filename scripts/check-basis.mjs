@@ -3,11 +3,13 @@
 /**
  * Gemeinsame Grundlagen der Gates: die Vergleichs-Basis des Slices (`resolveBase`, für check:diffsize, check:diffcoverage, check:lockfile,
  * den Review-Nachweis und verify-lauf), die Liste der prüfbaren Repo-Dateien (`listTrackedFiles`, `isCheckable`, für check:internalrefs und
- * check:steuerbytes) und das Markdown-Sammeln des Repos (`collectMarkdown`, für check:docdrift und check:contextsize).
+ * check:steuerbytes), das Markdown-Sammeln des Repos (`collectMarkdown`, für check:docdrift und check:contextsize) und die Prüfung der
+ * Struktur-Ordner (`strukturOrdnerBefunde`, für check:size, check:docmap und check:anysuppress).
  */
 import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ladeProjektConfig, strukturAus, umgebungsWert } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus, umgebungsWert } from "./projekt-config-lib.mjs";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 
@@ -174,4 +176,30 @@ export function collectMarkdown(rootDir = ROOT) {
   return collectMd(rootDir, ["."], {
     ueberspringe: (ent, relDir) => walkerUeberspringt(ent.name, ent.isDirectory(), relDir),
   });
+}
+
+// ── Struktur-Ordner (factory#168) ─────────────────────────────────────────────
+
+/** Prüft, ob die Ordner aus `struktur` (`quelle`, `moduldoku`) existieren, damit Gates, die sie durchsuchen, einen klaren Befund
+ *  melden statt mit ENOENT-Stacktrace zu enden. Ein vorhandener, leerer Ordner ist kein Befund; `null` (Opt-out von `moduldoku`)
+ *  wird übersprungen. Rückgabe: Meldungstexte ohne Präfix (leer = alles da). */
+export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"]) {
+  const befunde = [];
+  for (const k of schluessel) {
+    const pfad = struktur[k];
+    if (pfad === null || pfad === undefined) continue;
+    let istOrdner;
+    try {
+      istOrdner = statSync(join(rootDir, ...pfad.split("/"))).isDirectory();
+    } catch {
+      istOrdner = false;
+    }
+    if (istOrdner) continue;
+    const optOut = k === "moduldoku" ? " oder auf null setzen (keine Tiefendocs, check:docmap entfällt)" : "";
+    befunde.push(
+      `struktur.${k} in ${PROJEKT_CONFIG} nennt „${pfad}/“, den Ordner gibt es nicht\n` +
+        `  Fix: ${pfad}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder struktur.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
+    );
+  }
+  return befunde;
 }
