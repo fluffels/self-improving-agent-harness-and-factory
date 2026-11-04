@@ -37,6 +37,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0027 Evidenzbasiert lockern](../adr/0027-regeln-lockern.md) | wenn eine Regel, ein Gate, eine Lens, ein Hook, ein Workflow-Schritt oder Prompt-Text entfernt, eingeschränkt oder gekürzt werden soll, oder ein Status-Lauf einen Lockern-Kandidaten meldet |
 | [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ablauf neben dem Ticket-Ablauf (Ticket-Skills mit gemeinsamem ablauf.md; Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
 | [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
+| [0031 Fabrik ohne Zugriff auf Bezieher](../adr/0031-fabrik-ohne-zugriff-auf-bezieher.md) | wenn ein Fabrik-Lauf in ein Bezieher-Repo schreiben soll (Sync-PR, Issue, Kommentar, Trockenlauf im Bezieher), ein Bezieher-Befund gemeldet wird oder die Verteilung per Tag und `factory-update.yml` geändert wird |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 

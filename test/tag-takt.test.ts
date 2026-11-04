@@ -93,6 +93,11 @@ describe("Schwellen", () => {
     expect(T.dringlichSignal([commit({ body: `feat: x\n\n* ${KEY}: Lücke` })], KEY)).toEqual({ grund: "Lücke", sha: "a".repeat(40) });
     expect(entscheide({ besitz: reihe(1, { body: `fix: x\n\n${KEY}: Lücke` }) }).ausloeser?.[0]).toContain("Dringlich: Lücke");
   });
+  it("factory#162 L24: die Zahl-Schwelle ist die gemessene (Median der Besitz-PRs je Tag-Abstand 2,5, aufgerundet 3), nie unter dem Boden 3; der Auslöser nennt sie", () => {
+    expect(T.MIN_PRS).toBe(3);
+    expect(entscheide({ besitz: reihe(T.MIN_PRS) }).ausloeser?.[0]).toContain(`(ab ${T.MIN_PRS})`);
+    expect(entscheide({ besitz: reihe(T.MIN_PRS - 1) }).aktion).toBe("nichts");
+  });
   it("ohne Release-Tag entsteht nichts", () => {
     expect(entscheide({ letzterTag: null, besitz: reihe(5) }).aktion).toBe("nichts");
   });
