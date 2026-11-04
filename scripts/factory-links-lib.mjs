@@ -1,8 +1,8 @@
 // Factory-Link-Bausteine (ADR 0022 F10, factory#130/factory#131; Kern): pure Teile des Link-Wächters, geteilt von `check-factory-links.mjs` und `factory-sync.mjs`
 // (ein Einstiegsskript importiert kein anderes, `einstieg-importe`). Nichts hier liest oder schreibt Dateien: Texte kommen über einen Leser, Ergebnisse als Plan.
 import { besitzSpannen, einheitAusId, eolVon, normalisiereEol } from "./besitz-lib.mjs";
-import { codeMaskiert, collectHeadingSlugs, externeLinkStellen, schnappschussBloecke } from "./docs-gen/markdown.mjs";
-import { factoryUrlTeile } from "./factory-seite.mjs";
+import { codeMaskiert, collectHeadingSlugs, externeLinkStellen, linkStellen, linkZiel, schnappschussBloecke, ueberschriftenStellen } from "./docs-gen/markdown.mjs";
+import { factorySeite, factoryUrlTeile } from "./factory-seite.mjs";
 import { globRegex } from "./pfad-glob.mjs";
 
 export const INDEX_PFAD = ".factory/factory-links.json";
@@ -108,4 +108,66 @@ export function planeFactoryLinks({ dateien, lies, repo, einheiten, ausnahmen, t
     ergebnis.dateien.set(INDEX_PFAD, eol === "\n" ? soll : soll.replace(/\n/g, eol));
   }
   return ergebnis;
+}
+
+// ── Anker-Stubs (factory#132): Kern-Links auf Seiten außerhalb des Besitzes sind im Bezieher gedeckt ──
+
+/** Eine Stub-Meldung: der Kern-Link (`quelle:zeile`) und die Soll-URL aus `factorySeite`. */
+const stubText = (k, was, soll) => `${was} (Kern-Link ${k.quelle}:${k.zeile} → ${k.ziel}${k.anker ? `#${k.anker}` : ""}); Soll: \`Kern: [..](${soll})\``;
+
+/** Pur: die zu deckenden Kern-Links der Markdown-Einheiten (`besitz`: Einheiten, `lies`): `{ quelle, zeile, ziel, anker }`, je (Quelle, Ziel, Anker) einmal an der ersten Stelle. Nur `.md`-Ziele ohne Einheit. */
+function kernLinkZiele({ besitz, lies }) {
+  const kernPfade = new Set(besitz.map((e) => e.pfad));
+  const quellen = [...kernPfade].filter((p) => p.endsWith(".md") && besitz.some((e) => e.pfad === p && e.schluessel === undefined));
+  const gesehen = new Set();
+  const ziele = [];
+  for (const quelle of quellen) {
+    const text = lies(quelle);
+    if (text === null || text === undefined) continue;
+    const spannen = besitzSpannen(besitz, quelle, text);
+    for (const s of linkStellen(text)) {
+      const pfad = s.path.replace(/\?.*$/, "");
+      if (!pfad.endsWith(".md") || !spannen.some(([von, bis]) => s.start >= von && s.start <= bis)) continue;
+      const ziel = linkZiel(quelle, pfad);
+      const schluessel = `${quelle}\0${ziel}\0${s.anchor}`;
+      if (kernPfade.has(ziel) || gesehen.has(schluessel)) continue;
+      gesehen.add(schluessel);
+      ziele.push({ quelle, zeile: zeileVon(text, s.start), ziel, anker: s.anchor });
+    }
+  }
+  return ziele;
+}
+
+/** Zeilenbereich `{ von, bis }` (0-basiert, `bis` ausgeschlossen) des Abschnitts mit dem Anker: ab der Überschrift bis zur nächsten gleicher oder höherer Ebene; `null` ohne Überschrift. */
+function abschnitt(text, anker) {
+  const hs = ueberschriftenStellen(text);
+  const i = hs.findIndex((h) => h.slug === anker);
+  if (i < 0) return null;
+  const naechste = hs.slice(i + 1).find((h) => h.ebene <= hs[i].ebene);
+  return { von: hs[i].zeile, bis: naechste ? naechste.zeile : Infinity };
+}
+
+/** Der Befund eines Kern-Links `k` oder `null`: `stub-ziel`, `stub-anker` oder `stub-link` (Factory-Link auf genau `pfad#anker` am Tag, im Abschnitt der Überschrift bzw. ohne Anker irgendwo in der Datei). */
+function stubBefund(k, { lies, repo, tag }) {
+  const text = lies(k.ziel);
+  const soll = factorySeite({ pfad: k.ziel, anker: k.anker, repo, tag });
+  if (text === null || text === undefined) return befund("stub-ziel", stubText(k, `${k.ziel} fehlt`, soll), { datei: k.quelle, zeile: k.zeile });
+  const bereich = k.anker === "" ? { von: 0, bis: Infinity } : abschnitt(text, k.anker);
+  if (!bereich) return befund("stub-anker", stubText(k, `keine Überschrift mit dem Anker #${k.anker} in ${k.ziel}`, soll), { datei: k.quelle, zeile: k.zeile });
+  const gedeckt = sammleLinksAus({ dateien: [k.ziel], lies }, { repo }).some(
+    (l) => l.form === "blob" && l.zeile - 1 >= bereich.von && l.zeile - 1 < bereich.bis && factorySeite({ pfad: l.pfad, anker: l.anker, repo, tag: l.ref }) === soll,
+  );
+  const ort = k.anker === "" ? "in der Datei" : `unter der Überschrift #${k.anker}`;
+  return gedeckt ? null : befund("stub-link", stubText(k, `${k.ziel} trägt ${ort} keinen Factory-Link auf ${soll}`, soll), { datei: k.ziel, zeile: k.anker === "" ? 1 : bereich.von + 1 });
+}
+
+/**
+ * Pur: Anker-Stubs der Markdown-Einheiten (`einheiten`: Ids des Sync-Stands). Jeder relative `.md`-Link einer Einheit (ganze Datei oder Block) auf ein Ziel ohne Einheit
+ * muss auf eine vorhandene Datei zeigen; mit Anker trägt sie eine Überschrift mit gleichem Anker (roh verglichen) und darunter (bis zur nächsten Überschrift gleicher oder
+ * höherer Ebene) einen Factory-Link auf genau `pfad#anker` am Tag `tag`, ohne Anker irgendwo in der Datei einen Factory-Link auf die Seite. Factory-Links in
+ * Schnappschuss-Blöcken zählen nicht. Ergebnis `{ befunde, geprueft }` (`geprueft` = Zahl der Kern-Links nach Dedupe).
+ */
+export function stubBefunde({ lies, einheiten, repo, tag }) {
+  const ziele = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies });
+  return { befunde: ziele.map((k) => stubBefund(k, { lies, repo, tag })).filter(Boolean), geprueft: ziele.length };
 }

@@ -46,6 +46,9 @@ const slugify: (t: string) => string = checkDocDrift.slugify;
 const linkStellen = linkStellenRoh as (md: string) => { start: number; ende: number; text: string; bild: boolean; target: string; path: string; anchor: string }[];
 const linkZiel = linkZielRoh as (datei: string, pfad: string) => string;
 const collectHeadingSlugs: (md: string) => string[] = checkDocDrift.collectHeadingSlugs;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ueberschriftenStellen as ueberschriftenStellenRoh } from "../scripts/docs-gen/markdown.mjs";
+const ueberschriftenStellen = ueberschriftenStellenRoh as (md: string) => { ebene: number; slug: string; zeile: number }[];
 const auditDocDrift: () => {
   deadCommands: { file: string; script: string }[];
   undocumentedScripts: string[];
@@ -298,6 +301,16 @@ describe("Harness-Doku-Drift (#529)", () => {
       "## Abschnitt",
     ].join("\n");
     assert.deepEqual(collectHeadingSlugs(md), ["titel", "abschnitt", "abschnitt-1"]);
+  });
+
+  test("ueberschriftenStellen nennt Ebene, Slug und 0-basierte Zeile (Fence zählt nicht, Duplikat -1, CRLF)", () => {
+    const md = ["# Titel", "## Abschnitt", "```bash", "# kein Heading", "```", "### Tief", "## Abschnitt"].join("\r\n");
+    assert.deepEqual(ueberschriftenStellen(md), [
+      { ebene: 1, slug: "titel", zeile: 0 },
+      { ebene: 2, slug: "abschnitt", zeile: 1 },
+      { ebene: 3, slug: "tief", zeile: 5 },
+      { ebene: 2, slug: "abschnitt-1", zeile: 6 },
+    ]);
   });
 });
 

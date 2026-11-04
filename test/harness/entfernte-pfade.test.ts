@@ -65,6 +65,11 @@ export const RESTE: Rest[] = [
     fix: "für Kern-Tests gilt die Null-Regel ohne Baseline: Projektwerte aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test",
   },
   {
+    name: "Baseline der Kern-Links",
+    muster: /kern-links-baseline/,
+    fix: "Kern-Links werden ohne Baseline durch Factory-Seiten mit Anker gedeckt (kern-links.test.ts, check:factorylinks): ADRs nur als Text, Ziel mit Anker anlegen (factory#132)",
+  },
+  {
     name: "Spielquote-Bibliothek (heißt produktquote-lib)",
     muster: /spielquote-lib|\bSPIEL_QUOTE\b|\bzaehleSpielMerges\b/,
     fix: "den Kern-Begriff Produktquote nutzen: scripts/produktquote-lib.mjs, PRODUKT_QUOTE, zaehleProduktMerges (#1942)",
@@ -77,6 +82,7 @@ const meldungKern = (treffer: string[]): string => meldungMitFix(treffer, RESTE)
 /** Entfernte Dateien, die nie wieder angelegt werden dürfen (exakter Pfad, je Eintrag der Grund). */
 export const ENTFERNTE_DATEIEN: { pfad: string; grund: string }[] = [
   { pfad: "test/harness/kern-test-literale-baseline.json", grund: "Null-Regel der Kern-Tests (#1903)" },
+  { pfad: "test/harness/kern-links-baseline.json", grund: "Kern-Links: Deckung per Anker-Stub statt Baseline (factory#132)" },
 ];
 
 /** Meldungen für wieder angelegte entfernte Dateien; leer = sauber. */
@@ -206,6 +212,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
       "Spielquote-Bibliothek (heißt produktquote-lib)": "import { SPIEL_QUOTE } from board-takt",
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
+      "Baseline der Kern-Links": "gelesen aus test/harness/kern-links-baseline.json",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);

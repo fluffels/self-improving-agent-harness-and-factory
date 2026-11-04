@@ -1,12 +1,13 @@
-/* Kern-Link-Wächter (#1860, ADR 0022 F10): Markdown-Einheiten des Kerns dürfen nur auf Dateien verlinken, die selbst zum Kern gehören.
- * Ein Link auf eine Seite außerhalb des Besitz-Manifests `.factory/besitz.json` ist im Zielprojekt tot, sobald der Kern verteilt ist.
+/* Kern-Link-Wächter (quellprojekt#1860, ADR 0022 F10, factory#132): Markdown-Einheiten des Kerns dürfen nur auf Dateien verlinken, die im Bezieher da sind.
+ * Ein Link auf eine Seite außerhalb des Besitz-Manifests `.factory/besitz.json` ist im Zielprojekt tot, sobald der Kern verteilt ist, es sei denn, ein Anker-Stub deckt ihn.
  *
- * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (quellprojekt#1165).
  *
  * Geprüft: Markdown-Links `](ziel.md)` bzw. `](ziel.md#anker)` in den Markdown-Einheiten (Datei, Block zwischen Markern) der Manifest-Einträge,
- * die verteilt werden (`wirdVerteilt`). Ein Ziel ist in Ordnung, wenn es selbst ein verteilter Manifest-Pfad ist. Jedes andere
- * (Quelle, Ziel)-Paar steht in der Baseline `kern-links-baseline.json`, die nur sinken darf: ein neues Paar ist rot („Ziel ins Manifest (F10)
- * oder Link entfernen“), ein verschwundenes Paar ebenfalls („Eintrag streichen“).
+ * die verteilt werden (`wirdVerteilt`). Ein Ziel ist in Ordnung, wenn es selbst ein verteilter Manifest-Pfad ist. Jedes andere (Quelle, Ziel)-Paar muss auf eine
+ * Factory-Seite zeigen (`istFactorySeite`: Markdown unter docs/ ohne ADRs, Lessons Learned und Gegenproben), die es gibt und in der jeder Anker steht; sonst ist es rot
+ * („Link entfernen, Historie nur als Text“). Im Bezieher deckt ein Anker-Stub solche Links: den Gegenpart prüft `check:factorylinks` (Anker-Stubs), hier gilt nur die
+ * Vorbedingung im Factory-Repo. Eine Baseline gibt es nicht mehr (factory#132). Ohne Anker im Link müssen nur Seite und Datei stimmen.
  *
  * Bewusste Grenze (Link-Hülle): nicht geprüft werden Backtick-Pfade und Pfade im Fließtext, http(s)- und andere Schema-Links, reine
  * Anker-Links, Links in Code-Fences und in Inline-Code, Links auf Nicht-Markdown-Dateien (Skripte, JSON) und Link-Referenz-Definitionen
@@ -33,8 +34,13 @@ import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 import { PROJEKT_CONFIG } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { STAND_PFAD } from "../../scripts/sync-stand-lib.mjs";
-const { linkStellen, linkZiel, fenceMaske } = rawMarkdown as unknown as {
-  linkStellen: (md: string) => { path: string }[];
+// Prädikat der Factory-Seiten (eine Quelle mit dem Umsteller der Ticketnummern).
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { istFactorySeite } from "../../scripts/herkunftsform.mjs";
+const istSeite = istFactorySeite as (pfad: string) => boolean;
+const { linkStellen, linkZiel, fenceMaske, collectHeadingSlugs } = rawMarkdown as unknown as {
+  collectHeadingSlugs: (md: string) => string[];
+  linkStellen: (md: string) => { path: string; anchor: string }[];
   linkZiel: (datei: string, pfad: string) => string;
   fenceMaske: (zeilen: string[]) => boolean[];
 };
@@ -53,20 +59,25 @@ interface BesitzLib {
 const { einheitText, wirdVerteilt } = rawBesitz as unknown as BesitzLib;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
-const BASELINE = "test/harness/kern-links-baseline.json";
 const PFAD_BASELINE = "test/harness/kern-pfade-baseline.json";
 
 const lesen = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8") : null);
 
-/** Repo-relative Markdown-Ziele der Links in `text` einer Datei `quelle` (normalisiert, ohne Anker und Query, dedupliziert). Schema-Links, reine Anker und Nicht-Markdown-Ziele bleiben außen vor. */
-export function markdownZiele(quelle: string, text: string): string[] {
-  const ziele = new Set<string>();
+/** Repo-relative Markdown-Links in `text` einer Datei `quelle`: `{ ziel, anker }` (Ziel normalisiert, ohne Anker und Query; je Paar einmal, in Textreihenfolge). Schema-Links, reine Anker und Nicht-Markdown-Ziele bleiben außen vor. */
+export function markdownLinks(quelle: string, text: string): { ziel: string; anker: string }[] {
+  const links = new Map<string, { ziel: string; anker: string }>();
   for (const stelle of linkStellen(text)) {
     const ohneQuery = stelle.path.split("?")[0] ?? "";
     if (!ohneQuery.toLowerCase().endsWith(".md")) continue;
-    ziele.add(linkZiel(quelle, ohneQuery));
+    const ziel = linkZiel(quelle, ohneQuery);
+    links.set(`${ziel}\0${stelle.anchor}`, { ziel, anker: stelle.anchor });
   }
-  return [...ziele];
+  return [...links.values()];
+}
+
+/** Repo-relative Markdown-Ziele der Links in `text` einer Datei `quelle` (ohne Anker, dedupliziert). */
+export function markdownZiele(quelle: string, text: string): string[] {
+  return [...new Set(markdownLinks(quelle, text).map((l) => l.ziel))];
 }
 
 /** Ein Pfad in Code: Wurzelordner des Repos, Datei mit bekannter Endung; danach kein Namensrest (`.bak`, `-x`), `:zeile` und `#anker` fallen weg. */
@@ -107,9 +118,32 @@ function fremdePaare(eintraege: Eintrag[], lies: (pfad: string) => string | null
   return [...paare].sort();
 }
 
-/** Die Link-Paare `quelle -> ziel`, deren Ziel kein verteilter Manifest-Pfad ist (sortiert, ohne Doppelte). */
-export function fremdeLinks(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
-  return fremdePaare(eintraege, lies, markdownZiele);
+const LINK_FIX = {
+  keineSeite: "Link auf eine Datei, die keine Factory-Seite ist (Historie oder außerhalb von docs/). Fix: Link entfernen (ADRs und Historie nur als Text) oder Ziel ins Besitz-Manifest aufnehmen (F10)",
+  zielFehlt: "Link auf eine Factory-Seite, die es nicht gibt. Fix: Link entfernen oder die Seite anlegen",
+  ankerFehlt: (anker: string) => `Anker #${anker} fehlt im Ziel. Fix: Anker im Ziel anlegen oder den Link korrigieren`,
+};
+
+/** Meldungen der Kern-Links ohne Deckung: das Ziel ist kein verteilter Manifest-Pfad und keine vorhandene Factory-Seite mit allen Ankern (sortiert, ohne Doppelte). */
+export function ungedeckteLinks(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
+  const verteilt = eintraege.filter(wirdVerteilt);
+  const kern = new Set(verteilt.map((e) => e.pfad));
+  const meldungen = new Set<string>();
+  for (const e of verteilt) {
+    if (!e.pfad.toLowerCase().endsWith(".md") || e.schluessel !== undefined) continue;
+    const text = lies(e.pfad);
+    const einheit = text === null ? null : einheitText(e, text);
+    if (einheit === null) continue;
+    for (const { ziel, anker } of markdownLinks(e.pfad, einheit)) {
+      if (kern.has(ziel)) continue;
+      const paar = anker === "" ? `${e.pfad} -> ${ziel}` : `${e.pfad} -> ${ziel}#${anker}`;
+      const zieltext = istSeite(ziel) ? lies(ziel) : null;
+      if (!istSeite(ziel)) meldungen.add(`${paar}: ${LINK_FIX.keineSeite}`);
+      else if (zieltext === null) meldungen.add(`${paar}: ${LINK_FIX.zielFehlt}`);
+      else if (anker !== "" && !collectHeadingSlugs(zieltext).includes(anker)) meldungen.add(`${paar}: ${LINK_FIX.ankerFehlt(anker)}`);
+    }
+  }
+  return [...meldungen].sort();
 }
 
 /** Die Pfad-Paare `quelle -> ziel` aus Code (Pfad-Hülle), deren Ziel kein verteilter Manifest-Pfad ist (sortiert, ohne Doppelte). */
@@ -121,17 +155,13 @@ interface Meldungen {
   neu: string;
   weg: string;
 }
-const LINK_MELDUNGEN: Meldungen = {
-  neu: "Link auf eine Datei außerhalb des Kerns. Fix: Ziel ins Besitz-Manifest aufnehmen (F10) oder den Link entfernen",
-  weg: `steht in der Baseline, der Link existiert nicht mehr. Fix: Eintrag aus ${BASELINE} streichen`,
-};
 const PFAD_MELDUNGEN: Meldungen = {
   neu: "Pfad in Code auf eine Datei außerhalb des Kerns. Fix: Ziel ins Besitz-Manifest aufnehmen (F10) oder den Pfad entfernen bzw. als Platzhalter schreiben",
   weg: `steht in der Baseline, der Pfad existiert nicht mehr. Fix: Eintrag aus ${PFAD_BASELINE} streichen`,
 };
 
 /** Meldungen: neue Paare (nicht in der Baseline) und verschwundene Paare (nur noch in der Baseline). */
-export function vergleiche(ist: string[], baseline: string[], texte: Meldungen = LINK_MELDUNGEN): string[] {
+export function vergleiche(ist: string[], baseline: string[], texte: Meldungen): string[] {
   const out: string[] = [];
   const bekannt = new Set(baseline);
   const aktuell = new Set(ist);
@@ -142,16 +172,11 @@ export function vergleiche(ist: string[], baseline: string[], texte: Meldungen =
 
 const manifest = ladeBesitzManifest<Eintrag>();
 const baselineLesen = (pfad: string): string[] => (JSON.parse(lesen(pfad) ?? "{}") as { paare?: string[] }).paare ?? [];
-const baselinePaare = baselineLesen(BASELINE);
 const pfadPaare = baselineLesen(PFAD_BASELINE);
 
-describe("Kern-Links (#1860)", () => {
-  test("jeder Link einer Kern-Einheit führt in den Kern oder steht in der Baseline; die Baseline kennt nur noch echte Paare", () => {
-    assert.deepEqual(vergleiche(fremdeLinks(manifest.eintraege, lesen), baselinePaare), []);
-  });
-
-  test("die Baseline ist sortiert und ohne Doppelte (ein Paar, eine Zeile)", () => {
-    assert.deepEqual(baselinePaare, [...new Set(baselinePaare)].sort());
+describe("Kern-Links (quellprojekt#1860)", () => {
+  test("jeder Link einer Kern-Einheit führt in den Kern oder auf eine vorhandene Factory-Seite mit Anker (keine Baseline, factory#132)", () => {
+    assert.deepEqual(ungedeckteLinks(manifest.eintraege, lesen), []);
   });
 
   describe("markdownZiele", () => {
@@ -186,49 +211,60 @@ describe("Kern-Links (#1860)", () => {
     });
   });
 
-  describe("fremdeLinks", () => {
+  describe("markdownLinks", () => {
+    test("liefert Ziel und Anker je Paar einmal, in Textreihenfolge", () => {
+      assert.deepEqual(markdownLinks("docs/q.md", "[a](a.md#x) [b](a.md#x) [c](a.md) [d](b.md#y)"), [
+        { ziel: "docs/a.md", anker: "x" },
+        { ziel: "docs/a.md", anker: "" },
+        { ziel: "docs/b.md", anker: "y" },
+      ]);
+    });
+  });
+
+  describe("ungedeckteLinks (factory#132)", () => {
     const e = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
     const dateien: Record<string, string> = {
-      "docs/a.md": "[kern](b.md) [fremd](x.md) [fremd2](x.md#z)",
+      "docs/a.md": "[kern](b.md) [seite](s.md#abschnitt) [ohne](s.md) [dup](s.md#abschnitt-1)",
       "docs/b.md": "[zurück](a.md)",
-      "docs/blk.md": "vor [außen](ausser.md)\n<!-- factory-besitz:start k -->\n[innen](innen.md)\n<!-- factory-besitz:ende k -->",
-      "docs/nurfactory.md": "[f](x.md)",
+      "docs/s.md": "# S\n\n## Abschnitt\n\n## Abschnitt\n",
+      "docs/blk.md": "vor [außen](ausser.md)\n<!-- factory-besitz:start k -->\n[innen](s.md#abschnitt)\n<!-- factory-besitz:ende k -->",
       "docs/skript.mjs": "[nicht](geprueft.md)",
     };
     const lies = (p: string): string | null => dateien[p] ?? null;
+    const von = (pfad: string, text: string, ...weitere: Eintrag[]) => ungedeckteLinks([e(pfad), ...weitere], (p) => (p === pfad ? text : lies(p)));
 
-    test("ein Link auf einen Manifest-Pfad ist in Ordnung, einer daneben ist ein Paar (ohne Doppelte)", () => {
-      assert.deepEqual(fremdeLinks([e("docs/a.md"), e("docs/b.md")], lies), ["docs/a.md -> docs/x.md"]);
+    test("gedeckt: ein verteilter Manifest-Pfad, eine Factory-Seite mit vorhandenem Anker (auch Duplikat -1), ohne Anker nur die Seite", () => {
+      assert.deepEqual(ungedeckteLinks([e("docs/a.md"), e("docs/b.md")], lies), []);
     });
-    test("ein Ziel nur im Ring der Factory (wird nicht verteilt) zählt als außerhalb", () => {
-      const nurFactory = rawBesitz as unknown as { NUR_FACTORY: string[] };
-      const ring = nurFactory.NUR_FACTORY[0];
+    test("rot: der Anker fehlt im Ziel, die Meldung nennt Paar, Anker und Fix", () => {
+      const m = von("docs/q.md", "[x](s.md#fehlt)");
+      assert.equal(m.length, 1);
+      assert.match(m[0] ?? "", /^docs\/q\.md -> docs\/s\.md#fehlt: Anker #fehlt fehlt im Ziel\. Fix:/);
+    });
+    test("rot: ADR, Lessons Learned, Gegenprobe und ein Ziel außerhalb von docs/ sind keine Factory-Seiten", () => {
+      for (const ziel of ["docs/adr/x.md", "docs/lessons-learned.md", "docs/a-gegenprobe-b.md", "README.md"]) {
+        const m = von("docs/q.md", `[x](${ziel.startsWith("docs/") ? ziel.slice(5) : "../" + ziel})`);
+        assert.equal(m.length, 1, ziel);
+        assert.match(m[0] ?? "", /keine Factory-Seite/, ziel);
+      }
+    });
+    test("rot: das Ziel fehlt", () => {
+      assert.match(von("docs/q.md", "[x](gibtsnicht.md)")[0] ?? "", /^docs\/q\.md -> docs\/gibtsnicht\.md: .*es nicht gibt/);
+    });
+    test("ein Ziel nur im Ring der Factory (wird nicht verteilt) braucht die Factory-Seiten-Regel", () => {
+      const ring = (rawBesitz as unknown as { NUR_FACTORY: string[] }).NUR_FACTORY[0];
       assert.ok(ring, "NUR_FACTORY ist leer: der Test braucht einen nicht verteilten Ring");
-      assert.deepEqual(fremdeLinks([e("docs/b.md"), e("docs/a.md", { ring })], lies), ["docs/b.md -> docs/a.md"]);
-      assert.deepEqual(fremdeLinks([e("docs/a.md"), e("docs/b.md", { ring })], lies), ["docs/a.md -> docs/b.md", "docs/a.md -> docs/x.md"]);
+      assert.deepEqual(ungedeckteLinks([e("docs/a.md"), e("docs/b.md", { ring })], lies), []);
+      const adr = (p: string): string | null => (p === "docs/adr/z.md" ? "# Z\n" : p === "docs/a.md" ? "[x](adr/z.md)" : null);
+      assert.equal(ungedeckteLinks([e("docs/a.md"), e("docs/adr/z.md", { ring })], adr).length, 1);
     });
     test("nur der Block zwischen den Markern zählt; Nicht-Markdown, JSON-Schlüssel und fehlende Dateien werden übersprungen", () => {
       const eintraege = [e("docs/blk.md", { block: "k" }), e("docs/skript.mjs"), e("docs/fehlt.md"), e("docs/a.md", { schluessel: "s" })];
-      assert.deepEqual(fremdeLinks(eintraege, lies), ["docs/blk.md -> docs/innen.md"]);
+      assert.deepEqual(ungedeckteLinks(eintraege, lies), []);
+      assert.equal(ungedeckteLinks([e("docs/blk.md", { block: "k" })], (p) => (p === "docs/blk.md" ? (dateien[p] ?? "").replace("s.md#abschnitt", "s.md#nix") : lies(p))).length, 1);
     });
   });
 
-  describe("vergleiche", () => {
-    test("gleiche Mengen: keine Meldung", () => {
-      assert.deepEqual(vergleiche(["a -> b"], ["a -> b"]), []);
-      assert.deepEqual(vergleiche([], []), []);
-    });
-    test("ein neues Paar ist rot und nennt den Fix (Ziel ins Manifest oder Link entfernen)", () => {
-      const m = vergleiche(["a -> b", "a -> c"], ["a -> b"]);
-      assert.equal(m.length, 1);
-      assert.match(m[0] ?? "", /^a -> c: .*Besitz-Manifest aufnehmen \(F10\) oder den Link entfernen/);
-    });
-    test("ein verschwundenes Paar ist rot und verlangt, den Eintrag zu streichen", () => {
-      const m = vergleiche(["a -> b"], ["a -> b", "a -> c"]);
-      assert.equal(m.length, 1);
-      assert.match(m[0] ?? "", /^a -> c: .*Eintrag aus test\/harness\/kern-links-baseline\.json streichen/);
-    });
-  });
 });
 
 describe("Pfad-Hülle (factory#114)", () => {

@@ -370,18 +370,24 @@ export function slugify(headingText) {
     .replace(/\s/g, "-");
 }
 
+/** Alle Überschriften einer Markdown-Datei mit Ort: `{ ebene, slug, zeile }` (`zeile` 0-basiert, Index in die Zeilen des Textes; GitHub-Slugs inkl. -1/-2
+ *  bei Duplikaten). Code-Fences ausgeblendet (die Zeilenzahl bleibt), damit `#`-Kommentare nicht zählen. */
+export function ueberschriftenStellen(md) {
+  const stellen = [];
+  const seen = new Map();
+  stripFencedCode(md)
+    .split(/\r?\n/)
+    .forEach((line, zeile) => {
+      const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
+      if (!m) return;
+      const base = slugify(m[2]);
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      stellen.push({ ebene: m[1].length, slug: n === 0 ? base : `${base}-${n}`, zeile });
+    });
+  return stellen;
+}
+
 /** Alle Überschriften-Anker einer Markdown-Datei (GitHub-Slugs inkl. -1/-2 bei
  *  Duplikaten). Code-Fences ausgeblendet, damit `#`-Kommentare nicht zählen. */
-export function collectHeadingSlugs(md) {
-  const slugs = [];
-  const seen = new Map();
-  for (const line of stripFencedCode(md).split(/\r?\n/)) {
-    const m = line.match(/^(#{1,6})\s+(.*\S)\s*$/);
-    if (!m) continue;
-    const base = slugify(m[2]);
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    slugs.push(n === 0 ? base : `${base}-${n}`);
-  }
-  return slugs;
-}
+export const collectHeadingSlugs = (md) => ueberschriftenStellen(md).map((h) => h.slug);
