@@ -395,11 +395,6 @@ describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
     await expect(S({ nr: 20, position: 3, repo: "zz-org/zz-r" }, { loadItems: () => (geladen++, items), sleep: async () => {} })).rejects.toThrow(/board fehlt/);
     expect(geladen).toBe(0);
   });
-
-  test("Verdrahtung: der Aufruf in main übergibt das Ziel-Board (Factory- oder Produkt-Board je Art)", () => {
-    const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
-    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*board\b[^}]*repo/);
-  });
 });
 
 describe("sammelLabel, codequalitaetPlan und main (factory#156)", () => {
@@ -618,5 +613,118 @@ describe("Token und Lesezugriff im Ziel-Repo (#97 L7 b, L11 j, L12 a)", () => {
       expect(a.gh).toEqual([{ args: ["api", `repos/${REPO_ZIEL}/issues/12`], opt: { token: "pt" } }]);
       expect(Z.vorgaengerZustand(12, REPO_ZIEL, { ...a.naht, gh: () => { throw new Error("404"); } })).toBe("unbekannt");
     });
+  });
+});
+
+describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung je Art als Verhalten", () => {
+  type Ruf = [string, ...unknown[]];
+  const M = (raw as unknown as { main: (argv: string[], deps: object) => Promise<void> }).main;
+  const BOARD = (rawLib as unknown as { boardFuerRolle: (r: string) => unknown }).boardFuerRolle;
+  const FABRIK = "zz-org/zz-fabrik";
+  const cfg = { ...FREMD, boards: FREMD.boards.map((b: { rolle: string }) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)), labels: { ...FREMD.labels, codequalitaet: "area:code" } };
+  const it = (n: number, title = `T${n}`) => ({ id: `I${n}`, number: n, status: "Todo", title, assignees: [], state: "open" });
+  const listeVoll = () => [it(1, "Langfuse-Status überprüfen"), it(2), it(3), it(4), it(5), it(6), it(7), it(8), it(9)];
+  const fakes = (extra: object = {}) => {
+    const rufe: Ruf[] = [];
+    const log: string[] = [];
+    const deps = {
+      ladeConfig: () => cfg,
+      log: (z: string) => log.push(z),
+      kontingent: () => {},
+      sleep: async () => {},
+      findeVorhandenes: (a: unknown) => (rufe.push(["findeVorhandenes", a]), null),
+      vorgaengerZustand: () => "zu",
+      legeAn: (a: unknown) => (rufe.push(["legeAn", a]), { number: 50, node_id: "N50" }),
+      schliesseWennDublette: () => false,
+      addToBoardTodo: (...a: unknown[]) => (rufe.push(["addToBoardTodo", ...a]), "I50"),
+      loadItems: (...a: unknown[]) => (rufe.push(["loadItems", ...a]), listeVoll()),
+      setPosition: (...a: unknown[]) => rufe.push(["setPosition", ...a]),
+      setzeUndPruefe: async (a: unknown) => (rufe.push(["setzeUndPruefe", a]), "ok"),
+      ...extra,
+    };
+    return { deps, rufe, log };
+  };
+  const namen = (rufe: Ruf[]) => rufe.map((r) => r[0]);
+  const schreibend = ["legeAn", "addToBoardTodo", "setPosition", "setzeUndPruefe"];
+
+  test("harness: legt mit dem Harness-Label im Factory-Repo an, hängt es ans Factory-Board und prüft die Position dort", async () => {
+    const { deps, rufe } = fakes();
+    await M(["harness"], deps);
+    const anlegen = rufe.find((r) => r[0] === "legeAn")![1] as { repo: string; titel: string; harness: string };
+    expect(anlegen).toMatchObject({ repo: FABRIK, titel: "Harness-Härtung (gesammelt)", harness: cfg.labels.harness });
+    const board = BOARD("factory");
+    expect(rufe.find((r) => r[0] === "addToBoardTodo")!.slice(1)).toEqual([board, "N50", { repo: FABRIK }]);
+    const pruef = rufe.find((r) => r[0] === "setzeUndPruefe")![1] as { nr: number; board: unknown; repo: string; dry: boolean };
+    expect(pruef).toMatchObject({ nr: 50, repo: FABRIK, dry: false });
+    expect(pruef.board).toEqual(board);
+  });
+
+  test("harness: steht das neue Ticket falsch (hinten), setzt main es per setPosition auf das Factory-Board um", async () => {
+    const { deps, rufe } = fakes();
+    await M(["harness"], deps);
+    const set = rufe.filter((r) => r[0] === "setPosition");
+    expect(set).toHaveLength(1);
+    expect(set[0]![1]).toEqual(BOARD("factory"));
+    expect(set[0]![2]).toBe("I50");
+  });
+
+  test("langfuse ohne --top: angelegt und ans Board gehängt, aber keine Positionsarbeit", async () => {
+    const { deps, rufe } = fakes();
+    await M(["langfuse"], deps);
+    expect(namen(rufe)).toEqual(["findeVorhandenes", "legeAn", "addToBoardTodo"]);
+    expect((rufe[1]![1] as { harness: string; titel: string }).harness).toBe(cfg.labels.harness);
+  });
+
+  test("langfuse --top: setzt hinter den Sammelblock (setPosition auf dem Factory-Board), ohne setzeUndPruefe", async () => {
+    const { deps, rufe } = fakes();
+    await M(["langfuse", "--top"], deps);
+    const set = rufe.filter((r) => r[0] === "setPosition");
+    expect(set.length).toBeGreaterThan(0);
+    expect(set.every((r) => JSON.stringify(r[1]) === JSON.stringify(BOARD("factory")))).toBe(true);
+    expect(set.some((r) => r[2] === "I50")).toBe(true);
+    expect(namen(rufe)).not.toContain("setzeUndPruefe");
+  });
+
+  test("codequalitaet: Label aus labels.codequalitaet, Produkt-Board im eigenen Repo, immer hinter den Kopf gesetzt", async () => {
+    const { deps, rufe } = fakes();
+    await M(["codequalitaet"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: cfg.repo, titel: "Codequalität (gesammelt)", harness: "area:code" });
+    const board = BOARD("produkt");
+    expect(rufe.find((r) => r[0] === "addToBoardTodo")![1]).toEqual(board);
+    const set = rufe.filter((r) => r[0] === "setPosition");
+    expect(set).toHaveLength(1);
+    expect(set[0]!.slice(1)).toEqual([board, "I50", "I1"]);
+    expect(namen(rufe)).not.toContain("setzeUndPruefe");
+  });
+
+  test("schon vorhanden: nichts angelegt, nichts gesetzt; harness prüft nur die Position des vorhandenen Tickets", async () => {
+    const { deps, rufe, log } = fakes({ findeVorhandenes: () => ({ number: 33 }) });
+    await M(["langfuse"], deps);
+    expect(log).toEqual([]);
+    expect(namen(rufe)).toEqual([]);
+    const h = fakes({ findeVorhandenes: () => ({ number: 33 }) });
+    await M(["harness"], h.deps);
+    expect(h.rufe.filter((r) => schreibend.includes(r[0] as string)).map((r) => r[0])).toEqual(["setzeUndPruefe"]);
+    expect((h.rufe[0]![1] as { nr: number }).nr).toBe(33);
+  });
+
+  test("--dry-run: kein Schreibaufruf, nur die Ankündigung", async () => {
+    const { deps, rufe } = fakes();
+    for (const art of ["harness", "langfuse", "codequalitaet"]) await M([art, "--dry-run"], deps);
+    expect(rufe.filter((r) => schreibend.includes(r[0] as string))).toEqual([]);
+  });
+
+  test("Dublette nach dem Anlegen: kein Board-Aufruf mehr", async () => {
+    const { deps, rufe } = fakes({ schliesseWennDublette: () => true });
+    await M(["harness"], deps);
+    expect(namen(rufe)).toEqual(["findeVorhandenes", "legeAn"]);
+  });
+
+  test("Vorgänger: vorgaengerZustand wird mit Vorgänger und Ziel-Repo gefragt, offen landet die Blocker-Zeile im Body", async () => {
+    const gefragt: unknown[][] = [];
+    const { deps, rufe } = fakes({ vorgaengerZustand: (...a: unknown[]) => (gefragt.push(a), "offen") });
+    await M(["harness", "--vorgaenger", "7"], deps);
+    expect(gefragt).toEqual([[7, FABRIK]]);
+    expect((rufe.find((r) => r[0] === "legeAn")![1] as { body: string }).body).toMatch(/#7/);
   });
 });

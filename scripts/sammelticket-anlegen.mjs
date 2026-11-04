@@ -313,19 +313,19 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
 }
 
 /** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` hinter den Sammelblock, `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
-function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }) {
+function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
   if (!top && art !== "codequalitaet") return;
-  const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+  const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
   // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
   // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
   const { korrektur, plan } = art === "codequalitaet" ? { korrektur: null, plan: codequalitaetPlan(items, nr) } : planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-  if (korrektur) setPosition(board, korrektur.id, korrektur.afterId);
-  for (const { item, afterId } of plan.steps) setPosition(board, item.id, afterId);
+  if (korrektur) d.setPosition(board, korrektur.id, korrektur.afterId);
+  for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent`; ohne Angabe läuft alles echt. */
+/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo, loadItems, setPosition, vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
@@ -342,7 +342,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const vorhanden = findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
+  const vorhanden = d.findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
@@ -351,28 +351,28 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
     let neu;
     try {
-      neu = legeAn({ repo, titel, body, harness: label });
+      neu = d.legeAn({ repo, titel, body, harness: label });
     } catch (e) {
       console.error(`✖ ${e.message}`);
       process.exit(2);
     }
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
-    await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-    if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = addToBoardTodo(board, neu.node_id, { repo });
+    await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
+    if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
+    const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(board, k.id, k.afterId);
-    } else setzeErstePosition({ art: args.art, top: args.top, board: board, repo, itemId, nr, titel });
+      if (k) d.setPosition(board, k.id, k.afterId);
+    } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel }, d);
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: board, repo });
-  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
+  if (!vorhanden && !args.dry && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
   else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
