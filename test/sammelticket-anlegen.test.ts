@@ -826,4 +826,30 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(gefragt).toEqual([[7, FABRIK]]);
     expect((rufe.find((r) => r[0] === "legeAn")![1] as { body: string }).body).toMatch(/#7/);
   });
+
+  describe("native Abhängigkeit zum Vorgänger (factory#202 L1)", () => {
+    const mitVerknuepfung = (zustand: string, extra: object = {}) => {
+      const kanten: unknown[] = [];
+      const f = fakes({ vorgaengerZustand: () => zustand, verknuepfeBlocker: (a: unknown) => kanten.push(a), ...extra });
+      return { ...f, kanten };
+    };
+    test("offener Vorgänger: eine Kante neues Ticket ← Vorgänger im Ziel-Repo", async () => {
+      const { deps, kanten } = mitVerknuepfung("offen");
+      await M(["harness", "--vorgaenger", "7"], deps);
+      expect(kanten).toEqual([{ issueNodeId: "N50", blocker: { repo: FABRIK, nummer: 7 }, repo: FABRIK }]);
+    });
+    test("geschlossener Vorgänger und ohne --vorgaenger: keine Kante", async () => {
+      const zu = mitVerknuepfung("zu");
+      await M(["harness", "--vorgaenger", "7"], zu.deps);
+      const ohne = mitVerknuepfung("offen");
+      await M(["harness"], ohne.deps);
+      expect([zu.kanten, ohne.kanten]).toEqual([[], []]);
+    });
+    test("Scheitern der Kante ist eine Warnung, kein Abbruch (Position wird noch geprüft)", async () => {
+      const { deps, log, rufe } = mitVerknuepfung("offen", { verknuepfeBlocker: () => { throw new Error("403 forbidden"); } });
+      await M(["harness", "--vorgaenger", "7"], deps);
+      expect(log.join("\n")).toMatch(/native Abhängigkeit nicht gesetzt.*403 forbidden/);
+      expect(namen(rufe)).toContain("setzeUndPruefe");
+    });
+  });
 });
