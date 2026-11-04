@@ -223,6 +223,10 @@ describe("Summenzeile", () => {
     const l = laeufe([{ tool: "PowerShell", command: "npm run verify:kompakt", text: `${gruen}\n` }]);
     expect(l[0].gezaehlt).toBe(true);
   });
+  test("PowerShell: ein rotes verify:kompakt ohne Exit-code-Präfix gilt als abgebrochen", () => {
+    const l = laeufe([{ tool: "PowerShell", command: "npm run verify:kompakt", fehler: true, text: "verify:kompakt ROT · 3/4 grün · 9 s · rot: lint\n" }]);
+    expect(l[0]).toMatchObject({ gezaehlt: false, grund: "abgebrochen" });
+  });
   test("Round-Trip: das Format, das verify-lauf erzeugt, wird gelesen", () => {
     const e = [
       { name: "typecheck", ok: true, ms: 3000 },
@@ -395,9 +399,9 @@ describe("main", () => {
     const liste = [{ databaseId: 1, conclusion: "success", createdAt: new Date(T0).toISOString() }, { databaseId: 2, conclusion: "success", createdAt: new Date(bis).toISOString() }];
     const gh = vi.fn((args: string[]) => (args[1] === "list" ? JSON.stringify(liste) : logText));
     const b = basis({ gh });
-    expect(gf.main(["--ci", "ci.yml", "--von", new Date(T0 - 1000).toISOString(), "--bis", new Date(bis).toISOString(), "--json"], b.deps)).toBe(0);
+    expect(gf.main(["--ci", "ci.yml", "--von", new Date(T0).toISOString(), "--bis", new Date(bis).toISOString(), "--json"], b.deps)).toBe(0);
     const liste1 = gh.mock.calls[0][0];
-    expect(liste1[liste1.indexOf("--created") + 1]).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z\.\.\d{4}-\d\d-\d\dT[\d:]+Z$/);
+    expect(liste1[liste1.indexOf("--created") + 1]).toBe("2026-11-01T10:00:00Z..2026-11-02T10:00:00Z");
     const views = gh.mock.calls.filter((c) => c[0][1] === "view");
     expect(views).toHaveLength(1);
     expect(views[0][0]).toEqual(["run", "view", "1", "--log"]);
