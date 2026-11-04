@@ -834,7 +834,7 @@ describe("echtes Fremdrepo mit dem Besitz dieses Repos", { timeout: 30_000 }, ()
     const perm = (JSON.parse(lies(z, ".claude/settings.json")) as { permissions: Record<string, string[]> }).permissions;
     assert.ok((perm.deny ?? []).includes("mcp__claude-in-chrome"), "der Kern-Anteil kommt an (sonst wäre die Prüfung darunter vakuös)");
     assert.deepEqual(
-      Object.values(perm).flat().filter((x) => /^mcp__(playwright|likec4|langfuse__|pixellab)/.test(x)),
+      Object.values(perm).flat().filter((x) => /^mcp__(?!claude-in-chrome$)/.test(x)),
       [],
       "die Modulregeln des Quell-Projekts gehören nicht zum Kern-Anteil, den das Ziel bekommt",
     );

@@ -1,9 +1,10 @@
 /* Harness-Inventar-Wächter (#1361).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ * @probe-echte-dateien liest die echte README-Baustein-Tabelle und das echte Inventar des Projekts
  * `docs/harness-inventar.md` bewertet jeden Eigenbau gegen native Features und trägt maschinenlesbare
  * Prüfstand-Marker („Geprüft bis <Werkzeug> <Stand>“), die der Wochenabgleich (#1362) fortschreibt.
- * Drei Dinge dürfen nicht still driften: (1) jedes der fünf Werkzeuge hat genau einen regelkonformen
+ * Drei Dinge dürfen nicht still driften: (1) jedes der vier Werkzeuge hat genau einen regelkonformen
  * Marker, (2) jeder Baustein der generierten README-Tabelle (ADR 0017) steht in einer Inventarzeile,
  * (3) Urteil und Projektunabhängig nutzen nur das feste Vokabular. Negativfälle gegen die pure Hilfsfunktionen.
  * Bewusste Grenzen: Der Generator benennt Hooks nur je Event, ein neuer Guard unter einem bestehenden Event verlangt keine neue Zeile;
@@ -32,8 +33,8 @@ import { QUELL_VERZEICHNIS, ZEIGER_MARKE } from "../../scripts/skill-pfade.mjs";
 
 const WURZEL = process.cwd();
 const SEITE = "docs/harness-inventar.md";
-const WERKZEUGE = ["Claude Code", "Langfuse", "PixelLab", "Playwright", "GitHub"] as const;
-const MARKER = /^- Geprüft bis (Claude Code|Langfuse|PixelLab|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
+const WERKZEUGE = ["Claude Code", "Langfuse", "Playwright", "GitHub"] as const;
+const MARKER = /^- Geprüft bis (Claude Code|Langfuse|Playwright|GitHub) (v?\d+\.\d+\.\d+|\d{4}-\d{2}-\d{2})$/gm;
 const KOPF = "| Eigenbau | Zweck | Natives Gegenstück (Doku-Link, ab Version) | Urteil | Projektunabhängig |";
 const URTEIL = /^(behalten|ersetzen|beobachten)(:|$)/;
 const UNABHAENGIG = /^(ja|nein|teilweise|Modul|Oberfläche)(:|$)/;
