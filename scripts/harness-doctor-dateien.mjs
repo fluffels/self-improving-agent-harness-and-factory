@@ -174,7 +174,7 @@ const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync`, siehe Schr
 /** Das Repo, dessen Issues das Factory-Board der Config führt, wenn es nicht das eigene ist (sonst null; ohne Config oder Board ebenfalls null). */
 function fremdesFactoryRepo(config) {
   const repo = config?.boards?.find?.((b) => b?.rolle === "factory")?.repo;
-  return typeof repo === "string" && !gleichesRepo(repo, config?.repo) ? repo : null;
+  return typeof repo === "string" && !gleichesRepo(repo, config.repo) ? repo : null;
 }
 
 /**

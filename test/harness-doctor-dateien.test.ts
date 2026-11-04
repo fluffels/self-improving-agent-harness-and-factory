@@ -250,6 +250,12 @@ describe("Langfuse-Takt", () => {
     expect(p.fix).toContain("kern-nach-entkopplung");
   });
 
+  test("ein Nulleintrag in boards und eine Config ohne Factory-Board brechen den Punkt nicht", () => {
+    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] }).ok).toBe(true);
+    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] })).toHaveProperty("hinweis");
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
   test("Factory-Board führt ein fremdes Repo: OK mit Hinweis, der Takt dort pflegt Status- und Sammelticket", () => {
     const fremd = { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] };
     const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };
