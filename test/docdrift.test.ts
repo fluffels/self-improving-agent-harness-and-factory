@@ -56,6 +56,7 @@ const auditDocDrift: () => {
   deadAnchors: { file: string; target: string; resolved: string; anchor: string }[];
   verifyChainViolations: { file: string; chain: string[]; missing: string[] }[];
   testPfadFehler: unknown[];
+  abschnittFehler: unknown[];
 } = checkDocDrift.auditDocDrift;
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
@@ -128,6 +129,10 @@ describe("Harness-Doku-Drift (#529)", () => {
 
   test("keine toten Test-Pfade in der Doku (#97)", () => {
     assert.deepEqual(audit.testPfadFehler, []);
+  });
+
+  test("keine toten Abschnittsverweise in Doku und Skripten (factory#157)", () => {
+    assert.deepEqual(audit.abschnittFehler, []);
   });
 
   // ── Red-Green: die Mechanik greift wirklich (ein immer-grüner Wächter wäre wertlos) ──
@@ -704,5 +709,168 @@ describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz 
     for (const kaputt of [{ ring: "kern" }, { pfad: 5, ring: "kern" }, null]) {
       assert.equal(fixture({ ...STAND, ...manifest([kern, kaputt]), "docs/a.md": verweis }).length, 1);
     }
+  });
+});
+
+// Abschnittsverweise (factory#157): `<datei>.md › <Abschnitt>` und `<datei>.md § <Abschnitt>`.
+describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
+  type Verweis = { pfad: string; trenner: string; segmente: string[]; index: number };
+  const api = checkDocDrift as unknown as {
+    abschnittVerweise: (text: string, opt?: { istMarkdown?: boolean }) => Verweis[];
+    abschnittTitel: (md: string) => string[][];
+    abschnittTrifft: (segment: string, titel: string[][]) => boolean;
+    auditDocDrift: (root: string) => { abschnittFehler: { file: string; art: string; pfad: string; segment: string }[] };
+  };
+
+  test("Extraktion: Muster (a) ›, (b) § auch ohne Leerzeichen, (c) Kette", () => {
+    const v = api.abschnittVerweise("Siehe docs/a.md › Eins › Zwei und AGENTS.md § Regel.\nUnd docs/b.md §2a Kopf");
+    assert.deepEqual(v.map((x) => [x.pfad, x.trenner, x.segmente]), [
+      ["docs/a.md", "›", ["Eins", "Zwei und AGENTS.md § Regel."]],
+      ["docs/b.md", "§", ["2a Kopf"]],
+    ]);
+  });
+
+  test("Extraktion: Platzhalter, `<datei>.md`, leere Segmente und Inline-Code (nur Markdown) entfallen", () => {
+    assert.deepEqual(api.abschnittVerweise("AGENTS.md § <Titel>\nund <datei>.md › X\ndocs/a.md › `Code`"), []);
+    assert.equal(api.abschnittVerweise("`docs/a.md › X` und docs/b.md › Y", { istMarkdown: true }).length, 1);
+    assert.equal(api.abschnittVerweise("`docs/a.md › X` und docs/b.md › Y", { istMarkdown: false }).length, 2);
+    assert.deepEqual(api.abschnittVerweise("docs/a.md › Name `kein Teil`", { istMarkdown: true })[0].segmente, ["Name"]);
+  });
+
+  test("Abschnitte: Überschrift, Fettdruck-Anfang, Nummer optional, Herkunft entfernt, Fences ignoriert", () => {
+    const md = "# T\n## 3a. Langfassung (#12)\n- **Befunde sofort festhalten.** Text\n```\n## Im Code\n```\n";
+    const titel = api.abschnittTitel(md);
+    assert.ok(api.abschnittTrifft("Langfassung", titel));
+    assert.ok(api.abschnittTrifft("3a. Langfassung", titel));
+    assert.ok(api.abschnittTrifft("Befunde sofort festhalten", titel));
+    assert.ok(!api.abschnittTrifft("Im Code", titel));
+  });
+
+  test("Trefferregel: Satzzeichen und Klammern beenden den Namen, Prosa direkt dahinter ist rot", () => {
+    const titel = api.abschnittTitel("## Tag-Takt (factory#103)\n- **Harness-Befunde sind Zeilen, keine Tickets (quellprojekt#1199).** x\n- **Befunde sofort festhalten.** x\n");
+    assert.ok(api.abschnittTrifft("Tag-Takt (#103).", titel));
+    assert.ok(api.abschnittTrifft("Harness-Befunde)", titel));
+    assert.ok(api.abschnittTrifft("Harness-Befunde sind Zeilen, keine Tickets", titel));
+    assert.ok(!api.abschnittTrifft("Konventionen", titel));
+    assert.ok(!api.abschnittTrifft("Git-Workflow): z.B.", titel));
+    assert.ok(!api.abschnittTrifft("Befunde fehlen hier", titel));
+  });
+
+  const fixture = (dateien: Record<string, string>, entfernen: string[] = []): { file: string; art: string; pfad: string; segment: string }[] => {
+    const dir = mkdtempSync(join(tmpdir(), "docdrift-abschnitt-"));
+    try {
+      const alle = { "package.json": JSON.stringify({ scripts: {} }), "AGENTS.md": "# Titel\n\n- **Regel.** Text\n", ...dateien };
+      for (const [f, text] of Object.entries(alle)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      for (const f of entfernen) rmSync(join(dir, f));
+      return api.auditDocDrift(dir).abschnittFehler;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const QUELLEN = { "docs/y.md": "# Y\nSiehe docs/x.md › Secret-Inbox.\n", "scripts/a.mjs": '// AGENTS.md § Regel\nexport const T = "docs/x.md › Secret-Inbox";\n' };
+
+  test("Negativfall: ein Anker-Stub, den nur ein Textverweis hält, lässt sich nicht unbemerkt entfernen", () => {
+    assert.deepEqual(fixture({ "docs/x.md": "# X\n## Secret-Inbox\n", ...QUELLEN }), []);
+    const rot = fixture({ "docs/x.md": "# X\n", ...QUELLEN });
+    assert.deepEqual(rot.map((f) => [f.file, f.art, f.segment]), [
+      ["docs/y.md", "abschnitt", "Secret-Inbox."],
+      ["scripts/a.mjs", "abschnitt", "Secret-Inbox"],
+    ]);
+  });
+
+  test("AGENTS.md § <Abschnitt> in Skript und Doku: toter Abschnitt rot, vorhandener grün", () => {
+    const f = fixture({ "docs/x.md": "# X\n## Secret-Inbox\n", "scripts/a.mjs": "// AGENTS.md § Gibts nicht\n", "docs/y.md": "AGENTS.md § Regel\n" });
+    assert.deepEqual(f.map((x) => [x.file, x.segment]), [["scripts/a.mjs", "Gibts nicht"]]);
+  });
+
+  test("Ziel fehlt: rot (art ziel), relativ zur verweisenden Datei aufgelöst; ADR und datierte Dateien übersprungen", () => {
+    assert.deepEqual(fixture({ "docs/y.md": "docs/weg.md › X\n" }).map((x) => x.art), ["ziel"]);
+    assert.deepEqual(fixture({ "docs/y.md": "[x](x.md) und x.md › Eins\n", "docs/x.md": "# Eins\n" }), []);
+    assert.deepEqual(fixture({ "docs/adr/0001-a.md": "docs/weg.md › X\n", "docs/n-2026-01-02.md": "docs/weg.md › X\n" }), []);
+  });
+
+  test("Fettdruck zählt nur am Zeilen-/Listenanfang, nicht mitten im Text", () => {
+    assert.ok(!api.abschnittTrifft("Secret-Inbox", api.abschnittTitel("Text mit **Secret-Inbox** mittendrin\n")));
+    for (const praefix of ["", "> ", "* ", "+ ", "- ", "1. "]) assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel(`${praefix}**Foo Bar** Text\n`)), praefix);
+  });
+
+  test("Überschriften: 1 bis 6 Rauten mit Leerzeichen; sieben Rauten und `#hashtag` sind keine", () => {
+    assert.deepEqual(api.abschnittTitel("####### X\n#hashtag\n"), []);
+    assert.deepEqual(api.abschnittTitel("###### X\n"), [["x"]]);
+  });
+
+  test("Titel ohne Wörter (Emoji-Überschrift) lässt keinen Verweis durch", () => {
+    assert.ok(!api.abschnittTrifft("Gibts nicht", api.abschnittTitel("## 🚀\n")));
+  });
+
+  test("Nummer fällt nur bei Überschriften weg, nicht bei Fettdruck", () => {
+    assert.ok(!api.abschnittTrifft("Wochen", api.abschnittTitel("- **2. Wochen Frist** x\n")));
+    assert.ok(api.abschnittTrifft("Wochen", api.abschnittTitel("## 2. Wochen Frist\n")));
+  });
+
+  test("Normalisierung: Herkunftsklammer, Link-Syntax und ASCII-Strich im Titel fallen weg", () => {
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## Foo (#1) Bar\n")));
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## [Foo](x.md) Bar\n")));
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## Foo - Bar\n")));
+  });
+
+  test("Trefferregel: jedes weiche Satzzeichen beendet den Namen, das Fenster ist genau zwei Wörter", () => {
+    const titel = api.abschnittTitel("## Erstes Zweites Drittes\n## Befunde sofort festhalten\n");
+    for (const z of [".", ",", ";", ":", "(", ")", "!", "?"]) assert.ok(api.abschnittTrifft(`Erstes${z} Prosa weiter`, titel), z);
+    assert.ok(!api.abschnittTrifft("Erstes Prosa weiter", titel));
+    assert.ok(api.abschnittTrifft("Befunde sofort melden", titel));
+  });
+
+  test("Extraktion: Stoppzeichen und Inline-Code beenden den Abschnittstext", () => {
+    for (const z of ["|", "]", "„", "“", "”", '"', "`"]) assert.deepEqual(api.abschnittVerweise(`docs/a.md › A${z} B`)[0].segmente, ["A"], z);
+    assert.deepEqual(api.abschnittVerweise("docs/a.md › Name `x` und mehr", { istMarkdown: true })[0].segmente, ["Name"]);
+  });
+
+  test("Kette im Audit: jedes Segment wird geprüft, nicht nur das erste", () => {
+    const f = fixture({ "docs/x.md": "# X\n## Secret-Inbox\n", "docs/y.md": "docs/x.md › Secret-Inbox › Gibts nicht\n" });
+    assert.deepEqual(f.map((x) => x.segment), ["Gibts nicht"]);
+  });
+
+  test("Scan-Umfang: Skripte in Unterordnern und als .cjs/.js, nicht unter node_modules", () => {
+    const verweis = "// docs/x.md › Gibts nicht\n";
+    const f = fixture({ "docs/x.md": "# X\n", "scripts/sub/b.mjs": verweis, "scripts/c.cjs": verweis, "scripts/d.js": verweis, "scripts/e.txt": verweis, "scripts/node_modules/f.mjs": verweis });
+    assert.deepEqual(f.map((x) => x.file).sort(), ["scripts/c.cjs", "scripts/d.js", "scripts/sub/b.mjs"]);
+  });
+
+  describe("Bezieher (Sync-Stand und Manifest)", () => {
+    const STAND = { ".factory/sync-stand.json": "{}" };
+    const manifest = (pfade: string[]): Record<string, string> => ({ ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: pfade.map((pfad) => ({ pfad, ring: "kern" })) }) });
+
+    test("Block-Einheit: fehlendes Ziel schont nur Verweise innerhalb des Blocks (beide Grenzen)", () => {
+      const agents = (vor: string, innen: string, nach: string): string => `# T\n${vor}${markerStart("kern")}\n${innen}${markerEnde("kern")}\n${nach}`;
+      const verweis = "docs/weg.md › X\n";
+      const block = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }] }) };
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents("", verweis, "") }), []);
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents(verweis, "x\n", "") }).map((x) => x.art), ["ziel"]);
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents("", "x\n", verweis) }).map((x) => x.art), ["ziel"]);
+    });
+
+    test("Factory-Repo (ohne Sync-Stand): fehlendes Ziel aus Skript mit Besitz-Eintrag bleibt rot", () => {
+      assert.deepEqual(fixture({ ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/weg.md › X\n" }).map((x) => x.art), ["ziel"]);
+    });
+
+    test("fehlendes Ziel, das selbst Besitz ist (kaputter Sync), bleibt rot", () => {
+      const f = fixture({ ...STAND, ...manifest(["scripts/a.mjs", "docs/weg.md"]), "scripts/a.mjs": "// docs/weg.md › X\n" });
+      assert.deepEqual(f.map((x) => x.art), ["ziel"]);
+    });
+
+    test("fehlendes Ziel aus verteiltem Besitz-Text ist still, aus Projekt-Text rot", () => {
+      const f = fixture({ ...STAND, ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/weg.md › X\n", "scripts/projekt.mjs": "// docs/weg.md › X\n" });
+      assert.deepEqual(f.map((x) => [x.file, x.art]), [["scripts/projekt.mjs", "ziel"]]);
+    });
+
+    test("Negativfall im Bezieher: existiert das Ziel (Anker-Stub), wird sein Abschnitt weiter geprüft", () => {
+      const dateien = { ...STAND, ...manifest(["scripts/a.mjs", "docs/x.md"]), "scripts/a.mjs": "// docs/x.md › Secret-Inbox\n" };
+      assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n## Secret-Inbox\n" }), []);
+      assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n" }).map((x) => x.art), ["abschnitt"]);
+    });
   });
 });
