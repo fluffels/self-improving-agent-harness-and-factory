@@ -101,6 +101,18 @@ describe("befehlsform", () => {
   test("ein reines Env-Segment ist neutral", () => {
     expect(gf.befehlsform("FOO=1 && npm run lint")).toEqual({ art: "ok", aufrufe: 1 });
   });
+  test("ein Env-Segment mit mehreren Zuweisungen ist neutral", () => {
+    expect(gf.befehlsform("A=1 B=2 && npm run lint")).toEqual({ art: "ok", aufrufe: 1 });
+  });
+  test("Env-Präfix vor einem Fremdbefehl bleibt fremd, Env-Präfix vor einem Gate zählt", () => {
+    expect(gf.befehlsform("FOO=1 git push && npm run lint")).toEqual({ art: "befehlsform", aufrufe: 1 });
+    expect(gf.befehlsform("FOO=1 npm run lint").aufrufe).toBe(1);
+  });
+  test("viele Zuweisungen mit Fremdzeichen laufen linear (kein ReDoS)", () => {
+    const t0 = Date.now();
+    expect(gf.befehlsform("A=".repeat(50000) + " !").art).toBe("befehlsform");
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
 });
 
 describe("Kopfzeilen im Transkript", () => {
