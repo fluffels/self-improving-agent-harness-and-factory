@@ -450,7 +450,7 @@ describe("planeAnkerStubs (pur, factory#167)", () => {
     assert.ok(mdLib.collectHeadingSlugs(e.r.dateien.get("docs/s.md") ?? "").includes("drei"));
     const nur = stubs(kern(""), { "docs/s.md": SEITE });
     assert.equal(nur.r.dateien.get("docs/s.md")?.split("\n").filter((z) => z.startsWith("#")).join("|"), "# Titel Code");
-    assert.deepEqual([nur.r.ueberschriften, nur.r.links], [1, 1]);
+    assert.deepEqual([nur.r.ueberschriften, nur.r.links, nur.r.hinweise], [1, 1, []]);
     assert.equal(mdLib.linkStellen(nur.r.dateien.get("docs/s.md") ?? "").length, 0);
     assert.equal((nur.r.dateien.get("docs/s.md") ?? "").split("](https://").length - 1, 1);
   });

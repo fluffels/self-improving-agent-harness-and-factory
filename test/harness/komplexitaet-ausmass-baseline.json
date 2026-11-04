@@ -71,7 +71,7 @@
     "complexity": 2
   },
   "scripts/factory-sync.mjs": {
-    "complexity": 34
+    "complexity": 32
   },
   "scripts/flag-lib.mjs": {
     "complexity": 7
