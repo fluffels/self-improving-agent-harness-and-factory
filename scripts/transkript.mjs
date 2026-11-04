@@ -32,8 +32,9 @@ export function letzteErgebnisNachricht(zeilen) {
   const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
   for (let i = zeilen.length - 1; i >= 0; i--) {
     const msg = zeilen[i]?.message ?? zeilen[i];
-    if ((msg?.role === "user" || zeilen[i]?.type === "user") && istTextNachricht(msg)) return null;
-    if (msg?.role !== "assistant" && zeilen[i]?.type !== "assistant") continue;
+    const rolle = msg?.role ?? zeilen[i]?.type;
+    if (rolle === "user" && istTextNachricht(msg)) return null;
+    if (rolle !== "assistant") continue;
     const kandidaten = berichtKandidaten(msg?.content);
     for (let j = kandidaten.length - 1; j >= 0; j--) if (hatErgebnis(kandidaten[j])) return kandidaten[j];
   }
