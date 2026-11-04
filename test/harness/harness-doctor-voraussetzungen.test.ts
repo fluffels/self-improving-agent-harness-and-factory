@@ -26,6 +26,8 @@ import { FREMD } from "../support/fremd-config";
 import * as rawDoctor from "../../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { OPTIONALE_LABELS } from "../../scripts/projekt-config-lib.mjs";
 
 const lib = rawLib as unknown as { istWorkflowEinheit: (e: { pfad: string; block?: string; schluessel?: string }) => boolean };
 
@@ -178,7 +180,7 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
   test("jeder gelesene Label-Schlüssel existiert in der Config", () => {
     const gelesen = skripte.flatMap((s) => gelesenerSchluessel(s.text));
     assert.ok(gelesen.length > 0, "Scanner fand keinen Schlüssel: vakuös");
-    for (const k of gelesen) assert.ok(Object.hasOwn(config.labels, k), `labels.${k} wird gelesen, fehlt aber in .factory/projekt.json`);
+    for (const k of gelesen.filter((s) => !(OPTIONALE_LABELS as string[]).includes(s))) assert.ok(Object.hasOwn(config.labels, k), `labels.${k} wird gelesen, fehlt aber in .factory/projekt.json`);
   });
 
   test("jedes Project-Feld der Config, das ein Skript liest, ist ein Prüfpunkt (rolle: intern, keine GitHub-Voraussetzung)", () => {

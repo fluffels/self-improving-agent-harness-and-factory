@@ -37,6 +37,8 @@ describe("parseArgs", () => {
     expect(A.parseArgs(["--dry-run", "harness", "--vorgaenger", "7"])).toMatchObject({ vorgaenger: 7, dry: true });
     expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false });
     expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true });
+    expect(A.parseArgs(["codequalitaet"])).toEqual({ art: "codequalitaet", vorgaenger: null, top: false, dry: false });
+    expect(A.parseArgs(["codequalitaet", "--vorgaenger", "5", "--dry-run"])).toEqual({ art: "codequalitaet", vorgaenger: 5, top: false, dry: true });
   });
 
   test("Inline-Wert --vorgaenger=7 wird angenommen (node:util)", () => {
@@ -44,13 +46,23 @@ describe("parseArgs", () => {
   });
 
   test("falsche Benutzung → null", () => {
-    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"], ["harness", "--dry-run", "--dry-run"], ["harness", "--vorgaenger", "5", "--vorgaenger", "6"], ["--vorgaenger", "5", "harness"], ["harness", "--"], ["harness", "--vorgaenger", "--dry-run"], ["harness", "--vorgaenger="]]) {
+    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"], ["harness", "--dry-run", "--dry-run"], ["harness", "--vorgaenger", "5", "--vorgaenger", "6"], ["--vorgaenger", "5", "harness"], ["harness", "--"], ["harness", "--vorgaenger", "--dry-run"], ["harness", "--vorgaenger="], ["codequalitaet", "--top"], ["codequalitaet", "--vorgaenger", "abc"], ["codequalitaet", "--vorgaenger", "5", "x"]]) {
       expect(A.parseArgs(bad), bad.join(" ")).toBeNull();
     }
   });
 });
 
 describe("sammelticketBody", () => {
+  test("factory#156: Codequalität-Vorlage nennt „außerhalb des Slices“, Kommentar-Hinweis und bei offenem Vorgänger die Blocker-Zeile", () => {
+    const b = A.sammelticketBody({ art: "codequalitaet" });
+    expect(b).toContain("außerhalb des Slices");
+    expect(b).toContain("`- [ ] …`");
+    expect(b).not.toMatch(/Harness-Befunde|blockiert durch|Nachfolger/);
+    const m = A.sammelticketBody({ art: "codequalitaet", vorgaenger: 9, vorgaengerZustand: "offen", blocker: BL });
+    expect(m).toContain("Nachfolger von #9.");
+    expect(m).toContain(`${BL} #9`);
+  });
+
   test("Vorlage ohne Vorgänger: Zeile mit Kommentar-Hinweis, keine Blocker-Zeile", () => {
     const b = A.sammelticketBody({ art: "harness" });
     expect(b).toContain("Sammelticket für Harness-Befunde");
@@ -384,9 +396,42 @@ describe("setzeUndPruefe: das Board kommt als Parameter (L24)", () => {
     expect(geladen).toBe(0);
   });
 
-  test("Verdrahtung: der Aufruf in main übergibt das Factory-Board", () => {
+  test("Verdrahtung: der Aufruf in main übergibt das Ziel-Board (Factory- oder Produkt-Board je Art)", () => {
     const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
-    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*FACTORY_BOARD[^}]*repo/);
+    expect(skript).toMatch(/setzeUndPruefe\(\{[^}]*board:\s*board\b[^}]*repo/);
+  });
+});
+
+describe("sammelLabel, codequalitaetPlan und main (factory#156)", () => {
+  const X = raw as unknown as {
+    sammelLabel: (c: unknown, art: string) => string | null;
+    codequalitaetPlan: (items: unknown[], nr: number) => { steps: { item: { number: number }; afterId: string | null }[] };
+    main: (argv: string[], deps: object) => Promise<void>;
+  };
+  const mitCq = (l: unknown) => ({ ...FREMD, labels: { ...FREMD.labels, ...(l === undefined ? {} : { codequalitaet: l }) } });
+  test("harness und langfuse tragen labels.harness, codequalitaet das eigene Label, fehlend oder leer ist null", () => {
+    expect(X.sammelLabel(FREMD, "harness")).toBe(FREMD.labels.harness);
+    expect(X.sammelLabel(FREMD, "langfuse")).toBe(FREMD.labels.harness);
+    expect(X.sammelLabel(mitCq("area:code"), "codequalitaet")).toBe("area:code");
+    expect(X.sammelLabel(FREMD, "codequalitaet")).toBeNull();
+    expect(X.sammelLabel(mitCq(""), "codequalitaet")).toBeNull();
+    expect(X.sammelLabel(mitCq("  "), "codequalitaet")).toBeNull();
+  });
+  test("Platzierung: hinter dem Kopf (Status-Ticket) und vor dem Rest; mit Sammelblock dahinter, ohne Kopf an der Spitze", () => {
+    const b = (number: number, title: string, extra: object = {}) => ({ id: `I${number}`, number, status: "Todo", title, assignees: [], state: "open", ...extra });
+    const nachKopf = [b(1, "Langfuse-Status überprüfen"), b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
+    expect(X.codequalitaetPlan(nachKopf, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, "I1"]]);
+    const mitBlock = [b(1, "Langfuse-Status überprüfen"), b(4, "Harness-Härtung (gesammelt)"), b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
+    expect(X.codequalitaetPlan(mitBlock, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, "I4"]]);
+    const ohneKopf = [b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
+    expect(X.codequalitaetPlan(ohneKopf, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, null]]);
+  });
+  test("Negativfall: ohne labels.codequalitaet wird nichts angelegt, kein Kontingent-, kein gh-Aufruf, kein Wurf", async () => {
+    const log: string[] = [];
+    await X.main(["codequalitaet"], { ladeConfig: () => FREMD, log: (z: string) => log.push(z), kontingent: () => { throw new Error("darf nicht laufen"); } });
+    expect(log.join("\n")).toMatch(/labels\.codequalitaet .*nicht gesetzt.*nichts angelegt/);
+    await X.main(["codequalitaet", "--dry-run"], { ladeConfig: () => mitCq(""), log: (z: string) => log.push(z), kontingent: () => { throw new Error("darf nicht laufen"); } });
+    expect(log).toHaveLength(2);
   });
 });
 
@@ -397,6 +442,11 @@ describe("sammelZiel (#76, ADR 0022 F10): das Sammelticket liegt im Repo, das da
     const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
     expect(S(fremd)).toEqual({ rolle: "factory", repo: FABRIK, owner: "zz-org" });
     expect(S(FREMD)).toEqual({ rolle: "factory", repo: FREMD.repo, owner: FREMD.repo.split("/")[0] });
+  });
+  test("factory#156: mit dem Codequalität-Label liegt das Ticket auf dem Produkt-Board des eigenen Repos, nie auf dem Factory-Board", () => {
+    const S2 = (raw as unknown as { sammelZiel: (c: unknown, l: string) => { rolle: string; repo: string; owner: string } }).sammelZiel;
+    const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+    expect(S2(fremd, "area:code")).toEqual({ rolle: "produkt", repo: FREMD.repo, owner: FREMD.repo.split("/")[0] });
   });
   test("setzeUndPruefe ohne repo wirft vor dem ersten Laden", async () => {
     const wirft = (raw as unknown as { setzeUndPruefe: (a: object, io: object) => Promise<string> }).setzeUndPruefe;
