@@ -11,7 +11,7 @@ import { fixture } from "./support/tmp-fixture";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown }) => Ergebnis[];
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
 const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
@@ -32,15 +32,16 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
     throw new Error(`unerwarteter Git-Aufruf: ${args.join(" ")}`);
   };
 }
+const TAKT_DATEIEN = [".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"];
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) });
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
-  test("ohne blockierende Datei: OK, und alle drei Punkte stehen immer da", () => {
+  test("ohne blockierende Datei: OK, und alle vier Punkte stehen immer da", () => {
     const e = lauf(gesund);
-    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt"]);
     expect(e.every((p) => p.ok)).toBe(true);
   });
 
@@ -228,5 +229,31 @@ describe("Projektdateien (factory#170)", () => {
     const p = projektPunkt(() => false);
     expect(p.fix).toContain("npm run skills:sync");
     expect(p.fix).toContain("npm run lint:prune");
+  });
+});
+
+describe("Langfuse-Takt (SIH-189)", () => {
+  const takt = (existiert: (p: string) => boolean, config?: unknown) => punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert, config }), "Langfuse-Takt");
+  const norm = (p: string) => p.replaceAll("\\", "/");
+  const ohneDatei = (fehlend: string) => (p: string) => norm(p) !== `/x/${fehlend}`;
+
+  test("beide Dateien vorhanden: OK, ohne Hinweis bei eigenem Board", () => {
+    const eigen = { repo: "a/b", boards: [{ rolle: "factory" }] };
+    expect(takt(() => true, eigen)).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test.each(TAKT_DATEIEN)("fehlt %s: Lücke mit Fix auf den Sync (Ring kern-nach-entkopplung)", (datei) => {
+    const p = takt(ohneDatei(datei));
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain(datei);
+    expect(p.fix).toContain("factory:sync");
+    expect(p.fix).toContain("kern-nach-entkopplung");
+  });
+
+  test("Factory-Board führt ein fremdes Repo: OK mit Hinweis, der Takt dort pflegt Status- und Sammelticket", () => {
+    const fremd = { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] };
+    const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };
+    expect(p.ok).toBe(true);
+    expect(p.hinweis).toContain("c/d");
   });
 });

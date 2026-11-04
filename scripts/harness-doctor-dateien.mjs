@@ -1,4 +1,4 @@
-/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): drei Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
+/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): vier Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
@@ -8,6 +8,8 @@
  *   `Projektdateien` (factory#170): jede Datei der geschlossenen Liste `PROJEKTDATEIEN` (vom Sync nicht geliefert, aber von einem Gate oder Kern-Skript unter festem Pfad gebraucht)
  *   existiert; geprüft wird nur das Vorhandensein (eine leere Datei zählt), nie der Inhalt. Der Fix nennt einmal die Vorlage aus der Quelle und je fehlender Datei mit Besonderheit deren Zusatz.
  *
+ *   `Langfuse-Takt` (SIH-189): `.github/workflows/board-takt.yml` und `scripts/langfuse-takt.mjs` existieren (Ring kern-nach-entkopplung kommt per Sync); Hinweis, wenn das Factory-Board ein fremdes Repo führt.
+ *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
@@ -16,7 +18,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
-import { PROJEKT_CONFIG, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Memory-Dateien im Root, deren Existenz das native Laden von AGENTS.md abschaltet; `~/.claude/CLAUDE.md` und Unterordner zählen nicht. */
@@ -163,7 +166,38 @@ export function projektdateienPunkt(rootDir, existiert) {
   return luecke("Projektdateien", `fehlen ${fehlt.length}: ${fehlt.map((d) => d.pfad).join(", ")}`, [VORLAGE_FIX, ...fehlt.filter((d) => d.fix).map((d) => `${d.pfad}: ${d.fix}`)].join("; "));
 }
 
-/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien]`, immer alle drei, nie weniger. */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync }) {
-  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert)];
+/** Dateien des Langfuse-Takts: der Workflow (Ring `kern-nach-entkopplung`) und das Skript; ohne sie läuft weder Status-Ticket noch Sammelticket „Langfuse-Befunde (gesammelt)“. */
+export const LANGFUSE_TAKT_DATEIEN = Object.freeze([".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"]);
+
+const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync`, siehe Schritt 4 in docs/erstbezug.md): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung des Besitz-Manifests (.factory/besitz.json) und gehört damit zum Besitz, den jeder Bezieher bekommt";
+
+/** Das Repo, dessen Issues das Factory-Board der Config führt, wenn es nicht das eigene ist (sonst null; ohne Config oder Board ebenfalls null). */
+function fremdesFactoryRepo(config) {
+  const repo = config?.boards?.find?.((b) => b?.rolle === "factory")?.repo;
+  return typeof repo === "string" && !gleichesRepo(repo, config?.repo) ? repo : null;
+}
+
+/**
+ * Punkt `Langfuse-Takt` (SIH-189): beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
+ * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber als Hinweis, dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs).
+ */
+export function langfuseTaktPunkt(rootDir, existiert, config) {
+  const fehlt = LANGFUSE_TAKT_DATEIEN.filter((d) => !existiert(join(rootDir, d)));
+  if (fehlt.length > 0) return luecke("Langfuse-Takt", `fehlen ${fehlt.length}: ${fehlt.join(", ")}`, TAKT_FIX);
+  const fremd = fremdesFactoryRepo(config);
+  return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter`);
+}
+
+/** Die Config für den Langfuse-Takt-Punkt: ungeprüft gelesen, bei Fehler null (der Punkt braucht sie nur für den Hinweis). */
+function configOderNull(rootDir) {
+  try {
+    return ladeProjektConfig({ rootDir, pruefen: false });
+  } catch {
+    return null;
+  }
+}
+
+/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien, Langfuse-Takt]`, immer alle vier, nie weniger. */
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir) }) {
+  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert), langfuseTaktPunkt(rootDir, existiert, config)];
 }
