@@ -70,7 +70,7 @@ const KOMPAKT_AUFRUF = /verify:kompakt|verify:changed|gate-befehl\.mjs\s+verify(
 
 function segmentArt(seg) {
   const t = seg.trim();
-  if (/^cd\s+\S+$/.test(t) || /^(?:[A-Za-z_]\w*=\S*\s*)+$/.test(t)) return "neutral";
+  if (/^cd\s+\S+$/.test(t) || /^(?:[A-Za-z_]\w*=\S*\s+)*[A-Za-z_]\w*=\S*$/.test(t)) return "neutral";
   const ohneEnv = t.replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, "");
   if (/--zeigen/.test(ohneEnv)) return "fremd";
   return AUFRUFE.some((re) => re.test(ohneEnv)) ? "aufruf" : "fremd";
