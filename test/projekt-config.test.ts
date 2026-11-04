@@ -1021,6 +1021,14 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
     }
     for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
   });
+  test("struktur.quelle als Liste samt endungen und ohne ist gültig (factory#181); strukturAus nennt die Listenform als noch nicht unterstützt", () => {
+    const s = { quelle: ["a/src", "*/src/main/java"], moduldoku: "docs/module", endungen: [".java", ".ts"], ohne: ["**/*.spec.ts"] };
+    assert.deepEqual(mit(s), []);
+    assert.throws(() => pc.strukturAus({ struktur: s }), /noch nicht unterstützt[\s\S]*Fix:/);
+    assert.match(mit({ ...s, endungen: ["java"] }).join("|"), /struktur\.endungen\[0\]/);
+    assert.match(mit({ ...s, quelle: ["a/../b"] }).join("|"), /struktur\.quelle\[0\]/);
+    for (const m of ["docs/*", "docs/modul?"]) assert.match(mit({ ...s, moduldoku: m }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/, m);
+  });
 });
 
 describe("struktur.escapeKopien als Projektwert (#1934)", () => {
