@@ -479,9 +479,10 @@ describe("Projektliste (factory#169)", () => {
 
   test("--text prüft die Projekt-namen als Wortstamm", () => {
     const w = wurzelMit({ namen: [kod(DUMMY)] });
+    const out: string[] = [];
     const err: string[] = [];
-    assert.equal(main(["--text"], { wurzel: w, stdin: () => `${DUMMY}s`, out: () => undefined, err: (m) => err.push(m) }), 1);
-    assert.ok(!err.join("\n").includes(DUMMY));
+    assert.equal(main(["--text"], { wurzel: w, stdin: () => `${DUMMY}s`, out: (m) => out.push(m), err: (m) => err.push(m) }), 1);
+    assert.ok(!(out.join("\n") + err.join("\n")).includes(DUMMY));
   });
 
   test("--text prüft Kern- plus Projektliste", () => {
@@ -560,10 +561,13 @@ describe("Projektliste (factory#169)", () => {
     const w = wurzelMit(undefined);
     assert.equal(addProjektTerm("  ", w, "begriffe").ok, false);
     assert.equal(addProjektTerm(DUMMY, join(w, "gibt-es-nicht"), "begriffe").ok, false);
-    const leer = tempOrdner("ir-null-");
-    mkdirSync(join(leer, ".factory"));
-    writeFileSync(join(leer, ".factory", "projekt.json"), "null");
-    assert.equal(addProjektTerm(DUMMY, leer, "begriffe").ok, false);
+    for (const inhalt of ["null", "5", "[]"]) {
+      const leer = tempOrdner("ir-null-");
+      mkdirSync(join(leer, ".factory"));
+      writeFileSync(join(leer, ".factory", "projekt.json"), inhalt);
+      assert.equal(addProjektTerm(DUMMY, leer, "begriffe").ok, false);
+      assert.equal(configText(leer), inhalt, "nichts geschrieben");
+    }
     writeFileSync(join(w, SYNC), "{");
     assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
     assert.match(configText(w), /"internalrefs"/);

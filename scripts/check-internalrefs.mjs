@@ -226,7 +226,7 @@ export function addProjektTerm(term, wurzel, schluessel) {
   } catch {
     return { ok: false, reason: `${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON` };
   }
-  if (config === null || typeof config !== "object") return { ok: false, reason: `${PROJEKT_CONFIG} ist kein JSON-Objekt` };
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return { ok: false, reason: `${PROJEKT_CONFIG} ist kein JSON-Objekt` };
   const block = config.internalrefs ?? {};
   const mangel = internalrefsMaengel(block);
   if (mangel.length > 0) return { ok: false, reason: `Block internalrefs ist ungültig (${mangel.join("; ")})` };
