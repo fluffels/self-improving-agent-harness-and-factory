@@ -18,7 +18,7 @@ interface Lib {
   meldungsText(zeilen: string[], stand: string | null): string;
   meldestelleToken(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): string | undefined;
   textSauber(text: string, exec?: (...a: unknown[]) => { status: number | null; signal?: string | null; error?: Error }): boolean;
-  bereiteMeldung(zeilen: string[], o?: { pruefe?: (t: string) => boolean; stand?: string | null }): { ok: boolean; text?: string; grund?: string };
+  bereiteMeldung(zeilen: string[], o?: { wurzel?: string; pruefe?: (t: string) => boolean; stand?: string | null }): { ok: boolean; text?: string; grund?: string };
 }
 interface Melden {
   alsListenpunkt(z: string): string;
@@ -111,7 +111,7 @@ describe("bereiteMeldung", () => {
       }
       return w;
     };
-    const mit = (w: string) => (lib.bereiteMeldung as unknown as (z: string[], o: { wurzel: string; pruefe: () => boolean }) => { text: string })(["- [ ] a"], { wurzel: w, pruefe: () => true }).text;
+    const mit = (w: string) => lib.bereiteMeldung(["- [ ] a"], { wurzel: w, pruefe: () => true }).text;
     test("Stand mit Tag und Commit: Fußzeile", () => {
       expect(mit(wurzel('{"quelle":{"tag":"v1.2.3","commit":"abcdef0123"}}'))).toBe("- [ ] a\n\nfactory: v1.2.3 (abcdef0)");
     });
@@ -121,7 +121,7 @@ describe("bereiteMeldung", () => {
     test("unlesbarer Stand: nichts wird gesendet, die Fix-Zeile nennt die Datei, die Sperrprüfung läuft nicht", () => {
       for (const inhalt of ["{", "[]", "null"]) {
         let geprueft = 0;
-        const m = (lib.bereiteMeldung)(["- [ ] a"], { wurzel: wurzel(inhalt), pruefe: () => (geprueft++, true) });
+        const m = lib.bereiteMeldung(["- [ ] a"], { wurzel: wurzel(inhalt), pruefe: () => (geprueft++, true) });
         expect(m.ok, inhalt).toBe(false);
         expect(m.text).toBeUndefined();
         expect(m.grund).toMatch(/\.factory\/sync-stand\.json ist nicht lesbar[\s\S]*Fix:/);
