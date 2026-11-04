@@ -188,16 +188,16 @@ export function spracheAus(config) {
 
 /**
  * Pur: der Block `struktur` der Config (`quelle`: Wurzel des Quellcodes, `moduldoku`: Ordner der Modul-Tiefendocs; beide repo-relativ, POSIX) für die Kern-Checks
- * `check:size` und `check:docmap`; `moduldoku: null` ist der Opt-out für Repos ohne Modul-Tiefendocs (check:docmap entfällt); wirft ohne beide nicht-leeren Strings (kein stiller Standardwert, #1843). Nicht zu verwechseln mit der Quellwurzel der Schichtdaten.
+ * `check:size` und `check:docmap` (Liste nur mit `listeErlaubt`, wie check:docmap); `moduldoku: null` ist der Opt-out für Repos ohne Modul-Tiefendocs (check:docmap entfällt); wirft ohne beide nicht-leeren Strings (kein stiller Standardwert, #1843). Nicht zu verwechseln mit der Quellwurzel der Schichtdaten.
  */
-export function strukturAus(config) {
+export function strukturAus(config, { listeErlaubt = false } = {}) {
   const wert = config?.struktur;
   if (!istObjekt(wert) || !(istText(wert.quelle) || Array.isArray(wert.quelle)) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
     throw new Error(`struktur fehlt oder hat kein gültiges quelle (String oder Liste) und moduldoku (String oder null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
-  if (Array.isArray(wert.quelle)) throw new Error(`struktur.quelle als Liste (mehrere Quellwurzeln) wird von diesem Leser noch nicht unterstützt\nFix: struktur.quelle als einen Pfad schreiben oder auf die Umstellung dieses Lesers warten`);
+  if (!listeErlaubt && Array.isArray(wert.quelle)) throw new Error(`struktur.quelle als Liste (mehrere Quellwurzeln) wird von diesem Leser noch nicht unterstützt\nFix: struktur.quelle als einen Pfad schreiben oder auf die Umstellung dieses Lesers warten`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 
