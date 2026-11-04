@@ -42,7 +42,7 @@ describe("factoryStand und meldungsText (AK2)", () => {
     expect(lib.factoryStand(ok("", ""))).toBe("factory: ohne Tag (unbekannt)");
     expect(lib.factoryStand({ zustand: "ok", stand: { quelle: { tag: null, commit: 5 } } } as unknown as Stand)).toBe("factory: ohne Tag (unbekannt)");
   });
-  test("kein Sync-Stand (Upstream): keine Zeile; kaputter Stand: unbekannt, trotzdem eine Zeile", () => {
+  test("kein Sync-Stand (Upstream): keine Zeile; kaputter Stand (nur die pure Funktion; bereiteMeldung sperrt vorher): unbekannt", () => {
     expect(lib.factoryStand({ zustand: "fehlt", stand: null })).toBeNull();
     expect(lib.factoryStand({ zustand: "kaputt", stand: null })).toBe("factory: unbekannt (Sync-Stand unlesbar)");
   });
@@ -126,7 +126,11 @@ describe("bereiteMeldung", () => {
         expect(m.text).toBeUndefined();
         expect(m.grund).toMatch(/\.factory\/sync-stand\.json ist nicht lesbar[\s\S]*Fix:/);
         expect(geprueft).toBe(0);
+        expect(m.grund).toMatch(/Fix:.*\.factory\/sync-stand\.json/);
       }
+    });
+    test("stand: null (ausdrücklich keine Fußzeile) liest die Datei nicht, auch wenn sie unlesbar wäre", () => {
+      expect(lib.bereiteMeldung(["- [ ] a"], { wurzel: wurzel("{"), stand: null, pruefe: () => true })).toEqual({ ok: true, text: "- [ ] a" });
     });
   });
 });
