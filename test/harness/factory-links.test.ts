@@ -435,6 +435,10 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     const fremd = `# Z\n\n## Abschnitt\n\n[Y](${u("v2", "docs/y.md", "abschnitt")})\n`;
     assert.deepEqual(arten(stubRoot(fremd)), ["stub-link"]);
   });
+  test("Negativfall: ein tree-Link auf dieselbe Stelle ist kein Stub (nur blob zählt)", () => {
+    const baum = `# Z\n\n## Abschnitt\n\nKern: [Z](${u("v2", "docs/z.md", "abschnitt", "tree")})\n`;
+    assert.deepEqual(arten(stubRoot(baum)), ["stub-link"]);
+  });
   test("Negativfall: keine passende Überschrift ist rot (stub-anker); der Anker wird roh verglichen", () => {
     assert.deepEqual(arten(stubRoot(`# Z\n\n## Anders\n\n${stub()}\n`)), ["stub-anker"]);
     assert.deepEqual(arten(stubRoot(gut, { kern: "[Z](docs/z.md#Abschnitt)" })), ["stub-anker"]);
