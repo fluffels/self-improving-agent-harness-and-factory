@@ -260,7 +260,7 @@ describe("Kern-Links (quellprojekt#1860)", () => {
     });
     test("nur der Block zwischen den Markern zählt; Nicht-Markdown, JSON-Schlüssel und fehlende Dateien werden übersprungen", () => {
       const eintraege = [e("docs/blk.md", { block: "k" }), e("docs/skript.mjs"), e("docs/fehlt.md"), e("docs/jsn.md", { schluessel: "s" })];
-      const mitSchluessel = (p: string): string | null => (p === "docs/jsn.md" ? "[x](s.md#nix)" : lies(p));
+      const mitSchluessel = (p: string): string | null => (p === "docs/jsn.md" ? JSON.stringify({ s: "[x](s.md#nix)" }) : lies(p));
       assert.deepEqual(ungedeckteLinks(eintraege, mitSchluessel), []);
       assert.equal(ungedeckteLinks([e("docs/jsn.md")], mitSchluessel).length, 1);
       assert.equal(ungedeckteLinks([e("docs/blk.md", { block: "k" })], (p) => (p === "docs/blk.md" ? (dateien[p] ?? "").replace("s.md#abschnitt", "s.md#nix") : lies(p))).length, 1);
