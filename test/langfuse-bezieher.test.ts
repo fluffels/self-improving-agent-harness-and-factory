@@ -80,7 +80,7 @@ describe("Langfuse-Tickets im Bezieher: ohne Projektwort", () => {
   test("Probe des Prüfers: ein injiziertes Projektliteral wird gefunden, ein Link auf das Factory-Repo nicht", () => {
     const literal = Object.values(projektConfig().projektliterale ?? {})[0] ?? "";
     expect(literal).not.toBe("");
-    expect(treffer(`${status}\nUnser ${literal} läuft`, begriffe).length).toBeGreaterThan(0);
+    expect(treffer(`${statusText()}\nUnser ${literal} läuft`, begriffe).length).toBeGreaterThan(0);
     expect(treffer(`[Seite](https://github.com/x/${literal}/blob/v1/docs/a.md)`, begriffe)).toEqual([]);
   });
 });
