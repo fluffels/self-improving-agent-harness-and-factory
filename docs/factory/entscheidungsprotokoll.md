@@ -16,7 +16,7 @@ Der Hauptchat entscheidet Ermessensfragen **fundiert selbst** und schreibt im PR
    - **A/B**, nur wenn beide Zweige billig und reversibel sind.
    - **Kritischer Gegen-Review durch einen frischen Agenten** bei teuren oder riskanten Weichen.
 4. **Token-Deckel: eine Runde je Methode.** Kein Nachschleifen. Danach wird entschieden und, was offen blieb, als „Bekannte Grenze“ im PR dokumentiert.
-5. **Ratchet in beide Richtungen.** Regeln werden strenger, wo Fehler durchrutschen, und lockerer, wo Prüfungen nachweislich nichts finden (Messung über `lauf-ergebnis`; Lockern ohne Rot nach [ADR 0027](../adr/0027-regeln-lockern.md), nicht nach diesem Protokoll). Ein neues, stärkeres Modell ist ein Anlass, die Überwachungsdichte neu zu messen; die Methoden-Liste wird quartalsweise aktualisiert.
+5. **Ratchet in beide Richtungen.** Regeln werden strenger, wo Fehler durchrutschen, und lockerer, wo Prüfungen nachweislich nichts finden (Messung über `lauf-ergebnis`; Lockern ohne Rot nach ADR 0027, nicht nach diesem Protokoll). Ein neues, stärkeres Modell ist ein Anlass, die Überwachungsdichte neu zu messen; die Methoden-Liste wird quartalsweise aktualisiert.
 
 ## Methoden laufen in Subagenten
 

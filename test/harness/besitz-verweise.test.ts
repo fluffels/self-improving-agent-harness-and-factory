@@ -1,4 +1,4 @@
-/* Besitz-Verweis-Wächter (#101 L25/L28): Verweise aus verteilten Besitz-Einheiten dürfen im Bezieher nicht ins Leere laufen.
+/* Besitz-Verweis-Wächter (quellprojekt#101 L25/L28): Verweise aus verteilten Besitz-Einheiten dürfen im Bezieher nicht ins Leere laufen.
  * Nur im Factory-Repo (`.factory/besitz.json` ist dort die Quelle; wie die anderen Factory-only-Tests).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -6,9 +6,9 @@
  * Geprüft (die Klassen des Probe-Laufs aus L28):
  *  (1) `npm run <x>`: ist `<x>` ein Skript der package.json, das `node|tsx <datei>` ruft, muss `<datei>` Besitz sein (Datei oder unter einem Besitz-Ordner).
  *      Ausnahme `BEZIEHER_VERTRAG` (`setup`, Projekt-Eigentum); Grenze: nur `node|tsx <datei>` im Skriptwert, verkettete Skripte (`npm run a && npm run b`) nicht aufgelöst.
- *  (3) Markdown-Links Besitz -> Nicht-Besitz: einziger Durchsetzer ist `kern-links.test.ts` samt Baseline (kein zweiter Wächter).
- *  (4) Anker-Links (`ziel.md#anker`) auf Nicht-Besitz-Ziele: jedes solche Ziel steht schon als Paar in `kern-links-baseline.json` (ein neues Ziel
- *      wird dort rot). Grenze: ob der Anker im Ziel existiert, prüft `check:docdrift` (deadAnchors), nicht dieser Test; Anker in Block-Zielen ungeprüft.
+ *  (3) Markdown-Links Besitz -> Nicht-Besitz: einziger Durchsetzer ist `kern-links.test.ts` (Factory-Seite mit Anker, keine Baseline mehr; kein zweiter Wächter).
+ *  (4) Anker-Links (`ziel.md#anker`) auf Nicht-Besitz-Ziele: das Ziel muss eine Factory-Seite (`istFactorySeite`) sein, es gibt es, und der Anker steht darin (factory#132).
+ *      Grenze: Anker in Block-Zielen (Ziele mit Einheit) ungeprüft; Anker-Stubs im Bezieher prüft `check:factorylinks`.
  *  (L25) Das Literal des Manifest-Pfads steht in `scripts/**` (rekursiv, `.mjs`/`.cjs`) nur in `besitz-lib.mjs` (Kommentarzeilen ausgenommen).
  *      Das Literal der Projekt-Config `.factory/projekt.json` steht außerhalb von `projekt-config-lib.mjs` nur in der (leeren) Bestandsliste
  *      `PROJEKT_JSON_BESTAND` (factory#127: umgestellt; die Liste bleibt als Ausnahme-Mechanik und muss genau dem Ist entsprechen).
@@ -21,6 +21,12 @@ import { dateienUnter } from "../support/dateien";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawHerkunft from "../../scripts/herkunftsform.mjs";
+const { collectHeadingSlugs, linkZiel } = rawMarkdown as unknown as { collectHeadingSlugs: (md: string) => string[]; linkZiel: (datei: string, pfad: string) => string };
+const { istFactorySeite } = rawHerkunft as unknown as { istFactorySeite: (pfad: string) => boolean };
 
 interface Eintrag {
   pfad: string;
@@ -38,6 +44,28 @@ const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const lesen = (pfad: string): string | null => (existsSync(WURZEL + pfad) ? readFileSync(WURZEL + pfad, "utf8") : null);
 
 const istBesitz = (besitz: Set<string>, pfad: string): boolean => besitz.has(pfad) || [...besitz].some((b) => pfad.startsWith(b.endsWith("/") ? b : `${b}/`));
+
+/** Befunde Klasse (4): Anker-Links (`ziel.md#anker`) aus Besitz-Einheiten auf Nicht-Besitz-Ziele; das Ziel muss eine Factory-Seite sein, die es gibt, mit dem Anker (factory#132). */
+export function ankerBefunde(einheiten: Eintrag[], lies: (p: string) => string | null): string[] {
+  const besitz = new Set(einheiten.map((e) => e.pfad));
+  const out = new Set<string>();
+  for (const e of einheiten) {
+    if (!e.pfad.endsWith(".md") || e.schluessel !== undefined) continue;
+    const text = lies(e.pfad);
+    const einheit = text === null ? null : einheitText(e, text);
+    if (einheit === null) continue;
+    for (const l of einheit.matchAll(/\]\(([^)#\s]+\.md)#([^)\s]+)\)/g)) {
+      const ziel = linkZiel(e.pfad, l[1] ?? "");
+      if (besitz.has(ziel)) continue;
+      const zieltext = istFactorySeite(ziel) ? lies(ziel) : null;
+      const paar = `${e.pfad} -> ${ziel}#${l[2] ?? ""}`;
+      if (!istFactorySeite(ziel)) out.add(`${paar}: keine Factory-Seite`);
+      else if (zieltext === null) out.add(`${paar}: Ziel fehlt`);
+      else if (!collectHeadingSlugs(zieltext).includes(l[2] ?? "")) out.add(`${paar}: Anker fehlt im Ziel`);
+    }
+  }
+  return [...out].sort();
+}
 
 /** Bezieher-Vertrag: `npm run setup` nennen die Git-Hooks als Einrichtungsschritt; jedes Projekt bringt sein eigenes `setup` (package.json ist Projekt-Eigentum, `scripts/setup.mjs` kein Besitz). */
 const BEZIEHER_VERTRAG = ["setup"];
@@ -108,27 +136,22 @@ describe("Besitz-Verweise (#101)", () => {
     expect(npmRunBefunde(e, (p) => dateien[p] ?? null, skripte)).toEqual(["docs/a.md -> npm run fremd -> scripts/fremd.mjs"]);
   });
 
-  test("(4) jedes Nicht-Besitz-Ziel eines Anker-Links aus Besitz steht als Ziel in der kern-links-Baseline", () => {
-    const besitz = new Set(eintraege.map((e) => e.pfad));
-    const baseline = (JSON.parse(lesen("test/harness/kern-links-baseline.json") ?? "{}") as { paare?: string[] }).paare ?? [];
-    const lose: string[] = [];
-    for (const e of eintraege) {
-      if (!e.pfad.endsWith(".md") || e.schluessel !== undefined) continue;
-      const text = lesen(e.pfad);
-      const einheit = text === null ? null : einheitText(e, text);
-      if (einheit === null) continue;
-      for (const l of einheit.matchAll(/\]\(([^)#\s]+\.md)#[^)\s]+\)/g)) {
-        const pfad = (l[1] ?? "").split("/");
-        const basis = e.pfad.split("/").slice(0, -1);
-        for (const s of pfad) {
-          if (s === "..") basis.pop();
-          else if (s !== "." && s !== "") basis.push(s);
-        }
-        const ziel = basis.join("/");
-        if (!besitz.has(ziel) && !baseline.includes(`${e.pfad} -> ${ziel}`)) lose.push(`${e.pfad} -> ${ziel}`);
-      }
-    }
-    expect(lose).toEqual([]);
+  test("(4) jedes Nicht-Besitz-Ziel eines Anker-Links aus Besitz ist eine Factory-Seite, in der der Anker steht", () => {
+    expect(ankerBefunde(eintraege, lesen)).toEqual([]);
+  });
+
+  test("(4) Probe: ein fehlender Anker, ein ADR-Ziel und ein fehlendes Ziel werden gemeldet, ein gültiger Anker und ein Besitz-Ziel nicht", () => {
+    const dateien: Record<string, string> = {
+      "docs/a.md": "[ok](s.md#abschnitt) [weg](s.md#fehlt) [adr](adr/0001-x.md#t) [fehlt](gibtsnicht.md#t) [kern](b.md#x)",
+      "docs/s.md": "# S\n\n## Abschnitt\n",
+      "docs/adr/0001-x.md": "# T\n",
+    };
+    const e: Eintrag[] = [{ pfad: "docs/a.md", ring: "kern" }, { pfad: "docs/b.md", ring: "kern" }];
+    expect(ankerBefunde(e, (p) => dateien[p] ?? null)).toEqual([
+      "docs/a.md -> docs/adr/0001-x.md#t: keine Factory-Seite",
+      "docs/a.md -> docs/gibtsnicht.md#t: Ziel fehlt",
+      "docs/a.md -> docs/s.md#fehlt: Anker fehlt im Ziel",
+    ]);
   });
 
   test("(L25) das Manifest-Pfad-Literal steht in scripts/** (rekursiv) nur in der Lib", () => {
