@@ -632,11 +632,19 @@ describe("harness-doctor --pruefen", () => {
 
   test("factory#162 L33: fehlender Ruleset-Spiegel nennt die Vorlage der Quelle, die Dateipunkte erscheinen vor dem Abbruch, Exit bleibt 2", () => {
     const punkt = { punkt: "Projektdateien", ok: false, befund: "fehlen 1: tsconfig.json", fix: "Vorlage aus der Quelle" };
-    const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => [punkt] });
+    const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => [{ punkt: "Zeilenenden", ok: true }, punkt] });
     assert.equal(r.code, 2);
+    assert.ok(!r.out.some((z) => z.includes("Zeilenenden")), "ein gutes Dateipunkt-Ergebnis erscheint vor dem Abbruch nicht");
     assert.equal(r.aufrufe.length, 0);
     assert.match(r.err.join("\n"), /Fix: Ruleset-Spiegel[\s\S]*\.github\/ruleset-main-schutz\.json/);
     assert.ok(r.out.some((z) => z.startsWith("LÜCKE Projektdateien: fehlen 1: tsconfig.json ")), r.out.join("\n"));
+  });
+
+  test("factory#162 L33: wirft die Dateipunkt-Prüfung selbst, bleibt es beim Config-Fehler: Exit 2, Fix auf stderr", () => {
+    const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => { throw new Error("EACCES"); } });
+    assert.equal(r.code, 2);
+    assert.match(r.err.join("\n"), /Fix: Ruleset-Spiegel/);
+    assert.deepEqual(r.out, []);
   });
 
   test("CLI-Verdrahtung: unlesbare Config per Prozess ergibt Exit 2 und Fix auf stderr (ohne gh und Langfuse)", () => {

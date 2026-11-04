@@ -180,6 +180,7 @@ describe("CI-Zustand und Body", () => {
     expect(holen).toBeGreaterThan(-1);
     expect(punkte[holen]).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
     expect(punkte[holen]).toContain("docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md");
+    expect(punkte[holen]).toContain("kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar");
     expect(punkte[holen + 1]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
     expect(punkte.find((z) => z.includes("Gate-Lücke"))).toContain("Sammelticket");
     expect(punkte[punkte.length - 1]).toContain("sobald Tag und Release stehen");
