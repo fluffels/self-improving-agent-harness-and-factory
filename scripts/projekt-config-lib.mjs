@@ -8,7 +8,7 @@
  * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
  * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib` und `projekt-config-bloecke`
- * (deren Hülle: `relativ-pfad`, `pfad-glob`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
+ * (deren Hülle: `relativ-pfad`, `pfad-glob`, `quellwurzeln-lib`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
