@@ -14,6 +14,7 @@ import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arbeitsplatzMaengel } from "./arbeitsplatz-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { istRelativPosix } from "./relativ-pfad.mjs";
@@ -526,6 +527,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
+  if (wert.internalrefs !== undefined) fehler.push(...internalrefsMaengel(wert.internalrefs));
   fehler.push(...modulFormFehler(wert));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));
   return fehler;

@@ -71,11 +71,13 @@ type InternalRefsApi = {
       terms?: string[];
       nameTerms?: string[];
       repo?: string | null;
+      projekt?: { begriffe: string[]; namen: string[] };
     },
   ) => { files: string[]; violations: Violation[] };
   checkedLabel: (kind: "repo" | "text") => string;
+  addProjektTerm: (term: string, wurzel: string, schluessel: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
   addTerm: (term: string, selfPath: string, listName?: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
-  main: (argv: string[], deps?: { self?: string; out?: (m: string) => void; err?: (m: string) => void; pruefe?: () => { files: string[]; violations: Violation[] } }) => number;
+  main: (argv: string[], deps?: { self?: string; wurzel?: string; stdin?: () => string; out?: (m: string) => void; err?: (m: string) => void; pruefe?: () => { files: string[]; violations: Violation[] } }) => number;
 };
 
 const {
@@ -95,6 +97,7 @@ const {
   runCheck,
   checkedLabel,
   addTerm,
+  addProjektTerm,
   main,
 } = rawModule as unknown as InternalRefsApi;
 // isCheckable steht in der Gate-Lib scripts/check-basis.mjs (#1579).
@@ -248,6 +251,7 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
       readFile: (rel: string) => (rel === "a.md" ? "Name: zzzname" : ""),
       terms: [DUMMY],
       nameTerms: ["zzzname"],
+      projekt: { begriffe: [], namen: [] },
     };
     const r = runCheck("/x", io);
     assert.deepEqual(r.files, ["a.md", "commit:abc1234"], "nicht prüfbare Dateien (png) fallen raus, Commits kommen dazu");
@@ -309,7 +313,7 @@ describe("CLI-Flags (#1837)", () => {
   const lauf = (argv: string[]) => {
     const out: string[] = [];
     const err: string[] = [];
-    return { out, err, run: (self: string) => main(argv, { self, out: (m) => out.push(m), err: (m) => err.push(m) }) };
+    return { out, err, run: (self: string, wurzel = tempOrdner("ir-w-")) => main(argv, { self, wurzel, out: (m) => out.push(m), err: (m) => err.push(m) }) };
   };
   const zahl = (f: string, liste: string) => {
     const m = new RegExp(String.raw`export const ${liste} = \[([^\]]*)\]`).exec(readFileSync(f, "utf8"));
@@ -362,6 +366,172 @@ describe("CLI-Flags (#1837)", () => {
     const treffer = text(`vor ${begriff} nach`);
     assert.equal(treffer.status, 1);
     assert.ok(!(treffer.stdout + treffer.stderr).includes(begriff), "der Begriff darf nicht ausgegeben werden");
+  });
+});
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../scripts/internalrefs-lib.mjs";
+const { internalrefsMaengel, internalrefsAus } = rawLib as unknown as {
+  internalrefsMaengel: (block: unknown) => string[];
+  internalrefsAus: (config: unknown) => { begriffe: string[]; namen: string[] };
+};
+
+describe("Projektliste (factory#169)", () => {
+  const kod = (t: string) => "b64:" + Buffer.from(t, "utf8").toString("base64");
+  const SYNC = ".factory/sync-stand.json";
+
+  test("internalrefsMaengel: gültige Blöcke sind grün, jede Verletzung nennt nur den Index, nie den Wert", () => {
+    assert.deepEqual(internalrefsMaengel({}), []);
+    assert.deepEqual(internalrefsMaengel({ begriffe: [kod(DUMMY)], namen: [kod("zzzname")] }), []);
+    const faelle: [unknown, RegExp][] = [
+      [null, /muss ein Objekt/],
+      [[], /muss ein Objekt/],
+      [{ foo: [] }, /internalrefs\.foo ist kein bekannter Schlüssel/],
+      [{ begriffe: "x" }, /begriffe muss eine Liste/],
+      [{ begriffe: [DUMMY] }, /begriffe\[0\].*Klartext/],
+      [{ begriffe: [42] }, /begriffe\[0\].*Präfix/],
+      [{ begriffe: ["b64:ab-c"] }, /begriffe\[0\].*kanonisches base64/],
+      [{ begriffe: ["b64:" + Buffer.from(DUMMY).toString("base64").replace(/=+$/, "")] }, /begriffe\[0\].*kanonisches base64/],
+      [{ begriffe: ["b64:/w=="] }, /begriffe\[0\].*kanonisches base64|ungültigen/],
+      [{ begriffe: [kod("a\u0001b")] }, /begriffe\[0\].*ungültigen/],
+      [{ begriffe: [kod("   ")] }, /begriffe\[0\].*ungültigen/],
+      [{ begriffe: [kod(" " + DUMMY)] }, /begriffe\[0\].*ungültigen/],
+      [{ namen: [kod(DUMMY), kod(DUMMY)] }, /namen\[1\] ist eine Dublette/],
+    ];
+    for (const [block, erwartet] of faelle) {
+      const m = internalrefsMaengel(block).join("|");
+      assert.match(m, erwartet);
+      assert.ok(!m.includes(DUMMY), "die Meldung nennt den Wert nicht");
+    }
+  });
+
+  test("internalrefsAus: ohne Block leer, mit Block dekodiert, kaputter Block wirft mit Fix-Zeile ohne den Wert", () => {
+    assert.deepEqual(internalrefsAus({}), { begriffe: [], namen: [] });
+    assert.deepEqual(internalrefsAus({ internalrefs: { begriffe: [kod(DUMMY)] } }), { begriffe: [DUMMY], namen: [] });
+    assert.deepEqual(internalrefsAus({ internalrefs: { namen: [kod("zzzname")] } }), { begriffe: [], namen: ["zzzname"] });
+    assert.throws(() => internalrefsAus({ internalrefs: { begriffe: [DUMMY] } }), (e: Error) => /Fix:/.test(e.message) && !e.message.includes(DUMMY));
+  });
+
+  /** Temp-Wurzel mit der Fremd-Config, optional mit `internalrefs`-Block und Sync-Stand (= Bezieher). */
+  const wurzelMit = (block: unknown, bezieher = true) => {
+    const w = tempOrdner("ir-p-");
+    mkdirSync(join(w, ".factory"));
+    const cfg = JSON.parse(readFileSync(join(WURZEL_REPO, FREMD_CONFIG_PFAD), "utf8")) as Record<string, unknown>;
+    if (block !== undefined) cfg.internalrefs = block;
+    writeFileSync(join(w, ".factory", "projekt.json"), JSON.stringify(cfg, null, 2));
+    if (bezieher) writeFileSync(join(w, SYNC), "{}");
+    return w;
+  };
+  const configText = (w: string) => readFileSync(join(w, ".factory", "projekt.json"), "utf8");
+  const io = (readFile: () => string) => ({ listFiles: () => ["docs/a.md"], listCommits: () => [], readFile, terms: [], nameTerms: [] });
+
+  test("runCheck prüft die Projektliste mit: injizierte Begriffe treffen als ref, Namen als Wortstamm", () => {
+    const w = wurzelMit(undefined);
+    const mit = (projekt: { begriffe: string[]; namen: string[] }, text: string) =>
+      runCheck(w, { ...io(() => text), projekt, repo: null }).violations.map((v) => v.kind);
+    assert.deepEqual(mit({ begriffe: [DUMMY], namen: [] }, `x ${DUMMY} y`), ["ref"]);
+    assert.deepEqual(mit({ begriffe: [], namen: [DUMMY] }, `x ${DUMMY}s y`), ["name"]);
+    assert.deepEqual(mit({ begriffe: [], namen: [] }, `x ${DUMMY} y`), []);
+  });
+
+  test("runCheck liest die Projektliste aus der Config im Wurzelordner; eine kaputte Config macht ihn rot (fail-closed)", () => {
+    const text = `x ${DUMMY} y`;
+    const ok = wurzelMit({ begriffe: [kod(DUMMY)] });
+    assert.deepEqual(runCheck(ok, { ...io(() => text), repo: null }).violations.map((v) => v.kind), ["ref"]);
+    const klartext = wurzelMit({ begriffe: [DUMMY] });
+    assert.throws(() => runCheck(klartext, { ...io(() => text), repo: null }), (e: Error) => !e.message.includes(DUMMY));
+  });
+
+  test("main: Klartext-Eintrag in der Config ist Exit 1 ohne den Begriff auszugeben (Negativfall)", () => {
+    const w = wurzelMit({ begriffe: [DUMMY] });
+    const out: string[] = [];
+    const err: string[] = [];
+    assert.equal(main([], { wurzel: w, out: (m) => out.push(m), err: (m) => err.push(m) }), 1);
+    const alles = out.join("\n") + err.join("\n");
+    assert.match(alles, /internalrefs\.begriffe\[0\]/);
+    assert.ok(!alles.includes(DUMMY));
+    assert.equal(main(["--text"], { wurzel: w, stdin: () => DUMMY, out: (m) => out.push(m), err: (m) => err.push(m) }), 1);
+    assert.ok(!(out.join("\n") + err.join("\n")).includes(DUMMY));
+  });
+
+  test("--text prüft Kern- plus Projektliste", () => {
+    const w = wurzelMit({ begriffe: [kod(DUMMY)] });
+    const lauf = (stdin: string) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = main(["--text"], { wurzel: w, stdin: () => stdin, out: (m) => out.push(m), err: (m) => err.push(m) });
+      return { code, alles: out.join("\n") + err.join("\n") };
+    };
+    const treffer = lauf(`vor ${DUMMY} nach`);
+    assert.equal(treffer.code, 1);
+    assert.ok(!treffer.alles.includes(DUMMY));
+    assert.equal(lauf("harmlos").code, 0);
+    assert.equal(lauf(`vor ${decodeTerms()[0]} nach`).code, 1, "die Kernliste gilt weiter");
+  });
+
+  const SKRIPT = fileURLToPath(new URL("../scripts/check-internalrefs.mjs", import.meta.url));
+  const hashDatei = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+  const addLauf = (argv: string[], w: string, self: string) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = main(argv, { self, wurzel: w, out: (m) => out.push(m), err: (m) => err.push(m) });
+    return { code, out: out.join("\n"), err: err.join("\n") };
+  };
+  const selfKopie = () => {
+    const f = join(tempOrdner("ir-s-"), "kopie.mjs");
+    copyFileSync(SKRIPT, f);
+    return f;
+  };
+
+  test("--add in der Fabrik (kein Sync-Stand) wächst die Kernliste der Kopie, die Config bleibt byte-gleich", () => {
+    const w = wurzelMit(undefined, false);
+    const self = selfKopie();
+    const cfgVorher = configText(w);
+    const vorher = hashDatei(self);
+    assert.equal(addLauf(["--add", DUMMY], w, self).code, 0);
+    assert.notEqual(hashDatei(self), vorher);
+    assert.equal(configText(w), cfgVorher);
+  });
+
+  test("--add im Bezieher schreibt kodiert in die Projektliste, die Kernkopie bleibt byte-gleich, der Klartext steht nirgends", () => {
+    const w = wurzelMit(undefined);
+    const self = selfKopie();
+    const vorher = hashDatei(self);
+    const r = addLauf(["--add", DUMMY], w, self);
+    assert.equal(r.code, 0);
+    assert.equal(hashDatei(self), vorher);
+    const cfg = JSON.parse(configText(w)) as { internalrefs: { begriffe: string[] } };
+    assert.deepEqual(cfg.internalrefs.begriffe, [kod(DUMMY)]);
+    assert.ok(!configText(w).includes(DUMMY) && !r.out.includes(DUMMY));
+    assert.deepEqual(internalrefsMaengel(cfg.internalrefs), []);
+    // Dublette, Kern-Dublette, ungültiger Block: Exit 1 ohne Schreiben.
+    const nachher = configText(w);
+    assert.match(addLauf(["--add", DUMMY], w, self).err, /schon in der Liste/);
+    assert.match(addLauf(["--add", decodeTerms()[0]], w, self).err, /schon in der Kernliste/);
+    assert.equal(configText(w), nachher);
+  });
+
+  test("--add-name im Bezieher schreibt nach internalrefs.namen; ein vorhandener Klartext-Eintrag verhindert das Schreiben", () => {
+    const w = wurzelMit(undefined);
+    assert.equal(addLauf(["--add-name", DUMMY], w, selfKopie()).code, 0);
+    const cfg = JSON.parse(configText(w)) as { internalrefs: { namen: string[]; begriffe?: string[] } };
+    assert.deepEqual(cfg.internalrefs.namen, [kod(DUMMY)]);
+    assert.equal(cfg.internalrefs.begriffe, undefined);
+    const kaputt = wurzelMit({ begriffe: ["zzzandere"] });
+    const vorher = configText(kaputt);
+    const r = addLauf(["--add", DUMMY], kaputt, selfKopie());
+    assert.equal(r.code, 1);
+    assert.equal(configText(kaputt), vorher);
+    assert.ok(!r.err.includes("zzzandere"));
+  });
+
+  test("addProjektTerm: leerer Begriff und fehlende Config schreiben nichts; ein kaputter Sync-Stand zählt als Bezieher", () => {
+    const w = wurzelMit(undefined);
+    assert.equal(addProjektTerm("  ", w, "begriffe").ok, false);
+    assert.equal(addProjektTerm(DUMMY, join(w, "gibt-es-nicht"), "begriffe").ok, false);
+    writeFileSync(join(w, SYNC), "{");
+    assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
+    assert.match(configText(w), /"internalrefs"/);
   });
 });
 
@@ -451,7 +621,7 @@ describe("Pfadregel (#1888)", () => {
   test("runCheck ohne nutzbare Projekt-Config: Repo-Regel entfällt, Nutzer- und Wurzelregel laufen weiter", () => {
     const leer = tempOrdner("ir-leer-");
     const zeilen = [`C:/dev/${fremderRepo}/x`, win("C:", "Users", "KEINPLATZHALTER", "x"), win("D:", "KeineWurzel", "x")].join("\n");
-    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => zeilen, terms: [], nameTerms: [] } as Parameters<typeof runCheck>[1];
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => zeilen, terms: [], nameTerms: [], projekt: { begriffe: [], namen: [] } } as Parameters<typeof runCheck>[1];
     const r = runCheck(leer, io);
     assert.deepEqual(r.violations.map((v) => v.term), ["nutzer", "wurzel"]);
   });
@@ -460,7 +630,7 @@ describe("Pfadregel (#1888)", () => {
     const mitConfig = tempOrdner("ir-cfg-");
     mkdirSync(join(mitConfig, ".factory"));
     copyFileSync(join(WURZEL_REPO, FREMD_CONFIG_PFAD), join(mitConfig, ".factory", "projekt.json"));
-    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [] } as Parameters<typeof runCheck>[1];
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [], projekt: { begriffe: [], namen: [] } } as Parameters<typeof runCheck>[1];
     assert.deepEqual(runCheck(mitConfig, io).violations.map((v) => v.term), ["repo"]);
     const kaputt = tempOrdner("ir-kaputt-");
     mkdirSync(join(kaputt, ".factory"));
@@ -491,7 +661,7 @@ describe("Pfadregel (#1888)", () => {
   });
 
   test("runCheck verdrahtet die Pfadregel (Treffer tragen kind pfad)", () => {
-    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [], repo: fremderRepo } as Parameters<typeof runCheck>[1];
+    const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => `C:/dev/${fremderRepo}/x`, terms: [], nameTerms: [], projekt: { begriffe: [], namen: [] }, repo: fremderRepo } as Parameters<typeof runCheck>[1];
     const r = runCheck("/x", io);
     assert.deepEqual(r.violations.map((v) => `${v.file}:${v.kind}:${v.term}`), ["test/a.test.ts:pfad:repo"]);
   });
