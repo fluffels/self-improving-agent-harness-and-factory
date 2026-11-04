@@ -289,23 +289,14 @@ function skriptDateien(rootDir, ordner = "scripts") {
   });
 }
 
-/** Abschnitte von `ziel`: aus dem ganzen Text, bei `kernSicht` (Verweis aus verteiltem Besitz-Text auf eine Datei, von der nur Blöcke verteilt werden, etwa die AGENTS.md) nur aus den verteilten Blöcken: so sieht das Gate im Factory-Repo, was ein Bezieher mit eigenem Projekt-Block sieht. */
-function zielAbschnitte(zielText, ziel, einheiten, kernSicht) {
-  const text = kernSicht ? besitzSpannen(einheiten, ziel, zielText).map(([a, b]) => zielText.slice(a, b)).join("\n") : zielText;
-  return abschnittTitel(text);
-}
-
-/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird immer gegen seine Abschnitte geprüft; Verweise aus verteiltem Besitz-Text gelten dabei auch im Factory-Repo nur gegen die verteilten Blöcke des Ziels (Kern-Sicht). */
+/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird immer gegen seine Abschnitte geprüft. Der Vertrag für Kern-Verweise auf AGENTS.md-Titel (Kern-Block plus Vorlage) gehört `test/harness/agents-refs.test.ts`. */
 function auditAbschnittVerweise(rootDir, mdFiles, content) {
   const adrPrefix = `${adrOrdner(rootDir)}/`;
-  const einheiten = besitzEinheiten(rootDir) ?? [];
   const ausnahme = besitzAusnahme(rootDir);
-  const nurBloecke = (pfad) => einheiten.some((e) => e.pfad === pfad && e.block !== undefined) && !einheiten.some((e) => e.pfad === pfad && istGanzeDatei(e));
   const abschnittCache = new Map();
-  const titelVon = (ziel, kernSicht) => {
-    const schluessel = `${kernSicht ? "kern:" : ""}${ziel}`;
-    if (!abschnittCache.has(schluessel)) abschnittCache.set(schluessel, zielAbschnitte(readFileSync(join(rootDir, ziel), "utf8"), ziel, einheiten, kernSicht));
-    return abschnittCache.get(schluessel);
+  const titelVon = (ziel) => {
+    if (!abschnittCache.has(ziel)) abschnittCache.set(ziel, abschnittTitel(readFileSync(join(rootDir, ziel), "utf8")));
+    return abschnittCache.get(ziel);
   };
   const istDatei = (p) => existsSync(join(rootDir, p)) && statSync(join(rootDir, p)).isFile();
   const fehler = [];
@@ -313,17 +304,16 @@ function auditAbschnittVerweise(rootDir, mdFiles, content) {
   for (const [f, istMarkdown] of dateien) {
     if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
     const text = content.get(f) ?? readFileSync(join(rootDir, f), "utf8");
-    const spannen = besitzSpannen(einheiten, f, text);
+    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
     for (const v of abschnittVerweise(text, { istMarkdown })) {
       const ziel = [v.pfad, posix.join(posix.dirname(f), v.pfad)].find(istDatei);
       const basis = { file: f, pfad: v.pfad, trenner: v.trenner };
-      const inBesitz = spannen.some(([a, b]) => v.index >= a && v.index <= b);
       if (ziel === undefined) {
-        if (ausnahme && inBesitz && !ausnahme.istZiel(v.pfad)) continue;
+        if (spannen.some(([a, b]) => v.index >= a && v.index <= b) && !ausnahme.istZiel(v.pfad)) continue;
         fehler.push({ ...basis, art: "ziel", segment: v.segmente[0], ziel: v.pfad });
         continue;
       }
-      const titel = titelVon(ziel, inBesitz && nurBloecke(ziel));
+      const titel = titelVon(ziel);
       const tot = v.segmente.find((seg) => !abschnittTrifft(seg, titel));
       if (tot !== undefined) fehler.push({ ...basis, art: "abschnitt", segment: tot, ziel });
     }

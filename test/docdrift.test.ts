@@ -793,6 +793,11 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     assert.ok(!api.abschnittTrifft("Gibts nicht", api.abschnittTitel("## 🚀\n")));
   });
 
+  test("Nummer fällt nur bei Überschriften weg, nicht bei Fettdruck", () => {
+    assert.ok(!api.abschnittTrifft("Wochen", api.abschnittTitel("- **2. Wochen Frist** x\n")));
+    assert.ok(api.abschnittTrifft("Wochen", api.abschnittTitel("## 2. Wochen Frist\n")));
+  });
+
   test("Normalisierung: Herkunftsklammer, Link-Syntax und ASCII-Strich im Titel fallen weg", () => {
     assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## Foo (#1) Bar\n")));
     assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## [Foo](x.md) Bar\n")));
@@ -822,24 +827,22 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     assert.deepEqual(f.map((x) => x.file).sort(), ["scripts/c.cjs", "scripts/d.js", "scripts/sub/b.mjs"]);
   });
 
-  describe("Kern-Sicht (Factory-Repo, Manifest mit Block-Einheit)", () => {
-    const block = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] }) };
-    const agents = `# T\n${markerStart("kern")}\n- **Kernregel.** x\n${markerEnde("kern")}\n- **Projektregel.** y\n`;
-
-    test("Verweis aus verteiltem Text auf einen Abschnitt nur im Projekt-Block ist rot, auf den Kern-Block grün, aus Projekt-Text grün", () => {
-      const f = fixture({ ...block, "AGENTS.md": agents, "scripts/a.mjs": "// AGENTS.md § Kernregel\n// AGENTS.md § Projektregel\n", "scripts/projekt.mjs": "// AGENTS.md § Projektregel\n" });
-      assert.deepEqual(f.map((x) => [x.file, x.segment]), [["scripts/a.mjs", "Projektregel"]]);
-    });
-
-    test("ist die ganze Datei Besitz, zählt weiter der ganze Text", () => {
-      const ganz = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "docs/x.md", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] }) };
-      assert.deepEqual(fixture({ ...ganz, "docs/x.md": "# X\n## Abschnitt\n", "scripts/a.mjs": "// docs/x.md › Abschnitt\n" }), []);
-    });
-  });
-
   describe("Bezieher (Sync-Stand und Manifest)", () => {
     const STAND = { ".factory/sync-stand.json": "{}" };
     const manifest = (pfade: string[]): Record<string, string> => ({ ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: pfade.map((pfad) => ({ pfad, ring: "kern" })) }) });
+
+    test("Block-Einheit: fehlendes Ziel schont nur Verweise innerhalb des Blocks (beide Grenzen)", () => {
+      const agents = (vor: string, innen: string, nach: string): string => `# T\n${vor}${markerStart("kern")}\n${innen}${markerEnde("kern")}\n${nach}`;
+      const verweis = "docs/weg.md › X\n";
+      const block = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }] }) };
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents("", verweis, "") }), []);
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents(verweis, "x\n", "") }).map((x) => x.art), ["ziel"]);
+      assert.deepEqual(fixture({ ...STAND, ...block, "AGENTS.md": agents("", "x\n", verweis) }).map((x) => x.art), ["ziel"]);
+    });
+
+    test("Factory-Repo (ohne Sync-Stand): fehlendes Ziel aus Skript mit Besitz-Eintrag bleibt rot", () => {
+      assert.deepEqual(fixture({ ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/weg.md › X\n" }).map((x) => x.art), ["ziel"]);
+    });
 
     test("fehlendes Ziel, das selbst Besitz ist (kaputter Sync), bleibt rot", () => {
       const f = fixture({ ...STAND, ...manifest(["scripts/a.mjs", "docs/weg.md"]), "scripts/a.mjs": "// docs/weg.md › X\n" });
