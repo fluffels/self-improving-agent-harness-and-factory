@@ -17,7 +17,7 @@
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
- * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
+ * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · nur mit Block `design` der Config: kein Design-Label ohne Freigabe-Label (`design-lib.mjs`, factory#172; Grund „Design-Entwurf nicht freigegeben“, nach dem Blocker-Grund) · kein Branch, Worktree oder offener PR
  * `<praefixe.branch><nr>-*` · das ungeclaimte Harness-Sammelticket erst ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, `fuellstand`; `--ticket` umgeht das) · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: Ziel- und
  * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
@@ -33,6 +33,7 @@
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
+import { designGrund } from "./design-lib.mjs";
 import { existsSync } from "node:fs";
 import { NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
@@ -287,12 +288,18 @@ export function blockerGrund(c, { offene, repo, fremdStatus = FREMDSTATUS_OHNE_L
   return offen.length > 0 ? `offener Blocker ${offen.join(", ")}` : "";
 }
 
+/** Zugangsgrund (`""` = frei): Assignee, Fremdeingang, offener Blocker, danach der fehlende Design-Entwurf (factory#172, nur mit Block `design`). */
+function zugangsGrund(c, { owner, config, offene, repo, fremdStatus }) {
+  if (c.assignees.length > 0) return `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}`;
+  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
+  const blocker = blockerGrund(c, { offene, repo, fremdStatus, sprache: spracheAus(config).spezifikation });
+  return blocker || designGrund(c.labels, config);
+}
+
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
 function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus }) {
-  if (c.assignees.length > 0) return { grund: `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}` };
-  if (istFremdeingang({ user: c.autor, labels: c.labels }, owner, { config }).fremdeingang) return { grund: "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden" };
-  const blocker = blockerGrund(c, { offene, repo, fremdStatus, sprache: spracheAus(config).spezifikation });
-  if (blocker) return { grund: blocker };
+  const zugang = zugangsGrund(c, { owner, config, offene, repo, fremdStatus });
+  if (zugang) return { grund: zugang };
   const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
   const unlesbar = fenster.find((f) => "fehler" in f);
   if (unlesbar) return { grund: unlesbar.fehler };
