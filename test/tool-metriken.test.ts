@@ -229,6 +229,17 @@ describe("pruefLaeufe (#1120)", () => {
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
+  test("zählt nur das Skript gate-befehl.mjs selbst: ohne Skript, mit Präfix/Suffix am Dateinamen nicht", () => {
+    const evs = [
+      sh("node verify"),
+      sh("node verifyKompakt foo.mjs"),
+      sh("node scripts/my-gate-befehl.mjs verify"),
+      sh("node scripts/xgate-befehl.mjs verify"),
+      sh("node scripts/gate-befehl.mjs.bak verify"),
+    ];
+    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
+    assert.deepEqual(z([sh("node C:\\x\\scripts\\gate-befehl.mjs verify", "PowerShell")]), { voll: 1, gezielt: 0 });
+  });
   test("jeder Gate-Befehl-Name ist abgebildet oder ausdrücklich ausgenommen", () => {
     for (const name of gateNamen) {
       assert.ok(name in GATE_ZAEHLT || GATE_ZAEHLT_NICHT.includes(name), `neuer Gate-Befehl „${name}“: in pruefArt abbilden oder als „zählt nicht“ eintragen`);

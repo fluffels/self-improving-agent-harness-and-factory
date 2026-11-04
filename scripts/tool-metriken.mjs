@@ -135,9 +135,9 @@ export function pruefLaeufe(events) {
 /** `node …/gate-befehl.mjs <name>` → Art des Gate-Befehls (nur der Name direkt hinter dem Skript, ohne `--zeigen`), sonst null. */
 function gateBefehlArt(rest) {
   const i = rest.findIndex((w) => /(?:^|[/\\])gate-befehl\.mjs$/.test(w));
-  if (i < 0 || rest[i + 1] === undefined || rest.includes("--zeigen")) return null;
+  if (i < 0 || rest.includes("--zeigen")) return null;
   const name = rest[i + 1];
-  return GATE_BEFEHL_NAMEN.includes(name) ? (GATE_ART[name] ?? null) : null;
+  return GATE_BEFEHL_NAMEN.includes(name) ? GATE_ART[name] : null;
 }
 
 function pruefArt(words) {

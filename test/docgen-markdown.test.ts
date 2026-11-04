@@ -33,6 +33,7 @@ describe("mermaidText", () => {
 describe("cell", () => {
   test("escaped | und Zeilenumbrüche; Backslashes bleiben literal (Code-Spans, #1663 H6)", () => {
     assert.equal(api.cell("a|b\nc"), "a\\|b c");
+    assert.equal(api.cell("a\r\nb"), "a b");
     assert.equal(api.cell("`a\\b`"), "`a\\b`");
   });
 

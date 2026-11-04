@@ -788,6 +788,11 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), [`${WTP}13-lens-m1`]);
   });
 
+  test("CI-Fix-Delta-Lens `<präfix><nr>-lens-c<n>` ohne Feature-Ordner ist verwaist, mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/${WTP}13-lens-c1`, `${WT}/${WTP}14`, `${WT}/${WTP}14-lens-c2`, `${WT}/${WTP}15-lens-c`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), [`${WTP}13-lens-c1`]);
+  });
+
   test("Großgeschriebener Ordnername wird nicht mit dem kleingeschriebenen Feature-Ordner verwechselt (kein Flag i, sonst fälschlich verwaist)", () => {
     const reg = [MAIN, `${WT}/${WTP}13`, `${WT}/${WTP.toUpperCase()}13-lens-r1`];
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT, NAMEN), []);

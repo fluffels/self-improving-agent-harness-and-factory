@@ -3,7 +3,7 @@
  *
  * Reines Node-Tooling ohne Declaration-File: Namespace über `unknown` auf ein lokales Interface (Technik wie test/board.test.ts). */
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sammelticket-anlegen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -666,6 +666,51 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(set).toHaveLength(1);
     expect(set[0][1]).toEqual(BOARD("factory"));
     expect(set[0][2]).toBe("I50");
+  });
+
+  describe("harness: Meldung je Stand der Positionsprüfung", () => {
+    const stand = (s: string) => ({ setzeUndPruefe: () => Promise.resolve(s) });
+    test("ok: meldet die geprüfte Position, kein Exit", async () => {
+      const { deps, log } = fakes(stand("ok"));
+      await M(["harness"], deps);
+      expect(log.join("\n")).toMatch(/Position geprüft: #50/);
+    });
+    test("unbekannt: Warnung, die Position sei noch nicht prüfbar, kein Exit", async () => {
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      try {
+        const { deps, log } = fakes(stand("unbekannt"));
+        await M(["harness"], deps);
+        expect(log.join("\n")).toMatch(/::warning::#50 steht noch nicht in der Board-Liste/);
+        expect(exit).not.toHaveBeenCalled();
+      } finally {
+        exit.mockRestore();
+      }
+    });
+    test("falsch im Trockenlauf: Trockenlauf-Meldung, kein Exit", async () => {
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      try {
+        const { deps, log } = fakes({ ...stand("falsch"), findeVorhandenes: () => ({ number: 50 }) });
+        await M(["harness", "--dry-run"], deps);
+        expect(log.join("\n")).toMatch(/Trockenlauf: #50 steht nicht auf Position/);
+        expect(exit).not.toHaveBeenCalled();
+      } finally {
+        exit.mockRestore();
+      }
+    });
+    test("falsch im echten Lauf: Fehlermeldung und Exit 1", async () => {
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const { deps, log } = fakes(stand("falsch"));
+        await M(["harness"], deps);
+        expect(exit).toHaveBeenCalledWith(1);
+        expect(err.mock.calls.join("\n")).toMatch(/#50 steht nach dem Setzen nicht auf Position/);
+        expect(log.join("\n")).not.toMatch(/Trockenlauf|Position geprüft/);
+      } finally {
+        exit.mockRestore();
+        err.mockRestore();
+      }
+    });
   });
 
   test("langfuse ohne --top: angelegt und ans Board gehängt, aber keine Positionsarbeit", async () => {

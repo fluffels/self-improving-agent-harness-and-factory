@@ -256,6 +256,16 @@ describe("Langfuse-Takt", () => {
     expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 
+  test("das Factory-Board des eigenen Repos (auch in anderer Schreibweise) gibt keinen Hinweis", () => {
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "a/b" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "A/B" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("eine Config ohne boards oder mit boards ohne Liste bricht den Punkt nicht und gibt keinen Hinweis", () => {
+    expect(takt(() => true, { repo: "a/b" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", boards: "x" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
   test("Factory-Board führt ein fremdes Repo: OK mit Hinweis, der Takt dort pflegt Status- und Sammelticket", () => {
     const fremd = { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] };
     const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };

@@ -781,6 +781,13 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.equal(r.code, 0);
   });
 
+  test("pruefLauf reicht die geladene Config an die Dateipunkte durch (kein zweites Lesen der Config)", () => {
+    const gesehen: unknown[] = [];
+    lauf({}, { dateien: (a: { rootDir: string; config?: unknown }) => (gesehen.push(a.config), []) });
+    assert.equal(gesehen.length, 1);
+    assert.ok(gesehen[0] !== null && typeof gesehen[0] === "object" && "repo" in gesehen[0], JSON.stringify(gesehen[0]));
+  });
+
   test("Negativfall: fehlt tsconfig.json, erscheint LÜCKE Projektdateien mit Pfad und Fix, Exit 1", () => {
     const r = lauf({}, { dateien, vorbereiten: repo({}, "* text=auto eol=lf\n", ["tsconfig.json"]) });
     assert.equal(r.code, 1);

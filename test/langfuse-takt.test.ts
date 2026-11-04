@@ -153,6 +153,21 @@ describe("statusBody", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  test("Abschluss: im Factory-Repo PR mit Verdichtungszeile und Closes, im Bezieher nur Bericht-Kommentar ohne PR-Pflicht", () => {
+    const upstream = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: mkdtempSync(join(tmpdir(), "langfuse-takt-")) });
+    expect(upstream).toMatch(/PR mit Verdichtungszeile und `Closes`/);
+    expect(upstream).not.toMatch(/nur im Bericht-Kommentar/);
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v0.7.1", repo: "q/quelle" } }));
+      const bez = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
+      expect(bez).toMatch(/Verdichtungszeile nur im Bericht-Kommentar \(die Tabelle liegt nur im Factory-Repo\)/);
+      expect(bez).not.toMatch(/PR mit Verdichtungszeile|`Closes`/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
     const ohne = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" });

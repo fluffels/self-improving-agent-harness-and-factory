@@ -169,7 +169,7 @@ export function projektdateienPunkt(rootDir, existiert) {
 /** Dateien des Langfuse-Takts: der Workflow (Ring `kern-nach-entkopplung`) und das Skript; ohne sie läuft weder Status-Ticket noch Sammelticket „Langfuse-Befunde (gesammelt)“. */
 export const LANGFUSE_TAKT_DATEIEN = Object.freeze([".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"]);
 
-const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync`, siehe Schritt 4 in docs/erstbezug.md): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung und gehört damit zum Besitz, den jeder Bezieher bekommt";
+const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync -- --quelle <Factory-Checkout> --tag <Tag>`, Anleitung: Seite docs/erstbezug.md des Factory-Repos): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung und gehört damit zum Besitz, den jeder Bezieher bekommt";
 
 /** Das Repo, dessen Issues das Factory-Board der Config führt, wenn es nicht das eigene ist (sonst null; ohne Config oder Board ebenfalls null). */
 function fremdesFactoryRepo(config) {

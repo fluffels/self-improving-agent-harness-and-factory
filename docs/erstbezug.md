@@ -25,7 +25,7 @@ Ohne erreichbares Langfuse startet kein Ticketlauf (Vorbedingung `node scripts/l
 
 1. **Plugin im User-Scope:** das Plugin `langfuse-observability` ist im User-Scope aktiv ([ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md)), nicht in der Projekt-Einstellung des Beziehers.
 2. **Endpunkt und Keys trägt die Maintainerin selbst ein, nie der Agent.** Die drei Variablennamen sind `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` und `LANGFUSE_SECRET_KEY`; die Werte stehen in der Umgebung oder in den Plugin-Optionen der User-Settings, nie im Repo. Ein Agentenlauf liest und schreibt keine `.env*`-Datei (gesperrt) und startet kein Skript, das den Secret-Key liest.
-3. **`.env.example`-Abgleich nur über Namen:** hat der Bezieher eine `.env.example`, nennt sie dieselben drei Namen wie oben (ohne Werte); die Maintainerin gleicht ihre lokale Datei selbst damit ab. Der Agent vergleicht nur die Namen aus `scripts/langfuse-vorbedingung.mjs` und `scripts/langfuse-zugang.mjs` mit der Vorlage, nie Werte.
+3. **`.env.example`-Abgleich macht die Maintainerin selbst:** die Regel `Read(/.env.*)` sperrt dem Agenten jede `.env*`-Datei, auch `.env.example`. Die Maintainerin gleicht ihre lokale Datei von Hand mit den drei Namen aus Schritt 2 ab (ohne Werte); der Agent kennt die Namen nur aus `scripts/langfuse-vorbedingung.mjs` und `scripts/langfuse-zugang.mjs`.
 4. **`node scripts/langfuse-vorbedingung.mjs` muss Exit 0 liefern** (prüft nur `/api/public/health`, nicht die MCP-Verbindung; bei Exit 1 steht der Grund in der Ausgabe).
 5. **Probe-Lauf:** ein kurzer Lauf belegt, dass Trace, Projekt-Tag und `usageDetails` ankommen ([Langfuse-Erfassung belegen](model-routing.md#langfuse-erfassung-belegen-1293)).
 6. **Doctor-Zeile `Langfuse-Takt`:** `node scripts/harness-doctor.mjs --pruefen` meldet `OK Langfuse-Takt`, wenn Workflow und Skript angekommen sind (ohne Netz, ohne Secrets). Eine Lücke nennt den Sync als Fix (`board-takt.yml` liegt im Ring `kern-nach-entkopplung`, den der Sync mitliefert). Führt das Factory-Board der Config ein fremdes Repo, steht dazu ein Hinweis: dort pflegt der Takt Status-Ticket und Sammelticket „Langfuse-Befunde (gesammelt)“, hier läuft nur der Board-Wächter.
@@ -37,7 +37,7 @@ Fertiger Prompt für die Sitzung im Bezieher (Keys trägt die Maintainerin vorhe
 ```text
 Richte Langfuse nach docs/erstbezug.md › „Langfuse einrichten“ ein. Trage keine Keys ein und lies keine .env-Datei.
 1. Führe `node scripts/langfuse-vorbedingung.mjs` aus; bei Exit 1 stoppe und nenne den Grund.
-2. Vergleiche die Variablennamen LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY und LANGFUSE_SECRET_KEY mit der .env.example des Repos (nur Namen, falls die Datei existiert) und melde Abweichungen.
+2. Nenne die Variablennamen LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY und LANGFUSE_SECRET_KEY aus `scripts/langfuse-vorbedingung.mjs` und `scripts/langfuse-zugang.mjs` (nur Namen); den Abgleich mit einer .env.example macht die Maintainerin selbst, du öffnest keine .env*-Datei.
 3. Fahre den Probe-Lauf nach docs/model-routing.md › „Langfuse-Erfassung belegen“ und prüfe Trace, Projekt-Tag und usageDetails.
 4. Führe `node scripts/harness-doctor.mjs --pruefen` aus und melde die Zeile „Langfuse-Takt“.
 Melde je Schritt OK oder Lücke mit dem Fix, ändere nichts außerhalb der Doku.

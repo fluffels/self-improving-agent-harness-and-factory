@@ -99,7 +99,7 @@ describe("Prüfliste „Langfuse-Status überprüfen“ (docs/model-routing.md):
     expect(ende).toBeGreaterThan(start);
   });
 
-  test("die Verdichtungszeile gehört nur ins Factory-Repo, im Bezieher in den Bericht-Kommentar (die Seite ist Factory-Besitz)", () => {
+  test("die Verdichtungszeile gehört nur ins Factory-Repo, im Bezieher in den Bericht-Kommentar (die Seite liegt nur im Factory-Repo)", () => {
     expect(vorTabelle).not.toContain("hierher kommt je Lauf");
     expect(vorTabelle).toMatch(/im Factory-Repo hierher/);
     expect(vorTabelle).toMatch(/im Bezieher[^.]*nur in den Bericht-Kommentar/);

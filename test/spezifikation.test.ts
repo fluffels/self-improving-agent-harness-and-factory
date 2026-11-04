@@ -711,6 +711,25 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: EIGENES.toUpperCase() });
     expect(opts).toEqual([{ token: "pt" }, { token: undefined }, { token: undefined }]);
   });
+  test("verknuepfeBlocker: Lookup im Blocker-Repo (Token des Blockers), Mutation im Ziel-Repo mit issueId = neues Ticket, blockingIssueId = Blocker", () => {
+    const aufrufe: { args: string[]; opts: unknown }[] = [];
+    const gh = (args: string[], opts: unknown) => (aufrufe.push({ args, opts }), { node_id: "BLOCKER_NODE" });
+    const io = E.echteIo(config, { ghJson: gh, env: { PROJECT_TOKEN: "pt" } }) as unknown as {
+      verknuepfeBlocker: (a: { issueNodeId: string; blocker: { repo: string; nummer: number }; repo: string }) => void;
+    };
+    io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: "zz-org/fremd", nummer: 42 }, repo: EIGENES });
+    expect(aufrufe[0]?.args).toEqual(["api", "repos/zz-org/fremd/issues/42"]);
+    expect(aufrufe[0]?.opts).toEqual({ token: "pt" });
+    const mutation = aufrufe[1]?.args ?? [];
+    expect(mutation.slice(0, 2)).toEqual(["api", "graphql"]);
+    expect(mutation).toContain("i=NEU_NODE");
+    expect(mutation).toContain("b=BLOCKER_NODE");
+    expect(mutation.find((a) => a.startsWith("query="))).toContain("addBlockedBy");
+    expect(aufrufe[1]?.opts).toEqual({ token: undefined });
+    io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: EIGENES, nummer: 7 }, repo: "zz-org/ziel" });
+    expect(aufrufe[2]?.opts).toEqual({ token: undefined });
+    expect(aufrufe[3]?.opts).toEqual({ token: "pt" });
+  });
   test("einsortiere startet board-place mit --repo <repo> (nach und notfall)", () => {
     const { io, exec } = bau();
     io.einsortiere({ nr: 9, nach: 4, notfall: null, repo: "zz-org/ziel" });
