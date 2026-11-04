@@ -69,6 +69,7 @@ import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
 import { besitzSpannen, istGanzeDatei, MANIFEST_PFAD, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { istAnkerStub } from "./factory-links-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
 export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
@@ -434,7 +435,7 @@ function main() {
 
   for (const t of testPfadFehler) {
     bad = true;
-    console.error(red(`✖ Toter Test-Pfad: „${t.pfad}" in ${t.file} existiert nicht. Auf einen vorhandenen Wächter umzeigen oder den Testbezug streichen.`));
+    console.error(red(`✖ Toter Test-Pfad: „${t.pfad}" in ${t.file} existiert nicht. Auf einen vorhandenen Wächter umzeigen oder den Testbezug streichen (Erstbezug: ${factorySeiteIn(ROOT, "docs/erstbezug.md", "projektdateien")}).`));
   }
 
   for (const a of abschnittFehler) {
