@@ -230,11 +230,6 @@
       "count": 2
     }
   },
-  "scripts/sammelticket-anlegen.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/sandbox-doctor.mjs": {
     "complexity": {
       "count": 2

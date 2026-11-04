@@ -12,7 +12,7 @@
     "complexity": 3
   },
   "scripts/board-takt.mjs": {
-    "complexity": 10
+    "complexity": 5
   },
   "scripts/brain-metrics.mjs": {
     "complexity": 5
@@ -135,9 +135,6 @@
   },
   "scripts/projekt-config-lib.mjs": {
     "complexity": 14
-  },
-  "scripts/sammelticket-anlegen.mjs": {
-    "complexity": 5
   },
   "scripts/sandbox-doctor.mjs": {
     "complexity": 9
