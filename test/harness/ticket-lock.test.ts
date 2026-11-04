@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // Durchleitende Spione auf node:fs (Aufrufreihenfolge von ersetze belegen); alle anderen Tests laufen unverändert gegen das echte fs.
@@ -303,6 +303,19 @@ describe("wiederherstellen", () => {
     const b = lauf(["claim", "7"]);
     writeFileSync(lockDatei(7, "json.freigegeben"), JSON.stringify({ nr: 7, nonceHash: sha(nonceVon(b)), zeit: new Date(JETZT).toISOString() }));
     assert.equal(lauf(["wiederherstellen", "7", "--nonce", nonceVon(b)]).code, 4, "neben einem vorhandenen Lock nie");
+  });
+
+  test("Randfälle: kaputter Vermerk → Exit 4, anderer Schreibfehler → Exit 2, lokaler und Remote-Branch fragen gh nur einmal", () => {
+    const a = lauf(["claim", "5"]);
+    writeFileSync(lockDatei(5, "json.freigegeben"), "{kaputt");
+    unlinkSync(lockDatei(5));
+    assert.equal(lauf(["wiederherstellen", "5", "--nonce", nonceVon(a)]).code, 4);
+    const nonce = frei("6");
+    const kaputt = M.fuehreAus(["wiederherstellen", "6", "--nonce", nonce], { ...deps(), schreibeNeu: () => { throw Object.assign(new Error("platte voll"), { code: "ENOSPC" }); } });
+    assert.equal(kaputt.code, 2);
+    const b = lauf(["claim", "8"]);
+    lauf(["freigeben", "8", "--nonce", nonceVon(b)], { refs: [`${BRP}8-x`, `origin/${BRP}8-x`] });
+    assert.deepEqual(ghAufrufe, [`${BRP}8-x`]);
   });
 
   test("aufrufLesen: wiederherstellen braucht --nonce; aufzuraeumen räumt .freigegeben erst ab ALTLAST_MS ab", () => {
