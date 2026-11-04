@@ -2,6 +2,7 @@
  * die Maskierung kommt aus `escapeRegex` (scripts/ticket-namen.mjs). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { musterRegex } from "../scripts/besitz-extraktion.mjs";
 
 const re = (m: string): RegExp => (musterRegex as (muster: string) => RegExp)(m);
