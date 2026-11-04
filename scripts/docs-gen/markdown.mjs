@@ -6,11 +6,13 @@ import { isAbsolute, join, posix, relative, sep } from "node:path";
 
 /**
  * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
- * Code-Spans, darum nur die Pipe: in Code-Spans sind Backslashes literal, eine Verdopplung zeigte sie doppelt (der CodeQL-Alert `js/incomplete-sanitization`
- * dazu ist als „won't fix“ geschlossen). Freitext aus fremder Quelle maskiert `zelle` mit Backslash zuerst, dann Pipe.
+ * Code-Spans, darum nur die Pipe: in Code-Spans sind Backslashes literal, eine Verdopplung zeigte sie doppelt. Beleg (GitHub-Markdown-API, GFM):
+ * `\|` maskiert die Pipe auch hinter einem Backslash (`a\\|b` bleibt eine Zelle und zeigt `a\|b`), eine Backslash-Verdopplung ist also nicht nötig.
+ * Das Aufteilen und Verbinden an `|` statt `replace` ändert nichts am Ergebnis, vermeidet aber das CodeQL-Muster `js/incomplete-sanitization`
+ * (der Alert blockierte Bezieher-PRs). Freitext aus fremder Quelle maskiert `zelle` mit Backslash zuerst, dann Pipe.
  */
 export function cell(value) {
-  return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  return String(value).split("|").join("\\|").replace(/\r?\n/g, " ");
 }
 
 /**

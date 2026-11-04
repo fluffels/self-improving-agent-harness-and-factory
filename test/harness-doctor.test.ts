@@ -774,7 +774,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
   const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n", ausser: string[] = []) => (root: string) => {
     writeFileSync(join(root, ".gitattributes"), regel);
-    for (const d of rawProjektdateien as { pfad: string }[]) {
+    for (const d of [...(rawProjektdateien as { pfad: string }[]), { pfad: ".github/workflows/board-takt.yml" }, { pfad: "scripts/langfuse-takt.mjs" }]) {
       if (ausser.includes(d.pfad)) continue;
       mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
       writeFileSync(join(root, d.pfad), d.pfad === "AGENTS.md" ? "regeln\n" : "");
@@ -789,12 +789,20 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     writeFileSync(join(root, "CLAUDE.md"), "x\n");
   };
 
-  test("gesund: alle drei Punkte OK, Exit 0", () => {
+  test("gesund: alle vier Punkte OK, Exit 0", () => {
     const r = lauf({}, { dateien, vorbereiten: repo() });
     assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Zeilenenden"));
     assert.ok(r.out.includes("OK Projektdateien"));
+    assert.ok(r.out.includes("OK Langfuse-Takt"));
     assert.equal(r.code, 0);
+  });
+
+  test("pruefLauf reicht die geladene Config an die Dateipunkte durch (kein zweites Lesen der Config)", () => {
+    const gesehen: unknown[] = [];
+    lauf({}, { dateien: (a: { rootDir: string; config?: unknown }) => (gesehen.push(a.config), []) });
+    assert.equal(gesehen.length, 1);
+    assert.ok(gesehen[0] !== null && typeof gesehen[0] === "object" && "repo" in gesehen[0], JSON.stringify(gesehen[0]));
   });
 
   test("Negativfall: fehlt tsconfig.json, erscheint LÜCKE Projektdateien mit Pfad und Fix, Exit 1", () => {

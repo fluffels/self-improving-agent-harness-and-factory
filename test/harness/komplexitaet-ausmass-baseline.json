@@ -139,13 +139,10 @@
     "complexity": 14
   },
   "scripts/sammelticket-anlegen.mjs": {
-    "complexity": 6
+    "complexity": 5
   },
   "scripts/sandbox-doctor.mjs": {
     "complexity": 9
-  },
-  "scripts/schichten-kern.cjs": {
-    "complexity": 19
   },
   "scripts/skills-sync.mjs": {
     "complexity": 8

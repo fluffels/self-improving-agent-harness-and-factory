@@ -311,16 +311,16 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
 }
 
 /** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` an die Spitze (wörtlich, ohne Klemmung), `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
-function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }) {
+function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
   if (!top && art !== "codequalitaet") return;
-  const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+  const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
   const plan = art === "codequalitaet" ? codequalitaetPlan(items, nr) : planFuerArgs(items, { anchor: null, numbers: [nr] });
-  for (const { item, afterId } of plan.steps) setPosition(board, item.id, afterId);
+  for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent`; ohne Angabe läuft alles echt. */
+/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
@@ -337,40 +337,40 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const vorhanden = findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
+  const vorhanden = d.findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
-    console.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
+    d.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
   } else if (args.dry) {
-    console.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
+    d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
+    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
     let neu;
     try {
-      neu = legeAn({ repo, titel, body, harness: label });
+      neu = d.legeAn({ repo, titel, body, harness: label });
     } catch (e) {
       console.error(`✖ ${e.message}`);
       process.exit(2);
     }
     nr = neu.number;
-    console.log(`Angelegt: #${nr}`);
-    await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-    if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = addToBoardTodo(board, neu.node_id, { repo });
+    d.log(`Angelegt: #${nr}`);
+    await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
+    if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
+    const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(board, k.id, k.afterId);
-    } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel });
+      if (k) d.setPosition(board, k.id, k.afterId);
+    } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel }, d);
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: board, repo });
-  if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
-  if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
-  else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
-  else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
+  const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
+  if (!vorhanden && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
+  else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
+  else if (args.dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
   else {
     console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
     process.exit(1);
