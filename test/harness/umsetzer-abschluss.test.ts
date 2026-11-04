@@ -632,6 +632,17 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
     assert.equal(lies(datei([zeile("assistant", [...block].reverse())])), "ERGEBNIS: abgebrochen");
   });
 
+  test("Fortsetzung: ein altes ERGEBNIS vor einer jüngeren User-Nachricht mit Text zählt nicht (factory#193)", () => {
+    const alt = zeile("assistant", [{ type: "text", text: "ERGEBNIS: abnahme" }]);
+    const status = zeile("assistant", [{ type: "text", text: "Statuszeile" }]);
+    assert.equal(lies(datei([alt, zeile("user", "Fortsetzung"), status])), null, "String-Inhalt ist eine Grenze");
+    assert.equal(lies(datei([alt, zeile("user", [{ type: "text", text: "Hook-Feedback" }]), status])), null, "text-Block ist eine Grenze");
+    const handback = zeile("assistant", [{ type: "tool_use", name: "SubagentHandback", input: { message: "ERGEBNIS: gemergt" } }]);
+    const ergebnisBlock = zeile("user", [{ type: "tool_result", tool_use_id: "t1", content: "ok" }]);
+    assert.equal(lies(datei([handback, ergebnisBlock])), "ERGEBNIS: gemergt", "tool_result ist keine Grenze");
+    assert.equal(lies(datei([alt, zeile("user", "Fortsetzung"), handback])), "ERGEBNIS: gemergt", "ein Bericht nach der Grenze zählt");
+  });
+
   test("fehlende Datei oder kein Bericht ergeben null (fail-open)", () => {
     assert.equal(lies(join(tmpdir(), "gibt-es-nicht-bericht.jsonl")), null);
     assert.equal(lies(datei([zeile("user", "x")])), null);
