@@ -1345,3 +1345,38 @@ describe("Arbeitsplatz: Belegung über alle Repos (#88, AK5)", () => {
     expect(r.worktrees).toContain(`/w/.claude/worktrees/b/${WTP}88`);
   });
 });
+
+describe("Design-Schritt in der Auswahl (factory#172)", () => {
+  const DESIGN = { label: "ui", freigabe: "design-ok", system: "docs/design/system.md" };
+  const MIT = { ...CFG, design: DESIGN };
+  const GRUND = "Design-Entwurf nicht freigegeben";
+
+  test("K3: Design-Ticket ohne Freigabe wird übersprungen, das nächste gewählt", () => {
+    const r = frei([item(1, { labels: [{ name: "ui" }] }), item(2)], { config: MIT });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0]?.nr).toBe(1);
+    expect(r.uebersprungen[0]?.grund).toContain(GRUND);
+  });
+  test("mit Freigabe-Label gewählt; ohne Block gleiche Labels wie bisher (K2)", () => {
+    expect(frei([item(1, { labels: [{ name: "ui" }, { name: "design-ok" }] })], { config: MIT }).ticket?.nr).toBe(1);
+    expect(frei([item(1, { labels: [{ name: "ui" }] })]).ticket?.nr).toBe(1);
+  });
+  test("ein offener Blocker nennt seinen Grund vor dem Design-Grund", () => {
+    const r = frei([item(1, { labels: [{ name: "ui" }], body: "blockiert durch #50" })], { config: MIT, offene: new Set([1, 50]) });
+    expect(r.uebersprungen[0]?.grund).toContain("offener Blocker");
+  });
+  test("K3: --ticket meldet den fehlenden Design-Entwurf mit Exit 1", () => {
+    const einzel = (labels: string[]) => ({
+      lade: () => ({ produkt: [], factory: [], offene: new Set<number>() }) as never,
+      ladeEinzeln: () => ({ item: N.itemAusIssue(item(7, { labels: labels.map((name) => ({ name })) }).content), offene: new Set<number>() }) as never,
+      owner: OWNER,
+      namen: NAMEN,
+      config: MIT,
+      repo: FREMD.repo,
+    });
+    const r = N.fuehreAus(["--ticket", "7"], einzel(["ui"]));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(`#7 nicht frei: ${GRUND}`);
+    expect(N.fuehreAus(["--ticket", "7"], einzel(["ui", "design-ok"]) as never).code).toBe(0);
+  });
+});

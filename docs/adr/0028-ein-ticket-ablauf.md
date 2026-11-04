@@ -68,3 +68,5 @@ Entscheidung:
 - Name `factory`: Kurzform des Repo-Namens des Harness, im Repo schon etabliert (`.factory/`, Factory-Board), klar von `/kubernia` zu unterscheiden, kein Projektliteral.
 
 Konsequenzen: Factory-Arbeit entsteht nur noch über `/factory`; die Spielquote ist Soll und Kennzahl (Selbst-Audit), siehe [ADR 0016](0016-langfuse-takt-woechentlich.md). Laufende Sessions sehen `/factory` womöglich erst nach einem Neustart.
+
+Weitere Fortschreibungen stehen als Dateien unter `fortschreibungen/` (Konvention: [README](README.md#format)): [#172](fortschreibungen/0028-172-design-schritt.md).
