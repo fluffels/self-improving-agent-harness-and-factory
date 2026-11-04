@@ -424,7 +424,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     assert.equal(checkReviewNachweis({ runGit: fakeGit(review), env: {} }).ok, false);
     const frei = checkReviewNachweis({ runGit: fakeGit(review, `${Z.reviewOverride}: #162 Maintainerin gab den vierten Zusatzpass frei (Beleg: Kommentar)\n`), env: {} });
     assert.equal(frei.ok, true);
-    assert.match(frei.override as string, /vierten Zusatzpass/);
+    assert.match((frei as { override?: string }).override as string, /vierten Zusatzpass/);
   });
   test("ohne Zusatzpass oder mit ungültigem: das Feld ist null", () => {
     assert.equal(checkReviewNachweis({ runGit: fakeGit(`runden=2 ${LENSES} verdikt=ok`), env: {} }).zusatzpass, null);
