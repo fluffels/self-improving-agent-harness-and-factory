@@ -75,9 +75,9 @@ const STEUERZEICHEN = /[\p{Cc}�]/u;
 function eintragMangel(eintrag) {
   if (typeof eintrag !== "string" || !eintrag.startsWith(KODIER_PRAEFIX)) return `muss ein kodierter String mit dem Präfix ${KODIER_PRAEFIX} sein (Klartext ist verboten)`;
   const rest = eintrag.slice(KODIER_PRAEFIX.length);
-  if (!BASE64_FORM.test(rest) || rest.length % 4 !== 0 || encodeTerm(decodeTerm(rest)) !== rest) return "ist kein kanonisches base64";
+  if (!BASE64_FORM.test(rest) || encodeTerm(decodeTerm(rest)) !== rest) return "ist kein kanonisches base64";
   const klar = decodeTerm(rest);
-  if (klar.trim() === "" || klar !== klar.trim() || STEUERZEICHEN.test(klar)) return "dekodiert zu einem leeren, ungetrimmten oder ungültigen Begriff";
+  if (klar !== klar.trim() || STEUERZEICHEN.test(klar)) return "dekodiert zu einem leeren, ungetrimmten oder ungültigen Begriff";
   return null;
 }
 
@@ -106,7 +106,7 @@ export function internalrefsMaengel(block) {
 
 /** Pur: die dekodierte Projektliste `{ begriffe, namen }` aus der Config; ohne Block beide leer. Wirft mit Fix-Zeile bei kaputter Form (fail-closed). */
 export function internalrefsAus(config) {
-  const block = config?.internalrefs;
+  const block = config.internalrefs;
   if (block === undefined) return { begriffe: [], namen: [] };
   const fehler = internalrefsMaengel(block);
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in der Projekt-Config\nFix: den Block internalrefs (begriffe, namen: Listen von b64:<base64>) korrigieren, neue Einträge nur per node scripts/check-internalrefs.mjs --add`);

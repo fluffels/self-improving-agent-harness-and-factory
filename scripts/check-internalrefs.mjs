@@ -52,7 +52,7 @@ import { dirname, join } from "node:path";
 import { escapeRegex } from "./ticket-namen.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
-import { FIXTURE_WURZELN, KODIER_PRAEFIX, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, encodeTerm, internalrefsAus, internalrefsMaengel, pfadBefunde } from "./internalrefs-lib.mjs";
+import { FIXTURE_WURZELN, KODIER_PRAEFIX, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, decodeTerm, encodeTerm, internalrefsAus, internalrefsMaengel, pfadBefunde } from "./internalrefs-lib.mjs";
 import { PROJEKT_CONFIG, ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 
@@ -74,7 +74,7 @@ export const ENCODED_NAME_TERMS = ["S2F0aGFyaW5h"];
 
 /** base64 → Klartext. */
 export function decodeTerms(encoded = ENCODED_TERMS) {
-  return encoded.map((e) => Buffer.from(e, "base64").toString("utf8"));
+  return encoded.map((e) => decodeTerm(e));
 }
 
 // Klartext → base64 (Gegenstück zu decodeTerms, für `--add`): steht in `internalrefs-lib.mjs`, hier wieder ausgeführt.
@@ -226,6 +226,7 @@ export function addProjektTerm(term, wurzel, schluessel) {
   } catch {
     return { ok: false, reason: `${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON` };
   }
+  if (config === null || typeof config !== "object") return { ok: false, reason: `${PROJEKT_CONFIG} ist kein JSON-Objekt` };
   const block = config.internalrefs ?? {};
   const mangel = internalrefsMaengel(block);
   if (mangel.length > 0) return { ok: false, reason: `Block internalrefs ist ungültig (${mangel.join("; ")})` };

@@ -392,7 +392,11 @@ describe("Projektliste (factory#169)", () => {
       [{ begriffe: [42] }, /begriffe\[0\].*Präfix/],
       [{ begriffe: ["b64:ab-c"] }, /begriffe\[0\].*kanonisches base64/],
       [{ begriffe: ["b64:" + Buffer.from(DUMMY).toString("base64").replace(/=+$/, "")] }, /begriffe\[0\].*kanonisches base64/],
-      [{ begriffe: ["b64:/w=="] }, /begriffe\[0\].*kanonisches base64|ungültigen/],
+      [{ begriffe: ["b64:/w=="] }, /begriffe\[0\].*kanonisches base64/],
+      [{ begriffe: ["b64:YR=="] }, /begriffe\[0\].*kanonisches base64/],
+      [{ begriffe: ["b64:77+9"] }, /begriffe\[0\].*ungültigen/],
+      [5, /muss ein Objekt/],
+      [true, /muss ein Objekt/],
       [{ begriffe: [kod("a\u0001b")] }, /begriffe\[0\].*ungültigen/],
       [{ begriffe: [kod("   ")] }, /begriffe\[0\].*ungültigen/],
       [{ begriffe: [kod(" " + DUMMY)] }, /begriffe\[0\].*ungültigen/],
@@ -442,6 +446,25 @@ describe("Projektliste (factory#169)", () => {
     assert.throws(() => runCheck(klartext, { ...io(() => text), repo: null }), (e: Error) => !e.message.includes(DUMMY));
   });
 
+  test("fehlende oder kaputte Config macht main und --text rot (fail-closed)", () => {
+    const ohne = tempOrdner("ir-ohne-");
+    const kaputt = tempOrdner("ir-kaputt2-");
+    mkdirSync(join(kaputt, ".factory"));
+    writeFileSync(join(kaputt, ".factory", "projekt.json"), "{");
+    for (const w of [ohne, kaputt]) {
+      const err: string[] = [];
+      assert.equal(main([], { wurzel: w, out: () => undefined, err: (m) => err.push(m) }), 1);
+      assert.match(err.join("\n"), /Projekt-Config/);
+      assert.equal(main(["--text"], { wurzel: w, stdin: () => "harmlos", out: () => undefined, err: () => undefined }), 1);
+    }
+  });
+
+  test("runCheck meldet einen Treffer bei überlappenden Listen nur einmal", () => {
+    const w = wurzelMit(undefined);
+    const r = runCheck(w, { ...io(() => `x ${DUMMY} y`), terms: [DUMMY], projekt: { begriffe: [DUMMY], namen: [] }, repo: null });
+    assert.equal(r.violations.length, 1);
+  });
+
   test("main: Klartext-Eintrag in der Config ist Exit 1 ohne den Begriff auszugeben (Negativfall)", () => {
     const w = wurzelMit({ begriffe: [DUMMY] });
     const out: string[] = [];
@@ -452,6 +475,13 @@ describe("Projektliste (factory#169)", () => {
     assert.ok(!alles.includes(DUMMY));
     assert.equal(main(["--text"], { wurzel: w, stdin: () => DUMMY, out: (m) => out.push(m), err: (m) => err.push(m) }), 1);
     assert.ok(!(out.join("\n") + err.join("\n")).includes(DUMMY));
+  });
+
+  test("--text prüft die Projekt-namen als Wortstamm", () => {
+    const w = wurzelMit({ namen: [kod(DUMMY)] });
+    const err: string[] = [];
+    assert.equal(main(["--text"], { wurzel: w, stdin: () => `${DUMMY}s`, out: () => undefined, err: (m) => err.push(m) }), 1);
+    assert.ok(!err.join("\n").includes(DUMMY));
   });
 
   test("--text prüft Kern- plus Projektliste", () => {
@@ -508,6 +538,7 @@ describe("Projektliste (factory#169)", () => {
     const nachher = configText(w);
     assert.match(addLauf(["--add", DUMMY], w, self).err, /schon in der Liste/);
     assert.match(addLauf(["--add", decodeTerms()[0]], w, self).err, /schon in der Kernliste/);
+    assert.match(addLauf(["--add-name", decodeTerms(ENCODED_NAME_TERMS)[0]], w, self).err, /schon in der Kernliste/);
     assert.equal(configText(w), nachher);
   });
 
@@ -529,6 +560,10 @@ describe("Projektliste (factory#169)", () => {
     const w = wurzelMit(undefined);
     assert.equal(addProjektTerm("  ", w, "begriffe").ok, false);
     assert.equal(addProjektTerm(DUMMY, join(w, "gibt-es-nicht"), "begriffe").ok, false);
+    const leer = tempOrdner("ir-null-");
+    mkdirSync(join(leer, ".factory"));
+    writeFileSync(join(leer, ".factory", "projekt.json"), "null");
+    assert.equal(addProjektTerm(DUMMY, leer, "begriffe").ok, false);
     writeFileSync(join(w, SYNC), "{");
     assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
     assert.match(configText(w), /"internalrefs"/);
@@ -618,7 +653,7 @@ describe("Pfadregel (#1888)", () => {
     assert.deepEqual(befund("test/a.test.ts", `/${fremderRepo}/x`), [], "Unix-Pfade und URL-Pfade trägt den Namen zu Recht");
   });
 
-  test("runCheck ohne nutzbare Projekt-Config: Repo-Regel entfällt, Nutzer- und Wurzelregel laufen weiter", () => {
+  test("runCheck mit injizierter Projektliste und ohne nutzbare Projekt-Config: Repo-Regel entfällt, Nutzer- und Wurzelregel laufen weiter", () => {
     const leer = tempOrdner("ir-leer-");
     const zeilen = [`C:/dev/${fremderRepo}/x`, win("C:", "Users", "KEINPLATZHALTER", "x"), win("D:", "KeineWurzel", "x")].join("\n");
     const io = { listFiles: () => ["test/a.test.ts"], listCommits: () => [], readFile: () => zeilen, terms: [], nameTerms: [], projekt: { begriffe: [], namen: [] } } as Parameters<typeof runCheck>[1];
