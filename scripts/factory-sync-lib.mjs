@@ -17,10 +17,10 @@ import {
   normalisierterEinheitText,
   PROJEKT_BLOCK_ENDE,
   PROJEKT_BLOCK_START,
-  rendereProjektwerte,
   setzeBlock,
   setzeJsonSchluessel,
 } from "./besitz-lib.mjs";
+import { rendereProjektwerte } from "./projektwert-lib.mjs";
 
 const PROJEKT_PFAD = PROJEKT_CONFIG;
 

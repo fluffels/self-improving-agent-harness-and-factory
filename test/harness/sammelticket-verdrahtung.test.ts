@@ -61,7 +61,7 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
   test("setzeErstePosition platziert codequalitaet über codequalitaetPlan und läuft auch ohne --top", () => {
     const f = rumpf("function setzeErstePosition(");
     expect(f).toMatch(/if \(!top && art !== "codequalitaet"\) return;/);
-    expect(f).toMatch(/art === "codequalitaet" \? \{ korrektur: null, plan: codequalitaetPlan\(items, nr\) \}/);
+    expect(f).toMatch(/art === "codequalitaet" \? codequalitaetPlan\(items, nr\) : planFuerArgs\(/);
     const main = rumpf("export async function main(");
     expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: codequalitaet braucht kein --top
     expect(main).not.toMatch(/if \(args\.top\)\s*setzeErstePosition/);

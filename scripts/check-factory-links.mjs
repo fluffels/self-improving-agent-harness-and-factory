@@ -127,9 +127,10 @@ export function auditFactoryLinks(rootDir) {
   const v = vorbedingungen(rootDir);
   if (v.nichtsZuPruefen) return { nichtsZuPruefen: true, befunde: [], links: [] };
   if (v.befunde) return { befunde: v.befunde, links: [] };
-  const links = sammleLinks(rootDir, { repo: v.repo, einheiten: Object.keys(v.sync.einheiten ?? {}), ausnahmen: v.ausnahmen });
+  const einheiten = Object.keys(v.sync.einheiten ?? {});
+  const links = sammleLinks(rootDir, { repo: v.repo, einheiten, ausnahmen: v.ausnahmen });
   const index = pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo });
-  const stubs = v.sync.quelle?.tag ? stubBefunde({ lies: leserVon(rootDir), einheiten: Object.keys(v.sync.einheiten ?? {}), repo: v.repo, tag: v.sync.quelle.tag }) : { befunde: [], geprueft: 0 };
+  const stubs = v.sync.quelle?.tag ? stubBefunde({ lies: leserVon(rootDir), einheiten, repo: v.repo, tag: v.sync.quelle.tag }) : { befunde: [], geprueft: 0 };
   return { befunde: [...index, ...stubs.befunde], links, stubs: stubs.geprueft };
 }
 

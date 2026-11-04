@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPw from "../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLauf from "../scripts/projektwert-lauf.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawCli from "../scripts/projektwerte.mjs";
 
 type Cfg = Record<string, unknown>;
@@ -30,7 +34,7 @@ interface Lib {
 interface Cli {
   cli(argv: string[], opt?: { wurzel?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
 }
-const lib = rawLib as unknown as Lib;
+const lib = { ...rawLib, ...rawPw, ...rawLauf } as unknown as Lib;
 const cli = rawCli as unknown as Cli;
 const { PROJEKTWERT_START: S, PROJEKTWERT_ENDE: E } = lib;
 

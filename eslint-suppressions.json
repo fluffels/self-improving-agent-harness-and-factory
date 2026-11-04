@@ -11,10 +11,7 @@
   },
   "scripts/besitz-lib.mjs": {
     "complexity": {
-      "count": 5
-    },
-    "max-depth": {
-      "count": 1
+      "count": 3
     }
   },
   "scripts/board-lib.mjs": {
@@ -22,14 +19,9 @@
       "count": 1
     }
   },
-  "scripts/board-place.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/board-takt.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/brain-metrics.mjs": {

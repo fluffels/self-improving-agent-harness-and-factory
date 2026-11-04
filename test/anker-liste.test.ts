@@ -247,6 +247,29 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
     ]);
   });
 
+  // factory#162 L8: jede Kopf-Form liefert ihren Namen als Funktion des Ankers (nicht `(Modulebene)` oder die Vorgängerfunktion).
+  test.each([
+    ["generische Deklaration", "function f<T>(x: T): T {"],
+    ["generischer Pfeil", "const f = <T>(x: T): T => {"],
+    ["Pfeil mit Typannotation", "const f: Fn = (x) => {"],
+    ["export default function", "export default function f(x) {"],
+    ["async-Deklaration", "export async function f(x) {"],
+    ["Generator", "function* f(x) {"],
+    ["async Pfeil", "const f = async (x) => {"],
+    ["einzeilige Methode", "  f(x) { return x ?? 1; }"],
+    ["Methode mit async", "  async f(x) {"],
+    ["statische Methode", "  static f(x) {"],
+    ["statische async Methode", "  static async f(x) {"],
+    ["Methode mit Rückgabetyp", "  f(x): number {"],
+  ])("Kopf-Form %s", (_n, kopf) => {
+    const ein = kopf.endsWith("}") && !kopf.endsWith("=> {") ? "" : "\n  return x ?? 1;\n}";
+    const klasse = kopf.startsWith("  ");
+    const quelle = klasse ? `class K {\n${kopf}${ein}\n}\n` : `function davor() {}\n${kopf}${ein}\n`;
+    const r = neu(quelle);
+    const mitAnker = r.filter((e) => e.anker.some((a) => a.muster === "??"));
+    expect(mitAnker.map((e) => e.funktion), kopf).toEqual(["f"]);
+  });
+
   test("Kontrollfluss-Zeile mit Block bleibt kein Kopf", () => {
     const r = neu("function a() {\n  if (x) { g(y ?? 1); }\n}\n");
     expect(r.map((e) => e.funktion)).toEqual(["a"]);

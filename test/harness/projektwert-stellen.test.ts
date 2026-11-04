@@ -9,7 +9,9 @@
 import { describe, expect, test } from "vitest";
 import { lies } from "./repo-texte";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawBesitz from "../../scripts/besitz-lib.mjs";
+import * as rawBesitz from "../../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLauf from "../../scripts/projektwert-lauf.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 
@@ -17,7 +19,7 @@ interface Stellen {
   bloecke: unknown[];
   zeilen: { schluessel: string; name?: string }[];
 }
-const B = rawBesitz as unknown as {
+const B = { ...rawBesitz, ...rawLauf } as unknown as {
   projektwertStellen: (text: string, pfad?: string) => Stellen;
   PROJEKTWERT_START: string;
 };
@@ -81,8 +83,8 @@ describe("Projektwert-Stellen in Agenten und Skills", () => {
     expect(B.projektwertStellen(ohne).zeilen).toEqual([]);
   });
 
-  test("besitz-lib bezieht den Config-Pfad aus projekt-config-lib, ohne eigenes Literal", () => {
-    const text = lies("scripts/besitz-lib.mjs");
+  test("projektwert-lib bezieht den Config-Pfad aus projekt-config-lib, ohne eigenes Literal", () => {
+    const text = lies("scripts/projektwert-lib.mjs");
     expect(text).toContain("const CONFIG_PFAD = PROJEKT_CONFIG;");
     expect(text).not.toContain(`"${P.PROJEKT_CONFIG}"`);
   });

@@ -6,17 +6,13 @@
     "complexity": 18
   },
   "scripts/besitz-lib.mjs": {
-    "complexity": 24,
-    "max-depth": 1
+    "complexity": 18
   },
   "scripts/board-lib.mjs": {
     "complexity": 3
   },
-  "scripts/board-place.mjs": {
-    "complexity": 3
-  },
   "scripts/board-takt.mjs": {
-    "complexity": 23
+    "complexity": 21
   },
   "scripts/brain-metrics.mjs": {
     "complexity": 11,

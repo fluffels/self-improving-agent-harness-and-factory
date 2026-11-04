@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPw from "../../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-factory-drift.mjs";
 import { projektConfig } from "../support/fremd-config";
 
@@ -41,7 +43,7 @@ interface Lib {
 interface Drift {
   pruefeDrift(lies: (p: string) => string | null): { entfaellt: boolean; fehler: string[] };
 }
-const lib = rawLib as unknown as Lib;
+const lib = { ...rawLib, ...rawPw } as unknown as Lib;
 const drift = rawDrift as unknown as Drift;
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
