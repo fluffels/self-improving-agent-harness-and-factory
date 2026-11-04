@@ -187,7 +187,7 @@ export function spracheAus(config) {
 export function strukturAus(config) {
   const wert = config?.struktur;
   if (!istObjekt(wert) || !(istText(wert.quelle) || Array.isArray(wert.quelle)) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
-    throw new Error(`struktur fehlt oder hat kein gültiges quelle (String oder Liste) und moduldoku (String oder null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
+    throw new Error(`struktur fehlt oder hat kein gültiges quelle (String oder Liste) und moduldoku (String oder null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen (Schrittfolge: Erstbezug-Leitfaden der Factory, docs/erstbezug.md#schrittfolge)`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
