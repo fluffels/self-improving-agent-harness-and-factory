@@ -11,6 +11,7 @@ import * as ketten from "../scripts/docs-gen/npm-ketten.mjs";
 
 const api = md as unknown as {
   cell: (v: unknown) => string;
+  renderTable: (header: string[], rows: string[][]) => string;
   mermaidText: (s: string) => string;
   ganzzahlKonstante: (root: string, datei: string, name: string) => string;
 };
@@ -32,8 +33,30 @@ describe("mermaidText", () => {
 describe("cell", () => {
   test("escaped | und Zeilenumbrüche; Backslashes bleiben literal (Code-Spans, #1663 H6)", () => {
     assert.equal(api.cell("a|b\nc"), "a\\|b c");
+    assert.equal(api.cell("a\r\nb"), "a b");
     assert.equal(api.cell("`a\\b`"), "`a\\b`");
   });
+
+  // GFM-Teilung einer Tabellenzeile: `\|` ist stets eine maskierte Pipe (auch hinter einem Backslash, belegt per GitHub-Markdown-API:
+  // `a\\|b` in einer Zelle bleibt EINE Zelle), jede andere `|` trennt. Rückwandeln `\|` -> `|` liefert den Zelleninhalt.
+  const gfmZellen = (zeile: string): string[] => {
+    const zellen: string[] = [""];
+    const innen = zeile.slice(2, -2);
+    for (let i = 0; i < innen.length; i++) {
+      if (innen[i] === "\\" && innen[i + 1] === "|") {
+        zellen[zellen.length - 1] += "|";
+        i++;
+      } else if (innen[i] === "|") zellen.push("");
+      else zellen[zellen.length - 1] += innen[i];
+    }
+    return zellen.map((z) => z.trim());
+  };
+  for (const wert of ["a|b", "a\\|b", "a\\", "\\", "`x|y`", "|", "||"]) {
+    test(`renderTable erzeugt für ${JSON.stringify(wert)} genau zwei Datenzellen, der Inhalt bleibt erhalten`, () => {
+      const zeilen = api.renderTable(["h1", "h2"], [[wert, "z"]]).split("\n");
+      assert.deepEqual(gfmZellen(zeilen[2]), [wert.trim(), "z"]);
+    });
+  }
 });
 
 describe("ganzzahlKonstante", () => {

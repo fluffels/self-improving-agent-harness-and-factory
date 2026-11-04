@@ -86,7 +86,7 @@ const checkDiffSize = (o: Parameters<CheckDiffSizeModule["checkDiffSize"]>[0]) =
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {
-    const text = ["12\t3\tsrc/foo.ts", "0\t5\tsrc/bar.ts", "-\t-\tassets/pixellab/x.png"].join("\n");
+    const text = ["12\t3\tsrc/foo.ts", "0\t5\tsrc/bar.ts", "-\t-\tassets/bilder/x.png"].join("\n");
     const r = parseNumstat(text);
     assert.equal(r.fileCount, 3, "drei geänderte Dateien");
     assert.equal(r.changedLines, 12 + 3 + 0 + 5, "Binärdatei trägt 0 Zeilen bei");

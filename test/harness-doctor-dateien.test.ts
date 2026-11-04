@@ -11,7 +11,7 @@ import { fixture } from "./support/tmp-fixture";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown }) => Ergebnis[];
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
 const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
@@ -32,15 +32,16 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
     throw new Error(`unerwarteter Git-Aufruf: ${args.join(" ")}`);
   };
 }
+const TAKT_DATEIEN = [".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"];
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) });
+  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
-  test("ohne blockierende Datei: OK, und alle drei Punkte stehen immer da", () => {
+  test("ohne blockierende Datei: OK, und alle vier Punkte stehen immer da", () => {
     const e = lauf(gesund);
-    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt"]);
     expect(e.every((p) => p.ok)).toBe(true);
   });
 
@@ -228,6 +229,63 @@ describe("Projektdateien (factory#170)", () => {
     const p = projektPunkt(() => false);
     expect(p.fix).toContain("npm run skills:sync");
     expect(p.fix).toContain("npm run lint:prune");
+  });
+});
+
+describe("Langfuse-Takt", () => {
+  const takt = (existiert: (p: string) => boolean, config?: unknown) => punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert, config }), "Langfuse-Takt");
+  const norm = (p: string) => p.replaceAll("\\", "/");
+  const ohneDatei = (fehlend: string) => (p: string) => norm(p) !== `/x/${fehlend}`;
+
+  test("beide Dateien vorhanden: OK, ohne Hinweis bei eigenem Board", () => {
+    const eigen = { repo: "a/b", boards: [{ rolle: "factory" }] };
+    expect(takt(() => true, eigen)).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test.each(TAKT_DATEIEN)("fehlt %s: Lücke mit Fix auf den Sync (Ring kern-nach-entkopplung)", (datei) => {
+    const p = takt(ohneDatei(datei));
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain(datei);
+    expect(p.fix).toContain("factory:sync");
+    expect(p.fix).toContain("kern-nach-entkopplung");
+  });
+
+  test("ein Nulleintrag in boards und eine Config ohne Factory-Board brechen den Punkt nicht", () => {
+    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] }).ok).toBe(true);
+    expect(takt(() => true, { repo: "a/b", boards: [null, { rolle: "factory", repo: "c/d" }] })).toHaveProperty("hinweis");
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "produkt" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("das Factory-Board des eigenen Repos (auch in anderer Schreibweise) gibt keinen Hinweis", () => {
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "a/b" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", boards: [{ rolle: "factory", repo: "A/B" }] })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("eine Config ohne boards oder mit boards ohne Liste bricht den Punkt nicht und gibt keinen Hinweis", () => {
+    expect(takt(() => true, { repo: "a/b" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(takt(() => true, { repo: "a/b", boards: "x" })).toEqual({ punkt: "Langfuse-Takt", ok: true });
+  });
+
+  test("Factory-Board führt ein fremdes Repo: OK mit Hinweis, der Takt dort pflegt Status- und Sammelticket", () => {
+    const fremd = { repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] };
+    const p = takt(() => true, fremd) as Ergebnis & { hinweis?: string };
+    expect(p.ok).toBe(true);
+    expect(p.hinweis).toContain("c/d");
+  });
+});
+
+describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)", () => {
+  const alles = () => true;
+  const lies = (root: string) => punkt(pruefe({ rootDir: root, git: fakeGit(gesund), existiert: alles }), "Langfuse-Takt") as Ergebnis & { hinweis?: string };
+
+  test("die .factory/projekt.json des Roots wird gelesen: ein fremdes Factory-Board ergibt den Hinweis", () => {
+    const root = fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", boards: [{ rolle: "factory", repo: "c/d" }] }) });
+    expect(lies(root).hinweis).toContain("c/d");
+  });
+
+  test("ohne oder mit kaputter Config: OK ohne Hinweis, kein Absturz", () => {
+    expect(lies(fixture({}))).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(lies(fixture({ ".factory/projekt.json": "{kaputt" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 });
 

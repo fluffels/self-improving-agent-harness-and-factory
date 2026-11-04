@@ -473,6 +473,43 @@ blockiert durch acme/demo#13
     expect(S.fuehreAus(MIT("12", "acme/demo#13"), io).code).toBe(0);
     expect((aufrufe.erzeuge[0] as { body: string }).body).toMatch(/^blockiert durch #12, acme\/demo#13$/m);
   });
+  describe("native Abhängigkeit (verknuepfeBlocker)", () => {
+    const mitKnoten = (extra: Partial<Io> & { verknuepfeBlocker?: (a: unknown) => void } = {}) => {
+      const verknuepft: unknown[] = [];
+      const u = umgebung({ "b.md": GUT });
+      const io = {
+        ...u.io,
+        erzeuge: (a: Parameters<Io["erzeuge"]>[0]) => ({ ...u.io.erzeuge(a), node_id: "N900" }),
+        verknuepfeBlocker: (a: unknown) => void verknuepft.push(a),
+        ...extra,
+      };
+      return { io: io as unknown as Io, verknuepft, aufrufe: u.aufrufe };
+    };
+    test("je Blocker genau ein Aufruf: Nummer = Ziel-Repo, owner/name#n = genanntes Repo", () => {
+      const { io, verknuepft } = mitKnoten();
+      expect(S.fuehreAus(MIT("12", "acme/demo#7"), io).code).toBe(0);
+      expect(verknuepft).toEqual([
+        { issueNodeId: "N900", blocker: { repo: FREMD.repo, nummer: 12 }, repo: FREMD.repo },
+        { issueNodeId: "N900", blocker: { repo: "acme/demo", nummer: 7 }, repo: FREMD.repo },
+      ]);
+    });
+    test("ohne --blocker kein Aufruf", () => {
+      const { io, verknuepft } = mitKnoten();
+      S.fuehreAus(ANLEGEN, io);
+      expect(verknuepft).toEqual([]);
+    });
+    test("Fehler der Verknüpfung: Warnung auf stderr, Exit 0, Einsortieren unverändert", () => {
+      const { io, aufrufe } = mitKnoten({
+        verknuepfeBlocker: () => {
+          throw new Error("kaputt");
+        },
+      });
+      const r = S.fuehreAus(MIT("12"), io);
+      expect(r.code).toBe(0);
+      expect(r.err).toMatch(/native Abhängigkeit nicht gesetzt.*kaputt.*Blocker-Zeile im Body bleibt maßgeblich/s);
+      expect(aufrufe.einsortiere).toHaveLength(1);
+    });
+  });
   test("eine schon vorhandene Zeile wird nicht doppelt angehängt, eine fehlende Nummer ergänzt", () => {
     const { io, aufrufe } = umgebung({ "b.md": `${GUT}\nblockiert durch #12\n` });
     S.fuehreAus(MIT("12"), io);
@@ -673,6 +710,28 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: EIGENES });
     io.erzeuge({ titel: "t", body: "b", labels: ["x"], repo: EIGENES.toUpperCase() });
     expect(opts).toEqual([{ token: "pt" }, { token: undefined }, { token: undefined }]);
+  });
+  test("verknuepfeBlocker: Lookup im Blocker-Repo (Token des Blockers), Mutation im Ziel-Repo mit issueId = neues Ticket, blockingIssueId = Blocker", () => {
+    const aufrufe: { args: string[]; opts: unknown }[] = [];
+    const gh = (args: string[], opts: unknown) => (aufrufe.push({ args, opts }), { node_id: "BLOCKER_NODE" });
+    const io = E.echteIo(config, { ghJson: gh, env: { PROJECT_TOKEN: "pt" } }) as unknown as {
+      verknuepfeBlocker: (a: { issueNodeId: string; blocker: { repo: string; nummer: number }; repo: string }) => void;
+    };
+    io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: "zz-org/fremd", nummer: 42 }, repo: EIGENES });
+    expect(aufrufe[0]?.args).toEqual(["api", "repos/zz-org/fremd/issues/42"]);
+    expect(aufrufe[0]?.opts).toEqual({ token: "pt" });
+    const mutation = aufrufe[1]?.args ?? [];
+    expect(mutation.slice(0, 2)).toEqual(["api", "graphql"]);
+    expect(mutation).toContain("i=NEU_NODE");
+    expect(mutation).toContain("b=BLOCKER_NODE");
+    const query = mutation.find((a) => a.startsWith("query=")) ?? "";
+    expect(query).toContain("addBlockedBy");
+    expect(query).toMatch(/issueId:\s*\$i\b/);
+    expect(query).toMatch(/blockingIssueId:\s*\$b\b/);
+    expect(aufrufe[1]?.opts).toEqual({ token: undefined });
+    io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: EIGENES, nummer: 7 }, repo: "zz-org/ziel" });
+    expect(aufrufe[2]?.opts).toEqual({ token: undefined });
+    expect(aufrufe[3]?.opts).toEqual({ token: "pt" });
   });
   test("einsortiere startet board-place mit --repo <repo> (nach und notfall)", () => {
     const { io, exec } = bau();
