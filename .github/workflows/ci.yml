@@ -54,7 +54,7 @@ jobs:
           fi
           echo "FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"
 
-      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: der Gate-Befehl verify (Projekt-Config, Standard `npm run verify`), nicht hier
+      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: der Gate-Befehl verify (Projekt-Config, Standard `npm run verify`, Kette: package.json › scripts.verify), nicht hier
       # kopiert, damit die lokale Reihenfolge nicht von der CI driftet und kein Gate lokal vergessen wird. Coverage und
       # Diff-Coverage sind eigene Schritte dahinter (zusammen = `npm run verify:full`), weil die Instrumentierung die Suite verlangsamt.
       - name: Verify, alle Gates in einer Kette
