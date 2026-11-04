@@ -49,7 +49,7 @@ test("lokale Rollen: aktuell, veraltet, verwaist und fehlender Ordner", () => {
 test("Vorprüfung meldet veraltete Rolle in root", () => {
   const d = projekt({ "alt.toml": "x" }); const out: string[] = [];
   expect((p.main as unknown as (...a: unknown[]) => number)([], (s: string) => out.push(s), () => undefined, () => config, d)).toBe(1);
-  expect(JSON.parse(out[0]).maengel.join("\n")).toContain("verwaist");
+  expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.join("\n")).toContain("verwaist");
 });
 test("Aufruf-, Lese-, JSON- und Configfehler sind geschlossen", () => {
   const out: string[] = [], err: string[] = [];
