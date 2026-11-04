@@ -3,17 +3,18 @@
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
-// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index). Hash und Vergleich
+// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index und legt fehlende Anker-Stub-Seiten an). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 // Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
+// Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine vorhandene Seite wird nie angefasst.
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
-import { befundZeile, INDEX_PFAD, planeFactoryLinks } from "./factory-links-lib.mjs";
+import { befundZeile, INDEX_PFAD, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, rendereProjektwerte, textHash, wirdVerteilt } from "./besitz-lib.mjs";
@@ -304,12 +305,18 @@ function linkSchritt({ plan, ziel, leser }) {
   }
   const platte = liesDatei(ziel);
   const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
+  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser });
+  for (const [pfad, text] of stubs.dateien) plan.dateien.set(pfad, { text, neu: true, ausfuehrbar: false, stub: true });
   const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
-  return { fehler: [], hinweise: [`Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+  const stubHinweise = stubs.dateien.size === 0 ? [] : [`Anker-Stubs: ${stubs.dateien.size} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
+  return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
 }
+
+/** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `neu (Vorlage)`, `neu` oder `geändert`. */
+const artVon = (d) => (d.stub ? "neu (Anker-Stub)" : d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert");
 
 /** Link-Phase der Kommandozeile: `{ ok, hinweise }`; bei `ok: false` ist die Meldung schon über `err` ausgegeben (nichts geschrieben). */
 function linkPhase({ opt, plan, ziel, leser, err }) {
@@ -374,7 +381,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
   if (!links.ok) return 1;
   const ausfuehrbarePfade = [];
   for (const [pfad, d] of plan.dateien) {
-    out(`${opt.trocken ? "würde " : ""}${d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert"}: ${pfad}`);
+    out(`${opt.trocken ? "würde " : ""}${artVon(d)}: ${pfad}`);
     if (opt.trocken) continue;
     const voll = join(ziel, ...pfad.split("/"));
     mkdirSync(dirname(voll), { recursive: true });

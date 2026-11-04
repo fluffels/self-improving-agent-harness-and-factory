@@ -18,6 +18,10 @@ import * as rawWaechter from "../scripts/check-factory-links.mjs";
 import * as rawBesitz from "../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawMd from "../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDocdrift from "../scripts/check-docdrift.mjs";
 
 interface Leser { pfade: string[]; lies(p: string): string | null; vorladen(p: string[]): void }
 interface Plan { befunde: { art: string; datei?: string; zeile?: number; text: string }[]; dateien: Map<string, string>; geschrieben: number; ziele: number; tag: string }
@@ -363,5 +367,199 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
     const r = syncVomTag(q, z, "v2");
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /factory-sync: 0 geändert/);
+  });
+});
+
+// ── Anker-Stubs anlegen (factory#167) ─────────────────────────────────────────
+
+interface StubErgebnis { dateien: Map<string, string>; hinweise: string[]; ueberschriften: number; links: number }
+const stubLib = rawLinks as unknown as {
+  planeAnkerStubs(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string; leser: Leser }): StubErgebnis;
+  stubBefunde(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string }): { befunde: { art: string }[]; geprueft: number };
+};
+const mdLib = rawMd as unknown as { linkStellen(md: string): unknown[]; collectHeadingSlugs(md: string): string[] };
+
+describe("planeAnkerStubs (pur, factory#167)", () => {
+  const EINHEIT = [".claude/agents/x.md"];
+  /** Tag-Baum `seiten` (Pfad → Text); der Kern ist `.claude/agents/x.md` mit den übergebenen Links; `vorhanden` sind Seiten, die das Ziel schon hat. */
+  function stubs(kern: string, seiten: Record<string, string>, vorhanden: Record<string, string> = {}, tag = "v2"): { r: StubErgebnis; lies: (p: string) => string | null } {
+    const ziel: Record<string, string> = { ".claude/agents/x.md": kern, ...vorhanden };
+    const lies = (p: string): string | null => ziel[p] ?? null;
+    const leser: Leser = { pfade: Object.keys(seiten), lies: (p) => seiten[p] ?? null, vorladen: () => {} };
+    return { r: stubLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag, leser }), lies };
+  }
+  const SEITE = "# Titel `Code`\n\nIntro [x](rel.md)\n\n## Eins\n\ntext\n\n## Zwei [Link](rel.md)\n\n## Eins\n\ntext\n\n## Drei\n";
+  const kern = (...a: string[]): string => a.map((x) => `[l](../../docs/s.md${x})`).join(" ") + "\n";
+  const wirkt = (ergebnis: { r: StubErgebnis; lies: (p: string) => string | null }): { befunde: { art: string }[] } => {
+    const lies = (p: string): string | null => ergebnis.r.dateien.get(p) ?? ergebnis.lies(p);
+    return stubLib.stubBefunde({ lies, einheiten: EINHEIT, repo: REPO, tag: "v2" });
+  };
+
+  test("exakter Stub-Text: erste Überschrift mit Seitenlink, danach nur die verlinkten Überschriften mit ihrem Link (Rohwerte)", () => {
+    const e = stubs(kern("#zwei-link", "#drei"), { "docs/s.md": SEITE });
+    assert.equal(
+      e.r.dateien.get("docs/s.md"),
+      `# Titel Code\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [docs/s.md](${u("v2", "docs/s.md")})\n\n` +
+        `## Zwei Link\n\nKern: [docs/s.md#zwei-link](${u("v2", "docs/s.md", "zwei-link")})\n\n## Drei\n\nKern: [docs/s.md#drei](${u("v2", "docs/s.md", "drei")})\n`,
+    );
+    assert.deepEqual([e.r.ueberschriften, e.r.links, e.r.hinweise], [3, 3, []]);
+  });
+
+  test("Eigenschaft: die erzeugten Stubs haben keinen Stub-Befund, jeder Kern-Link ist gedeckt", () => {
+    const e = stubs(kern("", "#titel-code", "#zwei-link", "#eins-1", "#drei"), { "docs/s.md": SEITE });
+    assert.deepEqual(wirkt(e).befunde, []);
+  });
+
+  test("Eigenschaft: der Stub trägt keine relativen Links und die Anker bleiben gleich (Link-Text und Backticks entfallen slug-neutral)", () => {
+    const e = stubs(kern("#zwei-link", "#titel-code"), { "docs/s.md": SEITE });
+    const text = e.r.dateien.get("docs/s.md") ?? "";
+    assert.ok(!/rel\.md|`/.test(text));
+    assert.ok(mdLib.collectHeadingSlugs(text).includes("zwei-link"));
+    assert.ok(mdLib.collectHeadingSlugs(text).includes("titel-code"));
+  });
+
+  test("doppelte Überschrift: der Kern-Anker `eins-1` nimmt die frühere gleichnamige mit, damit der Slug im Stub gleich bleibt", () => {
+    const e = stubs(kern("#eins-1"), { "docs/s.md": SEITE });
+    const text = e.r.dateien.get("docs/s.md") ?? "";
+    assert.deepEqual(mdLib.collectHeadingSlugs(text), ["titel-code", "eins", "eins-1"]);
+    assert.deepEqual(wirkt(e).befunde, []);
+  });
+
+  test("AK3: eine Seite, die das Ziel schon hat (auch gekürzt ohne Überschriften), bekommt keinen Stub", () => {
+    for (const vorhanden of ["Projektanteil\n", "# Gekürzt\n", ""]) {
+      const e = stubs(kern("#zwei-link"), { "docs/s.md": SEITE }, { "docs/s.md": vorhanden });
+      assert.equal(e.r.dateien.size, 0);
+    }
+  });
+
+  test("ein Ziel mit eigener Einheit (Besitz) bekommt keinen Stub", () => {
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? kern("#zwei-link") : null);
+    const leser: Leser = { pfade: ["docs/s.md"], lies: () => SEITE, vorladen: () => {} };
+    const r = stubLib.planeAnkerStubs({ lies, einheiten: [...EINHEIT, "docs/s.md"], repo: REPO, tag: "v2", leser });
+    assert.equal(r.dateien.size, 0);
+  });
+
+  test("eine Pseudo-Überschrift im Codeblock zählt nicht", () => {
+    const e = stubs(kern("#drei"), { "docs/s.md": "# T\n\n```\n## Drei\n```\n\n## Drei\n" });
+    assert.deepEqual(mdLib.collectHeadingSlugs(e.r.dateien.get("docs/s.md") ?? ""), ["t", "drei"]);
+  });
+
+  test("fehlt ein Kern-Anker am Tag, steht ein Hinweis da und die Seite hat die übrigen Anker; ein Kern-Link ohne Anker gibt Titel, Absatz und Seitenlink", () => {
+    const e = stubs(kern("#gibt-es-nicht", "#drei"), { "docs/s.md": SEITE });
+    assert.deepEqual(e.r.hinweise, ["Anker-Stub: docs/s.md hat am Tag v2 keine Überschrift #gibt-es-nicht (check:factorylinks meldet stub-anker)"]);
+    assert.ok(mdLib.collectHeadingSlugs(e.r.dateien.get("docs/s.md") ?? "").includes("drei"));
+    const nur = stubs(kern(""), { "docs/s.md": SEITE });
+    assert.equal(nur.r.dateien.get("docs/s.md")?.split("\n").filter((z) => z.startsWith("#")).join("|"), "# Titel Code");
+    assert.deepEqual([nur.r.ueberschriften, nur.r.links], [1, 1]);
+    assert.equal(mdLib.linkStellen(nur.r.dateien.get("docs/s.md") ?? "").length, 0);
+    assert.equal((nur.r.dateien.get("docs/s.md") ?? "").split("](https://").length - 1, 1);
+  });
+
+  test("fehlt das Ziel am Tag, steht ein Hinweis da und es entsteht keine Datei", () => {
+    const e = stubs(kern("#drei"), {});
+    assert.equal(e.r.dateien.size, 0);
+    assert.deepEqual(e.r.hinweise, ["Anker-Stub: docs/s.md gibt es am Tag v2 nicht, keine Stub-Seite (check:factorylinks meldet stub-ziel)"]);
+  });
+
+  test("eine Seite ohne Ebene-1-Überschrift beginnt mit dem Absatz", () => {
+    const e = stubs(kern("#drei"), { "docs/s.md": "## Drei\n" });
+    assert.match(e.r.dateien.get("docs/s.md") ?? "", /^Anker-Stub: .*\n\n## Drei\n\nKern: \[docs\/s\.md#drei\]/);
+    assert.deepEqual(wirkt(e).befunde, []);
+  });
+});
+
+describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { timeout: 30_000 }, () => {
+  const SEITE_E2E = "# Seite\n\n## Erster\n\ntext\n\n## Zweiter Abschnitt\n\ntext\n";
+  const quelleMitSeiten = (): string => {
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#zweiter-abschnitt) hier.", besitzDateien: { ".claude/agents/x.md": "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md)\n" } });
+    schreibe(q, "docs/seite.md", SEITE_E2E);
+    schreibe(q, "docs/ohne.md", "# Ohne Anker\n\ntext\n");
+    return q;
+  };
+  const zielMitPackage = (dateien: Record<string, string> = {}): string => baueZiel({ "package.json": JSON.stringify({ scripts: {} }), ...dateien });
+  const audit = (z: string): Record<string, unknown[]> => (rawDocdrift as unknown as { auditDocDrift(r: string): Record<string, unknown[]> }).auditDocDrift(z);
+  const STUB_ZEILE = /^neu \(Anker-Stub\): docs\/(seite|ohne)\.md$/;
+
+  test("AK1+AK2: ein leeres Ziel bekommt beide Stub-Seiten, danach sind Link-Wächter und docdrift ohne Handarbeit grün", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)).length, 2);
+    assert.match(r.out, /Anker-Stubs: 2 Seiten angelegt, 4 Überschriften, 4 Links am Tag v2/);
+    assert.equal(
+      lies(z, "docs/ohne.md"),
+      `# Ohne Anker\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [docs/ohne.md](${u("v2", "docs/ohne.md")})\n`,
+    );
+    const index = JSON.parse(lies(z, INDEX)) as { ziele: Record<string, string[]> };
+    assert.deepEqual(index.ziele["docs/seite.md"], ["", "erster", "zweiter-abschnitt"]);
+    assert.deepEqual(index.ziele["docs/ohne.md"], [""]);
+    const g = wachter(z);
+    assert.equal(g.code, 0, g.err);
+    const a = audit(z);
+    for (const k of ["deadLinks", "deadAnchors", "deadCommands", "undocumentedScripts", "testPfadFehler", "fortschreibungsFehler"]) assert.deepEqual(a[k] ?? [], [], k);
+  });
+
+  test("AK3: eine vorhandene (gekürzte, CRLF) Seite bleibt byte-gleich; nur die fehlende wird angelegt, der Wächter meldet die gekürzte", () => {
+    const q = quelleMitSeiten();
+    const gekuerzt = "# Projektanteil\r\n\r\nnur unser Teil\r\n";
+    const z = zielMitPackage({ "docs/seite.md": gekuerzt });
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/seite.md"), gekuerzt);
+    assert.deepEqual(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)), ["neu (Anker-Stub): docs/ohne.md"]);
+    assert.match(r.out, /Anker-Stubs: 1 Seiten angelegt, 1 Überschriften, 1 Links/);
+    assert.match(wachter(z).err, /stub-anker|stub-link/);
+  });
+
+  test("--trocken meldet die Stubs und schreibt nichts", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    taggen(q, "v2");
+    const vorher = baum(z);
+    const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2", "--trocken"]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /würde neu \(Anker-Stub\): docs\/seite\.md/);
+    assert.deepEqual(baum(z), vorher);
+  });
+
+  test("ein zweiter Sync am selben Tag ändert nichts", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    assert.equal(syncVomTag(q, z, "v2").code, 0);
+    const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /factory-sync: 0 geändert/);
+    assert.ok(!/Anker-Stub\)/.test(r.out));
+  });
+
+  test("ein Sync auf einen anderen Tag lässt die Stub-Links auf den neuen Tag zeigen, beide Prüfungen bleiben grün", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    assert.equal(syncVomTag(q, z, "v2").code, 0);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.match(lies(z, "docs/ohne.md"), /blob\/v3\/docs\/ohne\.md/);
+    assert.ok(!/blob\/v2\//.test(lies(z, "docs/seite.md")));
+    assert.equal(wachter(z).code, 0);
+  });
+
+  test("ein Link-Befund in einer anderen Datei lässt Exit 1 und keine Stub-Datei schreiben", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage({ "docs/x.md": `[a](${u("v1", "AGENTS.md", "gibt-es-nicht")})\n` });
+    taggen(q, "v2");
+    const vorher = baum(z);
+    const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
+    assert.equal(r.code, 1);
+    assert.deepEqual(baum(z), vorher);
+  });
+
+  test("--entwurf legt keine Stubs an", () => {
+    const q = quelleMitSeiten();
+    const z = zielMitPackage();
+    const r = laufe(["--quelle", q, "--ziel", z, "--entwurf"]);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!/Anker-Stub\)/.test(r.out));
+    assert.equal(existsSync(join(z, "docs", "seite.md")), false);
   });
 });
