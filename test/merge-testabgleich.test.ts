@@ -261,7 +261,7 @@ describe("Wächter-Lauf-Hinweis", () => {
     assert.equal(W.waechterHinweis([]), "");
     const fuenf = ["a", "b", "c", "d", "e"].map((n) => `docs/${n}.md`);
     const t5 = W.waechterHinweis(fuenf);
-    assert.match(t5, /Wächter-Lauf nötig: npx vitest run test\/harness/);
+    assert.match(t5, /Wächter-Lauf nötig: node scripts\/gate-befehl\.mjs testGezielt test\/harness/);
     assert.ok(fuenf.every((f) => t5.includes(f)));
     assert.doesNotMatch(t5, /weitere/);
     const t7 = W.waechterHinweis([...fuenf, "docs/f.md", "docs/g.md"]);
@@ -303,7 +303,7 @@ describe("pruefeMerge nennt den Wächter-Lauf", { timeout: REPO_TIMEOUT_MS }, ()
     return { root, g };
   };
   const lies = (root: string) => (p: string) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8") : null);
-  const HINWEIS = /Wächter-Lauf nötig: npx vitest run test\/harness/;
+  const HINWEIS = /Wächter-Lauf nötig: node scripts\/gate-befehl\.mjs testGezielt test\/harness/;
 
   test("nur eine Seite berührt docs/: kein Hinweis", () => {
     const { root, g } = merge("docs/a.md", "src/x.ts");
