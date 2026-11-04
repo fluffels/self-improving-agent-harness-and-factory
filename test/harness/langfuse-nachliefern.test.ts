@@ -204,10 +204,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, projekt-config-lib, modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), ticket-namen (nur Builtins), direktaufruf (nur Builtins) nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), ticket-namen (nur Builtins), direktaufruf (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "projekt-config-lib", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "markdown", "ticket-namen", "direktaufruf"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "markdown", "ticket-namen", "direktaufruf"]));
   });
 });
 

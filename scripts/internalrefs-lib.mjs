@@ -81,8 +81,9 @@ function eintragMangel(eintrag) {
   return null;
 }
 
-/** Pur: prüft den Block `internalrefs` der Projekt-Config; gibt die Mängel zurück (leer = gültig). Nennt nie einen Eintragswert. */
+/** Pur: prüft den Block `internalrefs` der Projekt-Config; gibt die Mängel zurück (leer = gültig, auch ohne Block). Nennt nie einen Eintragswert. */
 export function internalrefsMaengel(block) {
+  if (block === undefined) return [];
   if (block === null || typeof block !== "object" || Array.isArray(block)) return ["internalrefs muss ein Objekt mit den Listen begriffe und namen sein"];
   const fehler = Object.keys(block).filter((k) => k !== "begriffe" && k !== "namen").map((k) => `internalrefs.${k} ist kein bekannter Schlüssel (erlaubt: begriffe, namen)`);
   for (const liste of ["begriffe", "namen"]) {
@@ -108,7 +109,7 @@ export function internalrefsAus(config) {
   const block = config?.internalrefs;
   if (block === undefined) return { begriffe: [], namen: [] };
   const fehler = internalrefsMaengel(block);
-  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in .factory/projekt.json\nFix: den Block internalrefs (begriffe, namen: Listen von b64:<base64>) korrigieren, neue Einträge nur per node scripts/check-internalrefs.mjs --add`);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in der Projekt-Config\nFix: den Block internalrefs (begriffe, namen: Listen von b64:<base64>) korrigieren, neue Einträge nur per node scripts/check-internalrefs.mjs --add`);
   const dekodiert = (liste) => (block[liste] ?? []).map((e) => decodeTerm(e.slice(KODIER_PRAEFIX.length)));
   return { begriffe: dekodiert("begriffe"), namen: dekodiert("namen") };
 }

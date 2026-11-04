@@ -251,6 +251,30 @@ function textListen(wurzel) {
   return { terms: vereint(decodeTerms(), projekt.begriffe), names: vereint(decodeTerms(ENCODED_NAME_TERMS), projekt.namen) };
 }
 
+/** `--add`/`--add-name`: meldet das Ergebnis von `begriffAufnehmen`, Rückgabe: Exit-Code. */
+function aufnehmenLauf(flag, result, { red, green, dim, out, err }) {
+  if (!result.ok) {
+    err(red(`✖ --${flag} fehlgeschlagen: ${result.reason}`));
+    return 1;
+  }
+  out(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
+  out(dim("  Der Klartext steht bewusst nirgends im Repo — auch nicht in der Commit-Message."));
+  return 0;
+}
+
+/** `--text`: der Text aus `stdin` gegen Kern- plus Projektliste. */
+function textLauf(stdin, wurzel, ctx) {
+  const text = stdin();
+  const { terms, names } = textListen(wurzel);
+  return bericht(findViolations(["stdin"], terms, () => text, names), 1, { ...ctx, label: checkedLabel("text") });
+}
+
+/** Der Repo-Lauf (`pruefe`: Dateien und Commit-Messages). */
+function repoLauf(pruefe, ctx) {
+  const { files, violations } = pruefe();
+  return bericht(violations, files.length, { ...ctx, label: checkedLabel("repo") });
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 /** Einstieg. `deps` (Tests): `self` (die Datei, in die `--add`/`--add-name` in der Fabrik schreiben), `wurzel` (Repo-Wurzel für Projekt-Config und Sync-Stand), `stdin` (Text für `--text`), `out`, `err`, `pruefe` (statt `runCheck` gegen das echte Repo). Rückgabe: Exit-Code. */
 export function main(argv = process.argv.slice(2), { self = SELF, wurzel = ROOT, stdin = () => readFileSync(0, "utf8"), out = console.log, err = console.error, pruefe = () => runCheck(wurzel) } = {}) {
@@ -266,28 +290,14 @@ Aufruf: node scripts/check-internalrefs.mjs [--add <begriff> | --add-name <begri
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  for (const flag of ["add", "add-name"]) {
-    if (werte[flag] === undefined) continue;
-    const result = begriffAufnehmen(flag, werte[flag], { self, wurzel });
-    if (!result.ok) {
-      err(red(`✖ --${flag} fehlgeschlagen: ${result.reason}`));
-      return 1;
-    }
-    out(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
-    out(dim("  Der Klartext steht bewusst nirgends im Repo — auch nicht in der Commit-Message."));
-    return 0;
-  }
+  const flag = ["add", "add-name"].find((f) => werte[f] !== undefined);
+  if (flag) return aufnehmenLauf(flag, begriffAufnehmen(flag, werte[flag], { self, wurzel }), { red, green, dim, out, err });
 
   // `--text`: Text von stdin prüfen (PR-Titel/-Body vor dem `gh pr create`/`gh pr edit`), z.B.
   //   gh pr view <nr> --json title,body --jq '.title, .body' | node scripts/check-internalrefs.mjs --text
+  const ctx = { red, green, out, err };
   try {
-    if (werte.text) {
-      const text = stdin();
-      const { terms, names } = textListen(wurzel);
-      return bericht(findViolations(["stdin"], terms, () => text, names), 1, { red, green, label: checkedLabel("text"), out, err });
-    }
-    const { files, violations } = pruefe();
-    return bericht(violations, files.length, { red, green, label: checkedLabel("repo"), out, err });
+    return werte.text ? textLauf(stdin, wurzel, ctx) : repoLauf(pruefe, ctx);
   } catch (e) {
     err(red(`✖ ${e instanceof Error ? e.message : e}`));
     return 1;
