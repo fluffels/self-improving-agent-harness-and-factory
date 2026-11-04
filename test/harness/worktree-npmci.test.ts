@@ -92,7 +92,8 @@ function verstoesse(treffer: Treffer[]): Treffer[] {
 
 /** Der Standard des Gate-Befehls `install` muss `npm ci` bleiben, ein Projekt-Befehl darf nicht `npm install` sein (pur, testbar). */
 function installBefehlFehler(befehl: string): string | null {
-  return /^npm ci\b/.test(befehl) || !/\bnpm install\b/.test(befehl) ? null : `Gate-Befehl install nutzt npm install: ${befehl}`;
+  const teile = befehl.split(/&&|\|\||[;|]/);
+  return teile.some((teil) => /^\s*npm\s+(?:install|i)(?![\w:-])/.test(teil)) ? `Gate-Befehl install nutzt npm install: ${befehl}` : null;
 }
 
 function alleTreffer(): Treffer[] {
@@ -170,6 +171,12 @@ describe("Worktree-Setup nutzt npm ci (#1119)", () => {
     const standard = (gateRaw as unknown as { STANDARD_BEFEHLE: Record<string, string> }).STANDARD_BEFEHLE;
     assert.equal(installBefehlFehler(standard.install), null);
     assert.ok(installBefehlFehler("npm install --no-save"));
+    // Jeder Teil einer Kette zählt, nicht nur der erste.
+    for (const kette of ["npm ci && npm install", "npm ci || npm i", "npm ci; npm install --no-save", "npm ci | npm install"]) {
+      assert.ok(installBefehlFehler(kette), kette);
+    }
+    assert.equal(installBefehlFehler("npm ci && npm run build"), null);
+    assert.equal(installBefehlFehler("npm ci --no-audit && npm run install-hooks"), null);
     const projekt = JSON.parse(readFileSync(ROOT + ".factory/projekt.json", "utf8")) as { befehle?: { install?: string } };
     if (projekt.befehle?.install !== undefined) assert.equal(installBefehlFehler(projekt.befehle.install), null);
   });

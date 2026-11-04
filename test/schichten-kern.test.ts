@@ -136,12 +136,8 @@ describe("musterAus", () => {
     assert.ok(!new RegExp(kern.musterAus("a/", ["main"], false, [".java"])).test("a/mainXjava"));
   });
 
-  test("Backslash und Regex-Zeichen einer Endung werden wörtlich genommen", () => {
-    const r = new RegExp(kern.musterAus("a/", ["main"], true, [".a\\b", ".c+"]));
-    assert.ok(r.test("a/main.a\\b"));
-    assert.ok(r.test("a/main.c+"));
-    assert.ok(!r.test("a/main.ab"));
-    assert.ok(!r.test("a/main.cc"));
+  test("Endung ausserhalb der Form (Backslash, Regex-Zeichen) wirft statt ein Muster zu bauen", () => {
+    for (const e of [".a\\b", ".c+", "java", ".j(a)"]) assert.throws(() => kern.musterAus("a/", ["main"], true, [e]), /Endung/, e);
   });
 
   test("Grenze: Verzeichnis-Schicht nimmt alle Dateien darunter, Datei-Schicht nur ihre Endungen", () => {
@@ -216,7 +212,7 @@ describe("pruefeModell: Negativfälle (AK4)", () => {
   });
 
   test("mehrteilige Endung .d.ts gültig, Endung mit Präfix davor rot, kein Modell rot", () => {
-    assert.doesNotThrow(() => kern.pruefeModell({ ...basis(), endungen: [".d.ts"] }));
+    assert.doesNotThrow(() => kern.pruefeModell(modellAus({ quellwurzel: "src/", endungen: [".d.ts"] })));
     rot({ ...basis(), endungen: ["x.java"] }, /endungen: "x.java"/);
     rot(undefined, /SCHICHT_MODELL ungültig/);
   });
@@ -249,5 +245,56 @@ describe("pruefeModell: Negativfälle (AK4)", () => {
     const n = modellAus({ quellwurzeln: ["a/", "b/"] });
     n.schichten[1] = { ...n.schichten[1], muster: 5 as unknown as string };
     rot(n, /muster beginnt nicht/);
+  });
+});
+
+describe("pruefeModell: Endungen, Präfix, .d.ts und Wurzel-Namen (factory#193)", () => {
+  const rot = (m: unknown, muster: RegExp) => assert.throws(() => kern.pruefeModell(m), muster);
+  const java = () => modellAus({ quellwurzel: "src/", endungen: [".java"] });
+  const setze = (m: Modell, i: number, wurzeln: string[], nurDatei: boolean, endungen?: string[]) => {
+    m.schichten[i] = { ...m.schichten[i], wurzeln, muster: kern.musterAus("src/", wurzeln, nurDatei, endungen) };
+  };
+
+  test("Muster ohne die Endungen des Modells ist ein Mangel (Datei- und Ordner-Schicht)", () => {
+    assert.doesNotThrow(() => kern.pruefeModell(java()));
+    const datei = java();
+    setze(datei, 0, ["main"], true);
+    rot(datei, /muster endet nicht auf die endungen/);
+    const ordner = java();
+    setze(ordner, 1, ["web", "api"], false);
+    rot(ordner, /muster endet nicht auf die endungen/);
+  });
+
+  test("ohne endungen im Modell gilt die Prüfung nicht", () => {
+    assert.doesNotThrow(() => kern.pruefeModell(modellAus({ quellwurzel: "src/" })));
+  });
+
+  test("auch die einzelne quellwurzel bindet jedes Muster an ihren Präfix", () => {
+    const m = modellAus({ quellwurzel: "src/" });
+    m.schichten[1] = { ...m.schichten[1], muster: kern.musterAus("andere/", ["web", "api"], false) };
+    rot(m, /muster beginnt nicht mit den quellwurzeln/);
+  });
+
+  test(".d.ts-Ausschluss der Regeln nur bei Modellen mit .ts", () => {
+    const hat = (m: Modell) => JSON.stringify(kern.verbotsRegeln(m)).includes("d\\\\.ts");
+    assert.ok(hat(modellAus({ quellwurzel: "src/" })));
+    assert.ok(!hat(java()));
+    assert.ok(hat(modellAus({ quellwurzel: "src/", endungen: [".java", ".ts"] })));
+  });
+
+  test("Wurzel-Namen: Großbuchstaben und Unterstrich erlaubt, Eindeutigkeit ohne Groß-/Kleinschreibung", () => {
+    const gross = java();
+    setze(gross, 0, ["Main"], true, [".java"]);
+    assert.doesNotThrow(() => kern.pruefeModell(gross));
+    const unterstrich = java();
+    setze(unterstrich, 0, ["a_b"], true, [".java"]);
+    assert.doesNotThrow(() => kern.pruefeModell(unterstrich));
+    const dublette = java();
+    setze(dublette, 0, ["web"], true, [".java"]);
+    setze(dublette, 1, ["Web", "api"], false, [".java"]);
+    rot(dublette, /steht in zwei Schichten/);
+    const schlecht = java();
+    setze(schlecht, 0, ["_x"], true, [".java"]);
+    rot(schlecht, /ungültige Wurzel/);
   });
 });
