@@ -99,11 +99,11 @@ describe("parseJacoco am statischen Fixture", () => {
     assert.deepEqual([...e.zeilen.entries()], [[2, 0]]);
   });
   test("zwei sourcefile-Einträge derselben Datei addieren ihre Treffer und mischen Zweige per max", () => {
-    const t = `<package name="p"><sourcefile name="A.java"><line nr="1" ci="1"/><line nr="2" ci="1" mb="1" cb="1"/></sourcefile></package><package name="p"><sourcefile name="A.java"><line nr="1" ci="2"/><line nr="2" ci="1" mb="1" cb="1"/></sourcefile></package>`;
+    const t = `<package name="p"><sourcefile name="A.java"><line nr="1" ci="1"/><line nr="2" ci="1" mb="0" cb="2"/></sourcefile></package><package name="p"><sourcefile name="A.java"><line nr="1" ci="2"/><line nr="2" ci="1" mb="2" cb="1"/></sourcefile></package>`;
     const e = m.parseJacoco(t).get("p/A.java")!;
     assert.equal(e.zeilen.get(1), 3);
     assert.equal(e.zweige.has(1), false);
-    assert.deepEqual(e.zweige.get(2), { total: 2, taken: 1 });
+    assert.deepEqual(e.zweige.get(2), { total: 3, taken: 2 });
   });
 });
 
