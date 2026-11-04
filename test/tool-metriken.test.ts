@@ -240,6 +240,7 @@ describe("pruefLaeufe (#1120)", () => {
       sh("node scripts/xgate-befehl.mjs verify"),
       // Nur der Name direkt hinter dem Skript zählt, ein späterer Gate-Name nicht.
       sh("node scripts/gate-befehl.mjs install verify"),
+      sh("node scripts/gate-befehl.mjs gibtsnicht verify"),
       // Nur `node` ist der Läufer: ein anderes Kommando mit dem Skriptnamen als Argument zählt nicht.
       sh("git add scripts/gate-befehl.mjs verify"),
     ];
