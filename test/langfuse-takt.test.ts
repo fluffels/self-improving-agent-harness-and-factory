@@ -4,7 +4,7 @@
  * Reines Node-Tooling-Skript ohne Declaration-File: Import über `unknown` auf ein lokales Interface
  * (gleiche Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FREMD_OWNER, projektConfig } from "./support/fremd-config";
@@ -14,6 +14,7 @@ import * as raw from "../scripts/langfuse-takt.mjs";
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; grund: string; warnungen: string[] };
 type Takt = {
+  WURZEL: string;
   STATUS_TITEL: string;
   MIN_MERGES: number;
   entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null; jetzt?: string | Date }) => Entscheidung;
@@ -133,6 +134,10 @@ describe("statusBody", () => {
     expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
     expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
     expect(x).not.toContain(String(projektConfig().repo));
+  });
+  test("der Standard-Wurzelpfad von statusBody ist die Repo-Wurzel (dort liegt im Bezieher der Sync-Stand)", () => {
+    expect(existsSync(join(T.WURZEL, "scripts", "langfuse-takt.mjs"))).toBe(true);
+    expect(existsSync(join(T.WURZEL, "package.json"))).toBe(true);
   });
   test("Bezieher (Sync-Stand): die Factory-Seiten stehen auf dem Sync-Tag der Quelle, nicht auf main des Beziehers (factory#157)", () => {
     const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));

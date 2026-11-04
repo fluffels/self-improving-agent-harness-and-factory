@@ -15,7 +15,8 @@ import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { fileURLToPath } from "node:url";
 
-const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+/** Repo-Wurzel des Checkouts: Standard für `statusBody` (dort liegt ein Sync-Stand, falls dies ein Bezieher ist). */
+export const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
