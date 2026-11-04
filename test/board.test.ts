@@ -183,12 +183,15 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
   const LT = "Langfuse-Befunde (gesammelt)";
   const langfuse = (number: number, extra: Partial<B> = {}) => b(number, { title: LT, ...extra });
+  const CQ = "Codequalität (gesammelt)";
+  const codeq = (number: number, extra: Partial<B> = {}) => b(number, { title: CQ, ...extra });
   const K = rawLib as unknown as {
     sammelticketItem: (items: B[], ohne?: number[]) => B | null;
     klemmeAnker: (items: B[], anker: number | null, o?: { numbers?: number[]; notfall?: boolean }) => { anker: number | null; geklemmt: boolean; sammelticket: number | null };
     normalizeItems: (raw: unknown) => B[];
     SAMMELTICKET_TITEL: string;
     LANGFUSE_SAMMELTICKET_TITEL: string;
+    CODEQUALITAET_SAMMELTICKET_TITEL: string;
     SAMMELTICKET_TITEL_LISTE: string[];
     sammelblock: (items: B[], ohne?: number[]) => B[];
     ungeclaimt: (i: { assignees?: string[] }) => boolean;
@@ -253,9 +256,10 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"], [21, "I20"]]);
   });
 
-  test("Titelliste: Harness und Langfuse; Sammelblock = aufeinanderfolgende ungeclaimte Sammeltickets ab dem Harness-Sammelticket (#1342)", () => {
-    expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT]);
+  test("Titelliste: Harness, Langfuse und Codequalität; Sammelblock = aufeinanderfolgende ungeclaimte Sammeltickets ab dem Harness-Sammelticket (#1342)", () => {
+    expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT, CQ]);
     expect(K.LANGFUSE_SAMMELTICKET_TITEL).toBe(LT);
+    expect(K.CODEQUALITAET_SAMMELTICKET_TITEL).toBe(CQ);
     const nummern = (items: B[], ohne?: number[]) => K.sammelblock(items, ohne).map((i) => i.number);
     expect(nummern([sammel(1), langfuse(2), b(3), langfuse(4)])).toEqual([1, 2]);
     expect(nummern([b(3), sammel(1)]), "Block beginnt am Harness-Sammelticket, wo es steht").toEqual([1]);
@@ -267,6 +271,8 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(nummern([b(8), sammel(1), langfuse(2), b(3)]), "Notfall/Forum-Ticket davor stört nicht").toEqual([1, 2]);
     expect(nummern([langfuse(2), b(3)]), "ohne Harness-Sammelticket ab der Spitze").toEqual([2]);
     expect(nummern([])).toEqual([]);
+    expect(nummern([codeq(5), b(3)]), "Produkt-Board ohne Harness-Ticket: das Codequalität-Ticket bildet den Block").toEqual([5]);
+    expect(nummern([sammel(1), codeq(5), b(3)]), "Harness und Codequalität bilden gemeinsam den Block").toEqual([1, 5]);
   });
 
   test("Klemmung kennt beide Sammeltickets: der Anker ist das am weitesten hinten stehende (#1342)", () => {
@@ -286,6 +292,7 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(hinter([b(8), sammel(1), langfuse(2), b(9)], 8), "Anker über den Sammeltickets wird geklemmt").toBe(2);
     expect(hinter([langfuse(2), b(9)]), "nur Langfuse an der Spitze, kein Harness-Sammelticket").toBe(2);
     expect(hinter([b(9), langfuse(2)]), "Langfuse hinten, kein Harness: keine Klemmung").toBeNull();
+    expect(hinter([codeq(5), b(9)]), "Codequalität an der Spitze klemmt den Anker dahinter").toBe(5);
   });
 
   test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
@@ -295,6 +302,21 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     for (const datei of ["AGENTS.md", "docs/ticket-reihenfolge.md"]) {
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.LANGFUSE_SAMMELTICKET_TITEL);
     }
+    for (const datei of ["AGENTS.md", ".agents/skills/factory/ablauf.md", "docs/ticket-reihenfolge.md"]) {
+      expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+    }
+  });
+
+  test("factory#156: Planer-Abschnitt 8 und der Befunde-Absatz des Umsetzers nennen das Codequalität-Sammelticket mit der Ortsregel „außerhalb des Slices“", () => {
+    const text = (datei: string) => readFileSync(new URL(`../${datei}`, import.meta.url), "utf8");
+    const planer = text(".claude/agents/factory-planer.md");
+    const abschnitt8 = planer.slice(planer.indexOf("8. **Befunde**"));
+    expect(abschnitt8.slice(0, 1500)).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+    expect(abschnitt8.slice(0, 1500)).toContain("außerhalb des Slices");
+    const umsetzer = text(".claude/agents/factory-umsetzer.md");
+    const absatz = umsetzer.slice(umsetzer.indexOf("Befunde außerhalb des Tickets"));
+    expect(absatz.slice(0, 2500)).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+    expect(absatz.slice(0, 2500)).toContain("außerhalb des Slices");
   });
 
   test("planFuerArgs (die Verdrahtung von board-place): --top klemmt, --notfall nicht, --after und --position klemmen, melden die Klemmung", () => {

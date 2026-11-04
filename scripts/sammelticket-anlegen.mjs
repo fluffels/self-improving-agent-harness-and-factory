@@ -6,6 +6,7 @@
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
  *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top hinter den Sammelblock)
+ *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Codequalität-Sammelticket im eigenen Repo (factory#156)
  *
  * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` korrigiert es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
@@ -16,6 +17,8 @@
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
+ * `codequalitaet` ist freiwillig: nur mit `labels.codequalitaet` in der Projekt-Config (Label, das auf das Produkt-Board des eigenen Repos führt); ohne
+ * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf (und den Sammelblock) des Produkt-Boards.
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
@@ -24,6 +27,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import {
+  CODEQUALITAET_SAMMELTICKET_TITEL,
   LANGFUSE_SAMMELTICKET_TITEL,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
@@ -31,6 +35,8 @@ import {
   ergaenzeFehlende,
   ghJson,
   kandidatenSammelticket,
+  kopfEnde,
+  planFuerArgs,
   waehleBestaetigtes,
   loadItems,
   loadOpenIssuePages,
@@ -52,7 +58,8 @@ import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
-const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
+const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, codequalitaet: CODEQUALITAET_SAMMELTICKET_TITEL };
+const KEIN_LABEL_TEXT = "labels.codequalitaet ist in der Projekt-Config nicht gesetzt: kein Codequalität-Sammelticket in diesem Projekt, nichts angelegt.";
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
@@ -61,7 +68,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung (unbekanntes, fehlendes, doppeltes Flag, Art nicht als
- * erstes Positionsargument). `--vorgaenger` gilt nur für `harness`, `--top` nur für `langfuse`. Pur.
+ * erstes Positionsargument). `--vorgaenger` gilt für `harness` und `codequalitaet`, `--top` nur für `langfuse`. Pur.
  */
 export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
@@ -104,16 +111,20 @@ export function zustandVonIssue(issue) {
 
 const ZUSATZ = { "in-arbeit": " (dort in Arbeit)" };
 
+const ANHAENGEN = "Befunde als Kommentar `- [ ] …` anhängen.";
+const BODY_ZEILE = {
+  harness: () => `Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). ${ANHAENGEN}`,
+  langfuse: () => `Sammelticket für Befunde aus Langfuse-Daten (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt")}). ${ANHAENGEN}`,
+  codequalitaet: () => `Sammelticket für Codequalität außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "codequalität-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
+};
+
 /**
  * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). Blocker-Zeile `<blocker> #N` (Wort aus `sprache.spezifikation.blocker`, Pflicht dann) bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
  * dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen); „(dort in Arbeit)“ nur bei `in-arbeit`. Pur.
  */
 export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu", blocker }) {
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
-  const zeilen =
-    art === "harness"
-      ? ["Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). Befunde als Kommentar `- [ ] …` anhängen."]
-      : ["Sammelticket für Befunde aus Langfuse-Daten (" + factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt") + "). Befunde als Kommentar `- [ ] …` anhängen."];
+  const zeilen = [BODY_ZEILE[art]()];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
   if (vorgaenger !== null && vorgaengerZustand !== "zu") {
     zeilen.push("", blockerZeile([vorgaenger], { blocker }, `(nur solange #${vorgaenger} offen ist)`));
@@ -137,12 +148,31 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 }
 
 /**
- * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Beide Arten tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board,
- * also im Repo, dessen Issues dieses Board führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
+ * Pur (factory#156): das Label, mit dem das Sammelticket der Art angelegt wird: `harness`/`langfuse` tragen `labels.harness`, `codequalitaet` das freiwillige
+ * `labels.codequalitaet` der Config; fehlt oder leer ist es → `null` (kein Codequalität-Sammelticket in diesem Projekt, es wird nichts angelegt).
+ */
+export function sammelLabel(config, art) {
+  if (art !== "codequalitaet") return labelAus(config, "harness");
+  const l = config?.labels?.codequalitaet;
+  return typeof l === "string" && l.trim() !== "" ? l : null;
+}
+
+/**
+ * Pur (factory#156): der Platzierungsplan des neuen Codequalität-Sammeltickets `nr` (steht schon in `items`): hinter dem Kopf des Boards (letztes Kopf-Item als Anker,
+ * ohne Kopf die Spitze), `planFuerArgs` klemmt es weiter hinter die ungeclaimten Sammeltickets. Das Füllstand-Gate in naechstes-ticket.mjs hält es bis zur Schwelle zurück.
+ */
+export function codequalitaetPlan(items, nr) {
+  const ende = kopfEnde(items);
+  return planFuerArgs(items, { anchor: ende > 0 ? items[ende - 1].number : null, numbers: [nr] });
+}
+
+/**
+ * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Harness und Langfuse tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board; `codequalitaet` (Label aus `sammelLabel`)
+ * liegt auf dem Produkt-Board des eigenen Repos. Ziel ist das Repo, dessen Issues das Board der Rolle führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
  * der Besitzer des Ziel-Repos (Vertrauensgrenze der Einzelabrufe).
  */
-export function sammelZiel(config) {
-  const labels = [labelAus(config, "harness")];
+export function sammelZiel(config, label = labelAus(config, "harness")) {
+  const labels = [label];
   const repo = zielRepoFuer(labels, config);
   return { rolle: boardRolleFuer(labels, config), repo, owner: zerlegeRepo(repo).owner };
 }
@@ -282,18 +312,32 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
   return neuGesetzt === 0 ? "unbekannt" : "falsch";
 }
 
-async function main(argv = process.argv.slice(2)) {
+/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` hinter den Sammelblock, `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
+function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }) {
+  if (!top && art !== "codequalitaet") return;
+  const items = ergaenzeFehlende(loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+  // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
+  // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
+  const { korrektur, plan } = art === "codequalitaet" ? { korrektur: null, plan: codequalitaetPlan(items, nr) } : planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
+  if (korrektur) setPosition(board, korrektur.id, korrektur.afterId);
+  for (const { item, afterId } of plan.steps) setPosition(board, item.id, afterId);
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent`; ohne Angabe läuft alles echt. */
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: mitKontingent, ...deps };
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run]");
+    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
     process.exit(2);
   }
-  mitKontingent("sammelticket-anlegen");
-  const config = ladeProjektConfig();
-  const harness = labelAus(config, "harness");
-  // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-  const ziel = sammelZiel(config);
-  const FACTORY_BOARD = boardFuerRolle(ziel.rolle);
+  const config = d.ladeConfig();
+  const harness = sammelLabel(config, args.art);
+  if (harness === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
+  d.kontingent("sammelticket-anlegen");
+  // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
+  const ziel = sammelZiel(config, harness);
+  const BOARD = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;
   const titel = TITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
@@ -319,22 +363,15 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Angelegt: #${nr}`);
     await sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
     if (schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = addToBoardTodo(FACTORY_BOARD, neu.node_id, { repo });
+    const itemId = addToBoardTodo(BOARD, neu.node_id, { repo });
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+      const items = ergaenzeFehlende(loadItems(BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = korrekturFuer({ items, nr, position });
-      if (k) setPosition(FACTORY_BOARD, k.id, k.afterId);
-    } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-      // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
-      // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
-      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-      if (korrektur) setPosition(FACTORY_BOARD, korrektur.id, korrektur.afterId);
-      for (const { item, afterId } of plan.steps) setPosition(FACTORY_BOARD, item.id, afterId);
-    }
+      if (k) setPosition(BOARD, k.id, k.afterId);
+    } else setzeErstePosition({ art: args.art, top: args.top, board: BOARD, repo, itemId, nr, titel });
   }
   if (args.art !== "harness") return;
-  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: FACTORY_BOARD, repo });
+  const stand = await setzeUndPruefe({ nr, position, dry: args.dry, board: BOARD, repo });
   if (!vorhanden && !args.dry && schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);

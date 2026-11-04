@@ -117,6 +117,8 @@ export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
 /** Pflicht-Label-Schlüssel (weitere erlaubt, gleiche Prüfung) und Pflicht-Agenten. */
 export const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
+/** Optionale Label-Schlüssel: Skripte lesen sie mit Rückfall (fehlt der Schlüssel, entfällt das Feature); sie gehören nicht in `PFLICHT_LABELS`. */
+export const OPTIONALE_LABELS = ["codequalitaet"];
 /** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 
@@ -373,6 +375,19 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
+/**
+ * Pur (factory#156): das optionale Label `labels.codequalitaet` (Opt-in für das Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein
+ * Produkt-Board führen: das Ticket liegt im eigenen Repo des Beziehers, nicht auf dem Factory-Board (gleicher Wert wie `labels.harness` wäre falsch).
+ * Nur bei sonst gültigen Labels und Boards geprüft.
+ */
+function pruefeCodequalitaetZiel(wert) {
+  const label = wert.labels?.codequalitaet;
+  if (label === undefined) return [];
+  if (boardRolleFuer([label], wert) === "produkt") return [];
+  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${boardRolleFuer([label], wert)})
+Fix: für labels.codequalitaet ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen (dann gibt es kein Codequalität-Sammelticket)`];
+}
+
 /** Der Skill-Schlüssel, dessen Wert `null` sein darf (kein Abschluss-Skill, factory#139). */
 export const NULLBARER_SKILL = "abschluss";
 
@@ -515,7 +530,7 @@ export function pruefeProjektConfig(wert) {
   const boardFehler = fehler.length;
   const labelFehler = pruefeLabels(wert.labels);
   fehler.push(...pruefePraefixe(wert.praefixe), ...labelFehler, ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
-  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert));
+  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
   if (wert.spezifikation !== undefined) {
