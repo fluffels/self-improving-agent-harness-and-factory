@@ -166,7 +166,7 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
 
   test("Binärassets und das Lockfile sind ausgeschlossen, Quelltext nicht", () => {
     assert.equal(isCheckable("package-lock.json"), false, "base64-Integrity-Hashes erzeugen Rauschen.");
-    assert.equal(isCheckable("assets/pixellab/held.png"), false);
+    assert.equal(isCheckable("assets/bilder/held.png"), false);
     assert.equal(isCheckable("assets/fonts/silkscreen.woff2"), false);
     assert.equal(isCheckable("AGENTS.md"), true);
     assert.equal(isCheckable("src/game.ts"), true);

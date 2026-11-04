@@ -424,7 +424,7 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
   };
   const E: Einheit = { pfad: SETTINGS, schluessel: "sandbox" };
   const KERN_SB: Sb = { enabled: true, network: { allowedDomains: ["github.com"] }, credentials: { envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] } };
-  const ERG: SbErg = { allowedDomains: ["*.pixellab.ai"], envVars: [{ name: "PIXELLAB_TOKEN", mode: "deny" }] };
+  const ERG: SbErg = { allowedDomains: ["*.asset-dienst.example"], envVars: [{ name: "ASSET_DIENST_TOKEN", mode: "deny" }] };
   const mitSb = (kern: Sb, erg: SbErg): Sb => sb.mitErgaenzungVon(E, kern, { sandbox: erg }) as Sb;
   const bef = (wert: unknown, erg: SbErg): string => sb.ergaenzungsBefundeVon(E, wert, { sandbox: erg }).join("|");
 
@@ -449,13 +449,13 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
   });
   test("mitErgaenzung hängt je Liste hinten an und legt fehlende Teile an; kernAnteil kehrt es um", () => {
     const m = mitSb(KERN_SB, ERG);
-    assert.deepEqual(m.network?.allowedDomains, ["github.com", "*.pixellab.ai"]);
-    assert.deepEqual(m.credentials?.envVars?.map((v) => v.name), ["GITHUB_TOKEN", "PIXELLAB_TOKEN"]);
+    assert.deepEqual(m.network?.allowedDomains, ["github.com", "*.asset-dienst.example"]);
+    assert.deepEqual(m.credentials?.envVars?.map((v) => v.name), ["GITHUB_TOKEN", "ASSET_DIENST_TOKEN"]);
     assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: ERG }), KERN_SB);
-    assert.deepEqual(mitSb({ enabled: true }, ERG).network, { allowedDomains: ["*.pixellab.ai"] }, "ein fehlender Zweig wird angelegt");
-    assert.deepEqual(sb.kernAnteilVon(E, { enabled: true, network: { allowedDomains: ["*.pixellab.ai"] } }, { sandbox: ERG }), { enabled: true }, "leere Liste und leerer Zweig entfallen");
+    assert.deepEqual(mitSb({ enabled: true }, ERG).network, { allowedDomains: ["*.asset-dienst.example"] }, "ein fehlender Zweig wird angelegt");
+    assert.deepEqual(sb.kernAnteilVon(E, { enabled: true, network: { allowedDomains: ["*.asset-dienst.example"] } }, { sandbox: ERG }), { enabled: true }, "leere Liste und leerer Zweig entfallen");
     assert.deepEqual(
-      sb.kernAnteilVon(E, { network: { allowedDomains: ["*.pixellab.ai"], allowLocalBinding: true } }, { sandbox: ERG }),
+      sb.kernAnteilVon(E, { network: { allowedDomains: ["*.asset-dienst.example"], allowLocalBinding: true } }, { sandbox: ERG }),
       { network: { allowLocalBinding: true } },
       "ein leer werdender Listenzweig lässt die weiteren Schlüssel des Zweigs stehen",
     );
@@ -469,21 +469,21 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
     assert.match(bef(mitSb(KERN_SB, ERG), { envVars: [null as never] }), /muss mode deny haben/);
   });
   test("der Vergleich der envVars läuft über den Namen, nicht über das ganze Objekt", () => {
-    const m = mitSb(KERN_SB, { envVars: [{ name: "PIXELLAB_TOKEN", mode: "deny" }] });
-    assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: { envVars: [{ name: "PIXELLAB_TOKEN", mode: "andere" }] } }), KERN_SB);
+    const m = mitSb(KERN_SB, { envVars: [{ name: "ASSET_DIENST_TOKEN", mode: "deny" }] });
+    assert.deepEqual(sb.kernAnteilVon(E, m, { sandbox: { envVars: [{ name: "ASSET_DIENST_TOKEN", mode: "andere" }] } }), KERN_SB);
   });
   test("Befunde: grün bei korrekter Ergänzung, ohne Ergänzung nichts", () => {
     assert.equal(bef(mitSb(KERN_SB, ERG), ERG), "");
     assert.equal(bef(KERN_SB, {}), "");
   });
   test("Befund: Eintrag fehlt", () => {
-    assert.match(bef(KERN_SB, ERG), /sandbox\.network\.allowedDomains: Ergänzung „\*\.pixellab\.ai“ fehlt/);
-    assert.match(bef(KERN_SB, ERG), /sandbox\.credentials\.envVars: Ergänzung „PIXELLAB_TOKEN“ fehlt/);
+    assert.match(bef(KERN_SB, ERG), /sandbox\.network\.allowedDomains: Ergänzung „\*\.asset-dienst\.example“ fehlt/);
+    assert.match(bef(KERN_SB, ERG), /sandbox\.credentials\.envVars: Ergänzung „ASSET_DIENST_TOKEN“ fehlt/);
     assert.match(bef(null, ERG), /fehlt/, "ein Nicht-Objekt ist ein Befund, kein Absturz");
   });
   test("Befund: Ergänzung nicht am Listenende", () => {
     const m = mitSb(KERN_SB, ERG);
-    const falsch = { ...m, network: { allowedDomains: ["*.pixellab.ai", "github.com"] } };
+    const falsch = { ...m, network: { allowedDomains: ["*.asset-dienst.example", "github.com"] } };
     assert.match(bef(falsch, ERG), /sandbox\.network\.allowedDomains: die Ergänzung muss als Ende der Liste stehen/);
     const falsch2 = { ...m, credentials: { envVars: [...(m.credentials?.envVars ?? [])].reverse() } };
     assert.match(bef(falsch2, ERG), /sandbox\.credentials\.envVars: die Ergänzung muss als Ende der Liste stehen/);
@@ -499,7 +499,7 @@ describe("Sandbox-Ergänzung (#1888): pure Primitive und Befunde", () => {
       const erg: SbErg = { allowedDomains: [d] };
       assert.match(bef(mitSb(KERN_SB, erg), erg), /erlaubt jede Domain/, d);
     }
-    const ok: SbErg = { allowedDomains: ["*.pixellab.ai"] };
+    const ok: SbErg = { allowedDomains: ["*.asset-dienst.example"] };
     assert.equal(bef(mitSb(KERN_SB, ok), ok), "");
   });
   test("Befund: eine envVars-Ergänzung ohne mode deny (Lockerung) ist rot", () => {

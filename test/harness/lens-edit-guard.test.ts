@@ -88,6 +88,18 @@ describe("bewerteLensEdit", () => {
     }
   });
 
+  test("CI-Fix-Delta-Lens `<präfix><nr>-lens-c<n>` (nach dem Nachweis) ist ein Lens-Worktree, ähnliche Namen nicht", () => {
+    expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}189-lens-c1/a.ts`, "", DEPS).block).toBe(false);
+    expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}189-lens-c12/a.ts`, "", DEPS).block).toBe(false);
+    for (const p of [
+      `C:/dev/projekt/.claude/worktrees/${W}189-lens-c/a.ts`,
+      `C:/dev/projekt/.claude/worktrees/${W}lens-c1/a.ts`,
+      `C:/dev/projekt/.claude/worktrees/${W}189-lens-d1/a.ts`,
+    ]) {
+      expect(G.bewerteLensEdit(p, "", DEPS).block, p).toBe(true);
+    }
+  });
+
   test("Pfadform ignoriert Groß-/Kleinschreibung (Windows), der Ordnername selbst nicht (Aufräumen)", () => {
     expect(G.bewerteLensEdit(`C:/Dev/X/.Claude/Worktrees/${W.toUpperCase()}1-Lens-R1/a.ts`, "", DEPS).block).toBe(false);
     expect(G.bewerteLensEdit(`C:/Dev/X/.Claude/Worktrees/${W.toUpperCase()}1-Lens-M2/a.ts`, "", DEPS).block).toBe(false);

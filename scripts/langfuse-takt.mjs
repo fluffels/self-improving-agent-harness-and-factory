@@ -101,6 +101,13 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
+function verdichtungsSchritt(wurzel) {
+  // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
+  return liesSyncStand(wurzel).zustand !== "fehlt"
+    ? "Verdichtungszeile nur im Bericht-Kommentar (die Tabelle liegt nur im Factory-Repo), danach das Ticket schließen"
+    : "PR mit Verdichtungszeile und `Closes`";
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
@@ -126,6 +133,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     const url = /^https?:/.test(ziel) || !upstream ? ziel : factorySeite({ pfad, anker, repo, tag: "main" });
     return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
   };
+  const verdichtung = verdichtungsSchritt(wurzel);
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
@@ -134,7 +142,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
-    `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
+    `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`,
   ].join("\n");
 }
 

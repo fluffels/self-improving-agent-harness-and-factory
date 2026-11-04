@@ -1,8 +1,8 @@
 /* Dateigröße-Wächter (#390) – Frühwarnung gegen neue God-Files.
  *
- * Große Module sind bei großem Spielumfang teuer: Agenten lesen pro Änderung viel mehr
+ * Große Module sind bei wachsendem Umfang teuer: Agenten lesen pro Änderung viel mehr
  * Kontext (Tokens), und je größer eine Datei, desto leichter schleichen sich
- * Regressionen ein (Befund: WorldScene.ts 1344, kubectl.ts 1220). Dieser Test ist
+ * Regressionen ein (Befund aus dem Quellprojekt: zwei Module über 1200 Zeilen). Dieser Test ist
  * das Gate im `npm test`-CI; dieselbe Logik gibt es als CLI `npm run check:size`.
  *
  * Die Mess-/Allowlist-Logik wird aus scripts/check-size.mjs importiert (EINE Quelle

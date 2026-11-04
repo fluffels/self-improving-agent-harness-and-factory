@@ -5,6 +5,7 @@
  * Definition: docs/model-routing.md §5 „Messen“.
  */
 import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
+import { GATE_BEFEHL_NAMEN } from "./gate-befehl-lib.mjs";
 
 /** `ERROR` allein ist kein Signal (der Hook setzt es bei jedem Exit ≠ 0); die Art steht im Text. */
 const ARTEN = [
@@ -109,10 +110,13 @@ export function wiederlesen(events) {
 
 /**
  * Prüfläufe (#1120): wie oft ein Agent die volle Gate-Kette (`npm run verify`, `verify:kompakt`, `verify:full`) bzw. die gezielte
- * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>` (oder `node …verify-lauf.mjs`), nie Text in Commit-
- * Message oder `echo`; von Guard, Hook oder Permission blockierte Events zählen nicht, ein roter Lauf (Exit ≠ 0) schon.
+ * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>`, `node …verify-lauf.mjs` oder der Gate-Befehl
+ * `node …gate-befehl.mjs verify|verifyKompakt|verifyChanged` (factory#182; `install`, `coverage`, `--zeigen` zählen nicht), nie Text in
+ * Commit-Message oder `echo`; von Guard, Hook oder Permission blockierte Events zählen nicht, ein roter Lauf (Exit ≠ 0) schon.
+ * Grenze: misst nur Claude-Transkripte.
  */
 const VOLL = new Set(["verify", "verify:kompakt", "verify:full"]);
+const GATE_ART = Object.freeze({ verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt" });
 const BLOCKIERT = new Set(["guard", "hook", "permission"]);
 
 export function pruefLaeufe(events) {
@@ -128,6 +132,14 @@ export function pruefLaeufe(events) {
   return out;
 }
 
+/** `node …/gate-befehl.mjs <name>` → Art des Gate-Befehls (nur der Name direkt hinter dem Skript, ohne `--zeigen`), sonst null. */
+function gateBefehlArt(rest) {
+  const i = rest.findIndex((w) => /(?:^|[/\\])gate-befehl\.mjs$/.test(w));
+  if (i < 0 || rest.includes("--zeigen")) return null;
+  const name = rest[i + 1];
+  return GATE_BEFEHL_NAMEN.includes(name) ? GATE_ART[name] : null;
+}
+
 function pruefArt(words) {
   const [cmd, ...rest] = words;
   if (cmd === "npm") {
@@ -139,5 +151,6 @@ function pruefArt(words) {
     return skript === "verify:changed" ? "gezielt" : null;
   }
   if (cmd === "node" && rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
+  if (cmd === "node") return gateBefehlArt(rest);
   return null;
 }

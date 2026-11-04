@@ -43,4 +43,35 @@ describe("Erstbezug-Seite und PROJEKTDATEIEN", () => {
     expect(verteilt.has("scripts/harness-doctor-dateien.mjs")).toBe(true);
     expect(liste.filter((d) => verteilt.has(d.pfad)).map((d) => d.pfad)).toEqual([]);
   });
+
+  describe("Abschnitt „Langfuse einrichten“", () => {
+    const seite = lies("docs/erstbezug.md");
+    const abschnitt = (seite.split(/^## Langfuse einrichten$/m)[1] ?? "").split(/^## /m)[0] ?? "";
+
+    test("der Abschnitt steht vor der Projektdateien-Tabelle und der Schritt 8 verweist darauf", () => {
+      expect(abschnitt.length).toBeGreaterThan(0);
+      expect(seite.indexOf("## Langfuse einrichten")).toBeLessThan(seite.indexOf("## Projektdateien"));
+      expect(seite).toContain("(#langfuse-einrichten)");
+    });
+
+    test("er nennt die Vorbedingung, die Variablennamen des Skripts, den Probe-Lauf, die Doctor-Zeile, die Codex-Grenze und die Regel, dass nie der Agent die Keys einträgt", () => {
+      const zugang = lies("scripts/langfuse-zugang.mjs") + lies("scripts/langfuse-vorbedingung.mjs");
+      for (const name of ["LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"]) {
+        expect(abschnitt, name).toContain(name);
+        expect(zugang, name).toContain(name);
+      }
+      expect(abschnitt).toContain("node scripts/langfuse-vorbedingung.mjs");
+      expect(abschnitt).toContain("model-routing.md#langfuse-erfassung-belegen-1293");
+      expect(abschnitt).toContain("`Langfuse-Takt`");
+      expect(abschnitt).toContain("codex/einstieg.md");
+      expect(abschnitt).toMatch(/Keys trägt die Maintainerin selbst ein, nie der Agent/);
+      expect(abschnitt).toMatch(/```text[\s\S]+```/);
+    });
+
+    test("jeder relative Link des Abschnitts zeigt auf eine vorhandene Datei", () => {
+      const ziele = [...abschnitt.matchAll(/\]\(([^)#]+)(?:#[^)]*)?\)/g)].map((m) => m[1]).filter((z) => !z.startsWith("http"));
+      expect(ziele.length).toBeGreaterThan(2);
+      for (const z of ziele) expect(existsSync(join(ROOT, "docs", z)), z).toBe(true);
+    });
+  });
 });

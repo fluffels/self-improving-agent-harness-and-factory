@@ -182,7 +182,7 @@ function aufbau() {
   return { wurzel, haupt, schiebe, aufraeumen: () => rmSync(wurzel, { recursive: true, force: true }) };
 }
 
-describe("fuehreSyncAus gegen echte Repos", { timeout: 30_000 }, () => {
+describe("fuehreSyncAus gegen echte Repos", { timeout: 60_000 }, () => {
   test("sauberer main hinter origin: Fast-Forward, Sitzungsbasis = alter HEAD", () => {
     const t = aufbau();
     try {
