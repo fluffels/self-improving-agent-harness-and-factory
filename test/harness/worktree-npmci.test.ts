@@ -170,6 +170,12 @@ describe("Worktree-Setup nutzt npm ci (#1119)", () => {
     const standard = (gateRaw as unknown as { STANDARD_BEFEHLE: Record<string, string> }).STANDARD_BEFEHLE;
     assert.equal(installBefehlFehler(standard.install), null);
     assert.ok(installBefehlFehler("npm install --no-save"));
+    // Jeder Teil einer Kette zählt, nicht nur der erste.
+    for (const kette of ["npm ci && npm install", "npm ci || npm i", "npm ci; npm install --no-save", "npm ci | npm install"]) {
+      assert.ok(installBefehlFehler(kette), kette);
+    }
+    assert.equal(installBefehlFehler("npm ci && npm run build"), null);
+    assert.equal(installBefehlFehler("npm ci --no-audit && npm run install-hooks"), null);
     const projekt = JSON.parse(readFileSync(ROOT + ".factory/projekt.json", "utf8")) as { befehle?: { install?: string } };
     if (projekt.befehle?.install !== undefined) assert.equal(installBefehlFehler(projekt.befehle.install), null);
   });
