@@ -137,6 +137,17 @@ describe("Takt im Bezieher: Status-Ticket im eigenen Repo (factory#195)", () => 
     expect(lauf({ statusOk: false }).r.fehler).toBe(true);
   });
 
+  test("scheitert das Anlegen ohne Token (keine Board-Abfrage), ist der Lauf ebenfalls rot", () => {
+    expect(lauf({ token: "", statusOk: false }).r.fehler).toBe(true);
+  });
+
+  test("der Wächter sieht ein eben hochgeholtes Status-Ticket auf der nachgezogenen Liste: keine überflüssige Zweitabfrage", () => {
+    const offen = [{ number: 77, title: STATUS, state: "open", user: { login: FREMD_OWNER }, assignees: [], created_at: "2026-10-02T00:00:00Z" }];
+    const { a } = lauf({ offen, suche: antwort(treffer(77, "OPEN")) });
+    expect(a.status).toHaveLength(1);
+    expect(a.itemsUeber).toEqual([]);
+  });
+
   test("lässt sich die offene Liste nicht lesen: Lauf rot, keine Suche, kein Status-Ticket", () => {
     const { r, a, log } = lauf({ offenFehler: true });
     expect(r.fehler).toBe(true);
