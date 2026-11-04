@@ -17,6 +17,8 @@ interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, .
 const lib = raw as unknown as {
   STANDARD_BEFEHLE: Record<string, string>;
   GATE_BEFEHL_NAMEN: string[];
+  PRUEFLAUF_ART: Record<string, string | null>;
+  ZEIGEN_FLAG: string;
   pruefeBefehle(block: unknown): string[];
   befehlAus(config: Config, name: string): string;
   cli(argv: string[], opt: Optionen): number;
@@ -157,6 +159,10 @@ describe("Ausführung (K3)", () => {
     const u = umgebung({}, { error: new Error("ENOENT") });
     assert.equal(lib.cli(["verify"], u.opt), 1);
     assert.match(u.err.join("\n"), /ENOENT/);
+  });
+  test("PRUEFLAUF_ART deckt genau die Gate-Befehl-Namen ab (gleiche Reihenfolge), ZEIGEN_FLAG ist --zeigen", () => {
+    assert.deepEqual(Object.keys(lib.PRUEFLAUF_ART), lib.GATE_BEFEHL_NAMEN);
+    assert.equal(lib.ZEIGEN_FLAG, "--zeigen");
   });
   test("--zeigen gibt genau den Befehl aus und startet nichts", () => {
     const u = umgebung({ befehle: { verify: "mvn -q verify" } });
