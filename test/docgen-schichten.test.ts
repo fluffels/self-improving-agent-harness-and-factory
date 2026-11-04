@@ -13,7 +13,7 @@ import { join } from "node:path";
 import * as schichten from "../scripts/docs-gen/schichten.mjs";
 
 type Schicht = { id: string; label: string; technik?: string; muster: string | null; wurzeln: string[]; darf: string[] };
-type Modell = { quellwurzel: string; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
+type Modell = { quellwurzel?: string; quellwurzeln?: string[]; endungen?: string[]; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
 type Cfg = Record<string, unknown>;
 type Kante = [string, string];
 const api = schichten as unknown as {
@@ -217,6 +217,15 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     const mitExtern: Modell = { ...m, extern: [{ id: "lib", label: "Lib", muster: "^src/ui/" }] };
     assert.equal(api.schichtVon("src/ui/a.ts", mitExtern), "lib");
   });
+  test("schichtVon mit zwei Quellwurzeln: Auffang unter jeder Wurzel, ausserhalb null (factory#184)", () => {
+    const m: Modell = { ...basis(), quellwurzel: undefined, quellwurzeln: ["src/", "lib/"] };
+    m.schichten = m.schichten.map((x) => (x.muster === null ? x : { ...x, muster: x.muster.replace("^src/", "^(src/|lib/)") }));
+    assert.equal(api.schichtVon("lib/neu/y.ts", m), "domaene");
+    assert.equal(api.schichtVon("src/neu/y.ts", m), "domaene");
+    assert.equal(api.schichtVon("lib/ui/a.ts", m), "praesentation");
+    assert.equal(api.schichtVon("tools/x.ts", m), null);
+    assert.match(api.renderDiagramm(m, []), /alles übrige unter src\/ · lib\//);
+  });
   test("schichtVon wirft bei einem ungültigen Modell (fail-closed, wie layerOfAus)", () => {
     assert.throws(() => api.schichtVon("src/x.ts", { ...basis(), schichten: [] }));
   });
@@ -374,6 +383,15 @@ describe("pruefeCruiseArgs: Cruise-Ziel und Collapse folgen der Quellwurzel (#14
     assert.match(pruefe([...gut.slice(0, 5), "^(lib|node_modules)/[^/]+/"], m) ?? "", /--collapse/);
     assert.match(pruefe(gut, { ...m, quellwurzel: "lib/" }) ?? "", /passt nicht/);
     assert.equal(pruefe([gut[0], "lib", "--collapse", "^(lib|node_modules)/[^/]+/"], { ...m, quellwurzel: "lib/" }), null);
+  });
+  test("mehrere Quellwurzeln: je ein Ziel und ein gemeinsames Collapse-Muster (factory#184)", () => {
+    const zwei: Modell = { ...m, quellwurzel: undefined, quellwurzeln: ["src/", "lib/"] };
+    const bin = gut[0];
+    const collapse = "^(src|lib|node_modules)/[^/]+/";
+    assert.equal(pruefe([bin, "src", "lib", "--config", "c.cjs", "--collapse", collapse], zwei), null);
+    assert.match(pruefe([bin, "src", "--config", "c.cjs"], zwei) ?? "", /Ziel „src --config“ passt nicht zur Quellwurzel „src\/, lib\/“/);
+    assert.match(pruefe([bin, "src", "lib", "--collapse", "^(src|node_modules)/[^/]+/"], zwei) ?? "", /--collapse/);
+    assert.equal(pruefe(["werkzeug/importgraph.mjs"], zwei), null);
   });
   test("Sonderzeichen in der Quellwurzel werden im Collapse-Muster escaped (#1460 Z7c)", () => {
     const sonder = { ...m, quellwurzel: "a.b/" };

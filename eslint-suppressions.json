@@ -246,11 +246,6 @@
       "count": 2
     }
   },
-  "scripts/schichten-kern.cjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/skills-sync.mjs": {
     "complexity": {
       "count": 2
