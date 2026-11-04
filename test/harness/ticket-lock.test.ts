@@ -44,7 +44,9 @@ let dir: string;
 let zaehler = 0;
 let fetchAufrufe: string[] = [];
 
-type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; reflogSek?: number; status?: string[]; fetchFehler?: boolean };
+/** `offenePrs`: offene PRs je Branch (Standard 0); `ghFehler`: gh scheitert. */
+type Welt = { refs?: string[]; worktrees?: string[]; commitSek?: number; reflogSek?: number; status?: string[]; fetchFehler?: boolean; offenePrs?: Record<string, number>; ghFehler?: boolean };
+let ghAufrufe: string[] = [];
 
 /** `echteDeps()` startet `git rev-parse`; einmal je Datei genügt (die Deps sind zustandslos). */
 let echteDepsCache: ReturnType<typeof M.echteDeps> | null = null;
@@ -59,6 +61,11 @@ function deps(welt: Welt = {}, jetzt = JETZT, datei: Record<string, number> = {}
     jetzt: () => jetzt,
     nonce: () => `nonce-${++zaehler}`,
     mtime: (p: string) => datei[p] ?? Number.NaN,
+    offenePrs: (branch: string) => {
+      ghAufrufe.push(branch);
+      if (welt.ghFehler) throw new Error("gh kaputt");
+      return welt.offenePrs?.[branch] ?? 0;
+    },
     git: (args: string[]) => {
       const a = args.join(" ");
       if (a.startsWith("fetch")) {
@@ -83,7 +90,8 @@ const nonceVon = (r: Erg) => /nonce=(\S+)/.exec(r.out)?.[1] ?? "";
 
 beforeEach(() => {
   fetchAufrufe = [];
-  dir = mkdtempSync(join(tmpdir(), "lock-"));
+  ghAufrufe = [];
+  dir =mkdtempSync(join(tmpdir(), "lock-"));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -223,6 +231,85 @@ describe("freigeben", () => {
   test("ohne Lock ist freigeben ein No-op (Exit 0), ohne Nonce falscher Aufruf", () => {
     assert.equal(lauf(["freigeben", "5", "--nonce", "x"]).code, 0);
     assert.equal(lauf(["freigeben", "5"]).code, 2);
+  });
+
+  const lockDatei = (nr: number, endung = "json") => join(dir, `${WTP}locks`, `${nr}.${endung}`);
+
+  test("solange zu einem Branch des Tickets ein PR offen ist, verweigert freigeben (Exit 4, Lock bleibt, Branch ohne origin/)", () => {
+    const a = lauf(["claim", "5"]);
+    const welt: Welt = { refs: [`origin/${BRP}5-x`], offenePrs: { [`${BRP}5-x`]: 1 } };
+    const f = lauf(["freigeben", "5", "--nonce", nonceVon(a)], welt);
+    assert.equal(f.code, 4);
+    assert.match(f.err, /offen/);
+    assert.match(f.err, NICHT_VON_HAND);
+    assert.deepEqual(ghAufrufe, [`${BRP}5-x`]);
+    assert.ok(existsSync(lockDatei(5)), "Lock bleibt");
+    assert.equal(lauf(["freigeben", "5", "--nonce", nonceVon(a)], { refs: [`${BRP}5-x`], offenePrs: { [`${BRP}5-x`]: 0 } }).code, 0, "ohne offenen PR geht es");
+  });
+
+  test("ohne Branch zum Ticket kein gh-Aufruf; scheitert gh, ist freigeben fail-closed (Exit 4 mit Fix-Zeile)", () => {
+    const a = lauf(["claim", "5"]);
+    const kein = lauf(["freigeben", "5", "--nonce", nonceVon(a)], { ghFehler: true });
+    assert.equal(kein.code, 0);
+    assert.deepEqual(ghAufrufe, []);
+    const b = lauf(["claim", "6"]);
+    const f = lauf(["freigeben", "6", "--nonce", nonceVon(b)], { refs: [`${BRP}6-x`], ghFehler: true });
+    assert.equal(f.code, 4);
+    assert.match(f.err, /Fix:/);
+    assert.ok(existsSync(lockDatei(6)), "Lock bleibt");
+  });
+
+  test("freigeben legt statt zu löschen den Freigabe-Vermerk <nr>.json.freigegeben an (Hash und Zeit)", () => {
+    const a = lauf(["claim", "5"]);
+    assert.equal(lauf(["freigeben", "5", "--nonce", nonceVon(a)]).code, 0);
+    assert.equal(existsSync(lockDatei(5)), false);
+    const v = JSON.parse(readFileSync(lockDatei(5, "json.freigegeben"), "utf8")) as { nonceHash: string; zeit: string };
+    assert.equal(v.nonceHash, sha(nonceVon(a)));
+    assert.equal(v.zeit, new Date(JETZT).toISOString());
+    assert.doesNotMatch(readFileSync(lockDatei(5, "json.freigegeben"), "utf8"), new RegExp(nonceVon(a)));
+  });
+});
+
+describe("wiederherstellen", () => {
+  const lockDatei = (nr: number, endung = "json") => join(dir, `${WTP}locks`, `${nr}.${endung}`);
+  const frei = (nr: string) => {
+    const a = lauf(["claim", nr]);
+    lauf(["freigeben", nr, "--nonce", nonceVon(a)]);
+    return nonceVon(a);
+  };
+
+  test("stellt den Lock mit demselben Hash und offenem gestoppt-Vermerk her: pruefe meldet uebernehmbar, uebernehmen greift", () => {
+    const nonce = frei("5");
+    const w = lauf(["wiederherstellen", "5", "--nonce", nonce], {}, JETZT + MIN);
+    assert.equal(w.code, 0);
+    const lock = lockInhalt(readFileSync(lockDatei(5), "utf8")) as { nonceHash: string; gestoppt?: { gesetzt: string; verbraucht: null } };
+    assert.equal(lock.nonceHash, sha(nonce));
+    assert.equal(lock.gestoppt?.verbraucht, null);
+    assert.equal(existsSync(lockDatei(5, "json.freigegeben")), false, "der Vermerk ist verbraucht");
+    const welt: Welt = { worktrees: [`/repo/.claude/worktrees/${WTP}5`], reflogSek: (JETZT + MIN) / 1000 };
+    assert.equal(lauf(["pruefe", "5", "--nonce", nonce], welt, JETZT + MIN).out, "uebernehmbar\n");
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", nonce, "--nachfolger"], welt, JETZT + MIN).code, 0);
+  });
+
+  test("verweigert (Exit 4): falsche Nonce, vorhandener Lock, kein Vermerk, Vermerk ab ALTLAST_MS alt", () => {
+    const nonce = frei("5");
+    assert.equal(lauf(["wiederherstellen", "5", "--nonce", "falsch"]).code, 4);
+    assert.equal(lauf(["wiederherstellen", "5", "--nonce", sha(nonce)]).code, 4, "der Hash selbst ist keine Nonce");
+    assert.equal(lauf(["wiederherstellen", "5", "--nonce", nonce], {}, JETZT + M.ALTLAST_MS).code, 4, "genau ALTLAST_MS alt");
+    assert.equal(lauf(["wiederherstellen", "9", "--nonce", nonce]).code, 4, "kein Vermerk");
+    const w = lauf(["wiederherstellen", "5", "--nonce", nonce], {}, JETZT + M.ALTLAST_MS - 1);
+    assert.equal(w.code, 0, "knapp darunter geht es");
+    assert.equal(lauf(["wiederherstellen", "5", "--nonce", nonce], {}, JETZT + M.ALTLAST_MS - 1).code, 4, "Lock existiert schon");
+    const b = lauf(["claim", "7"]);
+    writeFileSync(lockDatei(7, "json.freigegeben"), JSON.stringify({ nr: 7, nonceHash: sha(nonceVon(b)), zeit: new Date(JETZT).toISOString() }));
+    assert.equal(lauf(["wiederherstellen", "7", "--nonce", nonceVon(b)]).code, 4, "neben einem vorhandenen Lock nie");
+  });
+
+  test("aufrufLesen: wiederherstellen braucht --nonce; aufzuraeumen räumt .freigegeben erst ab ALTLAST_MS ab", () => {
+    assert.equal(M.aufrufLesen(["wiederherstellen", "5"]).fehler, "--nonce fehlt");
+    assert.equal(M.aufrufLesen(["wiederherstellen", "5", "--nonce", "x"]).befehl, "wiederherstellen");
+    const e = (name: string, alter: number) => ({ name, mtime: JETZT - alter });
+    assert.deepEqual(M.aufzuraeumen({ eintraege: [e("5.json.freigegeben", M.ALTLAST_MS + 1), e("6.json.freigegeben", M.ALTLAST_MS), e("7.json.freigegeben", 0)], jetzt: JETZT }), ["5.json.freigegeben"]);
   });
 });
 
