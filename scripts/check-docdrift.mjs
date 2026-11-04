@@ -68,6 +68,8 @@ import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
 import { besitzSpannen, istGanzeDatei, MANIFEST_PFAD, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istAnkerStub } from "./factory-links-lib.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
 
 // Link- und Anker-Helfer wohnen in docs-gen/markdown.mjs (auch das Export-Werkzeug nutzt sie; ein Einstiegsskript importiert aus keinem anderen); hier nur weitergereicht.
 export { collectHeadingSlugs, linkStellen, linkZiel, parseNpmRunMentions, slugify, stripFencedCode } from "./docs-gen/markdown.mjs";
@@ -289,10 +291,8 @@ function skriptDateien(rootDir, ordner = "scripts") {
   });
 }
 
-/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird immer gegen seine Abschnitte geprüft. Der Vertrag für Kern-Verweise auf AGENTS.md-Titel (Kern-Block plus Vorlage) gehört `test/harness/agents-refs.test.ts`. */
+/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird gegen seine Abschnitte geprüft, außer im Bezieher bei einem Verweis aus Besitz-Text auf einen Anker-Stub (`istAnkerStub`: nur Überschriften, der Fettdruck-Abschnitt fehlt dort; die Fabrik prüft gegen die volle Seite). Der Vertrag für Kern-Verweise auf AGENTS.md-Titel (Kern-Block plus Vorlage) gehört `test/harness/agents-refs.test.ts`. */
 function auditAbschnittVerweise(rootDir, mdFiles, content) {
-  const adrPrefix = `${adrOrdner(rootDir)}/`;
-  const ausnahme = besitzAusnahme(rootDir);
   const abschnittCache = new Map();
   const titelVon = (ziel) => {
     if (!abschnittCache.has(ziel)) abschnittCache.set(ziel, abschnittTitel(readFileSync(join(rootDir, ziel), "utf8")));
@@ -301,24 +301,34 @@ function auditAbschnittVerweise(rootDir, mdFiles, content) {
   const istDatei = (p) => existsSync(join(rootDir, p)) && statSync(join(rootDir, p)).isFile();
   const fehler = [];
   const dateien = [...mdFiles.map((f) => [f, true]), ...skriptDateien(rootDir).map((f) => [f, false])];
-  for (const [f, istMarkdown] of dateien) {
-    if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
-    const text = content.get(f) ?? readFileSync(join(rootDir, f), "utf8");
-    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
+  fuerDokuTexte(rootDir, dateien, content, ({ f, text, istMarkdown, still, imBesitz }) => {
     for (const v of abschnittVerweise(text, { istMarkdown })) {
       const ziel = [v.pfad, posix.join(posix.dirname(f), v.pfad)].find(istDatei);
       const basis = { file: f, pfad: v.pfad, trenner: v.trenner };
       if (ziel === undefined) {
-        if (spannen.some(([a, b]) => v.index >= a && v.index <= b) && !ausnahme.istZiel(v.pfad)) continue;
-        fehler.push({ ...basis, art: "ziel", segment: v.segmente[0], ziel: v.pfad });
+        if (!still(v.index, v.pfad)) fehler.push({ ...basis, art: "ziel", segment: v.segmente[0], ziel: v.pfad });
         continue;
       }
+      if (imBesitz(v.index) && istAnkerStub(readFileSync(join(rootDir, ziel), "utf8"))) continue; // Stub trägt nur Überschriften, nicht den Fettdruck-Abschnitt des Besitz-Verweises (factory#157)
       const titel = titelVon(ziel);
       const tot = v.segmente.find((seg) => !abschnittTrifft(seg, titel));
       if (tot !== undefined) fehler.push({ ...basis, art: "abschnitt", segment: tot, ziel });
     }
-  }
+  });
   return fehler;
+}
+
+/** Gemeinsamer Rahmen der Text-Prüfungen (Abschnittsverweise, Test-Pfade): ADRs (Historie) und Dateien mit Datum im Namen entfallen; je Text `besuche({ f, text, istMarkdown, imBesitz(index), still(index, pfad) })`. Im Bezieher (`besitzAusnahme`) ist `imBesitz` die Frage nach einer verteilten Besitz-Spanne, `still` zusätzlich „und das Ziel `pfad` ist kein Besitz“ (#110); im Factory-Repo ist beides `false`. */
+function fuerDokuTexte(rootDir, dateien, content, besuche) {
+  const adrPrefix = `${adrOrdner(rootDir)}/`;
+  const ausnahme = besitzAusnahme(rootDir);
+  for (const [f, istMarkdown] of dateien) {
+    if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
+    const text = content.get(f) ?? readFileSync(join(rootDir, f), "utf8");
+    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
+    const imBesitz = (index) => spannen.some(([a, b]) => index >= a && index <= b);
+    besuche({ f, text, istMarkdown, imBesitz, still: (index, pfad) => imBesitz(index) && !ausnahme.istZiel(pfad) });
+  }
 }
 
 /** Verteilte Besitz-Einheiten aus dem Manifest (unabhängig vom Sync-Stand), `null` bei fehlendem oder kaputtem Manifest (fail-closed). */
@@ -343,20 +353,14 @@ function besitzAusnahme(rootDir) {
 
 /** 7. Test-Pfade (#97): ein Backtick-Token `test/…` in der Doku muss existieren (Datei oder Ordner). Suffix `#…`/`:<zeile>` wird abgeschnitten, Platzhalter-Tokens (`<`, `*`, `{`) übersprungen. Ausgenommen: ADRs (Historie) und Dateien mit Datum im Namen. Im Bezieher (#110, `besitzAusnahme`) zählt ein Verweis aus verteilter Besitz-Einheit nur, wenn das Ziel selbst Besitz ist; Grenze: nur Ganz-Datei- und Block-Einheiten, JSON-Schlüssel-Einheiten nicht. Grenzen: der Testordner ist fest `test/`, der Datumsausschluss ist eine Heuristik (jedes Datum im Pfad), nackte Dateinamen und Markdown-Links prüft das nicht (Links: deadLinks). */
 function auditTestPfade(rootDir, mdFiles, content) {
-  const adrPrefix = `${adrOrdner(rootDir)}/`;
-  const ausnahme = besitzAusnahme(rootDir);
   const fehler = [];
-  for (const f of mdFiles) {
-    if (f.startsWith(adrPrefix) || /\d{4}-\d{2}-\d{2}/.test(f)) continue;
-    const text = content.get(f);
-    const spannen = ausnahme ? ausnahme.spannen(f, text) : [];
+  fuerDokuTexte(rootDir, mdFiles.map((f) => [f, true]), content, ({ f, text, still }) => {
     for (const m of text.matchAll(/`(test\/[^`\s]*)`/g)) {
       const pfad = m[1].replace(/[#:].*$/, "");
-      if (/[<*{]/.test(pfad) || existsSync(join(rootDir, pfad))) continue;
-      if (spannen.some(([a, b]) => m.index >= a && m.index <= b) && !ausnahme.istZiel(pfad)) continue;
+      if (/[<*{]/.test(pfad) || existsSync(join(rootDir, pfad)) || still(m.index, pfad)) continue;
       fehler.push({ file: f, pfad });
     }
-  }
+  });
   return fehler;
 }
 
@@ -431,7 +435,7 @@ function main() {
 
   for (const t of testPfadFehler) {
     bad = true;
-    console.error(red(`✖ Toter Test-Pfad: „${t.pfad}" in ${t.file} existiert nicht. Auf einen vorhandenen Wächter umzeigen oder den Testbezug streichen.`));
+    console.error(red(`✖ Toter Test-Pfad: „${t.pfad}" in ${t.file} existiert nicht. Auf einen vorhandenen Wächter umzeigen oder den Testbezug streichen (Erstbezug: ${factorySeiteIn(ROOT, "docs/erstbezug.md", "projektdateien")}).`));
   }
 
   for (const a of abschnittFehler) {

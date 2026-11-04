@@ -3,7 +3,7 @@
  * Drift-Gate gegen die Config (K2 fährt es auf den echten Texten und auf verfälschten Kopien).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel (kein eigenes check-Skript), darum im geschützten test/harness/ (#1165).
- * Die Regel selbst ist `platzhalterBefunde` in scripts/besitz-lib.mjs; dieser Test ruft sie auf den echten Texten und auf Fixtures auf.
+ * Die Regel selbst ist `platzhalterBefunde` in scripts/projektwert-lib.mjs; dieser Test ruft sie auf den echten Texten und auf Fixtures auf.
  *
  * Grenze: die Regel prüft nur die Prüf-Fläche von `projektwertDateien` (Manifest-Markdown, Agenten- und Skill-Markdown) und nur die
  * Schlüssel-Form mit den Gruppen `agenten`, `labels`, `praefixe`, `skills`; `<agenten.…>` mit Auslassungszeichen beschreibt nur und zählt nicht. */
@@ -15,6 +15,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawPw from "../../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLauf from "../../scripts/projektwert-lauf.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-factory-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -35,7 +39,7 @@ interface Lib {
 interface DriftCli {
   cli(argv: string[], opt?: { wurzel?: string; out?: (s: string) => void; err?: (s: string) => void }): number;
 }
-const lib = rawLib as unknown as Lib;
+const lib = { ...rawLib, ...rawPw, ...rawLauf } as unknown as Lib;
 const rolle = (rawPc as unknown as { ROLLEN_PFADE: Record<string, string> }).ROLLEN_PFADE;
 const drift = rawDrift as unknown as DriftCli;
 const { PROJEKTWERT_START: S, PROJEKTWERT_ENDE: E } = lib;

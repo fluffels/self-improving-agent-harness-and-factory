@@ -45,6 +45,10 @@
     "abschluss": "qx-abschluss"
   },
   "rulesetSpiegel": ".github/ruleset-main-schutz.json",
+  "struktur": {
+    "quelle": "scripts",
+    "moduldoku": null
+  },
   "sprache": {
     "umschrift": [
       "fuer",

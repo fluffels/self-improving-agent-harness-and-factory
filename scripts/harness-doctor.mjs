@@ -96,7 +96,7 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   try {
     lauf = pruefLauf({ rootDir, configPfad: werte.config, gh, langfuse: null, mitWochenlauf: true });
   } catch (e) {
-    err(konfigFehlerText(e));
+    err(konfigFehlerText(e, rootDir));
     return AUFRUF_EXIT;
   }
   const { config, ergebnis } = lauf;
@@ -149,6 +149,15 @@ function pruefWurzel(rootDir, config) {
   return resolve(wurzel, PROJEKT_CONFIG) === pfad ? { wurzel, abgeleitet: true, pfad } : { wurzel: rootDir, abgeleitet: false, pfad };
 }
 
+/** Bricht die Config-Ladung ab (Exit 2), zeigen die Dateipunkte trotzdem, was im Projekt fehlt (sie brauchen weder Config noch gh). Ein Fehler dort bleibt still, der Config-Fehler zählt. */
+function dateipunkteVorAbbruch({ dateien, rootDir, out }) {
+  try {
+    for (const p of dateien({ rootDir })) if (!p.ok) out(`LÜCKE ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
+  } catch {
+    /* der Config-Fehler wird gleich gemeldet */
+  }
+}
+
 function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien }) {
   const { wurzel: rootDir, abgeleitet, pfad: configPfad } = pruefWurzel(aufruferRoot, werte.config);
   if (abgeleitet) out(`Prüfwurzel: ${rootDir}`);
@@ -163,7 +172,8 @@ function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, ke
   try {
     ({ ergebnis } = pruefLauf({ rootDir, configPfad, gh, langfuse, umgebung: { env, namen }, dateien }));
   } catch (e) {
-    err(konfigFehlerText(e));
+    dateipunkteVorAbbruch({ dateien, rootDir, out });
+    err(konfigFehlerText(e, rootDir));
     return AUFRUF_EXIT;
   }
   return ausgabe(ergebnis, out);

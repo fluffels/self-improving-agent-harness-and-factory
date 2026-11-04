@@ -215,25 +215,26 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 60_000 }, () => {
     }
   });
 
-  test("frische Prüfung nach dem Fast-Forward (#101 L10): ok bleibt still, ein Grund steht in der Notiz und macht --streng rot, ohne scripts/ oder .factory/ läuft sie nicht", () => {
-    const frisch = (grund: string) => {
-      const aufrufe: string[] = [];
-      return { aufrufe, pruefeFrisch: (d: string) => (aufrufe.push(d), { grund }) };
-    };
-    for (const pfad of ["scripts/neu.mjs", ".factory/projekt.json"]) {
-      const t = aufbau();
-      try {
-        t.schiebe(pfad, "x\n");
-        const ok = frisch("");
-        const e = S.fuehreSyncAus(t.haupt, { config: undefined, pruefeFrisch: ok.pruefeFrisch } as never);
-        expect(ok.aufrufe).toEqual([t.haupt]);
-        expect(e.gepullt).toBe(true);
-        expect(e.notiz).not.toContain("Validator");
-        expect(S.exitCodeFuer(e)).toBe(0);
-      } finally {
-        t.aufraeumen();
-      }
+  // Je Fall ein eigenes Budget (factory#162 L16): eine Schleife über echte Repos riss unter voller Last das 30-s-Limit des Blocks.
+  const frisch = (grund: string) => {
+    const aufrufe: string[] = [];
+    return { aufrufe, pruefeFrisch: (d: string) => (aufrufe.push(d), { grund }) };
+  };
+  test.each(["scripts/neu.mjs", ".factory/projekt.json"])("frische Prüfung nach dem Fast-Forward (#101 L10): ok bleibt still (%s)", (pfad) => {
+    const t = aufbau();
+    try {
+      t.schiebe(pfad, "x\n");
+      const ok = frisch("");
+      const e = S.fuehreSyncAus(t.haupt, { config: undefined, pruefeFrisch: ok.pruefeFrisch } as never);
+      expect(ok.aufrufe).toEqual([t.haupt]);
+      expect(e.gepullt).toBe(true);
+      expect(e.notiz).not.toContain("Validator");
+      expect(S.exitCodeFuer(e)).toBe(0);
+    } finally {
+      t.aufraeumen();
     }
+  });
+  test("frische Prüfung: ein Grund steht in der Notiz und macht --streng rot", () => {
     const t = aufbau();
     try {
       t.schiebe("scripts/neu.mjs", "x\n");
@@ -245,6 +246,8 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 60_000 }, () => {
     } finally {
       t.aufraeumen();
     }
+  });
+  test("frische Prüfung: eine Config mit anderem Branch-Präfix ändert nichts am Ergebnis", () => {
     const v = aufbau();
     try {
       v.schiebe("scripts/neu.mjs", "x\n");
@@ -257,6 +260,8 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 60_000 }, () => {
     } finally {
       v.aufraeumen();
     }
+  });
+  test("frische Prüfung ohne Ergebnis ist rot", () => {
     const w = aufbau();
     try {
       w.schiebe("scripts/neu.mjs", "x\n");
@@ -267,6 +272,8 @@ describe("fuehreSyncAus gegen echte Repos", { timeout: 60_000 }, () => {
     } finally {
       w.aufraeumen();
     }
+  });
+  test("frische Prüfung: ohne scripts/ oder .factory/ im Pull läuft sie nicht", () => {
     const u = aufbau();
     try {
       u.schiebe("docs/neu.md", "x\n");

@@ -14,7 +14,7 @@ import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 export const PRODUKT_QUOTE = 3;
 
 /** Härtungs-Takt (Füllstand): so viele Befund-Kommentare vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
- *  hinter den Kopf holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
+ *  an die Spitze (hinter 🚨/🔒) holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
 export const HARNESS_TAKT_KOMMENTARE = 10;
 
 /**

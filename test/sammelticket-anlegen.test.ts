@@ -195,7 +195,7 @@ describe("Vorgänger-Ausschluss (--vorgaenger X, X ungeclaimt)", () => {
 describe("Verdrahtung (#1390)", () => {
   const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
   test("das Skript liest die Position aus AGENTS.md (keine eigene Zahl) und nutzt keinen Such-Index", () => {
-    expect(skript).toMatch(/positionLautAgentsMd|positionOderWarnung/);
+    expect(skript).toMatch(/positionLautAgentsMd/);
     expect(skript).not.toMatch(/readFileSync/);
     expect(skript).not.toMatch(/search\/issues|--search\b/);
     expect(skript).not.toMatch(/Position\s*:?\s*\d+/);
@@ -265,15 +265,14 @@ describe("korrekturFuer (#1646): die Korrektur gilt dem NEUEN Sammelticket, nie 
 
 });
 
-describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
+describe("Verdrahtung der Anlage ohne Selbstkorrektur (#1390, Lens R1, factory#162)", () => {
   const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
-  test("board-place korrigiert über planMitKorrektur, board-takt zieht die Liste nach, das Anlege-Skript nutzt pruefSchritt und planMitKorrektur", () => {
-    expect(lies("scripts/board-lib.mjs")).toMatch(/function planMitKorrektur\(items, args, n\)/);
-    expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : io\.positionOderWarnung\(\)\)/);
+  test("board-place plant über planFuerArgs ohne Korrektur, das Anlege-Skript nutzt pruefSchritt und planFuerArgs", () => {
+    expect(lies("scripts/board-place.mjs")).toMatch(/planFuerArgs\(items, args\)/);
     // Der Listen-Nachzug des Takts ist mit Fakes in test/board-takt-lauf.test.ts getestet (#1428 Z23), keine Quelltext-Regex mehr.
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
     expect(anlegen).toMatch(/pruefSchritt\(\{ items: lade\(board\)/);
-    expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
+    expect(anlegen).toMatch(/planFuerArgs\(items, \{ anchor: null, numbers: \[nr\] \}\)/);
     expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });
 });
@@ -412,12 +411,12 @@ describe("sammelLabel, codequalitaetPlan und main (factory#156)", () => {
     expect(X.sammelLabel(mitCq(""), "codequalitaet")).toBeNull();
     expect(X.sammelLabel(mitCq("  "), "codequalitaet")).toBeNull();
   });
-  test("Platzierung: hinter dem Kopf (Status-Ticket) und vor dem Rest; mit Sammelblock dahinter, ohne Kopf an der Spitze", () => {
+  test("Platzierung: hinter dem Kopf (Status-Ticket) und vor dem Rest, ohne Klemmung hinter andere Sammeltickets (factory#162), ohne Kopf an der Spitze", () => {
     const b = (number: number, title: string, extra: object = {}) => ({ id: `I${number}`, number, status: "Todo", title, assignees: [], state: "open", ...extra });
     const nachKopf = [b(1, "Langfuse-Status überprüfen"), b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
     expect(X.codequalitaetPlan(nachKopf, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, "I1"]]);
     const mitBlock = [b(1, "Langfuse-Status überprüfen"), b(4, "Harness-Härtung (gesammelt)"), b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
-    expect(X.codequalitaetPlan(mitBlock, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, "I4"]]);
+    expect(X.codequalitaetPlan(mitBlock, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, "I1"]]);
     const ohneKopf = [b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
     expect(X.codequalitaetPlan(ohneKopf, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, null]]);
   });

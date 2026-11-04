@@ -288,3 +288,18 @@ describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)",
     expect(lies(fixture({ ".factory/projekt.json": "{kaputt" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
   });
 });
+
+describe("factory#162 L44: PROJEKTDATEIEN trägt dieselben Pfade wie die Konstanten der Verbraucher", () => {
+  // Der Doctor importiert docs-gen.mjs und check-docdrift.mjs nicht (CLI-Einstiege mit eigener Hülle); darum bindet dieser Test die Pfade an deren Konstanten.
+  test("docs-gen-Config und Befehls-Referenz stehen unter genau dem Pfad, den docs-gen und check:docdrift lesen", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const { DEFAULT_CONFIG } = (await import("../scripts/docs-gen.mjs")) as { DEFAULT_CONFIG: string };
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const { CORE_DOCS } = (await import("../scripts/check-docdrift.mjs")) as { CORE_DOCS: string[] };
+    const befehle = CORE_DOCS.filter((d) => d.endsWith("referenz/befehle.md"));
+    expect(befehle).toHaveLength(1);
+    const pfade = PROJEKTDATEIEN.map((d) => d.pfad);
+    expect(pfade).toContain(DEFAULT_CONFIG);
+    expect(pfade).toContain(befehle[0]);
+  });
+});

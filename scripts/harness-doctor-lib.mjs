@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
 import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
@@ -368,10 +369,13 @@ export function workflowsLesen(rootDir) {
     .map((f) => ({ pfad: f, text: readFileSync(join(ordner, f), "utf8") }));
 }
 
-/** Text eines Config- oder Spiegel-Fehlers samt `Fix:`-Zeile (Exit 2 im Aufrufer). */
-export function konfigFehlerText(e) {
+/** Vorlage des Ruleset-Spiegels in der Quelle (Factory); `konfigFehlerText` nennt sie im Fix. */
+export const RULESET_VORLAGE = ".github/ruleset-main-schutz.json";
+
+/** Text eines Config- oder Spiegel-Fehlers samt `Fix:`-Zeile (Exit 2 im Aufrufer); `rootDir` löst den Link auf die Vorlage der Quelle auf (ohne: lokaler Pfad). */
+export function konfigFehlerText(e, rootDir = "") {
   const text = e instanceof Error ? e.message : String(e);
-  return text.includes("Fix:") ? text : `${text}\nFix: Ruleset-Spiegel laut rulesetSpiegel in der Projekt-Config reparieren, dann erneut prüfen`;
+  return text.includes("Fix:") ? text : `${text}\nFix: Ruleset-Spiegel laut rulesetSpiegel in der Projekt-Config reparieren (Vorlage der Quelle: ${factorySeiteIn(rootDir, RULESET_VORLAGE)}), dann erneut prüfen`;
 }
 
 /**

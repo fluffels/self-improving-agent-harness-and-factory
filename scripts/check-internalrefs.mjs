@@ -55,6 +55,7 @@ import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 import { FIXTURE_WURZELN, KODIER_PRAEFIX, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, decodeTerm, encodeTerm, internalrefsAus, internalrefsMaengel, pfadBefunde } from "./internalrefs-lib.mjs";
 import { PROJEKT_CONFIG, ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { setzeJsonSchluessel } from "./besitz-lib.mjs";
 
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = join(dirname(SELF), "..");
@@ -220,9 +221,10 @@ export function addProjektTerm(term, wurzel, schluessel) {
   const trimmed = String(term).trim();
   if (!trimmed) return { ok: false, reason: "leerer Begriff" };
   const pfad = join(wurzel, ...PROJEKT_CONFIG.split("/"));
-  let config;
+  let config, text;
   try {
-    config = JSON.parse(readFileSync(pfad, "utf8"));
+    text = readFileSync(pfad, "utf8");
+    config = JSON.parse(text);
   } catch {
     return { ok: false, reason: `${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON` };
   }
@@ -235,8 +237,10 @@ export function addProjektTerm(term, wurzel, schluessel) {
   if (kern.includes(encodeTerm(trimmed))) return { ok: false, reason: "Begriff steht schon in der Kernliste" };
   const liste = block[schluessel] ?? [];
   if (liste.includes(kodiert)) return { ok: false, reason: "Begriff steht schon in der Liste" };
-  config.internalrefs = { ...block, [schluessel]: [...liste, kodiert] };
-  writeFileSync(pfad, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  const neu = { ...block, [schluessel]: [...liste, kodiert] };
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  // Nur der Wert von `internalrefs` wird ersetzt, der Rest der Datei bleibt byte-gleich (kein Neuformatieren der ganzen Config).
+  writeFileSync(pfad, setzeJsonSchluessel(text, "internalrefs", JSON.stringify(neu, null, 2).split("\n").join(`${eol}  `)), "utf8");
   return { ok: true, encoded: kodiert, count: liste.length + 1 };
 }
 

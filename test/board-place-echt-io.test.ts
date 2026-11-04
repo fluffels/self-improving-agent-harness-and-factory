@@ -35,13 +35,12 @@ const P = rawPlace as unknown as {
     addToBoardTodo: (b: unknown, nodeId: string, o: object) => string;
     setPosition: (b: unknown, id: string, after: string | null) => void;
     entferneVomBoard: (b: unknown, id: string) => void;
-    positionOderWarnung: unknown;
     schlafe: () => Promise<void>;
     log: (z: string) => void;
     warn: (z: string) => void;
   };
 };
-const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board; zielRepo: (r: string) => string; positionOderWarnung: unknown };
+const L = rawLib as unknown as { boardFuerRolle: (r: string) => Board; zielRepo: (r: string) => string };
 const flach = () => aufrufe.map((a) => a.args.join(" ")).join("\n");
 
 beforeEach(() => {
@@ -105,9 +104,6 @@ describe("ECHTE_PLACE_IO: die übrigen Methoden (#101 L6a)", () => {
     expect(status).toContain("updateProjectV2ItemFieldValue");
     expect(status).toContain("i=ITEM_z9");
     expect(status).toContain(`o=${factory.todoOptionId}`);
-  });
-  test("positionOderWarnung ist die der Board-Lib", () => {
-    expect(P.ECHTE_PLACE_IO.positionOderWarnung).toBe(L.positionOderWarnung);
   });
   test("schlafe wartet eine Sekunde, log und warn gehen auf stdout bzw. stderr", async () => {
     vi.useFakeTimers();

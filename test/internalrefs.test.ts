@@ -557,6 +557,36 @@ describe("Projektliste (factory#169)", () => {
     assert.ok(!r.err.includes("zzzandere"));
   });
 
+  test("--add im Bezieher patcht nur den Wert von internalrefs, der Rest der Config bleibt byte-gleich (Folge #169)", () => {
+    const w = tempOrdner("ir-byte-");
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, SYNC), "{}");
+    const kopf = `{\r\n    "praefixe": {"a": ["x", "y"]},\r\n    "internalrefs": {\r\n      "namen": ["${kod("zzzalt")}"]\r\n    }`;
+    const rest = ',\r\n    "liste": ["eins","zwei"]\r\n}\r\n';
+    writeFileSync(join(w, ".factory", "projekt.json"), kopf + rest);
+    assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
+    const text = configText(w);
+    assert.ok(text.startsWith(kopf.slice(0, kopf.indexOf('"internalrefs"'))), "Text vor dem Block byte-gleich");
+    assert.ok(text.endsWith(rest), "Text nach dem Block byte-gleich");
+    assert.ok(!text.replaceAll("\r\n", "").includes("\n"), "der neue Block behält das Zeilenende CRLF");
+    const cfg = JSON.parse(text) as { internalrefs: { namen: string[]; begriffe: string[] } };
+    assert.deepEqual(cfg.internalrefs.namen, [kod("zzzalt")]);
+    assert.deepEqual(cfg.internalrefs.begriffe, [kod(DUMMY)]);
+  });
+
+  test("--add in einer LF-Config schreibt kein CR in den neuen Block (factory#162)", () => {
+    const w = tempOrdner("ir-lf-");
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, SYNC), "{}");
+    const kopf = `{\n  "praefixe": {"a": 1},\n  "internalrefs": {\n    "namen": ["${kod("zzzalt")}"]\n  }`;
+    const rest = ',\n  "liste": ["eins"]\n}\n';
+    writeFileSync(join(w, ".factory", "projekt.json"), kopf + rest);
+    assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
+    const text = configText(w);
+    assert.ok(!text.includes("\r"), "kein CR in einer LF-Config");
+    assert.ok(text.endsWith(rest), "Text nach dem Block byte-gleich");
+  });
+
   test("addProjektTerm: leerer Begriff und fehlende Config schreiben nichts; ein kaputter Sync-Stand zählt als Bezieher", () => {
     const w = wurzelMit(undefined);
     assert.equal(addProjektTerm("  ", w, "begriffe").ok, false);
