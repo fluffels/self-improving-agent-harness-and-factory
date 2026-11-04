@@ -71,6 +71,13 @@ describe("gateSatz", () => {
   test("wirft ohne verify", () => {
     expect(() => gf.gateSatz({ name: "x", scripts: { lint: "eslint ." } })).toThrow(/verify/);
   });
+  test("wirft bei Shell-Zeichen im Namen eines Zusatzschritts von verify:full", () => {
+    const p = { ...pkg, scripts: { ...pkg.scripts, "verify:full": "npm run verify && npm run a;b" } };
+    expect(() => gf.gateSatz(p)).toThrow(/Shell/);
+  });
+  test("wirft bei Shell-Zeichen im Namen eines verify-Schritts", () => {
+    expect(() => gf.gateSatz({ ...pkg, scripts: { ...pkg.scripts, verify: "npm run lint && npm run a;b" } })).toThrow(/Shell/);
+  });
   test("wirft ohne Paketnamen", () => {
     expect(() => gf.gateSatz({ scripts: { verify: "npm run lint", lint: "eslint ." } })).toThrow(/Namen/);
   });
@@ -94,6 +101,24 @@ describe("befehlsform", () => {
   });
   test.each(["npm run lint; npm run test", "npm run lint || true", "git push", "npm run lint & npm test", "npm run lint\nnpm test", "echo $(npm run lint)", "npm run lint > out.txt", "node scripts/gate-befehl.mjs verify --zeigen"])("Befehlsform: %s", (c) => {
     expect(gf.befehlsform(c).art).toBe("befehlsform");
+  });
+  test.each(["npm run lint > x.txt", "npm run lint < x.txt", "npm run lint >x.txt", "npm run lint &> x.txt", "npm run lint 2> x.txt", "npm run lint 1>&2"])("Umleitung außerhalb von 2>&1 und 2>/dev/null: %s", (c) => {
+    expect(gf.befehlsform(c).art).toBe("befehlsform");
+  });
+  test("2>&1 | tail ist Pipe, 2>/dev/null ist ok, gequotetes > ist kein Umleiten", () => {
+    expect(gf.befehlsform("npm run lint 2>&1 | tail").art).toBe("pipe");
+    expect(gf.befehlsform("npm run lint 2>/dev/null").art).toBe("ok");
+    expect(gf.befehlsform('cd "a > b" && npm run lint').art).toBe("ok");
+  });
+  test("offenes Quote und nicht parsbare Eingabe: Befehlsform", () => {
+    expect(gf.befehlsform("npm run lint 'x").art).toBe("befehlsform");
+    expect(gf.befehlsform("if true; then npm run lint; fi").art).toBe("befehlsform");
+    expect(gf.befehlsform("(npm run lint)").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run lint <<EOF\nx\nEOF").art).toBe("befehlsform");
+  });
+  test("Pipe: gewertet wird das erste Kommando", () => {
+    expect(gf.befehlsform("git log | npm run lint").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run lint | tail | head")).toEqual({ art: "pipe", aufrufe: 1 });
   });
   test("zählt die Gate-Aufrufe", () => {
     expect(gf.befehlsform("cd x && npm run lint && npm test").aufrufe).toBe(2);
@@ -251,6 +276,17 @@ describe("Summenzeile", () => {
     expect(r?.gates?.map((g) => [g.name, g.ergebnis, g.sek])).toEqual([["typecheck", "gruen", null], ["lint", "rot", 7], ["check:size", "gruen", null], ["test", "gruen", null]]);
     const gruenText = vl.bericht(e.map((x) => ({ ...x, ok: true })), { modus: "kompakt", hinweis: "h" });
     expect(gf.bewerteSumme(gruenText, { verify: ctx.verify })?.gates?.map((g) => [g.name, g.sek])).toEqual([["typecheck", 3], ["lint", 7], ["check:size", 0], ["test", 5]]);
+  });
+  test("Dauer mit Komma oder Dezimalpunkt wird gelesen", () => {
+    const r = gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6,0 s, test ok 6.5 s", { verify: ["lint", "test"] });
+    expect(r?.gates?.map((g) => [g.name, g.sek])).toEqual([["lint", 6], ["test", 6.5]]);
+  });
+  test("ein unparsbarer Teil macht die grüne Zeile unvollständig, nicht teilweise gezählt", () => {
+    expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, test ok schnell", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });
+  });
+  test("rote Dauer mit Komma wird gelesen", () => {
+    const r = gf.bewerteSumme("── lint: rot (Exit 1, 7,5 s) ──\nx\nverify:kompakt ROT · 1/2 grün · 9 s · rot: lint", { verify: ["lint", "test"] });
+    expect(r?.gates?.find((g) => g.name === "lint")?.sek).toBe(7.5);
   });
   test("rotes Gate außerhalb der Kette: Kette geändert", () => {
     expect(gf.bewerteSumme("verify:kompakt ROT · 3/4 grün · 1 s · rot: fremd", { verify: ctx.verify })).toEqual({ grund: "Kette geändert" });
