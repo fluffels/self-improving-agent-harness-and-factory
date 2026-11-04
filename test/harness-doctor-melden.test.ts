@@ -10,6 +10,7 @@ interface Kommentar { user: { login: string; type: string } | null; body: string
 interface Io {
   ermittle: () => Luecke[];
   kontext: () => { kommentare: Kommentar[]; owner: string; ziel: number | null };
+  bereite: (zeilen: string[]) => { ok: boolean; text?: string; grund?: string };
   postZeilen: (nr: number, text: string) => void;
   heute: string;
   log: (s: string) => void;
@@ -18,7 +19,7 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string): boolean;
-  main(argv: string[], deps: { env?: Record<string, string>; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
+  main(argv: string[], deps: { env?: Record<string, string>; bereite?: Io["bereite"]; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -29,7 +30,8 @@ const L2: Luecke = { punkt: "Label forum", befund: 'Label "forum" fehlt', fix: '
 const NP: Luecke = { punkt: "PVR", befund: "private-vulnerability-reporting nicht lesbar (HTTP 404)", fix: "mit einem Konto mit Admin-Recht prüfen", nichtPruefbar: true };
 const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} 2026-10-01 Harness-Doctor (Wochenlauf): ${l.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${l.punkt}: ${l.befund} Fix: ${l.fix}`;
 
-interface Welt { luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
+const bereiteStub: Io["bereite"] = (zeilen) => ({ ok: true, text: zeilen.join("\n") });
+interface Welt { treffer?: boolean; stand?: string; luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
 function fahre(w: Welt, trocken = false): { code: number; log: string[]; posts: { nr: number; text: string }[] } {
   const log: string[] = [];
   const posts: { nr: number; text: string }[] = [];
@@ -42,6 +44,7 @@ function fahre(w: Welt, trocken = false): { code: number; log: string[]; posts: 
       if (w.kontextWirft) throw new Error("HTTP 502");
       return { kommentare: w.kommentare ?? [], owner: OWNER, ziel: w.ziel === undefined ? 1814 : w.ziel };
     },
+    bereite: (zeilen) => (w.treffer ? { ok: false, grund: "Meldung nicht gesendet: check-internalrefs --text meldet einen Treffer\nFix: neutral formulieren" } : { ok: true, text: w.stand ? `${zeilen.join("\n")}\n\n${w.stand}` : zeilen.join("\n") }),
     postZeilen: (nr, text) => {
       if (w.postWirft) throw new Error("HTTP 403");
       posts.push({ nr, text });
@@ -67,6 +70,23 @@ describe("harness-doctor-melden: lauf", () => {
     assert.equal(r.posts.length, 1);
     assert.equal(r.posts[0].nr, 1814);
     assert.deepEqual(r.posts[0].text.split("\n"), [zeile(L1).replace("2026-10-01", "2026-10-21"), zeile(L2).replace("2026-10-01", "2026-10-21")]);
+  });
+
+  test("Meldestelle (factory#153): der Factory-Stand steht als Fußzeile im Post-Body; ohne Stand bleibt der Body unverändert", () => {
+    const mit = fahre({ luecken: [L1], stand: "factory: v0.6.0 (abc1234)" });
+    assert.equal(mit.posts[0].text, `${zeile(L1).replace("2026-10-01", "2026-10-21")}\n\nfactory: v0.6.0 (abc1234)`);
+    const ohne = fahre({ luecken: [L1] });
+    assert.equal(ohne.posts[0].text, zeile(L1).replace("2026-10-01", "2026-10-21"));
+  });
+
+  test("Meldestelle (factory#153): Treffer der Sperrprüfung → nichts gepostet, Exit 1, auch im Trockenlauf; Fehlerzeile mit Fix", () => {
+    for (const trocken of [false, true]) {
+      const r = fahre({ luecken: [L1], treffer: true }, trocken);
+      assert.equal(r.code, 1);
+      assert.deepEqual(r.posts, []);
+      assert.ok(r.log.some((z) => /^::error::.*check-internalrefs --text.*Fix:/.test(z)));
+      assert.equal(r.log.some((z) => z.includes("[dry-run]")), false);
+    }
   });
 
   test("ein mehrzeiliger Befund wird einzeilig (eine Zeile pro Lücke)", () => {
@@ -219,7 +239,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         waehleSammelticket: (offene: { number: number }[]) => offene[0],
         postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
       };
-      const deps = { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s: string) => log.push(s), err: () => undefined };
+      const deps = { bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s: string) => log.push(s), err: () => undefined };
       assert.equal(await melden.main(["--dry-run"], deps), 0);
       assert.deepEqual(gepostet, [], "Trockenlauf schreibt nichts");
       assert.match(log.join("\n"), /\[dry-run\] - \[ \] .*LÜCKE Secret PROJECT_TOKEN/);
@@ -268,12 +288,20 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         postZeilen: (...a: unknown[]) => gepostet.push(a),
       };
       const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
-      const code = await melden.main([], { env, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe });
+      const code = await melden.main([], { env, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe });
       assert.equal(code, 0);
       return gepostet[0]?.slice(2, 4);
     };
     test("fremdes Ziel-Repo mit PROJECT_TOKEN: postZeilen bekommt Ziel-Repo und Token", async () => {
       assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/ziel", "pt"]);
+    });
+    test("Meldestelle (factory#153): MELDESTELLE schlägt ZIEL; MELDESTELLE_TOKEN schlägt PROJECT_TOKEN", async () => {
+      const gepostet: unknown[][] = [];
+      const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", MELDESTELLE: "eingang/privat", ladeSammelKontext: (io: { repo: string }) => ({ offene: [{ number: 55 }], kommentare: [], owner: io.repo.split("/")[0] }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
+      const env = { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt", MELDESTELLE_TOKEN: "mt" };
+      const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
+      assert.equal(await melden.main([], { env, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
+      assert.deepEqual(gepostet[0]?.slice(2, 4), ["eingang/privat", "mt"]);
     });
     test("eigenes Ziel-Repo (auch anders geschrieben): kein Token, obwohl PROJECT_TOKEN gesetzt ist", async () => {
       assert.deepEqual(await lauf("acme/proj", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/proj", undefined]);
@@ -285,7 +313,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }).then((r) => r?.[1]), "x");
         const gepostet: unknown[][] = [];
         const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
-        await melden.main([], { env: { GITHUB_ACTIONS: "true" }, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
+        await melden.main([], { env: { GITHUB_ACTIONS: "true" }, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
         assert.equal(gepostet.length, 1);
         assert.equal(gepostet[0]?.[3], undefined);
       } finally {

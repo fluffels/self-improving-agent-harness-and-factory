@@ -28,6 +28,7 @@ interface Pc {
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
+  meldestelleAus(config: unknown): string;
   cli(argv: string[], opt?: { rootDir?: string; env?: Record<string, string | undefined>; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -152,6 +153,16 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit((c) => (c.rulesetSpiegel = "")), /rulesetSpiegel/);
     assert.match(mit((c) => (c.rulesetSpiegel = 5)), /rulesetSpiegel/);
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), rulesetSpiegel: ".github/r.json" }), []);
+  });
+
+  test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: "eingang/meldungen" }), []);
+    for (const schlecht of ["", "foo", 3]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: schlecht }).join("\n"), /meldestelle muss die Form owner\/name[\s\S]*Fix:/);
+    const cfg = gueltig() as { repo: string; boards: Array<Record<string, unknown>> };
+    const fabrik = cfg.boards.find((b) => b.rolle === "factory");
+    assert.equal(pc.meldestelleAus(cfg), fabrik?.repo ?? cfg.repo);
+    assert.equal(pc.meldestelleAus({ ...cfg, meldestelle: "eingang/meldungen" }), "eingang/meldungen");
+    assert.equal(pc.meldestelleAus({ ...cfg, boards: cfg.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "fabrik/kern" } : b)) }), "fabrik/kern");
   });
 
   test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {

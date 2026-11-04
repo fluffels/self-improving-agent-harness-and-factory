@@ -521,7 +521,7 @@ blockiert durch acme/demo#13
 
 describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1860)", () => {
   type Sammel = { ziel: number | null; owner?: string; kommentare: { user: { login: string; type?: string } | null; body: string }[] };
-  type GIo = Io & { sammelKontext: () => Sammel; postZeilen: (nr: number, text: string) => void; heute: () => string };
+  type GIo = Io & { bereite: (zeilen: string[]) => { ok: boolean; text?: string; grund?: string }; sammelKontext: () => Sammel; postZeilen: (nr: number, text: string) => void; heute: () => string };
   const ARGS = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
   const ZEILE = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
   function gumgebung(sammel: Partial<Sammel> = {}, extra: Partial<GIo> = {}) {
@@ -530,6 +530,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     const gio: GIo = {
       ...io,
       sammelKontext: () => ({ ziel: 1860, owner: OWNER, kommentare: [], ...sammel }),
+      bereite: (zeilen) => ({ ok: true, text: zeilen.join("\n") }),
       postZeilen: (nr, text) => void posts.push({ nr, text }),
       heute: () => "2026-10-22",
       ...extra,
@@ -550,6 +551,18 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(r.code, r.err).toBe(0);
     expect(posts).toEqual([{ nr: 1860, text: ZEILE }]);
     expect(r.out).toContain("#1860");
+  });
+  test("Meldestelle (factory#153): der Text der Meldung (mit Factory-Stand) wird gepostet, nicht die rohe Zeile", () => {
+    const { io, posts } = gumgebung({}, { bereite: (z) => ({ ok: true, text: `${z.join("\n")}\n\nfactory: v0.6.0 (abc1234)` }) });
+    expect(S.fuehreAus(ARGS, io).code).toBe(0);
+    expect(posts).toEqual([{ nr: 1860, text: `${ZEILE}\n\nfactory: v0.6.0 (abc1234)` }]);
+  });
+  test("Meldestelle (factory#153): Treffer der Sperrprüfung → Exit 1 mit Grund, nichts gepostet", () => {
+    const { io, posts } = gumgebung({}, { bereite: () => ({ ok: false, grund: "Meldung nicht gesendet: check-internalrefs --text meldet einen Treffer" }) });
+    const r = S.fuehreAus(ARGS, io);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("check-internalrefs --text");
+    expect(posts).toEqual([]);
   });
   test("Mangel über mehrere Zeilen wird einzeilig", () => {
     const { io, posts } = gumgebung();
@@ -669,7 +682,7 @@ describe("Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10)", () => {
     const posts: unknown[] = [];
     const { io } = umgebung({});
     const kontext = (owner: string) => ({ ziel: 1860, owner, kommentare: [{ user: { login: "zz-org", type: "User" }, body: zeile }] });
-    const gio = (owner: string) => ({ ...io, sammelKontext: () => kontext(owner), postZeilen: (nr: number) => void posts.push(nr), heute: () => "2026-10-22" }) as unknown as Io;
+    const gio = (owner: string) => ({ ...io, bereite: (z: string[]) => ({ ok: true, text: z.join("\n") }), sammelKontext: () => kontext(owner), postZeilen: (nr: number) => void posts.push(nr), heute: () => "2026-10-22" }) as unknown as Io;
     const args = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
     expect(S.fuehreAus(args, gio("zz-org")).out).toMatch(/schon/);
     expect(posts).toEqual([]);

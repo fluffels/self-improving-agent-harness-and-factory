@@ -337,6 +337,7 @@ export function pruefeProjektConfig(wert) {
   if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
+  if (wert.meldestelle !== undefined && !istRepoForm(wert.meldestelle)) fehler.push("meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen");
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
@@ -386,6 +387,9 @@ export const repoDerRolle = (rolle, config) => boardRepo(boardDerRolle(rolle, co
  * ihn führt, ein Produkt-Befund bleibt im eigenen Repo.
  */
 export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);
+
+/** Pur: die Meldestelle (`owner/name`, factory#153): das Repo, dessen Harness-Sammelticket die Befunde dieses Projekts aufnimmt; `config.meldestelle`, sonst das Repo des Boards mit Rolle `factory`. */
+export const meldestelleAus = (config) => (istRepoForm(config?.meldestelle) ? config.meldestelle : repoDerRolle("factory", config));
 
 /**
  * Pur: Fehlertext, wenn das Board der Rolle `rolle` die Issues eines anderen Repos als `repo` führt (sonst `null`). Ein Schreibweg bricht damit
