@@ -470,6 +470,7 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     assert.deepEqual(arten(stubRoot(`${stub()}\n\n# Z\n`, o)), []);
     const inUeberschrift = `# Z\n\n## Abschnitt\n\nText\n\n## Anderes ${stub()}\n`;
     assert.deepEqual(arten(stubRoot(inUeberschrift)), ["stub-link"]);
+    assert.deepEqual(arten(stubRoot(`# Z\n\n${stub()}\n## Abschnitt\n\nText\n`)), ["stub-link"]);
   });
   test("Kern-Links auf dieselbe Seite mit verschiedenen Ankern sind je ein Befund; ein Query-Anhang am Link ändert die Prüfung nicht", () => {
     const ziel = `# Z\n\n## Abschnitt\n\n${stub()}\n\n## Anderes\n\nText\n`;
