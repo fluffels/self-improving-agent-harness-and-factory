@@ -126,7 +126,8 @@ async function messeIst(): Promise<Baseline> {
 }
 
 describe("Komplexitäts-Ausmaß je Datei", () => {
-  test("das Ausmaß des Bestands entspricht exakt der Baseline (steigt nie, Rückgang senkt die Baseline)", async () => {
+  // Timeout 60 s: typbewusstes ESLint über alle Dateien des Repos, unter paralleler Last der Suite knapp über dem Vitest-Standard.
+  test("das Ausmaß des Bestands entspricht exakt der Baseline (steigt nie, Rückgang senkt die Baseline)", { timeout: 60_000 }, async () => {
     const baseline = JSON.parse(lesen(BASELINE)) as Baseline;
     assert.deepEqual(vergleiche(await messeIst(), baseline), []);
   });

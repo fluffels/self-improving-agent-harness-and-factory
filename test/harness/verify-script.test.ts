@@ -134,6 +134,15 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     }
   });
 
+  it("die Workflows mit Gate-Kette (ci.yml, verify-macos.yml) rufen Installation und verify über den Gate-Befehl", () => {
+    for (const datei of [".github/workflows/ci.yml", ".github/workflows/verify-macos.yml"]) {
+      const text = readRepo(datei);
+      expect(text, `${datei}: Installation über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs install\b/);
+      expect(text, `${datei}: verify über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs verify\b/);
+      expect(text, `${datei}: kein festes npm ci/npm run verify als Schritt`).not.toMatch(/run: npm (ci|run verify)\b/);
+    }
+  });
+
   it("netzabhängige Gates (#610 check:doctickets) laufen NICHT in verify, sondern als eigener CI-Job", () => {
     for (const gate of NETWORK_DEPENDENT_GATES) {
       const needle = new RegExp(`\\bnpm run ${escapeRegex(gate)}\\b`);

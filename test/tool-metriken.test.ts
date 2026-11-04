@@ -3,6 +3,10 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as tmModule from "../scripts/tool-metriken.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { GATE_BEFEHL_NAMEN } from "../scripts/gate-befehl-lib.mjs";
+
+const gateNamen = GATE_BEFEHL_NAMEN as readonly string[];
 
 type Ev = { ts?: string; tool: string; input: Record<string, unknown>; resultChars: number; agent?: string | null; fehler?: string | null };
 type Lesen = { reads: number; abschnittsweise: number; voll: { n: number; tokens: number }; gezielt: { n: number; tokens: number }; top: { datei: string; n: number; tokens: number }[] };
@@ -205,5 +209,32 @@ describe("pruefLaeufe (#1120)", () => {
   });
   test("Ein roter Lauf (Exit code 1) zählt", () => {
     assert.deepEqual(z([sh("npm run verify", "Bash", "Exit code 1\nfoo")]), { voll: 1, gezielt: 0 });
+  });
+  // Gate-Befehle (factory#182): der Läufer `node scripts/gate-befehl.mjs <name>` ersetzt `npm run …`.
+  const GATE_ZAEHLT: Record<string, "voll" | "gezielt"> = { verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt" };
+  const GATE_ZAEHLT_NICHT = ["install", "coverage"];
+  test("zählt den Gate-Befehl verify/verifyKompakt als voll, verifyChanged als gezielt", () => {
+    assert.deepEqual(z([sh("node scripts/gate-befehl.mjs verify")]), { voll: 1, gezielt: 0 });
+    assert.deepEqual(z([sh("cd x && node scripts/gate-befehl.mjs verifyKompakt")]), { voll: 1, gezielt: 0 });
+    assert.deepEqual(z([sh("node ./scripts/gate-befehl.mjs verifyChanged", "PowerShell")]), { voll: 0, gezielt: 1 });
+  });
+  test("zählt install, coverage und --zeigen nicht", () => {
+    const evs = [
+      sh("node scripts/gate-befehl.mjs install"),
+      sh("node scripts/gate-befehl.mjs coverage"),
+      sh("node scripts/gate-befehl.mjs verify --zeigen"),
+      sh("node scripts/gate-befehl.mjs"),
+      sh("node scripts/gate-befehl.mjs gibtsnicht"),
+      sh("node scripts/gate-befehl.mjs toString"),
+    ];
+    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
+  });
+  test("jeder Gate-Befehl-Name ist abgebildet oder ausdrücklich ausgenommen", () => {
+    for (const name of gateNamen) {
+      assert.ok(name in GATE_ZAEHLT || GATE_ZAEHLT_NICHT.includes(name), `neuer Gate-Befehl „${name}“: in pruefArt abbilden oder als „zählt nicht“ eintragen`);
+      const erwartet = GATE_ZAEHLT[name];
+      const soll = { voll: erwartet === "voll" ? 1 : 0, gezielt: erwartet === "gezielt" ? 1 : 0 };
+      assert.deepEqual(z([sh(`node scripts/gate-befehl.mjs ${name}`)]), soll, name);
+    }
   });
 });
