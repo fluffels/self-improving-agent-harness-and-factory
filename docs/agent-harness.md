@@ -121,7 +121,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
 | `npm run check:factorylinks` | `verify` | Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf vorhandene Pfade und Anker, Kern-Links auf Factory-Seiten sind durch Anker-Stubs gedeckt (entfällt ohne Sync-Stand) |
-| `npm run check:docmap` | `verify` | Tiefendoc-Abdeckung jeder Quell-Datei (entfällt mit Hinweis ohne `struktur.moduldoku`) |
+| `npm run check:docmap` | `verify` | Tiefendoc-Abdeckung jeder Quell-Einheit (Datei oder Ordner, `struktur.docmapEinheit`; entfällt mit Hinweis ohne `struktur.moduldoku`) |
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
 | `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config) |
