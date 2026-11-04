@@ -324,6 +324,9 @@ export function ergaenzungAusText(text) {
   return ergaenzungAus(config);
 }
 
+/** Pur: Fehler zum optionalen Schlüssel `meldestelle` (Form `owner/name`); fehlt er, ist nichts zu prüfen. */
+const pruefeMeldestelle = (wert) => (wert === undefined || istRepoForm(wert) ? [] : ["meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen"]);
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -337,7 +340,7 @@ export function pruefeProjektConfig(wert) {
   if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
-  if (wert.meldestelle !== undefined && !istRepoForm(wert.meldestelle)) fehler.push("meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen");
+  fehler.push(...pruefeMeldestelle(wert.meldestelle));
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }

@@ -19,6 +19,7 @@ import { bereiteMeldung, meldestelleToken } from "./meldung-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
+const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen) => bereiteMeldung(zeilen, { wurzel: WURZEL }), api: ghJson };
 const AUFRUF = 'Aufruf: node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]';
 
 /** Pur: die Zeile als Listenpunkt `- [ ] …` (ein vorhandenes Präfix `- [ ] ` bleibt, nie doppelt); Zeilenumbrüche werden Leerzeichen. */
@@ -28,7 +29,8 @@ export const alsListenpunkt = (zeile) => {
 };
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs`, `env`, `log`, `err`, `bereite` (Standard `bereiteMeldung`), `api` (Standard `ghJson`, mit Token der Meldestelle). Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, env = process.env, log = console.log, err = console.error, bereite = (zeilen) => bereiteMeldung(zeilen, { wurzel: WURZEL }), api = ghJson } = {}) {
+export async function main(argv = process.argv.slice(2), deps = {}) {
+  const { ladeConfig, ladeLibs, env, log, err, bereite, api } = { ...STANDARD, ...deps };
   const { werte, fehler } = flagsLesen(argv, { zeile: { type: "string", multiple: true }, "dry-run": { type: "boolean" } });
   if (fehler || !werte.zeile?.length) {
     err(`${fehler?.text ?? "--zeile fehlt"}\n${AUFRUF}`);
@@ -47,6 +49,11 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
     err(`::error::melden: ${meldung.grund}`);
     return 1;
   }
+  return sende(libs, meldung.text, { trocken: werte["dry-run"] === true, env, log, err, api });
+}
+
+/** Postet `text` an das jüngste ungeclaimte Sammelticket der Meldestelle (`libs.MELDESTELLE`); Exit-Code wie `main`. */
+function sende(libs, text, { trocken, env, log, err, api }) {
   const { MELDESTELLE, REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   const token = meldestelleToken({ stelle: MELDESTELLE, eigenes: REPO, env });
   try {
@@ -56,11 +63,11 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
       err(`::error::melden: kein ungeclaimtes Harness-Sammelticket in ${MELDESTELLE}\nFix: in der Fabrik node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen`);
       return 1;
     }
-    if (werte["dry-run"] === true) {
-      log(`[dry-run] Meldung an ${MELDESTELLE}#${nr}:\n${meldung.text}`);
+    if (trocken) {
+      log(`[dry-run] Meldung an ${MELDESTELLE}#${nr}:\n${text}`);
       return 0;
     }
-    postZeilen(nr, meldung.text, MELDESTELLE, token);
+    postZeilen(nr, text, MELDESTELLE, token);
     log(`Meldung in ${MELDESTELLE}#${nr} gepostet.`);
     return 0;
   } catch (e) {

@@ -22,7 +22,7 @@ import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
   pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
-  voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
+  voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; optionaleSecrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
 }
 const doctor = rawDoctor as unknown as Doctor;
 type Befund = { punkt: string; ok: boolean; befund?: string; fix?: string };
@@ -693,6 +693,12 @@ describe("voraussetzungenAus", () => {
     const v = ab("a: ${{ secrets.B }} ${{ secrets.GITHUB_TOKEN }} ${{ vars.C }}");
     assert.deepEqual(v.secrets, ["B"]);
     assert.deepEqual(v.variablen, ["C"]);
+  });
+
+  test("MELDESTELLE_TOKEN (factory#153) ist gelesen, aber nicht gefordert: er steht in optionaleSecrets, nie in secrets", () => {
+    const v = ab("a: ${{ secrets.B }} ${{ secrets.MELDESTELLE_TOKEN }}");
+    assert.deepEqual(v.secrets, ["B"]);
+    assert.deepEqual(v.optionaleSecrets, ["MELDESTELLE_TOKEN"]);
   });
 
   test("Label-Literale: Flag mit und ohne Anführungszeichen, Env-Schlüssel; Variablen und Ausdrücke nicht; Dedup ohne Groß-/Kleinschreibung", () => {

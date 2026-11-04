@@ -40,8 +40,8 @@ export const WOCHENLAUF_WORKFLOW = [
   "name: Harness-Doctor (Wochenlauf)",
   "",
   "# Meldet Lücken der Factory-Voraussetzungen (scripts/harness-doctor.mjs) einmal pro Woche als Zeile im Harness-Sammelticket, mit Abgleich",
-  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, in einem fremden Ziel-Repo mit PROJECT_TOKEN; fehlt das Secret,",
-  "# meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).",
+  "# gegen die offenen Zeilen (scripts/harness-doctor-melden.mjs). Geprüft wird mit PROJECT_TOKEN; gepostet wird im eigenen Repo mit github.token, an einer fremden Meldestelle (Schlüssel meldestelle, factory#153) mit MELDESTELLE_TOKEN (Rückfall PROJECT_TOKEN);",
+  "# fehlt PROJECT_TOKEN, meldet der Lauf genau das als Lücke. Diese Datei ist die Vorlage von `harness-doctor.mjs --einrichten` (ein Wächter hält beide gleich).",
   "",
   "on:",
   "  schedule:",
@@ -77,6 +77,7 @@ export const WOCHENLAUF_WORKFLOW = [
   "          GH_TOKEN: ${{ github.token }}",
   "          GITHUB_REPOSITORY: ${{ github.repository }}",
   "          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}",
+  "          MELDESTELLE_TOKEN: ${{ secrets.MELDESTELLE_TOKEN }}",
   "          TROCKEN: ${{ inputs.trocken == true }}",
   "        run: |",
   "          if [ \"$TROCKEN\" = \"true\" ]; then node scripts/harness-doctor-melden.mjs --dry-run; else node scripts/harness-doctor-melden.mjs; fi",
@@ -107,6 +108,10 @@ export const BOARD_PRUEFPUNKTE = Object.keys(BOARD_PRUEFUNG);
 
 const LABEL_FLAG = /--(?:add-)?label[ =]+(?:"([^"$]+)"|'([^'$]+)'|([^\s"'$\\]+))/g;
 const LABEL_ENV = /^\s*\w*LABEL\w*:\s*(.+?)\s*$/gm;
+/** Secrets, die ein Workflow liest, die aber ein Rückfall haben und nur in einem Sonderfall nötig sind: der Doctor fordert sie nicht (`MELDESTELLE_TOKEN`: nur für eine fremde Meldestelle, sonst `PROJECT_TOKEN`, factory#153). */
+const OPTIONALE_SECRETS = new Set(["MELDESTELLE_TOKEN"]);
+/** Pur: die Menge (`secrets`, `optionale` oder `variablen`), in die `art.name` gehört. */
+const mengeFuer = (art, name, mengen) => (art !== "secrets" ? mengen.variablen : OPTIONALE_SECRETS.has(name) ? mengen.optionale : mengen.secrets);
 const SECRET_VAR = /\b(secrets|vars)\.([A-Za-z_]\w*)/g;
 
 const ohneAnfuehrung = (s) => s.replace(/^(["'])(.*)\1$/, "$2");
@@ -129,11 +134,12 @@ function kernPflichtChecks({ besitz, workflows }) {
 const vereinigt = (spiegel, kern) => [...new Set([...(spiegel?.requiredChecks ?? []), ...kern])];
 
 /**
- * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, variablen, labels, boards, pflichtChecks, besitzFehler, manifest }` (`manifest`: das gelesene Besitz-Manifest oder `null`). `pflichtChecks` ist die Vereinigung aus den
+ * Pur: leitet aus Config und Workflows ab, was das Projekt braucht: `{ secrets, optionaleSecrets (gelesen, aber nicht gefordert), variablen, labels, boards, pflichtChecks, besitzFehler, manifest }` (`manifest`: das gelesene Besitz-Manifest oder `null`). `pflichtChecks` ist die Vereinigung aus den
  * Required Checks des Ruleset-Spiegels (zuerst) und den `pflichtChecks` der verteilten Kern-Workflows im Manifest, ohne Doppelte; `besitzFehler` nennt den Grund, wenn das Manifest nicht lesbar ist.
  */
 export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
   const secrets = new Set();
+  const optionale = new Set();
   const variablen = new Set();
   const labels = new Map();
   const merke = (name) => {
@@ -141,12 +147,12 @@ export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
   };
   for (const wert of Object.values(config.labels ?? {})) merke(wert);
   for (const { text } of workflows) {
-    for (const [, art, name] of text.matchAll(SECRET_VAR)) if (name !== "GITHUB_TOKEN") (art === "secrets" ? secrets : variablen).add(name);
+    for (const [, art, name] of text.matchAll(SECRET_VAR)) if (name !== "GITHUB_TOKEN") mengeFuer(art, name, { secrets, optionale, variablen }).add(name);
     for (const m of text.matchAll(LABEL_FLAG)) for (const l of (m[1] ?? m[2] ?? m[3]).split(",")) merke(l.trim());
     for (const [, wert] of text.matchAll(LABEL_ENV)) if (!wert.includes("${{") && !wert.includes("$")) merke(ohneAnfuehrung(wert));
   }
   const kern = kernPflichtChecks({ besitz, workflows });
-  return { secrets: [...secrets].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler, manifest: kern.manifest };
+  return { secrets: [...secrets].sort(), optionaleSecrets: [...optionale].sort(), variablen: [...variablen].sort(), labels: [...labels.values()], boards: config.boards ?? [], pflichtChecks: vereinigt(spiegel, kern.checks), besitzFehler: kern.fehler, manifest: kern.manifest };
 }
 
 const erste = (e) => fehlerText(e).split("\n")[0];

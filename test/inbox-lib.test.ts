@@ -12,7 +12,7 @@ const L = raw as unknown as {
   offeneTitel: (s: unknown, owner: string) => string[];
   platziereOben: (nr: number, art: string, token?: string) => void;
   sammelticketNummern: (offene: { number: number; titel: string }[]) => number[];
-  ladeSammelKontext: (io: { ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
+  ladeSammelKontext: (io: { repo?: string; ladeOffene: () => unknown; ladeKommentare: (nr: number) => { user: unknown; body: string; extra?: string }[] }) => { rohe: unknown; offene: { number: number }[]; kommentare: { user: unknown; body: string }[] };
 };
 
 const OWNER = FREMD_OWNER;
@@ -88,7 +88,6 @@ describe("Ziel-Repo der Sammelticket-Zeilen (#76)", () => {
     const repos: string[] = [];
     const k = L.ladeSammelKontext({
       repo: "eingang/meldungen",
-      token: "t",
       ladeOffene: () => rohe,
       ladeKommentare: ((nr: number, repo: string) => (repos.push(repo), [])) as unknown as (nr: number) => { user: unknown; body: string }[],
     }) as unknown as { owner: string };

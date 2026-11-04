@@ -31,7 +31,7 @@ import { OPTIONALE_LABELS } from "../../scripts/projekt-config-lib.mjs";
 
 const lib = rawLib as unknown as { istWorkflowEinheit: (e: { pfad: string; block?: string; schluessel?: string }) => boolean };
 
-interface Vor { secrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null }
+interface Vor { secrets: string[]; optionaleSecrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null }
 interface Doctor {
   voraussetzungenAus(a: { config: unknown; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): Vor;
   BOARD_PRUEFPUNKTE: string[];
@@ -165,7 +165,7 @@ describe("Voraussetzungen des Repos sind Prüfpunkte des Harness-Doctors", () =>
     const funde = workflows.flatMap((w) => secretsUndVars(w.text));
     assert.ok(funde.length > 0, "Scanner fand kein einziges Secret: vakuös");
     for (const { art, name } of funde) {
-      const liste = art === "secrets" ? vor.secrets : vor.variablen;
+      const liste = art === "secrets" ? [...vor.secrets, ...vor.optionaleSecrets] : vor.variablen;
       assert.ok(liste.includes(name), `${art}.${name} wird in den Workflows gelesen, hat aber keinen Prüfpunkt im Harness-Doctor`);
     }
   });

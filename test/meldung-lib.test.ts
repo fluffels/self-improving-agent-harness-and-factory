@@ -181,15 +181,15 @@ describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (A
     const namen = mitPost.map(name);
     for (const n of ["harness-doctor-melden.mjs", "spezifikation.mjs", "melden.mjs", "audit-einordnung.mjs"]) expect(namen).toContain(n);
   });
-  test("jedes Skript mit postZeilen( nutzt bereiteMeldung oder steht in der Ausnahmeliste", () => {
-    const ohne = mitPost.filter((f) => !readFileSync(f, "utf8").includes("bereiteMeldung") && !AUSNAHMEN.has(name(f))).map(name);
+  test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf oder steht in der Ausnahmeliste", () => {
+    const ohne = mitPost.filter((f) => !readFileSync(f, "utf8").includes("bereiteMeldung(") && !AUSNAHMEN.has(name(f))).map(name);
     expect(ohne).toEqual([]);
   });
   test("keine stale Ausnahme: jedes Skript der Liste ruft postZeilen( noch auf und nutzt bereiteMeldung nicht", () => {
     const namen = new Map(mitPost.map((f) => [name(f), readFileSync(f, "utf8")]));
     for (const a of AUSNAHMEN) {
       expect(namen.has(a), `${a} ruft postZeilen( nicht mehr auf: Ausnahme streichen`).toBe(true);
-      expect(namen.get(a)?.includes("bereiteMeldung"), `${a} nutzt bereiteMeldung: Ausnahme streichen`).toBe(false);
+      expect(namen.get(a)?.includes("bereiteMeldung("), `${a} nutzt bereiteMeldung: Ausnahme streichen`).toBe(false);
     }
   });
 });
