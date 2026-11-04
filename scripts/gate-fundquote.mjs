@@ -42,7 +42,7 @@ import { median } from "./mess-lib.mjs";
 import { ASSIGN_RE, parseBash } from "./bash-parser.mjs";
 import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
 import { escapeRegex, ohneFarbcodes } from "./regex-lib.mjs";
-import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug } from "./transkript.mjs";
+import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug, toolPaare } from "./transkript.mjs";
 
 const KETTEN = ["verify", "verify:full", "verify:kompakt", "verify:changed"];
 const sauber = (t) => ohneFarbcodes(t).split(String.fromCharCode(0xfeff)).join("").replace(/\r/g, "");
@@ -214,22 +214,14 @@ const istShellAufruf = (row, b) => row.type === "assistant" && b?.type === "tool
 
 /** Shell-Aufrufe samt Ergebnis, über die tool_use-ID verknüpft; die erste Fassung einer ID gilt (Haupt- und Subagent-Datei). */
 function sammleAufrufe(zeilen) {
-  const byId = new Map();
-  for (const row of zeilen) {
-    const content = Array.isArray(row?.message?.content) ? row.message.content : [];
-    for (const b of content) {
-      if (istShellAufruf(row, b)) {
-        if (!byId.has(b.id)) byId.set(b.id, neuerAufruf(row, b));
-      } else if (row.type === "user" && b?.type === "tool_result") {
-        const a = byId.get(b.tool_use_id);
-        if (a && !a.ergebnis) a.ergebnis = { fehler: b.is_error === true, text: textVon(b.content), unterbrochen: row.toolUseResult?.interrupted === true };
-      }
-    }
-  }
-  return [...byId.values()];
+  return toolPaare(zeilen, { istAufruf: istShellAufruf }).map(({ use: { row, block: b }, ergebnis }) => ({
+    tool: b.name,
+    command: b.input?.command ?? "",
+    ts: Date.parse(row.timestamp),
+    hintergrund: b.input?.run_in_background === true,
+    ergebnis: ergebnis && { fehler: ergebnis.block.is_error === true, text: textVon(ergebnis.block.content), unterbrochen: ergebnis.row.toolUseResult?.interrupted === true },
+  }));
 }
-
-const neuerAufruf = (row, b) => ({ tool: b.name, command: b.input?.command ?? "", ts: Date.parse(row.timestamp), hintergrund: b.input?.run_in_background === true, ergebnis: null });
 
 /** Regel 3 (Persistierte Ausgabe): `null` ohne Marker, `{ text }` aus dem Session-Ordner, sonst `{ fehler: true }`. */
 function lesePersistiert(text, sessionId, liesDatei) {
