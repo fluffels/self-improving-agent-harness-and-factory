@@ -561,7 +561,7 @@ describe("Projektliste (factory#169)", () => {
     const w = tempOrdner("ir-byte-");
     mkdirSync(join(w, ".factory"));
     writeFileSync(join(w, SYNC), "{}");
-    const kopf = '{\r\n    "praefixe": {"a": ["x", "y"]},\r\n    "internalrefs": {\r\n      "namen": ["alt"]\r\n    }';
+    const kopf = `{\r\n    "praefixe": {"a": ["x", "y"]},\r\n    "internalrefs": {\r\n      "namen": ["${kod("zzzalt")}"]\r\n    }`;
     const rest = ',\r\n    "liste": ["eins","zwei"]\r\n}\r\n';
     writeFileSync(join(w, ".factory", "projekt.json"), kopf + rest);
     assert.equal(addLauf(["--add", DUMMY], w, selfKopie()).code, 0);
@@ -569,7 +569,7 @@ describe("Projektliste (factory#169)", () => {
     assert.ok(text.startsWith(kopf.slice(0, kopf.indexOf('"internalrefs"'))), "Text vor dem Block byte-gleich");
     assert.ok(text.endsWith(rest), "Text nach dem Block byte-gleich");
     const cfg = JSON.parse(text) as { internalrefs: { namen: string[]; begriffe: string[] } };
-    assert.deepEqual(cfg.internalrefs.namen, ["alt"]);
+    assert.deepEqual(cfg.internalrefs.namen, [kod("zzzalt")]);
     assert.deepEqual(cfg.internalrefs.begriffe, [kod(DUMMY)]);
   });
 
