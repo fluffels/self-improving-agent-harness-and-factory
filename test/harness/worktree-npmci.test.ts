@@ -92,7 +92,8 @@ function verstoesse(treffer: Treffer[]): Treffer[] {
 
 /** Der Standard des Gate-Befehls `install` muss `npm ci` bleiben, ein Projekt-Befehl darf nicht `npm install` sein (pur, testbar). */
 function installBefehlFehler(befehl: string): string | null {
-  return /^npm ci\b/.test(befehl) || !/\bnpm install\b/.test(befehl) ? null : `Gate-Befehl install nutzt npm install: ${befehl}`;
+  const teile = befehl.split(/&&|\|\||[;|]/);
+  return teile.some((teil) => /^\s*npm\s+(?:install|i)(?![\w:-])/.test(teil)) ? `Gate-Befehl install nutzt npm install: ${befehl}` : null;
 }
 
 function alleTreffer(): Treffer[] {
