@@ -1414,21 +1414,31 @@ describe("Milestone-Vorrang (factory#194)", () => {
     const r = waehle([A, B, item(3, { ...H, ...ms(1, M1), ...vergeben }), item(4, { ...H, ...ms(1, M1), ...vergeben })]);
     expect(r.ticket?.nr).toBe(1);
     expect(r.uebersprungen.map((u) => u.nr)).toEqual([3, 4]);
+    // Stufe 3 prüft die Items der Milestone-Stufe nicht noch einmal: jede Nummer steht genau einmal in uebersprungen
+    expect(waehle([item(3, { ...H, ...ms(1, M1), ...vergeben }), A]).uebersprungen.map((u) => u.nr)).toEqual([3]);
   });
   test("ein Kopf-Item kommt vor dem Milestone", () => {
     const kopf = item(9, { title: "🚨 CI rot auf main: x", ...H });
     expect(waehle([A, C, kopf]).ticket?.nr).toBe(9);
+  });
+  test("ein Kopf-Item mit früherem Milestone bestimmt den Vorrang nicht (Kopf-Items sind ohne Milestone gedacht)", () => {
+    const kopf = item(9, { title: "🚨 CI rot auf main: x", ...H, ...ms(0, "2026-01-01T00:00:00Z"), ...vergeben });
+    const r = waehle([kopf, A, C]);
+    expect(r.ticket?.nr).toBe(3);
+    expect(r.hinweise).toEqual(["Milestone-Vorrang: „Release 1“ (fällig 2026-12-01)"]);
   });
   test("das Harness-Sammelticket läuft in der Stufe mit: voll vor C, unter der Schwelle übersprungen", () => {
     const sammel = item(7, { title: "Harness-Härtung (gesammelt)", ...H });
     expect(waehle([A, sammel, C], { fuellstand: () => 99 }).ticket?.nr).toBe(7);
     const r = waehle([A, sammel, C], { fuellstand: () => 0 });
     expect(r.ticket?.nr).toBe(3);
-    expect(r.uebersprungen.some((u) => u.nr === 7)).toBe(true);
+    expect(r.uebersprungen.map((u) => u.nr)).toEqual([7]);
   });
   test("ein Milestone nur auf der anderen Seite oder nur an Nicht-Todo-Items bestimmt den frühesten nicht", () => {
     const produktItem = item(20, { ...ms(1, M1) });
-    expect(N.waehleUeberBoards({ ...eingabe([A, item(2, H)]), produkt: norm([produktItem]) }).ticket?.nr).toBe(1);
+    const r = N.waehleUeberBoards({ ...eingabe([A, B]), produkt: norm([produktItem]) });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.hinweise).toEqual(["Milestone-Vorrang: „Release 2“ (fällig 2027-01-01)"]);
     expect(waehle([A, B, roh(5, { ...H, ...ms(1, M1) }, "In Progress")]).ticket?.nr).toBe(2);
     expect(waehle([A, B, roh(5, { ...H, ...ms(1, M1), state: "closed" })]).ticket?.nr).toBe(2);
   });

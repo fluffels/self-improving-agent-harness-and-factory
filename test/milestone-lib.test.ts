@@ -20,8 +20,9 @@ describe("milestoneAus (factory#194)", () => {
   it("normalisiert die REST-Form", () => {
     expect(milestoneAus({ number: 3, title: "Erste", state: "open", due_on: "2026-12-01T00:00:00Z" })).toEqual({ nummer: 3, titel: "Erste", state: "open", faellig: "2026-12-01T00:00:00Z" });
     expect(milestoneAus({ number: 3, title: "Erste", state: "open", due_on: null })?.faellig).toBeNull();
+    expect(milestoneAus({ number: 3, title: "Erste", state: "open", due_on: "" })?.faellig).toBeNull();
   });
-  it.each([[null], [undefined], ["x"], [{}], [{ number: "3", title: "a", state: "open" }], [{ number: 3, title: "a", state: "weird" }]])("unerwartete Form %j gibt null", (roh) => {
+  it.each([[null], [undefined], ["x"], [{}], [{ number: "3", title: "a", state: "open" }], [{ number: 3, title: "a", state: "weird" }], [{ number: 3, title: 5, state: "open" }]])("unerwartete Form %j gibt null", (roh) => {
     expect(milestoneAus(roh)).toBeNull();
   });
 });
@@ -44,6 +45,9 @@ describe("Texte", () => {
   it("titelBereinigt entfernt Umbrüche und Steuerzeichen", () => {
     expect(titelBereinigt("a\nb\u0000c|d")).toBe("a b c|d");
     expect(titelBereinigt("x".repeat(100)).length).toBe(80);
+    expect(titelBereinigt("x".repeat(80))).toBe("x".repeat(80));
+    expect(titelBereinigt("ab")).toBe("a b");
+    expect(titelBereinigt(null as unknown as string)).toBe("");
   });
   it("vorrangHinweis nennt Fälligkeit oder ihr Fehlen", () => {
     expect(vorrangHinweis(m(1, "2026-12-01T10:00:00Z"))).toBe("Milestone-Vorrang: „M1“ (fällig 2026-12-01)");
@@ -55,6 +59,17 @@ describe("geschlosseneMilestones und geschlossenSeit", () => {
   const seiten = [[{ number: 1, title: "A", closed_at: "2026-11-02T00:00:00Z" }, { number: 2, title: "B", closed_at: null }], [{ number: 3, title: "C", closed_at: "2026-11-04T00:00:00Z" }]];
   it("normalisiert Seiten; wieder geöffneter (closed_at null) zählt nicht", () => {
     expect(geschlosseneMilestones(seiten).map((x: { nummer: number }) => x.nummer)).toEqual([1, 3]);
+  });
+  it("Einträge ohne ganzzahlige Nummer fliegen raus", () => {
+    expect(geschlosseneMilestones([[{ title: "x", closed_at: "2026-11-02T00:00:00Z" }, { number: 1.5, title: "y", closed_at: "2026-11-02T00:00:00Z" }]])).toEqual([]);
+  });
+  it("geschlossenSeit sortiert nach Schließzeit, bei Gleichstand nach Nummer", () => {
+    const l = [
+      { nummer: 9, titel: "a", closedAt: "2026-11-05T00:00:00Z" },
+      { nummer: 8, titel: "b", closedAt: "2026-11-03T00:00:00Z" },
+      { nummer: 5, titel: "c", closedAt: "2026-11-03T00:00:00Z" },
+    ];
+    expect(geschlossenSeit(l, "2026-11-01T00:00:00Z").map((x: { nummer: number }) => x.nummer)).toEqual([5, 8, 9]);
   });
   it("wirft bei falscher Seitenform", () => {
     expect(() => geschlosseneMilestones({})).toThrow();

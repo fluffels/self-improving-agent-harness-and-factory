@@ -34,7 +34,7 @@ import { labelAus, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
-import { geschlosseneMilestones, geschlossenSeit } from "./milestone-lib.mjs";
+import { geschlosseneMilestones, geschlossenSeit, titelBereinigt } from "./milestone-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -150,13 +150,13 @@ function ausloeserVon({ letzterTag, besitz, jetzt, dringlichKey, milestones }) {
   if (besitz.length >= MIN_PRS) ausloeser.push(`${besitz.length} Besitz-PRs seit ${letzterTag} (ab ${MIN_PRS})`);
   if (tage !== null && tage > MAX_ALTER_TAGE) ausloeser.push(`älteste ungetaggte Änderung über ${MAX_ALTER_TAGE} Tage alt`);
   if (dringlich) ausloeser.push(`Dringlich: ${zelle(dringlich.grund)} (${dringlich.sha.slice(0, 7)})`);
-  if (besitz.length > 0) for (const m of milestones) ausloeser.push(`Milestone „${zelle(m.titel)}“ geschlossen`);
+  if (besitz.length > 0) for (const m of milestones) ausloeser.push(`Milestone „${zelle(titelBereinigt(m.titel))}“ geschlossen`);
   return ausloeser;
 }
 
 /** Pur: der Log-Grund für `nichts` ohne Auslöser; ein geschlossener Milestone ohne Besitz-PR wird genannt. */
 function keinAusloeserGrund({ letzterTag, besitz, milestones }) {
-  if (besitz.length === 0 && milestones.length > 0) return `Milestone „${zelle(milestones[0].titel)}“ geschlossen, aber nichts Ungetaggtes seit ${letzterTag}`;
+  if (besitz.length === 0 && milestones.length > 0) return `Milestone „${zelle(titelBereinigt(milestones[0].titel))}“ geschlossen, aber nichts Ungetaggtes seit ${letzterTag}`;
   return `${besitz.length} Besitz-PRs, jünger als ${MAX_ALTER_TAGE} Tage, kein Dringlich-Signal`;
 }
 

@@ -1,6 +1,6 @@
 # Ticket-Auswahl
 
-> **Es zählt die manuelle Board-Reihenfolge.** Das „nächste Ticket" ist das **oberste freie Item im GitHub-Project-Board** — in genau der Reihenfolge, in der die Tickets im Board (View 1) stehen. Die Maintainerin steuert die Reihenfolge **per Ziehen** (Drag & Drop) wie eine Warteschlange; oben wird genommen. Es gibt kein `Prio`-Feld.
+> **Es zählt die manuelle Board-Reihenfolge.** Das „nächste Ticket" ist das **oberste freie Item im GitHub-Project-Board** — in genau der Reihenfolge, in der die Tickets im Board (View 1) stehen (nach den Kopf-Items und dem [Milestone-Vorrang](#milestones-release-planung-factory194), falls Milestones gesetzt sind). Die Maintainerin steuert die Reihenfolge **per Ziehen** (Drag & Drop) wie eine Warteschlange; oben wird genommen. Es gibt kein `Prio`-Feld.
 >
 > Das bleibt kompatibel mit quellprojekt#627 (der Grund, warum es damals *weg von* einer handsortierten Datei ging): Die Reihenfolge lebt im **Board**, nicht in einer Datei — parallele Agenten kollidieren nicht auf ihr (keine Merge-Konflikt-Quelle). Der Kollisionsschutz bleibt der **Assignee-Marker**.
 
@@ -249,11 +249,11 @@ Core und GraphQL haben je 5000 Punkte pro Stunde, geteilt von allen Agenten und 
 
 **Negativfall.** Ohne Milestones, mit Items ohne Milestone und mit nur geschlossenen Milestones verhalten sich Auswahl und Tag-Takt wie vorher. Ein unlesbarer Milestone-Stand ist fail-open: die Auswahl wertet ihn als „ohne Milestone“, der Tag-Takt meldet `::warning::` und lässt den Milestone-Auslöser weg.
 
-**Grenzen.** Ein Bezieher nutzt die Milestones seines eigenen Repos (der Tag-Takt tut dort nichts). Milestone-Titel stehen nur bereinigt (Zeilenumbrüche und Steuerzeichen raus, höchstens 80 bzw. 120 Zeichen) in Hinweis und Ticket-Body.
+**Grenzen.** Ein Bezieher nutzt die Milestones seines eigenen Repos (der Tag-Takt tut dort nichts). Milestone-Titel stehen nur bereinigt (Zeilenumbrüche und Steuerzeichen raus, höchstens 80 Zeichen; im Ticket-Body zusätzlich `|` und Backticks raus) in Hinweis und Ticket-Body.
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
-Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt keine `prio:*`-Labels und kein `Prio`-Feld.
+Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle innerhalb einer Auswahlstufe (die Fälligkeit eines Milestones wählt nur die Stufe, nicht die Reihenfolge darin); es gibt keine `prio:*`-Labels und kein `Prio`-Feld.
 
 - **Reihenfolge ändern:** im Board (View 1) das Item per **Drag & Drop** hoch-/runterziehen. Weiter oben = früher dran. Das ist das „einpriorisieren".
 - **Neues Item an die Spitze schieben** (per CLI, wenn kein UI-Zugriff; die Liste kommt per REST, nur die Positions-Mutation läuft über GraphQL). **Ohne Klemmung (factory#162):** `--top`, `--after` und `--position` setzen den Anker wörtlich, auch vor das Sammelticket „Harness-Härtung (gesammelt)“; die Sammeltickets rücken über den Board-Takt nach vorn (Füllstand), nicht über eine Klemmung. Ganz oben stehen nur echte Notfälle und das Wochen-Status-Ticket, mit `--notfall <art>` (`rot-main`, `security`, `dependabot`, `forum`, `wiedervorlage`, `security-tabs`, `tag`; nur unmittelbar vor `--top`; der Titel des Tickets muss den Marker der Art tragen, sonst bricht das Skript mit Exit 2 ab, weil ein unmarkierter Notfall oben nicht zum Kopf zählt: `🚨 CI rot auf main`, `🔒 Security:`, `🤖 Dependabot-PRs auflösen`, `Forum #`, `⏰ Wiedervorlage:`, `🔍 Security-Tabs prüfen`, `🏷️ Tag `, Tabelle `NOTFAELLE` in `scripts/board-lib.mjs`; ein Security-Ticket erhält den Titelanfang `🔒 Security:` beim Anlegen; das Status-Ticket setzt der Workflow [`board-takt.yml`](../.github/workflows/board-takt.yml) selbst an die Spitze, [ADR 0016](adr/0016-langfuse-takt-woechentlich.md)); unbekannte Art oder andere Kombination ist ein Benutzungsfehler. `board-place` klemmt nie und korrigiert keine Sammelticket-Position (factory#162): der Anker gilt wörtlich, ein volles Harness-Sammelticket holt der Board-Takt (siehe „Position“ oben):

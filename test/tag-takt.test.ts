@@ -111,6 +111,10 @@ describe("Milestone-Auslöser (factory#194)", () => {
     expect(e.aktion).toBe("anlegen");
     expect(e.ausloeser).toEqual(["Milestone „Erste Stufe“ geschlossen"]);
   });
+  it("mehrere geschlossene Milestones ergeben je einen Auslöser, in der übergebenen Reihenfolge", () => {
+    const e = entscheide({ besitz: reihe(1), milestones: [ms("Eins"), ms("Zwei")] });
+    expect(e.ausloeser).toEqual(["Milestone „Eins“ geschlossen", "Milestone „Zwei“ geschlossen"]);
+  });
   it("Titel mit | und Zeilenumbruch wird bereinigt", () => {
     expect(entscheide({ besitz: reihe(1), milestones: [ms("A|B\nC")] }).ausloeser?.[0]).toBe("Milestone „A B C“ geschlossen");
   });

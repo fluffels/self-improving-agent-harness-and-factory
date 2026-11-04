@@ -470,6 +470,8 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const wf = parse(lies(".github/workflows/board-takt.yml")) as { on: { milestone?: { types?: string[] } }; jobs: { takt: { steps: { run?: string; if?: string }[] } } };
     expect(wf.on.milestone?.types).toEqual(["closed"]);
     const schritt = (skript: string) => wf.jobs.takt.steps.find((st) => st.run === `node scripts/${skript}`);
+    expect(schritt("board-takt.mjs")).toBeDefined();
+    expect(schritt("tag-takt.mjs")).toBeDefined();
     expect(schritt("board-takt.mjs")?.if).toContain("github.event_name != 'milestone'");
     expect(schritt("tag-takt.mjs")?.if ?? "").not.toContain("milestone");
   });
