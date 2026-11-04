@@ -36,6 +36,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
+import { escapeRegex } from "./ticket-namen.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug } from "./transkript.mjs";
 
@@ -151,7 +152,7 @@ function summeRot(teile, text, modus, verify) {
   const stimmt = n && rot.length && Number(n[2]) === verify.length && Number(n[1]) === verify.length - rot.length && rot.every((r) => verify.includes(r));
   if (!stimmt) return { grund: "Kette geändert" };
   const dauer = (name) => {
-    const m = new RegExp(`── ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: rot \\(Exit \\d+, (\\d+) s\\) ──`).exec(text);
+    const m = new RegExp(`── ${escapeRegex(name)}: rot \\(Exit \\d+, (\\d+) s\\) ──`).exec(text);
     return m ? Number(m[1]) : null;
   };
   const gates = verify
