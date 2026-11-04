@@ -42,7 +42,7 @@ const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
 const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
 const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
 /** Zeilen der Fremd-Config; die Wrapper reichen sie durch. */
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string } };
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; reviewOverride: string } };
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
@@ -424,7 +424,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     assert.equal(checkReviewNachweis({ runGit: fakeGit(review), env: {} }).ok, false);
     const frei = checkReviewNachweis({ runGit: fakeGit(review, `${Z.reviewOverride}: #162 Maintainerin gab den vierten Zusatzpass frei (Beleg: Kommentar)\n`), env: {} });
     assert.equal(frei.ok, true);
-    assert.match(frei.override ?? "", /vierten Zusatzpass/);
+    assert.match(frei.override as string, /vierten Zusatzpass/);
   });
   test("ohne Zusatzpass oder mit ungültigem: das Feld ist null", () => {
     assert.equal(checkReviewNachweis({ runGit: fakeGit(`runden=2 ${LENSES} verdikt=ok`), env: {} }).zusatzpass, null);
