@@ -176,21 +176,18 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   });
 });
 
-describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
+describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#162)", () => {
   const TITEL = "Harness-Härtung (gesammelt)";
   type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string; repo?: string };
   const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
   const LT = "Langfuse-Befunde (gesammelt)";
-  const langfuse = (number: number, extra: Partial<B> = {}) => b(number, { title: LT, ...extra });
   const K = rawLib as unknown as {
     sammelticketItem: (items: B[], ohne?: number[]) => B | null;
-    klemmeAnker: (items: B[], anker: number | null, o?: { numbers?: number[]; notfall?: boolean }) => { anker: number | null; geklemmt: boolean; sammelticket: number | null };
     normalizeItems: (raw: unknown) => B[];
     SAMMELTICKET_TITEL: string;
     LANGFUSE_SAMMELTICKET_TITEL: string;
     SAMMELTICKET_TITEL_LISTE: string[];
-    sammelblock: (items: B[], ohne?: number[]) => B[];
     ungeclaimt: (i: { assignees?: string[] }) => boolean;
   };
   // Board-Reihenfolge: 10, 11, 12, Sammelticket 13 (Position 4), 14, 15
@@ -215,80 +212,12 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(K.sammelticketItem([])).toBeNull();
   });
 
-  test("--top ohne Notfall wird hinter das Sammelticket geklemmt, mit Notfall bleibt es ganz oben", () => {
-    expect(K.klemmeAnker(board3, null)).toEqual({ anker: 13, geklemmt: true, sammelticket: 13 });
-    expect(K.klemmeAnker(board3, null, { notfall: true })).toEqual({ anker: null, geklemmt: false, sammelticket: null });
-  });
-
-  test("--after: Anker über dem Sammelticket wird geklemmt, Anker gleich oder darunter bleibt", () => {
-    expect(K.klemmeAnker(board3, 11)).toMatchObject({ anker: 13, geklemmt: true });
-    expect(K.klemmeAnker(board3, 12)).toMatchObject({ anker: 13, geklemmt: true });
-    expect(K.klemmeAnker(board3, 13)).toEqual({ anker: 13, geklemmt: false, sammelticket: null });
-    expect(K.klemmeAnker(board3, 14)).toEqual({ anker: 14, geklemmt: false, sammelticket: null });
-    expect(K.klemmeAnker(board3, 99)).toEqual({ anker: 99, geklemmt: false, sammelticket: null }); // unbekannter Anker: der Aufrufer meldet ihn
-  });
-
-  test("--position: bis zur Position des Sammeltickets geklemmt, dahinter nicht; das Sammelticket selbst klemmt nicht", () => {
-    const N2 = rawLib as unknown as { ankerNummerFuerPosition: (items: B[], n: number, ohne?: number | null) => number | null };
-    const anker = (n: number, nr: number) => N2.ankerNummerFuerPosition(board3, n, nr);
-    for (const n of [1, 2, 3, 4]) expect(K.klemmeAnker(board3, anker(n, 99), { numbers: [99] }), `Position ${n}`).toMatchObject({ anker: 13, geklemmt: true });
-    expect(K.klemmeAnker(board3, anker(5, 99), { numbers: [99] })).toMatchObject({ anker: 13, geklemmt: false }); // Anker = Sammelticket selbst: schon dahinter
-    expect(K.klemmeAnker(board3, anker(6, 99), { numbers: [99] })).toMatchObject({ anker: 14, geklemmt: false });
-    // das Sammelticket auf Position 4: nicht geklemmt (steht in numbers)
-    expect(K.klemmeAnker(board3, anker(4, 13), { numbers: [13] })).toEqual({ anker: 12, geklemmt: false, sammelticket: null });
-  });
-
-  test("ohne ungeclaimtes Sammelticket keine Klemmung (geclaimt, geschlossen, nicht vorhanden)", () => {
-    const geclaimt = [b(10), sammel(13, { assignees: [OWNER] }), b(14)];
-    expect(K.klemmeAnker(geclaimt, null)).toEqual({ anker: null, geklemmt: false, sammelticket: null });
-    expect(K.klemmeAnker([b(10), sammel(13, { state: "closed" })], null).geklemmt).toBe(false);
-    expect(K.klemmeAnker([b(10), b(11)], null).geklemmt).toBe(false);
-    expect(K.klemmeAnker([], null).geklemmt).toBe(false);
-  });
-
-  test("Klemmung im Zusammenspiel mit planPlacements: neue Tickets hängen hinter dem Sammelticket, in Reihenfolge", () => {
-    const neu = [...board3, b(20), b(21)];
-    const k = K.klemmeAnker(neu, null, { numbers: [20, 21] });
-    const plan = L.planPlacements(neu, [20, 21], k.anker);
-    expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"], [21, "I20"]]);
-  });
-
-  test("Titelliste: Harness und Langfuse; Sammelblock = aufeinanderfolgende ungeclaimte Sammeltickets ab dem Harness-Sammelticket (#1342)", () => {
+  test("Titelliste: Harness und Langfuse (naechstes-ticket und die Quote rechnen mit beiden)", () => {
     expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT]);
     expect(K.LANGFUSE_SAMMELTICKET_TITEL).toBe(LT);
-    const nummern = (items: B[], ohne?: number[]) => K.sammelblock(items, ohne).map((i) => i.number);
-    expect(nummern([sammel(1), langfuse(2), b(3), langfuse(4)])).toEqual([1, 2]);
-    expect(nummern([b(3), sammel(1)]), "Block beginnt am Harness-Sammelticket, wo es steht").toEqual([1]);
-    expect(nummern([sammel(1), b(5, { assignees: [OWNER] }), langfuse(2), b(3)]), "geclaimte überspringt der Block").toEqual([1, 2]);
-    expect(nummern([sammel(1), b(5, { state: "closed" }), langfuse(2), b(3)]), "geschlossene überspringt der Block").toEqual([1, 2]);
-    expect(nummern([sammel(1, { assignees: ["x"] }), langfuse(2)]), "geclaimtes Sammelticket zählt nicht").toEqual([2]);
-    expect(nummern([sammel(1), b(20), langfuse(2)], [20]), "gerade einsortiertes Item beendet den Block nicht").toEqual([1, 2]);
-    expect(nummern([b(8, { title: "Langfuse-Status überprüfen" }), sammel(1), langfuse(2), b(3)]), "Status-Ticket davor stört nicht").toEqual([1, 2]);
-    expect(nummern([b(8), sammel(1), langfuse(2), b(3)]), "Notfall/Forum-Ticket davor stört nicht").toEqual([1, 2]);
-    expect(nummern([langfuse(2), b(3)]), "ohne Harness-Sammelticket ab der Spitze").toEqual([2]);
-    expect(nummern([])).toEqual([]);
   });
 
-  test("Klemmung kennt beide Sammeltickets: der Anker ist das am weitesten hinten stehende (#1342)", () => {
-    const hinter = (items: B[], anker: number | null = null, o = {}) => K.klemmeAnker(items, anker, o).anker;
-    expect(hinter([sammel(1), b(9)]), "[S_H, X]").toBe(1);
-    expect(hinter([sammel(1), langfuse(2), b(9)]), "[S_H, S_L, X]").toBe(2);
-    expect(hinter([sammel(1), b(9), b(10), langfuse(2)]), "S_L am Ende zählt nicht").toBe(1);
-    expect(hinter([sammel(1), b(5, { assignees: [OWNER] }), langfuse(2), b(9)]), "geclaimte dazwischen").toBe(2);
-    expect(hinter([b(9), sammel(1)]), "[X, S_H]").toBe(1);
-    expect(hinter([langfuse(2), b(9), sammel(1)]), "[S_L, X, S_H]").toBe(1);
-    expect(hinter([sammel(1), langfuse(2), b(9)], 1), "Anker vor dem Ziel wird geklemmt").toBe(2);
-    expect(hinter([sammel(1), langfuse(2), b(9)], 2), "Anker = Ziel bleibt").toBe(2);
-    expect(hinter([sammel(1), langfuse(2), b(9)], 9), "Anker dahinter bleibt").toBe(9);
-    expect(hinter([sammel(1), langfuse(2), b(9)], null, { numbers: [2] }), "Sammelticket in numbers zählt nicht").toBe(1);
-    expect(hinter([sammel(1), langfuse(2), b(9)], null, { notfall: true }), "Notfall klemmt nicht").toBeNull();
-    expect(hinter([b(8), sammel(1), langfuse(2), b(9)]), "Status-/Notfall-Ticket an der Spitze (#1342, Lens-Befund)").toBe(2);
-    expect(hinter([b(8), sammel(1), langfuse(2), b(9)], 8), "Anker über den Sammeltickets wird geklemmt").toBe(2);
-    expect(hinter([langfuse(2), b(9)]), "nur Langfuse an der Spitze, kein Harness-Sammelticket").toBe(2);
-    expect(hinter([b(9), langfuse(2)]), "Langfuse hinten, kein Harness: keine Klemmung").toBeNull();
-  });
-
-  test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
+  test("der Titel, an dem das Einsortieren das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
     for (const datei of ["AGENTS.md", ".agents/skills/factory/ablauf.md", "docs/ticket-reihenfolge.md"]) {
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.SAMMELTICKET_TITEL);
     }
@@ -297,31 +226,28 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     }
   });
 
-  test("planFuerArgs (die Verdrahtung von board-place): --top klemmt, --notfall nicht, --after und --position klemmen, melden die Klemmung", () => {
-    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean; sammelticket: number | null } } };
+  test("planFuerArgs (die Verdrahtung von board-place): der Anker gilt wörtlich, --top, --after und --position klemmen nicht", () => {
+    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[] } };
     const neu = [...board3, b(20)];
     const hinter = (args: object) => F.planFuerArgs(neu, args).steps.map((s) => [s.item.number, s.afterId]);
-    expect(hinter({ anchor: null, numbers: [20] })).toEqual([[20, "I13"]]);
-    expect(F.planFuerArgs(neu, { anchor: null, numbers: [20] }).klemmung).toEqual({ geklemmt: true, sammelticket: 13 });
+    expect(hinter({ anchor: null, numbers: [20] })).toEqual([[20, null]]);
     expect(hinter({ anchor: null, numbers: [20], notfall: "rot-main" })).toEqual([[20, null]]);
-    expect(F.planFuerArgs(neu, { anchor: null, numbers: [20], notfall: "forum" }).klemmung.geklemmt).toBe(false);
-    expect(hinter({ anchor: 11, numbers: [20] })).toEqual([[20, "I13"]]);
+    expect(hinter({ anchor: 11, numbers: [20] })).toEqual([[20, "I11"]]);
     expect(hinter({ anchor: 14, numbers: [20] })).toEqual([[20, "I14"]]);
-    expect(hinter({ anchor: null, position: 2, numbers: [20] })).toEqual([[20, "I13"]]);
+    expect(hinter({ anchor: null, position: 2, numbers: [20] })).toEqual([[20, "I10"]]);
     expect(hinter({ anchor: null, position: 6, numbers: [20] })).toEqual([[20, "I14"]]);
     expect(hinter({ anchor: null, position: 4, numbers: [13] })).toEqual([[13, "I12"]]); // das Sammelticket selbst
   });
 
   test("Kompositionstest von main: planFuerArgs(items, parseArgs(argv)) aus echten Kommandozeilen (#1331)", () => {
-    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean } } };
+    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[] } };
     const neu = [...board3, b(20)];
     const plan = (argv: string[]) => {
       const args = P.parseArgs(argv);
       expect(args, argv.join(" ")).not.toBeNull();
       return F.planFuerArgs(neu, args as object);
     };
-    expect(plan(["--top", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"]]);
-    expect(plan(["--top", "20"]).klemmung.geklemmt).toBe(true);
+    expect(plan(["--top", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, null]]);
     expect(plan(["--notfall", "rot-main", "--top", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, null]]);
     expect(plan(["--after", "14", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I14"]]);
     expect(plan(["--position", "6", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I14"]]);
@@ -395,17 +321,6 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
       ["--notfall", "rot-main", "--dry-run", "--after", "1", "2"], // dry-run zwischen notfall und Modus ändert nichts
     ])
       expect(P.parseArgs(bad), bad.join(" ")).toBeNull();
-  });
-
-  test("Kopf (#1349 Z27b): ohne ungeclaimtes Harness-Sammelticket beginnt der Sammelblock hinter dem Kopf, damit ein Status-Ticket oben das Langfuse-Sammelticket nicht verdeckt", () => {
-    const status = (n: number) => b(n, { title: "Langfuse-Status überprüfen" });
-    const nummern = (items: B[]) => K.sammelblock(items).map((i) => i.number);
-    expect(nummern([status(8), langfuse(2), b(3)])).toEqual([2]);
-    expect(K.klemmeAnker([status(8), langfuse(2), b(3)], null)).toMatchObject({ anker: 2, geklemmt: true });
-    expect(nummern([b(1, { title: "🚨 CI rot auf main" }), status(8), langfuse(2), b(3)]), "mehrere Kopf-Items").toEqual([2]);
-    expect(nummern([b(1, { title: "🤖 Dependabot-PRs auflösen" }), b(4, { title: "Forum #12: Frage" }), langfuse(2)])).toEqual([2]);
-    expect(nummern([status(8), b(5), langfuse(2)]), "ein Nicht-Kopf-Ticket dazwischen beendet den Kopf: Block leer").toEqual([]);
-    expect(nummern([status(8), b(9, { state: "closed" }), langfuse(2)]), "geschlossene Items zählen nicht").toEqual([2]);
   });
 
   test("Notfall-Marker stehen wörtlich in ihrer Quelle (Inbox-Workflow bzw. Doku): keine stille Drift (#1390 Z6a)", () => {

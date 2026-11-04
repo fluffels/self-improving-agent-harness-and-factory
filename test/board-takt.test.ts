@@ -18,10 +18,10 @@ const OWNER = FREMD_OWNER; // Login des Maintainer-Accounts, nur Testdaten
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
-type Harness = { aktion: "nach-oben" | "auf-position" | "nichts"; nr?: number; afterId?: string | null; grund: string };
+type Harness = { aktion: "nach-oben" | "nichts"; nr?: number; afterId?: string | null; grund: string };
 type Takt = {
   HARNESS_TAKT_KOMMENTARE: number;
-  harnessVoraussetzung: (a: { items: Item[] | null; position: number | null; positionFehler?: string | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
+  harnessVoraussetzung: (a: { items: Item[] | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
   zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
   istHarnessCommit: (c: unknown, harnessIssues?: Set<number> | null) => boolean;
@@ -29,7 +29,7 @@ type Takt = {
   quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; produkt: number; eingehalten: boolean; zeile: string };
   PRODUKT_QUOTE: number;
   befundKommentare: (kommentare: unknown, owner: string) => number;
-  entscheideHarnessTakt: (a: { items: Item[]; befundKommentare: number; position: number }) => Harness;
+  entscheideHarnessTakt: (a: { items: Item[]; befundKommentare: number }) => Harness;
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
@@ -197,13 +197,15 @@ describe("Produktquote im Takt (#1425)", () => {
   });
 });
 
-describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
+describe("entscheideHarnessTakt (#1349 Z15, Sammelticket an die Spitze factory#162)", () => {
   const TITEL = "Harness-Härtung (gesammelt)";
   const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<Item> = {}) => it(number, { title: TITEL, ...extra });
   const status = (number: number) => it(number, { title: STATUS_TITEL });
+  const rotMain = (number: number) => it(number, { title: "🚨 CI rot auf main" });
+  const security = (number: number) => it(number, { title: "🔒 Security: Alert" });
   const fueller = (von: number, bis: number) => Array.from({ length: bis - von + 1 }, (_, i) => it(von + i));
-  const h = (items: Item[], n: number, position = 4) => T.entscheideHarnessTakt({ items, befundKommentare: n, position });
+  const h = (items: Item[], n: number) => T.entscheideHarnessTakt({ items, befundKommentare: n });
 
   test("Grenze 9/10/11: erst ab 10 Befund-Kommentaren nach oben (Härtungs-Takt, Füllstand #1888)", () => {
     expect(T.HARNESS_TAKT_KOMMENTARE).toBe(10);
@@ -213,26 +215,43 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     expect(h(board, 9).grund).toMatch(/Füllstand 9\/10/);
     expect(h(board, 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
     expect(h(board, 11)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
-    // schon hinter dem Kopf: bei 11 und 12 idempotent
-    expect(h([status(2), sammel(12), it(10)], 11).aktion).toBe("nichts");
-    expect(h([status(2), sammel(12), it(10)], 12).aktion).toBe("nichts");
+    // schon an der Spitze: bei 11 und 12 idempotent
+    expect(h([sammel(12), it(10)], 11).aktion).toBe("nichts");
+    expect(h([sammel(12), it(10)], 12).aktion).toBe("nichts");
   });
 
-  test("kommt hinter den Kopf, nicht davor: Status-Ticket und roter main bleiben oben", () => {
-    const board = [it(1, { title: "🚨 CI rot auf main" }), status(2), it(10), sammel(12)];
-    expect(h(board, 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I2" });
+  test("Spitze: vor dem Status-Ticket und den übrigen Kopf-Items, nur hinter 🚨 und 🔒", () => {
+    expect(h([status(2), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    const dependabot = it(3, { title: "🤖 Dependabot-PRs auflösen" });
+    expect(h([dependabot, status(2), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    expect(h([rotMain(1), status(2), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I1" });
+    expect(h([rotMain(1), security(4), status(2), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I4" });
+    // ein Status-Ticket über dem Notfall stört nicht; ein Notfall außerhalb des Kopfs zählt nicht
+    expect(h([status(2), rotMain(1), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I1" });
+    expect(h([it(10), rotMain(1), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    // geschlossene Notfälle zählen nicht, ein geclaimter offener schon
+    expect(h([it(1, { title: "🚨 CI rot auf main", state: "closed" }), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    expect(h([it(1, { title: "🚨 CI rot auf main", assignees: [OWNER] }), it(10), sammel(12)], 10)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I1" });
   });
 
-  test("idempotent: steht es schon direkt hinter dem Kopf (auch mit geschlossenem Item dazwischen), passiert nichts", () => {
-    expect(h([status(2), sammel(12), it(10)], 9).aktion).toBe("nichts");
-    expect(h([sammel(12), it(10)], 9).aktion).toBe("nichts");
-    expect(h([status(2), it(9, { state: "closed" }), sammel(12)], 9).aktion).toBe("nichts");
+  test("idempotent: steht es schon direkt hinter den Notfällen (auch mit geschlossenem Item dazwischen), passiert nichts", () => {
+    expect(h([sammel(12), status(2), it(10)], 10).aktion).toBe("nichts");
+    expect(h([rotMain(1), sammel(12), status(2)], 10).aktion).toBe("nichts");
+    expect(h([it(9, { state: "closed" }), sammel(12), status(2)], 10).aktion).toBe("nichts");
+    expect(h([rotMain(1), it(9, { state: "closed" }), sammel(12), it(10)], 10).aktion).toBe("nichts");
+  });
+
+  test("kein Rückschub: unter der Schwelle bleibt das Sammelticket liegen, wo es steht (auch am Board-Ende oder an der Spitze)", () => {
+    for (const n of [0, 2, 9]) {
+      expect(h([...fueller(1, 10), sammel(20)], n).aktion, `Ende, Füllstand ${n}`).toBe("nichts");
+      expect(h([sammel(20), status(2), ...fueller(3, 10)], n).aktion, `Spitze, Füllstand ${n}`).toBe("nichts");
+    }
   });
 
   test("geclaimtes, geschlossenes oder fehlendes Sammelticket: nichts", () => {
-    expect(h([it(10), sammel(12, { assignees: [OWNER] })], 9).aktion).toBe("nichts");
-    expect(h([it(10), sammel(12, { state: "closed" })], 9).aktion).toBe("nichts");
-    expect(h([it(10)], 9).aktion).toBe("nichts");
+    expect(h([it(10), sammel(12, { assignees: [OWNER] })], 10).aktion).toBe("nichts");
+    expect(h([it(10), sammel(12, { state: "closed" })], 10).aktion).toBe("nichts");
+    expect(h([it(10)], 10).aktion).toBe("nichts");
   });
 
   test("Vorgänger in Arbeit (#1646): geclaimtes plus ungeclaimtes Sammelticket → kein nach-oben, auch bei Füllstand 12", () => {
@@ -246,41 +265,19 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     expect(h([it(10), it(11), sammel(12, { assignees: [OWNER], state: "closed" }), sammel(13)], 10)).toMatchObject({ aktion: "nach-oben", nr: 13 });
   });
 
-  test("Vorgänger in Arbeit: Regel 2 (auf-position) bleibt", () => {
-    const board = [...fueller(1, 8), sammel(12, { assignees: [OWNER] }), sammel(13)];
-    expect(h(board, 10)).toMatchObject({ aktion: "auf-position", nr: 13 });
-  });
-
-  test("ungültige Eingaben werfen (auch ein ungültiges position)", () => {
+  test("ungültige Eingaben werfen", () => {
     expect(() => h([], -1)).toThrow();
-    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], befundKommentare: 10, position: 4 })).toThrow();
-    for (const bad of [0, -1, 1.5, Number.NaN, "4" as unknown as number]) expect(() => h([sammel(1)], 0, bad), String(bad)).toThrow(/position/);
+    expect(() => h([], 1.5)).toThrow();
+    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], befundKommentare: 10 })).toThrow();
   });
 
-  test("auf-position (#1390 Z10): geringer Füllstand, aber das Sammelticket steht am Board-Ende → zurück auf die Position", () => {
-    const ende = [...fueller(1, 10), sammel(20)];
-    expect(h(ende, 0)).toMatchObject({ aktion: "auf-position", nr: 20, afterId: "I3" });
-    expect(h(ende, 0).grund).toMatch(/Rang 11, zurück auf Rang 4/);
-    expect(h(ende, 2).aktion).toBe("auf-position");
+  test("es gibt keine Selbstkorrektur mehr: nur nach-oben oder nichts", () => {
+    const boards = [[...fueller(1, 10), sammel(20)], [status(1), ...fueller(2, 10), sammel(20)], [it(30), sammel(20), ...fueller(1, 6)]];
+    for (const board of boards) for (const n of [0, 4, 9, 10, 20]) expect(["nach-oben", "nichts"]).toContain(h(board, n).aktion);
   });
 
-  test("voller Füllstand hat Vorrang: ≥ 10 Befund-Kommentare und nicht hinter dem Kopf → nach-oben, nicht auf-position", () => {
-    expect(h([...fueller(1, 10), sammel(20)], 10)).toMatchObject({ aktion: "nach-oben", nr: 20, afterId: null });
-  });
-
-  test("auf-position wandert nie in den Kopf: ein großer Kopf verschiebt das Ziel hinter ihn", () => {
-    const kopf = [1, 2, 3, 4, 5].map((n) => it(n, { title: `Forum #${n}: x` }));
-    expect(h([...kopf, it(30), it(31), sammel(20)], 0)).toMatchObject({ aktion: "auf-position", nr: 20, afterId: "I5" });
-    expect(h([...kopf, sammel(20), it(30)], 0).aktion).toBe("nichts");
-  });
-
-  test("steht es auf Position N oder davor: nichts, auch bei geringem Füllstand", () => {
-    expect(h([it(1), it(2), it(3), sammel(20), it(5)], 0).aktion).toBe("nichts");
-    expect(h([it(1), sammel(20), it(3), it(4), it(5)], 0).aktion).toBe("nichts");
-  });
-
-  test("Fixpunkt: nach dem Anwenden der Entscheidung (nach-oben wie auf-position) ist der nächste Lauf ein nichts", () => {
-    const boards = [[...fueller(1, 10), sammel(20)], [status(1), ...fueller(2, 10), sammel(20)], [it(1), it(2), sammel(20)], [it(30), sammel(20), ...fueller(1, 6)]];
+  test("Fixpunkt: nach dem Anwenden der Entscheidung ist der nächste Lauf ein nichts", () => {
+    const boards = [[...fueller(1, 10), sammel(20)], [status(1), ...fueller(2, 10), sammel(20)], [rotMain(1), status(2), sammel(20)], [it(30), sammel(20), ...fueller(1, 6)]];
     let geprueft = 0;
     for (const board of boards) {
       for (const n of [0, 4, 10, 20]) {
@@ -292,6 +289,19 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
       }
     }
     expect(geprueft, "die Schleife prüft wirklich etwas").toBeGreaterThan(4);
+  });
+
+  test("zwei Läufe an einem Montag: der erste legt das Status-Ticket an und holt das Sammelticket davor, der zweite bewegt nichts", () => {
+    const board = [rotMain(1), it(10), it(11), sammel(12)];
+    // Lauf 1: Status-Aktion zieht die Liste nach (Status-Ticket an die Spitze), danach die Harness-Entscheidung
+    const nachStatus = T.ziehListeNach(board, { nr: 9, itemId: "ITEM_9" });
+    const e1 = h(nachStatus, 10);
+    expect(e1).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I1" });
+    const nachLauf1 = verschiebe(nachStatus, "I12", e1.afterId ?? null);
+    expect(nachLauf1.map((i) => i.number)).toEqual([9, 1, 12, 10, 11]);
+    // Lauf 2: das Status-Ticket steht schon, die Status-Aktion ist `nichts` (kein itemId): die Liste bleibt, der Harness-Takt auch
+    expect(T.ziehListeNach(nachLauf1, null)).toBe(nachLauf1);
+    expect(h(nachLauf1, 10).aktion).toBe("nichts");
   });
 });
 
@@ -318,10 +328,10 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
     expect(kopfEnde(liste)).toBe(1);
   });
 
-  test("Komposition: nach dem Nachziehen entscheidet der Harness-Takt gegen die aktuelle Liste (Sammelticket hinter dem frischen Status-Ticket)", () => {
+  test("Komposition: nach dem Nachziehen entscheidet der Harness-Takt gegen die aktuelle Liste (Sammelticket vor dem frischen Status-Ticket)", () => {
     const board = [it(1), it(2), it(12, { title: "Harness-Härtung (gesammelt)" })];
     const nachgezogen = T.ziehListeNach(board, { nr: 9, itemId: "ITEM_9" });
-    expect(T.entscheideHarnessTakt({ items: nachgezogen, befundKommentare: 10, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "ITEM_9" });
+    expect(T.entscheideHarnessTakt({ items: nachgezogen, befundKommentare: 10 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
   });
 });
 

@@ -53,6 +53,11 @@ export const RESTE: Rest[] = [
     muster: /\bHARNESS_TAKT_MERGES\b|\bharnessTaktAusCommits\b|\bmergesSeitAbschluss\b|(?:nach 5|fünf) Ticket-Merges jeder Art|Ticket-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf/,
     fix: "den Härtungs-Takt nach Füllstand beschreiben: HARNESS_TAKT_KOMMENTARE Befund-Kommentare vertrauter Nicht-Bot-Autoren im Harness-Sammelticket (#1888)",
   },
+  {
+    name: "Klemmung und Selbstkorrektur des Sammeltickets",
+    muster: /\bklemmeAnker\b|\bplanMitKorrektur\b|\bpositionOderWarnung\b|\bsammelblock\b|"auf-position"|Nie vor das ungeclaimte Sammelticket/,
+    fix: "das Harness-Sammelticket holt der Board-Takt ab dem Füllstand an die Spitze (hinter 🚨/🔒), board-place klemmt und korrigiert nicht (Fortschreibung #162 zu ADR 0016)",
+  },
   // Der Altnamen-Rückfall der Kern-Umgebungsvariablen ist entfernt (#1872): gelesen wird nur FACTORY_<NAME>.
   {
     name: "Altnamen-Rückfall",
@@ -213,6 +218,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Spielquote-Bibliothek (heißt produktquote-lib)": "import { SPIEL_QUOTE } from board-takt",
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
       "Baseline der Kern-Links": "gelesen aus test/harness/kern-links-baseline.json",
+      "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -225,6 +231,11 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.planer}.md`],
     ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.umsetzer}.md`],
     ["alte Agenten-Dateinamen", `.claude/agents/${C.agenten.gruppe}.md`],
+    ["Klemmung und Selbstkorrektur des Sammeltickets", "klemmeAnker(items, null)"],
+    ["Klemmung und Selbstkorrektur des Sammeltickets", "positionOderWarnung()"],
+    ["Klemmung und Selbstkorrektur des Sammeltickets", "const k = sammelblock(items)"],
+    ["Klemmung und Selbstkorrektur des Sammeltickets", 'aktion: "auf-position"'],
+    ["Klemmung und Selbstkorrektur des Sammeltickets", "Nie vor das ungeclaimte Sammelticket: --top klemmt"],
     ["Härtungs-Takt nach Merge-Zahl", "harnessTaktAusCommits({ items })"],
     ["Härtungs-Takt nach Merge-Zahl", "entscheideHarnessTakt({ mergesSeitAbschluss: 5 })"],
     ["Härtungs-Takt nach Merge-Zahl", "holt es nach 5 Ticket-Merges jeder Art"],

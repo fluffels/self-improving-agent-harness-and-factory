@@ -3,9 +3,8 @@
 /**
  * Generischer Board-Takt (#1390, ursprünglich #1351/#1349): der Workflow `.github/workflows/board-takt.yml` ruft dieses Skript. Es pflegt
  *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
- *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, Füllstand) hinter den Kopf
- *     holen und, unabhängig von der Aktivität, auf die Position laut AGENTS.md zurückschieben, wenn es dahinter steht (Selbstkorrektur,
- *     nur nach vorn, nie in den Kopf).
+ *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, Füllstand) an die Spitze des
+ *     Boards holen (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket); unter der Schwelle schiebt der Takt nichts.
  * Die Entscheidungen sind pur und getestet (test/board-takt.test.ts, test/langfuse-takt.test.ts), nur die gh-Aufrufe in `main` sind es nicht.
  *
  * Idempotent und ohne gespeicherten Zähler: jedes Mal wird aus den offenen Issues, der Commit-Liste von main und der Board-Liste
@@ -35,14 +34,12 @@ import {
   ghJson,
   itemsUeberIssues,
   kandidatenSammelticket,
-  kopfEnde,
+  spitzenEnde,
   loadItems,
   loadOpenIssuePages,
   missingFromBoard,
   normalizeOffene,
-  positionLautAgentsMd,
   sammelticketItem,
-  sammelticketKorrektur,
   seitenListen,
   setPosition,
   todoItem,
@@ -59,7 +56,7 @@ import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon
 // Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
 export { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, istHarnessCommit, zaehleTicketMerges };
 
-// Zwei Boards (ADR 0022 F11, #1729): Status-Ticket, Harness-Sammelticket und ihre Selbstkorrektur laufen auf dem Factory-Board; der Wächter
+// Zwei Boards (ADR 0022 F11, #1729): Status-Ticket und Harness-Sammelticket laufen auf dem Factory-Board; der Wächter
 // nimmt fehlende Issues nach der Trennregel (`boardRolleFuer`) auf ihrem Board auf.
 const FACTORY_BOARD = boardFuerRolle("factory");
 
@@ -92,54 +89,37 @@ export function quotenBericht(commits, seit = null, harnessIssues = null) {
 }
 
 /**
- * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `befundKommentare` = Füllstand des ungeclaimten Sammeltickets (`befundKommentare`: Kommentare
- * vertrauter Nicht-Bot-Autoren), `position` = Position laut AGENTS.md (`sammelticketPosition`). Reihenfolge der Regeln:
- *  1. Ab `HARNESS_TAKT_KOMMENTARE` kommt das erste ungeclaimte Harness-Sammelticket direkt hinter den zusammenhängenden Kopf ganz oben
- *     (Status-, Notfall-, Dependabot-, Forum-Ticket; die „Spitze“ des Boards) → `nach-oben`. Steht es dort schon, ist der Lauf idempotent.
- *     Ist ein Vorgänger (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel.
- *  2. Sonst, und auch bei geringem Füllstand: steht es hinter der Position laut AGENTS.md, geht es dorthin zurück (`sammelticketKorrektur`:
- *     nur nach vorn, nie in den Kopf) → `auf-position`. „Still liegen“ unter der Schwelle leistet die Auswahl (`naechstes-ticket`), nicht der Takt.
- *  3. Sonst nichts.
- * Grenze: ein Kopf-Item, das nicht zusammenhängend oben steht, zählt nicht zum Kopf. Liefert `{ aktion: "nach-oben" | "auf-position" | "nichts", nr?, afterId?, grund }`.
- * Ungültige Eingaben (auch ein `position` unter 1) werfen. Pur.
+ * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `befundKommentare` = Füllstand des ungeclaimten Sammeltickets
+ * (`befundKommentare`: Kommentare vertrauter Nicht-Bot-Autoren). Eine Regel (factory#162): ab `HARNESS_TAKT_KOMMENTARE` kommt das erste
+ * ungeclaimte Harness-Sammelticket an die Spitze des Boards, nur hinter den zusammenhängenden Notfall-Items ganz oben (🚨/🔒, `spitzenEnde`),
+ * vor das Status-Ticket und alle übrigen Kopf-Items → `nach-oben`. Steht es dort schon, ist der Lauf idempotent. Ist ein Vorgänger
+ * (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel. Unter der Schwelle schiebt der Takt nie zurück: „still liegen“ leistet die
+ * Auswahl (`naechstes-ticket`), die Anlage setzt es auf Position laut AGENTS.md (`sammelticket-anlegen`).
+ * Liefert `{ aktion: "nach-oben" | "nichts", nr?, afterId?, grund }`. Ungültige Eingaben werfen. Pur.
  */
-export function entscheideHarnessTakt({ items, befundKommentare: fuellstand, position }) {
+export function entscheideHarnessTakt({ items, befundKommentare: fuellstand }) {
   if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
   if (!Number.isInteger(fuellstand) || fuellstand < 0) {
     throw new Error(`befundKommentare muss eine ganze Zahl ≥ 0 sein, war ${String(fuellstand)}`);
   }
-  if (!Number.isInteger(position) || position < 1) throw new RangeError(`position muss eine ganze Zahl ≥ 1 sein, war ${String(position)}`);
   const ticket = sammelticketItem(items);
   if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${SAMMELTICKET_TITEL}“` };
-  const ende = kopfEnde(items);
-  const idx = items.findIndex((i) => i.id === ticket.id);
-  const direktHinterKopf = items.slice(ende, idx).every((i) => i.state !== "open");
+  if (fuellstand < HARNESS_TAKT_KOMMENTARE) {
+    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare (Schwelle ${HARNESS_TAKT_KOMMENTARE}), der Takt lässt es liegen` };
+  }
   const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && !ungeclaimt(i));
-  const voll = fuellstand >= HARNESS_TAKT_KOMMENTARE;
-  if (voll && !direktHinterKopf && !vorgaenger) {
-    return {
-      aktion: "nach-oben",
-      nr: ticket.number,
-      afterId: ende > 0 ? items[ende - 1].id : null,
-      grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare, #${ticket.number} kommt hinter den Kopf`,
-    };
+  if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
+  const ende = spitzenEnde(items);
+  const idx = items.findIndex((i) => i.id === ticket.id);
+  if (items.slice(ende, idx).every((i) => i.state !== "open")) {
+    return { aktion: "nichts", grund: `#${ticket.number} steht schon an der Spitze (hinter den Notfall-Items)` };
   }
-  const k = sammelticketKorrektur(items, position);
-  if (k) {
-    return {
-      aktion: "auf-position",
-      nr: k.nr,
-      afterId: k.afterId,
-      grund: `#${k.nr} stand auf Rang ${k.vonRang}, zurück auf Rang ${k.nachRang} (Position ${position} laut AGENTS.md)`,
-    };
-  }
-  if (vorgaenger && voll && !direktHinterKopf) {
-    return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
-  }
-  if (!voll) {
-    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare (Schwelle ${HARNESS_TAKT_KOMMENTARE}), Position stimmt` };
-  }
-  return { aktion: "nichts", grund: `#${ticket.number} steht schon direkt hinter dem Kopf` };
+  return {
+    aktion: "nach-oben",
+    nr: ticket.number,
+    afterId: ende > 0 ? items[ende - 1].id : null,
+    grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare, #${ticket.number} kommt an die Spitze`,
+  };
 }
 
 /** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
@@ -160,20 +140,12 @@ export function ziehListeNach(items, ergebnis) {
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 
 /**
- * Darf der Harness-Teil des Takts laufen? Er braucht die Board-Liste (Projekt-Scope des Tokens) und die Position laut AGENTS.md.
- * Fehlt etwas, entfällt NUR dieser Teil (das Status-Ticket braucht beides nicht) und das wird sichtbar gemeldet: ein fehlender Token
- * ist eine Warnung (Exit 0, der Lauf ohne Token ist bekannt), eine fehlende oder mehrdeutige Position ein Fehler (Exit 1), denn die
- * Selbstkorrektur ist dann blind. Liefert `{ ok: true }` oder `{ ok: false, meldung, fehler }`. Pur.
+ * Darf der Harness-Teil des Takts laufen? Er braucht die Board-Liste (Projekt-Scope des Tokens). Fehlt sie, entfällt NUR dieser Teil
+ * (das Status-Ticket braucht sie nicht) und das wird als Warnung gemeldet (Exit 0, der Lauf ohne Token ist bekannt).
+ * Liefert `{ ok: true }` oder `{ ok: false, meldung, fehler }`. Pur.
  */
-export function harnessVoraussetzung({ items, position, positionFehler }) {
+export function harnessVoraussetzung({ items }) {
   if (!items) return { ok: false, fehler: false, meldung: "::warning::PROJECT_TOKEN fehlt: Harness-Sammelticket-Takt übersprungen (die Board-Liste braucht den Projekt-Scope)." };
-  if (!Number.isInteger(position) || position < 1) {
-    return {
-      ok: false,
-      fehler: true,
-      meldung: `::error::Harness-Sammelticket-Takt übersprungen, die Position laut AGENTS.md fehlt: ${fehlerText(positionFehler ?? "keine Position")}`,
-    };
-  }
   return { ok: true };
 }
 
@@ -184,12 +156,12 @@ export function harnessVoraussetzung({ items, position, positionFehler }) {
  * ungeclaimte Sammelticket in `items`, steht aber offen und ungeclaimt in `offene`, ist die Board-Liste im Verzug: Warnung statt stillem „keins“.
  * Liefert `{ ...Entscheidung, fuellstand }` (`fuellstand` null, wenn nicht geladen). `io.ladeKommentare(nr, repo)` liefert die flache Kommentar-Liste.
  */
-export function entscheideMitFuellstand({ items, offene, position, repo, io }) {
+export function entscheideMitFuellstand({ items, offene, repo, io }) {
   const kandidat = sammelticketItem(items);
   if (!kandidat) {
     const [offenes] = kandidatenSammelticket(offene, SAMMELTICKET_TITEL);
     if (offenes) io.log(`::warning::Board-Verzug: #${offenes.number} fehlt in der Board-Liste (REST hinkt oder Item fehlt), der Härtungs-Takt sieht das Sammelticket nicht.`);
-    return { ...entscheideHarnessTakt({ items, befundKommentare: 0, position }), fuellstand: null };
+    return { ...entscheideHarnessTakt({ items, befundKommentare: 0 }), fuellstand: null };
   }
   const r = fuellstandVon({ nr: kandidat.number, repo, ladeKommentare: io.ladeKommentare });
   if (r.fehler !== undefined) {
@@ -197,7 +169,7 @@ export function entscheideMitFuellstand({ items, offene, position, repo, io }) {
     return { aktion: "nichts", grund: `Füllstand von #${kandidat.number} nicht prüfbar`, fuellstand: null };
   }
   const fuellstand = r.wert;
-  return { ...entscheideHarnessTakt({ items, befundKommentare: fuellstand, position }), fuellstand };
+  return { ...entscheideHarnessTakt({ items, befundKommentare: fuellstand }), fuellstand };
 }
 
 /** Harness-Entscheidung ausführen; true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
@@ -312,7 +284,6 @@ export const ECHTE_IO = {
   loadItems: (rolle, opts) => loadItems(boardFuerRolle(rolle), opts),
   loadOpenIssuePages,
   ladeKommentare: (nr, repo) => issueKommentare(nr, ghJson, repo),
-  positionLautAgentsMd,
   fuehreStatusAus,
   fuehreHarnessAus,
   log: (z) => console.log(z),
@@ -328,13 +299,6 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   const harnessLabel = labelAus(config, "harness");
   const fuehrt = zielRepoFuer([harnessLabel], config); // das Repo, dessen Issues das Factory-Board führt
   if (!gleichesRepo(fuehrt, repo)) return nurWaechter({ repo, dry, token, config, io, fuehrt });
-  let position = null;
-  let positionFehler = null;
-  try {
-    position = io.positionLautAgentsMd();
-  } catch (err) {
-    positionFehler = err.message;
-  }
   const gelesen = leseOffene(io, repo);
   if (gelesen.fehler) return { fehler: true };
   const offene = gelesen.offene;
@@ -396,13 +360,13 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     if (w.fehler) fehler = true;
   }
 
-  // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.
-  const voraussetzung = harnessVoraussetzung({ items, position, positionFehler });
+  // Harness-Sammelticket: Füllstand (eigenes Fenster), auf der nachgezogenen Liste.
+  const voraussetzung = harnessVoraussetzung({ items });
   if (!voraussetzung.ok) {
     io.log(voraussetzung.meldung);
     if (voraussetzung.fehler) fehler = true;
   } else {
-    const h = entscheideMitFuellstand({ items, offene, position, repo, io });
+    const h = entscheideMitFuellstand({ items, offene, repo, io });
     io.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Füllstand ${h.fuellstand ?? "?"}/${HARNESS_TAKT_KOMMENTARE}; Fenster ab ${abHarness}`);
     io.log(quotenBericht(commits, abHarness, harnessIssues).zeile);
     if (!dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token)) fehler = true;

@@ -5,13 +5,13 @@
  * lief einmal nicht bis zur Position, das Ticket stand am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin.
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
- *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top hinter den Sammelblock)
+ *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top an die Spitze)
  *
- * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` korrigiert es nur die
+ * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` prüft es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
  * auf Position bringen (`sammelticketKorrektur`), dann prüfen: die Board-Liste liefert Neues verzögert, darum bis zu 5 Ladeversuche mit
  * Pause; steht das Ticket falsch, wird es bis zu zweimal neu gesetzt (sonst Exit 1). Erscheint es nie in der Liste, warnt das Skript
- * (Exit 0): `board-place.mjs` und der Board-Takt (`board-takt.mjs`) korrigieren die Position beim nächsten Lauf selbst.
+ * (Exit 0); ein volles Sammelticket holt der Board-Takt (`board-takt.mjs`) an die Spitze, die Position korrigiert niemand nachträglich.
  * Race-fest (#1561): `vorhanden` wird per Direktabruf (`repos/<repo>/issues/<nr>`) bestätigt, weil die Listen-Abfrage nachhinkt (ein gerade geschlossenes
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
@@ -36,9 +36,8 @@ import {
   loadOpenIssuePages,
   normalizeOffene,
   REPO,
-  planMitKorrektur,
+  planFuerArgs,
   positionLautAgentsMd,
-  positionOderWarnung,
   sammelticketKorrektur,
   setPosition,
   todoItem,
@@ -326,10 +325,7 @@ async function main(argv = process.argv.slice(2)) {
       if (k) setPosition(FACTORY_BOARD, k.id, k.afterId);
     } else if (args.top) {
       const items = ergaenzeFehlende(loadItems(FACTORY_BOARD, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-      // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
-      // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
-      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
-      if (korrektur) setPosition(FACTORY_BOARD, korrektur.id, korrektur.afterId);
+      const plan = planFuerArgs(items, { anchor: null, numbers: [nr] });
       for (const { item, afterId } of plan.steps) setPosition(FACTORY_BOARD, item.id, afterId);
     }
   }

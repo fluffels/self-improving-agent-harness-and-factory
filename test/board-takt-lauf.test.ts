@@ -14,7 +14,6 @@ type Io = {
   ghJson: (args: string[]) => unknown;
   loadItems: (rolle: string, o: { token: string }) => Item[];
   loadOpenIssuePages: (repo: string) => unknown[];
-  positionLautAgentsMd: () => number;
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
   itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string; repo?: string }) => ({ number: number } | null)[];
@@ -90,7 +89,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
         ...(opts.offeneStatus ? [{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }] : []),
         ...(opts.offeneSammel ? [{ number: 160, title: "Langfuse-Befunde (gesammelt)", created_at: "2026-10-02T00:00:00Z", assignees: [OWNER] }] : []),
       ]],
-      positionLautAgentsMd: () => 4,
       ladeKommentare: (nr) => {
         geladen.push(nr);
         if (opts.kommentare instanceof Error) throw opts.kommentare;
@@ -163,7 +161,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       ghJson: () => [[]],
       loadItems: nurFactory([it(10), it(11)]),
       loadOpenIssuePages: () => offen([]),
-      positionLautAgentsMd: () => 4,
       itemsUeberIssues: () => [{ number: 77 }],
       ladeKommentare: () => ((geladen += 1), []),
       fuehreStatusAus: () => ({ ok: true }),
@@ -195,7 +192,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
             : [commitDaten.map((d, i) => ({ sha: `c${i}`, commit: { message: `feat: x (#${100 + i})`, committer: { date: d } }, author: { login: OWNER, type: "User" } }))],
         loadItems: nurFactory([]),
         loadOpenIssuePages: () => [offenCreatedAt ? [{ number: 70, title: STATUS, created_at: offenCreatedAt, assignees: [] }] : []],
-        positionLautAgentsMd: () => 4,
         frischeOffeneIssues: () => [],
         fuehreStatusAus: () => ({ ok: true }),
         fuehreHarnessAus: () => true,
@@ -230,7 +226,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: nurFactory([it(10), it(11), sammel, it(50, { title: STATUS })]),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
-      positionLautAgentsMd: () => 4,
       ladeKommentare: () => befunde(10),
       fuehreStatusAus: () => ({ ok: statusOk }),
       fuehreHarnessAus: () => harnessOk,
@@ -247,7 +242,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: (rolle) => (rolle === "factory" ? factory : produkt),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
-      positionLautAgentsMd: () => 4,
       ladeKommentare: () => befunde(10),
       fuehreStatusAus: (_e, ctx) => (gesehen.status.push((ctx as { items: Item[] }).items), { ok: true }),
       fuehreHarnessAus: () => ((gesehen.harness += 1), true),
@@ -283,7 +277,6 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
       ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3), spiel(4), spiel(5)]]),
       loadItems: nurFactory([it(10), it(11), sammel]),
       loadOpenIssuePages: () => [[]],
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ((gerufen += 1), { ok: true }),
       fuehreHarnessAus: () => ((gerufen += 1), true),
       log: (z) => log.push(z),
@@ -292,25 +285,20 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(gerufen).toBe(0);
   });
 
-  test("ohne Token entfällt nur der Harness-Teil (Warnung, kein Fehler); ohne Position ist es ein Fehler", () => {
+  test("ohne Token entfällt nur der Harness-Teil (Warnung, kein Fehler); der Takt braucht keine Position mehr", () => {
     const basis = {
-      ghJson: (a: string[]) => (a.join(" ").includes("state=closed") ? [[]] : [[]]),
+      ghJson: () => [[]],
       loadItems: nurFactory([]),
       loadOpenIssuePages: () => [[]],
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
     };
     const log: string[] = [];
-    const ohneToken = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, positionLautAgentsMd: () => 4, log: (z: string) => log.push(z) } });
+    const ohneToken = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), io: { ...basis, log: (z: string) => log.push(z) } });
     expect(ohneToken.fehler).toBe(false);
     expect(log.join("\n")).toContain("PROJECT_TOKEN fehlt");
-    const ohnePos = T.fuehreTaktAus({
-      config: CFG, repo: FREMD.repo,
-      jetzt: new Date("2026-10-08T12:00:00Z"),
-      token: "t",
-      io: { ...basis, positionLautAgentsMd: () => { throw new Error("keine Position"); }, log: () => undefined },
-    });
-    expect(ohnePos.fehler).toBe(true);
+    const mitToken = T.fuehreTaktAus({ config: CFG, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token: "t", io: { ...basis, log: () => undefined } });
+    expect(mitToken.fehler).toBe(false);
   });
 });
 
@@ -331,7 +319,6 @@ describe("Board-Wächter im Takt-Lauf (#1628)", () => {
       },
       loadItems: (rolle) => (rolle === "factory" ? [...(opts.imBoard ?? []).map(it), sammel] : (opts.produkt ?? []).map(it)),
       loadOpenIssuePages: () => offen(...opts.offene),
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: (_h, items) => (zaehler.harness.push(items), true),
       itemsUeberIssues: (rolle, n) => ((zaehler.graphql += 1), zaehler.graphqlRollen.push(rolle), (opts.graphql ?? (() => n.map(() => null)))(n)),
@@ -440,7 +427,6 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
       },
       loadItems: (_r, o) => (aufrufe.items++, aufrufe.loadRepos.push((o as { repo?: string }).repo ?? "-"), []),
       loadOpenIssuePages: (repo: unknown) => (aufrufe.offenRepos.push(repo), [offen.map((n) => ({ number: n, title: `T${n}`, state: "open", user: { login: OWNER }, assignees: [], created_at: "2026-10-01T00:00:00Z" }))]),
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => (aufrufe.status++, { ok: true }),
       fuehreHarnessAus: () => (aufrufe.harness++, true),
       itemsUeberIssues: (_r, n, o) => (aufrufe.itemsRepos.push(o.repo), n.map(() => null)),
@@ -541,7 +527,6 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
         aufrufe.push(a);
         return frisch ? frisch(a) : [];
       },
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: (e, ctx) => (angelegt.push(e.aktion), starts.push((ctx as { start?: unknown }).start), { ok: true }),
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
@@ -585,7 +570,6 @@ describe("Zweitabfrage vor dem Anlegen des Status-Tickets (#1866)", () => {
       loadItems: () => [],
       loadOpenIssuePages: () => [[{ number: 70, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
       frischeOffeneIssues: (a) => (aufrufe.push(a), []),
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
       log: (z) => log.push(z),
@@ -617,7 +601,6 @@ describe("Takt über Repo-Grenzen (#78)", () => {
       },
       loadItems: nurFactory([]),
       loadOpenIssuePages: () => [[]],
-      positionLautAgentsMd: () => 4,
       ladeKommentare: () => [],
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
@@ -699,7 +682,6 @@ describe("Lesefehler und env im Takt (#97 L7 c, L11 b/d)", () => {
       ghJson: () => [[]],
       loadItems: () => [],
       loadOpenIssuePages: offen,
-      positionLautAgentsMd: () => 4,
       fuehreStatusAus: () => ({ ok: true }),
       fuehreHarnessAus: () => true,
       itemsUeberIssues: (_r: string, n: number[]) => n.map(() => null),

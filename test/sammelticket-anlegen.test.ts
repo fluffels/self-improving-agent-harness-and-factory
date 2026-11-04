@@ -183,7 +183,7 @@ describe("Vorgänger-Ausschluss (--vorgaenger X, X ungeclaimt)", () => {
 describe("Verdrahtung (#1390)", () => {
   const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
   test("das Skript liest die Position aus AGENTS.md (keine eigene Zahl) und nutzt keinen Such-Index", () => {
-    expect(skript).toMatch(/positionLautAgentsMd|positionOderWarnung/);
+    expect(skript).toMatch(/positionLautAgentsMd/);
     expect(skript).not.toMatch(/readFileSync/);
     expect(skript).not.toMatch(/search\/issues|--search\b/);
     expect(skript).not.toMatch(/Position\s*:?\s*\d+/);
@@ -253,15 +253,14 @@ describe("korrekturFuer (#1646): die Korrektur gilt dem NEUEN Sammelticket, nie 
 
 });
 
-describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
+describe("Verdrahtung der Anlage ohne Selbstkorrektur (#1390, Lens R1, factory#162)", () => {
   const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
-  test("board-place korrigiert über planMitKorrektur, board-takt zieht die Liste nach, das Anlege-Skript nutzt pruefSchritt und planMitKorrektur", () => {
-    expect(lies("scripts/board-lib.mjs")).toMatch(/function planMitKorrektur\(items, args, n\)/);
-    expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : io\.positionOderWarnung\(\)\)/);
+  test("board-place plant über planFuerArgs ohne Korrektur, das Anlege-Skript nutzt pruefSchritt und planFuerArgs", () => {
+    expect(lies("scripts/board-place.mjs")).toMatch(/planFuerArgs\(items, args\)/);
     // Der Listen-Nachzug des Takts ist mit Fakes in test/board-takt-lauf.test.ts getestet (#1428 Z23), keine Quelltext-Regex mehr.
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
     expect(anlegen).toMatch(/pruefSchritt\(\{ items: lade\(board\)/);
-    expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
+    expect(anlegen).toMatch(/planFuerArgs\(items, \{ anchor: null, numbers: \[nr\] \}\)/);
     expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });
 });
