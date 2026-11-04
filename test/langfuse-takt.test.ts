@@ -4,7 +4,9 @@
  * Reines Node-Tooling-Skript ohne Declaration-File: Import über `unknown` auf ein lokales Interface
  * (gleiche Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FREMD_OWNER, projektConfig } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/langfuse-takt.mjs";
@@ -12,6 +14,7 @@ import * as raw from "../scripts/langfuse-takt.mjs";
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; grund: string; warnungen: string[] };
 type Takt = {
+  WURZEL: string;
   STATUS_TITEL: string;
   MIN_MERGES: number;
   entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null; jetzt?: string | Date }) => Entscheidung;
@@ -19,7 +22,7 @@ type Takt = {
   MIN_ABSTAND_STUNDEN: number;
   MIN_TICKET_MERGES_PUSH: number;
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
-  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date; repo?: string; start?: string | null }) => string;
+  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date; repo?: string; start?: string | null; wurzel?: string }) => string;
 };
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 const T = raw as unknown as Takt;
@@ -131,6 +134,24 @@ describe("statusBody", () => {
     expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
     expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
     expect(x).not.toContain(String(projektConfig().repo));
+  });
+  test("der Standard-Wurzelpfad von statusBody ist die Repo-Wurzel (dort liegt im Bezieher der Sync-Stand)", () => {
+    expect(existsSync(join(T.WURZEL, "scripts", "langfuse-takt.mjs"))).toBe(true);
+    expect(existsSync(join(T.WURZEL, "package.json"))).toBe(true);
+  });
+  test("Bezieher (Sync-Stand): die Factory-Seiten stehen auf dem Sync-Tag der Quelle, nicht auf main des Beziehers (factory#157)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v0.7.1", repo: "q/quelle" } }));
+      const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "beispiel/bezieher", wurzel: dir });
+      expect(x).toContain("https://github.com/q/quelle/blob/v0.7.1/docs/model-routing.md#langfuse-status-überprüfen-1293");
+      expect(x).toContain("https://github.com/q/quelle/blob/v0.7.1/docs/ticket-reihenfolge.md#");
+      expect(x).not.toContain("beispiel/bezieher/blob");
+      expect(x).not.toMatch(/docs\/[\w-]+\.md ›/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");

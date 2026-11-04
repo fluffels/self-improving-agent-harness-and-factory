@@ -284,7 +284,7 @@ function blockiert(k, dir, was) {
     block: true,
     reason:
       `git ${was} ist im geteilten main-Checkout (${ctx.toplevel ?? dir}) blockiert (PowerShell-Tool). ` +
-      "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Git-Workflow): z.B. `git -C <worktree-pfad> commit …` " +
+      "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Eigener Worktree): z.B. `git -C <worktree-pfad> commit …` " +
       "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)",
   };
 }

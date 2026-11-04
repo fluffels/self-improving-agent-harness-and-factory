@@ -28,6 +28,10 @@ import { zeilenRe } from "./nachweis-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+import { fileURLToPath } from "node:url";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export const TAG_MARKER = "🏷️ Tag ";
 export const MIN_PRS = 3;
@@ -218,7 +222,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "- [ ] Befunde aus dem Sync: Kern-Befunde als Zeile ins Harness-Sammelticket der Factory, nur den Bezieher betreffende als Issue ins Bezieher-Repo",
     "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
-    "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: docs/agent-harness.md › Tag-Takt (#103).",
+    "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: " + factorySeiteIn(WURZEL, "docs/agent-harness.md", "tag-takt-factory103") + ".",
   ].join("\n");
 }
 
