@@ -287,11 +287,11 @@ export function ankerPruefung({ nach, labels, repo }, lade, config) {
 const ADD_BLOCKED_BY = "mutation($i:ID!,$b:ID!){ addBlockedBy(input:{issueId:$i, blockingIssueId:$b}) { issue { number } } }";
 
 /** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`), `kontextLader`/`waehle`/`post` (Sammelticket lesen, wählen, posten an die Meldestelle, factory#153). */
-export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env, kontextLader = ladeSammelKontext, waehle = waehleSammelticket, post = postZeilen } = {}) => {
+export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env, kontextLader = ladeSammelKontext, waehle = waehleSammelticket, post = postZeilen, meldestelle = MELDESTELLE } = {}) => {
   return {
     owner: OWNER,
     config,
-    sammelRepo: MELDESTELLE,
+    sammelRepo: meldestelle,
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
     erzeuge: ({ titel, body, labels, repo }) =>
       gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
@@ -305,12 +305,12 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
       exec(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
     },
     sammelKontext: () => {
-      const token = meldestelleToken({ stelle: MELDESTELLE, eigenes: REPO, env });
-      const k = kontextLader({ repo: MELDESTELLE, token });
-      return { ziel: waehle(k.offene, MELDESTELLE, (a) => gh(a, { token }))?.number ?? null, kommentare: k.kommentare, owner: k.owner };
+      const token = meldestelleToken({ stelle: meldestelle, eigenes: REPO, env });
+      const k = kontextLader({ repo: meldestelle, token });
+      return { ziel: waehle(k.offene, meldestelle, (a) => gh(a, { token }))?.number ?? null, kommentare: k.kommentare, owner: k.owner };
     },
     bereite: (zeilen) => bereiteMeldung(zeilen),
-    postZeilen: (nr, text) => post(nr, text, MELDESTELLE, meldestelleToken({ stelle: MELDESTELLE, eigenes: REPO, env })),
+    postZeilen: (nr, text) => post(nr, text, meldestelle, meldestelleToken({ stelle: meldestelle, eigenes: REPO, env })),
     heute: () => new Date().toISOString().slice(0, 10),
     ladeIssue: (nr) => gh(["api", `repos/${REPO}/issues/${nr}`]),
     bearbeite: (nr, body) => gh(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),

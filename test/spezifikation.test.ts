@@ -715,6 +715,7 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     const aufrufe: unknown[][] = [];
     const io = E.echteIo(config, {
       env: { MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" },
+      meldestelle: "eingang/privat",
       ghJson: () => ({}),
       kontextLader: (o: unknown) => (aufrufe.push(["kontext", o]), { offene: [{ number: 9 }], kommentare: [], owner: "o" }),
       waehle: (_o: unknown, repo: string) => (aufrufe.push(["waehle", repo]), { number: 9 }),
@@ -722,11 +723,9 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     }) as unknown as { sammelRepo: string; sammelKontext: () => { ziel: number }; postZeilen: (nr: number, t: string) => void };
     expect(io.sammelKontext().ziel).toBe(9);
     io.postZeilen(9, "text");
-    const stelle = io.sammelRepo;
-    expect(stelle).toMatch(/^[^/]+\/[^/]+$/);
-    // Die eigene Meldestelle braucht kein Token; ist sie fremd, gilt MELDESTELLE_TOKEN.
-    const fremd = stelle.toLowerCase() !== EIGENES.toLowerCase();
-    const token = fremd ? "mt" : undefined;
+    const stelle = "eingang/privat";
+    expect(io.sammelRepo).toBe(stelle);
+    const token = "mt";
     expect(aufrufe).toEqual([["kontext", { repo: stelle, token }], ["waehle", stelle], ["post", 9, "text", stelle, token]]);
   });
   test("erzeuge schreibt in das übergebene Repo", () => {
