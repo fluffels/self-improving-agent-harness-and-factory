@@ -11,10 +11,7 @@
   },
   "scripts/besitz-lib.mjs": {
     "complexity": {
-      "count": 5
-    },
-    "max-depth": {
-      "count": 1
+      "count": 3
     }
   },
   "scripts/board-lib.mjs": {

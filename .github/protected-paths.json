@@ -28,6 +28,8 @@
     "/scripts/langfuse-vorbedingung.mjs",
     "/scripts/cockpit/lauf.mjs",
     "/scripts/besitz-lib.mjs",
+    "/scripts/projektwert-lib.mjs",
+    "/scripts/projektwert-lauf.mjs",
     "/scripts/besitz-extraktion.mjs",
     "/scripts/factory-sync.mjs",
     "/scripts/factory-sync-lib.mjs",

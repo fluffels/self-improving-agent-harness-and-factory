@@ -28,6 +28,8 @@ import * as rawPc from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjektwert from "../../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawExtraktion from "../../scripts/besitz-extraktion.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawRegistry from "../../scripts/docs-gen/registry.mjs";
@@ -56,7 +58,7 @@ interface PcLib {
   TICKET_SKILL_ORDNER: string;
 }
 const { ROLLEN_PFADE, PFLICHT_AGENTEN, TICKET_SKILL_ORDNER } = rawPc as unknown as PcLib;
-const { projektwertStellen } = rawBesitz as unknown as { projektwertStellen: (text: string, pfad?: string) => { zeilen: { schluessel: string; name: string }[] } };
+const { projektwertStellen } = rawProjektwert as unknown as { projektwertStellen: (text: string, pfad?: string) => { zeilen: { schluessel: string; name: string }[] } };
 /** Die Auslegung der Projektliterale lebt in der Bibliothek (eine Quelle für Wächter und Export-Werkzeug). */
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
 

@@ -152,6 +152,8 @@
     {"pfad":"scripts/budget-pacing.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/statusline.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/besitz-lib.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
+    {"pfad":"scripts/projektwert-lib.mjs","ring":"kern","quelle":"Schnitt aus besitz-lib (factory#162 L32): Projektwert-Stellen"},
+    {"pfad":"scripts/projektwert-lauf.mjs","ring":"kern","quelle":"Schnitt aus besitz-lib (factory#162 L32): Lauf über die Prüf-Fläche"},
     {"pfad":"scripts/besitz-extraktion.mjs","ring":"kern","quelle":"Schnitt aus besitz-lib (#1906)"},
     {"pfad":"scripts/factory-sync.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
     {"pfad":"scripts/repo-form.mjs","ring":"kern","quelle":"Blatt-Modul (#101): Einheit ohne Importe, aus einer Lib herausgelöst"},

@@ -31,6 +31,8 @@ AGENTS.md @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/cockpit/lauf.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
+/scripts/projektwert-lib.mjs @fluffels
+/scripts/projektwert-lauf.mjs @fluffels
 /scripts/besitz-extraktion.mjs @fluffels
 /scripts/factory-sync.mjs @fluffels
 /scripts/factory-sync-lib.mjs @fluffels

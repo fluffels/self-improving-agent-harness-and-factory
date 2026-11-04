@@ -6,8 +6,7 @@
     "complexity": 18
   },
   "scripts/besitz-lib.mjs": {
-    "complexity": 24,
-    "max-depth": 1
+    "complexity": 18
   },
   "scripts/board-lib.mjs": {
     "complexity": 3
