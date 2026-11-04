@@ -11,11 +11,8 @@
   "scripts/board-lib.mjs": {
     "complexity": 3
   },
-  "scripts/board-place.mjs": {
-    "complexity": 3
-  },
   "scripts/board-takt.mjs": {
-    "complexity": 23
+    "complexity": 21
   },
   "scripts/brain-metrics.mjs": {
     "complexity": 11,
@@ -142,7 +139,7 @@
     "complexity": 14
   },
   "scripts/sammelticket-anlegen.mjs": {
-    "complexity": 7
+    "complexity": 6
   },
   "scripts/sandbox-doctor.mjs": {
     "complexity": 9
