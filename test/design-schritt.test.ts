@@ -27,6 +27,12 @@ describe("pruefeDesign", () => {
     }
     expect(D.pruefeDesign({ ...BLOCK, freigabe: "UI" }).join("|")).toMatch(/verschieden/);
   });
+  test("design.system ist ein relativer POSIX-Pfad (Folge #172)", () => {
+    for (const system of ["/abs", "..\\x", "../x", "C:/x", "a//b", "a/"]) {
+      expect(D.pruefeDesign({ ...BLOCK, system }).join("|"), system).toMatch(/design\.system muss ein relativer POSIX-Pfad sein/);
+    }
+    expect(D.pruefeDesign({ ...BLOCK, system: "docs/design/system.md" })).toEqual([]);
+  });
 });
 
 describe("designAus", () => {
