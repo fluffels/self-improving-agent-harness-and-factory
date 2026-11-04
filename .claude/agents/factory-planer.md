@@ -82,7 +82,7 @@ Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
 
 - je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind), session-taugliche Größe (passt zu `check:diffsize`);
 - Duplikat-Check vorab per `gh issue list --search`;
-- nur mit Block `design`: jedes Kind mit Oberfläche bekommt ein vorgelagertes Design-Ticket ohne Design-Label; das Kind trägt das Design-Label und `blockiert durch #<design-ticket>`;
+- nur mit Block `design`: jedes Kind mit Oberfläche bekommt ein vorgelagertes Design-Ticket ohne Design-Label; das Kind trägt das Design-Label, ein Akzeptanzkriterium, das den Design-Entwurf nennt, und `blockiert durch #<design-ticket>`;
 - Reihenfolge der Kinder und Text für den Übersichts-Kommentar im Epic;
 - Abschnitt 7 bleibt Pflicht, jede Weiche und ihre Entscheidung wird dem betroffenen Kind zugeordnet; je Kind der Glossar-Abgleich aus Punkt 2.
 

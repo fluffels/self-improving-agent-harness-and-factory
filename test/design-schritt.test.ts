@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/design-lib.mjs";
@@ -19,6 +20,7 @@ describe("pruefeDesign", () => {
   test("kein Objekt, fehlende oder leere Schlüssel, gleiche Labels", () => {
     expect(D.pruefeDesign("ui")[0]).toMatch(/Objekt/);
     expect(D.pruefeDesign(null)[0]).toMatch(/Objekt/);
+    expect(D.pruefeDesign([])).toEqual(["design muss ein Objekt mit label, freigabe und system sein"]);
     for (const k of ["label", "freigabe", "system"]) {
       expect(D.pruefeDesign({ ...BLOCK, [k]: undefined }).join("|")).toContain(`design.${k} `);
       expect(D.pruefeDesign({ ...BLOCK, [k]: " " }).join("|")).toContain(`design.${k} `);
@@ -30,6 +32,7 @@ describe("pruefeDesign", () => {
 describe("designAus", () => {
   test("ohne Block null, mit Block die drei Werte, unvollständig wirft", () => {
     expect(D.designAus({})).toBeNull();
+    expect(D.designAus(undefined)).toBeNull();
     expect(D.designAus(CFG)).toEqual(BLOCK);
     expect(() => D.designAus({ design: { label: "ui" } })).toThrow(/design\.freigabe/);
   });
@@ -50,6 +53,11 @@ describe("designGrund (K2, K3)", () => {
   test("beide Labels: frei; Groß-/Kleinschreibung zählt nicht", () => {
     expect(D.designGrund(["ui", "design-ok"], CFG)).toBe("");
     expect(D.designGrund(["UI"], CFG)).not.toBe("");
+    expect(D.designGrund(["ui", "area:x"], CFG)).toContain("nicht freigegeben");
+    expect(D.designGrund(["area:x", "ui", "design-ok"], CFG)).toBe("");
+    expect(D.designGrund([" ui "], CFG)).not.toBe("");
+    expect(D.designGrund(["ui"], { design: { label: " ui ", freigabe: "design-ok", system: "s" } })).toContain("nicht freigegeben");
+    expect(D.pruefeDesign({ ...BLOCK, freigabe: "ui " }).join("|")).toMatch(/verschieden/);
     expect(D.designGrund(["UI", "Design-OK"], CFG)).toBe("");
   });
   test("unvollständiger Block wirft", () => {
@@ -58,7 +66,7 @@ describe("designGrund (K2, K3)", () => {
 });
 
 describe("Textanker (K2)", () => {
-  const lies = (p: string) => readFileSync(p, "utf8");
+  const lies = (p: string) => readFileSync(join(__dirname, "..", p), "utf8");
   test("Ablauf und Planer kennen den Schritt", () => {
     const ablauf = lies(".agents/skills/factory/ablauf.md");
     for (const s of ["design.label", "design.freigabe", "DESIGN-ENTWURF FEHLT"]) expect(ablauf).toContain(s);

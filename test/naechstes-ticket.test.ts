@@ -1357,6 +1357,11 @@ describe("Design-Schritt in der Auswahl (factory#172)", () => {
     expect(r.uebersprungen[0]?.nr).toBe(1);
     expect(r.uebersprungen[0]?.grund).toContain(GRUND);
   });
+  test("K3: Design-Label mit weiterem Label ohne Freigabe wird ebenfalls übersprungen", () => {
+    const r = frei([item(1, { labels: [{ name: "ui" }, { name: "area:x" }] }), item(2)], { config: MIT });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0]?.grund).toContain(GRUND);
+  });
   test("mit Freigabe-Label gewählt; ohne Block gleiche Labels wie bisher (K2)", () => {
     expect(frei([item(1, { labels: [{ name: "ui" }, { name: "design-ok" }] })], { config: MIT }).ticket?.nr).toBe(1);
     expect(frei([item(1, { labels: [{ name: "ui" }] })]).ticket?.nr).toBe(1);
