@@ -27,7 +27,7 @@ import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
-import { labelAus } from "./projekt-config-lib.mjs";
+import { labelAus, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -215,7 +215,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "```",
     "",
     "Checkliste:",
-    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`.factory/projekt.json\` hineinkopieren, dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
+    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`${PROJEKT_CONFIG}\` hineinkopieren, dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,

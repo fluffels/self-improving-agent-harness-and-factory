@@ -9,6 +9,7 @@ type Entscheidung = { aktion: string; grund: string; warnungen: string[]; nummer
 type Io = Record<string, unknown>;
 const T = raw as unknown as {
   TAG_MARKER: string;
+  MIN_PRS: number;
   tagTitel: (t: string) => string;
   commitsAusLog: (t: string) => Commit[];
   besitzCommits: (c: Commit[], m: unknown) => Commit[];
