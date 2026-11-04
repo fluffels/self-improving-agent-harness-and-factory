@@ -8,7 +8,7 @@
  * Idempotenz: je Session zuerst das Ist (zwei Metrics-Abfragen, bei Differenz Observations), gesendet wird `fehlend` minus
  * Ledger-`gesendet` (`~/.claude/state/langfuse-abgleich.json`, nur eine Brücke über den Ingestion-Verzug). Ein kaputtes oder
  * fehlendes Ledger kostet höchstens Abfragen, nie eine Doppelsendung. Importiert nur Builtins und hook-taugliche Module
- * (Hook-Verdrahtung: #1578, Einstieg scripts/langfuse-abgleich-hook.mjs; mit --ausloeser laufen Wartezeit, Lock und Log, ohne nur Lock und Log). Aufruf: docs/referenz/befehle.md, Einordnung: docs/model-routing.md › Checkliste Punkt 1.
+ * (Hook-Verdrahtung: #1578, Einstieg scripts/langfuse-abgleich-hook.mjs; mit --ausloeser laufen Wartezeit, Lock und Log, ohne nur Lock und Log). Aufruf: docs/referenz/befehle.md, Einordnung: docs/model-routing.md › Langfuse-Status überprüfen, Punkt 1.
  */
 
 import { fileURLToPath } from "node:url";
@@ -43,6 +43,9 @@ import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from 
 import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
 import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
+import { factorySeiteIn } from "./factory-seite.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 // Stichtag und Fristen stehen im Kern (eine Definition); die Tests lesen sie hier.
 export { RUHEFRIST_BEENDET_MS, RUHEFRIST_OHNE_ENDE_H, STICHTAG } from "./langfuse-abgleich-kern.mjs";
@@ -60,7 +63,7 @@ export function giltBestaetigt(eintrag) {
 }
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
-export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe nutzen den Secret-Key nicht: das ist Regel, `permissions.deny` sperrt nur das Read-Tool, technisch gesperrt ist die Datei nur unter der Sandbox, die unter Windows nicht greift). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (docs/model-routing.md › Langfuse-Erfassung belegen).";
+export const OHNE_ZUGANG = "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe nutzen den Secret-Key nicht: das ist Regel, `permissions.deny` sperrt nur das Read-Tool, technisch gesperrt ist die Datei nur unter der Sandbox, die unter Windows nicht greift). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (" + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-erfassung-belegen-1293") + ").";
 const AUSLOESER = ["sessionstart", "sessionend"];
 
 /** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
