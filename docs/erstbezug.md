@@ -15,9 +15,33 @@ Der Sync liefert den Besitz (Skripte, Agenten, Skills, Workflows, Kern-Tests, Ke
 5. **`node scripts/harness-doctor.mjs --pruefen`** nennt je fehlender Projektdatei den Fix. Dann die Projektdateien aus den Vorlagen anlegen (Tabelle unten).
 6. **`npm install`** (den Lockfile committen), `npm run skills:sync`, `npm run lint:prune`, `npm run verify:kompakt`.
 7. **Erster Pull Request** mit Auto-Merge. Die CI läuft hier zum ersten Mal (`pull_request`). Der Bootstrap-Commit enthält keine Workflows, dort läuft zu Recht nichts. Beobachtet wurde, dass beim Direkt-Push in ein neues Repo kein `push`-Lauf startete (CI und CodeQL erst per `workflow_dispatch`); die Ursache ist ungeklärt. Ausweg: `gh workflow run <datei>`.
-8. **`node scripts/harness-doctor.mjs --einrichten`** für die Einstellungen am Repo (Labels, Boards, Sicherheitsfunktionen).
+8. **`node scripts/harness-doctor.mjs --einrichten`** für die Einstellungen am Repo (Labels, Boards, Sicherheitsfunktionen). Danach [Langfuse einrichten](#langfuse-einrichten).
 
 Der Doctor ist ein reines Node-Skript ohne Bindung an eine Agenten-Laufzeit; der Ablauf gilt für Claude Code und Codex ([Codex-Einstieg](codex/einstieg.md)).
+
+## Langfuse einrichten
+
+Ohne erreichbares Langfuse startet kein Ticketlauf (Vorbedingung `node scripts/langfuse-vorbedingung.mjs`, Exit 1 stoppt), und der Langfuse-Takt hat nichts zu messen. Der Sync liefert die Skripte und den Workflow (`.github/workflows/board-takt.yml`, `scripts/langfuse-takt.mjs`); **Endpunkt, Keys und Plugin sind rechnerlokal und kommen nie per Sync.** Reihenfolge nach Schritt 8:
+
+1. **Plugin im User-Scope:** das Plugin `langfuse-observability` ist im User-Scope aktiv ([ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md)), nicht in der Projekt-Einstellung des Beziehers.
+2. **Endpunkt und Keys trägt die Maintainerin selbst ein, nie der Agent.** Die drei Variablennamen sind `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` und `LANGFUSE_SECRET_KEY`; die Werte stehen in der Umgebung oder in den Plugin-Optionen der User-Settings, nie im Repo. Ein Agentenlauf liest und schreibt keine `.env*`-Datei (gesperrt) und startet kein Skript, das den Secret-Key liest.
+3. **`.env.example`-Abgleich nur über Namen:** hat der Bezieher eine `.env.example`, nennt sie dieselben drei Namen wie oben (ohne Werte); die Maintainerin gleicht ihre lokale Datei selbst damit ab. Der Agent vergleicht nur die Namen aus `scripts/langfuse-vorbedingung.mjs` und `scripts/langfuse-zugang.mjs` mit der Vorlage, nie Werte.
+4. **`node scripts/langfuse-vorbedingung.mjs` muss Exit 0 liefern** (prüft nur `/api/public/health`, nicht die MCP-Verbindung; bei Exit 1 steht der Grund in der Ausgabe).
+5. **Probe-Lauf:** ein kurzer Lauf belegt, dass Trace, Projekt-Tag und `usageDetails` ankommen ([Langfuse-Erfassung belegen](model-routing.md#langfuse-erfassung-belegen-1293)).
+6. **Doctor-Zeile `Langfuse-Takt`:** `node scripts/harness-doctor.mjs --pruefen` meldet `OK Langfuse-Takt`, wenn Workflow und Skript angekommen sind (ohne Netz, ohne Secrets). Eine Lücke nennt den Sync als Fix (`board-takt.yml` liegt im Ring `kern-nach-entkopplung`, den der Sync mitliefert). Führt das Factory-Board der Config ein fremdes Repo, steht dazu ein Hinweis: dort pflegt der Takt Status-Ticket und Sammelticket „Langfuse-Befunde (gesammelt)“, hier läuft nur der Board-Wächter.
+
+**Grenze Codex:** Claude-Hooks und das Plugin gelten dort nicht; Langfuse liefert unter Codex ein eigener MCP-Endpunkt mit extern gesetztem Header, siehe [Codex-Einstieg](codex/einstieg.md).
+
+Fertiger Prompt für die Sitzung im Bezieher (Keys trägt die Maintainerin vorher selbst ein):
+
+```text
+Richte Langfuse nach docs/erstbezug.md › „Langfuse einrichten“ ein. Trage keine Keys ein und lies keine .env-Datei.
+1. Führe `node scripts/langfuse-vorbedingung.mjs` aus; bei Exit 1 stoppe und nenne den Grund.
+2. Vergleiche die Variablennamen LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY und LANGFUSE_SECRET_KEY mit der .env.example des Repos (nur Namen, falls die Datei existiert) und melde Abweichungen.
+3. Fahre den Probe-Lauf nach docs/model-routing.md › „Langfuse-Erfassung belegen“ und prüfe Trace, Projekt-Tag und usageDetails.
+4. Führe `node scripts/harness-doctor.mjs --pruefen` aus und melde die Zeile „Langfuse-Takt“.
+Melde je Schritt OK oder Lücke mit dem Fix, ändere nichts außerhalb der Doku.
+```
 
 ## Projektdateien
 
