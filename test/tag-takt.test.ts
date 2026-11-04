@@ -142,7 +142,7 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf-Sync je Bezieher", "CI des Sync-PR je Bezieher grün", "sobald Tag und Sync-PRs stehen und deren CI grün ist", "ja, taggen", "Cross-Repo-Token", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald Tag und Release stehen", "ja, taggen", "Die Fabrik prüft die Bezieher nicht", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
@@ -156,31 +156,28 @@ describe("CI-Zustand und Body", () => {
     expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
     expect(body).not.toMatch(/^git tag -a/m);
   });
-  it("L1: Trockenlauf gegen frischen Stand des Beziehers (Export von origin/main), nie lokaler Checkout dahinter, mit --ziel", () => {
-    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf-Sync")) ?? "";
-    for (const teil of ["nie gegen einen lokalen Checkout hinter `origin/main`", "gh repo clone <bezieher> <leerer-ordner> -- --depth 1", "git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>", "--ziel <leerer-ordner> --entwurf --trocken", "keinen Bezieher", "Kontextgröße gegen das Budget"]) {
+  it("factory#162 L26: Trockenlauf gegen den Probe-Erstbezug im Scratch, nie ein Bezieher-Repo, mit --ziel", () => {
+    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf")) ?? "";
+    for (const teil of ["Probe-Erstbezug", "test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "--ziel <scratch-ordner> --entwurf --trocken", "--quelle <checkout auf bbbbbbb>"]) {
       expect(punkt, teil).toContain(teil);
     }
+    expect(punkt).not.toContain("gh repo clone");
   });
-  it("L4 und L23: Schritte im Ziel nach dem Sync (docs:gen; Refs und Index schreibt der Sync mit, check:factorylinks --schreiben nur als Reparaturweg; nie Wächter-gebundene Sätze) und das Werkzeug der Quelle", () => {
-    const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
-    const sync = punkte.find((z) => z.includes("Sync-PR je Bezieher mit")) ?? "";
-    expect(sync).toContain("npm run docs:gen");
-    expect(sync).toContain("schreibt der Sync mit");
-    expect(sync).toContain("nur als Reparaturweg");
-    expect(sync).toContain("npm run check:factorylinks -- --schreiben --quelle");
-    expect(sync).toContain("nie Wächter-gebundene Sätze");
-    expect(sync).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
+  it("factory#162 L26: kein Schritt der Fabrik schreibt in ein Bezieher-Repo (kein Sync-PR, kein Bezieher-Trockenlauf, kein --repo)", () => {
+    for (const verboten of ["Sync-PR je Bezieher", "Trockenlauf-Sync je Bezieher", "gh repo clone <bezieher>", "--repo <bezieher>", "gh workflow run", "Cross-Repo-Token", "Issue ins Bezieher-Repo"]) {
+      expect(body, verboten).not.toContain(verboten);
+    }
   });
-  it("Checkliste: CI des Sync-PR je Bezieher nach dem Sync-PR, Schließen erst bei grüner CI, Patch-Tag nie verschoben (#101 L21 L30)", () => {
+  it("factory#162 L26: die Bezieher holen das Update selbst (factory-update.yml), Werkzeug-Hinweis bleibt, Patch-Tag nie verschoben, Schließen bei Tag und Release", () => {
     const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
-    const sync = punkte.findIndex((z) => z.includes("Sync-PR je Bezieher"));
-    const ci = punkte.findIndex((z) => z.includes("CI des Sync-PR je Bezieher grün"));
-    expect(sync).toBeGreaterThan(-1);
-    expect(ci).toBe(sync + 1);
-    expect(punkte[ci]).toContain("der Trockenlauf fährt kein verify");
-    expect(punkte[ci]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
-    expect(punkte[punkte.length - 1]).toContain("Tag und Sync-PRs stehen und deren CI grün ist");
+    const holen = punkte.findIndex((z) => z.includes("Bezieher holen das Update selbst (`factory-update.yml`"));
+    expect(holen).toBeGreaterThan(-1);
+    expect(punkte[holen]).toContain("node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>");
+    expect(punkte[holen]).toContain("docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md");
+    expect(punkte[holen + 1]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
+    expect(punkte.find((z) => z.includes("Gate-Lücke"))).toContain("Sammelticket");
+    expect(punkte[punkte.length - 1]).toContain("sobald Tag und Release stehen");
+    expect(body).toContain("vom Bezieher beim Update zu erledigen");
   });
   it("begrenzt die PR-Liste auf 50 Zeilen und bereinigt Zellen", () => {
     const viele = T.besitzCommits(Array.from({ length: 53 }, (_, i) => commit({ betreff: i === 0 ? "fix: a|b`c (#1)" : `fix: n (#${i + 2})` })), MANIFEST);
@@ -533,9 +530,10 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
     expect(mit).not.toContain("keine gemeldet");
     expect(mitTag()).toContain("keine gemeldet");
   });
-  it("Checkliste: Claim vor Worktree, Plan-Nachweis ohne, verify:kompakt, Migrationen, Befund-Ablage", () => {
+  it("factory#162 L26: Migrationen gehören dem Bezieher beim Update; Schritte im Bezieher stehen nicht mehr in der Checkliste der Fabrik", () => {
     const b = mitTag();
-    for (const teil of ["ticket-lock.mjs claim", "Exit 4", "Plan: ohne — Factory-Sync v1.3.0", "npm run verify:kompakt", "Bezieher-Migrationen", "abgelöster Kern-Tests", "Harness-Sammelticket der Factory"]) expect(b, teil).toContain(teil);
+    for (const teil of ["Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen)", "Gate-Lücke: welches Bezieher-Gate hätte es melden müssen"]) expect(b, teil).toContain(teil);
+    for (const teil of ["ticket-lock.mjs claim", "Plan: ohne — Factory-Sync", "npm run verify:kompakt", "abgelöster Kern-Tests", "Issue ins Bezieher-Repo"]) expect(b, teil).not.toContain(teil);
   });
   it("lauf reicht die Migrationen aus dem Log in den Ticket-Body (migrationKey)", () => {
     const texte: string[] = [];

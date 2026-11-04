@@ -4,12 +4,14 @@
  * Besitz-PRs seit dem letzten Release-Tag (Form `v1.2.3` aus release-tag-lib.mjs, #90) und das Alter der ältesten ungetaggten Änderung.
  *  - Besitz-PR: ein Commit auf main (erster Elternteil), der einen verteilten Pfad aus `.factory/besitz.json` (Ring `oberflaeche` zählt nicht) oder das
  *    Manifest selbst berührt. Bewusste Grenze: Pfad-Ebene, nicht Block- oder Schlüssel-Ebene; das zählt eher zu viel als zu wenig.
- *  - Ab 3 Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
+ *  - Ab `MIN_PRS` Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
  *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
- *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf-Sync in einem Bezieher“, CI des Sync-PR je Bezieher). Ein offenes Ticket wird nie verdoppelt, sondern bei
+ *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf gegen den Probe-Erstbezug“, „Bezieher holen das Update selbst“). Ein offenes Ticket wird nie verdoppelt, sondern bei
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
- *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach setzt der Agent den Tag und erstellt je Bezieher den Sync-PR.
- *  - Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret = Pre-Flight); ohne ihn bleibt die Checkliste.
+ *  - `MIN_PRS` = aufgerundeter Median der Besitz-PRs je Tag-Abstand, mindestens 3 (factory#162, Messung 2026-11-04 über v0.1.0..v0.8.0: 10 Abstände mit 1, 2, 7, 1, 1, 4, 4, 4, 0, 3 Besitz-PRs, Median 2,5 → 3;
+ *    je 7 Tage kämen 22 PRs heraus, aber nur aus der Anlaufwoche mit zwei überlappenden Fenstern, das trägt keine Schwelle). Das Alters-Signal (7 Tage) und `Sync-Dringlich` bleiben; neu messen, wenn das Alters-Signal öfter auslöst als die Zahl.
+ *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach holen die Bezieher das Update selbst (`factory-update.yml`, ADR 0031).
+ *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Trockenlauf läuft nur gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch).
  * Bekannte Grenze: der Titel-Marker `🏷️ Tag ` ist breit; ein von Hand angelegtes, vertrauenswürdiges Issue mit diesem Titelanfang zählt als Tag-Ticket (das Emoji-Präfix ist diesem Takt vorbehalten).
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
@@ -198,7 +200,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,
     ...zeilen,
     "",
-    "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, je Bezieher zu erledigen):",
+    "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen):",
     ...(migrationen.length > 0 ? migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`) : ["- keine gemeldet"]),
     "",
     "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
@@ -213,16 +215,15 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "```",
     "",
     "Checkliste:",
-    `- [ ] Trockenlauf-Sync je Bezieher gegen dessen frischen Stand, nie gegen einen lokalen Checkout hinter \`origin/main\`: erst \`gh repo clone <bezieher> <leerer-ordner> -- --depth 1\` (oder \`git -C <checkout> fetch origin\` und \`git -C <checkout> archive origin/main | tar -x -C <leerer-ordner>\`), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <leerer-ordner> --entwurf --trocken\` (die Bezieher nennt die Maintainerin oder \`arbeitsplatz.repos\` in der Projekt-Config des Arbeitsplatzes, der sie führt; \`node scripts/arbeitsplatz.mjs pfade\` nennt im Factory-Repo keinen Bezieher). Er meldet auch die Kontextgröße gegen das Budget des Ziels`,
+    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`.factory/projekt.json\` hineinkopieren, dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
-    `- [ ] Sync-PR je Bezieher mit \`--tag ${tag}\` (dort das Ticket „🔄 Factory-Update“: im Bezieher erst \`node scripts/ticket-lock.mjs claim <nr>\` für dieses Ticket, dann den Worktree anlegen; ein vorhandener Worktree lässt den Claim mit Exit 4 scheitern. Plan-Nachweis im Sync-PR: \`<Präfix des Beziehers>Plan: ohne — Factory-Sync ${tag}\` (der Bezieher-Wächter kennt nur den eigenen Planer). Vor dem PR im Bezieher \`npm run verify:kompakt\` voll fahren, gezielte Tests ersetzen es nicht. Anstoßen per \`gh workflow run factory-update.yml --repo <bezieher>\`). ${WERKZEUG_HINWEIS} Im Ziel danach \`npm run docs:gen\` fahren und mitcommitten (Refs und Index der Factory-Links schreibt der Sync mit; \`npm run check:factorylinks -- --schreiben --quelle <checkout auf ${sha.slice(0, 7)}>\` nur als Reparaturweg, falls \`docs:gen\` neue Factory-Links erzeugt hat); bei einer Kontext-Warnung den Projekt-Block kürzen, nie Wächter-gebundene Sätze (Wächter binden Projekt-Block-Sätze wörtlich)`,
-    "- [ ] CI des Sync-PR je Bezieher grün (der Trockenlauf fährt kein verify); rot durch Factory-Besitz: Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
-    "- [ ] Bezieher-Migrationen (Abschnitt oben) je Bezieher erledigt; Projektkopien abgelöster Kern-Tests im Bezieher abgleichen (projekteigen bleibt nur die Abdeckung der Projektwerte)",
-    "- [ ] Befunde aus dem Sync: Kern-Befunde als Zeile ins Harness-Sammelticket der Factory, nur den Bezieher betreffende als Issue ins Bezieher-Repo",
-    "- [ ] Ticket schließen, sobald Tag und Sync-PRs stehen und deren CI grün ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
+    `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
+    "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
+    "- [ ] Auffälligkeit zu einem Bezieher: als Sammelticket-Zeile „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“, nie als Schreibzugriff auf den Bezieher",
+    "- [ ] Ticket schließen, sobald Tag und Release stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
-    "Grenze: ein Trockenlauf im Bezieher in CI bräuchte ein Cross-Repo-Token (Secret anlegen ist Pre-Flight); ohne ihn bleibt die Checkliste. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: " + factorySeiteIn(WURZEL, "docs/agent-harness.md", "tag-takt-factory103") + ".",
+    "Grenze: Die Fabrik prüft die Bezieher nicht und schreibt in keinen (ADR 0031); der Trockenlauf deckt nur den Probe-Erstbezug ab, den Rest melden die Gates der Bezieher beim Update. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: " + factorySeiteIn(WURZEL, "docs/agent-harness.md", "tag-takt-factory103") + ".",
   ].join("\n");
 }
 
