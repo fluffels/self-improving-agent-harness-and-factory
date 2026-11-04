@@ -325,7 +325,7 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo, loadItems, setPosition, vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
@@ -372,7 +372,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
   if (args.art !== "harness") return;
   const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
-  if (!vorhanden && !args.dry && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  if (!vorhanden && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
   else if (args.dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);

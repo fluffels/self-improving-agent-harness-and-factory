@@ -639,7 +639,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
       addToBoardTodo: (...a: unknown[]) => (rufe.push(["addToBoardTodo", ...a]), "I50"),
       loadItems: (...a: unknown[]) => (rufe.push(["loadItems", ...a]), listeVoll()),
       setPosition: (...a: unknown[]) => rufe.push(["setPosition", ...a]),
-      setzeUndPruefe: async (a: unknown) => (rufe.push(["setzeUndPruefe", a]), "ok"),
+      setzeUndPruefe: (a: unknown) => (rufe.push(["setzeUndPruefe", a]), Promise.resolve("ok")),
       ...extra,
     };
     return { deps, rufe, log };
@@ -664,15 +664,15 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     await M(["harness"], deps);
     const set = rufe.filter((r) => r[0] === "setPosition");
     expect(set).toHaveLength(1);
-    expect(set[0]![1]).toEqual(BOARD("factory"));
-    expect(set[0]![2]).toBe("I50");
+    expect(set[0][1]).toEqual(BOARD("factory"));
+    expect(set[0][2]).toBe("I50");
   });
 
   test("langfuse ohne --top: angelegt und ans Board gehängt, aber keine Positionsarbeit", async () => {
     const { deps, rufe } = fakes();
     await M(["langfuse"], deps);
     expect(namen(rufe)).toEqual(["findeVorhandenes", "legeAn", "addToBoardTodo"]);
-    expect((rufe[1]![1] as { harness: string; titel: string }).harness).toBe(cfg.labels.harness);
+    expect((rufe[1][1] as { harness: string; titel: string }).harness).toBe(cfg.labels.harness);
   });
 
   test("langfuse --top: setzt hinter den Sammelblock (setPosition auf dem Factory-Board), ohne setzeUndPruefe", async () => {
@@ -693,7 +693,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(rufe.find((r) => r[0] === "addToBoardTodo")![1]).toEqual(board);
     const set = rufe.filter((r) => r[0] === "setPosition");
     expect(set).toHaveLength(1);
-    expect(set[0]!.slice(1)).toEqual([board, "I50", "I1"]);
+    expect(set[0].slice(1)).toEqual([board, "I50", "I1"]);
     expect(namen(rufe)).not.toContain("setzeUndPruefe");
   });
 
@@ -704,14 +704,14 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(namen(rufe)).toEqual([]);
     const h = fakes({ findeVorhandenes: () => ({ number: 33 }) });
     await M(["harness"], h.deps);
-    expect(h.rufe.filter((r) => schreibend.includes(r[0] as string)).map((r) => r[0])).toEqual(["setzeUndPruefe"]);
-    expect((h.rufe[0]![1] as { nr: number }).nr).toBe(33);
+    expect(h.rufe.filter((r) => schreibend.includes(r[0])).map((r) => r[0])).toEqual(["setzeUndPruefe"]);
+    expect((h.rufe[0][1] as { nr: number }).nr).toBe(33);
   });
 
   test("--dry-run: kein Schreibaufruf, nur die Ankündigung", async () => {
     const { deps, rufe } = fakes();
     for (const art of ["harness", "langfuse", "codequalitaet"]) await M([art, "--dry-run"], deps);
-    expect(rufe.filter((r) => schreibend.includes(r[0] as string))).toEqual([]);
+    expect(rufe.filter((r) => schreibend.includes(r[0]))).toEqual([]);
   });
 
   test("Dublette nach dem Anlegen: kein Board-Aufruf mehr", async () => {
@@ -725,7 +725,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     const { deps, rufe } = fakes({ loadItems: () => items });
     await M(["langfuse", "--top"], deps);
     const set = rufe.filter((r) => r[0] === "setPosition");
-    expect(set[0]![2]).toBe("I20");
+    expect(set[0][2]).toBe("I20");
     expect(set.length).toBeGreaterThan(1);
   });
 
