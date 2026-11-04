@@ -10,7 +10,7 @@
  * `--bereich` nimmt die Kern-Namen `agentic` und `produkt`; ein Alias aus `bereiche.aliase` der Projekt-Config gilt als sein Kern-Name (#1943), ohne Alias ist ein anderer Name unbekannt (Exit 2).
  * Ohne `--bereich` und ohne `--ticket` ist der Aufruf ein Fehler (Exit 2): es gibt keinen Auswahlmodus über beide Seiten. Zwei Boards (ADR 0022 F11, #1729):
  * zuerst die Kopf-Items (Rang nach `kopfRang`; mit Bereich die der eigenen Seite plus die Notfälle beider), dann das oberste freie Item der eigenen Seite,
- * ohne Ausweichen auf die andere. Die Produktquote bleibt eine Kennzahl (`produktquote-lib.mjs`), sie steuert die Auswahl nicht.
+ * ohne Ausweichen auf die andere. Milestone-Vorrang (factory#194): zwischen Kopf-Items und dem Rest zieht die Auswahl die Items des frühesten offenen Milestones der eigenen Seite vor (Fälligkeit aufsteigend, ohne Fälligkeit dahinter, Gleichstand nach Nummer; Takt-Sammeltickets laufen mit); ohne Milestones unverändert, Hinweiszeile `Milestone-Vorrang: …`. Die Produktquote bleibt eine Kennzahl (`produktquote-lib.mjs`), sie steuert die Auswahl nicht.
  *
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Forum-Label der Config) wird übersprungen und als „Befund melden“ ausgewiesen.
@@ -41,6 +41,7 @@ import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { fruehesterMilestone, vorrangHinweis } from "./milestone-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
 import { blockerVerweise, istEpicTitel, pruefeEingang } from "./spezifikation-lib.mjs";
@@ -200,9 +201,16 @@ function kopfKandidaten(listen, eigene) {
   return [...mitSeite("produkt"), ...mitSeite("factory")].sort((a, b) => kopfRang(a) - kopfRang(b));
 }
 
+/** Der früheste offene Milestone unter den offenen Todo-Items ohne Kopfrolle der eigenen Seite (factory#194); null ohne Milestones. Pur. */
+function vorrangMilestone(items) {
+  const ms = items.filter((i) => i.status === "Todo" && i.state === "open" && !istKopfItem(i) && i.milestone).map((i) => i.milestone);
+  return fruehesterMilestone(ms);
+}
+
 /**
- * Die Auswahl über beide Boards (#1729) für einen Bereich (Pflicht, wirft sonst): 1. Kopf-Items der eigenen Seite plus die Notfälle beider, 2. das oberste
- * freie Item der eigenen Seite, ohne Ausweichen auf die andere. `produkt`/`factory`: normalisierte Items je Board; der Rest wie `waehleNaechstes`.
+ * Die Auswahl über beide Boards (#1729) für einen Bereich (Pflicht, wirft sonst): 1. Kopf-Items der eigenen Seite plus die Notfälle beider, 2. die Items des
+ * frühesten offenen Milestones der eigenen Seite (Vorrang, factory#194; die Takt-Sammeltickets laufen mit, unter ihrer Schwelle bleiben sie übersprungen), 3. das oberste
+ * freie Item der eigenen Seite, ohne Ausweichen auf die andere. Ohne Milestones entfällt Stufe 2. `produkt`/`factory`: normalisierte Items je Board; der Rest wie `waehleNaechstes`.
  * Liefert `{ ticket, uebersprungen, hinweise? }`. Pur.
  */
 export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegung }) {
@@ -216,7 +224,13 @@ export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegu
     uebersprungen.push(...r.uebersprungen);
     return r.ticket;
   };
-  const ticket = lauf(kopfKandidaten(listen, eigene), {}) ?? lauf(listen[eigene], { nur: (i) => !istKopfItem(i) });
+  const ms = vorrangMilestone(listen[eigene]);
+  if (ms) hinweise.push(vorrangHinweis(ms));
+  const inStufe = (i) => ms !== null && (i.milestone?.nummer === ms.nummer || FUELLSTAND_TITEL.includes(i.title));
+  const ticket =
+    lauf(kopfKandidaten(listen, eigene), {}) ??
+    (ms ? lauf(listen[eigene], { nur: (i) => !istKopfItem(i) && inStufe(i) }) : null) ??
+    lauf(listen[eigene], { nur: (i) => !istKopfItem(i) && !inStufe(i) });
   return { ticket, uebersprungen, ...(hinweise.length > 0 ? { hinweise } : {}) };
 }
 

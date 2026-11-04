@@ -4,6 +4,7 @@
  * Reines Node-Tooling-Skript ohne Declaration-File: Import über `unknown` auf ein lokales Interface (Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
+import { parse } from "yaml";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -464,5 +465,14 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const yml = lies(".github/workflows/board-takt.yml");
     expect(yml).toMatch(/push:\s*\n\s*branches: \[main\]/);
     expect(yml).toMatch(/run: node scripts\/board-takt\.mjs/);
+  });
+  test("factory#194: das Schließen eines Milestones löst den Workflow aus, überspringt nur den Status-Schritt und lässt den Tag-Takt laufen", () => {
+    const wf = parse(lies(".github/workflows/board-takt.yml")) as { on: { milestone?: { types?: string[] } }; jobs: { takt: { steps: { run?: string; if?: string }[] } } };
+    expect(wf.on.milestone?.types).toEqual(["closed"]);
+    const schritt = (skript: string) => wf.jobs.takt.steps.find((st) => st.run === `node scripts/${skript}`);
+    expect(schritt("board-takt.mjs")).toBeDefined();
+    expect(schritt("tag-takt.mjs")).toBeDefined();
+    expect(schritt("board-takt.mjs")?.if).toContain("github.event_name != 'milestone'");
+    expect(schritt("tag-takt.mjs")?.if ?? "").not.toContain("milestone");
   });
 });

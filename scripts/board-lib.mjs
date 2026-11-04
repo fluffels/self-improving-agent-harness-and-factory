@@ -14,6 +14,7 @@ import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { brauchtRepo } from "./board-plan-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
+import { milestoneAus } from "./milestone-lib.mjs";
 
 // Repo, Besitzer und Board-IDs kommen aus .factory/projekt.json; fehlt sie oder ist sie ungültig, bricht schon der Import ab (kein stiller
 // Standardwert, #1611): mit einer ✖-Zeile samt Fix und Exit 2 (Config-Fehler wie ein Aufruf-Fehler, AUFRUF_EXIT) statt einem Stacktrace
@@ -463,6 +464,8 @@ export function normalizeItems(pages) {
       labels: Array.isArray(i.content.labels) ? i.content.labels.map((l) => (typeof l === "string" ? l : l?.name)).filter((n) => typeof n === "string" && n !== "") : [],
       autor: typeof i.content.user?.login === "string" && i.content.user.login !== "" ? { login: i.content.user.login, type: i.content.user.type ?? "" } : null,
       blockedBy: Number.isFinite(i.content.issue_dependencies_summary?.blocked_by) ? i.content.issue_dependencies_summary.blocked_by : 0,
+      // Milestone des Issues (Release-Planung, factory#194): `milestone: { nummer, titel, state, faellig }`, nur wenn gesetzt und lesbar (sonst fehlt der Schlüssel).
+      ...milestoneFeld(i.content.milestone),
     }));
 }
 
@@ -732,3 +735,8 @@ export function entferneVomBoard(board, itemId, opts = {}) {
   brauchtBoard(board, "entferneVomBoard");
   graphql(MUTATION_DELETE, { p: board.projectId, i: itemId }, opts);
 }
+
+const milestoneFeld = (roh) => {
+  const m = milestoneAus(roh);
+  return m === null ? {} : { milestone: m };
+};
