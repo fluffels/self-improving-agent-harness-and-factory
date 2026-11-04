@@ -23,6 +23,7 @@ import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { quellenMaengel } from "./quellwurzeln-lib.mjs";
+import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -531,6 +532,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
   fehler.push(...pruefeDesign(wert.design));
+  fehler.push(...pruefeBefehle(wert.befehle));
   fehler.push(...internalrefsMaengel(wert.internalrefs));
   fehler.push(...modulFormFehler(wert));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));

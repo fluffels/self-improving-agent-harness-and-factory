@@ -65,11 +65,15 @@ Der Generator-Kern hängt nicht am [Quellprojekt](https://github.com/fluffels/ku
 
 ## Form der Vorlage ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md))
 
+Der Weg in ein neues, leeres Repo (Bootstrap-Commit, Ruleset, erster Pull Request, die Projektdateien, die der Sync nicht liefert): [Erstbezug](erstbezug.md).
+
 Entschieden: ein Factory-Repo als Quelle, verteilt per Sync mit Besitz-Manifest; Projektwerte kommen zur Laufzeit aus einer Projekt-Config. Es gibt kein eigenes docs-gen-Paket, der docs-gen-Kern ist ein Baustein des Kerns. Die Veröffentlichung ist entschieden: Factory-Repo öffentlich unter `fluffels`, alle Rechte vorbehalten, kein Marketplace-Eintrag, keine externen Beiträge ([Fortschreibung quellprojekt#1706](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1706-2026-10-16-veröffentlichungsentscheidung)); das Repo entsteht mit F10.
 
 Für Projekte, in deren Repo vom Harness nichts liegen darf, gilt die Betriebsart Arbeitsplatz statt der eingebetteten Vorlage: [ADR 0022, Fortschreibung quellprojekt#1829](adr/0022-dark-factory-kern-und-verteilung.md#fortschreibung-1829-2026-10-22-betrieb-ohne-harness-im-projekt-repo-arbeitsplatz).
 
 Der Design-Schritt für Tickets mit Oberfläche ist optional (factory#172): ein Bezieher mit Oberfläche trägt in `.factory/projekt.json` den Block `design` ein (`label` und `freigabe` als Labelnamen, `system` als Pfad der Design-System-Seite); ohne Block gibt es den Schritt nicht. Ein Ticket mit dem Design-Label ohne Freigabe-Label geht nicht in die Umsetzung. Entscheidung: [Fortschreibung zu ADR 0028](adr/fortschreibungen/0028-172-design-schritt.md).
+
+Die Sammelbefehle der Gates sind je Projekt setzbar (factory#182): ein Bezieher mit anderem Build-Werkzeug trägt in `.factory/projekt.json` den Block `befehle` ein (`install`, `verify`, `verifyKompakt`, `verifyChanged`, `coverage` als Befehlszeilen; fehlende Namen behalten den npm-Standard). pre-push ruft `node scripts/gate-befehl.mjs <name>` (die Kern-Texte der Skills und Agenten stellt factory#186 um); ein eigenes `install` muss die npm-Installation einschließen; die eigene `ci.yml` (Projektbesitz) stellt der Bezieher selbst auf den Läufer um. Die Wurzel-`package.json` bleibt Task-Runner des Harness, denn Harness-Gates, `docs-gen` und `verify-lauf` setzen npm-Skripte voraus. Entscheidung: [Fortschreibung zu ADR 0022](adr/fortschreibungen/0022-182-gate-befehle.md).
 
 Der Abschluss-Skill am Sitzungsende ist optional (factory#139): ein Bezieher setzt `skills.abschluss` in `.factory/projekt.json` auf `null` (empfohlen, kein Skill) oder auf den Namen eines eigenen Skills, etwa den Brain-Skill eines Starter-Kits. Eine Maintainerin kann ihn lokal per `FACTORY_ABSCHLUSS_SKILL` setzen (`aus` schaltet ihn ab); `node scripts/projekt-config.mjs abschluss` nennt den wirksamen Namen oder `keiner`. Das Projekt-Brain (`docs/`, [ADR 0015](adr/0015-projekt-brain.md)) bleibt in jedem Fall Pflicht.
 
