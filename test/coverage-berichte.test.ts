@@ -49,11 +49,16 @@ describe("berichteAus und berichteMaengel", () => {
     [{ berichte: [{ format: "jacoco", pfad: "a.xml", basis: "x" }] }, /basis gilt nur bei format "lcov"/],
     [{ berichte: [{ format: "lcov", pfad: "a", basis: "../x" }] }, /basis muss ein wörtlicher repo-relativer POSIX-Ordner sein/],
     [{ berichte: [{ format: "lcov", pfad: "a", basis: "*" }] }, /basis muss ein wörtlicher/],
+    [{ berichte: [{ format: "lcov", pfad: "a", basis: 5 }] }, /basis muss ein wörtlicher/],
     [{ berichte: [{ format: "lcov", pfad: "a" }, { format: "lcov", pfad: "a" }] }, /steht doppelt/],
     [{ berichte: ["a"] }, /muss ein Objekt/],
   ])("Mangel %#: Meldung mit Fix-Zeile", (c, muster) => {
     assert.match(m.berichteMaengel(c).join(" "), muster);
     assert.throws(() => m.berichteAus({ coverage: c }), (e: Error) => muster.test(e.message) && /in der Projekt-Config\nFix:/.test(e.message));
+  });
+  test("derselbe lcov-Pfad mit anderer basis ist keine Dublette", () => {
+    const c = { berichte: [{ format: "lcov", pfad: "a/lcov.info", basis: "x" }, { format: "lcov", pfad: "a/lcov.info", basis: "y" }] };
+    assert.deepEqual(m.berichteMaengel(c), []);
   });
   test("coverage kein Objekt ist ein Mangel", () => {
     assert.match(m.berichteMaengel("x").join(" "), /coverage muss ein Objekt/);
@@ -68,6 +73,8 @@ describe("parseLcov mit basis", () => {
   test("mit basis steht basis/ vor relativen Pfaden, ein absoluter bleibt", () => {
     const r = m.parseLcov(text, "frontend");
     assert.deepEqual([...r.keys()], ["frontend/src/a.ts", "/abs/b.ts", "frontend/src/w.ts"]);
+    // ein Windows-Laufwerkspfad ist absolut und bekommt kein basis
+    assert.deepEqual([...m.parseLcov("SF:C:\\x\\a.ts\nDA:1,1\nend_of_record", "frontend").keys()], ["C:/x/a.ts"]);
     assert.equal(r.get("frontend/src/a.ts")?.get(1), 2);
     assert.deepEqual(m.parseLcovBranches(text, "frontend").get("frontend/src/a.ts")?.get(1), { total: 2, taken: 1 });
   });
@@ -91,9 +98,12 @@ describe("parseJacoco am statischen Fixture", () => {
     const e = m.parseJacoco(t).get("p/A.java")!;
     assert.deepEqual([...e.zeilen.entries()], [[2, 0]]);
   });
-  test("zwei sourcefile-Einträge derselben Datei addieren ihre Treffer", () => {
-    const t = `<package name="p"><sourcefile name="A.java"><line nr="1" ci="1"/></sourcefile></package><package name="p"><sourcefile name="A.java"><line nr="1" ci="2"/></sourcefile></package>`;
-    assert.equal(m.parseJacoco(t).get("p/A.java")!.zeilen.get(1), 3);
+  test("zwei sourcefile-Einträge derselben Datei addieren ihre Treffer und mischen Zweige per max", () => {
+    const t = `<package name="p"><sourcefile name="A.java"><line nr="1" ci="1"/><line nr="2" ci="1" mb="1" cb="1"/></sourcefile></package><package name="p"><sourcefile name="A.java"><line nr="1" ci="2"/><line nr="2" ci="1" mb="2" cb="0"/></sourcefile></package>`;
+    const e = m.parseJacoco(t).get("p/A.java")!;
+    assert.equal(e.zeilen.get(1), 3);
+    assert.equal(e.zweige.has(1), false);
+    assert.deepEqual(e.zweige.get(2), { total: 2, taken: 1 });
   });
 });
 
@@ -151,14 +161,27 @@ describe("ladeAbdeckung", () => {
   });
   test("derselbe Pfad in zwei Berichten wird gemischt (Hits addiert, Zweige per max), nicht mehrdeutig", () => {
     const d = fixture({
-      "a/lcov.info": "SF:src/a.ts\nDA:1,1\nDA:2,0\nBRDA:2,0,0,0\nBRDA:2,0,1,0\nend_of_record\n",
-      "b/lcov.info": "SF:src/a.ts\nDA:1,2\nDA:2,1\nBRDA:2,0,0,1\nBRDA:2,0,1,0\nend_of_record\n",
+      "a/lcov.info": "SF:src/a.ts\nDA:1,1\nDA:2,0\nDA:3,1\nBRDA:2,0,0,0\nBRDA:2,0,1,0\nBRDA:3,0,0,1\nBRDA:3,0,1,0\nend_of_record\n",
+      "b/lcov.info": "SF:src/a.ts\nDA:1,2\nDA:2,1\nDA:3,1\nBRDA:2,0,0,1\nBRDA:2,0,1,0\nBRDA:3,0,0,1\nBRDA:3,0,1,0\nend_of_record\n",
     });
     const berichte = [{ format: "lcov", pfad: "a/lcov.info" }, { format: "lcov", pfad: "b/lcov.info" }];
     const r = m.ladeAbdeckung({ berichte, rootDir: d, lies: lies, messDateien: ["src/a.ts"], quellen: { wurzeln: ["src"], endungen: [".ts"] } });
-    assert.deepEqual([...r.abdeckung.get("src/a.ts")!.entries()], [[1, 3], [2, 1]]);
+    assert.deepEqual([...r.abdeckung.get("src/a.ts")!.entries()], [[1, 3], [2, 1], [3, 2]]);
     assert.deepEqual(r.zweige.get("src/a.ts")!.get(2), { total: 2, taken: 1 });
+    // derselbe Zweig in beiden Berichten genommen: max (1), nicht Summe (2)
+    assert.deepEqual(r.zweige.get("src/a.ts")!.get(3), { total: 2, taken: 1 });
     assert.deepEqual(r.mehrdeutig, []);
+  });
+  test("Multi-Modul: ein Glob mit zwei Berichten liest beide; eine Datei des zweiten Moduls wird gemessen, dieselbe Datei in beiden Berichten gemischt", () => {
+    const foo = "modul-b/src/main/java/de/anders/Foo.java";
+    const xmlB = `<report name="b"><package name="de/anders"><sourcefile name="Foo.java"><line nr="2" mi="0" ci="5" mb="0" cb="0"/></sourcefile></package><package name="de/beispiel"><sourcefile name="Rechner.java"><line nr="3" mi="0" ci="1" mb="0" cb="0"/></sourcefile></package></report>`;
+    const d = fixture({ ...baum, "modul-b/target/site/jacoco/jacoco.xml": xmlB, [foo]: "z" });
+    const r = m.ladeAbdeckung({ berichte: [jacocoBericht], rootDir: d, lies, messDateien: [foo, java], quellen: JAVA });
+    assert.deepEqual(r.fehlend, []);
+    assert.deepEqual(r.mehrdeutig, []);
+    assert.equal(r.abdeckung.get(foo)!.get(2), 5);
+    // Rechner.java steht in beiden Berichten (modul-a: ci 4, modul-b: ci 1), die einzige existierende Datei ist die in modul-a: Hits addiert
+    assert.equal(r.abdeckung.get(java)!.get(3), 5);
   });
   test("fehlende Berichte: wörtlicher Pfad und Glob ohne Treffer stehen in fehlend", () => {
     const d = fixture({});

@@ -252,7 +252,7 @@ export function fehlenderBerichtText(fehlend) {
 /** Pur: die Meldung bei mehrdeutigen JaCoCo-Pfaden: je Eintrag Schlüssel und Kandidaten, dazu der Fix. */
 export function mehrdeutigText(mehrdeutig) {
   const zeilen = mehrdeutig.map((e) => `    ${e.pfad}: „${e.schluessel}“ gibt es unter ${e.kandidaten.join(", ")}`);
-  return `${zeilen.join("\n")}\n\nDer JaCoCo-Bericht nennt nur paket/Datei, nicht den Ordner: die Zuordnung ist nicht eindeutig, es wurde NICHTS gemessen.\nFix: die Quellwurzeln so fassen, dass jede Datei nur einmal vorkommt (struktur.quelle in der Projekt-Config)`;
+  return `${zeilen.join("\n")}\n\nDer JaCoCo-Bericht nennt nur paket/Datei, nicht den Ordner: die Zuordnung ist nicht eindeutig, es wurde NICHTS gemessen.\nFix: die Quellwurzeln (struktur.quelle in der Projekt-Config) so fassen, dass die Datei nur unter einer Wurzel liegt, oder eine der gleichnamigen Dateien umbenennen (ein anderer Zuschnitt hilft nur bei überlappenden Wurzeln)`;
 }
 
 /** Die Messfehler (fehlende Berichte, fehlende Datei im Bericht, mehrdeutiger Pfad) als Fehlertext oder `null`; bewusst NICHT über das Override abkürzbar. */

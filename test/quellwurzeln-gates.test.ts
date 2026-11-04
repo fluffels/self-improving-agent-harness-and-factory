@@ -160,6 +160,10 @@ describe("wurzelPraefixe und isMeasured über Liste, Glob und Endungsliste (fact
     // ein wörtlicher Präfix vor dem Glob darf mit Punkt beginnen
     assert.deepEqual(wurzelPraefixe(".claude/x/src/a.ts", [".claude/*/src"]), [".claude/x/src"]);
   });
+  test("eine Datei direkt unter dem Ordner, den ein Glob trifft, ist keine Wurzel dieser Datei", () => {
+    assert.deepEqual(wurzelPraefixe("src/a.ts", ["src/*"]), []);
+    assert.deepEqual(wurzelPraefixe("src/x/a.ts", ["src/*"]), ["src/x"]);
+  });
   test("isMeasured: Endungsliste, Glob-Wurzel und ohne-Glob", () => {
     assert.equal(isMeasured("modul-a/src/main/java/de/X.java", java), true);
     assert.equal(isMeasured("modul-a/src/main/java/de/X.kt", java), false);

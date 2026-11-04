@@ -12,7 +12,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "lcovonly"],
       reportsDirectory: "coverage",
-      // Deckungsgleich mit isMeasured (scripts/check-diffcoverage.mjs): ohne include zählt v8 nur im Testprozess geladene Dateien, eine nur als Kindprozess geprüfte Datei fehlte im lcov und machte check:diffcoverage hart rot (Test in test/diffcoverage.test.ts) und der Standard-Endungsliste (STANDARD_ENDUNGEN in scripts/quellwurzeln-lib.mjs).
+      // Deckungsgleich mit isMeasured (scripts/check-diffcoverage.mjs): ohne include zählt v8 nur im Testprozess geladene Dateien, eine nur als Kindprozess geprüfte Datei fehlte im lcov und machte check:diffcoverage hart rot (isMeasured in scripts/check-basis.mjs, Test in test/diffcoverage.test.ts) und mit der Standard-Endungsliste (STANDARD_ENDUNGEN in scripts/quellwurzeln-lib.mjs).
       include: ["scripts/**/*.{ts,mts,cts,mjs,cjs,js}"],
       exclude: ["scripts/**/*.d.{ts,mts,cts}"],
       // Aggregat-Floors (Ratchet, nur nach oben): abgerundet aus der ersten Messung mit include im Factory-Repo (Zeilen 89,33 %, Zweige 87,71 %; Fortschreibung 0022-1942-messbasis nennt sie maßgeblich). Kein Floor je Schicht: die Schichten des Factory-Repos sind klein; den Diff misst check:diffcoverage je Schicht.
