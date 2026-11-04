@@ -116,6 +116,13 @@ describe("befehlsform", () => {
     expect(gf.befehlsform("(npm run lint)").art).toBe("befehlsform");
     expect(gf.befehlsform("npm run lint <<EOF\nx\nEOF").art).toBe("befehlsform");
   });
+  test("Operator, Hintergrund, Negation, Ersetzung und Umleitung hinter der Pipe: Befehlsform", () => {
+    expect(gf.befehlsform("npm run lint || npm test").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run lint &").art).toBe("befehlsform");
+    expect(gf.befehlsform("! npm run lint").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run lint $(date)").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run lint | tail > x.txt").art).toBe("befehlsform");
+  });
   test("Pipe: gewertet wird das erste Kommando", () => {
     expect(gf.befehlsform("git log | npm run lint").art).toBe("befehlsform");
     expect(gf.befehlsform("npm run lint | tail | head")).toEqual({ art: "pipe", aufrufe: 1 });
