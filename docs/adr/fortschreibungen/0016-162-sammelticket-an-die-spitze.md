@@ -14,6 +14,7 @@ Entscheidung: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren steht das ungeclai
 - **Takt:** eine Regel statt zwei. `entscheideHarnessTakt` kennt nur `nach-oben` und `nichts`; `spitzenEnde` (`scripts/board-lib.mjs`, Arten `rot-main` und `security`) bestimmt den Anker: das letzte 🚨/🔒-Item im Kopf, sonst die Spitze. Idempotent: steht es dort, bewegt sich nichts. Unter der Schwelle bewegt der Takt nichts, auch nicht zurück; ist ein Vorgänger in Arbeit, wartet er.
 - **Status-Ticket:** der Status-Schritt des Takts bewegt nur, wenn er ein Ticket anlegt oder eines an die Spitze holt (`ziehListeNach` mit `itemId`); ein zweiter Lauf am selben Montag bewegt nichts. Legt ein Lauf ein Status-Ticket an, steht es kurz oben, der Harness-Schritt desselben Laufs setzt das volle Sammelticket davor.
 - **Entfallen:** die Klemmung in `board-place` (`klemmeAnker`, `sammelblock`) und die Selbstkorrektur (`planMitKorrektur`, `positionOderWarnung`, die Regel `auf-position`, `position` in `entscheideHarnessTakt`). `--top`, `--after` und `--position` setzen den Anker wörtlich.
+- **Codequalität-Sammelticket (factory#156):** seine Anlageposition „hinter dem Kopf und dem Sammelblock“ wird zu „hinter dem Kopf, ohne Klemmung hinter andere Sammeltickets“; das Füllstand-Gate hält es unverändert zurück.
 - **Unverändert:** die Anlage auf der Position laut AGENTS.md (`sammelticket-anlegen`, `sammelticketKorrektur`); `langfuse --top` setzt das Langfuse-Sammelticket jetzt wörtlich an die Spitze.
 
 ## Verworfen

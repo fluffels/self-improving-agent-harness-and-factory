@@ -18,7 +18,7 @@
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
  * `codequalitaet` ist freiwillig: nur mit `labels.codequalitaet` in der Projekt-Config (Label, das auf das Produkt-Board des eigenen Repos führt); ohne
- * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf (und den Sammelblock) des Produkt-Boards.
+ * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf des Produkt-Boards (ohne Klemmung hinter andere Sammeltickets, factory#162).
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
