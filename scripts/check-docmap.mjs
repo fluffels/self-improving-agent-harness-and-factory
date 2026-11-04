@@ -147,7 +147,7 @@ export function auditDocMap(rootDir = ROOT, struktur = configStruktur()) {
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 /** Die Meldungstexte zu den Quellwurzeln: `wo` (für Geister), `muster` (Hinweis bei leerer Wurzel), `einheit` (Erfolgszeile). */
-function wurzelTexte(q) {
+export function wurzelTexte(q) {
   const wo = q.wurzeln.length === 1 ? `nicht in ${q.wurzeln[0]}/` : `in keiner Quellwurzel (${q.wurzeln.join(", ")})`;
   const muster = q.einheit === "ordner"
     ? `keinen Ordner mit Quelldatei (${q.endungen.join(", ")}) unter ${q.wurzeln.join(", ")}`

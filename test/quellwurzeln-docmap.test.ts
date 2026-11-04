@@ -18,6 +18,7 @@ const dm = rawDocmap as unknown as {
   collectSrcModules: (root?: string, s?: Struktur | string) => string[];
   auditDocMap: (root: string, s: Struktur) => Audit;
   parseDeepDocMaps: (root: string, s: Struktur) => Set<string>;
+  wurzelTexte: (q: { wurzeln: string[]; endungen: string[]; einheit: string }) => { wo: string; muster: string; einheit: string };
   docmapQuellen: (s: object) => { wurzeln: string[]; endungen: string[]; ohne: string[]; einheit: string };
 };
 const pc = rawPc as unknown as {
@@ -170,6 +171,22 @@ describe("Scan-Grenzen der Backtick-Pfade", () => {
     assert.deepEqual(a.ghosts, []);
     assert.deepEqual(a.orphans, ["lib/b.ts"]);
     assert.deepEqual([...dm.parseDeepDocMaps(d, { quelle: "lib", moduldoku: "doku" })], ["lib/a.ts"]);
+  });
+});
+
+describe("Meldungstexte und Config-Standard", () => {
+  test("wurzelTexte: eine Wurzel, mehrere Wurzeln, Ordner-Einheit", () => {
+    const eine = dm.wurzelTexte({ wurzeln: ["lib"], endungen: [".ts"], einheit: "datei" });
+    assert.deepEqual(eine, { wo: "nicht in lib/", muster: "keine `lib/**/*.ts`", einheit: "" });
+    const viele = dm.wurzelTexte({ wurzeln: ["a", "b"], endungen: [".java", ".kt"], einheit: "ordner" });
+    assert.equal(viele.wo, "in keiner Quellwurzel (a, b)");
+    assert.equal(viele.muster, "keinen Ordner mit Quelldatei (.java, .kt) unter a, b");
+    assert.equal(viele.einheit, " (Ordner-Einheit)");
+    assert.equal(dm.wurzelTexte({ wurzeln: ["a", "b"], endungen: [".java", ".kt"], einheit: "datei" }).muster, "keine `a/**/*.java` oder `a/**/*.kt` oder `b/**/*.java` oder `b/**/*.kt`");
+  });
+  test("ohne Argumente gilt die Projekt-Config (Opt-out der Factory: moduldoku null → entfällt)", () => {
+    assert.deepEqual(dm.collectSrcModules(), alteSammlung(WURZEL, pc.ladeProjektConfig().struktur.quelle as string));
+    assert.equal((dm.auditDocMap(WURZEL, undefined as never) as unknown as { entfaellt?: boolean }).entfaellt, true);
   });
 });
 
