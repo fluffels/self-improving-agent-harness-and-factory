@@ -135,6 +135,10 @@ describe("Einheit ordner", () => {
 });
 
 describe("Scan-Grenzen der Backtick-Pfade", () => {
+  test("ein Pfad direkt hinter einem Backtick-Lauf wird wie zuvor erfasst (kein paarweises Verbrauchen)", () => {
+    const d = fixture({ "lib/b.ts": "x", "doku/m.md": "`x`lib/b.ts`\n" });
+    assert.deepEqual(dm.auditDocMap(d, { quelle: "lib", moduldoku: "doku" }).orphans, []);
+  });
   test("Doppel-Backtick-Spanne deckt ab; Lauf mit Leerraum ist weder Kandidat noch Geist; Pfad außerhalb der Wurzel zählt nicht", () => {
     const d = fixture({ "lib/a.ts": "x", "lib/b.ts": "x", "doku/m.md": "``lib/a.ts`` und `lib/b.ts oder lib/c.ts` und `libx/d.ts`\n" });
     const a = dm.auditDocMap(d, { quelle: "lib", moduldoku: "doku" });
