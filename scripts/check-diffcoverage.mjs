@@ -272,7 +272,7 @@ function messbereichText(quelle) {
 }
 
 /** Ergebnis ohne Messung (nichts zu messen, Diff nicht lesbar) → Exit-Code oder `null`, wenn gemessen wurde. */
-function ohneMessung(r, { zeilen, quelle, colors }) {
+export function ohneMessung(r, { zeilen, quelle, colors }) {
   const { red, green, dim } = colors;
   if (r.nothingToMeasure) {
     meldeUngueltigeOverrides(r.invalidOverrides, { dim });

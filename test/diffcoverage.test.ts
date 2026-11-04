@@ -60,6 +60,7 @@ type CheckDiffCoverageModule = {
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
   pfadAngaben: (quellen: string | Quellen) => string[];
   fehlenderBerichtText: (fehlend: string[]) => string;
+  ohneMessung: (r: Record<string, unknown>, o: { zeilen: Record<string, string>; quelle: string | Quellen; colors: Record<"red" | "green" | "dim", (s: string) => string> }) => number | null;
   messfehlerText: (r: Record<string, unknown>, red: (s: string) => string) => string | null;
   mehrdeutigText: (m: { pfad: string; schluessel: string; kandidaten: string[] }[]) => string;
   checkDiffCoverage: (opts: { quelle?: string | Quellen; berichte?: Bericht[]; rootDir?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
@@ -83,6 +84,7 @@ const {
   fehlenderBerichtText,
   mehrdeutigText,
   messfehlerText,
+  ohneMessung,
   checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -791,6 +793,24 @@ describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", 
     const t = mehrdeutigText([{ pfad: PFAD_A, schluessel: "de/beispiel/Rechner.java", kandidaten: [PFAD_A, PFAD_B] }]);
     assert.match(t, /de\/beispiel\/Rechner\.java[\s\S]*modul-b/);
     assert.match(t, /Fix: [^\n]*struktur\.quelle/);
+  });
+  test("ohneMessung: nichts zu messen grün (mit Wurzeln und Endungen im Text), stale rot, Diff nicht lesbar rot, sonst null", () => {
+    const aus: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((s: string) => void aus.push(s));
+    const err = vi.spyOn(console, "error").mockImplementation((s: string) => void aus.push(s));
+    try {
+      const id = (s: string): string => s;
+      const o = { zeilen: ZEILEN, quelle: JAVA, colors: { red: id, green: id, dim: id } };
+      assert.equal(ohneMessung({ nothingToMeasure: true, stale: false, invalidOverrides: [] }, o), 0);
+      assert.match(aus.join("\n"), /ok — dieser Slice ändert keinen gemessenen Quellcode \(Wurzeln: \*\/src\/main\/java; Endungen: \.java\)/);
+      assert.equal(ohneMessung({ nothingToMeasure: true, stale: true, reason: "x", invalidOverrides: [] }, o), 1);
+      assert.equal(ohneMessung({ diffUnlesbar: true }, o), 1);
+      assert.match(aus.join("\n"), /Diff nicht lesbar/);
+      assert.equal(ohneMessung({}, o), null);
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
   });
   test("messfehlerText unterscheidet fehlenden Bericht, fehlende Datei im Bericht und mehrdeutigen Pfad; ohne Messfehler gibt es null", () => {
     const rot = (s: string): string => s;
