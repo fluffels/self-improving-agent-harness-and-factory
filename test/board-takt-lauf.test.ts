@@ -141,8 +141,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
 
   test("--dry-run mit Füllstand 10/10 meldet die Entscheidung, führt das Harness-Ticket aber nicht aus; schlägt die Ausführung fehl, ist der Lauf rot", () => {
     const trocken = lauf([spiel(1)], { offeneStatus: true, kommentare: befunde(10), dry: true });
-    expect(trocken.log.join("
-")).toContain("Füllstand 10/10");
+    expect(trocken.log.join("\n")).toContain("Füllstand 10/10");
     expect(trocken.aufrufe.harness).toHaveLength(0);
     expect(trocken.r.fehler).toBe(false);
     const rot = lauf([spiel(1)], { offeneStatus: true, kommentare: befunde(10), harnessOk: false });
