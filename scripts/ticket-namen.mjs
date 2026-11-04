@@ -7,17 +7,14 @@
  * Schlüssel und „Fix:“-Zeile; `namenOderGrund` wirft nie und liefert statt der Namen einen Grund, den ein Hook als
  * deny/block ausgibt. Geladen wird nie beim Import eines Hook-Moduls (ein Import-Fehler schaltete den Dispatcher ab).
  *
- * Nur Node-Builtins, `arbeitsplatz-lib.mjs` und `projekt-config-lib.mjs`.
+ * Nur Node-Builtins, `arbeitsplatz-lib.mjs`, `regex-lib.mjs` und `projekt-config-lib.mjs`.
  */
 import { repoSegment } from "./arbeitsplatz-lib.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { ladeProjektConfig, PFLICHT_AGENTEN, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const istText = (v) => typeof v === "string" && v.trim() !== "";
-
-/** Maskiert alle Regex-Metazeichen. Pur. */
-export function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
-}
 
 /** Der eine fail-closed-Text für Hooks und Wächter, wenn die Projekt-Config nicht nutzbar ist. Pur; `fehler` darf ein Error oder beliebiger Wert sein. */
 export function failClosedGrund(werkzeug, fehler) {

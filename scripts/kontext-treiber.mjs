@@ -32,7 +32,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readdirSync } from "node:fs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { PRICES, priceFor } from "./preise.mjs";
 import { bereinige, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";

@@ -88,7 +88,7 @@ import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../suppor
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRoh from "../../scripts/ticket-namen.mjs";
+import * as namenRoh from "../../scripts/regex-lib.mjs";
 
 const escapeRegex = (namenRoh as unknown as { escapeRegex: (t: string) => string }).escapeRegex;
 

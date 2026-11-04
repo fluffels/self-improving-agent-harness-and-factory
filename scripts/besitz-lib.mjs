@@ -6,7 +6,7 @@ import { altEnvPraefix } from "./projekt-config-lib.mjs";
 import { leereProjektwerte } from "./projektwert-lib.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 /** Ring-Importregel (ADR 0029): Ring des Importeurs -> Ringe, deren Besitz er lokal importieren darf. Ein weiterer Ring ist eine Zeile. */
 export const RING_IMPORTE = {

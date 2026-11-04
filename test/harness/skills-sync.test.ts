@@ -23,7 +23,7 @@ import { QUELL_VERZEICHNIS, ZEIGER_MARKE, ZEIGER_WURZEL, zeigerText } from "../.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE, TICKET_SKILL_NAME, TICKET_SKILL_ZEIGER } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../../scripts/regex-lib.mjs";
 const maskiere = escapeRegex as (s: string) => string;
 const projektwertLauf = (projektwertLaufModul as unknown as { projektwertLauf: (w: string, c: () => unknown, o?: { schreiben?: boolean }) => { fehler: string[]; geaendert: string[] } }).projektwertLauf;
 

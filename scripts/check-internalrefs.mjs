@@ -49,7 +49,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { isCheckable, listTrackedFiles } from "./check-basis.mjs";
 import { FIXTURE_WURZELN, KODIER_PRAEFIX, LAUFWERK_KOPF, LAUFWERK_MUSTER, NACHLAUF, PLATZHALTER_NUTZER, decodeTerm, encodeTerm, internalrefsAus, internalrefsMaengel, pfadBefunde } from "./internalrefs-lib.mjs";

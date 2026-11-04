@@ -12,7 +12,7 @@ import { describe, expect, test } from "vitest";
 import { projektConfig } from "../support/fremd-config";
 import { liesMitProjektwerten, TICKET_ABLAUF } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../../scripts/regex-lib.mjs";
 
 /** Der Abschluss-Skill der Projekt-Config (`skills.abschluss`): kein Literal im Kern-Test. */
 const SKILL = projektConfig().skills.abschluss;

@@ -39,7 +39,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug } from "./transkript.mjs";
 
