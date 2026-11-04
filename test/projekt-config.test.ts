@@ -97,6 +97,15 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(pc.pruefeProjektConfig(ohne), []);
   });
 
+  test("Sperrliste je Bezieher (factory#169): kodierter Eintrag ist grün, ein Klartext-Begriff rot ohne den Wert zu nennen", () => {
+    const klar = "zzzdummyfirma";
+    const mit = (internalrefs: unknown): string => meld({ ...gueltig(), internalrefs });
+    assert.equal(mit({ begriffe: ["b64:" + Buffer.from(klar).toString("base64")], namen: [] }), "");
+    const rot = mit({ begriffe: [klar] });
+    assert.match(rot, /internalrefs\.begriffe\[0\].*b64:.*Klartext/);
+    assert.ok(!rot.includes(klar), "die Meldung nennt den Wert nicht");
+  });
+
   test("Sicherheits-Module (factory#119): codeql gewählt ohne Sprachen ist ein Config-Fehler mit Fix", () => {
     const mit = (extra: Record<string, unknown>): string => meld({ ...gueltig(), ...extra });
     assert.match(mit({ module: ["codeql"] }), /codeql\.sprachen.*Fix:/s);
