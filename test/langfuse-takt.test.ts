@@ -184,16 +184,30 @@ describe("statusBody", () => {
     }
   });
   test("Abschluss: im Factory-Repo PR mit Verdichtungszeile und Closes, im Bezieher nur Bericht-Kommentar ohne PR-Pflicht", () => {
-    const upstream = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: mkdtempSync(join(tmpdir(), "langfuse-takt-")) });
-    expect(upstream).toMatch(/PR mit Verdichtungszeile und `Closes`/);
-    expect(upstream).not.toMatch(/nur im Bericht-Kommentar/);
+    const leer = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
     const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
     try {
+      const upstream = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: leer });
+      expect(upstream).toMatch(/PR mit Verdichtungszeile und `Closes`/);
+      expect(upstream).not.toMatch(/nur im Bericht-Kommentar/);
       mkdirSync(join(dir, ".factory"));
       writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v0.7.1", repo: "q/quelle" } }));
       const bez = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
       expect(bez).toMatch(/Verdichtungszeile nur im Bericht-Kommentar \(die Tabelle liegt nur im Factory-Repo\)/);
       expect(bez).not.toMatch(/PR mit Verdichtungszeile|`Closes`/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(leer, { recursive: true, force: true });
+    }
+  });
+  test("Abschluss: eine kaputte sync-stand.json zählt als Bezieher (wie der Verweis im selben Body), nicht als Factory-Repo", () => {
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), "{kaputt");
+      const body = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
+      expect(body).toMatch(/Verdichtungszeile nur im Bericht-Kommentar/);
+      expect(body).not.toMatch(/PR mit Verdichtungszeile/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

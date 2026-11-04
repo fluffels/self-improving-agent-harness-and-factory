@@ -724,7 +724,10 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     expect(mutation.slice(0, 2)).toEqual(["api", "graphql"]);
     expect(mutation).toContain("i=NEU_NODE");
     expect(mutation).toContain("b=BLOCKER_NODE");
-    expect(mutation.find((a) => a.startsWith("query="))).toContain("addBlockedBy");
+    const query = mutation.find((a) => a.startsWith("query=")) ?? "";
+    expect(query).toContain("addBlockedBy");
+    expect(query).toMatch(/issueId:\s*\$i\b/);
+    expect(query).toMatch(/blockingIssueId:\s*\$b\b/);
     expect(aufrufe[1]?.opts).toEqual({ token: undefined });
     io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: EIGENES, nummer: 7 }, repo: "zz-org/ziel" });
     expect(aufrufe[2]?.opts).toEqual({ token: undefined });

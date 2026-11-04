@@ -719,7 +719,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect((rufe[1][1] as { harness: string; titel: string }).harness).toBe(cfg.labels.harness);
   });
 
-  test("langfuse --top: setzt hinter den Sammelblock (setPosition auf dem Factory-Board), ohne setzeUndPruefe", async () => {
+  test("langfuse --top: setzt an die Spitze (setPosition auf dem Factory-Board), ohne setzeUndPruefe", async () => {
     const { deps, rufe } = fakes();
     await M(["langfuse", "--top"], deps);
     const set = rufe.filter((r) => r[0] === "setPosition");

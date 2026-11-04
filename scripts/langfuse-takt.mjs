@@ -103,7 +103,7 @@ export function wochenFenster(jetzt) {
 
 function verdichtungsSchritt(wurzel) {
   // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
-  return liesSyncStand(wurzel).stand
+  return liesSyncStand(wurzel).zustand !== "fehlt"
     ? "Verdichtungszeile nur im Bericht-Kommentar (die Tabelle liegt nur im Factory-Repo), danach das Ticket schließen"
     : "PR mit Verdichtungszeile und `Closes`";
 }
