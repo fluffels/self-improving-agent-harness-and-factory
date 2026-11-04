@@ -27,9 +27,10 @@ interface Opt {
   suche?: unknown;
   commits?: unknown[];
   token?: string;
+  dry?: boolean;
 }
 type Io = Record<string, unknown>;
-const takt = rawTakt as unknown as { fuehreTaktAus: (a: { jetzt: Date; repo: string; token?: string; io: Io; config: unknown; bezieher?: boolean; ausloeser?: string }) => { fehler: boolean } };
+const takt = rawTakt as unknown as { fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo: string; token?: string; io: Io; config: unknown; bezieher?: boolean; ausloeser?: string }) => { fehler: boolean } };
 const status = rawStatus as unknown as {
   vorgaengerAusSuche: (a: { antwort: unknown; offene: { number: number }[] }) => { vorgaenger: { number: number; closedAt: string; createdAt: string } | null; unklar: number[] };
   statusSucheAnfrage: (repo: string) => string[];
@@ -70,7 +71,7 @@ function lauf(opt: Opt = {}) {
     env: {},
     log: (z: string) => a.log.push(z),
   };
-  const r = takt.fuehreTaktAus({ jetzt: JETZT, repo: FREMD.repo, token: "token" in opt ? opt.token : "t", io, config: bezieherConfig, bezieher: opt.bezieher ?? true });
+  const r = takt.fuehreTaktAus({ jetzt: JETZT, dry: opt.dry, repo: FREMD.repo, token: "token" in opt ? opt.token : "t", io, config: bezieherConfig, bezieher: opt.bezieher ?? true });
   return { r, a, log: a.log.join("\n") };
 }
 
@@ -124,6 +125,12 @@ describe("Takt im Bezieher: Status-Ticket im eigenen Repo (factory#195)", () => 
     const { log } = lauf({ suche: antwort(treffer(40, "OPEN")), offen });
     expect(log).toContain("Status-Ticket (schedule): nach-oben #40");
     expect(log).not.toContain("fail-closed");
+  });
+
+  test("--dry-run: die Entscheidung steht im Log, aber es wird nichts angelegt", () => {
+    const { a, log } = lauf({ dry: true });
+    expect(log).toContain("Status-Ticket (schedule): anlegen");
+    expect(a.status).toHaveLength(0);
   });
 
   test("ohne Token: keine Board-Abfrage, das Status-Ticket wird angelegt (es braucht die Liste nicht)", () => {
