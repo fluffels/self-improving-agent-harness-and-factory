@@ -8,8 +8,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus, umgebungsWert } from "./projekt-config-lib.mjs";
-import { istGlob, ordnerZuMuster } from "./quellwurzeln-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG, umgebungsWert } from "./projekt-config-lib.mjs";
+import { globRegex } from "./pfad-glob.mjs";
+import { normalizePath } from "./relativ-pfad.mjs";
+import { istGlob, ordnerZuMuster, quellenAus, quellenObjekt, wurzelPraefixe } from "./quellwurzeln-lib.mjs";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 
@@ -42,12 +44,8 @@ export function resolveBase(runGit, env = process.env) {
 
 // ── Diff-Zeilen und Messbereich (aus check-diffcoverage, #112) ───────────────────
 
-/** Vereinheitlicht Pfad-Trenner auf POSIX. Nötig, weil der v8-lcov-Reporter unter
- *  Windows `SF:src\sim\pods.ts` schreibt, `git diff` aber `src/sim/pods.ts` — ohne
- *  Normalisierung fände der Schnitt NIE einen Treffer und das Gate wäre still blind. */
-export function normalizePath(p) {
-  return String(p).replace(/\\/g, "/").replace(/^\.\//, "");
-}
+// `normalizePath` wohnt in relativ-pfad.mjs (Blatt, factory#185) und wird hier re-exportiert, damit Aufrufer unverändert bleiben.
+export { normalizePath };
 
 /** Parst `git diff -U0` und liefert je Datei die Zeilennummern der NEUEN Seite.
  *
@@ -89,15 +87,15 @@ export function parseDiffLines(text) {
   return byFile;
 }
 
-/** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem
- *  `include` der Coverage-Config für die Quellwurzel (`struktur.quelle` der Projekt-Config) — Content-JSON, Assets und Skripte
- *  außerhalb der Quellwurzel sind kein ausführbarer Quellcode und fallen raus.
- *
- *  Endungen `.ts`, `.mts`, `.mjs`, `.cjs`, `.js` (das Factory-Repo hat seine Quellwurzel unter `scripts` mit `.mjs`; in einem Repo mit `src/` als Quellwurzel liegt dort nur `.ts`).
- *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
- *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
-export function isMeasured(path, quelle = strukturAus(ladeProjektConfig()).quelle) {
-  return path.startsWith(`${quelle}/`) && /\.(?:ts|mts|mjs|cjs|js)$/.test(path) && !/\.d\.[cm]?ts$/.test(path);
+/** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem `include` der Coverage-Config für die Quellwurzeln: Content-JSON, Assets und
+ *  Dateien außerhalb der Wurzeln sind kein ausführbarer Quellcode und fallen raus. `quellen` ist `{ wurzeln, endungen, ohne }` (`quellenAus`, Wurzeln auch als Glob) oder ein
+ *  String (eine wörtliche Wurzel mit der Standard-Endungsliste). Gemessen = unter einer Wurzel UND eine Endung der Liste UND kein `ohne`-Glob trifft.
+ *  `.d.ts` (auch `.d.mts`, `.d.cts`) ist nie gemessen: reine Typdeklarationen haben keine ausführbare Zeile, und ein Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
+export function isMeasured(path, quellen = quellenAus(ladeProjektConfig())) {
+  const q = quellenObjekt(quellen);
+  if (wurzelPraefixe(path, q.wurzeln).length === 0) return false;
+  if (!q.endungen.some((e) => path.endsWith(e)) || /\.d\.[cm]?ts$/.test(path)) return false;
+  return !q.ohne.some((g) => globRegex(g).test(path));
 }
 
 // ── Prüfbare Dateien ───────────────────────────────────────────────────────────
