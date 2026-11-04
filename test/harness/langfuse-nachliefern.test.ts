@@ -204,10 +204,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (importfrei), ticket-namen (nur Builtins), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (importfrei), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "markdown", "ticket-namen", "direktaufruf"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "gate-befehl-lib", "markdown", "ticket-namen", "direktaufruf"]));
   });
 });
 

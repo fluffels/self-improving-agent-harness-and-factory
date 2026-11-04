@@ -97,6 +97,8 @@ AGENTS.md @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
 /scripts/spezifikation-lib.mjs @fluffels
 /scripts/design-lib.mjs @fluffels
+/scripts/gate-befehl.mjs @fluffels
+/scripts/gate-befehl-lib.mjs @fluffels
 /scripts/docs-gen/markdown.mjs @fluffels
 /scripts/skill-pfade.mjs @fluffels
 /scripts/subagent-laeufe.mjs @fluffels
