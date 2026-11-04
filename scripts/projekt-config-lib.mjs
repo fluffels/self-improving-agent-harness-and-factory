@@ -204,11 +204,9 @@ export function strukturAus(config) {
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  const pfade = ["moduldoku"].flatMap((k) => {
-    if (k === "moduldoku" && s[k] === null) return [];
-    if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRelativPosix(s[k]) && !/[*?]/.test(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
-  });
+  const doku = s.moduldoku;
+  const pfade = doku === null ? [] : !istText(doku) ? ["struktur.moduldoku muss ein nicht-leerer String (repo-relativer Pfad) sein"]
+    : istRelativPosix(doku) && !/[*?]/.test(doku) ? [] : [`struktur.moduldoku muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(doku)}`];
   return [...quellenMaengel(s), ...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
 }
 
