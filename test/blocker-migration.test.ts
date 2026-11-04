@@ -31,6 +31,10 @@ describe("fehlendeKanten", () => {
     expect(r.kanten).toEqual([]);
     expect(r.uebersprungen).toEqual([]);
   });
+  test("native Kante gleicher Nummer aus einem fremden Repo deckt den eigenen Blocker nicht ab", () => {
+    const r = lauf([issue(1, "blockiert durch #2", [{ nummer: 2, repo: "x/y" }]), issue(2)]);
+    expect(r.kanten.map((k) => k.blockerNummer)).toEqual([2]);
+  });
   test("fremdes Repo wird übersprungen und gelistet, auch in Verweis-URL-Form", () => {
     const r = lauf([issue(1, "blockiert durch x/y#5, https://github.com/a/b/issues/6")]);
     expect(r.kanten).toEqual([]);
