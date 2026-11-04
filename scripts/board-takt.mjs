@@ -19,7 +19,8 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
-import { labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, langfuseZiel, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import {
   REPO,
@@ -50,7 +51,7 @@ import {
 
 import { aufnahmePlan } from "./board-plan-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { bestaetigeAnlegen, entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
+import { WURZEL, bestaetigeAnlegen, entscheideTakt, fuehreStatusAus, statusSucheAnfrage, vorgaengerAusSuche } from "./langfuse-takt.mjs";
 import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
 
 // Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
@@ -236,6 +237,83 @@ function meldeAbgelehnte(abgelehnt, log) {
 }
 
 /**
+ * Beginn des Zählfensters des Status-Tickets (#1628): das Anlegen des jüngsten Status-Tickets (offen oder geschlossen, `vorgaenger` = `{ createdAt, closedAt }` oder null),
+ * ohne Ticket sein Abschluss; als ISO-String (`mergeFensterAb`). Pur.
+ */
+function statusFensterAb({ vorgaenger, offene, jetzt }) {
+  const angelegt = [vorgaenger?.createdAt, ...offene.filter((i) => i.titel === STATUS_TITEL).map((i) => i.createdAt)]
+    .filter(Boolean)
+    .map((d) => new Date(d).getTime())
+    .filter((t) => !Number.isNaN(t));
+  const fensterStart = angelegt.length > 0 ? new Date(Math.max(...angelegt)) : (vorgaenger?.closedAt ?? null);
+  return mergeFensterAb(fensterStart, jetzt).toISOString();
+}
+
+/**
+ * Der Status-Schritt des Takts (beide Wege): entscheiden, vor dem Anlegen per Zweitabfrage bestätigen (die REST-Liste hinkt bei frischen Tickets nach, fail-closed, #1866), ausführen und die
+ * Board-Liste nachziehen. `label` = Label der Zweitabfrage (`null`: ohne Label), `ziel` (nur im Bezieher, factory#195) = `langfuseZiel` für Board und Label beim Anlegen. Liefert `{ fehler, items }`.
+ */
+function statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label, token, dry, config, io, items, ziel }) {
+  const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
+  const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
+  const vorEntscheidung = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
+  const e = bestaetigeAnlegen(vorEntscheidung, { zweit: () => io.frischeOffeneIssues({ repo, label, anzahl: 50, mitBoard: false }) });
+  for (const w of e.warnungen) io.log(`::warning::${w}`);
+  io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
+  if (dry || e.aktion === "nichts") return { fehler: false, items };
+  const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [], config, start: io.ersterCommitDatum?.() ?? null, ...(ziel ? { ziel } : {}) });
+  return { fehler: !r.ok, items: items ? ziehListeNach(items, r) : items };
+}
+
+/**
+ * Der Vorgänger des Status-Tickets aus der Titelsuche (factory#195; im Bezieher fehlt das Harness-Label, nach dem die Liste der geschlossenen Issues sonst filtert).
+ * Fail-closed: widersprechen sich Suche und offene Liste oder scheitert die Suche, ist `unklar` gesetzt (Text) und der Status-Schritt entfällt. Liefert `{ vorgaenger }` oder `{ unklar }`.
+ */
+function sucheVorgaenger({ repo, offene, io }) {
+  try {
+    const r = vorgaengerAusSuche({ antwort: io.ghJson(statusSucheAnfrage(repo)), offene });
+    return r.unklar.length > 0
+      ? { unklar: `Suche und offene Liste widersprechen sich (${r.unklar.map((n) => `#${n}`).join(", ")}: Suchindex oder Liste hinkt)` }
+      : { vorgaenger: r.vorgaenger };
+  } catch (e) {
+    return { unklar: `Suche nach früheren Status-Tickets fehlgeschlagen: ${schreibrechtText(e, repo, "lesen") ?? fehlerText(e)}` };
+  }
+}
+
+/**
+ * Takt im Bezieher (factory#195, ADR 0031 Punkt 4): das Factory-Board führt das Repo der Fabrik. Status-Ticket (Board und Label laut `langfuseZiel`) und Board-Wächter laufen im eigenen Repo;
+ * Harness-Sammelticket und Quotenzeile pflegt der Takt der Fabrik. Gezählt werden nur die Commits von main des eigenen Repos. Liefert `{ fehler }`.
+ */
+function bezieherTakt({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt }) {
+  let ziel;
+  try {
+    ziel = langfuseZiel(config, { bezieher: true });
+  } catch (e) {
+    io.log(`::warning::${fehlerText(e)}`);
+    return nurWaechter({ repo, dry, token, config, io, fuehrt });
+  }
+  io.log(`Bezieher: Status-Ticket auf dem ${ziel.rolle}-Board von ${repo}; Harness-Sammelticket und Quote pflegt ${fuehrt}`);
+  const gelesen = leseOffene(io, repo);
+  if (gelesen.fehler) return { fehler: true };
+  const { offene } = gelesen;
+  const roh = token ? { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) } : null;
+  let fehler = false;
+  let items = roh ? roh[ziel.rolle] : null;
+  const suche = sucheVorgaenger({ repo, offene, io });
+  if (suche.unklar) io.log(`::warning::Status-Ticket ausgelassen (fail-closed): ${suche.unklar}`);
+  else {
+    const abStatus = statusFensterAb({ vorgaenger: suche.vorgaenger, offene, jetzt });
+    const commits = holeQuotenCommits({ quellen: [{ repo, rolle: null }], lies: quotenCommitLeser({ gh: io.ghJson, repo, since: abStatus, env: io.env }) });
+    const r = statusSchritt({ offene, commits, abStatus, vorgaenger: suche.vorgaenger, ausloeser, jetzt, repo, label: ziel.label, token, dry, config, io, items, ziel });
+    ({ items } = r);
+    fehler = r.fehler;
+  }
+  if (!roh) return { fehler };
+  const listen = { ...roh, [ziel.rolle]: items };
+  return { fehler: nimmFehlendeAuf({ offene, listen, token, dry, repo, config }, io).fehler || fehler };
+}
+
+/**
  * Fremdes Factory-Board (#76, ADR 0022 F10): führt das Factory-Board der Config die Issues eines anderen Repos als `repo`, pflegt der Takt dort
  * Status- und Sammelticket. Hier läuft nur der Board-Wächter; Status-Ticket, Harness-Sammelticket und Quotenzeile entfallen. Liefert `{ fehler }`.
  */
@@ -295,10 +373,10 @@ export const ECHTE_IO = {
  * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
  * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
  */
-export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config }) {
+export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config, bezieher = false }) {
   const harnessLabel = labelAus(config, "harness");
   const fuehrt = zielRepoFuer([harnessLabel], config); // das Repo, dessen Issues das Factory-Board führt
-  if (!gleichesRepo(fuehrt, repo)) return nurWaechter({ repo, dry, token, config, io, fuehrt });
+  if (!gleichesRepo(fuehrt, repo)) return (bezieher ? bezieherTakt : nurWaechter)({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt });
   const gelesen = leseOffene(io, repo);
   if (gelesen.fehler) return { fehler: true };
   const offene = gelesen.offene;
@@ -320,12 +398,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   };
   const vorgaenger = letzter(STATUS_TITEL);
   // Zählfenster (#1628): beginnt mit dem Anlegen des jüngsten Status-Tickets (offen oder geschlossen); jedes Anlegen setzt den Zähler auf 0.
-  const angelegt = [vorgaenger?.createdAt, ...offene.filter((i) => i.titel === STATUS_TITEL).map((i) => i.createdAt)]
-    .filter(Boolean)
-    .map((d) => new Date(d).getTime())
-    .filter((t) => !Number.isNaN(t));
-  const fensterStart = angelegt.length > 0 ? new Date(Math.max(...angelegt)) : (vorgaenger?.closedAt ?? null);
-  const abStatus = mergeFensterAb(fensterStart, jetzt).toISOString();
+  const abStatus = statusFensterAb({ vorgaenger, offene, jetzt });
   const abHarness = mergeFensterAb(abschluss?.closedAt ?? null, jetzt).toISOString();
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
   // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
@@ -333,25 +406,15 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     quellen: quotenQuellen({ config, repo }),
     lies: quotenCommitLeser({ gh: io.ghJson, repo, since: fruehestens, env: io.env }),
   });
-  const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Beide Board-Listen einmal je Lauf (brauchen den Projekt-Scope des Tokens); Status- und Harness-Takt arbeiten auf der Factory-Liste.
   const roh = token ? { produkt: io.loadItems("produkt", { token, repo }), factory: io.loadItems("factory", { token, repo }) } : null;
   const doppelt = roh ? seitenListen(roh.produkt, roh.factory, config).doppelt : [];
   for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
   let items = roh ? factoryListe(roh.factory, doppelt, config) : null;
 
-  const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
-  const vorEntscheidung = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
-  // Zweitabfrage nur vor dem Anlegen: die REST-Liste hinkt bei frischen Tickets nach (fail-closed, #1866).
-  const e = bestaetigeAnlegen(vorEntscheidung, { zweit: () => io.frischeOffeneIssues({ repo, label: harnessLabel, anzahl: 50, mitBoard: false }) });
-  for (const w of e.warnungen) io.log(`::warning::${w}`);
-  io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
-  let fehler = false;
-  if (!dry && e.aktion !== "nichts") {
-    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [], config, start: io.ersterCommitDatum?.() ?? null });
-    fehler = !r.ok;
-    if (items) items = ziehListeNach(items, r);
-  }
+  const s = statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label: harnessLabel, token, dry, config, io, items });
+  let fehler = s.fehler;
+  items = s.items;
 
   // Board-Wächter (#1628): offene Issues ohne Board-Item aufnehmen.
   if (items) {
@@ -395,6 +458,7 @@ export function main(env = process.env, { argv = process.argv.slice(2), io = ECH
     token: env.PROJECT_TOKEN,
     io: { ...io, env },
     config: ladeConfig(),
+    bezieher: liesSyncStand(WURZEL).zustand !== "fehlt", // Sync-Stand vorhanden: Bezieher (factory#195)
   });
   return fehler ? 1 : 0;
 }

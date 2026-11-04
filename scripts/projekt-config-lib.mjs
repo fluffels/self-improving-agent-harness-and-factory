@@ -18,6 +18,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
@@ -388,6 +389,21 @@ export const repoDerRolle = (rolle, config) => boardRepo(boardDerRolle(rolle, co
 export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRolleFuer(labels, config), config), config);
 
 /**
+ * Pur (factory#195, ADR 0031 Punkt 4): wohin Status-Ticket und Sammelticket „Langfuse-Befunde“ gehören. Upstream (`bezieher` falsch): Harness-Label, Board und Repo laut Trennregel
+ * (heutiger Wert). Im Bezieher (Sync-Stand vorhanden) immer das eigene Repo: führt das Factory-Board das eigene Repo, gilt `factory` mit Harness-Label, sonst das Produkt-Board ohne Label
+ * (`label: null`). Führt kein Board das eigene Repo, wirft sie. Liefert `{ rolle, repo, label }`.
+ */
+export function langfuseZiel(config, { bezieher = false } = {}) {
+  const h = labelAus(config, "harness");
+  if (!bezieher) return { rolle: boardRolleFuer([h], config), repo: zielRepoFuer([h], config), label: h };
+  for (const [rolle, label] of [["factory", h], ["produkt", null]]) {
+    const board = boardDerRolle(rolle, config);
+    if (board && gleichesRepo(boardRepo(board, config), config?.repo)) return { rolle, repo: config.repo, label };
+  }
+  throw new Error(`Kein Board der Config führt das eigene Repo ${String(config?.repo)}\nFix: ein Board in boards[] muss das eigene Repo führen (boards[].repo weglassen oder gleich config.repo)`);
+}
+
+/**
  * Pur: Fehlertext, wenn das Board der Rolle `rolle` die Issues eines anderen Repos als `repo` führt (sonst `null`). Ein Schreibweg bricht damit
  * klar ab, statt das Issue im falschen Repo auf das Board zu legen oder still ins eigene Repo auszuweichen.
  */
@@ -570,13 +586,31 @@ function zielRepoAusgeben(label, positionale, pfad, { rootDir, out, err }) {
   }
 }
 
+/** `--langfuse-repo`: gibt das Repo aus, in dem Status- und Sammelticket „Langfuse“ liegen (`langfuseZiel`, Bezieher laut Sync-Stand); Exit 0, 2 bei Aufruffehler, 1 bei Ladefehler. */
+function langfuseRepoAusgeben(positionale, pfad, { rootDir, out, err }) {
+  if (positionale.length > 0) {
+    err(`✖ --langfuse-repo nimmt kein weiteres Argument
+
+${CLI_AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  try {
+    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: liesSyncStand(rootDir).zustand !== "fehlt" }).repo);
+    return 0;
+  } catch (e) {
+    err(`✖ ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+}
+
 /** Kommandozeile; gibt den Exit-Code zurück. */
 export function cli(argv, { rootDir = ROOT, env = process.env, out = console.log, err = console.error } = {}) {
-  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" } }, { positionale: true });
+  const { werte, positionale, fehler } = flagsLesen(argv, { config: { type: "string" }, "ziel-repo": { type: "string" }, "langfuse-repo": { type: "boolean" } }, { positionale: true });
   if (fehler) {
     err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
+  if (werte["langfuse-repo"] === true) return langfuseRepoAusgeben(positionale, werte.config, { rootDir, out, err });
   if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, { rootDir, out, err });
   const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
