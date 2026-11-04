@@ -1,6 +1,6 @@
 name: Verify (macOS, manuell)
 
-# Fährt die Gate-Kette (`npm run verify`) einmal auf macOS, um plattformabhängige Pfad- und Shell-Annahmen der Harness-Skripte
+# Fährt die Gate-Kette (Gate-Befehl `verify`) einmal auf macOS, um plattformabhängige Pfad- und Shell-Annahmen der Harness-Skripte
 # zu finden, die Linux (CI) und Windows (lokal) nicht zeigen. Nur manuell gestartet, kein Required Check: ein roter Lauf ist ein
 # Befund (Zeile im Harness-Sammelticket), kein Merge-Blocker.
 on:
@@ -32,7 +32,7 @@ jobs:
           cache: npm
 
       - name: Abhängigkeiten installieren
-        run: npm ci
+        run: node scripts/gate-befehl.mjs install
 
       - name: Gate-Kette
-        run: npm run verify
+        run: node scripts/gate-befehl.mjs verify

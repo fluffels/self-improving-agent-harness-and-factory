@@ -435,7 +435,7 @@ export function normalizeOffene(pages) {
  * Antwort von `gh api --paginate --slurp <Board-Pfad>/items` (Liste von Seiten) →
  * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), contentId (node_id des Issues), number, status, title, assignees, state, body, labels, autor, blockedBy }`
  * (die letzten vier liest `naechstes-ticket.mjs`; Feldform `issue_dependencies_summary` belegt per Probe 2026-10-08: 151 von 151 Items tragen
- * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; ein Wert über 0 wurde noch nie beobachtet). Pur, damit die Form
+ * `blocked_by`, `total_blocked_by`, `blocking`, `total_blocking`; `blocked_by` über 0 liest `naechstes-ticket.mjs` als Sperre, `spezifikation.mjs anlegen` setzt sie nativ). Pur, damit die Form
  * mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form, statt Nummern still
  * als fehlend zu melden. Drafts und PRs fliegen raus. REST statt GraphQL: das Core-Kontingent ist
  * getrennt vom GraphQL-Kontingent, das bei Board-Arbeit binnen Minuten leer war.

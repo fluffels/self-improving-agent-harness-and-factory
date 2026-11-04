@@ -10,7 +10,6 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellproj
 
 - Geprüft bis Claude Code v2.1.294
 - Geprüft bis Langfuse 1.2.0
-- Geprüft bis PixelLab 2026-10-08
 - Geprüft bis Playwright 0.0.83
 - Geprüft bis GitHub 2.94.0
 
@@ -18,7 +17,6 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellproj
 |---|---|---|
 | Claude Code | `@anthropic-ai/claude-code` | npm (hinkte am 2026-10-08 dem Changelog nach: 2.1.293 gegen 2.1.294) und [CHANGELOG](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) |
 | Langfuse | Plugin `langfuse-observability` (Stand laut [langfuse-hook-patch.md](langfuse-hook-patch.md)) | GitHub-Releases des Plugin-Repos |
-| PixelLab | gehosteter MCP-Server, keine Versionsnummer | Datum der Prüfung |
 | Playwright | `@playwright/mcp` | npm, Lockfile |
 | GitHub | `gh` (und der GitHub-MCP-Server als Alternative) | Releases von `cli/cli` |
 
@@ -64,7 +62,6 @@ Tabellenkopf überall gleich; die erste Zelle trägt den Namen in Backticks wie 
 | `pre-push` | Zusatznetz vor dem Push | Git-Hooks, kein Claude-Feature; Required-Checks sind der Riegel | behalten | ja |
 | `post-commit` | frischt das Lebenszeichen `zuletzt` im Ticket-Lock auf (quellprojekt#1699) | Git-Hooks, kein Claude-Feature; ohne Ticket-Branch ein No-op | behalten | ja |
 | `playwright` | startet `@playwright/mcp` über gepinntes `npx` (`.mcp.json`) | [Optionen und Config-Datei](https://github.com/microsoft/playwright-mcp) (`--config`, `--output-dir`, `--isolated`); das Versionspinning steht im `npx`-Aufruf | behalten | Modul |
-| `pixellab` | Pixel-Art über den gehosteten MCP-Server | kein Eigenbau, nur Konfiguration in `.mcp.json` | behalten: `list_projects` (Git-URLs, Push-Weg) steht in `deny` (quellprojekt#1476), `pixelart_workbench` bleibt uneingeschränkt | ja |
 | Permissions und Sandbox (`sandbox-doctor.mjs`) | Allowlist, Deny-Regeln, WSL2-Sandbox | [Sandboxing](https://code.claude.com/docs/en/sandboxing.md) nativ seit v2.0.24, `permissions` nativ | behalten: Kern ist der Sandbox-Vertrag samt Doktor ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md)), die konkrete Sandbox wählt das Projekt | teilweise |
 | MCP-Ausfall melden (`mcp-ausfall.mjs`) | Reconnect, Ersatzweg und Abbruch eines MCP-Servers sichtbar machen | kein Hook-Ereignis für MCP-Disconnect; die Logs von Claude Code sind Interna, nicht dokumentiert | behalten: Auswertung aller `mcp-logs-*`-Ordner des Projekts (auch user-scope-Server wie Langfuse) und Meldepflicht sind Projektfall | teilweise |
 | Langfuse-Vorbedingung (`langfuse-vorbedingung.mjs`) | kein Ticketlauf ohne erreichbares Langfuse, sonst bleibt er ungemessen | kein natives Gegenstück: Claude Code kennt keine Vorbedingung vor dem Skill-Start; der Health-Endpunkt gehört zu Langfuse (`/api/public/health`) | behalten: Prüfung und Stopp-Regel sind Projektfall | teilweise |
@@ -123,11 +120,10 @@ Statusline: Eigenbau `scripts/statusline.mjs` (Budget-Pacing, Abschnitt B), reic
 |---|---|---|---|---|
 | Langfuse: Hook-Patch und `token-baseline.mjs --langfuse` | Erfassung und Messung | offizielles Plugin ([Integration](https://langfuse.com/integrations/developer-tools/claude-code)); ein offizieller Langfuse-MCP-Server ist nicht belegt (nur Community-Server); OTel-Traces von Claude Code sind Beta; verschachtelte Subagenten sendet das Plugin ab 1.2.1 selbst | beobachten: Patch-Teile quellprojekt#1311 und quellprojekt#1378 bleiben | ja |
 | GitHub: `gh`-/GraphQL-Board-Skripte | Board-Reihenfolge, Sammeltickets | [GitHub-MCP-Server](https://github.com/github/github-mcp-server) (Toolset `projects`, nicht Default; Reihenfolge nicht belegt), `gh project` ohne Positions-Flag | behalten | teilweise |
-| PixelLab: MCP-Zugriff | Pixel-Art-Erzeugung | gehosteter Server; die Tool-Liste ist auf der Website nicht belegt (nur die Server-Anweisung nennt `pixelart_workbench` und Git-Zugriff über `list_projects`) | beobachten: Außenwirkung der Git-Tools prüft die Befund-Zeile | ja |
 
 ## Befunde aus dem Erstabgleich (Stand 2026-10-08)
 
-Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Kleine Befunde stehen als Zeilen im Harness-Sammelticket quellprojekt#1476: Hooks aus Agent-Frontmatter fehlen im Generator, ein Fall „Befund größer als eine Zeile“ fehlt in AGENTS.md, PixelLab-Tools mit Außenwirkung. Eingaben für die Beobachtungen liegen bei quellprojekt#1358 (Mods, `agentType`), quellprojekt#1366 ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); `--marketplace`, Mods) und quellprojekt#1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft quellprojekt#1066.
+Kein Eigenbau erreichte „ersetzen“: jede Lücke ist unbelegt (Windows, Beta, offener Bug) oder Projektpolitik. Kleine Befunde stehen als Zeilen im Harness-Sammelticket quellprojekt#1476: Hooks aus Agent-Frontmatter fehlen im Generator, ein Fall „Befund größer als eine Zeile“ fehlt in AGENTS.md. Eingaben für die Beobachtungen liegen bei quellprojekt#1358 (Mods, `agentType`), quellprojekt#1366 ([ADR 0022](adr/0022-dark-factory-kern-und-verteilung.md); `--marketplace`, Mods) und quellprojekt#1362 (Marker, Versionsquellen). Die Worktree-Mechanik prüft quellprojekt#1066.
 
 ## Verwendung
 

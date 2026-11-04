@@ -266,7 +266,7 @@ describe("Ist-Kanten (Verdichtung)", () => {
   test("Kanten innerhalb einer Schicht, .d.ts-Quellen, Assets und fremde Pakete fallen weg", () => {
     const k = api.istKanten(
       cruiseJson({
-        "src/ui/": ["src/ui.ts", "src/game/", "node_modules/engine/", "node_modules/vite/", "assets/pixellab/x.png"],
+        "src/ui/": ["src/ui.ts", "src/game/", "node_modules/engine/", "node_modules/vite/", "assets/bilder/x.png"],
         "src/game.ts": ["src/sim/", "src/game/"],
         "src/vite-env.d.ts": ["src/ui/"],
         "src/sim/": ["src/sim/"],

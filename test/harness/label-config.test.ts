@@ -392,9 +392,16 @@ describe("pruefeProjektConfig: labels.dependabotInbox führt ins eigene Repo (#9
     expect(fehler[0]).toMatch(/labels\.dependabotInbox "[^"]+" führt auf das Board von fremd-org\/fabrik[\s\S]*Fix:/);
   });
   test("Upstream mit Nicht-Harness-Label, das auf ein fremdes Produkt-Board führt, ist rot", () => {
-    const fehler = mit((c) => { delete factory(c).repo; c.labels.dependabotInbox = "area:andere"; });
+    // Vorbedingung selbst gebaut: Label aus dem Bereichspräfix der Config, Produkt-Board mit fremdem repo
+    let andere = "";
+    const fehler = mit((c) => {
+      delete factory(c).repo;
+      (c.boards.find((x) => x.rolle === "produkt") as Board).repo = "fremd-org/produkt";
+      andere = `${c.labels.harness.split(":")[0]}:andere`;
+      c.labels.dependabotInbox = andere;
+    });
     expect(fehler).toHaveLength(1);
-    expect(fehler[0]).toContain("area:andere");
+    expect(fehler[0]).toContain(andere);
   });
   test("bei fehlerhaften Labels meldet nur der Label-Fehler, kein Folgefehler", () => {
     expect(mit((c) => { delete (c.labels as Record<string, string | undefined>).harness; })).toEqual(["labels.harness fehlt (Pflichtschlüssel)"]);
