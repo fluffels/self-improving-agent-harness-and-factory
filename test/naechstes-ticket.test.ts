@@ -1392,3 +1392,75 @@ describe("Design-Schritt in der Auswahl (factory#172)", () => {
     expect(N.fuehreAus(["--ticket", "7"], einzel(["ui", "design-ok"]) as never).code).toBe(0);
   });
 });
+
+describe("Milestone-Vorrang (factory#194)", () => {
+  const H = { labels: [{ name: HARNESS }] };
+  const ms = (n: number, due: string | null, state = "open", title = `Release ${n}`) => ({ milestone: { number: n, title, state, due_on: due } });
+  const M1 = "2026-12-01T00:00:00Z";
+  const M2 = "2027-01-01T00:00:00Z";
+  const eingabe = (factory: unknown[]) => ({ produkt: [], factory: norm(factory), offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG, bereich: "agentic", fuellstand: () => 0 });
+  const waehle = (factory: unknown[], extra: Record<string, unknown> = {}) => N.waehleUeberBoards({ ...eingabe(factory), ...extra });
+  const vergeben = { assignees: [{ login: OWNER }] };
+  const A = item(1, H);
+  const B = item(2, { ...H, ...ms(2, M2) });
+  const C = item(3, { ...H, ...ms(1, M1) });
+  const D = item(4, { ...H, ...ms(1, M1) });
+
+  test("das erste freie Item des frühesten Milestones kommt vor der Board-Reihenfolge", () => {
+    expect(waehle([A, B, C, D]).ticket?.nr).toBe(3);
+  });
+  test("ist C geclaimt, folgt D; sind C und D belegt, fällt es auf A zurück, C und D stehen vorn in uebersprungen", () => {
+    expect(waehle([A, B, item(3, { ...H, ...ms(1, M1), ...vergeben }), D]).ticket?.nr).toBe(4);
+    const r = waehle([A, B, item(3, { ...H, ...ms(1, M1), ...vergeben }), item(4, { ...H, ...ms(1, M1), ...vergeben })]);
+    expect(r.ticket?.nr).toBe(1);
+    expect(r.uebersprungen.map((u) => u.nr)).toEqual([3, 4]);
+    // Stufe 3 prüft die Items der Milestone-Stufe nicht noch einmal: jede Nummer steht genau einmal in uebersprungen
+    expect(waehle([item(3, { ...H, ...ms(1, M1), ...vergeben }), A]).uebersprungen.map((u) => u.nr)).toEqual([3]);
+  });
+  test("ein Kopf-Item kommt vor dem Milestone", () => {
+    const kopf = item(9, { title: "🚨 CI rot auf main: x", ...H });
+    expect(waehle([A, C, kopf]).ticket?.nr).toBe(9);
+  });
+  test("ein Kopf-Item mit früherem Milestone bestimmt den Vorrang nicht (Kopf-Items sind ohne Milestone gedacht)", () => {
+    const kopf = item(9, { title: "🚨 CI rot auf main: x", ...H, ...ms(0, "2026-01-01T00:00:00Z"), ...vergeben });
+    const r = waehle([kopf, A, C]);
+    expect(r.ticket?.nr).toBe(3);
+    expect(r.hinweise).toEqual(["Milestone-Vorrang: „Release 1“ (fällig 2026-12-01)"]);
+  });
+  test("das Harness-Sammelticket läuft in der Stufe mit: voll vor C, unter der Schwelle übersprungen", () => {
+    const sammel = item(7, { title: "Harness-Härtung (gesammelt)", ...H });
+    expect(waehle([A, sammel, C], { fuellstand: () => 99 }).ticket?.nr).toBe(7);
+    const r = waehle([A, sammel, C], { fuellstand: () => 0 });
+    expect(r.ticket?.nr).toBe(3);
+    expect(r.uebersprungen.map((u) => u.nr)).toEqual([7]);
+  });
+  test("ein Milestone nur auf der anderen Seite oder nur an Nicht-Todo-Items bestimmt den frühesten nicht", () => {
+    const produktItem = item(20, { ...ms(1, M1) });
+    const r = N.waehleUeberBoards({ ...eingabe([A, B]), produkt: norm([produktItem]) });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.hinweise).toEqual(["Milestone-Vorrang: „Release 2“ (fällig 2027-01-01)"]);
+    expect(waehle([A, B, roh(5, { ...H, ...ms(1, M1) }, "In Progress")]).ticket?.nr).toBe(2);
+    expect(waehle([A, B, roh(5, { ...H, ...ms(1, M1), state: "closed" })]).ticket?.nr).toBe(2);
+  });
+  test("ein Milestone ohne Fälligkeit kommt nach einem mit Fälligkeit; Gleichstand nach Nummer", () => {
+    expect(waehle([item(1, { ...H, ...ms(5, null) }), item(2, { ...H, ...ms(6, M2) })]).ticket?.nr).toBe(2);
+    expect(waehle([item(1, { ...H, ...ms(6, M1) }), item(2, { ...H, ...ms(5, M1) })]).ticket?.nr).toBe(2);
+  });
+  test("Hinweiszeile im Ergebnis und im Text, Titel bereinigt", () => {
+    const r = waehle([A, item(3, { ...H, ...ms(1, M1, "open", "Erste\nStufe|x") })]);
+    expect(r.hinweise).toEqual(["Milestone-Vorrang: „Erste Stufe|x“ (fällig 2026-12-01)"]);
+    expect(N.formatiere({ ...r, bereich: "agentic" } as never)).toContain("hinweis Milestone-Vorrang: „Erste Stufe|x“ (fällig 2026-12-01)");
+    expect(waehle([A, item(3, { ...H, ...ms(1, null) })]).hinweise).toEqual(["Milestone-Vorrang: „Release 1“ (ohne Fälligkeit)"]);
+  });
+  test("Negativfall: ohne Milestones, mit null und mit nur geschlossenem Milestone verhält sich alles wie bisher", () => {
+    const ohne = waehle([A, item(2, H), item(3, { ...H, ...vergeben })]);
+    const mitNull = waehle([A, item(2, { ...H, milestone: null }), item(3, { ...H, ...vergeben })]);
+    const geschlossen = waehle([A, item(2, { ...H, ...ms(1, M1, "closed") }), item(3, { ...H, ...vergeben })]);
+    expect(ohne.ticket?.nr).toBe(1);
+    expect(mitNull).toEqual(ohne);
+    expect(geschlossen).toEqual(ohne);
+    expect("hinweise" in ohne).toBe(false);
+    expect(waehle([item(1, { ...H, ...vergeben }), item(2, H)]).uebersprungen.map((u) => u.nr)).toEqual([1]);
+    expect(N.formatiere({ ...ohne, bereich: "agentic" } as never)).not.toContain("Milestone");
+  });
+});

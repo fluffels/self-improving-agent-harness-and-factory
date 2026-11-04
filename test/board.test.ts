@@ -107,6 +107,13 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
     ]);
   });
 
+  test("normalizeItems trägt den Milestone nur, wenn er gesetzt und lesbar ist (factory#194); sonst fehlt der Schlüssel", () => {
+    const roh = (milestone: unknown) => [[{ node_id: "ITEM_m", content_type: "Issue", fields: [], content: { number: 1, milestone } }]];
+    const m = (x: unknown) => (N.normalizeItems(roh(x))[0] as unknown as { milestone?: unknown });
+    expect(m({ number: 3, title: "Erste", state: "open", due_on: "2026-12-01T00:00:00Z" }).milestone).toEqual({ nummer: 3, titel: "Erste", state: "open", faellig: "2026-12-01T00:00:00Z" });
+    for (const leer of [null, undefined, "x", { number: "3" }]) expect("milestone" in m(leer), JSON.stringify(leer)).toBe(false);
+  });
+
   test("normalizeItems bricht bei unerwarteter Antwortform laut ab statt leer zu melden", () => {
     for (const bad of [{}, null, [{}], [[], "x"], "items"]) expect(() => N.normalizeItems(bad), JSON.stringify(bad)).toThrow(/Antwortform/);
     expect(N.normalizeItems([[{ content_type: "Issue", content: {} }]])).toEqual([]); // Issue ohne Nummer/node_id fliegt raus
