@@ -53,8 +53,10 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
 
   test("das Ziel wird aus dem Label der Art gewählt (Produkt-Board bei codequalitaet), nicht aus dem Harness-Label", () => {
     const main = rumpf("export async function main(");
-    expect(main).toMatch(/const label = sammelLabel\(config, args\.art\);/);
-    expect(main).toMatch(/sammelZiel\(config, label\)/);
+    expect(main).toMatch(/const \{ label, ziel \} = zielOderAbbruch\(config, args\.art, d\.bezieher\);/);
+    const zf = rumpf("export function zielFuerArt(");
+    expect(zf).toMatch(/const label = sammelLabel\(config, art\);/);
+    expect(zf).toMatch(/sammelZiel\(config, label\)/);
     expect(main).toMatch(/legeAn\(\{[^}]*harness: label\s*[,}][^}]*\}?\)/);
   });
 

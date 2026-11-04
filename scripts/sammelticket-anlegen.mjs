@@ -189,6 +189,16 @@ export function zielFuerArt(config, art, { bezieher = false } = {}) {
   return { label, ziel: label === null ? null : sammelZiel(config, label) };
 }
 
+/** `zielFuerArt`, aber ein Konfigurationsfehler endet mit `✖`-Zeile und Exit 2 statt mit einem Stacktrace. */
+function zielOderAbbruch(config, art, bezieher) {
+  try {
+    return zielFuerArt(config, art, { bezieher });
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
+    return process.exit(2);
+  }
+}
+
 /** Die gh-Optionen für Aufrufe gegen das Ziel-Repo `repo` (#97): ein fremdes Repo liest und schreibt der `PROJECT_TOKEN`, das eigene den Standard (`tokenFuerZiel`). */
 export const zielOpts = (repo, env = process.env) => ({ token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
 
@@ -343,14 +353,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const config = d.ladeConfig();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
   // Langfuse im Bezieher (factory#195): das eigene Repo, ohne Harness-Label auf dem Produkt-Board (`zielFuerArt`).
-  let zf;
-  try {
-    zf = zielFuerArt(config, args.art, { bezieher: d.bezieher });
-  } catch (e) {
-    console.error(`✖ ${e.message}`);
-    process.exit(2);
-  }
-  const { label, ziel } = zf;
+  const { label, ziel } = zielOderAbbruch(config, args.art, d.bezieher);
   if (ziel === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
   d.kontingent();
   const board = boardFuerRolle(ziel.rolle);

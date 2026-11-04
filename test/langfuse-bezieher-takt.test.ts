@@ -24,7 +24,7 @@ interface Aufrufe {
 interface Opt {
   bezieher?: boolean;
   offen?: unknown[];
-  suche?: unknown | Error;
+  suche?: unknown;
   commits?: unknown[];
   token?: string;
 }

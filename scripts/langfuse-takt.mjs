@@ -108,6 +108,13 @@ function verdichtungsSchritt(wurzel) {
     : "PR mit Verdichtungszeile und `Closes`";
 }
 
+/** Pur: die Abschluss-Zeile des Status-Tickets; Upstream wie bisher, im Bezieher `bezieherAbschluss`. */
+function abschlussZeile({ upstream, verweis, verdichtung }) {
+  return upstream
+    ? `Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`
+    : bezieherAbschluss(verweis, verdichtung);
+}
+
 /**
  * Pur (factory#195, ADR 0031 Punkt 4): die Abschluss-Zeile im Bezieher. Projekt-Befunde bleiben hier (groß als Issue, klein als Zeile ins eigene Sammelticket); Harness-Befunde gehen
  * erst durch die Anonymitätsprüfung (`check-internalrefs --text`) und dann über den Bezieher-Weg an die Fabrik. `verweis` baut den Link auf die Factory-Seite.
@@ -143,9 +150,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
   };
   const verdichtung = verdichtungsSchritt(wurzel);
-  const abschluss = upstream
-    ? `Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`
-    : bezieherAbschluss(verweis, verdichtung);
+  const abschluss = abschlussZeile({ upstream, verweis, verdichtung });
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",

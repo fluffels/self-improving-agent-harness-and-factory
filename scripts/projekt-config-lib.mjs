@@ -10,7 +10,7 @@
  * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib` und `projekt-config-bloecke`
  * (deren Hülle: `relativ-pfad`, `pfad-glob`, `quellwurzeln-lib`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arbeitsplatzMaengel } from "./arbeitsplatz-lib.mjs";
@@ -18,7 +18,6 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
@@ -595,12 +594,19 @@ ${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
   try {
-    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: liesSyncStand(rootDir).zustand !== "fehlt" }).repo);
+    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: existsSync(join(rootDir, ".factory", "sync-stand.json")) }).repo); // Sync-Stand vorhanden = Bezieher (Format: sync-stand-lib.mjs, hier ohne Import: die Import-Hülle des Einstiegs bleibt klein)
     return 0;
   } catch (e) {
     err(`✖ ${e instanceof Error ? e.message : e}`);
     return 1;
   }
+}
+
+/** Die Flags `--langfuse-repo` und `--ziel-repo`: der Exit-Code ihrer Ausgabe oder `undefined`, wenn keines gesetzt ist. */
+function repoAusgabe(werte, positionale, ctx) {
+  if (werte["langfuse-repo"] === true) return langfuseRepoAusgeben(positionale, werte.config, ctx);
+  if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, ctx);
+  return undefined;
 }
 
 /** Kommandozeile; gibt den Exit-Code zurück. */
@@ -610,8 +616,8 @@ export function cli(argv, { rootDir = ROOT, env = process.env, out = console.log
     err(`✖ ${fehler.text}\n\n${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
-  if (werte["langfuse-repo"] === true) return langfuseRepoAusgeben(positionale, werte.config, { rootDir, out, err });
-  if (werte["ziel-repo"] !== undefined) return zielRepoAusgeben(werte["ziel-repo"], positionale, werte.config, { rootDir, out, err });
+  const ausgabe = repoAusgabe(werte, positionale, { rootDir, out, err });
+  if (ausgabe !== undefined) return ausgabe;
   const [schluessel, ueberzaehlig] = positionale;
   if (!schluessel) {
     err(`✖ Schlüssel fehlt\n\n${CLI_AUFRUF}`);
