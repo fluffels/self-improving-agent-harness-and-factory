@@ -9,7 +9,7 @@ Der Sync liefert den Besitz (Skripte, Agenten, Skills, Workflows, Kern-Tests, Ke
 1. **Bootstrap-Commit direkt auf `main`:** nur `LICENSE` und `README.md` ([Glossar › Bootstrap-Commit](harness-glossar.md)). Danach geht nichts mehr direkt auf `main`.
 2. **Ruleset auf `main`** (kein Direkt-Push, Pull Request, Required Checks, keine Bypass-Akteure): Vorlage ist `.github/ruleset-main-schutz.json` der Quelle, angelegt per `gh api -X POST repos/<owner>/<repo>/rulesets --input <datei>`. Die Required Checks nennt der Doctor-Punkt `Ruleset`. Die Datei liegt auch im Projekt (Ruleset-Spiegel, Pfad `rulesetSpiegel` der Projekt-Config): **ohne sie bricht der Doctor mit Exit 2 ab**, bevor er die Dateipunkte zeigt.
 3. **Feature-Branch** (ab jetzt jede Änderung per Pull Request). Darin zwei Dateien anlegen, bevor der Sync läuft:
-   - `AGENTS.md` mit den vier Marker-Zeilen: `<!-- factory-besitz:start kern -->`, `<!-- factory-besitz:ende kern -->`, `<!-- factory-projekt:start -->`, `<!-- factory-projekt:ende -->` (ein leerer Kern-Block genügt, der Sync füllt ihn; ohne die Zeilen bricht der Sync ab und nennt sie in der Fehlermeldung);
+   - `AGENTS.md` mit den Kern-Marker-Zeilen `<!-- factory-besitz:start kern -->` und `<!-- factory-besitz:ende kern -->` (ein leerer Kern-Block genügt, der Sync füllt ihn; ohne diese Zeilen bricht der Sync ab, schreibt nichts und nennt sie in der Fehlermeldung). Dazu die Zeilen `<!-- factory-projekt:start -->` und `<!-- factory-projekt:ende -->` um den Projekt-Block: sie sind Konvention für die Abgrenzung, der Sync prüft sie nicht (fehlen sie, läuft er ohne Meldung durch);
    - `.factory/projekt.json` (Vorlage: die Datei des Factory-Repos; **alle** Werte ersetzen: Repo, Boards, Präfixe, Agentennamen, Labels, Sprache, und den Block `struktur` (`quelle`, `moduldoku`), den die Gates `check:size`, `check:docmap` und `check:anysuppress` verlangen).
 4. **Sync:** `node scripts/factory-sync.mjs --quelle <factory-checkout> --tag <name> --ziel .` (bei `ABGLEICH <pfad>` mit `--uebernehmen <pfad>`). Mit `--entwurf` statt `--tag` entsteht kein Link-Schritt und keine Anker-Stub-Seite: die Doku-Links der Kern-Skills zeigen dann ins Leere, das Drift-Gate bleibt rot.
 5. **`node scripts/harness-doctor.mjs --pruefen`** nennt je fehlender Projektdatei den Fix. Dann die Projektdateien aus den Vorlagen anlegen (Tabelle unten).
@@ -25,7 +25,7 @@ Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder e
 
 | Pfad | Wer braucht sie | Was an der Vorlage anpassen |
 | --- | --- | --- |
-| `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die vier Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage |
+| `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage |
 | `.factory/projekt.json` | jedes Kern-Skript | alle Werte, auch `struktur`; Alt-Werte des Factory-Repos löschen |
 | `.agents/skills/factory-ticket/SKILL.md` | Ticket-Ablauf; Rolle `ticketSkill` | fester Pfad (`ROLLEN_PFADE.ticketSkill`), Inhalt für das Projekt; `npm run skills:sync` erzeugt den Zeiger |
 | `package.json` | `verify`, alle `npm run`-Befehle | `scripts` und `devDependencies` der Quelle; Name, Version, Projekt-Skripte; im Skript `test` das Flag `--passWithNoTests`, solange es keinen Test gibt |

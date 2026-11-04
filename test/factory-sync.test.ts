@@ -101,6 +101,11 @@ describe("setzeBlock", () => {
     const r = lib.setzeBlock(`vor\n${S}\nalt\n${E}\nnach\n`, "b", `${S}\nneu\n${E}`);
     assert.equal(r, `vor\n${S}\nneu\n${E}\nnach\n`);
   });
+  test("Projekt-Marker sind keine Voraussetzung: nur die Marker des ersetzten Blocks zählen", () => {
+    const r = lib.setzeBlock(`# Projekt\n${S}\nalt\n${E}\n`, "b", `${S}\nneu\n${E}`);
+    assert.equal(r, `# Projekt\n${S}\nneu\n${E}\n`);
+    assert.ok(!r.includes("factory-projekt"));
+  });
   test("fehlende, doppelte oder vertauschte Marker sind ein Fehler", () => {
     assert.throws(() => lib.setzeBlock("nichts", "b", "x"), /genau einmal/);
     assert.throws(() => lib.setzeBlock("nichts", "b", "x"), (e: Error) => e.message.includes(S) && e.message.includes(E));
