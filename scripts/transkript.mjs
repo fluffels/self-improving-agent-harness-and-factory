@@ -35,21 +35,25 @@ export function toolPaare(zeilen, { istAufruf = istToolUse } = {}) {
   const paare = [];
   const byId = new Map();
   for (const row of zeilen) {
-    const content = Array.isArray(row?.message?.content) ? row.message.content : [];
-    for (const block of content) {
-      if (istAufruf(row, block)) {
-        const id = block.id ?? null;
-        if (id !== null && byId.has(id)) continue;
-        const paar = { id, use: { row, block }, ergebnis: null };
-        paare.push(paar);
-        if (id !== null) byId.set(id, paar);
-      } else if (row?.type === "user" && block?.type === "tool_result") {
-        const paar = byId.get(block.tool_use_id);
-        if (paar && !paar.ergebnis) paar.ergebnis = { row, block };
-      }
+    for (const block of Array.isArray(row?.message?.content) ? row.message.content : []) {
+      if (istAufruf(row, block)) neuerAufruf(paare, byId, row, block);
+      else if (row?.type === "user" && block?.type === "tool_result") ergebnisZu(byId, row, block);
     }
   }
   return paare;
+}
+
+function neuerAufruf(paare, byId, row, block) {
+  const id = block.id ?? null;
+  if (id !== null && byId.has(id)) return; // erste Fassung gilt
+  const paar = { id, use: { row, block }, ergebnis: null };
+  paare.push(paar);
+  if (id !== null) byId.set(id, paar);
+}
+
+function ergebnisZu(byId, row, block) {
+  const paar = byId.get(block.tool_use_id);
+  if (paar && !paar.ergebnis) paar.ergebnis = { row, block };
 }
 
 /**
