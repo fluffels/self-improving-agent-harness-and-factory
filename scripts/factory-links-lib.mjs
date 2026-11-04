@@ -194,10 +194,18 @@ function stubUeberschriften(text, ankerSet) {
   return { ausgewaehlt: hs.filter((_, i) => nimm.has(i)), h1: h1 >= 0 ? hs[h1] : null, alle: hs };
 }
 
+/** Der feste Anfang des Hinweises, den jede Stub-Seite trägt (Erkennungszeichen, Quelle der Form: `stubSeite`). */
+const STUB_HINWEIS = "Anker-Stub: Der Text dieser Seite steht im Factory-Repo;";
+
+/** Ist `text` eine von `planeAnkerStubs` angelegte Stub-Seite (Hinweis am Zeilenanfang)? */
+export function istAnkerStub(text) {
+  return text.split("\n").some((z) => z.startsWith(STUB_HINWEIS)); // CRLF stört nicht: nur der Zeilenanfang zählt
+}
+
 /** Der Text einer Stub-Seite (Zeilenende \n): Überschriften der Tag-Seite, jede mit einem Factory-Link auf ziel#slug am Tag (bei Kern-Ankern `anker`), vorn der Hinweis samt Seitenlink. Ergebnis { text, links }. */
 function stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag }) {
   const url = (a) => factorySeite({ pfad: ziel, anker: a, repo, tag });
-  const einleitung = `Anker-Stub: Der Text dieser Seite steht im Factory-Repo; hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [${ziel}](${url("")})`;
+  const einleitung = `${STUB_HINWEIS} hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [${ziel}](${url("")})`;
   const ankerLink = (h) => `Kern: [${ziel}#${h.slug}](${url(h.slug)})`;
   const bloecke = h1 ? [] : [einleitung];
   let links = 1;

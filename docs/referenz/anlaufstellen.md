@@ -55,7 +55,6 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 
 | Seite | Wann lesen |
 |---|---|
-| CONTRIBUTING.md | als menschliche Mitentwicklerin: Einstieg, One-Command-Setup `npm run setup`, IntelliJ-Run-Configs, Dependabot-Policy, Im Container entwickeln (devcontainer / `docker compose up`, quellprojekt#388) |
 | [ticket-reihenfolge.md](../ticket-reihenfolge.md) | wenn du das nächste Ticket auswählst oder ein neues Issue im Board einsortierst |
 | [befehle.md](befehle.md) | wenn du wissen willst, welches `npm run`-Kommando was tut und welche Umgebungsvariable ein Werkzeug liest |
 | schichtregeln.md | bevor du einen neuen Import setzt oder ein Modul verschiebst (Architektur-Wächter) |

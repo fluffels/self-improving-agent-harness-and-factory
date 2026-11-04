@@ -183,13 +183,13 @@ describe("Wächter: URL-Bau mit /blob/ und /tree/ nur in factory-seite.mjs", () 
 
 // Wächter (factory#157): Laufzeitmeldungen nennen Factory-Seiten über `factorySeiteIn`, nicht als Text `docs/x.md › Abschnitt`.
 // Scan-Umfang (geschlossen): `.mjs` unter `scripts/`, die das Besitz-Manifest als Ganz-Datei verteilt; gemeldet werden Nicht-Kommentarzeilen
-// (getrimmt nicht mit `*`, `//` oder `/*` beginnend) mit `docs/<x>.md ›` oder `docs/<x>.md §`; ausgenommen ist ein Treffer direkt hinter `[` (Linktext).
+// (getrimmt nicht mit `*`, `//` oder `/*` beginnend) mit `docs/<x>.md ›` oder `docs/<x>.md §`; ausgenommen ist ein Treffer direkt hinter `[` (Linktext) nur, wenn das Linkziel aufgelöst ist (`](${…}` oder `](http`).
 const TEXTVERWEIS = /docs\/[\w./-]+\.md (›|§)/g;
 describe("Wächter: Kern-Skripte verweisen in Laufzeitmeldungen nicht per Text auf Factory-Seiten (factory#157)", () => {
   const textverweise = (zeilen: string[]): string[] =>
     zeilen.flatMap((zeile, i) => {
       if (/^\s*(\*|\/\/|\/\*)/.test(zeile)) return [];
-      return [...zeile.matchAll(TEXTVERWEIS)].filter((m) => zeile[m.index - 1] !== "[").map(() => `Zeile ${i + 1}: ${zeile.trim().slice(0, 80)}`);
+      return [...zeile.matchAll(TEXTVERWEIS)].filter((m) => !(zeile[m.index - 1] === "[" && /^[^\]]*\]\((?:\$\{|https?:)/.test(zeile.slice(m.index)))).map(() => `Zeile ${i + 1}: ${zeile.trim().slice(0, 80)}`);
     });
 
   test("kein Kern-Skript trägt `docs/x.md ›` oder `docs/x.md §` in einer Nicht-Kommentarzeile", () => {
@@ -207,6 +207,9 @@ describe("Wächter: Kern-Skripte verweisen in Laufzeitmeldungen nicht per Text a
     assert.equal(textverweise(["  `siehe docs/a.md § Abschnitt`"]).length, 1);
     assert.deepEqual(textverweise([" * docs/a.md › Abschnitt", "// docs/a.md § X", "/* docs/a.md › X */"]), []);
     assert.deepEqual(textverweise(["`- [docs/a.md › Abschnitt](${url})`"]), []);
+    assert.deepEqual(textverweise(['"[docs/a.md › Abschnitt](https://example.org/a)"']), []);
+    assert.equal(textverweise(["`[docs/a.md › Abschnitt](docs/a.md#abschnitt)`"]).length, 1); // Linktext ohne aufgelöstes Ziel bleibt ein Textverweis
+    assert.equal(textverweise(["`[docs/a.md › Abschnitt] und (${url})`"]).length, 1);
     assert.deepEqual(textverweise(['"Mechanik: " + factorySeiteIn(WURZEL, "docs/a.md", "abschnitt")']), []);
   });
 });

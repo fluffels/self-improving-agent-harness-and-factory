@@ -13,6 +13,7 @@ import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
 import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 /** Repo-Wurzel des Checkouts: Standard für `statusBody` (dort liegt ein Sync-Stand, falls dies ein Bezieher ist). */
@@ -118,16 +119,21 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     : schonGemessen
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
-  // Bezieher (Sync-Stand mit Tag): `factorySeiteIn` verlinkt die Factory-Seite auf dem gesyncten Tag; sonst (Upstream) der Link auf `main` des Repos.
-  const docs = (pfad, anker, aufgeloest) => (/^https?:/.test(aufgeloest) ? aufgeloest : factorySeite({ pfad, anker, repo, tag: "main" }));
+  // Bezieher (Sync-Stand): `factorySeiteIn` verlinkt die Factory-Seite auf dem gesyncten Tag, ohne auflösbares Factory-Repo bleibt es die Textform (ein Link auf `main` des Beziehers wäre tot). Ohne Sync-Stand (Upstream) der Link auf `main` des Repos.
+  const upstream = liesSyncStand(wurzel).zustand === "fehlt";
+  const verweis = (text, pfad, anker) => {
+    const ziel = factorySeiteIn(wurzel, pfad, anker);
+    const url = /^https?:/.test(ziel) || !upstream ? ziel : factorySeite({ pfad, anker, repo, tag: "main" });
+    return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
+  };
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
-    `- **Checkliste:** [Checkliste Langfuse-Status überprüfen](${docs("docs/model-routing.md", "langfuse-status-überprüfen-1293", factorySeiteIn(wurzel, "docs/model-routing.md", "langfuse-status-überprüfen-1293"))}).`,
-    `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs("docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293", factorySeiteIn(wurzel, "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293"))}).`,
+    `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
+    `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
   ].join("\n");
 }

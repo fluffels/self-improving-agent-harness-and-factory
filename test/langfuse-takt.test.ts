@@ -129,11 +129,35 @@ describe("statusBody", () => {
     expect(body).not.toContain("Langfuse-Folgen");
     expect(body).not.toMatch(/Nachfolger/);
   });
-  test("die Doku-Links bauen auf dem übergebenen Repo auf (Z5e)", () => {
-    const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y" });
-    expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
-    expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
-    expect(x).not.toContain(String(projektConfig().repo));
+  test("die Doku-Links bauen auf dem übergebenen Repo auf (Z5e), ohne Sync-Stand (Upstream)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
+      expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
+      expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
+      expect(x).not.toContain(String(projektConfig().repo));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("Bezieher ohne auflösbares Factory-Repo: Textform statt totem Link auf main des Beziehers (L36)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v0.7.1" } }));
+      const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "beispiel/bezieher", wurzel: dir });
+      expect(x).not.toContain("github.com");
+      expect(x).not.toContain("](");
+      expect(x).toContain("docs/model-routing.md#langfuse-status-überprüfen-1293");
+      expect(x).toContain("docs/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("der Mechanik-Link hat beschreibenden Linktext statt des nackten Pfads (L36)", () => {
+    const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: tmpdir() });
+    expect(x).toMatch(/\*\*Mechanik:\*\* \[Wiederkehrendes Ticket[^\]]*\]\(https:/);
+    expect(x).not.toMatch(/\[docs\//);
   });
   test("der Standard-Wurzelpfad von statusBody ist die Repo-Wurzel (dort liegt im Bezieher der Sync-Stand)", () => {
     expect(existsSync(join(T.WURZEL, "scripts", "langfuse-takt.mjs"))).toBe(true);

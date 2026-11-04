@@ -872,5 +872,25 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
       assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n## Secret-Inbox\n" }), []);
       assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n" }).map((x) => x.art), ["abschnitt"]);
     });
+
+    test("Anker-Stub als Ziel (factory#157): Verweis aus Besitz-Text auf einen Fettdruck-Abschnitt ist still, aus Projekt-Text und auf echte Seiten rot", () => {
+      const stub = "# X\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [docs/x.md](https://example.org/x)\n";
+      const dateien = { ...STAND, ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/x.md › Fett-Regel\n", "scripts/projekt.mjs": "// docs/x.md › Fett-Regel\n" };
+      assert.deepEqual(fixture({ ...dateien, "docs/x.md": stub }).map((x) => [x.file, x.art]), [["scripts/projekt.mjs", "abschnitt"]]);
+      assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n\nText ohne Stub-Hinweis\n" }).map((x) => x.file), ["scripts/a.mjs", "scripts/projekt.mjs"]);
+      assert.deepEqual(fixture({ ...dateien, "docs/x.md": "# X\n\nText ohne Stub-Hinweis\n- **Fett-Regel.** ok\n" }), []);
+    });
+
+    test("Anker-Stub-Erkennung: Hinweis am Zeilenanfang (auch CRLF) zählt, mitten im Text nicht", () => {
+      const hinweis = "Anker-Stub: Der Text dieser Seite steht im Factory-Repo; hier";
+      const fehler = (text: string): unknown[] => fixture({ ...STAND, ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/x.md › Fett-Regel\n", "docs/x.md": text });
+      assert.deepEqual(fehler(`# X\r\n\r\n${hinweis}\r\n`), []);
+      assert.equal(fehler(`# X\n\nWie ${hinweis} steht im Text\n`).length, 1);
+    });
+
+    test("Factory-Repo (ohne Sync-Stand): Verweis auf einen Anker-Stub-Text wird voll geprüft", () => {
+      const stub = "# X\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; hier\n";
+      assert.deepEqual(fixture({ ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/x.md › Fett-Regel\n", "docs/x.md": stub }).map((x) => x.art), ["abschnitt"]);
+    });
   });
 });
