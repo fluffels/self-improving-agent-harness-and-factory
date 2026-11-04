@@ -20,7 +20,7 @@ type Sized = { file: string; loc: number };
 const collectSizes = (rawSize as unknown as { collectSizes: (root?: string, q?: Quellen) => Sized[] }).collectSizes;
 const collectSuppressions = (rawAny as unknown as { collectSuppressions: (root: string, q: Quellen) => Record<string, number> }).collectSuppressions;
 const strukturOrdnerBefunde = (rawBasis as unknown as { strukturOrdnerBefunde: (root: string, s: { quelle: string | string[] }, k?: string[]) => string[] }).strukturOrdnerBefunde;
-const pc = rawPc as unknown as { ladeProjektConfig: () => { struktur: object }; strukturAus: (c: unknown) => unknown };
+const pc = rawPc as unknown as { ladeProjektConfig: () => { struktur: object }; strukturAus: (c: unknown, o?: { listeErlaubt?: boolean }) => unknown };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 const nachDatei = (a: Sized, b: Sized): number => a.file.localeCompare(b.file);
@@ -139,12 +139,12 @@ describe("CLI-Verdrahtung der Listenform (factory#181)", () => {
 
 describe("Leser ohne Listenform werfen mit klarer Meldung (factory#181)", () => {
   const liste = { quelle: ["scripts", "test"], moduldoku: "docs/module" };
-  test.each(["check-docmap.mjs", "check-diffcoverage.mjs"])("%s: Exit 1 und „noch nicht unterstützt“", (skript) => {
+  test.each(["check-diffcoverage.mjs"])("%s: Exit 1 und „noch nicht unterstützt“", (skript) => {
     const r = lauf(skript, liste);
     assert.equal(r.status, 1, r.ausgabe);
     assert.match(r.ausgabe, /noch nicht unterstützt[\s\S]*Fix:/);
   });
-  test("anker-liste echteUmgebung wirft wie docmap (Entscheidung: bis zur Umstellung der Messgrenze, factory#185)", () => {
+  test("anker-liste echteUmgebung wirft wie diffcoverage (Entscheidung: bis zur Umstellung der Messgrenze, factory#185)", () => {
     const echt = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as object;
     const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur: liste }) });
     const code = `import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "anker-liste.mjs")).href)}).then((m) => m.echteUmgebung()).then(() => process.exit(0), (e) => { console.error(e.message); process.exit(3); })`;
@@ -155,8 +155,9 @@ describe("Leser ohne Listenform werfen mit klarer Meldung (factory#181)", () => 
     assert.equal(r.status, 3, r.stdout + r.stderr);
     assert.match(r.stderr, /noch nicht unterstützt/);
   });
-  test("strukturAus wirft bei der Liste, nimmt aber die String-Form", () => {
+  test("strukturAus wirft bei der Liste, nimmt aber die String-Form und mit listeErlaubt (check:docmap) auch die Liste", () => {
     assert.throws(() => pc.strukturAus({ struktur: liste }), /noch nicht unterstützt[\s\S]*Fix:/);
     assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: null } }), { quelle: "lib", moduldoku: null });
+    assert.deepEqual(pc.strukturAus({ struktur: liste }, { listeErlaubt: true }), { quelle: liste.quelle, moduldoku: liste.moduldoku });
   });
 });
