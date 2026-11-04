@@ -39,27 +39,25 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
-import { escapeRegex } from "./regex-lib.mjs";
-import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+import { ASSIGN_RE, parseBash } from "./bash-parser.mjs";
+import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
+import { escapeRegex, ohneFarbcodes } from "./regex-lib.mjs";
 import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug } from "./transkript.mjs";
 
 const KETTEN = ["verify", "verify:full", "verify:kompakt", "verify:changed"];
-const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-const sauber = (t) => String(t ?? "").replace(FARBCODE, "").split(String.fromCharCode(0xfeff)).join("").replace(/\r/g, "");
+const sauber = (t) => ohneFarbcodes(t).split(String.fromCharCode(0xfeff)).join("").replace(/\r/g, "");
 
 /** Gate-Satz des Pakets: Schritte von `verify`, danach die Zusatzschritte von `verify:full`; wirft ohne `verify` oder Paketnamen. */
 export function gateSatz(pkg) {
   const scripts = pkg?.scripts ?? {};
-  if (typeof scripts.verify !== "string") throw new Error('package.json hat kein Skript "verify"');
+  const verify = ketteAusPackage(pkg, ["verify"], "verify");
   if (!pkg.name) throw new Error("package.json hat keinen Namen");
-  const verify = kettenSchritte(scripts, ["verify"], "verify");
-  const extra = typeof scripts["verify:full"] === "string" ? kettenSchritte(scripts, ["verify", "verify:full"], "verify:full") : [];
+  const extra = typeof scripts["verify:full"] === "string" ? ketteAusPackage(pkg, ["verify", "verify:full"], "verify:full") : [];
   return { gates: [...new Set([...verify, ...extra])], verify, paket: String(pkg.name) };
 }
 
 // ── Befehlsform ──────────────────────────────────────────────────────────────
 
-const GEQUOTET = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
 const AUFRUFE = [
   /^npm\s+(?:run|run-script)\s+(?:-\S+\s+)*[\w:.-]+(?:\s|$)/,
   /^npm\s+(?:test|t)(?:\s|$)/,
@@ -76,15 +74,44 @@ function segmentArt(seg) {
   return AUFRUFE.some((re) => re.test(ohneEnv)) ? "aufruf" : "fremd";
 }
 
-/** Form eines Shell-Befehls: `{ art: "ok" | "pipe" | "befehlsform", aufrufe }` (Zahl der Gate-Aufrufe). Pur. */
+const NICHT_ERKANNT = { art: "befehlsform", aufrufe: 0 };
+const ERLAUBTE_UMLEITUNG = /^2>(?:&1|\/dev\/null)$/;
+
+/** Wort eines Kommandos als Text für `segmentArt`: Gequotetes wird zu `Q`, eine erlaubte Umleitung fällt weg, jede andere Umleitung ist `null`. */
+function wortText(w) {
+  if (w.quoted) return ASSIGN_RE.test(w.text) ? `${w.text.split("=")[0]}=Q` : "Q";
+  if (ERLAUBTE_UMLEITUNG.test(w.text)) return "";
+  return /[<>]/.test(w.text) ? null : w.text;
+}
+
+/** Wörter eines einfachen Kommandos ohne Ersetzungen und Heredocs als Text; sonst `null`. */
+function einfachText(cmd) {
+  if (cmd.type !== "simple" || cmd.substs.length > 0 || cmd.heredocs.length > 0) return null;
+  const worte = cmd.words.map(wortText);
+  return worte.includes(null) ? null : worte.filter(Boolean).join(" ");
+}
+
+/** Pipelines des einen `&&`-Ausdrucks aus dem AST oder `null` (Parse-Fehlschlag, mehrere Listen-Items, `bg`, anderer Operator, Negation). */
+function pipelines(command) {
+  const p = parseBash(command);
+  const items = p.ok && p.ast.type === "list" ? p.ast.items : [];
+  if (items.length !== 1 || items[0].bg) return null;
+  const { first, rest } = items[0].andor;
+  if (rest.some((r) => r.op !== "&&")) return null;
+  const alle = [first, ...rest.map((r) => r.pipe)];
+  return alle.some((x) => x.neg) ? null : alle;
+}
+
+/** Form eines Shell-Befehls: `{ art: "ok" | "pipe" | "befehlsform", aufrufe }` (Zahl der Gate-Aufrufe), auf Basis von `parseBash`; bei einer Pipe zählt das erste Kommando. Pur. */
 export function befehlsform(command) {
-  const s = String(command ?? "").replace(GEQUOTET, "Q").replace(/\s\d>(?:&\d|\/dev\/null)/g, "");
-  if (/[\n`;<>]|\$\(|\|\||(?<!&)&(?!&)/.test(s)) return { art: "befehlsform", aufrufe: 0 };
-  const pipe = s.includes("|");
-  const arten = (pipe ? s.split("|")[0] : s).split("&&").map(segmentArt);
+  const alle = pipelines(command);
+  if (alle === null) return NICHT_ERKANNT;
+  const texte = alle.map((x) => einfachText(x.cmds[0]));
+  if (texte.includes(null) || alle.some((x) => x.cmds.slice(1).some((c) => einfachText(c) === null))) return NICHT_ERKANNT;
+  const arten = texte.map(segmentArt);
   const aufrufe = arten.filter((a) => a === "aufruf").length;
   if (arten.includes("fremd")) return { art: "befehlsform", aufrufe };
-  return { art: pipe ? "pipe" : "ok", aufrufe };
+  return { art: alle.some((x) => x.cmds.length > 1) ? "pipe" : "ok", aufrufe };
 }
 
 // ── Kopfzeilen ───────────────────────────────────────────────────────────────
@@ -142,12 +169,16 @@ export function bewerteKopfLauf({ zeilen, exit, paket, gates, verify }) {
 // ── Summenzeile (verify:kompakt / verify:changed) ────────────────────────────
 
 const SUMME = /^verify:(kompakt|changed) (grün|ROT) · (.*)$/;
-const TEIL = /([\w:.-]+) (ok|ROT|übersprungen) (\d+) s/g;
+const TEIL = /^([\w:.-]+) (ok|ROT|übersprungen) (\d+(?:[.,]\d+)?) s$/;
+const sekunden = (text) => Number(text.replace(",", "."));
 
+/** Grüne Summenzeile: jeder Teil (ohne Klammerzusatz) muss auf `TEIL` passen, sonst ist der Lauf unvollständig (fail-closed, nie teilweise gezählt). */
 function summeGruen(teile) {
-  const gates = [...String(teile[2] ?? "").matchAll(TEIL)].map((m) => (
-    m[2] === "übersprungen" ? { name: m[1], ergebnis: "nicht-erreicht", sek: null } : { name: m[1], ergebnis: "gruen", sek: Number(m[3]) }));
-  return gates.length ? { gates } : { grund: "unvollständig" };
+  const teilTexte = String(teile[2] ?? "").replace(/ \([^)]*\)/g, "").split(", ");
+  const treffer = teilTexte.map((x) => TEIL.exec(x.trim()));
+  if (treffer.includes(null)) return { grund: "unvollständig" };
+  return { gates: treffer.map((m) => (
+    m[2] === "übersprungen" ? { name: m[1], ergebnis: "nicht-erreicht", sek: null } : { name: m[1], ergebnis: "gruen", sek: sekunden(m[3]) })) };
 }
 
 function summeRot(teile, text, modus, verify) {
@@ -156,8 +187,8 @@ function summeRot(teile, text, modus, verify) {
   const stimmt = n && rot.length && Number(n[2]) === verify.length && Number(n[1]) === verify.length - rot.length && rot.every((r) => verify.includes(r));
   if (!stimmt) return { grund: "Kette geändert" };
   const dauer = (name) => {
-    const m = new RegExp(`── ${escapeRegex(name)}: rot \\(Exit \\d+, (\\d+) s\\) ──`).exec(text);
-    return m ? Number(m[1]) : null;
+    const m = new RegExp(`── ${escapeRegex(name)}: rot \\(Exit \\d+, (\\d+(?:[.,]\\d+)?) s\\) ──`).exec(text);
+    return m ? sekunden(m[1]) : null;
   };
   const gates = verify
     .filter((g) => rot.includes(g) || !(modus === "changed" && g === "lint"))

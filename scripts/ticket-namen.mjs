@@ -11,7 +11,6 @@
  */
 import { repoSegment } from "./arbeitsplatz-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
-import { escapeRegex } from "./regex-lib.mjs";
 import { ladeProjektConfig, PFLICHT_AGENTEN, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const istText = (v) => typeof v === "string" && v.trim() !== "";

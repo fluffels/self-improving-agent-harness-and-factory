@@ -9,12 +9,14 @@ import * as laufzeitRoh from "../scripts/subagent-laufzeit.mjs";
 import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../scripts/ticket-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as regexLibRoh from "../scripts/regex-lib.mjs";
 import { FREMD, FREMD_NAMEN } from "./support/fremd-config";
 
 // Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const namenModul = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown; escapeRegex: (s: string) => string };
+const namenModul = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown };
 const NAMEN = FREMD_NAMEN;
-const escapeRegex = namenModul.escapeRegex;
+const escapeRegex = (regexLibRoh as unknown as { escapeRegex: (s: string) => string }).escapeRegex;
 const WT = FREMD.praefixe.worktree;
 const { planer: PLANER, lens: LENS } = FREMD.agenten;
 const BASIS_MIN_N = (laufzeitRoh as unknown as { BASIS_MIN_N: number }).BASIS_MIN_N;

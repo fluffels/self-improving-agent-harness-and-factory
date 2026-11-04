@@ -86,6 +86,7 @@ AGENTS.md @fluffels
 /scripts/repo-form.mjs @fluffels
 /scripts/sync-stand-lib.mjs @fluffels
 /scripts/ticket-namen.mjs @fluffels
+/scripts/regex-lib.mjs @fluffels
 /scripts/board-place.mjs @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels

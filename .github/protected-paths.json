@@ -83,6 +83,7 @@
     "/scripts/repo-form.mjs",
     "/scripts/sync-stand-lib.mjs",
     "/scripts/ticket-namen.mjs",
+    "/scripts/regex-lib.mjs",
     "/scripts/board-place.mjs",
     "/scripts/langfuse-takt.mjs",
     "/scripts/board-takt.mjs",

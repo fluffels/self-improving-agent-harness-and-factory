@@ -11,7 +11,7 @@ import { altName } from "./support/env-alt";
 import { projektConfig, repoName } from "./support/fremd-config";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../scripts/regex-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.

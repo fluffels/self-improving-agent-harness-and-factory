@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRoh from "../scripts/ticket-namen.mjs";
+import * as namenRoh from "../scripts/regex-lib.mjs";
 import { FREMD, repoName } from "./support/fremd-config";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).

@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 import * as raw from "../scripts/mess-lib.mjs";
 import { FREMD, projektConfig, repoName } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../scripts/regex-lib.mjs";
 
 const WT = FREMD.praefixe.worktree;
 const M = raw as unknown as { median: (w: number[]) => number | null; CACHE_TTL_MS: { fuenfMin: number; eineStunde: number } };
