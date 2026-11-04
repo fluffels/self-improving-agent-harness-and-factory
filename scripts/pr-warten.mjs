@@ -239,9 +239,9 @@ export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32A
 }
 
 /** Das `repo` der Projekt-Config (`owner/name`); ohne lesbare Config `null` (die Diagnose-Datei trägt dann kein Repo). Dünner I/O-Rand. */
-function repoDerConfig() {
+export function repoDerConfig(lade = ladeProjektConfig) {
   try {
-    return ladeProjektConfig().repo ?? null;
+    return lade().repo ?? null;
   } catch {
     return null;
   }

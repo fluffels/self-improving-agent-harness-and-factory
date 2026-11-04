@@ -103,6 +103,8 @@ describe("guardListe: Musterliste", () => {
     expect(muster("  const s = `${f({ a: 1 }) || d} und ${g ?? h}`;")).toEqual(["??", "||"]);
     expect(muster("  const s = `a ? b : c`;")).toEqual([]);
     expect(muster('  const s = `${f("a ? b")}`;')).toEqual([]);
+    expect(muster("  const s = `${f({ a: 1 }) || d} und a ? b : c`;")).toEqual(["||"]);
+    expect(muster('  const s = "${a ?? b}";')).toEqual([]);
   });
   test("zusammengesetzte Zuweisungen liefern nur ihr eigenes Muster, nicht das der Kurzform", () => {
     expect(muster("  a ??= 1;")).toEqual(["??="]);

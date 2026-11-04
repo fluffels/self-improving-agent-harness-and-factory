@@ -468,7 +468,7 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     expect(C.holeWerkzeuge("7", gh)).toEqual({ werkzeuge: [], hinweis: "HINWEIS Ruleset-Regeln nicht lesbar: HTTP 403" });
   });
   describe("lauf: die echte Verdrahtung aus holeWerkzeuge, holePflicht und warten", () => {
-    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number; schreibe?: (p: string, t: string) => void; meldeFehler?: (z: string) => void; repo?: string | null }) => Erg; diagnosePfad: (pr: string, repo?: string | null) => string };
+    const L = raw as unknown as { lauf: (a: { pr: string; maxSekunden: number; intervall: number }, d: { gh: (a: string[], o?: object) => string; schlafe: (ms: number) => void; jetzt: () => number; schreibe?: (p: string, t: string) => void; meldeFehler?: (z: string) => void; repo?: string | null }) => Erg; diagnosePfad: (pr: string, repo?: string | null) => string; repoDerConfig: (lade?: () => { repo?: string }) => string | null };
     const stand = offen([lauf("Tests", "COMPLETED", "SUCCESS"), lauf("CodeQL", "COMPLETED", "FAILURE")]);
     const ghMit = (regeln: () => string) => (a: string[]) => {
       if (a[0] === "api") return regeln();
@@ -519,6 +519,14 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
       const geschrieben: string[] = [];
       L.lauf(arg, { gh: ghMit(() => "[]"), ...uhr(), schreibe: (p) => void geschrieben.push(p), meldeFehler: () => {}, repo: "alpha/eins" });
       expect(geschrieben).toEqual([L.diagnosePfad("7", "alpha/eins")]);
+    });
+    test("L10b: ohne Angabe nimmt lauf das Repo der Projekt-Config, ohne lesbare Config bleibt es beim Namen ohne Repo", () => {
+      const geschrieben: string[] = [];
+      L.lauf(arg, { gh: ghMit(() => "[]"), ...uhr(), schreibe: (p) => void geschrieben.push(p), meldeFehler: () => {} });
+      expect(geschrieben[0]).toMatch(/pr-warten-[^/\\]+-[^/\\]+-7\.json$/);
+      expect(L.repoDerConfig(() => ({ repo: "a/b" }))).toBe("a/b");
+      expect(L.repoDerConfig(() => ({}))).toBeNull();
+      expect(L.repoDerConfig(() => { throw new Error("keine Config"); })).toBeNull();
     });
     test("Negativ: bei Exit 1 keine Diagnose-Datei; ein Schreibfehler ändert das Ergebnis nicht", () => {
       const geschrieben: string[] = [];
