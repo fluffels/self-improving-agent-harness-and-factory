@@ -145,7 +145,7 @@ function pruefArt(words) {
 function nodeArt(rest) {
   if (rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
   const i = rest.findIndex((w) => /(?:^|[/\\])gate-befehl\.mjs$/.test(w));
-  if (i < 0) return null;
+  if (i < 0 || rest.includes("--zeigen")) return null;
   const name = rest[i + 1];
   if (name === "verify" || name === "verifyKompakt") return "voll";
   return name === "verifyChanged" ? "gezielt" : null;

@@ -209,8 +209,10 @@ describe("pruefLaeufe (#1120)", () => {
       sh("cd x && node scripts/gate-befehl.mjs verifyKompakt 2>&1 | tail -5"),
       sh("node C:/x/wt/scripts/gate-befehl.mjs verifyKompakt", "PowerShell"),
       sh("node scripts/gate-befehl.mjs verifyChanged"),
+      sh(String.raw`node C:\x\scripts\gate-befehl.mjs verify`, "PowerShell"),
+      sh("node gate-befehl.mjs verify"),
     ];
-    assert.deepEqual(z(evs), { voll: 3, gezielt: 1 });
+    assert.deepEqual(z(evs), { voll: 5, gezielt: 1 });
   });
   test("Negativ: Läufer mit install, coverage, --zeigen, echo oder ohne Namen zählt nicht", () => {
     const evs = [
@@ -220,6 +222,11 @@ describe("pruefLaeufe (#1120)", () => {
       sh('echo "node scripts/gate-befehl.mjs verify"'),
       sh("node scripts/gate-befehl.mjs"),
       sh("node scripts/anderes.mjs verify"),
+      sh("node scripts/gate-befehl.mjs verify --zeigen"),
+      sh("node scripts/gate-befehl.mjs verifyKompakt --zeigen"),
+      sh("node verify"),
+      sh("node scripts/gate-befehl.mjs.bak verify"),
+      sh("node scripts/mein-gate-befehl.mjs verify"),
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
   });
