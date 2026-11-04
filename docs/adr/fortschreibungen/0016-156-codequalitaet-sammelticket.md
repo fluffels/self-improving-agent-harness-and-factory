@@ -1,4 +1,4 @@
-# Fortschreibung factory#156 (2026-11-04): drittes, freiwilliges Sammelticket „Codequalität (gesammelt)“
+# Fortschreibung #156 (2026-11-04): drittes, freiwilliges Sammelticket „Codequalität (gesammelt)“
 
 Ergänzt [ADR 0016](../0016-langfuse-takt-woechentlich.md) in der Fassung von [Fortschreibung 1888](0016-1888-haertungs-takt-nach-fuellstand.md) (Auswahl nach Füllstand) und die Trennregel der Boards aus [ADR 0022](../0022-dark-factory-kern-und-verteilung.md); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)). Herkunft: factory#139.
 

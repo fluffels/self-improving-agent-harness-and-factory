@@ -159,4 +159,4 @@ Präzisiert durch #1808: der Auswahlmodus ohne `--bereich` ist abgebaut; ohne `-
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) (Konvention: [README](README.md#format)); dort die erste: [#1888](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) löst den Härtungs-Takt nach Merge-Zahl ab (Füllstand der Befund-Kommentare).
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) (Konvention: [README](README.md#format)); dort die erste: [#1888](fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md) löst den Härtungs-Takt nach Merge-Zahl ab (Füllstand der Befund-Kommentare). Danach: [factory#156](fortschreibungen/0016-156-codequalitaet-sammelticket.md) führt das freiwillige Sammelticket „Codequalität (gesammelt)“ am selben Füllstand ein.
