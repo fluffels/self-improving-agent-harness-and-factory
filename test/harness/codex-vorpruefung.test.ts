@@ -7,7 +7,8 @@ import { join } from "node:path";
 import * as raw from "../../scripts/codex-vorpruefung.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as lib0 from "../../scripts/codex-lib.mjs";
-const p = raw as unknown as { main: (a: string[], o: (s: string) => void, e: (s: string) => void, l: () => unknown, root?: string) => number };
+type Naht = { out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string };
+const p = raw as unknown as { main: (a: string[], n: Naht) => number };
 const config = { repo: "owner/probe", agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
 const temps: string[] = [];
 afterEach(() => { for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -16,8 +17,9 @@ function leerRoot() { const d = mkdtempSync(join(tmpdir(), "codex-leer-")); temp
 function datei(text: string) { const d = mkdtempSync(join(tmpdir(), "codex-vorpruefung-")); temps.push(d); const p = join(d, "belege.json"); writeFileSync(p, text); return p; }
 test("ohne und mit selbst attestierten Belegen gesperrt", () => {
   const out: string[] = [], err: string[] = [];
-  expect(p.main([], s => out.push(s), s => err.push(s), () => config, leerRoot())).toBe(1);
-  expect(p.main(["--belege", datei('{"tracing":true}')], s => out.push(s), s => err.push(s), () => config, leerRoot())).toBe(1);
+  const naht = () => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade: () => config, root: leerRoot() });
+  expect(p.main([], naht())).toBe(1);
+  expect(p.main(["--belege", datei('{"tracing":true}')], naht())).toBe(1);
   expect(out.at(-1)).toContain('"autonom":false'); expect(out.at(-1)).toContain("Quarantäne"); expect(err).toEqual([]);
 });
 test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe", () => {
@@ -25,7 +27,7 @@ test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe",
   const row = (id: string, rolle?: string) => ({ id, type: "GENERATION", sessionId: "probe", tags: ["project:probe"], usageDetails: { input: 1, output: 1 }, metadata: { agent_id: id, agent_role: rolle ? "subagent" : "main", parent_thread_id: rolle ? "main" : "", "agent_source.subagent.thread_spawn.agent_role": rolle } });
   const b = { version: "0.164.0", sessionId: "probe", rollen, tools: ["playwright", "langfuse"], observations: [row("main"), ...rollen.map(r => row(r, r)), { ...row("tool"), type: "TOOL" }] };
   const out: string[] = [], err: string[] = [];
-  expect(p.main(["--belege", datei(JSON.stringify(b))], s => out.push(s), s => err.push(s), () => config, leerRoot())).toBe(1);
+  expect(p.main(["--belege", datei(JSON.stringify(b))], { out: s => out.push(s), err: s => err.push(s), lade: () => config, root: leerRoot() })).toBe(1);
   const result = JSON.parse(out[0]) as { autonom: boolean; maengel: string[] };
   expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain("Quarantäne"); expect(err).toEqual([]);
 });
@@ -56,14 +58,15 @@ test("lokale Rollen: ein Ordner an der Stelle einer Rollen-Datei ist veraltet, k
 });
 test("Vorprüfung meldet verwaiste Rolle in root", () => {
   const d = projekt({ "alt.toml": "x" }); const out: string[] = [];
-  expect((p.main as unknown as (...a: unknown[]) => number)([], (s: string) => out.push(s), () => undefined, () => config, d)).toBe(1);
+  expect(p.main([], { out: s => out.push(s), err: () => undefined, lade: () => config, root: d })).toBe(1);
   expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.join("\n")).toContain("verwaist");
 });
 test("Aufruf-, Lese-, JSON- und Configfehler sind geschlossen", () => {
   const out: string[] = [], err: string[] = [];
-  expect(p.main(["--issue", "79"], s => out.push(s), s => err.push(s), () => config)).toBe(2);
-  expect(p.main(["--belege", `${datei("{}")}fehlt`], s => out.push(s), s => err.push(s), () => config)).toBe(1);
-  expect(p.main(["--belege", datei("{")], s => out.push(s), s => err.push(s), () => config)).toBe(1);
-  expect(p.main([], s => out.push(s), s => err.push(s), () => { throw new Error("Config unlesbar"); })).toBe(1);
+  const naht = (lade: () => unknown = () => config) => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade, root: leerRoot() });
+  expect(p.main(["--issue", "79"], naht())).toBe(2);
+  expect(p.main(["--belege", `${datei("{}")}fehlt`], naht())).toBe(1);
+  expect(p.main(["--belege", datei("{")], naht())).toBe(1);
+  expect(p.main([], naht(() => { throw new Error("Config unlesbar"); }))).toBe(1);
   expect(out).toEqual([]); expect(err).toHaveLength(4);
 });
