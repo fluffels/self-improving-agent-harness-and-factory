@@ -108,6 +108,22 @@ function verdichtungsSchritt(wurzel) {
     : "PR mit Verdichtungszeile und `Closes`";
 }
 
+/** Pur: die Abschluss-Zeile des Status-Tickets; Upstream wie bisher, im Bezieher `bezieherAbschluss`. */
+function abschlussZeile({ upstream, verweis, verdichtung }) {
+  return upstream
+    ? `Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`
+    : bezieherAbschluss(verweis, verdichtung);
+}
+
+/**
+ * Pur (factory#195, ADR 0031 Punkt 4): die Abschluss-Zeile im Bezieher. Projekt-Befunde bleiben hier (groß als Issue, klein als Zeile ins eigene Sammelticket); Harness-Befunde gehen
+ * erst durch die Anonymitätsprüfung (`check-internalrefs --text`) und dann über den Bezieher-Weg an die Fabrik. `verweis` baut den Link auf die Factory-Seite.
+ */
+function bezieherAbschluss(verweis, verdichtung) {
+  const weg = verweis("Langfuse-Befunde (gesammelt)", "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt");
+  return `Bericht-Kommentar geschrieben. Projekt-Befunde groß als Issue in diesem Repo, klein als Zeile ins Sammelticket „${SAMMEL_TITEL}“ dieses Repos (\`node scripts/sammelticket-anlegen.mjs langfuse --top\`). Harness-Befunde: erst \`node scripts/check-internalrefs.mjs --text\` (Treffer: nichts senden, umformulieren), dann über den Bezieher-Weg an die Fabrik (${weg}); ${verdichtung}.`;
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
@@ -134,6 +150,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
   };
   const verdichtung = verdichtungsSchritt(wurzel);
+  const abschluss = abschlussZeile({ upstream, verweis, verdichtung });
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
@@ -142,8 +159,33 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
-    `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), ${verdichtung}.`,
+    `- **Abschluss:** ${abschluss}`,
   ].join("\n");
+}
+
+/** Pur (factory#195): die gh-Argumente der Titelsuche nach früheren Status-Tickets in `repo` (GraphQL `search`, unabhängig vom Label; die Suche kennt auch geschlossene Issues). */
+export const statusSucheAnfrage = (repo) => [
+  "api", "graphql",
+  "-f", "query=query($q:String!){ search(query:$q,type:ISSUE,first:20){ nodes{ ... on Issue { number title state createdAt closedAt } } } }",
+  "-f", `q=repo:${repo} is:issue in:title "${STATUS_TITEL}" sort:created-desc`,
+];
+
+/**
+ * Pur (factory#195): aus der Antwort der Titelsuche (`statusSucheAnfrage`) und den offenen Issues des Repos (`offene`, aus normalizeOffene) der Vorgänger des Status-Tickets
+ * (jüngster geschlossener Treffer mit exaktem Titel, der nicht in `offene` steht) und die Nummern, bei denen Suche und Liste sich widersprechen (`unklar`: die Suche meldet OPEN,
+ * die offene Liste kennt die Nummer nicht; der Suchindex oder die Liste hinkt). Wirft bei unerwarteter Antwortform. Liefert `{ vorgaenger: { number, closedAt, createdAt } | null, unklar: number[] }`.
+ */
+export function vorgaengerAusSuche({ antwort, offene }) {
+  const nodes = antwort?.data?.search?.nodes;
+  if (!Array.isArray(nodes)) throw new Error("Unerwartete Antwortform der Statusticket-Suche (kein data.search.nodes).");
+  const offeneNr = new Set(offene.map((i) => i.number));
+  const treffer = nodes.filter((n) => n?.title === STATUS_TITEL && Number.isInteger(n.number));
+  const zustand = (n) => String(n.state).toUpperCase();
+  const unklar = treffer.filter((n) => zustand(n) === "OPEN" && !offeneNr.has(n.number)).map((n) => n.number);
+  const [j] = treffer
+    .filter((n) => zustand(n) === "CLOSED" && typeof n.closedAt === "string" && !offeneNr.has(n.number))
+    .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt));
+  return { vorgaenger: j ? { number: j.number, closedAt: j.closedAt, createdAt: j.createdAt } : null, unklar };
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
@@ -152,10 +194,11 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt
  * wurde (der Aufrufer zieht seine Liste damit im Speicher nach); `nr` ist die Nummer des Tickets. `start` = Datum des ersten Commits auf main (siehe `statusBody`).
  */
-export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config, start = null }) {
+export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [], io = {}, config, start = null, ziel = null }) {
   // Zwei Boards (ADR 0022 F11): Status- und Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board.
-  const harness = labelAus(config, "harness");
-  const board = boardFuerRolle(boardRolleFuer([harness], config));
+  // Im Bezieher (factory#195) gibt `ziel` (`langfuseZiel`: Rolle, Label oder null) Board und Label vor; ohne `ziel` gilt der Wert von oben unverändert.
+  const harness = ziel ? ziel.label : labelAus(config, "harness");
+  const board = boardFuerRolle(ziel ? ziel.rolle : boardRolleFuer([harness], config));
   const { gh: ghRoh = ghJson, imBoardAnlegen = (nodeId, opts) => addToBoardTodo(board, nodeId, opts), setze = (id, afterId, opts) => setPosition(board, id, afterId, opts) } = io; // im Test injizierbar
   // Ein Fehler wegen fehlender Rechte im Ziel-Repo (#78 L14) ist eine klare Meldung statt eines Stacktraces; `art` sagt, ob gelesen oder geschrieben wurde.
   const gh = (args, art) => {
@@ -170,7 +213,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, "-f", `labels[]=${harness}`,
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`]),
     ], "schreiben");
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

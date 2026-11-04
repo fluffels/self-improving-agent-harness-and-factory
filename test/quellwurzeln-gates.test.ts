@@ -15,7 +15,10 @@ import * as rawBasis from "../scripts/check-basis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
-type Quellen = string | { wurzeln: string[]; endungen: string[]; ohne?: string[] };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawQl from "../scripts/quellwurzeln-lib.mjs";
+
+type Quellen = string |{ wurzeln: string[]; endungen: string[]; ohne?: string[] };
 type Sized = { file: string; loc: number };
 const collectSizes = (rawSize as unknown as { collectSizes: (root?: string, q?: Quellen) => Sized[] }).collectSizes;
 const collectSuppressions = (rawAny as unknown as { collectSuppressions: (root: string, q: Quellen) => Record<string, number> }).collectSuppressions;
@@ -99,12 +102,12 @@ describe("strukturOrdnerBefunde mit Liste (factory#181)", () => {
 });
 
 /** Startet ein Skript mit einer Config, die die echte Config mit anderem `struktur` ist (Muster: Kindlauf mit injizierter Config). */
-function lauf(skript: string, struktur: object): { status: number | null; ausgabe: string } {
+function lauf(skript: string, struktur: object, env: Record<string, string> = {}): { status: number | null; ausgabe: string } {
   const echt = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as object;
   const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur }) });
   const r = spawnSync(process.execPath, [join(WURZEL, "scripts", skript)], {
     encoding: "utf8",
-    env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "c.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL },
+    env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "c.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL, ...env },
   });
   return { status: r.status, ausgabe: `${r.stdout}${r.stderr}` };
 }
@@ -137,23 +140,76 @@ describe("CLI-Verdrahtung der Listenform (factory#181)", () => {
   });
 });
 
-describe("Leser ohne Listenform werfen mit klarer Meldung (factory#181)", () => {
-  const liste = { quelle: ["scripts", "test"], moduldoku: "docs/module" };
-  test.each(["check-diffcoverage.mjs"])("%s: Exit 1 und „noch nicht unterstützt“", (skript) => {
-    const r = lauf(skript, liste);
-    assert.equal(r.status, 1, r.ausgabe);
-    assert.match(r.ausgabe, /noch nicht unterstützt[\s\S]*Fix:/);
+describe("wurzelPraefixe und isMeasured über Liste, Glob und Endungsliste (factory#185)", () => {
+  const wurzelPraefixe = (rawQl as unknown as { wurzelPraefixe: (p: string, w: string[]) => string[] }).wurzelPraefixe;
+  const isMeasured = (rawBasis as unknown as { isMeasured: (p: string, q: Quellen) => boolean }).isMeasured;
+  const java = { wurzeln: ["*/src/main/java"], endungen: [".java"] };
+
+  test("wörtliche Wurzel: nur ein echtes Ordner-Präfix zählt", () => {
+    assert.deepEqual(wurzelPraefixe("scripts/a.mjs", ["scripts", "test"]), ["scripts"]);
+    assert.deepEqual(wurzelPraefixe("scripts-x/a.mjs", ["scripts"]), []);
   });
-  test("anker-liste echteUmgebung wirft wie diffcoverage (Entscheidung: bis zur Umstellung der Messgrenze, factory#185)", () => {
+  test("Glob-Wurzel liefert das getroffene Präfix, mehrere Wurzeln mischen sich", () => {
+    assert.deepEqual(wurzelPraefixe("modul-a/src/main/java/de/X.java", ["*/src/main/java", "docs"]), ["modul-a/src/main/java"]);
+    assert.deepEqual(wurzelPraefixe("docs/x.md", ["*/src/main/java", "docs"]), ["docs"]);
+  });
+  test("ab dem ersten Glob-Segment zählen Punkt-Ordner und node_modules nicht", () => {
+    assert.deepEqual(wurzelPraefixe(".versteckt/src/main/java/X.java", ["*/src/main/java"]), []);
+    assert.deepEqual(wurzelPraefixe("node_modules/src/main/java/X.java", ["*/src/main/java"]), []);
+    assert.deepEqual(wurzelPraefixe("a/.b/src/main/java/X.java", ["**/src/main/java"]), []);
+    // ein wörtlicher Präfix vor dem Glob darf mit Punkt beginnen
+    assert.deepEqual(wurzelPraefixe(".claude/x/src/a.ts", [".claude/*/src"]), [".claude/x/src"]);
+  });
+  test("eine Datei direkt unter dem Ordner, den ein Glob trifft, ist keine Wurzel dieser Datei", () => {
+    assert.deepEqual(wurzelPraefixe("src/a.ts", ["src/*"]), []);
+    assert.deepEqual(wurzelPraefixe("src/x/a.ts", ["src/*"]), ["src/x"]);
+  });
+  test("isMeasured: Endungsliste, Glob-Wurzel und ohne-Glob", () => {
+    assert.equal(isMeasured("modul-a/src/main/java/de/X.java", java), true);
+    assert.equal(isMeasured("modul-a/src/main/java/de/X.kt", java), false);
+    assert.equal(isMeasured("modul-a/src/test/java/de/X.java", java), false);
+    assert.equal(isMeasured("modul-a/src/main/java/gen/X.java", { ...java, ohne: ["*/src/main/java/gen/**"] }), false);
+    assert.equal(isMeasured("modul-a/src/main/java/de/X.java", { ...java, ohne: ["*/src/main/java/gen/**"] }), true);
+  });
+  test("isMeasured: String-Form mit Standard-Endungen, Typdeklarationen nie", () => {
+    assert.equal(isMeasured("src/a.ts", "src"), true);
+    assert.equal(isMeasured("src/a.cts", "src"), true);
+    assert.equal(isMeasured("src/a.d.ts", "src"), false);
+    assert.equal(isMeasured("src/a.d.cts", "src"), false);
+    assert.equal(isMeasured("src/a.json", "src"), false);
+    assert.equal(isMeasured("src/a.d.ts", { wurzeln: ["src"], endungen: [".ts", ".d.ts"] }), false);
+  });
+});
+
+describe("check:diffcoverage und anker-liste lesen die Listenform (factory#185)", () => {
+  const liste = { quelle: ["scripts", "test"], moduldoku: "docs/module" };
+  test("check:diffcoverage mit Liste: keine „noch nicht unterstützt“-Meldung, die Wurzeln stehen in der Ausgabe", () => {
+    // Basis = HEAD: leerer Diff, also deterministisch „nichts zu messen“ (die Messung selbst prüft test/diffcoverage.test.ts).
+    const r = lauf("check-diffcoverage.mjs", liste, { FACTORY_DIFF_BASE: "HEAD" });
+    assert.equal(r.status, 0, r.ausgabe);
+    assert.doesNotMatch(r.ausgabe, /noch nicht unterstützt/);
+    assert.match(r.ausgabe, /Wurzeln: scripts, test; Endungen: \.ts/);
+  });
+  test("check:diffcoverage mit kaputtem coverage-Block: Exit 1, Meldung mit Fix-Zeile", () => {
     const echt = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as object;
-    const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur: liste }) });
-    const code = `import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "anker-liste.mjs")).href)}).then((m) => m.echteUmgebung()).then(() => process.exit(0), (e) => { console.error(e.message); process.exit(3); })`;
+    const d = fixture({ "c.json": JSON.stringify({ ...echt, coverage: { berichte: [{ format: "xml", pfad: "a" }] } }) });
+    const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "check-diffcoverage.mjs")], {
+      encoding: "utf8",
+      env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "c.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL, FACTORY_DIFF_BASE: "HEAD" },
+    });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, /coverage\.berichte\[0\]\.format[\s\S]*Fix:/);
+  });
+  test("anker-liste echteUmgebung nimmt die Liste: istQuelle trifft Wurzeln und Hilfsdateien außerhalb der Wurzeln (Ordner-Klausel), nicht Doku", () => {
+    const echt = JSON.parse(readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")) as object;
+    const d = fixture({ "c.json": JSON.stringify({ ...echt, struktur: { ...liste, quelle: ["scripts", "lib"] } }) });
+    const code = `import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "anker-liste.mjs")).href)}).then((m) => { const u = m.echteUmgebung(); console.log(JSON.stringify([u.istQuelle("test/support/x.ts"), u.istQuelle("scripts/a.mjs"), u.istQuelle("docs/a.md")])); process.exit(0); }, (e) => { console.error(e.message); process.exit(3); })`;
     const r = spawnSync(process.execPath, ["-e", code], {
       encoding: "utf8",
       env: { ...process.env, FACTORY_PROJEKT_CONFIG: join(d, "c.json"), VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL },
     });
-    assert.equal(r.status, 3, r.stdout + r.stderr);
-    assert.match(r.stderr, /noch nicht unterstützt/);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout.trim()), [true, true, false]);
   });
   test("strukturAus wirft bei der Liste, nimmt aber die String-Form und mit listeErlaubt (check:docmap) auch die Liste", () => {
     assert.throws(() => pc.strukturAus({ struktur: liste }), /noch nicht unterstützt[\s\S]*Fix:/);

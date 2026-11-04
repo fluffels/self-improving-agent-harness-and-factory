@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { FREMD, projektConfig } from "./support/fremd-config";
+import { fixture } from "./support/tmp-fixture";
 
 // #101: node:child_process ersetzt, damit der Standardweg ohne runGit (execFileSync mit GIT_OPTIONEN) prüfbar ist, ohne git zu starten.
 const execFileSyncMock = vi.hoisted(() => vi.fn());
@@ -37,6 +38,8 @@ type RunGit = (args: string[]) => string;
 type Changed = Map<string, Set<number>>;
 type Lcov = Map<string, Map<number, number>>;
 type Bucket = { covered: number; total: number; pct: number; floor: number | null; below: boolean };
+type Quellen = { wurzeln: string[]; endungen: string[]; ohne?: string[] };
+type Bericht = { format: string; pfad: string; basis?: string };
 type Verdict = { buckets: Record<string, Bucket>; missing: string[]; below: string[] };
 
 /** Die öffentliche Oberfläche des Wächters, wie dieser Test sie nutzt. */
@@ -55,7 +58,12 @@ type CheckDiffCoverageModule = {
     branches: Map<string, Map<number, { total: number; taken: number }>>,
   ) => { path: string; line: number; taken: number; total: number }[];
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
-  checkDiffCoverage: (opts: { quelle?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
+  pfadAngaben: (quellen: string | Quellen) => string[];
+  fehlenderBerichtText: (fehlend: string[]) => string;
+  ohneMessung: (r: Record<string, unknown>, o: { zeilen: Record<string, string>; quelle: string | Quellen; colors: Record<"red" | "green" | "dim", (s: string) => string> }) => number | null;
+  messfehlerText: (r: Record<string, unknown>, red: (s: string) => string) => string | null;
+  mehrdeutigText: (m: { pfad: string; schluessel: string; kandidaten: string[] }[]) => string;
+  checkDiffCoverage: (opts: { quelle?: string | Quellen; berichte?: Bericht[]; rootDir?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
 
 // Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
@@ -68,17 +76,25 @@ const {
   LAYER_DIFF_FLOORS,
   LCOV_PATH,
   GIT_OPTIONEN,
-  normalizePath,
   isMeasured,
   parseDiffLines,
-  parseLcov,
-  parseLcovBranches,
   teilweiseGetestet,
   evaluateByLayer,
+  pfadAngaben,
+  fehlenderBerichtText,
+  mehrdeutigText,
+  messfehlerText,
+  ohneMessung,
   checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as covRaw from "../scripts/coverage-berichte.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as relRaw from "../scripts/relativ-pfad.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as sliceRaw from "../scripts/slice-override.mjs";
+const { parseLcov, parseLcovBranches } = covRaw as unknown as Pick<CheckDiffCoverageModule, "parseLcov" | "parseLcovBranches">;
+const { normalizePath } = relRaw as unknown as Pick<CheckDiffCoverageModule, "normalizePath">;
 const { commitZeilen, commitZeilenAus } = sliceRaw as unknown as {
   commitZeilen: (praefix: string, planer: string) => Record<string, string>;
   commitZeilenAus: (config: unknown) => Record<string, string>;
@@ -711,6 +727,152 @@ describe("Diff-Coverage: Quellwurzel aus der Struktur-Config (#1860)", () => {
       runGit: (args) => (args[0] === "diff" ? diffFor(`${Q}/a.ts`, ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
       env: { FACTORY_DIFF_BASE: "basesha" },
     });
+    assert.equal(r.nothingToMeasure, true);
+  });
+});
+
+describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", () => {
+  const { layerOf } = requireCjs("../scripts/layers.cjs") as { layerOf: (p: string) => string };
+  const JAVA: Quellen = { wurzeln: ["*/src/main/java"], endungen: [".java"] };
+  const XML = readFileSync(fileURLToPath(new URL("./fixtures/jacoco/jacoco.xml", import.meta.url)), "utf8");
+  const JACOCO: Bericht[] = [{ format: "jacoco", pfad: "*/target/site/jacoco/jacoco.xml" }];
+  const PFAD_A = "modul-a/src/main/java/de/beispiel/Rechner.java";
+  const PFAD_B = "modul-b/src/main/java/de/beispiel/Rechner.java";
+  const ENV = { FACTORY_DIFF_BASE: "basesha" };
+  const baum = (extra: Record<string, string> = {}): string => fixture({ "modul-a/target/site/jacoco/jacoco.xml": XML, [PFAD_A]: "x", ...extra });
+  /** Ein Diff, der die genannten Zeilen von `pfad` als neu ausweist. */
+  const diffZeilen = (pfad: string, zeilen: number[]): string => diffFor(pfad, zeilen.flatMap((z) => [`@@ -0,0 +${z} @@`, "+x"]));
+  const lauf = (o: { zeilen: number[]; pfad?: string; extra?: Record<string, string>; berichte?: Bericht[]; quelle?: string | Quellen; trailer?: string }) => {
+    const pfad = o.pfad ?? PFAD_A;
+    const basis: RunGit = (args) => (args[0] === "diff" ? diffZeilen(pfad, o.zeilen) : "basesha");
+    return checkDiffCoverage({
+      quelle: o.quelle ?? JAVA,
+      berichte: o.berichte ?? JACOCO,
+      rootDir: baum(o.extra),
+      runGit: o.trailer === undefined ? basis : mitTrailer(basis, o.trailer),
+      env: ENV,
+    });
+  };
+
+  test("Vorbedingung: die Java-Datei fällt in eine Schicht mit Floor (sonst wäre der Rot-Test vakuös)", () => {
+    assert.notEqual(LAYER_DIFF_FLOORS[layerOf(PFAD_A)], null);
+  });
+  test("eine ungedeckte geänderte Zeile in einer .java-Datei (JaCoCo-Fixture) ist rot und nennt die Schicht", () => {
+    const r = lauf({ zeilen: [5] });
+    assert.equal(r.failed, true);
+    assert.deepEqual(r.below, [layerOf(PFAD_A)]);
+    const bucket = (r.buckets as Record<string, { files: { path: string; uncovered: number[] }[] }>)[layerOf(PFAD_A)];
+    assert.deepEqual(bucket.files, [{ path: PFAD_A, total: 1, covered: 0, uncovered: [5] }]);
+  });
+  test("eine gedeckte Zeile ist grün, ein Zweig mit cb < mb+cb steht unter „teilweise getestet“", () => {
+    const gedeckt = lauf({ zeilen: [3] });
+    assert.equal(gedeckt.failed, false);
+    const teil = lauf({ zeilen: [7] });
+    assert.equal(teil.failed, false);
+    assert.deepEqual(teil.partial, [{ path: PFAD_A, line: 7, taken: 1, total: 2 }]);
+  });
+  test("eine Zeile ohne <line> im Bericht (Kommentar, Leerzeile) zählt nicht", () => {
+    const r = lauf({ zeilen: [4] });
+    assert.equal(r.failed, false);
+    assert.deepEqual(r.partial, []);
+  });
+  test("ein mehrdeutiger JaCoCo-Pfad (zwei Module, derselbe Schlüssel) ist rot, nennt beide Kandidaten und lässt sich nicht per Override durchwinken", () => {
+    const extra = { [PFAD_B]: "y" };
+    const rot = lauf({ zeilen: [3], extra });
+    assert.equal(rot.failed, true);
+    const m = rot.mehrdeutig as { pfad: string; schluessel: string; kandidaten: string[] }[];
+    assert.equal(m.length, 1);
+    assert.equal(m[0].schluessel, "de/beispiel/Rechner.java");
+    assert.deepEqual(m[0].kandidaten, [PFAD_A, PFAD_B]);
+    assert.deepEqual(rot.missing, []);
+    const mitOverride = lauf({ zeilen: [3], extra, trailer: `${ZEILEN.diffcovOverride}: #185 bewusst` });
+    assert.equal(mitOverride.failed, true);
+    assert.equal(mitOverride.stale, false);
+  });
+  test("mehrdeutigText nennt Pfad, Schlüssel, Kandidaten und den Fix", () => {
+    const t = mehrdeutigText([{ pfad: PFAD_A, schluessel: "de/beispiel/Rechner.java", kandidaten: [PFAD_A, PFAD_B] }]);
+    assert.match(t, /de\/beispiel\/Rechner\.java[\s\S]*modul-b/);
+    assert.match(t, /Fix: [^\n]*struktur\.quelle/);
+  });
+  test("ohneMessung: nichts zu messen grün (mit Wurzeln und Endungen im Text), stale rot, Diff nicht lesbar rot, sonst null", () => {
+    const aus: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((s: string) => void aus.push(s));
+    const err = vi.spyOn(console, "error").mockImplementation((s: string) => void aus.push(s));
+    try {
+      const id = (s: string): string => s;
+      const o = { zeilen: ZEILEN, quelle: JAVA, colors: { red: id, green: id, dim: id } };
+      assert.equal(ohneMessung({ nothingToMeasure: true, stale: false, invalidOverrides: [] }, o), 0);
+      assert.match(aus.join("\n"), /ok — dieser Slice ändert keinen gemessenen Quellcode \(Wurzeln: \*\/src\/main\/java; Endungen: \.java\)/);
+      assert.equal(ohneMessung({ nothingToMeasure: true, stale: true, reason: "x", invalidOverrides: [] }, o), 1);
+      assert.equal(ohneMessung({ diffUnlesbar: true }, o), 1);
+      assert.match(aus.join("\n"), /Diff nicht lesbar/);
+      assert.equal(ohneMessung({}, o), null);
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+  test("messfehlerText unterscheidet fehlenden Bericht, fehlende Datei im Bericht und mehrdeutigen Pfad; ohne Messfehler gibt es null", () => {
+    const rot = (s: string): string => s;
+    const leer = { noReport: false, missing: [], mehrdeutig: [] };
+    assert.equal(messfehlerText(leer, rot), null);
+    assert.match(messfehlerText({ ...leer, noReport: true, fehlendeBerichte: ["a/jacoco.xml"] }, rot) ?? "", /Kein Coverage-Bericht[\s\S]*Erwartet: a\/jacoco\.xml[\s\S]*gate-befehl\.mjs coverage/);
+    assert.match(messfehlerText({ ...leer, missing: ["x/A.java"] }, rot) ?? "", /fehlen im Coverage-Bericht:\n {4}x\/A\.java[\s\S]*gate-befehl\.mjs coverage/);
+    assert.match(messfehlerText({ ...leer, mehrdeutig: [{ pfad: PFAD_A, schluessel: "k", kandidaten: [PFAD_A, PFAD_B] }] }, rot) ?? "", /mehrdeutigem JaCoCo-Pfad[\s\S]*Fix:/);
+  });
+  test("ein fehlender Bericht (Glob ohne Treffer) ist noReport und nennt das Muster; der Text nennt den Befehl", () => {
+    const rootDir = fixture({ [PFAD_A]: "x" });
+    const r = checkDiffCoverage({ quelle: JAVA, berichte: JACOCO, rootDir, runGit: (a) => (a[0] === "diff" ? diffZeilen(PFAD_A, [5]) : "basesha"), env: ENV });
+    assert.equal(r.failed, true);
+    assert.equal(r.noReport, true);
+    assert.deepEqual(r.fehlendeBerichte, ["*/target/site/jacoco/jacoco.xml"]);
+    const text = fehlenderBerichtText(r.fehlendeBerichte);
+    assert.match(text, /Erwartet: \*\/target\/site\/jacoco\/jacoco\.xml/);
+    assert.match(text, /node scripts\/gate-befehl\.mjs coverage/);
+  });
+  test("jeder konfigurierte Bericht ist Pflicht: ein vorhandener lcov rettet einen fehlenden JaCoCo-Bericht nicht", () => {
+    const rootDir = fixture({ "coverage/lcov.info": "SF:x.ts\nDA:1,1\nend_of_record\n", [PFAD_A]: "x" });
+    const berichte = [{ format: "lcov", pfad: "coverage/lcov.info" }, ...JACOCO];
+    const r = checkDiffCoverage({ quelle: JAVA, berichte, rootDir, runGit: (a) => (a[0] === "diff" ? diffZeilen(PFAD_A, [3]) : "basesha"), env: ENV });
+    assert.equal(r.noReport, true);
+    assert.deepEqual(r.fehlendeBerichte, ["*/target/site/jacoco/jacoco.xml"]);
+  });
+  test("lcov mit basis frontend misst frontend/src/a.ts; ohne basis fehlt die Datei im Bericht", () => {
+    const rootDir = fixture({ "coverage/lcov.info": "SF:src/a.ts\nDA:1,1\nDA:2,0\nend_of_record\n" });
+    const quelle = { wurzeln: ["frontend/src"], endungen: [".ts"] };
+    const runGit: RunGit = (a) => (a[0] === "diff" ? diffFor("frontend/src/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha");
+    const mit = checkDiffCoverage({ quelle, berichte: [{ format: "lcov", pfad: "coverage/lcov.info", basis: "frontend" }], rootDir, runGit, env: ENV });
+    assert.equal(mit.failed, false);
+    const ohne = checkDiffCoverage({ quelle, berichte: [{ format: "lcov", pfad: "coverage/lcov.info" }], rootDir, runGit, env: ENV });
+    assert.deepEqual(ohne.missing, ["frontend/src/a.ts"]);
+    assert.equal(ohne.failed, true);
+  });
+  test("gemischter Lauf: lcov (Frontend) und JaCoCo (Backend) in einem Slice", () => {
+    const rootDir = baum({ "coverage/lcov.info": "SF:src/a.ts\nDA:1,1\nend_of_record\n" });
+    const quelle = { wurzeln: ["*/src/main/java", "frontend/src"], endungen: [".java", ".ts"] };
+    const berichte = [...JACOCO, { format: "lcov", pfad: "coverage/lcov.info", basis: "frontend" }];
+    const diff = [diffZeilen(PFAD_A, [3]), diffZeilen("frontend/src/a.ts", [1])].join("\n");
+    const r = checkDiffCoverage({ quelle, berichte, rootDir, runGit: (a) => (a[0] === "diff" ? diff : "basesha"), env: ENV });
+    assert.equal(r.failed, false);
+    const dateien = Object.values(r.buckets as Record<string, { files: { path: string }[] }>).flatMap((b) => b.files.map((f) => f.path));
+    assert.deepEqual(dateien.sort(), ["frontend/src/a.ts", PFAD_A]);
+  });
+  test("die Pfadangaben des Diffs: wörtlich unverändert, Glob als :(glob)<wurzel>/**; die Endungsliste filtert", () => {
+    assert.deepEqual(pfadAngaben("lib"), ["lib"]);
+    assert.deepEqual(pfadAngaben({ wurzeln: ["*/src/main/java", "lib"], endungen: [".java"] }), [":(glob)*/src/main/java/**", "lib"]);
+    const gesehen: string[][] = [];
+    const r = checkDiffCoverage({
+      quelle: JAVA,
+      berichte: JACOCO,
+      rootDir: baum(),
+      runGit: (a) => (gesehen.push(a), a[0] === "diff" ? diffFor("modul-a/src/main/java/de/beispiel/Doku.md", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      env: ENV,
+    });
+    assert.deepEqual(gesehen.find((a) => a[0] === "diff"), ["diff", "-U0", "basesha...HEAD", "--", ":(glob)*/src/main/java/**"]);
+    assert.equal(r.nothingToMeasure, true);
+  });
+  test("struktur.ohne nimmt Dateien aus der Messung", () => {
+    const r = lauf({ zeilen: [5], quelle: { ...JAVA, ohne: ["*/src/main/java/de/**"] } });
     assert.equal(r.nothingToMeasure, true);
   });
 });

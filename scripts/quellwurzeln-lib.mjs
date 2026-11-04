@@ -76,6 +76,12 @@ export function quellenAus(config) {
   };
 }
 
+/** Die Quellen als Objekt `{ wurzeln, endungen, ohne }`: ein Objekt bleibt, ein String wird eine wörtliche Wurzel mit der Standard-Endungsliste (die alte Einzel-Wurzel-Form der Aufrufer). */
+export function quellenObjekt(quellen) {
+  if (typeof quellen !== "string") return { ohne: [], ...quellen };
+  return { quelle: quellen, wurzeln: [quellen], endungen: [...STANDARD_ENDUNGEN], ohne: [] };
+}
+
 const istOrdner = (pfad) => {
   try {
     return statSync(pfad).isDirectory();
@@ -105,6 +111,27 @@ export function ordnerZuMuster(rootDir, muster) {
   const treffer = [];
   ordnerWalk(rootDir, praefix, globRegex(muster), treffer);
   return treffer.sort();
+}
+
+/** Pur: die Wurzel-Präfixe (repo-relative Ordner, POSIX), unter denen `pfad` liegt: je wörtlicher Wurzel diese selbst, je Glob jedes Segment-Präfix des Pfads,
+ *  das der Glob trifft (dieselbe Grenze wie `ordnerZuMuster`: ab dem ersten Glob-Segment ist kein Segment `node_modules` und keines beginnt mit `.`). Leer = außerhalb aller Wurzeln. */
+export function wurzelPraefixe(pfad, wurzeln) {
+  const segmente = pfad.split("/");
+  const treffer = new Set();
+  for (const w of wurzeln) {
+    if (!istGlob(w)) {
+      if (pfad.startsWith(`${w}/`)) treffer.add(w);
+      continue;
+    }
+    const regex = globRegex(w);
+    const erstes = w.split("/").findIndex((s) => istGlob(s));
+    for (let i = 1; i < segmente.length; i++) {
+      const praefix = segmente.slice(0, i);
+      if (praefix.slice(erstes).some(uebersprungen)) break;
+      if (regex.test(praefix.join("/"))) treffer.add(praefix.join("/"));
+    }
+  }
+  return [...treffer];
 }
 
 function dateiWalk(rootDir, rel, dateien) {

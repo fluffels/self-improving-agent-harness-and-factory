@@ -279,6 +279,14 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
 describe("istGemessen", () => {
   const istGemessen = (ankerRoh as unknown as { istGemessen: (p: string, q: string) => boolean }).istGemessen;
   test.each(["test/support/x.ts", "scripts/a.mjs"])("%s ist gemessen", (p) => expect(istGemessen(p, "scripts")).toBe(true));
+  test("Listenform: die Ordner-Klausel nimmt die Endungsliste und ohne des Projekts, nicht die Standard-Endungen", () => {
+    const java = { wurzeln: ["*/src/main/java"], endungen: [".java"] };
+    const gem = istGemessen as unknown as (p: string, q: unknown) => boolean;
+    expect(gem("modul-a/src/main/java/de/X.java", java)).toBe(true);
+    expect(gem("modul-a/src/test/java/de/Hilfe.java", java)).toBe(true);
+    expect(gem("test/support/x.mjs", { wurzeln: ["scripts"], endungen: [".ts"] })).toBe(false);
+    expect(gem("modul-a/src/test/java/de/Hilfe.java", { ...java, ohne: ["*/src/test/**"] })).toBe(false);
+  });
   test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts", "test/x.test.mjs", "scripts/a.test.mjs"])("%s ist nicht gemessen", (p) =>
     expect(istGemessen(p, "scripts")).toBe(false),
   );
