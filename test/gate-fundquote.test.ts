@@ -54,6 +54,7 @@ const lies = () => "";
 const laeufe = (a: Aufruf[], o: { von?: number | null; bis?: number | null; liesDatei?: (p: string) => string } = {}) =>
   gf.laeufeAusTranskript(zeilen(a), { sessionId: "sess1", liesDatei: o.liesDatei ?? lies, von: o.von, bis: o.bis, ctx });
 const erg = (l: Lauf) => Object.fromEntries(l.gates.map((g) => [g.name, g.ergebnis]));
+const json = (t: string) => JSON.parse(t) as { quellen: Record<string, Zahlen> };
 const zeile = (z: Zahlen, name: string) => z.gates.find((g) => g.name === name)!;
 
 describe("gateSatz", () => {
@@ -330,8 +331,8 @@ describe("main", () => {
     const gh = vi.fn((args: string[]) => (args[1] === "list" ? JSON.stringify([{ databaseId: 5, conclusion: "failure", createdAt: new Date(T0).toISOString() }, { databaseId: 6, conclusion: "failure", createdAt: new Date(T0 - 9 * 86_400_000).toISOString() }]) : log));
     const b = basis({ gh });
     expect(gf.main(["--ci", "ci.yml", "--json"], b.deps)).toBe(0);
-    const daten = JSON.parse(b.log.mock.calls[0][0]);
-    expect(daten.quellen.ci.gates.find((x: { name: string }) => x.name === "lint")).toMatchObject({ erreicht: 1, rot: 1 });
+    const daten = json(b.log.mock.calls[0][0]);
+    expect(daten.quellen.ci.gates.find((x) => x.name === "lint")).toMatchObject({ erreicht: 1, rot: 1 });
     expect(daten.quellen.transkript.gezaehlt).toBe(0);
     expect(gh.mock.calls.filter((c) => c[0][1] === "view")).toHaveLength(1);
   });
@@ -344,7 +345,7 @@ describe("main", () => {
     const b = basis({ ladeSession, liesDatei });
     expect(gf.main(["--transkript", "x.jsonl", "--ci-log", "log.txt"], b.deps)).toBe(0);
     expect(ladeSession).toHaveBeenCalledWith("x.jsonl");
-    const text = b.log.mock.calls[0][0] as string;
+    const text = b.log.mock.calls[0][0];
     expect(text).toMatch(/lint\s+erreicht\s+1 /);
     expect(text).toMatch(/CI-Log nicht lesbar 1/);
   });
@@ -353,6 +354,6 @@ describe("main", () => {
     const neu = { command: "npm run lint", text: ausgabe("lint"), ts: T0 + 86_400_000 - 1000, id: "n" };
     const b = basis({ findeSessions: () => [sessionMit([alt, neu])] });
     gf.main(["--json"], b.deps);
-    expect(JSON.parse(b.log.mock.calls[0][0]).quellen.transkript.gezaehlt).toBe(1);
+    expect(json(b.log.mock.calls[0][0]).quellen.transkript.gezaehlt).toBe(1);
   });
 });
