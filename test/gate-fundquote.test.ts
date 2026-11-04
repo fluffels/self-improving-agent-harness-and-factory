@@ -2,6 +2,10 @@
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gfModule from "../scripts/gate-fundquote.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as vlModule from "../scripts/verify-lauf.mjs";
+
+const vl = vlModule as { bericht: (e: Record<string, unknown>[], o: { modus: string; hinweis: string }) => string };
 
 type Gate = { name: string; ergebnis: string; sek: number | null };
 type Lauf = { quelle: string; id: string; gezaehlt: boolean; grund?: string; gates: Gate[] };
@@ -36,7 +40,7 @@ const kopf = (s: string) => `> beispiel@1.0.0 ${s}\n> body ${s}\n\n`;
 const ausgabe = (...s: string[]) => s.map(kopf).join("");
 const T0 = Date.parse("2026-11-01T10:00:00.000Z");
 
-type Aufruf = { command: string; text?: string; fehler?: boolean; unterbrochen?: boolean; tool?: string; hintergrund?: boolean; ohneErgebnis?: boolean; ts?: number; id?: string };
+type Aufruf = { command: string; array?: boolean; text?: string; fehler?: boolean; unterbrochen?: boolean; tool?: string; hintergrund?: boolean; ohneErgebnis?: boolean; ts?: number; id?: string };
 function zeilen(aufrufe: Aufruf[]): unknown[] {
   const rows: unknown[] = [];
   aufrufe.forEach((a, i) => {
@@ -45,7 +49,7 @@ function zeilen(aufrufe: Aufruf[]): unknown[] {
     if (a.hintergrund) input.run_in_background = true;
     rows.push({ type: "assistant", timestamp: new Date(a.ts ?? T0).toISOString(), message: { content: [{ type: "tool_use", id, name: a.tool ?? "Bash", input }] } });
     if (!a.ohneErgebnis) {
-      rows.push({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, is_error: a.fehler === true, content: a.text ?? "" }] }, toolUseResult: { interrupted: a.unterbrochen === true } });
+      rows.push({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, is_error: a.fehler === true, content: a.array ? [{ type: "text", text: a.text ?? "" }] : (a.text ?? "") }] }, toolUseResult: { interrupted: a.unterbrochen === true } });
     }
   });
   return rows;
@@ -66,6 +70,9 @@ describe("gateSatz", () => {
   });
   test("wirft ohne verify", () => {
     expect(() => gf.gateSatz({ name: "x", scripts: { lint: "eslint ." } })).toThrow(/verify/);
+  });
+  test("wirft ohne Paketnamen", () => {
+    expect(() => gf.gateSatz({ scripts: { verify: "npm run lint", lint: "eslint ." } })).toThrow(/Namen/);
   });
 });
 
@@ -90,6 +97,9 @@ describe("befehlsform", () => {
   });
   test("zählt die Gate-Aufrufe", () => {
     expect(gf.befehlsform("cd x && npm run lint && npm test").aufrufe).toBe(2);
+  });
+  test("ein reines Env-Segment ist neutral", () => {
+    expect(gf.befehlsform("FOO=1 && npm run lint")).toEqual({ art: "ok", aufrufe: 1 });
   });
 });
 
@@ -141,6 +151,21 @@ describe("Kopfzeilen im Transkript", () => {
     const c = laeufe([{ command: "npm run lint", text: "> anderes@2.0.0 lint\n> eslint\n" }]);
     expect(c).toEqual([]);
   });
+  test("verify:full rot im verify-Teil: test:coverage ist nicht erreicht", () => {
+    const l = laeufe([{ command: "npm run verify:full", fehler: true, text: `Exit code 1\n${ausgabe("verify:full", "verify", "typecheck", "lint")}` }]);
+    expect(erg(l[0])).toEqual({ typecheck: "gruen", lint: "rot", "check:size": "nicht-erreicht", test: "nicht-erreicht", "test:coverage": "nicht-erreicht" });
+  });
+  test("Quote mit Fremdskript gleich der ohne", () => {
+    const mit = laeufe([{ command: "npm run docs:gen && npm run lint", text: ausgabe("docs:gen", "lint") }]);
+    const ohne = laeufe([{ command: "npm run lint", text: ausgabe("lint") }]);
+    expect(gf.zaehle(mit, ctx.gates).gates).toEqual(gf.zaehle(ohne, ctx.gates).gates);
+  });
+  test("tool_result-Inhalt als Block-Liste, CRLF und Farbcodes werden gelesen", () => {
+    const esc = String.fromCharCode(27);
+    const text = `> beispiel@1.0.0 lint\r\n${esc}[32m> beispiel@1.0.0 test${esc}[0m\r\n`;
+    const l = laeufe([{ command: "npm run lint && npm test", text, array: true }]);
+    expect(erg(l[0])).toEqual({ lint: "gruen", test: "gruen" });
+  });
   test("Pipe und andere Befehlsformen zählen nicht", () => {
     const l = laeufe([
       { command: "npm run lint 2>&1 | tail -20", text: ausgabe("lint") },
@@ -182,6 +207,34 @@ describe("Summenzeile", () => {
   test("rot mit falscher Kettenlänge: Kette geändert", () => {
     const l = laeufe([{ command: "npm run verify:kompakt", fehler: true, text: "Exit code 1\nverify:kompakt ROT · 3/5 grün · 14 s · rot: lint\n" }]);
     expect(l[0]).toMatchObject({ gezaehlt: false, grund: "Kette geändert" });
+  });
+  test("unlesbare grüne Zeile und falsche Grün-Zahl: nicht zählbar", () => {
+    expect(gf.bewerteSumme("verify:kompakt grün · 4/4 · 12 s · nichts", { verify: ctx.verify })).toEqual({ grund: "unvollständig" });
+    expect(gf.bewerteSumme("verify:kompakt ROT · 2/4 grün · 1 s · rot: lint", { verify: ctx.verify })).toEqual({ grund: "Kette geändert" });
+  });
+  test("changed rot mit rotem lint: lint zählt rot", () => {
+    const l = laeufe([{ command: "npm run verify:changed", fehler: true, text: "Exit code 1\nverify:changed ROT · 3/4 grün · 9 s · rot: lint\n" }]);
+    expect(erg(l[0])).toEqual({ typecheck: "gruen", lint: "rot", "check:size": "gruen", test: "gruen" });
+  });
+  test("Kettenkopf von verify:changed ohne Summenzeile ist unvollständig", () => {
+    expect(laeufe([{ command: "npm run verify:changed", text: ausgabe("verify:changed") }])[0]).toMatchObject({ gezaehlt: false, grund: "unvollständig" });
+  });
+  test("PowerShell zählt über die Summenzeile", () => {
+    const l = laeufe([{ tool: "PowerShell", command: "npm run verify:kompakt", text: `${gruen}\n` }]);
+    expect(l[0].gezaehlt).toBe(true);
+  });
+  test("Round-Trip: das Format, das verify-lauf erzeugt, wird gelesen", () => {
+    const e = [
+      { name: "typecheck", ok: true, ms: 3000 },
+      { name: "lint", ok: false, exit: 1, ms: 7000, ausgabe: "fehler" },
+      { name: "check:size", ok: true, ms: 0 },
+      { name: "test", ok: true, ms: 5000, info: "related 2 + 0 per Name" },
+    ];
+    const rotText = vl.bericht(e, { modus: "changed", hinweis: "Lint und Test voll (x)" });
+    const r = gf.bewerteSumme(rotText, { verify: ctx.verify });
+    expect(r?.gates?.map((g) => [g.name, g.ergebnis, g.sek])).toEqual([["typecheck", "gruen", null], ["lint", "rot", 7], ["check:size", "gruen", null], ["test", "gruen", null]]);
+    const gruenText = vl.bericht(e.map((x) => ({ ...x, ok: true })), { modus: "kompakt", hinweis: "h" });
+    expect(gf.bewerteSumme(gruenText, { verify: ctx.verify })?.gates?.map((g) => [g.name, g.sek])).toEqual([["typecheck", 3], ["lint", 7], ["check:size", 0], ["test", 5]]);
   });
   test("rotes Gate außerhalb der Kette: Kette geändert", () => {
     expect(gf.bewerteSumme("verify:kompakt ROT · 3/4 grün · 1 s · rot: fremd", { verify: ctx.verify })).toEqual({ grund: "Kette geändert" });
@@ -329,6 +382,27 @@ describe("main", () => {
     expect(b.log.mock.calls[0][0]).toMatch(/Fenster enger wählen/);
     expect(b.log.mock.calls[0][0]).toMatch(/abgebrochen 1000/);
     expect(gh).toHaveBeenCalledTimes(1);
+  });
+  test("Läufe nur in Subagent-Dateien zählen mit", () => {
+    const a = { command: "npm run lint", text: ausgabe("lint"), ts: T0 };
+    const b = basis({ findeSessions: () => [{ id: "sess1", main: [], subagents: [{ zeilen: zeilen([a]) }] }] });
+    gf.main(["--json"], b.deps);
+    expect(json(b.log.mock.calls[0][0]).quellen.transkript.gezaehlt).toBe(1);
+  });
+  test("grüner CI-Lauf lädt das volle Log, Fenster mit beiden Grenzen, unter 1000 Läufen kein Hinweis", () => {
+    const logText = ["Tests\tVerify\t2026-11-01T10:00:00.0000000Z ##[group]Run x", "Tests\tVerify\t2026-11-01T10:00:01.0000000Z > beispiel@1.0.0 lint", "Tests\tVerify\t2026-11-01T10:00:09.0000000Z fertig"].join("\n");
+    const bis = T0 + 86_400_000;
+    const liste = [{ databaseId: 1, conclusion: "success", createdAt: new Date(T0).toISOString() }, { databaseId: 2, conclusion: "success", createdAt: new Date(bis).toISOString() }];
+    const gh = vi.fn((args: string[]) => (args[1] === "list" ? JSON.stringify(liste) : logText));
+    const b = basis({ gh });
+    expect(gf.main(["--ci", "ci.yml", "--von", new Date(T0 - 1000).toISOString(), "--bis", new Date(bis).toISOString(), "--json"], b.deps)).toBe(0);
+    const liste1 = gh.mock.calls[0][0];
+    expect(liste1[liste1.indexOf("--created") + 1]).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z\.\.\d{4}-\d\d-\d\dT[\d:]+Z$/);
+    const views = gh.mock.calls.filter((c) => c[0][1] === "view");
+    expect(views).toHaveLength(1);
+    expect(views[0][0]).toEqual(["run", "view", "1", "--log"]);
+    expect(json(b.log.mock.calls[0][0]).quellen.ci.gates.find((x) => x.name === "lint")).toMatchObject({ erreicht: 1, rot: 0, medianSek: 8 });
+    expect(b.log.mock.calls[0][0]).not.toMatch(/enger wählen/);
   });
   test("CI-Lauf im Fenster wird geladen, außerhalb nicht; --json trennt die Quellen", () => {
     const log = ["Tests\tVerify\t2026-11-01T10:00:00.0000000Z ##[group]Run x", "Tests\tVerify\t2026-11-01T10:00:01.0000000Z > beispiel@1.0.0 lint", "Tests\tVerify\t2026-11-01T10:00:09.0000000Z ##[error]Process completed with exit code 1."].join("\n");

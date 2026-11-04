@@ -28,7 +28,10 @@
  *
  * Grenzen: nur Claude-Transkripte (Codex-Sitzungen werden nicht gelesen; die CI-Quelle gilt für beide Laufzeiten); Hintergrund- und
  * pre-push-Läufe fehlen; ein fremdes npm-Skript, das selbst Gate-Skripte ruft, kann Rot vortäuschen; das PowerShell-Tool zählt nur
- * über die Summenzeile (sein Exit-Status ist nicht belegt); rote Summenzeilen nach einer Kettenänderung fallen heraus.
+ * über die Summenzeile (sein Exit-Status ist nicht belegt; ein rotes `verify:kompakt` ohne `Exit code`-Präfix gilt als abgebrochen);
+ * rote Summenzeilen nach einer Kettenänderung fallen heraus; eine Ad-hoc-`&&`-Kette ohne Kettenkopf (`npm run a && npm run b`) zählt
+ * nur die erreichten Gates, die nicht erreichten bleiben unsichtbar (nie grün); nur die npm-Kette aus `package.json`, der Block
+ * `befehle` der Projekt-Config wird nicht ausgewertet (Projekte mit anderer Kette bekommen Exit 2).
  */
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -107,9 +110,10 @@ const zeilenVon = (text) => sauber(text).split("\n").map((t) => ({ text: t, ms: 
 export const hatKopf = (zeilen, ctx) => kopfEintraege(zeilen, ctx).some((e) => e.art !== "fremd");
 
 function fehlendeGates(eintraege, verify, gates) {
-  const k = eintraege.map((e) => e.art).lastIndexOf("kette");
+  const k = eintraege.findIndex((e) => e.art === "kette");
   if (k < 0) return [];
-  const erwartet = eintraege[k].name === "verify" ? verify : gates;
+  // `verify:full` druckt zuerst die eigene, dann die Kopfzeile von `verify`: die äußerste Kette bestimmt die erwarteten Gates.
+  const erwartet = eintraege.some((e) => e.name === "verify:full") ? gates : verify;
   const gesehen = new Set(eintraege.slice(k).filter((e) => e.art === "gate").map((e) => e.name));
   return erwartet.filter((g) => !gesehen.has(g));
 }
@@ -374,8 +378,8 @@ function ciLaeufe(werte, fenster, ctx, d) {
   };
   for (const datei of werte["ci-log"] ?? []) lesbar(datei, () => d.liesDatei(datei));
   if (werte.ci) {
-    const tag = new Date(fenster.von).toISOString().slice(0, 10);
-    const liste = JSON.parse(d.gh(["run", "list", "--workflow", werte.ci, "--status", "completed", "--created", `>=${tag}`, "--limit", "1000", "--json", "databaseId,conclusion,createdAt"]));
+    const zeit = (ms) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
+    const liste = JSON.parse(d.gh(["run", "list", "--workflow", werte.ci, "--status", "completed", "--created", `${zeit(fenster.von)}..${zeit(fenster.bis)}`, "--limit", "1000", "--json", "databaseId,conclusion,createdAt"]));
     if (liste.length >= 1000) hinweise.push("CI: genau 1000 Läufe, Fenster enger wählen");
     for (const r of liste.filter((x) => Date.parse(x.createdAt) >= fenster.von && Date.parse(x.createdAt) < fenster.bis)) {
       if (r.conclusion === "success" || r.conclusion === "failure") lesbar(String(r.databaseId), () => d.gh(["run", "view", String(r.databaseId), "--log"]));
