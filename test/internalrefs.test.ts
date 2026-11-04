@@ -568,6 +568,7 @@ describe("Projektliste (factory#169)", () => {
     const text = configText(w);
     assert.ok(text.startsWith(kopf.slice(0, kopf.indexOf('"internalrefs"'))), "Text vor dem Block byte-gleich");
     assert.ok(text.endsWith(rest), "Text nach dem Block byte-gleich");
+    assert.ok(!text.replaceAll("\r\n", "").includes("\n"), "der neue Block behält das Zeilenende CRLF");
     const cfg = JSON.parse(text) as { internalrefs: { namen: string[]; begriffe: string[] } };
     assert.deepEqual(cfg.internalrefs.namen, [kod("zzzalt")]);
     assert.deepEqual(cfg.internalrefs.begriffe, [kod(DUMMY)]);

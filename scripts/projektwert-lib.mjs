@@ -35,8 +35,8 @@ function zeilenMarker(zeilen, i, fmEnde) {
   }
   const folge = i + 1 < zeilen.length ? PROJEKTWERT_FOLGE.exec(zeilen[i + 1]) : null;
   if (!PROJEKTWERT_GRUPPEN.includes(m[1].split(".")[0])) return { fehler: `unbekannte Projektwert-Gruppe in '${m[1]}' (erlaubt: ${PROJEKTWERT_GRUPPEN.join(", ")})` };
-  if (fmEnde < 0 || i >= fmEnde) return { fehler: "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters" };
-  if (i + 1 >= fmEnde || folge === null) return { fehler: "auf den Projektwert-Zeilen-Marker muss im Frontmatter eine Zeile `schlüssel:` folgen" };
+  if (i >= fmEnde) return { fehler: "Projektwert-Zeilen-Marker steht außerhalb des führenden Frontmatters" };
+  if (folge === null) return { fehler: "auf den Projektwert-Zeilen-Marker muss im Frontmatter eine Zeile `schlüssel:` folgen" };
   return { stelle: { marker: i, folge: i + 1, schluessel: m[1], einrueckung: folge[1], name: folge[2] } };
 }
 
