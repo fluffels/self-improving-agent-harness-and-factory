@@ -31,7 +31,7 @@ function refBedingung(modell: Modell, ziel: Schicht, alsQuelle: boolean) {
 }
 function refVerbotsRegeln(modell: Modell) {
   const regeln = [];
-  const ziele = [...modell.schichten, ...modell.extern];
+  const ziele: Array<Schicht | Extern> = [...modell.schichten, ...modell.extern];
   for (const von of modell.schichten) {
     for (const nach of ziele) {
       if (nach.id === von.id || von.darf.includes(nach.id)) continue;
@@ -40,7 +40,7 @@ function refVerbotsRegeln(modell: Modell) {
         comment: `${von.label} darf ${nach.label} nicht importieren (erlaubte Richtungen: \`darf\` im SCHICHT_MODELL der Schicht-Definition).`,
         severity: "error",
         from: refBedingung(modell, von, true),
-        to: refBedingung(modell, nach, false),
+        to: refBedingung(modell, nach as Schicht, false),
       });
     }
   }
