@@ -237,6 +237,20 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(pc.pruefeProjektConfig(anders), []);
   });
 
+  test("labels.codequalitaet (factory#156): optional; gesetzt muss es auf ein Produkt-Board führen, nie gleich labels.harness", () => {
+    const mitLabel = (wert: unknown): string[] => {
+      const c = gueltig();
+      if (wert !== undefined) (c.labels as Record<string, unknown>).codequalitaet = wert;
+      return pc.pruefeProjektConfig(c);
+    };
+    assert.deepEqual(mitLabel(undefined), []);
+    assert.deepEqual(mitLabel("area:code"), []);
+    const gleich = mitLabel("area:werk").join("\n");
+    assert.match(gleich, /labels\.codequalitaet "area:werk"/);
+    assert.match(gleich, /Fix:/);
+    assert.match(mitLabel("").join("\n"), /labels\.codequalitaet muss ein nicht-leerer String/);
+  });
+
   test("boards[].repo (ADR 0022 F10): optional, owner/name; boardRepo fällt auf das Repo der Config zurück", () => {
     const mit = (repo: unknown): string[] => {
       const c = gueltig();

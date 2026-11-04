@@ -1101,6 +1101,13 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     expect(r.ticket?.nr).toBe(1);
     expect(gefragt).toEqual([]);
   });
+  test("factory#156: das Codequalität-Sammelticket hängt am selben Füllstand (9/10 übersprungen, 10 gewählt)", () => {
+    const cq = { title: "Codequalität (gesammelt)", labels: [{ name: HARNESS }] };
+    const lauf = (n: number) => (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, cq), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: () => n });
+    expect(lauf(9).uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 Befund-Kommentare)" }]);
+    expect(lauf(9).ticket?.nr).toBe(2);
+    expect(lauf(10).ticket?.nr).toBe(1);
+  });
   test("--ticket umgeht die Schwelle: die Einzelprüfung nimmt das Sammelticket auch bei Füllstand 3", () => {
     const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG } as never);
     expect(pruefe.ticket?.nr).toBe(1);

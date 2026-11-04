@@ -112,6 +112,8 @@ const WORKTREE_MUSTER = /^[A-Za-z0-9_-]+$/;
 /** Agentenname: kein Leerraum, kein `:` (Agent-Typ-Trenner), nicht mit `-` am Anfang. */
 export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
+/** Optionale Label-Schlüssel: Skripte lesen sie mit Rückfall (fehlt der Schlüssel, entfällt das Feature); sie gehören nicht in `PFLICHT_LABELS`. */
+export const OPTIONALE_LABELS = ["codequalitaet"];
 /** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 
@@ -254,8 +256,7 @@ export const repoName = (config) => zerlegeRepo(config?.repo).name;
 export const repoOwner = (config) => zerlegeRepo(config?.repo).owner;
 
 /**
- * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23). Das Inbox-Issue legt der Lauf im Repo an, in dem Dependabot arbeitet;
- * führt `labels.dependabotInbox` auf ein Board eines fremden Repos, entstünde es dort (ein Bezieher setzt ein anderes Label als `labels.harness`).
+ * Pur: das Dependabot-Label muss in das eigene Repo führen (#90 L23): das Inbox-Issue entstünde sonst im fremden Repo des Boards.
  * Nur bei sonst gültigen Labels und Boards geprüft, damit Folgefehler die Ursache nicht verdecken.
  */
 function pruefeInboxZiel(wert) {
@@ -263,6 +264,15 @@ function pruefeInboxZiel(wert) {
   const ziel = zielRepoFuer([label], wert);
   if (gleichesRepo(ziel, wert.repo)) return [];
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
+}
+
+/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
+function pruefeCodequalitaetZiel(wert) {
+  const label = wert.labels?.codequalitaet;
+  const rolle = label === undefined ? "produkt" : boardRolleFuer([label], wert);
+  if (rolle === "produkt") return [];
+  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${rolle})
+Fix: ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen`];
 }
 
 /** Pur: prüft `agenten`: je Pflichtschlüssel ein Name nach AGENT_MUSTER. */
@@ -323,7 +333,7 @@ export function pruefeProjektConfig(wert) {
   const boardFehler = fehler.length;
   const labelFehler = pruefeLabels(wert.labels);
   fehler.push(...pruefePraefixe(wert.praefixe), ...labelFehler, ...pruefeAgenten(wert.agenten), ...pruefeSkills(wert.skills));
-  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert));
+  if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
   if (wert.spezifikation !== undefined) {
