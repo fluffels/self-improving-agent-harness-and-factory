@@ -31,12 +31,12 @@ Aufwand ist qualitativ (klein, mittel, groß) und an den Tickets des [Quellproje
 
 Der Schichtgedanke ist sprachneutral, das Werkzeug nicht. Alle Angaben sind an der jeweiligen Werkzeug-Doku belegt.
 
-| Ökosystem | Schichtregel prüfen | Ist-Graph / Diagramm | Bestand einfrieren | Quelle |
-|---|---|---|---|---|
-| JS/TS | dependency-cruiser, Regeln in der Config (hier abgeleitet aus `SCHICHT_MODELL`) | `--output-type mermaid`, Verdichten mit `--collapse` | `--baseline` (der frühere `depcruise-baseline` ist ein Alias), danach `--ignore-known` | [CLI-Doku](https://github.com/sverweij/dependency-cruiser/blob/main/doc/cli.md) |
-| Python | Tach (Modulgrenzen) oder import-linter (Verträge `layers`, `forbidden`, `independence`) | Tach: `tach show --mermaid`, `tach map`, `tach sync` | import-linter: `ignore_imports` je bekanntem Verstoß | [Tach](https://docs.gauge.sh/usage/commands), [import-linter](https://import-linter.readthedocs.io/en/stable/contract_types/) |
-| JVM | ArchUnit; ein PlantUML-Komponentendiagramm ist direkt die Regel (`adhereToPlantUmlDiagram`) | das PlantUML-Diagramm selbst ist die Quelle | `FreezingArchRule.freeze(...)` speichert bestehende Verstöße, später melden nur neue | [ArchUnit-Guide](https://www.archunit.org/userguide/html/000_Index.html) |
-| sprachneutral | LikeC4 prüft **keinen Code**: `likec4 validate` prüft Syntax und Layout-Drift des Modells, `likec4 build` erzeugt eine statische Seite | Diagramm aus dem Architekturmodell | entfällt; ein handgeschriebenes Modell driftet, wenn kein Test es gegen die Schichtquelle hält | [LikeC4-CLI](https://likec4.dev/tooling/cli/) |
+| Ökosystem | Schichtregel prüfen | Ist-Graph / Diagramm | Bestand einfrieren | Coverage (`check:diffcoverage`) | Quelle |
+|---|---|---|---|---|---|
+| JS/TS | dependency-cruiser, Regeln in der Config (hier abgeleitet aus `SCHICHT_MODELL`) | `--output-type mermaid`, Verdichten mit `--collapse` | `--baseline` (der frühere `depcruise-baseline` ist ein Alias), danach `--ignore-known` | `lcov` (Vitest/Istanbul-Reporter `lcov`) | [CLI-Doku](https://github.com/sverweij/dependency-cruiser/blob/main/doc/cli.md) |
+| Python | Tach (Modulgrenzen) oder import-linter (Verträge `layers`, `forbidden`, `independence`) | Tach: `tach show --mermaid`, `tach map`, `tach sync` | import-linter: `ignore_imports` je bekanntem Verstoß | `lcov` über `coverage lcov` | [coverage.py](https://coverage.readthedocs.io/en/latest/cmd.html#cmd-lcov), [Tach](https://docs.gauge.sh/usage/commands), [import-linter](https://import-linter.readthedocs.io/en/stable/contract_types/) |
+| JVM | ArchUnit; ein PlantUML-Komponentendiagramm ist direkt die Regel (`adhereToPlantUmlDiagram`) | das PlantUML-Diagramm selbst ist die Quelle | `FreezingArchRule.freeze(...)` speichert bestehende Verstöße, später melden nur neue | `jacoco` (JaCoCo-XML, `jacoco-maven-plugin`, Ziel `report`; Angular-Teil: `lcov`) | [ArchUnit-Guide](https://www.archunit.org/userguide/html/000_Index.html), [JaCoCo-Maven](https://www.jacoco.org/jacoco/trunk/doc/report-mojo.html) |
+| sprachneutral | LikeC4 prüft **keinen Code**: `likec4 validate` prüft Syntax und Layout-Drift des Modells, `likec4 build` erzeugt eine statische Seite | Diagramm aus dem Architekturmodell | entfällt; ein handgeschriebenes Modell driftet, wenn kein Test es gegen die Schichtquelle hält | entfällt | [LikeC4-CLI](https://likec4.dev/tooling/cli/) |
 
 **Quellwurzeln und Endungen (factory#181):** `struktur.quelle` der Projekt-Config nimmt einen Pfad oder eine Liste von Pfaden bzw. Globs (etwa `*/src/main/java` bei mehreren Gradle-Modulen), `struktur.endungen` die Dateiendungen mit Punkt (etwa `.java`; Standard ist die JS/TS-Familie) und `struktur.ohne` Ausschlüsse als Globs (etwa `**/*.spec.ts`). `check:size` misst alle Wurzeln mit der Endungsliste (`ohne` gilt dort nicht); `check:docmap` liest ebenfalls alle Wurzeln (Standard-Endung dort nur `.ts`, `ohne` gilt) und kennt `struktur.docmapEinheit: "ordner"` (ein Ordner mit direkter Quelldatei, etwa ein Java-Paket, ist ein Modul); `check:diffcoverage` misst die geänderten Zeilen aller Quellwurzeln (Endungsliste, `ohne` gilt, Typdeklarationen nie) gegen die Coverage-Berichte `coverage.berichte` der Projekt-Config: eine Liste `{ format: "lcov" | "jacoco", pfad, basis? }`, `pfad` auch als Glob (etwa `*/target/site/jacoco/jacoco.xml` bei mehreren Gradle-Modulen); ohne den Block gilt `coverage/lcov.info` (factory#185). Begriffe: [Coverage-Bericht, Quellwurzel, Endungsliste, Docmap-Einheit](harness-glossar.md).
 
@@ -82,6 +82,124 @@ Der Produktname ist „Self-Improving Agent Harness and Factory“. Er gilt als 
 Das Sync-Werkzeug (`npm run factory:sync`, ADR 0022 F9) überträgt den Besitz aus einem Tag der Quelle (`--tag <name>`), für den Stand eines Projekts nie aus dem Arbeitsbaum, das Drift-Gate (`npm run check:factorydrift`) hält ihn im Projekt unverändert und ist ohne Tag oder bei einem unsauberen Quellstand rot (quellprojekt#1871); nur `--entwurf` liest den Arbeitsbaum, zur Probe. Eine ganze Datei, die das Ziel schon in abweichender Fassung hat und die noch nicht im Sync-Stand steht, überschreibt der Sync nie still (`ABGLEICH`, erst `--uebernehmen <pfad>`); Vorlagen (`art: vorlage`, etwa `.github/dependabot.yml`) legt er nur an, wenn sie fehlen (factory#118); eine Einheit mit `modul` (Sicherheits-Module: CodeQL, Scorecard, Secret-Scan, Dependency Review, zizmor, Code-Scanning-Inbox, Audit-Einordnung, Dependabot-Inbox) verteilt er nur, wenn das Ziel das Modul in `module` der Projekt-Config gewählt hat (ohne den Schlüssel gilt nur `dependabot-inbox`; `codeql` braucht `codeql.sprachen`), und löscht beim Abwählen nichts, das Drift-Gate bleibt bis zum nächsten Sync rot; das Manifest steht dafür in Version 3, ein älteres Sync-Werkzeug bricht ab, das eine Update über diese Grenze fährt der Bezieher mit dem Werkzeug der Quelle (`node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <name> --ziel .`, factory#119); `art` verlangt Manifest-Version 2, `modul` Version 3. Der Ist-Zustand bleibt eine Kopie, bis F10 die Quelle als eigenes Repo einführt.
 
 Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md), [Sandbox anbinden](sandbox-anbinden.md)).
+
+## Java-Profil
+
+**Zweck.** Ein Maven-Multi-Modul-Projekt (Spring Boot) mit Angular-Frontend und ArchUnit nimmt den Harness ohne Kern-Code des Profils auf: die Projekt-Config, die Wurzel-`package.json` als Task-Runner und ein Rezept für den ArchUnit-Ratchet genügen. Belegt ist das durch einen Probe-Lauf (factory#187): ein Probe-Repo mit zwei Maven-Modulen (`domain` als reines Java, `app` mit Spring Boot) und einer Angular-App, im Container gebaut, ohne GitHub-Repo und ohne Push. Die Befehle und Exit-Codes stehen im Pull Request zu factory#187; die Probe lief mit einem lokalen Tag im Scratch-Klon der Quelle (`factory-sync --tag`) und einmal mit `--entwurf`.
+
+**Projekt-Config.** Der Block `struktur` nimmt Listen, `coverage.berichte` die beiden Berichtsarten, `befehle` die Sammelbefehle (Begriffe: [Quellwurzel, Endungsliste, Docmap-Einheit, Coverage-Bericht, Gate-Befehl](harness-glossar.md)):
+
+```json
+{
+  "struktur": {
+    "quelle": ["backend/*/src/main/java", "frontend/src/app"],
+    "endungen": [".java", ".ts"],
+    "ohne": ["**/*.spec.ts"],
+    "docmapEinheit": "ordner",
+    "moduldoku": "docs/module"
+  },
+  "coverage": {
+    "berichte": [
+      { "format": "jacoco", "pfad": "backend/*/target/site/jacoco/jacoco.xml" },
+      { "format": "lcov", "pfad": "frontend/coverage/frontend/lcov.info", "basis": "frontend" }
+    ]
+  },
+  "befehle": {
+    "install": "npm ci && npm --prefix frontend ci",
+    "coverage": "npm --silent run coverage",
+    "testGezielt": "node tools/test-gezielt.mjs"
+  }
+}
+```
+
+- **Globs:** `struktur.quelle` als Liste löst Globs je Eintrag auf; ein Glob ohne Treffer ist ein Fehler mit Fix-Zeile. Maven-Ausgabeordner (`target`, in Gradle `build`, im Frontend `out`) sind keine Skip-Einträge des Glob-Walkers, darum steht in den Globs kein `**`, sondern der Pfad bis zum Modulordner (`backend/*/src/main/java`); ein `**` liefe durch `target` und alle Modulordner.
+- **`ohne`** gilt für `check:docmap`, `check:anysuppress` und `check:diffcoverage`, **nicht** für `check:size`: ein großer Spec ist auch ein God-File.
+- **`docmapEinheit: "ordner"`:** ein Java-Paket (Ordner mit direkter Quelldatei) ist ein Modul, die Tiefendoc unter `struktur.moduldoku` nennt den Paketpfad in Backticks. Eine neue `.java`-Datei in einem neuen Paket macht `check:docmap` rot; in einem schon genannten Paket nicht. Wer jede Datei einzeln führen will, setzt `"datei"` (dann ist jede neue Datei rot).
+- **`basis`** gilt nur für `lcov`: Vitest und Angular schreiben `SF:`-Pfade relativ zum Frontend-Ordner, `basis` setzt ihn davor. JaCoCo-XML nennt Dateien als `paket/Datei.java`; der Leser ordnet sie per Suffix den Quellwurzeln zu und braucht kein `basis`.
+- **Schichtmodell für `check:diffcoverage`:** das Gate misst je Schicht (Floors), liest dafür `schichten.layers` aus `scripts/docs-gen/config.json` und bricht ohne diesen Schlüssel mit `schichten.layers fehlt` ab. Die Schicht-Definition des Projekts (CommonJS, Vertrag in [docs-gen übernehmen](#docs-gen-in-ein-anderes-repo-übernehmen-stufe-2-und-3)) trägt für das Java-Profil `quellwurzeln` ohne Glob, je Maven-Modul bis ins Basis-Paket (etwa `backend/app/src/main/java/de/beispiel/probe/app/`) und `endungen: [".java", ".ts"]`; die Schicht-Wurzeln sind Unterordner dieser Wurzeln (etwa `web`, `repo`), alles übrige fällt in die Auffang-Schicht.
+
+**Wurzel-`package.json` als Task-Runner.** Harness-Gates, `docs-gen` und `verify-lauf` setzen npm-Skripte voraus ([Fortschreibung zu ADR 0022](adr/fortschreibungen/0022-182-gate-befehle.md)); Maven und Angular hängen darum als npm-Skripte in der `verify`-Kette, jeder Schritt ein einfaches Skript (die Kette wird in Schritte zerlegt, `verify:kompakt` meldet jeden einzeln):
+
+```json
+{
+  "scripts": {
+    "check:archstore": "node tools/archunit-store.mjs",
+    "test:java": "node tools/mvn.mjs -B verify",
+    "test:web": "npm --prefix frontend run test:coverage",
+    "coverage": "npm --silent run test:java && npm --silent run test:web",
+    "test": "vitest run --passWithNoTests",
+    "verify": "<Kern-Gates der Quelle> && npm --silent run check:archstore && npm --silent run test:java && npm --silent run test:web && npm test"
+  }
+}
+```
+
+Die Beispiele schreiben `npm --silent run <name>` (ohne npm-Kopfzeile, sonst gleich `npm run`), damit der Doku-Drift-Wächter der Quelle die Namen des Projekts nicht als Skripte der Quelle liest; im Projekt selbst genügt `npm run <name>`. `frontend/package.json` trägt `"test:coverage": "ng test --no-watch --coverage --coverage-reporters=lcov"` und `@vitest/coverage-v8` (Angular mit dem Vitest-Läufer; der Bericht liegt unter `frontend/coverage/<app>/lcov.info`). JaCoCo: `jacoco-maven-plugin` im Eltern-POM mit `prepare-agent` und `report` (Phase `verify`), der Bericht liegt je Modul unter `target/site/jacoco/jacoco.xml`. `.gitattributes` braucht `* text=auto eol=lf` und für den Wrapper `*.cmd text eol=crlf` (sonst meldet der Doctor `Zeilenenden`).
+
+**`./mvnw` geht in cmd.exe nicht.** Unter Windows laufen npm-Skripte in `cmd.exe`, dort ist `./mvnw` kein gültiger Befehl. Der Node-Starter `tools/mvn.mjs` ruft `mvnw.cmd` (Windows) bzw. `./mvnw` (sonst) im Ordner `backend`; alternativ steht `mvn` im PATH:
+
+```js
+import { spawnSync } from "node:child_process";
+const windows = process.platform === "win32";
+const r = spawnSync(windows ? "mvnw.cmd" : "./mvnw", process.argv.slice(2), { cwd: "backend", stdio: "inherit", shell: windows });
+process.exit(r.status ?? 1);
+```
+
+**Gate-Befehle.** Die sechs Namen des Blocks `befehle` sind `install`, `verify`, `verifyKompakt`, `verifyChanged`, `coverage` und `testGezielt`; ein fehlender Name behält den npm-Standard (`npm ci`, `npm run verify`, `npm run verify:kompakt`, `npm run verify:changed`, `npm run test:coverage`, `npx vitest run`). Aufruf überall gleich: `node scripts/gate-befehl.mjs <name>` (Hintergrund: [Gate-Befehl](harness-glossar.md), [Fortschreibung factory#182](adr/fortschreibungen/0022-182-gate-befehle.md)). **`testGezielt`** ist der einzige Name mit Positionsargumenten: `node scripts/gate-befehl.mjs testGezielt <datei> [<datei> …]` hängt die Pfade in doppelten Anführungszeichen an die Befehlszeile an; erlaubt sind Buchstaben, Ziffern und `_ . / \ : @ + = , -`, alles andere (Leerzeichen, Shell-Metazeichen) endet mit Exit 2. Maven kennt keine Dateipfade als Argumente, darum bekommt `testGezielt` einen Wrapper: `tools/test-gezielt.mjs` ordnet `backend/<modul>/…/<Klasse>.java` dem Modul zu und ruft `-pl <modul> -am -Dtest=<Klasse>,<Klasse>Test`, `frontend/…/*.ts` dem Angular-Läufer (`ng test --include <pfad>`), alles andere `vitest`. `verify:changed` kürzt nur Lint und Vitest auf die geänderten Dateien; Maven und Angular laufen dort voll, und ohne `test/`-Ordner meldet es „Slice nicht lesbar“ und fährt Lint und Test voll.
+
+**Coverage-Leser (Ports und Adapter).** Der Port ist `ladeAbdeckung` in `scripts/coverage-berichte.mjs`: er liest alle `coverage.berichte` und liefert Zeilen- und Zweigabdeckung je Repo-Pfad an `check:diffcoverage`. Jede Berichtsart ist ein Adapter:
+
+| Format | Adapter | Zuordnung zum Repo-Pfad | Zählweise |
+|---|---|---|---|
+| `lcov` (Vitest/Istanbul, Angular, `coverage lcov` bei Python) | `parseLcov`, Zweige `parseLcovBranches` | `SF:` relativ, davor `basis` | Zeilen über `DA:`, Zweige über `BRDA:` |
+| `jacoco` (JaCoCo-XML) | `parseJacoco` | `paket/Datei.java` per Suffix gegen die Quellwurzeln, kein `basis`; dieselbe Datei unter zwei Quellwurzeln ist mehrdeutig (rot) | nur Zeilen mit `<line>` zählen, gedeckt bei `ci > 0`; `mb`/`cb` speisen „teilweise getestet“ |
+
+Dieselbe Datei in mehreren Berichten wird gemischt; jeder konfigurierte Bericht ist Pflicht (ein Glob ohne Treffer ist ein Fehler). Ein neuer Adapter ist eine neue `format`-Zeile im Kern, kein Projekt-Code.
+
+**ArchUnit mit eingefrorenem Bestand.** Das Muster ist das der [Grundregel](#grundregel-bestand-einfrieren-statt-sanieren), umgesetzt mit `FreezingArchRule.freeze(...)`:
+
+- `src/test/resources/archunit.properties` je Modul mit `freeze.store.default.path=src/test/resources/archunit_store`, `freeze.store.default.allowStoreCreation=false` und `freeze.refreeze=false`; der Store (`stored.rules` plus eine Datei je Regel mit den Verstößen) ist **eingecheckt**. `freeze.refreeze` steht nie auf `true`: ein Refreeze schriebe jeden neuen Verstoß in den Store und machte die Regel wirkungslos.
+- Den Store legt man **einmal** an: `./mvnw verify -Darchunit.freeze.store.default.allowStoreCreation=true`, dann einchecken.
+- Semantik (im Probe-Lauf belegt): eine **neue** Verletzung macht den Test rot, die Meldung nennt die Regel („was violated (n times)“); eine **eingefrorene** bleibt grün, auch wenn sich ihre Zeilennummer verschiebt (der Store bleibt dann unverändert); eine **gelöste** Verletzung wird beim nächsten Lauf aus dem Store entfernt (der Store schrumpft, Diff mit einchecken).
+- Grenze von `allowStoreCreation=false`: es verhindert nur, dass ein **fehlender** Store neu entsteht (der Lauf endet mit „Creating new violation store is disabled“). Eine **neue Regel** mit Verstößen legt ArchUnit trotzdem im vorhandenen Store an und der Lauf bleibt grün; `freeze.store.default.allowStoreUpdate=false` ließe sie scheitern („Updating frozen violations is disabled“), sperrt aber jede Store-Änderung. Diese Lücke schließt der Store-Wächter.
+- **Store-Wächter `check:archstore`** (Projektdatei des Profils, kein Kern-Gate: nur ein Projekt mit ArchUnit-Store braucht ihn): Rot, wenn (1) `freeze.refreeze=true` in einer getrackten `archunit.properties`, in der `pom.xml` (`archunit.freeze.refreeze` mit `true`), in `.mvn/maven.config`, `.mvn/jvm.config` oder einem Skript der Wurzel-`package.json` steht; (2) der Store gegenüber der Basis **wächst**: je Regeldatei (Schlüssel = Dateiname, `stored.rules` ausgenommen) die Mengen-Differenz der nicht-leeren Zeilen HEAD gegen Basis; eine neue Zeile oder eine neue Regeldatei ist rot, ein Rückgang grün. Basis wie im Kern (`FACTORY_DIFF_BASE`, sonst Merge-Base mit `origin/main`, sonst `main`). Ventil: die Commit-Zeile `<praefixe.commitZeile>ArchStore-Override: #<nr> warum` in `git log <basis>..HEAD`, nur mit offenem Ticket. Grenzen: Heuristik auf Mustern, ein nur lokal auf der Kommandozeile gesetztes `-D` ist unsichtbar (seine Wirkung fängt die Wachstumsprüfung); eine umbenannte Regel zählt als neue Regel; das Rezept ist in der Factory nicht getestet, der Probe-Lauf hat es belegt.
+
+```js
+// check:archstore (Projektdatei des Java-Profils, kein Kern-Gate): ArchUnit-Ratchet nur in die strenge Richtung.
+// Rot, wenn (1) freeze.refreeze=true gesetzt ist: getrackte archunit.properties, pom.xml (archunit.freeze.refreeze mit true),
+// .mvn/maven.config, .mvn/jvm.config oder ein Skript der Wurzel-package.json; (2) der eingecheckte Store gegenüber der Basis wächst
+// (je Regeldatei neue nicht-leere Zeile oder neue Regeldatei; stored.rules ausgenommen). Ventil: Commit-Zeile `<praefixe.commitZeile>ArchStore-Override: #<nr> warum`.
+// Grenze: ein nur lokal auf der Kommandozeile gesetztes -D ist unsichtbar, seine Wirkung fängt die Wachstumsprüfung. Heuristik, kein Beweis.
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+const git = (...a) => execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+const versuche = (f) => { try { return f(); } catch { return ""; } };
+const base = process.env.FACTORY_DIFF_BASE || versuche(() => git("merge-base", "origin/main", "HEAD")) || versuche(() => git("merge-base", "main", "HEAD"));
+const dateien = git("ls-files").split("\n");
+const fehler = [];
+const praefix = JSON.parse(readFileSync(".factory/projekt.json", "utf8")).praefixe.commitZeile;
+
+const REFREEZE = /freeze\.refreeze\s*[=:]\s*true|archunit\.freeze\.refreeze(?:=|<\/|>)\s*true/i;
+for (const f of dateien.filter((d) => /(^|\/)(archunit\.properties|pom\.xml|maven\.config|jvm\.config|package\.json)$/.test(d))) {
+  if (REFREEZE.test(readFileSync(f, "utf8"))) fehler.push(`${f}: freeze.refreeze=true`);
+}
+
+const zeilen = (txt) => new Set(txt.split("\n").map((z) => z.trim()).filter(Boolean));
+const stores = dateien.filter((d) => /(^|\/)archunit_store\/[^/]+$/.test(d) && !d.endsWith("/stored.rules"));
+const ventil = base ? versuche(() => git("log", `${base}..HEAD`, "--format=%B")).includes(`${praefix}ArchStore-Override: #`) : false;
+for (const f of base ? stores : []) {
+  const alt = zeilen(versuche(() => git("show", `${base}:${f}`)));
+  const neu = [...zeilen(readFileSync(f, "utf8"))].filter((z) => !alt.has(z));
+  if (neu.length && !ventil) fehler.push(`${f}: ${neu.length} neue Verstoßzeile(n), der Store darf nur schrumpfen`);
+}
+if (fehler.length) {
+  console.error(`check:archstore rot:\n${fehler.map((f) => `  - ${f}`).join("\n")}\nFix: Verletzung beheben statt einfrieren; Ausnahme nur mit Commit-Zeile ${praefix}ArchStore-Override: #<nr> warum.`);
+  process.exit(1);
+}
+console.log(`check:archstore grün (${stores.length} Regeldatei(en), Basis ${base ? base.slice(0, 7) : "keine"})`);
+```
+
+**Ablauf der Übernahme.** [Erstbezug](erstbezug.md) gilt unverändert; für dieses Profil kamen in der Probe dazu: ein Board mit Rolle `factory` in `.factory/projekt.json` (der Sync bricht sonst ab), `.gitattributes`, `node scripts/projektwerte.mjs --write` nach dem Sync, ein `test`-Skript mit `--passWithNoTests` (der Sync liefert keine Projekt-Tests), die beiden Referenzseiten mit je einer `Kern:`-Zeile auf die Seite der Quelle samt `npm run check:factorylinks -- --schreiben --quelle <klon>`, die Schicht-Definition für `check:diffcoverage` und die Tiefendoc je Paket. Mit `--entwurf` bleibt `verify` rot (Doku-Links der Kern-Skills ohne Anker-Stubs, Drift-Gate), mit `--tag` wird es grün. Der erste Sync-PR braucht `<praefixe.commitZeile>Diffsize-Override: #<nr> warum`, weil der Besitz auf einmal kommt.
 
 ## Gliederung für Artikel oder Vortrag
 
