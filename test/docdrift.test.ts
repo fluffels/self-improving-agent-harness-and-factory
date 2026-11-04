@@ -779,9 +779,72 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     assert.deepEqual(fixture({ "docs/adr/0001-a.md": "docs/weg.md › X\n", "docs/n-2026-01-02.md": "docs/weg.md › X\n" }), []);
   });
 
+  test("Fettdruck zählt nur am Zeilen-/Listenanfang, nicht mitten im Text", () => {
+    assert.ok(!api.abschnittTrifft("Secret-Inbox", api.abschnittTitel("Text mit **Secret-Inbox** mittendrin\n")));
+    for (const praefix of ["", "> ", "* ", "+ ", "- ", "1. "]) assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel(`${praefix}**Foo Bar** Text\n`)), praefix);
+  });
+
+  test("Überschriften: 1 bis 6 Rauten mit Leerzeichen; sieben Rauten und `#hashtag` sind keine", () => {
+    assert.deepEqual(api.abschnittTitel("####### X\n#hashtag\n"), []);
+    assert.deepEqual(api.abschnittTitel("###### X\n"), [["x"]]);
+  });
+
+  test("Titel ohne Wörter (Emoji-Überschrift) lässt keinen Verweis durch", () => {
+    assert.ok(!api.abschnittTrifft("Gibts nicht", api.abschnittTitel("## 🚀\n")));
+  });
+
+  test("Normalisierung: Herkunftsklammer, Link-Syntax und ASCII-Strich im Titel fallen weg", () => {
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## Foo (#1) Bar\n")));
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## [Foo](x.md) Bar\n")));
+    assert.ok(api.abschnittTrifft("Foo Bar", api.abschnittTitel("## Foo - Bar\n")));
+  });
+
+  test("Trefferregel: jedes weiche Satzzeichen beendet den Namen, das Fenster ist genau zwei Wörter", () => {
+    const titel = api.abschnittTitel("## Erstes Zweites Drittes\n## Befunde sofort festhalten\n");
+    for (const z of [".", ",", ";", ":", "(", ")", "!", "?"]) assert.ok(api.abschnittTrifft(`Erstes${z} Prosa weiter`, titel), z);
+    assert.ok(!api.abschnittTrifft("Erstes Prosa weiter", titel));
+    assert.ok(api.abschnittTrifft("Befunde sofort melden", titel));
+  });
+
+  test("Extraktion: Stoppzeichen und Inline-Code beenden den Abschnittstext", () => {
+    for (const z of ["|", "]", "„", "“", "”", '"', "`"]) assert.deepEqual(api.abschnittVerweise(`docs/a.md › A${z} B`)[0].segmente, ["A"], z);
+    assert.deepEqual(api.abschnittVerweise("docs/a.md › Name `x` und mehr", { istMarkdown: true })[0].segmente, ["Name"]);
+  });
+
+  test("Kette im Audit: jedes Segment wird geprüft, nicht nur das erste", () => {
+    const f = fixture({ "docs/x.md": "# X\n## Secret-Inbox\n", "docs/y.md": "docs/x.md › Secret-Inbox › Gibts nicht\n" });
+    assert.deepEqual(f.map((x) => x.segment), ["Gibts nicht"]);
+  });
+
+  test("Scan-Umfang: Skripte in Unterordnern und als .cjs/.js, nicht unter node_modules", () => {
+    const verweis = "// docs/x.md › Gibts nicht\n";
+    const f = fixture({ "docs/x.md": "# X\n", "scripts/sub/b.mjs": verweis, "scripts/c.cjs": verweis, "scripts/d.js": verweis, "scripts/e.txt": verweis, "scripts/node_modules/f.mjs": verweis });
+    assert.deepEqual(f.map((x) => x.file).sort(), ["scripts/c.cjs", "scripts/d.js", "scripts/sub/b.mjs"]);
+  });
+
+  describe("Kern-Sicht (Factory-Repo, Manifest mit Block-Einheit)", () => {
+    const block = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "AGENTS.md", block: "kern", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] }) };
+    const agents = `# T\n${markerStart("kern")}\n- **Kernregel.** x\n${markerEnde("kern")}\n- **Projektregel.** y\n`;
+
+    test("Verweis aus verteiltem Text auf einen Abschnitt nur im Projekt-Block ist rot, auf den Kern-Block grün, aus Projekt-Text grün", () => {
+      const f = fixture({ ...block, "AGENTS.md": agents, "scripts/a.mjs": "// AGENTS.md § Kernregel\n// AGENTS.md § Projektregel\n", "scripts/projekt.mjs": "// AGENTS.md § Projektregel\n" });
+      assert.deepEqual(f.map((x) => [x.file, x.segment]), [["scripts/a.mjs", "Projektregel"]]);
+    });
+
+    test("ist die ganze Datei Besitz, zählt weiter der ganze Text", () => {
+      const ganz = { ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: [{ pfad: "docs/x.md", ring: "kern" }, { pfad: "scripts/a.mjs", ring: "kern" }] }) };
+      assert.deepEqual(fixture({ ...ganz, "docs/x.md": "# X\n## Abschnitt\n", "scripts/a.mjs": "// docs/x.md › Abschnitt\n" }), []);
+    });
+  });
+
   describe("Bezieher (Sync-Stand und Manifest)", () => {
     const STAND = { ".factory/sync-stand.json": "{}" };
     const manifest = (pfade: string[]): Record<string, string> => ({ ".factory/besitz.json": JSON.stringify({ version: 1, eintraege: pfade.map((pfad) => ({ pfad, ring: "kern" })) }) });
+
+    test("fehlendes Ziel, das selbst Besitz ist (kaputter Sync), bleibt rot", () => {
+      const f = fixture({ ...STAND, ...manifest(["scripts/a.mjs", "docs/weg.md"]), "scripts/a.mjs": "// docs/weg.md › X\n" });
+      assert.deepEqual(f.map((x) => x.art), ["ziel"]);
+    });
 
     test("fehlendes Ziel aus verteiltem Besitz-Text ist still, aus Projekt-Text rot", () => {
       const f = fixture({ ...STAND, ...manifest(["scripts/a.mjs"]), "scripts/a.mjs": "// docs/weg.md › X\n", "scripts/projekt.mjs": "// docs/weg.md › X\n" });

@@ -87,7 +87,6 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, quellprojekt#593) | `npm run check:lockfile` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, quellprojekt#396) | `npm audit --omit=dev --audit-level=high` |
 
-> Aus IntelliJ/WebStorm gibt es dieselben Befehle als Ein-Klick-Run-Configs.
 
 ## Umgebungsvariablen
 
