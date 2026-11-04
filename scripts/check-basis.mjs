@@ -7,9 +7,9 @@
  * Struktur-Ordner (`strukturOrdnerBefunde`, für check:size, check:docmap und check:anysuppress).
  */
 import { execFileSync } from "node:child_process";
-import { statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ladeProjektConfig, PROJEKT_CONFIG, strukturAus, umgebungsWert } from "./projekt-config-lib.mjs";
+import { istGlob, ordnerZuMuster } from "./quellwurzeln-lib.mjs";
 import { fileURLToPath } from "node:url";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 
@@ -188,18 +188,17 @@ export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"]
   for (const k of schluessel) {
     const pfad = struktur[k];
     if (pfad === null || pfad === undefined) continue;
-    let istOrdner;
-    try {
-      istOrdner = statSync(join(rootDir, ...pfad.split("/"))).isDirectory();
-    } catch {
-      istOrdner = false;
-    }
-    if (istOrdner) continue;
     const optOut = k === "moduldoku" ? " oder auf null setzen (keine Tiefendocs, check:docmap entfällt)" : "";
-    befunde.push(
-      `struktur.${k} in ${PROJEKT_CONFIG} nennt „${pfad}/“, den Ordner gibt es nicht\n` +
-        `  Fix: ${pfad}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder struktur.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
-    );
+    const eintraege = Array.isArray(pfad) ? pfad.map((p, i) => [p, `${k}[${i}]`]) : [[pfad, k]];
+    for (const [p, wo] of eintraege) {
+      if (ordnerZuMuster(rootDir, p).length > 0) continue;
+      befunde.push(
+        istGlob(p)
+          ? `struktur.${wo} in ${PROJEKT_CONFIG} nennt den Glob „${p}“, der keinen Ordner trifft\n  Fix: den Glob auf vorhandene Ordner anpassen oder den Eintrag aus struktur.${k} in ${PROJEKT_CONFIG} streichen`
+          : `struktur.${wo} in ${PROJEKT_CONFIG} nennt „${p}/“, den Ordner gibt es nicht\n` +
+            `  Fix: ${p}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder struktur.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
+      );
+    }
   }
   return befunde;
 }

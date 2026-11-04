@@ -186,11 +186,12 @@ export function spracheAus(config) {
  */
 export function strukturAus(config) {
   const wert = config?.struktur;
-  if (!istObjekt(wert) || !istText(wert.quelle) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
-    throw new Error(`struktur fehlt oder hat keine nicht-leeren Strings quelle und moduldoku (oder moduldoku: null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen (Schrittfolge: Erstbezug-Leitfaden der Factory, docs/erstbezug.md#schrittfolge)`);
+  if (!istObjekt(wert) || !(istText(wert.quelle) || Array.isArray(wert.quelle)) || !(istText(wert.moduldoku) || wert.moduldoku === null)) {
+    throw new Error(`struktur fehlt oder hat kein gültiges quelle (String oder Liste) und moduldoku (String oder null) in ${PROJEKT_CONFIG}\nFix: den Schlüssel struktur (quelle, moduldoku) in ${PROJEKT_CONFIG} eintragen`);
   }
   const form = pruefeStruktur(wert);
   if (form.length > 0) throw new Error(`${form.join("; ")} in ${PROJEKT_CONFIG}\nFix: struktur.quelle und struktur.moduldoku als repo-relative POSIX-Pfade (z. B. docs/module) eintragen`);
+  if (Array.isArray(wert.quelle)) throw new Error(`struktur.quelle als Liste (mehrere Quellwurzeln) wird von diesem Leser noch nicht unterstützt\nFix: struktur.quelle als einen Pfad schreiben oder auf die Umstellung dieses Lesers warten`);
   return { quelle: wert.quelle, moduldoku: wert.moduldoku };
 }
 

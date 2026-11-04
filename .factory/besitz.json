@@ -61,6 +61,7 @@
     {"pfad":"scripts/design-lib.mjs","ring":"kern","quelle":"Design-Schritt (factory#172)"},
     {"pfad":"scripts/design-schritt.mjs","ring":"kern","quelle":"Design-Schritt als Skript (factory#162 L47)"},
     {"pfad":"scripts/projekt-config-bloecke.mjs","ring":"kern","quelle":"Schnitt von projekt-config-lib (factory#162 L22): Form-Prüfer der Config-Blöcke"},
+    {"pfad":"scripts/quellwurzeln-lib.mjs","ring":"kern","quelle":"Quellwurzeln und Endungsliste der Projekt-Config (factory#181)"},
     {"pfad":"scripts/gate-befehl.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
     {"pfad":"scripts/gate-befehl-lib.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
     {"pfad":"scripts/projekt-config-lib.mjs","ring":"kern","quelle":"Plan #1611 (ADR 0022 F2)"},

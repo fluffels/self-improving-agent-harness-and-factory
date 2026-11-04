@@ -1,9 +1,10 @@
 // Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, gates, factoryLinks, labels, skills,
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
-// Nur Blatt-Importe: `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
+// Nur Blatt-Importe: `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
+import { quellenMaengel } from "./quellwurzeln-lib.mjs";
 
 export const istText = (v) => typeof v === "string" && v.trim() !== "";
 export const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -14,12 +15,10 @@ const PFLICHT_LABELS = ["harness", "festgefahren", "forum", "dependabotInbox"];
 /** Pur: prüft `struktur` (nur die Form; ein fehlender Block ist beim Laden erlaubt, `strukturAus` verlangt ihn beim Gebrauch). */
 export function pruefeStruktur(s) {
   if (!istObjekt(s)) return ["struktur muss ein Objekt mit quelle und moduldoku sein"];
-  const pfade = ["quelle", "moduldoku"].flatMap((k) => {
-    if (k === "moduldoku" && s[k] === null) return [];
-    if (!istText(s[k])) return [`struktur.${k} muss ein nicht-leerer String (repo-relativer Pfad) sein`];
-    return istRelativPosix(s[k]) ? [] : [`struktur.${k} muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(s[k])}`];
-  });
-  return [...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
+  const doku = s.moduldoku;
+  const pfade = doku === null ? [] : !istText(doku) ? ["struktur.moduldoku muss ein nicht-leerer String (repo-relativer Pfad) sein"]
+    : istRelativPosix(doku) && !/[*?]/.test(doku) ? [] : [`struktur.moduldoku muss ein repo-relativer POSIX-Pfad sein (ohne führenden / oder Laufwerk, ohne . und .., ohne Backslash, ohne End- oder Doppel-Slash): ${JSON.stringify(doku)}`];
+  return [...quellenMaengel(s), ...pfade, ...pruefeEscapeKopien(s.escapeKopien)];
 }
 
 /** Pur: prüft den optionalen Schlüssel `struktur.escapeKopien` (Liste repo-relativer POSIX-Pfade ohne Doppelte); fehlt er, ist nichts zu prüfen. */
