@@ -30,7 +30,7 @@ import * as naechstesRaw from "../../scripts/naechstes-ticket.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as taktRaw from "../../scripts/board-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRaw from "../../scripts/ticket-namen.mjs";
+import * as namenRaw from "../../scripts/regex-lib.mjs";
 
 type Cfg = Record<string, unknown>;
 const ECHT = (projektRaw as unknown as { ladeProjektConfig: () => { labels: Record<string, string> } }).ladeProjektConfig().labels;

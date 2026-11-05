@@ -127,6 +127,25 @@ const EINR = (root: string, ...extra: string[]): string[] => ["--einrichten", "-
 const datei = (root: string): string => join(root, doctor.WOCHENLAUF_PFAD);
 
 describe("harness-doctor --einrichten", () => {
+  test("factory#202 L20: im Bezieher (Sync-Stand vorhanden) startet --einrichten das Sammelticket nicht, sondern nennt melden.mjs", () => {
+    const root = neuerRoot();
+    writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+    const r = fahre(root, welt(["status:steckt"]), EINR(root, "--dry-run"));
+    assert.deepEqual(r.sammel, []);
+    assert.ok(r.out.some((z) => z.startsWith("INFO Sammelticket:") && z.includes("melden.mjs")), r.out.join("\n"));
+    assert.ok(!r.out.some((z) => z.startsWith("FEHLER Sammelticket")));
+  });
+  test("factory#202 L20: ein eingerichteter Bezieher endet bei --einrichten mit Exit 0 und ohne Anleitung (zweiter Lauf ändert nichts)", () => {
+    const root = neuerRoot();
+    writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+    const w = welt(["status:steckt"]);
+    fahre(root, w, EINR(root));
+    const r = fahre(root, w, EINR(root));
+    assert.equal(r.code, 0, r.out.join("\n"));
+    assert.deepEqual(r.sammel, []);
+    assert.match(r.out.at(-1) ?? "", /^Harness-Doctor --einrichten: 0 angelegt, 0 geplant, 0 Anleitung\(en\), 0 Fehler$/);
+  });
+
   test("Dry-Run: nur Plan, nichts wird geschrieben, das Sammelticket bekommt --dry-run", () => {
     const root = neuerRoot();
     const r = fahre(root, welt(["status:steckt"]), EINR(root, "--dry-run"));

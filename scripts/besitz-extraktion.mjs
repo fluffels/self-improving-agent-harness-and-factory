@@ -1,9 +1,9 @@
 // Extraktionsliste, Bezug und Test-Hülle (ADR 0022 F10): was außer dem Besitz ins Factory-Repo zieht, Struktur-Prüfung der Liste `.factory/extraktion.json`,
-// Bezug eines Tests zum Besitz und die Test-Hülle. Importe: `node:path`, `projekt-config-lib` (`PROJEKT_CONFIG`), `ticket-namen` (`escapeRegex`) und aus `besitz-lib` nur `normalisiereEol`, `NUR_FACTORY` und `RINGE`; besitz-lib importiert diese Datei nie (zyklenfrei).
+// Bezug eines Tests zum Besitz und die Test-Hülle. Importe: `node:path`, `projekt-config-lib` (`PROJEKT_CONFIG`), `regex-lib` (`escapeRegex`) und aus `besitz-lib` nur `normalisiereEol`, `NUR_FACTORY` und `RINGE`; besitz-lib importiert diese Datei nie (zyklenfrei).
 import { posix } from "node:path";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { normalisiereEol, NUR_FACTORY, RINGE } from "./besitz-lib.mjs";
-import { escapeRegex } from "./ticket-namen.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 
 // ── Extraktionsliste (ADR 0022 F10) ──────────────────────────────────────────
 // `.factory/extraktion.json` legt geschlossen fest, was außer dem Besitz ins Factory-Repo zieht (Kern-Tests, Test-Hilfen,

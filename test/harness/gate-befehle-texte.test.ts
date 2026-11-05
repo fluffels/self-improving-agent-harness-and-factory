@@ -31,7 +31,7 @@ import { SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START } from "../support/entfernte-pf
 import * as markdownRaw from "../../scripts/docs-gen/markdown.mjs";
 import { projektBlockZeilen } from "../support/projekt-block";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRaw from "../../scripts/ticket-namen.mjs";
+import * as namenRaw from "../../scripts/regex-lib.mjs";
 import { lies, repoDateien } from "./repo-texte";
 
 type Einheit = { pfad: string; block?: string; schluessel?: string };

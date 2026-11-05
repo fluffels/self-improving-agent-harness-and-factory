@@ -1,5 +1,5 @@
 /* musterRegex (scripts/besitz-extraktion.mjs, factory#193): `*` bleibt im Segment, alle anderen Zeichen sind wörtlich;
- * die Maskierung kommt aus `escapeRegex` (scripts/ticket-namen.mjs). */
+ * die Maskierung kommt aus `escapeRegex` (scripts/regex-lib.mjs). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.

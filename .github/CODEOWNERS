@@ -87,6 +87,7 @@ AGENTS.md @fluffels
 /scripts/repo-form.mjs @fluffels
 /scripts/sync-stand-lib.mjs @fluffels
 /scripts/ticket-namen.mjs @fluffels
+/scripts/regex-lib.mjs @fluffels
 /scripts/board-place.mjs @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels
@@ -100,6 +101,8 @@ AGENTS.md @fluffels
 /scripts/gh-cli.mjs @fluffels
 /scripts/naechstes-ticket.mjs @fluffels
 /scripts/spezifikation-lib.mjs @fluffels
+/scripts/blocker-lib.mjs @fluffels
+/scripts/blocker-migration.mjs @fluffels
 /scripts/design-lib.mjs @fluffels
 /scripts/design-schritt.mjs @fluffels
 /scripts/projekt-config-bloecke.mjs @fluffels

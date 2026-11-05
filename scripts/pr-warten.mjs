@@ -12,7 +12,7 @@
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
  *   Zusatz bei ROT durch CANCELLED ohne laufenden Geschwister-Lauf: `HINWEIS <check> CANCELLED …: kein gh run rerun, leerer Commit mit Push` (ein Rerun behält das Ereignis samt `draft`).
- * Bei Exit 2 steht der letzte Rohstand (`state`, `mergeable`, `statusCheckRollup`) in `<os.tmpdir()>/pr-warten-<pr>.json` (je Aufruf überschrieben), der Pfad als `Diagnose: <pfad>` auf stderr; die stdout-Zeilen bleiben der Vertrag.
+ * Bei Exit 2 steht der letzte Rohstand (`state`, `mergeable`, `statusCheckRollup`) in `<os.tmpdir()>/pr-warten-<owner>-<name>-<pr>.json` (je Aufruf überschrieben; das Repo aus der Projekt-Config, ohne sie `pr-warten-<pr>.json`), der Pfad als `Diagnose: <pfad>` auf stderr; die stdout-Zeilen bleiben der Vertrag.
  * Pflicht-Checks: `gh pr checks <pr> --required --json name`; nur sie gaten. Schlägt das Holen fehl oder ist die Liste leer, gatet jeder Check (fail-closed).
  * `KONFLIKT` meldet erst eine zweite Abfrage im Abstand von mindestens 15 s (`mergeable` flackert, auch UNKNOWN).
  * Läuft das Zeitbudget nach gh-Fehlern ab, steht die letzte `GH-FEHLER`-Zeile mit Exit 2 da; erst drei Fehler in Folge sind Exit 3.
@@ -25,6 +25,8 @@ import { join } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { istRepoForm } from "./repo-form.mjs";
 
 const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
 const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
@@ -221,7 +223,7 @@ export function holeWerkzeuge(pr, gh = ghText) {
  * Ein Wartelauf für PR `a.pr`: Werkzeuge der Ruleset-Regel `code_scanning` einmal lesen, dann warten (Pflicht-Checks plus diese Werkzeuge gaten), Hinweiszeile anhängen.
  * `gh` (Aufrufe von `gh pr view/checks`, `gh api`), `schlafe` und `jetzt` sind die Test-Nähte; Standard ist echtes `gh` und Wanduhr. Rückgabe `{ exit, zeilen }`.
  */
-export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), jetzt = () => Date.now(), schreibe = writeFileSync, meldeFehler = console.error } = {}) {
+export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), jetzt = () => Date.now(), schreibe = writeFileSync, meldeFehler = console.error, repo = repoDerConfig() } = {}) {
   const w = holeWerkzeuge(a.pr, gh); // einmal je Lauf
   let roh = null;
   const r = mitHinweis(warten({
@@ -232,16 +234,25 @@ export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32A
     maxMs: a.maxSekunden * 1000,
     intervallMs: a.intervall * 1000,
   }), w.hinweis);
-  if (r.exit === 2 && roh) schreibeDiagnose(a.pr, roh, schreibe, meldeFehler);
+  if (r.exit === 2 && roh) schreibeDiagnose(a.pr, roh, schreibe, meldeFehler, repo);
   return r;
 }
 
-/** Pfad der Diagnose-Datei eines PR (OS-Temp, je Aufruf überschrieben). */
-export const diagnosePfad = (pr) => join(tmpdir(), `pr-warten-${pr}.json`);
+/** Das `repo` der Projekt-Config (`owner/name`); ohne lesbare Config `null` (die Diagnose-Datei trägt dann kein Repo). Dünner I/O-Rand. */
+export function repoDerConfig(lade = ladeProjektConfig) {
+  try {
+    return lade().repo ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Pfad der Diagnose-Datei eines PR (OS-Temp, je Aufruf überschrieben); mit `repo` (`owner/name`) `pr-warten-<owner>-<name>-<pr>.json`, damit zwei Repos mit gleicher PR-Nummer sich nicht überschreiben. */
+export const diagnosePfad = (pr, repo) => join(tmpdir(), `pr-warten-${istRepoForm(repo) ? `${repo.replace("/", "-")}-` : ""}${pr}.json`);
 
 /** Letzter Rohstand bei Exit 2 (OFFEN): `state`, `mergeable`, `statusCheckRollup`; Pfad auf stderr. Ein Schreibfehler bleibt folgenlos. */
-function schreibeDiagnose(pr, roh, schreibe, meldeFehler) {
-  const pfad = diagnosePfad(pr);
+function schreibeDiagnose(pr, roh, schreibe, meldeFehler, repo) {
+  const pfad = diagnosePfad(pr, repo);
   try {
     schreibe(pfad, `${JSON.stringify({ state: roh.state, mergeable: roh.mergeable, statusCheckRollup: roh.statusCheckRollup }, null, 2)}\n`);
     meldeFehler(`Diagnose: ${pfad}`);

@@ -17,7 +17,7 @@ import * as configLibRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as docsGenRaw from "../../scripts/docs-gen/markdown.mjs";
+import * as regexLibRaw from "../../scripts/regex-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as lensEditRaw from "../../scripts/lens-edit-guard.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -44,9 +44,8 @@ type Namen = {
   lensPfadMuster: RegExp;
   ticketBranchMuster: RegExp;
 };
-const docsGen = docsGenRaw as unknown as { escapeRegex: (t: string) => string };
+const R = regexLibRaw as unknown as { escapeRegex: (t: string) => string; ohneFarbcodes: (t: unknown) => string; FARBCODE: RegExp };
 const N = namenRaw as unknown as {
-  escapeRegex: (t: string) => string;
   ticketNamen: (c: Cfg) => Namen;
   ladeTicketNamen: (o?: { pfad?: string }) => Namen;
   failClosedGrund: (werkzeug: string, fehler: unknown) => string;
@@ -130,15 +129,15 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     const m = N.ticketNamen({ ...AB, praefixe: { branch: "feature/a.b-", worktree: "a.b-" } });
     expect(m.ticketAus("worktrees/a.b-12")).toBe(12);
     expect(m.ticketAus("worktrees/axb-12")).toBeNull();
-    expect(N.escapeRegex("a.b+c")).toBe(String.raw`a\.b\+c`);
-    expect(new RegExp(N.escapeRegex("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).test("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).toBe(true);
+    expect(R.escapeRegex("a.b+c")).toBe(String.raw`a\.b\+c`);
+    expect(new RegExp(R.escapeRegex("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).test("a.b+c(d)[e]{f}|g^h$i?j*k\\l")).toBe(true);
   });
 
   test("escapeRegex: jedes Sonderzeichen läuft als Literal durch, ein escaptes Zeichen ist kein Platzhalter", () => {
     const alle = ".*+?^${}()|[]\\/-";
-    for (const z of alle) expect(new RegExp("^" + N.escapeRegex(z) + "$").test(z), z).toBe(true);
-    expect(new RegExp("^" + N.escapeRegex(alle) + "$").test(alle)).toBe(true);
-    expect(new RegExp("^" + N.escapeRegex(".") + "$").test("x")).toBe(false);
+    for (const z of alle) expect(new RegExp("^" + R.escapeRegex(z) + "$").test(z), z).toBe(true);
+    expect(new RegExp("^" + R.escapeRegex(alle) + "$").test(alle)).toBe(true);
+    expect(new RegExp("^" + R.escapeRegex(".") + "$").test("x")).toBe(false);
   });
 });
 
@@ -349,7 +348,7 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
   const NADEL = "[.*+?^$" + "{}()|[\\]\\\\";
   // Die erlaubten Quellen: Kern und docs-gen-Kern (darf nur node:* und sich selbst importieren) fest hier, die Projektkopien
   // (z. B. ein CommonJS-Config, die den ESM-Kern nicht laden kann, oder eine Produkt-Funktion) aus `struktur.escapeKopien` der Config.
-  const ERLAUBT_KERN = ["scripts/ticket-namen.mjs", "scripts/docs-gen/markdown.mjs"];
+  const ERLAUBT_KERN = ["scripts/regex-lib.mjs"];
   const configKopien = (configLibRaw as unknown as { escapeKopienAus: (c: unknown) => string[] }).escapeKopienAus(ECHT);
   const ERLAUBT = [...ERLAUBT_KERN, ...configKopien];
   const kopien = (dateien: string[], lesen: (p: string) => string, erlaubt: string[] = ERLAUBT): string[] =>
@@ -359,7 +358,7 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
     expect(kopien(repoDateien(), lies)).toEqual([]);
   });
   test("Wächter erkennt eine Kopie, erlaubte Quellen zählen nicht", () => {
-    const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/ticket-namen.mjs": NADEL, "docs/a.md": NADEL };
+    const inhalt: Record<string, string> = { "test/x.ts": `s.replace(/${NADEL}]/g, "")`, "scripts/regex-lib.mjs": NADEL, "docs/a.md": NADEL };
     expect(kopien(Object.keys(inhalt), (p) => inhalt[p])).toEqual(["test/x.ts"]);
   });
   test("eine Projektkopie aus der Config ist erlaubt, derselbe Pfad ohne Eintrag ist eine Kopie", () => {
@@ -369,9 +368,13 @@ describe("Regex-Escape-Helfer: keine Kopien der Zeichenklasse", () => {
     expect(kopien(dateien, lesen, [...ERLAUBT_KERN, "lib/eigen.cjs"])).toEqual(["test/x.ts"]);
     expect(kopien(dateien, lesen, ERLAUBT_KERN)).toEqual(["lib/eigen.cjs", "test/x.ts"]);
   });
-  test("docs-gen-Kopie maskiert dieselben Metazeichen wie der Kern (Drift-Schutz)", () => {
-    for (const z of ".*+?^$" + "{}()|[]\\") expect(docsGen.escapeRegex(z), z).toBe(N.escapeRegex(z));
-    expect(docsGen.escapeRegex("a/b-c")).toBe("a/b-c"); // wie bisher in docs-gen: `/` und `-` bleiben unmaskiert
+  test("escapeRegex maskiert auch / und - (Kern-Zeichensatz, keine abweichende docs-gen-Kopie mehr)", () => {
+    expect(R.escapeRegex("a/b-c")).toBe(String.raw`a\/b\-c`);
+  });
+  test("ohneFarbcodes entfernt ANSI-Farbcodes und toleriert null", () => {
+    const esc = String.fromCharCode(27);
+    expect(R.ohneFarbcodes(`${esc}[31mrot${esc}[0m ok`)).toBe("rot ok");
+    expect(R.ohneFarbcodes(null)).toBe("");
   });
   test("die erlaubten Quellen (Kern und Config) existieren und tragen die Zeichenklasse wirklich", () => {
     for (const f of ERLAUBT) expect(lies(f), f).toContain(NADEL);

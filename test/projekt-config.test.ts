@@ -11,7 +11,7 @@ import { altName } from "./support/env-alt";
 import { projektConfig, repoName } from "./support/fremd-config";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { escapeRegex } from "../scripts/ticket-namen.mjs";
+import { escapeRegex } from "../scripts/regex-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPc from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -1042,10 +1042,10 @@ describe("Struktur-Pfade als Projektwert (#1843)", () => {
     }
     for (const p of ["src", "docs/module", "a/b.c/d"]) assert.deepEqual(mit({ quelle: p, moduldoku: p }), [], p);
   });
-  test("struktur.quelle als Liste samt endungen und ohne ist gültig (factory#181); strukturAus nennt die Listenform als noch nicht unterstützt", () => {
+  test("struktur.quelle als Liste samt endungen und ohne ist gültig (factory#181); strukturAus liefert die Liste unverändert", () => {
     const s = { quelle: ["a/src", "*/src/main/java"], moduldoku: "docs/module", endungen: [".java", ".ts"], ohne: ["**/*.spec.ts"] };
     assert.deepEqual(mit(s), []);
-    assert.throws(() => pc.strukturAus({ struktur: s }), /noch nicht unterstützt[\s\S]*Fix:/);
+    assert.deepEqual(pc.strukturAus({ struktur: s }), { quelle: s.quelle, moduldoku: s.moduldoku });
     assert.match(mit({ ...s, endungen: ["java"] }).join("|"), /struktur\.endungen\[0\]/);
     assert.match(mit({ ...s, quelle: ["a/../b"] }).join("|"), /struktur\.quelle\[0\]/);
     for (const m of ["docs/*", "docs/modul?"]) assert.match(mit({ ...s, moduldoku: m }).join("|"), /struktur\.moduldoku muss ein repo-relativer POSIX-Pfad/, m);

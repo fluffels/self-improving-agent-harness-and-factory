@@ -146,6 +146,12 @@ describe("toolEventsFromTranscript", () => {
     );
     assert.deepEqual(e.map((x: Ev) => x.resultChars), [5, 3]);
   });
+  test("doppelte tool_use-ID (Haupt- und Subagent-Datei): ein Event, die erste Fassung mit ihrem Ergebnis", () => {
+    const e = toolEventsFromTranscript([use("d", "Read", { file_path: "docs/a.md" }), use("d", "Grep", {}), res("d", "123"), res("d", "123456789")].join("\n"));
+    assert.equal(e.length, 1);
+    assert.equal(e[0].tool, "Read");
+    assert.equal(e[0].resultChars, 3);
+  });
   test("fehlendes Ergebnis → 0, kaputte Zeile übersprungen, mehrere tool_use je Nachricht", () => {
     const multi = JSON.stringify({
       type: "assistant",

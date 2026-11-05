@@ -45,7 +45,7 @@ export const DOCMAP_STANDARD_ENDUNGEN = Object.freeze([".ts"]);
 /** Der Block `struktur` samt `quelle` (auch als Liste), `endungen`, `ohne`, `docmapEinheit` und `moduldoku`; wirft ohne `struktur` (kein stiller Standardwert). */
 const configStruktur = () => {
   const c = ladeProjektConfig();
-  const { moduldoku } = strukturAus(c, { listeErlaubt: true });
+  const { moduldoku } = strukturAus(c);
   return { ...c.struktur, moduldoku };
 };
 
