@@ -104,7 +104,7 @@ function pruefen(werte, io, sprache) {
 }
 
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
-const gescheitertSchluessel = (nr, herkunft = null) => `Reparatur gescheitert: ${herkunft ?? ""}#${nr} (`;
+const gescheitertSchluessel = (nr, herkunft) => `Reparatur gescheitert: ${herkunft ?? ""}#${nr} (`;
 
 /** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig); `herkunft` (`owner/name`) steht vor der Nummer, wenn die Meldestelle fremd ist (factory#153). Pur. */
 export const gescheitertZeile = ({ nr, mangel, heute, herkunft = null }) =>

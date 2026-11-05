@@ -247,6 +247,9 @@ describe("nummernMitHerkunft und bereiteMeldung mit Herkunft (factory#208 L7)", 
     const r = lib.bereiteMeldung(["#12"], { stand: null, herkunft: "acme/proj", pruefe: (t) => !t.includes("acme/proj#") });
     expect(r.ok).toBe(false);
   });
+  test("ohne herkunft (Standard) bleiben nackte Nummern stehen", () => {
+    expect(lib.bereiteMeldung(["- [ ] x #4"], { stand: null, pruefe: () => true })).toEqual({ ok: true, text: "- [ ] x #4" });
+  });
   test("ohne wurzel (Standard: Repo-Wurzel des Skripts, im Quellrepo ohne Sync-Stand): Text ohne Stand-Zeile", () => {
     expect(lib.bereiteMeldung(["- [ ] x"], { pruefe: () => true })).toEqual({ ok: true, text: "- [ ] x" });
   });
@@ -269,6 +272,7 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
     const warn: string[] = [];
     expect(lib.eigenerLogin({ zugang: fremd, api: () => null, warn: (z) => warn.push(z) })).toBeNull();
     expect(warn).toHaveLength(1);
+    expect(warn[0]).toMatch(/^HINWEIS Dedupe: gh api user liefert keinen Login/);
   });
   test("leerer Login zählt wie ein fehlender (Warnzeile, null)", () => {
     const warn: string[] = [];
@@ -289,13 +293,15 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
   test("eigenes Konto zählt als vertraut (Groß-/Kleinschreibung egal), ein Fremder nie, ohne eigen nur der Owner", () => {
     expect(lib.zeileBekannt({ kommentare: [k("Fremdkonto")], owner: "eingang", eigen: "fremdkonto", schluessel: "Punkt: " })).toBe(true);
     expect(lib.zeileBekannt({ kommentare: [k("fremdkonto")], owner: "eingang", eigen: null, schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [k("fremdkonto")], owner: "eingang", schluessel: "Punkt: " })).toBe(false);
     expect(lib.zeileBekannt({ kommentare: [k("anderer")], owner: "eingang", eigen: "fremdkonto", schluessel: "Punkt: " })).toBe(false);
     expect(lib.zeileBekannt({ kommentare: [k("eingang")], owner: "eingang", schluessel: "Punkt: " })).toBe(true);
     expect(lib.zeileBekannt({ kommentare: [k(null)], owner: "eingang", eigen: "", schluessel: "Punkt: " })).toBe(false);
   });
   test("Kommentar ohne Body oder ohne user zählt nie als bekannt, wirft nicht", () => {
     const k = [{ user: { login: "eingang", type: "User" } } as unknown as { user: { login: string; type: string }; body: string }, { user: null, body: zeile }];
-    expect(lib.zeileBekannt({ kommentare: k, owner: "eingang", eigen: "x", schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [...k, null as never], owner: "eingang", eigen: "x", schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [{ body: zeile } as never], owner: "eingang", eigen: "x", schluessel: "Punkt: " })).toBe(false);
   });
   test("nur offene Listenzeilen mit dem Schlüssel zählen", () => {
     expect(lib.zeileBekannt({ kommentare: [k("eingang", "- [x] 2026 Punkt: Befund")], owner: "eingang", schluessel: "Punkt: " })).toBe(false);

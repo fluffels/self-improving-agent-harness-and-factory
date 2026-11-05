@@ -1,6 +1,6 @@
 /* Spezifikations-Gate, Schreibseite (#1698): anlegen nur geprüft, reparieren nur vertraute Tickets ohne Inhaltsverlust.
  * Alles über injizierte io: kein gh, kein Dateizugriff. Red-Green: die Prüfung vor `erzeuge`/`bearbeite` entfernen -> rot. */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -770,6 +770,18 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     expect(io.herkunft).toBe(EIGENES);
     expect(io.sammelKontext()).toMatchObject({ ziel: null, eigen: "fremdkonto" });
     expect(gh).toEqual([[["api", "user"], { token: "mt" }]]);
+  });
+  test("Standard-warn ist console.error: ein nicht lesbares Konto meldet die Warnzeile dorthin", () => {
+    const zeilen: unknown[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void zeilen.push(a[0]));
+    try {
+      const io = E.echteIo(config, { env: { MELDESTELLE_TOKEN: "mt" }, meldestelle: "eingang/privat", ghJson: () => { throw new Error("HTTP 403"); }, kontextLader: () => ({ offene: [], kommentare: [], owner: "o" }), waehle: () => null }) as unknown as { sammelKontext: () => unknown };
+      io.sammelKontext();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(zeilen).toHaveLength(1);
+    expect(String(zeilen[0])).toMatch(/^HINWEIS Dedupe: eigenes Konto nicht lesbar \(HTTP 403\)/);
   });
   test("eigene Meldestelle: keine Herkunft, kein gh api user; ein Treffer liefert die Nummer des Sammeltickets", () => {
     const io = E.echteIo(config, {

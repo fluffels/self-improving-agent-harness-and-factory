@@ -16,7 +16,7 @@ const PUNKT = "Meldestelle";
 
 /** Die fremde Meldestelle aus der Config oder `null` (eigenes Repo, keine Config, Config ohne ableitbare Stelle). */
 function fremdeStelle(config) {
-  if (!config || typeof config !== "object") return null;
+  if (!config) return null;
   try {
     const stelle = meldestelleAus(config);
     return typeof stelle === "string" && !gleichesRepo(stelle, config.repo) ? stelle : null;

@@ -69,7 +69,7 @@ export function eigenerLogin({ zugang, api, warn }) {
 /** Pur: steht in `kommentare` (`[{ user, body }]`) eine offene Zeile `- [ ]` mit `schluessel` von einem vertrauten Autor (`istVertraut` gegen `owner`) oder vom eigenen Konto `eigen` (Login, `null` ohne)? */
 export function zeileBekannt({ kommentare, owner, eigen = null, schluessel }) {
   const eigenKlein = typeof eigen === "string" && eigen !== "" ? eigen.toLowerCase() : null;
-  const vertraut = (user) => istVertraut(user ?? null, owner) || (eigenKlein !== null && typeof user?.login === "string" && user.login.toLowerCase() === eigenKlein);
+  const vertraut = (user) => istVertraut(user, owner) || (eigenKlein !== null && typeof user?.login === "string" && user.login.toLowerCase() === eigenKlein);
   return kommentare.some((k) => vertraut(k?.user) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)));
 }
 

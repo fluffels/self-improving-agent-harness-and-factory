@@ -26,7 +26,7 @@ describe("meldestellePunkt", () => {
   });
   test("keine oder unlesbare Config: kein Punkt (nichts zu prüfen)", () => {
     const { lesen } = lesenOk({});
-    for (const config of [undefined, null, "x", {}, { repo: "acme/proj", boards: "kaputt" }]) expect(lib.meldestellePunkt({ config, env: {}, lesen }), JSON.stringify(config)).toEqual([]);
+    for (const config of [undefined, null, "x", {}, { repo: "acme/proj", boards: "kaputt" }, { repo: "acme/proj", boards: [null] }]) expect(lib.meldestellePunkt({ config, env: {}, lesen }), JSON.stringify(config)).toEqual([]);
   });
   test("fremde Stelle über das Factory-Board (ohne Schlüssel meldestelle): der Punkt entsteht", () => {
     const { lesen } = lesenOk({ has_issues: true });
