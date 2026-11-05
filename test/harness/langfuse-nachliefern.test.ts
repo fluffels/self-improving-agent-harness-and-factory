@@ -642,12 +642,13 @@ describe("Fehler", () => {
     expect(m.aufrufe).toHaveLength(0);
   });
 
-  test("ohne Keys (auch mit --trocken) nennt die Meldung den Übergabeweg über die Session-ID im PR-Text", async () => {
+  test("ohne Keys (auch mit --trocken) nennt die Meldung den Auftrag-Einstieg und die Session-ID im PR-Text", async () => {
     const a = aufbau([msg("a", 1)]);
     const m = mock({ ist: 0 });
     const r = await N.nachliefern(N.parseArgs(["--trocken"]), { env: {}, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
     expect(r.exitCode).toBe(2);
-    expect(r.text).toContain("Session-ID in den PR-Text");
+    expect(r.text).toContain("node scripts/langfuse-auftrag.mjs <session-id>");
+    expect(r.text).toContain("Session-ID steht zusätzlich im PR-Text");
     expect(r.text).toContain("node scripts/langfuse-nachliefern.mjs --session <id>");
   });
 
@@ -1118,7 +1119,7 @@ describe("Startmarken (#1953)", () => {
 
 describe("parseArgs", () => {
   test("alle Flags landen im richtigen Feld", () => {
-    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, auftrag: null, fehler: null });
+    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
   });
   test.each(["sessionstart", "sessionend"])("--ausloeser %s ist erlaubt", (w) => {
     expect(N.parseArgs(["--ausloeser", w])).toMatchObject({ ausloeser: w, fehler: null });

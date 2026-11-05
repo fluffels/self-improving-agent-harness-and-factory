@@ -4,7 +4,7 @@
  * idempotent. Bewusst ein eigenes Modul: `langfuse-abgleich.mjs --pruefen` bleibt beweisbar lesend. Dubletten werden nur gemeldet.
  *
  *   node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]
- *   node scripts/langfuse-nachliefern.mjs --auftrag <id>   (nur ein Auftrag für den nächsten SessionStart-Lauf, ohne Zugang und ohne Netz, factory#213)
+ * Aufträge anderer Prozesse (`node scripts/langfuse-auftrag.mjs <id>`, key-frei, factory#213) führt der SessionStart-Lauf aus.
  *
  * Idempotenz: je Session zuerst das Ist (zwei Metrics-Abfragen, bei Differenz Observations), gesendet wird `fehlend` minus
  * Ledger-`gesendet` (`~/.claude/state/langfuse-abgleich.json`, nur eine Brücke über den Ingestion-Verzug). Ein kaputtes oder
@@ -43,7 +43,7 @@ import {
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
-import { auftraegeLesen, auftragErledigen, auftragLegen } from "./langfuse-auftrag.mjs";
+import { auftraegeLesen, auftragErledigen } from "./langfuse-auftrag.mjs";
 import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 
@@ -67,9 +67,9 @@ export function giltBestaetigt(eintrag) {
   return Boolean(eintrag?.bestaetigt) && eintrag.befund !== BEFUND_MEHRDEUTIG;
 }
 
-export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json] | --auftrag <id>";
+export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
 /** Hinweis ohne Langfuse-Zugang; eine Funktion statt Konstante, damit der Modul-Import keine Sync-Stand-Datei liest (Muster `natives()` in `sandbox-doctor.mjs`). */
-export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe nutzen den Secret-Key nicht: das ist Regel, `permissions.deny` sperrt nur das Read-Tool, technisch gesperrt ist die Datei nur unter der Sandbox, die unter Windows nicht greift). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (" + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-erfassung-belegen-1293") + ").";
+export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe nutzen den Secret-Key nicht: das ist Regel, `permissions.deny` sperrt nur das Read-Tool, technisch gesperrt ist die Datei nur unter der Sandbox, die unter Windows nicht greift). Im Agentenlauf: `node scripts/langfuse-auftrag.mjs <session-id>` legt einen Auftrag ab (ohne Key), den der nächste SessionStart-Lauf ausführt; die Session-ID steht zusätzlich im PR-Text (Rückfall: die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach) (" + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-erfassung-belegen-1293") + ").";
 const AUSLOESER = ["sessionstart", "sessionend"];
 
 /** Fehlertext fürs Protokoll: Node meldet bei Netzfehlern nur „fetch failed“, die Ursache steckt in `cause` (Code oder Meldung). */
@@ -81,9 +81,9 @@ export function fehlerText(e) {
 
 /** Unbekanntes Flag oder fehlender Wert: `fehler` gesetzt (der Aufrufer meldet Exit 2). */
 export function parseArgs(argv) {
-  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, auftrag: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
+  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen);
-  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, auftrag: werte.auftrag ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
+  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
   if (a.fehler === null && a.ausloeser !== null && !AUSLOESER.includes(a.ausloeser)) {
     a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
     a.ausloeser = null;
@@ -348,13 +348,6 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = hauptrepoPfad(fileURLToPath(new URL("..", import.meta.url)));
   const stateDir = join(homedir(), ".claude", "state");
-  // Auftrag ablegen: kein Zugang, kein Netz, der Agentenkontext liest den Key nie (factory#213); ausgeführt wird er vom SessionStart-Hook.
-  if (args.auftrag !== null && !args.fehler) {
-    const ok = auftragLegen(stateDir, args.auftrag);
-    (ok ? console.log : console.error)(ok ? `Auftrag abgelegt: ${args.auftrag} (der nächste SessionStart-Lauf liefert nach)` : `--auftrag: ungültige Session-ID: ${args.auftrag}`);
-    process.exitCode = ok ? 0 : 2;
-    return;
-  }
   const lauf = (a, o) => nachliefern(a, { projectsRoot: projekteWurzel(), stateDir, repoRoot, env: kindEnv(process.env, homedir()), ...o }); // Zugang auch aus ~/.langfuse-secret und den Plugin-Optionen, wie im Hook (#1821 L30)
   if (args.ausloeser && !args.fehler) {
     await hookLauf(args, { stateDir, lauf, stand: kurzerStand(fileURLToPath(new URL("..", import.meta.url))) });

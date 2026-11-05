@@ -16,7 +16,7 @@ import * as rawAuftrag from "../../scripts/langfuse-auftrag.mjs";
 import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 
 type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; auftrag: string | null; fehler: string | null };
-type Ergebnis = { exitCode: number; text: string; protokoll: { sessions: { status: string }[] } };
+type Ergebnis = { exitCode: number; text: string; protokoll: Record<string, unknown> & { sessions: { status: string }[] } };
 type Lauf = (a: Args, o: { now: number }) => Promise<Ergebnis>;
 const A = rawAuftrag as unknown as {
   AUFTRAG_DATEI: string;
@@ -24,6 +24,8 @@ const A = rawAuftrag as unknown as {
   auftragLegen: (dir: string, session: unknown, now?: number) => boolean;
   auftraegeLesen: (dir: string, now?: number) => string[];
   auftragErledigen: (dir: string, session: string) => void;
+  auftragAufruf: (argv: string[], dir: string, now?: number) => { exitCode: number; text: string };
+  AUFRUFHILFE: string;
 };
 const N = rawNach as unknown as {
   parseArgs: (a: string[]) => Args;
@@ -31,7 +33,9 @@ const N = rawNach as unknown as {
 };
 
 const T0 = Date.parse("2026-11-05T10:00:00Z");
-const SKRIPT = fileURLToPath(new URL("../../scripts/langfuse-nachliefern.mjs", import.meta.url));
+const SKRIPT_DIR = fileURLToPath(new URL("../../scripts/", import.meta.url));
+const NACHLIEFERN = join(SKRIPT_DIR, "langfuse-nachliefern.mjs");
+const AUFTRAG = join(SKRIPT_DIR, "langfuse-auftrag.mjs");
 const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
 const auftraegeAus = (datei: string) => (JSON.parse(readFileSync(datei, "utf8")) as { auftraege: Record<string, string> }).auftraege;
 
@@ -68,6 +72,8 @@ describe("Auftragsdatei", () => {
     writeFileSync(dateiVon(dir), JSON.stringify(null));
     expect(A.auftraegeLesen(dir, T0)).toEqual([]);
     // fremd geformter Inhalt (Zeichenkette statt Objekt) wird beim Ablegen nicht übernommen
+    writeFileSync(dateiVon(dir), JSON.stringify({ auftraege: null }));
+    expect(A.auftraegeLesen(dir, T0)).toEqual([]);
     writeFileSync(dateiVon(dir), JSON.stringify({ auftraege: "text" }));
     expect(A.auftragLegen(dir, "neu", T0)).toBe(true);
     expect(Object.keys(auftraegeAus(dateiVon(dir)))).toEqual(["neu"]);
@@ -87,7 +93,7 @@ describe("Auftragsdatei", () => {
 
 describe("SessionStart-Hook führt Aufträge aus", () => {
   const START = ["--ausloeser", "sessionstart", "--aktuell", "cur"];
-  const ergebnis = (status: string, exitCode = 0): Ergebnis => ({ exitCode, text: "", protokoll: { sessions: status ? [{ status }] : [] } });
+  const ergebnis = (status: string, exitCode = 0): Ergebnis => ({ exitCode, text: "", protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, uebrig: 0, fehler: [], sessions: status ? [{ status }] : [] } });
   const aufbau = (statusJeSession: Record<string, string> = {}, exitCode = 0) => {
     const stateDir = join(fixture({}), "state");
     const aufrufe: string[] = [];
@@ -142,6 +148,16 @@ describe("SessionStart-Hook führt Aufträge aus", () => {
     expect(A.auftraegeLesen(a.stateDir, T0)).toEqual(["alt1"]);
   });
 
+  test("der Auftrags-Lauf steht mit Auslöser auftrag im Log; ein verfallener Auftrag läuft nicht (Uhr des Hooks)", async () => {
+    const a = aufbau();
+    A.auftragLegen(a.stateDir, "frisch", T0 - 1000);
+    A.auftragLegen(a.stateDir, "verfallen", T0 - A.AUFTRAG_ALTER_MS);
+    await a.fahre(START);
+    expect(a.aufrufe).toEqual(["sessionstart:null:cur", "null:frisch:cur"]);
+    const zeilen = readFileSync(join(a.stateDir, "langfuse-abgleich.log"), "utf8").trim().split("\n").map((z) => JSON.parse(z) as { ausloeser: string; session: string | null });
+    expect(zeilen.map((z) => [z.ausloeser, z.session])).toEqual([["sessionstart", "cur"], ["auftrag", "frisch"]]);
+  });
+
   test("SessionEnd führt keine Aufträge aus", async () => {
     const a = aufbau();
     A.auftragLegen(a.stateDir, "alt1", T0 - 1000);
@@ -151,27 +167,55 @@ describe("SessionStart-Hook führt Aufträge aus", () => {
   });
 });
 
-describe("--auftrag im Agentenkontext liest nie einen Key", () => {
-  const fahre = (home: string, args: string[]) =>
-    spawnSync(process.execPath, [SKRIPT, ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" } });
+describe("auftragAufruf (Einstieg)", () => {
+  test("genau eine gültige Session-ID legt ab; keine, mehrere oder eine ungültige ID (auch ein Flag) legen nichts ab und enden mit Exit 2", () => {
+    const dir = join(fixture({}), "state");
+    for (const argv of [[], ["a", "b"], ["--json"], ["a b"], ["--auftrag", "abc"]]) {
+      const r = A.auftragAufruf(argv, dir, T0);
+      expect(r.exitCode).toBe(2);
+      expect(r.text).toContain(A.AUFRUFHILFE);
+    }
+    expect(existsSync(dateiVon(dir))).toBe(false);
+    expect(A.auftragAufruf(["abc-1"], dir, T0)).toEqual({ exitCode: 0, text: "Auftrag abgelegt: abc-1 (der nächste SessionStart-Lauf liefert nach)" });
+    expect(A.auftraegeLesen(dir, T0)).toEqual(["abc-1"]);
+  });
+});
 
-  test("ohne jeden Zugang: Exit 0, Auftrag liegt im Zustandsordner, kein Lauf (kein Log, kein Ledger); ein Lauf mit Zugangsprüfung scheiterte hier mit Exit 2", () => {
+describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, factory#213)", () => {
+  const spezifizierer = (datei: string): string[] => [...readFileSync(datei, "utf8").matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g)].map((m) => m[1]);
+  const fahre = (skript: string, home: string, args: string[]) =>
+    spawnSync(process.execPath, [skript, ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" } });
+
+  test("Import-Hülle: langfuse-auftrag.mjs zieht nur Node-Builtins und direktaufruf.mjs (nur Builtins), nie langfuse-zugang oder langfuse-api", () => {
+    const eigene = spezifizierer(AUFTRAG);
+    expect(eigene.length).toBeGreaterThan(0);
+    expect(eigene.filter((m) => !m.startsWith("node:") && m !== "./direktaufruf.mjs")).toEqual([]);
+    expect(spezifizierer(join(SKRIPT_DIR, "direktaufruf.mjs")).filter((m) => !m.startsWith("node:"))).toEqual([]);
+    // Gegenprobe: der Nachlieferer selbst zieht den Zugang, die Hülle unterscheidet also wirklich.
+    expect(spezifizierer(NACHLIEFERN)).toEqual(expect.arrayContaining(["./langfuse-zugang.mjs", "./langfuse-api.mjs"]));
+  });
+
+  test("ohne jeden Zugang: Exit 0, Auftrag liegt im Zustandsordner, kein Lauf (kein Log, kein Ledger)", () => {
     const home = fixture({});
-    const r = fahre(home, ["--auftrag", "abc-123"]);
+    const r = fahre(AUFTRAG, home, ["abc-123"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("Auftrag abgelegt: abc-123");
     const state = join(home, ".claude", "state");
     expect(auftraegeAus(dateiVon(state))).toHaveProperty("abc-123");
     expect(existsSync(join(state, "langfuse-abgleich.log"))).toBe(false);
     expect(existsSync(join(state, "langfuse-abgleich.json"))).toBe(false);
-    // Gegenprobe: derselbe Prozess ohne --auftrag will den Zugang und scheitert ohne Key (Exit 2): der Auftrag-Pfad liest ihn also wirklich nie.
-    expect(fahre(home, ["--trocken"]).status).toBe(2);
   });
 
-  test("ungültige Session-ID: Exit 2, nichts abgelegt", () => {
-    const home = fixture({});
-    const r = fahre(home, ["--auftrag", "a b"]);
+  test("Gegenprobe: der Nachlieferer ohne Key scheitert an der Zugangsprüfung (Exit 2, Meldung nennt den Auftrag-Einstieg)", () => {
+    const r = fahre(NACHLIEFERN, fixture({}), ["--trocken"]);
     expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Kein Langfuse-Zugang");
+    expect(r.stderr).toContain("node scripts/langfuse-auftrag.mjs <session-id>");
+  });
+
+  test("ungültige Aufrufe über den Prozess: Exit 2, nichts abgelegt", () => {
+    const home = fixture({});
+    for (const args of [["a b"], [], ["a", "b"], ["--auftrag", "x"]]) expect(fahre(AUFTRAG, home, args).status).toBe(2);
     expect(existsSync(dateiVon(join(home, ".claude", "state")))).toBe(false);
   });
 });
