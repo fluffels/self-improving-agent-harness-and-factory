@@ -165,3 +165,47 @@ describe("zielToken und Standard-Token der Schreibwege (#78 L13a, Review R1)", (
     expect(tokens).toEqual(["p", "std"]);
   });
 });
+
+describe("Sammelticket mit eigenem Titel und Ende der Todo-Spalte (factory#153)", () => {
+  const T = "Sicherheit: Rest-Befunde (gesammelt)";
+  const offene = [{ number: 5, titel: "Harness-Härtung (gesammelt)", assignees: [], createdAt: "2026-10-01T00:00:00Z" }, { number: 8, titel: T, assignees: [], createdAt: "2026-10-02T00:00:00Z" }];
+  test("sammelticketNummern mit Titel zählt nur dessen Tickets, ohne Titel das Harness-Sammelticket", () => {
+    const N = raw as unknown as { sammelticketNummern: (o: unknown[], titel?: string) => number[] };
+    expect(N.sammelticketNummern(offene, T)).toEqual([8]);
+    expect(N.sammelticketNummern(offene)).toEqual([5]);
+  });
+  test("waehleSammelticket mit Titel wählt dessen Ticket, nicht das Harness-Sammelticket", () => {
+    const W = raw as unknown as { waehleSammelticket: (o: unknown[], repo: string, api: (a: string[]) => unknown, titel?: string) => { number: number } | null };
+    const einzel = (args: string[]) => ({ state: "open", assignees: [], user: { login: "own-a", type: "User" }, args });
+    expect(W.waehleSammelticket(offene, "own-a/ziel", einzel, T)?.number).toBe(8);
+    expect(W.waehleSammelticket(offene, "own-a/ziel", einzel)?.number).toBe(5);
+  });
+  test("ladeSammelKontext mit io.titel liest die Kommentare nur der Tickets mit diesem Titel", () => {
+    const rohe = [[
+      { number: 5, title: "Harness-Härtung (gesammelt)", user: bot, assignees: [], created_at: "2026-10-01T00:00:00Z" },
+      { number: 8, title: T, user: bot, assignees: [], created_at: "2026-10-02T00:00:00Z" },
+    ]];
+    const abgefragt: number[] = [];
+    const io = { titel: T, ladeOffene: () => rohe, ladeKommentare: (nr: number) => (abgefragt.push(nr), []) };
+    (raw as unknown as { ladeSammelKontext: (io: unknown) => unknown }).ladeSammelKontext(io);
+    expect(abgefragt).toEqual([8]);
+  });
+  test("platziereAmEnde: ohne Token wirft es, sonst --position hinter dem Ende, --repo nur mit Ziel-Repo", () => {
+    const P = raw as unknown as { platziereAmEnde: (nr: number, token: string | undefined, repo: string | undefined, exec: (...a: unknown[]) => void) => void; ENDE_POSITION: number };
+    expect(() => P.platziereAmEnde(1, "", undefined, () => undefined)).toThrow(/PROJECT_TOKEN/);
+    const aufrufe: string[][] = [];
+    const exec = (...a: unknown[]) => void aufrufe.push((a[1] as string[]).slice(1));
+    P.platziereAmEnde(5, "t", "zz-org/ziel", exec);
+    P.platziereAmEnde(6, "t", undefined, exec);
+    expect(aufrufe[0]).toEqual(["--repo", "zz-org/ziel", "--position", String(P.ENDE_POSITION), "5"]);
+    expect(aufrufe[1]).toEqual(["--position", String(P.ENDE_POSITION), "6"]);
+    expect(P.ENDE_POSITION).toBeGreaterThan(1000);
+  });
+  test("platziereAmEnde: ohne Token-Angabe gilt PROJECT_TOKEN aus der Umgebung (als GH_TOKEN des Prozesses)", () => {
+    vi.stubEnv("PROJECT_TOKEN", "envtok");
+    const P = raw as unknown as { platziereAmEnde: (nr: number, token: undefined, repo: undefined, exec: (...a: unknown[]) => void) => void };
+    const optionen: { env: Record<string, string> }[] = [];
+    P.platziereAmEnde(7, undefined, undefined, (...a: unknown[]) => void optionen.push(a[2] as { env: Record<string, string> }));
+    expect(optionen[0].env.GH_TOKEN).toBe("envtok");
+  });
+});

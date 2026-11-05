@@ -18,8 +18,8 @@ export const NACHLAUF = /[.,;:)\]}]+$/;
 const VARIABLE = /^[$%{~]/;
 const imScope = (file) => /^(test|scripts)\//.test(file);
 
-/** Findet Pfad-Verstöße (siehe Block oben). `repo`: Repo-Name aus der Projekt-Config oder `null` (Regel 3 entfällt). Pur. */
-export function pfadBefunde(files, readFile, { repo = null } = {}) {
+/** Findet Pfad-Verstöße (siehe Block oben). `repo`: Repo-Name aus der Projekt-Config oder `null` (Regel 3 entfällt). `alleLaufwerke`: Regel 2 gilt für jede Quelle, nicht nur test/ und scripts/ (`--text`: ein Text hat keinen Dateipfad). Pur. */
+export function pfadBefunde(files, readFile, { repo = null, alleLaufwerke = false } = {}) {
   const hits = [];
   const repoKlein = repo ? repo.toLowerCase() : null;
   for (const file of files) {
@@ -37,7 +37,7 @@ export function pfadBefunde(files, readFile, { repo = null } = {}) {
         if (seg && !VARIABLE.test(seg) && !PLATZHALTER_NUTZER.includes(seg)) melde("nutzer");
       }
       const laufwerke = [...text.matchAll(LAUFWERK_MUSTER)].map((m) => m[0]);
-      if (imScope(file)) {
+      if (alleLaufwerke || imScope(file)) {
         for (const p of laufwerke) {
           const wurzel = p.replace(LAUFWERK_KOPF, "").split(/[\\/]+/)[0].replace(NACHLAUF, "");
           if (wurzel && !VARIABLE.test(wurzel) && !FIXTURE_WURZELN.includes(wurzel.toLowerCase())) melde("wurzel");

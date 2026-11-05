@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeBoardLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, sicherheitsLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
 import { ladeProjektConfig, labelAus } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
@@ -263,8 +263,8 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()`, `lies(pfad)`, `gh` (`{ text(args, opt), json(args, opt) }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig = () => ladeProjektConfig(), lies = (p) => readFileSync(p, "utf8"), gh = { text: ghText, json: ghJson }, log = console.log, err = console.error } = {}) {
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()`, `bezieher` (Standard: Sync-Stand vorhanden; im Bezieher liegt das Ticket im eigenen Repo), `lies(pfad)`, `gh` (`{ text(args, opt), json(args, opt) }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig = () => ladeProjektConfig(), lies = (p) => readFileSync(p, "utf8"), gh = { text: ghText, json: ghJson }, bezieher, log = console.log, err = console.error } = {}) {
   const { werte, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, bericht: { type: "string" } });
   if (fehler) {
     err(`${fehler.text}\nAufruf: node scripts/secret-inbox.mjs [--bericht <pfad>] [--dry-run]`);
@@ -274,7 +274,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   let libs;
   try {
     config = ladeConfig();
-    libs = await ladeLibs();
+    libs = sicherheitsLibs(await ladeLibs(), { bezieher, log });
   } catch (e) {
     log(`::error::Secret-Inbox: Projekt-Config nicht lesbar: ${fehlerText(e)}`);
     return AUFRUF_EXIT;

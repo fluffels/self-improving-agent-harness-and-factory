@@ -267,11 +267,12 @@ function aufnehmenLauf(flag, result, { red, green, dim, out, err }) {
   return 0;
 }
 
-/** `--text`: der Text aus `stdin` gegen Kern- plus Projektliste. */
+/** `--text`: der Text aus `stdin` gegen Kern- plus Projektliste und die Pfadregel (alle drei Regeln, auch Laufwerkspfade ohne Dateipfad im Scope; factory#153). */
 function textLauf(stdin, wurzel, ctx) {
   const text = stdin();
   const { terms, names } = textListen(wurzel);
-  return bericht(findViolations(["stdin"], terms, () => text, names), 1, { ...ctx, label: checkedLabel("text") });
+  const pfade = pfadBefunde(["stdin"], () => text, { repo: repoNameOderNull(wurzel), alleLaufwerke: true });
+  return bericht([...findViolations(["stdin"], terms, () => text, names), ...pfade], 1, { ...ctx, label: checkedLabel("text") });
 }
 
 /** Der Repo-Lauf (`pruefe`: Dateien und Commit-Messages). */

@@ -477,3 +477,39 @@ describe("main über Deps: Ticket des Ziel-Owners (Ziel-Owner ≠ eigener Owner)
     expect(aufrufe.filter((a) => a[1] === "create").map((a) => a[a.indexOf("--title") + 1])).not.toContain(titel);
   });
 });
+
+describe("main über Deps: Bezieher hält das Secret-Ticket im eigenen Repo (factory#153)", () => {
+  const titel = "🔒 Security: Secret rotieren/widerrufen";
+  const lauf = async (bezieher: boolean) => {
+    const aufrufe: { args: string[]; opt: unknown }[] = [];
+    const gh = {
+      text: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), args.includes("--slurp") ? "[[]]" : "https://github.com/o/r/issues/77\n"),
+      json: (args: string[], opt: unknown) => (aufrufe.push({ args, opt }), { body: S.issueBody(S.befundeAusGitleaks([gl()])) }),
+    };
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "o/fabrik",
+      zielToken: (repo?: string) => (repo === "o/r" ? undefined : "zt"),
+      ladeSammelKontext: () => ({ rohe: [{ number: 6, title: titel, user: { login: "o" } }], offene: [{ number: 6, titel }] }),
+      vertrauteIssues: (r: { user: { login: string } }[]) => r.filter((i) => i.user.login === "o"),
+      platziereOben: () => undefined,
+    };
+    const deps = { ladeConfig: () => ({ labels: { harness: "area:test" } }), ladeLibs: () => Promise.resolve(libs), lies: () => JSON.stringify([gl(), gl({ Fingerprint: "neu:fp" })]), gh, bezieher, log: () => {}, err: () => {} };
+    const code = await S.main(["--bericht", "b.json"], deps);
+    return { code, aufrufe: aufrufe.filter((a) => !a.args.includes("--slurp")) };
+  };
+  test("Bezieher: Lesen, Aktualisieren und Kommentieren im eigenen Repo, nie im Ziel-Repo der Fabrik, ohne Fremd-Token", async () => {
+    const { code, aufrufe } = await lauf(true);
+    expect(code).toBe(0);
+    const ziele = aufrufe.map((a) => a.args.join(" "));
+    expect(ziele.some((a) => a === "api repos/o/r/issues/6")).toBe(true);
+    expect(ziele.some((a) => a.startsWith("api -X PATCH repos/o/r/issues/6 "))).toBe(true);
+    expect(ziele.some((a) => a.includes("o/fabrik"))).toBe(false);
+    for (const a of aufrufe.filter((x) => x.args.some((s) => s.includes("repos/o/r/issues")))) expect(a.opt).toEqual({ token: undefined });
+  });
+  test("Fabrik (kein Bezieher): das Ticket bleibt im Ziel-Repo (Negativtest)", async () => {
+    const { aufrufe } = await lauf(false);
+    expect(aufrufe.map((a) => a.args.join(" ")).some((a) => a.includes("repos/o/fabrik/issues/6"))).toBe(true);
+  });
+});

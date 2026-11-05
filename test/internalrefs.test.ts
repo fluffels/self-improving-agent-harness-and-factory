@@ -500,6 +500,27 @@ describe("Projektliste (factory#169)", () => {
     assert.equal(lauf(`vor ${decodeTerms()[0]} nach`).code, 1, "die Kernliste gilt weiter");
   });
 
+  test("--text prüft lokale Pfade (pfadBefunde): Benutzerordner, Laufwerkspfad mit fremder Wurzel und Repo-Segment sind rot, Platzhalter und Fixture-Wurzel grün (factory#153)", () => {
+    const w = wurzelMit({});
+    const win = (...teile: string[]) => teile.join("\\");
+    const repo = FREMD.repo.split("/")[1] ?? "";
+    const lauf = (stdin: string) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = main(["--text"], { wurzel: w, stdin: () => stdin, out: (m) => out.push(m), err: (m) => err.push(m) });
+      return { code, alles: out.join("\n") + err.join("\n") };
+    };
+    const nutzer = lauf(`Pfad ${win("C:", "Users", "KEINPLATZHALTER", "x")} nicht lesbar`);
+    assert.equal(nutzer.code, 1);
+    assert.match(nutzer.alles, /lokaler Pfad \(nutzer\)/);
+    assert.ok(!nutzer.alles.includes("KEINPLATZHALTER"), "die Meldung nennt den Namen nicht");
+    const wurzel = lauf(`Pfad ${win("X:", "keinefixturewurzel", "a")} nicht lesbar`);
+    assert.equal(wurzel.code, 1, "im Text gilt die Laufwerksregel für jede Quelle, nicht nur test/ und scripts/");
+    assert.match(wurzel.alles, /lokaler Pfad \(wurzel\)/);
+    assert.match(lauf(`Pfad ${win("C:", "dev", repo, "x")}`).alles, /lokaler Pfad \(repo\)/);
+    assert.equal(lauf(`Pfad ${win("C:", "Users", "<name>", "x")} und ${win("C:", "Temp", "x")}`).code, 0);
+  });
+
   const SKRIPT = fileURLToPath(new URL("../scripts/check-internalrefs.mjs", import.meta.url));
   const hashDatei = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
   const addLauf = (argv: string[], w: string, self: string) => {

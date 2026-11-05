@@ -344,29 +344,22 @@ describe("melden.mjs reicht die Herkunft an bereite (factory#208 L7, Lens-Test)"
 });
 
 describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (AK1, AK3)", () => {
-  // Bewusst ausgeklammert (Sicherheits-Inboxen, eigenes Folge-Ticket des PR); eine Ausnahme ohne postZeilen( ist stale und rot.
-  const AUSNAHMEN = new Set(["audit-einordnung.mjs", "codescanning-inbox.mjs"]);
+  // Keine Ausnahmen (factory#153): auch die Sicherheits-Inboxen prüfen ihre Zeilen vor dem Post.
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts");
   const dateien = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? dateien(join(d, e.name)) : e.name.endsWith(".mjs") ? [join(d, e.name)] : []));
   // Quelltext ohne Kommentare: ein Aufruf zählt nur als Code (`name(`), nie über einen Import oder eine Kommentarzeile.
   const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const ruft = (q: string, name: string) => new RegExp(`(?<![\\w])${name}\\(`).test(q);
-  const mitPost = dateien(dir).filter((f) => !f.endsWith("inbox-lib.mjs") && ruft(code(f), "postZeilen"));
+  // `inbox-lib` definiert `postZeilen`, `inbox-start-lib` reicht es im Bezieher mit dem eigenen Ziel-Repo weiter: beide senden nichts selbst, die Schreiber prüfen vorher.
+  const mitPost = dateien(dir).filter((f) => !/inbox(-start)?-lib\.mjs$/.test(f) && ruft(code(f), "postZeilen"));
   const name = (f: string) => f.split(/[\\/]/).pop() as string;
 
   test("Heuristik findet die bekannten Schreiber (Wächter nicht vakuös)", () => {
     const namen = mitPost.map(name);
-    for (const n of ["harness-doctor-melden.mjs", "spezifikation.mjs", "melden.mjs", "audit-einordnung.mjs"]) expect(namen).toContain(n);
+    for (const n of ["harness-doctor-melden.mjs", "spezifikation.mjs", "melden.mjs", "audit-einordnung.mjs", "codescanning-inbox.mjs"]) expect(namen).toContain(n);
   });
-  test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf oder steht in der Ausnahmeliste", () => {
-    const ohne = mitPost.filter((f) => !ruft(code(f), "bereiteMeldung") && !AUSNAHMEN.has(name(f))).map(name);
+  test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf", () => {
+    const ohne = mitPost.filter((f) => !ruft(code(f), "bereiteMeldung")).map(name);
     expect(ohne).toEqual([]);
-  });
-  test("keine stale Ausnahme: jedes Skript der Liste ruft postZeilen( noch auf und nutzt bereiteMeldung nicht", () => {
-    const namen = new Map(mitPost.map((f) => [name(f), code(f)]));
-    for (const a of AUSNAHMEN) {
-      expect(namen.has(a), `${a} ruft postZeilen( nicht mehr auf: Ausnahme streichen`).toBe(true);
-      expect(ruft(namen.get(a) ?? "", "bereiteMeldung"), `${a} nutzt bereiteMeldung: Ausnahme streichen`).toBe(false);
-    }
   });
 });

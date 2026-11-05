@@ -1,5 +1,8 @@
 /* Gemeinsamer Start der Inbox-Skripte (#1837 L16): Aufruf-Check vor dem Config-Laden, Config- und Lib-Fehler als einheitliche `::error::`-Meldung. */
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawStand from "../scripts/sync-stand-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/inbox-start-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -175,5 +178,103 @@ describe("bestaetigeAnlegen (#101 L17, fail-closed, gemeinsam für Status- und T
     expect(B.bestaetigeAnlegen(anlegen, { zweit: () => [{ number: 1, titel: "Y" }], passt })).toBe(anlegen);
     const nichts: E = { aktion: "nach-oben", grund: "g", warnungen: [] };
     expect(B.bestaetigeAnlegen(nichts, { zweit: () => { throw new Error("nie fragen"); }, passt })).toBe(nichts);
+  });
+});
+
+describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im eigenen Repo", () => {
+  type Fn = (...a: unknown[]) => unknown;
+  type Libs = { REPO: string; ZIEL: string; SAMMELTICKET_TITEL_LISTE?: string[]; zielToken: Fn; ladeSammelKontext: Fn; postZeilen: Fn; waehleSammelticket: Fn; platziereAmEnde: Fn };
+  const S = rawLib as unknown as { sicherheitsLibs: (libs: Libs, opt?: { bezieher?: boolean; gh?: { text: (a: string[]) => string }; log?: (s: string) => void }) => Libs; REST_TITEL: string };
+  const aufbau = () => {
+    const aufrufe: { name: string; args: unknown[] }[] = [];
+    const libs: Libs = {
+      REPO: "own-a/proj",
+      ZIEL: "zz-org/fabrik",
+      SAMMELTICKET_TITEL_LISTE: ["Harness-Härtung (gesammelt)"],
+      zielToken: (...a: unknown[]) => (aufrufe.push({ name: "zielToken", args: a }), a[0] === "own-a/proj" ? undefined : "pt"),
+      ladeSammelKontext: (...a: unknown[]) => (aufrufe.push({ name: "ladeSammelKontext", args: a }), { offene: [] }),
+      postZeilen: (...a: unknown[]) => (aufrufe.push({ name: "postZeilen", args: a }), ""),
+      waehleSammelticket: (...a: unknown[]) => (aufrufe.push({ name: "waehleSammelticket", args: a }), null),
+      platziereAmEnde: (...a: unknown[]) => void aufrufe.push({ name: "platziereAmEnde", args: a }),
+    };
+    return { libs, aufrufe };
+  };
+  const von = (aufrufe: { name: string; args: unknown[] }[], name: string) => aufrufe.filter((a) => a.name === name).map((a) => a.args);
+
+  test("Fabrik (kein Bezieher): dieselben Libs, nichts ersetzt (Negativtest)", () => {
+    const { libs } = aufbau();
+    expect(S.sicherheitsLibs(libs, { bezieher: false })).toBe(libs);
+  });
+
+  test("Standard: ohne Angabe entscheidet der Sync-Stand dieses Repos (Bezieher: ersetzt, Fabrik: dieselben Libs)", () => {
+    const { libs } = aufbau();
+    const wurzel = fileURLToPath(new URL("..", import.meta.url));
+    expect(S.sicherheitsLibs(libs) === libs).toBe(!(rawStand as unknown as { istBezieher: (w: string) => boolean }).istBezieher(wurzel));
+  });
+
+  test("Bezieher: ohne SAMMELTICKET_TITEL_LISTE der Libs besteht die Liste nur aus dem Rest-Ticket", () => {
+    const { libs } = aufbau();
+    delete libs.SAMMELTICKET_TITEL_LISTE;
+    expect(S.sicherheitsLibs(libs, { bezieher: true }).SAMMELTICKET_TITEL_LISTE).toEqual([S.REST_TITEL]);
+  });
+
+  test("Bezieher: ZIEL ist das eigene Repo, der Ziel-Token der des eigenen Repos, das Rest-Ticket zählt als Sammelticket", () => {
+    const { libs, aufrufe } = aufbau();
+    const neu = S.sicherheitsLibs(libs, { bezieher: true });
+    expect(neu.ZIEL).toBe("own-a/proj");
+    expect(neu.zielToken()).toBeUndefined();
+    expect(von(aufrufe, "zielToken")).toEqual([["own-a/proj"]]);
+    expect(neu.SAMMELTICKET_TITEL_LISTE).toEqual(["Harness-Härtung (gesammelt)", S.REST_TITEL]);
+    expect(neu.REPO).toBe("own-a/proj");
+  });
+
+  test("Bezieher: ladeSammelKontext liest das eigene Repo und das Rest-Ticket, ein übergebener Wert geht vor", () => {
+    const { libs, aufrufe } = aufbau();
+    const neu = S.sicherheitsLibs(libs, { bezieher: true });
+    neu.ladeSammelKontext();
+    neu.ladeSammelKontext({ ladeKommentare: () => [] });
+    const [erst, zweit] = von(aufrufe, "ladeSammelKontext");
+    expect(erst).toEqual([{ repo: "own-a/proj", titel: S.REST_TITEL }]);
+    expect(Object.keys((zweit[0] as object)).sort()).toEqual(["ladeKommentare", "repo", "titel"]);
+  });
+
+  test("Bezieher: postZeilen geht standardmäßig ins eigene Repo ohne Fremd-Token, ein übergebenes Repo bleibt", () => {
+    const { libs, aufrufe } = aufbau();
+    const neu = S.sicherheitsLibs(libs, { bezieher: true });
+    neu.postZeilen(8, "text");
+    neu.postZeilen(9, "x", "zz-org/andere", "tok");
+    expect(von(aufrufe, "postZeilen")).toEqual([[8, "text", "own-a/proj", undefined], [9, "x", "zz-org/andere", "tok"]]);
+  });
+
+  test("Bezieher: ein vorhandenes Rest-Ticket wird gewählt (Titel und eigenes Repo), nichts angelegt", () => {
+    const { libs, aufrufe } = aufbau();
+    libs.waehleSammelticket = (...a: unknown[]) => (aufrufe.push({ name: "waehleSammelticket", args: a }), { number: 8 });
+    const gh = { text: () => { throw new Error("nichts anlegen"); } };
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh });
+    expect(neu.waehleSammelticket([{ number: 8 }])).toEqual({ number: 8 });
+    expect(von(aufrufe, "waehleSammelticket")).toEqual([[[{ number: 8 }], "own-a/proj", undefined, S.REST_TITEL]]);
+    expect(von(aufrufe, "platziereAmEnde")).toEqual([]);
+  });
+
+  test("Bezieher: fehlt das Rest-Ticket, wird es im eigenen Repo ohne Label angelegt und ans Ende der Todo-Spalte sortiert", () => {
+    const { libs, aufrufe } = aufbau();
+    const gh: { args: string[][]; text: (a: string[]) => string } = { args: [], text: (a) => (gh.args.push(a), "https://github.com/own-a/proj/issues/41\n") };
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh });
+    expect(neu.waehleSammelticket([])).toEqual({ number: 41 });
+    expect(gh.args).toHaveLength(1);
+    expect(gh.args[0].slice(0, 5)).toEqual(["issue", "create", "--repo", "own-a/proj", "--title"]);
+    expect(gh.args[0][5]).toBe(S.REST_TITEL);
+    expect(gh.args[0]).not.toContain("--label");
+    expect(gh.args[0].join(" ")).not.toContain("🔒");
+    expect(von(aufrufe, "platziereAmEnde")).toEqual([[41]]);
+  });
+
+  test("Bezieher: scheitert das Einsortieren, bleibt das Ticket nutzbar und eine Warnung steht im Log", () => {
+    const { libs } = aufbau();
+    libs.platziereAmEnde = () => { throw new Error("PROJECT_TOKEN fehlt"); };
+    const log: string[] = [];
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => "https://github.com/own-a/proj/issues/42" }, log: (s) => log.push(s) });
+    expect(neu.waehleSammelticket([])).toEqual({ number: 42 });
+    expect(log.join("\n")).toMatch(/::warning::.*#42.*nicht ans Ende.*PROJECT_TOKEN/);
   });
 });

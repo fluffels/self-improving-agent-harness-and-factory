@@ -236,3 +236,66 @@ describe("main: Vertrauen gegen den Owner des Ziel-Repos", () => {
     expect(aufrufe.filter((a) => a[1] === "create")).toEqual([]);
   });
 });
+
+describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const REST = "Sicherheit: Rest-Befunde (gesammelt)";
+  type Meldung = { ok: boolean; text?: string; grund?: string };
+  const auditJson = { vulnerabilities: { braces: { severity: "high", via: [{ url: `https://github.com/advisories/${G1}`, name: "braces", severity: "high" }] } } };
+  const aufbau = (extra: Record<string, unknown> = {}) => {
+    const gepostet: unknown[][] = [];
+    const geprueft: unknown[][] = [];
+    const gewaehlt: unknown[][] = [];
+    const kontexte: unknown[][] = [];
+    const log: string[] = [];
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ZIEL: "zz-org/fabrik",
+      zielToken: (repo?: string) => (repo === "o/r" ? undefined : "zt"),
+      ladeSammelKontext: (...a: unknown[]) => (kontexte.push(a), { rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: (...a: unknown[]) => gepostet.push(a),
+      waehleSammelticket: (...a: unknown[]) => (gewaehlt.push(a), { number: 8 }),
+    };
+    const bereite = (z: string[], o: unknown): Meldung => (geprueft.push([z, o]), { ok: true, text: "GEPRUEFT" });
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], bereite, log: (m: string) => log.push(m), err: () => undefined, ...extra };
+    return { gepostet, geprueft, gewaehlt, kontexte, log, deps };
+  };
+  test("die Zeilen gehen durch die Sperrprüfung (ohne Stand-Zeile); gepostet wird deren Text", async () => {
+    const { gepostet, geprueft, deps } = aufbau({ bezieher: false });
+    expect(await main([], deps)).toBe(0);
+    expect(geprueft).toHaveLength(1);
+    expect((geprueft[0][0] as string[]).join("\n")).toContain("- [ ] Audit: ");
+    expect(geprueft[0][1]).toEqual({ stand: null });
+    expect(gepostet).toEqual([[8, "GEPRUEFT"]]);
+  });
+  test("ein Treffer der Sperrprüfung: nichts gepostet, Exit 1, der Grund steht im Log, kein Ticket gewählt", async () => {
+    const { gepostet, gewaehlt, log, deps } = aufbau({ bezieher: false, bereite: () => ({ ok: false, grund: "Meldung nicht gesendet: Treffer" }) });
+    expect(await main([], deps)).toBe(1);
+    expect(gepostet).toEqual([]);
+    expect(gewaehlt).toEqual([]);
+    expect(log.join("\n")).toContain("::error::Meldung nicht gesendet: Treffer");
+  });
+  test("nur ein Alarm, keine Zeile: nichts geprüft, nichts ins Sammelticket gepostet", async () => {
+    const kritisch = { vulnerabilities: { braces: { severity: "critical", via: [{ url: `https://github.com/advisories/${G1}`, name: "braces", severity: "critical" }] } } };
+    const { gepostet, geprueft, gewaehlt, deps } = aufbau({ bezieher: false, npmAuditLaden: () => kritisch, gh: { text: () => "https://github.com/o/r/issues/77\n", json: () => ({}) } });
+    expect(await main([], deps)).toBe(0);
+    expect(gepostet).toEqual([]);
+    expect(geprueft).toEqual([]);
+    expect(gewaehlt).toEqual([]);
+  });
+  test("Bezieher: Zeilen gehen ins Rest-Ticket des eigenen Repos, nie ins Ziel-Repo der Fabrik; Fabrik unverändert (Negativtest)", async () => {
+    const bez = aufbau({ bezieher: true });
+    expect(await main([], bez.deps)).toBe(0);
+    expect(bez.gewaehlt).toEqual([[[{ number: 5 }], "o/r", undefined, REST]]);
+    expect(bez.kontexte).toEqual([[{ repo: "o/r", titel: REST }]]);
+    expect(bez.gepostet).toEqual([[8, "GEPRUEFT", "o/r", undefined]]);
+    const fab = aufbau({ bezieher: false });
+    expect(await main([], fab.deps)).toBe(0);
+    expect(fab.gewaehlt).toEqual([[[{ number: 5 }]]]);
+    expect(fab.kontexte).toEqual([[]]);
+    expect(fab.gepostet).toEqual([[8, "GEPRUEFT"]]);
+  });
+});
