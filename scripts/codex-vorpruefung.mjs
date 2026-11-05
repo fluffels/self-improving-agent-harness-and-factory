@@ -7,7 +7,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { bewerteBelege, lokaleRollenMaengel } from "./codex-lib.mjs";
 
-export function main(argv = process.argv.slice(2), out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url))) {
+export function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { belege: { type: "string" } });
   if (fehler) { err(fehler.text); return 2; }
   try {

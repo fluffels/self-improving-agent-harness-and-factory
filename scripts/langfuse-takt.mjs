@@ -13,7 +13,7 @@ import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
 import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 /** Repo-Wurzel des Checkouts: Standard für `statusBody` (dort liegt ein Sync-Stand, falls dies ein Bezieher ist). */
@@ -103,7 +103,7 @@ export function wochenFenster(jetzt) {
 
 function verdichtungsSchritt(wurzel) {
   // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
-  return liesSyncStand(wurzel).zustand !== "fehlt"
+  return istBezieher(wurzel)
     ? "Verdichtungszeile nur im Bericht-Kommentar (die Tabelle liegt nur im Factory-Repo), danach das Ticket schließen"
     : "PR mit Verdichtungszeile und `Closes`";
 }
@@ -143,7 +143,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
   // Bezieher (Sync-Stand): `factorySeiteIn` verlinkt die Factory-Seite auf dem gesyncten Tag, ohne auflösbares Factory-Repo bleibt es die Textform (ein Link auf `main` des Beziehers wäre tot). Ohne Sync-Stand (Upstream) der Link auf `main` des Repos.
-  const upstream = liesSyncStand(wurzel).zustand === "fehlt";
+  const upstream = !istBezieher(wurzel);
   const verweis = (text, pfad, anker) => {
     const ziel = factorySeiteIn(wurzel, pfad, anker);
     const url = /^https?:/.test(ziel) || !upstream ? ziel : factorySeite({ pfad, anker, repo, tag: "main" });

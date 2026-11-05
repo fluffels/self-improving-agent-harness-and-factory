@@ -36,6 +36,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { pruefeDateien } from "./harness-doctor-dateien.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
@@ -85,6 +86,24 @@ function sammelticket({ trocken, spawn, out }) {
   return { geplant: trocken && (/^Würde /m.test(text) || /^Trockenlauf: .*würde es neu setzen/m.test(text)) ? 1 : 0, angelegt: !trocken && /^Angelegt:/m.test(text) ? 1 : 0, fehler: 0 };
 }
 
+/** Der Sammelticket-Schritt von `--einrichten`: ohne Token Anleitung, im Bezieher nur ein Hinweis (kein Harness-Sammelticket, ADR 0031), bei fremder `--config` Anleitung, sonst `sammelticket-anlegen`. */
+function sammelticketSchritt({ fatal, abweichend, rootDir, trocken, spawn, out }) {
+  const nichts = { geplant: 0, angelegt: 0, fehler: 0, anleitungen: 0 };
+  if (fatal) {
+    out("ANLEITUNG Sammelticket: ohne gültigen Token kein Zugriff auf GitHub Fix: erst den Token-Punkt beheben, dann --einrichten erneut fahren");
+    return nichts; // der Token-Punkt zählt der Aufrufer über `fatal`
+  }
+  if (istBezieher(rootDir)) {
+    out("INFO Sammelticket: im Bezieher gibt es kein Harness-Sammelticket (ADR 0031), Kern-Befunde meldet `node scripts/melden.mjs` an die Meldestelle");
+    return nichts;
+  }
+  if (abweichend) {
+    out("ANLEITUNG Sammelticket: sammelticket-anlegen.mjs liest nur die Standard-Config (" + PROJEKT_CONFIG + "), nicht --config Fix: node scripts/sammelticket-anlegen.mjs harness mit der Standard-Config fahren");
+    return { ...nichts, anleitungen: 1 };
+  }
+  return { ...nichts, ...sammelticket({ trocken, spawn, out }), anleitungen: 0 };
+}
+
 /**
  * `--einrichten [--dry-run]`: legt nur Umkehrbares an (fehlende Labels, die Wochenlauf-Datei, das Sammelticket); alles andere (Ruleset,
  * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
@@ -127,16 +146,11 @@ function einrichten({ werte, rootDir, gh, spawn, out, err }) {
   const datei = wochenlaufDatei({ rootDir, trocken, out });
   geplant += datei.geplant;
   angelegt += datei.angelegt;
-  if (fatal) out("ANLEITUNG Sammelticket: ohne gültigen Token kein Zugriff auf GitHub Fix: erst den Token-Punkt beheben, dann --einrichten erneut fahren");
-  else if (abweichend) {
-    out("ANLEITUNG Sammelticket: sammelticket-anlegen.mjs liest nur die Standard-Config (" + PROJEKT_CONFIG + "), nicht --config Fix: node scripts/sammelticket-anlegen.mjs harness mit der Standard-Config fahren");
-    anleitungen++;
-  } else {
-    const s = sammelticket({ trocken, spawn, out });
-    geplant += s.geplant;
-    angelegt += s.angelegt;
-    fehler += s.fehler;
-  }
+  const s = sammelticketSchritt({ fatal, abweichend, rootDir, trocken, spawn, out });
+  geplant += s.geplant;
+  angelegt += s.angelegt;
+  fehler += s.fehler;
+  anleitungen += s.anleitungen;
   out(`Harness-Doctor --einrichten${trocken ? " --dry-run" : ""}: ${angelegt} angelegt, ${geplant} geplant, ${anleitungen + (fatal ? 1 : 0)} Anleitung(en), ${fehler} Fehler`);
   return anleitungen + (fatal ? 1 : 0) + fehler + geplant > 0 ? 1 : 0;
 }

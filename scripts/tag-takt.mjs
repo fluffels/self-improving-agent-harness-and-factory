@@ -29,7 +29,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
@@ -490,7 +490,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
   const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness"), env });
   const io = {
     log,
-    istBezieher: () => liesSyncStand(wurzel).zustand !== "fehlt",
+    istBezieher: () => istBezieher(wurzel),
     tags: () => git(["tag", "--merged", "HEAD"]).split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", "--no-renames", `${tag}..HEAD`, "--"]),
     ladeManifest,

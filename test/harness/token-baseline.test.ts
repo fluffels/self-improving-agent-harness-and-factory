@@ -25,7 +25,7 @@ import * as baselineModule from "../../scripts/token-baseline.mjs";
 import * as sliceModule from "../../scripts/slice-override.mjs";
 const { commitZeilen } = sliceModule as unknown as { commitZeilen: (praefix: string, planer: string) => { plan: string; review: string } };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as ticketNamen from "../../scripts/ticket-namen.mjs";
+import * as ticketNamen from "../../scripts/regex-lib.mjs";
 const { escapeRegex } = ticketNamen as unknown as { escapeRegex: (t: string) => string };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as brainModule from "../../scripts/brain-metrics.mjs";

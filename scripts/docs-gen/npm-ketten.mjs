@@ -42,3 +42,19 @@ export function kettenSchritte(scripts, chains, kette) {
   const aufgeloest = expandSteps(scripts[kette], scripts, chains, [kette]);
   return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
 }
+
+const SCHRITT_RE = /^[\w:.-]+$/;
+
+/**
+ * Schritte der Kette `kette` (`ketten`: ihre Kettennamen) aus `package.json`; wirft ohne das Skript dieses Namens oder bei einem
+ * Schrittnamen mit Shell-Zeichen (er liefe als `npm run <name>`). Gemeinsam für verify-lauf und gate-fundquote.
+ */
+export function ketteAusPackage(pkg, ketten, kette) {
+  const scripts = pkg?.scripts ?? {};
+  if (typeof scripts[kette] !== "string") throw new Error(`package.json hat kein Skript "${kette}"`);
+  const schritte = kettenSchritte(scripts, ketten, kette);
+  for (const s of schritte) {
+    if (!SCHRITT_RE.test(s)) throw new Error(`Schritt "${s}" der ${kette}-Kette ist kein einfaches npm-Skript (Shell-Zeichen?)`);
+  }
+  return schritte;
+}

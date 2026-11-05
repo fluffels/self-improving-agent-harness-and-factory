@@ -23,7 +23,7 @@ type Sized = { file: string; loc: number };
 const collectSizes = (rawSize as unknown as { collectSizes: (root?: string, q?: Quellen) => Sized[] }).collectSizes;
 const collectSuppressions = (rawAny as unknown as { collectSuppressions: (root: string, q: Quellen) => Record<string, number> }).collectSuppressions;
 const strukturOrdnerBefunde = (rawBasis as unknown as { strukturOrdnerBefunde: (root: string, s: { quelle: string | string[] }, k?: string[]) => string[] }).strukturOrdnerBefunde;
-const pc = rawPc as unknown as { ladeProjektConfig: () => { struktur: object }; strukturAus: (c: unknown, o?: { listeErlaubt?: boolean }) => unknown };
+const pc = rawPc as unknown as { ladeProjektConfig: () => { struktur: object }; strukturAus: (c: unknown) => unknown };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
 const nachDatei = (a: Sized, b: Sized): number => a.file.localeCompare(b.file);
@@ -211,9 +211,8 @@ describe("check:diffcoverage und anker-liste lesen die Listenform (factory#185)"
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.deepEqual(JSON.parse(r.stdout.trim()), [true, true, false]);
   });
-  test("strukturAus wirft bei der Liste, nimmt aber die String-Form und mit listeErlaubt (check:docmap) auch die Liste", () => {
-    assert.throws(() => pc.strukturAus({ struktur: liste }), /noch nicht unterstützt[\s\S]*Fix:/);
+  test("strukturAus nimmt die String-Form und die Liste", () => {
     assert.deepEqual(pc.strukturAus({ struktur: { quelle: "lib", moduldoku: null } }), { quelle: "lib", moduldoku: null });
-    assert.deepEqual(pc.strukturAus({ struktur: liste }, { listeErlaubt: true }), { quelle: liste.quelle, moduldoku: liste.moduldoku });
+    assert.deepEqual(pc.strukturAus({ struktur: liste }), { quelle: liste.quelle, moduldoku: liste.moduldoku });
   });
 });

@@ -8,13 +8,12 @@ import * as laufzeitRoh from "../scripts/subagent-laufzeit.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLaeufe from "../scripts/subagent-laeufe.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as namenRoh from "../scripts/ticket-namen.mjs";
+import * as regexLibRoh from "../scripts/regex-lib.mjs";
 import { FREMD, FREMD_NAMEN } from "./support/fremd-config";
 
 // Die Namen kommen aus der Fremd-Config; die Wrapper reichen sie an die Kern-Funktionen durch, damit die Tests ihre Eingaben wie bisher schreiben.
-const namenModul = namenRoh as unknown as { ticketNamen: (c: unknown) => unknown; escapeRegex: (s: string) => string };
 const NAMEN = FREMD_NAMEN;
-const escapeRegex = namenModul.escapeRegex;
+const escapeRegex = (regexLibRoh as unknown as { escapeRegex: (s: string) => string }).escapeRegex;
 const WT = FREMD.praefixe.worktree;
 const { planer: PLANER, lens: LENS } = FREMD.agenten;
 const BASIS_MIN_N = (laufzeitRoh as unknown as { BASIS_MIN_N: number }).BASIS_MIN_N;
@@ -88,6 +87,18 @@ describe("laufzeiten: ein Lauf", () => {
   });
   test("ohne #Nummer: ticket null; ohne (gesammelt): kein Sammelticket", () => {
     expect(S.laufzeiten({ laeufe: [lauf("Plane irgendwas", 0, 3)] }).laeufe[0]).toMatchObject({ ticket: null, sammel: false });
+  });
+  test("Zeitstempel-Guard: ein Aufruf ohne gültigen Zeitstempel zählt nicht als offen; ein Ergebnis ohne gültigen Zeitstempel lässt den Aufruf offen", () => {
+    const ohneZeit = lauf("Plane #5", 0, 3);
+    const aufruf = call(1, 7, "x1");
+    delete (aufruf as { timestamp?: string }).timestamp;
+    ohneZeit.zeilen.push(aufruf); // ohne Ergebnis: mit gültigem Zeitstempel wäre der Lauf offen
+    const a = S.laufzeiten({ laeufe: [ohneZeit] });
+    expect(a.laeufe[0]).toMatchObject({ toolMin: 0, offen: false });
+    const kaputtesErgebnis = lauf("Plane #6", 0, 3);
+    kaputtesErgebnis.zeilen.push(call(1, 7, "x2"), { ...result(2, "x2"), timestamp: "kein-datum" });
+    const b = S.laufzeiten({ laeufe: [kaputtesErgebnis] });
+    expect(b.laeufe[0]).toMatchObject({ toolMin: 0, offen: true });
   });
   test("laufender Lauf (Tool ohne Ergebnis) ist offen und zählt nicht in die Mediane", () => {
     const l = lauf("Plane #5", 0, 3);

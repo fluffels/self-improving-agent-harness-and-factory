@@ -5,12 +5,13 @@ import { readFileSync } from "node:fs";
 import { altName, ohneKernEnv } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as vlModule from "../scripts/verify-lauf.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as kettenModule from "../scripts/docs-gen/npm-ketten.mjs";
 
 type Job = { art: "npm"; schritt: string } | { art: "node"; args: string[] };
 type Erg = { name: string; ok: boolean; exit?: number; ms: number; ausgabe?: string; info?: string; uebersprungen?: boolean };
 type Eng = { voll: true; grund: string } | { voll: false; lint: string[]; related: string[]; perName: string[] };
 const vl = vlModule as {
-  ketteAusPackage: (pkg: unknown) => string[];
   bestimmeEngung: (a: { base: string | null; dateien?: string[]; tests?: { pfad: string; text: string }[] }) => Eng;
   kuerze: (t: string, s: string) => string;
   fehlgeschlageneTests: (t: string) => string[];
@@ -20,13 +21,14 @@ const vl = vlModule as {
   statusVon: (r: { status: number | null }) => number;
   laufe: (a: { schritte: string[]; engung?: Eng | null; run: (j: Job) => { status: number; output: string }; jetzt?: () => number }) => Erg[];
 };
+const ketteAusPackage = (pkg: unknown) => (kettenModule as { ketteAusPackage: (p: unknown, k: string[], n: string) => string[] }).ketteAusPackage(pkg, ["verify"], "verify");
 const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
 
 describe("Kette", () => {
   test("Schritte kommen aus package.json › verify; ein neuer Schritt läuft in beiden Modi mit", () => {
-    const schritte = vl.ketteAusPackage(pkg);
+    const schritte = ketteAusPackage(pkg);
     assert.ok(schritte.includes("lint") && schritte.includes("test") && schritte.includes("typecheck"));
-    const neu = vl.ketteAusPackage({ scripts: { ...pkg.scripts, verify: `${pkg.scripts.verify} && npm run check:fake` } });
+    const neu = ketteAusPackage({ scripts: { ...pkg.scripts, verify: `${pkg.scripts.verify} && npm run check:fake` } });
     assert.equal(neu.at(-1), "check:fake");
     const gesehen: string[] = [];
     const eng: Eng = { voll: false, lint: ["a.ts"], related: ["a.ts"], perName: [] };
@@ -37,8 +39,8 @@ describe("Kette", () => {
     }
   });
   test("Negativ: Shell-Zeichen im Schrittnamen und fehlendes verify werfen", () => {
-    assert.throws(() => vl.ketteAusPackage({ scripts: { verify: "npm run a;b && npm run c" } }), /Shell/);
-    assert.throws(() => vl.ketteAusPackage({ scripts: {} }), /verify/);
+    assert.throws(() => ketteAusPackage({ scripts: { verify: "npm run a;b && npm run c" } }), /Shell/);
+    assert.throws(() => ketteAusPackage({ scripts: {} }), /verify/);
   });
 });
 

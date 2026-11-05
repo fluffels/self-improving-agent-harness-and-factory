@@ -23,16 +23,53 @@ export function transkriptZeilen(jsonlText) {
   return rows;
 }
 
+const istToolUse = (row, b) => row?.type === "assistant" && b?.type === "tool_use";
+
+/**
+ * Tool-Aufrufe samt Ergebnis (factory#202 L13), verknüpft über die `tool_use`-ID: `[{ id, use: { row, block }, ergebnis: { row, block } | null }]`
+ * in Aufruf-Reihenfolge. Die erste Fassung einer ID gilt (Aufruf wie Ergebnis; Haupt- und Subagent-Datei); ein Ergebnis ohne gewählten
+ * Aufruf entfällt, ein Aufruf ohne ID (`id: null`) bleibt ohne Ergebnis. `istAufruf(row, block)` wählt die Aufrufe (Standard: jeder `tool_use`
+ * einer Assistant-Zeile). Gilt für Claude-Code-Transkripte; Codex-Sitzungen haben ein anderes Format und sind nicht abgedeckt.
+ */
+export function toolPaare(zeilen, { istAufruf = istToolUse } = {}) {
+  const paare = [];
+  const byId = new Map();
+  for (const row of zeilen) {
+    for (const block of Array.isArray(row?.message?.content) ? row.message.content : []) {
+      if (istAufruf(row, block)) neuerAufruf(paare, byId, row, block);
+      else if (row?.type === "user" && block?.type === "tool_result") ergebnisZu(byId, row, block);
+    }
+  }
+  return paare;
+}
+
+function neuerAufruf(paare, byId, row, block) {
+  const id = block.id ?? null;
+  if (id !== null && byId.has(id)) return; // erste Fassung gilt
+  const paar = { id, use: { row, block }, ergebnis: null };
+  paare.push(paar);
+  if (id !== null) byId.set(id, paar);
+}
+
+function ergebnisZu(byId, row, block) {
+  const paar = byId.get(block.tool_use_id);
+  if (paar && !paar.ergebnis) paar.ergebnis = { row, block };
+}
+
 /**
  * Jüngste Assistant-Nachricht mit einer `ERGEBNIS:`-Zeile (#1342): entweder die `message` eines
- * `SubagentHandback`-Aufrufs oder ein Text-Block. Die Suche endet an der jüngsten User-Nachricht mit Text (factory#193: Fortsetzung
- * oder Hook-Feedback); `tool_result`-Einträge sind keine Grenze. `null`, wenn es keine gibt.
+ * `SubagentHandback`-Aufrufs oder ein Text-Block. Die Suche endet an der jüngsten User-Nachricht mit Text (factory#193: Fortsetzung);
+ * `tool_result`-Einträge und Hook-Feedback sind keine Grenze (factory#202 L11). `null`, wenn es keine gibt.
+ * Belegte Form des Hook-Feedbacks (Claude-Code-Transkripte, Subagent-Dateien; 24 Zeilen in 15 Dateien durchsucht nach dem Festtext
+ * „Stop hook feedback“): `type: "user"`, `isMeta: true`, `message.content` ein String mit Präfix `Stop hook feedback:`. Nur diese Form
+ * wird übergangen; jede andere User-Nachricht mit Text bleibt Grenze. Codex-Sitzungen sind nicht belegt.
  */
 export function letzteErgebnisNachricht(zeilen) {
   const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
   for (let i = zeilen.length - 1; i >= 0; i--) {
     const msg = zeilen[i]?.message ?? zeilen[i];
     const rolle = msg?.role ?? zeilen[i]?.type;
+    if (rolle === "user" && istHookFeedback(zeilen[i], msg)) continue;
     if (rolle === "user" && istTextNachricht(msg)) return null;
     if (rolle !== "assistant") continue;
     const kandidaten = berichtKandidaten(msg?.content);
@@ -41,7 +78,10 @@ export function letzteErgebnisNachricht(zeilen) {
   return null;
 }
 
-/** Eine User-Nachricht mit Text (Fortsetzung, Hook-Feedback) beginnt eine neue Runde; ein reines `tool_result` nicht. */
+/** Die belegte Form des Hook-Feedbacks (Kopfkommentar von `letzteErgebnisNachricht`). */
+const istHookFeedback = (row, msg) => row?.type === "user" && row.isMeta === true && typeof msg?.content === "string" && msg.content.startsWith("Stop hook feedback:");
+
+/** Eine User-Nachricht mit Text (Fortsetzung) beginnt eine neue Runde; ein reines `tool_result` nicht. */
 const istTextNachricht = (m) => typeof m?.content === "string" || (Array.isArray(m?.content) && m.content.some((b) => b?.type === "text"));
 
 /** Texte, in denen ein Bericht stehen kann: String-Inhalt, Text-Blöcke und die `message` eines `SubagentHandback`-Aufrufs, in Reihenfolge. */

@@ -39,7 +39,7 @@ describe("korrekturFuer ist in main verdrahtet", () => {
     const alle = aufrufe(QUELLE);
     expect(alle.length, "kein korrekturFuer-Aufruf mehr gefunden: der Wächter prüfte nichts").toBeGreaterThanOrEqual(2);
     for (const a of alle) expect(fehlende(a), a).toEqual([]);
-    const main = QUELLE.slice(QUELLE.indexOf("async function main("));
+    const main = QUELLE.slice(QUELLE.indexOf("async function legeNeuAn(")); // legeNeuAn und main
     expect(aufrufe(main).length, "main ruft korrekturFuer nicht mehr auf").toBeGreaterThanOrEqual(1);
   });
 });
@@ -52,7 +52,7 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
   };
 
   test("das Ziel wird aus dem Label der Art gewählt (Produkt-Board bei codequalitaet), nicht aus dem Harness-Label", () => {
-    const main = rumpf("export async function main(");
+    const main = rumpf("export async function main(") + rumpf("async function legeNeuAn(");
     expect(main).toMatch(/const \{ label, ziel \} = zielOderAbbruch\(config, args\.art, d\.bezieher\);/);
     const zf = rumpf("export function zielFuerArt(");
     expect(zf).toMatch(/const label = sammelLabel\(config, art\);/);
@@ -64,7 +64,7 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
     const f = rumpf("function setzeErstePosition(");
     expect(f).toMatch(/if \(!top && art !== "codequalitaet"\) return;/);
     expect(f).toMatch(/art === "codequalitaet" \? codequalitaetPlan\(items, nr\) : planFuerArgs\(/);
-    const main = rumpf("export async function main(");
+    const main = rumpf("export async function main(") + rumpf("async function legeNeuAn(");
     expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: codequalitaet braucht kein --top
     expect(main).not.toMatch(/if \(args\.top\)\s*setzeErstePosition/);
   });
