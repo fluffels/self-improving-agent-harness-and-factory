@@ -39,7 +39,7 @@ type Payload = { resourceSpans: { resource: { attributes: Attr[] }; scopeSpans: 
 type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<Antwort>;
-type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean; fortgesetzt: boolean };
+type Rec = { session: string; status: string; gesendet: number; dubletten: number; unzuordenbar: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean; fortgesetzt: boolean };
 type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; uebrig: number; fehler: { session: string; status: number | null; meldung: string }[] };
 type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { gesendetAm?: Record<string, number>; vermerk?: string; pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
@@ -204,10 +204,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, langfuse-auftrag-lib (nur Builtins), flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "langfuse-auftrag-lib", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf"]));
   });
 });
 
@@ -410,7 +410,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), fremd] });
     const r = await lauf(a, m);
     expect(m.otlp).toHaveLength(0);
-    expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1, unzuordenbar: 1 });
     expect(r.protokoll.dubletten).toBe(1);
     expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, gesendet: [] });
     expect(ledgerVon(a.ledger).s1.befund).toMatch(/mehrdeutig/);
@@ -459,6 +459,80 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       expect(m.otlp).toHaveLength(0);
       expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
       expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(false);
+    });
+  });
+
+  describe("Kopien blockieren nicht (#213)", () => {
+    const spanIds = (m: ReturnType<typeof mock>, ids: string[]) => {
+      expect(spansVon(m.otlp[0]).map((s) => s.spanId)).toEqual(ids.map((i) => A.beobachtungsId("s1", i)));
+    };
+
+    test("Kopie eines gedeckten Calls neben einer Lücke: Lücke gesendet, nicht mehrdeutig", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 1, unzuordenbar: 0 });
+      expect(r.protokoll.sessions[0].status).not.toBe("mehrdeutig");
+    });
+
+    test("Altbestand mit Mehrdeutigkeits-Befund und Kopie: neu geprüft und die Lücke gesendet (71bfdf3a-Pfad)", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const [s] = A.findeSessions({ projectsRoot: a.root, praefix: PRAEFIX });
+      mkdirLedger(a.state);
+      writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: { pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: true, gesendet: [], spans: [], beendet: true, befund: "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet" } } }));
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0].status).not.toBe("bestätigt");
+      expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(false);
+    });
+
+    test("Folgelauf: alles da plus Kopie: nichts gesendet, nur Dubletten, bestätigt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 3, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }, obsZu(sollZu("b", 2))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0]).toMatchObject({ dubletten: 1, unzuordenbar: 0, befund: "nur Dubletten, nichts zu senden" });
+      expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(true);
+    });
+
+    test("Negativfall: gleichartige Session mit Lücke ohne Doppel bleibt vom Weg unberührt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const m = mock({ ist: 1, obs: [obsZu(sollZu("a", 1))] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 0, unzuordenbar: 0, befund: null });
+    });
+
+    test("vollständige Session ohne Abweichung (kein Diff): unzuordenbar ist 0, nichts gesendet", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2)]);
+      const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), obsZu(sollZu("b", 2))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0].unzuordenbar).toBe(0);
+    });
+
+    test("Kopie plus fremde Dublette plus Lücke bleibt mehrdeutig: nichts gesendet", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3), msg("d", 4)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 3, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }, obsZu(sollZu("zz", 99))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 2, unzuordenbar: 1 });
+      expect(r.text).toContain("Dubletten 2 (unzuordenbar 1)");
+    });
+
+    test("Bericht ohne unzuordenbare Dubletten nennt keine Klammer", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      expect(r.text).toContain("Dubletten 1,");
+      expect(r.text).not.toContain("unzuordenbar");
     });
   });
 
@@ -568,12 +642,13 @@ describe("Fehler", () => {
     expect(m.aufrufe).toHaveLength(0);
   });
 
-  test("ohne Keys (auch mit --trocken) nennt die Meldung den Übergabeweg über die Session-ID im PR-Text", async () => {
+  test("ohne Keys (auch mit --trocken) nennt die Meldung den Auftrag-Einstieg und die Session-ID im PR-Text", async () => {
     const a = aufbau([msg("a", 1)]);
     const m = mock({ ist: 0 });
     const r = await N.nachliefern(N.parseArgs(["--trocken"]), { env: {}, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
     expect(r.exitCode).toBe(2);
-    expect(r.text).toContain("Session-ID in den PR-Text");
+    expect(r.text).toContain("node scripts/langfuse-auftrag.mjs <session-id>");
+    expect(r.text).toContain("Session-ID steht zusätzlich im PR-Text");
     expect(r.text).toContain("node scripts/langfuse-nachliefern.mjs --session <id>");
   });
 
