@@ -318,6 +318,16 @@ describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)",
     expect(bezieher.befund).toContain("Kein Board der Config führt das eigene Repo a/b");
     expect(bezieher.fix).toContain("boards");
     expect(lies(fixture(config)).ok).toBe(true);
+    expect(bezieher.befund).not.toContain("\n"); // nur die Befundzeile von langfuseZiel, der Fix steht getrennt
+  });
+
+  test("factory#202 L21: im Bezieher bleiben fehlende, kaputte oder nicht-objekthafte Config OK ohne Hinweis; Nulleinträge in boards werfen keinen TypeError", () => {
+    const stand = { ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) };
+    expect(lies(fixture({ ...stand }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(lies(fixture({ ...stand, ".factory/projekt.json": "{kaputt" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    expect(lies(fixture({ ...stand, ".factory/projekt.json": "42" }))).toEqual({ punkt: "Langfuse-Takt", ok: true });
+    const mitNull = lies(fixture({ ...stand, ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [null, { rolle: "factory", repo: "c/d" }, { rolle: "produkt" }] }) }));
+    expect(mitNull.ok).toBe(true);
   });
 
   test("ohne oder mit kaputter Config: OK ohne Hinweis, kein Absturz", () => {

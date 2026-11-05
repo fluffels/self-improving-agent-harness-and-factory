@@ -126,7 +126,7 @@ function gescheitert(werte, nrText, io) {
   } catch (e) {
     return aufrufFehler(`Sammelticket nicht lesbar: ${schreibrechtText(e, io.sammelRepo ?? REPO, "lesen") ?? fehlerText(e)}`);
   }
-  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness (im Bezieher: node scripts/melden.mjs)\n");
+  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen\n");
   if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
   const meldung = io.bereite([gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() })]);
   if (!meldung.ok) return ergebnis(1, "", `✖ ${meldung.grund}\n`);

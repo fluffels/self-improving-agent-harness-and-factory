@@ -176,11 +176,16 @@ const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync -- --quelle 
  * Das Ziel-Repo des Takts (factory#202 L21): dieselbe Bestimmung wie der Board-Takt (`zielRepoFuer([labels.harness])`). Liefert `{ ziel }` (ein Repo, das nicht das eigene ist, sonst null)
  * oder `{ luecke: true }`, wenn sich kein Ziel bestimmen lässt (kein `labels.harness`, kein Repo). Ohne Config: kein Ziel, keine Lücke.
  */
+/** Die Config mit gefilterten `boards` (Nulleinträge der ungeprüften Config tolerieren), für `zielRepoFuer` und `langfuseZiel`. */
+function ohneNullBoards(config) {
+  return { ...config, boards: Array.isArray(config.boards) ? config.boards.filter((b) => b && typeof b === "object") : config.boards };
+}
+
 function taktZiel(config) {
   if (!config || typeof config !== "object") return { ziel: null };
   try {
-    const boards = Array.isArray(config.boards) ? config.boards.filter((b) => b && typeof b === "object") : config.boards; // Nulleinträge der ungeprüften Config tolerieren
-    const repo = zielRepoFuer([labelAus(config, "harness")], { ...config, boards });
+    const bereinigt = ohneNullBoards(config);
+    const repo = zielRepoFuer([labelAus(config, "harness")], bereinigt);
     if (typeof repo !== "string") return { luecke: true };
     return { ziel: gleichesRepo(repo, config.repo) ? null : repo };
   } catch {
@@ -191,21 +196,23 @@ function taktZiel(config) {
 /**
  * Punkt `Langfuse-Takt`: beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
  * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
- * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`).
+ * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
+ * führt im Bezieher kein Board das eigene Repo (`langfuseZiel` wirft), ist der Punkt eine Lücke, weil der Takt dort kein Status-Ticket anlegt (factory#202).
  */
 export function langfuseTaktPunkt(rootDir, existiert, config) {
   const fehlt = LANGFUSE_TAKT_DATEIEN.filter((d) => !existiert(join(rootDir, d)));
   if (fehlt.length > 0) return luecke("Langfuse-Takt", `fehlen ${fehlt.length}: ${fehlt.join(", ")}`, TAKT_FIX);
   const { ziel: fremd, luecke: keinZiel } = taktZiel(config);
   if (keinZiel) return luecke("Langfuse-Takt", "das Ziel-Repo des Board-Takts lässt sich aus der Config nicht bestimmen", "`labels.harness` und ein Board mit Rolle factory in `boards` der Projekt-Config eintragen (der Takt wählt sein Ziel wie `zielRepoFuer` aus diesen beiden)");
-  if (config && typeof config === "object" && istBezieher(rootDir)) {
+  const bezieher = istBezieher(rootDir);
+  if (config && typeof config === "object" && bezieher) {
     try {
-      langfuseZiel(config, { bezieher: true }); // dieselbe Wahl wie `bezieherTakt`: wirft sie, legt der Takt kein Status-Ticket an
+      langfuseZiel(ohneNullBoards(config), { bezieher: true }); // dieselbe Wahl wie `bezieherTakt`: wirft sie, legt der Takt kein Status-Ticket an
     } catch (e) {
       return luecke("Langfuse-Takt", String(e instanceof Error ? e.message : e).split("\n")[0], "ein Board in `boards` der Projekt-Config muss das eigene Repo führen (`boards[].repo` weglassen oder gleich `repo`)");
     }
   }
-  if (fremd !== null && istBezieher(rootDir)) {
+  if (fremd !== null && bezieher) {
     return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
   }
   return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter`);

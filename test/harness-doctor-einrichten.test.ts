@@ -135,6 +135,16 @@ describe("harness-doctor --einrichten", () => {
     assert.ok(r.out.some((z) => z.startsWith("INFO Sammelticket:") && z.includes("melden.mjs")), r.out.join("\n"));
     assert.ok(!r.out.some((z) => z.startsWith("FEHLER Sammelticket")));
   });
+  test("factory#202 L20: ein eingerichteter Bezieher endet bei --einrichten mit Exit 0 und ohne Anleitung (zweiter Lauf ändert nichts)", () => {
+    const root = neuerRoot();
+    writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+    const w = welt(["status:steckt"]);
+    fahre(root, w, EINR(root));
+    const r = fahre(root, w, EINR(root));
+    assert.equal(r.code, 0, r.out.join("\n"));
+    assert.deepEqual(r.sammel, []);
+    assert.match(r.out.at(-1) ?? "", /^Harness-Doctor --einrichten: 0 angelegt, 0 geplant, 0 Anleitung\(en\), 0 Fehler$/);
+  });
 
   test("Dry-Run: nur Plan, nichts wird geschrieben, das Sammelticket bekommt --dry-run", () => {
     const root = neuerRoot();
