@@ -378,6 +378,13 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     assert.equal(code, 0);
     assert.ok(log.some((z) => z.startsWith("[dry-run]") && z.includes("Issue acme/proj#12 fehlt")), log.join(" | "));
   });
+  test("fremde Meldestelle ohne ungeclaimtes Sammelticket (waehleSammelticket liefert nichts): ::error:: mit Fix, Exit 1, nichts gepostet", async () => {
+    const log: string[] = [];
+    const libs = { REPO: "acme/proj", MELDESTELLE: "eingang/privat", ladeSammelKontext: () => ({ offene: [], kommentare: [], owner: "eingang" }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("kein Ziel") };
+    const code = await melden.main([], { env: { GITHUB_ACTIONS: "true", MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" }, api: () => ({ login: "x" }), bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf: () => ({ ergebnis: [{ ok: false, punkt: "Neu", befund: "b", fix: "f" }] }) });
+    assert.equal(code, 1);
+    assert.ok(log.some((z) => z.includes("kein ungeclaimtes Harness-Sammelticket für 1 neue Zeile(n)")), log.join(" | "));
+  });
   test("gh api user schlägt fehl: Warnzeile, Rückfall auf den Owner (eigene Zeile gilt dann nicht als bekannt)", async () => {
     const log: string[] = [];
     const gepostet: unknown[][] = [];

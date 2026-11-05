@@ -265,6 +265,11 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
     expect(lib.eigenerLogin({ zugang: { fremd: false }, api: () => (gerufen.push("api"), { login: "x" }), warn: (z) => gerufen.push(z) })).toBeNull();
     expect(gerufen).toEqual([]);
   });
+  test("Antwort null oder ohne Objekt: wie ein fehlender Login (Warnzeile, null)", () => {
+    const warn: string[] = [];
+    expect(lib.eigenerLogin({ zugang: fremd, api: () => null, warn: (z) => warn.push(z) })).toBeNull();
+    expect(warn).toHaveLength(1);
+  });
   test("leerer Login zählt wie ein fehlender (Warnzeile, null)", () => {
     const warn: string[] = [];
     expect(lib.eigenerLogin({ zugang: fremd, api: () => ({ login: "" }), warn: (z) => warn.push(z) })).toBeNull();
@@ -287,6 +292,10 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
     expect(lib.zeileBekannt({ kommentare: [k("anderer")], owner: "eingang", eigen: "fremdkonto", schluessel: "Punkt: " })).toBe(false);
     expect(lib.zeileBekannt({ kommentare: [k("eingang")], owner: "eingang", schluessel: "Punkt: " })).toBe(true);
     expect(lib.zeileBekannt({ kommentare: [k(null)], owner: "eingang", eigen: "", schluessel: "Punkt: " })).toBe(false);
+  });
+  test("Kommentar ohne Body oder ohne user zählt nie als bekannt, wirft nicht", () => {
+    const k = [{ user: { login: "eingang", type: "User" } } as unknown as { user: { login: string; type: string }; body: string }, { user: null, body: zeile }];
+    expect(lib.zeileBekannt({ kommentare: k, owner: "eingang", eigen: "x", schluessel: "Punkt: " })).toBe(false);
   });
   test("nur offene Listenzeilen mit dem Schlüssel zählen", () => {
     expect(lib.zeileBekannt({ kommentare: [k("eingang", "- [x] 2026 Punkt: Befund")], owner: "eingang", schluessel: "Punkt: " })).toBe(false);

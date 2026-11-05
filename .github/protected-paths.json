@@ -45,6 +45,7 @@
     "/scripts/harness-doctor-lib.mjs",
     "/scripts/harness-doctor-sicherheit.mjs",
     "/scripts/harness-doctor-dateien.mjs",
+    "/scripts/harness-doctor-meldestelle.mjs",
     "/scripts/harness-doctor-ergebnis.mjs",
     "/scripts/harness-doctor-melden.mjs",
     "/scripts/sandbox-doctor.mjs",
