@@ -221,7 +221,7 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
     try {
       cpSync(join(fileURLToPath(new URL("..", import.meta.url)), "scripts"), join(dir, "scripts"), { recursive: true });
       writeFileSync(join(dir, "pruefe.mjs"), 'import { sicherheitsLibs } from "./scripts/inbox-start-lib.mjs";\nconst libs = { REPO: "acme/proj", ZIEL: "fabrik/eingang", zielToken: () => undefined };\nconsole.log(JSON.stringify(sicherheitsLibs(libs).ZIEL));\n');
-      const lauf = () => spawnSync(process.execPath, [join(dir, "pruefe.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 }).stdout.trim();
+      const lauf = () => spawnSync(process.execPath, [join(dir, "pruefe.mjs")], { encoding: "utf8", cwd: tmpdir(), timeout: 30_000 }).stdout.trim();
       expect(lauf()).toBe('"fabrik/eingang"');
       mkdirSync(join(dir, ".factory"));
       writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ version: 2 }));

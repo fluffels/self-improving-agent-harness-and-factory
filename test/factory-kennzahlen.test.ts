@@ -590,12 +590,14 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(von({ commits: [harness(1), harness(2), produkt(1), produkt(2)], produktQuelle: false }, "Produktquote").status).toBe("ABWEICHUNG");
   });
 
-  test("ladeAuditDaten (factory#208 L15): produktQuelle ist wahr nur mit Produkt-Board-Repo, sonst falsch", () => {
+  test("ladeAuditDaten (factory#208 L15): produktQuelle ist wahr mit Produkt-Board oder fremdem Factory-Board (eigenes Repo = Produkt), sonst falsch", () => {
     const gh = (a: string[]) => (a[0] === "issue" ? [] : [[produkt(1)]]);
     const getrennt = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt", repo: "o/p" }, { rolle: "factory" }] };
     expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: getrennt }).produktQuelle).toBe(true);
     const ohneProdukt = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "factory" }] };
     expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: ohneProdukt }).produktQuelle).toBe(false);
+    const beziehernah = { repo: "o/b", labels: CFG.labels, boards: [{ rolle: "factory", repo: "fabrik/kern" }] };
+    expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/b", config: beziehernah }).produktQuelle).toBe(true); // Factory-Board in fremdem Repo: das eigene Repo ist die Produkt-Quelle
     const einRepo = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt" }, { rolle: "factory" }] };
     expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: einRepo }).produktQuelle).toBe(true);
   });
