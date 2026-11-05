@@ -122,6 +122,32 @@ describe("Bilddateien im Hauptcheckout-Root (#1549 Z2)", () => {
   });
 });
 
+describe("ungetrackte Dateien im Hauptcheckout-Root (factory#208 L16)", () => {
+  const U = raw as unknown as { ungetrackteReste: (status: string) => string[]; ungetrackteResteFuer: (d: string, git?: (d: string, a: string[]) => string) => string[] };
+  const STATUS = ["?? probe-run.sh", "?? ordner/", "?? tief/datei.txt", " M AGENTS.md", "?? bild.png", "A  neu.mjs", "?? notizen.md"].join("\n");
+  test("ungetrackteReste: nur `??`-Dateien im Root, ohne Ordner, Unterpfade, Änderungen und Bilder (die meldet die Bildzeile)", () => {
+    expect(U.ungetrackteReste(STATUS)).toEqual(["probe-run.sh", "notizen.md"]);
+    expect(U.ungetrackteReste("")).toEqual([]);
+    expect(U.ungetrackteReste("?? a.sh\r\n?? b.sh")).toEqual(["a.sh", "b.sh"]);
+  });
+  test("ungetrackteResteFuer: git status des Ordners; ein Fehler ergibt [] (fail-open)", () => {
+    const aufrufe: string[][] = [];
+    expect(U.ungetrackteResteFuer("/x", (_d, a) => (aufrufe.push(a), "?? probe-run.sh"))).toEqual(["probe-run.sh"]);
+    expect(aufrufe[0]).toEqual(["status", "--porcelain", "--untracked-files=normal"]);
+    expect(U.ungetrackteResteFuer("/x", () => {
+      throw new Error("kein git");
+    })).toEqual([]);
+  });
+  test("baueText: Hinweis nennt die Dateien und den Temp-Ordner; ohne Reste keine Zeile; nicht blockierend", () => {
+    const t = S.baueText({ aktion: "nichts", basis: "abc", ungetrackt: ["probe-run.sh", "x.sh"] } as Partial<Ergebnis>);
+    expect(t).toContain("Ungetrackte Dateien im Hauptcheckout-Root: probe-run.sh, x.sh");
+    expect(t).toContain("Temp-Ordner");
+    expect(S.baueText({ aktion: "nichts", basis: "abc", ungetrackt: [] } as Partial<Ergebnis>)).not.toContain("Ungetrackte");
+    const ex = (raw as unknown as { exitCodeFuer: (e: unknown) => number }).exitCodeFuer;
+    expect(ex({ aktion: "nichts", ungetrackt: ["probe-run.sh"] })).toBe(ex({ aktion: "nichts" }));
+  });
+});
+
 describe("Ausgabe des Hooks", () => {
   test("SessionStart-Modus: JSON mit additionalContext und Sitzungsbasis", () => {
     const o = JSON.parse(S.ausgabe({ aktion: "nichts", basis: "abc" }, false)) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
