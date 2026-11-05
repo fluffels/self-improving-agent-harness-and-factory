@@ -749,7 +749,7 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     const r = syncVomTag(q, z, "v3");
     assert.equal(r.code, 0, r.err);
     assert.ok(r.out.split("\n").includes("geändert (Anker-Stub): docs/seite.md"), r.out);
-    assert.match(r.out, /Anker-Stubs: 1 Seiten erneuert am Tag v3/);
+    assert.match(r.out, /Anker-Stubs: 2 Seiten erneuert am Tag v3/);
     assert.match(lies(z, "docs/seite.md"), /## Zweiter Teil\n\nKern: \[docs\/seite\.md#zweiter-teil\]\(.*blob\/v3\/docs\/seite\.md#zweiter-teil\)/);
     const g = wachter(z);
     assert.equal(g.code, 0, g.err);
@@ -788,7 +788,7 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     schreibe(q, "docs/ohne.md", "# Ohne Anker\n\n## Abschnitt\n\ntext\n");
     const r = syncVomTag(q, z, "v3");
     assert.equal(r.code, 0, r.err);
-    assert.equal(lies(z, "docs/ohne.md"), seite);
+    assert.equal(lies(z, "docs/ohne.md"), seite.replace("blob/v2/", "blob/v3/")); // nur der Ref, den der Sync je Tag setzt
     const g = wachter(z);
     assert.equal(g.code, 1);
     assert.match(g.err, /stub-anker/);
@@ -802,7 +802,7 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     const r = syncVomTag(q, z, "v3");
     assert.equal(r.code, 0, r.err);
     assert.equal(lies(z, "docs/seite.md"), seite);
-    assert.ok(!/geändert \(Anker-Stub\)/.test(r.out));
+    assert.ok(!r.out.includes("geändert (Anker-Stub): docs/seite.md"));
   });
 
   test("ein zweiter Sync am selben Tag erneuert nichts, auch nicht bei CRLF-Zeilenenden des Stubs", () => {

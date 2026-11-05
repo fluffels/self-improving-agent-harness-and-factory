@@ -329,7 +329,7 @@ function linkSchritt({ plan, ziel, leser }) {
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
   const angelegt = stubs.dateien.size - stubs.erneuert.size;
-  const stubHinweise = stubs.dateien.size === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
+  const stubHinweise = angelegt === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
   const erneuertAnzahl = [...stubs.erneuert].filter((p) => plan.dateien.get(p)?.stub).length;
   if (erneuertAnzahl > 0) stubHinweise.push(`Anker-Stubs: ${erneuertAnzahl} Seiten erneuert am Tag ${tag}`);
   return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
