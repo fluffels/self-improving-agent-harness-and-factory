@@ -596,6 +596,8 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: getrennt }).produktQuelle).toBe(true);
     const ohneProdukt = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "factory" }] };
     expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: ohneProdukt }).produktQuelle).toBe(false);
+    const einRepo = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt" }, { rolle: "factory" }] };
+    expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: einRepo }).produktQuelle).toBe(true);
   });
 
   test("Produktquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
