@@ -659,3 +659,246 @@ describe("factory-sync --tag: Anker-Stubs beim ersten Sync (factory#167)", { tim
     assert.deepEqual(r.out.split("\n").filter((s) => STUB_ZEILE.test(s)), ["neu (Anker-Stub): docs/ohne.md"]);
   });
 });
+
+const reinLib = rawLinks as unknown as {
+  istReinerStub(text: string): boolean;
+  planeAnkerStubs(o: { lies: (p: string) => string | null; einheiten: string[]; repo: string; tag: string; leser: Leser; ausnahmen?: string[]; reineStubs?: string[] }): StubErgebnis & { erneuert: Set<string> };
+};
+
+describe("istReinerStub und planeAnkerStubs mit reineStubs (pur, factory#166)", () => {
+  const EINHEIT = [".claude/agents/x.md"];
+  const HINWEIS = "Anker-Stub: Der Text dieser Seite steht im Factory-Repo;";
+  const erneuere = (kern: string, seite: string, tag = "v3", reine = ["docs/s.md"], ausnahmen: string[] = []) => {
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? kern : null);
+    const leser: Leser = { pfade: ["docs/s.md"], lies: () => seite, vorladen: () => {} };
+    return reinLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag, leser, reineStubs: reine, ausnahmen });
+  };
+  const SEITE = "# Titel\n\n## Eins\n\ntext\n\n#### Tief\n\n## Eins\n\n## Zwei\n";
+  const kern = (...a: string[]): string => a.map((x) => `[l](../../docs/s.md${x})`).join(" ") + "\n";
+
+  test("Eigenschaft: jede von planeAnkerStubs erzeugte Stub-Seite ist ein reiner Stub (CRLF, ohne H1, Ebenen bis 6, -1-Suffix)", () => {
+    const seiten = [SEITE, "## Ohne H1\n\n###### Sechs\n", "# Nur Titel\n"];
+    for (const seite of seiten) {
+      for (const k of [kern(""), kern("#eins-1", "#tief", "#zwei"), kern("#sechs", "#ohne-h1")]) {
+        const text = erneuere(k, seite, "v2", []).dateien.get("docs/s.md");
+        const e = erneuere(k, seite, "v2", ["docs/s.md"]).dateien.get("docs/s.md");
+        for (const t of [text, e]) if (t !== undefined) {
+          assert.ok(reinLib.istReinerStub(t), t);
+          assert.ok(reinLib.istReinerStub(t.replace(/\n/g, "\r\n")));
+        }
+      }
+    }
+  });
+
+  test("Negativ: Projektzeile, zusätzliche Überschrift ohne Kern-Zeile, ohne Hinweis, zwei Hinweise, leerer Text sind keine reinen Stubs", () => {
+    const k = `Kern: [docs/s.md](${u("v2", "docs/s.md")})`;
+    const gut = `# T\n\n${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`;
+    assert.ok(reinLib.istReinerStub(gut));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nunsere Zeile\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n## Zwei\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n## Zwei\n\nProjekt\n\n${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`# T\n\n## Eins\n\n${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n${HINWEIS} noch einmal\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nKern: [x](http://unsicher)\n`));
+    assert.ok(!reinLib.istReinerStub(""));
+  });
+
+  test("Negativ: Text vor oder hinter einer Kern-Zeile, eine zweite eigene Ebene-1-Überschrift und eine Überschrift der Ebene 7 sind keine reinen Stubs", () => {
+    const k = `Kern: [docs/s.md](${u("v2", "docs/s.md")})`;
+    const gut = `# T\n\n${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`;
+    assert.ok(reinLib.istReinerStub(gut));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nunsere Notiz ${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n${k} und unser Zusatz\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n# Unser Kapitel\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n####### Sieben\n\n${k}\n`));
+    assert.ok(reinLib.istReinerStub(`${gut}\n###### Sechs\n\n${k}\n`));
+  });
+
+  test("Negativ: eingerückte Zeile, erste Überschrift ohne Ebene 1 ohne Kern-Zeile und zwei Links in einer Kern-Zeile sind keine reinen Stubs", () => {
+    const k = `Kern: [docs/s.md](${u("v2", "docs/s.md")})`;
+    const gut = `# T\n\n${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`;
+    assert.ok(!reinLib.istReinerStub(`${gut}\n eingerückte Notiz\n\n${k}\n`));
+    const ohneH1 = `${HINWEIS} hier. ${k}\n\n## Unser Abschnitt\n\n## Eins\n\n${k}\n`;
+    assert.ok(!reinLib.istReinerStub(ohneH1));
+    assert.ok(reinLib.istReinerStub(`${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nKern: [a](https://x.example) unser Zusatz [b](https://y.example)\n`));
+  });
+
+  test("angelegt und erneuert zugleich: ueberschriften und links zählen nur die angelegten Seiten", () => {
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? "[a](../../docs/s.md#eins) [b](../../docs/neu.md#abschnitt)\n" : null);
+    const seiten: Record<string, string> = { "docs/s.md": "# Titel\n\n## Eins\n", "docs/neu.md": "# Neu\n\n## Abschnitt\n" };
+    const leser: Leser = { pfade: Object.keys(seiten), lies: (p) => seiten[p] ?? null, vorladen: () => {} };
+    const e = reinLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag: "v3", leser, reineStubs: ["docs/s.md"] });
+    assert.deepEqual([...e.dateien.keys()], ["docs/neu.md", "docs/s.md"]);
+    assert.deepEqual([...e.erneuert], ["docs/s.md"]);
+    assert.equal(e.ueberschriften, 2);
+    assert.equal(e.links, 2);
+  });
+
+  test("Umbenennung: der erneuerte Stub hat den neuen Anker und nicht mehr den alten; ohne reineStubs bleibt es beim alten Verhalten", () => {
+    const e = erneuere(kern("#zwei-neu"), "# Titel\n\n## Zwei neu\n");
+    const text = e.dateien.get("docs/s.md") ?? "";
+    assert.deepEqual(mdLib.collectHeadingSlugs(text), ["titel", "zwei-neu"]);
+    assert.deepEqual([...e.erneuert], ["docs/s.md"]);
+    const ohne = reinLib.planeAnkerStubs({ lies: (p) => (p === ".claude/agents/x.md" ? kern("#zwei-neu") : "# Alt\n"), einheiten: EINHEIT, repo: REPO, tag: "v3", leser: { pfade: ["docs/s.md"], lies: () => SEITE, vorladen: () => {} } });
+    assert.equal(ohne.dateien.size, 0);
+  });
+
+  test("reiner Stub ohne Kern-Link: nur erste Überschrift und Hinweis; ausnahmen-Treffer bleibt unberührt; ein Ziel ohne Seite am Tag gibt einen Hinweis", () => {
+    const min = erneuere("kein Link\n", SEITE);
+    assert.equal(min.dateien.get("docs/s.md"), `# Titel\n\n${HINWEIS} hier stehen nur die Überschriften, auf die der Kern verlinkt. Kern: [docs/s.md](${u("v3", "docs/s.md")})\n`);
+    assert.equal(erneuere(kern("#zwei"), SEITE, "v3", ["docs/s.md"], ["docs/s.md"]).dateien.size, 0);
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? "kein Link\n" : null);
+    const weg = reinLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag: "v3", leser: { pfade: [], lies: () => null, vorladen: () => {} }, reineStubs: ["docs/s.md"] });
+    assert.equal(weg.dateien.size, 0);
+    assert.equal(weg.hinweise.length, 1);
+  });
+});
+
+describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30_000 }, () => {
+  const quelleV2 = (): string => {
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#zweiter-abschnitt) hier.", besitzDateien: { ".claude/agents/x.md": "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md)\n" } });
+    schreibe(q, "docs/seite.md", "# Seite\n\n## Erster\n\ntext\n\n## Zweiter Abschnitt\n\ntext\n");
+    schreibe(q, "docs/ohne.md", "# Ohne Anker\n\ntext\n");
+    return q;
+  };
+  const zielV2 = (q: string, dateien: Record<string, string> = {}): string => {
+    const z = baueZiel({ "package.json": JSON.stringify({ scripts: {} }), ...dateien });
+    assert.equal(syncVomTag(q, z, "v2").code, 0);
+    return z;
+  };
+  const umbenennen = (q: string): void => {
+    schreibe(q, "AGENTS.md", `# Quelle\n\n${stoppBlock("Siehe [a](docs/seite.md#zweiter-teil) hier.")}\n`);
+    schreibe(q, "docs/seite.md", "# Seite\n\n## Erster\n\ntext\n\n## Zweiter Teil\n\ntext\n");
+  };
+  const audit = (z: string): Record<string, unknown[]> => (rawDocdrift as unknown as { auditDocDrift(r: string): Record<string, unknown[]> }).auditDocDrift(z);
+  const PROJEKTZEILE = "\n\nunsere Projektzeile\n";
+
+  test("Umbenennung am Kern-Anker: der reine Stub wird erneuert, Wächter und docdrift bleiben ohne Handarbeit grün", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    umbenennen(q);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.ok(r.out.split("\n").includes("geändert (Anker-Stub): docs/seite.md"), r.out);
+    assert.match(r.out, /Anker-Stubs: 2 Seiten erneuert am Tag v3/);
+    assert.match(lies(z, "docs/seite.md"), /## Zweiter Teil\n\nKern: \[docs\/seite\.md#zweiter-teil\]\(.*blob\/v3\/docs\/seite\.md#zweiter-teil\)/);
+    const g = wachter(z);
+    assert.equal(g.code, 0, g.err);
+    assert.deepEqual(audit(z).deadAnchors, []);
+  });
+
+  test("neuer Kern-Anker auf einer reinen Stub-Seite: der Stub wird ergänzt, der Wächter ist grün", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(q, ".claude/agents/x.md", "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md#abschnitt)\n");
+    schreibe(q, "docs/ohne.md", "# Ohne Anker\n\n## Abschnitt\n\ntext\n");
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.match(lies(z, "docs/ohne.md"), /## Abschnitt\n\nKern: \[docs\/ohne\.md#abschnitt\]/);
+    assert.equal(wachter(z).code, 0);
+  });
+
+  test("AK3: Stub-Seite mit Projektzeile bleibt byte-gleich; mit Umbenennung bricht der Sync laut ab (anker-tot), nichts geschrieben", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(z, "docs/seite.md", lies(z, "docs/seite.md") + PROJEKTZEILE);
+    umbenennen(q);
+    const vorher = baum(z);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 1);
+    assert.match(r.err, /anker-tot/);
+    assert.deepEqual(baum(z), vorher);
+  });
+
+  test("AK3: Stub-Seite mit Projektzeile und nur neuem Kern-Anker: Seite byte-gleich, der Wächter meldet stub-anker", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(z, "docs/ohne.md", lies(z, "docs/ohne.md") + PROJEKTZEILE);
+    const seite = lies(z, "docs/ohne.md");
+    schreibe(q, ".claude/agents/x.md", "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md#abschnitt)\n");
+    schreibe(q, "docs/ohne.md", "# Ohne Anker\n\n## Abschnitt\n\ntext\n");
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/ohne.md"), seite.replace("blob/v2/", "blob/v3/")); // nur der Ref, den der Sync je Tag setzt
+    const g = wachter(z);
+    assert.equal(g.code, 1);
+    assert.match(g.err, /stub-anker/);
+  });
+
+  test("auf den Projektanteil gekürzte Seite (mit Überschrift, ohne Hinweis) wird nie überschrieben", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(z, "docs/seite.md", "# Seite\n\n## Erster\n\nnur unser Teil\n");
+    const seite = lies(z, "docs/seite.md");
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/seite.md"), seite);
+    assert.ok(!r.out.includes("geändert (Anker-Stub): docs/seite.md"));
+  });
+
+  test("neue Stub-Seite neben einem erneuerten reinen Stub: der Hinweis nennt für die angelegten nur ihre Zahlen", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(q, ".claude/agents/x.md", "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md) [e](../../docs/neu.md#abschnitt)\n");
+    schreibe(q, "docs/neu.md", "# Neu\n\n## Abschnitt\n\ntext\n");
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Anker-Stubs: 1 Seiten angelegt, 2 Überschriften, 2 Links am Tag v3/);
+    assert.match(r.out, /Anker-Stubs: 2 Seiten erneuert am Tag v3/);
+  });
+
+  test("AK3: eine Besitz-Einheit in der Form eines Stubs wird nie erneuert", () => {
+    const stubForm = `# B\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; Besitztext. Kern: [docs/b.md](${u("v2", "docs/b.md")})\n`;
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#erster) hier.", besitzDateien: { "docs/b.md": stubForm } });
+    schreibe(q, "docs/seite.md", "# Seite\n\n## Erster\n\ntext\n");
+    const z = zielV2(q);
+    assert.equal(lies(z, "docs/b.md"), stubForm);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/b.md"), stubForm);
+    assert.ok(!r.out.includes("docs/b.md"), r.out);
+  });
+
+  test("ein zweiter Sync am selben Tag erneuert nichts, auch nicht bei CRLF-Zeilenenden des Stubs", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    const crlf = lies(z, "docs/seite.md").replace(/\n/g, "\r\n");
+    schreibe(z, "docs/seite.md", crlf);
+    const r = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!/Anker-Stub\)/.test(r.out));
+    assert.equal(lies(z, "docs/seite.md"), crlf);
+  });
+
+  test("ein CRLF-Stub wird im CRLF-Stil erneuert", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(z, "docs/seite.md", lies(z, "docs/seite.md").replace(/\n/g, "\r\n"));
+    umbenennen(q);
+    assert.equal(syncVomTag(q, z, "v3").code, 0);
+    const t = lies(z, "docs/seite.md");
+    assert.ok(t.includes("## Zweiter Teil\r\n") && !/[^\r]\n/.test(t));
+  });
+
+  test("ein Symlink auf dem Seitenpfad wird nie erneuert", (ctx) => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    const stub = lies(z, "docs/seite.md");
+    const fremd = join(tmp(), "fremd.md");
+    writeFileSync(fremd, stub);
+    try {
+      rmSync(join(z, "docs", "seite.md"));
+      symlinkSync(fremd, join(z, "docs", "seite.md"));
+    } catch {
+      ctx.skip();
+      return;
+    }
+    umbenennen(q);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err); // ein Symlink wird nicht gelesen (collectMarkdown), also kein anker-tot und nichts darüber geschrieben
+    assert.ok(!r.out.includes("(Anker-Stub): docs/seite.md"), r.out);
+    assert.equal(readFileSync(fremd, "utf8"), stub);
+    assert.ok(lstatSync(join(z, "docs", "seite.md")).isSymbolicLink());
+  });
+});

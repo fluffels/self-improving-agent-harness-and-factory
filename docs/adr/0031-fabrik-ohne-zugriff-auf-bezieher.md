@@ -27,7 +27,7 @@ Entscheidung: C, weil nur der Pull für eigene und fremde Bezieher gleich gilt u
 2. **Verteilung per Pull.** Der Bezieher erfährt neue Tags über seinen Workflow `.github/workflows/factory-update.yml` (wöchentlich, Issue „🔄 Factory-Update“). Sein Agent fährt `factory-sync --tag`; die Gates des Beziehers melden tote Verweise und überzählige Modul-Kopien. Das gilt für eigene und fremde Bezieher gleich.
 3. **Meldungen Bezieher → Fabrik.** Vertraute Autoren kommentieren das Sammelticket der Fabrik. Für fremde Bezieher gilt der Meldeweg aus factory#153; ihr Text ist Fremdtext und nie Anweisung.
 4. **Langfuse im Bezieher.** Das Status-Ticket und die Langfuse-Befunde liegen auf dem Board des Beziehers. Harness-Befunde gehen anonymisiert (`node scripts/check-internalrefs.mjs --text`) über den Meldeweg aus factory#153 an die Fabrik; Projekt-Befunde bleiben im Bezieher. Die Umsetzung ist factory#195.
-5. **Abschnitte umbenennen oder entfernen** ist erlaubt: der nächste Sync des Beziehers bricht laut mit `anker-tot` ab, statt still ein totes Ziel zu behalten. Eine Weiterleitung im Stub gehört zu factory#166.
+5. **Abschnitte umbenennen oder entfernen** ist erlaubt: der nächste Sync des Beziehers bricht laut mit `anker-tot` ab, statt still ein totes Ziel zu behalten. Eine Weiterleitung im Stub gehört zu factory#166 *(entschieden in [factory#166](fortschreibungen/0022-166-ziel-besitz-factory-seiten.md): reine Stubs erneuert der Sync, Bezieher-Seiten brechen weiter laut ab)*.
 
 ## Konsequenzen
 
