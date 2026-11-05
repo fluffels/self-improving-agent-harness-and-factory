@@ -46,6 +46,7 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { MANIFEST_PFAD } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
@@ -92,11 +93,11 @@ export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).k
   return allowlist.filter((a) => !oversized.has(a.datei));
 }
 
-/** Kern-Block-Budget der AGENTS.md in `rootDir` (nur Fabrik, ohne Sync-Stand): Meldung oder `null`; fehlt die Datei, zählt das wie fehlende Marker (fail-closed). */
+/** Kern-Block-Budget der AGENTS.md in `rootDir`: Meldung oder `null`. Nur die Fabrik wird geprüft (Besitz-Manifest vorhanden, kein Sync-Stand); ein Bezieher oder ein Projekt ohne Manifest hat keinen Kern-Block zu hüten. Fehlt die Datei in der Fabrik, zählt das wie fehlende Marker (fail-closed). */
 export function kernBlockPruefung(rootDir = ROOT) {
   const abs = join(rootDir, "AGENTS.md");
   const text = existsSync(abs) ? readFileSync(abs, "utf8") : "";
-  return kernBlockBefund({ text, bezieher: istBezieher(rootDir) });
+  return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir) });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

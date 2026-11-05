@@ -117,7 +117,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run typecheck` | `verify` | voll `strict`, ganzes Projekt |
 | `npm run lint` | `verify` | ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion |
 | `npm run check:size` | `verify` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
-| `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen); in der Fabrik zusätzlich das [Kern-Block-Budget](harness-glossar.md) |
+| `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen); in der Fabrik zusätzlich das Kern-Block-Budget (Glossar) |
 | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
 | `npm run check:factorylinks` | `verify` | Links ins Factory-Repo stehen auf dem Sync-Tag und zeigen auf vorhandene Pfade und Anker, Kern-Links auf Factory-Seiten sind durch Anker-Stubs gedeckt (entfällt ohne Sync-Stand) |

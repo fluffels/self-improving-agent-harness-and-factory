@@ -52,9 +52,9 @@ export function kernBlockZeichen(text) {
   return a < 0 || b < a ? null : countChars(text.slice(a, b));
 }
 
-/** Pur: Meldung, wenn der Kern-Block das Budget überschreitet oder seine Marker fehlen (fail-closed); `null` sonst und immer im Bezieher (dort gilt sein Gesamtbudget, der Kern kommt per Sync). */
-export function kernBlockBefund({ text, bezieher, budget = KERN_BLOCK_BUDGET }) {
-  if (bezieher) return null;
+/** Pur: Meldung, wenn der Kern-Block das Budget überschreitet oder seine Marker fehlen (fail-closed); `null` sonst und immer außerhalb der Fabrik (im Bezieher gilt sein Gesamtbudget, der Kern kommt per Sync). */
+export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET }) {
+  if (!fabrik) return null;
   const chars = kernBlockZeichen(text);
   if (chars === null) return `Kern-Block von AGENTS.md nicht messbar: Marker ${KERN_START} und ${KERN_ENDE} fehlen oder stehen verdreht.`;
   if (chars <= budget) return null;
