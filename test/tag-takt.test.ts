@@ -227,7 +227,7 @@ describe("CI-Zustand und Body", () => {
     });
     it("beschreibt den lesenden Ablauf: Klon im Scratch ohne origin, lokaler Tag, Entwurfs-Vorschau, Sync mit --tag, install und verify, Ergebnis-Befehl", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
-      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "node scripts/gate-befehl.mjs verify", "node scripts/tag-takt.mjs --probe"]) {
+      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verify", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
         expect(block, teil).toContain(teil);
       }
     });
@@ -242,7 +242,7 @@ describe("CI-Zustand und Body", () => {
       expect(r.offen).toEqual(["o/a", "o/b"]);
       expect(r.blocker).toEqual([]);
     });
-    it("bezieherProbe Negativfall (AK4): ein roter Bezieher erscheint als BLOCKER, ein grüner abgehakt", () => {
+    it("bezieherProbe Negativfall (K4): ein roter Bezieher erscheint als BLOCKER, ein Bezieher ohne Rot durch Factory-Besitz (Exit 0) nicht", () => {
       const r = T.bezieherProbe({ bezieher: ["o/a", "o/b"], ergebnisse: { "o/a": 0, "o/b": 1 } });
       expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün", "- [ ] BLOCKER `o/b`: Probe rot (Exit 1), nicht taggen"]);
       expect(r.blocker).toEqual(["o/b"]);

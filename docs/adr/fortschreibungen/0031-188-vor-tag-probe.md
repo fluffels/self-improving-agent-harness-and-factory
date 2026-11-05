@@ -9,7 +9,7 @@ Ergänzt [ADR 0031](../0031-fabrik-ohne-zugriff-auf-bezieher.md): vor dem Tag l�
 
 ## Optionen
 
-- **A: Klon im Scratch, lesend (gewählt).** Ein Mensch oder Agent klont den Bezieher (öffentlich oder mit eigenem Zugang) in einen Scratch-Ordner, entfernt dort `origin`, synct aus einem ebenfalls lokalen Quell-Klon mit lokalem Tag und fährt dessen `verify`. Es entsteht nichts im Bezieher-Repo.
+- **A: Klon im Scratch, lesend (gewählt).** Ein Mensch oder Agent klont den Bezieher (öffentlich oder mit eigenem Zugang) in einen Scratch-Ordner, entfernt dort `origin`, synct aus einem ebenfalls lokalen Quell-Klon mit lokalem Tag fährt die mechanischen Update-Schritte und dann dessen `verify`. Es entsteht nichts im Bezieher-Repo.
 - **B: Cross-Repo-Workflow mit Secret.** Verworfen wie in ADR 0031: ein Token mit Zugriff auf fremde Repos, das zudem die Betriebsart für eigene und fremde Bezieher trennt.
 - **C: nichts tun.** Verworfen: der Fehler zeigte sich sonst erst nach dem Tag.
 
@@ -19,7 +19,8 @@ Entscheidung: Option A, weil Punkt 1 der ADR (kein Schreibzugriff) unberührt bl
 
 - **Liste:** der optionale Schlüssel `bezieher` der Projekt-Config (`owner/name`, ohne Doppelte, ohne das eigene Repo; `bezieherAus`), nur in der Fabrik wirksam; der Kern nennt keinen Namen.
 - **Ablauf:** die Checkliste des Tag-Tickets enthält je Bezieher die Befehle und eine Zeile (`Probe ausstehend`); `--entwurf --trocken` ist nur die Vorschau (Exit ≠ 0 ist ein Blocker), `verify` ist erst nach dem Sync mit lokalem Tag grün, denn nach `--entwurf` ist es per Konstruktion rot (Drift-Gate ohne Tag, Doku-Links ohne Anker-Stubs).
-- **Ergebnis:** `node scripts/tag-takt.mjs --probe <owner/name>=<exit>` je Bezieher gibt die Checkliste aus und endet mit Exit 1 bei einem Blocker (Exit ≠ 0) oder einem Bezieher ohne Ergebnis (fail-closed), mit Exit 2 bei einem Aufruf- oder Config-Fehler. Der erste Exit ≠ 0 der Kette ist das Ergebnis. Ein Bezieher, der schon vor dem Sync rot ist, ist ein Blocker mit Hinweis; die Maintainerin entscheidet im Pre-Flight.
+- **Bedeutung von „grün“ (Entscheidung der Maintainerin, Probe-Lauf 2026-11-05):** ein Sync mit Tag macht keinen Bezieher grün; danach braucht jeder Bezieher die mechanischen Update-Schritte (`lint:prune`, `projektwerte --write`, `docs:gen`, `check:factorylinks --schreiben`), die die Probe vor `verify` fährt. „Grün“ heißt: kein Rot durch Factory-Besitz. Rest-Rot nur im Projekt (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block) ist ein Befund bzw. eine Bezieher-Migration; Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein benannter Blocker für den nächsten Tag mit eigenem Ticket.
+- **Ergebnis:** `node scripts/tag-takt.mjs --probe <owner/name>=<exit>` je Bezieher (0 = kein Rot durch Factory-Besitz, sonst ≠ 0 nach dem Urteil der Probe) gibt die Checkliste aus und endet mit Exit 1 bei einem Blocker oder einem Bezieher ohne Ergebnis (fail-closed), mit Exit 2 bei einem Aufruf- oder Config-Fehler. Ein Bezieher, der schon vor dem Sync rot ist, wird im Pre-Flight genannt; die Maintainerin entscheidet.
 - **Migration:** die Commit-Zeile `Bezieher-Migration` eines Besitz-PRs landet wie bisher im Tag-Ticket; ein Bezieher mit neuem Konfig-Bedarf (etwa das Java-Profil) steht damit im Tag-Ticket.
 
 ## Folgen

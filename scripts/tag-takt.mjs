@@ -13,7 +13,7 @@
  *  - Taggen bleibt Pre-Flight („ja, taggen“, Veröffentlichen); danach holen die Bezieher das Update selbst (`factory-update.yml`, ADR 0031).
  *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Trockenlauf läuft gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch).
  *  - Vor-Tag-Probe (factory#188): die Projekt-Config listet die Bezieher (`bezieher`, `owner/name`); die Checkliste verlangt je Bezieher einen LESENDEN Lauf im Scratch-Klon (Entwurfs-Vorschau, Sync mit lokalem Tag,
- *    `verify`; nie Push, PR, Issue oder Kommentar; Fortschreibung zu ADR 0031). Rot oder fehlend heißt: nicht taggen. Kein Cross-Repo-CI (das bräuchte ein Secret): die Ergebnisse trägt der Mensch oder Agent mit `--probe` ein.
+ *    `verify` nach den mechanischen Update-Schritten; nie Push, PR, Issue oder Kommentar; Fortschreibung zu ADR 0031). Rot durch Factory-Besitz oder fehlend heißt: nicht taggen. Kein Cross-Repo-CI (das bräuchte ein Secret): die Ergebnisse trägt der Mensch oder Agent mit `--probe` ein.
  *  - Milestones (factory#194): ein Milestone, der nach dem Erstellungsdatum des letzten Release-Tags geschlossen wurde, ist ein weiterer Auslöser („Milestone „<titel>“ geschlossen“), schon bei einem
  *    Besitz-PR (ohne ungetaggten Besitz-PR gibt es nichts zu taggen: `nichts` mit Grund). Gelesen über REST (`milestones?state=closed`) und `git for-each-ref` (`creatordate`); fail-open mit Warnung, ohne Milestones unverändert.
  *    Der Takt läuft dafür auch beim Ereignis `milestone: closed` (board-takt.yml).
@@ -206,7 +206,7 @@ const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Ta
 
 /**
  * Pur (factory#188): die Checklisten-Zeilen der Vor-Tag-Probe je Bezieher. `ergebnisse` = `{ "owner/name": exit }` (erster Exit ≠ 0 der Probe-Kette, sonst 0).
- * Rot (Exit ≠ 0) ist ein Blocker, ein fehlendes Ergebnis bleibt ausstehend (`offen`, fail-closed: auch das heißt nicht taggen). Ergebnisse zu fremden Repos zählen nicht.
+ * Rot (Exit ≠ 0 = Rot durch Factory-Besitz nach den mechanischen Update-Schritten, so das Urteil der Probe) ist ein Blocker, ein fehlendes Ergebnis bleibt ausstehend (`offen`, fail-closed: auch das heißt nicht taggen). Ergebnisse zu fremden Repos zählen nicht.
  */
 export function bezieherProbe({ bezieher, ergebnisse = {} }) {
   if (bezieher.length === 0) return { zeilen: ["- Keine Bezieher gelistet (Schlüssel `bezieher` der Projekt-Config): nur der Probe-Erstbezug oben."], blocker: [], offen: [] };
@@ -238,11 +238,12 @@ function probeAblauf({ tag, sha }) {
     `git -C <s>/quelle tag ${tag} ${sha}`,
     "node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --entwurf --trocken",
     `node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --tag ${tag}`,
-    "cd <s>/bezieher && node scripts/gate-befehl.mjs install && node scripts/gate-befehl.mjs verify",
+    "cd <s>/bezieher && node scripts/gate-befehl.mjs install && npm run lint:prune && node scripts/projektwerte.mjs --write && npm run docs:gen",
+    "cd <s>/bezieher && npm run check:factorylinks -- --schreiben --quelle <s>/quelle && node scripts/gate-befehl.mjs verify",
     "node scripts/tag-takt.mjs --probe <owner/name>=<exit>",
     "```",
     "",
-    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag grün, denn nach `--entwurf` ist es per Konstruktion rot. An `--probe` geht der erste Exit ≠ 0 der Kette, sonst 0. Ist der Klon schon vor dem Sync rot, liegt es am Bezieher: als Blocker eintragen und im Pre-Flight nennen.",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (`lint:prune`, `projektwerte --write`, `docs:gen`, `check:factorylinks --schreiben`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker mit eigenem Ticket. An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker). War der Klon schon vor dem Sync rot, liegt es am Bezieher; im Pre-Flight nennen.",
     "",
   ];
 }
