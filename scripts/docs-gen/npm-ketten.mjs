@@ -1,6 +1,6 @@
 // Kein Shebang (siehe docs-gen.mjs). npm-Ketten (#1428 Z11, vorher in markdown.mjs): `a && b`-Ketten aus package.json zerlegen und auflösen.
-// Gemeinsam genutzt von Gate-Tabelle, Diagramm-Zahlen,
-// Doku-Drift-Wächter und verify-lauf. Reines Node-Modul ohne Importe.
+// Gemeinsam genutzt von Gate-Tabelle, Diagramm-Zahlen, Doku-Drift-Wächter und verify-lauf. Reines Node-Modul (nur das Blatt `regex-lib.mjs`).
+import { SCHRITT_NAME } from "../regex-lib.mjs";
 
 /** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
 export function parseChain(script) {
@@ -43,9 +43,7 @@ export function kettenSchritte(scripts, chains, kette) {
   return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
 }
 
-/** Zeichenklasse eines npm-Skriptnamens (Quelltext für RegExp-Bausteine; factory#208): verify-lauf, check:docdrift und die Doku-Erkennung nutzen dieselbe. */
-export const SCHRITT_NAME = "[\\w:.-]+";
-/** Ganzer Schrittname (einfaches npm-Skript, ohne Shell-Zeichen). */
+/** Ganzer Schrittname (einfaches npm-Skript, ohne Shell-Zeichen); die Zeichenklasse `SCHRITT_NAME` steht in `regex-lib.mjs` (eine Quelle für verify-lauf, check:docdrift und die Doku-Erkennung, factory#208). */
 export const SCHRITT_RE = new RegExp(`^${SCHRITT_NAME}$`);
 
 /**

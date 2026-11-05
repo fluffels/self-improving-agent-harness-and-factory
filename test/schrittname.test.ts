@@ -7,7 +7,7 @@ import * as drift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as markdown from "../scripts/docs-gen/markdown.mjs";
 
-const k = ketten as { SCHRITT_NAME: string; SCHRITT_RE: RegExp; ketteAusPackage: (p: unknown, c: string[], n: string) => string[] };
+const k = ketten as { SCHRITT_RE: RegExp; ketteAusPackage: (p: unknown, c: string[], n: string) => string[] };
 const d = drift as { parseVerifyChain: (s: Record<string, string>) => string[]; findDocumentedVerifyChains: (md: string) => string[][] };
 const m = markdown as { parseNpmRunMentions: (md: string) => Set<string> };
 

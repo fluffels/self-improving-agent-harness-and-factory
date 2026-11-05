@@ -4,7 +4,7 @@
 //
 // Formen von `struktur.quelle`: ein String (ein wörtlicher Ordner, wie bisher) oder eine Liste von Ordnern bzw. Globs (Syntax von `pfad-glob.mjs`,
 // etwa `*/src/main/java`). Globs lösen nur Ordner auf. Grenze beim Auflösen eines Globs (geschlossene Liste): `node_modules` und Ordner mit
-// führendem `.` werden nie betreten; ein wörtlicher Präfix vor dem ersten Glob-Segment wird direkt genommen (auch `.claude/...`). Innerhalb einer
+// führendem `.` werden nie betreten; ohne `**` reicht der Abstieg nur so tief wie das Muster Segmente hat; ein wörtlicher Präfix vor dem ersten Glob-Segment wird direkt genommen (auch `.claude/...`). Innerhalb einer
 // aufgelösten Wurzel zählt jede Datei mit passender Endung, wie bisher.
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
