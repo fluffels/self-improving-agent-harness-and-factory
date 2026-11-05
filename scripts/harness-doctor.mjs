@@ -5,9 +5,9 @@
  *   node scripts/harness-doctor.mjs --einrichten [--dry-run] [--config <pfad>]
  *
  * `--einrichten` (#1800) legt nur Umkehrbares an: fehlende Labels, die Wochenlauf-Datei (.github/workflows/harness-doctor.yml) und das Harness-Sammelticket
- * (über sammelticket-anlegen.mjs); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nie automatisch, nur als
+ * (über sammelticket-anlegen.mjs; im Bezieher nicht: dort nur ein `INFO Sammelticket`, ADR 0031, und bei fehlendem Token oder abweichender `--config` eine `ANLEITUNG Sammelticket`); Ruleset, Secrets, Variablen, Project-Felder, Actions, Admin-Recht und Token nie automatisch, nur als
  * `ANLEITUNG <Punkt>: <Befund> Fix: <Schritt> Link: <Seite>`. Langfuse prüft nur `--pruefen`; `--config` gilt nicht für das Sammelticket (sammelticket-anlegen.mjs liest die Standard-Config). `--dry-run` gibt nur den Plan aus (`PLAN …`). Ein zweiter Lauf ändert nichts.
- * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs.
+ * Der Wochenlauf selbst (Lücke als Zeile ins Sammelticket) steht in harness-doctor-melden.mjs; der Punkt `Meldestelle` (nur bei einer fremden Meldestelle, factory#208: Token, Lesbarkeit, Issues aktiv) in harness-doctor-meldestelle.mjs, er läuft mit den Dateipunkten in `--pruefen` und im Wochenlauf.
  *
  * `--pruefen` meldet den Block `sprache.spezifikation` der Config als Lücke `Sprache`, wenn er fehlt oder unvollständig ist (das Spezifikations-Gate hat keinen Standardwert). Es meldet zusätzlich jede Kern-Umgebungsvariable, die in der Umgebung dieses Prozesses noch unter ihrem Altnamen (Projektpräfix statt `FACTORY_`) gesetzt ist: der Altname wird nicht mehr gelesen (Wert nie ausgegeben; Namen aus den `umgebungsWert`-Literalen in scripts/). Grenze: nur die Umgebung des Doctor-Prozesses, nicht die anderer Shells oder Settings-Dateien.
  *
@@ -107,7 +107,7 @@ function sammelticketSchritt({ fatal, abweichend, rootDir, trocken, spawn, out }
 
 /**
  * `--einrichten [--dry-run]`: legt nur Umkehrbares an (fehlende Labels, die Wochenlauf-Datei, das Sammelticket); alles andere (Ruleset,
- * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Ein zweiter Lauf ändert nichts.
+ * Secrets, Variablen, Project-Felder, Actions, Admin-Recht, Token und die acht Sicherheitspunkte) nur als `ANLEITUNG` mit Link. Das Sammelticket entfällt im Bezieher (Sync-Stand vorhanden, ADR 0031: `INFO Sammelticket`, Kern-Befunde meldet `melden.mjs` an die Meldestelle). Ein zweiter Lauf ändert nichts.
  * Exit: 0 nichts offen; 1 Anleitung offen, Plan nicht leer (Dry-Run) oder Fehler; 2 Aufruf-Fehler oder Config.
  */
 function einrichten({ werte, rootDir, gh, spawn, out, err }) {

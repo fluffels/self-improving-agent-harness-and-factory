@@ -18,7 +18,12 @@ interface Lib {
   meldungsText(zeilen: string[], stand: string | null): string;
   meldestelleToken(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): string | undefined;
   textSauber(text: string, exec?: (...a: unknown[]) => { status: number | null; signal?: string | null; error?: Error }): boolean;
-  bereiteMeldung(zeilen: string[], o?: { wurzel?: string; pruefe?: (t: string) => boolean; stand?: string | null }): { ok: boolean; text?: string; grund?: string };
+  bereiteMeldung(zeilen: string[], o?: { wurzel?: string; pruefe?: (t: string) => boolean; stand?: string | null; herkunft?: string | null }): { ok: boolean; text?: string; grund?: string };
+  meldestelleZugang(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): { stelle: string; fremd: boolean; herkunft: string | null; token: string | undefined };
+  nummernMitHerkunft(text: string, herkunft: string | null): string;
+  eigenerLogin(a: { zugang: { fremd: boolean; token?: string }; api: (args: string[], o: { token?: string }) => unknown; warn: (z: string) => void }): string | null;
+  zeileBekannt(a: { kommentare: { user: { login: string; type: string } | null; body: string }[]; owner: string; eigen?: string | null; schluessel: string }): boolean;
+  keinSammelticketText(a: { fuer: string; ci?: boolean; trenner?: string }): string;
 }
 interface Melden {
   alsListenpunkt(z: string): string;
@@ -213,12 +218,118 @@ describe("melden.mjs (AK1, AK2, AK3)", () => {
   });
 });
 
+describe("meldestelleZugang (factory#208 L11): ein Zugang für alle Schreiber", () => {
+  const env = { MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" };
+  test("fremde Stelle: fremd, Herkunft ist das eigene Repo, Token wie meldestelleToken", () => {
+    expect(lib.meldestelleZugang({ stelle: "eingang/privat", eigenes: "acme/proj", env })).toEqual({ stelle: "eingang/privat", fremd: true, herkunft: "acme/proj", token: "mt" });
+  });
+  test("eigene Stelle (auch anders geschrieben): nicht fremd, keine Herkunft, kein Token", () => {
+    expect(lib.meldestelleZugang({ stelle: "Acme/Proj", eigenes: "acme/proj", env })).toEqual({ stelle: "Acme/Proj", fremd: false, herkunft: null, token: undefined });
+  });
+});
+
+describe("nummernMitHerkunft und bereiteMeldung mit Herkunft (factory#208 L7)", () => {
+  test("nackte #n bekommen owner/name; Nummern mit Herkunft und Nicht-Nummern bleiben", () => {
+    expect(lib.nummernMitHerkunft("Reparatur #12 und #7, aber factory#153, a/b#3, x#4 und #abc, Ende #9.", "acme/proj")).toBe(
+      "Reparatur acme/proj#12 und acme/proj#7, aber factory#153, a/b#3, x#4 und #abc, Ende acme/proj#9.",
+    );
+  });
+  test("ohne Herkunft (eigene Stelle) bleibt der Text unverändert", () => {
+    expect(lib.nummernMitHerkunft("Reparatur #12", null)).toBe("Reparatur #12");
+  });
+  test("bereiteMeldung schreibt die Herkunft vor der Sperrprüfung (sie sieht owner/name#n) und in den Text", () => {
+    const gesehen: string[] = [];
+    const r = lib.bereiteMeldung(["- [ ] gescheitert: #12 (x)"], { stand: null, herkunft: "acme/proj", pruefe: (t) => (gesehen.push(t), true) });
+    expect(r).toEqual({ ok: true, text: "- [ ] gescheitert: acme/proj#12 (x)" });
+    expect(gesehen).toEqual(["- [ ] gescheitert: acme/proj#12 (x)"]);
+  });
+  test("ein Treffer der Sperrprüfung im umgeschriebenen Text sperrt (die Herkunft kann selbst der Treffer sein)", () => {
+    const r = lib.bereiteMeldung(["#12"], { stand: null, herkunft: "acme/proj", pruefe: (t) => !t.includes("acme/proj#") });
+    expect(r.ok).toBe(false);
+  });
+  test("ohne wurzel (Standard: Repo-Wurzel des Skripts, im Quellrepo ohne Sync-Stand): Text ohne Stand-Zeile", () => {
+    expect(lib.bereiteMeldung(["- [ ] x"], { pruefe: () => true })).toEqual({ ok: true, text: "- [ ] x" });
+  });
+});
+
+describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Konto", () => {
+  const fremd = { fremd: true, token: "mt" };
+  test("fremde Stelle: der Login aus gh api user, mit dem Token der Stelle", () => {
+    const aufrufe: unknown[][] = [];
+    const login = lib.eigenerLogin({ zugang: fremd, api: (a, o) => (aufrufe.push([a, o]), { login: "fremdkonto" }), warn: () => undefined });
+    expect(login).toBe("fremdkonto");
+    expect(aufrufe).toEqual([[["api", "user"], { token: "mt" }]]);
+  });
+  test("eigene Stelle: kein Aufruf, kein Login", () => {
+    expect(lib.eigenerLogin({ zugang: { fremd: false }, api: () => { throw new Error("kein Aufruf"); }, warn: () => undefined })).toBeNull();
+  });
+  test("Fehler oder fehlender Login: null und eine Warnzeile mit Grund", () => {
+    const warn: string[] = [];
+    expect(lib.eigenerLogin({ zugang: fremd, api: () => { throw new Error("HTTP 403\nzweite Zeile"); }, warn: (z) => warn.push(z) })).toBeNull();
+    expect(lib.eigenerLogin({ zugang: fremd, api: () => ({}), warn: (z) => warn.push(z) })).toBeNull();
+    expect(warn).toHaveLength(2);
+    expect(warn[0]).toMatch(/^HINWEIS Dedupe: eigenes Konto nicht lesbar \(HTTP 403\)/);
+    expect(warn[0]).not.toContain("zweite Zeile");
+    expect(warn[1]).toMatch(/^HINWEIS Dedupe: gh api user liefert keinen Login/);
+  });
+  const zeile = "- [ ] 2026-11-05 Punkt: Befund";
+  const k = (login: string | null, body = zeile) => ({ user: login === null ? null : { login, type: "User" }, body });
+  test("eigenes Konto zählt als vertraut (Groß-/Kleinschreibung egal), ein Fremder nie, ohne eigen nur der Owner", () => {
+    expect(lib.zeileBekannt({ kommentare: [k("Fremdkonto")], owner: "eingang", eigen: "fremdkonto", schluessel: "Punkt: " })).toBe(true);
+    expect(lib.zeileBekannt({ kommentare: [k("fremdkonto")], owner: "eingang", eigen: null, schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [k("anderer")], owner: "eingang", eigen: "fremdkonto", schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [k("eingang")], owner: "eingang", schluessel: "Punkt: " })).toBe(true);
+    expect(lib.zeileBekannt({ kommentare: [k(null)], owner: "eingang", eigen: "", schluessel: "Punkt: " })).toBe(false);
+  });
+  test("nur offene Listenzeilen mit dem Schlüssel zählen", () => {
+    expect(lib.zeileBekannt({ kommentare: [k("eingang", "- [x] 2026 Punkt: Befund")], owner: "eingang", schluessel: "Punkt: " })).toBe(false);
+    expect(lib.zeileBekannt({ kommentare: [k("eingang", "Text\n* [ ] Punkt: Befund")], owner: "eingang", schluessel: "Punkt: " })).toBe(true);
+  });
+});
+
+describe("keinSammelticketText (factory#208 L24): ein Wortlaut für alle Schreiber", () => {
+  test("Agentenvariante: voller Wortlaut samt Bezieher-Teil „Zeile unter BEFUNDE im Bericht nennen“", () => {
+    expect(lib.keinSammelticketText({ fuer: "in eingang/privat" })).toBe(
+      "kein ungeclaimtes Harness-Sammelticket in eingang/privat\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen",
+    );
+  });
+  test("CI-Variante: kein Bericht, stattdessen Sammelticket anlegen lassen und der nächste Wochenlauf meldet erneut; Trenner wählbar", () => {
+    expect(lib.keinSammelticketText({ fuer: "für 2 neue Zeile(n)", ci: true, trenner: " " })).toBe(
+      "kein ungeclaimtes Harness-Sammelticket für 2 neue Zeile(n) Fix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut",
+    );
+  });
+  test("die drei Schreiber haben den Text nicht mehr als eigene Zeichenkette (nur meldung-lib trägt ihn)", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts");
+    for (const f of ["melden.mjs", "harness-doctor-melden.mjs", "spezifikation.mjs"]) {
+      const q = readFileSync(join(dir, f), "utf8");
+      expect(q, f).not.toContain("kein ungeclaimtes Harness-Sammelticket");
+      expect(q, f).toMatch(/keinSammelticketText\(/);
+    }
+  });
+});
+
+describe("melden.mjs reicht die Herkunft an bereite (factory#208 L7, Lens-Test)", () => {
+  const libs = (stelle: string) => ({ MELDESTELLE: stelle, REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 5 }), postZeilen: () => undefined });
+  const lauf = async (stelle: string) => {
+    const opt: unknown[] = [];
+    await melden.main(["--zeile", "x #3"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs(stelle)), env: { MELDESTELLE_TOKEN: "mt" }, log: () => undefined, err: () => undefined, bereite: (_z: string[], o: unknown) => (opt.push(o), { ok: true, text: "t" }) });
+    return opt;
+  };
+  test("fremde Meldestelle: herkunft ist das eigene Repo; eigene Stelle: null", async () => {
+    expect(await lauf("eingang/privat")).toEqual([{ herkunft: "acme/proj" }]);
+    expect(await lauf("acme/proj")).toEqual([{ herkunft: null }]);
+  });
+});
+
 describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (AK1, AK3)", () => {
   // Bewusst ausgeklammert (Sicherheits-Inboxen, eigenes Folge-Ticket des PR); eine Ausnahme ohne postZeilen( ist stale und rot.
   const AUSNAHMEN = new Set(["audit-einordnung.mjs", "codescanning-inbox.mjs"]);
   const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts");
   const dateien = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? dateien(join(d, e.name)) : e.name.endsWith(".mjs") ? [join(d, e.name)] : []));
-  const mitPost = dateien(dir).filter((f) => !f.endsWith("inbox-lib.mjs") && readFileSync(f, "utf8").includes("postZeilen("));
+  // Quelltext ohne Kommentare: ein Aufruf zählt nur als Code (`name(`), nie über einen Import oder eine Kommentarzeile.
+  const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const ruft = (q: string, name: string) => new RegExp(`(?<![\\w])${name}\\(`).test(q);
+  const mitPost = dateien(dir).filter((f) => !f.endsWith("inbox-lib.mjs") && ruft(code(f), "postZeilen"));
   const name = (f: string) => f.split(/[\\/]/).pop() as string;
 
   test("Heuristik findet die bekannten Schreiber (Wächter nicht vakuös)", () => {
@@ -226,14 +337,14 @@ describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (A
     for (const n of ["harness-doctor-melden.mjs", "spezifikation.mjs", "melden.mjs", "audit-einordnung.mjs"]) expect(namen).toContain(n);
   });
   test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf oder steht in der Ausnahmeliste", () => {
-    const ohne = mitPost.filter((f) => !readFileSync(f, "utf8").includes("bereiteMeldung(") && !AUSNAHMEN.has(name(f))).map(name);
+    const ohne = mitPost.filter((f) => !ruft(code(f), "bereiteMeldung") && !AUSNAHMEN.has(name(f))).map(name);
     expect(ohne).toEqual([]);
   });
   test("keine stale Ausnahme: jedes Skript der Liste ruft postZeilen( noch auf und nutzt bereiteMeldung nicht", () => {
-    const namen = new Map(mitPost.map((f) => [name(f), readFileSync(f, "utf8")]));
+    const namen = new Map(mitPost.map((f) => [name(f), code(f)]));
     for (const a of AUSNAHMEN) {
       expect(namen.has(a), `${a} ruft postZeilen( nicht mehr auf: Ausnahme streichen`).toBe(true);
-      expect(namen.get(a)?.includes("bereiteMeldung("), `${a} nutzt bereiteMeldung: Ausnahme streichen`).toBe(false);
+      expect(ruft(namen.get(a) ?? "", "bereiteMeldung"), `${a} nutzt bereiteMeldung: Ausnahme streichen`).toBe(false);
     }
   });
 });

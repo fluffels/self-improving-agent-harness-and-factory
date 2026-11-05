@@ -9,7 +9,7 @@ interface Luecke { punkt: string; befund: string; fix: string; nichtPruefbar?: b
 interface Kommentar { user: { login: string; type: string } | null; body: string }
 interface Io {
   ermittle: () => Luecke[];
-  kontext: () => { kommentare: Kommentar[]; owner: string; ziel: number | null };
+  kontext: () => { kommentare: Kommentar[]; owner: string; ziel: number | null; eigen?: string | null };
   bereite: (zeilen: string[]) => { ok: boolean; text?: string; grund?: string };
   postZeilen: (nr: number, text: string) => void;
   heute: string;
@@ -18,8 +18,9 @@ interface Io {
 interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
-  istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string): boolean;
-  main(argv: string[], deps: { env?: Record<string, string>; bereite?: Io["bereite"]; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
+  istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string, eigen?: string | null): boolean;
+  plane(a: { luecken: Luecke[]; kommentare: Kommentar[]; owner: string; heute: string; eigen?: string | null }): string[];
+  main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -31,7 +32,7 @@ const NP: Luecke = { punkt: "PVR", befund: "private-vulnerability-reporting nich
 const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} 2026-10-01 Harness-Doctor (Wochenlauf): ${l.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${l.punkt}: ${l.befund} Fix: ${l.fix}`;
 
 const bereiteStub: Io["bereite"] = (zeilen) => ({ ok: true, text: zeilen.join("\n") });
-interface Welt { treffer?: boolean; stand?: string; luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
+interface Welt { eigen?: string | null; treffer?: boolean; stand?: string; luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
 function fahre(w: Welt, trocken = false): { code: number; log: string[]; posts: { nr: number; text: string }[] } {
   const log: string[] = [];
   const posts: { nr: number; text: string }[] = [];
@@ -42,7 +43,7 @@ function fahre(w: Welt, trocken = false): { code: number; log: string[]; posts: 
     },
     kontext: () => {
       if (w.kontextWirft) throw new Error("HTTP 502");
-      return { kommentare: w.kommentare ?? [], owner: OWNER, ziel: w.ziel === undefined ? 1814 : w.ziel };
+      return { kommentare: w.kommentare ?? [], owner: OWNER, ziel: w.ziel === undefined ? 1814 : w.ziel, eigen: w.eigen ?? null };
     },
     bereite: (zeilen) => (w.treffer ? { ok: false, grund: "Meldung nicht gesendet: check-internalrefs --text meldet einen Treffer\nFix: neutral formulieren" } : { ok: true, text: w.stand ? `${zeilen.join("\n")}\n\n${w.stand}` : zeilen.join("\n") }),
     postZeilen: (nr, text) => {
@@ -198,6 +199,34 @@ describe("harness-doctor-melden: lauf", () => {
   });
 });
 
+describe("harness-doctor-melden: eigenes Konto an einer fremden Meldestelle (factory#208 L6)", () => {
+  const FREMD = { login: "fremdkonto", type: "User" };
+  test("istBekannt: die Zeile des eigenen Kontos zählt mit eigen, ohne eigen nicht (Owner ist ein anderer)", () => {
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: FREMD, body: zeile(L1) }], "eingang", "LÜCKE", "fremdkonto"), true);
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: FREMD, body: zeile(L1) }], "eingang"), false);
+    assert.equal(melden.istBekannt(L1.punkt, [{ user: FREMD, body: zeile(L1) }], "eingang", "LÜCKE", "anderes"), false);
+  });
+  test("plane: eine eigene bekannte Zeile erzeugt keine Dublette, eine andere Lücke kommt", () => {
+    const a = { luecken: [L1, L2], kommentare: [{ user: FREMD, body: zeile(L1) }], owner: "eingang", heute: "2026-11-05" };
+    assert.equal(melden.plane({ ...a, eigen: "fremdkonto" }).length, 1);
+    assert.equal(melden.plane(a).length, 2);
+  });
+  test("lauf: kontext().eigen geht in die Dedupe (wöchentliche Dubletten entfallen)", () => {
+    const r = fahre({ luecken: [L1], kommentare: [{ user: FREMD, body: zeile(L1) }], eigen: "fremdkonto" });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.posts, []);
+    assert.equal(fahre({ luecken: [L1], kommentare: [{ user: FREMD, body: zeile(L1) }] }).posts.length, 1);
+  });
+});
+
+describe("harness-doctor-melden: CI-Variante des Fix-Texts (factory#208 L24)", () => {
+  test("kein Sammelticket: voller Wortlaut ohne Verweis auf einen Bericht", () => {
+    const r = fahre({ luecken: [L1], ziel: null });
+    assert.ok(r.log.includes("::error::Harness-Doctor (Wochenlauf): kein ungeclaimtes Harness-Sammelticket für 1 neue Zeile(n) Fix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut"), r.log.join(" | "));
+    assert.ok(!r.log.join(" ").includes("BEFUNDE"));
+  });
+});
+
 describe("harness-doctor-melden: ermittleLuecken", () => {
   const ergebnis = [{ ok: true, punkt: "Labels" }, { ok: false, punkt: "Ruleset", befund: "fehlt", fix: "anlegen" }];
   test("in Actions ohne PROJECT_TOKEN: genau die Secret-Lücke, der Doctor wird nie gefragt", () => {
@@ -325,6 +354,32 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         vi.unstubAllEnvs();
       }
     });
+  });
+  test("fremde Meldestelle (factory#208): bereite bekommt die Herkunft, eigen kommt per api aus gh api user, die Meldung geht ohne Dublette", async () => {
+    const aufrufe: unknown[][] = [];
+    const herkunft: unknown[] = [];
+    const gepostet: unknown[][] = [];
+    const zeilenText = zeile(L1);
+    const libs = { REPO: "acme/proj", MELDESTELLE: "eingang/privat", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [{ user: { login: "fremdkonto", type: "User" }, body: zeilenText }], owner: "eingang" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
+    const api = (a: string[], o: unknown) => (aufrufe.push([a, o]), { login: "fremdkonto" });
+    const deps = { env: { GITHUB_ACTIONS: "true", MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" }, api, bereite: (z: string[], o?: { herkunft?: string | null }) => (herkunft.push(o), { ok: true, text: z.join("\n") }), ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined };
+    const luecke = { ok: false, punkt: L1.punkt, befund: "anders", fix: "f" };
+    assert.equal(await melden.main([], { ...deps, pruefLauf: () => ({ ergebnis: [luecke] }) }), 0);
+    assert.deepEqual(aufrufe[0], [["api", "user"], { token: "mt" }]);
+    assert.deepEqual(gepostet, [], "die eigene Zeile des fremden Kontos ist bekannt");
+    assert.equal(await melden.main([], { ...deps, pruefLauf: () => ({ ergebnis: [{ ...luecke, punkt: "Neu" }] }) }), 0);
+    assert.deepEqual(herkunft, [{ herkunft: "acme/proj" }]);
+    assert.equal(gepostet.length, 1);
+  });
+  test("gh api user schlägt fehl: Warnzeile, Rückfall auf den Owner (eigene Zeile gilt dann nicht als bekannt)", async () => {
+    const log: string[] = [];
+    const gepostet: unknown[][] = [];
+    const libs = { REPO: "acme/proj", MELDESTELLE: "eingang/privat", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [{ user: { login: "fremdkonto", type: "User" }, body: zeile(L1) }], owner: "eingang" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
+    const api = () => { throw new Error("HTTP 403"); };
+    const code = await melden.main([], { env: { GITHUB_ACTIONS: "true", MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" }, api, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf: () => ({ ergebnis: [{ ok: false, punkt: L1.punkt, befund: "b", fix: "f" }] }) });
+    assert.equal(code, 0);
+    assert.ok(log.some((z) => z.startsWith("HINWEIS Dedupe: eigenes Konto nicht lesbar (HTTP 403)")), log.join(" | "));
+    assert.equal(gepostet.length, 1);
   });
   test("unbekanntes Flag → Exit 2 vor jeder Config", async () => {
     const code = await melden.main(["--quatsch"], { ladeConfig: () => assert.fail("keine Config"), ladeLibs: () => assert.fail("kein Import"), log: () => undefined, err: () => undefined });
