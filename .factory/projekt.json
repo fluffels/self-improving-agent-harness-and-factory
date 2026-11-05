@@ -24,6 +24,7 @@
       "todoOptionId": "f75ad846"
     }
   ],
+  "bezieher": ["fluffels/kubernia", "fluffels/speaker-tooling"],
   "praefixe": {
     "commitZeile": "SIH-",
     "branch": "feature/sih-",

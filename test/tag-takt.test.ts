@@ -20,6 +20,7 @@ const T = raw as unknown as {
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
+  bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number> }) => { zeilen: string[]; blocker: string[]; offen: string[] };
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
 
@@ -188,7 +189,7 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald Tag und Release stehen", "ja, taggen", "Die Fabrik prüft die Bezieher nicht", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald Tag und Release stehen", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
@@ -210,9 +211,58 @@ describe("CI-Zustand und Body", () => {
     expect(punkt).not.toContain("gh repo clone");
   });
   it("factory#162 L26: kein Schritt der Fabrik schreibt in ein Bezieher-Repo (kein Sync-PR, kein Bezieher-Trockenlauf, kein --repo)", () => {
-    for (const verboten of ["Sync-PR je Bezieher", "Trockenlauf-Sync je Bezieher", "gh repo clone <bezieher>", "--repo <bezieher>", "gh workflow run", "Cross-Repo-Token", "Issue ins Bezieher-Repo"]) {
+    for (const verboten of ["Sync-PR je Bezieher", "gh repo clone <bezieher>", "--repo <bezieher>", "gh workflow run", "Cross-Repo-Token", "Issue ins Bezieher-Repo"]) {
       expect(body, verboten).not.toContain(verboten);
     }
+  });
+  describe("factory#188: Vor-Tag-Probe je Bezieher (nur lesend, Klon im Scratch)", () => {
+    const mitBezieher = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: null }, bezieher: ["o/a", "o/b"] });
+    it("ohne Bezieher-Liste kein Probe-Block, mit Liste je Bezieher eine offene Zeile vor „ja, taggen“", () => {
+      expect(body).not.toContain("Vor-Tag-Probe");
+      expect(body).not.toContain("Keine Bezieher gelistet");
+      expect(mitBezieher).not.toContain("Keine Bezieher gelistet");
+      const zeilen = mitBezieher.split("\n");
+      const probe = zeilen.findIndex((z) => z.includes("`o/a`: Probe ausstehend"));
+      expect(probe).toBeGreaterThan(-1);
+      expect(zeilen.findIndex((z) => z.includes("`o/b`: Probe ausstehend"))).toBeGreaterThan(probe);
+      expect(zeilen.findIndex((z) => z.startsWith("- [ ] Pre-Flight „ja, taggen“"))).toBeGreaterThan(probe);
+    });
+    it("beschreibt den lesenden Ablauf: Klon im Scratch ohne origin, lokaler Tag, Entwurfs-Vorschau, Sync mit --tag, install und verify, Ergebnis-Befehl", () => {
+      const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
+      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verify", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
+        expect(block, teil).toContain(teil);
+      }
+    });
+    it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
+      const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
+      for (const verboten of ["git push", "gh pr create", "--repo", "gh issue", "gh workflow run", "Cross-Repo-Token"]) expect(block, verboten).not.toContain(verboten);
+      expect(mitBezieher).toContain("Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)");
+    });
+    it("bezieherProbe ohne Ergebnisse: je Bezieher ausstehend, beide offen, kein Blocker", () => {
+      const r = T.bezieherProbe({ bezieher: ["o/a", "o/b"] });
+      expect(r.zeilen).toEqual(["- [ ] `o/a`: Probe ausstehend (nicht taggen, bis sie grün ist)", "- [ ] `o/b`: Probe ausstehend (nicht taggen, bis sie grün ist)"]);
+      expect(r.offen).toEqual(["o/a", "o/b"]);
+      expect(r.blocker).toEqual([]);
+    });
+    it("bezieherProbe Negativfall (K4): ein roter Bezieher erscheint als BLOCKER, ein Bezieher ohne Rot durch Factory-Besitz (Exit 0) nicht", () => {
+      const r = T.bezieherProbe({ bezieher: ["o/a", "o/b"], ergebnisse: { "o/a": 0, "o/b": 1 } });
+      expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün", "- [ ] BLOCKER `o/b`: Probe rot (Exit 1), nicht taggen"]);
+      expect(r.blocker).toEqual(["o/b"]);
+      expect(r.offen).toEqual([]);
+    });
+    it("bezieherProbe: jeder Exit ungleich 0 ist ein Blocker, auch 2; ein Ergebnis zu einem fremden Repo zählt nicht", () => {
+      const r = T.bezieherProbe({ bezieher: ["o/a"], ergebnisse: { "o/a": 2, "x/fremd": 0 } });
+      expect(r.blocker).toEqual(["o/a"]);
+      expect(r.zeilen).toHaveLength(1);
+    });
+    it("bezieherProbe mit leerer Liste: Hinweiszeile ohne Checkbox, nichts offen", () => {
+      const r = T.bezieherProbe({ bezieher: [] });
+      expect(r.zeilen).toHaveLength(1);
+      expect(r.zeilen[0]).toContain("Keine Bezieher gelistet (Schlüssel `bezieher` der Projekt-Config)");
+      expect(r.zeilen[0]).not.toContain("[ ]");
+      expect(r.offen).toEqual([]);
+      expect(r.blocker).toEqual([]);
+    });
   });
   it("factory#162 L26: die Bezieher holen das Update selbst (factory-update.yml), Werkzeug-Hinweis bleibt, Patch-Tag nie verschoben, Schließen bei Tag und Release", () => {
     const punkte = body.split("\n").filter((z) => z.startsWith("- [ ] "));
