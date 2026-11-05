@@ -176,6 +176,7 @@
     {"pfad":"scripts/harness-doctor-lib.mjs","ring":"kern","quelle":"Plan #1800 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-sicherheit.mjs","ring":"kern","quelle":"Plan factory#116 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-dateien.mjs","ring":"kern","quelle":"Plan factory#94 (Regel ADR 0022 §1)"},
+    {"pfad":"scripts/harness-doctor-meldestelle.mjs","ring":"kern","quelle":"Doctor-Punkt Meldestelle (factory#208 L8)"},
     {"pfad":"scripts/harness-doctor-ergebnis.mjs","ring":"kern","quelle":"Gemeinsame Ergebnis-Form der Doctor-Punkte (factory#127 L15a)"},
     {"pfad":"scripts/meldung-lib.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},
     {"pfad":"scripts/melden.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},

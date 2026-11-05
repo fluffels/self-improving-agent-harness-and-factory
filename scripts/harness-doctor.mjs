@@ -33,11 +33,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { fehlerText, ghText } from "./gh-cli.mjs";
+import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { pruefeDateien } from "./harness-doctor-dateien.mjs";
+import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
@@ -214,7 +215,7 @@ function ausgabe(ergebnis, out) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = pruefeDateien } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = mitMeldestelle(pruefeDateien, { env, lesen: (a, token) => ghJson(a, { token, timeout: 30000 }) }) } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)

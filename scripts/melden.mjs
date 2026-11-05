@@ -15,11 +15,11 @@ import { fehlerText, ghJson, schreibrechtText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeBoardLibs } from "./inbox-start-lib.mjs";
-import { bereiteMeldung, meldestelleToken } from "./meldung-lib.mjs";
+import { bereiteMeldung, keinSammelticketText, meldestelleZugang } from "./meldung-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
-const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen) => bereiteMeldung(zeilen, { wurzel: WURZEL }), api: ghJson };
+const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }), api: ghJson };
 const AUFRUF = 'Aufruf: node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]';
 
 /** Pur: die Zeile als Listenpunkt `- [ ] …` (ein vorhandenes Präfix `- [ ] ` bleibt, nie doppelt); Zeilenumbrüche werden Leerzeichen. */
@@ -28,7 +28,7 @@ export const alsListenpunkt = (zeile) => {
   return /^- \[ \] /.test(einzeilig) ? einzeilig : `- [ ] ${einzeilig}`;
 };
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs`, `env`, `log`, `err`, `bereite` (Standard `bereiteMeldung`), `api` (Standard `ghJson`, mit Token der Meldestelle). Rückgabe: Exit-Code. */
+/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs`, `env`, `log`, `err`, `bereite(zeilen, { herkunft })` (Standard `bereiteMeldung`), `api` (Standard `ghJson`, mit Token der Meldestelle). Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const { ladeConfig, ladeLibs, env, log, err, bereite, api } = { ...STANDARD, ...deps };
   const { werte, fehler } = flagsLesen(argv, { zeile: { type: "string", multiple: true }, "dry-run": { type: "boolean" } });
@@ -44,23 +44,23 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     err(`::error::melden: Projekt-Config nicht lesbar: ${fehlerText(e)}`);
     return AUFRUF_EXIT;
   }
-  const meldung = bereite(werte.zeile.map(alsListenpunkt));
+  const zugang = meldestelleZugang({ stelle: libs.MELDESTELLE, eigenes: libs.REPO, env });
+  const meldung = bereite(werte.zeile.map(alsListenpunkt), { herkunft: zugang.herkunft });
   if (!meldung.ok) {
     err(`::error::melden: ${meldung.grund}`);
     return 1;
   }
-  return sende(libs, meldung.text, { trocken: werte["dry-run"] === true, env, log, err, api });
+  return sende(libs, zugang, meldung.text, { trocken: werte["dry-run"] === true, log, err, api });
 }
 
 /** Postet `text` an das jüngste ungeclaimte Sammelticket der Meldestelle (`libs.MELDESTELLE`); Exit-Code wie `main`. */
-function sende(libs, text, { trocken, env, log, err, api }) {
-  const { MELDESTELLE, REPO, ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
-  const token = meldestelleToken({ stelle: MELDESTELLE, eigenes: REPO, env });
+function sende(libs, { stelle: MELDESTELLE, token }, text, { trocken, log, err, api }) {
+  const { ladeSammelKontext, postZeilen, waehleSammelticket } = libs;
   try {
     const { offene } = ladeSammelKontext({ repo: MELDESTELLE, token });
     const nr = waehleSammelticket(offene, MELDESTELLE, (a) => api(a, { token }))?.number;
     if (!nr) {
-      err(`::error::melden: kein ungeclaimtes Harness-Sammelticket in ${MELDESTELLE}\nFix: in der Fabrik node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen`);
+      err(`::error::melden: ${keinSammelticketText({ fuer: `in ${MELDESTELLE}` })}`);
       return 1;
     }
     if (trocken) {
