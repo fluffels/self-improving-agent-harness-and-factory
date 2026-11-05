@@ -1,4 +1,4 @@
-# Fortschreibung factory#188 (2026-11-05): Vor-Tag-Probe je Bezieher
+# Fortschreibung #188 (2026-11-05): Vor-Tag-Probe je Bezieher
 
 Ergänzt [ADR 0031](../0031-fabrik-ohne-zugriff-auf-bezieher.md): vor dem Tag läuft jeder gelistete Bezieher lesend gegen den Stand. Herkunft: das Epic Java-Profil (factory#171), Teil 8; die Akzeptanzkriterien verlangen, dass „rot“ eines Beziehers das Taggen verhindert.
 
