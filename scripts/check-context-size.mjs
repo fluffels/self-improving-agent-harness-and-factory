@@ -45,7 +45,8 @@ import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
-import { CONTEXT_BUDGETS, countChars } from "./kontext-budget-lib.mjs";
+import { CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -91,6 +92,13 @@ export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).k
   return allowlist.filter((a) => !oversized.has(a.datei));
 }
 
+/** Kern-Block-Budget der AGENTS.md in `rootDir` (nur Fabrik, ohne Sync-Stand): Meldung oder `null`; fehlt die Datei, zählt das wie fehlende Marker (fail-closed). */
+export function kernBlockPruefung(rootDir = ROOT) {
+  const abs = join(rootDir, "AGENTS.md");
+  const text = existsSync(abs) ? readFileSync(abs, "utf8") : "";
+  return kernBlockBefund({ text, bezieher: istBezieher(rootDir) });
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const tty = process.stdout.isTTY;
@@ -132,10 +140,13 @@ function main() {
       ),
     );
 
+  const kernBefund = kernBlockPruefung();
+  if (kernBefund) console.error(red(`✖ ${kernBefund}`));
+
   const total = sizes.reduce((sum, s) => sum + s.chars, 0);
   console.log(dim(`• INFO: ${sizes.length} Kontextdatei(en), zusammen ${fmt(total)} Zeichen (${tokens(total)}), kein Gate.`));
 
-  if (violations.length === 0 && stale.length === 0) {
+  if (violations.length === 0 && stale.length === 0 && !kernBefund) {
     console.log(
       green(`✔ Kontextdateien im Budget (${sizes.length} geprüft, außer ${allowed.length} dokumentierte Ausnahme(n)).`),
     );
