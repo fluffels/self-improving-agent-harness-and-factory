@@ -146,6 +146,9 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
   return true;
 }
 
+/** Zahl der unzuordenbaren Dubletten des Diffs (ohne Diff: 0); ausserhalb von `verarbeite`, dessen Komplexität nicht steigen darf. */
+const unzuordenbarAnzahl = (diff) => diff?.unzuordenbar?.length ?? 0;
+
 /** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
 async function verarbeite(s, c) {
   const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
@@ -194,7 +197,7 @@ async function verarbeite(s, c) {
   const fehlend = diff?.fehlend ?? [];
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
   rec.dubletten = diff?.dubletten.length ?? 0;
-  rec.unzuordenbar = diff?.unzuordenbar?.length ?? 0;
+  rec.unzuordenbar = unzuordenbarAnzahl(diff);
   rec.leer = diff?.leer?.length ?? 0;
   // Nur unzuordenbare Dubletten machen mehrdeutig; Kopien schon gedeckter Calls blockieren das Nachliefern nicht (#213).
   const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.unzuordenbar > 0;
