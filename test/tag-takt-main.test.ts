@@ -176,6 +176,69 @@ describe("tag-takt main", () => {
   });
 });
 
+describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
+  const mitBezieher = (bezieher: unknown) => ({ ...FREMD, bezieher });
+  const probe = (argv: string[], config: unknown = mitBezieher(["o/a", "o/b"])) => {
+    const a = aufbau();
+    a.deps.ladeConfig = () => config;
+    return T.main(argv, a.deps).then((code) => ({ code, log: a.log, text: a.text }));
+  };
+  it("Trockenlauf mit Bezieher-Liste: die Vorschau enthält den Probe-Abschnitt und je Bezieher eine offene Zeile", async () => {
+    const a = aufbau();
+    a.deps.start = () => Promise.resolve({ config: mitBezieher(["o/a", "o/b"]), libs: { OWNER: "o", REPO: "o/r", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [] }, trocken: true });
+    expect(await T.main(["--dry-run"], a.deps)).toBe(0);
+    const aus = a.log.join("\n");
+    expect(aus).toContain("[dry-run] Vor-Tag-Probe je Bezieher");
+    expect(aus).toContain("[dry-run] - [ ] `o/a`: Probe ausstehend");
+    expect(aus).toContain("[dry-run] - [ ] `o/b`: Probe ausstehend");
+  });
+  it("anlegen mit Bezieher-Liste: der Probe-Abschnitt steht im Body des angelegten Tickets", async () => {
+    const a = aufbau({ start: undefined });
+    a.deps.start = () => Promise.resolve({ config: mitBezieher(["o/a"]), libs: { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [], platziereOben: () => undefined }, trocken: false });
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(JSON.stringify(a.text[0].args)).toContain("Probe ausstehend");
+  });
+  it("alle Bezieher grün: Exit 0, beide abgehakt, kein gh-Aufruf", async () => {
+    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"]);
+    expect(r.code).toBe(0);
+    expect(r.log.join("\n")).toContain("- [x] `o/a`: Probe grün");
+    expect(r.text).toEqual([]);
+  });
+  it("Negativfall: ein roter Bezieher ist ein BLOCKER, Exit 1", async () => {
+    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=2"]);
+    expect(r.code).toBe(1);
+    const aus = r.log.join("\n");
+    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 2)");
+    expect(aus).toContain("Vor-Tag-Probe: BLOCKER o/b");
+  });
+  it("fail-closed: ein Bezieher ohne Ergebnis bleibt ausstehend, Exit 1", async () => {
+    const r = await probe(["--probe", "o/a=0"]);
+    expect(r.code).toBe(1);
+    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: ausstehend o/b");
+  });
+  it.each([
+    [["--probe", "o/fremd=0"]],
+    [["--probe", "o/a=abc"]],
+    [["--probe", "o/a"]],
+    [["--probe", "o/a=0", "--probe", "o/a=1"]],
+    [["--probe"]],
+    [["--probe", "o/a=0", "--dry-run"]],
+  ])("Aufruf-Fehler %j: Exit 2", async (argv) => {
+    const r = await probe(argv);
+    expect(r.code).toBe(2);
+  });
+  it("unlesbare Projekt-Config: Exit 2 mit Meldung, kein Stacktrace", async () => {
+    const a = aufbau();
+    a.deps.ladeConfig = () => { throw new Error("kaputt"); };
+    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(2);
+    expect(a.log.join("\n")).toContain("Tag-Takt: Projekt-Config nicht lesbar");
+  });
+  it("ohne gelistete Bezieher ist jedes --probe ein unbekanntes Repo: Exit 2", async () => {
+    const r = await probe(["--probe", "o/a=0"], mitBezieher(undefined));
+    expect(r.code).toBe(2);
+  });
+});
+
 describe("manifestLaden (Standard-Lader)", () => {
   const laden = (raw as unknown as { manifestLaden: (wurzel: string) => unknown }).manifestLaden;
   const wurzel = (inhalt?: string): string => {

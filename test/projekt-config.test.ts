@@ -29,6 +29,7 @@ interface Pc {
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
   meldestelleAus(config: unknown): string;
+  bezieherAus(config: unknown): string[];
   cli(argv: string[], opt?: { rootDir?: string; env?: Record<string, string | undefined>; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -163,6 +164,17 @@ describe("pruefeProjektConfig", () => {
     assert.equal(pc.meldestelleAus(cfg), fabrik?.repo ?? cfg.repo);
     assert.equal(pc.meldestelleAus({ ...cfg, meldestelle: "eingang/meldungen" }), "eingang/meldungen");
     assert.equal(pc.meldestelleAus({ ...cfg, boards: cfg.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "fabrik/kern" } : b)) }), "fabrik/kern");
+  });
+
+  test("bezieher (factory#188): optionale Liste owner/name, ohne Dublette und ohne das eigene Repo", () => {
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), bezieher: [] }), []);
+    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), bezieher: ["o/a", "o/b"] }), []);
+    for (const schlecht of ["o/a", [3], ["foo"], { a: 1 }]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: schlecht }).join("\n"), /bezieher muss eine Liste[\s\S]*Fix:/);
+    assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: ["o/a", "O/A"] }).join("\n"), /bezieher enthält ein Repo doppelt[\s\S]*Fix:/);
+    const cfg = gueltig() as { repo: string };
+    assert.match(pc.pruefeProjektConfig({ ...cfg, bezieher: [cfg.repo.toUpperCase()] }).join("\n"), /bezieher darf das eigene Repo nicht enthalten[\s\S]*Fix:/);
+    assert.deepEqual(pc.bezieherAus(cfg), []);
+    assert.deepEqual(pc.bezieherAus({ ...cfg, bezieher: ["o/a", "o/b"] }), ["o/a", "o/b"]);
   });
 
   test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {
