@@ -246,7 +246,7 @@ function stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag }) {
  * Pur: legt zu jedem Kern-Link-Ziel, das es nicht gibt (`lies(ziel)` ist `null`, Ziel ohne Einheit), eine Stub-Seite an (factory#167): die erste Ebene-1-Überschrift und jede Überschrift,
  * auf die der Kern verlinkt (samt früherer gleichnamiger), je mit Factory-Link auf `ziel#anker` am Tag `tag`; der Text kommt vom Leser des Tags. Eine vorhandene Seite wird nie angefasst, außer sie ist ein reiner Stub (`reineStubs`, factory#166): die erneuert der Sync aus dem Tag (gleiche Form wie angelegt, ohne Kern-Link nur Titel und Hinweis).
  * `vorhanden(pfad)` (Vorgabe: `lies` liefert Text) ist die Frage, ob das Ziel die Seite schon hat; der Sync fragt auch nach Symlinks, die `lies` als `null` meldet, damit nie über einen Symlink geschrieben wird.
- * Ergebnis `{ dateien: Map<pfad, text>, erneuert: Set<pfad>, hinweise, ueberschriften, links }` (`erneuert` = die Pfade aus `reineStubs`, der Rest ist angelegt); ein Ziel oder Anker, den es am Tag nicht gibt, ist ein Hinweis (`check:factorylinks` meldet es als `stub-ziel`/`stub-anker`).
+ * Ergebnis `{ dateien: Map<pfad, text>, erneuert: Set<pfad>, hinweise, ueberschriften, links }` (`erneuert` = die Pfade aus `reineStubs`, der Rest ist angelegt; `ueberschriften` und `links` zählen nur die angelegten); ein Ziel oder Anker, den es am Tag nicht gibt, ist ein Hinweis (`check:factorylinks` meldet es als `stub-ziel`/`stub-anker`).
  */
 export function planeAnkerStubs({ lies, einheiten, repo, tag, leser, ausnahmen = [], reineStubs = [], vorhanden = (pfad) => lies(pfad) != null }) {
   const ausgenommen = ausnahmen.map(globRegex);
@@ -267,6 +267,7 @@ export function planeAnkerStubs({ lies, einheiten, repo, tag, leser, ausnahmen =
     const s = stubSeite(ziel, { ausgewaehlt, h1 }, anker, { repo, tag });
     ergebnis.dateien.set(ziel, s.text);
     if (reineStubs.includes(ziel)) ergebnis.erneuert.add(ziel);
+    if (reineStubs.includes(ziel)) continue; // erneuert: zählt nicht zu den angelegten Seiten (Zahlen im Sync-Hinweis)
     ergebnis.ueberschriften += ausgewaehlt.length;
     ergebnis.links += s.links;
   }

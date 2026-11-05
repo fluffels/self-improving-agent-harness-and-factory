@@ -39,7 +39,7 @@ Quelle = Klon dieses Standes mit Tag `vProbe1`, leeres Ziel (`git init`, `.facto
 
 - Ein reiner Stub, dessen Seite es am Tag nicht mehr gibt, bricht mit `pfad-tot` ab; Weg: die Seite im Bezieher löschen.
 - Auf Bezieher-Seiten (mit Projektzeile oder auf den Projektanteil gekürzt) bleiben neue Kern-Anker und umbenannte Überschriften ein Handschritt; der Wächter nennt die Soll-Zeile.
-- Ein Stub, den der Bezieher von Hand um eine Zeile ergänzt, ist keine Sync-Ausgabe mehr und wird nie wieder erneuert (gewollt: kein Datenverlust).
+- Ein Stub, den der Bezieher von Hand um eine Projektzeile, einen Absatz, eine zweite Ebene-1-Überschrift oder Text vor oder hinter einer Kern-Zeile ergänzt, ist keine Sync-Ausgabe mehr und wird nie wieder erneuert (gewollt: kein Datenverlust). Zwei Ergänzungen bleiben ein reiner Stub und gehen beim nächsten Sync verloren: eine von Hand ergänzte Überschrift samt nachfolgender `Kern:`-Zeile, auf die kein Kern-Link zeigt, und Text, der an die Hinweiszeile angehängt wird (geprüft wird nur ihr Anfang). Fällt dadurch ein Anker weg, auf den ein Projektlink zeigt, meldet ihn `check:docdrift`, nicht der Sync.
 
 ## Bezieher-Schritte
 

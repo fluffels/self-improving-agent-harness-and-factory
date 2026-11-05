@@ -703,6 +703,28 @@ describe("istReinerStub und planeAnkerStubs mit reineStubs (pur, factory#166)", 
     assert.ok(!reinLib.istReinerStub(""));
   });
 
+  test("Negativ: Text vor oder hinter einer Kern-Zeile, eine zweite eigene Ebene-1-Überschrift und eine Überschrift der Ebene 7 sind keine reinen Stubs", () => {
+    const k = `Kern: [docs/s.md](${u("v2", "docs/s.md")})`;
+    const gut = `# T\n\n${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`;
+    assert.ok(reinLib.istReinerStub(gut));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nunsere Notiz ${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n${k} und unser Zusatz\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n# Unser Kapitel\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\n####### Sieben\n\n${k}\n`));
+    assert.ok(reinLib.istReinerStub(`${gut}\n###### Sechs\n\n${k}\n`));
+  });
+
+  test("angelegt und erneuert zugleich: ueberschriften und links zählen nur die angelegten Seiten", () => {
+    const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? "[a](../../docs/s.md#eins) [b](../../docs/neu.md#abschnitt)\n" : null);
+    const seiten: Record<string, string> = { "docs/s.md": "# Titel\n\n## Eins\n", "docs/neu.md": "# Neu\n\n## Abschnitt\n" };
+    const leser: Leser = { pfade: Object.keys(seiten), lies: (p) => seiten[p] ?? null, vorladen: () => {} };
+    const e = reinLib.planeAnkerStubs({ lies, einheiten: EINHEIT, repo: REPO, tag: "v3", leser, reineStubs: ["docs/s.md"] });
+    assert.deepEqual([...e.dateien.keys()], ["docs/neu.md", "docs/s.md"]);
+    assert.deepEqual([...e.erneuert], ["docs/s.md"]);
+    assert.equal(e.ueberschriften, 2);
+    assert.equal(e.links, 2);
+  });
+
   test("Umbenennung: der erneuerte Stub hat den neuen Anker und nicht mehr den alten; ohne reineStubs bleibt es beim alten Verhalten", () => {
     const e = erneuere(kern("#zwei-neu"), "# Titel\n\n## Zwei neu\n");
     const text = e.dateien.get("docs/s.md") ?? "";
@@ -805,6 +827,29 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     assert.ok(!r.out.includes("geändert (Anker-Stub): docs/seite.md"));
   });
 
+  test("neue Stub-Seite neben einem erneuerten reinen Stub: der Hinweis nennt für die angelegten nur ihre Zahlen", () => {
+    const q = quelleV2();
+    const z = zielV2(q);
+    schreibe(q, ".claude/agents/x.md", "[c](../../docs/seite.md#erster) [d](../../docs/ohne.md) [e](../../docs/neu.md#abschnitt)\n");
+    schreibe(q, "docs/neu.md", "# Neu\n\n## Abschnitt\n\ntext\n");
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Anker-Stubs: 1 Seiten angelegt, 2 Überschriften, 2 Links am Tag v3/);
+    assert.match(r.out, /Anker-Stubs: 2 Seiten erneuert am Tag v3/);
+  });
+
+  test("AK3: eine Besitz-Einheit in der Form eines Stubs wird nie erneuert", () => {
+    const stubForm = `# B\n\nAnker-Stub: Der Text dieser Seite steht im Factory-Repo; Besitztext. Kern: [docs/b.md](${u("v2", "docs/b.md")})\n`;
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#erster) hier.", besitzDateien: { "docs/b.md": stubForm } });
+    schreibe(q, "docs/seite.md", "# Seite\n\n## Erster\n\ntext\n");
+    const z = zielV2(q);
+    assert.equal(lies(z, "docs/b.md"), stubForm);
+    const r = syncVomTag(q, z, "v3");
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lies(z, "docs/b.md"), stubForm);
+    assert.ok(!r.out.includes("docs/b.md"), r.out);
+  });
+
   test("ein zweiter Sync am selben Tag erneuert nichts, auch nicht bei CRLF-Zeilenenden des Stubs", () => {
     const q = quelleV2();
     const z = zielV2(q);
@@ -842,6 +887,7 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     umbenennen(q);
     const r = syncVomTag(q, z, "v3");
     assert.equal(r.code, 1);
+    assert.match(r.err, /anker-tot/);
     assert.equal(readFileSync(fremd, "utf8"), stub);
     assert.ok(lstatSync(join(z, "docs", "seite.md")).isSymbolicLink());
   });

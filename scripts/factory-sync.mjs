@@ -3,7 +3,7 @@
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
-// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index legt fehlende Anker-Stub-Seiten an und erneuert reine Stubs). Hash und Vergleich
+// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index, er legt fehlende Anker-Stub-Seiten an und erneuert reine Stubs). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 // Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
@@ -299,7 +299,7 @@ function verschmelzeLinkDateien(plan, geaendert, platte) {
 }
 
 /**
- * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs, Index und angelegte Anker-Stub-Seiten (factory#167) im `plan.dateien`; bei einem Befund liegen die Stubs dort auch, die Kommandozeile schreibt dann nichts.
+ * Link-Schritt auf dem Sync-Ergebnis (factory#131): `leser` ist der Leser des Tags (`{ pfade, lies, vorladen }`). Rückgabe `{ fehler, hinweise }`, bei Erfolg sind Refs, Index, angelegte (factory#167) und erneuerte (factory#166) Anker-Stub-Seiten im `plan.dateien`; bei einem Befund liegen die Stubs dort auch, die Kommandozeile schreibt dann nichts.
  * Ohne bestimmbares Factory-Repo (weder `quelle.repo` noch Board mit Rolle factory) gibt es nur einen Hinweis; eine unlesbare Ziel-Config bei bekanntem Repo ist ein Fehler.
  */
 function linkSchritt({ plan, ziel, leser }) {
@@ -352,7 +352,7 @@ function existiertImZiel(voll) {
   }
 }
 
-/** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `neu (Vorlage)`, `neu` oder `geändert`. */
+/** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `geändert (Anker-Stub)` (erneuerter reiner Stub, factory#166), `neu (Vorlage)`, `neu` oder `geändert`. */
 const artVon = (d) => (d.stub ? (d.neu ? "neu (Anker-Stub)" : "geändert (Anker-Stub)") : d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert");
 
 /** Link-Phase der Kommandozeile: `{ ok, hinweise }`; bei `ok: false` ist die Meldung schon über `err` ausgegeben (nichts geschrieben). */
