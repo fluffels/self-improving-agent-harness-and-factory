@@ -410,7 +410,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), fremd] });
     const r = await lauf(a, m);
     expect(m.otlp).toHaveLength(0);
-    expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
+    expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1, unzuordenbar: 1 });
     expect(r.protokoll.dubletten).toBe(1);
     expect(ledgerVon(a.ledger).s1).toMatchObject({ bestaetigt: false, gesendet: [] });
     expect(ledgerVon(a.ledger).s1.befund).toMatch(/mehrdeutig/);
@@ -459,6 +459,61 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       expect(m.otlp).toHaveLength(0);
       expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 1 });
       expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(false);
+    });
+  });
+
+  describe("Kopien blockieren nicht (#213)", () => {
+    const spanIds = (m: ReturnType<typeof mock>, ids: string[]) => {
+      expect(spansVon(m.otlp[0]).map((s) => s.spanId)).toEqual(ids.map((i) => A.beobachtungsId("s1", i)));
+    };
+
+    test("Kopie eines gedeckten Calls neben einer Lücke: Lücke gesendet, nicht mehrdeutig", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 1, unzuordenbar: 0 });
+      expect(r.protokoll.sessions[0].status).not.toBe("mehrdeutig");
+    });
+
+    test("Altbestand mit Mehrdeutigkeits-Befund und Kopie: neu geprüft und die Lücke gesendet (71bfdf3a-Pfad)", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const [s] = A.findeSessions({ projectsRoot: a.root, praefix: PRAEFIX });
+      mkdirLedger(a.state);
+      writeFileSync(a.ledger, JSON.stringify({ version: 1, sessions: { s1: { pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: true, gesendet: [], spans: [], beendet: true, befund: "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet" } } }));
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0].status).not.toBe("bestätigt");
+    });
+
+    test("Folgelauf: alles da plus Kopie: nichts gesendet, nur Dubletten, bestätigt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 3, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }, obsZu(sollZu("b", 2))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0]).toMatchObject({ dubletten: 1, unzuordenbar: 0, befund: "nur Dubletten, nichts zu senden" });
+      expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(true);
+    });
+
+    test("Negativfall: gleichartige Session mit Lücke ohne Doppel bleibt vom Weg unberührt", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const m = mock({ ist: 1, obs: [obsZu(sollZu("a", 1))] });
+      const r = await lauf(a, m);
+      spanIds(m, ["b", "c"]);
+      expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 0, unzuordenbar: 0, befund: null });
+    });
+
+    test("Kopie plus fremde Dublette plus Lücke bleibt mehrdeutig: nichts gesendet", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3), msg("d", 4)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 3, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }, obsZu(sollZu("zz", 99))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 2, unzuordenbar: 1 });
     });
   });
 

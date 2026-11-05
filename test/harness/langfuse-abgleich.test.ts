@@ -62,7 +62,7 @@ const A = {
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown>; kosten: Record<string, unknown> };
   istAusMetrics: (z: unknown) => Map<string, Ist>;
   schluesselArt: (o: Obs[]) => string;
-  diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; leer: Obs[]; art: string };
+  diffMultimenge: (soll: Eintrag[], obs: Obs[], art?: string) => { fehlend: Eintrag[]; dubletten: Obs[]; unzuordenbar: Obs[]; leer: Obs[]; art: string };
   hatDifferenz: (soll: Eintrag[], ist: Ist) => boolean;
   renderMarkdown: (b: Record<string, unknown>[], sum: unknown) => string;
   ohneZugang: () => string;
@@ -416,6 +416,20 @@ describe("Diff (pur)", () => {
     const d = A.diffMultimenge([soll[0]], [obsZu(soll[0], { metadata: { message_id: "andere" } })]);
     expect(d.fehlend).toHaveLength(1);
     expect(d.dubletten).toHaveLength(1);
+  });
+
+  test("unzuordenbar (#213): Kopie eines gedeckten Calls ist Dublette, aber zuordenbar; fremder Fingerabdruck ist unzuordenbar", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const kopie = obsZu(soll[0], { id: "kopie" });
+    const fremd = obsZu(eintrag(9), { id: "fremd" });
+    const leer: Obs = { id: "leer1", type: "GENERATION", providedModelName: "claude", usageDetails: {}, metadata: {} };
+    const nurKopie = A.diffMultimenge(soll, [obsZu(soll[0]), kopie]);
+    expect(nurKopie.dubletten).toHaveLength(1);
+    expect(nurKopie.unzuordenbar).toEqual([]);
+    const gemischt = A.diffMultimenge(soll, [obsZu(soll[0]), kopie, fremd, leer]);
+    expect(gemischt.dubletten.map((o) => o.id)).toEqual(["kopie", "fremd"]);
+    expect(gemischt.unzuordenbar.map((o) => o.id)).toEqual(["fremd"]);
+    expect(gemischt.leer.map((o) => o.id)).toEqual(["leer1"]);
   });
 
   test("passende message_id trifft: nichts fehlt, keine Dublette", () => {

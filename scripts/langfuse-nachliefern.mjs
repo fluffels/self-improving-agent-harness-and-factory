@@ -151,7 +151,7 @@ async function verarbeite(s, c) {
   const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
   const alt = ledger.sessions[s.id];
   const unveraendert = standUnveraendert(alt, s);
-  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
+  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, unzuordenbar: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
   protokoll.sessions.push(rec);
   if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
   // Das SessionEnd-Kind wartet 10 min: wuchs das Transkript danach oder startete die Session neu (Startmarke, resume), gilt das Ende nicht mehr
@@ -194,8 +194,10 @@ async function verarbeite(s, c) {
   const fehlend = diff?.fehlend ?? [];
   const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
   rec.dubletten = diff?.dubletten.length ?? 0;
+  rec.unzuordenbar = diff?.unzuordenbar?.length ?? 0;
   rec.leer = diff?.leer?.length ?? 0;
-  const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.dubletten > 0;
+  // Nur unzuordenbare Dubletten machen mehrdeutig; Kopien schon gedeckter Calls blockieren das Nachliefern nicht (#213).
+  const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.unzuordenbar > 0;
   if (davor) return Object.assign(rec, { status: "vor Stichtag", wuerdeSenden: mehrdeutig ? 0 : zuSenden.length });
   const sendbar = mehrdeutig ? [] : zuSenden;
   if (args.trocken) return Object.assign(rec, { status: mehrdeutig ? "mehrdeutig" : "trocken", wuerdeSenden: sendbar.length });
@@ -242,7 +244,7 @@ function bericht(args, protokoll) {
   const p = protokoll;
   const zeilen = [`Nachliefern: ${p.geprueft} Session(s) geprüft, ${p.gesendet} Call(s) und ${p.spans} Subagent-Span(s) gesendet, ${p.dubletten} Dublette(n) (nur gemeldet), würde senden: ${p.wuerdeSenden}.`];
   for (const r of p.sessions.filter(zeigenswert)) {
-    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? (r.fortgesetzt ? ", Ende verworfen (Session nach dem SessionEnd neu gestartet, Startmarke)" : ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)") : ""}`);
+    zeilen.push(`- ${r.session.slice(0, 8)} ${r.status}: gesendet ${r.gesendet}, würde senden ${r.wuerdeSenden}, Dubletten ${r.dubletten}${r.unzuordenbar ? ` (unzuordenbar ${r.unzuordenbar})` : ""}, ausstehend ${r.ausstehend}${r.befund ? `, ${r.befund}` : ""}${r.endeVerworfen ? (r.fortgesetzt ? ", Ende verworfen (Session nach dem SessionEnd neu gestartet, Startmarke)" : ", Ende verworfen (Transkript wuchs nach dem SessionEnd-Hook)") : ""}`);
   }
   if (p.uebrig) zeilen.push(`Gesamtfrist von ${GESAMTFRIST_MS / 60_000} min erreicht: ${p.uebrig} Session(s) folgen beim nächsten Lauf.`);
   for (const f of p.fehler) zeilen.push(`FEHLER ${f.session.slice(0, 8)} (HTTP ${f.status ?? "–"}): ${f.meldung}`);
