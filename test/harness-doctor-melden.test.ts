@@ -371,6 +371,13 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     assert.deepEqual(herkunft, [{ herkunft: "acme/proj" }]);
     assert.equal(gepostet.length, 1);
   });
+  test("Standard-bereite (ohne Injektion) schreibt die Herkunft in die Meldung: nackte #n werden owner/name#n", async () => {
+    const log: string[] = [];
+    const libs = { REPO: "acme/proj", MELDESTELLE: "eingang/privat", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "eingang" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => assert.fail("Trockenlauf") };
+    const code = await melden.main(["--dry-run"], { env: { GITHUB_ACTIONS: "true", MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" }, api: () => ({ login: "fremdkonto" }), ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf: () => ({ ergebnis: [{ ok: false, punkt: "Neu", befund: "Issue #12 fehlt", fix: "f" }] }) });
+    assert.equal(code, 0);
+    assert.ok(log.some((z) => z.startsWith("[dry-run]") && z.includes("Issue acme/proj#12 fehlt")), log.join(" | "));
+  });
   test("gh api user schlägt fehl: Warnzeile, Rückfall auf den Owner (eigene Zeile gilt dann nicht als bekannt)", async () => {
     const log: string[] = [];
     const gepostet: unknown[][] = [];

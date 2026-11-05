@@ -50,8 +50,8 @@ export function meldestelleZugang({ stelle, eigenes, env }) {
   return { stelle, fremd, herkunft: fremd ? eigenes : null, token: meldestelleToken({ stelle, eigenes, env }) };
 }
 
-/** Pur: nackte Ticketnummern `#n` im Text mit Repo-Herkunft (`owner/name#n`); ohne `herkunft` (`null`) unverändert. Nummern mit Herkunft (`factory#12`, `a/b#3`) bleiben. */
-export const nummernMitHerkunft = (text, herkunft) => (herkunft ? String(text).replace(/(?<![\w/.#-])#(\d+)\b/g, `${herkunft}#$1`) : text);
+/** Pur: nackte Ticketnummern `#n` im Text mit Repo-Herkunft (`owner/name#n`); ohne `herkunft` (`null`) unverändert. Nummern mit Herkunft (`factory#12`, `a/b#3`) und `##n` bleiben. */
+export const nummernMitHerkunft = (text, herkunft) => (herkunft ? String(text).replace(/(?<![\w#])#(\d+)\b/g, `${herkunft}#$1`) : text);
 
 /** Der Login des eigenen Kontos an einer fremden Meldestelle (`api(["api", "user"], { token })`, die Naht ist `ghJson`); `null` ohne fremde Stelle oder bei Fehler (dann `warn` mit Grund). */
 export function eigenerLogin({ zugang, api, warn }) {

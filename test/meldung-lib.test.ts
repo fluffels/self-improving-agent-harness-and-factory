@@ -230,8 +230,8 @@ describe("meldestelleZugang (factory#208 L11): ein Zugang für alle Schreiber", 
 
 describe("nummernMitHerkunft und bereiteMeldung mit Herkunft (factory#208 L7)", () => {
   test("nackte #n bekommen owner/name; Nummern mit Herkunft und Nicht-Nummern bleiben", () => {
-    expect(lib.nummernMitHerkunft("Reparatur #12 und #7, aber factory#153, a/b#3, x#4 und #abc, Ende #9.", "acme/proj")).toBe(
-      "Reparatur acme/proj#12 und acme/proj#7, aber factory#153, a/b#3, x#4 und #abc, Ende acme/proj#9.",
+    expect(lib.nummernMitHerkunft("Reparatur #12 und #7, aber factory#153, a/b#3, x#4, ##5, #12ab und #abc, Ende #9.", "acme/proj")).toBe(
+      "Reparatur acme/proj#12 und acme/proj#7, aber factory#153, a/b#3, x#4, ##5, #12ab und #abc, Ende acme/proj#9.",
     );
   });
   test("ohne Herkunft (eigene Stelle) bleibt der Text unverändert", () => {
@@ -261,7 +261,14 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
     expect(aufrufe).toEqual([[["api", "user"], { token: "mt" }]]);
   });
   test("eigene Stelle: kein Aufruf, kein Login", () => {
-    expect(lib.eigenerLogin({ zugang: { fremd: false }, api: () => { throw new Error("kein Aufruf"); }, warn: () => undefined })).toBeNull();
+    const gerufen: string[] = [];
+    expect(lib.eigenerLogin({ zugang: { fremd: false }, api: () => (gerufen.push("api"), { login: "x" }), warn: (z) => gerufen.push(z) })).toBeNull();
+    expect(gerufen).toEqual([]);
+  });
+  test("leerer Login zählt wie ein fehlender (Warnzeile, null)", () => {
+    const warn: string[] = [];
+    expect(lib.eigenerLogin({ zugang: fremd, api: () => ({ login: "" }), warn: (z) => warn.push(z) })).toBeNull();
+    expect(warn).toHaveLength(1);
   });
   test("Fehler oder fehlender Login: null und eine Warnzeile mit Grund", () => {
     const warn: string[] = [];
