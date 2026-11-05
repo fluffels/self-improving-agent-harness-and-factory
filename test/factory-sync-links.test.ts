@@ -896,8 +896,8 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     }
     umbenennen(q);
     const r = syncVomTag(q, z, "v3");
-    assert.equal(r.code, 1);
-    assert.match(r.err, /anker-tot/);
+    assert.equal(r.code, 0, r.err); // ein Symlink wird nicht gelesen (collectMarkdown), also kein anker-tot und nichts darüber geschrieben
+    assert.ok(!r.out.includes("(Anker-Stub): docs/seite.md"), r.out);
     assert.equal(readFileSync(fremd, "utf8"), stub);
     assert.ok(lstatSync(join(z, "docs", "seite.md")).isSymbolicLink());
   });
