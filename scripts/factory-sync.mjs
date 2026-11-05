@@ -3,12 +3,12 @@
 // Der Besitz kommt aus einem Tag der Quelle (Inhalte wie `git show <tag>:<pfad>` über `git cat-file --batch`, Ausführbar-Bit aus `git ls-tree`), nie aus dem Arbeitsbaum; der
 // Sync-Stand hält Commit und Tag fest. Ohne `--tag` synct nichts; nur `--entwurf` liest den Arbeitsbaum (Probe, das Drift-Gate bleibt rot).
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
-// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index und legt fehlende Anker-Stub-Seiten an). Hash und Vergleich
+// Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index legt fehlende Anker-Stub-Seiten an und erneuert reine Stubs). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
 // Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
-// Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine vorhandene Seite wird nie angefasst.
+// Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine reine Stub-Seite (`istReinerStub`, nur Sync-Ausgabe) erneuert er bei jedem Sync (factory#166), jede andere vorhandene Seite wird nie angefasst.
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
