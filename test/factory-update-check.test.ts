@@ -8,8 +8,9 @@ import { join } from "node:path";
 import * as raw from "../scripts/factory-update-check.mjs";
 
 type Meldung = { alt: string; neu: string; text: string } | null;
-const { updateMeldung, fuehreAus } = raw as {
-  updateMeldung: (a: { stand: unknown; tags: string[] }) => Meldung;
+const { updateMeldung, fuehreAus, UPDATE_SCHRITTE } = raw as {
+  UPDATE_SCHRITTE: string[];
+  updateMeldung: (a: { stand: unknown; tags: string[]; repo?: string }) => Meldung;
   fuehreAus: (argv: string[], io: { wurzel: string; gh: (args: string[]) => string }) => { out: string; err: string; code: number };
 };
 
@@ -46,6 +47,29 @@ describe("updateMeldung", () => {
     const text = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "";
     assert.match(text, /„version N unbekannt“/);
     assert.match(text, /node <quelle>\/scripts\/factory-sync\.mjs --quelle <quelle> --tag <tag>/);
+  });
+  test("factory#208 L18/L22: mechanische Schritte nach dem Sync stehen geordnet im Text, vor verify", () => {
+    const text = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "";
+    const reihenfolge = [
+      "factory-sync.mjs --quelle <pfad> --tag v1.1.0",
+      "npm run lint:prune",
+      "node scripts/projektwerte.mjs --write",
+      "npm run docs:gen",
+      "npm run check:factorylinks -- --schreiben --quelle <pfad>",
+      "Projektkopien",
+      "npm run verify:kompakt",
+    ].map((s) => text.indexOf(s));
+    assert.ok(reihenfolge.every((i) => i >= 0), "ein Schritt fehlt: " + JSON.stringify(reihenfolge));
+    assert.deepEqual([...reihenfolge].sort((a, b) => a - b), reihenfolge, "Reihenfolge der Schritte");
+    assert.equal(UPDATE_SCHRITTE.length, 7);
+  });
+  test("factory#208 L21: Bezieher-Migration steht im Tag-Ticket der Fabrik; mit Repo kommt der Suchbefehl, ohne Repo kein Platzhalter-Repo", () => {
+    const mit = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"], repo: "o/factory" })?.text ?? "";
+    assert.match(mit, /Bezieher-Migration/);
+    assert.match(mit, /gh issue list --repo o\/factory --search "Tag v1\.1\.0 setzen und syncen" --state all --limit 5/);
+    const ohne = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "";
+    assert.match(ohne, /Bezieher-Migration/);
+    assert.doesNotMatch(ohne, /gh issue list/);
   });
   test("ein Patch-Release ist ein Update", () => {
     assert.equal(updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.0.1"] })?.neu, "v1.0.1");
@@ -87,6 +111,7 @@ describe("fuehreAus", () => {
     const text = fuehreAus([], { wurzel, gh });
     assert.equal(text.code, 0);
     assert.match(text.out, /v1\.0\.0.*v1\.2\.0/s);
+    assert.match(text.out, /--repo o\/factory --search "Tag v1\.2\.0 setzen und syncen"/);
     const json = fuehreAus(["--json"], { wurzel, gh });
     assert.equal((JSON.parse(json.out) as { update: { neu: string } }).update.neu, "v1.2.0");
     assert.ok(aufrufe[0].includes("repos/o/factory/tags"));
