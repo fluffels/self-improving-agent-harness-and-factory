@@ -10,7 +10,7 @@ Der Sync liefert den Besitz (Skripte, Agenten, Skills, Workflows, Kern-Tests, Ke
 2. **Ruleset auf `main`** (kein Direkt-Push, Pull Request, Required Checks, keine Bypass-Akteure): Vorlage ist `.github/ruleset-main-schutz.json` der Quelle, angelegt per `gh api -X POST repos/<owner>/<repo>/rulesets --input <datei>`. Die Required Checks nennt der Doctor-Punkt `Ruleset`. Die Datei liegt auch im Projekt (Ruleset-Spiegel, Pfad `rulesetSpiegel` der Projekt-Config): **ohne sie bricht der Doctor mit Exit 2 ab**, bevor er die Dateipunkte zeigt.
 3. **Feature-Branch** (ab jetzt jede Änderung per Pull Request). Darin zwei Dateien anlegen, bevor der Sync läuft:
    - `AGENTS.md` mit den Kern-Marker-Zeilen `<!-- factory-besitz:start kern -->` und `<!-- factory-besitz:ende kern -->` (ein leerer Kern-Block genügt, der Sync füllt ihn; ohne diese Zeilen bricht der Sync ab, schreibt nichts und nennt sie in der Fehlermeldung). Dazu die Zeilen `<!-- factory-projekt:start -->` und `<!-- factory-projekt:ende -->` um den Projekt-Block: sie grenzen den Projekt-Teil ab; fehlen sie, bricht der Sync nicht ab, gibt aber im selben Lauf einen `Hinweis:` mit den fehlenden Zeilen aus (der Sync fügt die Marker nicht selbst ein);
-   - `.factory/projekt.json` (Vorlage: die Datei des Factory-Repos; **alle** Werte ersetzen: Repo, Boards, Präfixe, Agentennamen, Labels, Sprache, und den Block `struktur` (`quelle`, `moduldoku`), den die Gates `check:size`, `check:docmap` und `check:anysuppress` verlangen).
+   - `.factory/projekt.json` (Vorlage: die Datei des Factory-Repos; **alle** Werte ersetzen: Repo, Boards (eines davon mit Rolle `factory`, sonst bricht der Sync mit „Rolle factory fehlt in boards“ ab), Präfixe, Agentennamen, Labels, Sprache, und den Block `struktur` (`quelle`, `moduldoku`), den die Gates `check:size`, `check:docmap` und `check:anysuppress` verlangen).
 4. **Sync:** `node scripts/factory-sync.mjs --quelle <factory-checkout> --tag <name> --ziel .` (bei `ABGLEICH <pfad>` mit `--uebernehmen <pfad>`). Mit `--entwurf` statt `--tag` entsteht kein Link-Schritt und keine Anker-Stub-Seite: die Doku-Links der Kern-Skills zeigen dann ins Leere, das Drift-Gate bleibt rot.
 5. **`node scripts/harness-doctor.mjs --pruefen`** nennt je fehlender Projektdatei den Fix. Dann die Projektdateien aus den Vorlagen anlegen (Tabelle unten).
 6. **`npm install`** (den Lockfile committen), `npm run skills:sync`, `npm run lint:prune`, `npm run verify:kompakt`.
@@ -63,17 +63,17 @@ Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder e
 | `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage |
 | `.factory/projekt.json` | jedes Kern-Skript | alle Werte, auch `struktur`; Alt-Werte des Factory-Repos löschen |
 | `.agents/skills/factory-ticket/SKILL.md` | Ticket-Ablauf; Rolle `ticketSkill` | fester Pfad (`ROLLEN_PFADE.ticketSkill`), Inhalt für das Projekt; `npm run skills:sync` erzeugt den Zeiger |
-| `package.json` | `verify`, alle `npm run`-Befehle | `scripts` und `devDependencies` der Quelle; Name, Version, Projekt-Skripte; im Skript `test` das Flag `--passWithNoTests`, solange es keinen Test gibt |
+| `package.json` | `verify`, alle `npm run`-Befehle | `scripts` und `devDependencies` der Quelle; Name, Version, Projekt-Skripte; im Skript `test` das Flag `--passWithNoTests` (der Sync liefert keine Projekt-Tests, ohne eigene Tests wäre `test` sonst rot) |
 | `tsconfig.json` | Typprüfung, Lint | `include` auf die eigenen Ordner |
 | `eslint.config.js` | Lint in `verify` | Projektordner und Ignore-Liste |
 | `eslint-suppressions.json` | eingefrorener Bestand der Komplexitätsregeln | die Datei der Quelle übernehmen, dann `npm run lint:prune` räumt veraltete Einträge |
 | `vite.config.ts` | Tests, Coverage | `coverage.include` auf den eigenen Code; Floors nicht übernehmen, sondern auf den Ist-Stand setzen |
-| `scripts/docs-gen/config.json` | Doku-Generatoren | `schichten.layers` zeigt auf die eigene Schicht-Definition (Vorlage `scripts/layers.cjs`), Quellwurzel und Markdown-Liste |
+| `scripts/docs-gen/config.json` | Doku-Generatoren | `schichten.layers` zeigt auf die eigene Schicht-Definition (Vorlage `scripts/layers.cjs`; ohne den Schlüssel bricht `check:diffcoverage` mit „schichten.layers fehlt“ ab, ein Projekt mit mehreren Quellwurzeln, etwa das Java-Profil, braucht ein Schichtmodell mit `quellwurzeln`), Quellwurzel und Markdown-Liste |
 | `.github/workflows/ci.yml` | Kern-Skripte setzen den Namen `ci.yml` voraus (`ci-laeufe`, `pr-warten`, `tag-takt`, `board-lib`) | Jobnamen müssen zu den Required Checks des Rulesets passen |
 | `.github/CODEOWNERS` | der Kern-Test gleicht sie mit `protected-paths.json` ab | Owner |
 | `.github/protected-paths.json` | Leitplanken-Pfade, Audit-Kommentar | Pfade des Projekts ergänzen |
-| `docs/referenz/befehle.md` | Doku-Drift-Gate | die Seite beschreibt die Befehle **des** Projekts: Test-Bezüge auf Wächter streichen, die es im Projekt nicht gibt (sonst „Toter Test-Pfad“) |
-| `docs/referenz/anlaufstellen.md` | Kern-Links zeigen darauf (Anker-Stub vom Sync) | die Seiten des Projekts; Kern-Seiten bleiben |
+| `docs/referenz/befehle.md` | Doku-Drift-Gate | die Seite beschreibt die Befehle **des** Projekts: Test-Bezüge auf Wächter streichen, die es im Projekt nicht gibt (sonst „Toter Test-Pfad“); legt das Projekt die Seite vor dem Sync selbst an, entsteht kein Anker-Stub und `check:factorylinks` meldet `stub-link` und `nicht-im-index`: eine `Kern:`-Zeile mit Link auf die Seite der Quelle einfügen und `npm run check:factorylinks -- --schreiben --quelle <klon>` fahren |
+| `docs/referenz/anlaufstellen.md` | Kern-Links zeigen darauf (Anker-Stub vom Sync) | die Seiten des Projekts; Kern-Seiten bleiben; bei selbst angelegter Seite dieselbe `Kern:`-Zeile samt `check:factorylinks -- --schreiben --quelle <klon>` wie bei `befehle.md` |
 
 Wer eine Zeile ergänzt oder streicht, ändert die Liste `PROJEKTDATEIEN` und diese Tabelle im selben Schritt; `test/erstbezug-seite.test.ts` hält beide gleich.
 

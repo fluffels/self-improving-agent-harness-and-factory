@@ -153,7 +153,7 @@ process.exit(r.status ?? 1);
 | Format | Adapter | Zuordnung zum Repo-Pfad | Zählweise |
 |---|---|---|---|
 | `lcov` (Vitest/Istanbul, Angular, `coverage lcov` bei Python) | `parseLcov`, Zweige `parseLcovBranches` | `SF:` relativ, davor `basis` | Zeilen über `DA:`, Zweige über `BRDA:` |
-| `jacoco` (JaCoCo-XML) | `parseJacoco` | `paket/Datei.java` per Suffix gegen die Quellwurzeln, kein `basis`; dieselbe Datei unter zwei Quellwurzeln ist mehrdeutig (rot) | nur Zeilen mit `<line>` zählen, gedeckt bei `ci > 0`; `mb`/`cb` speisen „teilweise getestet“ |
+| `jacoco` (JaCoCo-XML) | `parseJacoco` | `paket/Datei.java` per Suffix gegen die Quellwurzeln, kein `basis`; dieselbe Datei unter zwei Quellwurzeln ist mehrdeutig (rot); das trifft ein Split-Package, also gleicher Pfad `paket/Datei.java` in zwei Modulen (getrennte Pakete je Modul sind unkritisch) | nur Zeilen mit `<line>` zählen, gedeckt bei `ci > 0`; `mb`/`cb` speisen „teilweise getestet“ |
 
 Dieselbe Datei in mehreren Berichten wird gemischt; jeder konfigurierte Bericht ist Pflicht (ein Glob ohne Treffer ist ein Fehler). Ein neuer Adapter ist eine neue `format`-Zeile im Kern, kein Projekt-Code.
 
