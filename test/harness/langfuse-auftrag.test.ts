@@ -37,10 +37,12 @@ const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
 describe("Auftragsdatei", () => {
   test("ablegen, lesen (älteste zuerst), erledigen; gleiche Session zweimal ist ein Eintrag", () => {
     const dir = join(fixture({}), "state");
-    expect(A.auftragLegen(dir, "s2", T0 + 1000)).toBe(true);
-    expect(A.auftragLegen(dir, "s1", T0)).toBe(true);
+    expect(A.auftragLegen(dir, "s1", T0 + 1000)).toBe(true);
+    expect(A.auftragLegen(dir, "s2", T0)).toBe(true);
+    expect(A.auftragLegen(dir, "s3", T0 + 3000)).toBe(true);
     expect(A.auftragLegen(dir, "s1", T0 + 2000)).toBe(true);
-    expect(A.auftraegeLesen(dir, T0 + 5000)).toEqual(["s2", "s1"]);
+    expect(A.auftraegeLesen(dir, T0 + 5000)).toEqual(["s2", "s1", "s3"]);
+    A.auftragErledigen(dir, "s3");
     A.auftragErledigen(dir, "s2");
     expect(A.auftraegeLesen(dir, T0 + 5000)).toEqual(["s1"]);
     A.auftragErledigen(dir, "unbekannt");
@@ -64,8 +66,21 @@ describe("Auftragsdatei", () => {
     expect(A.auftraegeLesen(dir, T0)).toEqual([]);
     writeFileSync(dateiVon(dir), JSON.stringify(null));
     expect(A.auftraegeLesen(dir, T0)).toEqual([]);
-    expect(() => A.auftragLegen(dir, "neu", T0)).not.toThrow();
+    // fremd geformter Inhalt (Zeichenkette statt Objekt) wird beim Ablegen nicht übernommen
+    writeFileSync(dateiVon(dir), JSON.stringify({ auftraege: "text" }));
+    expect(A.auftragLegen(dir, "neu", T0)).toBe(true);
+    expect(Object.keys(JSON.parse(readFileSync(dateiVon(dir), "utf8")).auftraege)).toEqual(["neu"]);
     expect(A.auftraegeLesen(dir, T0)).toEqual(["neu"]);
+  });
+
+  test("ein ungültiger Schlüssel in der Datei wird nicht als Auftrag gelesen; Erledigen ohne Eintrag schreibt nichts", () => {
+    const dir = join(fixture({}), "state");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(dateiVon(dir), JSON.stringify({ auftraege: { "--json": new Date(T0).toISOString(), gut: new Date(T0).toISOString() } }));
+    expect(A.auftraegeLesen(dir, T0)).toEqual(["gut"]);
+    const leer = join(fixture({}), "state2");
+    A.auftragErledigen(leer, "x");
+    expect(existsSync(dateiVon(leer))).toBe(false);
   });
 });
 
