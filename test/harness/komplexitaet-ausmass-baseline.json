@@ -78,7 +78,7 @@
     "complexity": 5
   },
   "scripts/haupt-sync.mjs": {
-    "complexity": 22
+    "complexity": 20
   },
   "scripts/hauptchat-zerlegung.mjs": {
     "complexity": 12,

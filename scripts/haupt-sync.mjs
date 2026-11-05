@@ -17,6 +17,7 @@
  * ist geteilt, ein späterer Aufruf (`--text`, auch aus einer anderen Session) sieht einen schon gehobenen `main` und darum
  * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“ (HEAD des Checkouts beim Aufruf) und behauptet nichts über die Basis der Session, die nur der SessionStart-Kontext nennt. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
+ * Hinweise ohne Wirkung auf den Exit-Code: Bilddateien und ungetrackte Dateien im Wurzelordner (`ungetrackteReste`, etwa ein liegengebliebenes Probe-Skript; factory#208).
  *
  * `--text --streng` ist der erste Schritt des Ticket-Skills (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
  * bei getrackten Resten), nur dass jede Abweichung vom sauberen `main` Exit 1 ergibt (`exitCodeFuer`): der Hauptchat startet dann kein

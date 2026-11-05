@@ -171,7 +171,8 @@ describe("direktLauf (Modul-catch des Direktaufrufs)", () => {
     const r = M.direktLauf([], () => {
       throw new Error("kaputt");
     });
-    expect(r).toEqual({ code: 1, out: "", err: expect.stringMatching(/^✖ .*kaputt\n$/) });
+    expect([r.code, r.out]).toEqual([1, ""]);
+    expect(r.err).toMatch(/^✖ .*kaputt\n$/);
   });
 
   test("ohne Fehler wird das Ergebnis unverändert durchgereicht", () => {
