@@ -13,6 +13,7 @@ const M = raw as unknown as {
   fehlendeKanten: (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
   migriere: (a: { anwenden: boolean }, io: Io) => Ergebnis;
   fuehreAus: (argv: string[], io: object) => Ergebnis;
+  direktLauf: (argv: string[], fuehre?: (argv: string[]) => Ergebnis) => Ergebnis;
   echteIo: (repo: string, naht: { gh: (a: string[], o: unknown) => unknown; env: object }) => { ladeSeite: (n: string | null) => Seite; setze: (i: string, b: string) => void };
 };
 const fehlend = M.fehlendeKanten;
@@ -162,5 +163,19 @@ describe("echteIo (gefälschtes gh)", () => {
     const mutation = aufrufe[2]?.args ?? [];
     expect(mutation).toContain("i=I1");
     expect(mutation).toContain("b=I2");
+  });
+});
+
+describe("direktLauf (Modul-catch des Direktaufrufs)", () => {
+  test("ein geworfener Fehler wird zu Exit 1 mit Fehlerzeile, nichts auf stdout", () => {
+    const r = M.direktLauf([], () => {
+      throw new Error("kaputt");
+    });
+    expect(r).toEqual({ code: 1, out: "", err: expect.stringMatching(/^✖ .*kaputt\n$/) });
+  });
+
+  test("ohne Fehler wird das Ergebnis unverändert durchgereicht", () => {
+    const ok = { code: 0, out: "fertig\n", err: "" };
+    expect(M.direktLauf(["--x"], (argv) => (argv[0] === "--x" ? ok : { code: 9, out: "", err: "" }))).toBe(ok);
   });
 });
