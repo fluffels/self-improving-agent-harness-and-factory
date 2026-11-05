@@ -5,7 +5,7 @@
  *
  * Köpfe: Deklaration (auch `export default`, `async`, `function*`, generisch `f<T>(…)`), `const f = …=>` (auch `async`, generisch `<T>(…) =>`, mit Typannotation `const f: T = …`; ein Typ mit `=>` darin fehlt), Methode (auch `static`/`async`, mit Rückgabetyp) `name(…) {` (auch einzeilig) und Eigenschaft `name: (…) =>`/`name: function` (eine TS-Typzeile `name: (x) => T;` zählt ebenfalls als Kopf).
  * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
- * Strings, Ausdrücke in `${…}` eines Template-Literals, Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
+ * Strings, verschachtelte Template-Literale und mehrzeilige `${…}` (die Ausdrücke einzeiliger `${…}` werten wir gegen `MUSTER` aus), Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
  * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
@@ -56,6 +56,23 @@ export const MUSTER = [
 ];
 
 const STRINGS = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
+const TEMPLATE_AUSDRUCK = /\$\{/g;
+
+/** Pur: die Ausdrücke aller ${…} eines einzeiligen Template-Literals, klammerbalanciert (Strings darin geleert); ein nicht schließender Ausdruck endet am Literalende. */
+function templateAusdruecke(literal) {
+  const ausdruecke = [];
+  for (const m of literal.matchAll(TEMPLATE_AUSDRUCK)) {
+    const start = m.index + 2;
+    let tiefe = 1;
+    let ende = start;
+    for (; ende < literal.length && tiefe > 0; ende++) tiefe += literal[ende] === "{" ? 1 : literal[ende] === "}" ? -1 : 0;
+    ausdruecke.push(literal.slice(start, tiefe === 0 ? ende - 1 : ende).replace(STRINGS, '""'));
+  }
+  return ausdruecke;
+}
+
+/** Pur: ersetzt jeden String durch "", ein Template-Literal zusätzlich um seine ${…}-Ausdrücke (angehängt, damit `MUSTER` sie sieht). */
+const leereStrings = (zeile) => zeile.replace(STRINGS, (s) => (s.startsWith("`") ? ['""', ...templateAusdruecke(s)].join(" ") : '""'));
 const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
 const KOPF = [
   /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*(?:<[^(]*>\s*)?\(/,
@@ -83,7 +100,7 @@ function parameterListe(text) {
 
 /** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen mit Default-Parameter zusätzlich. */
 function ankerNamen(zeile) {
-  const text = zeile.replace(STRINGS, '""').replace(/\/\/.*$/, "");
+  const text = leereStrings(zeile).replace(/\/\/.*$/, "");
   const ohneRegex = text.replace(REGEX_LITERAL, "$1 R");
   const namen = MUSTER.filter((m) => m.re.test(m.auf === "text" ? text : ohneRegex)).map((m) => m.name);
   const parameter = kopfName(text) === undefined ? "" : parameterListe(ohneRegex);

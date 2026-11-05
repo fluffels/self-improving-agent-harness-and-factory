@@ -18,9 +18,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
-import { ladeProjektConfig, PROJEKT_CONFIG, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
 /** Memory-Dateien im Root, deren Existenz das native Laden von AGENTS.md abschaltet; `~/.claude/CLAUDE.md` und Unterordner zählen nicht. */
@@ -172,22 +172,47 @@ export const LANGFUSE_TAKT_DATEIEN = Object.freeze([".github/workflows/board-tak
 
 const TAKT_FIX = "den Sync erneut ausführen (`npm run factory:sync -- --quelle <Factory-Checkout> --tag <Tag>`, Anleitung: Seite docs/erstbezug.md des Factory-Repos): der Sync liefert beide Dateien, `.github/workflows/board-takt.yml` liegt im Ring kern-nach-entkopplung und gehört damit zum Besitz, den jeder Bezieher bekommt";
 
-/** Das Repo, dessen Issues das Factory-Board der Config führt, wenn es nicht das eigene ist (sonst null; ohne Config oder Board ebenfalls null). */
-function fremdesFactoryRepo(config) {
-  const repo = config?.boards?.find?.((b) => b?.rolle === "factory")?.repo;
-  return typeof repo === "string" && !gleichesRepo(repo, config.repo) ? repo : null;
+/**
+ * Das Ziel-Repo des Takts (factory#202 L21): dieselbe Bestimmung wie der Board-Takt (`zielRepoFuer([labels.harness])`). Liefert `{ ziel }` (ein Repo, das nicht das eigene ist, sonst null)
+ * oder `{ luecke: true }`, wenn sich kein Ziel bestimmen lässt (kein `labels.harness`, kein Repo). Ohne Config: kein Ziel, keine Lücke.
+ */
+/** Die Config mit gefilterten `boards` (Nulleinträge der ungeprüften Config tolerieren), für `zielRepoFuer` und `langfuseZiel`. */
+function ohneNullBoards(config) {
+  return { ...config, boards: Array.isArray(config.boards) ? config.boards.filter((b) => b && typeof b === "object") : config.boards };
+}
+
+function taktZiel(config) {
+  if (!config || typeof config !== "object") return { ziel: null };
+  try {
+    const bereinigt = ohneNullBoards(config);
+    const repo = zielRepoFuer([labelAus(config, "harness")], bereinigt);
+    if (typeof repo !== "string") return { luecke: true };
+    return { ziel: gleichesRepo(repo, config.repo) ? null : repo };
+  } catch {
+    return { luecke: true };
+  }
 }
 
 /**
  * Punkt `Langfuse-Takt`: beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
  * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
- * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`).
+ * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
+ * führt im Bezieher kein Board das eigene Repo (`langfuseZiel` wirft), ist der Punkt eine Lücke, weil der Takt dort kein Status-Ticket anlegt (factory#202).
  */
 export function langfuseTaktPunkt(rootDir, existiert, config) {
   const fehlt = LANGFUSE_TAKT_DATEIEN.filter((d) => !existiert(join(rootDir, d)));
   if (fehlt.length > 0) return luecke("Langfuse-Takt", `fehlen ${fehlt.length}: ${fehlt.join(", ")}`, TAKT_FIX);
-  const fremd = fremdesFactoryRepo(config);
-  if (fremd !== null && liesSyncStand(rootDir).zustand !== "fehlt") {
+  const { ziel: fremd, luecke: keinZiel } = taktZiel(config);
+  if (keinZiel) return luecke("Langfuse-Takt", "das Ziel-Repo des Board-Takts lässt sich aus der Config nicht bestimmen", "`labels.harness` und ein Board mit Rolle factory in `boards` der Projekt-Config eintragen (der Takt wählt sein Ziel wie `zielRepoFuer` aus diesen beiden)");
+  const bezieher = istBezieher(rootDir);
+  if (config && typeof config === "object" && bezieher) {
+    try {
+      langfuseZiel(ohneNullBoards(config), { bezieher: true }); // dieselbe Wahl wie `bezieherTakt`: wirft sie, legt der Takt kein Status-Ticket an
+    } catch (e) {
+      return luecke("Langfuse-Takt", String(e instanceof Error ? e.message : e).split("\n")[0], "ein Board in `boards` der Projekt-Config muss das eigene Repo führen (`boards[].repo` weglassen oder gleich `repo`)");
+    }
+  }
+  if (fremd !== null && bezieher) {
     return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
   }
   return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter`);

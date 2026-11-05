@@ -49,10 +49,11 @@ import {
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -343,16 +344,60 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
 }
 
 /** Bezieher (factory#195): Sync-Stand in der Wurzel vorhanden; `bezieher` und `wurzel` in `d` sind Test-Nähte. */
-const istBezieher = (d) => d.bezieher ?? liesSyncStand(d.wurzel ?? WURZEL).zustand !== "fehlt";
+const istBezieher = (d) => d.bezieher ?? istBezieherWurzel(d.wurzel ?? WURZEL);
+
+/** Neu anlegen (Zweig von `main`): liefert die Nummer, oder `null`, wenn nichts weiter zu tun ist (Dublette). */
+async function legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position }) {
+  const { vorgaenger } = args;
+  const vZustand = vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo);
+  const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vZustand, blocker: spracheAus(config).spezifikation.blocker });
+  let neu;
+  try {
+    neu = d.legeAn({ repo, titel, body, harness: label });
+  } catch (e) {
+    console.error(`✖ ${e.message}`);
+    process.exit(2);
+  }
+  const nr = neu.number;
+  d.log(`Angelegt: #${nr}`);
+  await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
+  if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return null;
+  if (vZustand !== "zu") { // die Blocker-Zeile steht im Body; zusätzlich die native Kante (Blocked-Icon im Board), Scheitern nur Warnung (factory#202 L1)
+    const warnung = verknuepfeBlocker(neu, [{ repo, nummer: vorgaenger }], repo, { verknuepfeBlocker: d.verknuepfeBlocker });
+    if (warnung) d.log(warnung.trimEnd());
+  }
+  const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
+  if (args.art === "harness") {
+    const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
+    const k = korrekturFuer({ items, nr, position });
+    if (k) d.setPosition(board, k.id, k.afterId);
+  } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel }, d);
+  return nr;
+}
+
+/** Ergebnis der Positionsprüfung melden (Zweig von `main`); eine verfehlte Position beendet mit Exit 1. */
+function meldeStand({ stand, nr, position, dry }, d) {
+  if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
+  else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
+  else if (dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
+  else {
+    console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
+    process.exit(1);
+  }
+}
 
 /** Einstieg. `deps` (Tests): `ladeConfig`, `log`, `kontingent` und die gh-/Board-Nähte (`findeVorhandenes`, `legeAn`, `addToBoardTodo`, `loadItems`, `setPosition`, `vorgaengerZustand`, `schliesseWennDublette`, `setzeUndPruefe`, `sleep`); ohne Angabe läuft alles echt. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, ...deps };
+  const d = { ladeConfig: ladeProjektConfig, log: console.log, kontingent: () => mitKontingent("sammelticket-anlegen"), findeVorhandenes, legeAn, addToBoardTodo: (board, nodeId, opts) => addToBoardTodo(board, nodeId, opts), loadItems: (board, opts) => loadItems(board, opts), setPosition: (board, id, afterId) => setPosition(board, id, afterId), vorgaengerZustand, schliesseWennDublette, setzeUndPruefe, sleep, verknuepfeBlocker: echteVerknuepfung({ eigenes: REPO }), ...deps };
   d.bezieher = istBezieher(d);
   const args = parseArgs(argv);
   if (!args) {
     console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
     process.exit(2);
+  }
+  if (args.art === "harness" && d.bezieher) {
+    console.error("✖ Im Bezieher gibt es kein Harness-Sammelticket (ADR 0031: nur im Factory-Repo).\nFix: Kern-Befunde per `node scripts/melden.mjs` an die Meldestelle melden (AGENTS.md › Harness-Befunde).");
+    return process.exit(2);
   }
   const config = d.ladeConfig();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
@@ -374,35 +419,14 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo), blocker: spracheAus(config).spezifikation.blocker });
-    let neu;
-    try {
-      neu = d.legeAn({ repo, titel, body, harness: label });
-    } catch (e) {
-      console.error(`✖ ${e.message}`);
-      process.exit(2);
-    }
-    nr = neu.number;
-    d.log(`Angelegt: #${nr}`);
-    await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-    if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return;
-    const itemId = d.addToBoardTodo(board, neu.node_id, { repo });
-    if (args.art === "harness") {
-      const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-      const k = korrekturFuer({ items, nr, position });
-      if (k) d.setPosition(board, k.id, k.afterId);
-    } else setzeErstePosition({ art: args.art, top: args.top, board, repo, itemId, nr, titel }, d);
+    const angelegt = await legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position });
+    if (angelegt === null) return;
+    nr = angelegt;
   }
   if (args.art !== "harness") return;
   const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
   if (!vorhanden && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
-  if (stand === "ok") d.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
-  else if (stand === "unbekannt") d.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
-  else if (args.dry) d.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
-  else {
-    console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
-    process.exit(1);
-  }
+  meldeStand({ stand, nr, position, dry: args.dry }, d);
 }
 
 if (istDirektaufruf(import.meta.url)) await main();

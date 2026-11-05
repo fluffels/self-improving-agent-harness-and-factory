@@ -26,9 +26,6 @@
   },
   "scripts/brain-metrics.mjs": {
     "complexity": {
-      "count": 2
-    },
-    "max-depth": {
       "count": 1
     }
   },
@@ -216,9 +213,6 @@
   "scripts/patch-zugriff.mjs": {
     "complexity": {
       "count": 1
-    },
-    "max-depth": {
-      "count": 5
     }
   },
   "scripts/pr-warten.mjs": {
@@ -234,11 +228,6 @@
   "scripts/projekt-config-lib.mjs": {
     "complexity": {
       "count": 2
-    }
-  },
-  "scripts/sammelticket-anlegen.mjs": {
-    "complexity": {
-      "count": 1
     }
   },
   "scripts/sandbox-doctor.mjs": {

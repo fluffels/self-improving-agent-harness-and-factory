@@ -643,6 +643,18 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
     assert.equal(lies(datei([alt, zeile("user", "Fortsetzung"), handback])), "ERGEBNIS: gemergt", "ein Bericht nach der Grenze zählt");
   });
 
+  test("Hook-Feedback der belegten Form (user, isMeta, String „Stop hook feedback:“) ist keine Grenze; echte Fortsetzung bleibt eine (factory#202 L11)", () => {
+    const alt = zeile("assistant", [{ type: "text", text: "ERGEBNIS: abnahme" }]);
+    const status = zeile("assistant", [{ type: "text", text: "Statuszeile" }]);
+    const feedback = JSON.stringify({ type: "user", isMeta: true, message: { role: "user", content: "Stop hook feedback:\nsynthetisch" } });
+    assert.equal(lies(datei([alt, feedback, status])), "ERGEBNIS: abnahme", "Hook-Feedback trennt nicht");
+    assert.equal(lies(datei([alt, zeile("user", "Fortsetzung"), feedback, status])), null, "echte Fortsetzung davor bleibt Grenze");
+    const ohneMeta = JSON.stringify({ type: "user", message: { role: "user", content: "Stop hook feedback:\nvom Menschen getippt" } });
+    assert.equal(lies(datei([alt, ohneMeta, status])), null, "ohne isMeta ist es keine Hook-Zeile");
+    const meta = JSON.stringify({ type: "user", isMeta: true, message: { role: "user", content: "etwas anderes" } });
+    assert.equal(lies(datei([alt, meta, status])), null, "andere Meta-Zeile bleibt Grenze (nur die belegte Form)");
+  });
+
   test("fehlende Datei oder kein Bericht ergeben null (fail-open)", () => {
     assert.equal(lies(join(tmpdir(), "gibt-es-nicht-bericht.jsonl")), null);
     assert.equal(lies(datei([zeile("user", "x")])), null);

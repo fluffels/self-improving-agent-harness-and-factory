@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert AGENTS.md › „Kein Grün-durch-Aufweichen“ um die Gegenrichtung und [ADR 0016](0016-langfuse-takt-woechentlich.md) (Status-Lauf, Checkliste Punkt 8). Bezug: [ADR 0012](0012-harness-autonomie-audit-spur.md) (Kreislauf aus Härtung gegen Hypothetisches), [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (Audit-Kommentar statt Riegel). Teil von #1350 (Baustein 4).
+**Akzeptiert.** Präzisiert AGENTS.md › „Kein Grün-durch-Aufweichen“ um die Gegenrichtung und [ADR 0016](0016-langfuse-takt-woechentlich.md) (Status-Lauf, Checkliste Punkt 8). Bezug: [ADR 0012](0012-harness-autonomie-audit-spur.md) (Kreislauf aus Härtung gegen Hypothetisches), [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (Audit-Kommentar statt Riegel). Teil von #1350 (Baustein 4). Fortschreibung: [factory#202](fortschreibungen/0027-202-gate-fundquote.md) (Evidenz für Gates liefert `scripts/gate-fundquote.mjs`).
 
 ## Kontext
 
@@ -49,7 +49,7 @@ Lösen zwei Rückfall-Trigger binnen 3 Monaten aus, wird die Evidenzschwelle ver
 Präzisiert Punkt 4, lockert kein Gate: Für einen K1-Rückfall-Trigger zählt ein roter Lauf nur, wenn der Check an dem scheitert, was die gekürzte Regel beschreibt („CI-Rot desselben Fehlertyps“), belegt mit Lauf-ID und Logzeile. Ein Testfehler oder Zeitlimit im selben Job ist Test-Rot; ist im selben Lauf beides rot, zählt der Lauf als Gate-Rot.
 Erste Anwendung: #1694, Status-Lauf 1, Lauf 39044049165 (Zeitlimit in `test/abnahme.test.ts`, behoben in #1801) zählt nicht, der Rückfall-Zähler steht bei 0. Die Ledger-Zeile bleibt unverändert (Punkt 8 erlaubt nur den Vermerk „ausgelöst“).
 
-Weitere Fortschreibungen stehen als Dateien unter `fortschreibungen/` (Konvention: [README](README.md#format)): #1942, [#145](fortschreibungen/0027-145-abschluss-skill-trigger-messbar.md).
+Weitere Fortschreibungen stehen als Dateien unter `fortschreibungen/` (Konvention: [README](README.md#format)): #1942, [#145](fortschreibungen/0027-145-abschluss-skill-trigger-messbar.md), [#202](fortschreibungen/0027-202-gate-fundquote.md).
 
 ## Gelockert
 

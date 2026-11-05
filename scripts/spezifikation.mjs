@@ -34,6 +34,7 @@ import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istRepoForm } from "./repo-form.mjs";
 import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
+import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
@@ -125,7 +126,7 @@ function gescheitert(werte, nrText, io) {
   } catch (e) {
     return aufrufFehler(`Sammelticket nicht lesbar: ${schreibrechtText(e, io.sammelRepo ?? REPO, "lesen") ?? fehlerText(e)}`);
   }
-  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness\n");
+  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen\n");
   if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
   const meldung = io.bereite([gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() })]);
   if (!meldung.ok) return ergebnis(1, "", `✖ ${meldung.grund}\n`);
@@ -209,20 +210,6 @@ function anlegen(werte, io, sprache) {
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`, warnung);
 }
 
-/** Setzt je Blocker die native GitHub-Abhängigkeit (nur für das neue Ticket, die Blocker-Zeile bleibt maßgeblich): Zahl = Ziel-Repo, `{ repo, nummer }` = genanntes Repo. Fehler: Warnungstext (Exit bleibt 0), sonst `""`. */
-function verknuepfeBlocker(neu, blocker, repo, io) {
-  let warnungen = "";
-  for (const b of blocker) {
-    const ref = typeof b === "number" ? { repo, nummer: b } : b;
-    try {
-      io.verknuepfeBlocker({ issueNodeId: neu.node_id, blocker: ref, repo });
-    } catch (e) {
-      warnungen += `⚠ native Abhängigkeit nicht gesetzt (${ref.repo}#${ref.nummer}: ${einzeilig(fehlerText(e))}), die Blocker-Zeile im Body bleibt maßgeblich\n`;
-    }
-  }
-  return warnungen;
-}
-
 function reparieren(werte, nrText, io, sprache) {
   const nr = positiveZahl(nrText);
   if (nr === null) return aufrufFehler("reparieren braucht eine Ticketnummer");
@@ -284,8 +271,6 @@ export function ankerPruefung({ nach, labels, repo }, lade, config) {
   return fehler ? `${fehler}; einen Anker vom passenden Board wählen` : null;
 }
 
-const ADD_BLOCKED_BY = "mutation($i:ID!,$b:ID!){ addBlockedBy(input:{issueId:$i, blockingIssueId:$b}) { issue { number } } }";
-
 /** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`), `kontextLader`/`waehle`/`post` (Sammelticket lesen, wählen, posten an die Meldestelle, factory#153). */
 export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env, kontextLader = ladeSammelKontext, waehle = waehleSammelticket, post = postZeilen, meldestelle = MELDESTELLE } = {}) => {
   return {
@@ -295,10 +280,7 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
     leseDatei: (pfad) => readFileSync(pfad, "utf8"),
     erzeuge: ({ titel, body, labels, repo }) =>
       gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
-    verknuepfeBlocker: ({ issueNodeId, blocker, repo }) => {
-      const knoten = gh(["api", `repos/${blocker.repo}/issues/${blocker.nummer}`], { token: tokenFuerZiel({ ziel: blocker.repo, eigenes: REPO, env }) }).node_id;
-      gh(["api", "graphql", "-f", `query=${ADD_BLOCKED_BY}`, "-f", `i=${issueNodeId}`, "-f", `b=${knoten}`], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) });
-    },
+    verknuepfeBlocker: echteVerknuepfung({ gh, env, eigenes: REPO }),
     pruefeAnker: (a) => ankerPruefung(a, (rolle, repo) => lade(boardFuerRolle(rolle), { repo }), config),
     einsortiere: ({ nr, nach, notfall, repo }) => {
       const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];

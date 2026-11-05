@@ -12,11 +12,10 @@
     "complexity": 3
   },
   "scripts/board-takt.mjs": {
-    "complexity": 10
+    "complexity": 5
   },
   "scripts/brain-metrics.mjs": {
-    "complexity": 11,
-    "max-depth": 1
+    "complexity": 5
   },
   "scripts/budget-lib.mjs": {
     "complexity": 13
@@ -126,8 +125,7 @@
     "complexity": 6
   },
   "scripts/patch-zugriff.mjs": {
-    "complexity": 21,
-    "max-depth": 7
+    "complexity": 10
   },
   "scripts/pr-warten.mjs": {
     "complexity": 9
@@ -137,9 +135,6 @@
   },
   "scripts/projekt-config-lib.mjs": {
     "complexity": 14
-  },
-  "scripts/sammelticket-anlegen.mjs": {
-    "complexity": 5
   },
   "scripts/sandbox-doctor.mjs": {
     "complexity": 9
