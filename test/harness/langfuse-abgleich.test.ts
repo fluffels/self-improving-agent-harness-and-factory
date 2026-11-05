@@ -432,6 +432,16 @@ describe("Diff (pur)", () => {
     expect(gemischt.leer.map((o) => o.id)).toEqual(["leer1"]);
   });
 
+  test("unzuordenbar mit Schlüsselart messageId (#213): Kopie zuordenbar, fremde message_id unzuordenbar", () => {
+    const soll = [eintrag(1), eintrag(2)];
+    const mit = (e: Eintrag, id: string, mid: string): Obs => obsZu(e, { id, metadata: { message_id: mid } });
+    const d = A.diffMultimenge(soll, [mit(soll[0], "o1", "m1"), mit(soll[0], "kopie", "m1"), mit(eintrag(9), "fremd", "m9")]);
+    expect(d.art).toBe("messageId");
+    expect(d.fehlend.map((e) => e.messageId)).toEqual(["m2"]);
+    expect(d.dubletten.map((o) => o.id)).toEqual(["kopie", "fremd"]);
+    expect(d.unzuordenbar.map((o) => o.id)).toEqual(["fremd"]);
+  });
+
   test("passende message_id trifft: nichts fehlt, keine Dublette", () => {
     const soll = [eintrag(1), eintrag(2)];
     const d = A.diffMultimenge(soll, soll.map((e) => obsZu(e, { metadata: { message_id: e.messageId } })));

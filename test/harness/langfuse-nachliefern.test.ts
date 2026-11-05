@@ -487,6 +487,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       const r = await lauf(a, m);
       spanIds(m, ["b", "c"]);
       expect(r.protokoll.sessions[0].status).not.toBe("bestätigt");
+      expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(false);
     });
 
     test("Folgelauf: alles da plus Kopie: nichts gesendet, nur Dubletten, bestätigt", async () => {

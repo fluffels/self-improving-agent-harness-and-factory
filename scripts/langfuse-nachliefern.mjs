@@ -4,6 +4,7 @@
  * idempotent. Bewusst ein eigenes Modul: `langfuse-abgleich.mjs --pruefen` bleibt beweisbar lesend. Dubletten werden nur gemeldet.
  *
  *   node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]
+ *   node scripts/langfuse-nachliefern.mjs --auftrag <id>   (nur ein Auftrag für den nächsten SessionStart-Lauf, ohne Zugang und ohne Netz, factory#213)
  *
  * Idempotenz: je Session zuerst das Ist (zwei Metrics-Abfragen, bei Differenz Observations), gesendet wird `fehlend` minus
  * Ledger-`gesendet` (`~/.claude/state/langfuse-abgleich.json`, nur eine Brücke über den Ingestion-Verzug). Ein kaputtes oder
@@ -42,6 +43,7 @@ import {
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
+import { auftraegeLesen, auftragErledigen, auftragLegen } from "./langfuse-auftrag.mjs";
 import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 
@@ -55,14 +57,17 @@ export { ENDE_SCHLUPF_MS };
 export const GESENDET_ABLAUF_MS = 4 * RUHEFRIST_MIN * 60_000;
 /** Gesamtfrist eines Laufs: unter LOCK_VERALTET_MS (15 min), damit kein Lauf länger hängt als sein Lock; übrige Sessions folgen beim nächsten Lauf. */
 export const GESAMTFRIST_MS = 10 * 60_000;
-/** Befund einer Session mit Lücke und Dubletten zugleich: nichts gesendet, aber nie bestätigt (jeder Lauf prüft neu, z.B. nach einer geänderten Dublettenregel). */
+/**
+ * Befund einer Session mit Lücke und unzuordenbaren Dubletten zugleich: nichts gesendet, aber nie bestätigt (jeder Lauf prüft neu, z.B. nach einer geänderten Dublettenregel).
+ * Der Wortlaut (noch „Dubletten“) bleibt Byte für Byte: ältere Ledger-Einträge tragen ihn, `giltBestaetigt` vergleicht ihn.
+ */
 export const BEFUND_MEHRDEUTIG = "mehrdeutig: Fehlend und Dubletten zugleich, nichts gesendet";
 /** Ob ein Ledger-Eintrag als bestätigt gilt; ältere Stände vermerkten Mehrdeutigkeit als bestätigt, das gilt nicht mehr. */
 export function giltBestaetigt(eintrag) {
   return Boolean(eintrag?.bestaetigt) && eintrag.befund !== BEFUND_MEHRDEUTIG;
 }
 
-export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json]";
+export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-nachliefern.mjs [--session <id>] [--seit <ISO>] [--aktuell <id>] [--beendet <id>] [--ausloeser sessionstart|sessionend] [--trocken] [--json] | --auftrag <id>";
 /** Hinweis ohne Langfuse-Zugang; eine Funktion statt Konstante, damit der Modul-Import keine Sync-Stand-Datei liest (Muster `natives()` in `sandbox-doctor.mjs`). */
 export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen (aus der Umgebung, zusätzlich aus ~/.langfuse-secret und den Plugin-Optionen; Agentenläufe nutzen den Secret-Key nicht: das ist Regel, `permissions.deny` sperrt nur das Read-Tool, technisch gesperrt ist die Datei nur unter der Sandbox, die unter Windows nicht greift). Im Agentenlauf: Session-ID in den PR-Text; die Maintainerin liefert mit `node scripts/langfuse-nachliefern.mjs --session <id>` nach (" + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-erfassung-belegen-1293") + ").";
 const AUSLOESER = ["sessionstart", "sessionend"];
@@ -76,9 +81,9 @@ export function fehlerText(e) {
 
 /** Unbekanntes Flag oder fehlender Wert: `fehler` gesetzt (der Aufrufer meldet Exit 2). */
 export function parseArgs(argv) {
-  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
+  const optionen = { session: { type: "string" }, seit: { type: "string" }, aktuell: { type: "string" }, beendet: { type: "string" }, auftrag: { type: "string" }, ausloeser: { type: "string" }, trocken: { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen);
-  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
+  const a = { session: werte.session ?? null, seit: werte.seit ?? null, aktuell: werte.aktuell ?? null, beendet: werte.beendet ?? null, auftrag: werte.auftrag ?? null, ausloeser: werte.ausloeser ?? null, trocken: werte.trocken === true, json: werte.json === true, fehler: fehler?.text ?? null };
   if (a.fehler === null && a.ausloeser !== null && !AUSLOESER.includes(a.ausloeser)) {
     a.fehler = `--ausloeser: erlaubt sind ${AUSLOESER.join(", ")}`;
     a.ausloeser = null;
@@ -146,8 +151,8 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
   return true;
 }
 
-/** Zahl der unzuordenbaren Dubletten des Diffs (ohne Diff: 0); ausserhalb von `verarbeite`, dessen Komplexität nicht steigen darf. */
-const unzuordenbarAnzahl = (diff) => diff?.unzuordenbar?.length ?? 0;
+/** Zahl der unzuordenbaren Dubletten des Diffs (ohne Diff: 0); außerhalb von `verarbeite`, dessen Komplexität nicht steigen darf. */
+const unzuordenbarAnzahl = (diff) => diff?.unzuordenbar.length ?? 0;
 
 /** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
 async function verarbeite(s, c) {
@@ -323,13 +328,33 @@ export async function hookLauf(args, optionen) {
   // Startmarke je SessionStart (auch bei belegtem Lock): ein wartendes SessionEnd-Kind derselben Session erkennt so die Fortsetzung.
   if (args.ausloeser === "sessionstart" && args.aktuell) markiereStart(optionen.stateDir, args.aktuell, jetzt);
   if (ende) await (optionen.schlafen ?? warte)(WARTE_SESSIONEND);
-  return gesperrterLauf(ende ? { ...args, ende: jetzt } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
+  const haupt = await gesperrterLauf(ende ? { ...args, ende: jetzt } : args, { ...optionen, ausloeser: args.ausloeser, wiederholen: ende });
+  if (args.ausloeser === "sessionstart") await fuehreAuftraegeAus(args, optionen);
+  return haupt;
+}
+
+/** Ein Auftrag ist erledigt, wenn sein Lauf ohne Fehler endete und die Session weder mehrdeutig noch in der Ruhefrist noch die laufende ist. */
+const auftragFertig = (e) => e !== null && e.exitCode === 0 && e.protokoll.sessions.every((r) => !["mehrdeutig", "läuft", "Fehler", "aktuell"].includes(r.status));
+
+/** Offene Nachliefer-Aufträge (factory#213) nach einem SessionStart-Lauf ausführen: je Session ein Lauf unter Lock, auch außerhalb des 7-Tage-Fensters (`--session`). */
+async function fuehreAuftraegeAus(args, optionen) {
+  for (const id of auftraegeLesen(optionen.stateDir, (optionen.uhr ?? Date.now)())) {
+    const { ergebnis } = await gesperrterLauf({ ...args, ausloeser: null, beendet: null, session: id }, { ...optionen, ausloeser: "auftrag" });
+    if (auftragFertig(ergebnis)) auftragErledigen(optionen.stateDir, id);
+  }
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = hauptrepoPfad(fileURLToPath(new URL("..", import.meta.url)));
   const stateDir = join(homedir(), ".claude", "state");
+  // Auftrag ablegen: kein Zugang, kein Netz, der Agentenkontext liest den Key nie (factory#213); ausgeführt wird er vom SessionStart-Hook.
+  if (args.auftrag !== null && !args.fehler) {
+    const ok = auftragLegen(stateDir, args.auftrag);
+    (ok ? console.log : console.error)(ok ? `Auftrag abgelegt: ${args.auftrag} (der nächste SessionStart-Lauf liefert nach)` : `--auftrag: ungültige Session-ID: ${args.auftrag}`);
+    process.exitCode = ok ? 0 : 2;
+    return;
+  }
   const lauf = (a, o) => nachliefern(a, { projectsRoot: projekteWurzel(), stateDir, repoRoot, env: kindEnv(process.env, homedir()), ...o }); // Zugang auch aus ~/.langfuse-secret und den Plugin-Optionen, wie im Hook (#1821 L30)
   if (args.ausloeser && !args.fehler) {
     await hookLauf(args, { stateDir, lauf, stand: kurzerStand(fileURLToPath(new URL("..", import.meta.url))) });
