@@ -70,7 +70,7 @@ export function eigenerLogin({ zugang, api, warn }) {
 export function zeileBekannt({ kommentare, owner, eigen = null, schluessel }) {
   const eigenKlein = typeof eigen === "string" && eigen !== "" ? eigen.toLowerCase() : null;
   const vertraut = (user) => istVertraut(user, owner) || (eigenKlein !== null && typeof user?.login === "string" && user.login.toLowerCase() === eigenKlein);
-  return kommentare.some((k) => vertraut(k?.user) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)));
+  return kommentare.some((k) => vertraut(k?.user) && String(k?.body).split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)));
 }
 
 const FIX_SAMMELTICKET = "Fix: node scripts/sammelticket-anlegen.mjs harness";

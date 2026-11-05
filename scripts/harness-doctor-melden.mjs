@@ -59,7 +59,7 @@ export function ermittleLuecken({ env, repo, pruefe }) {
 
 /**
  * Ein Lauf mit eingespeister IO: `ermittle() -> Lücken`, `kontext() -> { kommentare, owner, ziel, eigen? }` (`ziel` = Nummer des jüngsten ungeclaimten
- * Sammeltickets oder null), `bereite(zeilen)` (`bereiteMeldung`: `{ ok, text | grund }`), `postZeilen(nr, text)`, `heute`, `log`. Trockenlauf druckt die Zeilen und schreibt nichts.
+ * Sammeltickets, sonst keine Nummer), `bereite(zeilen)` (`bereiteMeldung`: `{ ok, text | grund }`), `postZeilen(nr, text)`, `heute`, `log`. Trockenlauf druckt die Zeilen und schreibt nichts.
  */
 export function lauf({ io, trocken = false }) {
   const log = io.log ?? console.log;
@@ -133,7 +133,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
     kontext: () => {
       const { offene, kommentare, owner } = ladeSammelKontext({ repo: ziel, token: zugang.token });
       const eigen = eigenerLogin({ zugang, api, warn: log });
-      return { kommentare, owner, eigen, ziel: waehleSammelticket(offene, ziel, (a) => api(a, { token: zugang.token }))?.number ?? null };
+      return { kommentare, owner, eigen, ziel: waehleSammelticket(offene, ziel, (a) => api(a, { token: zugang.token }))?.number };
     },
     bereite: (zeilen) => bereite(zeilen, { herkunft: zugang.herkunft }),
     postZeilen: (nr, text) => postZeilen(nr, text, ziel, zugang.token),

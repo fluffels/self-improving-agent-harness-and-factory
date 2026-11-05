@@ -10,7 +10,7 @@
  *
  * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] <Datum> Reparatur gescheitert: #<nr> (<Mängel>). Fix: …`
  * als Kommentar ins jüngste ungeclaimte Harness-Sammelticket der Meldestelle (factory#153, Standard das Repo des Factory-Boards; Exit 1: keins da, Fix: `sammelticket-anlegen.mjs harness`; Exit 1 auch bei einem Treffer von `check-internalrefs --text`, dann ist nichts gesendet; die Zeile trägt den Factory-Stand). Steht die Zeile zu dieser Nummer schon
- * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post. Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
+ * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post (an einer fremden Meldestelle nennt die Zeile `owner/name#<nr>`, und eine Zeile des eigenen Kontos, `gh api user`, zählt als bekannt, factory#208). Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
