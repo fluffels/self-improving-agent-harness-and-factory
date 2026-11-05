@@ -329,7 +329,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     });
     assert.equal(code, 0);
     const wurzel = mkdtempSync(join(tmpdir(), "meldestelle-"));
-    let punkte: { punkt: string; ok: boolean }[] = [];
+    let punkte: { punkt: string; ok: boolean }[];
     try {
       punkte = dateien?.({ rootDir: wurzel, config: { repo: "acme/proj", meldestelle: "eingang/privat" } }) ?? [];
     } finally {
