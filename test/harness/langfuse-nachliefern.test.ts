@@ -514,6 +514,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       const r = await lauf(a, m);
       expect(m.otlp).toHaveLength(0);
       expect(r.protokoll.sessions[0]).toMatchObject({ status: "mehrdeutig", dubletten: 2, unzuordenbar: 1 });
+      expect(r.text).toContain("Dubletten 2 (unzuordenbar 1)");
+    });
+
+    test("Bericht ohne unzuordenbare Dubletten nennt keine Klammer", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
+      const sa = sollZu("a", 1);
+      const m = mock({ ist: 2, obs: [obsZu(sa), { ...obsZu(sa), id: "o2" }] });
+      const r = await lauf(a, m);
+      expect(r.text).toContain("Dubletten 1,");
+      expect(r.text).not.toContain("unzuordenbar");
     });
   });
 
