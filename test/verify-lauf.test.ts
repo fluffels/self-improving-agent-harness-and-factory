@@ -1,7 +1,9 @@
 /* Zwei-Stufen-Prüfung (#1120): Verhalten von scripts/verify-lauf.mjs (Kette, Einengung, Bericht, Exit). Spawn/git sind injiziert. */
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { altName, ohneKernEnv } from "./support/env-alt";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as vlModule from "../scripts/verify-lauf.mjs";
@@ -18,6 +20,7 @@ const vl = vlModule as {
   bericht: (e: Erg[], o?: { modus?: string; hinweis?: string }) => string;
   exitCode: (e: Erg[]) => number;
   engungSicher: (lade: () => Eng) => Eng;
+  sammleTests: (dir?: string) => { pfad: string; text: string }[];
   statusVon: (r: { status: number | null }) => number;
   laufe: (a: { schritte: string[]; engung?: Eng | null; run: (j: Job) => { status: number; output: string }; jetzt?: () => number }) => Erg[];
 };
@@ -250,5 +253,30 @@ describe("fehlgeschlagene Testdateien im Bericht (#1663 L8)", () => {
     assert.match(vl.bericht([{ name: "test", ok: false, exit: 1, ms: 1, ausgabe: "Absturz" }]), /keine Testdatei in der Ausgabe erkannt/);
     assert.doesNotMatch(vl.bericht([{ name: "lint", ok: false, exit: 1, ms: 1, ausgabe: " FAIL  test/a.test.ts > x" }]), /Testdatei/);
     assert.doesNotMatch(vl.bericht([{ name: "test", ok: true, ms: 1 }]), /Testdatei/);
+  });
+});
+
+describe("sammleTests ohne test/-Ordner (factory#208)", () => {
+  const dirs: string[] = [];
+  const temp = (): string => {
+    const d = mkdtempSync(join(tmpdir(), "vl-"));
+    dirs.push(d);
+    return d;
+  };
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  test("fehlender Ordner (Projekt ohne Vitest-Tests, etwa Java-Profil) ergibt [] statt ENOENT", () => {
+    expect(vl.sammleTests(join(temp(), "test"))).toEqual([]);
+  });
+
+  test("vorhandener Ordner liefert seine *.test.ts (Negativfall: nur der fehlende Ordner ist leer)", () => {
+    const dir = temp();
+    mkdirSync(join(dir, "test"));
+    writeFileSync(join(dir, "test", "a.test.ts"), "x");
+    const r = vl.sammleTests(join(dir, "test"));
+    expect(r).toHaveLength(1);
+    expect(r[0].text).toBe("x");
   });
 });

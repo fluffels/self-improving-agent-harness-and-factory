@@ -3,7 +3,7 @@
 // dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (Builtins und das Blatt `regex-lib.mjs`).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, sep } from "node:path";
-import { escapeRegex } from "../regex-lib.mjs";
+import { escapeRegex, SCHRITT_NAME } from "../regex-lib.mjs";
 
 /**
  * Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). Richtlinie (Gegenstück: `zelle` in scripts/abnahme.mjs): `cell` maskiert generierte Zellen mit
@@ -22,7 +22,7 @@ export function cell(value) {
  */
 export function parseNpmRunMentions(md) {
   const found = new Set();
-  for (const m of md.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) found.add(m[1]);
+  for (const m of md.matchAll(new RegExp(String.raw`\bnpm\s+run\s+(${SCHRITT_NAME})`, "g"))) found.add(m[1]);
   if (/\bnpm\s+test\b/.test(md)) found.add("test");
   return found;
 }

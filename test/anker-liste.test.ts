@@ -227,6 +227,14 @@ describe("guardListe: Funktionszuordnung", () => {
     ]);
   });
 
+  test("der Direktaufruf-Block `if (istDirektaufruf(` zählt als (Modulebene), nicht zur vorigen Funktion (factory#208)", () => {
+    const r = neu("function f() {\n  if (a) {}\n}\nif (istDirektaufruf(import.meta.url)) {\n  try {\n    g();\n  } catch (e) {}\n}");
+    expect(r.map((e) => [e.funktion, e.zeile, e.anker.map((a) => a.zeile)])).toEqual([
+      ["f", 1, [2]],
+      ["(Modulebene)", 4, [4, 7]],
+    ]);
+  });
+
   test.each(["if", "for", "while", "switch", "catch", "return"])("%s-Zeile mit Block ist kein Methodenkopf", (wort) => {
     const r = neu(`function f() {\n  ${wort} (a) {\n    g(a || b);\n  }\n}`);
     expect(r.map((e) => e.funktion)).toEqual(["f"]);

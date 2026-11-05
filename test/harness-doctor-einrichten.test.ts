@@ -387,6 +387,44 @@ describe("harness-doctor --einrichten", () => {
     assert.ok(r.out.some((z) => z.startsWith("FEHLER Sammelticket:")));
   });
 
+  describe("factory#208 L26: sammelticketSchritt, Fatal-Zweig und Reihenfolge Token vor Bezieher (Summenzeile)", () => {
+    const anleitungen = (r: Ergebnis) => r.out.filter((z) => z.startsWith("ANLEITUNG ")).length;
+    const summe = (r: Ergebnis) => Number(/, (\d+) Anleitung\(en\), /.exec(r.out.at(-1) ?? "")?.[1] ?? "-1");
+    const fatal = () => welt(["status:steckt"], { "api -i user": new Error("nicht angemeldet") });
+    test("fatales Token: die Anleitung zum Sammelticket zählt in der Summenzeile genau einmal mit (Fatal-Zweig)", () => {
+      const root = neuerRoot();
+      const r = fahre(root, fatal(), EINR(root));
+      assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Sammelticket:") && z.includes("Token-Punkt")));
+      assert.equal(r.out.filter((z) => z.startsWith("ANLEITUNG Sammelticket:")).length, 1);
+      assert.equal(summe(r), anleitungen(r), r.out.join("\n"));
+      assert.ok(summe(r) >= 2);
+    });
+    test("Token fehlt vor Bezieher: im Bezieher mit fatalem Token steht die Token-Anleitung, nicht der INFO-Hinweis, und die Summe stimmt", () => {
+      const root = neuerRoot();
+      writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+      const r = fahre(root, fatal(), EINR(root));
+      assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Sammelticket:") && z.includes("Token-Punkt")), r.out.join("\n"));
+      assert.ok(!r.out.some((z) => z.startsWith("INFO Sammelticket")));
+      assert.deepEqual(r.sammel, []);
+      assert.equal(summe(r), anleitungen(r));
+    });
+    test("Bezieher ohne fatales Token: INFO statt Anleitung, die Summenzeile zählt den Hinweis nicht", () => {
+      const root = neuerRoot();
+      writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+      const r = fahre(root, welt(["status:steckt"]), EINR(root));
+      assert.ok(r.out.some((z) => z.startsWith("INFO Sammelticket:")));
+      assert.equal(summe(r), anleitungen(r));
+    });
+    test("abweichende --config: genau eine Anleitung zum Sammelticket zählt als `1 Anleitung(en)` mit, wenn sonst alles eingerichtet ist", () => {
+      const root = neuerRoot();
+      const andere = join(root, "andere.json");
+      writeFileSync(andere, JSON.stringify(CONFIG));
+      const r = fahre(root, welt(), ["--einrichten", "--config", andere]);
+      assert.equal(summe(r), anleitungen(r));
+      assert.ok(r.out.some((z) => z.startsWith("ANLEITUNG Sammelticket:")));
+    });
+  });
+
   test("fatales Token: weder Label noch Sammelticket, nur Anleitung", () => {
     const root = neuerRoot();
     const w = welt(["status:steckt"], { "api -i user": new Error("nicht angemeldet") });

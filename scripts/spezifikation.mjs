@@ -10,7 +10,7 @@
  *
  * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] <Datum> Reparatur gescheitert: #<nr> (<Mängel>). Fix: …`
  * als Kommentar ins jüngste ungeclaimte Harness-Sammelticket der Meldestelle (factory#153, Standard das Repo des Factory-Boards; Exit 1: keins da, Fix: `sammelticket-anlegen.mjs harness`; Exit 1 auch bei einem Treffer von `check-internalrefs --text`, dann ist nichts gesendet; die Zeile trägt den Factory-Stand). Steht die Zeile zu dieser Nummer schon
- * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post. Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
+ * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post (an einer fremden Meldestelle nennt die Zeile `owner/name#<nr>`, und eine Zeile des eigenen Kontos, `gh api user`, zählt als bekannt, factory#208). Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
@@ -28,8 +28,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ladeSammelKontext, postZeilen, waehleSammelticket } from "./inbox-lib.mjs";
 import { ankerFehler, boardFuerRolle, boardRolleFuer, loadItems, MELDESTELLE, NOTFALL_ARTEN, OWNER, REPO } from "./board-lib.mjs";
-import { bereiteMeldung, meldestelleToken } from "./meldung-lib.mjs";
-import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
+import { bereiteMeldung, eigenerLogin, keinSammelticketText, meldestelleZugang, zeileBekannt } from "./meldung-lib.mjs";
+import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istRepoForm } from "./repo-form.mjs";
@@ -104,19 +104,15 @@ function pruefen(werte, io, sprache) {
 }
 
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
-const gescheitertSchluessel = (nr) => `Reparatur gescheitert: #${nr} (`;
+const gescheitertSchluessel = (nr, herkunft) => `Reparatur gescheitert: ${herkunft ?? ""}#${nr} (`;
 
-/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig). Pur. */
-export const gescheitertZeile = ({ nr, mangel, heute }) =>
-  `- [ ] ${heute} ${gescheitertSchluessel(nr)}${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
+/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig); `herkunft` (`owner/name`) steht vor der Nummer, wenn die Meldestelle fremd ist (factory#153). Pur. */
+export const gescheitertZeile = ({ nr, mangel, heute, herkunft = null }) =>
+  `- [ ] ${heute} ${gescheitertSchluessel(nr, herkunft)}${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
 
-/** Steht zu #`nr` schon eine offene Zeile (`- [ ]`) eines vertrauten Autors in `kommentare` (`[{ user, body }]`)? Pur. */
-export function gescheitertBekannt(nr, kommentare, owner) {
-  const schluessel = gescheitertSchluessel(nr);
-  return kommentare.some(
-    (k) => istVertraut(k?.user ?? null, owner) && String(k?.body ?? "").split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)),
-  );
-}
+/** Steht zu #`nr` schon eine offene Zeile (`- [ ]`) eines vertrauten Autors oder des eigenen Kontos `eigen` in `kommentare` (`[{ user, body }]`)? `herkunft` wie bei `gescheitertZeile`. Pur. */
+export const gescheitertBekannt = (nr, kommentare, owner, { herkunft = null, eigen = null } = {}) =>
+  zeileBekannt({ kommentare, owner, eigen, schluessel: gescheitertSchluessel(nr, herkunft) });
 
 function gescheitert(werte, nrText, io) {
   const nr = positiveZahl(nrText);
@@ -126,9 +122,10 @@ function gescheitert(werte, nrText, io) {
   } catch (e) {
     return aufrufFehler(`Sammelticket nicht lesbar: ${schreibrechtText(e, io.sammelRepo ?? REPO, "lesen") ?? fehlerText(e)}`);
   }
-  if (!kontext.ziel) return ergebnis(1, "", "✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen\n");
-  if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner)) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
-  const meldung = io.bereite([gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute() })]);
+  if (!kontext.ziel) return ergebnis(1, "", `✖ ${keinSammelticketText({ fuer: "für die Zeile" })}\n`);
+  const herkunft = io.herkunft ?? null;
+  if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner, { herkunft, eigen: kontext.eigen ?? null })) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
+  const meldung = io.bereite([gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute(), herkunft })], { herkunft });
   if (!meldung.ok) return ergebnis(1, "", `✖ ${meldung.grund}\n`);
   try {
     io.postZeilen(kontext.ziel, meldung.text);
@@ -272,7 +269,8 @@ export function ankerPruefung({ nach, labels, repo }, lade, config) {
 }
 
 /** Fabrik der echten IO: erst nach bestandener Aufruf- und Config-Prüfung aufgerufen (`direktaufruf`). `deps` (Tests, #78 L13h): `ghJson`, `exec` (Prozessaufruf von board-place), `lade` (`loadItems`), `env` (Standard `process.env`; ein fremdes Ziel-Repo liest und schreibt der `PROJECT_TOKEN`), `kontextLader`/`waehle`/`post` (Sammelticket lesen, wählen, posten an die Meldestelle, factory#153). */
-export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env, kontextLader = ladeSammelKontext, waehle = waehleSammelticket, post = postZeilen, meldestelle = MELDESTELLE } = {}) => {
+export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade = loadItems, env = process.env, kontextLader = ladeSammelKontext, waehle = waehleSammelticket, post = postZeilen, meldestelle = MELDESTELLE, warn = console.error } = {}) => {
+  const zugang = meldestelleZugang({ stelle: meldestelle, eigenes: REPO, env });
   return {
     owner: OWNER,
     config,
@@ -286,13 +284,14 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
       const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];
       exec(process.execPath, [fileURLToPath(new URL("./board-place.mjs", import.meta.url)), ...args], { stdio: "inherit" });
     },
+    herkunft: zugang.herkunft,
     sammelKontext: () => {
-      const token = meldestelleToken({ stelle: meldestelle, eigenes: REPO, env });
-      const k = kontextLader({ repo: meldestelle, token });
-      return { ziel: waehle(k.offene, meldestelle, (a) => gh(a, { token }))?.number ?? null, kommentare: k.kommentare, owner: k.owner };
+      const k = kontextLader({ repo: meldestelle, token: zugang.token });
+      const eigen = eigenerLogin({ zugang, api: gh, warn });
+      return { ziel: waehle(k.offene, meldestelle, (a) => gh(a, { token: zugang.token }))?.number ?? null, kommentare: k.kommentare, owner: k.owner, eigen };
     },
-    bereite: (zeilen) => bereiteMeldung(zeilen),
-    postZeilen: (nr, text) => post(nr, text, meldestelle, meldestelleToken({ stelle: meldestelle, eigenes: REPO, env })),
+    bereite: (zeilen, opt) => bereiteMeldung(zeilen, opt),
+    postZeilen: (nr, text) => post(nr, text, meldestelle, zugang.token),
     heute: () => new Date().toISOString().slice(0, 10),
     ladeIssue: (nr) => gh(["api", `repos/${REPO}/issues/${nr}`]),
     bearbeite: (nr, body) => gh(["api", "-X", "PATCH", `repos/${REPO}/issues/${nr}`, "-f", `body=${body}`]),

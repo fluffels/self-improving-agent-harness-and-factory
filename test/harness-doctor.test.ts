@@ -804,6 +804,15 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.equal(r.code, 0);
   });
 
+  test("factory#208 L8: der Standard-Weg von --pruefen trägt den Punkt Meldestelle nur bei einer fremden Meldestelle (Actions ohne Token: Lücke, ohne gh-Aufruf)", () => {
+    const fremd = lauf({}, { dateien: "echt", config: { ...CONFIG, meldestelle: "eingang/privat" }, env: { GITHUB_ACTIONS: "true" } });
+    const z = fremd.out.find((l) => l.startsWith("LÜCKE Meldestelle: "));
+    assert.ok(z !== undefined && z.includes("eingang/privat") && z.includes("MELDESTELLE_TOKEN"), fremd.out.join("\n"));
+    assert.ok(!fremd.aufrufe.some((a) => a.includes("eingang/privat")));
+    const eigen = lauf({}, { dateien: "echt", env: { GITHUB_ACTIONS: "true" } });
+    assert.ok(!eigen.out.some((l) => l.includes("Meldestelle")), eigen.out.join("\n"));
+  });
+
   test("pruefLauf reicht die geladene Config an die Dateipunkte durch (kein zweites Lesen der Config)", () => {
     const gesehen: unknown[] = [];
     lauf({}, { dateien: (a: { rootDir: string; config?: unknown }) => (gesehen.push(a.config), []) });

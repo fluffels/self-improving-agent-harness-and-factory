@@ -1,6 +1,6 @@
 /* Spezifikations-Gate, Schreibseite (#1698): anlegen nur geprüft, reparieren nur vertraute Tickets ohne Inhaltsverlust.
  * Alles über injizierte io: kein gh, kein Dateizugriff. Red-Green: die Prüfung vor `erzeuge`/`bearbeite` entfernen -> rot. */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/spezifikation.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -537,7 +537,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     };
     return { io: gio as unknown as Io, posts };
   }
-  const fn = raw as unknown as { gescheitertZeile: (a: { nr: number; mangel: string; heute: string }) => string; gescheitertBekannt: (nr: number, kommentare: Sammel["kommentare"], owner: string) => boolean };
+  const fn = raw as unknown as { gescheitertZeile: (a: { nr: number; mangel: string; heute: string; herkunft?: string | null }) => string; gescheitertBekannt: (nr: number, kommentare: Sammel["kommentare"], owner: string, o?: { herkunft?: string | null; eigen?: string | null }) => boolean };
 
   test("aufrufPruefen: Nummer und --mangel sind Pflicht", () => {
     expect(S.aufrufPruefen(ARGS)).toMatchObject({ befehl: "gescheitert", positional: ["7"], werte: { mangel: "Negativfall fehlt" } });
@@ -628,6 +628,34 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22" })).toBe(ZEILE);
     expect(fn.gescheitertBekannt(7, [{ user: { login: OWNER, type: "User" }, body: ZEILE }], OWNER)).toBe(true);
     expect(fn.gescheitertBekannt(7, [], OWNER)).toBe(false);
+  });
+  test("fremde Meldestelle (factory#208 L7): die Zeile nennt owner/name#n, die Dedupe sucht genau diese Form", () => {
+    const mit = ZEILE.replace("#7 (", "acme/proj#7 (");
+    expect(fn.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: "2026-10-22", herkunft: "acme/proj" })).toBe(mit);
+    const k = [{ user: { login: OWNER, type: "User" }, body: mit }];
+    expect(fn.gescheitertBekannt(7, k, OWNER, { herkunft: "acme/proj" })).toBe(true);
+    expect(fn.gescheitertBekannt(7, k, OWNER)).toBe(false);
+    expect(fn.gescheitertBekannt(7, [{ user: { login: OWNER, type: "User" }, body: ZEILE }], OWNER, { herkunft: "acme/proj" })).toBe(false);
+  });
+  test("eigenes Konto an einer fremden Meldestelle (factory#208 L6): die eigene Zeile gilt als bekannt, die eines Fremden nicht", () => {
+    const eigene = [{ user: { login: "fremdkonto", type: "User" }, body: ZEILE }];
+    expect(fn.gescheitertBekannt(7, eigene, "eingang", { eigen: "fremdkonto" })).toBe(true);
+    expect(fn.gescheitertBekannt(7, eigene, "eingang", { eigen: "anderes" })).toBe(false);
+    expect(fn.gescheitertBekannt(7, eigene, "eingang")).toBe(false);
+    const { io, posts } = gumgebung({ owner: "eingang", kommentare: eigene, eigen: "fremdkonto" } as Partial<Sammel>);
+    expect(S.fuehreAus(ARGS, io).code).toBe(0);
+    expect(posts).toEqual([]);
+  });
+  test("io.herkunft: Zeile mit Herkunft und bereite bekommt sie (Fremd-Meldestelle), ohne herkunft bleibt es bei #n", () => {
+    const gesehen: unknown[][] = [];
+    const { io, posts } = gumgebung({}, { herkunft: "acme/proj", bereite: (z: string[], o?: unknown) => (gesehen.push([z, o]), { ok: true, text: z.join("\n") }) } as Partial<GIo>);
+    expect(S.fuehreAus(ARGS, io).code).toBe(0);
+    expect(posts[0]?.text).toContain("gescheitert: acme/proj#7 (");
+    expect(gesehen[0]?.[1]).toEqual({ herkunft: "acme/proj" });
+  });
+  test("kein ungeclaimtes Sammelticket: voller Wortlaut der Agentenvariante", () => {
+    const { io } = gumgebung({ ziel: null });
+    expect(S.fuehreAus(ARGS, io).err).toBe("✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen\n");
   });
 });
 
@@ -720,6 +748,7 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
       kontextLader: (o: unknown) => (aufrufe.push(["kontext", o]), { offene: [{ number: 9 }], kommentare: [], owner: "o" }),
       waehle: (_o: unknown, repo: string) => (aufrufe.push(["waehle", repo]), { number: 9 }),
       post: (...a: unknown[]) => aufrufe.push(["post", ...a]),
+      warn: () => undefined,
     }) as unknown as { sammelRepo: string; sammelKontext: () => { ziel: number }; postZeilen: (nr: number, t: string) => void };
     expect(io.sammelKontext().ziel).toBe(9);
     io.postZeilen(9, "text");
@@ -727,6 +756,48 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     expect(io.sammelRepo).toBe(stelle);
     const token = "mt";
     expect(aufrufe).toEqual([["kontext", { repo: stelle, token }], ["waehle", stelle], ["post", 9, "text", stelle, token]]);
+  });
+  test("fremde Meldestelle (factory#208): Herkunft ist das eigene Repo, eigen kommt aus gh api user mit dem Token der Stelle, ohne Treffer ziel null", () => {
+    const gh: unknown[][] = [];
+    const io = E.echteIo(config, {
+      env: { MELDESTELLE_TOKEN: "mt" },
+      meldestelle: "eingang/privat",
+      ghJson: (a: string[], o: unknown) => (gh.push([a, o]), { login: "fremdkonto" }),
+      kontextLader: () => ({ offene: [], kommentare: [], owner: "o" }),
+      waehle: () => null,
+      warn: () => undefined,
+    }) as unknown as { herkunft: string | null; sammelKontext: () => { ziel: number | null; eigen: string | null } };
+    expect(io.herkunft).toBe(EIGENES);
+    expect(io.sammelKontext()).toMatchObject({ ziel: null, eigen: "fremdkonto" });
+    expect(gh).toEqual([[["api", "user"], { token: "mt" }]]);
+  });
+  test("Standard-warn ist console.error: ein nicht lesbares Konto meldet die Warnzeile dorthin", () => {
+    const zeilen: unknown[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void zeilen.push(a[0]));
+    try {
+      const io = E.echteIo(config, { env: { MELDESTELLE_TOKEN: "mt" }, meldestelle: "eingang/privat", ghJson: () => { throw new Error("HTTP 403"); }, kontextLader: () => ({ offene: [], kommentare: [], owner: "o" }), waehle: () => null }) as unknown as { sammelKontext: () => unknown };
+      io.sammelKontext();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(zeilen).toHaveLength(1);
+    expect(String(zeilen[0])).toMatch(/^HINWEIS Dedupe: eigenes Konto nicht lesbar \(HTTP 403\)/);
+  });
+  test("eigene Meldestelle: keine Herkunft, kein gh api user; ein Treffer liefert die Nummer des Sammeltickets", () => {
+    const io = E.echteIo(config, {
+      env: {},
+      meldestelle: EIGENES,
+      ghJson: () => { throw new Error("kein Aufruf"); },
+      kontextLader: () => ({ offene: [{ number: 3 }], kommentare: [], owner: "o" }),
+      waehle: () => ({ number: 3 }),
+    }) as unknown as { herkunft: string | null; sammelKontext: () => { ziel: number | null; eigen: string | null } };
+    expect(io.herkunft).toBeNull();
+    expect(io.sammelKontext()).toMatchObject({ ziel: 3, eigen: null });
+  });
+  test("bereite ohne wurzel (Standard: Repo-Wurzel, im Quellrepo ohne Sync-Stand) und Standard-meldestelle", () => {
+    const io = E.echteIo(config, { ghJson: () => ({}) }) as unknown as { sammelRepo: string; bereite: (z: string[], o?: { herkunft?: string | null; pruefe?: (t: string) => boolean }) => { ok: boolean; text?: string } };
+    expect(typeof io.sammelRepo).toBe("string");
+    expect(io.bereite(["- [ ] x #4"], { herkunft: "acme/proj", pruefe: () => true })).toEqual({ ok: true, text: "- [ ] x acme/proj#4" });
   });
   test("erzeuge schreibt in das übergebene Repo", () => {
     const { io, gh } = bau();

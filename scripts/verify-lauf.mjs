@@ -124,7 +124,9 @@ export function laufe({ schritte, engung = null, run, jetzt = () => Date.now() }
 const git = (args) => execFileSync("git", args, { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const liste = (text) => text.split("\0").filter(Boolean);
 
-function sammleTests(dir = join(WURZEL, "test")) {
+export function sammleTests(dir = join(WURZEL, "test")) {
+  // Ein Projekt ohne Vitest-Tests (Java-Profil, Maven/Angular) ist gültig: kein test/-Ordner heißt keine Tests, kein ENOENT-Fehler.
+  if (!existsSync(dir)) return [];
   const out = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);

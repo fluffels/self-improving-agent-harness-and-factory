@@ -39,9 +39,9 @@ const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beisp
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
-  test("ohne blockierende Datei: OK, und alle vier Punkte stehen immer da", () => {
+  test("ohne blockierende Datei: OK, und alle fünf Punkte stehen immer da", () => {
     const e = lauf(gesund);
-    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test"]);
     expect(e.every((p) => p.ok)).toBe(true);
   });
 
@@ -348,5 +348,36 @@ describe("factory#162 L44: PROJEKTDATEIEN trägt dieselben Pfade wie die Konstan
     const pfade = PROJEKTDATEIEN.map((d) => d.pfad);
     expect(pfade).toContain(DEFAULT_CONFIG);
     expect(pfade).toContain(befehle[0]);
+  });
+});
+
+describe("Gezielter Test (factory#208 L23)", () => {
+  const gezielt = (config?: unknown) => punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config }), "Gezielter Test");
+
+  test("Endung außerhalb der JS/TS-Familie ohne befehle.testGezielt: Lücke mit Endung und Fix", () => {
+    const p = gezielt({ struktur: { quelle: "src", endungen: [".java", ".ts"] } });
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain(".java");
+    expect(p.befund).not.toContain(".ts,");
+    expect(p.fix).toContain("befehle.testGezielt");
+  });
+
+  test("mit befehle.testGezielt: OK", () => {
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".java"] }, befehle: { testGezielt: "mvn -q test -Dtest=" } })).toEqual({ punkt: "Gezielter Test", ok: true });
+  });
+
+  test("JS/TS-Endungen, fehlende endungen, fehlende struktur und fehlende Config brauchen keinen Befehl", () => {
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".ts", ".mjs", ".cjs", ".js", ".mts", ".cts"] } }).ok).toBe(true);
+    expect(gezielt({ struktur: { quelle: "src" } }).ok).toBe(true);
+    expect(gezielt({}).ok).toBe(true);
+    expect(gezielt(null).ok).toBe(true);
+    expect(gezielt({ struktur: { quelle: "src", endungen: "kaputt" } }).ok).toBe(true);
+  });
+
+  test("ein leerer befehle-Block zählt nicht als gesetzter Befehl", () => {
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: {} }).ok).toBe(false);
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { verify: "x" } }).ok).toBe(false);
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { testGezielt: "  " } }).ok).toBe(false);
   });
 });

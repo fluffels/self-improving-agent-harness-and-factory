@@ -4,7 +4,7 @@
 //
 // Formen von `struktur.quelle`: ein String (ein wörtlicher Ordner, wie bisher) oder eine Liste von Ordnern bzw. Globs (Syntax von `pfad-glob.mjs`,
 // etwa `*/src/main/java`). Globs lösen nur Ordner auf. Grenze beim Auflösen eines Globs (geschlossene Liste): `node_modules` und Ordner mit
-// führendem `.` werden nie betreten; ein wörtlicher Präfix vor dem ersten Glob-Segment wird direkt genommen (auch `.claude/...`). Innerhalb einer
+// führendem `.` werden nie betreten; ohne `**` reicht der Abstieg nur so tief wie das Muster Segmente hat; ein wörtlicher Präfix vor dem ersten Glob-Segment wird direkt genommen (auch `.claude/...`). Innerhalb einer
 // aufgelösten Wurzel zählt jede Datei mit passender Endung, wie bisher.
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -92,24 +92,26 @@ const istOrdner = (pfad) => {
 
 const uebersprungen = (name) => name === "node_modules" || name.startsWith(".");
 
-function ordnerWalk(rootDir, rel, regex, treffer) {
-  for (const ent of readdirSync(join(rootDir, ...rel.split("/")), { withFileTypes: true })) {
+// `maxTiefe`: Segmentzahl, ab der kein Ordner mehr gelesen wird (ohne `**` trifft ein Muster nur Ordner mit genau so vielen Segmenten wie es selbst; `Infinity` mit `**`).
+function ordnerWalk(rootDir, rel, regex, treffer, maxTiefe, readdir) {
+  for (const ent of readdir(join(rootDir, ...rel.split("/")), { withFileTypes: true })) {
     if (!ent.isDirectory() || uebersprungen(ent.name)) continue;
     const kind = rel === "" ? ent.name : `${rel}/${ent.name}`;
     if (regex.test(kind)) treffer.push(kind);
-    ordnerWalk(rootDir, kind, regex, treffer);
+    if (kind.split("/").length < maxTiefe) ordnerWalk(rootDir, kind, regex, treffer, maxTiefe, readdir);
   }
 }
 
-/** Die Ordner (repo-relativ, POSIX, sortiert), die ein Eintrag von `struktur.quelle` trifft; ein wörtlicher Pfad ergibt sich selbst, wenn er ein Ordner ist, sonst `[]`. */
-export function ordnerZuMuster(rootDir, muster) {
+/** Die Ordner (repo-relativ, POSIX, sortiert), die ein Eintrag von `struktur.quelle` trifft; ein wörtlicher Pfad ergibt sich selbst, wenn er ein Ordner ist, sonst `[]`.
+ *  Ohne `**` ist die Auflösung auf die Segmentzahl des Musters begrenzt (kein Abstieg in `target` oder Modul-Unterbäume, factory#208); `readdir` ist die Dateisystem-Naht. */
+export function ordnerZuMuster(rootDir, muster, readdir = readdirSync) {
   if (!istGlob(muster)) return istOrdner(join(rootDir, ...muster.split("/"))) ? [muster] : [];
   const segmente = muster.split("/");
   const erstes = segmente.findIndex((s) => istGlob(s));
   const praefix = segmente.slice(0, erstes).join("/");
   if (praefix !== "" && !istOrdner(join(rootDir, ...praefix.split("/")))) return [];
   const treffer = [];
-  ordnerWalk(rootDir, praefix, globRegex(muster), treffer);
+  ordnerWalk(rootDir, praefix, globRegex(muster), treffer, segmente.includes("**") ? Infinity : segmente.length, readdir);
   return treffer.sort();
 }
 

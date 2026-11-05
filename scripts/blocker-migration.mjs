@@ -6,7 +6,9 @@
  *   node scripts/blocker-migration.mjs [--anwenden] [--repo <owner/name>]
  *
  * Standard ist der Trockenlauf (nur Ausgabe); `--anwenden` schreibt je fehlender Kante eine Mutation. Übersprungen und gelistet: Blocker, die
- * nicht offen sind, und Blocker in fremden Repos. Grenze: je Issue werden höchstens 100 vorhandene Kanten gelesen (`blockedBy(first:100)`, ohne Paginierung). Idempotent: schon native Kanten werden abgezogen. Ausgabe endet mit einer Kostenzeile
+ * nicht offen sind, und Blocker in fremden Repos (bewusst kein REST-Lookup über `echteVerknuepfung`: im Factory-Repo sind 29 von 31 übersprungenen
+ * Verweisen Herkunftsnennungen auf Tickets des Quellprojekts, die Kante bräuchte Lesezugriff auf dieses Repo und zeigte kein Blocked-Icon an erledigter Arbeit;
+ * die Textzeile bleibt maßgeblich; Stand der Messung 2026-11-05). Grenze: je Issue werden höchstens 100 vorhandene Kanten gelesen (`blockedBy(first:100)`, ohne Paginierung). Idempotent: schon native Kanten werden abgezogen. Ausgabe endet mit einer Kostenzeile
  * („k Abfragen, m Mutationen“). Exit 0 = fertig, 1 = gh-Fehler (laufende Kanten werden weiter versucht), 2 = Aufruffehler.
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -118,13 +120,17 @@ export function echteIo(repo, { gh = ghJson, env = process.env } = {}) {
   };
 }
 
-if (istDirektaufruf(import.meta.url)) {
-  let r;
+/** Der Direktaufruf: `fuehreAus` (injizierbar), ein geworfener Fehler wird zu Exit 1 mit Fehlerzeile. Ergebnis `{ code, out, err }`. */
+export function direktLauf(argv, fuehre = fuehreAus) {
   try {
-    r = fuehreAus(process.argv.slice(2));
+    return fuehre(argv);
   } catch (e) {
-    r = { code: 1, out: "", err: `✖ ${fehlerText(e)}\n` };
+    return { code: 1, out: "", err: `✖ ${fehlerText(e)}\n` };
   }
+}
+
+if (istDirektaufruf(import.meta.url)) {
+  const r = direktLauf(process.argv.slice(2));
   process.stdout.write(r.out);
   process.stderr.write(r.err);
   process.exitCode = r.code;

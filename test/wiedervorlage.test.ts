@@ -229,3 +229,50 @@ describe("main: Ziel-Repo des Labels (#78 L12b)", () => {
     expect(platziert).toEqual([[7, "wiedervorlage", "pt", FREMD.repo]]);
   });
 });
+
+describe("main: Sperrprüfung bei fremdem Ziel-Repo (factory#153)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const aufbau = (config: unknown, bereite: (z: string[], o: unknown) => { ok: boolean; grund?: string }) => {
+    const angelegt: unknown[][] = [];
+    const geprueft: unknown[][] = [];
+    const log: string[] = [];
+    const deps = {
+      ladeConfig: () => config,
+      ladeLibs: () => Promise.resolve({ REPO: FREMD.repo, platziereOben: () => undefined }),
+      eintraegeLaden: () => [e("a", "2000-01-01")],
+      ticketsLaden: () => [] as T[],
+      legen: (...a: unknown[]) => (angelegt.push(a), 7),
+      bereite: (z: string[], o: unknown) => (geprueft.push([z, o]), bereite(z, o)),
+      log: (m: string) => log.push(m),
+      err: () => undefined,
+    };
+    return { angelegt, geprueft, log, deps };
+  };
+  test("fremdes Ziel: Titel und Body gehen durch die Prüfung (ohne Stand-Zeile), bei Treffer entsteht nichts und der Lauf ist rot", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { angelegt, geprueft, log, deps } = aufbau(fremd, () => ({ ok: false, grund: "Meldung nicht gesendet: Treffer" }));
+    expect(await main([], deps)).toBe(1);
+    expect(angelegt).toEqual([]);
+    expect(geprueft).toHaveLength(1);
+    expect((geprueft[0][0] as string[])[0]).toContain("⏰ Wiedervorlage:");
+    expect((geprueft[0][0] as string[])[1]).toContain(W.markerFuer("a"));
+    expect(geprueft[0][1]).toEqual({ stand: null });
+    expect(log.join("\n")).toContain("Meldung nicht gesendet: Treffer");
+  });
+  test("fremdes Ziel, saubere Prüfung: das Ticket wird angelegt", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { angelegt, deps } = aufbau(fremd, () => ({ ok: true }));
+    expect(await main([], deps)).toBe(0);
+    expect(angelegt).toHaveLength(1);
+  });
+  test("eigenes Ziel: keine Prüfung nötig, das Ticket wird angelegt (Negativtest)", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { angelegt, geprueft, deps } = aufbau(FREMD, () => ({ ok: false, grund: "darf nie gefragt werden" }));
+    expect(await main([], deps)).toBe(0);
+    expect(geprueft).toEqual([]);
+    expect(angelegt).toHaveLength(1);
+  });
+});

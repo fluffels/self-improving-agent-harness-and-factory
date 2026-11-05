@@ -62,6 +62,7 @@ type CheckDiffCoverageModule = {
   fehlenderBerichtText: (fehlend: string[]) => string;
   ohneMessung: (r: Record<string, unknown>, o: { zeilen: Record<string, string>; quelle: string | Quellen; colors: Record<"red" | "green" | "dim", (s: string) => string> }) => number | null;
   messfehlerText: (r: Record<string, unknown>, red: (s: string) => string) => string | null;
+  rotZeilen: (b: { files: { path: string; uncovered: number[] }[] }, berichte: string[]) => string[];
   mehrdeutigText: (m: { pfad: string; schluessel: string; kandidaten: string[] }[]) => string;
   checkDiffCoverage: (opts: { quelle?: string | Quellen; berichte?: Bericht[]; rootDir?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
@@ -84,6 +85,7 @@ const {
   fehlenderBerichtText,
   mehrdeutigText,
   messfehlerText,
+  rotZeilen,
   ohneMessung,
   checkDiffCoverage: checkDiffCoverageRoh,
 } = checkCovRaw as CheckDiffCoverageModule;
@@ -874,5 +876,28 @@ describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", 
   test("struktur.ohne nimmt Dateien aus der Messung", () => {
     const r = lauf({ zeilen: [5], quelle: { ...JAVA, ohne: ["*/src/main/java/de/**"] } });
     assert.equal(r.nothingToMeasure, true);
+  });
+});
+
+describe("Diff-Coverage: Rot nennt Datei, Zeile und Bericht (factory#208)", () => {
+  const bucket = {
+    files: [
+      { path: "a/src/main/java/de/A.java", uncovered: [3, 7] },
+      { path: "b/src/main/java/de/B.java", uncovered: [] },
+      { path: "c/src/main/java/de/C.java", uncovered: [12] },
+    ],
+  };
+
+  test("je Datei mit ungetesteten Zeilen eine Zeile (Datei und Zeilen), danach die gelesenen Berichte", () => {
+    const z = rotZeilen(bucket, ["a/target/jacoco.xml", "coverage/lcov.info"]);
+    assert.deepEqual(z, [
+      "    a/src/main/java/de/A.java: ungetestet in Zeile 3, 7",
+      "    c/src/main/java/de/C.java: ungetestet in Zeile 12",
+      "    gelesen aus: a/target/jacoco.xml, coverage/lcov.info",
+    ]);
+  });
+
+  test("Datei ohne ungetestete Zeile kommt nicht vor; ohne Treffer bleibt die Liste leer (kein Bericht ohne Anlass)", () => {
+    assert.deepEqual(rotZeilen({ files: [{ path: "x.java", uncovered: [] }] }, ["r.xml"]), []);
   });
 });

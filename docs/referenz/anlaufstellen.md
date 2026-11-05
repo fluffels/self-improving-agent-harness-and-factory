@@ -73,7 +73,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, Java-Profil (Maven, Angular, ArchUnit), docs-gen übernehmen |
-| [erstbezug.md](../erstbezug.md) | wenn du den Harness in ein neues, leeres Repo holst: Schrittfolge, Projektdateien mit Vorlagen, Probe `harness-doctor --pruefen` |
+| [erstbezug.md](../erstbezug.md) | wenn du den Harness in ein neues, leeres Repo holst: Schrittfolge, Projektdateien mit Vorlagen, Probe `harness-doctor --pruefen`; dazu die Meldestelle eines Beziehers (Schlüssel `meldestelle`, `melden.mjs`, Token, Doctor-Punkt `Meldestelle`) |
 | [factory/entscheidungsprotokoll.md](../factory/entscheidungsprotokoll.md) | wenn du vor einer Ermessens-Weiche oder einem Hand-off (`festgefahren`, Zusatzpass, Override) stehst und entscheiden willst, ob und womit du sie selbst klärst |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
 | [codex/einstieg.md](../codex/einstieg.md) | wenn Codex eingerichtet wird: native Rollen, MCP, Berechtigungen, Hook-Abbildung und noch fehlende autonome Freigabe |

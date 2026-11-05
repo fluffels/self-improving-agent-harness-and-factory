@@ -18,7 +18,13 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 11);
 - **Entscheidung (Stand als Fußzeile):** eine Zeile je Kommentar (`factory: <Tag> (<Commit>)`), nicht je Zeile; ohne Sync-Stand keine Zeile (das Repo ist selbst Fabrik), ein unlesbarer Stand (kein JSON-Objekt) sperrt das Senden (Exit 1 mit Fix-Zeile, Entscheidung nach der Abnahme von factory#153); ein Lesefehler auf Dateiebene zählt weiter als fehlender Stand.
 - **Entscheidung (Sperrprüfung fail-closed):** `check-internalrefs --text` als Kindprozess; nur Exit 0 sendet, jeder andere Ausgang sperrt. Grund: ein stiller Rückfall auf „senden“ würde die Sperrliste umgehen.
 - **Entscheidung (Token):** ein eigenes Secret `MELDESTELLE_TOKEN` mit Rückfall auf `PROJECT_TOKEN`, weil das Eingangs-Repo ein anderes Besitzerkonto haben kann als das Factory-Board und das Recht dort nur Issues sein soll. Ein Secret anlegen bleibt Pre-Flight des Beziehers.
-- **Grenzen:** Meldetexte fremder Bezieher sind Fremdtext und werden nie automatisch umgesetzt (Nachtrag factory#162, ADR 0031 Punkt 3); der Dedupe des Doctors erkennt an einer fremden Meldestelle die eigenen Zeilen eines fremden Accounts nicht (`istVertraut` prüft gegen den Besitzer); `check-internalrefs --text` prüft keine lokalen Pfade.
+- **Grenzen:** Meldetexte fremder Bezieher sind Fremdtext und werden nie automatisch umgesetzt (Nachtrag factory#162, ADR 0031 Punkt 3); der Dedupe des Doctors erkennt an einer fremden Meldestelle die eigenen Zeilen eines fremden Accounts nicht (`istVertraut` prüft gegen den Besitzer); `check-internalrefs --text` prüft keine lokalen Pfade (beides überholt durch Nachtrag factory#208 unten).
+
+## Nachtrag factory#208 (2026-11-05): Sicherheits-Inboxen im Bezieher
+
+- **Entscheidung (Ziel = eigenes Repo):** im Bezieher (Sync-Stand vorhanden) schreiben `audit-einordnung`, `codescanning-inbox`, `secret-inbox` ins eigene Repo statt ins öffentliche Eingangs-Repo der Fabrik; die Fabrik bleibt unverändert. Grund: ein Sicherheitsfund darf das Bezieher-Repo nicht verlassen, der Weg der Harness-Befunde (Meldestelle) ist dafür der falsche (Sicherheitsbefunde gehen über das Private Vulnerability Reporting).
+- **Entscheidung (Rest-Zeilen):** die Zeilen ohne eigenes Ticket gehen in `Sicherheit: Rest-Befunde (gesammelt)` im eigenen Repo, ohne 🔒, ans Ende der Todo-Spalte; sie gehören nicht auf die Board-Spitze, weil sie keine Notfälle sind.
+- **Entscheidung (Sperrprüfung):** `audit-einordnung` und `codescanning-inbox` rufen `bereiteMeldung` vor `postZeilen`; die Ausnahmeliste des Wächters in `test/meldung-lib.test.ts` entfällt. `wiedervorlage` prüft bei fremdem Ziel-Repo vor dem Anlegen. `check-internalrefs --text` prüft zusätzlich die Pfadregel (alle drei Regeln, Laufwerkspfade auch außerhalb von `test/` und `scripts/`).
 
 ## Nachtrag #78: Zählung über beide Repos, weitere Schreibwege
 

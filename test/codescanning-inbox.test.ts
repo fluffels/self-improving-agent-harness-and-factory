@@ -1174,3 +1174,61 @@ describe("main: bestehendes Spitzen-Ticket des Ziel-Owners im Ziel-Repo", () => 
     expect(zu?.opt).toEqual({ token: "zt" });
   });
 });
+
+describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const REST = "Sicherheit: Rest-Befunde (gesammelt)";
+  type Meldung = { ok: boolean; text?: string; grund?: string };
+  const aufbau = (extra: Record<string, unknown> = {}) => {
+    const gepostet: unknown[][] = [];
+    const geprueft: unknown[][] = [];
+    const gewaehlt: unknown[][] = [];
+    const kontexte: unknown[][] = [];
+    const log: string[] = [];
+    const libs = {
+      OWNER: OWNER,
+      REPO: "o/r",
+      ZIEL: "zz-org/fabrik",
+      zielToken: (repo?: string) => (repo === "o/r" ? undefined : "zt"),
+      SAMMELTICKET_TITEL_LISTE: SAMMELTICKET_TITEL_LISTE as string[],
+      ladeSammelKontext: (...a: unknown[]) => (kontexte.push(a), { rohe: [], offene: [{ number: 5, titel: "Sammel" }], kommentare: [] }),
+      vertrauteIssues: () => [],
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: (...a: unknown[]) => gepostet.push(a),
+      waehleSammelticket: (...a: unknown[]) => (gewaehlt.push(a), { number: 8 }),
+    };
+    const bereite = (z: string[], o: unknown): Meldung => (geprueft.push([z, o]), { ok: true, text: "GEPRUEFT" });
+    const deps = { ladeConfig: () => ({ labels: { harness: "area:harness" } }), ladeLibs: () => Promise.resolve(libs), ladeSeiten: () => [roh({ tool: { name: "Semgrep" } })], bereite, log: (m: string) => log.push(m), err: () => undefined, ...extra };
+    return { gepostet, geprueft, gewaehlt, kontexte, log, deps };
+  };
+  test("die Zeilen gehen durch die Sperrprüfung (ohne Stand-Zeile); gepostet wird deren Text", async () => {
+    const { gepostet, geprueft, deps } = aufbau({ bezieher: false });
+    expect(await main([], deps)).toBe(0);
+    expect(geprueft).toHaveLength(1);
+    expect((geprueft[0][0] as string[]).join("\n")).toContain("Code-Scanning");
+    expect(geprueft[0][1]).toEqual({ stand: null });
+    expect(gepostet).toEqual([[8, "GEPRUEFT"]]);
+  });
+  test("ein Treffer der Sperrprüfung: nichts gepostet, Exit 1, der Grund steht im Log", async () => {
+    const { gepostet, gewaehlt, log, deps } = aufbau({ bezieher: false, bereite: () => ({ ok: false, grund: "Meldung nicht gesendet: Treffer" }) });
+    expect(await main([], deps)).toBe(1);
+    expect(gepostet).toEqual([]);
+    expect(gewaehlt, "kein Rest-Ticket anlegen, solange die Prüfung rot ist").toEqual([]);
+    expect(log.join("\n")).toContain("::error::Meldung nicht gesendet: Treffer");
+  });
+  test("Fabrik (kein Bezieher): Ziel und Sammelticket unverändert, der Kontext liest keinen Rest-Titel (Negativtest)", async () => {
+    const { gepostet, gewaehlt, kontexte, deps } = aufbau({ bezieher: false });
+    expect(await main([], deps)).toBe(0);
+    expect(gewaehlt).toEqual([[[{ number: 5, titel: "Sammel" }]]]);
+    expect(kontexte).toEqual([[]]);
+    expect(gepostet).toEqual([[8, "GEPRUEFT"]]);
+  });
+  test("Bezieher: Zeilen gehen ins Rest-Ticket des eigenen Repos, nie ins Ziel-Repo der Fabrik", async () => {
+    const { gepostet, gewaehlt, kontexte, deps } = aufbau({ bezieher: true });
+    expect(await main([], deps)).toBe(0);
+    expect(gewaehlt).toEqual([[[{ number: 5, titel: "Sammel" }], "o/r", undefined, REST]]);
+    expect(kontexte).toEqual([[{ repo: "o/r", titel: REST }]]);
+    expect(gepostet).toEqual([[8, "GEPRUEFT", "o/r", undefined]]);
+  });
+});
