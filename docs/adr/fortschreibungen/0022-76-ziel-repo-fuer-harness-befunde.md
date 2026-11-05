@@ -18,7 +18,7 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 11);
 - **Entscheidung (Stand als Fußzeile):** eine Zeile je Kommentar (`factory: <Tag> (<Commit>)`), nicht je Zeile; ohne Sync-Stand keine Zeile (das Repo ist selbst Fabrik), ein unlesbarer Stand (kein JSON-Objekt) sperrt das Senden (Exit 1 mit Fix-Zeile, Entscheidung nach der Abnahme von factory#153); ein Lesefehler auf Dateiebene zählt weiter als fehlender Stand.
 - **Entscheidung (Sperrprüfung fail-closed):** `check-internalrefs --text` als Kindprozess; nur Exit 0 sendet, jeder andere Ausgang sperrt. Grund: ein stiller Rückfall auf „senden“ würde die Sperrliste umgehen.
 - **Entscheidung (Token):** ein eigenes Secret `MELDESTELLE_TOKEN` mit Rückfall auf `PROJECT_TOKEN`, weil das Eingangs-Repo ein anderes Besitzerkonto haben kann als das Factory-Board und das Recht dort nur Issues sein soll. Ein Secret anlegen bleibt Pre-Flight des Beziehers.
-- **Grenzen:** Meldetexte fremder Bezieher sind Fremdtext und werden nie automatisch umgesetzt (Nachtrag factory#162, ADR 0031 Punkt 3); der Dedupe des Doctors erkannte an einer fremden Meldestelle die eigenen Zeilen eines fremden Accounts nicht und `check-internalrefs --text` prüfte keine lokalen Pfade (beides behoben, Nachtrag factory#208 unten).
+- **Grenzen:** Meldetexte fremder Bezieher sind Fremdtext und werden nie automatisch umgesetzt (Nachtrag factory#162, ADR 0031 Punkt 3); der Dedupe des Doctors erkennt an einer fremden Meldestelle die eigenen Zeilen eines fremden Accounts nicht (`istVertraut` prüft gegen den Besitzer); `check-internalrefs --text` prüft keine lokalen Pfade (beides überholt durch Nachtrag factory#208 unten).
 
 ## Nachtrag factory#208 (2026-11-05): Sicherheits-Inboxen im Bezieher
 

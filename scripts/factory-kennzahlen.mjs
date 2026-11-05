@@ -341,7 +341,7 @@ export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = nul
       lies: quotenCommitLeser({ gh, repo, since, env }),
     });
     const commits = alle.filter((c) => !gueltig(c?.commit?.committer?.date) || Date.parse(c.commit.committer.date) <= Date.parse(bis));
-    const produktQuelle = quellen.some((q) => q.rolle === "produkt") || (config?.boards ?? []).some((b) => b.rolle === "produkt");
+    const produktQuelle = (config?.boards ?? []).some((b) => b.rolle === "produkt");
     return { commits, ...rest, produktQuelle, ...ladeHarnessIssues({ gh, repo, config, configFehler, seit: harnessSeit }) };
   } catch (err) {
     return { commits: null, commitsLuecke: `Commits von main nicht ladbar: ${fehlerText(err, 200)}`, ...rest };

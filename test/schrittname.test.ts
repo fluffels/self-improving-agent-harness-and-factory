@@ -1,4 +1,4 @@
-/* factory#208 L13: EINE Schrittnamen-Konstante in npm-ketten.mjs; verify-lauf, check:docdrift und die Doku-Erkennung akzeptieren dieselben Namen (auch mit Punkt). */
+/* factory#208 L13: EINE Schrittnamen-Konstante in regex-lib.mjs; verify-lauf, check:docdrift und die Doku-Erkennung akzeptieren dieselben Namen (auch mit Punkt). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as ketten from "../scripts/docs-gen/npm-ketten.mjs";
@@ -32,5 +32,11 @@ describe("gemeinsamer Schrittname", () => {
   test("die Doku-Erkennung (Kette im Text, npm run) kennt Namen mit Punkt", () => {
     expect(d.findDocumentedVerifyChains("typecheck → check:x.y → test")).toEqual([["typecheck", "check:x.y", "test"]]);
     expect([...m.parseNpmRunMentions("`npm run check:x.y`")]).toEqual(["check:x.y"]);
+  });
+
+  test("ein Satzpunkt hinter dem Namen gehört nicht dazu (Fließtext, auch vor Klammer)", () => {
+    expect([...m.parseNpmRunMentions("Danach npm run lint:prune. Dann weiter.")]).toEqual(["lint:prune"]);
+    expect([...m.parseNpmRunMentions("(npm run skills:sync.)")]).toEqual(["skills:sync"]);
+    expect(k.SCHRITT_RE.test("verify.")).toBe(false);
   });
 });

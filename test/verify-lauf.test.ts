@@ -1,7 +1,7 @@
 /* Zwei-Stufen-Prüfung (#1120): Verhalten von scripts/verify-lauf.mjs (Kette, Einengung, Bericht, Exit). Spawn/git sind injiziert. */
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { altName, ohneKernEnv } from "./support/env-alt";
@@ -257,13 +257,22 @@ describe("fehlgeschlagene Testdateien im Bericht (#1663 L8)", () => {
 });
 
 describe("sammleTests ohne test/-Ordner (factory#208)", () => {
+  const dirs: string[] = [];
+  const temp = (): string => {
+    const d = mkdtempSync(join(tmpdir(), "vl-"));
+    dirs.push(d);
+    return d;
+  };
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
   test("fehlender Ordner (Projekt ohne Vitest-Tests, etwa Java-Profil) ergibt [] statt ENOENT", () => {
-    const leer = mkdtempSync(join(tmpdir(), "vl-"));
-    expect(vl.sammleTests(join(leer, "test"))).toEqual([]);
+    expect(vl.sammleTests(join(temp(), "test"))).toEqual([]);
   });
 
   test("vorhandener Ordner liefert seine *.test.ts (Negativfall: nur der fehlende Ordner ist leer)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vl-"));
+    const dir = temp();
     mkdirSync(join(dir, "test"));
     writeFileSync(join(dir, "test", "a.test.ts"), "x");
     const r = vl.sammleTests(join(dir, "test"));

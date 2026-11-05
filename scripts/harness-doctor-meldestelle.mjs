@@ -9,17 +9,19 @@
  */
 import { fehlerText } from "./gh-cli.mjs";
 import { luecke, gut, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
+import { meldestelleZugang } from "./meldung-lib.mjs";
 import { meldestelleAus } from "./projekt-config-lib.mjs";
-import { gleichesRepo } from "./repo-form.mjs";
 
 const PUNKT = "Meldestelle";
 
-/** Die fremde Meldestelle aus der Config oder `null` (eigenes Repo, keine Config, Config ohne ableitbare Stelle). */
-function fremdeStelle(config) {
+/** Der Zugang zur fremden Meldestelle (dieselbe Rechnung wie der Wochenlauf: `meldestelleZugang`) oder `null` (eigenes Repo, keine Config, Config ohne ableitbare Stelle). */
+function fremderZugang(config, env) {
   if (!config) return null;
   try {
     const stelle = meldestelleAus(config);
-    return typeof stelle === "string" && !gleichesRepo(stelle, config.repo) ? stelle : null;
+    if (typeof stelle !== "string") return null;
+    const zugang = meldestelleZugang({ stelle, eigenes: config.repo, env });
+    return zugang.fremd ? zugang : null;
   } catch {
     return null;
   }
@@ -27,9 +29,9 @@ function fremdeStelle(config) {
 
 /** Der Punkt `Meldestelle` als Liste: leer ohne fremde Stelle, sonst genau ein Ergebnis. */
 export function meldestellePunkt({ config, env, lesen }) {
-  const stelle = fremdeStelle(config);
-  if (stelle === null) return [];
-  const token = env.MELDESTELLE_TOKEN || env.PROJECT_TOKEN || undefined;
+  const zugang = fremderZugang(config, env);
+  if (zugang === null) return [];
+  const { stelle, token } = zugang;
   if (token === undefined && env.GITHUB_ACTIONS === "true") {
     return [luecke(PUNKT, `die Meldestelle ${stelle} ist ein fremdes Repo, aber weder MELDESTELLE_TOKEN noch PROJECT_TOKEN ist gesetzt: der Wochenlauf kann dort weder lesen noch posten`, `Secret MELDESTELLE_TOKEN (Issues: Lesen und Schreiben an ${stelle}) im Repo anlegen und im Workflow harness-doctor.yml als Umgebungsvariable reichen (Anlegen ist ein Pre-Flight-Stopp, Anleitung: Seite docs/erstbezug.md des Factory-Repos, Abschnitt Meldestelle)`)];
   }

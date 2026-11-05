@@ -2,7 +2,8 @@
  * wächst nur bewusst. Das Budget ist ein Ratchet auf den Ist-Wert und gilt nur in der Fabrik (ohne Sync-Stand); im Bezieher entscheidet dessen Gesamtbudget. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { cpSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -66,6 +67,26 @@ describe("Kern-Block-Budget", () => {
       assert.match(String(kernBlockPruefung(dir)), /Kern-Block/);
       datei(dir, ".factory/sync-stand.json", JSON.stringify({ version: 2 }));
       assert.equal(kernBlockPruefung(dir), null, "mit Sync-Stand ist es ein Bezieher");
+    });
+  });
+
+  test("Gate check:contextsize (CLI): Kern-Block über Budget in der Fabrik ist rot, im Bezieher grün (die Verdrahtung, nicht nur die pure Prüfung)", { timeout: 60_000 }, () => {
+    temp((dir) => {
+      const wurzel = join(import.meta.dirname, "..");
+      cpSync(join(wurzel, "scripts"), join(dir, "scripts"), { recursive: true });
+      datei(dir, ".factory/projekt.json", readFileSync(join(wurzel, ".factory", "projekt.json"), "utf8"));
+      datei(dir, ".factory/besitz.json", "{}");
+      datei(dir, "AGENTS.md", mitKern("x".repeat(KERN_BLOCK_BUDGET)));
+      const lauf = () => {
+        const r = spawnSync(process.execPath, [join(dir, "scripts", "check-context-size.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 });
+        return { status: r.status, text: `${r.stderr}${r.stdout}` };
+      };
+      const fabrik = lauf();
+      assert.equal(fabrik.status, 1, fabrik.text);
+      assert.match(fabrik.text, /✖ [^\n]*Kern-Block/);
+      datei(dir, ".factory/sync-stand.json", JSON.stringify({ version: 2 }));
+      const bezieher = lauf();
+      assert.equal(bezieher.status, 0, bezieher.text);
     });
   });
 

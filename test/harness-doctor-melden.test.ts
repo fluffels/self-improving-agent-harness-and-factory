@@ -2,6 +2,9 @@
  * Alle IO-Teile sind Fakes (kein Netz); `lauf` ist die öffentliche Einstiegsfunktion, `ermittleLuecken` die Token-Weiche in Actions. */
 import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMelden from "../scripts/harness-doctor-melden.mjs";
 
@@ -310,6 +313,30 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+  test("Wochenlauf (factory#208 L8): `dateien` trägt den Punkt Meldestelle, gelesen wird mit dem Token der injizierten env", async () => {
+    const lesungen: unknown[][] = [];
+    let dateien: ((a: { rootDir: string; config: unknown }) => { punkt: string; ok: boolean }[]) | undefined;
+    const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [], kommentare: [], owner: "acme" }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("nichts zu posten") };
+    const code = await melden.main(["--dry-run"], {
+      env: { MELDESTELLE_TOKEN: "mt" },
+      api: (...a: unknown[]) => { lesungen.push(a); return { has_issues: true }; },
+      ladeConfig: () => ({}),
+      ladeLibs: () => Promise.resolve(libs),
+      log: () => undefined,
+      err: () => undefined,
+      pruefLauf: (a) => { dateien = a.dateien as typeof dateien; return { ergebnis: [] }; },
+    });
+    assert.equal(code, 0);
+    const wurzel = mkdtempSync(join(tmpdir(), "meldestelle-"));
+    let punkte: { punkt: string; ok: boolean }[] = [];
+    try {
+      punkte = dateien?.({ rootDir: wurzel, config: { repo: "acme/proj", meldestelle: "eingang/privat" } }) ?? [];
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+    assert.deepEqual(punkte.filter((p) => p.punkt === "Meldestelle"), [{ punkt: "Meldestelle", ok: true }]);
+    assert.deepEqual(lesungen[0], [["api", "repos/eingang/privat"], { token: "mt", timeout: 30000 }]);
   });
   describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
     const lauf = async (ziel: string, env: Record<string, string>) => {

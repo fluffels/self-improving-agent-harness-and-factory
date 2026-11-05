@@ -82,7 +82,7 @@ const KOPF = [
 ];
 /** Der Block `if (istDirektaufruf(…))` auf Modulebene: nicht der vorigen Funktion zuordnen. */
 const DIREKTAUFRUF_KOPF = /^if\s*\(\s*istDirektaufruf\(/;
-const DEFAULT_PARAMETER =/[^=!<>]=(?![=>])/;
+const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
 
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
 const kopfName = (text) => KOPF.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined);

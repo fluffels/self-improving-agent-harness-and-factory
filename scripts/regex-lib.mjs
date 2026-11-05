@@ -9,8 +9,8 @@ export function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
 }
 
-/** Zeichenklasse eines npm-Skriptnamens (Quelltext für RegExp-Bausteine, factory#208): verify-lauf, check:docdrift und die Doku-Erkennung nutzen dieselbe. */
-export const SCHRITT_NAME = "[\\w:.-]+";
+/** Zeichenklasse eines npm-Skriptnamens (Quelltext für RegExp-Bausteine, factory#208): verify-lauf, check:docdrift und die Doku-Erkennung nutzen dieselbe. Endet nie auf einen Punkt (ein Satzpunkt hinter `npm run x.` gehört nicht zum Namen). */
+export const SCHRITT_NAME = "[\\w:.-]*[\\w:-]";
 
 /** ANSI-Farbcode (`ESC[…m`). */
 export const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");

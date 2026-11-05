@@ -1,4 +1,8 @@
 /* Gemeinsamer Start der Inbox-Skripte (#1837 L16): Aufruf-Check vor dem Config-Laden, Config- und Lib-Fehler als einheitliche `::error::`-Meldung. */
+import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -210,6 +214,21 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
     const { libs } = aufbau();
     const wurzel = fileURLToPath(new URL("..", import.meta.url));
     expect(S.sicherheitsLibs(libs) === libs).toBe(!(rawStand as unknown as { istBezieher: (w: string) => boolean }).istBezieher(wurzel));
+  });
+
+  test("Standard in einem echten Bezieher (Kopie der Skripte mit Sync-Stand): ohne Angabe wird ersetzt, ohne Sync-Stand nicht (der Default zeigt auf die Repo-Wurzel)", { timeout: 60_000 }, () => {
+    const dir = mkdtempSync(join(tmpdir(), "sicherheitslibs-"));
+    try {
+      cpSync(join(fileURLToPath(new URL("..", import.meta.url)), "scripts"), join(dir, "scripts"), { recursive: true });
+      writeFileSync(join(dir, "pruefe.mjs"), 'import { sicherheitsLibs } from "./scripts/inbox-start-lib.mjs";\nconst libs = { REPO: "acme/proj", ZIEL: "fabrik/eingang", zielToken: () => undefined };\nconsole.log(JSON.stringify(sicherheitsLibs(libs).ZIEL));\n');
+      const lauf = () => spawnSync(process.execPath, [join(dir, "pruefe.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 }).stdout.trim();
+      expect(lauf()).toBe('"fabrik/eingang"');
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ version: 2 }));
+      expect(lauf()).toBe('"acme/proj"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("Bezieher: ohne SAMMELTICKET_TITEL_LISTE der Libs besteht die Liste nur aus dem Rest-Ticket", () => {
