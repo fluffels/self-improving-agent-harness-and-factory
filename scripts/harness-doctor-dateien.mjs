@@ -1,4 +1,4 @@
-/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): vier Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
+/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): fünf Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
@@ -10,6 +10,7 @@
  *
  *   `Langfuse-Takt`: `.github/workflows/board-takt.yml` und `scripts/langfuse-takt.mjs` existieren (Ring kern-nach-entkopplung kommt per Sync); Hinweis, wenn das Factory-Board ein fremdes Repo führt;
  *   im Bezieher (Sync-Stand vorhanden) ist es eine Lücke, wenn kein Board das eigene Repo führt (der Takt legt dort kein Status-Ticket an, factory#202), und wenn sich das Ziel des Takts aus der Config nicht bestimmen lässt.
+ *   `Gezielter Test` (factory#208): `struktur.endungen` außerhalb von JS/TS ohne `befehle.testGezielt` ist eine Lücke (der Standard `npx vitest run` kennt solche Tests nicht).
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
@@ -22,6 +23,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
+import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 
@@ -229,7 +231,19 @@ function configOderNull(rootDir) {
   }
 }
 
-/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien, Langfuse-Takt]`, immer alle vier, nie weniger. */
+/**
+ * Punkt `Gezielter Test` (factory#208): `struktur.endungen` mit einer Endung außerhalb der JS/TS-Familie (`STANDARD_ENDUNGEN`) braucht `befehle.testGezielt`, weil der Standard
+ * `npx vitest run` nur JS/TS-Tests kennt; ohne Befehl ist es eine Lücke. Fehlende Config, fehlende oder kaputte Endungen bedeuten Standard (OK). Pur.
+ */
+export function gezielterTestPunkt(config) {
+  const endungen = config?.struktur?.endungen;
+  const fremd = Array.isArray(endungen) ? endungen.filter((e) => !STANDARD_ENDUNGEN.includes(e)) : [];
+  const befehl = config?.befehle?.testGezielt;
+  if (fremd.length === 0 || (typeof befehl === "string" && befehl.trim() !== "")) return gut("Gezielter Test");
+  return luecke("Gezielter Test", `struktur.endungen nennt ${fremd.join(", ")} (außerhalb von JS/TS), aber befehle.testGezielt fehlt: der Standard „npx vitest run“ kennt solche Tests nicht`, `befehle.testGezielt in ${PROJEKT_CONFIG} auf die Befehlszeile des Test-Läufers setzen (der Läufer hängt die Pfade an: node scripts/gate-befehl.mjs testGezielt <datei>)`);
+}
+
+/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien, Langfuse-Takt, Gezielter Test]`, immer alle fünf, nie weniger. */
 export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir) }) {
-  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert), langfuseTaktPunkt(rootDir, existiert, config)];
+  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert), langfuseTaktPunkt(rootDir, existiert, config), gezielterTestPunkt(config)];
 }
