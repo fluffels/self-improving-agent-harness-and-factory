@@ -7,7 +7,7 @@ import { describe, expect, test } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixture } from "../support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -215,7 +215,20 @@ describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, 
 
   test("ungültige Aufrufe über den Prozess: Exit 2, nichts abgelegt", () => {
     const home = fixture({});
-    for (const args of [["a b"], [], ["a", "b"], ["--auftrag", "x"]]) expect(fahre(AUFTRAG, home, args).status).toBe(2);
+    for (const args of [["a b"], [], ["a", "b"], ["--auftrag", "x"]]) {
+      const r = fahre(AUFTRAG, home, args);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("Aufruf: node scripts/langfuse-auftrag.mjs <session-id>");
+      expect(r.stdout).toBe("");
+    }
     expect(existsSync(dateiVon(join(home, ".claude", "state")))).toBe(false);
+  });
+
+  test("ein Import des Moduls startet den Einstieg nicht (Direktaufruf-Guard): keine Ausgabe, Exit 0, nichts angelegt", () => {
+    const home = fixture({});
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", `import ${JSON.stringify(pathToFileURL(AUFTRAG).href)};`], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home } });
+    expect(r.status).toBe(0);
+    expect(r.stdout + r.stderr).toBe("");
+    expect(existsSync(join(home, ".claude"))).toBe(false);
   });
 });
