@@ -555,11 +555,11 @@ describe("Einstiegsskript", () => {
 
 describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lücke statt 0", () => {
   type A = { mechanismus: string; messung: string; soll: string; status: "ok" | "ABWEICHUNG" | "Lücke" };
-  type Eingabe = { commits?: unknown[] | null; commitsLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; zeilen?: Partial<Zeile>[] | null };
+  type Eingabe = { commits?: unknown[] | null; commitsLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; produktQuelle?: boolean; zeilen?: Partial<Zeile>[] | null };
   const S = raw as unknown as {
     selbstAudit: (e: Eingabe) => A[];
     auditAbschnitt: (a: A[]) => string[];
-    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[], o?: { token?: string }) => unknown; repo?: string; config?: unknown; env?: Record<string, string> }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null };
+    ladeAuditDaten: (e: { bis: string }, d: { gh: (a: string[], o?: { token?: string }) => unknown; repo?: string; config?: unknown; env?: Record<string, string> }) => { commits: unknown[] | null; commitsLuecke?: string; harnessIssues?: Set<number> | null; harnessLuecke?: string | null; sammelAbschluss?: string | null; sammelIssues?: Set<number>; sammelInArbeit?: number | null; produktQuelle?: boolean };
     configOderFehler: (lade?: () => unknown) => { config: unknown; configFehler?: string };
     erstelle: (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, unknown[]>; auditLader?: (e: { bis: string }) => Eingabe }) => { bericht: { audit?: A[] }; exit: number };
     renderMarkdown: (b: unknown) => string;
@@ -578,6 +578,24 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(wenig.messung).toMatch(/keine Aussage/);
     // vier Commits, davon zwei von Bots: nur zwei zählen, also keine Aussage statt ok
     expect(von({ commits: [produkt(1), produkt(2), commit("feat(app): x (#1)", "dependabot[bot]"), commit("feat(app): y (#2)", "dependabot[bot]")] }, "Produktquote").status).toBe("Lücke");
+  });
+
+  test("Produktquote (factory#208 L15): ohne Produkt-Quelle und ohne Produkt-Merge eine Lücke mit Grund statt ABWEICHUNG; mit Produkt-Quelle oder Produkt-Merges unverändert", () => {
+    const nurFactory = [harness(1), harness(2), harness(3), harness(4), harness(5)];
+    const ohne = von({ commits: nurFactory, produktQuelle: false }, "Produktquote");
+    expect(ohne.status).toBe("Lücke");
+    expect(ohne.messung).toMatch(/kein Produkt-Board/);
+    expect(von({ commits: nurFactory, produktQuelle: true }, "Produktquote").status).toBe("ABWEICHUNG");
+    expect(von({ commits: nurFactory }, "Produktquote").status).toBe("ABWEICHUNG");
+    expect(von({ commits: [harness(1), harness(2), produkt(1), produkt(2)], produktQuelle: false }, "Produktquote").status).toBe("ABWEICHUNG");
+  });
+
+  test("ladeAuditDaten (factory#208 L15): produktQuelle ist wahr nur mit Produkt-Board-Repo, sonst falsch", () => {
+    const gh = (a: string[]) => (a[0] === "issue" ? [] : [[produkt(1)]]);
+    const getrennt = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "produkt", repo: "o/p" }, { rolle: "factory" }] };
+    expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: getrennt }).produktQuelle).toBe(true);
+    const ohneProdukt = { repo: "o/f", labels: CFG.labels, boards: [{ rolle: "factory" }] };
+    expect(S.ladeAuditDaten({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/f", config: ohneProdukt }).produktQuelle).toBe(false);
   });
 
   test("Produktquote: Zuordnung nach Label der referenzierten Issues, nicht nach Commit-Scope (#1798)", () => {
