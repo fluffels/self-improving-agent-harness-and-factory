@@ -1,7 +1,4 @@
-// Kein Shebang: dieses Skript wird über `node scripts/check-diffcoverage.mjs`
-// (npm run check:diffcoverage) gestartet UND von test/diffcoverage.test.ts importiert.
-// Eine `#!`-Zeile bricht genau diesen Test-Import (Vitest/esbuild stolpert über das
-// `#!`), darum bewusst weggelassen — analog zu check-diffsize.mjs / check-size.mjs.
+// Kein Shebang: das Skript wird gestartet UND von test/diffcoverage.test.ts importiert; eine `#!`-Zeile bricht den Test-Import (analog check-diffsize.mjs).
 /**
  * Diff-Coverage-Wächter (#1021) — die geänderten Zeilen eines Slices müssen getestet sein.
  *
@@ -19,9 +16,7 @@
  * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
- * Regel in docs/agent-harness.md (Testabdeckung wird gemessen). Reines Node-Skript (nur Builtins); die Parse-/
- * Bewertungslogik ist als pure, IO-freie Funktionen exportiert und wird von
- * test/diffcoverage.test.ts importiert — EINE Quelle der Wahrheit.
+ * Regel in docs/agent-harness.md (Testabdeckung wird gemessen). Die Parse-/Bewertungslogik ist als pure Funktionen exportiert (Test: test/diffcoverage.test.ts).
  *
  * Ausführen mit:  npm run check:diffcoverage   (nach: npm run test:coverage)
  */
@@ -226,8 +221,14 @@ export function checkDiffCoverage({
 export const COVERAGE_BEFEHL = "node scripts/gate-befehl.mjs coverage";
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-/** Rendert die Schicht-Zeilen des Reports (gegatete zuerst, dann die berichtenden). */
-function renderBuckets(r, { dim, red, green }) {
+/** Pur: die Detailzeilen zu einer roten Schicht (factory#208): je Datei mit ungetesteten Zeilen `Datei: ungetestet in Zeile n, m`, danach die gelesenen Berichte; ohne ungetestete Zeile leer. */
+export function rotZeilen(b, berichte) {
+  const dateien = b.files.filter((f) => f.uncovered.length > 0).map((f) => `    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}`);
+  return dateien.length === 0 ? [] : [...dateien, `    gelesen aus: ${berichte.join(", ")}`];
+}
+
+/** Rendert die Schicht-Zeilen des Reports (gegatete zuerst, dann die berichtenden); die Rot-Details gehen auf denselben Strom wie die Summenzeile. */
+function renderBuckets(r, { dim, red, green }, berichte) {
   for (const [layer, b] of Object.entries(r.buckets)) {
     if (b.total === 0) continue;
     const zahl = `${b.covered}/${b.total} geänderte Zeilen getestet (${b.pct.toFixed(1)} %)`;
@@ -237,10 +238,7 @@ function renderBuckets(r, { dim, red, green }) {
     }
     const paint = b.below ? red : green;
     console.log(paint(`${b.below ? "✖" : "✔"} ${layer}: ${zahl}, Floor ${b.floor} %`));
-    if (!b.below) continue;
-    for (const f of b.files.filter((f) => f.uncovered.length > 0)) {
-      console.error(`    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}`);
-    }
+    if (b.below) for (const z of rotZeilen(b, berichte)) console.log(z);
   }
 }
 
@@ -318,13 +316,13 @@ function main() {
   if (fehler !== null) {
     if (r.noReport) console.error(fehler);
     else {
-      renderBuckets(r, colors);
+      renderBuckets(r, colors, berichte.map((b) => b.pfad));
       console.error(fehler);
     }
     process.exit(1);
   }
 
-  renderBuckets(r, colors);
+  renderBuckets(r, colors, berichte.map((b) => b.pfad));
   if (r.partial.length > 0) {
     console.log(dim("• Teilweise getestet (ungetesteter Zweig auf ausgeführter geänderter Zeile, nur berichtet):"));
     for (const p of r.partial) console.log(dim(`    ${p.path}: Zeile ${p.line} (${p.taken} von ${p.total} Zweigen)`));
