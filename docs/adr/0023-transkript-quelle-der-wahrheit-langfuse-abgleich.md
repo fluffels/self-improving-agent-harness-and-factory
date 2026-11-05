@@ -28,6 +28,6 @@ Die Messung (Token, Kosten, Läufe je Rolle) hängt an Langfuse. Der gepatchte H
 
 Zeigt der Score `erfassung_hook` (Anteil, den der Hook allein erfasste) in drei Status-Läufen in Folge den Wert 1, ist der Hook wieder verlässlich: dann den Abgleich auf reines Prüfen (`langfuse-abgleich.mjs --pruefen`) zurückbauen und diesen ADR per neuem ADR ablösen.
 
-## Fortschreibungen
+## Spätere Änderungen
 
 Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0023-213-kopien-blockieren-nachliefern-nicht.md) (Konvention: [README](README.md#format)): [factory#213](fortschreibungen/0023-213-kopien-blockieren-nachliefern-nicht.md) (Kopien blockieren das Nachliefern nicht).
