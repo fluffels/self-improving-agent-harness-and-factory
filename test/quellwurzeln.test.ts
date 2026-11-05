@@ -11,7 +11,7 @@ const lib = rawLib as unknown as {
   quellenMaengel: (s: unknown) => string[];
   quellenAus: (c: unknown) => Quellen;
   istGlob: (m: string) => boolean;
-  ordnerZuMuster: (root: string, muster: string) => string[];
+  ordnerZuMuster: (root: string, muster: string, readdir?: (p: string, o: { withFileTypes: true }) => { name: string; isDirectory: () => boolean }[]) => string[];
   quellDateien: (root: string, q: { wurzeln: string[]; endungen: string[]; ohne?: string[] }) => string[];
 };
 
@@ -117,5 +117,39 @@ describe("ordnerZuMuster und quellDateien (factory#181)", () => {
     assert.deepEqual(lib.quellDateien(d, w), ["a/src/A.java", "a/src/ATest.java", "a/src/app.spec.ts", "a/src/k.ts", "a/src/t.d.ts"]);
     assert.deepEqual(lib.quellDateien(d, { ...w, ohne: ["**/*.spec.ts", "**/*Test.java"] }), ["a/src/A.java", "a/src/k.ts", "a/src/t.d.ts"]);
     assert.deepEqual(lib.quellDateien(d, { wurzeln: ["a/src"], endungen: [".d.ts"] }), ["a/src/t.d.ts"]);
+  });
+});
+
+describe("Glob-Auflösung ohne ** ist tiefenbegrenzt (factory#208)", () => {
+  // Fiktiver Baum: m/src/main/java/p/q/r/s (tief) und m/target/classes/x/y/z; jeder Zugriff wird mitgeschrieben.
+  const baum: Record<string, string[]> = {
+    "": ["m"],
+    m: ["src", "target"],
+    "m/src": ["main"],
+    "m/src/main": ["java"],
+    "m/src/main/java": ["p"],
+    "m/src/main/java/p": ["q"],
+    "m/src/main/java/p/q": ["r"],
+    "m/target": ["classes"],
+    "m/target/classes": ["x"],
+    "m/target/classes/x": ["y"],
+  };
+  const fake = (gelesen: string[]) => (p: string) => {
+    const rel = p.replace(/\\/g, "/").replace(/^\/r\/?/, "");
+    gelesen.push(rel);
+    return (baum[rel] ?? []).map((name) => ({ name, isDirectory: () => true }));
+  };
+
+  test("ohne ** liest die Auflösung keinen Ordner, der tiefer liegt als das Muster", () => {
+    const gelesen: string[] = [];
+    assert.deepEqual(lib.ordnerZuMuster("/r", "*/src/main/java", fake(gelesen)), ["m/src/main/java"]);
+    assert.ok(gelesen.every((p) => p === "" || p.split("/").length <= 3), gelesen.join("|"));
+    assert.ok(!gelesen.includes("m/src/main/java"), "der Trefferordner selbst wird nicht betreten");
+  });
+
+  test("Negativfall: mit ** bleibt die Auflösung voll tief", () => {
+    const gelesen: string[] = [];
+    assert.deepEqual(lib.ordnerZuMuster("/r", "**/q", fake(gelesen)), ["m/src/main/java/p/q"]);
+    assert.ok(gelesen.includes("m/src/main/java/p/q"), gelesen.join("|"));
   });
 });
