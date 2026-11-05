@@ -378,5 +378,6 @@ describe("Gezielter Test (factory#208 L23)", () => {
   test("ein leerer befehle-Block zählt nicht als gesetzter Befehl", () => {
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: {} }).ok).toBe(false);
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { verify: "x" } }).ok).toBe(false);
+    expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { testGezielt: "  " } }).ok).toBe(false);
   });
 });
