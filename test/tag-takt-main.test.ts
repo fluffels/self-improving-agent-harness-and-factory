@@ -201,8 +201,7 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
   it("die Schreibweise --probe=<owner/name>=<exit> mit Gleichheitszeichen wird ebenfalls gelesen", async () => {
     const r = await probe(["--probe=o/a=0", "--probe=o/b=1"]);
     expect(r.code).toBe(1);
-    expect(r.log.join("
-")).toContain("BLOCKER `o/b`");
+    expect(r.log.join("\n")).toContain("BLOCKER `o/b`");
   });
   it("alle Bezieher grün: Exit 0, beide abgehakt, kein gh-Aufruf", async () => {
     const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"]);
