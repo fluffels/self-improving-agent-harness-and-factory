@@ -39,7 +39,7 @@ type Payload = { resourceSpans: { resource: { attributes: Attr[] }; scopeSpans: 
 type Chunk = { payload: Payload; generationIds: string[]; spanIds: string[] };
 type Antwort = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<Antwort>;
-type Rec = { session: string; status: string; gesendet: number; dubletten: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean; fortgesetzt: boolean };
+type Rec = { session: string; status: string; gesendet: number; dubletten: number; unzuordenbar: number; wuerdeSenden: number; ausstehend: number; befund: string | null; endeVerworfen: boolean; fortgesetzt: boolean };
 type Protokoll = { zugang: boolean | null; geprueft: number; gesendet: number; spans: number; dubletten: number; wuerdeSenden: number; sessions: Rec[]; uebrig: number; fehler: { session: string; status: number | null; meldung: string }[] };
 type Args = { ende?: number; ausloeser: string | null; session: string | null; seit: string | null; aktuell: string | null; beendet: string | null; trocken: boolean; json: boolean; fehler: string | null };
 type LedgerEintrag = { gesendetAm?: Record<string, number>; vermerk?: string; pfad: string; groesse: number | null; mtime: number | null; bestaetigt: boolean; gesendet: string[]; spans: string[]; beendet?: boolean; befund?: string };
