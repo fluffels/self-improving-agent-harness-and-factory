@@ -154,7 +154,7 @@ describe("echteIo (gefälschtes gh)", () => {
     expect(aufrufe[0]?.args.some((a) => a.startsWith("after="))).toBe(false);
     const s2 = echt.ladeSeite("C1");
     expect(s2.weiter).toBeNull();
-    expect(s2.issues.map((i: { nummer: number }) => i.nummer)).toEqual([2]);
+    expect(s2.issues.map((i) => (i as { nummer: number }).nummer)).toEqual([2]);
     expect(aufrufe[1]?.args).toContain("after=C1");
     expect(aufrufe[1]?.args).toContain("owner=o");
     expect(aufrufe[1]?.args).toContain("name=r");
