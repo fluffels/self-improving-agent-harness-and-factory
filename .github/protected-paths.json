@@ -126,6 +126,7 @@
     "/scripts/transkript-calls.mjs",
     "/scripts/langfuse-abgleich-kern.mjs",
     "/scripts/langfuse-lock.mjs",
+    "/scripts/langfuse-auftrag.mjs",
     "/scripts/worktree-aufraeumen.mjs",
     "/scripts/fremdtext-lib.mjs",
     "/scripts/flag-lib.mjs",

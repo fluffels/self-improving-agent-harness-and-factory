@@ -129,6 +129,7 @@ AGENTS.md @fluffels
 /scripts/transkript-calls.mjs @fluffels
 /scripts/langfuse-abgleich-kern.mjs @fluffels
 /scripts/langfuse-lock.mjs @fluffels
+/scripts/langfuse-auftrag.mjs @fluffels
 /scripts/worktree-aufraeumen.mjs @fluffels
 /scripts/fremdtext-lib.mjs @fluffels
 /scripts/flag-lib.mjs @fluffels

@@ -33,6 +33,7 @@ const N = rawNach as unknown as {
 const T0 = Date.parse("2026-11-05T10:00:00Z");
 const SKRIPT = fileURLToPath(new URL("../../scripts/langfuse-nachliefern.mjs", import.meta.url));
 const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
+const auftraegeAus = (datei: string) => (JSON.parse(readFileSync(datei, "utf8")) as { auftraege: Record<string, string> }).auftraege;
 
 describe("Auftragsdatei", () => {
   test("ablegen, lesen (älteste zuerst), erledigen; gleiche Session zweimal ist ein Eintrag", () => {
@@ -69,7 +70,7 @@ describe("Auftragsdatei", () => {
     // fremd geformter Inhalt (Zeichenkette statt Objekt) wird beim Ablegen nicht übernommen
     writeFileSync(dateiVon(dir), JSON.stringify({ auftraege: "text" }));
     expect(A.auftragLegen(dir, "neu", T0)).toBe(true);
-    expect(Object.keys(JSON.parse(readFileSync(dateiVon(dir), "utf8")).auftraege)).toEqual(["neu"]);
+    expect(Object.keys(auftraegeAus(dateiVon(dir)))).toEqual(["neu"]);
     expect(A.auftraegeLesen(dir, T0)).toEqual(["neu"]);
   });
 
@@ -160,7 +161,7 @@ describe("--auftrag im Agentenkontext liest nie einen Key", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("Auftrag abgelegt: abc-123");
     const state = join(home, ".claude", "state");
-    expect(JSON.parse(readFileSync(dateiVon(state), "utf8")).auftraege).toHaveProperty("abc-123");
+    expect(auftraegeAus(dateiVon(state))).toHaveProperty("abc-123");
     expect(existsSync(join(state, "langfuse-abgleich.log"))).toBe(false);
     expect(existsSync(join(state, "langfuse-abgleich.json"))).toBe(false);
     // Gegenprobe: derselbe Prozess ohne --auftrag will den Zugang und scheitert ohne Key (Exit 2): der Auftrag-Pfad liest ihn also wirklich nie.

@@ -204,10 +204,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, langfuse-auftrag (nur Builtins), flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "langfuse-auftrag", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf"]));
   });
 });
 
@@ -1118,7 +1118,7 @@ describe("Startmarken (#1953)", () => {
 
 describe("parseArgs", () => {
   test("alle Flags landen im richtigen Feld", () => {
-    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, fehler: null });
+    expect(N.parseArgs(["--aktuell", "a", "--beendet", "b", "--session", "s", "--seit", "2026-10-01", "--ausloeser", "sessionend", "--trocken", "--json"])).toEqual({ aktuell: "a", beendet: "b", ausloeser: "sessionend", session: "s", seit: "2026-10-01", trocken: true, json: true, auftrag: null, fehler: null });
   });
   test.each(["sessionstart", "sessionend"])("--ausloeser %s ist erlaubt", (w) => {
     expect(N.parseArgs(["--ausloeser", w])).toMatchObject({ ausloeser: w, fehler: null });
