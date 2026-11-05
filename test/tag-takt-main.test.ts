@@ -245,6 +245,13 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 2)");
     expect(aus).toContain("Vor-Tag-Probe: BLOCKER o/b");
   });
+  it("ein mehrstelliger Exit-Wert (127, 255) wird angenommen und ist ein BLOCKER, kein Aufruf-Fehler", async () => {
+    const r = await probe(["--probe", "o/a=127", "--probe", "o/b=255"]);
+    expect(r.code).toBe(1);
+    const aus = r.log.join("\n");
+    expect(aus).toContain("BLOCKER `o/a`: Probe rot (Exit 127)");
+    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 255)");
+  });
   it("fail-closed: ein Bezieher ohne Ergebnis bleibt ausstehend, Exit 1", async () => {
     const r = await probe(["--probe", "o/a=0"]);
     expect(r.code).toBe(1);
