@@ -173,6 +173,7 @@ describe("pruefeProjektConfig", () => {
     assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: ["o/a", "O/A"] }).join("\n"), /bezieher enthält ein Repo doppelt[\s\S]*Fix:/);
     const cfg = gueltig() as { repo: string };
     assert.match(pc.pruefeProjektConfig({ ...cfg, bezieher: [cfg.repo.toUpperCase()] }).join("\n"), /bezieher darf das eigene Repo nicht enthalten[\s\S]*Fix:/);
+    assert.match(pc.pruefeProjektConfig({ ...cfg, repo: "Acme/Demo", bezieher: ["acme/demo"] }).join("\n"), /bezieher darf das eigene Repo nicht enthalten/);
     assert.deepEqual(pc.bezieherAus(cfg), []);
     assert.deepEqual(pc.bezieherAus(undefined), []);
     assert.deepEqual(pc.bezieherAus({ ...cfg, bezieher: "o/a" }), []);

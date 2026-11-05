@@ -207,7 +207,36 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"]);
     expect(r.code).toBe(0);
     expect(r.log.join("\n")).toContain("- [x] `o/a`: Probe grün");
+    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
+    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");
     expect(r.text).toEqual([]);
+  });
+  it("nur ausstehend, kein Blocker: keine BLOCKER-Zeile; nur Blocker, nichts ausstehend: keine ausstehend-Zeile", async () => {
+    const nurOffen = await probe(["--probe", "o/a=0"]);
+    expect(nurOffen.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
+    const nurRot = await probe(["--probe", "o/a=1", "--probe", "o/b=0"]);
+    expect(nurRot.log.join("\n")).toContain("Vor-Tag-Probe: BLOCKER o/a");
+    expect(nurRot.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");
+  });
+  it("Bezieher-Repo (Sync-Stand vorhanden): --probe tut nichts, Exit 0, keine Checkliste", async () => {
+    const w = mkdtempSync(join(tmpdir(), "tt-"));
+    ordner.push(w);
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, ".factory", "sync-stand.json"), JSON.stringify({ version: 1, quelle: "q", tag: "v1.0.0" }));
+    const a = aufbau();
+    a.deps.wurzel = w;
+    a.deps.ladeConfig = () => mitBezieher(["o/a"]);
+    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(0);
+    expect(a.log.join("\n")).toContain("Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun");
+    expect(a.log.join("\n")).not.toContain("Probe grün");
+  });
+  it("Standard-ladeConfig liest die echte Projekt-Config: ein unbekanntes Repo nennt deren Liste, nicht eine eingebaute", async () => {
+    const a = aufbau();
+    expect(await T.main(["--probe", "o/zz-unbekannt=0"], a.deps)).toBe(2);
+    const aus = a.log.join("\n");
+    expect(aus).toContain("erwartet wird je Bezieher");
+    expect(aus).not.toContain("Liste leer");
+    expect(aus).not.toContain("x/y");
   });
   it("Negativfall: ein roter Bezieher ist ein BLOCKER, Exit 1", async () => {
     const r = await probe(["--probe", "o/a=0", "--probe", "o/b=2"]);
@@ -228,6 +257,8 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     [["--probe", "o/a=0", "--probe", "o/a=1"]],
     [["--probe"]],
     [["--probe", "o/a=0", "--dry-run"]],
+    [["--probe", "o/a=1000"]],
+    [["--probe", "o/a=0x"]],
   ])("Aufruf-Fehler %j: Exit 2", async (argv) => {
     const r = await probe(argv);
     expect(r.code).toBe(2);

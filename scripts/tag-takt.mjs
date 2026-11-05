@@ -243,7 +243,7 @@ function probeAblauf({ tag, sha }) {
     "node scripts/tag-takt.mjs --probe <owner/name>=<exit>",
     "```",
     "",
-    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (`lint:prune`, `projektwerte --write`, `docs:gen`, `check:factorylinks --schreiben`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker mit eigenem Ticket. An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker). War der Klon schon vor dem Sync rot, liegt es am Bezieher; im Pre-Flight nennen.",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (`lint:prune`, `projektwerte --write`, `docs:gen`, `check:factorylinks --schreiben`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker).",
     "",
   ];
 }
@@ -481,7 +481,13 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
 
 /** Einstieg. `deps` (Tests): `start`, `ladeConfig` (nur `--probe`), `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel), ladeConfig } = {}) {
-  if (argv.some((a) => a === "--probe" || a.startsWith("--probe="))) return probeEinstieg(argv, { ladeConfig, log, err });
+  if (argv.some((a) => a === "--probe" || a.startsWith("--probe="))) {
+    if (istBezieher(wurzel)) {
+      log("Tag-Takt: Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun.");
+      return 0;
+    }
+    return probeEinstieg(argv, { ladeConfig, log, err });
+  }
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
   const { config, libs } = s;

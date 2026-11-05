@@ -219,6 +219,8 @@ describe("CI-Zustand und Body", () => {
     const mitBezieher = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: null }, bezieher: ["o/a", "o/b"] });
     it("ohne Bezieher-Liste kein Probe-Block, mit Liste je Bezieher eine offene Zeile vor „ja, taggen“", () => {
       expect(body).not.toContain("Vor-Tag-Probe");
+      expect(body).not.toContain("Keine Bezieher gelistet");
+      expect(mitBezieher).not.toContain("Keine Bezieher gelistet");
       const zeilen = mitBezieher.split("\n");
       const probe = zeilen.findIndex((z) => z.includes("`o/a`: Probe ausstehend"));
       expect(probe).toBeGreaterThan(-1);
