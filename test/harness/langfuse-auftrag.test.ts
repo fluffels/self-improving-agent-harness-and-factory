@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixture } from "../support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawAuftrag from "../../scripts/langfuse-auftrag.mjs";
+import * as rawAuftrag from "../../scripts/langfuse-auftrag-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 
@@ -36,6 +36,7 @@ const T0 = Date.parse("2026-11-05T10:00:00Z");
 const SKRIPT_DIR = fileURLToPath(new URL("../../scripts/", import.meta.url));
 const NACHLIEFERN = join(SKRIPT_DIR, "langfuse-nachliefern.mjs");
 const AUFTRAG = join(SKRIPT_DIR, "langfuse-auftrag.mjs");
+const AUFTRAG_LIB = join(SKRIPT_DIR, "langfuse-auftrag-lib.mjs");
 const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
 const auftraegeAus = (datei: string) => (JSON.parse(readFileSync(datei, "utf8")) as { auftraege: Record<string, string> }).auftraege;
 
@@ -186,10 +187,13 @@ describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, 
   const fahre = (skript: string, home: string, args: string[]) =>
     spawnSync(process.execPath, [skript, ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" } });
 
-  test("Import-Hülle: langfuse-auftrag.mjs zieht nur Node-Builtins und direktaufruf.mjs (nur Builtins), nie langfuse-zugang oder langfuse-api", () => {
-    const eigene = spezifizierer(AUFTRAG);
-    expect(eigene.length).toBeGreaterThan(0);
-    expect(eigene.filter((m) => !m.startsWith("node:") && m !== "./direktaufruf.mjs")).toEqual([]);
+  test("Import-Hülle: Einstieg und Lib ziehen nur Node-Builtins, direktaufruf.mjs (nur Builtins) und die Lib, nie langfuse-zugang oder langfuse-api", () => {
+    const einstieg = spezifizierer(AUFTRAG);
+    expect(einstieg).toEqual(expect.arrayContaining(["./direktaufruf.mjs", "./langfuse-auftrag-lib.mjs"]));
+    expect(einstieg.filter((m) => !m.startsWith("node:") && m !== "./direktaufruf.mjs" && m !== "./langfuse-auftrag-lib.mjs")).toEqual([]);
+    const lib = spezifizierer(AUFTRAG_LIB);
+    expect(lib.length).toBeGreaterThan(0);
+    expect(lib.filter((m) => !m.startsWith("node:"))).toEqual([]);
     expect(spezifizierer(join(SKRIPT_DIR, "direktaufruf.mjs")).filter((m) => !m.startsWith("node:"))).toEqual([]);
     // Gegenprobe: der Nachlieferer selbst zieht den Zugang, die Hülle unterscheidet also wirklich.
     expect(spezifizierer(NACHLIEFERN)).toEqual(expect.arrayContaining(["./langfuse-zugang.mjs", "./langfuse-api.mjs"]));
