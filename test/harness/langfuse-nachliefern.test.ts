@@ -507,6 +507,14 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       expect(r.protokoll.sessions[0]).toMatchObject({ gesendet: 2, dubletten: 0, unzuordenbar: 0, befund: null });
     });
 
+    test("vollständige Session ohne Abweichung (kein Diff): unzuordenbar ist 0, nichts gesendet", async () => {
+      const a = aufbau([msg("a", 1), msg("b", 2)]);
+      const m = mock({ ist: 2, obs: [obsZu(sollZu("a", 1)), obsZu(sollZu("b", 2))] });
+      const r = await lauf(a, m);
+      expect(m.otlp).toHaveLength(0);
+      expect(r.protokoll.sessions[0].unzuordenbar).toBe(0);
+    });
+
     test("Kopie plus fremde Dublette plus Lücke bleibt mehrdeutig: nichts gesendet", async () => {
       const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3), msg("d", 4)]);
       const sa = sollZu("a", 1);
