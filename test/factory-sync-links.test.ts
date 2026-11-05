@@ -714,6 +714,16 @@ describe("istReinerStub und planeAnkerStubs mit reineStubs (pur, factory#166)", 
     assert.ok(reinLib.istReinerStub(`${gut}\n###### Sechs\n\n${k}\n`));
   });
 
+  test("Negativ: eingerückte Zeile, erste Überschrift ohne Ebene 1 ohne Kern-Zeile und zwei Links in einer Kern-Zeile sind keine reinen Stubs", () => {
+    const k = `Kern: [docs/s.md](${u("v2", "docs/s.md")})`;
+    const gut = `# T\n\n${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`;
+    assert.ok(!reinLib.istReinerStub(`${gut}\n eingerückte Notiz\n\n${k}\n`));
+    const ohneH1 = `${HINWEIS} hier. ${k}\n\n## Unser Abschnitt\n\n## Eins\n\n${k}\n`;
+    assert.ok(!reinLib.istReinerStub(ohneH1));
+    assert.ok(reinLib.istReinerStub(`${HINWEIS} hier. ${k}\n\n## Eins\n\n${k}\n`));
+    assert.ok(!reinLib.istReinerStub(`${gut}\nKern: [a](https://x.example) unser Zusatz [b](https://y.example)\n`));
+  });
+
   test("angelegt und erneuert zugleich: ueberschriften und links zählen nur die angelegten Seiten", () => {
     const lies = (p: string): string | null => (p === ".claude/agents/x.md" ? "[a](../../docs/s.md#eins) [b](../../docs/neu.md#abschnitt)\n" : null);
     const seiten: Record<string, string> = { "docs/s.md": "# Titel\n\n## Eins\n", "docs/neu.md": "# Neu\n\n## Abschnitt\n" };
