@@ -396,7 +396,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     process.exit(2);
   }
   if (args.art === "harness" && d.bezieher) {
-    console.error("✖ Im Bezieher gibt es kein Harness-Sammelticket (ADR 0031: nur im Factory-Repo).\nFix: Kern-Befunde als Kommentar ins Harness-Sammelticket des Factory-Repos eintragen (AGENTS.md › Harness-Befunde).");
+    console.error("✖ Im Bezieher gibt es kein Harness-Sammelticket (ADR 0031: nur im Factory-Repo).\nFix: Kern-Befunde per `node scripts/melden.mjs` an die Meldestelle melden (AGENTS.md › Harness-Befunde).");
     return process.exit(2);
   }
   const config = d.ladeConfig();

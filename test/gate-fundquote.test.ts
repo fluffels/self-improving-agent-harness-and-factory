@@ -136,6 +136,10 @@ describe("befehlsform", () => {
   test("ein Env-Segment mit mehreren Zuweisungen ist neutral", () => {
     expect(gf.befehlsform("A=1 B=2 && npm run lint")).toEqual({ art: "ok", aufrufe: 1 });
   });
+  test("eine gequotete Zuweisung bleibt Env-Präfix, ein gequotetes Wort ist kein Befehl", () => {
+    expect(gf.befehlsform('FOO="a b" npm run lint')).toEqual({ art: "ok", aufrufe: 1 });
+    expect(gf.befehlsform('"npm" run lint')).toEqual({ art: "befehlsform", aufrufe: 0 });
+  });
   test("Env-Präfix vor einem Fremdbefehl bleibt fremd, Env-Präfix vor einem Gate zählt", () => {
     expect(gf.befehlsform("FOO=1 git push && npm run lint")).toEqual({ art: "befehlsform", aufrufe: 1 });
     expect(gf.befehlsform("FOO=1 npm run lint").aufrufe).toBe(1);
@@ -287,6 +291,10 @@ describe("Summenzeile", () => {
   test("Dauer mit Komma oder Dezimalpunkt wird gelesen", () => {
     const r = gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6,0 s, test ok 6.5 s", { verify: ["lint", "test"] });
     expect(r?.gates?.map((g) => [g.name, g.sek])).toEqual([["lint", 6], ["test", 6.5]]);
+  });
+  test("Text vor oder nach einem Teil macht die grüne Zeile unvollständig (beide Grenzen der Teil-Regel)", () => {
+    expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, test ok 6 s kaputt", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });
+    expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, ?test ok 6 s", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });
   });
   test("ein unparsbarer Teil macht die grüne Zeile unvollständig, nicht teilweise gezählt", () => {
     expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, test ok schnell", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });

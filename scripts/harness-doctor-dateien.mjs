@@ -18,7 +18,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
-import { labelAus, ladeProjektConfig, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -198,6 +198,13 @@ export function langfuseTaktPunkt(rootDir, existiert, config) {
   if (fehlt.length > 0) return luecke("Langfuse-Takt", `fehlen ${fehlt.length}: ${fehlt.join(", ")}`, TAKT_FIX);
   const { ziel: fremd, luecke: keinZiel } = taktZiel(config);
   if (keinZiel) return luecke("Langfuse-Takt", "das Ziel-Repo des Board-Takts lässt sich aus der Config nicht bestimmen", "`labels.harness` und ein Board mit Rolle factory in `boards` der Projekt-Config eintragen (der Takt wählt sein Ziel wie `zielRepoFuer` aus diesen beiden)");
+  if (config && typeof config === "object" && istBezieher(rootDir)) {
+    try {
+      langfuseZiel(config, { bezieher: true }); // dieselbe Wahl wie `bezieherTakt`: wirft sie, legt der Takt kein Status-Ticket an
+    } catch (e) {
+      return luecke("Langfuse-Takt", String(e instanceof Error ? e.message : e).split("\n")[0], "ein Board in `boards` der Projekt-Config muss das eigene Repo führen (`boards[].repo` weglassen oder gleich `repo`)");
+    }
+  }
   if (fremd !== null && istBezieher(rootDir)) {
     return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
   }

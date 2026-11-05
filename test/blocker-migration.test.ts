@@ -13,6 +13,7 @@ const M = raw as unknown as {
   fehlendeKanten: (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
   migriere: (a: { anwenden: boolean }, io: Io) => Ergebnis;
   fuehreAus: (argv: string[], io: object) => Ergebnis;
+  echteIo: (repo: string, naht: { gh: (a: string[], o: unknown) => unknown; env: object }) => { ladeSeite: (n: string | null) => Seite; setze: (i: string, b: string) => void };
 };
 const fehlend = M.fehlendeKanten;
 const issue = (nummer: number, body = "", nativ: { nummer: number; repo?: string }[] = []) => ({
@@ -117,5 +118,49 @@ describe("migriere (injizierte I/O)", () => {
     const r = M.fuehreAus(["--repo", "a/b", "--anwenden"], io(mut, { repo: undefined }));
     expect(r.out).toMatch(/in a\/b/);
     expect(mut).toEqual([["I1", "I2"]]);
+  });
+  test("Ladefehler: Exit 1 mit ✖-Zeile, nichts wird gesetzt", () => {
+    const mut: unknown[][] = [];
+    const r = M.migriere({ anwenden: true }, io(mut, { ladeSeite: () => { throw new Error("gh kaputt"); } }));
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/Issues nicht ladbar: gh kaputt/);
+    expect(mut).toEqual([]);
+  });
+  test("Übersprungene Blocker stehen mit Zahl und Grund in der Ausgabe, Kopfzeile nennt Modus und Repo", () => {
+    const seite = { issues: [issue(1, "blockiert durch #9")], weiter: null };
+    const trocken = M.migriere({ anwenden: false }, io([], { ladeSeite: () => seite }));
+    expect(trocken.out).toMatch(/^Trockenlauf, würde setzen 0 Kante\(n\) in o\/r:/m);
+    expect(trocken.out).toMatch(/^Übersprungen \(1\):\n {2}#1 .*#9/m);
+    const echt = M.migriere({ anwenden: true }, io([], { ladeSeite: () => seite }));
+    expect(echt.out).toMatch(/^Setze 0 Kante\(n\) in o\/r:/m);
+    const ohne = M.migriere({ anwenden: false }, io([]));
+    expect(ohne.out).not.toMatch(/Übersprungen/);
+  });
+});
+
+describe("echteIo (gefälschtes gh)", () => {
+  const knoten = (n: number, blocker: { number: number; repo: string }[] = []) => ({ id: `N${n}`, number: n, body: n === 1 ? "blockiert durch #2" : "", blockedBy: { nodes: blocker.map((b) => ({ number: b.number, repository: { nameWithOwner: b.repo } })) } });
+  test("bildet die GraphQL-Antwort ab und paginiert über den Cursor; setze nutzt addBlockedBy", () => {
+    const aufrufe: { args: string[]; opts: unknown }[] = [];
+    const gh = (args: string[], opts: unknown) => {
+      aufrufe.push({ args, opts });
+      if (args.some((a) => a.startsWith("query=mutation"))) return {};
+      const seite2 = args.includes("after=C1");
+      return { data: { repository: { issues: { nodes: seite2 ? [knoten(2)] : [knoten(1, [{ number: 5, repo: "x/y" }])], pageInfo: { hasNextPage: !seite2, endCursor: seite2 ? null : "C1" } } } } };
+    };
+    const echt = M.echteIo("o/r", { gh, env: { PROJECT_TOKEN: "pt" } });
+    const s1 = echt.ladeSeite(null);
+    expect(s1).toEqual({ issues: [{ nummer: 1, id: "N1", body: "blockiert durch #2", nativ: [{ nummer: 5, repo: "x/y" }] }], weiter: "C1" });
+    expect(aufrufe[0]?.args.some((a) => a.startsWith("after="))).toBe(false);
+    const s2 = echt.ladeSeite("C1");
+    expect(s2.weiter).toBeNull();
+    expect(s2.issues.map((i: { nummer: number }) => i.nummer)).toEqual([2]);
+    expect(aufrufe[1]?.args).toContain("after=C1");
+    expect(aufrufe[1]?.args).toContain("owner=o");
+    expect(aufrufe[1]?.args).toContain("name=r");
+    echt.setze("I1", "I2");
+    const mutation = aufrufe[2]?.args ?? [];
+    expect(mutation).toContain("i=I1");
+    expect(mutation).toContain("b=I2");
   });
 });

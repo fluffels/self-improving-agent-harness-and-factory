@@ -21,7 +21,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, zielRepoFuer } from "./projekt-config-lib.mjs";
-import { liesSyncStand } from "./sync-stand-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import {
   REPO,
@@ -464,7 +464,7 @@ export function main(env = process.env, { argv = process.argv.slice(2), io = ECH
     token: env.PROJECT_TOKEN,
     io: { ...io, env },
     config: ladeConfig(),
-    bezieher: liesSyncStand(wurzel).zustand !== "fehlt", // Sync-Stand vorhanden: Bezieher (factory#195)
+    bezieher: istBezieher(wurzel), // Sync-Stand vorhanden: Bezieher (factory#195)
   });
   return fehler ? 1 : 0;
 }

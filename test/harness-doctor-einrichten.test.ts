@@ -127,6 +127,15 @@ const EINR = (root: string, ...extra: string[]): string[] => ["--einrichten", "-
 const datei = (root: string): string => join(root, doctor.WOCHENLAUF_PFAD);
 
 describe("harness-doctor --einrichten", () => {
+  test("factory#202 L20: im Bezieher (Sync-Stand vorhanden) startet --einrichten das Sammelticket nicht, sondern nennt melden.mjs", () => {
+    const root = neuerRoot();
+    writeFileSync(join(root, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }));
+    const r = fahre(root, welt(["status:steckt"]), EINR(root, "--dry-run"));
+    assert.deepEqual(r.sammel, []);
+    assert.ok(r.out.some((z) => z.startsWith("INFO Sammelticket:") && z.includes("melden.mjs")), r.out.join("\n"));
+    assert.ok(!r.out.some((z) => z.startsWith("FEHLER Sammelticket")));
+  });
+
   test("Dry-Run: nur Plan, nichts wird geschrieben, das Sammelticket bekommt --dry-run", () => {
     const root = neuerRoot();
     const r = fahre(root, welt(["status:steckt"]), EINR(root, "--dry-run"));

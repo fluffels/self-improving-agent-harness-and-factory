@@ -674,7 +674,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     test("harness bricht mit Exit 2 und Fix-Zeile ab, nichts wird angelegt", async () => {
       const { ergebnis, rufe, fehler } = await mitExit(["harness"], true);
       expect(ergebnis).toBe("exit 2");
-      expect(fehler).toContain("Kern-Befunde als Kommentar ins Harness-Sammelticket des Factory-Repos");
+      expect(fehler).toContain("Kern-Befunde per `node scripts/melden.mjs` an die Meldestelle melden");
       expect(namen(rufe)).not.toContain("legeAn");
     });
     test("harness in der Fabrik (kein Bezieher) läuft wie bisher", async () => {

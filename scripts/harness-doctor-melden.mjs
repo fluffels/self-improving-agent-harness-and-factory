@@ -95,7 +95,7 @@ export function lauf({ io, trocken = false }) {
     return 0;
   }
   if (!ziel) {
-    log(`::error::${KENNUNG}: kein ungeclaimtes Harness-Sammelticket für ${zeilen.length} neue Zeile(n) Fix: node scripts/sammelticket-anlegen.mjs harness`);
+    log(`::error::${KENNUNG}: kein ungeclaimtes Harness-Sammelticket für ${zeilen.length} neue Zeile(n) Fix: node scripts/sammelticket-anlegen.mjs harness (im Bezieher: node scripts/melden.mjs)`);
     return 1;
   }
   const m = io.bereite(zeilen);

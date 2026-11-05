@@ -88,6 +88,18 @@ describe("laufzeiten: ein Lauf", () => {
   test("ohne #Nummer: ticket null; ohne (gesammelt): kein Sammelticket", () => {
     expect(S.laufzeiten({ laeufe: [lauf("Plane irgendwas", 0, 3)] }).laeufe[0]).toMatchObject({ ticket: null, sammel: false });
   });
+  test("Zeitstempel-Guard: ein Aufruf ohne gültigen Zeitstempel ergibt kein Intervall und ist nicht offen; ein Ergebnis ohne gültigen Zeitstempel lässt den Aufruf offen", () => {
+    const ohneZeit = lauf("Plane #5", 0, 3);
+    const aufruf = call(1, 7, "x1");
+    delete (aufruf as { timestamp?: string }).timestamp;
+    ohneZeit.zeilen.push(aufruf, result(2, "x1"));
+    const a = S.laufzeiten({ laeufe: [ohneZeit] });
+    expect(a.laeufe[0]).toMatchObject({ toolMin: 0, offen: false });
+    const kaputtesErgebnis = lauf("Plane #6", 0, 3);
+    kaputtesErgebnis.zeilen.push(call(1, 7, "x2"), { ...result(2, "x2"), timestamp: "kein-datum" });
+    const b = S.laufzeiten({ laeufe: [kaputtesErgebnis] });
+    expect(b.laeufe[0]).toMatchObject({ toolMin: 0, offen: true });
+  });
   test("laufender Lauf (Tool ohne Ergebnis) ist offen und zählt nicht in die Mediane", () => {
     const l = lauf("Plane #5", 0, 3);
     l.zeilen.push(call(4, 7, "offen"));

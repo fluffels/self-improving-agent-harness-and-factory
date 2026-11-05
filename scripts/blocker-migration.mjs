@@ -6,7 +6,7 @@
  *   node scripts/blocker-migration.mjs [--anwenden] [--repo <owner/name>]
  *
  * Standard ist der Trockenlauf (nur Ausgabe); `--anwenden` schreibt je fehlender Kante eine Mutation. Übersprungen und gelistet: Blocker, die
- * nicht offen sind, und Blocker in fremden Repos. Idempotent: schon native Kanten werden abgezogen. Ausgabe endet mit einer Kostenzeile
+ * nicht offen sind, und Blocker in fremden Repos. Grenze: je Issue werden höchstens 100 vorhandene Kanten gelesen (`blockedBy(first:100)`, ohne Paginierung). Idempotent: schon native Kanten werden abgezogen. Ausgabe endet mit einer Kostenzeile
  * („k Abfragen, m Mutationen“). Exit 0 = fertig, 1 = gh-Fehler (laufende Kanten werden weiter versucht), 2 = Aufruffehler.
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -90,7 +90,7 @@ export function migriere({ anwenden }, io) {
   return { code: fehler.length > 0 ? 1 : 0, out: `${zeilen.join("\n")}\n`, err: fehler.length > 0 ? `${fehler.join("\n")}\n` : "" };
 }
 
-/** Argumente prüfen und ausführen (`io` voll oder Teil: `ladeSeite`, `setze`, `repo`, `sprache`; fehlende Teile kommen aus der echten Anbindung). Ergebnis `{ code, out, err }`. */
+/** Argumente prüfen und ausführen (`io` voll oder leer: `ladeSeite`, `setze`, `sprache`; ohne `io` kommt alles aus der echten Anbindung). Ergebnis `{ code, out, err }`. */
 export function fuehreAus(argv, io = {}) {
   const { werte, fehler } = flagsLesen(argv, OPTIONEN);
   if (fehler) return { code: AUFRUF_EXIT, out: "", err: `${fehler.text}\n${AUFRUF}\n` };
@@ -101,7 +101,7 @@ export function fuehreAus(argv, io = {}) {
 }
 
 /** Echte Anbindung über `gh` (GraphQL, Token des Ziel-Repos). */
-function echteIo(repo, { gh = ghJson, env = process.env } = {}) {
+export function echteIo(repo, { gh = ghJson, env = process.env } = {}) {
   const opts = { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) };
   const { owner, name } = zerlegeRepo(repo);
   return {

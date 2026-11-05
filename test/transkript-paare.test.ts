@@ -34,6 +34,11 @@ describe("toolPaare", () => {
     expect(paare[0].ergebnis).toBeNull();
   });
 
+  test("Standard-Wähler: ein tool_use-Block in einer User-Zeile ist kein Aufruf", () => {
+    const falsch = { type: "user", message: { content: [{ type: "tool_use", id: "u1", name: "Bash" }] } };
+    expect(toolPaare([falsch, res("u1")])).toEqual([]);
+  });
+
   test("istAufruf wählt die Aufrufe; ein Ergebnis zu einem abgewählten Aufruf zählt als ohne Aufruf", () => {
     const paare = toolPaare([use("a", "Read"), use("b", "Bash"), res("a"), res("b")], { istAufruf: (_r: unknown, b: unknown) => (b as { name: string }).name === "Bash" });
     expect(paare.map((p) => p.id)).toEqual(["b"]);

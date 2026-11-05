@@ -1,5 +1,5 @@
 /* @harness-waechter: Der Prototyp schaltet auch durch Offline-Belege keine autonomen Läufe frei. */
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +21,15 @@ test("ohne und mit selbst attestierten Belegen gesperrt", () => {
   expect(p.main([], naht())).toBe(1);
   expect(p.main(["--belege", datei('{"tracing":true}')], naht())).toBe(1);
   expect(out.at(-1)).toContain('"autonom":false'); expect(out.at(-1)).toContain("Quarantäne"); expect(err).toEqual([]);
+});
+test("Direktaufruf ohne Naht (wie der CLI-Einstieg) stürzt nicht ab: Aufruf-Fehler endet mit Exit 2", () => {
+  const stumm = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    expect((raw as unknown as { main: (a: string[]) => number }).main(["--unbekannt"])).toBe(2);
+    expect(stumm).toHaveBeenCalled();
+  } finally {
+    stumm.mockRestore();
+  }
 });
 test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe", () => {
   const rollen = [...Object.values(config.agenten), "explore", "holdout-szenario", "holdout-abnahme"];
