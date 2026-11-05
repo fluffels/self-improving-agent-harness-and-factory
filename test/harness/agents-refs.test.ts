@@ -18,6 +18,8 @@
  *   - ein bares `§ Begriff` im selben Absatz erbt sie (Bullet-Listen, `§ A + § B`),
  *   - `AGENTS.md › Begriff` (Link-Text-Form) und `AGENTS.md „Begriff"` (ohne `§`) zählen
  *     ebenso, erben aber nicht weiter – ein bares `›` ist oft nur ein Pfeil,
+ *   - `Projekt-Block › Begriff` (oder `§`) zielt auf den Projekt-Block; Kern-Dateien (verteilter Besitz) müssen `AGENTS.md § …`/`› …` im Kern-Block
+ *     treffen, Titel des Projekt-Blocks (Vorlage) nur so schreiben, weil ein Bezieher sie nicht haben muss (factory#208),
  *   - ein fremdes `*.md § …` (z.B. `docs/agent-harness.md § 2.5`) setzt die Zieldatei zurück,
  *   - `„Begriff"` nimmt alles zwischen den Anführungszeichen, sonst endet der Begriff
  *     an Satzzeichen/Klammer/`+`/Em-Dash/`§`/Zeilenende (bewusst NICHT am En-Dash, der
@@ -69,7 +71,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const VORLAGE = ".factory/produkt/vorlagen/AGENTS.md.vorlage";
 const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
-type Ziel = "AGENTS.md" | "CLAUDE.md";
+type Ziel = "AGENTS.md" | "CLAUDE.md" | "Projekt-Block";
 /** Wie der Verweis geschrieben war – nur für den Leerlauf-Schutz je Form. */
 type Form = "§" | "§ geerbt" | "›" | "Zitat ohne §";
 interface Verweis {
@@ -84,7 +86,7 @@ interface Verweis {
 // `formVon`. Der Lookahead verankert jeden Treffer an einem Dateinamen oder Trenner – sonst
 // matcht der (dann ganz optionale) Vorspann beliebige Prosa und frisst den nächsten Dateinamen.
 const VERWEIS_RE =
-  /(?=[\w./-]+\.md|§|›)(?:([\w./-]+\.md)[\s([]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“…§›]{2,160}))/g;
+  /(?=[\w./-]+\.md|Projekt-Block|§|›)(?:([\w./-]+\.md|Projekt-Block)[\s([]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“…§›]{2,160}))/g;
 
 function normalisiere(s: string): string {
   return s
@@ -95,7 +97,7 @@ function normalisiere(s: string): string {
 
 function zielVon(datei: string): Ziel | null {
   const name = datei.split("/").pop();
-  return name === "AGENTS.md" || name === "CLAUDE.md" ? name : null;
+  return name === "AGENTS.md" || name === "CLAUDE.md" || name === "Projekt-Block" ? name : null;
 }
 
 /** Ordnet einen Treffer einer Verweis-Form zu; `null` = kein Verweis (z.B. Prosa nach „AGENTS.md"). */
@@ -127,9 +129,9 @@ function extrahiereVerweise(text: string): Verweis[] {
   return verweise;
 }
 
-function pruefe<V extends Verweis>(verweise: V[], docs: Record<Ziel, string>): V[] {
-  const norm = { "AGENTS.md": normalisiere(docs["AGENTS.md"]), "CLAUDE.md": normalisiere(docs["CLAUDE.md"]) };
-  return verweise.filter((v) => !norm[v.ziel].includes(v.begriff));
+function pruefe<V extends Verweis>(verweise: V[], docs: Partial<Record<Ziel, string>>): V[] {
+  const norm = Object.fromEntries(Object.entries(docs).map(([ziel, text]) => [ziel, normalisiere(text)]));
+  return verweise.filter((v) => !(norm[v.ziel] ?? "").includes(v.begriff));
 }
 
 /** Ganze Dateien des verteilten Besitzes (Kern-Ringe) außer der AGENTS.md selbst: ihre Verweise müssen im Zielprojekt auflösen. Pur. */
@@ -139,7 +141,7 @@ function kernDateienVon(eintraege: (BesitzEintragKurz & { block?: string; schlue
 
 /** Verweisziel für Kern-Dateien: der Kern-Block der AGENTS.md plus die AGENTS-Vorlage des Zielprojekts (nicht der Projekt-Block dieses Repos). Pur. */
 function kernDocsVon(agentsText: string, vorlageText: string): Record<Ziel, string> {
-  return { "AGENTS.md": `${einheitText({ pfad: "AGENTS.md", block: "kern" }, agentsText) ?? ""}\n${vorlageText}`, "CLAUDE.md": "" };
+  return { "AGENTS.md": einheitText({ pfad: "AGENTS.md", block: "kern" }, agentsText) ?? "", "CLAUDE.md": "", "Projekt-Block": vorlageText };
 }
 
 /**
@@ -158,6 +160,7 @@ const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, be
 // übrig gebliebener `CLAUDE.md § …`-Verweis wird dann rot gemeldet, statt dass der Test crasht.
 const DOCS: Record<Ziel, string> = {
   "AGENTS.md": read("AGENTS.md"),
+  "Projekt-Block": projektBlock(read("AGENTS.md")) ?? "",
   "CLAUDE.md": existsSync(ROOT + "CLAUDE.md") ? read("CLAUDE.md") : "",
 };
 const CLAUDE_DATEIEN = listTrackedFiles(ROOT).filter(
@@ -178,19 +181,19 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     );
   });
 
-  test("jeder Verweis einer Kern-Datei trifft den Kern-Block der AGENTS.md oder deren Vorlage (im Zielprojekt gibt es den Projekt-Block dieses Repos nicht)", () => {
+  test("jeder Verweis einer Kern-Datei: `AGENTS.md § X`/`› X` trifft den Kern-Block, `Projekt-Block › X` die Vorlage bzw. den Projekt-Block (im Zielprojekt gibt es den Projekt-Block dieses Repos nicht)", () => {
     const kern = kernDateienVon(ladeBesitzManifest().eintraege);
     const kernVerweise = ECHTE_VERWEISE.filter((v) => kern.has(v.datei));
     assert.ok(kernVerweise.length > 0, "keine Verweise aus Kern-Dateien extrahiert");
     assert.deepEqual(
       pruefe(kernVerweise, kernDocsVon(DOCS["AGENTS.md"], vorlageOderProjektBlock(existsSync(ROOT + VORLAGE) ? read(VORLAGE) : null, DOCS["AGENTS.md"]))).map((v) => `${v.datei}: ${v.ziel} ${v.form} ${v.begriff}`),
       [],
-      "Kern-Dateien werden in jedes Projekt verteilt: der Verweis muss im Kern-Block oder in der AGENTS-Vorlage stehen, " +
-        "sonst den Titel in den Kern-Block heben oder in die Vorlage aufnehmen.",
+      "Kern-Dateien werden in jedes Projekt verteilt: ein Verweis `AGENTS.md § X` muss im Kern-Block stehen; ein Titel des Projekt-Blocks " +
+        "(Vorlage) schreibt man `Projekt-Block › X` (factory#208), sonst den Titel in den Kern-Block heben.",
     );
   });
 
-  test("Red-Green: ein Titel nur im Projekt-Block trifft für eine Kern-Datei nicht, ein Titel in der Vorlage oder im Kern-Block schon", () => {
+  test("Red-Green: `AGENTS.md § X` trifft für eine Kern-Datei nur im Kern-Block, `Projekt-Block › X` nur in der Vorlage", () => {
     const agents = [
       "<!-- factory-besitz:start kern -->\n- **Kern-Titel.**\n<!-- factory-besitz:ende kern -->",
       "<!-- factory-projekt:start -->\n- **Nur im Projekt.**\n<!-- factory-projekt:ende -->",
@@ -198,7 +201,11 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     const gegen = (text: string, vorlage = "") => pruefe(extrahiereVerweise(text), kernDocsVon(agents, vorlage)).length;
     assert.equal(gegen("AGENTS.md § Kern-Titel"), 0);
     assert.equal(gegen("AGENTS.md § Nur im Projekt"), 1);
-    assert.equal(gegen("AGENTS.md § Nur im Projekt", "- **Nur im Projekt.**"), 0);
+    assert.equal(gegen("AGENTS.md § Nur im Projekt", "- **Nur im Projekt.**"), 1, "streng: ein Vorlagen-Titel trifft `AGENTS.md §` nicht");
+    assert.equal(gegen("Projekt-Block › Nur im Projekt", "- **Nur im Projekt.**"), 0);
+    assert.equal(gegen("Projekt-Block › Nur im Projekt"), 1);
+    assert.equal(gegen("Projekt-Block › Kern-Titel", "- **Nur im Projekt.**"), 1, "der Kern-Block zählt nicht als Projekt-Block");
+    assert.deepEqual(extrahiereVerweise("im Projekt-Block › Nur im Projekt, sonst Prosa im Projekt-Block ergänzt nichts."), [{ ziel: "Projekt-Block", begriff: "Nur im Projekt", form: "›" }]);
     assert.equal(pruefe(extrahiereVerweise("AGENTS.md § Nur im Projekt"), { "AGENTS.md": agents, "CLAUDE.md": "" }).length, 0);
   });
 
@@ -212,9 +219,9 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:ende -->\n<!-- factory-projekt:start -->\nx"), "");
     assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:start -->\n- **Nur Start.**\nRest"), "");
     const gegen = (text: string, vorlage: string | null) => pruefe(extrahiereVerweise(text), kernDocsVon(agents, vorlageOderProjektBlock(vorlage, agents))).length;
-    assert.equal(gegen("AGENTS.md § Im Projekt-Block", null), 0);
-    assert.equal(gegen("AGENTS.md § Im Projekt-Block", "- **Anderes.**"), 1);
-    assert.equal(gegen("AGENTS.md § Gibt es nicht", null), 1);
+    assert.equal(gegen("Projekt-Block › Im Projekt-Block", null), 0);
+    assert.equal(gegen("Projekt-Block › Im Projekt-Block", "- **Anderes.**"), 1);
+    assert.equal(gegen("Projekt-Block › Gibt es nicht", null), 1);
   });
 
   test("Kern-Dateien: nur verteilte ganze Dateien, weder Blöcke, Schlüssel, die AGENTS.md noch Factory-Oberfläche", () => {
