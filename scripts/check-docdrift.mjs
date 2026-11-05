@@ -64,7 +64,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { codeMaskiert, collectHeadingSlugs, leseConfigObjekt, linkStellen, linkZiel, parseNpmRunMentions, stripFencedCode } from "./docs-gen/markdown.mjs";
 import { collectMarkdown } from "./check-basis.mjs";
-import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
+import { kettenSchritte, SCHRITT_NAME, SCHRITT_RE } from "./docs-gen/npm-ketten.mjs";
 import { fortschreibungsFehler } from "./docs-gen/adr.mjs";
 import { besitzSpannen, istGanzeDatei, MANIFEST_PFAD, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
@@ -110,7 +110,7 @@ export function parseVerifyChain(pkgScripts) {
   // Dieselbe Auflösung wie Gate-Tabelle und Diagramm-Zahlen (kettenSchritte, je Schritt einmal); ohne verify-Skript leer.
   const steps = typeof pkgScripts["verify"] === "string" ? kettenSchritte(pkgScripts, ["verify"], "verify") : [];
   // Ein Schritt ohne Skriptnamen (Rohbefehl) ließe sich nicht gegen die Doku abgleichen: laut melden statt still fallen lassen (Z5g).
-  const unbenennbar = steps.filter((step) => !/^[a-zA-Z0-9:_-]+$/.test(step));
+  const unbenennbar = steps.filter((step) => !SCHRITT_RE.test(step));
   if (unbenennbar.length > 0) {
     throw new Error(`verify enthält Schritte ohne Skriptnamen (nur \`npm run <x>\` und \`npm test\`, Argumente hinter \`--\` erlaubt): ${unbenennbar.join(" | ")}`);
   }
@@ -122,7 +122,7 @@ export function parseVerifyChain(pkgScripts) {
  *  in diesem Repo (docs/referenz/befehle.md, SKILL.md, agent-harness.md). */
 export function findDocumentedVerifyChains(md) {
   const chains = [];
-  for (const m of md.matchAll(/\btypecheck(?:\s*→\s*[a-zA-Z0-9:_-]+)+\s*→\s*test\b/g)) {
+  for (const m of md.matchAll(new RegExp(String.raw`\btypecheck(?:\s*→\s*${SCHRITT_NAME})+\s*→\s*test\b`, "g"))) {
     chains.push(m[0].split(/\s*→\s*/).map((s) => s.trim()));
   }
   return chains;

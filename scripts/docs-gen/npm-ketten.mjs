@@ -1,5 +1,5 @@
 // Kein Shebang (siehe docs-gen.mjs). npm-Ketten (#1428 Z11, vorher in markdown.mjs): `a && b`-Ketten aus package.json zerlegen und auflösen.
-// Gehört zum Harness-Stack, nicht zum übertragbaren Kern (markdown.mjs bleibt frei davon); gemeinsam genutzt von Gate-Tabelle, Diagramm-Zahlen,
+// Gemeinsam genutzt von Gate-Tabelle, Diagramm-Zahlen,
 // Doku-Drift-Wächter und verify-lauf. Reines Node-Modul ohne Importe.
 
 /** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
@@ -43,7 +43,10 @@ export function kettenSchritte(scripts, chains, kette) {
   return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
 }
 
-const SCHRITT_RE = /^[\w:.-]+$/;
+/** Zeichenklasse eines npm-Skriptnamens (Quelltext für RegExp-Bausteine; factory#208): verify-lauf, check:docdrift und die Doku-Erkennung nutzen dieselbe. */
+export const SCHRITT_NAME = "[\\w:.-]+";
+/** Ganzer Schrittname (einfaches npm-Skript, ohne Shell-Zeichen). */
+export const SCHRITT_RE = new RegExp(`^${SCHRITT_NAME}$`);
 
 /**
  * Schritte der Kette `kette` (`ketten`: ihre Kettennamen) aus `package.json`; wirft ohne das Skript dieses Namens oder bei einem
