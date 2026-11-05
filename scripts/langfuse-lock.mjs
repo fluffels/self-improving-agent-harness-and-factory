@@ -239,7 +239,7 @@ export function logEintrag({ zeit, ausloeser, session, lock, exitCode = null, pr
     dubletten: p.dubletten,
     wuerdeSenden: p.wuerdeSenden,
     uebrig: p.uebrig ?? 0,
-    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen), fortgesetzt: Boolean(r.fortgesetzt) })),
+    sessions: p.sessions.filter(zeigenswert).map((r) => ({ session: r.session, status: r.status, gesendet: r.gesendet, wuerdeSenden: r.wuerdeSenden, dubletten: r.dubletten, unzuordenbar: r.unzuordenbar ?? 0, ausstehend: r.ausstehend, endeVerworfen: Boolean(r.endeVerworfen), fortgesetzt: Boolean(r.fortgesetzt) })),
     fehler: [...p.fehler, ...fehler].map(kurz),
   };
 }

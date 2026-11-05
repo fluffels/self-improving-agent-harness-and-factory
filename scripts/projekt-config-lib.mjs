@@ -326,6 +326,16 @@ export function ergaenzungAusText(text) {
 /** Pur: Fehler zum optionalen Schlüssel `meldestelle` (Form `owner/name`); fehlt er, ist nichts zu prüfen. */
 const pruefeMeldestelle = (wert) => (wert === undefined || istRepoForm(wert) ? [] : ["meldestelle muss die Form owner/name haben (Repo, an das Harness-Befunde gemeldet werden)\nFix: meldestelle weglassen (Standard: Repo des Boards mit Rolle factory) oder owner/name eintragen"]);
 
+/** Pur: Fehler zum optionalen Schlüssel `bezieher` (factory#188): Liste von `owner/name`, ohne Dublette (Schreibung egal) und ohne das eigene `repo`; fehlt er, ist nichts zu prüfen. */
+function pruefeBezieher(wert, eigenes) {
+  if (wert === undefined) return [];
+  const fix = "\nFix: bezieher als Liste von owner/name eintragen (je Bezieher einmal, nicht das eigene Repo) oder den Schlüssel weglassen";
+  if (!Array.isArray(wert) || !wert.every(istRepoForm)) return [`bezieher muss eine Liste von Repos der Form owner/name sein (Bezieher, die die Vor-Tag-Probe prüft)${fix}`];
+  const klein = wert.map((r) => r.toLowerCase());
+  if (new Set(klein).size !== klein.length) return [`bezieher enthält ein Repo doppelt${fix}`];
+  return klein.includes(String(eigenes).toLowerCase()) ? [`bezieher darf das eigene Repo nicht enthalten${fix}`] : [];
+}
+
 /** Pur: prüft die geparste Config, gibt die Liste der Fehler zurück (leer = gültig). */
 export function pruefeProjektConfig(wert) {
   if (!istObjekt(wert)) return ["Config muss ein JSON-Objekt sein"];
@@ -339,7 +349,7 @@ export function pruefeProjektConfig(wert) {
   if (boardFehler === 0 && labelFehler.length === 0) fehler.push(...pruefeInboxZiel(wert), ...pruefeCodequalitaetZiel(wert));
   fehler.push(...pruefeLiterale(wert, "projektliterale"), ...pruefeLiterale(wert, "seitenliterale"));
   if (wert.rulesetSpiegel !== undefined && !istText(wert.rulesetSpiegel)) fehler.push("rulesetSpiegel muss ein nicht-leerer String (Pfad zum Ruleset-Spiegel) sein");
-  fehler.push(...pruefeMeldestelle(wert.meldestelle));
+  fehler.push(...pruefeMeldestelle(wert.meldestelle), ...pruefeBezieher(wert.bezieher, wert.repo));
   if (wert.spezifikation !== undefined) {
     if (!istObjekt(wert.spezifikation) || !istPositiv(wert.spezifikation.hartAb)) fehler.push("spezifikation.hartAb muss eine positive Ganzzahl sein (Stichtag: Issue-Nummer, ab der das Spezifikations-Gate hart ist)");
   }
@@ -392,6 +402,9 @@ export const zielRepoFuer = (labels, config) => boardRepo(boardDerRolle(boardRol
 
 /** Pur: die Meldestelle (`owner/name`, factory#153): das Repo, dessen Harness-Sammelticket die Befunde dieses Projekts aufnimmt; `config.meldestelle`, sonst das Repo des Boards mit Rolle `factory`. */
 export const meldestelleAus = (config) => (istRepoForm(config?.meldestelle) ? config.meldestelle : repoDerRolle("factory", config));
+
+/** Pur (factory#188): die Bezieher (`owner/name`), die die Vor-Tag-Probe prüft; ohne Schlüssel leer. */
+export const bezieherAus = (config) => (Array.isArray(config?.bezieher) ? config.bezieher.filter(istRepoForm) : []);
 
 /**
  * Pur (factory#195, ADR 0031 Punkt 4): wohin Status-Ticket und Sammelticket „Langfuse-Befunde“ gehören. Upstream (`bezieher` falsch): Harness-Label, Board und Repo laut Trennregel

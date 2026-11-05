@@ -473,7 +473,10 @@ describe("Log: Ende verworfen (#1579)", () => {
   test("eine Session mit verworfenem Ende steht im Log, auch wenn sonst nichts zu melden ist; ohne das Feld bleibt sie draußen", () => {
     const sess = (endeVerworfen: boolean) => ({ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, befund: null, endeVerworfen });
     const mit = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(true)], fehler: [] } });
-    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, ausstehend: 0, endeVerworfen: true, fortgesetzt: false }]);
+    expect(mit.sessions).toEqual([{ session: "s1", status: "läuft", gesendet: 0, wuerdeSenden: 0, dubletten: 0, unzuordenbar: 0, ausstehend: 0, endeVerworfen: true, fortgesetzt: false }]);
+    // Das Feld wird durchgereicht, wenn es gesetzt ist (#213).
+    const unz = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 3, wuerdeSenden: 0, sessions: [{ ...sess(false), dubletten: 3, unzuordenbar: 2 }], fehler: [] } });
+    expect(unz.sessions).toMatchObject([{ dubletten: 3, unzuordenbar: 2 }]);
     const fort = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [{ ...sess(true), fortgesetzt: true }], fehler: [] } });
     expect(fort.sessions).toMatchObject([{ session: "s1", endeVerworfen: true, fortgesetzt: true }]);
     const ohne = N.logEintrag({ zeit: "Z", ausloeser: "sessionend", session: "s1", lock: "frei", exitCode: 0, protokoll: { zugang: true, geprueft: 1, gesendet: 0, spans: 0, dubletten: 0, wuerdeSenden: 0, sessions: [sess(false)], fehler: [] } });
