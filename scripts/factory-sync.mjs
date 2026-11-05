@@ -14,10 +14,10 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
-import { befundZeile, INDEX_PFAD, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
+import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
@@ -316,14 +316,30 @@ function linkSchritt({ plan, ziel, leser }) {
   const platte = liesDatei(ziel);
   const lies = (pfad) => plan.dateien.get(pfad)?.text ?? platte(pfad);
   const vorhanden = (pfad) => plan.dateien.has(pfad) || existiertImZiel(join(ziel, ...pfad.split("/")));
-  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, ausnahmen, vorhanden });
-  for (const [pfad, text] of stubs.dateien) plan.dateien.set(pfad, { text, neu: true, ausfuehrbar: false, stub: true });
+  const reineStubs = reineStubPfade({ plan, ziel, platte });
+  const stubs = planeAnkerStubs({ lies, einheiten: Object.keys(plan.stand.einheiten), repo, tag, leser, ausnahmen, vorhanden, reineStubs });
+  for (const [pfad, text] of stubs.dateien) {
+    const erneuert = stubs.erneuert.has(pfad);
+    const alt = erneuert ? platte(pfad) : null;
+    if (alt !== null && normalisiereEol(alt) === text) continue; // erneuerter Stub inhaltsgleich: nichts schreiben (idempotent, CRLF-neutral)
+    plan.dateien.set(pfad, { text: alt === null || eolVon(alt) === "\n" ? text : text.replace(/\n/g, eolVon(alt)), neu: !erneuert, ausfuehrbar: false, stub: true });
+  }
   const dateien = [...new Set([...collectMarkdown(ziel), ...[...plan.dateien.keys()].filter(istGelesenesMarkdown)])];
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
-  const stubHinweise = stubs.dateien.size === 0 ? [] : [`Anker-Stubs: ${stubs.dateien.size} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
+  const angelegt = stubs.dateien.size - stubs.erneuert.size;
+  const stubHinweise = stubs.dateien.size === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
+  const erneuertAnzahl = [...stubs.erneuert].filter((p) => plan.dateien.get(p)?.stub).length;
+  if (erneuertAnzahl > 0) stubHinweise.push(`Anker-Stubs: ${erneuertAnzahl} Seiten erneuert am Tag ${tag}`);
   return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+}
+
+/** Die reinen Stubs des Ziels (factory#166): Markdown-Dateien, die weder der Sync-Plan schreibt noch eine Einheit des Stands sind, reguläre Dateien (kein Symlink, kein Ordner) und `istReinerStub`. */
+function reineStubPfade({ plan, ziel, platte }) {
+  const einheitPfade = new Set(Object.keys(plan.stand.einheiten).map((id) => einheitAusId(id).pfad));
+  const regulaer = (p) => existiertImZiel(join(ziel, ...p.split("/"))) && lstatSync(join(ziel, ...p.split("/"))).isFile();
+  return collectMarkdown(ziel).filter((p) => !plan.dateien.has(p) && !einheitPfade.has(p) && regulaer(p) && istReinerStub(platte(p) ?? ""));
 }
 
 /** Gibt es den Pfad im Ziel (auch als Symlink oder Ordner, hängend eingeschlossen)? Anker-Stubs schreiben nie über etwas, das schon da ist. */
@@ -337,7 +353,7 @@ function existiertImZiel(voll) {
 }
 
 /** Die Art einer Zeile der Ausgabe: `neu (Anker-Stub)` (angelegte Stub-Seite, factory#167), `neu (Vorlage)`, `neu` oder `geändert`. */
-const artVon = (d) => (d.stub ? "neu (Anker-Stub)" : d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert");
+const artVon = (d) => (d.stub ? (d.neu ? "neu (Anker-Stub)" : "geändert (Anker-Stub)") : d.neu ? (d.vorlage ? "neu (Vorlage)" : "neu") : "geändert");
 
 /** Link-Phase der Kommandozeile: `{ ok, hinweise }`; bei `ok: false` ist die Meldung schon über `err` ausgegeben (nichts geschrieben). */
 function linkPhase({ opt, plan, ziel, leser, err }) {
