@@ -226,7 +226,7 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     const a = aufbau();
     a.deps.wurzel = w;
     a.deps.ladeConfig = () => mitBezieher(["o/a"]);
-    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(0);
+    expect(await T.main(["--probe", "o/a=1"], a.deps)).toBe(0);
     expect(a.log.join("\n")).toContain("Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun");
     expect(a.log.join("\n")).not.toContain("Probe grün");
   });
@@ -259,6 +259,8 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     [["--probe", "o/a=0", "--dry-run"]],
     [["--probe", "o/a=1000"]],
     [["--probe", "o/a=0x"]],
+    [["--probe", "o/a="]],
+    [["--probe", "x=o/a=0"]],
   ])("Aufruf-Fehler %j: Exit 2", async (argv) => {
     const r = await probe(argv);
     expect(r.code).toBe(2);
