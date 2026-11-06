@@ -102,6 +102,9 @@ export function arbeitsplatzMaengel(block, { worktreePraefix } = {}) {
 
 const posixAus = (pfad) => pfad.replace(/\\/g, "/").replace(/(?<=.)\/+$/, "");
 
+/** Pur: hat die Config einen Block `arbeitsplatz` (Betriebsart Arbeitsplatz)? Ohne Block, ohne Config und bei `null` ist es eingebettet. Die eine Quelle dieser Prüfung. */
+export const istArbeitsplatz = (config) => config?.arbeitsplatz !== undefined;
+
 /**
  * Pur: leitet Betriebsart, Wurzel, Repo-Pfade und Worktree-Ordner je Repo ab, alles mit Schrägstrichen. `basis` ist der Ordner, der
  * `.factory/projekt.json` enthält. Ohne Block (eingebettet) ist die Wurzel die Basis und der einzige Repo die Basis selbst. Wirft bei kaputtem Block mit „Fix:“-Zeile.

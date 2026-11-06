@@ -65,7 +65,7 @@ import { execFileSync } from "node:child_process";
 import { statSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arbeitsplatzAus, standardzweigVon, worktreeBefehl } from "./arbeitsplatz-lib.mjs";
+import { arbeitsplatzAus, istArbeitsplatz, standardzweigVon, worktreeBefehl } from "./arbeitsplatz-lib.mjs";
 import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -161,7 +161,7 @@ export function schutzWurzeln(repoRoot, deps = {}) {
   const eigen = [{ wurzel: repoRoot }];
   try {
     const config = deps.config ?? ladeProjektConfig({ rootDir: repoRoot, pruefen: false });
-    if (config?.arbeitsplatz === undefined) return eigen;
+    if (!istArbeitsplatz(config)) return eigen;
     const aufloesung = arbeitsplatzAus(config, repoRoot);
     return [...eigen, ...aufloesung.repos.map((repo) => ({ wurzel: repo.pfad, repo, aufloesung }))];
   } catch {

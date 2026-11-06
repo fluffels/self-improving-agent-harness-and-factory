@@ -432,6 +432,15 @@ describe("Standardzweig je Repo (#88)", () => {
     expect(L2.standardzweigVon(L.arbeitsplatzAus(FREMD, "/proj").repos[0])).toBe("main");
   });
 
+  test("istArbeitsplatz (factory#220 L15b): nur ein vorhandener Block `arbeitsplatz` macht den Arbeitsplatz; ohne Block, ohne Config und bei null ist es eingebettet", () => {
+    const ist = (libRaw as unknown as { istArbeitsplatz: (c: unknown) => boolean }).istArbeitsplatz;
+    expect(ist({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [] } })).toBe(true);
+    expect(ist(FREMD)).toBe(false);
+    expect(ist(undefined)).toBe(false);
+    expect(ist(null)).toBe(false);
+    expect(ist({ ...FREMD, arbeitsplatz: undefined })).toBe(false);
+  });
+
   test("worktreeBefehl im Arbeitsplatz basiert auf origin/<Standardzweig>, eingebettet bleibt origin/main", () => {
     const n = N.ticketNamen(FREMD);
     const ap = L.arbeitsplatzAus({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [{ name: "web", pfad: "web", standardzweig: "develop" }, { name: "api", pfad: "api" }] } }, "/basis");

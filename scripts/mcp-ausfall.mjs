@@ -15,7 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { REPO_NAME_QUELLE } from "./arbeitsplatz-lib.mjs";
+import { REPO_NAME_QUELLE, istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
@@ -82,13 +82,13 @@ export function standPfad(wurzel, env, tmp, config) {
   const vorgabe = umgebungsWert(env, "FACTORY_MCP_AUSFALL_STAND");
   if (vorgabe) return vorgabe;
   const c = config ?? ladeProjektConfig();
-  return join(tmp, `${worktreePraefix(c)}mcp-ausfall-${slug(hauptWurzel(wurzel, c?.arbeitsplatz !== undefined))}.json`);
+  return join(tmp, `${worktreePraefix(c)}mcp-ausfall-${slug(hauptWurzel(wurzel, istArbeitsplatz(c)))}.json`);
 }
 
 /** Hat die Config (oder, ohne Angabe, die geladene) einen Block `arbeitsplatz`? Wirft nie (ohne lesbare Config `false`). */
-const istArbeitsplatz = (config) => {
+const istArbeitsplatzGeladen = (config) => {
   try {
-    return (config ?? ladeProjektConfig({ pruefen: false })).arbeitsplatz !== undefined;
+    return istArbeitsplatz(config ?? ladeProjektConfig({ pruefen: false }));
   } catch {
     return false;
   }
@@ -296,7 +296,7 @@ export function main(argv = process.argv.slice(2), env = process.env, out = cons
     }
     const seit = sessionstart ? parseSeit(standSeit, jetzt) : parseSeit(seitArg, jetzt);
     const basis = logBasis({ plattform, env, home });
-    const befunde = lies(basis, wurzel, server, seit, istArbeitsplatz(config));
+    const befunde = lies(basis, wurzel, server, seit, istArbeitsplatzGeladen(config));
     const variablen = server.filter((s) => s.type === "http").map((s) => [s, fehlendeVariablen(s, env)]).filter(([, f]) => f.length)
       .map(([s, f]) => `${s.name}: Umgebungsvariable(n) ${f.join(", ")} nicht gesetzt (Header-Platzhalter), der Server verbindet voraussichtlich nicht`);
     const unbekannt = server.filter((s) => !BEKANNTE_ARTEN.includes(s.type)).map((s) => `${s.name}: Server-Art "${s.type}" kennt mcp-ausfall nicht (ungeprüft)`);

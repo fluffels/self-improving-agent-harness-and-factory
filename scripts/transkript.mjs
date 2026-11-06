@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
@@ -170,7 +171,7 @@ export function projekteWurzel() {
 function arbeitsplatzBasis({ config, basis } = {}) {
   try {
     const c = config ?? ladeProjektConfig({ pruefen: false });
-    return c?.arbeitsplatz === undefined ? null : (basis ?? dirname(dirname(fileURLToPath(import.meta.url))));
+    return istArbeitsplatz(c) ? (basis ?? dirname(dirname(fileURLToPath(import.meta.url)))) : null;
   } catch {
     return null;
   }
