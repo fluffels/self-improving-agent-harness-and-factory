@@ -34,7 +34,8 @@
     "harness": "area:harness",
     "festgefahren": "status:festgefahren",
     "forum": "forum",
-    "dependabotInbox": "area:harness"
+    "dependabotInbox": "area:harness",
+    "entscheidung": "status:entscheidung-noetig"
   },
   "agenten": {
     "planer": "sih-planer",

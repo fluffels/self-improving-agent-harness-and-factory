@@ -593,6 +593,20 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.match(anderes.out, /WIEDERAUFNAHME #20/);
   });
 
+  test("wartet auf Entscheidung (Label labels.entscheidung am Issue oder PR): behalten, ohne gesetzten Schlüssel unverändert verwaist (factory#152)", () => {
+    const WARTET = "status:wartet";
+    const mit = (issue: object) => ({ ...baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps, entscheidungLabel: WARTET });
+    for (const issue of [{ state: "OPEN", labels: [WARTET] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: [WARTET] }] }]) {
+      const r = M.fuehreAus([], mit(issue));
+      assert.match(r.out, /BEHALTEN #20: behalten, wartet auf Entscheidung/);
+      assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
+    }
+    const ohneLabel = M.fuehreAus([], mit({ state: "OPEN" }));
+    assert.match(ohneLabel.out, /WIEDERAUFNAHME #20/);
+    const ohneSchluessel = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN", labels: [WARTET] } } }).deps);
+    assert.match(ohneSchluessel.out, /WIEDERAUFNAHME #20/);
+  });
+
   test("fuehreAus ohne deps.namen: der Branch mit dem Präfix der Projekt-Config zählt als Ticket, der mit dem fremden nicht", () => {
     const ohne = (branch: string) => ({ ...baue({ refs: [[branch, sek("2026-10-16T03:36:00Z")]], issues: { 21: { state: "OPEN" } } }).deps, namen: undefined });
     const echt = M.fuehreAus([], ohne(`${ECHT.branch}21-x`));
