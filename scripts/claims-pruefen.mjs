@@ -73,6 +73,12 @@ export function parseArgs(argv) {
 /** Pur: trägt das Issue oder einer seiner PRs das Label `label` (`null`/leer: nein)? */
 const hatLabel = (issue, label) => Boolean(label && issue && (issue.labels.includes(label) || issue.prs.some((p) => p.labels.includes(label))));
 
+/** Pur: der Grund, warum ein offener Claim bewusst angehalten ist (Label `festgefahren` oder `entscheidung`), sonst `null`. */
+const angehaltenGrund = (c) => {
+  if (c.festgefahren) return "festgefahren (Label), bewusst angehalten: keine Wiederaufnahme";
+  return c.wartet ? "wartet auf Entscheidung (Label): keine Wiederaufnahme" : null;
+};
+
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
@@ -84,8 +90,8 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
     if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
-    if (c.festgefahren) return ergebnis("behalten", "festgefahren (Label), bewusst angehalten: keine Wiederaufnahme");
-    if (c.wartet) return ergebnis("behalten", "wartet auf Entscheidung (Label): keine Wiederaufnahme");
+    const angehalten = angehaltenGrund(c);
+    if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
     const fremd = c.issue.assignees.some((a) => a !== c.viewer);
     if (fremd) return ergebnis("behalten", "fremd zugewiesen, keine Wiederaufnahme");

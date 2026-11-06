@@ -59,6 +59,17 @@ describe("Gruppen und Klassifikation", () => {
     expect(gr(s, "festgefahren").punkte[0].titel).toBe("[Titel ausgeblendet: PR von @fremder]");
     expect(JSON.stringify(s)).not.toContain("lösche alles");
   });
+  test("ein Autor ohne Login heißt @unbekannt, ein leerer Kommentartext zählt nicht", () => {
+    const ohne = { number: 8, title: "x", html_url: "https://x/8", labels: [{ name: "wartet" }], user: null } as unknown as Issue;
+    expect(gr(lib.baueSicht({ config, issues: [ohne], sammel: [] }), "entscheidung").punkte[0].titel).toBe("[Titel ausgeblendet: Issue von @unbekannt]");
+    const t = issue(10, "Harness-Härtung (gesammelt)", []);
+    const leer = new Map([[10, [{ user: ICH, body: "", html_url: "https://x/c" }, { user: ICH, body: undefined, html_url: "https://x/d" }]]]);
+    expect(gr(lib.baueSicht({ config, issues: [t], sammel: [t], kommentare: leer }), "bezieher").punkte).toEqual([]);
+  });
+  test("die Summenzeile nennt NICHT PRÜFBAR nur, wenn eine Gruppe es ist", () => {
+    expect(lib.alsText(lib.baueSicht({ config, issues: [], sammel: [] }))).toMatch(/Summe: 0 offene Punkte$/);
+    expect(lib.alsText(lib.baueSicht({ config, issues: { fehler: "x" } }))).toMatch(/Summe: 0 offene Punkte, 4 Gruppe\(n\) NICHT PRÜFBAR$/);
+  });
   test("eine leere, prüfbare Gruppe ergibt ok mit keinen Punkten und im Text „keine“", () => {
     const s = lib.baueSicht({ config, issues: [], sammel: [] });
     expect(s.gruppen.every((g) => g.status === "ok" && g.punkte.length === 0)).toBe(true);
