@@ -397,6 +397,11 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(pruefe({ rootDir: "/x", ...GESUND, git: werfend, existiert: () => true, config: {} }).map((p) => p.punkt)).toEqual([...DATEI_PUNKTE]);
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
+  test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"];
+    expect([...DATEI_PUNKTE]).toEqual(erwartet);
+    expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
+  });
   test("die Liste endet mit Required-Check-Quellen und ist unveränderlich", () => {
     expect(DATEI_PUNKTE.at(-1)).toBe("Required-Check-Quellen");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
@@ -415,6 +420,21 @@ describe("Required-Check-Quellen (factory#148)", () => {
     const p = pk([ci(K)], [K], null);
     expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
     expect(p.fix).toContain("rulesetSpiegel");
+  });
+  test("Spiegel nicht übergeben (undefined, wie pruefLauf ohne rulesetSpiegel) bei nicht leerer Soll-Liste: NICHT PRÜFBAR", () => {
+    const p = quellenPunkt({ spiegel: undefined, workflows: [ci(K)], pflichtChecks: [K] });
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p.fix).toContain("rulesetSpiegel");
+  });
+  test("Soll-Liste kein Array (String): NICHT PRÜFBAR statt Zeichen-Zählung", () => {
+    const p = quellenPunkt({ spiegel: {}, workflows: [ci(K)], pflichtChecks: K as unknown as string[] });
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("workflows nicht übergeben: LÜCKE mit 0 Quellen statt Absturz", () => {
+    const p = quellenPunkt({ spiegel: {}, workflows: undefined as unknown as Workflow[], pflichtChecks: [K] });
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain("0 Quellen");
   });
   test("leere Soll-Liste: NICHT PRÜFBAR mit Fix", () => {
     const p = pk([ci(K)], []);

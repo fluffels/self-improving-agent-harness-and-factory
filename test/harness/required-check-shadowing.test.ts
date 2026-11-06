@@ -144,6 +144,37 @@ const LESBAR: Record<string, [string, string[]]> = {
   ],
   "Liste auf Schlüsselhöhe bei nicht gelesenem Schlüssel": [`jobs:\n  a:\n    name: A\n    needs:\n    - b\n    - c\n    steps:\n      - name: S\n`, ["A", "S"]],
   "keine jobs und leere Eingabe": [`on: push\n`, []],
+  "typisierte Skalare bleiben Text (failsafe)": [`jobs:\n  a:\n    name: 1.0\n    steps:\n      - name: true\n`, ["1.0", "true"]],
+  "Datei ohne abschließenden Zeilenumbruch": [`jobs:\n  a:\n    name: X`, ["X"]],
+  "Job-Name hinter kompakten Steps auf Höhe von steps": [`jobs:\n  a:\n    steps:\n    - name: A\n    name: Audit\n`, ["Audit", "A"]],
+  "leerer Job vor dem nächsten Job": [`jobs:\n  a:\n  b:\n    name: X\n`, ["X"]],
+  "leeres jobs": [`jobs:\non: push\n`, []],
+  "Kommentare hinter jobs: und steps:": [`jobs: # c\n  a:\n    steps: # c\n      - name: S\n`, ["S"]],
+  "Kommentar hinter dem Dokumentstart": [`--- # c\njobs:\n  a:\n    name: A\n`, ["A"]],
+  "leeres name vor einem Geschwister-Schlüssel": [`jobs:\n  a:\n    name:\n    runs-on: x\n`, []],
+  "leerer Strich vor dem nächsten Step": [`jobs:\n  a:\n    steps:\n      -\n      - name: S\n`, ["S"]],
+};
+
+/** Nur für den Differenztest: Eingaben, bei denen der Leser exakt `yaml` trifft oder „nicht lesbar“ meldet (nie abstürzen, nie abweichen). */
+const NUR_DIFFERENZ: Record<string, string> = {
+  "Text nach gequotetem Wert": 'jobs:\n  a:\n    name: "A" B\n',
+  "gequotete Folgezeile flacher eingerückt": 'jobs:\n  a:\n    name: "A\n  B"\n',
+  "Strich im plain-Wert": "jobs:\n  a:\n    name: - x\n",
+  "Indikator @ am Wertanfang": "jobs:\n  a:\n    name: @x\n",
+  "Indikator Komma am Wertanfang": "jobs:\n  a:\n    name: ,x\n",
+  "Tab hinter dem Strich": "jobs:\n  a:\n    steps:\n      -\tname: X\n",
+  "Kommentar im Schlüssel": "jobs:\n  a:\n    kaputt #c: y\n",
+  "plain mit Kommentar und tieferer Folgezeile": "jobs:\n  a:\n    name: A # c\n      B\n",
+  "Hex-Escape über den Zeilenumbruch": 'jobs:\n  a:\n    name: "A\\x4\n      B"\n',
+  "Backslash im einfach gequoteten Wert": "jobs:\n  a:\n    name: 'a\\b'\n",
+  "Tab im gefalteten Quote": 'jobs:\n  a:\n    name: "A\n  B\t C"\n',
+  "Backslash am Zeilenende vor Leerzeile": 'jobs:\n  a:\n    name: "A\\\n\n      B"\n',
+  "Kommentarzeile unter plain-Wert": "jobs:\n  a:\n    name: A\n      # c\n    runs-on: x\n",
+  "gefaltet mit tiefer eingerückter Zeile": "jobs:\n  a:\n    name: >\n      A\n        B\n      C\n",
+  "leerer Block-Skalar vor Geschwister": "jobs:\n  a:\n    name: |\n    runs-on: x\n",
+  "kaputter Block-Skalar-Kopf": "jobs:\n  a:\n    name: |x\n",
+  "Codepunkt über U+10FFFF": 'jobs:\n  a:\n    name: "\\U00110000"\n',
+  "Escape-Tabelle N": 'jobs:\n  a:\n    name: "\\N"\n',
 };
 
 /** Formen, die der Leser nicht liest: Text, Zeile, Konstrukt (geschlossene Liste im Kopfkommentar des Moduls). */
@@ -187,6 +218,7 @@ const FIXTURES: Record<string, string> = {
   MIT_RAUTE,
   ...Object.fromEntries(Object.entries(LESBAR).map(([k, [text]]) => [k, text])),
   ...Object.fromEntries(Object.entries(NICHT_LESBAR).map(([k, [text]]) => [k, text])),
+  ...NUR_DIFFERENZ,
   "kaputtes YAML": "jobs:\n  a: [\n",
   Block_Doppelgaenger: "jobs:\n  x:\n    name: |\n      Beispiel-Check (Zusatz, #5)\n",
   Flow_Doppelgaenger: 'jobs:\n  x: { name: "Beispiel-Check (Zusatz, #5)" }\n',
