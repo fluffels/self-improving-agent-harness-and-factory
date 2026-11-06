@@ -14,7 +14,7 @@
 
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -43,7 +43,7 @@ import {
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
 import { bauePayloads } from "./langfuse-otlp.mjs";
-import { auftraegeLesen, auftragErledigen } from "./langfuse-auftrag-lib.mjs";
+import { auftraegeLesen, auftragErledigen, schreibeJsonAtomar } from "./langfuse-auftrag-lib.mjs";
 import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 
@@ -92,14 +92,6 @@ export function parseArgs(argv) {
 }
 
 // ── Ledger ───────────────────────────────────────────────────────────────────
-
-/** Atomar: erst `<datei>.tmp`, dann `rename`. */
-function ledgerSchreiben(datei, ledger) {
-  mkdirSync(join(datei, ".."), { recursive: true });
-  const tmp = `${datei}.tmp`;
-  writeFileSync(tmp, JSON.stringify(ledger, null, 2) + "\n");
-  renameSync(tmp, datei);
-}
 
 // ── Eine Session ─────────────────────────────────────────────────────────────
 
@@ -311,7 +303,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   protokoll.wuerdeSenden = protokoll.sessions.reduce((n, r) => n + r.wuerdeSenden, 0);
   if (!args.trocken) {
     for (const [id, e] of Object.entries(ledger.sessions)) if (!existsSync(e.pfad ?? "")) delete ledger.sessions[id];
-    if (kaputt || JSON.stringify(ledger) !== vorher) ledgerSchreiben(ledgerDatei, ledger);
+    if (kaputt || JSON.stringify(ledger) !== vorher) schreibeJsonAtomar(ledgerDatei, ledger);
   }
   return { exitCode: protokoll.fehler.length ? 1 : 0, text: bericht(args, protokoll), protokoll };
 }

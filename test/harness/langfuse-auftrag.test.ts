@@ -4,7 +4,7 @@
  * Weder ~/.claude noch Langfuse werden angefasst: Temp-Ordner, injiziertes lauf/Uhr; der Prozess-Test biegt das Home um.
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,6 +28,7 @@ const A = rawAuftrag as unknown as {
   auftragErledigen: (dir: string, session: string) => void;
   auftragAufruf: (argv: string[], dir: string, now?: number) => { exitCode: number; text: string };
   AUFRUFHILFE: string;
+  schreibeJsonAtomar: (datei: string, wert: unknown) => void;
 };
 const N = rawNach as unknown as {
   parseArgs: (a: string[]) => Args;
@@ -92,6 +93,18 @@ describe("Auftragsdatei", () => {
     const leer = join(fixture({}), "state2");
     A.auftragErledigen(leer, "x");
     expect(existsSync(dateiVon(leer))).toBe(false);
+  });
+});
+
+describe("schreibeJsonAtomar (gemeinsamer Zustandsschreiber für Ledger und Aufträge)", () => {
+  test("legt fehlende Ordner an, schreibt den vollen Inhalt, überschreibt und hinterlässt keine Tmp-Datei", () => {
+    const ordner = join(fixture({}), "a", "b");
+    const datei = join(ordner, "zustand.json");
+    A.schreibeJsonAtomar(datei, { x: 1 });
+    expect(readFileSync(datei, "utf8")).toBe('{\n  "x": 1\n}\n');
+    A.schreibeJsonAtomar(datei, { y: [2] });
+    expect(JSON.parse(readFileSync(datei, "utf8"))).toEqual({ y: [2] });
+    expect(readdirSync(ordner)).toEqual(["zustand.json"]);
   });
 });
 
