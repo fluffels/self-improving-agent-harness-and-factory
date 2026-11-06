@@ -270,10 +270,10 @@ describe("CI-Zustand und Body", () => {
         expect(block, teil).toContain(teil);
       }
     });
-    it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verify), der Erklärsatz nennt sie", () => {
+    it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verifyKompakt), der Erklärsatz nennt sie", () => {
       const mechanisch = mechanischeSchritte("<s>/quelle");
       expect(mechanisch).toHaveLength(4);
-      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verify\n");
+      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verifyKompakt\n");
       for (const befehl of mechanisch) expect(mitBezieher.split("aussagekräftig")[0], befehl).toContain("`" + befehl + "`");
     });
     it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
