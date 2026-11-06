@@ -205,6 +205,12 @@ function mischeZweige(ziel, zweige) {
   }
 }
 
+/** Merkt, aus welchem Bericht Daten zu einer Datei stammen (factory#215): je Repo-Pfad die Berichtsdateien in Lesereihenfolge, ohne Dublette. */
+function merkeBericht(berichteJe, pfad, bericht) {
+  const alt = berichteJe.get(pfad) ?? [];
+  if (!alt.includes(bericht)) berichteJe.set(pfad, [...alt, bericht]);
+}
+
 /** Mischt Daten einer Datei in den Gesamtbestand: Hits je Zeile addiert, Zweige je Zeile per `max`. */
 function mische(abdeckung, zweige, pfad, zeilenDaten, zweigDaten) {
   if (zeilenDaten !== undefined) {
@@ -227,7 +233,7 @@ function leseBericht(lies, rootDir, datei, fehlend) {
   }
 }
 
-function jacocoZuordnen({ bestaende, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig }) {
+function jacocoZuordnen({ bestaende, bestandPfade, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe }) {
   const ordner = [...new Set(wurzelOrdner ?? quellen.wurzeln.flatMap((w) => ordnerZuMuster(rootDir, w)))];
   const gibt = existiert ?? ((p) => existsSync(join(rootDir, ...p.split("/"))));
   for (const pfad of messDateien) {
@@ -240,13 +246,16 @@ function jacocoZuordnen({ bestaende, messDateien, quellen, rootDir, wurzelOrdner
         mehrdeutig.push({ pfad, schluessel, kandidaten });
         continue;
       }
-      for (const b of treffer) mische(abdeckung, zweige, pfad, b.get(schluessel).zeilen, b.get(schluessel).zweige);
+      for (const b of treffer) {
+        mische(abdeckung, zweige, pfad, b.get(schluessel).zeilen, b.get(schluessel).zweige);
+        merkeBericht(berichteJe, pfad, bestandPfade[bestaende.indexOf(b)]);
+      }
     }
   }
 }
 
 /** Liest alle konfigurierten Berichte und liefert die Abdeckung je Repo-Pfad: `{ abdeckung: Map<pfad, Map<zeile, hits>>, zweige: Map<pfad, Map<zeile, { total, taken }>>, fehlend: string[],
- *  mehrdeutig: { pfad, schluessel, kandidaten }[] }`. `fehlend` nennt jeden nicht lesbaren Berichtspfad bzw. einen Glob ohne Treffer. JaCoCo-Dateien werden nur für die gemessenen geänderten
+ *  mehrdeutig: { pfad, schluessel, kandidaten }[], berichteJe: Map<pfad, string[]> }` (`berichteJe`: die Berichtsdateien, aus denen die Daten einer Datei stammen). `fehlend` nennt jeden nicht lesbaren Berichtspfad bzw. einen Glob ohne Treffer. JaCoCo-Dateien werden nur für die gemessenen geänderten
  *  Dateien (`messDateien`) aufgelöst: Schlüssel = Pfad ohne Wurzel-Präfix; gibt es den Schlüssel im Bericht und unter mehr als einem Wurzelordner eine Datei dazu, ist das `mehrdeutig`.
  *  Dieselbe Datei in mehreren Berichten wird gemischt (Hits addiert, Zweige per `max`). `wurzelOrdner` und `existiert` sind injizierbar (Standard: Dateisystem unter `rootDir`), nur bei JaCoCo gebraucht. */
 export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, wurzelOrdner, existiert }) {
@@ -255,6 +264,8 @@ export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, w
   const fehlend = [];
   const mehrdeutig = [];
   const bestaende = [];
+  const bestandPfade = [];
+  const berichteJe = new Map();
   for (const b of berichte) {
     const dateien = berichtDateien(rootDir, b.pfad);
     if (dateien.length === 0) fehlend.push(b.pfad);
@@ -263,13 +274,17 @@ export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, w
       if (text === null) continue;
       if (b.format === "jacoco") {
         bestaende.push(parseJacoco(text));
+        bestandPfade.push(datei);
         continue;
       }
       const zeilen = parseLcov(text, b.basis);
       const br = parseLcovBranches(text, b.basis);
-      for (const [pfad, daten] of zeilen) mische(abdeckung, zweige, pfad, daten, br.get(pfad));
+      for (const [pfad, daten] of zeilen) {
+        mische(abdeckung, zweige, pfad, daten, br.get(pfad));
+        merkeBericht(berichteJe, pfad, datei);
+      }
     }
   }
-  if (bestaende.length > 0) jacocoZuordnen({ bestaende, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig });
-  return { abdeckung, zweige, fehlend, mehrdeutig };
+  if (bestaende.length > 0) jacocoZuordnen({ bestaende, bestandPfade, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe });
+  return { abdeckung, zweige, fehlend, mehrdeutig, berichteJe };
 }
