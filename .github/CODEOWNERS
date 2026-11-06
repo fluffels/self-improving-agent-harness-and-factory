@@ -81,6 +81,8 @@ AGENTS.md @fluffels
 /scripts/board-lib.mjs @fluffels
 /scripts/board-plan-lib.mjs @fluffels
 /scripts/produktquote-lib.mjs @fluffels
+/scripts/sammelticket-titel.mjs @fluffels
+/scripts/pfadwurzeln-lib.mjs @fluffels
 /scripts/projekt-config.mjs @fluffels
 /scripts/arbeitsplatz-lib.mjs @fluffels
 /scripts/projekt-config-lib.mjs @fluffels

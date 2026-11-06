@@ -77,6 +77,8 @@
     "/scripts/board-lib.mjs",
     "/scripts/board-plan-lib.mjs",
     "/scripts/produktquote-lib.mjs",
+    "/scripts/sammelticket-titel.mjs",
+    "/scripts/pfadwurzeln-lib.mjs",
     "/scripts/projekt-config.mjs",
     "/scripts/arbeitsplatz-lib.mjs",
     "/scripts/projekt-config-lib.mjs",

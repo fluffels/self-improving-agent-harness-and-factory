@@ -35,7 +35,7 @@ type Stand = { closedAt: string | null; n: number } | { fehler: string };
 type Eingabe = { repo?: string; items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
-type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number };
+type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number; existiert?: (wurzel: string) => boolean };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   formatiere: (e: Ergebnis) => string;

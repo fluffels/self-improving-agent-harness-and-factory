@@ -39,7 +39,7 @@
     "complexity": 12
   },
   "scripts/claims-pruefen.mjs": {
-    "complexity": 12
+    "complexity": 11
   },
   "scripts/cleanup-worktrees.mjs": {
     "complexity": 25

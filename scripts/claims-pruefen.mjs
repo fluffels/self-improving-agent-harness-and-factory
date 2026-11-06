@@ -80,6 +80,15 @@ const angehaltenGrund = (c) => {
   return c.wartet ? "wartet auf Entscheidung (Label): keine Wiederaufnahme" : null;
 };
 
+/** Pur: das Urteil eines offenen Claims ohne jede lokale Spur: `behalten` für ein Befund-Issue „Nicht eintragbar“ (kein eigener Claim), sonst `ohne-lokale-spur`. */
+function ohneSpurUrteil(c, ergebnis) {
+  if (c.nichtEintragbar) return ergebnis("behalten", "Befund-Issue „Nicht eintragbar“ (Befund, der sein Ziel-Repo nicht erreichte, kein eigener Claim)");
+  return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+}
+
+/** Pur: trägt das Issue den Titelpräfix „Nicht eintragbar: “ (`titel` aus `issueAus`; ohne Issue false)? */
+const istNichtEintragbar = (issue) => String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX);
+
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
@@ -90,8 +99,7 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
-    if (!spur && c.nichtEintragbar) return ergebnis("behalten", "Befund-Issue „Nicht eintragbar“ (Befund, der sein Ziel-Repo nicht erreichte, kein eigener Claim)");
-    if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+    if (!spur) return ohneSpurUrteil(c, ergebnis);
     const angehalten = angehaltenGrund(c);
     if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
@@ -240,7 +248,7 @@ export function sammle(deps) {
       prs: issue?.prs ?? [],
       festgefahren: hatLabel(issue, deps.festgefahrenLabel),
       wartet: hatLabel(issue, deps.entscheidungLabel),
-      nichtEintragbar: String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX),
+      nichtEintragbar: istNichtEintragbar(issue),
       lock,
       worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
       branch: meine.length > 0,
