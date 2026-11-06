@@ -12,10 +12,11 @@ import * as rawDoctor from "../scripts/harness-doctor.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawDateien } from "../scripts/harness-doctor-dateien.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf } from "../scripts/harness-doctor-lib.mjs";
+import { pruefeAltnamen as rawAlt, pruefeSprache as rawSprache, konfigFehlerText as rawFehlerText, pruefLauf as rawPruefLauf, sollKontexte as rawSoll } from "../scripts/harness-doctor-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { SICHERHEIT_PUNKTE as rawSicherheitPunkte } from "../scripts/harness-doctor-sicherheit.mjs";
 const SICHERHEIT_PUNKTE = rawSicherheitPunkte as string[];
+const sollKontexte = rawSoll as (a: { spiegel?: { requiredChecks?: string[] }; manifest?: unknown; workflows: { pfad: string; text: string }[] }) => string[];
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
@@ -647,7 +648,21 @@ describe("harness-doctor --pruefen", () => {
     assert.ok(r.out.includes("NICHT PRÜFBAR Required-Check-Quellen: kein Ruleset-Spiegel Fix: rulesetSpiegel setzen"), r.out.join("\n"));
   });
 
-  test("factory#162 L33: wirft die Dateipunkt-Prüfung selbst, bleibt es beim Config-Fehler: Exit 2, Fix auf stderr", () => {
+  test("factory#220 L19: der Abbruchpfad ruft die Dateipunkte mit vorAbbruch: true (und ohne Spiegel) auf", () => {
+    const gesehen: unknown[] = [];
+    lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: (a) => { gesehen.push(a); return []; } });
+    assert.equal(gesehen.length, 1);
+    assert.equal((gesehen[0] as { vorAbbruch?: boolean }).vorAbbruch, true);
+  });
+
+  test("factory#220 L19: der normale Lauf übergibt kein vorAbbruch", () => {
+    const gesehen: unknown[] = [];
+    lauf({}, { dateien: (a) => { gesehen.push(a); return []; } });
+    assert.equal(gesehen.length, 1);
+    assert.equal((gesehen[0] as { vorAbbruch?: boolean }).vorAbbruch, undefined);
+  });
+
+  test("factory#162 L33: wirft die Dateipunkt-Prüfung selbst,bleibt es beim Config-Fehler: Exit 2, Fix auf stderr", () => {
     const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => { throw new Error("EACCES"); } });
     assert.equal(r.code, 2);
     assert.match(r.err.join("\n"), /Fix: Ruleset-Spiegel/);
@@ -679,6 +694,14 @@ describe("voraussetzungenAus: Pflicht-Checks des Kerns (factory#117)", () => {
     const v = ab(wert(eintrag(".github/workflows/fehlt.yml"), eintrag(".github/workflows/k.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/k.yml", { pflichtChecks: undefined })));
     assert.deepEqual(v.pflichtChecks, ["CI", "Audit"]);
     assert.equal(v.besitzFehler, null);
+  });
+  test("factory#220 L20: sollKontexte ist die eine Quelle der Soll-Liste (gleich der Ableitung)", () => {
+    const manifest = { version: 1, eintraege: [eintrag(".github/workflows/k.yml")] };
+    const workflows = [{ pfad: "k.yml", text: "" }];
+    assert.deepEqual(sollKontexte({ spiegel: { requiredChecks: ["CI", "Audit"] }, manifest, workflows }), ["CI", "Audit", "Kern"]);
+    assert.deepEqual(sollKontexte({ spiegel: { requiredChecks: ["CI", "Audit"] }, manifest, workflows }), ab(wert(eintrag(".github/workflows/k.yml"))).pflichtChecks);
+    assert.deepEqual(sollKontexte({ spiegel: { requiredChecks: ["CI"] }, manifest, workflows: [] }), ["CI"], "Datei nicht im Repo: kein Kern-Check");
+    assert.deepEqual(sollKontexte({ spiegel: undefined, manifest: null, workflows }), [], "Manifest nicht gelesen: nur der Spiegel (hier keiner)");
   });
   test("ohne Spiegel: nur die Kern-Checks", () => {
     assert.deepEqual(ab(wert(eintrag(".github/workflows/k.yml")), null).pflichtChecks, ["Kern", "CI"]);

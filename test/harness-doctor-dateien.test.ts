@@ -498,6 +498,19 @@ describe("Required-Check-Quellen (factory#148)", () => {
     const doppelt = pruefe({ rootDir: "/x", ...GESUND, workflows: [ci(K), ci(K, "fake.yml")], git: fakeGit(gesund), existiert: () => true, config: {} });
     expect(punkt(doppelt, "Required-Check-Quellen").ok).toBe(false);
   });
+  test("factory#220 L19: vorAbbruch nennt als Grund die nicht geladene Config, ein fehlender Spiegel ohne vorAbbruch bleibt getrennt", () => {
+    const vor = quellenPunkt({ spiegel: undefined, workflows: [], pflichtChecks: [], vorAbbruch: true });
+    expect(vor).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(vor.befund).toContain("Config bzw. Ruleset-Spiegel nicht geladen (Abbruch oben)");
+    expect(vor.befund).not.toContain("kein Ruleset-Spiegel");
+    const ohne = quellenPunkt({ spiegel: undefined, workflows: [], pflichtChecks: [] });
+    expect(ohne.befund).toContain("kein Ruleset-Spiegel");
+    expect(ohne.befund).not.toContain("nicht geladen");
+  });
+  test("factory#220 L19: pruefeDateien reicht vorAbbruch an den Punkt durch", () => {
+    const e = pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {}, vorAbbruch: true } as never);
+    expect(punkt(e, "Required-Check-Quellen").befund).toContain("nicht geladen");
+  });
   test("ohne die neuen Felder (Abbruchpfad) ist der Punkt nicht prüfbar statt grün", () => {
     expect(punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {} }), "Required-Check-Quellen")).toMatchObject({ ok: false, nichtPruefbar: true });
   });
