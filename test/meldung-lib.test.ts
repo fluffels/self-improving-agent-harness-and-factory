@@ -377,6 +377,14 @@ describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStan
   test("Positivfälle: jede Hex-Ziffer 0-9 und a-f ist in der Commit-Kurzform erlaubt", () => {
     for (const commit of ["1234567", "89abcde", "0f0f0f0", "9876543"]) expect(lib.istStandZeile(`factory: v1 (${commit})`)).toBe(true);
     expect(lib.istStandZeile("factory: unbekannt (unbekannt)")).toBe(true);
+    expect(lib.istStandZeile("factory: x (abcdef0)")).toBe(true);
+  });
+  test("Negativfälle an den Klammern und am Literal der unlesbaren Stand-Zeile", () => {
+    expect(lib.istStandZeile("factory: v1 [abcdef0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef0]")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abc:/`0)")).toBe(false);
+    expect(lib.istStandZeile("factory: unbekannt (Sync-Stand unlesbar) danach Text")).toBe(false);
+    expect(lib.istStandZeile("siehe factory: unbekannt (Sync-Stand unlesbar)")).toBe(false);
   });
   test("Negativfälle: freier Text, factory: mitten in der Zeile, falscher Commit, leer", () => {
     expect(lib.istStandZeile("factory: das ist ein Satz")).toBe(false);
