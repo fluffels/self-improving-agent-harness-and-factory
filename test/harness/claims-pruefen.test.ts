@@ -80,6 +80,10 @@ describe("beurteileClaim: Befund-Issue „Nicht eintragbar“ (L10)", () => {
     assert.match(ohne.grund, /Nicht eintragbar/);
     assert.equal(urteil(claim({ nichtEintragbar: true })).urteil, "lebendig");
     assert.equal(urteil(claim({ lock: null, nichtEintragbar: false })).urteil, "ohne-lokale-spur");
+    assert.match(urteil(claim({ lock: null })).grund, /^zugewiesen, aber ohne Lock/);
+    const offen = urteil(claim({ lock: null, issue: { zustand: "OPEN", assignees: [] } }));
+    assert.equal(offen.urteil, "ohne-lokale-spur");
+    assert.equal(offen.grund, "offen, keine lokale Spur");
   });
 });
 
@@ -316,8 +320,8 @@ function baue(welt: Welt) {
         repository[`i${m[1]}`] = i
           ? {
               state: i.state,
-              title: i.title ?? "Ein Ticket",
               // Wie GitHub: ein Feld kommt nur zurück, wenn die Abfrage es verlangt.
+              ...(query.includes("title state labels(first:30)") ? { title: i.title ?? "Ein Ticket" } : {}),
               ...(query.includes("state labels(first:30){ nodes{ name } }") ? { labels: knoten(i.labels) } : {}),
               assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
               closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, ...(query.includes("headRefOid labels(first:30){ nodes{ name } }") ? { labels: knoten(p.labels) } : {}) })) },
