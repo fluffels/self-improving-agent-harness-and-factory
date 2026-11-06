@@ -71,6 +71,12 @@ describe("Rollen-Schalter (factory#154)", () => {
   test("Kommentar am Zeilenende zählt (fail-closed), ein Blockkommentar-Anfang nimmt die Zeile aus", () => {
     expect(rollenProben("scripts/x.mjs", "existsSync(STAND_PFAD); // Kommentar")).toHaveLength(1);
     expect(rollenProben("scripts/x.mjs", "/* existsSync(STAND_PFAD) */")).toEqual([]);
+    expect(rollenProben("scripts/x.mjs", "  // existsSync(STAND_PFAD)")).toEqual([]);
+    expect(rollenProben("scripts/x.mjs", "   * existsSync(STAND_PFAD)")).toEqual([]);
+  });
+
+  test("M1 trifft nur die genannten Funktionen als ganzes Wort (fstatSync bleibt grün)", () => {
+    expect(rollenProben("scripts/x.mjs", "const s = fstatSync(join(w, STAND_PFAD));")).toEqual([]);
   });
 
   test("M2 trifft nur das exakte Literal: längerer String in gleichen oder gemischten Anführungszeichen bleibt grün", () => {
