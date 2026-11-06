@@ -106,9 +106,10 @@ function bezieherGruppe(sammel, kommentare, owner) {
 
 /**
  * Pur: alle vier Gruppen. `config`: Projekt-Config (`repo`, `labels`); `issues`: die offenen Issues und PRs (REST-Form) oder `{ fehler }`, wenn der Abruf
- * scheiterte (dann sind alle Gruppen NICHT PRÜFBAR); `sammel` und `kommentare` wie bei `bezieherGruppe`.
+ * scheiterte (dann sind alle Gruppen NICHT PRÜFBAR); `sammel` und `kommentare` wie bei `bezieherGruppe`; `stelleOwner`: Besitzer der Meldestelle (vertraute Autoren der
+ * Bezieher-Meldungen, Standard der Besitzer von `config.repo`); `bezieherFehler` (nicht leer): die Meldestelle war nicht bestimmbar oder nicht lesbar, nur `bezieher` ist NICHT PRÜFBAR.
  */
-export function baueSicht({ config, issues, sammel = null, kommentare = new Map() }) {
+export function baueSicht({ config, issues, sammel = null, kommentare = new Map(), stelleOwner = "", bezieherFehler = "" }) {
   const repo = String(config?.repo ?? "");
   if (!Array.isArray(issues)) {
     const grund = `offene Issues und PRs nicht lesbar: ${issues?.fehler ?? "kein Abruf"}`;
@@ -128,7 +129,7 @@ export function baueSicht({ config, issues, sammel = null, kommentare = new Map(
       entscheidungGruppe(issues, config?.labels?.entscheidung, owner),
       festgefahren,
       nichtEintragbarGruppe(issues, owner),
-      bezieherGruppe(sammel, kommentare, owner),
+      bezieherFehler === "" ? bezieherGruppe(sammel, kommentare, stelleOwner === "" ? owner : stelleOwner) : gruppe("bezieher", { grund: bezieherFehler, fix: "gh-Anmeldung und Leserecht auf die Meldestelle prüfen (Schlüssel `meldestelle` der Projekt-Config), dann erneut aufrufen" }),
     ],
   };
 }

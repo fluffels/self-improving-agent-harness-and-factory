@@ -12,7 +12,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flach, issueKommentare } from "./fremdtext-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, meldestelleAus } from "./projekt-config-lib.mjs";
 import { alsJson, alsText, baueSicht, exitCode, sammeltickets } from "./offene-punkte-lib.mjs";
 
 const AUFRUF = "Aufruf: node scripts/offene-punkte.mjs [--json] [--wurzel <pfad>]";
@@ -52,8 +52,27 @@ async function sammleSicht({ config, api, ladeTitel }) {
     issues = { fehler: fehlerText(e) };
   }
   if (!Array.isArray(issues)) return baueSicht({ config, issues });
-  const sammel = await sammelnAus(issues, repo, ladeTitel);
-  return baueSicht({ config, issues, sammel, kommentare: sammel === null ? new Map() : kommentareDer(sammel, repo, api) });
+  return baueSicht({ config, issues, ...(await bezieherQuelle({ config, repo, issues, api, ladeTitel })) });
+}
+
+/** Die Quelle der Bezieher-Meldungen: das Harness-Sammelticket der Meldestelle (Schlüssel `meldestelle`, Standard das Repo des Factory-Boards). Weicht sie vom Config-Repo ab, werden ihre Issues zusätzlich gelesen; ist sie nicht bestimmbar oder nicht lesbar, steht `bezieherFehler` (nie "keine"). */
+async function bezieherQuelle({ config, repo, issues, api, ladeTitel }) {
+  let stelle;
+  try {
+    stelle = meldestelleAus(config) || repo;
+  } catch (e) {
+    return { bezieherFehler: `Meldestelle nicht bestimmbar: ${fehlerText(e)}` };
+  }
+  let quelle = issues;
+  if (stelle !== repo) {
+    try {
+      quelle = flach(api(["api", "--paginate", "--slurp", `repos/${stelle}/issues?state=open&per_page=100`]));
+    } catch (e) {
+      return { bezieherFehler: `Meldestelle ${stelle} nicht lesbar: ${fehlerText(e)}` };
+    }
+  }
+  const sammel = await sammelnAus(quelle, stelle, ladeTitel);
+  return { sammel, kommentare: sammel === null ? new Map() : kommentareDer(sammel, stelle, api), stelleOwner: String(stelle).split("/")[0] };
 }
 
 /** Einstieg. `deps` (Tests): `ladeConfig(wurzel)`, `api` (Standard `ghJson`), `ladeTitel`, `log`, `err`. Rückgabe: Exit-Code. */
