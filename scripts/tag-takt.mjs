@@ -282,7 +282,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "",
     ...(bezieher.length > 0 ? probeAblauf({ tag, sha }) : []),
     "Checkliste:",
-    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`${PROJEKT_CONFIG}\` und eine AGENTS.md mit den Kern-Markern ${markerStart("kern")} und ${markerEnde("kern")} hineinkopieren (ohne sie bliebe das Kontext-Budget des Ziels ungeprüft), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
+    `- [ ] Trockenlauf gegen den Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): einen leeren Scratch-Ordner anlegen, die Probe-Config als \`${PROJEKT_CONFIG}\` und eine AGENTS.md mit den Kern-Markern ${markerStart("kern")} und ${markerEnde("kern")} hineinkopieren (ohne sie bricht der Sync ab, weil die Marker im Ziel fehlen), dann \`node scripts/factory-sync.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --ziel <scratch-ordner> --entwurf --trocken\`. Er meldet auch die Kontextgröße gegen das Budget der Quelle`,
     ...(bezieher.length > 0 ? bezieherProbe({ bezieher }).zeilen : []),
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,

@@ -181,6 +181,33 @@ describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
     assert.equal(scanne(wurzel).funde.length, 1);
   });
 
+  test("eine nur in der Fabrik liegende Einheit (Ring oberflaeche, nicht verteilt) wird ignoriert", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "oberflaeche" }]),
+      "skill.md": "Siehe docs/seite.md › Fetter Abschnitt\n",
+      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
+    });
+    assert.deepEqual(scanne(wurzel), { funde: [], verweise: 0 });
+  });
+
+  test("ein Ziel relativ zur verweisenden Datei wird aufgelöst und geprüft", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }]),
+      ".agents/skills/x/SKILL.md": "Siehe seite.md › Fetter Abschnitt\n",
+      ".agents/skills/x/seite.md": "**Fetter Abschnitt** Text.\n",
+    });
+    assert.deepEqual(scanne(wurzel).funde, [{ datei: ".agents/skills/x/SKILL.md", ziel: ".agents/skills/x/seite.md", segment: "Fetter Abschnitt" }]);
+  });
+
+  test("eine Überschrift im Code-Fence der Zielseite ist kein Abschnitt", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
+      "skill.md": "Siehe docs/seite.md › Nur im Fence\n",
+      "docs/seite.md": "# Seite\n\n```\n## Nur im Fence\n```\n",
+    });
+    assert.deepEqual(scanne(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Nur im Fence" }]);
+  });
+
   test("echtes Repo: kein Besitz-Verweis, der für einen Bezieher ins Leere zeigt (und der Scan ist nicht leer)", () => {
     const { funde, verweise } = scanne(ROOT);
     assert.ok(verweise > 20, `Scan extrahiert nur ${verweise} Verweise: Muster oder Umfang kaputt (Leerlauf)`);

@@ -8,12 +8,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { CONTEXT_BUDGETS, KERN_BLOCK_BUDGET as rawBudget, PROJEKT_BLOCK_RAUM as rawRaum, kernBlockBefund as rawBefund, kernBlockZeichen as rawZeichen } from "../scripts/kontext-budget-lib.mjs";
+import { CONTEXT_BUDGETS, KERN_BLOCK_BUDGET as rawBudget, PROJEKT_BLOCK_RAUM as rawRaum, kernRaumBefund as rawRaumBefund, kernBlockBefund as rawBefund, kernBlockZeichen as rawZeichen } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { kernBlockPruefung as rawPruefung } from "../scripts/check-context-size.mjs";
 
 const KERN_BLOCK_BUDGET = rawBudget as number;
 const PROJEKT_BLOCK_RAUM = rawRaum as number;
+const kernRaumBefund = rawRaumBefund as (a: { kern: number; raum: number; gesamt: number }) => string | null;
 const kernBlockZeichen = rawZeichen as (text: string) => number | null;
 const kernBlockBefund = rawBefund as (a: { text: string; fabrik: boolean; budget?: number }) => string | null;
 const kernBlockPruefung = rawPruefung as (wurzel: string) => string | null;
@@ -101,8 +102,14 @@ describe("Kern-Block-Budget", () => {
   test("Kern-Budget plus Projekt-Raum passt ins Gesamtbudget von AGENTS.md (factory#177)", () => {
     const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
     assert.ok(gesamt > 0, "AGENTS.md hat ein Budget in CONTEXT_BUDGETS");
-    assert.ok(KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM <= gesamt, `Kern ${KERN_BLOCK_BUDGET} + Raum ${PROJEKT_BLOCK_RAUM} > Gesamtbudget ${gesamt}: ein Bezieher mit Raum-großem Projekt-Block liefe nach dem Sync rot`);
+    assert.equal(kernRaumBefund({ kern: KERN_BLOCK_BUDGET, raum: PROJEKT_BLOCK_RAUM, gesamt }), null);
     assert.ok(gesamt - (KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM) < 500, "der Abstand ist klein (Raum ist am größten gemessenen Rest geeicht, keine Reserve auf Vorrat)");
+  });
+
+  test("Raum-Invariante, Grenzfall exakt: Summe == Gesamtbudget grün, ein Zeichen mehr rot; der Befund nennt die Zahlen", () => {
+    assert.equal(kernRaumBefund({ kern: 15_000, raum: 13_000, gesamt: 28_000 }), null);
+    assert.match(String(kernRaumBefund({ kern: 15_000, raum: 13_001, gesamt: 28_000 })), /28001.*28000/);
+    assert.match(String(kernRaumBefund({ kern: 15_001, raum: 13_000, gesamt: 28_000 })), /28001.*28000/);
   });
 
   test("der echte Kern-Block liegt im Budget und das Budget ist ein Ratchet auf den Ist-Wert (Abstand < 100 Zeichen)", () => {

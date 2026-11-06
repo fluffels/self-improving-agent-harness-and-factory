@@ -40,11 +40,18 @@ export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] })
 
 /** Zeichen-Budget des Kern-Blocks von AGENTS.md (zwischen den Besitz-Markern `kern`, ohne den Projekt-Block): Ratchet auf den Ist-Wert, wächst nur bewusst per reviewtem Commit
  *  (factory#208 L19: der Kern wuchs zwischen zwei Tags um ~1,1k Zeichen und brachte einen Bezieher über sein Gesamtbudget). */
-export const KERN_BLOCK_BUDGET = 14_912;
+export const KERN_BLOCK_BUDGET = 14_972;
 
 /** Raum, den der Kern jedem Bezieher außerhalb des Kern-Blocks in AGENTS.md lässt (Projekt-Block samt Projektwerten): `KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` bleibt unter dem Budget von AGENTS.md
- *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Geeicht am größten gemessenen Rest plus rund 5 %; wächst ein Rest darüber, ist das ein Befund an den Bezieher. */
+ *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Geeicht am größten gemessenen Rest plus rund 5 %; wächst ein Rest darüber, ist das ein Befund an den Bezieher.
+ *  Grenze: gerechnet wird mit dem Kern der Fabrik; im Bezieher trägt der Kern zusätzlich die Projektwert-Tabelle (wenige Dutzend Zeichen mehr). */
 export const PROJEKT_BLOCK_RAUM = 13_000;
+
+/** Pur: Meldung, wenn Kern-Budget plus Projekt-Raum das Gesamtbudget von `AGENTS.md` übersteigt, sonst `null` (die Raum-Invariante, geprüft in `test/kern-block-budget.test.ts`). */
+export function kernRaumBefund({ kern, raum, gesamt }) {
+  if (kern + raum <= gesamt) return null;
+  return `Kern-Budget ${kern} + Projekt-Raum ${raum} = ${kern + raum} > Gesamtbudget ${gesamt} von AGENTS.md: ein Bezieher mit Raum-großem Projekt-Block liefe nach dem Sync rot.`;
+}
 
 const KERN_START = "<!-- factory-besitz:start kern -->";
 const KERN_ENDE = "<!-- factory-besitz:ende kern -->";
