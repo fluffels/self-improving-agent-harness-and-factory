@@ -1,6 +1,6 @@
 // Hook-Einstieg (#1578): SessionStart und SessionEnd starten den Nachlieferer losgelöst und enden sofort mit Exit 0. Nie an Stop (läuft je Turn, kollidiert mit dem
 // vom Plugin zurückgehaltenen Turn und erzeugt Dubletten). Wartezeit, Lock und Log stecken im Kind (scripts/langfuse-nachliefern.mjs, --ausloeser).
-// Nur Builtins, hook-io.mjs, langfuse-zugang.mjs und die Session-ID-Regel aus langfuse-auftrag-lib.mjs (nur Builtins); Einordnung: docs/langfuse-hook-patch.md › Abgleich als Garantie.
+// Nur Builtins, hook-io.mjs, langfuse-zugang.mjs und die Session-ID-Regel aus langfuse-auftrag-lib.mjs (nur Builtins); Einordnung: docs/langfuse-hook-patch.md (Fabrik) › Abgleich als Garantie.
 import { spawn as spawnEcht } from "node:child_process";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";

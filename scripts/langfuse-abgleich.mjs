@@ -14,7 +14,7 @@
  * Das Präfix trifft sonst nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
  * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`, `flag-lib`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:
- * docs/model-routing.md › Langfuse-Status überprüfen, Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
+ * docs/model-routing.md (Fabrik) › Langfuse-Status überprüfen, Punkt 1. Den Schreibweg (nur fehlende Calls nachliefern) trägt `langfuse-nachliefern.mjs`.
  */
 
 import { fileURLToPath } from "node:url";

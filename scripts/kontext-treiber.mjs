@@ -12,7 +12,7 @@
  *    verify (`verify:*`, `vitest`, `eslint`, `typecheck`, `check:*`), sonst der Zustand: Umsetzung → Pflege (zwischen den Markern
  *    `pflege: start/ende`) → Review (ab dem ersten Spawn des Lens-Agenten) → Lens-Fix (Edit/Write im Review) → ab `gh pr create` CI-Fix
  *    (Edit/Write) bzw. Merge/Cleanup. Calls ohne Tool erben den Zustand. Grenze: ein Befehl mit mehreren Zwecken zählt zum ersten Treffer.
- *  - Tokens eines Tool-Ergebnisses = Zeichen / 4 (Konvention aus docs/model-routing.md § Planer-Kosten); Last = Tokens × Zahl der
+ *  - Tokens eines Tool-Ergebnisses = Zeichen / 4 (Konvention aus docs/model-routing.md (Fabrik) › Planer-Kosten); Last = Tokens × Zahl der
  *    späteren Calls des Laufs (so oft wird das Ergebnis erneut aus dem Cache gelesen).
  *  - Neuaufbau: Pause > 5 min zum Vorgänger und Cache-Read unter der Hälfte des Kontexts (wie `countCacheRebuilds`); Mehrkosten =
  *    neu geschriebene Tokens × (Write-5m − Read-Preis), ohne Preisstufen.

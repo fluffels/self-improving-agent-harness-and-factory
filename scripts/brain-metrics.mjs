@@ -2,7 +2,7 @@
 /**
  * Projekt-Brain-Kennzahlen pro Ticket-Lauf (#1205, ADR 0015): welche Brain-Seiten (`docs/**.md`) ein Lauf
  * liest, wie viel er sucht, wie früh er den ersten Edit setzt und ob er das Brain pflegt.
- * Definition der Kennzahlen: docs/model-routing.md §5 „Projekt-Brain-Kennzahlen“.
+ * Definition der Kennzahlen: docs/model-routing.md (Fabrik) › Projekt-Brain-Kennzahlen.
  *
  * Pur und ohne IO; zwei Quellen liefern dieselbe Eventform `{ ts, tool, input, resultChars }`
  * (Claude-Code-Transkript, Langfuse-TOOL-Observations). Importiert nichts aus token-baseline.mjs (kein Zyklus).
