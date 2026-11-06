@@ -12,9 +12,9 @@ const MAX_ANZEIGE = 5;
 
 /** Das erste Segment eines Pfad-Kandidaten oder `null`, wenn der Inline-Code kein relativer Repo-Pfad im Sinn der Grenze ist. Pur. */
 function wurzelVon(roh) {
-  const text = roh.trim().replace(/[.,;:!?)]+$/, "");
+  const text = roh.trim();
   if (!text.includes("/") || /\s/.test(text) || /[<>#:\\]/.test(text)) return null;
-  if (text.startsWith("/") || text.startsWith("~")) return null;
+  if (text.startsWith("~")) return null;
   const segmente = text.split("/");
   if (segmente.includes("..")) return null;
   return segmente[0] === "" || segmente[0] === "." ? null : segmente[0];
@@ -23,7 +23,7 @@ function wurzelVon(roh) {
 /** Pur: die sortierten, eindeutigen Pfadwurzeln aus den Inline-Code-Pfaden von `body`, die `existiert(wurzel)` verneint. */
 export function fehlendePfadwurzeln(body, existiert) {
   const fehlend = new Set();
-  for (const m of String(body ?? "").matchAll(INLINE_CODE)) {
+  for (const m of String(body).matchAll(INLINE_CODE)) {
     const wurzel = wurzelVon(m[1]);
     if (wurzel !== null && !existiert(wurzel)) fehlend.add(wurzel);
   }

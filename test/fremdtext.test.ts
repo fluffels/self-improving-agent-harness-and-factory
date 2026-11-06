@@ -249,7 +249,8 @@ describe("flach", () => {
     assert.deepEqual(flach([]), []);
   });
   test("kein Array (Objekt, null, undefined, Text) wirft mit klarer Meldung statt still [] (fail-closed, L12)", () => {
-    for (const v of [{}, null, undefined, "text", 3]) assert.throws(() => flach(v), /gh --paginate --slurp lieferte keine Liste von Seiten/);
+    const faelle: [unknown, string][] = [[{}, "object"], [null, "null"], [undefined, "undefined"], ["text", "string"], [3, "number"]];
+    for (const [v, typ] of faelle) assert.throws(() => flach(v), new RegExp(`gh --paginate --slurp lieferte keine Liste von Seiten \\(Typ ${typ}\\)`));
   });
 });
 

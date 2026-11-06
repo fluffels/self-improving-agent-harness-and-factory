@@ -600,6 +600,9 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     expect(r.out).toContain("hinweis #7 nennt Pfade ohne Wurzel im Repo (src)");
     const zu = { ...mit, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { state: "closed", body: "`src/a.ts`" })), offene: new Set<number>() }) as never };
     expect(N.fuehreAus(["--ticket", "7"], zu).out).not.toContain("Produktbezug");
+    const rein = (existiert: (w: string) => boolean) => N.pruefeTicket({ item: N.itemAusIssue(issue(7, { body: "`src/a.ts`" })), offene: new Set<number>(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG, existiert } as never);
+    expect(rein(() => true)).not.toHaveProperty("hinweise");
+    expect(rein(() => false)).toHaveProperty("hinweise");
   });
   test("fuehreAus Einzelmodus: nicht frei Exit 1 mit Grund, json ohne Body", () => {
     const i = io();
