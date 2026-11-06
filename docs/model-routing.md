@@ -355,6 +355,8 @@ Sessions A: `07272120-b78b-44cf-b37c-c8f8315e974a`, `09f11879-403d-4bb2-981e-1f0
 | C Gesamtbudget erhöht | +3.244.067 | +1,071 | 0,698 $ |
 | D Kern nur im Hauptchat | −2.093.406 | −0,706 | −0,499 $ |
 
+Hauptsessions der Fenster-Läufe (8-stellige Präfixe, 81 Sessions, eine Hauptsession deckt Hauptchat, Planer, Umsetzer und Lens eines Tickets): 01eed46a 045bec81 04d7c3d1 06226faa 07809819 0881fa94 0aee7691 138efa78 14d75eac 1521537c 15403db5 188cec4c 1a7a05cd 1aaeadbc 223202b3 2953c210 2ee760a0 327e0f02 34ce053b 3b22af50 3b6a307e 49052218 49c6a1ae 4ba4f93d 538a0bdb 552aeb77 56ae050a 56e8c1e1 5ea21911 627227d2 632a3563 63ccad16 66ad0915 6b7bc384 6da6565a 71af592f 71bfdf3a 721b01e1 79921fa6 7be5df09 7c8919ac 7cb8ceb2 7e2cc4f7 8116c782 826733a2 83e5f1bf 87b5ce11 8aa9150a 94962489 99a3593c 99be75b9 a216dc2c a4092590 a41093ba a6b64cc3 a7beec31 aa4a8edd ad927fb8 af260de5 b4623d94 b537b366 b8a6dce8 ba0eb8ec bd36304b be6aca72 bed23e4b cc8fc328 cceb0ce1 cf5a261d cff9d6ec d143e03d d22ff032 d5631f17 da6980e9 dc1d22d9 e5b63535 eb23cb77 ee60df17 f9ab0f5b fd32561d fe010183.
+
 Grenzen: Die Zahlen sind eine Untergrenze (nicht gemessene Typen wie `<agenten.gruppe>`, `holdout-*` und die Hauptchat-Forks fehlen; Sammeltickets zählen als ein Ticket). Die Sockel sind headless gemessen und liegen unter den interaktiven (der Export hat keine gitignorierten Skill-Zeiger); die Differenzen sind übertragbar, die absoluten Werte nicht. Probe-Kosten: rund 3 $ für die Claude-Läufe, zwei Dutzend Codex-Läufe im Abo.
 
 ### Lens-Gegenprobe (#1580)
