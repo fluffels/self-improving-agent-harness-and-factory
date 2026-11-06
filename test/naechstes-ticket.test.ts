@@ -1325,6 +1325,12 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(e.boardRepos).toEqual({ produkt: L.boardRepo(B.boardFuerRolle("produkt"), { repo: B.REPO }), factory: L.boardRepo(B.boardFuerRolle("factory"), { repo: B.REPO }) });
     expect(typeof e.fremdStatus).toBe("function");
   });
+  test("echteIo: `existiert` prüft die Pfadwurzel im Repo des Skripts (L44)", () => {
+    const cfg = (ladeCfg as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const e = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => { existiert: (w: string) => boolean } }).echteIo({ config: cfg, messfensterLader: () => () => ({ closedAt: null, n: 0 }) });
+    expect(e.existiert("scripts")).toBe(true);
+    expect(e.existiert("zz-gibt-es-nicht")).toBe(false);
+  });
 });
 
 describe("Arbeitsplatz: Belegung über alle Repos (#88, AK5)", () => {
