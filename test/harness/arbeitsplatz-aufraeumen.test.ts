@@ -236,6 +236,13 @@ describe("cleanup-worktrees im Arbeitsplatz", () => {
     expect(out.join("\n")).toMatch(new RegExp(`✗ ${WT}8`));
     expect(w.geloescht).toEqual([]);
   });
+  test("der Exit-Code ist das Maximum über die Repos: eine Waise nur im zweiten Repo ergibt Exit 1", () => {
+    stumm();
+    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [`${WT}6`] });
+    expect(cleanup.main([], { config: CONFIG, root: "/basis", diagnoseDeps: w.deps })).toBe(1);
+    const sauber = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] });
+    expect(cleanup.main([], { config: CONFIG, root: "/basis", diagnoseDeps: sauber.deps })).toBe(0);
+  });
   test("fail-closed: scheitert git in einem Repo, nennt die Meldung es, Exit 1, nichts gelöscht", () => {
     const { err } = stumm();
     const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": new Error("x") }, { [ORDNER_WEB]: [`${WT}8`], [ORDNER_API]: [] });
