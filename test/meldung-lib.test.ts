@@ -15,6 +15,7 @@ import { decodeTerms } from "../scripts/check-internalrefs.mjs";
 type Stand = { zustand: "fehlt" | "kaputt" | "ok"; stand: { quelle?: { tag?: string; commit?: string } } | null };
 interface Lib {
   factoryStand(s: Stand): string | null;
+  istStandZeile(z: string): boolean;
   meldungsText(zeilen: string[], stand: string | null): string;
   meldestelleToken(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): string | undefined;
   textSauber(text: string, exec?: (...a: unknown[]) => { status: number | null; signal?: string | null; error?: Error }): boolean;
@@ -361,5 +362,22 @@ describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (A
   test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf", () => {
     const ohne = mitPost.filter((f) => !ruft(code(f), "bereiteMeldung")).map(name);
     expect(ohne).toEqual([]);
+  });
+});
+
+describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStand erzeugt", () => {
+  test("Rundlauf über alle Formen von factoryStand", () => {
+    const formen: Stand[] = [ok("v0.6.0", "abcdef0123456789"), ok(undefined, "abcdef0123456789"), ok("v1.0.0", undefined), ok("", ""), { zustand: "kaputt", stand: null }];
+    for (const f of formen) {
+      const zeile = lib.factoryStand(f);
+      expect(zeile).not.toBeNull();
+      expect(lib.istStandZeile(zeile as string)).toBe(true);
+    }
+  });
+  test("Negativfälle: freier Text, factory: mitten in der Zeile, falscher Commit, leer", () => {
+    expect(lib.istStandZeile("factory: das ist ein Satz")).toBe(false);
+    expect(lib.istStandZeile("siehe factory: v1 (abcdef0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (ZZZ)")).toBe(false);
+    expect(lib.istStandZeile("")).toBe(false);
   });
 });
