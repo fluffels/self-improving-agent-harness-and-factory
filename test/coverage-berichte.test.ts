@@ -172,6 +172,16 @@ describe("ladeAbdeckung", () => {
     assert.deepEqual(r.zweige.get("src/a.ts")!.get(3), { total: 2, taken: 1 });
     assert.deepEqual(r.mehrdeutig, []);
   });
+  test("berichteJe: dieselbe Berichtsdatei über zwei überlappende Einträge steht je Datei nur einmal, zwei Dateien in Lesereihenfolge (factory#215)", () => {
+    const d = fixture({
+      "a/lcov.info": "SF:src/a.ts\nDA:1,1\nend_of_record\n",
+      "a/zweit.info": "SF:src/a.ts\nDA:1,1\nend_of_record\n",
+    });
+    const quellen = { wurzeln: ["src"], endungen: [".ts"] };
+    const ueberlappend = [{ format: "lcov", pfad: "a/*.info" }, { format: "lcov", pfad: "a/lcov.info" }];
+    const r = m.ladeAbdeckung({ berichte: ueberlappend, rootDir: d, lies: lies, messDateien: ["src/a.ts"], quellen }) as unknown as { berichteJe: Map<string, string[]> };
+    assert.deepEqual(r.berichteJe.get("src/a.ts")!.map((p) => p.replace(/^.*[\\/]a[\\/]/, "a/")), ["a/lcov.info", "a/zweit.info"]);
+  });
   test("Multi-Modul: ein Glob mit zwei Berichten liest beide; eine Datei des zweiten Moduls wird gemessen, dieselbe Datei in beiden Berichten gemischt", () => {
     const foo = "modul-b/src/main/java/de/anders/Foo.java";
     const xmlB = `<report name="b"><package name="de/anders"><sourcefile name="Foo.java"><line nr="2" mi="0" ci="5" mb="0" cb="0"/></sourcefile></package><package name="de/beispiel"><sourcefile name="Rechner.java"><line nr="3" mi="0" ci="1" mb="0" cb="0"/></sourcefile></package></report>`;

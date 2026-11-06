@@ -110,7 +110,7 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
 
   const spiel = (n: number) => c(`feat(sim): s${n} (#${200 + n})`, "2026-10-06T10:00:00Z");
   const doku = c("docs(adr): Wächter (#102)", "2026-10-06T11:00:00Z");
-  const kommentar = (login: string, type = "User") => ({ user: { login, type } });
+  const kommentar = (login: string, type = "User") => ({ user: { login, type }, body: "- [ ] Befund" });
   const befunde = (n: number) => Array.from({ length: n }, () => kommentar(OWNER));
 
   test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Produkt-Merges plus ein Harness-Doku-Commit (ohne Befund-Kommentare) holen nichts", () => {

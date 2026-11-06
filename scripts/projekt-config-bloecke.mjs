@@ -2,6 +2,7 @@
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
 // Nur Blatt-Importe: `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
+import { GATE_FORM } from "./regex-lib.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { quellenMaengel } from "./quellwurzeln-lib.mjs";
@@ -74,7 +75,6 @@ export function pruefeAusnahmen(a) {
   return fehler;
 }
 
-const GATE_FORM = /^[\w:.-]+$/;
 
 /** Pur: prüft den Block `gates` (Form): nur `nichtInVerify`, eine Liste `{ gate, grund }`; das Gate ein Skriptname, je Liste nur einmal, der Grund nicht leer. */
 export function pruefeGates(g) {
@@ -86,7 +86,7 @@ export function pruefeGates(g) {
   g.nichtInVerify.forEach((e, i) => {
     const wo = `gates.nichtInVerify[${i}]`;
     if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { gate, grund } sein`);
-    if (!istText(e.gate) || !GATE_FORM.test(e.gate)) fehler.push(`${wo}.gate muss ein Skriptname (Buchstaben, Ziffern, : . _ -) sein`);
+    if (!istText(e.gate) || !GATE_FORM.test(e.gate)) fehler.push(`${wo}.gate muss ein Skriptname (Buchstaben, Ziffern, : . _ -, kein Punkt am Ende) sein`);
     else if (gesehen.has(e.gate)) fehler.push(`${wo}.gate „${e.gate}“ steht doppelt`);
     else gesehen.add(e.gate);
     if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);

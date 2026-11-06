@@ -26,6 +26,7 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN } from "./produktquote-lib.mjs";
 import {
   CODEQUALITAET_SAMMELTICKET_TITEL,
   LANGFUSE_SAMMELTICKET_TITEL,
@@ -90,7 +91,7 @@ export function parseArgs(argv) {
  * fremdtext-lib.mjs). `nurOffen` (Standard) zählt nur `[ ]`, sonst auch `[x]`. Kommentare ohne Checkbox, fremde oder ohne `user` zählen nicht. Pur.
  */
 export function zaehleBefundZeilen(kommentare, { vertraut, nurOffen = true }) {
-  const muster = nurOffen ? /^\s*[-*]\s+\[ \]/ : /^\s*[-*]\s+\[[ xX]\]/;
+  const muster = nurOffen ? BEFUND_ZEILE_OFFEN : BEFUND_ZEILE;
   let n = 0;
   for (const k of kommentare) {
     if (!vertraut(k.user ?? null)) continue;
@@ -111,7 +112,7 @@ export function zustandVonIssue(issue) {
 
 const ZUSATZ = { "in-arbeit": " (dort in Arbeit)" };
 
-const ANHAENGEN = "Befunde als Kommentar `- [ ] …` anhängen.";
+const ANHAENGEN = "Befunde als Kommentar anhängen, je Zeile `- [ ] …` (Fließtext ohne Checkbox zählt weder als Zeile noch füllt er das Ticket).";
 const BODY_ZEILE = {
   harness: () => `Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). ${ANHAENGEN}`,
   langfuse: () => `Sammelticket für Befunde aus Langfuse-Daten (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt")}). ${ANHAENGEN}`,

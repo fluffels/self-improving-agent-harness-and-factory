@@ -19,7 +19,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 import * as rawKb from "../scripts/kontext-budget-lib.mjs";
 import { ganzesWortMuster } from "./support/regex";
 
-const kb = rawKb as unknown as { ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
+const kb = rawKb as unknown as { knappeBudgets(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[]; anteil?: number }): { file: string; chars: number; budget: number; rest: number }[]; ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
 
 interface Span {
   start: number;
@@ -1354,6 +1354,30 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     const geduldet = vomTag(baueQuelle(), zielMit(true), ["--trocken"]);
     assert.equal(geduldet.code, 0, geduldet.err);
     assert.doesNotMatch(geduldet.out, /Kontextbudget/);
+  });
+  test("knappeBudgets: Rest < 5 % des Budgets und noch im Budget; Grenzen exakt, über Budget und Ausnahme nicht, Anteil steuert", () => {
+    const budgets = [{ file: "A", budget: 100 }];
+    const knapp = (n: number, extra: { anteil?: number; ausnahmen?: { datei: string }[] } = {}) => kb.knappeBudgets({ lies: () => "x".repeat(n), budgets, ...extra });
+    assert.deepEqual(knapp(96), [{ file: "A", chars: 96, budget: 100, rest: 4 }]);
+    assert.deepEqual(knapp(100), [{ file: "A", chars: 100, budget: 100, rest: 0 }], "genau am Budget ist noch knapp");
+    assert.deepEqual(knapp(95), [], "Rest genau 5 % ist nicht knapp");
+    assert.deepEqual(knapp(101), [], "über Budget meldet ueberBudget");
+    assert.deepEqual(knapp(95, { anteil: 0.1 }).length, 1);
+    assert.deepEqual(knapp(96, { ausnahmen: [{ datei: "A" }] }), []);
+    assert.deepEqual(kb.knappeBudgets({ lies: () => null, budgets }), []);
+  });
+  test("Sync-Hinweis 'Kontextbudget knapp' bei kleinem Rest, nicht bei großem Rest und nicht zusätzlich über Budget", () => {
+    const z = baueZiel();
+    schreibe(z, "AGENTS.md", `${ZIEL_AGENTS}\n${"x".repeat(27_700)}`);
+    schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
+    const r = vomTag(baueQuelle(), z, ["--trocken"]);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Hinweis: Kontextbudget knapp: AGENTS\.md \d+ von 28000 Zeichen \(Rest \d+\); der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen/);
+    const gross = vomTag(baueQuelle(), zielMit(), ["--trocken"]);
+    assert.doesNotMatch(gross.out, /Kontextbudget knapp/);
+    assert.match(gross.out, /Hinweis: Kontextbudget: AGENTS/);
+    const klein = vomTag(baueQuelle(), baueZiel(), ["--trocken"]);
+    assert.doesNotMatch(klein.out, /Kontextbudget knapp/);
   });
   test("ueberBudget: Zählung ohne CR, fehlende Datei zählt nicht", () => {
     const budgets = [{ file: "A", budget: 4 }];

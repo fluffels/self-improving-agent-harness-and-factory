@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as lib from "../scripts/release-tag-lib.mjs";
 import { FREMD } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; betreff: string; body: string; dateien: string[]; pr?: string };
@@ -20,9 +22,12 @@ const T = raw as unknown as {
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
-  bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number> }) => { zeilen: string[]; blocker: string[]; offen: string[] };
+  bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number | string> }) => { zeilen: string[]; blocker: string[]; offen: string[]; rest: string[] };
+  uebernimmHaken: (alt: string | undefined, neu: string) => string;
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
+
+const { mechanischeSchritte } = lib as { mechanischeSchritte: (quelle: string) => string[] };
 
 const KEY = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
 const MKEY = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
@@ -34,6 +39,19 @@ const commit = (o: Partial<Commit> = {}): Commit => ({ sha: "a".repeat(40), datu
 const reihe = (n: number, o: Partial<Commit> = {}) => T.besitzCommits(Array.from({ length: n }, (_, i) => commit({ sha: String(i).repeat(40), betreff: `fix: x (#${i + 1})`, ...o })), MANIFEST);
 const entscheide = (o: Partial<Parameters<typeof T.entscheideTagTakt>[0]> = {}) => T.entscheideTagTakt({ letzterTag: "v1.2.3", besitz: reihe(1), jetzt: JETZT, offene: [], dringlichKey: KEY, ...o });
 const tagOffen = (o: Partial<Offen> = {}): Offen => ({ number: 40, titel: "🏷️ Tag v1.2.4 setzen und syncen", assignees: [], body: "alt", ...o });
+
+describe("factory#215 L4: uebernimmHaken", () => {
+  const neu = ["Kopf", "- [ ] Eins", "- [ ] Zwei geändert", "* [ ] Drei", "  - [ ] Vier", "- [x] Fünf neu schon erledigt", "Text [ ] Eins"].join("\n");
+  it("übernimmt [x] und [X] (auch * und Einrückung); geänderter Text und Nicht-Checklistenzeilen bleiben", () => {
+    const alt = ["- [x] Eins", "- [ ] Zwei", "* [X] Drei", "- [x] Vier", "- [ ] Fünf neu schon erledigt"].join("\n");
+    expect(T.uebernimmHaken(alt, neu)).toBe(["Kopf", "- [x] Eins", "- [ ] Zwei geändert", "* [x] Drei", "  - [x] Vier", "- [x] Fünf neu schon erledigt", "Text [ ] Eins"].join("\n"));
+  });
+  it("Negativ: ein offenes [ ] im alten Body setzt keinen Haken; ohne alten Body bleibt alles", () => {
+    expect(T.uebernimmHaken("- [ ] Eins", neu)).toBe(neu);
+    expect(T.uebernimmHaken(undefined, neu)).toBe(neu);
+    expect(T.uebernimmHaken("- [x] Eins\r\n", "- [ ] Eins")).toBe("- [x] Eins");
+  });
+});
 
 describe("Parser und Besitz-Filter", () => {
   it("parst Commits mit Betreff, Body und Dateiliste (Leerzeilen, mehrere Commits)", () => {
@@ -203,6 +221,16 @@ describe("CI-Zustand und Body", () => {
     expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
     expect(body).not.toMatch(/^git tag -a/m);
   });
+  it("factory#215 L6: die Checkliste verlangt die Sichtung der Rückmeldungen fremder Bezieher (Meldestelle) vor dem Schließen, mit und ohne Bezieher-Liste", () => {
+    const zeile = "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“";
+    for (const b of [body, T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null }, bezieher: ["o/a"] })]) {
+      const zeilen = b.split("\n");
+      const i = zeilen.indexOf(zeile);
+      expect(i).toBeGreaterThan(-1);
+      expect(i).toBeLessThan(zeilen.findIndex((z) => z.startsWith("- [ ] Ticket schließen")));
+      expect(i).toBeGreaterThan(zeilen.findIndex((z) => z.startsWith("- [ ] Tag ")));
+    }
+  });
   it("factory#162 L26: Trockenlauf gegen den Probe-Erstbezug im Scratch, nie ein Bezieher-Repo, mit --ziel", () => {
     const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf")) ?? "";
     for (const teil of ["Probe-Erstbezug", "test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "--ziel <scratch-ordner> --entwurf --trocken", "--quelle <checkout auf bbbbbbb>"]) {
@@ -242,6 +270,12 @@ describe("CI-Zustand und Body", () => {
         expect(block, teil).toContain(teil);
       }
     });
+    it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verify), der Erklärsatz nennt sie", () => {
+      const mechanisch = mechanischeSchritte("<s>/quelle");
+      expect(mechanisch).toHaveLength(4);
+      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verify\n");
+      for (const befehl of mechanisch) expect(mitBezieher.split("aussagekräftig")[0], befehl).toContain("`" + befehl + "`");
+    });
     it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
       for (const verboten of ["git push", "gh pr create", "--repo", "gh issue", "gh workflow run", "Cross-Repo-Token"]) expect(block, verboten).not.toContain(verboten);
@@ -258,6 +292,11 @@ describe("CI-Zustand und Body", () => {
       expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün", "- [ ] BLOCKER `o/b`: Probe rot (Exit 1), nicht taggen"]);
       expect(r.blocker).toEqual(["o/b"]);
       expect(r.offen).toEqual([]);
+    });
+    it("factory#215 L5: bezieherProbe mit rest: Zeile grün mit Projekt-Rest, in rest gelistet, weder Blocker noch offen", () => {
+      const r = T.bezieherProbe({ bezieher: ["o/a", "o/b"], ergebnisse: { "o/a": "rest", "o/b": 0 } });
+      expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)", "- [x] `o/b`: Probe grün"]);
+      expect([r.blocker, r.offen, r.rest]).toEqual([[], [], ["o/a"]]);
     });
     it("bezieherProbe: jeder Exit ungleich 0 ist ein Blocker, auch 2; ein Ergebnis zu einem fremden Repo zählt nicht", () => {
       const r = T.bezieherProbe({ bezieher: ["o/a"], ergebnisse: { "o/a": 2, "x/fremd": 0 } });
@@ -458,6 +497,20 @@ describe("lauf", () => {
     T.lauf({ io: io({ ladeLaeufe: () => { throw new Error("403"); }, legeIssueAn: (_t: string, b: string) => { text.push(b); return "5"; } }) });
     expect(text[0]).toContain("CI-Status dieses Commits: unbekannt");
     expect(text[0]).toContain(`Älteste ungetaggte Änderung: ${vor(3).slice(0, 10)}`);
+  });
+  it("factory#215 L4: ein aktualisiertes Ticket behält die Haken, ein aktuelles Ticket mit Haken bleibt unberührt", () => {
+    let body = "";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, _t: string, b: string) => { body = b; } }) });
+    const pre = "- [ ] Pre-Flight „ja, taggen“";
+    expect(body).toContain(pre);
+    const abgehakt = body.replace(pre, "- [x] Pre-Flight „ja, taggen“");
+    const titel = "🏷️ Tag v1.3.0 setzen und syncen";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt })] }) });
+    expect(aufrufe).toEqual([]);
+    let neu = "";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt.replace("Besitz-Änderungen liegen", "Alt-Änderungen liegen") })], aktualisiere: (_n: number, _t: string, b: string) => { neu = b; } }) });
+    expect(neu).toContain("- [x] Pre-Flight „ja, taggen“");
+    expect(neu.match(/^- \[x\]/gm)).toHaveLength(1);
   });
   it("identisches offenes Ticket bleibt unberührt, abweichendes wird aktualisiert, leeres geschlossen", () => {
     T.lauf({ io: io({ ladeOffene: () => [tagOffen()] }) });

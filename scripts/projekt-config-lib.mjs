@@ -114,7 +114,7 @@ const WORKTREE_MUSTER = /^[A-Za-z0-9_-]+$/;
 export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
 /** Optionale Label-Schlüssel: Skripte lesen sie mit Rückfall (fehlt der Schlüssel, entfällt das Feature); sie gehören nicht zu den Pflichtschlüsseln (`PFLICHT_LABELS` in `projekt-config-bloecke.mjs`). */
-export const OPTIONALE_LABELS = ["codequalitaet"];
+export const OPTIONALE_LABELS = ["codequalitaet", "entscheidung"];
 /** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 

@@ -16,25 +16,14 @@ import { factoryRepo } from "./factory-seite.mjs";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { liesSyncStand } from "./sync-stand-lib.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { WERKZEUG_HINWEIS, teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
-
-/** Die Schritte nach einem Tag-Sync in fester Reihenfolge (factory#208: ein bloßer Sync macht keinen Bezieher grün; `{TAG}` setzt `updateMeldung` ein). */
-export const UPDATE_SCHRITTE = [
-  `Sync: node scripts/factory-sync.mjs --quelle <pfad> --tag {TAG}. ${WERKZEUG_HINWEIS}`,
-  "`npm run lint:prune` (veraltete eslint-Suppressions entfernen)",
-  "`node scripts/projektwerte.mjs --write`",
-  "`npm run docs:gen`",
-  "`npm run check:factorylinks -- --schreiben --quelle <pfad>` (Refs und Index der Factory-Links)",
-  "Projektkopien abgelöster Kern-Tests abgleichen (Hinweis `Projektkopie … weicht ab` des Syncs; eine Kopie, die der Kern-Test oder ein Doctor-Punkt ersetzt, entfernen, sonst mit der Quelle abgleichen)",
-  "`npm run verify:kompakt`, erst dann der Sync-PR",
-];
+import { UPDATE_SCHRITTE, teile, vergleiche, vergleicheTags } from "./release-tag-lib.mjs";
 
 /** Pur: `null` ohne Update, sonst `{ alt, neu, text }` (Text: Sync-Befehl und die geordneten Folgeschritte, dazu der Weg zur Bezieher-Migration im Tag-Ticket; `repo` = Factory-Repo für den Suchbefehl). */
 export function updateMeldung({ stand, tags, repo }) {
   const alt = stand?.quelle?.tag;
   const neu = vergleicheTags(tags);
   if (!teile(alt) || neu === null || vergleiche(neu, alt) <= 0) return null;
-  const schritte = UPDATE_SCHRITTE.map((s, i) => `${i + 1}. ${s.replaceAll("{TAG}", neu)}`).join("\n");
+  const schritte = UPDATE_SCHRITTE.map((s, i) => `${i + 1}. ${s.text.replaceAll("{TAG}", neu)}`).join("\n");
   const suche = repo ? ` Suche: \`gh issue list --repo ${repo} --search "Tag ${neu} setzen und syncen" --state all --limit 5\`.` : "";
   const migration = `Bezieher-Migration: die Schritte, die der neue Tag verlangt, stehen im Abschnitt „Bezieher-Migration“ des Tag-Tickets der Fabrik („Tag ${neu} setzen und syncen“).${suche}`;
   const text = `Neuer Factory-Release ${neu} (Stand ${alt}). Nach dem Sync in dieser Reihenfolge:\n${schritte}\n${migration}`;

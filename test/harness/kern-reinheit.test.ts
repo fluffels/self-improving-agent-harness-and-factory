@@ -86,6 +86,7 @@ export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektl
   labels: Record<string, string>;
   agenten: Record<string, string>;
   skills?: Record<string, string>;
+  bezieher?: string[];
 };
 
 /** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
@@ -137,10 +138,16 @@ export function erlaubt(
   begriffe: Record<string, RegExp>,
 ): Baseline {
   const out: Baseline = {};
+  // Mehrere Einheiten einer Datei (Blöcke, Schlüssel) lesen den Basistext nur einmal: je Aufruf ein git-Prozess (L15i, Flake unter Last).
+  const gelesen = new Map<string, string | null>();
+  const basisEinmal = (alt: string): string | null => {
+    if (!gelesen.has(alt)) gelesen.set(alt, basisText(alt));
+    return gelesen.get(alt) ?? null;
+  };
   for (const e of einheiten) {
     if (!aenderungen.has(e.pfad)) continue;
     const alt = aenderungen.get(e.pfad) ?? null;
-    const text = alt === null ? null : basisText(alt);
+    const text = alt === null ? null : basisEinmal(alt);
     const t = text === null ? null : einheitText(e, text);
     out[einheitId(e)] = t === null ? {} : zaehle(t, begriffe);
   }
@@ -478,6 +485,34 @@ describe("begriffeAus", () => {
   });
 });
 
+describe("begriffeAus Bezieher (factory#215)", () => {
+  const basis = { repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU };
+  test("der Name eines Beziehers ohne Literal-Eintrag zählt als ganzes Wort, sein Owner als Owner", () => {
+    const b = begriffeAus({ ...basis, bezieher: ["ownerx/Kundenwerk", "ownery/ab-cd"] });
+    assert.deepEqual(zaehle("ein kundenwerk und AB-CD", b), { Bezieher: 2 });
+    assert.deepEqual(zaehle("kundenwerke xab-cd", b), {});
+    assert.deepEqual(zaehle("ownerx", b), { Owner: 1 });
+  });
+  test("ein Name, der dem Repo-Namen oder einem Literal gleicht, zählt nur einmal", () => {
+    const b = begriffeAus({ ...basis, projektliterale: { Zelda: "zelda" }, bezieher: ["ownerx/Demo", "ownerx/zelda"] });
+    assert.equal("Bezieher" in b, false);
+    assert.deepEqual(zaehle("demo zelda", { ...b, Owner: /^$/g }), { Repo: 1, Zelda: 1 });
+  });
+  test("ohne bezieher gibt es keinen Begriff", () => {
+    assert.equal("Bezieher" in begriffeAus(basis), false);
+  });
+  test("jeder Bezieher der Config ist ein Begriff des Wächters", () => {
+    const cfg = projektConfig() as ProjektConfig & { bezieher?: string[] };
+    for (const repo of cfg.bezieher ?? []) {
+      const name = repo.split("/")[1] ?? "";
+      assert.ok(Object.keys(zaehleAlle(name)).length > 0, `${repo} wird vom Wächter nicht gemeldet`);
+    }
+  });
+});
+
+/** Zählung des Textes gegen die echten Begriffe der aktiven Config. */
+const zaehleAlle = (text: string): Record<string, number> => zaehle(text, echteBegriffe);
+
 describe("begriffeAus Skill", () => {
   test("Skill-Namen aus config.skills zählen als ganze Wörter, groß/klein-genau; ohne skills keine Kategorie", () => {
     const b = begriffeAus({ repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU, skills: { abschluss: "zz-abschluss", extra: "zz-extra" } });
@@ -613,6 +648,14 @@ describe("parseNameStatus / erlaubt / anhebungen", () => {
     const text = `${markerStart("b")} demo ${markerEnde("b")}`;
     assert.deepEqual(erlaubt([e], aen, () => text, B), { "a.mjs#b": { Repo: 1 } });
     assert.deepEqual(erlaubt([e], aen, () => "ohne Marker", B), { "a.mjs#b": {} });
+  });
+  test("mehrere Einheiten einer Datei lesen den Basistext einmal (ein git-Aufruf je Pfad, factory#215)", () => {
+    const aen = new Map<string, string | null>([["a.mjs", "a.mjs"]]);
+    const aufrufe: string[] = [];
+    const text = `${markerStart("b")} demo ${markerEnde("b")}${markerStart("c")} acme ${markerEnde("c")}`;
+    const erl2 = erlaubt([ein("a.mjs", { block: "b" }), ein("a.mjs", { block: "c" })], aen, (p) => (aufrufe.push(p), text), B);
+    assert.deepEqual(erl2, { "a.mjs#b": { Repo: 1 }, "a.mjs#c": { Owner: 1 } });
+    assert.deepEqual(aufrufe, ["a.mjs"]);
   });
 });
 

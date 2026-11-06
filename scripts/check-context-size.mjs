@@ -46,7 +46,7 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
-import { MANIFEST_PFAD } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
@@ -97,7 +97,7 @@ export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).k
 export function kernBlockPruefung(rootDir = ROOT) {
   const abs = join(rootDir, "AGENTS.md");
   const text = existsSync(abs) ? readFileSync(abs, "utf8") : "";
-  return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir) });
+  return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir), marker: { start: markerStart("kern"), ende: markerEnde("kern") } });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

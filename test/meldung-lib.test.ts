@@ -15,6 +15,7 @@ import { decodeTerms } from "../scripts/check-internalrefs.mjs";
 type Stand = { zustand: "fehlt" | "kaputt" | "ok"; stand: { quelle?: { tag?: string; commit?: string } } | null };
 interface Lib {
   factoryStand(s: Stand): string | null;
+  istStandZeile(z: string): boolean;
   meldungsText(zeilen: string[], stand: string | null): string;
   meldestelleToken(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): string | undefined;
   textSauber(text: string, exec?: (...a: unknown[]) => { status: number | null; signal?: string | null; error?: Error }): boolean;
@@ -361,5 +362,49 @@ describe("Wächter: jeder Schreiber nach postZeilen geht durch bereiteMeldung (A
   test("jedes Skript mit postZeilen( ruft bereiteMeldung( auf", () => {
     const ohne = mitPost.filter((f) => !ruft(code(f), "bereiteMeldung")).map(name);
     expect(ohne).toEqual([]);
+  });
+});
+
+describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStand erzeugt", () => {
+  test("Rundlauf über alle Formen von factoryStand", () => {
+    const formen: Stand[] = [ok("v0.6.0", "abcdef0123456789"), ok(undefined, "abcdef0123456789"), ok("v1.0.0", undefined), ok("", ""), { zustand: "kaputt", stand: null }];
+    for (const f of formen) {
+      const zeile = lib.factoryStand(f);
+      expect(zeile).not.toBeNull();
+      expect(lib.istStandZeile(zeile as string)).toBe(true);
+    }
+  });
+  test("Positivfälle: jede Hex-Ziffer 0-9 und a-f ist in der Commit-Kurzform erlaubt", () => {
+    for (const commit of ["1234567", "89abcde", "0f0f0f0", "9876543"]) expect(lib.istStandZeile(`factory: v1 (${commit})`)).toBe(true);
+    expect(lib.istStandZeile("factory: unbekannt (unbekannt)")).toBe(true);
+    expect(lib.istStandZeile("factory: x (abcdef0)")).toBe(true);
+    expect(lib.istStandZeile("factory: v10.20.30-rc.1+build.42 (abcdef0)")).toBe(true);
+    expect(lib.istStandZeile("factory: v1 (beta) (abcdef0)")).toBe(true);
+  });
+  test("Negativfälle am Literal und an den Leerzeichen", () => {
+    for (const zeile of ["factory: v1\t(abcdef0)", "factory; v1 (abcdef0)", "factori: v1 (abcdef0)", "factory v1 (abcdef0)","factory:v1 (abcdef0)", "factory:\tv1 (abcdef0)", "factory: v1(abcdef0)", "Factory: v1 (abcdef0)", "faktory: v1 (abcdef0)", "factory: unbekannt (sync-stand unlesbar)"]) expect(lib.istStandZeile(zeile)).toBe(false);
+    for (const zeile of ["factory: v1 (abcdef0", "factory: v1 abcdef0)"]) expect(lib.istStandZeile(zeile)).toBe(false);
+  });
+  test("Negativfälle an den Klammern und am Literal der unlesbaren Stand-Zeile", () => {
+    expect(lib.istStandZeile("factory: v1 [abcdef0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef0]")).toBe(false);
+    for (const zeichen of ["/", ":", "`"]) expect(lib.istStandZeile(`factory: v1 (abcde${zeichen}0)`)).toBe(false);
+    for (const klammerInhalt of ["", "x", "unbekanntunbekannt", "unbekanntt", "unbekannt0", "Unbekannt", "xnbekannt", "unbexannt", "unbekannx", "vielleich"]) expect(lib.istStandZeile(`factory: v1 (${klammerInhalt})`)).toBe(false);
+    expect(lib.istStandZeile("factory: unbekannt (Sync-Stand unlesbar) danach Text")).toBe(false);
+    expect(lib.istStandZeile("siehe factory: unbekannt (Sync-Stand unlesbar)")).toBe(false);
+  });
+  test("Negativfälle: freier Text, factory: mitten in der Zeile, falscher Commit, leer", () => {
+    expect(lib.istStandZeile("factory: das ist ein Satz")).toBe(false);
+    expect(lib.istStandZeile("siehe factory: v1 (abcdef0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (ZZZ)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef0) danach Text")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdefg)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef01)")).toBe(false);
+    expect(lib.istStandZeile("factory:  (abcdef0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (ABCDEF0)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdef012)")).toBe(false);
+    expect(lib.istStandZeile("")).toBe(false);
+    expect(lib.istStandZeile(undefined as unknown as string)).toBe(false);
   });
 });

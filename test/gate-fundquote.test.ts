@@ -96,6 +96,10 @@ describe("befehlsform", () => {
   ])("ok: %s", (c) => {
     expect(gf.befehlsform(c).art).toBe("ok");
   });
+  test("Schrittname ohne Punkt am Ende (eine Quelle mit SCHRITT_NAME, factory#215): verify. ist keine Befehlsform, verify:kompakt schon", () => {
+    expect(gf.befehlsform("npm run verify.").art).toBe("befehlsform");
+    expect(gf.befehlsform("npm run verify:kompakt").art).toBe("ok");
+  });
   test("Pipe", () => {
     expect(gf.befehlsform("npm run verify 2>&1 | tail -20").art).toBe("pipe");
   });
@@ -295,6 +299,10 @@ describe("Summenzeile", () => {
   test("Text vor oder nach einem Teil macht die grüne Zeile unvollständig (beide Grenzen der Teil-Regel)", () => {
     expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, test ok 6 s kaputt", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });
     expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, ?test ok 6 s", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });
+  });
+  test("ein Schrittname mit Punkt am Ende ist kein Teil (factory#215), verify:kompakt als Name schon", () => {
+    expect(gf.bewerteSumme("verify:kompakt grün · 1/1 · 1 s · lint. ok 6 s", { verify: ["lint"] })).toEqual({ grund: "unvollständig" });
+    expect(gf.bewerteSumme("verify:kompakt grün · 1/1 · 1 s · verify:kompakt ok 6 s", { verify: ["verify:kompakt"] })?.gates?.map((g) => g.name)).toEqual(["verify:kompakt"]);
   });
   test("ein unparsbarer Teil macht die grüne Zeile unvollständig, nicht teilweise gezählt", () => {
     expect(gf.bewerteSumme("verify:kompakt grün · 2/2 · 12 s · lint ok 6 s, test ok schnell", { verify: ["lint", "test"] })).toEqual({ grund: "unvollständig" });

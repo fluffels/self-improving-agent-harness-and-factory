@@ -1,7 +1,8 @@
 /* check:docmap über Quellwurzeln, Endungsliste und Ordner-Einheit (factory#183). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -209,7 +210,7 @@ describe("Config-Prüfung docmapEinheit", () => {
 describe("CLI-Verdrahtung (Kindlauf im Fremdrepo)", { timeout: 60_000 }, () => {
   const fremdrepo = (dateien: Record<string, string>): string => {
     const d = mkdtempSync(join(tmpdir(), "docmap-cli-"));
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    kopiereScripts(d);
     mkdirSync(join(d, ".factory"));
     const config = { ...pc.ladeProjektConfig(), struktur: { quelle: [JAVA], endungen: [".java"], docmapEinheit: "ordner", moduldoku: "doku" } };
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify(config));

@@ -38,9 +38,30 @@ export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] })
   return treffer;
 }
 
+/** Anteil des Budgets, unter dem der Rest als knapp gilt (factory#215 L12). */
+export const KNAPP_ANTEIL = 0.05;
+
+/**
+ * Pur: die Kontextdateien, die noch im Budget liegen, deren Rest aber unter `anteil` des Budgets liegt, als `[{ file, chars, budget, rest }]`.
+ * Über Budget zählt nicht (das meldet `ueberBudget`); `lies`/`ausnahmen` wie dort.
+ */
+export function knappeBudgets({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [], anteil = KNAPP_ANTEIL }) {
+  const geduldet = new Set(ausnahmen.map((a) => a.datei));
+  const treffer = [];
+  for (const { file, budget } of budgets) {
+    if (geduldet.has(file)) continue;
+    const text = lies(file);
+    if (text === null) continue;
+    const chars = countChars(text);
+    const rest = budget - chars;
+    if (rest >= 0 && rest < budget * anteil) treffer.push({ file, chars, budget, rest });
+  }
+  return treffer;
+}
+
 /** Zeichen-Budget des Kern-Blocks von AGENTS.md (zwischen den Besitz-Markern `kern`, ohne den Projekt-Block): Ratchet auf den Ist-Wert, wächst nur bewusst per reviewtem Commit
  *  (factory#208 L19: der Kern wuchs zwischen zwei Tags um ~1,1k Zeichen und brachte einen Bezieher über sein Gesamtbudget). */
-export const KERN_BLOCK_BUDGET = 14_972;
+export const KERN_BLOCK_BUDGET = 14_987;
 
 /** Raum, den der Kern jedem Bezieher außerhalb des Kern-Blocks in AGENTS.md lässt (Projekt-Block samt Projektwerten): `KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` bleibt unter dem Budget von AGENTS.md
  *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Geeicht am größten gemessenen Rest plus rund 5 %; wächst ein Rest darüber, ist das ein Befund an den Bezieher.
@@ -53,21 +74,18 @@ export function kernRaumBefund({ kern, raum, gesamt }) {
   return `Kern-Budget ${kern} + Projekt-Raum ${raum} = ${kern + raum} > Gesamtbudget ${gesamt} von AGENTS.md: ein Bezieher mit Raum-großem Projekt-Block liefe nach dem Sync rot.`;
 }
 
-const KERN_START = "<!-- factory-besitz:start kern -->";
-const KERN_ENDE = "<!-- factory-besitz:ende kern -->";
-
-/** Zeichen des Kern-Blocks (zeilenenden-neutral) oder `null`, wenn ein Marker fehlt oder das Ende vor dem Start steht. */
-export function kernBlockZeichen(text) {
-  const a = text.indexOf(KERN_START);
-  const b = text.indexOf(KERN_ENDE);
+/** Zeichen des Blocks zwischen `marker.start` und `marker.ende` (zeilenenden-neutral) oder `null`, wenn ein Marker fehlt oder das Ende vor dem Start steht. Die Marker gibt der Aufrufer vor (`markerStart`/`markerEnde` aus `besitz-lib.mjs`), die Lib bleibt Blatt. */
+export function kernBlockZeichen(text, { start, ende }) {
+  const a = text.indexOf(start);
+  const b = text.indexOf(ende);
   return a < 0 || b < a ? null : countChars(text.slice(a, b));
 }
 
-/** Pur: Meldung, wenn der Kern-Block das Budget überschreitet oder seine Marker fehlen (fail-closed); `null` sonst und immer außerhalb der Fabrik (im Bezieher gilt sein Gesamtbudget, der Kern kommt per Sync). */
-export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET }) {
+/** Pur: Meldung, wenn der Kern-Block das Budget überschreitet oder seine Marker fehlen (fail-closed); `null` sonst und immer außerhalb der Fabrik (im Bezieher gilt sein Gesamtbudget, der Kern kommt per Sync). `marker` = `{ start, ende }` (Pflicht). */
+export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, marker }) {
   if (!fabrik) return null;
-  const chars = kernBlockZeichen(text);
-  if (chars === null) return `Kern-Block von AGENTS.md nicht messbar: Marker ${KERN_START} und ${KERN_ENDE} fehlen oder stehen verdreht.`;
+  const chars = kernBlockZeichen(text, marker);
+  if (chars === null) return `Kern-Block von AGENTS.md nicht messbar: Marker ${marker.start} und ${marker.ende} fehlen oder stehen verdreht.`;
   if (chars <= budget) return null;
   return `Kern-Block von AGENTS.md ${chars} Zeichen > Kern-Block-Budget ${budget}. Kern-Regeln kürzen oder auslagern; das Budget (KERN_BLOCK_BUDGET in scripts/kontext-budget-lib.mjs) wächst nur bewusst per reviewtem Commit.`;
 }

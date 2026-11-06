@@ -12,6 +12,9 @@ export function escapeRegex(text) {
 /** Zeichenklasse eines npm-Skriptnamens (Quelltext für RegExp-Bausteine, factory#208): verify-lauf, check:docdrift und die Doku-Erkennung nutzen dieselbe. Endet nie auf einen Punkt (ein Satzpunkt hinter `npm run x.` gehört nicht zum Namen). */
 export const SCHRITT_NAME = "[\\w:.-]*[\\w:-]";
 
+/** Ganzer Schrittname als Regex (factory#215): die Prüfform für einen Gate-/Skriptnamen in der Config, ohne Kopie der Zeichenklasse. */
+export const GATE_FORM = new RegExp(`^${SCHRITT_NAME}$`);
+
 /** ANSI-Farbcode (`ESC[…m`). */
 export const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 

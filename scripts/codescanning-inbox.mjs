@@ -483,7 +483,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, ladeConfig, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config } = start;
-  const libs = sicherheitsLibs(start.libs, { bezieher, log });
+  const libs = sicherheitsLibs(start.libs, { bezieher, log, gh });
   const { REPO, postZeilen, ladeSammelKontext, vertrauteIssues, waehleSammelticket } = libs;
   const aktion = zielAktionen({ gh, libs, label: labelAus(config, "harness") });
   let offene = [];

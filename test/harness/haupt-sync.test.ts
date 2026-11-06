@@ -7,9 +7,9 @@
  * Durchlauf gegen echte temporäre Git-Repos (bare Remote + zwei Klone), der das Verhalten über die öffentliche
  * Funktion `fuehreSyncAus` prüft. Dazu die Bindung settings.json → Skript.
  */
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -183,21 +183,46 @@ const sauberEnv = (extra: Record<string, string> = {}) => {
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-C", cwd, ...args], { encoding: "utf8", env: sauberEnv(), stdio: ["ignore", "pipe", "pipe"] }).trim();
 
-/** Bare-Remote + Haupt-Klon (main) + zweiter Klon, der Commits auf origin schiebt. */
-function aufbau() {
-  const wurzel = mkdtempSync(join(tmpdir(), "haupt-sync-"));
+/** Vorlagen werden einmal je Datei gebaut und je Test kopiert (spart die git-Aufrufe des Aufbaus). */
+const vorlagen: string[] = [];
+afterAll(() => {
+  for (const v of vorlagen) rmSync(v, { recursive: true, force: true });
+});
+const vorlageBauen = (praefix: string, bau: (wurzel: string) => void): string => {
+  const v = mkdtempSync(join(tmpdir(), praefix));
+  vorlagen.push(v);
+  bau(v);
+  return v;
+};
+/** Kopiert die Vorlage in einen frischen Ordner; `urls` (Klon → Remote) werden auf die kopierten bare-Pfade umgestellt. */
+function vorlageKopieren(vorlage: string, praefix: string, urls: [string, string][]): string {
+  const wurzel = mkdtempSync(join(tmpdir(), praefix));
+  cpSync(vorlage, wurzel, { recursive: true });
+  for (const [klon, remote] of urls) git(join(wurzel, klon), "remote", "set-url", "origin", join(wurzel, remote));
+  return wurzel;
+}
+
+let aufbauVorlage: string | undefined;
+function baueAufbauVorlage(wurzel: string): void {
   const remote = join(wurzel, "remote.git");
   mkdirSync(remote);
   git(remote, "init", "--bare", "--initial-branch=main");
   const haupt = join(wurzel, "haupt");
-  const zweit = join(wurzel, "zweit");
   git(wurzel, "clone", remote, haupt);
   git(haupt, "checkout", "-B", "main");
   writeFileSync(join(haupt, "a.txt"), "1\n");
   git(haupt, "add", "-A");
   git(haupt, "commit", "-m", "start");
   git(haupt, "push", "-u", "origin", "main");
-  git(wurzel, "clone", remote, zweit);
+  git(wurzel, "clone", remote, join(wurzel, "zweit"));
+}
+
+/** Bare-Remote + Haupt-Klon (main) + zweiter Klon, der Commits auf origin schiebt (aus der Vorlage kopiert). */
+function aufbau() {
+  aufbauVorlage ??= vorlageBauen("haupt-sync-vorlage-", baueAufbauVorlage);
+  const wurzel = vorlageKopieren(aufbauVorlage, "haupt-sync-", [["haupt", "remote.git"], ["zweit", "remote.git"]]);
+  const haupt = join(wurzel, "haupt");
+  const zweit = join(wurzel, "zweit");
   const schiebe = (datei: string, inhalt: string) => {
     mkdirSync(join(zweit, datei, ".."), { recursive: true });
     writeFileSync(join(zweit, datei), inhalt);
@@ -929,9 +954,9 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
   const block = { wurzel: ".", repos: [{ name: "a", pfad: "a" }, { name: "b", pfad: "b", standardzweig: "develop" }] };
 
   /** Nicht-Git-Wurzel mit zwei Klonen (a auf main, b auf develop), je ein bare Remote und ein zweiter Klon, der Commits schiebt. */
-  function aufbauAp() {
-    const wurzel = mkdtempSync(join(tmpdir(), "haupt-sync-ap-"));
-    const repoMit = (name: string, zweig: string) => {
+  let apVorlage: string | undefined;
+  const baueApVorlage = (wurzel: string): void => {
+    for (const [name, zweig] of [["a", "main"], ["b", "develop"]]) {
       const remote = join(wurzel, `${name}-remote.git`);
       mkdirSync(remote);
       git(remote, "init", "--bare", `--initial-branch=${zweig}`);
@@ -945,6 +970,18 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
       const zweit = join(wurzel, `${name}-zweit`);
       git(wurzel, "clone", remote, zweit);
       git(zweit, "checkout", zweig);
+    }
+    mkdirSync(join(wurzel, ".factory"));
+    writeFileSync(join(wurzel, ".factory", "projekt.json"), JSON.stringify({ arbeitsplatz: block }));
+  };
+  function aufbauAp() {
+    apVorlage ??= vorlageBauen("haupt-sync-ap-vorlage-", baueApVorlage);
+    const wurzel = vorlageKopieren(apVorlage, "haupt-sync-ap-", [
+      ["a", "a-remote.git"], ["a-zweit", "a-remote.git"], ["b", "b-remote.git"], ["b-zweit", "b-remote.git"],
+    ]);
+    const repoMit = (name: string, zweig: string) => {
+      const klon = join(wurzel, name);
+      const zweit = join(wurzel, `${name}-zweit`);
       const schiebe = (datei: string) => {
         writeFileSync(join(zweit, datei), "x\n");
         git(zweit, "add", "-A");
@@ -955,8 +992,6 @@ describe("Arbeitsplatz: Haupt-Sync je Repo über die Config (#88)", { timeout: 6
     };
     const a = repoMit("a", "main");
     const b = repoMit("b", "develop");
-    mkdirSync(join(wurzel, ".factory"));
-    writeFileSync(join(wurzel, ".factory", "projekt.json"), JSON.stringify({ arbeitsplatz: block }));
     return { wurzel, a, b, aufloesung: () => AP.syncZiel(wurzel).aufloesung, aufraeumen: () => rmSync(wurzel, { recursive: true, force: true }) };
   }
 

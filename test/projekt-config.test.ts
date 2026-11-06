@@ -3,7 +3,8 @@
 import { afterEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -888,7 +889,7 @@ describe("struktur: Erstbezug-Verweis und Probe-Config (factory#162 L34)", () =>
 describe("check:size und check:docmap lesen die Struktur aus der Config, ohne sie endet es mit ✖ statt Stacktrace (#1843)", { timeout: 60_000 }, () => {
   const fremdrepo = (struktur: unknown): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    kopiereScripts(d);
     mkdirSync(join(d, ".factory"));
     const rest = { ...(pc.ladeProjektConfig() as Record<string, unknown>) };
     delete rest.struktur;
@@ -988,7 +989,7 @@ describe("check:size und check:docmap lesen die Struktur aus der Config, ohne si
 describe("struktur.moduldoku: null als Opt-out von check:docmap (#97 L7)", { timeout: 60_000 }, () => {
   const fremdrepo = (struktur: unknown): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    kopiereScripts(d);
     mkdirSync(join(d, ".factory"));
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur }));
     mkdirSync(join(d, "lib"));
@@ -1171,6 +1172,8 @@ describe("Gates außerhalb von verify als Projektwert (#1925)", () => {
     assert.match(mit({ nichtInVerify: {} }).join("|"), /gates\.nichtInVerify muss eine Liste/);
     assert.match(mit({ nichtInVerify: [null] }).join("|"), /gates\.nichtInVerify\[0\] muss ein Objekt/);
     assert.match(mit({ nichtInVerify: [{ gate: "a b", grund: "x" }] }).join("|"), /gates\.nichtInVerify\[0\]\.gate muss ein Skriptname/);
+    assert.match(mit({ nichtInVerify: [{ gate: "verify.", grund: "x" }] }).join("|"), /gates\.nichtInVerify\[0\]\.gate muss ein Skriptname.*kein Punkt am Ende/);
+    assert.deepEqual(mit({ nichtInVerify: [{ gate: "verify:kompakt", grund: "x" }] }), []);
     assert.match(mit({ nichtInVerify: [{ gate: "check:a", grund: "" }] }).join("|"), /gates\.nichtInVerify\[0\]\.grund muss ein nicht-leerer String/);
     assert.match(mit({ nichtInVerify: [ok, ok] }).join("|"), /gates\.nichtInVerify\[1\]\.gate „check:bundle“ steht doppelt/);
   });
@@ -1246,7 +1249,7 @@ describe("Config-Block sandbox (#1888)", () => {
 describe("check:size und check:contextsize lesen die Ausnahmen aus der Config (#1860)", { timeout: 60_000 }, () => {
   const repo = (ausnahmen: unknown): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    kopiereScripts(d);
     mkdirSync(join(d, ".factory"));
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), struktur: { quelle: "lib", moduldoku: "docs/module" }, ausnahmen }));
     mkdirSync(join(d, "lib"));
@@ -1281,7 +1284,7 @@ describe("check:size und check:contextsize lesen die Ausnahmen aus der Config (#
 describe("check:contextsize, check:anysuppress und check:diffcoverage: Ausnahmen- und Struktur-Block aus der Config (#1860)", { timeout: 60_000 }, () => {
   const repo = (zusatz: Record<string, unknown>, agentsZeichen = 0): string => {
     const d = tmp();
-    cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+    kopiereScripts(d);
     mkdirSync(join(d, ".factory"));
     writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ ...(pc.ladeProjektConfig() as Record<string, unknown>), ...zusatz }));
     if (agentsZeichen > 0) writeFileSync(join(d, "AGENTS.md"), "x".repeat(agentsZeichen));

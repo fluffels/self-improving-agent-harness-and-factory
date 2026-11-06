@@ -21,9 +21,15 @@ Entscheidung: das ungeclaimte Harness-Sammelticket kommt ab 10 Befund-Kommentare
 ## Verworfen
 
 - **Merge-Zahl beibehalten:** misst die Aktivität des Boards, nicht den Bedarf des Sammeltickets (siehe Kontext).
-- **Zeilenzahl statt Kommentarzahl:** Zeilen stehen im Kommentartext, ihr Zählen wäre Parsing von Fremdtext; die Kommentarzahl ist ohne Parsing zählbar und fasst Zusammengehöriges bereits zusammen.
+- **Zeilenzahl statt Kommentarzahl:** Zeilen stehen im Kommentartext, ihr Zählen wäre Parsing von Fremdtext; die Kommentarzahl ist ohne Parsing zählbar und fasst Zusammengehöriges bereits zusammen (teilweise überholt durch den Nachtrag factory#215 unten: die Kommentarzahl bleibt, ein Kommentar zählt aber nur mit Checkbox-Zeile).
 
 ## Folgen
 
 - Das Sammelticket kann länger als eine Woche liegen, wenn wenig auffällt; das ist gewollt. Ein Notfall-Befund geht als eigenes Issue.
 - Die Doku nennt die Schwelle an mehreren Stellen ([ticket-reihenfolge](../../ticket-reihenfolge.md#sammelticket-mechanik), Workflow-Kommentar, Glossar, Befehle, Anlaufstellen); ein Wächter in `test/board-takt.test.ts` bindet die Zahl an die Konstante.
+
+## Nachtrag factory#215: nur Kommentare mit Checkbox-Zeile
+
+- **Entscheidung:** `befundKommentare` zählt einen Kommentar vertrauter Nicht-Bot-Autoren nur, wenn er mindestens eine Checkbox-Zeile enthält (`BEFUND_ZEILE` in `scripts/produktquote-lib.mjs`, dieselbe Erkennung wie die Zeilenzählung des Sammeltickets). Fließtext ohne `- [ ]` ist keine abhakbare Zeile und füllt das Sammelticket nicht; die Anleitung verlangt `- [ ] …` je Zeile.
+- **Warum das Lesen des Textes hier vertretbar ist:** gelesen wird nur das Zeilenmuster der Kommentare vertrauter Autoren, die ohnehin geladen werden; der Text wird nicht ausgeführt und nicht gedeutet. Ohne die Bedingung zählten Kommentare, die keine abhakbaren Zeilen enthalten, und das Ticket kam zu früh an die Spitze.
+- Der Punkt „Zeilenzahl statt Kommentarzahl“ unter „Verworfen“ gilt weiter für die Zählweise (je Kommentar, nicht je Zeile).

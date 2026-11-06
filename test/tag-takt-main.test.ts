@@ -257,8 +257,35 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     expect(r.code).toBe(1);
     expect(r.log.join("\n")).toContain("Vor-Tag-Probe: ausstehend o/b");
   });
+  it("factory#215 L3: die Repo-Schreibweise ist egal (GitHub unterscheidet nicht), Ausgabe und Zuordnung unter dem Namen der Config", async () => {
+    const r = await probe(["--probe", "O/A=0", "--probe", "o/B=1"]);
+    expect(r.code).toBe(1);
+    const aus = r.log.join("\n");
+    expect(aus).toContain("- [x] `o/a`: Probe grün");
+    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 1)");
+    expect(aus).not.toContain("ausstehend");
+    expect((await probe(["--probe", "O/A=0", "--probe", "O/b=0"])).code).toBe(0);
+  }, 10_000);
+  it("factory#215 L3: dasselbe Repo in anderer Schreibweise doppelt ist ein Aufruf-Fehler (Exit 2)", async () => {
+    expect((await probe(["--probe", "o/a=0", "--probe", "O/A=1"])).code).toBe(2);
+  });
+  it("factory#215 L5: <owner/name>=rest ist grün mit Projekt-Rest (Exit 0, Befund-Hinweis), kein Blocker", async () => {
+    const r = await probe(["--probe", "o/a=rest", "--probe", "o/b=0"]);
+    expect(r.code).toBe(0);
+    const aus = r.log.join("\n");
+    expect(aus).toContain("- [x] `o/a`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)");
+    expect(aus).toContain("Vor-Tag-Probe: Projekt-Rest bei o/a: als Befund festhalten.");
+    expect(aus).not.toContain("BLOCKER");
+  });
+  it("factory#215 L5: rest ersetzt kein fehlendes Ergebnis (Bezieher ohne Ergebnis bleibt ausstehend, Exit 1)", async () => {
+    const r = await probe(["--probe", "o/a=rest"]);
+    expect(r.code).toBe(1);
+    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: ausstehend o/b");
+  });
   it.each([
     [["--probe", "o/fremd=0"]],
+    [["--probe", "o/a=REST"]],
+    [["--probe", "o/a=rest2"]],
     [["--probe", "o/a=abc"]],
     [["--probe", "o/a"]],
     [["--probe", "o/a=0", "--probe", "o/a=1"]],
