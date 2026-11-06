@@ -431,7 +431,7 @@ describe("Required-Check-Quellen (factory#148)", () => {
     expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
   });
   test("workflows nicht übergeben: LÜCKE mit 0 Quellen statt Absturz", () => {
-    const p = quellenPunkt({ spiegel: {}, workflows: undefined as unknown as Workflow[], pflichtChecks: [K] });
+    const p = quellenPunkt({ spiegel: {}, workflows: undefined, pflichtChecks: [K] });
     expect(p.ok).toBe(false);
     expect(p.nichtPruefbar).toBeUndefined();
     expect(p.befund).toContain("0 Quellen");
