@@ -404,7 +404,7 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(scanne(normal), { funde: [], verweise: 0 });
     assert.deepEqual(scanneFabrik(normal), { funde: [], verweise: 0 });
     const wurzel = fabrik("oberflaeche", "Siehe docs/seite.md (Fabrik) › Gibt es nicht\n");
-    assert.equal(scanneFabrik(wurzel).funde.length, 1);
+    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
   });
 
   test("Kette: jedes Segment wird geprüft, der Fund nennt das tote Segment", () => {
@@ -429,7 +429,7 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
       "AGENTS.md": KERN("Siehe docs/seite.md (Fabrik) › Gibt es nicht."),
       "docs/seite.md": SEITE_FETT,
     });
-    assert.equal(scanneFabrik(innen).funde.length, 1);
+    assert.deepEqual(scanneFabrik(innen).funde, [{ datei: "AGENTS.md", ziel: "docs/seite.md", segment: "Gibt es nicht." }]);
   });
 
   test("Markdown: Fabrik-Verweis in Inline-Code oder Code-Fence zählt nicht, Inline-Code beendet das Segment", () => {
@@ -437,6 +437,15 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(scanneFabrik(code), { funde: [], verweise: 0 });
     const ende = fabrik("kern", "Siehe docs/seite.md (Fabrik) › Gibt es nicht `Echte Überschrift`\n");
     assert.deepEqual(scanneFabrik(ende).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
+  });
+
+  test("Skriptdatei (.mjs): ein Fabrik-Verweis in Backticks wird nicht maskiert, sondern geprüft", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }]),
+      "scripts/x.mjs": "// siehe `docs/seite.md (Fabrik) › Gibt es nicht`\n",
+      "docs/seite.md": SEITE_FETT,
+    });
+    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "scripts/x.mjs", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
   });
 
   test("ein Ziel relativ zur verweisenden Datei wird aufgelöst (nicht als fehlend gemeldet)", () => {
