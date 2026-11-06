@@ -193,6 +193,7 @@ export function zielFuer(e, config, { repo, env = process.env, bezieher = false 
  * ohne Stand-Zeile): ein Treffer legt nichts an, der Lauf wird rot.
  */
 export function ioAus(config, { legen = legeAn, repo, platziereOben, env = process.env, bezieher = false, bereite = (z, o) => bereiteMeldung(z, o) } = {}) {
+  labelAus(config, "harness"); // wirft ohne `labels.harness` schon bei der Verdrahtung
   return {
     anlegen: (e) => {
       const { ziel, token, label } = zielFuer(e, config, { repo, env, bezieher });

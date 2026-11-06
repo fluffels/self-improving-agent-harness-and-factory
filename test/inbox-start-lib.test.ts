@@ -324,6 +324,13 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
     expect(von(aufrufe, "platziereAmEnde")).toEqual([]);
   });
 
+  test("Bezieher: die Nummer 0 oder eine negative ist keine gültige Nummer und wirft", () => {
+    const { libs } = aufbau();
+    for (const roh of ["https://github.com/own-a/proj/issues/0", "https://github.com/own-a/proj/issues/-3"]) {
+      expect(() => S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => roh } }).waehleSammelticket([])).toThrow(/Nummer fehlt/);
+    }
+  });
+
   test("Bezieher: scheitert das Einsortieren, bleibt das Ticket nutzbar und eine Warnung steht im Log", () => {
     const { libs } = aufbau();
     libs.platziereAmEnde = () => { throw new Error("PROJECT_TOKEN fehlt"); };

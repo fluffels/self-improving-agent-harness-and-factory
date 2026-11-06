@@ -1129,7 +1129,7 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
 
   describe("fuellstandLader: Kommentare vertrauter Nicht-Bot-Autoren, Memo, Ladefehler", () => {
     const lader = (N as unknown as { fuellstandLader: (o: { holeKommentare: (nr: number, repo: string) => unknown; repo: string }) => Fuell }).fuellstandLader;
-    const k = (login: string, type = "User") => ({ user: { login, type } });
+    const k = (login: string, type = "User") => ({ user: { login, type }, body: "- [ ] Befund" });
     test("zählt nur den Owner ohne Bots, lädt je Nummer einmal", () => {
       let n = 0;
       const f = lader({ holeKommentare: () => (n++, [k(OWNER), k(OWNER), k("fremd"), k("github-actions[bot]", "Bot")]), repo: `${OWNER}/projekt` });
