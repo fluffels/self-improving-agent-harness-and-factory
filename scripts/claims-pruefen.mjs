@@ -40,7 +40,8 @@ import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, optionalesLabel } from "./projekt-config-lib.mjs";
+import { NICHT_EINTRAGBAR_PRAEFIX } from "./sammelticket-titel.mjs";
 import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnisFuer, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
@@ -89,6 +90,7 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
+    if (!spur && c.nichtEintragbar) return ergebnis("behalten", "Befund-Issue „Nicht eintragbar“ (Befund, der sein Ziel-Repo nicht erreichte, kein eigener Claim)");
     if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
     const angehalten = angehaltenGrund(c);
     if (angehalten) return ergebnis("behalten", angehalten);
@@ -119,7 +121,7 @@ export function aliasAbfragen(nummern, repo = REPO) {
   if (!istRepoForm(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const { owner, name } = zerlegeRepo(repo);
-  const felder = "state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
+  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
     const teil = nummern.slice(von, von + ALIAS_MAX);
@@ -134,6 +136,7 @@ export function issueAus(knoten) {
   if (!knoten || typeof knoten !== "object" || typeof knoten.state !== "string") return null;
   return {
     zustand: knoten.state,
+    titel: typeof knoten.title === "string" ? knoten.title : "",
     assignees: (knoten.assignees?.nodes ?? []).map((a) => a.login),
     labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
     prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
@@ -237,6 +240,7 @@ export function sammle(deps) {
       prs: issue?.prs ?? [],
       festgefahren: hatLabel(issue, deps.festgefahrenLabel),
       wartet: hatLabel(issue, deps.entscheidungLabel),
+      nichtEintragbar: String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX),
       lock,
       worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
       branch: meine.length > 0,
@@ -368,7 +372,7 @@ export function echteDeps({ config: vorgabe, basis, ghJson: ghJsonFn = ghJson } 
       return liste.map((i) => i.number);
     },
     festgefahrenLabel: labelAus(config, "festgefahren"),
-    entscheidungLabel: typeof config.labels?.entscheidung === "string" && config.labels.entscheidung !== "" ? config.labels.entscheidung : null,
+    entscheidungLabel: optionalesLabel(config, "entscheidung"),
     lockDir: lockVerzeichnisFuer({ aufloesung, praefixWorktree: worktreePraefix(config), gemeinsam: () => git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),

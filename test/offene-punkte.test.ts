@@ -1,5 +1,6 @@
 /* Offene Punkte der Maintainerin (factory#152): Gruppen, Fremdtext-Ausblendung, der Negativfall NICHT PRÜFBAR (nie leer und grün) und die CLI. */
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/offene-punkte-lib.mjs";
@@ -186,7 +187,7 @@ describe("CLI", () => {
   const lauf = async (argv: string[], deps: Record<string, unknown>) => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = await cli.main(argv, { ladeConfig: () => config, ladeTitel: () => Promise.resolve(["Harness-Härtung (gesammelt)"]), log: (z: string) => out.push(z), err: (z: string) => err.push(z), ...deps });
+    const code = await cli.main(argv, { ladeConfig: () => config, log: (z: string) => out.push(z), err: (z: string) => err.push(z), ...deps });
     return { code, out: out.join("\n"), err: err.join("\n") };
   };
   const apiMit = (issues: Issue[], kommentare: unknown[] = []) => (args: string[]) => (args.some((a) => a.includes("/comments")) ? [kommentare] : [issues]);
@@ -269,10 +270,11 @@ describe("CLI", () => {
       expect(aufrufe.filter((a) => a.includes("/issues?")).length).toBe(1);
     });
   });
-  test("Titel der Sammeltickets nicht ladbar: bezieher NICHT PRÜFBAR", async () => {
-    const r = await lauf(["--json"], { api: apiMit([]), ladeTitel: () => Promise.reject(new Error("board-lib")) });
-    expect(r.code).toBe(1);
-    expect(parse(r.out).gruppen[3].status).toBe("nicht-pruefbar");
+  test("die Sammelticket-Titel kommen statisch aus dem importfreien Blatt (kein lazy board-lib-Import, L9)", () => {
+    const quelle = readFileSync(new URL("../scripts/offene-punkte.mjs", import.meta.url), "utf8");
+    expect(quelle).not.toMatch(/\bimport\(/);
+    expect(quelle).not.toContain("board-lib");
+    expect(quelle).toContain('from "./sammelticket-titel.mjs"');
   });
   test("Config nicht lesbar: Exit 2 mit Fix", async () => {
     const r = await lauf([], { ladeConfig: () => { throw new Error("fehlt"); }, api: apiMit([]) });

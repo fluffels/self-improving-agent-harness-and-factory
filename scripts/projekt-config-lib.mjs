@@ -169,6 +169,12 @@ export function labelAus(config, schluessel) {
   return wert;
 }
 
+/** Pur: das optionale Label zum Schlüssel `labels.<schluessel>` oder `null` (fehlt, kein String oder leer); wirft nie. Gegenstück zu `labelAus` für Schlüssel, die ein Projekt weglassen darf (`entscheidung`, `codequalitaet`). */
+export function optionalesLabel(config, schluessel) {
+  const wert = config?.labels?.[schluessel];
+  return typeof wert === "string" && wert.trim() !== "" ? wert : null;
+}
+
 /**
  * Pur: der Block `sprache` der Config (`umschrift` plus `spezifikation` mit den Abschnittsnamen und Schlüsselwörtern des Spezifikations-Gates);
  * wirft ohne `sprache` (kein stiller Deutsch-Standardwert, #1711). Die Form prüft `pruefeProjektConfig`, das Gate wirft bei einem fehlenden Schlüssel selbst.

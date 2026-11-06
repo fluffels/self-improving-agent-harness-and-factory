@@ -13,12 +13,11 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flach, issueKommentare } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig, meldestelleAus } from "./projekt-config-lib.mjs";
+import { SAMMELTICKET_TITEL_LISTE } from "./sammelticket-titel.mjs";
 import { alsJson, alsText, baueSicht, exitCode, sammeltickets } from "./offene-punkte-lib.mjs";
 
 const AUFRUF = "Aufruf: node scripts/offene-punkte.mjs [--json] [--wurzel <pfad>]";
-/** Die Titel der Sammeltickets kommen lazy aus `board-lib` (sein Import lädt die Config des Repos und bricht bei einem Fehler ab). */
-const ladeSammelTitel = async () => (await import("./board-lib.mjs")).SAMMELTICKET_TITEL_LISTE;
-const STANDARD = { ladeConfig: (wurzel) => ladeProjektConfig({ rootDir: wurzel }), api: ghJson, ladeTitel: ladeSammelTitel, log: console.log, err: console.error };
+const STANDARD = { ladeConfig: (wurzel) => ladeProjektConfig({ rootDir: wurzel }), api: ghJson, log: console.log, err: console.error };
 
 /** Die Kommentare je Sammelticket als Map Nummer → Liste oder `{ fehler }` (ein Abruffehler wirft nie). */
 function kommentareDer(sammel, repo, api) {
@@ -33,17 +32,8 @@ function kommentareDer(sammel, repo, api) {
   return karte;
 }
 
-/** Die Sammeltickets aus der Issue-Liste oder `null`, wenn ihre Titel nicht ladbar sind. */
-async function sammelnAus(issues, repo, ladeTitel) {
-  try {
-    return sammeltickets(issues, await ladeTitel(), String(repo).split("/")[0]);
-  } catch {
-    return null;
-  }
-}
-
 /** Liest die Quellen (jeder Fehler wird Daten, nie ein Absturz) und baut die Sicht. */
-async function sammleSicht({ config, api, ladeTitel }) {
+function sammleSicht({ config, api }) {
   const repo = config.repo;
   let issues;
   try {
@@ -52,11 +42,11 @@ async function sammleSicht({ config, api, ladeTitel }) {
     issues = { fehler: fehlerText(e) };
   }
   if (!Array.isArray(issues)) return baueSicht({ config, issues });
-  return baueSicht({ config, issues, ...(await bezieherQuelle({ config, repo, issues, api, ladeTitel })) });
+  return baueSicht({ config, issues, ...bezieherQuelle({ config, repo, issues, api }) });
 }
 
 /** Die Quelle der Bezieher-Meldungen: das Harness-Sammelticket der Meldestelle (Schlüssel `meldestelle`, Standard das Repo des Factory-Boards). Weicht sie vom Config-Repo ab, werden ihre Issues zusätzlich gelesen; ist sie nicht bestimmbar oder nicht lesbar, steht `bezieherFehler` (nie "keine"). */
-async function bezieherQuelle({ config, repo, issues, api, ladeTitel }) {
+function bezieherQuelle({ config, repo, issues, api }) {
   let stelle;
   try {
     stelle = meldestelleAus(config) || repo;
@@ -71,13 +61,13 @@ async function bezieherQuelle({ config, repo, issues, api, ladeTitel }) {
       return { bezieherFehler: `Meldestelle ${stelle} nicht lesbar: ${fehlerText(e)}` };
     }
   }
-  const sammel = await sammelnAus(quelle, stelle, ladeTitel);
-  return { sammel, kommentare: sammel === null ? new Map() : kommentareDer(sammel, stelle, api), stelleOwner: String(stelle).split("/")[0] };
+  const sammel = sammeltickets(quelle, SAMMELTICKET_TITEL_LISTE, String(stelle).split("/")[0]);
+  return { sammel, kommentare: kommentareDer(sammel, stelle, api), stelleOwner: String(stelle).split("/")[0] };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig(wurzel)`, `api` (Standard `ghJson`), `ladeTitel`, `log`, `err`. Rückgabe: Exit-Code. */
+/** Einstieg. `deps` (Tests): `ladeConfig(wurzel)`, `api` (Standard `ghJson`), `log`, `err`. Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const { ladeConfig, api, ladeTitel, log, err } = { ...STANDARD, ...deps };
+  const { ladeConfig, api, log, err } = { ...STANDARD, ...deps };
   const { werte, fehler } = flagsLesen(argv, { json: { type: "boolean" }, wurzel: { type: "string" } });
   if (fehler) {
     err(`${fehler.text}\n${AUFRUF}`);
@@ -90,7 +80,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     err(`::error::offene-punkte: Projekt-Config nicht lesbar: ${fehlerText(e)}\nFix: --wurzel auf ein Projekt mit Projekt-Config zeigen lassen`);
     return AUFRUF_EXIT;
   }
-  const sicht = await sammleSicht({ config, api, ladeTitel });
+  const sicht = sammleSicht({ config, api });
   log(werte.json === true ? alsJson(sicht) : alsText(sicht));
   return exitCode(sicht);
 }

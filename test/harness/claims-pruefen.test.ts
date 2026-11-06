@@ -25,6 +25,7 @@ interface Claim {
   branch: boolean;
   branchLokal: boolean;
   festgefahren: boolean;
+  nichtEintragbar?: boolean;
   lebenszeichenMs: number | null;
 }
 type Urteil = { urteil: string; grund: string; aktion: { worktree: boolean; lock: boolean } };
@@ -71,6 +72,16 @@ const geschlossen = (o: Partial<Claim> = {}): Claim =>
     ...o,
   });
 const urteil = (c: Claim, schwelleMs = SCHWELLE) => M.beurteileClaim({ claim: c, jetzt: JETZT, schwelleMs });
+
+describe("beurteileClaim: Befund-Issue „Nicht eintragbar“ (L10)", () => {
+  test("ohne Spur: behalten statt ohne-lokale-spur; mit Spur gilt das normale Urteil", () => {
+    const ohne = urteil(claim({ lock: null, nichtEintragbar: true }));
+    assert.equal(ohne.urteil, "behalten");
+    assert.match(ohne.grund, /Nicht eintragbar/);
+    assert.equal(urteil(claim({ nichtEintragbar: true })).urteil, "lebendig");
+    assert.equal(urteil(claim({ lock: null, nichtEintragbar: false })).urteil, "ohne-lokale-spur");
+  });
+});
 
 describe("beurteileClaim: je Urteil ein Fall", () => {
   test.each<[string, Claim, string]>([
@@ -198,14 +209,15 @@ describe("reine Hilfen", () => {
     assert.equal(M.issueAus({}), null);
     assert.deepEqual(
       M.issueAus({ state: "CLOSED", labels: { nodes: [{ name: "l" }] }, assignees: { nodes: [{ login: "a" }] }, closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED", headRefOid: "x", labels: { nodes: [{ name: "pl" }] } }] } }),
-      { zustand: "CLOSED", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
+      { zustand: "CLOSED", titel: "", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
     );
   });
 
   test("issueAus: fehlende Felder ergeben leere Listen und headRefOid null", () => {
-    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", assignees: [], labels: [], prs: [] });
+    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", titel: "", assignees: [], labels: [], prs: [] });
     assert.deepEqual(M.issueAus({ state: "OPEN", closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED" }] } }), {
       zustand: "OPEN",
+      titel: "",
       assignees: [],
       labels: [],
       prs: [{ nummer: 3, zustand: "MERGED", headRefOid: null, labels: [] }],
@@ -242,6 +254,7 @@ interface IssueWelt {
   state: string;
   assignees?: string[];
   labels?: string[];
+  title?: string;
   prs?: { number: number; state: string; headRefOid: string; labels?: string[] }[];
 }
 interface Welt {
@@ -303,6 +316,7 @@ function baue(welt: Welt) {
         repository[`i${m[1]}`] = i
           ? {
               state: i.state,
+              title: i.title ?? "Ein Ticket",
               // Wie GitHub: ein Feld kommt nur zurück, wenn die Abfrage es verlangt.
               ...(query.includes("state labels(first:30){ nodes{ name } }") ? { labels: knoten(i.labels) } : {}),
               assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
@@ -632,6 +646,13 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   test("eine nur zugewiesene Nummer ohne jede Spur ist ohne-lokale-spur (Quelle: Zuweisung)", () => {
     const r = M.fuehreAus([], baue({ zugewiesen: [23], issues: { 23: { state: "OPEN" } } }).deps);
     assert.match(r.out, /BEHALTEN #23: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
+  });
+
+  test("ein „Nicht eintragbar: “-Issue ohne Spur ist kein ohne-lokale-spur, sondern behalten mit eigenem Grund (L10); ein Titel ohne den Präfix bleibt ohne-lokale-spur", () => {
+    const r = M.fuehreAus([], baue({ zugewiesen: [24, 25], issues: { 24: { state: "OPEN", title: "Nicht eintragbar: Befund X" }, 25: { state: "OPEN", title: "Das ist Nicht eintragbar: kein Präfix" } } }).deps);
+    assert.match(r.out, /BEHALTEN #24: behalten, Befund-Issue „Nicht eintragbar“/);
+    assert.doesNotMatch(r.out, /#24: ohne-lokale-spur/);
+    assert.match(r.out, /BEHALTEN #25: ohne-lokale-spur/);
   });
 
   test("das Festgefahren-Label am Issue oder gemergten PR verhindert das Aufräumen eines geschlossenen Issues nicht", () => {

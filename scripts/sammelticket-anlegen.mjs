@@ -49,7 +49,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, optionalesLabel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
@@ -154,8 +154,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
  */
 export function sammelLabel(config, art) {
   if (art !== "codequalitaet") return labelAus(config, "harness");
-  const l = config?.labels?.codequalitaet;
-  return typeof l === "string" && l.trim() !== "" ? l : null;
+  return optionalesLabel(config, "codequalitaet");
 }
 
 /**
