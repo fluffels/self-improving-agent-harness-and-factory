@@ -9,13 +9,15 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixture } from "../support/tmp-fixture";
+import { importHuelle } from "../support/import-huelle";
+import { lokaleImporteTransitiv } from "./hook-importe";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAuftrag from "../../scripts/langfuse-auftrag-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 
-type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; auftrag: string | null; fehler: string | null };
+type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; fehler: string | null };
 type Ergebnis = { exitCode: number; text: string; protokoll: Record<string, unknown> & { sessions: { status: string }[] } };
 type Lauf = (a: Args, o: { now: number }) => Promise<Ergebnis>;
 const A = rawAuftrag as unknown as {
@@ -32,11 +34,12 @@ const N = rawNach as unknown as {
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
 
-const T0 = Date.parse("2026-11-05T10:00:00Z");
-const SKRIPT_DIR = fileURLToPath(new URL("../../scripts/", import.meta.url));
+// Weit in der Vergangenheit: nutzte ein Hook die Wanduhr statt der injizierten Uhr, fielen alle Aufträge als verfallen heraus.
+const T0 = Date.parse("2001-01-01T00:00:00Z");
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
+const SKRIPT_DIR = join(WURZEL, "scripts");
 const NACHLIEFERN = join(SKRIPT_DIR, "langfuse-nachliefern.mjs");
 const AUFTRAG = join(SKRIPT_DIR, "langfuse-auftrag.mjs");
-const AUFTRAG_LIB = join(SKRIPT_DIR, "langfuse-auftrag-lib.mjs");
 const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
 const auftraegeAus = (datei: string) => (JSON.parse(readFileSync(datei, "utf8")) as { auftraege: Record<string, string> }).auftraege;
 
@@ -174,7 +177,8 @@ describe("auftragAufruf (Einstieg)", () => {
     for (const argv of [[], ["a", "b"], ["--json"], ["a b"], ["--auftrag", "abc"]]) {
       const r = A.auftragAufruf(argv, dir, T0);
       expect(r.exitCode).toBe(2);
-      expect(r.text).toContain(A.AUFRUFHILFE);
+      expect(r.text).toBe(argv.length === 1 ? `ungültige Session-ID: ${argv[0]}
+${A.AUFRUFHILFE}` : A.AUFRUFHILFE);
     }
     expect(existsSync(dateiVon(dir))).toBe(false);
     expect(A.auftragAufruf(["abc-1"], dir, T0)).toEqual({ exitCode: 0, text: "Auftrag abgelegt: abc-1 (der nächste SessionStart-Lauf liefert nach)" });
@@ -183,20 +187,15 @@ describe("auftragAufruf (Einstieg)", () => {
 });
 
 describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, factory#213)", () => {
-  const spezifizierer = (datei: string): string[] => [...readFileSync(datei, "utf8").matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g)].map((m) => m[1]);
   const fahre = (skript: string, home: string, args: string[]) =>
     spawnSync(process.execPath, [skript, ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" } });
 
   test("Import-Hülle: Einstieg und Lib ziehen nur Node-Builtins, direktaufruf.mjs (nur Builtins) und die Lib, nie langfuse-zugang oder langfuse-api", () => {
-    const einstieg = spezifizierer(AUFTRAG);
-    expect(einstieg).toEqual(expect.arrayContaining(["./direktaufruf.mjs", "./langfuse-auftrag-lib.mjs"]));
-    expect(einstieg.filter((m) => !m.startsWith("node:") && m !== "./direktaufruf.mjs" && m !== "./langfuse-auftrag-lib.mjs")).toEqual([]);
-    const lib = spezifizierer(AUFTRAG_LIB);
-    expect(lib.length).toBeGreaterThan(0);
-    expect(lib.filter((m) => !m.startsWith("node:"))).toEqual([]);
-    expect(spezifizierer(join(SKRIPT_DIR, "direktaufruf.mjs")).filter((m) => !m.startsWith("node:"))).toEqual([]);
+    const leser = (p: string) => readFileSync(join(WURZEL, p), "utf8");
+    // wirft bei jedem Import, der weder node: noch relativ ist; Auslegung geteilt mit den anderen Hüllen-Tests (auch `import "…"`)
+    expect(importHuelle("scripts/langfuse-auftrag.mjs", leser)).toEqual(["scripts/direktaufruf.mjs", "scripts/langfuse-auftrag-lib.mjs", "scripts/langfuse-auftrag.mjs"]);
     // Gegenprobe: der Nachlieferer selbst zieht den Zugang, die Hülle unterscheidet also wirklich.
-    expect(spezifizierer(NACHLIEFERN)).toEqual(expect.arrayContaining(["./langfuse-zugang.mjs", "./langfuse-api.mjs"]));
+    expect(lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], leser)).toEqual(expect.arrayContaining(["scripts/langfuse-zugang.mjs", "scripts/langfuse-api.mjs"]));
   });
 
   test("ohne jeden Zugang: Exit 0, Auftrag liegt im Zustandsordner, kein Lauf (kein Log, kein Ledger)", () => {
