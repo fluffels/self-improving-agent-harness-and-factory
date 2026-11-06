@@ -18,7 +18,7 @@
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
- *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine).
+ *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine). Ein Befund-Issue „Nicht eintragbar: …“ ohne Spur ist stattdessen `behalten` (kein eigener Claim, factory#220).
  *   (offen und festgefahren oder wartend auf eine Entscheidung (Label `labels.entscheidung`, optional, factory#152): `behalten`, keine Wiederaufnahme.)
  *   lock-unlesbar    nur Meldung, der Lock wird nie gelöscht.
  *   aufraeumbar      geschlossen: Lock löschen und, mit Worktree, den Worktree entfernen. Ein Worktree nur bei gemergtem PR, sauberem Stand,

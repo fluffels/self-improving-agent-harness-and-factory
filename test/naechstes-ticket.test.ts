@@ -179,6 +179,20 @@ describe("fuehreAus", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
   });
+  test("Produktbezug (L44): Pfade ohne Wurzel im Repo ergeben einen Hinweis (Text und JSON), das Ticket wird trotzdem gewählt; ohne Prüfer oder mit vorhandener Wurzel kein Hinweis", () => {
+    const body = "Siehe `src/game/main.ts` und `scripts/x.mjs`.";
+    const eingabe = () => ({ items: norm([item(7, { body })]), offene: new Set<number>() });
+    const existiert = (w: string) => w === "scripts";
+    const text = N.fuehreAus(["--bereich", "produkt"], { ...io(eingabe()), existiert });
+    expect(text.code).toBe(0);
+    expect(text.out.split("\n")[0]).toBe("#7\tT7");
+    expect(text.out).toContain("hinweis #7 nennt Pfade ohne Wurzel im Repo (src): Produktbezug prüfen, ggf. Ticket ins Produkt-Repo übertragen");
+    const json = JSON.parse(N.fuehreAus(["--json", "--bereich", "produkt"], { ...io(eingabe()), existiert }).out) as { hinweise?: string[]; ticket?: { nr: number } };
+    expect(json.ticket?.nr).toBe(7);
+    expect(json.hinweise).toEqual(["#7 nennt Pfade ohne Wurzel im Repo (src): Produktbezug prüfen, ggf. Ticket ins Produkt-Repo übertragen"]);
+    expect(N.fuehreAus(["--bereich", "produkt"], io(eingabe())).out).not.toContain("Produktbezug");
+    expect(N.fuehreAus(["--bereich", "produkt"], { ...io(eingabe()), existiert: () => true }).out).not.toContain("Produktbezug");
+  });
   test("--json: parsebar; der Body erscheint nie in der Ausgabe", () => {
     const r = N.fuehreAus(["--json", "--bereich", "produkt"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
     expect((JSON.parse(r.out) as Ergebnis).ticket?.nr).toBe(7);
@@ -577,6 +591,15 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     const r = N.fuehreAus(["--ticket", "7"], i);
     expect(r).toMatchObject({ code: 0, out: "#7\tT7\n" });
     expect(i.aufrufe).toEqual({ lade: 0, einzeln: 1 });
+  });
+  test("fuehreAus Einzelmodus: Produktbezug-Hinweis (L44) auch bei --ticket, nicht bei einem übersprungenen Ticket", () => {
+    const i = io();
+    const mit = { ...i, existiert: () => false, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { body: "`src/a.ts`" })), offene: new Set<number>() }) as never };
+    const r = N.fuehreAus(["--ticket", "7"], mit);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("hinweis #7 nennt Pfade ohne Wurzel im Repo (src)");
+    const zu = { ...mit, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { state: "closed", body: "`src/a.ts`" })), offene: new Set<number>() }) as never };
+    expect(N.fuehreAus(["--ticket", "7"], zu).out).not.toContain("Produktbezug");
   });
   test("fuehreAus Einzelmodus: nicht frei Exit 1 mit Grund, json ohne Body", () => {
     const i = io();

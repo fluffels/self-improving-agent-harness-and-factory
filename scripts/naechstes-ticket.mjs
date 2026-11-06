@@ -35,6 +35,9 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { designGrund } from "./design-lib.mjs";
 import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { pfadHinweis } from "./pfadwurzeln-lib.mjs";
 import { CODEQUALITAET_SAMMELTICKET_TITEL, NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
@@ -148,13 +151,13 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus, existiert }) {
   const nr = item.number;
   if (item.repo === "") return { ticket: null, uebersprungen: [{ nr, grund: "Repo des Issues unbekannt (fail-closed)" }] };
   if (!gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
   const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus });
-  return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [] };
+  return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [], ...hinweisTeil(item, existiert) };
 }
 
 /** 🚨 CI rot auf main und 🔒 Security gelten auf beiden Boards (Roter main geht vor). Pur. */
@@ -175,7 +178,7 @@ export function imBereich(item, bereich, config) {
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config, repo, fremdStatus }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config, repo, fremdStatus, existiert }) {
   labelAus(config, "harness"); // fail-fast, auch ohne Bereich: ohne Config gibt es keine Auswahl
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
@@ -183,7 +186,7 @@ export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHe
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, config) || !nur(item)) continue;
     const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config, repo, fremdStatus });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
-    else return { ticket: ticketVon(item, r), uebersprungen };
+    else return { ticket: ticketVon(item, r), uebersprungen, ...hinweisTeil(item, existiert) };
   }
   return { ticket: null, uebersprungen };
 }
@@ -222,6 +225,7 @@ export function waehleUeberBoards({ produkt, factory, bereich, config, ...belegu
   const lauf = (items, extra) => {
     const r = waehleNaechstes({ ...belegung, config, items, ...extra });
     uebersprungen.push(...r.uebersprungen);
+    hinweise.push(...(r.hinweise ?? []));
     return r.ticket;
   };
   const ms = vorrangMilestone(listen[eigene]);
@@ -259,6 +263,12 @@ export function verzugAus(daten) {
   if (f.fehler) return { verzug: [], hinweis: `Board-Verzug nicht prüfbar (GraphQL): ${f.fehler}` };
   return { verzug: verzugNummern({ frisch: f.issues, produkt: daten.produkt, factory: daten.factory, projektIds: f.projektIds }) };
 }
+
+/** `{ hinweise }` mit dem Produktbezug-Hinweis zum gewählten Kandidaten (factory#220 L44, nur ein Hinweis, nie ein Überspringen) oder `{}`. Pur. */
+const hinweisTeil = (item, existiert) => {
+  const hinweise = pfadHinweis(item.number, item.body, existiert);
+  return hinweise.length > 0 ? { hinweise } : {};
+};
 
 const uebersprungenEintrag = (nr, r) => ({ nr, grund: r.grund, ...(r.fehlt ? { fehlt: r.fehlt } : {}) });
 const ticketVon = (item, r) => ({ nr: item.number, titel: item.title, ...(r.bestandFehlt ? { spezifikation: { bestand: true, fehlt: r.bestandFehlt } } : {}) });
@@ -409,7 +419,7 @@ export function fuehreAus(argv, io) {
   const aufruf = aufrufLesen(argv, { aliase: bereichAliaseAus(io.config) });
   if (aufruf.fehler) return fehlerErgebnis(aufruf.fehler);
   try {
-    const gemeinsam = { owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config, repo: io.repo, fremdStatus: io.fremdStatus };
+    const gemeinsam = { owner: io.owner, hartAb: io.hartAb, namen: io.namen, config: io.config, repo: io.repo, fremdStatus: io.fremdStatus, existiert: io.existiert };
     if (aufruf.maengel) {
       const liste = listeMaengel({ ...datenDesRepos(io.lade(), io, aufruf.bereich).daten, ...gemeinsam, bereich: aufruf.bereich });
       return { code: 0, out: aufruf.json ? `${JSON.stringify(liste, null, 2)}\n` : formatiereMaengel(liste), err: "" };
@@ -549,6 +559,9 @@ export function ladeFrisch(lade = frischeOffeneIssues) {
   }
 }
 
+/** Die Wurzel des Repos, in dem das Skript liegt (für den Produktbezug-Hinweis, factory#220 L44). */
+const REPO_WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
+
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). Der Messfenster-Lader (`messfensterLader`, Test-Naht) bekommt die schon geladenen Namen. */
 export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLader } = {}) {
   const cfg = config ?? ladeProjektConfig();
@@ -567,7 +580,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster, orte) });
   const boardRepos = { produkt: boardRepo(boardFuerRolle("produkt"), { repo: REPO }), factory: boardRepo(boardFuerRolle("factory"), { repo: REPO }) };
-  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
+  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), existiert: (wurzel) => existsSync(join(REPO_WURZEL, wurzel)), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (istDirektaufruf(import.meta.url)) {

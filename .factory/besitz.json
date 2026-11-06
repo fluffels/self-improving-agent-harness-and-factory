@@ -190,6 +190,7 @@
     {"pfad":"scripts/release-tag-lib.mjs","ring":"kern","quelle":"Release-Tags lesen und vergleichen, geteilt von Factory-Update-Check und Tag-Takt (Folge #103, #109)"},
     {"pfad":"scripts/milestone-lib.mjs","ring":"kern","quelle":"Release-Planung über Milestones (factory#194)"},
     {"pfad":"scripts/factory-update-check.mjs","ring":"kern","quelle":"Factory-Update-Check (#90 L17)"},
+    {"pfad":"scripts/pfadwurzeln-lib.mjs","ring":"kern","quelle":"Produktbezug-Hinweis der Ticket-Auswahl (factory#220 L44)"},
     {"pfad":"scripts/sammelticket-titel.mjs","ring":"kern","quelle":"Importfreies Blatt der Sammelticket-Titel (factory#220 L9)"},
     {"pfad":"scripts/offene-punkte-lib.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},
     {"pfad":"scripts/offene-punkte.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},

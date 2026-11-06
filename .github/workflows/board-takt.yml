@@ -7,7 +7,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 #    dasselbe, sobald seit dem Anlegen des jüngsten Status-Tickets mindestens 50 Ticket-Merges (ohne Bots) dazukamen (Fr–So ruht
 #    der Push-Auslöser, der Montag setzt zurück; #1628). Angelegt wird nur mit einem
 #    Mindestabstand von 24 Stunden zum Abschluss des Vorgängers (#1382).
-# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 Befund-Kommentaren (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand) holt derselbe Lauf das
+# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 Befund-Kommentaren (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand; ein Befund-Kommentar trägt mindestens eine Zeile `- [ ]`) holt derselbe Lauf das
 #    ungeclaimte an die Spitze des Boards (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket; #1349, #1888, factory#162). Unter der Schwelle
 #    schiebt er nichts, auch nicht zurück.
 # 3. Tag-Takt (#103): derselbe Lauf zählt die Besitz-PRs seit dem letzten Release-Tag und hält ab 3 PRs, über 7 Tage Alter oder einem
