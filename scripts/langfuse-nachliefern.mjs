@@ -157,19 +157,22 @@ export const STATUS = Object.freeze({
   VOLLSTAENDIG: "vollständig",
 });
 
+/** Δ = 0: kein Diff (die Abfrage fand keinen Unterschied); die Felder, die `nachlieferEntscheidung` liest, mit ihren leeren Werten. */
+const KEIN_DIFF = Object.freeze({ fehlend: [], dubletten: [], unzuordenbar: [], leer: [], art: null });
+
 /**
  * Entscheidung einer Session nach dem Diff, pur: was ist sendbar (Ledger-`gesendet` schon abgezogen), ist der Befund mehrdeutig, und endet der Lauf hier
  * (`status`: vor Stichtag oder Trockenlauf; `wuerdeSenden` ist dann die Vorschau). Nur unzuordenbare Dubletten machen mehrdeutig; Kopien schon gedeckter
  * Calls blockieren das Nachliefern nicht (factory#213).
  */
 export function nachlieferEntscheidung({ diff, gesendet, davor, trocken }) {
-  const fehlend = diff?.fehlend ?? [];
+  const d = { ...KEIN_DIFF, ...diff };
   const imLedger = new Set(gesendet);
-  const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
-  const unzuordenbar = diff?.unzuordenbar.length ?? 0;
-  const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && unzuordenbar > 0;
+  const zuSenden = d.fehlend.filter((e) => !imLedger.has(e.id));
+  const unzuordenbar = d.unzuordenbar.length;
+  const mehrdeutig = d.art === "fingerprint" && d.fehlend.length > 0 && unzuordenbar > 0;
   const sendbar = mehrdeutig ? [] : zuSenden;
-  const basis = { zuSenden, sendbar, mehrdeutig, dubletten: diff?.dubletten.length ?? 0, unzuordenbar, leer: diff?.leer?.length ?? 0, wuerdeSenden: sendbar.length };
+  const basis = { zuSenden, sendbar, mehrdeutig, dubletten: d.dubletten.length, unzuordenbar, leer: d.leer.length, wuerdeSenden: sendbar.length };
   if (davor) return { ...basis, status: STATUS.VOR_STICHTAG };
   if (trocken) return { ...basis, status: mehrdeutig ? STATUS.MEHRDEUTIG : STATUS.TROCKEN };
   return basis;
@@ -232,23 +235,30 @@ async function sendeScores(args, c) {
   }
 }
 
+/** Fortschritt nach einem Sendefehler nur für angenommene Chunks; nicht bestätigt, Stand nicht als aktuell vermerkt (mit bekanntem Ende bleibt er vermerkt, damit der Folgelauf `beendet` wiedererkennt). */
+function ledgerNachFehler({ s, c, alt, eintrag, beendet }) {
+  if (!eintrag.gesendet.length && !eintrag.spans.length) return;
+  c.ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: beendet ? s.groesse : (alt?.groesse ?? null), mtime: beendet ? s.mtime : (alt?.mtime ?? null) };
+}
+
+/** Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten): bestätigt, neue Prüfung erst bei Transkript-Änderung; mehrdeutig bleibt unbestätigt und wird bei jedem Lauf neu geprüft. */
+function bestaetige(rec, eintrag, e) {
+  if (e.sendbar.length || eintrag.gesendet.length) return;
+  rec.befund = e.mehrdeutig ? BEFUND_MEHRDEUTIG : e.dubletten ? "nur Dubletten, nichts zu senden" : null;
+  if (!rec.befund) rec.status = STATUS.VOLLSTAENDIG;
+  eintrag.bestaetigt = !e.mehrdeutig;
+}
+
 /** Ledger-Stand und Scores nach dem Senden; `rec` trägt Status und Befund. */
 async function schliesseAb({ s, c, rec, alt, eintrag, e, ok, soll, observations, beendet }) {
   const { ledger, env } = c;
   rec.status = e.mehrdeutig ? STATUS.MEHRDEUTIG : ok ? STATUS.GESENDET : STATUS.FEHLER;
   rec.ausstehend = eintrag.gesendet.length;
   if (!ok) {
-    // Fortschritt nur für angenommene Chunks; nicht bestätigt, Stand nicht als aktuell vermerken.
-    // Mit bekanntem Ende bleibt der aktuelle Stand vermerkt, damit der Folgelauf `beendet` wiedererkennt.
-    if (eintrag.gesendet.length || eintrag.spans.length) ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: beendet ? s.groesse : (alt?.groesse ?? null), mtime: beendet ? s.mtime : (alt?.mtime ?? null) };
+    ledgerNachFehler({ s, c, alt, eintrag, beendet });
     return rec;
   }
-  // Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten): bestätigt, neue Prüfung erst bei Transkript-Änderung; mehrdeutig bleibt unbestätigt und wird bei jedem Lauf neu geprüft.
-  if (!e.sendbar.length && !eintrag.gesendet.length) {
-    rec.befund = e.mehrdeutig ? BEFUND_MEHRDEUTIG : e.dubletten ? "nur Dubletten, nichts zu senden" : null;
-    if (!rec.befund) rec.status = STATUS.VOLLSTAENDIG;
-    eintrag.bestaetigt = !e.mehrdeutig;
-  }
+  bestaetige(rec, eintrag, e);
   ledger.sessions[s.id] = { ...eintrag, groesse: s.groesse, mtime: s.mtime };
   if (rec.befund) ledger.sessions[s.id].befund = rec.befund;
   else delete ledger.sessions[s.id].befund;

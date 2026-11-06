@@ -100,7 +100,7 @@
     "complexity": 4
   },
   "scripts/langfuse-nachliefern.mjs": {
-    "complexity": 61
+    "complexity": 17
   },
   "scripts/langfuse-otlp.mjs": {
     "complexity": 5
