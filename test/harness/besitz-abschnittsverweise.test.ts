@@ -115,7 +115,7 @@ function ueberschriften(md: string): { slug: string; zeile: string }[] {
   return drift
     .stripFencedCode(md)
     .split("\n")
-    .flatMap((z) => /^#{1,6}\s+(.*\S)\s*$/.exec(z) ?? [])
+    .filter((z) => /^#{1,6}\s+.*\S\s*$/.test(z))
     .map((m) => {
       const basis = drift.slugify(m.replace(/^#{1,6}\s+/, ""));
       const n = gesehen.get(basis) ?? 0;
@@ -236,7 +236,7 @@ describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
       "scripts/x.mjs": "// siehe docs/seite.md › Echte Überschrift\n// [x](docs/seite.md#echte-überschrift)\n",
       "docs/seite.md": SEITE,
     });
-    assert.equal(scanne(wurzel).funde.length, 1);
+    assert.deepEqual(scanne(wurzel).funde, [{ datei: "scripts/x.mjs", ziel: "docs/seite.md", segment: "Echte Überschrift" }]);
   });
 
   test("ein Kern-Link außerhalb der Block-Spanne gibt keine Garantie", () => {
@@ -245,7 +245,7 @@ describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
       "AGENTS.md": KERN("Siehe docs/seite.md › Echte Überschrift.") + "Projekt: [x](docs/seite.md#echte-überschrift)\n",
       "docs/seite.md": SEITE,
     });
-    assert.equal(scanne(wurzel).funde.length, 1);
+    assert.deepEqual(scanne(wurzel).funde, [{ datei: "AGENTS.md", ziel: "docs/seite.md", segment: "Echte Überschrift." }]);
   });
 
   test("AGENTS.md: ein Titel nur im Projekt-Block ist rot, im Kern-Block grün", () => {
@@ -256,6 +256,35 @@ describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
     });
     const { funde } = scanne(wurzel);
     assert.deepEqual(funde, [{ datei: "skill.md", ziel: "AGENTS.md", segment: "Nur Projekt" }]);
+  });
+
+  test("ein Kern-Link aus einer nicht verteilten Einheit (Ring oberflaeche) gibt keine Garantie", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([
+        { pfad: "skill.md", ring: "kern" },
+        { pfad: "ober.md", ring: "oberflaeche" },
+      ]),
+      "skill.md": "Siehe docs/seite.md › Echte Überschrift\n",
+      "ober.md": "[x](docs/seite.md#echte-überschrift)\n",
+      "docs/seite.md": SEITE,
+    });
+    assert.deepEqual(scanne(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Echte Überschrift" }]);
+  });
+
+  test("doppelte Überschriften: der Kern-Link auf #foo-1 garantiert die zweite, #foo-2 gibt es nicht", () => {
+    const seite = "# S\n\n## Foo\n\n## Foo\n";
+    const mit = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
+      "skill.md": "Siehe docs/seite.md › Foo\n[x](docs/seite.md#foo-1)\n",
+      "docs/seite.md": seite,
+    });
+    assert.deepEqual(scanne(mit).funde, []);
+    const ohne = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
+      "skill.md": "Siehe docs/seite.md › Foo\n[x](docs/seite.md#foo-2)\n",
+      "docs/seite.md": seite,
+    });
+    assert.deepEqual(scanne(ohne).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Foo" }]);
   });
 
   test("ein Verweis außerhalb der Besitz-Spanne (Block einer Datei) wird ignoriert", () => {
@@ -376,6 +405,47 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(scanneFabrik(normal), { funde: [], verweise: 0 });
     const wurzel = fabrik("oberflaeche", "Siehe docs/seite.md (Fabrik) › Gibt es nicht\n");
     assert.equal(scanneFabrik(wurzel).funde.length, 1);
+  });
+
+  test("Kette: jedes Segment wird geprüft, der Fund nennt das tote Segment", () => {
+    assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/seite.md (Fabrik) › Echte Überschrift › Fetter Abschnitt\n")), { funde: [], verweise: 1 });
+    const rot = fabrik("kern", "Siehe docs/seite.md (Fabrik) › Echte Überschrift › Gibt es nicht\n");
+    assert.deepEqual(scanneFabrik(rot).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
+  });
+
+  test("ein Platzhalter-Segment (`<…>`) ist kein Fund", () => {
+    assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/seite.md (Fabrik) › <Abschnitt>\n")).funde, []);
+  });
+
+  test("außerhalb der Besitz-Spanne (Projekt-Teil von AGENTS.md) wird ein Fabrik-Verweis ignoriert, innerhalb geprüft", () => {
+    const aussen = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "AGENTS.md": KERN("Kern.") + "Projekt: docs/seite.md (Fabrik) › Gibt es nicht\n",
+      "docs/seite.md": SEITE_FETT,
+    });
+    assert.deepEqual(scanneFabrik(aussen), { funde: [], verweise: 0 });
+    const innen = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "AGENTS.md": KERN("Siehe docs/seite.md (Fabrik) › Gibt es nicht."),
+      "docs/seite.md": SEITE_FETT,
+    });
+    assert.equal(scanneFabrik(innen).funde.length, 1);
+  });
+
+  test("Markdown: Fabrik-Verweis in Inline-Code oder Code-Fence zählt nicht, Inline-Code beendet das Segment", () => {
+    const code = fabrik("kern", "`docs/seite.md (Fabrik) › Gibt es nicht`\n\n```\ndocs/seite.md (Fabrik) › Gibt es nicht\n```\n");
+    assert.deepEqual(scanneFabrik(code), { funde: [], verweise: 0 });
+    const ende = fabrik("kern", "Siehe docs/seite.md (Fabrik) › Gibt es nicht `Echte Überschrift`\n");
+    assert.deepEqual(scanneFabrik(ende).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
+  });
+
+  test("ein Ziel relativ zur verweisenden Datei wird aufgelöst (nicht als fehlend gemeldet)", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }]),
+      ".agents/skills/x/SKILL.md": "Siehe seite.md (Fabrik) › Gibt es nicht\n",
+      ".agents/skills/x/seite.md": SEITE_FETT,
+    });
+    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: ".agents/skills/x/SKILL.md", ziel: ".agents/skills/x/seite.md", segment: "Gibt es nicht" }]);
   });
 
   test("Vertrag: check:docdrift erkennt die Fabrik-Form nicht (kein Verweis, der Bezieher prüft sie nie)", () => {
