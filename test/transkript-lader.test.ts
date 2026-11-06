@@ -1,7 +1,8 @@
 /* Gemeinsamer Session-Lader (#1392 Z29), Ticketlauf-Erkennung (Z30) und Generator-Lader (Z31) für die Transkript-Skripte.
  * Läuft gegen ein Fixture-Root (test/support/tmp-fixture); synthetische Zeilen, kein Zugriff auf ~/.claude. */
 import { describe, expect, test } from "vitest";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { fixture } from "./support/tmp-fixture";
 import { FREMD, repoName } from "./support/fremd-config";
@@ -163,6 +164,10 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
     expect(O.projektOrdner(undefined, { config: cfg, basis: "/ap" })).toBe(join(O.projekteWurzel(), "-ap"));
     expect(O.projektOrdner(undefined, { config: cfg, basis: "/ap/.claude/worktrees/web/wt-7" })).toBe(join(O.projekteWurzel(), "-ap"));
     expect(O.projektOrdner("X--slug", { config: cfg, basis: "/ap" })).toBe(join(O.projekteWurzel(), "X--slug"));
+    // ohne Basis gilt das Repo des Skripts (Standard), eine nicht lesbare Config ergibt den bisherigen Weg
+    expect(O.projektOrdner(undefined, { config: cfg })).toBe(join(O.projekteWurzel(), P.projektSlug(join(dirname(fileURLToPath(import.meta.url)), ".."))));
+    const werfend = new Proxy({}, { get: () => { throw new Error("nicht lesbar"); } });
+    expect(O.projektOrdner(undefined, { config: werfend, basis: "/ap" })).toBe(join(O.projekteWurzel(), P.projektSlug(O.hauptrepoWurzel() ?? process.cwd())));
     expect(O.projektOrdner(undefined, { config: {}, basis: "/ap" })).toBe(join(O.projekteWurzel(), P.projektSlug(O.hauptrepoWurzel() ?? process.cwd())));
   });
   test("projekteWurzel und projektOrdner: Wurzel unter ~/.claude/projects, Slug-Override, sonst Hauptrepo bzw. cwd", () => {

@@ -95,7 +95,7 @@ describe("assertSafeOrphanTarget im Arbeitsplatz", () => {
 });
 
 /** Fake-Welt: `worktree list --porcelain` je Repo-Pfad, Ordner je Worktree-Ordner, alles Weitere stumm. */
-function welt(listen: Record<string, string[] | Error>, ordner: Record<string, string[]>) {
+function welt(listen: Record<string, string[] | Error>, ordner: Record<string, string[]>, dateien: Record<string, string[]> = {}) {
   const n = (p: unknown) => String(p).replace(/\\/g, "/");
   const befehle: string[] = [];
   const gelesen: string[] = [];
@@ -119,7 +119,8 @@ function welt(listen: Record<string, string[] | Error>, ordner: Record<string, s
       const p = n(pRoh);
       gelesen.push(p);
       if (!o) return [...(ordner[p] ?? [])];
-      return (ordner[p] ?? []).filter((n) => vorhanden.has(`${p}/${n}`)).map((name) => ({ name, isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false }));
+      const ordnerEintraege = (ordner[p] ?? []).filter((n) => vorhanden.has(`${p}/${n}`)).map((name) => ({ name, isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false }));
+      return [...ordnerEintraege, ...(dateien[p] ?? []).map((name) => ({ name, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false }))];
     },
     statSync: () => ({ mtimeMs: JETZT - 10 * MIN, birthtimeMs: JETZT - 10 * MIN }),
     lstatSync: () => ECHT_DIR,
@@ -187,6 +188,17 @@ describe("Stop-Hook im Arbeitsplatz", () => {
     expect(r.blocked).toBe(false);
     expect([...(r.removed ?? [])].sort()).toEqual([`${WT}6`, `${WT}8`]);
     expect(w.geloescht.sort()).toEqual([`${ORDNER_API}/${WT}6`, `${ORDNER_WEB}/${WT}8`]);
+  });
+  test("nichts zu tun: kein Repo hat Waisen, der Hook meldet unverändert { blocked: false } ohne Zusatzfelder", () => {
+    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] });
+    expect(lauf(w)).toEqual({ blocked: false });
+  });
+  test("eine fremde lose Datei im Ordner eines Repos ist nur eine Warnung mit dem Repo-Namen, nie eine Blockade", () => {
+    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] }, { [ORDNER_WEB]: ["notiz.txt"] });
+    const r = lauf(w);
+    expect(r.blocked).toBe(false);
+    expect(r.warning).toMatch(/^Repo web: Fremde lose Datei(en).*notiz.txt/);
+    expect(w.geloescht).toEqual([]);
   });
   test("fail-closed: scheitert `worktree list` in einem Repo, wird in KEINEM Repo gelöscht und eine Warnung nennt das Repo", () => {
     const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": new Error("kaputt") }, { [ORDNER_WEB]: [`${WT}8`], [ORDNER_API]: [`${WT}6`] });
