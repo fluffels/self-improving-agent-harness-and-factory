@@ -236,7 +236,7 @@ describe("CLI", () => {
       expect(aufrufe.some((a) => a.startsWith(`repos/${STELLE}/issues?`))).toBe(true);
       expect(aufrufe.some((a) => a.startsWith(`repos/${STELLE}/issues/20/comments`))).toBe(true);
       expect(j.gruppen[3].punkte).toHaveLength(1);
-      expect((j.gruppen[3].punkte[0] as Punkt).titel).toContain("@meldeowner");
+      expect((j.gruppen[3].punkte[0] as Punkt).titel).toBe(`@meldeowner · ${STAND}`);
     });
     test("K4: eine nicht lesbare Meldestelle macht nur bezieher NICHT PRÜFBAR (Exit 1, nie keine), die anderen Gruppen bleiben", async () => {
       const r = await lauf([], { ladeConfig: () => configMitStelle, api: apiJeRepo([STELLE]) });
