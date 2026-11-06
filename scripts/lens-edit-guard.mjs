@@ -41,6 +41,9 @@ function zielNamen(norm) {
   return worktreeNamenOderGrund("Lens-Edit-Guard", { config }).namen ?? null;
 }
 
+/** Der Ordner-Teil des Lens-Worktree-Beispiels: eingebettet `.claude/worktrees/`, im Arbeitsplatz `<worktree-ordner>/` (je Repo `<wurzel>/.claude/worktrees/<repo>`, factory#89). */
+const lensOrdner = (config) => (config?.arbeitsplatz === undefined ? ".claude/worktrees/" : "<worktree-ordner>/");
+
 /**
  * Darf die Lens diese Datei per `Edit` ändern? Pur (die Config kommt über `deps.config` oder wird geladen). Liefert `{ block: false }` oder `{ block: true, reason }`.
  * `cwd` löst relative Pfade auf (die Edit-Tools liefern normalerweise absolute).
@@ -49,7 +52,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return { block: true, reason: "Lens-Edit ohne Dateipfad: nicht prüfbar, darum abgelehnt." };
   }
-  const { namen, grund } = namenOderGrund("Lens-Edit-Guard", deps);
+  const { namen, grund, config } = namenOderGrund("Lens-Edit-Guard", deps);
   if (grund) return { block: true, reason: grund };
   const norm = normalisierePfad(filePath, cwd);
   if (lensWorktree(zielNamen(norm) ?? namen).test(norm)) return { block: false };
@@ -57,7 +60,8 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(.claude/worktrees/${namen.worktreeName("<nr>")}-lens-r<runde> (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>) bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      `(${lensOrdner(config)}${namen.worktreeName("<nr>")}-lens-r<runde> (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>) bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      (config?.arbeitsplatz === undefined ? "" : "Worktree-Ordner je Repo: `node scripts/arbeitsplatz.mjs pfade`. ") +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }
