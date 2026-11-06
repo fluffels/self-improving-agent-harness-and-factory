@@ -197,7 +197,7 @@ describe("Stop-Hook im Arbeitsplatz", () => {
     const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] }, { [ORDNER_WEB]: ["notiz.txt"] });
     const r = lauf(w);
     expect(r.blocked).toBe(false);
-    expect(r.warning).toMatch(/^Repo web: Fremde lose Datei(en).*notiz.txt/);
+    expect(r.warning).toMatch(/^Repo web: Fremde lose Datei\(en\).*notiz\.txt/);
     expect(w.geloescht).toEqual([]);
   });
   test("fail-closed: scheitert `worktree list` in einem Repo, wird in KEINEM Repo gelöscht und eine Warnung nennt das Repo", () => {
@@ -241,9 +241,10 @@ describe("cleanup-worktrees im Arbeitsplatz", () => {
   };
   test("Diagnose: ein Kopf je Repo, Exit 1 bei einer Waise (Dry-Run, nichts gelöscht)", () => {
     const { out } = stumm();
-    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}8`], [ORDNER_API]: [] });
+    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}8`], [ORDNER_API]: [], "/w/.claude/worktrees": ["web", "api", "fremd"] });
     const code = cleanup.main([], { config: CONFIG, root: "/basis", diagnoseDeps: w.deps });
     expect(code).toBe(1);
+    expect(out.filter((z) => z.includes("ohne Repo in arbeitsplatz.repos")).join("")).toMatch(/\.claude.worktrees ohne Repo in arbeitsplatz\.repos \(nie automatisch gelöscht\): fremd\n$/);
     expect(out.filter((z) => z.startsWith("=== Repo "))).toEqual([`=== Repo web (${ORDNER_WEB}) ===`, `=== Repo api (${ORDNER_API}) ===`]);
     expect(out.join("\n")).toMatch(new RegExp(`✗ ${WT}8`));
     expect(w.geloescht).toEqual([]);
