@@ -72,7 +72,7 @@ Agent({
 })
 ```
 
-**Phasen-Schnitt:** die Zeile `Schnitt:` nur im Erst-Spawn: `verify` bei gerader, `pr` bei ungerader Ticketnummer (A/B im selben Fenster, gilt, bis die Nachmessung entscheidet: [docs/model-routing.md › A/B-Regel](../../../docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept); Vertrag und Messrezept dort). Ein Ticket, dessen Umsetzer-Definition diese Session noch nicht kennt (Sitzungsbasis veraltet), bekommt keine `Schnitt:`-Zeile; fehlt die Zeile, nennt der Hauptchat den Grund in der Sitzungszusammenfassung.
+**Phasen-Schnitt:** die Zeile `Schnitt:` nur im Erst-Spawn: `verify` bei gerader, `pr` bei ungerader Ticketnummer (A/B im selben Fenster, gilt, bis die Nachmessung entscheidet: [docs/model-routing.md › Phasen-Schnitt](../../../docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept); Vertrag und Messrezept dort). Ein Ticket, dessen Umsetzer-Definition diese Session noch nicht kennt (Sitzungsbasis veraltet), bekommt keine `Schnitt:`-Zeile; fehlt die Zeile, nennt der Hauptchat den Grund in der Sitzungszusammenfassung.
 
 Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers und gelten unabhängig vom Modell der Session. Der Umsetzer setzt um, pflegt das Projekt-Brain (Projekt-Block der AGENTS.md), iteriert gezielt (AGENTS.md § Zwei-Stufen-Prüfung) und fährt als Stufe 0 des [review-lenses](../../../.agents/skills/review-lenses/SKILL.md)-Reviews genau einmal `node scripts/gate-befehl.mjs verifyKompakt`, den Review (spawnt selbst die `<agenten.lens>`-Subagenten), PR, CI-Fix, Merge und Cleanup. Seine letzte Nachricht beginnt mit `ERGEBNIS:`:
 
