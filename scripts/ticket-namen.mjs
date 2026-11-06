@@ -93,13 +93,13 @@ export function ticketNamen(config) {
  * Wie `namenOderGrund`, aber nur mit dem Worktree-Präfix: `{ namen: { praefixe: { worktree }, <Worktree-Muster> } }` oder `{ grund }`. Für Werkzeuge, die nur
  * Worktree-Ordner aufräumen (Stop des Hauptchats): ein fehlender Agentenname soll sie nicht blockieren, darum liest sie die Config ohne Schema-Prüfung
  * (`deps.pfad` ersetzt den Pfad, `deps.config` das Laden; Test) und prüft allein `praefixe.worktree`. Das Teilobjekt trägt nur `praefixe.worktree` und die Worktree-Muster (`lensNameKern`, `lensWorktreeMuster`, `lensPfadMuster`, `dateiMuster`):
- * Empfänger dürfen keine anderen Felder lesen. Wirft nie.
+ * Empfänger dürfen keine anderen Felder lesen. Zusätzlich `config` (ungeprüft geladen), damit der Stop-Hook den Block `arbeitsplatz` sieht (factory#89). Wirft nie.
  */
 export function worktreeNamenOderGrund(werkzeug, deps = {}) {
   try {
     const config = deps.config ?? ladeProjektConfig({ pruefen: false, ...(deps.pfad ? { pfad: deps.pfad } : {}) });
     const worktree = worktreePraefix(config);
-    return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) } };
+    return { namen: { praefixe: { worktree }, ...worktreeTeil(worktree) }, config };
   } catch (e) {
     return { grund: failClosedGrund(werkzeug, e) };
   }

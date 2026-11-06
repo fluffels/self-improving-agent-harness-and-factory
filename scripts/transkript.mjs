@@ -8,6 +8,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
 export function transkriptZeilen(jsonlText) {
@@ -161,7 +163,20 @@ export function projekteWurzel() {
   return join(homedir(), ".claude", "projects");
 }
 
-/** Transkriptordner des Projekts: `slug` (z.B. aus `--projekt`) oder abgeleitet aus Hauptrepo bzw. cwd; git läuft nur ohne Slug. */
-export function projektOrdner(slug) {
-  return join(projekteWurzel(), slug ?? projektSlug(hauptrepoWurzel() ?? process.cwd()));
+/**
+ * Die Basis (Ordner mit `.factory/projekt.json`) im Arbeitsplatz, sonst `null` (factory#89): dort läuft die Session in der Basis, nicht in einem Hauptrepo.
+ * `deps.config` ersetzt das Laden (Test), `deps.basis` die Basis (Standard: das Repo dieses Skripts). Wirft nie.
+ */
+function arbeitsplatzBasis({ config, basis } = {}) {
+  try {
+    const c = config ?? ladeProjektConfig({ pruefen: false });
+    return c?.arbeitsplatz === undefined ? null : (basis ?? dirname(dirname(fileURLToPath(import.meta.url))));
+  } catch {
+    return null;
+  }
+}
+
+/** Transkriptordner des Projekts: `slug` (z.B. aus `--projekt`) oder abgeleitet aus der Basis (Arbeitsplatz), dem Hauptrepo bzw. cwd; git läuft nur ohne Slug und ohne Arbeitsplatz. */
+export function projektOrdner(slug, deps = {}) {
+  return join(projekteWurzel(), slug ?? projektSlug(arbeitsplatzBasis(deps) ?? hauptrepoWurzel() ?? process.cwd()));
 }

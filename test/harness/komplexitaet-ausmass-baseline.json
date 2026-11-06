@@ -42,7 +42,7 @@
     "complexity": 12
   },
   "scripts/cleanup-worktrees.mjs": {
-    "complexity": 35
+    "complexity": 25
   },
   "scripts/docs-gen.mjs": {
     "complexity": 9
@@ -149,7 +149,7 @@
     "max-depth": 1
   },
   "scripts/stop-verify-hook.mjs": {
-    "complexity": 15
+    "complexity": 11
   },
   "scripts/subagent-laeufe.mjs": {
     "complexity": 5
