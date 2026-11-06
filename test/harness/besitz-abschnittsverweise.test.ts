@@ -271,12 +271,17 @@ describe("npm-Kommandos in Besitz-Text aus Sicht des Beziehers", () => {
     assert.deepEqual(scanneKommandos(wurzel).funde, [{ datei: "skill.md", name: "test" }]);
   });
 
-  test("außerhalb der Besitz-Spanne (Projekt-Teil von AGENTS.md) ist kein Fund", () => {
+  test("Block-Spanne: im Kern-Block ein Fund, im Projekt-Teil von AGENTS.md keiner", () => {
     const wurzel = fixture({
       ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
-      "AGENTS.md": KERN("Kern ohne Kommando.") + "Projekt: `npm run neu`\n",
+      "AGENTS.md": KERN("Kern mit `npm run imkern`.") + "Projekt: `npm run improjekt`\n",
     });
-    assert.deepEqual(scanneKommandos(wurzel).funde, []);
+    assert.deepEqual(scanneKommandos(wurzel).funde, [{ datei: "AGENTS.md", name: "imkern" }]);
+  });
+
+  test("Orakel: die Erlaubnisliste ist genau die Grundausstattung (wächst nur mit SIH-Bezieher-Migration:-Zeile)", () => {
+    const quelle = ["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"];
+    assert.deepEqual([...BEZIEHER_NPM_SKRIPTE].sort(), quelle);
   });
 
   test("eine nicht verteilte Einheit (Ring oberflaeche) wird ignoriert", () => {
