@@ -1,5 +1,6 @@
 /* Reine Kernfunktionen der Session-Verarbeitung des Nachlieferers (factory#215 L8): `nachlieferEntscheidung`, `fruehesEnde`, `bereinigeEintrag`.
  *
+ * @harness-waechter – einziger Durchsetzer der Nachliefer-Entscheidung (mehrdeutig, Kopien gedeckter Calls, Stichtag, Trockenlauf), darum im geschützten test/harness/.
  * Kein Netz, kein Dateisystem: die Entscheidung „senden, mehrdeutig, Vorschau“ steht als pure Funktion neben `verarbeite` (dessen Verhalten
  * über `nachliefern` in langfuse-nachliefern.test.ts unverändert bleibt). Tabellentests je Zweig.
  */
@@ -24,7 +25,8 @@ const N = rawNach as unknown as {
 
 const fehlend = (...ids: string[]): Eintrag[] => ids.map((id) => ({ id }));
 const objekte = (n: number): object[] => Array.from({ length: n }, () => ({}));
-const diffVon = (o: { fehlend?: string[]; dubletten?: number; unzuordenbar?: number; leer?: number; art?: string }): Diff => ({
+type DiffOptionen = { fehlend?: string[]; dubletten?: number; unzuordenbar?: number; leer?: number; art?: string };
+const diffVon = (o: DiffOptionen): Diff => ({
   fehlend: fehlend(...(o.fehlend ?? [])),
   dubletten: objekte(o.dubletten ?? 0),
   unzuordenbar: objekte(o.unzuordenbar ?? 0),
@@ -64,7 +66,7 @@ describe("nachlieferEntscheidung", () => {
     expect(e.status).toBeUndefined();
   });
 
-  test.each([
+  test.each<[string, DiffOptionen]>([
     ["messageId statt Fingerabdruck", { fehlend: ["a"], dubletten: 1, unzuordenbar: 1, art: "messageId" }],
     ["nichts fehlt (nur unzuordenbare Dubletten)", { dubletten: 1, unzuordenbar: 1 }],
     ["nur Kopien gedeckter Calls, keine unzuordenbare Dublette (factory#213)", { fehlend: ["a"], dubletten: 2, unzuordenbar: 0 }],

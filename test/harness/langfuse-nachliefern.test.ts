@@ -405,13 +405,13 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
   });
 
   test("kaputtes Ledger ohne jede Session: die Sicherung steht, und ein frisches leeres Ledger wird trotz unverändertem Inhalt geschrieben", async () => {
-    const a = aufbau([]);
+    const a = aufbau([msg("a", 1)]);
     mkdirLedger(a.state);
     writeFileSync(a.ledger, "{kaputt");
-    const r = await lauf(a, mock({ ist: 0 }));
+    const r = await lauf(a, mock({ ist: 0 }), { seit: "2100-01-01T00:00:00Z" }); // keine Session im Fenster
     expect(r.exitCode).toBe(0);
     expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
-    expect(ledgerVon(a.ledger)).toEqual({ version: 1, sessions: {} });
+    expect(JSON.parse(readFileSync(a.ledger, "utf8"))).toEqual({ version: 1, sessions: {} });
   });
 
   test("mehrdeutig (Fingerabdruck: fehlend und Dubletten zugleich): nichts gesendet, unbestätigt mit Befund; der Folgelauf fragt erneut ab", async () => {
