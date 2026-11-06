@@ -45,6 +45,7 @@ const MIN = 60_000;
 const JETZT = Date.UTC(2026, 9, 9, 12, 0, 0);
 const CONFIG = { ...FREMD, arbeitsplatz: { wurzel: "/w", repos: [{ name: "web", pfad: "web" }, { name: "api", pfad: "api" }] } };
 const AUF = lib.arbeitsplatzAus(CONFIG, "/basis");
+const arbeitsplatz2 = (wurzel: string) => ({ ...FREMD, arbeitsplatz: { wurzel, repos: [{ name: "web", pfad: "web" }, { name: "api", pfad: "api" }] } });
 const ECHT_DIR = { isSymbolicLink: () => false, isDirectory: () => true, isFile: () => false };
 
 describe("erwarteterWorktreeOrdner", () => {
@@ -158,9 +159,11 @@ describe("diagnoseArbeitsplatz", () => {
     expect(w.gelesen).not.toContain("/w/.claude/worktrees"); // der Ordner mit den Repo-Ordnern wird nie gescannt
   });
   test("unter win32 gilt auch eine lose Datei eines registrierten Worktrees bei anderer Groß-/Kleinschreibung nicht als verwaist", () => {
-    const w = welt({ "/w/web": LISTE("/w/web", `${ORDNER_WEB}/${WT}7`.replace("/w/", "/W/")), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] }, { [ORDNER_WEB]: [`${WT}7-orig.bak`] });
-    expect(W.diagnoseArbeitsplatz(orte, { ...w.deps, platform: "win32" }).repos[0].orphanFiles).toEqual([]);
-    expect(W.diagnoseArbeitsplatz(orte, { ...w.deps, platform: "linux" }).repos[0].orphanFiles).toEqual([`${WT}7-orig.bak`]);
+    // Config-Wurzel mit Großbuchstaben, git meldet den registrierten Pfad klein: nur der Schlüssel (win32) erkennt die Datei als zugehörig.
+    const grossOrte = W.gitOrteAus(arbeitsplatz2("/W"), "/basis").orte;
+    const w = welt({ "/W/web": LISTE("/W/web", `/w/.claude/worktrees/web/${WT}7`), "/W/api": LISTE("/W/api") }, { "/W/.claude/worktrees/web": [], "/W/.claude/worktrees/api": [] }, { "/W/.claude/worktrees/web": [`${WT}7-orig.bak`] });
+    expect(W.diagnoseArbeitsplatz(grossOrte, { ...w.deps, platform: "win32" }).repos[0].orphanFiles).toEqual([]);
+    expect(W.diagnoseArbeitsplatz(grossOrte, { ...w.deps, platform: "linux" }).repos[0].orphanFiles).toEqual([`${WT}7-orig.bak`]);
   });
   test("unter win32 gilt ein registrierter Pfad auch bei anderer Groß-/Kleinschreibung", () => {
     const w = welt({ "/w/web": LISTE("/w/web", `${ORDNER_WEB.toUpperCase()}/${WT}7`.replace("/W/", "/w/")), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}7`], [ORDNER_API]: [] });
