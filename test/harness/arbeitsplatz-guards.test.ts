@@ -205,6 +205,14 @@ describe("Guards im temporären Arbeitsplatz (echtes git)", () => {
     expect(PS.bewertePowerShell({ command: `Set-Location ${apFwd}/api; git push`, cwd: apFwd, repoRoot: apFwd }).block).toBe(true);
     expect(PS.bewertePowerShell({ command: `Set-Location ${wt()}; git commit -m x`, cwd: apFwd, repoRoot: apFwd }).block).toBe(false);
   });
+  test("PowerShell verschachtelt (factory#220 L15e): `iex`/`pwsh -Command` reichen die Schutz-Wurzel weiter, der Hinweis nennt das getroffene Repo", () => {
+    for (const cmd of [`iex "git -C ${apFwd}/web commit -m x"`, `pwsh -Command "git -C ${apFwd}/api push"`]) {
+      const r = PS.bewertePowerShell({ command: cmd, cwd: apFwd, repoRoot: apFwd });
+      expect(r.block, cmd).toBe(true);
+      expect(r.reason, cmd).toMatch(/Neuer Worktree: .*worktree add .*--repo (web|api)/);
+    }
+    expect(PS.bewertePowerShell({ command: `iex "git -C ${apFwd}/web commit -m x"`, cwd: apFwd, repoRoot: apFwd }).reason).toContain("--repo web");
+  });
   test("PowerShell eingebettet: der Hinweistext bleibt ohne den Zusatz `Neuer Worktree:`", () => {
     const r = PS.bewertePowerShell({
       command: "git commit -m x",

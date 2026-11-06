@@ -158,6 +158,27 @@ describe("diagnoseArbeitsplatz", () => {
     expect([web.mainRoot, web.worktreesDir]).toEqual(["/w/web", ORDNER_WEB]);
     expect(w.gelesen).not.toContain("/w/.claude/worktrees"); // der Ordner mit den Repo-Ordnern wird nie gescannt
   });
+  test("Lens-Waisen gelten nur gegen die Liste des eigenen Repos (factory#220 L15e): der Feature-Worktree steht nur in der Liste von Repo B, der Lens-Worktree von Repo A ist trotzdem verwaist", () => {
+    const lens = `${ORDNER_WEB}/${WT}7-lens-r1`;
+    const w = welt(
+      { "/w/web": LISTE("/w/web", lens), "/w/api": LISTE("/w/api", `${ORDNER_WEB}/${WT}7`) },
+      { [ORDNER_WEB]: [`${WT}7`, `${WT}7-lens-r1`], [ORDNER_API]: [] },
+    );
+    const alt = { ...w.deps, statSync: () => ({ mtimeMs: JETZT - 600 * MIN, birthtimeMs: JETZT - 600 * MIN }) };
+    const r = W.diagnoseArbeitsplatz(orte, alt) as unknown as { repos: { lensOrphans: string[] }[] };
+    expect(r.repos[0].lensOrphans).toEqual([`${WT}7-lens-r1`]);
+    expect(r.repos[1].lensOrphans).toEqual([]);
+    // Gegenprobe: steht der Feature-Worktree in der Liste desselben Repos, ist der Lens-Worktree kein Waise.
+    const mit = welt({ "/w/web": LISTE("/w/web", `${ORDNER_WEB}/${WT}7`, lens), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}7`, `${WT}7-lens-r1`], [ORDNER_API]: [] });
+    expect((W.diagnoseArbeitsplatz(orte, { ...mit.deps, statSync: alt.statSync }) as unknown as { repos: { lensOrphans: string[] }[] }).repos[0].lensOrphans).toEqual([]);
+  });
+  test("eingebettet vergleicht ohne Schlüssel-Normalisierung (factory#220 L15e, Default von befundVon): ein registrierter Pfad in anderer Schreibung deckt den Ordner nicht", () => {
+    const w = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${WT.toUpperCase()}3`) }, { "/e/.claude/worktrees": [`${WT}3`] });
+    const r = W.aufraeumDiagnose(FREMD, "/e", { ...w.deps, platform: "win32" });
+    expect(r.repos[0].orphans).toEqual([`${WT}3`]);
+    const gleich = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${WT}3`) }, { "/e/.claude/worktrees": [`${WT}3`] });
+    expect(W.aufraeumDiagnose(FREMD, "/e", { ...gleich.deps, platform: "win32" }).repos[0].orphans).toEqual([]);
+  });
   test("unter win32 gilt auch eine lose Datei eines registrierten Worktrees bei anderer Groß-/Kleinschreibung nicht als verwaist", () => {
     // Config-Wurzel mit Großbuchstaben, git meldet den registrierten Pfad klein: nur der Schlüssel (win32) erkennt die Datei als zugehörig.
     const grossOrte = W.gitOrteAus(arbeitsplatz2("/W"), "/basis").orte;
