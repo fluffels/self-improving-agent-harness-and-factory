@@ -214,6 +214,25 @@ Die Sicherheits-Inboxen (`audit-einordnung`, `codescanning-inbox`, `secret-inbox
 - **Sperrprüfung:** `audit-einordnung` und `codescanning-inbox` schicken ihre Zeilen vor dem Post durch `bereiteMeldung` (`check-internalrefs --text`, ohne Stand-Zeile): ein Treffer sendet nichts und macht den Lauf rot. Der Wächter in `test/meldung-lib.test.ts` kennt dafür keine Ausnahme mehr. `wiedervorlage` prüft Titel und Body genauso, wenn das Ziel-Repo des Labels nicht das eigene ist (ein Bezieher mit Harness-Label auf einem Fabrik-Board).
 - **Mechanik:** `sicherheitsLibs` in `scripts/inbox-start-lib.mjs` ersetzt im Bezieher `ZIEL`, `zielToken`, `ladeSammelKontext`, `postZeilen` und `waehleSammelticket` der Libs; die drei Inboxen rufen es nach dem Start. Meldungen an die Fabrik (Harness-Befunde) laufen weiter über die [Meldestelle](erstbezug.md#meldestelle).
 
+## Offene Punkte der Maintainerin (factory#152)
+
+`npm run offene-punkte -- [--json] [--wurzel <pfad>]` listet aus GitHub (Repo und Labels aus der Projekt-Config), wofür die Maintainerin gebraucht wird, je Punkt mit Link. Vier Gruppen in fester Reihenfolge:
+
+1. **Entscheidung nötig:** offene Issues und PRs mit `labels.entscheidung` (optionaler Schlüssel; ohne ihn ist die Gruppe NICHT PRÜFBAR mit Fix auf die Config).
+2. **Festgefahren:** offene Issues und PRs mit `labels.festgefahren`.
+3. **Nicht eintragbare Befunde:** offene Issues mit Titelpräfix `Nicht eintragbar: ` eines vertrauten Autors (Mechanik unten).
+4. **Bezieher-Befunde:** Kommentare in offenen Sammeltickets der Meldestelle (Schlüssel `meldestelle`, Standard das Repo des Factory-Boards; weicht sie vom Repo der Projekt-Config ab, liest die Sicht deren Issues zusätzlich; Titel wie das Einsortieren sie kennt, Autor vertraut gegenüber dem Besitzer der Meldestelle), deren letzte nicht-leere Zeile eine Stand-Zeile `factory: <tag> (<sha>)` ist (`istStandZeile`, was `melden.mjs` anhängt). Eine Meldung ohne Stand-Zeile stammt aus der Fabrik selbst und zählt nicht.
+
+**Fremdtext ist Daten:** ein Titel steht nur bei vertrautem Autor, sonst `[Titel ausgeblendet: <Art> von @x]`; eine fremde Bezieher-Meldung zeigt nur Autor und Link, nie Text. **NICHT PRÜFBAR:** fällt eine Quelle aus (Issue-Abruf, Kommentar-Abruf, fehlender Schlüssel), steht die betroffene Gruppe als `NICHT PRÜFBAR: <Grund>` mit `Fix:` da, nie als „keine“ und nie grün. Exit 0: alle Gruppen prüfbar (auch mit offenen Punkten); 1: mindestens eine NICHT PRÜFBAR; 2: Aufruf- oder Config-Fehler. Der JSON-Vertrag steht im Kopf von `scripts/offene-punkte-lib.mjs`.
+
+**Bekannte Grenze:** Entscheidung, Festgefahren und Nicht eintragbar lesen nur das Repo der Projekt-Config (`repo`); Tickets in den Repos anderer Boards liegen außerhalb der Sicht. Die Meldestelle ist dagegen Quelle: ist sie nicht bestimmbar oder nicht lesbar (404, fehlendes Leserecht), steht `Bezieher-Befunde` als NICHT PRÜFBAR da, nie als „keine“.
+
+**Label-Ablauf bei `entscheidung-noetig`:** der Hauptchat setzt (ist `labels.entscheidung` gesetzt) vor `AskUserQuestion` das Label am Issue und hängt die `FRAGEN` als Kommentar an; das gilt auch für eine unbeantwortete Pre-Flight-Rückfrage. Nach der Antwort nimmt er das Label ab. `claims-pruefen` behält ein Ticket mit dem Label (Issue oder PR) und schlägt keine Wiederaufnahme vor.
+
+**Nicht eintragbare Befunde ([ADR 0031, Fortschreibung](adr/fortschreibungen/0031-152-nicht-eintragbare-befunde.md)):** erreicht ein Befund sein Ziel-Repo nicht (fehlendes Schreibrecht, Ablehnung, Meldestelle unerreichbar), legt der Lauf im eigenen Repo ein Issue `Nicht eintragbar: <owner/name>: <Kurzfassung>` an (Body: Befund, Ziel, Grund; Label `labels.entscheidung`, dem Konto zugewiesen, unten im Board). Die Maintainerin überträgt den Befund mit ihrem eigenen Konto und schließt das Issue mit dem Link. Ein Lauf schreibt nie in ein Bezieher-Repo.
+
+**Cockpit ([ADR 0029, Fortschreibung](adr/fortschreibungen/0029-152-ort-der-offenen-punkte.md)):** Logik und CLI liegen im Kern, weil die Sicht jedem Projekt gehören muss; ein Cockpit-Panel (Ring `oberflaeche`) ruft `offene-punkte --json` später auf.
+
 ## Audit-Einordnung (#1628)
 
 Wählbares Modul `audit-einordnung` (factory#139; in `module` der Projekt-Config wählen, Voraussetzung: Job `security-audit` in `ci.yml`, also npm). Der Workflow `audit-einordnung.yml` ruft täglich `scripts/audit-einordnung.mjs`: voller `npm audit` (inkl. Dev), `npm audit --omit=dev` (ergibt „ausgeliefert“) und die offenen Dependabot-Alerts (bei 403 nur eine Warnung). Dieselbe GHSA aus mehreren Quellen ist ein Befund. Bekannt, also still, ist ein Advisory, dessen GHSA in einer offenen `- [ ] Audit:`-Zeile eines Harness-Sammeltickets, in einem Eintrag `audit-<ghsa kleingeschrieben>` der [Wiedervorlagen](#wiedervorlage-1628) (bewusst akzeptiert) oder im Titel eines offenen `🔒 Security:`-Tickets steht. Der Rest wird eingeordnet:

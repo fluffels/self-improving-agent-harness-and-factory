@@ -38,7 +38,7 @@ const M = raw as unknown as {
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown; worktreeOrdner?: string }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
-  echteDeps: (o?: { config?: unknown; basis?: string; ghJson?: (a: string[]) => unknown }) => { festgefahrenLabel: string; lockDir: string; orte: { name: string; cwd?: string }[]; zugewiesen: () => number[] };
+  echteDeps: (o?: { config?: unknown; basis?: string; ghJson?: (a: string[]) => unknown }) => { festgefahrenLabel: string; entscheidungLabel: string | null; lockDir: string; orte: { name: string; cwd?: string }[]; zugewiesen: () => number[] };
 };
 
 const H = 60 * 60_000;
@@ -593,6 +593,20 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.match(anderes.out, /WIEDERAUFNAHME #20/);
   });
 
+  test("wartet auf Entscheidung (Label labels.entscheidung am Issue oder PR): behalten, ohne gesetzten Schlüssel unverändert verwaist (factory#152)", () => {
+    const WARTET = "status:wartet";
+    const mit = (issue: { state: string; labels?: string[]; prs?: { number: number; state: string; headRefOid: string; labels: string[] }[] }) => ({ ...baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps, entscheidungLabel: WARTET });
+    for (const issue of [{ state: "OPEN", labels: [WARTET] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: [WARTET] }] }]) {
+      const r = M.fuehreAus([], mit(issue));
+      assert.match(r.out, /BEHALTEN #20: behalten, wartet auf Entscheidung/);
+      assert.doesNotMatch(r.out, /WIEDERAUFNAHME/);
+    }
+    const ohneLabel = M.fuehreAus([], mit({ state: "OPEN" }));
+    assert.match(ohneLabel.out, /WIEDERAUFNAHME #20/);
+    const ohneSchluessel = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN", labels: [WARTET] } } }).deps);
+    assert.match(ohneSchluessel.out, /WIEDERAUFNAHME #20/);
+  });
+
   test("fuehreAus ohne deps.namen: der Branch mit dem Präfix der Projekt-Config zählt als Ticket, der mit dem fremden nicht", () => {
     const ohne = (branch: string) => ({ ...baue({ refs: [[branch, sek("2026-10-16T03:36:00Z")]], issues: { 21: { state: "OPEN" } } }).deps, namen: undefined });
     const echt = M.fuehreAus([], ohne(`${ECHT.branch}21-x`));
@@ -738,6 +752,11 @@ describe("echteDeps: Config", () => {
     const d = M.echteDeps({ config: AB });
     assert.equal(d.festgefahrenLabel, "zustand:fest");
     assert.match(d.lockDir, /ab-locks$/);
+  });
+  test("entscheidungLabel kommt aus der Config; ohne den optionalen Schlüssel oder leer ist es null", () => {
+    assert.equal(M.echteDeps({ config: { ...AB, labels: { ...AB.labels, entscheidung: "zustand:frage" } } }).entscheidungLabel, "zustand:frage");
+    assert.equal(M.echteDeps({ config: AB }).entscheidungLabel, null);
+    assert.equal(M.echteDeps({ config: { ...AB, labels: { ...AB.labels, entscheidung: "" } } }).entscheidungLabel, null);
   });
   test("Negativfall: ohne labels.festgefahren bricht echteDeps ab und nennt den Schlüssel", () => {
     const { festgefahren: _weg, ...rest } = AB.labels;

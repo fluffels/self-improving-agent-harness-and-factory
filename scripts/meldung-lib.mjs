@@ -35,6 +35,10 @@ export function factoryStand({ zustand, stand }) {
   return `factory: ${tag} (${commit})`;
 }
 
+const STAND_ZEILE = /^factory: .+ \((?:[0-9a-f]{7}|unbekannt)\)$/;
+/** Pur (factory#152): ist `zeile` genau eine Stand-Zeile, wie `factoryStand` sie erzeugt (`factory: <tag> (<7 hex|unbekannt>)` oder `factory: unbekannt (Sync-Stand unlesbar)`)? */
+export const istStandZeile = (zeile) => STAND_ZEILE.test(zeile) || zeile === "factory: unbekannt (Sync-Stand unlesbar)";
+
 /** Pur: der Kommentartext aus den Zeilen und der Stand-Zeile (`null` = ohne Fußzeile). */
 export const meldungsText = (zeilen, stand) => (stand === null ? zeilen.join("\n") : `${zeilen.join("\n")}\n\n${stand}`);
 

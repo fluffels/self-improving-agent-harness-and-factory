@@ -31,6 +31,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.festgefahren` | `status:festgefahren` |
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
+| `labels.entscheidung` | `status:entscheidung-noetig` |
 | `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
