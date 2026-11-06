@@ -230,6 +230,49 @@ describe("main: Ziel-Repo des Labels (#78 L12b)", () => {
   });
 });
 
+describe("main: Wiedervorlage im Bezieher geht ins eigene Repo (factory#215)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const zielFuer = (raw as unknown as { zielFuer: (e: E, config: unknown, o: { repo: string; env?: Record<string, string>; bezieher?: boolean }) => { ziel: string; token?: string; label?: string } }).zielFuer;
+  const FABRIK = "zz-org/zz-fabrik";
+  const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const aufbau = (config: unknown, extra: Record<string, unknown> = {}) => {
+    const platziert: unknown[][] = [];
+    const angelegt: unknown[][] = [];
+    const geladen: unknown[][] = [];
+    const geprueft: unknown[][] = [];
+    const deps = {
+      ladeConfig: () => config,
+      ladeLibs: () => Promise.resolve({ REPO: FREMD.repo, platziereOben: (...a: unknown[]) => platziert.push(a) }),
+      eintraegeLaden: () => [e("a", "2000-01-01")],
+      ticketsLaden: (...a: unknown[]) => (geladen.push(a), [] as T[]),
+      legen: (...a: unknown[]) => (angelegt.push(a.slice(1)), 7),
+      bereite: (z: string[], o: unknown) => (geprueft.push([z, o]), { ok: false, grund: "darf nie gefragt werden" }),
+      log: () => undefined,
+      err: () => undefined,
+      ...extra,
+    };
+    return { platziert, angelegt, geladen, geprueft, deps };
+  };
+  test("zielFuer: Bezieher mit Harness-Label auf einem Fabrik-Board: eigenes Repo, ohne Label, ohne Token-Wechsel; Fabrik unverändert (Negativtest)", () => {
+    const opt = { repo: FREMD.repo, env: { PROJECT_TOKEN: "pt" } };
+    expect(zielFuer(e("a"), fremd, { ...opt, bezieher: true })).toEqual({ ziel: FREMD.repo, token: undefined, label: undefined });
+    expect(zielFuer(e("a"), fremd, { ...opt, bezieher: false })).toEqual({ ziel: FABRIK, token: "pt", label: FREMD.labels.harness });
+  });
+  test("zielFuer: Bezieher, dessen Harness-Label auf das Board des eigenen Repos führt, behält das Label", () => {
+    expect(zielFuer(e("a"), FREMD, { repo: FREMD.repo, env: {}, bezieher: true })).toMatchObject({ ziel: FREMD.repo, label: FREMD.labels.harness });
+  });
+  test("main im Bezieher: legt im eigenen Repo ohne Label an, sortiert dort ein, liest nur dort, keine Sperrprüfung", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const { platziert, angelegt, geladen, geprueft, deps } = aufbau(fremd, { bezieher: true });
+    expect(await main([], deps)).toBe(0);
+    expect(angelegt).toEqual([[undefined, FREMD.repo, undefined]]);
+    expect(geladen.map((g) => g[0])).toEqual([FREMD.repo]);
+    expect(platziert).toEqual([[7, "wiedervorlage", "pt", FREMD.repo]]);
+    expect(geprueft).toEqual([]);
+  });
+});
+
 describe("main: Sperrprüfung bei fremdem Ziel-Repo (factory#153)", () => {
   afterEach(() => vi.unstubAllEnvs());
   const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
