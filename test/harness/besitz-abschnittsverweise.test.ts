@@ -16,6 +16,12 @@
  * Projektanteil-Seite eines Beziehers aber nicht, sieht nur die Vor-Tag-Probe. Die strenge Form („nur Überschriften, deren Anker der
  * Kern verlinkt") hätte heute 21 Funde und steht als Zeile im Sammelticket.
  *
+ * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
+ * (`BEZIEHER_NPM_SKRIPTE`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
+ * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; .mjs-Laufzeittexte
+ * bewusst nicht. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
+ * mit einer `SIH-Bezieher-Migration:`-Zeile.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -47,6 +53,7 @@ const drift = rawDrift as unknown as {
   abschnittTitel: (md: string) => string[][];
   abschnittTrifft: (segment: string, titel: string[][]) => boolean;
   stripFencedCode: (md: string) => string;
+  parseNpmRunMentions: (md: string) => Set<string>;
 };
 const besitz = rawBesitz as unknown as {
   besitzSpannen: (einheiten: Einheit[], pfad: string, text: string) => [number, number][];
@@ -63,24 +70,38 @@ interface Fund {
   segment: string;
 }
 
-/** Alle Verweise aus Besitz-Text, die für einen Bezieher nicht treffen. `wurzel` trägt `.factory/besitz.json`. */
-function scanne(wurzel: string): { funde: Fund[]; verweise: number } {
+interface BesitzDatei {
+  datei: string;
+  text: string;
+  spannen: [number, number][];
+}
+
+/** Gemeinsame Ermittlung (Abschnittsverweise und npm-Kommandos): verteilte Besitz-Dateien samt Spannen. `wurzel` trägt `.factory/besitz.json`. */
+function besitzDateien(wurzel: string, endung: RegExp): { lies: (p: string) => string | null; einheiten: Einheit[]; dateien: BesitzDatei[] } {
   const lies = (p: string): string | null => {
     const a = join(wurzel, p);
     return existsSync(a) && statSync(a).isFile() ? readFileSync(a, "utf8").replace(/\r/g, "") : null;
   };
   const manifest = JSON.parse(lies(".factory/besitz.json") ?? "{}") as { eintraege: Einheit[] };
   const einheiten = manifest.eintraege.filter(besitz.wirdVerteilt).filter((e) => e.schluessel === undefined);
+  const dateien: BesitzDatei[] = [];
+  for (const datei of new Set(einheiten.map((e) => e.pfad))) {
+    if (!endung.test(datei) || /^docs\/adr\//.test(datei) || /\d{4}-\d{2}-\d{2}/.test(datei)) continue;
+    const text = lies(datei);
+    if (text !== null) dateien.push({ datei, text, spannen: besitz.besitzSpannen(einheiten, datei, text) });
+  }
+  return { lies, einheiten, dateien };
+}
+
+/** Alle Verweise aus Besitz-Text, die für einen Bezieher nicht treffen. `wurzel` trägt `.factory/besitz.json`. */
+function scanne(wurzel: string): { funde: Fund[]; verweise: number } {
+  const { lies, einheiten, dateien } = besitzDateien(wurzel, /\.(md|mjs|cjs|js)$/);
   const ganzeDateien = new Set(einheiten.filter(besitz.istGanzeDatei).map((e) => e.pfad));
   const agents = lies("AGENTS.md");
   const kernTitel = drift.abschnittTitel(agents === null ? "" : (besitz.einheitText({ pfad: "AGENTS.md", block: "kern" }, agents) ?? ""));
   const funde: Fund[] = [];
   let verweise = 0;
-  for (const datei of new Set(einheiten.map((e) => e.pfad))) {
-    if (!/\.(md|mjs|cjs|js)$/.test(datei) || /^docs\/adr\//.test(datei) || /\d{4}-\d{2}-\d{2}/.test(datei)) continue;
-    const text = lies(datei);
-    if (text === null) continue;
-    const spannen = besitz.besitzSpannen(einheiten, datei, text);
+  for (const { datei, text, spannen } of dateien) {
     for (const v of drift.abschnittVerweise(text, { istMarkdown: datei.endsWith(".md") })) {
       if (!spannen.some(([a, b]) => v.index >= a && v.index <= b)) continue;
       const ziel = [v.pfad, posix.join(posix.dirname(datei), v.pfad)].find((p) => lies(p) !== null);
@@ -212,5 +233,70 @@ describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
     const { funde, verweise } = scanne(ROOT);
     assert.ok(verweise > 20, `Scan extrahiert nur ${verweise} Verweise: Muster oder Umfang kaputt (Leerlauf)`);
     assert.deepEqual(funde, [], `Verweise ohne Treffer in der Bezieher-Sicht:\n${funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment}`).join("\n")}`);
+  });
+});
+
+/** Skripte, die jedes Bezieher-Repo aus der Grundausstattung hat; nur diese darf Besitz-Text als `npm run <x>` nennen (alles andere: `node scripts/<x>.mjs`). */
+const BEZIEHER_NPM_SKRIPTE = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
+
+/** Gemerkte `npm run`-Namen in Besitz-Spannen verteilter `.md`-Einheiten, die ein Bezieher nicht hat. */
+function scanneKommandos(wurzel: string): { funde: { datei: string; name: string }[]; erwaehnungen: number } {
+  const funde: { datei: string; name: string }[] = [];
+  let erwaehnungen = 0;
+  for (const { datei, text, spannen } of besitzDateien(wurzel, /\.md$/).dateien) {
+    const innen = spannen.map(([a, b]) => text.slice(a, b + 1)).join("\n");
+    for (const name of drift.parseNpmRunMentions(innen)) {
+      erwaehnungen++;
+      if (!BEZIEHER_NPM_SKRIPTE.has(name)) funde.push({ datei, name });
+    }
+  }
+  return { funde, erwaehnungen };
+}
+
+const NPM_MANIFEST = (ring: string, pfad = "skill.md"): string => MANIFEST([{ pfad, ring }]);
+
+describe("npm-Kommandos in Besitz-Text aus Sicht des Beziehers", () => {
+  test("ein Kommando außerhalb der Grundausstattung in Kern-.md ist ein Fund", () => {
+    const wurzel = fixture({ ".factory/besitz.json": NPM_MANIFEST("kern"), "skill.md": "Starte `npm run neu`.\n" });
+    assert.deepEqual(scanneKommandos(wurzel).funde, [{ datei: "skill.md", name: "neu" }]);
+  });
+
+  test("ein Kommando der Grundausstattung ist kein Fund", () => {
+    const wurzel = fixture({ ".factory/besitz.json": NPM_MANIFEST("kern"), "skill.md": "Starte `npm run check:docdrift`.\n" });
+    assert.deepEqual(scanneKommandos(wurzel), { funde: [], erwaehnungen: 1 });
+  });
+
+  test("npm test in Kern-.md ist ein Fund (Name test)", () => {
+    const wurzel = fixture({ ".factory/besitz.json": NPM_MANIFEST("kern"), "skill.md": "Dann `npm test`.\n" });
+    assert.deepEqual(scanneKommandos(wurzel).funde, [{ datei: "skill.md", name: "test" }]);
+  });
+
+  test("Block-Spanne: im Kern-Block ein Fund, im Projekt-Teil von AGENTS.md keiner", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "AGENTS.md": KERN("Kern mit `npm run imkern`.") + "Projekt: `npm run improjekt`\n",
+    });
+    assert.deepEqual(scanneKommandos(wurzel).funde, [{ datei: "AGENTS.md", name: "imkern" }]);
+  });
+
+  test("Orakel: die Erlaubnisliste ist genau die Grundausstattung (wächst nur mit SIH-Bezieher-Migration:-Zeile)", () => {
+    const quelle = ["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"];
+    assert.deepEqual([...BEZIEHER_NPM_SKRIPTE].sort(), quelle);
+  });
+
+  test("eine nicht verteilte Einheit (Ring oberflaeche) wird ignoriert", () => {
+    const wurzel = fixture({ ".factory/besitz.json": NPM_MANIFEST("oberflaeche"), "skill.md": "Starte `npm run neu`.\n" });
+    assert.deepEqual(scanneKommandos(wurzel), { funde: [], erwaehnungen: 0 });
+  });
+
+  test("Grenze: ein Kommando in Kern-.mjs-Text wird bewusst nicht gescannt", () => {
+    const wurzel = fixture({ ".factory/besitz.json": NPM_MANIFEST("kern", "scripts/x.mjs"), "scripts/x.mjs": "// npm run neu\n" });
+    assert.deepEqual(scanneKommandos(wurzel), { funde: [], erwaehnungen: 0 });
+  });
+
+  test("echtes Repo: Besitz-Text nennt nur Grundausstattungs-Skripte (und der Scan ist nicht leer)", () => {
+    const { funde, erwaehnungen } = scanneKommandos(ROOT);
+    assert.ok(erwaehnungen >= 5, `Scan findet nur ${erwaehnungen} Erwähnungen: Umfang kaputt (Leerlauf)`);
+    assert.deepEqual(funde, [], `npm-Kommandos, die ein Bezieher nicht hat (stattdessen node scripts/<x>.mjs):\n${funde.map((f) => `${f.name} <- ${f.datei}`).join("\n")}`);
   });
 });

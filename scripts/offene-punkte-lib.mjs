@@ -15,7 +15,7 @@ import { istStandZeile } from "./meldung-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 
-/** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Mechanik: docs/ticket-reihenfolge.md › Offene Punkte der Maintainerin). */
+/** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Weg: ADR 0031, Fortschreibung zu factory#152). */
 export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
 
 /** Die Gruppen in fester Reihenfolge. */
