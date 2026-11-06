@@ -1,4 +1,4 @@
-/* Rollen-Schalter-Wächter (factory#154, Fortschreibung zu ADR 0022): verteilter Code unterscheidet Fabrik und Bezieher nur über `istBezieher(wurzel)` aus `scripts/sync-stand-lib.mjs`.
+/* Rollen-Schalter-Wächter (factory#154, Fortschreibung zu ADR 0022): verteilter Code unterscheidet Fabrik und Bezieher über `istBezieher(wurzel)` aus `scripts/sync-stand-lib.mjs` (Prüfer dürfen über den Format-Leser auf `zustand` verzweigen).
  *
  * Eine eigene Probe im Kern (Datei-Aufruf auf den Sync-Stand, nacktes Pfad-Literal) wäre eine unmarkierte Fabrik-Abweichung: sie umgeht die fail-closed-Definition des Schalters.
  * Rot wird jede Zeile einer verteilten Skript-Datei (`.mjs`, `.cjs`, `.js` laut `.factory/besitz.json`), die
@@ -59,9 +59,23 @@ describe("Rollen-Schalter (factory#154)", () => {
     expect(rollenProben("scripts/x.mjs", "const s = statSync(STAND_PFAD);")).toHaveLength(1);
   });
 
+  test.each(["existsSync", "statSync", "lstatSync", "accessSync", "readFileSync", "openSync"])("M1: %s mit STAND_PFAD wird rot (ohne Literal, damit M2 den Fall nicht verdeckt)", (fn) => {
+    expect(rollenProben("scripts/x.mjs", `const s = ${fn}(join(w, STAND_PFAD));`)).toHaveLength(1);
+  });
+
   test("M2: nacktes Pfad-Literal wird rot, mit einfachen und doppelten Anführungszeichen", () => {
     expect(rollenProben("scripts/x.mjs", 'const p = ".factory/sync-stand.json";')).toHaveLength(1);
     expect(rollenProben("scripts/x.mjs", "const p = 'sync-stand.json';")).toHaveLength(1);
+  });
+
+  test("Kommentar am Zeilenende zählt (fail-closed), ein Blockkommentar-Anfang nimmt die Zeile aus", () => {
+    expect(rollenProben("scripts/x.mjs", "existsSync(STAND_PFAD); // Kommentar")).toHaveLength(1);
+    expect(rollenProben("scripts/x.mjs", "/* existsSync(STAND_PFAD) */")).toEqual([]);
+  });
+
+  test("M2 trifft nur das exakte Literal: längerer String in gleichen oder gemischten Anführungszeichen bleibt grün", () => {
+    expect(rollenProben("scripts/x.mjs", 'err("kein .factory/sync-stand.json gefunden");')).toEqual([]);
+    expect(rollenProben("scripts/x.mjs", `const p = "sync-stand.json';`)).toEqual([]);
   });
 
   test("grün: istBezieher, Kommentarzeile, Pfad in längerem String, Inhaltsleser über injizierten Leser, Heimatdatei", () => {
