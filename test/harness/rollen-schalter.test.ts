@@ -77,6 +77,7 @@ describe("Rollen-Schalter (factory#154)", () => {
     expect(rollenProben("scripts/x.mjs", 'err("kein .factory/sync-stand.json gefunden");')).toEqual([]);
     expect(rollenProben("scripts/x.mjs", `const p = "sync-stand.json';`)).toEqual([]);
     expect(rollenProben("scripts/x.mjs", 'const p = "sync-stand.json.bak";')).toEqual([]);
+    expect(rollenProben("scripts/x.mjs", 'const p = "Pfad: .factory/sync-stand.json";')).toEqual([]);
   });
 
   test("grün: istBezieher, Kommentarzeile, Pfad in längerem String, Inhaltsleser über injizierten Leser, Heimatdatei", () => {
