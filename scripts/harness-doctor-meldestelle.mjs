@@ -5,7 +5,7 @@
  *   - Die Meldestelle muss mit dem Token lesbar sein, Issues haben (`has_issues`) und darf nicht archiviert sein; ein Lesefehler (403, 404, Netz) ist `NICHT PRÜFBAR`, nie still grün.
  *
  * Grenze: das Schreibrecht belegt der Punkt nicht (die REST-Antwort trägt es für fein granulare Tokens nicht zuverlässig); ein Post-Fehler meldet `schreibrechtText` beim Senden.
- * `lesen(args, token)` ist die `gh`-Naht (liefert die geparste Antwort, wirft bei einem Fehler); `mitMeldestelle` hängt den Punkt an die Dateipunkte des Doctors (`dateien({ rootDir, config })`).
+ * `lesen(args, token)` ist die `gh`-Naht (liefert die geparste Antwort, wirft bei einem Fehler); `mitMeldestelle` hängt den Punkt an die Dateipunkte des Doctors (`dateien({ rootDir, config, spiegel, workflows, pflichtChecks })`, im Vorab-Abbruch `dateien({ rootDir, vorAbbruch: true })`).
  */
 import { fehlerText } from "./gh-cli.mjs";
 import { luecke, gut, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";

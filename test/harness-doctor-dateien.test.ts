@@ -12,9 +12,9 @@ import { fixture } from "./support/tmp-fixture";
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[] }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
 const DATEI_PUNKTE = rawDateiPunkte as readonly string[];
-const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[] }) => Ergebnis;
+const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis;
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
 const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
@@ -508,7 +508,7 @@ describe("Required-Check-Quellen (factory#148)", () => {
     expect(ohne.befund).not.toContain("nicht geladen");
   });
   test("factory#220 L19: pruefeDateien reicht vorAbbruch an den Punkt durch", () => {
-    const e = pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {}, vorAbbruch: true } as never);
+    const e = pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {}, vorAbbruch: true });
     expect(punkt(e, "Required-Check-Quellen").befund).toContain("nicht geladen");
   });
   test("ohne die neuen Felder (Abbruchpfad) ist der Punkt nicht prüfbar statt grün", () => {

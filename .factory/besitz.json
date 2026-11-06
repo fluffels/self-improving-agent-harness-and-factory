@@ -180,6 +180,7 @@
     {"pfad":"scripts/harness-doctor-dateien.mjs","ring":"kern","quelle":"Plan factory#94 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/workflow-blockform.mjs","ring":"kern","quelle":"Blockform-Leser des Doctor-Punkts Required-Check-Quellen (factory#148)"},
     {"pfad":"scripts/harness-doctor-meldestelle.mjs","ring":"kern","quelle":"Doctor-Punkt Meldestelle (factory#208 L8)"},
+    {"pfad":"scripts/harness-doctor-factory-update.mjs","ring":"kern","quelle":"Doctor-Punkt Factory-Update (factory#220 L39)"},
     {"pfad":"scripts/harness-doctor-ergebnis.mjs","ring":"kern","quelle":"Gemeinsame Ergebnis-Form der Doctor-Punkte (factory#127 L15a)"},
     {"pfad":"scripts/meldung-lib.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},
     {"pfad":"scripts/melden.mjs","ring":"kern","quelle":"Meldestelle (factory#153)"},

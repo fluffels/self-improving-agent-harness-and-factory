@@ -248,8 +248,11 @@ export function gezielterTestPunkt(config) {
 }
 
 /** Punkt `Required-Check-Quellen` (factory#148): jeder Kontext aus `pflichtChecks` hat genau eine Quelle in `workflows` (`[{ pfad, text }]`). Pur: liest nichts selbst. */
-export function requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks }) {
+export function requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks, vorAbbruch = false }) {
   const punkt = "Required-Check-Quellen";
+  if (vorAbbruch) {
+    return nichtPruefbar(punkt, "Config bzw. Ruleset-Spiegel nicht geladen (Abbruch oben): die Soll-Liste der Required-Checks ist unbekannt", "erst den Config- bzw. Spiegel-Fehler oben beheben, dann erneut prüfen");
+  }
   if (spiegel === undefined || spiegel === null) {
     return nichtPruefbar(punkt, "kein Ruleset-Spiegel (`rulesetSpiegel` fehlt): die Soll-Liste der Required-Checks ist unbekannt", "`rulesetSpiegel` in der Projekt-Config setzen und die Vorlage `.github/ruleset-main-schutz.json` der Quelle übernehmen (Anleitung: Seite docs/erstbezug.md des Factory-Repos), dann erneut prüfen");
   }
@@ -279,14 +282,14 @@ export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
  * ohne sie ist `Required-Check-Quellen` nicht prüfbar.
  */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [] }) {
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
   const punkte = {
     "Root-Kontextdatei": () => kontextPunkt(rootDir, existiert),
     Zeilenenden: () => zeilenendenPunkt(git),
     Projektdateien: () => projektdateienPunkt(rootDir, existiert),
     "Langfuse-Takt": () => langfuseTaktPunkt(rootDir, existiert, config),
     "Gezielter Test": () => gezielterTestPunkt(config),
-    "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks }),
+    "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks, vorAbbruch }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }
