@@ -380,6 +380,8 @@ describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStan
     expect(lib.istStandZeile("factory: v1 (ZZZ)")).toBe(false);
     expect(lib.istStandZeile("factory: v1 (abcdef0) danach Text")).toBe(false);
     expect(lib.istStandZeile("factory: v1 (abcdef)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (abcdefg)")).toBe(false);
+    expect(lib.istStandZeile("factory: v1 (ABCDEF0)")).toBe(false);
     expect(lib.istStandZeile("factory: v1 (abcdef012)")).toBe(false);
     expect(lib.istStandZeile("")).toBe(false);
     expect(lib.istStandZeile(undefined as unknown as string)).toBe(false);
