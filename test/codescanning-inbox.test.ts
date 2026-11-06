@@ -1231,4 +1231,14 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
     expect(kontexte).toEqual([[{ repo: "o/r", titel: REST }]]);
     expect(gepostet).toEqual([[8, "GEPRUEFT", "o/r", undefined]]);
   });
+  test("Bezieher: fehlt das Rest-Ticket, legt das injizierte gh es im eigenen Repo an (die gh-Naht von main erreicht sicherheitsLibs)", async () => {
+    const { gepostet, deps } = aufbau({ bezieher: true });
+    const create: string[][] = [];
+    const gh = { text: (a: string[]) => (create.push(a), "https://github.com/o/r/issues/41\n"), json: () => ({}) };
+    const libs = await (deps.ladeLibs as () => Promise<Record<string, unknown>>)();
+    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: () => [], platziereAmEnde: () => undefined });
+    expect(await main([], { ...deps, gh })).toBe(0);
+    expect(create.filter((a) => a[1] === "create" && a[3] === "o/r")).toHaveLength(1);
+    expect(gepostet).toEqual([[41, "GEPRUEFT", "o/r", undefined]]);
+  });
 });

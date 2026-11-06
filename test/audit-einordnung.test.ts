@@ -298,4 +298,22 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
     expect(fab.kontexte).toEqual([[]]);
     expect(fab.gepostet).toEqual([[8, "GEPRUEFT"]]);
   });
+  test("Bezieher: fehlt das Rest-Ticket, legt das injizierte gh es im eigenen Repo an (die gh-Naht von main erreicht sicherheitsLibs)", async () => {
+    const bez = aufbau({ bezieher: true });
+    const create: string[][] = [];
+    const gh = { text: (a: string[]) => (create.push(a), "https://github.com/o/r/issues/41\n"), json: () => ({}) };
+    const libs = await (bez.deps.ladeLibs as () => Promise<Record<string, unknown>>)();
+    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: () => [], platziereAmEnde: () => undefined });
+    expect(await main([], { ...bez.deps, gh })).toBe(0);
+    expect(create.map((a) => a.slice(0, 4).join(" "))).toEqual(["issue create --repo o/r"]);
+    expect(bez.gepostet).toEqual([[41, "GEPRUEFT", "o/r", undefined]]);
+  });
+  test("Bezieher: kennt die Zweitabfrage das Rest-Ticket schon, ist kein Ticket da: Exit 1, nichts gepostet (null vertragen)", async () => {
+    const bez = aufbau({ bezieher: true });
+    const libs = await (bez.deps.ladeLibs as () => Promise<Record<string, unknown>>)();
+    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: () => [{ number: 9, titel: REST }] });
+    expect(await main([], { ...bez.deps, gh: { text: () => { throw new Error("nichts anlegen"); }, json: () => ({}) } })).toBe(1);
+    expect(bez.gepostet).toEqual([]);
+    expect(bez.log.join("\n")).toContain("::error::Kein ungeclaimtes");
+  });
 });
