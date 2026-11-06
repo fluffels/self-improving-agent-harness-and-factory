@@ -138,10 +138,16 @@ export function erlaubt(
   begriffe: Record<string, RegExp>,
 ): Baseline {
   const out: Baseline = {};
+  // Mehrere Einheiten einer Datei (Blöcke, Schlüssel) lesen den Basistext nur einmal: je Aufruf ein git-Prozess (L15i, Flake unter Last).
+  const gelesen = new Map<string, string | null>();
+  const basisEinmal = (alt: string): string | null => {
+    if (!gelesen.has(alt)) gelesen.set(alt, basisText(alt));
+    return gelesen.get(alt) ?? null;
+  };
   for (const e of einheiten) {
     if (!aenderungen.has(e.pfad)) continue;
     const alt = aenderungen.get(e.pfad) ?? null;
-    const text = alt === null ? null : basisText(alt);
+    const text = alt === null ? null : basisEinmal(alt);
     const t = text === null ? null : einheitText(e, text);
     out[einheitId(e)] = t === null ? {} : zaehle(t, begriffe);
   }
@@ -642,6 +648,14 @@ describe("parseNameStatus / erlaubt / anhebungen", () => {
     const text = `${markerStart("b")} demo ${markerEnde("b")}`;
     assert.deepEqual(erlaubt([e], aen, () => text, B), { "a.mjs#b": { Repo: 1 } });
     assert.deepEqual(erlaubt([e], aen, () => "ohne Marker", B), { "a.mjs#b": {} });
+  });
+  test("mehrere Einheiten einer Datei lesen den Basistext einmal (ein git-Aufruf je Pfad, factory#215)", () => {
+    const aen = new Map<string, string | null>([["a.mjs", "a.mjs"]]);
+    const aufrufe: string[] = [];
+    const text = `${markerStart("b")} demo ${markerEnde("b")}${markerStart("c")} acme ${markerEnde("c")}`;
+    const erl2 = erlaubt([ein("a.mjs", { block: "b" }), ein("a.mjs", { block: "c" })], aen, (p) => (aufrufe.push(p), text), B);
+    assert.deepEqual(erl2, { "a.mjs#b": { Repo: 1 }, "a.mjs#c": { Owner: 1 } });
+    assert.deepEqual(aufrufe, ["a.mjs"]);
   });
 });
 
