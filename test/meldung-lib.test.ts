@@ -382,7 +382,8 @@ describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStan
   test("Negativfälle an den Klammern und am Literal der unlesbaren Stand-Zeile", () => {
     expect(lib.istStandZeile("factory: v1 [abcdef0)")).toBe(false);
     expect(lib.istStandZeile("factory: v1 (abcdef0]")).toBe(false);
-    expect(lib.istStandZeile("factory: v1 (abc:/`0)")).toBe(false);
+    for (const zeichen of ["/", ":", "`"]) expect(lib.istStandZeile(`factory: v1 (abcde${zeichen}0)`)).toBe(false);
+    for (const klammerInhalt of ["", "x", "unbekanntunbekannt"]) expect(lib.istStandZeile(`factory: v1 (${klammerInhalt})`)).toBe(false);
     expect(lib.istStandZeile("factory: unbekannt (Sync-Stand unlesbar) danach Text")).toBe(false);
     expect(lib.istStandZeile("siehe factory: unbekannt (Sync-Stand unlesbar)")).toBe(false);
   });
