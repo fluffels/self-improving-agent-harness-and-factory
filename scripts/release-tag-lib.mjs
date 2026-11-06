@@ -23,7 +23,7 @@ export function vergleicheTags(tags) {
 /** Hinweis für den Sync-Schritt (Tag-Ticket und Update-Meldung): das eigene Werkzeug kennt ein neues Manifest-Format womöglich noch nicht. */
 export const WERKZEUG_HINWEIS = "Scheitert das eigene Werkzeug am neuen Manifest („version N unbekannt“), einmal das Werkzeug der Quelle fahren: `node <quelle>/scripts/factory-sync.mjs --quelle <quelle> --tag <tag>`.";
 
-const schritt = (id, befehl, erklaerung = "", mechanisch = false) => ({ id, befehl, text: `\`${befehl}\`${erklaerung}`, ...(mechanisch ? { mechanisch } : {}) });
+const schritt = (id, befehl, erklaerung, mechanisch = false) => ({ id, befehl, text: `\`${befehl}\`${erklaerung}`, ...(mechanisch ? { mechanisch } : {}) });
 
 /**
  * Die Schritte nach einem Tag-Sync in fester Reihenfolge (factory#208: ein bloßer Sync macht keinen Bezieher grün), einzige Quelle für die Update-Meldung (`factory-update-check.mjs`)
