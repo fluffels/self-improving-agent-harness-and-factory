@@ -102,6 +102,23 @@ export function arbeitsplatzMaengel(block, { worktreePraefix } = {}) {
 
 const posixAus = (pfad) => pfad.replace(/\\/g, "/").replace(/(?<=.)\/+$/, "");
 
+const WORKTREES_ANFANG = String.raw`[\\/]\.claude[\\/]worktrees[\\/]`;
+const WORKTREE_ENDEN = {
+  eingebettet: new RegExp(`${WORKTREES_ANFANG}[^\\\\/]+$`),
+  arbeitsplatz: new RegExp(`${WORKTREES_ANFANG}${REPO_NAME_QUELLE}[\\\\/][^\\\\/]+$`),
+  beliebig: new RegExp(`${WORKTREES_ANFANG}.*$`),
+};
+
+/**
+ * Pur, die eine Ableitung der Hauptwurzel (factory#220 L15c): `pfad` ohne abschließende Schrägstriche und ohne den Worktree-Teil `.claude/worktrees/…`. `modus`:
+ * `eingebettet` (Standard) kürzt genau `<name>`, `arbeitsplatz` genau `<repo>/<name>` (ein tieferer Pfad bleibt unverändert, er wäre sonst nicht von einem Worktree zu unterscheiden),
+ * `beliebig` alles nach `.claude/worktrees/` (ein Pfad in einem Worktree zählt als Hauptrepo).
+ */
+export const hauptWurzelAus = (pfad, modus = "eingebettet") => String(pfad).replace(/[\\/]+$/, "").replace(WORKTREE_ENDEN[modus], "");
+
+/** Pur: Ordnername, wie Claude Code ihn aus einem Pfad bildet (jedes Nicht-Alphanumerische wird `-`). */
+export const ordnerSlug = (pfad) => String(pfad).replace(/[^a-zA-Z0-9]/g, "-");
+
 /** Pur: hat die Config einen Block `arbeitsplatz` (Betriebsart Arbeitsplatz)? Ohne Block, ohne Config und bei `null` ist es eingebettet. Die eine Quelle dieser Prüfung. */
 export const istArbeitsplatz = (config) => config?.arbeitsplatz !== undefined;
 

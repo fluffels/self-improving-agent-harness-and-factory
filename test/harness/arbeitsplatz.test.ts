@@ -441,6 +441,21 @@ describe("Standardzweig je Repo (#88)", () => {
     expect(ist({ ...FREMD, arbeitsplatz: undefined })).toBe(false);
   });
 
+  test("hauptWurzelAus und ordnerSlug (factory#220 L15c): drei Modi, eine Ableitung; Namensvetter und Fremdpfade bleiben", () => {
+    const h = (libRaw as unknown as { hauptWurzelAus: (p: string, m?: string) => string }).hauptWurzelAus;
+    const slug = (libRaw as unknown as { ordnerSlug: (p: string) => string }).ordnerSlug;
+    expect(h("/p/.claude/worktrees/wt-1/")).toBe("/p");
+    expect(h("/p/.claude/worktrees/wt-1/sub")).toBe("/p/.claude/worktrees/wt-1/sub");
+    expect(h("/p/.claude/worktrees/web/wt-1", "arbeitsplatz")).toBe("/p");
+    expect(h("/p/.claude/worktrees/wt-1", "arbeitsplatz")).toBe("/p/.claude/worktrees/wt-1");
+    expect(h("/p/.claude/worktrees/web/wt-1")).toBe("/p/.claude/worktrees/web/wt-1");
+    expect(h("/p/.claude/worktrees/wt-1/sub/tief", "beliebig")).toBe("/p");
+    expect(h("X:\\p\\.claude\\worktrees\\wt-1\\x", "beliebig")).toBe("X:\\p");
+    expect(h("/p/.claude/worktreesX/wt-1", "beliebig")).toBe("/p/.claude/worktreesX/wt-1");
+    expect(h("/p/", "beliebig")).toBe("/p");
+    expect(slug("X:\\dev\\a.b/c")).toBe("X--dev-a-b-c");
+  });
+
   test("worktreeBefehl im Arbeitsplatz basiert auf origin/<Standardzweig>, eingebettet bleibt origin/main", () => {
     const n = N.ticketNamen(FREMD);
     const ap = L.arbeitsplatzAus({ ...FREMD, arbeitsplatz: { wurzel: ".", repos: [{ name: "web", pfad: "web", standardzweig: "develop" }, { name: "api", pfad: "api" }] } }, "/basis");

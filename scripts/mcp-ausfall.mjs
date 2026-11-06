@@ -15,7 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { REPO_NAME_QUELLE, istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
+import { hauptWurzelAus, istArbeitsplatz, ordnerSlug } from "./arbeitsplatz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
@@ -53,7 +53,7 @@ export function fehlendeVariablen(server, env) {
 }
 
 /** Ordnername, wie Claude Code ihn aus einem Pfad bildet. Pur. */
-export const slug = (pfad) => String(pfad).replace(/[^a-zA-Z0-9]/g, "-");
+export const slug = ordnerSlug;
 
 /** Basisordner der Claude-Code-Logs je Plattform; `FACTORY_MCP_LOG_DIR` hat Vorrang. Liest den Altpräfix lazy aus der Config (Fehler egal). */
 export function logBasis({ plattform, env, home }) {
@@ -64,15 +64,11 @@ export function logBasis({ plattform, env, home }) {
   return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
 }
 
-/** Worktree-Ordner unter `.claude/worktrees/`: eingebettet `<name>`, im Arbeitsplatz `<repo>/<name>` (Repo-Segment, factory#89). */
-const EINGEBETTET_ENDE = /[\\/]\.claude[\\/]worktrees[\\/][^\\/]+$/;
-const ARBEITSPLATZ_ENDE = new RegExp(String.raw`[\\/]\.claude[\\/]worktrees[\\/]${REPO_NAME_QUELLE}[\\/][^\\/]+$`);
-
 /**
  * Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf (`.claude/worktrees/<name>`). Mit `mitArbeitsplatz` (Config mit Block `arbeitsplatz`)
  * ist es die Arbeitsplatz-Wurzel und der Worktree liegt unter `.claude/worktrees/<repo>/<name>`; ohne die Angabe lässt der Aufbau `<repo>/<name>` den Pfad unverändert (er wäre sonst nicht von einem tieferen Pfad zu unterscheiden). Pur.
  */
-export const hauptWurzel = (wurzel, mitArbeitsplatz = false) => String(wurzel).replace(/[\\/]+$/, "").replace(mitArbeitsplatz ? ARBEITSPLATZ_ENDE : EINGEBETTET_ENDE, "");
+export const hauptWurzel = (wurzel, mitArbeitsplatz = false) => hauptWurzelAus(wurzel, mitArbeitsplatz ? "arbeitsplatz" : "eingebettet");
 
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<praefixe.worktree>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
