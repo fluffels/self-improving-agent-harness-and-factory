@@ -16,6 +16,12 @@
  * Projektanteil-Seite eines Beziehers aber nicht, sieht nur die Vor-Tag-Probe. Die strenge Form („nur Überschriften, deren Anker der
  * Kern verlinkt") hätte heute 21 Funde und steht als Zeile im Sammelticket.
  *
+ * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
+ * (`BEZIEHER_NPM_SKRIPTE`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
+ * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; .mjs-Laufzeittexte
+ * bewusst nicht. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
+ * mit einer `SIH-Bezieher-Migration:`-Zeile.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
