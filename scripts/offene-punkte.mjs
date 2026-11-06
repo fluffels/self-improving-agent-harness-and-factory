@@ -5,7 +5,7 @@
  *   node scripts/offene-punkte.mjs [--json] [--wurzel <pfad>]
  *
  * Exit 0: alle Gruppen prüfbar (auch mit offenen Punkten); 1: mindestens eine Gruppe NICHT PRÜFBAR (nie leer und grün); 2: Aufruf- oder Config-Fehler (mit Fix).
- * Logik und JSON-Vertrag: `offene-punkte-lib.mjs`; Mechanik und Gruppen: docs/ticket-reihenfolge.md › Offene Punkte der Maintainerin.
+ * Logik, Gruppen und JSON-Vertrag: Kopf von `offene-punkte-lib.mjs`.
  */
 import { resolve } from "node:path";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
