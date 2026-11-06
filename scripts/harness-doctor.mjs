@@ -14,7 +14,7 @@
  * Je Punkt eine Zeile mit drei möglichen Ausgängen: `OK <Punkt>`, `LÜCKE <Punkt>: <Befund> Fix: <Anweisung>` oder `NICHT PRÜFBAR <Punkt>: <Grund> Fix: <Anweisung>` (der
  * Zustand ist nicht belegbar: Endpunkt-Fehler oder fehlendes Feld, nie still grün). Exit 0 ohne Lücke und ohne nicht prüfbaren Punkt, 1 mit mindestens einem von beiden
  * (die Summenzeile zählt beide getrennt), 2 bei Aufruf-Fehler oder unlesbarer Config bzw. unlesbarem Ruleset-Spiegel (dann ohne einen einzigen gh-Aufruf).
- * Die Dateipunkte `Root-Kontextdatei`, `Zeilenenden`, `Projektdateien`, `Langfuse-Takt` und `Gezielter Test` (factory#94, factory#170, factory#208, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index, die geschlossene Liste der vom Sync nicht gelieferten Dateien, Workflow `board-takt.yml` und Skript `langfuse-takt.mjs` angekommen, `befehle.testGezielt` bei Nicht-JS/TS-Endungen), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
+ * Die Dateipunkte `Root-Kontextdatei`, `Zeilenenden`, `Projektdateien`, `Langfuse-Takt`, `Gezielter Test` und `Required-Check-Quellen` (factory#94, factory#170, factory#208, factory#148, harness-doctor-dateien.mjs) prüfen die Projektdateien des Beziehers (keine CLAUDE.md im Root, eol-Regeln und LF im Index, die geschlossene Liste der vom Sync nicht gelieferten Dateien, Workflow `board-takt.yml` und Skript `langfuse-takt.mjs` angekommen, `befehle.testGezielt` bei Nicht-JS/TS-Endungen, jeder Required-Check-Kontext genau eine Quelle unter `.github/workflows/`, gelesen ohne `yaml`), brauchen kein Token und laufen auch im Wochenlauf, nicht in `--einrichten`.
  * Die acht Sicherheitspunkte (Secret Scanning, Push Protection, Non-Provider-Patterns, Validity Checks, PVR, Dependabot Security Updates, Code-Scanning,
  * SHA-Pinning; dazu der Punkt `Sicherheits-Module` (factory#119, `modulPunkt` in harness-doctor-lib.mjs: fehlender Schlüssel `module` ist eine Lücke, eine Teilauswahl OK mit HINWEIS, ein nicht lesbares Manifest NICHT PRÜFBAR); factory#116, harness-doctor-sicherheit.mjs) stehen immer da; `--einrichten` ändert sie nie, nur `ANLEITUNG … Link: …`. Reines Node-Skript ohne Modell-Tokens; `gh` und
  * der Langfuse-Aufruf sind injizierbar (Tests laufen ohne Netz). Alles Projektspezifische kommt zur Laufzeit aus `.factory/projekt.json`
@@ -167,7 +167,7 @@ function pruefWurzel(rootDir, config) {
 /** Bricht die Config-Ladung ab (Exit 2), zeigen die Dateipunkte trotzdem, was im Projekt fehlt (sie brauchen weder Config noch gh). Ein Fehler dort bleibt still, der Config-Fehler zählt. */
 function dateipunkteVorAbbruch({ dateien, rootDir, out }) {
   try {
-    for (const p of dateien({ rootDir })) if (!p.ok) out(`LÜCKE ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
+    for (const p of dateien({ rootDir })) if (!p.ok) out(`${p.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${p.punkt}: ${einzeilig(p.befund)} Fix: ${p.fix}`);
   } catch {
     /* der Config-Fehler wird gleich gemeldet */
   }

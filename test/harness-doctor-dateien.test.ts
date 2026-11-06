@@ -6,12 +6,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe } from "../scripts/harness-doctor-dateien.mjs";
+import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt } from "../scripts/harness-doctor-dateien.mjs";
 import { fixture } from "./support/tmp-fixture";
 
+interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[] }) => Ergebnis[];
+const DATEI_PUNKTE = rawDateiPunkte as readonly string[];
+const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[] }) => Ergebnis;
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
 const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
@@ -34,14 +37,16 @@ function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
 }
 const TAKT_DATEIEN = [".github/workflows/board-takt.yml", "scripts/langfuse-takt.mjs"];
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
+/** Gesunde Quellen für `Required-Check-Quellen`: ein Kontext mit genau einer Quelle. */
+const GESUND = { spiegel: { requiredChecks: ["Beispiel Check"] }, workflows: [{ pfad: "ci.yml", text: "jobs:\n  a:\n    name: Beispiel Check\n" }], pflichtChecks: ["Beispiel Check"] };
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
+  pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
-  test("ohne blockierende Datei: OK, und alle fünf Punkte stehen immer da", () => {
+  test("ohne blockierende Datei: OK, und alle Punkte der Liste stehen immer da", () => {
     const e = lauf(gesund);
-    expect(e.map((p) => p.punkt)).toEqual(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test"]);
+    expect(e.map((p) => p.punkt)).toEqual([...DATEI_PUNKTE]);
     expect(e.every((p) => p.ok)).toBe(true);
   });
 
@@ -379,5 +384,121 @@ describe("Gezielter Test (factory#208 L23)", () => {
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: {} }).ok).toBe(false);
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { verify: "x" } }).ok).toBe(false);
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { testGezielt: "  " } }).ok).toBe(false);
+  });
+});
+
+describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
+  test("pruefeDateien liefert genau diese Punkte in dieser Reihenfolge: gesund, alles fehlt, werfendes Git", () => {
+    const werfend: Git = () => {
+      throw new Error("kein git");
+    };
+    expect(lauf(gesund).map((p) => p.punkt)).toEqual([...DATEI_PUNKTE]);
+    expect(pruefe({ rootDir: "/x", git: fakeGit([]), existiert: () => false, config: {} }).map((p) => p.punkt)).toEqual([...DATEI_PUNKTE]);
+    expect(pruefe({ rootDir: "/x", ...GESUND, git: werfend, existiert: () => true, config: {} }).map((p) => p.punkt)).toEqual([...DATEI_PUNKTE]);
+    expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
+  });
+  test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"];
+    expect([...DATEI_PUNKTE]).toEqual(erwartet);
+    expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
+  });
+  test("die Liste endet mit Required-Check-Quellen und ist unveränderlich", () => {
+    expect(DATEI_PUNKTE.at(-1)).toBe("Required-Check-Quellen");
+    expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
+  });
+});
+
+describe("Required-Check-Quellen (factory#148)", () => {
+  const K = "Beispiel Check";
+  const ci = (name: string, pfad = "ci.yml"): Workflow => ({ pfad, text: `jobs:\n  a:\n    name: ${name}\n` });
+  const pk = (workflows: Workflow[], pflichtChecks: string[] = [K], spiegel: unknown = { requiredChecks: pflichtChecks }) => quellenPunkt({ spiegel, workflows, pflichtChecks });
+
+  test("genau eine Quelle: OK", () => {
+    expect(pk([ci(K)])).toEqual({ punkt: "Required-Check-Quellen", ok: true });
+  });
+  test("ohne Spiegel: NICHT PRÜFBAR mit Fix, auch bei vorhandener Soll-Liste", () => {
+    const p = pk([ci(K)], [K], null);
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p.fix).toContain("rulesetSpiegel");
+  });
+  test("Spiegel nicht übergeben (undefined, wie pruefLauf ohne rulesetSpiegel) bei nicht leerer Soll-Liste: NICHT PRÜFBAR", () => {
+    const p = quellenPunkt({ spiegel: undefined, workflows: [ci(K)], pflichtChecks: [K] });
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p.fix).toContain("rulesetSpiegel");
+  });
+  test("Soll-Liste kein Array (String): NICHT PRÜFBAR statt Zeichen-Zählung", () => {
+    const p = quellenPunkt({ spiegel: {}, workflows: [ci(K)], pflichtChecks: K as unknown as string[] });
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("workflows nicht übergeben: LÜCKE mit 0 Quellen statt Absturz", () => {
+    const p = quellenPunkt({ spiegel: {}, workflows: undefined, pflichtChecks: [K] });
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain("0 Quellen");
+  });
+  test("leere Soll-Liste: NICHT PRÜFBAR mit Fix", () => {
+    const p = pk([ci(K)], []);
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p.fix).toContain("requiredChecks");
+  });
+  test("zwei Quellen (zweite Datei): Lücke mit Kontext, Anzahl und Fundstellen", () => {
+    const p = pk([ci(K), ci(K, "fake.yml")]);
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain("„Beispiel Check“: 2 Quellen (ci.yml: Beispiel Check, fake.yml: Beispiel Check)");
+    expect(p.fix).toContain("umbenennen");
+  });
+  test("zwei Quellen in DERSELBEN Datei und als Schritt: Lücke", () => {
+    const text = `jobs:\n  a:\n    name: ${K}\n    steps:\n      - name: ${K}\n`;
+    expect(pk([{ pfad: "ci.yml", text }]).befund).toContain("2 Quellen");
+  });
+  test("keine Quelle (auch ganz ohne Workflow-Datei): Lücke mit 0 Quellen", () => {
+    for (const workflows of [[ci("Anderes")], []]) {
+      const p = pk(workflows);
+      expect(p.ok).toBe(false);
+      expect(p.nichtPruefbar).toBeUndefined();
+      expect(p.befund).toContain("„Beispiel Check“: 0 Quellen");
+      expect(p.fix).toContain("Ruleset");
+    }
+  });
+  test("dynamischer Name (${{) mit passendem Präfix zählt fail-closed als Quelle, fremdes Präfix nicht", () => {
+    expect(pk([ci(K), ci("Beispiel ${{ matrix.x }}", "fake.yml")]).befund).toContain("2 Quellen");
+    expect(pk([ci(K), ci("Anderes ${{ matrix.x }}", "ok.yml")])).toMatchObject({ ok: true });
+  });
+  test("mehr als fünf Fundstellen werden gekürzt", () => {
+    const p = pk(Array.from({ length: 7 }, (_, i) => ci(K, `w${i}.yml`)));
+    expect(p.befund).toContain("7 Quellen");
+    expect(p.befund).toContain("(+2 weitere)");
+    expect(p.befund).not.toContain("w6.yml");
+  });
+  test("mehrere Kontexte: der Befund nennt jeden mit Anzahl ungleich eins", () => {
+    const p = pk([ci("Eins"), ci("Zwei"), ci("Zwei", "fake.yml")], ["Eins", "Zwei", "Drei"]);
+    expect(p.befund).toContain("„Zwei“: 2 Quellen");
+    expect(p.befund).toContain("„Drei“: 0 Quellen");
+    expect(p.befund).not.toContain("„Eins“");
+  });
+  test("nicht lesbare Datei (Flow-Form): NICHT PRÜFBAR mit datei:zeile, Konstrukt und Fix Blockform", () => {
+    const p = pk([ci(K), { pfad: "fake.yml", text: "jobs:\n  x: { name: Beispiel Check }\n" }]);
+    expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p.befund).toContain("fake.yml:2 Flow-Collection als Job");
+    expect(p.fix).toContain("Blockform");
+  });
+  test("nicht lesbar und 0 Quellen: NICHT PRÜFBAR (die Quelle könnte in der unlesbaren Datei stehen)", () => {
+    expect(pk([{ pfad: "fake.yml", text: "jobs: { x: {} }\n" }])).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("belegte Doppelquelle schlägt nicht lesbar: Lücke, die nicht lesbare Datei steht dabei", () => {
+    const p = pk([ci(K), ci(K, "zwei.yml"), { pfad: "fake.yml", text: "jobs: { x: {} }\n" }]);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain("2 Quellen");
+    expect(p.befund).toContain("fake.yml:1");
+  });
+  test("pruefeDateien liest selbst nichts: übergebene Workflows zählen, auch wenn auf der Platte keine liegen", () => {
+    const e = lauf(gesund);
+    expect(punkt(e, "Required-Check-Quellen").ok).toBe(true);
+    const doppelt = pruefe({ rootDir: "/x", ...GESUND, workflows: [ci(K), ci(K, "fake.yml")], git: fakeGit(gesund), existiert: () => true, config: {} });
+    expect(punkt(doppelt, "Required-Check-Quellen").ok).toBe(false);
+  });
+  test("ohne die neuen Felder (Abbruchpfad) ist der Punkt nicht prüfbar statt grün", () => {
+    expect(punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {} }), "Required-Check-Quellen")).toMatchObject({ ok: false, nichtPruefbar: true });
   });
 });

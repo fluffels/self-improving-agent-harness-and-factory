@@ -1,4 +1,4 @@
-/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): fünf Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
+/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): sechs Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
@@ -11,6 +11,9 @@
  *   `Langfuse-Takt`: `.github/workflows/board-takt.yml` und `scripts/langfuse-takt.mjs` existieren (Ring kern-nach-entkopplung kommt per Sync); Hinweis, wenn das Factory-Board ein fremdes Repo führt;
  *   im Bezieher (Sync-Stand vorhanden) ist es eine Lücke, wenn kein Board das eigene Repo führt (der Takt legt dort kein Status-Ticket an, factory#202), und wenn sich das Ziel des Takts aus der Config nicht bestimmen lässt.
  *   `Gezielter Test` (factory#208): `struktur.endungen` außerhalb von JS/TS ohne `befehle.testGezielt` ist eine Lücke (der Standard `npx vitest run` kennt solche Tests nicht).
+ *   `Required-Check-Quellen` (factory#148): jeder Kontext der Soll-Liste (`pflichtChecks` aus `voraussetzungenAus`: Ruleset-Spiegel vereinigt mit den Kern-Pflicht-Checks) hat genau eine Quelle unter `.github/workflows/`
+ *   (die `name:`-Werte von Jobs und Schritten, gelesen vom Blockform-Leser workflow-blockform.mjs ohne `yaml`; `beansprucht` wie im Kern-Test required-check-shadowing). 0 oder mindestens 2 Quellen sind eine Lücke, eine nicht lesbare
+ *   Workflow-Datei (Flow-Form, Anker, Alias, Tag, Merge-Schlüssel …), ein fehlender Ruleset-Spiegel oder eine leere Soll-Liste machen den Punkt nicht prüfbar. Spiegel, Workflows und Soll-Liste liest `pruefLauf` einmal und reicht sie herein.
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
@@ -23,6 +26,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
+import { quellenJeKontext } from "./workflow-blockform.mjs";
 import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -243,7 +247,46 @@ export function gezielterTestPunkt(config) {
   return luecke("Gezielter Test", `struktur.endungen nennt ${fremd.join(", ")} (außerhalb von JS/TS), aber befehle.testGezielt fehlt: der Standard „npx vitest run“ kennt solche Tests nicht`, `befehle.testGezielt in ${PROJEKT_CONFIG} auf die Befehlszeile des Test-Läufers setzen (der Läufer hängt die Pfade an: node scripts/gate-befehl.mjs testGezielt <datei>)`);
 }
 
-/** Die Dateipunkte des Doctors: `[Root-Kontextdatei, Zeilenenden, Projektdateien, Langfuse-Takt, Gezielter Test]`, immer alle fünf, nie weniger. */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir) }) {
-  return [kontextPunkt(rootDir, existiert), zeilenendenPunkt(git), projektdateienPunkt(rootDir, existiert), langfuseTaktPunkt(rootDir, existiert, config), gezielterTestPunkt(config)];
+/** Punkt `Required-Check-Quellen` (factory#148): jeder Kontext aus `pflichtChecks` hat genau eine Quelle in `workflows` (`[{ pfad, text }]`). Pur: liest nichts selbst. */
+export function requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks }) {
+  const punkt = "Required-Check-Quellen";
+  if (spiegel === undefined || spiegel === null) {
+    return nichtPruefbar(punkt, "kein Ruleset-Spiegel (`rulesetSpiegel` fehlt): die Soll-Liste der Required-Checks ist unbekannt", "`rulesetSpiegel` in der Projekt-Config setzen und die Vorlage `.github/ruleset-main-schutz.json` der Quelle übernehmen (Anleitung: Seite docs/erstbezug.md des Factory-Repos), dann erneut prüfen");
+  }
+  if (!Array.isArray(pflichtChecks) || pflichtChecks.length === 0) {
+    return nichtPruefbar(punkt, "die Soll-Liste der Required-Checks ist leer", "`requiredChecks` im Ruleset-Spiegel eintragen (Vorlage der Quelle: `.github/ruleset-main-schutz.json`), dann erneut prüfen");
+  }
+  const { treffer, nichtLesbar } = quellenJeKontext(workflows ?? [], pflichtChecks);
+  const abweichend = [...treffer].filter(([, orte]) => orte.length !== 1);
+  const nichtLesbarText = nichtLesbar.map((f) => `${f.pfad}:${f.zeile} ${f.konstrukt}`);
+  const befund = abweichend.map(([k, orte]) => `„${k}“: ${orte.length} Quellen${orte.length ? ` (${kurz(orte)})` : ""}`).join("; ");
+  if (abweichend.some(([, orte]) => orte.length >= 2)) {
+    return luecke(punkt, `${befund}${nichtLesbar.length ? `; nicht lesbar: ${kurz(nichtLesbarText)}` : ""}`, "den gleichnamigen Doppelgänger-Job oder -Schritt umbenennen oder entfernen (ein Required-Check-Name darf nur eine Quelle haben: ein gleichnamiger Fake-Job überschriebe den echten Check)");
+  }
+  if (nichtLesbar.length > 0) {
+    return nichtPruefbar(punkt, `Workflow-Datei in einer Form, die der Blockform-Leser nicht liest: ${kurz(nichtLesbarText)}`, "in Blockform schreiben (Mappings und Listen eingerückt, ohne Flow-Klammern, Anker, Aliasse, Tags, Merge-Schlüssel), dann erneut prüfen");
+  }
+  if (abweichend.length > 0) {
+    return luecke(punkt, befund, "den Job wie im Ruleset benennen (`name:`) oder Ruleset und Spiegel nachziehen: ein Required-Check ohne Quelle hängt ewig auf „erwartet“");
+  }
+  return gut(punkt);
+}
+
+/** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"]);
+
+/**
+ * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
+ * ohne sie ist `Required-Check-Quellen` nicht prüfbar.
+ */
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [] }) {
+  const punkte = {
+    "Root-Kontextdatei": () => kontextPunkt(rootDir, existiert),
+    Zeilenenden: () => zeilenendenPunkt(git),
+    Projektdateien: () => projektdateienPunkt(rootDir, existiert),
+    "Langfuse-Takt": () => langfuseTaktPunkt(rootDir, existiert, config),
+    "Gezielter Test": () => gezielterTestPunkt(config),
+    "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks }),
+  };
+  return DATEI_PUNKTE.map((p) => punkte[p]());
 }

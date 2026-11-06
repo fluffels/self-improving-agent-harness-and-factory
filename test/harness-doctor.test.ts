@@ -54,7 +54,7 @@ const CONFIG = {
     },
   },
 };
-const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n  G: ${{ secrets.GITHUB_TOKEN }}\nrun: gh issue list --label forum\n";
+const WORKFLOW = "env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n  G: ${{ secrets.GITHUB_TOKEN }}\nrun: gh issue list --label forum\njobs:\n  ci:\n    name: CI\n  audit:\n    name: Audit\n";
 const feld = { name: "Status", node_id: "x_status", options: [{ id: "abc", name: { raw: "Todo" } }] };
 const SICHER = { security_and_analysis: Object.fromEntries(["secret_scanning", "secret_scanning_push_protection", "secret_scanning_non_provider_patterns", "secret_scanning_validity_checks", "dependabot_security_updates"].map((k) => [k, { status: "enabled" }])) };
 const REPO_OK = { private: false, default_branch: "main", permissions: { admin: true }, ...SICHER };
@@ -640,6 +640,13 @@ describe("harness-doctor --pruefen", () => {
     assert.ok(r.out.some((z) => z.startsWith("LÜCKE Projektdateien: fehlen 1: tsconfig.json ")), r.out.join("\n"));
   });
 
+  test("factory#148: ein nicht prüfbarer Dateipunkt erscheint vor dem Abbruch als NICHT PRÜFBAR, nicht als LÜCKE", () => {
+    const punkt = { punkt: "Required-Check-Quellen", ok: false, nichtPruefbar: true, befund: "kein Ruleset-Spiegel", fix: "rulesetSpiegel setzen" };
+    const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => [punkt] });
+    assert.equal(r.code, 2);
+    assert.ok(r.out.includes("NICHT PRÜFBAR Required-Check-Quellen: kein Ruleset-Spiegel Fix: rulesetSpiegel setzen"), r.out.join("\n"));
+  });
+
   test("factory#162 L33: wirft die Dateipunkt-Prüfung selbst, bleibt es beim Config-Fehler: Exit 2, Fix auf stderr", () => {
     const r = lauf({}, { config: { ...CONFIG, rulesetSpiegel: "fehlt.json" }, dateien: () => { throw new Error("EACCES"); } });
     assert.equal(r.code, 2);
@@ -795,13 +802,58 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     writeFileSync(join(root, "CLAUDE.md"), "x\n");
   };
 
-  test("gesund: alle vier Punkte OK, Exit 0", () => {
+  test("gesund: alle sechs Punkte OK, Exit 0", () => {
     const r = lauf({}, { dateien, vorbereiten: repo() });
     assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Zeilenenden"));
     assert.ok(r.out.includes("OK Projektdateien"));
     assert.ok(r.out.includes("OK Langfuse-Takt"));
+    assert.ok(r.out.includes("OK Required-Check-Quellen"), r.out.join("\n"));
     assert.equal(r.code, 0);
+  });
+
+  test("factory#148: pruefLauf reicht Spiegel, die einmal gelesenen Workflows und die Soll-Liste an die Dateipunkte durch", () => {
+    const gesehen: { spiegel?: { requiredChecks?: string[] }; workflows?: { pfad: string }[]; pflichtChecks?: string[] }[] = [];
+    lauf({}, { dateien: (a: object) => (gesehen.push(a), []) });
+    assert.equal(gesehen.length, 1);
+    assert.deepEqual(gesehen[0].spiegel?.requiredChecks, ["CI", "Audit"]);
+    assert.deepEqual(gesehen[0].workflows?.map((w) => w.pfad), ["a.yml"]);
+    assert.deepEqual(gesehen[0].pflichtChecks, ["CI", "Audit"]);
+  });
+
+  test("factory#148: --einrichten ruft die Dateipunkte nicht auf (ohne Spion zählt der Aufruf)", () => {
+    let aufrufe = 0;
+    lauf({}, { dateien: () => (aufrufe++, []), argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
+    assert.equal(aufrufe, 0);
+  });
+
+  describe("factory#148 Negativfall: ein gleichnamiger Fake-Job macht genau Required-Check-Quellen rot", () => {
+    const FAKES: Record<string, [string, string]> = {
+      "fake.yml (plain, zweite Datei)": [".github/workflows/fake.yml", "jobs:\n  x:\n    name: Audit\n"],
+      "fake.yaml (zweite Endung)": [".github/workflows/fake.yaml", "jobs:\n  x:\n    name: Audit\n"],
+      "Block-Skalar": [".github/workflows/fake.yml", "jobs:\n  x:\n    name: |\n      Audit\n"],
+      "mehrzeiliger plain-Skalar": [".github/workflows/fake.yml", "jobs:\n  x:\n    name: Audit\n      (Zusatz)\n"],
+    };
+    const ohneZeile = (r: Lauf) => r.out.filter((z) => !z.includes("Required-Check-Quellen") && !z.startsWith("Harness-Doctor: "));
+    const basis = () => lauf({}, { dateien: "echt", vorbereiten: repo() });
+
+    test("Basislauf: gesund", () => {
+      assert.ok(basis().out.includes("OK Required-Check-Quellen"), basis().out.join("\n"));
+    });
+    for (const [titel, [pfad, text]] of Object.entries(FAKES)) {
+      test(titel, () => {
+        const r = lauf({}, { dateien: "echt", vorbereiten: repo({ [pfad]: text }) });
+        assert.ok(r.out.some((z) => z.startsWith("LÜCKE Required-Check-Quellen: ") && z.includes("„Audit“: 2 Quellen") && z.includes("Fix: ")), r.out.join("\n"));
+        assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
+        assert.equal(r.code, 1);
+      });
+    }
+    test("Flow-Form: NICHT PRÜFBAR Required-Check-Quellen, der Rest bleibt gleich", () => {
+      const r = lauf({}, { dateien: "echt", vorbereiten: repo({ ".github/workflows/fake.yml": "jobs:\n  x: { name: Audit }\n" }) });
+      assert.ok(r.out.some((z) => z.startsWith("NICHT PRÜFBAR Required-Check-Quellen: ") && z.includes("fake.yml:2") && z.includes("Fix: ")), r.out.join("\n"));
+      assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
+      assert.equal(r.code, 1);
+    });
   });
 
   test("factory#208 L8: der Standard-Weg von --pruefen trägt den Punkt Meldestelle nur bei einer fremden Meldestelle (Actions ohne Token: Lücke, ohne gh-Aufruf)", () => {
