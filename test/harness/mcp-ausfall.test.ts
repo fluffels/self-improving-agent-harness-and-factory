@@ -23,7 +23,7 @@ type Ausfall = {
   hauptWurzel: (p: string, ap?: boolean) => string;
   standPfad: (w: string, env: Record<string, string | undefined>, tmp: string, config?: unknown) => string;
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
-  projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
+  projektOrdner: (namen: string[], wurzel: string, ap?: boolean) => { ordner: string; suffix: string }[];
   serverOrdner: (n: string) => string;
   serverNameFuerOrdner: (ordner: string, server: Server[]) => string | null;
   serverAnzeige: (ordner: string, server: Server[]) => string | null;
@@ -169,6 +169,12 @@ describe("Pfad-Helfer", () => {
   test("standPfad ohne injizierte Config nimmt das Präfix der echten Projekt-Config", () => {
     expect(a.standPfad("/dev/proj", {}, "/tmp")).toBe(join("/tmp", `${projektConfig().praefixe.worktree}mcp-ausfall--dev-proj.json`));
   });
+  test("projektOrdner im Arbeitsplatz: ein Worktree-Pfad `<wurzel>/.claude/worktrees/<repo>/<name>` ergibt die Ordner der Wurzel", () => {
+    const po = a.projektOrdner;
+    const namen = ["-ap", "-ap--claude-worktrees-web-wt-1", "-ap-alt"];
+    expect(po(namen, "/ap/.claude/worktrees/web/wt-1", true).map((p) => p.ordner)).toEqual(["-ap", "-ap--claude-worktrees-web-wt-1"]);
+    expect(po(namen, "/ap/.claude/worktrees/web/wt-1").map((p) => p.ordner)).toEqual(["-ap--claude-worktrees-web-wt-1"]);
+  });
   test("projektOrdner: Hauptcheckout und Worktrees, nie Namensvettern", () => {
     const namen = ["C--dev-proj", "C--dev-proj--claude-worktrees-wt-1", "C--dev-proj2", "C--dev-other"];
     const erwartet = [{ ordner: "C--dev-proj", suffix: "" }, { ordner: "C--dev-proj--claude-worktrees-wt-1", suffix: "--claude-worktrees-wt-1" }];
@@ -275,6 +281,17 @@ describe("main mit Temp-Logs", () => {
     return { code, aus };
   };
 
+  test("Arbeitsplatz: aus einem Worktree `<wurzel>/.claude/worktrees/<repo>/<name>` findet der Lauf die Logs der Wurzel, ohne den Block nicht", () => {
+    const { env, d } = aufbau();
+    const wt = join(d, "proj", ".claude", "worktrees", "web", "wt-1");
+    mkdirSync(wt, { recursive: true });
+    writeFileSync(join(wt, ".mcp.json"), '{"mcpServers":{"pw":{"type":"stdio","command":"node"}}}');
+    const imWorktree = { ...env, CLAUDE_PROJECT_DIR: wt };
+    const jetztNah = Date.parse("2026-10-15T10:00:00Z");
+    const ap = { ...FREMD, arbeitsplatz: { wurzel: join(d, "proj"), repos: [{ name: "web", pfad: "web" }] } };
+    expect(lauf(["--seit", "24h"], imWorktree, { jetzt: jetztNah, config: ap }).aus.join("\n")).toContain("pw: reconnect ×1");
+    expect(lauf(["--seit", "24h"], imWorktree, { jetzt: jetztNah, config: FREMD }).aus.join("\n")).not.toContain("reconnect");
+  });
   test("--sessionstart meldet den Reconnect, schreibt den Stand, der zweite Lauf ist stumm", () => {
     const { env, d } = aufbau();
     const jetztNah = Date.parse("2026-10-15T10:00:00Z");

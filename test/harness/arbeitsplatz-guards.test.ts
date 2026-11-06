@@ -24,6 +24,7 @@ const H = hookRaw as unknown as {
   decide: (o: { cwd?: string; command: string; repoRoot: string; deps?: Deps }) => Entscheidung;
   schutzWurzeln: (repoRoot: string, deps?: Deps) => { wurzel: string; repo?: { name: string } }[];
   neuerWorktreeHinweis: (deps: Deps, w?: unknown) => string;
+  jeSchutzWurzel: (repoRoot: string, deps: Deps, bewerte: (w: { wurzel: string }) => Entscheidung | null) => Entscheidung;
 };
 const PS = psRaw as unknown as { bewertePowerShell: (o: { command: string; cwd: string; repoRoot: string; deps?: Deps }) => Entscheidung };
 const L = lensRaw as unknown as { bewerteLensEdit: (p: string, cwd: string, deps: Deps) => Entscheidung };
@@ -32,6 +33,23 @@ const WT = FREMD.praefixe.worktree;
 const BR = FREMD.praefixe.branch;
 const arbeitsplatz = (repos: { name: string; pfad: string; standardzweig?: string }[], wurzel = ".") => ({ ...FREMD, arbeitsplatz: { wurzel, repos } });
 const REPOS = [{ name: "web", pfad: "web" }, { name: "api", pfad: "api" }];
+
+describe("jeSchutzWurzel: Block vor Rückfrage vor Durchlassen", () => {
+  const config = arbeitsplatz(REPOS, "/ap");
+  const mit = (urteile: Record<string, Entscheidung | null>) => H.jeSchutzWurzel("/ap", { config }, (w) => urteile[w.wurzel] ?? null);
+  const frage = { block: false, ask: true, reason: "frage" };
+  const block = { block: true, reason: "block" };
+  test("eine Rückfrage der ersten Wurzel wird vom Block einer späteren überstimmt", () => {
+    expect(mit({ "/ap": frage, "/ap/api": block })).toEqual(block);
+  });
+  test("eine Rückfrage bleibt bestehen, wenn eine spätere Wurzel nichts meldet", () => {
+    expect(mit({ "/ap/web": frage })).toEqual(frage);
+  });
+  test("ohne Urteil wird durchgelassen, ein Block der ersten Wurzel gilt sofort", () => {
+    expect(mit({})).toEqual({ block: false });
+    expect(mit({ "/ap": block, "/ap/web": frage })).toEqual(block);
+  });
+});
 
 describe("Worktree-Guard (Bash) mit Fakes: Hinweistexte", () => {
   /** Fake-git: `/ap/web` und `/ap/api` (und `/proj`) sind Haupt-Checkouts, `/ap/.claude/worktrees/web/<wt>7` ein Linked Worktree von web, `/ap` selbst kein Repo. */
@@ -164,8 +182,10 @@ describe("Lens-Edit-Guard im Arbeitsplatz", () => {
     const ap = L.bewerteLensEdit("/ap/web/src/a.ts", "", cfg);
     expect(ap.reason).toContain(`<worktree-ordner>/${WT}<nr>-lens-r<runde>`);
     expect(ap.reason).toContain("node scripts/arbeitsplatz.mjs pfade");
+    expect(ap.reason).not.toContain("fremder Klon");
     const eing = L.bewerteLensEdit("/proj/src/a.ts", "", { config: FREMD });
     expect(eing.reason).toContain(`(.claude/worktrees/${WT}<nr>-lens-r<runde>`);
     expect(eing.reason).not.toContain("arbeitsplatz.mjs");
+    expect(eing.reason).toContain("<runde> (fremder Klon: git -C <klon> worktree add");
   });
 });

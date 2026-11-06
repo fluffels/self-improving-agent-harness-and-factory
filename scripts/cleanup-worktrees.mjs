@@ -108,7 +108,7 @@ export function branchenModus(root, loeschen, {
  * Einstieg, liefert in jedem Pfad den Exit-Code zurück (nie `process.exit`; der Aufrufer setzt `process.exitCode`). `--branches` gibt den Code von
  * `modus(root, loeschen, { namen })` weiter (`loeschen` nur mit `--fix`). `deps` (Tests): `modus`, `root`, `diagnoseDeps` (Nähte von `diagnoseOrphans`, z. B. `execSync`).
  */
-export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))), diagnoseDeps = {}, config: configIn } = {}) {
+export function main(argv = process.argv.slice(2), { modus = branchenModus, root = dirname(dirname(fileURLToPath(import.meta.url))), diagnoseDeps = {}, config: configIn, ausfuehren = execFileSync } = {}) {
   const { werte, fehler } = flagsLesen(argv, { fix: { type: "boolean" }, branches: { type: "boolean" } });
   if (fehler) {
     console.error(`${fehler.text}
@@ -126,7 +126,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
     return 1;
   }
-  if (config.arbeitsplatz !== undefined) return arbeitsplatzMain({ config, basis: ROOT, namen, FIX, branches: werte.branches === true, modus, diagnoseDeps });
+  if (config.arbeitsplatz !== undefined) return arbeitsplatzMain({ config, basis: ROOT, namen, FIX, branches: werte.branches === true, modus, diagnoseDeps, ausfuehren });
   if (werte.branches) {
     return modus(ROOT, FIX, { namen });
   }
@@ -147,7 +147,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
  * sonst Diagnose und Aufräumen je Repo (Kopf `=== Repo <name> … ===`); scheitert `git worktree list` in einem Repo, wird in keinem gelöscht.
  * Ordner direkt unter `<wurzel>/.claude/worktrees`, die zu keinem Repo der Config gehören, werden nur gemeldet. Exit = Maximum der Repo-Codes.
  */
-function arbeitsplatzMain({ config, basis, namen, FIX, branches, modus, diagnoseDeps }) {
+function arbeitsplatzMain({ config, basis, namen, FIX, branches, modus, diagnoseDeps, ausfuehren }) {
   let d;
   let orte;
   try {
@@ -160,7 +160,7 @@ function arbeitsplatzMain({ config, basis, namen, FIX, branches, modus, diagnose
   if (branches) {
     return Math.max(...orte.map((ort) => {
       console.log(`=== Repo ${ort.name} (${ort.pfad}) ===`);
-      return modus(ort.pfad, FIX, { namen, ghJson: (args) => ghJson(args, { exec: (cmd, a, o) => execFileSync(cmd, a, { ...o, cwd: ort.pfad }) }) });
+      return modus(ort.pfad, FIX, { namen, ghJson: (args) => ghJson(args, { exec: (cmd, a, o) => ausfuehren(cmd, a, { ...o, cwd: ort.pfad }) }) });
     }));
   }
   console.log("=== Worktree-Diagnose (Arbeitsplatz) ===\n");

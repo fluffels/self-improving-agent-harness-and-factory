@@ -25,7 +25,7 @@ import * as lockRaw from "../../scripts/ticket-lock.mjs";
 
 type Deps = Record<string, unknown>;
 type Aufloesung = { betriebsart: string; wurzel: string; repos: { name: string; pfad: string; worktreeOrdner: string }[] };
-type Befund = { name: string; ok: boolean; orphans: string[]; young: string[]; mainRoot: string; worktreesDir: string };
+type Befund = { name: string; ok: boolean; orphans: string[]; orphanFiles: string[]; young: string[]; mainRoot: string; worktreesDir: string };
 const W = wRaw as unknown as {
   erwarteterWorktreeOrdner: (mainRoot: string, aufloesung?: Aufloesung, platform?: string) => string | null;
   assertSafeOrphanTarget: (mainRoot: string, worktreesDir: string, name: string, deps?: Deps, art?: string) => { safe: boolean; reason?: string };
@@ -33,7 +33,8 @@ const W = wRaw as unknown as {
   aufraeumDiagnose: (config: unknown, basis: string, deps?: Deps) => { arbeitsplatz: boolean; ok: boolean; repos: Befund[]; fehler?: string };
   gitOrteAus: (config: unknown, basis?: string) => { aufloesung: Aufloesung; orte: unknown[] };
 };
-const hook = hookRaw as unknown as { checkAndFixOrphanWorktrees: (root: string, deps?: Deps) => { blocked: boolean; reason?: string; warning?: string; removed?: string[] } };
+type Hook = { blocked: boolean; reason?: string; warning?: string; removed?: string[] };
+const hook = hookRaw as unknown as { checkAndFixOrphanWorktrees: (root: string, deps?: Deps) => Hook; runHook: (stdin: string, root: string, check?: (root: string, deps: Deps) => Hook, deps?: Deps) => { exit: number } };
 const cleanup = cleanupRaw as unknown as { main: (argv: string[], o?: Deps) => number };
 const lib = libRaw as unknown as { arbeitsplatzAus: (c: unknown, basis: string) => Aufloesung };
 const cli = cliRaw as unknown as { cli: (argv: string[], o?: Deps) => number };
@@ -81,6 +82,10 @@ describe("assertSafeOrphanTarget im Arbeitsplatz", () => {
   test("ein mainRoot ohne Repo der Config wird abgelehnt", () => {
     const r = W.assertSafeOrphanTarget("/fremd", "/fremd/.claude/worktrees", `${WT}7`, deps());
     expect(r).toEqual({ safe: false, reason: "mainRoot /fremd ist kein Repo aus arbeitsplatz.repos" });
+  });
+  test("ist der Worktree-Ordner kein Verzeichnis (etwa eine Datei), wird nichts gelöscht", () => {
+    const lstat = (p: string) => (p === dir ? { ...ECHT_DIR, isDirectory: () => false } : ECHT_DIR);
+    expect(W.assertSafeOrphanTarget("/w/web", dir, `${WT}7`, deps({ lstatSync: lstat })).reason).toMatch(/kein echtes Verzeichnis/);
   });
   test("ist der Worktree-Ordner selbst ein Link, wird nichts gelöscht", () => {
     const lstat = (p: string) => (p === dir ? { ...ECHT_DIR, isSymbolicLink: () => true } : ECHT_DIR);
@@ -152,6 +157,11 @@ describe("diagnoseArbeitsplatz", () => {
     expect([web.mainRoot, web.worktreesDir]).toEqual(["/w/web", ORDNER_WEB]);
     expect(w.gelesen).not.toContain("/w/.claude/worktrees"); // der Ordner mit den Repo-Ordnern wird nie gescannt
   });
+  test("unter win32 gilt auch eine lose Datei eines registrierten Worktrees bei anderer Groß-/Kleinschreibung nicht als verwaist", () => {
+    const w = welt({ "/w/web": LISTE("/w/web", `${ORDNER_WEB}/${WT}7`.replace("/w/", "/W/")), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] }, { [ORDNER_WEB]: [`${WT}7-orig.bak`] });
+    expect(W.diagnoseArbeitsplatz(orte, { ...w.deps, platform: "win32" }).repos[0].orphanFiles).toEqual([]);
+    expect(W.diagnoseArbeitsplatz(orte, { ...w.deps, platform: "linux" }).repos[0].orphanFiles).toEqual([`${WT}7-orig.bak`]);
+  });
   test("unter win32 gilt ein registrierter Pfad auch bei anderer Groß-/Kleinschreibung", () => {
     const w = welt({ "/w/web": LISTE("/w/web", `${ORDNER_WEB.toUpperCase()}/${WT}7`.replace("/W/", "/w/")), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}7`], [ORDNER_API]: [] });
     expect(W.diagnoseArbeitsplatz(orte, { ...w.deps, platform: "win32" }).repos[0].orphans).toEqual([]);
@@ -188,6 +198,27 @@ describe("Stop-Hook im Arbeitsplatz", () => {
     expect(r.blocked).toBe(false);
     expect([...(r.removed ?? [])].sort()).toEqual([`${WT}6`, `${WT}8`]);
     expect(w.geloescht.sort()).toEqual([`${ORDNER_API}/${WT}6`, `${ORDNER_WEB}/${WT}8`]);
+  });
+  test("runHook reicht die Config an die Aufräumprüfung weiter (Stop und SubagentStop), sonst fiele der Arbeitsplatz auf den eingebetteten Zweig zurück", () => {
+    for (const [ereignis, extra] of [["Stop", {}], ["SubagentStop", { agent_type: FREMD.agenten.umsetzer }]] as const) {
+      let gesehen: Deps | undefined;
+      const r = hook.runHook(JSON.stringify({ hook_event_name: ereignis, ...extra }), "/basis", (_root, d) => { gesehen = d; return { blocked: false }; }, { config: CONFIG });
+      expect(r.exit, ereignis).toBe(0);
+      expect((gesehen?.config as { arbeitsplatz?: unknown } | undefined)?.arbeitsplatz, ereignis).toEqual(CONFIG.arbeitsplatz);
+    }
+  });
+  test("Datenverlust-Alarm im Arbeitsplatz: der git-Status läuft in der Wurzel, eine neu gelöschte versionierte Datei unter .claude blockiert", () => {
+    const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [`${WT}8`], [ORDNER_API]: [] });
+    const statusOrte: string[] = [];
+    const execSync = (cmd: string, o: { cwd: string }) => {
+      if (!cmd.startsWith("git status")) return w.deps.execSync(cmd, o);
+      statusOrte.push(String(o.cwd).replace(/\\/g, "/"));
+      return statusOrte.length === 1 ? "" : " D .claude/x\0";
+    };
+    const r = hook.checkAndFixOrphanWorktrees("/basis", { ...w.deps, execSync, config: CONFIG });
+    expect(r.blocked).toBe(true);
+    expect(r.reason).toMatch(/Repo web: MÖGLICHER DATENVERLUST/);
+    expect(statusOrte).toEqual(["/w", "/w"]);
   });
   test("nichts zu tun: kein Repo hat Waisen, der Hook meldet unverändert { blocked: false } ohne Zusatzfelder", () => {
     const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] });
@@ -250,11 +281,12 @@ describe("cleanup-worktrees im Arbeitsplatz", () => {
     expect(w.geloescht).toEqual([]);
   });
   test("der Exit-Code ist das Maximum über die Repos: eine Waise nur im zweiten Repo ergibt Exit 1", () => {
-    stumm();
+    const { out } = stumm();
     const w = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [`${WT}6`] });
     expect(cleanup.main([], { config: CONFIG, root: "/basis", diagnoseDeps: w.deps })).toBe(1);
     const sauber = welt({ "/w/web": LISTE("/w/web"), "/w/api": LISTE("/w/api") }, { [ORDNER_WEB]: [], [ORDNER_API]: [] });
     expect(cleanup.main([], { config: CONFIG, root: "/basis", diagnoseDeps: sauber.deps })).toBe(0);
+    expect(out.some((z) => z.includes("ohne Repo in arbeitsplatz.repos"))).toBe(false);
   });
   test("fail-closed: scheitert git in einem Repo, nennt die Meldung es, Exit 1, nichts gelöscht", () => {
     const { err } = stumm();
@@ -262,6 +294,20 @@ describe("cleanup-worktrees im Arbeitsplatz", () => {
     expect(cleanup.main(["--fix"], { config: CONFIG, root: "/basis", diagnoseDeps: w.deps })).toBe(1);
     expect(err.join("\n")).toMatch(/Repo api/);
     expect(w.geloescht).toEqual([]);
+  });
+  test("--branches: `gh` läuft mit dem Arbeitsverzeichnis des jeweiligen Repos", () => {
+    stumm();
+    const cwds: string[] = [];
+    const ausfuehren = (_cmd: string, _args: string[], o: { cwd: string }) => {
+      cwds.push(o.cwd);
+      return "[]";
+    };
+    const modus = (_root: string, _l: boolean, o: { ghJson: (a: string[]) => unknown }) => {
+      o.ghJson(["pr", "list"]);
+      return 0;
+    };
+    expect(cleanup.main(["--branches"], { config: CONFIG, root: "/basis", modus, ausfuehren })).toBe(0);
+    expect(cwds).toEqual(["/w/web", "/w/api"]);
   });
   test("--branches: der Modus läuft je Repo mit dem Repo-Pfad als Wurzel, der Exit-Code ist das Maximum", () => {
     stumm();
