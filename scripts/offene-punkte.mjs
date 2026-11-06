@@ -68,7 +68,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   try {
     config = ladeConfig(resolve(werte.wurzel ?? process.cwd()));
   } catch (e) {
-    err(`::error::offene-punkte: Projekt-Config nicht lesbar: ${fehlerText(e)}\nFix: --wurzel auf ein Projekt mit .factory/projekt.json zeigen lassen`);
+    err(`::error::offene-punkte: Projekt-Config nicht lesbar: ${fehlerText(e)}\nFix: --wurzel auf ein Projekt mit Projekt-Config zeigen lassen`);
     return AUFRUF_EXIT;
   }
   const sicht = await sammleSicht({ config, api, ladeTitel });

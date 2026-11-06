@@ -55,7 +55,7 @@ const istNichtEintragbar = (i, owner) => !i.pull_request && istVertraut(i.user, 
 
 /** Pur: Gruppe `entscheidung` (`label`: `labels.entscheidung` oder leer = nicht gesetzt). */
 function entscheidungGruppe(issues, label, owner) {
-  if (typeof label !== "string" || label === "") return gruppe("entscheidung", { grund: "labels.entscheidung fehlt in der Projekt-Config", fix: "labels.entscheidung in .factory/projekt.json eintragen" });
+  if (typeof label !== "string" || label === "") return gruppe("entscheidung", { grund: "labels.entscheidung fehlt in der Projekt-Config", fix: "labels.entscheidung in der Projekt-Config eintragen" });
   const punkte = issues.filter((i) => hatLabel(i, label) && !istNichtEintragbar(i, owner)).map((i) => punktAus(i, owner));
   return gruppe("entscheidung", { punkte });
 }
@@ -120,7 +120,7 @@ export function baueSicht({ config, issues, sammel = null, kommentare = new Map(
   try {
     festgefahren = festgefahrenGruppe(issues, labelAus(config, "festgefahren"), owner);
   } catch {
-    festgefahren = gruppe("festgefahren", { grund: "labels.festgefahren fehlt in der Projekt-Config", fix: "labels.festgefahren in .factory/projekt.json eintragen" });
+    festgefahren = gruppe("festgefahren", { grund: "labels.festgefahren fehlt in der Projekt-Config", fix: "labels.festgefahren in der Projekt-Config eintragen" });
   }
   return {
     repo,
