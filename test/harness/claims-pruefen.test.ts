@@ -595,7 +595,7 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
 
   test("wartet auf Entscheidung (Label labels.entscheidung am Issue oder PR): behalten, ohne gesetzten Schlüssel unverändert verwaist (factory#152)", () => {
     const WARTET = "status:wartet";
-    const mit = (issue: object) => ({ ...baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps, entscheidungLabel: WARTET });
+    const mit = (issue: { state: string; labels?: string[]; prs?: { number: number; state: string; headRefOid: string; labels: string[] }[] }) => ({ ...baue({ locks: { "20.json": alterLock }, issues: { 20: issue } }).deps, entscheidungLabel: WARTET });
     for (const issue of [{ state: "OPEN", labels: [WARTET] }, { state: "OPEN", prs: [{ number: 5, state: "OPEN", headRefOid: "x", labels: [WARTET] }] }]) {
       const r = M.fuehreAus([], mit(issue));
       assert.match(r.out, /BEHALTEN #20: behalten, wartet auf Entscheidung/);

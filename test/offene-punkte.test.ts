@@ -17,6 +17,8 @@ interface Lib {
   alsJson(s: Sicht): string;
   GRUPPEN: { id: string }[];
 }
+type Json = { repo: string; gruppen: { status: string; punkte: Punkt[] }[] };
+const parse = (s: string) => JSON.parse(s) as Json;
 interface Cli {
   main(argv: string[], deps: Record<string, unknown>): Promise<number>;
 }
@@ -138,7 +140,7 @@ describe("NICHT PRÜFBAR (K4): nie leer und grün", () => {
 
 describe("JSON-Vertrag", () => {
   test("repo und gruppen mit id, titel, status, grund, fix, punkte", () => {
-    const j = JSON.parse(lib.alsJson(lib.baueSicht({ config, issues: [issue(1, "F", ["wartet"])], sammel: [] })));
+    const j = (JSON.parse(lib.alsJson(lib.baueSicht({ config, issues: [issue(1, "F", ["wartet"])], sammel: [] }))) as Json & { gruppen: Record<string, unknown>[] });
     expect(Object.keys(j)).toEqual(["repo", "gruppen"]);
     expect(j.repo).toBe("eigner/projekt");
     expect(Object.keys(j.gruppen[0])).toEqual(["id", "titel", "status", "grund", "fix", "punkte"]);
@@ -151,7 +153,7 @@ describe("CLI", () => {
   const lauf = async (argv: string[], deps: Record<string, unknown>) => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = await cli.main(argv, { ladeConfig: () => config, ladeTitel: async () => ["Harness-Härtung (gesammelt)"], log: (z: string) => out.push(z), err: (z: string) => err.push(z), ...deps });
+    const code = await cli.main(argv, { ladeConfig: () => config, ladeTitel: () => Promise.resolve(["Harness-Härtung (gesammelt)"]), log: (z: string) => out.push(z), err: (z: string) => err.push(z), ...deps });
     return { code, out: out.join("\n"), err: err.join("\n") };
   };
   const apiMit = (issues: Issue[], kommentare: unknown[] = []) => (args: string[]) => (args.some((a) => a.includes("/comments")) ? [kommentare] : [issues]);
@@ -159,7 +161,7 @@ describe("CLI", () => {
   test("--json ist parsebar, Exit 0 bei prüfbaren Quellen auch mit Punkten", async () => {
     const r = await lauf(["--json"], { api: apiMit([issue(1, "F", ["wartet"]), sammelT]) });
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out).gruppen[0].punkte[0].nr).toBe(1);
+    expect(parse(r.out).gruppen[0].punkte[0].nr).toBe(1);
   });
   test("ein werfendes gh ergibt NICHT PRÜFBAR und Exit 1, keinen Absturz", async () => {
     const r = await lauf([], { api: () => { throw new Error("gh kaputt"); } });
@@ -173,15 +175,15 @@ describe("CLI", () => {
       return [[issue(1, "F", ["wartet"]), sammelT]];
     };
     const r = await lauf(["--json"], { api });
-    const j = JSON.parse(r.out);
+    const j = parse(r.out);
     expect(r.code).toBe(1);
     expect(j.gruppen[3].status).toBe("nicht-pruefbar");
     expect(j.gruppen[0].status).toBe("ok");
   });
   test("Titel der Sammeltickets nicht ladbar: bezieher NICHT PRÜFBAR", async () => {
-    const r = await lauf(["--json"], { api: apiMit([]), ladeTitel: async () => { throw new Error("board-lib"); } });
+    const r = await lauf(["--json"], { api: apiMit([]), ladeTitel: () => Promise.reject(new Error("board-lib")) });
     expect(r.code).toBe(1);
-    expect(JSON.parse(r.out).gruppen[3].status).toBe("nicht-pruefbar");
+    expect(parse(r.out).gruppen[3].status).toBe("nicht-pruefbar");
   });
   test("Config nicht lesbar: Exit 2 mit Fix", async () => {
     const r = await lauf([], { ladeConfig: () => { throw new Error("fehlt"); }, api: apiMit([]) });

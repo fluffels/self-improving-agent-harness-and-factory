@@ -188,6 +188,8 @@
     {"pfad":"scripts/release-tag-lib.mjs","ring":"kern","quelle":"Release-Tags lesen und vergleichen, geteilt von Factory-Update-Check und Tag-Takt (Folge #103, #109)"},
     {"pfad":"scripts/milestone-lib.mjs","ring":"kern","quelle":"Release-Planung über Milestones (factory#194)"},
     {"pfad":"scripts/factory-update-check.mjs","ring":"kern","quelle":"Factory-Update-Check (#90 L17)"},
+    {"pfad":"scripts/offene-punkte-lib.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},
+    {"pfad":"scripts/offene-punkte.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},
     {"pfad":"scripts/tag-takt.mjs","ring":"kern","quelle":"Tag-Takt (#103)"},
     {"pfad":".github/workflows/factory-update.yml","ring":"kern","quelle":"Factory-Update-Check (#90 L17)"},
     {"pfad":"scripts/check-factory-drift.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},

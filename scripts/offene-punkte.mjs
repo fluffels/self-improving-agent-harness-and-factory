@@ -33,6 +33,15 @@ function kommentareDer(sammel, repo, api) {
   return karte;
 }
 
+/** Die Sammeltickets aus der Issue-Liste oder `null`, wenn ihre Titel nicht ladbar sind. */
+async function sammelnAus(issues, repo, ladeTitel) {
+  try {
+    return sammeltickets(issues, await ladeTitel(), String(repo).split("/")[0]);
+  } catch {
+    return null;
+  }
+}
+
 /** Liest die Quellen (jeder Fehler wird Daten, nie ein Absturz) und baut die Sicht. */
 async function sammleSicht({ config, api, ladeTitel }) {
   const repo = config.repo;
@@ -43,12 +52,7 @@ async function sammleSicht({ config, api, ladeTitel }) {
     issues = { fehler: fehlerText(e) };
   }
   if (!Array.isArray(issues)) return baueSicht({ config, issues });
-  let sammel = null;
-  try {
-    sammel = sammeltickets(issues, await ladeTitel(), String(repo).split("/")[0]);
-  } catch {
-    sammel = null;
-  }
+  const sammel = await sammelnAus(issues, repo, ladeTitel);
   return baueSicht({ config, issues, sammel, kommentare: sammel === null ? new Map() : kommentareDer(sammel, repo, api) });
 }
 

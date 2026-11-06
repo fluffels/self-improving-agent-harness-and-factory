@@ -87,3 +87,7 @@ Ein Importeur mit unbekanntem Ring importiert keinen Besitz. `oberflaeche` bekom
 - Agent View liefert einen stabilen JSON-Vertrag samt Subagenten: dann das Cockpit auf diese Quelle zurückbauen, soweit sie reicht.
 - Eine zweite Person braucht das Cockpit: (e) und der localhost-Zuschnitt neu entscheiden, vorher nichts bauen.
 - Ein Bausatz erfüllt alle Kriterien (Windows nativ, nur lesend, ohne Abhängigkeit, Harness-Quellen anbindbar): Eigenbau gegen ihn abwägen.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0029-152-ort-der-offenen-punkte.md) (Konvention: [README](README.md#format)); dort die erste: [factory#152](fortschreibungen/0029-152-ort-der-offenen-punkte.md) prüft das Cockpit als Ort der Sicht „Offene Punkte“ (Logik im Kern, Panel als Folgeticket).

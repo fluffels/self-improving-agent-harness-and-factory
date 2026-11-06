@@ -38,7 +38,8 @@
     "docs:gen": "node scripts/docs-gen.mjs --write",
     "check:docgen": "node scripts/docs-gen.mjs",
     "probe:fremdconfig": "node scripts/fremd-config-probe.mjs",
-    "cockpit": "node scripts/cockpit/cockpit.mjs"
+    "cockpit": "node scripts/cockpit/cockpit.mjs",
+    "offene-punkte": "node scripts/offene-punkte.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
