@@ -8,7 +8,7 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 11);
 - **Board-Takt:** führt das Factory-Board ein anderes Repo als das laufende, entfallen Status-Ticket, Harness-Sammelticket und Quotenzeile (der Takt im Ziel-Repo pflegt sie), der Board-Wächter läuft weiter und lehnt Harness-Issues des eigenen Repos mit Warnung ab.
 - **Dependabot-Inbox:** die Vorprüfung vor dem Anlegen bricht ab, wenn `labels.dependabotInbox` zu einem fremd geführten Board gehört (Fix: ein Label des eigenen Boards).
 - **Entscheidung (Pflichtparameter `repo` statt Standardwert):** ein vergessenes `repo` würde die Items zweier Repos auf einem Board vermischen, eine Nummer träfe das falsche Issue; fail-closed wirft es. Board-Repos rechnen immer aus der Config, nie aus `GITHUB_REPOSITORY` (sonst kippt die Fremd-Config-Probe).
-- **Bekannte Grenze:** Inbox-Wege mit Harness-Standardlabel (`wiedervorlage`, Alarm-Inboxen) legen in der Fabrik im Ziel-Repo des Labels an, ein Bezieher schreibt dagegen immer ins eigene Repo (Nachtrag factory#208 und factory#215 unten); die Zählung der Produktquote läuft im Takt nur über das eigene Repo. Beides ist als Befund im Sammelticket notiert.
+- **Bekannte Grenze:** Inbox-Wege mit Harness-Standardlabel (`wiedervorlage`, Alarm-Inboxen) legen im eigenen Repo an und brechen dann am Guard von `board-place` ab; die Zählung der Produktquote läuft im Takt nur über das eigene Repo. Beides ist als Befund im Sammelticket notiert (der erste Teil ist überholt durch Nachtrag factory#208 und Nachtrag factory#215 unten).
 - **Re-Evaluierung:** wenn ein zweites Projekt dasselbe Factory-Repo nutzt (Kommentar-Füllstand und Quote über mehrere Repos) oder die Schreibrechte per App statt Token laufen.
 
 ## Nachtrag factory#153: Meldestelle je Bezieher
@@ -31,7 +31,8 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (F10, Teil 11);
 ## Nachtrag factory#215: Wiedervorlage im Bezieher
 
 - **Entscheidung (Ziel = eigenes Repo):** im Bezieher (Sync-Stand vorhanden) legt `wiedervorlage` das Ticket immer im eigenen Repo an (`zielFuer` mit `bezieher`, Standard: Sync-Stand), auch wenn das Harness-Label auf ein Fabrik-Board führt: die Fabrik gehört nicht zu den Schreibzielen eines Beziehers. Das Ticket trägt das Label nur, wenn das Board dieses Labels das eigene Repo führt, sonst keins; Einsortieren und Duplikat-Prüfung laufen im eigenen Repo, die Sperrprüfung entfällt (nichts verlässt das Repo). Die Fabrik bleibt unverändert (Ziel-Repo des Labels, Sperrprüfung bei fremdem Ziel).
-- **Entscheidung (Füllstand zählt Zeilen-Kommentare):** `befundKommentare` zählt nur Kommentare mit mindestens einer Checkbox-Zeile (`BEFUND_ZEILE` in `scripts/produktquote-lib.mjs`, dieselbe Erkennung wie die Zeilenzählung); Fließtext ohne `- [ ]` ist keine abhakbare Zeile und füllt das Sammelticket nicht.
+- **Grenze (einmalige Dublette):** ein Eintrag, zu dem früher in der Fabrik ein Ticket angelegt wurde, bekommt nach dem Update im Bezieher einmalig ein zweites im eigenen Repo, weil die Duplikat-Suche nur noch das eigene Repo prüft.
+- Die Zählweise des Füllstands (nur Kommentare mit Checkbox-Zeile) steht in der [Fortschreibung quellprojekt#1888](0016-1888-haertungs-takt-nach-fuellstand.md#nachtrag-factory215-nur-kommentare-mit-checkbox-zeile).
 
 ## Nachtrag #78: Zählung über beide Repos, weitere Schreibwege
 

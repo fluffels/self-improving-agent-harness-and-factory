@@ -259,6 +259,16 @@ describe("main: Wiedervorlage im Bezieher geht ins eigene Repo (factory#215)", (
     expect(zielFuer(e("a"), fremd, { ...opt, bezieher: true })).toEqual({ ziel: FREMD.repo, token: undefined, label: undefined });
     expect(zielFuer(e("a"), fremd, { ...opt, bezieher: false })).toEqual({ ziel: FABRIK, token: "pt", label: FREMD.labels.harness });
   });
+  test("anlegeArgumente: ohne Label kein --label (kein `--label undefined`), mit Label genau ein --label vor dem Body", () => {
+    const anlegeArgumente = (raw as unknown as { anlegeArgumente: (e: E, label: string | undefined, repo: string) => string[] }).anlegeArgumente;
+    const ohne = anlegeArgumente(e("a"), undefined, "o/r");
+    expect(ohne).not.toContain("--label");
+    expect(ohne.slice(0, 4)).toEqual(["issue", "create", "--repo", "o/r"]);
+    const mit = anlegeArgumente(e("a"), "area:x", "o/r");
+    expect(mit.filter((a) => a === "--label")).toHaveLength(1);
+    expect(mit[mit.indexOf("--label") + 1]).toBe("area:x");
+    expect(mit.indexOf("--label")).toBeLessThan(mit.indexOf("--body"));
+  });
   test("zielFuer: Bezieher, dessen Harness-Label auf das Board des eigenen Repos führt, behält das Label", () => {
     expect(zielFuer(e("a"), FREMD, { repo: FREMD.repo, env: {}, bezieher: true })).toMatchObject({ ziel: FREMD.repo, label: FREMD.labels.harness });
   });

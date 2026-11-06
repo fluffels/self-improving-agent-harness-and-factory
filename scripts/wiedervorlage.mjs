@@ -125,9 +125,14 @@ function ladeEintraege() {
 // Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
 const ladeTickets = (repo, token) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"], { token });
 
-function legeAn(e, label, repo, token) {
+/** Die `gh`-Argumente für das Anlegen: `--label` nur mit Label (im Bezieher ohne Label darf kein `--label undefined` entstehen, factory#215). Pur. */
+export function anlegeArgumente(e, label, repo) {
   const { titel, body } = ticketText(e);
-  const url = ghText(["issue", "create", "--repo", repo, "--title", titel, ...(label ? ["--label", label] : []), "--body", body], { token }).trim();
+  return ["issue", "create", "--repo", repo, "--title", titel, ...(label ? ["--label", label] : []), "--body", body];
+}
+
+function legeAn(e, label, repo, token) {
+  const url = ghText(anlegeArgumente(e, label, repo), { token }).trim();
   return Number(url.split("/").pop());
 }
 
