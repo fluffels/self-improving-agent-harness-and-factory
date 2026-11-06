@@ -1171,6 +1171,8 @@ describe("Gates außerhalb von verify als Projektwert (#1925)", () => {
     assert.match(mit({ nichtInVerify: {} }).join("|"), /gates\.nichtInVerify muss eine Liste/);
     assert.match(mit({ nichtInVerify: [null] }).join("|"), /gates\.nichtInVerify\[0\] muss ein Objekt/);
     assert.match(mit({ nichtInVerify: [{ gate: "a b", grund: "x" }] }).join("|"), /gates\.nichtInVerify\[0\]\.gate muss ein Skriptname/);
+    assert.match(mit({ nichtInVerify: [{ gate: "verify.", grund: "x" }] }).join("|"), /gates\.nichtInVerify\[0\]\.gate muss ein Skriptname.*kein Punkt am Ende/);
+    assert.deepEqual(mit({ nichtInVerify: [{ gate: "verify:kompakt", grund: "x" }] }), []);
     assert.match(mit({ nichtInVerify: [{ gate: "check:a", grund: "" }] }).join("|"), /gates\.nichtInVerify\[0\]\.grund muss ein nicht-leerer String/);
     assert.match(mit({ nichtInVerify: [ok, ok] }).join("|"), /gates\.nichtInVerify\[1\]\.gate „check:bundle“ steht doppelt/);
   });
