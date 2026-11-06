@@ -38,7 +38,7 @@ const M = raw as unknown as {
   issueAus: (k: unknown) => unknown;
   pfadErlaubt: (o: { pfad: string; hauptcheckout: string; nr: number; namen?: unknown; worktreeOrdner?: string }) => boolean;
   fuehreAus: (argv: string[], deps: Record<string, unknown> | (() => Record<string, unknown>)) => Erg;
-  echteDeps: (o?: { config?: unknown; basis?: string; ghJson?: (a: string[]) => unknown }) => { festgefahrenLabel: string; lockDir: string; orte: { name: string; cwd?: string }[]; zugewiesen: () => number[] };
+  echteDeps: (o?: { config?: unknown; basis?: string; ghJson?: (a: string[]) => unknown }) => { festgefahrenLabel: string; entscheidungLabel: string | null; lockDir: string; orte: { name: string; cwd?: string }[]; zugewiesen: () => number[] };
 };
 
 const H = 60 * 60_000;
