@@ -175,3 +175,7 @@ Konkretisierung vorgeschlagen in [ADR 0030](0030-team-betrieb-pod.md) (Team-Betr
 ### Neu entscheiden, wenn
 
 #1434 und #1657 vorliegen (dann die endgültige Wahl als weitere Fortschreibung); #1831, #1832 oder #1833 ein Ergebnis bringen; der Cloud-GitHub-Proxy GraphQL zulässt; Claude Code natives Windows sandboxt; `sbx` sein Credential-Modell ändert.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen nicht mehr am Dateiende, sondern je eine Datei unter [`fortschreibungen/`](fortschreibungen/0025-155-compose-sandbox.md) (Konvention: [README](README.md#format)); dort die erste: Compose-Sandbox mit Egress-Proxy gegen V0 bis V3.
