@@ -33,13 +33,14 @@ function stringMaengel(quelle) {
   return [];
 }
 
-function endungenMaengel(liste) {
+/** Pur: Fehlertexte einer optionalen Endungsliste; `wo` ist der Schlüsselname in den Meldungen. */
+export function endungenMaengel(liste, wo = "struktur.endungen") {
   if (liste === undefined) return [];
-  if (!Array.isArray(liste) || liste.length === 0) return ["struktur.endungen muss eine nicht-leere Liste von Endungen mit Punkt sein (etwa .java, .ts)"];
+  if (!Array.isArray(liste) || liste.length === 0) return [`${wo} muss eine nicht-leere Liste von Endungen mit Punkt sein (etwa .java, .ts)`];
   const gesehen = new Set();
   return liste.flatMap((e, i) => {
-    if (typeof e !== "string" || !ENDUNG.test(e)) return [`struktur.endungen[${i}] muss eine Endung mit Punkt sein (etwa .java, .d.ts): ${JSON.stringify(e)}`];
-    if (gesehen.has(e)) return [`struktur.endungen[${i}] „${e}“ steht doppelt`];
+    if (typeof e !== "string" || !ENDUNG.test(e)) return [`${wo}[${i}] muss eine Endung mit Punkt sein (etwa .java, .d.ts): ${JSON.stringify(e)}`];
+    if (gesehen.has(e)) return [`${wo}[${i}] „${e}“ steht doppelt`];
     gesehen.add(e);
     return [];
   });

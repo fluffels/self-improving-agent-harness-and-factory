@@ -1,11 +1,11 @@
-// Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, gates, factoryLinks, labels, skills,
+// Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, datengroesse, gates, factoryLinks, labels, skills,
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
 // Nur Blatt-Importe: `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { GATE_FORM } from "./regex-lib.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
-import { quellenMaengel } from "./quellwurzeln-lib.mjs";
+import { endungenMaengel, quellenMaengel } from "./quellwurzeln-lib.mjs";
 
 export const istText = (v) => typeof v === "string" && v.trim() !== "";
 export const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -61,17 +61,49 @@ export function pruefeAusnahmen(a) {
       continue;
     }
     const gesehen = new Set();
-    liste.forEach((e, i) => {
-      const wo = `ausnahmen.${name}[${i}]`;
-      if (!istObjekt(e)) return fehler.push(`${wo} muss ein Objekt { datei, grund } sein`);
-      if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
-      else if (!istRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
-      else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
-      else gesehen.add(e.datei);
-      if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
-      else if (!/#\d+/.test(e.grund)) fehler.push(`${wo}.grund muss ein Ticket #<nr> nennen (eine Ausnahme ohne offenes Ticket gibt es nicht)`);
-    });
+    liste.forEach((e, i) => fehler.push(...eintragMaengel(e, `ausnahmen.${name}[${i}]`, gesehen)));
   }
+  return fehler;
+}
+
+/** Pur: Form eines Listeneintrags `{ datei, grund }` (Datei repo-relativ POSIX und je Liste nur einmal über `gesehen`, der Grund nennt ein Ticket `#<nr>`); `wo` ist der Pfad in den Meldungen. */
+function eintragMaengel(e, wo, gesehen) {
+  if (!istObjekt(e)) return [`${wo} muss ein Objekt { datei, grund } sein`];
+  const fehler = [];
+  if (!istText(e.datei)) fehler.push(`${wo}.datei muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+  else if (!istRelativPosix(e.datei)) fehler.push(`${wo}.datei muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(e.datei)}`);
+  else if (gesehen.has(e.datei)) fehler.push(`${wo}.datei „${e.datei}“ steht doppelt`);
+  else gesehen.add(e.datei);
+  if (!istText(e.grund)) fehler.push(`${wo}.grund muss ein nicht-leerer String sein`);
+  else if (!/#\d+/.test(e.grund)) fehler.push(`${wo}.grund muss ein Ticket #<nr> nennen (eine Ausnahme ohne offenes Ticket gibt es nicht)`);
+  return fehler;
+}
+
+/** Standard-Endungen des Datenbudgets (`datengroesse.endungen`): ein Format, kein Projektwort. */
+export const DATEN_STANDARD_ENDUNGEN = [".json"];
+const DATEN_SCHLUESSEL = ["pfade", "budget", "endungen", "hinweis", "deckel"];
+const istPositivGanz = (v) => Number.isInteger(v) && v > 0;
+
+/**
+ * Pur: prüft den Block `datengroesse` (Form, factory#7): `pfade` (nicht-leere Liste wörtlicher Ordner oder Globs) und `budget` (positive Ganzzahl, Zeilen) sind Pflicht;
+ * `endungen` (Standard `.json`), `hinweis` (Projekttext der Teilung) und `deckel` (Liste `{ datei, max, grund mit #<nr> }`, Ratchet für bestehende Monolithe) sind optional.
+ * Ein fehlender Block ist beim Laden erlaubt (das Datenbudget ist dann aus), `datengroesseAus` verlangt die Form beim Gebrauch.
+ */
+export function pruefeDatengroesse(d) {
+  if (!istObjekt(d)) return ["datengroesse muss ein Objekt mit pfade und budget sein"];
+  const fehler = Object.keys(d).filter((k) => !DATEN_SCHLUESSEL.includes(k)).map((k) => `datengroesse.${k} ist kein bekannter Schlüssel (erlaubt: ${DATEN_SCHLUESSEL.join(", ")})`);
+  fehler.push(...(!Array.isArray(d.pfade) || d.pfade.length === 0 ? ["datengroesse.pfade muss eine nicht-leere Liste von Ordnern oder Pfad-Globs sein"] : globMaengel(d.pfade, "datengroesse.pfade")));
+  if (!istPositivGanz(d.budget)) fehler.push("datengroesse.budget muss eine positive Ganzzahl (Zeilen) sein");
+  fehler.push(...endungenMaengel(d.endungen, "datengroesse.endungen"));
+  if (d.hinweis !== undefined && !istText(d.hinweis)) fehler.push("datengroesse.hinweis muss ein nicht-leerer String sein");
+  if (d.deckel === undefined) return fehler;
+  if (!Array.isArray(d.deckel)) return [...fehler, "datengroesse.deckel muss eine Liste von { datei, max, grund } sein"];
+  const gesehen = new Set();
+  d.deckel.forEach((e, i) => {
+    const wo = `datengroesse.deckel[${i}]`;
+    fehler.push(...eintragMaengel(e, wo, gesehen));
+    if (istObjekt(e) && !istPositivGanz(e.max)) fehler.push(`${wo}.max muss eine positive Ganzzahl (Zeilen) sein`);
+  });
   return fehler;
 }
 

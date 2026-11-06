@@ -202,6 +202,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/datengroesse.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/filesize.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
