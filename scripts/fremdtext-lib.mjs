@@ -17,9 +17,10 @@ export function istVertraut(user, owner) {
   return user.type === "Bot" && VERTRAUTE_BOTS.includes(user.login);
 }
 
-/** `gh api --paginate --slurp` liefert eine Liste von Seiten; flach machen (kein Array: leere Liste). */
+/** `gh api --paginate --slurp` liefert eine Liste von Seiten; flach machen. Kein Array: wirft (fail-closed; eine stille leere Liste hielte „keine Kommentare“ für geprüft). */
 export function flach(slurped) {
-  return Array.isArray(slurped) ? slurped.flat() : [];
+  if (!Array.isArray(slurped)) throw new Error(`gh --paginate --slurp lieferte keine Liste von Seiten (Typ ${slurped === null ? "null" : typeof slurped})`);
+  return slurped.flat();
 }
 
 /**

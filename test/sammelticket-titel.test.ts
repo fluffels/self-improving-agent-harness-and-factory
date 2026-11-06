@@ -7,6 +7,8 @@ import * as blatt from "../scripts/sammelticket-titel.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as boardLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as produktquote from "../scripts/produktquote-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { exporteAus } from "../scripts/tag-takt.mjs";
 
 describe("sammelticket-titel", () => {
@@ -19,6 +21,17 @@ describe("sammelticket-titel", () => {
     expect(blatt.SAMMELTICKET_TITEL_LISTE).toEqual([blatt.SAMMELTICKET_TITEL, blatt.LANGFUSE_SAMMELTICKET_TITEL, blatt.CODEQUALITAET_SAMMELTICKET_TITEL]);
     expect(blatt.SAMMELTICKET_TITEL).toBe("Harness-Härtung (gesammelt)");
     expect(blatt.NICHT_EINTRAGBAR_PRAEFIX).toBe("Nicht eintragbar: ");
+  });
+
+  test("Zeilenerkennung: eine Quelle im Blatt, produktquote-lib exportiert dieselben Objekte, meldung-lib trägt keine Kopie des Regex (L45)", () => {
+    expect(produktquote.BEFUND_ZEILE).toBe(blatt.BEFUND_ZEILE);
+    expect(produktquote.BEFUND_ZEILE_OFFEN).toBe(blatt.BEFUND_ZEILE_OFFEN);
+    for (const z of ["- [ ] a", "  * [ ] b", "-   [ ] c"]) expect(blatt.BEFUND_ZEILE_OFFEN.test(z)).toBe(true);
+    for (const z of ["- [x] a", "[ ] a", "text - [ ] a"]) expect(blatt.BEFUND_ZEILE_OFFEN.test(z)).toBe(false);
+    expect(blatt.BEFUND_ZEILE.test("- [x] a")).toBe(true);
+    const meldung = readFileSync(new URL("../scripts/meldung-lib.mjs", import.meta.url), "utf8");
+    expect(meldung).toContain('from "./sammelticket-titel.mjs"');
+    expect(meldung).not.toContain(String.raw`\[ \]`);
   });
 
   const boardText = readFileSync(new URL("../scripts/board-lib.mjs", import.meta.url), "utf8");

@@ -1,4 +1,4 @@
-// Kein Shebang, keine Importe: das importfreie Blatt der Sammelticket-Titel. `board-lib.mjs` lädt beim Import die Projekt-Config und bricht bei einem
+// Kein Shebang, keine Importe: das importfreie Blatt der Sammelticket-Titel und der Zeilenerkennung.`board-lib.mjs` lädt beim Import die Projekt-Config und bricht bei einem
 // Fehler ab; wer nur die Titel braucht (offene-punkte, claims-pruefen), importiert sie von hier, ohne Seiteneffekt. `board-lib.mjs` exportiert die Namen weiter.
 
 /** Titel des Sammeltickets für Harness-Befunde (AGENTS.md § Harness-Befunde sind Zeilen). */
@@ -15,3 +15,9 @@ export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICK
 
 /** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Mechanik: docs/ticket-reihenfolge.md › Offene Punkte der Maintainerin). */
 export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
+
+/** Die eine Quelle der Zeilenerkennung eines Sammeltickets: eine Checkbox-Zeile (`- [ ]`, auch `*`, eingerückt, offen oder abgehakt `[x]`). Füllstand, Zeilenzählung, Tag-Takt und Meldung benutzen sie. */
+export const BEFUND_ZEILE = /^\s*[-*]\s+\[[ xX]\]/;
+
+/** Wie `BEFUND_ZEILE`, aber nur offene Zeilen (`[ ]`). */
+export const BEFUND_ZEILE_OFFEN = /^\s*[-*]\s+\[ \]/;

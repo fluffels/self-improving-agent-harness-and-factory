@@ -6,6 +6,7 @@
  */
 import { SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, alsDatum } from "./board-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN } from "./sammelticket-titel.mjs";
 import { fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
 import { repoDerRolle } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
@@ -17,11 +18,8 @@ export const PRODUKT_QUOTE = 3;
  *  an die Spitze (hinter 🚨/🔒) holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
 export const HARNESS_TAKT_KOMMENTARE = 10;
 
-/** Die eine Quelle der Zeilenerkennung eines Sammeltickets: eine Checkbox-Zeile (`- [ ]`, auch `*`, eingerückt, offen oder abgehakt `[x]`). Füllstand und Zeilenzählung benutzen sie beide. */
-export const BEFUND_ZEILE = /^\s*[-*]\s+\[[ xX]\]/;
-
-/** Wie `BEFUND_ZEILE`, aber nur offene Zeilen (`[ ]`). */
-export const BEFUND_ZEILE_OFFEN = /^\s*[-*]\s+\[ \]/;
+/** Die Zeilenerkennung eines Sammeltickets (`BEFUND_ZEILE`, `BEFUND_ZEILE_OFFEN`) steht im importfreien Blatt `sammelticket-titel.mjs` (auch `meldung-lib.mjs` liest sie von dort, ohne `board-lib`); hier weiter exportiert. */
+export { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN };
 
 /** Hat der Kommentartext mindestens eine Befund-Zeile (`BEFUND_ZEILE`)? Pur. */
 export const hatBefundZeile = (body) => String(body ?? "").split(/\r?\n/).some((z) => BEFUND_ZEILE.test(z));

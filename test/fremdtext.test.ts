@@ -248,6 +248,9 @@ describe("flach", () => {
     assert.deepEqual(flach([[1, 2], [3]]), [1, 2, 3]);
     assert.deepEqual(flach([]), []);
   });
+  test("kein Array (Objekt, null, undefined, Text) wirft mit klarer Meldung statt still [] (fail-closed, L12)", () => {
+    for (const v of [{}, null, undefined, "text", 3]) assert.throws(() => flach(v), /gh --paginate --slurp lieferte keine Liste von Seiten/);
+  });
 });
 
 describe("issueKommentare (#1646): ein Pfad für alle Kommentar-Abrufe", () => {
@@ -261,7 +264,7 @@ describe("issueKommentare (#1646): ein Pfad für alle Kommentar-Abrufe", () => {
     assert.deepEqual(r, [{ id: 1 }, { id: 2 }, { id: 3 }]);
   });
 
-  test("ein explizites Repo ersetzt den Platzhalter; ein Fehler des Abrufs wirft weiter, eine Nicht-Liste ergibt []", () => {
+  test("ein explizites Repo ersetzt den Platzhalter; ein Fehler des Abrufs wirft weiter, eine Nicht-Liste wirft (L12)", () => {
     let pfad = "";
     issueKommentare(9, (args) => ((pfad = args[3]), []), "o/r");
     assert.equal(pfad, "repos/o/r/issues/9/comments?per_page=100");
@@ -272,7 +275,7 @@ describe("issueKommentare (#1646): ein Pfad für alle Kommentar-Abrufe", () => {
         }),
       /gh kaputt/,
     );
-    assert.deepEqual(issueKommentare(9, () => ({})), []);
+    assert.throws(() => issueKommentare(9, () => ({})), /keine Liste von Seiten/);
   });
 });
 
