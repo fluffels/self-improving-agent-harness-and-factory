@@ -173,10 +173,10 @@ describe("diagnoseArbeitsplatz", () => {
     expect((W.diagnoseArbeitsplatz(orte, { ...mit.deps, statSync: alt.statSync }) as unknown as { repos: { lensOrphans: string[] }[] }).repos[0].lensOrphans).toEqual([]);
   });
   test("eingebettet vergleicht ohne Schlüssel-Normalisierung (factory#220 L15e, Default von befundVon): ein registrierter Pfad in anderer Schreibung deckt den Ordner nicht", () => {
-    const w = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${WT.toUpperCase()}3`) }, { "/e/.claude/worktrees": [`${WT}3`] });
-    const r = W.aufraeumDiagnose(FREMD, "/e", { ...w.deps, platform: "win32" });
-    expect(r.repos[0].orphans).toEqual([`${WT}3`]);
-    const gleich = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${WT}3`) }, { "/e/.claude/worktrees": [`${WT}3`] });
+    const GROSS = `${WT.toUpperCase()}3`;
+    const w = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${GROSS}`) }, { "/e/.claude/worktrees": [`${WT}3`] });
+    expect(W.aufraeumDiagnose(FREMD, "/e", { ...w.deps, platform: "win32" }).repos[0].orphans).toEqual([`${WT}3`]);
+    const gleich = welt({ "/e": LISTE("/e", `/e/.claude/worktrees/${GROSS}`) }, { "/e/.claude/worktrees": [GROSS] });
     expect(W.aufraeumDiagnose(FREMD, "/e", { ...gleich.deps, platform: "win32" }).repos[0].orphans).toEqual([]);
   });
   test("unter win32 gilt auch eine lose Datei eines registrierten Worktrees bei anderer Groß-/Kleinschreibung nicht als verwaist", () => {
