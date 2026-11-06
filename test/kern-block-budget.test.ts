@@ -3,7 +3,8 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -81,7 +82,7 @@ describe("Kern-Block-Budget", () => {
   test("Gate check:contextsize (CLI): Kern-Block über Budget in der Fabrik ist rot, im Bezieher grün (die Verdrahtung, nicht nur die pure Prüfung)", { timeout: 60_000 }, () => {
     temp((dir) => {
       const wurzel = join(import.meta.dirname, "..");
-      cpSync(join(wurzel, "scripts"), join(dir, "scripts"), { recursive: true });
+      kopiereScripts(dir);
       datei(dir, ".factory/projekt.json", readFileSync(join(wurzel, ".factory", "projekt.json"), "utf8"));
       datei(dir, ".factory/besitz.json", "{}");
       datei(dir, "AGENTS.md", mitKern("x".repeat(KERN_BLOCK_BUDGET)));

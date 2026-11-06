@@ -1,7 +1,7 @@
 /* Berechtigungs-Ergänzung im Sync und im Drift-Gate (#1874, ADR 0022 Fortschreibung 1874): der Kern-Anteil von `permissions` wird verteilt,
  * die Ergänzung des Ziels (`berechtigungen` in dessen Config) steht als Ende der Listen, Hash und Gate prüfen beides getrennt.
  * Fixture: synthetische Quelle und Ziele im Temp-Ordner, nichts davon liegt im Repo. */
-import { afterEach, describe, test } from "vitest";
+import { afterAll, afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -240,11 +240,24 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
 });
 
 describe("Berechtigungs-Ergänzung: Negativfälle (nichts wird geschrieben, Exit 1)", () => {
-  const rot = (erg: unknown, muster: RegExp, quelle: string = baueQuelle()): void => {
+  // Die Standard-Quelle wird nur gelesen: einmal je describe lazy gebaut (spart git init/commit je Fall).
+  let standard: string | undefined;
+  const standardQuelle = (): string => {
+    if (standard === undefined) {
+      standard = baueQuelle();
+      temps.splice(temps.indexOf(standard), 1);
+    }
+    return standard;
+  };
+  afterAll(() => {
+    if (standard !== undefined) rmSync(standard, { recursive: true, force: true });
+  });
+  const rot = (erg: unknown, muster: RegExp, quelle: string = standardQuelle()): void => {
     const z = tmp();
     schreibe(z, SETTINGS, '{\n  "model": "opus"\n}\n');
     schreibe(z, CONFIG, json({ berechtigungen: erg }));
     const r = vomTag(quelle, z);
+    assert.equal(git(quelle, ["status", "--porcelain"]), "", "der Sync lässt die Quelle unverändert");
     assert.equal(r.code, 1, r.out);
     assert.match(r.err, muster);
     assert.match(r.err, /nichts geschrieben/);
@@ -252,9 +265,11 @@ describe("Berechtigungs-Ergänzung: Negativfälle (nichts wird geschrieben, Exit
     assert.ok(!existsSync(join(z, ".factory/sync-stand.json")), "kein Sync-Stand");
   };
 
-  test("ein fremder Unterschlüssel (defaultMode, additionalDirectories) ist rot", () => {
-    rot({ defaultMode: "bypassPermissions" }, /berechtigungen\.defaultMode ist kein bekannter Schlüssel/);
-    rot({ additionalDirectories: ["/"] }, /additionalDirectories ist kein bekannter Schlüssel/);
+  test.each([
+    ["defaultMode", { defaultMode: "bypassPermissions" }, /berechtigungen\.defaultMode ist kein bekannter Schlüssel/],
+    ["additionalDirectories", { additionalDirectories: ["/"] }, /additionalDirectories ist kein bekannter Schlüssel/],
+  ] as [string, unknown, RegExp][])("ein fremder Unterschlüssel (%s) ist rot", (_name, erg, muster) => {
+    rot(erg, muster);
   });
   test("ein Eintrag ohne mcp__-Präfix ist rot", () => {
     rot({ allow: ["Bash(rm:*)"] }, /muss mit „mcp__“ beginnen/);
