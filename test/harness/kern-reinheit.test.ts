@@ -86,6 +86,7 @@ export type BegriffsConfig = Pick<ProjektConfig, "repo" | "praefixe" | "projektl
   labels: Record<string, string>;
   agenten: Record<string, string>;
   skills?: Record<string, string>;
+  bezieher?: string[];
 };
 
 /** Weg zur Behebung je Begriff (nur wo er vom Standardsatz abweicht). */
@@ -477,6 +478,34 @@ describe("begriffeAus", () => {
     assert.deepEqual(zaehle("wk-lens", kurzZuerst), { Agent: 1 });
   });
 });
+
+describe("begriffeAus Bezieher (factory#215)", () => {
+  const basis = { repo: "acme/demo", boards: [{ besitzer: "acme" }], ...NEU };
+  test("der Name eines Beziehers ohne Literal-Eintrag zählt als ganzes Wort, sein Owner als Owner", () => {
+    const b = begriffeAus({ ...basis, bezieher: ["ownerx/Kundenwerk", "ownery/ab-cd"] });
+    assert.deepEqual(zaehle("ein kundenwerk und AB-CD", b), { Bezieher: 2 });
+    assert.deepEqual(zaehle("kundenwerke xab-cd", b), {});
+    assert.deepEqual(zaehle("ownerx", b), { Owner: 1 });
+  });
+  test("ein Name, der dem Repo-Namen oder einem Literal gleicht, zählt nur einmal", () => {
+    const b = begriffeAus({ ...basis, projektliterale: { Zelda: "zelda" }, bezieher: ["ownerx/Demo", "ownerx/zelda"] });
+    assert.equal("Bezieher" in b, false);
+    assert.deepEqual(zaehle("demo zelda", { ...b, Owner: /^$/g }), { Repo: 1, Zelda: 1 });
+  });
+  test("ohne bezieher gibt es keinen Begriff", () => {
+    assert.equal("Bezieher" in begriffeAus(basis), false);
+  });
+  test("jeder Bezieher der Config ist ein Begriff des Wächters", () => {
+    const cfg = projektConfig() as ProjektConfig & { bezieher?: string[] };
+    for (const repo of cfg.bezieher ?? []) {
+      const name = repo.split("/")[1] ?? "";
+      assert.ok(Object.keys(zaehleAlle(name)).length > 0, `${repo} wird vom Wächter nicht gemeldet`);
+    }
+  });
+});
+
+/** Zählung des Textes gegen die echten Begriffe der aktiven Config. */
+const zaehleAlle = (text: string): Record<string, number> => zaehle(text, echteBegriffe);
 
 describe("begriffeAus Skill", () => {
   test("Skill-Namen aus config.skills zählen als ganze Wörter, groß/klein-genau; ohne skills keine Kategorie", () => {
