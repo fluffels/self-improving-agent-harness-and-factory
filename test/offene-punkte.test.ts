@@ -236,7 +236,7 @@ describe("CLI", () => {
       expect(aufrufe.some((a) => a.startsWith(`repos/${STELLE}/issues?`))).toBe(true);
       expect(aufrufe.some((a) => a.startsWith(`repos/${STELLE}/issues/20/comments`))).toBe(true);
       expect(j.gruppen[3].punkte).toHaveLength(1);
-      expect((j.gruppen[3].punkte[0] as Punkt).titel).toBe(`@meldeowner · ${STAND}`);
+      expect(j.gruppen[3].punkte[0].titel).toBe(`@meldeowner · ${STAND}`);
     });
     test("K4: eine nicht lesbare Meldestelle macht nur bezieher NICHT PRÜFBAR (Exit 1, nie keine), die anderen Gruppen bleiben", async () => {
       const r = await lauf([], { ladeConfig: () => configMitStelle, api: apiJeRepo([STELLE]) });
@@ -260,6 +260,7 @@ describe("CLI", () => {
       const r = await lauf(["--json"], { ladeConfig: () => ({ ...config, boards: [null] }), api: apiMit([sammelT]) });
       expect(r.code).toBe(1);
       expect(parse(r.out).gruppen[3].status).toBe("nicht-pruefbar");
+      expect(JSON.stringify(parse(r.out).gruppen[3])).toContain("Meldestelle nicht bestimmbar");
       expect(parse(r.out).gruppen[0].status).toBe("ok");
     });
     test("ohne abweichende Meldestelle wird keine zweite Issue-Liste gelesen", async () => {
