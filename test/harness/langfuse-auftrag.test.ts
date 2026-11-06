@@ -6,7 +6,7 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixture } from "../support/tmp-fixture";
 import { importHuelle } from "../support/import-huelle";
@@ -209,6 +209,24 @@ describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, 
     expect(importHuelle("scripts/langfuse-auftrag.mjs", leser)).toEqual(["scripts/direktaufruf.mjs", "scripts/langfuse-auftrag-lib.mjs", "scripts/langfuse-auftrag.mjs"]);
     // Gegenprobe: der Nachlieferer selbst zieht den Zugang, die Hülle unterscheidet also wirklich.
     expect(lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], leser)).toEqual(expect.arrayContaining(["scripts/langfuse-zugang.mjs", "scripts/langfuse-api.mjs"]));
+  });
+
+  test("unter dem Node-Permission-Model (nur Repo lesen, ~/.claude lesen und schreiben) legt der Einstieg ab; dasselbe Modell sperrt das Lesen von ~/.langfuse-secret (Sentinel)", () => {
+    const sentinel = "SENTINEL-KEIN-ECHTER-KEY";
+    const home = fixture({ ".langfuse-secret": sentinel, ".claude/.keep": "" });
+    const claude = join(home, ".claude");
+    const flags = ["--permission", `--allow-fs-read=${resolve(WURZEL)}`, `--allow-fs-read=${claude}`, `--allow-fs-write=${claude}`];
+    const env = { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" };
+    const r = spawnSync(process.execPath, [...flags, AUFTRAG, "abc-1"], { encoding: "utf8", timeout: 30_000, env });
+    expect(r.stderr).not.toContain("ERR_ACCESS_DENIED");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Auftrag abgelegt: abc-1");
+    expect(auftraegeAus(dateiVon(join(claude, "state")))).toHaveProperty("abc-1");
+    expect(r.stdout + r.stderr).not.toContain(sentinel);
+    // Gegenprobe: gleiche Flags, ein Lesen der Sentinel-Datei wird verweigert, das Modell greift also wirklich.
+    const probe = spawnSync(process.execPath, [...flags, "-e", `require("node:fs").readFileSync(${JSON.stringify(join(home, ".langfuse-secret"))}, "utf8")`], { encoding: "utf8", timeout: 30_000, env });
+    expect(probe.status).not.toBe(0);
+    expect(probe.stderr).toContain("ERR_ACCESS_DENIED");
   });
 
   test("ohne jeden Zugang: Exit 0, Auftrag liegt im Zustandsordner, kein Lauf (kein Log, kein Ledger)", () => {
