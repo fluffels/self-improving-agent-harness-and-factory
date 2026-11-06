@@ -80,12 +80,15 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = quellenAus(l
   return partial;
 }
 
+/** Die Berichtsdateien einer Datei aus `berichteJe` (kann fehlen). Pur. */
+const berichteVon = (berichteJe, path) => berichteJe?.get(path) ?? [];
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
  *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
-export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe = new Map()) {
+export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };
@@ -113,7 +116,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
     if (total === 0) continue;
     bucket.total += total;
     bucket.covered += covered;
-    bucket.files.push({ path, total, covered, uncovered, berichte: berichteJe.get(path) ?? [] });
+    bucket.files.push({ path, total, covered, uncovered, berichte: berichteVon(berichteJe, path) });
   }
 
   const below = [];
@@ -221,11 +224,14 @@ export function checkDiffCoverage({
 export const COVERAGE_BEFEHL = "node scripts/gate-befehl.mjs coverage";
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
+/** Pur: ` (aus <Bericht>[, <Bericht>])` oder leer ohne bekannten Bericht. */
+const berichtHinweis = (berichte) => (berichte?.length > 0 ? ` (aus ${berichte.join(", ")})` : "");
+
 /** Pur: die Detailzeilen zu einer roten Schicht (factory#208, factory#215): je Datei mit ungetesteten Zeilen `Datei: ungetestet in Zeile n, m (aus <Bericht>[, <Bericht>])`, der Bericht je Datei, nicht die Liste aller; ohne ungetestete Zeile leer. */
 export function rotZeilen(b) {
   return b.files
     .filter((f) => f.uncovered.length > 0)
-    .map((f) => `    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}${(f.berichte ?? []).length > 0 ? ` (aus ${f.berichte.join(", ")})` : ""}`);
+    .map((f) => `    ${f.path}: ungetestet in Zeile ${f.uncovered.join(", ")}${berichtHinweis(f.berichte)}`);
 }
 
 /** Rendert die Schicht-Zeilen des Reports (gegatete zuerst, dann die berichtenden); die Rot-Details gehen auf denselben Strom wie die Summenzeile. */
