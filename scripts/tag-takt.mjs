@@ -393,6 +393,28 @@ function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, bez
   return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, bezieher }) };
 }
 
+/** Checklistenzeile `- [ ] <rest>` bzw. `* [x] <rest>`: Gruppe 1 = Haken, Gruppe 2 = Rest. */
+const HAKEN_ZEILE = /^\s*[-*] \[([ xX])\] (.*?)\r?$/;
+
+/**
+ * Pur (factory#215): übernimmt die Haken des offenen Tickets in den neu gebauten Body. Eine offene Zeile (`[ ]`) des neuen Bodys wird `[x]`, wenn der alte Body dieselbe Zeile
+ * (gleicher Text nach der Checkbox) mit `[x]` oder `[X]` hat; ein geänderter Text verliert den Haken (die Zeile ist neu zu prüfen). Ein Takt-Lauf überschreibt so keine abgehakte Arbeit.
+ */
+export function uebernimmHaken(altBody, neuBody) {
+  const erledigt = new Set();
+  for (const zeile of String(altBody ?? "").split("\n")) {
+    const m = HAKEN_ZEILE.exec(zeile);
+    if (m && m[1] !== " ") erledigt.add(m[2]);
+  }
+  return String(neuBody)
+    .split("\n")
+    .map((zeile) => {
+      const m = HAKEN_ZEILE.exec(zeile);
+      return m && m[1] === " " && erledigt.has(m[2]) ? zeile.replace("[ ]", "[x]") : zeile;
+    })
+    .join("\n");
+}
+
 /** Pur: stimmt das offene Ticket mit dem Soll überein? */
 const istAktuell = (offen, soll) => offen?.titel === soll.titel && offen.body === soll.body;
 
@@ -402,8 +424,10 @@ function plane({ io, daten, offene, trocken }) {
   if (e.aktion === "anlegen" && !trocken) e = bestaetigeTagAnlegen(e, { zweit: io.frischeOffene });
   if (trocken && e.geclaimt && daten.besitz.length > 0) return { ...e, soll: sollTicket(e, daten) };
   if (e.aktion !== "anlegen" && e.aktion !== "aktualisieren") return e;
-  const soll = sollTicket(e, daten);
-  if (e.aktion === "aktualisieren" && istAktuell(offene.find((i) => i.number === e.nummer), soll)) return { ...e, aktion: "nichts", grund: "Ticket ist aktuell", soll };
+  const neu = sollTicket(e, daten);
+  const offen = e.aktion === "aktualisieren" ? offene.find((i) => i.number === e.nummer) : undefined;
+  const soll = offen ? { ...neu, body: uebernimmHaken(offen.body, neu.body) } : neu;
+  if (e.aktion === "aktualisieren" && istAktuell(offen, soll)) return { ...e, aktion: "nichts", grund: "Ticket ist aktuell", soll };
   return { ...e, soll };
 }
 

@@ -23,6 +23,7 @@ const T = raw as unknown as {
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
   bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number | string> }) => { zeilen: string[]; blocker: string[]; offen: string[]; rest: string[] };
+  uebernimmHaken: (alt: string | undefined, neu: string) => string;
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
 
@@ -38,6 +39,19 @@ const commit = (o: Partial<Commit> = {}): Commit => ({ sha: "a".repeat(40), datu
 const reihe = (n: number, o: Partial<Commit> = {}) => T.besitzCommits(Array.from({ length: n }, (_, i) => commit({ sha: String(i).repeat(40), betreff: `fix: x (#${i + 1})`, ...o })), MANIFEST);
 const entscheide = (o: Partial<Parameters<typeof T.entscheideTagTakt>[0]> = {}) => T.entscheideTagTakt({ letzterTag: "v1.2.3", besitz: reihe(1), jetzt: JETZT, offene: [], dringlichKey: KEY, ...o });
 const tagOffen = (o: Partial<Offen> = {}): Offen => ({ number: 40, titel: "🏷️ Tag v1.2.4 setzen und syncen", assignees: [], body: "alt", ...o });
+
+describe("factory#215 L4: uebernimmHaken", () => {
+  const neu = ["Kopf", "- [ ] Eins", "- [ ] Zwei geändert", "* [ ] Drei", "  - [ ] Vier", "- [x] Fünf neu schon erledigt", "Text [ ] Eins"].join("\n");
+  it("übernimmt [x] und [X] (auch * und Einrückung); geänderter Text und Nicht-Checklistenzeilen bleiben", () => {
+    const alt = ["- [x] Eins", "- [ ] Zwei", "* [X] Drei", "- [x] Vier", "- [ ] Fünf neu schon erledigt"].join("\n");
+    expect(T.uebernimmHaken(alt, neu)).toBe(["Kopf", "- [x] Eins", "- [ ] Zwei geändert", "* [x] Drei", "  - [x] Vier", "- [x] Fünf neu schon erledigt", "Text [ ] Eins"].join("\n"));
+  });
+  it("Negativ: ein offenes [ ] im alten Body setzt keinen Haken; ohne alten Body bleibt alles", () => {
+    expect(T.uebernimmHaken("- [ ] Eins", neu)).toBe(neu);
+    expect(T.uebernimmHaken(undefined, neu)).toBe(neu);
+    expect(T.uebernimmHaken("- [x] Eins\r\n", "- [ ] Eins")).toBe("- [x] Eins");
+  });
+});
 
 describe("Parser und Besitz-Filter", () => {
   it("parst Commits mit Betreff, Body und Dateiliste (Leerzeilen, mehrere Commits)", () => {
@@ -464,6 +478,20 @@ describe("lauf", () => {
     T.lauf({ io: io({ ladeLaeufe: () => { throw new Error("403"); }, legeIssueAn: (_t: string, b: string) => { text.push(b); return "5"; } }) });
     expect(text[0]).toContain("CI-Status dieses Commits: unbekannt");
     expect(text[0]).toContain(`Älteste ungetaggte Änderung: ${vor(3).slice(0, 10)}`);
+  });
+  it("factory#215 L4: ein aktualisiertes Ticket behält die Haken, ein aktuelles Ticket mit Haken bleibt unberührt", () => {
+    let body = "";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, _t: string, b: string) => { body = b; } }) });
+    const pre = "- [ ] Pre-Flight „ja, taggen“";
+    expect(body).toContain(pre);
+    const abgehakt = body.replace(pre, "- [x] Pre-Flight „ja, taggen“");
+    const titel = "🏷️ Tag v1.3.0 setzen und syncen";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt })] }) });
+    expect(aufrufe).toEqual([]);
+    let neu = "";
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt.replace("Besitz-Änderungen liegen", "Alt-Änderungen liegen") })], aktualisiere: (_n: number, _t: string, b: string) => { neu = b; } }) });
+    expect(neu).toContain("- [x] Pre-Flight „ja, taggen“");
+    expect(neu.match(/^- \[x\]/gm)).toHaveLength(1);
   });
   it("identisches offenes Ticket bleibt unberührt, abweichendes wird aktualisiert, leeres geschlossen", () => {
     T.lauf({ io: io({ ladeOffene: () => [tagOffen()] }) });
