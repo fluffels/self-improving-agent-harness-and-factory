@@ -195,6 +195,26 @@ export function erwarteterWorktreeOrdner(mainRoot, aufloesung, platform = proces
 }
 
 /**
+ * Schritt 2 des Gurts (factory#89): `{ expected }` oder `{ reason }`. `worktreesDir` muss exakt der erwartete Ordner sein (`erwarteterWorktreeOrdner`; ein `mainRoot` ohne Repo
+ * der Config im Arbeitsplatz lehnt er ab), und im Arbeitsplatz zusätzlich ein echtes Verzeichnis, kein Link (rekursives Löschen folgt keinem Link).
+ */
+function pruefeWorktreeOrdner(mainRoot, worktreesDir, deps) {
+  const expected = erwarteterWorktreeOrdner(mainRoot, deps.aufloesung, deps.platform);
+  if (expected === null) return { reason: `mainRoot ${norm(mainRoot)} ist kein Repo aus arbeitsplatz.repos` };
+  const arbeitsplatz = deps.aufloesung?.betriebsart === "arbeitsplatz";
+  if (norm(worktreesDir) !== expected) {
+    return { reason: `worktreesDir ist nicht ${arbeitsplatz ? "der Worktree-Ordner des Repos" : "<mainRoot>/.claude/worktrees"} (erwartet ${expected}, bekam ${norm(worktreesDir)})` };
+  }
+  if (!arbeitsplatz) return { expected };
+  try {
+    const st = (deps.lstatSync ?? lstatSync)(worktreesDir);
+    return st.isSymbolicLink() || !st.isDirectory() ? { reason: `Worktree-Ordner ist kein echtes Verzeichnis (Link?): ${expected}` } : { expected };
+  } catch {
+    return { reason: `Worktree-Ordner nicht statbar: ${expected}` };
+  }
+}
+
+/**
  * Schutzgurt vor dem `rmSync` (#1051) — `{ safe, reason? }`.
  *
  * Anlass: Beim Aufräumen eines Ticket-Worktrees wurden ALLE versionierten Dateien unter
@@ -223,27 +243,10 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}, 
     return { safe: false, reason: `Ordnername enthält einen Pfad-Trenner: ${name}` };
   }
 
-  // 2) worktreesDir exakt der erwartete Ordner — fängt einen Auflösungsfehler, der den Löschpfad eine Ebene zu hoch zeigen liesse.
-  //    Eingebettet <mainRoot>/.claude/worktrees, im Arbeitsplatz der worktreeOrdner des Repos aus der Config (factory#89).
-  const expected = erwarteterWorktreeOrdner(mainRoot, deps.aufloesung, deps.platform);
-  if (expected === null) {
-    return { safe: false, reason: `mainRoot ${norm(mainRoot)} ist kein Repo aus arbeitsplatz.repos` };
-  }
-  if (norm(worktreesDir) !== expected) {
-    return {
-      safe: false,
-      reason: `worktreesDir ist nicht ${deps.aufloesung?.betriebsart === "arbeitsplatz" ? "der Worktree-Ordner des Repos" : "<mainRoot>/.claude/worktrees"} (erwartet ${expected}, bekam ${norm(worktreesDir)})`,
-    };
-  }
-  // Im Arbeitsplatz zusätzlich: der Worktree-Ordner selbst ist ein echtes Verzeichnis, kein Link (rekursives Löschen folgt keinem Link).
-  if (deps.aufloesung?.betriebsart === "arbeitsplatz") {
-    try {
-      const ordnerSt = lstat(worktreesDir);
-      if (ordnerSt.isSymbolicLink() || !ordnerSt.isDirectory()) return { safe: false, reason: `Worktree-Ordner ist kein echtes Verzeichnis (Link?): ${expected}` };
-    } catch {
-      return { safe: false, reason: `Worktree-Ordner nicht statbar: ${expected}` };
-    }
-  }
+  // 2) worktreesDir exakt der erwartete Ordner (eingebettet <mainRoot>/.claude/worktrees, im Arbeitsplatz der Ordner des Repos aus der Config, factory#89).
+  const ordner = pruefeWorktreeOrdner(mainRoot, worktreesDir, deps);
+  if (ordner.reason !== undefined) return { safe: false, reason: ordner.reason };
+  const expected = ordner.expected;
 
   // 3) Defense in Depth: das Ziel muss ECHT unterhalb liegen, nie gleich sein.
   const target = norm(join(worktreesDir, name));

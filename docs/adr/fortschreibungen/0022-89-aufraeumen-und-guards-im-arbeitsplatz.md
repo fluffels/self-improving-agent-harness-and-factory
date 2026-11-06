@@ -1,4 +1,4 @@
-# Fortschreibung factory#89 (2026-11-06): Aufräumen und Guards arbeiten im Arbeitsplatz je Repo der Config
+# Fortschreibung #89 (2026-11-06): Aufräumen und Guards arbeiten im Arbeitsplatz je Repo der Config
 
 Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Betriebsart Arbeitsplatz, factory#87, factory#88); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
 

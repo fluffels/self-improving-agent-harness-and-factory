@@ -20,7 +20,7 @@ type Ausfall = {
   serverAusConfig: (text: string) => Server[];
   fehlendeVariablen: (s: Server, env: Record<string, string | undefined>) => string[];
   slug: (p: string) => string;
-  hauptWurzel: (p: string) => string;
+  hauptWurzel: (p: string, ap?: boolean) => string;
   standPfad: (w: string, env: Record<string, string | undefined>, tmp: string, config?: unknown) => string;
   logBasis: (o: { plattform: string; env: Record<string, string | undefined>; home: string }) => string;
   projektOrdner: (namen: string[], wurzel: string) => { ordner: string; suffix: string }[];
@@ -148,9 +148,9 @@ describe("Pfad-Helfer", () => {
     expect(a.hauptWurzel("/dev/proj/.claude/worktreesX/wt-1")).toBe("/dev/proj/.claude/worktreesX/wt-1");
   });
   test("hauptWurzel im Arbeitsplatz (factory#89): Worktree unter `.claude/worktrees/<repo>/<name>` kürzt auf die Wurzel, ohne die Angabe bleibt der Pfad (er wäre nicht von einem tieferen zu unterscheiden)", () => {
-    const hauptWurzelAp = a.hauptWurzel as unknown as (w: string, ap?: boolean) => string;
+    const hauptWurzelAp = a.hauptWurzel;
     expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1", true)).toBe("/ap");
-    expect(hauptWurzelAp("C:\\ap\\.claude\\worktrees\\web\\wt-1\\", true)).toBe("C:\\ap");
+    expect(hauptWurzelAp("X:\\dev\\ap\\.claude\\worktrees\\web\\wt-1\\", true)).toBe("X:\\dev\\ap");
     expect(hauptWurzelAp("/ap/.claude/worktrees/wt-1", true)).toBe("/ap/.claude/worktrees/wt-1");
     expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1/sub", true)).toBe("/ap/.claude/worktrees/web/wt-1/sub");
     expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1")).toBe("/ap/.claude/worktrees/web/wt-1");

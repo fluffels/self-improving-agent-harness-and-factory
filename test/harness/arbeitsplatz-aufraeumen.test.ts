@@ -49,7 +49,7 @@ const ECHT_DIR = { isSymbolicLink: () => false, isDirectory: () => true, isFile:
 describe("erwarteterWorktreeOrdner", () => {
   test("eingebettet <mainRoot>/.claude/worktrees (zeichengleich zu vorher), auch bei Backslashes", () => {
     expect(W.erwarteterWorktreeOrdner("/m")).toBe("/m/.claude/worktrees");
-    expect(W.erwarteterWorktreeOrdner("C:\\m\\")).toBe("C:/m/.claude/worktrees");
+    expect(W.erwarteterWorktreeOrdner("X:\\dev\\m\\")).toBe("X:/dev/m/.claude/worktrees");
     expect(W.erwarteterWorktreeOrdner("/m", { betriebsart: "eingebettet", wurzel: "/m", repos: [] })).toBe("/m/.claude/worktrees");
   });
   test("Arbeitsplatz: der Worktree-Ordner des Repos mit pfad = mainRoot, sonst null", () => {

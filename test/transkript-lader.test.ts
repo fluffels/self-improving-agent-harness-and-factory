@@ -154,7 +154,7 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
   });
   test("projektSlug und istProjektOrdner im Arbeitsplatz (factory#89): ein Worktree unter `.claude/worktrees/<repo>/<name>` zählt zur Wurzel", () => {
     expect(P.projektSlug("/ap/.claude/worktrees/web/wt-7")).toBe("-ap");
-    expect(P.projektSlug("X:\\ap\\.claude\\worktrees\\web\\wt-7\\scripts")).toBe("X--ap");
+    expect(P.projektSlug("X:\\dev\\ap\\.claude\\worktrees\\web\\wt-7\\scripts")).toBe("X--dev-ap");
     expect(P.istProjektOrdner("-ap--claude-worktrees-web-wt-7", "-ap")).toBe(true);
   });
   const O = rawTranskript as unknown as { projekteWurzel: () => string; projektOrdner: (s?: string | null, d?: { config?: unknown; basis?: string }) => string; hauptrepoWurzel: () => string | null };
