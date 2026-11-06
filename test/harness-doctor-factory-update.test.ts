@@ -63,6 +63,18 @@ describe("factoryUpdatePunkt", () => {
     const { lesen } = lesenMit(null);
     expect(lib.factoryUpdatePunkt({ rootDir: "/x", config, lesen, existiert: da, bezieher: ja })[0]).toMatchObject({ ok: false, nichtPruefbar: true });
   });
+  test("Antwort ohne Objekt (Text, Zahl): NICHT PRÜFBAR; leeres repo: NICHT PRÜFBAR ohne Aufruf; Standard-existiert liest das Dateisystem", () => {
+    for (const antwort of ["active", 7]) expect(lib.factoryUpdatePunkt({ rootDir: "/x", config, lesen: lesenMit(antwort).lesen, existiert: da, bezieher: ja })[0], String(antwort)).toMatchObject({ ok: false, nichtPruefbar: true });
+    const { aufrufe, lesen } = lesenMit({ state: "active" });
+    expect(lib.factoryUpdatePunkt({ rootDir: "/x", config: { repo: "" }, lesen, existiert: da, bezieher: ja })[0]).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(aufrufe).toEqual([]);
+    expect(lib.factoryUpdatePunkt({ rootDir: "/gibt/es/nicht", config, lesen, bezieher: ja })[0]).toMatchObject({ ok: false });
+    expect(aufrufe).toEqual([]);
+  });
+  test("keine Config (undefined, null, Text): kein Punkt", () => {
+    const { lesen } = lesenMit({ state: "active" });
+    for (const c of [undefined, null, "x"]) expect(lib.factoryUpdatePunkt({ rootDir: "/x", config: c, lesen, existiert: da, bezieher: ja }), String(c)).toEqual([]);
+  });
   test("Config ohne lesbares repo: NICHT PRÜFBAR ohne Aufruf; ohne Config oder im Vorab-Abbruch: kein Punkt", () => {
     const { aufrufe, lesen } = lesenMit({ state: "active" });
     expect(lib.factoryUpdatePunkt({ rootDir: "/x", config: { repo: 3 }, lesen, existiert: da, bezieher: ja })[0]).toMatchObject({ ok: false, nichtPruefbar: true });
