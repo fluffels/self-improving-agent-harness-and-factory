@@ -152,7 +152,19 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
     expect(P.projektSlug("/home/x/repo/.claude/worktrees/wt-1/scripts")).toBe("-home-x-repo");
     expect(P.projektSlug("X:/dev/repo/")).toBe("X--dev-repo");
   });
-  const O = rawTranskript as unknown as { projekteWurzel: () => string; projektOrdner: (s?: string | null) => string; hauptrepoWurzel: () => string | null };
+  test("projektSlug und istProjektOrdner im Arbeitsplatz (factory#89): ein Worktree unter `.claude/worktrees/<repo>/<name>` zählt zur Wurzel", () => {
+    expect(P.projektSlug("/ap/.claude/worktrees/web/wt-7")).toBe("-ap");
+    expect(P.projektSlug("X:\\ap\\.claude\\worktrees\\web\\wt-7\\scripts")).toBe("X--ap");
+    expect(P.istProjektOrdner("-ap--claude-worktrees-web-wt-7", "-ap")).toBe(true);
+  });
+  const O = rawTranskript as unknown as { projekteWurzel: () => string; projektOrdner: (s?: string | null, d?: { config?: unknown; basis?: string }) => string; hauptrepoWurzel: () => string | null };
+  test("projektOrdner im Arbeitsplatz: der Slug der Basis, ohne den Block der bisherige Weg", () => {
+    const cfg = { arbeitsplatz: { wurzel: "/ap", repos: [{ name: "web", pfad: "web" }] } };
+    expect(O.projektOrdner(undefined, { config: cfg, basis: "/ap" })).toBe(join(O.projekteWurzel(), "-ap"));
+    expect(O.projektOrdner(undefined, { config: cfg, basis: "/ap/.claude/worktrees/web/wt-7" })).toBe(join(O.projekteWurzel(), "-ap"));
+    expect(O.projektOrdner("X--slug", { config: cfg, basis: "/ap" })).toBe(join(O.projekteWurzel(), "X--slug"));
+    expect(O.projektOrdner(undefined, { config: {}, basis: "/ap" })).toBe(join(O.projekteWurzel(), P.projektSlug(O.hauptrepoWurzel() ?? process.cwd())));
+  });
   test("projekteWurzel und projektOrdner: Wurzel unter ~/.claude/projects, Slug-Override, sonst Hauptrepo bzw. cwd", () => {
     expect(O.projekteWurzel()).toBe(join(homedir(), ".claude", "projects"));
     expect(O.projektOrdner("X--dev-repo")).toBe(join(O.projekteWurzel(), "X--dev-repo"));

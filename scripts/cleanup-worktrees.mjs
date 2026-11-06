@@ -139,7 +139,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     return 1;
   }
-  return repoAufraeumen(befund, { FIX, namen });
+  return repoAufraeumen(befund, { FIX, namen, fs: diagnoseDeps });
 }
 
 /**
@@ -170,25 +170,25 @@ function arbeitsplatzMain({ config, basis, namen, FIX, branches, modus, diagnose
     return 1;
   }
   const wurzelOrdner = join(d.aufloesung.wurzel, ".claude", "worktrees");
-  const fremd = localWorktreeDirs(wurzelOrdner).filter((n) => !orte.some((o) => o.name === n));
+  const fremd = localWorktreeDirs(wurzelOrdner, diagnoseDeps).filter((n) => !orte.some((o) => o.name === n));
   if (fremd.length > 0) console.log(`Ordner unter ${wurzelOrdner} ohne Repo in arbeitsplatz.repos (nie automatisch gelöscht): ${fremd.join(", ")}\n`);
   const codes = d.repos.map((befund) => {
     console.log(`=== Repo ${befund.name} (${befund.worktreesDir}) ===`);
-    return repoAufraeumen(befund, { FIX, namen, aufloesung: d.aufloesung });
+    return repoAufraeumen(befund, { FIX, namen, aufloesung: d.aufloesung, fs: diagnoseDeps });
   });
   return Math.max(...codes);
 }
 
 /** Diagnose-Ausgabe und Aufräumen für den Befund EINES Repos (`diagnoseOrphans` bzw. ein Eintrag von `diagnoseArbeitsplatz`); Exit-Code dieses Repos. */
-function repoAufraeumen(befund, { FIX, namen, aufloesung }) {
+function repoAufraeumen(befund, { FIX, namen, aufloesung, fs }) {
   const { orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = befund;
-  const dirs = localWorktreeDirs(worktreesDir);
+  const dirs = localWorktreeDirs(worktreesDir, fs);
   console.log(`Worktrees-Ordner: ${worktreesDir}`);
   console.log(`Lokal vorhanden: ${dirs.length} Ordner\n`);
 
   // Reparse-Points an Worktree-Stelle sind nie ein normaler Ordner (#1051) und
   // werden NIE gelöscht — nur gemeldet, mit dem Auflöse-Befehl.
-  const suspicious = suspiciousWorktreeEntries(worktreesDir);
+  const suspicious = suspiciousWorktreeEntries(worktreesDir, fs);
   if (suspicious.length > 0) {
     console.error(`Symlink/Junction an Worktree-Stelle (${suspicious.length}) — NICHT automatisch löschbar:`);
     for (const name of suspicious) {
@@ -255,11 +255,11 @@ function repoAufraeumen(befund, { FIX, namen, aufloesung }) {
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
-  const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans, { aufloesung });
-  const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles, { aufloesung });
+  const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans, { ...fs, aufloesung });
+  const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles, { ...fs, aufloesung });
   for (const name of dateien.removed) console.log(`  ✓ ${name} (lose Datei) entfernt`);
   for (const name of lens.removed) console.log(`  ✓ ${name} (Lens-Worktree) entfernt`);
-  const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans, { aufloesung });
+  const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans, { ...fs, aufloesung });
   const errors = [...ordnerFehler, ...lens.errors, ...dateien.errors];
   const refused = [...ordnerRefused, ...lens.refused, ...dateien.refused];
   const halter = { ...ordnerHalter, ...lens.halter };

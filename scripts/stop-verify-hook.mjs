@@ -70,7 +70,7 @@ export function deletedTrackedPaths(cwd, deps = {}) {
   const exec = deps.execSync ?? execSync;
   let out;
   try {
-    out = exec("git status --porcelain -z -- .claude", { cwd, encoding: "utf-8" });
+    out = exec("git status --porcelain -z -- .claude", { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
   } catch {
     return null;
   }

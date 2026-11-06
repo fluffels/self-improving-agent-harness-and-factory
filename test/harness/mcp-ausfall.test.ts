@@ -147,6 +147,19 @@ describe("Pfad-Helfer", () => {
     expect(a.hauptWurzel("/dev/proj/.claude/worktrees/wt-1/sub")).toBe("/dev/proj/.claude/worktrees/wt-1/sub");
     expect(a.hauptWurzel("/dev/proj/.claude/worktreesX/wt-1")).toBe("/dev/proj/.claude/worktreesX/wt-1");
   });
+  test("hauptWurzel im Arbeitsplatz (factory#89): Worktree unter `.claude/worktrees/<repo>/<name>` kürzt auf die Wurzel, ohne die Angabe bleibt der Pfad (er wäre nicht von einem tieferen zu unterscheiden)", () => {
+    const hauptWurzelAp = a.hauptWurzel as unknown as (w: string, ap?: boolean) => string;
+    expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1", true)).toBe("/ap");
+    expect(hauptWurzelAp("C:\\ap\\.claude\\worktrees\\web\\wt-1\\", true)).toBe("C:\\ap");
+    expect(hauptWurzelAp("/ap/.claude/worktrees/wt-1", true)).toBe("/ap/.claude/worktrees/wt-1");
+    expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1/sub", true)).toBe("/ap/.claude/worktrees/web/wt-1/sub");
+    expect(hauptWurzelAp("/ap/.claude/worktrees/web/wt-1")).toBe("/ap/.claude/worktrees/web/wt-1");
+  });
+  test("standPfad mit Block `arbeitsplatz`: ein Worktree eines Repos und die Wurzel teilen eine Datei", () => {
+    const cfg = { ...FREMD, arbeitsplatz: { wurzel: "/ap", repos: [{ name: "web", pfad: "web" }] } };
+    expect(a.standPfad("/ap/.claude/worktrees/web/wt-1", {}, "/tmp", cfg)).toBe(a.standPfad("/ap", {}, "/tmp", cfg));
+    expect(a.standPfad("/ap/.claude/worktrees/web/wt-1", {}, "/tmp", FREMD)).not.toBe(a.standPfad("/ap", {}, "/tmp", FREMD));
+  });
   test("standPfad: Worktree und Hauptcheckout teilen eine Datei, der Override hat Vorrang", () => {
     const haupt = a.standPfad("/dev/proj", {}, "/tmp", FREMD);
     expect(a.standPfad("/dev/proj/.claude/worktrees/wt-1", {}, "/tmp", FREMD)).toBe(haupt);
