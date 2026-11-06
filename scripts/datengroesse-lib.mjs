@@ -55,7 +55,7 @@ export function splitEmpfehlung(text, { loc, budget, json = true, hinweis }) {
       wurzel = undefined;
     }
   }
-  if (!istContainer(wurzel)) zeilen.push("Nach inhaltlicher Einheit teilen (eine Datei je Einheit; die Struktur ist nicht als JSON lesbar).");
+  if (!istContainer(wurzel)) zeilen.push("Nach inhaltlicher Einheit teilen (eine Datei je Einheit; keine gliederbare JSON-Struktur erkannt).");
   else {
     const { ort, wert } = teilungsEbene(wurzel);
     const kinder = kinderVon(wert);

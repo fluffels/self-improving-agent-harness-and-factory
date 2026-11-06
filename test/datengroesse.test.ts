@@ -40,6 +40,9 @@ describe("pruefeDatengroesse (Form des Blocks)", () => {
       [],
     );
   });
+  test("untere Grenze: budget 1 und max 1 sind gültig", () => {
+    assert.deepEqual(pruefeDatengroesse({ pfade: ["d"], budget: 1, deckel: [{ datei: "d/a.json", max: 1, grund: "#1 x" }] }), []);
+  });
   test("kein Objekt, unbekannter Schlüssel", () => {
     assert.match(pruefeDatengroesse("x").join(), /datengroesse muss ein Objekt/);
     assert.match(pruefeDatengroesse(null).join(), /datengroesse muss ein Objekt/);
@@ -68,13 +71,14 @@ describe("pruefeDatengroesse (Form des Blocks)", () => {
     for (const m of [0, 1.5, "200", undefined]) {
       assert.match(pruefeDatengroesse({ ...gueltig, deckel: [{ datei: "daten/a.json", max: m, grund: "#9 x" }] }).join(), /deckel\[0\]\.max muss eine positive Ganzzahl/, String(m));
     }
-    assert.match(pruefeDatengroesse({ ...gueltig, deckel: ["x"] }).join(), /deckel\[0\] muss ein Objekt/);
+    for (const e of ["x", null]) assert.deepEqual(pruefeDatengroesse({ ...gueltig, deckel: [e] }), ["datengroesse.deckel[0] muss ein Objekt { datei, grund } sein"], String(e));
   });
 });
 
 describe("datengroesseAus und pruefeProjektConfig", () => {
   test("ohne Block null (Datenbudget aus), mit Block normalisiert", () => {
     assert.equal(pc.datengroesseAus({}), null);
+    assert.equal(pc.datengroesseAus(undefined), null);
     assert.deepEqual(pc.datengroesseAus({ datengroesse: gueltig }), { pfade: ["daten"], budget: 100, endungen: [".json"], hinweis: null, deckel: [] });
     const voll = { pfade: ["d"], budget: 3, endungen: [".yaml"], hinweis: "h", deckel: [{ datei: "d/a.yaml", max: 9, grund: "#1 x" }] };
     assert.deepEqual(pc.datengroesseAus({ datengroesse: voll }), voll);
@@ -111,6 +115,7 @@ describe("pruefeDatenGroessen (Urteile)", () => {
     const fehlt = pruefeDatenGroessen([], { budget, deckel });
     assert.equal(fehlt[0].art, "stale");
     assert.match(fehlt[0].text, /existiert nicht mehr/);
+    assert.deepEqual(pruefeDatenGroessen(a(101), { budget, deckel }).map((x) => x.art), ["unter-max"], "budget+1 mit Deckel ist nicht stale");
     const klein = pruefeDatenGroessen(a(100), { budget, deckel });
     assert.equal(klein[0].art, "stale");
     assert.match(klein[0].text, /liegt nicht mehr über 100 Zeilen/);
@@ -148,6 +153,18 @@ describe("splitEmpfehlung", () => {
     assert.match(splitEmpfehlung(JSON.stringify({ a: [], b: [] }), { loc: 300, budget: 100, json: false }), /nach inhaltlicher Einheit teilen/i);
     assert.doesNotMatch(splitEmpfehlung(JSON.stringify({ a: [], b: [] }), { loc: 300, budget: 100, json: false }), /Teilungsebene/);
     assert.match(splitEmpfehlung(JSON.stringify({ nur: 1 }), { loc: 300, budget: 100 }), /lässt sich nicht weiter gliedern/);
+  });
+  test("null als Wert, leeres Kind und Array in Array: kein Absturz, richtiger Ort", () => {
+    assert.match(splitEmpfehlung("null", { loc: 300, budget: 100 }), /nach inhaltlicher Einheit teilen/i);
+    assert.match(splitEmpfehlung(JSON.stringify({ w: null }), { loc: 300, budget: 100 }), /Struktur unter \$ lässt sich nicht weiter gliedern/);
+    assert.match(splitEmpfehlung(JSON.stringify({ a: [] }), { loc: 300, budget: 100 }), /Struktur unter \$\.a lässt sich nicht weiter gliedern/);
+    assert.match(splitEmpfehlung(JSON.stringify([[{ a: 1 }, { a: 2 }]]), { loc: 300, budget: 100 }), /Teilungsebene \$\[0\]: 2 Einträge/);
+  });
+  test("Kind genau auf dem Budget ist nicht über dem Budget, eines mehr schon", () => {
+    const mit = (n: number) => splitEmpfehlung(JSON.stringify({ g: Array.from({ length: n }, (_, i) => i), k: [] }, null, 2), { loc: 400, budget: 100 });
+    assert.match(mit(98), /g \(≈100 Zeilen\)/);
+    assert.doesNotMatch(mit(98), /eine Ebene tiefer/);
+    assert.match(mit(99), /g liegt allein über dem Budget: eine Ebene tiefer teilen/);
   });
   test("der Projekt-Hinweis wird angehängt", () => {
     assert.match(splitEmpfehlung("{ kaputt", { loc: 300, budget: 100, hinweis: "Teilung je Einheit X" }), /Projekt-Hinweis: Teilung je Einheit X$/);

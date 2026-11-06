@@ -11,6 +11,8 @@
  * schleichen sich Regressionen ein. Dieser Wächter meldet jedes Quellmodul (Wurzel `struktur.quelle`
  * der Projekt-Config) über einem Zeilen-Budget, BEVOR es zum nächsten God-File wächst.
  *
+ * Optional misst es auch Datendateien (Standard .json) gegen ein Zeilen-Budget: Block `datengroesse` der Projekt-Config, Logik in `datengroesse-lib.mjs` (factory#7).
+ *
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu setup.mjs: läuft
  * plattformübergreifend über `npm run check:size` und im CI. Die Mess- und
  * Allowlist-Logik wird zusätzlich von test/filesize.test.ts importiert – EINE
@@ -140,7 +142,7 @@ export function datenBefunde(rootDir, block) {
     else if (u.art === 'unter-max') rot.push(u.text + DATEN_REBASE_HINWEIS)
     else {
       const text = readFileSync(join(rootDir, ...u.datei.split('/')), 'utf8')
-      const empfehlung = splitEmpfehlung(text, { loc: u.loc, budget: block.budget, json: u.datei.endsWith('.json'), hinweis: block.hinweis ?? undefined })
+      const empfehlung = splitEmpfehlung(text, { loc: u.loc, budget: block.budget, json: u.datei.endsWith('.json'), hinweis: block.hinweis })
       rot.push(`${u.text}${u.art === 'ueber-max' ? DATEN_REBASE_HINWEIS : ''}\n  Split-Empfehlung: ${empfehlung.replaceAll('\n', '\n    ')}`)
     }
   }
