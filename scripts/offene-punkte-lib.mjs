@@ -75,7 +75,7 @@ export function sammeltickets(issues, titelListe, owner) {
   return issues.filter((i) => !i.pull_request && titelListe.includes(i.title) && istVertraut(i.user, owner));
 }
 
-const letzteZeile = (text) => String(text ?? "").split(/\r?\n/).map((z) => z.trim()).filter((z) => z !== "").pop() ?? "";
+const letzteZeile = (text) => String(text ?? "").split(/\r?\n/).map((z) => z.trim()).filter((z) => z !== "").pop();
 
 /** Pur: die Bezieher-Meldungen eines Sammeltickets aus seinen Kommentaren. */
 function meldungenAus(ticket, kommentare, owner) {
