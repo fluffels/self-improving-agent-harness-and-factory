@@ -290,6 +290,73 @@ Gemessen am 2026-10-06 aus den Subagenten-Transkripten, erster Call je Subagent 
 - **Override belegt:** Die Agenten-Liste der Session zeigt für `Explore` Beschreibung und Tools aus [`explore.md`](../.claude/agents/explore.md) („… Ersetzt den eingebauten Explore.“, gesehen mit Claude Code 2.1.291), der gemessene Call lief auf Haiku und mit dem kleinen Sockel; die Doku sagt: ein Projekt-Subagent namens `Explore` überschreibt den eingebauten.
 - **Chrome:** In der Planung gemessen (Session 129f8154): die Liste der verzögerten Tools (261 Namen) enthält keine `mcp__claude-in-chrome__*`-Namen, weil `deny` sie entfernt; der Systemprompt-Abschnitt „Claude in Chrome browser automation“ (4.107 Zeichen, rund 1k Tokens) bleibt im Hauptchat und lässt sich nur im User-Scope abschalten.
 
+### Kontext-Budget: Kern-Auslagerung (factory#233)
+
+Probe zu den Akzeptanzkriterien 1 und 2 des Epics factory#228; sie entscheidet nichts (Entscheidung und Umbau: factory#235 bis factory#237). Gemessen am 2026-11-06 mit Claude Code 2.1.319 und `codex-cli` 0.166.0 (Codex-Login per ChatGPT), Modell Sonnet 5.5. Alles im Scratch (`<scratch>/kern-probe/<fall>/`, je Fall ein eigenes `git init`), im Repo-Root liegt weder `CLAUDE.md` noch `.claude/CLAUDE.md` noch `CLAUDE.local.md`. User-Scope-Kontext (`~/.claude/CLAUDE.md`, 2.719 Zeichen, und `~/.codex/AGENTS.md`) lädt in jedem Lauf mit und ist für alle Fälle gleich.
+
+**Rezept.** Kanarienwörter `KW-<12 Hex>`, je Quelle ein eigenes, nie im Prompt; jede Probe hat ein Kontrollwort direkt in `AGENTS.md` (ohne es gilt ein „nein“ nicht). Claude Code: `claude -p "<Frage>" --tools "" --model sonnet --output-format stream-json --verbose` (Hauptchat), für Subagenten `--tools "Agent,Glob"` (ein Subagent mit `tools: Glob` startet nicht, wenn der Elternlauf `Glob` nicht hat) und Auswertung der Events mit `parent_tool_use_id` (die eigene Antwort des Subagenten, nicht die weitergegebene); Sockel = `input + cache_creation + cache_read` des ersten Assistant-Calls. Codex: `codex exec --json --sandbox read-only -C <dir> "<Frage>"`, Sockel = `usage.input_tokens` des ersten `turn.completed`; ungültig wäre ein Lauf mit `command_execution` vor der Antwort (kam nicht vor). Der Prompt verbietet Werkzeuge und Dateilesen. Die Probe-Sessions liegen im Langfuse-Projekt und unter dem Scratch-Projektordner der Transkripte; in Statistiken mit den IDs unten ausschließen.
+
+**Claude Code: Kanarienwort je Kontext** (Scratch `kanarien/`: `AGENTS.md` mit Kontrollwort und Zeile `@kern.md`, `kern.md` mit Importwort; zwei Agenten mit `tools: Glob`, einer zusätzlich `omitClaudeMd: true`):
+
+| Kontext | Kontrollwort in `AGENTS.md` | Importwort aus `kern.md` | Session | Sockel (erster Call) |
+|---|---|---|---|--:|
+| Hauptchat | ja | ja | `21b6f530-bdb9-4fa5-8475-0e04ba60c946` | 66.793 |
+| Subagent | ja | ja | `bfaa9f29-b458-4f36-b216-1b707d2d65f9` | 4.037 |
+| Subagent mit `omitClaudeMd` | nein | nein | `50a13a7b-8962-4897-bd60-b12e643a1433` | 2.278 |
+
+Ein ausgelagerter Kern per `@`-Import wird also nativ geladen, im Hauptchat wie im Subagenten, und `omitClaudeMd` lässt dem Subagenten beide weg. Ungültige Vorläufer (kein Subagent gestartet, weil `Glob` im Elternlauf fehlte): `ea20abd1-0ef3-43f2-bec3-fc4cac7c2af2`, `d4457efb-f77b-45c6-b1da-52195503af13`. Die Sockel dieser Tabelle sind mit der Sockel-Tabelle unten nicht vergleichbar (anderer Aufruf mit `--tools`-Filter, Ursache nicht untersucht).
+
+**Codex: Wege der Kontextladung** (je ein Lauf; Thread-ID, `input_tokens`):
+
+| Fall | Ergebnis | Thread | Tokens |
+|---|---|---|--:|
+| a) Import `@kern.md` in `AGENTS.md` | Kontrollwort ja, **Importwort nein**: der Import wird nicht aufgelöst | `01a1b305-ba66-7781-bd9f-039f2bc62c48` | 22.217 |
+| b1) `AGENTS.md` 46.560 Bytes, Wort bei Byte 46.520, Standard | **nein**: hinter `project_doc_max_bytes` (32.768) abgeschnitten | `01a1b306-2ef4-7fc3-813a-a38b14b59516` | 30.185 |
+| b2) wie b1 mit `-c project_doc_max_bytes=65536` | ja | `01a1b306-48d0-77a1-b86d-9de51b32f22b` | 33.543 |
+| c1) `.codex/config.toml` mit `project_doc_max_bytes = 65536` im Scratch (nicht vertraut) | nein | `01a1b306-6605-7163-852c-cd25c22175ef` | 30.191 |
+| c2) wie c1 plus `-c projects.'<pfad>'.trust_level="trusted"` | nein | `01a1b306-facc-7873-bda0-3a525529cfb3` | 30.196 |
+| c3) Projekt-Config mit `developer_instructions`, nicht vertraut / Trust per `-c` (mit Pfad in Groß- und Kleinschreibung) / Elternordner vertraut mit exaktem Trust per `-c` | nein (fünf Läufe) | `01a1b307-84e5-79d3-8aa0-04ef89f17210`, `01a1b307-a1eb-75d1-ad94-90da9f51055d`, `01a1b307-e6b8-7232-9649-8a6545ce3041`, `01a1b308-9ad2-7293-8c48-36e998bf89d6`, `01a1b308-b404-78e0-af7e-3e905a8c9b9c` | 21.887 bis 30.040 |
+| c4) Projekt-Config im vertrauten Repo (`developer_instructions`, danach `project_doc_max_bytes = 4000`) | **ja**; die Grenze wirkt: 27.820 gegen 23.550 Tokens (`01a1b309-498f-75a2-93ea-02f78a451404` ohne, `01a1b309-648c-7c42-b800-4da68a835b1d` mit Config) | `01a1b309-04e8-7d53-9102-ef6863080db7` | 23.564 |
+| d1) verschachtelte `kern/AGENTS.md`, Lauf aus der Wurzel | nein | `01a1b306-81de-7532-97aa-02bc0a4ff805` | 22.192 |
+| d2) wie d1 mit `-C kern` | ja | `01a1b306-9caa-7d52-8810-9b25223adc88` | 22.216 |
+| e1) `-c developer_instructions="…"` je Aufruf | ja | `01a1b307-1aee-7142-b193-1d9507c3679a` | 22.238 |
+| f1) `-c project_doc_fallback_filenames=["kern.md"]`, Ordner ohne `AGENTS.md` | ja (nur wenn dort keine `AGENTS.md` liegt) | `01a1b307-477f-7ec3-8dad-589996113190` | 22.202 |
+| g) Rolle: `.codex/agents/*.toml` im vertrauten Repo, einmal mit `project_doc_max_bytes = 0` | kein Effekt beobachtbar: der Subagent ist ein Fork (`forked_from_id` im Rollout) und erbt den Elternverlauf samt `AGENTS.md`; beide Rollen-Rollouts enthalten den Regeltext, die Kanarienwörter vermischen sich | Eltern `01a1b309-be91-72f1-9cef-0a21f3e85617`, Rollen `01a1b309-d8bc-7990-b679-cb7d9ebfb2ac`, `01a1b309-fa41-7593-a533-8fe89e544b6c` | 28.637, 28.995 |
+
+Folgerungen: Codex löst keinen Import auf; ein Kern hinter 32.768 Bytes fehlt dort, außer `project_doc_max_bytes` ist angehoben (per `-c` oder per Projekt-Config, die nur in einem vertrauten Projekt gilt; der Trust-Override per `-c` machte die Projekt-Config im Scratch nicht wirksam, ein dauerhafter Trust-Eintrag im User-Scope wurde nicht gesetzt). Ein Root-Kontext je Rolle ist in Codex headless nicht abschaltbar, solange Rollen Forks sind. Zu `docs/codex/einstieg.md` (nennt 0.164.0): die Probe zeigte keinen versionsbedingten Unterschied.
+
+**Regel-Matrix** (was bricht oder sich anpasst; keine Änderung in diesem PR):
+
+| Variante | Regel „genau eine Root-Kontextdatei“ (Doctor-Punkt, `agents-md-native.test.ts`) | `check:contextsize` | V4 (`laufzeit-vertraege.test.ts`) | Besitz `AGENTS.md` Block `kern` |
+|---|---|---|---|---|
+| B Import, Claude Code | unberührt (`kern.md` ist keine Kontextdatei); der SSOT-Satz im Kopf („jede harte Regel genau hier“) müsste auf die Importdatei zeigen | anpassen: gezählt wird nur `AGENTS.md` (hier 4.543 statt 19.769 Zeichen), die Importdatei muss mitzählen, sonst umgeht der Import das Budget; `KERN_BLOCK_BUDGET` misst den Block zwischen den Markern, dort stünde nur `@kern.md` | unberührt | anpassen: der Kern ist eine ganze Datei, nicht ein Block; Eintrag für `kern.md`, der Block `kern` hält nur die Import-Zeile |
+| B Import, Codex | wie oben | wie oben | bricht inhaltlich: V4 bliebe grün, aber Codex sieht den Kern gar nicht (Fall a) | wie oben |
+| C Gesamtbudget erhöht, Claude Code | unberührt | anpassen: `CONTEXT_BUDGETS` für `AGENTS.md` und die Raum-Invariante (`KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM`) | unberührt | unberührt |
+| C Gesamtbudget erhöht, Codex | unberührt | wie oben | bricht: `AGENTS.md` über 32.768 Bytes, der Rest wird abgeschnitten (Fall b1); anpassen heißt V4 heben und `project_doc_max_bytes` in vertrautem Projekt setzen (Fälle b2, c4) | unberührt |
+| D Kern je Rolle, Claude Code | unberührt | unberührt (Rollen-Auszüge wären neuer Text, den kein Gate zählt) | unberührt | unberührt; dazu bricht `test/harness/model-routing.test.ts` („Der Umsetzer braucht AGENTS.md im Kontext“, Zeile 572): Wächter und Agenten-Definitionen anpassen |
+| D Kern je Rolle, Codex | unberührt | unberührt | unberührt | nicht prüfbar: Root-Kontext je Rolle lässt sich nicht abschalten (Fall g) |
+
+**Sockel je Rolle und Variante** (Rohwerte, erster Call, zwei Läufe je Variante; Export von `HEAD` nach `<scratch>/kern-probe/var-<X>/`, ein Lauf `claude -p … --allowedTools Agent` startet nacheinander `<agenten.planer>`, `<agenten.umsetzer>` und `<agenten.lens>` mit „Antworte nur mit OK.“; Sockel des Subagenten aus den Events mit `parent_tool_use_id`). A = Ist, B = Kern per `@kern.md` (15.156 Zeichen ausgelagert), C = `AGENTS.md` mit echtem Doku-Text auf 44.572 Zeichen aufgefüllt, D = Kern nur im Hauptchat (Rollen mit `omitClaudeMd: true`, Projekt-Block ohne Kern am Ende des Agent-Bodys).
+
+| Rolle | A (2 Läufe) | B | C | D | Δ B | Δ C | Δ D |
+|---|---|---|---|---|--:|--:|--:|
+| Hauptchat | 41.846 / 42.313 | 42.436 / 42.436 | 54.988 / 54.988 | 42.313 / 42.313 | +357 | +12.909 | +234 |
+| Planer | 30.984 / 30.984 | 31.102 / 31.102 | 43.659 / 43.659 | 21.917 / 21.917 | +118 | +12.675 | −9.067 |
+| Umsetzer | 41.983 / 41.983 | 42.101 / 42.101 | 54.658 / 54.658 | 32.916 / 32.916 | +118 | +12.675 | −9.067 |
+| Lens | 26.446 / 26.446 | 26.564 / 26.564 | 39.121 / 39.121 | 17.379 / 17.379 | +118 | +12.675 | −9.067 |
+
+Sessions A: `07272120-b78b-44cf-b37c-c8f8315e974a`, `09f11879-403d-4bb2-981e-1f08c634e423`; B: `ecf031df-ab72-43a0-ab85-533ccd08277a`, `d6195eaf-13ac-4a9e-907a-4f05f5ac5d5a`; C: `5ef2be8c-dcc8-4850-a0d7-d374bdf73fce`, `095af977-1b47-4940-a00d-8a878443ad58`; D: `af0ddeaf-592b-4d51-9a80-7de3c0dd548c`, `34100c00-1d4a-4d99-83c7-6529b23e279e`. Δ gegen den Mittelwert von A (Hauptchat-A streut um 467, die Hauptchat-Δ sind also Rauschen bis auf C). Rate in C: 12.675 Tokens für 24.803 Zeichen, rund 0,51 Tokens je Zeichen. Δ D enthält auch die `~/.claude/CLAUDE.md` des Users (`omitClaudeMd` lässt sie dem Subagenten weg), sie ist nicht vom Kern getrennt gemessen. Der Kern-Zuwachs (B) ist klein, weil die Einbindung dieselben Zeichen lädt; B spart keinen Sockel, es ändert nur, wo der Text liegt.
+
+**Tokenkosten je Ticketlauf** (Sockel-Δ je Rolle mal Calls je Rolle und Ticket; Calls aus echten Läufen ab 2026-10-26 bis 2026-11-06 22:48 UTC, Median je Ticket, ohne factory#233: `node scripts/kontext-treiber.mjs --von 2026-10-26T00:00:00Z --je-ticket --ohne 233 --agent <rolle> --json` und `node scripts/hauptchat-zerlegung.mjs --von 2026-10-26T00:00:00Z --bis <ende> --json`; kein Langfuse-Zugriff). Calls: Umsetzer 97 (67 Tickets), Planer 20 (79), Lens 114,5 (66; vier Lens-Läufe ohne Ticket nicht gezählt), Hauptchat 24 (87 Tickets, nur Hauptchat-Calls der Kategorie Ticket-Orchestrierung; die 1.901 Fork-Calls auf Opus sind nicht enthalten). Spawns je Ticket aus `node scripts/subagent-laufzeit.mjs --typen`: Planer 86/79, Umsetzer 114/67, Lens 442/66, Hauptchat 1. Dollar = Σ Δ × [(Calls − Spawns) × Cache-Read + Spawns × Cache-Write] mit den Preisen aus `scripts/preise.mjs` je Mio. Tokens (Planer, Lens: Opus 5.5, 0,2 / 5; Umsetzer: Sonnet 5.5, 0,1 / 2,5; Hauptchat: Sonnet 5.5, 0,1 / 4 für 1h).
+
+| Variante | Δ Tokens je Ticket | Δ Dollar je Ticket | Anteil Lens |
+|---|--:|--:|---|
+| B Import | +35.873 | +0,011 | 0,006 $ |
+| C Gesamtbudget erhöht | +3.244.067 | +1,071 | 0,698 $ |
+| D Kern nur im Hauptchat | −2.093.406 | −0,706 | −0,499 $ |
+
+Grenzen: Die Zahlen sind eine Untergrenze (nicht gemessene Typen wie `<agenten.gruppe>`, `holdout-*` und die Hauptchat-Forks fehlen; Sammeltickets zählen als ein Ticket). Die Sockel sind headless gemessen und liegen unter den interaktiven (der Export hat keine gitignorierten Skill-Zeiger); die Differenzen sind übertragbar, die absoluten Werte nicht. Probe-Kosten: rund 3 $ für die Claude-Läufe, zwei Dutzend Codex-Läufe im Abo.
+
 ### Lens-Gegenprobe (#1580)
 
 **Entscheidung (2026-10-09):** alle vier Brillen bleiben auf Opus, der Lens-Effort bleibt `high`. Auf denselben Runde-1-Patches verpasst Sonnet in jeder Brille mindestens einen echten Blocker, den Opus-neu findet, bei aufgezeichneten Kosten von −51 bis −70 %; Haiku für die Doku-Lens verpasst 1 und liefert 2 Falsch-Blocker (Punkt 4 der Modellwahl oben). **Wiedervorlage** bei jedem neuen Opus- oder Sonnet-Release (Release-Watch: Ticket quellprojekt#1362, bis dahin Punkt 8 der [Status-Checkliste](#langfuse-status-überprüfen-1293)).
