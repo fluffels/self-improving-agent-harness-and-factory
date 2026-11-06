@@ -143,17 +143,63 @@ async function sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, r
   return true;
 }
 
-/** Zahl der unzuordenbaren Dubletten des Diffs (ohne Diff: 0); außerhalb von `verarbeite`, dessen Komplexität nicht steigen darf. */
-const unzuordenbarAnzahl = (diff) => diff?.unzuordenbar.length ?? 0;
+/** Status je Session im Protokoll, Log und Bericht (Texte unverändert: Ledger und Auftrags-Logik vergleichen sie). */
+export const STATUS = Object.freeze({
+  AKTUELL: "aktuell",
+  LAEUFT: "läuft",
+  BESTAETIGT: "bestätigt",
+  OHNE_CALLS: "ohne Calls",
+  VOR_STICHTAG: "vor Stichtag",
+  MEHRDEUTIG: "mehrdeutig",
+  TROCKEN: "trocken",
+  GESENDET: "gesendet",
+  FEHLER: "Fehler",
+  VOLLSTAENDIG: "vollständig",
+});
 
-/** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
-async function verarbeite(s, c) {
-  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
-  const alt = ledger.sessions[s.id];
-  const unveraendert = standUnveraendert(alt, s);
-  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, unzuordenbar: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
-  protokoll.sessions.push(rec);
-  if (args.aktuell === s.id) return Object.assign(rec, { status: "aktuell" });
+/**
+ * Entscheidung einer Session nach dem Diff, pur: was ist sendbar (Ledger-`gesendet` schon abgezogen), ist der Befund mehrdeutig, und endet der Lauf hier
+ * (`status`: vor Stichtag oder Trockenlauf; `wuerdeSenden` ist dann die Vorschau). Nur unzuordenbare Dubletten machen mehrdeutig; Kopien schon gedeckter
+ * Calls blockieren das Nachliefern nicht (factory#213).
+ */
+export function nachlieferEntscheidung({ diff, gesendet, davor, trocken }) {
+  const fehlend = diff?.fehlend ?? [];
+  const imLedger = new Set(gesendet);
+  const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
+  const unzuordenbar = diff?.unzuordenbar.length ?? 0;
+  const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && unzuordenbar > 0;
+  const sendbar = mehrdeutig ? [] : zuSenden;
+  const basis = { zuSenden, sendbar, mehrdeutig, dubletten: diff?.dubletten.length ?? 0, unzuordenbar, leer: diff?.leer?.length ?? 0, wuerdeSenden: sendbar.length };
+  if (davor) return { ...basis, status: STATUS.VOR_STICHTAG };
+  if (trocken) return { ...basis, status: mehrdeutig ? STATUS.MEHRDEUTIG : STATUS.TROCKEN };
+  return basis;
+}
+
+/** Status, mit dem die Session vor jeder Prüfung endet (Ruhefrist läuft, schon bestätigt, Vermerk bei unverändertem Stand), sonst `null`. Pur. */
+export function fruehesEnde({ alt, unveraendert, mtime, now, beendet }) {
+  if (nachliefererWartet({ mtime, now, beendet })) return STATUS.LAEUFT;
+  if (giltBestaetigt(alt) && unveraendert) return STATUS.BESTAETIGT;
+  // Sessions vor dem Stichtag und ohne Calls: der Vermerk spart bei unverändertem Stand das erneute Parsen und die Abfrage.
+  if (alt?.vermerk && unveraendert) return alt.vermerk;
+  return null;
+}
+
+/**
+ * Ledger-Eintrag der Session für diesen Lauf, pur: der alte Stand, neu bezogen auf die Datei und unbestätigt (ein neu verarbeiteter Stand gilt erst nach Δ = 0
+ * als bestätigt). Abgelaufene (oder ohne Zeitstempel aus einem Altbestand stammende) `gesendet`-Einträge zählen nicht mehr als unterwegs: ein noch fehlender Call
+ * wird erneut gesendet.
+ */
+export function bereinigeEintrag({ alt, s, beendet, now }) {
+  const eintrag = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet };
+  const frisch = (id) => now - (eintrag.gesendetAm?.[id] ?? -Infinity) < GESENDET_ABLAUF_MS;
+  eintrag.gesendet = eintrag.gesendet.filter(frisch);
+  eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
+  return eintrag;
+}
+
+/** Ob das Ende der Session gilt; hält `rec.endeVerworfen/fortgesetzt` fest und vermerkt ein bekanntes Ende vor jedem Fetch im Ledger. Liefert `beendet`. */
+function endeFestlegen(s, c, alt, unveraendert, rec) {
+  const { args, ledger } = c;
   // Das SessionEnd-Kind wartet 10 min: wuchs das Transkript danach oder startete die Session neu (Startmarke, resume), gilt das Ende nicht mehr
   // und die laufende Session bleibt unberührt (ihre weiteren Turns sendet der Plugin-Hook selbst, #1953).
   const endeAngegeben = args.beendet === s.id || args.session === s.id;
@@ -166,52 +212,30 @@ async function verarbeite(s, c) {
   const beendet = endeBekannt || endeGiltFuer(alt, s);
   // Bekanntes Ende vor jedem Fetch festhalten (auch wenn dieser wirft), sonst gälte beim nächsten Lauf wieder die 24-h-Frist.
   if (endeBekannt && !args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: giltBestaetigt(alt) && unveraendert, beendet: true };
-  if (nachliefererWartet({ mtime: s.mtime, now, beendet })) return Object.assign(rec, { status: "läuft" });
-  if (giltBestaetigt(alt) && unveraendert) return Object.assign(rec, { status: "bestätigt" });
-  // Sessions vor dem Stichtag und ohne Calls: der Vermerk spart bei unverändertem Stand das erneute Parsen und die Abfrage.
-  if (alt?.vermerk && unveraendert) return Object.assign(rec, { status: alt.vermerk });
-  const vermerke = (status) => {
-    if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
-  };
-  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
-  if (!soll.length) {
-    vermerke("ohne Calls");
-    return Object.assign(rec, { status: "ohne Calls" });
-  }
-  const davor = vorStichtag(soll);
-  if (davor) {
-    vermerke("vor Stichtag");
-    // Würde-senden-Zahl für den Bericht nur im ersten Lauf: der Vermerk überspringt die Abfrage bei unverändertem Stand.
-  }
-  const { observations, diff } = await istUndDiff({ s, soll, zugang, now, fetchImpl });
-  // Ein neu verarbeiteter Stand gilt erst nach Δ = 0 als bestätigt (auch wenn der alte Eintrag bestätigt war und die Session gewachsen ist).
-  const eintrag = { gesendet: [], spans: [], ...alt, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet: beendet };
-  // Abgelaufene (oder ohne Zeitstempel aus einem Altbestand stammende) Einträge zählen nicht mehr als unterwegs: ein noch fehlender Call wird erneut gesendet.
-  const frisch = (id) => now - (eintrag.gesendetAm?.[id] ?? -Infinity) < GESENDET_ABLAUF_MS;
-  eintrag.gesendet = eintrag.gesendet.filter(frisch);
-  eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
-  const imLedger = new Set(eintrag.gesendet);
-  const fehlend = diff?.fehlend ?? [];
-  const zuSenden = fehlend.filter((e) => !imLedger.has(e.id));
-  rec.dubletten = diff?.dubletten.length ?? 0;
-  rec.unzuordenbar = unzuordenbarAnzahl(diff);
-  rec.leer = diff?.leer?.length ?? 0;
-  // Nur unzuordenbare Dubletten machen mehrdeutig; Kopien schon gedeckter Calls blockieren das Nachliefern nicht (#213).
-  const mehrdeutig = diff?.art === "fingerprint" && fehlend.length > 0 && rec.unzuordenbar > 0;
-  if (davor) return Object.assign(rec, { status: "vor Stichtag", wuerdeSenden: mehrdeutig ? 0 : zuSenden.length });
-  const sendbar = mehrdeutig ? [] : zuSenden;
-  if (args.trocken) return Object.assign(rec, { status: mehrdeutig ? "mehrdeutig" : "trocken", wuerdeSenden: sendbar.length });
+  return beendet;
+}
 
-  // Δ = 0 oder nichts mehr sendbar: nur bestätigen, wenn auch kein gesendeter Call mehr unterwegs ist.
+/** Nach dem Senden: nur noch fehlende Calls bleiben als „unterwegs“ im Eintrag. */
+function gesendetAufFehlend(eintrag, fehlend) {
   const nochFehlend = new Set(fehlend.map((e) => e.id));
   eintrag.gesendet = eintrag.gesendet.filter((id) => nochFehlend.has(id));
   eintrag.gesendetAm = Object.fromEntries(eintrag.gesendet.map((id) => [id, eintrag.gesendetAm[id]]));
-  let ok = true;
-  if (sendbar.length) {
-    const { chunks } = bauePayloads(s.id, sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)), repoName: repo });
-    ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec, now });
+}
+
+/** Scores einer abgeschlossenen Session senden; ein Fehler kommt ins Protokoll, nie in den Lauf. */
+async function sendeScores(args, c) {
+  const { protokoll, zugang, fetchImpl } = c;
+  try {
+    for (const score of scoresFuer(args)) await sendeScore(score, { ...zugang, fetchImpl });
+  } catch (e) {
+    protokoll.fehler.push({ session: args.s.id, status: e.status ?? null, meldung: `Score: ${fehlerText(e)}` });
   }
-  rec.status = mehrdeutig ? "mehrdeutig" : ok ? "gesendet" : "Fehler";
+}
+
+/** Ledger-Stand und Scores nach dem Senden; `rec` trägt Status und Befund. */
+async function schliesseAb({ s, c, rec, alt, eintrag, e, ok, soll, observations, beendet }) {
+  const { ledger, env } = c;
+  rec.status = e.mehrdeutig ? STATUS.MEHRDEUTIG : ok ? STATUS.GESENDET : STATUS.FEHLER;
   rec.ausstehend = eintrag.gesendet.length;
   if (!ok) {
     // Fortschritt nur für angenommene Chunks; nicht bestätigt, Stand nicht als aktuell vermerken.
@@ -220,21 +244,55 @@ async function verarbeite(s, c) {
     return rec;
   }
   // Nichts sendbar und nichts mehr unterwegs (Δ = 0 oder nur Dubletten): bestätigt, neue Prüfung erst bei Transkript-Änderung; mehrdeutig bleibt unbestätigt und wird bei jedem Lauf neu geprüft.
-  if (!sendbar.length && !eintrag.gesendet.length) {
-    rec.befund = mehrdeutig ? BEFUND_MEHRDEUTIG : rec.dubletten ? "nur Dubletten, nichts zu senden" : null;
-    if (!rec.befund) rec.status = "vollständig";
-    eintrag.bestaetigt = !mehrdeutig;
+  if (!e.sendbar.length && !eintrag.gesendet.length) {
+    rec.befund = e.mehrdeutig ? BEFUND_MEHRDEUTIG : e.dubletten ? "nur Dubletten, nichts zu senden" : null;
+    if (!rec.befund) rec.status = STATUS.VOLLSTAENDIG;
+    eintrag.bestaetigt = !e.mehrdeutig;
   }
   ledger.sessions[s.id] = { ...eintrag, groesse: s.groesse, mtime: s.mtime };
   if (rec.befund) ledger.sessions[s.id].befund = rec.befund;
   else delete ledger.sessions[s.id].befund;
-  const rest = mehrdeutig ? zuSenden.length : 0;
-  try {
-    for (const score of scoresFuer({ s, soll, observations, rest, ledgerGesendet: alt?.gesendet ?? [], env })) await sendeScore(score, { ...zugang, fetchImpl });
-  } catch (e) {
-    protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: `Score: ${fehlerText(e)}` });
-  }
+  const rest = e.mehrdeutig ? e.zuSenden.length : 0;
+  await sendeScores({ s, soll, observations, rest, ledgerGesendet: alt?.gesendet ?? [], env }, c);
   return rec;
+}
+
+/** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
+async function verarbeite(s, c) {
+  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
+  const alt = ledger.sessions[s.id];
+  const unveraendert = standUnveraendert(alt, s);
+  const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, unzuordenbar: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
+  protokoll.sessions.push(rec);
+  if (args.aktuell === s.id) return Object.assign(rec, { status: STATUS.AKTUELL });
+  const beendet = endeFestlegen(s, c, alt, unveraendert, rec);
+  const frueh = fruehesEnde({ alt, unveraendert, mtime: s.mtime, now, beendet });
+  if (frueh) return Object.assign(rec, { status: frueh });
+  const vermerke = (status) => {
+    if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
+  };
+  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
+  if (!soll.length) {
+    vermerke(STATUS.OHNE_CALLS);
+    return Object.assign(rec, { status: STATUS.OHNE_CALLS });
+  }
+  const davor = vorStichtag(soll);
+  if (davor) vermerke(STATUS.VOR_STICHTAG);
+  const { observations, diff } = await istUndDiff({ s, soll, zugang, now, fetchImpl });
+  const eintrag = bereinigeEintrag({ alt, s, beendet, now });
+  const e = nachlieferEntscheidung({ diff, gesendet: eintrag.gesendet, davor, trocken: args.trocken });
+  Object.assign(rec, { dubletten: e.dubletten, unzuordenbar: e.unzuordenbar, leer: e.leer });
+  // Würde-senden-Zahl für den Bericht nur im ersten Lauf vor dem Stichtag: der Vermerk überspringt die Abfrage bei unverändertem Stand.
+  if (e.status) return Object.assign(rec, { status: e.status, wuerdeSenden: e.wuerdeSenden });
+
+  // Δ = 0 oder nichts mehr sendbar: nur bestätigen, wenn auch kein gesendeter Call mehr unterwegs ist.
+  gesendetAufFehlend(eintrag, diff?.fehlend ?? []);
+  let ok = true;
+  if (e.sendbar.length) {
+    const { chunks } = bauePayloads(s.id, e.sendbar, { soll, ledgerSpans: eintrag.spans, env, project: basename(hauptrepoPfad(repoRoot)), repoName: repo });
+    ok = await sendeChunks({ s, chunks, eintrag, zugang, fetchImpl, protokoll, rec, now });
+  }
+  return schliesseAb({ s, c, rec, alt, eintrag, e, ok, soll, observations, beendet });
 }
 
 // ── Ablauf ───────────────────────────────────────────────────────────────────
@@ -325,8 +383,11 @@ export async function hookLauf(args, optionen) {
   return haupt;
 }
 
+/** Status, bei denen ein Auftrag für den nächsten Start bleibt. */
+const NICHT_FERTIG = [STATUS.MEHRDEUTIG, STATUS.LAEUFT, STATUS.FEHLER, STATUS.AKTUELL];
+
 /** Ein Auftrag ist erledigt, wenn sein Lauf ohne Fehler endete und die Session weder mehrdeutig noch in der Ruhefrist noch die laufende ist. */
-const auftragFertig = (e) => e !== null && e.exitCode === 0 && e.protokoll.sessions.every((r) => !["mehrdeutig", "läuft", "Fehler", "aktuell"].includes(r.status));
+const auftragFertig = (e) => e !== null && e.exitCode === 0 && e.protokoll.sessions.every((r) => !NICHT_FERTIG.includes(r.status));
 
 /** Offene Nachliefer-Aufträge (factory#213) nach einem SessionStart-Lauf ausführen: je Session ein Lauf unter Lock, auch außerhalb des 7-Tage-Fensters (`--session`). */
 async function fuehreAuftraegeAus(args, optionen) {
