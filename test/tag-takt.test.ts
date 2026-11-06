@@ -189,7 +189,7 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald Tag und Release stehen", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald der Tag gepusht ist", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
@@ -208,6 +208,8 @@ describe("CI-Zustand und Body", () => {
     for (const teil of ["Probe-Erstbezug", "test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "--ziel <scratch-ordner> --entwurf --trocken", "--quelle <checkout auf bbbbbbb>"]) {
       expect(punkt, teil).toContain(teil);
     }
+    // factory#177: ein Ziel ohne Kern-Marker in AGENTS.md ist kein Erstbezug, den die Probe aussagekräftig prüft
+    expect(punkt).toContain("AGENTS.md mit den Kern-Markern <!-- factory-besitz:start kern --> und <!-- factory-besitz:ende kern -->");
     expect(punkt).not.toContain("gh repo clone");
   });
   it("factory#162 L26: kein Schritt der Fabrik schreibt in ein Bezieher-Repo (kein Sync-PR, kein Bezieher-Trockenlauf, kein --repo)", () => {
@@ -229,7 +231,14 @@ describe("CI-Zustand und Body", () => {
     });
     it("beschreibt den lesenden Ablauf: Klon im Scratch ohne origin, lokaler Tag, Entwurfs-Vorschau, Sync mit --tag, install und verify, Ergebnis-Befehl", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
-      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verify", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
+      // factory#177: der Klon `quelle` steht per Detach auf dem Commit (sonst fehlt der Tag-Stand im Arbeitsbaum), und `verify` bräche nach dem ersten Rot ab
+      const zeilen = block.split("\n");
+      expect(zeilen).toContain("git -C <s>/quelle tag v1.3.0 " + "b".repeat(40));
+      expect(zeilen).toContain("git -C <s>/quelle checkout --detach " + "b".repeat(40));
+      expect(zeilen.indexOf("git -C <s>/quelle checkout --detach " + "b".repeat(40))).toBeGreaterThan(zeilen.indexOf("git -C <s>/quelle tag v1.3.0 " + "b".repeat(40)));
+      expect(block).not.toMatch(/gate-befehl\.mjs verify(?!Kompakt)/);
+      expect(block).toContain("fährt jeden Schritt auch nach einem Rot");
+      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verifyKompakt", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
         expect(block, teil).toContain(teil);
       }
     });
@@ -273,7 +282,7 @@ describe("CI-Zustand und Body", () => {
     expect(punkte[holen]).toContain("kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar");
     expect(punkte[holen + 1]).toContain("Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben");
     expect(punkte.find((z) => z.includes("Gate-Lücke"))).toContain("Sammelticket");
-    expect(punkte[punkte.length - 1]).toContain("sobald Tag und Release stehen");
+    expect(punkte[punkte.length - 1]).toContain("sobald der Tag gepusht ist");
     expect(body).toContain("vom Bezieher beim Update zu erledigen");
   });
   it("begrenzt die PR-Liste auf 50 Zeilen und bereinigt Zellen", () => {
