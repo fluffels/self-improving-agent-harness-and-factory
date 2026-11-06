@@ -221,6 +221,16 @@ describe("CI-Zustand und Body", () => {
     expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
     expect(body).not.toMatch(/^git tag -a/m);
   });
+  it("factory#215 L6: die Checkliste verlangt die Sichtung der Rückmeldungen fremder Bezieher (Meldestelle) vor dem Schließen, mit und ohne Bezieher-Liste", () => {
+    const zeile = "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“";
+    for (const b of [body, T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null }, bezieher: ["o/a"] })]) {
+      const zeilen = b.split("\n");
+      const i = zeilen.indexOf(zeile);
+      expect(i).toBeGreaterThan(-1);
+      expect(i).toBeLessThan(zeilen.findIndex((z) => z.startsWith("- [ ] Ticket schließen")));
+      expect(i).toBeGreaterThan(zeilen.findIndex((z) => z.startsWith("- [ ] Tag ")));
+    }
+  });
   it("factory#162 L26: Trockenlauf gegen den Probe-Erstbezug im Scratch, nie ein Bezieher-Repo, mit --ziel", () => {
     const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf")) ?? "";
     for (const teil of ["Probe-Erstbezug", "test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "--ziel <scratch-ordner> --entwurf --trocken", "--quelle <checkout auf bbbbbbb>"]) {

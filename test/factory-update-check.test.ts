@@ -68,6 +68,12 @@ describe("updateMeldung", () => {
     assert.deepEqual([...reihenfolge].sort((a, b) => a - b), reihenfolge, "Reihenfolge der Schritte");
     assert.equal(UPDATE_SCHRITTE.length, 7);
   });
+  test("factory#215 L2: die Meldung rendert jeden Schritt als Zeile mit Text, ohne Platzhalter-Reste", () => {
+    const zeilen = (updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "").split("\n").filter((z) => /^\d+\. /.test(z));
+    assert.equal(zeilen.length, UPDATE_SCHRITTE.length);
+    assert.ok(zeilen.every((z) => !/undefined|\{TAG\}/.test(z)), zeilen.join("\n"));
+    assert.equal(zeilen[2], "3. `node scripts/projektwerte.mjs --write`");
+  });
   test("factory#215 L2: mechanischeSchritte liefert die vier mechanischen Befehle in Reihenfolge, <pfad> ersetzt", () => {
     assert.deepEqual(mechanischeSchritte("<s>/quelle"), ["npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben --quelle <s>/quelle"]);
   });

@@ -296,6 +296,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
     `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
     "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
+    "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“",
     "- [ ] Auffälligkeit zu einem Bezieher: als Sammelticket-Zeile „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“, nie als Schreibzugriff auf den Bezieher",
     "- [ ] Ticket schließen, sobald Tag und Release stehen (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
@@ -479,6 +480,18 @@ const probeWert = (text) => {
   return m ? { repo: m[1], code: m[2] === PROJEKT_REST ? PROJEKT_REST : Number(m[2]) } : null;
 };
 
+/** Pur: die `--probe`-Angaben als `{ ergebnisse }` je Bezieher (Name der Config, Schreibweise egal) oder mit `ungueltig` = der ersten unbrauchbaren Angabe (Form, unbekanntes Repo, doppelt). */
+export function probeErgebnisse(angaben, bezieher) {
+  const ergebnisse = {};
+  for (const roh of angaben) {
+    const w = probeWert(roh);
+    const repo = w ? bezieher.find((b) => gleichesRepo(b, w.repo)) : undefined;
+    if (!w || repo === undefined || Object.hasOwn(ergebnisse, repo)) return { ergebnisse, ungueltig: roh };
+    ergebnisse[repo] = w.code;
+  }
+  return { ergebnisse };
+}
+
 /**
  * Einstieg `--probe` (factory#188): liest die Ergebnisse der Vor-Tag-Probe und gibt die Checkliste aus; Exit 0 nur, wenn jeder gelistete Bezieher ein Ergebnis 0 hat,
  * 1 bei einem Blocker oder einem ausstehenden Bezieher, 2 bei Aufruf- oder Config-Fehler (unbekanntes Repo, kein Exit-Wert, doppelt). Kein gh-Aufruf.
@@ -496,15 +509,10 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
     log(fehlerMeldung(e, { praefix: "Tag-Takt: Projekt-Config nicht lesbar: " }));
     return AUFRUF_EXIT;
   }
-  const ergebnisse = {};
-  for (const roh of werte.probe) {
-    const w = probeWert(roh);
-    const repo = w ? bezieher.find((b) => gleichesRepo(b, w.repo)) : undefined;
-    if (!w || repo === undefined || Object.hasOwn(ergebnisse, repo)) {
-      err(`--probe ${roh}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
-      return AUFRUF_EXIT;
-    }
-    ergebnisse[repo] = w.code;
+  const { ergebnisse, ungueltig } = probeErgebnisse(werte.probe, bezieher);
+  if (ungueltig !== undefined) {
+    err(`--probe ${ungueltig}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
+    return AUFRUF_EXIT;
   }
   const r = bezieherProbe({ bezieher, ergebnisse });
   log(r.zeilen.join("\n"));

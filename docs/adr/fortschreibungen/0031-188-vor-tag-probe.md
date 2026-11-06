@@ -28,3 +28,11 @@ Entscheidung: Option A, weil Punkt 1 der ADR (kein Schreibzugriff) unberührt bl
 - **Vertrauen:** `install` und `verify` im Klon führen Bezieher-Code aus (npm-Skripte, Tests). Die Liste gehört nur Bezieher, deren Code die Maintainerin vertraut.
 - **Kein Automat:** die Ergebnisse trägt der Mensch oder Agent ein; die Checkliste ist die Quelle. Neu bewerten ab mehr als drei gelisteten Bezieherinnen oder wenn ein Bezieher ein Schreibrecht für einen Runner anbietet.
 - **Grenze:** die Probe belegt den Stand zum Zeitpunkt des Laufs; ein Bezieher mit offenem Branch oder lokalen Änderungen wird nicht abgebildet.
+
+## Nachtrag factory#215 (2026-11-06): Stellvertreter je Profil, Projekt-Rest, Haken
+
+- **Stellvertreter je Profil:** die Probe prüft nur Profile, für die es einen lesbaren Bezieher gibt. JS/TS: der Probe-Erstbezug und die gelisteten eigenen Bezieher (beide JS/TS; Profile der Bezieher nur lesend per `gh api repos/<r>/languages`, nie namentlich in der Doku). Java: keiner; belegt ist es nur durch den einmaligen Probe-Lauf (factory#187, [Java-Profil](../../harness-transfer.md#java-profil)). Python: keiner; es gibt nur die Werkzeugtabelle der Transfer-Doku. Ein Java- oder Python-Rot zeigt sich also erst beim ersten echten Bezieher dieses Profils; die Lücke führt factory#224 (synthetischer Bezieher je Profil im Tag-Takt).
+- **Projekt-Rest (L5):** `--probe <owner/name>=rest` meldet „grün mit Projekt-Rest“ (Exit 0, im Log „als Befund festhalten“): Rot nur im Projekt des Beziehers ist kein Blocker, muss aber als Befund bzw. Bezieher-Migration festgehalten werden; kein Ersatz für ein fehlendes Ergebnis.
+- **Repo-Schreibweise (L3):** `--probe` gleicht Repos ohne Groß-/Kleinschreibung ab (`gleichesRepo`), ordnet unter dem Namen der Config zu und erkennt Dubletten in anderer Schreibung (Exit 2).
+- **Haken (L4):** ein Takt-Lauf übernimmt die Haken des offenen Tag-Tickets (`uebernimmHaken`): eine Zeile, die vorher abgehakt war und im neuen Body textgleich vorkommt, bleibt abgehakt; geänderter Text verliert den Haken.
+- **Rückmeldungen (L6):** eine Checklistenzeile verlangt die Sichtung der Rückmeldungen fremder Bezieher über die Meldestelle, je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke“.
