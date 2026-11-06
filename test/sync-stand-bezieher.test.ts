@@ -30,6 +30,12 @@ describe("istBezieher", () => {
   test("mit Sync-Stand: Bezieher", () => {
     expect(T.istBezieher(wurzelMit('{"quelle":{"tag":"v1"}}'))).toBe(true);
   });
+  test("nicht lesbarer Sync-Stand (Ordner statt Datei) zählt wie ein fehlender", () => {
+    const w = wurzelMit(null);
+    mkdirSync(join(w, ".factory"), { recursive: true });
+    mkdirSync(join(w, ".factory", "sync-stand.json"));
+    expect(T.istBezieher(w)).toBe(false);
+  });
   test("kaputter Sync-Stand zählt als Bezieher (fail-closed)", () => {
     expect(T.istBezieher(wurzelMit("{kaputt"))).toBe(true);
   });
