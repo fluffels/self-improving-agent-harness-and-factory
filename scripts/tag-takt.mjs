@@ -35,7 +35,8 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { bezieherAus, labelAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { WERKZEUG_HINWEIS, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { geschlosseneMilestones, geschlossenSeit, titelBereinigt } from "./milestone-lib.mjs";
@@ -227,6 +228,7 @@ export function bezieherProbe({ bezieher, ergebnisse = {} }) {
 
 /** Pur (factory#188): der Ablauf-Abschnitt der Vor-Tag-Probe (Text und Befehle), nur lesend im Scratch. */
 function probeAblauf({ tag, sha }) {
+  const mechanisch = mechanischeSchritte("<s>/quelle");
   return [
     `Vor-Tag-Probe je Bezieher (factory#188; nur lesend: ein Klon im Scratch, nie der Checkout des Beziehers; kein Push, kein PR, kein Issue, kein Kommentar; rot heißt: nicht taggen). Je Bezieher \`<owner/name>\` der Liste unten; \`<s>\` = leerer Scratch-Ordner, \`<checkout>\` = Checkout auf ${sha.slice(0, 7)}:`,
     "",
@@ -238,12 +240,11 @@ function probeAblauf({ tag, sha }) {
     `git -C <s>/quelle tag ${tag} ${sha}`,
     "node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --entwurf --trocken",
     `node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --tag ${tag}`,
-    "cd <s>/bezieher && node scripts/gate-befehl.mjs install && npm run lint:prune && node scripts/projektwerte.mjs --write && npm run docs:gen",
-    "cd <s>/bezieher && npm run check:factorylinks -- --schreiben --quelle <s>/quelle && node scripts/gate-befehl.mjs verify",
+    `cd <s>/bezieher && ${["node scripts/gate-befehl.mjs install", ...mechanisch, "node scripts/gate-befehl.mjs verify"].join(" && ")}`,
     "node scripts/tag-takt.mjs --probe <owner/name>=<exit>",
     "```",
     "",
-    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (`lint:prune`, `projektwerte --write`, `docs:gen`, `check:factorylinks --schreiben`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker).",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker).",
     "",
   ];
 }

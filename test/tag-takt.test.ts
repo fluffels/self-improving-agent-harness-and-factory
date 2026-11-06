@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as lib from "../scripts/release-tag-lib.mjs";
 import { FREMD } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; betreff: string; body: string; dateien: string[]; pr?: string };
@@ -23,6 +25,8 @@ const T = raw as unknown as {
   bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number> }) => { zeilen: string[]; blocker: string[]; offen: string[] };
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
+
+const { mechanischeSchritte } = lib as { mechanischeSchritte: (quelle: string) => string[] };
 
 const KEY = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
 const MKEY = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
@@ -232,6 +236,12 @@ describe("CI-Zustand und Body", () => {
       for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verify", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
         expect(block, teil).toContain(teil);
       }
+    });
+    it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verify), der Erklärsatz nennt sie", () => {
+      const mechanisch = mechanischeSchritte("<s>/quelle");
+      expect(mechanisch).toHaveLength(4);
+      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verify\n");
+      for (const befehl of mechanisch) expect(mitBezieher.split("aussagekräftig")[0], befehl).toContain("`" + befehl + "`");
     });
     it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
