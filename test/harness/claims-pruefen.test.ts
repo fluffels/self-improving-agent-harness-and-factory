@@ -853,8 +853,8 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.deepEqual(geloescht, []);
   });
 
-  /** Ein Ticket mit je einem Worktree in Repo A und Repo B; `unsauberA` macht den Stand in A unsauber. */
-  function zweiRepoWelt(o: { unsauberA?: boolean } = {}) {
+  /** Ein Ticket mit je einem Worktree in Repo A und Repo B; `unsauberB` macht den Stand in B unsauber. */
+  function zweiRepoWelt(o: { unsauberB?: boolean } = {}) {
     const b = baue({
       locks: { [`${NR}.json`]: lock({ nr: NR, erstellt: "2026-10-16T00:10:00.000Z" }) },
       issues: { [NR]: { state: "CLOSED", prs: [{ number: 5, state: "MERGED", headRefOid: OID }] } },
@@ -871,7 +871,7 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
       aufrufe.push(`${cwd ?? "-"}: ${a}`);
       if (a === "worktree list --porcelain") return (stand[cwd ?? ""] ?? []).map(block).join("");
       if (a.startsWith("for-each-ref")) return `refs/heads/${BRP}${NR}-x\t${sek("2026-10-16T00:21:00Z")}`;
-      if (/^-C \S+ status --porcelain$/.test(a)) return o.unsauberA && a.includes(WT_A) ? " M datei" : "";
+      if (/^-C \S+ status --porcelain$/.test(a)) return o.unsauberB && a.includes(WT_B) ? " M datei" : "";
       const rm = /^worktree remove (\S+)$/.exec(a);
       if (rm && cwd !== undefined) {
         stand[cwd] = (stand[cwd] ?? []).filter((w) => w.pfad !== rm[1]);
@@ -893,8 +893,8 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.deepEqual(geloescht, [`/locks/${NR}.json`]);
   });
 
-  test("L6 Negativfall: ist einer der beiden Worktrees nicht sauber, wird keiner entfernt und der Lock bleibt", () => {
-    const { deps, aufrufe, geloescht } = zweiRepoWelt({ unsauberA: true });
+  test("L6 Negativfall: ist der zweite der beiden Worktrees nicht sauber, wird keiner entfernt und der Lock bleibt", () => {
+    const { deps, aufrufe, geloescht } = zweiRepoWelt({ unsauberB: true });
     const r = M.fuehreAus([], deps);
     assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
     assert.deepEqual(geloescht, []);
