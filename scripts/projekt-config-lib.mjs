@@ -7,10 +7,10 @@
  * Kommandozeile (über den Einstieg projekt-config.mjs): `node scripts/projekt-config.mjs [--config <pfad>] <schluessel.pfad>` gibt einen Skalarwert aus
  * (Exit 0), 1 bei fehlender/ungültiger Config oder unbekanntem Schlüssel, 2 bei einem Aufruf-Fehler (ohne Schlüssel, unbekanntes Flag, fehlender Wert).
  *
- * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib` und `projekt-config-bloecke`
+ * Nur Node-Builtins und Blatt-Module ohne Rückimport: `arbeitsplatz-lib`, `flag-lib`, `internalrefs-lib`, `skill-pfade`, `repo-form`, `modul-wahl-lib`, `design-lib`, `gate-befehl-lib`, `sync-stand-lib` (Rollen-Schalter `istBezieher`) und `projekt-config-bloecke`
  * (deren Hülle: `relativ-pfad`, `pfad-glob`, `quellwurzeln-lib`, `spezifikation-lib` mit `markdown`); läuft auch in Workflows ohne `npm ci`.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arbeitsplatzMaengel } from "./arbeitsplatz-lib.mjs";
@@ -22,6 +22,7 @@ import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
 
 export const PROJEKT_CONFIG = ".factory/projekt.json";
 
@@ -613,7 +614,7 @@ ${CLI_AUFRUF}`);
     return AUFRUF_EXIT;
   }
   try {
-    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: existsSync(join(rootDir, ".factory", "sync-stand.json")) }).repo); // Sync-Stand vorhanden = Bezieher (Format: sync-stand-lib.mjs, hier ohne Import: die Import-Hülle des Einstiegs bleibt klein)
+    out(langfuseZiel(ladeProjektConfig({ rootDir, pfad }), { bezieher: istBezieher(rootDir) }).repo); // Rollen-Schalter (factory#154): Bezieher ist, wer einen Sync-Stand hat
     return 0;
   } catch (e) {
     err(`✖ ${e instanceof Error ? e.message : e}`);

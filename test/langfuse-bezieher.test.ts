@@ -160,6 +160,9 @@ describe("--langfuse-repo (factory#195)", () => {
   test("mit Sync-Stand das eigene Repo, auch bei fremdem Factory-Board", () => {
     expect(lauf(SYNC, mitFactoryRepo(FABRIK))).toEqual({ code: 0, out: [FREMD.repo], err: [] });
   });
+  test("kaputter Sync-Stand zählt als Bezieher (fail-closed, factory#154)", () => {
+    expect(lauf({ ".factory/sync-stand.json": "{ kein json" }, mitFactoryRepo(FABRIK))).toEqual({ code: 0, out: [FREMD.repo], err: [] });
+  });
   test("ohne Sync-Stand (Upstream) dasselbe wie --ziel-repo <Harness-Label>", () => {
     const cfg = mitFactoryRepo(FABRIK);
     const r = lauf({}, cfg);
