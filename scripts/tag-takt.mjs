@@ -21,7 +21,7 @@
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
  * Aufruf: node scripts/tag-takt.mjs [--dry-run]   (Workflow: .github/workflows/board-takt.yml)
- *         node scripts/tag-takt.mjs --probe <owner/name>=<exit> …   (Checkliste der Vor-Tag-Probe; Exit 0 = alle Bezieher grün, 1 = Blocker oder ausstehend, 2 = Aufruf-/Config-Fehler; kein gh-Aufruf)
+ *         node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest …   (Checkliste der Vor-Tag-Probe, `rest` = Rot nur im Projekt des Beziehers: grün mit Befund, factory#215; Repo-Schreibweise egal (GitHub unterscheidet nicht), Ausgabe unter dem Namen der Config; Exit 0 = alle Bezieher grün, 1 = Blocker oder ausstehend, 2 = Aufruf-/Config-Fehler; kein gh-Aufruf)
  * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); `main` läuft in test/tag-takt-main.test.ts über injizierte Nähte, die echten git-/gh-Aufrufe unten nicht.
  */
 import { execFileSync } from "node:child_process";
@@ -205,14 +205,18 @@ export function ciZustand(laeufe) {
 
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
+/** Ergebnis-Wert der Probe für „Rot nur im Projekt des Beziehers“ (factory#215), neben dem Exit-Code. */
+const PROJEKT_REST = "rest";
+
 /**
- * Pur (factory#188): die Checklisten-Zeilen der Vor-Tag-Probe je Bezieher. `ergebnisse` = `{ "owner/name": exit }` (erster Exit ≠ 0 der Probe-Kette, sonst 0).
+ * Pur (factory#188): die Checklisten-Zeilen der Vor-Tag-Probe je Bezieher. `ergebnisse` = `{ "owner/name": exit }` (erster Exit ≠ 0 der Probe-Kette, sonst 0) oder `"rest"` (factory#215: Rot nur im Projekt des Beziehers, kein Blocker, aber als Befund bzw. Bezieher-Migration festzuhalten).
  * Rot (Exit ≠ 0 = Rot durch Factory-Besitz nach den mechanischen Update-Schritten, so das Urteil der Probe) ist ein Blocker, ein fehlendes Ergebnis bleibt ausstehend (`offen`, fail-closed: auch das heißt nicht taggen). Ergebnisse zu fremden Repos zählen nicht.
  */
 export function bezieherProbe({ bezieher, ergebnisse = {} }) {
   if (bezieher.length === 0) return { zeilen: ["- Keine Bezieher gelistet (Schlüssel `bezieher` der Projekt-Config): nur der Probe-Erstbezug oben."], blocker: [], offen: [] };
   const blocker = [];
   const offen = [];
+  const rest = [];
   const zeilen = bezieher.map((r) => {
     const code = Object.hasOwn(ergebnisse, r) ? ergebnisse[r] : undefined;
     if (code === undefined) {
@@ -220,10 +224,14 @@ export function bezieherProbe({ bezieher, ergebnisse = {} }) {
       return `- [ ] \`${r}\`: Probe ausstehend (nicht taggen, bis sie grün ist)`;
     }
     if (code === 0) return `- [x] \`${r}\`: Probe grün`;
+    if (code === PROJEKT_REST) {
+      rest.push(r);
+      return `- [x] \`${r}\`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)`;
+    }
     blocker.push(r);
     return `- [ ] BLOCKER \`${r}\`: Probe rot (Exit ${code}), nicht taggen`;
   });
-  return { zeilen, blocker, offen };
+  return { zeilen, blocker, offen, rest };
 }
 
 /** Pur (factory#188): der Ablauf-Abschnitt der Vor-Tag-Probe (Text und Befehle), nur lesend im Scratch. */
@@ -241,10 +249,10 @@ function probeAblauf({ tag, sha }) {
     "node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --entwurf --trocken",
     `node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --tag ${tag}`,
     `cd <s>/bezieher && ${["node scripts/gate-befehl.mjs install", ...mechanisch, "node scripts/gate-befehl.mjs verify"].join(" && ")}`,
-    "node scripts/tag-takt.mjs --probe <owner/name>=<exit>",
+    "node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest",
     "```",
     "",
-    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz) oder ein Exit ≠ 0 (Blocker).",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verify` ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz), `rest` (Rot nur im Projekt: grün, aber Befund bzw. Bezieher-Migration festhalten) oder ein Exit ≠ 0 (Blocker).",
     "",
   ];
 }
@@ -439,12 +447,12 @@ export function manifestLaden(wurzel) {
 }
 
 /** Aufrufzeile der Vor-Tag-Probe. */
-const PROBE_AUFRUF = "Aufruf: node scripts/tag-takt.mjs --probe <owner/name>=<exit> [--probe …]   (je Bezieher der Liste `bezieher` der Projekt-Config; nicht kombinierbar mit --dry-run)";
+const PROBE_AUFRUF = "Aufruf: node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest [--probe …]   (je Bezieher der Liste `bezieher` der Projekt-Config; nicht kombinierbar mit --dry-run)";
 
-/** Pur: `<owner/name>=<exit>` → `{ repo, code }` oder `null`. */
+/** Pur: `<owner/name>=<exit>` oder `<owner/name>=rest` (Rot nur im Projekt, factory#215) → `{ repo, code }` (`code` = Zahl oder `PROJEKT_REST`) oder `null`. */
 const probeWert = (text) => {
-  const m = /^([^=\s]+\/[^=\s]+)=(\d{1,3})$/.exec(text);
-  return m ? { repo: m[1], code: Number(m[2]) } : null;
+  const m = /^([^=\s]+\/[^=\s]+)=(\d{1,3}|rest)$/.exec(text);
+  return m ? { repo: m[1], code: m[2] === PROJEKT_REST ? PROJEKT_REST : Number(m[2]) } : null;
 };
 
 /**
@@ -467,15 +475,17 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
   const ergebnisse = {};
   for (const roh of werte.probe) {
     const w = probeWert(roh);
-    if (!w || !bezieher.includes(w.repo) || Object.hasOwn(ergebnisse, w.repo)) {
-      err(`--probe ${roh}: erwartet wird je Bezieher einmal <owner/name>=<exit> mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
+    const repo = w ? bezieher.find((b) => gleichesRepo(b, w.repo)) : undefined;
+    if (!w || repo === undefined || Object.hasOwn(ergebnisse, repo)) {
+      err(`--probe ${roh}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
       return AUFRUF_EXIT;
     }
-    ergebnisse[w.repo] = w.code;
+    ergebnisse[repo] = w.code;
   }
   const r = bezieherProbe({ bezieher, ergebnisse });
   log(r.zeilen.join("\n"));
   if (r.blocker.length > 0) log(`Vor-Tag-Probe: BLOCKER ${r.blocker.join(", ")}: nicht taggen.`);
+  if (r.rest.length > 0) log(`Vor-Tag-Probe: Projekt-Rest bei ${r.rest.join(", ")}: als Befund festhalten.`);
   if (r.offen.length > 0) log(`Vor-Tag-Probe: ausstehend ${r.offen.join(", ")}: nicht taggen, bis die Probe läuft.`);
   return r.blocker.length + r.offen.length === 0 ? 0 : 1;
 }

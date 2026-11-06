@@ -22,7 +22,7 @@ const T = raw as unknown as {
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
   tagBody: (a: Record<string, unknown>) => string;
-  bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number> }) => { zeilen: string[]; blocker: string[]; offen: string[] };
+  bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number | string> }) => { zeilen: string[]; blocker: string[]; offen: string[]; rest: string[] };
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
 
@@ -259,6 +259,11 @@ describe("CI-Zustand und Body", () => {
       expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün", "- [ ] BLOCKER `o/b`: Probe rot (Exit 1), nicht taggen"]);
       expect(r.blocker).toEqual(["o/b"]);
       expect(r.offen).toEqual([]);
+    });
+    it("factory#215 L5: bezieherProbe mit rest: Zeile grün mit Projekt-Rest, in rest gelistet, weder Blocker noch offen", () => {
+      const r = T.bezieherProbe({ bezieher: ["o/a", "o/b"], ergebnisse: { "o/a": "rest", "o/b": 0 } });
+      expect(r.zeilen).toEqual(["- [x] `o/a`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)", "- [x] `o/b`: Probe grün"]);
+      expect([r.blocker, r.offen, r.rest]).toEqual([[], [], ["o/a"]]);
     });
     it("bezieherProbe: jeder Exit ungleich 0 ist ein Blocker, auch 2; ein Ergebnis zu einem fremden Repo zählt nicht", () => {
       const r = T.bezieherProbe({ bezieher: ["o/a"], ergebnisse: { "o/a": 2, "x/fremd": 0 } });
