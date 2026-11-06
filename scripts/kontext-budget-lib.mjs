@@ -40,7 +40,11 @@ export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] })
 
 /** Zeichen-Budget des Kern-Blocks von AGENTS.md (zwischen den Besitz-Markern `kern`, ohne den Projekt-Block): Ratchet auf den Ist-Wert, wächst nur bewusst per reviewtem Commit
  *  (factory#208 L19: der Kern wuchs zwischen zwei Tags um ~1,1k Zeichen und brachte einen Bezieher über sein Gesamtbudget). */
-export const KERN_BLOCK_BUDGET = 16_572;
+export const KERN_BLOCK_BUDGET = 14_913;
+
+/** Raum, den der Kern jedem Bezieher außerhalb des Kern-Blocks in AGENTS.md lässt (Projekt-Block samt Projektwerten): `KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` bleibt unter dem Budget von AGENTS.md
+ *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Geeicht am größten gemessenen Rest plus rund 5 %; wächst ein Rest darüber, ist das ein Befund an den Bezieher. */
+export const PROJEKT_BLOCK_RAUM = 13_000;
 
 const KERN_START = "<!-- factory-besitz:start kern -->";
 const KERN_ENDE = "<!-- factory-besitz:ende kern -->";
