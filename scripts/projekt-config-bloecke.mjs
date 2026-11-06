@@ -87,9 +87,10 @@ const istPositivGanz = (v) => Number.isInteger(v) && v > 0;
 /**
  * Pur: prüft den Block `datengroesse` (Form, factory#7): `pfade` (nicht-leere Liste wörtlicher Ordner oder Globs) und `budget` (positive Ganzzahl, Zeilen) sind Pflicht;
  * `endungen` (Standard `.json`), `hinweis` (Projekttext der Teilung) und `deckel` (Liste `{ datei, max, grund mit #<nr> }`, Ratchet für bestehende Monolithe) sind optional.
- * Ein fehlender Block ist beim Laden erlaubt (das Datenbudget ist dann aus), `datengroesseAus` verlangt die Form beim Gebrauch.
+ * Ein fehlender Block (`undefined`) ist erlaubt (das Datenbudget ist dann aus) und ergibt keinen Fehler.
  */
 export function pruefeDatengroesse(d) {
+  if (d === undefined) return [];
   if (!istObjekt(d)) return ["datengroesse muss ein Objekt mit pfade und budget sein"];
   const fehler = Object.keys(d).filter((k) => !DATEN_SCHLUESSEL.includes(k)).map((k) => `datengroesse.${k} ist kein bekannter Schlüssel (erlaubt: ${DATEN_SCHLUESSEL.join(", ")})`);
   fehler.push(...(!Array.isArray(d.pfade) || d.pfade.length === 0 ? ["datengroesse.pfade muss eine nicht-leere Liste von Ordnern oder Pfad-Globs sein"] : globMaengel(d.pfade, "datengroesse.pfade")));

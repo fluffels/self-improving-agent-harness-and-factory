@@ -371,7 +371,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
-  if (wert.datengroesse !== undefined) fehler.push(...pruefeDatengroesse(wert.datengroesse));
+  fehler.push(...pruefeDatengroesse(wert.datengroesse));
   if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));

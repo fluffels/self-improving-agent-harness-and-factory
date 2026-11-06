@@ -42,6 +42,8 @@ describe("pruefeDatengroesse (Form des Blocks)", () => {
   });
   test("kein Objekt, unbekannter Schlüssel", () => {
     assert.match(pruefeDatengroesse("x").join(), /datengroesse muss ein Objekt/);
+    assert.match(pruefeDatengroesse(null).join(), /datengroesse muss ein Objekt/);
+    assert.deepEqual(pruefeDatengroesse(undefined), []);
     assert.match(pruefeDatengroesse({ ...gueltig, zufall: 1 }).join(), /datengroesse\.zufall ist kein bekannter Schlüssel/);
   });
   test("pfade: Pflicht, nicht leer, nur gültige Globs", () => {

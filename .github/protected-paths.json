@@ -106,6 +106,7 @@
     "/scripts/design-schritt.mjs",
     "/scripts/projekt-config-bloecke.mjs",
     "/scripts/quellwurzeln-lib.mjs",
+    "/scripts/datengroesse-lib.mjs",
     "/scripts/coverage-berichte.mjs",
     "/scripts/gate-befehl.mjs",
     "/scripts/gate-befehl-lib.mjs",
