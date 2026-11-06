@@ -39,7 +39,7 @@ const gruppe = (id, { punkte = [], grund = "", fix = "" } = {}) => ({
   status: grund === "" ? "ok" : "nicht-pruefbar",
   grund,
   fix,
-  punkte: grund === "" ? punkte : [],
+  punkte,
 });
 
 const ARTNAME = { issue: "Issue", pr: "PR", kommentar: "Kommentar" };

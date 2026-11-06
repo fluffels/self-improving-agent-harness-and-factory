@@ -216,7 +216,7 @@ Die Sicherheits-Inboxen (`audit-einordnung`, `codescanning-inbox`, `secret-inbox
 
 ## Offene Punkte der Maintainerin (factory#152)
 
-`npm run offene-punkte [-- --json] [--wurzel <pfad>]` listet aus GitHub (Repo und Labels aus der Projekt-Config), wofür die Maintainerin gebraucht wird, je Punkt mit Link. Vier Gruppen in fester Reihenfolge:
+`npm run offene-punkte -- [--json] [--wurzel <pfad>]` listet aus GitHub (Repo und Labels aus der Projekt-Config), wofür die Maintainerin gebraucht wird, je Punkt mit Link. Vier Gruppen in fester Reihenfolge:
 
 1. **Entscheidung nötig:** offene Issues und PRs mit `labels.entscheidung` (optionaler Schlüssel; ohne ihn ist die Gruppe NICHT PRÜFBAR mit Fix auf die Config).
 2. **Festgefahren:** offene Issues und PRs mit `labels.festgefahren`.

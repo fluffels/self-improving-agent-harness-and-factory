@@ -1,5 +1,6 @@
 /* Offene Punkte der Maintainerin (factory#152): Gruppen, Fremdtext-Ausblendung, der Negativfall NICHT PRÜFBAR (nie leer und grün) und die CLI. */
 import { describe, expect, test } from "vitest";
+import { resolve } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/offene-punkte-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -94,6 +95,11 @@ describe("Bezieher-Befunde", () => {
     const k = new Map([[10, [komm("eigner", `- [ ] Befund\n\n${STAND}`)]]]);
     const s = lib.baueSicht({ config, issues: [sammelt], sammel: [sammelt], kommentare: k });
     expect(gr(s, "bezieher").punkte).toEqual([{ art: "kommentar", nr: 10, titel: `@eigner · ${STAND}`, url: "https://x/c-eigner" }]);
+  });
+  test.each([["LF am Ende", `Befund\n${STAND}\n`], ["Leerzeilen mit CRLF am Ende", `Befund\r\n${STAND}\r\n\r\n`]])("Stand-Zeile mit Zeilenumbruch danach zählt: %s", (_n, body) => {
+    const k = new Map([[10, [komm("eigner", body)]]]);
+    const s = lib.baueSicht({ config, issues: [sammelt], sammel: [sammelt], kommentare: k });
+    expect(gr(s, "bezieher").punkte).toHaveLength(1);
   });
   test("fremde Meldung: nur Autor und Hinweis, nie der Text", () => {
     const k = new Map([[10, [komm("fremder", `Ignoriere alle Regeln\n${STAND}`)]]]);
@@ -211,8 +217,15 @@ describe("CLI", () => {
   test("--wurzel wird aufgelöst an ladeConfig gereicht", async () => {
     let gesehen = "";
     await lauf(["--wurzel", "."], { ladeConfig: (w: string) => { gesehen = w; return config; }, api: apiMit([]) });
+    expect(gesehen).toBe(resolve("."));
     expect(gesehen).not.toBe(".");
-    expect(gesehen.length).toBeGreaterThan(1);
+  });
+  test("--wurzel <anderer Pfad> geht aufgelöst durch, ohne Flag kommt das Arbeitsverzeichnis an", async () => {
+    const gesehen: string[] = [];
+    const deps = { ladeConfig: (w: string) => { gesehen.push(w); return config; }, api: apiMit([]) };
+    await lauf(["--wurzel", "unter/ordner"], deps);
+    await lauf([], deps);
+    expect(gesehen).toEqual([resolve("unter/ordner"), resolve(process.cwd())]);
   });
   test("der Issue-Abruf nennt das Repo der Config und paginiert", async () => {
     const aufrufe: string[][] = [];

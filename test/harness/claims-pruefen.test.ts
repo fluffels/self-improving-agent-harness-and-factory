@@ -753,6 +753,11 @@ describe("echteDeps: Config", () => {
     assert.equal(d.festgefahrenLabel, "zustand:fest");
     assert.match(d.lockDir, /ab-locks$/);
   });
+  test("entscheidungLabel kommt aus der Config; ohne den optionalen Schlüssel oder leer ist es null", () => {
+    assert.equal(M.echteDeps({ config: { ...AB, labels: { ...AB.labels, entscheidung: "zustand:frage" } } }).entscheidungLabel, "zustand:frage");
+    assert.equal(M.echteDeps({ config: AB }).entscheidungLabel, null);
+    assert.equal(M.echteDeps({ config: { ...AB, labels: { ...AB.labels, entscheidung: "" } } }).entscheidungLabel, null);
+  });
   test("Negativfall: ohne labels.festgefahren bricht echteDeps ab und nennt den Schlüssel", () => {
     const { festgefahren: _weg, ...rest } = AB.labels;
     assert.throws(() => M.echteDeps({ config: { ...AB, labels: rest } }), /labels\.festgefahren/);
