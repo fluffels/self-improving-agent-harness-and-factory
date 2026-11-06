@@ -382,14 +382,14 @@ describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStan
     expect(lib.istStandZeile("factory: v1 (beta) (abcdef0)")).toBe(true);
   });
   test("Negativfälle am Literal und an den Leerzeichen", () => {
-    for (const zeile of ["factory v1 (abcdef0)", "factory:v1 (abcdef0)", "factory:\tv1 (abcdef0)", "factory: v1(abcdef0)", "Factory: v1 (abcdef0)", "faktory: v1 (abcdef0)", "factory: unbekannt (sync-stand unlesbar)"]) expect(lib.istStandZeile(zeile)).toBe(false);
+    for (const zeile of ["factory: v1\t(abcdef0)", "factory; v1 (abcdef0)", "factori: v1 (abcdef0)", "factory v1 (abcdef0)","factory:v1 (abcdef0)", "factory:\tv1 (abcdef0)", "factory: v1(abcdef0)", "Factory: v1 (abcdef0)", "faktory: v1 (abcdef0)", "factory: unbekannt (sync-stand unlesbar)"]) expect(lib.istStandZeile(zeile)).toBe(false);
     for (const zeile of ["factory: v1 (abcdef0", "factory: v1 abcdef0)"]) expect(lib.istStandZeile(zeile)).toBe(false);
   });
   test("Negativfälle an den Klammern und am Literal der unlesbaren Stand-Zeile", () => {
     expect(lib.istStandZeile("factory: v1 [abcdef0)")).toBe(false);
     expect(lib.istStandZeile("factory: v1 (abcdef0]")).toBe(false);
     for (const zeichen of ["/", ":", "`"]) expect(lib.istStandZeile(`factory: v1 (abcde${zeichen}0)`)).toBe(false);
-    for (const klammerInhalt of ["", "x", "unbekanntunbekannt"]) expect(lib.istStandZeile(`factory: v1 (${klammerInhalt})`)).toBe(false);
+    for (const klammerInhalt of ["", "x", "unbekanntunbekannt", "unbekanntt", "unbekannt0", "Unbekannt", "xnbekannt", "unbexannt", "unbekannx", "vielleich"]) expect(lib.istStandZeile(`factory: v1 (${klammerInhalt})`)).toBe(false);
     expect(lib.istStandZeile("factory: unbekannt (Sync-Stand unlesbar) danach Text")).toBe(false);
     expect(lib.istStandZeile("siehe factory: unbekannt (Sync-Stand unlesbar)")).toBe(false);
   });
