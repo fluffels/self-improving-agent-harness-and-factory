@@ -170,7 +170,7 @@ describe("strukturOrdnerBefunde mit eigenem Block", () => {
 
 describe("datenBefunde", () => {
   const block = (extra: Partial<Block> = {}): Block => ({ pfade: ["daten"], budget: 10, endungen: [".json"], hinweis: null, deckel: [], ...extra });
-  const wurzel = () => fixture({ "daten/klein.json": zeilen(10), "daten/gross.json": JSON.stringify({ a: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], b: [1] }, null, 2), "daten/notiz.txt": zeilen(500), "andere/riesig.json": zeilen(500) });
+  const wurzel = () => fixture({ "daten/klein.json": zeilen(10), "daten/gross.json": JSON.stringify({ a: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], b: [1] }, null, 2), "daten/notiz.txt": JSON.stringify({ a: Array.from({ length: 60 }, (_, i) => i), b: [1, 2] }, null, 2), "andere/riesig.json": zeilen(500) });
   test("rot nur für die große JSON-Datei unter dem Datenpfad, mit Split-Empfehlung und Hinweis", () => {
     const { rot, info } = datenBefunde(wurzel(), block({ hinweis: "Projekttext" }));
     assert.equal(rot.length, 1);
@@ -185,7 +185,8 @@ describe("datenBefunde", () => {
   test("eigene Endungen: .txt wird dann gemessen und bekommt die generische Empfehlung", () => {
     const { rot } = datenBefunde(wurzel(), block({ endungen: [".txt"] }));
     assert.equal(rot.length, 1);
-    assert.match(rot[0], /^daten\/notiz\.txt: 500 Zeilen/);
+    assert.match(rot[0], /^daten\/notiz\.txt: \d+ Zeilen/);
+    assert.doesNotMatch(rot[0], /Teilungsebene/);
     assert.match(rot[0], /nach inhaltlicher Einheit teilen/i);
   });
   test("Deckel: gleich geduldet (info), darüber rot mit Rebase-Hinweis, darunter rot", () => {
