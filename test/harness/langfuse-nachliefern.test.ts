@@ -404,6 +404,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(existsSync(b.state) && readdirSync(b.state).some((n) => n.includes("kaputt"))).toBe(false);
   });
 
+  test("kaputtes Ledger ohne jede Session: die Sicherung steht, und ein frisches leeres Ledger wird trotz unverändertem Inhalt geschrieben", async () => {
+    const a = aufbau([]);
+    mkdirLedger(a.state);
+    writeFileSync(a.ledger, "{kaputt");
+    const r = await lauf(a, mock({ ist: 0 }));
+    expect(r.exitCode).toBe(0);
+    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(ledgerVon(a.ledger)).toEqual({ version: 1, sessions: {} });
+  });
+
   test("mehrdeutig (Fingerabdruck: fehlend und Dubletten zugleich): nichts gesendet, unbestätigt mit Befund; der Folgelauf fragt erneut ab", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
     const fremd = obsZu(sollZu("zz", 99));
