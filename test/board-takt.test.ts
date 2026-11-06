@@ -163,7 +163,7 @@ describe("Produktquote im Takt (#1425)", () => {
   });
 
   describe("fuellstandVon: Laden, Zählen und Fail-closed an einer Stelle", () => {
-    const k = (login: string) => ({ user: { login, type: "User" } });
+    const k = (login: string) => ({ user: { login, type: "User" }, body: "- [ ] Befund" });
     const repo = `${OWNER}/projekt`;
     test("zählt die Owner-Kommentare (Owner aus dem Repo) und reicht Nummer und Repo an den Lader", () => {
       const gesehen: unknown[] = [];
@@ -187,7 +187,7 @@ describe("Produktquote im Takt (#1425)", () => {
   });
 
   test("befundKommentare (#1888): nur Kommentare des vertrauten Owners ohne [bot]; fremde, Bot-, anonyme und gelöschte Autoren zählen nicht", () => {
-    const k = (login: string | null, type = "User") => ({ user: login === null ? null : { login, type } });
+    const k = (login: string | null, type = "User") => ({ user: login === null ? null : { login, type }, body: "- [ ] Befund" });
     expect(Q.befundKommentare([k(OWNER), k(OWNER), k("fremd"), k("github-actions[bot]", "Bot"), k("dependabot[bot]", "Bot"), k(null), {}], OWNER)).toBe(2);
     expect(Q.befundKommentare([k(OWNER.toUpperCase())], OWNER)).toBe(1); // Login ohne Groß-/Kleinschreibung
     expect(Q.befundKommentare([], OWNER)).toBe(0);
@@ -195,6 +195,13 @@ describe("Produktquote im Takt (#1425)", () => {
     expect(Q.befundKommentare([{ user: { login: `${OWNER}[bot]`, type: "User" } }], `${OWNER}[bot]`)).toBe(0); // ein [bot]-Login zählt nie
     expect(() => Q.befundKommentare({}, OWNER)).toThrow(/Liste/);
     expect(() => Q.befundKommentare(null, OWNER)).toThrow(/Liste/);
+  });
+
+  test("befundKommentare (factory#215): nur Kommentare mit mindestens einer Checkbox-Zeile zählen; Fließtext zählt 0, ein abgehaktes `- [x]` zählt 1", () => {
+    const k = (body?: string) => ({ user: { login: OWNER, type: "User" }, ...(body === undefined ? {} : { body }) });
+    expect(Q.befundKommentare([k("Nur Fließtext ohne Zeile"), k(), k("Text mit - [ ] mittendrin")], OWNER)).toBe(0);
+    expect(Q.befundKommentare([k("- [x] erledigt")], OWNER)).toBe(1);
+    expect(Q.befundKommentare([k("Kopf\n* [X] a\n  - [ ] b"), k("- [ ] c")], OWNER)).toBe(2); // je Kommentar höchstens 1, egal wie viele Zeilen
   });
 });
 

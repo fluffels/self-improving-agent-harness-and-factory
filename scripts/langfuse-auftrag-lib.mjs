@@ -7,7 +7,7 @@
  * „der Agentenkontext liest den Key nie“).
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const AUFTRAG_DATEI = "langfuse-nachliefer-auftraege.json";
 /** Ein nie erledigter Auftrag (z.B. dauerhaft mehrdeutige Session) verfällt nach dieser Zeit. */
@@ -24,12 +24,16 @@ function lies(stateDir) {
   }
 }
 
-function schreibe(stateDir, auftraege) {
-  mkdirSync(stateDir, { recursive: true });
-  const datei = join(stateDir, AUFTRAG_DATEI);
-  const tmp = `${datei}.${process.pid}.tmp`; // je Prozess eigen: Agent und Hook schreiben nicht gleichzeitig dieselbe Datei
-  writeFileSync(tmp, JSON.stringify({ version: 1, auftraege }, null, 2) + "\n");
+/** Atomarer JSON-Zustandsschreiber (Ledger und Aufträge): Ordner anlegen, erst `<datei>.<pid>.tmp`, dann `rename`; je Prozess eigene Tmp-Datei, damit Agent und Hook nie dieselbe beschreiben. */
+export function schreibeJsonAtomar(datei, wert) {
+  mkdirSync(dirname(datei), { recursive: true });
+  const tmp = `${datei}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(wert, null, 2) + "\n");
   renameSync(tmp, datei);
+}
+
+function schreibe(stateDir, auftraege) {
+  schreibeJsonAtomar(join(stateDir, AUFTRAG_DATEI), { version: 1, auftraege });
 }
 
 /** Legt den Auftrag ab; `false` bei einer ungültigen Session-ID (nichts geschrieben). */

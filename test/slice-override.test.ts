@@ -4,7 +4,8 @@
  * Reines Node-Tooling ohne Declaration-File: Namespace einmal auf eine lokale Oberfläche gebracht. */
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { altName, ohneKernEnv } from "./support/env-alt";
@@ -367,7 +368,7 @@ describe("Gates ohne Projekt-Config (#1741): kein Standardwert, Exit 1 mit der M
     const dir = mkdtempSync(join(tmpdir(), "gate-ohne-config-"));
     try {
       // Kopie der Skripte ohne .factory/projekt.json: der Lader sucht die Config relativ zu seinem Ort.
-      cpSync(join(__dirname, "..", "scripts"), join(dir, "scripts"), { recursive: true });
+      kopiereScripts(dir);
       const r = spawnSync(process.execPath, [join(dir, "scripts", skript)], { cwd: dir, encoding: "utf8" });
       expect(r.status).toBe(1);
       expect(r.stderr).toContain("Projekt-Config");

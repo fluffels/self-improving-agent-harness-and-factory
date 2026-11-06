@@ -23,7 +23,7 @@ import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, mo
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
 import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
-import { ueberBudget } from "./kontext-budget-lib.mjs";
+import { knappeBudgets, ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, projektMarkerHinweis, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
@@ -282,7 +282,9 @@ function kontextHinweise(plan, ziel) {
   } catch {
     // Config des Ziels nicht lesbar: ohne Ausnahmen messen, die Warnung ist nur ein Hinweis.
   }
-  return ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
+  const ueber = ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
+  const knapp = knappeBudgets({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget knapp: ${k.file} ${k.chars} von ${k.budget} Zeichen (Rest ${k.rest}); der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen`);
+  return [...ueber, ...knapp];
 }
 
 /** Trägt die Änderungen des Link-Plans in den Sync-Plan ein: ein Pfad, den der Sync als unverändert zählte, wechselt zu geändert; neue Pfade (der Index) werden angelegt. */

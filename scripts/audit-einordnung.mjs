@@ -222,7 +222,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken } = start;
-  const libs = sicherheitsLibs(start.libs, { bezieher, log });
+  const libs = sicherheitsLibs(start.libs, { bezieher, log, gh });
   const { REPO, ladeSammelKontext, offeneTitel, postZeilen, waehleSammelticket } = libs;
   const aktion = zielAktionen({ gh, libs });
   const kontext = ladeSammelKontext();

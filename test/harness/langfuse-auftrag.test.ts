@@ -4,18 +4,20 @@
  * Weder ~/.claude noch Langfuse werden angefasst: Temp-Ordner, injiziertes lauf/Uhr; der Prozess-Test biegt das Home um.
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixture } from "../support/tmp-fixture";
+import { importHuelle } from "../support/import-huelle";
+import { lokaleImporteTransitiv } from "./hook-importe";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAuftrag from "../../scripts/langfuse-auftrag-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNach from "../../scripts/langfuse-nachliefern.mjs";
 
-type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; auftrag: string | null; fehler: string | null };
+type Args = { ausloeser: string | null; session: string | null; aktuell: string | null; beendet: string | null; fehler: string | null };
 type Ergebnis = { exitCode: number; text: string; protokoll: Record<string, unknown> & { sessions: { status: string }[] } };
 type Lauf = (a: Args, o: { now: number }) => Promise<Ergebnis>;
 const A = rawAuftrag as unknown as {
@@ -26,17 +28,19 @@ const A = rawAuftrag as unknown as {
   auftragErledigen: (dir: string, session: string) => void;
   auftragAufruf: (argv: string[], dir: string, now?: number) => { exitCode: number; text: string };
   AUFRUFHILFE: string;
+  schreibeJsonAtomar: (datei: string, wert: unknown) => void;
 };
 const N = rawNach as unknown as {
   parseArgs: (a: string[]) => Args;
   hookLauf: (a: Args, o: { stateDir: string; lauf: Lauf; schlafen: (ms: number) => Promise<void>; uhr: () => number; pid: number }) => Promise<{ lock: string; ergebnis: Ergebnis | null }>;
 };
 
-const T0 = Date.parse("2026-11-05T10:00:00Z");
-const SKRIPT_DIR = fileURLToPath(new URL("../../scripts/", import.meta.url));
+// Weit in der Vergangenheit: nutzte ein Hook die Wanduhr statt der injizierten Uhr, fielen alle Aufträge als verfallen heraus.
+const T0 = Date.parse("2001-01-01T00:00:00Z");
+const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
+const SKRIPT_DIR = join(WURZEL, "scripts");
 const NACHLIEFERN = join(SKRIPT_DIR, "langfuse-nachliefern.mjs");
 const AUFTRAG = join(SKRIPT_DIR, "langfuse-auftrag.mjs");
-const AUFTRAG_LIB = join(SKRIPT_DIR, "langfuse-auftrag-lib.mjs");
 const dateiVon = (dir: string) => join(dir, A.AUFTRAG_DATEI);
 const auftraegeAus = (datei: string) => (JSON.parse(readFileSync(datei, "utf8")) as { auftraege: Record<string, string> }).auftraege;
 
@@ -89,6 +93,18 @@ describe("Auftragsdatei", () => {
     const leer = join(fixture({}), "state2");
     A.auftragErledigen(leer, "x");
     expect(existsSync(dateiVon(leer))).toBe(false);
+  });
+});
+
+describe("schreibeJsonAtomar (gemeinsamer Zustandsschreiber für Ledger und Aufträge)", () => {
+  test("legt fehlende Ordner an, schreibt den vollen Inhalt, überschreibt und hinterlässt keine Tmp-Datei", () => {
+    const ordner = join(fixture({}), "a", "b");
+    const datei = join(ordner, "zustand.json");
+    A.schreibeJsonAtomar(datei, { x: 1 });
+    expect(readFileSync(datei, "utf8")).toBe('{\n  "x": 1\n}\n');
+    A.schreibeJsonAtomar(datei, { y: [2] });
+    expect(JSON.parse(readFileSync(datei, "utf8"))).toEqual({ y: [2] });
+    expect(readdirSync(ordner)).toEqual(["zustand.json"]);
   });
 });
 
@@ -174,7 +190,8 @@ describe("auftragAufruf (Einstieg)", () => {
     for (const argv of [[], ["a", "b"], ["--json"], ["a b"], ["--auftrag", "abc"]]) {
       const r = A.auftragAufruf(argv, dir, T0);
       expect(r.exitCode).toBe(2);
-      expect(r.text).toContain(A.AUFRUFHILFE);
+      expect(r.text).toBe(argv.length === 1 ? `ungültige Session-ID: ${argv[0]}
+${A.AUFRUFHILFE}` : A.AUFRUFHILFE);
     }
     expect(existsSync(dateiVon(dir))).toBe(false);
     expect(A.auftragAufruf(["abc-1"], dir, T0)).toEqual({ exitCode: 0, text: "Auftrag abgelegt: abc-1 (der nächste SessionStart-Lauf liefert nach)" });
@@ -183,20 +200,33 @@ describe("auftragAufruf (Einstieg)", () => {
 });
 
 describe("Der Agent-Einstieg liest nie einen Key (Negativfall der Maintainerin, factory#213)", () => {
-  const spezifizierer = (datei: string): string[] => [...readFileSync(datei, "utf8").matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g)].map((m) => m[1]);
   const fahre = (skript: string, home: string, args: string[]) =>
     spawnSync(process.execPath, [skript, ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" } });
 
   test("Import-Hülle: Einstieg und Lib ziehen nur Node-Builtins, direktaufruf.mjs (nur Builtins) und die Lib, nie langfuse-zugang oder langfuse-api", () => {
-    const einstieg = spezifizierer(AUFTRAG);
-    expect(einstieg).toEqual(expect.arrayContaining(["./direktaufruf.mjs", "./langfuse-auftrag-lib.mjs"]));
-    expect(einstieg.filter((m) => !m.startsWith("node:") && m !== "./direktaufruf.mjs" && m !== "./langfuse-auftrag-lib.mjs")).toEqual([]);
-    const lib = spezifizierer(AUFTRAG_LIB);
-    expect(lib.length).toBeGreaterThan(0);
-    expect(lib.filter((m) => !m.startsWith("node:"))).toEqual([]);
-    expect(spezifizierer(join(SKRIPT_DIR, "direktaufruf.mjs")).filter((m) => !m.startsWith("node:"))).toEqual([]);
+    const leser = (p: string) => readFileSync(join(WURZEL, p), "utf8");
+    // wirft bei jedem Import, der weder node: noch relativ ist; Auslegung geteilt mit den anderen Hüllen-Tests (auch `import "…"`)
+    expect(importHuelle("scripts/langfuse-auftrag.mjs", leser)).toEqual(["scripts/direktaufruf.mjs", "scripts/langfuse-auftrag-lib.mjs", "scripts/langfuse-auftrag.mjs"]);
     // Gegenprobe: der Nachlieferer selbst zieht den Zugang, die Hülle unterscheidet also wirklich.
-    expect(spezifizierer(NACHLIEFERN)).toEqual(expect.arrayContaining(["./langfuse-zugang.mjs", "./langfuse-api.mjs"]));
+    expect(lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], leser)).toEqual(expect.arrayContaining(["scripts/langfuse-zugang.mjs", "scripts/langfuse-api.mjs"]));
+  });
+
+  test("unter dem Node-Permission-Model (nur Repo lesen, ~/.claude lesen und schreiben) legt der Einstieg ab; dasselbe Modell sperrt das Lesen von ~/.langfuse-secret (Sentinel)", () => {
+    const sentinel = "SENTINEL-KEIN-ECHTER-KEY";
+    const home = fixture({ ".langfuse-secret": sentinel, ".claude/.keep": "" });
+    const claude = join(home, ".claude");
+    const flags = ["--permission", `--allow-fs-read=${resolve(WURZEL)}`, `--allow-fs-read=${claude}`, `--allow-fs-write=${claude}`];
+    const env = { ...process.env, USERPROFILE: home, HOME: home, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: "" };
+    const r = spawnSync(process.execPath, [...flags, AUFTRAG, "abc-1"], { encoding: "utf8", timeout: 30_000, env });
+    expect(r.stderr).not.toContain("ERR_ACCESS_DENIED");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Auftrag abgelegt: abc-1");
+    expect(auftraegeAus(dateiVon(join(claude, "state")))).toHaveProperty("abc-1");
+    expect(r.stdout + r.stderr).not.toContain(sentinel);
+    // Gegenprobe: gleiche Flags, ein Lesen der Sentinel-Datei wird verweigert, das Modell greift also wirklich.
+    const probe = spawnSync(process.execPath, [...flags, "-e", `require("node:fs").readFileSync(${JSON.stringify(join(home, ".langfuse-secret"))}, "utf8")`], { encoding: "utf8", timeout: 30_000, env });
+    expect(probe.status).not.toBe(0);
+    expect(probe.stderr).toContain("ERR_ACCESS_DENIED");
   });
 
   test("ohne jeden Zugang: Exit 0, Auftrag liegt im Zustandsordner, kein Lauf (kein Log, kein Ledger)", () => {

@@ -7,7 +7,8 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +25,7 @@ const SAUBER_README = "# R\n\n`npm run verify`, `npm run typecheck`, `npm test`\
 const fixture = (dateien: Record<string, string> = {}): string => {
   const d = mkdtempSync(join(tmpdir(), "docdrift-cli-"));
   temps.push(d);
-  cpSync(join(WURZEL, "scripts"), join(d, "scripts"), { recursive: true });
+  kopiereScripts(d);
   const pkg = { scripts: { verify: "npm run typecheck && npm test", typecheck: "tsc", test: "vitest" } };
   // Die kopierten Skripte tragen Abschnittsverweise auf Seiten, die das Fixture nicht hat (factory#157): als verteilter Besitz eines Beziehers bleiben sie ohne Ziel still.
   const skripte = readdirSync(join(d, "scripts"), { recursive: true, encoding: "utf8" }).map((f) => f.replaceAll("\\", "/")).filter((f) => /\.(mjs|cjs|js)$/.test(f));

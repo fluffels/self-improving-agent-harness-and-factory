@@ -1,6 +1,7 @@
 /* Gemeinsamer Start der Inbox-Skripte (#1837 L16): Aufruf-Check vor dem Config-Laden, Config- und Lib-Fehler als einheitliche `::error::`-Meldung. */
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -187,7 +188,7 @@ describe("bestaetigeAnlegen (#101 L17, fail-closed, gemeinsam für Status- und T
 
 describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im eigenen Repo", () => {
   type Fn = (...a: unknown[]) => unknown;
-  type Libs = { REPO: string; ZIEL: string; SAMMELTICKET_TITEL_LISTE?: string[]; zielToken: Fn; ladeSammelKontext: Fn; postZeilen: Fn; waehleSammelticket: Fn; platziereAmEnde: Fn };
+  type Libs = { REPO: string; ZIEL: string; SAMMELTICKET_TITEL_LISTE?: string[]; zielToken: Fn; ladeSammelKontext: Fn; postZeilen: Fn; waehleSammelticket: Fn; platziereAmEnde: Fn; frischeOffeneIssues?: Fn };
   const S = rawLib as unknown as { sicherheitsLibs: (libs: Libs, opt?: { bezieher?: boolean; gh?: { text: (a: string[]) => string }; log?: (s: string) => void }) => Libs; REST_TITEL: string };
   const aufbau = () => {
     const aufrufe: { name: string; args: unknown[] }[] = [];
@@ -200,6 +201,7 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
       postZeilen: (...a: unknown[]) => (aufrufe.push({ name: "postZeilen", args: a }), ""),
       waehleSammelticket: (...a: unknown[]) => (aufrufe.push({ name: "waehleSammelticket", args: a }), null),
       platziereAmEnde: (...a: unknown[]) => void aufrufe.push({ name: "platziereAmEnde", args: a }),
+      frischeOffeneIssues: () => [],
     };
     return { libs, aufrufe };
   };
@@ -219,7 +221,7 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
   test("Standard in einem echten Bezieher (Kopie der Skripte mit Sync-Stand): ohne Angabe wird ersetzt, ohne Sync-Stand nicht (der Default zeigt auf die Repo-Wurzel)", { timeout: 60_000 }, () => {
     const dir = mkdtempSync(join(tmpdir(), "sicherheitslibs-"));
     try {
-      cpSync(join(fileURLToPath(new URL("..", import.meta.url)), "scripts"), join(dir, "scripts"), { recursive: true });
+      kopiereScripts(dir);
       writeFileSync(join(dir, "pruefe.mjs"), 'import { sicherheitsLibs } from "./scripts/inbox-start-lib.mjs";\nconst libs = { REPO: "acme/proj", ZIEL: "fabrik/eingang", zielToken: () => undefined };\nconsole.log(JSON.stringify(sicherheitsLibs(libs).ZIEL));\n');
       const lauf = () => spawnSync(process.execPath, [join(dir, "pruefe.mjs")], { encoding: "utf8", cwd: tmpdir(), timeout: 30_000 }).stdout.trim();
       expect(lauf()).toBe('"fabrik/eingang"');
@@ -286,6 +288,48 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
     expect(gh.args[0]).not.toContain("--label");
     expect(gh.args[0].join(" ")).not.toContain("🔒");
     expect(von(aufrufe, "platziereAmEnde")).toEqual([[41]]);
+  });
+
+  test("Bezieher: die Zweitabfrage kennt das Rest-Ticket schon (REST-Liste hinkt): nichts angelegt, Warnung, null", () => {
+    const { libs, aufrufe } = aufbau();
+    libs.frischeOffeneIssues = (...a: unknown[]) => (aufrufe.push({ name: "frischeOffeneIssues", args: a }), [{ number: 7, titel: S.REST_TITEL }]);
+    const log: string[] = [];
+    const gh = { text: () => { throw new Error("nichts anlegen"); } };
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh, log: (s) => log.push(s) });
+    expect(neu.waehleSammelticket([])).toBeNull();
+    expect(von(aufrufe, "frischeOffeneIssues")[0][0]).toEqual({ repo: "own-a/proj", anzahl: 50, mitBoard: false });
+    expect(log.join("\n")).toMatch(/::warning::.*#7/);
+    expect(von(aufrufe, "platziereAmEnde")).toEqual([]);
+  });
+
+  test("Bezieher: ein anderes offenes Ticket in der Zweitabfrage verhindert das Anlegen nicht", () => {
+    const { libs } = aufbau();
+    libs.frischeOffeneIssues = () => [{ number: 7, titel: "Etwas anderes" }];
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => "https://github.com/own-a/proj/issues/50" } });
+    expect(neu.waehleSammelticket([])).toEqual({ number: 50 });
+  });
+
+  test("Bezieher: scheitert die Zweitabfrage, wird nichts angelegt (fail-closed), Warnung, null", () => {
+    const { libs } = aufbau();
+    libs.frischeOffeneIssues = () => { throw new Error("API weg"); };
+    const log: string[] = [];
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => { throw new Error("nichts anlegen"); } }, log: (s) => log.push(s) });
+    expect(neu.waehleSammelticket([])).toBeNull();
+    expect(log.join("\n")).toMatch(/::warning::.*API weg/);
+  });
+
+  test("Bezieher: unerwartete Ausgabe von gh issue create wirft mit der Rohausgabe, statt NaN zu liefern", () => {
+    const { libs, aufrufe } = aufbau();
+    const neu = S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => "kaputte Ausgabe" } });
+    expect(() => neu.waehleSammelticket([])).toThrow(/kaputte Ausgabe/);
+    expect(von(aufrufe, "platziereAmEnde")).toEqual([]);
+  });
+
+  test("Bezieher: die Nummer 0 oder eine negative ist keine gültige Nummer und wirft", () => {
+    const { libs } = aufbau();
+    for (const roh of ["https://github.com/own-a/proj/issues/0", "https://github.com/own-a/proj/issues/-3"]) {
+      expect(() => S.sicherheitsLibs(libs, { bezieher: true, gh: { text: () => roh } }).waehleSammelticket([])).toThrow(/Nummer fehlt/);
+    }
   });
 
   test("Bezieher: scheitert das Einsortieren, bleibt das Ticket nutzbar und eine Warnung steht im Log", () => {

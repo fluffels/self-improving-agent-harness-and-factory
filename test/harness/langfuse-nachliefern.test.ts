@@ -404,6 +404,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(existsSync(b.state) && readdirSync(b.state).some((n) => n.includes("kaputt"))).toBe(false);
   });
 
+  test("kaputtes Ledger ohne jede Session: die Sicherung steht, und ein frisches leeres Ledger wird trotz unverändertem Inhalt geschrieben", async () => {
+    const a = aufbau([msg("a", 1)]);
+    mkdirLedger(a.state);
+    writeFileSync(a.ledger, "{kaputt");
+    const r = await lauf(a, mock({ ist: 0 }), { seit: "2100-01-01T00:00:00Z" }); // keine Session im Fenster
+    expect(r.exitCode).toBe(0);
+    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(JSON.parse(readFileSync(a.ledger, "utf8"))).toEqual({ version: 1, sessions: {} });
+  });
+
   test("mehrdeutig (Fingerabdruck: fehlend und Dubletten zugleich): nichts gesendet, unbestätigt mit Befund; der Folgelauf fragt erneut ab", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
     const fremd = obsZu(sollZu("zz", 99));
@@ -514,6 +524,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       const r = await lauf(a, m);
       expect(m.otlp).toHaveLength(0);
       expect(r.protokoll.sessions[0].unzuordenbar).toBe(0);
+      expect(r.protokoll.sessions[0].status).toBe("vollständig");
     });
 
     test("Kopie plus fremde Dublette plus Lücke bleibt mehrdeutig: nichts gesendet", async () => {
@@ -604,6 +615,7 @@ describe("Fehler", () => {
     const r = await lauf(a, m);
     expect(r.exitCode).toBe(1);
     expect(r.protokoll.fehler[0]).toMatchObject({ session: "s1", status: 500 });
+    expect(r.protokoll.sessions[0].status).toBe("Fehler");
     expect(readFileSync(a.ledger, "utf8")).toBe(vorher);
     expect(m.scores).toHaveLength(0);
   });
@@ -1374,6 +1386,7 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
       url.includes(pfad) ? Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) })) : m.fetchImpl(url, init);
     const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
     expect(r.protokoll.fehler.map((f: { meldung: string }) => f.meldung)).toEqual([erwartet]);
+    expect(r.protokoll.fehler.map((f: { status: number | null }) => f.status)).toEqual([null]); // ohne HTTP-Status: null, nicht fehlend
   });
   test("fehlerText: cause null oder Nicht-Error mit cause werfen nicht und bleiben bei der Meldung", () => {
     expect(N.fehlerText(new Error("x", { cause: null }))).toBe("x");

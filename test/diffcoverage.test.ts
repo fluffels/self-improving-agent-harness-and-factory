@@ -62,7 +62,7 @@ type CheckDiffCoverageModule = {
   fehlenderBerichtText: (fehlend: string[]) => string;
   ohneMessung: (r: Record<string, unknown>, o: { zeilen: Record<string, string>; quelle: string | Quellen; colors: Record<"red" | "green" | "dim", (s: string) => string> }) => number | null;
   messfehlerText: (r: Record<string, unknown>, red: (s: string) => string) => string | null;
-  rotZeilen: (b: { files: { path: string; uncovered: number[] }[] }, berichte: string[]) => string[];
+  rotZeilen: (b: { files: { path: string; uncovered: number[]; berichte?: string[] }[] }) => string[];
   mehrdeutigText: (m: { pfad: string; schluessel: string; kandidaten: string[] }[]) => string;
   checkDiffCoverage: (opts: { quelle?: string | Quellen; berichte?: Bericht[]; rootDir?: string; runGit: RunGit; readFile?: (p: string) => string; env?: Env; zeilen?: Record<string, string> }) => Record<string, unknown>;
 };
@@ -764,7 +764,7 @@ describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", 
     assert.equal(r.failed, true);
     assert.deepEqual(r.below, [layerOf(PFAD_A)]);
     const bucket = (r.buckets as Record<string, { files: { path: string; uncovered: number[] }[] }>)[layerOf(PFAD_A)];
-    assert.deepEqual(bucket.files, [{ path: PFAD_A, total: 1, covered: 0, uncovered: [5] }]);
+    assert.deepEqual(bucket.files, [{ path: PFAD_A, total: 1, covered: 0, uncovered: [5], berichte: ["modul-a/target/site/jacoco/jacoco.xml"] }]);
   });
   test("eine gedeckte Zeile ist grün, ein Zweig mit cb < mb+cb steht unter „teilweise getestet“", () => {
     const gedeckt = lauf({ zeilen: [3] });
@@ -882,22 +882,32 @@ describe("Diff-Coverage über mehrere Berichte und Quellwurzeln (factory#185)", 
 describe("Diff-Coverage: Rot nennt Datei, Zeile und Bericht (factory#208)", () => {
   const bucket = {
     files: [
-      { path: "a/src/main/java/de/A.java", uncovered: [3, 7] },
+      { path: "a/src/main/java/de/A.java", uncovered: [3, 7], berichte: ["a/target/jacoco.xml"] },
       { path: "b/src/main/java/de/B.java", uncovered: [] },
-      { path: "c/src/main/java/de/C.java", uncovered: [12] },
+      { path: "c/src/main/java/de/C.java", uncovered: [12], berichte: ["coverage/lcov.info", "coverage/zweit.info"] },
     ],
   };
 
-  test("je Datei mit ungetesteten Zeilen eine Zeile (Datei und Zeilen), danach die gelesenen Berichte", () => {
-    const z = rotZeilen(bucket, ["a/target/jacoco.xml", "coverage/lcov.info"]);
+  test("je Datei mit ungetesteten Zeilen eine Zeile (Datei, Zeilen und der Bericht dieser Datei, nicht alle Berichte)", () => {
+    const z = rotZeilen(bucket);
     assert.deepEqual(z, [
-      "    a/src/main/java/de/A.java: ungetestet in Zeile 3, 7",
-      "    c/src/main/java/de/C.java: ungetestet in Zeile 12",
-      "    gelesen aus: a/target/jacoco.xml, coverage/lcov.info",
+      "    a/src/main/java/de/A.java: ungetestet in Zeile 3, 7 (aus a/target/jacoco.xml)",
+      "    c/src/main/java/de/C.java: ungetestet in Zeile 12 (aus coverage/lcov.info, coverage/zweit.info)",
     ]);
+  });
+  test("ohne bekannten Bericht keine Klammer", () => {
+    assert.deepEqual(rotZeilen({ files: [{ path: "y.ts", uncovered: [2] }] }), ["    y.ts: ungetestet in Zeile 2"]);
+  });
+  test("zwei lcov-Berichte zur selben Datei: beide stehen an ihr, ein Bericht ohne die Datei nicht", () => {
+    const lcov = "SF:src/a.ts\nDA:1,0\nend_of_record\n";
+    const rootDir = fixture({ "c/eins.info": lcov, "c/zwei.info": lcov, "c/drei.info": "SF:src/b.ts\nDA:1,1\nend_of_record\n" });
+    const berichte = ["eins", "zwei", "drei"].map((n) => ({ format: "lcov", pfad: `c/${n}.info` }));
+    const r = checkDiffCoverage({ quelle: { wurzeln: ["src"], endungen: [".ts"] }, berichte, rootDir, runGit: (a) => (a[0] === "diff" ? diffFor("src/a.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"), env: { FACTORY_DIFF_BASE: "basesha" } });
+    const dateien = Object.values(r.buckets as Record<string, { files: { path: string; berichte: string[] }[] }>).flatMap((b) => b.files);
+    assert.deepEqual(dateien.map((f) => [f.path, f.berichte]), [["src/a.ts", ["c/eins.info", "c/zwei.info"]]]);
   });
 
   test("Datei ohne ungetestete Zeile kommt nicht vor; ohne Treffer bleibt die Liste leer (kein Bericht ohne Anlass)", () => {
-    assert.deepEqual(rotZeilen({ files: [{ path: "x.java", uncovered: [] }] }, ["r.xml"]), []);
+    assert.deepEqual(rotZeilen({ files: [{ path: "x.java", uncovered: [], berichte: ["r.xml"] }] }), []);
   });
 });

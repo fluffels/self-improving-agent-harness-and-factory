@@ -274,7 +274,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   let libs;
   try {
     config = ladeConfig();
-    libs = sicherheitsLibs(await ladeLibs(), { bezieher, log });
+    libs = sicherheitsLibs(await ladeLibs(), { bezieher, log, gh });
   } catch (e) {
     log(`::error::Secret-Inbox: Projekt-Config nicht lesbar: ${fehlerText(e)}`);
     return AUFRUF_EXIT;

@@ -40,9 +40,22 @@ export async function inboxStart(argv, { skript, praefix, ladeConfig = () => lad
 export const REST_TITEL = "Sicherheit: Rest-Befunde (gesammelt)";
 const REST_BODY = "Sammelticket für Sicherheitsbefunde dieses Projekts ohne eigenes Ticket (Audit- und Code-Scanning-Zeilen unterhalb der Alarmschwelle). Die Befunde bleiben im eigenen Repo und gehen nie an das Eingangs-Repo der Fabrik. Befunde als Kommentar `- [ ] …` anhängen; abarbeiten und das Ticket schließen, der nächste Lauf legt es bei neuen Zeilen neu an.";
 
-/** Legt das Rest-Ticket im eigenen Repo an und sortiert es ans Ende der Todo-Spalte (ein Fehler dort nur als Warnung: das Ticket existiert). Rückgabe: `{ number }`. */
+/**
+ * Legt das Rest-Ticket im eigenen Repo an und sortiert es ans Ende der Todo-Spalte (ein Fehler dort nur als Warnung: das Ticket existiert).
+ * Davor die Zweitabfrage wie bei jedem Anlegen (`bestaetigeAnlegen`: die REST-Liste hinkt, gleichzeitige Läufe): kennt sie das Ticket schon oder scheitert sie, wird
+ * nichts angelegt (Warnung, Rückgabe `null`, der nächste Lauf versucht es erneut). Das Anlegen selbst läuft über `zielAktionen`; eine Nummer, die keine ganze Zahl > 0 ist, wirft mit der Rohausgabe. Rückgabe: `{ number }` oder `null`.
+ */
 function legeRestTicketAn({ libs, ziel, gh, log }) {
-  const nr = Number(gh.text(["issue", "create", "--repo", ziel, "--title", REST_TITEL, "--body", REST_BODY]).trim().split("/").pop());
+  const aktion = zielAktionen({ gh, libs });
+  const zweit = () => libs.frischeOffeneIssues({ repo: ziel, anzahl: 50, mitBoard: false }, zielZugang(libs).zielOpt);
+  const e = bestaetigeAnlegen({ aktion: "anlegen", warnungen: [] }, { zweit, passt: (i) => i?.titel === REST_TITEL, was: `„${REST_TITEL}“` });
+  if (e.aktion === "nichts") {
+    log(`::warning::${[...e.warnungen, e.grund].join(" ")}`);
+    return null;
+  }
+  const roh = aktion.legeIssueAn(REST_TITEL, REST_BODY);
+  const nr = Number(roh);
+  if (!Number.isInteger(nr) || nr <= 0) throw new Error(`Rest-Ticket angelegt, aber die Nummer fehlt in der Ausgabe von gh issue create: ${JSON.stringify(roh)}`);
   try {
     libs.platziereAmEnde(nr);
   } catch (e) {
@@ -60,15 +73,16 @@ function legeRestTicketAn({ libs, ziel, gh, log }) {
 export function sicherheitsLibs(libs, { bezieher = istBezieher(WURZEL), gh = { text: ghText }, log = console.log } = {}) {
   if (!bezieher) return libs;
   const ziel = libs.REPO;
-  return {
+  const neu = {
     ...libs,
     ZIEL: ziel,
     zielToken: () => libs.zielToken(ziel),
     ladeSammelKontext: (io) => libs.ladeSammelKontext({ repo: ziel, titel: REST_TITEL, ...io }),
     postZeilen: (nr, text, repo = ziel, token = libs.zielToken(repo)) => libs.postZeilen(nr, text, repo, token),
-    waehleSammelticket: (offene) => libs.waehleSammelticket(offene, ziel, undefined, REST_TITEL) ?? legeRestTicketAn({ libs, ziel, gh, log }),
+    waehleSammelticket: (offene) => libs.waehleSammelticket(offene, ziel, undefined, REST_TITEL) ?? legeRestTicketAn({ libs: neu, ziel, gh, log }),
     SAMMELTICKET_TITEL_LISTE: [...(libs.SAMMELTICKET_TITEL_LISTE ?? []), REST_TITEL],
   };
+  return neu;
 }
 
 /**

@@ -41,7 +41,7 @@ import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
 import { ASSIGN_RE, parseBash } from "./bash-parser.mjs";
 import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
-import { escapeRegex, ohneFarbcodes } from "./regex-lib.mjs";
+import { escapeRegex, ohneFarbcodes, SCHRITT_NAME } from "./regex-lib.mjs";
 import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug, toolPaare } from "./transkript.mjs";
 
 const KETTEN = ["verify", "verify:full", "verify:kompakt", "verify:changed"];
@@ -59,7 +59,7 @@ export function gateSatz(pkg) {
 // ── Befehlsform ──────────────────────────────────────────────────────────────
 
 const AUFRUFE = [
-  /^npm\s+(?:run|run-script)\s+(?:-\S+\s+)*[\w:.-]+(?:\s|$)/,
+  new RegExp(String.raw`^npm\s+(?:run|run-script)\s+(?:-\S+\s+)*${SCHRITT_NAME}(?:\s|$)`),
   /^npm\s+(?:test|t)(?:\s|$)/,
   /^node\s+(?:\S*[\\/])?gate-befehl\.mjs\s+\w+(?:\s|$)/,
   /^node\s+(?:\S*[\\/])?verify-lauf\.mjs(?:\s+--changed)?$/,
@@ -169,7 +169,7 @@ export function bewerteKopfLauf({ zeilen, exit, paket, gates, verify }) {
 // ── Summenzeile (verify:kompakt / verify:changed) ────────────────────────────
 
 const SUMME = /^verify:(kompakt|changed) (grün|ROT) · (.*)$/;
-const TEIL = /^([\w:.-]+) (ok|ROT|übersprungen) (\d+(?:[.,]\d+)?) s$/;
+const TEIL = new RegExp(String.raw`^(${SCHRITT_NAME}) (ok|ROT|übersprungen) (\d+(?:[.,]\d+)?) s$`);
 const sekunden = (text) => Number(text.replace(",", "."));
 
 /** Grüne Summenzeile: jeder Teil (ohne Klammerzusatz) muss auf `TEIL` passen, sonst ist der Lauf unvollständig (fail-closed, nie teilweise gezählt). */

@@ -3,7 +3,8 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { kopiereScripts } from "./support/scripts-kopie";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,12 +14,13 @@ import { KERN_BLOCK_BUDGET as rawBudget, kernBlockBefund as rawBefund, kernBlock
 import { kernBlockPruefung as rawPruefung } from "../scripts/check-context-size.mjs";
 
 const KERN_BLOCK_BUDGET = rawBudget as number;
-const kernBlockZeichen = rawZeichen as (text: string) => number | null;
-const kernBlockBefund = rawBefund as (a: { text: string; fabrik: boolean; budget?: number }) => string | null;
+const kernBlockZeichen = rawZeichen as (text: string, marker: { start: string; ende: string }) => number | null;
+const kernBlockBefund = rawBefund as (a: { text: string; fabrik: boolean; budget?: number; marker?: { start: string; ende: string } }) => string | null;
 const kernBlockPruefung = rawPruefung as (wurzel: string) => string | null;
 
 const START = "<!-- factory-besitz:start kern -->";
 const ENDE = "<!-- factory-besitz:ende kern -->";
+const MARKER = { start: START, ende: ENDE };
 const mitKern = (inhalt: string): string => `# Kopf\n${START}\n${inhalt}\n${ENDE}\nProjekt`;
 
 describe("Kern-Block-Budget", () => {
@@ -37,26 +39,33 @@ describe("Kern-Block-Budget", () => {
 
   test("zählt nur den Block zwischen den Markern, CRLF wie LF", () => {
     const lf = mitKern("abc");
-    assert.equal(kernBlockZeichen(lf), `${START}\nabc\n`.length);
-    assert.equal(kernBlockZeichen(lf.replace(/\n/g, "\r\n")), kernBlockZeichen(lf));
+    assert.equal(kernBlockZeichen(lf, MARKER), `${START}\nabc\n`.length);
+    assert.equal(kernBlockZeichen(lf.replace(/\n/g, "\r\n"), MARKER), kernBlockZeichen(lf, MARKER));
   });
 
   test("fehlender oder verdrehter Marker: null (fail-closed in der Prüfung)", () => {
-    assert.equal(kernBlockZeichen("# ohne Marker"), null);
-    assert.equal(kernBlockZeichen(`${ENDE}\nx\n${START}`), null);
-    assert.match(String(kernBlockBefund({ text: "# ohne Marker", fabrik: true })), /Marker/);
+    assert.equal(kernBlockZeichen("# ohne Marker", MARKER), null);
+    assert.equal(kernBlockZeichen(`${ENDE}\nx\n${START}`, MARKER), null);
+    assert.match(String(kernBlockBefund({ text: "# ohne Marker", fabrik: true, marker: MARKER })), /Marker/);
+  });
+
+  test("Marker kommen vom Aufrufer: eigene Marker zählen, die Standard-Marker dann nicht (fail-closed, Befund nennt die übergebenen)", () => {
+    const eigen = { start: "<<a>>", ende: "<<b>>" };
+    assert.equal(kernBlockZeichen("<<a>>xy<<b>>", eigen), "<<a>>xy".length);
+    assert.equal(kernBlockZeichen(mitKern("x"), eigen), null);
+    assert.match(String(kernBlockBefund({ text: mitKern("x"), fabrik: true, marker: eigen })), /<<a>> und <<b>>/);
   });
 
   test("Grenze exakt: Budget == Zeichen grün, eins weniger rot; Befund nennt Zahlen", () => {
     const text = mitKern("x".repeat(50));
-    const n = kernBlockZeichen(text) as number;
-    assert.equal(kernBlockBefund({ text, fabrik: true, budget: n }), null);
-    assert.match(String(kernBlockBefund({ text, fabrik: true, budget: n - 1 })), new RegExp(`${n}.*${n - 1}`));
+    const n = kernBlockZeichen(text, MARKER) as number;
+    assert.equal(kernBlockBefund({ text, fabrik: true, budget: n, marker: MARKER }), null);
+    assert.match(String(kernBlockBefund({ text, fabrik: true, budget: n - 1, marker: MARKER })), new RegExp(`${n}.*${n - 1}`));
   });
 
   test("außerhalb der Fabrik wird übersprungen, auch bei fehlenden Markern", () => {
-    assert.equal(kernBlockBefund({ text: mitKern("x".repeat(500)), fabrik: false, budget: 1 }), null);
-    assert.equal(kernBlockBefund({ text: "# ohne Marker", fabrik: false }), null);
+    assert.equal(kernBlockBefund({ text: mitKern("x".repeat(500)), fabrik: false, budget: 1, marker: MARKER }), null);
+    assert.equal(kernBlockBefund({ text: "# ohne Marker", fabrik: false, marker: MARKER }), null);
   });
 
   test("Prüfung: Fabrik = Besitz-Manifest da und kein Sync-Stand; Bezieher und ein Projekt ohne Manifest werden übersprungen", () => {
@@ -73,7 +82,7 @@ describe("Kern-Block-Budget", () => {
   test("Gate check:contextsize (CLI): Kern-Block über Budget in der Fabrik ist rot, im Bezieher grün (die Verdrahtung, nicht nur die pure Prüfung)", { timeout: 60_000 }, () => {
     temp((dir) => {
       const wurzel = join(import.meta.dirname, "..");
-      cpSync(join(wurzel, "scripts"), join(dir, "scripts"), { recursive: true });
+      kopiereScripts(dir);
       datei(dir, ".factory/projekt.json", readFileSync(join(wurzel, ".factory", "projekt.json"), "utf8"));
       datei(dir, ".factory/besitz.json", "{}");
       datei(dir, "AGENTS.md", mitKern("x".repeat(KERN_BLOCK_BUDGET)));
@@ -99,7 +108,7 @@ describe("Kern-Block-Budget", () => {
 
   test("der echte Kern-Block liegt im Budget und das Budget ist ein Ratchet auf den Ist-Wert (Abstand < 100 Zeichen)", () => {
     const text = readFileSync(join(import.meta.dirname, "..", "AGENTS.md"), "utf8");
-    const n = kernBlockZeichen(text) as number;
+    const n = kernBlockZeichen(text, MARKER) as number;
     assert.ok(n <= KERN_BLOCK_BUDGET, `Kern-Block ${n} > Budget ${KERN_BLOCK_BUDGET}`);
     assert.ok(KERN_BLOCK_BUDGET - n < 100, `Budget ${KERN_BLOCK_BUDGET} liegt weit über dem Ist ${n}: nachziehen (Ratchet)`);
   });

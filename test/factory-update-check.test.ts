@@ -1,15 +1,20 @@
 /* Factory-Update-Check (#90 L17): neuerer Release-Tag der Factory gegenüber dem Sync-Stand. Pure Funktionen und CLI ohne Netz (gh injiziert). */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/factory-update-check.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as lib from "../scripts/release-tag-lib.mjs";
 
 type Meldung = { alt: string; neu: string; text: string } | null;
-const { updateMeldung, fuehreAus, UPDATE_SCHRITTE } = raw as {
-  UPDATE_SCHRITTE: string[];
+const { UPDATE_SCHRITTE, mechanischeSchritte } = lib as {
+  UPDATE_SCHRITTE: { id: string; befehl?: string; text: string; mechanisch?: boolean }[];
+  mechanischeSchritte: (quelle: string) => string[];
+};
+const { updateMeldung, fuehreAus } = raw as {
   updateMeldung: (a: { stand: unknown; tags: string[]; repo?: string }) => Meldung;
   fuehreAus: (argv: string[], io: { wurzel: string; gh: (args: string[]) => string }) => { out: string; err: string; code: number };
 };
@@ -57,11 +62,35 @@ describe("updateMeldung", () => {
       "npm run docs:gen",
       "npm run check:factorylinks -- --schreiben --quelle <pfad>",
       "Projektkopien",
-      "npm run verify:kompakt",
+      "node scripts/gate-befehl.mjs verifyKompakt",
     ].map((s) => text.indexOf(s));
     assert.ok(reihenfolge.every((i) => i >= 0), "ein Schritt fehlt: " + JSON.stringify(reihenfolge));
     assert.deepEqual([...reihenfolge].sort((a, b) => a - b), reihenfolge, "Reihenfolge der Schritte");
     assert.equal(UPDATE_SCHRITTE.length, 7);
+  });
+  test("factory#215 L2: die Meldung rendert jeden Schritt als Zeile mit Text, ohne Platzhalter-Reste", () => {
+    const zeilen = (updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "").split("\n").filter((z) => /^\d+\. /.test(z));
+    assert.equal(zeilen.length, UPDATE_SCHRITTE.length);
+    assert.ok(zeilen.every((z) => !/undefined|\{TAG\}/.test(z)), zeilen.join("\n"));
+    assert.equal(zeilen[2], "3. `node scripts/projektwerte.mjs --write`");
+  });
+  test("factory#215 L2: mechanischeSchritte liefert die vier mechanischen Befehle in Reihenfolge, <pfad> ersetzt", () => {
+    assert.deepEqual(mechanischeSchritte("<s>/quelle"), ["npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben --quelle <s>/quelle"]);
+  });
+  test("factory#215 L2/L15c: die Doku nennt jeden mechanischen Befehl (Update-Hinweis, Tag-Takt-Absatz, Glossar Vor-Tag-Probe)", () => {
+    const harness = readFileSync(new URL("../docs/agent-harness.md", import.meta.url), "utf8");
+    const glossar = readFileSync(new URL("../docs/harness-glossar.md", import.meta.url), "utf8");
+    const start = harness.indexOf("**Update-Hinweis (factory#90)");
+    const hinweis = harness.slice(start, harness.indexOf("\n", start));
+    const takt = harness.slice(harness.indexOf("**Vor-Tag-Probe (factory#188"), harness.indexOf("**Beim Update im Bezieher**"));
+    const zeile = glossar.split("\n").find((z) => z.startsWith("| Vor-Tag-Probe |")) ?? "";
+    assert.ok(hinweis.length > 0 && takt.length > 0 && zeile.length > 0, "Doku-Abschnitt nicht gefunden");
+    // Schlüsselwort je Befehl: Skriptname bzw. npm-Skript (die Doku darf ihn kürzen, nennen muss sie ihn).
+    const schluessel = mechanischeSchritte("<q>").map((b) => (b.startsWith("npm run ") ? b.split(" ")[2] : /scripts\/([\w-]+)\.mjs/.exec(b)?.[1] ?? b));
+    assert.equal(schluessel.length, 4);
+    for (const [name, text] of [["Update-Hinweis", hinweis], ["Tag-Takt-Absatz", takt], ["Glossar", zeile]] as const) {
+      for (const k of schluessel) assert.ok(text.includes(k), name + " nennt nicht: " + k);
+    }
   });
   test("factory#208 L21: Bezieher-Migration steht im Tag-Ticket der Fabrik; mit Repo kommt der Suchbefehl, ohne Repo kein Platzhalter-Repo", () => {
     const mit = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"], repo: "o/factory" })?.text ?? "";
