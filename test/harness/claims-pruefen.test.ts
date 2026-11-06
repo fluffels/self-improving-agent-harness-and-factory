@@ -853,6 +853,54 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.deepEqual(geloescht, []);
   });
 
+  /** Ein Ticket mit je einem Worktree in Repo A und Repo B; `unsauberA` macht den Stand in A unsauber. */
+  function zweiRepoWelt(o: { unsauberA?: boolean } = {}) {
+    const b = baue({
+      locks: { [`${NR}.json`]: lock({ nr: NR, erstellt: "2026-10-16T00:10:00.000Z" }) },
+      issues: { [NR]: { state: "CLOSED", prs: [{ number: 5, state: "MERGED", headRefOid: OID }] } },
+    });
+    const WT_A = `${A.worktreeOrdner}/${WTP}${NR}`;
+    const aufrufe: string[] = [];
+    const stand: Record<string, { pfad: string; head: string; branch?: string }[]> = {
+      [A.cwd]: [{ pfad: A.cwd, head: "m0" }, { pfad: WT_A, head: OID, branch: `${BRP}${NR}-x` }],
+      [B.cwd]: [{ pfad: B.cwd, head: "m1" }, { pfad: WT_B, head: OID, branch: `${BRP}${NR}-x` }],
+    };
+    const block = (w: { pfad: string; head: string; branch?: string }) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n\n`;
+    const git = (args: string[], cwd?: string) => {
+      const a = args.join(" ");
+      aufrufe.push(`${cwd ?? "-"}: ${a}`);
+      if (a === "worktree list --porcelain") return (stand[cwd ?? ""] ?? []).map(block).join("");
+      if (a.startsWith("for-each-ref")) return `refs/heads/${BRP}${NR}-x\t${sek("2026-10-16T00:21:00Z")}`;
+      if (/^-C \S+ status --porcelain$/.test(a)) return o.unsauberA && a.includes(WT_A) ? " M datei" : "";
+      const rm = /^worktree remove (\S+)$/.exec(a);
+      if (rm && cwd !== undefined) {
+        stand[cwd] = (stand[cwd] ?? []).filter((w) => w.pfad !== rm[1]);
+        return "";
+      }
+      throw new Error(`unerwartet: ${a}`);
+    };
+    const noch = (p: string) => Object.values(stand).some((l) => l.some((w) => w.pfad === p));
+    return { deps: { ...b.deps, git, orte: [A, B], existiert: noch }, aufrufe, geloescht: b.geloescht, WT_A };
+  }
+
+  test("L6: hat ein Ticket Worktrees in zwei Repos, räumt ein Lauf beide ab (je im Repo des Worktrees), dann den Lock", () => {
+    const { deps, aufrufe, geloescht, WT_A } = zweiRepoWelt();
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(aufrufe.includes(`${A.cwd}: worktree remove ${WT_A}`), aufrufe.join("\n"));
+    assert.ok(aufrufe.includes(`${B.cwd}: worktree remove ${WT_B}`), aufrufe.join("\n"));
+    assert.match(r.out, new RegExp(`AUFGERAEUMT #${NR}: Worktree .*${WTP}${NR}, Worktree .*${WTP}${NR}, Lock `));
+    assert.deepEqual(geloescht, [`/locks/${NR}.json`]);
+  });
+
+  test("L6 Negativfall: ist einer der beiden Worktrees nicht sauber, wird keiner entfernt und der Lock bleibt", () => {
+    const { deps, aufrufe, geloescht } = zweiRepoWelt({ unsauberA: true });
+    const r = M.fuehreAus([], deps);
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.deepEqual(geloescht, []);
+    assert.doesNotMatch(r.out, /AUFGERAEUMT/);
+  });
+
   test("Negativfall: scheitert git in Repo B, endet der Lauf mit Exit 2 samt Repo-Name und Fix-Zeile, nichts wird entfernt oder gelöscht", () => {
     const { deps, aufrufe, geloescht } = arbeitsplatzWelt({ fehlerIn: B.cwd });
     const r = M.fuehreAus([], deps);
