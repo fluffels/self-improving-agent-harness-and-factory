@@ -378,6 +378,12 @@ describe("istStandZeile (factory#152): erkennt genau die Zeilen, die factoryStan
     for (const commit of ["1234567", "89abcde", "0f0f0f0", "9876543"]) expect(lib.istStandZeile(`factory: v1 (${commit})`)).toBe(true);
     expect(lib.istStandZeile("factory: unbekannt (unbekannt)")).toBe(true);
     expect(lib.istStandZeile("factory: x (abcdef0)")).toBe(true);
+    expect(lib.istStandZeile("factory: v10.20.30-rc.1+build.42 (abcdef0)")).toBe(true);
+    expect(lib.istStandZeile("factory: v1 (beta) (abcdef0)")).toBe(true);
+  });
+  test("Negativfälle am Literal und an den Leerzeichen", () => {
+    for (const zeile of ["factory v1 (abcdef0)", "factory:v1 (abcdef0)", "factory:\tv1 (abcdef0)", "factory: v1(abcdef0)", "Factory: v1 (abcdef0)", "faktory: v1 (abcdef0)", "factory: unbekannt (sync-stand unlesbar)"]) expect(lib.istStandZeile(zeile)).toBe(false);
+    for (const zeile of ["factory: v1 (abcdef0", "factory: v1 abcdef0)"]) expect(lib.istStandZeile(zeile)).toBe(false);
   });
   test("Negativfälle an den Klammern und am Literal der unlesbaren Stand-Zeile", () => {
     expect(lib.istStandZeile("factory: v1 [abcdef0)")).toBe(false);
