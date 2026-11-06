@@ -453,7 +453,7 @@ describe("Standardzweig je Repo (#88)", () => {
     expect(h("X:\\p\\.claude\\worktrees\\wt-1\\x", "beliebig")).toBe("X:\\p");
     expect(h("/p/.claude/worktreesX/wt-1", "beliebig")).toBe("/p/.claude/worktreesX/wt-1");
     expect(h("/p/", "beliebig")).toBe("/p");
-    expect(slug("X:\\dev\\a.b/c")).toBe("X--dev-a-b-c");
+    expect(slug("X:\\dev\\a.b/c2")).toBe("X--dev-a-b-c2");
   });
 
   test("worktreeBefehl im Arbeitsplatz basiert auf origin/<Standardzweig>, eingebettet bleibt origin/main", () => {
