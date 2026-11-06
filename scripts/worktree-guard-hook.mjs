@@ -114,7 +114,7 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
   const cache = deps.kontextCache;
 
   const lookup = (dir) => {
-    const key = `${repoRoot}\0${dir}`;
+    const key = dir; // das Ergebnis hängt nur vom Verzeichnis ab, nicht von der Schutz-Wurzel (ein git-Aufruf je Verzeichnis)
     if (cache?.has(key)) return cache.get(key);
     let v = null;
     try {
@@ -203,7 +203,21 @@ const BLOCK_REASON = (top, deps, w) =>
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
   const kontextCache = deps.kontextCache ?? new Map();
+  if (!kannZielHaben(command, cwd, deps)) return { block: false }; // kein Ziel, keine Rückfrage: weder Config lesen noch git fragen
   return jeSchutzWurzel(repoRoot, deps, (w) => entscheideFuer({ cwd, command, w, deps, kontextCache }));
+}
+
+/**
+ * Liefert die Analyse ohne Schutz-Wurzel (`repoRoot` unbekannt: nichts gilt als außerhalb, also die größtmögliche Zielmenge) Ziele oder Rückfragen? Nur dann lohnen
+ * Config und git je Schutz-Wurzel. Wirft die Analyse, bleibt es bei `true` (die Prüfung je Wurzel entscheidet, fail-closed).
+ */
+function kannZielHaben(command, cwd, deps) {
+  try {
+    const found = analyse(command, cwd, { ...deps, repoRoot: undefined });
+    return found.targets.length > 0 || found.asks.size > 0;
+  } catch {
+    return true;
+  }
 }
 
 /** Die Entscheidung gegen EINE Schutz-Wurzel (`repoRoot` = `w.wurzel`, auch für `ausserhalbRepo`). */
