@@ -236,7 +236,7 @@ async function sendeScores(args, c) {
 }
 
 /** Fortschritt nach einem Sendefehler nur für angenommene Chunks; nicht bestätigt, Stand nicht als aktuell vermerkt (mit bekanntem Ende bleibt er vermerkt, damit der Folgelauf `beendet` wiedererkennt). */
-function ledgerNachFehler({ s, c, alt, eintrag, beendet }) {
+export function ledgerNachFehler({ s, c, alt, eintrag, beendet }) {
   if (!eintrag.gesendet.length && !eintrag.spans.length) return;
   c.ledger.sessions[s.id] = { ...eintrag, bestaetigt: false, groesse: beendet ? s.groesse : (alt?.groesse ?? null), mtime: beendet ? s.mtime : (alt?.mtime ?? null) };
 }

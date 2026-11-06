@@ -19,6 +19,7 @@ const N = rawNach as unknown as {
   fruehesEnde: (a: { alt?: Record<string, unknown>; unveraendert: boolean; mtime: number; now: number; beendet: boolean }) => string | null;
   bereinigeEintrag: (a: { alt?: Record<string, unknown>; s: { pfad: string; groesse: number; mtime: number }; beendet: boolean; now: number }) => Record<string, unknown>;
   BEFUND_MEHRDEUTIG: string;
+  ledgerNachFehler: (a: { s: { id: string; pfad: string; groesse: number; mtime: number }; c: { ledger: { sessions: Record<string, Record<string, unknown>> } }; alt?: Record<string, unknown>; eintrag: Record<string, unknown>; beendet: boolean }) => void;
 };
 
 const fehlend = (...ids: string[]): Eintrag[] => ids.map((id) => ({ id }));
@@ -128,6 +129,33 @@ describe("fruehesEnde", () => {
   test("Vermerk (ohne Calls, vor Stichtag) bei unverändertem Stand ist der Status; bei geändertem Stand nicht", () => {
     expect(ende({ alt: { vermerk: "ohne Calls" }, unveraendert: true })).toBe("ohne Calls");
     expect(ende({ alt: { vermerk: "ohne Calls" }, unveraendert: false })).toBeNull();
+  });
+});
+
+describe("ledgerNachFehler", () => {
+  const s = { id: "s1", pfad: "p.jsonl", groesse: 5, mtime: 7 };
+  const lauf = (eintrag: Record<string, unknown>, alt: Record<string, unknown> | undefined, beendet: boolean) => {
+    const c = { ledger: { sessions: {} as Record<string, Record<string, unknown>> } };
+    N.ledgerNachFehler({ s, c, alt, eintrag, beendet });
+    return c.ledger.sessions.s1;
+  };
+
+  test("nichts angenommen (weder gesendet noch Spans): der Ledger bleibt unberührt", () => {
+    expect(lauf({ gesendet: [], spans: [] }, undefined, true)).toBeUndefined();
+  });
+
+  test.each([
+    ["angenommene Calls", { gesendet: ["a"], spans: [] }],
+    ["nur angenommene Spans", { gesendet: [], spans: ["sp"] }],
+  ])("%s: Fortschritt steht im Ledger, unbestätigt", (_n, eintrag) => {
+    expect(lauf(eintrag, undefined, false)).toMatchObject({ ...eintrag, bestaetigt: false });
+  });
+
+  test("Dateistand nur mit bekanntem Ende vermerkt, sonst der alte (oder null)", () => {
+    const e = { gesendet: ["a"], spans: [] };
+    expect(lauf(e, { groesse: 3, mtime: 4 }, true)).toMatchObject({ groesse: 5, mtime: 7 });
+    expect(lauf(e, { groesse: 3, mtime: 4 }, false)).toMatchObject({ groesse: 3, mtime: 4 });
+    expect(lauf(e, undefined, false)).toMatchObject({ groesse: null, mtime: null });
   });
 });
 

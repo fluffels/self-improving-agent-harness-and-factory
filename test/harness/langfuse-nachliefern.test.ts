@@ -514,6 +514,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       const r = await lauf(a, m);
       expect(m.otlp).toHaveLength(0);
       expect(r.protokoll.sessions[0].unzuordenbar).toBe(0);
+      expect(r.protokoll.sessions[0].status).toBe("vollständig");
     });
 
     test("Kopie plus fremde Dublette plus Lücke bleibt mehrdeutig: nichts gesendet", async () => {
@@ -604,6 +605,7 @@ describe("Fehler", () => {
     const r = await lauf(a, m);
     expect(r.exitCode).toBe(1);
     expect(r.protokoll.fehler[0]).toMatchObject({ session: "s1", status: 500 });
+    expect(r.protokoll.sessions[0].status).toBe("Fehler");
     expect(readFileSync(a.ledger, "utf8")).toBe(vorher);
     expect(m.scores).toHaveLength(0);
   });
@@ -1374,6 +1376,7 @@ describe("Fristen für Langfuse-Aufrufe (Z15)", () => {
       url.includes(pfad) ? Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) })) : m.fetchImpl(url, init);
     const r = await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state });
     expect(r.protokoll.fehler.map((f: { meldung: string }) => f.meldung)).toEqual([erwartet]);
+    expect(r.protokoll.fehler.map((f: { status: number | null }) => f.status)).toEqual([null]); // ohne HTTP-Status: null, nicht fehlend
   });
   test("fehlerText: cause null oder Nicht-Error mit cause werfen nicht und bleiben bei der Meldung", () => {
     expect(N.fehlerText(new Error("x", { cause: null }))).toBe("x");
