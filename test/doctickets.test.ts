@@ -134,7 +134,7 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
 
   test("die echten Ausnahmelisten der Config nennen je Eintrag eine Ticket-Nummer", () => {
     const listen = ausnahmeListen();
-    assert.deepEqual(listen.map((l) => l.skript), [".factory/projekt.json › ausnahmen.groesse", ".factory/projekt.json › ausnahmen.kontext"]);
+    assert.deepEqual(listen.map((l) => l.skript), [".factory/projekt.json › ausnahmen.groesse", ".factory/projekt.json › ausnahmen.kontext", ".factory/projekt.json › datengroesse.deckel"]);
     for (const liste of listen) {
       for (const e of ausnahmeTickets(liste.eintraege)) {
         assert.ok(e.nr !== null, `${liste.skript}: Ausnahme ${e.datei} nennt kein #N`);
@@ -142,12 +142,13 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
     }
   });
 
-  test("ausnahmeListen liest beide Listen aus der übergebenen Config, ohne Block sind beide leer", () => {
+  test("ausnahmeListen liest alle Listen aus der übergebenen Config (auch datengroesse.deckel), ohne Block sind sie leer", () => {
     const eintrag = { datei: "x.ts", grund: "#7 offen" };
     const andere = { datei: "y.md", grund: "#8 offen" };
-    const l = ausnahmeListen({ ausnahmen: { groesse: [eintrag], kontext: [andere] } });
-    assert.deepEqual(l.map((x) => x.eintraege), [[eintrag], [andere]]);
-    assert.deepEqual(ausnahmeListen({}).map((x) => x.eintraege), [[], []]);
+    const deckel = { datei: "d.json", max: 20, grund: "#9 Split" };
+    const l = ausnahmeListen({ ausnahmen: { groesse: [eintrag], kontext: [andere] }, datengroesse: { pfade: ["daten"], budget: 10, deckel: [deckel] } });
+    assert.deepEqual(l.map((x) => x.eintraege), [[eintrag], [andere], [{ datei: "d.json", grund: "#9 Split" }]]);
+    assert.deepEqual(ausnahmeListen({}).map((x) => x.eintraege), [[], [], []]);
     assert.throws(() => ausnahmeListen({ ausnahmen: "kaputt" }), /ausnahmen[\s\S]*Fix:/);
   });
 });

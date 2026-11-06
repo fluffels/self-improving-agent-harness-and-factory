@@ -109,6 +109,7 @@ AGENTS.md @fluffels
 /scripts/design-schritt.mjs @fluffels
 /scripts/projekt-config-bloecke.mjs @fluffels
 /scripts/quellwurzeln-lib.mjs @fluffels
+/scripts/datengroesse-lib.mjs @fluffels
 /scripts/coverage-berichte.mjs @fluffels
 /scripts/gate-befehl.mjs @fluffels
 /scripts/gate-befehl-lib.mjs @fluffels
