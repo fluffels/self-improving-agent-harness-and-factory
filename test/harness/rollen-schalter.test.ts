@@ -17,15 +17,14 @@ import { fileURLToPath } from "node:url";
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 
-const { wirdVerteilt, istGanzeDatei } = rawBesitz as unknown as {
-  wirdVerteilt: (e: { ring: string }) => boolean;
-  istGanzeDatei: (e: { block?: string; schluessel?: string }) => boolean;
+const { istVerteilteGanzdatei } = rawBesitz as unknown as {
+  istVerteilteGanzdatei: (e: { ring: string; block?: string; schluessel?: string }) => boolean;
 };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 /** Die Heimat des Rollen-Schalters: dort darf der Pfad stehen. */
 const HEIMAT = "scripts/sync-stand-lib.mjs";
-const WEG = "Fabrik/Bezieher nur über istBezieher(wurzel) aus scripts/sync-stand-lib.mjs unterscheiden (Fortschreibung factory#154 zu ADR 0022)";
+const WEG = "Rollen-Weichen nur über istBezieher(wurzel) aus scripts/sync-stand-lib.mjs, Prüfer über das Feld zustand von liesSyncStand (Fortschreibung factory#154 zu ADR 0022)";
 
 const M1 = /\b(existsSync|statSync|lstatSync|accessSync|readFileSync|openSync)\(.*(sync-stand|STAND_PFAD)/;
 const M2 = /(["'])(\.factory\/)?sync-stand\.json\1/;
@@ -44,7 +43,7 @@ export function rollenProben(pfad: string, text: string): string[] {
 /** Die verteilten Skript-Dateien (ganze Datei, Endung `.mjs`/`.cjs`/`.js`) des Besitz-Manifests, ohne die Heimat des Schalters. */
 function umfang(): string[] {
   const { eintraege } = ladeBesitzManifest<{ pfad: string; ring: string; block?: string; schluessel?: string }>();
-  return [...new Set(eintraege.filter((e) => wirdVerteilt(e) && istGanzeDatei(e) && /\.(mjs|cjs|js)$/.test(e.pfad)).map((e) => e.pfad))].filter((p) => p !== HEIMAT).sort();
+  return [...new Set(eintraege.filter((e) => istVerteilteGanzdatei(e) && /\.(mjs|cjs|js)$/.test(e.pfad)).map((e) => e.pfad))].filter((p) => p !== HEIMAT).sort();
 }
 
 describe("Rollen-Schalter (factory#154)", () => {
@@ -53,6 +52,7 @@ describe("Rollen-Schalter (factory#154)", () => {
     expect(meldungen).toHaveLength(1);
     expect(meldungen[0]).toContain("scripts/x.mjs:2: M1");
     expect(meldungen[0]).toContain("istBezieher(wurzel)");
+    expect(meldungen[0]).toContain("Feld zustand von liesSyncStand");
   });
 
   test("M1: Datei-Aufruf mit STAND_PFAD wird rot", () => {

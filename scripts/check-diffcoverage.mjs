@@ -83,6 +83,21 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = quellenAus(l
 /** Die Berichtsdateien einer Datei aus `berichteJe` (kann fehlen). Pur. */
 const berichteVon = (berichteJe, path) => berichteJe?.get(path) ?? [];
 
+/** Bilanz einer Datei: `{ total, covered, uncovered }` über die geänderten Zeilen `lines` gegen den lcov-Eintrag `record` (Zeile → Hits). Nicht ausführbare Zeilen (Kommentar/Typ/Leerzeile) zählen nicht. Pur. */
+function zeilenBilanz(lines, record) {
+  const uncovered = [];
+  let total = 0;
+  let covered = 0;
+  for (const line of [...lines].sort((a, b) => a - b)) {
+    const hits = record.get(line);
+    if (hits === undefined) continue;
+    total++;
+    if (hits > 0) covered++;
+    else uncovered.push(line);
+  }
+  return { total, covered, uncovered };
+}
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
@@ -104,16 +119,7 @@ export function evaluateByLayer(changed, lcov, { floors = LAYER_DIFF_FLOORS, que
       continue;
     }
     const bucket = buckets[layerOf(path)];
-    const uncovered = [];
-    let total = 0;
-    let covered = 0;
-    for (const line of [...lines].sort((a, b) => a - b)) {
-      const hits = record.get(line);
-      if (hits === undefined) continue; // nicht ausführbar (Kommentar/Typ/Leerzeile)
-      total++;
-      if (hits > 0) covered++;
-      else uncovered.push(line);
-    }
+    const { total, covered, uncovered } = zeilenBilanz(lines, record);
     if (total === 0) continue;
     bucket.total += total;
     bucket.covered += covered;

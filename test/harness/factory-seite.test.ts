@@ -27,8 +27,7 @@ import * as rawBesitzRoh from "../../scripts/besitz-lib.mjs";
 const rawBesitz = rawBesitzRoh as unknown as {
   MANIFEST_PFAD: string;
   manifestAusText: (t: string) => { manifest: { eintraege: unknown[] } };
-  wirdVerteilt: (e: unknown) => boolean;
-  istGanzeDatei: (e: unknown) => boolean;
+  istVerteilteGanzdatei: (e: unknown) => boolean;
 };
 const { collectHeadingSlugs } = rawMd as { collectHeadingSlugs: (md: string) => string[] };
 
@@ -195,7 +194,7 @@ describe("Wächter: Kern-Skripte verweisen in Laufzeitmeldungen nicht per Text a
   test("kein Kern-Skript trägt `docs/x.md ›` oder `docs/x.md §` in einer Nicht-Kommentarzeile", () => {
     const manifest = rawBesitz.manifestAusText(readFileSync(join(WURZEL, rawBesitz.MANIFEST_PFAD), "utf8"));
     const dateien = (manifest.manifest.eintraege as { pfad: string; ring: string; block?: string; schluessel?: string }[])
-      .filter((e) => rawBesitz.wirdVerteilt(e) && rawBesitz.istGanzeDatei(e) && /^scripts\/.*\.mjs$/.test(e.pfad))
+      .filter((e) => rawBesitz.istVerteilteGanzdatei(e) && /^scripts\/.*\.mjs$/.test(e.pfad))
       .map((e) => e.pfad);
     assert.ok(dateien.length > 100, `erwartet viele verteilte Skripte, gefunden ${dateien.length}`);
     const fehler = dateien.flatMap((pfad) => textverweise(readFileSync(join(WURZEL, pfad), "utf8").split("\n")).map((f) => `${pfad} ${f}`));

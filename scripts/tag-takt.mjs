@@ -27,7 +27,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, istVerteilteGanzdatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
@@ -115,7 +115,7 @@ export function entfernteExporte(altText, neuText) {
 
 /** Pur: die in den Besitz-Commits berührten Skript-Dateien (`scripts/**.mjs|cjs`), die ein verteilter Ganzdatei-Eintrag des Manifests abdeckt. Sortiert, ohne Doppelte. */
 export function verteilteSkripte(besitz, manifest) {
-  const pfade = (manifest?.eintraege ?? []).filter((e) => wirdVerteilt(e) && istGanzeDatei(e)).map((e) => e.pfad);
+  const pfade = (manifest?.eintraege ?? []).filter(istVerteilteGanzdatei).map((e) => e.pfad);
   const gedeckt = (d) => pfade.some((p) => d === p || d.startsWith(`${p}/`));
   return [...new Set(besitz.flatMap((c) => c.dateien).filter((d) => SKRIPT_DATEI.test(d) && gedeckt(d)))].sort();
 }

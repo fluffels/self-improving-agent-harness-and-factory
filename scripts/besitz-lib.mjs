@@ -27,6 +27,9 @@ export const wirdVerteilt = (e) => !NUR_FACTORY.includes(e.ring);
 /** Ist die Einheit eine ganze Datei (kein Block, kein JSON-Schlüssel)? */
 export const istGanzeDatei = (e) => e.block === undefined && e.schluessel === undefined;
 
+/** Verteilte ganze Datei (kein Block, kein Schlüssel, Ring wird in Projekte verteilt): die Einheiten, die ein Projekt als Datei erhält. */
+export const istVerteilteGanzdatei = (e) => wirdVerteilt(e) && istGanzeDatei(e);
+
 export const markerStart = (id) => `<!-- factory-besitz:start ${id} -->`;
 export const markerEnde = (id) => `<!-- factory-besitz:ende ${id} -->`;
 /** Fehlertext-Zusatz: die erwarteten Marker-Zeilen eines Blocks. */
