@@ -36,6 +36,7 @@ type Eingabe = {
   bis?: string;
   brainRoots?: string[];
   closedAtOf?: (nr: number) => string | null;
+  ohne?: number[];
   config?: Record<string, unknown>;
   env?: Record<string, string>;
 };
@@ -168,6 +169,19 @@ describe("zerlegeHauptchat: Kategorien", () => {
     assert.equal(calls(r, "Nachlauf", OPUS), 1);
     assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2);
     assert.deepEqual(r.fenster.map((f) => f.nr), [1, 2]);
+  });
+
+  test("ohne: das Fenster eines ausgenommenen Tickets fehlt in Fenstern, Summen, Modellanteil und TTL (wie --ohne im kontext-treiber)", () => {
+    const main = [user(0, "a"), call(1, OPUS, claim(1)), call(2, OPUS), user(30, "nächstes"), call(31, SONNET, claim(2)), call(32, SONNET)];
+    const alle = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] });
+    assert.equal(calls(alle, "Ticket-Orchestrierung", OPUS), 2);
+    assert.equal(calls(alle, "Ticket-Orchestrierung", SONNET), 2);
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], ohne: [1] });
+    assert.deepEqual(r.fenster.map((f) => f.nr), [2]);
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 0);
+    assert.equal(calls(r, "Ticket-Orchestrierung", SONNET), 2);
+    assert.equal((r as unknown as { modellanteil: { fenster: number; gesamt: number } }).modellanteil.gesamt, 2);
+    assert.equal((r as unknown as { ttl: { calls: number } }).ttl.calls, 2);
   });
 
   test("tool_result und task-notification sind kein Turn-Start", () => {
@@ -740,11 +754,16 @@ describe("zerlegeHauptchat: Modellanteil und TTL im Ergebnis (#1557)", () => {
 });
 
 describe("parseArgs (#1790: strikt über flagsLesen)", () => {
-  const pa = (hcModule as unknown as { parseArgs: (a: string[]) => { brain: string[]; json: boolean; von?: string; bis?: string; projekt?: string; fehler?: string } }).parseArgs;
+  const pa = (hcModule as unknown as { parseArgs: (a: string[]) => { brain: string[]; ohne: number[]; json: boolean; von?: string; bis?: string; projekt?: string; fehler?: string } }).parseArgs;
   test("--brain ist wiederholbar, im Erfolgsfall gibt es kein fehler-Feld", () => {
     const a = pa(["--von", "v", "--bis", "b", "--brain", "a", "--brain", "c", "--projekt", "p", "--json"]);
-    assert.deepEqual(a, { brain: ["a", "c"], json: true, von: "v", bis: "b", projekt: "p" });
-    assert.deepEqual(pa([]), { brain: [], json: false });
+    assert.deepEqual(a, { brain: ["a", "c"], ohne: [], json: true, von: "v", bis: "b", projekt: "p" });
+    assert.deepEqual(pa([]), { brain: [], ohne: [], json: false });
+  });
+  test("--ohne ist wiederholbar und nimmt Ticketnummern; eine Nicht-Ganzzahl setzt fehler", () => {
+    assert.deepEqual(pa(["--ohne", "233", "--ohne", "7"]).ohne, [233, 7]);
+    assert.match(pa(["--ohne", "abc"]).fehler ?? "", /--ohne erwartet eine Ticketnummer, nicht abc/);
+    assert.match(pa(["--ohne"]).fehler ?? "", /--ohne erwartet eine Ticketnummer/);
   });
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
     assert.match(pa(["--bogus"]).fehler ?? "", /Unbekanntes Argument: --bogus/);
