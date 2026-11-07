@@ -954,6 +954,10 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
     assert.match(lade(wurzel(cfg, null)).fehler ?? "", /scripts\/l\.cjs nicht ladbar/);
     assert.match(lade(wurzel(cfg, "throw new Error('boom');\n")).fehler ?? "", /scripts\/l\.cjs nicht ladbar \(boom\)/);
     assert.match(lade(wurzel(cfg, "module.exports = {};\n")).fehler ?? "", /scripts\/l\.cjs exportiert LAYERS und layerOf nicht/);
+    // jede Teilbedingung einzeln
+    for (const js of ["module.exports = { LAYERS: { A: 1 } };\n", "module.exports = { layerOf: () => 'x' };\n", "module.exports = { LAYERS: null, layerOf: () => 'x' };\n", "module.exports = { LAYERS: 'x', layerOf: () => 'x' };\n"]) {
+      assert.match(lade(wurzel(cfg, js)).fehler ?? "", /scripts\/l\.cjs exportiert LAYERS und layerOf nicht/, js);
+    }
   });
 
   test("CLI: Exit 2, ✖-Zeile mit Fix: (schichten.layers, Vorlage scripts/layers.cjs), kein Stacktrace", () => {

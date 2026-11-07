@@ -485,6 +485,11 @@ describe("Fremdes Factory-Board in board-place (#76, ADR 0022 F10)", () => {
     expect(p.gemeldet[0]?.grund).toContain(FREMD.repo);
     expect(() => U.umzugsPlan([], [item], fremd)).toThrow(/umzugsPlan: repo fehlt[^]*Fix:/);
   });
+  test("umzugsPlan: ein Item ohne Issue-Repo gilt als Issue des laufenden Repos (Rückfall), nicht nur nach Label", () => {
+    const item = { id: "I2", number: 2, status: "Todo", state: "open", contentId: "C2", labels: [HARNESS], repo: "" };
+    const U = L as unknown as { umzugsPlan: (p: unknown[], f: unknown[], c: unknown, repo?: string) => { schritte: unknown[]; gemeldet: unknown[] } };
+    expect(U.umzugsPlan([], [item], fremd, FREMD.repo).schritte.length).toBe(1);
+  });
   test("parseArgs --repo: gültig an jeder Stelle, kaputte Form ungültig", () => {
     expect(Z.parseArgs(["--repo", "zz-org/zz-x", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-x" });
     expect(Z.parseArgs(["--top", "5", "--repo", "zz-org/zz-x", "--dry-run"])).toMatchObject({ numbers: [5], dry: true, repo: "zz-org/zz-x" });

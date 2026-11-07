@@ -342,6 +342,6 @@ export function workflowAusloeserPunkt({ workflows }) {
   const fehlend = gelesen.flatMap((w) => w.ausloeser.filter((n) => !vorhanden.has(n)).map((n) => ({ von: w.pfad.split("/").at(-1), name: n })));
   if (fehlend.length === 0) return gut(AUSLOESER_PUNKT);
   const befund = fehlend.map((f) => `${f.von} wartet auf „${f.name}“, kein Workflow heißt so`).join("; ");
-  const fix = fehlend.map((f) => `\`name:\` von \`.github/workflows/ci.yml\` auf \`${f.name}\` setzen (Auslöser von ${f.von})`).join("; ");
+  const fix = fehlend.map((f) => `einen Workflow mit \`name: ${f.name}\` anlegen oder den Auslöser in ${f.von} auf einen vorhandenen Namen ändern`).join("; ");
   return luecke(AUSLOESER_PUNKT, befund, `${fix}; sonst startet der Auslöser nie`);
 }

@@ -967,6 +967,7 @@ describe("factory-sync --tag: Hinweise nach dem Sync (Projektseiten, eslint-Supp
     assert.match(mit("src/a.ts"), /prune-suppressions/);
     assert.match(mit("src/b.js"), /prune-suppressions/);
     assert.ok(!/prune-suppressions/.test(mit("src/c.json")));
+    assert.ok(!/prune-suppressions/.test(mit("docs/hosts")), "ohne Punkt vor der Endung kein Hinweis");
   });
 
   test("L19: hat der Sync eine Datei unter scripts/ geschrieben, startet er einmal neu mit denselben Argumenten; ein Riegel verhindert den dritten Lauf", () => {

@@ -415,7 +415,7 @@ describe("Workflow-Auslöser", () => {
     const p = ausloeser([ci("Build"), fest('["CI"]')]);
     expect(p.ok).toBe(false);
     expect(p.befund).toContain("CI");
-    expect(p.fix).toContain("`name:` von `.github/workflows/ci.yml` auf `CI` setzen (Auslöser von festgefahren.yml)");
+    expect(p.fix).toContain("einen Workflow mit `name: CI` anlegen oder den Auslöser in festgefahren.yml auf einen vorhandenen Namen ändern");
   });
   test("Blockliste mit fehlendem Namen ist eine Lücke (der Leser sieht die Listeneinträge)", () => {
     expect(ausloeser([ci("Build"), fest("\n      - CI")]).befund).toContain("CI");
@@ -430,6 +430,21 @@ describe("Workflow-Auslöser", () => {
   });
   test("ein Verweis auf einen vorhandenen Namen genügt, ein zweiter fehlender macht es zur Lücke", () => {
     expect(ausloeser([ci("CI"), fest('["CI", "Weg"]')]).ok).toBe(false);
+  });
+  const eigen = (text: string): Workflow => ({ pfad: ".github/workflows/x.yml", text });
+  test("Guards des Lesers: Folgeschlüssel nach der Liste, Anführungszeichen, nur oberstes name, gleiche Einrückung, Leerzeile", () => {
+    // else liste = -1: ein Eintrag unter dem Folgeschlüssel `branches` ist kein Workflow-Name
+    expect(ausloeser([ci("CI"), fest("\n      - CI\n    branches:\n      - main")]).ok).toBe(true);
+    // ohneAnfuehrung beim Namen
+    expect(ausloeser([ci('"CI"'), fest('["CI"]')]).ok).toBe(true);
+    // ^ am name-Anker: ein Job-Name ist nicht der Workflow-Name
+    const jobNurName = eigen("on:\n  push:\njobs:\n  a:\n    name: CI\n");
+    expect(ausloeser([jobNurName, fest('["CI"]')]).ok).toBe(false);
+    // >= bei der Listen-Einrückung: Blockliste auf Höhe von `workflows:`
+    const gleich = eigen("name: G\non:\n  workflow_run:\n    workflows:\n    - CI\n");
+    expect(ausloeser([ci("Build"), gleich]).befund).toContain("CI");
+    // Leerzeile im Block beendet das Lesen nicht
+    expect(ausloeser([ci("CI"), fest("\n      - CI\n\n      - Weg")]).befund).toContain("Weg");
   });
   test("steht als letzter Punkt in DATEI_PUNKTE", () => {
     expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
