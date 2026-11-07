@@ -28,6 +28,13 @@
  * bewusst nicht. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
  * mit einer `SIH-Bezieher-Migration:`-Zeile.
  *
+ * Dritte Regel (factory#220 L34): Link-Anker `docs/<x>.md#<anker>` in Besitz-Spannen verteilter `.md`-Einheiten auf eine Fabrik-Seite, die
+ * nicht als ganze Datei verteilt wird, stehen in der geschlossenen Liste `KERN_LINK_ANKER` (neu: rot mit Weg; veraltet: rot). Ein Bezieher
+ * mit eigener Seite braucht dort die Überschrift; die Liste wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile und wandert ab 60
+ * Ankern als JSON neben den Test (`test/harness/kern-link-anker.json`, gleiche Regel). Grenze (bewusst): ob die Bezieher-Seite die
+ * Überschrift wirklich trägt, sieht nur die Vor-Tag-Probe; verlinkt wird nur über `[…](docs/<x>.md#<anker>)`, Verweise ohne Anker und
+ * Ziele außerhalb von `docs/` bleiben unerfasst.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -64,6 +71,8 @@ const drift = rawDrift as unknown as {
   abschnittTrifft: (segment: string, titel: string[][]) => boolean;
   stripFencedCode: (md: string) => string;
   parseNpmRunMentions: (md: string) => Set<string>;
+  linkStellen: (md: string) => { start: number; path: string; anchor: string }[];
+  linkZiel: (datei: string, pfad: string) => string;
   slugify: (text: string) => string;
 };
 const links = rawLinks as unknown as {
@@ -531,5 +540,126 @@ describe("npm-Kommandos in Besitz-Text aus Sicht des Beziehers", () => {
     const { funde, erwaehnungen } = scanneKommandos(ROOT);
     assert.ok(erwaehnungen >= 5, `Scan findet nur ${erwaehnungen} Erwähnungen: Umfang kaputt (Leerlauf)`);
     assert.deepEqual(funde, [], `npm-Kommandos, die ein Bezieher nicht hat (stattdessen node scripts/<x>.mjs):\n${funde.map((f) => `${f.name} <- ${f.datei}`).join("\n")}`);
+  });
+});
+
+/**
+ * Geschlossene Liste der Link-Anker (`docs/<x>.md#<anker>`), die verteilter Besitz-Text auf Fabrik-Seiten setzt, die als ganze Datei nicht verteilt werden
+ * (factory#220 L34, strenge Form aus factory#177). Ein Bezieher mit eigener Seite braucht dort genau diese Überschrift. Wächter wie `BEZIEHER_NPM_SKRIPTE`;
+ * die Liste wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile und steht bei mehr als 60 Ankern als JSON neben dem Test (`test/harness/kern-link-anker.json`).
+ */
+const KERN_LINK_ANKER = new Set<string>([
+  "docs/agent-harness-faq.md#der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun",
+  "docs/agent-harness-faq.md#wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules",
+  "docs/agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis",
+  "docs/agent-harness-faq.md#wie-räume-ich-scratch-auf-wenn-befehle-blockiert-werden",
+  "docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser",
+  "docs/agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren",
+  "docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd",
+  "docs/agent-harness.md#4-die-sichere-autonomie-schleife",
+  "docs/model-routing.md#1-phasen-matrix",
+  "docs/model-routing.md#messen",
+  "docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept",
+  "docs/model-routing.md#umsetzer-kontext",
+  "docs/ticket-reihenfolge.md#am-ticket-ende",
+  "docs/ticket-reihenfolge.md#langfuse-befunde-gesammelt",
+  "docs/ticket-reihenfolge.md#sammelticket-mechanik",
+  "docs/ticket-reihenfolge.md#wiederaufnahme-verwaister-claims",
+]);
+
+/** Ab dieser Zahl wandert `KERN_LINK_ANKER` in eine JSON-Datei neben dem Test (gleiche Regel). */
+const KERN_LINK_ANKER_MAX_IM_TEST = 60;
+
+const ANKER_MELDUNG = "neuen Anker in KERN_LINK_ANKER aufnehmen und eine `SIH-Bezieher-Migration:`-Zeile schreiben (Bezieher mit eigener Seite brauchen die Überschrift)";
+
+/** Link-Anker `docs/<x>.md#<anker>` in Besitz-Spannen verteilter `.md`-Einheiten, deren Ziel keine ganze Besitz-Datei ist (die kommt mit ihren Überschriften an). */
+function scanneLinkAnker(wurzel: string): { anker: Set<string>; links: number } {
+  const { lies, einheiten, dateien } = besitzDateien(wurzel, /\.md$/);
+  const ganzeDateien = new Set(einheiten.filter(besitz.istGanzeDatei).map((e) => e.pfad));
+  const anker = new Set<string>();
+  let links = 0;
+  for (const { datei, text, spannen } of dateien) {
+    for (const l of drift.linkStellen(text)) {
+      if (l.anchor === "" || !l.path.endsWith(".md") || !spannen.some(([a, b]) => l.start >= a && l.start <= b)) continue;
+      const ziel = drift.linkZiel(datei, l.path);
+      if (!ziel.startsWith("docs/") || lies(ziel) === null || ganzeDateien.has(ziel)) continue;
+      links++;
+      anker.add(`${ziel}#${l.anchor}`);
+    }
+  }
+  return { anker, links };
+}
+
+/** Meldungen (leer = grün): neue Anker und Einträge der Liste, die kein Besitz-Text mehr setzt. */
+function vergleicheAnker(gefunden: Set<string>, erlaubt: Set<string>): string[] {
+  return [
+    ...[...gefunden].filter((a) => !erlaubt.has(a)).sort().map((a) => `${a}: ${ANKER_MELDUNG}`),
+    ...[...erlaubt].filter((a) => !gefunden.has(a)).sort().map((a) => `${a}: kein Besitz-Text setzt diesen Anker mehr, aus KERN_LINK_ANKER streichen`),
+  ];
+}
+
+describe("Link-Anker in Besitz-Text auf nicht verteilte Fabrik-Seiten (factory#220 L34)", () => {
+  const manifest = (...e: Einheit[]): string => MANIFEST(e);
+
+  test("ein Anker auf eine Fabrik-Seite in Kern-.md wird gefunden, der Pfad relativ zur Datei aufgelöst, ein Doppel zählt als Link, nicht als Anker", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": manifest({ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }),
+      ".agents/skills/x/SKILL.md": "Siehe [Seite](../../../docs/seite.md#ein-abschnitt) und [nochmal](../../../docs/seite.md#ein-abschnitt) sowie [andere](../../../docs/andere.md#zwei).\n",
+      "docs/seite.md": "# Seite\n",
+      "docs/andere.md": "# Andere\n",
+    });
+    const r = scanneLinkAnker(wurzel);
+    assert.deepEqual([...r.anker].sort(), ["docs/andere.md#zwei", "docs/seite.md#ein-abschnitt"]);
+    assert.equal(r.links, 3);
+  });
+
+  test("außerhalb der Besitz-Spanne, im Code-Fence, ohne Anker, extern, nicht-docs, fehlendes Ziel, ganze Besitz-Datei und nicht verteilte Einheit zählen nicht", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": manifest(
+        { pfad: "AGENTS.md", block: "kern", ring: "kern" },
+        { pfad: "skill.md", ring: "kern" },
+        { pfad: "docs/ganz.md", ring: "kern" },
+        { pfad: "frei.md", ring: "oberflaeche" },
+      ),
+      "AGENTS.md": KERN("Im Kern: [x](docs/seite.md) [y](https://example.org/a.md#b) [z](README.md#k) [f](docs/fehlt.md#a) [g](docs/ganz.md#g)") + "Projekt: [p](docs/seite.md#nur-projekt)\n",
+      "skill.md": "```\n[c](docs/seite.md#im-fence)\n```\nFrei: [a](docs/ganz.md#ganz)\n",
+      "frei.md": "[o](docs/seite.md#nur-fabrik)\n",
+      "README.md": "# R\n",
+      "docs/seite.md": "# Seite\n",
+      "docs/ganz.md": "# Ganz\n",
+    });
+    assert.deepEqual(scanneLinkAnker(wurzel), { anker: new Set(), links: 0 });
+  });
+
+  test("ADR und Datei mit Datum im Namen sind wie in den anderen Regeln ausgenommen", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": manifest({ pfad: "docs/adr/0001-x.md", ring: "kern" }, { pfad: "notiz-2026-01-01.md", ring: "kern" }),
+      "docs/adr/0001-x.md": "[a](../seite.md#a)\n",
+      "notiz-2026-01-01.md": "[a](docs/seite.md#a)\n",
+      "docs/seite.md": "# Seite\n",
+    });
+    assert.deepEqual(scanneLinkAnker(wurzel), { anker: new Set(), links: 0 });
+  });
+
+  test("ein neuer Anker ist rot mit dem Weg, ein veralteter Listeneintrag ist rot, Gleichstand grün", () => {
+    const erlaubt = new Set(["docs/a.md#eins", "docs/a.md#alt"]);
+    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins", "docs/a.md#alt"]), erlaubt), []);
+    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins", "docs/a.md#alt", "docs/b.md#neu"]), erlaubt), [
+      "docs/b.md#neu: neuen Anker in KERN_LINK_ANKER aufnehmen und eine `SIH-Bezieher-Migration:`-Zeile schreiben (Bezieher mit eigener Seite brauchen die Überschrift)",
+    ]);
+    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins"]), erlaubt), ["docs/a.md#alt: kein Besitz-Text setzt diesen Anker mehr, aus KERN_LINK_ANKER streichen"]);
+  });
+
+  test("Orakel: die Liste ist sortiert, nur docs-Anker, ohne Doppelte und bleibt im Test, solange sie höchstens 60 Einträge trägt", () => {
+    const liste = [...KERN_LINK_ANKER];
+    assert.deepEqual(liste, [...liste].sort(), "alphabetisch halten");
+    assert.ok(liste.every((a) => /^docs\/[^#]+\.md#[^#\s]+$/.test(a)));
+    assert.ok(liste.length <= KERN_LINK_ANKER_MAX_IM_TEST, `mehr als ${KERN_LINK_ANKER_MAX_IM_TEST} Anker: Liste als JSON neben den Test (test/harness/kern-link-anker.json), gleiche Regel`);
+  });
+
+  test("echtes Repo: Besitz-Text setzt nur Anker der geschlossenen Liste (und der Scan ist nicht leer)", () => {
+    const { anker, links } = scanneLinkAnker(ROOT);
+    assert.ok(links >= 10, `Scan findet nur ${links} Links: Umfang kaputt (Leerlauf)`);
+    assert.deepEqual(vergleicheAnker(anker, KERN_LINK_ANKER), []);
   });
 });

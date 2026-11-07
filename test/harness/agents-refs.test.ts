@@ -58,10 +58,9 @@ import { projektBlock } from "../support/projekt-block";
 
 interface BesitzLibKurz {
   einheitText: (e: { pfad: string; block?: string }, text: string) => string | null;
-  wirdVerteilt: (e: BesitzEintragKurz) => boolean;
-  istGanzeDatei: (e: { block?: string; schluessel?: string }) => boolean;
+  istVerteilteGanzdatei: (e: BesitzEintragKurz & { block?: string; schluessel?: string }) => boolean;
 }
-const { einheitText, wirdVerteilt, istGanzeDatei } = rawBesitz as unknown as BesitzLibKurz;
+const { einheitText, istVerteilteGanzdatei } = rawBesitz as unknown as BesitzLibKurz;
 
 // Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -136,7 +135,7 @@ function pruefe<V extends Verweis>(verweise: V[], docs: Partial<Record<Ziel, str
 
 /** Ganze Dateien des verteilten Besitzes (Kern-Ringe) außer der AGENTS.md selbst: ihre Verweise müssen im Zielprojekt auflösen. Pur. */
 function kernDateienVon(eintraege: (BesitzEintragKurz & { block?: string; schluessel?: string })[]): Set<string> {
-  return new Set(eintraege.filter((e) => wirdVerteilt(e) && istGanzeDatei(e) && e.pfad !== "AGENTS.md").map((e) => e.pfad));
+  return new Set(eintraege.filter((e) => istVerteilteGanzdatei(e) && e.pfad !== "AGENTS.md").map((e) => e.pfad));
 }
 
 /** Verweisziel für Kern-Dateien: der Kern-Block der AGENTS.md plus die AGENTS-Vorlage des Zielprojekts (nicht der Projekt-Block dieses Repos). Pur. */

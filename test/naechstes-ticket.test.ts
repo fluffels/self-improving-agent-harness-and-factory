@@ -35,7 +35,7 @@ type Stand = { closedAt: string | null; n: number } | { fehler: string };
 type Eingabe = { repo?: string; items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
-type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number };
+type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number; existiert?: (wurzel: string) => boolean };
 const N = raw as unknown as {
   waehleNaechstes: (e: Eingabe) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
@@ -178,6 +178,20 @@ describe("fuehreAus", () => {
     const r = N.fuehreAus(["--bereich", "produkt"], io(new Error("kein Netz")));
     expect(r.code).toBe(2);
     expect(r.err).toContain("kein Netz");
+  });
+  test("Produktbezug (L44): Pfade ohne Wurzel im Repo ergeben einen Hinweis (Text und JSON), das Ticket wird trotzdem gewählt; ohne Prüfer oder mit vorhandener Wurzel kein Hinweis", () => {
+    const body = "Siehe `src/game/main.ts` und `scripts/x.mjs`.";
+    const eingabe = () => ({ items: norm([item(7, { body })]), offene: new Set<number>() });
+    const existiert = (w: string) => w === "scripts";
+    const text = N.fuehreAus(["--bereich", "produkt"], { ...io(eingabe()), existiert });
+    expect(text.code).toBe(0);
+    expect(text.out.split("\n")[0]).toBe("#7\tT7");
+    expect(text.out).toContain("hinweis #7 nennt Pfade ohne Wurzel im Repo (src): Produktbezug prüfen, ggf. Ticket ins Produkt-Repo übertragen");
+    const json = JSON.parse(N.fuehreAus(["--json", "--bereich", "produkt"], { ...io(eingabe()), existiert }).out) as { hinweise?: string[]; ticket?: { nr: number } };
+    expect(json.ticket?.nr).toBe(7);
+    expect(json.hinweise).toEqual(["#7 nennt Pfade ohne Wurzel im Repo (src): Produktbezug prüfen, ggf. Ticket ins Produkt-Repo übertragen"]);
+    expect(N.fuehreAus(["--bereich", "produkt"], io(eingabe())).out).not.toContain("Produktbezug");
+    expect(N.fuehreAus(["--bereich", "produkt"], { ...io(eingabe()), existiert: () => true }).out).not.toContain("Produktbezug");
   });
   test("--json: parsebar; der Body erscheint nie in der Ausgabe", () => {
     const r = N.fuehreAus(["--json", "--bereich", "produkt"], io({ items: norm([item(7, { body: "GEHEIMER BODY" })]), offene: new Set() }));
@@ -584,6 +598,18 @@ describe("Einzelprüfung --ticket (#1621)", () => {
     const r = N.fuehreAus(["--ticket", "7"], i);
     expect(r).toMatchObject({ code: 0, out: "#7\tT7\n" });
     expect(i.aufrufe).toEqual({ lade: 0, einzeln: 1 });
+  });
+  test("fuehreAus Einzelmodus: Produktbezug-Hinweis (L44) auch bei --ticket, nicht bei einem übersprungenen Ticket", () => {
+    const i = io();
+    const mit = { ...i, existiert: () => false, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { body: "`src/a.ts`" })), offene: new Set<number>() }) as never };
+    const r = N.fuehreAus(["--ticket", "7"], mit);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("hinweis #7 nennt Pfade ohne Wurzel im Repo (src)");
+    const zu = { ...mit, ladeEinzeln: () => ({ item: N.itemAusIssue(issue(7, { state: "closed", body: "`src/a.ts`" })), offene: new Set<number>() }) as never };
+    expect(N.fuehreAus(["--ticket", "7"], zu).out).not.toContain("Produktbezug");
+    const rein = (existiert: (w: string) => boolean) => N.pruefeTicket({ item: N.itemAusIssue(issue(7, { body: "`src/a.ts`" })), offene: new Set<number>(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG, existiert } as never);
+    expect(rein(() => true)).not.toHaveProperty("hinweise");
+    expect(rein(() => false)).toHaveProperty("hinweise");
   });
   test("fuehreAus Einzelmodus: nicht frei Exit 1 mit Grund, json ohne Body", () => {
     const i = io();
@@ -1305,6 +1331,26 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(e.repo).toBe(B.REPO);
     expect(e.boardRepos).toEqual({ produkt: L.boardRepo(B.boardFuerRolle("produkt"), { repo: B.REPO }), factory: L.boardRepo(B.boardFuerRolle("factory"), { repo: B.REPO }) });
     expect(typeof e.fremdStatus).toBe("function");
+  });
+  test("echteIo: `existiert` prüft die Pfadwurzel im Repo des Skripts (L44)", () => {
+    const cfg = (ladeCfg as unknown as { ladeProjektConfig: () => unknown }).ladeProjektConfig();
+    const e = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => { existiert: (w: string) => boolean } }).echteIo({ config: cfg, messfensterLader: () => () => ({ closedAt: null, n: 0 }) });
+    expect(e.existiert("scripts")).toBe(true);
+    expect(e.existiert("zz-gibt-es-nicht")).toBe(false);
+  });
+  test("echteIo im Arbeitsplatz: `existiert` sucht die Pfadwurzel in jedem Repo, nicht im Ordner des Skripts (Lens R1)", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "nt-ap-"));
+    try {
+      mkdirSync(join(wurzel, "web", "src"), { recursive: true });
+      mkdirSync(join(wurzel, "api", "lib"), { recursive: true });
+      const config = { ...FREMD, arbeitsplatz: { wurzel, repos: [{ name: "web", pfad: "web" }, { name: "api", pfad: "api" }] } };
+      const e = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => { existiert: (w: string) => boolean } }).echteIo({ config, messfensterLader: () => () => ({ closedAt: null, n: 0 }) });
+      expect(e.existiert("src")).toBe(true);
+      expect(e.existiert("lib")).toBe(true);
+      expect(e.existiert("scripts")).toBe(false);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
 });
 

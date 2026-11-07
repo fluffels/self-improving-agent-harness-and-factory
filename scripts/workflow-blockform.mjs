@@ -11,6 +11,7 @@
  * `'…'` mit `''`, `"…"` mit allen YAML-1.2-Escapes (`\0 \a \b \t \<Tab> \n \v \f \r \e \<Leerzeichen> \" \/ \\ \N \_ \L \P \xXX \uXXXX \UXXXXXXXX`, `\` am Zeilenende),
  * beide Quote-Formen auch mehrzeilig gefaltet, Block-Skalare `|` und `>` mit `-`/`+` und Einrückungs-Indikator; danach `trim()`, leere Werte entfallen.
  * BOM, CRLF und ein `---` am Anfang sind erlaubt. Je Job kommt erst `name`, dann kommen die Step-Namen (wie in der Referenz).
+ * Bekannte Grenze (fail-closed, factory#220): ein einzelnes CR (ohne LF) gilt dem Leser als Zeilenende, die `yaml`-Bibliothek wirft darauf; der Leser liest, die Bibliothek nicht.
  *
  * Nicht gelesen wird (fail-closed): `blockformNamen` liefert dann `{ fehler: { zeile, konstrukt } }`, nie still weniger Namen. Geschlossene Liste: Flow-Collection als `jobs`, Job,
  * `steps`, Step oder `name`-Wert; Anker `&`, Alias `*`, Tag `!` an diesen Stellen; Merge-Schlüssel `<<` und `?`-Schlüssel in einem gelesenen Mapping; Tab in der Einrückung einer

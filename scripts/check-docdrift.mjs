@@ -283,6 +283,14 @@ export function abschnittTrifft(segment, titel) {
   });
 }
 
+/** Das Segment für die Meldung „Toter Abschnitt“: bis zum ersten `;`, `. ` oder ` – `, höchstens 60 Zeichen, gekürzt mit „…“ (ein Verweis mit Nebensatz meldet sonst den ganzen Satz). Die Trefferregel (`abschnittTrifft`) bleibt unberührt. Pur. */
+export function segmentKurz(segment) {
+  const enden = [";", ". ", " – "].map((t) => segment.indexOf(t)).filter((i) => i > 0);
+  const kurz = (enden.length > 0 ? segment.slice(0, Math.min(...enden)) : segment).trimEnd();
+  if (kurz.length > 60) return `${kurz.slice(0, 59)}…`;
+  return kurz.length < segment.length ? `${kurz}…` : kurz;
+}
+
 function skriptDateien(rootDir, ordner = "scripts") {
   const abs = join(rootDir, ordner);
   if (!existsSync(abs)) return [];
@@ -443,7 +451,7 @@ function main() {
     bad = true;
     const was = a.art === "ziel"
       ? `Totes Verweisziel: „${a.pfad}" (${a.trenner} ${a.segment}) in ${a.file} existiert nicht. Verweis auf eine vorhandene Seite umstellen oder die Seite wiederherstellen.`
-      : `Toter Abschnitt: „${a.segment}" (${a.pfad} ${a.trenner}) in ${a.file} — gibt es in ${a.ziel} weder als Überschrift noch als Fettdruck-Anfang. Fix: Verweis auf den heutigen Abschnitt umstellen, den Abschnittsnamen mit Satzzeichen abschließen oder die Überschrift wiederherstellen.`;
+      : `Toter Abschnitt: „${segmentKurz(a.segment)}" (${a.pfad} ${a.trenner}) in ${a.file} — gibt es in ${a.ziel} weder als Überschrift noch als Fettdruck-Anfang. Fix: Verweis auf den heutigen Abschnitt umstellen, den Abschnittsnamen mit Satzzeichen abschließen oder die Überschrift wiederherstellen.`;
     console.error(red(`✖ ${was}`));
   }
 

@@ -13,10 +13,11 @@
 // `grund`/`fix` sind bei `ok` leer (`""`); `punkte` ist bei `nicht-pruefbar` leer. Exit-Code der CLI: `exitCode`.
 import { istStandZeile } from "./meldung-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { labelAus } from "./projekt-config-lib.mjs";
+import { labelAus, optionalesLabel } from "./projekt-config-lib.mjs";
+import { NICHT_EINTRAGBAR_PRAEFIX } from "./sammelticket-titel.mjs";
 
-/** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Weg: ADR 0031, Fortschreibung zu factory#152). */
-export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
+/** Titelpräfix „Nicht eintragbar: “ (die eine Quelle liegt im Blatt `sammelticket-titel.mjs`, auch `claims-pruefen` liest sie von dort). */
+export { NICHT_EINTRAGBAR_PRAEFIX };
 
 /** Die Gruppen in fester Reihenfolge. */
 export const GRUPPEN = Object.freeze([
@@ -126,7 +127,7 @@ export function baueSicht({ config, issues, sammel = null, kommentare = new Map(
   return {
     repo,
     gruppen: [
-      entscheidungGruppe(issues, config?.labels?.entscheidung, owner),
+      entscheidungGruppe(issues, optionalesLabel(config, "entscheidung"), owner),
       festgefahren,
       nichtEintragbarGruppe(issues, owner),
       bezieherFehler === "" ? bezieherGruppe(sammel, kommentare, stelleOwner === "" ? owner : stelleOwner) : gruppe("bezieher", { grund: bezieherFehler, fix: "gh-Anmeldung und Leserecht auf die Meldestelle prüfen (Schlüssel `meldestelle` der Projekt-Config), dann erneut aufrufen" }),

@@ -44,6 +44,7 @@ import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { ghJson } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { ticketNamen } from "./ticket-namen.mjs";
 import {
@@ -126,7 +127,7 @@ Aufruf: node scripts/cleanup-worktrees.mjs [--branches] [--fix]`);
     console.error(`Worktree-Aufräumen abgebrochen: ${e instanceof Error ? e.message : e}`);
     return 1;
   }
-  if (config.arbeitsplatz !== undefined) return arbeitsplatzMain({ config, basis: ROOT, namen, FIX, branches: werte.branches === true, modus, diagnoseDeps, ausfuehren });
+  if (istArbeitsplatz(config)) return arbeitsplatzMain({ config, basis: ROOT, namen, FIX, branches: werte.branches === true, modus, diagnoseDeps, ausfuehren });
   if (werte.branches) {
     return modus(ROOT, FIX, { namen });
   }

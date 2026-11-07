@@ -5,7 +5,7 @@
  *  - Besitz-PR: ein Commit auf main (erster Elternteil), der einen verteilten Pfad aus `.factory/besitz.json` (Ring `oberflaeche` zählt nicht) oder das
  *    Manifest selbst berührt. Bewusste Grenze: Pfad-Ebene, nicht Block- oder Schlüssel-Ebene; das zählt eher zu viel als zu wenig.
  *  - Ab `MIN_PRS` Besitz-PRs, einem ältesten Commit über 7 Tage oder einer Commit-Zeile `<praefixe.commitZeile>Sync-Dringlich: <grund>` in einem Besitz-Commit
- *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
+ *    hält das Skript GENAU EIN Kopf-Ticket „🏷️ Tag v<x> setzen“ (Board-Spitze, Art `tag`) mit Tag-Vorschlag, PRs, CI-Status des
  *    main-Commits, fertigem Befehl und der Checkliste („Trockenlauf gegen den Probe-Erstbezug“, „Bezieher holen das Update selbst“). Ein offenes Ticket wird nie verdoppelt, sondern bei
  *    Änderung aktualisiert (geclaimt: unberührt) und geschlossen, sobald nichts Ungetaggtes mehr da ist.
  *  - `MIN_PRS` = aufgerundeter Median der Besitz-PRs je Tag-Abstand, mindestens 3 (factory#162, Messung 2026-11-04 über v0.1.0..v0.8.0: 10 Abstände mit 1, 2, 7, 1, 1, 4, 4, 4, 0, 3 Besitz-PRs, Median 2,5 → 3;
@@ -27,7 +27,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MANIFEST_PFAD as MANIFEST, istGanzeDatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, istVerteilteGanzdatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
@@ -35,7 +35,8 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { bezieherAus, labelAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { UPDATE_SCHRITTE, WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { HAKEN_ZEILE } from "./sammelticket-titel.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -55,7 +56,7 @@ const EXPORT_DEKLARATION = /^export\s+(?:async\s+)?(?:const|let|var|function\*?|
 const EXPORT_LISTE = /^export\s*\{([^}]*)\}/gm;
 
 /** Titel des Tag-Tickets. Pur. */
-export const tagTitel = (tag) => `🏷️ Tag ${tag} setzen und syncen`;
+export const tagTitel = (tag) => `🏷️ Tag ${tag} setzen`;
 
 /** Zelle für die Liste: nur sichtbarer Text, ohne `|`, Backticks und Zeilenumbrüche, höchstens 120 Zeichen. Pur. */
 const zelle = (x) =>
@@ -115,7 +116,7 @@ export function entfernteExporte(altText, neuText) {
 
 /** Pur: die in den Besitz-Commits berührten Skript-Dateien (`scripts/**.mjs|cjs`), die ein verteilter Ganzdatei-Eintrag des Manifests abdeckt. Sortiert, ohne Doppelte. */
 export function verteilteSkripte(besitz, manifest) {
-  const pfade = (manifest?.eintraege ?? []).filter((e) => wirdVerteilt(e) && istGanzeDatei(e)).map((e) => e.pfad);
+  const pfade = (manifest?.eintraege ?? []).filter(istVerteilteGanzdatei).map((e) => e.pfad);
   const gedeckt = (d) => pfade.some((p) => d === p || d.startsWith(`${p}/`));
   return [...new Set(besitz.flatMap((c) => c.dateien).filter((d) => SKRIPT_DATEI.test(d) && gedeckt(d)))].sort();
 }
@@ -237,6 +238,7 @@ export function bezieherProbe({ bezieher, ergebnisse = {} }) {
 /** Pur (factory#188): der Ablauf-Abschnitt der Vor-Tag-Probe (Text und Befehle), nur lesend im Scratch. */
 function probeAblauf({ tag, sha }) {
   const mechanisch = mechanischeSchritte("<s>/quelle");
+  const verifyBefehl = UPDATE_SCHRITTE.find((s) => s.id === "verify").befehl;
   return [
     `Vor-Tag-Probe je Bezieher (factory#188; nur lesend: ein Klon im Scratch, nie der Checkout des Beziehers; kein Push, kein PR, kein Issue, kein Kommentar; rot heißt: nicht taggen). Je Bezieher \`<owner/name>\` der Liste unten; \`<s>\` = leerer Scratch-Ordner, \`<checkout>\` = Checkout auf ${sha.slice(0, 7)}:`,
     "",
@@ -249,11 +251,11 @@ function probeAblauf({ tag, sha }) {
     `git -C <s>/quelle checkout --detach ${sha}`,
     "node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --entwurf --trocken",
     `node scripts/factory-sync.mjs --quelle <s>/quelle --ziel <s>/bezieher --tag ${tag}`,
-    `cd <s>/bezieher && ${["node scripts/gate-befehl.mjs install", ...mechanisch, "node scripts/gate-befehl.mjs verifyKompakt"].join(" && ")}`,
+    `cd <s>/bezieher && ${["node scripts/gate-befehl.mjs install", ...mechanisch, verifyBefehl].join(" && ")}`,
     "node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest",
     "```",
     "",
-    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `verifyKompakt` (fährt jeden Schritt auch nach einem Rot, damit die Probe alle Funde auf einmal zeigt) ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Kopien von Dateien des Rings `oberflaeche`, die der Sync nie liefert, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; meldet der Sync `Kontextbudget knapp`, ist das ein Projekt-Rest (`=rest`); ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz), `rest` (Rot nur im Projekt: grün, aber Befund bzw. Bezieher-Migration festhalten) oder ein Exit ≠ 0 (Blocker).",
+    "Die Entwurfs-Vorschau ist nur eine Vorschau (Exit ≠ 0 ist ein Blocker); `" + verifyBefehl + "` (fährt jeden Schritt auch nach einem Rot, damit die Probe alle Funde auf einmal zeigt) ist erst nach dem Sync mit lokalem Tag und den mechanischen Update-Schritten (" + mechanisch.map((b) => "`" + b + "`").join(", ") + "; Quelle `UPDATE_SCHRITTE`) aussagekräftig, denn nach `--entwurf` ist es per Konstruktion rot. Grün heißt: kein Rot durch Factory-Besitz. Ein Rot, das nur Bezieher-Eigenes betrifft (eigene Docs, Projektkopien von Kern-Tests, Kopien von Dateien des Rings `oberflaeche`, die der Sync nie liefert, Projekt-Block), ist kein Blocker, sondern ein Befund bzw. eine Bezieher-Migration; meldet der Sync nur `Kontextbudget knapp` (eine Warnung, kein Rot), bleibt das Ergebnis 0 und die Warnung ist ein Befund, kein `=rest`; ein Rot durch Factory-Besitz (etwa das Kontext-Budget nach dem Sync) ist ein Blocker (als Sammelticket-Zeile „Gate-Lücke“ festhalten, im Pre-Flight nennen). An `--probe` geht 0 (kein Rot durch Factory-Besitz), `rest` (Rot nur im Projekt: grün, aber Befund bzw. Bezieher-Migration festhalten) oder ein Exit ≠ 0 (Blocker).",
     "",
   ];
 }
@@ -399,9 +401,6 @@ function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, bez
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
   return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, bezieher }) };
 }
-
-/** Checklistenzeile `- [ ] <rest>` bzw. `* [x] <rest>`: Gruppe 1 = Haken, Gruppe 2 = Rest. */
-const HAKEN_ZEILE = /^\s*[-*] \[([ xX])\] (.*?)\r?$/;
 
 /**
  * Pur (factory#215): übernimmt die Haken des offenen Tickets in den neu gebauten Body. Eine offene Zeile (`[ ]`) des neuen Bodys wird `[x]`, wenn der alte Body dieselbe Zeile

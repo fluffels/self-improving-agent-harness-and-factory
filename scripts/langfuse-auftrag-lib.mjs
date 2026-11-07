@@ -5,6 +5,10 @@
  * vom nächsten SessionStart-Lauf des Hooks (`langfuse-nachliefern.mjs`), der den Key im eigenen Prozess liest; der Lauf prüft die Session auch außerhalb des
  * 7-Tage-Fensters. Importiert nur Node-Builtins (`test/harness/langfuse-auftrag.test.ts` hält die Import-Hülle von Einstieg und Lib fest: der Beweis des Negativfalls
  * „der Agentenkontext liest den Key nie“).
+ *
+ * Gast-Exporte (nicht Teil des Auftrags): `SESSION_ID` (Session-ID-Form, genutzt von `langfuse-abgleich-hook.mjs` und `langfuse-lock.mjs`) und `schreibeJsonAtomar`
+ * (Zustandsschreiber, genutzt von `langfuse-nachliefern.mjs`). Bei weiterem Zuwachs eigene Builtin-only-Lib mit eigener Import-Hülle in `test/harness/langfuse-auftrag.test.ts`
+ * (keine Teilung jetzt).
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -38,7 +38,7 @@ import { join, resolve } from "node:path";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readStdin } from "./hook-io.mjs";
-import { arbeitsplatzAus, standardzweigVon } from "./arbeitsplatz-lib.mjs";
+import { arbeitsplatzAus, istArbeitsplatz, standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { KERN_TICKET_SKILL, TICKET_SKILL_NAME, TICKET_SKILL_ORDNER, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -327,7 +327,7 @@ export function syncZiel(dir, { lade = (d) => ladeProjektConfig({ rootDir: d, pr
   } catch {
     return { aufloesung: null };
   }
-  if (config?.arbeitsplatz === undefined) return { aufloesung: null };
+  if (!istArbeitsplatz(config)) return { aufloesung: null };
   try {
     return { aufloesung: arbeitsplatzAus(config, dir) };
   } catch (e) {

@@ -44,6 +44,10 @@ import * as rulesetSpiegel from "../../scripts/docs-gen/ruleset-spiegel.mjs";
 import * as projektConfig from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as blockform from "../../scripts/workflow-blockform.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as doctorLib from "../../scripts/harness-doctor-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as besitzLib from "../../scripts/besitz-lib.mjs";
 
 interface Workflow {
   pfad: string;
@@ -74,7 +78,7 @@ const pruefeRulesetSpiegel = (rulesetSpiegel as unknown as { pruefeRulesetSpiege
 function leseKontexte(json: string): string[] {
   return pruefeRulesetSpiegel(JSON.parse(json), "Spiegel").requiredChecks;
 }
-const REQUIRED_CONTEXTS: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
+const SPIEGEL_KONTEXTE: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
 
 /** Die Referenz: liest die `name:`-Werte aller Jobs und Schritte mit der YAML-Bibliothek (Schema `failsafe`: jeder Skalar bleibt ein Text, `name: 1.0` bleibt `1.0`;
  *  der Workflow-Name auf oberster Ebene zählt nicht; ein Parse-Fehler wirft). */
@@ -104,6 +108,12 @@ function echteWorkflows(): Workflow[] {
     .filter(istWorkflowDatei)
     .map((f) => ({ pfad: f, text: readFileSync(join(WORKFLOW_DIR, f), "utf8") }));
 }
+
+/** Die Soll-Liste des Doctors (factory#220 L20): dieselbe Funktion `sollKontexte` wie der Punkt `Required-Check-Quellen`: Spiegel plus `pflichtChecks` der verteilten Kern-Workflows des Besitz-Manifests. */
+const { sollKontexte } = doctorLib as unknown as { sollKontexte: (a: { spiegel: { requiredChecks: string[] }; manifest: unknown; workflows: Workflow[] }) => string[] };
+const { manifestAusText, MANIFEST_PFAD } = besitzLib as unknown as { manifestAusText: (text: string | null) => { manifest?: unknown; text?: string }; MANIFEST_PFAD: string };
+const manifestGelesen = manifestAusText(readFileSync(join(ROOT, MANIFEST_PFAD), "utf8"));
+const REQUIRED_CONTEXTS: readonly string[] = sollKontexte({ spiegel: { requiredChecks: [...SPIEGEL_KONTEXTE] }, manifest: manifestGelesen.manifest ?? null, workflows: echteWorkflows() });
 
 const wf = (...eintraege: [string, string][]): Workflow[] => eintraege.map(([pfad, text]) => ({ pfad, text }));
 
@@ -163,14 +173,15 @@ const NUR_DIFFERENZ: Record<string, string> = {
   "Indikator @ am Wertanfang": "jobs:\n  a:\n    name: @x\n",
   "Indikator Komma am Wertanfang": "jobs:\n  a:\n    name: ,x\n",
   "Tab hinter dem Strich": "jobs:\n  a:\n    steps:\n      -\tname: X\n",
-  "Kommentar im Schlüssel": "jobs:\n  a:\n    kaputt #c: y\n",
-  "Kommentar im Schlüssel vor einem name": "jobs:\n  a:\n    x #c: y\n    name: Z\n",
+  "Zeile ohne Schlüssel: Kommentar vor dem Doppelpunkt": "jobs:\n  a:\n    kaputt #c: y\n",
+  "Zeile ohne Schlüssel: Kommentar vor dem Doppelpunkt, dann ein name": "jobs:\n  a:\n    x #c: y\n    name: Z\n",
   "Tab vor dem Falten im gequoteten Wert": 'jobs:\n  a:\n    name: "A\n      B\t\n      C"\n',
   "Indikator Backtick am Wertanfang": "jobs:\n  a:\n    name: `x\n",
   "plain mit Kommentar und tieferer Folgezeile": "jobs:\n  a:\n    name: A # c\n      B\n",
   "Hex-Escape über den Zeilenumbruch": 'jobs:\n  a:\n    name: "A\\x4\n      B"\n',
   "Backslash im einfach gequoteten Wert": "jobs:\n  a:\n    name: 'a\\b'\n",
-  "Tab im gefalteten Quote": 'jobs:\n  a:\n    name: "A\n  B\t C"\n',
+  "gequotete Folgezeile mit Tab, zu flach eingerückt (Guard: falsche Einrückung)": 'jobs:\n  a:\n    name: "A\n  B\t C"\n',
+  "Tab mitten in der gequoteten Folgezeile, richtig eingerückt": 'jobs:\n  a:\n    name: "A\n      B\t C"\n',
   "Backslash am Zeilenende vor Leerzeile": 'jobs:\n  a:\n    name: "A\\\n\n      B"\n',
   "Kommentarzeile unter plain-Wert": "jobs:\n  a:\n    name: A\n      # c\n    runs-on: x\n",
   "gefaltet mit tiefer eingerückter Zeile": "jobs:\n  a:\n    name: >\n      A\n        B\n      C\n",

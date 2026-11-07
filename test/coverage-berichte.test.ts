@@ -21,6 +21,18 @@ const m = raw as unknown as {
   parseLcovBranches: (t: string, basis?: string) => Map<string, Map<number, Zweig>>;
   parseJacoco: (t: string) => Jacoco;
   berichtDateien: (root: string, pfad: string) => string[];
+  jacocoZuordnen: (o: {
+    berichte: { bestand: Jacoco; pfad: string }[];
+    messDateien: string[];
+    quellen: Quellen;
+    rootDir: string;
+    wurzelOrdner?: string[];
+    existiert?: (p: string) => boolean;
+    abdeckung: Map<string, Map<number, number>>;
+    zweige: Map<string, Map<number, Zweig>>;
+    mehrdeutig: unknown[];
+    berichteJe: Map<string, string[]>;
+  }) => void;
   ladeAbdeckung: (o: { berichte: Bericht[]; rootDir: string; lies: (p: string) => string; messDateien: string[]; quellen: Quellen; wurzelOrdner?: string[]; existiert?: (p: string) => boolean }) => Abdeckung;
 };
 
@@ -181,6 +193,25 @@ describe("ladeAbdeckung", () => {
     const ueberlappend = [{ format: "lcov", pfad: "a/*.info" }, { format: "lcov", pfad: "a/lcov.info" }];
     const r = m.ladeAbdeckung({ berichte: ueberlappend, rootDir: d, lies: lies, messDateien: ["src/a.ts"], quellen }) as unknown as { berichteJe: Map<string, string[]> };
     assert.deepEqual(r.berichteJe.get("src/a.ts")!.map((p) => p.replace(/^.*[\\/]a[\\/]/, "a/")), ["a/lcov.info", "a/zweit.info"]);
+  });
+  test("jacocoZuordnen: bei zwei gleichen Beständen meldet jedes { bestand, pfad }-Paar seinen eigenen Pfad (kein indexOf auf den ersten, factory#220 L47)", () => {
+    const bestand: Jacoco = new Map([["de/x/A.java", { zeilen: new Map([[3, 1]]), zweige: new Map() }]]);
+    const abdeckung = new Map<string, Map<number, number>>();
+    const berichteJe = new Map<string, string[]>();
+    m.jacocoZuordnen({
+      berichte: [{ bestand, pfad: "a/jacoco.xml" }, { bestand, pfad: "b/jacoco.xml" }],
+      messDateien: ["src/de/x/A.java"],
+      quellen: { wurzeln: ["src"], endungen: [".java"] },
+      rootDir: "/nie",
+      wurzelOrdner: ["src"],
+      existiert: () => true,
+      abdeckung,
+      zweige: new Map(),
+      mehrdeutig: [],
+      berichteJe,
+    });
+    assert.deepEqual(berichteJe.get("src/de/x/A.java"), ["a/jacoco.xml", "b/jacoco.xml"]);
+    assert.equal(abdeckung.get("src/de/x/A.java")!.get(3), 2, "beide Berichte tragen ihre Hits bei");
   });
   test("Multi-Modul: ein Glob mit zwei Berichten liest beide; eine Datei des zweiten Moduls wird gemessen, dieselbe Datei in beiden Berichten gemischt", () => {
     const foo = "modul-b/src/main/java/de/anders/Foo.java";

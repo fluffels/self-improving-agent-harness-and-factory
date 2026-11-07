@@ -719,6 +719,7 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     abschnittVerweise: (text: string, opt?: { istMarkdown?: boolean }) => Verweis[];
     abschnittTitel: (md: string) => string[][];
     abschnittTrifft: (segment: string, titel: string[][]) => boolean;
+    segmentKurz: (segment: string) => string;
     auditDocDrift: (root: string) => { abschnittFehler: { file: string; art: string; pfad: string; segment: string }[] };
   };
 
@@ -800,6 +801,24 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
   test("Überschriften: 1 bis 6 Rauten mit Leerzeichen; sieben Rauten und `#hashtag` sind keine", () => {
     assert.deepEqual(api.abschnittTitel("####### X\n#hashtag\n"), []);
     assert.deepEqual(api.abschnittTitel("###### X\n"), [["x"]]);
+  });
+
+  test("segmentKurz: bis zum ersten ; / „. “ / „ – “, höchstens 60 Zeichen, gekürzt mit „…“, der Trefferbefund bleibt (factory#220 L1)", () => {
+    assert.equal(api.segmentKurz("Git, PR und Merge"), "Git, PR und Merge");
+    assert.equal(api.segmentKurz("Gibts nicht."), "Gibts nicht.", "ein Punkt am Ende ohne Folgetext kürzt nicht");
+    assert.equal(api.segmentKurz("Eins; zwei"), "Eins…");
+    assert.equal(api.segmentKurz("Eins. Zwei"), "Eins…");
+    assert.equal(api.segmentKurz("Eins – Zwei"), "Eins…");
+    assert.equal(api.segmentKurz("Zwei. Danach; und – später"), "Zwei…", "der früheste Trenner gewinnt");
+    assert.equal(api.segmentKurz("Zuerst – dann. Danach; Rest"), "Zuerst…", "früheste Stelle, nicht Reihenfolge der Trenner");
+    const sechzig = "a".repeat(60);
+    assert.equal(api.segmentKurz(sechzig), sechzig, "genau 60 Zeichen bleiben");
+    assert.equal(api.segmentKurz(`${sechzig}b`), `${"a".repeat(59)}…`, "61 Zeichen: 59 plus Auslassungszeichen");
+    assert.equal(api.segmentKurz("; Anfang"), "; Anfang", "ein Trenner am Anfang ergäbe ein leeres Segment");
+    const nebensatz = "Git, PR und Merge, inklusive § X weiter so lang und noch viel länger als sechzig Zeichen. Danach folgt Rest";
+    assert.equal(api.segmentKurz(nebensatz).length, 60);
+    assert.ok(!api.abschnittTrifft(nebensatz, api.abschnittTitel("# X\n")), "Trefferregel unverändert: das volle Segment zählt");
+    assert.ok(api.abschnittTrifft(nebensatz, api.abschnittTitel("# Git\n")));
   });
 
   test("Titel ohne Wörter (Emoji-Überschrift) lässt keinen Verweis durch", () => {

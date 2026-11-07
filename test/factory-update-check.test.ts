@@ -95,7 +95,7 @@ describe("updateMeldung", () => {
   test("factory#208 L21: Bezieher-Migration steht im Tag-Ticket der Fabrik; mit Repo kommt der Suchbefehl, ohne Repo kein Platzhalter-Repo", () => {
     const mit = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"], repo: "o/factory" })?.text ?? "";
     assert.match(mit, /Bezieher-Migration/);
-    assert.match(mit, /gh issue list --repo o\/factory --search "Tag v1\.1\.0 setzen und syncen" --state all --limit 5/);
+    assert.match(mit, /gh issue list --repo o\/factory --search "Tag v1\.1\.0 setzen" --state all --limit 5/);
     const ohne = updateMeldung({ stand: stand("v1.0.0"), tags: ["v1.1.0"] })?.text ?? "";
     assert.match(ohne, /Bezieher-Migration/);
     assert.doesNotMatch(ohne, /gh issue list/);
@@ -140,7 +140,7 @@ describe("fuehreAus", () => {
     const text = fuehreAus([], { wurzel, gh });
     assert.equal(text.code, 0);
     assert.match(text.out, /v1\.0\.0.*v1\.2\.0/s);
-    assert.match(text.out, /--repo o\/factory --search "Tag v1\.2\.0 setzen und syncen"/);
+    assert.match(text.out, /--repo o\/factory --search "Tag v1\.2\.0 setzen"/);
     const json = fuehreAus(["--json"], { wurzel, gh });
     assert.equal((JSON.parse(json.out) as { update: { neu: string } }).update.neu, "v1.2.0");
     assert.ok(aufrufe[0].includes("repos/o/factory/tags"));

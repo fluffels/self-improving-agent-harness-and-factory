@@ -5,7 +5,7 @@ import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arbeitsplatzAus, standardzweigVon } from "./arbeitsplatz-lib.mjs";
+import { arbeitsplatzAus, istArbeitsplatz, standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { lensWorktreeName } from "./ticket-refs.mjs";
 
@@ -371,7 +371,7 @@ export function diagnoseArbeitsplatz(orte, deps = {}) {
  * (der Befund kann selbst `ok: false` sein, wie bisher), im Arbeitsplatz `{ arbeitsplatz: true, aufloesung, ...diagnoseArbeitsplatz }`. Wirft bei kaputtem Block (Fix-Zeile aus `arbeitsplatzAus`).
  */
 export function aufraeumDiagnose(config, basis, deps = {}) {
-  if (config?.arbeitsplatz === undefined) return { arbeitsplatz: false, ok: true, repos: [{ name: null, ...diagnoseOrphans(basis, deps) }] };
+  if (!istArbeitsplatz(config)) return { arbeitsplatz: false, ok: true, repos: [{ name: null, ...diagnoseOrphans(basis, deps) }] };
   const { aufloesung, orte } = gitOrteAus(config, basis);
   return { arbeitsplatz: true, aufloesung, ...diagnoseArbeitsplatz(orte, deps) };
 }

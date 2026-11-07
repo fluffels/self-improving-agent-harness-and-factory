@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fehlerText, tokenFuerZiel } from "./gh-cli.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { BEFUND_ZEILE_OFFEN } from "./sammelticket-titel.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { STAND_PFAD, liesSyncStand } from "./sync-stand-lib.mjs";
 
@@ -80,7 +81,7 @@ export function eigenerLogin({ zugang, api, warn }) {
 export function zeileBekannt({ kommentare, owner, eigen = null, schluessel }) {
   const eigenKlein = typeof eigen === "string" && eigen !== "" ? eigen.toLowerCase() : null;
   const vertraut = (user) => istVertraut(user, owner) || (eigenKlein !== null && typeof user?.login === "string" && user.login.toLowerCase() === eigenKlein);
-  return kommentare.some((k) => vertraut(k?.user) && String(k?.body).split(/\r?\n/).some((z) => /^\s*[-*]\s+\[ \]/.test(z) && z.includes(schluessel)));
+  return kommentare.some((k) => vertraut(k?.user) && String(k?.body).split(/\r?\n/).some((z) => BEFUND_ZEILE_OFFEN.test(z) && z.includes(schluessel)));
 }
 
 const FIX_SAMMELTICKET = "Fix: node scripts/sammelticket-anlegen.mjs harness";
