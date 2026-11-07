@@ -2,7 +2,7 @@ flowchart TD
   board["Board: oberstes freies Ticket"]
   claim["Claim: self-assign, verifizieren"]
   wt["Worktree von origin/main"]
-  szen["Szenarien (nur Tickets mit Kriterien)<br/>${agent:holdout-szenario}"]
+  szen["Szenarien (nur Tickets mit Kriterien, nach dem Plan)<br/>${agent:holdout-szenario}"]
   plan["Plan<br/>${agent:sih-planer}"]
   epic{"zu groß für eine Session?"}
   kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
@@ -24,9 +24,11 @@ flowchart TD
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
 
-  board --> claim --> szen --> plan --> epic
+  board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
+  epic -. "nein, Kriterien vorhanden: Hintergrund" .-> szen
+  szen -.->|"Ergebnis vor der Abnahme"| abnahme
   pre -- ja --> frage --> wt
   pre -- nein --> wt
   wt --> umsetzen

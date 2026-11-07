@@ -12,7 +12,7 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | **Epic-Aufteilung** (Schnitt der Kinder; ohne verfügbaren Planer teilt der Anlege-Agent selbst auf) | `opus` | `xhigh` | Subagent `<agenten.planer>` schlägt vor |
 | Epic-Kinder anlegen | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`) |
 | Dependabot-Sammelticket | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`) |
-| Holdout-Szenarien (vor dem Planen) | `opus` | `medium` | Subagent `holdout-szenario`, vom Hauptchat gespawnt (Frontmatter; nur `Read`, `Grep`, `Glob`, liest keinen Code) |
+| Holdout-Szenarien (nach dem Plan, im Hintergrund) | `opus` | `medium` | Subagent `holdout-szenario`, vom Hauptchat gespawnt (Frontmatter; nur `Read`, `Grep`, `Glob`, liest keinen Code) |
 | **Planung** | `opus` | `xhigh` | Subagent `<agenten.planer>` (Frontmatter) |
 | Pre-Flight (Weichen selbst entscheiden) | `sonnet` | `medium` | Hauptagent (Projekt-Default `sonnet`; übernimmt die Entscheidungen des Planers, `AskUserQuestion` nur bei Irreversiblem/Außenwirkung) |
 | Umsetzung | `sonnet` | `medium` | Subagent [`<agenten.umsetzer>`](../.claude/agents/factory-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |

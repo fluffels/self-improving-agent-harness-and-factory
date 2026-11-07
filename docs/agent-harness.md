@@ -313,7 +313,7 @@ flowchart TD
   board["Board: oberstes freies Ticket"]
   claim["Claim: self-assign, verifizieren"]
   wt["Worktree von origin/main"]
-  szen["Szenarien (nur Tickets mit Kriterien)<br/>holdout-szenario"]
+  szen["Szenarien (nur Tickets mit Kriterien, nach dem Plan)<br/>holdout-szenario"]
   plan["Plan<br/>sih-planer"]
   epic{"zu groß für eine Session?"}
   kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
@@ -335,9 +335,11 @@ flowchart TD
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
 
-  board --> claim --> szen --> plan --> epic
+  board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
+  epic -. "nein, Kriterien vorhanden: Hintergrund" .-> szen
+  szen -.->|"Ergebnis vor der Abnahme"| abnahme
   pre -- ja --> frage --> wt
   pre -- nein --> wt
   wt --> umsetzen
@@ -459,16 +461,15 @@ sequenceDiagram
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen
-  opt Ticket mit Akzeptanzkriterien
-    H->>S: Ticket und Kriterien
-    S-->>H: Szenarien (bleiben im Hauptchat)
-  end
   H->>P: Ticket planen
   opt breite Suche
     P->>E: Fundstellen suchen
     E-->>P: Fundstellen
   end
   P-->>H: Plan und Pre-Flight-Fragen
+  opt Plan ohne Epic-Weiche, Ticket mit Akzeptanzkriterien
+    H-)S: Ticket und Kriterien (Hintergrund)
+  end
   opt Irreversibel oder Außenwirkung
     H->>M: Rückfrage vor dem Coden
     M-->>H: Antwort
@@ -497,6 +498,7 @@ sequenceDiagram
   opt Ticket mit Akzeptanzkriterien
     U->>CI: Entwurfs-PR ohne Auto-Merge
     U-->>H: ERGEBNIS abnahme
+    S-->>H: Szenarien (bleiben im Hauptchat, spätestens jetzt da)
     H->>A: Kriterien, Szenarien, PR, Worktree, head
     A-->>H: Bericht je Kriterium
     H-->>U: bestanden, fix oder handoff
