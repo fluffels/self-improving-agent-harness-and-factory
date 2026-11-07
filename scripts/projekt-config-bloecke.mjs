@@ -79,8 +79,6 @@ function eintragMaengel(e, wo, gesehen) {
   return fehler;
 }
 
-/** Standard-Endungen des Datenbudgets (`datengroesse.endungen`): ein Format, kein Projektwort. */
-export const DATEN_STANDARD_ENDUNGEN = [".json"];
 const DATEN_SCHLUESSEL = ["pfade", "budget", "endungen", "hinweis", "deckel"];
 const istPositivGanz = (v) => Number.isInteger(v) && v > 0;
 

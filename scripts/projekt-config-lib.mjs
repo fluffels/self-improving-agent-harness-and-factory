@@ -19,7 +19,8 @@ import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
-import { DATEN_STANDARD_ENDUNGEN, istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
+import { DATEN_STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
+import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -239,7 +240,7 @@ export function datengroesseAus(config) {
   const fehler = pruefeDatengroesse(wert);
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}
 Fix: den Block datengroesse (pfade, budget; optional endungen, hinweis, deckel: Liste von { datei, max, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
-  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? DATEN_STANDARD_ENDUNGEN, hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
+  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? [...DATEN_STANDARD_ENDUNGEN], hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
 }
 
 /**
