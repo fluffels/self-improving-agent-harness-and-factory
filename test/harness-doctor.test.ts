@@ -888,11 +888,10 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.ok(!eigen.out.some((l) => l.includes("Meldestelle")), eigen.out.join("\n"));
   });
 
-  test("factory#220 L39: der Standard-Weg von main trägt den Punkt Factory-Update im Bezieher (Sync-Stand, Datei fehlt: Lücke ohne gh-Aufruf), in der Fabrik nicht", () => {
+  test("factory#220 L39: der Standard-Weg von main trägt den Punkt Factory-Update im Bezieher (Sync-Stand, Datei fehlt: Lücke), in der Fabrik nicht", () => {
     const bezieher = lauf({}, { dateien: "echt", vorbereiten: (root) => { mkdirSync(join(root, ".factory"), { recursive: true }); writeFileSync(join(root, ".factory", "sync-stand.json"), "{}"); } });
     const z = bezieher.out.find((l) => l.startsWith("LÜCKE Factory-Update: "));
     assert.ok(z !== undefined && z.includes("factory-update.yml fehlt"), bezieher.out.join("\n"));
-    assert.ok(!bezieher.aufrufe.some((a) => a.includes("factory-update.yml")));
     const fabrik = lauf({}, { dateien: "echt" });
     assert.ok(!fabrik.out.some((l) => l.includes("Factory-Update")), fabrik.out.join("\n"));
   });

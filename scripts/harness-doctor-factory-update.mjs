@@ -1,4 +1,4 @@
-/* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39): prüft im Bezieher, ob der Wochenlauf `.github/workflows/factory-update.yml` da ist und aktiv läuft.
+/* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39; `dateienStandard` unten ist die eine Verdrahtung der Standard-Dateipunkte für `--pruefen` und den Wochenlauf): prüft im Bezieher, ob der Wochenlauf `.github/workflows/factory-update.yml` da ist und aktiv läuft.
  * Fehlt die Datei oder ruht der Workflow, kommt nie ein Issue „Factory-Update“, und niemand merkt es. Nur im Bezieher (Sync-Stand vorhanden, `istBezieher`, Rollen-Schalter): in der Fabrik gibt es den Punkt nicht.
  *
  *   - Datei fehlt: Lücke (Fix: Sync erneut ausführen, er liefert die Datei).

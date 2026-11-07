@@ -558,7 +558,6 @@ export function ladeFrisch(lade = frischeOffeneIssues) {
   }
 }
 
-/** Die Wurzel des Repos, in dem das Skript liegt (für den Produktbezug-Hinweis, factory#220 L44). */
 
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). Der Messfenster-Lader (`messfensterLader`, Test-Naht) bekommt die schon geladenen Namen. */
 export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLader } = {}) {
