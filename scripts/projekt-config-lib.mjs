@@ -19,7 +19,7 @@ import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
-import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
+import { DATEN_STANDARD_ENDUNGEN, istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -236,6 +236,19 @@ export function ausnahmenAus(config) {
 }
 
 /**
+ * Pur: das Datenbudget von check:size (`datengroesse`, factory#7): ohne Block `null` (das Datenbudget ist aus), sonst `{ pfade, budget, endungen, hinweis, deckel }` mit
+ * Standard-Endung .json, ohne Hinweis `null`, ohne Deckel leer. Wirft mit Fix-Zeile bei kaputter Form (ein Deckel darf nicht still verloren gehen).
+ */
+export function datengroesseAus(config) {
+  const wert = config?.datengroesse;
+  if (wert === undefined) return null;
+  const fehler = pruefeDatengroesse(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}
+Fix: den Block datengroesse (pfade, budget; optional endungen, hinweis, deckel: Liste von { datei, max, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? DATEN_STANDARD_ENDUNGEN, hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
+}
+
+/**
  * Pur: die Gates des Projekts, die bewusst nicht in der `verify`-Kette laufen (`gates.nichtInVerify`, je Eintrag `{ gate, grund }`; #1925); ohne Block leer
  * (die strenge Richtung: dann muss `verify` jedes `check:*` fahren). Wirft mit Fix-Zeile bei kaputter Form.
  */
@@ -364,6 +377,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.struktur !== undefined) fehler.push(...pruefeStruktur(wert.struktur));
   if (wert.bereiche !== undefined) fehler.push(...pruefeBereiche(wert.bereiche));
   if (wert.ausnahmen !== undefined) fehler.push(...pruefeAusnahmen(wert.ausnahmen));
+  fehler.push(...pruefeDatengroesse(wert.datengroesse));
   if (wert.gates !== undefined) fehler.push(...pruefeGates(wert.gates));
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));

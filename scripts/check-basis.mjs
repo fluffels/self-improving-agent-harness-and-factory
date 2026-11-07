@@ -179,8 +179,9 @@ export function collectMarkdown(rootDir = ROOT) {
 
 /** Prüft, ob die Ordner aus `struktur` (`quelle`, `moduldoku`) existieren, damit Gates, die sie durchsuchen, einen klaren Befund
  *  melden statt mit ENOENT-Stacktrace zu enden. Ein vorhandener, leerer Ordner ist kein Befund; `null` (Opt-out von `moduldoku`)
- *  wird übersprungen, ebenso ein Schlüssel, der in `struktur` fehlt (erwartet eine von `strukturAus` geprüfte Struktur). Rückgabe: Meldungstexte ohne Präfix (leer = alles da). */
-export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"]) {
+ *  wird übersprungen, ebenso ein Schlüssel, der in `struktur` fehlt (erwartet eine von `strukturAus` geprüfte Struktur). Rückgabe: Meldungstexte ohne Präfix (leer = alles da).
+ *  `block` ist der Name des Config-Blocks in den Meldungen (Standard `struktur`; `datengroesse` für das Datenbudget, factory#7). */
+export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"], block = "struktur") {
   const befunde = [];
   for (const k of schluessel) {
     const pfad = struktur[k];
@@ -191,9 +192,9 @@ export function strukturOrdnerBefunde(rootDir, struktur, schluessel = ["quelle"]
       if (ordnerZuMuster(rootDir, p).length > 0) continue;
       befunde.push(
         istGlob(p)
-          ? `struktur.${wo} in ${PROJEKT_CONFIG} nennt den Glob „${p}“, der keinen Ordner trifft\n  Fix: den Glob auf vorhandene Ordner anpassen oder den Eintrag aus struktur.${k} in ${PROJEKT_CONFIG} streichen`
-          : `struktur.${wo} in ${PROJEKT_CONFIG} nennt „${p}/“, den Ordner gibt es nicht\n` +
-            `  Fix: ${p}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder struktur.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
+          ? `${block}.${wo} in ${PROJEKT_CONFIG} nennt den Glob „${p}“, der keinen Ordner trifft\n  Fix: den Glob auf vorhandene Ordner anpassen oder den Eintrag aus ${block}.${k} in ${PROJEKT_CONFIG} streichen`
+          : `${block}.${wo} in ${PROJEKT_CONFIG} nennt „${p}/“, den Ordner gibt es nicht\n` +
+            `  Fix: ${p}/ anlegen (leer genügt; git versioniert ihn erst mit einer Datei wie .gitkeep) oder ${block}.${k} in ${PROJEKT_CONFIG} auf den vorhandenen Ordner setzen${optOut}`,
       );
     }
   }

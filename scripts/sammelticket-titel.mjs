@@ -13,7 +13,7 @@ export const CODEQUALITAET_SAMMELTICKET_TITEL = "Codequalität (gesammelt)";
 /** Alle Sammeltickets, die das Einsortieren kennt (die Ankersuche und das Einsortieren kennen alle, nicht nur das Harness-Sammelticket). */
 export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, CODEQUALITAET_SAMMELTICKET_TITEL];
 
-/** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Mechanik: docs/ticket-reihenfolge.md › Offene Punkte der Maintainerin). */
+/** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Weg: ADR 0031, Fortschreibung zu factory#152). */
 export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
 
 /** Die eine Quelle der Zeilenerkennung eines Sammeltickets: eine Checkbox-Zeile (`- [ ]`, auch `*`, eingerückt, offen oder abgehakt `[x]`). Füllstand, Zeilenzählung, Tag-Takt und Meldung benutzen sie. */
