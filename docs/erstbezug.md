@@ -69,8 +69,8 @@ Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder e
 | `tsconfig.json` | Typprüfung, Lint | `include` auf die eigenen Ordner |
 | `eslint.config.js` | Lint in `verify` | Projektordner und Ignore-Liste |
 | `eslint-suppressions.json` | eingefrorener Bestand der Komplexitätsregeln | die Datei der Quelle übernehmen, dann `npm run lint:prune` räumt veraltete Einträge |
-| `vite.config.ts` | Tests, Coverage | `coverage.include` auf den eigenen Code; Floors nicht übernehmen, sondern auf den Ist-Stand setzen |
-| `scripts/docs-gen/config.json` | Doku-Generatoren | `schichten.layers` zeigt auf die eigene Schicht-Definition (Vorlage `scripts/layers.cjs`; ohne den Schlüssel bricht `check:diffcoverage` mit „schichten.layers fehlt“ ab, ein Projekt mit mehreren Quellwurzeln, etwa das Java-Profil, braucht ein Schichtmodell mit `quellwurzeln`), Quellwurzel und Markdown-Liste |
+| `vite.config.ts` | Tests, Coverage | `coverage.include` auf den eigenen Code; Floors nicht übernehmen, sondern auf den Ist-Stand setzen; ohne eigene Tests: `passWithNoTests` und Floors auf den Ist-Stand 0, Ratchet ab dem ersten Test |
+| `scripts/docs-gen/config.json` | Doku-Generatoren | `schichten.layers` zeigt auf die eigene Schicht-Definition (Vorlage `scripts/layers.cjs`; ohne den Schlüssel endet `check:diffcoverage` mit Exit 2 und einer Fix-Zeile („schichten.layers fehlt“), ein Projekt mit mehreren Quellwurzeln, etwa das Java-Profil, braucht ein Schichtmodell mit `quellwurzeln`), Quellwurzel und Markdown-Liste |
 | `.github/workflows/ci.yml` | Kern-Skripte setzen den Namen `ci.yml` voraus (`ci-laeufe`, `pr-warten`, `tag-takt`, `board-lib`) | Jobnamen müssen zu den Required Checks des Rulesets passen |
 | `.github/CODEOWNERS` | der Kern-Test gleicht sie mit `protected-paths.json` ab | Owner |
 | `.github/protected-paths.json` | Leitplanken-Pfade, Audit-Kommentar | Pfade des Projekts ergänzen |

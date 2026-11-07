@@ -18,6 +18,11 @@ describe("Factory-Update-Workflow platziert das Meldeticket oben", () => {
     assert.doesNotMatch(yml, /kein PROJECT_TOKEN/, "der Header nennt den Token nicht mehr als überflüssig");
   });
 
+  test("der Ablauftext verlangt keinen Checkout des Tags (der Sync liest den Tag per git)", () => {
+    assert.doesNotMatch(yml, /auf den Tag auschecken/);
+    assert.match(yml, /ein Checkout des Tags ist nicht nötig, der Sync liest den Tag per git/);
+  });
+
   test("ohne Token nur Warnung, kein Abbruch; die Platzierung nur im create-Zweig", () => {
     assert.ok(yml.includes('if [ -z "${PROJECT_TOKEN:-}" ]'));
     assert.match(yml, /::warning::[^\n]*PROJECT_TOKEN/);

@@ -75,7 +75,7 @@ jobs:
             gh issue comment "$existing" --repo "$REPO" --body "$text"
           else
             new_url=$(gh issue create --repo "$REPO" --title "$marker" --label "$MELDE_LABEL" \
-              --body "$(printf '%s\n\nAblauf: Factory-Repo auf den Tag auschecken, dann den Sync-Befehl oben mit dem Pfad dieses Checkouts fahren, Diff prüfen und per PR mergen.' "$text")")
+              --body "$(printf '%s\n\nAblauf: Factory-Repo klonen oder per git fetch --tags aktualisieren (ein Checkout des Tags ist nicht nötig, der Sync liest den Tag per git), dann den Sync-Befehl oben mit dem Pfad dieses Klons fahren, Diff prüfen und per PR mergen.' "$text")")
             echo "Angelegt: ${new_url}"
             # An die oberste Board-Position schieben (Kopf-Art update) – nur beim NEUEN Issue, nicht beim Ergänzen.
             nr="${new_url##*/}"
