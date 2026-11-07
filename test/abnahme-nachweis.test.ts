@@ -241,8 +241,7 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(leer.invalid).toHaveLength(1);
     expect(mit.invalid).toEqual([]);
     // Ohne PR-Nummer zeigt der Lauf die Head-Fehler vorab: mit Override ohne die Review-Meldung.
-    const ohnePr = lauf({ messages: `${ohneReview}
-${Z.reviewOverride}: #9 Revert-PR`, env: { FACTORY_PR_NUMBER: "" } }).r;
+    const ohnePr = lauf({ messages: `${ohneReview}\n${Z.reviewOverride}: #9 Revert-PR`, env: { FACTORY_PR_NUMBER: "" } }).r;
     expect(ohnePr.fehler).toHaveLength(1);
     rot(ohnePr.fehler, /PR-Nummer fehlt/);
   });
@@ -526,6 +525,13 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
     expect(r.stdout).toMatch(/Zeile fehlt/);
+  });
+  test("Review-Override (L24a): die Ausgabe nennt, was entfällt; ohne die Zeile fehlt der Hinweis", () => {
+    const abn = `${Z.abnahme}: head=${"c".repeat(40)} durchgaenge=1 urteil=K1:erfuellt`;
+    const mit = cli(cliRepo(`x\n\n${abn}\n${Z.reviewOverride}: #9 Revert-PR`), { FACTORY_PR_DRAFT: "true" });
+    expect(mit.stdout).toMatch(/• Review-Override: Cap- und head-Vergleich entfallen/);
+    const ohne = cli(cliRepo(`x\n\n${abn}`), { FACTORY_PR_DRAFT: "true" });
+    expect(ohne.stdout).not.toMatch(/Review-Override/);
   });
   test("Override: Exit 0 und die Begründung steht in der Ausgabe", () => {
     const r = cli(cliRepo(`x\n\n${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug`));

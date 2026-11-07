@@ -16,6 +16,7 @@
  * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
  * Ein Entwurfs-PR wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Den Entwurfs-Status liest der Wächter live vom PR (`repos/<repo>/pulls/<nr>`, ein Rerun trägt sonst den veralteten Ereigniswert); `FACTORY_PR_DRAFT` gilt nur ohne PR-Nummer, ein fehlgeschlagener Abruf ist rot. Jeder git- oder gh-Fehler ist rot
  * (fail-closed). Druckventil: die Override-Zeile (Schlüssel `abnahmeOverride`, `#<nr> <warum>`), ausgewertet vor jedem gh-Aufruf.
+ * Ist im Slice eine gültige Review-Override-Zeile (Schlüssel `reviewOverride`), entfallen Review-Zeile, Cap und der Vergleich mit dem Review-head (Ausgabe `Review-Override: Cap- und head-Vergleich entfallen`).
  * Bewusst kein npm-`check:*`-Skript und nicht in `verify` (der Nachweis entsteht erst nach dem Review). Lokal:
  *   node scripts/check-abnahme-nachweis.mjs
  *
