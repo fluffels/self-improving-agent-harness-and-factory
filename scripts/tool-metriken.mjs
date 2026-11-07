@@ -2,7 +2,7 @@
 /**
  * Tool-Fehler nach Art und Wiederlesen je Agent (#1379). Pur und ohne IO, arbeitet auf den Tool-Events aus
  * `brain-metrics.mjs` (`{ tool, input, resultChars, agent, fehler }`; `fehler` = Anfang des Fehlertexts, sonst null).
- * Definition: docs/model-routing.md §5 „Messen“.
+ * Definition: docs/model-routing.md › Messen.
  */
 import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
 import { PRUEFLAUF_ART, ZEIGEN_FLAG } from "./gate-befehl-lib.mjs";
