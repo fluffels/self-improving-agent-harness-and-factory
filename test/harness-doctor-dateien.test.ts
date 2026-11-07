@@ -417,6 +417,13 @@ describe("Workflow-Auslöser", () => {
     expect(p.befund).toContain("CI");
     expect(p.fix).toContain("`name:` von `.github/workflows/ci.yml` auf `CI` setzen (Auslöser von festgefahren.yml)");
   });
+  test("Blockliste mit fehlendem Namen ist eine Lücke (der Leser sieht die Listeneinträge)", () => {
+    expect(ausloeser([ci("Build"), fest("\n      - CI")]).befund).toContain("CI");
+  });
+  test("ein `workflows:` außerhalb des workflow_run-Blocks zählt nicht", () => {
+    const w: Workflow = { pfad: ".github/workflows/x.yml", text: "name: X\non:\n  workflow_run:\n    types: [completed]\njobs:\n  a:\n    with:\n      workflows: [Fremd]\n" };
+    expect(ausloeser([ci("CI"), w]).ok).toBe(true);
+  });
   test("kein workflow_run, oder keine Workflows: OK", () => {
     expect(ausloeser([ci("Build")])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
     expect(ausloeser([])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
