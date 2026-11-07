@@ -9,7 +9,7 @@ Ein Brownfield-Repo besteht den ersten Lauf jedes neuen Gates nicht, und ein Gat
 1. **Ist messen und in eine Baseline-Datei schreiben** (alles, was heute verletzt).
 2. **Das Gate ist rot bei Neuem oder Verschlechtertem**, grün bei Bestand.
 3. **Stale Einträge werden abgeräumt** (behobene Verletzungen verschwinden aus der Baseline, sonst wächst sie als Altlast zurück).
-4. **Schwellen bewegen sich nur in die strenge Richtung** (kein Grün-durch-Aufweichen, [AGENTS.md › Git, PR und Merge](../AGENTS.md#git-pr-und-merge)).
+4. **Schwellen bewegen sich nur in die strenge Richtung** (kein Grün-durch-Aufweichen, [AGENTS.md › Kern-Regeln › Arbeitsweise](../AGENTS.md#kern-regeln-factory-besitz)).
 
 Belege im Repo: [`eslint-suppressions.json`](../eslint-suppressions.json) (Komplexität je Funktion, abräumen mit `npm run lint:prune`), [`any-suppressions.json`](../any-suppressions.json) (Deckel für begründete `any`), die `ALLOWLIST` von `check:size` (Dateien über 800 Zeilen, nur mit offenem Split-Ticket), die Coverage-Floors je Schicht in [`vite.config.ts`](../vite.config.ts) (nur anheben) und die Emoji-Baseline der Wächter. Generierte Zeilen (`GEN:`-Abschnitte) zählen für `check:diffsize` nicht, ein neuer Generator bläht also den Slice-Deckel nicht auf.
 

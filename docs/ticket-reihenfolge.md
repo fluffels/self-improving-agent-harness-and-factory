@@ -121,6 +121,14 @@ Die Regel steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md); hi
 - **Langfuse-Ausnahme:** Befunde aus Langfuse-Daten gehen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Mechanik](#langfuse-befunde-gesammelt)).
 - **Notfall-Marker beim Einsortieren:** `🚨`, `🔒 Security:`, `🤖`, `⏰ Wiedervorlage:` (Art `wiedervorlage`, [Wiedervorlage](#wiedervorlage-1628)), `🔍 Security-Tabs prüfen` (Art `security-tabs`, [Secret-Inbox](#secret-inbox-92)), `🏷️ Tag ` (Art `tag`, Tag-Takt, [Sync-Ablauf](agent-harness.md)), Forum (`board-place.mjs --notfall`, der Titel trägt den Marker) und das Wochen-Status-Ticket (Workflow) stehen ganz oben ([Reihenfolge pflegen](#reihenfolge-pflegen--im-board-nicht-in-einer-datei)).
 
+### Codequalität (gesammelt)
+
+Das Sammelticket „Codequalität (gesammelt)“ ist **freiwillig** und lebt im eigenen Repo des Beziehers (Produkt-Board). Es entsteht nur, wenn die Projekt-Config `labels.codequalitaet` setzt (ein Label, das auf das Produkt-Board führt, nie gleich `labels.harness`; die Config-Prüfung lehnt Anderes ab); ohne Label legt `sammelticket-anlegen.mjs codequalitaet` nichts an (factory#156, Herkunft factory#139). Das Factory-Repo setzt es nicht: dort ist Codequalität Harness-Arbeit.
+
+- **Was hinein gehört:** nur Funde **außerhalb des Slices** des laufenden Tickets: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster. Was im Slice liegt, behebt der Umsetzer sofort. Der Planer nennt solche Funde in Abschnitt 8, der Umsetzer trägt sie unter `BEFUNDE` ein.
+- **Eintragen:** wie beim Harness-Sammelticket als Kommentar `- [ ] …`, im eigenen Repo (`gh issue list --repo <eigenes Repo> --state open --json number,title,assignees`, Titel „Codequalität (gesammelt)“, ungeclaimt); fehlt es, `node scripts/sammelticket-anlegen.mjs codequalitaet`.
+- **Füllstand und Abarbeiten:** dieselbe Schwelle wie beim Harness-Sammelticket (10 Befund-Kommentare vertrauter Nicht-Bot-Autoren mit mindestens einer `- [ ] …`-Zeile, darunter „füllt sich (k/10 Befund-Kommentare)“ in `naechstes-ticket`, `--ticket <nr>` umgeht sie); danach komplett abarbeiten, beim Claim den Nachfolger mit `--vorgaenger <nr>` anlegen. Der Board-Takt holt es nicht (er pflegt nur das Harness-Sammelticket); das Ticket steht beim Anlegen hinter dem Kopf des Produkt-Boards. Die Produktquote zählt es als Produkt.
+
 ## Sammelticket anlegen
 
 Gilt für das Harness-, das Langfuse- und das Codequalität-Sammelticket und läuft **immer per Skript**, nie von Hand: ein Doku-Snippet lief einmal nicht bis zur Position, das neue Ticket stand am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin (quellprojekt#1390).
@@ -190,14 +198,6 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`<labels.harness>`) bündelt 
   Zwei ungeclaimte ohne gegenseitigen Blocker-Bezug (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen; ein Nachfolger mit `blockiert durch #<vorgänger>` ist keiner, neue Zeilen kommen ins jüngste ungeclaimte.
 - **Anlegen nur bei Bedarf** (kein leeres Ticket, das sonst gezogen würde): `node scripts/sammelticket-anlegen.mjs langfuse` (siehe [Sammelticket anlegen](#sammelticket-anlegen)). Ohne `--top` bleibt es bewusst am Board-Ende (die „nie einfach ans Ende"-Regel gilt für Tickets, die sofort drankommen sollen); der Abschluss des nächsten Status-Laufs holt es mit `--top` nach oben. Wer es beim Abschluss selbst anlegt, nimmt gleich `langfuse --top`.
 - **Abarbeiten:** komplett, wie beim Harness-Sammelticket (alle Zeilen in einem PR, je Zeile ein Ergebnis, nichts still auslagern). Ein **Lockern** (Gate, Lens, Regel) setzt der PR nur nach [ADR 0027](adr/0027-regeln-lockern.md) um (Evidenz, Messung vorher und nachher, Ledger, Audit-Kommentar).
-
-### Codequalität (gesammelt)
-
-Das Sammelticket „Codequalität (gesammelt)“ ist **freiwillig** und lebt im eigenen Repo des Beziehers (Produkt-Board). Es entsteht nur, wenn die Projekt-Config `labels.codequalitaet` setzt (ein Label, das auf das Produkt-Board führt, nie gleich `labels.harness`; die Config-Prüfung lehnt Anderes ab); ohne Label legt `sammelticket-anlegen.mjs codequalitaet` nichts an (factory#156, Herkunft factory#139). Das Factory-Repo setzt es nicht: dort ist Codequalität Harness-Arbeit.
-
-- **Was hinein gehört:** nur Funde **außerhalb des Slices** des laufenden Tickets: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster. Was im Slice liegt, behebt der Umsetzer sofort. Der Planer nennt solche Funde in Abschnitt 8, der Umsetzer trägt sie unter `BEFUNDE` ein.
-- **Eintragen:** wie beim Harness-Sammelticket als Kommentar `- [ ] …`, im eigenen Repo (`gh issue list --repo <eigenes Repo> --state open --json number,title,assignees`, Titel „Codequalität (gesammelt)“, ungeclaimt); fehlt es, `node scripts/sammelticket-anlegen.mjs codequalitaet`.
-- **Füllstand und Abarbeiten:** dieselbe Schwelle wie beim Harness-Sammelticket (10 Befund-Kommentare vertrauter Nicht-Bot-Autoren mit mindestens einer `- [ ] …`-Zeile, darunter „füllt sich (k/10 Befund-Kommentare)“ in `naechstes-ticket`, `--ticket <nr>` umgeht sie); danach komplett abarbeiten, beim Claim den Nachfolger mit `--vorgaenger <nr>` anlegen. Der Board-Takt holt es nicht (er pflegt nur das Harness-Sammelticket); das Ticket steht beim Anlegen hinter dem Kopf des Produkt-Boards. Die Produktquote zählt es als Produkt.
 
 ## Wiedervorlage (#1628)
 
