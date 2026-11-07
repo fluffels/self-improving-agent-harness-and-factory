@@ -1480,3 +1480,17 @@ describe("Milestone-Vorrang (factory#194)", () => {
     expect(N.formatiere({ ...ohne, bereich: "agentic" } as never)).not.toContain("Milestone");
   });
 });
+
+describe("imBereich mit Item-Repo (#238 L28)", () => {
+  const bez = { ...CFG, repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "zz-org/zz-fabrik" } : b)) };
+  const imBereich = (N as unknown as { imBereich: (i: unknown, b: string, c: unknown) => boolean }).imBereich;
+  const h = (repo: string) => ({ title: "T", labels: [HARNESS], repo });
+  test("Bezieher: das Harness-Issue des eigenen Repos gehört zum Bereich produkt, nicht zu agentic", () => {
+    expect(imBereich(h(FREMD.repo), "produkt", bez)).toBe(true);
+    expect(imBereich(h(FREMD.repo), "agentic", bez)).toBe(false);
+  });
+  test("im Repo des Factory-Boards gehört es zu agentic; ohne Repo-Angabe gilt das Label allein", () => {
+    expect(imBereich(h("zz-org/zz-fabrik"), "agentic", bez)).toBe(true);
+    expect(imBereich(h(""), "agentic", bez)).toBe(true);
+  });
+});
