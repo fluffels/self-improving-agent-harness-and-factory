@@ -292,10 +292,13 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       }
     }
     for (const sa of subs) {
+      // Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile); dieser Turn bestimmt auch, ob das Fenster ausgenommen ist.
+      const erster = sa.calls.find((x) => gueltig(x.ts));
+      const turn = erster ? turnZu(turns, erster.ts) : turns[0];
+      if (ausgenommen(turn)) continue;
       for (const c of sa.calls) {
         if (!imFenster(c.ts)) continue;
         if (istTicketLauf(sa.meta, ticketAgenten)) {
-          if (ausgenommen(turnZu(turns, sa.calls.find((x) => gueltig(x.ts))?.ts ?? ""))) continue;
           eigene.calls += 1;
           eigene.cost += c.cost ?? 0;
           eigene.costGeschaetzt += c.costGeschaetzt ?? c.cost ?? 0;
@@ -304,10 +307,6 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
           if (c.cost == null) zaehleOhnePreis(c);
           continue;
         }
-        // Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile).
-        const erster = sa.calls.find((x) => gueltig(x.ts));
-        const turn = erster ? turnZu(turns, erster.ts) : turns[0];
-        if (ausgenommen(turn)) continue;
         buche(kategorieFuer(turn, c.ts), "Fork", c);
       }
     }
