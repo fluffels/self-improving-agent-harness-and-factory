@@ -1242,3 +1242,27 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
     expect(gepostet).toEqual([[41, "GEPRUEFT", "o/r", undefined]]);
   });
 });
+
+describe("main: ohne .github/wiedervorlagen.json", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const libs = {
+    OWNER: OWNER,
+    REPO: "o/r",
+    SAMMELTICKET_TITEL_LISTE: SAMMELTICKET_TITEL_LISTE as string[],
+    ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5, titel: "Sammel" }], kommentare: [] }),
+    vertrauteIssues: () => [],
+    offeneTitel: () => [],
+    platziereOben: () => undefined,
+    postZeilen: () => undefined,
+    waehleSammelticket: (o: { number: number }[]) => o[0],
+  };
+  const deps = (lies: () => string, log: (m: string) => void = () => {}) => ({ ladeConfig: () => ({ labels: { harness: "area:harness" } }), ladeLibs: () => Promise.resolve(libs), ladeSeiten: () => [], bezieher: false, lies, gh: { text: () => "", json: () => ({ body: "" }) }, log, err: () => {} });
+  test("ENOENT: der Lauf rechnet mit einer leeren Liste statt zu werfen", async () => {
+    expect(await main([], deps(() => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); }))).toBe(0);
+  });
+  test("ungültiges JSON bleibt ein Fehler", async () => {
+    const log: string[] = [];
+    expect(await main([], deps(() => "{kaputt", (m) => log.push(m)))).toBe(1);
+    expect(log.join("\n")).toContain("Code-Scanning-Alerts nicht lesbar");
+  });
+});

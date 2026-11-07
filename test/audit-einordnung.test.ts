@@ -317,3 +317,26 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
     expect(bez.log.join("\n")).toContain("::error::Kein ungeclaimtes");
   });
 });
+
+describe("main: ohne .github/wiedervorlagen.json", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const libs = {
+    OWNER: "o",
+    REPO: "o/r",
+    ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+    offeneTitel: () => [],
+    platziereOben: () => undefined,
+    postZeilen: () => undefined,
+    waehleSammelticket: (o: { number: number }[]) => o[0],
+  };
+  const deps = (lies: () => string, log: string[]) => ({ ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => ({ vulnerabilities: {} }), alertsLaden: () => [], bezieher: false, lies, log: (m: string) => log.push(m), err: () => undefined });
+  test("ENOENT: der Lauf rechnet mit einer leeren Liste statt zu werfen", async () => {
+    const log: string[] = [];
+    const lies = () => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); };
+    expect(await main([], deps(lies, log))).toBe(0);
+    expect(log.join("\n")).toContain("nichts Neues");
+  });
+  test("ungültiges JSON bleibt ein Fehler", async () => {
+    await expect(main([], deps(() => "{kaputt", []))).rejects.toThrow(SyntaxError);
+  });
+});

@@ -341,3 +341,23 @@ describe("sicherheitsLibs (factory#153): Sicherheitsfunde bleiben im Bezieher im
     expect(log.join("\n")).toMatch(/::warning::.*#42.*nicht ans Ende.*PROJECT_TOKEN/);
   });
 });
+
+describe("ladeWiedervorlagen (L27): fehlende Datei ist eine leere Liste", () => {
+  const lade = (rawLib as unknown as { ladeWiedervorlagen: (pfad: string, lies?: (p: string, enc: string) => string) => unknown[] }).ladeWiedervorlagen;
+  const fehler = (code: string) => Object.assign(new Error(code), { code });
+
+  test("ENOENT: leere Liste, der Pfad wird gelesen", () => {
+    const gelesen: string[] = [];
+    expect(lade("/x/w.json", (p) => { gelesen.push(p); throw fehler("ENOENT"); })).toEqual([]);
+    expect(gelesen).toEqual(["/x/w.json"]);
+  });
+  test("vorhandene Datei: die geparste Liste", () => {
+    expect(lade("/x/w.json", () => '[{"id":"a"}]')).toEqual([{ id: "a" }]);
+  });
+  test("ungültiges JSON wirft weiter", () => {
+    expect(() => lade("/x/w.json", () => "{kaputt")).toThrow(SyntaxError);
+  });
+  test("ein anderer Lesefehler (EACCES) wirft weiter", () => {
+    expect(() => lade("/x/w.json", () => { throw fehler("EACCES"); })).toThrow("EACCES");
+  });
+});

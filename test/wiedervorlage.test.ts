@@ -329,3 +329,14 @@ describe("main: Sperrprüfung bei fremdem Ziel-Repo (factory#153)", () => {
     expect(angelegt).toHaveLength(1);
   });
 });
+
+describe("ladeEintraege: ohne .github/wiedervorlagen.json", () => {
+  const lade = (raw as unknown as { ladeEintraege: (lies: (p: string, enc: string) => string) => unknown[] }).ladeEintraege;
+  test("ENOENT: leere Liste statt Wurf", () => {
+    expect(lade(() => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); })).toEqual([]);
+  });
+  test("gültige Datei: die Liste; ungültiger Eintrag wirft weiter", () => {
+    expect(lade(() => JSON.stringify([e("a")]))).toEqual([e("a")]);
+    expect(() => lade(() => JSON.stringify([{ id: "a" }]))).toThrow("ungültig");
+  });
+});

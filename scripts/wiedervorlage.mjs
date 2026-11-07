@@ -13,9 +13,8 @@
  */
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
-import { inboxStart } from "./inbox-start-lib.mjs";
+import { inboxStart, ladeWiedervorlagen } from "./inbox-start-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
@@ -114,8 +113,8 @@ export function ticketText(e) {
 
 // ---- IO (ungetestet) ----
 
-function ladeEintraege() {
-  const liste = JSON.parse(readFileSync(DATEI, "utf8"));
+export function ladeEintraege(lies) {
+  const liste = ladeWiedervorlagen(DATEI, lies);
   const fehler = pruefeEintraege(liste);
   if (fehler.length > 0) throw new Error(`.github/wiedervorlagen.json ungültig:\n- ${fehler.join("\n- ")}`);
   return liste;
