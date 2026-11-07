@@ -450,7 +450,7 @@ describe("Standardzweig je Repo (#88)", () => {
     expect(h("/p/.claude/worktrees/wt-1", "arbeitsplatz")).toBe("/p/.claude/worktrees/wt-1");
     expect(h("/p/.claude/worktrees/web/wt-1")).toBe("/p/.claude/worktrees/web/wt-1");
     expect(h("/p/.claude/worktrees/wt-1/sub/tief", "beliebig")).toBe("/p");
-    expect(h("X:\\p\\.claude\\worktrees\\wt-1\\x", "beliebig")).toBe("X:\\p");
+    expect(h("X:\\r\\.claude\\worktrees\\wt-1\\x", "beliebig")).toBe("X:\\r");
     expect(h("/p/.claude/worktreesX/wt-1", "beliebig")).toBe("/p/.claude/worktreesX/wt-1");
     expect(h("/p/", "beliebig")).toBe("/p");
     expect(slug("X:\\dev\\a.b/c2")).toBe("X--dev-a-b-c2");
