@@ -290,7 +290,7 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
       const eigen = eigenerLogin({ zugang, api: gh, warn });
       return { ziel: waehle(k.offene, meldestelle, (a) => gh(a, { token: zugang.token }))?.number ?? null, kommentare: k.kommentare, owner: k.owner, eigen };
     },
-    bereite: (zeilen, opt) => bereiteMeldung(zeilen, opt),
+    bereite: (zeilen, opt) => bereiteMeldung(zeilen, { eigenes: REPO, ...opt }),
     postZeilen: (nr, text) => post(nr, text, meldestelle, zugang.token),
     heute: () => new Date().toISOString().slice(0, 10),
     ladeIssue: (nr) => gh(["api", `repos/${REPO}/issues/${nr}`]),
