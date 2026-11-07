@@ -26,4 +26,4 @@ export const BEFUND_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}[ xX]\]`);
 export const BEFUND_ZEILE_OFFEN = new RegExp(String.raw`${CHECKBOX_KOPF} \]`);
 
 /** Wie `BEFUND_ZEILE` mit Gruppen (aus demselben Kopf): Gruppe 1 = Haken (` `, `x`, `X`), Gruppe 2 = Text nach der Checkbox (ohne CR am Zeilenende). Der Tag-Takt übernimmt damit Haken. */
-export const HAKEN_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}([ xX])\]\s+(.*?)\r?$`);
+export const HAKEN_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}([ xX])\]\s*(.*?)\r?$`);

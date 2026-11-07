@@ -17,12 +17,17 @@ describe("fehlendePfadwurzeln", () => {
   });
 
   test("ausgenommen: Platzhalter <…>, URLs, absolute Pfade, ~, .., Befehle mit Leerraum, Repo-Verweise mit #, Label mit :, Text ohne Inline-Code", () => {
-    const ausnahmen = ["`<ordner>/datei`", "`https://example.org/a/b`", "`/etc/hosts`", "`~/x/y`", "`../fremd/x`", "`a/../b`", "`git log a/b`", "`org/repo#5`", "`area:x/y`", "src/ohne/code.ts im Fließtext", "`C:\\x\\y`", "`ohneSchrägstrich`", "`./x/y`"];
+    const ausnahmen = ["`<ordner>/datei`", "`https://example.org/a/b`", "`/etc/hosts`", "`~/x/y`", "`../fremd/x`", "`a/../b`", "`git log a/b`", "`org/repo#5`", "`area:x/y`", "src/ohne/code.ts im Fließtext", "`C:\\x\\y`", "`ohneSchrägstrich`", "`./x/y`", "`a>b/c`", "`a<b/c`", "`scripts\\x/y`"];
     for (const a of ausnahmen) expect(M.fehlendePfadwurzeln(a, existiert), a).toEqual([]);
   });
 
   test("ein Pfad mit Anker (#) ist ausgenommen, ein Ordner mit Schlussstrich zählt, ein Punkt am Ende ändert die Wurzel nicht", () => {
     expect(M.fehlendePfadwurzeln("`src/a.ts.` `e2e/x.md#anker` `produkt/`", existiert)).toEqual(["produkt", "src"]);
+  });
+
+  test("Rand-Leerraum im Inline-Code wird abgeschnitten, ein offener Backtick vor einem Zeilenumbruch verschluckt den nächsten Pfad nicht (Lens R1)", () => {
+    expect(M.fehlendePfadwurzeln("` src/x `", existiert)).toEqual(["src"]);
+    expect(M.fehlendePfadwurzeln("x ` y\n`src/a.ts`", existiert)).toEqual(["src"]);
   });
 
   test("leerer oder fehlender Body: keine Wurzel", () => {

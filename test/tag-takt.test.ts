@@ -58,9 +58,9 @@ describe("factory#215 L4: uebernimmHaken", () => {
     expect(T.uebernimmHaken("-  [x]  Eins", "- [ ] Eins")).toBe("- [x] Eins");
   });
   it("factory#220 G6.2: HAKEN_ZEILE und BEFUND_ZEILE erkennen dieselben Beispiele (eine Quelle)", () => {
-    const beispiele = ["- [ ] a", "- [x] a", "* [X] a", "-  [x]  a", "  - [ ] a", "- [x] a\r", "- [y] a", "-[ ] a", "Text - [ ] a", "- [] a", ""];
+    const beispiele = ["- [ ] a", "- [x] a", "* [X] a", "-  [x]  a", "  - [ ] a", "- [x] a\r", "- [y] a", "-[ ] a", "Text - [ ] a", "- [] a", "- [x]a", "- [ ]", ""];
     for (const z of beispiele) expect(HAKEN_ZEILE.test(z), JSON.stringify(z)).toBe(BEFUND_ZEILE.test(z));
-    expect(beispiele.filter((z) => HAKEN_ZEILE.test(z))).toHaveLength(6);
+    expect(beispiele.filter((z) => HAKEN_ZEILE.test(z))).toHaveLength(8);
   });
 });
 
