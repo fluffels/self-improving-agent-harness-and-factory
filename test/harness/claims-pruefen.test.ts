@@ -22,6 +22,7 @@ interface Claim {
   prs: { nummer: number; zustand: string; headRefOid: string | null }[];
   lock: null | "unlesbar" | Record<string, unknown>;
   worktree: null | { pfad: string; branch: string | null; sauber: boolean; head: string | null; locked: boolean };
+  weitereWorktrees?: { pfad: string; branch: string | null; sauber: boolean; head: string | null; locked: boolean }[];
   branch: boolean;
   branchLokal: boolean;
   festgefahren: boolean;
@@ -34,6 +35,7 @@ const M = raw as unknown as {
   STANDARD_STUNDEN: number;
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
+  jsonDokument: (o: { jetzt: number; viewer: string | null; schwelleStunden: number; urteile: { claim: Claim; urteil: Urteil }[] }) => unknown;
   zugewiesenArgs: (repo?: string) => string[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
@@ -147,6 +149,50 @@ describe("beurteileClaim: Negativfälle (nie löschen)", () => {
     const u = urteil(geschlossen({ worktree: { pfad: WTPFAD, branch: null, sauber: true, head: OID, locked: true } }));
     assert.equal(u.urteil, "behalten");
     assert.match(u.grund, /gesperrt/);
+  });
+
+  describe("mehrere Worktrees eines Claims (L6): jeder muss die Bedingungen erfüllen", () => {
+    const zweiter = (o: Partial<NonNullable<Claim["worktree"]>> = {}) => ({ pfad: `${WTPFAD}-b`, branch: null, sauber: true, head: OID, locked: false, ...o });
+    const mitWeiterem = (w: NonNullable<Claim["worktree"]>, prs?: Claim["prs"]) => urteil(geschlossen({ weitereWorktrees: [w], ...(prs ? { prs } : {}) }));
+
+    test("alle sauber, gleich dem PR-Kopf, ungesperrt: räumbar", () => {
+      assert.equal(mitWeiterem(zweiter()).urteil, "aufraeumbar");
+    });
+
+    test("nur der zweite Worktree unsauber: bleibt", () => {
+      const u = mitWeiterem(zweiter({ sauber: false }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /uncommittet/);
+    });
+
+    test("nur der zweite Worktree mit fremdem HEAD: bleibt", () => {
+      const u = mitWeiterem(zweiter({ head: "anderer" }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /HEAD/);
+    });
+
+    test("zweiter Worktree ohne bekannten HEAD bleibt auch, wenn der PR-Kopf unbekannt (null) ist", () => {
+      const u = mitWeiterem(zweiter({ head: null }), [{ nummer: 9, zustand: "MERGED", headRefOid: null }]);
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /HEAD/);
+    });
+
+    test("mehrere gemergte PRs: es genügt, dass ein PR-Kopf dem HEAD gleicht", () => {
+      const prs = [{ nummer: 8, zustand: "MERGED", headRefOid: "alt" }, { nummer: 9, zustand: "MERGED", headRefOid: OID }];
+      assert.equal(mitWeiterem(zweiter(), prs).urteil, "aufraeumbar");
+    });
+
+    test("--json-Dokument: weitereWorktrees nennt die Pfade, ohne Angabe ist es eine leere Liste", () => {
+      const doc = (c: Claim) => (M.jsonDokument({ jetzt: JETZT, viewer: "ich", schwelleStunden: 3, urteile: [{ claim: c, urteil: urteil(c) }] }) as { claims: { weitereWorktrees: string[] }[] }).claims[0].weitereWorktrees;
+      assert.deepEqual(doc(geschlossen({ weitereWorktrees: [zweiter()] })), [`${WTPFAD}-b`]);
+      assert.deepEqual(doc(geschlossen()), []);
+    });
+
+    test("nur der zweite Worktree gesperrt: bleibt", () => {
+      const u = mitWeiterem(zweiter({ locked: true }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /gesperrt/);
+    });
   });
 
   test("Lebenszeichen der letzten 30 min: Worktree bleibt (29 min), nach 30 min räumbar; auch der Lock allein", () => {
@@ -489,6 +535,16 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.deepEqual(geloescht, []);
     assert.match(r.out, /FEHLER #1628: git worktree remove scheiterte/);
     assert.match(r.out, /WIEDERAUFNAHME #1672/);
+  });
+
+  test("worktree remove: die Fehlerzeile nennt die erste Zeile der Meldung, auch bei einem Fehler ohne `message` (Text, null)", () => {
+    const { deps } = baue(BELEG);
+    const gitDeps = deps as { git: (a: string[], cwd?: string) => string };
+    const echt = gitDeps.git;
+    const mit = (geworfen: unknown) => ({ ...deps, git: (a: string[], cwd?: string) => (a[0] === "worktree" && a[1] === "remove" ? (() => { throw geworfen; })() : echt(a, cwd)) });
+    assert.match(M.fuehreAus([], mit(new Error("Zugriff verweigert\nzweite Zeile"))).out, /scheiterte \(Zugriff verweigert\); Lock bleibt/);
+    assert.match(M.fuehreAus([], mit("roh")).out, /scheiterte \(roh\); Lock bleibt/);
+    assert.match(M.fuehreAus([], mit(null)).out, /scheiterte \(null\); Lock bleibt/);
   });
 
   test("bleibt der Worktree nach dem Entfernen in der Liste oder auf der Platte, ist es ein FEHLER und der Lock bleibt", () => {
