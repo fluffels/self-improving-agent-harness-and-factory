@@ -3,7 +3,7 @@
  * Hauptchat-Kosten nach Tätigkeit (#1356): wofür der Hauptchat Tokens verbraucht.
  * Aufruf, Kategorien und Grenzen: docs/model-routing.md (Fabrik) › Hauptchat nach Tätigkeit.
  *
- *   node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]
+ *   node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--ohne <nr>]… [--projekt <slug>] [--json]
  *
  * Kategorien (Vorrang von oben): Brain (ab dem ersten Call, dessen Tool eine `--brain`-Wurzel berührt oder der Abschluss-Skill (`skills.abschluss`) ist, bis Turn-Ende; ein Turn mit dessen Slash-Aufruf ganz),
  * Ticket-Orchestrierung (vom Claim-Turn bis `closedAt`), Nachlauf (nach dem Merge bis zum nächsten Claim),
@@ -18,7 +18,7 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { CACHE_TTL_MS, claimNummer, istEchtesModell, median } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, claimNummer, istEchtesModell, median, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_NAME, repoName, wirksamerAbschluss } from "./projekt-config-lib.mjs";
@@ -115,6 +115,12 @@ function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkills) {
   });
 }
 
+/** Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile); dieser Turn bestimmt auch, ob das Fenster ausgenommen ist. */
+function forkTurn(calls, turns) {
+  const erster = calls.find((x) => gueltig(x.ts));
+  return erster ? turnZu(turns, erster.ts) : turns[0];
+}
+
 /** Der Turn, in dem ein Zeitpunkt liegt: der zuletzt begonnene mit `startTs ≤ ts`. */
 function turnZu(turns, ts) {
   const t = Date.parse(ts);
@@ -208,10 +214,11 @@ export function ttlVergleich(calls) {
 
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
+ * `ohne` (Ticketnummern, wie `--ohne` im Kontext-Treiber): das Fenster dieser Tickets fehlt in Fenstern, Summen (alle Calls des Fensters, auch Nachlauf, Brain und Forks), Modellanteil und TTL.
  * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
- *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, config: object, env?: Record<string, string | undefined> }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
+ *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null, ohne?: number[], config: object, env?: Record<string, string | undefined> }} e Die Projekt-Config (`config`) ist Pflicht, ohne wirft `hauptchatNamen`.
  */
-export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, config, env }) {
+export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null, ohne = [], config, env }) {
   const { ticketSkills, ticketAgenten, abschlussSkills, repoName: name } = hauptchatNamen({ config, env });
   const wurzeln = brainRoots.map((r) => norm(r).replace(/\/+$/, "")).filter(Boolean);
   const summen = new Map();
@@ -264,6 +271,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     }));
 
     const fensterVon = (turn) => [...fenstern].reverse().find((w) => turn.idx >= w.turn);
+    const ausgenommen = (turn) => ohne.includes(fensterVon(turn)?.nr);
     const kategorieFuer = (turn, ts) => {
       if (!gueltig(ts)) return KAT.OHNE_ZEIT;
       if (turn.brainAb !== null && Date.parse(ts) >= turn.brainAb) return KAT.BRAIN;
@@ -273,7 +281,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       return KAT.TICKET;
     };
 
-    for (const turn of turns) {
+    for (const turn of turns.filter((t) => !ausgenommen(t))) {
       for (const c of turn.calls) {
         if (!imFenster(c.ts)) continue;
         const kat = kategorieFuer(turn, c.ts);
@@ -289,7 +297,8 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         }
       }
     }
-    for (const sa of subs) {
+    for (const sa of subs.filter((x) => !ausgenommen(forkTurn(x.calls, turns)))) {
+      const turn = forkTurn(sa.calls, turns);
       for (const c of sa.calls) {
         if (!imFenster(c.ts)) continue;
         if (istTicketLauf(sa.meta, ticketAgenten)) {
@@ -301,14 +310,11 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
           if (c.cost == null) zaehleOhnePreis(c);
           continue;
         }
-        // Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile).
-        const erster = sa.calls.find((x) => gueltig(x.ts));
-        const turn = erster ? turnZu(turns, erster.ts) : turns[0];
         buche(kategorieFuer(turn, c.ts), "Fork", c);
       }
     }
     fenster.push(
-      ...fenstern.map((w) => ({ hauptchatCalls: Object.values(w.modelle).reduce((a, b) => a + b, 0), nr: w.nr, closedAt: w.closedAt, startTs: w.startTs, art: w.art, modelle: w.modelle, kosten: w.kosten, session: w.session })),
+      ...fenstern.filter((w) => !ohne.includes(w.nr)).map((w) => ({ hauptchatCalls: Object.values(w.modelle).reduce((a, b) => a + b, 0), nr: w.nr, closedAt: w.closedAt, startTs: w.startTs, art: w.art, modelle: w.modelle, kosten: w.kosten, session: w.session })),
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
@@ -357,11 +363,13 @@ export function renderMarkdown(r, { repoName: name } = {}) {
 // ── CLI (dünn, ungetestet: Dateisuche und gh) ────────────────────────────────
 
 export function parseArgs(argv) {
-  const optionen = { von: { type: "string" }, bis: { type: "string" }, brain: { type: "string", multiple: true }, projekt: { type: "string" }, json: { type: "boolean" } };
-  const { werte, fehler } = flagsLesen(argv, optionen);
-  const a = { brain: werte.brain ?? [], json: werte.json === true };
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, brain: { type: "string", multiple: true }, ohne: TICKET_OPTIONEN.ohne, projekt: { type: "string" }, json: { type: "boolean" } };
+  const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
+  // Eine Nicht-Ganzzahl würde als NaN still nichts ausnehmen: Aufruf-Fehler statt falscher Zahl.
+  const { ohne, fehler: ticketFehler } = ticketFilterAus(werte);
+  const a = { brain: werte.brain ?? [], ohne, json: werte.json === true };
   for (const name of ["von", "bis", "projekt"]) if (werte[name] !== undefined) a[name] = werte[name];
-  if (fehler) a.fehler = fehler.text;
+  if (fehler ?? ticketFehler) a.fehler = fehler?.text ?? ticketFehler;
   return a;
 }
 
@@ -379,7 +387,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.fehler || !args.von || !args.bis) {
     if (args.fehler) console.error(args.fehler);
-    console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]");
+    console.error("Aufruf: node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--ohne <nr>]… [--projekt <slug>] [--json]");
     process.exit(2);
   }
   let namen;
@@ -394,7 +402,7 @@ function main() {
   const dir = projektOrdner(args.projekt);
   const cache = new Map();
   const closedAtOf = (nr) => (cache.has(nr) ? cache.get(nr) : cache.set(nr, closedAtViaGh(nr)).get(nr));
-  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf, config: namen.config });
+  const r = zerlegeHauptchat({ sessions: ladeSessions(dir, args.von), von: args.von, bis: args.bis, brainRoots: args.brain, closedAtOf, ohne: args.ohne, config: namen.config });
   console.log(args.json ? JSON.stringify(r, null, 2) : renderMarkdown(r, { repoName: namen.repoName }));
 }
 

@@ -357,7 +357,7 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
       kopfEnde: (items: B[]) => number;
       imKopf: (items: B[], nr: number) => boolean;
     };
-    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag"]);
+    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag", "update"]);
     expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
     // Die Art forum prüft der Projekt-Test forum-notfall-projekt.test.ts (der Forum-Workflow ist ein Projekt-Modul).
     for (const n of M.NOTFAELLE.filter((x) => x.art !== "forum")) {

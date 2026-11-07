@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { strukturOrdnerBefunde } from './check-basis.mjs'
 import { ausnahmenAus, datengroesseAus, ladeProjektConfig, PROJEKT_CONFIG } from './projekt-config-lib.mjs'
-import { pruefeDatenGroessen, splitEmpfehlung } from './datengroesse-lib.mjs'
+import { deckelUrteil, pruefeDatenGroessen, rebaseHinweis, splitEmpfehlung } from './datengroesse-lib.mjs'
 import { quellDateien, quellenAus, STANDARD_ENDUNGEN } from './quellwurzeln-lib.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -86,7 +86,7 @@ export function collectWorkflowSizes(rootDir = ROOT) {
  * Prüft Workflow-Skripte gegen `deckel`: Meldungen (leer = ok). Über `budget` ohne Eintrag, über `max`, unter `max`
  * (Deckel nachziehen) und Einträge ohne Datei bzw. mit Datei unter Budget (stale) sind Fehler. Pur.
  */
-const REBASE_HINWEIS = " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel auf die jetzt gemessene Zahl setzen (ein Konflikt in scripts/check-size.mjs ist dann erwartbar). Wächst die Datei durch den eigenen Diff, gilt weiter: kürzen oder bewusst per reviewtem Commit anheben."
+const REBASE_HINWEIS = rebaseHinweis({ zusatz: ' (ein Konflikt in scripts/check-size.mjs ist dann erwartbar)', verb: 'kürzen' })
 
 /** Zeichen-Deckel (#1628, jeder DECKEL-Eintrag): über `maxZeichen` rot, mehr als `ZEICHEN_TOLERANZ` darunter rot (Ratchet mit Toleranz). */
 export const ZEICHEN_TOLERANZ = 500
@@ -106,14 +106,16 @@ export function pruefeDeckel(workflowSizes, deckel = DECKEL, budget = LOC_BUDGET
     const d = eintrag.get(file)
     if (loc <= budget) continue
     if (d) meldungen.push(...pruefeZeichen(file, chars, d))
-    if (!d) meldungen.push(`${file}: ${loc} Zeilen > Budget ${budget} ohne Deckel (Eintrag DECKEL in scripts/check-size.mjs mit Begründung, oder kürzen).`)
-    else if (loc > d.max) meldungen.push(`${file}: ${loc} Zeilen > Deckel ${d.max}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${REBASE_HINWEIS}`)
-    else if (loc < d.max) meldungen.push(`${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet, in scripts/check-size.mjs).${REBASE_HINWEIS}`)
+    const art = deckelUrteil({ ist: loc, max: d?.max, budget })
+    if (art === 'ueber-budget-ohne-deckel') meldungen.push(`${file}: ${loc} Zeilen > Budget ${budget} ohne Deckel (Eintrag DECKEL in scripts/check-size.mjs mit Begründung, oder kürzen).`)
+    else if (art === 'ueber-max') meldungen.push(`${file}: ${loc} Zeilen > Deckel ${d.max}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${REBASE_HINWEIS}`)
+    else if (art === 'unter-max') meldungen.push(`${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet, in scripts/check-size.mjs).${REBASE_HINWEIS}`)
   }
   for (const d of deckel) {
     const loc = bekannt.get(d.file)
+    if (deckelUrteil({ ist: loc, max: d.max, budget }) !== 'stale') continue
     if (loc === undefined) meldungen.push(`DECKEL-Eintrag stale: ${d.file} existiert nicht mehr – Eintrag entfernen.`)
-    else if (loc <= budget) meldungen.push(`DECKEL-Eintrag stale: ${d.file} liegt nicht mehr über ${budget} LOC – Eintrag entfernen.`)
+    else meldungen.push(`DECKEL-Eintrag stale: ${d.file} liegt nicht mehr über ${budget} LOC – Eintrag entfernen.`)
   }
   return meldungen
 }
@@ -123,7 +125,7 @@ export function findOversized(sizes, budget = LOC_BUDGET) {
   return sizes.filter((s) => s.loc > budget)
 }
 
-const DATEN_REBASE_HINWEIS = ` Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel unter datengroesse.deckel in ${PROJEKT_CONFIG} auf die jetzt gemessene Zahl setzen. Wächst die Datei durch den eigenen Diff, gilt weiter: teilen oder bewusst per reviewtem Commit anheben.`
+const DATEN_REBASE_HINWEIS = rebaseHinweis({ ort: ` unter datengroesse.deckel in ${PROJEKT_CONFIG}`, verb: 'teilen' })
 
 /**
  * Datenbudget (factory#7): Datendateien (Standard .json) unter den Pfaden des Blocks `datengroesse` gegen dessen Zeilen-Budget, mit Deckel-Ratchet je bestehendem Monolithen.

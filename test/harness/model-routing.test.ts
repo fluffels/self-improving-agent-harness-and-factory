@@ -529,9 +529,9 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
     assert.equal(doku.split(abnahmeZeile).length, 2, "Abnahme-Zeile genau einmal");
     const abnahmeEffort = doku.replace(abnahmeZeile, "| Holdout-Abnahme (nach dem Lens-Review) | `opus` | `high` |");
     assert.match(matrixAbweichungen(abnahmeEffort, fmEcht).join("\n"), /Holdout-Abnahme \(nach dem Lens-Review\): Effort Skill-Pfad „high“ ≠ Frontmatter holdoutAbnahme „medium“/);
-    const szenarioZeile = "| Holdout-Szenarien (vor dem Planen) | `opus` | `medium` |";
+    const szenarioZeile = "| Holdout-Szenarien (nach dem Plan, im Hintergrund) | `opus` | `medium` |";
     assert.equal(doku.split(szenarioZeile).length, 2, "Szenario-Zeile genau einmal");
-    const szenarioAlias = doku.replace(szenarioZeile, "| Holdout-Szenarien (vor dem Planen) | `sonnet` | `medium` |");
+    const szenarioAlias = doku.replace(szenarioZeile, "| Holdout-Szenarien (nach dem Plan, im Hintergrund) | `sonnet` | `medium` |");
     assert.match(matrixAbweichungen(szenarioAlias, fmEcht).join("\n"), /Alias „sonnet“ ≠ Frontmatter holdoutSzenario „opus“/);
     const unbekannt = doku.replace("| Explore / Recherche |", "| Neue Phase | `haiku` | `low` | irgendwer |\n| Explore / Recherche |");
     assert.match(matrixAbweichungen(unbekannt, fmEcht).join("\n"), /Neue Phase: Ziel aus der Skill-Pfad-Zelle nicht zuordenbar/);

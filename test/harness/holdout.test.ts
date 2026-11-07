@@ -234,12 +234,17 @@ describe("Laufzeit-Hooks im Frontmatter beider Agenten (Sammelticket #1781)", ()
 });
 
 describe("Reihenfolge im Skill (#1754)", () => {
-  test("abnahme.mjs kriterien und der Szenario-Spawn stehen vor dem Planer-Spawn", () => {
+  test("factory#238 L31: der Planer-Spawn steht vor abnahme.mjs kriterien und dem Hintergrund-Szenario-Spawn; bei Weiche Epic ja kein Szenario-Agent", () => {
     const kriterien = SKILL.indexOf("node scripts/abnahme.mjs kriterien");
     const szenario = SKILL.indexOf('subagent_type: "holdout-szenario"');
     const planer = SKILL.indexOf(`subagent_type: "${PLANER}"`);
     assert.ok(kriterien >= 0 && szenario >= 0 && planer >= 0);
-    assert.ok(kriterien < szenario && szenario < planer);
+    assert.ok(planer < kriterien && kriterien < szenario);
+    const spawn = SKILL.slice(szenario, SKILL.indexOf("})", szenario));
+    assert.match(spawn, /run_in_background: true/);
+    const text = SKILL.slice(SKILL.lastIndexOf("*Szenarien", szenario), szenario);
+    assert.match(text, /`Weiche Epic: ja`, gibt es keinen Szenario-Agenten/);
+    assert.match(text, /parallel zu Pre-Flight und Umsetzer/);
   });
 
   test("Ticket ohne Kriterien: der Skill verweist auf die entfaellt-Zeile statt auf einen Szenario-Agenten", () => {

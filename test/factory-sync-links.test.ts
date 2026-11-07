@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLinks from "../scripts/factory-links-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -900,5 +901,121 @@ describe("factory-sync --tag: reine Stubs erneuern (factory#166)", { timeout: 30
     assert.ok(!r.out.includes("(Anker-Stub): docs/seite.md"), r.out);
     assert.equal(readFileSync(fremd, "utf8"), stub);
     assert.ok(lstatSync(join(z, "docs", "seite.md")).isSymbolicLink());
+  });
+});
+
+describe("factory-sync --tag: Hinweise nach dem Sync (Projektseiten, eslint-Suppressions, zweiter Lauf)", { timeout: 60_000 }, () => {
+  type CliOpt = { out: (s: string) => void; err: (s: string) => void; zweitlauf?: ((argv: string[]) => number) | null; env?: Record<string, string> };
+  const SEITE = "# Seite\n\n## Erster\n\ntext\n";
+  const kernQuelle = (): string => {
+    const q = baueQuelle({ stopp: "Siehe [a](docs/seite.md#erster) hier." });
+    schreibe(q, "docs/seite.md", SEITE);
+    return q;
+  };
+  const skriptQuelle = (): string => baueQuelle({ besitzDateien: { "scripts/x.mjs": "export const a = 1;\n" } });
+  function lauf(argv: string[], opt: { zweitlauf?: ((argv: string[]) => number) | null; env?: Record<string, string> } = {}): { code: number; out: string; err: string } {
+    const out: string[] = [];
+    const err: string[] = [];
+    const cliMit = (a: string[], o: CliOpt): number => sync.cli(a, o);
+    const code = cliMit(argv, { out: (s) => out.push(s), err: (s) => err.push(s), ...opt });
+    return { code, out: out.join("\n"), err: err.join("\n") };
+  }
+
+  test("L11/L20: eine vorhandene Projektseite ohne Factory-Link unter der Überschrift (stub-link) steht als Hinweis mit Seite und Soll-Zeile, Exit 0, Seite unverändert", () => {
+    const q = kernQuelle();
+    const z = baueZiel({ "docs/seite.md": SEITE });
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^Hinweis: Kern-Link-Seite im Projekt: docs\/seite\.md:3: \[stub-link\] .*Soll: `Kern: \[\.\.\]\(https:\/\/github\.com\/o\/f\/blob\/v2\/docs\/seite\.md#erster\)`$/m);
+    assert.equal(lies(z, "docs/seite.md"), SEITE);
+  });
+
+  test("L11/L20: eine gekürzte Seite ohne die verlinkte Überschrift (stub-anker) steht ebenso als Hinweis", () => {
+    const q = kernQuelle();
+    const z = baueZiel({ "docs/seite.md": "# Projektanteil\n" });
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^Hinweis: Kern-Link-Seite im Projekt: AGENTS\.md:\d+: \[stub-anker\] .*in docs\/seite\.md .*Soll: `Kern: \[\.\.\]\(/m);
+  });
+
+  test("L11/L20: eine vom Sync angelegte Stub-Seite und eine fehlende Seite (Ausnahme) lösen keinen Hinweis aus", () => {
+    const q = kernQuelle();
+    const z = baueZiel();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!/Kern-Link-Seite im Projekt/.test(r.out), r.out);
+    const z2 = baueZiel();
+    schreibe(z2, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: ["docs/seite.md"] } }));
+    assert.ok(!/Kern-Link-Seite im Projekt/.test(syncVomTag(q, z2, "v3").out));
+  });
+
+  test("L21c: hat der Sync ein Skript geändert, steht der Hinweis auf eslint-suppressions.json; ohne Skript-Änderung fehlt er; die Datei schreibt der Sync nicht", () => {
+    const q = skriptQuelle();
+    const z = baueZiel();
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /^Hinweis: eslint-suppressions\.json \(Projektdatei\): veraltete Einträge mit `npx eslint \. --prune-suppressions` entfernen$/m);
+    assert.equal(existsSync(join(z, "eslint-suppressions.json")), false);
+    const nochmal = laufe(["--quelle", q, "--ziel", z, "--tag", "v2"]);
+    assert.ok(!/prune-suppressions/.test(nochmal.out), nochmal.out);
+    const ohne = syncVomTag(baueQuelle(), baueZiel(), "v2");
+    assert.ok(!/prune-suppressions/.test(ohne.out), ohne.out);
+  });
+
+  test("L21c: auch .ts und .js lösen den Hinweis aus, andere Endungen nicht", () => {
+    const mit = (datei: string): string => syncVomTag(baueQuelle({ besitzDateien: { [datei]: "x\n" } }), baueZiel(), "v2").out;
+    assert.match(mit("src/a.ts"), /prune-suppressions/);
+    assert.match(mit("src/b.js"), /prune-suppressions/);
+    assert.ok(!/prune-suppressions/.test(mit("src/c.json")));
+    assert.ok(!/prune-suppressions/.test(mit("docs/hosts")), "ohne Punkt vor der Endung kein Hinweis");
+  });
+
+  test("L19: hat der Sync eine Datei unter scripts/ geschrieben, startet er einmal neu mit denselben Argumenten; ein Riegel verhindert den dritten Lauf", () => {
+    const q = skriptQuelle();
+    const z = baueZiel();
+    taggen(q, "v2");
+    const argv = ["--quelle", q, "--ziel", z, "--tag", "v2"];
+    const aufrufe: string[][] = [];
+    const r = lauf(argv, { zweitlauf: (a) => (aufrufe.push(a), 0), env: {} });
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(aufrufe, [argv]);
+    assert.match(r.out, /^Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand$/m);
+    const zweiter: string[][] = [];
+    const q2 = skriptQuelle();
+    const z2 = baueZiel();
+    taggen(q2, "v2");
+    lauf(["--quelle", q2, "--ziel", z2, "--tag", "v2"], { zweitlauf: (a) => (zweiter.push(a), 0), env: { FACTORY_SYNC_ZWEITLAUF: "1" } });
+    assert.deepEqual(zweiter, []);
+  });
+
+  test("L19: der Exit-Code des zweiten Laufs ist der Exit-Code; ohne Skript-Datei, bei --trocken und ohne Injektion läuft kein zweiter Lauf", () => {
+    const q = skriptQuelle();
+    const z = baueZiel();
+    taggen(q, "v2");
+    assert.equal(lauf(["--quelle", q, "--ziel", z, "--tag", "v2"], { zweitlauf: () => 1, env: {} }).code, 1);
+    const n: number[] = [];
+    const zaehle = (): number => (n.push(1), 0);
+    const q3 = skriptQuelle();
+    taggen(q3, "v2");
+    lauf(["--quelle", q3, "--ziel", baueZiel(), "--tag", "v2", "--trocken"], { zweitlauf: zaehle, env: {} });
+    const q4 = baueQuelle();
+    taggen(q4, "v2");
+    lauf(["--quelle", q4, "--ziel", baueZiel(), "--tag", "v2"], { zweitlauf: zaehle, env: {} });
+    assert.deepEqual(n, []);
+    const q5 = skriptQuelle();
+    taggen(q5, "v2");
+    assert.equal(lauf(["--quelle", q5, "--ziel", baueZiel(), "--tag", "v2"], { env: {} }).code, 0);
+  });
+
+  test("L19 (echter Prozess): `node scripts/factory-sync.mjs` startet nach einem Skript-Update einen zweiten Prozess, der den neuen Stand nur bestätigt", () => {
+    const q = skriptQuelle();
+    const z = baueZiel();
+    taggen(q, "v2");
+    const skript = fileURLToPath(new URL("../scripts/factory-sync.mjs", import.meta.url));
+    const aus = execFileSync(process.execPath, [skript, "--quelle", q, "--ziel", z, "--tag", "v2"], { encoding: "utf8", env: { ...process.env, FACTORY_SYNC_ZWEITLAUF: "" } });
+    assert.match(aus, /Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand/);
+    assert.equal((aus.match(/^factory-sync: \d+ geändert, \d+ unverändert$/gm) ?? []).length, 2, aus);
+    assert.match(aus, /factory-sync: 0 geändert/);
+    assert.ok(existsSync(join(z, "scripts", "x.mjs")));
   });
 });

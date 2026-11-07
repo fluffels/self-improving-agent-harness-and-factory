@@ -23,9 +23,8 @@
  */
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen, ladeWiedervorlagen } from "./inbox-start-lib.mjs";
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
@@ -479,7 +478,7 @@ function gemerkt(lade) {
 }
 
 /** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `SAMMELTICKET_TITEL_LISTE` und die Inbox-Bausteine), `ladeSeiten(pfad)`, `ladeDatei(pfad, commit)`, `gh` (`{ text, json }`, Standard: echtes gh), `bezieher` (Standard: Sync-Stand vorhanden; im Bezieher liegen Tickets und Zeilen im eigenen Repo), `bereite` (Sperrprüfung der Zeilen, Standard `bereiteMeldung`), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, ladeDatei, gh = { text: ghText, json: ghJson }, bezieher, bereite, log = console.log, err = console.error } = {}) {
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, ladeConfig, ladeSeiten = seiten, ladeDatei, gh = { text: ghText, json: ghJson }, bezieher, bereite, lies, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "codescanning-inbox", praefix: "Code-Scanning-Inbox: Projekt-Config nicht lesbar: ", ladeLibs, ladeConfig, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config } = start;
@@ -502,7 +501,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
       const ziele = offene.filter((i) => i.titel === ZIEL_TITEL && vertraut.has(i.number)).sort((a, b) => a.number - b.number);
       if (ziele.length > 1) log(`::warning::Mehrere offene Tickets "${ZIEL_TITEL}" (${ziele.map((z) => `#${z.number}`).join(", ")}); nehme das kleinste.`);
       const offenesIssue = ziele[0] ? { number: ziele[0].number, body: aktion.holeBody(ziele[0].number) } : null;
-      return kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")) });
+      return kontextAus({ libs, rohe, kommentare, owner, offenesIssue, wiedervorlagen: ladeWiedervorlagen(WIEDERVORLAGEN, lies) });
     },
     projectToken: process.env.PROJECT_TOKEN,
     log,

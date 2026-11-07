@@ -19,7 +19,8 @@ import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
-import { DATEN_STANDARD_ENDUNGEN, istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
+import { DATEN_STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
+import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -245,7 +246,7 @@ export function datengroesseAus(config) {
   const fehler = pruefeDatengroesse(wert);
   if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}
 Fix: den Block datengroesse (pfade, budget; optional endungen, hinweis, deckel: Liste von { datei, max, grund mit #<nr> }) in ${PROJEKT_CONFIG} korrigieren`);
-  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? DATEN_STANDARD_ENDUNGEN, hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
+  return { pfade: wert.pfade, budget: wert.budget, endungen: wert.endungen ?? [...DATEN_STANDARD_ENDUNGEN], hinweis: wert.hinweis ?? null, deckel: wert.deckel ?? [] };
 }
 
 /**
@@ -401,11 +402,15 @@ export const boardRepo = (board, config) => (typeof board?.repo === "string" ? b
 /** Pur: das Repo (`owner/name`) aus der `repository_url` eines Issues (`…/repos/<owner>/<name>`); leer, wenn die URL es nicht trägt. */
 export const repoAusUrl = (url) => /\/repos\/([^/]+\/[^/]+)$/.exec(String(url ?? ""))?.[1] ?? "";
 
-/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
-export function boardRolleFuer(labels, config) {
+/** Pur: Board-Rolle zu den Labels eines Issues (Strings oder `{ name }`-Objekte); genau `labels.harness` der Config ergibt `factory`, sonst `produkt`. Mit `{ repo }` (Repo des Issues) zählt das Harness-Label nur, wenn das Factory-Board dieses Repo führt, sonst `produkt`. Ohne Liste, ohne `config` oder ohne Schlüssel wirft sie. */
+export function boardRolleFuer(labels, config, { repo } = {}) {
   if (!Array.isArray(labels)) throw new Error("boardRolleFuer braucht die Label-Liste des Issues\nFix: labels als Array übergeben (auch leer)");
   const harness = labelAus(config, "harness");
-  return labels.some((l) => (typeof l === "string" ? l : l?.name) === harness) ? "factory" : "produkt";
+  if (!labels.some((l) => (typeof l === "string" ? l : l?.name) === harness)) return "produkt";
+  // Trennregel mit Issue-Repo (#238): das Harness-Label zählt nur, wenn das Factory-Board das Repo des Issues führt; ohne bekanntes Repo wie bisher.
+  const fuehrt = repoDerRolle("factory", config);
+  const bekannt = typeof repo === "string" && repo !== "" && typeof fuehrt === "string";
+  return !bekannt || gleichesRepo(repo, fuehrt) ? "factory" : "produkt";
 }
 
 /** Pur: das Board der Rolle `rolle` (`config.boards[]`) oder `undefined`. */

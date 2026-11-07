@@ -233,7 +233,7 @@ describe("Projektdateien (factory#170)", () => {
   test("Sonder-Fixes: Ticket-Skill nennt skills:sync, eslint-suppressions lint:prune", () => {
     const p = projektPunkt(() => false);
     expect(p.fix).toContain("npm run skills:sync");
-    expect(p.fix).toContain("npm run lint:prune");
+    expect(p.fix).toContain("npx eslint . --prune-suppressions");
   });
 });
 
@@ -251,7 +251,7 @@ describe("Langfuse-Takt", () => {
     const p = takt(ohneDatei(datei));
     expect(p.ok).toBe(false);
     expect(p.befund).toContain(datei);
-    expect(p.fix).toContain("factory:sync");
+    expect(p.fix).toContain("factory-sync.mjs");
     expect(p.fix).toContain("kern-nach-entkopplung");
   });
 
@@ -387,6 +387,73 @@ describe("Gezielter Test (factory#208 L23)", () => {
   });
 });
 
+describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
+  /** Spiegel der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` in test/harness/besitz-abschnittsverweise.test.ts. */
+  const ERLAUBT = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
+  const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
+
+  test("kein Fix-Text (Projektdateien, Langfuse-Takt) nennt ein npm-Skript außerhalb der Liste", () => {
+    const takt = punkt(pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(gesund), existiert: () => false, config: {} }), "Langfuse-Takt");
+    const texte = [...PROJEKTDATEIEN.map((d) => d.fix ?? ""), takt.fix ?? ""];
+    expect(texte.some((t) => t !== "")).toBe(true);
+    expect(takt.fix).toContain("factory-sync.mjs");
+    expect(PROJEKTDATEIEN.find((d) => d.pfad === "eslint-suppressions.json")?.fix).toContain("npx eslint . --prune-suppressions");
+    for (const t of texte) for (const n of npmNamen(t)) expect(ERLAUBT.has(n), `npm run ${n}`).toBe(true);
+  });
+});
+
+describe("Workflow-Auslöser", () => {
+  const ci = (name: string): Workflow => ({ pfad: ".github/workflows/ci.yml", text: `name: ${name}\non:\n  push:\njobs:\n  a:\n    name: Beispiel Check\n` });
+  const fest = (liste: string): Workflow => ({ pfad: ".github/workflows/festgefahren.yml", text: `name: Festgefahren\non:\n  workflow_run:  # Kommentar\n    workflows: ${liste}\n    types: [completed]\njobs:\n  b:\n    name: Zaehler\n` });
+  const ausloeser = (workflows: Workflow[]) => punkt(pruefe({ rootDir: "/x", ...GESUND, workflows, git: fakeGit(gesund), existiert: () => true, config: {} }), "Workflow-Auslöser");
+
+  test("Name passt (Flow-Liste und Blockliste): OK", () => {
+    expect(ausloeser([ci("CI"), fest('["CI"]')])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+    expect(ausloeser([ci("CI"), fest("\n      - CI")])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+  });
+  test("Name fehlt: Lücke mit Fix, der Datei und Namen nennt", () => {
+    const p = ausloeser([ci("Build"), fest('["CI"]')]);
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("CI");
+    expect(p.fix).toContain("einen Workflow mit `name: CI` anlegen oder den Auslöser in festgefahren.yml auf einen vorhandenen Namen ändern");
+  });
+  test("Blockliste mit fehlendem Namen ist eine Lücke (der Leser sieht die Listeneinträge)", () => {
+    expect(ausloeser([ci("Build"), fest("\n      - CI")]).befund).toContain("CI");
+  });
+  test("ein `workflows:` außerhalb des workflow_run-Blocks zählt nicht", () => {
+    const w: Workflow = { pfad: ".github/workflows/x.yml", text: "name: X\non:\n  workflow_run:\n    types: [completed]\njobs:\n  a:\n    with:\n      workflows: [Fremd]\n" };
+    expect(ausloeser([ci("CI"), w]).ok).toBe(true);
+  });
+  test("kein workflow_run, oder keine Workflows: OK", () => {
+    expect(ausloeser([ci("Build")])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+    expect(ausloeser([])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+  });
+  test("ein Verweis auf einen vorhandenen Namen genügt, ein zweiter fehlender macht es zur Lücke", () => {
+    expect(ausloeser([ci("CI"), fest('["CI", "Weg"]')]).ok).toBe(false);
+  });
+  const eigen = (text: string): Workflow => ({ pfad: ".github/workflows/x.yml", text });
+  test("Guards des Lesers: Folgeschlüssel nach der Liste, Anführungszeichen, nur oberstes name, gleiche Einrückung, Leerzeile", () => {
+    // else liste = -1: ein Eintrag unter dem Folgeschlüssel `branches` ist kein Workflow-Name
+    expect(ausloeser([ci("CI"), fest("\n      - CI\n    branches:\n      - main")]).ok).toBe(true);
+    // ohneAnfuehrung beim Namen
+    expect(ausloeser([ci('"CI"'), fest('["CI"]')]).ok).toBe(true);
+    // ^ am name-Anker: ein Job-Name ist nicht der Workflow-Name
+    const jobNurName = eigen("on:\n  push:\njobs:\n  a:\n    name: CI\n");
+    expect(ausloeser([jobNurName, fest('["CI"]')]).ok).toBe(false);
+    // und ein eingerücktes `name:` vor dem obersten zählt nicht
+    const spaet = eigen("on:\n  workflow_dispatch:\n    inputs:\n      name: x\nname: CI\n");
+    expect(ausloeser([spaet, fest('["CI"]')]).ok).toBe(true);
+    // >= bei der Listen-Einrückung: Blockliste auf Höhe von `workflows:`
+    const gleich = eigen("name: G\non:\n  workflow_run:\n    workflows:\n    - CI\n");
+    expect(ausloeser([ci("Build"), gleich]).befund).toContain("CI");
+    // Leerzeile im Block beendet das Lesen nicht
+    expect(ausloeser([ci("CI"), fest("\n      - CI\n\n      - Weg")]).befund).toContain("Weg");
+  });
+  test("steht als letzter Punkt in DATEI_PUNKTE", () => {
+    expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
+  });
+});
+
 describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
   test("pruefeDateien liefert genau diese Punkte in dieser Reihenfolge: gesund, alles fehlt, werfendes Git", () => {
     const werfend: Git = () => {
@@ -398,12 +465,12 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Workflow-Auslöser"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
-  test("die Liste endet mit Required-Check-Quellen und ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-1)).toBe("Required-Check-Quellen");
+  test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
+    expect(DATEI_PUNKTE.at(-2)).toBe("Required-Check-Quellen");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });

@@ -42,7 +42,7 @@ import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
+import { BEREICHE, BEREICH_BOARD, bereichAliaseAus, boardRepo, boardRolleFuer, configAusAufruf, labelAus, ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { fruehesterMilestone, vorrangHinweis } from "./milestone-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { HARNESS_TAKT_KOMMENTARE, fuellstandVon } from "./produktquote-lib.mjs";
@@ -167,7 +167,7 @@ export function istNotfallBeider(item) {
 /** Gehört das Item zum Bereich? Ohne Bereich immer; Notfälle (`istNotfallBeider`) zählen in beiden. Das Harness-Label kommt aus `config` (Pflicht, wirft ohne `labels.harness`). Pur. */
 export function imBereich(item, bereich, config) {
   if (!bereich) return true;
-  return istNotfallBeider(item) || item.labels.includes(labelAus(config, "harness")) === (BEREICH_BOARD[bereich] === "factory");
+  return istNotfallBeider(item) || boardRolleFuer(item.labels, config, { repo: item.repo }) === BEREICH_BOARD[bereich];
 }
 
 /**

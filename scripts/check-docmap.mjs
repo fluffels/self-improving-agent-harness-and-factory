@@ -31,16 +31,13 @@ import { dirname, join, posix } from "node:path";
 import { strukturOrdnerBefunde } from "./check-basis.mjs";
 import { globRegex } from "./pfad-glob.mjs";
 import { ladeProjektConfig, strukturAus } from "./projekt-config-lib.mjs";
-import { quellDateien, quellenAus } from "./quellwurzeln-lib.mjs";
+import { DOCMAP_STANDARD_ENDUNGEN, quellDateien, quellenAus } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Module, die bewusst KEINE Tiefendoc-Zeile brauchen (repo-relativ, POSIX).
  *  Leer gehalten: die Konvention verlangt für JEDES Quellmodul eine Tiefendoc-Erwähnung. */
 export const ORPHAN_ALLOWLIST = [];
-
-/** Endungen, wenn `struktur.endungen` fehlt (wie bisher nur `.ts`, nicht die JS/TS-Familie von check:size). */
-export const DOCMAP_STANDARD_ENDUNGEN = Object.freeze([".ts"]);
 
 /** Der Block `struktur` samt `quelle` (auch als Liste), `endungen`, `ohne`, `docmapEinheit` und `moduldoku`; wirft ohne `struktur` (kein stiller Standardwert). */
 const configStruktur = () => {

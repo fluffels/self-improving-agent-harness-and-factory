@@ -4,6 +4,7 @@
  * deshalb kommen sie erst nach dem Check und der Config: eine kaputte Config meldet sich als `::error::` mit Fix-Zeile und Exit 2 statt als
  * Stacktrace (das direkte Laden von `board-lib` endet bei einer kaputten Config ebenso mit Exit 2, `ladeProjektOderAbbruch`). Kein Guard, kein Import von `board-lib`/`inbox-lib` beim Laden dieser Datei.
  */
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -11,6 +12,18 @@ import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+
+/** Die Liste aus `.github/wiedervorlagen.json`: fehlt die Datei (ENOENT), ist es `[]`; ungültiges JSON und jeder andere Lesefehler werfen weiter. `lies` ist die Test-Naht. */
+export function ladeWiedervorlagen(pfad, lies = readFileSync) {
+  let text;
+  try {
+    text = lies(pfad, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT") return [];
+    throw e;
+  }
+  return JSON.parse(text);
+}
 
 /** Die Board-Bausteine beider Libs in einem Objekt (`REPO`, `OWNER`, `ladeSammelKontext`, `postZeilen` …); erst beim Aufruf importiert. */
 export const ladeBoardLibs = async () => ({ ...(await import("./board-lib.mjs")), ...(await import("./inbox-lib.mjs")) });

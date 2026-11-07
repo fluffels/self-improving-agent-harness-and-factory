@@ -170,7 +170,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
       postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
       waehleSammelticket: (offene: { number: number }[]) => offene[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], log: (m: string) => log.push(m), err: () => undefined };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], bezieher: false, log: (m: string) => log.push(m), err: () => undefined };
     return { gepostet, log, deps };
   };
   test("mit Flag: [dry-run]-Zeile im Log, nichts gepostet", async () => {
@@ -206,7 +206,7 @@ describe("main: Ziel-Repo der Alarm-Tickets", () => {
       postZeilen: () => undefined,
       waehleSammelticket: (o: { number: number }[]) => o[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], bezieher: false, gh, log: () => {}, err: () => {} };
     expect(await main([], deps)).toBe(0);
     const anlegen = aufrufe.find((a) => a.args[1] === "create");
     expect(anlegen?.args[anlegen.args.indexOf("--repo") + 1]).toBe("o/ziel");
@@ -231,7 +231,7 @@ describe("main: Vertrauen gegen den Owner des Ziel-Repos", () => {
       postZeilen: () => undefined,
       waehleSammelticket: (o: { number: number }[]) => o[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], bezieher: false, gh, log: () => {}, err: () => {} };
     expect(await main([], deps)).toBe(0);
     expect(aufrufe.filter((a) => a[1] === "create")).toEqual([]);
   });
@@ -311,9 +311,34 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
   test("Bezieher: kennt die Zweitabfrage das Rest-Ticket schon, ist kein Ticket da: Exit 1, nichts gepostet (null vertragen)", async () => {
     const bez = aufbau({ bezieher: true });
     const libs = await (bez.deps.ladeLibs as () => Promise<Record<string, unknown>>)();
-    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: () => [{ number: 9, titel: REST }] });
+    const zweit: unknown[][] = [];
+    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: (...x: unknown[]) => (zweit.push(x), [{ number: 9, titel: REST }]) });
     expect(await main([], { ...bez.deps, gh: { text: () => { throw new Error("nichts anlegen"); }, json: () => ({}) } })).toBe(1);
+    expect(zweit).toEqual([[{ repo: "o/r", anzahl: 50, mitBoard: false }, { token: undefined }]]);
     expect(bez.gepostet).toEqual([]);
     expect(bez.log.join("\n")).toContain("::error::Kein ungeclaimtes");
+  });
+});
+
+describe("main: ohne .github/wiedervorlagen.json", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const libs = {
+    OWNER: "o",
+    REPO: "o/r",
+    ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+    offeneTitel: () => [],
+    platziereOben: () => undefined,
+    postZeilen: () => undefined,
+    waehleSammelticket: (o: { number: number }[]) => o[0],
+  };
+  const deps = (lies: () => string, log: string[]) => ({ ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => ({ vulnerabilities: {} }), alertsLaden: () => [], bezieher: false, lies, log: (m: string) => log.push(m), err: () => undefined });
+  test("ENOENT: der Lauf rechnet mit einer leeren Liste statt zu werfen", async () => {
+    const log: string[] = [];
+    const lies = () => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); };
+    expect(await main([], deps(lies, log))).toBe(0);
+    expect(log.join("\n")).toContain("nichts Neues");
+  });
+  test("ungültiges JSON bleibt ein Fehler", async () => {
+    await expect(main([], deps(() => "{kaputt", []))).rejects.toThrow(SyntaxError);
   });
 });

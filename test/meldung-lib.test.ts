@@ -14,12 +14,12 @@ import { decodeTerms } from "../scripts/check-internalrefs.mjs";
 
 type Stand = { zustand: "fehlt" | "kaputt" | "ok"; stand: { quelle?: { tag?: string; commit?: string } } | null };
 interface Lib {
-  factoryStand(s: Stand): string | null;
+  factoryStand(s: Stand, eigenes?: string | null): string | null;
   istStandZeile(z: string): boolean;
   meldungsText(zeilen: string[], stand: string | null): string;
   meldestelleToken(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): string | undefined;
   textSauber(text: string, exec?: (...a: unknown[]) => { status: number | null; signal?: string | null; error?: Error }): boolean;
-  bereiteMeldung(zeilen: string[], o?: { wurzel?: string; pruefe?: (t: string) => boolean; stand?: string | null; herkunft?: string | null }): { ok: boolean; text?: string; grund?: string };
+  bereiteMeldung(zeilen: string[], o?: { wurzel?: string; pruefe?: (t: string) => boolean; stand?: string | null; herkunft?: string | null; eigenes?: string | null }): { ok: boolean; text?: string; grund?: string };
   meldestelleZugang(a: { stelle: string; eigenes: string; env: Record<string, string | undefined> }): { stelle: string; fremd: boolean; herkunft: string | null; token: string | undefined };
   nummernMitHerkunft(text: string, herkunft: string | null): string;
   eigenerLogin(a: { zugang: { fremd: boolean; token?: string }; api: (args: string[], o: { token?: string }) => unknown; warn: (z: string) => void }): string | null;
@@ -339,8 +339,55 @@ describe("melden.mjs reicht die Herkunft an bereite (factory#208 L7, Lens-Test)"
     return opt;
   };
   test("fremde Meldestelle: herkunft ist das eigene Repo; eigene Stelle: null", async () => {
-    expect(await lauf("eingang/privat")).toEqual([{ herkunft: "acme/proj" }]);
-    expect(await lauf("acme/proj")).toEqual([{ herkunft: null }]);
+    expect(await lauf("eingang/privat")).toEqual([{ herkunft: "acme/proj", eigenes: "acme/proj" }]);
+    expect(await lauf("acme/proj")).toEqual([{ herkunft: null, eigenes: "acme/proj" }]);
+  });
+});
+
+describe("Stand-Zeile nennt das eigene Repo (factory#238 L25)", () => {
+  const wurzeln: string[] = [];
+  afterEach(() => {
+    for (const w of wurzeln.splice(0)) rmSync(w, { recursive: true, force: true });
+  });
+  const wurzelMitStand = (): string => {
+    const w = mkdtempSync(join(tmpdir(), "meldung-eigenes-"));
+    wurzeln.push(w);
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, ".factory", "sync-stand.json"), '{"quelle":{"tag":"v0.9.0","commit":"13131bcdeadbeef"}}');
+    return w;
+  };
+  const ZEILE = "factory: v0.9.0 (13131bc) · acme/proj";
+  test("factoryStand hängt das eigene Repo an; ohne eigenes Repo bleibt die Zeile unverändert", () => {
+    expect(lib.factoryStand(ok("v0.9.0", "13131bcdeadbeef"), "acme/proj")).toBe(ZEILE);
+    expect(lib.factoryStand(ok("v0.9.0", "13131bcdeadbeef"))).toBe("factory: v0.9.0 (13131bc)");
+    expect(lib.factoryStand({ zustand: "fehlt", stand: null }, "acme/proj")).toBeNull();
+  });
+  test("bereiteMeldung mit Sync-Stand schreibt die Fußzeile samt eigenem Repo, auch bei fremder Meldestelle", () => {
+    const eigen = lib.bereiteMeldung(["- [ ] a"], { wurzel: wurzelMitStand(), pruefe: () => true, eigenes: "acme/proj" });
+    expect(eigen.text).toBe(`- [ ] a\n\n${ZEILE}`);
+    const fremd = lib.bereiteMeldung(["- [ ] a #3"], { wurzel: wurzelMitStand(), pruefe: () => true, eigenes: "acme/proj", herkunft: "acme/proj" });
+    expect(fremd.text).toBe(`- [ ] a acme/proj#3\n\n${ZEILE}`);
+    expect(lib.bereiteMeldung(["- [ ] a"], { wurzel: wurzelMitStand(), pruefe: () => true }).text).toBe("- [ ] a\n\nfactory: v0.9.0 (13131bc)");
+  });
+  test("ohne Sync-Stand (Upstream) bleibt die Meldung ohne Fußzeile, auch mit eigenem Repo", () => {
+    const leer = mkdtempSync(join(tmpdir(), "meldung-eigenes-"));
+    wurzeln.push(leer);
+    expect(lib.bereiteMeldung(["- [ ] a"], { wurzel: leer, pruefe: () => true, eigenes: "acme/proj" }).text).toBe("- [ ] a");
+  });
+  test("--dry-run zeigt die Fußzeile mit dem eigenen Repo (echtes bereiteMeldung)", async () => {
+    const log: string[] = [];
+    const wurzel = wurzelMitStand();
+    const libs = { MELDESTELLE: "eingang/privat", REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 5 }), postZeilen: () => undefined };
+    const code = await melden.main(["--zeile", "x", "--dry-run"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), env: { MELDESTELLE_TOKEN: "mt" }, log: (z: string) => log.push(z), err: () => undefined, bereite: (z: string[], o: object) => lib.bereiteMeldung(z, { wurzel, pruefe: () => true, ...o }) });
+    expect(code).toBe(0);
+    expect(log.join("\n")).toContain(ZEILE);
+  });
+  test("istStandZeile erkennt die Zeile mit Repo-Zusatz (Rundlauf) und lehnt kaputte Zusätze ab", () => {
+    expect(lib.istStandZeile(ZEILE)).toBe(true);
+    expect(lib.factoryStand({ zustand: "kaputt", stand: null }, "acme/proj")).toBe("factory: unbekannt (Sync-Stand unlesbar) · acme/proj");
+    expect(lib.istStandZeile(lib.factoryStand({ zustand: "kaputt", stand: null }, "acme/proj") as string)).toBe(true);
+    for (const z of ["factory: v0.9.0 (13131bc) · my-org/my-repo", "factory: v0.9.0 (13131bc) · my.org/repo.js"]) expect(lib.istStandZeile(z), z).toBe(true);
+    for (const z of ["factory: v0.9.0 (13131bc) · ", "factory: v0.9.0 (13131bc) · acme", "factory: v0.9.0 (13131bc) · acme/proj danach", "factory: v0.9.0 (13131bc) ·acme/proj"]) expect(lib.istStandZeile(z), z).toBe(false);
   });
 });
 

@@ -25,7 +25,7 @@ export function aufnahmePlan(fehlend, issues, { config, ankerNr = null, repo } =
     const i = issues?.[nr] ?? null;
     const grund = aufnahmeGrund(nr, i, ankerNr) ?? fremdGrund(i, repo, config);
     if (grund) abgelehnt.push({ number: nr, grund });
-    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config) });
+    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "", rolle: boardRolleFuer(i.labels ?? [], config, { repo }) });
   }
   return { aufnehmen, abgelehnt };
 }
@@ -41,5 +41,5 @@ function aufnahmeGrund(nr, i, ankerNr) {
 
 /** Pur: erste Zeile des Fremd-Board-Texts, wenn das Board der Rolle des Issues `i` ein anderes Repo als `repo` führt, sonst `null`. */
 function fremdGrund(i, repo, config) {
-  return fremdesBoardText(boardRolleFuer(i.labels ?? [], config), repo, config)?.split("\n")[0] ?? null;
+  return fremdesBoardText(boardRolleFuer(i.labels ?? [], config, { repo }), repo, config)?.split("\n")[0] ?? null;
 }

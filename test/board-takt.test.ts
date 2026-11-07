@@ -483,3 +483,16 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(schritt("tag-takt.mjs")?.if ?? "").not.toContain("milestone");
   });
 });
+
+describe("factoryListe mit Issue-Repo (#238 L28)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const bezieher = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const liste = (items: unknown[], doppelt: number[], config: unknown) => (raw as unknown as { factoryListe: (f: unknown[], d: number[], c: unknown) => { number: number }[] }).factoryListe(items, doppelt, config).map((i) => i.number);
+  const harness = (number: number, repo: string) => ({ number, repo, labels: [FREMD.labels.harness] });
+  test("eine doppelte Nummer mit Harness-Label im fremden Repo zählt zur Produkt-Seite und fällt aus der Factory-Liste", () => {
+    expect(liste([harness(1, FREMD.repo), harness(2, FABRIK)], [1, 2], bezieher)).toEqual([2]);
+  });
+  test("in der Fabrik (beide Boards ein Repo) bleibt das Harness-Item in der Liste", () => {
+    expect(liste([harness(1, FREMD.repo)], [1], FREMD)).toEqual([1]);
+  });
+});

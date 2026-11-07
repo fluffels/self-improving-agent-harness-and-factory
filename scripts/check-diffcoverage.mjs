@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
+import { AUFRUF_EXIT } from "./flag-lib.mjs";
 import { ladeAbdeckung, STANDARD_BERICHTE, berichteAus } from "./coverage-berichte.mjs";
 // Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398), die lcov-Leser in coverage-berichte.mjs (factory#185, Blatt: nicht re-exportiert).
 export { isMeasured, parseDiffLines };
@@ -38,9 +39,34 @@ import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides,
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
 // scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
-const schichtenPfad = JSON.parse(readFileSync(`${WURZEL}scripts/docs-gen/config.json`, "utf8")).schichten?.layers;
-if (typeof schichtenPfad !== "string") throw new Error("scripts/docs-gen/config.json: schichten.layers fehlt");
-const { LAYERS, layerOf } = createRequire(import.meta.url)(`${WURZEL}${schichtenPfad}`);
+/**
+ * Lädt die Schichtdaten unter `wurzel` (Slash am Ende): `{ LAYERS, layerOf }` oder `{ fehler }`, nie ein Wurf (ein Stacktrace beim Import sagt dem Bezieher nichts).
+ * Prüft die Config, den Pfad `schichten.layers` und die beiden Exporte der Schichtdatei.
+ */
+export function ladeSchichten(wurzel = WURZEL) {
+  let pfad;
+  try {
+    pfad = JSON.parse(readFileSync(`${wurzel}scripts/docs-gen/config.json`, "utf8")).schichten?.layers;
+  } catch (e) {
+    return { fehler: `scripts/docs-gen/config.json nicht lesbar (${e instanceof Error ? e.message : String(e)})` };
+  }
+  if (typeof pfad !== "string") return { fehler: "scripts/docs-gen/config.json: schichten.layers fehlt" };
+  try {
+    const { LAYERS, layerOf } = createRequire(import.meta.url)(`${wurzel}${pfad}`);
+    if (typeof LAYERS !== "object" || LAYERS === null || typeof layerOf !== "function") return { fehler: `${pfad} exportiert LAYERS und layerOf nicht` };
+    return { LAYERS, layerOf };
+  } catch (e) {
+    return { fehler: `${pfad} nicht ladbar (${e instanceof Error ? e.message : String(e)})` };
+  }
+}
+const SCHICHTEN = ladeSchichten();
+// Fail-closed: bei einem Ladefehler beendet `main` mit Exit 2; ein anderer Aufrufer, der `layerOf` nutzt, bekommt den Fehler geworfen statt einer stillen Schicht.
+const LAYERS = SCHICHTEN.LAYERS ?? {};
+const layerOf =
+  SCHICHTEN.layerOf ??
+  (() => {
+    throw new Error(`Schichtdaten nicht ladbar: ${SCHICHTEN.fehler}`);
+  });
 
 /** Wo der v8-Reporter das lcov ablegt (reportsDirectory in vite.config.ts) — relativ zur
  *  Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. Der Standard-Bericht ohne Block `coverage` der Projekt-Config. */
@@ -310,6 +336,10 @@ function ladeConfigOderBeende(red) {
 }
 
 function main() {
+  if (SCHICHTEN.fehler !== undefined) {
+    console.error(`✖ check:diffcoverage: ${SCHICHTEN.fehler}\nFix: in scripts/docs-gen/config.json unter schichten.layers den Pfad der Schichtdatei eintragen (Vorlage: scripts/layers.cjs) und die Datei dort anlegen`);
+    process.exit(AUFRUF_EXIT);
+  }
   // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
   const zeilen = ladeCommitZeilenOderBeende();
   const tty = process.stdout.isTTY;

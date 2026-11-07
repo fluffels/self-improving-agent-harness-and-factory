@@ -195,6 +195,7 @@ describe("datenBefunde", () => {
     assert.equal(rot.length, 1);
     assert.match(rot[0], /^daten\/gross\.json: \d+ Zeilen > Datenbudget 10 ohne Deckel\n {2}Split-Empfehlung: Teilen in mindestens/);
     assert.match(rot[0], /Teilungsebene \$: 2 Schlüssel; größte: a \(/);
+    assert.match(rot[0], /\n {4}Teilungsebene/);
     assert.match(rot[0], /Projekt-Hinweis: Projekttext/);
     assert.deepEqual(info, []);
   });
@@ -267,5 +268,48 @@ describe("check:size als Kindlauf (Verdrahtung, No-op ohne Block)", { timeout: 6
     const kaputt = lauf(repo({ pfade: ["daten"] }));
     assert.equal(kaputt.status, 1, kaputt.text);
     assert.match(kaputt.text, /datengroesse\.budget[\s\S]*Fix:/);
+  });
+});
+
+describe("Deckel-Meldungen: Charakterisierung (factory#7 L5)", () => {
+  const wfHinweis = " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel auf die jetzt gemessene Zahl setzen (ein Konflikt in scripts/check-size.mjs ist dann erwartbar). Wächst die Datei durch den eigenen Diff, gilt weiter: kürzen oder bewusst per reviewtem Commit anheben.";
+  const datHinweis = " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel unter datengroesse.deckel in .factory/projekt.json auf die jetzt gemessene Zahl setzen. Wächst die Datei durch den eigenen Diff, gilt weiter: teilen oder bewusst per reviewtem Commit anheben.";
+  const pruefeDeckel = (sizeRoh as unknown as { pruefeDeckel: (s: { file: string; loc: number; chars?: number }[], d: object[], b?: number) => string[] }).pruefeDeckel;
+  const wf = [{ file: "w.js", max: 1000, maxZeichen: 50000, reason: "t" }];
+  test("Workflow-Deckel: ueber-max, unter-max, ohne Deckel, stale", () => {
+    assert.deepEqual(pruefeDeckel([{ file: "w.js", loc: 1001, chars: 50000 }], wf), [`w.js: 1001 Zeilen > Deckel 1000: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${wfHinweis}`]);
+    assert.deepEqual(pruefeDeckel([{ file: "w.js", loc: 950, chars: 50000 }], wf), [`w.js: 950 Zeilen < Deckel 1000: Deckel auf 950 senken (Ratchet, in scripts/check-size.mjs).${wfHinweis}`]);
+    assert.deepEqual(pruefeDeckel([{ file: "n.js", loc: 801, chars: 1 }], [], 800), ["n.js: 801 Zeilen > Budget 800 ohne Deckel (Eintrag DECKEL in scripts/check-size.mjs mit Begründung, oder kürzen)."]);
+    assert.deepEqual(pruefeDeckel([], wf), ["DECKEL-Eintrag stale: w.js existiert nicht mehr – Eintrag entfernen."]);
+    assert.deepEqual(pruefeDeckel([{ file: "w.js", loc: 800, chars: 1 }], wf, 800), ["DECKEL-Eintrag stale: w.js liegt nicht mehr über 800 LOC – Eintrag entfernen."]);
+  });
+  test("Zeichen-Deckel: Hinweis hängt am Zeichen-Text", () => {
+    assert.deepEqual(pruefeDeckel([{ file: "w.js", loc: 1000, chars: 51000 }], wf), [`w.js: 51000 Zeichen > Deckel 50000: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${wfHinweis}`]);
+    assert.deepEqual(pruefeDeckel([{ file: "w.js", loc: 1000, chars: 100 }], wf), [`w.js: 100 Zeichen < Deckel 50000 − 500: Deckel auf 100 senken (Ratchet, in scripts/check-size.mjs).${wfHinweis}`]);
+  });
+  test("Datenbudget: ueber-max und unter-max tragen den Hinweis mit dem Ort der Projekt-Config", () => {
+    const d = fixture({ "daten/gross.json": zeilen(30) });
+    const block = (max: number): Block => ({ pfade: ["daten"], budget: 10, endungen: [".json"], hinweis: null, deckel: [{ datei: "daten/gross.json", max, grund: "#9 x" }] });
+    assert.equal(datenBefunde(d, block(29)).rot[0].split("\n")[0], `daten/gross.json: 30 Zeilen > Deckel 29: teilen statt wachsen${datHinweis}`);
+    assert.equal(datenBefunde(d, block(31)).rot[0], `daten/gross.json: 30 Zeilen < Deckel 31: Deckel auf 30 senken (Ratchet)${datHinweis}`);
+  });
+});
+
+describe("deckelUrteil und rebaseHinweis (factory#7 L5)", () => {
+  const deckelUrteil = (libRoh as unknown as { deckelUrteil: (o: { ist?: number; max?: number; budget: number }) => string }).deckelUrteil;
+  const rebaseHinweis = (libRoh as unknown as { rebaseHinweis: (o: { ort?: string; zusatz?: string; verb: string }) => string }).rebaseHinweis;
+  test("alle fünf Urteile an den Grenzen", () => {
+    assert.equal(deckelUrteil({ ist: 101, budget: 100 }), "ueber-budget-ohne-deckel");
+    assert.equal(deckelUrteil({ ist: 100, budget: 100 }), "ok");
+    assert.equal(deckelUrteil({ ist: 301, max: 300, budget: 100 }), "ueber-max");
+    assert.equal(deckelUrteil({ ist: 299, max: 300, budget: 100 }), "unter-max");
+    assert.equal(deckelUrteil({ ist: 300, max: 300, budget: 100 }), "ok");
+    assert.equal(deckelUrteil({ ist: undefined, max: 300, budget: 100 }), "stale");
+    assert.equal(deckelUrteil({ ist: 100, max: 300, budget: 100 }), "stale");
+    assert.equal(deckelUrteil({ ist: 50, max: 300, budget: 100 }), "stale");
+  });
+  test("rebaseHinweis setzt Ort, Zusatz und Verb ein", () => {
+    assert.equal(rebaseHinweis({ ort: " unter X in Y", zusatz: " (Z)", verb: "teilen" }), " Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel unter X in Y auf die jetzt gemessene Zahl setzen (Z). Wächst die Datei durch den eigenen Diff, gilt weiter: teilen oder bewusst per reviewtem Commit anheben.");
+    assert.ok(rebaseHinweis({ verb: "kürzen" }).includes("den Deckel auf die jetzt gemessene Zahl setzen. Wächst"));
   });
 });

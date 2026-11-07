@@ -134,7 +134,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
       const eigen = eigenerLogin({ zugang, api, warn: log });
       return { kommentare, owner, eigen, ziel: waehleSammelticket(offene, ziel, (a) => api(a, { token: zugang.token }))?.number };
     },
-    bereite: (zeilen) => bereite(zeilen, { herkunft: zugang.herkunft }),
+    bereite: (zeilen) => bereite(zeilen, { herkunft: zugang.herkunft, eigenes: REPO }),
     postZeilen: (nr, text) => postZeilen(nr, text, ziel, zugang.token),
     heute: new Date().toISOString().slice(0, 10),
     log,

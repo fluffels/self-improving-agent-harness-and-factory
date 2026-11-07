@@ -96,6 +96,7 @@ Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks 
 - **Komplexität je Funktion** (`scripts/**`): `complexity` ≤ 15, `max-lines-per-function` ≤ 120, `max-depth` ≤ 4. Bestand eingefroren in `eslint-suppressions.json` (das Ausmaß des Bestands je Datei steigt nie: `test/harness/komplexitaet-ausmass.test.ts`), Neues bricht sofort, stale Einträge `npm run lint:prune`.
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `SIH-Diffsize-Override: #<nr> warum`.
 - **Abhängigkeiten:** nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`; Ausnahme: Dependabot oder `SIH-Lockfile-Override: #<nr> warum`).
+- **Besitz-Verweise nur in strenger Form oder als Fabrik-Verweis (factory#177).** Wächter: `test/harness/besitz-abschnittsverweise.test.ts`.
 
 ### Verifikation
 

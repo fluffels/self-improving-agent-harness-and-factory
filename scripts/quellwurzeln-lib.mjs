@@ -14,6 +14,12 @@ import { istRelativPosix } from "./relativ-pfad.mjs";
 /** Endungen der JS/TS-Familie (`.d.ts` zählt über `.ts` mit); gilt, wenn `struktur.endungen` fehlt. */
 export const STANDARD_ENDUNGEN = Object.freeze([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 
+/** Standard-Endungen des Datenbudgets (`datengroesse.endungen`): ein Format, kein Projektwort. */
+export const DATEN_STANDARD_ENDUNGEN = Object.freeze([".json"]);
+
+/** Endungen von `check:docmap`, wenn `struktur.endungen` fehlt (wie bisher nur `.ts`, nicht die JS/TS-Familie von check:size). */
+export const DOCMAP_STANDARD_ENDUNGEN = Object.freeze([".ts"]);
+
 /** Doku-Einheiten von `check:docmap` (`struktur.docmapEinheit`): eine Datei oder ein Ordner je Modul; Standard `datei`. */
 export const DOCMAP_EINHEITEN = Object.freeze(["datei", "ordner"]);
 
@@ -103,6 +109,9 @@ function ordnerWalk(rootDir, rel, regex, treffer, maxTiefe, readdir) {
   }
 }
 
+// Die Regexe, die einen Ordner als Treffer des Musters zählen: das Muster selbst, bei abschließendem `/**` (null oder mehr Ebenen) auch das Muster ohne dieses Segment (der Präfix-Ordner selbst).
+const musterRegexe = (muster) => (muster.endsWith("/**") ? [globRegex(muster), globRegex(muster.slice(0, -3))] : [globRegex(muster)]);
+
 /** Die Ordner (repo-relativ, POSIX, sortiert), die ein Eintrag von `struktur.quelle` trifft; ein wörtlicher Pfad ergibt sich selbst, wenn er ein Ordner ist, sonst `[]`.
  *  Ohne `**` ist die Auflösung auf die Segmentzahl des Musters begrenzt (kein Abstieg in `target` oder Modul-Unterbäume, factory#208); `readdir` ist die Dateisystem-Naht. */
 export function ordnerZuMuster(rootDir, muster, readdir = readdirSync) {
@@ -112,7 +121,8 @@ export function ordnerZuMuster(rootDir, muster, readdir = readdirSync) {
   const praefix = segmente.slice(0, erstes).join("/");
   if (praefix !== "" && !istOrdner(join(rootDir, ...praefix.split("/")))) return [];
   const treffer = [];
-  ordnerWalk(rootDir, praefix, globRegex(muster), treffer, segmente.includes("**") ? Infinity : segmente.length, readdir);
+  if (praefix !== "" && musterRegexe(muster).some((re) => re.test(praefix))) treffer.push(praefix);
+  ordnerWalk(rootDir, praefix, { test: (k) => musterRegexe(muster).some((re) => re.test(k)) }, treffer, segmente.includes("**") ? Infinity : segmente.length, readdir);
   return treffer.sort();
 }
 
@@ -126,12 +136,12 @@ export function wurzelPraefixe(pfad, wurzeln) {
       if (pfad.startsWith(`${w}/`)) treffer.add(w);
       continue;
     }
-    const regex = globRegex(w);
+    const regexe = musterRegexe(w);
     const erstes = w.split("/").findIndex((s) => istGlob(s));
     for (let i = 1; i < segmente.length; i++) {
       const praefix = segmente.slice(0, i);
       if (praefix.slice(erstes).some(uebersprungen)) break;
-      if (regex.test(praefix.join("/"))) treffer.add(praefix.join("/"));
+      if (regexe.some((re) => re.test(praefix.join("/")))) treffer.add(praefix.join("/"));
     }
   }
   return [...treffer];

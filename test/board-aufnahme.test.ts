@@ -140,17 +140,30 @@ describe("nimmFehlendeAuf (#1428 Z37, Verdrahtung)", () => {
 describe("aufnahmePlan: fremdes Board (#76)", () => {
   const FABRIK = "zz-org/zz-fabrik";
   const fremd = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
-  test("ein Harness-Issue des eigenen Repos wird abgelehnt, der Grund nennt das führende Repo; ein Produkt-Issue und das Ziel-Repo selbst werden aufgenommen", () => {
+  test("ein Harness-Issue eines Repos ohne Board wird abgelehnt, der Grund nennt das führende Repo; ein Produkt-Issue und das Ziel-Repo selbst werden aufgenommen", () => {
     const harness = { labels: [{ name: FREMD.labels.harness }] };
-    const p = aufnahmePlan([5, 6], { 5: issue(5, harness), 6: issue(6) }, { config: fremd, repo: FREMD.repo });
-    expect(p.aufnehmen.map((a) => a.number)).toEqual([6]);
-    expect(p.abgelehnt).toHaveLength(1);
+    const p = aufnahmePlan([5, 6], { 5: issue(5, harness), 6: issue(6) }, { config: fremd, repo: "zz-org/ohne-board" });
+    expect(p.aufnehmen.map((a) => a.number)).toEqual([]);
+    expect(p.abgelehnt).toHaveLength(2);
     expect(p.abgelehnt[0]).toMatchObject({ number: 5 });
-    expect(p.abgelehnt[0]?.grund).toContain(FABRIK);
+    expect(p.abgelehnt[0]?.grund).toContain(FREMD.repo);
     expect(aufnahmePlan([5], { 5: issue(5, harness) }, { config: fremd, repo: FABRIK }).aufnehmen.map((a) => a.number)).toEqual([5]);
   });
   test("ohne repo wirft aufnahmePlan (kein stiller Standardwert)", () => {
     expect(() => aufnahmePlan([5], { 5: issue(5) }, { config: fremd, repo: undefined })).toThrow(/aufnahmePlan: repo fehlt[^]*Fix:/);
     expect(() => aufnahmePlan([5], { 5: issue(5) }, { config: fremd, repo: "" })).toThrow(/repo fehlt/);
+  });
+});
+
+describe("aufnahmePlan mit Issue-Repo (#238 L28/L29)", () => {
+  const FABRIK = "zz-org/zz-fabrik";
+  const bezieher = { ...FREMD, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  const harness = issue(5, { labels: [{ name: FREMD.labels.harness }] });
+  test("Bezieher: ein Harness-Issue des eigenen Repos wird auf dem Produkt-Board aufgenommen", () => {
+    expect(aufnahmePlan([5], { 5: harness }, { config: bezieher })).toMatchObject({ aufnehmen: [{ number: 5, rolle: "produkt" }], abgelehnt: [] });
+  });
+  test("im Repo des Factory-Boards bleibt es factory; ein Repo ohne Board wird abgelehnt", () => {
+    expect(aufnahmePlan([5], { 5: harness }, { config: bezieher, repo: FABRIK }).aufnehmen[0]?.rolle).toBe("factory");
+    expect(aufnahmePlan([5], { 5: harness }, { config: bezieher, repo: "zz-org/ohne-board" }).abgelehnt[0]?.grund).toMatch(/nicht die von zz-org\/ohne-board/);
   });
 });

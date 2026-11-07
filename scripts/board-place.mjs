@@ -156,7 +156,7 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   for (const nr of numbers) {
     const labels = [stehtAuf(produkt, nr), stehtAuf(factory, nr)].map((i) => i?.labels).find(Array.isArray) ?? labelsRest[nr];
     if (!Array.isArray(labels)) return { fehler: `#${nr}: Board-Rolle nicht bestimmbar (weder Labels im Board-Item noch aus dem Issue)` };
-    rollen.set(nr, boardRolleFuer(labels, config));
+    rollen.set(nr, boardRolleFuer(labels, config, { repo }));
   }
   const verschieden = new Set(rollen.values());
   if (verschieden.size !== 1) return { fehler: `gemischte Nummern: ${[...rollen].map(([nr, rolle]) => `#${nr} ${rolle}`).join(", ")}; getrennt einsortieren` };

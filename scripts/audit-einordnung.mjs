@@ -14,9 +14,8 @@
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
-import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen } from "./inbox-start-lib.mjs";
+import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen, ladeWiedervorlagen } from "./inbox-start-lib.mjs";
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -168,10 +167,10 @@ function ladeAlerts(repo) {
 }
 
 /** Bekannte GHSA-IDs aus Sammelticket-Zeilen, Wiedervorlagen und Titeln offener Security-Tickets. */
-function ladeBekannte({ kommentare, rohe, OWNER, offeneTitel }) {
+function ladeBekannte({ kommentare, rohe, OWNER, offeneTitel, lies }) {
   return bekannteGhsa({
     kommentare: vertrauteBodies(kommentare, OWNER),
-    wiedervorlagen: JSON.parse(readFileSync(WIEDERVORLAGEN, "utf8")),
+    wiedervorlagen: ladeWiedervorlagen(WIEDERVORLAGEN, lies),
     // Nur Titel vertrauter Autoren: ein Fremder darf mit einem „🔒 Security: GHSA-…“-Titel keinen Alarm unterdrücken.
     offeneTitel: offeneTitel(rohe, OWNER),
   });
@@ -218,7 +217,7 @@ function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log,
 }
 
 /** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, bezieher, bereite, log = console.log, err = console.error } = {}) {
+export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, bezieher, bereite, lies, log = console.log, err = console.error } = {}) {
   const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken } = start;
@@ -227,7 +226,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const aktion = zielAktionen({ gh, libs });
   const kontext = ladeSammelKontext();
   const { rohe, offene, kommentare } = kontext;
-  const bekannt = ladeBekannte({ kommentare, rohe, OWNER: vertrauterOwner(kontext, libs), offeneTitel });
+  const bekannt = ladeBekannte({ kommentare, rohe, OWNER: vertrauterOwner(kontext, libs), offeneTitel, lies });
   const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
   const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(alertsLaden(REPO))], bekannt });
   if (aktionen.length === 0) {

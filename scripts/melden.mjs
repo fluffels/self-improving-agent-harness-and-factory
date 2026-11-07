@@ -45,7 +45,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     return AUFRUF_EXIT;
   }
   const zugang = meldestelleZugang({ stelle: libs.MELDESTELLE, eigenes: libs.REPO, env });
-  const meldung = bereite(werte.zeile.map(alsListenpunkt), { herkunft: zugang.herkunft });
+  const meldung = bereite(werte.zeile.map(alsListenpunkt), { herkunft: zugang.herkunft, eigenes: libs.REPO });
   if (!meldung.ok) {
     err(`::error::melden: ${meldung.grund}`);
     return 1;

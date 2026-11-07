@@ -2,8 +2,8 @@ name: Factory-Update (Wochenlauf)
 
 # Meldet einmal pro Woche, wenn die Factory einen neueren Release-Tag hat als der Sync-Stand dieses Projekts (scripts/factory-update-check.mjs).
 # Bei einem Treffer entsteht ein Issue "🔄 Factory-Update" oder, wenn es offen ist, ein Kommentar darauf (Dedupe über den Titel wie in
-# dependabot-inbox.yml). Das Board übernimmt board-takt, darum kein PROJECT_TOKEN. Ohne Sync-Stand (Quelle selbst) tut der Lauf nichts; ist das
-# Factory-Repo nicht lesbar, warnt er und bleibt grün.
+# dependabot-inbox.yml). Ein neu angelegtes Issue schiebt board-place.mjs mit PROJECT_TOKEN an die oberste Board-Position (fehlt das Secret,
+# nur eine Warnung). Ohne Sync-Stand (Quelle selbst) tut der Lauf nichts; ist das Factory-Repo nicht lesbar, warnt er und bleibt grün.
 
 on:
   schedule:
@@ -49,6 +49,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           MELDE_LABEL: ${{ steps.label.outputs.wert }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: |
           set -uo pipefail
           marker="🔄 Factory-Update"
@@ -73,6 +74,15 @@ jobs:
             echo "Bestehende Meldung #$existing, ergänze per Kommentar."
             gh issue comment "$existing" --repo "$REPO" --body "$text"
           else
-            gh issue create --repo "$REPO" --title "$marker" --label "$MELDE_LABEL" \
-              --body "$(printf '%s\n\nAblauf: Factory-Repo auf den Tag auschecken, dann den Sync-Befehl oben mit dem Pfad dieses Checkouts fahren, Diff prüfen und per PR mergen.' "$text")"
+            new_url=$(gh issue create --repo "$REPO" --title "$marker" --label "$MELDE_LABEL" \
+              --body "$(printf '%s\n\nAblauf: Factory-Repo klonen oder per git fetch --tags aktualisieren (ein Checkout des Tags ist nicht nötig, der Sync liest den Tag per git), dann den Sync-Befehl oben mit dem Pfad dieses Klons fahren, Diff prüfen und per PR mergen.' "$text")")
+            echo "Angelegt: ${new_url}"
+            # An die oberste Board-Position schieben (Kopf-Art update) – nur beim NEUEN Issue, nicht beim Ergänzen.
+            nr="${new_url##*/}"
+            if [ -z "${PROJECT_TOKEN:-}" ]; then
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für #${nr} nicht gesetzt (Fix: PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen)"
+            elif ! GH_TOKEN="$PROJECT_TOKEN" node scripts/board-place.mjs --notfall update --top "$nr"; then
+              echo "::error::Board-Position für #${nr} nicht gesetzt – board-place.mjs ist gescheitert (Fix: Token-Scope Issues-Zugriff auf ${REPO} und Projects-Schreibrecht)"
+              exit 1
+            fi
           fi

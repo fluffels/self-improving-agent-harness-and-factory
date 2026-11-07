@@ -413,7 +413,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     assert.deepEqual(aufrufe[0], [["api", "user"], { token: "mt" }]);
     assert.deepEqual(gepostet, [], "die eigene Zeile des fremden Kontos ist bekannt");
     assert.equal(await melden.main([], { ...deps, pruefLauf: () => ({ ergebnis: [{ ...luecke, punkt: "Neu" }] }) }), 0);
-    assert.deepEqual(herkunft, [{ herkunft: "acme/proj" }]);
+    assert.deepEqual(herkunft, [{ herkunft: "acme/proj", eigenes: "acme/proj" }]);
     assert.equal(gepostet.length, 1);
   });
   test("Standard-bereite (ohne Injektion) schreibt die Herkunft in die Meldung: nackte #n werden owner/name#n", async () => {

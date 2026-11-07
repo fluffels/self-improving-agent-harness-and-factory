@@ -300,6 +300,13 @@ describe("Bereich (#1552)", () => {
     expect(r.ticket).toBeNull();
     expect(r.uebersprungen).toEqual([]);
   });
+  test("das Update-Meldeticket des Bots ist ein Kopf-Item: es kommt vor dem obersten freien Item, ohne Fremdeingang", () => {
+    const bot = { user: { login: "github-actions[bot]", type: "Bot" }, labels: [{ name: HARNESS }] };
+    const board = norm([item(2, { labels: [{ name: HARNESS }] }), item(1, { title: "🔄 Factory-Update", ...bot })]);
+    const r = N.waehleUeberBoards({ produkt: [], factory: board, bereich: "agentic", offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG });
+    expect(r.ticket?.nr).toBe(1);
+    expect(r.uebersprungen).toEqual([]);
+  });
 });
 
 describe("prHeadsAus: REST-Form der offenen PRs (#1549 Z1)", () => {
@@ -1439,6 +1446,22 @@ describe("Design-Schritt in der Auswahl (factory#172)", () => {
   });
 });
 
+describe("Trennregel mit Issue-Repo im Bezieher (#238 L28)", () => {
+  // Das Factory-Board führt das Fabrik-Repo; ein Harness-Issue des eigenen Repos (Produkt-Board) gehört zur Produkt-Seite.
+  const bez = { ...CFG, repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "zz-org/zz-fabrik" } : b)) };
+  const wahl = (cfg: unknown, bereich: string, repoVon: string) =>
+    N.waehleUeberBoards({ produkt: norm([item(1, { labels: [{ name: HARNESS }] })]), factory: [], offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: cfg, bereich, repo: repoVon, fuellstand: () => 0 });
+  test("Bezieher: das Harness-Issue des eigenen Repos wird im Bereich produkt gewählt, nicht übersprungen", () => {
+    expect(wahl(bez, "produkt", FREMD.repo).ticket?.nr).toBe(1);
+    expect(wahl(bez, "agentic", FREMD.repo).ticket).toBeNull();
+  });
+  test("Fabrik (beide Boards ein Repo): das Harness-Issue bleibt auf der agentic-Seite", () => {
+    const fabrik = { ...CFG, repo: FREMD.repo, boards: FREMD.boards };
+    expect(wahl(fabrik, "agentic", FREMD.repo).ticket?.nr).toBe(1);
+    expect(wahl(fabrik, "produkt", FREMD.repo).ticket).toBeNull();
+  });
+});
+
 describe("Milestone-Vorrang (factory#194)", () => {
   const H = { labels: [{ name: HARNESS }] };
   const ms = (n: number, due: string | null, state = "open", title = `Release ${n}`) => ({ milestone: { number: n, title, state, due_on: due } });
@@ -1508,5 +1531,19 @@ describe("Milestone-Vorrang (factory#194)", () => {
     expect("hinweise" in ohne).toBe(false);
     expect(waehle([item(1, { ...H, ...vergeben }), item(2, H)]).uebersprungen.map((u) => u.nr)).toEqual([1]);
     expect(N.formatiere({ ...ohne, bereich: "agentic" } as never)).not.toContain("Milestone");
+  });
+});
+
+describe("imBereich mit Item-Repo (#238 L28)", () => {
+  const bez = { ...CFG, repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "zz-org/zz-fabrik" } : b)) };
+  const imBereich = (N as unknown as { imBereich: (i: unknown, b: string, c: unknown) => boolean }).imBereich;
+  const h = (repo: string) => ({ title: "T", labels: [HARNESS], repo });
+  test("Bezieher: das Harness-Issue des eigenen Repos gehört zum Bereich produkt, nicht zu agentic", () => {
+    expect(imBereich(h(FREMD.repo), "produkt", bez)).toBe(true);
+    expect(imBereich(h(FREMD.repo), "agentic", bez)).toBe(false);
+  });
+  test("im Repo des Factory-Boards gehört es zu agentic; ohne Repo-Angabe gilt das Label allein", () => {
+    expect(imBereich(h("zz-org/zz-fabrik"), "agentic", bez)).toBe(true);
+    expect(imBereich(h(""), "agentic", bez)).toBe(true);
   });
 });

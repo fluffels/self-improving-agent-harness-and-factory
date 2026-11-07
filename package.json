@@ -41,6 +41,9 @@
     "cockpit": "node scripts/cockpit/cockpit.mjs",
     "offene-punkte": "node scripts/offene-punkte.mjs"
   },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",

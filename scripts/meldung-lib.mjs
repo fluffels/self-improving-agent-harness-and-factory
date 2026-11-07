@@ -26,19 +26,25 @@ import { STAND_PFAD, liesSyncStand } from "./sync-stand-lib.mjs";
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PRUEFER = join(WURZEL, "scripts", "check-internalrefs.mjs");
 
-/** Pur: die Stand-Zeile (`factory: v0.6.0 (abc1234)`) zu einem Sync-Stand `{ zustand, stand }` (`liesSyncStand`); `null` ohne Sync-Stand (kein Bezieher). */
-export function factoryStand({ zustand, stand }) {
+/**
+ * Pur: die Stand-Zeile (`factory: v0.6.0 (abc1234)`) zu einem Sync-Stand `{ zustand, stand }` (`liesSyncStand`); `null` ohne Sync-Stand (kein Bezieher).
+ * Mit `eigenes` (`owner/name`, das Repo des Absenders) hängt die Zeile ` · <owner/name>` an (factory#238): die Meldestelle sieht, von wem die Meldung kommt.
+ */
+export function factoryStand({ zustand, stand }, eigenes = null) {
   if (zustand === "fehlt") return null;
-  if (zustand !== "ok") return "factory: unbekannt (Sync-Stand unlesbar)";
+  const von = eigenes ? ` · ${eigenes}` : "";
+  if (zustand !== "ok") return `factory: unbekannt (Sync-Stand unlesbar)${von}`;
   const quelle = stand?.quelle ?? {};
   const tag = typeof quelle.tag === "string" && quelle.tag !== "" ? quelle.tag : "ohne Tag";
   const commit = typeof quelle.commit === "string" && quelle.commit !== "" ? quelle.commit.slice(0, 7) : "unbekannt";
-  return `factory: ${tag} (${commit})`;
+  return `factory: ${tag} (${commit})${von}`;
 }
 
-const STAND_ZEILE = /^factory: .+ \((?:[0-9a-f]{7}|unbekannt)\)$/;
-/** Pur (factory#152): ist `zeile` genau eine Stand-Zeile, wie `factoryStand` sie erzeugt (`factory: <tag> (<7 hex|unbekannt>)` oder `factory: unbekannt (Sync-Stand unlesbar)`)? */
-export const istStandZeile = (zeile) => STAND_ZEILE.test(zeile) || zeile === "factory: unbekannt (Sync-Stand unlesbar)";
+const REPO_ZUSATZ = String.raw`(?: · [\w.-]+\/[\w.-]+)?`;
+const STAND_ZEILE = new RegExp(String.raw`^factory: .+ \((?:[0-9a-f]{7}|unbekannt)\)${REPO_ZUSATZ}$`);
+const STAND_ZEILE_UNLESBAR = new RegExp(String.raw`^factory: unbekannt \(Sync-Stand unlesbar\)${REPO_ZUSATZ}$`);
+/** Pur (factory#152): ist `zeile` genau eine Stand-Zeile, wie `factoryStand` sie erzeugt (`factory: <tag> (<7 hex|unbekannt>)` oder `factory: unbekannt (Sync-Stand unlesbar)`, je mit dem Zusatz ` · <owner/name>`)? */
+export const istStandZeile = (zeile) => STAND_ZEILE.test(zeile) || STAND_ZEILE_UNLESBAR.test(zeile);
 
 /** Pur: der Kommentartext aus den Zeilen und der Stand-Zeile (`null` = ohne Fußzeile). */
 export const meldungsText = (zeilen, stand) => (stand === null ? zeilen.join("\n") : `${zeilen.join("\n")}\n\n${stand}`);
@@ -99,13 +105,13 @@ export function textSauber(text, exec = spawnSync) {
  * Die Meldung zu den Zeilen: `{ ok: true, text }` oder `{ ok: false, grund }`, wenn die Sperrprüfung anschlägt. `pruefe(text)` (Standard `textSauber`) sieht den
  * ganzen Text samt Stand-Zeile (nach `nummernMitHerkunft`, wenn `herkunft` gesetzt ist); `stand` ist die Stand-Zeile (`null`: keine; Standard: aus `.factory/sync-stand.json` unter `wurzel`, ist die Datei dann unlesbar, wird nichts gesendet).
  */
-export function bereiteMeldung(zeilen, { wurzel = WURZEL, pruefe = textSauber, stand = undefined, herkunft = null } = {}) {
+export function bereiteMeldung(zeilen, { wurzel = WURZEL, pruefe = textSauber, stand = undefined, herkunft = null, eigenes = null } = {}) {
   let zeile = stand;
   if (zeile === undefined) {
     const gelesen = liesSyncStand(wurzel);
     if (gelesen.zustand === "kaputt") return { ok: false, grund: `Meldung nicht gesendet: ${STAND_PFAD} ist nicht lesbar (kein JSON-Objekt), die Meldung hätte keine Herkunftsangabe
 Fix: die Datei reparieren (git checkout -- ${STAND_PFAD} oder factory-update erneut ausführen)` };
-    zeile = factoryStand(gelesen);
+    zeile = factoryStand(gelesen, eigenes);
   }
   const text = meldungsText(zeilen.map((z) => nummernMitHerkunft(z, herkunft)), zeile);
   if (!pruefe(text)) return { ok: false, grund: "Meldung nicht gesendet: check-internalrefs --text meldet einen Treffer\nFix: die Zeile neutral formulieren (die Sache benennen, keine internen Namen)" };

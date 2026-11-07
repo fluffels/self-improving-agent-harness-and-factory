@@ -7,7 +7,7 @@ import { homedir, tmpdir } from "node:os";
 import * as raw from "../../scripts/codex-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as cliRaw from "../../scripts/codex-setup.mjs";
-const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
+const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string, a?: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
 const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void) => number };
 const config = { agenten: { planer: "probe-planer", umsetzer: "probe-umsetzer", lens: "probe-lens", gruppe: "probe-gruppe" } };
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["--probe"] } } };
@@ -65,6 +65,27 @@ test.each(["a", "a".repeat(64)])("erlaubte Namensgrenze", name => {
 test("abweichender Playwright-Befehl wird übernommen; fehlende Rollentabelle stoppt", () => {
   expect(c.setupDateien({ mcpServers: { playwright: { command: "runner", args: [] } } }, config, endpoint)[".codex/config.toml"]).toContain('command = "runner"');
   expect(() => c.setupDateien(mcp, {}, endpoint)).toThrow(/Rollenname/);
+});
+test("langfuseAuth host: kein env_http_headers, aber required und Lese-Toolliste; env und Standard mit Header", () => {
+  const host = c.setupDateien(mcp, config, endpoint, "host")[".codex/config.toml"];
+  expect(host).not.toContain("env_http_headers");
+  expect(host).toContain("required = true");
+  expect(host).toContain('enabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]');
+  expect(c.setupDateien(mcp, config, endpoint, "env")[".codex/config.toml"]).toContain("env_http_headers");
+  expect(c.setupDateien(mcp, config, endpoint)[".codex/config.toml"]).toContain("env_http_headers");
+  expect(() => c.setupDateien(mcp, config, endpoint, "anders")).toThrow(/langfuseAuth/);
+});
+test("CLI --langfuse-auth: host ohne Header, ungültiger Wert Exit 2", () => {
+  const root = quelle(), ziel = join(temp(), "neu"), args = ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"];
+  expect(lauf(root, [...args, "--langfuse-auth", "host"]).code).toBe(0);
+  expect(readFileSync(join(ziel, ".codex/config.toml"), "utf8")).not.toContain("env_http_headers");
+  const schlecht = lauf(root, ["--langfuse-url", endpoint, "--langfuse-auth", "anders"]);
+  expect(schlecht.code).toBe(2); expect(schlecht.err.join()).toContain("--langfuse-auth");
+});
+test("Rollentext mit Shell nennt die Read-Pflicht per exec_command; ohne Shell nicht", () => {
+  const files = c.setupDateien(mcp, config, endpoint);
+  expect(files[".codex/agents/probe-planer.toml"]).toContain("exec_command");
+  expect(files[".codex/agents/holdout-szenario.toml"]).not.toContain("exec_command");
 });
 test("Standard-Ausgabe bleibt im geprüften Quellrepo, Vorschau ist schreibfrei", () => {
   const root = quelle(), args = ["--langfuse-url", endpoint];

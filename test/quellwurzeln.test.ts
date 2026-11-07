@@ -109,6 +109,13 @@ describe("ordnerZuMuster und quellDateien (factory#181)", () => {
     assert.deepEqual(lib.ordnerZuMuster(d, "datei-nur"), []);
     assert.deepEqual(lib.ordnerZuMuster(d, "nix"), []);
   });
+  test("abschließendes /** trifft auch den Präfix-Ordner selbst (null Ebenen)", () => {
+    const d = fixture({ "a/x.json": "x", "a/b/y.json": "x", "c/z.json": "x" });
+    assert.deepEqual(lib.ordnerZuMuster(d, "a/**"), ["a", "a/b"]);
+    assert.deepEqual(lib.ordnerZuMuster(d, "a/*"), ["a/b"]);
+    assert.deepEqual(lib.quellDateien(d, { wurzeln: ["a/**"], endungen: [".json"] }), ["a/x.json", "a/b/y.json"].sort());
+    assert.deepEqual((rawLib as unknown as { wurzelPraefixe: (p: string, w: string[]) => string[] }).wurzelPraefixe("a/x.json", ["a/**"]), ["a"]);
+  });
   test("quellDateien: Endungsfilter, ohne, Dubletten und .d.ts", () => {
     const d = fixture({
       "a/src/A.java": "x", "a/src/ATest.java": "x", "a/src/app.spec.ts": "x", "a/src/t.d.ts": "x", "a/src/t.json": "x", "a/src/k.ts": "x",

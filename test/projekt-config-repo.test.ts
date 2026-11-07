@@ -76,6 +76,29 @@ describe("zielRepoFuer", () => {
   });
 });
 
+/* Trennregel mit Issue-Repo (#238 L28/L29): das Harness-Label zählt nur zur Factory-Seite, wenn das Factory-Board das Repo des Issues führt. */
+describe("boardRolleFuer mit { repo }", () => {
+  const rolle = raw as unknown as { boardRolleFuer(labels: unknown, config: unknown, o?: { repo?: string }): string };
+  const h = [FREMD.labels.harness];
+  const bezieher = mitFactoryRepo(FABRIK); // Factory-Board führt FABRIK, Produkt-Board das eigene Repo
+  test("Repo des Factory-Boards (auch in anderer Schreibweise) ergibt factory", () => {
+    assert.equal(rolle.boardRolleFuer(h, bezieher, { repo: FABRIK }), "factory");
+    assert.equal(rolle.boardRolleFuer(h, bezieher, { repo: FABRIK.toUpperCase() }), "factory");
+  });
+  test("fremdes Repo (Bezieher-Issue mit Harness-Label) ergibt produkt", () => {
+    assert.equal(rolle.boardRolleFuer(h, bezieher, { repo: FREMD.repo }), "produkt");
+  });
+  test("Repo ohne Board bleibt produkt; das Produkt-Label bleibt produkt", () => {
+    assert.equal(rolle.boardRolleFuer(h, bezieher, { repo: "zz-org/ohne-board" }), "produkt");
+    assert.equal(rolle.boardRolleFuer(["bug"], bezieher, { repo: FABRIK }), "produkt");
+  });
+  test("ohne repo (oder leer) gilt das heutige Verhalten, in der Fabrik (beide Boards ein Repo) bleibt es unverändert", () => {
+    assert.equal(rolle.boardRolleFuer(h, bezieher), "factory");
+    assert.equal(rolle.boardRolleFuer(h, bezieher, { repo: "" }), "factory");
+    assert.equal(rolle.boardRolleFuer(h, mitFactoryRepo(), { repo: FREMD.repo }), "factory");
+  });
+});
+
 describe("fremdesBoardText", () => {
   test("null beim eigenen Repo (auch ohne Groß-/Kleinschreibung), sonst Text mit Rolle, geführtem Repo und Fix", () => {
     const c = mitFactoryRepo(FABRIK);

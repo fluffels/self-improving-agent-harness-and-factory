@@ -226,9 +226,12 @@ describe("CI-Zustand und Body", () => {
   });
   it("L5: Tag-Befehl aus einem Worktree auf dem Commit, mit Hook-Hinweis und Aufräumen", () => {
     const sha = "b".repeat(40);
-    const block = body.slice(body.indexOf("```") + 3, body.indexOf("```", body.indexOf("```") + 3)).split("\n").filter(Boolean);
+    const eins = body.indexOf("```"), zwei = body.indexOf("```", eins + 3), drei = body.indexOf("```", zwei + 3), vier = body.indexOf("```", drei + 3);
+    const block = body.slice(eins + 3, zwei).split("\n").filter(Boolean), block2 = body.slice(drei + 3, vier).split("\n").filter(Boolean);
     const wt = ".claude/worktrees/tag-v1.3.0";
-    expect(block).toEqual(["git fetch origin --tags", `gh run list --commit ${sha} --workflow ci.yml`, `git worktree add --detach ${wt} ${sha}`, `git -C ${wt} tag -a v1.3.0 ${sha} -m "v1.3.0"`, `git -C ${wt} push origin v1.3.0`, `git worktree remove ${wt}`]);
+    expect(block).toEqual(["git fetch origin --tags", `gh run list --commit ${sha} --workflow ci.yml`, `git worktree add --detach ${wt} ${sha}`]);
+    expect(block2).toEqual([`git -C ${wt} tag -a v1.3.0 ${sha} -m "v1.3.0"`, `git -C ${wt} push origin v1.3.0`, `git worktree remove ${wt}`]);
+    expect(body).toContain("worktree add und tag/push in getrennten Aufrufen, der Hook prüft den Worktree beim Auswerten");
     expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
     expect(body).not.toMatch(/^git tag -a/m);
   });

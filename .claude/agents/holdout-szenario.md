@@ -1,6 +1,6 @@
 ---
 name: holdout-szenario
-description: Schreibt Prüfszenarien (Gegeben/Wenn/Dann, Negativfall, Beobachtungsweg) zu den Akzeptanzkriterien eines Tickets, allein aus Ticket und Kriterienliste. Nur vom Hauptchat vor dem Planen spawnen, nie vom Umsetzer.
+description: Schreibt Prüfszenarien (Gegeben/Wenn/Dann, Negativfall, Beobachtungsweg) zu den Akzeptanzkriterien eines Tickets, allein aus Ticket und Kriterienliste. Nur vom Hauptchat nach einem Plan ohne Epic-Weiche im Hintergrund spawnen, nie vom Umsetzer.
 model: opus
 effort: medium
 tools: Read, Grep, Glob

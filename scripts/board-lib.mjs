@@ -78,7 +78,7 @@ export function seitenListen(produkt, factory, config) {
   const falsch = [];
   for (const [board, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const soll = boardRolleFuer(i.labels ?? [], config);
+      const soll = boardRolleFuer(i.labels ?? [], config, { repo: i.repo });
       if (board === soll) richtig[soll].push(i);
       else if (!beide.has(i.number)) {
         verirrt[soll].push(i);
@@ -103,7 +103,7 @@ export function umzugsPlan(produkt, factory, config, repo) {
   const gemeldet = [];
   for (const [von, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const nach = boardRolleFuer(i.labels ?? [], config);
+      const nach = boardRolleFuer(i.labels ?? [], config, { repo: i.repo || repo });
       if (i.state !== "open" || nach === von) continue;
       const fremd = fremdesBoardText(nach, i.repo || repo, config);
       if (fremd) {
@@ -214,6 +214,8 @@ export const NOTFAELLE = [
   { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
   // Der Titel entsteht in scripts/tag-takt.mjs (Release-Tag setzen, #103).
   { art: "tag", marker: "🏷️ Tag ", quelle: "scripts/tag-takt.mjs" },
+  // Der Titel entsteht im Wochenlauf .github/workflows/factory-update.yml (neuer Factory-Release für Bezieher).
+  { art: "update", marker: "🔄 Factory-Update", quelle: ".github/workflows/factory-update.yml" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
