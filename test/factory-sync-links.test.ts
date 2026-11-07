@@ -916,7 +916,8 @@ describe("factory-sync --tag: Hinweise nach dem Sync (Projektseiten, eslint-Supp
   function lauf(argv: string[], opt: { zweitlauf?: ((argv: string[]) => number) | null; env?: Record<string, string> } = {}): { code: number; out: string; err: string } {
     const out: string[] = [];
     const err: string[] = [];
-    const code = (sync.cli as unknown as (a: string[], o: CliOpt) => number)(argv, { out: (s) => out.push(s), err: (s) => err.push(s), ...opt });
+    const cliMit = (a: string[], o: CliOpt): number => sync.cli(a, o);
+    const code = cliMit(argv, { out: (s) => out.push(s), err: (s) => err.push(s), ...opt });
     return { code, out: out.join("\n"), err: err.join("\n") };
   }
 

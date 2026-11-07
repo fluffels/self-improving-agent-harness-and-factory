@@ -404,16 +404,16 @@ function suppressionsHinweise(plan) {
 
 /**
  * Zweiter Lauf, wenn der Sync eine Datei unter `scripts/` geschrieben hat (das laufende Werkzeug ist dann veraltet): einmal, nie mit `--trocken`, nie mit gesetztem Riegel,
- * nur mit injiziertem `zweitlauf`. Rückgabe: dessen Exit-Code oder `null` (kein Neustart).
+ * nur mit injiziertem `zweitlauf`. Rückgabe: dessen Exit-Code, sonst 0 (kein Neustart).
  */
-function zweiterLauf({ plan, opt, argv, zweitlauf, env, out }) {
-  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || ![...plan.dateien.keys()].some((p) => p.startsWith("scripts/"))) return null;
+function zweiterLauf({ plan, opt, argv, out, zweitlauf = null, env = process.env }) {
+  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || ![...plan.dateien.keys()].some((p) => p.startsWith("scripts/"))) return 0;
   out("Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand");
   return zweitlauf(argv);
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
-export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)), zweitlauf = null, env = process.env } = {}) {
+export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)), ...weitere } = {}) {
   const opt = parseArgs(argv);
   const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken] [--uebernehmen <pfad>]…";
   if (opt.fehler !== null) {
@@ -483,7 +483,7 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
   for (const h of [...suppressionsHinweise(plan), ...kontextHinweise(plan, ziel)]) out(h);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");
   out(`factory-sync: ${plan.dateien.size} ${opt.trocken ? "zu ändern" : "geändert"}, ${plan.unveraendert} unverändert`);
-  return zweiterLauf({ plan, opt, argv, zweitlauf, env, out }) ?? 0;
+  return zweiterLauf({ plan, opt, argv, out, ...weitere });
 }
 
 if (istDirektaufruf(import.meta.url)) {
