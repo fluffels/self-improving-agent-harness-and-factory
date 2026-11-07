@@ -2,6 +2,22 @@
 // Gemessen werden physische Zeilen wie bei `check:size` (CRLF-neutral). Bekannte Grenzen: einzeiliges oder minifiziertes JSON umgeht das Zeilen-Budget
 // (bewusst kein Zeichen-Deckel); die Zeilenangaben der Split-Empfehlung sind eine Schätzung (`JSON.stringify(…, null, 2)`, daher „≈“).
 
+/** Pur: das gemeinsame Deckel-Urteil (Workflow-Skripte und Datenbudget). `ist` = gemessene Zeilen (`undefined`: Datei fehlt), `max` = Deckel (`undefined`: keiner), `budget`.
+ *  `stale`: Datei fehlt, oder sie liegt mit Deckel nicht mehr über dem Budget; `ueber-budget-ohne-deckel`; `ueber-max`; `unter-max` (Deckel senken); sonst `ok`
+ *  (ohne Deckel nicht über dem Budget, oder Zeilenzahl gleich Deckel). Über dem Budget heißt strikt größer. */
+export function deckelUrteil({ ist, max, budget }) {
+  if (ist === undefined) return "stale";
+  if (ist <= budget) return max === undefined ? "ok" : "stale";
+  if (max === undefined) return "ueber-budget-ohne-deckel";
+  if (ist > max) return "ueber-max";
+  return ist < max ? "unter-max" : "ok";
+}
+
+/** Pur: der Rebase-Hinweis zu `ueber-max`/`unter-max`; `ort` (etwa „ unter datengroesse.deckel in <Datei>“) steht hinter „den Deckel“, `zusatz` hinter „setzen“, `verb` ist die Alternative zum Wachsen (kürzen, teilen). */
+export function rebaseHinweis({ ort = "", zusatz = "", verb }) {
+  return ` Paralleler PR, der dieselbe Datei ändert? Nach dem Rebase auf origin/main den Deckel${ort} auf die jetzt gemessene Zahl setzen${zusatz}. Wächst die Datei durch den eigenen Diff, gilt weiter: ${verb} oder bewusst per reviewtem Commit anheben.`;
+}
+
 /** Pur: Urteile je Datei. `sizes` = `[{ file, loc }]` (nur Dateien unter dem Datenpfad), `deckel` = `[{ datei, max, grund }]`.
  *  Rückgabe `[{ datei, loc, art, text }]`; `art`: `ueber-budget` (ohne Deckel), `ueber-max`, `unter-max` (Deckel senken), `stale` (Datei fehlt oder liegt nicht mehr über dem Budget),
  *  `geduldet` (Zeilenzahl gleich Deckel, kein Fehler). Über dem Budget heißt strikt größer (`loc === budget` ist grün). */
@@ -12,15 +28,17 @@ export function pruefeDatenGroessen(sizes, { budget, deckel = [] }) {
   for (const { file, loc } of sizes) {
     if (loc <= budget) continue;
     const d = eintrag.get(file);
-    if (!d) urteile.push({ datei: file, loc, art: "ueber-budget", text: `${file}: ${loc} Zeilen > Datenbudget ${budget} ohne Deckel` });
-    else if (loc > d.max) urteile.push({ datei: file, loc, art: "ueber-max", text: `${file}: ${loc} Zeilen > Deckel ${d.max}: teilen statt wachsen` });
-    else if (loc < d.max) urteile.push({ datei: file, loc, art: "unter-max", text: `${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet)` });
+    const art = deckelUrteil({ ist: loc, max: d?.max, budget });
+    if (art === "ueber-budget-ohne-deckel") urteile.push({ datei: file, loc, art: "ueber-budget", text: `${file}: ${loc} Zeilen > Datenbudget ${budget} ohne Deckel` });
+    else if (art === "ueber-max") urteile.push({ datei: file, loc, art, text: `${file}: ${loc} Zeilen > Deckel ${d.max}: teilen statt wachsen` });
+    else if (art === "unter-max") urteile.push({ datei: file, loc, art, text: `${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet)` });
     else urteile.push({ datei: file, loc, art: "geduldet", text: `${file}: ${loc} Zeilen = Deckel ${d.max} – ${d.grund}` });
   }
   for (const d of deckel) {
     const loc = bekannt.get(d.datei);
+    if (deckelUrteil({ ist: loc, max: d.max, budget }) !== "stale") continue;
     if (loc === undefined) urteile.push({ datei: d.datei, loc: 0, art: "stale", text: `Deckel-Eintrag stale: ${d.datei} existiert nicht mehr (oder liegt außerhalb des Datenpfads) – Eintrag entfernen` });
-    else if (loc <= budget) urteile.push({ datei: d.datei, loc, art: "stale", text: `Deckel-Eintrag stale: ${d.datei} liegt nicht mehr über ${budget} Zeilen – Eintrag entfernen` });
+    else urteile.push({ datei: d.datei, loc, art: "stale", text: `Deckel-Eintrag stale: ${d.datei} liegt nicht mehr über ${budget} Zeilen – Eintrag entfernen` });
   }
   return urteile;
 }
