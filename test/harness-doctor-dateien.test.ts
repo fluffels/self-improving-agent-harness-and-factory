@@ -233,7 +233,7 @@ describe("Projektdateien (factory#170)", () => {
   test("Sonder-Fixes: Ticket-Skill nennt skills:sync, eslint-suppressions lint:prune", () => {
     const p = projektPunkt(() => false);
     expect(p.fix).toContain("npm run skills:sync");
-    expect(p.fix).toContain("npm run lint:prune");
+    expect(p.fix).toContain("npx eslint . --prune-suppressions");
   });
 });
 
@@ -251,7 +251,7 @@ describe("Langfuse-Takt", () => {
     const p = takt(ohneDatei(datei));
     expect(p.ok).toBe(false);
     expect(p.befund).toContain(datei);
-    expect(p.fix).toContain("factory:sync");
+    expect(p.fix).toContain("factory-sync.mjs");
     expect(p.fix).toContain("kern-nach-entkopplung");
   });
 
@@ -384,6 +384,21 @@ describe("Gezielter Test (factory#208 L23)", () => {
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: {} }).ok).toBe(false);
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { verify: "x" } }).ok).toBe(false);
     expect(gezielt({ struktur: { quelle: "src", endungen: [".py"] }, befehle: { testGezielt: "  " } }).ok).toBe(false);
+  });
+});
+
+describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
+  /** Spiegel der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` in test/harness/besitz-abschnittsverweise.test.ts. */
+  const ERLAUBT = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
+  const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]!);
+
+  test("kein Fix-Text (Projektdateien, Langfuse-Takt) nennt ein npm-Skript außerhalb der Liste", () => {
+    const takt = punkt(pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(gesund), existiert: () => false, config: {} }), "Langfuse-Takt");
+    const texte = [...PROJEKTDATEIEN.map((d) => d.fix ?? ""), takt.fix ?? ""];
+    expect(texte.some((t) => t !== "")).toBe(true);
+    expect(takt.fix).toContain("factory-sync.mjs");
+    expect(PROJEKTDATEIEN.find((d) => d.pfad === "eslint-suppressions.json")?.fix).toContain("npx eslint . --prune-suppressions");
+    for (const t of texte) for (const n of npmNamen(t)) expect(ERLAUBT.has(n), `npm run ${n}`).toBe(true);
   });
 });
 
