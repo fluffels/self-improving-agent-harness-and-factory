@@ -223,6 +223,8 @@ export const NOTFAELLE = [
   { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
   // Der Titel entsteht in scripts/tag-takt.mjs (Release-Tag setzen und syncen, #103).
   { art: "tag", marker: "🏷️ Tag ", quelle: "scripts/tag-takt.mjs" },
+  // Der Titel entsteht im Wochenlauf .github/workflows/factory-update.yml (neuer Factory-Release für Bezieher).
+  { art: "update", marker: "🔄 Factory-Update", quelle: ".github/workflows/factory-update.yml" },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */

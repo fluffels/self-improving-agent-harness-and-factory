@@ -286,6 +286,13 @@ describe("Bereich (#1552)", () => {
     expect(r.ticket).toBeNull();
     expect(r.uebersprungen).toEqual([]);
   });
+  test("das Update-Meldeticket des Bots ist ein Kopf-Item: es kommt vor dem obersten freien Item, ohne Fremdeingang", () => {
+    const bot = { user: { login: "github-actions[bot]", type: "Bot" }, labels: [{ name: HARNESS }] };
+    const board = norm([item(2, { labels: [{ name: HARNESS }] }), item(1, { title: "🔄 Factory-Update", ...bot })]);
+    const r = N.waehleUeberBoards({ produkt: [], factory: board, bereich: "agentic", offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: CFG });
+    expect(r.ticket?.nr).toBe(1);
+    expect(r.uebersprungen).toEqual([]);
+  });
 });
 
 describe("prHeadsAus: REST-Form der offenen PRs (#1549 Z1)", () => {
