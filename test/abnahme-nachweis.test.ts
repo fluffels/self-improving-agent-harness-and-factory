@@ -33,7 +33,7 @@ interface Mod {
     gh: (a: string[]) => unknown;
     env: Record<string, string>;
     ladeConfig: () => unknown;
-  }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean; hinweise?: string[] };
+  }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean; hinweise?: string[]; invalid?: string[] };
 }
 const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
@@ -238,6 +238,13 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     rot(leer.fehler, /Review-Zeile fehlt/);
     expect(leer.ok).toBe(false);
     expect(leer.hinweise).toEqual([]);
+    expect(leer.invalid).toHaveLength(1);
+    expect(mit.invalid).toEqual([]);
+    // Ohne PR-Nummer zeigt der Lauf die Head-Fehler vorab: mit Override ohne die Review-Meldung.
+    const ohnePr = lauf({ messages: `${ohneReview}
+${Z.reviewOverride}: #9 Revert-PR`, env: { FACTORY_PR_NUMBER: "" } }).r;
+    expect(ohnePr.fehler).toHaveLength(1);
+    rot(ohnePr.fehler, /PR-Nummer fehlt/);
   });
   test("Zeile fehlt: rot", () => rot(lauf({ messages: "nur Code" }).r.fehler, /Zeile fehlt/));
   test("entfaellt: rot bei Kriterien, grün ohne Kriterien und ohne Ticket", () => {
