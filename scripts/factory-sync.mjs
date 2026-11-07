@@ -10,11 +10,13 @@
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
 // Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine reine Stub-Seite (`istReinerStub`, nur Sync-Ausgabe) erneuert er bei jedem Sync (factory#166), jede andere vorhandene Seite wird nie angefasst.
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
-import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks } from "./factory-links-lib.mjs";
+import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
@@ -330,11 +332,28 @@ function linkSchritt({ plan, ziel, leser }) {
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
+  const seiten = seitenHinweise({ lies, plan, repo, tag });
   const angelegt = stubs.dateien.size - stubs.erneuert.size;
   const stubHinweise = angelegt === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
   const erneuertAnzahl = [...stubs.erneuert].filter((p) => plan.dateien.get(p)?.stub).length;
   if (erneuertAnzahl > 0) stubHinweise.push(`Anker-Stubs: ${erneuertAnzahl} Seiten erneuert am Tag ${tag}`);
-  return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+  return { fehler: [], hinweise: [...stubs.hinweise, ...stubHinweise, ...seiten, `Factory-Links: ${r.geschrieben} Links auf ${r.ziele} Ziele am Tag ${tag} (Refs und Index in ${INDEX_PFAD})`] };
+}
+
+/**
+ * Handschritte auf vorhandenen Projektseiten: ein Kern-Link, dessen Seite im Projekt die Überschrift (`stub-anker`) oder den Factory-Link darunter (`stub-link`) nicht trägt,
+ * mit Seite und Soll-Zeile. Die Seite fasst der Sync nie an, der Exit bleibt 0; `stub-ziel` entfällt (der Sync legt die Seite an, oder sie steht in den Ausnahmen). Pur bis auf `lies`.
+ */
+function seitenHinweise({ lies, plan, repo, tag }) {
+  const sicher = (p) => {
+    try {
+      return lies(p);
+    } catch {
+      return null; // ein Ordner auf dem Seitenpfad ist nicht lesbar: wie eine fehlende Seite (stub-ziel entfällt)
+    }
+  };
+  const { befunde } = stubBefunde({ lies: sicher, einheiten: Object.keys(plan.stand.einheiten), repo, tag });
+  return befunde.filter((b) => b.art !== "stub-ziel").map((b) => `Kern-Link-Seite im Projekt: ${befundZeile(b)}`);
 }
 
 /** Die reinen Stubs des Ziels (factory#166): Markdown-Dateien, die weder der Sync-Plan schreibt noch eine Einheit des Stands sind, reguläre Dateien (kein Symlink, kein Ordner) und `istReinerStub`. */
@@ -369,8 +388,32 @@ function linkPhase({ opt, plan, ziel, leser, err }) {
   return { ok: false, hinweise: [] };
 }
 
+/** Env-Riegel gegen einen dritten Lauf: der zweite Lauf trägt ihn. */
+const ZWEITLAUF_ENV = "FACTORY_SYNC_ZWEITLAUF";
+
+/** Der Neustart des Werkzeugs mit denselben Argumenten (Env-Riegel gesetzt); Exit-Code des Kindes. Injizierbar als `zweitlauf` der Kommandozeile. */
+export function starteNeu(argv) {
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...argv], { stdio: "inherit", env: { ...process.env, [ZWEITLAUF_ENV]: "1" } });
+  return r.status ?? 1;
+}
+
+/** Hinweis auf die Projektdatei `eslint-suppressions.json`, wenn der Sync Skript-Dateien (.mjs/.ts/.js) ändert; die Datei gehört dem Projekt, der Sync schreibt sie nie. */
+function suppressionsHinweise(plan) {
+  return [...plan.dateien.keys()].some((p) => /\.(?:mjs|ts|js)$/.test(p)) ? ["Hinweis: eslint-suppressions.json (Projektdatei): veraltete Einträge mit `npx eslint . --prune-suppressions` entfernen"] : [];
+}
+
+/**
+ * Zweiter Lauf, wenn der Sync eine Datei unter `scripts/` geschrieben hat (das laufende Werkzeug ist dann veraltet): einmal, nie mit `--trocken`, nie mit gesetztem Riegel,
+ * nur mit injiziertem `zweitlauf`. Rückgabe: dessen Exit-Code oder `null` (kein Neustart).
+ */
+function zweiterLauf({ plan, opt, argv, zweitlauf, env, out }) {
+  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || ![...plan.dateien.keys()].some((p) => p.startsWith("scripts/"))) return null;
+  out("Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand");
+  return zweitlauf(argv);
+}
+
 /** Kommandozeile; Rückgabe = Exit-Code (0 ok, 1 Fehler, 2 Aufruf). */
-export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)) } = {}) {
+export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), err = (s) => console.error(s), plattform = process.platform, git = (a) => gitIn(a[1], a.slice(2)), zweitlauf = null, env = process.env } = {}) {
   const opt = parseArgs(argv);
   const usage = "Aufruf: node scripts/factory-sync.mjs --quelle <pfad> (--tag <name> | --entwurf) [--ziel <pfad>] [--trocken] [--uebernehmen <pfad>]…";
   if (opt.fehler !== null) {
@@ -437,12 +480,12 @@ export function cli(argv, { cwd = process.cwd(), out = (s) => console.log(s), er
   }
   for (const m of plan.meldungen) out(`Hinweis: ${m}`);
   for (const h of links.hinweise) out(`Hinweis: ${h}`);
-  for (const h of kontextHinweise(plan, ziel)) out(h);
+  for (const h of [...suppressionsHinweise(plan), ...kontextHinweise(plan, ziel)]) out(h);
   if (opt.tag === null) out("Hinweis: Entwurf aus dem Arbeitsbaum, check:factorydrift im Ziel bleibt rot bis zum Sync von einem Tag");
   out(`factory-sync: ${plan.dateien.size} ${opt.trocken ? "zu ändern" : "geändert"}, ${plan.unveraendert} unverändert`);
-  return 0;
+  return zweiterLauf({ plan, opt, argv, zweitlauf, env, out }) ?? 0;
 }
 
 if (istDirektaufruf(import.meta.url)) {
-  process.exitCode = cli(process.argv.slice(2));
+  process.exitCode = cli(process.argv.slice(2), { zweitlauf: starteNeu });
 }
