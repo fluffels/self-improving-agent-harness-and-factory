@@ -7,7 +7,7 @@
  *
  * Eine Zeile ohne Listenpräfix bekommt `- [ ] `. Exit 0: gesendet (bzw. Trockenlauf); 1: Treffer der Sperrprüfung, kein ungeclaimtes Sammelticket oder Post
  * fehlgeschlagen (jeweils mit Fix); 2: Aufruf- oder Config-Fehler. Nur Harness-Befunde gehören hierher; Projekt-Befunde bleiben im eigenen Repo,
- * Sicherheitsbefunde laufen über SECURITY.md (docs/erstbezug.md › Meldestelle). Logik pur in `meldung-lib.mjs`.
+ * Sicherheitsbefunde laufen über SECURITY.md (docs/erstbezug.md (Fabrik) › Meldestelle). Logik pur in `meldung-lib.mjs`.
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

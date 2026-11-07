@@ -116,7 +116,7 @@ export function planeFactoryLinks({ dateien, lies, repo, einheiten, ausnahmen, t
 const stubText = (k, was, soll) => `${was} (Kern-Link ${k.quelle}:${k.zeile} → ${k.ziel}${k.anker ? `#${k.anker}` : ""}); Soll: \`Kern: [..](${soll})\``;
 
 /** Pur: die zu deckenden Kern-Links der Markdown-Einheiten (`besitz`: Einheiten, `lies`): `{ quelle, zeile, ziel, anker }`, je (Quelle, Ziel, Anker) einmal an der ersten Stelle. Nur `.md`-Ziele ohne Einheit. */
-function kernLinkZiele({ besitz, lies }) {
+export function kernLinkZiele({ besitz, lies }) {
   const kernPfade = new Set(besitz.map((e) => e.pfad));
   const quellen = [...kernPfade].filter((p) => p.endsWith(".md") && besitz.some((e) => e.pfad === p && e.schluessel === undefined));
   const gesehen = new Set();

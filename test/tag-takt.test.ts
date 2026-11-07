@@ -281,6 +281,9 @@ describe("CI-Zustand und Body", () => {
         expect(block, teil).toContain(teil);
       }
     });
+    it("factory#177: die Bezieher-Eigenes-Klammer nennt Kopien von Dateien des Rings oberflaeche, die der Sync nie liefert", () => {
+      expect(mitBezieher).toContain("Kopien von Dateien des Rings `oberflaeche`, die der Sync nie liefert");
+    });
     it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verifyKompakt), der Erklärsatz nennt sie", () => {
       const mechanisch = mechanischeSchritte("<s>/quelle");
       expect(mechanisch).toHaveLength(4);
