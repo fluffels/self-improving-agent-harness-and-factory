@@ -440,6 +440,9 @@ describe("Workflow-Auslöser", () => {
     // ^ am name-Anker: ein Job-Name ist nicht der Workflow-Name
     const jobNurName = eigen("on:\n  push:\njobs:\n  a:\n    name: CI\n");
     expect(ausloeser([jobNurName, fest('["CI"]')]).ok).toBe(false);
+    // und ein eingerücktes `name:` vor dem obersten zählt nicht
+    const spaet = eigen("on:\n  workflow_dispatch:\n    inputs:\n      name: x\nname: CI\n");
+    expect(ausloeser([spaet, fest('["CI"]')]).ok).toBe(true);
     // >= bei der Listen-Einrückung: Blockliste auf Höhe von `workflows:`
     const gleich = eigen("name: G\non:\n  workflow_run:\n    workflows:\n    - CI\n");
     expect(ausloeser([ci("Build"), gleich]).befund).toContain("CI");
