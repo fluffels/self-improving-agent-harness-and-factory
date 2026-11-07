@@ -1393,6 +1393,22 @@ describe("Design-Schritt in der Auswahl (factory#172)", () => {
   });
 });
 
+describe("Trennregel mit Issue-Repo im Bezieher (#238 L28)", () => {
+  // Das Factory-Board führt das Fabrik-Repo; ein Harness-Issue des eigenen Repos (Produkt-Board) gehört zur Produkt-Seite.
+  const bez = { ...CFG, repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "zz-org/zz-fabrik" } : b)) };
+  const wahl = (cfg: unknown, bereich: string, repoVon: string) =>
+    N.waehleUeberBoards({ produkt: norm([item(1, { labels: [{ name: HARNESS }] })]), factory: [], offene: new Set<number>(), owner: OWNER, namen: NAMEN, config: cfg, bereich, repo: repoVon, fuellstand: () => 0 });
+  test("Bezieher: das Harness-Issue des eigenen Repos wird im Bereich produkt gewählt, nicht übersprungen", () => {
+    expect(wahl(bez, "produkt", FREMD.repo).ticket?.nr).toBe(1);
+    expect(wahl(bez, "agentic", FREMD.repo).ticket).toBeNull();
+  });
+  test("Fabrik (beide Boards ein Repo): das Harness-Issue bleibt auf der agentic-Seite", () => {
+    const fabrik = { ...CFG, repo: FREMD.repo, boards: FREMD.boards };
+    expect(wahl(fabrik, "agentic", FREMD.repo).ticket?.nr).toBe(1);
+    expect(wahl(fabrik, "produkt", FREMD.repo).ticket).toBeNull();
+  });
+});
+
 describe("Milestone-Vorrang (factory#194)", () => {
   const H = { labels: [{ name: HARNESS }] };
   const ms = (n: number, due: string | null, state = "open", title = `Release ${n}`) => ({ milestone: { number: n, title, state, due_on: due } });

@@ -180,6 +180,16 @@ describe("zielRolle: das Board für board-place (#1729)", () => {
     const r = Z.zielRolle({ numbers: [5], produkt: [f(5)], factory: [f(5)], config: echt });
     expect(r).toEqual({ rolle: "factory", doppelt: [5] });
   });
+  // Bezieher (#238 L29): das Factory-Board führt ein anderes Repo; ein Harness-Issue im eigenen Repo (Sicherheits-Inbox) gehört auf das Produkt-Board.
+  const FABRIK = "zz-org/zz-fabrik";
+  const BEZIEHER = { ...echt, boards: echt.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
+  test("Bezieher: ein Harness-Label im eigenen Repo ergibt produkt statt des Fremd-Board-Fehlers", () => {
+    expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: [HARNESS] }, config: BEZIEHER })).toEqual({ rolle: "produkt", doppelt: [] });
+  });
+  test("Bezieher: im Repo des Factory-Boards bleibt es factory, ein Repo ohne Board bleibt beim Fremd-Board-Fehler", () => {
+    expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: [HARNESS] }, config: BEZIEHER, repo: FABRIK })).toMatchObject({ rolle: "factory" });
+    expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: [HARNESS] }, config: BEZIEHER, repo: "zz-org/ohne-board" }).fehler).toMatch(/nicht die von zz-org\/ohne-board/);
+  });
   test("ohne Item im Board kommen die Labels aus der Issue-REST; ohne beides ist die Rolle nicht bestimmbar", () => {
     expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], labelsRest: { 7: [HARNESS] }, config: echt })).toMatchObject({ rolle: "factory" });
     expect(Z.zielRolle({ numbers: [7], produkt: [], factory: [], config: echt }).fehler).toMatch(/#7: Board-Rolle nicht bestimmbar/);
@@ -459,20 +469,21 @@ describe("Fremdes Factory-Board in board-place (#76, ADR 0022 F10)", () => {
   const Z = rawPlace as unknown as { zielRolle: (a: Record<string, unknown>) => { rolle?: string; fehler?: string }; parseArgs: (a: string[]) => Record<string, unknown> | null };
   const f = (number: number): Item => ({ number, labels: [HARNESS] });
 
-  test("zielRolle: ein Harness-Issue des eigenen Repos hat kein Board (fehler mit Ziel-Repo), im Ziel-Repo gilt die Rolle", () => {
-    const r = Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: FREMD.repo });
+  test("zielRolle: ein Harness-Issue des eigenen Repos gehört aufs Produkt-Board, ein Repo ohne Board bleibt beim Fehler mit Ziel-Repo, im Ziel-Repo gilt factory", () => {
+    expect(Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: FREMD.repo })).toMatchObject({ rolle: "produkt" });
+    const r = Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: "zz-org/ohne-board" });
     expect(r.rolle).toBeUndefined();
-    expect(r.fehler).toMatch(new RegExp(`factory-Board.*${FABRIK}, nicht die von ${FREMD.repo}`));
+    expect(r.fehler).toMatch(/produkt-Board.*nicht die von zz-org\/ohne-board/);
     expect(Z.zielRolle({ numbers: [1], produkt: [], factory: [f(1)], config: fremd, repo: FABRIK })).toMatchObject({ rolle: "factory" });
     expect(Z.zielRolle({ numbers: [3], produkt: [{ number: 3, labels: [] }], factory: [], config: fremd, repo: FREMD.repo })).toMatchObject({ rolle: "produkt" });
   });
   test("umzugsPlan: ein Item, dessen Ziel-Board ein anderes Repo führt, wird gemeldet statt umgezogen", () => {
-    const item = { id: "I1", number: 1, status: "Todo", state: "open", contentId: "C1", labels: [HARNESS], repo: FREMD.repo };
+    const item = { id: "I1", number: 1, status: "Todo", state: "open", contentId: "C1", labels: [HARNESS], repo: "zz-org/ohne-board" };
     const U = L as unknown as { umzugsPlan: (p: unknown[], f: unknown[], c: unknown, repo?: string) => { schritte: unknown[]; gemeldet: { grund: string }[] } };
-    const p = U.umzugsPlan([item], [], fremd, FREMD.repo);
+    const p = U.umzugsPlan([], [item], fremd, FREMD.repo);
     expect(p.schritte).toEqual([]);
-    expect(p.gemeldet[0]?.grund).toContain(FABRIK);
-    expect(() => U.umzugsPlan([item], [], fremd)).toThrow(/umzugsPlan: repo fehlt[^]*Fix:/);
+    expect(p.gemeldet[0]?.grund).toContain(FREMD.repo);
+    expect(() => U.umzugsPlan([], [item], fremd)).toThrow(/umzugsPlan: repo fehlt[^]*Fix:/);
   });
   test("parseArgs --repo: gültig an jeder Stelle, kaputte Form ungültig", () => {
     expect(Z.parseArgs(["--repo", "zz-org/zz-x", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, repo: "zz-org/zz-x" });

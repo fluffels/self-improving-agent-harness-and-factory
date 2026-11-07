@@ -77,7 +77,7 @@ export function seitenListen(produkt, factory, config) {
   const falsch = [];
   for (const [board, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const soll = boardRolleFuer(i.labels ?? [], config);
+      const soll = boardRolleFuer(i.labels ?? [], config, { repo: i.repo });
       if (board === soll) richtig[soll].push(i);
       else if (!beide.has(i.number)) {
         verirrt[soll].push(i);
@@ -102,7 +102,7 @@ export function umzugsPlan(produkt, factory, config, repo) {
   const gemeldet = [];
   for (const [von, liste] of [["produkt", produkt], ["factory", factory]]) {
     for (const i of liste) {
-      const nach = boardRolleFuer(i.labels ?? [], config);
+      const nach = boardRolleFuer(i.labels ?? [], config, { repo: i.repo || repo });
       if (i.state !== "open" || nach === von) continue;
       const fremd = fremdesBoardText(nach, i.repo || repo, config);
       if (fremd) {
