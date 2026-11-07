@@ -170,7 +170,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
       postZeilen: (nr: number, text: string) => gepostet.push([nr, text]),
       waehleSammelticket: (offene: { number: number }[]) => offene[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], log: (m: string) => log.push(m), err: () => undefined };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => auditJson, alertsLaden: () => [], bezieher: false, log: (m: string) => log.push(m), err: () => undefined };
     return { gepostet, log, deps };
   };
   test("mit Flag: [dry-run]-Zeile im Log, nichts gepostet", async () => {
@@ -206,7 +206,7 @@ describe("main: Ziel-Repo der Alarm-Tickets", () => {
       postZeilen: () => undefined,
       waehleSammelticket: (o: { number: number }[]) => o[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], bezieher: false, gh, log: () => {}, err: () => {} };
     expect(await main([], deps)).toBe(0);
     const anlegen = aufrufe.find((a) => a.args[1] === "create");
     expect(anlegen?.args[anlegen.args.indexOf("--repo") + 1]).toBe("o/ziel");
@@ -231,7 +231,7 @@ describe("main: Vertrauen gegen den Owner des Ziel-Repos", () => {
       postZeilen: () => undefined,
       waehleSammelticket: (o: { number: number }[]) => o[0],
     };
-    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], gh, log: () => {}, err: () => {} };
+    const deps = { ladeLibs: () => Promise.resolve(libs), npmAuditLaden: () => kritisch, alertsLaden: () => [], bezieher: false, gh, log: () => {}, err: () => {} };
     expect(await main([], deps)).toBe(0);
     expect(aufrufe.filter((a) => a[1] === "create")).toEqual([]);
   });
