@@ -402,6 +402,33 @@ describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
   });
 });
 
+describe("Workflow-Auslöser (SIH-238 L26)", () => {
+  const ci = (name: string): Workflow => ({ pfad: ".github/workflows/ci.yml", text: `name: ${name}\non:\n  push:\njobs:\n  a:\n    name: Beispiel Check\n` });
+  const fest = (liste: string): Workflow => ({ pfad: ".github/workflows/festgefahren.yml", text: `name: Festgefahren\non:\n  workflow_run:  # Kommentar\n    workflows: ${liste}\n    types: [completed]\njobs:\n  b:\n    name: Zaehler\n` });
+  const ausloeser = (workflows: Workflow[]) => punkt(pruefe({ rootDir: "/x", ...GESUND, workflows, git: fakeGit(gesund), existiert: () => true, config: {} }), "Workflow-Auslöser");
+
+  test("Name passt (Flow-Liste und Blockliste): OK", () => {
+    expect(ausloeser([ci("CI"), fest('["CI"]')])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+    expect(ausloeser([ci("CI"), fest("\n      - CI")])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+  });
+  test("Name fehlt: Lücke mit Fix, der Datei und Namen nennt", () => {
+    const p = ausloeser([ci("Build"), fest('["CI"]')]);
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("CI");
+    expect(p.fix).toContain("`name:` von `.github/workflows/ci.yml` auf `CI` setzen (Auslöser von festgefahren.yml)");
+  });
+  test("kein workflow_run, oder keine Workflows: OK", () => {
+    expect(ausloeser([ci("Build")])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+    expect(ausloeser([])).toEqual({ punkt: "Workflow-Auslöser", ok: true });
+  });
+  test("ein Verweis auf einen vorhandenen Namen genügt, ein zweiter fehlender macht es zur Lücke", () => {
+    expect(ausloeser([ci("CI"), fest('["CI", "Weg"]')]).ok).toBe(false);
+  });
+  test("steht als letzter Punkt in DATEI_PUNKTE", () => {
+    expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
+  });
+});
+
 describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
   test("pruefeDateien liefert genau diese Punkte in dieser Reihenfolge: gesund, alles fehlt, werfendes Git", () => {
     const werfend: Git = () => {
@@ -413,12 +440,12 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Workflow-Auslöser"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
-  test("die Liste endet mit Required-Check-Quellen und ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-1)).toBe("Required-Check-Quellen");
+  test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
+    expect(DATEI_PUNKTE.at(-2)).toBe("Required-Check-Quellen");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });
