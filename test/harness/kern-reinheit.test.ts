@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
+import { basisTexte } from "../support/git-batch";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawModul from "../../scripts/modul-wahl-lib.mjs";
@@ -1034,13 +1035,10 @@ describe("Kern-Reinheit (#1610)", () => {
   test.skipIf(diffBasisModus(basis, process.env) === "entfaellt")("die Baseline wurde gegen die Diff-Basis nicht angehoben", () => {
     assert.ok(basis, "keine Diff-Basis auflösbar (FACTORY_DIFF_BASE/origin/main fehlt)");
     const aend = parseNameStatus(git(["diff", "-M", "--name-status", basis]));
-    const basisText = (alt: string): string | null => {
-      try {
-        return git(["show", `${basis}:${alt}`]);
-      } catch {
-        return null;
-      }
-    };
+    // Alle alten Pfade in einem Aufruf `git cat-file --batch` statt eines `git show` je Pfad (factory#220 L37, Flake unter Last).
+    const alte = [...new Set([...aend.values()].filter((p): p is string => p !== null))];
+    const texte = basisTexte((args, input) => execFileSync("git", args, { cwd: WURZEL, input, maxBuffer: 64 * 1024 * 1024 }), basis, alte);
+    const basisText = (alt: string): string | null => texte.get(alt) ?? null;
     const erl = erlaubt(manifest.eintraege, aend, basisText, echteBegriffe);
     assert.deepEqual(anhebungen(baseline, erl), []);
   });
