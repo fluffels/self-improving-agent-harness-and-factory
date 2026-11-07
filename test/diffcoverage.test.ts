@@ -968,7 +968,7 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
       assert.ok(!/\n\s+at /.test(r.stderr), r.stderr);
       // fail-closed: wer die Auswertung trotzdem importiert, bekommt beim Schicht-Zugriff den Fehler statt einer stillen Schicht.
       const skript = pathToFileURL(join(tmp, "scripts", "check-diffcoverage.mjs")).href;
-      const probe = `import(${JSON.stringify(skript)}).then((m) => { try { m.evaluateByLayer(new Map([["scripts/a.mjs", new Set([1])]]), new Map([["scripts/a.mjs", new Map([[1, 1]])]]), undefined, { wurzeln: ["scripts"], endungen: [".mjs"] }); console.log("kein Wurf"); } catch (e) { console.log("WURF " + e.message); } });`;
+      const probe = `import(${JSON.stringify(skript)}).then((m) => { try { m.evaluateByLayer(new Map([["scripts/a.mjs", new Set([1])]]), new Map([["scripts/a.mjs", new Map([[1, 1]])]]), { quelle: { wurzeln: ["scripts"], endungen: [".mjs"] } }); console.log("kein Wurf"); } catch (e) { console.log("WURF " + e.message); } });`;
       const f = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", cwd: tmp });
       assert.match(f.stdout, /^WURF Schichtdaten nicht ladbar: scripts\/docs-gen\/config\.json: schichten\.layers fehlt/, f.stdout + f.stderr);
     } finally {

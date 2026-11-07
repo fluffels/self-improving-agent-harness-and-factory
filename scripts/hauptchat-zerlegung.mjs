@@ -115,6 +115,12 @@ function turnsAus(zeilen, wurzeln, ticketSkills, abschlussSkills) {
   });
 }
 
+/** Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile); dieser Turn bestimmt auch, ob das Fenster ausgenommen ist. */
+function forkTurn(calls, turns) {
+  const erster = calls.find((x) => gueltig(x.ts));
+  return erster ? turnZu(turns, erster.ts) : turns[0];
+}
+
 /** Der Turn, in dem ein Zeitpunkt liegt: der zuletzt begonnene mit `startTs ≤ ts`. */
 function turnZu(turns, ts) {
   const t = Date.parse(ts);
@@ -275,9 +281,9 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       return KAT.TICKET;
     };
 
-    for (const turn of turns) {
+    for (const turn of turns.filter((t) => !ausgenommen(t))) {
       for (const c of turn.calls) {
-        if (!imFenster(c.ts) || ausgenommen(turn)) continue;
+        if (!imFenster(c.ts)) continue;
         const kat = kategorieFuer(turn, c.ts);
         buche(kat, "Hauptchat", c);
         // Alle Hauptchat-Calls bilden die Pausenkette der Session (die TTL gilt für die ganze Konversation); nur Ticket-Calls zählen in die Kosten.
@@ -291,11 +297,8 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         }
       }
     }
-    for (const sa of subs) {
-      // Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile); dieser Turn bestimmt auch, ob das Fenster ausgenommen ist.
-      const erster = sa.calls.find((x) => gueltig(x.ts));
-      const turn = erster ? turnZu(turns, erster.ts) : turns[0];
-      if (ausgenommen(turn)) continue;
+    for (const sa of subs.filter((x) => !ausgenommen(forkTurn(x.calls, turns)))) {
+      const turn = forkTurn(sa.calls, turns);
       for (const c of sa.calls) {
         if (!imFenster(c.ts)) continue;
         if (istTicketLauf(sa.meta, ticketAgenten)) {
