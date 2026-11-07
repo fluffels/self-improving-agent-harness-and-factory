@@ -35,8 +35,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { designGrund } from "./design-lib.mjs";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { pfadHinweis } from "./pfadwurzeln-lib.mjs";
 import { CODEQUALITAET_SAMMELTICKET_TITEL, NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
@@ -560,7 +559,6 @@ export function ladeFrisch(lade = frischeOffeneIssues) {
 }
 
 /** Die Wurzel des Repos, in dem das Skript liegt (für den Produktbezug-Hinweis, factory#220 L44). */
-const REPO_WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Echte I/O samt Namen aus der Projekt-Config; wirft mit Schlüssel und Fix-Zeile, wenn `praefixe` oder `agenten` unvollständig sind (kein Standardwert). Der Messfenster-Lader (`messfensterLader`, Test-Naht) bekommt die schon geladenen Namen. */
 export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLader } = {}) {
@@ -580,7 +578,7 @@ export function echteIo({ config, messfensterLader: erzeugeLader = messfensterLa
   /** Einzelweg (`--ticket`): das eine Issue per REST, keine Board-Seiten. */
   const ladeEinzeln = (nr) => ({ item: itemAusIssue(ghJson(["api", `repos/${REPO}/issues/${nr}`])), ...ladeBelegung(messfenster, orte) });
   const boardRepos = { produkt: boardRepo(boardFuerRolle("produkt"), { repo: REPO }), factory: boardRepo(boardFuerRolle("factory"), { repo: REPO }) };
-  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), existiert: (wurzel) => existsSync(join(REPO_WURZEL, wurzel)), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
+  return { lade, ladeEinzeln, fuellstand: fuellstandLader(), fremdStatus: fremdStatusLader(), existiert: (wurzel) => orte.some((o) => existsSync(join(o.pfad, wurzel))), repo: REPO, boardRepos, owner: OWNER, hartAb: cfg.spezifikation?.hartAb, namen, config: cfg };
 }
 
 if (istDirektaufruf(import.meta.url)) {

@@ -1331,6 +1331,20 @@ describe("ein Board führt die Issues eines Repos (ADR 0022 F10)", () => {
     expect(e.existiert("scripts")).toBe(true);
     expect(e.existiert("zz-gibt-es-nicht")).toBe(false);
   });
+  test("echteIo im Arbeitsplatz: `existiert` sucht die Pfadwurzel in jedem Repo, nicht im Ordner des Skripts (Lens R1)", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "nt-ap-"));
+    try {
+      mkdirSync(join(wurzel, "web", "src"), { recursive: true });
+      mkdirSync(join(wurzel, "api", "lib"), { recursive: true });
+      const config = { ...FREMD, arbeitsplatz: { wurzel, repos: [{ name: "web", pfad: "web" }, { name: "api", pfad: "api" }] } };
+      const e = (N as unknown as { echteIo: (o: { config: unknown; messfensterLader: () => unknown }) => { existiert: (w: string) => boolean } }).echteIo({ config, messfensterLader: () => () => ({ closedAt: null, n: 0 }) });
+      expect(e.existiert("src")).toBe(true);
+      expect(e.existiert("lib")).toBe(true);
+      expect(e.existiert("scripts")).toBe(false);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("Arbeitsplatz: Belegung über alle Repos (#88, AK5)", () => {
