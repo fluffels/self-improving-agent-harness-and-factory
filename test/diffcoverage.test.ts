@@ -57,7 +57,11 @@ type CheckDiffCoverageModule = {
     lcov: Lcov,
     branches: Map<string, Map<number, { total: number; taken: number }>>,
   ) => { path: string; line: number; taken: number; total: number }[];
-  evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
+  evaluateByLayer: (
+    changed: Changed,
+    lcov: Lcov,
+    optionen?: { floors?: Record<string, number | null>; quelle?: string | Quellen; berichteJe?: Map<string, string[]> },
+  ) => Verdict & { buckets: Record<string, Bucket & { files: { path: string; berichte: string[] }[] }> };
   pfadAngaben: (quellen: string | Quellen) => string[];
   fehlenderBerichtText: (fehlend: string[]) => string;
   ohneMessung: (r: Record<string, unknown>, o: { zeilen: Record<string, string>; quelle: string | Quellen; colors: Record<"red" | "green" | "dim", (s: string) => string> }) => number | null;
@@ -333,6 +337,18 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
     assert.equal(v.buckets["domaene"].covered, 4);
     assert.equal(v.buckets["domaene"].total, 5);
     assert.equal(v.below.includes("domaene"), true);
+  });
+
+  test("Optionsobjekt: floors überschreibt den Floor der Schicht, berichteJe nennt die Berichte der Datei (factory#220 L47)", () => {
+    const pfad = `${Q}/sim/pods.ts`;
+    const changed = new Map([[pfad, new Set([1, 2])]]);
+    const lcov = new Map([[pfad, new Map([[1, 1], [2, 0]])]]);
+    assert.equal(evaluateByLayer(changed, lcov).below.includes("domaene"), true, "mit dem Standard-Floor rot");
+    const v = evaluateByLayer(changed, lcov, { floors: { domaene: 50 }, berichteJe: new Map([[pfad, ["a/lcov.info"]]]) });
+    assert.equal(v.buckets["domaene"].floor, 50);
+    assert.deepEqual(v.below, []);
+    assert.deepEqual(v.buckets["domaene"].files.map((f) => f.berichte), [["a/lcov.info"]]);
+    assert.deepEqual(evaluateByLayer(changed, lcov).buckets["domaene"].files.map((f) => f.berichte), [[]]);
   });
 
   test("Gegenprobe: dieselben Zeilen MIT Treffern sind grün (der Test misst wirklich Coverage)", () => {

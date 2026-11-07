@@ -87,8 +87,9 @@ const berichteVon = (berichteJe, path) => berichteJe?.get(path) ?? [];
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
- *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
-export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe) {
+ *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Optionen (alle optional): `floors` (Standard `LAYER_DIFF_FLOORS`), `quelle`, `berichteJe`
+ *  (Datei → Berichtsdateien). Pure. */
+export function evaluateByLayer(changed, lcov, { floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe } = {}) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };
@@ -142,7 +143,7 @@ export function pfadAngaben(quellen) {
 
 /** Schneidet die Messung (Zeilen, Zweige) gegen die geänderten Zeilen: Bewertung je Schicht, teilweise Getestetes und die Messfehler (fehlt im Bericht, mehrdeutiger JaCoCo-Pfad). */
 function messe(changed, geladen, quelle) {
-  const verdict = evaluateByLayer(changed, geladen.abdeckung, LAYER_DIFF_FLOORS, quelle, geladen.berichteJe);
+  const verdict = evaluateByLayer(changed, geladen.abdeckung, { floors: LAYER_DIFF_FLOORS, quelle, berichteJe: geladen.berichteJe });
   const mehrdeutigePfade = new Set(geladen.mehrdeutig.map((e) => e.pfad));
   const missing = verdict.missing.filter((p) => !mehrdeutigePfade.has(p));
   return { ...verdict, missing, mehrdeutig: geladen.mehrdeutig, partial: teilweiseGetestet(changed, geladen.abdeckung, geladen.zweige, quelle) };
