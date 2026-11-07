@@ -311,8 +311,10 @@ describe("main: Sperrprüfung der Zeilen und Bezieher-Ziel (factory#153)", () =>
   test("Bezieher: kennt die Zweitabfrage das Rest-Ticket schon, ist kein Ticket da: Exit 1, nichts gepostet (null vertragen)", async () => {
     const bez = aufbau({ bezieher: true });
     const libs = await (bez.deps.ladeLibs as () => Promise<Record<string, unknown>>)();
-    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: () => [{ number: 9, titel: REST }] });
+    const zweit: unknown[][] = [];
+    Object.assign(libs, { waehleSammelticket: () => undefined, frischeOffeneIssues: (...x: unknown[]) => (zweit.push(x), [{ number: 9, titel: REST }]) });
     expect(await main([], { ...bez.deps, gh: { text: () => { throw new Error("nichts anlegen"); }, json: () => ({}) } })).toBe(1);
+    expect(zweit).toEqual([[{ repo: "o/r", anzahl: 50, mitBoard: false }, { token: undefined }]]);
     expect(bez.gepostet).toEqual([]);
     expect(bez.log.join("\n")).toContain("::error::Kein ungeclaimtes");
   });
