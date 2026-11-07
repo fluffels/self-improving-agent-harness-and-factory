@@ -390,7 +390,7 @@ describe("Gezielter Test (factory#208 L23)", () => {
 describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
   /** Spiegel der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` in test/harness/besitz-abschnittsverweise.test.ts. */
   const ERLAUBT = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
-  const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]!);
+  const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
 
   test("kein Fix-Text (Projektdateien, Langfuse-Takt) nennt ein npm-Skript außerhalb der Liste", () => {
     const takt = punkt(pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(gesund), existiert: () => false, config: {} }), "Langfuse-Takt");
@@ -402,7 +402,7 @@ describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
   });
 });
 
-describe("Workflow-Auslöser (SIH-238 L26)", () => {
+describe("Workflow-Auslöser", () => {
   const ci = (name: string): Workflow => ({ pfad: ".github/workflows/ci.yml", text: `name: ${name}\non:\n  push:\njobs:\n  a:\n    name: Beispiel Check\n` });
   const fest = (liste: string): Workflow => ({ pfad: ".github/workflows/festgefahren.yml", text: `name: Festgefahren\non:\n  workflow_run:  # Kommentar\n    workflows: ${liste}\n    types: [completed]\njobs:\n  b:\n    name: Zaehler\n` });
   const ausloeser = (workflows: Workflow[]) => punkt(pruefe({ rootDir: "/x", ...GESUND, workflows, git: fakeGit(gesund), existiert: () => true, config: {} }), "Workflow-Auslöser");

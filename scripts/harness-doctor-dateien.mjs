@@ -16,6 +16,8 @@
  *   Workflow-Datei (Flow-Form, Anker, Alias, Tag, Merge-Schlüssel …), ein fehlender Ruleset-Spiegel oder eine leere Soll-Liste machen den Punkt nicht prüfbar. Spiegel, Workflows und Soll-Liste liest `pruefLauf` einmal und reicht sie herein.
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
+ *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows.
+ *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
@@ -273,7 +275,7 @@ export function requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks })
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Workflow-Auslöser"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
@@ -287,6 +289,56 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Langfuse-Takt": () => langfuseTaktPunkt(rootDir, existiert, config),
     "Gezielter Test": () => gezielterTestPunkt(config),
     "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks }),
+    "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
+}
+
+/* Punkt `Workflow-Auslöser`: ein zeilenweiser Blockform-Leser ohne `yaml` (der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI`; ein `on:` in Flow-Form zählt als „kein workflow_run“. */
+const AUSLOESER_PUNKT = "Workflow-Auslöser";
+
+const ohneKommentar = (zeile) => zeile.replace(/\s+#.*$/, "").trimEnd();
+const einrueckung = (zeile) => zeile.length - zeile.trimStart().length;
+const ohneAnfuehrung = (s) => s.trim().replace(/^(["'])(.*)\1$/, "$2");
+
+/** Der `name:` auf oberster Ebene oder `null`. */
+function workflowName(zeilen) {
+  const z = zeilen.find((l) => /^name:\s*\S/.test(l));
+  return z ? ohneAnfuehrung(z.slice(5)) : null;
+}
+
+/** Die Namen unter `workflow_run.workflows` (Flow-Liste oder Blockliste); leer ohne `workflow_run`. */
+function ausloeserNamen(zeilen) {
+  const start = zeilen.findIndex((l) => /^\s*workflow_run:$/.test(l));
+  if (start < 0) return [];
+  const basis = einrueckung(zeilen[start]);
+  const namen = [];
+  let liste = -1;
+  for (const z of zeilen.slice(start + 1)) {
+    if (z.trim() === "") continue;
+    const ein = einrueckung(z);
+    if (ein <= basis) break;
+    const schluessel = /^\s*workflows:\s*(.*)$/.exec(z);
+    if (schluessel) {
+      liste = ein;
+      const rest = schluessel[1].replace(/^\[|\]$/g, "");
+      namen.push(...rest.split(",").map(ohneAnfuehrung).filter(Boolean));
+    } else if (liste >= 0 && ein >= liste && z.trim().startsWith("- ")) namen.push(ohneAnfuehrung(z.trim().slice(2)));
+    else liste = -1;
+  }
+  return namen;
+}
+
+/** Punkt `Workflow-Auslöser`: `workflows` ist `[{ pfad, text }]`. Pur. */
+export function workflowAusloeserPunkt({ workflows }) {
+  const gelesen = (workflows ?? []).map((w) => {
+    const zeilen = String(w.text).split(/\r\n|\n|\r/).map(ohneKommentar);
+    return { pfad: w.pfad.replaceAll("\\", "/"), name: workflowName(zeilen), ausloeser: ausloeserNamen(zeilen) };
+  });
+  const vorhanden = new Set(gelesen.map((w) => w.name).filter((n) => n !== null));
+  const fehlend = gelesen.flatMap((w) => w.ausloeser.filter((n) => !vorhanden.has(n)).map((n) => ({ von: w.pfad.split("/").at(-1), name: n })));
+  if (fehlend.length === 0) return gut(AUSLOESER_PUNKT);
+  const befund = fehlend.map((f) => `${f.von} wartet auf „${f.name}“, kein Workflow heißt so`).join("; ");
+  const fix = fehlend.map((f) => `\`name:\` von \`.github/workflows/ci.yml\` auf \`${f.name}\` setzen (Auslöser von ${f.von})`).join("; ");
+  return luecke(AUSLOESER_PUNKT, befund, `${fix}; sonst startet der Auslöser nie`);
 }
