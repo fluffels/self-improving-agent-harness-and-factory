@@ -293,6 +293,22 @@ describe("zerlegeHauptchat: Subagenten", () => {
     assert.equal(calls(r, "Ad-hoc", OPUS), 1);
   });
 
+  test("ohne: Ticketlauf-Subagenten und Forks im Fenster eines ausgenommenen Tickets fallen aus den Summen", () => {
+    const main = [user(0, "a"), call(1, OPUS, claim(1)), user(10, "b"), call(11, OPUS, claim(2))];
+    const subagents = [
+      sub({ agentType: FREMD.agenten.planer, description: "Plan 1" }, [call(3, OPUS)]),
+      sub({ agentType: "general-purpose", description: "Fork 1" }, [call(4, OPUS)]),
+      sub({ agentType: FREMD.agenten.planer, description: "Plan 2" }, [call(12, OPUS)]),
+      sub({ agentType: "general-purpose", description: "Fork 2" }, [call(13, OPUS)]),
+    ];
+    const alle = hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] });
+    assert.equal(eigen(alle).calls, 2);
+    assert.equal(calls(alle, "Ticket-Orchestrierung", OPUS, "Fork"), 2);
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }], ohne: [1] });
+    assert.equal(eigen(r).calls, 1);
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS, "Fork"), 1);
+  });
+
   test("Claim eines Workflow-Subagenten (Tiefe 1) eröffnet das Fenster", () => {
     const main = [user(0, "a"), call(1, OPUS)];
     const subagents = [sub({ agentType: "general-purpose", description: "Auswahl" }, [call(5, SONNET, claim(9))])];
