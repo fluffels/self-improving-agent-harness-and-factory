@@ -18,7 +18,7 @@
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
- *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine).
+ *   ohne-lokale-spur offen und zugewiesen, aber ohne Lock, Worktree und lokalen Branch: nur Meldung (evtl. eine andere Maschine). Ein Befund-Issue „Nicht eintragbar: …“ ohne Spur ist stattdessen `behalten` (kein eigener Claim, factory#220).
  *   (offen und festgefahren oder wartend auf eine Entscheidung (Label `labels.entscheidung`, optional, factory#152): `behalten`, keine Wiederaufnahme.)
  *   lock-unlesbar    nur Meldung, der Lock wird nie gelöscht.
  *   aufraeumbar      geschlossen: Lock löschen und, mit Worktree, den Worktree entfernen. Ein Worktree nur bei gemergtem PR, sauberem Stand,
@@ -27,7 +27,7 @@
  *   behalten         alles andere, mit Grund.
  * Das Skript entfernt nie einen Assignee und ändert nie ein Issue.
  * Arbeitsplatz (ADR 0022 Fortschreibung, #88): Worktrees, Branches und git-Aufrufe je Repo aus `arbeitsplatz.repos` der Projekt-Config, der Lock-Ort liegt unter `<wurzel>/.claude`; `worktree remove` läuft im Repo des Worktrees und nur für einen
- * Worktree direkt in dessen Worktree-Ordner (`pfadErlaubt`). Grenze: je Lauf führt ein Claim einen Worktree (den ersten in Config-Reihenfolge), hat ein Ticket Worktrees in mehreren Repos, räumt der nächste Lauf den Rest ab. Scheitert git in einem Repo: Exit 2 mit `Fix:`-Zeile.
+ * Worktree direkt in dessen Worktree-Ordner (`pfadErlaubt`). Hat ein Ticket Worktrees in mehreren Repos, räumt ein Lauf alle ab (nur wenn jeder einzeln aufräumbar ist; `worktree` ist der erste, `weitereWorktrees` der Rest). Scheitert git in einem Repo: Exit 2 mit `Fix:`-Zeile.
  *
  * Exit 0 = ok, 1 = ein Aufräumschritt ist gescheitert (der Rest wird gemeldet), 2 = Aufruf-, git- oder gh-Fehler (nichts aufgeräumt),
  * 5 = GitHub-API-Kontingent knapp.
@@ -40,7 +40,8 @@ import { REPO, teilantwortAusStdout } from "./board-lib.mjs";
 import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, optionalesLabel } from "./projekt-config-lib.mjs";
+import { NICHT_EINTRAGBAR_PRAEFIX } from "./sammelticket-titel.mjs";
 import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnisFuer, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
@@ -79,6 +80,18 @@ const angehaltenGrund = (c) => {
   return c.wartet ? "wartet auf Entscheidung (Label): keine Wiederaufnahme" : null;
 };
 
+/** Pur: das Urteil eines offenen Claims ohne jede lokale Spur: `behalten` für ein Befund-Issue „Nicht eintragbar“ (kein eigener Claim), sonst `ohne-lokale-spur`. */
+function ohneSpurUrteil(c, ergebnis) {
+  if (c.nichtEintragbar) return ergebnis("behalten", "Befund-Issue „Nicht eintragbar“ (Befund, der sein Ziel-Repo nicht erreichte, kein eigener Claim)");
+  return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+}
+
+/** Pur: trägt das Issue den Titelpräfix „Nicht eintragbar: “ (`titel` aus `issueAus`; ohne Issue false)? */
+const istNichtEintragbar = (issue) => String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX);
+
+/** Alle Worktrees eines Claims (der erste in `worktree`, die übrigen in `weitereWorktrees`); leer ohne Worktree. */
+const alleWorktrees = (c) => (c.worktree ? [c.worktree, ...(c.weitereWorktrees ?? [])] : []);
+
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
@@ -89,7 +102,7 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
-    if (!spur) return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
+    if (!spur) return ohneSpurUrteil(c, ergebnis);
     const angehalten = angehaltenGrund(c);
     if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
@@ -100,11 +113,11 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const gemergt = c.prs.filter((p) => p.zustand === "MERGED");
   const lockAktion = Boolean(c.lock);
   if (c.worktree) {
-    const w = c.worktree;
+    const ws = alleWorktrees(c);
     if (gemergt.length === 0) return ergebnis("behalten", "Worktree ohne gemergten PR");
-    if (!w.sauber) return ergebnis("behalten", "Worktree mit uncommitteten Änderungen oder Status unlesbar");
-    if (!w.head || !gemergt.some((p) => p.headRefOid === w.head)) return ergebnis("behalten", "Worktree-HEAD ist nicht der Kopf eines gemergten PR");
-    if (w.locked) return ergebnis("behalten", "Worktree gesperrt");
+    if (!ws.every((w) => w.sauber)) return ergebnis("behalten", "Worktree mit uncommitteten Änderungen oder Status unlesbar");
+    if (!ws.every((w) => w.head && gemergt.some((p) => p.headRefOid === w.head))) return ergebnis("behalten", "Worktree-HEAD ist nicht der Kopf eines gemergten PR");
+    if (ws.some((w) => w.locked)) return ergebnis("behalten", "Worktree gesperrt");
     if (alter < inaktivMs) return ergebnis("behalten", "Lebenszeichen der letzten 30 min");
     return ergebnis("aufraeumbar", "geschlossen, PR gemergt, Worktree sauber und gleich dem PR-Kopf", { worktree: true, lock: lockAktion });
   }
@@ -119,7 +132,7 @@ export function aliasAbfragen(nummern, repo = REPO) {
   if (!istRepoForm(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const { owner, name } = zerlegeRepo(repo);
-  const felder = "state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
+  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
     const teil = nummern.slice(von, von + ALIAS_MAX);
@@ -134,6 +147,7 @@ export function issueAus(knoten) {
   if (!knoten || typeof knoten !== "object" || typeof knoten.state !== "string") return null;
   return {
     zustand: knoten.state,
+    titel: typeof knoten.title === "string" ? knoten.title : "",
     assignees: (knoten.assignees?.nodes ?? []).map((a) => a.login),
     labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
     prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
@@ -169,6 +183,17 @@ const fehlerZeilen = (e) => {
   const fix = zeilen.find((z) => z.startsWith("Fix:"));
   return fix ? `${zeilen[0]}\n${fix}` : zeilen[0];
 };
+
+/** Ein registrierter Worktree mit seinem Stand (`sauber`; unlesbar gilt als nicht sauber). */
+function worktreeMitStand(deps, b) {
+  let sauber = false;
+  try {
+    sauber = deps.git(["-C", b.pfad, "status", "--porcelain"]).trim() === "";
+  } catch {
+    /* Status unlesbar: gilt als nicht sauber */
+  }
+  return mitOrt({ pfad: b.pfad, branch: b.branch, sauber, head: b.head, locked: b.locked }, b);
+}
 
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */
 export function sammle(deps) {
@@ -217,15 +242,8 @@ export function sammle(deps) {
     b.nummern.forEach((nr, k) => issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`])));
   }
   const claims = nummern.map((nr) => {
-    const w = ticketWorktrees.find((b) => ticketAusRef(b.pfad, namen) === nr) ?? null;
-    let sauber = false;
-    if (w) {
-      try {
-        sauber = deps.git(["-C", w.pfad, "status", "--porcelain"]).trim() === "";
-      } catch {
-        /* Status unlesbar: gilt als nicht sauber */
-      }
-    }
+    const eigene = ticketWorktrees.filter((b) => ticketAusRef(b.pfad, namen) === nr).map((b) => worktreeMitStand(deps, b));
+    const [w = null, ...weitere] = eigene;
     const lock = locks.get(nr) ?? null;
     const meine = refs.filter((r) => r.nr === nr);
     const lz = [lebenszeichenMs(typeof lock === "object" ? lock : null), ...meine.map((r) => r.ms)].filter((x) => Number.isFinite(x));
@@ -237,8 +255,10 @@ export function sammle(deps) {
       prs: issue?.prs ?? [],
       festgefahren: hatLabel(issue, deps.festgefahrenLabel),
       wartet: hatLabel(issue, deps.entscheidungLabel),
+      nichtEintragbar: istNichtEintragbar(issue),
       lock,
-      worktree: w && mitOrt({ pfad: w.pfad, branch: w.branch, sauber, head: w.head, locked: w.locked }, w),
+      worktree: w,
+      weitereWorktrees: weitere,
       branch: meine.length > 0,
       branchLokal: meine.some((r) => r.lokal),
       lebenszeichenMs: lz.length ? Math.max(...lz) : null,
@@ -261,6 +281,7 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
       issue: c.issue,
       lock: c.lock === null || c.lock === "unlesbar" ? c.lock : oeffentlicheSicht(c.lock),
       worktree: c.worktree && { pfad: c.worktree.pfad, branch: c.worktree.branch, sauber: c.worktree.sauber, head: c.worktree.head },
+      weitereWorktrees: (c.weitereWorktrees ?? []).map((w) => w.pfad),
       branch: c.branch,
       branchLokal: c.branchLokal,
       festgefahren: c.festgefahren,
@@ -273,21 +294,30 @@ export function jsonDokument({ jetzt, viewer, schwelleStunden, urteile }) {
   };
 }
 
-/** Entfernt den Worktree und den Lock eines Claims; liefert eine Ausgabezeile und ob es gelang. */
+/** Entfernt einen Worktree (im Repo, dem er gehört) und prüft, dass er weg ist; \`null\` bei Erfolg, sonst die Fehlerzeile. */
+function entferneWorktree(deps, c, w, hauptcheckout) {
+  const ort = w.ort; // Arbeitsplatz: das Repo, dem der Worktree gehört; eingebettet fehlt es (Arbeitsverzeichnis)
+  if (!pfadErlaubt({ pfad: w.pfad, hauptcheckout, nr: c.nr, namen: deps.namen ?? ladeTicketNamen(), worktreeOrdner: ort?.worktreeOrdner })) return `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt`;
+  const gitHier = (args) => (ort ? deps.git(args, ort.cwd) : deps.git(args));
+  try {
+    gitHier(["worktree", "remove", w.pfad]);
+    const noch = parseWorktreeBloecke(gitHier(["worktree", "list", "--porcelain"])).some((blk) => blk.pfad === w.pfad);
+    if (noch || deps.existiert(w.pfad)) return `FEHLER #${c.nr}: Worktree ${w.pfad} ist nach dem Entfernen noch da (Lock bleibt)`;
+  } catch (e) {
+    return `FEHLER #${c.nr}: git worktree remove scheiterte (${String(e?.message ?? e).split("\n")[0]}); Lock bleibt`;
+  }
+  return null;
+}
+
+/** Entfernt alle Worktrees und den Lock eines Claims; liefert eine Ausgabezeile und ob es gelang. */
 function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
   const getan = [];
   if (urteil.aktion.worktree) {
-    const ort = c.worktree.ort; // Arbeitsplatz: das Repo, dem der Worktree gehört; eingebettet fehlt es (Arbeitsverzeichnis)
-    if (!pfadErlaubt({ pfad: c.worktree.pfad, hauptcheckout, nr: c.nr, namen: deps.namen ?? ladeTicketNamen(), worktreeOrdner: ort?.worktreeOrdner })) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree-Pfad liegt nicht unter dem Worktree-Ordner des Hauptcheckouts, nichts entfernt` };
-    const gitHier = (args) => (ort ? deps.git(args, ort.cwd) : deps.git(args));
-    try {
-      gitHier(["worktree", "remove", c.worktree.pfad]);
-      const noch = parseWorktreeBloecke(gitHier(["worktree", "list", "--porcelain"])).some((b) => b.pfad === c.worktree.pfad);
-      if (noch || deps.existiert(c.worktree.pfad)) return { ok: false, zeile: `FEHLER #${c.nr}: Worktree ${c.worktree.pfad} ist nach dem Entfernen noch da (Lock bleibt)` };
-    } catch (e) {
-      return { ok: false, zeile: `FEHLER #${c.nr}: git worktree remove scheiterte (${String(e?.message ?? e).split("\n")[0]}); Lock bleibt` };
+    for (const w of alleWorktrees(c)) {
+      const fehler = entferneWorktree(deps, c, w, hauptcheckout);
+      if (fehler) return { ok: false, zeile: fehler };
+      getan.push(`Worktree ${w.pfad}`);
     }
-    getan.push(`Worktree ${c.worktree.pfad}`);
   }
   if (urteil.aktion.lock) {
     try {
@@ -368,7 +398,7 @@ export function echteDeps({ config: vorgabe, basis, ghJson: ghJsonFn = ghJson } 
       return liste.map((i) => i.number);
     },
     festgefahrenLabel: labelAus(config, "festgefahren"),
-    entscheidungLabel: typeof config.labels?.entscheidung === "string" && config.labels.entscheidung !== "" ? config.labels.entscheidung : null,
+    entscheidungLabel: optionalesLabel(config, "entscheidung"),
     lockDir: lockVerzeichnisFuer({ aufloesung, praefixWorktree: worktreePraefix(config), gemeinsam: () => git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() }),
     liste: (d) => readdirSync(d),
     liesDatei: (p) => readFileSync(p, "utf8"),

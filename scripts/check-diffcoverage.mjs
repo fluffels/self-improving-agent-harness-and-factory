@@ -83,12 +83,28 @@ export function teilweiseGetestet(changed, lcov, branches, quelle = quellenAus(l
 /** Die Berichtsdateien einer Datei aus `berichteJe` (kann fehlen). Pur. */
 const berichteVon = (berichteJe, path) => berichteJe?.get(path) ?? [];
 
+/** Bilanz einer Datei: `{ total, covered, uncovered }` über die geänderten Zeilen `lines` gegen den lcov-Eintrag `record` (Zeile → Hits). Nicht ausführbare Zeilen (Kommentar/Typ/Leerzeile) zählen nicht. Pur. */
+function zeilenBilanz(lines, record) {
+  const uncovered = [];
+  let total = 0;
+  let covered = 0;
+  for (const line of [...lines].sort((a, b) => a - b)) {
+    const hits = record.get(line);
+    if (hits === undefined) continue;
+    total++;
+    if (hits > 0) covered++;
+    else uncovered.push(line);
+  }
+  return { total, covered, uncovered };
+}
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
- *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
-export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe) {
+ *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Optionen (alle optional): `floors` (Standard `LAYER_DIFF_FLOORS`), `quelle`, `berichteJe`
+ *  (Datei → Berichtsdateien). Pure. */
+export function evaluateByLayer(changed, lcov, { floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe } = {}) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };
@@ -103,16 +119,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS, quell
       continue;
     }
     const bucket = buckets[layerOf(path)];
-    const uncovered = [];
-    let total = 0;
-    let covered = 0;
-    for (const line of [...lines].sort((a, b) => a - b)) {
-      const hits = record.get(line);
-      if (hits === undefined) continue; // nicht ausführbar (Kommentar/Typ/Leerzeile)
-      total++;
-      if (hits > 0) covered++;
-      else uncovered.push(line);
-    }
+    const { total, covered, uncovered } = zeilenBilanz(lines, record);
     if (total === 0) continue;
     bucket.total += total;
     bucket.covered += covered;
@@ -142,7 +149,7 @@ export function pfadAngaben(quellen) {
 
 /** Schneidet die Messung (Zeilen, Zweige) gegen die geänderten Zeilen: Bewertung je Schicht, teilweise Getestetes und die Messfehler (fehlt im Bericht, mehrdeutiger JaCoCo-Pfad). */
 function messe(changed, geladen, quelle) {
-  const verdict = evaluateByLayer(changed, geladen.abdeckung, LAYER_DIFF_FLOORS, quelle, geladen.berichteJe);
+  const verdict = evaluateByLayer(changed, geladen.abdeckung, { floors: LAYER_DIFF_FLOORS, quelle, berichteJe: geladen.berichteJe });
   const mehrdeutigePfade = new Set(geladen.mehrdeutig.map((e) => e.pfad));
   const missing = verdict.missing.filter((p) => !mehrdeutigePfade.has(p));
   return { ...verdict, missing, mehrdeutig: geladen.mehrdeutig, partial: teilweiseGetestet(changed, geladen.abdeckung, geladen.zweige, quelle) };

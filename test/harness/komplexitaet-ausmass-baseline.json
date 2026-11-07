@@ -21,7 +21,7 @@
     "complexity": 13
   },
   "scripts/check-diffcoverage.mjs": {
-    "complexity": 8
+    "complexity": 6
   },
   "scripts/check-diffsize.mjs": {
     "complexity": 8
@@ -39,7 +39,7 @@
     "complexity": 12
   },
   "scripts/claims-pruefen.mjs": {
-    "complexity": 12
+    "complexity": 10
   },
   "scripts/cleanup-worktrees.mjs": {
     "complexity": 25

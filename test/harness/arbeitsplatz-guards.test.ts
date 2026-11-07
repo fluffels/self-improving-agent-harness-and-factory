@@ -117,6 +117,51 @@ describe("Worktree-Guard (Bash) mit Fakes: Hinweistexte", () => {
   });
 });
 
+describe("Kosten des Worktree-Guards im Arbeitsplatz (factory#220 L15a)", () => {
+  const config = arbeitsplatz(REPOS, "/ap");
+  const vorwaerts = (p: string) => p.split(String.fromCharCode(92)).join("/");
+  /** Fake-git: `rev-parse` je Verzeichnis, gezählt je `cwd`; `/ap/web` ist ein Linked Worktree (kein `.git`-Verzeichnis), `/ap` und `/ap/api` Haupt-Checkouts. */
+  const baue = (liesConfig: () => void = () => undefined) => {
+    const aufrufe: string[] = [];
+    const deps = {
+      config: {
+        ...config,
+        get arbeitsplatz() {
+          liesConfig();
+          return config.arbeitsplatz;
+        },
+      },
+      platform: "linux",
+      execFileSync: (_g: string, _a: string[], o: { cwd: string }) => {
+        aufrufe.push(o.cwd);
+        return `${o.cwd}\n${o.cwd}/.git\n`;
+      },
+      statSync: (p: string) => ({ isDirectory: () => !vorwaerts(p).includes("/ap/web") }),
+    };
+    return { deps, aufrufe };
+  };
+  test("ein git-Aufruf je Verzeichnis, auch wenn mehrere Schutz-Wurzeln dasselbe Verzeichnis prüfen (Cache nur nach dem Verzeichnis)", () => {
+    const { deps, aufrufe } = baue();
+    const r = H.decide({ cwd: "/ap/web", command: "git commit -m x", repoRoot: "/ap", deps });
+    expect(r.block).toBe(false);
+    expect(aufrufe.length).toBeGreaterThan(1);
+    expect(new Set(aufrufe).size).toBe(aufrufe.length);
+  });
+  test("ohne git commit/push im Befehl wird die Config nicht gelesen und git nicht gefragt", () => {
+    let gelesen = 0;
+    const { deps, aufrufe } = baue(() => (gelesen += 1));
+    expect(H.decide({ cwd: "/ap", command: "ls -la && echo fertig", repoRoot: "/ap", deps })).toEqual({ block: false });
+    expect(gelesen).toBe(0);
+    expect(aufrufe).toEqual([]);
+  });
+  test("Gegenprobe: mit git commit wird die Config gelesen (Schutz-Wurzeln des Arbeitsplatzes)", () => {
+    let gelesen = 0;
+    const { deps } = baue(() => (gelesen += 1));
+    H.decide({ cwd: "/ap", command: "git commit -m x", repoRoot: "/ap", deps });
+    expect(gelesen).toBeGreaterThan(0);
+  });
+});
+
 describe("Guards im temporären Arbeitsplatz (echtes git)", () => {
   let basis = "";
   let ap = "";
@@ -159,6 +204,14 @@ describe("Guards im temporären Arbeitsplatz (echtes git)", () => {
     expect(r.reason).toMatch(/Neuer Worktree: .*worktree add .*--repo web/);
     expect(PS.bewertePowerShell({ command: `Set-Location ${apFwd}/api; git push`, cwd: apFwd, repoRoot: apFwd }).block).toBe(true);
     expect(PS.bewertePowerShell({ command: `Set-Location ${wt()}; git commit -m x`, cwd: apFwd, repoRoot: apFwd }).block).toBe(false);
+  });
+  test("PowerShell verschachtelt (factory#220 L15e): `iex`/`pwsh -Command` reichen die Schutz-Wurzel weiter, der Hinweis nennt das getroffene Repo", () => {
+    for (const cmd of [`iex "git -C ${apFwd}/web commit -m x"`, `pwsh -Command "git -C ${apFwd}/api push"`]) {
+      const r = PS.bewertePowerShell({ command: cmd, cwd: apFwd, repoRoot: apFwd });
+      expect(r.block, cmd).toBe(true);
+      expect(r.reason, cmd).toMatch(/Neuer Worktree: .*worktree add .*--repo (web|api)/);
+    }
+    expect(PS.bewertePowerShell({ command: `iex "git -C ${apFwd}/web commit -m x"`, cwd: apFwd, repoRoot: apFwd }).reason).toContain("--repo web");
   });
   test("PowerShell eingebettet: der Hinweistext bleibt ohne den Zusatz `Neuer Worktree:`", () => {
     const r = PS.bewertePowerShell({

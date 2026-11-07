@@ -35,6 +35,7 @@ interface Lib {
   markerEnde(id: string): string;
   wirdVerteilt: (e: { ring: string }) => boolean;
   istGanzeDatei: (e: { block?: string; schluessel?: string }) => boolean;
+  istVerteilteGanzdatei: (e: { ring: string; block?: string; schluessel?: string }) => boolean;
 }
 interface Opt {
   cwd?: string;
@@ -91,6 +92,16 @@ describe("istGanzeDatei", () => {
   test("Block oder Schlüssel: keine ganze Datei", () => {
     assert.equal(istGanzeDatei({ block: "b" }), false);
     assert.equal(istGanzeDatei({ schluessel: "k" }), false);
+  });
+});
+
+describe("istVerteilteGanzdatei (factory#220 L7)", () => {
+  test("verteilt und ganz: wahr; verteilt mit Block oder Schlüssel: falsch; nicht verteilt (Ring oberflaeche): falsch", () => {
+    assert.equal(lib.istVerteilteGanzdatei({ ring: "kern" }), true);
+    assert.equal(lib.istVerteilteGanzdatei({ ring: "kern", block: "b" }), false);
+    assert.equal(lib.istVerteilteGanzdatei({ ring: "kern", schluessel: "k" }), false);
+    assert.equal(lib.istVerteilteGanzdatei({ ring: "oberflaeche" }), false);
+    assert.equal(lib.istVerteilteGanzdatei({ ring: "oberflaeche", block: "b" }), false);
   });
 });
 
@@ -1236,6 +1247,7 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
       bricht(ohneRolle("lens", { pfad, ring: "oberflaeche", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
       bricht(ohneRolle("lens", { pfad, block: "x", ring: "kern", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
       bricht(ohneRolle("lens", { pfad, schluessel: "x", ring: "kern", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
+      bricht(ohneRolle("lens", { pfad, art: "vorlage", ring: "kern", quelle: "t" }), /\(lens\) ist keine verteilte Einheit/);
     });
     test("der Ticket-Skill ist Projektdatei: fehlt er im Ziel, nur ein Hinweis; liegt er dort, keiner", () => {
       const pfad = pc.ROLLEN_PFADE.ticketSkill;
@@ -1256,7 +1268,7 @@ describe("Sync vom Tag (#1871)", { timeout: 30_000 }, () => {
       for (const [rolle, pfad] of Object.entries(pc.ROLLEN_PFADE)) {
         const eintraege = m.eintraege.filter((e) => e.pfad === pfad);
         if (pc.PROJEKT_ROLLEN.includes(rolle)) assert.equal(eintraege.length, 0, `${rolle} gehört dem Projekt`);
-        else assert.ok(eintraege.some((e) => istGanzeDatei(e) && wirdVerteilt(e)), `${rolle}: ${pfad} ist keine ganze verteilte Einheit`);
+        else assert.ok(eintraege.some((e) => lib.istVerteilteGanzdatei(e)), `${rolle}: ${pfad} ist keine ganze verteilte Einheit`);
       }
     });
   });

@@ -321,6 +321,16 @@ describe("pruefeProjektConfig", () => {
   });
 });
 
+describe("optionalesLabel: String oder null, wirft nie (L13)", () => {
+  const f = (rawPc as unknown as { optionalesLabel: (c: unknown, k: string) => string | null }).optionalesLabel;
+  test("gesetzter Schlüssel liefert das Label", () => {
+    assert.equal(f({ labels: { entscheidung: "status:x" } }, "entscheidung"), "status:x");
+  });
+  test.each([[{ labels: {} }], [{ labels: { entscheidung: "" } }], [{ labels: { entscheidung: "  " } }], [{ labels: { entscheidung: 3 } }], [{}], [null], [undefined]])("fehlt, leer oder kein String → null: %j", (c) => {
+    assert.equal(f(c, "entscheidung"), null);
+  });
+});
+
 describe("Bereich zu Board-Rolle", () => {
   const roh = rawPc as unknown as { BEREICHE: object; BEREICH_BOARD: Record<string, string>; BOARD_ROLLEN: string[] };
 

@@ -2,7 +2,7 @@
  * Alle IO-Teile sind Fakes (kein Netz); `lauf` ist die öffentliche Einstiegsfunktion, `ermittleLuecken` die Token-Weiche in Actions. */
 import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -263,6 +263,24 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     const code = await melden.main([], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), log: (s) => log.push(s), err: () => undefined });
     assert.equal(code, 2);
     assert.match(log[0], /^::error::.*Import kaputt/);
+  });
+  test("factory#220 L39: die Dateipunkte des Wochenlaufs tragen Factory-Update (Standardverdrahtung wie --pruefen, Lens R1)", async () => {
+    const bezieher = mkdtempSync(join(tmpdir(), "melden-fu-"));
+    try {
+      mkdirSync(join(bezieher, ".factory"), { recursive: true });
+      writeFileSync(join(bezieher, ".factory", "sync-stand.json"), "{}");
+      let punkte: { punkt: string; ok: boolean }[] = [];
+      const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => undefined };
+      const pruefLauf = (a: { dateien: (x: { rootDir: string; config: unknown }) => { punkt: string; ok: boolean }[] }) => {
+        punkte = a.dateien({ rootDir: bezieher, config: { repo: "acme/proj" } });
+        return { ergebnis: [] };
+      };
+      const deps = { bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, env: {}, pruefLauf };
+      assert.equal(await melden.main(["--dry-run"], deps as never), 0);
+      assert.ok(punkte.some((p) => p.punkt === "Factory-Update" && !p.ok), JSON.stringify(punkte));
+    } finally {
+      rmSync(bezieher, { recursive: true, force: true });
+    }
   });
   test("Gutfall (#1821 L23d): Config lesbar, injizierte Libs, Lücke aus dem leeren Token → Zeile geht an das Sammelticket", async () => {
     vi.stubEnv("GITHUB_ACTIONS", "true");

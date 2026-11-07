@@ -70,6 +70,11 @@ export const RESTE: Rest[] = [
     fix: "für Kern-Tests gilt die Null-Regel ohne Baseline: Projektwerte aus FREMD bzw. projektConfig() nehmen, Projektinhalt in einen projekt-test",
   },
   {
+    name: "alter Titel des Tag-Tickets",
+    muster: /Tag [^\n`"]{0,12}setzen und syncen/,
+    fix: "den Titel „🏷️ Tag v<x> setzen“ nennen (factory#220); das Tag-Ticket heißt nicht mehr „setzen und syncen“",
+  },
+  {
     name: "Baseline der Kern-Links",
     muster: /kern-links-baseline/,
     fix: "Kern-Links werden ohne Baseline durch Factory-Seiten mit Anker gedeckt (kern-links.test.ts, check:factorylinks): ADRs nur als Text, Ziel mit Anker anlegen (factory#132)",
@@ -217,6 +222,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
       "Spielquote-Bibliothek (heißt produktquote-lib)": "import { SPIEL_QUOTE } from board-takt",
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
+      "alter Titel des Tag-Tickets": "Kopf-Ticket „🏷️ Tag v1.3.0 setzen und syncen“",
       "Baseline der Kern-Links": "gelesen aus test/harness/kern-links-baseline.json",
       "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
     };

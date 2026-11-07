@@ -131,8 +131,9 @@ export function anlegeArgumente(e, label, repo) {
   return ["issue", "create", "--repo", repo, "--title", titel, ...(label ? ["--label", label] : []), "--body", body];
 }
 
-function legeAn(e, label, repo, token) {
-  const url = ghText(anlegeArgumente(e, label, repo), { token }).trim();
+/** Legt das Ticket an (`gh issue create`) und liefert seine Nummer aus der ausgegebenen URL. `text` (Test-Naht): der `gh`-Aufruf `(args, { token }) -> Ausgabe`, Standard `ghText`. */
+export function legeAn(e, label, repo, token, text = ghText) {
+  const url = text(anlegeArgumente(e, label, repo), { token }).trim();
   return Number(url.split("/").pop());
 }
 

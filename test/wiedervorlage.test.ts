@@ -269,6 +269,23 @@ describe("main: Wiedervorlage im Bezieher geht ins eigene Repo (factory#215)", (
     expect(mit[mit.indexOf("--label") + 1]).toBe("area:x");
     expect(mit.indexOf("--label")).toBeLessThan(mit.indexOf("--body"));
   });
+  test("legeAn: die gh-Argumente samt Token gehen durch die Naht, die Nummer kommt aus der URL (L38)", () => {
+    const legeAn = (raw as unknown as { legeAn: (e: E, label: string | undefined, repo: string, token: string | undefined, text: (a: string[], o: { token?: string }) => string) => number }).legeAn;
+    const aufrufe: [string[], unknown][] = [];
+    const nr = legeAn(e("a"), "area:x", "o/r", "tok", (a, o) => (aufrufe.push([a, o]), "https://github.com/o/r/issues/42\n"));
+    expect(nr).toBe(42);
+    expect(aufrufe).toEqual([[(raw as unknown as { anlegeArgumente: (e: E, l: string, r: string) => string[] }).anlegeArgumente(e("a"), "area:x", "o/r"), { token: "tok" }]]);
+    expect(aufrufe[0][0].slice(0, 4)).toEqual(["issue", "create", "--repo", "o/r"]);
+  });
+  test("main ohne `bezieher`-Dep in der Fabrik (kein Sync-Stand) nimmt den Fabrik-Pfad: Ziel des Labels, mit Label und Sperrprüfung (L38)", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "pt");
+    const geprueft0: unknown[][] = [];
+    const { angelegt, geprueft, deps } = aufbau(fremd, { bezieher: undefined, bereite: (z: string[], o: unknown) => (geprueft0.push([z, o]), { ok: true }) });
+    expect(await main([], deps)).toBe(0);
+    expect(angelegt).toEqual([[FREMD.labels.harness, FABRIK, "pt"]]);
+    expect(geprueft0).toHaveLength(1);
+    expect(geprueft).toEqual([]);
+  });
   test("zielFuer: Bezieher, dessen Harness-Label auf das Board des eigenen Repos führt, behält das Label", () => {
     expect(zielFuer(e("a"), FREMD, { repo: FREMD.repo, env: {}, bezieher: true })).toMatchObject({ ziel: FREMD.repo, label: FREMD.labels.harness });
   });

@@ -22,9 +22,11 @@ interface Claim {
   prs: { nummer: number; zustand: string; headRefOid: string | null }[];
   lock: null | "unlesbar" | Record<string, unknown>;
   worktree: null | { pfad: string; branch: string | null; sauber: boolean; head: string | null; locked: boolean };
+  weitereWorktrees?: { pfad: string; branch: string | null; sauber: boolean; head: string | null; locked: boolean }[];
   branch: boolean;
   branchLokal: boolean;
   festgefahren: boolean;
+  nichtEintragbar?: boolean;
   lebenszeichenMs: number | null;
 }
 type Urteil = { urteil: string; grund: string; aktion: { worktree: boolean; lock: boolean } };
@@ -33,6 +35,7 @@ const M = raw as unknown as {
   STANDARD_STUNDEN: number;
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
+  jsonDokument: (o: { jetzt: number; viewer: string | null; schwelleStunden: number; urteile: { claim: Claim; urteil: Urteil }[] }) => unknown;
   zugewiesenArgs: (repo?: string) => string[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
@@ -71,6 +74,20 @@ const geschlossen = (o: Partial<Claim> = {}): Claim =>
     ...o,
   });
 const urteil = (c: Claim, schwelleMs = SCHWELLE) => M.beurteileClaim({ claim: c, jetzt: JETZT, schwelleMs });
+
+describe("beurteileClaim: Befund-Issue „Nicht eintragbar“ (L10)", () => {
+  test("ohne Spur: behalten statt ohne-lokale-spur; mit Spur gilt das normale Urteil", () => {
+    const ohne = urteil(claim({ lock: null, nichtEintragbar: true }));
+    assert.equal(ohne.urteil, "behalten");
+    assert.match(ohne.grund, /Nicht eintragbar/);
+    assert.equal(urteil(claim({ nichtEintragbar: true })).urteil, "lebendig");
+    assert.equal(urteil(claim({ lock: null, nichtEintragbar: false })).urteil, "ohne-lokale-spur");
+    assert.match(urteil(claim({ lock: null })).grund, /^zugewiesen, aber ohne Lock/);
+    const offen = urteil(claim({ lock: null, issue: { zustand: "OPEN", assignees: [] } }));
+    assert.equal(offen.urteil, "ohne-lokale-spur");
+    assert.equal(offen.grund, "offen, keine lokale Spur");
+  });
+});
 
 describe("beurteileClaim: je Urteil ein Fall", () => {
   test.each<[string, Claim, string]>([
@@ -128,10 +145,60 @@ describe("beurteileClaim: Negativfälle (nie löschen)", () => {
     }
   });
 
+  test("unbekannter HEAD (null) gleicht nie einem unbekannten PR-Kopf (null): bleibt", () => {
+    const u = urteil(geschlossen({ worktree: { pfad: WTPFAD, branch: null, sauber: true, head: null, locked: false }, prs: [{ nummer: 9, zustand: "MERGED", headRefOid: null }] }));
+    assert.equal(u.urteil, "behalten");
+    assert.match(u.grund, /HEAD/);
+  });
+
   test("gesperrter Worktree bleibt", () => {
     const u = urteil(geschlossen({ worktree: { pfad: WTPFAD, branch: null, sauber: true, head: OID, locked: true } }));
     assert.equal(u.urteil, "behalten");
     assert.match(u.grund, /gesperrt/);
+  });
+
+  describe("mehrere Worktrees eines Claims (L6): jeder muss die Bedingungen erfüllen", () => {
+    const zweiter = (o: Partial<NonNullable<Claim["worktree"]>> = {}) => ({ pfad: `${WTPFAD}-b`, branch: null, sauber: true, head: OID, locked: false, ...o });
+    const mitWeiterem = (w: NonNullable<Claim["worktree"]>, prs?: Claim["prs"]) => urteil(geschlossen({ weitereWorktrees: [w], ...(prs ? { prs } : {}) }));
+
+    test("alle sauber, gleich dem PR-Kopf, ungesperrt: räumbar", () => {
+      assert.equal(mitWeiterem(zweiter()).urteil, "aufraeumbar");
+    });
+
+    test("nur der zweite Worktree unsauber: bleibt", () => {
+      const u = mitWeiterem(zweiter({ sauber: false }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /uncommittet/);
+    });
+
+    test("nur der zweite Worktree mit fremdem HEAD: bleibt", () => {
+      const u = mitWeiterem(zweiter({ head: "anderer" }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /HEAD/);
+    });
+
+    test("zweiter Worktree ohne bekannten HEAD bleibt auch, wenn der PR-Kopf unbekannt (null) ist", () => {
+      const u = mitWeiterem(zweiter({ head: null }), [{ nummer: 9, zustand: "MERGED", headRefOid: null }]);
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /HEAD/);
+    });
+
+    test("mehrere gemergte PRs: es genügt, dass ein PR-Kopf dem HEAD gleicht", () => {
+      const prs = [{ nummer: 8, zustand: "MERGED", headRefOid: "alt" }, { nummer: 9, zustand: "MERGED", headRefOid: OID }];
+      assert.equal(mitWeiterem(zweiter(), prs).urteil, "aufraeumbar");
+    });
+
+    test("--json-Dokument: weitereWorktrees nennt die Pfade, ohne Angabe ist es eine leere Liste", () => {
+      const doc = (c: Claim) => (M.jsonDokument({ jetzt: JETZT, viewer: "ich", schwelleStunden: 3, urteile: [{ claim: c, urteil: urteil(c) }] }) as { claims: { weitereWorktrees: string[] }[] }).claims[0].weitereWorktrees;
+      assert.deepEqual(doc(geschlossen({ weitereWorktrees: [zweiter()] })), [`${WTPFAD}-b`]);
+      assert.deepEqual(doc(geschlossen()), []);
+    });
+
+    test("nur der zweite Worktree gesperrt: bleibt", () => {
+      const u = mitWeiterem(zweiter({ locked: true }));
+      assert.equal(u.urteil, "behalten");
+      assert.match(u.grund, /gesperrt/);
+    });
   });
 
   test("Lebenszeichen der letzten 30 min: Worktree bleibt (29 min), nach 30 min räumbar; auch der Lock allein", () => {
@@ -198,14 +265,15 @@ describe("reine Hilfen", () => {
     assert.equal(M.issueAus({}), null);
     assert.deepEqual(
       M.issueAus({ state: "CLOSED", labels: { nodes: [{ name: "l" }] }, assignees: { nodes: [{ login: "a" }] }, closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED", headRefOid: "x", labels: { nodes: [{ name: "pl" }] } }] } }),
-      { zustand: "CLOSED", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
+      { zustand: "CLOSED", titel: "", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
     );
   });
 
   test("issueAus: fehlende Felder ergeben leere Listen und headRefOid null", () => {
-    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", assignees: [], labels: [], prs: [] });
+    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", titel: "", assignees: [], labels: [], prs: [] });
     assert.deepEqual(M.issueAus({ state: "OPEN", closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED" }] } }), {
       zustand: "OPEN",
+      titel: "",
       assignees: [],
       labels: [],
       prs: [{ nummer: 3, zustand: "MERGED", headRefOid: null, labels: [] }],
@@ -242,6 +310,7 @@ interface IssueWelt {
   state: string;
   assignees?: string[];
   labels?: string[];
+  title?: string;
   prs?: { number: number; state: string; headRefOid: string; labels?: string[] }[];
 }
 interface Welt {
@@ -304,6 +373,7 @@ function baue(welt: Welt) {
           ? {
               state: i.state,
               // Wie GitHub: ein Feld kommt nur zurück, wenn die Abfrage es verlangt.
+              ...(query.includes("title state labels(first:30)") ? { title: i.title ?? "Ein Ticket" } : {}),
               ...(query.includes("state labels(first:30){ nodes{ name } }") ? { labels: knoten(i.labels) } : {}),
               assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
               closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, ...(query.includes("headRefOid labels(first:30){ nodes{ name } }") ? { labels: knoten(p.labels) } : {}) })) },
@@ -473,6 +543,16 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.match(r.out, /WIEDERAUFNAHME #1672/);
   });
 
+  test("worktree remove: die Fehlerzeile nennt die erste Zeile der Meldung, auch bei einem Fehler ohne `message` (Text, null)", () => {
+    const { deps } = baue(BELEG);
+    const gitDeps = deps as { git: (a: string[], cwd?: string) => string };
+    const echt = gitDeps.git;
+    const mit = (geworfen: unknown) => ({ ...deps, git: (a: string[], cwd?: string) => (a[0] === "worktree" && a[1] === "remove" ? (() => { throw geworfen; })() : echt(a, cwd)) });
+    assert.match(M.fuehreAus([], mit(new Error("Zugriff verweigert\nzweite Zeile"))).out, /scheiterte \(Zugriff verweigert\); Lock bleibt/);
+    assert.match(M.fuehreAus([], mit("roh")).out, /scheiterte \(roh\); Lock bleibt/);
+    assert.match(M.fuehreAus([], mit(null)).out, /scheiterte \(null\); Lock bleibt/);
+  });
+
   test("bleibt der Worktree nach dem Entfernen in der Liste oder auf der Platte, ist es ein FEHLER und der Lock bleibt", () => {
     const { deps, geloescht } = baue({ ...BELEG, bleibtNachRemove: true });
     const r = M.fuehreAus([], deps);
@@ -575,8 +655,15 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const welt: Welt = { ...BELEG, loescheFehler: true };
     const r = M.fuehreAus([], baue(welt).deps);
     assert.equal(r.code, 1);
-    assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht/);
+    assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht \(gesperrt\)/);
     assert.match(r.out, /WIEDERAUFNAHME #1672/);
+  });
+
+  test("scheitert das Löschen des Locks mit einem Fehler ohne `message` (Text, null): die Zeile nennt ihn trotzdem", () => {
+    const { deps } = baue(BELEG);
+    const mit = (geworfen: unknown) => ({ ...deps, loesche: () => { throw geworfen; } });
+    assert.match(M.fuehreAus([], mit("roh")).out, /Lock nicht gelöscht \(roh\)/);
+    assert.match(M.fuehreAus([], mit(null)).out, /Lock nicht gelöscht \(null\)/);
   });
 
   const alterLock = lock({ erstellt: "2026-10-16T01:00:00.000Z" });
@@ -632,6 +719,13 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   test("eine nur zugewiesene Nummer ohne jede Spur ist ohne-lokale-spur (Quelle: Zuweisung)", () => {
     const r = M.fuehreAus([], baue({ zugewiesen: [23], issues: { 23: { state: "OPEN" } } }).deps);
     assert.match(r.out, /BEHALTEN #23: ohne-lokale-spur, zugewiesen, aber ohne Lock, Worktree und lokalen Branch/);
+  });
+
+  test("ein „Nicht eintragbar: “-Issue ohne Spur ist kein ohne-lokale-spur, sondern behalten mit eigenem Grund (L10); ein Titel ohne den Präfix bleibt ohne-lokale-spur", () => {
+    const r = M.fuehreAus([], baue({ zugewiesen: [24, 25], issues: { 24: { state: "OPEN", title: "Nicht eintragbar: Befund X" }, 25: { state: "OPEN", title: "Das ist Nicht eintragbar: kein Präfix" } } }).deps);
+    assert.match(r.out, /BEHALTEN #24: behalten, Befund-Issue „Nicht eintragbar“/);
+    assert.doesNotMatch(r.out, /#24: ohne-lokale-spur/);
+    assert.match(r.out, /BEHALTEN #25: ohne-lokale-spur/);
   });
 
   test("das Festgefahren-Label am Issue oder gemergten PR verhindert das Aufräumen eines geschlossenen Issues nicht", () => {
@@ -826,6 +920,54 @@ describe("Arbeitsplatz: Repos aus der Config (#88)", () => {
     assert.match(r.out, /FEHLER #88: Worktree-Pfad liegt nicht unter dem Worktree-Ordner/);
     assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
     assert.deepEqual(geloescht, []);
+  });
+
+  /** Ein Ticket mit je einem Worktree in Repo A und Repo B; `unsauberB` macht den Stand in B unsauber. */
+  function zweiRepoWelt(o: { unsauberB?: boolean } = {}) {
+    const b = baue({
+      locks: { [`${NR}.json`]: lock({ nr: NR, erstellt: "2026-10-16T00:10:00.000Z" }) },
+      issues: { [NR]: { state: "CLOSED", prs: [{ number: 5, state: "MERGED", headRefOid: OID }] } },
+    });
+    const WT_A = `${A.worktreeOrdner}/${WTP}${NR}`;
+    const aufrufe: string[] = [];
+    const stand: Record<string, { pfad: string; head: string; branch?: string }[]> = {
+      [A.cwd]: [{ pfad: A.cwd, head: "m0" }, { pfad: WT_A, head: OID, branch: `${BRP}${NR}-x` }],
+      [B.cwd]: [{ pfad: B.cwd, head: "m1" }, { pfad: WT_B, head: OID, branch: `${BRP}${NR}-x` }],
+    };
+    const block = (w: { pfad: string; head: string; branch?: string }) => `worktree ${w.pfad}\nHEAD ${w.head}\n${w.branch ? `branch refs/heads/${w.branch}` : "detached"}\n\n`;
+    const git = (args: string[], cwd?: string) => {
+      const a = args.join(" ");
+      aufrufe.push(`${cwd ?? "-"}: ${a}`);
+      if (a === "worktree list --porcelain") return (stand[cwd ?? ""] ?? []).map(block).join("");
+      if (a.startsWith("for-each-ref")) return `refs/heads/${BRP}${NR}-x\t${sek("2026-10-16T00:21:00Z")}`;
+      if (/^-C \S+ status --porcelain$/.test(a)) return o.unsauberB && a.includes(WT_B) ? " M datei" : "";
+      const rm = /^worktree remove (\S+)$/.exec(a);
+      if (rm && cwd !== undefined) {
+        stand[cwd] = (stand[cwd] ?? []).filter((w) => w.pfad !== rm[1]);
+        return "";
+      }
+      throw new Error(`unerwartet: ${a}`);
+    };
+    const noch = (p: string) => Object.values(stand).some((l) => l.some((w) => w.pfad === p));
+    return { deps: { ...b.deps, git, orte: [A, B], existiert: noch }, aufrufe, geloescht: b.geloescht, WT_A };
+  }
+
+  test("L6: hat ein Ticket Worktrees in zwei Repos, räumt ein Lauf beide ab (je im Repo des Worktrees), dann den Lock", () => {
+    const { deps, aufrufe, geloescht, WT_A } = zweiRepoWelt();
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(aufrufe.includes(`${A.cwd}: worktree remove ${WT_A}`), aufrufe.join("\n"));
+    assert.ok(aufrufe.includes(`${B.cwd}: worktree remove ${WT_B}`), aufrufe.join("\n"));
+    assert.match(r.out, new RegExp(`AUFGERAEUMT #${NR}: Worktree .*${WTP}${NR}, Worktree .*${WTP}${NR}, Lock `));
+    assert.deepEqual(geloescht, [`/locks/${NR}.json`]);
+  });
+
+  test("L6 Negativfall: ist der zweite der beiden Worktrees nicht sauber, wird keiner entfernt und der Lock bleibt", () => {
+    const { deps, aufrufe, geloescht } = zweiRepoWelt({ unsauberB: true });
+    const r = M.fuehreAus([], deps);
+    assert.equal(aufrufe.some((a) => a.includes("worktree remove")), false);
+    assert.deepEqual(geloescht, []);
+    assert.doesNotMatch(r.out, /AUFGERAEUMT/);
   });
 
   test("Negativfall: scheitert git in Repo B, endet der Lauf mit Exit 2 samt Repo-Name und Fix-Zeile, nichts wird entfernt oder gelöscht", () => {

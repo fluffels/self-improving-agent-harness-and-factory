@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import * as raw from "../scripts/tag-takt.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as lib from "../scripts/release-tag-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as titel from "../scripts/sammelticket-titel.mjs";
 import { FREMD } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; betreff: string; body: string; dateien: string[]; pr?: string };
@@ -27,7 +29,8 @@ const T = raw as unknown as {
   lauf: (a: { io: Io; trocken?: boolean }) => number;
 };
 
-const { mechanischeSchritte } = lib as { mechanischeSchritte: (quelle: string) => string[] };
+const { mechanischeSchritte, UPDATE_SCHRITTE } = lib as { mechanischeSchritte: (quelle: string) => string[]; UPDATE_SCHRITTE: unknown };
+const { BEFUND_ZEILE, HAKEN_ZEILE } = titel as { BEFUND_ZEILE: RegExp; HAKEN_ZEILE: RegExp };
 
 const KEY = `${FREMD.praefixe.commitZeile}Sync-Dringlich`;
 const MKEY = `${FREMD.praefixe.commitZeile}Bezieher-Migration`;
@@ -38,7 +41,7 @@ const vor = (tage: number) => new Date(JETZT.getTime() - tage * TAG_MS).toISOStr
 const commit = (o: Partial<Commit> = {}): Commit => ({ sha: "a".repeat(40), datum: vor(1), betreff: "fix: x (#5)", body: "fix: x (#5)", dateien: ["scripts/a.mjs"], ...o });
 const reihe = (n: number, o: Partial<Commit> = {}) => T.besitzCommits(Array.from({ length: n }, (_, i) => commit({ sha: String(i).repeat(40), betreff: `fix: x (#${i + 1})`, ...o })), MANIFEST);
 const entscheide = (o: Partial<Parameters<typeof T.entscheideTagTakt>[0]> = {}) => T.entscheideTagTakt({ letzterTag: "v1.2.3", besitz: reihe(1), jetzt: JETZT, offene: [], dringlichKey: KEY, ...o });
-const tagOffen = (o: Partial<Offen> = {}): Offen => ({ number: 40, titel: "🏷️ Tag v1.2.4 setzen und syncen", assignees: [], body: "alt", ...o });
+const tagOffen = (o: Partial<Offen> = {}): Offen => ({ number: 40, titel: "🏷️ Tag v1.2.4 setzen", assignees: [], body: "alt", ...o });
 
 describe("factory#215 L4: uebernimmHaken", () => {
   const neu = ["Kopf", "- [ ] Eins", "- [ ] Zwei geändert", "* [ ] Drei", "  - [ ] Vier", "- [x] Fünf neu schon erledigt", "Text [ ] Eins"].join("\n");
@@ -50,6 +53,14 @@ describe("factory#215 L4: uebernimmHaken", () => {
     expect(T.uebernimmHaken("- [ ] Eins", neu)).toBe(neu);
     expect(T.uebernimmHaken(undefined, neu)).toBe(neu);
     expect(T.uebernimmHaken("- [x] Eins\r\n", "- [ ] Eins")).toBe("- [x] Eins");
+  });
+  it("factory#220 G6.2: mehrere Leerzeichen nach Spiegelstrich und Checkbox werden erkannt", () => {
+    expect(T.uebernimmHaken("-  [x]  Eins", "- [ ] Eins")).toBe("- [x] Eins");
+  });
+  it("factory#220 G6.2: HAKEN_ZEILE und BEFUND_ZEILE erkennen dieselben Beispiele (eine Quelle)", () => {
+    const beispiele = ["- [ ] a", "- [x] a", "* [X] a", "-  [x]  a", "  - [ ] a", "- [x] a\r", "- [y] a", "-[ ] a", "Text - [ ] a", "- [] a", "- [x]a", "- [ ]", ""];
+    for (const z of beispiele) expect(HAKEN_ZEILE.test(z), JSON.stringify(z)).toBe(BEFUND_ZEILE.test(z));
+    expect(beispiele.filter((z) => HAKEN_ZEILE.test(z))).toHaveLength(8);
   });
 });
 
@@ -210,7 +221,7 @@ describe("CI-Zustand und Body", () => {
     for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald der Tag gepusht ist", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
-    expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen und syncen");
+    expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen");
     expect(T.tagTitel("v1.3.0").startsWith(T.TAG_MARKER)).toBe(true);
   });
   it("L5: Tag-Befehl aus einem Worktree auf dem Commit, mit Hook-Hinweis und Aufräumen", () => {
@@ -278,6 +289,12 @@ describe("CI-Zustand und Body", () => {
       expect(mechanisch).toHaveLength(4);
       expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verifyKompakt\n");
       for (const befehl of mechanisch) expect(mitBezieher.split("aussagekräftig")[0], befehl).toContain("`" + befehl + "`");
+    });
+    it("factory#220 G6.1: die Probe-Zeile endet genau mit dem Befehl des Update-Schritts verify (abgeleitet, kein Literal)", () => {
+      const verify = (UPDATE_SCHRITTE as { id: string; befehl: string }[]).find((s) => s.id === "verify")?.befehl as string;
+      expect(verify).toBeTruthy();
+      const zeile = mitBezieher.split("\n").find((z) => z.startsWith("cd <s>/bezieher && ")) as string;
+      expect(zeile.endsWith(" && " + verify)).toBe(true);
     });
     it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));
@@ -466,7 +483,7 @@ describe("lauf", () => {
   }
   it("legt bei 3 Besitz-PRs ein Ticket an und sortiert es per Art tag an die Spitze", () => {
     expect(T.lauf({ io: io() })).toBe(0);
-    expect(aufrufe).toEqual(["zweit", "anlegen:🏷️ Tag v1.3.0 setzen und syncen", "platziere:77:tag"]);
+    expect(aufrufe).toEqual(["zweit", "anlegen:🏷️ Tag v1.3.0 setzen", "platziere:77:tag"]);
   });
   it("legt ohne Zweitabfrage-Treffer an, mit Treffer nicht", () => {
     T.lauf({ io: io({ frischeOffene: () => [{ number: 9, titel: T.tagTitel("v1.3.0") }] }) });
@@ -482,7 +499,7 @@ describe("lauf", () => {
     expect(T.lauf({ io: io(geclaimt), trocken: true })).toBe(0);
     const t = log.join("\n");
     expect(t).toContain("nichts");
-    expect(t).toContain("[dry-run] 🏷️ Tag v1.3.0 setzen und syncen");
+    expect(t).toContain("[dry-run] 🏷️ Tag v1.3.0 setzen");
     expect(t).toContain("[dry-run] - Vorgeschlagener Tag");
     T.lauf({ io: io(geclaimt) });
     expect(aufrufe).toEqual([]);
@@ -507,7 +524,7 @@ describe("lauf", () => {
     const pre = "- [ ] Pre-Flight „ja, taggen“";
     expect(body).toContain(pre);
     const abgehakt = body.replace(pre, "- [x] Pre-Flight „ja, taggen“");
-    const titel = "🏷️ Tag v1.3.0 setzen und syncen";
+    const titel = "🏷️ Tag v1.3.0 setzen";
     T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt })] }) });
     expect(aufrufe).toEqual([]);
     let neu = "";
@@ -517,14 +534,18 @@ describe("lauf", () => {
   });
   it("identisches offenes Ticket bleibt unberührt, abweichendes wird aktualisiert, leeres geschlossen", () => {
     T.lauf({ io: io({ ladeOffene: () => [tagOffen()] }) });
-    expect(aufrufe).toEqual(["aktualisiere:40:🏷️ Tag v1.3.0 setzen und syncen"]);
+    expect(aufrufe).toEqual(["aktualisiere:40:🏷️ Tag v1.3.0 setzen"]);
     let body = "";
     T.lauf({ io: io({ ladeOffene: () => [tagOffen()], aktualisiere: (_n: number, _t: string, b: string) => { body = b; } }) });
-    const titel = "🏷️ Tag v1.3.0 setzen und syncen";
+    const titel = "🏷️ Tag v1.3.0 setzen";
     T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body })] }) });
     expect(aufrufe).toEqual([]);
     T.lauf({ io: io({ ladeLog: () => "", ladeOffene: () => [tagOffen()] }) });
     expect(aufrufe).toEqual(["schliesse:40"]);
+  });
+  it("factory#220 G6.3: ein offenes Ticket mit dem alten Titel wird über TAG_MARKER erkannt und aktualisiert (kein Duplikat)", () => {
+    T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel: "🏷️ Tag v1.3.0 setzen " + "und syncen" })] }) });
+    expect(aufrufe).toEqual(["aktualisiere:40:🏷️ Tag v1.3.0 setzen"]);
   });
   it("Bezieher: nichts zu tun; Git-Fehler: Exit 1; ohne PROJECT_TOKEN nur Warnung", () => {
     expect(T.lauf({ io: io({ istBezieher: () => true, tags: () => { throw new Error("nie"); } }) })).toBe(0);

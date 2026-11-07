@@ -49,7 +49,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, optionalesLabel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
@@ -88,7 +88,7 @@ export function parseArgs(argv) {
 
 /**
  * Zählt die Befundzeilen (`- [ ]`, auch `*` und eingerückt) in den Kommentaren VERTRAUTER Autoren (`vertraut(user)`, Liste aus
- * fremdtext-lib.mjs). `nurOffen` (Standard) zählt nur `[ ]`, sonst auch `[x]`. Kommentare ohne Checkbox, fremde oder ohne `user` zählen nicht. Pur.
+ * fremdtext-lib.mjs). Zweck: die Nachmessung der Sammelticket-Zeilen (ADR 0026, factory#48) und der Test-Gegenwert der Füllstand-Zählung; kein Aufrufer in `scripts/` (bewusst, kein toter Code). `nurOffen` (Standard) zählt nur `[ ]`, sonst auch `[x]`. Kommentare ohne Checkbox, fremde oder ohne `user` zählen nicht. Pur.
  */
 export function zaehleBefundZeilen(kommentare, { vertraut, nurOffen = true }) {
   const muster = nurOffen ? BEFUND_ZEILE_OFFEN : BEFUND_ZEILE;
@@ -154,8 +154,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
  */
 export function sammelLabel(config, art) {
   if (art !== "codequalitaet") return labelAus(config, "harness");
-  const l = config?.labels?.codequalitaet;
-  return typeof l === "string" && l.trim() !== "" ? l : null;
+  return optionalesLabel(config, "codequalitaet");
 }
 
 /**

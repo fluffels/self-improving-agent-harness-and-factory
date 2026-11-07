@@ -81,6 +81,16 @@ describe("Kern-Block-Budget", () => {
     });
   });
 
+  test("factory#220 G6.4: Prüfung in der Fabrik mit echten Markern und Block im Budget ist grün (null); ein Zeichen über dem Budget rot", () => {
+    temp((dir) => {
+      datei(dir, ".factory/besitz.json", "{}");
+      datei(dir, "AGENTS.md", mitKern("x".repeat(100)));
+      assert.equal(kernBlockPruefung(dir), null);
+      datei(dir, "AGENTS.md", mitKern("x".repeat(KERN_BLOCK_BUDGET)));
+      assert.match(String(kernBlockPruefung(dir)), /Kern-Block/);
+    });
+  });
+
   test("Gate check:contextsize (CLI): Kern-Block über Budget in der Fabrik ist rot, im Bezieher grün (die Verdrahtung, nicht nur die pure Prüfung)", { timeout: 60_000 }, () => {
     temp((dir) => {
       const wurzel = join(import.meta.dirname, "..");

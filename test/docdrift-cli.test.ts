@@ -68,6 +68,11 @@ describe("check:docdrift als Prozess (#101)", { timeout: 60_000 }, () => {
     ["(7) toter Test-Pfad", { "README.md": `${SAUBER_README}\`test/weg.test.ts\`\n` }, /✖ Toter Test-Pfad: „test\/weg\.test\.ts" in README\.md[\s\S]*docs\/erstbezug\.md#projektdateien/],
     ["(8) totes Verweisziel (factory#157)", { "README.md": `${SAUBER_README}Siehe docs/weg.md › X.\n` }, /✖ Totes Verweisziel: „docs\/weg\.md" \(› X\.\) in README\.md/],
     ["(8) toter Abschnitt (factory#157)", { "docs/x.md": "# X\n", "README.md": `${SAUBER_README}Siehe docs/x.md › Gibts nicht.\n` }, /✖ Toter Abschnitt: „Gibts nicht\." \(docs\/x\.md ›\) in README\.md/],
+    [
+      "(8) toter Abschnitt mit Nebensatz: die Meldung zeigt den gekürzten Abschnitt (factory#220 L1)",
+      { "docs/x.md": "# X\n", "README.md": `${SAUBER_README}Siehe docs/x.md › Git, PR und Merge, inklusive § X weiter so lang und noch viel länger als sechzig Zeichen. Danach folgt Rest\n` },
+      /✖ Toter Abschnitt: „Git, PR und Merge, inklusive § X weiter so lang und noch vi…" \(docs\/x\.md ›\) in README\.md/,
+    ],
   ];
   for (const [name, dateien, muster] of FEHLER) {
     test(`${name}: Exit 1 mit Meldung`, () => {

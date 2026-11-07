@@ -58,7 +58,7 @@ const labelLiterale = (text: string): string[] => {
 };
 const skriptLabels = (text: string): string[] => [...text.matchAll(/"--(?:add-)?label",\s*"([^"$]+)"/g)].map((m) => m[1]);
 const gelesenerSchluessel = (text: string): string[] => [
-  ...[...text.matchAll(/labelAus\(\s*[^,()]+,\s*"(\w+)"\s*\)/g)].map((m) => m[1]),
+  ...[...text.matchAll(/(?:labelAus|optionalesLabel)\(\s*[^,()]+,\s*"(\w+)"\s*\)/g)].map((m) => m[1]),
   ...[...text.matchAll(/\b(?:config|PROJEKT|cfg)\??\.labels\??\.(\w+)/g)].map((m) => m[1]),
 ];
 const boardSchluesselGelesen = (text: string, schluessel: string[]): string[] => schluessel.filter((k) => new RegExp(`\\.${k}\\b`).test(text));
@@ -97,6 +97,7 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
     assert.deepEqual(labelLiterale('gh x --label forum --label "$V" --add-label a:b,c:d\n  ALARM_LABEL: area:x\n  L: ${{ y }}'), ["forum", "a:b", "c:d"].concat(["area:x"]));
     assert.deepEqual(skriptLabels(`["--label", "${FREMD.labels.harness}", "--label", label]`), [FREMD.labels.harness]);
     assert.deepEqual(gelesenerSchluessel('labelAus(config, "harness") config.labels.forum labels.some(x)'), ["harness", "forum"]);
+    assert.deepEqual(gelesenerSchluessel('optionalesLabel(config, "entscheidung")'), ["entscheidung"]);
   });
   test("Board-Schlüssel und Vergleichsliterale", () => {
     assert.deepEqual(boardSchluesselGelesen("b.projectId + x.rolle", ["projectId", "neu", "rolle"]), ["projectId", "rolle"]);

@@ -1,10 +1,10 @@
 /* Berechtigungs-Ergänzung im Sync und im Drift-Gate (#1874, ADR 0022 Fortschreibung 1874): der Kern-Anteil von `permissions` wird verteilt,
  * die Ergänzung des Ziels (`berechtigungen` in dessen Config) steht als Ende der Listen, Hash und Gate prüfen beides getrennt.
  * Fixture: synthetische Quelle und Ziele im Temp-Ordner, nichts davon liegt im Repo. */
-import { afterAll, afterEach, describe, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -106,6 +106,28 @@ function gate(z: string): { code: number; out: string; err: string } {
   const code = drift.cli(["--wurzel", z], { out: (s) => out.push(s), err: (s) => err.push(s) });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
+// Geteilte Vorlage (L23/L33): eine Quelle, die ein Test nicht verändert, baut ein `describe` einmal per beforeAll
+// (git init/add/commit je Fall entfällt). Sie lebt außerhalb von `temps` (afterEach räumt sonst nach dem ersten Test),
+// der Aufräumer läuft in afterAll. Ein Test, der die Quelle verändert, nimmt `kopie(...)` (cpSync, samt .git).
+function geteilteQuelle(bauen: () => string): { pfad: () => string; kopie: () => string } {
+  let q = "";
+  beforeAll(() => {
+    q = bauen();
+    temps.splice(temps.indexOf(q), 1);
+  });
+  afterAll(() => {
+    if (q !== "") rmSync(q, { recursive: true, force: true });
+  });
+  return {
+    pfad: () => q,
+    kopie: () => {
+      const k = tmp();
+      cpSync(q, k, { recursive: true });
+      return k;
+    },
+  };
+}
+
 const perm = (z: string): Required<Perm> => (JSON.parse(lies(z, SETTINGS)) as { permissions: Required<Perm> }).permissions;
 const leser = (z: string) => (p: string): string | null => (existsSync(join(z, ...p.split("/"))) ? lies(z, p) : null);
 
@@ -150,9 +172,10 @@ describe("Berechtigungs-Ergänzung: pure Primitive", () => {
 
 describe("Berechtigungs-Ergänzung: Sync", () => {
   const ZIEL_ERG: Erg = { allow: ["mcp__z"], ask: [], deny: ["mcp__zz"] };
+  const std = geteilteQuelle(() => baueQuelle());
 
   test("das Ziel bekommt den Kern-Anteil plus die eigene Ergänzung am Ende; Projektschlüssel bleiben, der zweite Lauf schreibt nichts, das Gate ist grün", () => {
-    const q = baueQuelle();
+    const q = std.pfad();
     const z = baueZiel(ZIEL_ERG);
     const r = vomTag(q, z);
     assert.equal(r.code, 0, r.err);
@@ -170,7 +193,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
 
   test("ein Ziel ohne Config bekommt nur den Kern-Anteil", () => {
     const z = baueZiel();
-    assert.equal(vomTag(baueQuelle(), z).code, 0);
+    assert.equal(vomTag(std.pfad(), z).code, 0);
     assert.deepEqual(perm(z), KERN);
     assert.equal(gate(z).code, 0);
   });
@@ -185,7 +208,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
   });
 
   test("zwei Ziele mit verschiedenen Ergänzungen teilen den Hash der Einheit im Sync-Stand", () => {
-    const q = baueQuelle();
+    const q = std.pfad();
     const a = baueZiel(ZIEL_ERG);
     const b = baueZiel({ allow: ["mcp__anders"], ask: ["mcp__anders__w"], deny: [] });
     assert.equal(vomTag(q, a).code, 0);
@@ -198,7 +221,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
 
   test("getrennte Prüfung: eine nur in der Config ergänzte Regel ohne neuen Sync lässt den Kern-Hash grün und macht die Ergänzungs-Prüfung rot", () => {
     const z = baueZiel(ZIEL_ERG);
-    assert.equal(vomTag(baueQuelle(), z).code, 0);
+    assert.equal(vomTag(std.pfad(), z).code, 0);
     schreibe(z, CONFIG, json({ berechtigungen: { ...ZIEL_ERG, allow: [...ZIEL_ERG.allow, "mcp__neu"] } }));
     assert.deepEqual(drift.pruefeDrift(leser(z)).fehler, []);
     const e = drift.pruefeErgaenzung(leser(z));
@@ -209,7 +232,7 @@ describe("Berechtigungs-Ergänzung: Sync", () => {
   });
 
   test("ohne Sync-Stand (Quell-Modus) ist die Ergänzungs-Prüfung aktiv: grün bei Gleichstand, rot bei falscher Reihenfolge", () => {
-    const q = baueQuelle();
+    const q = std.kopie();
     const ok = gate(q);
     assert.equal(ok.code, 0, ok.err);
     assert.match(ok.out, /dieses Projekt ist Quelle/);
@@ -556,11 +579,12 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
     if (erg !== undefined) schreibe(z, CONFIG, json({ sandbox: erg }));
     return z;
   }
+  const sb = geteilteQuelle(() => quelle());
   const sbox = (z: string): { enabled: boolean; network: { allowedDomains: string[] }; credentials: { envVars: { name: string }[] } } =>
     (JSON.parse(lies(z, SETTINGS)) as { sandbox: never }).sandbox;
 
   test("das Ziel bekommt den Kern-Anteil plus die eigene Ergänzung am Ende, die der Quelle verteilt sich nicht; der zweite Lauf schreibt nichts, das Gate ist grün", () => {
-    const q = quelle();
+    const q = sb.pfad();
     const z = ziel(ZIEL_SB);
     const r = vomTag(q, z);
     assert.equal(r.code, 0, r.err);
@@ -586,7 +610,7 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
   });
   test("ohne Block im Ziel gibt es nur den Kern-Anteil, ohne Meldung des Gates", () => {
     const z = ziel();
-    assert.equal(vomTag(quelle(), z).code, 0);
+    assert.equal(vomTag(sb.pfad(), z).code, 0);
     assert.deepEqual(sbox(z), KERN_SB);
     const g = gate(z);
     assert.equal(g.code, 0, g.err);
@@ -594,14 +618,14 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
   });
   test("eine Handänderung am Kern-Anteil macht das Gate rot, mit Hinweis auf die Config", () => {
     const z = ziel(ZIEL_SB);
-    assert.equal(vomTag(quelle(), z).code, 0);
+    assert.equal(vomTag(sb.pfad(), z).code, 0);
     const s = sbox(z);
     schreibe(z, SETTINGS, json({ sandbox: { ...s, network: { allowedDomains: [...s.network.allowedDomains, "hand.example"] } } }));
     assert.match(gate(z).err, /#\/sandbox: Besitz wurde im Projekt verändert \(Projekt-Ergänzungen gehören nach \.factory\/projekt\.json › sandbox\)/);
   });
   test("eine nur in der Config ergänzte Domain ohne neuen Sync lässt den Kern-Hash grün und die Ergänzungs-Prüfung rot", () => {
     const z = ziel(ZIEL_SB);
-    assert.equal(vomTag(quelle(), z).code, 0);
+    assert.equal(vomTag(sb.pfad(), z).code, 0);
     schreibe(z, CONFIG, json({ sandbox: { ...ZIEL_SB, allowedDomains: [...ZIEL_SB.allowedDomains, "neu.example"] } }));
     assert.deepEqual(drift.pruefeDrift(leser(z)).fehler, []);
     assert.match(drift.pruefeErgaenzung(leser(z)).fehler.join("|"), /sandbox\.network\.allowedDomains: Ergänzung „neu\.example“ fehlt[\s\S]*Weg:/);
@@ -609,7 +633,7 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
   });
   test("ein Ziel mit Domain * ist rot, nichts wird geschrieben", () => {
     const z = ziel({ allowedDomains: ["*"] });
-    const r = vomTag(quelle(), z);
+    const r = vomTag(sb.pfad(), z);
     assert.equal(r.code, 1, r.out);
     assert.match(r.err, /Ziel: sandbox\.network\.allowedDomains: Ergänzung „\*“ erlaubt jede Domain/);
     assert.match(r.err, /nichts geschrieben/);
@@ -617,7 +641,7 @@ describe("Sandbox-Ergänzung (#1888): Sync und Gate", () => {
   });
   test("eine Ziel-Ergänzung mit einem Kern-Namen in envVars ist rot", () => {
     const z = ziel({ envVars: [{ name: "GITHUB_TOKEN", mode: "deny" }] });
-    const r = vomTag(quelle(), z);
+    const r = vomTag(sb.pfad(), z);
     assert.equal(r.code, 1, r.out);
     assert.match(r.err, /„GITHUB_TOKEN“ steht doppelt/);
   });

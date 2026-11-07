@@ -21,6 +21,7 @@ concurrency:
 permissions:
   contents: read
   issues: write
+  actions: read
 
 jobs:
   doctor:

@@ -233,22 +233,23 @@ function leseBericht(lies, rootDir, datei, fehlend) {
   }
 }
 
-function jacocoZuordnen({ bestaende, bestandPfade, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe }) {
+/** Ordnet die JaCoCo-Bestände (`berichte: [{ bestand, pfad }]`, der Pfad gehört zu seinem Bestand) den gemessenen Dateien zu. */
+export function jacocoZuordnen({ berichte, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe }) {
   const ordner = [...new Set(wurzelOrdner ?? quellen.wurzeln.flatMap((w) => ordnerZuMuster(rootDir, w)))];
   const gibt = existiert ?? ((p) => existsSync(join(rootDir, ...p.split("/"))));
   for (const pfad of messDateien) {
     for (const praefix of wurzelPraefixe(pfad, quellen.wurzeln)) {
       const schluessel = pfad.slice(praefix.length + 1);
-      const treffer = bestaende.filter((b) => b.has(schluessel));
+      const treffer = berichte.filter((b) => b.bestand.has(schluessel));
       if (treffer.length === 0) continue;
       const kandidaten = ordner.map((o) => `${o}/${schluessel}`).filter(gibt);
       if (kandidaten.length > 1) {
         mehrdeutig.push({ pfad, schluessel, kandidaten });
         continue;
       }
-      for (const b of treffer) {
-        mische(abdeckung, zweige, pfad, b.get(schluessel).zeilen, b.get(schluessel).zweige);
-        merkeBericht(berichteJe, pfad, bestandPfade[bestaende.indexOf(b)]);
+      for (const { bestand, pfad: bericht } of treffer) {
+        mische(abdeckung, zweige, pfad, bestand.get(schluessel).zeilen, bestand.get(schluessel).zweige);
+        merkeBericht(berichteJe, pfad, bericht);
       }
     }
   }
@@ -263,8 +264,7 @@ export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, w
   const zweige = new Map();
   const fehlend = [];
   const mehrdeutig = [];
-  const bestaende = [];
-  const bestandPfade = [];
+  const jacoco = [];
   const berichteJe = new Map();
   for (const b of berichte) {
     const dateien = berichtDateien(rootDir, b.pfad);
@@ -273,8 +273,7 @@ export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, w
       const text = leseBericht(lies, rootDir, datei, fehlend);
       if (text === null) continue;
       if (b.format === "jacoco") {
-        bestaende.push(parseJacoco(text));
-        bestandPfade.push(datei);
+        jacoco.push({ bestand: parseJacoco(text), pfad: datei });
         continue;
       }
       const zeilen = parseLcov(text, b.basis);
@@ -285,6 +284,6 @@ export function ladeAbdeckung({ berichte, rootDir, lies, messDateien, quellen, w
       }
     }
   }
-  if (bestaende.length > 0) jacocoZuordnen({ bestaende, bestandPfade, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe });
+  if (jacoco.length > 0) jacocoZuordnen({ berichte: jacoco, messDateien, quellen, rootDir, wurzelOrdner, existiert, abdeckung, zweige, mehrdeutig, berichteJe });
   return { abdeckung, zweige, fehlend, mehrdeutig, berichteJe };
 }

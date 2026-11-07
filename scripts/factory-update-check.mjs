@@ -24,8 +24,8 @@ export function updateMeldung({ stand, tags, repo }) {
   const neu = vergleicheTags(tags);
   if (!teile(alt) || neu === null || vergleiche(neu, alt) <= 0) return null;
   const schritte = UPDATE_SCHRITTE.map((s, i) => `${i + 1}. ${s.text.replaceAll("{TAG}", neu)}`).join("\n");
-  const suche = repo ? ` Suche: \`gh issue list --repo ${repo} --search "Tag ${neu} setzen und syncen" --state all --limit 5\`.` : "";
-  const migration = `Bezieher-Migration: die Schritte, die der neue Tag verlangt, stehen im Abschnitt „Bezieher-Migration“ des Tag-Tickets der Fabrik („Tag ${neu} setzen und syncen“).${suche}`;
+  const suche = repo ? ` Suche: \`gh issue list --repo ${repo} --search "Tag ${neu} setzen" --state all --limit 5\`.` : "";
+  const migration = `Bezieher-Migration: die Schritte, die der neue Tag verlangt, stehen im Abschnitt „Bezieher-Migration“ des Tag-Tickets der Fabrik („Tag ${neu} setzen“).${suche}`;
   const text = `Neuer Factory-Release ${neu} (Stand ${alt}). Nach dem Sync in dieser Reihenfolge:\n${schritte}\n${migration}`;
   return { alt, neu, text };
 }

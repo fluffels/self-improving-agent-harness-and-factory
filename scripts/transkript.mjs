@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hauptWurzelAus, istArbeitsplatz, ordnerSlug } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 /** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
@@ -131,9 +132,7 @@ export function* ladeSessions(dir, von) {
 
 /** Repo-Pfad ohne Worktree-Suffix `.claude/worktrees/…` und ohne abschließende Schrägstriche (ein Worktree zählt als Hauptrepo). */
 export function hauptrepoPfad(pfad) {
-  return String(pfad)
-    .replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "")
-    .replace(/[\\/]+$/, "");
+  return hauptWurzelAus(pfad, "beliebig");
 }
 
 /**
@@ -141,7 +140,7 @@ export function hauptrepoPfad(pfad) {
  * abschließende Schrägstriche entfallen (das Hauptrepo zählt), jedes Nicht-Alphanumerische wird `-`. EINE Ableitung für alle Messskripte.
  */
 export function projektSlug(pfad) {
-  return hauptrepoPfad(pfad).replace(/[^A-Za-z0-9]/g, "-");
+  return ordnerSlug(hauptrepoPfad(pfad));
 }
 
 /** Gehört der Ordnername zum Projekt `slug`: das Hauptrepo selbst oder einer seiner Worktrees; Geschwister (`<slug>-alt`) nicht. */
@@ -170,7 +169,7 @@ export function projekteWurzel() {
 function arbeitsplatzBasis({ config, basis } = {}) {
   try {
     const c = config ?? ladeProjektConfig({ pruefen: false });
-    return c?.arbeitsplatz === undefined ? null : (basis ?? dirname(dirname(fileURLToPath(import.meta.url))));
+    return istArbeitsplatz(c) ? (basis ?? dirname(dirname(fileURLToPath(import.meta.url)))) : null;
   } catch {
     return null;
   }
