@@ -21,8 +21,7 @@ import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { pruefeDateien } from "./harness-doctor-dateien.mjs";
-import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
+import { dateienStandard } from "./harness-doctor.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
 import { bereiteMeldung, eigenerLogin, keinSammelticketText, meldestelleZugang, zeileBekannt } from "./meldung-lib.mjs";
 
@@ -128,7 +127,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
       ermittleLuecken({
         env,
         repo: REPO,
-        pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null, dateien: mitMeldestelle(pruefeDateien, { env, lesen: (a, token) => api(a, { token, timeout: 30000 }) }) }).ergebnis,
+        pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null, dateien: dateienStandard({ env, lesen: (a, token) => api(a, { token, timeout: 30000 }) }) }).ergebnis,
       }),
     kontext: () => {
       const { offene, kommentare, owner } = ladeSammelKontext({ repo: ziel, token: zugang.token });

@@ -1,6 +1,7 @@
 /* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39): nur im Bezieher; die Datei `.github/workflows/factory-update.yml` muss da sein und der Workflow `active`.
  * Jeder Zweig hat seinen Test; `lesen` ist die gh-Naht (kein Netz), `existiert` und `bezieher` sind injiziert. */
-import { describe, expect, test } from "vitest";
+import { rmSync } from "node:fs";
+import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/harness-doctor-factory-update.mjs";
 
@@ -37,7 +38,7 @@ describe("factoryUpdatePunkt", () => {
     expect(p).toMatchObject({ punkt: "Factory-Update", ok: false });
     expect(p?.nichtPruefbar).toBeUndefined();
     expect(p?.befund).toContain(".github/workflows/factory-update.yml");
-    expect(p?.fix).toContain("factory:sync");
+    expect(p?.fix).toContain("scripts/factory-sync.mjs --quelle");
     expect(aufrufe).toEqual([]);
   });
   test("Datei da, Workflow active: OK, gefragt wird genau der Workflow des eigenen Repos", () => {
@@ -96,9 +97,15 @@ describe("mitFactoryUpdate", () => {
   test("Vorab-Abbruch: nur die Dateipunkte, der Punkt fehlt", () => {
     const { aufrufe, lesen } = lesenMit({ state: "active" });
     const f = lib.mitFactoryUpdate(() => [{ punkt: "Eins", ok: true }], { lesen, existiert: weg, bezieher: ja });
-    expect(f({ rootDir: "/x", config: undefined, vorAbbruch: true })).toEqual([{ punkt: "Eins", ok: true }]);
+    expect(f({ rootDir: "/x", config, vorAbbruch: true })).toEqual([{ punkt: "Eins", ok: true }]);
+    expect(f({ rootDir: "/x", config })).toHaveLength(2); // ohne Vorab-Abbruch käme die Lücke „Datei fehlt“ dazu: der Test oben ist nicht vakuös
     expect(aufrufe).toEqual([]);
   });
+});
+
+const aufraeumen: string[] = [];
+afterEach(() => {
+  for (const d of aufraeumen.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
 describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
@@ -110,6 +117,7 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
     const doctor = (await import("../scripts/harness-doctor.mjs")) as { dateienStandard(a: { env: Record<string, string>; lesen: Lesen; pruefe: (a: unknown) => Ergebnis[] }): (a: { rootDir: string; config: unknown }) => Ergebnis[] };
     const fabrik = mkdtempSync(join(tmpdir(), "doc-fu-fabrik-"));
     const bezieher = mkdtempSync(join(tmpdir(), "doc-fu-bez-"));
+    aufraeumen.push(fabrik, bezieher);
     mkdirSync(join(bezieher, ".factory"), { recursive: true });
     writeFileSync(join(bezieher, ".factory", "sync-stand.json"), "{}");
     mkdirSync(join(bezieher, ".github", "workflows"), { recursive: true });

@@ -18,7 +18,7 @@ import { istBezieher } from "./sync-stand-lib.mjs";
 const PUNKT = "Factory-Update";
 const WORKFLOW = "factory-update.yml";
 const PFAD = `.github/workflows/${WORKFLOW}`;
-const SYNC_FIX = "den Sync erneut ausführen (`npm run factory:sync -- --quelle <Factory-Checkout> --tag <Tag>`, Anleitung: Seite docs/erstbezug.md des Factory-Repos): der Sync liefert die Datei";
+const SYNC_FIX = "den Sync erneut ausführen (`node scripts/factory-sync.mjs --quelle <Factory-Checkout> --tag <Tag> --ziel .`, Anleitung: Seite docs/erstbezug.md des Factory-Repos): der Sync liefert die Datei";
 
 /** Der Punkt `Factory-Update` als Liste: leer in der Fabrik, ohne Config und im Vorab-Abbruch, sonst genau ein Ergebnis. */
 export function factoryUpdatePunkt({ rootDir, config, lesen, existiert = existsSync, bezieher = istBezieher, vorAbbruch = false }) {
