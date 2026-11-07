@@ -434,7 +434,7 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
   const FABRIK = "zz-org/zz-fabrik";
   const fremd = { repo: FREMD.repo, labels: CFG.labels, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)) };
   const issue = (n: number, labels: string[]) => ({ number: n, state: "open", node_id: `N${n}`, title: `T${n}`, labels: labels.map((name) => ({ name })) });
-  const bauen = (offen: number[], labelsVon: (n: number) => string[], opt: { token?: string; werfe?: boolean } = {}) => {
+  const bauen = (offen: number[], labelsVon: (n: number) => string[], opt: { token?: string; werfe?: boolean; config?: unknown } = {}) => {
     const log: string[] = [];
     const aufrufe = { status: 0, harness: 0, add: [] as string[], loadRepos: [] as string[], commits: 0, offenRepos: [] as unknown[], items: 0, itemsRepos: [] as unknown[] };
     const io: Io = {
@@ -456,7 +456,7 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
       log: (z) => log.push(z),
     };
     const token = "token" in opt ? opt.token : "t";
-    const r = T.fuehreTaktAus({ config: fremd, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token, io });
+    const r = T.fuehreTaktAus({ config: opt.config ?? fremd, repo: FREMD.repo, jetzt: new Date("2026-10-08T12:00:00Z"), token, io });
     return { r, log: log.join("\n"), aufrufe };
   };
   test("Status-Ticket, Sammelticket und Quotenzeile entfallen mit Logzeile, der Lauf bleibt grün, der Wächter läuft mit dem eigenen Repo", () => {
@@ -466,20 +466,27 @@ describe("Fremdes Factory-Board im Takt (#76, ADR 0022 F10)", () => {
     expect(aufrufe).toMatchObject({ status: 0, harness: 0, commits: 0, loadRepos: [FREMD.repo, FREMD.repo] });
     expect(r.fehler).toBe(false);
   });
-  test("der Wächter nimmt ein Produkt-Issue auf, lehnt ein Harness-Issue des eigenen Repos mit Grund ab (Warnung, kein Fehler)", () => {
-    const { r, log, aufrufe } = bauen([5, 6], (n) => (n === 6 ? [FREMD.labels.harness] : []));
-    expect(aufrufe.add).toEqual(["N5"]);
-    expect(log).toMatch(new RegExp(`::warning::Board-Wächter: #6 fehlt im Board, nicht aufgenommen: Das factory-Board.*${FABRIK}`));
+  // Ein Board, das das Repo des Issues führt, nimmt es auf; hier führt keines das eigene Repo (Bezieher ohne passendes Board).
+  const ohneBoard = { ...fremd, boards: fremd.boards.map((b) => (b.rolle === "produkt" ? { ...b, repo: "zz-org/anderes" } : b)) };
+  test("der Wächter nimmt ein Harness-Issue des eigenen Repos wie ein Produkt-Issue auf (Produkt-Board führt es, L29)", () => {
+    const { r, aufrufe } = bauen([5, 6], (n) => (n === 6 ? [FREMD.labels.harness] : []));
+    expect(aufrufe.add).toEqual(["N5", "N6"]);
+    expect(r.fehler).toBe(false);
+  });
+  test("der Wächter lehnt ein Issue ab, dessen Repo kein Board führt, mit Grund (Warnung, kein Fehler)", () => {
+    const { r, log, aufrufe } = bauen([6], () => [FREMD.labels.harness], { config: ohneBoard });
+    expect(aufrufe.add).toEqual([]);
+    expect(log).toMatch(/::warning::Board-Wächter: #6 fehlt im Board, nicht aufgenommen: Das produkt-Board.*zz-org\/anderes/);
     expect(r.fehler).toBe(false);
   });
   test("die GraphQL-Zweitabfrage bekommt das eigene Repo (nicht den Standard)", () => {
     expect(bauen([5], () => []).aufrufe.itemsRepos).toEqual([FREMD.repo, FREMD.repo]);
   });
   test("mehrere abgelehnte Harness-Issues: EINE Sammel-Warnung mit Anzahl und Nummern statt je Issue", () => {
-    const { log } = bauen([6, 7, 8], (n) => (n === 8 ? [] : [FREMD.labels.harness]));
+    const { log } = bauen([6, 7, 8], (n) => (n === 8 ? [] : [FREMD.labels.harness]), { config: ohneBoard });
     const warnungen = log.split("\n").filter((z) => z.includes("nicht aufgenommen"));
     expect(warnungen).toHaveLength(1);
-    expect(warnungen[0]).toMatch(/2 Issues fehlen im Board, nicht aufgenommen \(#6, #7\)/);
+    expect(warnungen[0]).toMatch(/3 Issues fehlen im Board, nicht aufgenommen \(#6, #7, #8\)/);
   });
   test("Wächter fragt die offenen Issues des eigenen Repos ab (nicht des Factory-Repos)", () => {
     expect(bauen([5], () => []).aufrufe.offenRepos).toEqual([FREMD.repo]);
