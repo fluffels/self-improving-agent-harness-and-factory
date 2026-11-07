@@ -384,6 +384,7 @@ describe("Stand-Zeile nennt das eigene Repo (factory#238 L25)", () => {
   });
   test("istStandZeile erkennt die Zeile mit Repo-Zusatz (Rundlauf) und lehnt kaputte Zusätze ab", () => {
     expect(lib.istStandZeile(ZEILE)).toBe(true);
+    expect(lib.factoryStand({ zustand: "kaputt", stand: null }, "acme/proj")).toBe("factory: unbekannt (Sync-Stand unlesbar) · acme/proj");
     expect(lib.istStandZeile(lib.factoryStand({ zustand: "kaputt", stand: null }, "acme/proj") as string)).toBe(true);
     for (const z of ["factory: v0.9.0 (13131bc) · ", "factory: v0.9.0 (13131bc) · acme", "factory: v0.9.0 (13131bc) · acme/proj danach", "factory: v0.9.0 (13131bc) ·acme/proj"]) expect(lib.istStandZeile(z), z).toBe(false);
   });
