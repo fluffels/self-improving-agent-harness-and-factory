@@ -16,8 +16,14 @@ export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICK
 /** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Weg: ADR 0031, Fortschreibung zu factory#152). */
 export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
 
+/** Gemeinsamer Anfang der Checkbox-Zeilenmuster: Zeilenanfang, Einrückung, Spiegelstrich `-` oder `*`, Leerraum, öffnende Klammer. */
+const CHECKBOX_KOPF = String.raw`^\s*[-*]\s+\[`;
+
 /** Die eine Quelle der Zeilenerkennung eines Sammeltickets: eine Checkbox-Zeile (`- [ ]`, auch `*`, eingerückt, offen oder abgehakt `[x]`). Füllstand, Zeilenzählung, Tag-Takt und Meldung benutzen sie. */
-export const BEFUND_ZEILE = /^\s*[-*]\s+\[[ xX]\]/;
+export const BEFUND_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}[ xX]\]`);
 
 /** Wie `BEFUND_ZEILE`, aber nur offene Zeilen (`[ ]`). */
-export const BEFUND_ZEILE_OFFEN = /^\s*[-*]\s+\[ \]/;
+export const BEFUND_ZEILE_OFFEN = new RegExp(String.raw`${CHECKBOX_KOPF} \]`);
+
+/** Wie `BEFUND_ZEILE` mit Gruppen (aus demselben Kopf): Gruppe 1 = Haken (` `, `x`, `X`), Gruppe 2 = Text nach der Checkbox (ohne CR am Zeilenende). Der Tag-Takt übernimmt damit Haken. */
+export const HAKEN_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}([ xX])\]\s+(.*?)\r?$`);

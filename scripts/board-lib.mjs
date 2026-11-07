@@ -212,7 +212,7 @@ export const NOTFAELLE = [
   { art: "wiedervorlage", marker: "⏰ Wiedervorlage:", quelle: "scripts/wiedervorlage.mjs" },
   // Der Titel entsteht in scripts/secret-inbox.mjs (wöchentliches Prüf-Ticket für die Security-Tabs, #92).
   { art: "security-tabs", marker: "🔍 Security-Tabs prüfen", quelle: "scripts/secret-inbox.mjs" },
-  // Der Titel entsteht in scripts/tag-takt.mjs (Release-Tag setzen und syncen, #103).
+  // Der Titel entsteht in scripts/tag-takt.mjs (Release-Tag setzen, #103).
   { art: "tag", marker: "🏷️ Tag ", quelle: "scripts/tag-takt.mjs" },
 ];
 

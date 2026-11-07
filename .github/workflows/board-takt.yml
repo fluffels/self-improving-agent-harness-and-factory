@@ -11,7 +11,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 #    ungeclaimte an die Spitze des Boards (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket; #1349, #1888, factory#162). Unter der Schwelle
 #    schiebt er nichts, auch nicht zurück.
 # 3. Tag-Takt (#103): derselbe Lauf zählt die Besitz-PRs seit dem letzten Release-Tag und hält ab 3 PRs, über 7 Tage Alter oder einem
-#    Dringlich-Signal genau ein Kopf-Ticket „🏷️ Tag v<x> setzen und syncen“ (scripts/tag-takt.mjs; braucht die volle Historie und lesenden
+#    Dringlich-Signal genau ein Kopf-Ticket „🏷️ Tag v<x> setzen“ (scripts/tag-takt.mjs; braucht die volle Historie und lesenden
 #    Zugriff auf die Workflow-Läufe für den CI-Status).
 # 4. Milestone (factory#194): das Schließen eines Milestones löst nur den Tag-Takt aus (Auslöser „Milestone geschlossen“ in scripts/tag-takt.mjs); der Schritt für
 #    Status-Ticket und Sammelticket entfällt bei diesem Ereignis (board-takt.mjs wertet jedes Nicht-Push-Ereignis wie den Montagslauf).
