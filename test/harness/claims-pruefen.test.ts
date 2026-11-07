@@ -145,6 +145,12 @@ describe("beurteileClaim: Negativfälle (nie löschen)", () => {
     }
   });
 
+  test("unbekannter HEAD (null) gleicht nie einem unbekannten PR-Kopf (null): bleibt", () => {
+    const u = urteil(geschlossen({ worktree: { pfad: WTPFAD, branch: null, sauber: true, head: null, locked: false }, prs: [{ nummer: 9, zustand: "MERGED", headRefOid: null }] }));
+    assert.equal(u.urteil, "behalten");
+    assert.match(u.grund, /HEAD/);
+  });
+
   test("gesperrter Worktree bleibt", () => {
     const u = urteil(geschlossen({ worktree: { pfad: WTPFAD, branch: null, sauber: true, head: OID, locked: true } }));
     assert.equal(u.urteil, "behalten");
@@ -649,8 +655,15 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const welt: Welt = { ...BELEG, loescheFehler: true };
     const r = M.fuehreAus([], baue(welt).deps);
     assert.equal(r.code, 1);
-    assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht/);
+    assert.match(r.out, /FEHLER #1628: Lock nicht gelöscht \(gesperrt\)/);
     assert.match(r.out, /WIEDERAUFNAHME #1672/);
+  });
+
+  test("scheitert das Löschen des Locks mit einem Fehler ohne `message` (Text, null): die Zeile nennt ihn trotzdem", () => {
+    const { deps } = baue(BELEG);
+    const mit = (geworfen: unknown) => ({ ...deps, loesche: () => { throw geworfen; } });
+    assert.match(M.fuehreAus([], mit("roh")).out, /Lock nicht gelöscht \(roh\)/);
+    assert.match(M.fuehreAus([], mit(null)).out, /Lock nicht gelöscht \(null\)/);
   });
 
   const alterLock = lock({ erstellt: "2026-10-16T01:00:00.000Z" });
