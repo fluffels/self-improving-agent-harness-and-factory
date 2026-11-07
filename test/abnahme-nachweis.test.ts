@@ -18,6 +18,7 @@ import { FREMD, FREMD_CONFIG_PFAD, FREMD_OWNER, projektConfig } from "./support/
 interface Zeilen {
   abnahme: string;
   abnahmeOverride: string;
+  reviewOverride: string;
 }
 type Urteil = { k: string; wert: string }[];
 type Marker = { durchgang: number; head: string; urteil: Urteil } | null;
@@ -26,13 +27,13 @@ type Nachweis = { review: { head: string | null; runden: number } | null; abnahm
 interface Mod {
   verknuepfteTickets: (body: string) => number[];
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
     env: Record<string, string>;
     ladeConfig: () => unknown;
-  }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean };
+  }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean; hinweise?: string[] };
 }
 const m = raw as unknown as Mod;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen & Record<string, string> };
@@ -49,8 +50,9 @@ const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wer
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean }) =>
   m.bewerteAbnahme({
+    reviewOverride: o.reviewOverride,
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
     ticket: o.ticket === undefined ? { nr: 9, kriterien: kr(2) } : o.ticket,
     marker: o.marker === undefined ? marker() : o.marker,
@@ -103,6 +105,20 @@ describe("K3: Cap", () => {
   test("Review-Zeile fehlt oder runden keine Zahl", () => {
     rot(bewerte({ review: false }), /Review-Zeile fehlt/);
     rot(bewerte({ runden: Number.NaN }), /runden ist keine Zahl/);
+  });
+});
+
+describe("K3b: Review-Override (L24a)", () => {
+  test("mit Review-Override entfallen Review-Zeile, Cap und Review-head-Vergleich", () => {
+    expect(bewerte({ review: false, reviewOverride: true })).toEqual([]);
+    expect(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 2, marker: marker({ durchgang: 3 }), reviewOverride: true })).toEqual([]);
+    expect(bewerte({ abnahmeHead: { nachReviewHead: false }, reviewOverride: true })).toEqual([]);
+  });
+  test("die übrigen head-Regeln gelten weiter (unbekannt, Slice, Konflikt-Merge, Änderungs-Commit)", () => {
+    rot(bewerte({ review: false, reviewOverride: true, abnahmeHead: { bekannt: false, imSlice: false } }), /kein bekannter Commit/);
+    rot(bewerte({ review: false, reviewOverride: true, abnahmeHead: { imSlice: false } }), /nicht im Slice/);
+    rot(bewerte({ review: false, reviewOverride: true, abnahmeHead: { konfliktMerges: ["m1"] } }), /Konflikt-Merge m1/);
+    rot(bewerte({ review: false, reviewOverride: true, abnahmeHead: { aenderungsCommits: [{ sha: "c1", dateien: ["a"] }] } }), /Commit c1/);
   });
 });
 
@@ -208,6 +224,20 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     const { r } = lauf();
     expect(r.fehler).toEqual([]);
     expect(r.ok).toBe(true);
+  });
+  test("Review-Override (L24a): ohne Review-Zeile grün mit Hinweis; ohne Override rot; Override ohne Begründung ungültig, rot", () => {
+    const ohneReview = `Nachweis\n\n${ZEILE}`;
+    const mit = lauf({ messages: `${ohneReview}\n${Z.reviewOverride}: #9 Revert-PR` }).r;
+    expect(mit.fehler).toEqual([]);
+    expect(mit.ok).toBe(true);
+    expect(mit.hinweise).toEqual(["Review-Override: Cap- und head-Vergleich entfallen"]);
+    const ohne = lauf({ messages: ohneReview }).r;
+    rot(ohne.fehler, /Review-Zeile fehlt/);
+    expect(ohne.hinweise).toEqual([]);
+    const leer = lauf({ messages: `${ohneReview}\n${Z.reviewOverride}: #9` }).r;
+    rot(leer.fehler, /Review-Zeile fehlt/);
+    expect(leer.ok).toBe(false);
+    expect(leer.hinweise).toEqual([]);
   });
   test("Zeile fehlt: rot", () => rot(lauf({ messages: "nur Code" }).r.fehler, /Zeile fehlt/));
   test("entfaellt: rot bei Kriterien, grün ohne Kriterien und ohne Ticket", () => {
