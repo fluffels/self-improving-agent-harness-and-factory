@@ -7,7 +7,7 @@ import { homedir, tmpdir } from "node:os";
 import * as raw from "../../scripts/codex-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as cliRaw from "../../scripts/codex-setup.mjs";
-const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
+const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string, a?: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
 const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void) => number };
 const config = { agenten: { planer: "probe-planer", umsetzer: "probe-umsetzer", lens: "probe-lens", gruppe: "probe-gruppe" } };
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["--probe"] } } };
