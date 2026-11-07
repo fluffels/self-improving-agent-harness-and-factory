@@ -354,6 +354,13 @@ describe("ladeWiedervorlagen (L27): fehlende Datei ist eine leere Liste", () => 
   test("vorhandene Datei: die geparste Liste", () => {
     expect(lade("/x/w.json", () => '[{"id":"a"}]')).toEqual([{ id: "a" }]);
   });
+  test("Standard-Leser: echte Datei und echter ENOENT", () => {
+    const ordner = mkdtempSync(join(tmpdir(), "wv-"));
+    writeFileSync(join(ordner, "w.json"), '[{"id":"echt"}]');
+    expect(lade(join(ordner, "w.json"))).toEqual([{ id: "echt" }]);
+    expect(lade(join(ordner, "fehlt.json"))).toEqual([]);
+    rmSync(ordner, { recursive: true });
+  });
   test("ungültiges JSON wirft weiter", () => {
     expect(() => lade("/x/w.json", () => "{kaputt")).toThrow(SyntaxError);
   });
