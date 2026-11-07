@@ -37,16 +37,13 @@ import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { kernEnvNamen, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
-import { pruefeDateien } from "./harness-doctor-dateien.mjs";
-import { mitFactoryUpdate } from "./harness-doctor-factory-update.mjs";
-import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
+import { dateienStandard } from "./harness-doctor-factory-update.mjs";
 import { WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, konfigFehlerText, ohneActionPins, pruefLauf } from "./harness-doctor-lib.mjs";
 
 // Die Prüf-API (Ableitung, Prüfpunkte, Vorlage) steht in der Lib; sie bleibt unter diesem Namen erreichbar.
 export { BOARD_PRUEFPUNKTE, STATUS_FELD_NAME, TODO_OPTION_NAME, WOCHENLAUF_PFAD, WOCHENLAUF_WORKFLOW, ohneActionPins, pruefLauf, pruefe, voraussetzungenAus, workflowsLesen } from "./harness-doctor-lib.mjs";
 
-/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht der beiden letzten. */
-export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen });
+export { dateienStandard };
 
 const SKRIPTE = dirname(fileURLToPath(import.meta.url));
 const USAGE = "Aufruf: node scripts/harness-doctor.mjs --pruefen [--config <pfad>] | --einrichten [--dry-run] [--config <pfad>]";

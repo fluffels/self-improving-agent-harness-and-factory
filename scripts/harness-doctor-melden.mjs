@@ -21,7 +21,7 @@ import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { dateienStandard } from "./harness-doctor.mjs";
+import { dateienStandard } from "./harness-doctor-factory-update.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
 import { bereiteMeldung, eigenerLogin, keinSammelticketText, meldestelleZugang, zeileBekannt } from "./meldung-lib.mjs";
 

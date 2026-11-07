@@ -38,8 +38,10 @@ Die Fabrik ist selbst ein Projekt des Harness: sie verteilt den Kern und nutzt i
 Der Wächter wurde vor der Korrektur geschrieben und lief rot genau an der einen Fundstelle:
 
 ```
-scripts/projekt-config-lib.mjs:616: M1 Datei-Aufruf auf den Sync-Stand: Rollen-Weichen nur über istBezieher(wurzel) aus scripts/sync-stand-lib.mjs, Prüfer über das Feld zustand von liesSyncStand (Fortschreibung factory#154 zu ADR 0022)
+scripts/projekt-config-lib.mjs:616: M1 Datei-Aufruf auf den Sync-Stand: Fabrik/Bezieher nur über istBezieher(wurzel) aus scripts/sync-stand-lib.mjs unterscheiden (Fortschreibung factory#154 zu ADR 0022)
 ```
+
+Nachtrag factory#220 (L7): der Meldungstext des Wächters lautet seitdem: „M1 Datei-Aufruf auf den Sync-Stand: Rollen-Weichen nur über istBezieher(wurzel) aus scripts/sync-stand-lib.mjs, Prüfer über das Feld zustand von liesSyncStand (Fortschreibung factory#154 zu ADR 0022)“ (die Rollen-Weiche ist `istBezieher`, der Prüfer liest das Feld `zustand`).
 
 Nach der Korrektur ist der Scan über die verteilten Skript-Dateien leer. Sabotagen (je per Edit, danach zurück): die Fundstelle zurück auf die Dateiprobe, das Muster M1 verfälscht, das Muster M2 verfälscht, die Ausnahme der Heimatdatei entfernt; jede macht mindestens einen Test rot. Ein Dateisystem-Zugriff auf den Sync-Stand außerhalb von `sync-stand-lib.mjs` kam sonst in `scripts/**` nicht vor (Suche nach `existsSync|readFileSync|statSync|accessSync|lstatSync` mit `sync-stand` oder `STAND_PFAD`).
 

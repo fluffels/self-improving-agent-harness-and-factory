@@ -12,7 +12,9 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
+import { pruefeDateien } from "./harness-doctor-dateien.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
+import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 
 const PUNKT = "Factory-Update";
@@ -49,3 +51,6 @@ function zustandPunkt(config, lesen) {
 
 /** Die Dateipunkte `dateien` samt Punkt `Factory-Update` (Config aus dem Aufruf, `lesen` vom Rand): dieselbe Form `dateien({ rootDir, config, … })`. */
 export const mitFactoryUpdate = (dateien, { lesen, existiert, bezieher }) => (a) => [...dateien(a), ...factoryUpdatePunkt({ rootDir: a.rootDir, config: a.config, vorAbbruch: a.vorAbbruch === true, lesen, existiert, bezieher })];
+
+/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht der beiden letzten. */
+export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen });
