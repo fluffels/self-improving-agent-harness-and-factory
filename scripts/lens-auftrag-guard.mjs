@@ -14,17 +14,21 @@
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
  *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
  *      ein Fließtext statt Hash wird verweigert).
+ *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
+ *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  * Fehlende Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
  * Bewusste Grenzen:
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt.
+ *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config trägt; ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
 import { basename } from "node:path";
 import { HEX_HEAD } from "./nachweis-lib.mjs";
+import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 
@@ -64,6 +68,20 @@ function istLensSpawn(subagentType, prompt, lens) {
 const HINWEIS =
   "Setze die Werte aus Stufe 0 ein (Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) und kopiere Brille, Kontext-Diät und Findings-Format wörtlich aus dem Skill `review-lenses`.";
 
+/** R4: Grund, wenn ein Pfadsegment `<wt><nr>-lens-<x>…` eine Endung `<x>` trägt, die das Muster aus `ticket-namen.mjs` (`lensNameKern`) nicht kennt; sonst `null`.
+ *  Ein Platzhalter nach dem Buchstaben (`-lens-r<runde>`) zählt wie eine Ziffer; die erlaubten Endungen stehen nur in `lensNameKern`. Pure. */
+function unbekannteLensEndung(text, namen) {
+  const wt = escapeRegex(namen.praefixe.worktree);
+  const segmente = text.matchAll(new RegExp(String.raw`${wt}(?:\d+|<[^<>\s]*>)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
+  const bekannt = new RegExp(namen.lensNameKern);
+  for (const [segment] of segmente) {
+    if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
+    const erlaubt = /-lens-\[([a-z]+)\]/.exec(namen.lensNameKern)?.[1] ?? "";
+    return `Lens-Auftrag unbekannt: der Lens-Worktree „${segment}“ trägt eine Endung, die es nicht gibt. Erlaubt sind ${[...erlaubt].join(", ")} (Muster aus ticket-namen.mjs: -lens-r<runde> Review, -lens-m<n> Merge-Delta, -lens-a<n> Abnahme-Delta, -lens-c<n> CI-Fix-Delta), sonst blockiert der Lens-Edit-Guard die Sabotage-Probe. ${HINWEIS}`;
+  }
+  return null;
+}
+
 /** Grund für ein Deny oder `null` (durchlassen). Pure. */
 export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
@@ -79,6 +97,8 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
       return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). Ein Zusatz in derselben Zeile zählt mit, auch ein erklärendes „<…>“: Erklärungen in eine eigene Zeile schreiben. ${HINWEIS}`;
     }
   }
+  const endung = unbekannteLensEndung(text, namen);
+  if (endung) return endung;
   const head = felder["erwarteter HEAD"];
   // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
   const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];

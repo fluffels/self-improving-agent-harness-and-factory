@@ -329,7 +329,7 @@ describe("CI-Zustand und Body", () => {
     it("factory#215 L2: die Probe-Befehle sind genau die mechanischen Update-Schritte in Reihenfolge (zwischen install und verifyKompakt), der Erklärsatz nennt sie", () => {
       const mechanisch = mechanischeSchritte("<s>/quelle");
       expect(mechanisch).toHaveLength(4);
-      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && node scripts/gate-befehl.mjs verifyKompakt\n");
+      expect(mitBezieher).toContain("cd <s>/bezieher && node scripts/gate-befehl.mjs install && " + mechanisch.join(" && ") + " && git add -A && node scripts/gate-befehl.mjs verifyKompakt\n");
       for (const befehl of mechanisch) expect(mitBezieher.split("aussagekräftig")[0], befehl).toContain("`" + befehl + "`");
     });
     it("factory#220 G6.1: die Probe-Zeile endet genau mit dem Befehl des Update-Schritts verify (abgeleitet, kein Literal)", () => {
@@ -337,6 +337,13 @@ describe("CI-Zustand und Body", () => {
       expect(verify).toBeTruthy();
       const zeile = mitBezieher.split("\n").find((z) => z.startsWith("cd <s>/bezieher && ")) as string;
       expect(zeile.endsWith(" && " + verify)).toBe(true);
+    });
+    it("factory#280 L2: `git add -A` steht nach dem Sync (--tag) und vor verify, die Begründung (git ls-files) steht im Text", () => {
+      const i = (s: string) => mitBezieher.indexOf(s);
+      expect(i("--tag v1.3.0")).toBeGreaterThan(-1);
+      expect(i("git add -A")).toBeGreaterThan(i("--tag v1.3.0"));
+      expect(i("node scripts/gate-befehl.mjs verifyKompakt")).toBeGreaterThan(i("git add -A"));
+      expect(mitBezieher).toContain("git ls-files");
     });
     it("Negativ: die Probe schreibt nie in einen Bezieher (kein push, kein PR, kein --repo, kein Issue) und ist von der Checkliste der Fabrik-Grenze gedeckt", () => {
       const block = mitBezieher.slice(mitBezieher.indexOf("Vor-Tag-Probe"), mitBezieher.indexOf("Checkliste:"));

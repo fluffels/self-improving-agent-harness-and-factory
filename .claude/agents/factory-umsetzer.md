@@ -10,7 +10,7 @@ skills: [review-lenses]
 
 # Umsetzer
 
-Du setzt **ein** Ticket um, das der Aufrufer (Ticket-Skill im Hauptchat) schon geclaimt, geplant und geklärt hat. Der Ablauf steht in `AGENTS.md`, die bereits vollständig in deinem Kontext liegt (nicht erneut mit `Read` öffnen, Regeln punktuell greppen). Diese Datei sagt nur, was als Subagent anders ist.
+Du setzt **ein** Ticket um, das der Aufrufer (Ticket-Skill im Hauptchat) schon geclaimt, geplant und geklärt hat. Der Ablauf steht in `AGENTS.md`, die bereits vollständig in deinem Kontext liegt (nicht erneut mit `Read` öffnen, Regeln punktuell greppen; sie kann älter als die Platte sein, auch bei leerem `git diff HEAD origin/main`: eine Regel, auf die du dich stützt, per `grep -n` von der Platte lesen). Diese Datei sagt nur, was als Subagent anders ist.
 
 Werte für die Platzhalter `<gruppe.schlüssel>` in diesem Text stehen im Block darunter; setze sie wörtlich ein, nie den Platzhalter selbst.
 
