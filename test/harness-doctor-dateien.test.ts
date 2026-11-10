@@ -489,6 +489,11 @@ describe("Workflow-Auslöser", () => {
       expect(p.nichtPruefbar).toBe(true);
       expect(p.befund).toContain(`${FPFAD}:4`);
     });
+    test.each(["[CI], Weg # y", "[CI] x # y"])("Text hinter dem `]` vor einem ` #` (%s) ist nicht prüfbar mit Datei:Zeile", (liste) => {
+      const p = ausloeser([ci("Build"), eigen(`name: X\non:\n  workflow_run:\n    workflows: ${liste}\n`)]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
     test("`on: >` (Folded-Block-Skalar) ist nicht lesbar", () => {
       const p = ausloeser([ci("Build"), eigen("name: X\non: >\n  push\n")]);
       expect(p.nichtPruefbar).toBe(true);
@@ -595,6 +600,10 @@ describe("Workflow-Auslöser", () => {
       "name: A\non:\n  workflow_run:\n    workflows: [CI] # siehe [docs]\n",
       "name: A\non:\n  workflow_run:\n    workflows: [CI] # x ]\n",
       "name: A\non:\n  workflow_run:\n    workflows: [\"a ] #b\"]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a\\\"]\"] # x\n",
+      "name: A\non:\n  workflow_run:\n    workflows: ['C:\\'] # x\n",
+      "name: A\non:\n  workflow_run:\n    workflows: ['x ] y', z] # q ]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI]\t# x\n",
     ];
     for (const text of proben) {
       const erwartet = (parse(text) as { on?: { workflow_run?: { workflows?: string[] } } }).on;
