@@ -313,7 +313,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- [ ] Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): läuft auch als CI-Job \`Probe-Erstbezug\` und baut einen Fixture-Bezieher mit dem Sync aus einem lokalen Klon, den mechanischen Update-Schritten und vollem \`verifyKompakt\`; die grüne CI des Commits deckt ihn ab. Von Hand mit demselben Aufruf: \`node scripts/probe-erstbezug.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --scratch <leerer scratch-ordner>\``,
     ...(bezieher.length > 0 ? bezieherProbe({ bezieher }).zeilen : []),
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
-    ci?.zustand === "gruen" ? `- [ ] Tag \`${tag}\` setzen (Befehl oben)` : `- [ ] Tag \`${tag}\` setzen: GESPERRT, solange die CI-Zeile nicht grün ist (Befehl oben nicht ausführen)`,
+    ci.zustand === "gruen" ? `- [ ] Tag \`${tag}\` setzen (Befehl oben)` : `- [ ] Tag \`${tag}\` setzen: GESPERRT, solange die CI-Zeile nicht grün ist (Befehl oben nicht ausführen)`,
     `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
     "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
     "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“",
@@ -532,13 +532,18 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
     err(`--probe ${ungueltig}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
     return AUFRUF_EXIT;
   }
-  const r = bezieherProbe({ bezieher, ergebnisse });
+  return probeAusgabe({ r: bezieherProbe({ bezieher, ergebnisse }), ci, sha, log });
+}
+
+/** Gibt Checkliste und Urteil der Vor-Tag-Probe aus; Exit 0 nur ohne Blocker, ohne ausstehenden Bezieher und mit grüner CI (`ci` kann `null` sein: dann ausstehend). */
+function probeAusgabe({ r, ci, sha, log }) {
+  const ciGruen = ci?.zustand === "gruen";
   log([ciCheckliste(ci, sha), ...r.zeilen].join("\n"));
-  if (ci?.zustand !== "gruen") log("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
+  if (!ciGruen) log("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
   if (r.blocker.length > 0) log(`Vor-Tag-Probe: BLOCKER ${r.blocker.join(", ")}: nicht taggen.`);
   if (r.rest.length > 0) log(`Vor-Tag-Probe: Projekt-Rest bei ${r.rest.join(", ")}: als Befund festhalten.`);
   if (r.offen.length > 0) log(`Vor-Tag-Probe: ausstehend ${r.offen.join(", ")}: nicht taggen, bis die Probe läuft.`);
-  return r.blocker.length + r.offen.length === 0 && ci?.zustand === "gruen" ? 0 : 1;
+  return r.blocker.length + r.offen.length === 0 && ciGruen ? 0 : 1;
 }
 
 /** CI-Zustand des HEAD-Commits für `--probe` (das Repo löst gh über `{owner}/{repo}` aus dem Checkout auf); jeder Lesefehler ist `unbekannt` (fail-closed). → `{ ci, sha }`. */
