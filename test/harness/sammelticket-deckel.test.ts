@@ -253,10 +253,9 @@ const istHistorie = (pfad: string): boolean => pfad === "docs/lessons-learned.md
 
 function sammleMarkdown(rel: string): string[] {
   const abs = fileURLToPath(new URL(`../../${rel}`, import.meta.url));
-  if (!existsSync(abs)) return [];
   return readdirSync(abs, { withFileTypes: true }).flatMap((e) => {
     const sub = `${rel}/${e.name}`;
-    if (e.isDirectory()) return rel === "docs" && e.name === "adr" ? [] : sammleMarkdown(sub);
+    if (e.isDirectory()) return e.name === "adr" ? [] : sammleMarkdown(sub);
     return e.name.endsWith(".md") && !istHistorie(sub) ? [sub] : [];
   });
 }
@@ -294,6 +293,7 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
     for (const erwartet of ["AGENTS.md", "docs/ticket-reihenfolge.md", ".agents/skills/review-lenses/SKILL.md", "docs/agent-harness.md", "docs/referenz/befehle.md", ".claude/agents/factory-umsetzer.md"]) {
       assert.ok(pfade.includes(erwartet), erwartet);
     }
+    assert.ok(pfade.every((p) => p.endsWith(".md")));
     assert.ok(!pfade.some((p) => p.startsWith("docs/adr/") || p === "docs/lessons-learned.md" || /-\d{4}-\d{2}-\d{2}\.md$/.test(p)));
     assert.ok(echte.find((d) => d.pfad === "AGENTS.md")?.text.includes("Deckel 12 Zeilen"));
   });
@@ -329,5 +329,8 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
     assert.equal(zeilenzahlVerstoesse([{ pfad: "AGENTS.md", text: `${agents.text}\nDeckel 15 Zeilen` }], []).length, 1);
     assert.equal(zeilenzahlVerstoesse([{ pfad: "x.md", text: "nichts" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]).length, 1);
     assert.deepEqual(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Sammelticket: 7 Zeilen" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]), []);
+    // Ausnahme gilt nur für ihre Datei und nur für den ganzen Treffertext
+    assert.equal(zeilenzahlVerstoesse([{ pfad: "y.md", text: "Sammelticket: 7 Zeilen" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]).length, 2);
+    assert.equal(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Sammelticket: 16 Zeilen" }], [{ pfad: "x.md", treffer: "6 Zeilen", grund: "g" }]).length, 2);
   });
 });
