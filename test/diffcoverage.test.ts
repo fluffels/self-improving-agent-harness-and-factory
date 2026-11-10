@@ -342,6 +342,18 @@ describe("Diff-Coverage: Bewertung pro Schicht", () => {
     assert.equal(v.below.includes("domaene"), true);
   });
 
+  test("Alter Aufruf mit einer Floor-Map als drittem Argument wirft TypeError, statt die Floors still zu ignorieren (L14)", () => {
+    const pfad = `${Q}/sim/pods.ts`;
+    const changed = new Map([[pfad, new Set([1, 2])]]);
+    const lcov = new Map([[pfad, new Map([[1, 1], [2, 0]])]]);
+    const alt = { domaene: 50 } as unknown as Parameters<typeof evaluateByLayer>[2];
+    assert.throws(() => evaluateByLayer(changed, lcov, alt), (e: Error) => e instanceof TypeError && /domaene/.test(e.message) && /floors/.test(e.message));
+    const mehrere = { floors: { domaene: 50 }, zusatz: 1, anders: 2 } as unknown as Parameters<typeof evaluateByLayer>[2];
+    assert.throws(() => evaluateByLayer(changed, lcov, mehrere), /zusatz, anders/);
+    assert.doesNotThrow(() => evaluateByLayer(changed, lcov, { floors: { domaene: 50 }, quelle: Q, berichteJe: new Map() }));
+    assert.doesNotThrow(() => evaluateByLayer(changed, lcov, {}));
+  });
+
   test("Optionsobjekt: floors überschreibt den Floor der Schicht, berichteJe nennt die Berichte der Datei (factory#220 L47)", () => {
     const pfad = `${Q}/sim/pods.ts`;
     const changed = new Map([[pfad, new Set([1, 2])]]);
