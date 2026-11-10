@@ -74,20 +74,16 @@ describe("messfenster", () => {
     expect(w({ claim, merge }, [punkt(claim, 10), punkt(merge, 10)])).toEqual({ delta: 0 });
   });
   test.each([
-    ["genau 30 min vor dem Claim ist ok", claim - 30 * MIN, true],
-    ["30 min und 1 ms vor dem Claim ist eine Lücke", claim - 30 * MIN - 1, false],
-  ])("Start: %s", (_n, stand, ok) => {
-    const r = w({ claim, merge }, [punkt(stand, 10), punkt(merge, 11)]);
-    expect("delta" in r).toBe(ok);
-    if (!ok) expect(r).toEqual({ luecke: "kein Punkt höchstens 30 min vor dem Claim" });
+    ["genau 30 min vor dem Claim ist ok", claim - 30 * MIN, { delta: 1 }],
+    ["30 min und 1 ms vor dem Claim ist eine Lücke", claim - 30 * MIN - 1, { luecke: "kein Punkt höchstens 30 min vor dem Claim" }],
+  ])("Start: %s", (_n, stand, erwartet) => {
+    expect(w({ claim, merge }, [punkt(stand, 10), punkt(merge, 11)])).toEqual(erwartet);
   });
   test.each([
-    ["genau 30 min nach dem Merge ist ok", merge + 30 * MIN, true],
-    ["30 min und 1 ms nach dem Merge ist eine Lücke", merge + 30 * MIN + 1, false],
-  ])("Ende: %s", (_n, stand, ok) => {
-    const r = w({ claim, merge }, [punkt(claim, 10), punkt(stand, 11)]);
-    expect("delta" in r).toBe(ok);
-    if (!ok) expect(r).toEqual({ luecke: "kein Punkt höchstens 30 min nach dem Merge" });
+    ["genau 30 min nach dem Merge ist ok", merge + 30 * MIN, { delta: 1 }],
+    ["30 min und 1 ms nach dem Merge ist eine Lücke", merge + 30 * MIN + 1, { luecke: "kein Punkt höchstens 30 min nach dem Merge" }],
+  ])("Ende: %s", (_n, stand, erwartet) => {
+    expect(w({ claim, merge }, [punkt(claim, 10), punkt(stand, 11)])).toEqual(erwartet);
   });
   test("kein Punkt vor dem Claim oder keiner nach dem Merge: Lücke, nie 0", () => {
     expect(w({ claim, merge }, [punkt(claim + MIN, 10), punkt(merge, 11)])).toHaveProperty("luecke");

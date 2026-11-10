@@ -531,7 +531,7 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
       throw new Error("darf nicht laufen");
     };
     const kein: Run = (name) => (name === "token-baseline.mjs" ? nie() : { status: 1, stdout: "", stderr: "x" });
-    expect(mitLader({ von, bis }, { run: kein, claimKarte: nie as never, kontingentLader: nie }).bericht.kontingent).toBeUndefined();
+    expect(mitLader({ von, bis }, { run: kein, claimKarte: nie, kontingentLader: nie }).bericht.kontingent).toBeUndefined();
   });
   test("Ticket ohne Claim in der Karte: Lücke, nicht 0", () => {
     const run: Run = () => ({ status: 0, stdout: lauf([ZEILE({ ticket: 99 })]), stderr: "" });
