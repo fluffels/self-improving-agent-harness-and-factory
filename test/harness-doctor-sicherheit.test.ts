@@ -292,6 +292,11 @@ describe("pruefeSicherheit: Code-Scanning vergleicht auch die Schwellen (L3)", (
     e.regeln = { wert: [regel("high_or_higher", "errors")] };
     expect(je(e, "Code-Scanning").ok).toBe(true);
   });
+  test("Spiegel ohne Schwelle: die Live-Schwelle wird nicht verglichen", () => {
+    const e = gesund();
+    e.regeln = { wert: [regel("none", "none")] };
+    expect(je(e, "Code-Scanning").ok).toBe(true);
+  });
   test("abweichende Sicherheits-Schwelle: Lücke", () => {
     const e = gesund();
     e.spiegel = spiegelMitSchwelle;
