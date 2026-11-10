@@ -195,8 +195,9 @@ export function pruefeBerechtigungen(b) {
 
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
-/** Pur: prüft den optionalen Block `vorpruefung` (Form, factory#260): `befehle` ist eine Liste `{ name, befehl }` mit eindeutigem Namen und einer nicht-leeren Liste von Strings (Programm, dann Argumente; kein Shell-Text). */
+/** Pur: prüft den optionalen Block `vorpruefung` (Form, factory#260; fehlt er, ist nichts zu prüfen): `befehle` ist eine Liste `{ name, befehl }` mit eindeutigem Namen und einer nicht-leeren Liste von Strings (Programm, dann Argumente; kein Shell-Text). */
 export function pruefeVorpruefung(b) {
+  if (b === undefined) return [];
   if (!istObjekt(b)) return ["vorpruefung muss ein Objekt mit der Liste befehle sein"];
   const fehler = Object.keys(b).filter((k) => k !== "befehle").map((k) => `vorpruefung.${k} ist kein bekannter Schlüssel (erlaubt: befehle)`);
   if (b.befehle === undefined) return fehler;

@@ -87,7 +87,7 @@ Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 002
 
 **Zweck.** Ein Maven-Multi-Modul-Projekt (Spring Boot) mit Angular-Frontend und ArchUnit nimmt den Harness ohne Kern-Code des Profils auf: die Projekt-Config, die Wurzel-`package.json` als Task-Runner und ein Rezept für den ArchUnit-Ratchet genügen. Belegt ist das durch einen Probe-Lauf (factory#187): ein Probe-Repo mit zwei Maven-Modulen (`domain` als reines Java, `app` mit Spring Boot) und einer Angular-App, im Container gebaut, ohne GitHub-Repo und ohne Push. Die Befehle und Exit-Codes stehen im Pull Request zu factory#187; die Probe fuhr zuerst den Entwurfs-Sync (`factory-sync --entwurf`, Exit 0; `verify` ist dort per Konstruktion rot: die Kette hält bei `check:docdrift` an, `check:factorydrift` ist einzeln rot), danach den Sync mit lokalem Tag im Scratch-Klon der Quelle (`factory-sync --tag`), danach waren `verify` und `check:diffcoverage` grün. Skripte für solche Probe-Läufe (Docker-Aufruf, Sync) gehören in einen Temp-Ordner, nie in den Wurzelordner des Hauptcheckouts; nach dem Lauf werden sie dort entfernt, und der Haupt-Sync (`node scripts/haupt-sync.mjs --text`) meldet ungetrackte Dateien im Wurzelordner als Hinweis (factory#208).
 
-**Projekt-Config.** Der Block `struktur` nimmt Listen, `coverage.berichte` die beiden Berichtsarten, `befehle` die Sammelbefehle (Begriffe: [Quellwurzel, Endungsliste, Docmap-Einheit, Coverage-Bericht, Gate-Befehl](harness-glossar.md)):
+**Projekt-Config.** Der Block `struktur` nimmt Listen, `coverage.berichte` die beiden Berichtsarten, `befehle` die Sammelbefehle, `vorpruefung.befehle` die Werkzeuge, die vor dem Ticketstart laufen müssen (`{ name, befehl: [Programm, Argument…] }`, kein Shell-Text, 10 s Frist je Befehl, ENOENT, Exit != 0 oder Timeout stoppt `node scripts/werkzeug-vorpruefung.mjs`; ohne den Block entfällt die Prüfung; factory#260) (Begriffe: [Quellwurzel, Endungsliste, Docmap-Einheit, Coverage-Bericht, Gate-Befehl](harness-glossar.md)):
 
 ```json
 {
@@ -108,6 +108,12 @@ Wer den Harness übernimmt, schließt eine vertragskonforme Sandbox an ([ADR 002
     "install": "npm ci && npm --prefix frontend ci",
     "coverage": "npm --silent run coverage",
     "testGezielt": "node tools/test-gezielt.mjs"
+  },
+  "vorpruefung": {
+    "befehle": [
+      { "name": "Maven", "befehl": ["mvn", "-v"] },
+      { "name": "Docker", "befehl": ["docker", "info"] }
+    ]
   }
 }
 ```

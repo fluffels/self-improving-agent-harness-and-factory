@@ -176,6 +176,7 @@ describe("Projekt-Werkzeuge", () => {
     const f = (v: unknown) => lib.pruefeProjektConfig({ vorpruefung: v }).filter((e) => e.startsWith("vorpruefung"));
     expect(f({ befehle: befehle })).toEqual([]);
     expect(f({})).toEqual([]);
+    expect(f(undefined)).toEqual([]);
     expect(f([])).toEqual(["vorpruefung muss ein Objekt mit der Liste befehle sein"]);
     expect(f({ x: 1 })).toEqual(["vorpruefung.x ist kein bekannter Schlüssel (erlaubt: befehle)"]);
     expect(f({ befehle: "x" })).toEqual(["vorpruefung.befehle muss eine Liste von { name, befehl } sein"]);
@@ -222,9 +223,9 @@ describe("CLI und Codex", () => {
     const out: string[] = [];
     const code = codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", werkzeug: () => [{ text: "T", fix: "F" }] });
     expect(code).toBe(1);
-    expect(JSON.parse(out[0]).maengel).toContain("Werkzeug-Vorprüfung: T (Fix: F)");
+    expect((JSON.parse(out[0]) as { maengel: string[] }).maengel).toContain("Werkzeug-Vorprüfung: T (Fix: F)");
     out.length = 0;
     codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", werkzeug: () => [] });
-    expect(JSON.parse(out[0]).maengel.some((m: string) => m.startsWith("Werkzeug-Vorprüfung"))).toBe(false);
+    expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.some((m: string) => m.startsWith("Werkzeug-Vorprüfung"))).toBe(false);
   });
 });
