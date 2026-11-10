@@ -93,12 +93,15 @@ const istNichtEintragbar = (issue) => String(issue?.titel ?? "").startsWith(NICH
 /** Alle Worktrees eines Claims (der erste in `worktree`, die übrigen in `weitereWorktrees`); leer ohne Worktree. */
 const alleWorktrees = (c) => (c.worktree ? [c.worktree, ...(c.weitereWorktrees ?? [])] : []);
 
+/** Das Urteil ohne Issue-Daten: `geloescht` (GitHub meldet NOT_FOUND) oder `unbekannt` (Daten fehlen). Pur. */
+const ohneIssueUrteil = (c, ergebnis) =>
+  c.geloescht ? ergebnis("geloescht", "Issue nicht mehr auffindbar (gelöscht oder übertragen), nichts wird entfernt") : ergebnis("unbekannt", "GitHub-Daten fehlen (keine Aktion)");
+
 /** Das Urteil zu einem Claim (`{ urteil, grund, aktion }`); `aktion`: was aufzuräumen ist (`worktree`, `lock`). Pur, Eingabe siehe `sammle`. */
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
   const ergebnis = (urteil, grund, aktion = ohneAktion) => ({ urteil, grund, aktion });
-  if (c.geloescht) return ergebnis("geloescht", "Issue nicht mehr auffindbar (gelöscht oder übertragen), nichts wird entfernt");
-  if (!c.issue) return ergebnis("unbekannt", "GitHub-Daten fehlen (keine Aktion)");
+  if (!c.issue) return ohneIssueUrteil(c, ergebnis);
   if (c.lock === "unlesbar") return ergebnis("lock-unlesbar", "Lock unlesbar, nie löschen (von Hand prüfen)");
   const lz = c.lebenszeichenMs;
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
@@ -203,6 +206,23 @@ function worktreeMitStand(deps, b) {
   return mitOrt({ pfad: b.pfad, branch: b.branch, sauber, head: b.head, locked: b.locked }, b);
 }
 
+/** Die Issue-Daten zu `nummern` (gebündelt): `{ issues, geloescht, viewer }`; `geloescht` sind die Nummern, die GitHub als `NOT_FOUND` meldet. */
+function ladeIssues(deps, nummern) {
+  const issues = new Map();
+  const geloescht = new Set();
+  let viewer = null;
+  for (const b of aliasAbfragen(nummern)) {
+    const antwort = frageGraphql(deps, b.query);
+    viewer = antwort?.data?.viewer?.login ?? viewer;
+    const weg = nichtGefundeneAliase(antwort);
+    b.nummern.forEach((nr, k) => {
+      issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`]));
+      if (weg.has(`i${k}`) && !issues.get(nr)) geloescht.add(nr);
+    });
+  }
+  return { issues, geloescht, viewer };
+}
+
 /** Sammelt Kandidaten und ihre Daten: `{ jetzt, viewer, hauptcheckout, claims }`. Wirft bei git-/gh-Fehlern. */
 export function sammle(deps) {
   const jetzt = deps.jetzt();
@@ -242,18 +262,7 @@ export function sammle(deps) {
     }),
   );
   const nummern = [...new Set([...locks.keys(), ...ticketWorktrees.map((b) => ticketAusRef(b.pfad, namen)), ...refs.map((r) => r.nr), ...deps.zugewiesen()])].sort((a, b) => a - b);
-  const issues = new Map();
-  const geloescht = new Set();
-  let viewer = null;
-  for (const b of aliasAbfragen(nummern)) {
-    const antwort = frageGraphql(deps, b.query);
-    viewer = antwort?.data?.viewer?.login ?? viewer;
-    const weg = nichtGefundeneAliase(antwort);
-    b.nummern.forEach((nr, k) => {
-      issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`]));
-      if (weg.has(`i${k}`) && !issues.get(nr)) geloescht.add(nr);
-    });
-  }
+  const { issues, geloescht, viewer } = ladeIssues(deps, nummern);
   const claims = nummern.map((nr) => {
     const eigene = ticketWorktrees.filter((b) => ticketAusRef(b.pfad, namen) === nr).map((b) => worktreeMitStand(deps, b));
     const [w = null, ...weitere] = eigene;

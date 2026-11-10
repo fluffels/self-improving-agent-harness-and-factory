@@ -89,7 +89,7 @@ const REST_PFADE = [
 ];
 
 /** Anlege-Sperre (#1693): neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Pflichtfelder, Board-Platz). */
-const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen`";
+const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Position mit `--nach <nr> --weil \"<grund>\"` oder `--notfall <art>`)";
 /** Der Endpunkt `repos/<o>/<r>/issues` selbst (auch mit `?…`, führendem `/`, Quotes), nicht `/issues/<n>/…`. */
 const ISSUES_ENDPUNKT = /^["']?\/?repos\/[^/\s'"]+\/[^/\s'"]+\/issues\/?(?:\?[^\s'"]*)?["']?$/;
 /** Das Kommando `gh issue create` an Kommandoposition oder hinter Trennern (Text in Quotes ist maskiert). */
