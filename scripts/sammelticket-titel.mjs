@@ -44,7 +44,7 @@ export const SCHUTZBEREICHE = ["Sicherheit", "Fremdtext", "Datenverlust"];
 /** Tage von Eintrag bis Verfall einer Kosmetik- oder Hypothese-Zeile (4 Wochen). */
 export const VERFALL_TAGE = 28;
 
-const KOPF = /^([^\s:(]+)(?: \(([^)]*)\))?:\s/;
+const KOPF = /^([^\s:]+)(?: \(([^)]*)\))?:\s/;
 const VERFALL_ENDE = /\s+Verfall:\s*(\S+?)(?:\s+\(aus #\d+\))?\s*$/;
 const NUR_MIT_VERFALL = ["Kosmetik", "Hypothese"];
 
