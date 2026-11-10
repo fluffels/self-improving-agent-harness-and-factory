@@ -316,6 +316,7 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
         "Sammelticket: Zeilen je PR begrenzen.",
         "Alles gesammelt in 12 Zeilen.",
         "Das Sammelticket schneidet 12 Zeilen.",
+        "Das Sammelticket schneidet 16 Zeilen.",
       ]) {
         assert.ok(zeilenzahlVerstoesse(mit(pfad, zusatz)).some((v) => v.startsWith(`${pfad}: „`)), `${pfad}: ${zusatz}`);
       }
