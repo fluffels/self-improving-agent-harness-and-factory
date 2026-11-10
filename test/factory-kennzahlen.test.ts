@@ -630,6 +630,16 @@ describe("Kosten und Abnahme je Ticketart (L27, L29)", () => {
     expect(erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte }).bericht.arten).toBeUndefined();
   });
 
+  test("erstelle: scheitert das Lauf-Ergebnis, gibt es keine Ticketarten (statt eines Absturzes), das Selbst-Audit bleibt", () => {
+    type Fn = (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, never[]>; auditLader?: (e: { von: string; bis: string }) => unknown }) => { bericht: { arten?: Arten; audit?: unknown[] }; exit: number };
+    const erstelle = (raw as unknown as { erstelle: Fn }).erstelle;
+    const run: Run = () => ({ status: 2, stdout: "", stderr: "gh weg" });
+    const r = erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte: () => new Map(), auditLader: () => ({ commits: [], sammelIssues: SAMMEL, harnessIssues: HARNESS }) });
+    expect(r.exit).toBe(2);
+    expect(r.bericht.arten).toBeUndefined();
+    expect(r.bericht.audit).toHaveLength(4);
+  });
+
   test("ladeAuditDaten: die Harness-Issues reichen bis einen Tag vor `von`, auch wenn der letzte Sammelticket-Abschluss jünger ist", () => {
     const L = (raw as unknown as { ladeAuditDaten: (e: { von?: string; bis: string }, d: { gh: (a: string[]) => unknown; repo: string; config: unknown }) => unknown }).ladeAuditDaten;
     const seiten: string[] = [];
