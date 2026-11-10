@@ -222,6 +222,11 @@ describe("anlegen", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("Art der Grund");
   });
+  test("Ausgabe: erste Zeile mit URL, ohne URL nur die Nummer, dann die Position (L8)", () => {
+    expect(S.fuehreAus(ANLEGEN, umgebung({ "b.md": GUT }).io).out).toBe("angelegt #900 https://x/900\nPosition: hinter #12, weil Abhängigkeit\n");
+    const ohneUrl = umgebung({ "b.md": GUT }, { erzeuge: (a) => ({ number: 901, labels: a.labels.map((name) => ({ name })) }) });
+    expect(S.fuehreAus(ANLEGEN, ohneUrl.io).out).toBe("angelegt #901\nPosition: hinter #12, weil Abhängigkeit\n");
+  });
   test("--notfall: einsortiert wird als Notfall", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
     const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "rot-main"], io);

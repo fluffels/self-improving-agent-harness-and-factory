@@ -217,9 +217,8 @@ export function guardListeWarnung({ messages, ist }) {
   return genannt === ist ? null : `::warning::Guard-Liste nennt ${genannt} Anker, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)`;
 }
 
-/** Die Warnung zu `messages` mit der Ankerzahl aus `ankerZahl()`; ohne `ankerZahl` oder bei einem Fehler dort `null` (eine Warnung bricht nie ab). */
+/** Die Warnung zu `messages` mit der Ankerzahl aus `ankerZahl()`; ohne `ankerZahl` (der Aufruf wirft) oder bei einem Fehler dort `null` (eine Warnung bricht nie ab). */
 function guardWarnungOderNull(messages, ankerZahl) {
-  if (typeof ankerZahl !== "function") return null;
   try {
     return guardListeWarnung({ messages, ist: ankerZahl() });
   } catch {

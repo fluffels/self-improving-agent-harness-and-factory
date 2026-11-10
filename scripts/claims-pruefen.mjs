@@ -217,7 +217,7 @@ function ladeIssues(deps, nummern) {
     const weg = nichtGefundeneAliase(antwort);
     b.nummern.forEach((nr, k) => {
       issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`]));
-      if (weg.has(`i${k}`) && !issues.get(nr)) geloescht.add(nr);
+      if (weg.has(`i${k}`)) geloescht.add(nr); // liefert GitHub dazu Daten, geht `issue` im Urteil vor
     });
   }
   return { issues, geloescht, viewer };
