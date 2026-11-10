@@ -23,6 +23,7 @@ const T = raw as unknown as {
   entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string; milestones?: { nummer: number; titel: string; closedAt: string }[] }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
+  ciCheckliste: (ci: { zustand: string; url: string | null }, sha: string) => string;
   tagBody: (a: Record<string, unknown>) => string;
   bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number | string> }) => { zeilen: string[]; blocker: string[]; offen: string[]; rest: string[] };
   uebernimmHaken: (alt: string | undefined, neu: string) => string;
@@ -218,7 +219,7 @@ describe("CI-Zustand und Body", () => {
   });
   const body = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["3 Besitz-PRs"], ci: { zustand: "gruen", url: "https://example.invalid/run/1" } });
   it("nennt PRs, CI-Status, fertigen Tag-Befehl und die Checkliste samt Grenze", () => {
-    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Trockenlauf gegen den Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald der Tag gepusht ist", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
+    for (const teil of ["#1 fix: x", "#3 fix: x", "CI-Status dieses Commits: grün", "https://example.invalid/run/1", `git -C .claude/worktrees/tag-v1.3.0 tag -a v1.3.0 ${"b".repeat(40)}`, "git -C .claude/worktrees/tag-v1.3.0 push origin v1.3.0", "Probe-Erstbezug", "Bezieher holen das Update selbst", "sobald der Tag gepusht ist", "ja, taggen", "Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031)", "--tag v1.3.0"]) {
       expect(body, teil).toContain(teil);
     }
     expect(T.tagTitel("v1.3.0")).toBe("🏷️ Tag v1.3.0 setzen");
@@ -245,14 +246,45 @@ describe("CI-Zustand und Body", () => {
       expect(i).toBeGreaterThan(zeilen.findIndex((z) => z.startsWith("- [ ] Tag ")));
     }
   });
-  it("factory#162 L26: Trockenlauf gegen den Probe-Erstbezug im Scratch, nie ein Bezieher-Repo, mit --ziel", () => {
-    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Trockenlauf")) ?? "";
-    for (const teil of ["Probe-Erstbezug", "test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "--ziel <scratch-ordner> --entwurf --trocken", "--quelle <checkout auf bbbbbbb>"]) {
+  it("factory#234: der Probe-Erstbezug ist ein CI-Job, die Probe-Zeile nennt denselben Aufruf wie die CI, nie ein Bezieher-Repo", () => {
+    const punkt = body.split("\n").find((z) => z.startsWith("- [ ] Probe-Erstbezug")) ?? "";
+    for (const teil of ["test/fixtures/projekt-probe.json", "Export im Scratch", "nie ein Bezieher-Repo", "node scripts/probe-erstbezug.mjs --quelle <checkout auf bbbbbbb> --scratch <leerer scratch-ordner>", "läuft auch als CI-Job", "grüne CI des Commits deckt ihn ab"]) {
       expect(punkt, teil).toContain(teil);
     }
-    // factory#177: ein Ziel ohne Kern-Marker in AGENTS.md ist kein Erstbezug, den die Probe aussagekräftig prüft
-    expect(punkt).toContain("AGENTS.md mit den Kern-Markern <!-- factory-besitz:start kern --> und <!-- factory-besitz:ende kern -->");
     expect(punkt).not.toContain("gh repo clone");
+    expect(body).not.toContain("Trockenlauf gegen den Probe-Erstbezug");
+    expect(body).not.toContain("--entwurf --trocken`. Er meldet");
+  });
+  describe("factory#234: roter CI-Zustand des Tag-Commits ist ein Blocker", () => {
+    const zeilen = (zustand: string, url: string | null = null) => T.ciCheckliste({ zustand, url }, "b".repeat(40));
+    it("rot: Blocker-Zeile, offen, nennt den Commit und dass der Probe-Erstbezug dazugehört", () => {
+      expect(zeilen("rot")).toBe("- [ ] BLOCKER: CI des Commits bbbbbbb rot (enthält den Probe-Erstbezug), nicht taggen");
+    });
+    it("grün: erledigte Zeile; läuft und unbekannt: offen mit ausstehend (fail-closed)", () => {
+      expect(zeilen("gruen")).toBe("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
+      for (const z of ["laeuft", "unbekannt", "irgendwas"]) {
+        expect(zeilen(z), z).toBe("- [ ] CI des Commits bbbbbbb ausstehend, nicht taggen, bis grün (Probe-Erstbezug eingeschlossen)");
+      }
+    });
+    it("der Body trägt die CI-Zeile des Zustands vor der Probe-Zeile und vor dem Pre-Flight", () => {
+      const mit = (zustand: string): string[] => T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand, url: null } }).split("\n");
+      const rot = mit("rot");
+      const i = rot.findIndex((z) => z.startsWith("- [ ] BLOCKER: CI des Commits"));
+      expect(i).toBeGreaterThan(-1);
+      expect(i).toBeLessThan(rot.findIndex((z) => z.startsWith("- [ ] Probe-Erstbezug")));
+      expect(i).toBeLessThan(rot.findIndex((z) => z.startsWith("- [ ] Pre-Flight")));
+      expect(mit("gruen")).toContain("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
+    });
+    it("bei leerer Bezieher-Liste bleibt die Probe-Zeile, und die Bezieher-Zeile verweist auf den CI-Job statt auf oben", () => {
+      const leer = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null }, bezieher: [] });
+      expect(leer).toContain("- [ ] Probe-Erstbezug");
+      expect(T.bezieherProbe({ bezieher: [] }).zeilen.join("\n")).toContain("nur der Probe-Erstbezug (CI-Job `Probe-Erstbezug`, Zeile der Checkliste)");
+    });
+    it("ein Haken am alten Wortlaut bleibt nur bei unverändertem Text: wechselt die CI von grün auf rot, verliert die Zeile ihn", () => {
+      const alt = "- [x] CI grün (Probe-Erstbezug eingeschlossen)\n- [ ] Pre-Flight";
+      const neu = "- [ ] BLOCKER: CI des Commits bbbbbbb rot (enthält den Probe-Erstbezug), nicht taggen\n- [ ] Pre-Flight";
+      expect(T.uebernimmHaken(alt, neu)).toBe(neu);
+    });
   });
   it("factory#162 L26: kein Schritt der Fabrik schreibt in ein Bezieher-Repo (kein Sync-PR, kein Bezieher-Trockenlauf, kein --repo)", () => {
     for (const verboten of ["Sync-PR je Bezieher", "gh repo clone <bezieher>", "--repo <bezieher>", "gh workflow run", "Cross-Repo-Token", "Issue ins Bezieher-Repo"]) {
@@ -533,7 +565,7 @@ describe("lauf", () => {
     let neu = "";
     T.lauf({ io: io({ ladeOffene: () => [tagOffen({ titel, body: abgehakt.replace("Besitz-Änderungen liegen", "Alt-Änderungen liegen") })], aktualisiere: (_n: number, _t: string, b: string) => { neu = b; } }) });
     expect(neu).toContain("- [x] Pre-Flight „ja, taggen“");
-    expect(neu.match(/^- \[x\]/gm)).toHaveLength(1);
+    expect(neu.match(/^- \[x\]/gm)).toHaveLength(2); // Pre-Flight und die CI-Zeile (grün, factory#234)
   });
   it("identisches offenes Ticket bleibt unberührt, abweichendes wird aktualisiert, leeres geschlossen", () => {
     T.lauf({ io: io({ ladeOffene: () => [tagOffen()] }) });
