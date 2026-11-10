@@ -35,7 +35,7 @@ export function offeneZeileMit(zeile, praefix) {
   return /^\s/.test(rest) && rest.trimStart().startsWith(praefix);
 }
 
-/** Die vier Klassen einer Befund-Zeile (AGENTS.md § Harness-Befunde sind Zeilen; Format: docs/ticket-reihenfolge.md › Sammelticket-Mechanik). Groß-/Kleinschreibung zählt. */
+/** Die vier Klassen einer Befund-Zeile (Regel: AGENTS.md § Harness-Befunde sind Zeilen, Format in docs/ticket-reihenfolge.md). Groß-/Kleinschreibung zählt. */
 export const ZEILEN_KLASSEN = ["Defekt", "Blocker", "Kosmetik", "Hypothese"];
 
 /** Schutzbereiche, deren Zeilen nie verfallen (Hypothese ohne Beleg bleibt dort offen). */

@@ -1,4 +1,4 @@
-# Fortschreibung factory#269 (2026-11-10): Eingangsfilter für Harness-Zeilen
+# Fortschreibung #269 (2026-11-10): Eingangsfilter für Harness-Zeilen
 
 Ergänzt [ADR 0012](../0012-harness-autonomie-audit-spur.md), das „Härtung gegen Hypothetisches“ selbst als Risiko nennt. Präzisiert „Kein Parken“ (AGENTS.md).
 
