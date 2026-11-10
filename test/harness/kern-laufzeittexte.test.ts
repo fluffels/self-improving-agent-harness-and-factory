@@ -107,6 +107,7 @@ describe("Laufzeit-Strings verteilter .mjs nennen nur Bezieher-npm-Skripte", () 
   test("Negativfälle: Kommentare, erlaubte Namen und die geschlossene Ausnahme sind kein Fund", () => {
     const text = ["// npm run cockpit", "/** npm run cockpit", " * npm run cockpit */", "/* npm run cockpit */ const x = 1;", 'const a = "x"; // npm run cockpit', 'const b = "npm run skills:sync";'].join("\n");
     expect(fremdeNamen([{ pfad: "scripts/x.mjs", text }])).toEqual([]);
+    expect(fremdeNamen([{ pfad: "scripts/x.mjs", text: "const c = `Fix: npm run skills:sync: dann erneut`;" }])).toEqual([]); // Satzzeichen hinter dem Namen gehört nicht dazu
     expect(fremdeNamen([{ pfad: "scripts/gate-befehl-lib.mjs", text: 'const v = "npm run verify";' }])).toEqual([]);
     expect(fremdeNamen([{ pfad: "scripts/andere.mjs", text: 'const v = "npm run verify";' }])).toEqual([{ datei: "scripts/andere.mjs", name: "verify" }]);
   });
