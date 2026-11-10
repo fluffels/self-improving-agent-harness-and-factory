@@ -36,6 +36,7 @@ const M = raw as unknown as {
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
   jsonDokument: (o: { jetzt: number; viewer: string | null; schwelleStunden: number; urteile: { claim: Claim; urteil: Urteil }[] }) => unknown;
+  nichtGefundeneAliase: (antwort: unknown) => Set<string>;
   zugewiesenArgs: (repo?: string) => string[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
@@ -619,6 +620,22 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     assert.match(r.out, /AUFGERAEUMT #1628/);
     assert.equal(aufrufe.some((a) => a === `git worktree remove ${pfad}`), false);
     assert.deepEqual(geloescht, ["/locks/1628.json"]);
+  });
+
+  test("nichtGefundeneAliase: nur NOT_FOUND mit Pfad auf repository.<alias>; andere Arten, fremde Pfade, kurze Pfade und Fehlformen zählen nicht (L13)", () => {
+    const aus = (errors: unknown) => [...M.nichtGefundeneAliase({ errors })];
+    assert.deepEqual(aus([{ type: "NOT_FOUND", path: ["repository", "i0"] }, { type: "NOT_FOUND", path: ["repository", "i3"] }]), ["i0", "i3"]);
+    assert.deepEqual(aus([{ type: "RATE_LIMITED", path: ["repository", "i0"] }]), []);
+    assert.deepEqual(aus([{ type: "NOT_FOUND", path: ["viewer", "i0"] }, { type: "NOT_FOUND", path: ["repository"] }, { type: "NOT_FOUND" }, null]), []);
+    assert.deepEqual(aus(undefined), []);
+    assert.deepEqual([...M.nichtGefundeneAliase(null)], []);
+  });
+
+  test("meldet GitHub NOT_FOUND, liefert aber Daten zum Alias, gilt das Issue nicht als gelöscht", () => {
+    const welt: Welt = { ...BELEG, nichtGefunden: [1530] };
+    const r = M.fuehreAus([], baue(welt).deps);
+    assert.equal(r.out.includes("GELÖSCHT"), false);
+    assert.ok(r.out.includes("WIEDERAUFNAHME #1530"), r.out);
   });
 
   test("sind alle Kandidaten gelöscht (NOT_FOUND), ist das kein Exit 2 (anders als unbekannt)", () => {
