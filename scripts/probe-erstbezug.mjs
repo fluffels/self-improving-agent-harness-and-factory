@@ -183,10 +183,10 @@ export function main(argv, io) {
   return { code: urteil.code, out: `${[mess ?? "Messung nicht möglich (AGENTS.md des Fixture-Projekts fehlt oder ohne Marker)", ...urteil.zeilen].join("\n")}\n`, err: "" };
 }
 
-/** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe geerbt, ohne Zeitlimit-Abbruch des Prozessbaums außer dem der Schritte selbst). */
-export function echteNaehte() {
+/** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
+export function echteNaehte(stdio = "inherit") {
   const lies = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
-  const lauf = (argv, cwd) => spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio: "inherit" }).status;
+  const lauf = (argv, cwd) => spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio }).status;
   const io = {
     lies,
     istGitRepo: (p) => existsSync(p) && spawnSync("git", ["-C", p, "rev-parse", "--git-dir"], { stdio: "ignore" }).status === 0,
