@@ -132,6 +132,23 @@ describe("kindUmgebung", () => {
     const aus = P.kindUmgebung({ FACTORY_DIFF_BASE: "a", FACTORY_PROJEKT_CONFIG: "b", FACTORY_PROJEKT_WURZEL: "c", VITEST: "true", VITEST_POOL_ID: "1", PATH: "/bin", FACTORY_ANDERES: "d" });
     expect(aus).toEqual({ PATH: "/bin", FACTORY_ANDERES: "d" });
   });
+
+  it("filtert nur Schlüssel, die mit VITEST beginnen, nicht solche, die es enthalten", () => {
+    expect(P.kindUmgebung({ MY_VITEST_X: "1", VITEST_X: "2" })).toEqual({ MY_VITEST_X: "1" });
+  });
+
+  it("der Kindprozess der Probe (echteNaehte) sieht die gesperrten Variablen der Elternumgebung nicht", () => {
+    temp((dir) => {
+      const skript = `const { echteNaehte } = await import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "probe-erstbezug.mjs")).href)});
+const io = echteNaehte().mitScratch(${JSON.stringify(join(dir, "s"))});
+process.exitCode = io.fuehre({ argv: [process.execPath, "-e", "console.log('CFG=' + (process.env.FACTORY_PROJEKT_CONFIG ?? 'leer') + ' KEEP=' + (process.env.PROBE_BEHALTEN ?? 'weg'))"], cwd: ${JSON.stringify(dir)} });`;
+      const datei = join(dir, "lauf.mjs");
+      writeFileSync(datei, skript);
+      const r = spawnSync(process.execPath, [datei], { encoding: "utf8", env: { ...process.env, FACTORY_PROJEKT_CONFIG: "/x", PROBE_BEHALTEN: "ja" } });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("CFG=leer KEEP=ja");
+    });
+  });
 });
 
 describe("liegtIn", () => {
@@ -173,7 +190,7 @@ describe("probeSchritte", () => {
 
   it("Aufbau, Sync und Installation sind kritisch (Abbruch), die mechanischen Schritte und verify nicht", () => {
     const kritisch = Object.fromEntries(schritte.map((s) => [s.id, s.kritisch]));
-    for (const id of ["klon", "tag", "fixture", "sync-tag", "befehle", "install"]) expect(kritisch[id], id).toBe(true);
+    for (const id of ["klon", "klon-origin", "tag", "detach", "fixture", "fixture-init", "fixture-add", "fixture-commit", "sync-vorschau", "sync-tag", "befehle", "install"]) expect(kritisch[id], id).toBe(true);
     for (const id of ["lint-prune", "projektwerte", "docs-gen", "factorylinks", "verifyKompakt"]) expect(kritisch[id], id).toBe(false);
   });
 
@@ -480,5 +497,23 @@ describe("Negativfälle der Kette (echter Klon)", () => {
       expect(r.status).toBe(1);
       expect(r.text).toMatch(/Toter Anker[^\n]*#gates/);
     });
+  });
+});
+
+describe("CI-Job probe-erstbezug (Wächter der Invarianten)", () => {
+  const ci = readFileSync(join(WURZEL, ".github", "workflows", "ci.yml"), "utf8");
+  const start = ci.indexOf("\n  probe-erstbezug:\n");
+  const rest = ci.slice(start + 1);
+  const job = rest.slice(0, rest.search(/\n {2}\S/));
+
+  it("der Job existiert und ruft das Skript mit Quelle und Scratch im Runner-Temp auf", () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(job).toContain('run: node scripts/probe-erstbezug.mjs --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-erstbezug"\n');
+  });
+
+  it("jeder Fund bleibt rot: kein continue-on-error und kein || true im Job", () => {
+    // Die Kommentarzeilen über dem Job nennen continue-on-error, der Job-Block selbst nicht.
+    expect(job).not.toMatch(/continue-on-error\s*:/);
+    expect(job).not.toMatch(/\|\|\s*true/);
   });
 });

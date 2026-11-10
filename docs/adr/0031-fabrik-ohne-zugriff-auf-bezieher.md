@@ -31,7 +31,7 @@ Entscheidung: C, weil nur der Pull für eigene und fremde Bezieher gleich gilt u
 
 ## Konsequenzen
 
-- Der Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch, `scripts/probe-erstbezug.mjs`, seit factory#234 als CI-Job mit vollem `verifyKompakt`) deckt Struktur, Kontextgröße und tote Kern-Verweise der Quelle ab, nicht den Stand eines Beziehers; ein roter CI-Zustand des Tag-Commits blockiert den Tag.
+- Der Trockenlauf der Checkliste läuft gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch); er deckt Struktur und Kontextgröße der Quelle ab, nicht den Stand eines Beziehers.
 - Die Fabrik erfährt Probleme eines Beziehers später (erst bei dessen Update), dafür ohne Rechte und Secrets.
 - Das Tag-Ticket schließt, sobald Tag und Release stehen; die Bezieher-Schritte (Claim, Plan-Nachweis, `verify:kompakt`, Migrationen) stehen in der Doku des Tag-Takts als Anleitung für den Bezieher.
 - Jede Gate-Lücke, die ein Bezieher-Fehler offenlegt, wird ein Gate im Kern: der Bezieher meldet, die Fabrik härtet.
@@ -42,4 +42,4 @@ Neu bewerten, wenn drei Updates in Folge ohne Meldung des Beziehers rot beim Bez
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0031-195-langfuse-im-bezieher.md) (Konvention: [README](README.md#format)); dort die erste: [factory#195](fortschreibungen/0031-195-langfuse-im-bezieher.md) setzt Punkt 4 um (Status-Ticket und Langfuse-Sammelticket im Bezieher); [factory#188](fortschreibungen/0031-188-vor-tag-probe.md) erlaubt die lesende Vor-Tag-Probe im Scratch-Klon (Punkt 1 bleibt: kein Schreibzugriff); [factory#152](fortschreibungen/0031-152-nicht-eintragbare-befunde.md) klärt den Weg für Befunde, die ihr Ziel-Repo nicht erreichen.
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0031-195-langfuse-im-bezieher.md) (Konvention: [README](README.md#format)); dort die erste: [factory#195](fortschreibungen/0031-195-langfuse-im-bezieher.md) setzt Punkt 4 um (Status-Ticket und Langfuse-Sammelticket im Bezieher); [factory#188](fortschreibungen/0031-188-vor-tag-probe.md) erlaubt die lesende Vor-Tag-Probe im Scratch-Klon (Punkt 1 bleibt: kein Schreibzugriff); [factory#152](fortschreibungen/0031-152-nicht-eintragbare-befunde.md) klärt den Weg für Befunde, die ihr Ziel-Repo nicht erreichen; [factory#234](fortschreibungen/0031-234-probe-erstbezug-ci.md) macht den Probe-Erstbezug zum CI-Job mit vollem `verifyKompakt`.

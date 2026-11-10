@@ -64,7 +64,7 @@ export const quellPfadFuer = (pfad) => (pfad === PROJEKT_CONFIG ? FIXTURE_PFAD :
 
 /**
  * Pur: Inhalt einer Datei des Fixture-Projekts aus dem Text der Quelle (die Anker-Stubs des Syncs fehlen in `fixturePfade`). `AGENTS.md` ist der Füll-Block (`text` unbenutzt), die Config die
- * Fixture plus Overlay, `package.json` bekommt den Probe-Namen; alles andere ist eine wörtliche Kopie.
+ * Fixture plus Overlay, `package.json` behält den Namen und bekommt `--passWithNoTests` am Test-Skript; alles andere ist eine wörtliche Kopie.
  */
 export function projektdatei({ pfad, text, raum, overlay = PROBE_OVERLAY }) {
   if (pfad === "AGENTS.md") return fuellAgentsMd({ raum });
