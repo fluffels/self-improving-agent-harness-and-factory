@@ -32,6 +32,7 @@ const melden = rawMelden as unknown as {
 };
 const doctor = rawDoctor as unknown as {
   zeileFuer(l: { punkt: string; befund: string; fix: string; nichtPruefbar?: boolean }, heute: string): string;
+  lauf(a: { io: Record<string, unknown> }): number;
   plane(a: { luecken: { punkt: string; befund: string; fix: string }[]; kommentare: never[]; owner: string; heute: string }): string[];
 };
 const spez = rawSpez as unknown as { gescheitertZeile(a: { nr: number; mangel: string; heute: string }): string };
@@ -58,6 +59,8 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
   test("ohne Klasse, unbekannte Klasse, falsche Schreibweise", () => {
     for (const z of ["- [ ] Gate kaputt Beleg: x1", "- [ ] Idee: etwas Beleg: x1", "- [ ] defekt: etwas Beleg: x1"]) assert.equal(gut(z).ok, false, z);
     assert.match(gut("- [ ] Idee: etwas Beleg: x1").fehler ?? "", /unbekannte Klasse/);
+    assert.match(gut("- [ ] Gate kaputt Beleg: x1").fehler ?? "", /keine Klasse/);
+    assert.match(gut("- [ ] Hypothese (Foo): x Verfall: 2026-12-08").fehler ?? "", /unbekannter Schutzbereich/);
   });
   test("ohne Beleg oder nur Satzzeichen als Beleg", () => {
     assert.match(gut("- [ ] Defekt: etwas ohne Nachweis").fehler ?? "", /kein Beleg/);
@@ -69,7 +72,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.match(gut("- [ ] Kosmetik: x Beleg: y1").fehler ?? "", /braucht `Verfall/);
     assert.match(gut("- [ ] Defekt: x Beleg: y1 Verfall: 2026-12-08").fehler ?? "", /Verfall nur bei/);
     assert.match(gut("- [ ] Hypothese (Sicherheit): x Verfall: 2026-12-08").fehler ?? "", /Verfall nur bei/);
-    assert.match(gut("- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-13-01").fehler ?? "", /kein gültiges Datum/);
+    for (const d of ["2026-13-01", "2026-02-30", "26-1-1", "morgen"]) assert.match(gut(`- [ ] Kosmetik: x Beleg: y1 Verfall: ${d}`).fehler ?? "", /kein gültiges Datum/, d);
     assert.match(gut("- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-11-09", { heute: HEUTE }).fehler ?? "", /verfallen/);
     assert.equal(gut("- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-11-10", { heute: HEUTE }).ok, true);
   });
@@ -131,6 +134,14 @@ describe("Erzeuger-Ausgaben bestehen die Prüfung", () => {
   test("Doctor: LÜCKE und NICHT PRÜFBAR", () => {
     assert.equal(gut(doctor.zeileFuer(l, HEUTE)).ok, true);
     assert.equal(gut(doctor.zeileFuer({ ...l, nichtPruefbar: true }, HEUTE)).ok, true);
+  });
+  test("Doctor-Lauf: ein Punkt ohne Beleg steht nur als Warnung im Log, nichts wird gepostet", () => {
+    const log: string[] = [];
+    const posts: unknown[] = [];
+    const io = { ermittle: () => [{ ...l, befund: "" }], kontext: () => ({ kommentare: [], owner: "o", ziel: 1 }), bereite: (z: string[]) => ({ ok: true, text: z.join("\n") }), postZeilen: (...a: unknown[]) => posts.push(a), heute: HEUTE, log: (x: string) => log.push(x) };
+    doctor.lauf({ io });
+    assert.ok(log.some((x) => /::warning::.*Secret A ohne Beleg, nur im Bericht/.test(x)), log.join("\n"));
+    assert.deepEqual(posts, []);
   });
   test("Doctor: ein leerer Befund wird keine Zeile", () => {
     assert.deepEqual(doctor.plane({ luecken: [{ ...l, befund: "" }], kommentare: [], owner: "o", heute: HEUTE }), []);
