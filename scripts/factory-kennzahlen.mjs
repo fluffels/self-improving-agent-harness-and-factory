@@ -11,7 +11,7 @@
  * docs/model-routing.md (Fabrik) › Factory-Kennzahlen.
  *
  * Abschnitt „Abo-Kontingent je Ticket“ (factory#285): Prozentpunkte des 7-Tage-Fensters je gemergtem Ticket aus dem Kontingent-Verlauf der Statusline
- * (`abo-kontingent-lib.mjs`, Claims per GraphQL); fehlt der Verlauf oder gh, erscheint eine Lücke mit Grund, der Exit-Code bleibt.
+ * (`abo-kontingent-lib.mjs`, Claims per GraphQL); fehlt der Verlauf, gh oder das Lauf-Ergebnis, erscheint eine Lücke mit Grund, der Exit-Code bleibt.
  *
  * `--datenbasis` (factory#258) ist die Vorprüfung des Status-Laufs und läuft allein: je Ticket-Lauf des Zeitraums (`lauf-ergebnis`) die
  * Sessions mit Claim-Zeile im lokalen Transkript zählen; kein token-baseline, kein Audit, keine Nacharbeit. Stand: `leer` (kein Lauf),

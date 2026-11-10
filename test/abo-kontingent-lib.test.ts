@@ -63,6 +63,12 @@ describe("verlaufAus", () => {
     expect(v.punkte[0]?.sevenDay).toBeUndefined();
     expect(v.punkte[0]?.fiveHour).toEqual({ pct: 3, resetsAt: 5 });
   });
+  test("ein ungültiges fiveHour neben gültigem sevenDay wird verworfen, der Punkt bleibt", () => {
+    const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: { pct: 3, resetsAt: 5 }, fiveHour: "x" }));
+    expect(v.punkte).toHaveLength(1);
+    expect(v.punkte[0]?.fiveHour).toBeUndefined();
+    expect(v.punkte[0]?.sevenDay).toEqual({ pct: 3, resetsAt: 5 });
+  });
   test("nur 5-Stunden-Fenster ist ein gültiger Punkt, aber ohne sevenDay", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, fiveHour: { pct: 3, resetsAt: 5 } }));
     expect(v.kaputt).toBe(0);
@@ -156,6 +162,10 @@ describe("kontrollzahl", () => {
   test("ein Punkt nach bis wird ignoriert, von zwei Punkten vor von zählt der letzte als Basis, ein Rückgang ohne Reset trägt 0 bei", () => {
     const k = L.kontrollzahl([punkt(von - 2 * MIN, 1), punkt(von - MIN, 10), punkt(von + MIN, 8), punkt(von + 2 * MIN, 12), punkt(bis + MIN, 90)], { von, bis, anzahlTickets: 1 });
     expect(k).toMatchObject({ summe: 4, quotient: 4, erster: von - MIN, letzter: von + 2 * MIN });
+  });
+  test("ein Punkt genau auf bis zählt mit, ein einziger Punkt genau auf von ist noch keine Folge", () => {
+    expect(L.kontrollzahl([punkt(von - MIN, 10), punkt(bis, 15)], { von, bis, anzahlTickets: 1 })).toMatchObject({ summe: 5 });
+    expect(L.kontrollzahl([punkt(von, 10)], { von, bis, anzahlTickets: 1 })).toHaveProperty("luecke");
   });
   test("über einen Reset zählt der neue Stand, der Reset wird gezählt", () => {
     const reset = (von + 2 * 3_600_000) / 1000;
