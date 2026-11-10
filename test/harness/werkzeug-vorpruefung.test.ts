@@ -26,7 +26,9 @@ type Werkzeug = {
   serverAusAgent: (t: string) => string[];
   serverAusRegeln: (r: string[]) => string[];
   unbekannteMcpServer: (r: string[], bekannt: string[]) => string[];
-  bewerteMcp: (o: { agenten: { datei: string; text: string }[]; projekt: string[]; userScope?: string[] }) => Mangel[];
+  bewerteMcp: (o: { agenten: { datei: string; text: string }[]; bekannt: string[] }) => Mangel[];
+  vorpruefungMitMangel: (config: unknown) => { vorpruefung: { befehle: unknown[]; userScopeServer: string[] }; mangel: Mangel[] };
+  bekannteMcpServer: (projekt: string[], config: unknown) => string[];
   versionTeile: (t: string) => number[] | null;
   bewerteNode: (o: { ist: string; nvmrc?: string | null; engines?: string | null }) => Mangel[];
   bewerteBefehle: (o: { befehle: { name: string; befehl: string[] }[]; laufe: (b: string[], f: number, cwd?: string) => Lauf; root?: string }) => Mangel[];
@@ -63,6 +65,26 @@ function fs(dateien: Record<string, string>) {
 const ok: Lauf = { ok: true, grund: "" };
 const lauf = (dateien: Record<string, string>, extra: Partial<Parameters<Werkzeug["pruefeWerkzeuge"]>[0]> = {}) =>
   w.pruefeWerkzeuge({ root: "/r", ...fs(dateien), ist: "22.23.4", config: {}, laufe: () => ok, ...extra });
+
+describe("Vorprüfung samt Mangel und bekannte MCP-Server (factory#283 L1)", () => {
+  test("vorpruefungMitMangel: gültige Config ohne Mangel, ungültige als leere Vorprüfung mit genau einem Mangel samt Fix", () => {
+    const gut = w.vorpruefungMitMangel({ vorpruefung: { userScopeServer: ["x"] } });
+    expect(gut.mangel).toEqual([]);
+    expect(gut.vorpruefung.userScopeServer).toEqual(["x"]);
+    const schlecht = w.vorpruefungMitMangel({ vorpruefung: { befehle: [{ name: "n", befehl: "kein-array" }] } });
+    expect(schlecht.vorpruefung).toEqual({ befehle: [], userScopeServer: [] });
+    expect(schlecht.mangel).toHaveLength(1);
+    expect(schlecht.mangel[0].text).toContain("vorpruefung.befehle[0].befehl");
+    expect(schlecht.mangel[0].fix.length).toBeGreaterThan(0);
+    const ohneFix = w.vorpruefungMitMangel({ vorpruefung: { userScopeServer: "x" } });
+    expect(ohneFix.mangel[0].fix).toContain("userScopeServer");
+  });
+  test("bekannteMcpServer: Projekt, Kern und Config-Server; bei ungültiger Config nur Projekt und Kern", () => {
+    expect(w.bekannteMcpServer(["p"], { vorpruefung: { userScopeServer: ["c"] } })).toEqual(["p", ...w.USER_SCOPE_MCP_SERVER, "c"]);
+    expect(w.bekannteMcpServer(["p"], {})).toEqual(["p", ...w.USER_SCOPE_MCP_SERVER]);
+    expect(w.bekannteMcpServer(["p"], { vorpruefung: { userScopeServer: "x" } })).toEqual(["p", ...w.USER_SCOPE_MCP_SERVER]);
+  });
+});
 
 describe("MCP-Server", () => {
   test("serverAusAgent liest nur mcp__<server>__ aus der tools-Zeile des Frontmatters", () => {

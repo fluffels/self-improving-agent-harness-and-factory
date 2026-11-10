@@ -85,11 +85,11 @@ import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 import * as checkBasis from "../../scripts/check-basis.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE, vorpruefungAus } from "../../scripts/projekt-config-lib.mjs";
+import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { LANGFUSE_LESE_TOOLS as LESE_TOOLS_ROH } from "../../scripts/langfuse-zugang.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { USER_SCOPE_MCP_SERVER, unbekannteMcpServer } from "../../scripts/werkzeug-vorpruefung.mjs";
+import { USER_SCOPE_MCP_SERVER, unbekannteMcpServer, bekannteMcpServer } from "../../scripts/werkzeug-vorpruefung.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
@@ -648,8 +648,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
       regeln.push(...(frontmatter(read(`.claude/agents/${f}`)).tools ?? "").split(",").map((t) => t.trim()));
     }
-    const ausConfig = (vorpruefungAus as unknown as (c: unknown) => { userScopeServer: string[] })(projektConfig()).userScopeServer;
-    assert.deepEqual((unbekannteMcpServer as (r: string[], b: string[]) => string[])(regeln, [...projekt, ...userScope, ...ausConfig]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
+    assert.deepEqual((unbekannteMcpServer as (r: string[], b: string[]) => string[])(regeln, (bekannteMcpServer as (p: string[], c: unknown) => string[])(projekt, projektConfig())), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
   });
 
   test("Erkennung greift wirklich (Red-Green): Langfuse-Regeln gegen die Quelle LANGFUSE_LESE_TOOLS", () => {
