@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/wiedervorlage.mjs";
 import { FREMD } from "./support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as standRaw from "../scripts/sync-stand-lib.mjs";
+const istBezieher = (standRaw as unknown as { istBezieher: (w: string) => boolean }).istBezieher;
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 type E = { id: string; faellig: string; titel: string; text: string; label?: string; alerts?: unknown };
 type T = { number: number; state: string; body: string; closedAt?: string };
@@ -277,7 +283,8 @@ describe("main: Wiedervorlage im Bezieher geht ins eigene Repo (factory#215)", (
     expect(aufrufe).toEqual([[(raw as unknown as { anlegeArgumente: (e: E, l: string, r: string) => string[] }).anlegeArgumente(e("a"), "area:x", "o/r"), { token: "tok" }]]);
     expect(aufrufe[0][0].slice(0, 4)).toEqual(["issue", "create", "--repo", "o/r"]);
   });
-  test("main ohne `bezieher`-Dep in der Fabrik (kein Sync-Stand) nimmt den Fabrik-Pfad: Ziel des Labels, mit Label und Sperrprüfung (L38)", async () => {
+  // Der Test beschreibt den Fabrik-Pfad; in einem Bezieher-Checkout (Sync-Stand vorhanden) gilt er nicht.
+  test.skipIf(istBezieher(WURZEL))("main ohne `bezieher`-Dep in der Fabrik (kein Sync-Stand) nimmt den Fabrik-Pfad: Ziel des Labels, mit Label und Sperrprüfung (L38)", async () => {
     vi.stubEnv("PROJECT_TOKEN", "pt");
     const geprueft0: unknown[][] = [];
     const { angelegt, geprueft, deps } = aufbau(fremd, { bezieher: undefined, bereite: (z: string[], o: unknown) => (geprueft0.push([z, o]), { ok: true }) });

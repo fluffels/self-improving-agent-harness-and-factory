@@ -41,7 +41,7 @@ test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe",
   expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain("Quarantäne"); expect(err).toEqual([]);
 });
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["x"] } } };
-const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string> };
+const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string>; pruefeAusgabe: (r: string) => string; quellDatei: (r: string, p: string) => string };
 function projekt(rollen: Record<string, string>) {
   const d = mkdtempSync(join(tmpdir(), "codex-rollen-")); temps.push(d);
   mkdirSync(join(d, ".codex", "agents"), { recursive: true }); writeFileSync(join(d, ".mcp.json"), JSON.stringify(mcp));
@@ -76,8 +76,8 @@ function unterVerlinktemVorfahren() {
 test("Wurzel unter verlinktem Vorfahren ist erlaubt (Guard prüft nur unterhalb der Wurzel)", () => {
   const { root } = unterVerlinktemVorfahren();
   expect(lib.lokaleRollenMaengel(root, config, mcp)).toEqual([]);
-  expect(lib0.pruefeAusgabe(root)).toBe(root);
-  expect(lib0.quellDatei(root, ".mcp.json")).toBe(join(root, ".mcp.json"));
+  expect(lib.pruefeAusgabe(root)).toBe(root);
+  expect(lib.quellDatei(root, ".mcp.json")).toBe(join(root, ".mcp.json"));
 });
 test("Symlink innerhalb der Wurzel bleibt ein Fehler", () => {
   const { d, root } = unterVerlinktemVorfahren();
@@ -85,10 +85,10 @@ test("Symlink innerhalb der Wurzel bleibt ein Fehler", () => {
   rmSync(join(root, ".codex", "agents"), { recursive: true }); symlinkSync(ziel, join(root, ".codex", "agents"), "junction");
   expect(() => lib.lokaleRollenMaengel(root, config, mcp)).toThrow(/Symlink/);
   const quelle = join(d, "q.json"); writeFileSync(quelle, "{}"); rmSync(join(root, ".mcp.json")); symlinkSync(quelle, join(root, ".mcp.json"));
-  expect(() => lib0.quellDatei(root, ".mcp.json")).toThrow(/Symlink/);
-  expect(() => lib0.pruefeAusgabe(join(d, "link-direkt"))).not.toThrow();
+  expect(() => lib.quellDatei(root, ".mcp.json")).toThrow(/Symlink/);
+  expect(() => lib.pruefeAusgabe(join(d, "link-direkt"))).not.toThrow();
   symlinkSync(ziel, join(d, "link-direkt"), "junction");
-  expect(() => lib0.pruefeAusgabe(join(d, "link-direkt"))).toThrow(/Symlink/);
+  expect(() => lib.pruefeAusgabe(join(d, "link-direkt"))).toThrow(/Symlink/);
 });
 test("Vorprüfung meldet verwaiste Rolle in root", () => {
   const d = projekt({ "alt.toml": "x" }); const out: string[] = [];
