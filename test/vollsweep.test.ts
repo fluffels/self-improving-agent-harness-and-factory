@@ -286,7 +286,7 @@ describe("lauf", () => {
     const a = aufbau({ diffNachher: " scripts/x.mjs | 2 +-\n" });
     const r = lauf(argv("--zeilen", "2"), a.deps);
     expect(r.code).toBe(1);
-    expect(r.err).toMatch(/nicht zurückgeschrieben|geändert/);
+    expect(r.err).toMatch(/weicht nach dem Sweep vom Stand ab/);
   });
 
   test("Wirft der Test-Spawn, wird die Datei trotzdem zurückgeschrieben", () => {
