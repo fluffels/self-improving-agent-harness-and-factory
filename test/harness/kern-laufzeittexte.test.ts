@@ -1,4 +1,5 @@
 /**
+ * @harness-waechter – Kern-Test.
  * Wächter: verteilte `.mjs`-Einheiten (ganze Dateien, Ring wird in Projekte verteilt, `wirdVerteilt`) nennen in ihren Laufzeit-Strings kein
  * `npm run <x>`, das ein Bezieher nicht hat. Erlaubt sind die Namen aus `BEZIEHER_NPM_SKRIPTE` (`test/support/bezieher-npm-skripte.ts`);
  * alles andere steht als `node scripts/<x>.mjs` bzw. `node scripts/gate-befehl.mjs <name>`. Ergänzt `besitz-abschnittsverweise.test.ts`

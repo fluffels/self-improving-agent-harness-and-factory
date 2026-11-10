@@ -156,7 +156,7 @@ describe("Prüfmodus", () => {
     const r = run([], projekt(tagLinks("v0"), gut()));
     assert.equal(r.code, 1);
     assert.match(r.err, /docs\/x\.md:1: \[ref\]/);
-    assert.match(r.err, /check:factorylinks -- --schreiben --quelle/);
+    assert.match(r.err, /check-factory-links\.mjs --schreiben --quelle/);
     assert.match(r.err, /factoryLinks\.ausnahmen/);
   });
   test("derselbe Link in einer Datei, die ein Ausnahme-Glob trifft, bleibt grün; ohne den Schlüssel ist er rot", () => {

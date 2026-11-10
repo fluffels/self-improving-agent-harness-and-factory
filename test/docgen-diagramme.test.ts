@@ -223,7 +223,7 @@ describe("Vollständigkeit (AK4)", () => {
     ] as const) {
       const f = basis({ "docs/diagramme/voll.mmd": VOLL.replace(weg, "") });
       assert.throws(() => erzeuge("voll", f), re);
-      assert.throws(() => erzeuge("voll", f), /docs:gen/);
+      assert.throws(() => erzeuge("voll", f), /docs-gen\.mjs --write/);
     }
   });
   test("ein neuer Subagent ohne Diagramm-Eintrag macht rot", () => {

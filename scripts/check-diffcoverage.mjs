@@ -127,6 +127,11 @@ function zeilenBilanz(lines, record) {
 /** Die erlaubten Schlüssel des dritten Arguments von `evaluateByLayer`; ein anderer Schlüssel (etwa eine alte Floor-Map) ist ein `TypeError`. */
 const EVALUATE_OPTIONEN = ["floors", "quelle", "berichteJe"];
 
+function pruefeOptionen(optionen) {
+  const unbekannt = Object.keys(optionen).filter((k) => !EVALUATE_OPTIONEN.includes(k));
+  if (unbekannt.length > 0) throw new TypeError(`evaluateByLayer: unbekannte Option(en) ${unbekannt.join(", ")} im dritten Argument (erlaubt: ${EVALUATE_OPTIONEN.join(", ")}); eine Floor-Map gehört in \`floors\``);
+}
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
@@ -134,8 +139,7 @@ const EVALUATE_OPTIONEN = ["floors", "quelle", "berichteJe"];
  *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Optionen (alle optional): `floors` (Standard `LAYER_DIFF_FLOORS`), `quelle`, `berichteJe`
  *  (Datei → Berichtsdateien). Pure. */
 export function evaluateByLayer(changed, lcov, optionen = {}) {
-  const unbekannt = Object.keys(optionen).filter((k) => !EVALUATE_OPTIONEN.includes(k));
-  if (unbekannt.length > 0) throw new TypeError(`evaluateByLayer: unbekannte Option(en) ${unbekannt.join(", ")} im dritten Argument (erlaubt: ${EVALUATE_OPTIONEN.join(", ")}); eine Floor-Map gehört in \`floors\``);
+  pruefeOptionen(optionen);
   const { floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe } = optionen;
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
