@@ -108,6 +108,11 @@ describe("scripts/statusline.mjs", () => {
     expect(zeilen()).toHaveLength(2);
   });
 
+  test("Kontingent-Verlauf: ohne rate_limits entsteht keine Zeile", () => {
+    const r = lauf('{"model":"x"}', null);
+    expect(existsSync(r.verlauf)).toBe(false);
+  });
+
   test("Kontingent-Verlauf nicht schreibbar: Exit 0, Ausgabe byte-gleich, Snapshot trotzdem da", () => {
     const r = lauf(PAYLOAD, KOPIE, { FACTORY_ABO_KONTINGENT_VERLAUF: VERLAUF_DIR }); // ein Verzeichnis ist nicht beschreibbar
     expect(r.code).toBe(0);

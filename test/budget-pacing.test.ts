@@ -257,6 +257,20 @@ describe("liesSnapshot und CLI", () => {
     expect(zeilen()).toHaveLength(6);
   });
 
+  test("haengeVerlaufAn: die Dedup liest nur das Dateiende (Verlauf über 4 KiB), Teil-Snapshots als letzte Zeile brechen nichts", () => {
+    const pfad = join(neu(), "gross.jsonl");
+    const s = (p7: number): Snap => ({ stand: Date.now(), sevenDay: { pct: p7, resetsAt: 1000 }, fiveHour: { pct: 1, resetsAt: 100 } });
+    for (let i = 0; i < 60; i++) appendFileSync(pfad, `${JSON.stringify({ ...s(i % 50), stand: i })}\n`);
+    expect(readFileSync(pfad, "utf8").length).toBeGreaterThan(4096);
+    appendFileSync(pfad, `${JSON.stringify(s(77))}\n`);
+    expect(B.haengeVerlaufAn(s(77), pfad)).toBe(false);
+    const teil = join(neu(), "teil.jsonl");
+    expect(B.haengeVerlaufAn({ stand: 1, fiveHour: { pct: 5, resetsAt: 100 } }, teil)).toBe(true);
+    expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
+    expect(B.haengeVerlaufAn({ stand: 2, sevenDay: { pct: 3, resetsAt: 1000 } }, teil)).toBe(true);
+    expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
+  });
+
   test("CLI: Probe hängt ihren Stand an den Verlauf an, ein nicht schreibbarer Verlauf ändert den Exit nicht und warnt", () => {
     const d = neu();
     const probe = join(d, "probe.mjs");

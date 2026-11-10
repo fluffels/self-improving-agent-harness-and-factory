@@ -57,6 +57,12 @@ describe("verlaufAus", () => {
     expect(v.punkte.map((p) => p.stand)).toEqual([T0, T0 + 10]);
     expect(v.kaputt).toBe(4);
   });
+  test("ein ungültiges sevenDay neben gültigem fiveHour wird verworfen, der Punkt bleibt", () => {
+    const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: "x", fiveHour: { pct: 3, resetsAt: 5 } }));
+    expect(v.punkte).toHaveLength(1);
+    expect(v.punkte[0]?.sevenDay).toBeUndefined();
+    expect(v.punkte[0]?.fiveHour).toEqual({ pct: 3, resetsAt: 5 });
+  });
   test("nur 5-Stunden-Fenster ist ein gültiger Punkt, aber ohne sevenDay", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, fiveHour: { pct: 3, resetsAt: 5 } }));
     expect(v.kaputt).toBe(0);
@@ -93,6 +99,11 @@ describe("messfenster", () => {
   test("Fenster-Reset im Ticket-Fenster ist eine Lücke", () => {
     const reset = (claim + 30 * MIN) / 1000;
     expect(w({ claim, merge }, [punkt(claim, 90, reset), punkt(merge, 2, reset + 7 * 86_400)])).toEqual({ luecke: "Fenster-Reset im Ticket-Fenster" });
+  });
+  test("Reset genau zum Ende-Punkt zählt als Reset, eine Sekunde danach nicht", () => {
+    const reset = (merge + 5 * MIN) / 1000;
+    expect(w({ claim, merge }, [punkt(claim, 10, reset), punkt(merge + 5 * MIN, 12, reset)])).toEqual({ luecke: "Fenster-Reset im Ticket-Fenster" });
+    expect(w({ claim, merge }, [punkt(claim, 10, reset + 1), punkt(merge + 5 * MIN, 12, reset + 1)])).toEqual({ delta: 2 });
   });
   test("Punkte ohne 7-Tage-Fenster werden ignoriert", () => {
     const ohne: Punkt = { stand: claim - MIN, fiveHour: { pct: 1, resetsAt: 1 } };
@@ -142,6 +153,10 @@ describe("kontrollzahl", () => {
     const k = L.kontrollzahl([punkt(von - MIN, 10), punkt(von + MIN, 14), punkt(bis - MIN, 20)], { von, bis, anzahlTickets: 5 });
     expect(k).toMatchObject({ summe: 10, quotient: 2, resets: 0 });
   });
+  test("ein Punkt nach bis wird ignoriert, von zwei Punkten vor von zählt der letzte als Basis, ein Rückgang ohne Reset trägt 0 bei", () => {
+    const k = L.kontrollzahl([punkt(von - 2 * MIN, 1), punkt(von - MIN, 10), punkt(von + MIN, 8), punkt(von + 2 * MIN, 12), punkt(bis + MIN, 90)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 4, quotient: 4, erster: von - MIN, letzter: von + 2 * MIN });
+  });
   test("über einen Reset zählt der neue Stand, der Reset wird gezählt", () => {
     const reset = (von + 2 * 3_600_000) / 1000;
     const k = L.kontrollzahl([punkt(von, 80, reset), punkt(von + 3 * 3_600_000, 5, reset + 7 * 86_400)], { von, bis, anzahlTickets: 1 });
@@ -168,6 +183,7 @@ describe("Claims", () => {
   });
   test("ohne Event vor dem Merge eine Lücke, fehlender Alias wirft", () => {
     const m = new Map([[7, "2026-10-15T12:00:00Z"]]);
+    expect(L.claimsAusAntwort(antwort([{ createdAt: "2026-10-15T12:00:00Z" }]), m).get(7)).toEqual({ claim: Date.parse("2026-10-15T12:00:00Z") }); // genau zum Merge zählt
     expect(L.claimsAusAntwort(antwort([]), m).get(7)).toEqual({ luecke: "kein assigned-Event vor dem Merge" });
     expect(() => L.claimsAusAntwort({ data: { repository: {} } }, m)).toThrow(/#7/);
     expect(() => L.claimsAusAntwort({}, m)).toThrow();
@@ -212,6 +228,15 @@ describe("aboKontingent und Abschnitt", () => {
     expect(a.zeilen).toEqual([{ ticket: 1, pr: 101, luecke: "kein assigned-Event vor dem Merge" }]);
     expect(a.gemessen).toBe(0);
   });
+  test("ein Ticket ohne Eintrag in der Claim-Karte ist eine Lücke „kein Claim bekannt“", () => {
+    const a = L.aboKontingent({ tickets: [zeile(1)], punkte: [punkt(claim, 10), punkt(merge, 14)], kaputt: 0, claims: new Map(), von: T0, bis: merge });
+    expect(a.zeilen).toEqual([{ ticket: 1, pr: 101, luecke: "kein Claim bekannt" }]);
+  });
+  test("ohne kaputte Zeilen fehlt die Zeile Datenlücken, der Verlaufszeitraum steht im Kontrollzahl-Text", () => {
+    const text = L.aboKontingentAbschnitt(eins([punkt(claim, 10), punkt(merge, 14)])).join("\n");
+    expect(text).not.toContain("Datenlücken");
+    expect(text).toContain("Verlauf 2026-10-15 10:00 bis 2026-10-15 11:00)");
+  });
   test("Überlappung: zwei Tickets im selben Fenster teilen das Delta", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 20)], [zeile(1), zeile(2)]);
     expect(a.zeilen.map((z) => z.pp)).toEqual([5, 5]);
@@ -248,6 +273,22 @@ describe("ladeAboKontingent und Bericht", () => {
     const r = K.ladeAboKontingent({ von, bis, tickets }, { gh: (a) => (aufrufe.push(a), claimAntwort), lies: () => verlauf, pfad: "/x/v.jsonl" });
     expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 3 }]);
     expect(aufrufe).toHaveLength(1);
+  });
+  test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
+    const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0]!, ticket: 100 + i, pr: 500 + i }));
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      const q = a.find((x) => x.startsWith("query=")) ?? "";
+      const repo: Record<string, unknown> = {};
+      for (const m of q.matchAll(/i(\d+): issue/g)) repo[`i${m[1]}`] = { timelineItems: { nodes: [{ createdAt: "2026-10-15T10:00:00Z" }] } };
+      return { data: { repository: repo } };
+    };
+    const r = K.ladeAboKontingent({ von, bis, tickets: viele }, { gh, lies: () => verlauf, pfad: "/x" });
+    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe.map((a) => (a.find((x) => x.startsWith("query=")) ?? "").match(/ issue\(/g)?.length)).toEqual([50, 1]);
+    expect(aufrufe[0]).toEqual(expect.arrayContaining(["owner={owner}", "name={repo}"]));
+    expect(r.gemessen).toBe(51);
   });
   test("fehlender Verlauf und gh-Fehler sind Lücken mit Grund, nie 0", () => {
     const nein = () => {

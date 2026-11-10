@@ -494,7 +494,7 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
     const reihen = ticketLaeufe(lauf.daten.zeilen).tickets;
     kontingent = kontingentLader ? kontingentLader({ von, bis, tickets: reihen }) : undefined; // eine Lücke dort ändert den Exit-Code nicht
     tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
-  }
+  } else if (kontingentLader) kontingent = { luecke: "kein Lauf-Ergebnis" };
   const { audit, arten } = auditUndArten(auditLader, { von, bis, lauf, tickets });
   const spezifikation = maengelLader ? maengelLader() : undefined; // eine Lücke dort ändert den Exit-Code nicht (wie bei den Kosten)
   const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation, arten, kontingent });
