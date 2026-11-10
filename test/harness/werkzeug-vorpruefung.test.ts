@@ -80,6 +80,11 @@ describe("MCP-Server", () => {
     expect(m).toHaveLength(1);
     expect(m[0].text).toContain("a.md, .claude/agents/b.md");
   });
+  test("nur Markdown-Dateien im Agentenordner zählen; .mcp.json ohne mcpServers kennt keinen Projekt-Server", () => {
+    expect(lauf({ ".claude/agents/notiz.txt": PW })).toEqual([]);
+    expect(lauf({ ".claude/agents/u.md": LF, ".mcp.json": "{}" })).toEqual([]);
+    expect(lauf({ ".claude/agents/u.md": PW, ".mcp.json": "{}" })).toHaveLength(1);
+  });
   test("kaputte .mcp.json ist ein Mangel", () => {
     const m = lauf({ ".mcp.json": "{kaputt" });
     expect(m.map((x) => x.text)).toEqual([".mcp.json ist kein gültiges JSON"]);
@@ -112,6 +117,8 @@ describe("Node-Version", () => {
     expect(w.bewerteNode({ ist: "22.0.0", engines: ">=22.23.4" })[0].text).toContain("engines.node");
     expect(w.bewerteNode({ ist: "22.23.4", engines: ">=22.23.4" })).toEqual([]);
     expect(w.bewerteNode({ ist: "22.0.0", nvmrc: "22.0.0", engines: ">=99.0.0" })).toEqual([]);
+    expect(w.bewerteNode({ ist: "22.23.4", engines: " >= 22.23.4" })).toEqual([]);
+    expect(w.bewerteNode({ ist: "22.0.0", engines: " >= 22.23.4" })).toHaveLength(1);
   });
   test("weder .nvmrc noch engines: übersprungen", () => {
     expect(w.bewerteNode({ ist: "1.0.0" })).toEqual([]);
@@ -134,6 +141,7 @@ describe("Projekt-Werkzeuge", () => {
   const befehle = [{ name: "Docker", befehl: ["docker", "info"] }];
   test("fehlender Block: keine Befehle, kein Lauf", () => {
     expect(lib.vorpruefungAus({}).befehle).toEqual([]);
+    expect(lib.vorpruefungAus({ vorpruefung: {} }).befehle).toEqual([]);
     expect(lauf({}, { laufe: () => { throw new Error("darf nicht laufen"); } })).toEqual([]);
   });
   test("ok, ENOENT, Exit 1 und Timeout", () => {
@@ -149,7 +157,7 @@ describe("Projekt-Werkzeuge", () => {
     const node = process.execPath;
     expect(w.laufeBefehl([node, "-e", "process.exit(0)"])).toEqual({ ok: true, grund: "" });
     expect(w.laufeBefehl([node, "-e", "process.exit(3)"])).toEqual({ ok: false, grund: "Exit 3" });
-    expect(w.laufeBefehl(["gibt-es-nicht-sih-260"]).grund).toContain("ENOENT");
+    expect(w.laufeBefehl(["gibt-es-nicht-sih-260"]).grund).toBe("Programm nicht gefunden (ENOENT)");
     expect(w.laufeBefehl([node, "-e", "setTimeout(()=>{},5000)"], 200).grund).toBe("Timeout nach 200 ms");
   });
   test("pruefeWerkzeuge reicht den Config-Block an den Runner", () => {

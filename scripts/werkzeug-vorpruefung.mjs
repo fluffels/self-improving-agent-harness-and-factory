@@ -27,7 +27,7 @@ const USAGE = "Aufruf: node scripts/werkzeug-vorpruefung.mjs";
 /** Pur: die Server-Namen aus den `mcp__<server>__…`-Einträgen der `tools:`-Zeile eines Agent-Textes. */
 export function serverAusAgent(text) {
   const zeile = /^tools:(.*)$/m.exec(frontmatterBlock(text) ?? "")?.[1] ?? "";
-  const namen = zeile.split(",").map((t) => /^\s*mcp__([^_\s][^\s]*?)__/.exec(t)?.[1]).filter(Boolean);
+  const namen = zeile.split(",").map((t) => /^\s*mcp__(\S+?)__/.exec(t)?.[1]).filter(Boolean);
   return [...new Set(namen)];
 }
 
