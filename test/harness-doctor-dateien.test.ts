@@ -449,6 +449,48 @@ describe("Workflow-Auslöser", () => {
     // Leerzeile im Block beendet das Lesen nicht
     expect(ausloeser([ci("CI"), fest("\n      - CI\n\n      - Weg")]).befund).toContain("Weg");
   });
+  describe("L20: nicht lesbare Form ist NICHT PRÜFBAR mit Datei:Zeile, nie „kein workflow_run“", () => {
+    const FPFAD = ".github/workflows/x.yml";
+    test("`on:` in Flow-Form (Mapping): nicht prüfbar mit Datei und Zeile", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non: { workflow_run: { workflows: [CI] } }\njobs: {}\n")]);
+      expect(p.ok).toBe(false);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:2`);
+      expect(p.befund).toContain("Flow-Collection");
+    });
+    test("Alias oder Anker an `workflows` und an `name`: nicht prüfbar", () => {
+      const alias = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: *liste\n")]);
+      expect(alias.nichtPruefbar).toBe(true);
+      expect(alias.befund).toContain(`${FPFAD}:4`);
+      const anker = ausloeser([ci("Build"), eigen("name: &n CI\non:\n  push:\n")]);
+      expect(anker.nichtPruefbar).toBe(true);
+      expect(anker.befund).toContain(`${FPFAD}:1`);
+    });
+    test("mehrzeilige Flow-Liste unter `workflows`: nicht prüfbar", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: [CI,\n      Weg]\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
+    test("eine nicht lesbare Datei macht auch eine sonst sichere Lücke nicht prüfbar (der Name könnte dort stehen)", () => {
+      const p = ausloeser([ci("Build"), fest('["CI"]'), eigen("name: Y\non: { push: {} }\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.fix).toContain("Blockform");
+    });
+    test("`on:` als Skalar oder Flow-Liste kennt kein workflow_run: OK", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non: push\n")]).ok).toBe(true);
+      expect(ausloeser([ci("Build"), eigen("name: X\non: [push, pull_request]\n")]).ok).toBe(true);
+    });
+    test("Flow-Liste mit Anführungszeichen und Komma im Namen bleibt ein Name", () => {
+      const p = ausloeser([ci("Build"), fest('["A, B", \'C\']')]);
+      expect(p.befund).toContain("A, B");
+      expect(p.befund).toContain("„C“");
+    });
+    test("die Zeile bleibt eine Lücke, wenn alle Dateien lesbar sind (kein Aufweichen)", () => {
+      const p = ausloeser([ci("Build"), fest('["CI"]')]);
+      expect(p.ok).toBe(false);
+      expect(p.nichtPruefbar).toBeUndefined();
+    });
+  });
   test("steht als letzter Punkt in DATEI_PUNKTE", () => {
     expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
   });
