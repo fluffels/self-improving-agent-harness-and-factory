@@ -139,7 +139,7 @@ function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: str
 
 /** Die in der Routing-Doku genannten User-Scope-MCP-Server, deren Namen das Repo voraussetzt. */
 function userScopeServer(md: string): string[] {
-  const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n]*)/.exec(md)?.[1] ?? "";
+  const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n.]*)/.exec(md)?.[1] ?? "";
   return [...zeile.matchAll(/`([\w-]+)`/g)].map((m) => m[1]);
 }
 
