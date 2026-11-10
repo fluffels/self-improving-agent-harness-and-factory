@@ -33,7 +33,9 @@ export const LINK_SICHERHEIT = {
 
 const FIX_FEHLER = "mit einem Konto mit Admin-Recht prüfen (gh auth status), dann erneut prüfen";
 const FIX_FELD = "Funktion im Plan nicht verfügbar oder Feld unbekannt: in den Einstellungen von Hand prüfen";
-export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
+/** Die eine Zuordnung Spiegel-Feld → Feld der Live-Regel für die Schwellen eines Code-Scanning-Werkzeugs (Sicherheits- und Ruleset-Punkt lesen sie hier). */
+export const SCHWELLEN_FELDER = [["sicherheitsSchwelle", "security_alerts_threshold"], ["alertSchwelle", "alerts_threshold"]];
+export const GRENZE_PRIVAT =" (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
 
 const luecke = (punkt, befund, fix) => lueckeRoh(punkt, befund, fix, LINK_SICHERHEIT[punkt]);
 /** Nicht prüfbar mit den Standardwerten dieses Moduls: Fix `FIX_FELD`, Link des Punkts (`link` hat Vorrang). */
@@ -84,11 +86,10 @@ function boolPunkt(punkt, quelle, { was, feld, aus, fix }) {
 /** Abweichende Schwellen je Werkzeug, das Spiegel und Live-Regel nennen: Texte `<tool>: <feld> <live> statt <soll>`; ein Spiegel ohne Schwelle prüft sie nicht. */
 function schwellenAbweichungen(regeln, spiegel) {
   const live = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? []);
-  const felder = [["sicherheitsSchwelle", "security_alerts_threshold"], ["alertSchwelle", "alerts_threshold"]];
   return (spiegel?.codeScanning ?? []).flatMap((e) => {
     const l = live.find((w) => w.tool === e.tool);
     if (l === undefined) return [];
-    return felder.filter(([soll, ist]) => e[soll] !== undefined && l[ist] !== e[soll])
+    return SCHWELLEN_FELDER.filter(([soll, ist]) => e[soll] !== undefined && l[ist] !== e[soll])
       .map(([soll, ist]) => `${e.tool}: ${ist} ${l[ist] ?? "nicht gesetzt"} statt ${e[soll]}`);
   });
 }

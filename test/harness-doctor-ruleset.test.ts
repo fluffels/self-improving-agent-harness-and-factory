@@ -70,6 +70,14 @@ describe("Ruleset-Spiegel: LÜCKE je Feld", () => {
     expect(x.ok).toBe(false);
     expect(x.befund).toContain("requiredChecks");
   });
+  test("Antwort ohne `rules`: Lücke requiredChecks, kein Wurf", () => {
+    const antwort: Record<string, unknown> = live();
+    delete antwort.rules;
+    const x = lauf(antwort);
+    expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBeUndefined();
+    expect(x.befund).toContain("requiredChecks");
+  });
   test("Code-Scanning-Schwelle weicht ab", () => {
     const x = lauf(live({ rules: [
       { type: "required_status_checks", parameters: { required_status_checks: [{ context: "A" }, { context: "B" }] } },

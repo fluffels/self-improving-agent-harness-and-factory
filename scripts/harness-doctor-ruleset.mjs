@@ -3,9 +3,11 @@
  *
  * Nur im lokalen `--pruefen`: `bypass_actors` liefert GitHub nur mit Admin-Recht, das Token des Wochenlaufs hat es nicht. Fehlt das Feld oder scheitert der Endpunkt
  * (403, 404, Netz), ist der Punkt `NICHT PRÜFBAR` (fail-closed), nie still grün. Ein Spiegel ohne `id` oder ein Aufruf ohne `lesen` lässt den Punkt aus (`rulesetPunkte`). Pur bis auf die Naht `lesen(args)` (liefert die geparste
- * Antwort, wirft bei einem Fehler; der Aufrufer reicht `gh` herein). Blatt-Modul: importiert nur die Ergebnis-Form.
+ * Antwort, wirft bei einem Fehler; der Aufrufer reicht `gh` herein). Importiert nur die Ergebnis-Form und die Schwellen-Zuordnung des Sicherheitspunkts. Der Spiegel kommt vom Lader (`ladeRulesetSpiegel`),
+ * der `name`, `requiredChecks`, `codeScanning` (fehlt → `[]`) und `bypassActors` als gültig garantiert; darum steht hier kein Rückfall für diese Felder (die Live-Antwort bleibt ungeprüft: fehlt `rules`, ist `requiredChecks` eine Lücke).
  */
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
+import { SCHWELLEN_FELDER } from "./harness-doctor-sicherheit.mjs";
 
 const PUNKT = "Ruleset-Spiegel";
 const LINK = "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository";
@@ -16,18 +18,18 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const checksAus = (regeln) => regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context)).sort();
 const werkzeugeAus = (regeln) => regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? [])
-  .map((w) => ({ tool: w.tool, sicherheitsSchwelle: w.security_alerts_threshold, alertSchwelle: w.alerts_threshold }))
+  .map((w) => ({ tool: w.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll, ist]) => [soll, w[ist]])) }))
   .sort((a, b) => String(a.tool).localeCompare(String(b.tool)));
 
 /** Die Felder, die vom Spiegel abweichen (Namen wie im Spiegel). */
 function abweichungen(spiegel, live) {
   const regeln = Array.isArray(live.rules) ? live.rules : [];
-  const sollWerkzeuge = [...(spiegel.codeScanning ?? [])].sort((a, b) => String(a.tool).localeCompare(String(b.tool)));
+  const sollWerkzeuge = [...spiegel.codeScanning].sort((a, b) => String(a.tool).localeCompare(String(b.tool)));
   return [
     live.name !== spiegel.name && "name",
-    !gleich(checksAus(regeln), [...(spiegel.requiredChecks ?? [])].sort()) && "requiredChecks",
-    !gleich(werkzeugeAus(regeln), sollWerkzeuge.map((e) => ({ tool: e.tool, sicherheitsSchwelle: e.sicherheitsSchwelle, alertSchwelle: e.alertSchwelle }))) && "codeScanning",
-    !gleich(sortiert(live.bypass_actors), sortiert(spiegel.bypassActors ?? [])) && "bypassActors",
+    !gleich(checksAus(regeln), [...spiegel.requiredChecks].sort()) && "requiredChecks",
+    !gleich(werkzeugeAus(regeln), sollWerkzeuge.map((e) => ({ tool: e.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll]) => [soll, e[soll]])) }))) && "codeScanning",
+    !gleich(sortiert(live.bypass_actors), sortiert(spiegel.bypassActors)) && "bypassActors",
   ].filter(Boolean);
 }
 
