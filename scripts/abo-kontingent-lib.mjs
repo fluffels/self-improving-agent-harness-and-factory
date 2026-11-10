@@ -2,7 +2,7 @@
 /**
  * Abo-Kontingent je Ticket: Prozentpunkte (pp) des 7-Tage-Fensters zwischen Claim (assigned-Event) und Merge, aus dem Kontingent-Verlauf
  * (`budget-lib.mjs` › `haengeVerlaufAn`). Nicht zu verwechseln mit dem GitHub-API-Kontingent (`gh-kontingent.mjs`).
- * Pur, ohne I/O und ohne gh: `verlaufAus`, `messfenster`, `teileZeitanteilig`, `kontrollzahl`, `claimAbfrage`, `claimsAusAntwort`,
+ * Pur, ohne I/O und ohne gh: `verlaufAus`, `messfenster`, `zuwachsIm`, `teileZeitanteilig`, `kontrollzahl`, `claimAbfrage`, `claimsAusAntwort`,
  * `aboKontingent`, `aboKontingentAbschnitt`. Ein Ticket ohne Messfenster ist eine Lücke mit Grund, nie 0.
  * Grenzen: docs/model-routing.md (Fabrik) › „Nach einer Optimierung vergleichen“ und §6.
  */
@@ -48,11 +48,12 @@ export function messfenster(punkte, { claim, merge }) {
 }
 
 /**
- * Teilt die Deltas gleichzeitig laufender Tickets zeitanteilig: `fenster` = `[{ ticket, claim, merge, delta? }]` (ohne `delta` eine Lücke,
- * sie zählt trotzdem als gleichzeitig laufend). Das Delta verteilt sich gleichmäßig über das eigene Fenster, je Segment geteilt durch
- * die Zahl der Tickets, die das Segment abdecken. Ergebnis: Map Ticket → Anteil (nur Tickets mit Delta). Pur.
+ * Teilt den Kontozuwachs auf gleichzeitig laufende Tickets: `fenster` = `[{ ticket, claim, merge, delta? }]` (ohne `delta` eine Lücke,
+ * sie zählt trotzdem als gleichzeitig laufend), `zuwachs(a, b)` = Zuwachs in pp im Teilintervall. Der Zuwachs je Segment (zerschnitten an allen
+ * Claim- und Merge-Zeiten) wird durch die Zahl der Tickets geteilt, die das Segment abdecken; die Summe der Anteile übersteigt so nie den
+ * Zuwachs der Vereinigung der Fenster. Ein Fenster der Länge 0 behält sein `delta`. Ergebnis: Map Ticket → Anteil (nur Tickets mit Delta). Pur.
  */
-export function teileZeitanteilig(fenster) {
+export function teileZeitanteilig(fenster, zuwachs) {
   const grenzen = [...new Set(fenster.flatMap((f) => [f.claim, f.merge]))].sort((a, b) => a - b);
   const anteile = new Map();
   for (const f of fenster) {
@@ -67,11 +68,27 @@ export function teileZeitanteilig(fenster) {
       const [a, b] = [grenzen[i], grenzen[i + 1]];
       if (a < f.claim || b > f.merge) continue;
       const k = fenster.filter((g) => g.claim <= a && g.merge >= b).length;
-      summe += (f.delta * (b - a)) / laenge / k;
+      summe += zuwachs(a, b) / k;
     }
     anteile.set(f.ticket, runde(summe));
   }
   return anteile;
+}
+
+/** Stand des 7-Tage-Fensters zur Zeit `t`, linear zwischen den Punkten davor und danach interpoliert; `null` ohne Punkt davor oder danach. Pur. */
+function standBei(sieben, t) {
+  const p = sieben.filter((x) => x.stand <= t).at(-1);
+  const q = sieben.find((x) => x.stand >= t);
+  if (!p || !q) return null;
+  if (q.stand === p.stand) return p.sevenDay.pct;
+  return p.sevenDay.pct + ((q.sevenDay.pct - p.sevenDay.pct) * (t - p.stand)) / (q.stand - p.stand);
+}
+
+/** Zuwachs in pp zwischen `a` und `b` (ms) aus den interpolierten Ständen, nie negativ; 0 ohne Stand. Pur. */
+export function zuwachsIm(punkte, a, b) {
+  const sieben = punkte.filter((p) => p.sevenDay);
+  const [x, y] = [standBei(sieben, a), standBei(sieben, b)];
+  return x === null || y === null ? 0 : Math.max(0, y - x);
 }
 
 /** Zeitraum-Quotient: Σ Zuwachs des 7-Tage-Fensters in [von, bis] geteilt durch die gemergten Tickets; `{ luecke }` bei < 2 Punkten oder 0 Tickets. Pur. */
@@ -132,7 +149,7 @@ export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
     return { t, claim: c.claim, merge, ...messfenster(punkte, { claim: c.claim, merge }) };
   });
   const fenster = rohe.filter((r) => r.claim !== undefined).map((r) => ({ ticket: r.t.ticket, claim: r.claim, merge: r.merge, delta: r.delta }));
-  const anteile = teileZeitanteilig(fenster);
+  const anteile = teileZeitanteilig(fenster, (a, b) => zuwachsIm(punkte, a, b));
   const zeilen = rohe.map((r) => ({ ticket: r.t.ticket, pr: r.t.pr, ...(anteile.has(r.t.ticket) ? { pp: anteile.get(r.t.ticket) } : { luecke: r.luecke }) }));
   const gemessen = rohe.filter((r) => anteile.has(r.t.ticket)).map((r) => r.t);
   const mitBlocker = gemessen.filter((t) => t.blocker !== null && t.blocker !== undefined);

@@ -23,7 +23,8 @@ const L = raw as unknown as {
   TOLERANZ_MS: number;
   verlaufAus: (t: string) => { punkte: Punkt[]; kaputt: number };
   messfenster: (p: Punkt[], o: { claim: number; merge: number }) => Fenster;
-  teileZeitanteilig: (f: { ticket: number; claim: number; merge: number; delta?: number }[]) => Map<number, number>;
+  zuwachsIm: (p: Punkt[], a: number, b: number) => number;
+  teileZeitanteilig: (f: { ticket: number; claim: number; merge: number; delta?: number }[], z: (a: number, b: number) => number) => Map<number, number>;
   kontrollzahl: (p: Punkt[], o: { von: number; bis: number; anzahlTickets: number }) => { luecke?: string; summe?: number; resets?: number; quotient?: number };
   claimAbfrage: (n: number[]) => string;
   claimsAusAntwort: (a: unknown, m: Map<number, string>) => Map<number, { claim?: number; luecke?: string }>;
@@ -123,32 +124,39 @@ describe("messfenster", () => {
   });
 });
 
-describe("teileZeitanteilig", () => {
-  test("zwei gleiche Fenster mit je 10 pp: je 5", () => {
-    const m = L.teileZeitanteilig([
-      { ticket: 1, claim: 0, merge: 10, delta: 10 },
-      { ticket: 2, claim: 0, merge: 10, delta: 10 },
-    ]);
-    expect([m.get(1), m.get(2)]).toEqual([5, 5]);
+describe("zuwachsIm und teileZeitanteilig", () => {
+  const lin = (a: number, b: number) => (b - a) * 0.5; // gleichmäßiger Zuwachs, 0,5 pp je Einheit
+  test("zuwachsIm interpoliert linear zwischen den Punkten, nie negativ, ohne Punkt davor oder danach 0", () => {
+    const pk = [punkt(0, 10), punkt(100, 20)];
+    expect(L.zuwachsIm(pk, 0, 100)).toBe(10);
+    expect(L.zuwachsIm(pk, 25, 75)).toBe(5);
+    expect(L.zuwachsIm(pk, 100, 100)).toBe(0);
+    expect(L.zuwachsIm(pk, -10, 50)).toBe(0);
+    expect(L.zuwachsIm(pk, 50, 150)).toBe(0);
+    expect(L.zuwachsIm([punkt(0, 20), punkt(100, 10)], 0, 100)).toBe(0);
+    expect(L.zuwachsIm([punkt(0, 10), punkt(50, 10), punkt(50, 14), punkt(100, 14)], 0, 100)).toBe(4);
   });
-  test("Teilüberlappung [0,10] und [5,15] mit je 10 pp: je 7,5", () => {
-    const m = L.teileZeitanteilig([
-      { ticket: 1, claim: 0, merge: 10, delta: 10 },
-      { ticket: 2, claim: 5, merge: 15, delta: 10 },
-    ]);
-    expect([m.get(1), m.get(2)]).toEqual([7.5, 7.5]);
+  test("zwei gleiche Fenster mit zusammen 10 pp: je 5", () => {
+    const m = L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 10 }, { ticket: 2, claim: 0, merge: 10, delta: 10 }], lin);
+    expect([m.get(1), m.get(2)]).toEqual([2.5, 2.5]);
+  });
+  test("Teilüberlappung [0,10] und [5,15] bei gleichmäßigem Zuwachs: je 3,75, Summe = Zuwachs der Vereinigung", () => {
+    const m = L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 5 }, { ticket: 2, claim: 5, merge: 15, delta: 5 }], lin);
+    expect([m.get(1), m.get(2)]).toEqual([3.75, 3.75]);
+    expect((m.get(1) ?? 0) + (m.get(2) ?? 0)).toBe(lin(0, 15));
+  });
+  test("ein ungleichmäßiger Zuwachs wird je Segment geteilt: der Überlappungszuwachs zählt einmal", () => {
+    const m = L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 9 }, { ticket: 2, claim: 5, merge: 15, delta: 9 }], (a, b) => (a >= 5 && b <= 10 ? 8 : (b - a) * 0.4));
+    expect([m.get(1), m.get(2)]).toEqual([6, 6]); // 2 allein + 8/2 je
   });
   test("ein Lücken-Ticket (ohne delta) zählt als gleichzeitig laufend, bekommt aber keinen Anteil", () => {
-    const m = L.teileZeitanteilig([
-      { ticket: 1, claim: 0, merge: 10, delta: 10 },
-      { ticket: 2, claim: 0, merge: 10 },
-    ]);
-    expect(m.get(1)).toBe(5);
+    const m = L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 10 }, { ticket: 2, claim: 0, merge: 10 }], lin);
+    expect(m.get(1)).toBe(2.5);
     expect(m.has(2)).toBe(false);
   });
-  test("ein einzelnes Ticket behält sein Delta, ein Fenster der Länge 0 ebenso", () => {
-    expect(L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 7 }]).get(1)).toBe(7);
-    expect(L.teileZeitanteilig([{ ticket: 1, claim: 4, merge: 4, delta: 3 }]).get(1)).toBe(3);
+  test("ein einzelnes Ticket bekommt den vollen Zuwachs seines Fensters, ein Fenster der Länge 0 sein delta", () => {
+    expect(L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 7 }], lin).get(1)).toBe(5);
+    expect(L.teileZeitanteilig([{ ticket: 1, claim: 4, merge: 4, delta: 3 }], lin).get(1)).toBe(3);
   });
 });
 
@@ -247,6 +255,16 @@ describe("aboKontingent und Abschnitt", () => {
     expect(text).not.toContain("Datenlücken");
     expect(text).toContain("Verlauf 2026-10-15 10:00 bis 2026-10-15 11:00)");
   });
+  test("Überlappung nach Zuwachs je Segment: A 10 bis 12 Uhr, B 11 bis 13 Uhr, die Summe übersteigt den Kontozuwachs nicht", () => {
+    const uhr = (h: number, m = 0) => Date.UTC(2026, 9, 15, h, m);
+    const pk = [punkt(uhr(9, 55), 10), punkt(uhr(11), 14), punkt(uhr(12), 22), punkt(uhr(13, 5), 26)];
+    const t = [zeile(1, { gemergt: new Date(uhr(12)).toISOString() }), zeile(2, { gemergt: new Date(uhr(13)).toISOString() })];
+    const a = L.aboKontingent({ tickets: t, punkte: pk, kaputt: 0, claims: new Map([[1, { claim: uhr(10) }], [2, { claim: uhr(11) }]]), von: uhr(9), bis: uhr(14) });
+    const [x, y] = a.zeilen.map((z) => z.pp ?? NaN);
+    expect(x).toBeCloseTo(7.69, 2);
+    expect(y).toBeCloseTo(7.69, 2);
+    expect((x ?? 0) + (y ?? 0)).toBeLessThanOrEqual(16);
+  });
   test("Überlappung: zwei Tickets im selben Fenster teilen das Delta", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 20)], [zeile(1), zeile(2)]);
     expect(a.zeilen.map((z) => z.pp)).toEqual([5, 5]);
@@ -281,7 +299,7 @@ describe("ladeAboKontingent und Bericht", () => {
   test("liest den Verlauf, holt die Claims in einem Block und wertet aus", () => {
     const aufrufe: string[][] = [];
     const r = K.ladeAboKontingent({ von, bis, tickets }, { gh: (a) => (aufrufe.push(a), claimAntwort), lies: () => verlauf, pfad: "/x/v.jsonl" });
-    expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 3 }]);
+    expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 2.73 }]); // 3 pp über 66 min, davon 60 min im Ticket-Fenster
     expect(aufrufe).toHaveLength(1);
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
