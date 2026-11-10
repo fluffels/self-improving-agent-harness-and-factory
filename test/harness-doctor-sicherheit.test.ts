@@ -55,7 +55,8 @@ describe("pruefeSicherheit: ausgeschaltet ist eine Lücke mit Klickpfad, ohne sc
     expect(luecken.map((x) => x.punkt)).toEqual([punkt]);
     expect(luecken[0].nichtPruefbar).toBeUndefined();
     expect(luecken[0].fix).toMatch(/\S/);
-    expect(luecken[0].fix).not.toMatch(/gh api|PATCH|PUT|POST/);
+    expect(luecken[0].fix).not.toMatch(/PATCH|POST/);
+    if (punkt !== "PVR" && punkt !== "SHA-Pinning") expect(luecken[0].fix).not.toMatch(/gh api|PUT/);
     expect(luecken[0].link).toBe(LINKS[punkt]);
     expect(luecken[0].link).toMatch(/^https:\/\//);
   });
@@ -227,5 +228,83 @@ describe("pruefeSicherheit: Code-Scanning gegen den Spiegel", () => {
     e.privat = true;
     e.regeln = { wert: [] };
     expect(je(e, "Code-Scanning").befund).toMatch(/private Repos auf GitHub Free/);
+  });
+});
+
+describe("pruefeSicherheit: Fix-Texte mit Befehl nach Pre-Flight (L10)", () => {
+  test("PVR nennt den PUT-Befehl und die Pre-Flight-Freigabe", () => {
+    const e = gesund();
+    e.pvr = { wert: { enabled: false } };
+    const x = je(e, "PVR");
+    expect(x.fix).toContain("nach Pre-Flight-Freigabe: gh api -X PUT repos/<repo>/private-vulnerability-reporting");
+  });
+
+  test("SHA-Pinning übernimmt allowed_actions aus der gelesenen Antwort", () => {
+    const e = gesund();
+    e.actions = { wert: { enabled: true, allowed_actions: "selected", sha_pinning_required: false } };
+    const x = je(e, "SHA-Pinning");
+    expect(x.fix).toContain("gh api -X PUT repos/<repo>/actions/permissions -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true");
+  });
+
+  test("SHA-Pinning ohne allowed_actions in der Antwort: Platzhalter statt geratenem Wert", () => {
+    const e = gesund();
+    e.actions = { wert: { sha_pinning_required: false } };
+    expect(je(e, "SHA-Pinning").fix).toContain("-f allowed_actions=<Ist-Wert aus der Antwort>");
+  });
+});
+
+describe("pruefeSicherheit: Persönliches Konto kennt die Schalter nicht (L33)", () => {
+  const aus = (typ: string): Eingabe => {
+    const e = gesund();
+    e.repo = { wert: { owner: { type: typ }, security_and_analysis: sa(["secret_scanning_non_provider_patterns", "secret_scanning_validity_checks"]) } };
+    return e;
+  };
+  test.each(["Non-Provider-Patterns", "Validity Checks"])("User: %s ist OK mit Hinweis", (punkt) => {
+    const x = je(aus("User"), punkt);
+    expect(x.ok).toBe(true);
+    expect(x.hinweis).toContain("für Repos eines persönlichen Kontos nicht angeboten");
+  });
+  test.each(["Non-Provider-Patterns", "Validity Checks"])("Organisation: %s bleibt Lücke mit Secret-Protection-Fix", (punkt) => {
+    const x = je(aus("Organization"), punkt);
+    expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBeUndefined();
+    expect(x.fix).toContain("GitHub Secret Protection nötig");
+  });
+  test("ohne owner.type bleibt es eine Lücke (kein Beleg für ein persönliches Konto)", () => {
+    const e = aus("User");
+    e.repo = { wert: { security_and_analysis: sa(["secret_scanning_validity_checks"]) } };
+    expect(je(e, "Validity Checks").ok).toBe(false);
+  });
+  test("Dependabot Security Updates bleibt auch im persönlichen Konto eine Lücke", () => {
+    const e = gesund();
+    e.repo = { wert: { owner: { type: "User" }, security_and_analysis: sa(["dependabot_security_updates"]) } };
+    expect(je(e, "Dependabot Security Updates").ok).toBe(false);
+  });
+});
+
+describe("pruefeSicherheit: Code-Scanning vergleicht auch die Schwellen (L3)", () => {
+  const spiegelMitSchwelle = { name: "rs", codeScanning: [{ tool: "CodeQL", sicherheitsSchwelle: "high_or_higher", alertSchwelle: "errors" }] };
+  const regel = (sec: string, alert: string) => ({ type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL", security_alerts_threshold: sec, alerts_threshold: alert }] } });
+  test("gleiche Schwellen: gut", () => {
+    const e = gesund();
+    e.spiegel = spiegelMitSchwelle;
+    e.regeln = { wert: [regel("high_or_higher", "errors")] };
+    expect(je(e, "Code-Scanning").ok).toBe(true);
+  });
+  test("abweichende Sicherheits-Schwelle: Lücke", () => {
+    const e = gesund();
+    e.spiegel = spiegelMitSchwelle;
+    e.regeln = { wert: [regel("none", "errors")] };
+    const x = je(e, "Code-Scanning");
+    expect(x.ok).toBe(false);
+    expect(x.befund).toMatch(/security_alerts_threshold.*none.*high_or_higher/);
+  });
+  test("abweichende Alert-Schwelle: Lücke", () => {
+    const e = gesund();
+    e.spiegel = spiegelMitSchwelle;
+    e.regeln = { wert: [regel("high_or_higher", "none")] };
+    const x = je(e, "Code-Scanning");
+    expect(x.ok).toBe(false);
+    expect(x.befund).toMatch(/alerts_threshold.*none.*errors/);
   });
 });
