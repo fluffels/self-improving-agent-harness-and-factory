@@ -16,6 +16,10 @@ const BOARD_QUERY = rawQuery as string;
 const gitHooksPunkt = rawHooks as (a: { lesen: () => string | null }) => Ergebnis;
 const gitHooksStandard = rawHooksStandard as (a: { rootDir: string; exec?: (cmd: string, args: string[], o: unknown) => { status: number | null; stdout: string; error?: Error } }) => () => string | null;
 
+/** Wirft einen beliebigen Wert (auch Nicht-Error): die Lese-Nähte können alles werfen. */
+const wirf = (wert: unknown): never => {
+  throw wert;
+};
 const REPO = "acme/proj";
 const CONFIG = { repo: REPO, boards: [{ rolle: "factory", besitzer: "acme", nummer: 2, projectId: "p_eins" }] };
 const WF = [{ name: "Auto-add sub-issues to project", enabled: true }, { name: "Auto-archive items", enabled: true }];
@@ -122,8 +126,9 @@ describe("Board-Ansicht", () => {
     expect(lauf(antwort({ workflows: { nodes: [null, ...WF] } }))[0].ok).toBe(true);
   });
   test("Lesefehler ohne Error-Objekt (Text) und leere projectId", () => {
-    const r = boardPunkte({ config: CONFIG, lesen: () => { throw "kaputt"; } });
+    const r = boardPunkte({ config: CONFIG, lesen: () => wirf("kaputt") });
     expect(r[0].befund).toContain("kaputt");
+    expect(boardPunkte({ config: CONFIG, lesen: () => wirf(null) })[0].nichtPruefbar).toBe(true);
     const leer = lauf(antwort(), { repo: REPO, boards: [{ rolle: "factory", nummer: 2, projectId: "" }] });
     expect(leer[0].nichtPruefbar).toBe(true);
     expect(leer[0].befund).toContain("projectId");
@@ -177,8 +182,9 @@ describe("Git-Hooks", () => {
     expect(p.nichtPruefbar).toBe(true);
     expect(p.befund).toContain("git fehlt");
   });
-  test("Lesefehler als Text statt Error", () => {
-    expect(gitHooksPunkt({ lesen: () => { throw "kaputt"; } }).befund).toContain("kaputt");
+  test("Lesefehler als Text oder null statt Error", () => {
+    expect(gitHooksPunkt({ lesen: () => wirf("kaputt") }).befund).toContain("kaputt");
+    expect(gitHooksPunkt({ lesen: () => wirf(null) }).nichtPruefbar).toBe(true);
   });
   test("echtes git: der Standard liest den gesetzten Wert und meldet ungesetzt als null", () => {
     const wurzel = mkdtempSync(join(tmpdir(), "hooks-"));
