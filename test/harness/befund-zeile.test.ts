@@ -57,7 +57,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.deepEqual([s.ok, s.klasse, s.schutz], [true, "Hypothese", "Sicherheit"]);
   });
   test("ohne Klasse, unbekannte Klasse, falsche Schreibweise", () => {
-    for (const z of ["- [ ] Gate kaputt Beleg: x1", "- [ ] Idee: etwas Beleg: x1", "- [ ] defekt: etwas Beleg: x1"]) assert.equal(gut(z).ok, false, z);
+    for (const z of ["- [ ] Gate kaputt Beleg: x1", "- [ ] Idee: etwas Beleg: x1", "- [ ] defekt: etwas Beleg: x1", "- [ ] Defekt:etwas Beleg: x1"]) assert.equal(gut(z).ok, false, z);
     assert.match(gut("- [ ] Idee: etwas Beleg: x1").fehler ?? "", /unbekannte Klasse/);
     assert.match(gut("- [ ] Gate kaputt Beleg: x1").fehler ?? "", /keine Klasse/);
     assert.match(gut("- [ ] Idee: ohne Beleg").fehler ?? "", /unbekannte Klasse/);
