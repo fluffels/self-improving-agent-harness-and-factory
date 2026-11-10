@@ -472,6 +472,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     }
     // zwei Platzhalter im selben Segment (der Skill nennt `<praefixe.worktree><nr>-lens-r<runde>`)
     assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}<nr>-lens-r<runde>`)), null);
+    assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}<>-lens-r<>`)), null);
   });
 
   test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
