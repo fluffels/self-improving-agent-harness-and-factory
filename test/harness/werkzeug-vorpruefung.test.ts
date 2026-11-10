@@ -369,4 +369,15 @@ describe("User-Scope-Server der Projekt-Config (factory#263 L5, L6)", () => {
     expect(w.unbekannteMcpServer(["mcp__langfuse2__getObservation", "mcp__neu", "mcp__neu__x"], ["langfuse", "playwright"])).toEqual(["langfuse2", "neu"]);
     expect(w.serverAusAgent(agent("Read, mcp__a"))).toEqual(["a"]);
   });
+  test("serverAusRegeln: Namen beginnen und enden nicht mit Unterstrich, Leerraum außen zählt nicht", () => {
+    expect(w.serverAusRegeln(["mcp___x__t", "mcp___x"])).toEqual([]);
+    expect(w.serverAusRegeln(["mcp__a_", "mcp__a_ "])).toEqual([]);
+    expect(w.serverAusRegeln([" mcp__a ", "mcp__b__t "])).toEqual(["a", "b"]);
+  });
+  test("kaputte Config und MCP-Agent: Config-Mangel und der fehlende Server werden beide gemeldet", () => {
+    const m = stub(() => ({ vorpruefung: { userScopeServer: "x" } }));
+    expect(m).toHaveLength(2);
+    expect(m.some((x) => x.text.includes("userScopeServer"))).toBe(true);
+    expect(m.some((x) => x.text.includes("„x“ fehlt") || x.text.includes('"x"'))).toBe(true);
+  });
 });

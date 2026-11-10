@@ -119,6 +119,12 @@ describe("guardListe: Musterliste", () => {
     expect(neu("const g = (a, b) => h(a === b || a !== b);")[0]?.anker.map((a) => a.muster)).not.toContain("Default-Parameter");
   });
 
+  test("Default-Parameter: Vergleiche im Default (<=, >=, !=) sind kein zweiter Anker", () => {
+    for (const z of ["function f(a = b <= c) {\n}", "function f(a = b >= c) {\n}", "function f(a = b != c) {\n}"]) {
+      expect(neu(z)[0]?.anker.map((a) => a.muster).filter((m) => m === "Default-Parameter"), z).toEqual(["Default-Parameter"]);
+    }
+  });
+
   test("Default-Parameter: ungleich (!=) und Zuweisung im Rumpf hinter der Kopfklammer zählen nicht, geschachtelte Klammer im Kopf schon", () => {
     for (const z of ["function f(a) { return g(a != b); }", "function f(a) { x.y = g(a); }", "const f = (a) => { a.b = c(); };", "const s = (o) => (o.x = 1);", "const g = x => y = 1;", "const s = o => (o.x = 1);", "const g = x => h(y = 1);"]) {
       expect(neu(z)[0]?.anker.map((a) => a.muster) ?? [], z).not.toContain("Default-Parameter");
