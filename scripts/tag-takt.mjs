@@ -27,14 +27,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MANIFEST_PFAD as MANIFEST, istVerteilteGanzdatei, manifestAusText, markerEnde, markerStart, wirdVerteilt } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD as MANIFEST, istVerteilteGanzdatei, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
-import { bezieherAus, labelAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { bezieherAus, labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { UPDATE_SCHRITTE, WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { HAKEN_ZEILE } from "./sammelticket-titel.mjs";
 import { gleichesRepo } from "./repo-form.mjs";

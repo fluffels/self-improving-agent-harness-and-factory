@@ -36,3 +36,10 @@ Entscheidung: Option A, weil Punkt 1 der ADR (kein Schreibzugriff) unberührt bl
 - **Repo-Schreibweise (L3):** `--probe` gleicht Repos ohne Groß-/Kleinschreibung ab (`gleichesRepo`), ordnet unter dem Namen der Config zu und erkennt Dubletten in anderer Schreibung (Exit 2).
 - **Haken (L4):** ein Takt-Lauf übernimmt die Haken des offenen Tag-Tickets (`uebernimmHaken`): eine Zeile, die vorher abgehakt war und im neuen Body textgleich vorkommt, bleibt abgehakt; geänderter Text verliert den Haken.
 - **Rückmeldungen (L6):** eine Checklistenzeile verlangt die Sichtung der Rückmeldungen fremder Bezieher über die Meldestelle, je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke“.
+
+## Nachtrag factory#234 (2026-11-10): Probe-Erstbezug in der CI
+
+- **Lücke:** der Trockenlauf der Checkliste (`--entwurf --trocken`) lief von Hand und zeigte nur die Vorschau, nicht ein volles `verifyKompakt`; ein Kern-Budget-Überschuss oder ein toter Kern-Verweis fiel erst im ersten echten Bezieher auf.
+- **Entscheidung:** `scripts/probe-erstbezug.mjs` ersetzt den Handschritt und läuft als CI-Job `Probe-Erstbezug` (`ci.yml`): Fixture-Projekt mit `AGENTS.md` (Kern-Marker, Füll-Block in Größe von `PROJEKT_BLOCK_RAUM`), Sync aus einem lokalen Klon mit lokalem Tag, mechanische Update-Schritte, `verifyKompakt`. Jeder Fund ist rot, eine leere Ergebnisliste nie grün. `PROJEKT_BLOCK_RAUM` ist seitdem lückenlos (`KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` = Gesamtbudget), sonst ließe sich der Negativfall „Kern ein Zeichen über dem Budget“ bei vollem Raum nie auslösen.
+- **Wirkung:** der Job ist kein Required Check (eine Ruleset-Änderung ist ein Pre-Flight-Stopp); Rot wirkt über den Blocker „CI des Commits rot“ im Tag-Ticket (`ciCheckliste`) und den Alarm auf `main` (`alarm-red-main`).
+- **Grenze:** er ersetzt keinen echten Bezieher (keine echten Projekt-Blöcke, kein Projekt-Eigenes, nur JS/TS; andere Profile: factory#224). Die Sync-Warnung `Kontextbudget knapp` ist kein Fund.

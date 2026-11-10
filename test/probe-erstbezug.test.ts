@@ -29,7 +29,7 @@ const P = raw as unknown as {
   baueFixture: (a: { von: string; ziel: string; raum: number; io: Io }) => void;
   fuehreSchritte: (s: Schritt[], io: Io) => { id: string; status: number | null }[];
   main: (argv: string[], io: Io) => { code: number; out: string; err: string };
-  echteNaehte: () => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
+  echteNaehte: (stdio?: string) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
 };
 const B = budgetRaw as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; kernBlockZeichen: (t: string, m: { start: string; ende: string }) => number | null; countChars: (t: string) => number };
 const R = releaseRaw as unknown as { mechanischeSchritte: (q: string) => string[] };
@@ -100,7 +100,7 @@ describe("projektdatei und fixturePfade", () => {
     expect(pkg.scripts.test).toBe("vitest run --passWithNoTests");
     expect(pkg.scripts.a).toBe("b");
     expect(pkg.name).toBe("n");
-    expect(JSON.parse(P.projektdatei({ pfad: "package.json", text: '{"name":"n"}', raum: 0 }) as string).scripts.test).toBe("vitest run --passWithNoTests");
+    expect((JSON.parse(P.projektdatei({ pfad: "package.json", text: '{"name":"n"}', raum: 0 }) as string) as { scripts: Record<string, string> }).scripts.test).toBe("vitest run --passWithNoTests");
   });
 
   it("die Anker-Stubs baut die Probe nicht, jede andere Datei ist eine wörtliche Kopie", () => {

@@ -31,7 +31,7 @@ Entscheidung: C, weil nur der Pull für eigene und fremde Bezieher gleich gilt u
 
 ## Konsequenzen
 
-- Der Trockenlauf der Checkliste läuft gegen den Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch); er deckt Struktur und Kontextgröße der Quelle ab, nicht den Stand eines Beziehers.
+- Der Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch, `scripts/probe-erstbezug.mjs`, seit factory#234 als CI-Job mit vollem `verifyKompakt`) deckt Struktur, Kontextgröße und tote Kern-Verweise der Quelle ab, nicht den Stand eines Beziehers; ein roter CI-Zustand des Tag-Commits blockiert den Tag.
 - Die Fabrik erfährt Probleme eines Beziehers später (erst bei dessen Update), dafür ohne Rechte und Secrets.
 - Das Tag-Ticket schließt, sobald Tag und Release stehen; die Bezieher-Schritte (Claim, Plan-Nachweis, `verify:kompakt`, Migrationen) stehen in der Doku des Tag-Takts als Anleitung für den Bezieher.
 - Jede Gate-Lücke, die ein Bezieher-Fehler offenlegt, wird ein Gate im Kern: der Bezieher meldet, die Fabrik härtet.

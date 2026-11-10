@@ -12,6 +12,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { PROJEKTDATEIEN } from "./harness-doctor-dateien.mjs";
+import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { countChars, KERN_BLOCK_BUDGET, kernBlockZeichen, PROJEKT_BLOCK_RAUM } from "./kontext-budget-lib.mjs";
 import { mechanischeSchritte, UPDATE_SCHRITTE } from "./release-tag-lib.mjs";
 
@@ -19,7 +20,6 @@ import { mechanischeSchritte, UPDATE_SCHRITTE } from "./release-tag-lib.mjs";
 export const PROBE_TAG = "probe-erstbezug";
 /** Die Fixture-Config der Fabrik; im Fixture-Projekt liegt sie als `.factory/projekt.json`. */
 export const FIXTURE_PFAD = "test/fixtures/projekt-probe.json";
-const PROJEKT_CONFIG = ".factory/projekt.json";
 /** Dateien, die der Sync nicht liefert und die der Probe-Erstbezug mit den Projektdateien aus der Quelle übernimmt (ergänzend zu `PROJEKTDATEIEN`). */
 export const ZUSATZ_DATEIEN = Object.freeze(["package-lock.json", ".gitattributes", ".nvmrc", ".gitignore"]);
 /** Anker-Stubs legt der Sync selbst an: diese Projektdateien baut die Probe bewusst nicht. */

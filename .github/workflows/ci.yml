@@ -105,6 +105,34 @@ jobs:
       - name: Audit der Abhängigkeiten (blockt bei high und höher)
         run: npm audit --audit-level=high
 
+  # Probe-Erstbezug (factory#234): baut im Runner-Temp einen Fixture-Bezieher (Fixture-Projekt, AGENTS.md mit Kern-Markern und Projekt-Block in Größe von PROJEKT_BLOCK_RAUM), synct ihn aus einem lokalen Klon
+  # dieses Commits mit lokalem Tag, fährt die mechanischen Update-Schritte und das volle verifyKompakt. Jeder Fund ist rot (Kern-Budget, tote Kern-Verweise): die Fabrik findet sie selbst, auch ohne
+  # bekannten Bezieher. Kein continue-on-error: sonst bliebe der Lauf grün und der Tag-Takt (ciZustand) sähe den Fund nicht. Kein Required Check (Ruleset-Änderung ist ein Pre-Flight-Stopp):
+  # Rot wirkt über den Blocker im Tag-Ticket und den Alarm auf main. Der Job schreibt nirgends (nur Lesen, nur ein lokaler Klon im Temp-Ordner). Grenze: ersetzt keinen echten Bezieher.
+  probe-erstbezug:
+    name: Probe-Erstbezug (Erstbezug mit verifyKompakt)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: node scripts/gate-befehl.mjs install
+
+      - name: Probe-Erstbezug
+        run: node scripts/probe-erstbezug.mjs --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-erstbezug"
+
   # Doku-Aktualitäts-Wächter: gleicht die in der Doku als „offen“ markierten Roadmap-Tickets gegen den echten gh-issue-Status ab und
   # ALARMIERT, wenn ein längst geschlossenes Ticket noch als offen dokumentiert ist. Bewusst nicht in der hermetischen `verify`-Kette:
   # der Abgleich braucht Netz und Token. continue-on-error: nicht blockierend, der rote Schritt bleibt als Alarm sichtbar. Kein `npm ci`
@@ -140,7 +168,7 @@ jobs:
   # entsteht das Issue trotzdem und steht nur nicht garantiert oben.
   alarm-red-main:
     name: Alarm bei rotem main
-    needs: [build-test, security-audit]
+    needs: [build-test, security-audit, probe-erstbezug]
     if: failure() && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
