@@ -165,6 +165,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     ...kennzahlenZeilen(vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"),
+    ...(upstream ? ["- **Laufzeiten-Upstream:** Checkliste Punkt 12 (Claude Code und Codex: Releases, Modell-IDs und Preise, Hook- und Frontmatter-Verhalten, Deprecations; Befunde als Zeilen im Harness-Sammelticket)."] : []),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
     `- **Abschluss:** ${abschluss}`,
