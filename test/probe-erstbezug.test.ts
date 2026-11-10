@@ -1,7 +1,7 @@
 /* Probe-Erstbezug (factory#234): reine Teile (Füll-Block, Schrittliste, Urteil), Aufruf-Fehler und die Negativfälle der Kette (Budget, toter Kern-Verweis) gegen einen echten Klon. */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -21,6 +21,7 @@ const P = raw as unknown as {
   projektdatei: (a: { pfad: string; text: string; raum: number; overlay?: Record<string, unknown> }) => string | null;
   fixturePfade: () => string[];
   kindUmgebung: (env: Record<string, string | undefined>) => Record<string, string | undefined>;
+  teile: (b: string) => string[];
   probeSchritte: (a: { quelle: string; scratch: string; tag: string; sha: string }) => Schritt[];
   probeUrteil: (e: unknown) => { code: number; zeilen: string[] };
   messZeile: (t: string) => string | null;
@@ -72,7 +73,7 @@ describe("fuellAgentsMd", () => {
   it("wirft, wenn der Raum kleiner als das Gerüst ist oder keine ganze Zahl", () => {
     const min = minRaum();
     expect(() => P.fuellAgentsMd({ raum: min - 1 })).toThrow(/kleiner als das Gerüst/);
-    expect(() => P.fuellAgentsMd({ raum: 1.5 })).toThrow(/kleiner als das Gerüst/);
+    expect(() => P.fuellAgentsMd({ raum: min + 0.5 })).toThrow(/kleiner als das Gerüst/);
   });
 
   it("trägt jeden Marker genau einmal, nur den Titel als Überschrift und keine Steuerbytes, Links oder CR", () => {
@@ -103,6 +104,14 @@ describe("projektdatei und fixturePfade", () => {
     expect((JSON.parse(P.projektdatei({ pfad: "package.json", text: '{"name":"n"}', raum: 0 }) as string) as { scripts: Record<string, string> }).scripts.test).toBe("vitest run --passWithNoTests");
   });
 
+  it("die Config-Mischung ersetzt Nicht-Objekte, Arrays und null, statt sie zu verschmelzen; ohne Overlay bleibt die Fixture unverändert", () => {
+    const cfg = (text: string, overlay?: Record<string, unknown>) => JSON.parse(P.projektdatei({ pfad: ".factory/projekt.json", text, raum: 0, overlay }) as string) as unknown;
+    expect(cfg('{"a":"str"}', { a: { b: 1 } })).toEqual({ a: { b: 1 } });
+    expect(cfg('{"l":{"x":1}}', { l: [1] })).toEqual({ l: [1] });
+    expect(cfg('{"a":{"x":1}}', { a: null })).toEqual({ a: null });
+    expect(cfg('{"x":1}')).toEqual({ x: 1 });
+  });
+
   it("die Anker-Stubs baut die Probe nicht, jede andere Datei ist eine wörtliche Kopie", () => {
     expect(P.projektdatei({ pfad: "docs/referenz/befehle.md", text: "x", raum: 0 })).toBeNull();
     expect(P.projektdatei({ pfad: "docs/referenz/anlaufstellen.md", text: "x", raum: 0 })).toBeNull();
@@ -122,6 +131,12 @@ describe("kindUmgebung", () => {
   it("entfernt Diff-Basis, Config-Überschreibungen und Vitest-Variablen, behält den Rest", () => {
     const aus = P.kindUmgebung({ FACTORY_DIFF_BASE: "a", FACTORY_PROJEKT_CONFIG: "b", FACTORY_PROJEKT_WURZEL: "c", VITEST: "true", VITEST_POOL_ID: "1", PATH: "/bin", FACTORY_ANDERES: "d" });
     expect(aus).toEqual({ PATH: "/bin", FACTORY_ANDERES: "d" });
+  });
+});
+
+describe("teile", () => {
+  it("zerlegt an beliebigem Leerraum ohne leere Wörter", () => {
+    expect(P.teile("  npm   run\tx ")).toEqual(["npm", "run", "x"]);
   });
 });
 
@@ -221,6 +236,13 @@ describe("aufrufFehler und main", () => {
     expect(f(["--quelle", "/q", "--scratch", "/s"], io({ kopf: null })).code).toBe(2);
   });
 
+  it("liegt der Scratch in der Quelle? Ein Ordner namens ..x darin zählt dazu, ein Nachbar und ein Elternordner nicht", () => {
+    expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/q/..x"], io()).text).toMatch(/liegt in der Quelle/);
+    expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/q/a/b"], io()).text).toMatch(/liegt in der Quelle/);
+    expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/"], io()).text).toBeUndefined();
+    expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/q2"], io()).text).toBeUndefined();
+  });
+
   it("ein Scratch neben der Quelle ist gültig", () => {
     expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/qq"], io())).toEqual({ quelle: resolve("/q"), scratch: resolve("/qq") });
   });
@@ -309,6 +331,39 @@ describe("echte Nähte", () => {
       expect(n.istGitRepo(dir)).toBe(true);
       spawnSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
       expect(n.kopf(dir)).toMatch(/^[0-9a-f]{40}$/);
+    });
+  });
+
+  it("die Schritte fixture und befehle melden einen Fehler auf stderr und liefern Exit 1; befehle ergänzt die Seite sonst", () => {
+    temp((dir) => {
+      const io = P.echteNaehte("ignore").mitScratch(join(dir, "s")) as { fixture: (s: unknown) => number; befehle: (s: unknown) => number };
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      try {
+        expect(io.fixture({ cwd: join(dir, "b") })).toBe(1);
+        expect(io.befehle({ cwd: join(dir, "b") })).toBe(1);
+        expect(stderr.mock.calls.map((c) => String(c[0])).join("")).toMatch(/fehlt in der Quelle[\s\S]*ENOENT/);
+      } finally {
+        stderr.mockRestore();
+      }
+      mkdirSync(join(dir, "b", "docs", "referenz"), { recursive: true });
+      writeFileSync(join(dir, "b", "docs", "referenz", "befehle.md"), "# Befehle\n");
+      writeFileSync(join(dir, "b", "package.json"), '{"scripts":{"a":"x"}}');
+      expect(io.befehle({ cwd: join(dir, "b") })).toBe(0);
+      expect(readFileSync(join(dir, "b", "docs", "referenz", "befehle.md"), "utf8")).toBe("# Befehle\n\n## Befehle des Probe-Projekts\n\n- `npm run a`\n");
+    });
+  });
+
+  it("das Skript endet bei einer Quelle ohne Projektdateien rot mit Exit 1 und nennt den Schritt (Direktaufruf, nie grün)", () => {
+    temp((dir) => {
+      const q = join(dir, "q");
+      mkdirSync(q);
+      spawnSync("git", ["init", "-q", "-b", "main", q]);
+      spawnSync("git", ["-C", q, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
+      const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "probe-erstbezug.mjs"), "--quelle", q, "--scratch", join(dir, "s")], { encoding: "utf8" });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toMatch(/--- klon[\s\S]*--- fixture[\s\S]*ROT fixture: Exit 1/);
+      expect(r.stdout).not.toMatch(/übersprungen|GRÜN/i);
+      expect(r.stderr).toMatch(/fehlt in der Quelle/);
     });
   });
 

@@ -7,9 +7,10 @@
 // der Probe-Erstbezug ersetzt keinen echten Bezieher. Die Sync-Warnung `Kontextbudget knapp` ist kein Fund (factory#220).
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { fehlerText } from "./gh-cli.mjs";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { PROJEKTDATEIEN } from "./harness-doctor-dateien.mjs";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
@@ -87,7 +88,7 @@ export function kindUmgebung(env) {
   return Object.fromEntries(Object.entries(env).filter(([k]) => !GESPERRTE_UMGEBUNG.includes(k) && !k.startsWith("VITEST")));
 }
 
-const teile = (befehl) => befehl.split(/\s+/u).filter(Boolean);
+export const teile = (befehl) => befehl.split(/\s+/u).filter(Boolean);
 
 /**
  * Pur: die geordnete Schrittliste `[{ id, argv, cwd, kritisch }]` (oder `{ id, art: "fixture", cwd }` für den Aufbau der Projektdateien). `kritisch` = ein Rot bricht ab (Aufbau, Sync,
@@ -135,6 +136,12 @@ export function messZeile(text) {
   return `Messung Fixture-AGENTS.md: Kern-Block ${kern} (Budget ${KERN_BLOCK_BUDGET}), Raum ${gesamt - kern} (Soll ${PROJEKT_BLOCK_RAUM}), gesamt ${gesamt} (Budget ${KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM})`;
 }
 
+/** Pur: liegt `pfad` in `ordner` oder ist er es selbst? (`relative` liefert bei einem anderen Laufwerk einen absoluten Pfad: dann nein.) */
+const liegtIn = (ordner, pfad) => {
+  const rel = relative(ordner, pfad);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+};
+
 /** Aufruf-Fehler als Text oder `null`: `--quelle`/`--scratch` Pflicht, Scratch leer und außerhalb der Quelle, Quelle ein Git-Repo, keine Leerzeichen in den Pfaden (die Schrittbefehle sind Wort-Listen). */
 export function aufrufFehler(argv, io) {
   const r = flagsLesen(argv, { quelle: { type: "string" }, scratch: { type: "string" } }, { pflicht: ["quelle", "scratch"] });
@@ -143,8 +150,7 @@ export function aufrufFehler(argv, io) {
   const scratch = resolve(r.werte.scratch);
   if (/\s/u.test(quelle + scratch)) return { text: "Pfade mit Leerzeichen gehen nicht (die Befehle der Schrittliste sind Wort-Listen)" };
   if (!io.istGitRepo(quelle)) return { text: `--quelle ${quelle} ist kein Git-Repo` };
-  const rel = relative(quelle, scratch);
-  if (rel === "" || (!rel.startsWith("..") && !rel.startsWith(sep) && !/^[A-Za-z]:/u.test(rel))) return { text: `--scratch ${scratch} liegt in der Quelle ${quelle}` };
+  if (liegtIn(quelle, scratch)) return { text: `--scratch ${scratch} liegt in der Quelle ${quelle}` };
   if (!io.istLeer(scratch)) return { text: `--scratch ${scratch} ist nicht leer` };
   return { quelle, scratch };
 }
@@ -189,7 +195,7 @@ export function echteNaehte(stdio = "inherit") {
   const lauf = (argv, cwd) => spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio }).status;
   const io = {
     lies,
-    istGitRepo: (p) => existsSync(p) && spawnSync("git", ["-C", p, "rev-parse", "--git-dir"], { stdio: "ignore" }).status === 0,
+    istGitRepo: (p) => spawnSync("git", ["-C", p, "rev-parse", "--git-dir"], { stdio: "ignore" }).status === 0,
     istLeer: (p) => !existsSync(p) || readdirSync(p).length === 0,
     kopf: (p) => {
       const r = spawnSync("git", ["-C", p, "rev-parse", "HEAD"], { encoding: "utf8" });
@@ -207,7 +213,7 @@ export function echteNaehte(stdio = "inherit") {
             writeFileSync(seite, `${readFileSync(seite, "utf8")}${befehleErgaenzung(readFileSync(join(s.cwd, "package.json"), "utf8"))}`);
             return 0;
           } catch (e) {
-            process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+            process.stderr.write(`${fehlerText(e)}\n`);
             return 1;
           }
         },
@@ -216,7 +222,7 @@ export function echteNaehte(stdio = "inherit") {
             baueFixture({ von: join(scratch, "quelle"), ziel: s.cwd, raum: PROJEKT_BLOCK_RAUM, io: { lies, schreibe: (p, t) => (mkdirSync(dirname(p), { recursive: true }), writeFileSync(p, t)) } });
             return 0;
           } catch (e) {
-            process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+            process.stderr.write(`${fehlerText(e)}\n`);
             return 1;
           }
         },

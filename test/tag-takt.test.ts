@@ -260,7 +260,9 @@ describe("CI-Zustand und Body", () => {
     it("rot: Blocker-Zeile, offen, nennt den Commit und dass der Probe-Erstbezug dazugehört", () => {
       expect(zeilen("rot")).toBe("- [ ] BLOCKER: CI des Commits bbbbbbb rot (enthält den Probe-Erstbezug), nicht taggen");
     });
-    it("grün: erledigte Zeile; läuft und unbekannt: offen mit ausstehend (fail-closed)", () => {
+    it("grün: erledigte Zeile; läuft, unbekannt und ein fehlender Zustand: offen mit ausstehend (fail-closed)", () => {
+      expect(T.ciCheckliste(undefined as never, "b".repeat(40))).toBe("- [ ] CI des Commits bbbbbbb ausstehend, nicht taggen, bis grün (Probe-Erstbezug eingeschlossen)");
+      expect(T.ciCheckliste(null as never, "b".repeat(40))).toBe("- [ ] CI des Commits bbbbbbb ausstehend, nicht taggen, bis grün (Probe-Erstbezug eingeschlossen)");
       expect(zeilen("gruen")).toBe("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
       for (const z of ["laeuft", "unbekannt", "irgendwas"]) {
         expect(zeilen(z), z).toBe("- [ ] CI des Commits bbbbbbb ausstehend, nicht taggen, bis grün (Probe-Erstbezug eingeschlossen)");
