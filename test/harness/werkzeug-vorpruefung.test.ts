@@ -373,11 +373,12 @@ describe("User-Scope-Server der Projekt-Config (factory#263 L5, L6)", () => {
     expect(w.serverAusRegeln(["mcp___x__t", "mcp___x"])).toEqual([]);
     expect(w.serverAusRegeln(["mcp__a_", "mcp__a_ "])).toEqual([]);
     expect(w.serverAusRegeln([" mcp__a ", "mcp__b__t "])).toEqual(["a", "b"]);
+    expect(w.serverAusRegeln(["mcp__ a", "mcp__ ", "mcp__\ta__t"])).toEqual([]);
   });
   test("kaputte Config und MCP-Agent: Config-Mangel und der fehlende Server werden beide gemeldet", () => {
     const m = stub(() => ({ vorpruefung: { userScopeServer: "x" } }));
     expect(m).toHaveLength(2);
     expect(m.some((x) => x.text.includes("userScopeServer"))).toBe(true);
-    expect(m.some((x) => x.text.includes("„x“ fehlt") || x.text.includes('"x"'))).toBe(true);
+    expect(m.some((x) => x.text.startsWith("MCP-Server „x“ fehlt"))).toBe(true);
   });
 });
