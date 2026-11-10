@@ -370,7 +370,8 @@ export function blockformNamen(text) {
 }
 
 /** Die Einträge einer einzeiligen Flow-Liste `[a, "b, c", 'd']` (Zeile `k`); mehrzeilig, unbeendetes Quote und Verschachtelung sind nicht lesbar. */
-function flowListe(rest, k) {
+function flowListe(wert, k) {
+  const rest = wert.replace(/^(.*\])[ \t]+#[^\]]*$/, "$1"); // Zeilenkommentar hinter dem schließenden `]`; ein `#` ohne Leerraum davor oder in der Liste bleibt
   if (!rest.endsWith("]")) throw nl(k, "mehrzeilige Flow-Liste");
   const namen = [];
   let s = rest.slice(1, -1);
