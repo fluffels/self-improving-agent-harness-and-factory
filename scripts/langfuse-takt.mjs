@@ -156,6 +156,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
+    `- **Datenbasis:** \`node scripts/factory-kennzahlen.mjs --datenbasis --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\` vor Punkt 1 (Exit 3: Vorbedingung verletzt, Checkliste › Vorbedingung).`,
     `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
