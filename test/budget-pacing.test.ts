@@ -266,6 +266,7 @@ describe("liesSnapshot und CLI", () => {
     expect(B.haengeVerlaufAn(s(77), pfad)).toBe(false);
     const teil = join(neu(), "teil.jsonl");
     expect(B.haengeVerlaufAn({ stand: 1, fiveHour: { pct: 5, resetsAt: 100 } }, teil)).toBe(true);
+    expect(B.haengeVerlaufAn({ stand: 9, fiveHour: { pct: 5, resetsAt: 100 } }, teil)).toBe(false); // gleicher Teil-Snapshot: Dedup trotz fehlendem Fenster
     expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
     expect(B.haengeVerlaufAn({ stand: 2, sevenDay: { pct: 3, resetsAt: 1000 } }, teil)).toBe(true);
     expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
