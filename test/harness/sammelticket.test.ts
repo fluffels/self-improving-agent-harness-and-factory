@@ -116,7 +116,7 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.equal(positionAusAgentsMd("Board-Position 6"), 6);
   });
 
-  test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
+  test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen den Deckel je Lauf und die gewählten Zeilen komplett (#1311, Deckel factory#268)", () => {
     assert.match(agents, /Kommt es dran: je Lauf \*\*Deckel \d+ Zeilen\*\* und `check:diffsize`, diese \*\*komplett\*\*/);
     assert.match(abschnitt, /\*\*Abarbeiten:\*\* je Lauf höchstens der Deckel laut AGENTS\.md/);
     assert.ok(abschnitt.includes(OVERRIDE), "zu große PRs deckt der begründete Override (mit Platzhalter, nicht mit dem Projektpräfix)");
@@ -135,7 +135,7 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 });
 
-describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung aus #1309)", () => {
+describe("Sammelticket: gewählte Zeilen komplett statt halbiert (#1311, ersetzt die Halbierung aus #1309)", () => {
   const agents = lies("AGENTS.md");
   const doc = lies("docs/ticket-reihenfolge.md");
   const abarbeiten = doc.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
@@ -176,7 +176,7 @@ describe("keine Generationsgrenze im Takt (#1687, ADR 0026)", () => {
     .map((f) => `.github/workflows/${f}`);
   const dateien = ["scripts/sammelticket-anlegen.mjs", ...workflows, "docs/ticket-reihenfolge.md", "docs/referenz/befehle.md", "docs/harness-glossar.md"];
 
-  test("Skript, Workflows und Sammelticket-Doku kennen keine Zeilengrenze und kein --generation", () => {
+  test("Skript, Workflows und Sammelticket-Doku kennen keine Generationsgrenze und kein --generation", () => {
     for (const f of dateien) assert.doesNotMatch(lies(f), VERBOTEN, f);
   });
 

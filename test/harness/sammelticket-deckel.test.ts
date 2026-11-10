@@ -44,6 +44,7 @@ const ZIEHT_REST_REIN = [
   /\*\*komplett\*\* \(kein Rest/,
   /alle Zeilen in einem PR/,
   /keine Zeilengrenze/,
+  /Nachzügler setzt du selbst um/,
 ];
 export const ziehtRestInDenPR = (text: string): boolean => ZIEHT_REST_REIN.some((m) => m.test(text));
 
@@ -78,9 +79,13 @@ describe("Sammelticket-Deckel: Zahl nur in AGENTS.md (factory#268)", () => {
     const abarbeiten = doc.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
     assert.ok(abarbeiten.includes("Folge-Sammelticket"));
     assert.ok(abarbeiten.includes("nie Teil desselben PR"));
-    assert.match(lies(".claude/agents/factory-planer.md"), /`DECKEL: L<a>–L<b> \| REST: L<c>, …`/);
+    const planer = lies(".claude/agents/factory-planer.md");
+    assert.match(planer, /`DECKEL: L<a>–L<b> \| REST: L<c>, …`/);
+    assert.match(planer, /der Rest geht ins Folge-Sammelticket/);
     const umsetzer = lies(".claude/agents/factory-umsetzer.md");
     assert.match(umsetzer, /`DECKEL`/);
+    assert.match(umsetzer, /`REST`/);
+    assert.match(umsetzer, /nie in diesen PR/);
     assert.match(umsetzer, /Folge-Sammelticket/);
     assert.match(agents, /Rest und Neues ins Folge-Sammelticket/);
   });
@@ -100,6 +105,7 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "zwar **komp" + "lett** (kein Rest; zu groß",
       "alle Zeilen " + "in einem PR",
       "Es hat " + "keine Zeilengrenze",
+      "(einen Nachzügler " + "setzt du selbst um)",
     ]) {
       assert.ok(ziehtRestInDenPR(alt), alt);
     }

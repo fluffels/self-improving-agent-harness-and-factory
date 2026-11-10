@@ -8,11 +8,11 @@ Seit der Abschaffung der Generationsgrenze wachsen Sammel-PRs mit dem Rückstau.
 
 | PR (Ticket) | Zeilen | Dateien | Diff | runden | Blocker arch/req/test | Override |
 | --- | --- | --- | --- | --- | --- | --- |
-| #266 (factory#260) | 16 | 49 | +1090/−90 | 3 | 0/3/8 | ja |
+| #266 (factory#260) | 17 | 49 | +1090/−90 | 3 | 0/3/8 | ja |
 | #264 (factory#247) | 34 | 80 | +1929/−182 | 5 | 1/4/5 | ja |
 | #251 (factory#238) | 31 | 71 | +1132/−225 | 4 plus 1 Zusatzpass | 0/1/4 | ja |
 | #250 (factory#220) | 58 | 96 | +1522/−283 | 2 | 1/4/5 | ja |
-| #261 (factory#258, Vergleich) | n. e. | 14 | +253/−21 | 2 und 3 | n. e. | nein |
+| #261 (factory#258, Vergleich) | nicht erhoben | 14 | +253/−21 | 2 und 3 | 1/0/3 | nein |
 
 Die Dateizahlen sind `changedFiles` des PR (das Ticket nennt 71–102; die Abweichung ist eine andere Zählung, nicht nachgeprüft). Die Review-Pässe wuchsen mit der Breite (4–5 bei 31–34 Zeilen gegenüber 2–3 bei 14 Dateien), `check:diffsize` ist per Override Dauerzustand, ein Lauf dauert laut Messung des Tickets 80–120 min und kostet 20–33 $ (Untergrenze, ein Ein-Zeilen-Ticket 3,5 $ und 27 min).
 
@@ -30,7 +30,7 @@ Die Dateizahlen sind `changedFiles` des PR (das Ticket nennt 71–102; die Abwei
 
 ## Konsequenzen
 
-- **Gegenseite:** jeder PR trägt feste Kosten (laut Laufzeitanteilen verify 32 %, Review 25 %, CI 21 %; Untergrenze 3,5 $ und 27 min je Lauf). Mehr, kleinere Läufe zahlen diese öfter, und es droht Rückstau, wenn mehr Zeilen hereinkommen, als ein Lauf schafft. Dagegen stehen kürzere, billigere Reviews je Lauf. Dass die Kosten je Zeile steigen, ist eine Hypothese, die die Re-Evaluierung misst.
+- **Gegenseite:** jeder PR trägt feste Kosten (Untergrenze 3,5 $ und 27 min je Lauf laut Ticket; die Anteile von verify, Review und CI an der Laufzeit sind im Plan genannt, nicht nachgemessen). Mehr, kleinere Läufe zahlen diese öfter, und es droht Rückstau, wenn mehr Zeilen hereinkommen, als ein Lauf schafft. Dagegen stehen kürzere, billigere Reviews je Lauf. Je Zeile sind größere Läufe gemessen billiger (docs/model-routing.md, Messung der Sammeltickets: ab 12 Zeilen im Median 0,35 $ je Zeile gegenüber 0,43 $ insgesamt, weil sich die festen PR-Kosten verteilen); dass kleinere Läufe je Zeile teurer werden, ist damit belegt als Richtung, die Größe misst die Re-Evaluierung.
 - **Takt:** mehr, kleinere Läufe über der Schwelle; ein Rest unter 10 Kommentaren wartet auf neue Befunde, ab 10 wird nach dem Merge sofort geholt.
 - **Gruppen** bleiben unverändert; unter dem Deckel ist offen, ob sie sich lohnen.
 
