@@ -1,6 +1,5 @@
 /* Werkzeug-Vorprüfung (factory#260 L7): Bewertung und Prüfungen ohne Direktaufruf (Einstiegsskripte importieren nicht voneinander); der Einstieg ist werkzeug-vorpruefung.mjs.
- * Ändert nichts, führt nur die deklarierten Prüfbefehle aus (in der Repo-Wurzel, 10 s Frist).
- * Bekannte Grenze: USER_SCOPE_MCP_SERVER ist eine feste Kern-Konstante; ein Bezieher mit eigenem User-Scope-Server hat keinen Config-Weg (bei belegtem Bedarf ein Config-Schlüssel). */
+ * Ändert nichts, führt nur die deklarierten Prüfbefehle aus (in der Repo-Wurzel, 10 s Frist). */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,16 +7,26 @@ import { fileURLToPath } from "node:url";
 import { frontmatterBlock } from "./skill-pfade.mjs";
 import { ladeProjektConfig, vorpruefungAus } from "./projekt-config-lib.mjs";
 
-/** MCP-Server, die im User-Scope liegen und darum nie in `.mcp.json` stehen (docs/model-routing.md nennt sie). */
+/** Kern-Basis der MCP-Server im User-Scope, die nie in `.mcp.json` stehen (docs/model-routing.md nennt sie); die Projekt-Config ergänzt per `vorpruefung.userScopeServer`. */
 export const USER_SCOPE_MCP_SERVER = ["langfuse"];
 export const BEFEHL_FRIST_MS = 10_000;
 export const USAGE = "Aufruf: node scripts/werkzeug-vorpruefung.mjs";
 
-/** Pur: die Server-Namen aus den `mcp__<server>__…`-Einträgen der `tools:`-Zeile eines Agent-Textes. */
+/** Pur: die Server-Namen aus Regeln der Form `mcp__<server>__<tool>` oder `mcp__<server>` (ohne Tool, allow-Form); andere Regeln zählen nicht, jeder Server einmal. */
+export function serverAusRegeln(regeln) {
+  const namen = regeln.map((r) => /^\s*mcp__([^_\s](?:\S*?[^_\s])??)(?:__\S*)?\s*$/.exec(r)?.[1]).filter(Boolean);
+  return [...new Set(namen)];
+}
+
+/** Pur: Server aus `regeln`, die nicht in `bekannt` stehen. */
+export function unbekannteMcpServer(regeln, bekannt) {
+  return serverAusRegeln(regeln).filter((s) => !bekannt.includes(s));
+}
+
+/** Pur: die Server-Namen aus den `mcp__<server>[__<tool>]`-Einträgen der `tools:`-Zeile eines Agent-Textes. */
 export function serverAusAgent(text) {
   const zeile = /^tools:(.*)$/m.exec(frontmatterBlock(text) ?? "")?.[1] ?? "";
-  const namen = zeile.split(",").map((t) => /^\s*mcp__(\S+?)__/.exec(t)?.[1]).filter(Boolean);
-  return [...new Set(namen)];
+  return serverAusRegeln(zeile.split(","));
 }
 
 /** Pur: Mängel für Server, die weder in `.mcp.json` (`projekt`, Liste der Schlüssel) noch im User-Scope stehen. `agenten`: `[{ datei, text }]`. */
@@ -29,7 +38,7 @@ export function bewerteMcp({ agenten, projekt, userScope = USER_SCOPE_MCP_SERVER
   }
   return [...fehlend].map(([server, dateien]) => ({
     text: `MCP-Server „${server}“ fehlt: ${dateien.join(", ")} nennt mcp__${server}__-Werkzeuge, aber .mcp.json hat keinen Eintrag „${server}“`,
-    fix: `den Server „${server}“ in .mcp.json eintragen (Vorlage: .mcp.json der Factory; ein User-Scope-Server steht in USER_SCOPE_MCP_SERVER)`,
+    fix: `den Server „${server}“ in .mcp.json eintragen (Vorlage: .mcp.json der Factory; ein User-Scope-Server steht in vorpruefung.userScopeServer der Projekt-Config)`,
   }));
 }
 
@@ -70,7 +79,7 @@ export function laufeBefehl(befehl, fristMs = BEFEHL_FRIST_MS, cwd = undefined) 
 }
 
 /** Mängel der Projekt-Befehle (`vorpruefung.befehle`); der Runner wird injiziert und läuft in `root`. */
-export function bewerteBefehle({ befehle, laufe, root = undefined }) {
+export function bewerteBefehle({ befehle, laufe, root }) {
   return befehle.flatMap(({ name, befehl }) => {
     const r = laufe(befehl, BEFEHL_FRIST_MS, root);
     return r.ok ? [] : [{ text: `Werkzeug „${name}“ nicht bereit: ${befehl.join(" ")} → ${r.grund}`, fix: `„${name}“ installieren oder starten, dann ${befehl.join(" ")} prüfen` }];
@@ -106,14 +115,17 @@ function enginesNode(root, lies) {
 export function pruefeWerkzeuge({ root, lies = (p) => readFileSync(p, "utf8"), liste = (p) => readdirSync(p), ist = process.versions.node, config, laufe = laufeBefehl }) {
   const maengel = [];
   const projekt = mcpServerSchluessel(root, lies, maengel);
-  maengel.push(...bewerteMcp({ agenten: agentenTexte(root, lies, liste), projekt }));
   maengel.push(...bewerteNode({ ist, nvmrc: lesen(root, ".nvmrc", lies), engines: enginesNode(root, lies) }));
+  let userScopeServer = [];
   try {
-    maengel.push(...bewerteBefehle({ befehle: vorpruefungAus(config).befehle, laufe, root }));
+    const vorpruefung = vorpruefungAus(config);
+    userScopeServer = vorpruefung.userScopeServer;
+    maengel.push(...bewerteBefehle({ befehle: vorpruefung.befehle, laufe, root }));
   } catch (e) {
     const [text, fix] = String(e.message).split("\nFix: ");
     maengel.push({ text, fix: fix ?? "den Block vorpruefung der Projekt-Config korrigieren" });
   }
+  maengel.push(...bewerteMcp({ agenten: agentenTexte(root, lies, liste), projekt, userScope: [...USER_SCOPE_MCP_SERVER, ...userScopeServer] }));
   return maengel;
 }
 

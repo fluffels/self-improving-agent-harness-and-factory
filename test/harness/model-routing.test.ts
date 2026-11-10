@@ -85,11 +85,11 @@ import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 import * as checkBasis from "../../scripts/check-basis.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+import { ROLLEN_PFADE, vorpruefungAus } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { LANGFUSE_LESE_TOOLS as LESE_TOOLS_ROH } from "../../scripts/langfuse-zugang.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { USER_SCOPE_MCP_SERVER } from "../../scripts/werkzeug-vorpruefung.mjs";
+import { USER_SCOPE_MCP_SERVER, unbekannteMcpServer } from "../../scripts/werkzeug-vorpruefung.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
@@ -141,12 +141,6 @@ function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: str
 function userScopeServer(md: string): string[] {
   const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n.]*)/.exec(md)?.[1] ?? "";
   return [...zeile.matchAll(/`([\w-]+)`/g)].map((m) => m[1]);
-}
-
-/** Server-Namen aus `mcp__<server>[__tool]`-Regeln, die weder in .mcp.json noch als User-Scope-Server bekannt sind. */
-function unbekannteServer(regeln: string[], bekannt: string[]): string[] {
-  const namen = regeln.filter((r) => r.startsWith("mcp__")).map((r) => r.split("__")[1]);
-  return [...new Set(namen)].filter((n) => !bekannt.includes(n));
 }
 
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
@@ -654,7 +648,8 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
       regeln.push(...(frontmatter(read(`.claude/agents/${f}`)).tools ?? "").split(",").map((t) => t.trim()));
     }
-    assert.deepEqual(unbekannteServer(regeln, [...projekt, ...userScope]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
+    const ausConfig = (vorpruefungAus(projektConfig()) as { userScopeServer: string[] }).userScopeServer;
+    assert.deepEqual((unbekannteMcpServer as (r: string[], b: string[]) => string[])(regeln, [...projekt, ...userScope, ...ausConfig]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
   });
 
   test("Erkennung greift wirklich (Red-Green): Langfuse-Regeln gegen die Quelle LANGFUSE_LESE_TOOLS", () => {
@@ -666,9 +661,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     assert.deepEqual(langfuseAbweichungen([`${LF_PRAEFIX}createX`], false), ["zusätzliches Tool createX"]);
   });
 
-  test("Erkennung greift wirklich (Red-Green): ein umbenannter Server fällt auf", () => {
-    assert.deepEqual(unbekannteServer(["mcp__langfuse__getObservation", "mcp__playwright", "Bash(npm:*)"], ["langfuse", "playwright"]), []);
-    assert.deepEqual(unbekannteServer(["mcp__langfuse2__getObservation"], ["langfuse", "playwright"]), ["langfuse2"]);
+  test("Erkennung greift wirklich (Red-Green): die Doku-Zeile der User-Scope-Server wird gelesen (die Server-Erkennung selbst: werkzeug-vorpruefung.test.ts)", () => {
     assert.deepEqual(userScopeServer("- User-Scope-MCP-Server, deren Namen das Repo voraussetzt: `langfuse`, `x`."), ["langfuse", "x"]);
     assert.deepEqual(userScopeServer("nichts"), []);
   });
