@@ -15,6 +15,7 @@
  * (darüber hinaus fail-open für das Label, fail-closed für das Aufräumen).
  * Je Nummer ein Urteil (`beurteileClaim`, pur):
  *   unbekannt        GitHub-Daten fehlen: keine Aktion (fail-closed).
+ *   geloescht        GitHub meldet das Issue als NOT_FOUND (gelöscht oder übertragen): Zeile `GELÖSCHT` mit Worktree-Pfad und Weg von Hand, nichts wird entfernt, kein Exit 2.
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
@@ -96,6 +97,7 @@ const alleWorktrees = (c) => (c.worktree ? [c.worktree, ...(c.weitereWorktrees ?
 export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTIV_MS }) {
   const ohneAktion = { worktree: false, lock: false };
   const ergebnis = (urteil, grund, aktion = ohneAktion) => ({ urteil, grund, aktion });
+  if (c.geloescht) return ergebnis("geloescht", "Issue nicht mehr auffindbar (gelöscht oder übertragen), nichts wird entfernt");
   if (!c.issue) return ergebnis("unbekannt", "GitHub-Daten fehlen (keine Aktion)");
   if (c.lock === "unlesbar") return ergebnis("lock-unlesbar", "Lock unlesbar, nie löschen (von Hand prüfen)");
   const lz = c.lebenszeichenMs;
@@ -152,6 +154,12 @@ export function issueAus(knoten) {
     labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
     prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
   };
+}
+
+/** Pur: die Aliase (`i<k>`), die die Antwort als `NOT_FOUND` meldet (Pfad `repository.<alias>`); ein `NOT_FOUND` ohne Pfad zählt nicht (kein Alias zuordenbar). */
+export function nichtGefundeneAliase(antwort) {
+  const fehler = Array.isArray(antwort?.errors) ? antwort.errors : [];
+  return new Set(fehler.filter((x) => x?.type === "NOT_FOUND" && x.path?.[0] === "repository" && typeof x.path[1] === "string").map((x) => x.path[1]));
 }
 
 /** Eine Abfrage ausführen; ein unbekanntes Issue (`NOT_FOUND`) gilt als Teilantwort, jeder andere Fehler wirft. */
@@ -235,11 +243,16 @@ export function sammle(deps) {
   );
   const nummern = [...new Set([...locks.keys(), ...ticketWorktrees.map((b) => ticketAusRef(b.pfad, namen)), ...refs.map((r) => r.nr), ...deps.zugewiesen()])].sort((a, b) => a - b);
   const issues = new Map();
+  const geloescht = new Set();
   let viewer = null;
   for (const b of aliasAbfragen(nummern)) {
     const antwort = frageGraphql(deps, b.query);
     viewer = antwort?.data?.viewer?.login ?? viewer;
-    b.nummern.forEach((nr, k) => issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`])));
+    const weg = nichtGefundeneAliase(antwort);
+    b.nummern.forEach((nr, k) => {
+      issues.set(nr, issueAus(antwort?.data?.repository?.[`i${k}`]));
+      if (weg.has(`i${k}`) && !issues.get(nr)) geloescht.add(nr);
+    });
   }
   const claims = nummern.map((nr) => {
     const eigene = ticketWorktrees.filter((b) => ticketAusRef(b.pfad, namen) === nr).map((b) => worktreeMitStand(deps, b));
@@ -251,6 +264,7 @@ export function sammle(deps) {
     return {
       nr,
       viewer,
+      geloescht: geloescht.has(nr),
       issue: issue && { zustand: issue.zustand, assignees: issue.assignees },
       prs: issue?.prs ?? [],
       festgefahren: hatLabel(issue, deps.festgefahrenLabel),
@@ -330,6 +344,15 @@ function raeumeAuf(deps, c, urteil, lockPfad, hauptcheckout) {
   return { ok: true, zeile: `AUFGERAEUMT #${c.nr}: ${getan.join(", ")} (${urteil.grund})` };
 }
 
+/** Die Ausgabezeile zu einem gelöschten Issue: mit Worktree dessen Pfad und der Weg zum Entfernen von Hand. Pur. */
+export function geloeschtZeile(c) {
+  const kopf = `GELÖSCHT #${c.nr}: Issue nicht mehr auffindbar (gelöscht oder übertragen)`;
+  if (!c.worktree) return kopf;
+  const w = c.worktree.pfad;
+  const zweig = c.worktree.branch ? ` && git branch -D ${c.worktree.branch}` : "";
+  return `${kopf}, Worktree ${w} bleibt; Weg: git worktree remove ${w}${zweig} nach Prüfung`;
+}
+
 const aufrufFehler = (fehler) => `✖ claims-pruefen: ${fehler}
 Aufruf: claims-pruefen [--json] [--stunden <n>]`;
 const ergebnisAus = (code, out = "", err = "") => ({ code, out: out ? `${out}\n` : "", err: err ? `${err}\n` : "" });
@@ -371,7 +394,8 @@ export function fuehreAus(argv, depsOderFabrik) {
     const h = stundenSeit(stand.jetzt, c.lebenszeichenMs);
     zeilen.push(`WIEDERAUFNAHME #${c.nr}: ${urteil.grund}, letztes Lebenszeichen ${iso(c.lebenszeichenMs) ?? "unbekannt"}${h === null ? "" : ` (vor ${h} h)`}; Weg: node scripts/ticket-lock.mjs claim ${c.nr} --wiederaufnahme, dann Fortsetzungsauftrag`);
   }
-  for (const { claim: c, urteil } of urteile.filter((u) => !["aufraeumbar", "verwaist"].includes(u.urteil.urteil))) zeilen.push(`BEHALTEN #${c.nr}: ${urteil.urteil}, ${urteil.grund}`);
+  for (const { claim: c } of urteile.filter((u) => u.urteil.urteil === "geloescht")) zeilen.push(geloeschtZeile(c));
+  for (const { claim: c, urteil } of urteile.filter((u) => !["aufraeumbar", "verwaist", "geloescht"].includes(u.urteil.urteil))) zeilen.push(`BEHALTEN #${c.nr}: ${urteil.urteil}, ${urteil.grund}`);
   return ergebnisAus(code, zeilen.join("\n"));
 }
 
