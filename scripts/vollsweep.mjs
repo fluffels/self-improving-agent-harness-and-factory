@@ -307,7 +307,7 @@ export function lauf(argv, { lies, schreibe, spawn }) {
   const zaehler = { rot: 0, grün: 0, ungültig: 0 };
   const zeilenAus = [`vollsweep: ${plan.length} Mutationen in ${r.werte.datei} gegen ${r.werte.test}`];
   for (const m of plan) {
-    let ergebnis = "ungültig";
+    let ergebnis;
     try {
       if (!m.ungueltig) schreibe(datei, original.slice(0, m.von) + m.ersatz + original.slice(m.bis));
       ergebnis = bewerte(ctx, m);

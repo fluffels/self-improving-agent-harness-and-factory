@@ -27,7 +27,7 @@ interface Deps {
   spawn: (cmd: string, args: string[], opt: { cwd: string }) => Spawn;
 }
 const sweep = roh as unknown as {
-  regexLiterale: (text: string) => { von: number; bis: number; quelle: string; flags: string }[];
+  regexLiterale: (text: string) => { von: number; bis: number; zeile: number; quelle: string; flags: string }[];
   mutationenRegex: (quelle: string, flags: string) => Mut[];
   mutationenBedingung: (zeile: string) => { von: number; bis: number; such: string; ersatz: string }[];
   regexUngueltig: (quelle: string, flags: string) => boolean;
@@ -45,14 +45,14 @@ describe("regexLiterale", () => {
     const l = regexLiterale(text);
     expect(l).toHaveLength(1);
     expect(l[0]).toMatchObject({ quelle: "a+", flags: "gi" });
-    expect(text.slice(l[0]!.von, l[0]!.bis)).toBe("/a+/gi");
-    expect(l[0]!.zeile).toBe(1);
+    expect(text.slice(l[0].von, l[0].bis)).toBe("/a+/gi");
+    expect(l[0].zeile).toBe(1);
   });
   test("Zeilennummer und Offset stimmen in späteren Zeilen; Kommentarzeilen (//, /*, *) bleiben außen", () => {
     const text = "x();\n// a = /c1/;\n  /* a = /c2/;\n * a = /c3/;\nconst r = /ok/;";
     const l = regexLiterale(text);
-    expect(l.map((x) => [x.zeile, x.quelle])).toEqual([[5, "ok"]]);
-    expect(text.slice(l[0]!.von, l[0]!.bis)).toBe("/ok/");
+    expect(l.map((x) => `${x.zeile}:${x.quelle}`)).toEqual(["5:ok"]);
+    expect(text.slice(l[0].von, l[0].bis)).toBe("/ok/");
   });
   test("ein Kommentar hinter dem Code oder `//` im String macht die Zeile nicht zur Kommentarzeile", () => {
     expect(regexLiterale("const r = /x/; // Hinweis").map((x) => x.quelle)).toEqual(["x"]);
@@ -146,7 +146,7 @@ describe("mutationenBedingung", () => {
   const ersetzt = (zeile: string) => mutationenBedingung(zeile).map((m) => zeile.slice(0, m.von) + m.ersatz + zeile.slice(m.bis));
   test("if (b) wird if (true) und if (false), verschachtelte Klammern bleiben ganz", () => {
     expect(ersetzt("  if (f(a) > (b)) return;")).toEqual(["  if (true) return;", "  if (false) return;"]);
-    expect(mutationenBedingung("  if (a && b) {")[0]!.such).toBe("if (a && b)");
+    expect(mutationenBedingung("  if (a && b) {")[0].such).toBe("if (a && b)");
   });
   test("auch } else if (b) {", () => {
     expect(ersetzt("  } else if (x) {")).toEqual(["  } else if (true) {", "  } else if (false) {"]);
@@ -164,11 +164,11 @@ describe("mutationenBedingung", () => {
     expect(ersetzt("if   (a) b();")).toEqual(["if (true) b();", "if (false) b();"]);
   });
   test("Klammern in Strings zählen nicht (', \", `, auch mit Escape), mehrere if in einer Zeile", () => {
-    expect(mutationenBedingung(String.raw`if (x === ")") y();`)[0]!.such).toBe(String.raw`if (x === ")")`);
-    expect(mutationenBedingung("if (x === ')') y();")[0]!.such).toBe("if (x === ')')");
-    expect(mutationenBedingung("if (x === `)`) y();")[0]!.such).toBe("if (x === `)`)");
-    expect(mutationenBedingung(String.raw`if (x === "\")") y();`)[0]!.such).toBe(String.raw`if (x === "\")")`);
-    expect(mutationenBedingung(String.raw`if (x === "\\") y();`)[0]!.such).toBe(String.raw`if (x === "\\")`);
+    expect(mutationenBedingung(String.raw`if (x === ")") y();`)[0].such).toBe(String.raw`if (x === ")")`);
+    expect(mutationenBedingung("if (x === ')') y();")[0].such).toBe("if (x === ')')");
+    expect(mutationenBedingung("if (x === `)`) y();")[0].such).toBe("if (x === `)`)");
+    expect(mutationenBedingung(String.raw`if (x === "\")") y();`)[0].such).toBe(String.raw`if (x === "\")")`);
+    expect(mutationenBedingung(String.raw`if (x === "\\") y();`)[0].such).toBe(String.raw`if (x === "\\")`);
     expect(mutationenBedingung("if (a) { if (b) c(); }").map((m) => m.such)).toEqual(["if (a)", "if (a)", "if (b)", "if (b)"]);
   });
 });
@@ -213,9 +213,9 @@ describe("lauf", () => {
       spawn: (cmd, args, { cwd }) => {
         aufrufe.push(`${cmd} ${args.join(" ")} @${cwd}`);
         if (cmd === "git") return { status: 0, stdout: git++ === 0 ? (opt.diffVorher ?? "") : (opt.diffNachher ?? ""), stderr: "" };
-        if (args[0] === "--check") return { status: (opt.kaputt ?? []).some((k) => dateien[datei]!.includes(k)) ? 1 : 0, stdout: "", stderr: "SyntaxError" };
-        tests.push(dateien[datei]!);
-        const inhalt = dateien[datei]!;
+        if (args[0] === "--check") return { status: (opt.kaputt ?? []).some((k) => dateien[datei].includes(k)) ? 1 : 0, stdout: "", stderr: "SyntaxError" };
+        tests.push(dateien[datei]);
+        const inhalt = dateien[datei];
         if (inhalt === QUELLE) return { status: opt.basisRot ? 1 : 0, stdout: "", stderr: "" };
         const gruen = (opt.gruen ?? []).some((g) => inhalt.includes(g));
         return { status: gruen ? 0 : 1, stdout: opt.ausgabe ?? "", stderr: "" };
