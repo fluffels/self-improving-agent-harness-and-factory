@@ -517,6 +517,22 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
     expect(r.exit).toBe(2);
     expect(r.bericht.tickets).toEqual([]);
   });
+  test("kontingentLader (factory#285): nur mit Lauf-Ergebnis gerufen, Ergebnis im Bericht, eine Lücke dort ändert den Exit nicht", () => {
+    type K = (e: { von: string; bis: string }, d: { run: Run; claimKarte: typeof claimKarte; kontingentLader?: (e: { tickets: { ticket: number }[] }) => unknown }) => { bericht: { kontingent?: unknown }; exit: number };
+    const mitLader = (raw as unknown as { erstelle: K }).erstelle;
+    const run: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
+    const gesehen: number[][] = [];
+    const r = mitLader({ von, bis }, { run, claimKarte, kontingentLader: (e) => (gesehen.push(e.tickets.map((t) => t.ticket)), { luecke: "weg" }) });
+    expect(gesehen).toEqual([[40]]);
+    expect(r.bericht.kontingent).toEqual({ luecke: "weg" });
+    expect(r.exit).toBe(0);
+    expect(mitLader({ von, bis }, { run, claimKarte }).bericht.kontingent).toBeUndefined();
+    const nie = () => {
+      throw new Error("darf nicht laufen");
+    };
+    const kein: Run = (name) => (name === "token-baseline.mjs" ? nie() : { status: 1, stdout: "", stderr: "x" });
+    expect(mitLader({ von, bis }, { run: kein, claimKarte: nie as never, kontingentLader: nie }).bericht.kontingent).toBeUndefined();
+  });
   test("Ticket ohne Claim in der Karte: Lücke, nicht 0", () => {
     const run: Run = () => ({ status: 0, stdout: lauf([ZEILE({ ticket: 99 })]), stderr: "" });
     expect(erstelle({ von, bis }, { run, claimKarte }).bericht.tickets[0].ergebnis).toEqual({ luecke: "keine Session mit Claim-Zeile" });

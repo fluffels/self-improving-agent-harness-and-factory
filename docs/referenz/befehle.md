@@ -116,11 +116,12 @@ Welche Umgebungsvariable ein Werkzeug liest (quellprojekt#1824, [ADR 0022](../ad
 | `FACTORY_MCP_AUSFALL_STAND` | Kern | Testskript `test/harness/mcp-ausfall.test.ts` | `mcp-ausfall` |
 | `FACTORY_PACING_ZIELQUOTE` | Kern | die Maintainerin (Shell oder `env` in `.claude/settings.local.json`); Testskript `test/budget-pacing.test.ts` | `budget-lib` |
 | `FACTORY_PACING_PROBE_SKRIPT` | Kern | Testskript `test/budget-pacing.test.ts` | `budget-pacing` |
+| `FACTORY_ABO_KONTINGENT_VERLAUF` | Kern | die Maintainerin (optional); Testskripte `test/budget-pacing.test.ts`, `test/statusline.test.ts` | `budget-lib` |
 | `FACTORY_RATE_LIMITS_SNAPSHOT` | Kern | Testskripte `test/budget-pacing.test.ts`, `test/statusline.test.ts` | `budget-lib` |
 | `FACTORY_STATUSLINE_DURCHREICHEN` | Kern | Skript `statusline` (Schleifenschutz für die durchgereichte Statusline) | `statusline` |
 | `FACTORY_USER_SETTINGS` | Kern | Testskript `test/statusline.test.ts` | `statusline` |
 | `FACTORY_TEST_FEHLT` | Kern | nie gesetzt (Absenz-Fixture im Testskript `test/harness/mcp-ausfall.test.ts`) | `mcp-ausfall` (Test des Fehlerpfads) |
 
-**Zählung:** 15 Variablen (alle Kern), eine Zeile je Variable.
+**Zählung:** 19 Variablen (alle Kern), eine Zeile je Variable.
 
 Die Override-Variablen der Slice-Gates sind entfallen: dafür gibt es Commit-Zeilen (siehe [agent-harness](../agent-harness.md)).

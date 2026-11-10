@@ -3,8 +3,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterAll, afterEach, describe, expect, test } from "vitest";
 
+// Alle direkten Aufrufe unten erben diesen Verlaufspfad: kein Test schreibt ins echte Home.
+const VERLAUF_DIR = mkdtempSync(join(tmpdir(), "statusline-verlauf-"));
+process.env.FACTORY_ABO_KONTINGENT_VERLAUF = join(VERLAUF_DIR, "verlauf.jsonl");
+afterAll(() => rmSync(VERLAUF_DIR, { recursive: true, force: true }));
 const KOPIE = 'node -e "process.stdin.pipe(process.stdout)"';
 const PAYLOAD = JSON.stringify({
   model: { display_name: "Ä-Modell" },
@@ -22,11 +26,12 @@ function lauf(stdin: string, kommando: string | null, env: Record<string, string
   const settings = join(dir, "settings.json");
   writeFileSync(settings, JSON.stringify(kommando === null ? {} : { statusLine: { type: "command", command: kommando } }));
   const snapshot = join(dir, "snap.json");
+  const verlauf = join(dir, "verlauf.jsonl");
   const r = spawnSync(process.execPath, ["scripts/statusline.mjs"], {
     input: stdin,
-    env: { ...process.env, FACTORY_USER_SETTINGS: settings, FACTORY_RATE_LIMITS_SNAPSHOT: snapshot, FACTORY_STATUSLINE_DURCHREICHEN: "", ...env },
+    env: { ...process.env, FACTORY_USER_SETTINGS: settings, FACTORY_RATE_LIMITS_SNAPSHOT: snapshot, FACTORY_ABO_KONTINGENT_VERLAUF: verlauf, FACTORY_STATUSLINE_DURCHREICHEN: "", ...env },
   });
-  return { code: r.status, out: r.stdout.toString("utf8"), snapshot };
+  return { code: r.status, out: r.stdout.toString("utf8"), snapshot, verlauf };
 }
 
 describe("scripts/statusline.mjs", () => {
@@ -90,6 +95,24 @@ describe("scripts/statusline.mjs", () => {
     expect(r.code).toBe(0);
     expect(r.out).toBe("{kein json");
     expect(existsSync(r.snapshot)).toBe(false);
+  });
+
+  test("Kontingent-Verlauf: gleicher Stand erzeugt keine neue Zeile, geänderter eine, beide Fenster samt Reset stehen drin", () => {
+    const r = lauf(PAYLOAD, null);
+    const zeilen = () => readFileSync(r.verlauf, "utf8").split("\n").filter(Boolean);
+    expect(JSON.parse(zeilen()[0] ?? "")).toMatchObject({ sevenDay: { pct: 34, resetsAt: 1792184400 }, fiveHour: { pct: 12, resetsAt: 1792098000 } });
+    const env = { ...process.env, FACTORY_USER_SETTINGS: join(dir, "settings.json"), FACTORY_RATE_LIMITS_SNAPSHOT: r.snapshot, FACTORY_ABO_KONTINGENT_VERLAUF: r.verlauf };
+    spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: PAYLOAD, env });
+    expect(zeilen()).toHaveLength(1);
+    spawnSync(process.execPath, ["scripts/statusline.mjs"], { input: PAYLOAD.replace('"used_percentage":34', '"used_percentage":35'), env });
+    expect(zeilen()).toHaveLength(2);
+  });
+
+  test("Kontingent-Verlauf nicht schreibbar: Exit 0, Ausgabe byte-gleich, Snapshot trotzdem da", () => {
+    const r = lauf(PAYLOAD, KOPIE, { FACTORY_ABO_KONTINGENT_VERLAUF: VERLAUF_DIR }); // ein Verzeichnis ist nicht beschreibbar
+    expect(r.code).toBe(0);
+    expect(r.out).toBe(PAYLOAD);
+    expect(existsSync(r.snapshot)).toBe(true);
   });
 
   test("Schleifenschutz: im Kind (FACTORY_STATUSLINE_DURCHREICHEN=1) wird nichts durchgereicht", () => {
