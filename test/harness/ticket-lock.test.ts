@@ -1071,6 +1071,24 @@ describe("erzwingen (factory#260, Lock-Übernahme auf Anweisung der Maintainerin
     assert.equal(readdirSync(lockDir()).filter((n) => n.includes("verwaist")).length, 0);
   });
 
+  test("Altformat-Lock mit Klartext-nonce: der Vorgänger-Hash ist der Hash dieser Nonce; sandbox wird übernommen, sonst null", () => {
+    mkdirSync(lockDir(), { recursive: true });
+    writeFileSync(lockDatei5(), `${JSON.stringify({ nr: 5, nonce: "klartext", erstellt: new Date(JETZT).toISOString() })}\n`);
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), sandbox: "box" });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lockJson().erzwungen?.vorherNonceHash, sha("klartext"));
+    assert.equal((lockJson() as unknown as { sandbox: string }).sandbox, "box");
+    rmSync(lockDatei5());
+    assert.equal(M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), sandbox: undefined }).code, 0);
+    assert.equal((lockJson() as unknown as { sandbox: null }).sandbox, null);
+  });
+
+  test("anderer Schreibfehler als EEXIST: Exit 2 mit der Meldung", () => {
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), schreibeNeu: () => { throw Object.assign(new Error("platte voll"), { code: "ENOSPC" }); } });
+    assert.equal(r.code, 2);
+    assert.ok(r.err.includes("platte voll"), r.err);
+  });
+
   test("Umbenennen scheitert: Exit 4, Hinweis nicht von Hand, kein neuer Lock", () => {
     lauf(["claim", "5"]);
     const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), benenneUm: () => { throw new Error("weg"); } });
