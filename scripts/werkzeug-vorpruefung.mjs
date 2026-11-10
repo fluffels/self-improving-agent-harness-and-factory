@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Werkzeug-Vorprüfung (factory#260 L7): fehlt dem Repo ein Werkzeug, das ein Ticketlauf braucht, stoppt der Lauf vor dem Claim,
- * nicht erst nach Plan und Commits (Vorbild: langfuse-vorbedingung.mjs). Rein lesend, ohne Modell-Tokens.
+ * nicht erst nach Plan und Commits (Vorbild: langfuse-vorbedingung.mjs). Ändert nichts, führt nur die deklarierten Prüfbefehle aus; ohne Modell-Tokens.
  *
  *   node scripts/werkzeug-vorpruefung.mjs   Exit 0 = alles da, 1 = Mangel (je Mangel eine `Mangel:`- und eine `Fix:`-Zeile auf stderr), 2 = Aufruffehler
  *

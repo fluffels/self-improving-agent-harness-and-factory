@@ -3,7 +3,12 @@
  * Projekt-Befehle (`vorpruefung.befehle`), Exit-Codes der CLI und die Aufnahme in `codex-vorpruefung`. Dateisystem und Runner sind Stubs.
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/werkzeug-vorpruefung.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -21,7 +26,8 @@ type Werkzeug = {
   versionTeile: (t: string) => number[] | null;
   bewerteNode: (o: { ist: string; nvmrc?: string | null; engines?: string | null }) => Mangel[];
   bewerteBefehle: (o: { befehle: { name: string; befehl: string[] }[]; laufe?: (b: string[], f: number) => Lauf }) => Mangel[];
-  laufeBefehl: (b: string[], f?: number) => Lauf;
+  laufeBefehl: (b: string[], f?: number, cwd?: string) => Lauf;
+  werkzeugMaengel: (o?: Record<string, unknown>) => Mangel[];
   pruefeWerkzeuge: (o: { root: string; lies: (p: string) => string; liste: (p: string) => string[]; ist: string; config: unknown; laufe: (b: string[], f: number) => Lauf }) => Mangel[];
   main: (argv: string[], o?: Record<string, unknown>) => number;
 };
@@ -227,5 +233,87 @@ describe("CLI und Codex", () => {
     out.length = 0;
     codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", werkzeug: () => [] });
     expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.some((m: string) => m.startsWith("Werkzeug-Vorprüfung"))).toBe(false);
+  });
+});
+
+describe("Review-Runde 1 (factory#260): echter Runner, Wurzel als cwd, Signal und EACCES", () => {
+  const temps: string[] = [];
+  afterEach(() => { for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  const tempRoot = () => { const d = realpathSync(mkdtempSync(join(tmpdir(), "werkzeug-"))); temps.push(d); return d; };
+  const node = process.execPath;
+  const block = (befehl: string[]) => ({ vorpruefung: { befehle: [{ name: "Probe", befehl }] } });
+  const posix = process.platform !== "win32";
+
+  test("werkzeugMaengel ohne injiziertes laufe startet den Befehl wirklich (Exit 1 = Mangel, Exit 0 = ok)", () => {
+    const root = tempRoot();
+    const m = w.werkzeugMaengel({ root, lade: () => block([node, "-e", "process.exit(1)"]), ist: "22.23.4" });
+    expect(m).toHaveLength(1);
+    expect(m[0].text).toContain("Werkzeug „Probe“ nicht bereit");
+    expect(m[0].text).toContain("Exit 1");
+    expect(w.werkzeugMaengel({ root, lade: () => block([node, "-e", "process.exit(0)"]), ist: "22.23.4" })).toEqual([]);
+  });
+  test("main ohne injiziertes laufe: Exit 1 bei fehlschlagendem, 0 bei gelingendem Befehl", () => {
+    const root = tempRoot();
+    const stumm = { out: () => {}, err: () => {} };
+    expect(w.main([], { ...stumm, root, lade: () => block([node, "-e", "process.exit(1)"]), ist: "22.23.4" })).toBe(1);
+    expect(w.main([], { ...stumm, root, lade: () => block([node, "-e", "process.exit(0)"]), ist: "22.23.4" })).toBe(0);
+  });
+  test("der Befehl läuft mit der Repo-Wurzel als cwd (werkzeugMaengel reicht root bis spawnSync durch)", () => {
+    const root = tempRoot();
+    const prog = `process.exit(require("fs").realpathSync(process.cwd()) === ${JSON.stringify(root)} ? 0 : 1)`;
+    expect(w.werkzeugMaengel({ root, lade: () => block([node, "-e", prog]), ist: "22.23.4" })).toEqual([]);
+    expect(w.laufeBefehl([node, "-e", prog], 5000, root)).toEqual({ ok: true, grund: "" });
+    expect(w.laufeBefehl([node, "-e", prog], 5000, tempRoot()).ok).toBe(false);
+  });
+  test.skipIf(!posix)("Datei ohne x-Bit: der Grund nennt EACCES statt „Exit null“ (r.error wird ausgewertet; unter Windows läuft der Befehl über die Shell)", () => {
+    const d = tempRoot();
+    const datei = join(d, "ohne-x");
+    writeFileSync(datei, "#!/bin/sh\nexit 0\n");
+    chmodSync(datei, 0o644);
+    const r = w.laufeBefehl([datei]);
+    expect(r.ok).toBe(false);
+    expect(r.grund).not.toBe("Exit null");
+    expect(r.grund).toContain("EACCES");
+  });
+  test.skipIf(!posix)("per Signal beendeter Prozess: eigener Grundtext „Signal <name>“ statt „Exit null“", () => {
+    expect(w.laufeBefehl([node, "-e", "process.kill(process.pid, 'SIGKILL')"])).toEqual({ ok: false, grund: "Signal SIGKILL" });
+  });
+  test("unlesbare Config: der Mangel steht neben den Mängeln der übrigen Prüfungen (kein Abbruch)", () => {
+    const m = w.werkzeugMaengel({ root: "/r", ...fs({ ".claude/agents/u.md": PW }), lade: () => { throw new Error("kaputt\nFix: x"); }, ist: "22.23.4", laufe: () => ok });
+    expect(m.map((x) => x.text)).toEqual(["Projekt-Config nicht lesbar: kaputt", expect.stringContaining("MCP-Server „playwright“ fehlt")]);
+  });
+  test("unlesbare gelistete Agent-Datei: leerer Text, kein Server, kein Absturz", () => {
+    const m = w.pruefeWerkzeuge({ root: "/r", liste: () => ["a.md"], lies: () => { throw new Error("EACCES"); }, ist: "22.23.4", config: {}, laufe: () => ok });
+    expect(m).toEqual([]);
+  });
+  test("bewerteNode: der Fix der .nvmrc trägt kein „>=“, der von engines.node schon", () => {
+    expect(w.bewerteNode({ ist: "22.0.0", nvmrc: "kaputt" })[0].fix).not.toContain(">=");
+    expect(w.bewerteNode({ ist: "22.0.0", engines: "kaputt" })[0].fix).toContain(">=");
+  });
+  test("Regex-Anker: versionTeile und serverAusAgent verlangen den Anfang", () => {
+    expect(w.versionTeile("x22.1.0")).toBeNull();
+    expect(w.serverAusAgent(agent("Bash(mcp__x__y)"))).toEqual([]);
+    expect(w.serverAusAgent(agent("Read,  mcp__x__y"))).toEqual(["x"]);
+  });
+  test("Form des Blocks: ein Eintrag, der kein Objekt ist, ist ein Formfehler und kein TypeError", () => {
+    const f = (v: unknown) => lib.pruefeProjektConfig({ vorpruefung: v }).filter((e) => e.startsWith("vorpruefung"));
+    const erwartet = ["vorpruefung.befehle[0].name muss ein nicht-leerer String sein"];
+    expect(f({ befehle: [null] })).toEqual(erwartet);
+    expect(f({ befehle: ["x"] })).toEqual(erwartet);
+  });
+  test("Einstieg als Prozess: Exit 2 bei unbekanntem Argument und Exit 0 im Repo", () => {
+    const skript = fileURLToPath(new URL("../../scripts/werkzeug-vorpruefung.mjs", import.meta.url));
+    expect(spawnSync(node, [skript, "--x"], { encoding: "utf8" }).status).toBe(2);
+    expect(spawnSync(node, [skript], { encoding: "utf8" }).status).toBe(0);
+  });
+  test("codex-vorpruefung: die Standard-Verdrahtung reicht root und lade an die Werkzeug-Vorprüfung", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, ".claude", "agents"), { recursive: true });
+    writeFileSync(join(root, ".claude", "agents", "u.md"), PW);
+    const out: string[] = [];
+    codex.main([], { out: (s: string) => out.push(s), err: () => {}, root, lade: () => ({ ...(lib.ladeProjektConfig() as object), ...block([node, "-e", "process.exit(1)"]) }) });
+    const maengel = (JSON.parse(out[0]) as { maengel: string[] }).maengel;
+    expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: MCP-Server „playwright“ fehlt"))).toBe(true);
+    expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: Werkzeug „Probe“ nicht bereit"))).toBe(true);
   });
 });

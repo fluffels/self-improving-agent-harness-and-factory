@@ -1,4 +1,6 @@
-/* Werkzeug-Vorprüfung (factory#260 L7): Bewertung und Prüfungen ohne Direktaufruf (Einstiegsskripte importieren nicht voneinander); der Einstieg ist werkzeug-vorpruefung.mjs. */
+/* Werkzeug-Vorprüfung (factory#260 L7): Bewertung und Prüfungen ohne Direktaufruf (Einstiegsskripte importieren nicht voneinander); der Einstieg ist werkzeug-vorpruefung.mjs.
+ * Ändert nichts, führt nur die deklarierten Prüfbefehle aus (in der Repo-Wurzel, 10 s Frist).
+ * Bekannte Grenze: USER_SCOPE_MCP_SERVER ist eine feste Kern-Konstante; ein Bezieher mit eigenem User-Scope-Server hat keinen Config-Weg (bei belegtem Bedarf ein Config-Schlüssel). */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -57,19 +59,20 @@ export function bewerteNode({ ist, nvmrc = null, engines = null }) {
   return mindestens(istTeile, quelle.soll) ? [] : [{ text: `Node ${ist} ist älter als ${quelle.name} (${roh})`, fix: `Node auf mindestens ${quelle.soll.join(".")} heben (etwa per nvm)` }];
 }
 
-/** Führt einen Befehl mit Frist aus: `{ ok, grund }`. Wirft nie. */
-export function laufeBefehl(befehl, fristMs = BEFEHL_FRIST_MS) {
-  const r = spawnSync(befehl[0], befehl.slice(1), { timeout: fristMs, stdio: "ignore", shell: process.platform === "win32" });
+/** Führt einen Befehl mit Frist im Verzeichnis `cwd` (Repo-Wurzel; ohne Angabe das aktuelle) aus: `{ ok, grund }`. Wirft nie. */
+export function laufeBefehl(befehl, fristMs = BEFEHL_FRIST_MS, cwd = undefined) {
+  const r = spawnSync(befehl[0], befehl.slice(1), { timeout: fristMs, stdio: "ignore", shell: process.platform === "win32", cwd });
   if (r.error?.code === "ETIMEDOUT") return { ok: false, grund: `Timeout nach ${fristMs} ms` };
   if (r.error?.code === "ENOENT") return { ok: false, grund: "Programm nicht gefunden (ENOENT)" };
   if (r.error) return { ok: false, grund: r.error.message };
+  if (r.signal) return { ok: false, grund: `Signal ${r.signal}` };
   return r.status === 0 ? { ok: true, grund: "" } : { ok: false, grund: `Exit ${r.status}` };
 }
 
-/** Mängel der Projekt-Befehle (`vorpruefung.befehle`); der Runner wird injiziert. */
-export function bewerteBefehle({ befehle, laufe = laufeBefehl }) {
+/** Mängel der Projekt-Befehle (`vorpruefung.befehle`); der Runner wird injiziert und läuft in `root`. */
+export function bewerteBefehle({ befehle, laufe = laufeBefehl, root = undefined }) {
   return befehle.flatMap(({ name, befehl }) => {
-    const r = laufe(befehl, BEFEHL_FRIST_MS);
+    const r = laufe(befehl, BEFEHL_FRIST_MS, root);
     return r.ok ? [] : [{ text: `Werkzeug „${name}“ nicht bereit: ${befehl.join(" ")} → ${r.grund}`, fix: `„${name}“ installieren oder starten, dann ${befehl.join(" ")} prüfen` }];
   });
 }
@@ -106,7 +109,7 @@ export function pruefeWerkzeuge({ root, lies = (p) => readFileSync(p, "utf8"), l
   maengel.push(...bewerteMcp({ agenten: agentenTexte(root, lies, liste), projekt }));
   maengel.push(...bewerteNode({ ist, nvmrc: lesen(root, ".nvmrc", lies), engines: enginesNode(root, lies) }));
   try {
-    maengel.push(...bewerteBefehle({ befehle: vorpruefungAus(config).befehle, laufe }));
+    maengel.push(...bewerteBefehle({ befehle: vorpruefungAus(config).befehle, laufe, root }));
   } catch (e) {
     const [text, fix] = String(e.message).split("\nFix: ");
     maengel.push({ text, fix: fix ?? "den Block vorpruefung der Projekt-Config korrigieren" });

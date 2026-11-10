@@ -1025,7 +1025,7 @@ describe("erzwingen (factory#260, Lock-Übernahme auf Anweisung der Maintainerin
   const lockJson = () => JSON.parse(readFileSync(lockDatei5(), "utf8")) as { nonceHash: string; erzwungen?: { zeit: string; grund: string; vorherNonceHash: string }; gestoppt?: { verbraucht: string | null } };
 
   test("ohne oder mit leerem oder mehrzeiligem --grund: Exit 2, nichts angelegt", () => {
-    for (const argv of [["erzwingen", "5"], ["erzwingen", "5", "--grund", ""], ["erzwingen", "5", "--grund", "   "], ["erzwingen", "5", "--grund", "a\nb"]]) {
+    for (const argv of [["erzwingen", "5"], ["erzwingen", "5", "--grund", ""], ["erzwingen", "5", "--grund", "   "], ["erzwingen", "5", "--grund", "a\nb"], ["erzwingen", "5", "--grund", "a\rb"]]) {
       const r = lauf(argv, jung);
       assert.equal(r.code, 2, argv.join(" "));
       assert.ok(r.err.includes("--grund"), r.err);
@@ -1090,10 +1090,13 @@ describe("erzwingen (factory#260, Lock-Übernahme auf Anweisung der Maintainerin
   });
 
   test("Umbenennen scheitert: Exit 4, Hinweis nicht von Hand, kein neuer Lock", () => {
-    lauf(["claim", "5"]);
+    const alt = nonceVon(lauf(["claim", "5"]));
     const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), benenneUm: () => { throw new Error("weg"); } });
     assert.equal(r.code, 4);
     assert.match(r.err, NICHT_VON_HAND);
+    assert.match(r.err, /ließ sich nicht beiseite legen/);
+    assert.equal(lockJson().nonceHash, sha(alt), "der alte Lock ist unverändert");
+    assert.equal(lockJson().erzwungen, undefined);
   });
 
   test("Wettlauf: legt ein anderer den Lock zwischen Umbenennen und Anlegen an, Exit 4", () => {

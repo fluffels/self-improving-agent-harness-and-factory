@@ -257,6 +257,14 @@ describe("Abnahme-Ursache (factory#260): Marker-Feld ursache= und Zeilen-Feld ur
   it("Marker mit ungültiger Ursache ist ungültig (unbekannte Klasse, K ohne nicht-erfuellt, doppelt, kaputt)", () => {
     for (const u of ["K2:foo", "K1:umsetzung", "K2:umsetzung,K2:szenario", "K2", "K9:kriterium", "xK2:umsetzung"]) expect(A.parseAbnahmeMarker(Z, `${kopf} ursache=${u} -->`), u).toBeNull();
   });
+  it("zweistellige Nummern: Marker mit K10 und Zeile mit umsetzung:10 sind gültig", () => {
+    const zehn = Array.from({ length: 10 }, (_, i) => ({ k: `K${i + 1}`, wert: i === 9 ? "nicht-erfuellt" : "erfuellt" }));
+    const urteilText = zehn.map((u) => `${u.k}:${u.wert}`).join(",");
+    const m = A.parseAbnahmeMarker(Z, `<!-- ${MARKER} durchgang=2 head=${HEX} urteil=${urteilText} ursache=K10:umsetzung -->`) as { ursache: unknown };
+    expect(m?.ursache).toEqual([{ k: "K10", klasse: "umsetzung" }]);
+    const z = lies(`${Z.abnahme}: head=${HEX} durchgaenge=2 urteil=K1:erfuellt ursachen=umsetzung:10`) as { ursachen: unknown };
+    expect(z.ursachen).toEqual({ umsetzung: 10 });
+  });
   it("formatAbnahmeMarker wirft bei ungültiger Ursache", () => {
     for (const ursache of [[], [{ k: "K2", klasse: "foo" }], [{ k: "K1", klasse: "umsetzung" }]]) expect(() => A.formatAbnahmeMarker(Z, { durchgang: 2, head: HEX, urteil, ursache })).toThrow(/ursache/);
   });
