@@ -369,10 +369,25 @@ export function blockformNamen(text) {
   return { namen: alle.filter((n) => n !== "") };
 }
 
+/** Der Index des ersten `]` außerhalb von Quotes (doppelt mit `\`-Escape, einfach mit `''`), sonst -1. */
+function listenEnde(wert) {
+  let quote = "";
+  for (let i = 0; i < wert.length; i++) {
+    const ch = wert[i];
+    if (quote === '"' && ch === "\\") i++;
+    else if (quote !== "") quote = ch === quote ? "" : quote;
+    else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "]") return i;
+  }
+  return -1;
+}
+
 /** Die Einträge einer einzeiligen Flow-Liste `[a, "b, c", 'd']` (Zeile `k`); mehrzeilig, unbeendetes Quote und Verschachtelung sind nicht lesbar. */
 function flowListe(wert, k) {
-  const rest = wert.replace(/^(.*\])[ \t]+#[^\]]*$/, "$1"); // Zeilenkommentar hinter dem schließenden `]`; ein `#` ohne Leerraum davor oder in der Liste bleibt
-  if (!rest.endsWith("]")) throw nl(k, "mehrzeilige Flow-Liste");
+  const ende = listenEnde(wert);
+  if (ende === -1) throw nl(k, "mehrzeilige Flow-Liste");
+  if (!/^[ \t]*$|^[ \t]+#/.test(wert.slice(ende + 1))) throw nl(k, "Text oder `#` ohne Leerraum hinter der Flow-Liste");
+  const rest = wert.slice(0, ende + 1); // der Zeilenkommentar hinter dem ersten schließenden `]` außerhalb von Quotes fällt weg
   const namen = [];
   let s = rest.slice(1, -1);
   for (;;) {
