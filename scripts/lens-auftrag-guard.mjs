@@ -73,7 +73,7 @@ const HINWEIS =
 function unbekannteLensEndung(text, namen) {
   const wt = escapeRegex(namen.praefixe.worktree);
   const segmente = text.matchAll(new RegExp(String.raw`${wt}(?:\d+|<[^<>\s]*>)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
-  const bekannt = new RegExp(`^${namen.lensNameKern}`);
+  const bekannt = new RegExp(namen.lensNameKern);
   for (const [segment] of segmente) {
     if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
     const erlaubt = /-lens-\[([a-z]+)\]/.exec(namen.lensNameKern)?.[1] ?? "";

@@ -20,3 +20,6 @@ export const FARBCODE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 
 /** Text ohne ANSI-Farbcodes. Pur. */
 export const ohneFarbcodes = (text) => String(text ?? "").replace(FARBCODE, "");
+
+/** Regex-Literal im Quelltext (Heuristik, kein AST): Gruppe 1 ist der Vorlauf (Zeilenanfang oder Operator), danach `/…/flags`; die Lücke nach `=>` ist bekannt (factory#280 L14). Gemeinsam für `anker-liste.mjs` und `vollsweep.mjs` (Einstiegsskripte importieren nicht voneinander). */
+export const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
