@@ -28,7 +28,7 @@ import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktion
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
-import { BEFUND_ZEILE_OFFEN } from "./sammelticket-titel.mjs";
+import { offeneZeileMit } from "./sammelticket-titel.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -164,13 +164,6 @@ export function codeScanningNummernIn(text) {
   for (const m of String(text ?? "").matchAll(/(?<![\w-])Code-Scanning-Alerts?\s+(\d+(?:\s*,\s*\d+)*)/g)) nummern.push(...m[1].split(",").map((n) => Number(n.trim())));
   return nummern;
 }
-
-/** Ist `zeile` eine offene Checkbox-Zeile (`BEFUND_ZEILE_OFFEN`, die eine Quelle der Zeilenerkennung), deren Text nach Leerraum mit `praefix` beginnt? */
-const offeneZeileMit = (zeile, praefix) => {
-  const kopf = BEFUND_ZEILE_OFFEN.exec(zeile);
-  const rest = kopf === null ? "" : zeile.slice(kopf[0].length);
-  return /^\s/.test(rest) && rest.trimStart().startsWith(praefix);
-};
 
 /** Alert-Nummern aus offenen `- [ ] Code-Scanning:`-Zeilen in Kommentaren vertrauter Autoren. Pur. */
 function nummernAusKommentaren(kommentare, owner) {

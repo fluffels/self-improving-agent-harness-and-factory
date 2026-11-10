@@ -27,3 +27,10 @@ export const BEFUND_ZEILE_OFFEN = new RegExp(String.raw`${CHECKBOX_KOPF} \]`);
 
 /** Wie `BEFUND_ZEILE` mit Gruppen (aus demselben Kopf): Gruppe 1 = Haken (` `, `x`, `X`), Gruppe 2 = Text nach der Checkbox (ohne CR am Zeilenende). Der Tag-Takt übernimmt damit Haken. */
 export const HAKEN_ZEILE = new RegExp(String.raw`${CHECKBOX_KOPF}([ xX])\]\s*(.*?)\r?$`);
+
+/** Ist `zeile` eine offene Checkbox-Zeile (`BEFUND_ZEILE_OFFEN`, die eine Quelle der Zeilenerkennung), deren Text nach Leerraum mit `praefix` beginnt? Pur. */
+export function offeneZeileMit(zeile, praefix) {
+  const kopf = BEFUND_ZEILE_OFFEN.exec(zeile);
+  const rest = kopf === null ? "" : zeile.slice(kopf[0].length);
+  return /^\s/.test(rest) && rest.trimStart().startsWith(praefix);
+}
