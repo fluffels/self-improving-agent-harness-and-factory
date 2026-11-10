@@ -3,7 +3,7 @@
  * (Schlüssel `meldestelle` der Projekt-Config, Standard das Repo des Boards mit Rolle `factory`), mit dem Factory-Stand als Fußzeile. Vor dem Senden läuft
  * `check-internalrefs --text`; bei einem Treffer wird nichts gesendet.
  *
- *   node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]
+ *   node scripts/melden.mjs --zeile "<Klasse>: <Befund> Beleg: <…>" [--zeile "…" …] [--dry-run]
  *
  * Eine Zeile ohne Listenpräfix bekommt `- [ ] `. Format (Eingangsfilter, factory#269): `<Klasse>[ (<Schutzbereich>)]: <Befund> Beleg: <Fundstelle|Fehlerausgabe|Messwert>`
  * mit Klasse `Defekt|Blocker|Kosmetik|Hypothese`; Kosmetik und Hypothese bekommen `Verfall: <heute + 28 Tage>` ergänzt (Regel: AGENTS.md § Harness-Befunde sind Zeilen). Eine Zeile
@@ -23,7 +23,7 @@ import { mitVerfall, pruefeBefundZeile } from "./sammelticket-titel.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }), api: ghJson, heute: () => new Date().toISOString().slice(0, 10) };
-const AUFRUF = 'Aufruf: node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]';
+const AUFRUF = 'Aufruf: node scripts/melden.mjs --zeile "<Klasse>: <Befund> Beleg: <…>" [--zeile "…" …] [--dry-run]';
 
 /** Pur: die Zeile als Listenpunkt `- [ ] …` (ein vorhandenes Präfix `- [ ] ` bleibt, nie doppelt); Zeilenumbrüche werden Leerzeichen. */
 export const alsListenpunkt = (zeile) => {

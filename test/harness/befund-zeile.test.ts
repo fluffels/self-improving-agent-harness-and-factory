@@ -35,7 +35,7 @@ const doctor = rawDoctor as unknown as {
   lauf(a: { io: Record<string, unknown> }): number;
   plane(a: { luecken: { punkt: string; befund: string; fix: string }[]; kommentare: never[]; owner: string; heute: string }): string[];
 };
-const spez = rawSpez as unknown as { gescheitertZeile(a: { nr: number; mangel: string; heute: string }): string };
+const spez = rawSpez as unknown as { gescheitertZeile(a: { nr: number; mangel: string; heute: string }): string; gescheitertBekannt(nr: number, k: { user: { login: string; type: string }; body: string }[], owner: string): boolean };
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const zeileMit = (rel: string, muster: RegExp): string => {
@@ -52,7 +52,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.equal(gut("- [ ] Defekt: Gate X lässt Y durch Beleg: test/x.test.ts:12").ok, true);
     assert.equal(gut("- [ ] Blocker: MCP fällt aus Beleg: Fehlerausgabe `spawn ENOENT`").ok, true);
     assert.equal(gut("- [ ] Kosmetik: Tippfehler Beleg: docs/a.md:3 Verfall: 2026-12-08").ok, true);
-    assert.equal(gut("- [ ] Hypothese: Umgehung denkbar Beleg: keiner, nur Vermutung Verfall: 2026-12-08 (aus #12)").ok, true);
+    assert.equal(gut("- [ ] Hypothese: Umgehung denkbar Beleg: docs/a.md:3 Verfall: 2026-12-08 (aus #12)").ok, true);
     const s = gut("- [ ] Hypothese (Sicherheit): Token könnte leaken");
     assert.deepEqual([s.ok, s.klasse, s.schutz], [true, "Hypothese", "Sicherheit"]);
   });
@@ -67,6 +67,10 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.match(gut("- [ ] Defekt: etwas ohne Nachweis").fehler ?? "", /kein Beleg/);
     assert.equal(gut("- [ ] Defekt: etwas Beleg: ...").ok, false);
     assert.equal(gut("- [ ] Hypothese (Datenverlust): ohne Beleg").ok, true);
+    assert.match(gut("- [ ] Hypothese: x Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
+    assert.match(gut("- [ ] Kosmetik: x Beleg: Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
+    assert.equal(gut("- [ ] Defekt: x Beleg: 42").ok, true);
+    assert.equal(gut("- [ ] Defekt: x Beleg: (aus #1) (aus #2)").ok, false);
     assert.equal(gut("- [ ] Defekt (Sicherheit): ohne Beleg").ok, false);
   });
   test("Verfall: Pflicht bei Kosmetik und Hypothese, sonst verboten, gültiges Datum, nicht verfallen", () => {
@@ -85,6 +89,8 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.equal(titel.mitVerfall("- [ ] Kosmetik: x Beleg: y1", "2026-11-20"), "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-18");
     const bleibt = ["- [ ] Defekt: x Beleg: y1", "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-01", "- [ ] Hypothese (Sicherheit): x", "kein Listenpunkt"];
     for (const z of bleibt) assert.equal(titel.mitVerfall(z, "2026-11-20"), z);
+    const uebertrag = ["- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08 (aus #12) (aus #20)", "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08. Fix: z (aus #12)"];
+    for (const z of uebertrag) assert.equal(titel.mitVerfall(z, "2026-11-20"), z, "Übertrag verlängert den Verfall nie");
   });
 });
 
@@ -148,6 +154,10 @@ describe("Erzeuger-Ausgaben bestehen die Prüfung", () => {
     assert.deepEqual(doctor.plane({ luecken: [{ ...l, befund: "" }], kommentare: [], owner: "o", heute: HEUTE }), []);
     assert.equal(doctor.plane({ luecken: [l], kommentare: [], owner: "o", heute: HEUTE }).length, 1);
   });
+  test("eine Altzeile der gescheiterten Reparatur ohne Klasse gilt weiter als bekannt", () => {
+    const alt = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body nachziehen";
+    assert.equal(spez.gescheitertBekannt(7, [{ user: { login: "o", type: "User" }, body: alt }], "o"), true);
+  });
   test("gescheiterte Reparatur: Beleg ist der Mangel, ohne Mangel keine gültige Zeile", () => {
     assert.equal(gut(spez.gescheitertZeile({ nr: 7, mangel: "Negativfall fehlt", heute: HEUTE })).ok, true);
     assert.equal(gut(spez.gescheitertZeile({ nr: 7, mangel: "", heute: HEUTE })).ok, false);
@@ -175,6 +185,26 @@ describe("melden.mjs lehnt ab und ergänzt den Verfall", () => {
     const r = await lauf("Kosmetik: x Beleg: y1");
     assert.equal(r.code, 0);
     assert.deepEqual(r.geseh, [["- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08"]]);
+  });
+  test("leerer Beleg bei Kosmetik: Exit 2 (der ergänzte Verfall ist kein Beleg)", async () => {
+    const r = await lauf("Kosmetik: Tippfehler Beleg:");
+    assert.equal(r.code, 2);
+    assert.deepEqual(r.geseh, []);
+  });
+  test("mehrere Zeilen: ist eine schlecht, Exit 2 und nichts bereitet", async () => {
+    const err: string[] = [];
+    const geseh: string[][] = [];
+    const libs = { MELDESTELLE: "a/b", REPO: "a/b", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 1 }), postZeilen: () => undefined };
+    const code = await melden.main(["--zeile", "Defekt: a Beleg: b1", "--zeile", "Gate kaputt", "--dry-run"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), env: {}, log: () => undefined, err: (s: string) => err.push(s), heute: () => HEUTE, bereite: (z: string[]) => (geseh.push(z), { ok: true, text: "t" }) });
+    assert.equal(code, 2);
+    assert.deepEqual(geseh, []);
+  });
+  test("Standard-heute (ohne Einspritzung): der ergänzte Verfall ist ein ISO-Datum", async () => {
+    const geseh: string[][] = [];
+    const libs = { MELDESTELLE: "a/b", REPO: "a/b", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 1 }), postZeilen: () => undefined };
+    const code = await melden.main(["--zeile", "Kosmetik: x Beleg: y1", "--dry-run"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), env: {}, log: () => undefined, err: () => undefined, bereite: (z: string[]) => (geseh.push(z), { ok: true, text: "t" }) });
+    assert.equal(code, 0);
+    assert.match(geseh[0][0], /Verfall: \d{4}-\d{2}-\d{2}$/);
   });
   test("verfallene Zeile: Exit 2", async () => {
     assert.equal((await lauf("Kosmetik: x Beleg: y1 Verfall: 2026-11-01")).code, 2);

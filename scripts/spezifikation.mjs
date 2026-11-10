@@ -8,7 +8,7 @@
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
  *   node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"
  *
- * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] <Datum> Reparatur gescheitert: #<nr> (<Mängel>). Fix: …`
+ * `gescheitert` meldet eine Reparatur, die nicht gelang (Exit 1 oder 3, Body nicht nachziehbar): eine Zeile `- [ ] Defekt: <Datum> Reparatur gescheitert: #<nr> (Beleg: <Mängel>). Fix: …`
  * als Kommentar ins jüngste ungeclaimte Harness-Sammelticket der Meldestelle (factory#153, Standard das Repo des Factory-Boards; Exit 1: keins da, Fix: `sammelticket-anlegen.mjs harness`; Exit 1 auch bei einem Treffer von `check-internalrefs --text`, dann ist nichts gesendet; die Zeile trägt den Factory-Stand). Steht die Zeile zu dieser Nummer schon
  * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post (an einer fremden Meldestelle nennt die Zeile `owner/name#<nr>`, und eine Zeile des eigenen Kontos, `gh api user`, zählt als bekannt, factory#208). Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
@@ -35,6 +35,7 @@ import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-c
 import { istRepoForm } from "./repo-form.mjs";
 import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
 import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
+import { pruefeBefundZeile } from "./sammelticket-titel.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
@@ -128,7 +129,10 @@ function gescheitert(werte, nrText, io) {
   if (!kontext.ziel) return ergebnis(1, "", `✖ ${keinSammelticketText({ fuer: "für die Zeile" })}\n`);
   const herkunft = io.herkunft ?? null;
   if (gescheitertBekannt(nr, kontext.kommentare, kontext.owner, { herkunft, eigen: kontext.eigen ?? null })) return ergebnis(0, `#${nr}: gescheiterte Reparatur schon als offene Zeile gemeldet, nichts gepostet\n`);
-  const meldung = io.bereite([gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute(), herkunft })], { herkunft });
+  const zeile = gescheitertZeile({ nr, mangel: werte.mangel, heute: io.heute(), herkunft });
+  const geprueft = pruefeBefundZeile(zeile);
+  if (!geprueft.ok) return aufrufFehler(`--mangel ohne Beleg, nichts gepostet: ${geprueft.fehler}`);
+  const meldung = io.bereite([zeile], { herkunft });
   if (!meldung.ok) return ergebnis(1, "", `✖ ${meldung.grund}\n`);
   try {
     io.postZeilen(kontext.ziel, meldung.text);

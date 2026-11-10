@@ -589,6 +589,12 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(r.err).toContain("check-internalrefs --text");
     expect(posts).toEqual([]);
   });
+  test("Mangel ohne Beleg (nur Satzzeichen): Exit 2, nichts gepostet (Eingangsfilter factory#269)", () => {
+    const { io, posts } = gumgebung();
+    const r = S.fuehreAus(["gescheitert", "7", "--mangel", "..."], io);
+    expect(r.code).toBe(2);
+    expect(posts).toEqual([]);
+  });
   test("Mangel über mehrere Zeilen wird einzeilig", () => {
     const { io, posts } = gumgebung();
     S.fuehreAus(["gescheitert", "7", "--mangel", "a\n  b"], io);

@@ -1,4 +1,4 @@
-// Kein Shebang, keine Importe: das importfreie Blatt der Sammelticket-Titel und der Zeilenerkennung.`board-lib.mjs` lädt beim Import die Projekt-Config und bricht bei einem
+// Kein Shebang, keine Importe: das importfreie Blatt der Sammelticket-Titel, der Zeilenerkennung und des Zeilenformats (Klasse, Beleg, Verfall: `pruefeBefundZeile`, `mitVerfall`).`board-lib.mjs` lädt beim Import die Projekt-Config und bricht bei einem
 // Fehler ab; wer nur die Titel braucht (offene-punkte, claims-pruefen), importiert sie von hier, ohne Seiteneffekt. `board-lib.mjs` exportiert die Namen weiter.
 
 /** Titel des Sammeltickets für Harness-Befunde (AGENTS.md § Harness-Befunde sind Zeilen). */
@@ -45,7 +45,8 @@ export const SCHUTZBEREICHE = ["Sicherheit", "Fremdtext", "Datenverlust"];
 export const VERFALL_TAGE = 28;
 
 const KOPF = /^([^\s:]+)(?: \(([^)]*)\))?:\s/;
-const VERFALL_ENDE = /\s+Verfall:\s*(\S+?)(?:\s+\(aus #\d+\))?\s*$/;
+const VERFALL_TEIL = /\s+Verfall:\s*(\S+)/;
+const AUS_ENDE = /(?:\s*\(aus #\d+\))+\s*$/;
 const NUR_MIT_VERFALL = ["Kosmetik", "Hypothese"];
 
 /** Ist `text` genau ein gültiges Datum `JJJJ-MM-TT` (Hin- und Rückumwandlung gleich, also auch kein 30. Februar)? */
@@ -63,9 +64,10 @@ function zerlege(zeile) {
   if (kopf === null) return null;
   const text = zeile.slice(kopf[0].length).trim();
   const k = KOPF.exec(text);
-  const belegTeil = /\bBeleg:\s*(.*)$/.exec(text);
-  const verfall = VERFALL_ENDE.exec(text);
-  const beleg = belegTeil === null ? null : belegTeil[1].replace(VERFALL_ENDE, "").replace(/(?:^|\s+)Fix:.*$/, "").trim();
+  const verfall = VERFALL_TEIL.exec(text);
+  const ohneVerfall = verfall === null ? text : text.replace(VERFALL_TEIL, "");
+  const belegTeil = /\bBeleg:\s*(.*)$/.exec(ohneVerfall);
+  const beleg = belegTeil === null ? null : belegTeil[1].replace(/(?:^|\s+)Fix:.*$/, "").replace(AUS_ENDE, "").trim();
   return { klasse: k?.[1] ?? null, schutz: k?.[2] ?? null, beleg, verfall: verfall?.[1] ?? null };
 }
 
