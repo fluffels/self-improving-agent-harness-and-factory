@@ -135,6 +135,11 @@ describe("zuwachsIm und teileZeitanteilig", () => {
     expect(L.zuwachsIm(pk, 50, 150)).toBe(0);
     expect(L.zuwachsIm([punkt(0, 20), punkt(100, 10)], 0, 100)).toBe(0);
     expect(L.zuwachsIm([punkt(0, 10), punkt(50, 10), punkt(50, 14), punkt(100, 14)], 0, 100)).toBe(4);
+    const doppelt = [punkt(0, 10), punkt(50, 10), punkt(50, 14), punkt(100, 14)];
+    expect(L.zuwachsIm(doppelt, 0, 50)).toBe(4); // gleicher Zeitstempel: zum Zeitpunkt gilt der neuere Stand, der Sprung liegt davor
+    expect(L.zuwachsIm(doppelt, 50, 100)).toBe(0);
+    const nurFuenf: Punkt = { stand: 50, fiveHour: { pct: 1, resetsAt: 1 } };
+    expect(L.zuwachsIm([punkt(0, 10), nurFuenf, punkt(100, 20)], 0, 50)).toBe(5); // ein Punkt ohne 7-Tage-Fenster wird übergangen
   });
   test("zwei gleiche Fenster mit zusammen 10 pp: je 5", () => {
     const m = L.teileZeitanteilig([{ ticket: 1, claim: 0, merge: 10, delta: 10 }, { ticket: 2, claim: 0, merge: 10, delta: 10 }], lin);
