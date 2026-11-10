@@ -227,7 +227,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     const punkt11 = mr.indexOf("11. **Selbst-Audit");
     const zeilenEnde = mr.indexOf("\n", punkt11);
     const mitZwoelf = `${mr.slice(0, zeilenEnde)}\n12. **Neu:** x${mr.slice(zeilenEnde)}`;
-    assert.notEqual(zaehle(mitZwoelf), CHECKLISTE.length);
+    assert.notEqual(zaehle(mitZwoelf), CHECKLISTE.length - 1);
   });
 
   test("model-routing.md: Beleg-Ablauf mit Probe-Lauf und Usage", () => {

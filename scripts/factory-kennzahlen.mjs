@@ -11,7 +11,7 @@
  * docs/model-routing.md (Fabrik) › Factory-Kennzahlen.
  *
  * `--datenbasis` (factory#258) ist die Vorprüfung des Status-Laufs und läuft allein: je Ticket-Lauf des Zeitraums (`lauf-ergebnis`) die
- * Sessions mit Claim-Zeile im lokalen Transkript zählen; kein token-baseline, kein Audit, keine Nacharbeit. Status: `leer` (kein Lauf),
+ * Sessions mit Claim-Zeile im lokalen Transkript zählen; kein token-baseline, kein Audit, keine Nacharbeit. Stand: `leer` (kein Lauf),
  * `erfüllt` (alle), `teilweise` (normal bei zwei Maschinen), `verletzt` (0 von n). Grenze: Codex-Läufe zählen als ohne Transkript
  * (`transkript.mjs` liest nur Claude-Transkripte, Codex hat keinen Langfuse-Exporter).
  *
@@ -454,16 +454,16 @@ export function datenbasis({ tickets, claims }) {
   const sessions = [...new Set(mit.flatMap((t) => claims.get(t.ticket).map((c) => c.session)))].sort();
   const ohne = tickets.filter((t) => !mit.includes(t)).map((t) => t.ticket);
   const n = tickets.length;
-  const status = n === 0 ? "leer" : mit.length === n ? "erfüllt" : mit.length === 0 ? "verletzt" : "teilweise";
-  return { status, laeufe: n, mitTranskript: mit.length, sessions, ohne };
+  const stand = n === 0 ? "leer" : mit.length === n ? "erfüllt" : mit.length === 0 ? "verletzt" : "teilweise";
+  return { stand, laeufe: n, mitTranskript: mit.length, sessions, ohne };
 }
 
 /** Markdown-Block „Datenbasis“ für den Bericht. Pure. */
 export function datenbasisAbschnitt(d) {
-  const zeilen = ["### Datenbasis", "", `- Status: ${d.status}; Ticket-Läufe im Zeitraum: ${d.laeufe}, davon mit Transkript: ${d.mitTranskript} von ${d.laeufe}.`];
+  const zeilen = ["### Datenbasis", "", `- Stand: ${d.stand}; Ticket-Läufe im Zeitraum: ${d.laeufe}, davon mit Transkript: ${d.mitTranskript} von ${d.laeufe}.`];
   zeilen.push(`- Sessions mit Claim-Zeile: ${d.sessions.length > 0 ? d.sessions.join(", ") : "keine"}.`);
   if (d.ohne.length > 0) zeilen.push(`- Tickets ohne Transkript: ${d.ohne.map((n) => `#${n}`).join(", ")}.`);
-  if (d.status === "verletzt") zeilen.push("- Vorbedingung verletzt: keine Transkripte der Ticket-Läufe auf dieser Maschine (Status-Lauf auf der Maschine der Ticket-Läufe fahren).");
+  if (d.stand === "verletzt") zeilen.push("- Vorbedingung verletzt: keine Transkripte der Ticket-Läufe auf dieser Maschine (Status-Lauf auf der Maschine der Ticket-Läufe fahren).");
   return zeilen.join("\n");
 }
 
@@ -472,7 +472,7 @@ export function erstelleDatenbasis({ von, bis }, { run = runSkript, claimKarte }
   const lauf = holeLauf(von, bis, run);
   if (lauf.luecke) return { text: `### Datenbasis\n\n- Lücke: ${lauf.luecke}`, exit: 2 };
   const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims: claimKarte() });
-  return { text: datenbasisAbschnitt(d), exit: d.status === "verletzt" ? 3 : 0 };
+  return { text: datenbasisAbschnitt(d), exit: d.stand === "verletzt" ? 3 : 0 };
 }
 
 function main(argv) {

@@ -6,7 +6,7 @@ import * as raw from "../scripts/factory-kennzahlen.mjs";
 
 type Claims = Map<number, { session: string; ts: string }[]>;
 type Ticket = { ticket: number; pr: number };
-type Basis = { status: string; laeufe: number; mitTranskript: number; sessions: string[]; ohne: number[] };
+type Basis = { stand: string; laeufe: number; mitTranskript: number; sessions: string[]; ohne: number[] };
 type Run = (name: string, args: string[]) => { status: number; stdout: string; stderr: string };
 const F = raw as unknown as {
   parseArgs: (argv: string[]) => { datenbasis: boolean; fehler: string | null };
@@ -34,19 +34,19 @@ describe("parseArgs --datenbasis", () => {
 
 describe("datenbasis", () => {
   test("leer: kein Lauf im Zeitraum", () => {
-    expect(F.datenbasis({ tickets: [], claims: karte({}) })).toMatchObject({ status: "leer", laeufe: 0, mitTranskript: 0 });
+    expect(F.datenbasis({ tickets: [], claims: karte({}) })).toMatchObject({ stand: "leer", laeufe: 0, mitTranskript: 0 });
   });
   test("erfüllt: jeder Lauf hat eine Session", () => {
-    expect(F.datenbasis({ tickets: [t(1), t(2)], claims: karte({ 1: ["a"], 2: ["b"] }) })).toMatchObject({ status: "erfüllt", laeufe: 2, mitTranskript: 2, ohne: [] });
+    expect(F.datenbasis({ tickets: [t(1), t(2)], claims: karte({ 1: ["a"], 2: ["b"] }) })).toMatchObject({ stand: "erfüllt", laeufe: 2, mitTranskript: 2, ohne: [] });
   });
   test("teilweise: nur ein Teil, die Tickets ohne Transkript stehen in `ohne`", () => {
-    expect(F.datenbasis({ tickets: [t(1), t(2), t(3)], claims: karte({ 2: ["b"] }) })).toMatchObject({ status: "teilweise", laeufe: 3, mitTranskript: 1, ohne: [1, 3] });
+    expect(F.datenbasis({ tickets: [t(1), t(2), t(3)], claims: karte({ 2: ["b"] }) })).toMatchObject({ stand: "teilweise", laeufe: 3, mitTranskript: 1, ohne: [1, 3] });
   });
   test("verletzt nur bei 0 von n (n > 0)", () => {
-    expect(F.datenbasis({ tickets: [t(1), t(2)], claims: karte({ 9: ["x"] }) })).toMatchObject({ status: "verletzt", mitTranskript: 0, ohne: [1, 2] });
+    expect(F.datenbasis({ tickets: [t(1), t(2)], claims: karte({ 9: ["x"] }) })).toMatchObject({ stand: "verletzt", mitTranskript: 0, ohne: [1, 2] });
   });
   test("eine leere Session-Liste zählt als ohne Transkript", () => {
-    expect(F.datenbasis({ tickets: [t(1)], claims: karte({ 1: [] }) }).status).toBe("verletzt");
+    expect(F.datenbasis({ tickets: [t(1)], claims: karte({ 1: [] }) }).stand).toBe("verletzt");
   });
   test("zwei Sessions eines Tickets zählen das Ticket einmal; gleiche Session bei zwei Tickets steht einmal, sortiert", () => {
     const d = F.datenbasis({ tickets: [t(1), t(2)], claims: karte({ 1: ["s2", "s1"], 2: ["s2"] }) });
@@ -56,7 +56,7 @@ describe("datenbasis", () => {
 });
 
 describe("datenbasisAbschnitt", () => {
-  const d = (status: string, extra: Partial<Basis> = {}): Basis => ({ status, laeufe: 2, mitTranskript: 0, sessions: [], ohne: [4, 5], ...extra });
+  const d = (stand: string, extra: Partial<Basis> = {}): Basis => ({ stand, laeufe: 2, mitTranskript: 0, sessions: [], ohne: [4, 5], ...extra });
   test("verletzt nennt die Vorbedingung samt Weg", () => {
     const s = F.datenbasisAbschnitt(d("verletzt"));
     expect(s).toContain("Vorbedingung verletzt: keine Transkripte der Ticket-Läufe auf dieser Maschine");
