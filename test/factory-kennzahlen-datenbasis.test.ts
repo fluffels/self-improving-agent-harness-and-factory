@@ -17,6 +17,7 @@ const F = raw as unknown as {
   parseArgs: (argv: string[]) => { datenbasis: boolean; fehler: string | null };
   datenbasis: (a: { tickets: Ticket[]; claims: Claims }) => Basis;
   datenbasisAbschnitt: (d: Basis) => string;
+  datenbasisModus: (a: { von: string; bis: string }, d: { run: Run; claimKarte: () => Claims; log: (t: string) => void; beenden: (c: number) => void }) => void;
   erstelleDatenbasis: (a: { von: string; bis: string }, d: { run: Run; claimKarte: () => Claims }) => { text: string; exit: number };
 };
 
@@ -119,6 +120,18 @@ describe("erstelleDatenbasis", () => {
   test("der gerenderte Text nennt den Stand", () => {
     const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }, { pr: 12, ticket: 2 }])).run, claimKarte: () => karte({ 1: ["a"] }) });
     expect(r.text).toContain("Stand: teilweise");
+  });
+  test("datenbasisModus gibt den Block aus und beendet mit dem Exit des Blocks (3 bei verletzt, 0 sonst)", () => {
+    const lauft = (karteWert: Claims) => {
+      const log: string[] = [];
+      const exits: number[] = [];
+      F.datenbasisModus(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }])).run, claimKarte: () => karteWert, log: (x) => log.push(x), beenden: (c) => exits.push(c) });
+      return { log, exits };
+    };
+    const v = lauft(karte({}));
+    expect(v.exits).toEqual([3]);
+    expect(v.log[0]).toContain("### Datenbasis");
+    expect(lauft(karte({ 1: ["a"] })).exits).toEqual([0]);
   });
   test("verletzt: der Text trägt den Abschnitt Datenbasis und die Vorbedingung", () => {
     const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }])).run, claimKarte: () => karte({}) });

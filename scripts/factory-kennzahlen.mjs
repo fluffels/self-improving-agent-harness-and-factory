@@ -475,6 +475,13 @@ export function erstelleDatenbasis({ von, bis }, { run = runSkript, claimKarte }
   return { text: datenbasisAbschnitt(d), exit: d.stand === "verletzt" ? 3 : 0 };
 }
 
+/** Modus `--datenbasis`: Block ausgeben und mit dem Exit des Blocks beenden (`beenden` ist im Betrieb `process.exit`). IO injiziert. */
+export function datenbasisModus({ von, bis }, { run, claimKarte, log, beenden }) {
+  const d = erstelleDatenbasis({ von, bis }, { run, claimKarte });
+  log(d.text);
+  beenden(d.exit);
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.fehler) {
@@ -483,11 +490,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
-  if (args.datenbasis) {
-    const d = erstelleDatenbasis({ von, bis }, { claimKarte });
-    console.log(d.text);
-    process.exit(d.exit);
-  }
+  if (args.datenbasis) datenbasisModus({ von, bis }, { claimKarte, log: console.log, beenden: process.exit }); // beendet den Prozess
   const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel() });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
