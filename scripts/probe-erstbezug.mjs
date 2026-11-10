@@ -49,6 +49,9 @@ export function fuellAgentsMd({ raum }) {
   return geruest(fuell);
 }
 
+/** Das Fixture-Projekt hat keine eigenen Tests (der Sync liefert keine Kern-Tests): `--passWithNoTests` im Test-Skript, sonst wäre `test` per Konstruktion rot. */
+const ohneTestZwang = (pkg) => ({ ...pkg, scripts: { ...pkg.scripts, test: `${pkg.scripts?.test ?? "vitest run"} --passWithNoTests` } });
+
 const mische = (basis, ueber) => {
   const aus = { ...basis };
   for (const [k, v] of Object.entries(ueber)) aus[k] = v && typeof v === "object" && !Array.isArray(v) && aus[k] && typeof aus[k] === "object" ? mische(aus[k], v) : v;
@@ -66,12 +69,18 @@ export function projektdatei({ pfad, text, raum, overlay = PROBE_OVERLAY }) {
   if (SYNC_STUBS.has(pfad)) return null;
   if (pfad === "AGENTS.md") return fuellAgentsMd({ raum });
   if (pfad === PROJEKT_CONFIG) return `${JSON.stringify(mische(JSON.parse(text), overlay), null, 2)}\n`;
-  if (pfad === "package.json") return `${JSON.stringify({ ...JSON.parse(text), name: "probe-erstbezug" }, null, 2)}\n`;
+  if (pfad === "package.json") return `${JSON.stringify(ohneTestZwang(JSON.parse(text)), null, 2)}\n`;
   return text;
 }
 
 /** Pur: Pfade des Fixture-Projekts in fester Reihenfolge (die geschlossene Liste `PROJEKTDATEIEN` plus `ZUSATZ_DATEIEN`, ohne die Anker-Stubs). */
 export const fixturePfade = () => [...PROJEKTDATEIEN.map((d) => d.pfad), ...ZUSATZ_DATEIEN].filter((p) => !SYNC_STUBS.has(p));
+
+/** Pur: Ergänzung der Befehle-Seite des Fixture-Projekts: jedes npm-Skript der `package.json` einmal erwähnt (das Gate `check:docdrift` verlangt das von jedem Projekt; der Sync legt nur einen Stub mit Überschriften an). */
+export function befehleErgaenzung(packageText) {
+  const namen = Object.keys(JSON.parse(packageText).scripts ?? {});
+  return `\n## Befehle des Probe-Projekts\n\n${namen.map((n) => `- \`npm run ${n}\``).join("\n")}\n`;
+}
 
 /** Pur: die Umgebung für Kindprozesse ohne Diff-Basis, Config-Überschreibung und Vitest-Variablen. */
 export function kindUmgebung(env) {
@@ -103,6 +112,7 @@ export function probeSchritte({ quelle, scratch, tag, sha }) {
     k("fixture-commit", ["git", "-C", b, ...IDENTITAET, "commit", "--quiet", "-m", "Probe-Erstbezug"], scratch),
     k("sync-vorschau", [...sync, "--entwurf", "--trocken"], b),
     k("sync-tag", [...sync, "--tag", tag], b),
+    { id: "befehle", art: "befehle", cwd: b, kritisch: true },
     k("install", teile("node scripts/gate-befehl.mjs install"), b),
     ...mech,
     { id: "verifyKompakt", argv: teile(verify.befehl), cwd: b, kritisch: false },
@@ -154,7 +164,7 @@ export function fuehreSchritte(schritte, io) {
   const ergebnisse = [];
   for (const s of schritte) {
     io.melde(`--- ${s.id}`);
-    const status = s.art === "fixture" ? io.fixture(s) : io.fuehre(s);
+    const status = s.art ? io[s.art](s) : io.fuehre(s);
     ergebnisse.push({ id: s.id, status });
     if (status !== 0 && s.kritisch) break;
   }
@@ -191,6 +201,16 @@ export function echteNaehte() {
       return {
         ...io,
         fuehre: (s) => lauf(s.argv, s.cwd),
+        befehle: (s) => {
+          try {
+            const seite = join(s.cwd, "docs", "referenz", "befehle.md");
+            writeFileSync(seite, `${readFileSync(seite, "utf8")}${befehleErgaenzung(readFileSync(join(s.cwd, "package.json"), "utf8"))}`);
+            return 0;
+          } catch (e) {
+            process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+            return 1;
+          }
+        },
         fixture: (s) => {
           try {
             baueFixture({ von: join(scratch, "quelle"), ziel: s.cwd, raum: PROJEKT_BLOCK_RAUM, io: { lies, schreibe: (p, t) => (mkdirSync(dirname(p), { recursive: true }), writeFileSync(p, t)) } });
