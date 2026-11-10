@@ -1,6 +1,11 @@
 /* Datenbasis-Prüfung (factory#258): ohne Transkripte der Ticket-Läufe gibt es eine Lücke statt Zahlen. Pure Zählung,
- * Darstellung und der Zweig `erstelleDatenbasis` mit injiziertem `run`; kein Unterprozess, kein token-baseline. */
+ * Darstellung und der Zweig `erstelleDatenbasis` mit injiziertem `run`; der CLI-Zweig läuft ohne gh offline. */
 import { describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/factory-kennzahlen.mjs";
 
@@ -106,5 +111,21 @@ describe("erstelleDatenbasis", () => {
     expect(r.text).toMatch(/Lücke/);
     expect(r.text).toContain("lauf-ergebnis Exit 1");
     expect(r.text).not.toContain("Vorbedingung verletzt");
+  });
+});
+
+describe("CLI --datenbasis", () => {
+  test("ohne gh: nur der Datenbasis-Abschnitt als Lücke, Exit 2, kein Kennzahlen-Block", () => {
+    const skript = fileURLToPath(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url));
+    const leer = mkdtempSync(join(tmpdir(), "datenbasis-"));
+    try {
+      const r = spawnSync(process.execPath, [skript, "--datenbasis", "--von", "2026-11-01T00:00:00Z", "--bis", "2026-11-08T00:00:00Z"], { encoding: "utf8", env: { ...process.env, PATH: leer } });
+      expect(r.status).toBe(2);
+      expect(r.stdout).toContain("### Datenbasis");
+      expect(r.stdout).toContain("Lücke: lauf-ergebnis Exit");
+      expect(r.stdout).not.toContain("Lauf-Ergebnis");
+    } finally {
+      rmSync(leer, { recursive: true, force: true });
+    }
   });
 });
