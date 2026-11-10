@@ -446,12 +446,12 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(!kurzId.test("Zählung 12345678 und Wort abcdefab"));
   });
 
-  test("Prüfregel steht auf 26 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
-    assert.ok(patchDokuStimmig(hp, 26));
+  test("Prüfregel steht auf 25 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
+    assert.ok(patchDokuStimmig(hp, 25));
     // darf NICHT passieren: alte Zahl oder die alte Lücke
-    assert.ok(!patchDokuStimmig(hp.replace("→ `26`", "→ `15`"), 26));
-    assert.ok(!patchDokuStimmig(hp + "\nFür solche Läufe den Transkript-Modus nehmen.", 26));
-    assert.ok(!patchDokuStimmig(hp.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
+    assert.ok(!patchDokuStimmig(hp.replace("→ `25`", "→ `15`"), 25));
+    assert.ok(!patchDokuStimmig(hp + "\nFür solche Läufe den Transkript-Modus nehmen.", 25));
+    assert.ok(!patchDokuStimmig(hp.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 25));
   });
 
   test("die Doku nennt das Datum des Stichtags aus langfuse-abgleich-kern.mjs (Drift Doku <-> Konstante)", () => {
