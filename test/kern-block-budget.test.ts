@@ -122,7 +122,7 @@ describe("Kern-Block-Budget", () => {
     const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
     assert.ok(gesamt > 0, "AGENTS.md hat ein Budget in CONTEXT_BUDGETS");
     assert.equal(kernRaumBefund({ kern: KERN_BLOCK_BUDGET, raum: PROJEKT_BLOCK_RAUM, gesamt }), null);
-    assert.ok(gesamt - (KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM) < 500, "der Abstand ist klein (Raum ist am größten gemessenen Rest geeicht, keine Reserve auf Vorrat)");
+    assert.equal(KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM, gesamt, "der Raum schließt lückenlos an das Kern-Budget an (factory#234: sonst reißt der Probe-Erstbezug bei vollem Raum nie das Gesamtbudget)");
   });
 
   test("Raum-Invariante, Grenzfall exakt: Summe == Gesamtbudget grün, ein Zeichen mehr rot; der Befund nennt die Zahlen", () => {
