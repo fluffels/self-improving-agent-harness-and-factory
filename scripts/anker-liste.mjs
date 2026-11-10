@@ -21,7 +21,6 @@ import { normalizePath } from "./relativ-pfad.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { REGEX_LITERAL } from "./regex-lib.mjs";
 import { quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,6 +74,7 @@ function templateAusdruecke(literal) {
 
 /** Pur: ersetzt jeden String durch "", ein Template-Literal zusätzlich um seine ${…}-Ausdrücke (angehängt, damit `MUSTER` sie sieht). */
 const leereStrings = (zeile) => zeile.replace(STRINGS, (s) => (s.startsWith("`") ? ['""', ...templateAusdruecke(s)].join(" ") : '""'));
+const REGEX_LITERAL = /(^\s*|[=(,:;!&|?{}[]\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\]|\\.)*\])+\/[dgimsuvy]*/g;
 const KOPF = [
   /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*(?:<[^(]*>\s*)?\(/,
   /^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(?:async\s+)?(?:function\b|(?:<[^(]*>\s*)?\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
