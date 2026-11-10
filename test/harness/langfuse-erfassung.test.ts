@@ -51,6 +51,7 @@ const CHECKLISTE = [
   "Vermeidbare Arbeit",
   "Factory-Kennzahlen",
   "Selbst-Audit",
+  "Vorbedingung",
 ];
 
 /** Der AGENTS.md-Bullet zur Erfassungsregel: nennt die vier Änderungsarten und verlinkt den Ablauf. */
@@ -70,7 +71,7 @@ const hatErfassungsRegel = (agentsMd: string): boolean => {
 /** Der Checklisten-Abschnitt trägt alle fetten Punkte der CHECKLISTE. */
 const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Status überprüfen \(#1293\)/);
-  return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`));
+  return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`)) && /^1\. \*\*Datenvollständigkeit.*listModels.*totalPages/m.test(a) && /^\*\*Vorbedingung.*--datenbasis/m.test(a) && /^7\. \*\*Wochenbudget.*--datenbasis/m.test(a);
 };
 
 /** Der Beleg-Ablauf steht in model-routing.md. */
@@ -209,6 +210,14 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Tokenfresser:**", "Tokenfresser:")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vorbedingung (", "Vorbedingung (")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replaceAll("listModels", "lesen")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replaceAll("--datenbasis", "--pruefung")));
+    // je Stelle einzeln: die historische Tabellenzeile und die anderen Punkte halten sie sonst still grün
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("per `listModels` des Langfuse-MCP (die Instanz", "per Langfuse-MCP (die Instanz")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("alle Seiten bis `meta.totalPages` lesen", "die Seiten lesen")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("Erster Schritt ist `node scripts/factory-kennzahlen.mjs --datenbasis", "Erster Schritt ist `node scripts/factory-kennzahlen.mjs --pruefung")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("bei verletzter Vorbedingung (`--datenbasis` Exit 3)", "bei verletzter Vorbedingung (`--pruefung` Exit 3)")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (quellprojekt#1425):**", "Vermeidbare Arbeit (quellprojekt#1425):")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
   });
@@ -218,12 +227,12 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
       abschnitt(text, /^### Langfuse-Status überprüfen \(#1293\)/)
         .split("\n")
         .filter((z) => /^\d+\. \*\*/.test(z)).length;
-    assert.equal(zaehle(mr), CHECKLISTE.length);
+    assert.equal(zaehle(mr), CHECKLISTE.length - 1, "alle Punkte nummeriert, außer der unnummerierten Vorbedingung");
     // Drift: ein zwölfter Punkt ohne Eintrag in CHECKLISTE muss auffallen
     const punkt11 = mr.indexOf("11. **Selbst-Audit");
     const zeilenEnde = mr.indexOf("\n", punkt11);
     const mitZwoelf = `${mr.slice(0, zeilenEnde)}\n12. **Neu:** x${mr.slice(zeilenEnde)}`;
-    assert.notEqual(zaehle(mitZwoelf), CHECKLISTE.length);
+    assert.notEqual(zaehle(mitZwoelf), CHECKLISTE.length - 1);
   });
 
   test("model-routing.md: Beleg-Ablauf mit Probe-Lauf und Usage", () => {

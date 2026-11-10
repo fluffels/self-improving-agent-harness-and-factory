@@ -214,6 +214,8 @@ describe("statusBody", () => {
   });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
+    expect(body).toContain("node scripts/factory-kennzahlen.mjs --datenbasis --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
+    expect(T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" })).toContain("--datenbasis --von <Start des Zeitraums> --bis <Claim-Zeit>");
     const ohne = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" });
     expect(ohne).toContain("--von <Start des Zeitraums> --bis <Claim-Zeit>");
   });

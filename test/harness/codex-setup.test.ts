@@ -70,7 +70,7 @@ test("langfuseAuth host: kein env_http_headers, aber required und Lese-Toolliste
   const host = c.setupDateien(mcp, config, endpoint, "host")[".codex/config.toml"];
   expect(host).not.toContain("env_http_headers");
   expect(host).toContain("required = true");
-  expect(host).toContain('enabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]');
+  expect(host).toContain('enabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]');
   expect(c.setupDateien(mcp, config, endpoint, "env")[".codex/config.toml"]).toContain("env_http_headers");
   expect(c.setupDateien(mcp, config, endpoint)[".codex/config.toml"]).toContain("env_http_headers");
   expect(() => c.setupDateien(mcp, config, endpoint, "anders")).toThrow(/langfuseAuth/);
