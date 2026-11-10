@@ -18,6 +18,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 import { projektConfig } from "../support/fremd-config";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { LANGFUSE_LESE_TOOLS } from "../../scripts/langfuse-zugang.mjs";
 import { liesMitProjektwerten, liesTicketAblauf } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
@@ -189,6 +191,8 @@ describe("Tool-Mengen der Holdout-Agenten (#1754 K2)", () => {
 
   test("Abnahme-Agent: genau die Liste, ohne Edit, NotebookEdit und Agent, keine Wildcards", () => {
     assert.deepEqual(toolAbweichungen(agentTools(abnahme), ABNAHME_TOOLS), []);
+    const lfAbnahme = ABNAHME_TOOLS.filter((t) => t.startsWith("mcp__langfuse__")).map((t) => t.slice("mcp__langfuse__".length));
+    assert.deepEqual(lfAbnahme.filter((t) => !(LANGFUSE_LESE_TOOLS as string[]).includes(t)), [], "Abnahme-Langfuse-Tools sind keine Teilmenge von LANGFUSE_LESE_TOOLS");
     for (const verboten of ["Edit", "NotebookEdit", "Agent"]) assert.ok(!agentTools(abnahme).includes(verboten), verboten);
     assert.ok(agentTools(abnahme).every((t) => !t.includes("*")));
   });

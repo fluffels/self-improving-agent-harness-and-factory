@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
+import { LANGFUSE_LESE_TOOLS } from "./langfuse-zugang.mjs";
 export { rollenFuer } from "./codex-rollen.mjs";
 export { bewerteBelege } from "./codex-belege.mjs";
 const q = JSON.stringify;
@@ -31,7 +32,7 @@ export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
     const features = `\n[features]\napps = false\nplugins = false\nmemories = false\nrequest_permissions_tool = false\n${r.ohneShell ? "shell_tool = false\n" : ""}`;
     files[`.codex/agents/${r.name}.toml`] = `name = ${q(r.name)}\ndescription = ${q(r.aufgabe)}\nmodel_reasoning_effort = ${q(r.effort)}\ndeveloper_instructions = ${q(anweisung)}\n${features}`;
   }
-  files[".codex/config.toml"] = `# Generiert aus gemeinsamen Quellen; keine autonome Freigabe.\n[agents]\nenabled = true\n\n[mcp_servers.playwright]\ncommand = ${q(p.command)}\nargs = ${q(p.args)}\nrequired = true\n\n[mcp_servers.langfuse]\nurl = ${q(endpoint)}\n${header}required = true\nenabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]\n`;
+  files[".codex/config.toml"] = `# Generiert aus gemeinsamen Quellen; keine autonome Freigabe.\n[agents]\nenabled = true\n\n[mcp_servers.playwright]\ncommand = ${q(p.command)}\nargs = ${q(p.args)}\nrequired = true\n\n[mcp_servers.langfuse]\nurl = ${q(endpoint)}\n${header}required = true\nenabled_tools = [${LANGFUSE_LESE_TOOLS.map(q).join(", ")}]\n`;
   return files;
 }
 

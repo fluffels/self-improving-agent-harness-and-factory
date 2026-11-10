@@ -7,6 +7,8 @@ import { homedir, tmpdir } from "node:os";
 import * as raw from "../../scripts/codex-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as cliRaw from "../../scripts/codex-setup.mjs";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import { LANGFUSE_LESE_TOOLS } from "../../scripts/langfuse-zugang.mjs";
 const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string, a?: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
 const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void) => number };
 const config = { agenten: { planer: "probe-planer", umsetzer: "probe-umsetzer", lens: "probe-lens", gruppe: "probe-gruppe" } };
@@ -70,7 +72,8 @@ test("langfuseAuth host: kein env_http_headers, aber required und Lese-Toolliste
   const host = c.setupDateien(mcp, config, endpoint, "host")[".codex/config.toml"];
   expect(host).not.toContain("env_http_headers");
   expect(host).toContain("required = true");
-  expect(host).toContain('enabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]');
+  expect(host).toContain(`enabled_tools = [${(LANGFUSE_LESE_TOOLS as string[]).map((t) => `"${t}"`).join(", ")}]\n`);
+  expect(LANGFUSE_LESE_TOOLS).toEqual(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]);
   expect(c.setupDateien(mcp, config, endpoint, "env")[".codex/config.toml"]).toContain("env_http_headers");
   expect(c.setupDateien(mcp, config, endpoint)[".codex/config.toml"]).toContain("env_http_headers");
   expect(() => c.setupDateien(mcp, config, endpoint, "anders")).toThrow(/langfuseAuth/);
