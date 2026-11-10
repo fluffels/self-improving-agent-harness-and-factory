@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, win32 } from "node:path";
+import { pathToFileURL } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/probe-erstbezug.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -22,6 +23,7 @@ const P = raw as unknown as {
   fixturePfade: () => string[];
   kindUmgebung: (env: Record<string, string | undefined>) => Record<string, string | undefined>;
   teile: (b: string) => string[];
+  liegtIn: (o: string, p: string, m?: unknown) => boolean;
   probeSchritte: (a: { quelle: string; scratch: string; tag: string; sha: string }) => Schritt[];
   probeUrteil: (e: unknown) => { code: number; zeilen: string[] };
   messZeile: (t: string) => string | null;
@@ -112,9 +114,7 @@ describe("projektdatei und fixturePfade", () => {
     expect(cfg('{"x":1}')).toEqual({ x: 1 });
   });
 
-  it("die Anker-Stubs baut die Probe nicht, jede andere Datei ist eine wörtliche Kopie", () => {
-    expect(P.projektdatei({ pfad: "docs/referenz/befehle.md", text: "x", raum: 0 })).toBeNull();
-    expect(P.projektdatei({ pfad: "docs/referenz/anlaufstellen.md", text: "x", raum: 0 })).toBeNull();
+  it("jede andere Datei ist eine wörtliche Kopie", () => {
     expect(P.projektdatei({ pfad: "tsconfig.json", text: "wörtlich\r\n", raum: 0 })).toBe("wörtlich\r\n");
   });
 
@@ -131,6 +131,19 @@ describe("kindUmgebung", () => {
   it("entfernt Diff-Basis, Config-Überschreibungen und Vitest-Variablen, behält den Rest", () => {
     const aus = P.kindUmgebung({ FACTORY_DIFF_BASE: "a", FACTORY_PROJEKT_CONFIG: "b", FACTORY_PROJEKT_WURZEL: "c", VITEST: "true", VITEST_POOL_ID: "1", PATH: "/bin", FACTORY_ANDERES: "d" });
     expect(aus).toEqual({ PATH: "/bin", FACTORY_ANDERES: "d" });
+  });
+});
+
+describe("liegtIn", () => {
+  it("gleicher Ordner, Unterordner und Ordner namens ..x liegen darin; Nachbar, Elternordner und ein anderes Laufwerk nicht", () => {
+    expect(P.liegtIn("/q", "/q")).toBe(true);
+    expect(P.liegtIn("/q", "/q/a")).toBe(true);
+    expect(P.liegtIn("/q", "/q/..x")).toBe(true);
+    expect(P.liegtIn("/q", "/q2")).toBe(false);
+    expect(P.liegtIn("/q/a", "/q")).toBe(false);
+    const laufwerk = (l: string, ...rest: string[]): string => win32.join(`${l}:`, ...rest);
+    expect(P.liegtIn(laufwerk("C", "q"), laufwerk("C", "q", "a"), win32)).toBe(true);
+    expect(P.liegtIn(laufwerk("C", "q"), laufwerk("D", "s"), win32)).toBe(false);
   });
 });
 
@@ -331,6 +344,19 @@ describe("echte Nähte", () => {
       expect(n.istGitRepo(dir)).toBe(true);
       spawnSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
       expect(n.kopf(dir)).toMatch(/^[0-9a-f]{40}$/);
+    });
+  });
+
+  it("die Ausgabe der Schritte wird standardmäßig an den Prozess durchgereicht (stdio inherit), nicht verschluckt", () => {
+    temp((dir) => {
+      const skript = `const { echteNaehte } = await import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "probe-erstbezug.mjs")).href)});
+const io = echteNaehte().mitScratch(${JSON.stringify(join(dir, "s"))});
+process.exitCode = io.fuehre({ argv: [process.execPath, "-e", "console.log('SICHTBAR-IM-SCHRITT')"], cwd: ${JSON.stringify(dir)} });`;
+      const datei = join(dir, "lauf.mjs");
+      writeFileSync(datei, skript);
+      const r = spawnSync(process.execPath, [datei], { encoding: "utf8" });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("SICHTBAR-IM-SCHRITT");
     });
   });
 

@@ -63,11 +63,10 @@ const mische = (basis, ueber) => {
 export const quellPfadFuer = (pfad) => (pfad === PROJEKT_CONFIG ? FIXTURE_PFAD : pfad);
 
 /**
- * Pur: Inhalt einer Datei des Fixture-Projekts aus dem Text der Quelle (`null` = nicht anlegen, der Sync legt sie an). `AGENTS.md` ist der Füll-Block (`text` unbenutzt), die Config die
+ * Pur: Inhalt einer Datei des Fixture-Projekts aus dem Text der Quelle (die Anker-Stubs des Syncs fehlen in `fixturePfade`). `AGENTS.md` ist der Füll-Block (`text` unbenutzt), die Config die
  * Fixture plus Overlay, `package.json` bekommt den Probe-Namen; alles andere ist eine wörtliche Kopie.
  */
 export function projektdatei({ pfad, text, raum, overlay = PROBE_OVERLAY }) {
-  if (SYNC_STUBS.has(pfad)) return null;
   if (pfad === "AGENTS.md") return fuellAgentsMd({ raum });
   if (pfad === PROJEKT_CONFIG) return `${JSON.stringify(mische(JSON.parse(text), overlay), null, 2)}\n`;
   if (pfad === "package.json") return `${JSON.stringify(ohneTestZwang(JSON.parse(text)), null, 2)}\n`;
@@ -88,7 +87,7 @@ export function kindUmgebung(env) {
   return Object.fromEntries(Object.entries(env).filter(([k]) => !GESPERRTE_UMGEBUNG.includes(k) && !k.startsWith("VITEST")));
 }
 
-export const teile = (befehl) => befehl.split(/\s+/u).filter(Boolean);
+export const teile = (befehl) => befehl.split(/\s/u).filter(Boolean);
 
 /**
  * Pur: die geordnete Schrittliste `[{ id, argv, cwd, kritisch }]` (oder `{ id, art: "fixture", cwd }` für den Aufbau der Projektdateien). `kritisch` = ein Rot bricht ab (Aufbau, Sync,
@@ -136,10 +135,10 @@ export function messZeile(text) {
   return `Messung Fixture-AGENTS.md: Kern-Block ${kern} (Budget ${KERN_BLOCK_BUDGET}), Raum ${gesamt - kern} (Soll ${PROJEKT_BLOCK_RAUM}), gesamt ${gesamt} (Budget ${KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM})`;
 }
 
-/** Pur: liegt `pfad` in `ordner` oder ist er es selbst? (`relative` liefert bei einem anderen Laufwerk einen absoluten Pfad: dann nein.) */
-const liegtIn = (ordner, pfad) => {
-  const rel = relative(ordner, pfad);
-  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+/** Pur: liegt `pfad` in `ordner` oder ist er es selbst (relativer Pfad leer)? `relative` liefert bei einem anderen Laufwerk einen absoluten Pfad: dann nein. */
+export const liegtIn = (ordner, pfad, p = { relative, isAbsolute, sep }) => {
+  const rel = p.relative(ordner, pfad);
+  return rel !== ".." && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel);
 };
 
 /** Aufruf-Fehler als Text oder `null`: `--quelle`/`--scratch` Pflicht, Scratch leer und außerhalb der Quelle, Quelle ein Git-Repo, keine Leerzeichen in den Pfaden (die Schrittbefehle sind Wort-Listen). */
@@ -160,8 +159,7 @@ export function baueFixture({ von, ziel, raum, io }) {
   for (const pfad of fixturePfade()) {
     const text = pfad === "AGENTS.md" ? "" : io.lies(join(von, quellPfadFuer(pfad)));
     if (text === null) throw new Error(`Projektdatei ${pfad} fehlt in der Quelle (${quellPfadFuer(pfad)})`);
-    const inhalt = projektdatei({ pfad, text, raum });
-    if (inhalt !== null) io.schreibe(join(ziel, pfad), inhalt);
+    io.schreibe(join(ziel, pfad), projektdatei({ pfad, text, raum }));
   }
 }
 
