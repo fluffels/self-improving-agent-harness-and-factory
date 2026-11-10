@@ -88,6 +88,8 @@ import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../suppor
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { LANGFUSE_LESE_TOOLS as LESE_TOOLS_ROH } from "../../scripts/langfuse-zugang.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { USER_SCOPE_MCP_SERVER } from "../../scripts/werkzeug-vorpruefung.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
@@ -645,7 +647,8 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
   test("jedes mcp__<server>__-Präfix in allow und den Agent-Whitelists nennt einen bekannten Server (#1311)", () => {
     const projekt = Object.keys((JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {});
     const userScope = userScopeServer(read(ROUTING_SSOT));
-    assert.ok(userScope.includes("langfuse"), "docs/model-routing.md muss `langfuse` als vorausgesetzten User-Scope-Server nennen");
+    assert.deepEqual(userScope, USER_SCOPE_MCP_SERVER as string[], "docs/model-routing.md und USER_SCOPE_MCP_SERVER (scripts/werkzeug-vorpruefung.mjs) nennen verschiedene User-Scope-Server");
+    assert.ok(userScope.includes("langfuse"),"docs/model-routing.md muss `langfuse` als vorausgesetzten User-Scope-Server nennen");
     const settings = JSON.parse(read(".claude/settings.json")) as { permissions: { allow: string[] } };
     const regeln = [...settings.permissions.allow];
     for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
