@@ -107,7 +107,8 @@ describe("guardListe: Musterliste", () => {
     expect(muster('  const s = "${a ?? b}";')).toEqual([]);
   });
   test("Regex-Literal nach => wird ausgeblendet (factory#280 L14), Division und echtes ?? bleiben", () => {
-    expect(muster("  const g = (s) => /a ?? b/.test(s);")).toEqual([]);
+    expect(muster("  const g = (s) => /a ?? b/.test(s);")).toEqual(["Regex-Literal"]);
+    expect(muster("  const g = (s) => /^x+$/.test(s);")).toEqual(["Regex-Literal"]);
     expect(muster("  const h = (s) => a / b ?? c / d;")).toEqual(["??"]);
     expect(muster("  const k = (s) => s ?? 1;")).toEqual(["??"]);
   });

@@ -458,7 +458,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("R4: ein Lens-Worktree-Pfad mit unbekannter Endung (`-lens-b1`, `-lens-b<n>`) wird verweigert, die Meldung nennt r, m, a, c (factory#280 L6)", () => {
     const wt = FREMD.praefixe.worktree;
-    for (const pfad of [`/w/.claude/worktrees/${wt}7-lens-b1`, `/w/.claude/worktrees/${wt}7-lens-b<n>`, `/w/.claude/worktrees/${wt}<nr>-lens-x2`]) {
+    for (const pfad of [`/w/.claude/worktrees/${wt}7-lens-b1`, `/w/.claude/worktrees/${wt}7-lens-b<n>`, `/w/.claude/worktrees/${wt}<nr>-lens-x2`, `/w/.claude/worktrees/${wt}268-lens-b1`]) {
       const prompt = `${gut()} · Sabotage-Worktree: ${pfad}`;
       assert.equal(deny(agent(prompt))?.hookSpecificOutput.permissionDecision, "deny", pfad);
       assert.match(grund(agent(prompt)), /r, m, a, c/);
@@ -470,6 +470,9 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     for (const ende of ["r<runde>", "r4", "m3", "a2", "c1"]) {
       assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}7-lens-${ende}`)), null, ende);
     }
+    // bekannte Grenze: ohne Zähler (`-lens-b` ohne Ziffer, Fließtext) bleibt unerkannt, kein Fehlalarm
+    assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}7-lens-b`)), null);
+    assert.equal(deny(agent(`${gut()} · Hinweis: ${wt}7-lens-worktree heißt so`)), null);
     // zwei Platzhalter im selben Segment (der Skill nennt `<praefixe.worktree><nr>-lens-r<runde>`)
     assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}<nr>-lens-r<runde>`)), null);
     assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}<>-lens-r<>`)), null);

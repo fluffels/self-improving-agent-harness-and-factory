@@ -445,6 +445,7 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     // ticket-reihenfolge.md nennt Schwelle und Quote an mehreren Stellen (Takt-Absatz, Position, Kennzahl-Soll): jede muss stimmen.
     // factory#280 L3: die Schwellenzahl steht in der Doku genau einmal (Takt-Bullet, mit Verweis auf die Konstante); sonst Verweis statt Literal.
     bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 1);
+    expect([...doc.matchAll(/ab (\d+) Befund-Kommentaren/g)]).toHaveLength(1);
     expect(doc).not.toMatch(/Schwelle \d+ Befund-Kommentare/);
     expect(doc).not.toMatch(/füllt sich \(k\/\d+/);
     expect(doc).toContain("Konstante `HARNESS_TAKT_KOMMENTARE` in `scripts/produktquote-lib.mjs`");

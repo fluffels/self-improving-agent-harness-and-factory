@@ -77,7 +77,7 @@ function unbekannteLensEndung(text, namen) {
   for (const [segment] of segmente) {
     if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
     const erlaubt = /-lens-\[([a-z]+)\]/.exec(namen.lensNameKern)?.[1] ?? "";
-    return `Lens-Auftrag unbekannt: der Lens-Worktree „${segment}“ trägt eine Endung, die es nicht gibt. Erlaubt sind ${[...erlaubt].join(", ")} (Muster aus ticket-namen.mjs: -lens-r<runde> Review, -lens-m<n> Probe, -lens-a<n> Abnahme-Delta, -lens-c<n> CI-Fix-Delta), sonst blockiert der Lens-Edit-Guard die Sabotage-Probe. ${HINWEIS}`;
+    return `Lens-Auftrag unbekannt: der Lens-Worktree „${segment}“ trägt eine Endung, die es nicht gibt. Erlaubt sind ${[...erlaubt].join(", ")} (Muster aus ticket-namen.mjs: -lens-r<runde> Review, -lens-m<n> Merge-Delta, -lens-a<n> Abnahme-Delta, -lens-c<n> CI-Fix-Delta), sonst blockiert der Lens-Edit-Guard die Sabotage-Probe. ${HINWEIS}`;
   }
   return null;
 }

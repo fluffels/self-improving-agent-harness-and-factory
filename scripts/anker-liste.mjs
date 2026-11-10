@@ -44,7 +44,7 @@ export const MUSTER = [
   { name: "&&=", re: /&&=/ },
   { name: "catch", re: /\bcatch\b/ },
   { name: "throw", re: /\bthrow\b/ },
-  { name: "Regex-Literal", re: /(?:^|[=(,:;!&|?{}[])\s*\/(?![/*])/, auf: "text" },
+  { name: "Regex-Literal", re: /(?:^|[=>(,:;!&|?{}[])\s*\/(?![/*])/, auf: "text" },
   { name: "new RegExp", re: /\bnew\s+RegExp\b/ },
   { name: "<", re: /\s<\s/ },
   { name: "<=", re: /\s<=\s/ },
