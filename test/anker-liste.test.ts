@@ -106,6 +106,12 @@ describe("guardListe: Musterliste", () => {
     expect(muster("  const s = `${f({ a: 1 }) || d} und a ? b : c`;")).toEqual(["||"]);
     expect(muster('  const s = "${a ?? b}";')).toEqual([]);
   });
+  test("Regex-Literal nach => wird ausgeblendet (factory#280 L14), Division und echtes ?? bleiben", () => {
+    expect(muster("  const g = (s) => /a ?? b/.test(s);")).toEqual(["Regex-Literal"]);
+    expect(muster("  const g = (s) => /^x+$/.test(s);")).toEqual(["Regex-Literal"]);
+    expect(muster("  const h = (s) => a / b ?? c / d;")).toEqual(["??"]);
+    expect(muster("  const k = (s) => s ?? 1;")).toEqual(["??"]);
+  });
   test("zusammengesetzte Zuweisungen liefern nur ihr eigenes Muster, nicht das der Kurzform", () => {
     expect(muster("  a ??= 1;")).toEqual(["??="]);
     expect(muster("  a ||= 1;")).toEqual(["||="]);
@@ -147,7 +153,7 @@ describe("guardListe: Musterliste", () => {
   });
 
   test("Verdrahtung reiner Helfer an der Aufrufstelle ist kein Anker (bewusste Grenze, die Lens prüft sie)", () => {
-    expect(neu("function f(x) {\n  const r = g({\n    env: kindUmgebung(x),\n  });\n}")).toEqual([]);
+    expect(neu("function f(x) {\n  const r = g({\n    opt: helfer(x),\n  });\n}")).toEqual([]);
   });
 
   test("ein Regex-Literal am Zeilenanfang verbirgt seine Zeichen ebenfalls", () => {
