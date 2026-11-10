@@ -7,6 +7,10 @@
     "art": "projekt",
     "grund": "Projekt-Config des Doku-Generators"
   },
+  "scripts/probe-erstbezug.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-Werkzeug des Probe-Erstbezugs (factory#234): braucht die Fabrik-Fixture test/fixtures/projekt-probe.json, wird nicht verteilt"
+  },
   "scripts/setup.mjs": {
     "art": "projekt",
     "grund": "Einrichtung dieses Projekts (npm-Skripte, Hooks, Werkzeuge)"
