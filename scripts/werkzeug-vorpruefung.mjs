@@ -5,7 +5,7 @@
  *   node scripts/werkzeug-vorpruefung.mjs   Exit 0 = alles da, 1 = Mangel (je Mangel eine `Mangel:`- und eine `Fix:`-Zeile auf stderr), 2 = Aufruffehler
  *
  * Drei Prüfungen:
- *   1. MCP-Server: jedes `mcp__<server>__`-Präfix aus `tools:` der Agenten in `.claude/agents/*.md` steht in `.mcp.json`, in USER_SCOPE_MCP_SERVER oder in `vorpruefung.userScopeServer` der Projekt-Config (auch die Form `mcp__<server>` ohne Tool).
+ *   1. MCP-Server: jedes `mcp__<server>__`-Präfix aus `tools:` der Agenten in `.claude/agents/*.md` steht in `.mcp.json` oder in USER_SCOPE_MCP_SERVER.
  *   2. Node-Version: `process.versions.node` ist mindestens `.nvmrc`, sonst mindestens `engines.node` (`>=x.y.z`) der `package.json`; ohne beides entfällt sie, eine unlesbare Angabe ist ein Mangel.
  *   3. Projekt-Werkzeuge: der optionale Block `vorpruefung.befehle` der Projekt-Config (`[{ name, befehl: [Programm, Argument…] }]`); jeder Befehl läuft mit 10 s Frist, ENOENT, Exit != 0 oder Timeout ist ein Mangel.
  * Bekannte Grenze: geprüft wird die Deklaration, nicht die laufende MCP-Verbindung (die belegt `mcp-ausfall.mjs`). Bei Codex prüft `required = true` die MCP-Verbindung nativ.
