@@ -44,12 +44,15 @@ export const SCHUTZBEREICHE = ["Sicherheit", "Fremdtext", "Datenverlust"];
 /** Tage von Eintrag bis Verfall einer Kosmetik- oder Hypothese-Zeile (4 Wochen). */
 export const VERFALL_TAGE = 28;
 
-const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const KOPF = /^([^\s:(]+)(?: \(([^)]*)\))?:\s/;
 const VERFALL_ENDE = /\s+Verfall:\s*(\S+?)(?:\s+\(aus #\d+\))?\s*$/;
 const NUR_MIT_VERFALL = ["Kosmetik", "Hypothese"];
 
-const istDatum = (text) => ISO_DATUM.test(text) && !Number.isNaN(Date.parse(`${text}T00:00:00Z`)) && new Date(`${text}T00:00:00Z`).toISOString().startsWith(text);
+/** Ist `text` genau ein gültiges Datum `JJJJ-MM-TT` (Hin- und Rückumwandlung gleich, also auch kein 30. Februar)? */
+const istDatum = (text) => {
+  const t = Date.parse(`${text}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === text;
+};
 
 /** Pur: `datum` (`JJJJ-MM-TT`) plus `tage` Tage, wieder als `JJJJ-MM-TT` (UTC). */
 export const plusTage = (datum, tage) => new Date(Date.parse(`${datum}T00:00:00Z`) + tage * 86_400_000).toISOString().slice(0, 10);
@@ -83,7 +86,8 @@ function verfallFehler({ klasse, schutz, verfall }, heute) {
   if (verfall === null) return braucht ? `${klasse} ohne Schutzbereich braucht \`Verfall: JJJJ-MM-TT\`` : null;
   if (!braucht) return "Verfall nur bei Kosmetik oder Hypothese ohne Schutzbereich";
   if (!istDatum(verfall)) return `Verfall „${verfall}“ ist kein gültiges Datum (JJJJ-MM-TT)`;
-  return heute !== undefined && verfall < heute ? `Verfall ${verfall} liegt vor ${heute} (verfallen)` : null;
+  // ohne `heute` (undefined) ist der Vergleich immer false: dann keine Verfallsprüfung
+  return verfall < heute ? `Verfall ${verfall} liegt vor ${heute} (verfallen)` : null;
 }
 
 /**

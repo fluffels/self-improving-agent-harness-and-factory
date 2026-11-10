@@ -60,6 +60,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     for (const z of ["- [ ] Gate kaputt Beleg: x1", "- [ ] Idee: etwas Beleg: x1", "- [ ] defekt: etwas Beleg: x1"]) assert.equal(gut(z).ok, false, z);
     assert.match(gut("- [ ] Idee: etwas Beleg: x1").fehler ?? "", /unbekannte Klasse/);
     assert.match(gut("- [ ] Gate kaputt Beleg: x1").fehler ?? "", /keine Klasse/);
+    assert.match(gut("- [ ] Idee: ohne Beleg").fehler ?? "", /unbekannte Klasse/);
     assert.match(gut("- [ ] Hypothese (Foo): x Verfall: 2026-12-08").fehler ?? "", /unbekannter Schutzbereich/);
   });
   test("ohne Beleg oder nur Satzzeichen als Beleg", () => {
