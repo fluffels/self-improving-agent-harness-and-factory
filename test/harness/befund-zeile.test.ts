@@ -70,6 +70,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.match(gut("- [ ] Hypothese: x Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
     assert.match(gut("- [ ] Kosmetik: x Beleg: Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
     assert.equal(gut("- [ ] Defekt: x Beleg: 42").ok, true);
+    assert.equal(gut("- [ ] Defekt: x Beleg: mitVerfall: 2026-12-08").ok, true, "nur ein eigenes Wort Verfall: ist das Feld");
     assert.equal(gut("- [ ] Defekt: mitVerfall setzt Verfall: doppelt Beleg: test/a.ts:3").ok, true, "Verfall: im Befund-Text ist kein Verfallsfeld");
     assert.equal(gut("- [ ] Kosmetik: Feld Verfall: fehlt im Glossar Beleg: docs/a.md:3 Verfall: 2026-12-08").ok, true);
     assert.equal(titel.mitVerfall("- [ ] Kosmetik: Feld Verfall: fehlt Beleg: docs/a.md:3", "2026-11-20"), "- [ ] Kosmetik: Feld Verfall: fehlt Beleg: docs/a.md:3 Verfall: 2026-12-18");

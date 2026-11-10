@@ -45,7 +45,7 @@ export const SCHUTZBEREICHE = ["Sicherheit", "Fremdtext", "Datenverlust"];
 export const VERFALL_TAGE = 28;
 
 const KOPF = /^([^\s:]+)(?: \(([^)]*)\))?:\s/;
-const VERFALL_TEIL = /\s+Verfall:[ ]*(\S+?)(?=(?:\s*\(aus #\d+\))*\s*$)/;
+const VERFALL_TEIL = /\s+Verfall:[ ]*(\S+)(?=(?:\s*\(aus #\d+\))*\s*$)/;
 const AUS_ENDE = /(?:\s*\(aus #\d+\))+\s*$/;
 const NUR_MIT_VERFALL = ["Kosmetik", "Hypothese"];
 
