@@ -7,9 +7,12 @@
  * werden je eine neue Zeile im Folge-Sammelticket, nie Teil desselben PR. Alle anderen Stellen sagen
  * „Deckel laut AGENTS.md“ und nennen keine Zahl.
  *
- * Bewusste Grenze: geprüft werden nur die geschlossene Liste VERWEISE und die bekannten Muster des alten
- * „komplett, kein Rest“-Wortlauts; ADRs (Historie) und Tests sind ausgenommen, eine ganz neue Umschreibung desselben
- * Gedankens erkennt der Test nicht.
+ * Bewusste Grenze: geprüft werden nur die geschlossene Liste VERWEISE, die bekannten Muster des alten
+ * „komplett, kein Rest“-Wortlauts und eine Klausel-Regel (Rest-Wort und PR-Ziel in einer Klausel ohne Verneinung);
+ * ADRs (Historie) und Tests sind ausgenommen, eine ganz neue Umschreibung desselben Gedankens erkennt der Test nicht.
+ * Grenzen der Klausel-Regel: ein „nie“ oder „nicht“ in der Klausel schaltet sie frei („nicht ins Folge-Sammelticket,
+ * sondern in diesen PR“ bleibt unerkannt), die Trennung an Kommas verliert den Bezug, „alle Zeilen“ ohne „des Tickets“
+ * ist kein Rest-Wort, und PR-Wendungen wie „diesem einen PR“ kennt sie nicht.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -47,7 +50,7 @@ const ZIEHT_REST_REIN = [
   /Nachzügler setzt du selbst um/,
 ];
 const RESTWORT = /\bRest\b|\bREST\b|übrigen? Zeilen|ganze Ticket|Zeilen des Tickets|Dazugekommen|Nachzügler/;
-const PR_ZIEL = /(?:in|im) (?:diesem|diesen|demselben|selben|einem|einen) PR|\bPR (?:mit|um)\b|mit in (?:diesen|diesem|denselben)|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
+const PR_ZIEL = /(?:in|im|ins) (?:diesem|diesen|dem|den|demselben|denselben|selben|selbe|gleichen|einem|einen) PR|(?:Teil|Bestandteil) (?:desselben|dieses) PR|\bPR (?:mit|um)\b|mit in (?:diesen|diesem|denselben)|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
 const VERNEINT = /\bnie\b|\bnicht\b/;
 
 /** Allgemeine Klausel-Regel: eine Klausel (getrennt an . ; , : und Klammern), die den Rest nennt UND einen PR als Ziel, ohne Verneinung. */
@@ -104,6 +107,26 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
     for (const f of ["AGENTS.md", ...VERWEISE]) assert.ok(!ziehtRestInDenPR(lies(f)), f);
   });
 
+  test("Erkennung greift nicht zu weit (Red-Green der Grenzen): Verneinung, Klausel-Trennung und Wortgrenzen", () => {
+    for (const frei of [
+      "der Rest kommt nie in diesen PR",
+      "der Rest kommt nicht in diesen PR",
+      "Der Rest bleibt. Die Zeilen kommen in einem PR",
+      "Rest; in einem PR",
+      "Rest: in einem PR",
+      "Rest (in einem PR)",
+      "(Rest) in einem PR",
+      "Restarbeit in einem PR",
+      "VorRest in einem PR",
+      "VorREST in einem PR",
+      "RESTE in einem PR",
+      "Der Rest XPR mit",
+      "Der Rest PR umständlich",
+    ]) {
+      assert.ok(!restKlauselInPR(frei), frei);
+    }
+  });
+
   test("der Override-Weg zieht den Rest nicht zurück: nur eine einzelne Zeile, die allein über check:diffsize liegt", () => {
     assert.match(lies("docs/ticket-reihenfolge.md"), /gilt nur für eine einzelne Zeile, die allein darüber liegt/);
     assert.match(lies(".claude/agents/factory-umsetzer.md"), /nur für eine einzelne Zeile, die allein über `check:diffsize` liegt/);
@@ -117,6 +140,16 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "Alle Zeilen des Tickets werden in einem PR umgesetzt.",
       "der Rest geht ins Folge-Sammelticket oder kommt in denselben PR mit",
       "der Rest kommt im selben PR mit",
+      "Der Rest kommt in denselben PR.",
+      "Rest und Neues in denselben PR.",
+      "Der Rest wird Teil desselben PR.",
+      "Nachzügler kommen mit in diesen PR",
+      "Dazugekommenes in diesem PR umsetzen",
+      "alle übrigen Zeilen im selben PR mit",
+      "Es gilt der Rest-Übertrag.",
+      "Setze den Rest PR um",
+      "Die Linie zieht den Rest in diesen PR",
+      "Das nichtig lässt den Rest in diesen PR",
     ]) {
       assert.ok(ziehtRestInDenPR(weg), weg);
     }
