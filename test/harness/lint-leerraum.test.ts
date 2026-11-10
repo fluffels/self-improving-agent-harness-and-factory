@@ -1,3 +1,6 @@
+/* @harness-waechter
+ * Lint-Leerraum (factory#260 L15): die Repo-Config meldet fehlenden Leerraum um Operatoren.
+ */
 import { describe, expect, test } from "vitest";
 import { ESLint } from "eslint";
 
