@@ -13,6 +13,9 @@
  * BOM, CRLF und ein `---` am Anfang sind erlaubt. Je Job kommt erst `name`, dann kommen die Step-Namen (wie in der Referenz).
  * Bekannte Grenze (fail-closed, factory#220): ein einzelnes CR (ohne LF) gilt dem Leser als Zeilenende, die `yaml`-Bibliothek wirft darauf; der Leser liest, die Bibliothek nicht.
  *
+ * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`) und `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
+ * eigene Grenze im Kopf von `blockformAusloeser`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
+ *
  * Nicht gelesen wird (fail-closed): `blockformNamen` liefert dann `{ fehler: { zeile, konstrukt } }`, nie still weniger Namen. Geschlossene Liste: Flow-Collection als `jobs`, Job,
  * `steps`, Step oder `name`-Wert; Anker `&`, Alias `*`, Tag `!` an diesen Stellen; Merge-Schlüssel `<<` und `?`-Schlüssel in einem gelesenen Mapping; Tab in der Einrückung einer
  * gelesenen Zeile; ein zweites Dokument (`---`/`...` nach dem Anfang); eine Direktive `%`; Flow-/JSON-Form oben (`{` oder `[` in Spalte 0); ein unbekanntes Escape; eine Liste
@@ -364,6 +367,102 @@ export function blockformNamen(text) {
     throw e;
   }
   return { namen: alle.filter((n) => n !== "") };
+}
+
+/** Die Einträge einer einzeiligen Flow-Liste `[a, "b, c", 'd']` (Zeile `k`); mehrzeilig, unbeendetes Quote und Verschachtelung sind nicht lesbar. */
+function flowListe(rest, k) {
+  if (!rest.endsWith("]")) throw nl(k, "mehrzeilige Flow-Liste");
+  const namen = [];
+  let s = rest.slice(1, -1);
+  for (;;) {
+    s = s.trimStart();
+    if (s === "") return namen;
+    if (s[0] === '"' || s[0] === "'") {
+      const r = quoteStueck(s.slice(1), s[0] === '"', k);
+      if (!r.zu || !/^[ \t]*(,|$)/.test(r.rest)) throw nl(k, "unlesbarer Eintrag in der Flow-Liste");
+      namen.push(r.out.trim());
+      s = r.rest.replace(/^[ \t]*,?/, "");
+      continue;
+    }
+    const i = s.indexOf(",");
+    const eintrag = (i === -1 ? s : s.slice(0, i)).trim();
+    if (Object.hasOwn(INDIKATOR, eintrag[0]) || /:([ \t]|$)/.test(eintrag)) throw nl(k, "unlesbarer Eintrag in der Flow-Liste");
+    namen.push(eintrag);
+    s = i === -1 ? "" : s.slice(i + 1);
+  }
+}
+
+/** Der Wert von `workflows`: einzeilige Flow-Liste, Block-Liste (auch auf Schlüsselhöhe) oder ein einzelner Skalar; die Namen landen in `namen`. */
+function workflowsWert(c, z, rest, namen) {
+  if (rest[0] === "[") {
+    namen.push(...flowListe(rest, z.k));
+    return;
+  }
+  if (rest !== "") {
+    namen.push(skalar(c, rest, z.k, z.einr).trim());
+    return;
+  }
+  const n = lesen(c);
+  if (n === null || !istStrich(n.text) || n.einr < z.einr) return;
+  for (let e = n; e !== null && e.einr === n.einr && istStrich(e.text); e = lesen(c)) {
+    const frag = e.text.slice(1).trim();
+    if (frag === "" || istStrich(frag) || frag.startsWith("#")) throw nl(e.k, "Eintrag der Liste ohne Skalar in derselben Zeile");
+    c.i = e.k + 1;
+    namen.push(skalar(c, frag, e.k, e.einr).trim());
+  }
+}
+
+/** Der Wert von `workflow_run`: ein Mapping; darin wird nur `workflows` gelesen. */
+function workflowRunBlock(c, z, rest, namen) {
+  const n = blockUnter(c, z, rest, "workflow_run");
+  if (n === null) return;
+  if (istStrich(n.text)) throw nl(n.k, "Liste als workflow_run");
+  mapping(c, n.einr, (key, kz, krest) => {
+    if (key !== "workflows") return false;
+    workflowsWert(c, kz, krest, namen);
+    return true;
+  });
+}
+
+/** Der Wert von `on`: als Block-Mapping wird `workflow_run` gelesen; ein Skalar, eine Flow-Liste oder eine Block-Liste trägt keinen Auslöser mit `workflows`, ein Flow-Mapping wäre nicht lesbar. */
+function onBlock(c, z, rest, namen) {
+  if (rest !== "") {
+    if (rest[0] !== "[" && (Object.hasOwn(INDIKATOR, rest[0]) || /^[|>]/.test(rest))) throw nl(z.k, `${INDIKATOR[rest[0]] ?? "Block-Skalar"} als on`);
+    return;
+  }
+  const n = blockUnter(c, z, rest, "on");
+  if (n === null || istStrich(n.text)) return;
+  mapping(c, n.einr, (key, kz, krest) => {
+    if (key !== "workflow_run") return false;
+    workflowRunBlock(c, kz, krest, namen);
+    return true;
+  });
+}
+
+/**
+ * Liest für den Doctor-Punkt `Workflow-Auslöser` den `name:` der Workflow-Datei (oberste Ebene) und die Namen unter `on.workflow_run.workflows` (L20).
+ * Liefert `{ name: string | null, ausloeser: string[] }` oder `{ fehler: { zeile, konstrukt } }` (`zeile` 1-basiert). Nicht gelesen wird (fail-closed): `on` als Flow-Mapping,
+ * Anker, Alias oder Tag an `on`, `workflow_run`, `workflows`, einem Listeneintrag oder dem Workflow-Namen, eine mehrzeilige Flow-Liste unter `workflows`, dazu alle Strukturfehler der gelesenen Ebenen
+ * (wie bei `blockformNamen`). Jobs und alles andere werden übersprungen; eine Datei, die dort etwas Unlesbares trägt, bleibt lesbar.
+ */
+export function blockformAusloeser(text) {
+  const roh = String(text);
+  const c = { z: (roh.charCodeAt(0) === 0xfeff ? roh.slice(1) : roh).split(/\r\n|\n|\r/), i: 0 };
+  let name = null;
+  const ausloeser = [];
+  try {
+    dokumentStart(c);
+    mapping(c, 0, (key, z, rest) => {
+      if (key === "name") name = nameWert(c, z, rest);
+      else if (key === "on") onBlock(c, z, rest, ausloeser);
+      else return false;
+      return true;
+    });
+  } catch (e) {
+    if (e instanceof NichtLesbar) return { fehler: { zeile: e.zeile, konstrukt: e.konstrukt } };
+    throw e;
+  }
+  return { name: name === "" ? null : name, ausloeser: ausloeser.filter((n) => n !== "") };
 }
 
 /** GitHub liest beide Endungen: auch ein `fake.yaml` darf nicht entgehen. */

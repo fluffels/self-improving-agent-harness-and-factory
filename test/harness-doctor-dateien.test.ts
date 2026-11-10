@@ -491,6 +491,22 @@ describe("Workflow-Auslöser", () => {
       expect(p.nichtPruefbar).toBeUndefined();
     });
   });
+  test("Differenz: der Leser liest dieselben Auslöser wie die yaml-Bibliothek", async () => {
+    const { parse } = await import("yaml");
+    const proben = [
+      "name: A\non:\n  workflow_run:\n    workflows: [CI, 'Zwei Worte']\n    types: [completed]\n",
+      "name: A\non:\n  workflow_run:\n    workflows:\n      - CI\n      - \"Build x\"\n",
+      "name: A\non:\n  workflow_run:\n    workflows:\n    - CI\n    branches: [main]\n",
+      "name: A\non: push\n",
+      "name: A\non:\n  push:\n  pull_request:\n",
+    ];
+    for (const text of proben) {
+      const erwartet = (parse(text) as { on?: { workflow_run?: { workflows?: string[] } } }).on;
+      const soll = typeof erwartet === "object" && erwartet !== null ? (erwartet.workflow_run?.workflows ?? []) : [];
+      const r = (await import("../scripts/workflow-blockform.mjs")).blockformAusloeser(text) as { ausloeser: string[] };
+      expect(r.ausloeser, text).toEqual(soll);
+    }
+  });
   test("steht als letzter Punkt in DATEI_PUNKTE", () => {
     expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
   });
