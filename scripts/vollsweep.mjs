@@ -36,7 +36,7 @@ const AUFRUF = "Aufruf: node scripts/vollsweep.mjs --wurzel <absoluter Worktree>
 const FLAGS = { wurzel: { type: "string" }, datei: { type: "string" }, test: { type: "string" }, zeilen: { type: "string" } };
 const SYNTAX_MUSTER = [/SyntaxError/, /Transform failed/, /Unexpected token/];
 const NODE_DATEI = /\.(?:mjs|cjs|js)$/;
-const GRUPPEN_PRAEFIX = /^\((?:\?(?:<[=!]|[:=!]|<[^>]*>))?/;
+const GRUPPEN_PRAEFIX = /\((?:\?(?:<[=!]|[:=!]|<[^>]*>))?/;
 const KLASSEN_ELEMENT = /\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^\\]/gs;
 const GRENZEN = /^\{(\d+)(?:(,)(\d*))?\}/;
 const KOMMENTARZEILE = /^\s*(?:\/\/|\/\*|\*)/;

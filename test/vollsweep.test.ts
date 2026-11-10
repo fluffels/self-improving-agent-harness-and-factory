@@ -54,6 +54,10 @@ describe("regexLiterale", () => {
     expect(l.map((x) => [x.zeile, x.quelle])).toEqual([[5, "ok"]]);
     expect(text.slice(l[0]!.von, l[0]!.bis)).toBe("/ok/");
   });
+  test("ein Kommentar hinter dem Code oder `//` im String macht die Zeile nicht zur Kommentarzeile", () => {
+    expect(regexLiterale("const r = /x/; // Hinweis").map((x) => x.quelle)).toEqual(["x"]);
+    expect(regexLiterale('const u = "a//b"; const r = /y/;').map((x) => x.quelle)).toEqual(["y"]);
+  });
 });
 
 describe("mutationenRegex", () => {
