@@ -1,6 +1,6 @@
-# Fortschreibung factory#260 (2026-11-10): Laufzeiten-Upstream im Langfuse-Status
+# Fortschreibung #260 (2026-11-10): Laufzeiten-Upstream im Langfuse-Status
 
-Ergänzt [ADR 0016](../0016-langfuse-status-wiederkehrend.md) um einen wöchentlichen Upstream-Check der Agenten-Laufzeiten.
+Ergänzt [ADR 0016](../0016-langfuse-takt-woechentlich.md) um einen wöchentlichen Upstream-Check der Agenten-Laufzeiten.
 
 ## Kontext
 

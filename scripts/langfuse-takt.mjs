@@ -132,6 +132,13 @@ function kennzahlenZeilen(von) {
   ];
 }
 
+/** Die Zeile zum Laufzeiten-Upstream-Check (Checkliste Punkt 12, factory#260): nur in der Fabrik (`upstream`), im Bezieher leer. Pur. */
+function laufzeitenZeile(upstream) {
+  return upstream
+    ? ["- **Laufzeiten-Upstream:** Checkliste Punkt 12 (Claude Code und Codex: Releases, Modell-IDs und Preise, Hook- und Frontmatter-Verhalten, Deprecations; Befunde als Zeilen im Harness-Sammelticket)."]
+    : [];
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
@@ -165,7 +172,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     ...kennzahlenZeilen(vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"),
-    ...(upstream ? ["- **Laufzeiten-Upstream:** Checkliste Punkt 12 (Claude Code und Codex: Releases, Modell-IDs und Preise, Hook- und Frontmatter-Verhalten, Deprecations; Befunde als Zeilen im Harness-Sammelticket)."] : []),
+    ...laufzeitenZeile(upstream),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
     `- **Abschluss:** ${abschluss}`,
