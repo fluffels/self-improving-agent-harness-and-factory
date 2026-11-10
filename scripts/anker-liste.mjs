@@ -6,6 +6,7 @@
  * Köpfe: Deklaration (auch `export default`, `async`, `function*`, generisch `f<T>(…)`), `const f = …=>` (auch `async`, generisch `<T>(…) =>`, mit Typannotation `const f: T = …`; ein Typ mit `=>` darin fehlt), Methode (auch `static`/`async`, mit Rückgabetyp) `name(…) {` (auch einzeilig) und Eigenschaft `name: (…) =>`/`name: function` (eine TS-Typzeile `name: (x) => T;` zählt ebenfalls als Kopf).
  * Bewusste Grenzen (Regex-Heuristik, kein AST): mehrzeilige Ausdrücke und Funktionsköpfe über mehrere Zeilen, verschachtelte oder zeilenübergreifende
  * Strings, verschachtelte Template-Literale und mehrzeilige `${…}` (die Ausdrücke einzeiliger `${…}` werten wir gegen `MUSTER` aus), Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
+ * Verdrahtung reiner Helfer an der Aufrufstelle (`env: kindUmgebung(…)` als Argument) ist keine Verzweigung und kein Anker; die Lens prüft sie.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`; der Kopf `if (istDirektaufruf(` (Spalte 0) zählt als `(Modulebene)`.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
  * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
@@ -82,7 +83,7 @@ const KOPF = [
 ];
 /** Der Block `if (istDirektaufruf(…))` auf Modulebene: nicht der vorigen Funktion zuordnen. */
 const DIREKTAUFRUF_KOPF = /^if\s*\(\s*istDirektaufruf\(/;
-const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/;
+const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/g;
 
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
 const kopfName = (text) => KOPF.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined);
@@ -100,13 +101,14 @@ function parameterListe(text) {
   return text.slice(start);
 }
 
-/** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen mit Default-Parameter zusätzlich. */
+/** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen je Default-Parameter ein Anker „Default-Parameter“ zusätzlich. */
 function ankerNamen(zeile) {
   const text = leereStrings(zeile).replace(/\/\/.*$/, "");
   const ohneRegex = text.replace(REGEX_LITERAL, "$1 R");
   const namen = MUSTER.filter((m) => m.re.test(m.auf === "text" ? text : ohneRegex)).map((m) => m.name);
   const parameter = kopfName(text) === undefined ? "" : parameterListe(ohneRegex);
-  return DEFAULT_PARAMETER.test(parameter) ? [...namen, "Default-Parameter"] : namen;
+  const defaults = (parameter.match(DEFAULT_PARAMETER) ?? []).map(() => "Default-Parameter");
+  return [...namen, ...defaults];
 }
 
 /** Anker einer Datei: nur die Zeilen in `zeilen` (`null` = alle), je Funktion gruppiert. */

@@ -327,13 +327,13 @@ export function sandboxAus(config) {
   return { allowedDomains: wert.allowedDomains ?? [], envVars: wert.envVars ?? [] };
 }
 
-/** Pur: die Projekt-Werkzeuge der Vorprüfung (`vorpruefung.befehle`, factory#260) als `{ befehle }`; ohne Block leer. Wirft mit Fix-Zeile bei kaputter Form. */
+/** Pur: die Projekt-Werkzeuge der Vorprüfung (`vorpruefung.befehle`, factory#260) als `{ befehle, userScopeServer }` (`userScopeServer`: zusätzliche User-Scope-MCP-Server); ohne Block leer. Wirft mit Fix-Zeile bei kaputter Form. */
 export function vorpruefungAus(config) {
   const wert = config?.vorpruefung;
-  if (wert === undefined) return { befehle: [] };
+  if (wert === undefined) return { befehle: [], userScopeServer: [] };
   const fehler = pruefeVorpruefung(wert);
-  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block vorpruefung (befehle: Liste von { name, befehl: [Programm, Argument…] }) in ${PROJEKT_CONFIG} korrigieren`);
-  return { befehle: wert.befehle ?? [] };
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block vorpruefung (befehle: Liste von { name, befehl: [Programm, Argument…] }; userScopeServer: Liste von Servernamen) in ${PROJEKT_CONFIG} korrigieren`);
+  return { befehle: wert.befehle ?? [], userScopeServer: wert.userScopeServer ?? [] };
 }
 
 /** Pur: die gesamte Ergänzung des Projekts aus der geparsten Config: die Listen von `berechtigungen` plus der Zweig `sandbox`; wirft bei kaputter Form. */

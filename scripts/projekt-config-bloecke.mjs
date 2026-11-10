@@ -195,11 +195,20 @@ export function pruefeBerechtigungen(b) {
 
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
-/** Pur: prüft den optionalen Block `vorpruefung` (Form, factory#260; fehlt er, ist nichts zu prüfen): `befehle` ist eine Liste `{ name, befehl }` mit eindeutigem Namen und einer nicht-leeren Liste von Strings (Programm, dann Argumente; kein Shell-Text). */
+const VORPRUEFUNG_KEYS = ["befehle", "userScopeServer"];
+
+/** Pur: Fehler der optionalen Liste `vorpruefung.userScopeServer` (Servernamen `[\w-]+`). */
+function pruefeUserScopeServer(liste) {
+  if (liste === undefined) return [];
+  if (!Array.isArray(liste)) return ["vorpruefung.userScopeServer muss eine Liste von Servernamen sein"];
+  return liste.flatMap((s, i) => (typeof s === "string" && /^[\w-]+$/.test(s) ? [] : [`vorpruefung.userScopeServer[${i}] muss ein Servername sein (nicht-leerer String aus Buchstaben, Ziffern, _ und -)`]));
+}
+
+/** Pur: prüft den optionalen Block `vorpruefung` (Form, factory#260; fehlt er, ist nichts zu prüfen): `befehle` ist eine Liste `{ name, befehl }` mit eindeutigem Namen und einer nicht-leeren Liste von Strings (Programm, dann Argumente; kein Shell-Text); `userScopeServer` ist eine Liste von Servernamen. */
 export function pruefeVorpruefung(b) {
   if (b === undefined) return [];
   if (!istObjekt(b)) return ["vorpruefung muss ein Objekt mit der Liste befehle sein"];
-  const fehler = Object.keys(b).filter((k) => k !== "befehle").map((k) => `vorpruefung.${k} ist kein bekannter Schlüssel (erlaubt: befehle)`);
+  const fehler = [...Object.keys(b).filter((k) => !VORPRUEFUNG_KEYS.includes(k)).map((k) => `vorpruefung.${k} ist kein bekannter Schlüssel (erlaubt: ${VORPRUEFUNG_KEYS.join(", ")})`), ...pruefeUserScopeServer(b.userScopeServer)];
   if (b.befehle === undefined) return fehler;
   if (!Array.isArray(b.befehle)) return [...fehler, "vorpruefung.befehle muss eine Liste von { name, befehl } sein"];
   const namen = new Set();
