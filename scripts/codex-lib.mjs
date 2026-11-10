@@ -1,6 +1,6 @@
 // Codex-Setup-Adapter; kein Einstieg, kein Netzwerk und kein Zugriff auf Authentifizierungswerte.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import pfadModul, { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
@@ -37,8 +37,11 @@ export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
 
 /** Prüft `pfad` und alle Komponenten bis einschließlich `wurzel` (Vorfahren oberhalb, etwa /var auf macOS, bleiben unbeachtet); tote Symlinks zählen, kein Link wird gefolgt. Keine Race-Garantie. */
 function ohneSymlinks(pfad, wurzel) {
+  ohneSymlinksBis(pfad, dirname(resolve(wurzel)));
+}
+/** Wie `ohneSymlinks`, mit dem ausdrücklichen Stopp-Ordner (er selbst wird nicht geprüft). */
+function ohneSymlinksBis(pfad, stopp) {
   let p = resolve(pfad);
-  const stopp = dirname(resolve(wurzel));
   while (p !== stopp) {
     const st = lstatSync(p, { throwIfNoEntry: false });
     if (st?.isSymbolicLink()) throw new Error(`Setup folgt keinem Symlink: ${p}`);
@@ -47,14 +50,18 @@ function ohneSymlinks(pfad, wurzel) {
     p = parent;
   }
 }
-function liegtUnter(ziel, basis) {
-  const r = relative(resolve(basis), resolve(ziel));
-  return r === "" || (r !== ".." && !r.startsWith(`..${sep}`) && !isAbsolute(r));
+function liegtUnter(ziel, basis, pm = pfadModul) {
+  const r = pm.relative(pm.resolve(basis), pm.resolve(ziel));
+  return r === "" || (r !== ".." && !r.startsWith(`..${pm.sep}`) && !pm.isAbsolute(r));
 }
-/** Nächster gemeinsamer Vorfahre zweier Pfade (Ordner, auch einer der beiden selbst). */
-function gemeinsamerVorfahre(a, b) {
-  let p = resolve(a);
-  while (!liegtUnter(b, p)) p = dirname(p);
+/** Nächster gemeinsamer Vorfahre zweier Pfade (Ordner, auch einer der beiden selbst); `pm` ist das Pfadmodul (Tests: `path.win32`). Ohne gemeinsamen Vorfahren (zwei Windows-Laufwerke) endet die Suche an der Wurzel von `a`. */
+export function gemeinsamerVorfahre(a, b, pm = pfadModul) {
+  let p = pm.resolve(a);
+  while (!liegtUnter(b, p, pm)) {
+    const oben = pm.dirname(p);
+    if (oben === p) return p;
+    p = oben;
+  }
   return p;
 }
 /** `repo`: Bezugswurzel; Vorfahren oberhalb des gemeinsamen Vorfahren von Ausgabe und Repo (macOS: /var) werden nicht geprüft. */
@@ -63,7 +70,8 @@ export function pruefeAusgabe(root, repo = root) {
   if (ziel.split(/[\\/]/).some(t => [".git", ".agents", ".codex", ".aws"].includes(t.toLowerCase()))) throw new Error("Ausgabe in Metadatenverzeichnissen ist nicht erlaubt");
   const globalePfade = [join(homedir(), ".codex"), process.env.CODEX_HOME].filter(p => typeof p === "string" && p !== "");
   if (globalePfade.some(p => liegtUnter(ziel, p) || liegtUnter(join(ziel, ".codex"), p))) throw new Error("Globale Codex-Konfiguration ist kein Setup-Ausgabeziel");
-  ohneSymlinks(ziel, gemeinsamerVorfahre(ziel, repo) === ziel ? ziel : join(gemeinsamerVorfahre(ziel, repo), "x"));
+  const vorfahre = gemeinsamerVorfahre(ziel, repo);
+  ohneSymlinksBis(ziel, vorfahre === ziel ? dirname(ziel) : vorfahre);
   return ziel;
 }
 export function quellDatei(root, pfad) {
