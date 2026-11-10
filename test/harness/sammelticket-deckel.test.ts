@@ -232,7 +232,7 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
  * ganze Datei (nicht je Zeile); Markdown-Auszeichnung im Treffer („**12** Zeilen“) wird nicht normalisiert.
  */
 const SCAN_WURZELN = ["docs", ".agents", ".claude/agents"];
-const REGEL_A = /(?:höchstens|maximal|bis zu|Obergrenze|Deckel|Limit)\D{0,20}?\d+\s+(?:Befund-)?Zeilen/gi;
+const REGEL_A = /(?:höchstens|maximal|bis zu|Obergrenze|Deckel|Limit)\D{0,20}\d+\s+(?:Befund-)?Zeilen/gi;
 const REGEL_B = /\d+\s+(?:Befund-)?Zeilen|Zeilen (?:je|pro) (?:Lauf|PR)/gi;
 const SAMMELTICKET = /Sammelticket|gesammelt/i;
 
@@ -307,6 +307,15 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
         "Der Deckel von 12 Zeilen gilt je Sammelticket.",
         "Je Lauf maximal 12 Zeilen.",
         "Das Sammelticket wird in 12 Zeilen je Lauf geschnitten.",
+        "Je Lauf bis zu 12 Zeilen.",
+        "Je Lauf Obergrenze 12 Zeilen.",
+        "Je Lauf Limit 12 Zeilen.",
+        "Je Lauf höchstens 12 Befund-Zeilen.",
+        "Sammelticket: Zeilen je Lauf begrenzen.",
+        "Sammelticket: Zeilen pro Lauf begrenzen.",
+        "Sammelticket: Zeilen je PR begrenzen.",
+        "Alles gesammelt in 12 Zeilen.",
+        "Das Sammelticket schneidet 12 Zeilen.",
       ]) {
         assert.ok(zeilenzahlVerstoesse(mit(pfad, zusatz)).some((v) => v.startsWith(`${pfad}: „`)), `${pfad}: ${zusatz}`);
       }
