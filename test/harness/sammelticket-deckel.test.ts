@@ -330,6 +330,8 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
         "Höchstens 12 Zeilen je Lauf.",
         "Das Sammelticket schneidet 12 Befund-Zeilen.",
         "Gesammelt wird in 12 Zeilen.",
+        "Je Lauf höchstens 12\u00a0Zeilen.",
+        "Das Sammelticket schneidet 12 zeilen.",
         "Das Sammelticket schneidet 12\u00a0Zeilen.",
         "Limit" + "x".repeat(20) + "12 Zeilen.",
       ]) {
