@@ -250,6 +250,7 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     expect(r.log.join("\n")).toContain("- [x] `o/a`: Probe grün");
     expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
     expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");
+    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: CI des Commits nicht grün");
     expect(r.text).toEqual([]);
   });
   it("nur ausstehend, kein Blocker: keine BLOCKER-Zeile; nur Blocker, nichts ausstehend: keine ausstehend-Zeile", async () => {
