@@ -146,6 +146,18 @@ export function guardListe({ diffText, neueDateien = [], lies, istQuelle }) {
   return [...quellen].flatMap(([datei, { inhalt, zeilen }]) => dateiAnker(datei, inhalt, zeilen));
 }
 
+/** Pur: die Zahl aller Anker einer Guard-Liste. */
+export const ankerSumme = (ergebnis) => ergebnis.reduce((s, e) => s + e.anker.length, 0);
+
+/** Die Guard-Liste des Diffs gegen `basis` (geänderte und neue Quelldateien) mit injiziertem `git`, `lesen`, `istQuelle`. */
+export function ankerImDiff(basis, { git, lesen, istQuelle }) {
+  const neueDateien = git(["ls-files", "--others", "--exclude-standard"])
+    .split(/\r?\n/)
+    .filter((pfad) => istQuelle(normalizePath(pfad)))
+    .map((pfad) => ({ pfad, inhalt: lesen(pfad) }));
+  return guardListe({ diffText: git(["diff", "-U0", basis]), neueDateien, lies: lesen, istQuelle });
+}
+
 /** Eine Zeile je Funktion `datei:zeile funktion: <n> Anker (if×2 :41,:47; ?? :52)` plus Summe. */
 export function formatiere(ergebnis) {
   if (ergebnis.length === 0) return "Guard-Liste: keine Anker im Diff.\n";
@@ -155,7 +167,7 @@ export function formatiere(ergebnis) {
     const text = [...gruppen].map(([muster, orte]) => `${muster}${orte.length > 1 ? `×${orte.length}` : ""} ${orte.join(",")}`).join("; ");
     return `${e.datei}:${e.zeile} ${e.funktion}: ${e.anker.length} Anker (${text})`;
   });
-  const summe = ergebnis.reduce((s, e) => s + e.anker.length, 0);
+  const summe = ankerSumme(ergebnis);
   return `${zeilen.join("\n")}\nSumme: ${summe} Anker in ${ergebnis.length} ${ergebnis.length === 1 ? "Funktion" : "Funktionen"}\n`;
 }
 
@@ -167,11 +179,7 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   if (basis === null) {
     return { code: 1, out: "", err: "✖ anker-liste: keine Vergleichs-Basis auflösbar\nFix: --basis <ref> angeben oder `git fetch origin` ausführen\n" };
   }
-  const neueDateien = git(["ls-files", "--others", "--exclude-standard"])
-    .split(/\r?\n/)
-    .filter((pfad) => istQuelle(normalizePath(pfad)))
-    .map((pfad) => ({ pfad, inhalt: lesen(pfad) }));
-  const ergebnis = guardListe({ diffText: git(["diff", "-U0", basis]), neueDateien, lies: lesen, istQuelle });
+  const ergebnis = ankerImDiff(basis, { git, lesen, istQuelle });
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
 

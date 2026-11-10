@@ -275,6 +275,41 @@ function fakeGit(o: {
 }
 const env = { FACTORY_DIFF_BASE: "base" };
 
+describe("Guard-Liste: Zahl im Selbstcheck gegen die Ankerzahl des Diffs (L23)", () => {
+  const warnung = (messages: string, ist: number) => (raw as unknown as { guardListeWarnung: (o: { messages: string; ist: number }) => string | null }).guardListeWarnung({ messages, ist });
+  test("Treffer: gleiche Zahl, keine Warnung", () => {
+    assert.equal(warnung("feat: x\n\nGuard-Liste: 7 Anker, 5 belegt\n", 7), null);
+  });
+  test("Abweichung: ::warning:: mit beiden Zahlen; die jüngste Zeile gilt", () => {
+    const w = warnung("Guard-Liste: 7 Anker, 7 belegt\n\nspäter\n\nGuard-Liste: 9 Anker, 9 belegt\n", 12);
+    assert.match(w ?? "", /^::warning::/);
+    assert.match(w ?? "", /9 Anker/);
+    assert.match(w ?? "", /12 Anker/);
+    assert.equal(warnung("Guard-Liste: 7 Anker, 7 belegt\n\nGuard-Liste: 12 Anker, 12 belegt\n", 12), null);
+  });
+  test("keine Zeile: Warnung bei Ankern im Diff, keine bei null Ankern; eingerückte Zeile zählt nicht", () => {
+    assert.match(warnung("feat: x\n", 3) ?? "", /^::warning::.*keine Zeile/);
+    assert.equal(warnung("feat: x\n", 0), null);
+    assert.match(warnung("  Guard-Liste: 3 Anker\n", 3) ?? "", /keine Zeile/);
+  });
+  test("checkReviewNachweis liefert die Warnung nur mit ankerZahl, die Exit-Entscheidung bleibt gleich", () => {
+    const git = fakeGit({ messages: `${review()}\nGuard-Liste: 2 Anker, 2 belegt` });
+    type Mit = (o: { runGit: (a: string[]) => string; env: Record<string, string>; ladeZeilen: () => Zeilen; ankerZahl?: () => number }) => { ok: boolean; guardWarnung?: string | null };
+    const f = (raw as unknown as { checkReviewNachweis: Mit }).checkReviewNachweis;
+    const ohne = f({ runGit: git, env, ladeZeilen: () => Z });
+    const abweichend = f({ runGit: git, env, ladeZeilen: () => Z, ankerZahl: () => 5 });
+    const gleich = f({ runGit: git, env, ladeZeilen: () => Z, ankerZahl: () => 2 });
+    assert.equal(ohne.guardWarnung ?? null, null);
+    assert.match(abweichend.guardWarnung ?? "", /::warning::/);
+    assert.equal(gleich.guardWarnung, null);
+    assert.equal(abweichend.ok, true);
+    assert.equal(ohne.ok, true);
+    const wirft = f({ runGit: git, env, ladeZeilen: () => Z, ankerZahl: () => { throw new Error("kaputt"); } });
+    assert.equal(wirft.ok, true);
+    assert.equal(wirft.guardWarnung, null);
+  });
+});
+
 describe("checkReviewNachweis (git injiziert)", () => {
   test("zwei Nachweis-Commits: der jüngste gilt, ein alter mit unbekanntem head stört nicht (Z8a)", () => {
     const alt = review(`head=${"c".repeat(40)} runden=2 lenses=${DREI} verdikt=ok`);

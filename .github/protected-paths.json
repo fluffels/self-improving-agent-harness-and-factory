@@ -4,6 +4,7 @@
     "/scripts/schichten-kern.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
+    "/scripts/anker-liste.mjs",
     "/scripts/ci-laeufe.mjs",
     "/scripts/verify-lauf.mjs",
     "/scripts/docs-gen*",

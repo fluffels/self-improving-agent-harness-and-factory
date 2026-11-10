@@ -35,7 +35,10 @@
  *
  * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config (Test, fremdes Projekt), sonst die des Repos.
  *
- * Reines Node-Skript (nur Builtins + check-basis.mjs); die Bewertung ist pur exportiert.
+ * Hinweis (kein Fehler, Exit-Code gleich): die jüngste Commit-Zeile `Guard-Liste: <n> Anker` (Selbstcheck des Umsetzers) wird mit der Ankerzahl des Diffs
+ * aus `scripts/anker-liste.mjs` verglichen; Abweichung oder fehlende Zeile bei vorhandenen Ankern gibt eine `::warning::`-Zeile (`guardListeWarnung`).
+ *
+ * Reines Node-Skript (nur Builtins, check-basis.mjs und anker-liste.mjs); die Bewertung ist pur exportiert.
  */
 
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -45,6 +48,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { ankerImDiff, ankerSumme, echteUmgebung as ankerUmgebung } from "./anker-liste.mjs";
 import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -202,9 +206,30 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   return fehler;
 }
 
+/**
+ * Pur: Warnung, wenn die jüngste Zeile `Guard-Liste: <n> Anker` (am Zeilenanfang einer Commit-Message, der Selbstcheck des Umsetzers) nicht
+ * zur Ankerzahl `ist` des Diffs passt (`scripts/anker-liste.mjs`); ohne Zeile nur, wenn der Diff Anker hat. Sonst `null`. Nie ein Fehler (Exit-Code gleich).
+ */
+export function guardListeWarnung({ messages, ist }) {
+  const treffer = [...String(messages).replace(/\r/g, "").matchAll(/^Guard-Liste: (\d+) Anker\b/gm)];
+  if (treffer.length === 0) return ist > 0 ? `::warning::Guard-Liste: keine Zeile \`Guard-Liste: <n> Anker\` in den Commits, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)` : null;
+  const genannt = Number(treffer[treffer.length - 1][1]);
+  return genannt === ist ? null : `::warning::Guard-Liste nennt ${genannt} Anker, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)`;
+}
+
+/** Die Warnung zu `messages` mit der Ankerzahl aus `ankerZahl()`; ohne `ankerZahl` oder bei einem Fehler dort `null` (eine Warnung bricht nie ab). */
+function guardWarnungOderNull(messages, ankerZahl) {
+  if (typeof ankerZahl !== "function") return null;
+  try {
+    return guardListeWarnung({ messages, ist: ankerZahl() });
+  } catch {
+    return null;
+  }
+}
+
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen } = {}) {
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ankerZahl } = {}) {
   let zeilen;
   try {
     zeilen = ladeZeilen();
@@ -250,6 +275,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       invalid: ov.invalid,
       commitsNachReview,
       blockerFehlt: nachweis.review?.blocker === null,
+      guardWarnung: guardWarnungOderNull(messages, ankerZahl),
       zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
     };
   } catch (e) {
@@ -260,6 +286,14 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
 /** CLI-Zeile zum Zusatzpass; `null` ohne gültigen Zusatzpass. Pur. */
 export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass: ${r.zusatzpass.grund}` : null);
 
+/** Die Ankerzahl des Diffs gegen die Basis (echtes git, wie `node scripts/anker-liste.mjs`); wirft ohne auflösbare Basis. */
+function ankerZahlImDiff() {
+  const umgebung = ankerUmgebung();
+  const basis = resolveBase(umgebung.git, process.env);
+  if (!basis) throw new Error("keine Basis");
+  return ankerSumme(ankerImDiff(basis, umgebung));
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main(argv = process.argv.slice(2)) {
   const getrennt = trenneConfigArg(argv);
@@ -269,7 +303,7 @@ function main(argv = process.argv.slice(2)) {
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
   const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
-  const r = checkReviewNachweis({ ladeZeilen: () => zeilen });
+  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ankerZahl: ankerZahlImDiff });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");
     return;
@@ -284,6 +318,7 @@ function main(argv = process.argv.slice(2)) {
     if (typeof r.commitsNachReview === "number") {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
     }
+    if (r.guardWarnung) console.log(r.guardWarnung);
     if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
     const zusatz = zusatzpassZeile(r);
     if (zusatz) console.log(zusatz);
