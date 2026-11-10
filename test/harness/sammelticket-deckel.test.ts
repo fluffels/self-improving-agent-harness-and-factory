@@ -167,6 +167,8 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "Übrige Zeilen kommen in diesen PR",
       "Der Rest kommt in **denselben** PR.",
       "Der Rest kommt in    denselben PR.",
+      "Eine harmlose Zeile\nDer Rest kommt in diesen PR",
+      "Das gilt nie\nDer Rest kommt in diesen PR",
     ]) {
       assert.ok(ziehtRestInDenPR(weg), weg);
     }
