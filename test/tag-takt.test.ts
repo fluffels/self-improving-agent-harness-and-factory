@@ -277,6 +277,11 @@ describe("CI-Zustand und Body", () => {
       expect(i).toBeLessThan(rot.findIndex((z) => z.startsWith("- [ ] Pre-Flight")));
       expect(mit("gruen")).toContain("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
     });
+    it("die Zeile „Tag setzen“ ist nur bei grüner CI ein freigegebener Schritt, sonst gesperrt", () => {
+      const tagZeile = (zustand: string): string | undefined => T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand, url: null } }).split("\n").find((z) => z.includes("Tag `v1.3.0` setzen"));
+      expect(tagZeile("gruen")).toBe("- [ ] Tag `v1.3.0` setzen (Befehl oben)");
+      for (const z of ["rot", "laeuft", "unbekannt"]) expect(tagZeile(z), z).toBe("- [ ] Tag `v1.3.0` setzen: GESPERRT, solange die CI-Zeile nicht grün ist (Befehl oben nicht ausführen)");
+    });
     it("bei leerer Bezieher-Liste bleibt die Probe-Zeile, und die Bezieher-Zeile verweist auf den CI-Job statt auf oben", () => {
       const leer = T.tagBody({ tag: "v1.3.0", letzterTag: "v1.2.3", sha: "b".repeat(40), prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null }, bezieher: [] });
       expect(leer).toContain("- [ ] Probe-Erstbezug");

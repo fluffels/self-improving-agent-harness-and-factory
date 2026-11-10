@@ -11,7 +11,7 @@ import { FREMD } from "./support/fremd-config";
 
 type Aufruf = { args: string[]; opt: unknown };
 type Deps = Record<string, unknown>;
-const T = raw as unknown as { main: (argv: string[], deps: Deps) => Promise<number>; tagTitel: (t: string) => string };
+const T = raw as unknown as { main: (argv: string[], deps: Deps) => Promise<number>; tagTitel: (t: string) => string; probeEinstieg: (argv: string[], deps: Deps) => number };
 
 const SHA = "a".repeat(40);
 const commitLog = (n: number) =>
@@ -178,8 +178,9 @@ describe("tag-takt main", () => {
 
 describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
   const mitBezieher = (bezieher: unknown) => ({ ...FREMD, bezieher });
-  const probe = (argv: string[], config: unknown = mitBezieher(["o/a", "o/b"])) => {
-    const a = aufbau();
+  const CI_LAUF = (conclusion: string | null, status = "completed") => [{ path: ".github/workflows/ci.yml", status, conclusion, html_url: "https://example.invalid/run/9" }];
+  const probe = (argv: string[], config: unknown = mitBezieher(["o/a", "o/b"]), laeufe: unknown = CI_LAUF("success")) => {
+    const a = aufbau({ ghJson: () => laeufe });
     a.deps.ladeConfig = () => config;
     return T.main(argv, a.deps).then((code) => ({ code, log: a.log, text: a.text }));
   };
@@ -203,9 +204,49 @@ describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
     expect(r.code).toBe(1);
     expect(r.log.join("\n")).toContain("BLOCKER `o/b`");
   });
-  it("alle Bezieher grün: Exit 0, beide abgehakt, kein gh-Aufruf", async () => {
+  it("CI des Commits rot: Exit 1 trotz grüner Bezieher, BLOCKER-Zeile, nicht taggen (K3)", async () => {
+    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"], undefined, CI_LAUF("failure"));
+    expect(r.code).toBe(1);
+    expect(r.log.join("\n")).toContain("- [ ] BLOCKER: CI des Commits aaaaaaa rot (enthält den Probe-Erstbezug), nicht taggen");
+    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
+  });
+  it.each([
+    ["läuft noch", CI_LAUF(null, "in_progress")],
+    ["kein Lauf", []],
+  ])("CI des Commits %s: Exit 1 (ausstehend, fail-closed)", async (_n, laeufe) => {
+    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"], undefined, laeufe);
+    expect(r.code).toBe(1);
+    expect(r.log.join("\n")).toContain("- [ ] CI des Commits aaaaaaa ausstehend, nicht taggen, bis grün");
+  });
+  it("probeEinstieg ohne ci (Standard) oder mit ci null ist ausstehend: Exit 1, auch bei grünen Bezieherinnen", () => {
+    const deps = { ladeConfig: () => mitBezieher(["o/a"]), log: () => undefined, err: () => undefined };
+    expect(T.probeEinstieg(["--probe", "o/a=0"], deps)).toBe(1);
+    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: null })).toBe(1);
+    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "gruen", url: null }, sha: SHA })).toBe(0);
+  });
+  it("CI-Abfrage wirft (gh-Fehler): ausstehend, Exit 1, kein Absturz", async () => {
+    const a = aufbau({ ghJson: () => { throw new Error("gh kaputt"); } });
+    a.deps.ladeConfig = () => mitBezieher(["o/a", "o/b"]);
+    expect(await T.main(["--probe", "o/a=0", "--probe", "o/b=0"], a.deps)).toBe(1);
+    expect(a.log.join("\n")).toContain("CI-Status nicht lesbar");
+  });
+  it("git rev-parse wirft: ausstehend, Exit 1, kein Absturz", async () => {
+    const a = aufbau({ git: () => { throw new Error("kein git"); } });
+    a.deps.ladeConfig = () => mitBezieher(["o/a", "o/b"]);
+    expect(await T.main(["--probe", "o/a=0", "--probe", "o/b=0"], a.deps)).toBe(1);
+    expect(a.log.join("\n")).toContain("Commit nicht lesbar");
+  });
+  it("die CI-Abfrage gilt dem HEAD-Commit des Checkouts (rev-parse) über den gh-Platzhalter, nicht einem festen Repo", async () => {
+    const aufrufe: string[][] = [];
+    const a = aufbau({ ghJson: (x) => { aufrufe.push(x); return CI_LAUF("success"); } });
+    a.deps.ladeConfig = () => mitBezieher(["o/a"]);
+    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(0);
+    expect(aufrufe).toEqual([["api", `repos/{owner}/{repo}/actions/runs?head_sha=${SHA}&event=push&per_page=30`, "--jq", ".workflow_runs"]]);
+  });
+  it("alle Bezieher grün, CI grün: Exit 0, beide abgehakt, CI-Zeile abgehakt, kein Ticket-Schreibzugriff", async () => {
     const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"]);
     expect(r.code).toBe(0);
+    expect(r.log.join("\n")).toContain("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
     expect(r.log.join("\n")).toContain("- [x] `o/a`: Probe grün");
     expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
     expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");

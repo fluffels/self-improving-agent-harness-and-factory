@@ -21,7 +21,7 @@
  * In einem Bezieher (es gibt `.factory/sync-stand.json`) tut das Skript nichts. Ohne Release-Tag ebenfalls nichts.
  *
  * Aufruf: node scripts/tag-takt.mjs [--dry-run]   (Workflow: .github/workflows/board-takt.yml)
- *         node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest …   (Checkliste der Vor-Tag-Probe, `rest` = Rot nur im Projekt des Beziehers: grün mit Befund, factory#215; Repo-Schreibweise egal (GitHub unterscheidet nicht), Ausgabe unter dem Namen der Config; Exit 0 = alle Bezieher grün, 1 = Blocker oder ausstehend, 2 = Aufruf-/Config-Fehler; kein gh-Aufruf)
+ *         node scripts/tag-takt.mjs --probe <owner/name>=<exit>|rest …   (Checkliste der Vor-Tag-Probe, `rest` = Rot nur im Projekt des Beziehers: grün mit Befund, factory#215; Repo-Schreibweise egal (GitHub unterscheidet nicht), Ausgabe unter dem Namen der Config; Exit 0 = alle Bezieher grün und die CI des HEAD-Commits grün (eine lesende gh-Abfrage, factory#234), 1 = Blocker, ausstehend oder CI nicht grün, 2 = Aufruf-/Config-Fehler)
  * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); `main` läuft in test/tag-takt-main.test.ts über injizierte Nähte, die echten git-/gh-Aufrufe unten nicht.
  */
 import { execFileSync } from "node:child_process";
@@ -313,7 +313,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- [ ] Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): läuft auch als CI-Job \`Probe-Erstbezug\` und baut einen Fixture-Bezieher mit dem Sync aus einem lokalen Klon, den mechanischen Update-Schritten und vollem \`verifyKompakt\`; die grüne CI des Commits deckt ihn ab. Von Hand mit demselben Aufruf: \`node scripts/probe-erstbezug.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --scratch <leerer scratch-ordner>\``,
     ...(bezieher.length > 0 ? bezieherProbe({ bezieher }).zeilen : []),
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
-    `- [ ] Tag \`${tag}\` setzen (Befehl oben)`,
+    ci?.zustand === "gruen" ? `- [ ] Tag \`${tag}\` setzen (Befehl oben)` : `- [ ] Tag \`${tag}\` setzen: GESPERRT, solange die CI-Zeile nicht grün ist (Befehl oben nicht ausführen)`,
     `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
     "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
     "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“",
@@ -511,9 +511,10 @@ export function probeErgebnisse(angaben, bezieher) {
 
 /**
  * Einstieg `--probe` (factory#188): liest die Ergebnisse der Vor-Tag-Probe und gibt die Checkliste aus; Exit 0 nur, wenn jeder gelistete Bezieher ein Ergebnis 0 hat,
- * 1 bei einem Blocker oder einem ausstehenden Bezieher, 2 bei Aufruf- oder Config-Fehler (unbekanntes Repo, kein Exit-Wert, doppelt). Kein gh-Aufruf.
+ * 1 bei einem Blocker oder einem ausstehenden Bezieher, 2 bei Aufruf- oder Config-Fehler (unbekanntes Repo, kein Exit-Wert, doppelt). Seit factory#234 zählt auch der CI-Zustand des
+ * Commits (`ci` = `ciZustand`, `sha`): nur grün lässt Exit 0 zu, rot ist ein Blocker, laufend oder unbekannt ausstehend (fail-closed). `ci` und `sha` setzt `main` (eine gh-Abfrage).
  */
-export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), log = console.log, err = console.error } = {}) {
+export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), log = console.log, err = console.error, ci = { zustand: "unbekannt", url: null }, sha = "" } = {}) {
   const { werte, fehler } = flagsLesen(argv, { probe: { type: "string", multiple: true } });
   if (fehler) {
     err(`${fehler.text}\n${PROBE_AUFRUF}`);
@@ -532,11 +533,29 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
     return AUFRUF_EXIT;
   }
   const r = bezieherProbe({ bezieher, ergebnisse });
-  log(r.zeilen.join("\n"));
+  log([ciCheckliste(ci, sha), ...r.zeilen].join("\n"));
+  if (ci?.zustand !== "gruen") log("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
   if (r.blocker.length > 0) log(`Vor-Tag-Probe: BLOCKER ${r.blocker.join(", ")}: nicht taggen.`);
   if (r.rest.length > 0) log(`Vor-Tag-Probe: Projekt-Rest bei ${r.rest.join(", ")}: als Befund festhalten.`);
   if (r.offen.length > 0) log(`Vor-Tag-Probe: ausstehend ${r.offen.join(", ")}: nicht taggen, bis die Probe läuft.`);
-  return r.blocker.length + r.offen.length === 0 ? 0 : 1;
+  return r.blocker.length + r.offen.length === 0 && ci?.zustand === "gruen" ? 0 : 1;
+}
+
+/** CI-Zustand des HEAD-Commits für `--probe` (das Repo löst gh über `{owner}/{repo}` aus dem Checkout auf); jeder Lesefehler ist `unbekannt` (fail-closed). → `{ ci, sha }`. */
+function probeCi({ gh, git, log }) {
+  let sha = "";
+  try {
+    sha = git(["rev-parse", "HEAD"]).trim();
+  } catch (e) {
+    log(`Commit nicht lesbar (${fehlerText(e)}), die CI-Zeile steht auf „ausstehend“.`);
+    return { ci: { zustand: "unbekannt", url: null }, sha };
+  }
+  try {
+    return { ci: ciZustand(gh.json(["api", `repos/{owner}/{repo}/actions/runs?head_sha=${sha}&event=push&per_page=30`, "--jq", ".workflow_runs"])), sha };
+  } catch (e) {
+    log(`CI-Status nicht lesbar (${fehlerText(e)}), die CI-Zeile steht auf „ausstehend“.`);
+    return { ci: { zustand: "unbekannt", url: null }, sha };
+  }
 }
 
 /** Einstieg. `deps` (Tests): `start`, `ladeConfig` (nur `--probe`), `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
@@ -546,7 +565,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
       log("Tag-Takt: Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun.");
       return 0;
     }
-    return probeEinstieg(argv, { ladeConfig, log, err });
+    return probeEinstieg(argv, { ladeConfig, log, err, ...probeCi({ gh, git, log }) });
   }
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
