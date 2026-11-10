@@ -46,7 +46,15 @@ const ZIEHT_REST_REIN = [
   /keine Zeilengrenze/,
   /Nachzügler setzt du selbst um/,
 ];
-export const ziehtRestInDenPR = (text: string): boolean => ZIEHT_REST_REIN.some((m) => m.test(text));
+const RESTWORT = /\bRest\b|\bREST\b|übrigen? Zeilen|ganze Ticket|Zeilen des Tickets|Dazugekommen|Nachzügler/;
+const PR_ZIEL = /(?:in|im) (?:diesem|diesen|demselben|selben|einem|einen) PR|\bPR (?:mit|um)\b|mit in (?:diesen|diesem|denselben)|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
+const VERNEINT = /\bnie\b|\bnicht\b/;
+
+/** Allgemeine Klausel-Regel: eine Klausel (getrennt an . ; , : und Klammern), die den Rest nennt UND einen PR als Ziel, ohne Verneinung. */
+export const restKlauselInPR = (text: string): boolean =>
+  text.split(/[.;,:()]/).some((k) => RESTWORT.test(k) && PR_ZIEL.test(k) && !VERNEINT.test(k));
+
+export const ziehtRestInDenPR = (text: string): boolean => ZIEHT_REST_REIN.some((m) => m.test(text)) || restKlauselInPR(text);
 
 describe("Sammelticket-Deckel: Zahl nur in AGENTS.md (factory#268)", () => {
   const agents = lies("AGENTS.md");
@@ -94,6 +102,32 @@ describe("Sammelticket-Deckel: Zahl nur in AGENTS.md (factory#268)", () => {
 describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268)", () => {
   test("weder AGENTS.md noch eine Verweis-Stelle enthält das alte „komplett, kein Rest“", () => {
     for (const f of ["AGENTS.md", ...VERWEISE]) assert.ok(!ziehtRestInDenPR(lies(f)), f);
+  });
+
+  test("der Override-Weg zieht den Rest nicht zurück: nur eine einzelne Zeile, die allein über check:diffsize liegt", () => {
+    assert.match(lies("docs/ticket-reihenfolge.md"), /gilt nur für eine einzelne Zeile, die allein darüber liegt/);
+    assert.match(lies(".claude/agents/factory-umsetzer.md"), /nur für eine einzelne Zeile, die allein über `check:diffsize` liegt/);
+  });
+
+  test("Erkennung greift (Red-Green): andere Wege, den Rest wieder in denselben PR zu ziehen, fallen durch", () => {
+    for (const weg of [
+      "Der Override gilt für den ganzen Lauf, dann setzt du auch die REST-Zeilen in diesem PR um.",
+      "Mit diesem Override darf ein Lauf auch alle Zeilen des Tickets komplett umsetzen.",
+      "Danach das ganze Ticket komplett abarbeiten, kein Rest.",
+      "Alle Zeilen des Tickets werden in einem PR umgesetzt.",
+      "der Rest geht ins Folge-Sammelticket oder kommt in denselben PR mit",
+      "der Rest kommt im selben PR mit",
+    ]) {
+      assert.ok(ziehtRestInDenPR(weg), weg);
+    }
+    for (const ok of [
+      "der Rest geht ins Folge-Sammelticket, nie Teil desselben PR",
+      "die gewählten Zeilen komplett in einem PR, je Zeile ein Ergebnis, Rest ins Folge-Sammelticket",
+      "Der PR löst die ALLOWLIST-Einträge auf.",
+      "ein Nachzügler wird eine Zeile im Folge-Sammelticket, nie Teil dieses PR",
+    ]) {
+      assert.ok(!ziehtRestInDenPR(ok), ok);
+    }
   });
 
   test("Erkennung greift (Red-Green): jeder alte Wortlaut fällt durch, der neue nicht", () => {
