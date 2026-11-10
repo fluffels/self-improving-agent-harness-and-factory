@@ -28,7 +28,7 @@ const M = raw as unknown as {
   entscheideClaim: (o: { erstellt: number; jetzt: number }) => string;
   entscheidePruefung: (o: { lock: { nonce: string } | null; nonce: string | null; vorhanden: boolean; aktivitaet: number | null; jetzt: number }) => string;
   letzteAktivitaet: (o: { commitMs?: number[]; reflogMs?: number[]; dateiMs?: number[]; nodeModulesMs?: number | null }) => number | null;
-  aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; fehler?: string };
+  aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; grund?: string | null; fehler?: string };
   fuehreAus: (argv: string[], deps: Deps) => Erg;
   echteDeps: (o?: { config?: unknown; basis?: string }) => Deps;
   ALTLAST_MS: number;

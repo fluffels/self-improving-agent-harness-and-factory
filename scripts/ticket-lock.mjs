@@ -5,7 +5,8 @@
  * Worktree, eine löschte dem Gegenüber `node_modules`).
  *
  *   node scripts/ticket-lock.mjs claim <nr> [--wiederaufnahme]    # vor `gh issue edit --add-assignee`; Exit 0 + `nonce=<x>`
- *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]       # rein lesend: vor Spawn und vor Übernahme eines Worktrees
+ *   node scripts/ticket-lock.mjs erzwingen <nr> --grund <text>   # nur auf ausdrückliche Anweisung der Maintainerin (factory#260): ersetzt den Lock einer beendeten Session; Exit 0 + `nonce=<x>`
+ *   node scripts/ticket-lock.mjs pruefe <nr> [--nonce <x>]      # rein lesend: vor Spawn und vor Übernahme eines Worktrees
  *   node scripts/ticket-lock.mjs uebernehmen <nr> --nonce <x> --nachfolger   # nur Nachfolger/Fortsetzung (#1593): wie `pruefe`, verbraucht zusätzlich Übergabe bzw. Stopp-Vermerk; ohne `--nachfolger` Exit 2 (der Hauptchat prüft nur mit `pruefe`)
  *   node scripts/ticket-lock.mjs freigeben <nr> --nonce <x>      # nach verifiziertem Cleanup und MERGED (factory#193): Exit 4 bei offenem PR zum Ticket-Branch (gh scheitert: fail-closed); legt den Freigabe-Vermerk `<nr>.json.freigegeben` an statt zu löschen
  *   node scripts/ticket-lock.mjs wiederherstellen <nr> --nonce <x>   # holt einen zu früh freigegebenen Lock binnen `ALTLAST_MS` zurück (nur ohne `<nr>.json`, Hash muss passen); der neue Lock trägt einen offenen `gestoppt`-Vermerk, `uebernehmen --nachfolger` greift
@@ -29,7 +30,7 @@
  * Bewusste Grenzen: `claim --wiederaufnahme` prüft kein Festgefahren-Label (das tut `claims-pruefen.mjs`; ein ausdrückliches „mach weiter“ der Maintainerin ist eine menschliche Entscheidung); nur maschinenlokal (der Lock liegt im lokalen `.git`; maschinenübergreifend bleibt der Assignee die einzige
  * Sperre);
  * ein Lock eines gemergten, geschlossenen Tickets sperrt nichts (die Auswahl nimmt nur offene Todo-Items), wird aber nur durch das Aufräumen (`freigeben` mit der Nonce) oder den Verfall per `VERWAIST_MS`/`ALTLAST_MS` frei; `pruefe` kann nach dem Merge bis dahin `aktiv` melden, solange Worktree oder Branch noch existieren (erst `cleanup-worktrees.mjs --branches --fix`, das selbst `git fetch --prune` fährt);
- * kein Freigabeweg ohne Nonce (Absicht);
+ * kein Freigabeweg ohne Nonce (Absicht); einzige Ausnahme `erzwingen <nr> --grund <text>` (factory#260): nur auf ausdrückliche Anweisung der Maintainerin, wenn die Nonce der beendeten Session fehlt und `claim --wiederaufnahme` Exit 4 liefert (letzter Commit jünger als 30 min). Pflichtgrund (einzeilig, nicht leer) wird im neuen Lock als `erzwungen: { zeit, grund, vorherNonceHash }` festgehalten, der alte Lock bleibt als `<nr>.json.verwaist-erzwungen-<Hash-Präfix>` liegen, der neue trägt einen offenen `gestoppt`-Vermerk (`uebernehmen --nachfolger` greift). Ohne Lock, Worktree und Branch: Exit 4 (dafür ist `claim`). Nie autonom: ein autonomer Lauf ruft den Befehl nicht von sich aus (laufzeitneutral, Codex-Läufe bleiben ohnehin gesperrt);
  * Selbstauskunft, keine Authentifizierung (wer die Nonce kennt, ist der Besitzer; aus der Lock-Datei ist sie nicht lesbar). Jede Exit-4-Ausgabe nennt: den Lock nie von Hand lösen.
  *
  * Arbeitsplatz (ADR 0022 Fortschreibung, #88): git läuft je Repo aus `arbeitsplatz.repos` der Projekt-Config (`gitOrteAus`), Branches und Worktrees werden über alle Repos vereinigt: ein Worktree `<praefixe.worktree><nr>` in einem Repo
@@ -403,7 +404,7 @@ const FLAG_MENGEN = {
   lebenszeichen: { optionen: { nonce: { type: "string" }, schritt: { type: "string" } }, pflicht: ["nonce"] },
 };
 
-const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | erzwingen <nr> --grund <text> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
+const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit | erzwingen <nr> --grund <text>";
 
 /**
  * Liest den Aufruf vor jedem I/O: `{ commit: true }` für `lebenszeichen --commit` (genau diese zwei Argumente, post-commit-Hook), sonst
@@ -411,6 +412,19 @@ const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | erzwingen <nr> --grund <te
  * die Flags danach lesen `flagsLesen` je Befehl. Eine leere Nonce ist ein Fehler. Pur.
  */
 export function aufrufLesen(argv) {
+  const a = aufrufRoh(argv);
+  if (!a.befehl) return a;
+  return a.befehl === "erzwingen" ? mitGrund(a) : { ...a, grund: null };
+}
+
+/** Der Grund von `erzwingen` (factory#260): getrimmt, nicht leer, einzeilig; sonst `{ fehler }`. Pur. */
+function mitGrund(a) {
+  const grund = String(a.grund).trim();
+  if (!grund || /[\r\n]/.test(grund)) return { fehler: "--grund braucht einen nicht leeren, einzeiligen Text" };
+  return { ...a, grund };
+}
+
+function aufrufRoh(argv) {
   if (argv.length === 2 && argv[0] === "lebenszeichen" && argv[1] === "--commit") return { commit: true };
   const [befehl, nrText, ...rest] = argv;
   if (typeof befehl !== "string" || !Object.hasOwn(FLAG_MENGEN, befehl)) return { fehler: befehl === undefined ? "kein Befehl angegeben" : `unbekannter Befehl ${befehl}` };
@@ -420,9 +434,7 @@ export function aufrufLesen(argv) {
   if (r.fehler) return { fehler: r.fehler.text };
   if (r.werte.nonce === "") return { fehler: "--nonce braucht einen Wert" };
   if (befehl === "uebernehmen" && r.werte.nachfolger !== true) return { fehler: "uebernehmen ruft nur der Nachfolger (--nachfolger); der Hauptchat prüft mit pruefe <nr> --nonce <x>" };
-  const grund = r.werte.grund === undefined ? null : String(r.werte.grund).trim();
-  if (befehl === "erzwingen" && (!grund || /[\r\n]/.test(r.werte.grund))) return { fehler: "--grund braucht einen nicht leeren, einzeiligen Text" };
-  return { befehl, grund, nr: Number(nrText), nonce: r.werte.nonce ?? null, wiederaufnahme: r.werte.wiederaufnahme === true, schritt: r.werte.schritt ?? null };
+  return { befehl, grund: r.werte.grund, nr: Number(nrText), nonce: r.werte.nonce ?? null, wiederaufnahme: r.werte.wiederaufnahme === true, schritt: r.werte.schritt ?? null };
 }
 
 /** Der Aufruf-Fehler als Ergebnis: Rahmen, Grund, Aufrufzeile. */
