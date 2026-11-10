@@ -181,6 +181,7 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "In denselben PR kommt der Rest",
       "Im selben PR bleibt der Rest",
       "Das gilt nie. Der Rest kommt in diesen PR",
+      "Der Rest kommt in diesen PR\nEine harmlose Zeile",
       "Der Rest kommt in\tdenselben PR",
       "Der Rest kommt in\u00a0denselben PR",
       "Der Rest kommt in *denselben* PR",
