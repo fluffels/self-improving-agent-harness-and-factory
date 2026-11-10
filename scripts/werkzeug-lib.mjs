@@ -70,7 +70,7 @@ export function laufeBefehl(befehl, fristMs = BEFEHL_FRIST_MS, cwd = undefined) 
 }
 
 /** Mängel der Projekt-Befehle (`vorpruefung.befehle`); der Runner wird injiziert und läuft in `root`. */
-export function bewerteBefehle({ befehle, laufe = laufeBefehl, root = undefined }) {
+export function bewerteBefehle({ befehle, laufe, root = undefined }) {
   return befehle.flatMap(({ name, befehl }) => {
     const r = laufe(befehl, BEFEHL_FRIST_MS, root);
     return r.ok ? [] : [{ text: `Werkzeug „${name}“ nicht bereit: ${befehl.join(" ")} → ${r.grund}`, fix: `„${name}“ installieren oder starten, dann ${befehl.join(" ")} prüfen` }];

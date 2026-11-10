@@ -5,7 +5,7 @@
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { afterEach, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -257,6 +257,21 @@ describe("Review-Runde 1 (factory#260): echter Runner, Wurzel als cwd, Signal un
     const stumm = { out: () => {}, err: () => {} };
     expect(w.main([], { ...stumm, root, lade: () => block([node, "-e", "process.exit(1)"]), ist: "22.23.4" })).toBe(1);
     expect(w.main([], { ...stumm, root, lade: () => block([node, "-e", "process.exit(0)"]), ist: "22.23.4" })).toBe(0);
+  });
+  test("Default-Lader: die Projekt-Config unter root/.factory/projekt.json liefert den Block vorpruefung (ohne injiziertes lade)", () => {
+    const root = tempRoot();
+    const repoConfig = JSON.parse(readFileSync(new URL("../../.factory/projekt.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    mkdirSync(join(root, ".factory"));
+    const schreibe = (befehl: string[]) => writeFileSync(join(root, ".factory", "projekt.json"), JSON.stringify({ ...repoConfig, ...block(befehl) }));
+    schreibe([node, "-e", "process.exit(1)"]);
+    const m = w.werkzeugMaengel({ root, ist: "22.23.4" });
+    expect(m).toHaveLength(1);
+    expect(m[0].text).toContain("Werkzeug „Probe“ nicht bereit");
+    schreibe([node, "-e", "process.exit(0)"]);
+    expect(w.werkzeugMaengel({ root, ist: "22.23.4" })).toEqual([]);
+  });
+  test("bewerteBefehle hat keinen Default-Runner: ohne laufe wirft der Aufruf, der Runner kommt immer von pruefeWerkzeuge", () => {
+    expect(() => w.bewerteBefehle({ befehle: [{ name: "Probe", befehl: [node, "-e", "process.exit(0)"] }] })).toThrow();
   });
   test("der Befehl läuft mit der Repo-Wurzel als cwd (werkzeugMaengel reicht root bis spawnSync durch)", () => {
     const root = tempRoot();
