@@ -106,13 +106,13 @@ const WORKTREES_ANFANG = String.raw`[\\/]\.claude[\\/]worktrees[\\/]`;
 const WORKTREE_ENDEN = {
   eingebettet: new RegExp(`${WORKTREES_ANFANG}[^\\\\/]+$`),
   arbeitsplatz: new RegExp(`${WORKTREES_ANFANG}${REPO_NAME_QUELLE}[\\\\/][^\\\\/]+$`),
-  beliebig: new RegExp(`${WORKTREES_ANFANG}.*$`),
+  beliebig: /[\\/]\.claude[\\/]worktrees(?:[\\/].*)?$/,
 };
 
 /**
  * Pur, die eine Ableitung der Hauptwurzel (factory#220 L15c): `pfad` ohne abschließende Schrägstriche und ohne den Worktree-Teil `.claude/worktrees/…`. `modus`:
  * `eingebettet` (Standard) kürzt genau `<name>`, `arbeitsplatz` genau `<repo>/<name>` (ein tieferer Pfad bleibt unverändert, er wäre sonst nicht von einem Worktree zu unterscheiden),
- * `beliebig` alles nach `.claude/worktrees/` (ein Pfad in einem Worktree zählt als Hauptrepo).
+ * `beliebig` alles ab `.claude/worktrees` (auch der Ordner selbst; ein Pfad in einem Worktree zählt als Hauptrepo).
  */
 export const hauptWurzelAus = (pfad, modus = "eingebettet") => String(pfad).replace(/[\\/]+$/, "").replace(WORKTREE_ENDEN[modus], "");
 

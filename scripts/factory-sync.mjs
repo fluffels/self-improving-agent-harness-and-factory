@@ -332,7 +332,7 @@ function linkSchritt({ plan, ziel, leser }) {
   const r = planeFactoryLinks({ dateien, lies, repo, einheiten: Object.keys(plan.stand.einheiten), ausnahmen, tag, commit, leser });
   if (r.befunde.length > 0) return { fehler: r.befunde.map(befundZeile), hinweise: [] };
   verschmelzeLinkDateien(plan, r.dateien, platte);
-  const seiten = seitenHinweise({ lies, plan, repo, tag });
+  const seiten = seitenHinweise({ lies, plan, repo, tag, ausnahmen });
   const angelegt = stubs.dateien.size - stubs.erneuert.size;
   const stubHinweise = angelegt === 0 ? [] : [`Anker-Stubs: ${angelegt} Seiten angelegt, ${stubs.ueberschriften} Überschriften, ${stubs.links} Links am Tag ${tag}`];
   const erneuertAnzahl = [...stubs.erneuert].filter((p) => plan.dateien.get(p)?.stub).length;
@@ -344,7 +344,7 @@ function linkSchritt({ plan, ziel, leser }) {
  * Handschritte auf vorhandenen Projektseiten: ein Kern-Link, dessen Seite im Projekt die Überschrift (`stub-anker`) oder den Factory-Link darunter (`stub-link`) nicht trägt,
  * mit Seite und Soll-Zeile. Die Seite fasst der Sync nie an, der Exit bleibt 0; `stub-ziel` entfällt (der Sync legt die Seite an, oder sie steht in den Ausnahmen). Pur bis auf `lies`.
  */
-function seitenHinweise({ lies, plan, repo, tag }) {
+function seitenHinweise({ lies, plan, repo, tag, ausnahmen }) {
   const sicher = (p) => {
     try {
       return lies(p);
@@ -352,7 +352,7 @@ function seitenHinweise({ lies, plan, repo, tag }) {
       return null; // ein Ordner auf dem Seitenpfad ist nicht lesbar: wie eine fehlende Seite (stub-ziel entfällt)
     }
   };
-  const { befunde } = stubBefunde({ lies: sicher, einheiten: Object.keys(plan.stand.einheiten), repo, tag });
+  const { befunde } = stubBefunde({ lies: sicher, einheiten: Object.keys(plan.stand.einheiten), repo, tag, ausnahmen });
   return befunde.filter((b) => b.art !== "stub-ziel").map((b) => `Kern-Link-Seite im Projekt: ${befundZeile(b)}`);
 }
 

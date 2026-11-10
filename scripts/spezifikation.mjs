@@ -4,7 +4,7 @@
  * Spezifikation wird nachgezogen. Die Auswahl (`naechstes-ticket.mjs`) meldet nur (`reparieren #<nr>`), dieses Skript schreibt.
  *
  *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
- *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]
+ *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …]
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
  *   node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"
  *
@@ -13,7 +13,7 @@
  * offen (`- [ ]`) von einem vertrauten Autor in einem offenen Sammelticket, bleibt es bei Exit 0 ohne Post (an einer fremden Meldestelle nennt die Zeile `owner/name#<nr>`, und eine Zeile des eigenen Kontos, `gh api user`, zählt als bekannt, factory#208). Wochenliste der offenen Fälle: `naechstes-ticket.mjs --maengel`.
  *
  * `anlegen` prüft vorab mit `pruefeEingang` (`## Ziel`, `## Akzeptanzkriterien` samt Negativfall) und den `--nach`-Anker (steht er nur auf dem anderen Board: Exit 2, nichts angelegt), legt ohne Assignee an und sortiert
- * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, `--notfall` = ganz oben). `reparieren` ersetzt den Body eines freien,
+ * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, dazu Pflicht `--weil "<grund>"` nach den Kriterien aus `POSITIONS_KRITERIEN`; `--notfall` = ganz oben, die Art ist der Grund); die Ausgabe nennt `Position: hinter #<nr>, weil <grund>`. `reparieren` ersetzt den Body eines freien,
  * vertrauten Issues, wenn der neue Body vollständig ist und keine Zeile des alten verliert (`verloreneZeilen`); ein Fremdeingang
  * (Autor nicht vertraut oder Forum-Label der Projekt-Config) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
  *
@@ -41,10 +41,13 @@ import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, ve
 const AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> | --notfall <art>) [--blocker <nr> …]',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
   '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");
+
+/** Die Kriterien der Position (Abschnitt „Neue Issues“ in ticket-reihenfolge.md); der Aufruf-Fehler zu `--weil` nennt sie. */
+export const POSITIONS_KRITERIEN = "Sicherheit und Blocker anderer Tickets vor Features, Abhängigkeiten vor Abhängigen, kleine entblockende Tickets vor großen";
 
 const ergebnis = (code, out = "", err = "") => ({ code, out, err });
 const aufrufFehler = (text) => ergebnis(2, "", `✖ spezifikation: ${text}\n`);
@@ -53,7 +56,7 @@ const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
 const BEFEHLE = {
   pruefen: { optionen: { "body-datei": { type: "string" } }, positionale: 0 },
   anlegen: {
-    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true } },
+    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, weil: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true } },
     positionale: 0,
   },
   reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: 1 },
@@ -170,6 +173,17 @@ export function bereichsPraefix(config) {
   return i < 0 ? "" : harness.slice(0, i + 1);
 }
 
+/** Pur: der Fehlertext zur Positionswahl (genau eines von `--nach`/`--notfall`; `--weil` Pflicht mit `--nach`, nicht mit `--notfall`) oder `null`. */
+function positionPruefen(werte) {
+  if (Boolean(werte.nach) === Boolean(werte.notfall)) return "genau eines von --nach <nr> und --notfall <art> ist Pflicht";
+  if (werte.nach && String(werte.weil ?? "").trim() === "") return `--nach braucht --weil "<grund>" (warum hinter dieser Nummer; Kriterien: ${POSITIONS_KRITERIEN})`;
+  if (werte.notfall && werte.weil !== undefined) return "--weil gehört zu --nach; bei --notfall ist die Art der Grund";
+  return null;
+}
+
+/** Pur: die Ausgabezeile zur Position (`hinter #<nr>, weil <grund>` bzw. `ganz oben, weil <art>`). */
+const positionText = (nach, werte) => (nach !== null ? `hinter #${nach}, weil ${einzeilig(werte.weil)}` : `ganz oben, weil ${werte.notfall}`);
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
@@ -177,7 +191,8 @@ function anlegen(werte, io, sprache) {
   if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
     return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
   }
-  if (Boolean(werte.nach) === Boolean(werte.notfall)) return aufrufFehler("genau eines von --nach <nr> und --notfall <art> ist Pflicht");
+  const positionsFehler = positionPruefen(werte);
+  if (positionsFehler) return aufrufFehler(positionsFehler);
   const nach = werte.nach ? positiveZahl(werte.nach) : null; // einmal parsen: `#12` und `12` sind dieselbe Nummer
   if (werte.nach && nach === null) return aufrufFehler("--nach braucht eine Ticketnummer");
   if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
@@ -204,7 +219,7 @@ function anlegen(werte, io, sprache) {
     return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number, repo)}`);
   }
   const warnung = verknuepfeBlocker(neu, werte.blocker, repo, io);
-  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\n`, warnung);
+  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\nPosition: ${positionText(nach, werte)}\n`, warnung);
 }
 
 function reparieren(werte, nrText, io, sprache) {

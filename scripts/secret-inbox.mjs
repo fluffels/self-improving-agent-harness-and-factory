@@ -92,7 +92,7 @@ export function issueBody(befunde) {
     "2. **Erst danach schließen:** GitHub-Alert als `revoked` schließen (Fehlalarm: `false_positive` mit Grund) bzw. den Fingerprint mit Begründung in `.gitleaksignore` eintragen.",
     "3. **Historie erst zuletzt bereinigen** (nur wenn nötig; das Rotieren war der eigentliche Schutz).",
     "",
-    "Secret-Alerts nie mit dem Wert in den Kontext holen: `gh api repos/<repo>/secret-scanning/alerts --jq '.[] | {number,state,secret_type_display_name,html_url}'`.",
+    "Secret-Alerts nie mit dem Wert in den Kontext holen: `gh api --paginate \"repos/<repo>/secret-scanning/alerts?per_page=100\" --jq '.[] | {number,state,secret_type_display_name,html_url}'`.",
     "",
     "Mechanik: " + factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "secret-inbox-92") + ". Das Ticket schließt sich, wenn der nächste Lauf keinen Fund mehr meldet.",
   ].join("\n");
@@ -126,10 +126,10 @@ export function checkBody(repo = "<repo>") {
   return [
     "Wöchentliche Sichtung der Security-Tabs mit dem lokalen gh-Login (kein neues Secret nötig). Jeder Punkt: lesen, Funde beheben oder einordnen, Ergebnis hier kommentieren, dann das Ticket schließen.",
     "",
-    "- [ ] **Secret-Scanning-Tab.** Lesen NUR so, dass der Wert nie in den Kontext kommt: `gh api repos/" + repo + "/secret-scanning/alerts --jq '.[] | {number,state,secret_type_display_name,html_url}'` (nie ohne `--jq`, nie das Feld `secret`). Ein offener Alert wird zum Ticket `" + ZIEL_TITEL + "` (ohne Wert): `node scripts/secret-inbox.mjs`. Ein Secret-Alert schließt sich NIE selbst, auch nicht nach dem Entfernen aus dem Code: erst beim Anbieter widerrufen bzw. rotieren, dann den Alert manuell als `revoked` schließen (Fehlalarm: `false_positive` mit Grund).",
-    "- [ ] **Code-Scanning-Tab (CodeQL, Scorecard, zizmor).** `gh api \"repos/" + repo + "/code-scanning/alerts?state=open\" --jq '.[] | {number,tool:.tool.name,rule:.rule.id,severity:.rule.security_severity_level}'`. Beheben; der Alert schließt sich selbst, sobald der Fund behoben ist und der Scan neu läuft. Sonst mit Grund dismissen.",
-    "- [ ] **Dependabot-Alerts.** `gh api \"repos/" + repo + "/dependabot/alerts?state=open\" --jq '.[] | {number,package:.dependency.package.name,severity:.security_advisory.severity}'`. Upgrade; der Alert schließt sich selbst, sobald die Abhängigkeit behoben ist.",
-    "- [ ] **Security-Advisories und PVR-Meldungen.** `gh api repos/" + repo + "/security-advisories --jq '.[] | {ghsa_id,state,severity}'`. Meldungen beantworten bzw. einordnen; sie schließen sich nur durch eine Entscheidung (veröffentlichen, schließen).",
+    "- [ ] **Secret-Scanning-Tab.** Lesen NUR so, dass der Wert nie in den Kontext kommt: `gh api --paginate \"repos/" + repo + "/secret-scanning/alerts?per_page=100\" --jq '.[] | {number,state,secret_type_display_name,html_url}'` (nie ohne `--jq`, nie das Feld `secret`). Ein offener Alert wird zum Ticket `" + ZIEL_TITEL + "` (ohne Wert): `node scripts/secret-inbox.mjs`. Ein Secret-Alert schließt sich NIE selbst, auch nicht nach dem Entfernen aus dem Code: erst beim Anbieter widerrufen bzw. rotieren, dann den Alert manuell als `revoked` schließen (Fehlalarm: `false_positive` mit Grund).",
+    "- [ ] **Code-Scanning-Tab (CodeQL, Scorecard, zizmor).** `gh api --paginate \"repos/" + repo + "/code-scanning/alerts?state=open&per_page=100\" --jq '.[] | {number,tool:.tool.name,rule:.rule.id,severity:.rule.security_severity_level}'`. Beheben; der Alert schließt sich selbst, sobald der Fund behoben ist und der Scan neu läuft. Sonst mit Grund dismissen.",
+    "- [ ] **Dependabot-Alerts.** `gh api --paginate \"repos/" + repo + "/dependabot/alerts?state=open&per_page=100\" --jq '.[] | {number,package:.dependency.package.name,severity:.security_advisory.severity}'`. Upgrade; der Alert schließt sich selbst, sobald die Abhängigkeit behoben ist.",
+    "- [ ] **Security-Advisories und PVR-Meldungen.** `gh api --paginate \"repos/" + repo + "/security-advisories?per_page=100\" --jq '.[] | {ghsa_id,state,severity}'`. Meldungen beantworten bzw. einordnen; sie schließen sich nur durch eine Entscheidung (veröffentlichen, schließen).",
     "",
     "Mechanik: " + factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "secret-inbox-92") + ".",
   ].join("\n");

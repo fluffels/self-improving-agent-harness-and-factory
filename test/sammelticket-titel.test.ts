@@ -11,7 +11,7 @@ import * as produktquoteRaw from "../scripts/produktquote-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { exporteAus as exporteAusRaw } from "../scripts/tag-takt.mjs";
 
-type Blatt = { SAMMELTICKET_TITEL: string; LANGFUSE_SAMMELTICKET_TITEL: string; CODEQUALITAET_SAMMELTICKET_TITEL: string; SAMMELTICKET_TITEL_LISTE: string[]; NICHT_EINTRAGBAR_PRAEFIX: string; BEFUND_ZEILE: RegExp; BEFUND_ZEILE_OFFEN: RegExp };
+type Blatt = { SAMMELTICKET_TITEL: string; LANGFUSE_SAMMELTICKET_TITEL: string; CODEQUALITAET_SAMMELTICKET_TITEL: string; SAMMELTICKET_TITEL_LISTE: string[]; NICHT_EINTRAGBAR_PRAEFIX: string; BEFUND_ZEILE: RegExp; BEFUND_ZEILE_OFFEN: RegExp; offeneZeileMit: (zeile: string, praefix: string) => boolean };
 const blatt = blattRaw as unknown as Blatt;
 const boardLib = boardLibRaw as unknown as Record<string, unknown>;
 const produktquote = produktquoteRaw as unknown as Pick<Blatt, "BEFUND_ZEILE" | "BEFUND_ZEILE_OFFEN">;
@@ -39,6 +39,18 @@ describe("sammelticket-titel", () => {
     const meldung = readFileSync(new URL("../scripts/meldung-lib.mjs", import.meta.url), "utf8");
     expect(meldung).toContain('from "./sammelticket-titel.mjs"');
     expect(meldung).not.toContain(String.raw`\[ \]`);
+  });
+
+  test("offeneZeileMit: nur offene Checkbox-Zeile, Präfix nach Leerraum", () => {
+    const mit = blatt.offeneZeileMit;
+    expect(mit("- [ ] Audit: GHSA-x", "Audit:")).toBe(true);
+    expect(mit("  * [ ]   Audit: x", "Audit:")).toBe(true);
+    expect(mit("- [ ]Audit: x", "Audit:")).toBe(false);
+    expect(mit("- [x] Audit: x", "Audit:")).toBe(false);
+    expect(mit("- [ ] Anderes: x", "Audit:")).toBe(false);
+    expect(mit("Audit: x", "Audit:")).toBe(false);
+    expect(mit("  Audit: x", "Audit:")).toBe(false);
+    expect(mit("- [ ] siehe Audit: x", "Audit:")).toBe(false);
   });
 
   const boardText = readFileSync(new URL("../scripts/board-lib.mjs", import.meta.url), "utf8");

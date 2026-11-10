@@ -9,6 +9,7 @@
 /scripts/schichten-kern.cjs @fluffels
 /scripts/check-*.mjs @fluffels
 /scripts/slice-override.mjs @fluffels
+/scripts/anker-liste.mjs @fluffels
 /scripts/ci-laeufe.mjs @fluffels
 /scripts/verify-lauf.mjs @fluffels
 /scripts/docs-gen* @fluffels
@@ -47,6 +48,9 @@ AGENTS.md @fluffels
 /scripts/harness-doctor.mjs @fluffels
 /scripts/harness-doctor-lib.mjs @fluffels
 /scripts/harness-doctor-sicherheit.mjs @fluffels
+/scripts/harness-doctor-ruleset.mjs @fluffels
+/scripts/harness-doctor-board.mjs @fluffels
+/scripts/harness-doctor-githooks.mjs @fluffels
 /scripts/harness-doctor-ergebnis.mjs @fluffels
 /scripts/harness-doctor-factory-update.mjs @fluffels
 /scripts/harness-doctor-dateien.mjs @fluffels

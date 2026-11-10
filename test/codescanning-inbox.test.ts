@@ -301,6 +301,15 @@ describe("bekannteAlerts", () => {
     const b = C.bekannteAlerts({ kommentare: [{ user: bot, body: zeile.replace("[ ]", "[x]") }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect(b.nummern.size).toBe(0);
   });
+  test("Zeilenerkennung wie BEFUND_ZEILE_OFFEN: Sternchen und Einrückung zählen, fehlender Leerraum, andere Klammer und Fließtext nicht (L15)", () => {
+    const n = (body: string) => [...C.bekannteAlerts({ kommentare: [{ user: bot, body }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] }).nummern];
+    expect(n(zeile.replace("- ", "* "))).toEqual([8, 9]);
+    expect(n(`  ${zeile.replace("[ ]", "[ ]  ")}`)).toEqual([8, 9]);
+    expect(n(zeile.replace("[ ] ", "[ ]"))).toEqual([]);
+    expect(n(zeile.replace("[ ]", "[-]"))).toEqual([]);
+    expect(n(zeile.replace("Code-Scanning:", "Code-Scan:"))).toEqual([]);
+    expect(n(`Text ${zeile}`)).toEqual([]);
+  });
   test("Zeile eines fremden Autors zählt nicht", () => {
     const b = C.bekannteAlerts({ kommentare: [{ user: { login: "fremd", type: "User" }, body: zeile }], owner: OWNER, wiedervorlagen: [], sammelTitel: [] });
     expect(b.nummern.size).toBe(0);

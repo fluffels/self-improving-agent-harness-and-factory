@@ -87,7 +87,7 @@ describe("tag-takt main", () => {
     const skript = join(w, "kind.mjs");
     const lib = pathToFileURL(join(process.cwd(), "scripts", "tag-takt.mjs")).href;
     writeFileSync(skript, `import { gitEcht } from ${JSON.stringify(lib)};\ntry { gitEcht(["show", "HEAD:gibt-es-nicht.txt"]); } catch (e) { process.stdout.write(String(e.message)); }\n`);
-    const r = spawnSync(process.execPath, [skript], { encoding: "utf8", cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] });
+    const r = spawnSync(process.execPath, [skript], { encoding: "utf8", cwd: process.cwd(), env: { ...process.env, LC_ALL: "C" }, stdio: ["ignore", "pipe", "pipe"] });
     expect(r.stderr).toBe("");
     expect(r.stdout).toContain("fatal");
   });

@@ -187,6 +187,43 @@ function abnahmeAbschnitt(lauf) {
   ];
 }
 
+/** Die Ticketarten der Kosten- und Abnahme-Auswertung, in Anzeigereihenfolge. */
+export const TICKETARTEN = ["Produkt", "Harness", "Sammelticket"];
+
+/** Die Art eines Tickets: Sammelticket (Titel aus `SAMMELTICKET_TITEL_LISTE`, trägt oft auch das Harness-Label) vor Harness (`labels.harness`) vor Produkt. Pure. */
+export function ticketArt(nr, { sammelIssues, harnessIssues }) {
+  if (sammelIssues.has(nr)) return "Sammelticket";
+  return harnessIssues.has(nr) ? "Harness" : "Produkt";
+}
+
+/**
+ * Median der Kosten und Abnahme im ersten Durchgang je Ticketart: `{ gruppen: [{ art, tickets, gemessen, median, abnahmeGemessen, abnahmeErster }] }`
+ * oder `{ luecke }`, wenn die Zuordnung nicht möglich ist (Harness-Issues oder Sammeltickets nicht geladen): dann keine geratene Aufteilung. `tickets` = `[{ ticket, pr, ergebnis }]`,
+ * `zeilen` = PR-Zeilen von `lauf-ergebnis.mjs`; PRs ohne Ticket und Kosten-Lücken zählen nicht in den Median (nie 0 $). Pure.
+ */
+export function artGruppen({ tickets, zeilen, sammelIssues, harnessIssues, harnessLuecke = null }) {
+  if (!(harnessIssues instanceof Set)) return { luecke: harnessLuecke ?? "Harness-Issues nicht geladen" };
+  if (!(sammelIssues instanceof Set)) return { luecke: "Sammeltickets nicht geladen" };
+  const art = (nr) => ticketArt(nr, { sammelIssues, harnessIssues });
+  const gruppen = TICKETARTEN.map((name) => {
+    const meine = tickets.filter((t) => art(t.ticket) === name);
+    const gemessen = meine.filter((t) => t.ergebnis.kosten !== undefined);
+    const urteile = zeilen.filter((z) => z.ticket && art(z.ticket) === name && typeof z.abnahme === "object" && z.abnahme !== null);
+    return { art: name, tickets: meine.length, gemessen: gemessen.length, median: median(gemessen.map((t) => t.ergebnis.kosten)), abnahmeGemessen: urteile.length, abnahmeErster: urteile.filter((z) => z.abnahme.durchgaenge === 1).length };
+  });
+  return { gruppen };
+}
+
+/** Abschnitt „Ticketarten“ (Tabelle je Art; Median ohne Messung und Abnahme ohne Urteil als „–“, nie 0); eine Lücke zeigt den Grund. Pure. */
+export function artenAbschnitt(arten) {
+  if (arten.luecke) return [`- Lücke: ${arten.luecke}`];
+  return [
+    "| Art | Tickets | Gemessen | Median Kosten | Abnahme im 1. Durchgang |",
+    "|---|---|---|---|---|",
+    ...arten.gruppen.map((g) => `| ${g.art} | ${g.tickets} | ${g.gemessen} | ${g.median === null ? "–" : dollar(g.median)} | ${anteil(g.abnahmeErster, g.abnahmeGemessen)} |`),
+  ];
+}
+
 /** Höchstens so viele Tickets mit Mangel zeigt der Abschnitt einzeln (der Rest als Zahl). */
 export const MAENGEL_ZEILEN_MAX = 10;
 
@@ -201,9 +238,10 @@ export function spezifikationAbschnitt(s) {
 }
 
 /** Bericht als Daten: `lauf`/`nacharbeit` = `vertragPruefen`-Ergebnis, `tickets` = `[{ticket, pr, ergebnis}]`. Pure. */
-export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit, spezifikation }) {
+export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit, spezifikation, arten }) {
   return {
     ...(audit ? { audit } : {}),
+    ...(arten ? { arten } : {}),
     ...(spezifikation ? { spezifikation } : {}),
     zeitraum: { von, bis },
     nacharbeitFenster: nacharbeitFenster(von, bis),
@@ -228,6 +266,7 @@ export function renderMarkdown(b) {
     "",
     "**Kosten je Ticket**",
     ...kosten,
+    ...(b.arten ? ["", "**Ticketarten**", ...artenAbschnitt(b.arten)] : []),
     "",
     "**Abnahme-Quote**",
     ...abnahmeAbschnitt(b.lauf),
@@ -323,11 +362,17 @@ function ladeHarnessIssues({ gh, repo, config, configFehler, seit }) {
   }
 }
 
+/** Ab wann geschlossene Harness-Issues zu laden sind: einen Tag vor dem früheren von `since` und dem Berichtsfenster `von` (die Ticketarten brauchen das ganze Fenster). Pur. */
+function harnessSeitAus(since, von) {
+  const fruehest = Math.min(Date.parse(since), gueltig(von) ? Date.parse(von) : Number.POSITIVE_INFINITY);
+  return new Date(fruehest - TAG_MS).toISOString();
+}
+
 /**
  * Lädt die Rohdaten des Selbst-Audits mit drei gh-Aufrufen (Sammeltickets mit `--limit`, Commits von main seit deren letztem Abschluss und geschlossene Harness-Issues ab dann minus 1 Tag, paginiert;
  * keine Modell-Tokens). `gh` ist injizierbar. Ein Ladefehler wird zur Lücke mit Grund (`commitsLuecke`, bei den Harness-Issues `harnessLuecke`), nie zu leeren Daten.
  */
-export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = null, configFehler = null, env = process.env } = {}) {
+export function ladeAuditDaten({ von, bis }, { gh = ghJson, repo = REPO, config = null, configFehler = null, env = process.env } = {}) {
   let issues;
   try {
     issues = gh(["issue", "list", "--repo", repo, "--state", "all", "--search", "in:title \"gesammelt\"", "--json", "number,title,state,closedAt,assignees", "--limit", "200"]);
@@ -338,7 +383,7 @@ export function ladeAuditDaten({ bis }, { gh = ghJson, repo = REPO, config = nul
   const sammelAbschluss = stand.abschluss?.closedAt ?? null;
   const since = sammelAbschluss ? new Date(Date.parse(sammelAbschluss) + 60_000).toISOString() : new Date(Date.parse(bis) - 28 * TAG_MS).toISOString();
   const rest = { sammelAbschluss, sammelIssues: stand.sammelIssues, sammelInArbeit: stand.inArbeit };
-  const harnessSeit = new Date(Date.parse(since) - TAG_MS).toISOString();
+  const harnessSeit = harnessSeitAus(since, von);
   try {
     // Nach einem Umzug des Factory-Boards (#78) zählen die Commits beider Repos; ein fremdes Repo liest der Projekt-Token.
     const quellen = quotenQuellen({ config, repo });
@@ -417,6 +462,15 @@ export function holeKosten({ ticket, pr, claims, langfuse }, run = runSkript) {
   return { kosten: summe };
 }
 
+/** Selbst-Audit und Ticketarten aus einem Lauf des Audit-Laders (`{ von, bis }`); ohne Lader beides `undefined`, ohne Lauf-Ergebnis keine Ticketarten. */
+function auditUndArten(auditLader, { von, bis, lauf, tickets }) {
+  if (!auditLader) return {};
+  const daten = auditLader({ von, bis });
+  const zeilen = lauf.daten?.zeilen ?? null;
+  const arten = zeilen ? artGruppen({ tickets, zeilen, sammelIssues: daten.sammelIssues, harnessIssues: daten.harnessIssues, harnessLuecke: daten.harnessLuecke }) : undefined;
+  return { audit: selbstAudit({ ...daten, zeilen }), arten };
+}
+
 /**
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
@@ -430,9 +484,9 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
     const claims = claimKarte();
     tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
   }
-  const audit = auditLader ? selbstAudit({ ...auditLader({ bis }), zeilen: lauf.daten?.zeilen ?? null }) : undefined;
+  const { audit, arten } = auditUndArten(auditLader, { von, bis, lauf, tickets });
   const spezifikation = maengelLader ? maengelLader() : undefined; // eine Lücke dort ändert den Exit-Code nicht (wie bei den Kosten)
-  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation });
+  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation, arten });
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
 }
 

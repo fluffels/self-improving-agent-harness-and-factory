@@ -544,6 +544,118 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
   }, 20_000);
 });
 
+describe("Kosten und Abnahme je Ticketart (L27, L29)", () => {
+  type Gruppe = { art: string; tickets: number; gemessen: number; median: number | null; abnahmeGemessen: number; abnahmeErster: number };
+  type Arten = { luecke?: string; gruppen?: Gruppe[] };
+  type T = { ticket: number; pr: number; ergebnis: Erg };
+  const A = raw as unknown as {
+    TICKETARTEN: string[];
+    ticketArt: (nr: number, o: { sammelIssues: Set<number>; harnessIssues: Set<number> }) => string;
+    artGruppen: (o: { tickets: T[]; zeilen: Zeile[]; sammelIssues?: Set<number>; harnessIssues?: Set<number> | null; harnessLuecke?: string | null }) => Arten;
+    artenAbschnitt: (a: Arten) => string[];
+    renderMarkdown: (b: unknown) => string;
+    bericht: (e: Record<string, unknown>) => unknown;
+  };
+  const SAMMEL = new Set([10]);
+  const HARNESS = new Set([10, 20, 21]);
+  const t = (ticket: number, kosten?: number): T => ({ ticket, pr: ticket + 1000, ergebnis: kosten === undefined ? { luecke: "keine Session mit Claim-Zeile" } : { kosten } });
+
+  test("ticketArt: Sammelticket vor Harness vor Produkt (ein Sammelticket trägt auch das Harness-Label)", () => {
+    const o = { sammelIssues: SAMMEL, harnessIssues: HARNESS };
+    expect(A.ticketArt(10, o)).toBe("Sammelticket");
+    expect(A.ticketArt(20, o)).toBe("Harness");
+    expect(A.ticketArt(30, o)).toBe("Produkt");
+    expect(A.TICKETARTEN).toEqual(["Produkt", "Harness", "Sammelticket"]);
+  });
+
+  test("artGruppen: Median je Art nur aus gemessenen Tickets, Lücken zählen nicht mit; Abnahme im ersten Durchgang je Art", () => {
+    const tickets = [t(30, 1), t(31, 3), t(32), t(20, 6), t(10, 20)];
+    const zeilen = [
+      ZEILE({ pr: 1, ticket: 30, abnahme: { durchgaenge: 1 } }),
+      ZEILE({ pr: 2, ticket: 31, abnahme: { durchgaenge: 2 } }),
+      ZEILE({ pr: 3, ticket: 20, abnahme: { durchgaenge: 1 } }),
+      ZEILE({ pr: 4, ticket: 21, abnahme: "entfaellt" }),
+      ZEILE({ pr: 5, ticket: null, abnahme: { durchgaenge: 1 } }),
+      ZEILE({ pr: 6, ticket: 10, abnahme: null }),
+    ];
+    const r = A.artGruppen({ tickets, zeilen, sammelIssues: SAMMEL, harnessIssues: HARNESS });
+    expect(r.luecke).toBeUndefined();
+    expect(r.gruppen).toEqual([
+      { art: "Produkt", tickets: 3, gemessen: 2, median: 2, abnahmeGemessen: 2, abnahmeErster: 1 },
+      { art: "Harness", tickets: 1, gemessen: 1, median: 6, abnahmeGemessen: 1, abnahmeErster: 1 },
+      { art: "Sammelticket", tickets: 1, gemessen: 1, median: 20, abnahmeGemessen: 0, abnahmeErster: 0 },
+    ]);
+  });
+
+  test("artGruppen: fehlen die Harness-Issues oder die Sammeltickets, ist es eine Lücke mit Grund, nie eine falsche Aufteilung", () => {
+    expect(A.artGruppen({ tickets: [t(30, 1)], zeilen: [], sammelIssues: SAMMEL, harnessIssues: null, harnessLuecke: "Harness-Issues nicht ladbar: gh weg" }).luecke).toBe("Harness-Issues nicht ladbar: gh weg");
+    expect(A.artGruppen({ tickets: [t(30, 1)], zeilen: [], sammelIssues: SAMMEL, harnessIssues: undefined }).luecke).toMatch(/Harness-Issues/);
+    expect(A.artGruppen({ tickets: [t(30, 1)], zeilen: [], harnessIssues: HARNESS }).luecke).toMatch(/Sammeltickets/);
+  });
+
+  test("artenAbschnitt: Tabelle je Art, Median ohne Messung als – (nie 0 $), Abnahme ohne Urteil als –; eine Lücke zeigt den Grund", () => {
+    const gruppen: Gruppe[] = [
+      { art: "Produkt", tickets: 2, gemessen: 2, median: 1.5, abnahmeGemessen: 2, abnahmeErster: 1 },
+      { art: "Harness", tickets: 1, gemessen: 0, median: null, abnahmeGemessen: 0, abnahmeErster: 0 },
+      { art: "Sammelticket", tickets: 0, gemessen: 0, median: null, abnahmeGemessen: 0, abnahmeErster: 0 },
+    ];
+    const z = A.artenAbschnitt({ gruppen });
+    expect(z).toContain("| Produkt | 2 | 2 | 1,50 $ | 50 % (1/2) |");
+    expect(z).toContain("| Harness | 1 | 0 | – | – |");
+    expect(z).toContain("| Sammelticket | 0 | 0 | – | – |");
+    expect(A.artenAbschnitt({ luecke: "weg" })).toEqual(["- Lücke: weg"]);
+  });
+
+  test("Markdown: der Abschnitt „Ticketarten“ erscheint nur mit arten im Bericht", () => {
+    const basis = { von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z", lauf: { luecke: "x" }, nacharbeit: { luecke: "x" }, tickets: [], quelle: "Transkript" };
+    expect(A.renderMarkdown(A.bericht(basis))).not.toContain("Ticketarten");
+    const md = A.renderMarkdown(A.bericht({ ...basis, arten: { luecke: "weg" } }));
+    expect(md).toContain("**Ticketarten**");
+    expect(md).toContain("- Lücke: weg");
+  });
+
+  test("erstelle: der Audit-Lader bekommt von und bis, die Ticketarten kommen aus denselben Daten; ohne Lader kein Abschnitt", () => {
+    type Fn = (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, { session: string; ts: string }[]>; auditLader?: (e: { von: string; bis: string }) => unknown }) => { bericht: { arten?: Arten } };
+    const erstelle = (raw as unknown as { erstelle: Fn }).erstelle;
+    const zeilen = [ZEILE({ pr: 50, ticket: 40 }), ZEILE({ pr: 51, ticket: 20 })];
+    const run: Run = (name) =>
+      name === "token-baseline.mjs"
+        ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" }
+        : { status: 0, stdout: JSON.stringify({ zeilen, kennzahlen: { ...KENN, prs: 2 } }), stderr: "" };
+    const claimKarte = () => new Map([[40, [{ session: "s1", ts: "2026-10-14T07:00:00Z" }]], [20, [{ session: "s2", ts: "2026-10-14T08:00:00Z" }]]]);
+    const gesehen: unknown[] = [];
+    const r = erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte, auditLader: (e) => (gesehen.push(e), { commits: [], sammelIssues: SAMMEL, harnessIssues: HARNESS }) });
+    expect(gesehen).toEqual([{ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }]);
+    expect(r.bericht.arten?.gruppen?.map((g) => [g.art, g.tickets])).toEqual([["Produkt", 1], ["Harness", 1], ["Sammelticket", 0]]);
+    expect(erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte }).bericht.arten).toBeUndefined();
+  });
+
+  test("erstelle: scheitert das Lauf-Ergebnis, gibt es keine Ticketarten (statt eines Absturzes), das Selbst-Audit bleibt", () => {
+    type Fn = (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, never[]>; auditLader?: (e: { von: string; bis: string }) => unknown }) => { bericht: { arten?: Arten; audit?: unknown[] }; exit: number };
+    const erstelle = (raw as unknown as { erstelle: Fn }).erstelle;
+    const run: Run = () => ({ status: 2, stdout: "", stderr: "gh weg" });
+    const r = erstelle({ von: "2026-10-12T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { run, claimKarte: () => new Map(), auditLader: () => ({ commits: [], sammelIssues: SAMMEL, harnessIssues: HARNESS }) });
+    expect(r.exit).toBe(2);
+    expect(r.bericht.arten).toBeUndefined();
+    expect(r.bericht.audit).toHaveLength(4);
+  });
+
+  test("ladeAuditDaten: die Harness-Issues reichen bis einen Tag vor `von`, auch wenn der letzte Sammelticket-Abschluss jünger ist", () => {
+    const L = (raw as unknown as { ladeAuditDaten: (e: { von?: string; bis: string }, d: { gh: (a: string[]) => unknown; repo: string; config: unknown }) => unknown }).ladeAuditDaten;
+    const seiten: string[] = [];
+    const gh = (a: string[]) => {
+      if (a[0] === "issue") return [{ number: 11, title: "Harness-Härtung (gesammelt)", state: "CLOSED", closedAt: "2026-10-14T00:00:00Z", assignees: [] }];
+      if (a[3]?.includes("/issues?")) seiten.push(a[3]);
+      return [[]];
+    };
+    L({ von: "2026-10-05T00:00:00Z", bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: { labels: { harness: FREMD.labels.harness } } });
+    expect(seiten[0]).toContain("since=2026-10-04T00:00:00.000Z");
+    seiten.length = 0;
+    L({ bis: "2026-10-16T00:00:00Z" }, { gh, repo: "o/r", config: { labels: { harness: FREMD.labels.harness } } });
+    expect(seiten[0]).toContain("since=2026-10-13T00:01:00.000Z");
+  });
+});
+
 describe("Einstiegsskript", () => {
   test("ohne Import anderer Einstiegsskripte", () => {
     const src = readFileSync(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url), "utf8");

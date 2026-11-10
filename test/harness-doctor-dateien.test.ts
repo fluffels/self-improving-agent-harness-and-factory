@@ -7,7 +7,12 @@ import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt } from "../scripts/harness-doctor-dateien.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { blockformAusloeser as rawBlockformAusloeser } from "../scripts/workflow-blockform.mjs";
+import { BEZIEHER_NPM_SKRIPTE } from "./support/bezieher-npm-skripte";
 import { fixture } from "./support/tmp-fixture";
+
+const rawAusloeser = rawBlockformAusloeser as (text: string) => { ausloeser: string[] };
 
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
@@ -388,8 +393,7 @@ describe("Gezielter Test (factory#208 L23)", () => {
 });
 
 describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
-  /** Spiegel der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` in test/harness/besitz-abschnittsverweise.test.ts. */
-  const ERLAUBT = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
+  const ERLAUBT = BEZIEHER_NPM_SKRIPTE;
   const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
 
   test("kein Fix-Text (Projektdateien, Langfuse-Takt) nennt ein npm-Skript außerhalb der Liste", () => {
@@ -448,6 +452,165 @@ describe("Workflow-Auslöser", () => {
     expect(ausloeser([ci("Build"), gleich]).befund).toContain("CI");
     // Leerzeile im Block beendet das Lesen nicht
     expect(ausloeser([ci("CI"), fest("\n      - CI\n\n      - Weg")]).befund).toContain("Weg");
+  });
+  describe("L20: nicht lesbare Form ist NICHT PRÜFBAR mit Datei:Zeile, nie „kein workflow_run“", () => {
+    const FPFAD = ".github/workflows/x.yml";
+    test("`on:` in Flow-Form (Mapping): nicht prüfbar mit Datei und Zeile", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non: { workflow_run: { workflows: [CI] } }\njobs: {}\n")]);
+      expect(p.ok).toBe(false);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:2`);
+      expect(p.befund).toContain("Flow-Collection");
+    });
+    test("Alias oder Anker an `workflows` und an `name`: nicht prüfbar", () => {
+      const alias = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: *liste\n")]);
+      expect(alias.nichtPruefbar).toBe(true);
+      expect(alias.befund).toContain(`${FPFAD}:4`);
+      const anker = ausloeser([ci("Build"), eigen("name: &n CI\non:\n  push:\n")]);
+      expect(anker.nichtPruefbar).toBe(true);
+      expect(anker.befund).toContain(`${FPFAD}:1`);
+    });
+    test("mehrzeilige Flow-Liste unter `workflows`: nicht prüfbar", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: [CI,\n      Weg]\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
+    test("Flow-Liste: Leerraum vor dem Komma oder vor `]` ist lesbar, `[a:]` ist ein Mapping-Eintrag und nicht lesbar", () => {
+      for (const liste of ['["CI" , Weg]', '["CI" ]']) {
+        const text = `name: X\non:\n  workflow_run:\n    workflows: ${liste}\n`;
+        expect(rawAusloeser(text).ausloeser, liste).toEqual(liste.includes("Weg") ? ["CI", "Weg"] : ["CI"]);
+      }
+      const p = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: [a:]\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
+    test("`#` direkt hinter dem `]` (ohne Leerraum) ist nicht prüfbar mit Datei:Zeile", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: [CI]#x\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
+    test.each(["[CI], Weg # y", "[CI] x # y"])("Text hinter dem `]` vor einem ` #` (%s) ist nicht prüfbar mit Datei:Zeile", (liste) => {
+      const p = ausloeser([ci("Build"), eigen(`name: X\non:\n  workflow_run:\n    workflows: ${liste}\n`)]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
+    test("`on: >` (Folded-Block-Skalar) ist nicht lesbar", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non: >\n  push\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:2`);
+    });
+    test("eine nicht lesbare Datei macht auch eine sonst sichere Lücke nicht prüfbar (der Name könnte dort stehen)", () => {
+      const p = ausloeser([ci("Build"), fest('["CI"]'), eigen("name: Y\non: { push: {} }\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.fix).toContain("Blockform");
+    });
+    test("`on:` als Skalar oder Flow-Liste kennt kein workflow_run: OK", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non: push\n")]).ok).toBe(true);
+      expect(ausloeser([ci("Build"), eigen("name: X\non: [push, pull_request]\n")]).ok).toBe(true);
+    });
+    test("Flow-Liste mit Anführungszeichen und Komma im Namen bleibt ein Name", () => {
+      const p = ausloeser([ci("Build"), fest('["A, B", \'C\']')]);
+      expect(p.befund).toContain("A, B");
+      expect(p.befund).toContain("„C“");
+    });
+    const wf = (rest: string) => eigen(`name: X\non:\n  workflow_run:\n    workflows: ${rest}\n`);
+    const nicht = (text: Workflow) => {
+      const p = ausloeser([ci("Build"), text]);
+      expect(p.nichtPruefbar, JSON.stringify(text.text)).toBe(true);
+      return p;
+    };
+    test("Flow-Liste ohne Quotes: jeder Eintrag zählt, der letzte auch; leere Einträge entfallen", () => {
+      const p = ausloeser([ci("Build"), wf("[CI, Weg]")]);
+      expect(p.befund).toContain("„CI“");
+      expect(p.befund).toContain("„Weg“");
+      expect(ausloeser([ci("CI"), wf("[CI]")]).ok).toBe(true);
+      expect(ausloeser([ci("CI"), wf("[CI,, '']")]).ok).toBe(true);
+      expect(ausloeser([ci("CI"), wf("[]")]).ok).toBe(true);
+    });
+    test("unlesbare Einträge der Flow-Liste: Text nach dem Quote, unbeendetes Quote, Alias, Mapping-Eintrag", () => {
+      for (const rest of ['["CI" x]', '["CI]', "[*a]", "[a: b]", "[CI, &a Weg]"]) nicht(wf(rest));
+    });
+    test("Flow-Liste: ein Anführungszeichen mitten im Eintrag und einfaches Quote mit Komma", () => {
+      expect(ausloeser([ci("Build"), wf("['A, B', C]")]).befund).toContain("A, B");
+    });
+    test("Block-Liste: Eintrag mit Kommentar zählt, Alias, leerer, verschachtelter und nur-Kommentar-Eintrag sind nicht prüfbar", () => {
+      expect(ausloeser([ci("CI"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - CI # Kommentar\n")]).ok).toBe(true);
+      for (const eintrag of ["- *a", "-", "- - x", "- # nur Kommentar"]) nicht(eigen(`name: X\non:\n  workflow_run:\n    workflows:\n      ${eintrag}\n`));
+    });
+    test("Block-Liste eingerückt, danach ein Folgeschlüssel auf Höhe von `workflows`", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - Weg\n    types: [completed]\n")]).befund).toContain("Weg");
+    });
+    test("Block-Liste weniger eingerückt als `workflows:`: nicht prüfbar statt als Eintrag gelesen", () => {
+      nicht(eigen("name: X\non:\n  workflow_run:\n    workflows:\n  - Weg\n"));
+    });
+    test("`workflows` als einzelner Skalar oder leer", () => {
+      expect(ausloeser([ci("Build"), wf("Weg")]).befund).toContain("Weg");
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n    types: [completed]\n")]).ok).toBe(true);
+    });
+    test("`workflow_run` als Liste oder Flow-Mapping: nicht prüfbar, leer: OK", () => {
+      nicht(eigen("name: X\non:\n  workflow_run:\n    - x\n"));
+      nicht(eigen("name: X\non:\n  workflow_run: { workflows: [CI] }\n"));
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n")]).ok).toBe(true);
+    });
+    test("`on:` als Block-Liste, leer oder Skalar: OK; als Anker, Block-Skalar oder doppelt: nicht prüfbar", () => {
+      for (const on of ["on:\n  - push\n", "on:\n", "on: push\n", "on: [workflow_run]\n"]) expect(ausloeser([ci("Build"), eigen(`name: X\n${on}`)]).ok, on).toBe(true);
+      for (const on of ["on: &a\n  push:\n", "on: |\n  x\n", "on: *a\n", "on:\n  push:\non:\n  push:\n"]) nicht(eigen(`name: X\n${on}`));
+    });
+    test("BOM und Dokumentstart werden gelesen, Dokumentstart mit Inhalt nicht", () => {
+      expect(ausloeser([ci("Build"), eigen("﻿---\nname: X\non:\n  workflow_run:\n    workflows: [Weg]\n")]).befund).toContain("Weg");
+      nicht(eigen("--- x\nname: X\n"));
+    });
+    test("leerer Workflow-Name zählt nicht als Name", () => {
+      expect(ausloeser([eigen("name:\non: push\n"), wf("['']")]).ok).toBe(true);
+      expect(ausloeser([eigen("name: ''\non: push\n"), wf("[Leer]")]).ok).toBe(false);
+    });
+    test("CRLF-Zeilenenden, `workflows:` am Dateiende, Liste auf Schlüsselhöhe mit Folgeschlüssel, Einträge auf verschiedenen Einrückungen", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\r\non:\r\n  workflow_run:\r\n    workflows:\r\n      - Weg\r\n")]).befund).toContain("Weg");
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n")]).ok).toBe(true);
+      const gleich = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n    - Weg\n    types: [completed]\n")]);
+      expect(gleich.befund).toContain("„Weg“");
+      expect(gleich.befund).not.toContain("types");
+      nicht(eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - A\n    - B\n"));
+    });
+    test("andere Auslöser mit eigenen Unterschlüsseln vor `workflow_run` werden übersprungen; `on: |` heißt Block-Skalar", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  push:\n    branches:\n      - main\n  workflow_run:\n    workflows: [Weg]\n")]).befund).toContain("Weg");
+      expect(nicht(eigen("name: X\non: |\n  x\n")).befund).toContain("Block-Skalar");
+    });
+    test("`workflows: null` (Aufrufer reicht null) wie keine Workflows", () => {
+      expect(punkt(pruefe({ rootDir: "/x", ...GESUND, workflows: null as unknown as Workflow[], git: fakeGit(gesund), existiert: () => true, config: {} }), "Workflow-Auslöser").ok).toBe(true);
+    });
+    test("die Zeile bleibt eine Lücke, wenn alle Dateien lesbar sind (kein Aufweichen)", () => {
+      const p = ausloeser([ci("Build"), fest('["CI"]')]);
+      expect(p.ok).toBe(false);
+      expect(p.nichtPruefbar).toBeUndefined();
+    });
+  });
+  test("Differenz: der Leser liest dieselben Auslöser wie die yaml-Bibliothek", async () => {
+    const { parse } = await import("yaml");
+    const proben = [
+      "name: A\non:\n  workflow_run:\n    workflows: [CI, 'Zwei Worte']\n    types: [completed]\n",
+      "name: A\non:\n  workflow_run:\n    workflows:\n      - CI\n      - \"Build x\"\n",
+      "name: A\non:\n  workflow_run:\n    workflows:\n    - CI\n    branches: [main]\n",
+      "name: A\non: push\n",
+      "name: A\non:\n  push:\n  pull_request:\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI] # Kommentar\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"CI\" , 'Weg' ] # Kommentar\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a #b\", c#d]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a ] #b\"] # Kommentar\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI] # siehe [docs]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI] # x ]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a ] #b\"]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a\\\"]\"] # x\n",
+      "name: A\non:\n  workflow_run:\n    workflows: ['C:\\'] # x\n",
+      "name: A\non:\n  workflow_run:\n    workflows: ['x ] y', z] # q ]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI]\t# x\n",
+    ];
+    for (const text of proben) {
+      const erwartet = (parse(text) as { on?: { workflow_run?: { workflows?: string[] } } }).on;
+      const soll = typeof erwartet === "object" && erwartet !== null ? (erwartet.workflow_run?.workflows ?? []) : [];
+      const r = rawAusloeser(text);
+      expect(r.ausloeser, text).toEqual(soll);
+    }
   });
   test("steht als letzter Punkt in DATEI_PUNKTE", () => {
     expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");

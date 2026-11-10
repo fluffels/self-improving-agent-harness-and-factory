@@ -1,6 +1,6 @@
 /* @harness-waechter: Der Prototyp schaltet auch durch Offline-Belege keine autonomen Läufe frei. */
 import { afterEach, expect, test, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -41,7 +41,7 @@ test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe",
   expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain("Quarantäne"); expect(err).toEqual([]);
 });
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["x"] } } };
-const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string> };
+const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string>; pruefeAusgabe: (r: string) => string; quellDatei: (r: string, p: string) => string };
 function projekt(rollen: Record<string, string>) {
   const d = mkdtempSync(join(tmpdir(), "codex-rollen-")); temps.push(d);
   mkdirSync(join(d, ".codex", "agents"), { recursive: true }); writeFileSync(join(d, ".mcp.json"), JSON.stringify(mcp));
@@ -64,6 +64,31 @@ test("lokale Rollen: ein Ordner an der Stelle einer Rollen-Datei ist veraltet, k
   const d = projekt({}); mkdirSync(join(d, ".codex", "agents", soll[0]));
   const m = lib.lokaleRollenMaengel(d, config, mcp);
   expect(m).toHaveLength(1); expect(m[0]).toContain("veraltet"); expect(m[0]).toContain(soll[0]);
+});
+/** Verlinkter Vorfahre oberhalb der Wurzel (macOS: /var -> /private/var), plattformneutral nachgebaut. */
+function unterVerlinktemVorfahren() {
+  const d = mkdtempSync(join(tmpdir(), "codex-link-")); temps.push(d);
+  const real = join(d, "real"); mkdirSync(join(real, "repo", ".codex", "agents"), { recursive: true });
+  writeFileSync(join(real, "repo", ".mcp.json"), JSON.stringify(mcp));
+  symlinkSync(real, join(d, "link"), "junction");
+  return { d, root: join(d, "link", "repo") };
+}
+test("Wurzel unter verlinktem Vorfahren ist erlaubt (Guard prüft nur unterhalb der Wurzel)", () => {
+  const { root } = unterVerlinktemVorfahren();
+  expect(lib.lokaleRollenMaengel(root, config, mcp)).toEqual([]);
+  expect(lib.pruefeAusgabe(root)).toBe(root);
+  expect(lib.quellDatei(root, ".mcp.json")).toBe(join(root, ".mcp.json"));
+});
+test("Symlink innerhalb der Wurzel bleibt ein Fehler", () => {
+  const { d, root } = unterVerlinktemVorfahren();
+  const ziel = join(d, "anderswo"); mkdirSync(ziel);
+  rmSync(join(root, ".codex", "agents"), { recursive: true }); symlinkSync(ziel, join(root, ".codex", "agents"), "junction");
+  expect(() => lib.lokaleRollenMaengel(root, config, mcp)).toThrow(/Symlink/);
+  const quelle = join(d, "q.json"); writeFileSync(quelle, "{}"); rmSync(join(root, ".mcp.json")); symlinkSync(quelle, join(root, ".mcp.json"));
+  expect(() => lib.quellDatei(root, ".mcp.json")).toThrow(/Symlink/);
+  expect(() => lib.pruefeAusgabe(join(d, "link-direkt"))).not.toThrow();
+  symlinkSync(ziel, join(d, "link-direkt"), "junction");
+  expect(() => lib.pruefeAusgabe(join(d, "link-direkt"))).toThrow(/Symlink/);
 });
 test("Vorprüfung meldet verwaiste Rolle in root", () => {
   const d = projekt({ "alt.toml": "x" }); const out: string[] = [];

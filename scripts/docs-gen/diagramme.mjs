@@ -198,7 +198,7 @@ export function pruefeVollstaendigkeit(vorlagen, katalog) {
   if (fehlen.length)
     throw new Error(
       `${vorlagen.length === 1 ? "Vorlage" : "Vorlagen"} ${vorlagen.map((v) => v.pfad).join(" + ")}: nicht im Diagramm: ${fehlen.map(([art, name, datei]) => `${art} "${name}" (${datei})`).join(", ")}. ` +
-        `Fix: in eine dieser Vorlagen mit \${agent:NAME}, \${skill:NAME} bzw. \${workflow:NAME} aufnehmen, dann npm run docs:gen`,
+        `Fix: in eine dieser Vorlagen mit \${agent:NAME}, \${skill:NAME} bzw. \${workflow:NAME} aufnehmen, dann node scripts/docs-gen.mjs --write`,
     );
 }
 

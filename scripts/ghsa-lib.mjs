@@ -4,6 +4,7 @@
  * Alles pur, getestet über test/audit-einordnung.test.ts.
  */
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { offeneZeileMit } from "./sammelticket-titel.mjs";
 
 export const ALARM_PRAEFIX = "🔒 Security:";
 const GHSA_MUSTER = /GHSA(?:-[a-z0-9]{4}){3}/gi;
@@ -21,7 +22,7 @@ export function bekannteGhsa({ kommentare, wiedervorlagen, offeneTitel }) {
   const menge = new Set();
   for (const k of kommentare) {
     for (const z of String(k ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Audit:/.test(z)) ghsaIn(z).forEach((g) => menge.add(g));
+      if (offeneZeileMit(z, "Audit:")) ghsaIn(z).forEach((g) => menge.add(g));
     }
   }
   for (const e of wiedervorlagen) {
