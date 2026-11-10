@@ -2,7 +2,7 @@
 /* Harness-Doctor, Punkt `Git-Hooks` (factory#247 L1): `git config core.hooksPath` ist `.githooks` (die Kern-Hooks `pre-push` und `post-commit` liegen dort). Ohne die Einstellung laufen sie nie,
  * ohne dass etwas meldet. Nur lokal in `--pruefen`: ein CI-Checkout hat die Einstellung nie, der Wochenlauf prüft den Punkt nicht. Fehlt die Einstellung oder hat sie einen anderen Wert, ist es
  * eine Lücke (Fix: der Befehl); lässt sich git nicht lesen, ist der Punkt nicht prüfbar. Das Skript `setup` gehört dem Projekt und braucht eine eigene `scripts/setup.mjs` (docs/erstbezug.md);
- * dieser Punkt prüft nur das Ergebnis.
+ * dieser Punkt prüft nur das Ergebnis. Grenze: `git config --get` liest die wirksame Konfiguration (lokal, global, System); ein globales `core.hooksPath` zählt also mit (der Fix setzt den Wert lokal).
  */
 import { spawnSync } from "node:child_process";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
