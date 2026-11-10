@@ -2,7 +2,7 @@
  * `name`, `requiredChecks` (Menge), `codeScanning` (Werkzeug und beide Schwellen) und `bypassActors`. Ersetzt den Handbefehl `gh api repos/<repo>/rulesets/<id>`.
  *
  * Nur im lokalen `--pruefen`: `bypass_actors` liefert GitHub nur mit Admin-Recht, das Token des Wochenlaufs hat es nicht. Fehlt das Feld oder scheitert der Endpunkt
- * (403, 404, Netz), ist der Punkt `NICHT PRÜFBAR` (fail-closed), nie still grün; ohne `id` im Spiegel ebenso. Pur bis auf die Naht `lesen(args)` (liefert die geparste
+ * (403, 404, Netz), ist der Punkt `NICHT PRÜFBAR` (fail-closed), nie still grün. Ein Spiegel ohne `id` oder ein Aufruf ohne `lesen` lässt den Punkt aus (`rulesetPunkte`). Pur bis auf die Naht `lesen(args)` (liefert die geparste
  * Antwort, wirft bei einem Fehler; der Aufrufer reicht `gh` herein). Blatt-Modul: importiert nur die Ergebnis-Form.
  */
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
@@ -31,9 +31,11 @@ function abweichungen(spiegel, live) {
   ].filter(Boolean);
 }
 
+/** Die Zeilen des Punkts für `pruefLauf`: leer ohne `lesen` (Wochenlauf, `--einrichten`), ohne Spiegel oder ohne `id` im Spiegel (dann ist der Abgleich nicht angefordert), sonst genau ein Ergebnis. */
+export const rulesetPunkte = ({ spiegel, repo, lesen }) => (typeof lesen === "function" && spiegel?.id != null ? [pruefeRulesetSpiegel({ spiegel, repo, lesen })] : []);
+
 /** Der Punkt `Ruleset-Spiegel`: ein Ergebnis (`gut`, `luecke` oder `nichtPruefbar`). */
 export function pruefeRulesetSpiegel({ spiegel, repo, lesen }) {
-  if (spiegel?.id === undefined || spiegel.id === null) return nichtPruefbar(PUNKT, "der Spiegel nennt keine id des Rulesets", "das Feld id (Ruleset-ID) im Ruleset-Spiegel ergänzen", LINK);
   let live;
   try {
     live = lesen(["api", `repos/${repo}/rulesets/${spiegel.id}`]);

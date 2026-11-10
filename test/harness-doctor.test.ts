@@ -986,3 +986,34 @@ describe("Prüfwurzel aus --config (factory#127 L27)", () => {
     assert.ok(!r.out.some((z) => z.startsWith("Prüfwurzel: ")), r.out.join(String.fromCharCode(10)));
   });
 });
+
+describe("Punkt Ruleset-Spiegel (factory#247 L3): nur lokales --pruefen", () => {
+  const ENDPUNKT = "api repos/acme/demo/rulesets/7";
+  const MIT_ID = { ...SPIEGEL, id: 7 };
+  const LIVE = { name: "main-schutz", rules: [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }], bypass_actors: [] };
+  const zeile = (r: Lauf) => r.out.find((z) => z.includes(" Ruleset-Spiegel") && !z.startsWith("HINWEIS"));
+
+  test("Spiegel ohne id: der Punkt entfällt", () => {
+    assert.equal(zeile(lauf({}, { spiegel: SPIEGEL })), undefined);
+  });
+  test("Standardlauf liest den Ruleset-Endpunkt und meldet OK bei Gleichstand", () => {
+    const r = lauf({ [ENDPUNKT]: LIVE }, { spiegel: MIT_ID });
+    assert.ok(r.aufrufe.includes(ENDPUNKT), r.aufrufe.join("\n"));
+    assert.match(zeile(r) ?? "", /^OK /);
+  });
+  test("abweichender Name ist eine LÜCKE, Exit 1", () => {
+    const r = lauf({ [ENDPUNKT]: { ...LIVE, name: "anders" } }, { spiegel: MIT_ID });
+    assert.match(zeile(r) ?? "", /^LÜCKE /);
+    assert.equal(r.code, 1);
+  });
+  test("Endpunkt scheitert: NICHT PRÜFBAR statt grün", () => {
+    const r = lauf({}, { spiegel: MIT_ID });
+    assert.match(zeile(r) ?? "", /^NICHT PRÜFBAR /);
+    assert.equal(r.code, 1);
+  });
+  test("ohne die lokale Naht (--einrichten, Wochenlauf) kein Aufruf und keine Zeile", () => {
+    const r = lauf({ [ENDPUNKT]: LIVE }, { spiegel: MIT_ID, argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
+    assert.ok(!r.aufrufe.includes(ENDPUNKT));
+    assert.equal(zeile(r), undefined);
+  });
+});

@@ -56,7 +56,8 @@ describe("pruefeSicherheit: ausgeschaltet ist eine Lücke mit Klickpfad, ohne sc
     expect(luecken[0].nichtPruefbar).toBeUndefined();
     expect(luecken[0].fix).toMatch(/\S/);
     expect(luecken[0].fix).not.toMatch(/PATCH|POST/);
-    if (punkt !== "PVR" && punkt !== "SHA-Pinning") expect(luecken[0].fix).not.toMatch(/gh api|PUT/);
+    const nennt = /gh api -X PUT/.test(luecken[0].fix ?? "");
+    expect(nennt).toBe(punkt === "PVR" || punkt === "SHA-Pinning");
     expect(luecken[0].link).toBe(LINKS[punkt]);
     expect(luecken[0].link).toMatch(/^https:\/\//);
   });

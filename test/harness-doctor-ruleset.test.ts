@@ -2,11 +2,13 @@
  * OK, LÜCKE je Feld, NICHT PRÜFBAR (fail-closed: kein Admin-Recht, Endpunkt-Fehler, fehlende ID). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeRulesetSpiegel as raw } from "../scripts/harness-doctor-ruleset.mjs";
+import { pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Lesen = (args: string[]) => unknown;
 const pruefe = raw as (e: { spiegel: unknown; repo: string; lesen: Lesen }) => Ergebnis;
+
+const punkte = rawPunkte as (e: { spiegel: unknown; repo: string; lesen?: Lesen }) => Ergebnis[];
 
 const SPIEGEL = {
   id: 7,
@@ -25,6 +27,23 @@ const live = (ueber: Record<string, unknown> = {}) => ({
   ...ueber,
 });
 const lauf = (antwort: unknown, spiegel: unknown = SPIEGEL) => pruefe({ spiegel, repo: "o/r", lesen: () => antwort });
+
+describe("Ruleset-Spiegel: Punkt nur auf Anforderung (rulesetPunkte)", () => {
+  const { id: _id, ...ohneId } = SPIEGEL;
+  void _id;
+  test("mit lesen und id: genau ein Punkt", () => {
+    expect(punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => live() })).toHaveLength(1);
+  });
+  test("ohne lesen (Wochenlauf, --einrichten): kein Punkt", () => {
+    expect(punkte({ spiegel: SPIEGEL, repo: "o/r" })).toEqual([]);
+  });
+  test("Spiegel ohne id: kein Punkt", () => {
+    expect(punkte({ spiegel: ohneId, repo: "o/r", lesen: () => live() })).toEqual([]);
+  });
+  test("ohne Spiegel: kein Punkt", () => {
+    expect(punkte({ spiegel: undefined, repo: "o/r", lesen: () => live() })).toEqual([]);
+  });
+});
 
 describe("Ruleset-Spiegel: OK", () => {
   test("alles gleich, Reihenfolge der Checks egal", () => {
@@ -79,13 +98,6 @@ describe("Ruleset-Spiegel: NICHT PRÜFBAR (fail-closed)", () => {
     const x = pruefe({ spiegel: SPIEGEL, repo: "o/r", lesen: () => { throw new Error("HTTP 404"); } });
     expect(x.nichtPruefbar).toBe(true);
     expect(x.befund).toContain("404");
-  });
-  test("Spiegel ohne id", () => {
-    const { id: _id, ...ohne } = SPIEGEL;
-    void _id;
-    const x = lauf(live(), ohne);
-    expect(x.nichtPruefbar).toBe(true);
-    expect(x.befund).toContain("id");
   });
   test("Antwort ist kein Objekt", () => {
     expect(lauf(null).nichtPruefbar).toBe(true);

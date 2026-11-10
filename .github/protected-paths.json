@@ -44,6 +44,7 @@
     "/scripts/harness-doctor.mjs",
     "/scripts/harness-doctor-lib.mjs",
     "/scripts/harness-doctor-sicherheit.mjs",
+    "/scripts/harness-doctor-ruleset.mjs",
     "/scripts/harness-doctor-dateien.mjs",
     "/scripts/workflow-blockform.mjs",
     "/scripts/harness-doctor-meldestelle.mjs",
