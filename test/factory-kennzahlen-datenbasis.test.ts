@@ -61,9 +61,11 @@ describe("datenbasisAbschnitt", () => {
     const s = F.datenbasisAbschnitt(d("verletzt"));
     expect(s).toContain("Vorbedingung verletzt: keine Transkripte der Ticket-Läufe auf dieser Maschine");
     expect(s).toContain("Status-Lauf auf der Maschine der Ticket-Läufe fahren");
+    expect(s).toContain("Sessions mit Claim-Zeile: keine.");
   });
   test("erfüllt und teilweise ohne Verletzungs-Zeile, teilweise nennt die Tickets ohne Transkript", () => {
     expect(F.datenbasisAbschnitt(d("erfüllt", { mitTranskript: 2, ohne: [], sessions: ["s1"] }))).not.toContain("Vorbedingung verletzt");
+    expect(F.datenbasisAbschnitt(d("erfüllt", { mitTranskript: 2, ohne: [], sessions: ["s1"] }))).not.toContain("Tickets ohne Transkript");
     const s = F.datenbasisAbschnitt(d("teilweise", { mitTranskript: 1, sessions: ["s1"] }));
     expect(s).not.toContain("Vorbedingung verletzt");
     expect(s).toContain("#4");
