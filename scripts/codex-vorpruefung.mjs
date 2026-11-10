@@ -6,7 +6,7 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { bewerteBelege, lokaleRollenMaengel } from "./codex-lib.mjs";
-import { werkzeugMaengel } from "./werkzeug-vorpruefung.mjs";
+import { werkzeugMaengel } from "./werkzeug-lib.mjs";
 
 export function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)), werkzeug = (r, l) => werkzeugMaengel({ root: r, lade: l }) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { belege: { type: "string" } });
