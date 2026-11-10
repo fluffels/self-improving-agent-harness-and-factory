@@ -270,8 +270,8 @@ describe("Abnahme je PR (#1756)", () => {
   const ab = (...zeilen: string[]) => bewerte([nachricht(...zeilen)]).zeilen[0].abnahme;
 
   test("gültiges Urteil: durchgaenge übernommen", () => {
-    assert.deepEqual(ab(urteil(1)), { durchgaenge: 1 });
-    assert.deepEqual(ab(urteil(2)), { durchgaenge: 2 });
+    assert.deepEqual(ab(urteil(1)), { durchgaenge: 1, ursachen: {} });
+    assert.deepEqual(ab(urteil(2)), { durchgaenge: 2, ursachen: {} });
   });
   test("entfaellt und Override", () => {
     assert.equal(ab(`${Z.abnahme}: entfaellt — Hand-PR`), "entfaellt");
@@ -288,7 +288,7 @@ describe("Abnahme je PR (#1756)", () => {
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 67 %/);
   });
   test("Widerruf hebt den Override auf, die Abnahme-Zeile zählt wieder", () => {
-    assert.deepEqual(ab(`${Z.abnahmeOverride}: #1755 grund`, `${Z.abnahmeOverride}: #1755 entfällt`, urteil(1)), { durchgaenge: 1 });
+    assert.deepEqual(ab(`${Z.abnahmeOverride}: #1755 grund`, `${Z.abnahmeOverride}: #1755 entfällt`, urteil(1)), { durchgaenge: 1, ursachen: {} });
   });
   test("ungültig (durchgaenge=0, ohne head) und ohne Zeile: null", () => {
     assert.equal(ab(`${Z.abnahme}: head=${H} durchgaenge=0 urteil=K1:erfuellt`), null);
@@ -296,7 +296,7 @@ describe("Abnahme je PR (#1756)", () => {
     assert.equal(ab(), null);
   });
   test("Squash-Betreff mit Stern-Präfix wird erkannt", () => {
-    assert.deepEqual(ab(`* ${urteil(1)}`), { durchgaenge: 1 });
+    assert.deepEqual(ab(`* ${urteil(1)}`), { durchgaenge: 1, ursachen: {} });
   });
   test("nur der Merge-Commit zählt: eine Abnahme-Zeile in einem späteren Commit nicht", () => {
     const e = roh.bewertePrs({
@@ -318,7 +318,7 @@ describe("Abnahme je PR (#1756)", () => {
       nachricht(),
     ]);
     const a = e.kennzahlen.abnahme as Record<string, number>;
-    assert.deepEqual(a, { gemessen: 2, ersterDurchgang: 1, entfaellt: 1, override: 1, ohne: 1 });
+    assert.deepEqual(a, { gemessen: 2, ersterDurchgang: 1, entfaellt: 1, override: 1, ohne: 1, ursachen: { kriterium: 0, szenario: 0, umsetzung: 0, ohne: 1 } });
     assert.equal(a.gemessen + a.entfaellt + a.override + a.ohne, e.kennzahlen.prs);
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: 50 % \(1\/2\); entfällt 1, Override 1, ohne gültige Abnahme-Zeile 1/);
   });
@@ -331,6 +331,17 @@ describe("Abnahme je PR (#1756)", () => {
     assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 3, mitFixUndFestgefahren: 1, offenMitFix: 0 });
     assert.match(mod.formatiere(e), /Abnahme-Fix: 3 PRs, davon mit Hand-off: 33 % \(1\/3\)/);
   });
+  test("Abnahme-Ursache (factory#260): Summen je Klasse, ohne = PRs mit Fix ohne Feld; erster Durchgang zählt nie als ohne", () => {
+    const mit = (d: number, u: string) => nachricht(`${Z.abnahme}: head=${H} durchgaenge=${d} urteil=K1:erfuellt ursachen=${u}`);
+    const e = bewerte([nachricht(urteil(1)), nachricht(urteil(2)), mit(3, "szenario:1,umsetzung:1"), mit(2, "umsetzung:2")]);
+    const a = e.kennzahlen.abnahme as { ursachen: unknown };
+    assert.deepEqual(a.ursachen, { kriterium: 0, szenario: 1, umsetzung: 3, ohne: 1 });
+    assert.deepEqual(e.zeilen[2].abnahme, { durchgaenge: 3, ursachen: { szenario: 1, umsetzung: 1 } });
+    assert.match(mod.formatiere(e), /Abnahme-Ursache \(Fälle mit Fix\): kriterium 0, szenario 1, umsetzung 3, ohne Ursachen-Feld 1/);
+  });
+  test("Abnahme-Zeile mit ungültigem ursachen-Feld zählt als ohne gültige Zeile", () => {
+    assert.equal(ab(`${Z.abnahme}: head=${H} durchgaenge=2 urteil=K1:erfuellt ursachen=foo:1`), null);
+  });
   test("Abnahme-Fix leer: 0 PRs, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
     assert.deepEqual(e.kennzahlen.abnahmeFix, { mitFix: 0, mitFixUndFestgefahren: 0, offenMitFix: 0 });
@@ -338,7 +349,7 @@ describe("Abnahme je PR (#1756)", () => {
   });
   test("leer: alle Werte 0, Darstellung ohne Prozent", () => {
     const e = bewerte([]);
-    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 });
+    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0, ursachen: { kriterium: 0, szenario: 0, umsetzung: 0, ohne: 0 } });
     assert.match(mod.formatiere(e), /Abnahme im ersten Durchgang: –;/);
   });
   test("Präfix aus der Config: bei AB- wird die Abnahme-Zeile des Config-Präfixes nicht gelesen", () => {
@@ -356,8 +367,8 @@ describe("Abnahme je PR (#1756)", () => {
       return JSON.stringify({ data: { repository } });
     };
     const e = mod.laufErgebnis({ von: "2026-10-01T00:00:00Z", bis: "2026-10-02T00:00:00Z", runGit: () => log, runGh: gh, jetzt: SPAETER });
-    assert.deepEqual(e.zeilen[0].abnahme, { durchgaenge: 1 });
-    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 1, ersterDurchgang: 1, entfaellt: 0, override: 0, ohne: 0 });
+    assert.deepEqual(e.zeilen[0].abnahme, { durchgaenge: 1, ursachen: {} });
+    assert.deepEqual(e.kennzahlen.abnahme, { gemessen: 1, ersterDurchgang: 1, entfaellt: 0, override: 0, ohne: 0, ursachen: { kriterium: 0, szenario: 0, umsetzung: 0, ohne: 0 } });
   });
 });
 

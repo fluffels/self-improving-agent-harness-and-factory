@@ -44,8 +44,11 @@ Zuerst `git -C <worktree> status --porcelain` (muss leer sein) und `git -C <work
 Erste Zeile `ABNAHME #<nr> · holdout-abnahme` (`<nr>` ist die Ticketnummer aus der Zeile `Ticket #<nr>` des Auftrags, nie die PR-Nummer), dann je Kriterium genau eine Zeile:
 
 ```
-K<i>: erfuellt | nicht-erfuellt | nicht-pruefbar — <Beleg>
+K<i>: erfuellt | nicht-pruefbar — <Beleg>
+K<i>: nicht-erfuellt ursache=kriterium|szenario|umsetzung — <Beleg>
 ```
+
+Bei `nicht-erfuellt` ist `ursache=` Pflicht, bei `erfuellt` und `nicht-pruefbar` ein Fehler (der Bericht ist ungültig). Wähle die Klasse nach der Ursache der Abweichung: das beobachtete Verhalten widerspricht dem Kriterium → `umsetzung`; das Szenario prüft über das Kriterium hinaus → `szenario`; das Kriterium lässt die beobachtete Lesart zu, gemeint war eine andere → `kriterium`.
 
 Der Beleg nennt das beobachtete Verhalten (Aufruf, Ausgabe, Zustand), nie den Wortlaut der Szenarien. `nicht-erfuellt` nur, wenn du das Gegenteil beobachtet hast; `nicht-pruefbar` **nur bei einem Spezifikationsmangel** (das Kriterium ist so unklar oder widersprüchlich, dass keine Beobachtung es entscheidet). Ein Werkzeugproblem (Server startet nicht, Browser fehlt, Port belegt, Aufruf bricht ab) ist kein Spezifikationsmangel: Dann lautet die erste Zeile `ABNAHME-ABGEBROCHEN #<nr> · holdout-abnahme` mit einer Zeile `GRUND: <was nicht ging>`; der Hauptchat versucht es einmal neu.
 

@@ -172,7 +172,46 @@ function abnahmeFehler(wert, head, durch, u) {
   return u.fehler ?? null;
 }
 
-/** Wert der Abnahme-Zeile: `{art:"urteil", head, durchgaenge, urteil}` | `{art:"entfaellt", grund}` | `{art:"ungueltig", zeile, grund}` | `null` (keine Zeile). */
+/** Klassen der Abnahme-Ursache (factory#260): Verhalten widerspricht dem Kriterium, Szenario prüft darüber hinaus, Kriterium lässt eine andere Lesart zu. */
+export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
+
+/** Marker-Feld `ursache=K2:umsetzung,…` → `{ursache: [{k, klasse}]}` oder `{fehler}`; jedes K muss im Urteil nicht-erfuellt sein. */
+function parseUrsache(wert, urteil) {
+  const ursache = [];
+  for (const teil of wert.split(",")) {
+    const m = /^(K[1-9]\d*):(\S+)$/.exec(teil.trim());
+    if (!m) return { fehler: `Eintrag „${teil.trim()}“ ungültig (erwartet K<n>:<klasse>)` };
+    if (!URSACHEN.includes(m[2])) return { fehler: `unbekannte Ursache „${m[2]}“ bei ${m[1]}` };
+    if (urteil.find((u) => u.k === m[1])?.wert !== "nicht-erfuellt") return { fehler: `${m[1]} ist nicht nicht-erfuellt` };
+    if (ursache.some((x) => x.k === m[1])) return { fehler: `${m[1]} doppelt` };
+    ursache.push({ k: m[1], klasse: m[2] });
+  }
+  return { ursache };
+}
+
+/** Zeilenfeld `ursachen=<klasse>:<n>,…` → `{ursachen: {klasse: n}}` oder `{fehler}`. */
+function parseUrsachen(wert) {
+  const ursachen = {};
+  for (const teil of wert.split(",")) {
+    const m = /^([a-z]+):([1-9]\d*)$/.exec(teil.trim());
+    if (!m || !URSACHEN.includes(m[1])) return { fehler: `ursachen: Eintrag „${teil.trim()}“ ungültig (erwartet <klasse>:<n ≥ 1>, Klassen ${URSACHEN.join(" | ")})` };
+    if (m[1] in ursachen) return { fehler: `ursachen: ${m[1]} doppelt` };
+    ursachen[m[1]] = Number(m[2]);
+  }
+  return { ursachen };
+}
+
+const ursachenText = (u) => URSACHEN.filter((k) => u[k] > 0).map((k) => `${k}:${u[k]}`).join(",");
+
+/** Zeilenfeld ` ursachen=<klasse>:<n>,…` samt führendem Leerzeichen (leer ohne Angabe); wirft bei ungültiger Angabe (nur Klassen aus URSACHEN, ganze Zahlen ≥ 1). */
+function ursachenFeld(ursachen) {
+  if (ursachen === undefined) return "";
+  const text = ursachenText(ursachen);
+  if (parseUrsachen(text).fehler || Object.keys(ursachen).length !== text.split(",").length) throw new Error("Abnahme: ursachen ungültig (<klasse>:<n ≥ 1>)");
+  return ` ursachen=${text}`;
+}
+
+/** Wert der Abnahme-Zeile: `{art:"urteil", head, durchgaenge, urteil, ursachen?}` | `{art:"entfaellt", grund}` | `{art:"ungueltig", zeile, grund}` | `null` (keine Zeile). */
 function abnahmeAus(wert) {
   if (wert === null) return null;
   const entf = /^entf(?:ae|ä)llt\s*[—–-]+\s*(\S.*)$/.exec(wert);
@@ -180,9 +219,11 @@ function abnahmeAus(wert) {
   const head = (feldWert(wert, "head")?.trim() ?? "").toLowerCase();
   const durch = feldWert(wert, "durchgaenge")?.trim() ?? "";
   const u = parseUrteil(feldWert(wert, "urteil"));
-  const grund = abnahmeFehler(wert, head, durch, u);
+  const ur = feldWert(wert, "ursachen");
+  const pu = ur === null ? {} : parseUrsachen(ur.trim());
+  const grund = abnahmeFehler(wert, head, durch, u) ?? pu.fehler ?? null;
   if (grund !== null) return { art: "ungueltig", zeile: wert, grund };
-  return { art: "urteil", head, durchgaenge: Number(durch), urteil: u.urteil };
+  return { art: "urteil", head, durchgaenge: Number(durch), urteil: u.urteil, ...(pu.ursachen ? { ursachen: pu.ursachen } : {}) };
 }
 
 /** Die einzige Quelle der Abnahme-Zeile (ohne Schlüssel-Präfix der Message): `<praefixe.commitZeile>Abnahme: head=… durchgaenge=… urteil=…` bzw.
@@ -197,7 +238,7 @@ export function formatAbnahme(zeilen, abnahme) {
   const urteil = abnahme?.urteil;
   const ok = abnahme?.art === "urteil" && HEX_HEAD.test(abnahme.head ?? "") && Number.isInteger(abnahme.durchgaenge) && abnahme.durchgaenge >= 1;
   if (!ok || !Array.isArray(urteil) || urteilAus(urteilText(urteil)) === null) throw new Error("Abnahme: head (7-40 Hex), durchgaenge (≥ 1) und gültiges Urteil nötig");
-  return `${key} head=${abnahme.head} durchgaenge=${abnahme.durchgaenge} urteil=${urteilText(urteil)}`;
+  return `${key} head=${abnahme.head} durchgaenge=${abnahme.durchgaenge} urteil=${urteilText(urteil)}${ursachenFeld(abnahme.ursachen)}`;
 }
 
 /** Name des Kommentar-Markers der Abnahme (aus dem Präfix, kleingeschrieben); der Hand-off-Marker hängt `-handoff` an. */
@@ -205,19 +246,27 @@ export function abnahmeMarker(zeilen) {
   return `${zeilen.praefix.toLowerCase()}abnahme`;
 }
 
-/** Marker-Kommentarzeile `<!-- <marker> durchgang=<d> head=<sha> urteil=K1:… -->`; wirft bei ungültiger Eingabe wie formatAbnahme. Pur. */
-export function formatAbnahmeMarker(zeilen, { durchgang, head, urteil }) {
+/** Marker-Kommentarzeile `<!-- <marker> durchgang=<d> head=<sha> urteil=K1:… [ursache=K2:umsetzung,…] -->`; wirft bei ungültiger Eingabe wie formatAbnahme. Pur. */
+export function formatAbnahmeMarker(zeilen, { durchgang, head, urteil, ursache }) {
   formatAbnahme(zeilen, { art: "urteil", head, durchgaenge: durchgang, urteil });
-  return `<!-- ${abnahmeMarker(zeilen)} durchgang=${durchgang} head=${head} urteil=${urteilText(urteil)} -->`;
+  let feld = "";
+  if (ursache !== undefined) {
+    const text = ursache.map((x) => `${x.k}:${x.klasse}`).join(",");
+    if (parseUrsache(text, urteil).fehler) throw new Error("Abnahme-Marker: ursache ungültig (K<n>:<klasse>, nur bei nicht-erfuellt)");
+    feld = ` ursache=${text}`;
+  }
+  return `<!-- ${abnahmeMarker(zeilen)} durchgang=${durchgang} head=${head} urteil=${urteilText(urteil)}${feld} -->`;
 }
 
-/** Liest den Marker aus einem Kommentartext: `{durchgang, head, urteil}` oder `null`. Der Hand-off-Marker zählt nie. Pur. */
+/** Liest den Marker aus einem Kommentartext: `{durchgang, head, urteil, ursache?}` oder `null` (ungültige Ursache macht den Marker ungültig). Der Hand-off-Marker zählt nie. Pur. */
 export function parseAbnahmeMarker(zeilen, text) {
-  const re = new RegExp(`<!--\\s*${escapeRegex(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=(${HEX})\\s+urteil=(\\S+)\\s*-->`);
+  const re = new RegExp(`<!--\\s*${escapeRegex(abnahmeMarker(zeilen))}\\s+durchgang=(\\d+)\\s+head=(${HEX})\\s+urteil=(\\S+)(?:\\s+ursache=(\\S+))?\\s*-->`);
   const m = re.exec(String(text ?? ""));
   const urteil = m ? urteilAus(m[3]) : null;
   if (!m || urteil === null || Number(m[1]) < 1) return null;
-  return { durchgang: Number(m[1]), head: m[2], urteil };
+  const pu = m[4] === undefined ? null : parseUrsache(m[4], urteil);
+  if (pu?.fehler) return null;
+  return { durchgang: Number(m[1]), head: m[2], urteil, ...(pu ? { ursache: pu.ursache } : {}) };
 }
 
 /** Die gültigen Abnahme-Marker der Kommentare vertrauter Autoren (`owner` plus vertraute Bots), in der Reihenfolge der API; Marker Fremder
