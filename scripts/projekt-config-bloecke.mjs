@@ -195,6 +195,24 @@ export function pruefeBerechtigungen(b) {
 
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
+/** Pur: prüft den optionalen Block `vorpruefung` (Form, factory#260; fehlt er, ist nichts zu prüfen): `befehle` ist eine Liste `{ name, befehl }` mit eindeutigem Namen und einer nicht-leeren Liste von Strings (Programm, dann Argumente; kein Shell-Text). */
+export function pruefeVorpruefung(b) {
+  if (b === undefined) return [];
+  if (!istObjekt(b)) return ["vorpruefung muss ein Objekt mit der Liste befehle sein"];
+  const fehler = Object.keys(b).filter((k) => k !== "befehle").map((k) => `vorpruefung.${k} ist kein bekannter Schlüssel (erlaubt: befehle)`);
+  if (b.befehle === undefined) return fehler;
+  if (!Array.isArray(b.befehle)) return [...fehler, "vorpruefung.befehle muss eine Liste von { name, befehl } sein"];
+  const namen = new Set();
+  b.befehle.forEach((e, i) => {
+    const wo = `vorpruefung.befehle[${i}]`;
+    if (!istObjekt(e) || !istText(e.name)) return fehler.push(`${wo}.name muss ein nicht-leerer String sein`);
+    if (!Array.isArray(e.befehl) || e.befehl.length === 0 || !e.befehl.every(istText)) fehler.push(`${wo}.befehl muss eine nicht-leere Liste von Strings sein (Programm, dann Argumente)`);
+    if (namen.has(e.name)) fehler.push(`${wo}.name „${e.name}“ steht doppelt`);
+    namen.add(e.name);
+  });
+  return fehler;
+}
+
 /**
  * Pur: prüft den Block `sandbox` (Form, #1888): nur die Listen allowedDomains (Strings ohne Leerraum) und envVars (Objekte `{ name, mode }` mit `mode: "deny"`), je Liste ohne Duplikat (Name).
  * Ob die Ergänzung zum Wert in `.claude/settings.json` passt und nichts öffnet, prüft die Besitz-Lib (`sandboxErgaenzungsBefunde`).

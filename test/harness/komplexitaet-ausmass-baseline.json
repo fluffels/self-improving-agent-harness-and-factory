@@ -1,6 +1,6 @@
 {
   "scripts/abnahme.mjs": {
-    "complexity": 4
+    "complexity": 3
   },
   "scripts/besitz-extraktion.mjs": {
     "complexity": 18

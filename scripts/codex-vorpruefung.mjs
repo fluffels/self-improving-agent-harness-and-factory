@@ -6,8 +6,9 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { bewerteBelege, lokaleRollenMaengel } from "./codex-lib.mjs";
+import { werkzeugMaengel } from "./werkzeug-lib.mjs";
 
-export function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)) } = {}) {
+export function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)), werkzeug = (r, l) => werkzeugMaengel({ root: r, lade: l }) } = {}) {
   const { werte, fehler } = flagsLesen(argv, { belege: { type: "string" } });
   if (fehler) { err(fehler.text); return 2; }
   try {
@@ -15,6 +16,7 @@ export function main(argv = process.argv.slice(2), { out = console.log, err = co
     const config = lade();
     const maengel = bewerteBelege(belege, config);
     if (existsSync(join(root, ".codex", "agents"))) maengel.push(...lokaleRollenMaengel(root, config, JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"))));
+    maengel.push(...werkzeug(root, lade).map((m) => `Werkzeug-Vorprüfung: ${m.text} (Fix: ${m.fix})`));
     maengel.push("Autonomer Codex-Ticketlauf gesperrt: technische Quarantäne, Hook-Abbildung und frische Ende-zu-Ende-Abnahme noch nicht nachgewiesen (#79)");
     out(JSON.stringify({ autonom: false, maengel }));
     return 1;

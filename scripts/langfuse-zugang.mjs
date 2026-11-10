@@ -4,6 +4,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+/** Die lesenden Langfuse-MCP-Tools, die Agenten nutzen dürfen: einzige Quelle. `codex-lib.mjs` erzeugt daraus `enabled_tools`; Umsetzer-`tools:`, `permissions.allow` und `berechtigungen.allow` bewacht `test/harness/model-routing.test.ts`. Die Reihenfolge ist Teil der erzeugten `.codex/config.toml`. */
+export const LANGFUSE_LESE_TOOLS = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"];
+
 const ZUGANGSNAMEN = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"];
 
 /** Basis-URL von Langfuse aus der Umgebung: leerer String gilt als nicht gesetzt, abschließende Schrägstriche fallen weg, Standard `http://localhost:3000`. Pur. */

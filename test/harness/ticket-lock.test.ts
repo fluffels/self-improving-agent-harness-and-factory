@@ -28,7 +28,7 @@ const M = raw as unknown as {
   entscheideClaim: (o: { erstellt: number; jetzt: number }) => string;
   entscheidePruefung: (o: { lock: { nonce: string } | null; nonce: string | null; vorhanden: boolean; aktivitaet: number | null; jetzt: number }) => string;
   letzteAktivitaet: (o: { commitMs?: number[]; reflogMs?: number[]; dateiMs?: number[]; nodeModulesMs?: number | null }) => number | null;
-  aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; fehler?: string };
+  aufrufLesen: (argv: string[]) => { commit?: boolean; befehl?: string; nr?: number; nonce?: string | null; wiederaufnahme?: boolean; schritt?: string | null; grund?: string | null; fehler?: string };
   fuehreAus: (argv: string[], deps: Deps) => Erg;
   echteDeps: (o?: { config?: unknown; basis?: string }) => Deps;
   ALTLAST_MS: number;
@@ -440,7 +440,7 @@ describe("Aufruf und reine Funktionen", () => {
   });
 
   test("aufrufLesen: Befehl, Nummer, Nonce in beiden Schreibweisen, Flags je Befehl", () => {
-    assert.deepEqual(M.aufrufLesen(["pruefe", "5"]), { befehl: "pruefe", nr: 5, nonce: null, wiederaufnahme: false, schritt: null });
+    assert.deepEqual(M.aufrufLesen(["pruefe", "5"]), { befehl: "pruefe", nr: 5, nonce: null, wiederaufnahme: false, schritt: null, grund: null });
     assert.equal(M.aufrufLesen(["pruefe", "5", "--nonce", "abc"]).nonce, "abc");
     assert.equal(M.aufrufLesen(["pruefe", "5", "--nonce=abc"]).nonce, "abc");
     assert.equal(M.aufrufLesen(["claim", "5", "--wiederaufnahme"]).wiederaufnahme, true);
@@ -1014,5 +1014,102 @@ describe("Arbeitsplatz: Belegung über alle Repos und Lock-Ort (#88)", () => {
   test("zwei Worktrees der Nummer in Repo A und B: der frische in B zählt (Maximum über alle, nicht der erste)", () => {
     const { d } = aktivDeps({ [A.cwd]: { worktrees: [WT_A] }, [B.cwd]: { worktrees: [WT_B] } }, [WT_B]);
     assert.equal(M.fuehreAus(["pruefe", "88"], d).out, "aktiv\n");
+  });
+});
+
+describe("erzwingen (factory#260, Lock-Übernahme auf Anweisung der Maintainerin)", () => {
+  const wt = `/repo/.claude/worktrees/${WTP}5`;
+  const jung: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
+  const lockDir = () => join(dir, `${WTP}locks`);
+  const lockDatei5 = () => join(lockDir(), "5.json");
+  const lockJson = () => JSON.parse(readFileSync(lockDatei5(), "utf8")) as { nonceHash: string; erzwungen?: { zeit: string; grund: string; vorherNonceHash: string }; gestoppt?: { verbraucht: string | null } };
+
+  test("ohne oder mit leerem oder mehrzeiligem --grund: Exit 2, nichts angelegt", () => {
+    for (const argv of [["erzwingen", "5"], ["erzwingen", "5", "--grund", ""], ["erzwingen", "5", "--grund", "   "], ["erzwingen", "5", "--grund", "a\nb"], ["erzwingen", "5", "--grund", "a\rb"]]) {
+      const r = lauf(argv, jung);
+      assert.equal(r.code, 2, argv.join(" "));
+      assert.ok(r.err.includes("--grund"), r.err);
+    }
+    assert.equal(existsSync(lockDatei5()), false);
+  });
+
+  test("nichts belegt (kein Lock, kein Worktree, kein Branch): Exit 4 mit Hinweis auf claim", () => {
+    const r = lauf(["erzwingen", "5", "--grund", "Sitzung beendet"]);
+    assert.equal(r.code, 4);
+    assert.ok(r.err.includes("claim"), r.err);
+    assert.equal(existsSync(lockDatei5()), false);
+  });
+
+  test("fremder junger Lock mit aktivem Worktree: Exit 0, alter Lock umbenannt, neuer Lock mit Grund und Hashes ohne Klar-Nonce, danach greift uebernehmen --nachfolger", () => {
+    const alt = nonceVon(lauf(["claim", "5"]));
+    assert.equal(lauf(["claim", "5", "--wiederaufnahme"], jung).code, 4, "Kontrolle: der reguläre Weg scheitert");
+    const r = lauf(["erzwingen", "5", "--grund", "Sitzung beendet, Nonce verloren"], jung);
+    assert.equal(r.code, 0, r.err);
+    const neu = nonceVon(r);
+    assert.notEqual(neu, "");
+    assert.ok(r.err.includes("ausdrückliche Anweisung der Maintainerin"), r.err);
+    const lock = lockJson();
+    assert.equal(lock.nonceHash, sha(neu));
+    assert.equal(lock.erzwungen?.grund, "Sitzung beendet, Nonce verloren");
+    assert.equal(lock.erzwungen?.vorherNonceHash, sha(alt));
+    assert.equal(lock.erzwungen?.zeit, new Date(JETZT).toISOString());
+    const text = readFileSync(lockDatei5(), "utf8");
+    assert.ok(!text.includes(neu) && !text.includes(alt), "keine Klar-Nonce in der Datei");
+    const beiseite = readdirSync(lockDir()).filter((n) => n.startsWith("5.json.verwaist-erzwungen-"));
+    assert.equal(beiseite.length, 1);
+    assert.equal(beiseite[0], `5.json.verwaist-erzwungen-${sha(neu).slice(0, 16)}`);
+    assert.equal(lauf(["pruefe", "5", "--nonce", alt], jung).out, "fremd\n", "die alte Nonce ist raus");
+    assert.equal(lauf(["pruefe", "5", "--nonce", neu], jung).out, "uebernehmbar\n");
+    assert.equal(lauf(["uebernehmen", "5", "--nonce", neu, "--nachfolger"], jung).code, 0);
+    assert.ok(lockJson().gestoppt?.verbraucht, "der Vermerk ist verbraucht");
+  });
+
+  test("ohne vorhandenen Lock, aber mit Worktree: Exit 0, kein Vorgänger-Hash, kein Umbenennen", () => {
+    const r = lauf(["erzwingen", "5", "--grund", "Lock verloren"], jung);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lockJson().erzwungen?.vorherNonceHash, null);
+    assert.equal(readdirSync(lockDir()).filter((n) => n.includes("verwaist")).length, 0);
+  });
+
+  test("Altformat-Lock mit Klartext-nonce: der Vorgänger-Hash ist der Hash dieser Nonce; sandbox wird übernommen, sonst null", () => {
+    mkdirSync(lockDir(), { recursive: true });
+    writeFileSync(lockDatei5(), `${JSON.stringify({ nr: 5, nonce: "klartext", erstellt: new Date(JETZT).toISOString() })}\n`);
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), sandbox: "box" });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(lockJson().erzwungen?.vorherNonceHash, sha("klartext"));
+    assert.equal((lockJson() as unknown as { sandbox: string }).sandbox, "box");
+    rmSync(lockDatei5());
+    assert.equal(M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), sandbox: undefined }).code, 0);
+    assert.equal((lockJson() as unknown as { sandbox: null }).sandbox, null);
+  });
+
+  test("anderer Schreibfehler als EEXIST: Exit 2 mit der Meldung", () => {
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), schreibeNeu: () => { throw Object.assign(new Error("platte voll"), { code: "ENOSPC" }); } });
+    assert.equal(r.code, 2);
+    assert.ok(r.err.includes("platte voll"), r.err);
+  });
+
+  test("Umbenennen scheitert: Exit 4, Hinweis nicht von Hand, kein neuer Lock", () => {
+    const alt = nonceVon(lauf(["claim", "5"]));
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...deps(jung), benenneUm: () => { throw new Error("weg"); } });
+    assert.equal(r.code, 4);
+    assert.match(r.err, NICHT_VON_HAND);
+    assert.match(r.err, /ließ sich nicht beiseite legen/);
+    assert.equal(lockJson().nonceHash, sha(alt), "der alte Lock ist unverändert");
+    assert.equal(lockJson().erzwungen, undefined);
+  });
+
+  test("Wettlauf: legt ein anderer den Lock zwischen Umbenennen und Anlegen an, Exit 4", () => {
+    lauf(["claim", "5"]);
+    const d = deps(jung);
+    const r = M.fuehreAus(["erzwingen", "5", "--grund", "x"], { ...d, schreibeNeu: () => { throw Object.assign(new Error("da"), { code: "EEXIST" }); } });
+    assert.equal(r.code, 4);
+    assert.match(r.err, NICHT_VON_HAND);
+  });
+
+  test("aufrufLesen: erzwingen braucht --grund, nonce ist kein Flag", () => {
+    assert.equal(M.aufrufLesen(["erzwingen", "5"]).fehler, "--grund fehlt");
+    assert.equal(M.aufrufLesen(["erzwingen", "5", "--grund", " Text "]).grund, "Text");
+    assert.equal(M.aufrufLesen(["erzwingen", "5", "--grund", "x", "--nonce", "y"]).fehler?.includes("nonce"), true);
   });
 });

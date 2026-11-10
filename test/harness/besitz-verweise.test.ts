@@ -102,7 +102,7 @@ const PROJEKT_JSON = ".factory/projekt.json";
 /** Pfade (relativ zu scripts/) aller Quellen, die `literal` im Code (nicht in Kommentarzeilen) tragen, ohne die Datei `erlaubt`. */
 export function literalFunde(literal: string, dateien: Record<string, string>, erlaubt: string): string[] {
   return Object.entries(dateien)
-    .filter(([name, text]) => name !== erlaubt &&text.split("\n").some((z) => z.includes(literal) && !/^\s*(\/\/|\/?\*)/.test(z)))
+    .filter(([name, text]) => name !== erlaubt && text.split("\n").some((z) => z.includes(literal) && !/^\s*(\/\/|\/?\*)/.test(z)))
     .map(([name]) => name)
     .sort();
 }

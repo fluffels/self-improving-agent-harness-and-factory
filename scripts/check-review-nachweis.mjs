@@ -37,7 +37,7 @@
  *
  * Hinweis (kein Fehler, Exit-Code gleich): die jüngste Commit-Zeile `Guard-Liste: <n> Anker` (Selbstcheck des Umsetzers) wird mit der Ankerzahl des Diffs
  * aus `scripts/anker-liste.mjs` verglichen; Abweichung oder fehlende Zeile bei vorhandenen Ankern gibt eine `::warning::`-Zeile (`guardListeWarnung`).
- * Grenzen: die jüngste Zeile muss die Gesamtzahl der Anker des Branches nennen (verglichen wird mit dem Gesamt-Diff gegen die Basis, nicht mit dem Anteil eines Commits); `anker-liste.mjs` kennt
+ * Grenzen: die jüngste Zeile muss die Gesamtzahl der Anker des Branches nennen, oder die Zeilen aller Commits (je Gruppe) ergeben summiert die Gesamtzahl (verglichen wird mit dem Gesamt-Diff gegen die Basis, nicht mit dem Anteil eines Commits); `anker-liste.mjs` kennt
  * kein `--config`, das Kind liest immer die Config des Repos, auch bei `--config` hier.
  *
  * Reines Node-Skript (nur Builtins, check-basis.mjs und anker-liste.mjs); die Bewertung ist pur exportiert.
@@ -208,14 +208,15 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
 }
 
 /**
- * Pur: Warnung, wenn die jüngste Zeile `Guard-Liste: <n> Anker` (am Zeilenanfang einer Commit-Message, der Selbstcheck des Umsetzers) nicht
- * zur Ankerzahl `ist` des Diffs passt (`scripts/anker-liste.mjs`); ohne Zeile nur, wenn der Diff Anker hat. Sonst `null`. Nie ein Fehler (Exit-Code gleich).
+ * Pur: Warnung, wenn weder die jüngste Zeile `Guard-Liste: <n> Anker` (am Zeilenanfang einer Commit-Message, der Selbstcheck des Umsetzers) noch die
+ * Summe aller solcher Zeilen (Commits je Gruppe) zur Ankerzahl `ist` des Diffs passt (`scripts/anker-liste.mjs`); ohne Zeile nur, wenn der Diff Anker hat. Sonst `null`. Nie ein Fehler (Exit-Code gleich).
  */
 export function guardListeWarnung({ messages, ist }) {
   const treffer = [...String(messages).replace(/\r/g, "").matchAll(/^Guard-Liste: (\d+) Anker\b/gm)];
   if (treffer.length === 0) return ist > 0 ? `::warning::Guard-Liste: keine Zeile \`Guard-Liste: <n> Anker\` in den Commits, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)` : null;
   const genannt = Number(treffer[treffer.length - 1][1]);
-  return genannt === ist ? null : `::warning::Guard-Liste nennt ${genannt} Anker, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)`;
+  const summe = treffer.reduce((s, t) => s + Number(t[1]), 0);
+  return genannt === ist || summe === ist ? null : `::warning::Guard-Liste nennt ${genannt} Anker, der Diff hat ${ist} Anker (node scripts/anker-liste.mjs)`;
 }
 
 /** Die Warnung zu `messages` mit der Ankerzahl aus `ankerZahl()`; ohne `ankerZahl` (der Aufruf wirft) oder bei einem Fehler dort `null` (eine Warnung bricht nie ab). */

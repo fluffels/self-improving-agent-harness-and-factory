@@ -8,7 +8,7 @@
  *   node scripts/abnahme.mjs kriterien <nr>   (Kriterien mit Präfix `Nach dem Merge:` stehen als „(nach dem Merge, nicht prüfen)“ da)
  *   node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>
  *
- * Bericht: erste nicht leere Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium `K<i>: erfuellt|nicht-erfuellt|nicht-pruefbar — <Beleg>`
+ * Bericht: erste nicht leere Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium `K<i>: erfuellt|nicht-pruefbar — <Beleg>` bzw. `K<i>: nicht-erfuellt ursache=kriterium|szenario|umsetzung — <Beleg>`
  * (Beleg Pflicht; andere Zeilen werden ignoriert, Szenarien gehören nicht in den Kommentar). Ausgabe `ENTSCHEIDUNG: bestanden|fix|handoff`
  * (Vorrang handoff > fix > bestanden): bestanden mit der fertigen Abnahme-Zeile, fix mit den Belegen der nicht erfüllten Kriterien,
  * handoff mit den Gründen (ein Ticket-Kommentar mit dem Hand-off-Marker, genau einer je Aufruf).
@@ -29,7 +29,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, hoechsterAbnahmeDurchgang } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, URSACHEN, hoechsterAbnahmeDurchgang, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -51,7 +51,21 @@ const KOPF = new RegExp(`^ABNAHME\\s+#(\\d+)\\s*·\\s*${ABNAHME_AGENT}\\s*$`);
 const URTEILSZEILE = /^\s*(?:[-*]\s+)?K(\d+):\s*(.+?)\s+[—–-]\s+(\S.*)$/;
 /** Beleg des Skripts für ein Nach-Merge-Kriterium (den echten Beleg liefert der Umsetzer nach dem Merge als PR-Kommentar). */
 const NACH_MERGE_BELEG = "Beleg folgt nach dem Merge als PR-Kommentar des Umsetzers";
-const KANDIDAT =/^\s*(?:[-*]\s+)?K\d+:/;
+const KANDIDAT = /^\s*(?:[-*]\s+)?K\d+:/;
+
+/** Fehlertext zur Ursache einer Berichtszeile (Pflicht bei nicht-erfuellt, sonst verboten); `null`, wenn sie passt. */
+function ursachenFehler(wert, ursache) {
+  if (wert === "nicht-erfuellt") return URSACHEN.includes(ursache) ? null : `nicht-erfuellt braucht ursache=${URSACHEN.join("|")}`;
+  return ursache === undefined ? null : "ursache nur bei nicht-erfuellt";
+}
+
+/** Erster Fehler einer Urteilszeile (unbekanntes Kriterium oder Urteil, doppelt, Ursache falsch); `null`, wenn sie passt. */
+function zeilenFehler({ k, wert, urteilText, ursache }, bekannt, gefunden) {
+  if (!bekannt.has(k)) return "unbekanntes Kriterium";
+  if (!URTEILSWERTE.includes(wert)) return `unbekanntes Urteil „${urteilText}“ (${URTEILSWERTE.join(" | ")})`;
+  if (gefunden.has(k)) return "doppelt";
+  return ursachenFehler(wert, ursache);
+}
 
 /**
  * Prüft den Bericht gegen die Kriterien `[{k, text}]`: `{urteile:[{k, wert, beleg}]}` (in der Reihenfolge der Kriterien) oder `{fehler:[…]}`.
@@ -78,13 +92,13 @@ export function parseBericht(text, nr, kriterienListe) {
       fehler.push(`${k}: Zeile ohne Beleg oder ohne Urteil („K<i>: <urteil> — <Beleg>“)`);
       continue;
     }
-    const wert = normalisiereWert(m[2]);
-    if (!bekannt.has(k)) fehler.push(`${k}: unbekanntes Kriterium`);
-    else if (!URTEILSWERTE.includes(wert)) fehler.push(`${k}: unbekanntes Urteil „${m[2]}“ (${URTEILSWERTE.join(" | ")})`);
-    else if (gefunden.has(k)) fehler.push(`${k}: doppelt`);
-    else gefunden.set(k, { k, wert, beleg: m[3].trim() });
+    const [, urteilText, ursache] = /^(.*?)(?:\s+ursache=(\S*))?$/.exec(m[2]);
+    const wert = normalisiereWert(urteilText);
+    const f = zeilenFehler({ k, wert, urteilText, ursache }, bekannt, gefunden);
+    if (f !== null) fehler.push(`${k}: ${f}`);
+    else gefunden.set(k, { k, wert, beleg: m[3].trim(), ...(ursache ? { ursache } : {}) });
   }
-  for (const { k } of kriterienListe) if (!nachMerge.has(k) && !gefunden.has(k) &&!fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
+  for (const { k } of kriterienListe) if (!nachMerge.has(k) && !gefunden.has(k) && !fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
   if (fehler.length > 0) return { fehler };
   return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }
@@ -141,7 +155,8 @@ const kurz = (t) => {
 
 /** PR-Kommentar: Marker, Tabelle Kriterium, Urteil, Beleg (keine anderen Berichtszeilen, keine Szenarien). Pur. */
 export function prKommentar({ zeilen, nr, durchgang, head, urteile, kriterienListe, max = KOMMENTAR_MAX }) {
-  const marker = formatAbnahmeMarker(zeilen, { durchgang, head, urteil: urteile.map(({ k, wert }) => ({ k, wert })) });
+  const ursache = urteile.filter((u) => u.ursache).map((u) => ({ k: u.k, klasse: u.ursache }));
+  const marker = formatAbnahmeMarker(zeilen, { durchgang, head, urteil: urteile.map(({ k, wert }) => ({ k, wert })), ...(ursache.length > 0 ? { ursache } : {}) });
   const text = new Map(kriterienListe.map((c) => [c.k, c.text]));
   const zeilenTabelle = urteile.map((u) => `| ${zelle(`${u.k}: ${kurz(text.get(u.k) ?? "")}`)} | ${u.wert} | ${zelle(kuerzeBeleg(u.beleg))} |`);
   const kopf = [marker, `### Holdout-Abnahme #${nr}, Durchgang ${durchgang}`, "", `Stand \`${head.slice(0, 7)}\``, "", "| Kriterium | Urteil | Beleg |", "| --- | --- | --- |"];
@@ -215,9 +230,17 @@ function pruefeWorktree(werte, io) {
   }
 }
 
-function ausgabe(entscheidung, urteile, io, head, durchgang) {
+/** Summe der Ursachen je Klasse über die vertrauten Marker früherer Durchgänge (je nicht erfülltem Kriterium und Durchgang eine); `undefined` ohne Angabe. Pur. */
+export function summiereUrsachen(kommentare, owner, zeilen) {
+  const summe = {};
+  for (const m of vertrauteAbnahmeMarker(kommentare, owner, zeilen)) for (const x of m.ursache ?? []) summe[x.klasse] = (summe[x.klasse] ?? 0) + 1;
+  return Object.keys(summe).length > 0 ? summe : undefined;
+}
+
+function ausgabe(entscheidung, urteile, io, head, durchgang, kommentare) {
   if (entscheidung === "bestanden") {
-    const zeile = formatAbnahme(io.zeilen, { art: "urteil", head, durchgaenge: durchgang, urteil: urteile.map(({ k, wert }) => ({ k, wert })) });
+    const ursachen = summiereUrsachen(kommentare, io.owner, io.zeilen);
+    const zeile = formatAbnahme(io.zeilen, { art: "urteil", head, durchgaenge: durchgang, urteil: urteile.map(({ k, wert }) => ({ k, wert })), ...(ursachen ? { ursachen } : {}) });
     return `ENTSCHEIDUNG: bestanden\n${zeile}\n`;
   }
   if (entscheidung === "fix") {
@@ -269,7 +292,7 @@ function auswerten(werte, nrText, io, sprache) {
       return aufrufFehler(`PR-Kommentar gepostet, Hand-off-Kommentar fehlt: ${fehlerText(e)}`);
     }
   }
-  return ergebnis(0, ausgabe(entscheidung, bericht.urteile, io, wt.head, durchgang));
+  return ergebnis(0, ausgabe(entscheidung, bericht.urteile, io, wt.head, durchgang, kommentare));
 }
 
 /** Ausführung mit injizierbarer I/O (`owner`, `zeilen`, `leseDatei`, `ladeIssue`, `ladeKommentare`, `poste`, `git`): `{ code, out, err }`. */

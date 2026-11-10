@@ -42,7 +42,7 @@ const A = raw as unknown as {
   ABNAHME_AGENT: string;
 };
 const nl = rawNl as unknown as { parseAbnahmeMarker: (z: Zeilen, text: string) => { urteil: unknown[] } | null };
-const commitZeilen =(so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
+const commitZeilen = (so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer) as { praefix: string; abnahme: string };
 const MARKER = FREMD_ABNAHME_MARKER;
 
@@ -97,13 +97,13 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(gelesen.abnahme.art).toBe("urteil");
   });
   test("fix: PR-Kommentar, Belege der nicht erfüllten Kriterien, kein Ticket-Kommentar", () => {
-    const r = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt — Rot weil X", "K3: nicht-erfuellt — Rot weil Y"]));
+    const r = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=umsetzung — Rot weil X", "K3: nicht-erfuellt ursache=szenario — Rot weil Y"]));
     expect(r.code).toBe(0);
     expect(r.out).toBe("ENTSCHEIDUNG: fix\nK2 nicht erfüllt: Rot weil X\nK3 nicht erfüllt: Rot weil Y\n");
     expect(r.posts.map((p) => p.nr)).toEqual([70]);
   });
   test("handoff hat Vorrang vor fix: genau ein Ticket-Kommentar mit Marker, beiden Kriterien, Grund und Reparaturweg", () => {
-    const r = lauf(BERICHT(["K1: nicht-erfuellt — rot", "K2: nicht-pruefbar — keine Messgröße", "K3: nicht-pruefbar — nicht beobachtbar"]));
+    const r = lauf(BERICHT(["K1: nicht-erfuellt ursache=kriterium — rot", "K2: nicht-pruefbar — keine Messgröße", "K3: nicht-pruefbar — nicht beobachtbar"]));
     expect(r.code).toBe(0);
     expect(r.out.split("\n")[0]).toBe("ENTSCHEIDUNG: handoff");
     expect(r.posts.map((p) => p.nr)).toEqual([70, 7]);
@@ -134,7 +134,7 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(r.out).toContain("AB-Abnahme: head=");
   });
   test("tolerante Berichtswerte: Listenzeichen, Groß/Klein, Trenner", () => {
-    const r = A.parseBericht(BERICHT(["- K1: Erfüllt – ok", "* K2: NICHT-ERFUELLT - rot", "K3: erfuellt — x"]), 7, [
+    const r = A.parseBericht(BERICHT(["- K1: Erfüllt – ok", "* K2: NICHT-ERFUELLT ursache=umsetzung - rot", "K3: erfuellt — x"]), 7, [
       { k: "K1", text: "a" },
       { k: "K2", text: "b" },
       { k: "K3", text: "c" },
@@ -578,5 +578,33 @@ describe("Beleg-Escaping (CodeQL js/incomplete-sanitization, #1796)", () => {
     });
     expect(body).toMatch(/Grund: z1 z2 z3$/m);
     expect(body).not.toContain("\r");
+  });
+});
+
+describe("Abnahme-Ursache (factory#260)", () => {
+  const liste = [{ k: "K1", text: "a" }, { k: "K2", text: "b" }];
+  const pb = (z: string[]) => A.parseBericht(BERICHT(z), 7, liste) as { urteile?: { k: string; wert: string; ursache?: string }[]; fehler?: string[] };
+  test("nicht-erfuellt braucht eine gültige Ursache; Klassen sind geschlossen", () => {
+    expect(pb(["K1: erfuellt — a", "K2: nicht-erfuellt — rot"]).fehler?.join("\n")).toMatch(/K2: nicht-erfuellt braucht ursache=kriterium\|szenario\|umsetzung/);
+    expect(pb(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=foo — rot"]).fehler?.join("\n")).toMatch(/K2: nicht-erfuellt braucht ursache/);
+    for (const k of ["kriterium", "szenario", "umsetzung"]) expect(pb(["K1: erfuellt — a", `K2: nicht-erfuellt ursache=${k} — rot`]).urteile?.[1]).toEqual({ k: "K2", wert: "nicht-erfuellt", beleg: "rot", ursache: k });
+  });
+  test("bei erfuellt und nicht-pruefbar ist ursache ein Fehler, der Bericht ist ungültig", () => {
+    expect(pb(["K1: erfuellt ursache=umsetzung — a", "K2: erfuellt — b"]).fehler?.join("\n")).toMatch(/K1: ursache nur bei nicht-erfuellt/);
+    expect(pb(["K1: erfuellt — a", "K2: nicht-pruefbar ursache=szenario — b"]).fehler?.join("\n")).toMatch(/K2: ursache nur bei nicht-erfuellt/);
+    const r = lauf(BERICHT(["K1: erfuellt ursache=umsetzung — a", "K2: erfuellt — b", "K3: erfuellt — c"]));
+    expect(r.code).toBe(1);
+    expect(r.posts).toHaveLength(0);
+  });
+  test("unbekanntes Urteil nennt den Wert ohne das Ursache-Feld", () => {
+    expect(pb(["K1: foo ursache=umsetzung — a", "K2: erfuellt — b"]).fehler?.join("\n")).toMatch(/unbekanntes Urteil „foo“/);
+  });
+  test("PR-Kommentar trägt ursache= im Marker, die Aggregation über zwei frühere Durchgänge steht in der Abnahme-Zeile", () => {
+    const m = (d: number, ur: string) => ({ user: VERTRAUT, body: `<!-- ${MARKER} durchgang=${d} head=${HEAD} urteil=K1:erfuellt,K2:nicht-erfuellt ursache=${ur} -->` });
+    const fix = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=szenario — x", "K3: erfuellt — c"]));
+    expect(fix.posts[0].body).toContain(`urteil=K1:erfuellt,K2:nicht-erfuellt,K3:erfuellt ursache=K2:szenario -->`);
+    const r = lauf(ALLE_OK, {}, [m(1, "K2:szenario"), m(2, "K2:umsetzung"), { user: { login: "fremd", type: "User" }, body: m(3, "K2:kriterium").body }]);
+    expect(r.out).toBe(`ENTSCHEIDUNG: bestanden\n${Z.abnahme}: head=${HEAD} durchgaenge=3 urteil=K1:erfuellt,K2:erfuellt,K3:erfuellt ursachen=szenario:1,umsetzung:1\n`);
+    expect(lauf(ALLE_OK).out).not.toContain("ursachen=");
   });
 });

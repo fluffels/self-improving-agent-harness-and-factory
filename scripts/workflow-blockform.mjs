@@ -13,6 +13,9 @@
  * BOM, CRLF und ein `---` am Anfang sind erlaubt. Je Job kommt erst `name`, dann kommen die Step-Namen (wie in der Referenz).
  * Bekannte Grenze (fail-closed, factory#220): ein einzelnes CR (ohne LF) gilt dem Leser als Zeilenende, die `yaml`-Bibliothek wirft darauf; der Leser liest, die Bibliothek nicht.
  *
+ * Bekannte Grenze (fail-closed, factory#260): die zeilenweise Flow-Listen-Erkennung kennt ein Quote mitten in einem unquotierten Eintrag nicht wie YAML (`[c'd]` wird
+ * NICHT PRÜFBAR statt gelesen); bei belegtem Bedarf auf einen echten Parser umstellen.
+ *
  * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`) und `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
  * eigene Grenze im Kopf von `blockformAusloeser`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
  *

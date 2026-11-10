@@ -287,6 +287,12 @@ describe("Guard-Liste: Zahl im Selbstcheck gegen die Ankerzahl des Diffs (L23)",
     assert.match(w ?? "", /12 Anker/);
     assert.equal(warnung("Guard-Liste: 7 Anker, 7 belegt\n\nGuard-Liste: 12 Anker, 12 belegt\n", 12), null);
   });
+  test("Commits je Gruppe: die Summe aller Zeilen gleich ist, keine Warnung; weder letzte Zeile noch Summe passt, Warnung", () => {
+    assert.equal(warnung("Guard-Liste: 3 Anker, 3 belegt\n\nGuard-Liste: 4 Anker, 4 belegt\n", 7), null);
+    assert.equal(warnung("Guard-Liste: 3 Anker\n\nGuard-Liste: 7 Anker\n", 7), null);
+    const w = warnung("Guard-Liste: 3 Anker\n\nGuard-Liste: 4 Anker\n", 9);
+    assert.match(w ?? "", /^::warning::.*4 Anker.*9 Anker/);
+  });
   test("keine Zeile: Warnung bei Ankern im Diff, keine bei null Ankern; eingerückte Zeile zählt nicht", () => {
     assert.match(warnung("feat: x\n", 3) ?? "", /^::warning::.*keine Zeile/);
     assert.equal(warnung("feat: x\n", 0), null);

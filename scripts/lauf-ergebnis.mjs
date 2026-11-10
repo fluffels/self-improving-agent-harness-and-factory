@@ -23,7 +23,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { hoechsterAbnahmeDurchgang, parseNachweis } from "./nachweis-lib.mjs";
+import { hoechsterAbnahmeDurchgang, parseNachweis, URSACHEN } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -114,10 +114,10 @@ export function festgefahrenAusAntwort(antwort, nummern, label) {
   return out;
 }
 
-/** Abnahme eines PRs aus dem Merge-Body: `"override"` (hat Vorrang, wie im Gate; ein Widerruf hebt ihn auf), `{durchgaenge}` bei gültigem Urteil, `"entfaellt"`, sonst `null` (keine oder ungültige Zeile). Pure. */
+/** Abnahme eines PRs aus dem Merge-Body: `"override"` (hat Vorrang, wie im Gate; ein Widerruf hebt ihn auf), `{durchgaenge, ursachen}` bei gültigem Urteil (`ursachen`: Klasse → Anzahl, `{}` ohne Feld), `"entfaellt"`, sonst `null` (keine oder ungültige Zeile). Pure. */
 export function abnahmeVon(body, abnahme, zeilen) {
   if (aktiverOverride(body, zeilen.abnahmeOverride) !== null) return "override";
-  if (abnahme?.art === "urteil") return { durchgaenge: abnahme.durchgaenge };
+  if (abnahme?.art === "urteil") return { durchgaenge: abnahme.durchgaenge, ursachen: abnahme.ursachen ?? {} };
   if (abnahme?.art === "entfaellt") return "entfaellt";
   return null;
 }
@@ -180,6 +180,11 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
         entfaellt: eintraege.filter((z) => z.abnahme === "entfaellt").length,
         override: eintraege.filter((z) => z.abnahme === "override").length,
         ohne: eintraege.filter((z) => z.abnahme === null).length,
+        // Abnahme-Ursache (factory#260): Σ je Klasse über die Fälle mit Fix; ohne = PRs mit Fix (durchgaenge ≥ 2) ohne Ursachen-Feld (Altbestand).
+        ursachen: {
+          ...Object.fromEntries(URSACHEN.map((u) => [u, eintraege.reduce((a, z) => a + (z.abnahme?.ursachen?.[u] ?? 0), 0)])),
+          ohne: eintraege.filter((z) => z.abnahme?.durchgaenge >= 2 && Object.keys(z.abnahme.ursachen).length === 0).length,
+        },
       },
       // Abnahme-Fix (#1808): PRs mit mehr als einem Abnahme-Durchgang (der Fix nach Urteil `fix`), davon mit Festgefahren-Label (Hand-off).
       // `mitFix` zählt nur gemergte PRs; der offene Hand-off-PR steht getrennt in `offenMitFix` (nie in `mitFix` addiert).
@@ -207,6 +212,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
   out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
+  out.push(`Abnahme-Ursache (Fälle mit Fix): ${URSACHEN.map((u) => `${u} ${a.ursachen[u]}`).join(", ")}, ohne Ursachen-Feld ${a.ursachen.ohne}`);
   out.push(`Abnahme-Fix: ${k.abnahmeFix.mitFix} PRs, davon mit Hand-off: ${prozent(k.abnahmeFix.mitFixUndFestgefahren, k.abnahmeFix.mitFix)}; offen (Hand-off, nicht gemergt): ${k.abnahmeFix.offenMitFix}`);
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");

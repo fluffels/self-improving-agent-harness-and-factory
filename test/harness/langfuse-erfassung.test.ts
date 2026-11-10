@@ -51,6 +51,7 @@ const CHECKLISTE = [
   "Vermeidbare Arbeit",
   "Factory-Kennzahlen",
   "Selbst-Audit",
+  "Laufzeiten-Upstream",
   "Vorbedingung",
 ];
 
@@ -228,10 +229,10 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
         .split("\n")
         .filter((z) => /^\d+\. \*\*/.test(z)).length;
     assert.equal(zaehle(mr), CHECKLISTE.length - 1, "alle Punkte nummeriert, außer der unnummerierten Vorbedingung");
-    // Drift: ein zwölfter Punkt ohne Eintrag in CHECKLISTE muss auffallen
-    const punkt11 = mr.indexOf("11. **Selbst-Audit");
-    const zeilenEnde = mr.indexOf("\n", punkt11);
-    const mitZwoelf = `${mr.slice(0, zeilenEnde)}\n12. **Neu:** x${mr.slice(zeilenEnde)}`;
+    // Drift: ein dreizehnter Punkt ohne Eintrag in CHECKLISTE muss auffallen
+    const punkt12 = mr.indexOf("12. **Laufzeiten-Upstream");
+    const zeilenEnde = mr.indexOf("\n", punkt12);
+    const mitZwoelf = `${mr.slice(0, zeilenEnde)}\n13. **Neu:** x${mr.slice(zeilenEnde)}`;
     assert.notEqual(zaehle(mitZwoelf), CHECKLISTE.length - 1);
   });
 
@@ -292,7 +293,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     const sabotagen: [string, string, string][] = [
       ["schedule:", "pull_request:", "Cron"],
       ['- cron: "17 5 * * 1"', "", "Cron-Zeile weg, schedule: bleibt"],
-      ["concurrency:"+"\n  group: board-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
+      ["concurrency:" + "\n  group: board-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
       ["  group: board-takt\n", "", "group: weg"],
       ["run: node scripts/board-takt.mjs", "run: echo node scripts/langfuse-takt.mjs", "falsche run-Zeile (echo)"],
       ["run: node scripts/board-takt.mjs", "run: node scripts/anderes.mjs", "falsches Skript"],

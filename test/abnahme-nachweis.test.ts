@@ -551,3 +551,14 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(ohnePfad.stderr).toMatch(/--config/);
   });
 });
+
+describe("Abnahme-Ursache (factory#260): check-abnahme-nachweis", () => {
+  test("die Zeile mit ursachen= wird gelesen und bewertet grün; ein ungültiges Feld macht sie rot", () => {
+    const zeile = `${Z.abnahme}: head=${H} durchgaenge=2 urteil=K1:erfuellt,K2:erfuellt`;
+    const neu = parseNachweis(`${zeile} ursachen=szenario:1,umsetzung:1`, Z).abnahme;
+    expect(neu).toMatchObject({ art: "urteil", ursachen: { szenario: 1, umsetzung: 1 } });
+    expect(bewerte({ abnahme: neu, runden: 2, marker: marker({ durchgang: 2 }) })).toEqual([]);
+    expect((parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme as { art: string }).art).toBe("ungueltig");
+    rot(bewerte({ abnahme: parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme }), /ungültig \(ursachen: Eintrag/);
+  });
+});

@@ -230,3 +230,64 @@ describe("Schutzliste (.github/protected-paths.json, #1929): der Kopfkommentar v
     expect(nurDurchEigenenEintrag("scripts/nachweis-lib.mjs")).toEqual({ trifftEchte: true, trifftOhneEintrag: false });
   });
 });
+
+describe("Abnahme-Ursache (factory#260): Marker-Feld ursache= und Zeilen-Feld ursachen=", () => {
+  const A = raw as unknown as {
+    formatAbnahme: (z: Zeilen, a: unknown) => string;
+    formatAbnahmeMarker: (z: Zeilen, a: unknown) => string;
+    parseAbnahmeMarker: (z: Zeilen, t: string) => unknown;
+    vertrauteAbnahmeMarker: (k: unknown, owner: string, z: Zeilen) => unknown[];
+  };
+  const urteil = [
+    { k: "K1", wert: "erfuellt" },
+    { k: "K2", wert: "nicht-erfuellt" },
+    { k: "K3", wert: "nicht-erfuellt" },
+  ];
+  const lies = (zeile: string) => so.parseNachweis(zeile, Z).abnahme;
+  const kopf = `<!-- ${MARKER} durchgang=2 head=${HEX} urteil=K1:erfuellt,K2:nicht-erfuellt,K3:nicht-erfuellt`;
+
+  it("Marker Round-Trip mit Ursache; alter Marker ohne Feld bleibt gültig und trägt kein ursache-Feld", () => {
+    const m = A.formatAbnahmeMarker(Z, { durchgang: 2, head: HEX, urteil, ursache: [{ k: "K2", klasse: "umsetzung" }, { k: "K3", klasse: "szenario" }] });
+    expect(m).toBe(`${kopf} ursache=K2:umsetzung,K3:szenario -->`);
+    expect(A.parseAbnahmeMarker(Z, m)).toEqual({ durchgang: 2, head: HEX, urteil, ursache: [{ k: "K2", klasse: "umsetzung" }, { k: "K3", klasse: "szenario" }] });
+    const alt = A.parseAbnahmeMarker(Z, `${kopf} -->`) as Record<string, unknown>;
+    expect(alt.durchgang).toBe(2);
+    expect("ursache" in alt).toBe(false);
+  });
+  it("Marker mit ungültiger Ursache ist ungültig (unbekannte Klasse, K ohne nicht-erfuellt, doppelt, kaputt)", () => {
+    for (const u of ["K2:foo", "K1:umsetzung", "K2:umsetzung,K2:szenario", "K2", "K9:kriterium", "xK2:umsetzung"]) expect(A.parseAbnahmeMarker(Z, `${kopf} ursache=${u} -->`), u).toBeNull();
+  });
+  it("zweistellige Nummern: Marker mit K10 und Zeile mit umsetzung:10 sind gültig", () => {
+    const zehn = Array.from({ length: 10 }, (_, i) => ({ k: `K${i + 1}`, wert: i === 9 ? "nicht-erfuellt" : "erfuellt" }));
+    const urteilText = zehn.map((u) => `${u.k}:${u.wert}`).join(",");
+    const m = A.parseAbnahmeMarker(Z, `<!-- ${MARKER} durchgang=2 head=${HEX} urteil=${urteilText} ursache=K10:umsetzung -->`) as { ursache: unknown };
+    expect(m?.ursache).toEqual([{ k: "K10", klasse: "umsetzung" }]);
+    const z = lies(`${Z.abnahme}: head=${HEX} durchgaenge=2 urteil=K1:erfuellt ursachen=umsetzung:10`) as { ursachen: unknown };
+    expect(z.ursachen).toEqual({ umsetzung: 10 });
+  });
+  it("formatAbnahmeMarker wirft bei ungültiger Ursache", () => {
+    for (const ursache of [[], [{ k: "K2", klasse: "foo" }], [{ k: "K1", klasse: "umsetzung" }]]) expect(() => A.formatAbnahmeMarker(Z, { durchgang: 2, head: HEX, urteil, ursache })).toThrow(/ursache/);
+  });
+  it("vertrauteAbnahmeMarker reicht die Ursache durch", () => {
+    const body = A.formatAbnahmeMarker(Z, { durchgang: 2, head: HEX, urteil, ursache: [{ k: "K2", klasse: "kriterium" }] });
+    const r = A.vertrauteAbnahmeMarker([{ user: { login: "owner", type: "User" }, body }], "owner", Z) as { ursache: unknown }[];
+    expect(r[0].ursache).toEqual([{ k: "K2", klasse: "kriterium" }]);
+  });
+  it("Zeile Round-Trip mit ursachen=; Altbestand ohne Feld bleibt gültig ohne ursachen-Schlüssel", () => {
+    const a = { art: "urteil", head: HEX, durchgaenge: 3, urteil: [{ k: "K1", wert: "erfuellt" }], ursachen: { umsetzung: 1, szenario: 1 } };
+    const z = A.formatAbnahme(Z, a);
+    expect(z).toBe(`${Z.abnahme}: head=${HEX} durchgaenge=3 urteil=K1:erfuellt ursachen=szenario:1,umsetzung:1`);
+    expect(lies(z)).toEqual({ ...a, ursachen: { szenario: 1, umsetzung: 1 } });
+    const alt = lies(`${Z.abnahme}: head=${HEX} durchgaenge=1 urteil=K1:erfuellt`) as Record<string, unknown>;
+    expect(alt.art).toBe("urteil");
+    expect("ursachen" in alt).toBe(false);
+  });
+  it("Zeile mit ungültigem ursachen-Feld ist ungültig; formatAbnahme wirft", () => {
+    for (const u of ["foo:1", "szenario:0", "szenario", "szenario:1,szenario:2", "szenario:x", "1szenario:1", "szenario:1x"]) {
+      expect((lies(`${Z.abnahme}: head=${HEX} durchgaenge=2 urteil=K1:erfuellt ursachen=${u}`) as { art: string }).art, u).toBe("ungueltig");
+    }
+    for (const ursachen of [{}, { foo: 1 }, { szenario: 0 }, { szenario: 1, foo: 2 }, { szenario: 1.5 }]) {
+      expect(() => A.formatAbnahme(Z, { art: "urteil", head: HEX, durchgaenge: 2, urteil: [{ k: "K1", wert: "erfuellt" }], ursachen })).toThrow(/ursachen/);
+    }
+  });
+});

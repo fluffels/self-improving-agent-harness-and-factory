@@ -481,7 +481,7 @@ describe("Texte", () => {
 });
 
 describe("fuehreAus", () => {
-  const plan =(o: Partial<Plan> = {}): Plan => ({ issue: { art: "nichts" }, zeilen: [], nachfolger: [], ...o });
+  const plan = (o: Partial<Plan> = {}): Plan => ({ issue: { art: "nichts" }, zeilen: [], nachfolger: [], ...o });
   const GRUPPE: Gruppe = { tool: "Scorecard", regel: "X", stufe: "high", schwere: "error", nummern: [1] };
   function io(o: Record<string, unknown> = {}) {
     const calls: string[] = [];

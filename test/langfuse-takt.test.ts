@@ -212,6 +212,21 @@ describe("statusBody", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  test("Laufzeiten-Upstream (factory#260): die Zeile steht nur in der Fabrik, nicht im Bezieher", () => {
+    const leer = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    const dir = mkdtempSync(join(tmpdir(), "langfuse-takt-"));
+    try {
+      const upstream = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: leer });
+      expect(upstream).toContain("- **Laufzeiten-Upstream:** Checkliste Punkt 12");
+      mkdirSync(join(dir, ".factory"));
+      writeFileSync(join(dir, ".factory", "sync-stand.json"), JSON.stringify({ quelle: { tag: "v0.7.1", repo: "q/quelle" } }));
+      const bez = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y", wurzel: dir });
+      expect(bez).not.toContain("Laufzeiten-Upstream");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(leer, { recursive: true, force: true });
+    }
+  });
   test("Factory-Kennzahlen-Aufruf mit dem Abschlusszeitpunkt des Vorgängers, sonst Platzhalter (#1616)", () => {
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");
     expect(body).toContain("node scripts/factory-kennzahlen.mjs --datenbasis --von 2026-10-06T10:00:00Z --bis <Claim-Zeit>");

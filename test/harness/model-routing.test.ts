@@ -86,6 +86,10 @@ import * as checkBasis from "../../scripts/check-basis.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { LANGFUSE_LESE_TOOLS as LESE_TOOLS_ROH } from "../../scripts/langfuse-zugang.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { USER_SCOPE_MCP_SERVER } from "../../scripts/werkzeug-vorpruefung.mjs";
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
@@ -135,7 +139,7 @@ function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: str
 
 /** Die in der Routing-Doku genannten User-Scope-MCP-Server, deren Namen das Repo voraussetzt. */
 function userScopeServer(md: string): string[] {
-  const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n]*)/.exec(md)?.[1] ?? "";
+  const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n.]*)/.exec(md)?.[1] ?? "";
   return [...zeile.matchAll(/`([\w-]+)`/g)].map((m) => m[1]);
 }
 
@@ -226,6 +230,16 @@ function retiredRoutingClaims(md: string): { line: number; term: string; home: s
       }
     });
   return found;
+}
+
+const LANGFUSE_LESE_TOOLS = LESE_TOOLS_ROH as string[];
+const LF_PRAEFIX = "mcp__langfuse__";
+/** Abweichungen der Langfuse-Regeln einer Liste von der Quelle `LANGFUSE_LESE_TOOLS`: `gleich` verlangt Mengengleichheit, sonst nur Teilmenge. Pur. */
+function langfuseAbweichungen(regeln: string[], gleich: boolean): string[] {
+  const lf = regeln.filter((r) => r.startsWith(LF_PRAEFIX)).map((r) => r.slice(LF_PRAEFIX.length));
+  const aus = lf.filter((t) => !LANGFUSE_LESE_TOOLS.includes(t)).map((t) => `zusätzliches Tool ${t}`);
+  const fehlt = gleich ? LANGFUSE_LESE_TOOLS.filter((t) => !lf.includes(t)).map((t) => `fehlendes Tool ${t}`) : [];
+  return [...aus, ...fehlt];
 }
 
 describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#1035)", () => {
@@ -607,15 +621,14 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     // Die Langfuse-Lesetools stehen einmal in settings.json `allow` (#1311); die Umsetzer-Whitelist muss
     // mengengleich sein, sonst darf der Hauptchat etwas, was der Umsetzer nicht kann (oder umgekehrt).
     const erlaubt = (JSON.parse(read(".claude/settings.json")) as { permissions: { allow: string[] } }).permissions.allow;
-    assert.deepEqual(
-      tools.filter((t) => t.startsWith("mcp__langfuse__")).sort(),
-      erlaubt.filter((r) => r.startsWith("mcp__langfuse__")).sort(),
-      "Langfuse-Tools: Umsetzer-`tools:` und `permissions.allow` in .claude/settings.json müssen dieselbe Menge sein",
-    );
+    assert.deepEqual(langfuseAbweichungen(tools, true), [], "Langfuse-Tools: Umsetzer-`tools:` weichen von LANGFUSE_LESE_TOOLS (scripts/langfuse-zugang.mjs) ab");
+    assert.deepEqual(langfuseAbweichungen(erlaubt, true), [], "Langfuse-Tools: `permissions.allow` in .claude/settings.json weicht von LANGFUSE_LESE_TOOLS ab");
+    const projektAllow = (JSON.parse(read(".factory/projekt.json")) as { berechtigungen: { allow: string[] } }).berechtigungen.allow;
+    assert.deepEqual(langfuseAbweichungen(projektAllow, false), [], "Langfuse-Tools: .factory/projekt.json `berechtigungen.allow` ist keine Teilmenge von LANGFUSE_LESE_TOOLS");
     // Darf NICHT passieren: andere Server (Projekt-Module bleiben im Hauptchat, Claude in Chrome ist
     // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
     // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
-    const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]);
+    const LANGFUSE_LESEN = new Set(LANGFUSE_LESE_TOOLS);
     const fremd = tools.filter(
       (t) =>
         t.startsWith("mcp__") &&
@@ -634,13 +647,23 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
   test("jedes mcp__<server>__-Präfix in allow und den Agent-Whitelists nennt einen bekannten Server (#1311)", () => {
     const projekt = Object.keys((JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {});
     const userScope = userScopeServer(read(ROUTING_SSOT));
-    assert.ok(userScope.includes("langfuse"), "docs/model-routing.md muss `langfuse` als vorausgesetzten User-Scope-Server nennen");
+    assert.deepEqual(userScope, USER_SCOPE_MCP_SERVER as string[], "docs/model-routing.md und USER_SCOPE_MCP_SERVER (scripts/werkzeug-vorpruefung.mjs) nennen verschiedene User-Scope-Server");
+    assert.ok(userScope.includes("langfuse"),"docs/model-routing.md muss `langfuse` als vorausgesetzten User-Scope-Server nennen");
     const settings = JSON.parse(read(".claude/settings.json")) as { permissions: { allow: string[] } };
     const regeln = [...settings.permissions.allow];
     for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
       regeln.push(...(frontmatter(read(`.claude/agents/${f}`)).tools ?? "").split(",").map((t) => t.trim()));
     }
     assert.deepEqual(unbekannteServer(regeln, [...projekt, ...userScope]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
+  });
+
+  test("Erkennung greift wirklich (Red-Green): Langfuse-Regeln gegen die Quelle LANGFUSE_LESE_TOOLS", () => {
+    const voll = LANGFUSE_LESE_TOOLS.map((t) => `${LF_PRAEFIX}${t}`);
+    assert.deepEqual(langfuseAbweichungen(["Bash", ...voll], true), []);
+    assert.deepEqual(langfuseAbweichungen(voll.slice(1), true), [`fehlendes Tool ${LANGFUSE_LESE_TOOLS[0]}`]);
+    assert.deepEqual(langfuseAbweichungen([...voll, `${LF_PRAEFIX}createX`], true), ["zusätzliches Tool createX"]);
+    assert.deepEqual(langfuseAbweichungen(voll.slice(1), false), [], "Teilmenge darf Tools weglassen");
+    assert.deepEqual(langfuseAbweichungen([`${LF_PRAEFIX}createX`], false), ["zusätzliches Tool createX"]);
   });
 
   test("Erkennung greift wirklich (Red-Green): ein umbenannter Server fällt auf", () => {
@@ -656,7 +679,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
       // Monitor/TaskStop: Abschluss-Regel #1308 (umsetzer-abschluss.test.ts prüft nur die Prosa, diese Liste bindet die Tools)
       "Read", "Grep", "Glob", "Bash", "PowerShell", "Edit", "Write", "WebFetch", "WebSearch", "Agent", "Monitor", "TaskStop", "ToolSearch",
       ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "start_video", "stop_video", "handle_dialog", "file_upload"].map((t) => `mcp__playwright__browser_${t}`),
-      ...["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"].map((t) => `mcp__langfuse__${t}`),
+      ...LANGFUSE_LESE_TOOLS.map((t) => `mcp__langfuse__${t}`),
     ];
     assert.deepEqual([...tools].sort(), [...erwartet].sort(), "tools: des Umsetzers weicht von der erwarteten Gesamtmenge ab: bewusst ändern = diese Liste mitpflegen");
   });

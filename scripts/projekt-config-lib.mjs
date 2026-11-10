@@ -20,7 +20,7 @@ import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { DATEN_STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
-import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur } from "./projekt-config-bloecke.mjs";
+import { istObjekt, istText, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLiterale, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur, pruefeVorpruefung } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -327,6 +327,15 @@ export function sandboxAus(config) {
   return { allowedDomains: wert.allowedDomains ?? [], envVars: wert.envVars ?? [] };
 }
 
+/** Pur: die Projekt-Werkzeuge der Vorprüfung (`vorpruefung.befehle`, factory#260) als `{ befehle }`; ohne Block leer. Wirft mit Fix-Zeile bei kaputter Form. */
+export function vorpruefungAus(config) {
+  const wert = config?.vorpruefung;
+  if (wert === undefined) return { befehle: [] };
+  const fehler = pruefeVorpruefung(wert);
+  if (fehler.length > 0) throw new Error(`${fehler.join("; ")} in ${PROJEKT_CONFIG}\nFix: den Block vorpruefung (befehle: Liste von { name, befehl: [Programm, Argument…] }) in ${PROJEKT_CONFIG} korrigieren`);
+  return { befehle: wert.befehle ?? [] };
+}
+
 /** Pur: die gesamte Ergänzung des Projekts aus der geparsten Config: die Listen von `berechtigungen` plus der Zweig `sandbox`; wirft bei kaputter Form. */
 export function ergaenzungAus(config) {
   return { ...berechtigungenAus(config), sandbox: sandboxAus(config) };
@@ -383,6 +392,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.factoryLinks !== undefined) fehler.push(...pruefeFactoryLinks(wert.factoryLinks));
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
+  fehler.push(...pruefeVorpruefung(wert.vorpruefung));
   fehler.push(...pruefeDesign(wert.design));
   fehler.push(...pruefeBefehle(wert.befehle));
   fehler.push(...internalrefsMaengel(wert.internalrefs));
