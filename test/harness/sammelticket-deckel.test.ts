@@ -16,7 +16,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
@@ -214,5 +214,110 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
     }
     assert.ok(!ziehtRestInDenPR("setze ALLE gewählten Zeilen um; Rest und Neues ins Folge-Sammelticket"));
     assert.ok(!ziehtRestInDenPR(""));
+  });
+});
+
+/* ---- Vollscan: keine zweite Zeilenzahl-Regel für Sammeltickets (K5, factory#268) ----
+ *
+ * Statt einer fest verdrahteten Dateiliste scannt der Wächter alle Markdown-Dateien unter docs/ (ohne docs/adr/ und die
+ * Historie: docs/lessons-learned.md und datierte Gegenprobe-Berichte `…-JJJJ-MM-TT.md`), .agents/ und .claude/agents/
+ * sowie AGENTS.md (dort ohne die eine SSOT-Stelle „Deckel <N> Zeilen“) auf zwei Regeln:
+ *   A) überall: Mengenwort (höchstens, maximal, bis zu, Obergrenze, Deckel, Limit) gefolgt von „<N> Zeilen“;
+ *   B) in Zeilen, die ein Sammelticket nennen: jede Angabe „<N> Zeilen“ oder „Zeilen je Lauf/PR“.
+ * Jeder Treffer außerhalb der geschlossenen Liste ZEILENZAHL_AUSNAHMEN (Treffertext je Datei, mit Grund) ist ein Verstoß;
+ * ein Ausnahme-Eintrag, der nichts mehr trifft, ist ebenfalls rot (keine toten Einträge).
+ *
+ * Bekannte Grenzen: Zahlen in Worten („zwölf Zeilen“), Tabellenzellen ohne „Zeilen“, Skripte und Tests, andere Dateiarten,
+ * eine Regel ohne die Mengenwörter in einer Zeile ohne „Sammelticket“/„gesammelt“; ein Ausnahme-Treffer gilt für die
+ * ganze Datei (nicht je Zeile); Markdown-Auszeichnung im Treffer („**12** Zeilen“) wird nicht normalisiert.
+ */
+const SCAN_WURZELN = ["docs", ".agents", ".claude/agents"];
+const REGEL_A = /(?:höchstens|maximal|bis zu|Obergrenze|Deckel|Limit)\D{0,20}?\d+\s+(?:Befund-)?Zeilen/gi;
+const REGEL_B = /\d+\s+(?:Befund-)?Zeilen|Zeilen (?:je|pro) (?:Lauf|PR)/gi;
+const SAMMELTICKET = /Sammelticket|gesammelt/i;
+
+/** Geschlossene Liste: Treffer, die keine Sammelticket-Zeilenzahl-Regel sind. */
+export const ZEILENZAHL_AUSNAHMEN: { pfad: string; treffer: string; grund: string }[] = [
+  { pfad: ".claude/agents/factory-gruppe.md", treffer: "höchstens ~15 Zeilen", grund: "Länge des Gruppen-Berichts" },
+  { pfad: "docs/factory/entscheidungsprotokoll.md", treffer: "höchstens 10 Zeilen", grund: "Länge der Rückmeldung eines Subagenten" },
+  { pfad: ".claude/agents/factory-planer.md", treffer: "300 Zeilen", grund: "Dateien, die der Planer nicht ganz liest" },
+  { pfad: ".claude/agents/factory-planer.md", treffer: "6 Zeilen", grund: "Schwelle für Gruppen (ADR 0026), kein Deckel je Lauf" },
+  { pfad: "docs/ticket-reihenfolge.md", treffer: "6 Zeilen", grund: "Schwelle für Gruppen (ADR 0026), kein Deckel je Lauf" },
+  { pfad: "docs/model-routing.md", treffer: "300 Zeilen", grund: "Messung Planer-Laufzeit" },
+  { pfad: "docs/model-routing.md", treffer: "200 Zeilen", grund: "Messung (Kontext sparen)" },
+  { pfad: "docs/model-routing.md", treffer: "100 Zeilen", grund: "Messung (Kontext sparen)" },
+  { pfad: "docs/model-routing.md", treffer: "1000 Zeilen", grund: "Messung (Datei-Lesegrenze)" },
+];
+
+const istHistorie = (pfad: string): boolean => pfad === "docs/lessons-learned.md" || /-\d{4}-\d{2}-\d{2}\.md$/.test(pfad);
+
+function sammleMarkdown(rel: string): string[] {
+  const abs = fileURLToPath(new URL(`../../${rel}`, import.meta.url));
+  if (!existsSync(abs)) return [];
+  return readdirSync(abs, { withFileTypes: true }).flatMap((e) => {
+    const sub = `${rel}/${e.name}`;
+    if (e.isDirectory()) return rel === "docs" && e.name === "adr" ? [] : sammleMarkdown(sub);
+    return e.name.endsWith(".md") && !istHistorie(sub) ? [sub] : [];
+  });
+}
+
+/** Alle Treffer der Regeln A und B (Treffertext je Datei); AGENTS.md ohne die SSOT-Stelle. Pure. */
+export function zeilenzahlTreffer(dateien: { pfad: string; text: string }[]): { pfad: string; treffer: string }[] {
+  const aus: { pfad: string; treffer: string }[] = [];
+  for (const { pfad, text: roh } of dateien) {
+    const text = pfad === "AGENTS.md" ? roh.replace(/Deckel \d+ Zeilen/, "") : roh;
+    for (const zeile of text.split("\n")) {
+      for (const t of zeile.match(REGEL_A) ?? []) aus.push({ pfad, treffer: t });
+      if (SAMMELTICKET.test(zeile)) for (const t of zeile.match(REGEL_B) ?? []) aus.push({ pfad, treffer: t });
+    }
+  }
+  return aus;
+}
+
+/** Verstöße: Treffer, die nicht in der Ausnahmeliste stehen, und tote Ausnahme-Einträge. Pure. */
+export function zeilenzahlVerstoesse(dateien: { pfad: string; text: string }[], ausnahmen = ZEILENZAHL_AUSNAHMEN): string[] {
+  const treffer = zeilenzahlTreffer(dateien);
+  const offen = treffer.filter((t) => !ausnahmen.some((a) => a.pfad === t.pfad && t.treffer === a.treffer));
+  const tot = ausnahmen.filter((a) => !treffer.some((t) => t.pfad === a.pfad && t.treffer === a.treffer));
+  return [...offen.map((t) => `${t.pfad}: „${t.treffer}“ ist eine Zeilenzahl-Regel außerhalb der SSOT`), ...tot.map((a) => `${a.pfad}: toter Ausnahme-Eintrag „${a.treffer}“`)];
+}
+
+describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (factory#268, K5)", () => {
+  const echte = [...SCAN_WURZELN.flatMap(sammleMarkdown), "AGENTS.md"].map((pfad) => ({ pfad, text: lies(pfad) }));
+
+  test("der Vollscan über docs/, .agents/, .claude/agents/ und AGENTS.md findet nur die geschlossene Ausnahmeliste", () => {
+    assert.deepEqual(zeilenzahlVerstoesse(echte), []);
+  });
+
+  test("Leerlauf-Schutz: der Scan sieht die erwarteten Dateien und keine Historie", () => {
+    const pfade = echte.map((d) => d.pfad);
+    for (const erwartet of ["AGENTS.md", "docs/ticket-reihenfolge.md", ".agents/skills/review-lenses/SKILL.md", "docs/agent-harness.md", "docs/referenz/befehle.md", ".claude/agents/factory-umsetzer.md"]) {
+      assert.ok(pfade.includes(erwartet), erwartet);
+    }
+    assert.ok(!pfade.some((p) => p.startsWith("docs/adr/") || p === "docs/lessons-learned.md" || /-\d{4}-\d{2}-\d{2}\.md$/.test(p)));
+    assert.ok(echte.find((d) => d.pfad === "AGENTS.md")?.text.includes("Deckel 12 Zeilen"));
+  });
+
+  test("Negativfälle: eine zweite oder abweichende Zahl wird überall erkannt (Red-Green)", () => {
+    const basis = echte.filter((d) => ["AGENTS.md", "docs/agent-harness.md", "docs/referenz/befehle.md", ".agents/skills/review-lenses/SKILL.md", "docs/ticket-reihenfolge.md"].includes(d.pfad));
+    const mit = (pfad: string, zusatz: string) => basis.map((d) => (d.pfad === pfad ? { ...d, text: `${d.text}\n${zusatz}` } : d));
+    for (const pfad of ["AGENTS.md", "docs/agent-harness.md", "docs/referenz/befehle.md", ".agents/skills/review-lenses/SKILL.md", "docs/ticket-reihenfolge.md"]) {
+      for (const zusatz of [
+        "Ein Sammelticket-Lauf nimmt höchstens 15 Zeilen.",
+        "Der Deckel von 12 Zeilen gilt je Sammelticket.",
+        "Je Lauf maximal 12 Zeilen.",
+        "Das Sammelticket wird in 12 Zeilen je Lauf geschnitten.",
+      ]) {
+        assert.ok(zeilenzahlVerstoesse(mit(pfad, zusatz)).some((v) => v.startsWith(`${pfad}: „`)), `${pfad}: ${zusatz}`);
+      }
+    }
+  });
+
+  test("Negativfall: ein zweiter Deckel in AGENTS.md selbst und ein toter Ausnahme-Eintrag werden erkannt", () => {
+    const agents = echte.find((d) => d.pfad === "AGENTS.md")!;
+    assert.deepEqual(zeilenzahlVerstoesse([agents], []), []);
+    assert.equal(zeilenzahlVerstoesse([{ pfad: "AGENTS.md", text: `${agents.text}\nDeckel 15 Zeilen` }], []).length, 1);
+    assert.equal(zeilenzahlVerstoesse([{ pfad: "x.md", text: "nichts" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]).length, 1);
+    assert.deepEqual(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Sammelticket: 7 Zeilen" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]), []);
   });
 });
