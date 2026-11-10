@@ -130,7 +130,7 @@ export function auditFactoryLinks(rootDir) {
   const einheiten = Object.keys(v.sync.einheiten ?? {});
   const links = sammleLinks(rootDir, { repo: v.repo, einheiten, ausnahmen: v.ausnahmen });
   const index = pruefeIndex({ links, index: liesJson(rootDir, INDEX_PFAD), sync: v.sync, repo: v.repo });
-  const stubs = v.sync.quelle?.tag ? stubBefunde({ lies: leserVon(rootDir), einheiten, repo: v.repo, tag: v.sync.quelle.tag }) : { befunde: [], geprueft: 0 };
+  const stubs = v.sync.quelle?.tag ? stubBefunde({ lies: leserVon(rootDir), einheiten, repo: v.repo, tag: v.sync.quelle.tag, ausnahmen: v.ausnahmen }) : { befunde: [], geprueft: 0 };
   return { befunde: [...index, ...stubs.befunde], links, stubs: stubs.geprueft };
 }
 

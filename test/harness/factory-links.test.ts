@@ -453,6 +453,13 @@ describe("Anker-Stubs (factory#132): Kern-Links auf Nicht-Besitz-Seiten sind im 
     assert.equal(b[0].datei, "AGENTS.md");
     assert.equal(b[0].zeile, 2);
   });
+  test("Ausnahme: ein Ziel aus factoryLinks.ausnahmen ergibt weder stub-ziel noch stub-link (L11)", () => {
+    const ausnahme = { extra: { ".factory/projekt.json": CONFIG({ factoryLinks: { ausnahmen: ["docs/z.md"] } }) } };
+    assert.deepEqual(stubBefunde(stubRoot(null, ausnahme)), []);
+    assert.deepEqual(stubBefunde(stubRoot("# Z\n\n## Abschnitt\n\nText\n", ausnahme)), []);
+    const andere = { extra: { ".factory/projekt.json": CONFIG({ factoryLinks: { ausnahmen: ["docs/alt/**"] } }) } };
+    assert.deepEqual(arten(stubRoot(null, andere)), ["stub-ziel"]);
+  });
   test("ohne Anker reicht irgendwo in der Datei ein Factory-Link auf die Seite am Sync-Tag; ohne ihn ist es rot", () => {
     const o = { kern: "[Z](docs/z.md)", ziele: { "docs/z.md": [""] } };
     assert.deepEqual(arten(stubRoot(`# Z\n\nKern: [Z](${u("v2", "docs/z.md")})\n`, o)), []);

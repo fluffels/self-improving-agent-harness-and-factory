@@ -165,10 +165,11 @@ function stubBefund(k, { lies, repo, tag }) {
  * Pur: Anker-Stubs der Markdown-Einheiten (`einheiten`: Ids des Sync-Stands). Jeder relative `.md`-Link einer Einheit (ganze Datei oder Block) auf ein Ziel ohne Einheit
  * muss auf eine vorhandene Datei zeigen; mit Anker trägt sie eine Überschrift mit gleichem Anker (roh verglichen) und darunter (bis zur nächsten Überschrift gleicher oder
  * höherer Ebene) einen Factory-Link auf genau `pfad#anker` am Tag `tag`, ohne Anker irgendwo in der Datei einen Factory-Link auf die Seite. Factory-Links in
- * Schnappschuss-Blöcken zählen nicht. Ergebnis `{ befunde, geprueft }` (`geprueft` = Zahl der Kern-Links nach Dedupe).
+ * Schnappschuss-Blöcken zählen nicht; ein Ziel, das ein Glob aus `ausnahmen` (`factoryLinks.ausnahmen`) trifft, wird nicht geprüft. Ergebnis `{ befunde, geprueft }` (`geprueft` = Zahl der Kern-Links nach Dedupe).
  */
-export function stubBefunde({ lies, einheiten, repo, tag }) {
-  const ziele = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies });
+export function stubBefunde({ lies, einheiten, repo, tag, ausnahmen = [] }) {
+  const ausgenommen = ausnahmen.map(globRegex);
+  const ziele = kernLinkZiele({ besitz: einheiten.map(einheitAusId), lies }).filter((k) => !ausgenommen.some((re) => re.test(k.ziel)));
   return { befunde: ziele.map((k) => stubBefund(k, { lies, repo, tag })).filter(Boolean), geprueft: ziele.length };
 }
 
