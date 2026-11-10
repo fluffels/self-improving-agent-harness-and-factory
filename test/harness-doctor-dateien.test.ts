@@ -540,6 +540,21 @@ describe("Workflow-Auslöser", () => {
       expect(ausloeser([eigen("name:\non: push\n"), wf("['']")]).ok).toBe(true);
       expect(ausloeser([eigen("name: ''\non: push\n"), wf("[Leer]")]).ok).toBe(false);
     });
+    test("CRLF-Zeilenenden, `workflows:` am Dateiende, Liste auf Schlüsselhöhe mit Folgeschlüssel, Einträge auf verschiedenen Einrückungen", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\r\non:\r\n  workflow_run:\r\n    workflows:\r\n      - Weg\r\n")]).befund).toContain("Weg");
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n")]).ok).toBe(true);
+      const gleich = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n    - Weg\n    types: [completed]\n")]);
+      expect(gleich.befund).toContain("„Weg“");
+      expect(gleich.befund).not.toContain("types");
+      nicht(eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - A\n    - B\n"));
+    });
+    test("andere Auslöser mit eigenen Unterschlüsseln vor `workflow_run` werden übersprungen; `on: |` heißt Block-Skalar", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  push:\n    branches:\n      - main\n  workflow_run:\n    workflows: [Weg]\n")]).befund).toContain("Weg");
+      expect(nicht(eigen("name: X\non: |\n  x\n")).befund).toContain("Block-Skalar");
+    });
+    test("`workflows: null` (Aufrufer reicht null) wie keine Workflows", () => {
+      expect(punkt(pruefe({ rootDir: "/x", ...GESUND, workflows: null as unknown as Workflow[], git: fakeGit(gesund), existiert: () => true, config: {} }), "Workflow-Auslöser").ok).toBe(true);
+    });
     test("die Zeile bleibt eine Lücke, wenn alle Dateien lesbar sind (kein Aufweichen)", () => {
       const p = ausloeser([ci("Build"), fest('["CI"]')]);
       expect(p.ok).toBe(false);

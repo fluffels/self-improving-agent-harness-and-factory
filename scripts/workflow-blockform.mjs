@@ -403,10 +403,10 @@ function workflowsWert(c, z, rest, namen) {
     return;
   }
   const n = lesen(c);
-  if (n === null || !istStrich(n.text) || n.einr < z.einr) return;
+  if (n === null || n.einr < z.einr) return;
   for (let e = n; e !== null && e.einr === n.einr && istStrich(e.text); e = lesen(c)) {
     const frag = e.text.slice(1).trim();
-    if (frag === "" || istStrich(frag) || frag.startsWith("#")) throw nl(e.k, "Eintrag der Liste ohne Skalar in derselben Zeile");
+    if (frag === "" || frag.startsWith("#")) throw nl(e.k, "Eintrag der Liste ohne Skalar in derselben Zeile");
     c.i = e.k + 1;
     namen.push(skalar(c, frag, e.k, e.einr).trim());
   }
@@ -416,7 +416,6 @@ function workflowsWert(c, z, rest, namen) {
 function workflowRunBlock(c, z, rest, namen) {
   const n = blockUnter(c, z, rest, "workflow_run");
   if (n === null) return;
-  if (istStrich(n.text)) throw nl(n.k, "Liste als workflow_run");
   mapping(c, n.einr, (key, kz, krest) => {
     if (key !== "workflows") return false;
     workflowsWert(c, kz, krest, namen);
@@ -442,7 +441,7 @@ function onBlock(c, z, rest, namen) {
 
 /**
  * Liest für den Doctor-Punkt `Workflow-Auslöser` den `name:` der Workflow-Datei (oberste Ebene) und die Namen unter `on.workflow_run.workflows` (L20).
- * Liefert `{ name: string | null, ausloeser: string[] }` oder `{ fehler: { zeile, konstrukt } }` (`zeile` 1-basiert). Nicht gelesen wird (fail-closed): `on` als Flow-Mapping,
+ * Liefert `{ name: string | null, ausloeser: string[] }` (`name` ist `null` ohne `name:` und `""` bei leerem Wert) oder `{ fehler: { zeile, konstrukt } }` (`zeile` 1-basiert). Nicht gelesen wird (fail-closed): `on` als Flow-Mapping,
  * Anker, Alias oder Tag an `on`, `workflow_run`, `workflows`, einem Listeneintrag oder dem Workflow-Namen, eine mehrzeilige Flow-Liste unter `workflows`, dazu alle Strukturfehler der gelesenen Ebenen
  * (wie bei `blockformNamen`). Jobs und alles andere werden übersprungen; eine Datei, die dort etwas Unlesbares trägt, bleibt lesbar.
  */
@@ -463,7 +462,7 @@ export function blockformAusloeser(text) {
     if (e instanceof NichtLesbar) return { fehler: { zeile: e.zeile, konstrukt: e.konstrukt } };
     throw e;
   }
-  return { name: name === "" ? null : name, ausloeser: ausloeser.filter((n) => n !== "") };
+  return { name, ausloeser: ausloeser.filter((n) => n !== "") };
 }
 
 /** GitHub liest beide Endungen: auch ein `fake.yaml` darf nicht entgehen. */

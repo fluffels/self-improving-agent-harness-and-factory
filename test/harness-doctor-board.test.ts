@@ -1,4 +1,8 @@
 /* Harness-Doctor, Punkte `Board-Ansicht` und `Git-Hooks` (factory#247 L7, L9, L1): reine Punkte mit eingespeister Lese-Naht, kein Netz, kein Git-Prozess. */
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { boardPunkte as rawBoardPunkte, BOARD_QUERY as rawQuery } from "../scripts/harness-doctor-board.mjs";
@@ -95,7 +99,7 @@ describe("Board-Ansicht", () => {
     });
     test("Feld fehlt in der Antwort: Ansichten, Filter, Sortierung, Workflows", () => {
       nicht(antwort({ views: null }));
-      nicht(antwort({ views: { nodes: [] } }));
+      expect(nicht(antwort({ views: { nodes: [] } })).befund).toContain("views");
       nicht(antwort({ views: { nodes: [{ number: 1, sortByFields: { nodes: [] } }] } }));
       nicht(antwort({ views: { nodes: [{ number: 1, filter: `-status:Done repo:${REPO}` }] } }));
       nicht(antwort({ workflows: null }));
@@ -172,6 +176,21 @@ describe("Git-Hooks", () => {
     const p = gitHooksPunkt({ lesen: () => { throw new Error("git fehlt"); } });
     expect(p.nichtPruefbar).toBe(true);
     expect(p.befund).toContain("git fehlt");
+  });
+  test("Lesefehler als Text statt Error", () => {
+    expect(gitHooksPunkt({ lesen: () => { throw "kaputt"; } }).befund).toContain("kaputt");
+  });
+  test("echtes git: der Standard liest den gesetzten Wert und meldet ungesetzt als null", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "hooks-"));
+    try {
+      execFileSync("git", ["init", "-q", wurzel]);
+      const lesen = gitHooksStandard({ rootDir: wurzel });
+      expect(lesen()).toBeNull();
+      execFileSync("git", ["-C", wurzel, "config", "core.hooksPath", ".githooks"]);
+      expect(lesen()).toBe(".githooks");
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
   describe("gitHooksStandard liest `git config core.hooksPath` im Prüf-Root", () => {
     const stand = (r: { status: number | null; stdout?: string; error?: Error }) => {
