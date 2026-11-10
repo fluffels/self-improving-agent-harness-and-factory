@@ -28,3 +28,5 @@ sbom/
 *.iml
 Thumbs.db
 .DS_Store
+# Vitest-JSON-Bericht (.vitest/json/output.json) einer lokalen Testlauf-Umgebung: Cache, nie ins Repo.
+.vitest/

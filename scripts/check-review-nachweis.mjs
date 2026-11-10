@@ -37,6 +37,8 @@
  *
  * Hinweis (kein Fehler, Exit-Code gleich): die jüngste Commit-Zeile `Guard-Liste: <n> Anker` (Selbstcheck des Umsetzers) wird mit der Ankerzahl des Diffs
  * aus `scripts/anker-liste.mjs` verglichen; Abweichung oder fehlende Zeile bei vorhandenen Ankern gibt eine `::warning::`-Zeile (`guardListeWarnung`).
+ * Grenzen: die jüngste Zeile muss die Gesamtzahl der Anker des Branches nennen (verglichen wird mit dem Gesamt-Diff gegen die Basis, nicht mit dem Anteil eines Commits); `anker-liste.mjs` kennt
+ * kein `--config`, das Kind liest immer die Config des Repos, auch bei `--config` hier.
  *
  * Reines Node-Skript (nur Builtins, check-basis.mjs und anker-liste.mjs); die Bewertung ist pur exportiert.
  */

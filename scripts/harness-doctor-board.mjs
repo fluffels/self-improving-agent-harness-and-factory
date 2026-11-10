@@ -8,6 +8,8 @@
  *
  * Nur lokal in `--pruefen`: die Abfrage braucht das Projekt-Leserecht des Kontos, das Token des Wochenlaufs reicht dafür nicht überall. Grenze (fail-closed): was GraphQL nicht liefert
  * (Lesefehler, Projekt nicht gefunden, `views`, `filter`, `sortByFields` oder `workflows` fehlen bzw. haben eine andere Form, kein `projectId`), macht das Board `NICHT PRÜFBAR`, nie grün.
+ * Annahmen: die Abfrage liest `views(first: 20)` und `workflows(first: 30)` ohne Paginierung (mehr Ansichten oder Workflows liegen außerhalb des Blicks; die Standardansicht ist die mit der kleinsten `number` unter den gelesenen),
+ * und der geforderte Filter ist fest `-status:Done` (ein Board mit anderem Statusnamen für „erledigt“ meldet eine Lücke).
  * Geprüft wird nur die Standardansicht; weitere Ansichten und deren Filter bleiben ungeprüft. Der Fix beschreibt den Handgriff in der Oberfläche (Ansichten ändert der Doctor nie selbst).
  */
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
