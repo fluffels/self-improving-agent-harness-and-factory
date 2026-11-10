@@ -124,13 +124,23 @@ function zeilenBilanz(lines, record) {
   return { total, covered, uncovered };
 }
 
+/** Die erlaubten Schlüssel des dritten Arguments von `evaluateByLayer`; ein anderer Schlüssel (etwa eine alte Floor-Map) ist ein `TypeError`. */
+const EVALUATE_OPTIONEN = ["floors", "quelle", "berichteJe"];
+
+function pruefeOptionen(optionen) {
+  const unbekannt = Object.keys(optionen).filter((k) => !EVALUATE_OPTIONEN.includes(k));
+  if (unbekannt.length > 0) throw new TypeError(`evaluateByLayer: unbekannte Option(en) ${unbekannt.join(", ")} im dritten Argument (erlaubt: ${EVALUATE_OPTIONEN.join(", ")}); eine Floor-Map gehört in \`floors\``);
+}
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
  *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
  *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Optionen (alle optional): `floors` (Standard `LAYER_DIFF_FLOORS`), `quelle`, `berichteJe`
  *  (Datei → Berichtsdateien). Pure. */
-export function evaluateByLayer(changed, lcov, { floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe } = {}) {
+export function evaluateByLayer(changed, lcov, optionen = {}) {
+  pruefeOptionen(optionen);
+  const { floors = LAYER_DIFF_FLOORS, quelle = quellenAus(ladeProjektConfig()), berichteJe } = optionen;
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
     buckets[layer] = { covered: 0, total: 0, pct: 100, floor: floors[layer] ?? null, below: false, files: [] };

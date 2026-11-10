@@ -28,6 +28,7 @@ import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktion
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { offeneZeileMit } from "./sammelticket-titel.mjs";
 import { bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -170,7 +171,7 @@ function nummernAusKommentaren(kommentare, owner) {
   for (const k of kommentare) {
     if (!istVertraut(k?.user ?? null, owner)) continue;
     for (const z of String(k?.body ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Code-Scanning:/.test(z)) nummernIn(z).forEach((n) => nummern.add(n));
+      if (offeneZeileMit(z, "Code-Scanning:")) nummernIn(z).forEach((n) => nummern.add(n));
     }
   }
   return nummern;

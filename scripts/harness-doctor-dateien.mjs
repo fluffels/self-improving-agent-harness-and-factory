@@ -16,7 +16,7 @@
  *   Workflow-Datei (Flow-Form, Anker, Alias, Tag, Merge-Schlüssel …), ein fehlender Ruleset-Spiegel oder eine leere Soll-Liste machen den Punkt nicht prüfbar. Spiegel, Workflows und Soll-Liste liest `pruefLauf` einmal und reicht sie herein.
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
- *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows.
+ *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
@@ -28,7 +28,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
-import { quellenJeKontext } from "./workflow-blockform.mjs";
+import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
 import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
@@ -297,47 +297,23 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }
 
-/* Punkt `Workflow-Auslöser`: ein zeilenweiser Blockform-Leser ohne `yaml` (der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI`; ein `on:` in Flow-Form zählt als „kein workflow_run“. */
+/* Punkt `Workflow-Auslöser`: gelesen vom Blockform-Leser `blockformAusloeser` (workflow-blockform.mjs, ohne `yaml`: der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI` unter `workflows`.
+ * Eine Datei in nicht lesbarer Form (`on:` als Flow-Mapping, Anker, Alias, Tag, mehrzeilige Flow-Liste) macht den Punkt NICHT PRÜFBAR mit `datei:zeile`, nie „kein workflow_run“ (L20). */
 const AUSLOESER_PUNKT = "Workflow-Auslöser";
-
-const ohneKommentar = (zeile) => zeile.replace(/\s+#.*$/, "").trimEnd();
-const einrueckung = (zeile) => zeile.length - zeile.trimStart().length;
-const ohneAnfuehrung = (s) => s.trim().replace(/^(["'])(.*)\1$/, "$2");
-
-/** Der `name:` auf oberster Ebene oder `null`. */
-function workflowName(zeilen) {
-  const z = zeilen.find((l) => /^name:\s*\S/.test(l));
-  return z ? ohneAnfuehrung(z.slice(5)) : null;
-}
-
-/** Die Namen unter `workflow_run.workflows` (Flow-Liste oder Blockliste); leer ohne `workflow_run`. */
-function ausloeserNamen(zeilen) {
-  const start = zeilen.findIndex((l) => /^\s*workflow_run:$/.test(l));
-  if (start < 0) return [];
-  const basis = einrueckung(zeilen[start]);
-  const namen = [];
-  let liste = -1;
-  for (const z of zeilen.slice(start + 1)) {
-    if (z.trim() === "") continue;
-    const ein = einrueckung(z);
-    if (ein <= basis) break;
-    const schluessel = /^\s*workflows:\s*(.*)$/.exec(z);
-    if (schluessel) {
-      liste = ein;
-      const rest = schluessel[1].replace(/^\[|\]$/g, "");
-      namen.push(...rest.split(",").map(ohneAnfuehrung).filter(Boolean));
-    } else if (liste >= 0 && ein >= liste && z.trim().startsWith("- ")) namen.push(ohneAnfuehrung(z.trim().slice(2)));
-    else liste = -1;
-  }
-  return namen;
-}
 
 /** Punkt `Workflow-Auslöser`: `workflows` ist `[{ pfad, text }]`. Pur. */
 export function workflowAusloeserPunkt({ workflows }) {
-  const gelesen = (workflows ?? []).map((w) => {
-    const zeilen = String(w.text).split(/\r\n|\n|\r/).map(ohneKommentar);
-    return { pfad: w.pfad.replaceAll("\\", "/"), name: workflowName(zeilen), ausloeser: ausloeserNamen(zeilen) };
-  });
+  const gelesen = [];
+  const nichtLesbar = [];
+  for (const w of workflows ?? []) {
+    const pfad = w.pfad.replaceAll("\\", "/");
+    const r = blockformAusloeser(w.text);
+    if (r.fehler) nichtLesbar.push(`${pfad}:${r.fehler.zeile} ${r.fehler.konstrukt}`);
+    else gelesen.push({ pfad, name: r.name, ausloeser: r.ausloeser });
+  }
+  if (nichtLesbar.length > 0) {
+    return nichtPruefbar(AUSLOESER_PUNKT, `Workflow-Datei in einer Form, die der Blockform-Leser nicht liest: ${kurz(nichtLesbar)}`, "in Blockform schreiben (`on:`, `workflow_run:` und `workflows:` als eingerückte Mappings und Listen, ohne Flow-Mapping, Anker, Alias, Tag), dann erneut prüfen");
+  }
   const vorhanden = new Set(gelesen.map((w) => w.name).filter((n) => n !== null));
   const fehlend = gelesen.flatMap((w) => w.ausloeser.filter((n) => !vorhanden.has(n)).map((n) => ({ von: w.pfad.split("/").at(-1), name: n })));
   if (fehlend.length === 0) return gut(AUSLOESER_PUNKT);

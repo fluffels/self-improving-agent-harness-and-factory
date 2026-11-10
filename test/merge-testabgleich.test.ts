@@ -27,7 +27,7 @@ let tick = 0;
 const gitMitFestenDaten = (cwd: string) => (args: string[]) => {
   tick += 1;
   const datum = new Date(Date.UTC(2030, 0, 1, 0, 0, 0) + tick * 1000).toISOString();
-  return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_AUTHOR_DATE: datum, GIT_COMMITTER_DATE: datum } });
+  return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, LC_ALL: "C", GIT_AUTHOR_DATE: datum, GIT_COMMITTER_DATE: datum } });
 };
 /** Jeder Test legt ein Temp-Repo an und startet mehrere `git`-Prozesse (die CLI-Tests dazu `node`): im vollen Lauf unter Last (1 bis 2,6 s gemessen) reicht der Standard von 5 s nicht sicher. */
 const REPO_TIMEOUT_MS = 30_000;

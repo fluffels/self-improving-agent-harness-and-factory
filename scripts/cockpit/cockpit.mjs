@@ -36,7 +36,7 @@ export function leseArgs(argv, cwd) {
 export async function main(argv = process.argv.slice(2), cwd = process.cwd(), { starteServer = starteServerStandard } = {}) {
   const a = leseArgs(argv, cwd);
   if (a.fehler) {
-    console.error(`${a.fehler}\nAufruf: npm run cockpit [-- --projekt <pfad>] [--port <n>]`);
+    console.error(`${a.fehler}\nAufruf: node scripts/cockpit/cockpit.mjs [-- --projekt <pfad>] [--port <n>]`);
     return AUFRUF_EXIT;
   }
   const ctxFuer = (signal) => ({ projekt: a.projekt, lauf: (id) => laufe(id, { cwd: a.projekt, signal }) });

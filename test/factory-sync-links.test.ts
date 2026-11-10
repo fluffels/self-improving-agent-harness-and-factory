@@ -930,6 +930,18 @@ describe("factory-sync --tag: Hinweise nach dem Sync (Projektseiten, eslint-Supp
     assert.equal(lies(z, "docs/seite.md"), SEITE);
   });
 
+  test("eine vorhandene Projektseite in factoryLinks.ausnahmen löst keinen Seiten-Hinweis aus (stub-link und stub-anker), eine nicht ausgenommene schon", () => {
+    const q = kernQuelle();
+    const z = baueZiel({ "docs/seite.md": SEITE });
+    schreibe(z, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: ["docs/seite.md"] } }));
+    const r = syncVomTag(q, z, "v2");
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!/Kern-Link-Seite im Projekt/.test(r.out), r.out);
+    const z2 = baueZiel({ "docs/seite.md": SEITE });
+    schreibe(z2, ".factory/projekt.json", JSON.stringify({ factoryLinks: { ausnahmen: ["docs/anderes.md"] } }));
+    assert.match(syncVomTag(q, z2, "v2").out, /Kern-Link-Seite im Projekt: docs\/seite\.md/);
+  });
+
   test("L11/L20: eine gekürzte Seite ohne die verlinkte Überschrift (stub-anker) steht ebenso als Hinweis", () => {
     const q = kernQuelle();
     const z = baueZiel({ "docs/seite.md": "# Projektanteil\n" });

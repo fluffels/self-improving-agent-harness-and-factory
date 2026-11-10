@@ -1,6 +1,7 @@
 /* Quellwurzeln und Endungsliste der Projekt-Config (factory#181): `scripts/quellwurzeln-lib.mjs`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { fixture } from "./support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/quellwurzeln-lib.mjs";
@@ -124,6 +125,31 @@ describe("ordnerZuMuster und quellDateien (factory#181)", () => {
     assert.deepEqual(lib.quellDateien(d, w), ["a/src/A.java", "a/src/ATest.java", "a/src/app.spec.ts", "a/src/k.ts", "a/src/t.d.ts"]);
     assert.deepEqual(lib.quellDateien(d, { ...w, ohne: ["**/*.spec.ts", "**/*Test.java"] }), ["a/src/A.java", "a/src/k.ts", "a/src/t.d.ts"]);
     assert.deepEqual(lib.quellDateien(d, { wurzeln: ["a/src"], endungen: [".d.ts"] }), ["a/src/t.d.ts"]);
+  });
+});
+
+describe("quellDateien überspringt von Git ignorierte Ordner (L4)", () => {
+  const dateien = { ".gitignore": "target/\nbuild\n", "a/src/k.ts": "x", "a/target/gen.ts": "x", "a/deep/target/gen2.ts": "x", "a/build/b.ts": "x", "a/target.ts": "x" };
+  const git = (d: string) => execFileSync("git", ["init", "-q"], { cwd: d });
+  const w = { wurzeln: ["a"], endungen: [".ts"] };
+
+  test("Ordner aus .gitignore (auch tief und ohne Schrägstrich) fehlen, gleichnamige Dateien und andere Ordner bleiben", () => {
+    const d = fixture(dateien);
+    git(d);
+    assert.deepEqual(lib.quellDateien(d, w), ["a/src/k.ts", "a/target.ts"]);
+  });
+  test("ohne Git-Repo kein Sprung (fail-open): jede Datei zählt", () => {
+    assert.deepEqual(lib.quellDateien(fixture(dateien), w), ["a/build/b.ts", "a/deep/target/gen2.ts", "a/src/k.ts", "a/target.ts", "a/target/gen.ts"]);
+  });
+  test("ein Repo ohne ignorierte Ordner ändert nichts", () => {
+    const d = fixture({ "a/src/k.ts": "x", "a/t/j.ts": "x" });
+    git(d);
+    assert.deepEqual(lib.quellDateien(d, w), ["a/src/k.ts", "a/t/j.ts"]);
+  });
+  test("eine ignorierte Wurzel-Unterstruktur über Glob-Wurzeln wird ebenso übersprungen", () => {
+    const d = fixture(dateien);
+    git(d);
+    assert.deepEqual(lib.quellDateien(d, { wurzeln: ["a/**"], endungen: [".ts"] }), ["a/src/k.ts", "a/target.ts"]);
   });
 });
 

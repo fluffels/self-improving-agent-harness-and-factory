@@ -76,7 +76,7 @@ export function fehlgeschlageneTests(ausgabe) {
 const testDateienZeile = (e) => {
   if (e.name !== "test") return "";
   const d = fehlgeschlageneTests(e.ausgabe);
-  return `${d.length ? `fehlgeschlagene Testdateien: ${d.join(", ")}` : "keine Testdatei in der Ausgabe erkannt (Absturz oder Ladefehler: volle Ausgabe mit npm run test)"}\n`;
+  return `${d.length ? `fehlgeschlagene Testdateien: ${d.join(", ")}` : "keine Testdatei in der Ausgabe erkannt (Absturz oder Ladefehler: volle Ausgabe mit node scripts/gate-befehl.mjs verify)"}\n`;
 };
 
 const sek = (ms) => `${Math.round(ms / 1000)} s`;

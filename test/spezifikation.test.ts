@@ -26,7 +26,7 @@ type Io = {
   bearbeite: (nr: number, body: string) => void;
 };
 const EIGENES = (boardLibRaw as unknown as { REPO: string }).REPO;
-const S = raw as unknown as { fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; aufrufPruefen: (argv: string[]) => { fehler?: string; befehl?: string; werte?: Record<string, unknown>; positional?: string[] } };
+const S = raw as unknown as { POSITIONS_KRITERIEN: string; fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; aufrufPruefen: (argv: string[]) => { fehler?: string; befehl?: string; werte?: Record<string, unknown>; positional?: string[] } };
 
 const GUT = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n- Negativfall: ohne Spezifikation wird nichts angelegt.\n";
 const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n";
@@ -54,7 +54,7 @@ function umgebung(dateien: Record<string, string>, extra: Partial<Io> = {}) {
   return { io, aufrufe };
 }
 
-const ANLEGEN = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "12"];
+const ANLEGEN = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "12", "--weil", "Abhängigkeit"];
 
 describe("aufrufPruefen", () => {
   test("Flags, mehrfaches --label und positionale Nummer je Unterbefehl", () => {
@@ -140,20 +140,20 @@ describe("anlegen", () => {
   });
   test("ohne area-Label, ohne Ziel der Einordnung oder mit beiden: Exit 2, nichts angelegt", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "bug", "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "bug", "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2);
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA], io).code).toBe(2);
     expect(S.fuehreAus([...ANLEGEN, "--notfall", "rot-main"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--body-datei", "b.md", "--label", AREA, "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2);
     expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "unbekannt"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "abc"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "abc", "--weil", "Abhängigkeit"], io).code).toBe(2);
     expect(aufrufe.erzeuge).toEqual([]);
   });
   test("leerer Titel (nur Leerzeichen) und leeres Label `area:` sind Aufrufdefekte: Exit 2, nichts angelegt", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", AREA, "--nach", "12"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12"], io).code).toBe(2);
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:`, "--nach", "12"], io).code).toBe(2); // leer, im Präfix der Config
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:a b`, "--nach", "12"], io).code).toBe(2); // Leerraum im Namen
+    expect(S.fuehreAus(["anlegen", "--titel", "   ", "--body-datei", "b.md", "--label", AREA, "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:", "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:`, "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2); // leer, im Präfix der Config
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${FREMD.labels.harness.split(":")[0]}:a b`, "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(2); // Leerraum im Namen
     expect(aufrufe.erzeuge).toEqual([]);
   });
   test("Bereichs-Label: Präfix = labels.harness bis zum ersten Doppelpunkt (fremd `bereich:`, echt `area:`)", () => {
@@ -161,9 +161,9 @@ describe("anlegen", () => {
     const echt = projektConfig().labels.harness.split(":")[0] + ":";
     expect(fremd).not.toBe(echt);
     const a = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${fremd}demo`, "--nach", "12"], a.io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${fremd}demo`, "--nach", "12", "--weil", "Abhängigkeit"], a.io).code).toBe(0);
     const b = umgebung({ "b.md": GUT });
-    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${echt}demo`, "--nach", "12"], b.io);
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", `${echt}demo`, "--nach", "12", "--weil", "Abhängigkeit"], b.io);
     expect(r.code).toBe(2);
     expect(r.err).toContain(`${fremd}<x>`);
     expect(b.aufrufe.erzeuge).toEqual([]);
@@ -171,22 +171,22 @@ describe("anlegen", () => {
   test("Bereichs-Label der echten Config: `area:demo` ist gültig", () => {
     const echt = projektConfig();
     const { io } = umgebung({ "b.md": GUT }, { config: { repo: echt.repo, boards: echt.boards, labels: echt.labels, sprache: echteSprache() } });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:demo", "--nach", "12"], io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "area:demo", "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(0);
   });
   test("harness-Label ohne Doppelpunkt: jedes nicht leere Label genügt", () => {
     const { io } = umgebung({ "b.md": GUT }, { config: { repo: FREMD.repo, boards: FREMD.boards, labels: { forum: "f", harness: "harness" }, sprache: echteSprache() } });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "irgendwas", "--nach", "12"], io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", "irgendwas", "--nach", "12", "--weil", "Abhängigkeit"], io).code).toBe(0);
   });
   test("`--nach #12` und `--nach 12` sind dieselbe Nummer: einsortiert wird mit 12 (nie NaN), der Nachhol-Befehl nennt 12", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
-    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], io).code).toBe(0);
+    expect(S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12", "--weil", "Abhängigkeit"], io).code).toBe(0);
     expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null, repo: FREMD.repo }]);
     const { io: kaputt } = umgebung({ "b.md": GUT }, {
       einsortiere: () => {
         throw new Error("x");
       },
     });
-    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12"], kaputt);
+    const r = S.fuehreAus(["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "#12", "--weil", "Abhängigkeit"], kaputt);
     expect(r.err).toContain(`--repo ${FREMD.repo} --after 12 900`);
     expect(r.err).not.toContain("#12 900");
   });
@@ -201,6 +201,31 @@ describe("anlegen", () => {
     expect(aufrufe.erzeuge).toEqual([{ titel: "T", body: GUT, labels: [AREA, "prio"], repo: FREMD.repo }]);
     expect(JSON.stringify(aufrufe.erzeuge)).not.toContain("assignee");
     expect(aufrufe.einsortiere).toEqual([{ nr: 900, nach: 12, notfall: null, repo: FREMD.repo }]);
+  });
+  test("--nach ohne --weil (oder leer): Exit 2 mit den Kriterien, nichts angelegt (L8)", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    const ohne = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--nach", "12"];
+    for (const argv of [ohne, [...ohne, "--weil", "  "]]) {
+      const r = S.fuehreAus(argv, io);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("--weil");
+      expect(r.err).toContain(S.POSITIONS_KRITERIEN);
+    }
+    expect(aufrufe.erzeuge).toEqual([]);
+  });
+  test("Ausgabe nennt die Position mit Grund; bei --notfall ist die Art der Grund, --weil dazu ist ein Aufruf-Fehler (L8)", () => {
+    const { io } = umgebung({ "b.md": GUT });
+    expect(S.fuehreAus([...ANLEGEN.slice(0, -2), "--weil", "blockiert #12"], io).out).toContain("Position: hinter #12, weil blockiert #12");
+    const notfall = ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", AREA, "--notfall", "rot-main"];
+    expect(S.fuehreAus(notfall, io).out).toContain("Position: ganz oben, weil rot-main");
+    const r = S.fuehreAus([...notfall, "--weil", "x"], io);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("Art der Grund");
+  });
+  test("Ausgabe: erste Zeile mit URL, ohne URL nur die Nummer, dann die Position (L8)", () => {
+    expect(S.fuehreAus(ANLEGEN, umgebung({ "b.md": GUT }).io).out).toBe("angelegt #900 https://x/900\nPosition: hinter #12, weil Abhängigkeit\n");
+    const ohneUrl = umgebung({ "b.md": GUT }, { erzeuge: (a) => ({ number: 901, labels: a.labels.map((name) => ({ name })) }) });
+    expect(S.fuehreAus(ANLEGEN, ohneUrl.io).out).toBe("angelegt #901\nPosition: hinter #12, weil Abhängigkeit\n");
   });
   test("--notfall: einsortiert wird als Notfall", () => {
     const { io, aufrufe } = umgebung({ "b.md": GUT });
@@ -662,7 +687,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
 describe("Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10)", () => {
   const FABRIK = "zz-org/zz-fabrik";
   const fremdConfig = { repo: FREMD.repo, boards: FREMD.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)), labels: { forum: FREMD.labels.forum, harness: HARNESS }, sprache: echteSprache() };
-  const ARGS = (label: string) => ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", label, "--nach", "12"];
+  const ARGS = (label: string) => ["anlegen", "--titel", "T", "--body-datei", "b.md", "--label", label, "--nach", "12", "--weil", "Abhängigkeit"];
 
   test("Harness-Label: erzeuge, pruefeAnker und einsortiere bekommen das Ziel-Repo, der Nachhol-Befehl nennt --repo (AK2)", () => {
     const geprueft: unknown[] = [];

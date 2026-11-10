@@ -36,6 +36,7 @@ const M = raw as unknown as {
   parseArgs: (a: string[]) => { json?: boolean; stunden?: number; fehler?: string };
   beurteileClaim: (o: { claim: Claim; jetzt: number; schwelleMs: number }) => Urteil;
   jsonDokument: (o: { jetzt: number; viewer: string | null; schwelleStunden: number; urteile: { claim: Claim; urteil: Urteil }[] }) => unknown;
+  nichtGefundeneAliase: (antwort: unknown) => Set<string>;
   zugewiesenArgs: (repo?: string) => string[];
   aliasAbfragen: (n: number[], repo?: string) => { nummern: number[]; query: string }[];
   issueAus: (k: unknown) => unknown;
@@ -327,6 +328,8 @@ interface Welt {
   bleibtAufPlatte?: boolean;
   liesFehlerBei?: string;
   ghTeilantwort?: boolean;
+  /** Issues, die GitHub als NOT_FOUND meldet (gelöscht oder übertragen), mit Pfad auf den Alias wie die echte Antwort. */
+  nichtGefunden?: number[];
   statusFehler?: boolean;
   loescheFehler?: boolean;
   listeFehler?: boolean;
@@ -366,6 +369,7 @@ function baue(welt: Welt) {
       aufrufe.push("gh graphql");
       if (welt.ghFehler) throw new Error("kein Netz");
       const repository: Record<string, unknown> = {};
+      const notFound: unknown[] = [];
       for (const m of query.matchAll(/i(\d+): issue\(number: (\d+)\)/g)) {
         const i = welt.issues?.[Number(m[2])];
         const knoten = (namen: string[] = []) => ({ nodes: namen.map((name) => ({ name })) });
@@ -379,9 +383,11 @@ function baue(welt: Welt) {
               closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, ...(query.includes("headRefOid labels(first:30){ nodes{ name } }") ? { labels: knoten(p.labels) } : {}) })) },
             }
           : null;
+        if (welt.nichtGefunden?.includes(Number(m[2]))) notFound.push({ type: "NOT_FOUND", path: ["repository", `i${m[1]}`] });
       }
       const antwort = { data: { viewer: { login: "ich" }, repository } };
       if (welt.ghTeilantwort) throw Object.assign(new Error("Exit 1"), { stdout: JSON.stringify({ ...antwort, errors: [{ type: "NOT_FOUND" }] }) });
+      if (notFound.length > 0) throw Object.assign(new Error("Exit 1"), { stdout: JSON.stringify({ ...antwort, errors: notFound }) });
       return antwort;
     },
     zugewiesen: () => {
@@ -601,6 +607,74 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     const r = M.fuehreAus([], baue(welt).deps);
     assert.match(r.out, /BEHALTEN #1672: unbekannt/);
     assert.match(r.out, /AUFGERAEUMT #1628/);
+  });
+
+  test("ein gelöschtes Issue (NOT_FOUND mit Pfad) mit Worktree: GELÖSCHT mit Pfad und Weg, nichts entfernt, kein Exit 2 (L13)", () => {
+    const welt: Welt = { ...BELEG, issues: { ...BELEG.issues, 1530: null }, nichtGefunden: [1530] };
+    const { deps, aufrufe, geloescht } = baue(welt);
+    const r = M.fuehreAus([], deps);
+    const pfad = `/h/.claude/worktrees/${WTP}1530`;
+    assert.equal(r.code, 0);
+    assert.ok(r.out.includes(`GELÖSCHT #1530: Issue nicht mehr auffindbar (gelöscht oder übertragen), Worktree ${pfad} bleibt; Weg: git worktree remove ${pfad} && git branch -D ${BRP}1530-x nach Prüfung`), r.out);
+    assert.equal(r.out.includes("BEHALTEN #1530"), false);
+    assert.match(r.out, /AUFGERAEUMT #1628/);
+    assert.equal(aufrufe.some((a) => a === `git worktree remove ${pfad}`), false);
+    assert.deepEqual(geloescht, ["/locks/1628.json"]);
+  });
+
+  test("nichtGefundeneAliase: nur NOT_FOUND mit Pfad auf repository.<alias>; andere Arten, fremde Pfade, kurze Pfade und Fehlformen zählen nicht (L13)", () => {
+    const aus = (errors: unknown) => [...M.nichtGefundeneAliase({ errors })];
+    assert.deepEqual(aus([{ type: "NOT_FOUND", path: ["repository", "i0"] }, { type: "NOT_FOUND", path: ["repository", "i3"] }]), ["i0", "i3"]);
+    assert.deepEqual(aus([{ type: "RATE_LIMITED", path: ["repository", "i0"] }]), []);
+    assert.deepEqual(aus([{ type: "NOT_FOUND", path: ["viewer", "i0"] }, { type: "NOT_FOUND", path: ["repository"] }, { type: "NOT_FOUND" }, null]), []);
+    assert.deepEqual(aus(undefined), []);
+    assert.deepEqual([...M.nichtGefundeneAliase(null)], []);
+  });
+
+  test("meldet GitHub NOT_FOUND, liefert aber Daten zum Alias, gilt das Issue nicht als gelöscht", () => {
+    const welt: Welt = { ...BELEG, nichtGefunden: [1530] };
+    const r = M.fuehreAus([], baue(welt).deps);
+    assert.equal(r.out.includes("GELÖSCHT"), false);
+    assert.ok(r.out.includes("WIEDERAUFNAHME #1530"), r.out);
+  });
+
+  test("sind alle Kandidaten gelöscht (NOT_FOUND), ist das kein Exit 2 (anders als unbekannt)", () => {
+    const welt: Welt = { worktrees: [{ pfad: WTPFAD, head: OID, branch: `${BRP}1628-x` }], refs: [[`${BRP}1628-x`, sek("2026-10-16T00:21:00Z")]], nichtGefunden: [1628] };
+    const r = M.fuehreAus([], baue(welt).deps);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /GELÖSCHT #1628/);
+  });
+
+  test("ein gelöschtes Issue ohne Worktree: GELÖSCHT ohne Worktree-Weg", () => {
+    const welt: Welt = { locks: { "1672.json": lock() }, nichtGefunden: [1672] };
+    const r = M.fuehreAus([], baue(welt).deps);
+    assert.ok(r.out.includes("GELÖSCHT #1672: Issue nicht mehr auffindbar (gelöscht oder übertragen)"), r.out);
+    assert.equal(r.out.includes("Worktree"), false);
+  });
+
+  test("schlägt das Entfernen eines Claims fehl, laufen die übrigen weiter und die Meldung nennt den Fehlschlag (L18c)", () => {
+    const zweiter = `/h/.claude/worktrees/${WTP}1700`;
+    const welt: Welt = {
+      worktrees: [
+        { pfad: WTPFAD, head: OID, branch: `${BRP}1628-x` },
+        { pfad: zweiter, head: OID, branch: `${BRP}1700-x` },
+      ],
+      refs: [[`${BRP}1628-x`, sek("2026-10-16T00:21:00Z")], [`${BRP}1700-x`, sek("2026-10-16T00:21:00Z")]],
+      locks: { "1628.json": lock(), "1700.json": lock() },
+      issues: { 1628: { state: "CLOSED", prs: [{ number: 1, state: "MERGED", headRefOid: OID }] }, 1700: { state: "CLOSED", prs: [{ number: 2, state: "MERGED", headRefOid: OID }] } },
+    };
+    const { deps, aufrufe, geloescht } = baue(welt);
+    const echt = deps.git;
+    deps.git = (args: string[]) => {
+      if (args.join(" ") === `worktree remove ${WTPFAD}`) throw new Error("Zugriff verweigert");
+      return echt(args);
+    };
+    const r = M.fuehreAus([], deps);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /FEHLER #1628: git worktree remove scheiterte \(Zugriff verweigert\); Lock bleibt/);
+    assert.match(r.out, /AUFGERAEUMT #1700/);
+    assert.equal(aufrufe.includes(`git worktree remove ${zweiter}`), true);
+    assert.deepEqual(geloescht, ["/locks/1700.json"]);
   });
 
   test("gh-Fehler: Exit 2, nichts aufgeräumt", () => {

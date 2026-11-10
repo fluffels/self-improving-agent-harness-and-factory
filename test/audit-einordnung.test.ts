@@ -130,6 +130,20 @@ describe("bekannteGhsa", () => {
   });
 });
 
+describe("bekannteGhsa: Zeilenerkennung wie BEFUND_ZEILE_OFFEN (L15)", () => {
+  const g = (zeile: string) => [...A.bekannteGhsa({ kommentare: [zeile], wiedervorlagen: [], offeneTitel: [] })];
+  test("Sternchen und Einrückung zählen, wie bei jeder Sammelticket-Zeile", () => {
+    expect(g("* [ ] Audit: GHSA-1111-2222-3333 p")).toEqual(["ghsa-1111-2222-3333"]);
+    expect(g("   - [ ]   Audit: GHSA-1111-2222-3333 p")).toEqual(["ghsa-1111-2222-3333"]);
+  });
+  test("Negativfälle: ohne Leerraum nach der Klammer, andere Klammer, anderer Text und Fließtext zählen nicht", () => {
+    expect(g("- [ ]Audit: GHSA-1111-2222-3333 p")).toEqual([]);
+    expect(g("- [-] Audit: GHSA-1111-2222-3333 p")).toEqual([]);
+    expect(g("- [ ] Audit GHSA-1111-2222-3333 p")).toEqual([]);
+    expect(g("Text - [ ] Audit: GHSA-1111-2222-3333 p")).toEqual([]);
+  });
+});
+
 describe("vertrauteBodies (#1663)", () => {
   const owner = "fluffels";
   const k = (login: string | null, body: string, type = "User") => ({ body, user: login === null ? null : { login, type } });

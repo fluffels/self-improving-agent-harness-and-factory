@@ -1,7 +1,7 @@
 /* @harness-waechter: Codex-Konfiguration und ausschließlich lokale Setup-Dateien (#79). */
 import { afterEach, expect, test, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, win32 } from "node:path";
 import { homedir, tmpdir } from "node:os";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as raw from "../../scripts/codex-lib.mjs";
@@ -127,6 +127,11 @@ test("Ausgabeziel und seine Vorfahren dürfen keine Symlinks sein", () => {
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", join(link, "kind"), "--write"]).code).toBe(1);
   expect(existsSync(join(real, "kind"))).toBe(false);
 });
+test("pruefeAusgabe: ist das Ziel selbst die Bezugswurzel (Standard `repo = root`), wird ein Symlink als Ziel nicht verfolgt", () => {
+  const real = temp(), link = join(temp(), "link"); symlinkSync(real, link, "junction");
+  const p = raw as unknown as { pruefeAusgabe: (root: string, repo?: string) => string };
+  expect(() => p.pruefeAusgabe(link)).toThrow(/Symlink/);
+});
 test.each([".codex", ".codex/agents"])("auch ein innerer Ziel-Symlink %s wird nicht verfolgt", p => {
   const root = temp(), real = temp(); mkdirSync(dirname(join(root, p)), { recursive: true }); symlinkSync(real, join(root, p), "junction");
   expect(() => c.schreibeSetup(root, { ".codex/agents/probe.toml": "x" })).toThrow(/Symlink/);
@@ -167,4 +172,12 @@ test("Regex-Endgrenze lässt keinen Zeilenumbruch im Zielpfad durch", () => {
 test("Setup-Aufruffehler schließen vor I/O", () => {
   expect(lauf(temp(), []).code).toBe(2);
   expect(lauf(temp(), ["--langfuse-url", endpoint, "--falsch"]).code).toBe(2);
+});
+test("gemeinsamerVorfahre: nächster gemeinsamer Ordner; zwei Windows-Laufwerke enden an der Wurzel statt endlos zu laufen", () => {
+  const g = c as unknown as { gemeinsamerVorfahre: (a: string, b: string, pm?: typeof win32) => string };
+  expect(g.gemeinsamerVorfahre("C:\\w\\aus", "C:\\w\\repo", win32)).toBe("C:\\w");
+  expect(g.gemeinsamerVorfahre("C:\\w\\aus", "D:\\repo", win32)).toBe("C:\\");
+  expect(g.gemeinsamerVorfahre("/x/y", "/x/z/q")).toBe("/x");
+  expect(g.gemeinsamerVorfahre("/x/y", "/x/y")).toBe("/x/y");
+  expect(g.gemeinsamerVorfahre("/x/y", "/x")).toBe("/x");
 });

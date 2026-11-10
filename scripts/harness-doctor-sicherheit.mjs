@@ -4,7 +4,9 @@
  * Jede Quelle ist `{ wert }` (Antwort des Endpunkts) oder `{ fehler: "<erste Fehlerzeile>", fix? }`. `pruefeSicherheit` liefert immer genau
  * acht Ergebnisse in der Reihenfolge von `SICHERHEIT_PUNKTE`, nie weniger und nie still grün: ein Fehler des Endpunkts (403, 404, Netz) und ein
  * fehlendes oder unbekanntes Feld ergeben „nicht prüfbar“ (`ok: false, nichtPruefbar: true`), nur ein belegter Wert ergibt OK oder LÜCKE.
- * Lücken nennen den Klickpfad in den Einstellungen, nie einen schreibenden `gh`-Befehl: `--einrichten` ändert diese Punkte nicht.
+ * Lücken nennen den Klickpfad in den Einstellungen; PVR und SHA-Pinning nennen zusätzlich den schreibenden `gh`-Befehl „nach Pre-Flight-Freigabe“ (nur Text, der Doctor führt ihn nie aus): `--einrichten` ändert diese Punkte nicht.
+ * Grenze (Persönliches Konto): `Non-Provider-Patterns` und `Validity Checks` gehören zu GitHub Secret Protection; `disabled` bei `owner.type` `User` ist `OK` mit Hinweis „nicht angeboten“, bei einer Organisation eine Lücke („GitHub Secret Protection nötig“).
+ * Code-Scanning vergleicht neben dem Werkzeug die Schwellen (`sicherheitsSchwelle`/`alertSchwelle` des Spiegels gegen `security_alerts_threshold`/`alerts_threshold` der Live-Regel); der Abgleich des gesamten Rulesets (Name, Bypass-Akteure) steht in harness-doctor-ruleset.mjs.
  * Grenze: `secret_scanning_validity_checks` steht nicht in der REST-Doku von „Get a repository“; die Live-Probe mit Admin-Recht zeigt ihn; fehlt er in einem Projekt, ist der Punkt nicht prüfbar.
  */
 
@@ -31,6 +33,8 @@ export const LINK_SICHERHEIT = {
 
 const FIX_FEHLER = "mit einem Konto mit Admin-Recht prüfen (gh auth status), dann erneut prüfen";
 const FIX_FELD = "Funktion im Plan nicht verfügbar oder Feld unbekannt: in den Einstellungen von Hand prüfen";
+/** Die eine Zuordnung Spiegel-Feld → Feld der Live-Regel für die Schwellen eines Code-Scanning-Werkzeugs (Sicherheits- und Ruleset-Punkt lesen sie hier). */
+export const SCHWELLEN_FELDER = [["sicherheitsSchwelle", "security_alerts_threshold"], ["alertSchwelle", "alerts_threshold"]];
 export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
 
 const luecke = (punkt, befund, fix) => lueckeRoh(punkt, befund, fix, LINK_SICHERHEIT[punkt]);
@@ -38,6 +42,10 @@ const luecke = (punkt, befund, fix) => lueckeRoh(punkt, befund, fix, LINK_SICHER
 const nichtPruefbar = (punkt, grund, fix = FIX_FELD, link = LINK_SICHERHEIT[punkt]) => nichtPruefbarRoh(punkt, grund, fix, link);
 /** Quelle fehlgeschlagen; `quelle.fix` (etwa „erst den Token-Punkt beheben“) hat Vorrang vor `FIX_FEHLER`. */
 const ausFehler = (punkt, was, quelle, link = LINK_SICHERHEIT[punkt]) => ausFehlerRoh(punkt, was, quelle, FIX_FEHLER, link);
+
+/** Diese zwei Schalter gehören zu GitHub Secret Protection: Repos eines persönlichen Kontos (`owner.type` `User`) bekommen sie nicht angeboten, `disabled` ist dort kein Mangel. */
+const NUR_MIT_SECRET_PROTECTION = new Set(["Non-Provider-Patterns", "Validity Checks"]);
+const HINWEIS_PERSOENLICH = "für Repos eines persönlichen Kontos nicht angeboten";
 
 /** Die fünf Punkte aus `security_and_analysis`: Schlüssel und Klickpfad der Lücke. */
 const SECURITY_AND_ANALYSIS = {
@@ -58,6 +66,10 @@ export function analysePunkt(punkt, repo) {
   if (sa === null || typeof sa !== "object") return nichtPruefbar(punkt, "security_and_analysis fehlt in der Antwort (sichtbar nur mit Admin-Recht)", FIX_FEHLER);
   const status = sa[schluessel]?.status;
   if (status === "enabled") return gut(punkt);
+  if (status === "disabled" && NUR_MIT_SECRET_PROTECTION.has(punkt)) {
+    if (repo.wert?.owner?.type === "User") return gut(punkt, HINWEIS_PERSOENLICH);
+    return luecke(punkt, `${schluessel} ist ausgeschaltet`, `GitHub Secret Protection nötig; dann ${fix}`);
+  }
   if (status === "disabled") return luecke(punkt, `${schluessel} ist ausgeschaltet`, fix);
   return nichtPruefbar(punkt, `${schluessel} fehlt in security_and_analysis oder hat einen unbekannten Status`);
 }
@@ -71,6 +83,17 @@ function boolPunkt(punkt, quelle, { was, feld, aus, fix }) {
   return nichtPruefbar(punkt, `${feld} fehlt in der Antwort von ${was}`);
 }
 
+/** Abweichende Schwellen je Werkzeug, das Spiegel und Live-Regel nennen: Texte `<tool>: <feld> <live> statt <soll>`; ein Spiegel ohne Schwelle prüft sie nicht. */
+function schwellenAbweichungen(regeln, spiegel) {
+  const live = regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? []);
+  return (spiegel?.codeScanning ?? []).flatMap((e) => {
+    const l = live.find((w) => w.tool === e.tool);
+    if (l === undefined) return [];
+    return SCHWELLEN_FELDER.filter(([soll, ist]) => e[soll] !== undefined && l[ist] !== e[soll])
+      .map(([soll, ist]) => `${e.tool}: ${ist} ${l[ist] ?? "nicht gesetzt"} statt ${e[soll]}`);
+  });
+}
+
 function codeScanningPunkt(regeln, { spiegel, branch, privat }) {
   const punkt = "Code-Scanning";
   const grenze = privat ? GRENZE_PRIVAT : "";
@@ -82,6 +105,8 @@ function codeScanningPunkt(regeln, { spiegel, branch, privat }) {
   const fehlend = soll.filter((w) => !live.includes(w));
   if (fehlend.length) return luecke(punkt, `Code-Scanning ${fehlend.map((w) => `"${w}"`).join(", ")} fehlt auf ${branch}${grenze}`, `Regel in ${rs} ergänzen (Pre-Flight)`);
   if (soll.length === 0 && live.length === 0) return luecke(punkt, `keine Code-Scanning-Regel auf ${branch}${grenze}`, `Code-Scanning-Regel in ${rs} ergänzen (Pre-Flight)`);
+  const abweichend = schwellenAbweichungen(regeln.wert, spiegel);
+  if (abweichend.length) return luecke(punkt, `Code-Scanning-Schwelle weicht vom Spiegel ab auf ${branch} (${abweichend.join("; ")})${grenze}`, `Schwelle in ${rs} an den Spiegel angleichen oder den Spiegel nachziehen (Pre-Flight)`);
   if (soll.length === 0) return gut(punkt, "der Ruleset-Spiegel nennt kein codeScanning: das Werkzeug dort nachtragen");
   return gut(punkt);
 }
@@ -92,9 +117,9 @@ function codeScanningPunkt(regeln, { spiegel, branch, privat }) {
  */
 export function pruefeSicherheit({ repo, actions, regeln, pvr, spiegel, branch = "main", privat = false }) {
   const ergebnis = {
-    PVR: () => boolPunkt("PVR", pvr, { was: "private-vulnerability-reporting", feld: "enabled", aus: "Private Vulnerability Reporting ist ausgeschaltet", fix: "Settings › Advanced Security: Private vulnerability reporting aktivieren" }),
+    PVR: () => boolPunkt("PVR", pvr, { was: "private-vulnerability-reporting", feld: "enabled", aus: "Private Vulnerability Reporting ist ausgeschaltet", fix: "Settings › Advanced Security: Private vulnerability reporting aktivieren, oder nach Pre-Flight-Freigabe: gh api -X PUT repos/<repo>/private-vulnerability-reporting" }),
     "Code-Scanning": () => codeScanningPunkt(regeln, { spiegel, branch, privat }),
-    "SHA-Pinning": () => boolPunkt("SHA-Pinning", actions, { was: "actions/permissions", feld: "sha_pinning_required", aus: "Actions müssen nicht an einen vollen Commit-SHA gepinnt sein", fix: "Settings › Actions › General: Require actions to be pinned to a full-length commit SHA aktivieren" }),
+    "SHA-Pinning": () => boolPunkt("SHA-Pinning", actions, { was: "actions/permissions", feld: "sha_pinning_required", aus: "Actions müssen nicht an einen vollen Commit-SHA gepinnt sein", fix: `Settings › Actions › General: Require actions to be pinned to a full-length commit SHA aktivieren, oder nach Pre-Flight-Freigabe: gh api -X PUT repos/<repo>/actions/permissions -F enabled=true -f allowed_actions=${typeof actions.wert?.allowed_actions === "string" ? actions.wert.allowed_actions : "<Ist-Wert aus der Antwort>"} -F sha_pinning_required=true` }),
   };
   return SICHERHEIT_PUNKTE.map((p) => (ergebnis[p] ? ergebnis[p]() : analysePunkt(p, repo)));
 }
