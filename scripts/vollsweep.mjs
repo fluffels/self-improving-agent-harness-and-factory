@@ -39,6 +39,7 @@ const NODE_DATEI = /\.(?:mjs|cjs|js)$/;
 const GRUPPEN_PRAEFIX = /^\((?:\?(?:<[=!]|[:=!]|<[^>]*>))?/;
 const KLASSEN_ELEMENT = /\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^\\]/gs;
 const GRENZEN = /^\{(\d+)(?:(,)(\d*))?\}/;
+const KOMMENTARZEILE = /^\s*(?:\/\/|\/\*|\*)/;
 const WORKTREE_SEGMENT = /\/\.claude\/worktrees\/[^/]+/;
 
 // ───────────────────────── Regex-Literale ─────────────────────────
@@ -172,7 +173,7 @@ export function regexLiterale(text) {
   const funde = [];
   let offset = 0;
   text.split("\n").forEach((zeile, k) => {
-    if (!/^\s*(?:\/\/|\/\*|\*)/.test(zeile)) {
+    if (!KOMMENTARZEILE.test(zeile)) {
       for (const m of zeile.matchAll(REGEX_LITERAL)) {
         const literal = m[0].slice(m[1].length);
         const ende = literal.lastIndexOf("/");
@@ -249,7 +250,7 @@ export function planeMutationen(text, zeilen) {
   if (zeilen) {
     let offset = 0;
     text.split("\n").forEach((zeile, k) => {
-      if (innen(k + 1)) for (const b of mutationenBedingung(zeile)) plan.push({ von: offset + b.von, bis: offset + b.bis, such: b.such, ersatz: b.ersatz, ungueltig: false });
+      if (innen(k + 1) && !KOMMENTARZEILE.test(zeile)) for (const b of mutationenBedingung(zeile)) plan.push({ von: offset + b.von, bis: offset + b.bis, such: b.such, ersatz: b.ersatz, ungueltig: false });
       offset += zeile.length + 1;
     });
   }

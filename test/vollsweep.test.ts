@@ -1,5 +1,7 @@
 /* Vollsweep (factory#280 L5/L7): Mutationen für Regex-Literale und Bedingungen, Ausweis syntaxungültiger Mutationen, Runner mit eingespritztem fs/spawn.
  * Jede Mutationsart der geschlossenen Liste hat einen Positiv- und einen Negativfall (Maskierung, Klasse, Gruppenpräfix). */
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as roh from "../scripts/vollsweep.mjs";
@@ -44,6 +46,13 @@ describe("regexLiterale", () => {
     expect(l).toHaveLength(1);
     expect(l[0]).toMatchObject({ quelle: "a+", flags: "gi" });
     expect(text.slice(l[0]!.von, l[0]!.bis)).toBe("/a+/gi");
+    expect(l[0]!.zeile).toBe(1);
+  });
+  test("Zeilennummer und Offset stimmen in späteren Zeilen; Kommentarzeilen (//, /*, *) bleiben außen", () => {
+    const text = "x();\n// a = /c1/;\n  /* a = /c2/;\n * a = /c3/;\nconst r = /ok/;";
+    const l = regexLiterale(text);
+    expect(l.map((x) => [x.zeile, x.quelle])).toEqual([[5, "ok"]]);
+    expect(text.slice(l[0]!.von, l[0]!.bis)).toBe("/ok/");
   });
 });
 
@@ -96,6 +105,25 @@ describe("mutationenRegex", () => {
     expect(quellen("(?<n>a)")).toEqual([]);
   });
 
+  test("Gruppenpräfixe (?:, ?=, ?!, ?<=, ?<!, ?<name>) gehören zur Gruppe: nur die zwei Zweig-Streichungen, kein Quantor-Fund", () => {
+    for (const auf of ["(", "(?:", "(?=", "(?!", "(?<=", "(?<!", "(?<n>"]) {
+      expect(quellen(`x${auf}a|b)y`), auf).toEqual([`x${auf}a)y`, `x${auf}b)y`].sort());
+    }
+  });
+
+  test("Klassenelemente: Hex-, Unicode- und Zeichen-Escapes sind je ein Element (Groß-/Kleinschreibung der Ziffern, feste Länge)", () => {
+    const elemente = ["\\x4a", "\\x4A", "\\x41", "\\u00e9", "\\u00E9", "\\u0041", "c"];
+    const erwartet = [`[^${elemente.join("")}]`, ...elemente.map((_, k) => `[${elemente.filter((__, j) => j !== k).join("")}]`)];
+    expect(quellen(`[${elemente.join("")}]`)).toEqual(erwartet.sort());
+  });
+
+  test("Quantor-Grenzen: Null-Grenzen entfallen, `{x}` und `{,3}` sind keine Quantoren, ein späteres {2} verschiebt nichts", () => {
+    expect(quellen("a{0,0}")).toEqual(["a{0,1}", "a{1,0}"].sort());
+    expect(quellen("a{0}")).toEqual(["a{1}"]);
+    expect(quellen("a{,3}")).toEqual([]);
+    expect(quellen("a{x}b{2}")).toEqual(["a{x}b{1}", "a{x}b{3}"].sort());
+  });
+
   test("Flags: jedes einmal entfernt, Quelle unverändert", () => {
     expect(flagsVon("a", "gi")).toEqual(["g", "i"]);
     expect(flagsVon("a", "")).toEqual([]);
@@ -125,6 +153,19 @@ describe("mutationenBedingung", () => {
     expect(ersetzt("  const x = 1;")).toEqual([]);
     expect(ersetzt("  if (a &&")).toEqual([]);
     expect(ersetzt("  notif (a) b();")).toEqual([]);
+    expect(ersetzt("  $if (a) b();")).toEqual([]);
+  });
+  test("Abstand: if(b) ohne und if  (b) mit mehreren Leerzeichen", () => {
+    expect(ersetzt("if(a) b();")).toEqual(["if (true) b();", "if (false) b();"]);
+    expect(ersetzt("if   (a) b();")).toEqual(["if (true) b();", "if (false) b();"]);
+  });
+  test("Klammern in Strings zählen nicht (', \", `, auch mit Escape), mehrere if in einer Zeile", () => {
+    expect(mutationenBedingung(String.raw`if (x === ")") y();`)[0]!.such).toBe(String.raw`if (x === ")")`);
+    expect(mutationenBedingung("if (x === ')') y();")[0]!.such).toBe("if (x === ')')");
+    expect(mutationenBedingung("if (x === `)`) y();")[0]!.such).toBe("if (x === `)`)");
+    expect(mutationenBedingung(String.raw`if (x === "\")") y();`)[0]!.such).toBe(String.raw`if (x === "\")")`);
+    expect(mutationenBedingung(String.raw`if (x === "\\") y();`)[0]!.such).toBe(String.raw`if (x === "\\")`);
+    expect(mutationenBedingung("if (a) { if (b) c(); }").map((m) => m.such)).toEqual(["if (a)", "if (a)", "if (b)", "if (b)"]);
   });
 });
 
@@ -221,6 +262,61 @@ describe("lauf", () => {
     expect(mit.out).toContain("scripts/x.mjs | if (a) → if (true) | test/x.test.ts | rot");
     expect(mit.out).toContain("scripts/x.mjs | if (a) → if (false) | test/x.test.ts | grün");
     expect(mit.out).not.toMatch(/\/\^a\+\$\//);
+  });
+
+  test("ein if in einer Kommentarzeile wird nicht mutiert", () => {
+    const a = aufbau();
+    a.dateien[DATEI] = QUELLE.replace("const a = 1;", "// if (a) wird erklärt\n * if (b) auch");
+    const roh0 = a.dateien[DATEI];
+    const orig = a.deps.spawn;
+    a.deps.spawn = (cmd, args, opt) => (cmd === "git" ? orig(cmd, args, opt) : { status: a.dateien[DATEI] === roh0 ? 0 : 1, stdout: "", stderr: "" });
+    const r = lauf(argv("--zeilen", "1-5"), a.deps);
+    expect(r.out).toMatch(/^vollsweep: 5 Mutationen/);
+    expect(r.out).not.toMatch(/if \(b\)|wird erklärt/);
+  });
+
+  test("--wurzel relativ, aber mit Worktree-Segment: Exit 2 wegen „absolut“", () => {
+    const r = lauf(["--wurzel", "rel/.claude/worktrees/sih-1", "--datei", "scripts/x.mjs", "--test", "t"], aufbau().deps);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/absolut/);
+  });
+
+  test("--zeilen: a und a-b gelten, alles andere (3-, x3, 3x, 3-4x, 0, 5-2) ist Exit 2", () => {
+    for (const ok of ["2", "2-3"]) expect(lauf(argv("--zeilen", ok), aufbau().deps).code, ok).toBe(0);
+    for (const schlecht of ["3-", "x3", "3x", "3-4x", "0", "5-2", "4-x"]) expect(lauf(argv("--zeilen", schlecht), aufbau().deps).code, schlecht).toBe(2);
+  });
+
+  test("eine ungültige Regex-Mutation wird nie geschrieben", () => {
+    const a = aufbau();
+    a.dateien[DATEI] = "const q = /a{2,2}/;\n";
+    const geschrieben: string[] = [];
+    const schreibe = a.deps.schreibe;
+    a.deps.schreibe = (p, t) => {
+      geschrieben.push(t);
+      schreibe(p, t);
+    };
+    const orig = a.deps.spawn;
+    a.deps.spawn = (cmd, args, opt) => (cmd === "git" ? orig(cmd, args, opt) : { status: 0, stdout: "", stderr: "" });
+    lauf(argv(), a.deps);
+    expect(geschrieben.some((t) => t.includes("{2,1}") || t.includes("{3,2}"))).toBe(false);
+    expect(geschrieben.some((t) => t.includes("{1,2}"))).toBe(true);
+  });
+
+  test("`node --check` nur für .mjs, .cjs und .js (nicht .ts, nicht .mjs.ts)", () => {
+    const check = (name: string) => {
+      const a = aufbau({ datei: `${W}/scripts/${name}` });
+      lauf(["--wurzel", W, "--datei", `scripts/${name}`, "--test", "test/x.test.ts"], a.deps);
+      return a.aufrufe.some((c) => c.includes("--check"));
+    };
+    expect([check("a.mjs"), check("a.cjs"), check("a.js")]).toEqual([true, true, true]);
+    expect([check("a.ts"), check("a.mjs.ts"), check("a.json")]).toEqual([false, false, false]);
+  });
+
+  test("Prozess-Start: ohne Argumente Exit 2 mit Aufrufzeile auf stderr, nichts auf stdout", () => {
+    const r = spawnSync("node", [fileURLToPath(new URL("../scripts/vollsweep.mjs", import.meta.url))], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Aufruf: node scripts\/vollsweep\.mjs --wurzel/);
+    expect(r.stdout).toBe("");
   });
 
   test("ohne --zeilen werden alle Regex-Literale der Datei gesweept", () => {
