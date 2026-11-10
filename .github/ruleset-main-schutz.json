@@ -2,11 +2,12 @@
   "$kommentar": "Spiegel des Rulesets main-schutz (Server-Konfiguration, nicht in Git). Quelle für den Required-Check-Shadowing-Wächter (test/harness/required-check-shadowing.test.ts) und das Leitplanken-Diagramm (docs/diagramme/leitplanken-schichten.mmd). Ändert sich das Ruleset, hier im selben PR nachziehen. Abgleich mit der Wirklichkeit: node scripts/harness-doctor.mjs --pruefen, Punkt Ruleset-Spiegel (liest die ID aus dem Feld id dieses Spiegels und vergleicht name, requiredChecks, codeScanning mit beiden Schwellen und bypassActors; braucht Admin-Recht, darum nur lokal und nicht in der CI; ohne Admin-Recht NICHT PRÜFBAR).",
   "id": 25905018,
   "name": "main-schutz",
-  "stand": "2026-10-26",
+  "stand": "2026-11-10",
   "requiredChecks": [
     "Tests, Typecheck & Builds",
     "Security-Audit (npm audit)",
-    "PR-Text interne Bezuege pruefen"
+    "PR-Text interne Bezuege pruefen",
+    "Probe-Erstbezug (Erstbezug mit verifyKompakt)"
   ],
   "codeScanning": [
     { "tool": "CodeQL", "sicherheitsSchwelle": "high_or_higher", "alertSchwelle": "errors" }

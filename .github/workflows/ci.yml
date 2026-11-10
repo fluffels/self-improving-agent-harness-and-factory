@@ -107,8 +107,8 @@ jobs:
 
   # Probe-Erstbezug (factory#234): baut im Runner-Temp einen Fixture-Bezieher (Fixture-Projekt, AGENTS.md mit Kern-Markern und Projekt-Block in Größe von PROJEKT_BLOCK_RAUM), synct ihn aus einem lokalen Klon
   # dieses Commits mit lokalem Tag, fährt die mechanischen Update-Schritte und das volle verifyKompakt. Jeder Fund ist rot (Kern-Budget, tote Kern-Verweise): die Fabrik findet sie selbst, auch ohne
-  # bekannten Bezieher. Kein continue-on-error: sonst bliebe der Lauf grün und der Tag-Takt (ciZustand) sähe den Fund nicht. Kein Required Check (Ruleset-Änderung ist ein Pre-Flight-Stopp):
-  # Rot wirkt über den Blocker im Tag-Ticket und den Alarm auf main. Der Job schreibt nirgends (nur Lesen, nur ein lokaler Klon im Temp-Ordner). Grenze: ersetzt keinen echten Bezieher.
+  # bekannten Bezieher. Kein continue-on-error: sonst bliebe der Lauf grün und der Tag-Takt (ciZustand) sähe den Fund nicht. Required Check im Ruleset main-schutz (factory#263):
+  # Rot sperrt den Merge und wirkt zusätzlich über den Blocker im Tag-Ticket und den Alarm auf main. Der Job schreibt nirgends (nur Lesen, nur ein lokaler Klon im Temp-Ordner). Grenze: ersetzt keinen echten Bezieher.
   probe-erstbezug:
     name: Probe-Erstbezug (Erstbezug mit verifyKompakt)
     runs-on: ubuntu-latest
