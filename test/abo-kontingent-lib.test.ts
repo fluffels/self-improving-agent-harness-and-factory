@@ -275,7 +275,7 @@ describe("ladeAboKontingent und Bericht", () => {
     expect(aufrufe).toHaveLength(1);
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
-    const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0]!, ticket: 100 + i, pr: 500 + i }));
+    const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0], ticket: 100 + i, pr: 500 + i }));
     const aufrufe: string[][] = [];
     const gh = (a: string[]) => {
       aufrufe.push(a);
