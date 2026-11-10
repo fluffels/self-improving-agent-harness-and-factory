@@ -83,7 +83,7 @@ afterEach(() => {
 
 const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean; relativ?: boolean } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; lokal?: ((a: { rootDir: string; config: unknown }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean; relativ?: boolean } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   opt.vorbereiten?.(root);
@@ -119,6 +119,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     gh,
     env: opt.env ?? {},
     ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
+    ...(opt.lokal === "echt" ? {} : { lokal: opt.lokal ?? (() => []) }), // "echt": Default von main (Git-Hooks, Board-Ansicht); sonst leer, damit kein Test das echte git liest
     ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
     out: (s: string) => r.out.push(s),
@@ -1015,5 +1016,37 @@ describe("Punkt Ruleset-Spiegel (factory#247 L3): nur lokales --pruefen", () => 
     const r = lauf({ [ENDPUNKT]: LIVE }, { spiegel: MIT_ID, argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
     assert.ok(!r.aufrufe.includes(ENDPUNKT));
     assert.equal(zeile(r), undefined);
+  });
+});
+
+describe("lokale Punkte Git-Hooks und Board-Ansicht (factory#247 L1, L7, L9): nur --pruefen", () => {
+  test("--pruefen reicht Prüf-Root und geladene Config an `lokal`, seine Punkte stehen in der Ausgabe, eine Lücke macht Exit 1", () => {
+    const gesehen: { rootDir: string; config: { repo?: string } }[] = [];
+    const lokal = (a: { rootDir: string; config: unknown }) => (gesehen.push(a as (typeof gesehen)[number]), [{ punkt: "Git-Hooks", ok: false, befund: "nicht gesetzt", fix: "git config core.hooksPath .githooks" }]);
+    const r = lauf({}, { lokal });
+    assert.equal(gesehen.length, 1);
+    assert.equal(typeof gesehen[0].rootDir, "string");
+    assert.equal(gesehen[0].config.repo, CONFIG.repo);
+    assert.ok(r.out.includes("LÜCKE Git-Hooks: nicht gesetzt Fix: git config core.hooksPath .githooks"), r.out.join("\n"));
+    assert.equal(r.code, 1);
+  });
+  test("--einrichten ruft `lokal` nicht auf", () => {
+    let aufrufe = 0;
+    lauf({}, { lokal: () => (aufrufe++, []), argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
+    assert.equal(aufrufe, 0);
+  });
+  test("pruefLauf ohne `lokal` (Wochenlauf) hat weder Git-Hooks noch Board-Ansicht", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    const { ergebnis } = (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null });
+    assert.deepEqual(ergebnis.filter((e) => e.punkt === "Git-Hooks" || e.punkt === "Board-Ansicht"), []);
+  });
+  test("Standard-`lokal` von main: Zeile Git-Hooks und eine GraphQL-Abfrage je Board mit projectId", () => {
+    const r = lauf({}, { lokal: "echt" });
+    assert.ok(r.out.some((z) => z.includes(" Git-Hooks")), r.out.join("\n"));
+    assert.ok(r.out.some((z) => z.includes(" Board-Ansicht")), r.out.join("\n"));
+    assert.ok(r.aufrufe.some((a) => a.startsWith("api graphql")), r.aufrufe.join("\n"));
   });
 });
