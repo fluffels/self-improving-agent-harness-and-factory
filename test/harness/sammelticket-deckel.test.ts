@@ -50,7 +50,7 @@ const ZIEHT_REST_REIN = [
   /Nachzügler setzt du selbst um/,
 ];
 const RESTWORT = /\bRest\b|\bREST\b|übrigen? Zeilen|ganze Ticket|Zeilen des Tickets|Dazugekommen|Nachzügler/;
-const PR_ZIEL = /(?:in|im|ins) (?:diesem|diesen|dem|den|demselben|denselben|selben|selbe|gleichen|einem|einen) PR|(?:Teil|Bestandteil) (?:desselben|dieses) PR|\bPR (?:mit|um)\b|mit in (?:diesen|diesem|denselben)|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
+const PR_ZIEL = /(?:in|im) (?:diesem|diesen|dem|den|demselben|denselben|selben|einem|einen) PR|(?:Teil|Bestandteil) (?:desselben|dieses) PR|\bPR (?:mit|um)\b|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
 const VERNEINT = /\bnie\b|\bnicht\b/;
 
 /** Allgemeine Klausel-Regel: eine Klausel (getrennt an . ; , : und Klammern), die den Rest nennt UND einen PR als Ziel, ohne Verneinung. */
@@ -150,6 +150,10 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "Setze den Rest PR um",
       "Die Linie zieht den Rest in diesen PR",
       "Das nichtig lässt den Rest in diesen PR",
+      "Die niedrige Priorität zieht den Rest in diesen PR",
+      "Vornicht zieht den Rest in diesen PR",
+      "Der Rest kommt in den PR",
+      "Der Rest bleibt in dem PR",
     ]) {
       assert.ok(ziehtRestInDenPR(weg), weg);
     }
