@@ -250,7 +250,7 @@ describe("fehlgeschlagene Testdateien im Bericht (#1663 L8)", () => {
     assert.ok(b.indexOf("fehlgeschlagene Testdateien") < b.indexOf("gekürzt"), "die Zeile steht vor dem gekürzten Block");
   });
   test("roter Schritt test ohne erkennbare Datei sagt das (statt zu schweigen); andere rote Schritte bekommen die Zeile nicht", () => {
-    assert.match(vl.bericht([{ name: "test", ok: false, exit: 1, ms: 1, ausgabe: "Absturz" }]), /keine Testdatei in der Ausgabe erkannt/);
+    assert.match(vl.bericht([{ name: "test", ok: false, exit: 1, ms: 1, ausgabe: "Absturz" }]), /keine Testdatei in der Ausgabe erkannt.*node scripts\/gate-befehl\.mjs verify\)/);
     assert.doesNotMatch(vl.bericht([{ name: "lint", ok: false, exit: 1, ms: 1, ausgabe: " FAIL  test/a.test.ts > x" }]), /Testdatei/);
     assert.doesNotMatch(vl.bericht([{ name: "test", ok: true, ms: 1 }]), /Testdatei/);
   });
