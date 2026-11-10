@@ -489,6 +489,57 @@ describe("Workflow-Auslöser", () => {
       expect(p.befund).toContain("A, B");
       expect(p.befund).toContain("„C“");
     });
+    const wf = (rest: string) => eigen(`name: X\non:\n  workflow_run:\n    workflows: ${rest}\n`);
+    const nicht = (text: Workflow) => {
+      const p = ausloeser([ci("Build"), text]);
+      expect(p.nichtPruefbar, JSON.stringify(text.text)).toBe(true);
+      return p;
+    };
+    test("Flow-Liste ohne Quotes: jeder Eintrag zählt, der letzte auch; leere Einträge entfallen", () => {
+      const p = ausloeser([ci("Build"), wf("[CI, Weg]")]);
+      expect(p.befund).toContain("„CI“");
+      expect(p.befund).toContain("„Weg“");
+      expect(ausloeser([ci("CI"), wf("[CI]")]).ok).toBe(true);
+      expect(ausloeser([ci("CI"), wf("[CI,, '']")]).ok).toBe(true);
+      expect(ausloeser([ci("CI"), wf("[]")]).ok).toBe(true);
+    });
+    test("unlesbare Einträge der Flow-Liste: Text nach dem Quote, unbeendetes Quote, Alias, Mapping-Eintrag", () => {
+      for (const rest of ['["CI" x]', '["CI]', "[*a]", "[a: b]", "[CI, &a Weg]"]) nicht(wf(rest));
+    });
+    test("Flow-Liste: ein Anführungszeichen mitten im Eintrag und einfaches Quote mit Komma", () => {
+      expect(ausloeser([ci("Build"), wf("['A, B', C]")]).befund).toContain("A, B");
+    });
+    test("Block-Liste: Eintrag mit Kommentar zählt, Alias, leerer, verschachtelter und nur-Kommentar-Eintrag sind nicht prüfbar", () => {
+      expect(ausloeser([ci("CI"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - CI # Kommentar\n")]).ok).toBe(true);
+      for (const eintrag of ["- *a", "-", "- - x", "- # nur Kommentar"]) nicht(eigen(`name: X\non:\n  workflow_run:\n    workflows:\n      ${eintrag}\n`));
+    });
+    test("Block-Liste eingerückt, danach ein Folgeschlüssel auf Höhe von `workflows`", () => {
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n      - Weg\n    types: [completed]\n")]).befund).toContain("Weg");
+    });
+    test("Block-Liste weniger eingerückt als `workflows:`: nicht prüfbar statt als Eintrag gelesen", () => {
+      nicht(eigen("name: X\non:\n  workflow_run:\n    workflows:\n  - Weg\n"));
+    });
+    test("`workflows` als einzelner Skalar oder leer", () => {
+      expect(ausloeser([ci("Build"), wf("Weg")]).befund).toContain("Weg");
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows:\n    types: [completed]\n")]).ok).toBe(true);
+    });
+    test("`workflow_run` als Liste oder Flow-Mapping: nicht prüfbar, leer: OK", () => {
+      nicht(eigen("name: X\non:\n  workflow_run:\n    - x\n"));
+      nicht(eigen("name: X\non:\n  workflow_run: { workflows: [CI] }\n"));
+      expect(ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n")]).ok).toBe(true);
+    });
+    test("`on:` als Block-Liste, leer oder Skalar: OK; als Anker, Block-Skalar oder doppelt: nicht prüfbar", () => {
+      for (const on of ["on:\n  - push\n", "on:\n", "on: push\n", "on: [workflow_run]\n"]) expect(ausloeser([ci("Build"), eigen(`name: X\n${on}`)]).ok, on).toBe(true);
+      for (const on of ["on: &a\n  push:\n", "on: |\n  x\n", "on: *a\n", "on:\n  push:\non:\n  push:\n"]) nicht(eigen(`name: X\n${on}`));
+    });
+    test("BOM und Dokumentstart werden gelesen, Dokumentstart mit Inhalt nicht", () => {
+      expect(ausloeser([ci("Build"), eigen("﻿---\nname: X\non:\n  workflow_run:\n    workflows: [Weg]\n")]).befund).toContain("Weg");
+      nicht(eigen("--- x\nname: X\n"));
+    });
+    test("leerer Workflow-Name zählt nicht als Name", () => {
+      expect(ausloeser([eigen("name:\non: push\n"), wf("['']")]).ok).toBe(true);
+      expect(ausloeser([eigen("name: ''\non: push\n"), wf("[Leer]")]).ok).toBe(false);
+    });
     test("die Zeile bleibt eine Lücke, wenn alle Dateien lesbar sind (kein Aufweichen)", () => {
       const p = ausloeser([ci("Build"), fest('["CI"]')]);
       expect(p.ok).toBe(false);

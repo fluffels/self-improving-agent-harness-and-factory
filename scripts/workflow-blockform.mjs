@@ -381,7 +381,7 @@ function flowListe(rest, k) {
       const r = quoteStueck(s.slice(1), s[0] === '"', k);
       if (!r.zu || !/^[ \t]*(,|$)/.test(r.rest)) throw nl(k, "unlesbarer Eintrag in der Flow-Liste");
       namen.push(r.out.trim());
-      s = r.rest.replace(/^[ \t]*,?/, "");
+      s = r.rest; // ein führendes Komma ergibt unten einen leeren Eintrag, den `blockformAusloeser` verwirft
       continue;
     }
     const i = s.indexOf(",");
@@ -424,19 +424,20 @@ function workflowRunBlock(c, z, rest, namen) {
   });
 }
 
-/** Der Wert von `on`: als Block-Mapping wird `workflow_run` gelesen; ein Skalar, eine Flow-Liste oder eine Block-Liste trägt keinen Auslöser mit `workflows`, ein Flow-Mapping wäre nicht lesbar. */
+/** Der Wert von `on`: `true`, wenn das Block-Mapping gelesen wurde, sonst `false` (der Aufrufer überspringt den Wert). Als Block-Mapping wird `workflow_run` gelesen; ein Skalar, eine Flow-Liste oder eine Block-Liste trägt keinen Auslöser mit `workflows`, ein Flow-Mapping wäre nicht lesbar. */
 function onBlock(c, z, rest, namen) {
   if (rest !== "") {
     if (rest[0] !== "[" && (Object.hasOwn(INDIKATOR, rest[0]) || /^[|>]/.test(rest))) throw nl(z.k, `${INDIKATOR[rest[0]] ?? "Block-Skalar"} als on`);
-    return;
+    return false;
   }
   const n = blockUnter(c, z, rest, "on");
-  if (n === null || istStrich(n.text)) return;
+  if (n === null || istStrich(n.text)) return false;
   mapping(c, n.einr, (key, kz, krest) => {
     if (key !== "workflow_run") return false;
     workflowRunBlock(c, kz, krest, namen);
     return true;
   });
+  return true;
 }
 
 /**
@@ -454,7 +455,7 @@ export function blockformAusloeser(text) {
     dokumentStart(c);
     mapping(c, 0, (key, z, rest) => {
       if (key === "name") name = nameWert(c, z, rest);
-      else if (key === "on") onBlock(c, z, rest, ausloeser);
+      else if (key === "on") return onBlock(c, z, rest, ausloeser);
       else return false;
       return true;
     });

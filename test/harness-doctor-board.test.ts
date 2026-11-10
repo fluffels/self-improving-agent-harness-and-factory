@@ -110,6 +110,33 @@ describe("Board-Ansicht", () => {
       expect(boardPunkte({ config: null, lesen: () => antwort() })).toEqual([]);
     });
   });
+  test("Randformen der Antwort: Einträge ohne Nummer oder null zählen nicht als Ansicht, Sortierung ohne Feldnamen, null-Workflow", () => {
+    const gut = { number: 2, filter: `-status:Done repo:${REPO}`, sortByFields: { nodes: [] } };
+    expect(lauf(antwort({ views: { nodes: [null, { filter: "", sortByFields: { nodes: [] } }, gut] } }))[0].ok).toBe(true);
+    const sortiert = { ...gut, sortByFields: { nodes: [{ direction: "ASC" }, null] } };
+    expect(lauf(antwort({ views: { nodes: [sortiert] } }))[0].befund).toContain("?, ?");
+    expect(lauf(antwort({ workflows: { nodes: [null, ...WF] } }))[0].ok).toBe(true);
+  });
+  test("Lesefehler ohne Error-Objekt (Text) und leere projectId", () => {
+    const r = boardPunkte({ config: CONFIG, lesen: () => { throw "kaputt"; } });
+    expect(r[0].befund).toContain("kaputt");
+    const leer = lauf(antwort(), { repo: REPO, boards: [{ rolle: "factory", nummer: 2, projectId: "" }] });
+    expect(leer[0].nichtPruefbar).toBe(true);
+    expect(leer[0].befund).toContain("projectId");
+  });
+  test("ein Board ohne Rolle und Nummer wird mit Platzhaltern benannt; ein null-Eintrag in boards wird übergangen", () => {
+    const r = boardPunkte({ config: { repo: REPO, boards: [null, { projectId: "p_x" }] }, lesen: () => antwort({ workflows: { nodes: [] } }) });
+    expect(r).toHaveLength(1);
+    expect(r[0].befund).toContain("Board ? (Nr. ?)");
+  });
+  test("Lücke und nicht prüfbares Board zusammen: die Lücke gewinnt, das andere steht als nicht prüfbar im Befund", () => {
+    const config = { repo: REPO, boards: [{ rolle: "produkt", nummer: 1, projectId: "p_a" }, { rolle: "factory", nummer: 2 }] };
+    const r = boardPunkte({ config, lesen: () => antwort({ workflows: { nodes: [] } }) });
+    expect(r[0].nichtPruefbar).toBeUndefined();
+    expect(r[0].ok).toBe(false);
+    expect(r[0].befund).toContain("Auto-archive items");
+    expect(r[0].befund).toContain("Board factory (Nr. 2): nicht prüfbar");
+  });
   test("mehrere Boards: ein Ergebnis fasst sie zusammen, die Lücke nennt das Board", () => {
     const config = { repo: REPO, boards: [{ rolle: "produkt", besitzer: "acme", nummer: 1, projectId: "p_a", repo: "acme/prod" }, { rolle: "factory", besitzer: "acme", nummer: 2, projectId: "p_b" }] };
     const lesen = (a: string[]) => (a.includes("id=p_a") ? antwort({ views: { nodes: [{ number: 1, filter: "-status:Done repo:acme/prod", sortByFields: { nodes: [] } }] } }) : antwort({ workflows: { nodes: [] } }));
