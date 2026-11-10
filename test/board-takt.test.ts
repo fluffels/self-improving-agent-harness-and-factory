@@ -443,9 +443,11 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     // ticket-reihenfolge.md nennt Schwelle und Quote an mehreren Stellen (Takt-Absatz, Position, Kennzahl-Soll): jede muss stimmen.
-    bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 2);
-    bindeAlle(/Schwelle (\d+) Befund-Kommentare/g, doc, T.HARNESS_TAKT_KOMMENTARE);
-    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, doc, T.HARNESS_TAKT_KOMMENTARE);
+    // factory#280 L3: die Schwellenzahl steht in der Doku genau einmal (Takt-Bullet, mit Verweis auf die Konstante); sonst Verweis statt Literal.
+    bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 1);
+    expect(doc).not.toMatch(/Schwelle \d+ Befund-Kommentare/);
+    expect(doc).not.toMatch(/füllt sich \(k\/\d+/);
+    expect(doc).toContain("Konstante `HARNESS_TAKT_KOMMENTARE` in `scripts/produktquote-lib.mjs`");
     bindeAlle(/Produktquote 1:(\d+)/g, doc, T.PRODUKT_QUOTE, 2);
     // die Zahl steht auch in Glossar, Befehlsreferenz und Anlaufstellen
     expect(Number(/ab der Schwelle (\d+) greift der Härtungs-Takt/.exec(lies("docs/harness-glossar.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
