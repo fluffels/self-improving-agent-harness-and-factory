@@ -127,6 +127,11 @@ test("Ausgabeziel und seine Vorfahren dürfen keine Symlinks sein", () => {
   expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", join(link, "kind"), "--write"]).code).toBe(1);
   expect(existsSync(join(real, "kind"))).toBe(false);
 });
+test("pruefeAusgabe: ist das Ziel selbst die Bezugswurzel (Standard `repo = root`), wird ein Symlink als Ziel nicht verfolgt", () => {
+  const real = temp(), link = join(temp(), "link"); symlinkSync(real, link, "junction");
+  const p = raw as unknown as { pruefeAusgabe: (root: string, repo?: string) => string };
+  expect(() => p.pruefeAusgabe(link)).toThrow(/Symlink/);
+});
 test.each([".codex", ".codex/agents"])("auch ein innerer Ziel-Symlink %s wird nicht verfolgt", p => {
   const root = temp(), real = temp(); mkdirSync(dirname(join(root, p)), { recursive: true }); symlinkSync(real, join(root, p), "junction");
   expect(() => c.schreibeSetup(root, { ".codex/agents/probe.toml": "x" })).toThrow(/Symlink/);
@@ -174,4 +179,5 @@ test("gemeinsamerVorfahre: nächster gemeinsamer Ordner; zwei Windows-Laufwerke 
   expect(g.gemeinsamerVorfahre("C:\\w\\aus", "D:\\repo", win32)).toBe("C:\\");
   expect(g.gemeinsamerVorfahre("/x/y", "/x/z/q")).toBe("/x");
   expect(g.gemeinsamerVorfahre("/x/y", "/x/y")).toBe("/x/y");
+  expect(g.gemeinsamerVorfahre("/x/y", "/x")).toBe("/x");
 });

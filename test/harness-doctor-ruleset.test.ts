@@ -70,18 +70,19 @@ describe("Ruleset-Spiegel: LÜCKE je Feld", () => {
     expect(x.ok).toBe(false);
     expect(x.befund).toContain("requiredChecks");
   });
-  test("Antwort ohne `rules`: Lücke requiredChecks, kein Wurf", () => {
+  test.each([["fehlt", undefined], ["ist ein Objekt statt einer Liste", {}]])("Antwort, deren `rules` %s: Lücke requiredChecks, kein Wurf", (_name, rules) => {
     const antwort: Record<string, unknown> = live();
-    delete antwort.rules;
+    if (rules === undefined) delete antwort.rules;
+    else antwort.rules = rules;
     const x = lauf(antwort);
     expect(x.ok).toBe(false);
     expect(x.nichtPruefbar).toBeUndefined();
     expect(x.befund).toContain("requiredChecks");
   });
-  test("Code-Scanning-Schwelle weicht ab", () => {
+  test.each([["security_alerts_threshold", "none", "errors"], ["alerts_threshold", "high_or_higher", "none"]])("Code-Scanning-Schwelle weicht ab (%s)", (_feld, sec, alert) => {
     const x = lauf(live({ rules: [
       { type: "required_status_checks", parameters: { required_status_checks: [{ context: "A" }, { context: "B" }] } },
-      { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL", security_alerts_threshold: "none", alerts_threshold: "errors" }] } },
+      { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL", security_alerts_threshold: sec, alerts_threshold: alert }] } },
     ] }));
     expect(x.ok).toBe(false);
     expect(x.befund).toContain("codeScanning");

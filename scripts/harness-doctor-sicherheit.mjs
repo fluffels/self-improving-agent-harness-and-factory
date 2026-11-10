@@ -35,7 +35,7 @@ const FIX_FEHLER = "mit einem Konto mit Admin-Recht prüfen (gh auth status), da
 const FIX_FELD = "Funktion im Plan nicht verfügbar oder Feld unbekannt: in den Einstellungen von Hand prüfen";
 /** Die eine Zuordnung Spiegel-Feld → Feld der Live-Regel für die Schwellen eines Code-Scanning-Werkzeugs (Sicherheits- und Ruleset-Punkt lesen sie hier). */
 export const SCHWELLEN_FELDER = [["sicherheitsSchwelle", "security_alerts_threshold"], ["alertSchwelle", "alerts_threshold"]];
-export const GRENZE_PRIVAT =" (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
+export const GRENZE_PRIVAT = " (private Repos auf GitHub Free kennen keine Rulesets, ADR 0022)";
 
 const luecke = (punkt, befund, fix) => lueckeRoh(punkt, befund, fix, LINK_SICHERHEIT[punkt]);
 /** Nicht prüfbar mit den Standardwerten dieses Moduls: Fix `FIX_FELD`, Link des Punkts (`link` hat Vorrang). */

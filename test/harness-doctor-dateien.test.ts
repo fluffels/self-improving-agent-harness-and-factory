@@ -484,6 +484,11 @@ describe("Workflow-Auslöser", () => {
       expect(p.nichtPruefbar).toBe(true);
       expect(p.befund).toContain(`${FPFAD}:4`);
     });
+    test("`#` direkt hinter dem `]` (ohne Leerraum) ist nicht prüfbar mit Datei:Zeile", () => {
+      const p = ausloeser([ci("Build"), eigen("name: X\non:\n  workflow_run:\n    workflows: [CI]#x\n")]);
+      expect(p.nichtPruefbar).toBe(true);
+      expect(p.befund).toContain(`${FPFAD}:4`);
+    });
     test("`on: >` (Folded-Block-Skalar) ist nicht lesbar", () => {
       const p = ausloeser([ci("Build"), eigen("name: X\non: >\n  push\n")]);
       expect(p.nichtPruefbar).toBe(true);
@@ -587,6 +592,9 @@ describe("Workflow-Auslöser", () => {
       "name: A\non:\n  workflow_run:\n    workflows: [\"CI\" , 'Weg' ] # Kommentar\n",
       "name: A\non:\n  workflow_run:\n    workflows: [\"a #b\", c#d]\n",
       "name: A\non:\n  workflow_run:\n    workflows: [\"a ] #b\"] # Kommentar\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI] # siehe [docs]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [CI] # x ]\n",
+      "name: A\non:\n  workflow_run:\n    workflows: [\"a ] #b\"]\n",
     ];
     for (const text of proben) {
       const erwartet = (parse(text) as { on?: { workflow_run?: { workflows?: string[] } } }).on;

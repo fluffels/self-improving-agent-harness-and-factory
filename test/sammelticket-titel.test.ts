@@ -49,9 +49,11 @@ describe("sammelticket-titel", () => {
     expect(mit("- [x] Audit: x", "Audit:")).toBe(false);
     expect(mit("- [ ] Anderes: x", "Audit:")).toBe(false);
     expect(mit("Audit: x", "Audit:")).toBe(false);
+    expect(mit("  Audit: x", "Audit:")).toBe(false);
+    expect(mit("- [ ] siehe Audit: x", "Audit:")).toBe(false);
   });
 
-  const boardText =readFileSync(new URL("../scripts/board-lib.mjs", import.meta.url), "utf8");
+  const boardText = readFileSync(new URL("../scripts/board-lib.mjs", import.meta.url), "utf8");
   test("board-lib exportiert die Titel unverändert weiter (Re-Export wird von exporteAus als vorhanden erkannt)", () => {
     for (const n of NAMEN) {
       expect(boardLib[n]).toBe(blatt[n]);
