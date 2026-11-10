@@ -7,6 +7,9 @@
  * werden je eine neue Zeile im Folge-Sammelticket, nie Teil desselben PR. Alle anderen Stellen sagen
  * „Deckel laut AGENTS.md“ und nennen keine Zahl.
  *
+ * Zweite Zeilenzahl-Regel: der Vollscan weiter unten (docs/, .agents/, .claude/agents/, AGENTS.md) findet jede weitere
+ * Zeilenzahl-Regel für Sammeltickets, nicht nur an den Stellen der Liste VERWEISE.
+ *
  * Bewusste Grenze: geprüft werden nur die geschlossene Liste VERWEISE, die bekannten Muster des alten
  * „komplett, kein Rest“-Wortlauts und eine Klausel-Regel (Rest-Wort und PR-Ziel in einer Klausel ohne Verneinung);
  * ADRs (Historie) und Tests sind ausgenommen, eine ganz neue Umschreibung desselben Gedankens erkennt der Test nicht.
