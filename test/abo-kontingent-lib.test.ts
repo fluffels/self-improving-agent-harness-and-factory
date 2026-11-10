@@ -60,15 +60,11 @@ describe("verlaufAus", () => {
   });
   test("ein ungültiges sevenDay neben gültigem fiveHour wird verworfen, der Punkt bleibt", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: "x", fiveHour: { pct: 3, resetsAt: 5 } }));
-    expect(v.punkte).toHaveLength(1);
-    expect(v.punkte[0]?.sevenDay).toBeUndefined();
-    expect(v.punkte[0]?.fiveHour).toEqual({ pct: 3, resetsAt: 5 });
+    expect(v.punkte.map((q) => [q.sevenDay, q.fiveHour])).toEqual([[undefined, { pct: 3, resetsAt: 5 }]]);
   });
   test("ein ungültiges fiveHour neben gültigem sevenDay wird verworfen, der Punkt bleibt", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: { pct: 3, resetsAt: 5 }, fiveHour: "x" }));
-    expect(v.punkte).toHaveLength(1);
-    expect(v.punkte[0]?.fiveHour).toBeUndefined();
-    expect(v.punkte[0]?.sevenDay).toEqual({ pct: 3, resetsAt: 5 });
+    expect(v.punkte.map((q) => [q.fiveHour, q.sevenDay])).toEqual([[undefined, { pct: 3, resetsAt: 5 }]]);
   });
   test("nur 5-Stunden-Fenster ist ein gültiger Punkt, aber ohne sevenDay", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, fiveHour: { pct: 3, resetsAt: 5 } }));
