@@ -153,6 +153,13 @@ describe("Projektordner-Ableitung (#1572, eine Quelle für alle Messskripte)", (
     expect(P.projektSlug("/home/x/repo/.claude/worktrees/wt-1/scripts")).toBe("-home-x-repo");
     expect(P.projektSlug("X:/dev/repo/")).toBe("X--dev-repo");
   });
+  test("hauptrepoPfad: der Worktree-Ordner selbst (auch mit abschließendem Schrägstrich) zählt zum Hauptrepo (Verhalten vor factory#220 erhalten)", () => {
+    const H = rawTranskript as unknown as { hauptrepoPfad: (p: string) => string };
+    expect(H.hauptrepoPfad("/p/.claude/worktrees/")).toBe("/p");
+    expect(H.hauptrepoPfad("/p/.claude/worktrees")).toBe("/p");
+    expect(H.hauptrepoPfad("X:\\p\\.claude\\worktrees\\")).toBe("X:\\p");
+    expect(H.hauptrepoPfad("/p/.claude/worktrees-alt")).toBe("/p/.claude/worktrees-alt");
+  });
   test("projektSlug und istProjektOrdner im Arbeitsplatz (factory#89): ein Worktree unter `.claude/worktrees/<repo>/<name>` zählt zur Wurzel", () => {
     expect(P.projektSlug("/ap/.claude/worktrees/web/wt-7")).toBe("-ap");
     expect(P.projektSlug("X:\\dev\\ap\\.claude\\worktrees\\web\\wt-7\\scripts")).toBe("X--dev-ap");
