@@ -4,6 +4,7 @@
  * Alles pur, getestet über test/audit-einordnung.test.ts.
  */
 import { istVertraut } from "./fremdtext-lib.mjs";
+import { BEFUND_ZEILE_OFFEN } from "./sammelticket-titel.mjs";
 
 export const ALARM_PRAEFIX = "🔒 Security:";
 const GHSA_MUSTER = /GHSA(?:-[a-z0-9]{4}){3}/gi;
@@ -16,12 +17,19 @@ export function vertrauteBodies(kommentare, owner) {
   return kommentare.filter((k) => istVertraut(k?.user, owner)).map((k) => String(k.body ?? ""));
 }
 
+/** Offene Checkbox-Zeile (`BEFUND_ZEILE_OFFEN`, die eine Quelle der Zeilenerkennung), deren Text nach Leerraum mit `Audit:` beginnt. */
+function offeneAuditZeile(zeile) {
+  const kopf = BEFUND_ZEILE_OFFEN.exec(zeile);
+  const rest = kopf === null ? "" : zeile.slice(kopf[0].length);
+  return /^\s/.test(rest) && rest.trimStart().startsWith("Audit:");
+}
+
 /** Bekannte GHSA-IDs aus den Quellen: offene Audit-Zeilen in Kommentaren, Wiedervorlagen-Einträge `audit-<ghsa>`, Titel offener Security-Tickets. Pur. */
 export function bekannteGhsa({ kommentare, wiedervorlagen, offeneTitel }) {
   const menge = new Set();
   for (const k of kommentare) {
     for (const z of String(k ?? "").split(/\r?\n/)) {
-      if (/^\s*[-*]\s+\[ \]\s+Audit:/.test(z)) ghsaIn(z).forEach((g) => menge.add(g));
+      if (offeneAuditZeile(z)) ghsaIn(z).forEach((g) => menge.add(g));
     }
   }
   for (const e of wiedervorlagen) {
