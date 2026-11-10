@@ -648,7 +648,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
       regeln.push(...(frontmatter(read(`.claude/agents/${f}`)).tools ?? "").split(",").map((t) => t.trim()));
     }
-    const ausConfig = (vorpruefungAus(projektConfig()) as { userScopeServer: string[] }).userScopeServer;
+    const ausConfig = (vorpruefungAus as unknown as (c: unknown) => { userScopeServer: string[] })(projektConfig()).userScopeServer;
     assert.deepEqual((unbekannteMcpServer as (r: string[], b: string[]) => string[])(regeln, [...projekt, ...userScope, ...ausConfig]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
   });
 
