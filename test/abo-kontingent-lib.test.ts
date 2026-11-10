@@ -211,6 +211,11 @@ describe("aboKontingent und Abschnitt", () => {
     expect(a.blocker).toEqual({ n: 1, von: 2 });
     expect(a.folge).toEqual({ n: 2, von: 2, offen: 1 });
   });
+  test("eine Claim-Lücke (kein assigned-Event) erscheint mit ihrem Grund, nicht mit einem Messgrund", () => {
+    const a = L.aboKontingent({ tickets: [zeile(1)], punkte: [punkt(claim, 10), punkt(merge, 14)], kaputt: 0, claims: new Map([[1, { luecke: "kein assigned-Event vor dem Merge" }]]), von: T0, bis: merge });
+    expect(a.zeilen).toEqual([{ ticket: 1, pr: 101, luecke: "kein assigned-Event vor dem Merge" }]);
+    expect(a.gemessen).toBe(0);
+  });
   test("Überlappung: zwei Tickets im selben Fenster teilen das Delta", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 20)], [zeile(1), zeile(2)]);
     expect(a.zeilen.map((z) => z.pp)).toEqual([5, 5]);
