@@ -361,8 +361,38 @@ function wiederherstellen(deps, nr, nonce) {
   return ergebnis(0, "wiederhergestellt");
 }
 
+/**
+ * Erzwungene Übernahme (factory#260): nur auf ausdrückliche Anweisung der Maintainerin, wenn der Lock einer beendeten Session fehlt, deren Nonce verloren ist.
+ * Legt den alten Lock beiseite (`<nr>.json.verwaist-erzwungen-<hash16>`), schreibt einen neuen mit eigener Nonce, `erzwungen: { zeit, grund, vorherNonceHash }` und offenem `gestoppt`-Vermerk
+ * (`uebernehmen --nachfolger` greift dann trotz junger Aktivität). Nichts belegt (kein Lock, Worktree, Branch): Exit 4, dafür ist `claim` da.
+ */
+function erzwingen(deps, nr, grund) {
+  const lock = liesLock(deps, nr);
+  if (!lock && !ermittleBelegung(deps, nr).belegt) return ergebnis(4, "", `✖ ticket-lock: zu #${nr} gibt es weder Lock noch Worktree oder Branch: nichts zu erzwingen, dafür ist claim da.`);
+  const nonce = deps.nonce();
+  const neuerHash = hashVon(nonce);
+  const jetzt = new Date(deps.jetzt()).toISOString();
+  deps.legeVerzeichnisAn(deps.lockDir);
+  if (lock) {
+    try {
+      deps.benenneUm(lockPfad(deps, nr), `${lockPfad(deps, nr)}.verwaist-erzwungen-${neuerHash.slice(0, 16)}`);
+    } catch {
+      return ergebnis(4, "", `✖ ticket-lock: der Lock von #${nr} ließ sich nicht beiseite legen (andere Session?): nichts erzwungen. ${NICHT_VON_HAND}`);
+    }
+  }
+  const vorherNonceHash = lock ? (typeof lock.nonceHash === "string" ? lock.nonceHash : hashVon(String(lock.nonce ?? ""))) : null;
+  try {
+    deps.schreibeNeu(lockPfad(deps, nr), `${JSON.stringify({ nr, nonceHash: neuerHash, erstellt: jetzt, sandbox: deps.sandbox ?? null, erzwungen: { zeit: jetzt, grund, vorherNonceHash }, gestoppt: { gesetzt: jetzt, verbraucht: null } })}\n`);
+  } catch (e) {
+    if (e && e.code === "EEXIST") return ergebnis(4, "", `✖ ticket-lock: #${nr} wurde beim Erzwingen von einer anderen Session belegt. ${NICHT_VON_HAND}`);
+    throw e;
+  }
+  return ergebnis(0, `nonce=${nonce}`, `⚠ ticket-lock: Lock von #${nr} erzwungen (${grund}); nur auf ausdrückliche Anweisung der Maintainerin, nie autonom.`);
+}
+
 /** Die Befehle und ihre Flag-Menge (Format von `flagsLesen`) samt Pflicht-Flags: die einzige Befehlsliste, Prüfung per `Object.hasOwn`. */
 const FLAG_MENGEN = {
+  erzwingen: { optionen: { grund: { type: "string" } }, pflicht: ["grund"] },
   claim: { optionen: { wiederaufnahme: { type: "boolean" } }, pflicht: [] },
   pruefe: { optionen: { nonce: { type: "string" } }, pflicht: [] },
   freigeben: { optionen: { nonce: { type: "string" } }, pflicht: ["nonce"] },
@@ -373,7 +403,7 @@ const FLAG_MENGEN = {
   lebenszeichen: { optionen: { nonce: { type: "string" }, schritt: { type: "string" } }, pflicht: ["nonce"] },
 };
 
-const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
+const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | erzwingen <nr> --grund <text> | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit";
 
 /**
  * Liest den Aufruf vor jedem I/O: `{ commit: true }` für `lebenszeichen --commit` (genau diese zwei Argumente, post-commit-Hook), sonst
@@ -390,7 +420,9 @@ export function aufrufLesen(argv) {
   if (r.fehler) return { fehler: r.fehler.text };
   if (r.werte.nonce === "") return { fehler: "--nonce braucht einen Wert" };
   if (befehl === "uebernehmen" && r.werte.nachfolger !== true) return { fehler: "uebernehmen ruft nur der Nachfolger (--nachfolger); der Hauptchat prüft mit pruefe <nr> --nonce <x>" };
-  return { befehl, nr: Number(nrText), nonce: r.werte.nonce ?? null, wiederaufnahme: r.werte.wiederaufnahme === true, schritt: r.werte.schritt ?? null };
+  const grund = r.werte.grund === undefined ? null : String(r.werte.grund).trim();
+  if (befehl === "erzwingen" && (!grund || /[\r\n]/.test(r.werte.grund))) return { fehler: "--grund braucht einen nicht leeren, einzeiligen Text" };
+  return { befehl, grund, nr: Number(nrText), nonce: r.werte.nonce ?? null, wiederaufnahme: r.werte.wiederaufnahme === true, schritt: r.werte.schritt ?? null };
 }
 
 /** Der Aufruf-Fehler als Ergebnis: Rahmen, Grund, Aufrufzeile. */
@@ -401,9 +433,10 @@ export function fuehreAus(argv, deps) {
   const aufruf = aufrufLesen(argv);
   if (aufruf.fehler) return aufrufFehler(aufruf.fehler);
   if (aufruf.commit) return lebenszeichenCommit(deps);
-  const { befehl, nr, nonce, wiederaufnahme, schritt } = aufruf;
+  const { befehl, nr, nonce, wiederaufnahme, schritt, grund } = aufruf;
   try {
     if (befehl === "claim") return claim(deps, nr, wiederaufnahme);
+    if (befehl === "erzwingen") return erzwingen(deps, nr, grund);
     if (befehl === "lebenszeichen") return lebenszeichen(deps, nr, nonce, schritt);
     if (befehl === "pruefe") return pruefe(deps, nr, nonce);
     if (befehl === "uebernehmen") return pruefe(deps, nr, nonce, true);
