@@ -12,7 +12,7 @@
  * ADRs (Historie) und Tests sind ausgenommen, eine ganz neue Umschreibung desselben Gedankens erkennt der Test nicht.
  * Grenzen der Klausel-Regel: ein „nie“ oder „nicht“ in der Klausel schaltet sie frei („nicht ins Folge-Sammelticket,
  * sondern in diesen PR“ bleibt unerkannt), die Trennung an Kommas verliert den Bezug, „alle Zeilen“ ohne „des Tickets“
- * ist kein Rest-Wort, und PR-Wendungen wie „diesem einen PR“ kennt sie nicht.
+ * ist kein Rest-Wort, ein Zeilenumbruch mitten in der PR-Wendung trennt sie, und PR-Wendungen wie „diesem einen PR“ oder „gleichen PR“ kennt sie nicht.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -49,13 +49,16 @@ const ZIEHT_REST_REIN = [
   /keine Zeilengrenze/,
   /Nachzügler setzt du selbst um/,
 ];
-const RESTWORT = /\bRest\b|\bREST\b|übrigen? Zeilen|ganze Ticket|Zeilen des Tickets|Dazugekommen|Nachzügler/;
+const RESTWORT = /\bRest\b|\bREST\b|[Üü]brigen? Zeilen|ganze Ticket|Zeilen des Tickets|Dazugekommen|Nachzügler/;
 const PR_ZIEL = /(?:in|im) (?:diesem|diesen|dem|den|demselben|denselben|selben|einem|einen) PR|(?:Teil|Bestandteil) (?:desselben|dieses) PR|\bPR (?:mit|um)\b|komplett (?:abarbeiten|umsetzen)|Rest-Übertrag/;
 const VERNEINT = /\bnie\b|\bnicht\b/;
 
-/** Allgemeine Klausel-Regel: eine Klausel (getrennt an . ; , : und Klammern), die den Rest nennt UND einen PR als Ziel, ohne Verneinung. */
+/** Allgemeine Klausel-Regel (je Zeile, ohne Markdown-Fettdruck, Leerraum vereinheitlicht): eine Klausel (getrennt an . ; , : und Klammern), die den Rest nennt UND einen PR als Ziel, ohne Verneinung. */
 export const restKlauselInPR = (text: string): boolean =>
-  text.split(/[.;,:()]/).some((k) => RESTWORT.test(k) && PR_ZIEL.test(k) && !VERNEINT.test(k));
+  text
+    .split("\n")
+    .map((z) => z.replace(/\*+/g, "").replace(/\s+/g, " "))
+    .some((z) => z.split(/[.;,:()]/).some((k) => RESTWORT.test(k) && PR_ZIEL.test(k) && !VERNEINT.test(k)));
 
 export const ziehtRestInDenPR = (text: string): boolean => ZIEHT_REST_REIN.some((m) => m.test(text)) || restKlauselInPR(text);
 
@@ -157,6 +160,13 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
       "Der Rest kommt in demselben PR",
       "Der Rest bleibt im selben PR.",
       "Der Rest geht in einen PR",
+      "Den Rest nimmst du in den laufenden PR mit",
+      "Der Rest wird Bestandteil dieses PR",
+      "Der Rest wird Teil dieses PR",
+      "übrige Zeilen kommen in diesen PR",
+      "Übrige Zeilen kommen in diesen PR",
+      "Der Rest kommt in **denselben** PR.",
+      "Der Rest kommt in    denselben PR.",
     ]) {
       assert.ok(ziehtRestInDenPR(weg), weg);
     }
