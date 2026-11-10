@@ -7,7 +7,11 @@ import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt } from "../scripts/harness-doctor-dateien.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { blockformAusloeser as rawBlockformAusloeser } from "../scripts/workflow-blockform.mjs";
 import { fixture } from "./support/tmp-fixture";
+
+const rawAusloeser = rawBlockformAusloeser as (text: string) => { ausloeser: string[] };
 
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
@@ -503,7 +507,7 @@ describe("Workflow-Auslöser", () => {
     for (const text of proben) {
       const erwartet = (parse(text) as { on?: { workflow_run?: { workflows?: string[] } } }).on;
       const soll = typeof erwartet === "object" && erwartet !== null ? (erwartet.workflow_run?.workflows ?? []) : [];
-      const r = (await import("../scripts/workflow-blockform.mjs")).blockformAusloeser(text) as { ausloeser: string[] };
+      const r = rawAusloeser(text);
       expect(r.ausloeser, text).toEqual(soll);
     }
   });

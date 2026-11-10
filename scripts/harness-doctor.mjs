@@ -178,8 +178,8 @@ function dateipunkteVorAbbruch({ dateien, rootDir, out }) {
   }
 }
 
-/** Die lokalen Punkte von `--pruefen` (factory#247): `Git-Hooks` (git config im Prüf-Root) und `Board-Ansicht` (GraphQL über `gh`); der Wochenlauf und `--einrichten` rufen sie nie. */
-export const lokalStandard = (gh) => ({ rootDir, config }) => [gitHooksPunkt({ lesen: gitHooksStandard({ rootDir }) }), ...boardPunkte({ config, lesen: (a) => JSON.parse(gh(a)) })];
+/** Die lokalen Punkte von `--pruefen` (factory#247; `lokal` ersetzt sie in Tests): `Git-Hooks` (git config im Prüf-Root) und `Board-Ansicht` (GraphQL über `gh`); der Wochenlauf und `--einrichten` rufen sie nie. */
+export const lokalStandard = ({ gh, lokal }) => lokal ?? (({ rootDir, config }) => [gitHooksPunkt({ lesen: gitHooksStandard({ rootDir }) }), ...boardPunkte({ config, lesen: (a) => JSON.parse(gh(a)) })]);
 
 function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien, lokal }) {
   const { wurzel: rootDir, abgeleitet, pfad: configPfad } = pruefWurzel(aufruferRoot, werte.config);
@@ -193,7 +193,7 @@ function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, ke
   }
   let ergebnis;
   try {
-    ({ ergebnis } = pruefLauf({ rootDir, configPfad, gh, langfuse, umgebung: { env, namen }, dateien, rulesetLesen: (a) => JSON.parse(gh(a)), lokal }));
+    ({ ergebnis } = pruefLauf({ rootDir, configPfad, gh, langfuse, umgebung: { env, namen }, dateien, rulesetLesen: (a) => JSON.parse(gh(a)), lokal: lokalStandard({ gh, lokal }) }));
   } catch (e) {
     dateipunkteVorAbbruch({ dateien, rootDir, out });
     err(konfigFehlerText(e, rootDir));
@@ -223,7 +223,7 @@ function ausgabe(ergebnis, out) {
 
 export function main(
   argv = process.argv.slice(2),
-  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = dateienStandard({ env, lesen: (a, token) => ghJson(a, { token, timeout: 30000 }) }), lokal = lokalStandard(gh) } = {},
+  { rootDir = join(SKRIPTE, ".."), gh = (a) => ghText(a, { timeout: 30000 }), langfuse = langfuseStandard, spawn = sammelticketStandard, env = process.env, out = console.log, err = console.error, kernEnv = kernEnvNamen, dateien = dateienStandard({ env, lesen: (a, token) => ghJson(a, { token, timeout: 30000 }) }), lokal } = {},
 ) {
   const { werte, fehler } = flagsLesen(argv, { pruefen: { type: "boolean" }, einrichten: { type: "boolean" }, "dry-run": { type: "boolean" }, config: { type: "string" } });
   const aufrufFehler = fehler?.text ?? (Number(werte.pruefen === true) + Number(werte.einrichten === true) !== 1 ? "Genau einen Modus angeben: --pruefen oder --einrichten" : null)

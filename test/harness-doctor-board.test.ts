@@ -13,7 +13,7 @@ const gitHooksPunkt = rawHooks as (a: { lesen: () => string | null }) => Ergebni
 const gitHooksStandard = rawHooksStandard as (a: { rootDir: string; exec?: (cmd: string, args: string[], o: unknown) => { status: number | null; stdout: string; error?: Error } }) => () => string | null;
 
 const REPO = "acme/proj";
-const CONFIG = { repo: REPO, boards: [{ rolle: "factory", besitzer: "acme", nummer: 2, projectId: "PVT_1" }] };
+const CONFIG = { repo: REPO, boards: [{ rolle: "factory", besitzer: "acme", nummer: 2, projectId: "p_eins" }] };
 const WF = [{ name: "Auto-add sub-issues to project", enabled: true }, { name: "Auto-archive items", enabled: true }];
 const antwort = (over: { views?: unknown; workflows?: unknown } = {}) => ({
   data: { node: { views: "views" in over ? over.views : { nodes: [{ number: 1, filter: `-status:Done repo:${REPO}`, sortByFields: { nodes: [] } }] }, workflows: "workflows" in over ? over.workflows : { nodes: WF } } },
@@ -26,7 +26,7 @@ describe("Board-Ansicht", () => {
     const r = boardPunkte({ config: CONFIG, lesen: (a) => { aufrufe.push(a); return antwort(); } });
     expect(r).toEqual([{ punkt: "Board-Ansicht", ok: true }]);
     expect(aufrufe).toHaveLength(1);
-    expect(aufrufe[0]).toContain("id=PVT_1");
+    expect(aufrufe[0]).toContain("id=p_eins");
     for (const wort of ["views", "filter", "sortByFields", "workflows", "enabled", "number"]) expect(BOARD_QUERY).toContain(wort);
   });
   test("Standardansicht ist die kleinste Nummer, nicht die erste in der Liste", () => {
@@ -49,7 +49,7 @@ describe("Board-Ansicht", () => {
     }
   });
   test("das Repo steht beim Board, wenn es dort gesetzt ist (Vorrang vor dem Projekt-Repo); Groß-/Kleinschreibung zählt nicht", () => {
-    const config = { repo: REPO, boards: [{ rolle: "produkt", besitzer: "acme", nummer: 1, projectId: "PVT_2", repo: "Acme/Prod" }] };
+    const config = { repo: REPO, boards: [{ rolle: "produkt", besitzer: "acme", nummer: 1, projectId: "p_zwei", repo: "Acme/Prod" }] };
     const views = { nodes: [{ number: 1, filter: "-status:Done repo:acme/prod", sortByFields: { nodes: [] } }] };
     expect(lauf(antwort({ views }), config)[0].ok).toBe(true);
   });
@@ -111,8 +111,8 @@ describe("Board-Ansicht", () => {
     });
   });
   test("mehrere Boards: ein Ergebnis fasst sie zusammen, die Lücke nennt das Board", () => {
-    const config = { repo: REPO, boards: [{ rolle: "produkt", besitzer: "acme", nummer: 1, projectId: "PVT_A", repo: "acme/prod" }, { rolle: "factory", besitzer: "acme", nummer: 2, projectId: "PVT_B" }] };
-    const lesen = (a: string[]) => (a.includes("id=PVT_A") ? antwort({ views: { nodes: [{ number: 1, filter: "-status:Done repo:acme/prod", sortByFields: { nodes: [] } }] } }) : antwort({ workflows: { nodes: [] } }));
+    const config = { repo: REPO, boards: [{ rolle: "produkt", besitzer: "acme", nummer: 1, projectId: "p_a", repo: "acme/prod" }, { rolle: "factory", besitzer: "acme", nummer: 2, projectId: "p_b" }] };
+    const lesen = (a: string[]) => (a.includes("id=p_a") ? antwort({ views: { nodes: [{ number: 1, filter: "-status:Done repo:acme/prod", sortByFields: { nodes: [] } }] } }) : antwort({ workflows: { nodes: [] } }));
     const r = boardPunkte({ config, lesen });
     expect(r).toHaveLength(1);
     expect(r[0].ok).toBe(false);

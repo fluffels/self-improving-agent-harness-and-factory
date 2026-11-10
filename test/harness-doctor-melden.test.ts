@@ -8,7 +8,7 @@ import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMelden from "../scripts/harness-doctor-melden.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawDoctor from "../scripts/harness-doctor.mjs";
+import { dateienStandard as rawStandard } from "../scripts/harness-doctor.mjs";
 
 interface Luecke { punkt: string; befund: string; fix: string; nichtPruefbar?: boolean }
 interface Kommentar { user: { login: string; type: string } | null; body: string }
@@ -375,7 +375,7 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     const wurzel = mkdtempSync(join(tmpdir(), "l16a-"));
     try {
       const config = { repo: "acme/proj", meldestelle: "eingang/privat" };
-      const doktor = rawDoctor.dateienStandard({ env: { MELDESTELLE_TOKEN: "mt" }, lesen }) as Punkte;
+      const doktor = (rawStandard as (a: { env: Record<string, string>; lesen: () => unknown }) => Punkte)({ env: { MELDESTELLE_TOKEN: "mt" }, lesen });
       const namen = (f?: Punkte) => (f?.({ rootDir: wurzel, config }) ?? []).map((p) => p.punkt);
       assert.ok(namen(doktor).length > 7, "Gegenprobe: die Standardliste trägt mehr als die Basis-Dateipunkte");
       assert.deepEqual(namen(dateien), namen(doktor));
