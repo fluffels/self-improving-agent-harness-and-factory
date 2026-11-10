@@ -548,7 +548,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
   type Sammel = { ziel: number | null; owner?: string; kommentare: { user: { login: string; type?: string } | null; body: string }[] };
   type GIo = Io & { bereite: (zeilen: string[]) => { ok: boolean; text?: string; grund?: string }; sammelKontext: () => Sammel; postZeilen: (nr: number, text: string) => void; heute: () => string };
   const ARGS = ["gescheitert", "7", "--mangel", "Negativfall fehlt"];
-  const ZEILE = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
+  const ZEILE = "- [ ] Defekt: 2026-10-22 Reparatur gescheitert: #7 (Beleg: Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
   function gumgebung(sammel: Partial<Sammel> = {}, extra: Partial<GIo> = {}) {
     const posts: { nr: number; text: string }[] = [];
     const { io } = umgebung({});
@@ -589,10 +589,16 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
     expect(r.err).toContain("check-internalrefs --text");
     expect(posts).toEqual([]);
   });
+  test("Mangel ohne Beleg (nur Satzzeichen): Exit 2, nichts gepostet (Eingangsfilter factory#269)", () => {
+    const { io, posts } = gumgebung();
+    const r = S.fuehreAus(["gescheitert", "7", "--mangel", "..."], io);
+    expect(r.code).toBe(2);
+    expect(posts).toEqual([]);
+  });
   test("Mangel über mehrere Zeilen wird einzeilig", () => {
     const { io, posts } = gumgebung();
     S.fuehreAus(["gescheitert", "7", "--mangel", "a\n  b"], io);
-    expect(posts[0]?.text).toContain("(a b)");
+    expect(posts[0]?.text).toContain("(Beleg: a b)");
     expect(posts[0]?.text.split("\n")).toHaveLength(1);
   });
   test("schon offene Zeile eines vertrauten Autors: Exit 0, nichts gepostet", () => {
@@ -731,7 +737,7 @@ describe("Ziel-Repo für Harness-Befunde (#76, ADR 0022 F10)", () => {
     expect(aufrufe.einsortiere).toEqual([]);
   });
   test("gescheitert vertraut dem Owner des Ziel-Repos, nicht dem eigenen", () => {
-    const zeile = "- [ ] 2026-10-22 Reparatur gescheitert: #7 (Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
+    const zeile = "- [ ] Defekt: 2026-10-22 Reparatur gescheitert: #7 (Beleg: Negativfall fehlt). Fix: Body über den Reparaturweg nachziehen";
     const posts: unknown[] = [];
     const { io } = umgebung({});
     const kontext = (owner: string) => ({ ziel: 1860, owner, kommentare: [{ user: { login: "zz-org", type: "User" }, body: zeile }] });

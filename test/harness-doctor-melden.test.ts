@@ -34,7 +34,7 @@ const ICH = { login: "acme", type: "User" };
 const L1: Luecke = { punkt: "Secret PROJECT_TOKEN", befund: "PROJECT_TOKEN fehlt (ein Workflow liest es)", fix: "gh secret set PROJECT_TOKEN --repo acme/demo" };
 const L2: Luecke = { punkt: "Label forum", befund: 'Label "forum" fehlt', fix: 'gh label create "forum" --repo acme/demo' };
 const NP: Luecke = { punkt: "PVR", befund: "private-vulnerability-reporting nicht lesbar (HTTP 404)", fix: "mit einem Konto mit Admin-Recht prüfen", nichtPruefbar: true };
-const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} 2026-10-01 Harness-Doctor (Wochenlauf): ${l.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${l.punkt}: ${l.befund} Fix: ${l.fix}`;
+const zeile = (l: Luecke, kopf = "- [ ]"): string => `${kopf} Defekt: 2026-10-01 Harness-Doctor (Wochenlauf): ${l.nichtPruefbar ? "NICHT PRÜFBAR" : "LÜCKE"} ${l.punkt}: Beleg: ${l.befund} Fix: ${l.fix}`;
 
 const bereiteStub: Io["bereite"] = (zeilen) => ({ ok: true, text: zeilen.join("\n") });
 interface Welt { eigen?: string | null; treffer?: boolean; stand?: string; luecken?: Luecke[]; kommentare?: Kommentar[]; ziel?: number | null; postWirft?: boolean; ermittleWirft?: boolean; kontextWirft?: boolean }
@@ -103,7 +103,7 @@ describe("harness-doctor-melden: lauf", () => {
   test("ein mehrzeiliger Befund wird einzeilig (eine Zeile pro Lücke)", () => {
     const r = fahre({ luecken: [{ ...L1, befund: "erste\nzweite" }] });
     assert.equal(r.posts[0].text.split("\n").length, 1);
-    assert.match(r.posts[0].text, /LÜCKE Secret PROJECT_TOKEN: erste zweite Fix:/);
+    assert.match(r.posts[0].text, /LÜCKE Secret PROJECT_TOKEN: Beleg: erste zweite Fix:/);
   });
 
   test("offene Zeile eines vertrauten Autors: still; abgehakte Zeile, fremder Autor und anderer Punkt: wird gemeldet", () => {
@@ -130,7 +130,7 @@ describe("harness-doctor-melden: lauf", () => {
   test("ein nicht prüfbarer Punkt wird als Zeile NICHT PRÜFBAR ins Sammelticket geschrieben (factory#116)", () => {
     const r = fahre({ luecken: [NP] });
     assert.equal(r.posts.length, 1);
-    assert.equal(r.posts[0].text, "- [ ] 2026-10-21 Harness-Doctor (Wochenlauf): NICHT PRÜFBAR PVR: private-vulnerability-reporting nicht lesbar (HTTP 404) Fix: mit einem Konto mit Admin-Recht prüfen");
+    assert.equal(r.posts[0].text, "- [ ] Defekt: 2026-10-21 Harness-Doctor (Wochenlauf): NICHT PRÜFBAR PVR: Beleg: private-vulnerability-reporting nicht lesbar (HTTP 404) Fix: mit einem Konto mit Admin-Recht prüfen");
   });
 
   test("Abgleich mit der Art: eine offene NICHT-PRÜFBAR-Zeile hält still, eine LÜCKE-Zeile desselben Punkts verdeckt sie nicht und umgekehrt", () => {
@@ -185,7 +185,7 @@ describe("harness-doctor-melden: lauf", () => {
     const r = fahre({ luecken: [L1] }, true);
     assert.equal(r.code, 0);
     assert.deepEqual(r.posts, []);
-    assert.ok(r.log.some((z) => z.startsWith("[dry-run] - [ ] 2026-10-21 Harness-Doctor (Wochenlauf): LÜCKE Secret PROJECT_TOKEN:")));
+    assert.ok(r.log.some((z) => z.startsWith("[dry-run] - [ ] Defekt: 2026-10-21 Harness-Doctor (Wochenlauf): LÜCKE Secret PROJECT_TOKEN:")));
   });
 
   test("Fehlerfälle sind ::error:: mit Fix und Exit 1: kein Sammelticket, Post wirft, Sammelticket nicht lesbar, Doctor nicht lauffähig", () => {

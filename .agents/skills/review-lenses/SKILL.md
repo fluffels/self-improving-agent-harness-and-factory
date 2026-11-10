@@ -173,7 +173,7 @@ Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 
-Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „Produkt-/Inhalts-Befund oder Ausnahmefall der Regel → Issue, zusammengehörige Befunde gebündelt (AGENTS.md § Befunde sofort festhalten)" oder „Harness → Zeile im Sammelticket" (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets). Nicht inline mitfixen — oberste Regel.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „Produkt-/Inhalts-Befund oder Ausnahmefall der Regel → Issue, zusammengehörige Befunde gebündelt (AGENTS.md § Befunde sofort festhalten)" oder „Harness → Zeile mit Klasse und Beleg" (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets; ohne Beleg nur im Bericht, nie als Zeile). Nicht inline mitfixen — oberste Regel.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 
