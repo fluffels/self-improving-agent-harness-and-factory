@@ -14,8 +14,9 @@
  *   3. Der Ticket-Skill und der Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
- *   4. Das Sammelticket hat keine Zeilengrenze (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein
- *      Takt-Schritt; es gibt höchstens ein ungeclaimtes, beim Claim entsteht der Nachfolger (`--vorgaenger`).
+ *   4. Keine Generationsgrenze im Takt (#1687, ADR 0026): kein `--generation`, keine Grenzzahl, kein Takt-Schritt;
+ *      es gibt höchstens ein ungeclaimtes, beim Claim entsteht der Nachfolger (`--vorgaenger`). Der Deckel je Lauf
+ *      (factory#268) ist Regeltext, seine Zahl steht nur in AGENTS.md und wird von sammelticket-deckel.test.ts bewacht.
  *
  * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
  * auch in anderem Zusammenhang; darum hat das wiederkehrende Status-Ticket keine Position mehr:
@@ -116,16 +117,16 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 
   test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
-    assert.match(agents, /Kommt es dran: abarbeiten, und zwar \*\*komplett\*\*/);
-    assert.match(abschnitt, /\*\*Abarbeiten:\*\* \*\*alle\*\* Zeilen umsetzen, kein Teil und kein Rest-Übertrag/);
+    assert.match(agents, /Kommt es dran: je Lauf \*\*Deckel \d+ Zeilen\*\* und `check:diffsize`, diese \*\*komplett\*\*/);
+    assert.match(abschnitt, /\*\*Abarbeiten:\*\* je Lauf höchstens der Deckel laut AGENTS\.md/);
     assert.ok(abschnitt.includes(OVERRIDE), "zu große PRs deckt der begründete Override (mit Platzhalter, nicht mit dem Projektpräfix)");
     assert.doesNotMatch(abschnitt, PROJEKT_LITERAL, "kein Projektpräfix vor Diffsize-Override in der Kern-Doku");
   });
 
   test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
-    assert.match(lies(".claude/agents/factory-umsetzer.md"), /setze ALLE Zeilen um/);
-    assert.match(lies(".claude/agents/factory-planer.md"), /plane ALLE Zeilen/);
-    assert.match(lies(".agents/skills/factory/ablauf.md"), /komplett umsetzen, kein Rest-Übertrag/);
+    assert.match(lies(".claude/agents/factory-umsetzer.md"), /setze ALLE gewählten Zeilen/);
+    assert.match(lies(".claude/agents/factory-planer.md"), /plane höchstens den Deckel laut AGENTS\.md/);
+    assert.match(lies(".agents/skills/factory/ablauf.md"), /die gewählten Zeilen komplett/);
   });
 
   test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {
@@ -141,7 +142,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
   const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
 
   /** Verlangt der Abarbeiten-Bullet ein Ergebnis je Zeile, alle Zeilen und den Override für zu große PRs? Ein Prädikat für Artefakt und Gegenbeispiel. */
-  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes(OVERRIDE) && s.includes("nichts wird still ausgelagert");
+  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** gewählten Zeilen") && s.includes("**Ergebnis**") && s.includes(OVERRIDE) && s.includes("nichts wird still ausgelagert");
   /** Beschreibt ein Text noch die Halbierung (die Teilung der Zeilenliste, #1309)? */
   const halbiert = (s: string) => /zweite Hälfte/.test(s) || /erste Hälfte/.test(s);
 
@@ -168,7 +169,7 @@ describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung au
   });
 });
 
-describe("keine Zeilengrenze für Sammeltickets (#1687, ADR 0026)", () => {
+describe("keine Generationsgrenze im Takt (#1687, ADR 0026)", () => {
   const VERBOTEN = /--generation\b|SAMMEL_ZEILEN_GRENZE|Generationsgrenze|planeGeneration|entscheideGeneration|generationsKommentar|Generation voll/;
   const workflows = readdirSync(fileURLToPath(new URL("../../.github/workflows", import.meta.url)))
     .filter((f) => f.endsWith(".yml"))

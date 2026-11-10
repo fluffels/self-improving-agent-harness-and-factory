@@ -343,7 +343,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(sammelticketOhneLangfuse(tr, agents));
     // darf NICHT passieren: die Auswertung kehrt in anderem Wortlaut zurück
     assert.ok(!sammelticketOhneLangfuse(tr.replace("- **Abarbeiten:**", "- **Abarbeiten:** zuerst die Langfuse-Auswertung,"), agents));
-    assert.ok(!sammelticketOhneLangfuse(tr, agents.replace("Kommt es dran: abarbeiten", "Kommt es dran: zuerst Langfuse auswerten, abarbeiten")));
+    assert.ok(!sammelticketOhneLangfuse(tr, agents.replace("Kommt es dran: je Lauf", "Kommt es dran: zuerst Langfuse auswerten, je Lauf")));
     assert.ok(!sammelticketOhneLangfuse("", agents));
   });
 
