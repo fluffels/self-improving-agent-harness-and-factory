@@ -1032,7 +1032,7 @@ describe("struktur.moduldoku: null in den Funktionen selbst (#97 Runde 1)", () =
     const d = tmp();
     mkdirSync(join(d, "lib"));
     writeFileSync(join(d, "lib", "a.ts"), "x\n");
-    const s ={ quelle: "lib", moduldoku: null };
+    const s = { quelle: "lib", moduldoku: null };
     assert.deepEqual([...dm.parseDeepDocMaps(d, s)], []);
     const a = dm.auditDocMap(d, s);
     assert.equal(a.entfaellt, true);

@@ -51,7 +51,7 @@ const KOPF = new RegExp(`^ABNAHME\\s+#(\\d+)\\s*·\\s*${ABNAHME_AGENT}\\s*$`);
 const URTEILSZEILE = /^\s*(?:[-*]\s+)?K(\d+):\s*(.+?)\s+[—–-]\s+(\S.*)$/;
 /** Beleg des Skripts für ein Nach-Merge-Kriterium (den echten Beleg liefert der Umsetzer nach dem Merge als PR-Kommentar). */
 const NACH_MERGE_BELEG = "Beleg folgt nach dem Merge als PR-Kommentar des Umsetzers";
-const KANDIDAT =/^\s*(?:[-*]\s+)?K\d+:/;
+const KANDIDAT = /^\s*(?:[-*]\s+)?K\d+:/;
 
 /** Fehlertext zur Ursache einer Berichtszeile (Pflicht bei nicht-erfuellt, sonst verboten); `null`, wenn sie passt. */
 function ursachenFehler(wert, ursache) {
@@ -98,7 +98,7 @@ export function parseBericht(text, nr, kriterienListe) {
     if (f !== null) fehler.push(`${k}: ${f}`);
     else gefunden.set(k, { k, wert, beleg: m[3].trim(), ...(ursache ? { ursache } : {}) });
   }
-  for (const { k } of kriterienListe) if (!nachMerge.has(k) && !gefunden.has(k) &&!fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
+  for (const { k } of kriterienListe) if (!nachMerge.has(k) && !gefunden.has(k) && !fehler.some((f) => f.startsWith(`${k}:`))) fehler.push(`${k}: fehlt im Bericht`);
   if (fehler.length > 0) return { fehler };
   return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }

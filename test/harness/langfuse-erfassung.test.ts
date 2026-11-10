@@ -293,7 +293,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     const sabotagen: [string, string, string][] = [
       ["schedule:", "pull_request:", "Cron"],
       ['- cron: "17 5 * * 1"', "", "Cron-Zeile weg, schedule: bleibt"],
-      ["concurrency:"+"\n  group: board-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
+      ["concurrency:" + "\n  group: board-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
       ["  group: board-takt\n", "", "group: weg"],
       ["run: node scripts/board-takt.mjs", "run: echo node scripts/langfuse-takt.mjs", "falsche run-Zeile (echo)"],
       ["run: node scripts/board-takt.mjs", "run: node scripts/anderes.mjs", "falsches Skript"],

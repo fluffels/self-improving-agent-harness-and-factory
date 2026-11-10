@@ -20,6 +20,12 @@ export default tseslint.config(
     rules: { "regexp/no-empty-alternative": "error" },
   },
 
+  // Leerraum um Operatoren: fängt Reste wie `const x ="…"` oder `const y =readFileSync(…)` (eingebaute Regel, kein Stylistic-Paket nötig).
+  {
+    files: ["**/*.{js,mjs,cjs,ts}"],
+    rules: { "space-infix-ops": "error" },
+  },
+
   // Reine JS-Dateien (diese Config, scripts/*.mjs): JS-Basisregeln und Node-Globals.
   {
     files: ["**/*.{js,mjs,cjs}"],

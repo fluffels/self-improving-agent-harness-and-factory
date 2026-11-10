@@ -42,7 +42,7 @@ const A = raw as unknown as {
   ABNAHME_AGENT: string;
 };
 const nl = rawNl as unknown as { parseAbnahmeMarker: (z: Zeilen, text: string) => { urteil: unknown[] } | null };
-const commitZeilen =(so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
+const commitZeilen = (so as unknown as { commitZeilen: (p: string, pl: string) => Zeilen }).commitZeilen;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer) as { praefix: string; abnahme: string };
 const MARKER = FREMD_ABNAHME_MARKER;
 

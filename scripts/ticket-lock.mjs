@@ -404,7 +404,7 @@ const FLAG_MENGEN = {
   lebenszeichen: { optionen: { nonce: { type: "string" }, schritt: { type: "string" } }, pflicht: ["nonce"] },
 };
 
-const USAGE ="Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit | erzwingen <nr> --grund <text>";
+const USAGE = "Aufruf: claim <nr> [--wiederaufnahme] | pruefe <nr> [--nonce <x>] | freigeben <nr> --nonce <x> | wiederherstellen <nr> --nonce <x> | uebergeben <nr> --nonce <x> | gestoppt <nr> --nonce <x> | uebernehmen <nr> --nonce <x> --nachfolger | lebenszeichen <nr> --nonce <x> [--schritt <text>] | lebenszeichen --commit | erzwingen <nr> --grund <text>";
 
 /**
  * Liest den Aufruf vor jedem I/O: `{ commit: true }` für `lebenszeichen --commit` (genau diese zwei Argumente, post-commit-Hook), sonst
