@@ -7,6 +7,16 @@
       "grund": "Temp-Ordner-Hilfe der Kern-Tests"
     },
     {
+      "muster": "test/support/bezieher-npm-skripte.ts",
+      "art": "test-hilfe",
+      "grund": "Liste der Bezieher-npm-Skripte, geteilt von Kern-Tests"
+    },
+    {
+      "muster": "test/harness/kern-laufzeittexte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/support/besitz-anker.ts",
       "art": "test-hilfe",
       "grund": "Leerlauf-Schutz der Kern-Tests (Anker aus dem Besitz-Manifest)"

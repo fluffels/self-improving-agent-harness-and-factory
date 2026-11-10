@@ -107,7 +107,7 @@ describe("main", () => {
   test("Aufruf-Fehler: Exit 2 und Aufruf-Hinweis", async () => {
     const [err] = stumm();
     expect(await main(["--port", "abc"], process.cwd())).toBe(2);
-    expect(String(err.mock.calls[0][0])).toContain("Aufruf: npm run cockpit");
+    expect(String(err.mock.calls[0][0])).toContain("Aufruf: node scripts/cockpit/cockpit.mjs");
   });
 
   test("Erfolg: liefert schliessen und die Startmeldung mit der Adresse", async () => {

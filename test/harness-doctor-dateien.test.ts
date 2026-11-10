@@ -9,6 +9,7 @@ import { describe, expect, test } from "vitest";
 import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt } from "../scripts/harness-doctor-dateien.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { blockformAusloeser as rawBlockformAusloeser } from "../scripts/workflow-blockform.mjs";
+import { BEZIEHER_NPM_SKRIPTE } from "./support/bezieher-npm-skripte";
 import { fixture } from "./support/tmp-fixture";
 
 const rawAusloeser = rawBlockformAusloeser as (text: string) => { ausloeser: string[] };
@@ -392,8 +393,7 @@ describe("Gezielter Test (factory#208 L23)", () => {
 });
 
 describe("Fix-Texte nennen nur Bezieher-Skripte (factory#177)", () => {
-  /** Spiegel der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` in test/harness/besitz-abschnittsverweise.test.ts. */
-  const ERLAUBT = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
+  const ERLAUBT = BEZIEHER_NPM_SKRIPTE;
   const npmNamen = (text: string) => [...text.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
 
   test("kein Fix-Text (Projektdateien, Langfuse-Takt) nennt ein npm-Skript außerhalb der Liste", () => {

@@ -45,7 +45,7 @@ export function sammleLinks(rootDir, optionen) {
   return sammleLinksAus({ dateien: collectMarkdown(rootDir), lies }, optionen);
 }
 
-const SCHREIB_WEG = "Weg: `npm run check:factorylinks -- --schreiben --quelle <klon des Factory-Repos>`";
+const SCHREIB_WEG = "Weg: `node scripts/check-factory-links.mjs --schreiben --quelle <klon des Factory-Repos>`";
 
 const paarSchluessel = (pfad, anker) => `${pfad}\0${anker}`;
 

@@ -23,9 +23,9 @@
  * Kern-Links zählen nur aus `.md`-Quellen wie im Sync. Zusätzliche Überschriften auf einer eigenen Bezieher-Seite zählen nicht.
  *
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
- * (`BEZIEHER_NPM_SKRIPTE`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
- * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; .mjs-Laufzeittexte
- * bewusst nicht. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
+ * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
+ * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; die .mjs-Laufzeittexte
+ * deckt `kern-laufzeittexte.test.ts` mit derselben Liste ab. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
  * mit einer `SIH-Bezieher-Migration:`-Zeile.
  *
  * Dritte Regel (factory#220 L34): Link-Anker `docs/<x>.md#<anker>` in Besitz-Spannen verteilter `.md`-Einheiten auf eine Fabrik-Seite, die
@@ -51,6 +51,7 @@ import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import * as rawLinks from "../../scripts/factory-links-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+import { BEZIEHER_NPM_SKRIPTE } from "../support/bezieher-npm-skripte";
 import { fixture } from "../support/tmp-fixture";
 
 interface Verweis {
@@ -477,9 +478,6 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(funde, [], `Fabrik-Verweise ohne Treffer in der Fabrik-Seite:\n${funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment}`).join("\n")}`);
   });
 });
-
-/** Skripte, die jedes Bezieher-Repo aus der Grundausstattung hat; nur diese darf Besitz-Text als `npm run <x>` nennen (alles andere: `node scripts/<x>.mjs`). */
-const BEZIEHER_NPM_SKRIPTE = new Set(["check:docdrift", "check:docmap", "check:factorydrift", "check:internalrefs", "check:size", "skills:sync"]);
 
 /** Gemerkte `npm run`-Namen in Besitz-Spannen verteilter `.md`-Einheiten, die ein Bezieher nicht hat. */
 function scanneKommandos(wurzel: string): { funde: { datei: string; name: string }[]; erwaehnungen: number } {
