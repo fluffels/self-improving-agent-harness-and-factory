@@ -395,12 +395,15 @@ export function konfigFehlerText(e, rootDir = "") {
   return text.includes("Fix:") ? text : `${text}\nFix: Ruleset-Spiegel laut rulesetSpiegel in der Projekt-Config reparieren (Vorlage der Quelle: ${factorySeiteIn(rootDir, RULESET_VORLAGE)}), dann erneut prüfen`;
 }
 
+/** Die lokalen Punkte (`Git-Hooks`, `Board-Ansicht`, factory#247): leer ohne `lokal` (Wochenlauf, `--einrichten`), sonst `lokal({ rootDir, config })` (der Aufrufer verdrahtet die Punkte). */
+const lokalePunkte = ({ lokal, rootDir, config }) => (typeof lokal === "function" ? lokal({ rootDir, config }) : []);
+
 /**
  * Lädt Config und Ruleset-Spiegel und führt alle Prüfpunkte aus: `{ config, ergebnis }`. Wirft bei unlesbarer Config oder unlesbarem Spiegel,
  * bevor ein einziger `gh`-Aufruf läuft. `langfuse: null` lässt den Langfuse-Punkt aus, `dateien: null` die Dateipunkte (`dateien({ rootDir, config, spiegel, workflows, pflichtChecks })` mit der geladenen Config, dem Spiegel, den einmal gelesenen Workflows und der Soll-Liste `voraussetzungen.pflichtChecks` liefert Ergebnisse wie `pruefeDateien`, factory#94, factory#148; der Aufrufer reicht die Funktion am Rand herein), ein fehlendes `rulesetLesen` den Punkt `Ruleset-Spiegel` (nur lokal: `rulesetLesen(args)` liest die geparste Antwort des Ruleset-Endpunkts, harness-doctor-ruleset.mjs; `bypass_actors` braucht Admin-Recht), `umgebung: null` den Altnamen-Punkt (`{ env, namen }` prüft ihn: `namen` sind die `FACTORY_…`-Namen aus `kernEnvNamen`, die der Aufrufer am Rand bestimmt; die Lib liest dafür keine Dateien); `mitWochenlauf` rechnet die Vorlage des Wochenlaufs
  * als Workflow mit, falls die Datei fehlt (dann erscheinen ihre Secrets schon im Plan von `--einrichten`).
  */
-export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null, dateien = null, rulesetLesen }) {
+export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenlauf = false, umgebung = null, dateien = null, rulesetLesen, lokal }) {
   if (umgebung && !Array.isArray(umgebung.namen)) throw new Error("umgebung braucht { env, namen }: die Kern-Namen bestimmt der Aufrufer am Rand (kernEnvNamen)");
   const config = ladeProjektConfig({ rootDir, pfad: configPfad });
   const spiegel = config.rulesetSpiegel ? ladeRulesetSpiegel(rootDir, config.rulesetSpiegel) : undefined;
@@ -412,7 +415,7 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const voraussetzungen = voraussetzungenAus({ config, workflows, spiegel, besitz });
   const ergebnis = pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung });
   if (dateien) ergebnis.push(...dateien({ rootDir, config, spiegel, workflows, pflichtChecks: voraussetzungen.pflichtChecks }));
-  ergebnis.push(...rulesetPunkte({ spiegel, repo: config.repo, lesen: rulesetLesen }));
+  ergebnis.push(...rulesetPunkte({ spiegel, repo: config.repo, lesen: rulesetLesen }), ...lokalePunkte({ lokal, rootDir, config }));
   return { config, ergebnis };
 }
 
