@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMelden from "../scripts/harness-doctor-melden.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDoctor from "../scripts/harness-doctor.mjs";
 
 interface Luecke { punkt: string; befund: string; fix: string; nichtPruefbar?: boolean }
 interface Kommentar { user: { login: string; type: string } | null; body: string }
@@ -355,6 +357,31 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     }
     assert.deepEqual(punkte.filter((p) => p.punkt === "Meldestelle"), [{ punkt: "Meldestelle", ok: true }]);
     assert.deepEqual(lesungen[0], [["api", "repos/eingang/privat"], { token: "mt", timeout: 30000 }]);
+  });
+  test("Wochenlauf (L16a): `dateien` hat genau die Punktnamen der Standard-Dateipunkte von harness-doctor.mjs, keine eigene Liste", async () => {
+    const lesen = () => ({ has_issues: true, state: "active" });
+    type Punkte = (a: { rootDir: string; config: unknown }) => { punkt: string }[];
+    let dateien: Punkte | undefined;
+    const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [], kommentare: [], owner: "acme" }), waehleSammelticket: () => undefined, postZeilen: () => assert.fail("nichts zu posten") };
+    await melden.main(["--dry-run"], {
+      env: { MELDESTELLE_TOKEN: "mt" },
+      api: lesen,
+      ladeConfig: () => ({}),
+      ladeLibs: () => Promise.resolve(libs),
+      log: () => undefined,
+      err: () => undefined,
+      pruefLauf: (a) => { dateien = a.dateien as Punkte; return { ergebnis: [] }; },
+    });
+    const wurzel = mkdtempSync(join(tmpdir(), "l16a-"));
+    try {
+      const config = { repo: "acme/proj", meldestelle: "eingang/privat" };
+      const doktor = rawDoctor.dateienStandard({ env: { MELDESTELLE_TOKEN: "mt" }, lesen }) as Punkte;
+      const namen = (f?: Punkte) => (f?.({ rootDir: wurzel, config }) ?? []).map((p) => p.punkt);
+      assert.ok(namen(doktor).length > 7, "Gegenprobe: die Standardliste trägt mehr als die Basis-Dateipunkte");
+      assert.deepEqual(namen(dateien), namen(doktor));
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
   describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
     const lauf = async (ziel: string, env: Record<string, string>) => {
