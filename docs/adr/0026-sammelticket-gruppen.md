@@ -56,3 +56,7 @@ Entscheidung 3 (Generationsgrenze samt Nachfolger-Anlage im Board-Takt), der Gre
 **Entscheidung: die Grenze entfällt, weil die Maintainerin es so entschieden hat; die Gruppen-Umsetzer (Entscheidung 2) fangen den wachsenden Kontext ab.** Anlass: ein vom Takt angelegter Nachfolger (#1685) musste aus #1663 von Hand zurückgelegt werden. Bleiben: `--vorgaenger`, die Gruppen-Umsetzer und `zaehleBefundZeilen` für die Nachmessung. Der Workflow-Schritt und `--generation` entfallen; ein Wächter (`test/harness/sammelticket.test.ts`) hält sie draußen.
 
 **Re-Evaluierung:** geht ein Sammelticket trotz Gruppen über das Review-Limit oder steigen Review-Runden und Nacharbeit, steht eine Grenze neu zur Wahl.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen als Dateien unter [`fortschreibungen/`](fortschreibungen/0026-268-sammelticket-deckel.md) (Konvention: [README](README.md#format)); dort: [factory#268](fortschreibungen/0026-268-sammelticket-deckel.md) führt einen Deckel je Sammelticket-Lauf ein (Zahl nur in AGENTS.md); der Rest geht ins Folge-Sammelticket.
