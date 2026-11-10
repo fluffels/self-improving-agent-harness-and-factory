@@ -231,11 +231,13 @@ describe("Sammelticket-Deckel: der Rest kommt nicht in denselben PR (factory#268
  * ein Ausnahme-Eintrag, der nichts mehr trifft, ist ebenfalls rot (keine toten Einträge).
  *
  * Bekannte Grenzen: Zahlen in Worten („zwölf Zeilen“), Tabellenzellen ohne „Zeilen“, Skripte und Tests, andere Dateiarten,
- * eine Regel ohne die Mengenwörter in einer Zeile ohne „Sammelticket“/„gesammelt“; ein Ausnahme-Treffer gilt für die
+ * eine Regel ohne die Mengenwörter in einer Zeile ohne „Sammelticket“/„gesammelt“ („max. 15 Zeilen“, „nicht mehr als 15 Zeilen“);
+ * eine zweite Dateizahl-Regel (die Dateigrenze ist der Verweis auf check:diffsize, ohne eigene Zahl); die Historie-Ausnahme
+ * (Dateiname mit Datum) ist nur über die echte Dateiliste belegt, nicht als reine Funktion; ein Ausnahme-Treffer gilt für die
  * ganze Datei (nicht je Zeile); Markdown-Auszeichnung im Treffer („**12** Zeilen“) wird nicht normalisiert.
  */
 const SCAN_WURZELN = ["docs", ".agents", ".claude/agents"];
-const REGEL_A = /(?:höchstens|maximal|bis zu|Obergrenze|Deckel|Limit)\D{0,20}\d+\s+(?:Befund-)?Zeilen/gi;
+const REGEL_A = /(?:höchstens|maximal|bis zu|Obergrenze|Deckel|Limit)\D{0,20}(?:\d+\s*(?:[–-]|bis)\s*)?\d+\s+(?:Befund-)?Zeilen/gi;
 const REGEL_B = /\d+\s+(?:Befund-)?Zeilen|Zeilen (?:je|pro) (?:Lauf|PR)/gi;
 const SAMMELTICKET = /Sammelticket|gesammelt/i;
 
@@ -247,8 +249,8 @@ export const ZEILENZAHL_AUSNAHMEN: { pfad: string; treffer: string; grund: strin
   { pfad: ".claude/agents/factory-planer.md", treffer: "6 Zeilen", grund: "Schwelle für Gruppen (ADR 0026), kein Deckel je Lauf" },
   { pfad: "docs/ticket-reihenfolge.md", treffer: "6 Zeilen", grund: "Schwelle für Gruppen (ADR 0026), kein Deckel je Lauf" },
   { pfad: "docs/model-routing.md", treffer: "300 Zeilen", grund: "Messung Planer-Laufzeit" },
-  { pfad: "docs/model-routing.md", treffer: "200 Zeilen", grund: "Messung (Kontext sparen)" },
-  { pfad: "docs/model-routing.md", treffer: "100 Zeilen", grund: "Messung (Kontext sparen)" },
+  { pfad: "docs/model-routing.md", treffer: "200 Zeilen", grund: "Messung Teil-Umsetzer (quellprojekt#1583)" },
+  { pfad: "docs/model-routing.md", treffer: "100 Zeilen", grund: "Messung Teil-Umsetzer (quellprojekt#1583)" },
   { pfad: "docs/model-routing.md", treffer: "1000 Zeilen", grund: "Messung (Datei-Lesegrenze)" },
 ];
 
@@ -320,15 +322,37 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
         "Alles gesammelt in 12 Zeilen.",
         "Das Sammelticket schneidet 12 Zeilen.",
         "Das Sammelticket schneidet 16 Zeilen.",
+        "Der Deckel liegt je Lauf bei 12 Zeilen.",
+        "Deckel12 Zeilen.",
+        "Je Lauf höchstens 12–15 Zeilen.",
+        "Der Deckel liegt bei 12 bis 15 Zeilen.",
+        "Limit 12-15 Zeilen.",
+        "Höchstens 12 Zeilen je Lauf.",
+        "Das Sammelticket schneidet 12 Befund-Zeilen.",
+        "Gesammelt wird in 12 Zeilen.",
+        "Das Sammelticket schneidet 12\u00a0Zeilen.",
+        "Limit" + "x".repeat(20) + "12 Zeilen.",
       ]) {
         assert.ok(zeilenzahlVerstoesse(mit(pfad, zusatz)).some((v) => v.startsWith(`${pfad}: „`)), `${pfad}: ${zusatz}`);
       }
     }
   });
 
+  test("Negativfälle an der Grenze: 21 Zeichen Abstand zum Mengenwort, zweiter Treffer in der Zeile, Ausnahme nur exakt", () => {
+    assert.deepEqual(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Limit" + "x".repeat(21) + "12 Zeilen." }], []), []);
+    const gruppe = { pfad: ".claude/agents/factory-gruppe.md", text: "Bericht höchstens ~15 Zeilen, je Lauf maximal 12 Zeilen." };
+    assert.ok(zeilenzahlVerstoesse([gruppe]).some((v) => v.includes("maximal 12 Zeilen")), "ein erlaubter Treffer deckt keinen zweiten in derselben Zeile");
+    assert.equal(zeilenzahlVerstoesse([{ pfad: ".claude/agents/factory-gruppe.md", text: "Bericht Höchstens ~15 Zeilen." }]).length > 0, true, "andere Groß-/Kleinschreibung ist keine Ausnahme");
+  });
+
   test("Negativfall: ein zweiter Deckel in AGENTS.md selbst und ein toter Ausnahme-Eintrag werden erkannt", () => {
     const agents = echte.find((d) => d.pfad === "AGENTS.md")!;
     assert.deepEqual(zeilenzahlVerstoesse([agents], []), []);
+    // die SSOT-Stelle wird nur in AGENTS.md gestrichen, nur sie, nicht die ganze Zeile
+    assert.equal(zeilenzahlVerstoesse([{ pfad: "docs/x.md", text: "Sammelticket: je Lauf Deckel 12 Zeilen." }], []).length > 0, true);
+    const zeileMitZweiter = zeilenzahlVerstoesse([{ pfad: "AGENTS.md", text: "Sammelticket: je Lauf **Deckel 12 Zeilen**, höchstens 15 Zeilen je PR" }], []);
+    assert.ok(zeileMitZweiter.some((v) => v.includes("höchstens 15 Zeilen")), "zweite Zahl in der SSOT-Zeile");
+    assert.ok(!zeileMitZweiter.some((v) => v.includes("Deckel 12 Zeilen")), "die SSOT-Stelle selbst ist kein Verstoß");
     assert.equal(zeilenzahlVerstoesse([{ pfad: "AGENTS.md", text: `${agents.text}\nDeckel 15 Zeilen` }], []).length, 1);
     assert.equal(zeilenzahlVerstoesse([{ pfad: "x.md", text: "nichts" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]).length, 1);
     assert.deepEqual(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Sammelticket: 7 Zeilen" }], [{ pfad: "x.md", treffer: "7 Zeilen", grund: "g" }]), []);
