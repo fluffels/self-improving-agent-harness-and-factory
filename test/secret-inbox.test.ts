@@ -123,6 +123,18 @@ describe("plane (Secret-Ticket)", () => {
   });
 });
 
+describe("gh api in den erzeugten Bodys: Listen vollständig lesen (L31)", () => {
+  const aufrufe = (text: string) => text.match(/`gh api [^`]*`/g) ?? [];
+  test("jedes `gh api` im Prüf- und im Secret-Ticket trägt --paginate und per_page=100", () => {
+    const alle = [...aufrufe(S.checkBody("o/r")), ...aufrufe(S.issueBody(S.befundeAusAlerts([alert()])))];
+    expect(alle.length).toBeGreaterThanOrEqual(5);
+    for (const a of alle) {
+      expect(a, a).toContain("--paginate");
+      expect(a, a).toContain("per_page=100");
+    }
+  });
+});
+
 describe("Prüf-Ticket", () => {
   test("keins offen: anlegen; eins: wiederverwenden; mehrere: genau das kleinste bleibt", () => {
     expect(S.planeCheck({ offene: [] }).art).toBe("anlegen");
@@ -132,7 +144,7 @@ describe("Prüf-Ticket", () => {
   test("Text: Checkliste der vier Tabs, `--jq` ohne Feld secret, Schließ-Regeln", () => {
     const t = S.checkBody("o/r");
     for (const tab of ["Secret-Scanning-Tab", "Code-Scanning-Tab", "Dependabot-Alerts", "Security-Advisories"]) expect(t).toContain(tab);
-    expect(t).toContain("secret-scanning/alerts --jq '.[] | {number,state,secret_type_display_name,html_url}'");
+    expect(t).toContain("secret-scanning/alerts?per_page=100\" --jq '.[] | {number,state,secret_type_display_name,html_url}'");
     expect(t).not.toMatch(/\{[^}]*\bsecret\b[^}]*\}/);
     expect(t).toContain("schließt sich NIE selbst");
     expect(t).toContain("`revoked`");
