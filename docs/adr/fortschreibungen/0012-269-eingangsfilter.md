@@ -20,5 +20,5 @@ Die Schleife „Befund, Zeile, Sammelticket, Lauf, neue Befunde“ hatte keinen 
 
 - Altzeilen ohne Klasse bleiben gültig; beim Übertrag des Rests verlangt `melden.mjs` Klasse und Beleg. Nichts wird still gelöscht.
 - Weniger Zeilen: das Sammelticket füllt sich langsamer, der Takt holt es seltener.
-- Grenze des Wächters (`test/harness/befund-zeile.test.ts`): geschlossene Liste der Erzeuger-Texte; Umformulierungen und die Sicherheits-Inboxen erkennt er nicht.
+- Grenze des Wächters (`test/harness/befund-zeile.test.ts`): geschlossene Liste der Erzeuger-Texte; Umformulierungen und die Sicherheits-Inboxen erkennt er nicht. Der Beleg wird nur syntaktisch geprüft (mindestens ein Wort oder eine Zahl): ein inhaltsleerer Beleg wie „keiner“ besteht. Der Verfall ist das letzte Feld der Zeile (davor oder danach nur `(aus #n)`).
 - Codex liest AGENTS.md nativ und nutzt dasselbe `melden.mjs`; `docs/codex/` hat keinen Sammelticket-Text, es gibt keinen eigenen Adapter.

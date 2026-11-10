@@ -7,7 +7,7 @@
  *
  * Bewusste Grenze: geprüft werden nur die geschlossene Liste ERZEUGER (je eine Zeile je Datei), das Zeilenformat an Beispielen und die
  * Ausgabe von `zeileFuer` und `gescheitertZeile`. Die Sicherheits-Inboxen (`Audit:`, `Code-Scanning:`) behalten ihr festes Format und sind
- * ausgenommen; eine Umformulierung eines Erzeuger-Textes, die die Verweis-Wörter behält, erkennt der Test nicht.
+ * ausgenommen; der Beleg wird nur syntaktisch geprüft (Wort oder Zahl), ein inhaltsleerer Beleg wie „keiner“ besteht; eine Umformulierung eines Erzeuger-Textes, die die Verweis-Wörter behält, erkennt der Test nicht.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -70,6 +70,9 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.match(gut("- [ ] Hypothese: x Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
     assert.match(gut("- [ ] Kosmetik: x Beleg: Verfall: 2026-12-08").fehler ?? "", /kein Beleg/);
     assert.equal(gut("- [ ] Defekt: x Beleg: 42").ok, true);
+    assert.equal(gut("- [ ] Defekt: mitVerfall setzt Verfall: doppelt Beleg: test/a.ts:3").ok, true, "Verfall: im Befund-Text ist kein Verfallsfeld");
+    assert.equal(gut("- [ ] Kosmetik: Feld Verfall: fehlt im Glossar Beleg: docs/a.md:3 Verfall: 2026-12-08").ok, true);
+    assert.equal(titel.mitVerfall("- [ ] Kosmetik: Feld Verfall: fehlt Beleg: docs/a.md:3", "2026-11-20"), "- [ ] Kosmetik: Feld Verfall: fehlt Beleg: docs/a.md:3 Verfall: 2026-12-18");
     assert.equal(gut("- [ ] Defekt: x Beleg: (aus #1) (aus #2)").ok, false);
     assert.equal(gut("- [ ] Defekt (Sicherheit): ohne Beleg").ok, false);
   });
@@ -89,7 +92,7 @@ describe("Zeilenformat: Klasse, Beleg, Verfall (factory#269)", () => {
     assert.equal(titel.mitVerfall("- [ ] Kosmetik: x Beleg: y1", "2026-11-20"), "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-18");
     const bleibt = ["- [ ] Defekt: x Beleg: y1", "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-01", "- [ ] Hypothese (Sicherheit): x", "kein Listenpunkt"];
     for (const z of bleibt) assert.equal(titel.mitVerfall(z, "2026-11-20"), z);
-    const uebertrag = ["- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08 (aus #12) (aus #20)", "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08. Fix: z (aus #12)"];
+    const uebertrag = ["- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08 (aus #12) (aus #20)", "- [ ] Kosmetik: x Beleg: y1 Verfall: 2026-12-08"];
     for (const z of uebertrag) assert.equal(titel.mitVerfall(z, "2026-11-20"), z, "Übertrag verlängert den Verfall nie");
   });
 });
