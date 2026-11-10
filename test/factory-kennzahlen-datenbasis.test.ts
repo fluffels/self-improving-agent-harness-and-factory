@@ -22,7 +22,7 @@ const F = raw as unknown as {
 
 const t = (ticket: number): Ticket => ({ ticket, pr: ticket + 1000 });
 const karte = (e: Record<number, string[]>): Claims => new Map(Object.entries(e).map(([k, v]) => [Number(k), v.map((session) => ({ session, ts: "2026-11-01T10:00:00Z" }))]));
-const lauf = (zeilen: { pr: number; ticket: number }[]) =>
+const lauf = (zeilen: { pr: number; ticket: number | null }[]) =>
   JSON.stringify({
     zeilen: zeilen.map((z) => ({ ...z, gemergt: "2026-11-02T10:00:00Z", ciFix: 0, nacharbeit: "keine", abnahme: null })),
     kennzahlen: { prs: 0, ohneNacharbeit: 0, nachweisbareFenster: 0, nacharbeitOffen: 0, ciFixSumme: 0, festgefahrenSumme: 0, runde1MitBlocker: 0, mitBlockerFeld: 0, abnahme: { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 } },
@@ -86,11 +86,13 @@ describe("erstelleDatenbasis", () => {
   const ra = { von: "2026-11-01T00:00:00Z", bis: "2026-11-08T00:00:00Z" };
   const mitRun = (stdout: string, status = 0) => {
     const aufrufe: string[] = [];
-    const run: Run = (name) => {
+    const argumente: string[][] = [];
+    const run: Run = (name, args) => {
       aufrufe.push(name);
+      argumente.push(args);
       return { status, stdout, stderr: status === 0 ? "" : "boom" };
     };
-    return { run, aufrufe };
+    return { run, aufrufe, argumente };
   };
   test("Exit 3 bei verletzt, 0 bei teilweise, 0 bei erfüllt, 0 bei leer; nur lauf-ergebnis wird gestartet", () => {
     const zeilen = [{ pr: 11, ticket: 1 }, { pr: 12, ticket: 2 }];
@@ -100,6 +102,23 @@ describe("erstelleDatenbasis", () => {
     expect(F.erstelleDatenbasis(ra, { run: a.run, claimKarte: () => karte({ 1: ["a"], 2: ["b"] }) }).exit).toBe(0);
     expect(F.erstelleDatenbasis(ra, { run: mitRun(lauf([])).run, claimKarte: () => karte({}) }).exit).toBe(0);
     expect(new Set(a.aufrufe)).toEqual(new Set(["lauf-ergebnis.mjs"]));
+  });
+  test("Ticket-Läufe zählen über ticketLaeufe: PR ohne Ticket (Bot) und zwei PRs je Ticket zählen nicht doppelt", () => {
+    const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }, { pr: 12, ticket: null }, { pr: 13, ticket: 1 }])).run, claimKarte: () => karte({ 1: ["a"] }) });
+    expect(r.exit).toBe(0);
+    expect(r.text).toContain("Stand: erfüllt");
+    expect(r.text).toContain("1 von 1");
+  });
+  test("lauf-ergebnis bekommt das Fenster in der Reihenfolge --von, --bis", () => {
+    const m = mitRun(lauf([]));
+    F.erstelleDatenbasis(ra, { run: m.run, claimKarte: () => karte({}) });
+    expect(m.argumente[0]).toEqual(expect.arrayContaining(["--von", ra.von, "--bis", ra.bis]));
+    expect(m.argumente[0].indexOf("--von") + 1).toBe(m.argumente[0].indexOf(ra.von));
+    expect(m.argumente[0].indexOf("--bis") + 1).toBe(m.argumente[0].indexOf(ra.bis));
+  });
+  test("der gerenderte Text nennt den Stand", () => {
+    const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }, { pr: 12, ticket: 2 }])).run, claimKarte: () => karte({ 1: ["a"] }) });
+    expect(r.text).toContain("Stand: teilweise");
   });
   test("verletzt: der Text trägt den Abschnitt Datenbasis und die Vorbedingung", () => {
     const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }])).run, claimKarte: () => karte({}) });

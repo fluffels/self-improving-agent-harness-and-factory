@@ -71,7 +71,7 @@ const hatErfassungsRegel = (agentsMd: string): boolean => {
 /** Der Checklisten-Abschnitt trägt alle fetten Punkte der CHECKLISTE. */
 const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Status überprüfen \(#1293\)/);
-  return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`)) && /listModels/.test(a) && /--datenbasis/.test(a);
+  return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`)) && /^1\. \*\*Datenvollständigkeit.*listModels.*totalPages/m.test(a) && /^\*\*Vorbedingung.*--datenbasis/m.test(a) && /^7\. \*\*Wochenbudget.*--datenbasis/m.test(a);
 };
 
 /** Der Beleg-Ablauf steht in model-routing.md. */
@@ -213,6 +213,11 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vorbedingung (", "Vorbedingung (")));
     assert.ok(!hatChecklisteVollstaendig(mr.replaceAll("listModels", "lesen")));
     assert.ok(!hatChecklisteVollstaendig(mr.replaceAll("--datenbasis", "--pruefung")));
+    // je Stelle einzeln: die historische Tabellenzeile und die anderen Punkte halten sie sonst still grün
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("per `listModels` des Langfuse-MCP (die Instanz", "per Langfuse-MCP (die Instanz")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("alle Seiten bis `meta.totalPages` lesen", "die Seiten lesen")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("Erster Schritt ist `node scripts/factory-kennzahlen.mjs --datenbasis", "Erster Schritt ist `node scripts/factory-kennzahlen.mjs --pruefung")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("bei verletzter Vorbedingung (`--datenbasis` Exit 3)", "bei verletzter Vorbedingung (`--pruefung` Exit 3)")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (quellprojekt#1425):**", "Vermeidbare Arbeit (quellprojekt#1425):")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
   });

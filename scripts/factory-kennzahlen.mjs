@@ -486,8 +486,7 @@ function main(argv) {
   if (args.datenbasis) {
     const d = erstelleDatenbasis({ von, bis }, { claimKarte });
     console.log(d.text);
-    if (d.exit !== 0) process.exit(d.exit);
-    return;
+    process.exit(d.exit);
   }
   const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel() });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
