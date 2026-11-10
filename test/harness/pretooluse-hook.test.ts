@@ -456,6 +456,23 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     }
   });
 
+  test("R4: ein Lens-Worktree-Pfad mit unbekannter Endung (`-lens-b1`, `-lens-b<n>`) wird verweigert, die Meldung nennt r, m, a, c (factory#280 L6)", () => {
+    const wt = FREMD.praefixe.worktree;
+    for (const pfad of [`/w/.claude/worktrees/${wt}7-lens-b1`, `/w/.claude/worktrees/${wt}7-lens-b<n>`, `/w/.claude/worktrees/${wt}<nr>-lens-x2`]) {
+      const prompt = `${gut()} · Sabotage-Worktree: ${pfad}`;
+      assert.equal(deny(agent(prompt))?.hookSpecificOutput.permissionDecision, "deny", pfad);
+      assert.match(grund(agent(prompt)), /-lens-\[?[rmac]/);
+      assert.match(grund(agent(prompt)), /r, m, a, c/);
+    }
+  });
+
+  test("R4 lässt die bekannten Endungen und Platzhalter durch (`-lens-r<runde>`, `-lens-a2`, `-lens-c1`, `-lens-m3`)", () => {
+    const wt = FREMD.praefixe.worktree;
+    for (const ende of ["r<runde>", "r4", "m3", "a2", "c1"]) {
+      assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}7-lens-${ende}`)), null, ende);
+    }
+  });
+
   test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
     const settings = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
     const trifft = (tool: string) => settings.hooks.PreToolUse.filter((e) => new RegExp(`^(${e.matcher})$`).test(tool)).flatMap((e) => e.hooks.flatMap((h) => h.args ?? []));
