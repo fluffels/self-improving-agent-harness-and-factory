@@ -130,6 +130,20 @@ describe("guardListe: Musterliste", () => {
     expect(neu("function f(a = 1,\n  b) {\n}")[0]?.anker.map((a) => a.muster)).toEqual(["Default-Parameter"]);
   });
 
+  test("Default-Parameter: je Default ein Anker (factory#263), Vergleich und Pfeil im Default zählen nicht mit", () => {
+    const zahl = (z: string) => (neu(z)[0]?.anker ?? []).filter((a) => a.muster === "Default-Parameter").length;
+    expect(zahl("function f(a = 1, b = 2) {\n}")).toBe(2);
+    expect(zahl("const g = ({ x = 1, y } = {}) => x;")).toBe(2);
+    expect(zahl("function f(a = x === y) {\n}")).toBe(1);
+    expect(zahl("function f(cb = () => 1) {\n}")).toBe(1);
+    expect(zahl("function f(a, b) {\n}")).toBe(0);
+    expect(ankerListe.formatiere(neu("function f(a = 1, b = 2) {\n}"))).toContain("Default-Parameter×2 :1,:1");
+  });
+
+  test("Verdrahtung reiner Helfer an der Aufrufstelle ist kein Anker (bewusste Grenze, die Lens prüft sie)", () => {
+    expect(neu("function f(x) {\n  const r = g({\n    env: kindUmgebung(x),\n  });\n}")).toEqual([]);
+  });
+
   test("ein Regex-Literal am Zeilenanfang verbirgt seine Zeichen ebenfalls", () => {
     expect(muster("  /a?.b|c && d/,")).toEqual(["Regex-Literal"]);
     expect(muster("  /a?.b|c && d/.test(x);")).toEqual(["Regex-Literal"]);
