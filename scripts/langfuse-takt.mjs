@@ -124,6 +124,14 @@ function bezieherAbschluss(verweis, verdichtung) {
   return `Bericht-Kommentar geschrieben. Projekt-Befunde groß als Issue in diesem Repo, klein als Zeile ins Sammelticket „${SAMMEL_TITEL}“ dieses Repos (\`node scripts/sammelticket-anlegen.mjs langfuse --top\`). Harness-Befunde: erst \`node scripts/check-internalrefs.mjs --text\` (Treffer: nichts senden, umformulieren), dann über den Bezieher-Weg an die Fabrik (${weg}); ${verdichtung}.`;
 }
 
+/** Die Aufruf-Zeilen für Datenbasis-Prüfung und Factory-Kennzahlen; `von` ist der Beginn des Zeitraums. Pur. */
+function kennzahlenZeilen(von) {
+  return [
+    `- **Datenbasis:** \`node scripts/factory-kennzahlen.mjs --datenbasis --von ${von} --bis <Claim-Zeit>\` vor Punkt 1 (Exit 3: Vorbedingung verletzt, Checkliste › Vorbedingung).`,
+    `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${von} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
+  ];
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
@@ -156,7 +164,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
-    `- **Factory-Kennzahlen:** \`node scripts/factory-kennzahlen.mjs --von ${vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"} --bis <Claim-Zeit>\`, den Block unverändert in den Bericht-Kommentar (Checkliste Punkt 10).`,
+    ...kennzahlenZeilen(vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
     `- **Abschluss:** ${abschluss}`,

@@ -31,7 +31,7 @@ export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
     const features = `\n[features]\napps = false\nplugins = false\nmemories = false\nrequest_permissions_tool = false\n${r.ohneShell ? "shell_tool = false\n" : ""}`;
     files[`.codex/agents/${r.name}.toml`] = `name = ${q(r.name)}\ndescription = ${q(r.aufgabe)}\nmodel_reasoning_effort = ${q(r.effort)}\ndeveloper_instructions = ${q(anweisung)}\n${features}`;
   }
-  files[".codex/config.toml"] = `# Generiert aus gemeinsamen Quellen; keine autonome Freigabe.\n[agents]\nenabled = true\n\n[mcp_servers.playwright]\ncommand = ${q(p.command)}\nargs = ${q(p.args)}\nrequired = true\n\n[mcp_servers.langfuse]\nurl = ${q(endpoint)}\n${header}required = true\nenabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]\n`;
+  files[".codex/config.toml"] = `# Generiert aus gemeinsamen Quellen; keine autonome Freigabe.\n[agents]\nenabled = true\n\n[mcp_servers.playwright]\ncommand = ${q(p.command)}\nargs = ${q(p.args)}\nrequired = true\n\n[mcp_servers.langfuse]\nurl = ${q(endpoint)}\n${header}required = true\nenabled_tools = ["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]\n`;
   return files;
 }
 

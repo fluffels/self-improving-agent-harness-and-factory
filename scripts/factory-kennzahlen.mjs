@@ -3,14 +3,20 @@
  * Factory-Kennzahlen (ADR 0022 §6, F14): Lauf-Ergebnis, Nacharbeit und Kosten je Ticket als ein Markdown-Block
  * für den Bericht-Kommentar des Wochen-Status-Tickets, dazu die Abnahme-Quote im ersten Durchgang. Fehlende Daten erscheinen als Lücke mit Grund, nie als 0.
  *
- *   node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json]
+ *   node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json] [--datenbasis]
  *
  * Verkettung über Unterprozesse mit `--json` (Einstiegsskripte importieren einander nicht): `lauf-ergebnis.mjs` für
  * Lauf-Ergebnis und Nacharbeit, `token-baseline.mjs` je Ticket für die Kosten (Standard: Transkript, `--langfuse`
  * ausdrücklich), `naechstes-ticket.mjs --maengel` für den Abschnitt „Spezifikation“. Ticket → Session über die Claim-Zeile im lokalen Transkript. Definitionen und Grenzen:
  * docs/model-routing.md (Fabrik) › Factory-Kennzahlen.
  *
- * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem).
+ * `--datenbasis` (factory#258) ist die Vorprüfung des Status-Laufs und läuft allein: je Ticket-Lauf des Zeitraums (`lauf-ergebnis`) die
+ * Sessions mit Claim-Zeile im lokalen Transkript zählen; kein token-baseline, kein Audit, keine Nacharbeit. Stand: `leer` (kein Lauf),
+ * `erfüllt` (alle), `teilweise` (normal bei zwei Maschinen), `verletzt` (0 von n). Grenze: Codex-Läufe zählen als ohne Transkript
+ * (`transkript.mjs` liest nur Claude-Transkripte, Codex hat keinen Langfuse-Exporter).
+ *
+ * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem),
+ * 3 nur mit `--datenbasis`: Vorbedingung verletzt (keine Transkripte der Ticket-Läufe auf dieser Maschine).
  */
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -29,7 +35,7 @@ import { ladeSessions, projektOrdner } from "./transkript.mjs";
 /** Nacharbeitsfenster von `lauf-ergebnis.mjs` (NACHARBEIT_TAGE dort; ein Einstiegsskript importiert das andere nicht, Test `vertrag` hält beide gleich). */
 export const NACHARBEIT_TAGE = 14;
 const TAG_MS = 24 * 3600 * 1000;
-export const AUFRUFHILFE = "Aufruf: node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json]";
+export const AUFRUFHILFE = "Aufruf: node scripts/factory-kennzahlen.mjs --von <ISO> --bis <ISO> [--langfuse] [--json] [--datenbasis]";
 
 const gueltig = (iso) => Number.isFinite(Date.parse(String(iso ?? "")));
 
@@ -37,9 +43,9 @@ const gueltig = (iso) => Number.isFinite(Date.parse(String(iso ?? "")));
 export function parseArgs(argv) {
   const iso = "--von und --bis brauchen je ein gültiges ISO-Datum.";
   const meldung = { "ohne-wert": iso, fehlt: iso };
-  const optionen = { von: { type: "string" }, bis: { type: "string" }, langfuse: { type: "boolean" }, json: { type: "boolean" } };
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, langfuse: { type: "boolean" }, json: { type: "boolean" }, datenbasis: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["von", "bis"], meldung });
-  const a = { von: werte.von, bis: werte.bis, langfuse: werte.langfuse === true, json: werte.json === true, fehler: fehler?.text ?? null };
+  const a = { von: werte.von, bis: werte.bis, langfuse: werte.langfuse === true, json: werte.json === true, datenbasis: werte.datenbasis === true, fehler: fehler?.text ?? null };
   if (!gueltig(a.von) || !gueltig(a.bis)) a.fehler ??= "--von und --bis brauchen je ein gültiges ISO-Datum.";
   return a;
 }
@@ -493,6 +499,43 @@ export function configOderFehler(lade = ladeProjektConfig) {
   }
 }
 
+/**
+ * Datenbasis des Zeitraums: Läufe (`ticketLaeufe`) gegen die Claim-Karte. `mitTranskript` zählt Tickets mit mindestens einer Session,
+ * `sessions` sind alle Session-IDs dieser Tickets (einmal, sortiert), `ohne` die Tickets ohne. Pure.
+ */
+export function datenbasis({ tickets, claims }) {
+  const mit = tickets.filter((t) => (claims.get(t.ticket) ?? []).length > 0);
+  const sessions = [...new Set(mit.flatMap((t) => claims.get(t.ticket).map((c) => c.session)))].sort();
+  const ohne = tickets.filter((t) => !mit.includes(t)).map((t) => t.ticket);
+  const n = tickets.length;
+  const stand = n === 0 ? "leer" : mit.length === n ? "erfüllt" : mit.length === 0 ? "verletzt" : "teilweise";
+  return { stand, laeufe: n, mitTranskript: mit.length, sessions, ohne };
+}
+
+/** Markdown-Block „Datenbasis“ für den Bericht. Pure. */
+export function datenbasisAbschnitt(d) {
+  const zeilen = ["### Datenbasis", "", `- Stand: ${d.stand}; Ticket-Läufe im Zeitraum: ${d.laeufe}, davon mit Transkript: ${d.mitTranskript} von ${d.laeufe}.`];
+  zeilen.push(`- Sessions mit Claim-Zeile: ${d.sessions.length > 0 ? d.sessions.join(", ") : "keine"}.`);
+  if (d.ohne.length > 0) zeilen.push(`- Tickets ohne Transkript: ${d.ohne.map((n) => `#${n}`).join(", ")}.`);
+  if (d.stand === "verletzt") zeilen.push("- Vorbedingung verletzt: keine Transkripte der Ticket-Läufe auf dieser Maschine (Status-Lauf auf der Maschine der Ticket-Läufe fahren).");
+  return zeilen.join("\n");
+}
+
+/** Zweig `--datenbasis`: `{ text, exit }`; Exit 3 bei `verletzt`, 2 mit Lücke statt Urteil, wenn `lauf-ergebnis` fehlt. IO injiziert. */
+export function erstelleDatenbasis({ von, bis }, { run = runSkript, claimKarte }) {
+  const lauf = holeLauf(von, bis, run);
+  if (lauf.luecke) return { text: `### Datenbasis\n\n- Lücke: ${lauf.luecke}`, exit: 2 };
+  const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims: claimKarte() });
+  return { text: datenbasisAbschnitt(d), exit: d.stand === "verletzt" ? 3 : 0 };
+}
+
+/** Modus `--datenbasis`: Block ausgeben und mit dem Exit des Blocks beenden (`beenden` ist im Betrieb `process.exit`). IO injiziert. */
+export function datenbasisModus({ von, bis }, { run, claimKarte, log, beenden }) {
+  const d = erstelleDatenbasis({ von, bis }, { run, claimKarte });
+  log(d.text);
+  beenden(d.exit);
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.fehler) {
@@ -501,6 +544,7 @@ function main(argv) {
   }
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
+  if (args.datenbasis) datenbasisModus({ von, bis }, { claimKarte, log: console.log, beenden: process.exit }); // beendet den Prozess
   const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel() });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);

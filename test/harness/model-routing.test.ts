@@ -615,7 +615,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     // Darf NICHT passieren: andere Server (Projekt-Module bleiben im Hauptchat, Claude in Chrome ist
     // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
     // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
-    const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]);
+    const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"]);
     const fremd = tools.filter(
       (t) =>
         t.startsWith("mcp__") &&
@@ -656,7 +656,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
       // Monitor/TaskStop: Abschluss-Regel #1308 (umsetzer-abschluss.test.ts prüft nur die Prosa, diese Liste bindet die Tools)
       "Read", "Grep", "Glob", "Bash", "PowerShell", "Edit", "Write", "WebFetch", "WebSearch", "Agent", "Monitor", "TaskStop", "ToolSearch",
       ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "start_video", "stop_video", "handle_dialog", "file_upload"].map((t) => `mcp__playwright__browser_${t}`),
-      ...["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"].map((t) => `mcp__langfuse__${t}`),
+      ...["queryMetrics", "getMetricsSchema", "listObservations", "getObservation", "listModels"].map((t) => `mcp__langfuse__${t}`),
     ];
     assert.deepEqual([...tools].sort(), [...erwartet].sort(), "tools: des Umsetzers weicht von der erwarteten Gesamtmenge ab: bewusst ändern = diese Liste mitpflegen");
   });

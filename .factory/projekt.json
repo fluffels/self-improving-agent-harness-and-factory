@@ -68,7 +68,8 @@
       "mcp__langfuse__queryMetrics",
       "mcp__langfuse__getMetricsSchema",
       "mcp__langfuse__listObservations",
-      "mcp__langfuse__getObservation"
+      "mcp__langfuse__getObservation",
+      "mcp__langfuse__listModels"
     ],
     "ask": [
       "mcp__playwright__browser_run_code_unsafe"
