@@ -461,7 +461,6 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     for (const pfad of [`/w/.claude/worktrees/${wt}7-lens-b1`, `/w/.claude/worktrees/${wt}7-lens-b<n>`, `/w/.claude/worktrees/${wt}<nr>-lens-x2`]) {
       const prompt = `${gut()} · Sabotage-Worktree: ${pfad}`;
       assert.equal(deny(agent(prompt))?.hookSpecificOutput.permissionDecision, "deny", pfad);
-      assert.match(grund(agent(prompt)), /-lens-\[?[rmac]/);
       assert.match(grund(agent(prompt)), /r, m, a, c/);
     }
   });

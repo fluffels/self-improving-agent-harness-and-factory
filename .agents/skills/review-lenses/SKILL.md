@@ -105,7 +105,7 @@ Agent({
 })
 ```
 
-Ein PreToolUse-Guard (`scripts/lens-auftrag-guard.mjs`) verweigert den Spawn, wenn ein Kopf-Feld noch `<…>` trägt, `erwarteter HEAD:` nicht mit einem Commit-Hash beginnt oder `… WÖRTLICH>` stehen blieb: Werte einsetzen, Blöcke wörtlich kopieren, neu spawnen. Ein Zusatz in derselben Zeile wie ein Feldwert zählt zum Wert: Felder ohne `<…>`-Zusatz schreiben, Erklärungen in eine eigene Zeile.
+Ein PreToolUse-Guard (`scripts/lens-auftrag-guard.mjs`) verweigert den Spawn, wenn ein Kopf-Feld noch `<…>` trägt, `erwarteter HEAD:` nicht mit einem Commit-Hash beginnt oder `… WÖRTLICH>` stehen blieb: Werte einsetzen, Blöcke wörtlich kopieren, neu spawnen. Lens-Worktree-Namen tragen genau eine von vier Endungen (Quelle `scripts/ticket-namen.mjs`): `-lens-r<runde>` Review-Pass, `-lens-m<n>` Probe, `-lens-a<n>` Abnahme-Fix-Delta, `-lens-c<n>` CI-Fix-Delta; jede andere (`-lens-b1`) weist der Guard ab, der Lens-Edit-Guard ließe dort keine Sabotage zu. Ein Zusatz in derselben Zeile wie ein Feldwert zählt zum Wert: Felder ohne `<…>`-Zusatz schreiben, Erklärungen in eine eigene Zeile.
 
 **Pflichtsatz am Ende jedes Lens-Prompts, wörtlich:** „Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach.“ Fehlt trotzdem ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohne Neu-Spawn.
 
