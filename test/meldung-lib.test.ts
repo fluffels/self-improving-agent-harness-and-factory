@@ -176,33 +176,33 @@ describe("melden.mjs (AK1, AK2, AK3)", () => {
     }
   });
   test("postet die Zeilen samt Stand an die Meldestelle mit MELDESTELLE_TOKEN", async () => {
-    const r = await fahre(["--zeile", "Gate A kaputt. Fix: B", "--zeile", "- [ ] zweite"]);
+    const r = await fahre(["--zeile", "Defekt: Gate A kaputt. Beleg: Z. Fix: B", "--zeile", "- [ ] Defekt: zweite Beleg: Z"]);
     expect(r.code).toBe(0);
-    expect(r.gesehen).toEqual([["- [ ] Gate A kaputt. Fix: B", "- [ ] zweite"]]);
-    expect(r.posts).toEqual([[77, "- [ ] Gate A kaputt. Fix: B\n- [ ] zweite\n\nfactory: v1 (abc1234)", "eingang/privat", "mt"]]);
+    expect(r.gesehen).toEqual([["- [ ] Defekt: Gate A kaputt. Beleg: Z. Fix: B", "- [ ] Defekt: zweite Beleg: Z"]]);
+    expect(r.posts).toEqual([[77, "- [ ] Defekt: Gate A kaputt. Beleg: Z. Fix: B\n- [ ] Defekt: zweite Beleg: Z\n\nfactory: v1 (abc1234)", "eingang/privat", "mt"]]);
   });
   test("Treffer der Sperrprüfung: Exit 1, nichts gepostet, auch im Trockenlauf", async () => {
     for (const extra of [[], ["--dry-run"]]) {
-      const r = await fahre(["--zeile", "x", ...extra], { treffer: true });
+      const r = await fahre(["--zeile", "Defekt: x Beleg: y", ...extra], { treffer: true });
       expect(r.code).toBe(1);
       expect(r.posts).toEqual([]);
       expect(r.err.join("\n")).toMatch(/check-internalrefs --text/);
     }
   });
   test("Trockenlauf zeigt Text samt Stand-Zeile und postet nicht", async () => {
-    const r = await fahre(["--zeile", "x", "--dry-run"]);
+    const r = await fahre(["--zeile", "Defekt: x Beleg: y", "--dry-run"]);
     expect(r.code).toBe(0);
     expect(r.posts).toEqual([]);
-    expect(r.log.join("\n")).toMatch(/\[dry-run\][\s\S]*- \[ \] x[\s\S]*factory: v1 \(abc1234\)/);
+    expect(r.log.join("\n")).toMatch(/\[dry-run\][\s\S]*- \[ \] Defekt: x Beleg: y[\s\S]*factory: v1 \(abc1234\)/);
   });
   test("kein ungeclaimtes Sammelticket: Exit 1 mit Fix, nichts gepostet", async () => {
-    const r = await fahre(["--zeile", "x"], { nr: null });
+    const r = await fahre(["--zeile", "Defekt: x Beleg: y"], { nr: null });
     expect(r.code).toBe(1);
     expect(r.posts).toEqual([]);
     expect(r.err.join("\n")).toMatch(/Fix:.*sammelticket-anlegen/);
   });
   test("Post-Fehler (kein Schreibrecht): Exit 1 mit klarer Meldung", async () => {
-    const r = await fahre(["--zeile", "x"], { postWirft: true });
+    const r = await fahre(["--zeile", "Defekt: x Beleg: y"], { postWirft: true });
     expect(r.code).toBe(1);
     expect(r.err.join("\n")).toMatch(/keine Schreibrechte auf eingang\/privat[\s\S]*Fix:/);
   });
@@ -214,7 +214,7 @@ describe("melden.mjs (AK1, AK2, AK3)", () => {
     }
   });
   test("Config-/Import-Fehler: Exit 2", async () => {
-    const code = await melden.main(["--zeile", "x"], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), err: () => undefined, log: () => undefined });
+    const code = await melden.main(["--zeile", "Defekt: x Beleg: y"], { ladeConfig: () => ({}), ladeLibs: () => Promise.reject(new Error("Import kaputt")), err: () => undefined, log: () => undefined });
     expect(code).toBe(2);
   });
 });
@@ -335,7 +335,7 @@ describe("melden.mjs reicht die Herkunft an bereite (factory#208 L7, Lens-Test)"
   const libs = (stelle: string) => ({ MELDESTELLE: stelle, REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 5 }), postZeilen: () => undefined });
   const lauf = async (stelle: string) => {
     const opt: unknown[] = [];
-    await melden.main(["--zeile", "x #3"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs(stelle)), env: { MELDESTELLE_TOKEN: "mt" }, log: () => undefined, err: () => undefined, bereite: (_z: string[], o: unknown) => (opt.push(o), { ok: true, text: "t" }) });
+    await melden.main(["--zeile", "Defekt: x #3 Beleg: y"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs(stelle)), env: { MELDESTELLE_TOKEN: "mt" }, log: () => undefined, err: () => undefined, bereite: (_z: string[], o: unknown) => (opt.push(o), { ok: true, text: "t" }) });
     return opt;
   };
   test("fremde Meldestelle: herkunft ist das eigene Repo; eigene Stelle: null", async () => {
@@ -378,7 +378,7 @@ describe("Stand-Zeile nennt das eigene Repo (factory#238 L25)", () => {
     const log: string[] = [];
     const wurzel = wurzelMitStand();
     const libs = { MELDESTELLE: "eingang/privat", REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [] }), waehleSammelticket: () => ({ number: 5 }), postZeilen: () => undefined };
-    const code = await melden.main(["--zeile", "x", "--dry-run"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), env: { MELDESTELLE_TOKEN: "mt" }, log: (z: string) => log.push(z), err: () => undefined, bereite: (z: string[], o: object) => lib.bereiteMeldung(z, { wurzel, pruefe: () => true, ...o }) });
+    const code = await melden.main(["--zeile", "Defekt: x Beleg: y", "--dry-run"], { ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), env: { MELDESTELLE_TOKEN: "mt" }, log: (z: string) => log.push(z), err: () => undefined, bereite: (z: string[], o: object) => lib.bereiteMeldung(z, { wurzel, pruefe: () => true, ...o }) });
     expect(code).toBe(0);
     expect(log.join("\n")).toContain(ZEILE);
   });

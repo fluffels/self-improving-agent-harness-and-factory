@@ -5,7 +5,9 @@
  *
  *   node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]
  *
- * Eine Zeile ohne Listenpräfix bekommt `- [ ] `. Exit 0: gesendet (bzw. Trockenlauf); 1: Treffer der Sperrprüfung, kein ungeclaimtes Sammelticket oder Post
+ * Eine Zeile ohne Listenpräfix bekommt `- [ ] `. Format (Eingangsfilter, factory#269): `<Klasse>[ (<Schutzbereich>)]: <Befund> Beleg: <Fundstelle|Fehlerausgabe|Messwert>`
+ * mit Klasse `Defekt|Blocker|Kosmetik|Hypothese`; Kosmetik und Hypothese bekommen `Verfall: <heute + 28 Tage>` ergänzt (Regel: AGENTS.md § Harness-Befunde sind Zeilen). Eine Zeile
+ * ohne Klasse oder Beleg, mit unbekannter Klasse oder schon verfallen wird abgelehnt (Exit 2, nichts gepostet). Exit 0: gesendet (bzw. Trockenlauf); 1: Treffer der Sperrprüfung, kein ungeclaimtes Sammelticket oder Post
  * fehlgeschlagen (jeweils mit Fix); 2: Aufruf- oder Config-Fehler. Nur Harness-Befunde gehören hierher; Projekt-Befunde bleiben im eigenen Repo,
  * Sicherheitsbefunde laufen über SECURITY.md (docs/erstbezug.md (Fabrik) › Meldestelle). Logik pur in `meldung-lib.mjs`.
  */
@@ -17,9 +19,10 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeBoardLibs } from "./inbox-start-lib.mjs";
 import { bereiteMeldung, keinSammelticketText, meldestelleZugang } from "./meldung-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { mitVerfall, pruefeBefundZeile } from "./sammelticket-titel.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
-const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }), api: ghJson };
+const STANDARD = { ladeConfig: () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs: ladeBoardLibs, env: process.env, log: console.log, err: console.error, bereite: (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }), api: ghJson, heute: () => new Date().toISOString().slice(0, 10) };
 const AUFRUF = 'Aufruf: node scripts/melden.mjs --zeile "<Befund>" [--zeile "<Befund>" …] [--dry-run]';
 
 /** Pur: die Zeile als Listenpunkt `- [ ] …` (ein vorhandenes Präfix `- [ ] ` bleibt, nie doppelt); Zeilenumbrüche werden Leerzeichen. */
@@ -28,12 +31,27 @@ export const alsListenpunkt = (zeile) => {
   return /^- \[ \] /.test(einzeilig) ? einzeilig : `- [ ] ${einzeilig}`;
 };
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs`, `env`, `log`, `err`, `bereite(zeilen, { herkunft })` (Standard `bereiteMeldung`), `api` (Standard `ghJson`, mit Token der Meldestelle). Rückgabe: Exit-Code. */
+const BEISPIEL = '--zeile "Defekt: <Befund> Beleg: <Fundstelle|Fehlerausgabe|Messwert>"';
+
+/** Pur: prüft jede Zeile (Listenpunkt, Verfall ergänzt) gegen `pruefeBefundZeile`; `{ zeilen }` oder `{ fehler }` (Text mit Format und Beispiel). */
+export function pruefeZeilen(roh, heute) {
+  const zeilen = roh.map((z) => mitVerfall(alsListenpunkt(z), heute));
+  const mangel = zeilen.map((z) => ({ z, r: pruefeBefundZeile(z, { heute }) })).find((m) => !m.r.ok);
+  if (mangel === undefined) return { zeilen };
+  return { fehler: `Zeile abgelehnt: ${mangel.r.fehler}\n  ${mangel.z}\nFormat: <Klasse>[ (<Schutzbereich>)]: <Befund> Beleg: <…> (AGENTS.md § Harness-Befunde sind Zeilen)\nBeispiel: ${BEISPIEL}` };
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs`, `env`, `log`, `err`, `bereite(zeilen, { herkunft })` (Standard `bereiteMeldung`), `api` (Standard `ghJson`, mit Token der Meldestelle), `heute()` (Standard heutiges ISO-Datum). Rückgabe: Exit-Code. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const { ladeConfig, ladeLibs, env, log, err, bereite, api } = { ...STANDARD, ...deps };
+  const { ladeConfig, ladeLibs, env, log, err, bereite, api, heute } = { ...STANDARD, ...deps };
   const { werte, fehler } = flagsLesen(argv, { zeile: { type: "string", multiple: true }, "dry-run": { type: "boolean" } });
   if (fehler || !werte.zeile?.length || werte.zeile.some((z) => z.trim() === "")) {
     err(`${fehler?.text ?? "--zeile fehlt oder ist leer"}\n${AUFRUF}`);
+    return AUFRUF_EXIT;
+  }
+  const geprueft = pruefeZeilen(werte.zeile, heute());
+  if (geprueft.fehler) {
+    err(`::error::melden: ${geprueft.fehler}`);
     return AUFRUF_EXIT;
   }
   let libs;
@@ -45,7 +63,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     return AUFRUF_EXIT;
   }
   const zugang = meldestelleZugang({ stelle: libs.MELDESTELLE, eigenes: libs.REPO, env });
-  const meldung = bereite(werte.zeile.map(alsListenpunkt), { herkunft: zugang.herkunft, eigenes: libs.REPO });
+  const meldung = bereite(geprueft.zeilen, { herkunft: zugang.herkunft, eigenes: libs.REPO });
   if (!meldung.ok) {
     err(`::error::melden: ${meldung.grund}`);
     return 1;

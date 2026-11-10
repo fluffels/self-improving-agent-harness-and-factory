@@ -109,9 +109,9 @@ function pruefen(werte, io, sprache) {
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
 const gescheitertSchluessel = (nr, herkunft) => `Reparatur gescheitert: ${herkunft ?? ""}#${nr} (`;
 
-/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig); `herkunft` (`owner/name`) steht vor der Nummer, wenn die Meldestelle fremd ist (factory#153). Pur. */
+/** Die Sammelticket-Zeile zu einer gescheiterten Reparatur von #`nr` (`mangel` einzeilig, zugleich der Beleg; Klasse `Defekt`, AGENTS.md § Harness-Befunde sind Zeilen); `herkunft` (`owner/name`) steht vor der Nummer, wenn die Meldestelle fremd ist (factory#153). Pur. */
 export const gescheitertZeile = ({ nr, mangel, heute, herkunft = null }) =>
-  `- [ ] ${heute} ${gescheitertSchluessel(nr, herkunft)}${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
+  `- [ ] Defekt: ${heute} ${gescheitertSchluessel(nr, herkunft)}Beleg: ${einzeilig(mangel)}). Fix: Body über den Reparaturweg nachziehen`;
 
 /** Steht zu #`nr` schon eine offene Zeile (`- [ ]`) eines vertrauten Autors oder des eigenen Kontos `eigen` in `kommentare` (`[{ user, body }]`)? `herkunft` wie bei `gescheitertZeile`. Pur. */
 export const gescheitertBekannt = (nr, kommentare, owner, { herkunft = null, eigen = null } = {}) =>
