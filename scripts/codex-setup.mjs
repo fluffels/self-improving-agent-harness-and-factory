@@ -11,7 +11,7 @@ export function main(argv = process.argv.slice(2), root = fileURLToPath(new URL(
   if (fehler) { err(fehler.text); return 2; }
   if (werte["langfuse-auth"] !== undefined && !LANGFUSE_AUTH_MODI.includes(werte["langfuse-auth"])) { err(`--langfuse-auth: ${LANGFUSE_AUTH_MODI.join(" oder ")} erforderlich`); return 2; }
   try {
-    const ziel = pruefeAusgabe(werte.ausgabe ?? root);
+    const ziel = pruefeAusgabe(werte.ausgabe ?? root, root);
     const mcpPfad = quellDatei(root, ".mcp.json"); quellDatei(root, PROJEKT_CONFIG);
     const config = ladeProjektConfig({ rootDir: root }); pruefeQuellen(root, config);
     const dateien = setupDateien(JSON.parse(readFileSync(mcpPfad, "utf8")), config, werte["langfuse-url"], werte["langfuse-auth"]);
