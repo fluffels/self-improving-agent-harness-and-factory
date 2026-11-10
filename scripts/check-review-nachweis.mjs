@@ -48,7 +48,6 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { ankerImDiff, ankerSumme, echteUmgebung as ankerUmgebung } from "./anker-liste.mjs";
 import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -285,12 +284,11 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
 /** CLI-Zeile zum Zusatzpass; `null` ohne gültigen Zusatzpass. Pur. */
 export const zusatzpassZeile = (r) => (r.zusatzpass ? `• Zusatzpass: ${r.zusatzpass.grund}` : null);
 
-/** Die Ankerzahl des Diffs gegen die Basis (echtes git, wie `node scripts/anker-liste.mjs`); wirft ohne auflösbare Basis. */
+/** Die Ankerzahl des Diffs gegen die Basis: das Einstiegsskript `anker-liste.mjs --json` als Kindprozess (kein Import eines Einstiegsskripts); wirft bei Fehler. */
 function ankerZahlImDiff() {
-  const umgebung = ankerUmgebung();
-  const basis = resolveBase(umgebung.git, process.env);
-  if (!basis) throw new Error("keine Basis");
-  return ankerSumme(ankerImDiff(basis, umgebung));
+  const skript = fileURLToPath(new URL("./anker-liste.mjs", import.meta.url));
+  const liste = JSON.parse(execFileSync(process.execPath, [skript, "--json"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
+  return liste.reduce((summe, e) => summe + e.anker.length, 0);
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
