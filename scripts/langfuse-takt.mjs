@@ -114,15 +114,20 @@ function hoechstabstand({ wochenbericht, ausloeser, stundenSeitAbschluss, warnun
 function wochenberichtEntscheidung({ wochenbericht, anlass, ausloeser, stundenSeitAbschluss, warnungen }) {
   const text = typeof anlass === "string" ? anlass.trim() : "";
   const hoechst = text ? null : hoechstabstand({ wochenbericht, ausloeser, stundenSeitAbschluss, warnungen });
-  const grund = text ? `Anlass: ${anlassZitat(text).slice(3, -1)}` : hoechst;
+  const grund = text ? `Anlass: ${anlassEinzeilig(text)}` : hoechst;
   if (!grund) return { aktion: "nichts", grund: "Wochenbericht aktiv: kein Anlass und der Höchstabstand ist nicht erreicht (der Push-Auslöser legt nicht an)", warnungen };
   return abstandSperre(stundenSeitAbschluss, warnungen) ?? { aktion: "anlegen", grund, warnungen, anlass: text || hoechst };
 }
 
-/** Pur: der Anlass als zitierte Zeile für den Body: einzeilig, Backticks entfernt, auf 300 Zeichen gekappt (mit „…“), als `> \`…\`` (Code-Span: ein `@name` benachrichtigt niemanden). */
-export function anlassZitat(text) {
+/** Pur: der Anlass einzeilig, ohne Backticks, auf 300 Zeichen gekappt (mit „…“). */
+function anlassEinzeilig(text) {
   const eine = String(text).replace(/`/g, "").replace(/\s+/g, " ").trim();
-  return `> \`${eine.length > 300 ? `${eine.slice(0, 300)}…` : eine}\``;
+  return eine.length > 300 ? `${eine.slice(0, 300)}…` : eine;
+}
+
+/** Pur: der Anlass als zitierte Zeile für den Body (`anlassEinzeilig`), als `> \`…\`` (Code-Span: ein `@name` benachrichtigt niemanden). */
+export function anlassZitat(text) {
+  return `> \`${anlassEinzeilig(text)}\``;
 }
 
 /**

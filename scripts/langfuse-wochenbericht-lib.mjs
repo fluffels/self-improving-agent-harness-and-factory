@@ -284,10 +284,10 @@ export function wochenberichtAblage(repo, home = "~") {
 
 /**
  * Pur: Anlass-Text der Auslösung (öffentlich im Body des Status-Tickets, nie roher Fehlertext): `art` `schwelle` (mit `gruende` des Urteils),
- * `fehlt` (mit `klasse` `unerreichbar` oder `fehler`) oder `ohne-daten` (mit `commits`).
+ * `fehlt` (mit `klasse` `unerreichbar` oder `fehler`) oder `ohne-daten`.
  */
-export function anlassText({ art, montag, gruende = [], klasse, commits }) {
+export function anlassText({ art, montag, gruende = [], klasse }) {
   if (art === "schwelle") return `Wochenbericht ${montag}: Agent-Lauf nötig (${gruende.map((g) => `${g.schwelle} Ist ${Number(g.ist).toFixed(1)}, Soll höchstens ${g.soll}`).join("; ")})`;
-  if (art === "ohne-daten") return `Wochenbericht ${montag}: Woche ohne Daten bei ${commits} Commits auf main (Erfassung prüfen)`;
+  if (art === "ohne-daten") return `Wochenbericht ${montag}: Woche ohne Daten trotz Commits auf main (Erfassung prüfen)`;
   return `Wochenbericht ${montag} fehlt: ${klasse === "unerreichbar" ? "Langfuse unerreichbar" : "Fehler im Live-Weg"} (Details im lokalen Log)`;
 }

@@ -27,10 +27,10 @@ Codex hat keinen registrierten SessionStart-Hook ([Codex-Einstieg](../../codex/e
 
 - Verpasste Wochen (Maschine aus bis zum Montag danach) werden nicht nachgeholt; der Höchstabstand fängt das auf.
 - Eine hängende Meldung (Dispatch scheitert) verfällt mit dem nächsten Montag: der Stand `melden` gilt nur für die Woche des Montags im Dateinamen.
-- Ein Anlass bei offenem Status-Ticket führt nur zu `nach-oben`, kein zweites Ticket entsteht.
+- Ein Anlass bei offenem Status-Ticket führt nur zu `nach-oben`, kein zweites Ticket entsteht. Verfällt ein Anlass im Takt (Vorgänger vor weniger als 24 Stunden geschlossen, offenes Status-Ticket geclaimt), gilt die Woche im Lauf trotzdem als `gemeldet`; der Höchstabstand und der Montag danach fangen das auf.
 - Der Anlass im öffentlichen Body nennt nur Klasse und Schwellenzahlen; roher Fehlertext bleibt im lokalen Log.
 
 ## Folgen
 
-- Eine zusätzliche lokale Logzeile je SessionStart nach Fälligkeit; kein Mehraufwand für die Session (losgelöst).
+- Je SessionStart (`startup|resume|clear`) ein zusätzlicher kurzer Node-Prozess und eine Logzeile, auch ohne Schlüssel (`aus`) und vor der Fälligkeit; kein Wartezeit-Aufwand für die Session (losgelöst).
 - **Prüftermin (ADR 0027):** Eintrag `wochenbericht-takt-314` in `.github/wiedervorlagen.json`: nach rund 13 Wochen prüfen, ob jeder Anlass einen echten Befund brachte und ob der Höchstabstand je eine verpasste Woche auffing; sonst Schwellen lockern oder die Regel streichen.

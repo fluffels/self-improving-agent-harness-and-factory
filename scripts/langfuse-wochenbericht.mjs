@@ -231,7 +231,7 @@ function keinBerichtFolge(k, obj) {
     jsonErgaenzen(k, basis, { status: "ruhe", warnung: "Woche ohne Daten und ohne Commits auf main" });
     return { status: "ruhe" };
   }
-  return melde(k, basis, anlassText({ art: "ohne-daten", montag: k.montag, commits }));
+  return melde(k, basis, anlassText({ art: "ohne-daten", montag: k.montag }));
 }
 
 /** Auswerten fehlgeschlagen (Exit 1 oder 2): `fehler` festhalten, ab Donnerstag melden. */
@@ -319,7 +319,7 @@ async function main() {
     process.exitCode = await wochenberichtLauf(args);
     return;
   }
-  const { exitCode, stdout, stderr } = await auswerten(parseArgs(process.argv.slice(2)));
+  const { exitCode, stdout, stderr } = await auswerten(args);
   if (stdout) console.log(stdout);
   if (stderr) console.error(stderr);
   process.exitCode = exitCode;

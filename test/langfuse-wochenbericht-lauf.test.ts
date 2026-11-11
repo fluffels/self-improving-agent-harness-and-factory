@@ -23,6 +23,7 @@ type Ergebnis = { exitCode: number; stdout: string; stderr: string };
 const echtesLock = lockRaw as unknown as { lockNehmen: (d: string, o: { now: number }) => string };
 const C = cliRaw as unknown as {
   parseArgs: (a: string[]) => { ausloeser?: string; wurzel?: string; fehler?: string };
+  ladeProjekt: (w?: string) => { owner: string; repo: string; config: { repo: string } };
   auswerten: (a: unknown, d?: Record<string, unknown>) => Promise<Ergebnis>;
   wochenberichtLauf: (a: Record<string, unknown>, d: Record<string, unknown>) => Promise<number>;
 };
@@ -57,7 +58,7 @@ describe("Termin und Stand (Lib)", () => {
     expect(L.anlassText({ art: "schwelle", montag: MONTAG, gruende: [{ schwelle: "erfassungLueckenMax", ist: 2, soll: 0 }] })).toBe(`Wochenbericht ${MONTAG}: Agent-Lauf nötig (erfassungLueckenMax Ist 2.0, Soll höchstens 0)`);
     expect(L.anlassText({ art: "fehlt", montag: MONTAG, klasse: "unerreichbar" })).toBe(`Wochenbericht ${MONTAG} fehlt: Langfuse unerreichbar (Details im lokalen Log)`);
     expect(L.anlassText({ art: "fehlt", montag: MONTAG, klasse: "fehler" })).toBe(`Wochenbericht ${MONTAG} fehlt: Fehler im Live-Weg (Details im lokalen Log)`);
-    expect(L.anlassText({ art: "ohne-daten", montag: MONTAG, commits: 1 })).toBe(`Wochenbericht ${MONTAG}: Woche ohne Daten bei 1 Commits auf main (Erfassung prüfen)`);
+    expect(L.anlassText({ art: "ohne-daten", montag: MONTAG })).toBe(`Wochenbericht ${MONTAG}: Woche ohne Daten trotz Commits auf main (Erfassung prüfen)`);
   });
   test("wochenberichtAblage: <home>/.claude/state/langfuse-wochenbericht/<owner>__<repo>", () => {
     expect(L.wochenberichtAblage("own/repo")).toBe("~/.claude/state/langfuse-wochenbericht/own__repo");
@@ -75,7 +76,7 @@ describe("Aufruf", () => {
   });
 });
 
-interface Aufrufe { gh: string[][]; auswerten: number; claims: number }
+interface Aufrufe { gh: string[][]; auswerten: number; claims: number; argumente: Array<{ args: Record<string, unknown>; deps: Record<string, unknown> }> }
 interface Opt {
   jetzt?: Date;
   schwellen?: Record<string, number> | undefined;
@@ -93,6 +94,8 @@ interface Opt {
   roh?: Ergebnis;
   /** Vom Fake-`lockNehmen` vor der Rückgabe abgelegte `.json` (ein gleichzeitiger Lauf, der die Woche erledigt). */
   nachClaim?: Record<string, unknown>;
+  /** stderr des Fake-Auswertens bei Exit 1 oder 2. */
+  stderr?: string;
 }
 const SCHWELLEN = { erfassungLueckenMax: 0, kostenAnstiegProzent: 50, wochenOhneLaufMax: 4 };
 
@@ -101,10 +104,11 @@ function umgebung(opt: Opt = {}) {
   const home = mkdtempSync(join(tmpdir(), "wbl-"));
   temps.push(home);
   const ordner = join(home, ".claude", "state", "langfuse-wochenbericht", "own__repo");
-  const a: Aufrufe = { gh: [], auswerten: 0, claims: 0 };
+  const a: Aufrufe = { gh: [], auswerten: 0, claims: 0, argumente: [] };
   const exit = opt.exit ?? 0;
-  const auswerten = (): Promise<Ergebnis> => {
+  const auswerten = (args: Record<string, unknown>, deps: Record<string, unknown>): Promise<Ergebnis> => {
     a.auswerten += 1;
+    a.argumente.push({ args, deps });
     if (opt.roh) return Promise.resolve(opt.roh);
     mkdirSync(ordner, { recursive: true });
     if (exit === 0 || exit === 3) {
@@ -118,7 +122,7 @@ function umgebung(opt: Opt = {}) {
       writeFileSync(join(ordner, `${MONTAG}.json`), JSON.stringify(obj));
       return Promise.resolve({ exitCode: 4, stdout: JSON.stringify(obj), stderr: "WARNUNG" });
     }
-    return Promise.resolve({ exitCode: exit, stdout: "", stderr: `Fehler: kaputt in ${home}/x` });
+    return Promise.resolve({ exitCode: exit, stdout: "", stderr: opt.stderr ?? `Fehler: kaputt in ${home}/x` });
   };
   const gh = (args: string[]) => {
     a.gh.push(args);
@@ -246,7 +250,7 @@ describe("Wochenbericht-Lauf: Ausgänge der Auswertung", () => {
     const mit = umgebung({ exit: 4, grund: "keine-daten", commits: '[{"sha":"a"}]' });
     await mit.lauf();
     expect(mit.a.gh[0]).toEqual(["api", `repos/own/repo/commits?sha=main&since=${MONTAG}T00:00:00.000Z&until=2026-11-09T00:00:00.000Z&per_page=1`]);
-    expect(mit.a.gh[1]).toEqual(dispatchArgs("own/repo", `Wochenbericht ${MONTAG}: Woche ohne Daten bei 1 Commits auf main (Erfassung prüfen)`));
+    expect(mit.a.gh[1]).toEqual(dispatchArgs("own/repo", `Wochenbericht ${MONTAG}: Woche ohne Daten trotz Commits auf main (Erfassung prüfen)`));
     expect(mit.json()?.status).toBe("gemeldet");
     const ohne = umgebung({ exit: 4, grund: "keine-daten", commits: "[]" });
     await ohne.lauf();
@@ -339,6 +343,51 @@ describe("Wochenbericht-Lauf: Ränder der Ausgänge", () => {
     const zeile = JSON.parse(readFileSync(join(home, ".claude", "state", "langfuse-wochenbericht.log"), "utf8").trim()) as Record<string, unknown>;
     expect(zeile).toMatchObject({ status: "fehler", ausloeser: "sessionstart" });
     expect(JSON.stringify(zeile)).not.toContain(home);
+  }, 60_000);
+});
+
+describe("Wochenbericht-Lauf: Aufruf des Auswertens, Ergänzen, Kappung, Produktionsweg", () => {
+  test("das Auswerten bekommt Woche, ablegen und json sowie Home, Projekt und Zeit des Laufs", async () => {
+    const u = umgebung({ exit: 0 });
+    await u.lauf();
+    expect(u.a.argumente).toHaveLength(1);
+    expect(u.a.argumente[0].args).toMatchObject({ woche: MONTAG, ablegen: true, json: true, exporte: [], rezept: false });
+    expect(u.a.argumente[0].deps).toMatchObject({ home: u.home, jetzt: MI, env: { LANGFUSE_PUBLIC_KEY: "pk" } });
+    expect(u.a.argumente[0].deps.projekt).toBe((u.deps as { projekt: unknown }).projekt);
+  });
+  test("ein Fehler ergänzt die vorhandene .json (Zusatzfeld bleibt) und überschreibt den Status", async () => {
+    const u = umgebung({ exit: 1, vorher: { status: "unerreichbar", woche: MONTAG, extra: 1 } });
+    await u.lauf();
+    expect(u.json()).toMatchObject({ status: "fehler", extra: 1, woche: MONTAG });
+  });
+  test("mehrzeilige, lange Fehlerausgabe: grund in der .json und im Log einzeilig und höchstens 300 Zeichen", async () => {
+    const u = umgebung({ exit: 1, stderr: `${"x".repeat(1000)}\nFix: zweite Zeile` });
+    await u.lauf();
+    const grund = u.json()?.grund as string;
+    expect(grund).toBe("x".repeat(300));
+    expect(u.zeilen()[0].grund).toBe("x".repeat(300));
+    const zwei = umgebung({ exit: 1, stderr: `kurz\nFix: ${"y".repeat(500)}` });
+    await zwei.lauf();
+    expect(zwei.json()?.grund).toBe("kurz");
+  });
+  test("Produktionsweg ohne injiziertes Projekt: Config und Ziel-Repo kommen aus der Repo-Wurzel", async () => {
+    const echt = C.ladeProjekt();
+    expect(echt.config.repo).toBe(`${echt.owner}/${echt.repo}`);
+    const u = umgebung({ exit: 3 });
+    const { projekt: _projekt, ...ohneProjekt } = u.deps;
+    // Ablage unter dem Repo der echten Config
+    expect(await C.wochenberichtLauf({ ausloeser: "sessionstart", wurzel: process.cwd() }, ohneProjekt)).toBe(0);
+    expect(u.a.gh).toHaveLength(1);
+    expect(u.a.gh[0].slice(0, 5)).toEqual(["workflow", "run", "board-takt.yml", "--repo", echt.config.repo]);
+    expect(u.zeilen()[0]).toMatchObject({ status: "gemeldet", repo: `${echt.owner}/${echt.repo}` });
+  });
+  test("Ende zu Ende: --ausloeser mit unbekanntem Wert endet mit Exit 2 und startet keinen Lauf (kein Log)", () => {
+    const home = mkdtempSync(join(tmpdir(), "wbf-"));
+    temps.push(home);
+    const r = spawnSync(process.execPath, ["scripts/langfuse-wochenbericht.mjs", "--ausloeser", "foo"], { encoding: "utf8", env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 30_000 });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toBe("");
+    expect(existsSync(join(home, ".claude"))).toBe(false);
   }, 60_000);
 });
 

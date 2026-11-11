@@ -122,6 +122,7 @@ describe("wochenArgs: Argumente des Wochenbericht-Kinds (factory#314)", () => {
     ["SessionStart resume", { event: "SessionStart", session: "s1", source: "resume" }, true],
     ["SessionStart clear", { event: "SessionStart", session: "s1", source: "clear" }, true],
     ["SessionStart compact", { event: "SessionStart", session: "s1", source: "compact" }, false],
+    ["Session-ID keine Zeichenkette", { event: "SessionStart", session: 123, source: "startup" }, false],
     ["SessionStart ohne source", { event: "SessionStart", session: "s1" }, false],
     ["SessionEnd", { event: "SessionEnd", session: "s1" }, false],
     ["SessionEnd mit source startup", { event: "SessionEnd", session: "s1", source: "startup" }, false],
