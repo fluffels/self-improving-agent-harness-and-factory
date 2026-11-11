@@ -196,7 +196,7 @@ Jede `Call`-Generation des Nachlieferers trägt die Metadaten `agent_type`, `eff
 
 **Abfragerezept (drei Schritte).**
 
-1. `node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…]` gibt die Abfragen als JSON aus (`{ art, name, abfrage }`); die Rollenliste kommt aus `.claude/agents/*.md` (`name:`), den eingebauten Typen und `--rolle`. `bis` höchstens jetzt minus 30 min (Ingestion läuft nach; ein Export mitten in einer Ingestion macht die Summen inkonsistent).
+1. `node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…] [--agenten <ordner>]` gibt die Abfragen als JSON aus (`{ art, name, abfrage }`); die Rollenliste kommt aus `.claude/agents/*.md` (`name:`, oder dem Ordner von `--agenten`), den eingebauten Typen und `--rolle` (Agenten aus dem Home-Ordner oder von Plugins gehören per `--rolle` dazu, sonst stehen sie in „unzugeordnet“). `bis` höchstens jetzt minus 30 min (Ingestion läuft nach; ein Export mitten in einer Ingestion macht die Summen inkonsistent).
 2. Jede `abfrage` per MCP `queryMetrics` abfragen und die Antwort als `{ "art": …, "abfrage": …, "data": […] }` in je eine Datei eines temporären Verzeichnisses schreiben (nacktes `{data}` weist die CLI ab).
 3. `node scripts/langfuse-auswertung.mjs --export <datei> --export <datei> …`.
 
@@ -205,18 +205,18 @@ Jede `Call`-Generation des Nachlieferers trägt die Metadaten `agent_type`, `eff
 | Art | Dimensionen | Metriken | Zweck |
 | --- | --- | --- | --- |
 | `gesamt` | `traceName`, `name`, `providedModelName`, `environment` | `count`, `sum totalCost` | Summen je Quelle, Modell, Repo (genau einmal) |
-| `tage` | `traceName`, `timeDimension` `day` | `count`, `sum totalCost` | Tage ohne Daten |
+| `tage` | keine, `timeDimension` `day` | `count`, `sum totalCost` | Tage ohne Daten |
 | `latenz` | wie `gesamt` | `min latency`, `count`, `sum totalCost` | Gruppen mit negativer Latenz |
 | `metadaten` | wie `gesamt`, je Schlüssel und Wert ein Export, Filter `stringObject` | `count`, `sum totalCost`, `min latency` | Rolle (`agent_type`, `agent_role`) und Effort (`effort`, `reasoning_effort`) |
 
 **Regeln.**
 
 - **Quelle:** Trace `Abgleich` ist nachgeliefert (Metadatum `quelle: abgleich`), Name `Model response` oder Trace `Codex: …` ist Codex (eigene Quelle: Rolle aus `agent_role`, Effort aus `reasoning_effort`), Trace `Claude Code Turn` oder Name `LLM Call`/`Subagent LLM Call` ist live, alles andere steht sichtbar als „sonstige“.
-- **Rolle und Effort** kommen nur aus den Metadaten-Schlüsseln der Generations (`queryMetrics` gruppiert `metadata` nicht, darum je Wert ein Export). Je Gruppe gilt Rest = Summe minus Summe der Metadaten-Zellen; der Rest, der Wert `unbekannt` und jede Gruppe ohne Rollen-Export gehen nach „unzugeordnet“, der Bericht nennt die Aufteilung „davon `unbekannt`; ohne Schlüssel oder Wert ohne Export“. Ein Rest unter 0 ist eine Datenlücke („Exporte nicht konsistent“), nie eine negative Zahl.
+- **Rolle und Effort** kommen nur aus den Metadaten-Schlüsseln der Generations (`queryMetrics` gruppiert `metadata` nicht, darum je Wert ein Export). Je Gruppe gilt Rest = Summe minus Summe der Metadaten-Zellen; der Rest, der Wert `unbekannt` und jede Gruppe ohne Rollen-Export gehen nach „unzugeordnet“, der Bericht nennt die Aufteilung „davon `unbekannt`; ohne Schlüssel oder Wert ohne Export“. Ein Rest unter 0 (oder mit Kosten ohne Calls) ist eine Datenlücke („Exporte nicht konsistent“), nie eine negative Zahl und nie ein stiller Verlust.
 - **„unzugeordnet“** (Glossar) zählt Generations ohne Rolle oder ohne Modell, steht immer im Bericht (auch mit 0) und je Tabelle als letzte Zeile.
 - **Repo** ist `environment`; leer oder `default` ist „unzugeordnet“.
 - **Roh und bereinigt:** die Gesamtzeile nennt beide. Bereinigt zieht die Gruppen mit negativer Latenz und die doppelten Audit-Markierungen ab. Dubletten zwischen Live und Nachgeliefert werden nicht abgezogen (Stichprobe factory#286: keine belegt).
-- **Doppelte Audit-Markierung:** Observationen mit dem Namenspräfix `[duplicate audit] ` (Metadatum `audit_status: duplicate`) sind Kopien einer Observation, die schon in den Summen steht. Sie zählen einmal: das Original bleibt, die Kopie fällt aus „bereinigt“ und aus allen Tabellen, der Bericht nennt Anzahl und Kosten.
+- **Doppelte Audit-Markierung:** Observationen mit dem Namenspräfix `[duplicate audit] ` (Metadatum `audit_status: duplicate`) sind Kopien einer Observation, die schon in den Summen steht. Sie zählen einmal: das Original bleibt, die Kopie fällt aus „bereinigt“ und aus allen Tabellen, der Bericht nennt Anzahl und Kosten. Annahme, an einer Probe-Observation belegt (nicht je Kopie gegen ihr Original gezählt): jede Kopie hat ein Original in den Summen.
 - **Datenlücke (Auswertung)** (Glossar): Tage ohne Daten im Fenster stehen als „Tage ohne Daten: …“, und jede Summe und Tabellenüberschrift trägt „ohne Tag X“; fehlt der Export `tage`, steht „Tage nicht geprüft“, fehlt `latenz`, „negative Latenzen nicht geprüft“, nie eine stille 0.
 - **Negative Latenzen:** `queryMetrics` lässt die Dimension `id` nur mit `orderBy` absteigend zu, darum gibt es keinen Export der kleinsten Latenzen je Observation. Erkannt wird je Gruppe (`min latency` unter 0): die ganze Gruppe wird gezählt (Gruppen, Calls, Kosten), aus allen Summen genommen und als Datenlücke genannt; dasselbe gilt für eine Metadaten-Zelle, deren Gruppe dann auch beim Rest ausfällt.
 - **Exit:** 0 Bericht (auch mit Datenlücken), 1 Export- oder Lesefehler (nacktes `{data}`, unbekannte `art`, fehlender Filter, abgeschnitten, ungleiche Fenster, `gesamt` fehlt oder doppelt, Zeile ohne Metriken), 2 Aufruffehler.

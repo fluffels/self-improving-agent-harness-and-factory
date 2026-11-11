@@ -3,8 +3,9 @@
  * deterministischen Kostenbericht baut (Live, Nachgeliefert, Codex, sonstige getrennt; je Rolle, Repo, Effort, Modell).
  * Keine Imports, kein fs, kein env, kein Netz: die CLI `langfuse-auswertung.mjs` ist der einzige Adapter, und kein Modul
  * dieser Hülle liest den Langfuse-Secret-Key (ein Test hält die Import-Hülle fest). Darum sind `TRACE_NAME_ABGLEICH` und
- * `EFFORT_STUFEN` hier neu deklariert statt aus `langfuse-otlp.mjs`/`transkript-calls.mjs` importiert (die ziehen
- * `langfuse-api.mjs` mit); ein Test sichert die Gleichheit.
+ * `EFFORT_STUFEN` hier neu deklariert statt importiert (`langfuse-otlp.mjs` zieht über `langfuse-abgleich-kern.mjs` die
+ * Key-Quelle `langfuse-api.mjs` mit, `transkript-calls.mjs` ist nicht schlüsselnah, hätte der Lib aber Imports gebracht);
+ * ein Test sichert die Gleichheit.
  *
  * Export-Form: `{ art, abfrage, data }` (Abfragerezept: `rezept()`), Zeilenschlüssel wie die MCP-Ausgabe
  * (`count_count`, `sum_totalCost`, `min_latency`, `time_dimension`).
@@ -60,7 +61,7 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
   const b = (extra) => ({ ...basisAbfrage(von, bis), ...extra });
   const out = [
     { art: "gesamt", name: "gesamt", abfrage: b({ dimensions: dim(DIMS_GESAMT), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], orderBy: [{ field: "sum_totalCost", direction: "desc" }] }) },
-    { art: "tage", name: "tage", abfrage: b({ dimensions: dim(["traceName"]), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], timeDimension: { granularity: "day" } }) },
+    { art: "tage", name: "tage", abfrage: b({ dimensions: [], metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], timeDimension: { granularity: "day" } }) },
     { art: "latenz", name: "latenz", abfrage: b({ dimensions: dim(DIMS_GESAMT), metrics: [{ measure: "latency", aggregation: "min" }, { measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }] }) },
   ];
   const rollenListe = [...new Set(["hauptchat", "unbekannt", ...EINGEBAUTE_ROLLEN, ...rollen])];
@@ -115,7 +116,7 @@ function metaFilter(abfrage, pfad) {
 }
 
 const zeigeZeile = (art, i) => `${art}-Zeile ${i + 1}`;
-const numerisch = (v) => v !== null && v !== undefined && Number.isFinite(Number(v));
+const numerisch = (v) => v !== null && Number.isFinite(Number(v));
 
 /** Normalisiert eine Zeile; fehlende oder nicht numerische Metriken sind ein Formfehler, nie eine stille 0. */
 function zeileVon(r, art, pfad, i) {
@@ -210,14 +211,17 @@ function zellenPosten(teil, metaExporte) {
 }
 
 /** Rest je Basiszeile (Generations ohne Zelle dieser Dimension); Gruppen mit negativer Zelle fallen als Lücke heraus. */
+/** Ein Rest ist unstimmig, wenn er Calls oder Kosten unter 0 hat oder Kosten ohne Calls (die Zelle war billiger als die Gruppe bei gleichen Calls). */
+const restKaputt = (r) => r.count < 0 || r.cost < -EPS || (r.count === 0 && r.cost > EPS);
+
 function restPosten(teil, st) {
   const out = { posten: [], inkonsistent: 0, luecke: { count: 0, cost: 0 } };
   for (const b of teil.basis.values()) {
     const z = st.zugeteilt.get(b.key) ?? { count: 0, cost: 0 };
     const rest = { count: b.count - z.count, cost: b.cost - z.cost };
     if (st.kaputt.has(b.key)) out.luecke = summe([out.luecke, b]);
-    else if (rest.count < 0 || rest.cost < -EPS) out.inkonsistent += 1;
-    else if (rest.count > 0) out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), art: "rest" });
+    else if (restKaputt(rest)) out.inkonsistent += 1;
+    else out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), art: "rest" });
   }
   return out;
 }
@@ -229,7 +233,7 @@ function dimensionPosten(teil, metaExporte, name) {
   const luecken = [];
   if (!metaExporte.length) luecken.push(`${name}: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)`);
   if (st.kaputt.size) luecken.push(`${name}: ${st.kaputt.size} Gruppe(n) mit negativer Latenz in einer Metadaten-Zelle, ${rest.luecke.count} Calls (${usd(rest.luecke.cost)}) aus den Summen genommen`);
-  if (rest.inkonsistent || st.ohneGegenstueck) luecken.push(`${name}: Exporte nicht konsistent (${rest.inkonsistent} Zeile(n) mit Rest unter 0, ${st.ohneGegenstueck} Zelle(n) ohne Gegenstück in gesamt; Fenster in der Vergangenheit wählen)`);
+  if (rest.inkonsistent || st.ohneGegenstueck) luecken.push(`${name}: Exporte nicht konsistent (${rest.inkonsistent} Zeile(n) mit Rest unter 0 oder Kosten ohne Calls, ${st.ohneGegenstueck} Zelle(n) ohne Gegenstück in gesamt; Fenster in der Vergangenheit wählen)`);
   return { posten: [...st.posten, ...rest.posten], luecken };
 }
 
@@ -252,7 +256,6 @@ export function tabelle(posten) {
     }
   }
   const alle = [...zeilen.values()];
-  for (const z of alle) z.quellen = Object.fromEntries(QUELLEN.filter((q) => q in z.quellen).map((q) => [q, z.quellen[q]]));
   const rest = alle.filter((z) => z.name === UNZUGEORDNET);
   const rang = alle.filter((z) => z.name !== UNZUGEORDNET).sort((a, b) => b.cost - a.cost || sortName(a.name, b.name));
   return { zeilen: [...rang, ...rest], summe: summe(alle), davon };

@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/langfuse-auswertung-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -29,13 +30,14 @@ type Bericht = {
   unzugeordnet: { count: number; cost: number };
   luecken: string[];
 };
+type Abfr = { dimensions?: { field: string }[]; metrics?: { measure: string; aggregation: string }[]; timeDimension?: unknown; filters?: { column: string; key?: string; value: string }[]; config?: { row_limit: number } };
 type Ex = { art: string; abfrage: { filters?: { column: string; key?: string; value: string }[]; config?: { row_limit: number } }; data: unknown[] };
 const L = libRaw as unknown as {
   TRACE_NAME_ABGLEICH: string;
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[] }) => { art: string; name: string; abfrage: Ex["abfrage"] & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[] }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
@@ -73,8 +75,8 @@ const unzZeile = (t: Tab) => t.zeilen[t.zeilen.length - 1];
 describe("Quelle", () => {
   test("Abgleich ist nachgeliefert, Model response und Codex: sind codex, Plugin-Namen live, alles andere sonstige", () => {
     expect(L.quelleVon("Abgleich", "Call")).toBe("nachgeliefert");
-    expect(L.quelleVon("Codex: lumina", "Model response")).toBe("codex");
-    expect(L.quelleVon("Codex: lumina", "Anderes")).toBe("codex");
+    expect(L.quelleVon("Codex: repo-x", "Model response")).toBe("codex");
+    expect(L.quelleVon("Codex: repo-x", "Anderes")).toBe("codex");
     expect(L.quelleVon("Claude Code Turn", "Subagent LLM Call")).toBe("live");
     expect(L.quelleVon("Claude Code Turn", "[duplicate audit] LLM Call")).toBe("live");
     expect(L.quelleVon("Claude: usage reconciliation", "Call")).toBe("sonstige");
@@ -275,19 +277,12 @@ describe("Rezept", () => {
 });
 
 describe("Wächter Secret-Key (AK8)", () => {
-  const huelle = (start: string, gesehen = new Set<string>()): Set<string> => {
-    if (gesehen.has(start)) return gesehen;
-    gesehen.add(start);
-    const text = readFileSync(join("scripts", start), "utf8");
-    for (const m of text.matchAll(/(?:from|import)\s*\(?\s*"\.\/([^"]+)"/g)) huelle(m[1], gesehen);
-    return gesehen;
-  };
   test("die Import-Hülle der CLI enthält weder langfuse-api noch langfuse-zugang, keinen Key und kein fetch", () => {
-    const h = huelle("langfuse-auswertung.mjs");
-    expect(h).toContain("langfuse-auswertung-lib.mjs");
-    expect(h).not.toContain("langfuse-api.mjs");
-    expect(h).not.toContain("langfuse-zugang.mjs");
-    for (const f of h) expect(readFileSync(join("scripts", f), "utf8")).not.toMatch(/LANGFUSE_SECRET_KEY|fetch\(/);
+    const h = importHuelle("scripts/langfuse-auswertung.mjs", (p) => readFileSync(p, "utf8"));
+    expect(h).toContain("scripts/langfuse-auswertung-lib.mjs");
+    expect(h).not.toContain("scripts/langfuse-api.mjs");
+    expect(h).not.toContain("scripts/langfuse-zugang.mjs");
+    for (const f of h) expect(readFileSync(f, "utf8")).not.toMatch(/LANGFUSE_SECRET_KEY|fetch\(/);
   });
   test("die Lib importiert nichts", () => {
     expect(readFileSync("scripts/langfuse-auswertung-lib.mjs", "utf8")).not.toMatch(/^import /m);
@@ -319,7 +314,7 @@ describe("Randfälle", () => {
   test("eine Zelle ohne Gegenstück in gesamt ist eine Lücke; eine Audit-Zelle ist es nicht", () => {
     const fremd = ["Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoZ"] as const;
     const b = rep(...basis, meta("agent_type", "Plan", [g(...fremd, 1, 1, 3)]));
-    expect(b.luecken.join("\n")).toMatch(/Rolle: Exporte nicht konsistent \(0 Zeile\(n\) mit Rest unter 0, 1 Zelle\(n\) ohne Gegenstück/);
+    expect(b.luecken.join("\n")).toMatch(/Rolle: Exporte nicht konsistent \(0 Zeile\(n\) mit Rest unter 0 oder Kosten ohne Calls, 1 Zelle\(n\) ohne Gegenstück/);
   });
   test("Rest: nur die Kosten über der Zelle (Calls gleich) und Rundungsrauschen unterscheiden Lücke und Null", () => {
     expect(rep(...basis, meta("agent_type", "Plan", [g(...R1, 10, 6, 3)])).luecken.join("\n")).toMatch(/1 Zeile\(n\) mit Rest unter 0/);
@@ -408,6 +403,78 @@ describe("Randfälle", () => {
   });
 });
 
+describe("Funde Runde 1", () => {
+  test("ein Rest ohne Calls, aber mit Kosten ist eine Lücke, nie still verloren", () => {
+    const b = rep(...basis, meta("agent_type", "Plan", [g(...R1, 10, 4, 3)]));
+    expect(b.luecken.join("\n")).toMatch(/Rolle: Exporte nicht konsistent \(1 Zeile\(n\) mit Rest unter 0 oder Kosten ohne Calls/);
+  });
+  test("die Quellen-Spalten der Rollen- und Effort-Tabelle trennen Live, Nachgeliefert und Codex (Zellen und Rest)", () => {
+    const b = rep(...basis, ...alleRollen, ...alleEfforts);
+    expect(b.rolle.zeilen.find((z) => z.name === "Plan")?.quellen).toEqual({ live: 5, nachgeliefert: 10 });
+    expect(b.rolle.zeilen.find((z) => z.name === "agent_role:main")?.quellen).toEqual({ codex: 2 });
+    expect(b.effort.zeilen.find((z) => z.name === "effort:high")?.quellen).toEqual({ live: 5, nachgeliefert: 10 });
+    const r = rep(...basis, meta("agent_type", "Plan", [g(...R1, 4, 2, 3)]));
+    expect(unzZeile(r.rolle).quellen).toEqual({ live: 3, nachgeliefert: 10, codex: 2 });
+  });
+  test("Effort-Lücken stehen im Bericht: kein Export, negative Zelle, nicht konsistent", () => {
+    expect(rep(...basis, ...alleRollen).luecken).toContain("Effort: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)");
+    const neg = rep(...basis, ...alleRollen, meta("effort", "high", [g(...R1, 10, 5, -1), g(...R2, 20, 10, 3)]));
+    expect(neg.luecken.join("\n")).toMatch(/Effort: 1 Gruppe\(n\) mit negativer Latenz in einer Metadaten-Zelle, 10 Calls \(5\.00 \$\)/);
+    expect(rep(...basis, ...alleRollen, meta("effort", "high", [g(...R1, 11, 5, 3)])).luecken.join("\n")).toMatch(/Effort: Exporte nicht konsistent/);
+    expect(rep(...basis, ...alleRollen, ...alleEfforts).luecken).toEqual([]);
+  });
+  test("Gleitkomma: die Summe der Zellen einer Gruppe hängt nicht von der Exportreihenfolge ab", () => {
+    const gesamtF = exp("gesamt", [g(...R1, 3, 0.6)]);
+    const latF = exp("latenz", [g(...R1, 3, 0.6, 0)]);
+    const zellen = (reihe: string[]) => reihe.map((w, i) => meta("agent_type", w, [g(...R1, 1, [0.1, 0.2, 0.3][i], 3)]));
+    const a = rep(gesamtF, tageVoll, latF, ...zellen(["A", "B", "C"]));
+    const b = rep(gesamtF, tageVoll, latF, ...zellen(["C", "B", "A"]).reverse());
+    const c = rep(gesamtF, tageVoll, latF, meta("agent_type", "C", [g(...R1, 1, 0.3, 3)]), meta("agent_type", "B", [g(...R1, 1, 0.2, 3)]), meta("agent_type", "A", [g(...R1, 1, 0.1, 3)]));
+    expect(JSON.stringify(c)).toBe(JSON.stringify(a));
+    expect(b.luecken).toEqual(a.luecken);
+  });
+  test("eine Gruppe mit negativer Latenz und eine Metadaten-Zelle derselben Gruppe ergeben keine falsche Lücke", () => {
+    const b = rep(gesamt, tageVoll, exp("latenz", [g(...R1, 10, 5, 0), g(...R2, 20, 10, -5), g(...R3, 4, 2, 7)]), ...alleRollen);
+    expect(b.luecken.join("\n")).not.toMatch(/nicht konsistent/);
+    expect(b.rolle.summe).toEqual({ count: 14, cost: 7 });
+  });
+  test("Tage: der Fensterstart zählt mit seinem Tag, ein Zeitstempel mit Uhrzeit zählt als dieser Tag", () => {
+    expect(L.tagesLuecken("2026-11-01T12:00:00Z", "2026-11-02T06:00:00Z", [])).toEqual(["2026-11-01", "2026-11-02"]);
+    expect(L.tagesLuecken(VON, "2026-11-02T00:00:00Z", [{ time_dimension: "2026-11-01T00:00:00.000Z" }])).toEqual([]);
+  });
+  test("fehlende Schlüssel (nicht nur null oder leer) für Modell und Umgebung sind unzugeordnet", () => {
+    const b = rep(exp("gesamt", [{ traceName: "Abgleich", name: "Call", count_count: 2, sum_totalCost: 1 }]), tageVoll);
+    expect(b.modell.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
+    expect(b.repo.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
+  });
+  test("ein null-Eintrag in den Filtern wirft keinen TypeError", () => {
+    const so = { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" };
+    expect(() => lese(exp("gesamt", gesamtRows, [null, FILTER]))).not.toThrow();
+    expect(() => lese(exp("metadaten", [], [FILTER, null, so]))).not.toThrow();
+  });
+  test("das Rezept enthält keine Abfrage doppelt, auch wenn eine Rolle schon eingebaut ist", () => {
+    const namen = L.rezept({ von: VON, bis: BIS, rollen: ["Plan", "hauptchat", "x", "x"] }).map((r) => r.name);
+    expect(new Set(namen).size).toBe(namen.length);
+  });
+  test("Rezept und Leser passen zusammen: Zeilen genau der angefragten Dimensionen und Metriken ergeben einen vollständigen Bericht ohne Lücke", () => {
+    const werte: Record<string, string> = { traceName: "Claude Code Turn", name: "LLM Call", providedModelName: "claude-sonnet-5-5", environment: "repoA" };
+    const zeilen = (a: Abfr): Record<string, unknown>[] => {
+      const z: Record<string, unknown> = {};
+      for (const d of a.dimensions ?? []) z[d.field] = werte[d.field];
+      for (const m of a.metrics ?? []) z[m.aggregation === "count" ? "count_count" : `${m.aggregation}_${m.measure}`] = m.measure === "count" ? 10 : m.measure === "totalCost" ? 5 : 3;
+      if (!a.timeDimension) return [z];
+      return ["2026-11-01", "2026-11-02", "2026-11-03"].map((t) => ({ ...z, time_dimension: t }));
+    };
+    const rez = L.rezept({ von: VON, bis: BIS });
+    const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
+    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
+    const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
+    expect(b.luecken).toEqual([]);
+    expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
+    expect(b.rolle.zeilen[0]).toMatchObject({ name: "hauptchat", count: 10 });
+  });
+});
+
 describe("CLI", () => {
   const ordner: string[] = [];
   const neuerOrdner = () => {
@@ -480,7 +547,14 @@ describe("CLI", () => {
     writeFileSync(join(dir, "e.md"), "---\nname:\n---\n");
     writeFileSync(join(dir, "f.md"), "---\r\nname: windows\r\n---\r\n");
     writeFileSync(join(dir, "g.md"), "---\nname:\tmittab\t\n---\n");
-    expect(C.agentenNamen(dir)).toEqual(["mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
+    writeFileSync(join(dir, "h.md"), "---\nname: \"gequotet\"\n---\n");
+    writeFileSync(join(dir, "i.md"), "---\nname: 'einfach'\n---\n");
+    expect(C.agentenNamen(dir)).toEqual(["einfach", "gequotet", "mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
+  });
+  test("der Standard-Agentenordner ist .claude/agents des Repos und enthält Agenten", () => {
+    const a = C.parseArgs([]) as { agenten: string };
+    expect(a.agenten).toMatch(/\.claude[\\/]agents$/);
+    expect(C.agentenNamen(a.agenten).length).toBeGreaterThan(0);
   });
   test("agentenNamen nimmt eingespeiste Leser", () => {
     expect(C.agentenNamen("/x", { lies: () => "name: eingespeist\n", liste: () => ["a.md", "b.txt"] })).toEqual(["eingespeist"]);
