@@ -769,7 +769,7 @@ describe("parseArgs strikt (#1790)", () => {
   type PArgs = { agent: string; tickets: number[]; ohne: number[]; json: boolean; von?: string; bis?: string; projekt?: string; brille?: string; delta?: boolean; jeTicket?: boolean; fehler?: string };
   const PS = (K as unknown as { parseArgs: (a: string[]) => PArgs }).parseArgs;
   test("alle Flags gesetzt: Form ohne fehler-Feld, --ticket/--ohne wiederholbar", () => {
-    expect(PS(["--von", "v", "--bis", "b", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "v", bis: "b", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
+    expect(PS(["--von", "2026-01-01T00:00:00Z", "--bis", "2026-01-02T00:00:00Z", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "2026-01-01T00:00:00Z", bis: "2026-01-02T00:00:00Z", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
     expect(PS([])).toEqual({ agent: UMSETZER, tickets: [], ohne: [], json: false });
   });
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {

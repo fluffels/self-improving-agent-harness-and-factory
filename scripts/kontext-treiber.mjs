@@ -682,6 +682,7 @@ export function parseArgs(argv, namen) {
   ttlFlag(werte, a);
   const gefunden = fehler?.text ?? ticketFehler;
   if (gefunden) a.fehler = gefunden;
+  for (const name of ["von", "bis"]) if (werte[name] !== undefined && Number.isNaN(Date.parse(werte[name]))) a.fehler ??= `--${name} erwartet einen ISO-Zeitpunkt, nicht ${werte[name]}`;
   const delta = werte.delta;
   if (delta !== undefined && delta !== "ja" && delta !== "nein") a.fehler ??= `--delta erwartet ja|nein, nicht ${delta}`;
   else if (delta !== undefined) a.delta = delta === "ja";
