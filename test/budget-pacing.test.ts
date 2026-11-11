@@ -1,7 +1,7 @@
 /* Budget-Pacing (#1358): Entscheidung ok/knapp/stopp aus dem Rate-Limit-Snapshot, Quellen, Snapshot-I/O, CLI. */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { altName, ohneKernEnv } from "./support/env-alt";
@@ -20,6 +20,9 @@ const B = raw as unknown as {
   liesSnapshot: (p: string) => { snapshot: Snap | null; warnung: string | null };
   snapshotPfad: (e: Record<string, string>) => string;
   schreibeSnapshot: (s: unknown, p: string) => void;
+  verlaufPfad: (e: Record<string, string>) => string;
+  verlaufSchluessel: (s: unknown) => string;
+  haengeVerlaufAn: (s: unknown, p: string) => boolean;
 };
 
 const WOCHE = 7 * 24 * 3_600_000;
@@ -232,6 +235,56 @@ describe("liesSnapshot und CLI", () => {
     expect(readdirSync(d).filter((n) => n.endsWith(".tmp"))).toEqual([]);
   });
 
+  test("verlaufPfad: Env überschreibt, sonst Home/.claude/state", () => {
+    expect(B.verlaufPfad({ FACTORY_ABO_KONTINGENT_VERLAUF: "/x/v.jsonl" })).toBe("/x/v.jsonl");
+    expect(B.verlaufPfad({})).toBe(join(homedir(), ".claude", "state", "abo-kontingent-verlauf.jsonl"));
+  });
+
+  test("haengeVerlaufAn: hängt nur bei geändertem Stand an, nach einer kaputten letzten Zeile wird angehängt", () => {
+    const pfad = join(neu(), "unter", "v.jsonl");
+    const s = (p7: number, p5 = 10, r5 = 100): Snap => ({ stand: Date.now(), sevenDay: { pct: p7, resetsAt: 1000 }, fiveHour: { pct: p5, resetsAt: r5 } });
+    const zeilen = () => readFileSync(pfad, "utf8").split("\n").filter(Boolean);
+    expect(B.haengeVerlaufAn(s(18), pfad)).toBe(true);
+    expect(B.haengeVerlaufAn(s(18), pfad)).toBe(false);
+    expect(B.haengeVerlaufAn(s(18.000000000000004), pfad)).toBe(false); // Gleitkomma-Rauschen der Probe
+    expect(zeilen()).toHaveLength(1);
+    expect(B.haengeVerlaufAn(s(19), pfad)).toBe(true);
+    expect(B.haengeVerlaufAn(s(19, 11), pfad)).toBe(true); // nur das 5h-Fenster geändert
+    expect(B.haengeVerlaufAn(s(19, 11, 200), pfad)).toBe(true); // nur der Reset geändert
+    expect(zeilen()).toHaveLength(4);
+    appendFileSync(pfad, "{kaputt\n");
+    expect(B.haengeVerlaufAn(s(19, 11, 200), pfad)).toBe(true);
+    expect(zeilen()).toHaveLength(6);
+  });
+
+  test("haengeVerlaufAn: die Dedup liest nur das Dateiende (Verlauf über 4 KiB), Teil-Snapshots als letzte Zeile brechen nichts", () => {
+    const pfad = join(neu(), "gross.jsonl");
+    const s = (p7: number): Snap => ({ stand: Date.now(), sevenDay: { pct: p7, resetsAt: 1000 }, fiveHour: { pct: 1, resetsAt: 100 } });
+    for (let i = 0; i < 60; i++) appendFileSync(pfad, `${JSON.stringify({ ...s(i % 50), stand: i })}\n`);
+    expect(readFileSync(pfad, "utf8").length).toBeGreaterThan(4096);
+    appendFileSync(pfad, `${JSON.stringify(s(77))}\n`);
+    expect(B.haengeVerlaufAn(s(77), pfad)).toBe(false);
+    const teil = join(neu(), "teil.jsonl");
+    expect(B.haengeVerlaufAn({ stand: 1, fiveHour: { pct: 5, resetsAt: 100 } }, teil)).toBe(true);
+    expect(B.haengeVerlaufAn({ stand: 9, fiveHour: { pct: 5, resetsAt: 100 } }, teil)).toBe(false); // gleicher Teil-Snapshot: Dedup trotz fehlendem Fenster
+    expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
+    expect(B.haengeVerlaufAn({ stand: 2, sevenDay: { pct: 3, resetsAt: 1000 } }, teil)).toBe(true);
+    expect(B.haengeVerlaufAn(s(3), teil)).toBe(true);
+  });
+
+  test("CLI: Probe hängt ihren Stand an den Verlauf an, ein nicht schreibbarer Verlauf ändert den Exit nicht und warnt", () => {
+    const d = neu();
+    const probe = join(d, "probe.mjs");
+    writeFileSync(probe, `console.log(${JSON.stringify(JSON.stringify({ type: "rate_limit_event", rate_limit_info: { unifiedWindows: { seven_day: { utilization: 0.18, resetsAt: Math.floor(Date.now() / 1000) + 3.5 * 86400 } } } }))});`);
+    const ok = cli(null, { FACTORY_PACING_PROBE_SKRIPT: probe }, ["--json"]);
+    expect(ok.code).toBe(0);
+    expect(readFileSync(ok.verlauf, "utf8").split("\n").filter(Boolean)).toHaveLength(1);
+    mkdirSync(join(d, "verz"));
+    const nein = cli(null, { FACTORY_PACING_PROBE_SKRIPT: probe, FACTORY_ABO_KONTINGENT_VERLAUF: join(d, "verz") }, ["--json"]);
+    expect(nein.code).toBe(0);
+    expect((JSON.parse(nein.out) as Urteil).warnungen.join()).toMatch(/Kontingent-Verlauf nicht schreibbar/);
+  });
+
   test("CLI: nicht schreibbarer Snapshot-Pfad ergibt eine Warnung, der Stand der Probe gilt trotzdem", () => {
     const d = neu();
     mkdirSync(join(d, "ziel.json"));
@@ -239,7 +292,7 @@ describe("liesSnapshot und CLI", () => {
     writeFileSync(probe, `console.log(${JSON.stringify(JSON.stringify({ type: "rate_limit_event", rate_limit_info: { unifiedWindows: { seven_day: { utilization: 0.9, resetsAt: Math.floor(Date.now() / 1000) + 3.5 * 86400 } } } }))});`);
     const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", "--json"], {
       encoding: "utf8",
-      env: { ...process.env, FACTORY_RATE_LIMITS_SNAPSHOT: join(d, "ziel.json"), FACTORY_PACING_PROBE_SKRIPT: probe, FACTORY_PACING_ZIELQUOTE: "65" },
+      env: { ...process.env, FACTORY_RATE_LIMITS_SNAPSHOT: join(d, "ziel.json"), FACTORY_ABO_KONTINGENT_VERLAUF: join(d, "verlauf.jsonl"), FACTORY_PACING_PROBE_SKRIPT: probe, FACTORY_PACING_ZIELQUOTE: "65" },
     });
     expect(r.status).toBe(4);
     expect((JSON.parse(r.stdout) as Urteil).warnungen.join()).toMatch(/Snapshot nicht schreibbar/);
@@ -257,9 +310,10 @@ describe("liesSnapshot und CLI", () => {
     const basis: Record<string, string | undefined> = { ...process.env };
     // Eine Zielquote aus der Umgebung der Maintainerin (nur der neue Name wirkt) darf die Tests nicht verschieben.
     ohneKernEnv(basis, "FACTORY_PACING_ZIELQUOTE");
-    Object.assign(basis, { FACTORY_RATE_LIMITS_SNAPSHOT: pfad, ...env });
+    const verlauf = join(d, "verlauf.jsonl");
+    Object.assign(basis, { FACTORY_RATE_LIMITS_SNAPSHOT: pfad, FACTORY_ABO_KONTINGENT_VERLAUF: verlauf, ...env });
     const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", ...args], { encoding: "utf8", env: basis });
-    return { code: r.status, out: r.stdout, err: r.stderr, pfad };
+    return { code: r.status, out: r.stdout, err: r.stderr, pfad, verlauf };
   };
   const jetztS = () => Math.floor(Date.now() / 1000);
   const wochenfenster = (haelfte: number) => ({ pct: haelfte, resetsAt: jetztS() + 3.5 * 86400 });
@@ -283,7 +337,7 @@ describe("liesSnapshot und CLI", () => {
   });
 
   test("CLI: ungültiger Aufruf endet mit Exit 2, Zielquote per Env", () => {
-    const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", "--gibtsnicht"], { encoding: "utf8" });
+    const r = spawnSync(process.execPath, ["scripts/budget-pacing.mjs", "--gibtsnicht"], { encoding: "utf8", env: { ...process.env, FACTORY_ABO_KONTINGENT_VERLAUF: join(neu(), "verlauf.jsonl") } });
     expect(r.status).toBe(2);
     const streng = cli({ stand: Date.now(), quelle: "statusline", sevenDay: { pct: 20, resetsAt: jetztS() + 3.5 * 86400 } }, { FACTORY_PACING_ZIELQUOTE: "20" });
     expect(streng.code).toBe(4);
