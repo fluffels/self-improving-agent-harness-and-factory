@@ -92,7 +92,7 @@ export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, mark
 }
 
 /** Zeichen-Budget je Agenten- und Skill-Datei (factory#307): `.claude/agents/*.md`, `.agents/skills/<name>/**` (SKILL.md und Zusatzdateien). Nur die verteilten Pfade aus dem Besitz-Manifest stehen hier (der Kern nennt keine Fabrik-Dateien);
- *  jede andere Datei dieser Ordner, auch eine projekt-eigene im Bezieher, bekommt `AGENTEN_SKILL_DEFAULT_BUDGET`. Gemessen OHNE den Projektwerte-Block (er wächst mit der Projekt-Config, nicht mit dem Kern).
+ *  jede andere Datei dieser Ordner, auch eine projekt-eigene im Bezieher, bekommt `AGENTEN_SKILL_DEFAULT_BUDGET`. Gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen; sie wachsen mit der Projekt-Config, nicht mit dem Kern).
  *  Kalibriert am 2026-11-11 (main e31542f): Ist + 10 %, aufgerundet auf 500 Zeichen. Ratchet: ein Budget sinkt nur, wächst es gegenüber der Merge-Base, wird `test/harness/kontext-budget-ratchet.test.ts` rot.
  *  Je Eintrag genau eine Zeile `{ file: "<pfad>", budget: <zahl> },` (der Ratchet-Test liest sie). Verfall: Prüftermin laut Wiedervorlage `regeln-verfall-2027-03` (ADR 0027). */
 export const AGENTEN_SKILL_BUDGETS = [
