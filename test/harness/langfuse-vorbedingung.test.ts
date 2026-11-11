@@ -108,6 +108,13 @@ describe("bewerteMcpSpur (L4, factory#320)", () => {
     const z = [START("2026-11-10T07:00:00.000Z"), FEHLER("2026-11-10T07:00:01.000Z"), START("2026-11-10T07:05:00.000Z"), ERFOLG("2026-11-10T07:05:01.000Z")];
     expect(v.bewerteMcpSpur(z, SID)).toMatchObject({ ok: true });
   });
+  test("neuer Start ohne Ergebnis nach einem alten Fehler: nicht prüfbar statt alter Fehler", () => {
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z"), FEHLER("2026-11-10T07:00:01.000Z"), START("2026-11-10T07:05:00.000Z")], SID)).toBeNull();
+  });
+  test("Zeilen ohne sessionId passen nie auf eine fehlende Session-ID", () => {
+    const ohne = (d: string) => JSON.stringify({ debug: d, timestamp: "2026-11-10T07:00:00.000Z" });
+    expect(v.bewerteMcpSpur([ohne("Starting connection with timeout of 30000ms"), ohne("HTTP Connection failed after 4ms: ECONNREFUSED")], undefined)).toBeNull();
+  });
   test("Erfolg ohne Fehler: ok", () => {
     expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z"), ERFOLG("2026-11-10T07:00:01.000Z")], SID)).toMatchObject({ ok: true });
   });
