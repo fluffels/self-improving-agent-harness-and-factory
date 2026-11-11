@@ -198,10 +198,13 @@ function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
   return true;
 }
 
-/** `git stash`: nur `list`/`show` (erstes Nicht-Options-Wort) lesen; alles andere, auch dynamisch, ändert den repoweit geteilten Stash. */
+/** Grobe Wortregel für `git stash` (außer list/show), wenn Zerlegen oder Analyse scheitert. */
+export const STASH_GROB = /\bgit\b.*\bstash\b(?!\s+(?:list|show)\b)/s;
+
+/** `git stash`: nur `list`/`show` als erstes Wort lesen; alles andere (auch `-q list`, `-p show` = push, dynamisch) ändert den repoweit geteilten Stash. */
 function stashMerken(c, sub, rest) {
   if (sub !== "stash") return;
-  const w = rest.find((x) => x.dynamic || !x.text.startsWith("-"));
+  const w = rest[0];
   if (!w || w.dynamic || !["list", "show"].includes(w.text)) c.stash = true;
 }
 

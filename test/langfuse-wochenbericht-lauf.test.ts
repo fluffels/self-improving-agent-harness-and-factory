@@ -444,5 +444,8 @@ describe("Wochenbericht-Lauf: kein Schlüssel in grund (Sicherheit)", () => {
   test("Helfer: Text ohne Muster bleibt gleich, mehrere Treffer je Zeile werden alle ersetzt", () => {
     expect(C.ohneSchluessel("Fehler: kaputt in ~/x")).toBe("Fehler: kaputt in ~/x");
     expect(C.ohneSchluessel("sk-lf-a sk-lf-b")).toBe("[geschwärzt] [geschwärzt]");
+    expect(C.ohneSchluessel("Basic ab+cd/ef=")).toBe("[geschwärzt]");
+    expect(C.ohneSchluessel("LANGFUSE_PROJECT_SECRET=x")).toBe("[geschwärzt]");
+    expect(C.ohneSchluessel("Basic auth failed")).toBe("Basic auth failed");
   });
 });

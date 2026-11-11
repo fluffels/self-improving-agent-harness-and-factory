@@ -187,6 +187,16 @@ describe("dynamische Unterbefehle und Analysefehler", () => {
     const lauf = (command: string) => decide({ cwd: WT, command, repoRoot: HAUPT, deps: kaputt });
     assert.equal(lauf("cd ~ && git stash pop").block, true);
     assert.equal(lauf("cd ~ && git stash list").block, false);
+    assert.equal(lauf("cd ~ && git stash show").block, false, "Lesebefehl bleibt im Rückfall erlaubt");
+    assert.equal(lauf("cd ~ && git stash listx").block, true, "Wortgrenze hinter list");
+    assert.equal(lauf("cd ~ &&\ngit\nstash pop").block, true, "Zeilenumbruch zwischen git und stash");
+  });
+
+  test("Optionen vor list/show zählen nicht als Lesebefehl; nicht zerlegbarer Befehl fällt auf die grobe Regel", () => {
+    assert.equal(pruefeStash("git stash -q list").block, true);
+    assert.equal(pruefeStash("git stash -p show").block, true, "push -p mit Pfad show");
+    assert.equal(pruefeStash("for ((i=0;i<1;i++)); do git stash pop; done").block, true);
+    assert.equal(pruefeStash("git stash show -p").block, false);
   });
 });
 

@@ -38,6 +38,7 @@
  *    Quotes zählt bei reinen Text-Kommandos (gh, echo, printf, cat, grep, egrep, fgrep, rg ohne `--pre`) nicht.
  *  - Nicht zerlegbar (offenes Quote, `for ((…))`, Verschachtelung über MAX_TIEFE): grobe Wortregel (Wortsuche
  *    "git" + "commit"/"push") gegen das Session-`cwd`.
+ *  - Wirft die Analyse bei einem grob geschützten Befehl, fragt der Hook im Worktree (Ziel nicht bestimmbar); im Haupt-Checkout blockt er (factory#332).
  *  - Fail-open nur bei fehlendem `cwd`, Nicht-Git-Verzeichnis und anderem Repo (dieselbe "kein falsches Rot"-
  *    Philosophie wie check-diffsize.mjs).
  *  - Ersetzt NICHT den PR-Gate (#592): das bleibt die Durchsetzung für Code-Qualität. Der Hook fängt die EINE
@@ -76,6 +77,7 @@ import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
+import { STASH_GROB } from "./worktree-guard-git.mjs";
 import { coarseProtected, fromMsysPath, pathFor } from "./worktree-guard-tabellen.mjs";
 
 export { parseHookInput, buildDenyOutput, analyse, coarseProtected, fromMsysPath };
@@ -225,7 +227,7 @@ function stashBlock(command, cwd, deps) {
   try {
     stash = analyse(command, cwd, { ...deps, repoRoot: undefined }).stash;
   } catch {
-    stash = /\bgit\b.*\bstash\b(?!\s+(?:list|show)\b)/s.test(command); // Analyse wirft: grobe Wortregel statt Durchwinken
+    stash = STASH_GROB.test(command); // Analyse wirft: grobe Wortregel statt Durchwinken
   }
   return stash ? { block: true, reason: STASH_REASON } : null;
 }

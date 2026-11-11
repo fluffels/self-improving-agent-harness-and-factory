@@ -164,7 +164,7 @@ export async function auswerten(args, deps = {}) {
 // ── Wochenbericht-Lauf (factory#314) ─────────────────────────────────────────
 
 const ghEcht = (args) => ghText(args, { timeout: 60_000 });
-const SCHLUESSEL_MUSTER = [/sk-lf-\S+/g, /pk-lf-\S+/g, /Basic\s+[A-Za-z0-9+/=_-]+/g, /LANGFUSE_\w*SECRET\w*=\S*/g];
+const SCHLUESSEL_MUSTER = [/sk-lf-\S+/g, /pk-lf-\S+/g, /Basic\s+[A-Za-z0-9+/=_-]{8,}/g, /LANGFUSE_\w*SECRET\w*=\S*/g];
 /** Schwärzt Langfuse-Schlüsselmuster (geschlossene Liste), bevor Text in .json oder Log landet; liest keine env-Werte. */
 export const ohneSchluessel = (text) => SCHLUESSEL_MUSTER.reduce((t, m) => t.replace(m, "[geschwärzt]"), String(text));
 const entpfade = (text, home) => ohneSchluessel(String(text).split(home).join("~")).split("\n")[0].slice(0, 300);

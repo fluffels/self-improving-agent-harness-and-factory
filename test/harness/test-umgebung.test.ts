@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { istZugang } from "../support/zugaenge";
 
 const WURZEL = join(__dirname, "..", "..");
@@ -29,6 +29,18 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
 
   it("process.env des Testworkers hat keinen Zugangs-Schlüssel", () => {
     expect(Object.keys(process.env).filter(istZugang)).toEqual([]);
+  });
+
+  it("das Setup löscht gesetzte Zugangs-Variablen, unabhängig von der Umgebung des Laufs", async () => {
+    process.env.LANGFUSE_PROBE = "x";
+    process.env.GH_TOKEN = "x";
+    process.env.GITHUB_TOKEN = "x";
+    process.env.NICHT_ZUGANG = "x";
+    vi.resetModules();
+    await import("../support/zugaenge-entfernen");
+    expect(Object.keys(process.env).filter(istZugang)).toEqual([]);
+    expect(process.env.NICHT_ZUGANG).toBe("x");
+    delete process.env.NICHT_ZUGANG;
   });
 
   it("ein Kindprozess sieht keinen Zugangs-Schlüssel", () => {
