@@ -94,6 +94,17 @@ function epicRestUrteil(c, ergebnis) {
   return ergebnis("epic-rest", `${c.kinder} Kinder, offen ohne Worktree, Branch und PR`);
 }
 
+/** Pur: das erste Urteil eines offenen Claims vor der Lebenszeichen-Prüfung: `epic-rest`, sonst ohne lokale Spur `ohneSpurUrteil`; sonst null. */
+function fruehesOffenUrteil(c, spur, ergebnis) {
+  const epicRest = epicRestUrteil(c, ergebnis);
+  if (epicRest || spur) return epicRest;
+  return ohneSpurUrteil(c, ergebnis);
+}
+
+/** Pur: die Zeilen `EPIC-REST #<nr>` mit dem Weg, je Claim mit dem Urteil `epic-rest`. */
+const epicRestZeilen = (urteile) =>
+  urteile.filter((u) => u.urteil.urteil === "epic-rest").map(({ claim: c, urteil }) => `EPIC-REST #${c.nr}: ${urteil.grund}; Weg: Übersichts-Kommentar, gh issue close ${c.nr}, Lock freigeben`);
+
 /** Pur: trägt das Issue den Titelpräfix „Nicht eintragbar: “ (`titel` aus `issueAus`; ohne Issue false)? */
 const istNichtEintragbar = (issue) => String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX);
 
@@ -114,9 +125,8 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
-    const epicRest = epicRestUrteil(c, ergebnis);
-    if (epicRest) return epicRest;
-    if (!spur) return ohneSpurUrteil(c, ergebnis);
+    const frueh = fruehesOffenUrteil(c, spur, ergebnis);
+    if (frueh) return frueh;
     const angehalten = angehaltenGrund(c);
     if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
@@ -414,7 +424,7 @@ export function fuehreAus(argv, depsOderFabrik) {
     const h = stundenSeit(stand.jetzt, c.lebenszeichenMs);
     zeilen.push(`WIEDERAUFNAHME #${c.nr}: ${urteil.grund}, letztes Lebenszeichen ${iso(c.lebenszeichenMs) ?? "unbekannt"}${h === null ? "" : ` (vor ${h} h)`}; Weg: node scripts/ticket-lock.mjs claim ${c.nr} --wiederaufnahme, dann Fortsetzungsauftrag`);
   }
-  for (const { claim: c, urteil } of urteile.filter((u) => u.urteil.urteil === "epic-rest")) zeilen.push(`EPIC-REST #${c.nr}: ${urteil.grund}; Weg: Übersichts-Kommentar, gh issue close ${c.nr}, Lock freigeben`);
+  zeilen.push(...epicRestZeilen(urteile));
   for (const { claim: c } of urteile.filter((u) => u.urteil.urteil === "geloescht")) zeilen.push(geloeschtZeile(c));
   for (const { claim: c, urteil } of urteile.filter((u) => !["aufraeumbar", "verwaist", "geloescht", "epic-rest"].includes(u.urteil.urteil))) zeilen.push(`BEHALTEN #${c.nr}: ${urteil.urteil}, ${urteil.grund}`);
   return ergebnisAus(code, zeilen.join("\n"));
