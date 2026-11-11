@@ -288,6 +288,12 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     const ok = JSON.parse((await lauf(["--json"], CC, () => VERBUNDEN)).out[0]) as { mcp: { status: string } };
     expect(ok.mcp.status).toBe("verbunden");
   });
+  test("eigener Fehlstart knapp innerhalb des 24-h-Fensters (23 h) zählt: getrennt, Exit 1", async () => {
+    const jung = [START("2026-11-10T11:00:00.000Z"), REFUSED("2026-11-10T11:00:00.020Z")];
+    const r = await lauf([], CC, () => jung);
+    expect(r.code).toBe(1);
+    expect(r.err.join("\n")).toContain("fehlt");
+  });
   test("eigener Fehlstart älter als das 24-h-Fenster: kein getrennt, Exit 0 (Fenster an der Aufrufstelle verdrahtet)", async () => {
     const alt = [START("2026-11-10T08:00:00.000Z"), REFUSED("2026-11-10T08:00:00.020Z")];
     const r = await lauf([], CC, () => alt);
