@@ -71,6 +71,16 @@ describe("Regex-Escape: Muster erkennen (Red-Green-Fixtures)", () => {
     assert.deepEqual(befunde(aufruf("'.'", BS2 + ".")), ["M2 nur erster Treffer"]);
     assert.deepEqual(befunde(aufruf("/[.*]/", BS2 + "$&")), ["M2 nur erster Treffer"]);
   });
+  test("Randformen: Template- und Einfach-Literal als Ersatz, Escape in Klasse und Text-Literal, Leerraum", () => {
+    assert.deepEqual(befunde("s.replace(/" + BS + "." + "/g, `" + BS2 + ".`)"), ["M1 Escape ohne Backslash"]);
+    assert.deepEqual(befunde("s.replace(\".\", " + "\x27" + BS2 + ".\x27)"), ["M2 nur erster Treffer"]);
+    assert.deepEqual(befunde(aufruf("/[" + BS + ".*]/g", BS2 + "$&")), ["M1 Escape ohne Backslash"]);
+    assert.deepEqual(befunde(aufruf("\"" + BS + "t\"", BS2 + "t")), ["M2 nur erster Treffer"]);
+    assert.deepEqual(befunde("s.replace( /[.*]/g , \"" + BS2 + "$&\")"), ["M1 Escape ohne Backslash"]);
+    assert.deepEqual(befunde("s.replace('" + BS + "t', '" + BS2 + "t')"), ["M2 nur erster Treffer"]);
+    // verdoppelter Backslash im Ersatz (maskiert den Backslash selbst) ist kein Escape
+    assert.deepEqual(befunde(aufruf("/" + BS + "//", BS2 + BS2)), []);
+  });
   test("sauber: volle Klasse mit Backslash, Folge von Escapes, Ersatz ohne Escape, Ersatzfunktion, Verankerung", () => {
     assert.deepEqual(befunde(aufruf("/[.*+?^${}()|[]" + BS2 + "]/g", BS2 + "$&")), []);
     assert.deepEqual(befunde("t.replace(/" + BS2 + "/g, " + '"' + BS2 + BS2 + '")' + ".replace(/" + BS + '|/g, "' + BS2 + '|")'), []);

@@ -395,7 +395,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
 describe("Automatischer Abgleich verdrahtet (#1578)", () => {
   const settings = read(".claude/settings.json");
   const hookQuelle = read("scripts/langfuse-abgleich-hook.mjs");
-  const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => (trifftLeitplanke as (pfad: string, muster: string[]) => boolean)(rel, eintraege.filter((p) => p !== ""));
+  const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => (trifftLeitplanke as (pfad: string, muster: string[]) => boolean)(rel, eintraege);
   const echte = (JSON.parse(read(".github/protected-paths.json")) as { harness: string[] }).harness;
   // CODEOWNERS spiegelt nur die Pflicht-Review-Liste (factory#348): geprüft wird, was sie nennt.
   const pflichtListe = (pflichtReviewMuster as (t: string) => string[] | null)(read(".github/protected-paths.json")) ?? [];

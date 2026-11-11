@@ -4,7 +4,7 @@
  *
  *   node scripts/pr-warten.mjs <pr> [--max-sekunden 150] [--intervall 30]
  *
- * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 150: Gesamtlaufzeit unter 180 s auch mit einer letzten gh-Abfrage (30 s Timeout), weil Claude Code ab v2.1.318 in Hintergrund-Subagenten einen Shell-Befehl nach 3 Minuten in den Hintergrund schiebt; zugleich unter der 5-Minuten-Standard-Cache-TTL der Subagenten:
+ * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 150: im Normalfall Gesamtlaufzeit unter 180 s (Grenze: nicht eingerechnet sind die gh-Abfragen vor dem Budget und die Konflikt-Bestätigung) auch mit einer letzten gh-Abfrage (30 s Timeout), weil Claude Code ab v2.1.318 in Hintergrund-Subagenten einen Shell-Befehl nach 3 Minuten in den Hintergrund schiebt; zugleich unter der 5-Minuten-Standard-Cache-TTL der Subagenten:
  * eine längere Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem Nicht-Pflicht-Check zusätzlich eine `HINWEIS`-Zeile):
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
