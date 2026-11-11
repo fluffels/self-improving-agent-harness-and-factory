@@ -30,11 +30,11 @@ export function serverAusAgent(text) {
 }
 
 /** Pur: Mängel für Server, die weder in `.mcp.json` (`projekt`, Liste der Schlüssel) noch im User-Scope stehen. `agenten`: `[{ datei, text }]`. */
-export function bewerteMcp({ agenten, projekt, userScope = USER_SCOPE_MCP_SERVER }) {
-  const bekannt = new Set([...projekt, ...userScope]);
+export function bewerteMcp({ agenten, bekannt }) {
+  const kennt = new Set(bekannt);
   const fehlend = new Map();
   for (const { datei, text } of agenten) {
-    for (const s of serverAusAgent(text)) if (!bekannt.has(s)) fehlend.set(s, [...(fehlend.get(s) ?? []), datei]);
+    for (const s of serverAusAgent(text)) if (!kennt.has(s)) fehlend.set(s, [...(fehlend.get(s) ?? []), datei]);
   }
   return [...fehlend].map(([server, dateien]) => ({
     text: `MCP-Server „${server}“ fehlt: ${dateien.join(", ")} nennt mcp__${server}__-Werkzeuge, aber .mcp.json hat keinen Eintrag „${server}“`,
@@ -116,17 +116,25 @@ export function pruefeWerkzeuge({ root, lies = (p) => readFileSync(p, "utf8"), l
   const maengel = [];
   const projekt = mcpServerSchluessel(root, lies, maengel);
   maengel.push(...bewerteNode({ ist, nvmrc: lesen(root, ".nvmrc", lies), engines: enginesNode(root, lies) }));
-  let userScopeServer = [];
+  const { vorpruefung, mangel } = vorpruefungMitMangel(config);
+  maengel.push(...mangel, ...bewerteBefehle({ befehle: vorpruefung.befehle, laufe, root }));
+  maengel.push(...bewerteMcp({ agenten: agentenTexte(root, lies, liste), bekannt: bekannteMcpServer(projekt, config) }));
+  return maengel;
+}
+
+/** Die Vorprüfung der Projekt-Config; eine ungültige Form ergibt eine leere Vorprüfung und genau einen Mangel (`mangel`, Liste). */
+export function vorpruefungMitMangel(config) {
   try {
-    const vorpruefung = vorpruefungAus(config);
-    userScopeServer = vorpruefung.userScopeServer;
-    maengel.push(...bewerteBefehle({ befehle: vorpruefung.befehle, laufe, root }));
+    return { vorpruefung: vorpruefungAus(config), mangel: [] };
   } catch (e) {
     const [text, fix] = String(e.message).split("\nFix: ");
-    maengel.push({ text, fix: fix ?? "den Block vorpruefung der Projekt-Config korrigieren" });
+    return { vorpruefung: { befehle: [], userScopeServer: [] }, mangel: [{ text, fix: fix ?? "den Block vorpruefung der Projekt-Config korrigieren" }] };
   }
-  maengel.push(...bewerteMcp({ agenten: agentenTexte(root, lies, liste), projekt, userScope: [...USER_SCOPE_MCP_SERVER, ...userScopeServer] }));
-  return maengel;
+}
+
+/** Alle bekannten MCP-Server: Projekt (`.mcp.json`), Kern-User-Scope und `vorpruefung.userScopeServer` der Config (ungültig: nur die ersten beiden). */
+export function bekannteMcpServer(projekt, config) {
+  return [...projekt, ...USER_SCOPE_MCP_SERVER, ...vorpruefungMitMangel(config).vorpruefung.userScopeServer];
 }
 
 /** Wie `pruefeWerkzeuge` mit geladener Projekt-Config (nur der Block `vorpruefung` zählt); ist sie nicht lesbar, ist das ein Mangel. */

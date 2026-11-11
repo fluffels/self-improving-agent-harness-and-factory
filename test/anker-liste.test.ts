@@ -106,7 +106,7 @@ describe("guardListe: Musterliste", () => {
     expect(muster("  const s = `${f({ a: 1 }) || d} und a ? b : c`;")).toEqual(["||"]);
     expect(muster('  const s = "${a ?? b}";')).toEqual([]);
   });
-  test("Regex-Literal nach => wird ausgeblendet (factory#280 L14), Division und echtes ?? bleiben", () => {
+  test("Regex-Literal nach => zählt als Anker „Regex-Literal“, sein Inhalt (etwa ??) nicht (factory#280 L14); Division und echtes ?? bleiben", () => {
     expect(muster("  const g = (s) => /a ?? b/.test(s);")).toEqual(["Regex-Literal"]);
     expect(muster("  const g = (s) => /^x+$/.test(s);")).toEqual(["Regex-Literal"]);
     expect(muster("  const h = (s) => a / b ?? c / d;")).toEqual(["??"]);
