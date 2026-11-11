@@ -49,7 +49,7 @@ Eigener Diff dieses Tickets (`scripts/gate-befehl-lib.mjs`, `scripts/mutation-la
 
 Handklassifikation der 44 Überlebenden des ersten Laufs: 13 waren Meldungstexte (`StringLiteral`: Fix- und Fehlerzeilen, die kein Test wörtlich bindet), 4 Options- und Rückgabeobjekte (`ObjectLiteral`: der Wegfall ändert den Exit-Code nicht oder wird nicht beobachtet), 27 betrafen Code (davon zehn echte Lücken in meinen Tests: Sortierung, Grenzwert der Kürzung, Anker einer Regex, Null-Werte im Bericht, Auslassen der Fehlerzeile; sie sind mit Tests geschlossen). **Mutator-Ausschluss für die Messung: `StringLiteral` und `ObjectLiteral`**, Begründung wie angegeben; alle anderen Mutatoren bleiben, auch `Regex`, `ConditionalExpression`, `EqualityOperator` und `OptionalChaining` (die Blocker der Sabotage-Klasse betreffen Bedingungen und Regex-Komponenten).
 
-Die letzten 10 Überlebenden am eigenen Diff sind alle „äquivalent/irrelevant“ (nicht erreichbarer Zweig, `catch` mit gleichem Ergebnis, Einstiegs-Guard `istDirektaufruf`, Parameter, die kein Aufrufer leer lässt), davon eine Zeile (`scripts/gate-befehl-lib.mjs:77`), die das Werkzeug als überlebend meldet, während eine händische Sabotage derselben Teilbedingungen Tests rot macht (Werkzeug-Artefakt der Testzuordnung, zählt als irrelevant). Die 13 `NoCoverage` sind `main()` (Kindprozess).
+Die letzten 10 Überlebenden am eigenen Diff sind alle „äquivalent/irrelevant“ (nicht erreichbarer Zweig, `catch` mit gleichem Ergebnis, Einstiegs-Guard `istDirektaufruf`, Parameter, die kein Aufrufer leer lässt), davon eine Zeile (`scripts/gate-befehl-lib.mjs:77`), die das Werkzeug als überlebend meldet, während eine händische Sabotage derselben Teilbedingungen Tests rot macht (Ursache nach der Lens-Prüfung: die Tests hingen von der Prozess-Umgebung ab, `umgebung()` gab keine eigene `env` mit; behoben, am Diff nicht neu gemessen, in den Tabellen oben gilt der Stand vor dem Fix und zählt als irrelevant). Die 13 `NoCoverage` sind `main()` (Kindprozess).
 
 ## Messung und Urteil
 
@@ -59,7 +59,7 @@ Die Entscheidungsregel stand im Commit `ef35aea`, der Mutator-Ausschluss samt Pr
 
 Top zehn nach Blockern der Test-Lens (Rohwerte `lauf-ergebnis`), Klassen nach der vorab festgelegten Regel (Zählung per Skript über den Squash-Diff, Heuristik für Regex-Literale: Literal am Ausdrucksanfang oder nach `= ( , : ! & | ? [`, plus `new RegExp`):
 
-| PR | Blocker Test-Lens | Code-Dateien | hinzugefügte Code-Zeilen | R je Zeile | G je Zeile | Test startet Skript (K) |
+| PR | Blocker Test-Lens (gesamt, `lauf-ergebnis`) | Code-Dateien | hinzugefügte Code-Zeilen | R je Zeile | G je Zeile | Test startet Skript (K) |
 |---|--:|--:|--:|--:|--:|---|
 | factory#174 | 11 | 16 | 199 | 0,065 | 0,131 | ja |
 | factory#108 | 10 | 4 | 335 | 0,024 | 0,173 | ja |
@@ -71,6 +71,8 @@ Top zehn nach Blockern der Test-Lens (Rohwerte `lauf-ergebnis`), Klassen nach de
 | factory#229 | 8 | 4 | 455 | 0,042 | 0,301 | ja |
 | factory#266 | 8 | 14 | 361 | 0,028 | 0,235 | ja |
 | factory#6 | 7 | 5 | 132 | 0,015 | 0,144 | ja |
+
+**Entscheidung: Rangfolge nach den Gesamt-Blockern der Test-Lens, weil `lauf-ergebnis` keine Runde-1-Zahlen kennt.** Das Ticket nennt „Runde-1-Blocker“; die vorab registrierte Auswahlregel nutzt die Gesamtzahl über alle Runden (Proxy, im Commit `ef35aea` festgelegt). Nach den `Runde 1:`-Zeilen der Commits lägen factory#108 und factory#136 (je 10) vor factory#174 (9) und factory#120 und factory#229 (je 8). Nicht nachgemessen; das Urteil gilt für die registrierte Auswahl und kann bei anderer Auswahl abweichen (der Anteil der Äquivalenten liegt je PR bei 43 %, 66 % und 18 %).
 
 Vergabe: K an den PR mit den meisten Blockern, factory#174; R an die höchste Dichte der übrigen, factory#120; G an die höchste Dichte der dann übrigen, factory#229. Fast jeder PR startet Skripte aus Tests; die Klasse K trennt darum nicht, die Regel vergibt sie an den ersten.
 
@@ -138,7 +140,7 @@ Quelle der Funde: die Commit-Message des Fix-Commits (b) samt Selbstcheck und di
 | factory#229 | Orakel-Reihenfolge der `DATEI_PUNKTE` | `:276` | nein |
 | factory#229 | Soll-Liste kein Array | `:256` | nein |
 
-**Überdeckung gesamt: 19 von 27 Blockern (70 %)** (factory#174 7 von 10, factory#120 6 von 9, factory#229 6 von 8; die Ledger-Zahl der Blocker ist 9, 8 und 8, die Commit-Messages nennen bei factory#174 zehn und bei factory#120 neun Themen, dort ist der Nenner die Themenzahl). Bedingung 2 (mindestens 2/3) ist damit knapp erfüllt. Die Zuordnung ist Handarbeit und das Ergebnis zuordnungsabhängig. Mit dem Ergänzungsstand vor den `wip`-Fixes (`3e76a140`) statt (a) liegt die Überdeckung bei factory#120 bei mindestens 8 von 9 (gesamt 21 von 27, 78 %). Liest man „überdeckt“ strenger als „der Mutant überlebt in (a) und der Fix-Test tötet ihn“, ergibt die Regel bei factory#120 (a)=(b) null von 9 (gesamt 13 von 27, 48 %), mit dem Ergänzungsstand 4 von 9 (gesamt 17 von 27, 63 %); bei factory#174 und factory#229 ändert sich nichts. Dass die Tests der Runde 1 genau diese Mutanten töten, zeigt die Verschiebung von (a) nach (b): bei factory#229 sinken die Überlebenden von 119 auf 77 (31 Mutanten verschwinden, keiner kommt hinzu), bei factory#174 von 61 auf 46 (26 verschwinden, 11 kommen durch neuen Code hinzu).
+**Überdeckung gesamt: 19 von 27 Blockern (70 %)** (factory#174 7 von 10, factory#120 6 von 9, factory#229 6 von 8; die Runde-1-Zahl der Blocker laut Commit-Zeilen ist 9, 8 und 8, die Commit-Messages nennen bei factory#174 zehn und bei factory#120 neun Themen, dort ist der Nenner die Themenzahl). Bedingung 2 (mindestens 2/3) ist damit knapp erfüllt. Die Zuordnung ist Handarbeit und das Ergebnis zuordnungsabhängig. Mit dem Ergänzungsstand vor den `wip`-Fixes (`3e76a140`) statt (a) liegt die Überdeckung bei factory#120 bei mindestens 8 von 9 (gesamt 21 von 27, 78 %). Liest man „überdeckt“ strenger als „der Mutant überlebt in (a) und der Fix-Test tötet ihn“, ergibt die Regel bei factory#120 (a)=(b) null von 9 (gesamt 13 von 27, 48 %), mit dem Ergänzungsstand 4 von 9 (gesamt 17 von 27, 63 %); bei factory#174 und factory#229 ändert sich nichts. Dass die Tests der Runde 1 genau diese Mutanten töten, zeigt die Verschiebung von (a) nach (b): bei factory#229 sinken die Überlebenden (`Survived` plus `NoCoverage`) von 122 auf 78, bei factory#174 von 68 auf 52.
 
 ### Äquivalente und irrelevante Überlebende (Bedingung 3)
 
@@ -376,10 +378,12 @@ Alle 196 Überlebenden der drei Stände (c) wurden von Hand gelesen (Zeile, Muta
 | Bedingung | Messwert | Grenze | erfüllt |
 |---|---|---|---|
 | (i) Median-Laufzeit je Diff | 34 s | 10 min | ja |
-| (ii) Überdeckung der Blocker der Sabotage-Klasse | 19 von 27 (70 %) | mindestens 2/3 | ja, knapp und zuordnungsabhängig |
+| (ii) Überdeckung der Blocker der Sabotage-Klasse | 19 von 27 (70 %); strengere Lesart 13 von 27 (48 %) | mindestens 2/3 | ja, knapp; mit der strengen Lesart nein (zuordnungsabhängig) |
 | (iii) äquivalent oder irrelevant unter den Überlebenden | 84 von 196 (43 %) | höchstens 20 % | nein |
 
 Der Mutationslauf findet die Lücken der Test-Lens in Sekunden bis wenigen Minuten, aber auf drei echte Lücken kommen zwei äquivalente oder irrelevante Überlebende (112 zu 84): in den Heuristik-Regexes und Grenzvergleichen dieses Repos ist fast jeder zweite Überlebende ohne Wirkung, und jede Zeile müsste ein Mensch oder Agent erst lesen. Der Projektanteil bleibt als opt-in Gate-Befehl stehen (Bezieher werden nicht gezwungen), seine Entfernung ist als Zeile im Sammelticket eingetragen.
+
+**Ausgabelänge im Agentenkontext (Messwert).** Die Ausgabe von `mutation-lauf` im Stand (c) hat bei factory#174 49 Zeilen (3.046 Zeichen), bei factory#120 80 Zeilen (7.069 Zeichen), bei factory#229 76 Zeilen (5.270 Zeichen); jede Überlebenden-Zeile ist auf 80 Zeichen des Ersatzes gekürzt, die Zahl der Zeilen nicht. Eine Kappung entscheidet ein Folgeticket; nach dem Urteil „nicht brauchbar“ entfällt sie.
 
 **Wiedervorlage:** wenn eine Heuristik-Regex-Klasse sich per Mutator-Ausschluss sauber abtrennen lässt (Werkzeug-Option für Regex-Quantoren, ohne die Anker zu verlieren) oder ein Bezieher mit weniger Heuristik-Code den Lauf einrichtet.
 
