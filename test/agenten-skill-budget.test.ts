@@ -12,7 +12,7 @@ import { kopiereScripts } from "./support/scripts-kopie";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault, zeichenOhneBlock as rawOhneBlock } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized } from "../scripts/check-context-size.mjs";
+import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
 
 type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
@@ -22,6 +22,7 @@ const zeichenOhneBlock = rawOhneBlock as (text: string, marker: { start: string;
 const collectFiles = rawFiles as (wurzel: string) => string[];
 const collectSizes = rawSizes as (wurzel: string, budgets?: Eintrag[], standard?: number) => Groesse[];
 const findOversized = rawOversized as (sizes: Groesse[]) => Groesse[];
+const fixHinweis = rawFix as (violations: { file: string }[]) => string;
 
 const WURZEL = join(import.meta.dirname, "..");
 const START = "<!-- factory:projektwerte:start -->";
@@ -100,6 +101,39 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
       datei(dir, ".claude/agents/a.md", `kopf\n${START}\n${"| x |\n".repeat(50_000)}${ENDE}\nrest`);
       assert.deepEqual(collectSizes(dir).map((s) => s.chars), ["kopf\n\nrest".length]);
     });
+  });
+});
+
+describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
+  const agent = { file: ".claude/agents/x.md" };
+  const skill = { file: ".agents/skills/s/tief/zusatz.md" };
+  const agents = { file: "docs/AGENTS.md" };
+
+  test("Agenten-/Skill-Verletzung: kürzen oder in bedingte Zusatzdatei/Brain-Seite auslagern, Ratchet und Ausnahme mit Ticket, keine modul-lokale AGENTS.md", () => {
+    for (const v of [agent, skill]) {
+      const t = fixHinweis([v]);
+      assert.match(t, /kürzen/);
+      assert.match(t, /\.agents\/skills\/<name>\//);
+      assert.match(t, /Brain-Seite/);
+      assert.match(t, /kontext-budget-ratchet\.test\.ts/);
+      assert.match(t, /ausnahmen\.kontext/);
+      assert.match(t, /Ticket/);
+      assert.doesNotMatch(t, /modul-lokale AGENTS\.md/);
+    }
+  });
+
+  test("AGENTS.md-Verletzung: bisheriger Text (modul-lokale AGENTS.md, ausnahmen.kontext), kein Ratchet-Hinweis", () => {
+    const t = fixHinweis([agents]);
+    assert.match(t, /modul-lokale AGENTS\.md/);
+    assert.match(t, /ausnahmen\.kontext/);
+    assert.doesNotMatch(t, /kontext-budget-ratchet/);
+  });
+
+  test("gemischt: beide Teile; ohne Verletzung leer", () => {
+    const t = fixHinweis([agents, agent]);
+    assert.match(t, /modul-lokale AGENTS\.md/);
+    assert.match(t, /kontext-budget-ratchet\.test\.ts/);
+    assert.equal(fixHinweis([]), "");
   });
 });
 
