@@ -16,6 +16,7 @@
  * Je Nummer ein Urteil (`beurteileClaim`, pur):
  *   unbekannt        GitHub-Daten fehlen: keine Aktion (fail-closed).
  *   geloescht        GitHub meldet das Issue als NOT_FOUND (gelöscht oder übertragen): Zeile `GELÖSCHT` mit Worktree-Pfad und Weg von Hand, nichts wird entfernt, kein Exit 2.
+ *   epic-rest        offen mit Unteraufgaben (GraphQL `subIssuesSummary`), aber ohne Worktree, Branch und PR: ein aufgeteiltes Epic, das offen blieb. Zeile `EPIC-REST` mit dem Weg (Übersichts-Kommentar, `gh issue close`, Lock freigeben); vor `lebendig` und `ohne-lokale-spur` geprüft.
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
@@ -87,6 +88,23 @@ function ohneSpurUrteil(c, ergebnis) {
   return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
 }
 
+/** Pur: das Urteil `epic-rest` für ein offenes Issue mit Unteraufgaben, das keinen Worktree, keinen Branch (lokal wie remote) und keinen PR hat (aufgeteiltes Epic, das offen blieb); sonst null. */
+function epicRestUrteil(c, ergebnis) {
+  if (!(c.kinder > 0) || c.worktree || c.branch || c.branchLokal || c.prs.length > 0) return null;
+  return ergebnis("epic-rest", `${c.kinder} Kinder, offen ohne Worktree, Branch und PR`);
+}
+
+/** Pur: das erste Urteil eines offenen Claims vor der Lebenszeichen-Prüfung: `epic-rest`, sonst ohne lokale Spur `ohneSpurUrteil`; sonst null. */
+function fruehesOffenUrteil(c, spur, ergebnis) {
+  const epicRest = epicRestUrteil(c, ergebnis);
+  if (epicRest || spur) return epicRest;
+  return ohneSpurUrteil(c, ergebnis);
+}
+
+/** Pur: die Zeilen `EPIC-REST #<nr>` mit dem Weg, je Claim mit dem Urteil `epic-rest`. */
+const epicRestZeilen = (urteile) =>
+  urteile.filter((u) => u.urteil.urteil === "epic-rest").map(({ claim: c, urteil }) => `EPIC-REST #${c.nr}: ${urteil.grund}; Weg: Übersichts-Kommentar, gh issue close ${c.nr}, Lock freigeben`);
+
 /** Pur: trägt das Issue den Titelpräfix „Nicht eintragbar: “ (`titel` aus `issueAus`; ohne Issue false)? */
 const istNichtEintragbar = (issue) => String(issue?.titel ?? "").startsWith(NICHT_EINTRAGBAR_PRAEFIX);
 
@@ -107,7 +125,8 @@ export function beurteileClaim({ claim: c, jetzt, schwelleMs, inaktivMs = INAKTI
   const alter = Number.isFinite(lz) ? jetzt - lz : Number.POSITIVE_INFINITY;
   const spur = Boolean(c.lock || c.worktree || c.branchLokal);
   if (c.issue.zustand !== "CLOSED") {
-    if (!spur) return ohneSpurUrteil(c, ergebnis);
+    const frueh = fruehesOffenUrteil(c, spur, ergebnis);
+    if (frueh) return frueh;
     const angehalten = angehaltenGrund(c);
     if (angehalten) return ergebnis("behalten", angehalten);
     if (alter < schwelleMs) return ergebnis("lebendig", "Lebenszeichen jünger als die Schwelle");
@@ -137,7 +156,7 @@ export function aliasAbfragen(nummern, repo = REPO) {
   if (!istRepoForm(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const { owner, name } = zerlegeRepo(repo);
-  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
+  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } subIssuesSummary{ total } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
     const teil = nummern.slice(von, von + ALIAS_MAX);
@@ -155,6 +174,7 @@ export function issueAus(knoten) {
     titel: typeof knoten.title === "string" ? knoten.title : "",
     assignees: (knoten.assignees?.nodes ?? []).map((a) => a.login),
     labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
+    kinder: Number.isInteger(knoten.subIssuesSummary?.total) ? knoten.subIssuesSummary.total : 0,
     prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
   };
 }
@@ -279,6 +299,7 @@ export function sammle(deps) {
       festgefahren: hatLabel(issue, deps.festgefahrenLabel),
       wartet: hatLabel(issue, deps.entscheidungLabel),
       nichtEintragbar: istNichtEintragbar(issue),
+      kinder: issue?.kinder ?? 0,
       lock,
       worktree: w,
       weitereWorktrees: weitere,
@@ -403,8 +424,9 @@ export function fuehreAus(argv, depsOderFabrik) {
     const h = stundenSeit(stand.jetzt, c.lebenszeichenMs);
     zeilen.push(`WIEDERAUFNAHME #${c.nr}: ${urteil.grund}, letztes Lebenszeichen ${iso(c.lebenszeichenMs) ?? "unbekannt"}${h === null ? "" : ` (vor ${h} h)`}; Weg: node scripts/ticket-lock.mjs claim ${c.nr} --wiederaufnahme, dann Fortsetzungsauftrag`);
   }
+  zeilen.push(...epicRestZeilen(urteile));
   for (const { claim: c } of urteile.filter((u) => u.urteil.urteil === "geloescht")) zeilen.push(geloeschtZeile(c));
-  for (const { claim: c, urteil } of urteile.filter((u) => !["aufraeumbar", "verwaist", "geloescht"].includes(u.urteil.urteil))) zeilen.push(`BEHALTEN #${c.nr}: ${urteil.urteil}, ${urteil.grund}`);
+  for (const { claim: c, urteil } of urteile.filter((u) => !["aufraeumbar", "verwaist", "geloescht", "epic-rest"].includes(u.urteil.urteil))) zeilen.push(`BEHALTEN #${c.nr}: ${urteil.urteil}, ${urteil.grund}`);
   return ergebnisAus(code, zeilen.join("\n"));
 }
 

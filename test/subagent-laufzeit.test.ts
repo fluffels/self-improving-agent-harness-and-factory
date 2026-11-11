@@ -140,7 +140,7 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(S.laufzeiten({ laeufe: [lauf("x #2", 0, 1, { agentType: LENS })], agent: LENS }).laeufe).toHaveLength(1);
   });
   test("von/bis schneiden nach dem Start; Median je UTC-Tag, Sammeltickets getrennt gezählt", () => {
-    const laeufe = [lauf("#1", 0, 4, { tag: 5 }), lauf("#2", 0, 8, { tag: 5 }), lauf("#3 (gesammelt)", 0, 20, { tag: 6 }), lauf("#4", 0, 6, { tag: 6 })];
+    const laeufe = [lauf("#1", 0, 4, { tag: 5 }), lauf("#2", 0, 8, { tag: 5 }), lauf("#3 Harness-Härtung (gesammelt)", 0, 20, { tag: 6 }), lauf("#4", 0, 6, { tag: 6 })];
     const r = S.laufzeiten({ laeufe, von: t(-1, 5), bis: t(1, 6) });
     expect(r.aggregat.jeTag.map((x) => [x.tag, x.n, x.sammelN, x.dauerMin])).toEqual([["2026-10-05", 2, 0, 6], ["2026-10-06", 2, 1, 13]]);
     expect(r.aggregat.sammel.n).toBe(1);
@@ -156,7 +156,7 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(S.laufzeiten({ laeufe }).aggregat.alt).toBeUndefined();
   });
   test("Sammeltickets werden vor und ab dem Schnitt getrennt gezählt; bis ist einschließlich", () => {
-    const laeufe = [lauf("#0", 0, 4), lauf("#1 (gesammelt)", 0, 4), lauf("#2 (gesammelt)", 10, 20), lauf("#3", 10, 20), lauf("#4 (gesammelt)", 30, 40)];
+    const laeufe = [lauf("#0", 0, 4), lauf("#1 Harness-Härtung (gesammelt)", 0, 4), lauf("#2 Harness-Härtung (gesammelt)", 10, 20), lauf("#3", 10, 20), lauf("#4 Harness-Härtung (gesammelt)", 30, 40)];
     const r = S.laufzeiten({ laeufe, schnitt: t(10), bis: t(30) }) as Erg & { aggregat: { altSammel: Stat; neuSammel: Stat } };
     expect(r.aggregat.altSammel.n).toBe(1);
     expect(r.aggregat.neuSammel.n).toBe(2);
@@ -188,7 +188,7 @@ describe("laufzeiten: Filter und Aggregat", () => {
     expect(r.aggregat.gesamt.parallel).toBe(2);
   });
   test("Schnitt trennt auch die Läufe ohne Sammeltickets (alt/neu)", () => {
-    const laeufe = [lauf("#1", 0, 4), lauf("#2 (gesammelt)", 0, 4), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5 (gesammelt)", 10, 20)];
+    const laeufe = [lauf("#1", 0, 4), lauf("#2 Harness-Härtung (gesammelt)", 0, 4), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5 Harness-Härtung (gesammelt)", 10, 20)];
     const a = S.laufzeiten({ laeufe, schnitt: t(10) }).aggregat;
     expect(a.altOhneSammel?.n).toBe(1);
     expect(a.neuOhneSammel?.n).toBe(2);
@@ -381,7 +381,7 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(S.renderMarkdown(S.laufzeiten({ laeufe: [ohnePreisLauf("Plane #1")] }))).toContain("| - | - | - | 1 |");
   });
   test("Median und Summe je Gruppe vor und ab dem Schnitt, auch ohne Sammeltickets", () => {
-    const laeufe = [lauf("#1", 0, 4), lauf("#2 (gesammelt)", 0, 4, { tool: [1, 2] }), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5", 12, 30, { tool: [13, 14] })];
+    const laeufe = [lauf("#1", 0, 4), lauf("#2 Harness-Härtung (gesammelt)", 0, 4, { tool: [1, 2] }), lauf("#3", 10, 20), lauf("#4", 12, 30), lauf("#5", 12, 30, { tool: [13, 14] })];
     const a = S.laufzeiten({ laeufe, schnitt: t(10) }).aggregat;
     expect(a.alt?.kostenSumme).toBeCloseTo(5 * CALL_KOSTEN, 8);
     expect(a.altOhneSammel?.kostenSumme).toBeCloseTo(2 * CALL_KOSTEN, 8);

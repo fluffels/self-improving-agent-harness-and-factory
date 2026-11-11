@@ -42,7 +42,7 @@ function laufzeitFaelle(S, config) {
     zeilen: [user(0, prompt), call(0.1), ...mitTool(2, "Read", { file_path: `${WT}/src/a.ts` }), call(9)],
   });
   const laeufe = [
-    lauf(planer, `Ticket #12: Titel (gesammelt)\nWorktree: ${WT}\nPatch: C:/tmp/${wtp}12-r1.patch`),
+    lauf(planer, `Ticket #12: Harness-Härtung (gesammelt)\nWorktree: ${WT}\nPatch: C:/tmp/${wtp}12-r1.patch`),
     lauf(lensName, `Lens\nPatch: C:/tmp/${wtp}12-r2.patch\nDelta-Patch: C:/tmp/${wtp}12-r2-delta.patch`, "Lens Test-Adäquanz R2"),
     lauf("Explore", `suche etwas in worktrees/${wtp}99/src`),
   ];

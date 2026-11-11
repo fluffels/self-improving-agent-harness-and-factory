@@ -69,6 +69,8 @@ describe("laufAus: sammel nur aus der Titelzeile (#1593)", () => {
     expect(sammel("Ticket #1628: Harness-Härtung (gesammelt). Body:\nx")).toBe(true);
     expect(sammel("Ticket #1490: Etwas. Body:\nTeil des Sammeltickets Harness-Härtung (gesammelt)")).toBe(false);
     expect(sammel("")).toBe(false);
+    expect(sammel("Ticket #5: Notizen (gesammelt). Body:\nx")).toBe(false);
+    expect(sammel("Ticket #9: Sicherheit: Rest-Befunde (gesammelt). Body:\nx")).toBe(true);
   });
 });
 

@@ -27,6 +27,7 @@ interface Claim {
   branchLokal: boolean;
   festgefahren: boolean;
   nichtEintragbar?: boolean;
+  kinder?: number;
   lebenszeichenMs: number | null;
 }
 type Urteil = { urteil: string; grund: string; aktion: { worktree: boolean; lock: boolean } };
@@ -87,6 +88,26 @@ describe("beurteileClaim: Befund-Issue „Nicht eintragbar“ (L10)", () => {
     const offen = urteil(claim({ lock: null, issue: { zustand: "OPEN", assignees: [] } }));
     assert.equal(offen.urteil, "ohne-lokale-spur");
     assert.equal(offen.grund, "offen, keine lokale Spur");
+  });
+});
+
+describe("beurteileClaim: Epic-Rest (L1, offenes Issue mit Kindern ohne Worktree, Branch und PR)", () => {
+  const epic = (o: Partial<Claim> = {}) => claim({ kinder: 3, ...o });
+  test("Lock, frisches Lebenszeichen: epic-rest statt lebendig; ohne Lock (zugewiesen) ebenso statt ohne-lokale-spur", () => {
+    const r = urteil(epic());
+    assert.equal(r.urteil, "epic-rest");
+    assert.match(r.grund, /3 Kinder/);
+    assert.equal(urteil(epic({ lock: null })).urteil, "epic-rest");
+  });
+  test("Negativfälle: keine Kinder, Worktree, lokaler Branch, Remote-Branch, PR, geschlossen", () => {
+    assert.equal(urteil(claim({ kinder: 0 })).urteil, "lebendig");
+    assert.equal(urteil(claim()).urteil, "lebendig");
+    const wt = { pfad: "/x", branch: null, sauber: true, head: null, locked: false };
+    assert.equal(urteil(epic({ worktree: wt })).urteil, "lebendig");
+    assert.equal(urteil(epic({ branchLokal: true })).urteil, "lebendig");
+    assert.equal(urteil(epic({ branch: true })).urteil, "lebendig");
+    assert.equal(urteil(epic({ prs: [{ nummer: 9, zustand: "OPEN", headRefOid: OID }] })).urteil, "lebendig");
+    assert.notEqual(urteil(geschlossen({ kinder: 3 })).urteil, "epic-rest");
   });
 });
 
@@ -266,17 +287,24 @@ describe("reine Hilfen", () => {
     assert.equal(M.issueAus({}), null);
     assert.deepEqual(
       M.issueAus({ state: "CLOSED", labels: { nodes: [{ name: "l" }] }, assignees: { nodes: [{ login: "a" }] }, closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED", headRefOid: "x", labels: { nodes: [{ name: "pl" }] } }] } }),
-      { zustand: "CLOSED", titel: "", assignees: ["a"], labels: ["l"], prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
+      { zustand: "CLOSED", titel: "", assignees: ["a"], labels: ["l"], kinder: 0, prs: [{ nummer: 3, zustand: "MERGED", headRefOid: "x", labels: ["pl"] }] },
     );
   });
 
+  test("issueAus: subIssuesSummary.total ist kinder (fehlt: 0); die Abfrage verlangt das Feld", () => {
+    assert.equal((M.issueAus({ state: "OPEN", subIssuesSummary: { total: 4 } }) as { kinder: number }).kinder, 4);
+    assert.equal((M.issueAus({ state: "OPEN" }) as { kinder: number }).kinder, 0);
+    assert.match(M.aliasAbfragen([1], "o/r")[0].query, /subIssuesSummary\{ total \}/);
+  });
+
   test("issueAus: fehlende Felder ergeben leere Listen und headRefOid null", () => {
-    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", titel: "", assignees: [], labels: [], prs: [] });
+    assert.deepEqual(M.issueAus({ state: "OPEN" }), { zustand: "OPEN", titel: "", assignees: [], labels: [], kinder: 0, prs: [] });
     assert.deepEqual(M.issueAus({ state: "OPEN", closedByPullRequestsReferences: { nodes: [{ number: 3, state: "MERGED" }] } }), {
       zustand: "OPEN",
       titel: "",
       assignees: [],
       labels: [],
+      kinder: 0,
       prs: [{ nummer: 3, zustand: "MERGED", headRefOid: null, labels: [] }],
     });
   });
@@ -312,6 +340,7 @@ interface IssueWelt {
   assignees?: string[];
   labels?: string[];
   title?: string;
+  kinder?: number;
   prs?: { number: number; state: string; headRefOid: string; labels?: string[] }[];
 }
 interface Welt {
@@ -380,6 +409,7 @@ function baue(welt: Welt) {
               ...(query.includes("title state labels(first:30)") ? { title: i.title ?? "Ein Ticket" } : {}),
               ...(query.includes("state labels(first:30){ nodes{ name } }") ? { labels: knoten(i.labels) } : {}),
               assignees: { nodes: (i.assignees ?? ["ich"]).map((login) => ({ login })) },
+              ...(query.includes("subIssuesSummary{ total }") ? { subIssuesSummary: { total: i.kinder ?? 0 } } : {}),
               closedByPullRequestsReferences: { nodes: (i.prs ?? []).map((p) => ({ ...p, ...(query.includes("headRefOid labels(first:30){ nodes{ name } }") ? { labels: knoten(p.labels) } : {}) })) },
             }
           : null;
@@ -741,6 +771,17 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
   });
 
   const alterLock = lock({ erstellt: "2026-10-16T01:00:00.000Z" });
+
+  test("Epic-Rest: Zeile EPIC-REST mit Weg, nicht unter BEHALTEN; Issue ohne Kinder bleibt wie bisher", () => {
+    const frisch = lock({ erstellt: "2026-10-16T08:00:00.000Z" });
+    const r = M.fuehreAus([], baue({ locks: { "20.json": frisch }, issues: { 20: { state: "OPEN", kinder: 3 } } }).deps);
+    assert.equal(r.code, 0);
+    assert.match(r.out, /^EPIC-REST #20: 3 Kinder, offen ohne Worktree, Branch und PR; Weg: Übersichts-Kommentar, gh issue close 20, Lock freigeben$/m);
+    assert.doesNotMatch(r.out, /BEHALTEN #20|WIEDERAUFNAHME/);
+    const ohne = M.fuehreAus([], baue({ locks: { "20.json": frisch }, issues: { 20: { state: "OPEN" } } }).deps);
+    assert.doesNotMatch(ohne.out, /EPIC-REST/);
+    assert.match(ohne.out, /BEHALTEN #20: lebendig/);
+  });
 
   test("festgefahren (Label am Issue oder am PR): keine Wiederaufnahme, behalten; ohne Label dieselbe Lage verwaist", () => {
     const ohne = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN" } } }).deps);
