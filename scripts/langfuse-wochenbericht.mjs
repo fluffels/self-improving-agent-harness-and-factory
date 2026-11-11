@@ -95,6 +95,7 @@ const dateien = (home, p) => {
 
 /** Exit 4: Warnung auf stderr; mit `--ablegen` die `.json` mit Status und Grund, eine alte `.md` entfällt. */
 function keinBericht(args, deps, p, montag, status, grund) {
+  grund = ohneSchluessel(grund);
   const obj = { status, woche: montag, grund };
   const warnung = `WARNUNG Langfuse-Wochenbericht ${montag}: kein Bericht (${status}): ${grund}`;
   if (args.ablegen) {
@@ -163,7 +164,10 @@ export async function auswerten(args, deps = {}) {
 // ── Wochenbericht-Lauf (factory#314) ─────────────────────────────────────────
 
 const ghEcht = (args) => ghText(args, { timeout: 60_000 });
-const entpfade = (text, home) => String(text).split(home).join("~").split("\n")[0].slice(0, 300);
+const SCHLUESSEL_MUSTER = [/sk-lf-\S+/g, /pk-lf-\S+/g, /Basic\s+[A-Za-z0-9+/=_-]+/g, /LANGFUSE_\w*SECRET\w*=\S*/g];
+/** Schwärzt Langfuse-Schlüsselmuster (geschlossene Liste), bevor Text in .json oder Log landet; liest keine env-Werte. */
+export const ohneSchluessel = (text) => SCHLUESSEL_MUSTER.reduce((t, m) => t.replace(m, "[geschwärzt]"), String(text));
+const entpfade = (text, home) => ohneSchluessel(String(text).split(home).join("~")).split("\n")[0].slice(0, 300);
 
 /** Stand der Woche aus ihrer `<montag>.json` (fehlt oder kaputt: `offen`) samt dem Inhalt. */
 function standLesen(k) {
