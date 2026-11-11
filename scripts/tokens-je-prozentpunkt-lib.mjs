@@ -54,7 +54,8 @@ export function callsAus(sitzungen) {
 
 /**
  * Abschnitte zwischen aufeinanderfolgenden Verlaufspunkten eines Limits, nur ganz in `[von, bis]`. Reset (`resetsAt` des Vorpunkts <= Stand): Abschnitt
- * ausgelassen, neue Kette. Ein Punkt unter dem bisherigen Höchststand ist veraltet (übersprungen und gezählt), der Zuwachs rechnet vom Höchststand.
+ * ausgelassen, neue Kette. Veraltet (übersprungen und gezählt, der Zuwachs rechnet vom Vorpunkt): ein Punkt unter dem bisherigen Höchststand und ein Nachzügler
+ * aus einem früheren Fenster (sein `resetsAt` liegt vor seinem Stand oder vor dem des Vorpunkts).
  * Ergebnis `{ punkte, liste: [{ von, bis, delta, kette, pos }], reset, veraltet }`. Pur.
  */
 export function strecken(punkte, limit, { von, bis }) {
@@ -62,6 +63,11 @@ export function strecken(punkte, limit, { von, bis }) {
   const liste = [];
   let [reset, veraltet, kette, ref] = [0, 0, 0, ps[0]];
   for (const q of ps.slice(1)) {
+    const r = q[limit].resetsAt;
+    if (r * 1000 <= q.stand || r < ref[limit].resetsAt) {
+      veraltet += 1; // Nachzügler aus einem früheren Fenster (seine Zurücksetzung liegt vor dem Stand oder vor der des Vorpunkts)
+      continue;
+    }
     if (ref[limit].resetsAt * 1000 <= q.stand) {
       reset += 1;
       kette += 1;
@@ -117,7 +123,7 @@ const laeufe = (gruppe) => gruppe.filter((s, i) => i === 0 || s.kette !== gruppe
 
 const nachSchluessel = (liste, f) => {
   const m = new Map();
-  for (const x of liste) m.set(f(x), [...(m.get(f(x)) ?? []), x]);
+  for (const x of liste) (m.get(f(x)) ?? m.set(f(x), []).get(f(x))).push(x);
   return m;
 };
 

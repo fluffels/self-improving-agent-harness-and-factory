@@ -19,13 +19,13 @@ type Kennzahl = {
   tage: { roh: { n: number; median: number; q1: number; q3: number } };
 };
 type Limit = {
-  luecke?: string; streuung: { roh: { n: number }; gewichtet: { n: number } }; tage: Kennzahl[]; wochen: Kennzahl[]; gesamt: Kennzahl; tabelle: Record<string, number | string>[];
+  luecke?: string; streuung: { roh: { n: number }; gewichtet: { n: number }; iqrRoh: number | null; iqrGewichtet: number | null }; tage: Kennzahl[]; wochen: Kennzahl[]; gesamt: Kennzahl; tabelle: Record<string, number | string>[];
   ausgelassen: { reset: number; veraltet: number; ohneCallsN: number; ohneCallsPp: number; callsOhneVerlauf: number };
 };
 const L = raw as unknown as {
   tokensJeProzentpunkt: (a: { verlaufText: string; calls: Call[]; von: number; bis: number }) => { kaputt: number; limits: { sevenDay: Limit; fiveHour: Limit } };
   tokensJeProzentpunktAbschnitt: (t: unknown) => string[];
-  strecken: (p: unknown[], l: string, f: { von: number; bis: number }) => { liste: { delta: number }[]; veraltet: number };
+  strecken: (p: unknown[], l: string, f: { von: number; bis: number }) => { liste: { delta: number }[]; veraltet: number; reset: number };
   callsAus: (s: unknown[]) => { calls: Call[]; sitzungen: number; ohneZeit: number };
   isoWoche: (ms: number) => string;
 };
@@ -47,7 +47,43 @@ describe("Reset und Ketten", () => {
       [c(T0 + 90 * 60_000, { input: 1000 }), c(T0 + 150 * 60_000, { input: 777_777 }), c(T0 + 210 * 60_000, { input: 1000 })],
     );
     expect(r.gesamt).toMatchObject({ tokens: 2000, zuwachs: 20, k: 2, jePp: 100 });
+    expect(r.gesamt.spanne[0]).toBeCloseTo(200_000 / 22, 6);
+    expect(r.gesamt.spanne[1]).toBeCloseTo(200_000 / 18, 6);
     expect(r.ausgelassen).toMatchObject({ reset: 1, callsOhneVerlauf: 1 });
+  });
+
+  test("zwei Ketten zu je 4 pp: die Schwelle wächst mit k (8 pp < 5 · 2), also nicht aussagekräftig", () => {
+    const r1 = (T0 + 150 * 60_000) / 1000;
+    const g = sieben(
+      [p(T0 + H, 10, r1), p(T0 + 2 * H, 14, r1), p(T0 + 3 * H, 2), p(T0 + 4 * H, 6)],
+      [c(T0 + 90 * 60_000, { input: 1000 }), c(T0 + 210 * 60_000, { input: 1000 })],
+    ).gesamt;
+    expect(g).toMatchObject({ zuwachs: 8, k: 2, unklar: true });
+    expect(g.jePp).toBeUndefined();
+  });
+
+  test("Reset genau beim Stand des nächsten Punkts ist ein Reset (Grenze), ohne Abschnitt: Lücke ohne Calls-Hinweis", () => {
+    const r = sieben([p(T0 + H, 10, (T0 + 2 * H) / 1000), p(T0 + 2 * H, 15)], []);
+    expect(r.ausgelassen.reset).toBe(1);
+    expect(r.gesamt.luecke).toBe("keine Kontingent-Punkte");
+  });
+
+  test("veraltete Nachzügler: ein Punkt aus dem alten Fenster nach dem Reset und einer mit resetsAt genau beim Stand zählen nicht", () => {
+    const r1 = (T0 + 150 * 60_000) / 1000;
+    const nachReset = [
+      { stand: T0 + H, sevenDay: { pct: 70, resetsAt: r1 } },
+      { stand: T0 + 3 * H, sevenDay: { pct: 2, resetsAt: RESET } },
+      { stand: T0 + 4 * H, sevenDay: { pct: 80, resetsAt: r1 } },
+      { stand: T0 + 5 * H, sevenDay: { pct: 4, resetsAt: RESET } },
+    ];
+    const s = L.strecken(nachReset, "sevenDay", { von: T0, bis: T0 + D });
+    expect(s).toMatchObject({ reset: 1, veraltet: 1 });
+    expect(s.liste.map((x) => x.delta)).toEqual([2]);
+    const genau = [
+      { stand: T0 + H, sevenDay: { pct: 10, resetsAt: RESET } },
+      { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: (T0 + 2 * H) / 1000 } },
+    ];
+    expect(L.strecken(genau, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
   });
 });
 
@@ -111,9 +147,10 @@ describe("Datenlücken", () => {
   test("fehlende Snapshots: Calls an einem Tag ohne Punkte sind eine Lücke mit Zahl; nur fiveHour-Punkte lassen das 7-Tage-Limit zur Lücke werden", () => {
     const r = sieben([p(T0 + H, 10), p(T0 + 2 * H, 20)], [c(T0 + 90 * 60_000, { input: 1000 }), c(T0 + 2 * D + H, { input: 5 })]);
     expect(r.tage.map((t) => t.schluessel)).toEqual(["2026-11-02", "2026-11-04"]);
-    expect(r.tage[1].luecke).toMatch(/keine Kontingent-Punkte \(1 Calls ohne Verlauf\)/);
+    expect(r.tage[1].luecke).toBe("keine Kontingent-Punkte (1 Calls ohne Verlauf)");
     const f = lauf([p(T0 + H, 10, RESET, "fiveHour"), p(T0 + 2 * H, 20, RESET, "fiveHour")], [c(T0 + 90 * 60_000, { input: 1000 })]).limits;
     expect(f.sevenDay.luecke).toMatch(/weniger als 2 Verlaufspunkte/);
+    expect(lauf([p(T0 + H, 10)], []).limits.sevenDay.luecke).toBe("weniger als 2 Verlaufspunkte für dieses Limit im Zeitraum (1; 0 Calls ohne Verlauf)");
     expect(f.fiveHour.gesamt.jePp).toBe(100);
   });
 
@@ -173,6 +210,71 @@ describe("Woche und ISO-Woche", () => {
   ])("isoWoche(%i) = %s", (ms, woche) => expect(L.isoWoche(ms)).toBe(woche));
 });
 
+describe("Zeitraum, Sortierung, Streuung und Wochen", () => {
+  const RF = (T0 + 60 * D) / 1000;
+  const tag = (i: number, tokens: number, cost = 0) => ({
+    pts: [p(T0 + i * D + H, 10 * i, RF), p(T0 + i * D + 2 * H, 10 * i + 10, RF)],
+    call: c(T0 + i * D + 90 * 60_000, { input: tokens, cost }),
+  });
+  const aus = (ts: ReturnType<typeof tag>[], extra: Call[] = []) => lauf(ts.flatMap((x) => x.pts), [...ts.map((x) => x.call), ...extra], T0 + 30 * D).limits.sevenDay;
+  const vier = (kosten: number) => [100_000, 200_000, 300_000, 400_000].map((t, i) => tag(i, t, t / kosten));
+
+  test("Calls vor von und nach bis zählen nicht, Calls genau auf den Grenzen schon", () => {
+    const bis = T0 + 3 * D;
+    const r = lauf([p(T0 + H, 0, RF), p(T0 + 2 * H, 10, RF)], [c(T0 - 1), c(T0), c(T0 + 90 * 60_000, { input: 1000 }), c(bis), c(bis + 1)], bis).limits.sevenDay;
+    expect(r.ausgelassen.callsOhneVerlauf).toBe(2);
+    expect(r.tage.map((t) => t.schluessel)).toEqual(["2026-11-02", "2026-11-05"]);
+  });
+
+  test("Verlaufspunkte genau auf von und bis zählen mit", () => {
+    const bis = T0 + D;
+    const g = lauf([p(T0, 0, RF), p(T0 + H, 10, RF), p(bis, 20, RF)], [c(T0 + 30 * 60_000, { input: 1000 }), c(T0 + 2 * H, { input: 1000 })], bis).limits.sevenDay.gesamt;
+    expect(g).toMatchObject({ tokens: 2000, zuwachs: 20 });
+  });
+
+  test("callsAus sortiert nach Zeit, auch wenn die Sitzungen in umgekehrter Reihenfolge kommen", () => {
+    const ev = (ts: string) => ({ type: "assistant", timestamp: ts, uuid: ts, message: { id: ts, role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: "x" }] } });
+    const spaet = "2026-11-02T12:00:00Z";
+    const frueh = "2026-11-02T10:00:00Z";
+    const r = L.callsAus([{ id: "a", main: [ev(spaet)], subagents: [] }, { id: "b", main: [ev(frueh)], subagents: [] }]);
+    expect(r.calls.map((x) => x.t)).toEqual([Date.parse(frueh), Date.parse(spaet)]);
+  });
+
+  test("Streuung roh und gewichtet: IQR/Median aus vier Tageswerten (Handwerte), auch im Text", () => {
+    const r = aus(vier(50_000));
+    expect(r.streuung.iqrRoh).toBeCloseTo(0.6, 6);
+    expect(r.streuung.iqrGewichtet).toBeCloseTo(0.6, 6);
+    const text = L.tokensJeProzentpunktAbschnitt(lauf(vier(50_000).flatMap((x) => x.pts), vier(50_000).map((x) => x.call), T0 + 30 * D)).join("\n");
+    expect(text).toContain("- Streuung der Tageswerte roh: Median 25 Tsd, Q1 bis Q3 18 Tsd bis 33 Tsd (n=4), IQR/Median 0,6; gewichtet (Schätzung, Listenpreis-Gewichte, ungesichert): Median $0,50, Q1 bis Q3 $0,35 bis $0,65 (n=4), IQR/Median 0,6");
+    expect(text).toContain("| ↳ Tageswerte | Median 25 Tsd, Q1 bis Q3 18 Tsd bis 33 Tsd (n=4) | | | | |");
+    expect(text).toContain("| Modell | input | output | cache_read | cache_creation 5m | cache_creation 1h |");
+    expect(text).toContain("| m | 1,00 Mio | 0 | 0 | 0 | 0 |");
+  });
+
+  test("Preis 0 ergibt Median 0: IQR/Median ist null und steht als Strich, ohne aussagekräftige Tage als Text", () => {
+    const g = aus(vier(Infinity)).streuung;
+    expect([g.iqrRoh !== null, g.iqrGewichtet]).toEqual([true, null]);
+    const text = L.tokensJeProzentpunktAbschnitt(lauf(vier(Infinity).flatMap((x) => x.pts), vier(Infinity).map((x) => x.call), T0 + 30 * D)).join("\n");
+    expect(text).toContain("Median $0,00, Q1 bis Q3 $0,00 bis $0,00 (n=4), IQR/Median –");
+    const klein = L.tokensJeProzentpunktAbschnitt(lauf([p(T0 + H, 0), p(T0 + 2 * H, 2)], [c(T0 + 90 * 60_000, { input: 500 })])).join("\n");
+    expect(klein).toContain("- Streuung der Tageswerte roh: keine aussagekräftigen Tage, IQR/Median –; gewichtet");
+  });
+
+  test("Wochen: jede Woche zeigt nur ihre eigene Verteilung; Calls ohne Verlauf in einer Woche ohne Punkte ergeben eine Wochenzeile mit Lücke", () => {
+    const r = aus([...vier(1e9), tag(7, 1_000_000), tag(8, 2_000_000)], [c(T0 + 15 * D + H)]);
+    expect(r.wochen.map((w) => w.schluessel)).toEqual(["2026-W45", "2026-W46", "2026-W47"]);
+    expect(r.wochen[0].tage.roh.n).toBe(4);
+    expect(r.wochen[1].tage.roh).toMatchObject({ n: 2, median: 150_000 });
+    expect(r.wochen[2].luecke).toBe("keine Kontingent-Punkte (1 Calls ohne Verlauf)");
+  });
+
+  test("die Zeile Ausgelassen nennt alle Zähler mit Wert", () => {
+    const r1 = (T0 + 150 * 60_000) / 1000;
+    const t = lauf([p(T0 + H, 10, r1), p(T0 + 2 * H, 20, r1), p(T0 + 3 * H, 2), p(T0 + 4 * H, 12)], [c(T0 + 90 * 60_000, { input: 1000 }), c(T0 + 150 * 60_000, { input: 5 }), c(T0 + 210 * 60_000, { input: 1000 })]);
+    expect(L.tokensJeProzentpunktAbschnitt(t).join("\n")).toContain("- Ausgelassen: Reset 1, Zuwachs ohne Calls 0 pp (0), veraltete Punkte 0, Calls ohne Verlauf 1");
+  });
+});
+
 describe("Abschnitt", () => {
   test("Lücken, nicht aussagekräftig und Kennzahl erscheinen als Text, gewichtete Werte mit Schätzungs-Hinweis; Lücke des Ganzen", () => {
     const t = lauf([p(T0 + H, 0), p(T0 + 2 * H, 10), p(T0 + D + H, 10)], [c(T0 + 90 * 60_000, { input: 1_000_000, cost: 1 })]);
@@ -215,6 +317,7 @@ describe("keine zweite Token-Zählung (AK1)", () => {
     const basis = B.summarize({ calls: B.readTranscriptSession("s1", root).calls }).total;
     const sum = (k: keyof Call) => lib.calls.reduce((s, x) => s + (x[k] as number), 0);
     expect(lib.calls).toHaveLength(3);
+    expect({ input: sum("input"), cacheRead: sum("cacheRead") }).toEqual({ input: 21, cacheRead: 33 }); // Handwerte: je Call 7 und 11, drei Calls nach der Dublette
     expect(lib.calls.map((x) => [x.cacheWrite5m, x.cacheWrite1h])).toEqual([[8, 5], [8, 5], [8, 5]]);
     expect({ input: sum("input"), cacheWrite: sum("cacheWrite5m") + sum("cacheWrite1h"), cacheRead: sum("cacheRead"), output: sum("output") }).toEqual({
       input: basis.input, cacheWrite: basis.cacheWrite, cacheRead: basis.cacheRead, output: basis.output,

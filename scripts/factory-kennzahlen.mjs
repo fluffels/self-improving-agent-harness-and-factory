@@ -609,6 +609,14 @@ export function datenbasisModus({ von, bis }, { run, claimKarte, log, beenden })
   beenden(d.exit);
 }
 
+/** Die Lader des echten Laufs (`main`); ein Test belegt, dass jeder eingehängt ist. */
+export const STANDARD_LADER = {
+  auditLader: (e) => ladeAuditDaten(e, configOderFehler()),
+  maengelLader: () => holeMaengel(),
+  kontingentLader: (e) => ladeAboKontingent(e),
+  tokensLader: (e) => ladeTokensJeProzentpunkt(e),
+};
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.fehler) {
@@ -618,7 +626,7 @@ function main(argv) {
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
   if (args.datenbasis) datenbasisModus({ von, bis }, { claimKarte, log: console.log, beenden: process.exit }); // beendet den Prozess
-  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel(), kontingentLader: (e) => ladeAboKontingent(e), tokensLader: (e) => ladeTokensJeProzentpunkt(e) });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, ...STANDARD_LADER });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }
