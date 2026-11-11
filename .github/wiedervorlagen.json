@@ -12,6 +12,12 @@
     "text": "npm audit prüfen; Fix verfügbar → Update; sonst mit Begründung verlängern; dann Eintrag löschen"
   },
   {
+    "id": "sicherheits-lens-kosten-334",
+    "faellig": "2026-12-10",
+    "titel": "Kosten und Funde der Sicherheits-Lens nachmessen (factory#334, ADR 0027)",
+    "text": "Tickets der Klasse hoch seit dem Merge finden (`git log --grep` auf `Bedrohungen:` im Nachweis-Commit). Ab 3 Tickets messen: (a) Kontingent-Prozentpunkte je Ticket aus `node scripts/factory-kennzahlen.mjs --von <Merge> --bis <heute>` gegen Tickets der Stufe voll mit Klasse normal, (b) Läufe und Kosten `Lens Sicherheit R<n>` per `node scripts/subagent-laufzeit.mjs --agent sih-lens --von <Merge> --json`, (c) echte Funde aus `blocker=…,sicherheit:<n>`. Unter 3 Tickets: um 4 Wochen schieben, die Zahl als Grund nennen. Ohne Funde bei spürbaren Kosten nach ADR 0027 lockern, sonst „bleibt“ vermerken; dann Eintrag löschen."
+  },
+  {
     "id": "typescript-7-eslint",
     "faellig": "2027-01-28",
     "titel": "TypeScript 7: trägt typescript-eslint den Major inzwischen?",

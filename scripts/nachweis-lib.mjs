@@ -15,7 +15,11 @@ export const HEX = "[0-9a-f]{7,40}";
 export const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 /** Kombi-Lens der Größenstufe S (factory#271): eine Lens statt der drei Code-Brillen; sie zählt nur bei berechnetem S als Code-Satz (check-review-nachweis). */
 export const KOMBI_LENS = "kombiniert";
-export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, "doku"];
+/** Sicherheits-Lens der Risikoklasse hoch (factory#334): läuft zusätzlich zu den Code-Brillen, Prüffragen in `brille-sicherheit.md`. */
+export const SICHERHEITS_LENS = "sicherheit";
+export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, SICHERHEITS_LENS, "doku"];
+/** Die vier Teile der Bedrohungs-Zeile (factory#334, Format: docs/agent-harness.md §3a); die Prüfregel steht nur in `bewerteKlasseHoch` (check-review-nachweis.mjs). */
+export const BEDROHUNGS_TEILE = Object.freeze(["daten", "grenzen", "missbrauch", "datenschutz"]);
 
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
 
@@ -122,11 +126,30 @@ function planAus(planWert, planer) {
   return ohne ? { art: "ohne", grund: ohne[1].trim() } : { art: "ungueltig", zeile: planWert };
 }
 
+/** Bedrohungs-Zeile `daten=… | grenzen=… | missbrauch=… | datenschutz=…` (factory#334): `null` ohne Zeile, sonst `{zeile, teile, doppelt, unbekannt, ohneSchluessel}`.
+ *  Getrennt wird an `|`, je Teil am ersten `=`; der Schlüssel läuft durch `normalisiereWert`, der Wert durch `trim`. Bewertet wird erst im Gate. Pur. */
+function bedrohungenAus(wert) {
+  if (wert === null) return null;
+  const r = { zeile: wert, teile: {}, doppelt: [], unbekannt: [], ohneSchluessel: [] };
+  for (const teil of wert.split("|")) {
+    const i = teil.indexOf("=");
+    if (i < 0) {
+      if (teil.trim() !== "") r.ohneSchluessel.push(teil.trim());
+      continue;
+    }
+    const key = normalisiereWert(teil.slice(0, i));
+    if (!BEDROHUNGS_TEILE.includes(key)) r.unbekannt.push(key);
+    else if (key in r.teile) r.doppelt.push(key);
+    else r.teile[key] = teil.slice(i + 1).trim();
+  }
+  return r;
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
 export function parseNachweis(text, zeilen) {
-  if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string" || typeof zeilen.abnahme !== "string") {
+  if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string" || typeof zeilen.abnahme !== "string" || typeof zeilen.bedrohungen !== "string") {
     throw new Error("parseNachweis braucht die Commit-Zeilen (commitZeilen(praefix, planer)), keinen Standardwert");
   }
   const plan = planAus(lastLine(text, zeilen.plan), zeilen.planer);
@@ -149,7 +172,7 @@ export function parseNachweis(text, zeilen) {
       verdikt: felder.verdikt ?? null,
     };
   }
-  return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)) };
+  return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)), bedrohungen: bedrohungenAus(lastLine(text, zeilen.bedrohungen)) };
 }
 
 /** Urteilswerte der Holdout-Abnahme je Kriterium (ADR 0022 F13). */

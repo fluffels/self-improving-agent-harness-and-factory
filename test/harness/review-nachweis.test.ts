@@ -15,17 +15,17 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null };
+type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null; bedrohungen?: { teile: Record<string, string> } | null };
 type Mod = {
   MAX_FIX_RUNDEN: number;
   parseNachweis: (t: string, z: unknown) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown; risiko?: { klasse: string; gruende: string[] } }) => string[];
 };
 import { besitzAnker } from "../support/besitz-anker";
 import { ohneKernEnv } from "../support/env-alt";
@@ -46,7 +46,7 @@ const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: 
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
-const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: { klasse: "normal", gruende: ["Test"] }, ...o });
 const zusatzpassZeile = (raw as unknown as { zusatzpassZeile: (r: { zusatzpass: { grund: string } | null }) => string | null }).zusatzpassZeile;
 const checkReviewNachweis = (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) =>
   (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen: () => unknown }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
@@ -168,6 +168,23 @@ describe("(e2) Das Feld blocker= ist an allen Stellen benannt (#1123)", () => {
     assert.match(read("docs/agent-harness.md"), /blocker=architektur:<n>/);
     assert.match(read(".agents/skills/review-lenses/SKILL.md"), /`blocker`/);
     assert.match(read("scripts/check-review-nachweis.mjs"), /blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
+  });
+});
+
+describe("(e3) Die Bedrohungs-Zeile ist an allen Stellen benannt (factory#334)", () => {
+  const bedrohungen = (zeilen: unknown) => (zeilen as { bedrohungen: string }).bedrohungen;
+  test("die Formatzeile der SSOT (Platzhalter ersetzt) liefert vier Teile, die Konstante nennt dieselben", () => {
+    const harness = read("docs/agent-harness.md");
+    const zeile = /^ {2}<praefixe\.commitZeile>Bedrohungen: (.+?) {3}\(/m.exec(harness)?.[1] ?? "";
+    assert.ok(zeile !== "", "Formatzeile in §3a fehlt");
+    const n = parseNachweis(`${bedrohungen(Z)}: ${zeile.replace(/<…>/g, "x")}`);
+    assert.deepEqual(Object.keys(n.bedrohungen?.teile ?? {}), (nachweisLib as unknown as { BEDROHUNGS_TEILE: string[] }).BEDROHUNGS_TEILE);
+  });
+  test("Vorlage, Planer, Ablauf, Nachweis-Datei und AGENTS.md nennen die Zeile", () => {
+    assert.match((raw as unknown as { vorlage: (z: unknown) => string }).vorlage(Z), new RegExp(`${bedrohungen(Z)}: daten=… \\| grenzen=… \\| missbrauch=… \\| datenschutz=…`));
+    for (const datei of [".claude/agents/factory-planer.md", ".agents/skills/review-lenses/ablauf-klasse-hoch.md", ".agents/skills/review-lenses/ablauf-nachweis.md", "AGENTS.md"]) {
+      assert.match(read(datei), /<praefixe\.commitZeile>Bedrohungen:/, datei);
+    }
   });
 });
 
@@ -422,6 +439,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     if (j === "rev-parse HEAD") return "d".repeat(40);
     if (j.startsWith("log --reverse")) return `${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}\n${extra}`;
     if (j.startsWith("diff --name-only")) return "src/a.ts\n";
+    if (j.startsWith("diff --numstat")) return "100\t0\tsrc/a.ts\n"; // sonst fiele die Risikoklasse fail-closed auf hoch (factory#334)
     if (j.startsWith("rev-parse --verify")) return SHA;
     if (j.startsWith("rev-list --count")) return "1";
     if (j.startsWith("rev-list --merges")) return "";
@@ -460,7 +478,10 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
       git("commit", "-q", "--allow-empty", "-m", "basis");
       git("update-ref", "refs/remotes/origin/main", "HEAD");
       git("checkout", "-q", "-b", "feature/x");
-      git("commit", "-q", "--allow-empty", "-m", "umsetzung");
+      mkdirSync(join(dir, "src"));
+      writeFileSync(join(dir, "src", "x.ts"), "export const x = 1;\n");
+      git("add", "-A");
+      git("commit", "-q", "-m", "umsetzung");
       const head = git("rev-parse", "HEAD").trim();
       git("commit", "-q", "--allow-empty", "-m", `nachweis\n\n${zeilen.plan}: ${e.agenten.planer}\n${zeilen.review}: head=${head} ${review}`);
       const env = { ...process.env };

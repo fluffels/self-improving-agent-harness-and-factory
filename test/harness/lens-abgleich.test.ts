@@ -31,6 +31,7 @@ const BRILLEN: { key: string; kopf: string; punkt: RegExp }[] = [
   { key: "requirement-treue", kopf: "**Lens 2 — Requirement-Treue.**", punkt: /^- / },
   { key: "test-adaequanz", kopf: "**Lens 3 — Test-Adäquanz.**", punkt: /^- / },
   { key: "kombiniert", kopf: "**Lens K — Kombiniert**", punkt: /^- / },
+  { key: "sicherheit", kopf: "**Lens 5 — Sicherheit.**", punkt: /^- / },
   { key: "doku", kopf: "**Lens 4 — Doku**", punkt: /^\d+\. / },
 ];
 
@@ -71,6 +72,23 @@ describe("Brillen-Dateien (factory#308)", () => {
     assert.deepEqual(doppelt(SKILL), []);
     const punkt = punkte(brille("architektur"), /^- /).find((z) => z.length >= 40) ?? "";
     assert.equal(doppelt(`${SKILL}\n${punkt}\n`).length, 1, "die Erkennung greift");
+  });
+
+  test("Sicherheits-Lens (factory#334): die sieben Prüffragen stehen nur in brille-sicherheit.md, nicht als Prüfpunkt in SKILL.md oder der Lens-Definition", () => {
+    const text = brille("sicherheit");
+    const fragen = [/Eingabevalidierung/, /Authentisierung/, /Autorisierung/, /Geheimnisse/, /personenbezogen/, /Datenminimierung/, /Aufbewahrung/, /Abhängigkeiten/];
+    for (const f of fragen) assert.match(text, f);
+    const prueffragen = punkte(text, /^- /).map((z) => z.replace(/^- \*\*([^*]+)\*\*.*$/, "$1")).filter((z) => !z.startsWith("- "));
+    assert.ok(prueffragen.length >= 8, "Plan-Prüfliste, sieben Fragen und Zählung");
+    for (const datei of [SKILL, LENS_DEF]) {
+      for (const f of [/Eingabevalidierung/, /Datenminimierung/, /Aufbewahrungsfristen/]) assert.doesNotMatch(datei, f);
+    }
+    assert.doesNotMatch(SKILL, /Selbstcheck/);
+  });
+
+  test("Sicherheits-Lens (factory#334): die Spawn-Vorlage gibt ihr den Bedrohungsabschnitt, nicht die Plan-Abschnitte 4 und 7", () => {
+    const vorlage = /Plan-Prüfliste: <[^>]*>/.exec(SKILL)?.[0] ?? "";
+    assert.match(vorlage, /Abschnitt 4 und 7 \(Requirement-, Test-, Kombi-Lens\), Bedrohungsabschnitt \(Sicherheit\)/);
   });
 
   test("die Doku-Brille läuft ohne Test-Brille; die Sabotage-Probe verlangt einen sauberen Stand (bleibt im Skill)", () => {
@@ -142,7 +160,7 @@ describe("Beide Laufzeiten erreichen die Brille (factory#308, AK4)", () => {
 });
 
 describe("Bedingte Ablauf-Dateien des Review-Skills (factory#309)", () => {
-  const ERWARTET = ["ablauf-abnahme-fix.md", "ablauf-merge-main.md", "ablauf-nachweis.md", "ablauf-zusatzpass.md"];
+  const ERWARTET = ["ablauf-abnahme-fix.md", "ablauf-klasse-hoch.md", "ablauf-merge-main.md", "ablauf-nachweis.md", "ablauf-zusatzpass.md"];
   /** Die Menge der in `skill` mit vollem Pfad genannten `ablauf-*.md` (sortiert). */
   const genannt = (skill: string): string[] =>
     [...new Set([...skill.matchAll(/\.agents\/skills\/review-lenses\/(ablauf-[a-z-]+\.md)/g)].map((m) => m[1]))].sort();
