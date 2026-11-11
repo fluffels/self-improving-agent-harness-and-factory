@@ -206,3 +206,24 @@ describe("erlaubt bleibt", () => {
     assert.deepEqual(pruefeStash('git -C /repo/wt commit -m "x"'), { block: false });
   });
 });
+
+describe("Analysefehler bei geschütztem Befehl (factory#332 L38)", () => {
+  const gitMock = (_c: string, _a: string[], o: { cwd: string }) => `${o.cwd}\n${HAUPT}/.git\n`;
+  const kaputt = { ...deps, execFileSync: gitMock, statSync: (q: string) => ({ isDirectory: () => q.startsWith(HAUPT) }), homedir: () => { throw new Error("h"); } };
+  const lauf2 = (command: string, cwd: string) => decide({ cwd, command, repoRoot: HAUPT, deps: kaputt });
+
+  test("git -C ~/x commit im Worktree fragt statt still durchzugehen", () => {
+    const r = lauf2("git -C ~/x commit -m a", WT);
+    assert.equal(r.block, false);
+    assert.equal(r.ask, true);
+    assert.match(r.reason ?? "", /Ziel nicht bestimmbar \(Analysefehler\)/);
+  });
+
+  test("im Haupt-Checkout blockt die cwd-Prüfung weiter", () => {
+    assert.equal(lauf2("git -C ~/x commit -m a", HAUPT).block, true);
+  });
+
+  test("ungeschützter Befehl bleibt erlaubt", () => {
+    assert.deepEqual(lauf2("git -C ~/x status", WT), { block: false });
+  });
+});
