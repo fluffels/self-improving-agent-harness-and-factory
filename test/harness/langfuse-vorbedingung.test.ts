@@ -126,7 +126,7 @@ describe("bewerteMcpSpur (L4, factory#320)", () => {
 describe("mcpZeilenLesen (L4)", () => {
   const BASIS = "/c/claude-cli-nodejs";
   const dateien: Record<string, { mtimeMs: number; text: string }> = {
-    [`${BASIS}/-projekt/mcp-logs-langfuse/neu.jsonl`]: { mtimeMs: 1_000_000, text: `${START("t")}\n${FEHLER("t")}\n` },
+    [`${BASIS}/-projekt/mcp-logs-langfuse/neu.jsonl`]: { mtimeMs: 100_000_000, text: `${START("t")}\n${FEHLER("t")}\n` },
     [`${BASIS}/-projekt/mcp-logs-langfuse/alt.jsonl`]: { mtimeMs: 1, text: `${ERFOLG("t")}\n` },
   };
   const fs = {
@@ -139,7 +139,7 @@ describe("mcpZeilenLesen (L4)", () => {
     readFileSync: (p: string) => dateien[p]?.text ?? "",
   };
   test("liest nur Langfuse-Logdateien des Projekts aus den letzten 24 h", () => {
-    const z = v.mcpZeilenLesen({ env: { FACTORY_MCP_LOG_DIR: BASIS }, home: "/h", jetzt: 1_000_000 + 3_600_000, wurzel: "/projekt", fs });
+    const z = v.mcpZeilenLesen({ env: { FACTORY_MCP_LOG_DIR: BASIS }, home: "/h", jetzt: 100_000_000 + 3_600_000, wurzel: "/projekt", fs });
     expect(z).toHaveLength(2);
     expect(z[0]).toContain("Starting connection");
   });
