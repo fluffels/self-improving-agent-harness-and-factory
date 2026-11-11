@@ -46,9 +46,12 @@
  *  - Das PowerShell-Tool deckt scripts/worktree-guard-powershell.mjs ab, beide hängen am Dispatcher.
  *
  * Bewusste Grenzen:
- *  - Eine Shell-Variable als Ziel (`git -C $WT commit`, `cd "$WT" && git commit`, quotiert oder nicht) gilt wie jedes dynamische Ziel: aus dem
- *    Haupt-Checkout als Session-`cwd` wird geblockt (der Wert könnte der Haupt-Checkout sein), im Worktree gefragt. Wer aus dem Haupt-Checkout
- *    committet, nimmt den literalen Pfad (`git -C <worktree> commit`); der Hook wertet Variablenwerte nicht aus.
+ *  - Eine Shell-Variable als Ziel (`git -C $WT commit`, `cd "$WT" && git commit`) wird nur aufgelöst, wenn sie vorher im selben Befehl ein statisches
+ *    Literal bekam (`WT=<pfad>; …`, `export WT=<pfad>`) und das Wort genau `$V`, `${V}`, `"$V"` oder `$V/<literal>` ist (geschlossene Formenliste;
+ *    Scoping wie Subshell/Zweige: Änderungen in Subshell, `$(…)`, Pipeline, `&` und nach `&&`/`||`, if/case/Schleifen gelten danach als unbekannt).
+ *    Alles andere bleibt dynamisch und gilt wie jedes dynamische Ziel: aus dem Haupt-Checkout als Session-`cwd` wird geblockt, im Worktree gefragt:
+ *    unzugewiesene Variable, `WT=$(pwd)`/`WT=$X`, Präfix-Zuweisung `WT=<wt> git -C "$WT" …` (Bash expandiert vor der Zuweisung), `unset`/`read`/`local`,
+ *    `for WT in …`, `WT+=`, `$WT$X`, `${WT:-x}`, Wert mit `~`.
  *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
  *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
  *  - `ausserhalbRepo` ist rein lexikalisch: ein verlinkter (Linked) Worktree außerhalb des Repo-Ordners (`repoRoot`) zählt als außerhalb.

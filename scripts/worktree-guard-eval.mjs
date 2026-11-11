@@ -5,7 +5,7 @@
  * (Verzeichnisse nach Erfolg bzw. Misserfolg des letzten Gliedes): `a && b` wertet b aus S, `a || b` aus F, das
  * Kettenende ist S ∪ F. Ein `cd` auf ein statisches, existierendes Ziel ersetzt die Menge exakt; ein fehlendes Ziel
  * oder zu viele Argumente lassen sie unverändert; ein dynamisches Ziel fügt Session-`cwd` und einen Unbekannt-Marker
- * hinzu. Subshells, Substitutionen, Pipelines und `&`-Listen wirken nicht nach außen; `{ … }` und `eval` schon;
+ * hinzu (eine vorher statisch zugewiesene Variable als `$V`/`${V}`/`"$V"`/`$V/<literal>` gilt als statisch, `c.vars`; sonst dynamisch). Subshells, Substitutionen, Pipelines und `&`-Listen wirken nicht nach außen; `{ … }` und `eval` schon;
  * if/Schleifen/case vereinigen die Enden aller Zweige. Die git-Aufrufe wertet `worktree-guard-git.mjs` aus.
  *
  * Reines Node-Skript (nur Builtins).
