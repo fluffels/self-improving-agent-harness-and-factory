@@ -12,7 +12,7 @@ import { kopiereScripts } from "./support/scripts-kopie";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault, zeichenOhneBlock as rawOhneBlock } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized } from "../scripts/check-context-size.mjs";
+import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
 
 type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
@@ -22,6 +22,7 @@ const zeichenOhneBlock = rawOhneBlock as (text: string, marker: { start: string;
 const collectFiles = rawFiles as (wurzel: string) => string[];
 const collectSizes = rawSizes as (wurzel: string, budgets?: Eintrag[], standard?: number) => Groesse[];
 const findOversized = rawOversized as (sizes: Groesse[]) => Groesse[];
+const fixHinweis = rawFix as (violations: { file: string }[]) => string;
 
 const WURZEL = join(import.meta.dirname, "..");
 const START = "<!-- factory:projektwerte:start -->";
@@ -103,6 +104,71 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
   });
 });
 
+describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
+  const agent = { file: ".claude/agents/x.md" };
+  const skill = { file: ".agents/skills/s/tief/zusatz.md" };
+  const agents = { file: "docs/AGENTS.md" };
+
+  test("Agenten-/Skill-Verletzung: kürzen oder in bedingte Zusatzdatei/Brain-Seite auslagern, Ratchet und Ausnahme mit Ticket, keine modul-lokale AGENTS.md", () => {
+    for (const v of [agent, skill]) {
+      const t = fixHinweis([v]);
+      assert.match(t, /kürzen/);
+      assert.match(t, /\.agents\/skills\/<name>\//);
+      assert.match(t, /Brain-Seite/);
+      assert.match(t, /Ratchet/);
+      assert.match(t, /ausnahmen\.kontext/);
+      assert.match(t, /Ticket/);
+      assert.doesNotMatch(t, /modul-lokale AGENTS\.md/);
+    }
+  });
+
+  test("AGENTS.md-Verletzung: bisheriger Text (modul-lokale AGENTS.md, ausnahmen.kontext), kein Ratchet-Hinweis", () => {
+    const t = fixHinweis([agents]);
+    assert.match(t, /modul-lokale AGENTS\.md/);
+    assert.match(t, /ausnahmen\.kontext/);
+    assert.doesNotMatch(t, /Ratchet/);
+  });
+
+  test("AGENTS.md unter dem Skill-Verzeichnis und Pfade mit gleichem Präfix ohne Schrägstrich sind keine Agenten-/Skill-Dateien", () => {
+    for (const file of [".agents/skills/s/AGENTS.md", ".agents/skillsX/s.md"]) {
+      const t = fixHinweis([{ file }]);
+      assert.match(t, /modul-lokale AGENTS\.md/);
+      assert.doesNotMatch(t, /Ratchet/);
+    }
+  });
+
+  test("gemischt: beide Teile; ohne Verletzung leer", () => {
+    const t = fixHinweis([agents, agent]);
+    assert.match(t, /modul-lokale AGENTS\.md/);
+    assert.match(t, /Ratchet/);
+    assert.equal(fixHinweis([]), "");
+  });
+});
+
+describe("Projektwert-Zeilen der Frontmatter (L3/L6b)", () => {
+  const agent = (name: string, tabelle: string): string =>
+    `---\n# factory:projektwert agenten.planer\nname: ${name}\n---\nrumpf\n${START}\n${tabelle}${ENDE}\nrest\n`;
+
+  test("ein kurzer und ein langer name:-Wert samt unterschiedlich langem Block messen gleich (Fabrik = Bezieher, zeichengleich)", () => {
+    temp((kurz) => {
+      temp((lang) => {
+        datei(kurz, ".claude/agents/planer.md", agent("a", "| x |\n"));
+        datei(lang, ".claude/agents/planer.md", agent("ein-sehr-langer-projektname-planer", "| x |\n".repeat(40)));
+        const chars = (d: string): number[] => collectSizes(d).map((s) => s.chars);
+        assert.deepEqual(chars(lang), chars(kurz));
+        assert.equal(chars(kurz)[0], `---\n# factory:projektwert agenten.planer\nname:\n---\nrumpf\n\nrest\n`.length);
+      });
+    });
+  });
+
+  test("ein kaputter Zeilen-Marker wirft (als Gate-Fehler)", () => {
+    temp((dir) => {
+      datei(dir, ".claude/agents/planer.md", `---\n# factory:projektwert agenten.planer\n---\nx\n`);
+      assert.throws(() => collectSizes(dir), /planer\.md:2: .*Zeilen-Marker/);
+    });
+  });
+});
+
 describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien", () => {
   /** Kopiert die echten Agenten- und Skill-Dateien der Fabrik, jeder Projektwerte-Block um 10.000 Zeichen verlängert. */
   const bezieherRepo = (dir: string): void => {
@@ -142,6 +208,8 @@ describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien
       const rot = lauf();
       assert.equal(rot.status, 1, rot.text);
       assert.match(rot.text, /✖ \.agents\/skills\/proj\/SKILL\.md/);
+      assert.match(rot.text, /Agenten-\/Skill-Datei: kürzen/);
+      assert.doesNotMatch(rot.text, /modul-lokale AGENTS\.md/);
     });
   });
 });
@@ -171,8 +239,8 @@ describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
     }
   });
 
-  test("Default >= größte Datei der Liste (nach dem Vorbild MODULE_AGENTS_BUDGET)", () => {
-    assert.ok(DEFAULT >= Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)));
+  test("Default = größtes Budget der Liste (nachgezogen)", () => {
+    assert.equal(DEFAULT, Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)));
   });
 });
 

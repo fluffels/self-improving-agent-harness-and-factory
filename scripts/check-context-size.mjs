@@ -36,8 +36,8 @@
  * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (`ausnahmen.kontext` der Projekt-Config).
  *
  * Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` und `.agents/skills/<name>/**`.md haben je Datei ein Budget (`AGENTEN_SKILL_BUDGETS`, Default `AGENTEN_SKILL_DEFAULT_BUDGET`
- * für Dateien ohne Eintrag, auch projekt-eigene im Bezieher), gemessen ohne den Projektwerte-Block; `collectAgentSkillSizes`. Der Ratchet (ein Budget wächst nicht gegenüber der Merge-Base) steht
- * als Fabrik-Wächter in test/harness/kontext-budget-ratchet.test.ts.
+ * für Dateien ohne Eintrag, auch projekt-eigene im Bezieher), gemessen ohne Projektwerte (Block und Werte der Frontmatter-Zeilen); `collectAgentSkillSizes`. Der Ratchet (ein Budget wächst nicht gegenüber der Merge-Base) steht
+ * als Fabrik-Wächter in test/harness/kontext-budget-ratchet.test.ts. Bei einer Verletzung nennt `fixHinweis` für diese Dateien Kürzen bzw. Auslagern in eine bedingte Zusatzdatei (nicht „modul-lokale AGENTS.md“, die gilt nur für AGENTS.md).
  *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */
@@ -49,8 +49,9 @@ import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
+import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
 import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
-import { PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
+import { leereProjektwerte, PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -87,34 +88,44 @@ export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, m
   });
 }
 
-/** Alle .md-Dateien unter `dir` (rekursiv, repo-relativer POSIX-Pfad `rel`); ein fehlender Ordner gibt eine leere Liste. */
-function mdRekursiv(rootDir, rel) {
-  const abs = join(rootDir, rel);
-  if (!existsSync(abs)) return [];
-  return readdirSync(abs, { withFileTypes: true }).flatMap((e) => {
-    const sub = `${rel}/${e.name}`;
-    if (e.isDirectory()) return mdRekursiv(rootDir, sub);
-    return e.name.endsWith(".md") ? [sub] : [];
-  });
-}
-
 /** Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` (nur oberste Ebene) und `.agents/skills/<name>/**`.md rekursiv, ohne AGENTS.md (die misst `collectAgentsFiles`); repo-relativer POSIX-Pfad, sortiert. */
 export function collectAgentSkillFiles(rootDir = ROOT) {
   const agenten = existsSync(join(rootDir, ".claude/agents"))
     ? readdirSync(join(rootDir, ".claude/agents"), { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => `.claude/agents/${e.name}`)
     : [];
-  return [...agenten, ...mdRekursiv(rootDir, QUELL_VERZEICHNIS)].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
+  return [...agenten, ...collectMd(rootDir, [QUELL_VERZEICHNIS])].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
 }
 
-/** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte-Block; ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
+/** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen); ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
 export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_BUDGETS, defaultBudget = AGENTEN_SKILL_DEFAULT_BUDGET) {
   const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
   const marker = { start: PROJEKTWERT_START, ende: PROJEKTWERT_ENDE };
   return collectAgentSkillFiles(rootDir).map((file) => ({
     file,
-    chars: zeichenOhneBlock(readFileSync(join(rootDir, file), "utf8"), marker),
+    chars: zeichenOhneBlock(leereProjektwerte(readFileSync(join(rootDir, file), "utf8"), file), marker),
     budget: budgetOf.get(file) ?? defaultBudget,
   }));
+}
+
+/** Agenten- oder Skill-Datei (nicht AGENTS.md): ihr Budget gehört dem Kern, die Fix-Zeile unterscheidet sich von der einer AGENTS.md. */
+const istAgentSkill = (file) => !file.endsWith("AGENTS.md") && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
+
+/** Pur: Fix-Zeile zu den Budget-Verletzungen [{ file }] (leer ohne Verletzung): AGENTS.md → auslagern in modul-lokale AGENTS.md bzw. Tiefendoc; Agenten-/Skill-Datei → kürzen oder in eine bedingte Zusatzdatei bzw. Brain-Seite auslagern, das Budget nie anheben (Ratchet). */
+export function fixHinweis(violations) {
+  const teile = [];
+  if (violations.some((v) => !istAgentSkill(v.file))) {
+    teile.push(
+      "Inhalt auslagern – bereichsspezifische Tiefe in eine modul-lokale AGENTS.md bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in " +
+        "ausnahmen.kontext in " + PROJEKT_CONFIG + " aufnehmen (datei, grund mit #<nr>).",
+    );
+  }
+  if (violations.some((v) => istAgentSkill(v.file))) {
+    teile.push(
+      `Agenten-/Skill-Datei: kürzen oder in eine bedingte Zusatzdatei unter ${QUELL_VERZEICHNIS}/<name>/ bzw. eine Brain-Seite auslagern; das Budget wächst nicht (Ratchet). ` +
+        "Nur mit offenem Ticket ausnahmsweise unter ausnahmen.kontext in " + PROJEKT_CONFIG + " aufnehmen (datei, grund mit #<nr>).",
+    );
+  }
+  return teile.join(" ");
 }
 
 /** Dateien strikt über ihrem eigenen Budget. */
@@ -190,13 +201,7 @@ function main() {
     return;
   }
 
-  if (violations.length)
-    console.error(
-      `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
-        `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
-        `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `ausnahmen.kontext in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
-    );
+  if (violations.length) console.error(`\n${violations.length} Kontextdatei(en) über dem Budget. ${fixHinweis(violations)}`);
   process.exit(1);
 }
 
