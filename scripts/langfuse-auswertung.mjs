@@ -54,7 +54,7 @@ export function parseArgs(argv) {
 export function agentenNamen(ordner, { lies = readFileSync, liste = readdirSync } = {}) {
   const namen = [];
   for (const datei of liste(ordner).filter((f) => f.endsWith(".md"))) {
-    const m = /^name:\s*(\S+)\s*$/m.exec(lies(join(ordner, datei), "utf8"));
+    const m = /^name:[ \t]*(\S+)[ \t]*$/m.exec(lies(join(ordner, datei), "utf8"));
     if (m) namen.push(m[1]);
   }
   return namen.sort();

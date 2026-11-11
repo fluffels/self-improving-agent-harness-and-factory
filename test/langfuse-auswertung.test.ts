@@ -461,7 +461,10 @@ describe("CLI", () => {
     writeFileSync(join(dir, "b.md"), "---\nname: zwei woerter\n---\n");
     writeFileSync(join(dir, "c.md"), "---\nname:ohneleerzeichen\n---\n");
     writeFileSync(join(dir, "d.md"), "---\nname:   mitplatz   \n---\n");
-    expect(C.agentenNamen(dir)).toEqual(["mitplatz", "ohneleerzeichen", "richtig"]);
+    writeFileSync(join(dir, "e.md"), "---\nname:\n---\n");
+    writeFileSync(join(dir, "f.md"), "---\r\nname: windows\r\n---\r\n");
+    writeFileSync(join(dir, "g.md"), "---\nname:\tmittab\t\n---\n");
+    expect(C.agentenNamen(dir)).toEqual(["mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
   });
   test("eine Agentendatei ohne name wird übersprungen", () => {
     const dir = mkdtempSync(join(tmpdir(), "auswertung-"));

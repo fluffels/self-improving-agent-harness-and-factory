@@ -106,6 +106,8 @@ AGENTS.md @fluffels
 /scripts/budget-lib.mjs @fluffels
 /scripts/budget-pacing.mjs @fluffels
 /scripts/abo-kontingent-lib.mjs @fluffels
+/scripts/langfuse-auswertung-lib.mjs @fluffels
+/scripts/langfuse-auswertung.mjs @fluffels
 /scripts/sammelticket-anlegen.mjs @fluffels
 /scripts/fremdtext.mjs @fluffels
 /scripts/gh-cli.mjs @fluffels
