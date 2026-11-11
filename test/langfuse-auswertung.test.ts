@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -404,6 +404,11 @@ describe("Randfälle", () => {
 });
 
 describe("Funde Runde 1", () => {
+  test("ein Rest ohne Calls und mit positivem Rundungsrauschen ist keine Lücke", () => {
+    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]));
+    expect(b.luecken).toEqual([]);
+    expect(b.unzugeordnet.count).toBe(0);
+  });
   test("ein Rest ohne Calls, aber mit Kosten ist eine Lücke, nie still verloren", () => {
     const b = rep(...basis, meta("agent_type", "Plan", [g(...R1, 10, 4, 3)]));
     expect(b.luecken.join("\n")).toMatch(/Rolle: Exporte nicht konsistent \(1 Zeile\(n\) mit Rest unter 0 oder Kosten ohne Calls/);
@@ -428,10 +433,8 @@ describe("Funde Runde 1", () => {
     const latF = exp("latenz", [g(...R1, 3, 0.6, 0)]);
     const zellen = (reihe: string[]) => reihe.map((w, i) => meta("agent_type", w, [g(...R1, 1, [0.1, 0.2, 0.3][i], 3)]));
     const a = rep(gesamtF, tageVoll, latF, ...zellen(["A", "B", "C"]));
-    const b = rep(gesamtF, tageVoll, latF, ...zellen(["C", "B", "A"]).reverse());
     const c = rep(gesamtF, tageVoll, latF, meta("agent_type", "C", [g(...R1, 1, 0.3, 3)]), meta("agent_type", "B", [g(...R1, 1, 0.2, 3)]), meta("agent_type", "A", [g(...R1, 1, 0.1, 3)]));
     expect(JSON.stringify(c)).toBe(JSON.stringify(a));
-    expect(b.luecken).toEqual(a.luecken);
   });
   test("eine Gruppe mit negativer Latenz und eine Metadaten-Zelle derselben Gruppe ergeben keine falsche Lücke", () => {
     const b = rep(gesamt, tageVoll, exp("latenz", [g(...R1, 10, 5, 0), g(...R2, 20, 10, -5), g(...R3, 4, 2, 7)]), ...alleRollen);
@@ -550,10 +553,13 @@ describe("CLI", () => {
     writeFileSync(join(dir, "g.md"), "---\nname:\tmittab\t\n---\n");
     writeFileSync(join(dir, "h.md"), "---\nname: \"gequotet\"\n---\n");
     writeFileSync(join(dir, "i.md"), "---\nname: 'einfach'\n---\n");
-    expect(C.agentenNamen(dir)).toEqual(["einfach", "gequotet", "mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
+    writeFileSync(join(dir, "j.md"), "---\nname: it's\n---\n");
+    writeFileSync(join(dir, "k.md"), "---\nname: a\"b\n---\n");
+    expect(C.agentenNamen(dir)).toEqual(["a\"b", "einfach", "gequotet", "it's", "mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
   });
   test("der Standard-Agentenordner ist .claude/agents des Repos und enthält Agenten", () => {
     const a = C.parseArgs([]) as { agenten: string };
+    expect(isAbsolute(a.agenten)).toBe(true);
     expect(a.agenten).toMatch(/\.claude[\\/]agents$/);
     expect(C.agentenNamen(a.agenten).length).toBeGreaterThan(0);
   });
