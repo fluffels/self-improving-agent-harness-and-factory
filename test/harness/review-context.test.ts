@@ -70,7 +70,8 @@ function teil(text: string, von: string, bis: string): string {
 // Die Prädikate laufen über den jeweiligen Abschnitt, nicht über die ganze Datei: sonst trägt ein zweiter Treffer
 // an anderer Stelle (z. B. „greppen“ in Lens 4, `rev-parse` im Patch-Befehl) eine zurückgedrehte Regel.
 const patchSkill = teil(lensSkill, "## Was ist „der Diff", "### Kontext-Diät je Lens");
-const diaetSkill = teil(lensSkill, "### Kontext-Diät je Lens", "> **Was die Diät");
+// Die Kontext-Diät steht seit factory#308 in der Lens-Definition (Regeln 1 und 3; Regel 2, der Regel-Ausschnitt, dort und je Brillen-Datei).
+const diaetSkill = teil(lensAgent, "- **Die Root-Kontextdatei liegt bereits", "- **Frische-Guard:**");
 const frischeSkill = teil(lensSkill, "⚠️ **Frische-Guard", "### Kontext-Diät je Lens");
 
 // ── Prädikate: EIN Ort je Regel, angewandt auf echtes Artefakt UND Gegenbeispiel ──
@@ -82,7 +83,7 @@ const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s
 const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext[\s\S]{0,300}grepp/i.test(s);
 
 /** Weist der Text an, Dateien gezielt statt vollständig zu öffnen? */
-const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s) && /gezielt um die Hunk-Zeilen, nicht die ganze Datei/.test(s);
+const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s) && /gezielt um die Hunk-Zeilen/.test(s);
 
 /** Lässt der Text den HEAD gegen den Patch-Stand abgleichen? */
 const hatFrischeGuard = (s: string) => /rev-parse/.test(s);
@@ -136,10 +137,10 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
   });
 
   test("jede Brille bekommt ihren eigenen Regel-Ausschnitt", () => {
-    // Sonst liest jede Lens wieder alles.
-    assert.match(lensSkill, /eigenen Regel-Ausschnitt/, "Der Skill nennt den Regel-Ausschnitt je Brille nicht");
-    for (const brille of ["Architektur", "Requirement-Treue", "Test-Adäquanz", "Doku"]) {
-      assert.match(lensSkill, new RegExp(`${brille} →`), `Kein Regel-Ausschnitt für die Brille ${brille}`);
+    // Sonst liest jede Lens wieder alles. Die Regel steht in der Lens-Definition, der Ausschnitt je Brille im Kopf der Brillen-Datei.
+    assert.match(lensAgent, /eigenen Regel-Ausschnitt/, "Die Lens-Definition nennt den Regel-Ausschnitt je Brille nicht");
+    for (const brille of ["architektur", "requirement-treue", "test-adaequanz", "doku"]) {
+      assert.match(read(`.agents/skills/review-lenses/brille-${brille}.md`), /^Regel-Ausschnitt: .+/m, `Kein Regel-Ausschnitt für die Brille ${brille}`);
     }
   });
 
@@ -164,7 +165,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
 
 describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt wird rot (#1067)", () => {
   test("Regel 1 der Kontext-Diät ohne Grep-Anweisung fällt durch", () => {
-    assert.ok(!haeltKontextDiaet(diaetSkill.replace("**punktuell greppen**", "**die Datei lesen**")));
+    assert.ok(!haeltKontextDiaet(diaetSkill.replace("punktuell greppen", "die Datei lesen")));
   });
   test("Frische-Guard-Absatz ohne HEAD-Abgleich fällt durch", () => {
     assert.ok(!hatFrischeGuard(frischeSkill.replace(/`git rev-parse HEAD`/g, "den Stand")));
@@ -173,7 +174,7 @@ describe("Abschnittsprädikate: eine zurückgedrehte Regel im eigenen Abschnitt 
     assert.ok(!istDreiPunkt(patchSkill.replace("git diff origin/main...HEAD > ", "git diff main > ")));
   });
   test("Regel 3 ohne den Hunk-Zeilen-Satz (Datei nur gezielt öffnen) fällt durch", () => {
-    assert.ok(!liestGezielt(diaetSkill.replace("dann gezielt um die Hunk-Zeilen, nicht die ganze Datei", "dann vollständig")));
+    assert.ok(!liestGezielt(diaetSkill.replace("dann gezielt um die Hunk-Zeilen", "dann vollständig")));
   });
   test("Regel 3 der Kontext-Diät ohne die Gezielt-Anweisung fällt durch (kein größeres `limit` zählt nicht)", () => {
     assert.ok(!liestGezielt(diaetSkill.replace("danach nur gezielt per Grep oder offset/limit", "danach nach Belieben")));
@@ -195,8 +196,8 @@ describe("Frische-Guard: keine Lens reviewt einen veralteten Patch (#1034)", () 
 describe("Was NICHT gekürzt werden durfte (#1034)", () => {
   test("die Test-Lens prüft weiter per Sabotage auf False Positives", () => {
     assert.ok(
-      fordertSabotage(lensSkill),
-      "Der Test-Adäquanz-Auftrag im Skill hat den Sabotage-/Red-Green-Schritt verloren. Das Ticket #1034 nennt " +
+      fordertSabotage(read(".agents/skills/review-lenses/brille-test-adaequanz.md")),
+      "Der Test-Adäquanz-Auftrag in der Brillen-Datei hat den Sabotage-/Red-Green-Schritt verloren. Das Ticket #1034 nennt " +
         "ihn ausdrücklich als das, was die Kontext-Diät NICHT treffen darf — er fand in der " +
         "Messsession den einzigen echten Blocker.",
     );

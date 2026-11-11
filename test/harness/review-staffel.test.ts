@@ -43,10 +43,8 @@ describe("Der Skill regelt die Staffel (#1265)", () => {
     assert.match(lies(SKILL), /description: "Lens <[^>]*Doku> R<runde>"/);
   });
 
-  test("Patch einmal lesen: im Skill und im Lens-Agenten", () => {
-    assert.ok(liestPatchEinmal(lies(SKILL)), "review-lenses/SKILL.md");
+  test("Patch einmal lesen: im Lens-Agenten (die Kontext-Diät steht seit factory#308 dort, nicht mehr im Skill)", () => {
     assert.ok(liestPatchEinmal(lies(".claude/agents/factory-lens.md")), "factory-lens.md");
-    assert.ok(nenntAbschnittsHelfer(lies(SKILL)), "review-lenses/SKILL.md nennt patch-abschnitte.mjs nicht");
     assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/factory-lens.md")), "factory-lens.md nennt patch-abschnitte.mjs nicht");
   });
   test("Prädikate greifen (Red-Green)", () => {

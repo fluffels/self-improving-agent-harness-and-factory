@@ -3,31 +3,31 @@
  * Lens-Auftrag-Guard (#1425): ein Lens-Spawn (Agent `agenten.lens` der Projekt-Config) mit übrig gebliebenen Platzhaltern wird abgewiesen.
  *
  * Anlass: Beim Spawn einer Lens (Skill `review-lenses`) setzt der Orchestrator Handarbeit-Werte in den Prompt
- * (Worktree, Patch-Pfad, erwarteter HEAD) und kopiert die Blöcke wörtlich. Blieb ein `<…>` stehen, startete die Lens
- * ohne Patch, HEAD oder Format und prüfte nichts (PR #1423). Der Guard läuft als PreToolUse auf `Agent`, fail-closed
+ * (Brille, Worktree, Patch-Pfad, erwarteter HEAD). Blieb ein `<…>` stehen, startete die Lens
+ * ohne Patch oder HEAD und prüfte nichts (PR #1423). Seit factory#308 liest die Lens ihre Brille selbst (`brille-<Schlüssel>.md`); der Auftrag nennt nur den Schlüssel. Der Guard läuft als PreToolUse auf `Agent`, fail-closed
  * (deny) bei einem klar erkennbaren Rest, fail-open bei allem Unklaren (kein Lens-Spawn, kaputte Eingabe).
  *
- * Bewusst KEIN generischer `<…>`-Test: das Findings-Format (`<Befund>`, `<warum>`), die Kontext-Diät
- * (`node <Arbeitsverzeichnis>/scripts/patch-abschnitte.mjs <patch>`) und der Lens-Worktree-Pfad
- * (`<worktree-präfix><nr>-lens-r<runde>`) tragen absichtlich Platzhalter. Geprüft werden nur die Kopf-Felder des Auftrags:
- *  R1  `WÖRTLICH>` irgendwo (der Platzhalter `<Brille WÖRTLICH>` / `<Kontext-Diät WÖRTLICH>` blieb stehen),
+ * Bewusst KEIN generischer `<…>`-Test: die Plan-Prüfliste und der Lens-Worktree-Pfad
+ * (`<worktree-präfix><nr>-lens-r<runde>`) können absichtlich Platzhalter tragen. Geprüft werden nur die Kopf-Felder des Auftrags:
+ *  R1  `WÖRTLICH>` irgendwo (der Platzhalter der Plan-Prüfliste `… WÖRTLICH>` blieb stehen),
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
  *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
  *      ein Fließtext statt Hash wird verweigert).
  *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
- * Fehlende Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
+ *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES` (tolerant normalisiert, Backticks erlaubt); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
+ * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
  * Bewusste Grenzen:
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
- *  - Ausgewertet wird je Feld der letzte Treffer im Prompt.
+ *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
  *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config trägt; ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
 import { basename } from "node:path";
-import { HEX_HEAD } from "./nachweis-lib.mjs";
+import { BEKANNTE_LENSES, HEX_HEAD, normalisiereLens } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -66,7 +66,7 @@ function istLensSpawn(subagentType, prompt, lens) {
 }
 
 const HINWEIS =
-  "Setze die Werte aus Stufe 0 ein (Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) und kopiere Brille, Kontext-Diät und Findings-Format wörtlich aus dem Skill `review-lenses`.";
+  "Setze die Werte aus Stufe 0 ein (Brille als `Brille: <Schlüssel>` am Prompt-Anfang, Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) laut Spawn-Vorlage im Skill `review-lenses`.";
 
 /** R4: Grund, wenn ein Pfadsegment `<wt><nr>-lens-<x>…` eine Endung `<x>` trägt, die das Muster aus `ticket-namen.mjs` (`lensNameKern`) nicht kennt; sonst `null`.
  *  Ein Platzhalter nach dem Buchstaben (`-lens-r<runde>`) zählt wie eine Ziffer; die erlaubten Endungen stehen nur in `lensNameKern`. Pure. */
@@ -82,6 +82,14 @@ function unbekannteLensEndung(text, namen) {
   return null;
 }
 
+/** R5: Grund, wenn der Prompt nicht mit `Brille: <Schlüssel>` beginnt oder der Schlüssel keine bekannte Brille ist; sonst `null`. Pure. */
+function brillenGrund(text) {
+  const wert = /^\s*Brille:[ \t]*([^\s·]+)/.exec(text)?.[1];
+  const schluessel = normalisiereLens((wert ?? "").replace(/^`+|`+$/g, ""));
+  if (BEKANNTE_LENSES.includes(schluessel)) return null;
+  return `Lens-Auftrag unvollständig: der Prompt beginnt nicht mit „Brille: <Schlüssel>“ mit einer bekannten Brille (${BEKANNTE_LENSES.join(", ")}); die Lens liest ihre Brillen-Datei (brille-<Schlüssel>.md) selbst und braucht den Schlüssel. ${HINWEIS}`;
+}
+
 /** Grund für ein Deny oder `null` (durchlassen). Pure. */
 export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
@@ -89,7 +97,7 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   if (!istLensSpawn(subagentType, prompt, namen.agenten.lens)) return null;
   const text = String(prompt ?? "");
   if (text.includes("WÖRTLICH>")) {
-    return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (Brille, Kontext-Diät oder Findings-Format wurden nicht eingesetzt). ${HINWEIS}`;
+    return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (die Plan-Prüfliste wurde nicht eingesetzt). ${HINWEIS}`;
   }
   const felder = parseLensAuftrag(text);
   for (const [name, wert] of Object.entries(felder)) {
@@ -105,5 +113,6 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   if (head !== undefined && !HEX_HEAD.test((hash ?? "").toLowerCase())) {
     return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
   }
-  return null;
+  // Kein Prompt-Feld (kaputte oder fremde Eingabe) bleibt fail-open wie bisher.
+  return prompt === undefined ? null : brillenGrund(text);
 }

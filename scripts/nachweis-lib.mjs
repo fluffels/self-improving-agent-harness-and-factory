@@ -11,6 +11,10 @@ import { escapeRegex } from "./regex-lib.mjs";
 
 /** Hex-Hash eines Commits (7 bis 40 Zeichen, nur klein); Eingaben mit Großbuchstaben vorher mit `.toLowerCase()` angleichen. */
 export const HEX = "[0-9a-f]{7,40}";
+/** Brillen-Schlüssel (Quelle für Review-Zeile, Lens-Auftrag-Guard und die Dateien `brille-<Schlüssel>.md` des Skills `review-lenses`). */
+export const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
+export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
+
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
 
 /** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Skill `review-lenses` trägt dieselbe Zahl (Wächter test/harness/review-nachweis.test.ts). */
