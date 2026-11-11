@@ -41,10 +41,10 @@ const besitz = besitzRaw as unknown as {
   besitzSpannen(einheiten: Einheit[], pfad: string, text: string): [number, number][];
   manifestAusText(text: string | null): { manifest?: { eintraege: Einheit[] } };
 };
-const gate = gateRaw as unknown as { GATE_BEFEHL_NAMEN: readonly string[]; STANDARD_BEFEHLE: Readonly<Record<string, string>> };
+const gate = gateRaw as unknown as { GATE_BEFEHL_NAMEN: readonly string[]; STANDARD_BEFEHLE: Readonly<Record<string, string | null>> };
 const { escapeRegex } = namenRaw as unknown as { escapeRegex: (text: string) => string };
 const NAMEN = gate.GATE_BEFEHL_NAMEN;
-const STANDARD_WERTE = Object.values(gate.STANDARD_BEFEHLE);
+const STANDARD_WERTE = Object.values(gate.STANDARD_BEFEHLE).filter((w): w is string => w !== null);
 const codex = codexRaw as unknown as { setupDateien(m: unknown, c: unknown, u: string): Record<string, string> };
 const markdown = markdownRaw as unknown as { schnappschussBloecke(zeilen: string[]): { bloecke: [number, number][] } };
 

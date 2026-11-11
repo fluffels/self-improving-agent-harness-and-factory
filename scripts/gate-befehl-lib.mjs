@@ -12,12 +12,17 @@ export const STANDARD_BEFEHLE = Object.freeze({
   verifyChanged: "npm run verify:changed",
   coverage: "npm run test:coverage",
   testGezielt: "npx vitest run",
+  mutation: null, // opt-in (factory#299): null = nicht eingerichtet
 });
 
 export const GATE_BEFEHL_NAMEN = Object.freeze(Object.keys(STANDARD_BEFEHLE));
 
 /** Art des Prüflaufs je Gate-Befehl (Werkzeugmessung zählt `voll`/`gezielt`; null = kein Prüflauf); Schlüssel = `GATE_BEFEHL_NAMEN`. */
-export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null });
+export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null, mutation: null });
+
+/** Adapter-Vertrag Mutation (factory#299): Umgebungsvariablen, über die `node scripts/mutation-lauf.mjs` Eingabe (Zeilenbereiche als JSON) und Ausgabe (Bericht) übergibt. */
+export const MUTATION_UMGEBUNG = Object.freeze({ bereiche: "FACTORY_MUTATION_BEREICHE", bericht: "FACTORY_MUTATION_BERICHT" });
+const MUTATION_NAME = "mutation";
 
 /** Der einzige Name, der Pfade annimmt; sie werden in doppelten Anführungszeichen an die Befehlszeile angehängt. */
 export const PFAD_NAME = "testGezielt";
@@ -68,7 +73,7 @@ function aufrufFehler(err, text) {
 }
 
 /** Einstieg: `<name> [--zeigen]` (`testGezielt` zusätzlich mit Pfaden); gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
-export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error }) {
+export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error, env = process.env }) {
   const { werte, positionale, fehler } = flagsLesen(argv, { [ZEIGEN_FLAG.slice(2)]: { type: "boolean" } }, { positionale: true });
   const hinweis = `Fix: node scripts/gate-befehl.mjs <name> [${ZEIGEN_FLAG}] mit name aus ${GATE_BEFEHL_NAMEN.join(", ")}`;
   if (fehler) return aufrufFehler(err, `${fehler.text}\n${hinweis}`);
@@ -86,8 +91,16 @@ export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.e
   } catch (e) {
     return aufrufFehler(err, e.message);
   }
+  if (befehl === null) {
+    out(`${name}: nicht eingerichtet`);
+    return 0;
+  }
+  const nurZeigen = Boolean(werte[ZEIGEN_FLAG.slice(2)]);
+  if (name === MUTATION_NAME && !nurZeigen && Object.values(MUTATION_UMGEBUNG).some((v) => !env[v])) {
+    return aufrufFehler(err, `${name} braucht die Umgebungsvariablen ${Object.values(MUTATION_UMGEBUNG).join(" und ")} (sonst mutiert das Werkzeug das ganze Projekt).\nFix: über node scripts/mutation-lauf.mjs aufrufen.`);
+  }
   if (pfade.length > 0) befehl = `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
-  if (werte[ZEIGEN_FLAG.slice(2)]) {
+  if (nurZeigen) {
     out(befehl);
     return 0;
   }
