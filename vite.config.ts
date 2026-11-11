@@ -11,6 +11,8 @@ export default defineConfig({
     setupFiles: ["test/support/zugaenge-entfernen.ts"],
     // Coverage misst nur ein Lauf mit --coverage; lcovonly schreibt coverage/lcov.info, das check-diffcoverage.mjs gegen den Diff auswertet.
     coverage: {
+      // factory#270: nur die CI schaltet es am Verify-Schritt ein (FACTORY_COVERAGE=1), damit sie die Suite einmal instrumentiert statt zweimal fährt; lokal bleibt verify uninstrumentiert, `--coverage` und test:coverage gehen weiter.
+      enabled: process.env.FACTORY_COVERAGE === "1",
       provider: "v8",
       reporter: ["text", "json-summary", "lcovonly"],
       reportsDirectory: "coverage",
