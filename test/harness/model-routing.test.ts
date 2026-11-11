@@ -127,14 +127,98 @@ const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
  * Befunde zum Hauptchat-Modell in den Projekt-Settings (#1557): `model` muss genau `sonnet` sein (der Alias, nie eine feste ID),
  * und kein `env`-Schlüssel mit MODEL darf es überstimmen (`ANTHROPIC_MODEL` hat Vorrang vor dem Settings-`model`; generisch,
  * damit neue Variablennamen nicht durchrutschen); ebenso kein EFFORT-Schlüssel (`CLAUDE_CODE_EFFORT_LEVEL` überstimmt das
- * Agent-Frontmatter). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5).
+ * Agent-Frontmatter). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5); `subagentPromptCacheTtl` überstimmt das Frontmatter jeder Rolle und ist ebenfalls verboten (die TTL je Rolle steht im Frontmatter, factory#312).
  */
-function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }): string[] {
+function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; subagentPromptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }): string[] {
   const out = settings.model === "sonnet" ? [] : [`model=${JSON.stringify(settings.model ?? null)}`];
   for (const k of Object.keys(settings.env ?? {})) if (/MODEL|EFFORT|PROMPT_CACHE_TTL|PROMPT_CACHING/i.test(k)) out.push(`env.${k}`);
   if (settings.promptCacheTtl !== undefined) out.push("promptCacheTtl");
+  if (settings.subagentPromptCacheTtl !== undefined) out.push("subagentPromptCacheTtl");
   if (settings.experimental?.cacheTtl !== undefined) out.push("experimental.cacheTtl");
   return out;
+}
+
+/** Überschrift des Doku-Abschnitts mit der Gegenrechnung je Rolle (factory#312). */
+const TTL_ABSCHNITT = "### Cache-TTL je Subagent-Rolle";
+type TtlZeile = { rolle: string; ttl: string; netto: number };
+
+/** Die Tabelle unter `TTL_ABSCHNITT`: je Rolle TTL und Netto in $. Fehlt der Abschnitt oder die Spalten, ist die Liste leer (fail-closed: kein Schlüssel erlaubt). */
+function ttlZeilenAusDoku(md: string): TtlZeile[] {
+  const start = md.indexOf(`\n${TTL_ABSCHNITT}`);
+  if (start < 0) return [];
+  const rest = md.slice(start + 1 + TTL_ABSCHNITT.length);
+  const ende = rest.search(/\n#{1,6} /);
+  const zellen = (ende < 0 ? rest : rest.slice(0, ende))
+    .split("\n")
+    .filter((l) => l.trim().startsWith("|"))
+    .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((z) => z.trim().replace(/`/g, "")));
+  const kopf = zellen[0] ?? [];
+  const [iRolle, iNetto, iTtl] = ["Rolle", "Netto $", "TTL"].map((n) => kopf.indexOf(n));
+  if (iRolle < 0 || iNetto < 0 || iTtl < 0) return [];
+  return zellen
+    .slice(1)
+    .filter((z) => !/^:?-+:?$/.test(z[0] ?? ""))
+    .map((z) => ({ rolle: z[iRolle] ?? "", ttl: z[iTtl] ?? "", netto: Number((z[iNetto] ?? "").replace("−", "-").replace(",", ".")) }));
+}
+
+/** Pfade aller Schlüssel, die nach Cache-TTL heißen (`cache.?ttl`, ohne Groß-/Kleinschreibung), samt Wert; verschachtelt gesucht. */
+function ttlSchluessel(wert: unknown, pfad = ""): { pfad: string; wert: unknown }[] {
+  if (typeof wert !== "object" || wert === null) return [];
+  return Object.entries(wert as Record<string, unknown>).flatMap(([k, v]) => {
+    const p = pfad ? `${pfad}.${k}` : k;
+    return [...(/cache.?ttl/i.test(k) ? [{ pfad: p, wert: v }] : []), ...ttlSchluessel(v, p)];
+  });
+}
+
+/**
+ * Der Frontmatter-Block einer Agentendatei mit einer Ebene Verschachtelung (anders als `parseFrontmatter`, das eingerückte Schlüssel nicht sieht). Eigener Zeilenleser statt
+ * YAML-Parser: die Beschreibungen tragen unquotierte Doppelpunkte, die ein strenger Parser ablehnt. Ein Schlüssel ohne Wert sammelt die eingerückten Zeilen darunter als Map.
+ * Bekannte Grenze: die Flow-Schreibweise `experimental: { cacheTtl: 1h }` bleibt ein String und wird nicht erkannt; tiefer verschachtelte Schlüssel zählen als eine Ebene.
+ */
+function frontmatterYaml(md: string): Record<string, unknown> {
+  const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md)?.[1] ?? "";
+  const out: Record<string, unknown> = {};
+  let offen: Record<string, unknown> | null = null;
+  for (const zeile of block.split(/\r?\n/)) {
+    const m = /^(\s*)([^\s#:][^:]*?):\s*(.*)$/.exec(zeile);
+    if (!m) continue;
+    const wert = m[3].replace(/^["']|["']$/g, "");
+    if (m[1] === "") {
+      offen = m[3] === "" ? {} : null;
+      out[m[2]] = offen ?? wert;
+    } else if (offen) offen[m[2]] = wert;
+  }
+  return out;
+}
+
+/**
+ * Befunde zur Subagent-Cache-TTL (factory#312): ein TTL-Schlüssel im Frontmatter ist nur als `experimental.cacheTtl: 1h` bei einer Rolle erlaubt,
+ * deren Doku-Zeile `1h` mit Netto > 0 trägt; umgekehrt braucht jede Doku-Zeile `1h` mit Netto > 0 den Schlüssel, und `1h` bei Netto ≤ 0 ist ein Befund.
+ */
+function ttlRollenBefunde(agenten: { name: string; fm: Record<string, unknown> }[], zeilen: TtlZeile[]): string[] {
+  const out: string[] = [];
+  const belegt = (rolle: string) => zeilen.some((z) => z.rolle === rolle && z.ttl === "1h" && z.netto > 0);
+  for (const { name, fm } of agenten) {
+    for (const s of ttlSchluessel(fm)) {
+      if (s.pfad !== "experimental.cacheTtl") out.push(`${name}: ${s.pfad} (nur experimental.cacheTtl wirkt)`);
+      else if (s.wert !== "1h") out.push(`${name}: experimental.cacheTtl=${JSON.stringify(s.wert)} (5m ist der Standard)`);
+      else if (!belegt(name)) out.push(`${name}: 1h ohne belegten Nettogewinn in der Doku`);
+    }
+  }
+  for (const z of zeilen.filter((x) => x.ttl === "1h")) {
+    if (!(z.netto > 0)) out.push(`Doku ${z.rolle}: 1h bei Netto ${z.netto}`);
+    const a = agenten.find((x) => x.name === z.rolle);
+    if (!a || !ttlSchluessel(a.fm).some((s) => s.pfad === "experimental.cacheTtl" && s.wert === "1h")) out.push(`Doku ${z.rolle}: 1h ohne experimental.cacheTtl: 1h im Frontmatter`);
+  }
+  return out;
+}
+
+/** Alle Agenten unter `.claude/agents` mit Namen und YAML-Frontmatter. */
+function agentenYaml(): { name: string; fm: Record<string, unknown> }[] {
+  return readdirSync(`${REPO_ROOT}.claude/agents`)
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => frontmatterYaml(read(`.claude/agents/${f}`)))
+    .map((fm) => ({ name: typeof fm.name === "string" ? fm.name : "", fm }));
 }
 
 /** Die in der Routing-Doku genannten User-Scope-MCP-Server, deren Namen das Repo voraussetzt. */
@@ -323,6 +407,10 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
       assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { [k]: "5m" } }), [`env.${k}`], k);
     }
     assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", promptCacheTtl: "5m" }), ["promptCacheTtl"]);
+    assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", subagentPromptCacheTtl: "1h" }), ["subagentPromptCacheTtl"]);
+    for (const k of ["CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "ENABLE_PROMPT_CACHING_1H"]) {
+      assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", env: { [k]: "1h" } }), [`env.${k}`], k);
+    }
     assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", experimental: { cacheTtl: "5m" } }), ["experimental.cacheTtl"]);
   });
 
@@ -975,5 +1063,61 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     const doku = read(ROUTING_SSOT);
     assert.match(doku, /pflege: start/);
     assert.doesNotMatch(doku, /kommen mit (quellprojekt)?#1099/);
+  });
+});
+
+describe("Cache-TTL je Subagent-Rolle (factory#312)", () => {
+  const tabelle = (zeilen: string[]) => ["", TTL_ABSCHNITT, "", "| Rolle | Netto $ | TTL |", "| --- | ---: | --- |", ...zeilen, "", "### Weiter", ""].join("\n");
+  const mitTtl = (ttl: string) => ({ name: "rolle-a", fm: frontmatterYaml(`---\nname: rolle-a\nexperimental:\n  cacheTtl: ${ttl}\n---\n`) });
+  const ohneTtl = { name: "rolle-a", fm: frontmatterYaml("---\nname: rolle-a\n---\n") };
+
+  test("echte Agenten und echte Doku passen zusammen", () => {
+    const zeilen = ttlZeilenAusDoku(liesMitProjektwerten(ROUTING_SSOT));
+    assert.ok(zeilen.length > 0, "die Doku führt die Gegenrechnung je Rolle als Tabelle unter '" + TTL_ABSCHNITT + "'");
+    assert.deepEqual(ttlRollenBefunde(agentenYaml(), zeilen), [], "TTL-Schlüssel im Frontmatter nur bei belegtem Nettogewinn (docs/model-routing.md, Abschnitt Cache-TTL je Subagent-Rolle)");
+  });
+
+  test("Negativfall: Schlüssel ohne Doku-Zeile ist ein Befund (Red-Green)", () => {
+    assert.deepEqual(ttlRollenBefunde([ohneTtl], []), []);
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], []), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku"]);
+    const anderes = ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-b | 0,42 | 1h |"]))).sort();
+    assert.deepEqual(anderes, ["Doku rolle-b: 1h ohne experimental.cacheTtl: 1h im Frontmatter", "rolle-a: 1h ohne belegten Nettogewinn in der Doku"], "andere Rolle belegt, diese nicht");
+  });
+
+  test("Doku-Zeile 1h mit Netto > 0 und passendem Schlüssel: kein Befund; Netto <= 0 oder fehlender Schlüssel: Befund", () => {
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 1h |"]))), []);
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | \u22120,10 | 1h |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku", "Doku rolle-a: 1h bei Netto -0.1"], "Netto negativ: Schlüssel und Doku-Zeile");
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,00 | 1h |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku", "Doku rolle-a: 1h bei Netto 0"], "Netto genau 0 belegt nichts");
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 5m |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku"], "Zeile 5m mit Netto > 0 belegt den Schlüssel nicht");
+    assert.deepEqual(ttlRollenBefunde([ohneTtl], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 1h |"]))), ["Doku rolle-a: 1h ohne experimental.cacheTtl: 1h im Frontmatter"]);
+    assert.deepEqual(ttlRollenBefunde([ohneTtl], ttlZeilenAusDoku(tabelle(["| rolle-a | -1,50 | 5m |"]))), [], "5m-Zeile ohne Schlüssel ist der Normalfall");
+  });
+
+  test("falsche Formen: oberste Ebene, 5m und andere Schreibweisen sind Befunde", () => {
+    const zeilen = ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 1h |"]));
+    const flach = { name: "rolle-a", fm: frontmatterYaml("---\nname: rolle-a\ncacheTtl: 1h\n---\n") };
+    assert.ok(ttlRollenBefunde([flach], zeilen).some((b) => b.includes("nur experimental.cacheTtl wirkt")));
+    assert.ok(ttlRollenBefunde([mitTtl("5m")], zeilen).some((b) => b.includes("5m ist der Standard")));
+    const schreibweise = { name: "rolle-a", fm: frontmatterYaml("---\nname: rolle-a\nexperimental:\n  cache_ttl: 1h\n---\n") };
+    assert.equal(ttlRollenBefunde([schreibweise], zeilen).some((b) => b.includes("experimental.cache_ttl")), true);
+  });
+
+  test("fehlender Abschnitt oder fehlende Spalte: leere Liste (fail-closed)", () => {
+    assert.deepEqual(ttlZeilenAusDoku("# Nichts\n"), []);
+    assert.deepEqual(ttlZeilenAusDoku(["", TTL_ABSCHNITT, "", "| Name | TTL |", "| --- | --- |", "| a | 1h |"].join("\n")), []);
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], []).length, 1);
+  });
+
+  test("Zeilen hinter der nächsten Überschrift gehören nicht zur Tabelle", () => {
+    const md = tabelle([]) + "| rolle-a | 0,42 | 1h |\n";
+    assert.deepEqual(ttlZeilenAusDoku(md), []);
+  });
+
+  test("je fehlende Spalte (Rolle, Netto $, TTL) ist die Liste leer", () => {
+    const ohne = (kopf: string) => ["", TTL_ABSCHNITT, "", kopf, "| --- | --- | --- |", "| rolle-a | 0,42 | 1h |"].join("\n");
+    assert.equal(ttlZeilenAusDoku(ohne("| Rolle | Netto $ | TTL |")).length, 1, "Kontrolle: vollständiger Kopf liefert die Zeile");
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Name | Netto $ | TTL |")), []);
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Betrag | TTL |")), []);
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Netto $ | Dauer |")), []);
   });
 });
