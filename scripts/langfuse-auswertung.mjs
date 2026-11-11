@@ -41,8 +41,8 @@ export function parseArgs(argv) {
     exporte: werte.export ?? [],
     json: werte.json === true,
     rezept: werte.rezept === true,
-    von: werte.von ?? null,
-    bis: werte.bis ?? null,
+    von: werte.von,
+    bis: werte.bis,
     rollen: werte.rolle ?? [],
     agenten: werte.agenten ?? join(WURZEL, ".claude", "agents"),
   };
@@ -61,7 +61,7 @@ export function agentenNamen(ordner, { lies = readFileSync, liste = readdirSync 
 }
 
 function rezeptAusgeben(args, deps) {
-  if (!args.von || !args.bis || Number.isNaN(Date.parse(args.von)) || Number.isNaN(Date.parse(args.bis)) || Date.parse(args.von) >= Date.parse(args.bis)) {
+  if (Number.isNaN(Date.parse(args.von)) || Number.isNaN(Date.parse(args.bis)) || Date.parse(args.von) >= Date.parse(args.bis)) {
     return { exitCode: AUFRUF_EXIT, text: `--rezept braucht --von und --bis (ISO mit Zeitzone, von vor bis).\n${aufrufHilfe()}` };
   }
   try {

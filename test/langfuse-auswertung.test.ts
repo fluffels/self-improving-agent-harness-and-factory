@@ -313,9 +313,7 @@ describe("Randfälle", () => {
   test("die Meldung bei doppeltem Metadaten-Export nennt Schlüssel und Wert", () => {
     expect(() => rep(gesamt, meta("agent_type", "Plan", []), meta("agent_type", "Plan", []))).toThrow(/agent_type=Plan/);
   });
-  test("Tage: ungültige Zeit ergibt keine Lücken, ein Fensterende genau um Mitternacht schließt den Tag aus", () => {
-    expect(L.tagesLuecken("kaputt", BIS, [])).toEqual([]);
-    expect(L.tagesLuecken(VON, "kaputt", [])).toEqual([]);
+  test("Tage: ein Fensterende genau um Mitternacht schließt den Tag aus", () => {
     expect(L.tagesLuecken("2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z", [])).toEqual(["2026-11-01"]);
   });
   test("eine Zelle ohne Gegenstück in gesamt ist eine Lücke; eine Audit-Zelle ist es nicht", () => {
@@ -351,6 +349,56 @@ describe("Randfälle", () => {
     expect(b.bereinigt).toEqual({ count: 6, cost: 6 });
     expect(b.modell.zeilen.find((z) => z.name === "m")).toMatchObject({ count: 5, cost: 5 });
   });
+  test("ein unlesbares Fenster im Export wirft", () => {
+    expect(() => lese({ ...gesamt, abfrage: { filters: [FILTER], fromTimestamp: "kaputt", toTimestamp: BIS } })).toThrow(/kein Zeitstempel/);
+    expect(() => lese({ ...gesamt, abfrage: { filters: [FILTER], fromTimestamp: VON, toTimestamp: "kaputt" } })).toThrow(/kein Zeitstempel/);
+  });
+  test("ohne abfrage oder ohne filters wirft der Leser mit Meldung statt TypeError", () => {
+    expect(() => lese({ art: "gesamt", data: [] })).toThrow(/type = GENERATION/);
+    expect(() => lese({ art: "gesamt", abfrage: { fromTimestamp: VON, toTimestamp: BIS }, data: [] })).toThrow(/type = GENERATION/);
+  });
+  test("Quelle: Name allein genügt, auch mit Audit-Präfix; ein Name null stürzt nicht", () => {
+    expect(L.quelleVon("Fremd", "Model response")).toBe("codex");
+    expect(L.quelleVon("Fremd", "[duplicate audit] Model response")).toBe("codex");
+    expect(L.quelleVon("Fremd", "[duplicate audit] Subagent LLM Call")).toBe("live");
+    expect(L.quelleVon("Fremd", "Subagent LLM Call")).toBe("live");
+    expect(L.quelleVon("Claude Code Turn", "Anderer Name")).toBe("live");
+    expect(L.quelleVon("Abgleich", null)).toBe("nachgeliefert");
+    expect(rep(exp("gesamt", [g("Fremd", null as unknown as string, "m", "r", 1, 1)]), tageVoll).quelle.zeilen.find((z) => z.name === "sonstige")).toMatchObject({ count: 1 });
+  });
+  test("das Rezept braucht keine Rollenliste", () => {
+    expect(L.rezept({ von: VON, bis: BIS }).length).toBeGreaterThan(3);
+  });
+  test("Zelle mit anderer Darstellung von leer (null gegen leer) findet ihre Gruppe", () => {
+    const leerEnv = ["Claude Code Turn", "LLM Call", "claude-sonnet-5-5", null] as const;
+    const b = rep(exp("gesamt", [g(...leerEnv, 2, 1)]), tageVoll, meta("agent_type", "Plan", [g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "", 2, 1, 3)]));
+    expect(b.luecken.join("\n")).not.toMatch(/nicht konsistent/);
+    expect(b.rolle.zeilen.find((z) => z.name === "Plan")).toMatchObject({ count: 2 });
+  });
+  test("Gleitkomma: die Summe hängt nicht von der Zeilenreihenfolge ab", () => {
+    const rows = [g("Abgleich", "Call", "m1", "r", 1, 0.1), g("Abgleich", "Call", "m2", "r", 1, 0.2), g("Abgleich", "Call", "m3", "r", 1, 0.3)];
+    const a = rep(exp("gesamt", rows), tageVoll);
+    const b = rep(exp("gesamt", [...rows].reverse()), tageVoll);
+    expect(a.bereinigt.cost).toBe(b.bereinigt.cost);
+    expect(a.repo.summe.cost).toBe(b.repo.summe.cost);
+  });
+  test("mehr Calls in den Zellen als in gesamt (Kosten gleich) ist eine Lücke", () => {
+    expect(rep(...basis, meta("agent_type", "Plan", [g(...R1, 11, 5, 3)])).luecken.join("\n")).toMatch(/1 Zeile\(n\) mit Rest unter 0/);
+  });
+  test("Kosten je Quelle addieren sich über Zeilen derselben Tabellenzeile", () => {
+    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2)]), tageVoll);
+    expect(b.repo.zeilen.find((z) => z.name === "repoA")?.quellen.live).toBe(3);
+  });
+  test("Sortierung: Kosten absteigend, bei Gleichstand nach Name (unabhängig von der Zeilenfolge)", () => {
+    const gleich = rep(exp("gesamt", [g("Abgleich", "Call", "z-modell", "r", 1, 1), g("Zzz", "Call", "a-modell", "r", 1, 1)]), tageVoll);
+    expect(gleich.modell.zeilen.map((z) => z.name)).toEqual(["a-modell", "z-modell", "unzugeordnet"]);
+    const teuer = rep(exp("gesamt", [g("Abgleich", "Call", "a-klein", "r", 1, 1), g("Zzz", "Call", "z-gross", "r", 1, 9)]), tageVoll);
+    expect(teuer.modell.zeilen.map((z) => z.name)).toEqual(["z-gross", "a-klein", "unzugeordnet"]);
+  });
+  test("ein Modell-null-Call ohne Rollen-Zelle zählt in unzugeordnet nur einmal", () => {
+    const b = rep(exp("gesamt", [g("Claude Code Turn", "LLM Call", null, "r", 3, 1)]), tageVoll);
+    expect(b.unzugeordnet).toEqual({ count: 3, cost: 1 });
+  });
 });
 
 describe("CLI", () => {
@@ -366,7 +414,7 @@ describe("CLI", () => {
     expect(r.text).toContain(teil);
   };
   test("unbekanntes Flag und fehlende Aufgabe sind Aufruffehler (Exit 2) mit Aufrufhilfe", () => {
-    erwarte(["--gibtsnicht"], 2, "Aufruf: node scripts/langfuse-auswertung.mjs");
+    erwarte(["--gibtsnicht"], 2, "Unbekanntes Argument: --gibtsnicht");
     erwarte([], 2, "Weder --export noch --rezept");
     expect(lauf(["--rezept", "--von", VON])).toMatchObject({ exitCode: 2 });
     expect(lauf(["--rezept", "--von", BIS, "--bis", VON]).exitCode).toBe(2);
@@ -375,7 +423,7 @@ describe("CLI", () => {
     dateien["kaputt.json"] = "{";
     dateien["nackt.json"] = JSON.stringify({ data: [] });
     erwarte(["--export", "fehlt.json"], 1, "fehlt.json");
-    erwarte(["--export", "kaputt.json"], 1, "kein lesbares JSON");
+    erwarte(["--export", "kaputt.json"], 1, "--export kaputt.json: kein lesbares JSON");
     erwarte(["--export", "nackt.json"], 1, "selbstbeschreibend");
   });
   test("zwei Exporte ergeben Markdown, mit --json das Objekt; Datenlücken ändern den Exit nicht", () => {
@@ -406,6 +454,14 @@ describe("CLI", () => {
     const r = lauf(["--rezept", "--von", VON, "--bis", BIS, "--agenten", join(tmpdir(), "gibt-es-nicht-289")]);
     expect(r.exitCode).toBe(1);
     expect(r.text).toContain("Fehler:");
+  });
+  test("Agentenname: nur eine ganze Zeile name: <wort> zählt (kein Mittendrin, kein Mehrwort)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    writeFileSync(join(dir, "a.md"), "---\ndescription: x name: falsch\nname: richtig\n---\n");
+    writeFileSync(join(dir, "b.md"), "---\nname: zwei woerter\n---\n");
+    writeFileSync(join(dir, "c.md"), "---\nname:ohneleerzeichen\n---\n");
+    writeFileSync(join(dir, "d.md"), "---\nname:   mitplatz   \n---\n");
+    expect(C.agentenNamen(dir)).toEqual(["mitplatz", "ohneleerzeichen", "richtig"]);
   });
   test("eine Agentendatei ohne name wird übersprungen", () => {
     const dir = mkdtempSync(join(tmpdir(), "auswertung-"));

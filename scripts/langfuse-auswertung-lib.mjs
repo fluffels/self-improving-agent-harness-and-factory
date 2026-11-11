@@ -90,6 +90,8 @@ const fehler = (pfad, text) => new Error(`${pfad}: ${text} (Abfragerezept: node 
 const hatGenerationFilter = (abfrage) =>
   Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f?.operator === "=" && String(f?.value).toUpperCase() === "GENERATION");
 
+const fensterLesbar = (a) => !Number.isNaN(Date.parse(a.fromTimestamp)) && !Number.isNaN(Date.parse(a.toTimestamp));
+
 function pruefeKopf(json, pfad) {
   if (!json || typeof json !== "object" || !("art" in json)) {
     throw fehler(pfad, "kein selbstbeschreibender Export { art, abfrage, data } (nacktes {data} oder Array)");
@@ -97,7 +99,7 @@ function pruefeKopf(json, pfad) {
   if (!ARTEN.includes(json.art)) throw fehler(pfad, `unbekannte art ${JSON.stringify(json.art)}`);
   if (!Array.isArray(json.data)) throw fehler(pfad, "data fehlt oder ist kein Array");
   if (!hatGenerationFilter(json.abfrage)) throw fehler(pfad, "Filter type = GENERATION fehlt (Spans mit Rolle unbekannt würden mitzählen)");
-  if (leer(json.abfrage.fromTimestamp) || leer(json.abfrage.toTimestamp)) throw fehler(pfad, "Fenster (fromTimestamp/toTimestamp) fehlt in abfrage");
+  if (!fensterLesbar(json.abfrage)) throw fehler(pfad, "Fenster (fromTimestamp/toTimestamp) fehlt oder ist kein Zeitstempel in abfrage");
   if (json.data.length >= ROW_LIMIT) throw fehler(pfad, `Export abgeschnitten (${json.data.length} Zeilen = row_limit): Fenster enger wählen`);
 }
 
@@ -156,7 +158,6 @@ export function tagesLuecken(von, bis, tageData) {
   const start = Date.parse(von);
   const ende = Date.parse(bis);
   const out = [];
-  if (!Number.isFinite(start) || !Number.isFinite(ende)) return out;
   for (let t = Math.floor(start / MS_TAG) * MS_TAG; t < ende; t += MS_TAG) {
     const tag = new Date(t).toISOString().slice(0, 10);
     if (!have.has(tag)) out.push(tag);
@@ -164,7 +165,8 @@ export function tagesLuecken(von, bis, tageData) {
   return out;
 }
 
-const istNegativ = (z) => z.minLatency !== null && z.minLatency < 0;
+/** Gesamt-Zeilen tragen `minLatency: null` (`null < 0` ist falsch), Latenz- und Metadaten-Zeilen eine Zahl. */
+const istNegativ = (z) => z.minLatency < 0;
 const summe = (liste) => liste.reduce((s, z) => ({ count: s.count + z.count, cost: s.cost + z.cost }), { count: 0, cost: 0 });
 
 function anreichern(z) {
