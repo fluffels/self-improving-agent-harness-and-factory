@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
 import { pruefeRisiko } from "./projekt-config-bloecke.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 /** Obergrenzen der Stufe S (Summe über den ganzen Diff). */
 export const GROESSENSTUFE_S = Object.freeze({ maxDateien: 3, maxZeilen: 60 });
@@ -92,10 +92,10 @@ export function vereinigeRisiko(basis, kopf) {
   return { muster: menge, quelle };
 }
 
-/** Die Risiko-Muster der Basis über `git show <base>:.factory/projekt.json`; nicht lesbar (Datei fehlt, kein JSON): Standardliste als Basisanteil. Ein ungültiger `risiko`-Block bleibt `fehler`. */
+/** Die Risiko-Muster der Basis über `git show <base>:<PROJEKT_CONFIG>`; nicht lesbar (Datei fehlt, kein JSON): Standardliste als Basisanteil. Ein ungültiger `risiko`-Block bleibt `fehler`. */
 function risikoDerBasis(git, base) {
   try {
-    return risikoMusterAus(JSON.parse(git(["show", `${base}:.factory/projekt.json`])));
+    return risikoMusterAus(JSON.parse(git(["show", `${base}:${PROJEKT_CONFIG}`])));
   } catch {
     return { ...STANDARD_RISIKO };
   }
