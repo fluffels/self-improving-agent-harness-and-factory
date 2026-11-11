@@ -217,7 +217,7 @@ export function decide({ cwd, command, repoRoot, deps = {} }) {
 
 const STASH_REASON =
   "git stash (außer list/show) ist verboten: Stashes sind repoweit geteilt (refs/stash); pop/apply kann fremden WIP anwenden. " +
-  "Zwischenstand per WIP-Commit auf dem eigenen Branch oder per Kopie in den Scratchpad sichern (AGENTS.md › Red-Green). (factory#323)";
+  "Zwischenstand per WIP-Commit auf dem eigenen Branch oder per Kopie in den Scratchpad sichern (Regel „Tests gegen False Positives absichern“ in AGENTS.md). (factory#323)";
 
 /** Ortsunabhängiger Block für `git stash` (Aliase, Interpreter, dynamischer Unterbefehl eingeschlossen); sonst null. */
 function stashBlock(command, cwd, deps) {
