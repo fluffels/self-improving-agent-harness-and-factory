@@ -202,6 +202,9 @@ export function entwurfLive({ gh, env, repo }) {
   return pr.draft;
 }
 
+/** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
+const stufeFuerEntfaellt = (nachweis, git, base) => (nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base).stufe : "voll");
+
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
   const repo = repoVon(env, config);
@@ -223,8 +226,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
     if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead, reviewOverride), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
-  const stufe = nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base).stufe : "voll";
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe: stufeFuerEntfaellt(nachweis, git, base) });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

@@ -70,11 +70,13 @@ export { BEKANNTE_LENSES };
 
 /** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: Factory-Seite docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
 export const vorlage = (zeilen) =>
-  `${zeilen.plan}: ${zeilen.planer}   |   Größenstufe S: ${zeilen.plan}: ${zeilen.planer} — skizze   |   ${zeilen.plan}: ohne — klein: <Begründung>\n` +
+  `${zeilen.plan}: ${zeilen.planer}\n` +
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
   `lenses=architektur,requirement-treue,test-adaequanz ` +
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
-  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>; bei Größenstufe S mit Code: lenses=kombiniert blocker=kombiniert:<n>)`;
+  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)\n` +
+  `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
+  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n>`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche

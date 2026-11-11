@@ -36,7 +36,7 @@
     "complexity": 7
   },
   "scripts/check-review-nachweis.mjs": {
-    "complexity": 12
+    "complexity": 9
   },
   "scripts/claims-pruefen.mjs": {
     "complexity": 10
@@ -117,9 +117,6 @@
   "scripts/mcp-ausfall.mjs": {
     "complexity": 21,
     "max-depth": 2
-  },
-  "scripts/nachweis-lib.mjs": {
-    "complexity": 2
   },
   "scripts/naechstes-ticket.mjs": {
     "complexity": 6

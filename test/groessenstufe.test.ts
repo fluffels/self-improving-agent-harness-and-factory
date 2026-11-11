@@ -2,8 +2,9 @@
  * Logik aus scripts/groessenstufe-lib.mjs, scripts/groessenstufe.mjs, check-review-nachweis.mjs und check-abnahme-nachweis.mjs importiert;
  * die Wächter laufen gegen ein echtes git-Repo im Temp-Ordner (Verdrahtung: der Wächter rechnet die Stufe selbst, der Umsetzer behauptet sie nie). */
 import { afterEach, describe, expect, test } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -29,7 +30,7 @@ const lib = libRaw as unknown as {
   parseNumstatNoRenames: (t: string) => { pfad: string | null; zeilen: number | null }[];
   bestimmeGroessenstufe: (o: { eintraege: Eintrag[] | null; muster: string[] | null; prognose?: boolean }) => Ergebnis;
   groessenstufeAusGit: (git: (a: string[]) => string, base: string, head?: string, o?: { ladeMuster?: () => string[]; zweiPunkt?: boolean }) => Ergebnis;
-  ladeLeitplankenMuster: () => string[];
+  ladeLeitplankenMuster: (quelle?: string) => string[];
 };
 const cli = cliRaw as unknown as { laufe: (argv: string[], o?: { git?: (a: string[]) => string; ladeMuster?: () => string[]; env?: Record<string, string> }) => { code: number; ausgabe: string } };
 const nl = nlRaw as unknown as { kleinGrund: (g: string) => { art: string; begruendung?: string } | null; parseNachweis: (t: string, z: unknown) => { plan: { art: string; grund?: string } | null; review: { lenses: string[] } | null } };
@@ -115,6 +116,31 @@ describe("bestimmeGroessenstufe: Negativfall, nie S (K5)", () => {
 });
 
 describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
+  test("ohne Text (undefined) ist die Liste leer; eine halb-binäre Zeile (- und Zahl) ist binär", () => {
+    expect(lib.parseNumstatNoRenames(undefined as unknown as string)).toEqual([]);
+    expect(lib.parseNumstatNoRenames("-\t3\tbild.bin\n3\t-\tbild2.bin\n")).toEqual([
+      { pfad: "bild.bin", zeilen: null },
+      { pfad: "bild2.bin", zeilen: null },
+    ]);
+  });
+  test("ein Pfad aus Leerraum ist kein Pfad (voll); die Prognose ignoriert angegebene Zeilen", () => {
+    expect(stufe([{ pfad: "   ", zeilen: 1 }]).stufe).toBe("voll");
+    expect(stufe([{ pfad: "docs/a.md", zeilen: 400 }], MUSTER, true).stufe).toBe("S");
+  });
+  test("ladeLeitplankenMuster wirft bei kaputtem JSON und bei fehlender Datei, liest sonst alle String-Listen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "stufe-"));
+    dirs.push(dir);
+    writeFileSync(join(dir, "kaputt.json"), "{nicht json");
+    writeFileSync(join(dir, "ok.json"), JSON.stringify({ a: ["/x/"], b: ["/y/"], c: 5 }));
+    expect(() => lib.ladeLeitplankenMuster(join(dir, "kaputt.json"))).toThrow(/kein gültiges JSON/);
+    expect(() => lib.ladeLeitplankenMuster(join(dir, "fehlt.json"))).toThrow();
+    expect(lib.ladeLeitplankenMuster(join(dir, "ok.json"))).toEqual(["/x/", "/y/"]);
+  });
+  test("ohne head zählt der Aufruf bis HEAD", () => {
+    const aufrufe: string[] = [];
+    lib.groessenstufeAusGit((a) => (aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n"), "B", undefined, { ladeMuster: () => MUSTER });
+    expect(aufrufe).toEqual(["diff --numstat --no-renames B...HEAD"]);
+  });
   test("Zeilen werden summiert, Binärdateien sind null, Müll hat keinen Pfad", () => {
     expect(lib.parseNumstatNoRenames("3\t4\tdocs/a.md\n-\t-\tbild.png\nkaputt\n\n")).toEqual([
       { pfad: "docs/a.md", zeilen: 7 },
@@ -160,10 +186,24 @@ describe("CLI groessenstufe.mjs", () => {
     expect(cli.laufe(["--pfade", "docs/x.md", "scripts/y.mjs"], o).ausgabe).toMatch(/^STUFE: voll — scripts\/y\.mjs liegt in einem geschützten Pfad/);
     expect(JSON.parse(cli.laufe(["--pfade", "scripts/y.mjs", "--json"], o).ausgabe)).toMatchObject({ stufe: "voll" });
   });
-  test("Aufruf-Fehler: Exit 1; keine Basis und Ladefehler: voll statt Absturz", () => {
-    expect(cli.laufe(["--pfade"], o).code).toBe(1);
-    expect(cli.laufe(["--commit"], o).code).toBe(1);
-    expect(cli.laufe(["--unbekannt"], o).code).toBe(1);
+  test("--pfade normalisiert Backslashes und ./: ein geschützter Pfad in Windows-Schreibweise ist voll", () => {
+    expect(cli.laufe(["--pfade", ".\\scripts\\x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
+    expect(cli.laufe(["--pfade", "./scripts/x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
+    expect(cli.laufe(["--pfade", "./docs/x.md"], o).ausgabe).toBe("STUFE: S");
+  });
+  test("als Prozess: STUFE-Zeile mit Exit 0, Aufruf-Fehler mit Exit 2 und Aufrufzeile", () => {
+    const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
+    expect(execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim()).toBe("STUFE: S");
+    const fehler = spawnSync("node", [skript, "--unbekannt"], { encoding: "utf8" });
+    expect(fehler.status).toBe(2);
+    expect(fehler.stderr).toMatch(/Aufruf: node scripts\/groessenstufe\.mjs/);
+  });
+  test("Aufruf-Fehler: Exit 2; keine Basis und Ladefehler: voll statt Absturz", () => {
+    expect(cli.laufe(["--pfade"], o).code).toBe(2);
+    expect(cli.laufe(["--commit"], o).code).toBe(2);
+    expect(cli.laufe(["--unbekannt"], o).code).toBe(2);
+    expect(cli.laufe(["docs/x.md"], o).code).toBe(2);
+    expect(cli.laufe(["--commit", "abc", "--pfade", "docs/x.md"], o).code).toBe(2);
     expect(cli.laufe([], { ...o, git: () => "", env: {} }).ausgabe).toMatch(/voll — keine Vergleichs-Basis/);
     expect(cli.laufe(["--pfade", "docs/x.md"], { ...o, ladeMuster: () => { throw new Error("x"); } }).ausgabe).toMatch(/voll — Schutzliste nicht ladbar/);
   });
@@ -176,10 +216,14 @@ describe("kleinGrund und parseNachweis: skizze und ohne — klein", () => {
     expect(nl.kleinGrund("klein:   ")).toEqual({ art: "klein-ohne-begruendung" });
     expect(nl.kleinGrund("Revert eines PR")).toBeNull();
     expect(nl.kleinGrund("kleinlich: x")).toBeNull();
+    expect(nl.kleinGrund(undefined as unknown as string)).toBeNull();
   });
   test("Plan-Zeile: skizze wird erkannt, ein anderer Zusatz bleibt ungültig", () => {
     expect(nl.parseNachweis(`${Z.plan}: ${PL} — skizze`, Z).plan).toEqual({ art: "skizze" });
     expect(nl.parseNachweis(`${Z.plan}: ${PL} — skizze2`, Z).plan).toMatchObject({ art: "ungueltig" });
+    expect(nl.parseNachweis(`${Z.plan}: vor${PL} — skizze`, Z).plan).toMatchObject({ art: "ungueltig" });
+    expect(nl.parseNachweis(`${Z.plan}: ${PL} - skizze`, Z).plan).toEqual({ art: "skizze" });
+    expect(nl.parseNachweis("kein Nachweis", Z).plan).toBeNull();
     expect(nl.parseNachweis(`${Z.plan}: ohne — klein: x`, Z).plan).toEqual({ art: "ohne", grund: "klein: x" });
   });
 });
@@ -247,6 +291,9 @@ describe("check-review-nachweis rechnet die Stufe selbst (K3, K4, K5)", () => {
       expect(f, pfad).toMatch(/kombiniert genügt nur bei Größenstufe S/);
     }
   });
+  test("eine ungültige Plan-Zeile nennt die Skizze als erlaubte Form", () => {
+    expect(pruefe(KLEIN, nach("murks", DREI)).fehler.join()).toMatch(/ungültig: "murks" \(erlaubt: .*— skizze/);
+  });
   test("klein ohne Begründung ist auch bei S rot; ein anderer Grund bleibt bei voll grün", () => {
     expect(pruefe(KLEIN, nach("ohne — klein", "kombiniert")).fehler.join()).toMatch(/braucht eine Begründung/);
     expect(pruefe({ "scripts/x.mjs": "x\n" }, nach("ohne — Revert eines PR", DREI)).fehler).toEqual([]);
@@ -283,7 +330,10 @@ describe("check-abnahme-nachweis: entfaellt — klein nur bei berechnetem S (K3)
     expect(pruefe({ "docs/a.md": "x\n".repeat(61) }, "entfaellt — klein: nichts zu beobachten").ok).toBe(false);
   });
   test("S: ein anderer entfaellt-Grund und klein ohne Begründung bleiben mit Kriterien rot", () => {
-    expect(pruefe(KLEIN, "entfaellt — nicht nötig").ok).toBe(false);
+    const f = pruefe(KLEIN, "entfaellt — nicht nötig").fehler.join();
+    expect(f).toMatch(/nicht erlaubt/);
+    expect(f).not.toMatch(/Ausnahme/);
+    expect(pruefe(KLEIN, "entfaellt — klein").fehler.join()).toMatch(/Ausnahme.*mit Begründung/);
     expect(pruefe(KLEIN, "entfaellt — klein").ok).toBe(false);
   });
   test("ohne Kriterien bleibt entfaellt bei jeder Stufe grün", () => {

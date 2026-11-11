@@ -8,38 +8,42 @@
  *   node scripts/groessenstufe.mjs --pfade <p…>    Prognose des Planers aus geplanten Pfaden (ohne Zeilen: nur Dateizahl und Pfade)
  *   --json                                         `{stufe, gruende}` als JSON
  *
- * Ausgabe: `STUFE: S` oder `STUFE: voll — <Gründe>`; Exit 0 bei jeder berechneten Stufe, 1 bei einem Aufruf-Fehler. Ein Fehler beim Rechnen
+ * Ausgabe: `STUFE: S` oder `STUFE: voll — <Gründe>`; Exit 0 bei jeder berechneten Stufe, 2 bei einem Aufruf-Fehler (`AUFRUF_EXIT`). Ein Fehler beim Rechnen
  * (git, Schutzliste) ist `voll` (fail-closed), kein Absturz.
  */
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestimmeGroessenstufe, groessenstufeAusGit, ladeLeitplankenMuster } from "./groessenstufe-lib.mjs";
 
 const AUFRUF = "Aufruf: node scripts/groessenstufe.mjs [--commit <sha> | --pfade <pfad…>] [--json]";
+const FLAGS = { commit: { type: "string" }, pfade: { type: "boolean" }, json: { type: "boolean" } };
 
 /** Die Zeile für Menschen: `STUFE: S` bzw. `STUFE: voll — <Gründe>`. Pur. */
 export const stufeZeile = ({ stufe, gruende }) => (stufe === "S" ? "STUFE: S" : `STUFE: voll — ${gruende.join("; ")}`);
 
-/** Rechnet die Stufe zu `argv`; `git` und `ladeMuster` injizierbar. Liefert `{code, ausgabe}` (Exit-Code und stdout/stderr-Text). */
+const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "");
+
+/** Zulässige Aufrufe: nichts, `--commit <sha>` allein oder `--pfade` mit mindestens einem Pfad (Positionsargumente gehören nur zu `--pfade`). Pur. */
+const aufrufGueltig = (commit, pfade, pos) => (commit !== undefined ? !pfade && pos.length === 0 : pfade ? pos.length > 0 : pos.length === 0);
+
+/** Rechnet die Stufe zu `argv`; `git`, `ladeMuster` und `env` injizierbar. Liefert `{code, ausgabe}` (Exit-Code und stdout/stderr-Text). */
 export function laufe(argv, { git = (a) => execFileSync("git", a, { encoding: "utf8" }), ladeMuster = ladeLeitplankenMuster, env = process.env } = {}) {
-  const json = argv.includes("--json");
-  const rest = argv.filter((a) => a !== "--json");
-  const antwort = (r) => ({ code: 0, ausgabe: json ? JSON.stringify(r) : stufeZeile(r) });
-  if (rest[0] === "--pfade") {
-    const pfade = rest.slice(1);
-    if (pfade.length === 0 || pfade.some((p) => p.startsWith("--"))) return { code: 1, ausgabe: AUFRUF };
+  const r = flagsLesen(argv, FLAGS, { positionale: true });
+  if (r.fehler) return { code: AUFRUF_EXIT, ausgabe: `${r.fehler.text}\n${AUFRUF}` };
+  const { commit, pfade, json } = r.werte;
+  const pos = r.positionale;
+  if (!aufrufGueltig(commit, pfade, pos)) return { code: AUFRUF_EXIT, ausgabe: AUFRUF };
+  const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify(e) : stufeZeile(e) });
+  if (pfade) {
     try {
-      return antwort(bestimmeGroessenstufe({ eintraege: pfade.map((pfad) => ({ pfad: pfad.replace(/\\/g, "/").replace(/^\.\//, "") })), muster: ladeMuster(), prognose: true }));
+      return antwort(bestimmeGroessenstufe({ eintraege: pos.map((pfad) => ({ pfad: normPfad(pfad) })), muster: ladeMuster(), prognose: true }));
     } catch (e) {
       return antwort({ stufe: "voll", gruende: [`Schutzliste nicht ladbar: ${e instanceof Error ? e.message : String(e)}`] });
     }
   }
-  if (rest[0] === "--commit") {
-    if (rest.length !== 2 || rest[1].startsWith("--")) return { code: 1, ausgabe: AUFRUF };
-    return antwort(groessenstufeAusGit(git, `${rest[1]}^`, rest[1], { ladeMuster, zweiPunkt: true }));
-  }
-  if (rest.length > 0) return { code: 1, ausgabe: AUFRUF };
+  if (commit !== undefined) return antwort(groessenstufeAusGit(git, `${commit}^`, commit, { ladeMuster, zweiPunkt: true }));
   const base = resolveBase(git, env);
   if (!base) return antwort({ stufe: "voll", gruende: ["keine Vergleichs-Basis auflösbar"] });
   return antwort(groessenstufeAusGit(git, base, "HEAD", { ladeMuster }));

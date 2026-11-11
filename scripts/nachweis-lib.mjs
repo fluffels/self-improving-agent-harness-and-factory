@@ -113,6 +113,15 @@ export function kleinGrund(grund) {
   return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
 }
 
+/** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
+function planAus(planWert, planer) {
+  if (planWert === null) return null;
+  if (planWert === planer) return { art: "planer" };
+  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
+  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
+  return ohne ? { art: "ohne", grund: ohne[1].trim() } : { art: "ungueltig", zeile: planWert };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -120,15 +129,7 @@ export function parseNachweis(text, zeilen) {
   if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string" || typeof zeilen.abnahme !== "string") {
     throw new Error("parseNachweis braucht die Commit-Zeilen (commitZeilen(praefix, planer)), keinen Standardwert");
   }
-  const planWert = lastLine(text, zeilen.plan);
-  let plan = null;
-  if (planWert !== null) {
-    const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-    if (planWert === zeilen.planer) plan = { art: "planer" };
-    else if (new RegExp(`^${escapeRegex(zeilen.planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) plan = { art: "skizze" };
-    else if (ohne) plan = { art: "ohne", grund: ohne[1].trim() };
-    else plan = { art: "ungueltig", zeile: planWert };
-  }
+  const plan = planAus(lastLine(text, zeilen.plan), zeilen.planer);
   const reviewWert = lastLine(text, zeilen.review);
   let review = null;
   if (reviewWert !== null) {
