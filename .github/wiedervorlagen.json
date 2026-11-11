@@ -16,5 +16,11 @@
     "faellig": "2027-01-28",
     "titel": "TypeScript 7: trägt typescript-eslint den Major inzwischen?",
     "text": "Prüfen, ob ein veröffentlichtes typescript-eslint TypeScript 7 im Peer-Bereich trägt (`npm view typescript-eslint peerDependencies`). Wenn ja: das `ignore` für den `typescript`-Major in `.github/dependabot.yml` (Ökosystem npm) löschen und TypeScript 7 in einem eigenen PR heben. Wenn nein: `faellig` um etwa drei Monate schieben."
+  },
+  {
+    "id": "regeln-verfall-2027-03",
+    "faellig": "2027-03-01",
+    "titel": "Prüftermin neuer Regeln: Agenten-/Skill-Budgets und Verbleib-Wächter (factory#307)",
+    "text": "Neue Regeln aus factory#307 (ADR 0027, Fortschreibung factory#298): (1) Zeichen-Budget je Agenten- und Skill-Datei (`AGENTEN_SKILL_BUDGETS`, Default `AGENTEN_SKILL_DEFAULT_BUDGET`, Ratchet `test/harness/kontext-budget-ratchet.test.ts`, Nachzieh-Ratchet in `test/agenten-skill-budget.test.ts`), (2) Verbleib-Wächter `test/harness/verbleib.test.ts` mit `test/harness/verbleib-liste.json`. Prüfen: Haben sie echte Funde gebracht (rote Läufe aus dem Ratchet, ein verlorener Verbleib), und stimmt der Umsetzer-Sockel noch mit der Basis in docs/model-routing.md (Sockel-Basis vor der Kontext-Diät)? Ohne Fund und Beleg: Entscheidung „bleibt“ oder lockern (ADR 0027); dann Eintrag löschen."
   }
 ]
