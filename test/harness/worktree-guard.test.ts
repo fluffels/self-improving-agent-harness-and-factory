@@ -596,6 +596,53 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask("git -C $WT status", wt), false, "ohne geschützten Aufruf keine Rückfrage");
   });
 
+  test("Variable mit statischem Literal-Wert wird aufgelöst (Parität zum PowerShell-Guard, L4)", () => {
+    for (const cmd of [
+      `WT=${wt}; git -C "$WT" commit -m x`,
+      `WT=${wt} && cd "$WT" && git commit -m x`,
+      `export WT=${wt}; git -C \${WT} push`,
+      `WT='${wt}'; git -C $WT commit -m x`,
+      `WT=${wt}; git -C $WT/sub commit -m x`,
+      `WT=${wt}; git -C "\${WT}/sub" commit -m x`,
+      `WT=${wt}; cd \${WT} && git push`,
+      `declare WT=${wt}; git -C $WT push`,
+    ]) {
+      assert.equal(run(cmd), false, `${cmd}: kein Block`);
+      assert.equal(ask(cmd), false, `${cmd}: keine Rückfrage`);
+    }
+    assert.equal(run(`WT=${wt}; git -C "$WT" commit -m x`, wt), false, "auch aus dem Worktree");
+    assert.equal(run(`WT=${wt}; (git -C $WT commit -m x)`), false, "Subshell sieht die Zuweisung");
+    assert.equal(run(`WT=${wt}; X=$(git -C $WT status); git commit -m x`), true, "Substitution wirkt nicht nach außen, aber der Commit läuft im Haupt-Checkout");
+  });
+
+  test("Variablenauflösung bleibt eng: alles andere bleibt dynamisch (Block bzw. Rückfrage)", () => {
+    const blockt = (cmd: string) => assert.equal(run(cmd), true, `${cmd}: Block`);
+    blockt(`WT=${repoRoot}; git -C $WT commit -m x`);
+    blockt(`git -C $WT commit -m x`);
+    blockt(`WT=$(pwd); git -C $WT commit -m x`);
+    blockt(`WT=\`pwd\`; git -C $WT commit -m x`);
+    blockt(`WT=${wt} git -C "$WT" commit -m x`); // Präfix-Zuweisung: Bash expandiert vor der Zuweisung
+    blockt(`(WT=${wt}); git -C $WT commit -m x`);
+    blockt(`echo $(WT=${wt}); git -C $WT commit -m x`);
+    blockt(`WT=${wt} | cat; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; WT=$X; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; unset WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; for WT in a b; do :; done; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; read WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; WT+=/x; git -C $WT commit -m x`);
+    blockt(`WT=; git -C $WT commit -m x`);
+    blockt(`WT=~/x; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; true && WT=${wt}; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; if true; then WT=${wt}; fi; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; true || WT=${wt}; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; git -C $WT$X commit -m x`);
+    blockt(`WT=${wt}; git -C a$WT commit -m x`);
+    blockt(`WT=${wt}; git -C \${WT:-x} commit -m x`);
+    blockt(`W=${repoRoot}; WT=${wt}; git -C $W"T" commit -m x`);
+    blockt(`WT=${wt}; git --git-dir=$WT/.git commit -m x`);
+    assert.equal(ask(`WT=${wt}; unset WT; git -C $WT commit -m x`, wt), true, "unset: im Worktree Rückfrage");
+  });
+
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {
     for (const cmd of ['cd "$X" && git push', 'git -C "$D" push', "cd - && git push", "popd && git commit -m x", "git -C {} push"]) {
       assert.equal(ask(cmd, wt), true, cmd);
