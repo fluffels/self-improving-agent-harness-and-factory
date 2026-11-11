@@ -69,4 +69,4 @@ Entscheidung:
 
 Konsequenzen: Factory-Arbeit entsteht nur noch über `/factory`; die Spielquote ist Soll und Kennzahl (Selbst-Audit), siehe [ADR 0016](0016-langfuse-takt-woechentlich.md). Laufende Sessions sehen `/factory` womöglich erst nach einem Neustart.
 
-Weitere Fortschreibungen stehen als Dateien unter `fortschreibungen/` (Konvention: [README](README.md#format)): [#172](fortschreibungen/0028-172-design-schritt.md).
+Weitere Fortschreibungen stehen als Dateien unter `fortschreibungen/` (Konvention: [README](README.md#format)): [#172](fortschreibungen/0028-172-design-schritt.md), [#272](fortschreibungen/0028-272-phasen-schnitt-beendet.md).
