@@ -78,3 +78,55 @@ export function leseLogDateien({ basis, wurzel, seitMs, mitArbeitsplatz = false,
   }
   return alle;
 }
+
+const START = /^Starting connection/;
+const ERFOLG = /^Successfully connected/;
+const FEHLER = /^(HTTP )?Connection failed|^version negotiation probe failed/;
+const MCP_URL = /^Initializing HTTP transport to (\S+)/;
+
+/** Ereignisse `[{ ms, text, sessionId }]` der `debug`-Zeilen ab `seitMs` (einschließlich), zeitlich geordnet; kaputte Zeilen entfallen. Pur. */
+function ereignisse(zeilen, seitMs) {
+  const aus = [];
+  for (const roh of zeilen) {
+    const z = versuche(() => JSON.parse(roh), null);
+    const ms = Date.parse(z?.timestamp);
+    if (typeof z?.debug === "string" && ms >= seitMs) aus.push({ ms, text: z.debug, sessionId: z.sessionId ?? "" });
+  }
+  return aus.sort((a, b) => a.ms - b.ms);
+}
+
+const nichtPruefbar = (grund) => ({ status: "nicht-pruefbar", grund });
+
+/** Zeilen der Session, wenn sie einen eigenen Start haben, sonst alle (Rückfall: Subagent oder Resume ohne eigenen Start). Pur. */
+function wahlZeilen(ev, sessionId) {
+  const eigene = sessionId ? ev.filter((e) => e.sessionId === sessionId) : [];
+  return eigene.some((e) => START.test(e.text)) ? { ev: eigene, quelle: "session" } : { ev, quelle: "rueckfall" };
+}
+
+/**
+ * Urteil über die Verbindung eines MCP-Servers aus seinen JSONL-Zeilen: `{ status: "verbunden"|"getrennt"|"nicht-pruefbar", grund, quelle, url, code, zeit }`.
+ * Es zählt der letzte `Starting connection` ab `seit`; danach entscheidet das letzte Ergebnis (`Successfully connected` = verbunden, Verbindungsfehler ohne spätere Neuverbindung = getrennt).
+ * Hat die Session (`sessionId`) keinen eigenen Start, zählt der jüngste Start im Fenster (`quelle: "rueckfall"`, kann eine fremde Session sein). Kein Start oder Start ohne Ergebnis: nicht prüfbar. Pur.
+ */
+export function mcpVerbindung(zeilen, { sessionId, seit }) {
+  const { ev, quelle } = wahlZeilen(ereignisse(zeilen, Date.parse(seit)), sessionId);
+  const start = ev.findLastIndex((e) => START.test(e.text));
+  if (start < 0) return { ...nichtPruefbar("kein Verbindungsstart im Fenster"), quelle };
+  const letzte = ev.slice(start + 1).findLast((e) => ERFOLG.test(e.text) || FEHLER.test(e.text));
+  if (!letzte) return { ...nichtPruefbar("Verbindungsstart ohne Ergebnis"), quelle };
+  const url = ev.slice(0, start).findLast((e) => MCP_URL.test(e.text))?.text.match(MCP_URL)?.[1] ?? null;
+  if (ERFOLG.test(letzte.text)) return { status: "verbunden", grund: "Verbindung steht", quelle, url };
+  const code = netzCode(letzte.text) || "Verbindungsfehler";
+  const zeit = new Date(letzte.ms).toISOString();
+  return { status: "getrennt", grund: `Verbindung fehlgeschlagen (${code}, ${zeit})`, quelle, url, code, zeit };
+}
+
+const portVon = (u) => u.port || (u.protocol === "https:" ? "443" : "80");
+
+/** Weicht die MCP-URL nach Host oder Port von der Langfuse-Basis-URL ab (`localhost` ≠ `127.0.0.1` ≠ `[::1]`)? Text der Abweichung oder `null`; unlesbare URL: `null`. Pur. */
+export function urlAbweichung(mcpUrl, basisUrl) {
+  const a = versuche(() => new URL(mcpUrl), null);
+  const b = versuche(() => new URL(basisUrl), null);
+  if (!a || !b || (a.hostname === b.hostname && portVon(a) === portVon(b))) return null;
+  return `MCP-URL ${a.hostname}:${portVon(a)} weicht von der Langfuse-Basis-URL ${b.hostname}:${portVon(b)} ab`;
+}
