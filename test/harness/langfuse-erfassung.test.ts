@@ -202,9 +202,10 @@ const abgleichVerdrahtet = (settingsJson: string, hookQuelle: string, geschuetzt
   const s = JSON.parse(settingsJson) as { hooks?: Record<string, { hooks: { args?: string[] }[] }[]> };
   const zeigt = (ereignis: string): boolean => (s.hooks?.[ereignis] ?? []).some((e) => e.hooks.some((h) => (h.args ?? []).some((a) => a.endsWith(HOOK))));
   if (!zeigt("SessionStart") || !zeigt("SessionEnd") || zeigt("Stop") || zeigt("SubagentStop")) return false;
-  const ziel = /new URL\("\.\/([\w.-]+\.mjs)", import\.meta\.url\)/.exec(hookQuelle)?.[1];
-  if (!ziel) return false;
-  return lokaleImporteTransitiv([`scripts/${ziel}`, HOOK], lies).every(geschuetzt);
+  // jedes Spawn-Ziel des Hooks (Nachlieferer, seit factory#314 auch der Wochenbericht-Lauf) samt seiner Importe muss geschützt sein
+  const ziele = [...hookQuelle.matchAll(/new URL\("\.\/([\w.-]+\.mjs)", import\.meta\.url\)/g)].map((m) => `scripts/${m[1]}`);
+  if (ziele.length === 0) return false;
+  return lokaleImporteTransitiv([...ziele, HOOK], lies).every(geschuetzt);
 };
 
 describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
@@ -351,7 +352,8 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     // Grün: env-Zeilen vertauscht
     assert.ok(taktWorkflowRobust(yml.replace(tok, "").replace(gh, tok + gh)), "Token zuerst");
     // Grün: env nach run
-    const env = "        env:\n" + gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok;
+    const anlass = "          LANGFUSE_ANLASS: ${{ inputs.langfuse_anlass }}\n"; // factory#314: der Input kommt nur per env
+    const env = "        env:\n" + gh + "          GITHUB_REPOSITORY: ${{ github.repository }}\n" + tok + anlass;
     const run = "        run: node scripts/board-takt.mjs\n";
     assert.ok(yml.includes(env + run), "env vor run in der Vorlage");
     assert.ok(taktWorkflowRobust(yml.replace(env + run, run + env)), "env nach run");
@@ -419,6 +421,8 @@ describe("Automatischer Abgleich verdrahtet (#1578)", () => {
     assert.ok(!abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(echte.filter((p) => !p.includes("langfuse-otlp"))), read), "langfuse-otlp.mjs fehlt in der Liste");
     const ungeschuetzt = hookQuelle.replace("./langfuse-nachliefern.mjs", "./transkript-kopie.mjs");
     assert.ok(!abgleichVerdrahtet(settings, ungeschuetzt, g, (rel) => (rel === "scripts/transkript-kopie.mjs" ? "" : read(rel))), "Spawn-Ziel ungeschützt");
+    const wochenUngeschuetzt = hookQuelle.replace("./langfuse-wochenbericht.mjs", "./transkript-kopie.mjs");
+    assert.ok(!abgleichVerdrahtet(settings, wochenUngeschuetzt, g, (rel) => (rel === "scripts/transkript-kopie.mjs" ? "" : read(rel))), "zweites Spawn-Ziel (Wochenbericht-Lauf) ungeschützt");
     assert.ok(!abgleichVerdrahtet(settings, "kein Spawn-Ziel", g, read), "Spawn-Ziel nicht erkennbar");
   });
 });

@@ -5,6 +5,8 @@
  *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
  *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, Füllstand) an die Spitze des
  *     Boards holen (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket); unter der Schwelle schiebt der Takt nichts.
+ * Mit dem Config-Schlüssel `langfuseWochenbericht` (factory#314) legt der Takt das Status-Ticket nur bei einem Anlass an (`LANGFUSE_ANLASS` aus dem Dispatch-Input `langfuse_anlass`) oder nach
+ * `wochenOhneLaufMax` Wochen ohne Status-Ticket am Montags-Cron; ohne den Schlüssel bleibt alles wie bisher (Entscheidung: scripts/langfuse-takt.mjs).
  * Im Bezieher (Sync-Stand vorhanden), dessen Factory-Board das Repo der Fabrik führt, legt der Takt nur das Status-Ticket im eigenen Repo an (`bezieherTakt`, factory#195); das Harness-Sammelticket pflegt dort die Fabrik.
  * Die Entscheidungen sind pur und getestet (test/board-takt.test.ts, test/langfuse-takt.test.ts), nur die gh-Aufrufe in `main` sind es nicht.
  *
@@ -52,7 +54,7 @@ import {
 
 import { aufnahmePlan } from "./board-plan-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { WURZEL, bestaetigeAnlegen, entscheideTakt, fuehreStatusAus, statusSucheAnfrage, vorgaengerAusSuche } from "./langfuse-takt.mjs";
+import { WURZEL, bestaetigeAnlegen, entscheideTakt, fuehreStatusAus, statusSucheAnfrage, vorgaengerAusSuche, wochenberichtAus } from "./langfuse-takt.mjs";
 import { HARNESS_TAKT_KOMMENTARE, PRODUKT_QUOTE, befundKommentare, fuellstandVon, harnessIssuesAnfrage, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTicketMerges } from "./produktquote-lib.mjs";
 
 // Die Quote liegt in produktquote-lib.mjs (auch factory-kennzahlen.mjs braucht sie); die API dieses Skripts bleibt stabil.
@@ -254,10 +256,10 @@ function statusFensterAb({ vorgaenger, offene, jetzt }) {
  * Der Status-Schritt des Takts (beide Wege): entscheiden, vor dem Anlegen per Zweitabfrage bestätigen (die REST-Liste hinkt bei frischen Tickets nach, fail-closed, #1866), ausführen und die
  * Board-Liste nachziehen. `label` = Label der Zweitabfrage (`null`: ohne Label), `ziel` (nur im Bezieher, factory#195) = `langfuseZiel` für Board und Label beim Anlegen. Liefert `{ fehler, items }`.
  */
-function statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label, token, dry, config, io, items, ziel }) {
+function statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label, token, dry, config, io, items, ziel, anlass }) {
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
-  const vorEntscheidung = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt });
+  const vorEntscheidung = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss, jetzt, anlass, wochenbericht: wochenberichtAus(config) });
   const e = bestaetigeAnlegen(vorEntscheidung, { zweit: () => io.frischeOffeneIssues({ repo, label, anzahl: 50, mitBoard: false }) });
   for (const w of e.warnungen) io.log(`::warning::${w}`);
   io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
@@ -285,7 +287,7 @@ function sucheVorgaenger({ repo, offene, io }) {
  * Takt im Bezieher (factory#195, ADR 0031 Punkt 4): das Factory-Board führt das Repo der Fabrik. Status-Ticket (Board und Label laut `langfuseZiel`) und Board-Wächter laufen im eigenen Repo;
  * Harness-Sammelticket und Quotenzeile pflegt der Takt der Fabrik. Gezählt werden nur die Commits von main des eigenen Repos. Liefert `{ fehler }`.
  */
-function bezieherTakt({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt }) {
+function bezieherTakt({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt, anlass }) {
   let ziel;
   try {
     ziel = langfuseZiel(config, { bezieher: true });
@@ -305,7 +307,7 @@ function bezieherTakt({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt }
   else {
     const abStatus = statusFensterAb({ vorgaenger: suche.vorgaenger, offene, jetzt });
     const commits = holeQuotenCommits({ quellen: [{ repo, rolle: null }], lies: quotenCommitLeser({ gh: io.ghJson, repo, since: abStatus, env: io.env }) });
-    const r = statusSchritt({ offene, commits, abStatus, vorgaenger: suche.vorgaenger, ausloeser, jetzt, repo, label: ziel.label, token, dry, config, io, items, ziel });
+    const r = statusSchritt({ offene, commits, abStatus, vorgaenger: suche.vorgaenger, ausloeser, jetzt, repo, label: ziel.label, token, dry, config, io, items, ziel, anlass });
     ({ items } = r);
     fehler = r.fehler;
   }
@@ -387,10 +389,10 @@ function harnessSchritt({ items, offene, repo, io, commits, abHarness, harnessIs
  * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
  * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
  */
-export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config, bezieher = false }) {
+export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO, config, bezieher = false, anlass }) {
   const harnessLabel = labelAus(config, "harness");
   const fuehrt = zielRepoFuer([harnessLabel], config); // das Repo, dessen Issues das Factory-Board führt
-  if (!gleichesRepo(fuehrt, repo)) return (bezieher ? bezieherTakt : nurWaechter)({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt });
+  if (!gleichesRepo(fuehrt, repo)) return (bezieher ? bezieherTakt : nurWaechter)({ repo, jetzt, dry, token, config, io, ausloeser, fuehrt, anlass });
   const gelesen = leseOffene(io, repo);
   if (gelesen.fehler) return { fehler: true };
   const offene = gelesen.offene;
@@ -426,7 +428,7 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
   for (const nr of doppelt) io.log(`::warning::Board-Wächter: #${nr} steht auf beiden Boards, es zählt das Board laut Trennregel.`);
   let items = roh ? factoryListe(roh.factory, doppelt, config) : null;
 
-  const s = statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label: harnessLabel, token, dry, config, io, items });
+  const s = statusSchritt({ offene, commits, abStatus, vorgaenger, ausloeser, jetzt, repo, label: harnessLabel, token, dry, config, io, items, anlass });
   let fehler = s.fehler;
   items = s.items;
 
@@ -461,6 +463,7 @@ export function main(env = process.env, { argv = process.argv.slice(2), io = ECH
     dry: aufruf.werte["dry-run"] === true,
     repo: REPO,
     ausloeser: env.GITHUB_EVENT_NAME || "schedule",
+    anlass: env.LANGFUSE_ANLASS,
     token: env.PROJECT_TOKEN,
     io: { ...io, env },
     config: ladeConfig(),

@@ -253,3 +253,41 @@ export function renderWochenbericht(montag, projektFilter, a) {
 export function wochenJson(montag, projektFilter, a) {
   return { status: "bericht", woche: montag, projektFilter, vermerk: a.vermerk, summe: a.kennzahlen, erfassungsprobe: a.probe, datenluecken: a.bericht.luecken, schwellen: a.schwellen, urteil: a.urteil };
 }
+
+// ── Wochenbericht-Lauf (factory#314) ─────────────────────────────────────────
+
+/**
+ * Pur: Termin des automatischen Wochenbericht-Laufs. `montag` = Montag der letzten vollen Woche (UTC), `faellig` ab Dienstag 00:00Z nach
+ * ihrem Ende (Montag + 8 Tage), `meldenAb` ab Donnerstag 00:00Z (Montag + 10 Tage): ab dann wird ein fehlender Bericht gemeldet.
+ */
+export function wochenberichtTermin(jetzt) {
+  const montag = letzteVolleWoche(new Date(jetzt));
+  const ms = Date.parse(`${montag}T00:00:00.000Z`);
+  const t = new Date(jetzt).getTime();
+  return { montag, faellig: t >= ms + 8 * MS_TAG, meldenAb: t >= ms + 10 * MS_TAG };
+}
+
+/**
+ * Pur: Stand einer Woche aus ihrer `<montag>.json`: `erledigt` (Bericht ohne Schwellenüberschreitung, `gemeldet`, `ruhe`), `melden` (Bericht mit
+ * Schwellenüberschreitung, Meldung noch offen) oder `offen` (fehlt, kaputt, `unerreichbar`, `keine-daten`, `fehler`). Ohne Bericht nie `erledigt`.
+ */
+export function wochenStand(json) {
+  const status = json && typeof json === "object" ? json.status : undefined;
+  if (status === "bericht") return json.urteil?.agentLaufNoetig ? "melden" : "erledigt";
+  return status === "gemeldet" || status === "ruhe" ? "erledigt" : "offen";
+}
+
+/** Pur: Ordner der Wochenberichte eines Repos (`owner/name`) unter `home` (Standard `~`, die Darstellung für den Ticket-Body). Einzige Quelle des Pfads. */
+export function wochenberichtAblage(repo, home = "~") {
+  return `${home}/.claude/state/langfuse-wochenbericht/${String(repo).replace("/", "__")}`;
+}
+
+/**
+ * Pur: Anlass-Text der Auslösung (öffentlich im Body des Status-Tickets, nie roher Fehlertext): `art` `schwelle` (mit `gruende` des Urteils),
+ * `fehlt` (mit `klasse` `unerreichbar` oder `fehler`) oder `ohne-daten` (mit `commits`).
+ */
+export function anlassText({ art, montag, gruende = [], klasse, commits }) {
+  if (art === "schwelle") return `Wochenbericht ${montag}: Agent-Lauf nötig (${gruende.map((g) => `${g.schwelle} Ist ${Number(g.ist).toFixed(1)}, Soll höchstens ${g.soll}`).join("; ")})`;
+  if (art === "ohne-daten") return `Wochenbericht ${montag}: Woche ohne Daten bei ${commits} Commits auf main (Erfassung prüfen)`;
+  return `Wochenbericht ${montag} fehlt: ${klasse === "unerreichbar" ? "Langfuse unerreichbar" : "Fehler im Live-Weg"} (Details im lokalen Log)`;
+}

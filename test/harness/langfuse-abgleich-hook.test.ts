@@ -11,6 +11,7 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fixture } from "../support/tmp-fixture";
@@ -34,11 +35,12 @@ type Log = Record<string, unknown> & { ausloeser: string; lock: string; sessions
 // Zugangsdaten-Lesen (kindEnv u. a.) in der Lib langfuse-zugang.mjs, kindArgs und starte im Einstieg.
 const H = { ...rawHookEinstieg, ...rawZugang } as unknown as {
   kindArgs: (i: { event?: string; session?: unknown; source?: string }) => string[] | null;
+  wochenArgs: (i: { event?: string; session?: unknown; source?: string }, wurzel: string) => string[] | null;
   leseZugang: (t: string) => Record<string, string>;
   leseSecretDatei: (t: string) => string | undefined;
   lesePluginOptionen: (t: string) => Record<string, string>;
   kindEnv: (env: Record<string, string>, home: string, lies?: (p: string) => string) => Record<string, string>;
-  starte: (t: string, o: { spawn: (...a: unknown[]) => Kind; env?: Record<string, string>; execPath?: string; home?: string }) => boolean;
+  starte: (t: string, o: { spawn: (...a: unknown[]) => Kind; env?: Record<string, string>; execPath?: string; home?: string; wurzel?: string }) => boolean;
 };
 type Kind = { on: (e: string, f: () => void) => void; unref: () => void };
 // Wartezeit und hookLauf im Einstieg, Lock, Log und gesperrterLauf in der Lib langfuse-lock.mjs.
@@ -114,20 +116,69 @@ const fakeSpawn = () => {
 };
 const START = JSON.stringify({ hook_event_name: "SessionStart", session_id: "s1", source: "startup", cwd: "C:/repo" });
 
+describe("wochenArgs: Argumente des Wochenbericht-Kinds (factory#314)", () => {
+  test.each([
+    ["SessionStart startup", { event: "SessionStart", session: "s1", source: "startup" }, true],
+    ["SessionStart resume", { event: "SessionStart", session: "s1", source: "resume" }, true],
+    ["SessionStart clear", { event: "SessionStart", session: "s1", source: "clear" }, true],
+    ["SessionStart compact", { event: "SessionStart", session: "s1", source: "compact" }, false],
+    ["SessionStart ohne source", { event: "SessionStart", session: "s1" }, false],
+    ["SessionEnd", { event: "SessionEnd", session: "s1" }, false],
+    ["SessionEnd mit source startup", { event: "SessionEnd", session: "s1", source: "startup" }, false],
+    ["Stop", { event: "Stop", session: "s1" }, false],
+    ["Stop mit source startup", { event: "Stop", session: "s1", source: "startup" }, false],
+    ["verdächtige Session-ID", { event: "SessionStart", session: "--x", source: "startup" }, false],
+    ["leer", {}, false],
+  ])("%s", (_n, eingabe, laeuft) => {
+    expect(H.wochenArgs(eingabe, "/w")).toEqual(laeuft ? ["--ausloeser", "sessionstart", "--wurzel", "/w"] : null);
+  });
+});
+
 describe("starte: losgelöster Kindprozess", () => {
-  test("Spawn-Optionen exakt: detached, windowsHide, stdio ignore, cwd = Home (nie der Worktree), genau ein unref, error-Handler", () => {
+  test("Spawn-Optionen exakt: detached, windowsHide, stdio ignore, cwd = Home (nie der Worktree), je Kind ein unref und ein error-Handler; am SessionStart zwei Kinder", () => {
     const f = fakeSpawn();
     const home = fixture({});
-    const ok = H.starte(START, { spawn: f.spawn, env: { A: "1" }, execPath: "node-pfad", home });
+    const ok = H.starte(START, { spawn: f.spawn, env: { A: "1" }, execPath: "node-pfad", home, wurzel: "/w" });
     expect(ok).toBe(true);
-    expect(f.aufrufe).toHaveLength(1);
-    const [a] = f.aufrufe;
+    expect(f.aufrufe).toHaveLength(2);
+    const [a, w] = f.aufrufe;
     expect(a.cmd).toBe("node-pfad");
     expect(a.args[0]).toBe(SKRIPT("langfuse-nachliefern.mjs"));
     expect(a.args.slice(1)).toEqual(["--ausloeser", "sessionstart", "--aktuell", "s1"]);
-    expect(a.opts).toEqual({ detached: true, windowsHide: true, stdio: "ignore", cwd: home, env: { A: "1" } });
-    expect(f.kind.unrefs).toBe(1);
-    expect(f.kind.handler).toContain("error");
+    expect(w.cmd).toBe("node-pfad");
+    expect(w.args).toEqual([SKRIPT("langfuse-wochenbericht.mjs"), "--ausloeser", "sessionstart", "--wurzel", "/w"]);
+    for (const k of [a, w]) expect(k.opts).toEqual({ detached: true, windowsHide: true, stdio: "ignore", cwd: home, env: { A: "1" } });
+    expect(f.kind.unrefs).toBe(2);
+    expect(f.kind.handler).toEqual(["error", "error"]);
+  });
+
+  test("ohne Option wurzel ist die Repo-Wurzel des Hooks das Argument des Wochenbericht-Kinds", () => {
+    const f = fakeSpawn();
+    expect(H.starte(START, { spawn: f.spawn, home: fixture({}) })).toBe(true);
+    expect(f.aufrufe[1].args.slice(1)).toEqual(["--ausloeser", "sessionstart", "--wurzel", fileURLToPath(new URL("../../", import.meta.url))]);
+  });
+
+  test("SessionEnd startet genau das Nachlieferer-Kind, kein Wochenbericht-Kind", () => {
+    const f = fakeSpawn();
+    const ende = JSON.stringify({ hook_event_name: "SessionEnd", session_id: "s1" });
+    expect(H.starte(ende, { spawn: f.spawn, home: fixture({}) })).toBe(true);
+    expect(f.aufrufe).toHaveLength(1);
+    expect(f.aufrufe[0].args[0]).toBe(SKRIPT("langfuse-nachliefern.mjs"));
+  });
+
+  test("wirft der zweite Spawn, ist das erste Kind trotzdem gestartet und starte liefert true; wirft der erste, startet das zweite", () => {
+    const aufrufe: string[] = [];
+    const bauSpawn = (wirftBei: string) => (...a: unknown[]): Kind => {
+      const name = (a[1] as string[])[0].endsWith("langfuse-wochenbericht.mjs") ? "wochen" : "nachliefern";
+      if (name === wirftBei) throw new Error("EPERM");
+      aufrufe.push(name);
+      return { on: () => {}, unref: () => {} };
+    };
+    expect(H.starte(START, { spawn: bauSpawn("wochen"), home: fixture({}) })).toBe(true);
+    expect(aufrufe).toEqual(["nachliefern"]);
+    aufrufe.length = 0;
+    expect(H.starte(START, { spawn: bauSpawn("nachliefern"), home: fixture({}) })).toBe(true);
+    expect(aufrufe).toEqual(["wochen"]);
   });
 
   test("das Kind bekommt die Zugangswerte aus den Dateien im Home (Fake-Werte), die Umgebung hat Vorrang", () => {
@@ -137,7 +188,7 @@ describe("starte: losgelöster Kindprozess", () => {
     });
     const f = fakeSpawn();
     expect(H.starte(START, { spawn: f.spawn, env: { LANGFUSE_BASE_URL: "http://env.test" }, execPath: "n", home })).toBe(true);
-    expect(f.aufrufe[0].opts.env).toEqual({ LANGFUSE_SECRET_KEY: "sk-fake-77", LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://env.test" });
+    for (const a of f.aufrufe) expect(a.opts.env).toEqual({ LANGFUSE_SECRET_KEY: "sk-fake-77", LANGFUSE_PUBLIC_KEY: "pk-fake", LANGFUSE_BASE_URL: "http://env.test" });
   });
 
   test.each([
@@ -151,7 +202,7 @@ describe("starte: losgelöster Kindprozess", () => {
     expect(f.aufrufe).toHaveLength(0);
   });
 
-  test("wirft spawn, endet starte mit false statt zu werfen", () => {
+  test("wirft spawn immer, endet starte mit false statt zu werfen", () => {
     const spawn = () => {
       throw new Error("EPERM");
     };

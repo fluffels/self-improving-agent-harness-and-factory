@@ -106,7 +106,7 @@
     "complexity": 5
   },
   "scripts/langfuse-takt.mjs": {
-    "complexity": 8
+    "complexity": 5
   },
   "scripts/langfuse-vorbedingung.mjs": {
     "complexity": 4
