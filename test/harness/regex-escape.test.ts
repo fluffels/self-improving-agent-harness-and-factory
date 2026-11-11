@@ -36,7 +36,7 @@ const AUFRUF = new RegExp(
   "g",
 );
 /** Ein Regex-Literal-Argument von `.replace(`, dessen Quelle den Backslash selbst maskiert (zwei Backslashes). */
-const MASKIERT_BACKSLASH = new RegExp("\\.replace\\(\\/[^/\\n]*\\\\\\\\[^/\\n]*\\/[a-z]*\\s*,");
+const MASKIERT_BACKSLASH = new RegExp("\\.replace\\(\\s*\\/[^/\\n]*\\\\\\\\[^/\\n]*\\/[a-z]*\\s*,");
 
 /** Die Befunde einer Zeile (leer = sauber). Pur. */
 export function befunde(zeile: string): string[] {
@@ -92,6 +92,10 @@ describe("Regex-Escape: Muster erkennen (Red-Green-Fixtures)", () => {
     assert.deepEqual(befunde(aufruf("/(a)/g", "$1")), []);
     assert.deepEqual(befunde("s.replace(/[.*]/g, (m) => m)"), []);
     assert.deepEqual(befunde(aufruf("/^" + BS + "//", BS2 + "/")), []);
+    // MASKIERT_BACKSLASH: Leerraum nach der Klammer und vor dem Komma, mehrere Flags (Fehlalarm-Schutz)
+    assert.deepEqual(befunde("s.replace( /[.*]" + BS2 + "/g, \"" + BS2 + "$&\")"), []);
+    assert.deepEqual(befunde("s.replace(/[.*]" + BS2 + "/g , \"" + BS2 + "$&\")"), []);
+    assert.deepEqual(befunde(aufruf("/[.*+?^${}()|[]" + BS2 + "]/gi", BS2 + "$&")), []);
     // Pfadtrenner-Tausch (Ersatz ist nur der Backslash selbst) ist kein Escape
     assert.deepEqual(befunde(aufruf("/" + BS + "//g", BS2)), []);
   });
