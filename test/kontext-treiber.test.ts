@@ -958,6 +958,12 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
     expect(r.nettoMitWarmstart).toBeGreaterThan(0);
     expect(r.empfehlung).toBe("1h");
   });
+  test("Netto der Kette genau 0 ohne Warmstart-Ersparnis: 5m (Netto mit Warmstart muss > 0 sein)", () => {
+    const roh = (i: number) => ({ offen: false, sessions: [`s${i}`], ttl: { calls: 1, uebersprungen: 0, pausenUeber5: 0, neuaufbauUeber5: 0, vermeidbar: 0, ueber60: 0, ist: 1, sim: 1, erster: null, ersterMs: null, letzterMs: null } });
+    const r = (K as unknown as { ttlGegenrechnung: (a: object[]) => Ttl }).ttlGegenrechnung(Array.from({ length: 10 }, (_, i) => roh(i)));
+    expect([r.laeufe, r.netto, r.nettoMitWarmstart]).toEqual([10, 0, 0]);
+    expect(r.empfehlung).toBe("5m");
+  });
 
   describe("CLI", () => {
     const P = (K as unknown as { parseArgs: (a: string[]) => { ttl?: boolean; jeTicket?: boolean; fehler?: string } }).parseArgs;
