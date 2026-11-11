@@ -179,8 +179,8 @@ describe("Datenlücken und Bereinigung", () => {
     expect(b.roh).toEqual({ count: 13, cost: 5 });
     expect(b.luecken).toContain("Kosten unvollständig: 3 Calls in 1 Gruppen ohne Preis (claude-opus-5-5)");
     expect(L.renderMarkdown(b)).toContain("- Kosten unvollständig: 3 Calls in 1 Gruppen ohne Preis (claude-opus-5-5)");
-    const zwei = rep(exp("gesamt", [{ ...g(...R2, 3, 0), sum_totalCost: null }, { ...g(...R1, 2, 0), sum_totalCost: null }, { ...g("X", "Y", null, null, 1, 0), sum_totalCost: null }]), tageVoll);
-    expect(zwei.luecken).toContain("Kosten unvollständig: 6 Calls in 3 Gruppen ohne Preis (claude-opus-5-5, claude-sonnet-5-5, unzugeordnet)");
+    const zwei = rep(exp("gesamt", [{ ...g(...R2, 3, 0), sum_totalCost: null }, { ...g(...R1, 2, 0), sum_totalCost: null }, { ...g("X", "Y", null, null, 1, 0), sum_totalCost: null }, { ...g("Z", "Y", "claude-haiku-5-5", null, 1, 0), sum_totalCost: null }]), tageVoll);
+    expect(zwei.luecken).toContain("Kosten unvollständig: 7 Calls in 4 Gruppen ohne Preis (claude-haiku-5-5, claude-opus-5-5, claude-sonnet-5-5, unzugeordnet)");
   });
   test("Kosten null ohne Calls, belegte Kosten, oder in einer ausgeschlossenen Gruppe: keine Lücke", () => {
     const leer = rep(exp("gesamt", [g(...R1, 10, 5), { ...g(...R2, 0, 0), sum_totalCost: null }]), tageVoll);
