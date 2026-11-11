@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { normalizePath } from "./relativ-pfad.mjs";
 import { MUTATION_UMGEBUNG } from "./gate-befehl-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { quellenAus } from "./quellwurzeln-lib.mjs";
@@ -54,7 +55,7 @@ const alsPosix = (p) => p.replace(/\\/g, "/");
 
 /** Pur: macht aus einem Berichtsschlüssel (absolut, Windows-Trenner, `./`) einen Pfad relativ zur Wurzel. */
 function relativ(schluessel, wurzel) {
-  const k = alsPosix(schluessel).replace(/^\.\//, "");
+  const k = normalizePath(schluessel);
   const w = alsPosix(wurzel).replace(/\/+$/, "");
   return k.startsWith(`${w}/`) ? k.slice(w.length + 1) : k;
 }
@@ -177,9 +178,9 @@ function lauf({ bereiche, ordner, spawn, lies, schreibe, env, wurzel, out, err }
   return 0;
 }
 
-function main(argv) {
-  const wurzel = join(import.meta.dirname, "..");
-  const exit = cli(argv, {
+/** Die echten Nähte (git, Spawn, Dateien, Temp-Ordner) für `cli`; getrennt von `main`, damit ein Test sie ohne Kindprozess prüfen kann. */
+export function echteNaehte(wurzel, env = process.env) {
+  return {
     lade: () => ladeProjektConfig(),
     git: (args) => execFileSync("git", args, { cwd: wurzel, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }),
     spawn: spawnSync,
@@ -187,12 +188,16 @@ function main(argv) {
     schreibe: (p, t) => writeFileSync(p, t),
     tempOrdner: () => mkdtempSync(join(tmpdir(), "mutation-lauf-")),
     entferne: (p) => rmSync(p, { recursive: true, force: true }),
-    env: process.env,
+    env,
     wurzel,
     out: console.log,
     err: console.error,
-  });
-  process.exitCode = exit;
+  };
+}
+
+function main(argv) {
+  const wurzel = join(import.meta.dirname, "..");
+  process.exitCode = cli(argv, echteNaehte(wurzel));
 }
 
 if (istDirektaufruf(import.meta.url)) main(process.argv.slice(2));

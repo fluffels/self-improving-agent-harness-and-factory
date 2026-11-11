@@ -3,6 +3,8 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/mutation-lauf.mjs";
 
@@ -20,6 +22,7 @@ const lib = raw as unknown as {
   aufBereicheFiltern(m: Mutant[], b: Bereich[]): { mutanten: Mutant[]; verworfen: number };
   formatiere(m: Mutant[], verworfen?: number): string[];
   cli(argv: string[], io: Io): number;
+  echteNaehte(wurzel: string, env?: Record<string, string>): Io;
 };
 
 const QUELLEN = { wurzeln: ["src"], endungen: [".mjs", ".ts"], ohne: [] };
@@ -110,6 +113,13 @@ describe("Bericht-Parser fail-closed", () => {
     const r = lib.berichtLesen(bericht(files), "/w");
     assert.deepEqual(r.mutanten?.map((x) => x.datei), ["src/a.mjs", "src/b.mjs", "src/c.mjs", "src/d.mjs"]);
     assert.deepEqual(lib.berichtLesen(bericht({ "C:\\w\\src\\a.mjs": { mutants: [m()] } }), "C:\\w").mutanten?.map((x) => x.datei), ["src/a.mjs"]);
+  });
+  test("Schlüssel mit Punkt am Ordnerende bleiben heil (kein ./ mitten im Pfad entfernt)", () => {
+    assert.deepEqual(lib.berichtLesen(bericht({ "/w/src/v1./a.mjs": { mutants: [m()] } }), "/w").mutanten?.map((x) => x.datei), ["src/v1./a.mjs"]);
+  });
+  test("ein Mutant ohne Mutator-Namen heißt „?“, nicht „undefined“", () => {
+    const r = lib.berichtLesen(bericht({ "src/a.mjs": { mutants: [m({ mutatorName: undefined })] } }), WURZEL);
+    assert.equal(r.mutanten?.[0].mutator, "?");
   });
   test("alle bekannten Status werden akzeptiert", () => {
     const s = ["Killed", "Survived", "NoCoverage", "Timeout", "CompileError", "RuntimeError", "Ignored", "Pending"];
@@ -250,6 +260,31 @@ describe("Ablauf", () => {
       assert.equal(log.out.length, 0, String(b));
       assert.match(log.err.join("\n"), /Fix:/);
     }
+  });
+  test("die Meldung nennt je Fall die Ursache: Bericht fehlt, kein gültiges JSON, kein files-Objekt", () => {
+    const fehlt = umgebung({ bericht: null });
+    lib.cli([], fehlt.io);
+    assert.match(fehlt.log.err.join("\n"), /Bericht fehlt/);
+    const kaputt = umgebung({ bericht: "{" });
+    lib.cli([], kaputt.io);
+    assert.match(kaputt.log.err.join("\n"), /kein gültiges JSON/);
+    const leer = umgebung({ bericht: "{}" });
+    lib.cli([], leer.io);
+    assert.match(leer.log.err.join("\n"), /ohne Objekt „files“/);
+  });
+  test("echteNaehte: der Temp-Ordner wird angelegt und von entferne wieder gelöscht, schreibe und lies sind ein Paar", () => {
+    const n = lib.echteNaehte("/w", { X: "1" });
+    assert.equal(n.wurzel, "/w");
+    assert.deepEqual(n.env, { X: "1" });
+    const ordner = n.tempOrdner();
+    try {
+      assert.ok(existsSync(ordner));
+      n.schreibe(join(ordner, "x.json"), "{\"a\":1}");
+      assert.equal(n.lies(join(ordner, "x.json")), "{\"a\":1}");
+    } finally {
+      n.entferne(ordner);
+    }
+    assert.equal(existsSync(ordner), false);
   });
   test("ein vorhandener alter Bericht wird nie gelesen: der Berichtspfad liegt im frischen Ordner", () => {
     const { io, log } = umgebung({ bericht: null, alt: gutBericht });

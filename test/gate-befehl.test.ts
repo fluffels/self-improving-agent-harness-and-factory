@@ -13,7 +13,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 type Config = Record<string, unknown>;
 interface Lauf { status?: number | null; error?: Error }
-interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, ...rest: unknown[]) => Lauf; cwd: string; out: (t: string) => void; err: (t: string) => void }
+interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, ...rest: unknown[]) => Lauf; cwd: string; out: (t: string) => void; err: (t: string) => void; env?: Record<string, string> }
 const lib = raw as unknown as {
   STANDARD_BEFEHLE: Record<string, string | null>;
   MUTATION_UMGEBUNG: { bereiche: string; bericht: string };
@@ -40,6 +40,7 @@ const umgebung = (config: Config = {}, lauf: Lauf = { status: 0 }) => {
     lade: () => { geladen++; return config; },
     spawn: (befehl, o, ...rest) => { aufrufe.push({ befehl, opt: o, rest }); return lauf; },
     cwd: "/wurzel",
+    env: {},
     out: (t) => out.push(t),
     err: (t) => err.push(t),
   };
@@ -170,8 +171,16 @@ describe("testGezielt mit angehängten Pfaden (factory#193)", () => {
   test("ohne Pfad endet testGezielt mit Exit 2 und Fix-Zeile", () => {
     const u = umgebung();
     assert.equal(lib.cli(["testGezielt"], u.opt), 2);
-    assert.match(u.err.join("\n"), /Fix:/);
+    assert.match(u.err.join("\n"), /testGezielt braucht mindestens einen Pfad[\s\S]*Fix:/);
     assert.equal(u.aufrufe.length, 0);
+  });
+  test("die Meldungen der Aufruf-Fehler nennen die Ursache, nicht nur die Fix-Zeile", () => {
+    const schlecht = umgebung();
+    assert.equal(lib.cli(["testGezielt", "a;b"], schlecht.opt), 2);
+    assert.match(schlecht.err.join("\n"), /Pfad „a;b“ enthält unerlaubte Zeichen/);
+    const zwei = umgebung();
+    assert.equal(lib.cli(["verify", "install"], zwei.opt), 2);
+    assert.match(zwei.err.join("\n"), /genau ein Gate-Befehl-Name erwartet/);
   });
   test("Shell-Metazeichen im Pfad enden mit Exit 2, nichts wird gestartet", () => {
     for (const pfad of ["a;b", "a b", "a&b", "a|b", "$(x)", "`x`", 'a"b', "a'b", "a>b", "a<b", "a*b", "a\nb", "a%b", "a!b", "a^b", "a(b)", "a#b", "~x", ""]) {
@@ -245,6 +254,29 @@ describe("mutation: opt-in Gate-Befehl (factory#299)", () => {
   });
   test("Vertrag: die Umgebungsvariablen heißen genau wie dokumentiert", () => {
     assert.deepEqual(lib.MUTATION_UMGEBUNG, { bereiche: "FACTORY_MUTATION_BEREICHE", bericht: "FACTORY_MUTATION_BERICHT" });
+  });
+});
+
+describe("mutation im Kindprozess: der Produktionsweg übergibt die Prozess-Umgebung (factory#299)", () => {
+  const lauf = (env: Record<string, string>) => {
+    const d = mkdtempSync(join(tmpdir(), "gate-befehl-mutation-"));
+    dirs.push(d);
+    const config = JSON.parse(readFileSync(join(WURZEL, "test/fixtures/projekt-fremd.json"), "utf8")) as Config;
+    config.befehle = { mutation: "node --version" };
+    const pfad = join(d, "projekt.json");
+    writeFileSync(pfad, JSON.stringify(config));
+    const basis: Record<string, string | undefined> = { ...process.env, VITEST: "1", FACTORY_PROJEKT_WURZEL: WURZEL, FACTORY_PROJEKT_CONFIG: pfad };
+    delete basis.FACTORY_MUTATION_BEREICHE;
+    delete basis.FACTORY_MUTATION_BERICHT;
+    return spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "mutation"], { cwd: WURZEL, encoding: "utf8", env: { ...basis, ...env } });
+  };
+  test("mit beiden Variablen startet die konfigurierte Zeile (Exit 0), ohne sie endet der Aufruf mit Exit 2", () => {
+    const mit = lauf({ FACTORY_MUTATION_BEREICHE: "/tmp/b.json", FACTORY_MUTATION_BERICHT: "/tmp/r.json" });
+    assert.equal(mit.status, 0, mit.stderr);
+    assert.match(mit.stderr, /Gate-Befehl mutation: node --version/);
+    const ohne = lauf({});
+    assert.equal(ohne.status, 2);
+    assert.match(ohne.stderr, /braucht die Umgebungsvariablen/);
   });
 });
 
