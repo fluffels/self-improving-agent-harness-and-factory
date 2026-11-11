@@ -5,13 +5,13 @@
  * und -Auswertung, Multimengen-Diff. Pur bis auf `findeSessions` (Dateisystem) und `holeMetrics` (Netz über `fetchImpl`).
  * Bewertung, Bericht und CLI stehen in langfuse-abgleich.mjs, der Schreibweg in langfuse-nachliefern.mjs.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { callsDerSitzung } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
+import { beobachtungsId, traceIdVon, subagentSpanId, scoreId } from "./langfuse-otlp.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
 export const RUHEFRIST_MIN = 30;
@@ -79,15 +79,8 @@ export function ledgerLesen(datei) {
   return { ledger: leeresLedger(), kaputt: true };
 }
 
-const sha = (text) => createHash("sha256").update(text).digest("hex");
-/** Observation-ID: 16 Hex, deterministisch aus Session und Message (idempotentes Nachtragen in 2/3). */
-export const beobachtungsId = (session, messageId) => sha(session + messageId).slice(0, 16);
-/** Trace-ID: 32 Hex, je Session ein Abgleich-Trace. */
-export const traceIdVon = (session) => sha(session).slice(0, 32);
-/** Span-ID eines Subagenten: 16 Hex, deterministisch aus Session und Agent-ID (Nachliefern sendet den Span je Session einmal). */
-export const subagentSpanId = (session, agentId) => sha(session + "agent:" + agentId).slice(0, 16);
-/** Score-ID: 32 Hex, deterministisch aus Name und Session (Upsert statt Dublette). */
-export const scoreId = (session, name) => sha("score:" + name + ":" + session).slice(0, 32);
+// Die ID-Funktionen stehen in langfuse-otlp.mjs (pur, ohne langfuse-api); hier nur weitergereicht.
+export { beobachtungsId, traceIdVon, subagentSpanId, scoreId };
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 

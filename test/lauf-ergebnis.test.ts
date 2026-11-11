@@ -27,7 +27,7 @@ type Pr = {
   closingIssuesReferences: { number: number }[];
 };
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
-type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string };
+type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean };
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
@@ -42,6 +42,7 @@ const roh = raw as {
   parseCommits: (log: string) => Commit[];
   ticketVon: (pr: Partial<Pr>) => number | null;
   nacharbeitVon: (e: { pr: number; ticket: number | null; mergeSha: string; mergedAt: string; commits: Commit[]; jetzt: Date }) => string;
+  fristAbgelaufen: (e: { mergedAt: string; jetzt: Date }) => boolean;
   ciFixRunden: (l: { sha: string; createdAt: string }[], von: string, bis: string) => number;
   bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date; konfigZeilen: Zeilen }) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
@@ -99,6 +100,17 @@ describe("Nacharbeit (14 Tage)", () => {
     assert.equal(nach([commit("Folge #40", tage(mod.NACHARBEIT_TAGE + 0.01))]), "nein");
     assert.equal(nach([commit("Folge #40", tage(mod.NACHARBEIT_TAGE))]), "folge", "genau 14 Tage zählt");
     assert.equal(nach([commit("Folge #40", tage(1), SHA)]), "nein", "eigener Commit");
+  });
+  test("fristAbgelaufen: genau Merge + 14 T ist abgelaufen, eine Millisekunde davor nicht; die Zeile trägt das Feld", () => {
+    const ende = new Date(new Date(MERGED).getTime() + mod.NACHARBEIT_TAGE * 86400000);
+    const davor = new Date(ende.getTime() - 1);
+    assert.equal(roh.fristAbgelaufen({ mergedAt: MERGED, jetzt: ende }), true);
+    assert.equal(roh.fristAbgelaufen({ mergedAt: MERGED, jetzt: davor }), false);
+    assert.equal(nach([], davor), "offen");
+    assert.equal(nach([], ende), "nein");
+    const zeile = (jetzt: Date) => mod.bewertePrs({ prs: [pr()], commits: [], ci: {}, festgefahren: {}, jetzt }).zeilen[0];
+    assert.equal(zeile(davor).fristAbgelaufen, false);
+    assert.equal(zeile(ende).fristAbgelaufen, true);
   });
   test("offenes Fenster ohne Treffer ist offen, mit Treffer bleibt der Treffer", () => {
     const innen = new Date(tage(3));

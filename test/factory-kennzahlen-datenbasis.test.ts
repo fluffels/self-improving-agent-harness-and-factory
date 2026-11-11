@@ -25,7 +25,7 @@ const t = (ticket: number): Ticket => ({ ticket, pr: ticket + 1000 });
 const karte = (e: Record<number, string[]>): Claims => new Map(Object.entries(e).map(([k, v]) => [Number(k), v.map((session) => ({ session, ts: "2026-11-01T10:00:00Z" }))]));
 const lauf = (zeilen: { pr: number; ticket: number | null }[]) =>
   JSON.stringify({
-    zeilen: zeilen.map((z) => ({ ...z, gemergt: "2026-11-02T10:00:00Z", ciFix: 0, nacharbeit: "keine", abnahme: null })),
+    zeilen: zeilen.map((z) => ({ ...z, gemergt: "2026-11-02T10:00:00Z", ciFix: 0, nacharbeit: "keine", fristAbgelaufen: true, abnahme: null })),
     kennzahlen: { prs: 0, ohneNacharbeit: 0, nachweisbareFenster: 0, nacharbeitOffen: 0, ciFixSumme: 0, festgefahrenSumme: 0, runde1MitBlocker: 0, mitBlockerFeld: 0, abnahme: { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 0 } },
   });
 

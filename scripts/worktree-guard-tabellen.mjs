@@ -1,7 +1,8 @@
 // Kein Shebang: Baustein des Worktree-Guards (scripts/worktree-guard-hook.mjs), wird von dessen Modulen und Tests importiert.
 /**
  * Tabellen, Kontext und Wort-Helfer des Worktree-Guards (#1311): Wrapper-Tabelle, bekannte git-Unterbefehle, der
- * Auswertungs-Kontext `makeCtx`, Pfad-Helfer und `peel` (Zuweisungen und Wrapper vor dem eigentlichen Kommando).
+ * Auswertungs-Kontext `makeCtx`, Pfad-Helfer und `peel` (Zuweisungen und Wrapper vor dem eigentlichen Kommando) sowie die
+ * Vormerkung statischer Shell-Variablen (`setVar`, `aufgeloest`, `bedingt`, `isoliert`, `kindShell`).
  * Pur und ohne Abhängigkeit von den Auswerter-Modulen (kein Import-Zyklus): `worktree-guard-git.mjs` und
  * `worktree-guard-eval.mjs` bauen darauf auf.
  *
@@ -86,6 +87,7 @@ export function makeCtx(cwd, deps) {
     aliases: new Map(),
     expanding: new Set(),
     gitEnv: { gitDir: null, workTree: null },
+    vars: new Map(), // Shell-Variablen mit statischem Literal-Wert (null: dynamisch/unbekannt), Scoping wie Subshell/Zweige
     seen: new Set(),
     depth: 0,
     aliasCache: new Map(),
@@ -219,4 +221,57 @@ export function peel(words) {
     if (i < 0) return { ...res, noop: true };
   }
   return res;
+}
+
+// ── Shell-Variablen mit statischem Literal-Wert (L4: Parität zum PowerShell-Guard) ──
+// Geschlossene Formenliste: aufgelöst wird nur ein Wort, das im Quelltext genau `$V`, `${V}`, `"$V"`, `"${V}"` oder eines davon mit
+// angehängtem `/<literal>` ist. Alles andere (`$V$X`, `a$V`, `${V:-x}`, `$A"T"`) bleibt dynamisch.
+const VAR_REF = String.raw`\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})(\/[A-Za-z0-9_.\/-]*)?`;
+const VAR_FORM = new RegExp(`^(?:${VAR_REF}|"${VAR_REF}")$`);
+
+/** Wert einer Zuweisung `NAME=wert` vormerken: nur ein statischer, nicht leerer Wert ohne `~` (sonst null = dynamisch). */
+export function setVar(c, name, word) {
+  const statisch = !word.dynamic && word.text !== "" && !word.text.includes("~");
+  c.vars.set(name, statisch ? word.text : null);
+}
+
+/** Das Wort mit aufgelöster Variable (statisch, nicht dynamisch), sonst unverändert. */
+export function aufgeloest(c, w) {
+  const m = VAR_FORM.exec(w.raw); // ohne `raw` (undefined) und bei statischen Wörtern passt keine Form
+  if (!m) return w;
+  const wert = c.vars.get(m[1] ?? m[2] ?? m[4] ?? m[5]);
+  if (typeof wert !== "string") return w;
+  return { ...w, text: wert + (m[3] ?? m[6] ?? ""), dynamic: false };
+}
+
+/** Vormerkung der Variablen für einen Teillauf: Änderungen darin gelten danach als unbekannt (null). */
+export function bedingt(c, fn) {
+  const vorher = new Map(c.vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of c.vars) if (vorher.get(k) !== v) c.vars.set(k, null);
+  }
+}
+
+/** Teillauf in einer Kind-Shell (`bash -c`, Heredoc, `!`-Alias): sie erbt nur exportierte Variablen, die der Guard nicht
+ *  unterscheidet; darum startet sie ohne Vormerkung (`$V` bleibt dynamisch), und nichts wirkt nach außen. */
+export function kindShell(c, fn) {
+  const vorher = c.vars;
+  c.vars = new Map();
+  try {
+    return fn();
+  } finally {
+    c.vars = vorher;
+  }
+}
+
+/** Teillauf in eigener Subshell: Variablenänderungen wirken nicht nach außen. */
+export function isoliert(c, fn) {
+  const vorher = new Map(c.vars);
+  try {
+    return fn();
+  } finally {
+    c.vars = vorher;
+  }
 }

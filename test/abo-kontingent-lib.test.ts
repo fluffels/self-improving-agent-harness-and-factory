@@ -8,7 +8,7 @@ import * as kennzahlenRaw from "../scripts/factory-kennzahlen.mjs";
 
 type Punkt = { stand: number; sevenDay?: { pct: number; resetsAt: number }; fiveHour?: { pct: number; resetsAt: number } };
 type Fenster = { luecke: string } | { delta: number };
-type Ticketzeile = { ticket: number; pr: number; gemergt: string; blocker: { lens: string; n: number }[] | null; nacharbeit: string };
+type Ticketzeile = { ticket: number; pr: number; gemergt: string; blocker: { lens: string; n: number }[] | null; nacharbeit: string; fristAbgelaufen: boolean };
 type Auswertung = {
   zeilen: { ticket: number; pr: number; pp?: number; luecke?: string }[];
   gemessen: number;
@@ -29,11 +29,11 @@ const L = raw as unknown as {
   gueltigeFolge: (p: Punkt[], limit: string) => { folge: Punkt[]; veraltet: Punkt[] };
   claimAbfrage: (n: number[]) => string;
   claimsAusAntwort: (a: unknown, m: Map<number, string>) => Map<number, { claim?: number; luecke?: string }>;
-  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number; jetzt?: number; fristMs?: number }) => Auswertung;
+  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number }) => Auswertung;
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
-  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string; jetzt?: number }) => { luecke?: string } & Partial<Auswertung>;
+  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string }) => { luecke?: string } & Partial<Auswertung>;
   erstelle: (a: unknown, io: unknown) => { bericht: { kontingent?: unknown }; exit: number };
   renderMarkdown: (b: unknown) => string;
 };
@@ -300,10 +300,9 @@ describe("Claims", () => {
 describe("aboKontingent und Abschnitt", () => {
   const claim = T0;
   const merge = T0 + 60 * MIN;
-  const FRIST = 14 * 24 * 60 * MIN;
-  const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", ...extra });
+  const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", fristAbgelaufen: true, ...extra });
   const eins = (punkte: Punkt[], t: Ticketzeile[] = [zeile(1)], kaputt = 0) =>
-    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000, jetzt: merge + FRIST, fristMs: FRIST });
+    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000 });
 
   test("Messwert, Median und Kontrollzahl", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 14)]);
@@ -322,7 +321,7 @@ describe("aboKontingent und Abschnitt", () => {
   test("Quoten nur über gemessene Tickets; Blocker ohne Feld und offene Nacharbeit zählen nicht in den Nenner", () => {
     const t = [
       zeile(1, { blocker: [{ lens: "a", n: 2 }], nacharbeit: "folge" }),
-      zeile(2, { blocker: null, nacharbeit: "offen" }),
+      zeile(2, { blocker: null, nacharbeit: "offen", fristAbgelaufen: false }),
       zeile(3, { nacharbeit: "revert" }),
       zeile(4, { gemergt: new Date(merge + 500 * MIN).toISOString(), blocker: [{ lens: "a", n: 9 }], nacharbeit: "folge" }), // keine Messung: zählt nicht
     ];
@@ -335,11 +334,11 @@ describe("aboKontingent und Abschnitt", () => {
     const TAG = 24 * 60 * MIN;
     const jetzt = merge + 30 * TAG;
     const tage = (d: number) => new Date(jetzt - d * TAG).toISOString();
-    const t = [zeile(1, { gemergt: tage(3), nacharbeit: "folge" }), zeile(2, { gemergt: tage(20), nacharbeit: "nein" }), zeile(3, { gemergt: tage(20), nacharbeit: "folge" })];
+    const t = [zeile(1, { gemergt: tage(3), nacharbeit: "folge", fristAbgelaufen: false }), zeile(2, { gemergt: tage(20), nacharbeit: "nein" }), zeile(3, { gemergt: tage(20), nacharbeit: "folge" })];
     const stunde = (x: Ticketzeile, h: number) => Date.parse(x.gemergt) + h * 60 * MIN;
     const fern = jetzt / 1000 + 7 * 86_400;
     const punkte = [punkt(stunde(t[1], -1), 10, fern), punkt(stunde(t[1], 0), 11, fern), punkt(stunde(t[0], -1), 14, fern), punkt(stunde(t[0], 0), 15, fern)];
-    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt, fristMs: FRIST });
+    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt });
     expect(a.folge).toEqual({ n: 1, von: 2, offen: 1, offenMitFolge: 1 });
     const text = L.aboKontingentAbschnitt(a).join("\n");
     expect(text).toContain("- Folge-Quote (Nacharbeit, Frist abgelaufen): 50 % (1/2), offen: 1, davon schon mit Folge: 1");
@@ -394,7 +393,7 @@ describe("aboKontingent und Abschnitt", () => {
 });
 
 describe("ladeAboKontingent und Bericht", () => {
-  const tickets: Ticketzeile[] = [{ ticket: 7, pr: 70, gemergt: "2026-10-15T11:00:00Z", blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein" }];
+  const tickets: Ticketzeile[] = [{ ticket: 7, pr: 70, gemergt: "2026-10-15T11:00:00Z", blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", fristAbgelaufen: true }];
   const von = "2026-10-15T00:00:00Z";
   const bis = "2026-10-16T00:00:00Z";
   const claimAntwort = { data: { repository: { i7: { timelineItems: { nodes: [{ createdAt: "2026-10-15T10:00:00Z" }] } } } } };
@@ -406,12 +405,11 @@ describe("ladeAboKontingent und Bericht", () => {
     expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 2.73 }]); // 3 pp über 66 min, davon 60 min im Ticket-Fenster
     expect(aufrufe).toHaveLength(1);
   });
-  test("die Frist läuft ab dem Merge: vor 14 Tagen zählt eine Folge als offen, danach als Folge (jetzt eingespritzt)", () => {
-    const folgeTicket: Ticketzeile[] = [{ ...tickets[0], nacharbeit: "folge" }];
-    const merge = Date.parse("2026-10-15T11:00:00Z");
+  test("die Frist kommt aus dem Feld fristAbgelaufen der Lauf-Zeile: laufende Frist zählt eine Folge als offen, abgelaufene als Folge", () => {
     const io = { gh: () => claimAntwort, lies: () => verlauf, pfad: "/x" };
-    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 13 * 86_400_000 }).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
-    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 15 * 86_400_000 }).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
+    const folge = (fristAbgelaufen: boolean): Ticketzeile[] => [{ ...tickets[0], nacharbeit: "folge", fristAbgelaufen }];
+    expect(K.ladeAboKontingent({ von, bis, tickets: folge(false) }, io).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
+    expect(K.ladeAboKontingent({ von, bis, tickets: folge(true) }, io).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
     const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0], ticket: 100 + i, pr: 500 + i }));

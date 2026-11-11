@@ -5,7 +5,7 @@
  * (Verzeichnisse nach Erfolg bzw. Misserfolg des letzten Gliedes): `a && b` wertet b aus S, `a || b` aus F, das
  * Kettenende ist S ∪ F. Ein `cd` auf ein statisches, existierendes Ziel ersetzt die Menge exakt; ein fehlendes Ziel
  * oder zu viele Argumente lassen sie unverändert; ein dynamisches Ziel fügt Session-`cwd` und einen Unbekannt-Marker
- * hinzu. Subshells, Substitutionen, Pipelines und `&`-Listen wirken nicht nach außen; `{ … }` und `eval` schon;
+ * hinzu (eine vorher statisch zugewiesene Variable als `$V`/`${V}`/`"$V"`/`$V/<literal>` gilt als statisch, `c.vars`; sonst dynamisch). Subshells, Substitutionen, Pipelines und `&`-Listen wirken nicht nach außen; `{ … }` und `eval` schon;
  * if/Schleifen/case vereinigen die Enden aller Zweige. Die git-Aufrufe wertet `worktree-guard-git.mjs` aus.
  *
  * Reines Node-Skript (nur Builtins).
@@ -37,14 +37,22 @@ import {
   tildeOf,
   union,
   ASSIGN_RE,
+  aufgeloest,
+  bedingt,
+  isoliert,
+  kindShell,
+  setVar,
   baseName,
   ausserhalbRepo,
 } from "./worktree-guard-tabellen.mjs";
 
+const APPEND_RE = /^([A-Za-z_]\w*)\+=/;
+const VAR_AENDERER = new Set(["unset", "read", "mapfile", "readarray", "getopts", "printf"]);
+
 // ── Listen, Ketten, Pipelines ───────────────────────────────────────────────
 function evalList(list, D, c) {
   for (const it of list.items) {
-    const r = evalAndOr(it.andor, D, c);
+    const r = it.bg ? isoliert(c, () => evalAndOr(it.andor, D, c)) : evalAndOr(it.andor, D, c);
     if (!it.bg) D = union(r.S, r.F); // Hintergrund: läuft in einer Subshell, D bleibt
   }
   return D;
@@ -52,7 +60,15 @@ function evalList(list, D, c) {
 
 function evalAndOr(andor, D, c) {
   let { S, F } = evalPipeline(andor.first, D, c);
-  for (const { op, pipe } of andor.rest) {
+  bedingt(c, () => {
+    ({ S, F } = evalRest(andor.rest, S, F, c));
+  });
+  return { S, F };
+}
+
+/** Die Glieder nach dem ersten: ihre Zuweisungen gelten nur bedingt (siehe `bedingt`). */
+function evalRest(rest, S, F, c) {
+  for (const { op, pipe } of rest) {
     const r = evalPipeline(pipe, op === "&&" ? S : F, c);
     if (op === "&&") {
       F = union(F, r.F);
@@ -69,15 +85,17 @@ function evalPipeline(p, D, c) {
   let r;
   if (p.cmds.length === 1) r = evalCmd(p.cmds[0], D, c, {});
   else {
-    p.cmds.forEach((cmd, i) => evalCmd(cmd, D, c, { pipeSrc: i > 0 ? p.cmds[i - 1] : null })); // jedes Glied in einer Subshell
+    isoliert(c, () => p.cmds.forEach((cmd, i) => evalCmd(cmd, D, c, { pipeSrc: i > 0 ? p.cmds[i - 1] : null }))); // jedes Glied in einer Subshell
     r = { S: D, F: D };
   }
   return p.neg ? { S: r.F, F: r.S } : r;
 }
 
 function evalSubsts(node, D, c) {
-  for (const l of node.substs ?? []) evalList(l, D, c);
-  for (const h of node.heredocs ?? []) for (const l of h.substs) evalList(l, D, c);
+  isoliert(c, () => {
+    for (const l of node.substs ?? []) evalList(l, D, c);
+    for (const h of node.heredocs ?? []) for (const l of h.substs) evalList(l, D, c);
+  });
 }
 
 function evalCmd(cmd, D, c, opts) {
@@ -86,7 +104,7 @@ function evalCmd(cmd, D, c, opts) {
       return evalSimple(cmd, D, c, opts);
     case "subshell":
       evalSubsts(cmd, D, c);
-      evalList(cmd.body, D, c);
+      isoliert(c, () => evalList(cmd.body, D, c));
       return { S: D, F: D };
     case "group": {
       evalSubsts(cmd, D, c);
@@ -98,7 +116,8 @@ function evalCmd(cmd, D, c, opts) {
       return { S: D, F: D };
     default: {
       evalSubsts(cmd, D, c);
-      const r = evalCompound(cmd, D, c);
+      if (cmd.type === "for") c.vars.set(cmd.varName, null); // Schleifenvariable: dynamisch
+      const r = bedingt(c, () => evalCompound(cmd, D, c));
       return { S: r, F: r };
     }
   }
@@ -167,7 +186,7 @@ function cdEffect(name, args, D, c) {
   for (const d of real(D)) c.seen.add(d);
   const ops = cdOperanden(args);
   if (ops.length > 1) return { S: D, F: D }; // zu viele Argumente: cd schlägt fehl
-  const t = ops[0];
+  const t = ops[0] && aufgeloest(c, ops[0]);
   if (name === "popd" || (name === "pushd" && !t) || (t && (t.dynamic || t.text === "-"))) return dynamicState(D, c);
   if (!t) return { S: new Set([c.home(), c.cwd]), F: D }; // `cd` ohne Argument: Home
   const text = tildeOf(c, t.text);
@@ -182,6 +201,7 @@ function cdEffect(name, args, D, c) {
 // ── Zuweisungen, Aliase, Funktionen ─────────────────────────────────────────
 function noteEnv(c, env) {
   for (const { name, word } of env) {
+    setVar(c, name, word);
     if (name === "GIT_DIR") c.gitEnv.gitDir = word;
     else if (name === "GIT_WORK_TREE") c.gitEnv.workTree = word;
   }
@@ -282,14 +302,14 @@ function shellCall(args, cmd, opts, hereString, D, c) {
   if (a.sawC) {
     if (!a.script) return;
     if (a.script.dynamic) ask(c, real(D), "Interpreter mit nicht statischem Text (`bash -c \"$X\"`).", true);
-    else evalString(a.script.text, D, c);
+    else kindShell(c, () => evalString(a.script.text, D, c));
     return;
   }
   if (a.operand && !a.stdinFlag) return; // `bash skript.sh`: Dateiinhalt ist nicht auswertbar
   const text = stdinText(cmd, opts, hereString);
   if (text === undefined) return; // keine Eingabe (interaktive Shell)
   if (text === null) ask(c, real(D), "Interpreter mit nicht statischer Eingabe (Heredoc/Pipe).", true);
-  else evalString(text, D, c);
+  else kindShell(c, () => evalString(text, D, c));
 }
 
 /** `find … -exec CMD … ;|+`: jedes innere Kommando einzeln bewerten. */
@@ -367,6 +387,18 @@ function sonderfall(name, ctx) {
   return null;
 }
 
+/** Builtins, die eine Variable ohne Literal-Zuweisung ändern (`unset`, `read`, `local WT` …): ihre Namen werden dynamisch. */
+function variablenAenderer(name, [cmdWort, ...args], c) {
+  const anhaengen = APPEND_RE.exec(cmdWort.text); // `WT+=x` als Kommandowort (der Parser kennt `+=` nicht als Zuweisung)
+  if (anhaengen) c.vars.set(anhaengen[1], null);
+  if (!VAR_AENDERER.has(name) && !EXPORTERS.has(name)) return;
+  for (const w of args) {
+    const a = APPEND_RE.exec(w.text);
+    if (a) c.vars.set(a[1], null);
+    else if (!ASSIGN_RE.test(w.text)) c.vars.set(w.text, null);
+  }
+}
+
 const fertig = (ergebnis) => ({ ergebnis, weiter: false });
 
 function evalSimple(cmd, D, c, opts) {
@@ -387,6 +419,7 @@ function evalSimple(cmd, D, c, opts) {
     return nichts(D);
   }
   const name = pe.name;
+  variablenAenderer(name, [words[pe.i], ...args], c);
   const ind = indirektion(cmd, words, pe, D, c, opts);
   if (ind) return ind;
   const sonder = sonderfall(name, { cmd, words, pe, args, D, c, opts, hereString });

@@ -596,6 +596,97 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask("git -C $WT status", wt), false, "ohne geschützten Aufruf keine Rückfrage");
   });
 
+  test("Variable mit statischem Literal-Wert wird aufgelöst (Parität zum PowerShell-Guard, L4)", () => {
+    for (const cmd of [
+      `WT=${wt}; git -C "$WT" commit -m x`,
+      `WT=${wt} && cd "$WT" && git commit -m x`,
+      `export WT=${wt}; git -C \${WT} push`,
+      `WT='${wt}'; git -C $WT commit -m x`,
+      `WT=${wt}; git -C $WT/sub commit -m x`,
+      `WT=${wt}; git -C "\${WT}/sub" commit -m x`,
+      `WT=${wt}; cd \${WT} && git push`,
+      `declare WT=${wt}; git -C $WT push`,
+    ]) {
+      assert.equal(run(cmd), false, `${cmd}: kein Block`);
+      assert.equal(ask(cmd), false, `${cmd}: keine Rückfrage`);
+    }
+    assert.equal(run(`WT=${wt}; git -C "$WT" commit -m x`, wt), false, "auch aus dem Worktree");
+    assert.equal(run(`WT=${wt}; (git -C $WT commit -m x)`), false, "Subshell sieht die Zuweisung");
+    const eltern = `${repoRoot}/.claude`;
+    assert.equal(run(`WT=${eltern}; git -C $WT/worktrees/${wt.split("/").pop()} commit -m x`), false, "Suffix wird angehängt");
+    assert.equal(run(`WT=${eltern}; git -C "\${WT}/worktrees/${wt.split("/").pop()}" commit -m x`), false, "Suffix in der Quote-Form");
+    assert.equal(run(`WT=${eltern}; git -C "$WT" commit -m x`), true, "ohne Suffix gilt nur der Wert");
+    assert.equal(run(`WT=${wt}; git -C "$WT" commit -m x`), false);
+    assert.equal(run(`WT=${wt}; X=$(git -C $WT status); git commit -m x`), true, "Substitution wirkt nicht nach außen, aber der Commit läuft im Haupt-Checkout");
+  });
+
+  test("Variablenauflösung bleibt eng: alles andere bleibt dynamisch (Block bzw. Rückfrage)", () => {
+    const blockt = (cmd: string) => assert.equal(run(cmd), true, `${cmd}: Block`);
+    blockt(`WT=${repoRoot}; git -C $WT commit -m x`);
+    blockt(`git -C $WT commit -m x`);
+    blockt(`WT=$(pwd); git -C $WT commit -m x`);
+    blockt(`WT=\`pwd\`; git -C $WT commit -m x`);
+    blockt(`WT=${wt} git -C "$WT" commit -m x`); // Präfix-Zuweisung: Bash expandiert vor der Zuweisung
+    blockt(`(WT=${wt}); git -C $WT commit -m x`);
+    blockt(`echo $(WT=${wt}); git -C $WT commit -m x`);
+    blockt(`WT=${wt} | cat; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; WT=$X; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; unset WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; for WT in a b; do :; done; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; read WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; WT+=/x; git -C $WT commit -m x`);
+    blockt(`WT=; git -C $WT commit -m x`);
+    blockt(`WT=~/x; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; true && WT=${wt}; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; if true; then WT=${wt}; fi; git -C $WT commit -m x`);
+    blockt(`WT=${repoRoot}; true || WT=${wt}; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; git -C $WT$X commit -m x`);
+    blockt(`WT=${wt}; git -C a$WT commit -m x`);
+    blockt(`WT=${wt}; git -C \${WT:-x} commit -m x`);
+    blockt(`W=${repoRoot}; WT=${wt}; git -C $W"T" commit -m x`);
+    blockt(`WT=${wt}; git --git-dir=$WT/.git commit -m x`);
+    assert.equal(ask(`WT=${wt}; unset WT; git -C $WT commit -m x`, wt), true, "unset: im Worktree Rückfrage");
+    blockt(`WT=${wt} & git -C $WT commit -m x`); // Hintergrund-Zuweisung läuft in einer Subshell
+    blockt(`WT=${wt}; local WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; export WT+=/x; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; git -C $WT/$X commit -m x`);
+    blockt(`WT=${wt}; git -C $WT/a$X commit -m x`);
+    assert.equal(run(`WT=${wt}; ./WT+=x; git -C $WT commit -m x`), false, "ein Pfad mit `WT+=` im Namen ändert WT nicht");
+    assert.equal(run(`WT=${wt}; WT+x; git -C $WT commit -m x`), false, "`WT+x` ist keine Anhänge-Zuweisung");
+    assert.equal(ask(`WT=$HOME/x; git -C $WT commit -m x`, wt), true, "dynamischer Wert bleibt dynamisch");
+    assert.equal(ask(`WT=; git -C $WT commit -m x`, wt), true, "leerer Wert bleibt dynamisch");
+    assert.equal(ask(`WT=~/x; git -C $WT commit -m x`, wt, withHome(repoRoot)), true, "Wert mit Tilde bleibt dynamisch");
+    assert.equal(ask(`WT=$(pwd); git -C $WT commit -m x`, wt), true, "Substitution bleibt dynamisch (Rückfrage statt Pfad)");
+    assert.equal(ask(`WT=${wt}; WT=$X; git -C $WT commit -m x`, wt), true, "dynamische Neu-Zuweisung bleibt dynamisch");
+  });
+
+  test("Variablen ändernde Builtins machen den Wert unbekannt: jedes Mitglied von VAR_AENDERER (L4)", () => {
+    for (const cmd of [
+      `printf -v WT %s ${repoRoot}`,
+      `mapfile WT`,
+      `readarray WT`,
+      `getopts ab WT`,
+    ]) {
+      assert.equal(run(`WT=${wt}; ${cmd}; git -C $WT commit -m x`), true, `${cmd}: Block`);
+      assert.equal(ask(`WT=${wt}; ${cmd}; git -C $WT commit -m x`, wt), true, `${cmd}: im Worktree Rückfrage`);
+    }
+  });
+
+  test("Kind-Shells (bash -c, Heredoc, !-Alias) sehen keine Vormerkung und geben keine nach außen (L4)", () => {
+    const blockt = (cmd: string) => assert.equal(run(cmd), true, `${cmd}: Block`);
+    blockt(`bash -c 'WT=${wt}'; git -C "$WT" commit -m x`); // WT bleibt außen leer
+    blockt(`WT=${wt}; bash -c 'git -C "$WT" commit -m x'`); // nicht exportiert: die Kind-Shell sieht einen leeren Wert
+    blockt(`WT=${wt}; bash <<'E'\ngit -C "$WT" commit -m x\nE`);
+    blockt(`sh <<'E'\nWT=${wt}\nE\ngit -C "$WT" commit -m x`);
+    blockt(`git -c alias.q='!WT=${wt}' q; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git -c alias.q='!git -C "$WT" commit -m x' q`);
+    blockt(`git submodule foreach 'WT=${wt}'; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git submodule foreach 'git -C "$WT" commit -m x'`);
+    blockt(`git rebase -x 'WT=${wt}' main; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git rebase -x 'git -C "$WT" commit -m x' main`);
+    assert.equal(ask(`WT=${wt}; bash -c 'git -C "$WT" commit -m x'`, wt), true, "nicht exportierte Variable: im Worktree Rückfrage statt Auflösung");
+  });
+
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {
     for (const cmd of ['cd "$X" && git push', 'git -C "$D" push', "cd - && git push", "popd && git commit -m x", "git -C {} push"]) {
       assert.equal(ask(cmd, wt), true, cmd);

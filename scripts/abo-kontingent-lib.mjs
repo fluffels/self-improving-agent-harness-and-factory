@@ -167,9 +167,9 @@ export function claimsAusAntwort(antwort, mergeJeTicket) {
 
 /**
  * Wertet den Zeitraum aus. `tickets` = Lauf-Zeilen `{ ticket, pr, gemergt, blocker, nacharbeit }`, `claims` = Map aus `claimsAusAntwort`,
- * `von`/`bis`/`jetzt` in ms, `fristMs` = Nacharbeitsfrist. Blocker-Quote über die gemessenen Tickets mit `blocker`-Feld, Folge-Quote über gemessene Tickets mit abgelaufener Nacharbeitsfrist. Pur.
+ * `von`/`bis` in ms. Blocker-Quote über die gemessenen Tickets mit `blocker`-Feld, Folge-Quote über gemessene Tickets mit `fristAbgelaufen === true` (Feld aus `lauf-ergebnis.mjs`, dort die einzige Fristberechnung). Pur.
  */
-export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis, jetzt, fristMs }) {
+export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
   const rohe = tickets.map((t) => {
     const c = claims.get(t.ticket);
     const merge = Date.parse(t.gemergt);
@@ -181,7 +181,7 @@ export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis, jetzt
   const zeilen = rohe.map((r) => ({ ticket: r.t.ticket, pr: r.t.pr, ...(anteile.has(r.t.ticket) ? { pp: anteile.get(r.t.ticket) } : { luecke: r.luecke }) }));
   const gemessen = rohe.filter((r) => anteile.has(r.t.ticket)).map((r) => r.t);
   const mitBlocker = gemessen.filter((t) => t.blocker !== null && t.blocker !== undefined);
-  const mitFrist = gemessen.filter((t) => t.nacharbeit !== "offen" && Date.parse(t.gemergt) + fristMs <= jetzt);
+  const mitFrist = gemessen.filter((t) => t.fristAbgelaufen === true);
   const istFolge = (t) => t.nacharbeit === "folge" || t.nacharbeit === "revert";
   return {
     zeilen,
