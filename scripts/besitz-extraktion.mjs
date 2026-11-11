@@ -81,6 +81,20 @@ export function schutzlistenMuster(text) {
 }
 
 /**
+ * Pflicht-Review-Liste (factory#348): die Einträge der Gruppe `pflichtReview`, die CODEOWNERS genau spiegelt. Fehlt die Gruppe,
+ * spiegelt CODEOWNERS die ganze Schutzliste (`schutzlistenMuster`); kaputtes JSON oder eine Gruppe, die kein Array ist: `null`.
+ */
+export function pflichtReviewMuster(text) {
+  try {
+    const gruppe = JSON.parse(text).pflichtReview;
+    if (gruppe === undefined) return schutzlistenMuster(text);
+    return Array.isArray(gruppe) ? gruppe.filter((x) => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Trifft `pfad` (Repo-relativ, `/`) eines der Muster? CODEOWNERS-Teilmenge: führendes `/` verankert an der Wurzel;
  * ohne `/` (außer am Ende) auf jeder Ebene; `/` am Ende = Verzeichnis-Präfix; `*` = beliebige Zeichen außer `/`;
  * ein Muster, das ein Elternverzeichnis trifft, trifft alle Dateien darin.

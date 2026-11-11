@@ -159,5 +159,11 @@
   ],
   "waechter": [
     "/test/harness/"
+  ],
+  "pflichtReview": [
+    "/.github/CODEOWNERS",
+    "/.github/workflows/",
+    "/.claude/settings.json",
+    "/.mcp.json"
   ]
 }
