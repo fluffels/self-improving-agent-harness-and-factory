@@ -11,6 +11,8 @@
  * Secret-Key). Mit `--export` und `--rezept` bleibt die CLI schlüsselfrei: ihre statische Import-Hülle enthält weder `langfuse-api` noch
  * `langfuse-zugang` (ein Test hält das fest). `--ablegen` schreibt `<montag>.md` und `<montag>.json` nach
  * `~/.claude/state/langfuse-wochenbericht/<owner>__<repo>/`.
+ * Kosten je Merge (factory#324): `kostenAnstiegProzent` misst das Δ der Kosten je gemergtem PR; die Zahl der Merges holt die CLI per `gh`-Suche
+ * (`deps.gh`, kein Secret-Key, `--export` und `--rezept` bleiben schlüsselfrei); nicht ermittelbar ist Exit 1.
  * `--ausloeser` ist der automatische Wochenbericht-Lauf (`wochenberichtLauf`): das losgelöste Kind des SessionStart-Hooks
  * (`langfuse-abgleich-hook.mjs`) liest den Secret-Key über den Live-Weg, kein Agent startet es. Er arbeitet nur mit dem Config-Schlüssel
  * `langfuseWochenbericht`, ab Dienstag nach dem Wochenende, einmal je Woche (atomarer Claim), schreibt nichts auf stdout und löst Meldungen per
@@ -31,7 +33,7 @@ import { istBezieher } from "./sync-stand-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { lockFreigeben, lockNehmen, logAnhaengen } from "./langfuse-lock.mjs";
 import { agentenNamen } from "./agenten-namen.mjs";
-import { RUHEFRIST_MS, anlassText, letzteVolleWoche, ordneExporte, projektFilterAus, pruefeAbgeschlossen, renderWochenbericht, wochenAuswertung, wochenberichtAblage, wochenberichtTermin, wochenFenster, wochenJson, wochenRezept, wochenStand } from "./langfuse-wochenbericht-lib.mjs";
+import { RUHEFRIST_MS, anlassText, letzteVolleWoche, mergeAnzahl, mergeSucheArgs, ordneExporte, projektFilterAus, pruefeAbgeschlossen, renderWochenbericht, wochenAuswertung, wochenberichtAblage, wochenberichtTermin, wochenFenster, wochenJson, wochenRezept, wochenStand } from "./langfuse-wochenbericht-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 export const EXIT_KEIN_BERICHT = 4;
@@ -134,6 +136,15 @@ function berichtAusgeben(args, deps, p, montag, a, filter) {
   return { exitCode: a.urteil.agentLaufNoetig ? EXIT_AGENT_LAUF : 0, stdout: args.json ? JSON.stringify(json, null, 2) : md, stderr: "" };
 }
 
+const ghEcht = (args) => ghText(args, { timeout: 60_000 });
+
+/** Gemergte PRs des Repos der Config in Woche und Vorwoche (`gh`-Suche, kein Secret-Key); wirft, wenn nicht ermittelbar (factory#324). */
+function mergesDerWochen(gh, p, montag) {
+  const f = wochenFenster(montag);
+  const zaehle = (von, bis) => mergeAnzahl(gh(mergeSucheArgs({ owner: p.owner, repo: p.repo, von, bis })));
+  return { woche: zaehle(f.von, f.bis), vorwoche: zaehle(f.vorVon, f.vorBis) };
+}
+
 /** Ablauf ohne `process.exit` (testbar): `{ exitCode, stdout, stderr }`. */
 export async function auswerten(args, deps = {}) {
   const aufruf = (text) => ({ exitCode: AUFRUF_EXIT, stdout: "", stderr: `${text}\n${aufrufHilfe()}` });
@@ -155,7 +166,8 @@ export async function auswerten(args, deps = {}) {
     const geordnet = ordneExporte(geholt.exporte, { montag, projektFilter: filter });
     const gesamtW = geordnet.woche.find((e) => e.art === "gesamt");
     if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}`);
-    return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk }), filter);
+    const merges = mergesDerWochen(deps.gh ?? ghEcht, p, montag);
+    return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk, merges }), filter);
   } catch (e) {
     return { exitCode: 1, stdout: "", stderr: `Fehler: ${e.message}` };
   }
@@ -163,7 +175,6 @@ export async function auswerten(args, deps = {}) {
 
 // ── Wochenbericht-Lauf (factory#314) ─────────────────────────────────────────
 
-const ghEcht = (args) => ghText(args, { timeout: 60_000 });
 const SCHLUESSEL_MUSTER = [/sk-lf-\S+/g, /pk-lf-\S+/g, /Basic\s+[A-Za-z0-9+/=_-]{8,}/g, /LANGFUSE_\w*SECRET\w*=\S*/g];
 /** Schwärzt Langfuse-Schlüsselmuster (geschlossene Liste), bevor Text in .json oder Log landet; liest keine env-Werte. */
 export const ohneSchluessel = (text) => SCHLUESSEL_MUSTER.reduce((t, m) => t.replace(m, "[geschwärzt]"), String(text));
@@ -277,7 +288,7 @@ export async function wochenberichtLauf(args, deps = {}) {
     const wurzel = args.wurzel ?? WURZEL;
     const p = n.projekt ?? ladeProjekt(wurzel, n.lies);
     const repo = `${p.owner}/${p.repo}`;
-    const k = { ...n, p, wurzel, termin, montag: termin.montag, d: dateien(n.home, p), auswertenDeps: { jetzt: n.jetzt, projekt: p, home: n.home, env: n.env, ladeLive: n.ladeLive, fetchImpl: n.fetchImpl } };
+    const k = { ...n, p, wurzel, termin, montag: termin.montag, d: dateien(n.home, p), auswertenDeps: { gh: n.gh, jetzt: n.jetzt, projekt: p, home: n.home, env: n.env, ladeLive: n.ladeLive, fetchImpl: n.fetchImpl } };
     const frueh = fruehAbbruch(k);
     if (frueh) {
       log({ repo, status: frueh });
