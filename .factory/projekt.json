@@ -47,6 +47,9 @@
   "skills": {
     "abschluss": "brain-input"
   },
+  "befehle": {
+    "mutation": "npx stryker run"
+  },
   "module": ["codeql", "scorecard", "secret-scan", "dependency-review", "zizmor", "codescanning-inbox", "audit-einordnung", "dependabot-inbox"],
   "codeql": {
     "sprachen": ["javascript-typescript", "actions"]

@@ -12,12 +12,17 @@ export const STANDARD_BEFEHLE = Object.freeze({
   verifyChanged: "npm run verify:changed",
   coverage: "npm run test:coverage",
   testGezielt: "npx vitest run",
+  mutation: null, // opt-in (factory#299): null = nicht eingerichtet
 });
 
 export const GATE_BEFEHL_NAMEN = Object.freeze(Object.keys(STANDARD_BEFEHLE));
 
 /** Art des Prüflaufs je Gate-Befehl (Werkzeugmessung zählt `voll`/`gezielt`; null = kein Prüflauf); Schlüssel = `GATE_BEFEHL_NAMEN`. */
-export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null });
+export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null, mutation: null });
+
+/** Adapter-Vertrag Mutation (factory#299): Umgebungsvariablen, über die `node scripts/mutation-lauf.mjs` Eingabe (Zeilenbereiche als JSON) und Ausgabe (Bericht) übergibt. */
+export const MUTATION_UMGEBUNG = Object.freeze({ bereiche: "FACTORY_MUTATION_BEREICHE", bericht: "FACTORY_MUTATION_BERICHT" });
+const MUTATION_NAME = "mutation";
 
 /** Der einzige Name, der Pfade annimmt; sie werden in doppelten Anführungszeichen an die Befehlszeile angehängt. */
 export const PFAD_NAME = "testGezielt";
@@ -67,18 +72,31 @@ function aufrufFehler(err, text) {
   return AUFRUF_EXIT;
 }
 
-/** Einstieg: `<name> [--zeigen]` (`testGezielt` zusätzlich mit Pfaden); gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
-export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error }) {
+/** Pur: Fehlertext, wenn `mutation` ohne beide Vertrags-Umgebungsvariablen gestartet würde (das Werkzeug mutierte sonst das ganze Projekt), sonst null. */
+function mutationUmgebungFehler(name, env) {
+  if (name !== MUTATION_NAME || Object.values(MUTATION_UMGEBUNG).every((v) => env[v])) return null;
+  return `${name} braucht die Umgebungsvariablen ${Object.values(MUTATION_UMGEBUNG).join(" und ")} (sonst mutiert das Werkzeug das ganze Projekt).\nFix: über node scripts/mutation-lauf.mjs aufrufen.`;
+}
+
+/** Pur: liest Name, Pfade und `--zeigen` aus `argv`; Rückgabe `{ name, pfade, nurZeigen }` oder `{ meldung }` (Aufruf-Fehler samt Fix-Zeile). */
+function argumenteLesen(argv) {
   const { werte, positionale, fehler } = flagsLesen(argv, { [ZEIGEN_FLAG.slice(2)]: { type: "boolean" } }, { positionale: true });
   const hinweis = `Fix: node scripts/gate-befehl.mjs <name> [${ZEIGEN_FLAG}] mit name aus ${GATE_BEFEHL_NAMEN.join(", ")}`;
-  if (fehler) return aufrufFehler(err, `${fehler.text}\n${hinweis}`);
+  if (fehler) return { meldung: `${fehler.text}\n${hinweis}` };
   const name = positionale[0];
   const mitPfaden = name === PFAD_NAME;
-  if (!mitPfaden && positionale.length !== 1) return aufrufFehler(err, `genau ein Gate-Befehl-Name erwartet (Pfade nimmt nur ${PFAD_NAME} an).\n${hinweis}`);
+  if (!mitPfaden && positionale.length !== 1) return { meldung: `genau ein Gate-Befehl-Name erwartet (Pfade nimmt nur ${PFAD_NAME} an).\n${hinweis}` };
   const pfade = mitPfaden ? positionale.slice(1) : [];
-  if (mitPfaden && pfade.length === 0) return aufrufFehler(err, `${PFAD_NAME} braucht mindestens einen Pfad.\nFix: node scripts/gate-befehl.mjs ${PFAD_NAME} <datei> [<datei> …]`);
+  if (mitPfaden && pfade.length === 0) return { meldung: `${PFAD_NAME} braucht mindestens einen Pfad.\nFix: node scripts/gate-befehl.mjs ${PFAD_NAME} <datei> [<datei> …]` };
   const schlecht = pfade.find((x) => !PFAD_MUSTER.test(x));
-  if (schlecht !== undefined) return aufrufFehler(err, `Pfad „${schlecht}“ enthält unerlaubte Zeichen (erlaubt: Buchstaben, Ziffern, _ . / \\ : @ + = , -).\nFix: einen einfachen Pfad ohne Leerzeichen und Shell-Zeichen angeben.`);
+  if (schlecht !== undefined) return { meldung: `Pfad „${schlecht}“ enthält unerlaubte Zeichen (erlaubt: Buchstaben, Ziffern, _ . / \\ : @ + = , -).\nFix: einen einfachen Pfad ohne Leerzeichen und Shell-Zeichen angeben.` };
+  return { name, pfade, nurZeigen: Boolean(werte[ZEIGEN_FLAG.slice(2)]) };
+}
+
+/** Einstieg: `<name> [--zeigen]` (`testGezielt` zusätzlich mit Pfaden); gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
+export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error, env = process.env }) {
+  const { meldung, name, pfade, nurZeigen } = argumenteLesen(argv);
+  if (meldung !== undefined) return aufrufFehler(err, meldung);
   let befehl;
   try {
     if (!istName(name)) befehlAus({}, name);
@@ -86,8 +104,14 @@ export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.e
   } catch (e) {
     return aufrufFehler(err, e.message);
   }
+  if (befehl === null) {
+    out(`${name}: nicht eingerichtet`);
+    return 0;
+  }
+  const umgebungsFehler = nurZeigen ? null : mutationUmgebungFehler(name, env);
+  if (umgebungsFehler !== null) return aufrufFehler(err, umgebungsFehler);
   if (pfade.length > 0) befehl = `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
-  if (werte[ZEIGEN_FLAG.slice(2)]) {
+  if (nurZeigen) {
     out(befehl);
     return 0;
   }
