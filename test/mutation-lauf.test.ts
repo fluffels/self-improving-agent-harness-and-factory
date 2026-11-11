@@ -35,6 +35,21 @@ describe("Diff zu Zeilenbereichen", () => {
       { datei: "src/a.mjs", von: 30, bis: 30 },
     ]);
   });
+  test("Dateien und Zeilen kommen sortiert heraus, auch wenn der Diff sie umgekehrt liefert (numerisch, nicht textuell)", () => {
+    const d = `${hunk("src/b.mjs", "@@ -1 +9 @@")}@@ -1 +100 @@\n+y\n${hunk("src/a.mjs", "@@ -1 +2 @@")}`;
+    assert.deepEqual(lib.bereicheAusDiff(d, QUELLEN), [
+      { datei: "src/a.mjs", von: 2, bis: 2 },
+      { datei: "src/b.mjs", von: 9, bis: 9 },
+      { datei: "src/b.mjs", von: 100, bis: 100 },
+    ]);
+    const rueck = `${hunk("src/a.mjs", "@@ -1 +11 @@")}@@ -1 +3 @@\n+y\n@@ -1 +10 @@\n+z\n`;
+    assert.deepEqual(lib.bereicheAusDiff(rueck, QUELLEN), [{ datei: "src/a.mjs", von: 3, bis: 3 }, { datei: "src/a.mjs", von: 10, bis: 11 }]);
+  });
+  test("istTestPfad: der Punkt vor test/spec und das Dateiende sind Teil des Musters", () => {
+    assert.equal(lib.istTestPfad("src/atest.mjs"), false);
+    assert.equal(lib.istTestPfad("src/a.test.mjs.bak"), true);
+    assert.equal(lib.istTestPfad("src/a.test"), false);
+  });
   test("Zeilen direkt hintereinander aus zwei Hunks verschmelzen zu einem Bereich", () => {
     const d = `${hunk("src/a.mjs", "@@ -1,0 +3,2 @@")}@@ -9 +5,2 @@\n+y\n`;
     assert.deepEqual(lib.bereicheAusDiff(d, QUELLEN), [{ datei: "src/a.mjs", von: 3, bis: 6 }]);
@@ -101,6 +116,11 @@ describe("Filter und Ausgabe", () => {
     assert.deepEqual(r.mutanten.map((x) => x.zeile), [5, 7]);
     assert.equal(r.verworfen, 3);
   });
+  test("mehrere Bereiche: ein Treffer in irgendeinem genügt, Datei und Zeile müssen im selben Bereich liegen", () => {
+    const b = [{ datei: "src/a.mjs", von: 1, bis: 2 }, { datei: "src/b.mjs", von: 10, bis: 12 }];
+    const r = lib.aufBereicheFiltern([mu({ zeile: 2 }), mu({ datei: "src/b.mjs", zeile: 11 }), mu({ datei: "src/a.mjs", zeile: 11 }), mu({ datei: "src/b.mjs", zeile: 2 })], b);
+    assert.deepEqual(r.mutanten.map((x) => `${x.datei}:${x.zeile}`), ["src/a.mjs:2", "src/b.mjs:11"]);
+  });
   test("Zeilenformat, Abschnitte, Sortierung und Summenzeile", () => {
     const z = lib.formatiere([
       mu({ datei: "src/b.mjs", zeile: 2 }), mu({ zeile: 9, mutator: "StringLiteral", ersatz: '""' }), mu({ zeile: 3, status: "NoCoverage" }),
@@ -119,6 +139,12 @@ describe("Filter und Ausgabe", () => {
     assert.equal(z[2], "src/a.mjs:6 | ConditionalExpression | –");
     assert.equal(z[3], `src/a.mjs:7 | ConditionalExpression | ${"x".repeat(79)}…`);
     assert.equal(z[4], "Mutanten: 3 · getötet 0 · überlebt 3 · ohne Abdeckung 0 · Timeout 0 · sonstige 0 · außerhalb der Bereiche verworfen 4");
+  });
+  test("Kürzung: genau 80 Zeichen bleiben ganz, 81 werden auf 79 plus Auslassung gekürzt; gleiche Datei sortiert numerisch", () => {
+    const z = lib.formatiere([mu({ zeile: 10, ersatz: "y".repeat(80) }), mu({ zeile: 9, ersatz: "y".repeat(81) }), mu({ zeile: 100 })]);
+    assert.equal(z[1], `src/a.mjs:9 | ConditionalExpression | ${"y".repeat(79)}…`);
+    assert.equal(z[2], `src/a.mjs:10 | ConditionalExpression | ${"y".repeat(80)}`);
+    assert.equal(z[3], "src/a.mjs:100 | ConditionalExpression | true");
   });
   test("ohne Überlebende gibt es nur die Summenzeile", () => {
     assert.deepEqual(lib.formatiere([mu({ status: "Killed" })]), ["Mutanten: 1 · getötet 1 · überlebt 0 · ohne Abdeckung 0 · Timeout 0 · sonstige 0"]);
