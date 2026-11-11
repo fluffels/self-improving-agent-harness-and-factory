@@ -228,7 +228,7 @@ Jede `Call`-Generation des Nachlieferers trägt die Metadaten `agent_type`, `eff
 - Negative Latenzen: die zwölf Gruppen mit der kleinsten `min latency` haben alle 0; im Fenster ist keine Gruppe negativ.
 - Rollen: `agent_type` gesetzt an keiner Generation im Fenster (die Live-Calls tragen ihn erst mit factory#288, die nachgelieferten erst nach dem Merge von factory#287); `agent_role` gesetzt an den Codex-Generations (Trace `Codex: …`, allein im Trace des Factory-Repos 3820) und an 956 Generations des Traces `Claude: usage reconciliation` (Name `Call`, Quelle „sonstige“; `agent_role` `main` an 64 davon).
 - Modell: keine Zeile des Exports `gesamt` hat ein leeres `providedModelName`; die Vermutung, ein Filter `providedModelName none of ["claude"]` schließe Generations ohne Modell still aus, ließ sich im Fenster nicht belegen (keine solche Generation). Das Rezept benutzt den Filter nicht.
-- `gesamt` im Fenster: unter 1000 Zeilen, größte Kostengruppe Trace `Abgleich` (`Call`, `claude-opus-5-5`, Repo `kubernia`: 14 012 Calls, 665,92 $).
+- `gesamt` im Fenster: unter 1000 Zeilen, größte Kostengruppe Trace `Abgleich` (`Call`, `claude-opus-5-5`, ein Fremd-Repo: 14 012 Calls, 665,92 $).
 
 **Grenzen.** Live-Calls haben bis factory#288 weder Rolle noch Effort und sind „unzugeordnet“. Codex hat keinen Effort (`reasoning_effort` leer; steht nicht im Standard-Rezept, die Lib liest ihn bei einem Export). Die Rollenliste kann unvollständig sein: der Rest landet sichtbar in „unzugeordnet“, `--rolle` ergänzt. Codex-Laufzeit: derselbe Weg, `queryMetrics` steht in `LANGFUSE_LESE_TOOLS` (`scripts/langfuse-zugang.mjs`); mehr als die Lesewerkzeuge braucht die Auswertung nicht.
 
