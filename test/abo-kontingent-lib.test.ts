@@ -33,7 +33,7 @@ const L = raw as unknown as {
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
-  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string }) => { luecke?: string } & Partial<Auswertung>;
+  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string; jetzt?: number }) => { luecke?: string } & Partial<Auswertung>;
   erstelle: (a: unknown, io: unknown) => { bericht: { kontingent?: unknown }; exit: number };
   renderMarkdown: (b: unknown) => string;
 };
@@ -214,6 +214,10 @@ describe("gueltigeFolge", () => {
   test("Nachzügler: resetsAt vor dem des Vorpunkts ist veraltet, auch bei höherem Stand", () => {
     expect(f([punkt(0, 10, r2), punkt(MIN, 88, r1), punkt(2 * MIN, 12, r2)])).toEqual([[10, 12], [88]]);
   });
+  test("Rückgang genau zum Reset-Zeitpunkt des Vorpunkts ist ein Reset, der Punkt bleibt gültig", () => {
+    const reset = (2 * MIN) / 1000;
+    expect(f([punkt(0, 80, reset), punkt(2 * MIN, 5, r2)])).toEqual([[80, 5], []]);
+  });
   test("Punkte ohne das Limit werden übergangen, auch wenn sie nicht zählen", () => {
     const ohne: Punkt = { stand: MIN, fiveHour: { pct: 1, resetsAt: r1 } };
     const e = L.gueltigeFolge([punkt(0, 5), ohne], "sevenDay");
@@ -245,6 +249,10 @@ describe("kontrollzahl", () => {
   test("veraltete Punkte vor von und nach bis zählen nicht in veraltet", () => {
     const k = L.kontrollzahl([punkt(von - 3 * MIN, 20), punkt(von - 2 * MIN, 15), punkt(von - MIN, 21), punkt(von + MIN, 22), punkt(bis + MIN, 30), punkt(bis + 2 * MIN, 25)], { von, bis, anzahlTickets: 1 });
     expect(k).toMatchObject({ summe: 1, veraltet: 0 });
+  });
+  test("veraltete Punkte genau auf von und genau auf bis zählen mit", () => {
+    const k = L.kontrollzahl([punkt(von - MIN, 10), punkt(von, 5), punkt(von + MIN, 12), punkt(bis, 3)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 2, veraltet: 2 });
   });
   test("die Textzeile nennt veraltete Punkte nur bei v > 0", () => {
     const ok = L.kontrollzahl([punkt(von, 1), punkt(von + MIN, 2)], { von, bis, anzahlTickets: 1 });
@@ -397,6 +405,13 @@ describe("ladeAboKontingent und Bericht", () => {
     const r = K.ladeAboKontingent({ von, bis, tickets }, { gh: (a) => (aufrufe.push(a), claimAntwort), lies: () => verlauf, pfad: "/x/v.jsonl" });
     expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 2.73 }]); // 3 pp über 66 min, davon 60 min im Ticket-Fenster
     expect(aufrufe).toHaveLength(1);
+  });
+  test("die Frist läuft ab dem Merge: vor 14 Tagen zählt eine Folge als offen, danach als Folge (jetzt eingespritzt)", () => {
+    const folgeTicket: Ticketzeile[] = [{ ...tickets[0], nacharbeit: "folge" }];
+    const merge = Date.parse("2026-10-15T11:00:00Z");
+    const io = { gh: () => claimAntwort, lies: () => verlauf, pfad: "/x" };
+    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 13 * 86_400_000 }).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
+    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 15 * 86_400_000 }).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
     const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0], ticket: 100 + i, pr: 500 + i }));

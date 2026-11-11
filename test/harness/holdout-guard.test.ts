@@ -122,6 +122,7 @@ describe("bewerteAbnahmeWrite", () => {
     test("Windows: /tmp ist keine Wurzel", () => {
       expect(G.bewerteAbnahmeWrite("/tmp/a.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(true);
       expect(G.bewerteAbnahmeWrite("C:/Temp/a.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(false);
+      expect(G.bewerteAbnahmeWrite("c:/temp/A.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(false); // Groß-/Kleinschreibung nur unter win32
     });
     test("Ablehnungsgrund nennt alle erlaubten Wurzeln", () => {
       const r = w("/Users/x/repo/a.mjs").reason ?? "";
