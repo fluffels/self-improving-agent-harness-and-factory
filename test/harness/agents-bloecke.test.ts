@@ -151,7 +151,9 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     const lenses = lese(".agents/skills/review-lenses/SKILL.md");
     const brillen = ["architektur", "requirement-treue", "test-adaequanz", "doku"].map((b) => lese(`.agents/skills/review-lenses/brille-${b}.md`));
     const abläufe = ["abnahme-fix", "merge-main", "nachweis", "zusatzpass"].map((b) => lese(`.agents/skills/review-lenses/ablauf-${b}.md`));
-    for (const t of [planer, umsetzer, lenses, ...brillen, ...abläufe]) assert.deepEqual(projektliteraleIn(t), []);
+    // factory#310: bedingte Dateien des Umsetzers neben dem Ablauf-Skill
+    const umsetzerDateien = ["plattform-windows", "umsetzer-browser", "umsetzer-fortsetzung", "umsetzer-gruppen", "umsetzer-guard-proben", "umsetzer-pr-merge"].map((b) => lese(`.agents/skills/factory/${b}.md`));
+    for (const t of [planer, umsetzer, lenses, ...brillen, ...abläufe, ...umsetzerDateien]) assert.deepEqual(projektliteraleIn(t), []);
     assert.match(planer, /Projekt-Leitfrage/);
     assert.match(brillen[0], /Projekt-Leitfrage/);
     assert.match(planer, /Optik-Messlatte/);

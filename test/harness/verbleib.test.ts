@@ -104,6 +104,22 @@ describe("Verbleib gate-erzwungener Regeln", () => {
     assert.match(verbleibBefunde({ eintraege, lies }).join("\n"), /factory-umsetzer\.md × pre-flight: der gespeicherte Text steht in .* nicht/);
   });
 
+  test("Negativfall am echten Stand (factory#310): fehlt je Regel ihr gespeicherter Text an ihrem Ort, ist die Umsetzer-Datei rot", () => {
+    const eintraege = echteListe().filter((e) => e.datei === SCAN_DATEIEN[0]);
+    assert.equal(eintraege.length, Object.keys(REGELN).length);
+    for (const eintrag of eintraege) {
+      const lies = (pfad: string): string | null => {
+        const t = echtLesen(pfad);
+        return t !== null && pfad === eintrag.ort ? t.split(eintrag.text).join("") : t;
+      };
+      assert.match(
+        verbleibBefunde({ eintraege: echteListe(), lies }).join("\n"),
+        new RegExp(`factory-umsetzer\\.md × ${eintrag.regel}: der gespeicherte Text steht in .* nicht`),
+        `${eintrag.regel}: ohne den Text an seinem Ort muss der Wächter rot werden`,
+      );
+    }
+  });
+
   test("Negativfall am echten Stand (factory#309): fehlt je Regel ihr gespeicherter Text an ihrem Ort, ist der Kern des Review-Skills rot", () => {
     const eintraege = echteListe().filter((e) => e.datei === SCAN_DATEIEN[1]);
     assert.equal(eintraege.length, Object.keys(REGELN).length);

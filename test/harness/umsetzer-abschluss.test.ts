@@ -60,6 +60,10 @@ const blockade: typeof abschluss.abschlussBlockade = (i, d = {}) => abschluss.ab
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
+// Bedingte Dateien des Umsetzers (factory#310): der Kern verweist auf sie, ihre Sätze stehen dort.
+const GRUPPEN_DATEI = liesMitProjektwerten(".agents/skills/factory/umsetzer-gruppen.md");
+const FORTSETZUNG = liesMitProjektwerten(".agents/skills/factory/umsetzer-fortsetzung.md");
+const GUARD_PROBEN = liesMitProjektwerten(".agents/skills/factory/umsetzer-guard-proben.md");
 
 const abschnitt = (md: string, kopf: RegExp): string => {
   const zeilen = md.split("\n");
@@ -427,7 +431,7 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   // Bekannte Grenze: ob eine Entscheidung im konkreten PR-Text steht, ist nicht prüfbar; gebunden ist nur der Auftrag in der Prosa.
   test("Bindung: Entscheidungen kommen in den PR-Text, auch die der Gruppen-Umsetzer (#1740 L3)", () => {
     assert.match(UMSETZER, /im PR-Text \(„Entscheidung: X, weil Y“\)/);
-    assert.match(abschnitt(UMSETZER, /^\*\*Gruppen \(quellprojekt#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
+    assert.match(abschnitt(GRUPPEN_DATEI, /^\*\*Gruppen \(quellprojekt#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
   });
 });
 
@@ -578,8 +582,8 @@ describe("abnahme: Holdout-Abnahme auf dem Entwurfs-PR (#1754)", () => {
     assert.match(block, /^ABNAHME:/m);
     assert.match(block, /FESTGEFAHREN: .*review.*ci.*abnahme/);
     assert.match(UMSETZER, /gh pr create --draft/);
-    assert.match(UMSETZER, /gh pr ready/);
-    assert.match(UMSETZER, /handoff[^\n]*Festgefahren-Label[^\n]*labels\.festgefahren/);
+    assert.match(FORTSETZUNG, /gh pr ready/);
+    assert.match(FORTSETZUNG, /handoff[^\n]*Festgefahren-Label[^\n]*labels\.festgefahren/);
   });
 });
 
@@ -667,13 +671,15 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
   const KERNPHRASEN = [
     "nie über stdin", // Skripte nie über stdin starten
-    "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
     "das betroffene Gate erneut", // Gate verschärft: origin/main einmergen (#1449)
     "git checkout <datei>", // Red-Green-Probe nie so zurücknehmen (verwirft ungesicherte Änderungen)
   ];
 
   test("jede Kernphrase steht in der Agenten-Definition, die Red-Green-Regel auch in der Gruppen-Rolle", () => {
     for (const phrase of KERNPHRASEN) assert.ok(UMSETZER.includes(phrase), `factory-umsetzer.md ohne „${phrase}“`);
+    // je neue Guard-/Gate-Regel ein Negativtest: der Satz steht in der bedingten Datei, auf die der Kern verweist (factory#310)
+    assert.ok(GUARD_PROBEN.includes("eigenen Negativtest, der genau diese Regel verfälscht"), "umsetzer-guard-proben.md ohne den Negativtest-Satz");
+    assert.ok(UMSETZER.includes(".agents/skills/factory/umsetzer-guard-proben.md"), "der Kern verweist nicht auf umsetzer-guard-proben.md");
     assert.ok(GRUPPE.includes("git checkout <datei>"), "factory-gruppe.md ohne die Red-Green-Rücknahme-Regel");
     assert.ok(!UMSETZER.replace("nie über stdin", "").includes("nie über stdin"), "Negativfall: die Prüfung erkennt eine fehlende Phrase");
   });
@@ -719,20 +725,22 @@ describe("Selbstcheck vor jedem Commit (#1625)", () => {
     assert.ok(!verlangtSelbstcheck(""));
   });
 
+  /** Kern und Gruppen-Datei: der `SELBSTCHECK`-Satz der Gruppen steht in der bedingten Datei (factory#310). */
+  const UMSETZER_GRUPPEN = `${UMSETZER}\n${GRUPPEN_DATEI}`;
   /** Der Umsetzer holt die Blöcke aus den Commit-Bodies in den PR-Text und holt einen fehlenden vor `gh pr create` nach; die Gruppen-Berichte tragen ihn mit. */
   const uebernimmtBloecke = (s: string) =>
     s.includes("git log origin/main..HEAD --format=%B") && /fehlt der Block im letzten Commit, vor `gh pr create` nachholen/.test(s) && /`SELBSTCHECK`[^.]*PR-Text|PR-Text[^.]*`SELBSTCHECK`/.test(s);
   const gruppeTraegtBlock = (s: string) => /Block `Selbstcheck:` im Commit-Body/.test(s) && /übernimmt ihn in den PR-Text/.test(s);
 
   test("Umsetzer übernimmt die Selbstcheck-Blöcke aus den Commits in den PR-Text; Gruppe trägt den Block im Commit-Body", () => {
-    assert.ok(uebernimmtBloecke(UMSETZER), "factory-umsetzer.md");
+    assert.ok(uebernimmtBloecke(UMSETZER_GRUPPEN), "factory-umsetzer.md samt Gruppen-Datei");
     assert.ok(gruppeTraegtBlock(GRUPPE), "factory-gruppe.md");
   });
 
   test("Red-Green: ohne Befehl, Nachhol-Satz, Gruppen-Bezug oder Commit-Body greifen die Prädikate nicht", () => {
-    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("git log origin/main..HEAD --format=%B", "git log")));
-    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("vor `gh pr create` nachholen", "ignorieren")));
-    assert.ok(!uebernimmtBloecke(UMSETZER.replaceAll("`SELBSTCHECK`", "x")));
+    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("git log origin/main..HEAD --format=%B", "git log")));
+    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("vor `gh pr create` nachholen", "ignorieren")));
+    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("`SELBSTCHECK`", "x")));
     assert.ok(!gruppeTraegtBlock(GRUPPE.replace("im Commit-Body", "irgendwo")));
     assert.ok(!gruppeTraegtBlock(GRUPPE.replace("übernimmt ihn in den PR-Text", "liest ihn")));
     assert.ok(!uebernimmtBloecke("") && !gruppeTraegtBlock(""));

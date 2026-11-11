@@ -638,7 +638,8 @@ describe("Matrix §1 stimmt mit den Frontmatter ihrer Ziele überein (#1609)", (
 });
 
 describe("Sammelticket-Gruppen (#1647, ADR 0026): ein Vertrag in Planer, Umsetzer und Gruppe", () => {
-  const dateien = [".claude/agents/factory-planer.md", ".claude/agents/factory-umsetzer.md", ".claude/agents/factory-gruppe.md"];
+  // Die Umsetzer-Seite des Gruppen-Vertrags steht seit factory#310 in der bedingten Datei neben dem Ablauf-Skill (der Kern verweist auf sie).
+  const dateien = [".claude/agents/factory-planer.md", ".agents/skills/factory/umsetzer-gruppen.md", ".claude/agents/factory-gruppe.md"];
   test("die Kopfzeile `GRUPPE <k>/<n>` steht wortgleich in allen drei Definitionen", () => {
     for (const d of dateien) assert.ok(read(d).includes("GRUPPE <k>/<n>"), `${d} nennt \`GRUPPE <k>/<n>\``);
   });

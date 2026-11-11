@@ -16,7 +16,7 @@ const MARKE = "gruppe-stopp";
 const PFAD_OPTION = "--git-path";
 
 describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
-  test.each([".claude/agents/factory-gruppe.md", ".claude/agents/factory-umsetzer.md", ".agents/skills/factory/ablauf.md"])(
+  test.each([".claude/agents/factory-gruppe.md", ".agents/skills/factory/umsetzer-gruppen.md", ".agents/skills/factory/ablauf.md"])(
     "%s nennt Marke und Pfad-Auflösung",
     (rel) => {
       const text = lies(rel);
@@ -34,7 +34,7 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
     expect(text).not.toContain("stoppt ihn bei einem Planwechsel");
   });
   test("der Umsetzer setzt, wartet, sichert, nimmt zurück und räumt die Marke", () => {
-    const text = lies(".claude/agents/factory-umsetzer.md");
+    const text = lies(".agents/skills/factory/umsetzer-gruppen.md");
     for (const teil of ["Marke `touch \"$(git", "stash push -u -m", "git revert --no-edit", "entferne die Marke (`rm -f` auf denselben Pfad)", "kein `TaskStop` am Gruppen-Umsetzer"]) expect(text).toContain(teil);
     expect(text).toContain("warte auf den Bericht der Gruppe");
     expect(text).toContain("warte, bis der Worktree ruht: `git -C <worktree> status --porcelain` und `git -C <worktree> diff HEAD` sind bei zwei Messungen im Abstand von 5 Minuten gleich");
