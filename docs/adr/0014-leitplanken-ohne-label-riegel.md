@@ -44,3 +44,7 @@ Die Kosten fielen bei **jedem** Harness-PR an: Wartezeit auf ein erwartet rotes 
 - **Weitere Beitragende** neben der Maintainerin: einen echten CODEOWNERS-Pflichtreview erwägen.
 - **Audit-Kommentare fehlen** wiederholt: einen nicht blockierenden Auto-Kommentar erwägen.
 - **Aufweichung eines Gates entdeckt**, die der Riegel verhindert hätte: einen technischen Riegel wie in ADR 0012 neu bewerten.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0014-348-bot-konto-pflicht-review.md) (Konvention: [README](README.md#format)); dort die erste: Bot-Konto und Pflicht-Review-Liste, Entscheidung Status quo.
