@@ -212,7 +212,7 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "cat <<'EOF'\n$(git push)\nEOF", // quotierter Delimiter: Body wörtlich
       "cat > f <<-EOF\n\tgit push\n\tEOF",
       "git log --grep=push",
-      "git stash show push", // `git stash push` selbst ist seit factory#323 ortsunabhängig verboten (worktree-guard-stash.test.ts)
+      "git stash show push", // `git stash push` selbst ist seit factory#323 ortsunabhängig verboten (worktree-guard-grenzen.test.ts)
       "git status # dann git push",
       "npm test # git push",
       "gh issue comment 1 --body '`git push`'",
