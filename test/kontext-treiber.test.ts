@@ -1036,6 +1036,11 @@ describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
     expect(j.code).toBe(3);
     expect((JSON.parse(j.aus) as JeTyp).ungueltig).toHaveLength(1);
   });
+  test("CLI: ohne --von oder mit falschem Flag Exit 2 samt Aufrufzeile mit wiederholbarem --agent", () => {
+    const r = cli(["--agent", LENS, "--agent", LENS_B], laeufeJeTyp);
+    expect(r.code).toBe(2);
+    expect(r.fehler).toMatch(/--agent .*…/);
+  });
   test("CLI: gültige Messung Exit 0; ein einzelnes --agent gibt den Bericht ohne Typ-Umschlag aus", () => {
     const gueltig = { [LENS]: [lensLauf(2, LENS)], [LENS_B]: [lensLauf(1, LENS_B)] };
     expect(cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B], gueltig).code).toBe(0);

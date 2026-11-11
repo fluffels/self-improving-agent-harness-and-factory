@@ -69,6 +69,9 @@ describe("lens-arm CLI", () => {
   test.each([[["0"]], [["-3"]], [["abc"]], [[]], [["1", "2"]], [["07"]], [["1.5"]]])("ungültiger Aufruf %j: Exit 2", (argv) => {
     expect(cli(argv).code).toBe(2);
   });
+  test("ohne injizierten Bezieher-Test gilt der Sync-Stand des Repos (die Fabrik hat keinen): Arm nach Parität", () => {
+    expect(arm.laufe(["235"], { config: CONFIG })).toEqual({ code: 0, ausgabe: "lens-kern-je-rolle" });
+  });
   test("ohne nutzbare Config: Exit 1 mit Fix-Zeile", () => {
     const r = arm.laufe(["235"], { config: { agenten: {} }, bezieher: () => false });
     expect(r.code).toBe(1);
