@@ -4,7 +4,7 @@
  * Spezifikation wird nachgezogen. Die Auswahl (`naechstes-ticket.mjs`) meldet nur (`reparieren #<nr>`), dieses Skript schreibt.
  *
  *   node scripts/spezifikation.mjs pruefen --body-datei <pfad>
- *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …]
+ *   node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …] [--epic <nr>]
  *   node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>
  *   node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"
  *
@@ -16,6 +16,8 @@
  * über `board-place.mjs` ein (`--nach` = hinter diese Nummer, dazu Pflicht `--weil "<grund>"` nach den Kriterien aus `POSITIONS_KRITERIEN`; `--notfall` = ganz oben, die Art ist der Grund); die Ausgabe nennt `Position: hinter #<nr>, weil <grund>`. `reparieren` ersetzt den Body eines freien,
  * vertrauten Issues, wenn der neue Body vollständig ist und keine Zeile des alten verliert (`verloreneZeilen`); ein Fremdeingang
  * (Autor nicht vertraut oder Forum-Label der Projekt-Config) wird nie umgeschrieben. Der Body wird nie ausgegeben, nur Mängel und verlorene Zeilen.
+ *
+ * `--epic <nr>` (nur `anlegen`) hängt das neue Ticket als native Unteraufgabe an das Epic <nr> im Ziel-Repo (`blocker-lib.mjs`, `addSubIssue`); scheitert die Kante, bleibt es bei einer Warnung und Exit 0.
  *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
@@ -34,7 +36,7 @@ import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { configAusAufruf, labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istRepoForm } from "./repo-form.mjs";
 import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { echteVerknuepfung, verknuepfeBlocker } from "./blocker-lib.mjs";
+import { echteEpicVerknuepfung, echteVerknuepfung, verknuepfeBlocker, verknuepfeEpic } from "./blocker-lib.mjs";
 import { pruefeBefundZeile } from "./sammelticket-titel.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
@@ -42,7 +44,7 @@ import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, ve
 const AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …]',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …] [--epic <nr>]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
   '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");
@@ -57,7 +59,7 @@ const liste = (zeilen) => zeilen.map((z) => `  - ${z}`).join("\n");
 const BEFEHLE = {
   pruefen: { optionen: { "body-datei": { type: "string" } }, positionale: 0 },
   anlegen: {
-    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, weil: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true } },
+    optionen: { titel: { type: "string" }, "body-datei": { type: "string" }, label: { type: "string", multiple: true }, nach: { type: "string" }, weil: { type: "string" }, notfall: { type: "string" }, blocker: { type: "string", multiple: true }, epic: { type: "string" } },
     positionale: 0,
   },
   reparieren: { optionen: { "body-datei": { type: "string" } }, positionale: 1 },
@@ -85,6 +87,7 @@ export function aufrufPruefen(argv) {
   }
   const blocker = (r.werte.blocker ?? []).map(blockerArg);
   if (blocker.includes(null)) return { fehler: "--blocker braucht eine Ticketnummer oder owner/name#<nr> (--blocker <nr>, mehrfach möglich)" };
+  if (r.werte.epic !== undefined && positiveZahl(r.werte.epic) === null) return { fehler: "--epic braucht eine Ticketnummer (--epic <nr>: das neue Ticket wird Unteraufgabe dieses Epics)" };
   return { befehl: r.befehl, werte: { ...r.werte, label: r.werte.label ?? [], ...(r.befehl === "anlegen" ? { blocker } : {}) }, positional: r.positionale };
 }
 
@@ -222,7 +225,7 @@ function anlegen(werte, io, sprache) {
   } catch (e) {
     return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number, repo)}`);
   }
-  const warnung = verknuepfeBlocker(neu, werte.blocker, repo, io);
+  const warnung = verknuepfeBlocker(neu, werte.blocker, repo, io) + verknuepfeEpic(neu, werte.epic === undefined ? null : positiveZahl(werte.epic), repo, io);
   return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\nPosition: ${positionText(nach, werte)}\n`, warnung);
 }
 
@@ -298,6 +301,7 @@ export const echteIo = (config, { ghJson: gh = ghJson, exec = execFileSync, lade
     erzeuge: ({ titel, body, labels, repo }) =>
       gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, ...labels.flatMap((l) => ["-f", `labels[]=${l}`])], { token: tokenFuerZiel({ ziel: repo, eigenes: REPO, env }) }),
     verknuepfeBlocker: echteVerknuepfung({ gh, env, eigenes: REPO }),
+    verknuepfeEpic: echteEpicVerknuepfung({ gh, env, eigenes: REPO }),
     pruefeAnker: (a) => ankerPruefung(a, (rolle, repo) => lade(boardFuerRolle(rolle), { repo }), config),
     einsortiere: ({ nr, nach, notfall, repo }) => {
       const args = ["--repo", repo, ...(nach ? ["--after", String(nach), String(nr)] : ["--notfall", notfall, "--top", String(nr)])];
