@@ -167,6 +167,11 @@ describe("Filter und Ausgabe", () => {
     assert.equal(z[2], `src/a.mjs:10 | ConditionalExpression | ${"y".repeat(80)}`);
     assert.equal(z[3], "src/a.mjs:100 | ConditionalExpression | true");
   });
+  test("ein Backslash im Ersatz wird vor dem Pipe-Zeichen maskiert", () => {
+    const z = lib.formatiere([mu({ ersatz: String.raw`/\.\//` }), mu({ zeile: 6, ersatz: String.raw`a\|b` })]);
+    assert.equal(z[1], String.raw`src/a.mjs:5 | ConditionalExpression | /\\.\\//`);
+    assert.equal(z[2], String.raw`src/a.mjs:6 | ConditionalExpression | a\\\|b`);
+  });
   test("Leerraum am Rand des Ersatzes wird entfernt, ein null-Ersatz ist „–“", () => {
     const z = lib.formatiere([mu({ ersatz: "  x  " }), mu({ zeile: 6, ersatz: null as unknown as undefined })]);
     assert.equal(z[1], "src/a.mjs:5 | ConditionalExpression | x");

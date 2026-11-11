@@ -95,7 +95,7 @@ export function aufBereicheFiltern(mutanten, bereiche) {
 }
 
 const einzeilig = (t) => {
-  const s = String(t).replace(/\s+/g, " ").trim().replace(/\|/g, "\\|");
+  const s = String(t).replace(/\s+/g, " ").trim().replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
   return s.length > MAX_ERSATZ ? `${s.slice(0, MAX_ERSATZ - 1)}…` : s;
 };
 const zeileVon = (m) => `${m.datei}:${m.zeile} | ${einzeilig(m.mutator)} | ${m.ersatz === undefined || m.ersatz === null ? "–" : einzeilig(m.ersatz)}`;
