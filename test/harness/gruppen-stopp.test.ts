@@ -32,12 +32,16 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
   });
   test("der Umsetzer setzt, wartet, sichert, nimmt zurück und räumt die Marke", () => {
     const text = lies(".claude/agents/factory-umsetzer.md");
-    for (const teil of ["touch", "stash push -u", "git revert --no-edit", "rm -f", "kein `TaskStop`"]) expect(text).toContain(teil);
+    for (const teil of ["Marke `touch \"$(git", "stash push -u -m", "git revert --no-edit", "entferne die Marke (`rm -f` auf denselben Pfad)", "kein `TaskStop` am Gruppen-Umsetzer"]) expect(text).toContain(teil);
+    expect(text).toContain("liegt dort eine verwaiste Marke");
+    expect(text).toContain("vor der ersten Gruppe mit `rm -f` auf denselben Pfad");
   });
   test("der Hauptchat-Ablauf nennt seine Rolle beim Planwechsel und nach einem eigenen TaskStop", () => {
     const text = lies(".agents/skills/factory/ablauf.md");
-    expect(text).toContain("SendMessage");
-    expect(text).toContain("setzt er danach selbst die Marke");
+    expect(text).toContain("**Planwechsel bei laufender Gruppe:**");
+    expect(text).toContain("schicke ihm den neuen Plan per `SendMessage`");
+    expect(text).toContain("setzt du danach selbst die Marke");
+    expect(text).not.toContain("setzt er danach selbst die Marke");
   });
   test("das Glossar erklärt die Gruppen-Stopp-Marke", () => {
     expect(lies("docs/harness-glossar.md")).toContain("Gruppen-Stopp-Marke");
