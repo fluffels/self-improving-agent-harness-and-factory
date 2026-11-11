@@ -7,6 +7,7 @@
  * Export-Arten: die der Auswertung (`gesamt`, `tage`, `latenz`, `metadaten`) und zwei eigene, `sessions` (Sessions der Woche,
  * Dimensionen sessionId und traceName) und `erfassung` (Scores `erfassung` und `erfassung_hook` je Session). Jeder
  * observations-Export trägt den Projektfilter (`projektFilterAus`), sonst bricht `ordneExporte`.
+ * Kosten je Merge (factory#324): `kostenAnstiegProzent` misst das Δ der Kosten je gemergtem PR (Merge-Zahlen liefert die CLI per `gh`-Suche, die Lib bekommt sie als `merges`).
  * Zählweise der Erfassungslücken: m(Woche) + j(Vorwoche), also Scores unter 1 der Woche plus Sessions der Vorwoche, die weiter ohne
  * Score sind (die Ruhefrist des Abgleichs ist dann sicher um). Codex-Sessions zählen nie (der Abgleich liest nur Claude-Transkripte).
  */
@@ -180,11 +181,41 @@ export function erfassungsprobe({ sessionsW, sessionsV, scores }) {
   return { ...p, luecken: p.m + p.jVorwoche };
 }
 
-/** Summe, Δ und Anteil unzugeordnet aus den Berichten der Woche und der Vorwoche; nicht bewertbare Werte sind `null`. */
-export function kennzahlen(b, bV) {
-  const delta = bV.bereinigt.count > 0 && bV.bereinigt.cost > 0 ? ((b.bereinigt.cost - bV.bereinigt.cost) / bV.bereinigt.cost) * 100 : null;
+const mergeZeit = (iso8601) => iso8601.slice(0, 19) + "+00:00";
+
+/** Pur: `gh`-Argumente für die Zahl der gemergten PRs eines Repos im Fenster [von, bis) (Suche, `per_page=1`: nur `total_count` zählt). */
+export function mergeSucheArgs({ owner, repo, von, bis }) {
+  const bisIncl = new Date(Date.parse(bis) - 1000).toISOString();
+  return ["api", "-X", "GET", "search/issues", "-f", `q=repo:${owner}/${repo} is:pr is:merged merged:${mergeZeit(von)}..${mergeZeit(bisIncl)}`, "-f", "per_page=1"];
+}
+
+/** Pur: Zahl der Merges aus der Suchantwort; wirft bei unlesbarem JSON, unvollständigem Ergebnis oder unbrauchbarem `total_count`. */
+export function mergeAnzahl(text) {
+  let j;
+  try {
+    j = JSON.parse(text);
+  } catch {
+    throw new Error("Merges nicht ermittelbar: Antwort der Suche ist kein JSON");
+  }
+  if (j?.incomplete_results !== false) throw new Error("Merges nicht ermittelbar: Suche unvollständig (incomplete_results)");
+  if (!Number.isInteger(j.total_count) || j.total_count < 0) throw new Error("Merges nicht ermittelbar: total_count fehlt oder ist keine Ganzzahl >= 0");
+  return j.total_count;
+}
+
+/**
+ * Summe, Δ, Kosten je Merge und Anteil unzugeordnet aus den Berichten der Woche und der Vorwoche; nicht bewertbare Werte sind `null`.
+ * `merges` = `{ woche, vorwoche }` gemergte PRs (Nenner mindestens 1); ohne `merges` ist `deltaJeMergeProzent` `null`, bei 0 Merges in beiden Wochen ergibt der Nenner 1 beider Seiten das Summen-Δ.
+ */
+export function kennzahlen(b, bV, merges = null) {
+  const bewertbar = bV.bereinigt.count > 0 && bV.bereinigt.cost > 0;
+  const delta = bewertbar ? ((b.bereinigt.cost - bV.bereinigt.cost) / bV.bereinigt.cost) * 100 : null;
   const unz = b.bereinigt.cost > 0 ? (b.unzugeordnet.cost / b.bereinigt.cost) * 100 : null;
-  return { summe: b.bereinigt.cost, vorwoche: bV.bereinigt.cost, deltaProzent: delta, unzugeordnetProzent: unz };
+  const je = (cost, n) => cost / Math.max(n, 1);
+  const jeMerge = merges === null ? null : je(b.bereinigt.cost, merges.woche);
+  const jeMergeVor = merges === null ? null : je(bV.bereinigt.cost, merges.vorwoche);
+  let deltaJe = null;
+  if (bewertbar && merges !== null) deltaJe = ((jeMerge - jeMergeVor) / jeMergeVor) * 100;
+  return { summe: b.bereinigt.cost, vorwoche: bV.bereinigt.cost, deltaProzent: delta, merges, jeMerge, jeMergeVorwoche: jeMergeVor, deltaJeMergeProzent: deltaJe, unzugeordnetProzent: unz };
 }
 
 // ── Urteil ───────────────────────────────────────────────────────────────────
@@ -208,19 +239,25 @@ export function urteil(schwellen, ist) {
 const unzugeordnetLuecke = (b) => (b.unzugeordnet.count > 0 ? [`Zeilen ohne Rolle oder Modell: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)})`] : []);
 
 /** Baut Bericht, Kennzahlen, Probe und Urteil aus den geordneten Exporten. */
-export function wochenAuswertung(geordnet, { schwellen, vermerk }) {
+export function wochenAuswertung(geordnet, { schwellen, vermerk, merges }) {
   const roh = bericht(geordnet.woche);
   const b = { ...roh, luecken: [...roh.luecken, ...unzugeordnetLuecke(roh)] };
   const bV = bericht([geordnet.vorwoche]);
   const probe = erfassungsprobe({ sessionsW: geordnet.sessionsW.data, sessionsV: geordnet.sessionsV.data, scores: geordnet.erfassung.data });
-  const k = kennzahlen(b, bV);
-  const u = urteil(schwellen, { erfassungLueckenMax: probe.luecken, kostenAnstiegProzent: k.deltaProzent, unzugeordnetProzent: k.unzugeordnetProzent });
+  const k = kennzahlen(b, bV, merges);
+  const u = urteil(schwellen, { erfassungLueckenMax: probe.luecken, kostenAnstiegProzent: k.deltaJeMergeProzent, unzugeordnetProzent: k.unzugeordnetProzent });
   return { bericht: b, probe, kennzahlen: k, urteil: u, schwellen: schwellen ?? null, vermerk: vermerk ?? null };
 }
 
 function urteilZeilen(u) {
   const kopf = u.agentLaufNoetig ? "Agent-Lauf nötig" : "kein Agent-Lauf nötig";
   return [`${kopf}.`, ...u.gruende.map((g) => `- ${g.schwelle}: Ist ${Number(g.ist).toFixed(1)}, Soll höchstens ${g.soll}`), ...u.hinweise.map((h) => `- ${h}`)];
+}
+
+function jeMergeZeile(k) {
+  if (k.merges === null) return "Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.";
+  const delta = `Δ ${prozent(k.deltaJeMergeProzent)}${k.deltaJeMergeProzent === null ? " (Vorwoche ohne Kosten, nicht bewertbar)" : ""}`;
+  return `Gemergte PRs: Woche ${k.merges.woche}, Vorwoche ${k.merges.vorwoche}; Kosten je Merge ${usd(k.jeMerge)} (Vorwoche ${usd(k.jeMergeVorwoche)}), ${delta}. Nenner mindestens 1; das Urteil misst \`kostenAnstiegProzent\` an diesem Δ, nicht an der Summe.`;
 }
 
 /** Markdown des Wochenberichts (die Auswertung steht mit um eine Ebene tieferen Überschriften darunter). */
@@ -236,9 +273,10 @@ export function renderWochenbericht(montag, projektFilter, a) {
     "",
     ...urteilZeilen(a.urteil),
     "",
-    "## Summe und Δ Vorwoche",
+    "## Summe, Kosten je Merge und Δ Vorwoche",
     "",
     `Woche ${usd(k.summe)}, Vorwoche ${usd(k.vorwoche)}, Δ ${prozent(k.deltaProzent)}${k.deltaProzent === null ? " (Vorwoche ohne Kosten, nicht bewertbar)" : ""}. Beide Summen bereinigt nur um negative Latenz (nur Woche) und Audit-Kopien, ohne Überzählung und Preisabweichung (dafür braucht es die Transkripte, \`--pruefen\`).`,
+    jeMergeZeile(k),
     "",
     "## Erfassungsprobe",
     "",

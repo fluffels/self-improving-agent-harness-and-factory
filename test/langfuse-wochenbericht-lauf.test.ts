@@ -362,6 +362,11 @@ describe("Wochenbericht-Lauf: Aufruf des Auswertens, Ergänzen, Kappung, Produkt
     expect(u.a.argumente[0].deps).toMatchObject({ home: u.home, jetzt: MI, env: { LANGFUSE_PUBLIC_KEY: "pk" } });
     expect(u.a.argumente[0].deps.projekt).toBe((u.deps as { projekt: unknown }).projekt);
   });
+  test("das Auswerten bekommt dasselbe `gh` wie der Lauf (Merge-Suche, factory#324)", async () => {
+    const u = umgebung({ exit: 0 });
+    await u.lauf();
+    expect(u.a.argumente[0].deps.gh).toBe((u.deps as { gh: unknown }).gh);
+  });
   test("ein Fehler ergänzt die vorhandene .json (Zusatzfeld bleibt) und überschreibt den Status", async () => {
     const u = umgebung({ exit: 1, vorher: { status: "unerreichbar", woche: MONTAG, extra: 1 } });
     await u.lauf();

@@ -1,7 +1,7 @@
 import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -10,6 +10,13 @@ import * as libRaw from "../scripts/langfuse-wochenbericht-lib.mjs";
 import * as cliRaw from "../scripts/langfuse-wochenbericht.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as liveRaw from "../scripts/langfuse-wochenbericht-live.mjs";
+
+/** Das echte `gh` erreicht nie ein Test: `ghText` ist gemockt, geprüft wird nur, mit welchen Argumenten der Rückfall (`deps.gh` fehlt) es ruft (factory#324). */
+const ghMockAufrufe = vi.hoisted(() => [] as string[][]);
+vi.mock("../scripts/gh-cli.mjs", async (orig) => {
+  const echt = await orig<Record<string, unknown>>();
+  return { ...echt, ghText: (args: string[]) => { ghMockAufrufe.push(args); return JSON.stringify({ total_count: 7, incomplete_results: false }); } };
+});
 
 type Abfr = { view: string; filters: unknown[]; fromTimestamp: string; toTimestamp: string };
 type Rez = { art: string; name: string; abfrage: Abfr };
@@ -30,8 +37,11 @@ type Wb = Record<string, unknown>;
 const E = libRaw as unknown as {
   pruefeAbgeschlossen: (m: string, jetzt: string) => void;
   ordneExporte: (roh: Array<{ json: unknown; pfad: string }>, o: { montag: string; projektFilter: unknown }) => unknown;
-  kennzahlen: (b: Wb, bV: Wb) => { deltaProzent: number | null; unzugeordnetProzent: number | null };
+  kennzahlen: (b: Wb, bV: Wb, merges?: { woche: number; vorwoche: number } | null) => { deltaProzent: number | null; unzugeordnetProzent: number | null; deltaJeMergeProzent: number | null; jeMerge: number | null; jeMergeVorwoche: number | null; merges: { woche: number; vorwoche: number } | null };
+  mergeSucheArgs: (o: { owner: string; repo: string; von: string; bis: string }) => string[];
+  mergeAnzahl: (t: string) => number;
 };
+const ordneSatz = (dateien: Satz) => E.ordneExporte(Object.values(dateien).map((json, i) => ({ json, pfad: `p${i}` })), { montag: MONTAG, projektFilter: PF });
 const C = cliRaw as unknown as { parseArgs: (a: string[]) => unknown; auswerten: (a: unknown, d?: Record<string, unknown>) => Promise<Ergebnis> };
 const { parseArgs, auswerten } = C;
 const CLI = cliRaw as unknown as { ladeProjekt: (w?: string, lies?: (p: string, e: string) => string) => { owner: string; repo: string; tags: string[]; schwellen?: Record<string, number> } };
@@ -68,7 +78,7 @@ function satz(opt: { kostenW?: number; kostenV?: number; sessionsW?: Array<[stri
 const PROJEKT = { owner: "own", repo: "repo", schwellen: undefined as Satz | undefined, tags: ["factory"], wurzel: process.cwd() };
 function lauf(argv: string[], dateien: Satz, deps: Satz = {}) {
   const lies = (p: string) => (p in dateien ? (typeof dateien[p] === "string" ? dateien[p] : JSON.stringify(dateien[p])) : (() => { throw new Error("ENOENT " + p); })());
-  return auswerten(parseArgs([...argv, ...(argv.includes("--rezept") ? [] : Object.keys(dateien).flatMap((p) => ["--export", p]))]), { jetzt: JETZT, projekt: PROJEKT, lies, ...deps });
+  return auswerten(parseArgs([...argv, ...(argv.includes("--rezept") ? [] : Object.keys(dateien).flatMap((p) => ["--export", p]))]), { jetzt: JETZT, projekt: PROJEKT, lies, gh: GH, ...deps });
 }
 const temps: string[] = [];
 const tmp = () => {
@@ -85,6 +95,12 @@ const fehler = async (dateien: Satz, text: string) => {
   expect(r.stderr).toContain(text);
 };
 const SCHWELLEN = { erfassungLueckenMax: 0, kostenAnstiegProzent: 50, unzugeordnetProzent: 90 };
+/** `gh`-Stub der Merge-Suche (factory#324): Woche (Montag 2026-11-02) und Vorwoche liefern je die übergebene Zahl; echtes `gh` erreicht nie einen Test. */
+const ghMerges = (woche: number, vorwoche: number) => (args: string[]) => {
+  const q = args.find((a) => a.startsWith("q=")) ?? "";
+  return JSON.stringify({ total_count: q.includes("merged:2026-11-02T") ? woche : vorwoche, incomplete_results: false });
+};
+const GH = ghMerges(10, 10);
 
 describe("Woche", () => {
   test("letzteVolleWoche: Mittwoch ergibt den Montag der Vorwoche, Montag 00:10Z mit Ruhefrist den Montag davor", () => {
@@ -272,7 +288,7 @@ describe("Negativfälle (Exit 4)", () => {
         : [{ ...g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 4, 2), min_latency: 1 }];
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data }) });
     };
-    const r = await auswerten(parseArgs([]), { jetzt: JETZT, projekt: PROJEKT, home: tmp(), env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, fetchImpl });
+    const r = await auswerten(parseArgs([]), { jetzt: JETZT, projekt: PROJEKT, home: tmp(), env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, fetchImpl, gh: GH });
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("1 Sessions (ohne Codex): 1 mit Score 1");
   });
@@ -494,5 +510,111 @@ describe("Ablage", () => {
     const home = tmp();
     await lauf([], satz(), { home });
     expect(existsSync(join(home, ".claude"))).toBe(false);
+  });
+});
+
+describe("Kosten je Merge (factory#324)", () => {
+  const SCHWELLEN_KOSTEN = { ...SCHWELLEN, unzugeordnetProzent: 100 };
+  const bw = (cost: number, count = 5) => ({ bereinigt: { cost, count }, unzugeordnet: { cost: 0, count: 0 } });
+  test("mergeSucheArgs: Fenster der Woche von Montag 00:00:00 bis Sonntag 23:59:59, Repo und per_page", () => {
+    const args = E.mergeSucheArgs({ owner: "own", repo: "repo", von: F.von, bis: F.bis });
+    expect(args).toEqual(["api", "-X", "GET", "search/issues", "-f", "q=repo:own/repo is:pr is:merged merged:2026-11-02T00:00:00+00:00..2026-11-08T23:59:59+00:00", "-f", "per_page=1"]);
+  });
+  test("mergeAnzahl: gültige Antwort zählt, alles andere wirft", () => {
+    expect(E.mergeAnzahl('{"total_count":56,"incomplete_results":false}')).toBe(56);
+    expect(E.mergeAnzahl('{"total_count":0,"incomplete_results":false}')).toBe(0);
+    const falsch: Array<[string, RegExp]> = [
+      ["kein json", /kein JSON/],
+      ["null", /unvollständig/],
+      ['{"total_count":5,"incomplete_results":true}', /unvollständig/],
+      ['{"total_count":5}', /unvollständig/],
+      ['{"incomplete_results":false}', /total_count/],
+      ['{"total_count":-1,"incomplete_results":false}', /total_count/],
+      ['{"total_count":"5","incomplete_results":false}', /total_count/],
+      ['{"total_count":1.5,"incomplete_results":false}', /total_count/],
+    ];
+    for (const [t, muster] of falsch) expect(() => E.mergeAnzahl(t), t).toThrow(muster);
+  });
+  test("Beleg-Woche 2026-11-02: Summe +152,5 %, je Merge -9,8 %, kein Agent-Lauf", () => {
+    const k = E.kennzahlen(bw(995.23), bw(394.21), { woche: 56, vorwoche: 20 });
+    expect(k.deltaProzent).toBeCloseTo(152.5, 1);
+    expect(k.deltaJeMergeProzent).toBeCloseTo(-9.8, 1);
+    expect(k.jeMerge).toBeCloseTo(17.77, 2);
+    expect(k.jeMergeVorwoche).toBeCloseTo(19.71, 2);
+    const u = W.urteil({ erfassungLueckenMax: 0, kostenAnstiegProzent: 50, unzugeordnetProzent: 90 }, { erfassungLueckenMax: 0, kostenAnstiegProzent: k.deltaJeMergeProzent, unzugeordnetProzent: 0 });
+    expect(u.agentLaufNoetig).toBe(false);
+  });
+  test("Beleg-Woche über auswerten: Summe weit über 50 %, je Merge darunter ergibt Exit 0 (Red-Green: Urteil auf die Summe zurückdrehen macht rot)", async () => {
+    const r = await lauf(["--json"], satz({ kostenW: 995.23, kostenV: 394.21 }), { gh: ghMerges(56, 20), projekt: { ...PROJEKT, schwellen: SCHWELLEN_KOSTEN } });
+    expect(r.exitCode).toBe(0);
+    expect(lese<{ summe: { deltaProzent: number } }>(r.stdout).summe.deltaProzent).toBeGreaterThan(150);
+  });
+  test("strenger: Kosten flach, Merges halbiert, je Merge +100 %: Lauf nötig (Ende zu Ende über auswerten)", async () => {
+    const k = E.kennzahlen(bw(20), bw(20), { woche: 5, vorwoche: 10 });
+    expect(k.deltaJeMergeProzent).toBeCloseTo(100, 5);
+    const r = await lauf(["--json"], satz({ kostenW: 20, kostenV: 20 }), { gh: ghMerges(5, 10), projekt: { ...PROJEKT, schwellen: SCHWELLEN_KOSTEN } });
+    expect(r.exitCode).toBe(3);
+    expect(lese<{ urteil: { gruende: Array<{ schwelle: string }> } }>(r.stdout).urteil.gruende.map((x) => x.schwelle)).toEqual(["kostenAnstiegProzent"]);
+  });
+  test("0 Merges in der Woche bei Kosten: Nenner 1 löst aus; beide Wochen 0: Rückfall auf Summen-Δ; Merges null: nicht bewertbar", () => {
+    expect(E.kennzahlen(bw(20), bw(20), { woche: 0, vorwoche: 10 }).deltaJeMergeProzent).toBeCloseTo(900, 5);
+    expect(E.kennzahlen(bw(20), bw(20), { woche: 10, vorwoche: 0 }).deltaJeMergeProzent).toBeCloseTo(-90, 5);
+    expect(E.kennzahlen(bw(30), bw(20), { woche: 0, vorwoche: 0 }).deltaJeMergeProzent).toBeCloseTo(50, 5);
+    const ohne = E.kennzahlen(bw(30), bw(20));
+    expect(ohne).toMatchObject({ deltaJeMergeProzent: null, jeMerge: null, merges: null, deltaProzent: 50 });
+    expect(E.kennzahlen(bw(30), bw(0, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(0, 4), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(5, 0), { woche: 3, vorwoche: 3 }).deltaProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(5, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+  });
+  test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", () => {
+    const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => { urteil: Urteil } };
+    const geordnet = ordneSatz(satz());
+    const a = lib.wochenAuswertung(geordnet, { schwellen: SCHWELLEN });
+    expect(a.urteil.hinweise).toContain("kostenAnstiegProzent: nicht bewertbar");
+  });
+  test("manueller Aufruf ohne deps.gh nimmt das echte gh, eine injizierte Naht gewinnt (Red-Green: `?? ghEcht` entfernen macht rot)", () => {
+    const k = cliRaw as unknown as { ghDer: (d: Record<string, unknown>) => unknown; ghEcht: unknown };
+    const stub = () => "";
+    expect(k.ghDer({})).toBe(k.ghEcht);
+    expect(typeof k.ghEcht).toBe("function");
+    expect(k.ghDer({ gh: stub })).toBe(stub);
+  });
+  test("auswerten ohne deps.gh (manueller Aufruf) ruft das echte gh mit den Such-Argumenten beider Wochen (Red-Green: Aufrufstelle auf deps.gh umstellen macht rot)", async () => {
+    ghMockAufrufe.length = 0;
+    const r = await lauf(["--json"], satz(), { gh: undefined });
+    expect(r.exitCode).toBe(0);
+    expect(ghMockAufrufe.map((a) => a.find((x) => x.startsWith("q=")))).toEqual([
+      "q=repo:own/repo is:pr is:merged merged:2026-11-02T00:00:00+00:00..2026-11-08T23:59:59+00:00",
+      "q=repo:own/repo is:pr is:merged merged:2026-10-26T00:00:00+00:00..2026-11-01T23:59:59+00:00",
+    ]);
+    expect(lese<{ summe: { merges: unknown } }>(r.stdout).summe.merges).toEqual({ woche: 7, vorwoche: 7 });
+  });
+  test("Markdown: ohne Merges und bei Vorwoche ohne Kosten steht der Grund in der Zeile Kosten je Merge", async () => {
+    const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => unknown; renderWochenbericht: (m: string, f: unknown, a: unknown) => string };
+    const ohne = lib.renderWochenbericht(MONTAG, PF, lib.wochenAuswertung(ordneSatz(satz()), { schwellen: SCHWELLEN }));
+    expect(ohne).toContain("Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.");
+    const ohneKosten = (await lauf([], satz({ kostenV: 0 }))).stdout;
+    expect(ohneKosten).toMatch(/^Gemergte PRs:.*Δ – \(Vorwoche ohne Kosten, nicht bewertbar\)/m);
+    expect(ohneKosten).toContain("Gemergte PRs: Woche 10, Vorwoche 10;");
+  });
+  test("auswerten: Markdown trägt die Zeile Kosten je Merge, JSON summe.merges; gh-Aufrufe für Woche und Vorwoche", async () => {
+    const aufrufe: string[][] = [];
+    const gh = (a: string[]) => { aufrufe.push(a); return ghMerges(10, 8)(a); };
+    const md = await lauf([], satz(), { gh });
+    expect(md.stdout).toContain("Gemergte PRs: Woche 10, Vorwoche 8; Kosten je Merge 2.00 $ (Vorwoche 2.50 $), Δ -20.0 %");
+    expect(aufrufe).toHaveLength(2);
+    expect(aufrufe[0].join(" ")).toContain("repo:own/repo");
+    const js = lese<{ summe: { merges: { woche: number; vorwoche: number } } }>((await lauf(["--json"], satz(), { gh: ghMerges(10, 8) })).stdout);
+    expect(js.summe.merges).toEqual({ woche: 10, vorwoche: 8 });
+  });
+  test("gh wirft oder liefert incomplete: Exit 1, mit --ablegen keine .md", async () => {
+    for (const gh of [() => { throw new Error("gh kaputt"); }, () => '{"total_count":3,"incomplete_results":true}']) {
+      const home = tmp();
+      const r = await lauf(["--ablegen"], satz(), { gh, home });
+      expect(r.exitCode).toBe(1);
+      expect(r.stderr).toMatch(/gh kaputt|Merges nicht ermittelbar/);
+      expect(existsSync(join(home, ".claude", "state", "langfuse-wochenbericht", "own__repo", `${MONTAG}.md`))).toBe(false);
+    }
   });
 });
