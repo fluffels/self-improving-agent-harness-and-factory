@@ -389,7 +389,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("R5: ohne `Brille: <Schlüssel>` am Prompt-Anfang oder mit unbekannter Brille wird verweigert, die Meldung nennt die bekannten Brillen", () => {
     const rest = `Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`;
-    for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · "]) {
+    for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · "]) {
       const out = deny(agent(`${kopf}${rest}`));
       assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", kopf);
       assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, doku/, kopf);
@@ -403,6 +403,8 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     for (const wert of ["architektur", "requirement-treue", "test-adaequanz", "doku", "Test-Adäquanz", "Requirement-Treue", "`doku`", "Architektur (Schichtregeln)"]) {
       assert.equal(deny(agent(`Brille: ${wert} · ${rest}`)), null, wert);
     }
+    // Schreibweisen der Kopfzeile: ohne Leerzeichen, mit führendem Leerraum, ohne Trenner-Leerzeichen vor dem `·`
+    for (const kopf of ["Brille:doku · ", "  \n Brille: doku · ", "Brille: doku· ", "Brille:  doku · "]) assert.equal(deny(agent(`${kopf}${rest}`)), null, JSON.stringify(kopf));
     assert.match(grund(agent("Patch: <TMP>/x.patch · erwarteter HEAD: abc1234")), /Patch/);
     assert.match(grund(agent("Brille: stil · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc")), /Commit-Hash/);
   });

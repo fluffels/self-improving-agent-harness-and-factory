@@ -85,7 +85,7 @@ function unbekannteLensEndung(text, namen) {
 /** R5: Grund, wenn der Prompt nicht mit `Brille: <Schlüssel>` beginnt oder der Schlüssel keine bekannte Brille ist; sonst `null`. Pure. */
 function brillenGrund(text) {
   const wert = /^\s*Brille:[ \t]*([^\s·]+)/.exec(text)?.[1];
-  const schluessel = normalisiereLens((wert ?? "").replace(/^`+|`+$/g, ""));
+  const schluessel = normalisiereLens((wert ?? "").replace(/^`|`$/g, ""));
   if (BEKANNTE_LENSES.includes(schluessel)) return null;
   return `Lens-Auftrag unvollständig: der Prompt beginnt nicht mit „Brille: <Schlüssel>“ mit einer bekannten Brille (${BEKANNTE_LENSES.join(", ")}); die Lens liest ihre Brillen-Datei (brille-<Schlüssel>.md) selbst und braucht den Schlüssel. ${HINWEIS}`;
 }
