@@ -18,7 +18,9 @@ type Vorbedingung = {
   bewerteHealth: (e: { status?: number; fehler?: string }) => Urteil;
   basisUrl: (env: Record<string, string | undefined>) => string;
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
-  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string }) => Promise<number>;
+  bewerteMcpSpur: (zeilen: string[], sessionId: string | undefined) => { ok: boolean; grund?: string; zeit?: string; code?: string } | null;
+  mcpZeilenLesen: (o: { env: Record<string, string | undefined>; home: string; jetzt: number; wurzel: string; fs?: { readdirSync: (p: string) => string[]; statSync: (p: string) => { mtimeMs: number }; readFileSync: (p: string, e: string) => string } }) => string[];
+  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
 const WURZEL = process.cwd();
@@ -87,6 +89,71 @@ const keineDatei = () => {
   throw new Error("keine Datei");
 };
 
+const SID = "11111111-aaaa-bbbb-cccc-000000000001";
+const zeile = (debug: string, zeit: string, sessionId = SID) => JSON.stringify({ debug, timestamp: zeit, sessionId, cwd: "/projekt" });
+const START = (z: string, sid = SID) => zeile("Starting connection with timeout of 30000ms", z, sid);
+const FEHLER = (z: string, sid = SID) => zeile("HTTP Connection failed after 4ms: ECONNREFUSED: Unable to connect. (code: ECONNREFUSED, errno: none)", z, sid);
+const ERFOLG = (z: string, sid = SID) => zeile("Successfully connected (transport: http) in 71ms", z, sid);
+
+describe("bewerteMcpSpur (L4, factory#320)", () => {
+  test("Verbindungsfehler nach dem Start ohne späteren Erfolg: nicht ok, mit Zeit und Code", () => {
+    const r = v.bewerteMcpSpur([START("2026-11-10T07:26:34.000Z"), FEHLER("2026-11-10T07:26:34.356Z")], SID);
+    expect(r).toMatchObject({ ok: false, zeit: "2026-11-10T07:26:34.356Z", code: "ECONNREFUSED" });
+    expect(r?.grund).toContain("ECONNREFUSED");
+  });
+  test("Erfolg nach dem Fehler (Reconnect): ok", () => {
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z"), FEHLER("2026-11-10T07:00:01.000Z"), ERFOLG("2026-11-10T07:00:02.000Z")], SID)).toMatchObject({ ok: true });
+  });
+  test("ein Fehler vor dem letzten Start zählt nicht (nur die Spur ab dem letzten Start)", () => {
+    const z = [START("2026-11-10T07:00:00.000Z"), FEHLER("2026-11-10T07:00:01.000Z"), START("2026-11-10T07:05:00.000Z"), ERFOLG("2026-11-10T07:05:01.000Z")];
+    expect(v.bewerteMcpSpur(z, SID)).toMatchObject({ ok: true });
+  });
+  test("Erfolg ohne Fehler: ok", () => {
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z"), ERFOLG("2026-11-10T07:00:01.000Z")], SID)).toMatchObject({ ok: true });
+  });
+  test("fremde Session, keine Zeilen, keine Session-ID, Start ohne Ergebnis: nicht prüfbar (null)", () => {
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z", "fremd"), FEHLER("2026-11-10T07:00:01.000Z", "fremd")], SID)).toBeNull();
+    expect(v.bewerteMcpSpur([], SID)).toBeNull();
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z"), FEHLER("2026-11-10T07:00:01.000Z")], undefined)).toBeNull();
+    expect(v.bewerteMcpSpur([START("2026-11-10T07:00:00.000Z")], SID)).toBeNull();
+  });
+  test("kaputte Zeilen werden ignoriert", () => {
+    const z = ["{kaputt", "", START("2026-11-10T07:00:00.000Z"), "nur text", FEHLER("2026-11-10T07:00:01.000Z")];
+    expect(v.bewerteMcpSpur(z, SID)).toMatchObject({ ok: false });
+  });
+});
+
+describe("mcpZeilenLesen (L4)", () => {
+  const BASIS = "/c/claude-cli-nodejs";
+  const dateien: Record<string, { mtimeMs: number; text: string }> = {
+    [`${BASIS}/-projekt/mcp-logs-langfuse/neu.jsonl`]: { mtimeMs: 1_000_000, text: `${START("t")}\n${FEHLER("t")}\n` },
+    [`${BASIS}/-projekt/mcp-logs-langfuse/alt.jsonl`]: { mtimeMs: 1, text: `${ERFOLG("t")}\n` },
+  };
+  const fs = {
+    readdirSync: (p: string) => {
+      if (p === BASIS) return ["-projekt", "-fremd"];
+      if (p.endsWith("-projekt")) return ["mcp-logs-langfuse", "mcp-logs-x"];
+      return p.endsWith("mcp-logs-langfuse") ? ["neu.jsonl", "alt.jsonl"] : [];
+    },
+    statSync: (p: string) => ({ mtimeMs: dateien[p]?.mtimeMs ?? 0 }),
+    readFileSync: (p: string) => dateien[p]?.text ?? "",
+  };
+  test("liest nur Langfuse-Logdateien des Projekts aus den letzten 24 h", () => {
+    const z = v.mcpZeilenLesen({ env: { FACTORY_MCP_LOG_DIR: BASIS }, home: "/h", jetzt: 1_000_000 + 3_600_000, wurzel: "/projekt", fs });
+    expect(z).toHaveLength(2);
+    expect(z[0]).toContain("Starting connection");
+  });
+  test("ohne lesbaren Logordner: leer, wirft nie", () => {
+    const kaputt = {
+      ...fs,
+      readdirSync: () => {
+        throw new Error("weg");
+      },
+    };
+    expect(v.mcpZeilenLesen({ env: {}, home: "/h", jetzt: 1, wurzel: "/projekt", fs: kaputt })).toEqual([]);
+  });
+});
+
 describe("main", () => {
   const lauf = async (argv: string[], fetchImpl: Fetch) => {
     const out: string[] = [];
@@ -114,6 +181,40 @@ describe("main", () => {
     expect(j.systemMessage).toContain("Langfuse aus, bitte starten");
     expect(j.hookSpecificOutput.hookEventName).toBe("SessionStart");
     expect(j.hookSpecificOutput.additionalContext).toContain("Ohne Langfuse startet kein Ticket");
+  });
+  describe("MCP-Spur dieser Session (L4)", () => {
+    const spurAus = () => [START("2026-11-10T07:26:34.000Z"), FEHLER("2026-11-10T07:26:34.356Z")];
+    const mit = async (argv: string[], mcpZeilen: () => string[], env: Record<string, string> = { CLAUDE_CODE_SESSION_ID: SID }) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = await v.main(argv, env, (s) => out.push(s), (s) => err.push(s), { fetchImpl: antwort(200), fristMs: 20, home: "/h", lies: keineDatei, mcpZeilen });
+      return { code, out, err };
+    };
+    test("Health ok, MCP-Spur kaputt: Exit 1 mit Meldung samt Zeit, Code und /mcp-Hinweis", async () => {
+      const r = await mit([], spurAus);
+      expect(r.code).toBe(1);
+      const t = r.err.join("\n");
+      expect(t).toContain("Langfuse erreichbar, aber der Langfuse-MCP dieser Session verband nicht (2026-11-10T07:26:34.356Z, ECONNREFUSED)");
+      expect(t).toContain("/mcp");
+    });
+    test("--json bleibt erreichbar:true, Exit 0; --sessionstart bleibt Exit 0 ohne Ausgabe", async () => {
+      const j = await mit(["--json"], spurAus);
+      expect(j.code).toBe(0);
+      expect(JSON.parse(j.out[0])).toEqual({ erreichbar: true, grund: null });
+      const s = await mit(["--sessionstart"], spurAus);
+      expect(s.code).toBe(0);
+      expect(s.out).toEqual([]);
+    });
+    test("nicht prüfbar (keine Spur oder keine Session-ID): Exit 0", async () => {
+      expect((await mit([], () => [])).code).toBe(0);
+      expect((await mit([], spurAus, {})).code).toBe(0);
+    });
+    test("ein werfender Leser sperrt nie (Exit 0)", async () => {
+      const wirft = () => {
+        throw new Error("kaputt");
+      };
+      expect((await mit([], wirft)).code).toBe(0);
+    });
   });
   test("die Basis-URL kommt wie beim Abgleich-Hook auch aus den Plugin-Optionen der User-Settings; die Umgebung hat Vorrang", async () => {
     const settings = JSON.stringify({ pluginConfigs: { "langfuse@x": { options: { LANGFUSE_BASE_URL: "http://plugin:3000/" } } } });
