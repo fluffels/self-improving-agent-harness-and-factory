@@ -69,7 +69,7 @@ Die hohen Blocker-Zahlen der Test-Adäquanz und der Requirement-Treue stammen ü
 
 **Verschärfungs-Trigger (Rückfall, ADR 0027 Punkt 4):** ein `Folge #`-Commit oder ein späterer Fund (Lens, CI-Rot desselben Fehlertyps) auf einem S-PR, den eine der drei Brillen im vollen Satz gefunden hätte, oder die Nachmessung zeigt keine Einsparung gegenüber `voll`. Folge: Revert per PR (oder die Grenze in `GROESSENSTUFE_S` senken), die Ledger-Zeile bekommt den Vermerk „ausgelöst“. Prüftermin: Status-Lauf nach dem fünften S-Lauf.
 
-**Risikoklasse (factory#333, ADR 0027):** die Härtung (hoch ist nie `S`) braucht Evidenz; Nachmessung der letzten 60 Commits Rohwerte im PR von factory#333. Prüftermin: Sammeleintrag `regeln-verfall-2027-03` in `.github/wiedervorlagen.json` (2027-03-01), Nachmessung wie dort (Zahl der Commits je Klasse und der nur durch Risiko auf `voll` gehobenen); sind die Fehlalarme der Teilwort-Muster (`*auth*` in „author“) häufiger als echte Treffer, werden die Muster der Standardliste enger gefasst.
+**Risikoklasse (factory#333, ADR 0027):** die Härtung (hoch ist nie `S`) braucht Evidenz; Nachmessung der letzten 60 Commits Rohwerte im PR von factory#333. Prüftermin: Sammeleintrag `regeln-verfall-2027-03` in `.github/wiedervorlagen.json` (2027-03-01), Nachmessung wie im PR von factory#333 (Zahl der Commits je Klasse und der nur durch Risiko auf `voll` gehobenen); sind die Fehlalarme der Teilwort-Muster (`*auth*` in „author“) häufiger als echte Treffer, werden die Muster der Standardliste enger gefasst.
 
 ## 2. Wie das Routing in Claude Code wirkt
 
