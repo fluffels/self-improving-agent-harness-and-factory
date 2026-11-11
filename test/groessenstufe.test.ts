@@ -116,6 +116,10 @@ describe("bestimmeGroessenstufe: Negativfall, nie S (K5)", () => {
 });
 
 describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
+  test("mehrstellige Zählungen werden summiert (12 + 30 = 42, ein S-Diff mit 10 bis 60 Zeilen bleibt S)", () => {
+    expect(lib.parseNumstatNoRenames("12\t30\tdocs/a.md\n")).toEqual([{ pfad: "docs/a.md", zeilen: 42 }]);
+    expect(stufe(lib.parseNumstatNoRenames("12\t30\tdocs/a.md\n")).stufe).toBe("S");
+  });
   test("ohne Text (undefined) ist die Liste leer; eine halb-binäre Zeile (- und Zahl) ist binär", () => {
     expect(lib.parseNumstatNoRenames(undefined as unknown as string)).toEqual([]);
     expect(lib.parseNumstatNoRenames("-\t3\tbild.bin\n3\t-\tbild2.bin\n")).toEqual([
@@ -207,6 +211,7 @@ describe("CLI groessenstufe.mjs", () => {
     expect(cli.laufe(["--commit"], o).code).toBe(2);
     expect(cli.laufe(["--unbekannt"], o).code).toBe(2);
     expect(cli.laufe(["docs/x.md"], o).code).toBe(2);
+    expect(cli.laufe(["--commit", "abc", "docs/x.md"], o).code).toBe(2);
     expect(cli.laufe(["--commit", "abc", "--pfade", "docs/x.md"], o).code).toBe(2);
     expect(cli.laufe([], { ...o, git: () => "", env: {} }).ausgabe).toMatch(/voll — keine Vergleichs-Basis/);
     expect(cli.laufe(["--pfade", "docs/x.md"], { ...o, ladeMuster: () => { throw new Error("x"); } }).ausgabe).toMatch(/voll — Schutzliste nicht ladbar/);
@@ -220,6 +225,7 @@ describe("kleinGrund und parseNachweis: skizze und ohne — klein", () => {
     expect(nl.kleinGrund("klein:   ")).toEqual({ art: "klein-ohne-begruendung" });
     expect(nl.kleinGrund("Revert eines PR")).toBeNull();
     expect(nl.kleinGrund("kleinlich: x")).toBeNull();
+    expect(nl.kleinGrund("klein : x")).toEqual({ art: "klein", begruendung: "x" });
     expect(nl.kleinGrund(undefined as unknown as string)).toBeNull();
   });
   test("Plan-Zeile: skizze wird erkannt, ein anderer Zusatz bleibt ungültig", () => {
@@ -227,6 +233,8 @@ describe("kleinGrund und parseNachweis: skizze und ohne — klein", () => {
     expect(nl.parseNachweis(`${Z.plan}: ${PL} — skizze2`, Z).plan).toMatchObject({ art: "ungueltig" });
     expect(nl.parseNachweis(`${Z.plan}: vor${PL} — skizze`, Z).plan).toMatchObject({ art: "ungueltig" });
     expect(nl.parseNachweis(`${Z.plan}: ${PL} - skizze`, Z).plan).toEqual({ art: "skizze" });
+    expect(nl.parseNachweis(`${Z.plan}: ${PL} – skizze`, Z).plan).toEqual({ art: "skizze" });
+    expect(nl.parseNachweis(`${Z.plan}: ${PL} —— skizze`, Z).plan).toEqual({ art: "skizze" });
     expect(nl.parseNachweis("kein Nachweis", Z).plan).toBeNull();
     expect(nl.parseNachweis(`${Z.plan}: ohne — klein: x`, Z).plan).toEqual({ art: "ohne", grund: "klein: x" });
   });
@@ -242,7 +250,7 @@ afterEach(() => {
 function repo(aenderungen: Record<string, string>, nachweis: string) {
   const dir = mkdtempSync(join(tmpdir(), "stufe-"));
   dirs.push(dir);
-  const git = (a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", ...a], { cwd: dir, encoding: "utf8" });
+  const git = (a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   git(["init", "-q", "-b", "main"]);
   writeFileSync(join(dir, "README.md"), "x\n");
   git(["add", "-A"]);
@@ -346,6 +354,23 @@ describe("check-abnahme-nachweis: entfaellt — klein nur bei berechnetem S (K3)
 });
 
 describe("Nachweis-Wächter: Bestandsverhalten ohne Stufe (Default voll)", () => {
+  test("bewerteAbnahme ohne stufe lässt entfaellt — klein bei einem Ticket mit Kriterien nicht durch", () => {
+    const nachweis = nl.parseNachweis(`${Z.abnahme}: entfaellt — klein: x`, Z);
+    const f = (abnahmeRaw as { bewerteAbnahme: (o: unknown) => string[] }).bewerteAbnahme({
+      nachweis,
+      ticket: { nr: 9, kriterien: [{ k: "K1", text: "a" }, { k: "K2", text: "b" }] },
+      marker: null,
+      abnahmeHead: null,
+      zeilen: Z,
+    });
+    expect(f.join()).toMatch(/nicht erlaubt/);
+  });
+  test("die Meldung nennt den Kombi-Hinweis nur, wenn kombiniert im Satz steht", () => {
+    const nachweis = nl.parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${"a".repeat(40)} runden=1 lenses=architektur verdikt=ok`, Z);
+    const f = (reviewRaw as { bewerteNachweis: (o: unknown) => string[] }).bewerteNachweis({ nachweis, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, zeilen: Z });
+    expect(f.join()).toMatch(/lenses fehlt/);
+    expect(f.join()).not.toMatch(/kombiniert genügt/);
+  });
   test("bewerteNachweis ohne stufe behandelt kombiniert wie einen fehlenden Code-Satz", () => {
     const nachweis = nl.parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${"a".repeat(40)} runden=1 lenses=kombiniert verdikt=ok`, Z);
     const f = (reviewRaw as { bewerteNachweis: (o: unknown) => string[] }).bewerteNachweis({ nachweis, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, zeilen: Z });

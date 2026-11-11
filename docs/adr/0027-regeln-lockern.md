@@ -37,7 +37,7 @@ Zahlen aus [model-routing.md › Lens-Kostenstruktur (c)](../model-routing.md) (
 ## Konsequenzen
 
 - Punkt 8 liefert Zeilen statt Prosa. Für Gates bleibt die Evidenz Handarbeit bis #1360, für Prompt-Regeln hängt sie an #1362.
-- Der Lens-Kandidat „Arch+Req als eine Lens bei Code-Diffs unter 100 Zeilen ohne Save-Bezug“ wird **kein** Kandidat (für die Größenstufe S hebt die Ledger-Zeile vom 2026-11-11 das auf, factory#271): die Ersparnis liegt im Fenster bei höchstens ~0,8 $, die nötige Gegenprobe (mindestens 12 Patches × 2 Brillen, Medianpass Architektur 0,51 $ laut (c)) kostet ein Vielfaches. Wiedervorlage über Punkt 8, wenn der Anteil kleiner Code-PRs steigt.
+- Der Lens-Kandidat „Arch+Req als eine Lens bei Code-Diffs unter 100 Zeilen ohne Save-Bezug“ wird **kein** Kandidat: die Ersparnis liegt im Fenster bei höchstens ~0,8 $, die nötige Gegenprobe (mindestens 12 Patches × 2 Brillen, Medianpass Architektur 0,51 $ laut (c)) kostet ein Vielfaches. Wiedervorlage über Punkt 8, wenn der Anteil kleiner Code-PRs steigt.
 - Kein neuer Wächter-Test: das Verfahren steht im ADR, die Prüfung leistet die Doku-Lens.
 
 ## Re-Evaluierung
