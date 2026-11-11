@@ -22,6 +22,7 @@ import { normalizePath } from "./relativ-pfad.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { TESTDATEI } from "./groessenstufe-lib.mjs";
 import { quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -185,8 +186,6 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   const ergebnis = ankerImDiff(basis, { git, lesen, istQuelle });
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
-
-const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
 
 /** Pur: Quellwurzeln und Endungsliste (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
 export function istGemessen(pfad, quelle) {

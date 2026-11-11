@@ -8,7 +8,7 @@
  *   node scripts/groessenstufe.mjs --pfade <p…>    Prognose des Planers aus geplanten Pfaden (ohne Zeilen: nur Dateizahl und Pfade)
  *   --json                                         `{stufe, gruende, risiko}` als JSON (`risiko` mit allen Treffern)
  *
- * Ausgabe, zwei Zeilen: `STUFE: S` oder `STUFE: voll — <Gründe>`, dazu `RISIKO: hoch | normal | doku — <Grund>` (factory#333: die Risikoklasse aus Pfadmustern der
+ * Ausgabe, drei Zeilen (die dritte `SWEEP: voll | stichprobe — <Grund>`, factory#272: die Sweep-Tiefe der Test-Lens, `stichprobe` nur für Doku- und Testdateien-Diffs ohne Risikoklasse hoch; fehlt sie, gilt `voll`): `STUFE: S` oder `STUFE: voll — <Gründe>`, dazu `RISIKO: hoch | normal | doku — <Grund>` (factory#333: die Risikoklasse aus Pfadmustern der
  * Projekt-Config `risiko.hoch`, sonst der Standardliste; Klasse hoch ist nie `S`; reiner `*.md`-Diff ist `doku`); Exit 0 bei jeder berechneten Stufe, 2 bei einem Aufruf-Fehler (`AUFRUF_EXIT`). Ein Fehler beim Rechnen
  * (git, Schutzliste) ist `voll` (fail-closed), kein Absturz.
  */
@@ -32,6 +32,9 @@ export const risikoZeile = ({ klasse, gruende }) => {
   return `RISIKO: ${klasse} — ${gruende.slice(0, MAX_TREFFER_TEXT).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
 };
 
+/** Die Sweep-Zeile für Menschen (factory#272): `SWEEP: <tiefe> — <Gründe>`; fehlt `sweep`, ist es `voll` (fail-closed). Pur. */
+export const sweepZeile = ({ sweep }) => (sweep ? `SWEEP: ${sweep.tiefe} — ${sweep.gruende.join("; ")}` : "SWEEP: voll — nicht berechnet");
+
 const ladeFehler = (e) => ({ muster: null, quelle: "Projekt-Config", fehler: [`Projekt-Config nicht ladbar: ${e instanceof Error ? e.message : String(e)}`] });
 
 const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -52,7 +55,7 @@ function prognose(pos, ladeMuster, ladeRisiko) {
     return bestimmeGroessenstufe({ eintraege: pos.map((pfad) => ({ pfad: normPfad(pfad) })), muster: ladeMuster(), prognose: true, risiko });
   } catch (e) {
     const grund = `Schutzliste nicht ladbar: ${meldung(e)}`;
-    return { stufe: "voll", gruende: [grund], risiko: { klasse: "hoch", quelle: risiko.quelle, treffer: [], gruende: [grund] } };
+    return { stufe: "voll", gruende: [grund], risiko: { klasse: "hoch", quelle: risiko.quelle, treffer: [], gruende: [grund] }, sweep: { tiefe: "voll", gruende: [grund] } };
   }
 }
 
@@ -63,14 +66,14 @@ export function laufe(argv, { git = (a) => execFileSync("git", a, { encoding: "u
   const { commit, pfade, json } = r.werte;
   const pos = r.positionale;
   if (!aufrufGueltig(commit, pfade, pos)) return { code: AUFRUF_EXIT, ausgabe: AUFRUF };
-  const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify(e) : `${stufeZeile(e)}\n${risikoZeile(e.risiko)}` });
+  const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify(e) : `${stufeZeile(e)}\n${risikoZeile(e.risiko)}\n${sweepZeile(e)}` });
   const fehlRisiko = (grund) => ({ klasse: "hoch", quelle: "Projekt-Config", treffer: [], gruende: [grund] });
   if (pfade) return antwort(prognose(pos, ladeMuster, ladeRisiko));
   if (commit !== undefined) return antwort(groessenstufeAusGit(git, `${commit}^`, commit, { ladeMuster, ladeRisiko, zweiPunkt: true }));
   const base = resolveBase(git, env);
   if (!base) {
     const grund = "keine Vergleichs-Basis auflösbar";
-    return antwort({ stufe: "voll", gruende: [grund], risiko: fehlRisiko(grund) });
+    return antwort({ stufe: "voll", gruende: [grund], risiko: fehlRisiko(grund), sweep: { tiefe: "voll", gruende: [grund] } });
   }
   return antwort(groessenstufeAusGit(git, base, "HEAD", { ladeMuster, ladeRisiko }));
 }
