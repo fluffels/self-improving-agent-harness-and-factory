@@ -13,7 +13,9 @@ import { escapeRegex } from "./regex-lib.mjs";
 export const HEX = "[0-9a-f]{7,40}";
 /** Brillen-Schlüssel (Quelle für Review-Zeile, Lens-Auftrag-Guard und die Dateien `brille-<Schlüssel>.md` des Skills `review-lenses`). */
 export const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
-export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
+/** Kombi-Lens der Größenstufe S (factory#271): eine Lens statt der drei Code-Brillen; sie zählt nur bei berechnetem S als Code-Satz (check-review-nachweis). */
+export const KOMBI_LENS = "kombiniert";
+export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, "doku"];
 
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
 
@@ -102,6 +104,15 @@ function abnahmefixAus(reviewWert) {
   return wert.trim() === "1" ? 1 : { ungueltig: wert };
 }
 
+/** Liest den Grund einer Plan- oder Abnahme-Ausnahme der Größenstufe S (factory#271): `klein: <Begründung>`. `null`, wenn der Grund nicht mit `klein` beginnt;
+ *  `{art:"klein", begruendung}` mit nicht leerer Begründung, sonst `{art:"klein-ohne-begruendung"}`. Ob die Stufe stimmt, prüft der Wächter gegen den Diff. Pur. */
+export function kleinGrund(grund) {
+  const g = String(grund ?? "").trim();
+  if (!/^klein\b/.test(g)) return null;
+  const m = /^klein\s*:\s*(\S.*)$/.exec(g);
+  return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -114,6 +125,7 @@ export function parseNachweis(text, zeilen) {
   if (planWert !== null) {
     const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
     if (planWert === zeilen.planer) plan = { art: "planer" };
+    else if (new RegExp(`^${escapeRegex(zeilen.planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) plan = { art: "skizze" };
     else if (ohne) plan = { art: "ohne", grund: ohne[1].trim() };
     else plan = { art: "ungueltig", zeile: planWert };
   }
