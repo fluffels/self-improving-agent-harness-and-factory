@@ -204,9 +204,13 @@ export function urteil(schwellen, ist) {
 
 // ── Darstellung ──────────────────────────────────────────────────────────────
 
+/** Zeilen ohne Rolle oder Modell stehen als Datenlücke des Wochenberichts (nie nur als Summe im Auswertungsteil). */
+const unzugeordnetLuecke = (b) => (b.unzugeordnet.count > 0 ? [`Zeilen ohne Rolle oder Modell: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)})`] : []);
+
 /** Baut Bericht, Kennzahlen, Probe und Urteil aus den geordneten Exporten. */
 export function wochenAuswertung(geordnet, { schwellen, vermerk }) {
-  const b = bericht(geordnet.woche);
+  const roh = bericht(geordnet.woche);
+  const b = { ...roh, luecken: [...roh.luecken, ...unzugeordnetLuecke(roh)] };
   const bV = bericht([geordnet.vorwoche]);
   const probe = erfassungsprobe({ sessionsW: geordnet.sessionsW.data, sessionsV: geordnet.sessionsV.data, scores: geordnet.erfassung.data });
   const k = kennzahlen(b, bV);
@@ -247,5 +251,5 @@ export function renderWochenbericht(montag, projektFilter, a) {
 
 /** JSON-Form des Wochenberichts (`status: "bericht"`). */
 export function wochenJson(montag, projektFilter, a) {
-  return { status: "bericht", woche: montag, projektFilter, vermerk: a.vermerk, summe: a.kennzahlen, erfassungsprobe: a.probe, schwellen: a.schwellen, urteil: a.urteil };
+  return { status: "bericht", woche: montag, projektFilter, vermerk: a.vermerk, summe: a.kennzahlen, erfassungsprobe: a.probe, datenluecken: a.bericht.luecken, schwellen: a.schwellen, urteil: a.urteil };
 }

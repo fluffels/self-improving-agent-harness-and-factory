@@ -456,6 +456,24 @@ describe("Verdrahtung und Guards (Runde 2)", () => {
   });
 });
 
+describe("Datenlücken des Wochenberichts (Abnahme-Fix)", () => {
+  test("Zeilen ohne Rolle oder Modell und fehlende Tage stehen unter Datenlücken, auch im JSON", async () => {
+    const r = await lauf([], satz({ luecke: true }));
+    expect(r.stdout).toMatch(/^### Datenlücken$[\s\S]*^- Tage ohne Daten: 2026-11-05$[\s\S]*^- Zeilen ohne Rolle oder Modell: 16 Calls \(20\.00 \$\)$/m);
+    const j = lese<{ datenluecken: string[] }>((await lauf(["--json"], satz({ luecke: true }))).stdout);
+    expect(j.datenluecken).toContain("Zeilen ohne Rolle oder Modell: 16 Calls (20.00 $)");
+    expect(j.datenluecken).toContain("Tage ohne Daten: 2026-11-05");
+  });
+  test("ohne Zeilen ohne Rolle oder Modell steht keine solche Zeile", async () => {
+    const s = satz();
+    const zeilen = gesamtW().map((z) => ({ ...z, min_latency: 1 }));
+    s["metaW.json"] = exp("metadaten", F.von, F.bis, zeilen, [TYPE, PF, { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" }]);
+    const r = await lauf([], s);
+    expect(r.stderr).toBe("");
+    expect(r.stdout).not.toContain("Zeilen ohne Rolle oder Modell");
+  });
+});
+
 describe("Ablage", () => {
   test("--ablegen schreibt <montag>.md und <montag>.json nach ~/.claude/state/langfuse-wochenbericht/<owner>__<repo>/", async () => {
     const home = tmp();
