@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ausProbe, brauchtProbe, liesSnapshot, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
+import { ausProbe, brauchtProbe, haengeVerlaufAn, liesSnapshot, pacing, schreibeSnapshot, snapshotPfad, zielquoteAusEnv } from "./budget-lib.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 const EXIT = { ok: 0, knapp: 3, stopp: 4 };
@@ -58,6 +58,11 @@ if (brauchtProbe(snapshot, jetzt) && !werte["ohne-probe"]) {
       schreibeSnapshot(gemessen, pfad);
     } catch (e) {
       vorab.push(`Snapshot nicht schreibbar: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    try {
+      haengeVerlaufAn(gemessen);
+    } catch (e) {
+      vorab.push(`Kontingent-Verlauf nicht schreibbar: ${e instanceof Error ? e.message : String(e)}`);
     }
   } else vorab.push("Headless-Probe lieferte keinen Stand.");
 } else if (!snapshot && gelesen.warnung) vorab.push(gelesen.warnung);

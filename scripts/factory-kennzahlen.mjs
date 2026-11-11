@@ -10,6 +10,9 @@
  * ausdrücklich), `naechstes-ticket.mjs --maengel` für den Abschnitt „Spezifikation“. Ticket → Session über die Claim-Zeile im lokalen Transkript. Definitionen und Grenzen:
  * docs/model-routing.md (Fabrik) › Factory-Kennzahlen.
  *
+ * Abschnitt „Abo-Kontingent je Ticket“ (factory#285): Prozentpunkte des 7-Tage-Fensters je gemergtem Ticket aus dem Kontingent-Verlauf der Statusline
+ * (`abo-kontingent-lib.mjs`, Claims per GraphQL); fehlt der Verlauf, gh oder das Lauf-Ergebnis, erscheint eine Lücke mit Grund, der Exit-Code bleibt.
+ *
  * `--datenbasis` (factory#258) ist die Vorprüfung des Status-Laufs und läuft allein: je Ticket-Lauf des Zeitraums (`lauf-ergebnis`) die
  * Sessions mit Claim-Zeile im lokalen Transkript zählen; kein token-baseline, kein Audit, keine Nacharbeit. Stand: `leer` (kein Lauf),
  * `erfüllt` (alle), `teilweise` (normal bei zwei Maschinen), `verletzt` (0 von n). Grenze: Codex-Läufe zählen als ohne Transkript
@@ -18,6 +21,7 @@
  * Exit 0 ok (auch mit Kosten-Lücken), 1 Aufruffehler, 2 Lauf-Ergebnis fehlt oder verletzt den Vertrag (Block erscheint trotzdem),
  * 3 nur mit `--datenbasis`: Vorbedingung verletzt (keine Transkripte der Ticket-Läufe auf dieser Maschine).
  */
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { spawnSync } from "node:child_process";
@@ -26,6 +30,8 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
+import { aboKontingent, aboKontingentAbschnitt, claimAbfrage, claimsAusAntwort, verlaufAus } from "./abo-kontingent-lib.mjs";
+import { verlaufPfad } from "./budget-lib.mjs";
 import { claimNummer, median } from "./mess-lib.mjs";
 import { PRODUKT_QUOTE, harnessIssuesAnfrage, harnessIssuesAus, holeQuotenCommits, istHarnessCommit, quotenCommitLeser, quotenQuellen, sammelStand, zaehleTaktMerges, zaehleTicketMerges } from "./produktquote-lib.mjs";
 import { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } from "./nachweis-lib.mjs";
@@ -238,8 +244,9 @@ export function spezifikationAbschnitt(s) {
 }
 
 /** Bericht als Daten: `lauf`/`nacharbeit` = `vertragPruefen`-Ergebnis, `tickets` = `[{ticket, pr, ergebnis}]`. Pure. */
-export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit, spezifikation, arten }) {
+export function bericht({ von, bis, lauf, nacharbeit, tickets, quelle, audit, spezifikation, arten, kontingent }) {
   return {
+    ...(kontingent ? { kontingent } : {}),
     ...(audit ? { audit } : {}),
     ...(arten ? { arten } : {}),
     ...(spezifikation ? { spezifikation } : {}),
@@ -267,6 +274,7 @@ export function renderMarkdown(b) {
     "**Kosten je Ticket**",
     ...kosten,
     ...(b.arten ? ["", "**Ticketarten**", ...artenAbschnitt(b.arten)] : []),
+    ...(b.kontingent ? ["", "**Abo-Kontingent je Ticket**", ...aboKontingentAbschnitt(b.kontingent)] : []),
     "",
     "**Abnahme-Quote**",
     ...abnahmeAbschnitt(b.lauf),
@@ -475,19 +483,51 @@ function auditUndArten(auditLader, { von, bis, lauf, tickets }) {
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
  */
-export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte, auditLader = null, maengelLader = null }) {
+export function erstelle({ von, bis, langfuse = false }, { run = runSkript, claimKarte, auditLader = null, maengelLader = null, kontingentLader = null }) {
   const fenster = nacharbeitFenster(von, bis);
   const lauf = holeLauf(von, bis, run);
   const nacharbeit = holeLauf(fenster.von, fenster.bis, run);
   let tickets = [];
+  let kontingent;
   if (lauf.daten) {
     const claims = claimKarte();
-    tickets = ticketLaeufe(lauf.daten.zeilen).tickets.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
-  }
+    const reihen = ticketLaeufe(lauf.daten.zeilen).tickets;
+    kontingent = kontingentLader ? kontingentLader({ von, bis, tickets: reihen }) : undefined; // eine Lücke dort ändert den Exit-Code nicht
+    tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
+  } else if (kontingentLader) kontingent = { luecke: "kein Lauf-Ergebnis" };
   const { audit, arten } = auditUndArten(auditLader, { von, bis, lauf, tickets });
   const spezifikation = maengelLader ? maengelLader() : undefined; // eine Lücke dort ändert den Exit-Code nicht (wie bei den Kosten)
-  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation, arten });
+  const b = bericht({ von, bis, lauf, nacharbeit, tickets, quelle: langfuse ? "Langfuse" : "Transkript", audit, spezifikation, arten, kontingent });
   return { bericht: b, exit: lauf.luecke || nacharbeit.luecke ? 2 : 0 };
+}
+
+const KONTINGENT_BLOCK = 50;
+
+/**
+ * Abo-Kontingent je Ticket (factory#285): Verlauf lesen, Claims per GraphQL holen (Blöcke zu `KONTINGENT_BLOCK`), auswerten.
+ * `tickets` = Lauf-Zeilen des Zeitraums. Verlauf oder gh nicht verfügbar: `{ luecke }` mit Grund, nie 0. IO injizierbar; kein Langfuse.
+ */
+export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
+  let text;
+  try {
+    text = lies(pfad);
+  } catch {
+    return { luecke: `Kontingent-Verlauf fehlt: ${pfad}` };
+  }
+  const { punkte, kaputt } = verlaufAus(text);
+  const merge = new Map(tickets.map((t) => [t.ticket, t.gemergt]));
+  const claims = new Map();
+  try {
+    const nummern = [...merge.keys()];
+    for (let i = 0; i < nummern.length; i += KONTINGENT_BLOCK) {
+      const block = nummern.slice(i, i + KONTINGENT_BLOCK);
+      const antwort = gh(["api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${claimAbfrage(block)}`]);
+      for (const [k, v] of claimsAusAntwort(antwort, new Map(block.map((n) => [n, merge.get(n)])))) claims.set(k, v);
+    }
+  } catch (err) {
+    return { luecke: `Claims nicht ladbar: ${fehlerText(err, 200)}` };
+  }
+  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis) });
 }
 
 /** `{ config }` oder `{ config: null, configFehler }`: ein Ladefehler macht nur die Quote zur Lücke (mit dem echten Fehlertext), nie den ganzen Bericht kaputt. */
@@ -545,7 +585,7 @@ function main(argv) {
   const { von, bis, langfuse } = args;
   const claimKarte = () => claimSessions(ladeSessions(projektOrdner(), new Date(Date.parse(von) - TAG_MS).toISOString()));
   if (args.datenbasis) datenbasisModus({ von, bis }, { claimKarte, log: console.log, beenden: process.exit }); // beendet den Prozess
-  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel() });
+  const r = erstelle({ von, bis, langfuse }, { claimKarte, auditLader: (e) => ladeAuditDaten(e, configOderFehler()), maengelLader: () => holeMaengel(), kontingentLader: (e) => ladeAboKontingent(e) });
   console.log(args.json ? JSON.stringify(r.bericht, null, 2) : renderMarkdown(r.bericht));
   if (r.exit !== 0) process.exit(r.exit);
 }

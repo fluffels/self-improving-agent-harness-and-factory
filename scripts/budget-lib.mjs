@@ -2,13 +2,14 @@
 // Einstiegsskripte importieren nicht voneinander, gemeinsamer Code steht in einer Lib).
 /**
  * Budget-Pacing: Entscheidung ok / knapp / stopp aus dem Rate-Limit-Snapshot des Kontos (7-Tage- und 5-Stunden-Fenster).
- * Pur: `pacing`, `ausStatusline`, `ausProbe`. Env/Config: `zielquoteAusEnv`. I/O: `snapshotPfad`, `liesSnapshot`, `schreibeSnapshot`.
+ * Pur: `pacing`, `ausStatusline`, `ausProbe`. Env/Config: `zielquoteAusEnv`. I/O: `snapshotPfad`, `liesSnapshot`, `schreibeSnapshot`,
+ * dazu der dauerhafte Kontingent-Verlauf (factory#285): `verlaufPfad`, `verlaufSchluessel`, `haengeVerlaufAn`.
  * Fail-open: ein unbekannter oder unlesbarer Stand ergibt `ok` mit Warnung (Pacing ist kein Sicherheits-Gate).
  * Ein Snapshot hat die Form `{ stand, quelle, sevenDay?, fiveHour? }` mit `stand` in ms und je Fenster
  * `{ pct (0-100), resetsAt (Unix-Sekunden) }`. Regeln und Defaults: docs/model-routing.md (Fabrik) §6.
  */
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 
@@ -154,4 +155,58 @@ export function schreibeSnapshot(snapshot, pfad = snapshotPfad()) {
     rmSync(tmp, { force: true });
     throw e;
   }
+}
+
+export const VERLAUF_DATEI = "abo-kontingent-verlauf.jsonl";
+
+/**
+ * Pfad des dauerhaften Kontingent-Verlaufs (kontoweit, im Home statt OS-Temp, factory#285);
+ * `FACTORY_ABO_KONTINGENT_VERLAUF` überschreibt ihn.
+ */
+export function verlaufPfad(env = process.env) {
+  return umgebungsWert(env, "FACTORY_ABO_KONTINGENT_VERLAUF") || join(homedir(), ".claude", "state", VERLAUF_DATEI);
+}
+
+/** Vergleichsschlüssel eines Snapshots: pct (auf 0,01 gerundet, die Probe liefert Gleitkomma-Rauschen) und Reset beider Fenster. Pur. */
+export function verlaufSchluessel(snapshot) {
+  const f = (w) => (w ? [Math.round(w.pct * 100) / 100, w.resetsAt] : null);
+  return JSON.stringify([f(snapshot?.sevenDay), f(snapshot?.fiveHour)]);
+}
+
+/** Letzte nichtleere Zeile aus den letzten 4 KiB der Datei; `null` bei fehlender oder leerer Datei. */
+function letzteZeile(pfad) {
+  let fd;
+  try {
+    fd = openSync(pfad, "r");
+  } catch {
+    return null;
+  }
+  try {
+    const groesse = fstatSync(fd).size;
+    const laenge = Math.min(groesse, 4096);
+    const puffer = Buffer.alloc(laenge);
+    readSync(fd, puffer, 0, laenge, groesse - laenge);
+    const zeilen = puffer.toString("utf8").split("\n").filter((z) => z.trim());
+    return zeilen.length ? zeilen[zeilen.length - 1] : null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Hängt den Snapshot als Punkt an den Verlauf an, außer die letzte Zeile hat denselben Schlüssel (kaputte letzte Zeile: anhängen).
+ * Gibt zurück, ob angehängt wurde; Fehler wirft sie an den Aufrufer.
+ */
+export function haengeVerlaufAn(snapshot, pfad = verlaufPfad()) {
+  const letzte = letzteZeile(pfad);
+  if (letzte !== null) {
+    try {
+      if (verlaufSchluessel(JSON.parse(letzte)) === verlaufSchluessel(snapshot)) return false;
+    } catch {
+      /* kaputte letzte Zeile: anhängen */
+    }
+  }
+  mkdirSync(dirname(pfad), { recursive: true });
+  appendFileSync(pfad, `${JSON.stringify(snapshot)}\n`);
+  return true;
 }

@@ -2,6 +2,7 @@
 /**
  * Statusline-Weiche (#1358): Claude Code startet dieses Skript als `statusLine` und übergibt den Zustand als JSON auf stdin.
  * 1) legt `rate_limits` als Snapshot im OS-Temp ab (kontoweit, für Budget-Pacing, docs/model-routing.md (Fabrik) §6);
+ *    Jeden geänderten Stand hängt sie zusätzlich an den dauerhaften Kontingent-Verlauf an (factory#285);
  * 2) reicht die persönliche Statusline aus `~/.claude/settings.json` unverändert durch (die Projekt-Einstellung verdrängt sie sonst).
  * Wirft nie und endet immer mit Exit 0: eine kaputte Statusline darf keine Session stören.
  */
@@ -9,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ausStatusline, liesSnapshot, schreibeSnapshot } from "./budget-lib.mjs";
+import { ausStatusline, haengeVerlaufAn, liesSnapshot, schreibeSnapshot } from "./budget-lib.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 
 /** Shell wie Claude Code: unter Windows Git Bash, sonst die Standard-Shell. */
@@ -27,12 +28,18 @@ try {
   } catch {
     /* kein stdin: leer weiterreichen */
   }
+  let snapshot = null;
   try {
-    const snapshot = ausStatusline(JSON.parse(roh));
+    snapshot = ausStatusline(JSON.parse(roh));
     // Ein Teil-Snapshot ohne 7-Tage-Fenster ersetzt keinen vorhandenen mit Wochenstand (z.B. aus der Probe).
     if (snapshot && (snapshot.sevenDay || !liesSnapshot().snapshot?.sevenDay)) schreibeSnapshot(snapshot);
   } catch {
     /* kein JSON oder nicht schreibbar: nur durchreichen */
+  }
+  try {
+    if (snapshot) haengeVerlaufAn(snapshot);
+  } catch {
+    /* Verlauf nicht schreibbar: fail-open */
   }
   if (umgebungsWert(process.env, "FACTORY_STATUSLINE_DURCHREICHEN") !== "1") {
     try {
