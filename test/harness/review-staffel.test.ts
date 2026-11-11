@@ -28,7 +28,7 @@ const SKILL = ".agents/skills/review-lenses/SKILL.md";
 
 /** Nennt ein Regeltext die Staffel vollständig? EIN Prädikat für Artefakt und Gegenbeispiel. */
 const nenntStaffel = (s: string) =>
-  /`\*\.md`/.test(s) && /Doku/.test(s) && /Delta/.test(s) && /Test-Adäquanz immer mit/.test(s) && /[Ff]ail-closed/.test(s);
+  /`\*\.md`/.test(s) && /Doku/.test(s) && /Delta/.test(s) && /Test-Adäquanz immer mit/.test(s) && /`kombiniert`[^.]*Test-Teil enthalten/.test(s) && /[Ff]ail-closed/.test(s);
 /** Verlangt ein Text, den Patch nur einmal vollständig zu lesen? */
 const liestPatchEinmal = (s: string) => /einmal\s+vollständig/i.test(s) && /kein(?:en)?\s+zweites\s+Volllesen/i.test(s);
 /** Nennt der Text den Abschnitts-Helfer (#1379), statt nur „sehr große Patches abschnittsweise“ zu verlangen? */
