@@ -899,6 +899,14 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
     test("Netto der Kette negativ: 5m", () => {
       expect(ttlBericht(viele(10, 70)).empfehlung).toBe("5m");
     });
+    test("nur der Warmstart trägt den Gewinn (Kette negativ): 5m", () => {
+      const gross = (ab: number, cacheRead: number) => mitSession(lauf("#1 x", [{ min: ab, ctx: 1_000_000, cacheRead }, { min: ab + 1, ctx: 1_000_100, cacheRead: 1_000_000 }]), "w");
+      const r = ttlBericht([...viele(9, 70), gross(-20, 800_000), gross(10, 0)]);
+      expect(r.laeufe).toBe(11);
+      expect(r.netto).toBeLessThan(0);
+      expect(r.nettoMitWarmstart).toBeGreaterThan(0);
+      expect(r.empfehlung).toBe("5m");
+    });
   });
 
   describe("CLI", () => {
