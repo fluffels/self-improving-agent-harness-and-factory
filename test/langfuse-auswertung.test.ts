@@ -289,6 +289,27 @@ describe("Bericht", () => {
   });
 });
 
+describe("Rezept mit Projektfilter (factory#313)", () => {
+  const TAGS = { column: "tags", operator: "any of", value: ["factory"], type: "arrayOptions" };
+  const ENV = { column: "environment", operator: "=", value: "proj", type: "string" };
+  test("ohne projektFilter bleibt die Ausgabe unverändert, mit Filter trägt jede Abfrage ihn und der Leser nimmt sie an", () => {
+    const ohne = L.rezept({ von: VON, bis: BIS });
+    for (const r of ohne) expect(r.abfrage.filters?.some((f: { column: string }) => f.column === "tags" || f.column === "environment")).toBe(false);
+    for (const pf of [TAGS, ENV]) {
+      const mit = L.rezept({ von: VON, bis: BIS, projektFilter: pf });
+      expect(mit).toHaveLength(ohne.length);
+      for (const r of mit) {
+        expect(r.abfrage.filters).toContainEqual(pf);
+        expect(() => lese({ art: r.art, abfrage: r.abfrage, data: [] })).not.toThrow();
+      }
+    }
+  });
+  test("ein ungültiger Filter wirft (stringObject, falscher Operator, leerer Wert, leere Liste, kein Objekt)", () => {
+    const schlecht = [{ column: "metadata", key: "k", operator: "=", value: "v", type: "stringObject" }, { ...ENV, operator: "<>" }, { ...ENV, value: "" }, { ...TAGS, value: [] }, { ...TAGS, value: [""] }, "x", { ...TAGS, type: "string" }];
+    for (const pf of schlecht) expect(() => L.rezept({ von: VON, bis: BIS, projektFilter: pf })).toThrow(/projektFilter/);
+  });
+});
+
 describe("Rezept", () => {
   const rez = L.rezept({ von: VON, bis: BIS, rollen: ["sih-umsetzer"] });
   test("jede Abfrage filtert type = GENERATION, nutzt row_limit 1000 und das Fenster; der Leser nimmt sie an", () => {

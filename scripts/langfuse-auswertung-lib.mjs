@@ -6,6 +6,8 @@
  * die Import-Hülle fest). `EFFORT_STUFEN` ist hier neu deklariert statt aus `transkript-calls.mjs` importiert (nicht
  * schlüsselnah, hätte der Lib aber Imports gebracht); ein Test sichert die Gleichheit.
  *
+ * `rezept()` nimmt optional `projektFilter` (factory#313: Wochenbericht), der an jede Abfrage hängt; ohne ihn bleibt die Ausgabe unverändert.
+ *
  * Export-Form: `{ art, abfrage, data }` (Abfragerezept: `rezept()`), Zeilenschlüssel wie die MCP-Ausgabe
  * (`count_count`, `sum_totalCost`, `min_latency`, `time_dimension`).
  * Bekannte Grenzen: negative Latenzen lassen sich nur je Gruppe (nicht je Observation) erkennen, weil `queryMetrics`
@@ -48,9 +50,19 @@ export function quelleVon(traceName, name) {
 
 // ── Rezept ───────────────────────────────────────────────────────────────────
 
-const basisAbfrage = (von, bis) => ({
+/** Erlaubte Projektfilter von `rezept()` (factory#313): `environment = <wert>` oder `tags any of [<wert>…]`; beide sind nie `stringObject`, `metaFilter` zählt sie nicht. */
+export function pruefeProjektFilter(f) {
+  const ok = f && typeof f === "object" && (
+    (f.column === "environment" && f.operator === "=" && f.type === "string" && typeof f.value === "string" && f.value !== "") ||
+    (f.column === "tags" && f.operator === "any of" && f.type === "arrayOptions" && Array.isArray(f.value) && f.value.length > 0 && f.value.every((v) => typeof v === "string" && v !== ""))
+  );
+  if (!ok) throw new Error("projektFilter muss { column: environment, operator: =, type: string, value } oder { column: tags, operator: any of, type: arrayOptions, value: [..] } sein");
+  return f;
+}
+
+const basisAbfrage = (von, bis, projektFilter) => ({
   view: "observations",
-  filters: [{ column: "type", operator: "=", value: "GENERATION", type: "string" }],
+  filters: [{ column: "type", operator: "=", value: "GENERATION", type: "string" }, ...(projektFilter ? [pruefeProjektFilter(projektFilter)] : [])],
   fromTimestamp: von,
   toTimestamp: bis,
   config: { row_limit: ROW_LIMIT },
@@ -58,8 +70,8 @@ const basisAbfrage = (von, bis) => ({
 const dim = (felder) => felder.map((field) => ({ field }));
 
 /** Abfragen für den Agentenlauf (MCP `queryMetrics`); jede gespeicherte Antwort wird `{ art, abfrage, data }`. */
-export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRollen = ["main", "subagent"] }) {
-  const b = (extra) => ({ ...basisAbfrage(von, bis), ...extra });
+export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRollen = ["main", "subagent"], projektFilter }) {
+  const b = (extra) => ({ ...basisAbfrage(von, bis, projektFilter), ...extra });
   const out = [
     { art: "gesamt", name: "gesamt", abfrage: b({ dimensions: dim(DIMS_GESAMT), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], orderBy: [{ field: "sum_totalCost", direction: "desc" }] }) },
     { art: "tage", name: "tage", abfrage: b({ dimensions: [], metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], timeDimension: { granularity: "day" } }) },
@@ -78,7 +90,7 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
       abfrage: b({
         dimensions: dim(DIMS_GESAMT),
         metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "latency", aggregation: "min" }],
-        filters: [...basisAbfrage(von, bis).filters, { column: "metadata", key, operator: "=", value, type: "stringObject" }],
+        filters: [...basisAbfrage(von, bis, projektFilter).filters, { column: "metadata", key, operator: "=", value, type: "stringObject" }],
       }),
     });
   }

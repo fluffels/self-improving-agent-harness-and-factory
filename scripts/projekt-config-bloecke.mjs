@@ -193,6 +193,25 @@ export function pruefeBerechtigungen(b) {
   return fehler;
 }
 
+/** Schwellenfelder des optionalen Blocks `langfuseWochenbericht` (factory#313): Name → Prüfung (je Feld einzeln optional, kein Default). */
+const WOCHENBERICHT_FELDER = {
+  erfassungLueckenMax: [(v) => Number.isInteger(v) && v >= 0, "eine Ganzzahl ab 0"],
+  kostenAnstiegProzent: [(v) => Number.isFinite(v) && v >= 0, "eine Zahl ab 0"],
+  unzugeordnetProzent: [(v) => Number.isFinite(v) && v >= 0, "eine Zahl ab 0"],
+  wochenOhneLaufMax: [(v) => Number.isInteger(v) && v >= 1, "eine Ganzzahl ab 1"],
+};
+
+/** Pur: prüft den optionalen Block `langfuseWochenbericht` (Schwellen des Wochenberichts, factory#313; fehlt er, ist nichts zu prüfen). */
+export function pruefeLangfuseWochenbericht(b) {
+  if (b === undefined) return [];
+  if (!istObjekt(b)) return ["langfuseWochenbericht muss ein Objekt mit den Schwellen " + Object.keys(WOCHENBERICHT_FELDER).join(", ") + " sein"];
+  return Object.keys(b).flatMap((k) => {
+    const feld = WOCHENBERICHT_FELDER[k];
+    if (!feld) return [`langfuseWochenbericht.${k} ist kein bekannter Schlüssel (erlaubt: ${Object.keys(WOCHENBERICHT_FELDER).join(", ")})`];
+    return feld[0](b[k]) ? [] : [`langfuseWochenbericht.${k} muss ${feld[1]} sein`];
+  });
+}
+
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
 const VORPRUEFUNG_KEYS = ["befehle", "userScopeServer"];

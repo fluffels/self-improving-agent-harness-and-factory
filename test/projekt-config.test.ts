@@ -157,6 +157,18 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), rulesetSpiegel: ".github/r.json" }), []);
   });
 
+  test("langfuseWochenbericht (factory#313): optional, Felder einzeln optional, Form je Feld", () => {
+    const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), langfuseWochenbericht: b });
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({}), []);
+    assert.deepEqual(mit({ erfassungLueckenMax: 0, kostenAnstiegProzent: 50.5, unzugeordnetProzent: 0, wochenOhneLaufMax: 4 }), []);
+    assert.match(mit({ tippfehler: 1 }).join("\n"), /langfuseWochenbericht\.tippfehler ist kein bekannter Schlüssel/);
+    for (const [feld, schlecht] of [["erfassungLueckenMax", -1], ["erfassungLueckenMax", 1.5], ["kostenAnstiegProzent", -1], ["kostenAnstiegProzent", "50"], ["unzugeordnetProzent", Infinity], ["wochenOhneLaufMax", 0], ["wochenOhneLaufMax", 1.5]] as const) {
+      assert.match(mit({ [feld]: schlecht }).join("\n"), new RegExp(`langfuseWochenbericht\\.${feld} muss`));
+    }
+    for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /langfuseWochenbericht muss ein Objekt/);
+  });
+
   test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: "eingang/meldungen" }), []);
     for (const schlecht of ["", "foo", 3]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: schlecht }).join("\n"), /meldestelle muss die Form owner\/name[\s\S]*Fix:/);
