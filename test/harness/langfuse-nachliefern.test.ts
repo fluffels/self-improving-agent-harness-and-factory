@@ -246,6 +246,12 @@ describe("Payload (Golden)", () => {
     expect(Object.keys(attrs(subSpan as Span)).filter((k) => k.endsWith(".effort") || k.endsWith(".thinking") || k.endsWith(".repo"))).toEqual([]);
   });
 
+  test("zuordnungsAttribute ohne repoName: kein repo-Schlüssel, kein Wert 'undefined'", () => {
+    const f = (O as unknown as { zuordnungsAttribute: (z: unknown, r?: string) => { key: string }[] }).zuordnungsAttribute;
+    expect(f({ agent_type: "x" }, undefined).map((a) => a.key)).toEqual(["langfuse.observation.metadata.agent_type"]);
+    expect(f({}, "").map((a) => a.key)).toEqual([]);
+  });
+
   test("Negativfall: ohne Zuordnung fehlen agent_type, effort und thinking (kein \"undefined\", keine erfundene Rolle); repo bleibt", () => {
     for (const zuordnung of [undefined, {}, { agent_type: "", effort: undefined }]) {
       const [s] = spansVon(baue([{ ...eintrag(1), zuordnung } as Eintrag]).chunks[0].payload);

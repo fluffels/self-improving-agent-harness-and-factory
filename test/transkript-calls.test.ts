@@ -222,6 +222,37 @@ describe("Zuordnungs-Metadaten", () => {
     expect(m.get("s1")).toMatchObject({ effort: "high", thinking: "nein" });
   });
 
+  test("Message ohne message.id: die Zeile gilt unter ihrer uuid (wie bei den Calls)", () => {
+    const m = Zo.zuordnungen(sitz([{ type: "assistant", uuid: "nur-uuid", effort: "low", message: { content: [text(1)] } }]));
+    expect(m.get("nur-uuid")).toEqual({ agent_type: "hauptchat", effort: "low", thinking: "nein" });
+  });
+
+  test("Zeilen einer Message mit und ohne effort: kein effort, auch kein Rückfall auf Meta (nie raten)", () => {
+    const z = [{ ...zeile("a", [text(1)], { effort: "high" })[0] }, { ...zeile("a", [text(2)])[0] }];
+    const m = Zo.zuordnungen(sitz([], [sub(z, { agentType: "Explore", effort: "medium" })]));
+    expect(m.get("a")).not.toHaveProperty("effort");
+  });
+
+  test.each(["ultra", 7, ""])("ungültiger effort %j in der Meta wird nicht übernommen; der Spawn-effort greift danach", (ungueltig) => {
+    const spawn = zeile("p", [{ type: "tool_use", id: "tu1", name: "Agent", input: { effort: "high" } }]);
+    const m = Zo.zuordnungen(sitz(spawn, [sub(zeile("s1", [text(1)]), { agentType: "Explore", effort: ungueltig, toolUseId: "tu1" }), { ...sub(zeile("s2", [text(1)]), { agentType: "Explore", effort: ungueltig }), datei: "agent-a2.jsonl" }]));
+    expect(m.get("s1")?.effort).toBe("high");
+    expect(m.get("s2")).not.toHaveProperty("effort");
+  });
+
+  test("Spawn-effort aus der Datei eines Subagenten (er startet einen weiteren)", () => {
+    const spawn = zeile("p", [{ type: "tool_use", id: "tu9", name: "Agent", input: { effort: "xhigh" } }]);
+    const m = Zo.zuordnungen(sitz([], [sub(spawn, { agentType: "Plan" }), { ...sub(zeile("s2", [text(1)]), { agentType: "Explore", toolUseId: "tu9" }), datei: "agent-a2.jsonl" }]));
+    expect(m.get("s2")?.effort).toBe("xhigh");
+  });
+
+  test("Agent-tool_use ohne id: sein effort gehört keinem Subagenten, auch nicht einem ohne toolUseId", () => {
+    const spawn = zeile("p", [{ type: "tool_use", name: "Agent", input: { effort: "high" } }]);
+    const m = Zo.zuordnungen(sitz(spawn, [sub(zeile("s1", [text(1)]), { agentType: "Explore" })]));
+    expect(m.get("s1")).not.toHaveProperty("effort");
+    expect(Zo.spawnEfforts(spawn).size).toBe(0);
+  });
+
   test("Message in mehr als einer Datei: agent_type und effort entfallen, thinking bleibt als ODER", () => {
     const m = Zo.zuordnungen(sitz(zeile("dup", [text(1)], { effort: "high" }), [sub(zeile("dup", [denk], { effort: "high" })), { ...sub(zeile("nur", [text(1)], { effort: "low" })), datei: "agent-a2.jsonl" }]));
     expect(m.get("dup")).toEqual({ thinking: "ja" });
