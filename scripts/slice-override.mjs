@@ -29,6 +29,7 @@ export function commitZeilen(praefix, planer) {
     plan: `${praefix}Plan`,
     review: `${praefix}Review`,
     abnahme: `${praefix}Abnahme`,
+    bedrohungen: `${praefix}Bedrohungen`,
     reviewOverride: `${praefix}Review-Override`,
     abnahmeOverride: `${praefix}Abnahme-Override`,
     diffsizeOverride: `${praefix}Diffsize-Override`,

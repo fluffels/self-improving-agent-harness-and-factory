@@ -21,14 +21,17 @@ afterEach(() => {
 type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; verdikt: string | null } | null;
+  bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
-type Zeilen = { praefix: string; planer: string; plan: string; review: string; reviewOverride: string; diffsizeOverride: string };
+type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
+type Zeilen = { praefix: string; planer: string; plan: string; review: string; bedrohungen: string; reviewOverride: string; diffsizeOverride: string };
 type Mod = {
   MAX_FIX_RUNDEN: number;
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko }) => string[];
+  bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;
   checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen }) => {
@@ -53,9 +56,11 @@ const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const ECHT = projektConfig();
 const parseNachweis = (text: string) => (raw as Mod).parseNachweis(text, Z);
-const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, ...o });
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: NORMAL, ...o });
 const checkReviewNachweis = (o: Parameters<Mod["checkReviewNachweis"]>[0]) => (raw as Mod).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
 
+/** Die Bestandstests prüfen Plan und Review; die Risikoklasse hoch (factory#334) hat einen eigenen Block unten. */
+const NORMAL: Risiko = { klasse: "normal", gruende: ["kein Pfad trifft ein Risiko-Muster"] };
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
 const review = (felder = `head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) => `${Z.plan}: ${PL}\n${Z.review}: ${felder}`;
@@ -223,6 +228,8 @@ function fakeGit(o: {
   /** Commit-Messages chronologisch (ältester zuerst); überschreibt `messages` und macht die Log-Reihenfolge prüfbar. */
   commits?: string[];
   files?: string;
+  /** Antwort auf `diff --numstat` (factory#334: ohne Antwort fiele die Größenstufe fail-closed auf voll/hoch); Standard: 100 Zeilen je Datei aus `files`. */
+  numstat?: string;
   inSlice?: string[];
   known?: string[];
   head?: string;
@@ -252,6 +259,10 @@ function fakeGit(o: {
     if (cmd === `log --reverse --format=%B ${B}..HEAD`) return chrono.join("\n\n");
     if (cmd === `log --format=%B ${B}..HEAD`) return [...chrono].reverse().join("\n\n");
     if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
+    if (cmd === `diff --numstat --no-renames ${B}...HEAD`) {
+      if (o.numstat !== undefined) return o.numstat;
+      return (o.files ?? "src/x.ts\n").split(/\r?\n/).filter((l) => l.trim() !== "").map((f) => `100\t0\t${f}`).join("\n") + "\n";
+    }
     // Exakt (#1309): die Basis des Zählens ist der geprüfte head, nicht beliebig; ein anderer Bereich wirft.
     const zaehlen = /^rev-list --count --no-merges ([0-9a-f]{40})\.\.HEAD$/.exec(cmd);
     if (zaehlen) {
@@ -683,6 +694,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
       headBekannt: true,
       headImSlice: true,
       zeilen,
+      risiko: NORMAL,
     });
 
   test("AK3: die wörtliche Squash-Message eines gemergten Commits ist mit der Config ein gültiger Nachweis", () => {
@@ -854,5 +866,129 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
+  });
+});
+
+describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)", () => {
+  const HOCH: Risiko = { klasse: "hoch", gruende: ["src/auth.ts trifft **/auth* (Standardliste)"] };
+  const DOKU: Risiko = { klasse: "doku", gruende: ["nur *.md"] };
+  const ZEILE = "daten=Token vom Client zum Server | grenzen=Browser zu API | missbrauch=Token-Diebstahl | datenschutz=keine Personendaten gespeichert";
+  const mitSicherheit = (extra = "") => `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI},sicherheit blocker=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 verdikt=ok${extra}`;
+  const bewerte = (text: string, risiko: Risiko = HOCH, dateien = ["src/auth.ts"]) =>
+    (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(text), dateien, headBekannt: true, headImSlice: true, zeilen: Z, stufe: "voll", risiko });
+  const mitZeile = (zeile: string) => `${mitSicherheit()}\n${Z.bedrohungen}: ${zeile}`;
+
+  test("gültig: drei Code-Brillen, sicherheit und vier belegte Teile ergeben keinen Fehler", () => {
+    assert.deepEqual(bewerte(mitZeile(ZEILE)), []);
+  });
+
+  test("K4-Negativfall: ohne Zeile und ohne sicherheit genau zwei Fehler, je eine Hälfte nur ihren", () => {
+    const ohneBeides = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
+    assert.equal(ohneBeides.length, 2, ohneBeides.join("\n"));
+    assert.match(ohneBeides.join("\n"), /Bedrohungen-Zeile fehlt/);
+    assert.match(ohneBeides.join("\n"), /lenses fehlt sicherheit/);
+    assert.match(ohneBeides.join("\n"), /src\/auth\.ts trifft/);
+    const nurZeileFehlt = bewerte(mitSicherheit());
+    assert.equal(nurZeileFehlt.length, 1);
+    assert.match(nurZeileFehlt[0], /Bedrohungen-Zeile fehlt/);
+    const nurLensFehlt = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
+    assert.equal(nurLensFehlt.length, 1);
+    assert.match(nurLensFehlt[0], /lenses fehlt sicherheit/);
+  });
+
+  test("ohne Review-Zeile meldet die Bewertung die Bedrohungs-Zeile, aber keinen Lens-Fehler zur Review-Zeile", () => {
+    const f = bewerte(`${Z.praefix}Plan: ${PL}`);
+    assert.ok(f.some((m) => /Bedrohungen-Zeile fehlt/.test(m)));
+    assert.ok(!f.some((m) => /lenses fehlt sicherheit/.test(m)));
+  });
+
+  test("je Teil: leer, nur …, ..., - oder <…> ist rot und nennt den Schlüssel; die anderen Teile bleiben grün", () => {
+    const teile = ["daten", "grenzen", "missbrauch", "datenschutz"];
+    for (const t of teile) {
+      for (const leer of ["", "…", "...", "-", "<was fließt wohin>"]) {
+        const z = teile.map((k) => `${k}=${k === t ? leer : "belegt"}`).join(" | ");
+        const f = bewerte(mitZeile(z));
+        assert.equal(f.length, 1, `${t}=${leer}: ${f.join("\n")}`);
+        assert.match(f[0], new RegExp(`Teil ${t} fehlt oder ist leer`));
+      }
+    }
+  });
+
+  test("fehlender, doppelter, unbekannter Teil und Teil ohne = sind rot", () => {
+    assert.match(bewerte(mitZeile("daten=a | grenzen=b | missbrauch=c")).join(), /Teil datenschutz fehlt/);
+    assert.match(bewerte(mitZeile(`${ZEILE} | daten=nochmal`)).join(), /doppelt: daten/);
+    assert.match(bewerte(mitZeile(`${ZEILE} | sonstiges=x`)).join(), /unbekannte Teile sonstiges/);
+    assert.match(bewerte(mitZeile(`${ZEILE} | Freitext ohne Gleichheitszeichen`)).join(), /ohne \`=\`.*Freitext/);
+  });
+
+  test("normal ohne beides und Doku-Diff mit lenses=doku sind ohne Bedrohungs-Fehler (Doku-Diff wird nicht belastet)", () => {
+    const code = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    assert.deepEqual(bewerte(code, NORMAL, ["src/x.ts"]), []);
+    const doku = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
+    assert.deepEqual(bewerte(doku, DOKU, ["docs/auth.md"]), []);
+  });
+
+  test("risiko fehlt: fail-closed, die Klasse hoch gilt und die Meldung nennt den Grund", () => {
+    const f = (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(mitSicherheit()), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, zeilen: Z });
+    assert.match(f.join(), /Bedrohungen-Zeile fehlt/);
+    assert.match(f.join(), /nicht übergeben/);
+  });
+
+  test("die jüngste Zeile gilt: alt gültig + jung leer ist rot, alt leer + jung gültig grün", () => {
+    assert.equal(bewerte(`${mitZeile(ZEILE)}\n${Z.bedrohungen}: daten=… | grenzen=b | missbrauch=c | datenschutz=d`).length, 1);
+    assert.deepEqual(bewerte(`${mitZeile("daten=… | grenzen=b | missbrauch=c | datenschutz=d")}\n${Z.bedrohungen}: ${ZEILE}`), []);
+  });
+
+  test("Squash-Präfix `* ` vor der Zeile wird wie bei den anderen Nachweis-Zeilen toleriert", () => {
+    assert.deepEqual(bewerte(`${mitSicherheit()}\n* ${Z.bedrohungen}: ${ZEILE}`), []);
+  });
+
+  test("bewerteKlasseHoch ist die einzige Prüfstelle: normal und doku liefern [], hoch ohne Zeile nicht", () => {
+    const n = parseNachweis(mitSicherheit());
+    const { bewerteKlasseHoch } = raw as Mod;
+    assert.deepEqual(bewerteKlasseHoch(n, NORMAL, Z), []);
+    assert.deepEqual(bewerteKlasseHoch(n, DOKU, Z), []);
+    assert.equal(bewerteKlasseHoch(n, HOCH, Z).length, 1);
+  });
+
+  test("blocker=…,sicherheit:0 bei runden=1 ist grün, sicherheit:1 bei runden=1 rot", () => {
+    assert.deepEqual(bewerte(mitZeile(ZEILE)), []);
+    const rot = bewerte(mitZeile(ZEILE).replace("sicherheit:0", "sicherheit:1"));
+    assert.match(rot.join(), /Runde 1 meldete Blocker/);
+  });
+
+  describe("Integration über checkReviewNachweis", () => {
+    const nachweis = (extra: string[]) => [`${Z.praefix}Plan: ${PL}`, `${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI}${extra[0] ?? ""} blocker=architektur:0,requirement-treue:0,test-adaequanz:0${extra[1] ?? ""} verdikt=ok`].join("\n");
+    const pruefe = (messages: string, o: { files?: string; numstat?: string; throws?: string } = {}) =>
+      checkReviewNachweis({ runGit: fakeGit({ messages, files: o.files ?? "src/auth.ts\n", numstat: o.numstat, throws: o.throws }), env, ladeRisiko: () => ({ muster: ["**/auth*"], quelle: "Test" }) } as never);
+
+    test("src/auth.ts ohne beides rot, mit beidem ok", () => {
+      const rot = pruefe(nachweis([]));
+      assert.equal(rot.ok, false);
+      assert.match(rot.fehler.join(), /Bedrohungen-Zeile fehlt/);
+      const gruen = pruefe(`${nachweis([",sicherheit", ",sicherheit:0"])}\n${Z.bedrohungen}: ${ZEILE}`);
+      assert.equal(gruen.ok, true, gruen.fehler.join("\n"));
+    });
+
+    test("ein Pfad außerhalb der Muster bleibt normal und braucht beides nicht", () => {
+      const r = pruefe(nachweis([]), { files: "src/x.ts\n" });
+      assert.equal(r.ok, true, r.fehler.join("\n"));
+    });
+
+    test("ein Doku-Diff mit Risikowort im Namen bleibt frei", () => {
+      const r = pruefe(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 verdikt=ok`, { files: "docs/auth.md\n" });
+      assert.equal(r.ok, true, r.fehler.join("\n"));
+    });
+
+    test("numstat-Fehler: fail-closed hoch, die Meldung nennt den git-Grund", () => {
+      const r = pruefe(nachweis([]), { files: "src/x.ts\n", throws: "diff --numstat" });
+      assert.equal(r.ok, false);
+      assert.match(r.fehler.join(), /git-Fehler beim Zählen des Diffs/);
+    });
+
+    test("Review-Override bleibt das Ventil trotz Klasse hoch", () => {
+      const r = pruefe(`${Z.reviewOverride}: #334 Revert-PR`);
+      assert.equal(r.ok, true);
+    });
   });
 });
