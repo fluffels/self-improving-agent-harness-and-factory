@@ -72,6 +72,14 @@ const WORKFLOW_LABELS = [
   [/^(pr\+merge|ci-fix)\b/i, "CI/Merge"],
 ];
 
+/** Namens-Heuristik für den Agententyp (Reihenfolge zählt: Planer-, Recherche-, Lens-Namen vor „umsetzer“): Phase („Planung“/„Recherche“/„Review“), "umsetzer" oder null. Gemeinsame Quelle von classifySubagent und istUmsetzer. */
+function namensArt(t) {
+  if (/planner/i.test(t)) return "Planung";
+  if (/explore/i.test(t)) return "Recherche";
+  if (/lens/i.test(t)) return "Review";
+  return /umsetzer/i.test(t) ? "umsetzer" : null;
+}
+
 /**
  * Phase eines Subagenten: erst der exakte Agentenname aus `agenten` (`agenten.planer`/`lens`; `umsetzer` und `gruppe` haben keine feste Phase), dann der Typ per
  * Namens-Heuristik (`agenten` fehlt oder passt nicht), dann Workflow-Label,
@@ -87,12 +95,9 @@ export function classifySubagent(agentType, description, agenten = {}) {
     if (t === agenten.lens) return "Review";
     if (t === agenten.umsetzer || t === agenten.gruppe) return null; // keine feste Phase: der Zeitschnitt teilt sie (s. u.)
   }
-  if (/planner/i.test(t)) return "Planung";
-  if (/explore/i.test(t)) return "Recherche";
-  if (/lens/i.test(t)) return "Review";
-  // Der Umsetzer arbeitet über Umsetzung UND CI/Merge: keine feste Phase, der
-  // Zeitschnitt teilt ihn; vor den Beschreibungs-Regeln, damit „Plan“/„Review“ im Text nicht greift.
-  if (/umsetzer/i.test(t)) return null;
+  const art = namensArt(t);
+  if (art === "umsetzer") return null; // der Umsetzer arbeitet über Umsetzung UND CI/Merge: keine feste Phase, der Zeitschnitt teilt ihn; vor den Beschreibungs-Regeln, damit „Plan“/„Review“ im Text nicht greift
+  if (art !== null) return art;
   for (const [re, phase] of WORKFLOW_LABELS) if (re.test(d)) return phase;
   if (/\blens\b|review|kritiker/i.test(d)) return "Review";
   if (/\bplan/i.test(d)) return "Planung";
@@ -136,7 +141,7 @@ export function countReviewRounds(reviewDescriptions) {
 function istUmsetzer(agentType, agenten = {}) {
   const t = typeof agentType === "string" ? agentType : "";
   if (t === agenten.umsetzer) return true;
-  return t !== agenten.gruppe && !/planner|explore|lens/i.test(t) && /umsetzer/i.test(t);
+  return t !== agenten.gruppe && namensArt(t) === "umsetzer";
 }
 
 const subKey = (c) => c.subagent.id ?? c.subagent;

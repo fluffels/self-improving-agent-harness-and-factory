@@ -141,6 +141,8 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.classifySubagent("general-purpose", "Lens 1: Architektur"), "Review");
     assert.equal(m.classifySubagent("general-purpose", "Frischer Kritiker Runde 2"), "Review");
     assert.equal(m.classifySubagent("Explore", "Review-Kontext sammeln"), "Recherche");
+    assert.equal(m.classifySubagent("X-Planner", "x"), "Planung");
+    assert.equal(m.classifySubagent("X-LENS", "x"), "Review");
     assert.equal(m.classifySubagent("general-purpose", "Lens 2: Requirement-Treue gegen den Plan"), "Review");
     // Ein Lens-Typ mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
     assert.equal(m.classifySubagent("x-lens", "Architektur-Blick auf #1264"), "Review");
