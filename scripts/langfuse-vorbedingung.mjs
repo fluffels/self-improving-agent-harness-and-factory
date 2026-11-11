@@ -8,7 +8,7 @@
  * Aufrufer: der Ticket-Skill (Schritt 0); bewusst NICHT im Board-Takt.
  * MCP-Verbindung der Session (factory#323 L1/L7/L18): der Langfuse-MCP verbindet nur beim Session-Start, Health allein sagt darüber nichts. Nach grüner Health (Standard- und --json-Modus, nicht bei --sessionstart: Race beim Start) wertet das Skript
  * die Logs `mcp-logs-langfuse` der letzten 24 h aus (Lib mcp-log-lib.mjs): getrennt (letzter Verbindungsversuch fehlgeschlagen) → Exit 1 mit Hinweis `/mcp` → langfuse neu verbinden oder Session neu starten; bei abweichender MCP-URL (Host/Port) nennt der Hinweis das.
- * Hat die Session keinen eigenen `Starting connection` (Subagent), zählt der jüngste Versuch im Projekt (Rückfall, kann eine fremde Session sein). Nur unter Claude Code (`CLAUDECODE=1`); sonst, ohne Log oder bei Lesefehler steht „nicht prüfbar (Grund)“ auf stderr, Exit 0. `--json` bekommt additiv das Feld `mcp`.
+ * Hat die Session keinen eigenen `Starting connection` (Subagent), zählt der jüngste Versuch im Projekt (Rückfall, kann eine fremde Session sein). Nur unter Claude Code (`CLAUDECODE=1`); sonst, ohne Log oder bei Lesefehler steht „nicht prüfbar (Grund)“ auf stderr, Exit 0. `--json` bekommt additiv das Feld `mcp` und behält den Exit der Health-Prüfung (Cockpit-Vertrag).
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -61,11 +61,11 @@ function mcpHinweis(u) {
   return [`Langfuse-MCP-Verbindung dieser Session fehlt (${u.code}, ${u.zeit}): \`/mcp\` → langfuse neu verbinden oder Session neu starten, erst dann Ticket starten.`, ...zusatz].join(" ");
 }
 
-/** Exit bei erreichbarem Langfuse: getrennt → 1 mit Hinweis, nicht prüfbar → 0 mit einer Zeile (außer `--json`, dort steht es im Feld `mcp`), sonst 0. */
+/** Exit bei erreichbarem Langfuse: getrennt → 1 mit Hinweis (mit `--json` Exit 0, das Urteil steht im Feld `mcp`), nicht prüfbar → 0 mit einer Zeile (außer `--json`), sonst 0. */
 function mcpAbschluss(u, json, err) {
   if (u.status === "getrennt") {
     if (!json) err(mcpHinweis(u));
-    return 1;
+    return json ? 0 : 1; // --json: Exit bleibt die Health-Aussage (Cockpit-Vertrag `erreichbar === (Exit 0)`), das Urteil steht im Feld `mcp`
   }
   if (u.status === "nicht-pruefbar" && !json) err(`Langfuse-MCP-Verbindung der Session nicht prüfbar (${u.grund}).`);
   return 0;

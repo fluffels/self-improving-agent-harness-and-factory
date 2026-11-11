@@ -18,7 +18,6 @@
  *    ein dynamisches Ziel (`cd "$X"`, `cd -`, `popd`) fügt Session-`cwd` und einen Unbekannt-Marker hinzu.
  *    Subshells, Substitutionen, Pipelines und Hintergrundlisten (`&`) wirken nicht nach außen; `{ … }` und
  *    `eval` schon; if/Schleifen/case vereinigen die Enden aller Zweige.
- *  - Ortsunabhängig verboten (auch im eigenen Worktree): `git stash` außer `list`/`show` (repoweit geteilter Stash, factory#323).
  *  - Geschützt sind `git commit`/`git push`, `git subtree push`, die Unterkommandos von `git submodule foreach` und
  *    `git rebase -x/--exec`, Git-Aliase (`-c alias.p=push p`, `git config alias.*`) und exportiertes
  *    `GIT_DIR`/`GIT_WORK_TREE`. Ziel ist je Verzeichnis aus `D`: `-C`-Kette (relativ, `~` per `os.homedir()`,
@@ -209,25 +208,8 @@ const BLOCK_REASON = (top, deps, w) =>
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
   const kontextCache = deps.kontextCache ?? new Map();
-  const stash = stashBlock(command, cwd, deps);
-  if (stash) return stash;
   if (!kannZielHaben(command, cwd, deps)) return { block: false }; // kein Ziel, keine Rückfrage: weder Config lesen noch git fragen
   return jeSchutzWurzel(repoRoot, deps, (w) => entscheideFuer({ cwd, command, w, deps, kontextCache }));
-}
-
-const STASH_REASON =
-  "git stash (außer list/show) ist verboten: Stashes sind repoweit geteilt (refs/stash); pop/apply kann fremden WIP anwenden. " +
-  "Zwischenstand per WIP-Commit auf dem eigenen Branch oder per Kopie in den Scratchpad sichern (Regel „Tests gegen False Positives absichern“ in AGENTS.md). (factory#323)";
-
-/** Ortsunabhängiger Block für `git stash` (Aliase, Interpreter, dynamischer Unterbefehl eingeschlossen); sonst null. */
-function stashBlock(command, cwd, deps) {
-  let stash;
-  try {
-    stash = analyse(command, cwd, { ...deps, repoRoot: undefined }).stash;
-  } catch {
-    stash = /\bgit\b.*\bstash\b(?!\s+(?:list|show)\b)/s.test(command); // Analyse wirft: grobe Wortregel statt Durchwinken
-  }
-  return stash ? { block: true, reason: STASH_REASON } : null;
 }
 
 /**

@@ -451,5 +451,5 @@ export function analyse(command, cwd, deps = {}) {
   const parsed = parseBash(command);
   if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks };
   evalList(parsed.ast, new Set([c.cwd]), c);
-  return { targets: [...c.targets], asks: c.asks, stash: c.stash };
+  return { targets: [...c.targets], asks: c.asks };
 }

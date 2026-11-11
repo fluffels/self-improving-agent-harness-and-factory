@@ -42,6 +42,14 @@ describe("mcpVerbindung", () => {
     const z = [START("2026-11-11T09:00:00.000Z"), OHNE_CODE("2026-11-11T09:00:01.000Z")];
     expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT })).toMatchObject({ status: "getrennt", code: "Verbindungsfehler" });
   });
+  test("`version negotiation probe failed` zählt als Verbindungsfehler: getrennt", () => {
+    const z = [START("2026-11-11T09:00:00.000Z"), zeile("version negotiation probe failed: ECONNREFUSED", "2026-11-11T09:00:01.000Z")];
+    expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT }).status).toBe("getrennt");
+  });
+  test("Werkzeugfehler mitten im Text (ECONNREFUSED, Connection failed) nach dem Erfolg sperrt nicht: verbunden", () => {
+    const z = [START("2026-11-11T09:00:00.000Z"), ERFOLG("2026-11-11T09:00:00.050Z"), zeile("Tool x: ECONNREFUSED beim Aufruf", "2026-11-11T09:30:00.000Z"), zeile("Tool y: HTTP Connection failed nach 5ms", "2026-11-11T09:31:00.000Z")];
+    expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT }).status).toBe("verbunden");
+  });
   test("Fehler, dann erfolgreiche Neuverbindung: verbunden", () => {
     const z = [START("2026-11-11T09:00:00.000Z"), REFUSED("2026-11-11T09:00:01.000Z"), START("2026-11-11T09:00:05.000Z"), ERFOLG("2026-11-11T09:00:05.050Z")];
     expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT }).status).toBe("verbunden");

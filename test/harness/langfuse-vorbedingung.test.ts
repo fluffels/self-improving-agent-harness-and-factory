@@ -279,14 +279,20 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     expect(r.out).toEqual([]);
     expect(r.gelesen()).toBe(0);
   });
-  test("--json enthält `mcp` (additiv, `erreichbar` bleibt die Health-Aussage); getrennt ergibt Exit 1", async () => {
+  test("--json enthält `mcp` (additiv, `erreichbar` bleibt die Health-Aussage); getrennt ändert den Exit nicht (Cockpit-Vertrag erreichbar === Exit 0)", async () => {
     const r = await lauf(["--json"], CC, () => GETRENNT);
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(0);
     const j = JSON.parse(r.out[0]) as { erreichbar: boolean; grund: null; mcp: { status: string; code: string } };
     expect(j).toMatchObject({ erreichbar: true, grund: null, mcp: { status: "getrennt", code: "ECONNREFUSED" } });
     expect(r.err).toEqual([]);
     const ok = JSON.parse((await lauf(["--json"], CC, () => VERBUNDEN)).out[0]) as { mcp: { status: string } };
     expect(ok.mcp.status).toBe("verbunden");
+  });
+  test("eigener Fehlstart älter als das 24-h-Fenster: kein getrennt, Exit 0 (Fenster an der Aufrufstelle verdrahtet)", async () => {
+    const alt = [START("2026-11-10T08:00:00.000Z"), REFUSED("2026-11-10T08:00:00.020Z")];
+    const r = await lauf([], CC, () => alt);
+    expect(r.code).toBe(0);
+    expect(r.err.join("\n")).not.toContain("fehlt");
   });
   test("--json bei Health aus: keine MCP-Prüfung, kein Feld `mcp`", async () => {
     const r = await lauf(["--json"], CC, () => GETRENNT, antwort(500));
