@@ -865,6 +865,26 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
     expect(ttlBericht([mitSession(zwei(3, 10_000), "b"), mitSession(zwei(3, 10_000), "a"), mitSession(zwei(3, 10_000), "b")]).sessions).toEqual(["a", "b"]);
   });
 
+  test("Pausengrenzen: genau 5 min ist keine Pause, genau 60 min zählt nicht zu den Pausen über 60 min", () => {
+    expect(ttlBericht([zwei(5, 500)]).pausenUeber5).toBe(0);
+    expect(ttlBericht([zwei(5.1, 500)]).pausenUeber5).toBe(1);
+    expect(ttlBericht([zwei(60, 500)]).ueber60).toBe(0);
+    expect(ttlBericht([zwei(61, 500)]).ueber60).toBe(1);
+  });
+  test("der Präfix ist höchstens der neu geschriebene Teil: ein größerer Vorgänger-Kontext macht das Schreiben nicht negativ", () => {
+    const l = lauf("#1 x", [{ min: 0, ctx: 20_000, cacheRead: 0 }, { min: 10, ctx: 5000, cacheRead: 500 }]);
+    expect(ttlBericht([l]).sim).toBeCloseTo(0.0805, 9);
+  });
+  test("ein Read über dem Präfix bleibt erhalten (der Präfix schiebt nur, was noch geschrieben wurde)", () => {
+    const l = lauf("#1 x", [{ min: 0, ctx: 100, cacheRead: 0 }, { min: 10, ctx: 12_000, cacheRead: 500 }]);
+    expect(ttlBericht([l]).sim).toBeCloseTo(0.04645, 9);
+  });
+  test("ohne Fenster-Angabe steht in Markdown und JSON ein Platzhalter", () => {
+    const bericht = (K as unknown as { kontextTreiber: (e: object) => { von: unknown; bis: unknown } }).kontextTreiber({ laeufe: [zwei(10, 500)], ttl: true });
+    expect([bericht.von, bericht.bis]).toEqual([null, null]);
+    expect(K.renderMarkdown(bericht as never)).toContain("(Fenster - bis -, Preisstand");
+  });
+
   describe("Warmstart über Läufe", () => {
     const warm = (session: string, ab: number) => mitSession(lauf("#1 x", [{ min: ab, ctx: 10_000, cacheRead: 8000 }, { min: ab + 1, ctx: 10_500, cacheRead: 10_000 }]), session);
     const kalt = (session: string, ab: number) => mitSession(lauf("#1 x", [{ min: ab, ctx: 10_000, cacheRead: 0 }, { min: ab + 1, ctx: 10_500, cacheRead: 10_000 }]), session);
@@ -882,6 +902,25 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
     });
     test("ein weiterer Lauf mit Call in den 5 min davor macht den Start nicht zum Kandidaten", () => {
       expect(kandidaten(warm("s", -20), warm("s", 7), kalt("s", 10))).toBe(0);
+    });
+    test("ein später startender Lauf derselben Session blockiert den kalten Start davor nicht", () => {
+      expect(kandidaten(warm("s", -20), kalt("s", 10), warm("s", 12))).toBe(1);
+    });
+    test("Fenstergrenzen: genau 5 und genau 60 min nach dem letzten Call sind Kandidaten", () => {
+      expect(kandidaten(warm("s", 4), kalt("s", 10))).toBe(1);
+      expect(kandidaten(warm("s", -51), kalt("s", 10))).toBe(1);
+      expect(kandidaten(warm("s", 4.9), kalt("s", 10))).toBe(0);
+      expect(kandidaten(warm("s", -52), kalt("s", 10))).toBe(0);
+    });
+    test("Läufe ohne Session sind nie dieselbe Session", () => {
+      const ohne = (l: Lauf): Lauf => ({ ...l, session: undefined } as Lauf);
+      expect(kandidaten(ohne(warm("s", -20)), ohne(kalt("s", 10)))).toBe(0);
+    });
+    test("die Ersparnis ist auf das Geschriebene des kalten Starts gedeckelt, wenn der Sockel größer ist", () => {
+      const klein = mitSession(lauf("#1 x", [{ min: 10, ctx: 5000, cacheRead: 0 }, { min: 11, ctx: 5100, cacheRead: 5000 }]), "s");
+      const r = ttlBericht([warm("s", -20), klein]);
+      expect(r.warmstart.sockel).toBe(8000);
+      expect(r.sim - r.simMitWarmstart).toBeCloseTo((5000 * (4 - 0.1)) / 1e6, 9);
     });
     test("ohne warm gestartete erste Calls ist der Sockel 0, die Ersparnis 0", () => {
       const r = ttlBericht([kalt("s", -20), kalt("s", 10)]);
@@ -907,6 +946,17 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
       expect(r.nettoMitWarmstart).toBeGreaterThan(0);
       expect(r.empfehlung).toBe("5m");
     });
+  });
+
+  test("Netto der Kette genau 0 mit positivem Warmstart: 1h (die Grenze ist ≥, nicht >)", () => {
+    const ts = (min: number) => new Date(Date.UTC(2026, 9, 8, 12, min)).toISOString();
+    const call = (min: number, cacheRead: number) => ({ model: "claude-sonnet-5-5", ts: ts(min), input: 0, output: 10, cacheRead, cacheWrite: 10_000 - cacheRead, cacheWrite1h: 0 });
+    const roh = (session: string, min: number, cacheRead: number) => ({ offen: false, sessions: [session], ttl: { calls: 1, uebersprungen: 0, pausenUeber5: 0, neuaufbauUeber5: 0, vermeidbar: 0, ueber60: 0, ist: 1, sim: 1, erster: call(min, cacheRead), ersterMs: Date.parse(ts(min)), letzterMs: Date.parse(ts(min)) } });
+    const fueller = Array.from({ length: 8 }, (_, i) => ({ ...roh(`f${i}`, 0, 8000), ttl: { ...roh("x", 0, 8000).ttl, erster: null } }));
+    const r = (K as unknown as { ttlGegenrechnung: (a: object[]) => Ttl }).ttlGegenrechnung([...fueller, roh("s", -20, 8000), roh("s", 10, 0)]);
+    expect([r.laeufe, r.netto, r.warmstart.kandidaten]).toEqual([10, 0, 1]);
+    expect(r.nettoMitWarmstart).toBeGreaterThan(0);
+    expect(r.empfehlung).toBe("1h");
   });
 
   describe("CLI", () => {

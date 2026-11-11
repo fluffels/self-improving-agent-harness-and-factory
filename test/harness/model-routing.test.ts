@@ -173,6 +173,7 @@ function ttlSchluessel(wert: unknown, pfad = ""): { pfad: string; wert: unknown 
 /**
  * Der Frontmatter-Block einer Agentendatei mit einer Ebene Verschachtelung (anders als `parseFrontmatter`, das eingerückte Schlüssel nicht sieht). Eigener Zeilenleser statt
  * YAML-Parser: die Beschreibungen tragen unquotierte Doppelpunkte, die ein strenger Parser ablehnt. Ein Schlüssel ohne Wert sammelt die eingerückten Zeilen darunter als Map.
+ * Bekannte Grenze: die Flow-Schreibweise `experimental: { cacheTtl: 1h }` bleibt ein String und wird nicht erkannt; tiefer verschachtelte Schlüssel zählen als eine Ebene.
  */
 function frontmatterYaml(md: string): Record<string, unknown> {
   const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md)?.[1] ?? "";
@@ -1085,7 +1086,9 @@ describe("Cache-TTL je Subagent-Rolle (factory#312)", () => {
 
   test("Doku-Zeile 1h mit Netto > 0 und passendem Schlüssel: kein Befund; Netto <= 0 oder fehlender Schlüssel: Befund", () => {
     assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 1h |"]))), []);
-    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | \u22120,10 | 1h |"]))).length, 2, "Netto negativ: Doku-Zeile und Schlüssel");
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | \u22120,10 | 1h |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku", "Doku rolle-a: 1h bei Netto -0.1"], "Netto negativ: Schlüssel und Doku-Zeile");
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,00 | 1h |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku", "Doku rolle-a: 1h bei Netto 0"], "Netto genau 0 belegt nichts");
+    assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 5m |"]))), ["rolle-a: 1h ohne belegten Nettogewinn in der Doku"], "Zeile 5m mit Netto > 0 belegt den Schlüssel nicht");
     assert.deepEqual(ttlRollenBefunde([ohneTtl], ttlZeilenAusDoku(tabelle(["| rolle-a | 0,42 | 1h |"]))), ["Doku rolle-a: 1h ohne experimental.cacheTtl: 1h im Frontmatter"]);
     assert.deepEqual(ttlRollenBefunde([ohneTtl], ttlZeilenAusDoku(tabelle(["| rolle-a | -1,50 | 5m |"]))), [], "5m-Zeile ohne Schlüssel ist der Normalfall");
   });
@@ -1103,5 +1106,18 @@ describe("Cache-TTL je Subagent-Rolle (factory#312)", () => {
     assert.deepEqual(ttlZeilenAusDoku("# Nichts\n"), []);
     assert.deepEqual(ttlZeilenAusDoku(["", TTL_ABSCHNITT, "", "| Name | TTL |", "| --- | --- |", "| a | 1h |"].join("\n")), []);
     assert.deepEqual(ttlRollenBefunde([mitTtl("1h")], []).length, 1);
+  });
+
+  test("Zeilen hinter der nächsten Überschrift gehören nicht zur Tabelle", () => {
+    const md = tabelle([]) + "| rolle-a | 0,42 | 1h |\n";
+    assert.deepEqual(ttlZeilenAusDoku(md), []);
+  });
+
+  test("je fehlende Spalte (Rolle, Netto $, TTL) ist die Liste leer", () => {
+    const ohne = (kopf: string) => ["", TTL_ABSCHNITT, "", kopf, "| --- | --- | --- |", "| rolle-a | 0,42 | 1h |"].join("\n");
+    assert.equal(ttlZeilenAusDoku(ohne("| Rolle | Netto $ | TTL |")).length, 1, "Kontrolle: vollständiger Kopf liefert die Zeile");
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Name | Netto $ | TTL |")), []);
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Betrag | TTL |")), []);
+    assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Netto $ | Dauer |")), []);
   });
 });

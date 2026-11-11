@@ -174,7 +174,6 @@ function liestPfad(aufruf, pfad) {
   return new RegExp(`(?<![\\w.-])${escapeRegex(pfad)}(?!\\w)`).test(aufruf.befehl);
 }
 
-/** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. `namen` (Ticket-Namen aus der Projekt-Config) ist Pflicht, ohne wirft `laufAus`. */
 // ── TTL-Gegenrechnung (factory#312) ──────────────────────────────────────────
 
 /** Mindestzahl Läufe einer Rolle, ab der die Gegenrechnung etwas belegt. */
@@ -296,6 +295,7 @@ export function ttlGegenrechnung(alle) {
   };
 }
 
+/** Kennzahlen eines Laufs (`{ meta, zeilen }`), `null` ohne Call. `namen` (Ticket-Namen aus der Projekt-Config) ist Pflicht, ohne wirft `laufAus`. */
 export function analysiereLauf(lauf, { wurzel = null, namen } = {}) {
   const kopf = laufAus(lauf, namen);
   const eintraege = phasenUndTools(lauf.zeilen, kopf?.einstieg ?? null, namen);
