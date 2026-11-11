@@ -1079,8 +1079,9 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
   test("Lader: Punkte und Calls vor von zählen nicht; ein Call ohne Zeitstempel steht als ohneZeit in der Quelle", () => {
     const ohne = JSON.stringify({ type: "assistant", uuid: "u9", message: { id: "x9", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: "x" }] } });
     const vorher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 - 90 * 60_000).toISOString(), uuid: "u8", message: { id: "x8", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 5000, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
-    const wurzel = fixture({ "a/s1.jsonl": [callZeile("m1"), vorher, ohne].join("\n") });
-    const frueh = [punkt(-120, 50), punkt(-60, 90), verlauf].join("\n");
+    const nachher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 + 25 * 60 * 60_000).toISOString(), uuid: "u7", message: { id: "x7", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 7777, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
+    const wurzel = fixture({ "a/s1.jsonl": [callZeile("m1"), vorher, nachher, ohne].join("\n") });
+    const frueh = [punkt(-120, 50), punkt(-60, 90), verlauf, punkt(26 * 60, 99)].join("\n");
     const r = lade({ von, bis }, { lies: () => frueh, pfad: "/x/v.jsonl", wurzel });
     expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 1000, jePp: 100 });
     expect(r.aufbau).toMatchObject({ ohneZeit: 1 });
@@ -1090,6 +1091,13 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
     const l = (raw as unknown as { STANDARD_LADER: Record<string, unknown> }).STANDARD_LADER;
     expect(Object.keys(l).sort()).toEqual(["auditLader", "kontingentLader", "maengelLader", "tokensLader"]);
     for (const f of Object.values(l)) expect(typeof f).toBe("function");
+    // Verdrahtung als Quelltext-Wächter (factory#208: `name(` statt `includes("name")`): main spreadet das Objekt, jeder Lader ruft seine Funktion auf
+    const src = readFileSync(fileURLToPath(new URL("../scripts/factory-kennzahlen.mjs", import.meta.url)), "utf8");
+    expect(src).toMatch(/\bfunction main\(argv\) \{[\s\S]*erstelle\(\{ von, bis, langfuse \}, \{ claimKarte, \.\.\.STANDARD_LADER \}\)/);
+    expect(src).toContain("auditLader: (e) => ladeAuditDaten(e, configOderFehler()),");
+    expect(src).toContain("maengelLader: () => holeMaengel(),");
+    expect(src).toContain("kontingentLader: (e) => ladeAboKontingent(e),");
+    expect(src).toContain("tokensLader: (e) => ladeTokensJeProzentpunkt(e),");
   });
 
   test("Lader: fehlender Verlauf nennt den Pfad, fehlende Wurzel ist eine Lücke, nie ein Wert", () => {

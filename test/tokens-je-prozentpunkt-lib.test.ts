@@ -89,6 +89,8 @@ describe("Reset und Ketten", () => {
       { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: (T0 + 5 * D) / 1000 } },
     ];
     expect(L.strecken(frueherer, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
+    const eineSekunde = [frueherer[0], { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: RESET - 1 } }];
+    expect(L.strecken(eineSekunde, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
   });
 });
 
@@ -271,6 +273,11 @@ describe("Zeitraum, Sortierung, Streuung und Wochen", () => {
     expect(r.wochen[0].tage.roh.n).toBe(4);
     expect(r.wochen[1].tage.roh).toMatchObject({ n: 2, median: 150_000 });
     expect(r.wochen[2].luecke).toBe("keine Kontingent-Punkte (1 Calls ohne Verlauf)");
+  });
+
+  test("Ausgelassen: veralteter Punkt und Abschnitt mit Zuwachs ohne Calls stehen mit Werten ungleich 0", () => {
+    const t = lauf([p(T0 + H, 10, RF), p(T0 + 2 * H, 20, RF), p(T0 + 3 * H, 15, RF), p(T0 + 4 * H, 30, RF)], [c(T0 + 90 * 60_000, { input: 1000 })]);
+    expect(L.tokensJeProzentpunktAbschnitt(t).join("\n")).toContain("- Ausgelassen: Reset 0, Zuwachs ohne Calls 10 pp (1), veraltete Punkte 1, Calls ohne Verlauf 0");
   });
 
   test("die Zeile Ausgelassen nennt alle Zähler mit Wert", () => {
