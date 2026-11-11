@@ -194,12 +194,20 @@ describe("Datenlücken und Bereinigung", () => {
     expect(b.unzugeordnet).toEqual({ count: 24, cost: 12 });
   });
   test("ein Tag ohne Daten ist Datenlücke und jede Summe trägt „ohne Tag X“", () => {
-    const b = rep(gesamt, exp("tage", [{ time_dimension: "2026-11-01" }, { time_dimension: "2026-11-03" }]), latenzOk);
+    const b = rep(gesamt, exp("tage", [{ time_dimension: "2026-11-01", count_count: 1 }, { time_dimension: "2026-11-03", count_count: 1 }]), latenzOk);
     expect(b.luecken).toContain("Tage ohne Daten: 2026-11-02");
     const md = L.renderMarkdown(b);
     expect(md).toContain("Gesamt (ohne Tag 2026-11-02): roh");
     expect(md).toContain("unzugeordnet (ohne Tag 2026-11-02): ");
     for (const t of ["Quelle", "Je Rolle", "Je Repo", "Je Effort", "Je Modell"]) expect(md).toContain(`## ${t} (ohne Tag 2026-11-02)`);
+  });
+  test("ein leerer Tag als Zeile mit count 0 und Kosten null (so liefert queryMetrics ihn) ist Datenlücke, auch ohne count_count", () => {
+    const leerTag = { traceName: "Claude Code Turn", time_dimension: "2026-11-02", count_count: 0, sum_totalCost: null };
+    const b = rep(gesamt, exp("tage", [{ time_dimension: "2026-11-01", count_count: 1, sum_totalCost: 1 }, leerTag, { time_dimension: "2026-11-03", count_count: 1, sum_totalCost: 1 }]), latenzOk);
+    expect(b.luecken).toContain("Tage ohne Daten: 2026-11-02");
+    expect(L.renderMarkdown(b)).toContain("Gesamt (ohne Tag 2026-11-02): roh");
+    expect(JSON.stringify(b.luecken)).toContain("2026-11-02");
+    expect(L.tagesLuecken(VON, "2026-11-02T00:00:00Z", [{ time_dimension: "2026-11-01" }])).toEqual(["2026-11-01"]);
   });
   test("ohne Tage-Export steht „Tage nicht geprüft“; mit allen Tagen kein Vermerk", () => {
     const b = rep(gesamt, latenzOk);
@@ -209,7 +217,7 @@ describe("Datenlücken und Bereinigung", () => {
   });
   test("Tage werden nach UTC gegen das Fenster geprüft (halboffen, Offset-Zeiten)", () => {
     expect(L.tagesLuecken("2026-11-01T12:00:00Z", "2026-11-03T00:00:00Z", [])).toEqual(["2026-11-01", "2026-11-02"]);
-    expect(L.tagesLuecken("2026-11-01T00:00:00+01:00", "2026-11-01T23:00:00Z", [{ time_dimension: "2026-11-01" }])).toEqual(["2026-10-31"]);
+    expect(L.tagesLuecken("2026-11-01T00:00:00+01:00", "2026-11-01T23:00:00Z", [{ time_dimension: "2026-11-01", count_count: 1 }])).toEqual(["2026-10-31"]);
   });
   test("doppelte Audit-Markierung zählt einmal: die Kopie fällt aus bereinigt und aus den Tabellen", () => {
     const kopie = ["Claude Code Turn", "[duplicate audit] LLM Call", "claude-sonnet-5-5", "repoA"] as const;
@@ -443,7 +451,7 @@ describe("Funde Runde 1", () => {
   });
   test("Tage: der Fensterstart zählt mit seinem Tag, ein Zeitstempel mit Uhrzeit zählt als dieser Tag", () => {
     expect(L.tagesLuecken("2026-11-01T12:00:00Z", "2026-11-02T06:00:00Z", [])).toEqual(["2026-11-01", "2026-11-02"]);
-    expect(L.tagesLuecken(VON, "2026-11-02T00:00:00Z", [{ time_dimension: "2026-11-01T00:00:00.000Z" }])).toEqual([]);
+    expect(L.tagesLuecken(VON, "2026-11-02T00:00:00Z", [{ time_dimension: "2026-11-01T00:00:00.000Z", count_count: 1 }])).toEqual([]);
   });
   test("fehlende Schlüssel (nicht nur null oder leer) für Modell und Umgebung sind unzugeordnet", () => {
     const b = rep(exp("gesamt", [{ traceName: "Abgleich", name: "Call", count_count: 2, sum_totalCost: 1 }]), tageVoll);
@@ -515,7 +523,7 @@ describe("CLI", () => {
   });
   test("zwei Exporte ergeben Markdown, mit --json das Objekt; Datenlücken ändern den Exit nicht", () => {
     dateien["g.json"] = JSON.stringify(gesamt);
-    dateien["t.json"] = JSON.stringify(exp("tage", [{ time_dimension: "2026-11-01" }]));
+    dateien["t.json"] = JSON.stringify(exp("tage", [{ time_dimension: "2026-11-01", count_count: 1 }]));
     const md = lauf(["--export", "g.json", "--export", "t.json"]);
     expect(md.exitCode).toBe(0);
     expect(md.text).toContain("## Datenlücken");

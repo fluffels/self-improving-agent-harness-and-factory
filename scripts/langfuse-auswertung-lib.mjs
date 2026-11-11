@@ -153,9 +153,9 @@ export function pruefeExporte(exporte) {
 
 // ── Aufbereitung ─────────────────────────────────────────────────────────────
 
-/** UTC-Tage, die das Fenster schneiden und im Tage-Export keine Zeile haben. */
+/** UTC-Tage, die das Fenster schneiden und im Tage-Export keine Zeile mit Calls haben (`queryMetrics` liefert einen leeren Tag als Zeile mit `count_count` 0 und `sum_totalCost` null). */
 export function tagesLuecken(von, bis, tageData) {
-  const have = new Set(tageData.map((r) => String(r.time_dimension).slice(0, 10)));
+  const have = new Set(tageData.filter((r) => Number(r.count_count) > 0).map((r) => String(r.time_dimension).slice(0, 10)));
   const start = Date.parse(von);
   const ende = Date.parse(bis);
   const out = [];
