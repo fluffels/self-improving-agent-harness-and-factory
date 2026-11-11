@@ -77,6 +77,8 @@ describe("Regex-Escape: Muster erkennen (Red-Green-Fixtures)", () => {
     assert.deepEqual(befunde(aufruf("/(a)/g", "$1")), []);
     assert.deepEqual(befunde("s.replace(/[.*]/g, (m) => m)"), []);
     assert.deepEqual(befunde(aufruf("/^" + BS + "//", BS2 + "/")), []);
+    // Pfadtrenner-Tausch (Ersatz ist nur der Backslash selbst) ist kein Escape
+    assert.deepEqual(befunde(aufruf("/" + BS + "//g", BS2)), []);
   });
   test("escapeRe maskiert Punkt und Backslash überall (der Fix für beide Fundstellen)", () => {
     assert.equal(escapeRe("a.b.c"), "a" + BS + ".b" + BS + ".c");
