@@ -27,7 +27,7 @@ import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 /** Erlaubte Werte hinter `ERGEBNIS:` (Format in der Umsetzer-Definition unter `.claude/agents/`, Test bindet beides). */
 export const ERGEBNIS_WERTE = ["gemergt", "entscheidung-noetig", "festgefahren", "abgebrochen", "uebergabe", "abnahme"];
 
-/** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`). */
+/** Erlaubte Schnittpunkte hinter `SCHNITT:` bei `ERGEBNIS: uebergabe` (Phasen-Schnitt #1592; Definition: die Umsetzer-Definition unter `.claude/agents/`, Ablauf in `.agents/skills/factory/umsetzer-fortsetzung.md`). */
 export const SCHNITTE = ["pr", "verify"];
 
 /** Art des Festgefahren-Berichts hinter `FESTGEFAHREN:` (optional, fehlt sie: `ci`). Jede Art verlangt bei offenem PR das Label am PR (R3); `abnahme` (#1754) verlangt zusätzlich einen Entwurf ohne Auto-Merge (R8). Ohne PR gehört das Label an das Issue (Prosa der Umsetzer-Definition, der Hook sieht dann keinen PR). */

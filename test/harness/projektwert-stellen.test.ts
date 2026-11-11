@@ -48,6 +48,9 @@ const BLOECKE: string[] = [
   ".agents/skills/review-lenses/ablauf-nachweis.md",
   ".agents/skills/review-lenses/ablauf-zusatzpass.md",
   ".agents/skills/factory/ablauf.md",
+  ".agents/skills/factory/umsetzer-browser.md",
+  ".agents/skills/factory/umsetzer-gruppen.md",
+  ".agents/skills/factory/umsetzer-pr-merge.md",
 ];
 
 /** Der CodeQL-Workflow (Sicherheits-Modul, factory#119): die Sprachen kommen aus der Config, nie fest im Workflow. */

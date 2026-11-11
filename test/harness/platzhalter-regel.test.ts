@@ -85,6 +85,9 @@ const BLOCK_DATEIEN = [
   ".agents/skills/review-lenses/ablauf-nachweis.md",
   ".agents/skills/review-lenses/ablauf-zusatzpass.md",
   ".agents/skills/factory/ablauf.md",
+  ".agents/skills/factory/umsetzer-browser.md",
+  ".agents/skills/factory/umsetzer-gruppen.md",
+  ".agents/skills/factory/umsetzer-pr-merge.md",
 ];
 
 describe("Projektwert-Block der Kern-Texte (#1747)", () => {

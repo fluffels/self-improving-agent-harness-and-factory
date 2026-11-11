@@ -387,10 +387,10 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
     assert.equal((parseNachweis(`${Z.review}: head=${SHA} runden=4 abnahmefix=1 ${LENSES} verdikt=ok`).review as { abnahmefix?: unknown } | null)?.abnahmefix, 1);
     assert.doesNotMatch(read("scripts/check-review-nachweis.mjs").split("export const vorlage")[1].split(";")[0], /abnahmefix/);
   });
-  test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
+  test("Skill, Format-SSOT und die Fortsetzungs-Datei des Umsetzers (factory#310) nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /abnahmefix=/);
     assert.match(read(".agents/skills/review-lenses/ablauf-abnahme-fix.md"), /abnahmefix=/);
-    assert.match(read(".claude/agents/factory-umsetzer.md"), /abnahmefix=/);
+    assert.match(read(".agents/skills/factory/umsetzer-fortsetzung.md"), /abnahmefix=/);
   });
 });
 

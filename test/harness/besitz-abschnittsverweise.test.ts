@@ -550,7 +550,6 @@ const KERN_LINK_ANKER = new Set<string>([
   "docs/agent-harness-faq.md#der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun",
   "docs/agent-harness-faq.md#wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules",
   "docs/agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis",
-  "docs/agent-harness-faq.md#wie-räume-ich-scratch-auf-wenn-befehle-blockiert-werden",
   "docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser",
   "docs/agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren",
   "docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd",

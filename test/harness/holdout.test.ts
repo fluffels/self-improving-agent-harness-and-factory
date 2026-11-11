@@ -74,7 +74,9 @@ const ABNAHME_TOOLS = [
 
 const SKILL = liesTicketAblauf();
 const LENSES = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
-const UMSETZER = liesMitProjektwerten(".claude/agents/factory-umsetzer.md");
+/** Kern und bedingte Dateien des Umsetzers (factory#310): Gruppen-Absatz und Nachfolger-Vorlagen stehen in den bedingten Dateien neben dem Ablauf-Skill. */
+const UMSETZER_BEDINGT = ["umsetzer-gruppen", "umsetzer-fortsetzung"].map((n) => liesMitProjektwerten(`.agents/skills/factory/${n}.md`));
+const UMSETZER = [liesMitProjektwerten(".claude/agents/factory-umsetzer.md"), ...UMSETZER_BEDINGT].join(NL);
 const GANZE_DATEIEN: [string, string][] = [
   [".claude/agents/factory-planer.md", liesMitProjektwerten(".claude/agents/factory-planer.md")],
   [".claude/agents/factory-umsetzer.md", UMSETZER],
@@ -277,7 +279,7 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
   });
 
   test("Werkzeug-Abbruch entscheidet der Hauptchat nach Entscheidungsprotokoll, nicht die Maintainerin (Skill und Umsetzer)", () => {
-    const umsetzer = lies(".claude/agents/factory-umsetzer.md");
+    const umsetzer = [lies(".claude/agents/factory-umsetzer.md"), lies(".agents/skills/factory/umsetzer-fortsetzung.md")].join(NL);
     assert.doesNotMatch(SKILL, /bei einem Werkzeug-Abbruch repariert sie das Werkzeug/);
     assert.doesNotMatch(umsetzer, /Maintainerin repariert das Werkzeug/);
     assert.match(umsetzer, /Werkzeug-Abbruch[^\n]*?entscheidet der Hauptchat nach `docs\/factory\/entscheidungsprotokoll\.md`/);

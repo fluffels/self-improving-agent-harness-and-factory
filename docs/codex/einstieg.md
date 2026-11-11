@@ -11,7 +11,7 @@ Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige U
 | Phase | Codex-Rolle | Fachliche Quelle |
 |---|---|---|
 | Planung | Name aus `agenten.planer` | `factory-planer.md` |
-| Umsetzung / Gruppen | `agenten.umsetzer` / `agenten.gruppe` | `factory-umsetzer.md` / `factory-gruppe.md` |
+| Umsetzung / Gruppen | `agenten.umsetzer` / `agenten.gruppe` | `factory-umsetzer.md` (Kern; bedingte Dateien `.agents/skills/factory/plattform-windows.md` und `umsetzer-*.md`, die der Kern bei Eintritt ihrer Bedingung nennt, gehören zur Rolle) / `factory-gruppe.md` |
 | Architektur, Requirements, Tests | je unabhängiger Auftrag an `agenten.lens` | `factory-lens.md`, Skill `review-lenses` |
 | Exploration | `explore` | `explore.md` |
 | Szenarien / Abnahme | `holdout-szenario` / `holdout-abnahme` | gleichnamige Dateien |

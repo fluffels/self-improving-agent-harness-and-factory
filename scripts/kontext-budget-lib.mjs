@@ -98,6 +98,12 @@ export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, mark
 export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/factory/SKILL.md", budget: 1_500 },
   { file: ".agents/skills/factory/ablauf.md", budget: 37_500 },
+  { file: ".agents/skills/factory/plattform-windows.md", budget: 2_500 },
+  { file: ".agents/skills/factory/umsetzer-browser.md", budget: 2_000 },
+  { file: ".agents/skills/factory/umsetzer-fortsetzung.md", budget: 5_000 },
+  { file: ".agents/skills/factory/umsetzer-gruppen.md", budget: 3_500 },
+  { file: ".agents/skills/factory/umsetzer-guard-proben.md", budget: 2_500 },
+  { file: ".agents/skills/factory/umsetzer-pr-merge.md", budget: 4_000 },
   { file: ".agents/skills/review-lenses/SKILL.md", budget: 10_000 },
   { file: ".agents/skills/review-lenses/ablauf-abnahme-fix.md", budget: 1_500 },
   { file: ".agents/skills/review-lenses/ablauf-merge-main.md", budget: 6_000 },
@@ -112,13 +118,13 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".claude/agents/factory-gruppe.md", budget: 7_500 },
   { file: ".claude/agents/factory-lens.md", budget: 12_000 },
   { file: ".claude/agents/factory-planer.md", budget: 17_500 },
-  { file: ".claude/agents/factory-umsetzer.md", budget: 41_500 },
+  { file: ".claude/agents/factory-umsetzer.md", budget: 19_460 },
   { file: ".claude/agents/holdout-abnahme.md", budget: 7_000 },
   { file: ".claude/agents/holdout-szenario.md", budget: 3_500 },
 ];
 
-/** Budget für jede Agenten- und Skill-Datei ohne Eintrag (nach dem Vorbild von `MODULE_AGENTS_BUDGET`: größte Datei plus Kopffreiheit). */
-export const AGENTEN_SKILL_DEFAULT_BUDGET = 41_500;
+/** Budget für jede Agenten- und Skill-Datei ohne Eintrag (gleich dem größten Budget der Liste, `test/agenten-skill-budget.test.ts` verlangt das). */
+export const AGENTEN_SKILL_DEFAULT_BUDGET = 37_500;
 
 /** Zeichen eines Textes ohne den Block von `marker.start` bis einschließlich `marker.ende` (zeilenenden-neutral); fehlt ein Marker oder steht das Ende vor dem Start, zählt der ganze Text. Die Marker gibt der Aufrufer vor (Blatt). */
 export function zeichenOhneBlock(text, { start, ende }) {
