@@ -679,7 +679,7 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   });
 
   test("Verschobener-Code-Prüfung: der Skill trägt die Befehle für Diff der alten Datei und Merge-Basis (#1501, #1508)", () => {
-    const skill = readFileSync(resolve(ROOT, ".agents/skills/review-lenses/SKILL.md"), "utf8");
+    const skill = readFileSync(resolve(ROOT, ".agents/skills/review-lenses/ablauf-merge-main.md"), "utf8");
     assert.ok(skill.includes("git diff <basis> <M>^2 -- <alte datei>"), "review-lenses ohne Diff der alten Datei gegen die Merge-Basis");
     assert.ok(skill.includes("git merge-base <M>^1 <M>^2"), "review-lenses ohne Merge-Basis-Befehl");
   });

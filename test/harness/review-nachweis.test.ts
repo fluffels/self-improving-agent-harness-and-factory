@@ -15,7 +15,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -184,11 +184,16 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.match(harness, /wird der Check rot/);
     assert.match(harness, /Nach jedem Merge von `main`/, "§3a verweist auf die Schritte im Skill");
     const skill = read(".agents/skills/review-lenses/SKILL.md");
-    assert.doesNotMatch(skill, /wird der Check rot/, "keine zweite Kopie der Erklärung im Skill");
-    assert.doesNotMatch(skill, /git ≥ 2\.36/, "keine zweite Kopie der Erklärung im Skill");
-    assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill trägt das Rezept");
+    const merge = read(".agents/skills/review-lenses/ablauf-merge-main.md");
+    for (const datei of readdirSync(new URL("../../.agents/skills/review-lenses/", import.meta.url)).filter((n) => n.endsWith(".md"))) {
+      const text = read(`.agents/skills/review-lenses/${datei}`);
+      assert.doesNotMatch(text, /wird der Check rot/, `keine zweite Kopie der Erklärung in ${datei}`);
+      assert.doesNotMatch(text, /git ≥ 2\.36/, `keine zweite Kopie der Erklärung in ${datei}`);
+    }
+    assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill nennt die Konflikt-Auflösung als Delta");
+    assert.match(merge, /git show --remerge-diff --format= <M> >/, "die Merge-Datei trägt das Rezept (Patch schreiben)");
     assert.match(read(".claude/agents/factory-umsetzer.md"), /`review-lenses` › Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
-    assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
+    assert.match(merge, /git diff <basis> <M>\^2 -- <alte datei>/, "die Merge-Datei trägt den Prüfschritt für verschobenen Code");
   });
   test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
     assert.match(read("scripts/slice-override.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
@@ -384,7 +389,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
   });
   test("Skill, Format-SSOT und Umsetzer nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /abnahmefix=/);
-    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /abnahmefix=/);
+    assert.match(read(".agents/skills/review-lenses/ablauf-abnahme-fix.md"), /abnahmefix=/);
     assert.match(read(".claude/agents/factory-umsetzer.md"), /abnahmefix=/);
   });
 });
@@ -392,7 +397,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
 describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
   test("Format-SSOT und Skill nennen das Feld", () => {
     assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
-    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /zusatzpass=/);
+    assert.match(read(".agents/skills/review-lenses/ablauf-zusatzpass.md"), /zusatzpass=/);
   });
 });
 

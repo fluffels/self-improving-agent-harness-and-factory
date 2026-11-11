@@ -94,13 +94,6 @@ function findeZweiPunktTreffer(text: string): Treffer[] {
 
 /** Erlaubte historische Gegenbeispiele: Datei → exakte Trefferzahl + Begründung. */
 const ERLAUBTE_GEGENBEISPIELE: { datei: string; anzahl: number; grund: string }[] = [
-  {
-    datei: ".agents/skills/review-lenses/SKILL.md",
-    anzahl: 2,
-    grund:
-      "Historische Gegenbeispiele: die Absätze „Warum Drei-Punkt“ und „Erst committen“ erklären, " +
-      "WARUM der Zwei-Punkt-Diff gegen lokales main falsch ist (#1034). Wegkürzen wäre ein Verlust.",
-  },
 ];
 
 // ── Scan-Umfang ─────────────────────────────────────────────────────────────────
