@@ -282,6 +282,20 @@ describe("kontext-treiber: Namen aus der Config", () => {
     expect(err.join("\n")).toMatch(/agenten\.umsetzer[\s\S]*Fix:/);
     expect(geladen).toEqual([]);
   });
+  test("hauptlauf --ttl: liefert die TTL-Gegenrechnung, Markdown und JSON mit Fenster-Platzhalter ohne --bis (factory#312)", () => {
+    const lauf = (args: string[]) => {
+      const out: string[] = [];
+      const code = K.hauptlauf(args, { config: CFG, err: () => {}, out: (s: string) => out.push(s), ordner: () => tmpdir(), wurzel: () => null, ladeTyp: () => [] });
+      return { code, text: out.join("\n") };
+    };
+    const md = lauf(["--von", t(0), "--ttl"]);
+    expect(md.code).toBe(0);
+    expect(md.text).toContain("TTL-Gegenrechnung `acme-umsetzer` (Fenster " + t(0) + " bis -, Preisstand");
+    const json = JSON.parse(lauf(["--von", t(0), "--ttl", "--json"]).text) as Record<string, unknown>;
+    expect(json).toHaveProperty("bis", null);
+    expect(json).toHaveProperty("ttl.empfehlung", "5m");
+    expect(lauf(["--von", t(0)]).text).not.toContain("TTL-Gegenrechnung");
+  });
   test("hauptlauf mit Config: der Standard-Agent ist agenten.umsetzer (Aufruf mit leerem Ordner)", () => {
     const out: string[] = [];
     const agenten: string[] = [];

@@ -334,7 +334,7 @@ function costPartsOf(calls) {
   return parts;
 }
 
-/** Pause, ab der ein Cache (5-Minuten-TTL) als abgelaufen gilt: Subagenten schreiben mit 5 m, der Hauptchat mit 1 h. */
+/** Pause, ab der ein Cache (5-Minuten-TTL) als abgelaufen gilt: Subagenten schreiben mit 5 m (außer Rollen mit `experimental.cacheTtl: 1h`), der Hauptchat mit 1 h. */
 const CACHE_PAUSE_MS = { subagent: CACHE_TTL_MS.fuenfMin, main: CACHE_TTL_MS.eineStunde };
 
 /**

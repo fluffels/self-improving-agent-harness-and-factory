@@ -6,6 +6,8 @@ model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write, WebFetch, WebSearch, Agent, Monitor, TaskStop, ToolSearch, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_press_key, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_resize, mcp__playwright__browser_tabs, mcp__playwright__browser_close, mcp__playwright__browser_start_video, mcp__playwright__browser_stop_video, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_file_upload, mcp__langfuse__queryMetrics, mcp__langfuse__getMetricsSchema, mcp__langfuse__listObservations, mcp__langfuse__getObservation, mcp__langfuse__listModels
 skills: [review-lenses]
+experimental:
+  cacheTtl: 1h
 ---
 
 # Umsetzer
