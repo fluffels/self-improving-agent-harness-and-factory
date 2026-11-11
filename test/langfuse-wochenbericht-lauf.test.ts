@@ -26,6 +26,7 @@ const C = cliRaw as unknown as {
   ladeProjekt: (w?: string) => { owner: string; repo: string; config: { repo: string } };
   auswerten: (a: unknown, d?: Record<string, unknown>) => Promise<Ergebnis>;
   wochenberichtLauf: (a: Record<string, unknown>, d: Record<string, unknown>) => Promise<number>;
+  ohneSchluessel: (t: string) => string;
 };
 
 const MONTAG = "2026-11-02";
@@ -426,5 +427,22 @@ describe("Wochenbericht-Lauf: nie ein stilles „alles in Ordnung“", () => {
     expect(u.zeilen()[0]).toMatchObject({ status: "fehler" });
     expect(JSON.stringify(u.zeilen())).not.toContain(u.home);
     expect(existsSync(join(u.ordner, `${MONTAG}.claim`))).toBe(false);
+  });
+});
+
+describe("Wochenbericht-Lauf: kein Schlüssel in grund (Sicherheit)", () => {
+  const WERTE = ["sk-lf-geheim123", "pk-lf-oeffentlich", "cGs6c2s=", "abc"];
+  const roh = "Fehler: sk-lf-geheim123 und sk-lf-zweiter pk-lf-oeffentlich Authorization: Basic cGs6c2s= LANGFUSE_SECRET_KEY=abc";
+  test("Auswerten-stderr: .json und Logzeile ohne Key-Muster, mit Platzhalter", async () => {
+    const u = umgebung({ roh: { exitCode: 1, stdout: "", stderr: roh } });
+    await u.lauf();
+    const text = JSON.stringify(u.json()) + JSON.stringify(u.zeilen());
+    for (const w of WERTE) expect(text).not.toContain(w);
+    expect(text).not.toContain("sk-lf-zweiter");
+    expect(String(u.json()?.grund)).toContain("[geschwärzt]");
+  });
+  test("Helfer: Text ohne Muster bleibt gleich, mehrere Treffer je Zeile werden alle ersetzt", () => {
+    expect(C.ohneSchluessel("Fehler: kaputt in ~/x")).toBe("Fehler: kaputt in ~/x");
+    expect(C.ohneSchluessel("sk-lf-a sk-lf-b")).toBe("[geschwärzt] [geschwärzt]");
   });
 });
