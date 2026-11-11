@@ -110,7 +110,7 @@ describe("Verbleib gate-erzwungener Regeln", () => {
     for (const eintrag of eintraege) {
       const lies = (pfad: string): string | null => {
         const t = echtLesen(pfad);
-        return t !== null && pfad === eintrag.ort ? t.replace(eintrag.text, "") : t;
+        return t !== null && pfad === eintrag.ort ? t.split(eintrag.text).join("") : t;
       };
       assert.match(
         verbleibBefunde({ eintraege: echteListe(), lies }).join("\n"),

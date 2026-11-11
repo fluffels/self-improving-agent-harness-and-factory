@@ -51,13 +51,13 @@ Der Drei-Punkt-Diff zeigt genau den Slice, den `check:diffsize` misst; ein Zwei-
 
 ### Kontext-Diät je Lens (#1034)
 
-Kontext-Diät, Findings-Format, Pflichtsatz und Blocker-Maßstab stehen in der Lens-Definition, die Prüfpunkte in `brille-<brille>.md` neben dieser Datei (die Lens liest sie von `origin/main`). Der Orchestrator kopiert nichts in den Prompt.
+Kontext-Diät, Findings-Format, Pflichtsatz und Blocker-Maßstab stehen in der Lens-Definition, die Prüfpunkte in `brille-<brille>.md` neben dieser Datei (die Lens liest sie von `origin/main`).
 
 ## Ablauf — Stufe 0 zuerst, dann (nur bei Grün) die Lenses
 
 ### Stufe 0 — deterministische Gates (der Short-Circuit)
 
-**Immer zuerst.** Vor der ersten Stufe 0 `git fetch origin`; ist `origin/main` weiter, `git merge origin/main`, Konflikte jetzt lösen, danach [Nach jedem Merge von `main`](#nach-jedem-merge-von-main). Dann das SSOT-Aggregat aller Gates (es ist der **eine** volle Lauf vor dem Review, AGENTS.md § Zwei-Stufen-Prüfung; fehlt im Worktree die Installation, einmal `node scripts/gate-befehl.mjs install`):
+**Immer zuerst.** Vor der ersten Stufe 0 `git fetch origin`; ist `origin/main` weiter, `git merge origin/main`, danach [Nach jedem Merge von `main`](#nach-jedem-merge-von-main). Dann das SSOT-Aggregat aller Gates (es ist der **eine** volle Lauf vor dem Review, AGENTS.md § Zwei-Stufen-Prüfung; fehlt im Worktree die Installation, einmal `node scripts/gate-befehl.mjs install`):
 
 ```bash
 node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, alle Gates, Ausgabe nur bei Rot
@@ -89,9 +89,9 @@ Agent({
 
 Der PreToolUse-Guard `scripts/lens-auftrag-guard.mjs` weist einen Auftrag mit offenem `<…>`, ohne Commit-Hash bei `erwarteter HEAD:` oder ohne `Brille: <Schlüssel>` am Anfang ab (Abhilfe in seiner Meldung): Werte einsetzen, neu spawnen. Lens-Worktree-Namen tragen genau eine Endung: `-lens-r<runde>` Review-Pass, `-lens-m<n>` Merge-Delta, `-lens-a<n>` Abnahme-Fix-Delta, `-lens-c<n>` CI-Fix-Delta.
 
-Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohne Neu-Spawn. Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“
+Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an. Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“ Der Bericht vermerkt den Fallback.
 
-⚠️ **Die Lenses lesen, sie schreiben nicht** (die Lens-Definition sagt „du liest, du änderst nichts“); **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>` (`git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen, Stop-Hook: `.claude/agents/factory-lens.md`, FAQ.
+⚠️ **Die Lenses lesen, sie schreiben nicht** (die Lens-Definition sagt „du liest, du änderst nichts“); **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>` (`git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
 
 **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sonst meldet sie „nicht belegt“.
 
@@ -114,6 +114,6 @@ Bei jedem Merge von `origin/main` in den Branch zuerst `.agents/skills/review-le
 
 ### Nachweis nach Konvergenz (#1270)
 
-Nach der Konvergenz `.agents/skills/review-lenses/ablauf-nachweis.md` lesen: ein leerer Nachweis-Commit mit den Zeilen `<praefixe.commitZeile>Plan:` und `<praefixe.commitZeile>Review:`, lokal geprüft mit `node scripts/check-review-nachweis.mjs`.
+Nach der Konvergenz und nach jedem CI-Fix hinter dem Nachweis `.agents/skills/review-lenses/ablauf-nachweis.md` lesen: ein leerer Nachweis-Commit mit den Zeilen `<praefixe.commitZeile>Plan:` und `<praefixe.commitZeile>Review:`, lokal geprüft mit `node scripts/check-review-nachweis.mjs`.
 
 Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md), Rundengrenze `MAX_FIX_RUNDEN` in `scripts/nachweis-lib.mjs`. Ablauf-Änderungen gehören in docs/AGENTS.md, nicht (nur) hierher.
