@@ -368,7 +368,7 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
     ["keine Einstellung gesetzt (der Modell-Default wird nie eingesetzt)", { "c/settings.json": "{}" }, undefined, {}],
   ])("Settings-Stufe: %s ⇒ kein effort", (_name, files, alt, env) => {
     const w = welt({ "p/.claude/agents/e.md": AGENT("Explore"), ...(files as Record<string, string>) }, [...(alt ?? Object.keys(files)), "p/.claude/agents/e.md"]);
-    w.q.env = env as Record<string, string>;
+    w.q.env = env;
     expect(subZ(w)).not.toHaveProperty("effort");
   });
 

@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "vitest";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, posix } from "node:path";
@@ -623,6 +624,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     const je = (id: string) => attrs(calls.find((s) => attrs(s)["langfuse.observation.metadata.message_id"] === id) as Span);
     expect(je("h1")).toMatchObject({ "langfuse.observation.metadata.agent_type": "hauptchat", "langfuse.observation.metadata.effort": "xhigh", "langfuse.observation.metadata.thinking": "nein", "langfuse.observation.metadata.repo": REPO_NAME });
     expect(je("s1a")).toMatchObject({ "langfuse.observation.metadata.agent_type": FREMD.agenten.lens, "langfuse.observation.metadata.effort": "high", "langfuse.observation.metadata.repo": REPO_NAME });
+  });
+  test("Effort-Rückfall (factory#287): die Settings im Benutzerordner neben dem State-Ordner und das cwd der Zeile liefern effort, sonst fehlt er", async () => {
+    const a = aufbau([msg("h1", 1, { cwd: join(tmpdir(), "gibt-es-nicht-287") })]);
+    const settings = join(a.state, "..", "settings.json");
+    writeFileSync(settings, JSON.stringify({ effortLevel: "high" }));
+    utimesSync(settings, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    const m = mock({ ist: 0, obs: [] });
+    await lauf(a, m);
+    const [call] = spansVon(m.otlp[0]).filter((s) => s.name === "Call");
+    expect(attrs(call)["langfuse.observation.metadata.effort"]).toBe("high");
   });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
     const meta = JSON.stringify({ agentType: FREMD.agenten.lens, description: "Lens R1" });
