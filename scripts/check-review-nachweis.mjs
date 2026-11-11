@@ -35,7 +35,8 @@
  *
  * Größenstufe (factory#271): der Wächter berechnet sie aus dem Diff (`groessenstufe-lib.mjs`, nie vom Umsetzer behauptet). Nur bei `S` genügen
  * `<praefixe.commitZeile>Plan: <Planer> — skizze`, `Plan: ohne — klein: <Begründung>` und bei Code-Diff `lenses=kombiniert` statt der drei Code-Brillen;
- * bei `voll` sind diese Varianten rot, `klein` ohne Begründung immer. Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
+ * bei `voll` sind diese Varianten rot, `klein` ohne Begründung immer. Die Risikoklasse hoch (Pfadmuster der Projekt-Config `risiko.hoch`, sonst Standardliste,
+ * factory#333) ist nie `S`; die Doku-Regel (nur `*.md`) steht nur in `groessenstufe-lib.mjs` (`istDokuDiff`). Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
  *
  * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config (Test, fremdes Projekt), sonst die des Repos.
  *
@@ -55,7 +56,7 @@ import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 import { BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, kleinGrund, parseNachweis } from "./nachweis-lib.mjs";
-import { groessenstufeAusGit } from "./groessenstufe-lib.mjs";
+import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -82,9 +83,7 @@ export const vorlage = (zeilen) =>
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
  *  Regel der Review-Staffel (Skill `review-lenses`, Wächter review-staffel.test.ts). */
 export function pflichtLenses(dateien) {
-  if (!Array.isArray(dateien) || dateien.length === 0) return [...CODE_LENSES];
-  if (dateien.some((d) => typeof d !== "string" || d.trim() === "")) return [...CODE_LENSES];
-  return dateien.every((d) => /\.md$/i.test(d.trim())) ? ["doku"] : [...CODE_LENSES];
+  return istDokuDiff(dateien) ? ["doku"] : [...CODE_LENSES];
 }
 
 /** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
@@ -254,7 +253,7 @@ function guardWarnungOderNull(messages, ankerZahl) {
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ankerZahl } = {}) {
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ankerZahl } = {}) {
   let zeilen;
   try {
     zeilen = ladeZeilen();
@@ -293,7 +292,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       konfliktMerges: hd.konfliktMerges,
       aenderungsCommits: hd.aenderungsCommits,
       zeilen,
-      stufe: groessenstufeAusGit(git, base).stufe,
+      stufe: groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe,
     });
     return {
       ok: fehler.length === 0,
@@ -328,7 +327,7 @@ function main(argv = process.argv.slice(2)) {
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
   const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
-  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ankerZahl: ankerZahlImDiff });
+  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ladeRisiko: () => ladeRisikoMuster({ pfad: getrennt.pfad }), ankerZahl: ankerZahlImDiff });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");
     return;
