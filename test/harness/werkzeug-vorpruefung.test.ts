@@ -78,6 +78,8 @@ describe("Vorprüfung samt Mangel und bekannte MCP-Server (factory#283 L1)", () 
     expect(schlecht.mangel[0].fix.length).toBeGreaterThan(0);
     const ohneFix = w.vorpruefungMitMangel({ vorpruefung: { userScopeServer: "x" } });
     expect(ohneFix.mangel[0].fix).toContain("userScopeServer");
+    const wirft = w.vorpruefungMitMangel({ get vorpruefung() { throw new Error("kaputt"); } });
+    expect(wirft.mangel).toEqual([{ text: "kaputt", fix: "den Block vorpruefung der Projekt-Config korrigieren" }]);
   });
   test("bekannteMcpServer: Projekt, Kern und Config-Server; bei ungültiger Config nur Projekt und Kern", () => {
     expect(w.bekannteMcpServer(["p"], { vorpruefung: { userScopeServer: ["c"] } })).toEqual(["p", ...w.USER_SCOPE_MCP_SERVER, "c"]);
