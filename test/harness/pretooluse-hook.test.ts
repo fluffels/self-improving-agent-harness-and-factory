@@ -366,7 +366,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   // Die ECHTE Spawn-Vorlage aus dem Skill (Fehlalarm-Schutz: sie trägt absichtlich `<…>`-Platzhalter, die der Orchestrator einsetzt).
   const skill = lies(".agents/skills/review-lenses/SKILL.md");
   const vorlage = /prompt: "([^"]*)"/.exec(skill)?.[1] ?? "";
-  const KOPF = "Brille: Architektur (Schichtregeln)";
+  const KOPF = "Brille: architektur";
   const gut = (extra = "") =>
     `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · Plan-Prüfliste: entfällt`;
 
@@ -389,7 +389,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("R5: ohne `Brille: <Schlüssel>` am Prompt-Anfang oder mit unbekannter Brille wird verweigert, die Meldung nennt die bekannten Brillen", () => {
     const rest = `Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`;
-    for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · "]) {
+    for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · ", "Brille: Architektur · ", "Brille: Test-Adäquanz · ", "Brille: `doku` · ", "Brille: do`ku · "]) {
       const out = deny(agent(`${kopf}${rest}`));
       assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", kopf);
       assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, doku/, kopf);
@@ -398,15 +398,18 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     assert.equal(deny(agent(`Lies zuerst factory-lens.md · ${rest}`, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
   });
 
-  test("R5 lässt alle vier Schlüssel, die tolerante Schreibweise und Backticks durch; Reihenfolge: R1 bis R3 behalten ihren Grund", () => {
+  test("R5 lässt genau die vier exakten Schlüssel durch (auch als Fallback-Spawn); Reihenfolge: R1 bis R3 behalten ihren Grund", () => {
     const rest = `Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`;
-    for (const wert of ["architektur", "requirement-treue", "test-adaequanz", "doku", "Test-Adäquanz", "Requirement-Treue", "`doku`", "Architektur (Schichtregeln)"]) {
+    for (const wert of ["architektur", "requirement-treue", "test-adaequanz", "doku"]) {
       assert.equal(deny(agent(`Brille: ${wert} · ${rest}`)), null, wert);
+      assert.equal(deny(agent(`Brille: ${wert} · Lies zuerst factory-lens.md · ${rest}`, "general-purpose")), null, `Fallback ${wert}`);
     }
     // Schreibweisen der Kopfzeile: ohne Leerzeichen, mit führendem Leerraum, ohne Trenner-Leerzeichen vor dem `·`
     for (const kopf of ["Brille:doku · ", "  \n Brille: doku · ", "Brille: doku· ", "Brille:  doku · "]) assert.equal(deny(agent(`${kopf}${rest}`)), null, JSON.stringify(kopf));
-    assert.match(grund(agent("Patch: <TMP>/x.patch · erwarteter HEAD: abc1234")), /Patch/);
-    assert.match(grund(agent("Brille: stil · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc")), /Commit-Hash/);
+    // R1 bis R3 behalten ihren Grund auch ohne gültige Brille (R5 prüft zuletzt); verankert am regelspezifischen Text, nicht am gemeinsamen HINWEIS
+    assert.match(grund(agent("<Plan-Prüfliste WÖRTLICH> · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234")), /Platzhalter „… WÖRTLICH>“/);
+    assert.match(grund(agent("Patch: <TMP>/x.patch · erwarteter HEAD: abc1234")), /das Feld „Patch:“/);
+    assert.match(grund(agent("Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc")), /kein Commit-Hash/);
   });
 
   test("R1: ein stehengebliebenes `<… WÖRTLICH>` wird verweigert", () => {
@@ -467,7 +470,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   });
 
   test("je Feld zählt der LETZTE Treffer: ein Beispiel in der Brille sperrt den echten Kopf nicht, ein Platzhalter im Kopf wird trotz früherem Treffer gefunden", () => {
-    const beispiel = "Brille: Architektur mit Beispiel `Patch: <TMP>/x.patch` im Text";
+    const beispiel = "Brille: architektur mit Beispiel `Patch: <TMP>/x.patch` im Text";
     assert.equal(deny(agent(`${beispiel} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
     assert.match(grund(agent(`Fall mit Patch: /a/b.patch davor · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`)), /Patch/);
   });

@@ -15,7 +15,7 @@
  *      ein Fließtext statt Hash wird verweigert).
  *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
- *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES` (tolerant normalisiert, Backticks erlaubt); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
+ *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
  * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
@@ -27,7 +27,7 @@
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
 import { basename } from "node:path";
-import { BEKANNTE_LENSES, HEX_HEAD, normalisiereLens } from "./nachweis-lib.mjs";
+import { BEKANNTE_LENSES, HEX_HEAD } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -85,8 +85,7 @@ function unbekannteLensEndung(text, namen) {
 /** R5: Grund, wenn der Prompt nicht mit `Brille: <Schlüssel>` beginnt oder der Schlüssel keine bekannte Brille ist; sonst `null`. Pure. */
 function brillenGrund(text) {
   const wert = /^\s*Brille:[ \t]*([^\s·]+)/.exec(text)?.[1];
-  const schluessel = normalisiereLens((wert ?? "").replace(/^`|`$/g, ""));
-  if (BEKANNTE_LENSES.includes(schluessel)) return null;
+  if (BEKANNTE_LENSES.includes(wert ?? "")) return null;
   return `Lens-Auftrag unvollständig: der Prompt beginnt nicht mit „Brille: <Schlüssel>“ mit einer bekannten Brille (${BEKANNTE_LENSES.join(", ")}); die Lens liest ihre Brillen-Datei (brille-<Schlüssel>.md) selbst und braucht den Schlüssel. ${HINWEIS}`;
 }
 

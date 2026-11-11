@@ -112,7 +112,7 @@ Warum überhaupt Subagenten:
 - **Kein Self-Grading — schon vorher gefordert (quellprojekt#1012), jetzt auch strukturell erfüllt.** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat; die Konvergenzschleife unten verlangt ohnehin „frische, unabhängige Kritiker". Der Subagent macht aus der Verhaltensregel eine Eigenschaft des Ablaufs — und ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
 **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle); sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per `node scripts/token-baseline.mjs --session <id>`; ohne Rohwerte meldet sie „nicht belegt“ (Hinweis).
 
-Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌), vom Orchestrator aus den Lens-Verdikten gebildet. Die Vorschläge der Lenses zu Funden außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets; ohne Beleg nur im Bericht). Nicht inline mitfixen — oberste Regel.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌), vom Orchestrator aus den Lens-Verdikten gebildet. Die Vorschläge der Lenses zu Funden außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets; ohne Beleg nur im Bericht), Produkt-/Inhalts-Befund → Issue, zusammengehörige gebündelt (AGENTS.md § Befunde sofort festhalten). Nicht inline mitfixen — oberste Regel.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 

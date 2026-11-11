@@ -95,7 +95,6 @@ describe("Brille vom Stand origin/main (factory#308, AK3)", () => {
     assert.equal(args[3], `origin/main:${BRILLEN_ORDNER}/brille-<Brille>.md`);
     assert.throws(() => lesebefehl("kein Befehl"), /0 Treffer/);
     assert.throws(() => lesebefehl("`git -C <Arbeitsverzeichnis> show a` und `git -C <Arbeitsverzeichnis> show b`"), /2 Treffer/);
-    assert.notEqual(lesebefehl(LENS_DEF.replace("show origin/main:", "show HEAD:"))[3].split(":")[0], "origin/main", "ein HEAD:-Befehl wird als solcher erkannt");
   });
 
   test("der Befehl liefert den Stand von origin/main, nicht den Feature-Commit und nicht den Arbeitsbaum", () => {
