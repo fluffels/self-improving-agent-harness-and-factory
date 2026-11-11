@@ -1,5 +1,8 @@
 /* Output-Schätzung (#1568): Subagent-Transkripte zeichnen output_tokens beim Stand message_start auf (3 bis 8 je Nachricht). */
+import { utimesSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { fixture } from "./support/tmp-fixture";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/transkript-calls.mjs";
 
@@ -257,5 +260,107 @@ describe("Zuordnungs-Metadaten", () => {
     const m = Zo.zuordnungen(sitz(zeile("dup", [text(1)], { effort: "high" }), [sub(zeile("dup", [denk], { effort: "high" })), { ...sub(zeile("nur", [text(1)], { effort: "low" })), datei: "agent-a2.jsonl" }]));
     expect(m.get("dup")).toEqual({ thinking: "ja" });
     expect(m.get("nur")).toMatchObject({ agent_type: "Explore", effort: "low" });
+  });
+});
+
+/* Rückfall-Kette für den Effort (Frontmatter der Agentendefinition, Settings), nur mit Quellen und nie auf geändertem oder uneindeutigem Stand. */
+describe("Effort-Rückfall: Agentendefinition und Settings", () => {
+  type Z = { agent_type?: string; effort?: string; thinking?: string };
+  type Datei = { datei: string; meta: Record<string, unknown>; zeilen: Row[] };
+  type Q = { claudeDir: string; env?: Record<string, string> };
+  const Zo = raw as unknown as {
+    effortKette: (s: (() => { status: string; wert?: string })[]) => string | undefined;
+    zuordnungen: (s: { id: string; main: Row[]; subagents: Datei[] }, q?: Q) => Map<string, Z>;
+  };
+  const AGENT = (name: string, effort?: string) => `---\nname: ${name}\n${effort ? `effort: ${effort}\n` : ""}model: opus\n---\nText`;
+  /** Wurzel mit `c` (Benutzer-.claude) und `p` (Projekt); die genannten Dateien sind „alt“ (vor dem Lauf), alle anderen neu. */
+  const welt = (files: Record<string, string>, alt: string[] = Object.keys(files)) => {
+    const root = fixture(files);
+    for (const rel of alt) utimesSync(join(root, rel), new Date("2026-10-01T00:00:00Z"), new Date("2026-10-01T00:00:00Z"));
+    return { root, cwd: join(root, "p"), q: { claudeDir: join(root, "c") } as Q };
+  };
+  const text = { type: "text", text: "y" };
+  const mitCwd = (id: string, cwd: string | undefined, extra: Row = {}) => msg(id, 100, [text]).map((r) => ({ ...r, ...(cwd ? { cwd } : {}), ...extra }));
+  const subZ = (w: { cwd: string; q: Q }, meta: Row = { agentType: "Explore" }, cwd: string | undefined = w.cwd) =>
+    Zo.zuordnungen({ id: "s1", main: [], subagents: [{ datei: "agent-a1.jsonl", meta, zeilen: mitCwd("m", cwd) }] }, w.q).get("m");
+
+  test("effortKette: Wert gewinnt, leer geht weiter, unbekannt beendet ohne Wert", () => {
+    const wert = (w: string) => () => ({ status: "wert", wert: w });
+    const leer = () => ({ status: "leer" });
+    const unb = () => ({ status: "unbekannt" });
+    expect(Zo.effortKette([leer, wert("low"), wert("high")])).toBe("low");
+    expect(Zo.effortKette([leer, unb, wert("high")])).toBeUndefined();
+    expect(Zo.effortKette([leer])).toBeUndefined();
+    expect(Zo.effortKette([])).toBeUndefined();
+  });
+
+  test("Frontmatter der Agentendefinition (Projekt) ergibt effort; Meta-effort schlägt es", () => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low"), "c/x": "" });
+    expect(subZ(w)).toMatchObject({ agent_type: "Explore", effort: "low" });
+    expect(subZ(w, { agentType: "Explore", effort: "high" })?.effort).toBe("high");
+  });
+
+  test("Definition im Benutzerordner gilt ebenso", () => {
+    const w = welt({ "c/agents/e.md": AGENT("Explore", "xhigh"), "p/x": "" });
+    expect(subZ(w)?.effort).toBe("xhigh");
+  });
+
+  test("ohne Quellen kein Rückfall (der Aufrufer gibt keine Dateien frei)", () => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low") });
+    const m = Zo.zuordnungen({ id: "s1", main: [], subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: "Explore" }, zeilen: mitCwd("m", w.cwd) }] });
+    expect(m.get("m")).not.toHaveProperty("effort");
+  });
+
+  test("Definition jünger als der Lauf, doppelter Name, ohne Definition (Built-in) und ohne cwd: kein effort, auch kein Settings-Wert", () => {
+    const settings = { "c/settings.json": JSON.stringify({ effortLevel: "high" }) };
+    const jung = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low"), ...settings }, ["c/settings.json"]);
+    expect(subZ(jung)).not.toHaveProperty("effort");
+    const doppelt = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low"), "c/agents/e.md": AGENT("Explore", "high"), ...settings });
+    expect(subZ(doppelt)).not.toHaveProperty("effort");
+    const ohne = welt({ "p/.claude/agents/e.md": AGENT("Anderer", "low"), ...settings });
+    expect(subZ(ohne)).not.toHaveProperty("effort");
+    expect(subZ(ohne, { agentType: "Explore" }, undefined)).not.toHaveProperty("effort");
+  });
+
+  test("ungültiger Frontmatter-effort: kein effort und kein Rückfall auf die Settings", () => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "ultra"), "c/settings.json": JSON.stringify({ effortLevel: "high" }) });
+    expect(subZ(w)).not.toHaveProperty("effort");
+  });
+
+  test("Definition ohne effort: Settings-Einstellung, Rang lokal vor Projekt vor Benutzer", () => {
+    const def = { "p/.claude/agents/e.md": AGENT("Explore") };
+    const nurUser = welt({ ...def, "c/settings.json": JSON.stringify({ effortLevel: "low" }) });
+    expect(subZ(nurUser)?.effort).toBe("low");
+    const projekt = welt({ ...def, "c/settings.json": JSON.stringify({ effortLevel: "low" }), "p/.claude/settings.json": JSON.stringify({ effortLevel: "medium" }) });
+    expect(subZ(projekt)?.effort).toBe("medium");
+    const lokal = welt({ ...def, "c/settings.json": JSON.stringify({ effortLevel: "low" }), "p/.claude/settings.json": JSON.stringify({ effortLevel: "medium" }), "p/.claude/settings.local.json": JSON.stringify({ effortLevel: "xhigh" }) });
+    expect(subZ(lokal)?.effort).toBe("xhigh");
+  });
+
+  test.each([
+    ["Settings-Datei jünger als der Lauf", { "c/settings.json": JSON.stringify({ effortLevel: "low" }) }, [] as string[], {}],
+    ["höher rangige Datei jünger als der Lauf", { "c/settings.json": JSON.stringify({ effortLevel: "low" }), "p/.claude/settings.local.json": "{}" }, ["c/settings.json"], {}],
+    ["ungültiger Wert", { "c/settings.json": JSON.stringify({ effortLevel: "ultra" }) }, undefined, {}],
+    ["kaputtes JSON", { "c/settings.json": "{nicht json" }, undefined, {}],
+    ["CLAUDE_CODE_EFFORT_LEVEL in den Settings (env)", { "c/settings.json": JSON.stringify({ effortLevel: "low", env: { CLAUDE_CODE_EFFORT_LEVEL: "max" } }) }, undefined, {}],
+    ["CLAUDE_CODE_EFFORT_LEVEL in der Prozess-Umgebung", { "c/settings.json": JSON.stringify({ effortLevel: "low" }) }, undefined, { CLAUDE_CODE_EFFORT_LEVEL: "max" }],
+    ["keine Einstellung gesetzt (der Modell-Default wird nie eingesetzt)", { "c/settings.json": "{}" }, undefined, {}],
+  ])("Settings-Stufe: %s ⇒ kein effort", (_name, files, alt, env) => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore"), ...(files as Record<string, string>) }, [...(alt ?? Object.keys(files)), "p/.claude/agents/e.md"]);
+    w.q.env = env as Record<string, string>;
+    expect(subZ(w)).not.toHaveProperty("effort");
+  });
+
+  test("Hauptchat: Settings-Einstellung als Rückfall; nach /effort oder /model, ohne cwd und ohne Quellen fehlt sie", () => {
+    const w = welt({ "c/settings.json": JSON.stringify({ effortLevel: "high" }), "p/x": "" });
+    const main = (extra: Row[] = [], cwd: string | undefined = w.cwd) => [...mitCwd("h", cwd), ...extra];
+    const z = (zeilen: Row[], q: Q | null = w.q) => Zo.zuordnungen({ id: "s1", main: zeilen, subagents: [] }, q ?? undefined).get("h");
+    expect(z(main())).toMatchObject({ agent_type: "hauptchat", effort: "high" });
+    const befehl = (n: string): Row => ({ type: "user", message: { role: "user", content: `<command-name>/${n}</command-name>` } });
+    expect(z(main([befehl("effort")]))).not.toHaveProperty("effort");
+    expect(z(main([{ type: "user", message: { role: "user", content: [{ type: "text", text: "<command-name>/model</command-name>" }] } }]))).not.toHaveProperty("effort");
+    expect(z(main([befehl("clear")]))).toMatchObject({ effort: "high" });
+    expect(z(main([], undefined))).not.toHaveProperty("effort");
+    expect(z(main(), null)).not.toHaveProperty("effort");
   });
 });

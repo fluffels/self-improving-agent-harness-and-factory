@@ -5,6 +5,9 @@
  */
 
 import { num, priceCall, priceParts } from "./preise.mjs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { frontmatterBlock } from "./skill-pfade.mjs";
 import { transkriptZeilen } from "./transkript.mjs";
 
 /**
@@ -228,7 +231,92 @@ function effortJeMessage(zeilen) {
   return werte;
 }
 
-/** Zuordnung einer Datei: `rolle` (`agentType` oder `hauptchat`, undefined = nicht bestimmbar), Rückfall-Effort der Datei (Meta, Spawn). */
+const LEER = { status: "leer" };
+const UNBEKANNT = { status: "unbekannt" };
+
+/**
+ * Rückfall-Kette für den Effort, wenn die Message keinen beobachteten Wert trägt. `stufen` sind Funktionen mit dem Status
+ * `{ status: "wert", wert }` (gilt), `leer` (die Quelle sagt nichts: nächste Stufe) oder `unbekannt` (nicht bestimmbar oder ungültig: Kette endet, kein Wert).
+ */
+export function effortKette(stufen) {
+  for (const stufe of stufen) {
+    const s = stufe();
+    if (s.status === "wert") return s.wert;
+    if (s.status !== "leer") return undefined;
+  }
+  return undefined;
+}
+
+const mtimeVon = (pfad) => {
+  try {
+    return statSync(pfad).mtimeMs;
+  } catch {
+    return null;
+  }
+};
+
+/** Wert einer Frontmatter-Zeile `<schluessel>: <wert>` (ohne Anführungszeichen) oder undefined. */
+function frontmatterWert(text, schluessel) {
+  const block = frontmatterBlock(text);
+  const zeile = block?.split("\n").find((z) => z.startsWith(`${schluessel}:`));
+  return zeile === undefined ? undefined : zeile.slice(schluessel.length + 1).trim().replace(/^["']|["']$/g, "");
+}
+
+/** Die EINE Agentendefinition (`.claude/agents/*.md`) mit `name: <agentType>` in den Verzeichnissen oder null (keine oder mehrere ⇒ nicht bestimmbar). */
+function agentDefinition(agentType, verzeichnisse) {
+  const treffer = [];
+  for (const dir of verzeichnisse) {
+    if (!existsSync(dir)) continue;
+    for (const datei of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+      const pfad = join(dir, datei);
+      const text = readFileSync(pfad, "utf8");
+      if (frontmatterWert(text, "name") === agentType) treffer.push({ pfad, text });
+    }
+  }
+  return treffer.length === 1 ? treffer[0] : null;
+}
+
+const statusVon = (v) => (v === undefined ? LEER : gueltigerEffort(v) ? { status: "wert", wert: v } : UNBEKANNT);
+
+/** Stufe „Frontmatter `effort` der Agentendefinition“: nur, wenn die Datei seit Laufbeginn (`start`, ms) unverändert ist. */
+function effortAusDefinition(agentType, { claudeDir, cwd }, start) {
+  if (!agentType || !cwd || !claudeDir) return UNBEKANNT;
+  const def = agentDefinition(agentType, [join(cwd, ".claude", "agents"), join(claudeDir, "agents")]);
+  const mtime = def ? mtimeVon(def.pfad) : null;
+  if (!def || mtime === null || start === null || mtime > start) return UNBEKANNT;
+  return statusVon(frontmatterWert(def.text, "effort"));
+}
+
+/** Stufe „Effort-Einstellung der Settings“ (`effortLevel`; Rang: lokal, Projekt, Benutzer): jede vorhandene Datei muss seit Laufbeginn unverändert sein. */
+function effortAusSettings({ claudeDir, cwd, env }, start) {
+  if (!cwd || !claudeDir || start === null || env?.CLAUDE_CODE_EFFORT_LEVEL) return UNBEKANNT;
+  let wert;
+  for (const pfad of [join(cwd, ".claude", "settings.local.json"), join(cwd, ".claude", "settings.json"), join(claudeDir, "settings.json")]) {
+    if (!existsSync(pfad)) continue;
+    let json;
+    try {
+      json = JSON.parse(readFileSync(pfad, "utf8"));
+    } catch {
+      return UNBEKANNT;
+    }
+    if (mtimeVon(pfad) > start || json?.env?.CLAUDE_CODE_EFFORT_LEVEL) return UNBEKANNT;
+    wert ??= json?.effortLevel;
+  }
+  return statusVon(wert);
+}
+
+const textVon = (c) => (typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => b?.text ?? "").join(" ") : "");
+
+/** Hat der Benutzer in der Datei den Effort oder das Modell per Slash-Befehl umgestellt? Dann gilt die Settings-Einstellung nicht mehr. */
+const hatEffortBefehl = (zeilen) => zeilen.some((r) => r?.type === "user" && /<command-name>\/(effort|model)\b/.test(textVon(r.message?.content)));
+
+/** Laufbeginn einer Datei in ms (frühester Zeitstempel der Assistant-Zeilen) oder null. */
+function laufbeginn(zeilen) {
+  const ts = assistantZeilen(zeilen).map(([, r]) => Date.parse(r.timestamp)).filter((n) => !Number.isNaN(n));
+  return ts.length ? Math.min(...ts) : null;
+}
+
+/** Zuordnung einer Datei: `rolle` (`agentType` oder `hauptchat`, undefined = nicht bestimmbar), Rückfall-Effort der Datei (Funktion: Meta, Spawn, Frontmatter, Settings). */
 function dateiZuordnungen(zeilen, agentType, rueckfall) {
   const thinking = thinkingJeMessage(zeilen);
   const effort = effortJeMessage(zeilen);
@@ -238,7 +326,7 @@ function dateiZuordnungen(zeilen, agentType, rueckfall) {
     const beobachtet = werte && werte.size === 1 ? [...werte][0] : undefined;
     const z = { thinking: hat };
     if (agentType) z.agent_type = agentType;
-    const e = beobachtet ?? (werte?.has(null) && werte.size === 1 ? rueckfall : undefined);
+    const e = beobachtet ?? (werte?.has(null) && werte.size === 1 ? rueckfall() : undefined);
     if (e) z.effort = e;
     out.set(id, z);
   }
@@ -252,22 +340,32 @@ const textOderUndefined = (v) => (typeof v === "string" && v !== "" ? v : undefi
  * `{ agent_type?, effort?, thinking? }`, `thinking` schon als `ja`/`nein`.
  * - `agent_type`: Hauptdatei ⇒ `hauptchat`, Subagent ⇒ `agentType` der `meta.json`; fehlt er dort, fehlt der Schlüssel (nie eine Rolle erfinden).
  * - `effort`: der an der Message beobachtete Wert; fehlt er dort, der `effort` der `meta.json`, dann der `effort` im Agent-`tool_use`
- *   (über `toolUseId` der Meta); sonst fehlt der Schlüssel. Settings und Agent-Frontmatter werden nicht herangezogen (spätere Dateistände, keine Beobachtung).
+ *   (über `toolUseId` der Meta), dann (nur mit `quellen` = `{ claudeDir, env }`) `effort` im Frontmatter der Agentendefinition und die Effort-Einstellung
+ *   der Settings (`effortLevel`). Jede dieser Dateien muss seit Laufbeginn unverändert sein (mtime ≤ erster Call der Datei), die Definition eindeutig,
+ *   `cwd` bekannt, `CLAUDE_CODE_EFFORT_LEVEL` nirgends gesetzt und kein `/effort`/`/model` in der Hauptdatei; sonst oder bei ungültigem Wert fehlt der Schlüssel.
  * - Steht eine Message in mehr als einer Datei, entfallen `agent_type` und `effort` (Rolle nicht eindeutig); `thinking` bleibt als ODER.
  * Eine EINZIGE Ableitung für den Nachlieferer und den Hook.
  */
-export function zuordnungen(sitzung) {
+export function zuordnungen(sitzung, quellen = null) {
   const spawn = spawnEfforts([...sitzung.main, ...sitzung.subagents.flatMap((s) => s.zeilen)]);
-  const quellen = [
-    dateiZuordnungen(sitzung.main, "hauptchat", undefined),
+  const mainCwd = sitzung.main.find((r) => r?.cwd)?.cwd;
+  const umfeld = (zeilen) => ({ claudeDir: quellen?.claudeDir, env: quellen?.env, cwd: zeilen.find((r) => r?.cwd)?.cwd ?? mainCwd });
+  const hauptRueckfall = () => (quellen && !hatEffortBefehl(sitzung.main) ? effortKette([() => effortAusSettings(umfeld(sitzung.main), laufbeginn(sitzung.main))]) : undefined);
+  const dateien = [
+    dateiZuordnungen(sitzung.main, "hauptchat", hauptRueckfall),
     ...sitzung.subagents.map((s) => {
-      const rueckfall = gueltigerEffort(s.meta?.effort) ?? spawn.get(s.meta?.toolUseId);
-      return dateiZuordnungen(s.zeilen, textOderUndefined(s.meta?.agentType), rueckfall);
+      const agentType = textOderUndefined(s.meta?.agentType);
+      const start = laufbeginn(s.zeilen);
+      const rueckfall = () =>
+        gueltigerEffort(s.meta?.effort) ??
+        spawn.get(s.meta?.toolUseId) ??
+        (quellen ? effortKette([() => effortAusDefinition(agentType, umfeld(s.zeilen), start), () => effortAusSettings(umfeld(s.zeilen), start)]) : undefined);
+      return dateiZuordnungen(s.zeilen, agentType, rueckfall);
     }),
   ];
   const out = new Map();
   const mehrfach = new Set();
-  for (const q of quellen) {
+  for (const q of dateien) {
     for (const [id, z] of q) {
       const alt = out.get(id);
       if (!alt) {
