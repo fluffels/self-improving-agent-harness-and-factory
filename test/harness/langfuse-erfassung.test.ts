@@ -75,6 +75,26 @@ const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
   return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`)) && /^1\. \*\*Datenvollständigkeit.*listModels.*totalPages/m.test(a) && /^\*\*Vorbedingung.*--datenbasis/m.test(a) && /^7\. \*\*Wochenbudget.*--datenbasis/m.test(a);
 };
 
+const INVENTAR_KOPF = "| Punkt | Teil | Einordnung | im Wochenbericht | Quelle |";
+const INVENTAR_PUNKTE = ["Vorbedingung", "Eingangsfilter", ...Array.from({ length: 12 }, (_, i) => String(i + 1)), "Verdichtungszeile"];
+
+/** Das Inventar (factory#313): genau eine Tabelle mit festem Kopf im Checklisten-Abschnitt und in der Datei, alle Punkte, nur erlaubte Werte, kein Fettdruck in den Zeilen. */
+const hatInventar = (modelRouting: string): boolean => {
+  const a = abschnitt(modelRouting, /^### Langfuse-Status überprüfen \(#1293\)/);
+  const zeilen = a.split("\n");
+  const kopf = zeilen.indexOf(INVENTAR_KOPF);
+  if (kopf < 0 || zeilen.lastIndexOf(INVENTAR_KOPF) !== kopf || modelRouting.split(INVENTAR_KOPF).length !== 2) return false;
+  const inventar: string[] = [];
+  for (const z of zeilen.slice(kopf + 2)) {
+    if (!z.startsWith("|")) break;
+    inventar.push(z);
+  }
+  const zellen = inventar.map((z) => z.split("|").slice(1, -1).map((c) => c.trim()));
+  const punkte = new Set(zellen.map((c) => /^\d+/.exec(c[0])?.[0] ?? c[0]));
+  const zeileOk = (c: string[]): boolean => c.length === 5 && !c.some((x) => x.includes("**")) && ["deterministisch", "Urteil"].includes(c[2]) && ["ja", "nein"].includes(c[3]);
+  return zellen.length > 0 && zellen.every(zeileOk) && INVENTAR_PUNKTE.every((p) => punkte.has(p));
+};
+
 /** Der Beleg-Ablauf steht in model-routing.md. */
 const hatBelegAblauf = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Erfassung belegen \(#1293\)/);
@@ -206,7 +226,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatErfassungsRegel(""));
   });
 
-  test("model-routing.md: Checkliste mit allen elf Punkten", () => {
+  test("model-routing.md: Checkliste mit allen zwölf Punkten", () => {
     assert.ok(hatChecklisteVollstaendig(mr));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
@@ -221,6 +241,18 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatChecklisteVollstaendig(mr.replace("bei verletzter Vorbedingung (`--datenbasis` Exit 3)", "bei verletzter Vorbedingung (`--pruefung` Exit 3)")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (quellprojekt#1425):**", "Vermeidbare Arbeit (quellprojekt#1425):")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
+  });
+
+  test("model-routing.md: das Inventar der Checkliste (factory#313) deckt alle Punkte ab und bleibt eindeutig", () => {
+    assert.ok(hatInventar(mr));
+    assert.ok(!hatInventar(mr.replace(/^\| 12 Laufzeiten-Upstream .*\n/m, "")), "Zeile 12 entfernt");
+    assert.ok(!hatInventar(mr.replace("| 7 Wochenbudget | Summe und Δ |", "| **7 Wochenbudget** | Summe und Δ |")), "Fettdruck");
+    assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Kennzahlen | deterministisch |", "| 3 Tokenfresser | Kennzahlen | teils |")), "teils");
+    assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Bewertung | Urteil | nein |", "| 3 Tokenfresser | Bewertung | Urteil | vielleicht |")), "Wochenbericht-Spalte");
+    assert.ok(!hatInventar(mr + "\n" + "| Punkt | Teil | Einordnung | im Wochenbericht | Quelle |\n"), "zweite Tabelle");
+    assert.ok(!hatInventar(mr.replace("| Verdichtungszeile | Datenvollständigkeit |", "| Verdichtung | Datenvollständigkeit |").replaceAll("| Verdichtungszeile |", "| Verdichtung |")), "Verdichtungszeile fehlt");
+    assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Bewertung | Urteil | nein | Bericht |", "| 3 Tokenfresser | Bewertung | Urteil | nein |")), "Zellzahl");
+    assert.ok(!hatInventar(""));
   });
 
   test("model-routing.md: die Checkliste hat genau so viele nummerierte Punkte wie CHECKLISTE", () => {

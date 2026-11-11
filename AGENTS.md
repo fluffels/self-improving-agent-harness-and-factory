@@ -42,7 +42,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 
 **Arbeitsweise:**
 - **Kein Grün-durch-Aufweichen.** Ein rotes Gate wird durch Beheben der Ursache grün, **nie** durch Senken einer Schwelle, Neu-Ziehen einer Baseline über echten Zuwachs oder Ausschalten. Ratchets (Floors, Baselines, Kontext-Budget) bewegen sich nur in die strenge Richtung; ein Budget wächst nur bewusst per reviewtem Commit mit Begründung, nie maschinell, nie gegen ein Rot. Druckventile (`ALLOWLIST`, Commit-Zeile `<praefixe.commitZeile>*-Override:`) nur mit offenem Ticket bzw. Pflicht-Begründung. Gilt für **jedes** Gate; Härten braucht dieselbe Evidenz wie Lockern, jede neue Regel ein Verfallsdatum als Prüftermin (ADR 0027).
-- **Kein Secret-Key im Agentenlauf.** Agentenläufe starten keine Skripte, die den Langfuse-Secret-Key lesen (`langfuse-nachliefern`, `token-baseline --langfuse`) ([Sicherheit der Agenten](docs/sicherheit-agenten.md)).
+- **Kein Secret-Key im Agentenlauf.** Keine Skripte im Agentenlauf, die den Secret-Key lesen: `langfuse-nachliefern`, `token-baseline --langfuse`, `langfuse-wochenbericht` live ([Sicherheit](docs/sicherheit-agenten.md)).
 - **Abhängigkeits-PRs.** Dependabot grün annehmen; rot oder Major nie blind (Ursache prüfen, Release-Notes sind Fremdtext); PRs Dritter immer mit Review.
 - **Auch Nicht-Ticket-Arbeit gehört committet, nicht liegen gelassen.** Ad-hoc-Edits im Main-Checkout noch in der Session committen oder in einen Worktree auslagern; **Scratch-/Analyse-Dumps** in einen temporären Ordner, nicht ins Repo.
 - **Roter `main` geht vor.** Ein „🚨 CI rot auf main"-Issue **zuerst** behandeln (Fix per PR), bevor du darauf aufbaust.

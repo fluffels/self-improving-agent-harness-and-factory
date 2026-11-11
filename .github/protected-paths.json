@@ -27,6 +27,8 @@
     "/scripts/*-mcp.mjs",
     "/scripts/mcp-ausfall.mjs",
     "/scripts/langfuse-vorbedingung.mjs",
+    "/scripts/langfuse-health.mjs",
+    "/scripts/agenten-namen.mjs",
     "/scripts/cockpit/lauf.mjs",
     "/scripts/besitz-lib.mjs",
     "/scripts/projektwert-lib.mjs",
