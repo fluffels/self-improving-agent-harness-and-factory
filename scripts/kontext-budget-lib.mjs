@@ -90,3 +90,31 @@ export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, mark
   if (chars <= budget) return null;
   return `Kern-Block von AGENTS.md ${chars} Zeichen > Kern-Block-Budget ${budget}. Kern-Regeln kürzen oder auslagern; das Budget (KERN_BLOCK_BUDGET in scripts/kontext-budget-lib.mjs) wächst nur bewusst per reviewtem Commit.`;
 }
+
+/** Zeichen-Budget je Agenten- und Skill-Datei (factory#307): `.claude/agents/*.md`, `.agents/skills/<name>/**` (SKILL.md und Zusatzdateien). Nur die verteilten Pfade aus dem Besitz-Manifest stehen hier (der Kern nennt keine Fabrik-Dateien);
+ *  jede andere Datei dieser Ordner, auch eine projekt-eigene im Bezieher, bekommt `AGENTEN_SKILL_DEFAULT_BUDGET`. Gemessen OHNE den Projektwerte-Block (er wächst mit der Projekt-Config, nicht mit dem Kern).
+ *  Kalibriert am 2026-11-11 (main e31542f): Ist + 10 %, aufgerundet auf 500 Zeichen. Ratchet: ein Budget sinkt nur, wächst es gegenüber der Merge-Base, wird `test/harness/kontext-budget-ratchet.test.ts` rot.
+ *  Je Eintrag genau eine Zeile `{ file: "<pfad>", budget: <zahl> },` (der Ratchet-Test liest sie). Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). */
+export const AGENTEN_SKILL_BUDGETS = [
+  { file: ".agents/skills/factory/SKILL.md", budget: 1_500 },
+  { file: ".agents/skills/factory/ablauf.md", budget: 37_500 },
+  { file: ".agents/skills/review-lenses/SKILL.md", budget: 45_500 },
+  { file: ".claude/agents/explore.md", budget: 1_500 },
+  { file: ".claude/agents/factory-gruppe.md", budget: 7_500 },
+  { file: ".claude/agents/factory-lens.md", budget: 12_000 },
+  { file: ".claude/agents/factory-planer.md", budget: 17_500 },
+  { file: ".claude/agents/factory-umsetzer.md", budget: 41_500 },
+  { file: ".claude/agents/holdout-abnahme.md", budget: 7_000 },
+  { file: ".claude/agents/holdout-szenario.md", budget: 3_500 },
+];
+
+/** Budget für jede Agenten- und Skill-Datei ohne Eintrag (nach dem Vorbild von `MODULE_AGENTS_BUDGET`: größte Datei plus Kopffreiheit). */
+export const AGENTEN_SKILL_DEFAULT_BUDGET = 45_500;
+
+/** Zeichen eines Textes ohne den Block von `marker.start` bis einschließlich `marker.ende` (zeilenenden-neutral); fehlt ein Marker oder steht das Ende vor dem Start, zählt der ganze Text. Die Marker gibt der Aufrufer vor (Blatt). */
+export function zeichenOhneBlock(text, { start, ende }) {
+  const a = text.indexOf(start);
+  const b = text.indexOf(ende);
+  if (a < 0 || b < a) return countChars(text);
+  return countChars(text.slice(0, a) + text.slice(b + ende.length));
+}
