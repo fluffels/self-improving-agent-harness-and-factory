@@ -32,7 +32,7 @@ const P = raw as unknown as {
   baueFixture: (a: { von: string; ziel: string; raum: number; io: Io }) => void;
   fuehreSchritte: (s: Schritt[], io: Io) => { id: string; status: number | null }[];
   main: (argv: string[], io: Io) => { code: number; out: string; err: string };
-  echteNaehte: (stdio?: string) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
+  echteNaehte: (stdio?: unknown) => { fehler: () => string[]; istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
 };
 const B = budgetRaw as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; kernBlockZeichen: (t: string, m: { start: string; ende: string }) => number | null; countChars: (t: string) => number };
 const R = releaseRaw as unknown as { mechanischeSchritte: (q: string) => string[] };
@@ -361,6 +361,21 @@ describe("echte Nähte", () => {
       expect(n.istGitRepo(dir)).toBe(true);
       spawnSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
       expect(n.kopf(dir)).toMatch(/^[0-9a-f]{40}$/);
+    });
+  });
+
+  it("ein fehlgeschlagener Schritt hält Befehl und stderr-Ende fest (naehte.fehler), grüne Schritte nicht", () => {
+    temp((dir) => {
+      const naehte = P.echteNaehte(["ignore", "ignore", "pipe"]);
+      const io = { ...naehte.mitScratch(join(dir, "s")), melde: () => undefined };
+      const rot = { id: "rot", argv: ["git", "-C", join(dir, "gibtsnicht"), "status"], cwd: dir, kritisch: false };
+      const gruen = { id: "gruen", argv: [process.execPath, "-e", "0"], cwd: dir, kritisch: false };
+      expect(P.fuehreSchritte([gruen], io)).toEqual([{ id: "gruen", status: 0 }]);
+      expect(naehte.fehler()).toEqual([]);
+      expect(P.fuehreSchritte([rot], io)).toEqual([{ id: "rot", status: expect.any(Number) }]);
+      const fehler = naehte.fehler().join("\n");
+      expect(fehler).toContain("fatal");
+      expect(fehler).toContain("status");
     });
   });
 
