@@ -195,9 +195,6 @@
   "scripts/mcp-ausfall.mjs": {
     "complexity": {
       "count": 2
-    },
-    "max-depth": {
-      "count": 2
     }
   },
   "scripts/naechstes-ticket.mjs": {

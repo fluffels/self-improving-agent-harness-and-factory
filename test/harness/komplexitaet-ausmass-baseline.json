@@ -115,8 +115,7 @@
     "complexity": 5
   },
   "scripts/mcp-ausfall.mjs": {
-    "complexity": 21,
-    "max-depth": 2
+    "complexity": 21
   },
   "scripts/naechstes-ticket.mjs": {
     "complexity": 6

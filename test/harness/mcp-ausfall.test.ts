@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/mcp-ausfall.mjs";
+// @ts-expect-error: kein .d.ts für die .mjs-Lib.
+import * as libRaw from "../../scripts/mcp-log-lib.mjs";
 import { FREMD, projektConfig } from "../support/fremd-config";
 
 type Server = { name: string; type?: string; url?: string; headers?: Record<string, string> };
@@ -36,7 +38,8 @@ type Ausfall = {
   parseSeit: (arg: string | undefined, jetzt: number) => string;
   main: (argv: string[], env: Record<string, string | undefined>, out: (t: string) => void, o?: { plattform?: string; home?: string; jetzt?: number; err?: (t: string) => void }) => number;
 };
-const a = raw as unknown as Ausfall;
+// Pfad-Helfer und `netzCode` leben in der Lib `mcp-log-lib.mjs` (kein Re-Export im Skript): beide Module zusammen ergeben `a`.
+const a = { ...(raw as object), ...(libRaw as object) } as unknown as Ausfall;
 const WURZEL = join(import.meta.dirname, "..", "..");
 
 const dbg = (debug: string, zeit = "2026-10-15T10:00:00.000Z") => JSON.stringify({ debug, timestamp: zeit, sessionId: "s1", cwd: "C:\\x" });
