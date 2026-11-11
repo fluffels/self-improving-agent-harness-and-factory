@@ -504,6 +504,15 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
       ["2026-09-28T00:00:00.000Z", "2026-10-02T00:00:00.000Z"],
     ]);
   });
+  test("Claim-Karte nicht lesbar (ENOENT): kein Throw, Kosten-Zeilen zeigen die Lücke mit Grund, Exit 0", () => {
+    const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: "{}", stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
+    const kaputt = () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory, scandir '/h/.claude/projects/x'"), { code: "ENOENT" });
+    };
+    const r = erstelle({ von, bis }, { run: ok, claimKarte: kaputt });
+    expect(r.exit).toBe(0);
+    expect(r.bericht.tickets).toEqual([{ ticket: 40, pr: 50, ergebnis: { luecke: expect.stringMatching(/^Claim-Sessions nicht lesbar: .*ENOENT/) } }]);
+  });
   test("alles da: Exit 0; Lauf-Ergebnis fehlt: Exit 2 ohne Claim-Karte und ohne Kosten-Prozess", () => {
     const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
     expect(erstelle({ von, bis }, { run: ok, claimKarte }).exit).toBe(0);

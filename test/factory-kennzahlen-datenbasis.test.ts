@@ -137,6 +137,15 @@ describe("erstelleDatenbasis", () => {
     const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }])).run, claimKarte: () => karte({}) });
     expect(r.text).toContain("Vorbedingung verletzt");
   });
+  test("Claim-Karte nicht lesbar (ENOENT): Exit 2 mit Lücke samt Grund, kein Urteil", () => {
+    const kaputt = () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory, scandir '/h/.claude/projects/x'"), { code: "ENOENT" });
+    };
+    const r = F.erstelleDatenbasis(ra, { run: mitRun(lauf([{ pr: 11, ticket: 1 }])).run, claimKarte: kaputt });
+    expect(r.exit).toBe(2);
+    expect(r.text).toMatch(/Lücke: Claim-Sessions nicht lesbar: .*ENOENT/);
+    expect(r.text).not.toContain("Vorbedingung verletzt");
+  });
   test("lauf-ergebnis fehlt: Exit 2 mit Lücke samt Grund, kein Urteil", () => {
     const r = F.erstelleDatenbasis(ra, { run: mitRun("", 1).run, claimKarte: () => karte({}) });
     expect(r.exit).toBe(2);
