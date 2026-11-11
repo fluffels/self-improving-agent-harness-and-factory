@@ -485,6 +485,15 @@ function auditUndArten(auditLader, { von, bis, lauf, tickets }) {
   return { audit: selbstAudit({ ...daten, zeilen }), arten };
 }
 
+/** Claim-Karte laden; nicht lesbar (etwa fehlender Transkript-Ordner) → `{ luecke }` mit Grund statt Abbruch, sonst `{ claims }`. */
+export function claimsOderLuecke(claimKarte) {
+  try {
+    return { claims: claimKarte() };
+  } catch (err) {
+    return { luecke: `Claim-Sessions nicht lesbar: ${fehlerText(err, 200)}` };
+  }
+}
+
 /**
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
@@ -496,10 +505,10 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
   let tickets = [];
   let kontingent;
   if (lauf.daten) {
-    const claims = claimKarte();
+    const { claims, luecke } = claimsOderLuecke(claimKarte);
     const reihen = ticketLaeufe(lauf.daten.zeilen).tickets;
     kontingent = kontingentLader ? kontingentLader({ von, bis, tickets: reihen }) : undefined; // eine Lücke dort ändert den Exit-Code nicht
-    tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
+    tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: luecke ? { luecke } : holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
   } else if (kontingentLader) kontingent = { luecke: "kein Lauf-Ergebnis" };
   const tokensJePp = tokensLader ? tokensLader({ von, bis }) : undefined; // unabhängig vom Lauf-Ergebnis, eine Lücke ändert den Exit-Code nicht
   const { audit, arten } = auditUndArten(auditLader, { von, bis, lauf, tickets });
@@ -598,7 +607,9 @@ export function datenbasisAbschnitt(d) {
 export function erstelleDatenbasis({ von, bis }, { run = runSkript, claimKarte }) {
   const lauf = holeLauf(von, bis, run);
   if (lauf.luecke) return { text: `### Datenbasis\n\n- Lücke: ${lauf.luecke}`, exit: 2 };
-  const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims: claimKarte() });
+  const { claims, luecke } = claimsOderLuecke(claimKarte);
+  if (luecke) return { text: `### Datenbasis\n\n- Lücke: ${luecke}`, exit: 2 };
+  const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims });
   return { text: datenbasisAbschnitt(d), exit: d.stand === "verletzt" ? 3 : 0 };
 }
 
