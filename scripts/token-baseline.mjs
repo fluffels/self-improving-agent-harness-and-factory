@@ -173,6 +173,13 @@ function sockelOf(allCalls, windowCalls, agenten) {
   return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review"), umsetzer };
 }
 
+/** Report-Zeile mit Sockel (Haupt, Planer, Lens, Umsetzer) und Median-Kontext; `dash` setzt für fehlende Werte den Strich. */
+function sockelZeile(summary, dash) {
+  const sk = summary.sockel;
+  const mc = summary.medianContext;
+  return `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Umsetzer ${dash(sk?.umsetzer)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`;
+}
+
 /** Ohne Preis, aber nur echte Modelle: der Client-Platzhalter `<synthetic>` hat nie einen Preis (#1663). */
 const ohnePreis = (c) => (c.cost === undefined || c.cost === null) && (!c.model || istEchtesModell(c.model));
 
@@ -536,12 +543,7 @@ export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
   const dash = (v) => (v === null || v === undefined ? "–" : fmt(v));
   const brain = summary.brain;
-  const sk = summary.sockel;
-  const mc = summary.medianContext;
-  lines.push(
-    "",
-    `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Umsetzer ${dash(sk?.umsetzer)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
-  );
+  lines.push("", sockelZeile(summary, dash));
   const parts = summary.costParts;
   const sum = parts ? sumParts(parts) : 0;
   if (sum > 0) {

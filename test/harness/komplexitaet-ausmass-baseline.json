@@ -158,7 +158,7 @@
     "complexity": 6
   },
   "scripts/token-baseline.mjs": {
-    "complexity": 18
+    "complexity": 13
   },
   "scripts/tool-metriken.mjs": {
     "complexity": 2

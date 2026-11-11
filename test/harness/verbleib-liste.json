@@ -62,7 +62,7 @@
       "regel": "pre-flight",
       "ort": "AGENTS.md",
       "bedingung": "",
-      "text": "Einziger Pflicht-Stopp ist die **Pre-Flight-Klärung** bei **Irreversiblem oder Außenwirkung**, geschlossene Liste: Löschen (auch `gh issue delete`), Ruleset/Secrets/Repo-Einstellungen samt Project-Ansichten und -Feldern, Veröffentlichen, dazu die Projekt-Stopps im Projekt-Block; vorab klären."
+      "text": "Einziger Pflicht-Stopp ist die **Pre-Flight-Klärung** bei **Irreversiblem oder Außenwirkung**, geschlossene Liste:"
     },
     {
       "datei": ".agents/skills/review-lenses/SKILL.md",

@@ -51,6 +51,7 @@ import { dirname, join } from "node:path";
 import { collectMarkdown } from "./check-basis.mjs";
 import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
 import { PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
@@ -102,7 +103,7 @@ export function collectAgentSkillFiles(rootDir = ROOT) {
   const agenten = existsSync(join(rootDir, ".claude/agents"))
     ? readdirSync(join(rootDir, ".claude/agents"), { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => `.claude/agents/${e.name}`)
     : [];
-  return [...agenten, ...mdRekursiv(rootDir, ".agents/skills")].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
+  return [...agenten, ...mdRekursiv(rootDir, QUELL_VERZEICHNIS)].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
 }
 
 /** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte-Block; ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */

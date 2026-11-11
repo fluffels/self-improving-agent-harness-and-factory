@@ -868,27 +868,27 @@ Basis für die Kürzungen aus dem Epic factory#273: Sockel (Kontext des ersten C
 
 | Ticket | Arm | Session | Fenster (Claim bis Merge, UTC, 2026) | Sockel Haupt | Sockel Umsetzer |
 |---|---|---|---|--:|--:|
-| #252 | verify | 8a139c59-76b1-4853-b791-3dee38bb62c3 | 11-10 15:52 bis 11-10 16:14 | 54.782 | 41.717 |
-| #247 | pr | 48fb7018-832e-4f1f-a34d-c672989eadf4 | 11-10 16:21 bis 11-10 18:22 | 55.022 | 44.390 |
-| #258 | verify | 8e3049ce-f866-4bd6-8beb-5201f32bf8cc | 11-10 17:27 bis 11-10 18:08 | 54.570 | 43.126 |
-| #234 | verify | 76334e7b-6fcb-4a13-9e78-e01635d0b735 | 11-10 18:11 bis 11-10 19:26 | 55.222 | 43.544 |
-| #260 | ohne | e651a924-24e5-4f9e-a4ed-429e96bc822b | 11-10 18:11 bis 11-10 19:29 | 54.773 | 47.831 |
-| #268 | ohne | 007d1335-5436-4667-8ded-3dd8e9a596a2 | 11-10 19:53 bis 11-10 21:19 | 54.836 | 49.748 |
-| #269 | pr | cead93e3-8904-4e29-8ce0-9657fa6b5422 | 11-10 21:28 bis 11-10 22:25 | 55.164 | 47.064 |
-| #263 | ohne | a4524566-50e0-4ca8-87c2-534da81f4616 | 11-10 21:27 bis 11-10 22:06 | 55.098 | 44.678 |
-| #280 | verify | dd04ec9a-1779-4d6c-8aec-60a0959d664b | 11-10 22:25 bis 11-10 23:25 | 55.793 | 42.946 |
-| #285 | pr | d487b1a6-e8ff-4768-b2f9-83dcfc179e2b | 11-10 22:57 bis 11-11 00:06 | 55.117 | 47.361 |
-| #286 | verify | e570d4da-fec8-4269-999a-c75d0bb54.349 | 11-10 22:59 bis 11-10 23:37 | 54.994 | 43.726 |
-| #287 | pr | 9d0dff3d-24fe-41b7-89bb-a50e58ff7a51 | 11-10 23:46 bis 11-11 00:48 | 55.883 | 46.206 |
-| #283 | pr | 163695ac-6ccb-4a4a-bb97-3a696ee336ba | 11-10 23:49 bis 11-11 00:18 | 55.163 | 42.601 |
-| #290 | verify | 6df6d767-de0b-4cc6-8d21-65d27f3650f2 | 11-11 08:16 bis 11-11 09:12 | 54.481 | 45.835 |
-| #289 | pr | c5e40eda-7d8f-4288-8726-67aa751d13a4 | 11-11 08:18 bis 11-11 09:44 | 56.134 | 48.803 |
-| #294 | verify | 40417485-9403-41e9-b4d9-715c92197f61 | 11-11 09:11 bis 11-11 09:49 | 53.388 | 44.371 |
-| #298 | verify | 9c0df781-cd6b-4c56-813d-73d065130.877 | 11-11 09:16 bis 11-11 09:40 | 53.414 | 43.771 |
+| factory#252 | verify | 8a139c59-76b1-4853-b791-3dee38bb62c3 | 11-10 15:52 bis 11-10 16:14 | 54.782 | 41.717 |
+| factory#247 | pr | 48fb7018-832e-4f1f-a34d-c672989eadf4 | 11-10 16:21 bis 11-10 18:22 | 55.022 | 44.390 |
+| factory#258 | verify | 8e3049ce-f866-4bd6-8beb-5201f32bf8cc | 11-10 17:27 bis 11-10 18:08 | 54.570 | 43.126 |
+| factory#234 | verify | 76334e7b-6fcb-4a13-9e78-e01635d0b735 | 11-10 18:11 bis 11-10 19:26 | 55.222 | 43.544 |
+| factory#260 | ohne | e651a924-24e5-4f9e-a4ed-429e96bc822b | 11-10 18:11 bis 11-10 19:29 | 54.773 | 47.831 |
+| factory#268 | ohne | 007d1335-5436-4667-8ded-3dd8e9a596a2 | 11-10 19:53 bis 11-10 21:19 | 54.836 | 49.748 |
+| factory#269 | pr | cead93e3-8904-4e29-8ce0-9657fa6b5422 | 11-10 21:28 bis 11-10 22:25 | 55.164 | 47.064 |
+| factory#263 | ohne | a4524566-50e0-4ca8-87c2-534da81f4616 | 11-10 21:27 bis 11-10 22:06 | 55.098 | 44.678 |
+| factory#280 | verify | dd04ec9a-1779-4d6c-8aec-60a0959d664b | 11-10 22:25 bis 11-10 23:25 | 55.793 | 42.946 |
+| factory#285 | pr | d487b1a6-e8ff-4768-b2f9-83dcfc179e2b | 11-10 22:57 bis 11-11 00:06 | 55.117 | 47.361 |
+| factory#286 | verify | e570d4da-fec8-4269-999a-c75d0bb54.349 | 11-10 22:59 bis 11-10 23:37 | 54.994 | 43.726 |
+| factory#287 | pr | 9d0dff3d-24fe-41b7-89bb-a50e58ff7a51 | 11-10 23:46 bis 11-11 00:48 | 55.883 | 46.206 |
+| factory#283 | pr | 163695ac-6ccb-4a4a-bb97-3a696ee336ba | 11-10 23:49 bis 11-11 00:18 | 55.163 | 42.601 |
+| factory#290 | verify | 6df6d767-de0b-4cc6-8d21-65d27f3650f2 | 11-11 08:16 bis 11-11 09:12 | 54.481 | 45.835 |
+| factory#289 | pr | c5e40eda-7d8f-4288-8726-67aa751d13a4 | 11-11 08:18 bis 11-11 09:44 | 56.134 | 48.803 |
+| factory#294 | verify | 40417485-9403-41e9-b4d9-715c92197f61 | 11-11 09:11 bis 11-11 09:49 | 53.388 | 44.371 |
+| factory#298 | verify | 9c0df781-cd6b-4c56-813d-73d065130.877 | 11-11 09:16 bis 11-11 09:40 | 53.414 | 43.771 |
 
 **Mediane:** Haupt 55.022 Tokens (n = 17 Sessions, Spanne 53.388 bis 56.134), Umsetzer 44.390 (n = 17 Tickets, Spanne 41.717 bis 49.748). Der Haupt-Sockel ist je Session der erste Call (die Größe der Session), der Umsetzer-Sockel je Ticket der Median über dessen Umsetzer-Subagenten.
 
-**A/B-Schalter factory#235:** nicht aktiv (Issue offen, Stand 2026-11-11; `.claude/agents/` enthält keine Kern-Variante je Rolle); kein Lauf war auszuschließen. **Grenzen:** Die Agenten-Definitionen änderten sich im Fenster (Harness-Tickets im selben Zeitraum); Codex ist nicht gemessen (`token-baseline` liest nur Claude-Code-Transkripte). Ticket #288 fehlt (kein gemergter PR mit Titel-Präfix), #299, #307 und #311 waren offen.
+**A/B-Schalter factory#235:** nicht aktiv (Issue offen, Stand 2026-11-11; `.claude/agents/` enthält keine Kern-Variante je Rolle); kein Lauf war auszuschließen. **Grenzen:** Die Agenten-Definitionen änderten sich im Fenster (Harness-Tickets im selben Zeitraum); Codex ist nicht gemessen (`token-baseline` liest nur Claude-Code-Transkripte). Ticket factory#288 fehlt (kein gemergter PR mit Titel-Präfix), factory#299, factory#307 und factory#311 waren offen.
 
 #### Phasen-Schnitt: Vertrag, A/B-Regel, Messrezept
 

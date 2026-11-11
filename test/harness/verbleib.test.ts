@@ -66,7 +66,7 @@ function eintragBefunde(e: Eintrag, art: RegelArt, id: string, lies: (pfad: stri
   const text = norm(e.text);
   if (!text.includes(art.kern)) out.push(`${id}: der gespeicherte Text enthält das Kern-Token „${art.kern}“ nicht`);
   if (art.art === "wortgleich" && text.length < MIN_LAENGE) out.push(`${id}: wortgleiche Regel kürzer als ${MIN_LAENGE} Zeichen (ein ganzer Satz, kein Stichwort)`);
-  if (art.art === "wortgleich" && !text.endsWith(".")) out.push(`${id}: wortgleiche Regel endet nicht auf einem Punkt (ein ganzer Satz)`);
+  if (art.art === "wortgleich" && !/[.,;:]$/.test(text)) out.push(`${id}: wortgleiche Regel endet nicht an einer Satzgrenze (wörtlicher Satz oder Satzanfang)`);
   const eigen = e.ort === e.datei || e.ort === "AGENTS.md";
   if (!eigen && !bedingterOrt(e.ort)) {
     out.push(`${id}: unzulässiger Ort ${e.ort} (zulässig: AGENTS.md, die Datei selbst, eine bedingte Datei unter .claude/agents/ oder .agents/skills/; nie docs/ oder ein Archiv)`);
@@ -164,17 +164,23 @@ describe("Verbleib gate-erzwungener Regeln", () => {
       assert.equal(befunde((l) => l, (p) => (p === SCAN_DATEIEN[0] ? dateien[p].replace(satz, satz.replace(/ /g, "\n  ")) : lies(p))), "");
     });
 
-    test("wortgleiche Regel: zu kurz, ohne Kern-Token, ohne Schlusspunkt; Token-Regel ohne Kern-Token", () => {
+    test("wortgleiche Regel: zu kurz, ohne Kern-Token, ohne Satzgrenze am Ende; Token-Regel ohne Kern-Token", () => {
       const ersetze = (regel: string, text: string) => (l: Eintrag[]) => l.map((x) => (x.regel === regel && x.datei === SCAN_DATEIEN[0] ? { ...x, text } : x));
       const mitText = (text: string) => (p: string): string | null => (p === SCAN_DATEIEN[0] ? `${dateien[p]}\n${text}` : lies(p));
       const kurz = "Außenwirkung zählt.";
       assert.match(befunde(ersetze("pre-flight", kurz), mitText(kurz)), /kürzer als 80 Zeichen/);
       const ohneKern = "x".repeat(90) + ".";
       assert.match(befunde(ersetze("pre-flight", ohneKern), mitText(ohneKern)), /Kern-Token „Außenwirkung“ nicht/);
-      const ohnePunkt = satz.slice(0, -1);
-      assert.match(befunde(ersetze("pre-flight", ohnePunkt), mitText(ohnePunkt)), /endet nicht auf einem Punkt/);
+      const ohneSatzgrenze = satz.slice(0, -1);
+      assert.match(befunde(ersetze("pre-flight", ohneSatzgrenze), mitText(ohneSatzgrenze)), /endet nicht an einer Satzgrenze/);
+      for (const ende of [".", ",", ";", ":"]) {
+        const satzAnfang = satz.slice(0, -1) + ende;
+        const dateienAnfang: Record<string, string> = { ...dateien, [SCAN_DATEIEN[0]]: `Kopf\n${satzAnfang}` };
+        const lesenAnfang = (q: string): string | null => dateienAnfang[q] ?? lies(q);
+        assert.doesNotMatch(befunde(ersetze("pre-flight", satzAnfang), lesenAnfang), /Satzgrenze/, `Ende ${ende}`);
+      }
       assert.match(befunde(ersetze("commit-plan", "`Plan:`"), mitText("`Plan:`")), /commit-plan: der gespeicherte Text enthält das Kern-Token/);
-      assert.equal(befunde((l) => l), "", "ein Token-Eintrag braucht weder 80 Zeichen noch einen Schlusspunkt");
+      assert.equal(befunde((l) => l), "", "ein Token-Eintrag braucht weder 80 Zeichen noch ein Satzzeichen am Ende");
     });
   });
 });
