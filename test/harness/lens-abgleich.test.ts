@@ -86,6 +86,11 @@ describe("Brillen-Dateien (factory#308)", () => {
     assert.doesNotMatch(SKILL, /Selbstcheck/);
   });
 
+  test("Sicherheits-Lens (factory#334): die Spawn-Vorlage gibt ihr den Bedrohungsabschnitt, nicht die Plan-Abschnitte 4 und 7", () => {
+    const vorlage = /Plan-Prüfliste: <[^>]*>/.exec(SKILL)?.[0] ?? "";
+    assert.match(vorlage, /Abschnitt 4 und 7 \(Requirement-, Test-, Kombi-Lens\), Bedrohungsabschnitt \(Sicherheit\)/);
+  });
+
   test("die Doku-Brille läuft ohne Test-Brille; die Sabotage-Probe verlangt einen sauberen Stand (bleibt im Skill)", () => {
     assert.match(brille("doku"), /Test-Adäquanz entfällt, weil es ohne Code nichts zu sabotieren gibt/);
     assert.match(SKILL, /git status --porcelain\s+# MUSS leer sein/);
