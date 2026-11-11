@@ -86,6 +86,7 @@ export function makeCtx(cwd, deps) {
     aliases: new Map(),
     expanding: new Set(),
     gitEnv: { gitDir: null, workTree: null },
+    vars: new Map(), // Shell-Variablen mit statischem Literal-Wert (null: dynamisch/unbekannt), Scoping wie Subshell/Zweige
     seen: new Set(),
     depth: 0,
     aliasCache: new Map(),
@@ -219,4 +220,45 @@ export function peel(words) {
     if (i < 0) return { ...res, noop: true };
   }
   return res;
+}
+
+// ── Shell-Variablen mit statischem Literal-Wert (L4: Parität zum PowerShell-Guard) ──
+// Geschlossene Formenliste: aufgelöst wird nur ein Wort, das im Quelltext genau `$V`, `${V}`, `"$V"`, `"${V}"` oder eines davon mit
+// angehängtem `/<literal>` ist. Alles andere (`$V$X`, `a$V`, `${V:-x}`, `$A"T"`) bleibt dynamisch.
+const VAR_REF = String.raw`\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})(\/[A-Za-z0-9_.\/-]*)?`;
+const VAR_FORM = new RegExp(`^(?:${VAR_REF}|"${VAR_REF}")$`);
+
+/** Wert einer Zuweisung `NAME=wert` vormerken: nur ein statischer, nicht leerer Wert ohne `~` (sonst null = dynamisch). */
+export function setVar(c, name, word) {
+  const statisch = !word.dynamic && word.text !== "" && !word.text.includes("~");
+  c.vars.set(name, statisch ? word.text : null);
+}
+
+/** Das Wort mit aufgelöster Variable (statisch, nicht dynamisch), sonst unverändert. */
+export function aufgeloest(c, w) {
+  const m = w.dynamic && typeof w.raw === "string" ? VAR_FORM.exec(w.raw) : null;
+  if (!m) return w;
+  const wert = c.vars.get(m[1] ?? m[2] ?? m[4] ?? m[5]);
+  if (typeof wert !== "string") return w;
+  return { ...w, text: wert + (m[3] ?? m[6] ?? ""), dynamic: false };
+}
+
+/** Vormerkung der Variablen für einen Teillauf: Änderungen darin gelten danach als unbekannt (null). */
+export function bedingt(c, fn) {
+  const vorher = new Map(c.vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of c.vars) if (vorher.get(k) !== v) c.vars.set(k, null);
+  }
+}
+
+/** Teillauf in eigener Subshell: Variablenänderungen wirken nicht nach außen. */
+export function isoliert(c, fn) {
+  const vorher = new Map(c.vars);
+  try {
+    return fn();
+  } finally {
+    c.vars = vorher;
+  }
 }

@@ -9,7 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { MAX_INTERPRETER } from "./hook-io.mjs";
-import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, ask, ausserhalbRepo, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
+import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, aufgeloest, ask, ausserhalbRepo, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
 
 // Die vier Optionen mit eigener Auswertung (-C, -c, --git-dir, --work-tree) behandelt gitOption selbst; der Rest der Tabelle nimmt nur einen Wert.
 const VALUE_OPTS = [...GIT_GLOBAL_MIT_WERT].filter((o) => !["-C", "-c", "--git-dir", "--work-tree"].includes(o));
@@ -73,7 +73,8 @@ const envWorte = (pe, name, global) => [...pe.env.filter((e) => e.name === name)
 /** `-C`-Kette ab `b`; liefert den Endpunkt und ergänzt `out`/`unresolved` für nicht auflösbare oder fehlende Ziele. */
 function folgeC(c, g, b, out, st) {
   let cur = b;
-  for (const w of g.cWords) {
+  for (const w0 of g.cWords) {
+    const w = aufgeloest(c, w0);
     const t = w.dynamic || /[{}*?]/.test(w.text) ? null : tildeOf(c, w.text);
     if (t === null) {
       st.unresolved = true;

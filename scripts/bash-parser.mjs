@@ -326,12 +326,14 @@ class Parser {
 
   readWord() {
     const w = { t: "w", text: "", dynamic: false, quoted: false, substs: [] };
+    const start = this.pos;
     while (this.pos < this.src.length) {
       const ch = this.src[this.pos];
       const next = this.src[this.pos + 1];
       if (this.wortEnde(w, ch, next)) break;
       this.wortZeichen(w, ch, next);
     }
+    w.raw = this.src.slice(start, this.pos); // Quelltext des Wortes (enge Variablenauflösung des Worktree-Guards)
     return w;
   }
 
@@ -493,7 +495,7 @@ class Parser {
     this.expectKw("do");
     const body = this.parseList((x) => this.isKw(x, "done"));
     this.expectKw("done");
-    return this.redirs({ type: "for", body, substs: [...substs] });
+    return this.redirs({ type: "for", varName: v.text, body, substs: [...substs] });
   }
 
   parseCase() {
@@ -547,7 +549,7 @@ class Parser {
         heredocs.push(this.take().ref);
       } else if (t.t === "w") {
         this.take();
-        words.push({ text: t.text, dynamic: t.dynamic, quoted: t.quoted });
+        words.push({ text: t.text, dynamic: t.dynamic, quoted: t.quoted, raw: t.raw });
         substs.push(...t.substs);
       } else if (this.isOp(t, "(") && words.length === 1 && !words[0].dynamic) {
         // Funktionsdefinition `name() compound`
