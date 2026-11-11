@@ -181,7 +181,7 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
 
   test("jedes Windows-Token im Kern-Rumpf ist rot", () => {
     const e = echt();
-    for (const t of ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"]) assert.match(bedingteDateienBefunde({ ...e, kern: `${e.kern}\n${t}\n` }).join("\n"), new RegExp(`Windows-Sonderfall „${t.replace(/\$/g, "\\$")}“`), t);
+    for (const t of ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"]) assert.ok(bedingteDateienBefunde({ ...e, kern: `${e.kern}\n${t}\n` }).join("\n").includes(`Windows-Sonderfall „${t}“`), t);
   });
 
   test("CRLF-Checkout: der echte Kern mit \\r\\n ist in Ordnung (Frontmatter wird trotzdem abgetrennt)", () => {
