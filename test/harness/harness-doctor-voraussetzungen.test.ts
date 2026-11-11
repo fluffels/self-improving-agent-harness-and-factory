@@ -75,7 +75,7 @@ const config = JSON.parse(lies(".factory/projekt.json")) as { labels: Record<str
 const workflows = dateien(".github/workflows", /\.ya?ml$/);
 const skripte = dateien("scripts", /\.mjs$/).filter((s) => !["scripts/harness-doctor.mjs", "scripts/harness-doctor-lib.mjs"].includes(s.pfad));
 const spiegel = JSON.parse(lies(".github/ruleset-main-schutz.json")) as { requiredChecks: string[] };
-const besitz = JSON.parse(lies(".factory/besitz.json")) as { eintraege: { pfad: string; block?: string; schluessel?: string; ring: string; pflichtChecks?: string[] }[] };
+const besitz = JSON.parse(lies(".factory/besitz.json")) as { eintraege: { pfad: string; block?: string; schluessel?: string; ring: string; modul?: string; pflichtChecks?: string[] }[] };
 const vor = doctor.voraussetzungenAus({ config, workflows, spiegel, besitz: { wert: besitz } });
 /** Jobs eines Workflows: Schlüssel und literaler `name:` (ein Ausdruck mit `${{` gilt als unbekannt); `kontext` ist der Check-Name, den GitHub meldet (`name` oder sonst der Schlüssel), `null` bei Ausdruck oder `uses:`. */
 const jobsVon = (text: string): { id: string; name?: string; kontext: string | null }[] => {
@@ -144,7 +144,8 @@ describe("Pflicht-Checks des Kerns (factory#117)", () => {
 
   test("jeder Spiegel-Check, den ein Besitz-Workflow erzeugt, steht in pflichtChecks dieser Einheit", () => {
     let funde = 0;
-    for (const e of ganzeWorkflows) {
+    // Moduleinheiten tragen nie pflichtChecks (Fortschreibung 0022-119: Kern-Pflicht-Checks müssen in jedem Bezieher existieren); ihr Spiegel-Check ist Sache des Beziehers, der das Modul wählt (factory#335).
+    for (const e of ganzeWorkflows.filter((w) => w.modul === undefined)) {
       for (const j of jobsVon(lies(e.pfad))) {
         if (j.kontext === null || !spiegel.requiredChecks.includes(j.kontext)) continue;
         funde++;
