@@ -18,6 +18,7 @@ export default {
   coverageAnalysis: "perTest",
   reporters: ["json"],
   jsonReporter: { fileName: berichtPfad },
+  inPlace: true, // Tests lesen git (ls-files, diff): in einer Sandbox-Kopie ohne .git scheitern sie schon im Probelauf
   tempDirName: ".stryker-tmp",
   cleanTempDir: true,
   logLevel: "warn",

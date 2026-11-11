@@ -602,6 +602,11 @@
       "grund": "Gegenstand ist Besitz (Preistabelle und die Seite des Hook-Patches)"
     },
     {
+      "muster": "test/mutation-lauf.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/lauf-ergebnis.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

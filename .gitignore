@@ -34,3 +34,4 @@ Thumbs.db
 # Mutationslauf (factory#299): Sandbox und Berichte, nie ins Repo.
 .stryker-tmp/
 reports/mutation/
+stryker-setup-*.js
