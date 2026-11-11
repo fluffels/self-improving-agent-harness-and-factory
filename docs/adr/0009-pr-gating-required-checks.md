@@ -70,3 +70,7 @@ Seit drei Wächter (`check:diffsize`, `check:diffcoverage`, `check-review-nachwe
 ## Fortschreibung #1383 (2026-10-07): Betreff-Zeilen im Squash-Commit
 
 PR #1381 war grün, der Nachlauf auf `main` (913cf17) rot: die Override-Zeile war der Betreff ihres Commits, und GitHub schreibt jeden Betreff im Squash als `* <betreff>`; der Parser las nur den Zeilenanfang ohne Präfix. Entscheidung: genau `* ` (Stern plus ein Leerzeichen) wird toleriert, über einen Regex für Override und Nachweis (`SIH-Plan`/`SIH-Review`); Einrückung, andere Aufzählungszeichen und Prosa zählen weiter nicht. Verworfen: den Override im Betreff verbieten (nicht erzwingbar) bzw. nur den Body lesen (`%b`, verliert die Form im lokalen Log). Ein Paritätstest hält fest, dass PR-Log und Squash dasselbe lesen. Audit-Grep ab jetzt `git log -E --grep '^(\* )?SIH-Diffsize-Override:'`; der Grep aus #1269 bleibt für die Body-Form gültig.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0009-335-sicherheits-checks-merge-pflicht.md) (Konvention: [README](README.md#format)); dort die erste: Dependency Review und zizmor werden Merge-Pflicht.

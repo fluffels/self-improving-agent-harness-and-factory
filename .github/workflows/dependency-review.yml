@@ -1,8 +1,9 @@
 name: Dependency Review
 
 # Dependency Review (#92) auf PRs: vergleicht die Abhängigkeits-Änderungen des PR mit bekannten Advisories.
-# BERICHTEND, kein Required-Check: ein Fund ab `high` färbt diesen Check rot, sperrt den Merge aber nicht
-# (`scripts/pr-warten.mjs` meldet ein Rot eines Nicht-Pflicht-Checks nur als HINWEIS). Bewusst keine Lizenzregel,
+# REQUIRED CHECK (factory#335): ein Fund ab `high` färbt diesen Check rot und sperrt den Merge; der Jobname steht in
+# `requiredChecks` des Ruleset-Spiegels (.github/ruleset-main-schutz.json) und in `pflichtChecks` dieser Besitz-Einheit.
+# Bewusst keine Lizenzregel,
 # kein PR-Kommentar (`comment-summary-in-pr` bleibt aus) und keine Schreibrechte: der Job liest nur den Diff.
 # Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing.test.ts).
 # Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).
