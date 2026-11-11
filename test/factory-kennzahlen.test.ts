@@ -1070,7 +1070,7 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
   const lade = (raw as unknown as { ladeTokensJeProzentpunkt: Lader }).ladeTokensJeProzentpunkt;
 
   test("Lader: Calls aus beiden Projektordnern der Wurzel zählen (das Limit gilt kontoweit)", () => {
-    const wurzel = fixture({ "a/s1.jsonl": callZeile("m1"), "b/s2.jsonl": callZeile("m2") });
+    const wurzel = fixture({ "a/s1.jsonl": callZeile("m1"), "b/s2.jsonl": callZeile("m2"), "lies-mich.txt": "keine Sitzung" });
     const r = lade({ von, bis }, { lies: () => verlauf, pfad: "/x/v.jsonl", wurzel });
     expect(r.aufbau).toMatchObject({ sitzungen: 2, calls: 2 });
     expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 2000, jePp: 200 });

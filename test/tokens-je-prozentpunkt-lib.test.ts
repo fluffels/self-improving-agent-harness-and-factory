@@ -19,7 +19,7 @@ type Kennzahl = {
   tage: { roh: { n: number; median: number; q1: number; q3: number } };
 };
 type Limit = {
-  luecke?: string; tage: Kennzahl[]; wochen: Kennzahl[]; gesamt: Kennzahl; tabelle: Record<string, number | string>[];
+  luecke?: string; streuung: { roh: { n: number }; gewichtet: { n: number } }; tage: Kennzahl[]; wochen: Kennzahl[]; gesamt: Kennzahl; tabelle: Record<string, number | string>[];
   ausgelassen: { reset: number; veraltet: number; ohneCallsN: number; ohneCallsPp: number; callsOhneVerlauf: number };
 };
 const L = raw as unknown as {
@@ -77,6 +77,17 @@ describe("Zuwachs und Schwelle", () => {
     expect(r.ausgelassen.veraltet).toBe(1);
     const punkte = [1, 2, 3].map((i) => ({ stand: T0 + i * H, sevenDay: { pct: 10 * i, resetsAt: RESET } }));
     expect(L.strecken(punkte, "sevenDay", { von: T0, bis: T0 + 150 * 60_000 }).liste).toHaveLength(1);
+    expect(L.strecken(punkte, "sevenDay", { von: T0 + 90 * 60_000, bis: T0 + 10 * D }).liste).toHaveLength(1);
+  });
+
+  test("ein Call genau am Anfangspunkt gehört zum Vorgänger, einer genau am Endpunkt zum Abschnitt", () => {
+    const g = sieben([p(T0 + H, 0), p(T0 + 2 * H, 10)], [c(T0 + H, { input: 1_000_000 }), c(T0 + 2 * H, { input: 1000 })]).gesamt;
+    expect(g.tokens).toBe(1000);
+  });
+
+  test("Läufe: ein Abschnitt ohne Calls zwischen zwei gezählten trennt sie (k = 2)", () => {
+    const g = sieben([p(T0 + H, 0), p(T0 + 2 * H, 10), p(T0 + 3 * H, 20), p(T0 + 4 * H, 30)], [c(T0 + 90 * 60_000, { input: 1000 }), c(T0 + 210 * 60_000, { input: 1000 })]).gesamt;
+    expect(g).toMatchObject({ tokens: 2000, zuwachs: 20, k: 2, ohneCallsPp: 10 });
   });
 });
 
@@ -130,6 +141,8 @@ describe("Summen und Gewichte", () => {
     const g = sieben(verlauf, [c(T0 + 90 * 60_000, a), c(T0 + 100 * 60_000, { ...b, model: "C", cost: null })]).gesamt;
     expect(g.gewichtet.luecke).toBe("kein Preis für C");
     expect(g.jePp).toBe(181.5);
+    const s = sieben(verlauf, [c(T0 + 90 * 60_000, a), c(T0 + 100 * 60_000, { ...b, model: "C", cost: null })]).streuung;
+    expect([s.roh.n, s.gewichtet.n]).toEqual([1, 0]);
   });
 });
 
@@ -145,6 +158,10 @@ describe("Woche und ISO-Woche", () => {
     expect(w).toHaveLength(1);
     expect(w[0].schluessel).toBe("2026-W45");
     expect(w[0].tage.roh).toEqual({ n: 4, median: 25_000, q1: 17_500, q3: 32_500 });
+    // ein fünfter Tag mit 1 pp ist nicht aussagekräftig und bleibt aus der Verteilung
+    pts.push(p(T0 + 4 * D + H, 40), p(T0 + 4 * D + 2 * H, 41));
+    calls.push(c(T0 + 4 * D + 90 * 60_000, { input: 5000 }));
+    expect(sieben(pts, calls).wochen[0].tage.roh.n).toBe(4);
   });
 
   test.each([
@@ -164,7 +181,22 @@ describe("Abschnitt", () => {
     expect(text).toContain("100 Tsd je pp");
     expect(text).toContain("Schätzung, Listenpreis-Gewichte, ungesichert");
     expect(text).toContain("5-Stunden-Limit:** Lücke");
+    expect(text).toContain("1,00 Mio");
     expect(L.tokensJeProzentpunktAbschnitt({ luecke: "kein Verlauf" })).toEqual(["- Lücke: kein Verlauf"]);
+    const mehr = L.tokensJeProzentpunktAbschnitt({ ...t, kaputt: 2, aufbau: { sitzungen: 3, calls: 7, ohneZeit: 1 } }).join("\n");
+    expect(mehr).toContain("2 kaputte Zeilen");
+    expect(mehr).toContain("3 Sitzungen, 7 Calls, 1 ohne Zeitstempel");
+    expect(L.tokensJeProzentpunktAbschnitt({ ...t, aufbau: { sitzungen: 3, calls: 7, ohneZeit: 0 } }).join("\n")).not.toContain("ohne Zeitstempel");
+  });
+
+  test("nicht aussagekräftig, Preis-Lücke und ein Limit ohne gültigen Abschnitt (keine Modelltabelle) erscheinen im Text", () => {
+    const klein = L.tokensJeProzentpunktAbschnitt(lauf([p(T0 + H, 0), p(T0 + 2 * H, 2)], [c(T0 + 90 * 60_000, { input: 500, cost: null })])).join("\n");
+    expect(klein).toContain("500 | 2 pp (±1) | nicht aussagekräftig (unter 5 pp)");
+    const preis = L.tokensJeProzentpunktAbschnitt(lauf([p(T0 + H, 0), p(T0 + 2 * H, 10)], [c(T0 + 90 * 60_000, { input: 500, cost: null })])).join("\n");
+    expect(preis).toContain("Lücke: kein Preis für m");
+    const leer = L.tokensJeProzentpunktAbschnitt(lauf([p(T0 + H, 0), p(T0 + 2 * H, 10)], [])).join("\n");
+    expect(leer).toContain("Zuwachs ohne Calls (10 pp)");
+    expect(leer).not.toContain("| Modell |");
   });
 });
 
