@@ -240,7 +240,7 @@ export function urteil(schwellen, ist) {
 const unzugeordnetLuecke = (b) => (b.unzugeordnet.count > 0 ? [`Zeilen ohne Rolle oder Modell: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)})`] : []);
 
 /** Baut Bericht, Kennzahlen, Probe und Urteil aus den geordneten Exporten. */
-export function wochenAuswertung(geordnet, { schwellen, vermerk, merges = null }) {
+export function wochenAuswertung(geordnet, { schwellen, vermerk, merges }) {
   const roh = bericht(geordnet.woche);
   const b = { ...roh, luecken: [...roh.luecken, ...unzugeordnetLuecke(roh)] };
   const bV = bericht([geordnet.vorwoche]);

@@ -517,9 +517,17 @@ describe("Kosten je Merge (factory#324)", () => {
   test("mergeAnzahl: gültige Antwort zählt, alles andere wirft", () => {
     expect(W_MERGE.mergeAnzahl('{"total_count":56,"incomplete_results":false}')).toBe(56);
     expect(W_MERGE.mergeAnzahl('{"total_count":0,"incomplete_results":false}')).toBe(0);
-    for (const t of ["kein json", '{"total_count":5,"incomplete_results":true}', '{"total_count":5}', '{"incomplete_results":false}', '{"total_count":-1,"incomplete_results":false}', '{"total_count":"5","incomplete_results":false}', '{"total_count":1.5,"incomplete_results":false}']) {
-      expect(() => W_MERGE.mergeAnzahl(t), t).toThrow(/Merges nicht ermittelbar/);
-    }
+    const falsch: Array<[string, RegExp]> = [
+      ["kein json", /kein JSON/],
+      ["null", /unvollständig/],
+      ['{"total_count":5,"incomplete_results":true}', /unvollständig/],
+      ['{"total_count":5}', /unvollständig/],
+      ['{"incomplete_results":false}', /total_count/],
+      ['{"total_count":-1,"incomplete_results":false}', /total_count/],
+      ['{"total_count":"5","incomplete_results":false}', /total_count/],
+      ['{"total_count":1.5,"incomplete_results":false}', /total_count/],
+    ];
+    for (const [t, muster] of falsch) expect(() => W_MERGE.mergeAnzahl(t), t).toThrow(muster);
   });
   test("Beleg-Woche 2026-11-02: Summe +152,5 %, je Merge -9,8 %, kein Agent-Lauf", () => {
     const k = E.kennzahlen(bw(995.23), bw(394.21), { woche: 56, vorwoche: 20 });
@@ -544,16 +552,27 @@ describe("Kosten je Merge (factory#324)", () => {
   });
   test("0 Merges in der Woche bei Kosten: Nenner 1 löst aus; beide Wochen 0: Rückfall auf Summen-Δ; Merges null: nicht bewertbar", () => {
     expect(E.kennzahlen(bw(20), bw(20), { woche: 0, vorwoche: 10 }).deltaJeMergeProzent).toBeCloseTo(900, 5);
+    expect(E.kennzahlen(bw(20), bw(20), { woche: 10, vorwoche: 0 }).deltaJeMergeProzent).toBeCloseTo(-90, 5);
     expect(E.kennzahlen(bw(30), bw(20), { woche: 0, vorwoche: 0 }).deltaJeMergeProzent).toBeCloseTo(50, 5);
     const ohne = E.kennzahlen(bw(30), bw(20));
     expect(ohne).toMatchObject({ deltaJeMergeProzent: null, jeMerge: null, merges: null, deltaProzent: 50 });
     expect(E.kennzahlen(bw(30), bw(0, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(0, 4), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(5, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
   });
   test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", () => {
     const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => { urteil: Urteil } };
     const geordnet = lib_ordne(satz());
     const a = lib.wochenAuswertung(geordnet, { schwellen: SCHWELLEN });
     expect(a.urteil.hinweise).toContain("kostenAnstiegProzent: nicht bewertbar");
+  });
+  test("Markdown: ohne Merges und bei Vorwoche ohne Kosten steht der Grund in der Zeile Kosten je Merge", async () => {
+    const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => unknown; renderWochenbericht: (m: string, f: unknown, a: unknown) => string };
+    const ohne = lib.renderWochenbericht(MONTAG, PF, lib.wochenAuswertung(lib_ordne(satz()), { schwellen: SCHWELLEN }));
+    expect(ohne).toContain("Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.");
+    const ohneKosten = (await lauf([], satz({ kostenV: 0 }))).stdout;
+    expect(ohneKosten).toContain("Δ – (Vorwoche ohne Kosten, nicht bewertbar)");
+    expect(ohneKosten).toContain("Gemergte PRs: Woche 10, Vorwoche 10;");
   });
   test("auswerten: Markdown trägt die Zeile Kosten je Merge, JSON summe.merges; gh-Aufrufe für Woche und Vorwoche", async () => {
     const aufrufe: string[][] = [];
