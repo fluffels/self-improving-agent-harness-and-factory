@@ -508,6 +508,7 @@ describe("Ablage", () => {
 });
 
 describe("Kosten je Merge (factory#324)", () => {
+  const SCHWELLEN_KOSTEN = { ...SCHWELLEN, unzugeordnetProzent: 100 };
   const bw = (cost: number, count = 5) => ({ bereinigt: { cost, count }, unzugeordnet: { cost: 0, count: 0 } });
   test("mergeSucheArgs: Fenster der Woche von Montag 00:00:00 bis Sonntag 23:59:59, Repo und per_page", () => {
     const args = W_MERGE.mergeSucheArgs({ owner: "own", repo: "repo", von: F.von, bis: F.bis });
@@ -530,16 +531,16 @@ describe("Kosten je Merge (factory#324)", () => {
     expect(u.agentLaufNoetig).toBe(false);
   });
   test("Beleg-Woche über auswerten: Summe weit über 50 %, je Merge darunter ergibt Exit 0 (Red-Green: Urteil auf die Summe zurückdrehen macht rot)", async () => {
-    const r = await lauf(["--json"], satz({ kostenW: 995.23, kostenV: 394.21 }), { gh: ghMerges(56, 20), projekt: { ...PROJEKT, schwellen: SCHWELLEN } });
+    const r = await lauf(["--json"], satz({ kostenW: 995.23, kostenV: 394.21 }), { gh: ghMerges(56, 20), projekt: { ...PROJEKT, schwellen: SCHWELLEN_KOSTEN } });
     expect(r.exitCode).toBe(0);
     expect(lese<{ summe: { deltaProzent: number } }>(r.stdout).summe.deltaProzent).toBeGreaterThan(150);
   });
   test("strenger: Kosten flach, Merges halbiert, je Merge +100 %: Lauf nötig (Ende zu Ende über auswerten)", async () => {
     const k = E.kennzahlen(bw(20), bw(20), { woche: 5, vorwoche: 10 });
     expect(k.deltaJeMergeProzent).toBeCloseTo(100, 5);
-    const r = await lauf(["--json"], satz({ kostenW: 20, kostenV: 20 }), { gh: ghMerges(5, 10), projekt: { ...PROJEKT, schwellen: SCHWELLEN } });
+    const r = await lauf(["--json"], satz({ kostenW: 20, kostenV: 20 }), { gh: ghMerges(5, 10), projekt: { ...PROJEKT, schwellen: SCHWELLEN_KOSTEN } });
     expect(r.exitCode).toBe(3);
-    expect(lese<{ urteil: { gruende: Array<{ schwelle: string }> }; summe: { merges: unknown } }>(r.stdout).urteil.gruende[0].schwelle).toBe("kostenAnstiegProzent");
+    expect(lese<{ urteil: { gruende: Array<{ schwelle: string }> } }>(r.stdout).urteil.gruende.map((x) => x.schwelle)).toEqual(["kostenAnstiegProzent"]);
   });
   test("0 Merges in der Woche bei Kosten: Nenner 1 löst aus; beide Wochen 0: Rückfall auf Summen-Δ; Merges null: nicht bewertbar", () => {
     expect(E.kennzahlen(bw(20), bw(20), { woche: 0, vorwoche: 10 }).deltaJeMergeProzent).toBeCloseTo(900, 5);
