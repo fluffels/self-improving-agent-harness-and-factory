@@ -60,8 +60,7 @@ describe("Zuwachs und Schwelle", () => {
     const g = sieben([p(T0 + H, 50), p(T0 + 2 * H, 50 + delta)], [c(T0 + 90 * 60_000, { input: 1000 })]).gesamt;
     expect(g.unklar ?? false).toBe(unklar);
     expect(g.tokens).toBe(1000);
-    if (unklar) expect(g).not.toHaveProperty("jePp");
-    else expect(g.jePp).toBe(200);
+    expect(g.jePp).toBe(unklar ? undefined : 200);
   });
 
   test("Spanne: 1 Mio Tokens bei 10 pp und k = 1", () => {
@@ -171,7 +170,7 @@ describe("Abschnitt", () => {
 
 describe("keine zweite Token-Zählung (AK1)", () => {
   const zeile = (id: string, ts: string, model: string, out: number) =>
-    JSON.stringify({ type: "assistant", timestamp: ts, uuid: `${id}-${out}`, message: { id, role: "assistant", model, usage: { input_tokens: 7, cache_read_input_tokens: 11, cache_creation_input_tokens: 13, output_tokens: out }, content: [{ type: "text", text: "x" }] } });
+    JSON.stringify({ type: "assistant", timestamp: ts, uuid: `${id}-${out}`, message: { id, role: "assistant", model, usage: { input_tokens: 7, cache_read_input_tokens: 11, cache_creation_input_tokens: 13, cache_creation: { ephemeral_1h_input_tokens: 5 }, output_tokens: out }, content: [{ type: "text", text: "x" }] } });
 
   test("dieselbe Session ergibt dieselben Summen wie token-baseline (Dublette in Haupt- und Subagent-Datei, zwei Modelle)", () => {
     const root = fixture({
@@ -184,9 +183,18 @@ describe("keine zweite Token-Zählung (AK1)", () => {
     const basis = B.summarize({ calls: B.readTranscriptSession("s1", root).calls }).total;
     const sum = (k: keyof Call) => lib.calls.reduce((s, x) => s + (x[k] as number), 0);
     expect(lib.calls).toHaveLength(3);
+    expect(lib.calls.map((x) => [x.cacheWrite5m, x.cacheWrite1h])).toEqual([[8, 5], [8, 5], [8, 5]]);
     expect({ input: sum("input"), cacheWrite: sum("cacheWrite5m") + sum("cacheWrite1h"), cacheRead: sum("cacheRead"), output: sum("output") }).toEqual({
       input: basis.input, cacheWrite: basis.cacheWrite, cacheRead: basis.cacheRead, output: basis.output,
     });
+  });
+});
+
+describe("callsAus", () => {
+  test("ein Call ohne lesbaren Zeitstempel zählt nicht in die Abschnitte, sondern in ohneZeit", () => {
+    const ohne = { type: "assistant", uuid: "u1", message: { id: "x1", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: "x" }] } };
+    const r = L.callsAus([{ id: "s", main: [ohne], subagents: [] }]);
+    expect(r).toMatchObject({ calls: [], sitzungen: 1, ohneZeit: 1 });
   });
 });
 
