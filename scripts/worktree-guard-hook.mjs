@@ -248,15 +248,19 @@ function entscheideFuer({ cwd, command, w, deps, kontextCache }) {
   const repoRoot = w.wurzel;
   const d = { ...deps, kontextCache, repoRoot };
   let found;
+  let analyseFehler = false;
   try {
     found = analyse(command, cwd, d);
   } catch {
-    found = { targets: coarseProtected(command) ? [cwd] : [], asks: new Map() }; // unerwarteter Fehler: grobe Regel statt Durchwinken
+    analyseFehler = coarseProtected(command);
+    found = { targets: analyseFehler ? [cwd] : [], asks: new Map() }; // unerwarteter Fehler: grobe Regel statt Durchwinken
   }
   for (const target of found.targets) {
     const ctx = resolveGitContext(target, repoRoot, d);
     if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel, deps, w) };
   }
+  // Das `-C`-Ziel ist unbekannt (nur cwd geprüft): fragen statt still durchlassen (factory#332 L38).
+  if (analyseFehler) return { block: false, ask: true, reason: "Worktree-Guard: Ziel nicht bestimmbar (Analysefehler). Den Ort literal angeben (`git -C <worktree-pfad> …`) oder bestätigen." };
   for (const [dir, a] of found.asks) {
     const ctx = resolveGitContext(dir, repoRoot, d);
     if (!ctx.relevant || (a.mainOnly && !ctx.isMainWorktree)) continue;

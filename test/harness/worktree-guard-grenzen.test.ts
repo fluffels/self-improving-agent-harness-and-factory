@@ -225,5 +225,6 @@ describe("Analysefehler bei geschütztem Befehl (factory#332 L38)", () => {
 
   test("ungeschützter Befehl bleibt erlaubt", () => {
     assert.deepEqual(lauf2("git -C ~/x status", WT), { block: false });
+    assert.deepEqual(lauf2("cd ~ && git status", HAUPT), { block: false }, "kein Ziel [cwd] bei ungeschütztem Befehl");
   });
 });
