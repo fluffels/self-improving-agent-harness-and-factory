@@ -140,6 +140,43 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
     assert.deepEqual(bedingteDateienBefunde({ ...e, ordnerDateien: [...e.ordnerDateien, "ablauf-fremd.md"] }), [], "andere Dateien im Ordner zählen nicht");
   });
 
+  test("Waise: Anker beidseitig (`^` und `$`), Präfix mitten im Namen und Endung dahinter zählen nicht", () => {
+    const e = echt();
+    assert.deepEqual(bedingteDateienBefunde({ ...e, ordnerDateien: [...e.ordnerDateien, "alt-umsetzer-x.md"] }), []);
+    assert.deepEqual(bedingteDateienBefunde({ ...e, ordnerDateien: [...e.ordnerDateien, "umsetzer-x.md.orig"] }), []);
+  });
+
+  test("Weiche: Bedingung und Ort in verschiedenen Zeilen sind nicht ein Satz, also rot", () => {
+    const e = echt();
+    const kern = e.kern.split("liest du vor Schritt 1").join("\nliest du vor Schritt 1");
+    assert.notEqual(kern, e.kern);
+    assert.match(bedingteDateienBefunde({ ...e, kern }).join("\n"), /Plattform-Weiche: der Kern nennt Bedingung/);
+  });
+
+  test("Kopf-Fenster beidseitig: der Kern-Pfad hinter Zeichen 600 ist rot, knapp innerhalb nicht", () => {
+    const e = echt();
+    const mit = (vorlauf: number) => (p: string): string | null => (p.endsWith("umsetzer-browser.md") ? `${"x".repeat(vorlauf)} ${KERN}` : e.lies(p));
+    assert.match(bedingteDateienBefunde({ ...e, lies: mit(700) }).join("\n"), /umsetzer-browser\.md: der Kopf nennt den Kern/);
+    assert.doesNotMatch(bedingteDateienBefunde({ ...e, lies: mit(500) }).join("\n"), /umsetzer-browser\.md: der Kopf nennt den Kern/);
+  });
+
+  test("Rumpf ohne Projektwerte-Block: der ganze Text zählt, ein Windows-Token ist rot", () => {
+    const e = echt();
+    const ohneBlock = e.kern.split("<!-- factory:projektwerte:start -->").join("").split("<!-- factory:projektwerte:end -->").join("");
+    assert.deepEqual(bedingteDateienBefunde({ ...e, kern: ohneBlock }), []);
+    assert.match(bedingteDateienBefunde({ ...e, kern: `${ohneBlock}\ntaskkill\n` }).join("\n"), /Windows-Sonderfall „taskkill“/);
+  });
+
+  test("jedes Windows-Token im Kern-Rumpf ist rot", () => {
+    const e = echt();
+    for (const t of WINDOWS_TOKENS) assert.match(bedingteDateienBefunde({ ...e, kern: `${e.kern}\n${t}\n` }).join("\n"), new RegExp(`Windows-Sonderfall „${t.replace(/\$/g, "\\$")}“`), t);
+  });
+
+  test("CRLF-Checkout: der echte Kern mit \\r\\n ist in Ordnung (Frontmatter wird trotzdem abgetrennt)", () => {
+    const e = echt();
+    assert.deepEqual(bedingteDateienBefunde({ ...e, kern: e.kern.replace(/\n/g, "\r\n") }), []);
+  });
+
   test("Negativfall Budget und Manifest: ein fehlender Eintrag je Datei ist rot", () => {
     const e = echt();
     const pfad = `${ORDNER}/umsetzer-gruppen.md`;
