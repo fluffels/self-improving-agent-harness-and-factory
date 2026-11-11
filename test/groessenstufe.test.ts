@@ -471,6 +471,6 @@ describe("Sweep-Tiefe (factory#272)", () => {
     };
     expect(cli.laufe(["--pfade", "docs/a.md"], { ...o, ladeMuster: wirft }).ausgabe).toMatch(/\nSWEEP: voll — Schutzliste nicht ladbar/);
     expect(cli.laufe([], { ...o, git: () => "", env: {} }).ausgabe).toMatch(/\nSWEEP: voll — keine Vergleichs-Basis/);
-    expect(cliRaw.sweepZeile({})).toBe("SWEEP: voll — nicht berechnet");
+    expect((cliRaw as unknown as { sweepZeile: (e: object) => string }).sweepZeile({})).toBe("SWEEP: voll — nicht berechnet");
   });
 });

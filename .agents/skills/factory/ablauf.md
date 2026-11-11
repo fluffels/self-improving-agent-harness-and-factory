@@ -74,7 +74,7 @@ Agent({
 })
 ```
 
-**Phasen-Schnitt beendet (factory#272):** der Erst-Spawn trägt keine `Schnitt:`-Zeile mehr, ein Ticket läuft in einem Umsetzer bis zum Merge ([Entscheidung und Rohwerte](../../../docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept)). Der Vertrag (`uebergabe`, `Einstieg:`) ruht für Sessions mit älterer Definition.
+**Phasen-Schnitt beendet:** der Erst-Spawn trägt keine `Schnitt:`-Zeile mehr, ein Ticket läuft in einem Umsetzer bis zum Merge ([Entscheidung und Rohwerte](../../../docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept)). Der Vertrag (`uebergabe`, `Einstieg:`) ruht für Sessions mit älterer Definition.
 
 Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers und gelten unabhängig vom Modell der Session. Der Umsetzer setzt um, pflegt das Projekt-Brain (Projekt-Block der AGENTS.md), iteriert gezielt (AGENTS.md § Zwei-Stufen-Prüfung) und fährt als Stufe 0 des [review-lenses](../../../.agents/skills/review-lenses/SKILL.md)-Reviews genau einmal `node scripts/gate-befehl.mjs verifyKompakt`, den Review (spawnt selbst die `<agenten.lens>`-Subagenten), PR, CI-Fix, Merge und Cleanup. Seine letzte Nachricht beginnt mit `ERGEBNIS:`:
 
