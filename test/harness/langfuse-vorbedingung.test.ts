@@ -5,7 +5,8 @@
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/langfuse-vorbedingung.mjs";
@@ -207,6 +208,31 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     expect(r.err.join("\n")).toContain("MCP-URL localhost:3000 weicht von der Langfuse-Basis-URL 127.0.0.1:3000 ab");
     const gleich = await lauf([], { ...CC, LANGFUSE_BASE_URL: "http://localhost:3000" }, () => GETRENNT);
     expect(gleich.err.join("\n")).not.toContain("weicht");
+  });
+  test("getrennt ohne MCP-URL im Log: Hinweis ohne Abweichung, endet nach „starten.“", async () => {
+    const r = await lauf([], { ...CC, LANGFUSE_BASE_URL: "http://127.0.0.1:3000" }, () => GETRENNT.slice(1));
+    expect(r.code).toBe(1);
+    expect(r.err).toHaveLength(1);
+    expect(r.err[0]).toMatch(/erst dann Ticket starten\.$/);
+  });
+  test("liest die echten Log-Dateien: Hauptcheckout-Ordner, nur Langfuse, Fenster ab jetzt − 24 h; ohne Ordner nicht prüfbar", async () => {
+    const basis = mkdtempSync(join(tmpdir(), "vorb-logs-"));
+    const wurzel = "/dev/vorb-proj";
+    const dir = join(basis, "-dev-vorb-proj", "mcp-logs-langfuse");
+    mkdirSync(dir, { recursive: true });
+    const vor = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+    writeFileSync(join(dir, "a.jsonl"), [START(vor(5)), REFUSED(vor(4))].join("\n"));
+    const env = { ...CC, CLAUDE_PROJECT_DIR: `${wurzel}/.claude/worktrees/wt-1`, FACTORY_MCP_LOG_DIR: basis };
+    const lauf2 = async (e: Record<string, string | undefined>) => {
+      const err: string[] = [];
+      const code = await v.main([], e, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
+      return { code, err: err.join("\n") };
+    };
+    const r = await lauf2(env);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("ECONNREFUSED");
+    const leer = await lauf2({ ...env, FACTORY_MCP_LOG_DIR: join(basis, "gibt-es-nicht") });
+    expect(leer).toEqual({ code: 0, err: "Langfuse-MCP-Verbindung der Session nicht prüfbar (kein MCP-Log gefunden)." });
   });
   test("Rückfall (Session ohne eigenen Start): bewertet den jüngsten Start und sagt es", async () => {
     const r = await lauf([], { ...CC, CLAUDE_CODE_SESSION_ID: "subagent" }, () => GETRENNT);

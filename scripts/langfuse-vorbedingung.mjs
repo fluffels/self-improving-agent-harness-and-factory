@@ -47,7 +47,7 @@ export function mcpUrteil({ env, basisUrl: basis, lesen, jetzt }) {
   }
   if (!zeilen) return nichtPruefbar("kein MCP-Log gefunden");
   const u = mcpVerbindung(zeilen, { sessionId: env.CLAUDE_CODE_SESSION_ID, seit: new Date(jetzt - MCP_FENSTER_MS).toISOString() });
-  return u.status === "getrennt" ? { ...u, abweichung: u.url ? urlAbweichung(u.url, basis) : null } : u;
+  return u.status === "getrennt" ? { ...u, abweichung: urlAbweichung(u.url, basis) } : u;
 }
 
 /** Hinweis bei fehlender Verbindung: Code und Zeit, Weg zur Reparatur, bei Rückfall und abweichender Adresse der jeweilige Zusatz. Pur. */

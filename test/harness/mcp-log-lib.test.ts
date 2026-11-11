@@ -14,7 +14,8 @@ type Urteil = { status: string; grund: string; quelle: string; url?: string | nu
 type Datei = { ordner: string; suffix: string; zeilen: string[] };
 type Lib = {
   mcpVerbindung: (zeilen: string[], o: { sessionId?: string; seit: string }) => Urteil;
-  urlAbweichung: (mcpUrl: string, basisUrl: string) => string | null;
+  urlAbweichung: (mcpUrl: string | null, basisUrl: string) => string | null;
+  istArbeitsplatzGeladen: (config?: unknown) => boolean;
   leseLogDateien: (o: { basis: string; wurzel: string; seitMs: number; mitArbeitsplatz?: boolean; ordnerFilter?: (o: string) => boolean }) => Datei[] | null;
 };
 const l = raw as unknown as Lib;
@@ -62,6 +63,10 @@ describe("mcpVerbindung", () => {
     expect(l.mcpVerbindung(z, { sessionId: "sub", seit: SEIT })).toMatchObject({ status: "getrennt", quelle: "rueckfall", code: "ECONNREFUSED" });
     expect(l.mcpVerbindung(z.slice(0, 2), { sessionId: "sub", seit: SEIT })).toMatchObject({ status: "verbunden", quelle: "rueckfall" });
   });
+  test("eigene Zeilen der Session ohne eigenen Start (nur Werkzeug-Zeilen): ebenfalls Rückfall", () => {
+    const z = [START("2026-11-11T09:00:00.000Z", "haupt"), ERFOLG("2026-11-11T09:00:00.050Z", "haupt"), zeile("Tool 'x' completed successfully in 5ms", "2026-11-11T09:10:00.000Z", "sub")];
+    expect(l.mcpVerbindung(z, { sessionId: "sub", seit: SEIT })).toMatchObject({ status: "verbunden", quelle: "rueckfall" });
+  });
   test("ohne Session-ID gilt ebenfalls der Rückfall", () => {
     expect(l.mcpVerbindung([START("2026-11-11T09:00:00.000Z"), ERFOLG("2026-11-11T09:00:00.050Z")], { seit: SEIT })).toMatchObject({ status: "verbunden", quelle: "rueckfall" });
   });
@@ -78,6 +83,15 @@ describe("mcpVerbindung", () => {
   test("die Zeilen werden nach Zeitstempel geordnet (Dateien mehrerer Worktree-Ordner gemischt)", () => {
     const z = [ERFOLG("2026-11-11T09:00:00.050Z"), REFUSED("2026-11-11T09:00:01.000Z"), START("2026-11-11T09:00:00.000Z")];
     expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT }).status).toBe("getrennt");
+  });
+});
+
+describe("istArbeitsplatzGeladen", () => {
+  test("Block `arbeitsplatz` ja, sonst nein; ein Zugriffsfehler der Config ergibt nein statt Wurf; ohne Angabe zählt die geladene Config", () => {
+    expect(l.istArbeitsplatzGeladen({ arbeitsplatz: { wurzel: "/ap" } })).toBe(true);
+    expect(l.istArbeitsplatzGeladen({})).toBe(false);
+    expect(l.istArbeitsplatzGeladen({ get arbeitsplatz(): never { throw new Error("kaputt"); } })).toBe(false);
+    expect(l.istArbeitsplatzGeladen()).toBe(false);
   });
 });
 
@@ -98,6 +112,7 @@ describe("urlAbweichung", () => {
   test("unlesbare URL: keine Abweichung", () => {
     expect(l.urlAbweichung("kaputt", "http://localhost:3000")).toBeNull();
     expect(l.urlAbweichung("http://localhost:3000", "kaputt")).toBeNull();
+    expect(l.urlAbweichung(null, "http://localhost:3000")).toBeNull();
   });
 });
 
@@ -137,6 +152,13 @@ describe("leseLogDateien", () => {
     ablegen("-dev-proj", "mcp-logs-langfuse", "an.jsonl", "an\n", SEIT_MS / 1000 + 0.0005);
     ablegen("-dev-proj", "mcp-logs-langfuse", "davor.jsonl", "davor\n", (SEIT_MS - 1) / 1000);
     expect((l.leseLogDateien({ basis, wurzel: "/dev/proj", seitMs: SEIT_MS }) ?? []).map((d) => d.zeilen[0])).toEqual(["an"]);
+  });
+  test("im Arbeitsplatz führt eine Worktree-Wurzel `<wurzel>/.claude/worktrees/<repo>/<name>` zu den Ordnern der Wurzel", () => {
+    const { basis, ablegen } = baue();
+    ablegen("-ap", "mcp-logs-langfuse", "a.jsonl", "ap\n", NEU);
+    const wt = "/ap/.claude/worktrees/web/wt-1";
+    expect((l.leseLogDateien({ basis, wurzel: wt, seitMs: SEIT_MS, mitArbeitsplatz: true }) ?? []).map((d) => d.zeilen[0])).toEqual(["ap"]);
+    expect(l.leseLogDateien({ basis, wurzel: wt, seitMs: SEIT_MS })).toEqual([]);
   });
   test("ordnerFilter wählt die Server-Ordner", () => {
     const { basis, ablegen } = baue();
