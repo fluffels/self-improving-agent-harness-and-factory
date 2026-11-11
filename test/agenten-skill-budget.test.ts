@@ -63,6 +63,7 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
       datei(dir, ".claude/agents/a.md", "x");
       datei(dir, ".claude/agents/unter/b.md", "x");
       datei(dir, ".claude/agents/c.txt", "x");
+      datei(dir, ".claude/agents/ordner.md/x.txt", "x"); // ein Ordner namens *.md ist keine Datei
       datei(dir, ".agents/skills/s/SKILL.md", "x");
       datei(dir, ".agents/skills/s/tief/zusatz.md", "x");
       datei(dir, ".agents/skills/s/AGENTS.md", "x");
