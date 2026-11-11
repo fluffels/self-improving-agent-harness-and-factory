@@ -93,7 +93,7 @@ function mdRekursiv(rootDir, rel) {
   return readdirSync(abs, { withFileTypes: true }).flatMap((e) => {
     const sub = `${rel}/${e.name}`;
     if (e.isDirectory()) return mdRekursiv(rootDir, sub);
-    return e.isFile() && e.name.endsWith(".md") ? [sub] : [];
+    return e.name.endsWith(".md") ? [sub] : [];
   });
 }
 
