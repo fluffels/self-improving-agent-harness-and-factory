@@ -192,7 +192,7 @@ describe("dynamische Unterbefehle und Analysefehler", () => {
 describe("analyse meldet den Stash ohne Rückgriff auf die grobe Regel", () => {
   test("git stash ohne Unterbefehl: stash gesetzt, ohne Fehler", () => {
     assert.equal(lauf("git stash", WT).stash, true);
-    assert.equal(lauf("git stash list", WT).stash, false);
+    assert.ok(!lauf("git stash list", WT).stash);
   });
 });
 
