@@ -1,11 +1,10 @@
 /**
  * Langfuse-Auswertung (factory#289): pure Lib, die aus selbstbeschreibenden `queryMetrics`-Exporten einen
  * deterministischen Kostenbericht baut (Live, Nachgeliefert, Codex, sonstige getrennt; je Rolle, Repo, Effort, Modell).
- * Keine Imports, kein fs, kein env, kein Netz: die CLI `langfuse-auswertung.mjs` ist der einzige Adapter, und kein Modul
- * dieser Hülle liest den Langfuse-Secret-Key (ein Test hält die Import-Hülle fest). Darum sind `TRACE_NAME_ABGLEICH` und
- * `EFFORT_STUFEN` hier neu deklariert statt importiert (`langfuse-otlp.mjs` zieht über `langfuse-abgleich-kern.mjs` die
- * Key-Quelle `langfuse-api.mjs` mit, `transkript-calls.mjs` ist nicht schlüsselnah, hätte der Lib aber Imports gebracht);
- * ein Test sichert die Gleichheit.
+ * Einziger Import ist das pure `langfuse-otlp.mjs` (nur `node:crypto` und `preise.mjs`; kein fs, kein env, kein Netz): die CLI
+ * `langfuse-auswertung.mjs` ist der einzige Adapter, und kein Modul dieser Hülle liest den Langfuse-Secret-Key (ein Test hält
+ * die Import-Hülle fest). `EFFORT_STUFEN` ist hier neu deklariert statt aus `transkript-calls.mjs` importiert (nicht
+ * schlüsselnah, hätte der Lib aber Imports gebracht); ein Test sichert die Gleichheit.
  *
  * Export-Form: `{ art, abfrage, data }` (Abfragerezept: `rezept()`), Zeilenschlüssel wie die MCP-Ausgabe
  * (`count_count`, `sum_totalCost`, `min_latency`, `time_dimension`).
@@ -14,7 +13,9 @@
  * abgezogen (Stichprobe factory#286: keine belegt).
  */
 
-export const TRACE_NAME_ABGLEICH = "Abgleich";
+import { TRACE_NAME } from "./langfuse-otlp.mjs";
+
+export const TRACE_NAME_ABGLEICH = TRACE_NAME;
 export const EFFORT_STUFEN = ["low", "medium", "high", "xhigh", "max"];
 /** Eingebaute Agent-Typen des Hauptchats (geschlossene Liste; eigene Agenten kommen per `--rolle`). */
 export const EINGEBAUTE_ROLLEN = ["general-purpose", "Explore", "Plan", "statusline-setup", "claude-code-guide"];

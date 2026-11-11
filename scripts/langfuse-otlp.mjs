@@ -6,8 +6,18 @@
  * beginnt NICHT mit `langfuse-sdk`, sonst stuft Langfuse die Spans als SDK-Spans ein.
  */
 
+import { createHash } from "node:crypto";
 import { priceParts, sumParts } from "./preise.mjs";
-import { subagentSpanId, traceIdVon } from "./langfuse-abgleich-kern.mjs";
+
+const sha = (text) => createHash("sha256").update(text).digest("hex");
+/** Observation-ID: 16 Hex, deterministisch aus Session und Message (idempotentes Nachtragen in 2/3). */
+export const beobachtungsId = (session, messageId) => sha(session + messageId).slice(0, 16);
+/** Trace-ID: 32 Hex, je Session ein Abgleich-Trace. */
+export const traceIdVon = (session) => sha(session).slice(0, 32);
+/** Span-ID eines Subagenten: 16 Hex, deterministisch aus Session und Agent-ID (Nachliefern sendet den Span je Session einmal). */
+export const subagentSpanId = (session, agentId) => sha(session + "agent:" + agentId).slice(0, 16);
+/** Score-ID: 32 Hex, deterministisch aus Name und Session (Upsert statt Dublette). */
+export const scoreId = (session, name) => sha("score:" + name + ":" + session).slice(0, 32);
 
 /** Scope- und Service-Name der Abgleich-Spans: `<Repo-Name>-abgleich` (Repo-Name aus `repo` der Projekt-Config). */
 export const scopeName = (repoName) => `${repoName}-abgleich`;
