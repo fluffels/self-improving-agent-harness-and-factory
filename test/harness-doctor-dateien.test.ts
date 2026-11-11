@@ -821,6 +821,10 @@ describe("Code-Scanning-Quellen (factory#339)", () => {
   test("ein Präfix mit zusätzlichen Zeichen vor dem @ ist keine analyze-Quelle", () => {
     expect(p(cs("CodeQL"), [{ pfad: "c.yml", text: "      - uses: github/codeql-action/analyzer@abc\n" }]).nichtPruefbar).toBe(true);
   });
+  test("ein Präfix mit zusätzlichen Zeichen vor dem @ ist keine upload-sarif-Quelle", () => {
+    const text = "jobs:\n  a:\n    steps:\n      - run: zizmor --sarif\n      - uses: github/codeql-action/upload-sarifx@abc\n";
+    expect(p(cs("zizmor"), [{ pfad: "z.yml", text }]).ok).toBe(false);
+  });
   test("ein kaputter codeScanning-Eintrag stürzt nicht ab und erzeugt keine Lücke", () => {
     expect(p({ codeScanning: "zizmor" }, []).ok).toBe(true);
     expect(p({ codeScanning: {} }, []).ok).toBe(true);

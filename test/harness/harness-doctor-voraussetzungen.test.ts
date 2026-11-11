@@ -151,7 +151,7 @@ describe("Pflicht-Checks des Kerns (factory#117)", () => {
 
   test("jeder Spiegel-Check, den ein Besitz-Workflow erzeugt, steht in pflichtChecks dieser Einheit", () => {
     let funde = 0;
-    // Auch Moduleinheiten tragen pflichtChecks (Fortschreibung 0022-119): der Doctor verlangt sie nur, wenn ihre Workflow-Datei im Repo liegt.
+    // Auch Moduleinheiten tragen pflichtChecks (Fortschreibung 0022-339): der Doctor verlangt sie nur, wenn ihre Workflow-Datei im Repo liegt.
     for (const e of ganzeWorkflows) {
       for (const j of jobsVon(lies(e.pfad))) {
         if (j.kontext === null || !spiegel.requiredChecks.includes(j.kontext)) continue;

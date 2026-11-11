@@ -5,7 +5,7 @@
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { describe, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -249,9 +249,13 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     writeFileSync(join(dir, "fremd.jsonl"), [START(vor(10), "sid-fremd"), ERFOLG(vor(9), "sid-fremd")].join("\n"));
     const env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "sid-neu", CLAUDE_PROJECT_DIR: wurzel, FACTORY_MCP_LOG_DIR: basis };
     const err: string[] = [];
-    const code = await v.main([], env, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
-    expect(code).toBe(1);
-    expect(err.join("\n")).toContain("ECONNREFUSED");
+    try {
+      const code = await v.main([], env, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
+      expect(code).toBe(1);
+      expect(err.join("\n")).toContain("ECONNREFUSED");
+    } finally {
+      rmSync(basis, { recursive: true, force: true });
+    }
   });
   test("Rückfall (Session ohne eigenen Start): bewertet den jüngsten Start und sagt es", async () => {
     const r = await lauf([], { ...CC, CLAUDE_CODE_SESSION_ID: "subagent" }, () => GETRENNT);

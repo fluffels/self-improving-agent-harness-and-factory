@@ -114,6 +114,13 @@ describe("mcpVerbindung", () => {
       expect(urteil([a, b])).toMatchObject({ status: "verbunden", quelle: "prozess" });
       expect(urteil([b, a])).toMatchObject({ status: "verbunden", quelle: "prozess" });
     });
+    test("mehrere eigene Zeilen je Datei: die jüngste eigene Zeile entscheidet, nicht die erste", () => {
+      const tool = (zeit: string) => zeile("Tool 'x' completed successfully in 5ms", zeit, "sid-neu");
+      const a = [START("2026-11-11T09:00:00.000Z", "sid-alt"), REFUSED("2026-11-11T09:00:01.000Z", "sid-alt"), tool("2026-11-11T09:10:00.000Z"), tool("2026-11-11T09:50:00.000Z")];
+      const b = [START("2026-11-11T09:20:00.000Z", "sid-b"), ERFOLG("2026-11-11T09:20:00.050Z", "sid-b"), tool("2026-11-11T09:30:00.000Z")];
+      expect(urteil([a, b])).toMatchObject({ status: "getrennt", quelle: "prozess" });
+      expect(urteil([b, a])).toMatchObject({ status: "getrennt", quelle: "prozess" });
+    });
     test("Rückfall über mehrere fremde Dateien: der jüngste Start gewinnt, unabhängig von der Listenfolge", () => {
       const alt2 = [START("2026-11-11T09:30:00.000Z", "f1"), ERFOLG("2026-11-11T09:30:00.050Z", "f1")];
       const neu2 = [START("2026-11-11T09:40:00.000Z", "f2"), REFUSED("2026-11-11T09:40:01.000Z", "f2")];
