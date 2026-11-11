@@ -94,6 +94,22 @@ describe("Reset und Ketten", () => {
   });
 });
 
+describe("strecken: veraltet nur im Bereich", () => {
+  test("ein veralteter Punkt vor von zählt nicht mit, der Vorpunkt vor von bestimmt die Folge, punkte zählt alle Punkte im Bereich", () => {
+    const pk = [
+      { stand: T0, sevenDay: { pct: 50, resetsAt: RESET } },
+      { stand: T0 + H, sevenDay: { pct: 40, resetsAt: RESET } },
+      { stand: T0 + 3 * H, sevenDay: { pct: 45, resetsAt: RESET } },
+      { stand: T0 + 4 * H, sevenDay: { pct: 44, resetsAt: RESET } },
+      { stand: T0 + 5 * H, sevenDay: { pct: 52, resetsAt: RESET } },
+      { stand: T0 + 6 * H, sevenDay: { pct: 53, resetsAt: RESET } },
+    ];
+    const s = L.strecken(pk, "sevenDay", { von: T0 + 2 * H, bis: T0 + D });
+    expect(s).toMatchObject({ punkte: 4, veraltet: 2, reset: 0 });
+    expect(s.liste.map((x) => x.delta)).toEqual([1]); // 45 und 44 sind veraltet (< 50, der Vorpunkt vor von), 40 vor von zählt nicht mit
+  });
+});
+
 describe("Zuwachs und Schwelle", () => {
   test.each([
     [0, true],

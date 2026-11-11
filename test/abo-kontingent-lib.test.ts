@@ -242,6 +242,10 @@ describe("kontrollzahl", () => {
     const k = L.kontrollzahl([punkt(von, 80, reset), punkt(von + 3 * MIN, 5, r2), punkt(von + 4 * MIN, 90, reset), punkt(von + 5 * MIN, 7, r2)], { von, bis, anzahlTickets: 1 });
     expect(k).toMatchObject({ summe: 7, resets: 1, veraltet: 1 });
   });
+  test("veraltete Punkte vor von und nach bis zählen nicht in veraltet", () => {
+    const k = L.kontrollzahl([punkt(von - 3 * MIN, 20), punkt(von - 2 * MIN, 15), punkt(von - MIN, 21), punkt(von + MIN, 22), punkt(bis + MIN, 30), punkt(bis + 2 * MIN, 25)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 1, veraltet: 0 });
+  });
   test("die Textzeile nennt veraltete Punkte nur bei v > 0", () => {
     const ok = L.kontrollzahl([punkt(von, 1), punkt(von + MIN, 2)], { von, bis, anzahlTickets: 1 });
     const alt = L.kontrollzahl([punkt(von, 5), punkt(von + MIN, 4), punkt(von + 2 * MIN, 6)], { von, bis, anzahlTickets: 1 });
