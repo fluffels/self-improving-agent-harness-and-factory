@@ -137,6 +137,9 @@ function berichtAusgeben(args, deps, p, montag, a, filter) {
 }
 
 const ghEcht = (args) => ghText(args, { timeout: 60_000 });
+/** `gh` der Merge-Suche: die injizierte Naht, sonst das echte `gh` (manueller Aufruf ohne `deps`). */
+export const ghDer = (deps) => deps.gh ?? ghEcht;
+export { ghEcht };
 
 /** Gemergte PRs des Repos der Config in Woche und Vorwoche (`gh`-Suche, kein Secret-Key); wirft, wenn nicht ermittelbar (factory#324). */
 function mergesDerWochen(gh, p, montag) {
@@ -166,7 +169,7 @@ export async function auswerten(args, deps = {}) {
     const geordnet = ordneExporte(geholt.exporte, { montag, projektFilter: filter });
     const gesamtW = geordnet.woche.find((e) => e.art === "gesamt");
     if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}`);
-    const merges = mergesDerWochen(deps.gh ?? ghEcht, p, montag);
+    const merges = mergesDerWochen(ghDer(deps), p, montag);
     return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk, merges }), filter);
   } catch (e) {
     return { exitCode: 1, stdout: "", stderr: `Fehler: ${e.message}` };

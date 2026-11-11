@@ -34,8 +34,7 @@ const E = libRaw as unknown as {
   mergeSucheArgs: (o: { owner: string; repo: string; von: string; bis: string }) => string[];
   mergeAnzahl: (t: string) => number;
 };
-const W_MERGE = E;
-const lib_ordne = (dateien: Satz) => E.ordneExporte(Object.values(dateien).map((json, i) => ({ json, pfad: `p${i}` })), { montag: MONTAG, projektFilter: PF });
+const ordneSatz = (dateien: Satz) => E.ordneExporte(Object.values(dateien).map((json, i) => ({ json, pfad: `p${i}` })), { montag: MONTAG, projektFilter: PF });
 const C = cliRaw as unknown as { parseArgs: (a: string[]) => unknown; auswerten: (a: unknown, d?: Record<string, unknown>) => Promise<Ergebnis> };
 const { parseArgs, auswerten } = C;
 const CLI = cliRaw as unknown as { ladeProjekt: (w?: string, lies?: (p: string, e: string) => string) => { owner: string; repo: string; tags: string[]; schwellen?: Record<string, number> } };
@@ -511,12 +510,12 @@ describe("Kosten je Merge (factory#324)", () => {
   const SCHWELLEN_KOSTEN = { ...SCHWELLEN, unzugeordnetProzent: 100 };
   const bw = (cost: number, count = 5) => ({ bereinigt: { cost, count }, unzugeordnet: { cost: 0, count: 0 } });
   test("mergeSucheArgs: Fenster der Woche von Montag 00:00:00 bis Sonntag 23:59:59, Repo und per_page", () => {
-    const args = W_MERGE.mergeSucheArgs({ owner: "own", repo: "repo", von: F.von, bis: F.bis });
+    const args = E.mergeSucheArgs({ owner: "own", repo: "repo", von: F.von, bis: F.bis });
     expect(args).toEqual(["api", "-X", "GET", "search/issues", "-f", "q=repo:own/repo is:pr is:merged merged:2026-11-02T00:00:00+00:00..2026-11-08T23:59:59+00:00", "-f", "per_page=1"]);
   });
   test("mergeAnzahl: gültige Antwort zählt, alles andere wirft", () => {
-    expect(W_MERGE.mergeAnzahl('{"total_count":56,"incomplete_results":false}')).toBe(56);
-    expect(W_MERGE.mergeAnzahl('{"total_count":0,"incomplete_results":false}')).toBe(0);
+    expect(E.mergeAnzahl('{"total_count":56,"incomplete_results":false}')).toBe(56);
+    expect(E.mergeAnzahl('{"total_count":0,"incomplete_results":false}')).toBe(0);
     const falsch: Array<[string, RegExp]> = [
       ["kein json", /kein JSON/],
       ["null", /unvollständig/],
@@ -527,7 +526,7 @@ describe("Kosten je Merge (factory#324)", () => {
       ['{"total_count":"5","incomplete_results":false}', /total_count/],
       ['{"total_count":1.5,"incomplete_results":false}', /total_count/],
     ];
-    for (const [t, muster] of falsch) expect(() => W_MERGE.mergeAnzahl(t), t).toThrow(muster);
+    for (const [t, muster] of falsch) expect(() => E.mergeAnzahl(t), t).toThrow(muster);
   });
   test("Beleg-Woche 2026-11-02: Summe +152,5 %, je Merge -9,8 %, kein Agent-Lauf", () => {
     const k = E.kennzahlen(bw(995.23), bw(394.21), { woche: 56, vorwoche: 20 });
@@ -563,13 +562,20 @@ describe("Kosten je Merge (factory#324)", () => {
   });
   test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", () => {
     const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => { urteil: Urteil } };
-    const geordnet = lib_ordne(satz());
+    const geordnet = ordneSatz(satz());
     const a = lib.wochenAuswertung(geordnet, { schwellen: SCHWELLEN });
     expect(a.urteil.hinweise).toContain("kostenAnstiegProzent: nicht bewertbar");
   });
+  test("manueller Aufruf ohne deps.gh nimmt das echte gh, eine injizierte Naht gewinnt (Red-Green: `?? ghEcht` entfernen macht rot)", () => {
+    const k = cliRaw as unknown as { ghDer: (d: Record<string, unknown>) => unknown; ghEcht: unknown };
+    const stub = () => "";
+    expect(k.ghDer({})).toBe(k.ghEcht);
+    expect(typeof k.ghEcht).toBe("function");
+    expect(k.ghDer({ gh: stub })).toBe(stub);
+  });
   test("Markdown: ohne Merges und bei Vorwoche ohne Kosten steht der Grund in der Zeile Kosten je Merge", async () => {
     const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => unknown; renderWochenbericht: (m: string, f: unknown, a: unknown) => string };
-    const ohne = lib.renderWochenbericht(MONTAG, PF, lib.wochenAuswertung(lib_ordne(satz()), { schwellen: SCHWELLEN }));
+    const ohne = lib.renderWochenbericht(MONTAG, PF, lib.wochenAuswertung(ordneSatz(satz()), { schwellen: SCHWELLEN }));
     expect(ohne).toContain("Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.");
     const ohneKosten = (await lauf([], satz({ kostenV: 0 }))).stdout;
     expect(ohneKosten).toMatch(/^Gemergte PRs:.*Δ – \(Vorwoche ohne Kosten, nicht bewertbar\)/m);
