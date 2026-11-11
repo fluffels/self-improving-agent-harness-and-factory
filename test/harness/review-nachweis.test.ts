@@ -399,6 +399,11 @@ describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
     assert.match(read("docs/agent-harness.md"), /zusatzpass=/);
     assert.match(read(".agents/skills/review-lenses/ablauf-zusatzpass.md"), /zusatzpass=/);
   });
+  test("Zusatzpass nur bei neuer Blocker-Klasse, sonst Hand-off statt weiterer Runde (factory#272)", () => {
+    const text = read(".agents/skills/review-lenses/ablauf-zusatzpass.md");
+    assert.match(text, /\*\*neuen Blocker-Klasse\*\*/);
+    assert.match(text, /Ohne neue Klasse[^.]*: \*\*Hand-off\*\*[^.]*statt weiterer Runde/);
+  });
 });
 
 describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {

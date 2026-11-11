@@ -94,6 +94,10 @@ const hatRundenNummer = (s: string) => /-r<runde>[^\s"]*\.patch/i.test(s);
 /** Erhebt der Text den Diff als Drei-Punkt-Diff gegen origin/main? */
 const istDreiPunkt = (s: string) => /git diff origin\/main\.\.\.HEAD > /.test(s);
 
+/** Bindet der Test-Lens-Auftrag den Vollsweep an `SWEEP: voll` und die Stichprobe an die Zeile `SWEEP:` aus `node scripts/groessenstufe.mjs` (factory#272)? */
+const staffeltSweep = (s: string) =>
+  /node scripts\/groessenstufe\.mjs/.test(s) && /`SWEEP: voll`/.test(s) && /`SWEEP: stichprobe`/.test(s) && /Stichprobenregel Text-Wächter/.test(s) && /höchstens 3 Sabotage-Proben/.test(s);
+
 /** Bleibt die Sabotage-/Red-Green-Prüfung im Test-Lens-Auftrag? */
 const fordertSabotage = (s: string) => /sabotier/i.test(s) && /\brot\b/i.test(s);
 
@@ -201,6 +205,12 @@ describe("Was NICHT gekürzt werden durfte (#1034)", () => {
         "ihn ausdrücklich als das, was die Kontext-Diät NICHT treffen darf — er fand in der " +
         "Messsession den einzigen echten Blocker.",
     );
+  });
+
+  test("die Staffel der Sweep-Tiefe steht in der Brille: Vollsweep nur bei SWEEP: voll, Stichprobenregel bei stichprobe (factory#272)", () => {
+    assert.ok(staffeltSweep(read(".agents/skills/review-lenses/brille-test-adaequanz.md")), "Die Test-Brille hat die Staffel nach `SWEEP:` verloren.");
+    assert.match(read(".agents/skills/review-lenses/brille-test-adaequanz.md"), /Guards vollständig, keine Stichprobe \(Runde 1, bei `SWEEP: voll`\)/, "Der Vollsweep ist nicht an SWEEP: voll gebunden.");
+    assert.ok(!staffeltSweep("Guards vollständig, keine Stichprobe."), "Gegenbeispiel muss rot sein");
   });
 
   test("der tool-neutrale Skill dokumentiert Materialisierung und Commit-Pflicht", () => {
