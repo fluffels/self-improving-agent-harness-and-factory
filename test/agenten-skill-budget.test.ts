@@ -103,6 +103,30 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
   });
 });
 
+describe("Projektwert-Zeilen der Frontmatter (L3/L6b)", () => {
+  const agent = (name: string, tabelle: string): string =>
+    `---\n# factory:projektwert agenten.planer\nname: ${name}\n---\nrumpf\n${START}\n${tabelle}${ENDE}\nrest\n`;
+
+  test("ein kurzer und ein langer name:-Wert samt unterschiedlich langem Block messen gleich (Fabrik = Bezieher, zeichengleich)", () => {
+    temp((kurz) => {
+      temp((lang) => {
+        datei(kurz, ".claude/agents/planer.md", agent("a", "| x |\n"));
+        datei(lang, ".claude/agents/planer.md", agent("ein-sehr-langer-projektname-planer", "| x |\n".repeat(40)));
+        const chars = (d: string): number[] => collectSizes(d).map((s) => s.chars);
+        assert.deepEqual(chars(lang), chars(kurz));
+        assert.equal(chars(kurz)[0], `---\n# factory:projektwert agenten.planer\nname:\n---\nrumpf\n\nrest\n`.length);
+      });
+    });
+  });
+
+  test("ein kaputter Zeilen-Marker wirft (als Gate-Fehler)", () => {
+    temp((dir) => {
+      datei(dir, ".claude/agents/planer.md", `---\n# factory:projektwert agenten.planer\n---\nx\n`);
+      assert.throws(() => collectSizes(dir), /Zeilen-Marker/);
+    });
+  });
+});
+
 describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien", () => {
   /** Kopiert die echten Agenten- und Skill-Dateien der Fabrik, jeder Projektwerte-Block um 10.000 Zeichen verlängert. */
   const bezieherRepo = (dir: string): void => {
