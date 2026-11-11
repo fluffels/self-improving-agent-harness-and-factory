@@ -10,6 +10,7 @@
  * per Pfad verweist. `docs/` und ein Archiv zählen nie.
  * Wortgleich heißt: der gespeicherte Satz steht (Leerraum normalisiert) am Ort, enthält das Kern-Token der Regel, ist mindestens 80 Zeichen lang und endet an einer Satzgrenze (`.`, `,`, `;` oder `:`), ist also ein wörtlicher Satz oder Satzanfang, kein Stichwort; die Pre-Flight-Kriterienliste darf nach test/harness/harness-approval.test.ts nur in AGENTS.md stehen, darum endet der gespeicherte Satzanfang vor ihr.
  * Grenze: geprüft wird, ob der gespeicherte Text am Ort steht, nicht ob er dasselbe bedeutet; ein umformulierter Satz muss in der Liste nachgezogen werden und fällt im Review auf. Der Pfad-Check für bedingte Orte ist textuell: ein Pfad mit `..` unter .agents/skills/ wird nicht aufgelöst.
+ * Strengere Einzelwächter gelten zusätzlich (Epic factory#273, Kinder factory#308 bis factory#310): test/harness/fremdtext-gate.test.ts (b) verlangt das Fremdtext-Skript in der Rollendatei, test/harness/model-routing.test.ts (`umsetzerRegelOk`, `planerRegelOk`) die Weichen-Regel in der Rollendatei; wirksam ist der strengste Ort, wer eine Regel verlegt, prüft beide.
  * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). Begriff: `docs/harness-glossar.md` › Verbleib-Liste. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
