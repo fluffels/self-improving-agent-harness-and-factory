@@ -21,6 +21,7 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
+import { zuordnungen } from "./transkript-calls.mjs";
 import {
   diffMultimenge,
   findeSessions,
@@ -38,6 +39,7 @@ import {
   standUnveraendert,
   scoreId,
   sollEintraege,
+  sollMitZuordnung,
   vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
@@ -281,7 +283,8 @@ async function verarbeite(s, c) {
   const vermerke = (status) => {
     if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
   };
-  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
+  const sitzung = ladeSessionDatei(s.pfad);
+  const soll = sollMitZuordnung(sollEintraege(sitzung, { session: s.id, worktree }), zuordnungen(sitzung));
   if (!soll.length) {
     vermerke(STATUS.OHNE_CALLS);
     return Object.assign(rec, { status: STATUS.OHNE_CALLS });

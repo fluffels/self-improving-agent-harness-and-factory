@@ -142,3 +142,89 @@ describe("Output-Schätzung aus dem Kontext-Zuwachs", () => {
     expect(r[0].costGeschaetzt).toBeGreaterThan(0);
   });
 });
+
+/* Zuordnungs-Metadaten (factory#287): agent_type, effort, thinking je Message; nicht Bestimmbares fehlt (nie raten). */
+describe("Zuordnungs-Metadaten", () => {
+  type Z = { agent_type?: string; effort?: string; thinking?: string };
+  type Datei = { datei: string; meta: Record<string, unknown>; zeilen: Row[] };
+  const Zo = raw as unknown as {
+    EFFORT_STUFEN: string[];
+    thinkingJeMessage: (z: Row[]) => Map<string, boolean>;
+    spawnEfforts: (z: Row[]) => Map<string, string>;
+    zuordnungen: (s: { id: string; main: Row[]; subagents: Datei[] }) => Map<string, Z>;
+  };
+  /** Assistant-Zeile je Block; `extra` liegt auf der Zeile (dort schreibt Claude Code `effort`). */
+  const zeile = (id: string, blocks: Row[], extra: Row = {}): Row[] => msg(id, 100, blocks).map((r) => ({ ...r, ...extra }));
+  const denk = { type: "thinking", thinking: "", signature: "s" };
+  const sitz = (main: Row[], subagents: Datei[] = []) => ({ id: "s1", main, subagents });
+  const sub = (zeilen: Row[], meta: Row = { agentType: "Explore" }): Datei => ({ datei: "agent-a1.jsonl", meta, zeilen });
+
+  test("thinking: ODER über die Zeilen einer Message; redacted_thinking zählt; nur Text ist false; ohne Array-Inhalt fehlt die Message", () => {
+    const z = [
+      ...zeile("m1", [denk, text(3)]),
+      ...zeile("m2", [text(3)]),
+      ...zeile("m3", [{ type: "redacted_thinking", data: "x" }]),
+      { type: "assistant", uuid: "u-str", message: { id: "m4", content: "nur ein String" } },
+      { type: "user", uuid: "u-user", message: { id: "m5", content: [denk] } },
+    ];
+    expect(Object.fromEntries(Zo.thinkingJeMessage(z))).toEqual({ m1: true, m2: false, m3: true });
+  });
+
+  test("spawnEfforts: nur Werkzeug Agent mit gültiger Stufe", () => {
+    const z = [
+      ...zeile("m1", [{ type: "tool_use", id: "t1", name: "Agent", input: { effort: "high" } }]),
+      ...zeile("m2", [{ type: "tool_use", id: "t2", name: "Agent", input: {} }]),
+      ...zeile("m3", [{ type: "tool_use", id: "t3", name: "Bash", input: { effort: "high" } }]),
+      ...zeile("m4", [{ type: "tool_use", id: "t4", name: "Agent", input: { effort: "ultra" } }]),
+    ];
+    expect(Object.fromEntries(Zo.spawnEfforts(z))).toEqual({ t1: "high" });
+  });
+
+  test("Hauptdatei: agent_type hauptchat, beobachteter effort der Zeile, thinking ja/nein", () => {
+    const m = Zo.zuordnungen(sitz([...zeile("a", [denk, text(1)], { effort: "xhigh" }), ...zeile("b", [text(1)], { effort: "medium" })]));
+    expect(m.get("a")).toEqual({ agent_type: "hauptchat", effort: "xhigh", thinking: "ja" });
+    expect(m.get("b")).toEqual({ agent_type: "hauptchat", effort: "medium", thinking: "nein" });
+  });
+
+  test("perTurnEffort gilt, wenn effort fehlt; ungültiger Wert und widersprüchliche Zeilen lassen effort weg", () => {
+    const m = Zo.zuordnungen(
+      sitz([
+        ...zeile("a", [text(1)], { perTurnEffort: "low" }),
+        ...zeile("b", [text(1)], { effort: "ultra" }),
+        { ...zeile("c", [text(1)], { effort: "low" })[0] },
+        { ...zeile("c", [text(2)], { effort: "high" })[0] },
+      ]),
+    );
+    expect(m.get("a")?.effort).toBe("low");
+    expect(m.get("b")).not.toHaveProperty("effort");
+    expect(m.get("c")).not.toHaveProperty("effort");
+  });
+
+  test("Subagent: agentType der Meta; ohne beobachteten effort gilt effort der Meta, dann effort des Agent-tool_use über toolUseId", () => {
+    const spawn = zeile("p", [{ type: "tool_use", id: "tu1", name: "Agent", input: { effort: "high" } }]);
+    const m = Zo.zuordnungen(
+      sitz(spawn, [
+        sub(zeile("s1", [text(1)]), { agentType: "Explore", toolUseId: "tu1" }),
+        { ...sub(zeile("s2", [text(1)]), { agentType: "Plan", effort: "medium", toolUseId: "tu1" }), datei: "agent-a2.jsonl" },
+        { ...sub(zeile("s3", [text(1)], { effort: "low" }), { agentType: "Plan", toolUseId: "tu1" }), datei: "agent-a3.jsonl" },
+        { ...sub(zeile("s4", [text(1)]), { agentType: "Plan", toolUseId: "unbekannt" }), datei: "agent-a4.jsonl" },
+      ]),
+    );
+    expect(m.get("s1")).toMatchObject({ agent_type: "Explore", effort: "high" });
+    expect(m.get("s2")?.effort).toBe("medium");
+    expect(m.get("s3")?.effort).toBe("low"); // beobachtet schlägt Meta und Spawn
+    expect(m.get("s4")).not.toHaveProperty("effort");
+  });
+
+  test.each([{}, { agentType: "" }, { agentType: 7 }, { description: "nur Beschreibung" }])("Negativfall: Meta %j ohne brauchbares agentType ⇒ Schlüssel agent_type fehlt, nichts erfunden", (meta) => {
+    const m = Zo.zuordnungen(sitz([], [sub(zeile("s1", [text(1)], { effort: "high" }), meta)]));
+    expect(m.get("s1")).not.toHaveProperty("agent_type");
+    expect(m.get("s1")).toMatchObject({ effort: "high", thinking: "nein" });
+  });
+
+  test("Message in mehr als einer Datei: agent_type und effort entfallen, thinking bleibt als ODER", () => {
+    const m = Zo.zuordnungen(sitz(zeile("dup", [text(1)], { effort: "high" }), [sub(zeile("dup", [denk], { effort: "high" })), { ...sub(zeile("nur", [text(1)], { effort: "low" })), datei: "agent-a2.jsonl" }]));
+    expect(m.get("dup")).toEqual({ thinking: "ja" });
+    expect(m.get("nur")).toMatchObject({ agent_type: "Explore", effort: "low" });
+  });
+});

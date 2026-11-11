@@ -77,14 +77,26 @@ const span = ({ traceId, spanId, parentSpanId, name, start, ende, attributes }) 
   attributes,
 });
 
-/** Eine Generation; `ctx` = `{ traceAttrs, parentSpanId? }`. Ohne Modell entfallen Modellname und Kosten, ohne Preis die Kosten. */
-export function generationSpan(e, { traceAttrs, parentSpanId = null }) {
+const ZUORDNUNGS_SCHLUESSEL = ["agent_type", "effort", "thinking"];
+
+/**
+ * Zuordnungs-Metadaten einer Generation (factory#287): `agent_type`, `effort`, `thinking` aus `z` (`zuordnungen` in `transkript-calls.mjs`),
+ * `repo` aus `repoName`. Ein Wert, der nicht bestimmt ist (fehlt oder leer), erzeugt keinen Schlüssel: nie raten, nie eine Rolle erfinden.
+ */
+export function zuordnungsAttribute(z, repoName) {
+  const out = ZUORDNUNGS_SCHLUESSEL.filter((k) => typeof z?.[k] === "string" && z[k] !== "").map((k) => attr(`langfuse.observation.metadata.${k}`, z[k]));
+  if (typeof repoName === "string" && repoName !== "") out.push(attr("langfuse.observation.metadata.repo", repoName));
+  return out;
+}
+
+/** Eine Generation; `ctx` = `{ traceAttrs, parentSpanId?, repoName? }`. Ohne Modell entfallen Modellname und Kosten, ohne Preis die Kosten. */
+export function generationSpan(e, { traceAttrs, parentSpanId = null, repoName }) {
   const attributes = [attr("langfuse.observation.type", "generation")];
   if (e.model) attributes.push(attr("langfuse.observation.model.name", e.model));
   attributes.push(attr("langfuse.observation.usage_details", JSON.stringify(usageDetails(e.usage))));
   const kosten = e.model ? costDetails(e) : null;
   if (kosten) attributes.push(attr("langfuse.observation.cost_details", JSON.stringify(kosten)));
-  attributes.push(attr("langfuse.observation.metadata.message_id", e.messageId), attr("langfuse.observation.metadata.quelle", "abgleich"), ...traceAttrs);
+  attributes.push(attr("langfuse.observation.metadata.message_id", e.messageId), attr("langfuse.observation.metadata.quelle", "abgleich"), ...zuordnungsAttribute(e.zuordnung, repoName), ...traceAttrs);
   return span({ traceId: e.traceId, spanId: e.id, parentSpanId, name: "Call", start: nanos(e.ts), ende: nanos(e.ts), attributes });
 }
 
@@ -165,7 +177,7 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
   }
   const generationen = eintraege.map((e) => ({
     id: e.id,
-    span: generationSpan(e, { traceAttrs, parentSpanId: e.rolle?.agentId && agenten.has(e.rolle.agentId) ? spanIdVon(e.rolle.agentId) : null }),
+    span: generationSpan(e, { traceAttrs, repoName, parentSpanId: e.rolle?.agentId && agenten.has(e.rolle.agentId) ? spanIdVon(e.rolle.agentId) : null }),
     gen: true,
   }));
   const alle = [...spans, ...generationen];

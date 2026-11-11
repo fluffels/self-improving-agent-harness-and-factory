@@ -172,3 +172,116 @@ export function eindeutigeCalls(calls) {
   }
   return [...byId.values()];
 }
+
+/** Effort-Stufen laut `docs/model-routing.md` (Phasen-Matrix): nur diese Werte gelten als Effort, alles andere fehlt. */
+export const EFFORT_STUFEN = ["low", "medium", "high", "xhigh", "max"];
+
+const gueltigerEffort = (v) => (typeof v === "string" && EFFORT_STUFEN.includes(v) ? v : undefined);
+
+/** Assistant-Zeilen mit Array-Inhalt als `[messageId, row]`; `messageId` wie bei den Calls (`message.id`, Rückfall `uuid`). */
+function assistantZeilen(zeilen) {
+  const out = [];
+  for (const row of zeilen) {
+    if (row?.type !== "assistant" || !Array.isArray(row.message?.content)) continue;
+    const id = row.message.id ?? row.uuid;
+    if (id) out.push([id, row]);
+  }
+  return out;
+}
+
+/**
+ * Hat die Message Thinking-Blöcke? Claude Code schreibt pro Content-Block eine Zeile mit derselben `message.id`: ODER über die Zeilen
+ * (`thinking`/`redacted_thinking` ⇒ true, sonst false). Nur Assistant-Zeilen mit Array-Inhalt; eine Message ohne solche Zeile fehlt in der Map.
+ */
+export function thinkingJeMessage(zeilen) {
+  const map = new Map();
+  for (const [id, row] of assistantZeilen(zeilen)) {
+    const hat = row.message.content.some((b) => b?.type === "thinking" || b?.type === "redacted_thinking");
+    map.set(id, (map.get(id) ?? false) || hat);
+  }
+  return map;
+}
+
+/** `tool_use`-ID → `effort` des Aufrufs (`input.effort`, nur Werkzeug `Agent`, nur gültige Stufen); ID ohne Effort fehlt in der Map. */
+export function spawnEfforts(zeilen) {
+  const map = new Map();
+  for (const [, row] of assistantZeilen(zeilen)) {
+    for (const b of row.message.content) {
+      const e = b?.type === "tool_use" && b.name === "Agent" ? gueltigerEffort(b.input?.effort) : undefined;
+      if (e && b.id) map.set(b.id, e);
+    }
+  }
+  return map;
+}
+
+/**
+ * Effort je Message einer Datei aus dem Transkript selbst: Claude Code schreibt `effort` (und gleichlautend `perTurnEffort`) an jede
+ * Assistant-Zeile. Ein gültiger Wert gilt; widersprechen sich die Zeilen einer Message, fehlt er (nie raten).
+ */
+function effortJeMessage(zeilen) {
+  const werte = new Map();
+  for (const [id, row] of assistantZeilen(zeilen)) {
+    const set = werte.get(id) ?? new Set();
+    set.add(gueltigerEffort(row.effort ?? row.perTurnEffort) ?? null);
+    werte.set(id, set);
+  }
+  return werte;
+}
+
+/** Zuordnung einer Datei: `rolle` (`agentType` oder `hauptchat`, undefined = nicht bestimmbar), Rückfall-Effort der Datei (Meta, Spawn). */
+function dateiZuordnungen(zeilen, agentType, rueckfall) {
+  const thinking = thinkingJeMessage(zeilen);
+  const effort = effortJeMessage(zeilen);
+  const out = new Map();
+  for (const [id, hat] of thinking) {
+    const werte = effort.get(id);
+    const beobachtet = werte && werte.size === 1 ? [...werte][0] : undefined;
+    const z = { thinking: hat };
+    if (agentType) z.agent_type = agentType;
+    const e = beobachtet ?? (werte?.has(null) && werte.size === 1 ? rueckfall : undefined);
+    if (e) z.effort = e;
+    out.set(id, z);
+  }
+  return out;
+}
+
+const textOderUndefined = (v) => (typeof v === "string" && v !== "" ? v : undefined);
+
+/**
+ * Zuordnungs-Metadaten je Message (`message.id`, Rückfall `uuid`) einer Session (Form von `ladeSessionDatei`):
+ * `{ agent_type?, effort?, thinking? }`, `thinking` schon als `ja`/`nein`.
+ * - `agent_type`: Hauptdatei ⇒ `hauptchat`, Subagent ⇒ `agentType` der `meta.json`; fehlt er dort, fehlt der Schlüssel (nie eine Rolle erfinden).
+ * - `effort`: der an der Message beobachtete Wert; fehlt er dort, der `effort` der `meta.json`, dann der `effort` im Agent-`tool_use`
+ *   (über `toolUseId` der Meta); sonst fehlt der Schlüssel. Settings und Agent-Frontmatter werden nicht herangezogen (spätere Dateistände, keine Beobachtung).
+ * - Steht eine Message in mehr als einer Datei, entfallen `agent_type` und `effort` (Rolle nicht eindeutig); `thinking` bleibt als ODER.
+ * Eine EINZIGE Ableitung für den Nachlieferer und den Hook.
+ */
+export function zuordnungen(sitzung) {
+  const spawn = spawnEfforts([...sitzung.main, ...sitzung.subagents.flatMap((s) => s.zeilen)]);
+  const quellen = [
+    dateiZuordnungen(sitzung.main, "hauptchat", undefined),
+    ...sitzung.subagents.map((s) => {
+      const rueckfall = gueltigerEffort(s.meta?.effort) ?? spawn.get(s.meta?.toolUseId);
+      return dateiZuordnungen(s.zeilen, textOderUndefined(s.meta?.agentType), rueckfall);
+    }),
+  ];
+  const out = new Map();
+  const mehrfach = new Set();
+  for (const q of quellen) {
+    for (const [id, z] of q) {
+      const alt = out.get(id);
+      if (!alt) {
+        out.set(id, { ...z });
+        continue;
+      }
+      mehrfach.add(id);
+      alt.thinking = alt.thinking || z.thinking;
+    }
+  }
+  for (const id of mehrfach) {
+    delete out.get(id).agent_type;
+    delete out.get(id).effort;
+  }
+  for (const z of out.values()) z.thinking = z.thinking ? "ja" : "nein";
+  return out;
+}

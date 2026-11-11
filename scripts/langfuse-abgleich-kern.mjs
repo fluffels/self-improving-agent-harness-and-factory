@@ -135,6 +135,9 @@ export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) 
   });
 }
 
+/** Hängt jedem Soll-Eintrag die Zuordnungs-Metadaten an (`zuordnungen` aus `transkript-calls.mjs`, Map Message-ID → Werte); ohne Treffer `{}`. */
+export const sollMitZuordnung = (soll, map) => soll.map((e) => ({ ...e, zuordnung: map.get(e.messageId) ?? {} }));
+
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
 /**
