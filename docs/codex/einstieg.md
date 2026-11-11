@@ -34,7 +34,7 @@ await collaboration.send_message({ target: planer.task_name, message: "Ergänzun
 await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
 ```
 
-Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag` und `holdout-auftrag` sowie die Holdout-Pfad-Guards `holdout-guard.mjs` (Schreib- und Lesepfade der Holdout-Agenten) sind nicht auf diese Aufrufe portiert.
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag` und `holdout-auftrag` sind nicht auf diese Aufrufe portiert.
 
 ## Reproduzierbares Setup
 
@@ -81,9 +81,9 @@ Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **f
 | Bestehender Schutz | Codex-Stand |
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
-| `SessionStart` / `SessionEnd`: Langfuse-Abgleich (derselbe Hook startet am `SessionStart` auch den Wochenbericht-Lauf) | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
+| `SessionStart` / `SessionEnd`: Langfuse-Abgleich | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
 | `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
-| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung, Holdout-Pfad-Guard (`holdout-guard.mjs`) | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
+| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
 | `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
 | Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
 | Fremdtext | bestehendes `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten sind keine Quarantäne |

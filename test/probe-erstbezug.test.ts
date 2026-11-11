@@ -32,7 +32,7 @@ const P = raw as unknown as {
   baueFixture: (a: { von: string; ziel: string; raum: number; io: Io }) => void;
   fuehreSchritte: (s: Schritt[], io: Io) => { id: string; status: number | null }[];
   main: (argv: string[], io: Io) => { code: number; out: string; err: string };
-  echteNaehte: (stdio?: unknown) => { fehler: () => string[]; istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
+  echteNaehte: (stdio?: string) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
 };
 const B = budgetRaw as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; kernBlockZeichen: (t: string, m: { start: string; ende: string }) => number | null; countChars: (t: string) => number };
 const R = releaseRaw as unknown as { mechanischeSchritte: (q: string) => string[] };
@@ -364,25 +364,6 @@ describe("echte Nähte", () => {
     });
   });
 
-  it("ein fehlgeschlagener Schritt hält Befehl und stderr-Ende fest (naehte.fehler), grüne Schritte nicht", () => {
-    temp((dir) => {
-      const naehte = P.echteNaehte(["ignore", "ignore", "pipe"]);
-      const io = { ...naehte.mitScratch(join(dir, "s")), melde: () => undefined };
-      const rot = { id: "rot", argv: ["git", "-C", join(dir, "gibtsnicht"), "status"], cwd: dir, kritisch: false };
-      const gruen = { id: "gruen", argv: [process.execPath, "-e", "0"], cwd: dir, kritisch: false };
-      expect(P.fuehreSchritte([gruen], io)).toEqual([{ id: "gruen", status: 0 }]);
-      expect(naehte.fehler()).toEqual([]);
-      expect(P.fuehreSchritte([rot], io).map((e) => [e.id, e.status !== 0])).toEqual([["rot", true]]);
-      const fehler = naehte.fehler().join("\n");
-      expect(fehler).toMatch(/gibtsnicht.*(?:fatal|Schwerwiegend|No such file)/su);
-      expect(fehler).toContain("status");
-      // ohne gepipeten stderr (stderr null) bleibt der Fehlschlag ohne Absturz und ohne Eintrag
-      const still = P.echteNaehte("ignore");
-      expect(P.fuehreSchritte([rot], { ...still.mitScratch(join(dir, "t")), melde: () => undefined }).map((e) => e.status !== 0)).toEqual([true]);
-      expect(still.fehler()).toEqual([]);
-    });
-  });
-
   it("die Ausgabe der Schritte wird standardmäßig an den Prozess durchgereicht (stdio inherit), nicht verschluckt", () => {
     temp((dir) => {
       const skript = `const { echteNaehte } = await import(${JSON.stringify(pathToFileURL(join(WURZEL, "scripts", "probe-erstbezug.mjs")).href)});
@@ -462,14 +443,14 @@ describe("Negativfälle der Kette (echter Klon)", () => {
   /** Fixture bis nach dem Sync und `projektwerte --write` bauen; → Pfad des Fixture-Projekts. */
   const bezieher = (dir: string, k: string, name: string): string => {
     const scratch = join(dir, name);
-    const naehte = P.echteNaehte(["ignore", "ignore", "pipe"]);
+    const naehte = P.echteNaehte("ignore");
     const sha = naehte.kopf(k) as string;
     const alle = P.probeSchritte({ quelle: k, scratch, tag: P.PROBE_TAG, sha });
     const bis = alle.findIndex((s) => s.id === "projektwerte");
     const kette = alle.slice(0, bis + 1).filter((s) => s.id !== "install" && s.id !== "lint-prune");
     const io = { ...naehte.mitScratch(scratch), melde: () => undefined };
     const ergebnisse = P.fuehreSchritte(kette, io);
-    expect(ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id)), naehte.fehler().join("\n")).toEqual([]);
+    expect(ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id))).toEqual([]);
     return join(scratch, "bezieher");
   };
 
