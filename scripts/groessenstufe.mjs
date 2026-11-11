@@ -6,7 +6,7 @@
  *   node scripts/groessenstufe.mjs                 Diff gegen die Vergleichs-Basis (wie die Gates, `resolveBase`) bis HEAD
  *   node scripts/groessenstufe.mjs --commit <sha>  ein einzelner Commit (`<sha>^..<sha>`), etwa für die Nachmessung
  *   node scripts/groessenstufe.mjs --pfade <p…>    Prognose des Planers aus geplanten Pfaden (ohne Zeilen: nur Dateizahl und Pfade)
- *   --json                                         `{stufe, gruende, risiko}` als JSON (`risiko` mit allen Treffern)
+ *   --json                                         `{stufe, gruende, risiko, sweep}` als JSON (`risiko` mit allen Treffern)
  *
  * Ausgabe, drei Zeilen (die dritte `SWEEP: voll | stichprobe — <Grund>`, factory#272: die Sweep-Tiefe der Test-Lens, `stichprobe` nur für Doku- und Testdateien-Diffs ohne Risikoklasse hoch; fehlt sie, gilt `voll`): `STUFE: S` oder `STUFE: voll — <Gründe>`, dazu `RISIKO: hoch | normal | doku — <Grund>` (factory#333: die Risikoklasse aus Pfadmustern der
  * Projekt-Config `risiko.hoch`, sonst der Standardliste; Klasse hoch ist nie `S`; reiner `*.md`-Diff ist `doku`); Exit 0 bei jeder berechneten Stufe, 2 bei einem Aufruf-Fehler (`AUFRUF_EXIT`). Ein Fehler beim Rechnen

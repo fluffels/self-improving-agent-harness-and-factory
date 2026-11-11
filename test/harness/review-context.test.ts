@@ -96,7 +96,7 @@ const istDreiPunkt = (s: string) => /git diff origin\/main\.\.\.HEAD > /.test(s)
 
 /** Bindet der Test-Lens-Auftrag den Vollsweep an `SWEEP: voll` und die Stichprobe an die Zeile `SWEEP:` aus `node scripts/groessenstufe.mjs` (factory#272)? */
 const staffeltSweep = (s: string) =>
-  /node scripts\/groessenstufe\.mjs/.test(s) && /`SWEEP: voll`/.test(s) && /`SWEEP: stichprobe`/.test(s) && /Stichprobenregel Text-Wächter/.test(s) && /höchstens 3 Sabotage-Proben/.test(s);
+  /node scripts\/groessenstufe\.mjs/.test(s) && /`SWEEP: voll`/.test(s) && /`SWEEP: stichprobe`/.test(s) && /Stichprobenregel Text-Wächter/.test(s) && /oder fehlende Zeile: der Vollsweep/.test(s) && /ganze Datei bekommt in derselben Runde den Vollsweep/.test(s) && /höchstens 3 Sabotage-Proben/.test(s);
 
 /** Bleibt die Sabotage-/Red-Green-Prüfung im Test-Lens-Auftrag? */
 const fordertSabotage = (s: string) => /sabotier/i.test(s) && /\brot\b/i.test(s);

@@ -404,6 +404,12 @@ describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
     assert.match(text, /\*\*neuen Blocker-Klasse\*\*/);
     assert.match(text, /Ohne neue Klasse[^.]*: \*\*Hand-off\*\*[^.]*statt weiterer Runde/);
   });
+  test("ablauf.md gibt Zusatzpässe nur nach der Bedingung frei und trägt keine Schnitt-Zeile im Spawn (factory#272)", () => {
+    const ablauf = read(".agents/skills/factory/ablauf.md");
+    assert.match(ablauf, /einen ihm nach `ablauf-zusatzpass\.md` zustehenden Zusatzpass \(neue, belegte Blocker-Klasse\)/);
+    assert.doesNotMatch(ablauf, /ohne dass der Umsetzer die Zusatzpässe gefahren hat/);
+    assert.doesNotMatch(ablauf, /Lock: nonce=<x>\\nSchnitt:/);
+  });
 });
 
 describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {

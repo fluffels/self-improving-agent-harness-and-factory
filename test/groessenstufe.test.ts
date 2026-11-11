@@ -454,11 +454,20 @@ describe("Sweep-Tiefe (factory#272)", () => {
     for (const p of ["test/a.test.ts", "test/a.spec.js", "test/a.test.mjs", "test/a.spec.cts"]) expect(tiefe([p]), p).toBe("stichprobe");
     for (const p of ["test/a.test.ts.bak", "test/atest.ts", "test/a.tests.ts", "test/a.test.tsx", "test/a.test-ts", "test/a.test.json", "test/a.test"]) expect(tiefe([p]), p).toBe("voll");
   });
+  test("die injizierte Risikoliste wirkt über bestimmeGroessenstufe und die CLI (Verdrahtung, kein Default)", () => {
+    const eigen = lib.risikoMusterAus({ risiko: { hoch: ["*billing*"] } });
+    const o = { git: () => "b".repeat(40), ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
+    const pfade = ["--pfade", "test/billing.test.ts", "docs/a.md"];
+    expect(cli.laufe(pfade, { ...o, ladeRisiko: () => eigen }).ausgabe).toMatch(/\nSWEEP: voll — /);
+    expect(cli.laufe(pfade, { ...o, ladeRisiko: () => lib.risikoMusterAus({}) }).ausgabe).toMatch(/\nSWEEP: stichprobe — /);
+    const e = [eins("test/billing.test.ts"), eins("docs/a.md")];
+    expect(lib.bestimmeGroessenstufe({ eintraege: e, muster: MUSTER, risiko: eigen } as never)).toMatchObject({ sweep: { tiefe: "voll" } });
+  });
   test("bestimmeGroessenstufe trägt sweep, auch bei Eintrag null oder ohne Liste", () => {
     expect(lib.bestimmeGroessenstufe({ eintraege: null, muster: MUSTER })).toMatchObject({ sweep: { tiefe: "voll" } });
     expect(stufe([null as unknown as Eintrag])).toMatchObject({ sweep: { tiefe: "voll" } });
   });
-  test("bestimmeGroessenstufe trägt sweep, auch im fail-closed-Zweig", () => {
+  test("bestimmeGroessenstufe: der Sweep hängt nicht von der Schutzliste ab (leere Liste: Stufe voll, Sweep nach den Pfaden)", () => {
     expect(stufe([eins("docs/x.md")])).toMatchObject({ sweep: { tiefe: "stichprobe" } });
     expect(stufe([eins("docs/x.md")], null)).toMatchObject({ sweep: { tiefe: "stichprobe" } });
     expect(stufe([])).toMatchObject({ sweep: { tiefe: "voll" } });
