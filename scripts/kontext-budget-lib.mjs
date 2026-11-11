@@ -113,7 +113,7 @@ export const AGENTEN_SKILL_BUDGETS = [
 ];
 
 /** Budget für jede Agenten- und Skill-Datei ohne Eintrag (nach dem Vorbild von `MODULE_AGENTS_BUDGET`: größte Datei plus Kopffreiheit). */
-export const AGENTEN_SKILL_DEFAULT_BUDGET = 45_500;
+export const AGENTEN_SKILL_DEFAULT_BUDGET = 41_500;
 
 /** Zeichen eines Textes ohne den Block von `marker.start` bis einschließlich `marker.ende` (zeilenenden-neutral); fehlt ein Marker oder steht das Ende vor dem Start, zählt der ganze Text. Die Marker gibt der Aufrufer vor (Blatt). */
 export function zeichenOhneBlock(text, { start, ende }) {
