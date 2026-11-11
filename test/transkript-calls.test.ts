@@ -337,6 +337,11 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
     expect(m.get("m")?.effort).toBe("low");
   });
 
+  test("Meta ohne agentType: keine Definition wird geraten (auch nicht eine ohne name)", () => {
+    const w = welt({ "p/.claude/agents/ohne-name.md": "---\neffort: low\n---\nText" });
+    expect(subZ(w, {})).not.toHaveProperty("effort");
+  });
+
   test("ungültiger Frontmatter-effort: kein effort und kein Rückfall auf die Settings", () => {
     const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "ultra"), "c/settings.json": JSON.stringify({ effortLevel: "high" }) });
     expect(subZ(w)).not.toHaveProperty("effort");
@@ -357,6 +362,7 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
     ["höher rangige Datei jünger als der Lauf", { "c/settings.json": JSON.stringify({ effortLevel: "low" }), "p/.claude/settings.local.json": "{}" }, ["c/settings.json"], {}],
     ["ungültiger Wert", { "c/settings.json": JSON.stringify({ effortLevel: "ultra" }) }, undefined, {}],
     ["kaputtes JSON", { "c/settings.json": "{nicht json" }, undefined, {}],
+    ["kaputtes JSON in der niedriger rangigen Datei trotz gültigem Projektwert", { "p/.claude/settings.json": JSON.stringify({ effortLevel: "medium" }), "c/settings.json": "{nicht json" }, undefined, {}],
     ["CLAUDE_CODE_EFFORT_LEVEL in den Settings (env)", { "c/settings.json": JSON.stringify({ effortLevel: "low", env: { CLAUDE_CODE_EFFORT_LEVEL: "max" } }) }, undefined, {}],
     ["CLAUDE_CODE_EFFORT_LEVEL in der Prozess-Umgebung", { "c/settings.json": JSON.stringify({ effortLevel: "low" }) }, undefined, { CLAUDE_CODE_EFFORT_LEVEL: "max" }],
     ["keine Einstellung gesetzt (der Modell-Default wird nie eingesetzt)", { "c/settings.json": "{}" }, undefined, {}],
