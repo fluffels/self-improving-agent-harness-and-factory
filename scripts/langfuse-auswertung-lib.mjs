@@ -119,15 +119,22 @@ function metaFilter(abfrage, pfad) {
 const zeigeZeile = (art, i) => `${art}-Zeile ${i + 1}`;
 const numerisch = (v) => v !== null && Number.isFinite(Number(v));
 
-/** Normalisiert eine Zeile; fehlende oder nicht numerische Metriken sind ein Formfehler, nie eine stille 0. */
+/** Kosten null (queryMetrics liefert Summen ohne Preis als null) sind gültig; fehlender Schlüssel oder Nicht-Zahl nicht. */
+const kostenOk = (v) => v === null || numerisch(v);
+
+/**
+ * Normalisiert eine Zeile; fehlende oder nicht numerische Metriken sind ein Formfehler, nie eine stille 0. Kosten null bei
+ * Calls zählen mit 0 $ und tragen `ohnePreis`: der Bericht nennt sie als Datenlücke.
+ */
 function zeileVon(r, art, pfad, i) {
   const z = { traceName: r?.traceName, name: r?.name, providedModelName: r?.providedModelName, environment: r?.environment };
-  if (!numerisch(r?.count_count) || !numerisch(r?.sum_totalCost)) {
+  if (!numerisch(r?.count_count) || !kostenOk(r?.sum_totalCost)) {
     throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerische Metriken count_count und sum_totalCost`);
   }
-  if (art === "gesamt") return { ...z, key: keyVon(z), count: Number(r.count_count), cost: Number(r.sum_totalCost), minLatency: null };
+  const kosten = { count: Number(r.count_count), cost: Number(r.sum_totalCost), ohnePreis: r.sum_totalCost === null && Number(r.count_count) > 0 };
+  if (art === "gesamt") return { ...z, key: keyVon(z), ...kosten, minLatency: null };
   if (!numerisch(r.min_latency)) throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerisches min_latency (Negativ-Latenz nicht prüfbar)`);
-  return { ...z, key: keyVon(z), count: Number(r.count_count), cost: Number(r.sum_totalCost), minLatency: Number(r.min_latency) };
+  return { ...z, key: keyVon(z), ...kosten, minLatency: Number(r.min_latency) };
 }
 
 /** Prüft einen Export und liefert `{ art, pfad, von, bis, data, zeilen, schluessel?, wert? }`; wirft bei jedem Formfehler. */
@@ -181,13 +188,17 @@ function teile(gesamtZeilen, latenzZeilen) {
   const basis = new Map();
   const audit = [];
   const neg = [];
+  const ohnePreis = [];
   for (const z of gesamtZeilen.map(anreichern).sort((a, b) => sortName(a.key, b.key))) {
     if (istAudit(z.name)) audit.push(z);
     else if (negativ.has(z.key)) neg.push(z);
-    else basis.set(z.key, basis.has(z.key) ? { ...z, ...summe([basis.get(z.key), z]) } : z);
+    else {
+      basis.set(z.key, basis.has(z.key) ? { ...z, ...summe([basis.get(z.key), z]) } : z);
+      if (z.ohnePreis) ohnePreis.push(z);
+    }
   }
   const ausgeschlossen = new Set([...audit, ...neg].map((z) => z.key));
-  return { basis, audit: summe(audit), negativ: { gruppen: neg.length, ...summe(neg) }, ausgeschlossen };
+  return { basis, audit: summe(audit), negativ: { gruppen: neg.length, ...summe(neg) }, ausgeschlossen, ohnePreis };
 }
 
 const zellenLabel = (z) => (z.wert === "unbekannt" ? UNZUGEORDNET : z.schluessel === "agent_type" ? z.wert : `${z.schluessel}:${z.wert}`);
@@ -264,6 +275,13 @@ export function tabelle(posten) {
 
 const postenAusBasis = (basis, feld) => [...basis.values()].map((b) => ({ quelle: b.quelle, label: b[feld], count: b.count, cost: b.cost, art: "wert" }));
 
+/** Lücke für Gruppen mit Calls, aber ohne Preis (Kosten null): die Summen zählen sie mit 0 $, das ist nie still. */
+function preisLuecke(ohnePreis) {
+  if (!ohnePreis.length) return [];
+  const modelle = [...new Set(ohnePreis.map((z) => z.modell))].sort(sortName).join(", ");
+  return [`Kosten unvollständig: ${summe(ohnePreis).count} Calls in ${ohnePreis.length} Gruppen ohne Preis (${modelle})`];
+}
+
 /** Baut den Bericht aus geprüften Exporten (`leseExport`); wirft bei inkonsistenter Exportmenge. */
 export function bericht(exporte) {
   pruefeExporte(exporte);
@@ -278,6 +296,7 @@ export function bericht(exporte) {
     ...(tage ? [] : ["Tage nicht geprüft (Export tage fehlt)"]),
     ...(tageFehlend?.length ? [`Tage ohne Daten: ${tageFehlend.join(", ")}`] : []),
     ...(latenz ? [] : ["negative Latenzen nicht geprüft (Export latenz fehlt)"]),
+    ...preisLuecke(teil.ohnePreis),
     ...(teil.negativ.gruppen ? [`negative Latenzen: ${teil.negativ.gruppen} Gruppe(n) mit min_latency unter 0, ${teil.negativ.count} Calls (${usd(teil.negativ.cost)}), aus allen Summen genommen`] : []),
     ...rolle.luecken,
     ...effort.luecken,
