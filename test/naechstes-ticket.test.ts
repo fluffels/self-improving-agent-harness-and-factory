@@ -671,7 +671,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(waehle([roh(99, { body: "" })], { hartAb: 100 }).ticket?.nr).toBe(99);
   });
   test("ausgenommen: Sammel-, Status-, Notfall-, Forum-, Epic-Titel ohne Format bleiben frei", () => {
-    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
+    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
       const r = waehle([roh(1, { title: titel, body: "" })], { fuellstand: () => 10 }); // das Sammelticket ist voll: nur das Spezifikations-Gate steht zur Prüfung
       expect(r.ticket?.nr, titel).toBe(1);
       expect(r.ticket?.spezifikation, titel).toBeUndefined();
