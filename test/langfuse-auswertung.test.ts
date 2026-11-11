@@ -278,9 +278,14 @@ describe("Rezept", () => {
     expect(werte("effort")).toEqual(L.EFFORT_STUFEN);
     expect(werte("agent_role")).toEqual(["main", "subagent"]);
   });
-  test("die lokalen Konstanten gleichen den Quellen (die Lib importiert sie bewusst nicht)", () => {
+  test("EFFORT_STUFEN gleicht der Quelle (die Lib importiert sie bewusst nicht); TRACE_NAME_ABGLEICH ist das importierte TRACE_NAME", () => {
     expect(L.EFFORT_STUFEN).toEqual(EFFORT_TRANSKRIPT);
     expect(L.TRACE_NAME_ABGLEICH).toBe(TRACE_NAME_OTLP);
+  });
+  test("die Import-Hülle von langfuse-otlp enthält weder langfuse-api noch langfuse-zugang", () => {
+    const h = importHuelle("scripts/langfuse-otlp.mjs", (p) => readFileSync(p, "utf8"));
+    expect(h).not.toContain("scripts/langfuse-api.mjs");
+    expect(h).not.toContain("scripts/langfuse-zugang.mjs");
   });
 });
 
@@ -292,8 +297,10 @@ describe("Wächter Secret-Key (AK8)", () => {
     expect(h).not.toContain("scripts/langfuse-zugang.mjs");
     for (const f of h) expect(readFileSync(f, "utf8")).not.toMatch(/LANGFUSE_SECRET_KEY|fetch\(/);
   });
-  test("die Lib importiert nichts", () => {
-    expect(readFileSync("scripts/langfuse-auswertung-lib.mjs", "utf8")).not.toMatch(/^import /m);
+  test("die Lib importiert nur langfuse-otlp (pur)", () => {
+    const imports = readFileSync("scripts/langfuse-auswertung-lib.mjs", "utf8").match(/^import .*$/gm) ?? [];
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain("./langfuse-otlp.mjs");
   });
 });
 
