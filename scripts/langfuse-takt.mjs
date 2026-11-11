@@ -6,13 +6,18 @@
  * pflegt und die Commit-Fenster berechnet. Die Entscheidung ist pur und getestet (test/langfuse-takt.test.ts), nur die gh-Aufrufe in
  * `fuehreStatusAus` sind es nicht.
  *
- * Nur Node-Builtins, board-lib.mjs und gh-cli.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
+ * Mit dem Config-Schlüssel `langfuseWochenbericht` (factory#314) legt der Takt das Status-Ticket nur noch bei einem Anlass an (Dispatch mit `langfuse_anlass`, vom
+ * Wochenbericht-Lauf) oder am Montags-Cron nach `wochenOhneLaufMax` Wochen ohne Status-Ticket (Höchstabstand); der Push-Auslöser legt dann nicht mehr an. Ohne den Schlüssel gilt
+ * alles wie bisher (ADR 0016, Fortschreibung 0016-314).
+ *
+ * Nur Node-Builtins, board-lib.mjs, gh-cli.mjs und die pure Wochenbericht-Lib (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
 import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, boardFuerRolle, boardRolleFuer, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 import { fehlerMeldung, fehlerText, schreibrechtText } from "./gh-cli.mjs";
 import { bestaetigeAnlegen as bestaetigeAnlegenLib } from "./inbox-start-lib.mjs";
 import { factorySeite, factorySeiteIn } from "./factory-seite.mjs";
 import { labelAus } from "./projekt-config-lib.mjs";
+import { wochenberichtAblage } from "./langfuse-wochenbericht-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { fileURLToPath } from "node:url";
 
@@ -37,9 +42,11 @@ export const MIN_ABSTAND_STUNDEN = 24;
  * `stundenSeitAbschluss` = Stunden seit dem Abschluss des Vorgängers (null/fehlt: kein Vorgänger); das Anlegen braucht mindestens
  * `MIN_ABSTAND_STUNDEN`. `jetzt` (Datum oder ISO-String, optional) bestimmt den Wochentag (UTC): an `PUSH_RUHETAGE` (Fr–So) ruht der
  * Push-Auslöser ganz (auch das Hochschieben), der Cron nicht. Ungültiges `jetzt` wirft.
- * Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
+ * `wochenbericht` (Config-Block `langfuseWochenbericht` oder fehlend) und `anlass` (Text des Dispatch-Inputs `langfuse_anlass`, factory#314): mit dem Block legt nur ein nicht leerer Anlass
+ * oder der Höchstabstand des Montags-Crons an (`anlegenEntscheidung`), der Push-Auslöser nie; `nach-oben` und `MIN_ABSTAND_STUNDEN` bleiben.
+ * Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen, anlass? }` (`anlass` nur bei `anlegen` mit dem Block). Pur.
  */
-export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule", stundenSeitAbschluss = null, jetzt = undefined }) {
+export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule", stundenSeitAbschluss = null, jetzt = undefined, wochenbericht, anlass }) {
   const wochentag = jetzt === undefined ? null : alsDatum(jetzt, "jetzt").getUTCDay();
   if (!Array.isArray(offene)) throw new Error("offene muss eine Liste sein.");
   if (!Number.isInteger(mergesSeit) || mergesSeit < 0) throw new Error(`mergesSeit muss eine ganze Zahl ≥ 0 sein, war ${String(mergesSeit)}`);
@@ -65,13 +72,62 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
     if (geclaimt) return { aktion: "nichts", grund: `#${geclaimt.number} ist geclaimt und läuft schon`, warnungen };
     return { aktion: "nach-oben", nr: treffer[0].number, grund: `#${treffer[0].number} ist offen und ungeclaimt, kommt an die Spitze`, warnungen };
   }
-  if (mergesSeit < MIN_MERGES) {
-    return { aktion: "nichts", grund: `nur ${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets (Untergrenze ${MIN_MERGES})`, warnungen };
-  }
+  return anlegenEntscheidung({ mergesSeit, stundenSeitAbschluss, ausloeser, wochenbericht, anlass, warnungen });
+}
+
+/** Pur: der Mindestabstand zum Abschluss des Vorgängers (beide Wege); `null`, wenn er erfüllt ist, sonst die `nichts`-Entscheidung. */
+function abstandSperre(stundenSeitAbschluss, warnungen) {
   if (typeof stundenSeitAbschluss === "number" && stundenSeitAbschluss < MIN_ABSTAND_STUNDEN) {
     return { aktion: "nichts", grund: `erst ${stundenSeitAbschluss.toFixed(1)} h seit dem Abschluss des Vorgängers (Mindestabstand ${MIN_ABSTAND_STUNDEN} h)`, warnungen };
   }
-  return { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets, kein offenes Status-Ticket`, warnungen };
+  return null;
+}
+
+/** Die Entscheidung ohne offenes Status-Ticket: wie bisher über `MIN_MERGES`, mit dem Block `langfuseWochenbericht` über Anlass und Höchstabstand. Pur. */
+function anlegenEntscheidung({ mergesSeit, stundenSeitAbschluss, ausloeser, wochenbericht, anlass, warnungen }) {
+  if (wochenbericht) return wochenberichtEntscheidung({ wochenbericht, anlass, ausloeser, stundenSeitAbschluss, warnungen });
+  if (mergesSeit < MIN_MERGES) {
+    return { aktion: "nichts", grund: `nur ${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets (Untergrenze ${MIN_MERGES})`, warnungen };
+  }
+  return abstandSperre(stundenSeitAbschluss, warnungen) ?? { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem Anlegen des jüngsten Status-Tickets, kein offenes Status-Ticket`, warnungen };
+}
+
+/** Wochen-Länge in Stunden für den Höchstabstand. */
+const STUNDEN_WOCHE = 168;
+
+/**
+ * Pur: der Höchstabstand des Montags-Crons (nur `schedule`): Text, wenn seit dem Abschluss des Vorgängers mindestens `wochenOhneLaufMax` Wochen vergangen sind (ohne Vorgänger: sofort),
+ * sonst `null`. Fehlt `wochenOhneLaufMax`, gibt es keinen Höchstabstand (kein Default im Code), sondern eine Warnung.
+ */
+function hoechstabstand({ wochenbericht, ausloeser, stundenSeitAbschluss, warnungen }) {
+  if (ausloeser !== "schedule") return null;
+  const max = wochenbericht.wochenOhneLaufMax;
+  if (max === undefined) {
+    warnungen.push("langfuseWochenbericht.wochenOhneLaufMax fehlt: kein Höchstabstand, nur ein Anlass legt das Status-Ticket an.");
+    return null;
+  }
+  if (typeof stundenSeitAbschluss !== "number") return "Höchstabstand: noch kein abgeschlossenes Status-Ticket";
+  return stundenSeitAbschluss >= max * STUNDEN_WOCHE ? `Höchstabstand: ${Math.floor(stundenSeitAbschluss / STUNDEN_WOCHE)} Wochen seit dem Abschluss des Vorgängers (Grenze ${max} Wochen)` : null;
+}
+
+/** Pur: mit dem Block `langfuseWochenbericht` legt nur ein Anlass (nicht leerer Dispatch-Text) oder der Höchstabstand an; `MIN_MERGES` gilt nicht mehr. */
+function wochenberichtEntscheidung({ wochenbericht, anlass, ausloeser, stundenSeitAbschluss, warnungen }) {
+  const text = typeof anlass === "string" ? anlass.trim() : "";
+  const hoechst = text ? null : hoechstabstand({ wochenbericht, ausloeser, stundenSeitAbschluss, warnungen });
+  const grund = text ? `Anlass: ${anlassEinzeilig(text)}` : hoechst;
+  if (!grund) return { aktion: "nichts", grund: "Wochenbericht aktiv: kein Anlass und der Höchstabstand ist nicht erreicht (der Push-Auslöser legt nicht an)", warnungen };
+  return abstandSperre(stundenSeitAbschluss, warnungen) ?? { aktion: "anlegen", grund, warnungen, anlass: text || hoechst };
+}
+
+/** Pur: der Anlass einzeilig, ohne Backticks, auf 300 Zeichen gekappt (mit „…“). */
+function anlassEinzeilig(text) {
+  const eine = String(text).replace(/`/g, "").replace(/\s+/g, " ").trim();
+  return eine.length > 300 ? `${eine.slice(0, 300)}…` : eine;
+}
+
+/** Pur: der Anlass als zitierte Zeile für den Body (`anlassEinzeilig`), als `> \`…\`` (Code-Span: ein `@name` benachrichtigt niemanden). */
+export function anlassZitat(text) {
+  return `> \`${anlassEinzeilig(text)}\``;
 }
 
 /**
@@ -132,6 +188,20 @@ function kennzahlenZeilen(von) {
   ];
 }
 
+/**
+ * Pur (factory#314): mit dem Block `langfuseWochenbericht` der Anlass als Zitat und der Ablageort der Wochenberichte seit dem Vorgänger (Checkliste Punkt 7 nutzt sie); ohne den Block leer,
+ * der Body bleibt byte-gleich.
+ */
+function anlassZeilen({ wochenbericht, anlass, repo, vorgaenger, start, bis }) {
+  if (!wochenbericht) return [];
+  const von = vorgaenger?.closedAt ?? start;
+  const seit = von ? `seit ${String(von).slice(0, 10)}` : "seit dem Beginn der Historie";
+  return [
+    ...(anlass ? ["- **Anlass:**", `  ${anlassZitat(anlass)}`] : []),
+    `- **Wochenberichte:** ${seit} bis ${bis}, lokal unter \`${wochenberichtAblage(repo)}/\` (je Woche \`<Montag>.md\` und \`.json\`; eine Woche ohne Datei hat der Wochenbericht-Lauf nicht geliefert).`,
+  ];
+}
+
 /** Die Zeile zum Laufzeiten-Upstream-Check (Checkliste Punkt 12, factory#260): nur in der Fabrik (`upstream`), im Bezieher leer. Pur. */
 function laufzeitenZeile(upstream) {
   return upstream
@@ -143,7 +213,7 @@ function laufzeitenZeile(upstream) {
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
  */
-export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurzel = WURZEL }) {
+export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurzel = WURZEL, anlass, wochenbericht }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
@@ -171,6 +241,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
+    ...anlassZeilen({ wochenbericht, anlass, repo, vorgaenger, start, bis: w.letzte.bis }),
     ...kennzahlenZeilen(vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"),
     ...laufzeitenZeile(upstream),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
@@ -204,6 +275,9 @@ export function vorgaengerAusSuche({ antwort, offene }) {
   return { vorgaenger: j ? { number: j.number, closedAt: j.closedAt, createdAt: j.createdAt } : null, unklar };
 }
 
+/** Der Config-Block `langfuseWochenbericht` (oder `undefined`). */
+export const wochenberichtAus = (config) => config?.langfuseWochenbericht;
+
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 /**
  * Status-Ticket anlegen bzw. nach oben schieben. `items` = die schon geladene Board-Liste (der Aufrufer lädt sie einmal je Lauf).
@@ -229,7 +303,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [],
   if (e.aktion === "anlegen") {
     const neu = gh([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start })}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`]),
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo, start, anlass: e.anlass, wochenbericht: wochenberichtAus(config) })}`, ...(harness === null ? [] : ["-f", `labels[]=${harness}`]),
     ], "schreiben");
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

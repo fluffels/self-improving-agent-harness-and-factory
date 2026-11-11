@@ -18,6 +18,12 @@
     "text": "Prüfen, ob ein veröffentlichtes typescript-eslint TypeScript 7 im Peer-Bereich trägt (`npm view typescript-eslint peerDependencies`). Wenn ja: das `ignore` für den `typescript`-Major in `.github/dependabot.yml` (Ökosystem npm) löschen und TypeScript 7 in einem eigenen PR heben. Wenn nein: `faellig` um etwa drei Monate schieben."
   },
   {
+    "id": "wochenbericht-takt-314",
+    "faellig": "2027-02-11",
+    "titel": "Wochenbericht-Lauf und Takt mit Schlüssel prüfen (factory#314, ADR 0027)",
+    "text": "Prüfen nach rund 13 Wochen: (1) `~/.claude/state/langfuse-wochenbericht.log` und die Ablage `~/.claude/state/langfuse-wochenbericht/` zeigen je volle Woche einen Bericht oder eine begründete Zeile (aus, kein-zugang, belegt, gemeldet, ruhe); (2) wie viele Status-Tickets entstanden aus einem Anlass, wie viele aus dem Höchstabstand, und fand der Agent-Lauf jeweils einen echten Befund (Bericht-Kommentare der Status-Tickets); (3) gab es eine verpasste Woche (Lücke in der Ablage) und fing der Höchstabstand sie auf. Ohne echte Funde je Anlass: Schwellen oder `wochenOhneLaufMax` lockern oder die Regel streichen; mit Funden: Entscheidung „bleibt“ in der Fortschreibung vermerken. Dann Eintrag löschen."
+  },
+  {
     "id": "regeln-verfall-2027-03",
     "faellig": "2027-03-01",
     "titel": "Prüftermin neuer Regeln: Agenten-/Skill-Budgets, Verbleib-Wächter (factory#307), Brillen-Dateien (factory#308), Plattform-Weiche und bedingte Dateien des Umsetzers (factory#310)",
