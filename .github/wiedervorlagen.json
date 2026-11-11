@@ -6,6 +6,12 @@
     "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø gegen 1,38 $ vergleichen. Ø = Spalte ‚Kosten geschätzt ($, Ø)‘ (Σ/n), nicht der Median; auslösend ist die Gruppe ‚ab Schnitt, ohne Sammeltickets‘ gegen 1,38 $; alle Läufe und Sammeltickets nur berichten. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
   },
   {
+    "id": "lens-kosten-nach-272",
+    "faellig": "2026-11-25",
+    "titel": "Lens-Kosten und Runde-1-Blocker je Brille nach factory#272 nachmessen (factory#324, ADR 0027)",
+    "text": "Messen mit denselben Befehlen wie die Basis: `node scripts/lauf-ergebnis.mjs --von <Merge von factory#272> --bis <heute>` (Runde-1-Blocker je Brille, Anteil PRs mit Blocker) und `node scripts/subagent-laufzeit.mjs --agent sih-lens --von <Merge von factory#272> --json` (Läufe und Kosten der Lens). Basis aus factory#324 (Fenster 2026-11-10T16:14:37Z bis 2026-11-11T21:24:39Z): Lens Σ 202,68 $ von 469,38 $ Subagentenkosten (43 %), 233 Läufe; Runde-1-Blocker in 97 % der PRs (32/33), Test-Adäquanz 130 von 182 Blockern, in 29 von 30 PRs. Ab 10 PRs nach dem Merge messen, sonst um 2 Wochen schieben. Sinken weder Lens-Anteil noch Lens-Kosten, wird eine Gegenprobe der Test-Adäquanz-Brille (Blocker ohne Befund bei einer Brille mit Sabotage-Probe, ADR 0027, Fortschreibung factory#298) eine Zeile im Langfuse-Sammelticket; sinken sie, Entscheidung „bleibt“ vermerken. Dann Eintrag löschen."
+  },
+  {
     "id": "audit-ghsa-g3hv-75wg-m249",
     "faellig": "2026-12-02",
     "titel": "GHSA-g3hv-75wg-m249: minimatch (moderate, dev) erneut prüfen",

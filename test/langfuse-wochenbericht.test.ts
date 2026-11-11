@@ -549,7 +549,7 @@ describe("Kosten je Merge (factory#324)", () => {
     expect(ohne).toMatchObject({ deltaJeMergeProzent: null, jeMerge: null, merges: null, deltaProzent: 50 });
     expect(E.kennzahlen(bw(30), bw(0, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
   });
-  test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", async () => {
+  test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", () => {
     const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => { urteil: Urteil } };
     const geordnet = lib_ordne(satz());
     const a = lib.wochenAuswertung(geordnet, { schwellen: SCHWELLEN });
