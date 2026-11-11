@@ -29,6 +29,7 @@ AGENTS.md @fluffels
 /.mcp.json @fluffels
 /scripts/*-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
+/scripts/mcp-log-lib.mjs @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/langfuse-health.mjs @fluffels
 /scripts/agenten-namen.mjs @fluffels

@@ -769,7 +769,7 @@ describe("parseArgs strikt (#1790)", () => {
   type PArgs = { agent: string; tickets: number[]; ohne: number[]; json: boolean; von?: string; bis?: string; projekt?: string; brille?: string; delta?: boolean; jeTicket?: boolean; fehler?: string };
   const PS = (K as unknown as { parseArgs: (a: string[]) => PArgs }).parseArgs;
   test("alle Flags gesetzt: Form ohne fehler-Feld, --ticket/--ohne wiederholbar", () => {
-    expect(PS(["--von", "v", "--bis", "b", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "v", bis: "b", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
+    expect(PS(["--von", "2026-01-01T00:00:00Z", "--bis", "2026-01-02T00:00:00Z", "--agent", "x", "--ticket", "1", "--ticket", "2", "--ohne", "3", "--ohne", "4", "--projekt", "p", "--brille", "Doku", "--delta", "nein", "--je-ticket", "--json"])).toEqual({ agent: "x", tickets: [1, 2], ohne: [3, 4], json: true, von: "2026-01-01T00:00:00Z", bis: "2026-01-02T00:00:00Z", projekt: "p", brille: "Doku", delta: false, jeTicket: true });
     expect(PS([])).toEqual({ agent: UMSETZER, tickets: [], ohne: [], json: false });
   });
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
@@ -968,9 +968,15 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
   describe("CLI", () => {
     const P = (K as unknown as { parseArgs: (a: string[]) => { ttl?: boolean; jeTicket?: boolean; fehler?: string } }).parseArgs;
     test("--ttl setzt das Feld, --ttl mit --je-ticket ist ein Aufruf-Fehler", () => {
-      expect(P(["--von", "v", "--ttl"]).ttl).toBe(true);
-      expect(P(["--von", "v"]).ttl).toBeUndefined();
-      expect(P(["--von", "v", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
+      expect(P(["--von", "2026-01-01T00:00:00Z", "--ttl"]).ttl).toBe(true);
+      expect(P(["--von", "2026-01-01T00:00:00Z"]).ttl).toBeUndefined();
+      expect(P(["--von", "2026-01-01T00:00:00Z", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
+    });
+    test("--von/--bis ohne ISO-Zeitpunkt sind ein Aufruf-Fehler (factory#323), mit und ohne --ttl", () => {
+      expect(P(["--von", "kein-datum", "--ttl"]).fehler).toMatch(/--von.*kein-datum/);
+      expect(P(["--von", "kein-datum"]).fehler).toMatch(/--von/);
+      expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "kein-datum"]).fehler).toMatch(/--bis.*kein-datum/);
+      expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "2026-11-11T13:18:00Z", "--ttl"]).fehler).toBeUndefined();
     });
     test("Markdown nennt Fenster, Preisstand, Zähler und Netto", () => {
       const bericht = (K as unknown as { kontextTreiber: (e: object) => object }).kontextTreiber({ laeufe: [zwei(10, 500)], ttl: true, von: "2026-10-08T00:00:00Z", bis: "2026-10-09T00:00:00Z" });

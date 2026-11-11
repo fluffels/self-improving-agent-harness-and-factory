@@ -26,6 +26,7 @@
     "/.mcp.json",
     "/scripts/*-mcp.mjs",
     "/scripts/mcp-ausfall.mjs",
+    "/scripts/mcp-log-lib.mjs",
     "/scripts/langfuse-vorbedingung.mjs",
     "/scripts/langfuse-health.mjs",
     "/scripts/agenten-namen.mjs",
