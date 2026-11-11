@@ -16,7 +16,7 @@ type Auswertung = {
   median: number | null;
   kontrolle: { luecke?: string; quotient?: number; summe?: number; resets?: number };
   blocker: { n: number; von: number };
-  folge: { n: number; von: number; offen: number };
+  folge: { n: number; von: number; offen: number; offenMitFolge: number };
   kaputt: number;
 };
 const L = raw as unknown as {
@@ -29,7 +29,7 @@ const L = raw as unknown as {
   gueltigeFolge: (p: Punkt[], limit: string) => { folge: Punkt[]; veraltet: Punkt[] };
   claimAbfrage: (n: number[]) => string;
   claimsAusAntwort: (a: unknown, m: Map<number, string>) => Map<number, { claim?: number; luecke?: string }>;
-  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number }) => Auswertung;
+  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number; jetzt?: number; fristMs?: number }) => Auswertung;
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
@@ -249,8 +249,8 @@ describe("kontrollzahl", () => {
   test("die Textzeile nennt veraltete Punkte nur bei v > 0", () => {
     const ok = L.kontrollzahl([punkt(von, 1), punkt(von + MIN, 2)], { von, bis, anzahlTickets: 1 });
     const alt = L.kontrollzahl([punkt(von, 5), punkt(von + MIN, 4), punkt(von + 2 * MIN, 6)], { von, bis, anzahlTickets: 1 });
-    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: ok, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0 }, kaputt: 0 }).join("\n")).not.toContain("veraltete Punkte");
-    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: alt, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0 }, kaputt: 0 }).join("\n")).toContain("veraltete Punkte 1");
+    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: ok, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0, offenMitFolge: 0 }, kaputt: 0 }).join("\n")).not.toContain("veraltete Punkte");
+    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: alt, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0, offenMitFolge: 0 }, kaputt: 0 }).join("\n")).toContain("veraltete Punkte 1");
   });
   test("ein Punkt genau auf bis zählt mit, ein einziger Punkt genau auf von ist noch keine Folge", () => {
     expect(L.kontrollzahl([punkt(von - MIN, 10), punkt(bis, 15)], { von, bis, anzahlTickets: 1 })).toMatchObject({ summe: 5 });
@@ -292,9 +292,10 @@ describe("Claims", () => {
 describe("aboKontingent und Abschnitt", () => {
   const claim = T0;
   const merge = T0 + 60 * MIN;
+  const FRIST = 14 * 24 * 60 * MIN;
   const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", ...extra });
   const eins = (punkte: Punkt[], t: Ticketzeile[] = [zeile(1)], kaputt = 0) =>
-    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000 });
+    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000, jetzt: merge + FRIST, fristMs: FRIST });
 
   test("Messwert, Median und Kontrollzahl", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 14)]);
@@ -320,7 +321,18 @@ describe("aboKontingent und Abschnitt", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 11)], t);
     expect(a.gemessen).toBe(3);
     expect(a.blocker).toEqual({ n: 1, von: 2 });
-    expect(a.folge).toEqual({ n: 2, von: 2, offen: 1 });
+    expect(a.folge).toEqual({ n: 2, von: 2, offen: 1, offenMitFolge: 0 });
+  });
+  test("Folge-Quote: Folgen bei offener Frist zählen nicht in Zähler und Nenner, erscheinen aber als offen mit Folge", () => {
+    const TAG = 24 * 60 * MIN;
+    const jetzt = merge + 30 * TAG;
+    const tage = (d: number) => new Date(jetzt - d * TAG).toISOString();
+    const t = [zeile(1, { gemergt: tage(3), nacharbeit: "folge" }), zeile(2, { gemergt: tage(20), nacharbeit: "nein" }), zeile(3, { gemergt: tage(20), nacharbeit: "folge" })];
+    const a = L.aboKontingent({ tickets: t, punkte: [punkt(jetzt - 21 * TAG, 10), punkt(jetzt, 12)], kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: jetzt - 21 * TAG }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt, fristMs: FRIST });
+    expect(a.folge).toEqual({ n: 1, von: 2, offen: 1, offenMitFolge: 1 });
+    const text = L.aboKontingentAbschnitt(a).join("\n");
+    expect(text).toContain("- Folge-Quote (Nacharbeit, Frist abgelaufen): 50 % (1/2), offen: 1, davon schon mit Folge: 1");
+    expect(L.aboKontingentAbschnitt({ ...a, folge: { ...a.folge, offenMitFolge: 0 } }).join("\n")).not.toContain("davon schon mit Folge");
   });
   test("eine Claim-Lücke (kein assigned-Event) erscheint mit ihrem Grund, nicht mit einem Messgrund", () => {
     const a = L.aboKontingent({ tickets: [zeile(1)], punkte: [punkt(claim, 10), punkt(merge, 14)], kaputt: 0, claims: new Map([[1, { luecke: "kein assigned-Event vor dem Merge" }]]), von: T0, bis: merge });
@@ -359,7 +371,7 @@ describe("aboKontingent und Abschnitt", () => {
     expect(text).toContain("Gemessen: 1 von 2; Median: 1,25 pp");
     expect(text).toContain("Kontrollzahl: 1,25 pp je Ticket (Σ Zuwachs 2,5 pp, 2 Tickets, Resets 0");
     expect(text).toContain("Blocker-Quote (Runde 1 mit Blocker): 0 % (0/1)");
-    expect(text).toContain("Folge-Quote (Nacharbeit): 0 % (0/1), offen: 0");
+    expect(text).toContain("Folge-Quote (Nacharbeit, Frist abgelaufen): 0 % (0/1), offen: 0");
     expect(L.aboKontingentAbschnitt({ luecke: "weg" })).toEqual(["- Lücke: weg"]);
   });
   test("ohne Messwert steht für Median und Quoten ein Strich", () => {

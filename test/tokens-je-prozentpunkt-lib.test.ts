@@ -28,6 +28,7 @@ const L = raw as unknown as {
   strecken: (p: unknown[], l: string, f: { von: number; bis: number }) => { liste: { delta: number }[]; veraltet: number; reset: number };
   callsAus: (s: unknown[]) => { calls: Call[]; sitzungen: number; ohneZeit: number };
   isoWoche: (ms: number) => string;
+  usd: (x: number) => string;
 };
 
 const H = 3_600_000;
@@ -272,6 +273,17 @@ describe("Zeitraum, Sortierung, Streuung und Wochen", () => {
     expect(text).toContain("| ↳ Tageswerte | Median 25 Tsd, Q1 bis Q3 18 Tsd bis 33 Tsd (n=4) | | | | |");
     expect(text).toContain("| Modell | input | output | cache_read | cache_creation 5m | cache_creation 1h |");
     expect(text).toContain("| m | 1,00 Mio | 0 | 0 | 0 | 0 |");
+  });
+
+  test("usd: ab 0,01 zwei Nachkommastellen, darunter zwei geltende Ziffern, 0 bleibt $0,00, unter 1e-6 eine Untergrenze", () => {
+    expect(L.usd(0.5)).toBe("$0,50");
+    expect(L.usd(0.01)).toBe("$0,01");
+    expect(L.usd(0.0085)).toBe("$0,0085");
+    expect(L.usd(0.00123)).toBe("$0,0012");
+    expect(L.usd(0.000012345)).toBe("$0,000012");
+    expect(L.usd(0)).toBe("$0,00");
+    expect(L.usd(0.0000004)).toBe("< $0,000001");
+    expect(L.usd(0.000001)).toBe("$0,000001");
   });
 
   test("Preis 0 ergibt Median 0: IQR/Median ist null und steht als Strich, ohne aussagekräftige Tage als Text", () => {
