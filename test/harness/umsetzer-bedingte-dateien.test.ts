@@ -140,6 +140,12 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
     assert.deepEqual(bedingteDateienBefunde({ ...e, ordnerDateien: [...e.ordnerDateien, "ablauf-fremd.md"] }), [], "andere Dateien im Ordner zählen nicht");
   });
 
+  test("Frontmatter-Strip: sparsam (eine Trennlinie im Rumpf versteckt kein Token) und ein Token im Frontmatter zählt nicht", () => {
+    const e = echt();
+    assert.match(bedingteDateienBefunde({ ...e, kern: `${e.kern}\ntaskkill\n\n---\n\nRest\n` }).join("\n"), /Windows-Sonderfall „taskkill“/);
+    assert.deepEqual(bedingteDateienBefunde({ ...e, kern: e.kern.replace(/^---\n/, "---\ntaskkill: x\n") }), []);
+  });
+
   test("Waise: Anker beidseitig (`^` und `$`), Präfix mitten im Namen und Endung dahinter zählen nicht", () => {
     const e = echt();
     assert.deepEqual(bedingteDateienBefunde({ ...e, ordnerDateien: [...e.ordnerDateien, "alt-umsetzer-x.md"] }), []);
