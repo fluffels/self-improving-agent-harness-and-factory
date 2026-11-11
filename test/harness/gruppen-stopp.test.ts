@@ -54,6 +54,6 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
     expect(text).toContain("Gruppen-Stopp-Marke");
     expect(text).toContain("prüft sie zu Beginn jeder Zeile und vor jedem Commit");
     expect(text).toContain("meldet bei gesetzter Marke `abgebrochen`");
-    expect(text).toContain("sobald der Worktree ruht (`git status --porcelain` und `git diff HEAD` bei zwei Messungen im Abstand von 5 Minuten gleich)");
+    expect(text).toContain("sobald der Worktree ruht (5 Minuten ohne Dateiänderung)");
   });
 });
