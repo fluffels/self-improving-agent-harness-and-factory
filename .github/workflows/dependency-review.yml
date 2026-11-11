@@ -2,8 +2,8 @@ name: Dependency Review
 
 # Dependency Review (#92) auf PRs: vergleicht die Abhängigkeits-Änderungen des PR mit bekannten Advisories.
 # REQUIRED CHECK (factory#335): ein Fund ab `high` färbt diesen Check rot und sperrt den Merge; der Jobname steht in
-# `requiredChecks` des Ruleset-Spiegels (.github/ruleset-main-schutz.json). Moduleinheit, darum kein `pflichtChecks` im Besitz-Manifest
-# (Fortschreibung 0022-119): ein Bezieher mit gewähltem Modul trägt den Check selbst in sein Ruleset und seinen Spiegel ein.
+# `requiredChecks` des Ruleset-Spiegels (.github/ruleset-main-schutz.json). Moduleinheit mit `pflichtChecks` im Besitz-Manifest
+# (Fortschreibung 0022-339): der Doctor verlangt den Check nur, wenn diese Datei im Repo liegt (gewähltes Modul); ein Bezieher trägt ihn in sein Ruleset und seinen Spiegel ein.
 # Bewusst keine Lizenzregel, kein PR-Kommentar (`comment-summary-in-pr` bleibt aus) und keine Schreibrechte: der Job liest nur den Diff.
 # Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing.test.ts).
 # Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).

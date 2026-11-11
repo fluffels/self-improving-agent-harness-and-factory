@@ -108,6 +108,21 @@ describe("mcpVerbindung", () => {
     test("keine eigene Zeile, fremde Session getrennt: bleibt getrennt (streng)", () => {
       expect(urteil([[START("2026-11-11T09:30:00.000Z", "sid-fremd"), REFUSED("2026-11-11T09:30:01.000Z", "sid-fremd")]])).toMatchObject({ status: "getrennt", quelle: "rueckfall" });
     });
+    test("Dateiwahl nach der jüngsten EIGENEN Zeile, nicht nach der letzten Zeile der Datei", () => {
+      const a = [...alt, zeile("Tool 'x' completed successfully in 5ms", "2026-11-11T09:50:00.000Z", "sid-x")];
+      const b = [START("2026-11-11T09:15:00.000Z", "sid-b"), ERFOLG("2026-11-11T09:15:00.050Z", "sid-b"), zeile("Tool 'x' completed successfully in 5ms", "2026-11-11T09:20:00.000Z", "sid-neu")];
+      expect(urteil([a, b])).toMatchObject({ status: "verbunden", quelle: "prozess" });
+      expect(urteil([b, a])).toMatchObject({ status: "verbunden", quelle: "prozess" });
+    });
+    test("Rückfall über mehrere fremde Dateien: der jüngste Start gewinnt, unabhängig von der Listenfolge", () => {
+      const alt2 = [START("2026-11-11T09:30:00.000Z", "f1"), ERFOLG("2026-11-11T09:30:00.050Z", "f1")];
+      const neu2 = [START("2026-11-11T09:40:00.000Z", "f2"), REFUSED("2026-11-11T09:40:01.000Z", "f2")];
+      expect(urteil([neu2, alt2])).toMatchObject({ status: "getrennt", quelle: "rueckfall" });
+      expect(urteil([alt2, neu2])).toMatchObject({ status: "getrennt", quelle: "rueckfall" });
+    });
+    test("Dateien ohne Session-ID: alter Rückfall, die fremde Verbindung bleibt verbunden", () => {
+      expect(l.mcpVerbindung(fremd, { seit: SEIT, dateien: [fremd] })).toMatchObject({ status: "verbunden", quelle: "rueckfall" });
+    });
   });
   test("Fenstergrenze: ein Start genau an `seit` zählt, eine Millisekunde davor nicht", () => {
     const an = [START("2026-11-11T08:00:00.000Z"), REFUSED("2026-11-11T08:00:00.500Z")];

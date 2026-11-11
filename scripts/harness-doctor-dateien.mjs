@@ -17,7 +17,7 @@
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
  *   `Code-Scanning-Quellen` (factory#339): jedes Werkzeug aus `spiegel.codeScanning` hat eine Workflow-Quelle (CodeQL: `uses: github/codeql-action/analyze@`, jedes andere Werkzeug: `uses: github/codeql-action/upload-sarif@` in einer Datei, die den Namen als Wort nennt);
- *   ohne Quelle Lücke, nur CodeQL ohne Workflow nicht prüfbar (Default-Setup serverseitig). Grenze: Drittaktionen und ein SARIF-Upload per API erkennt der Punkt nicht. Spiegel und Workflows reicht `pruefLauf` herein wie bei `Required-Check-Quellen`.
+ *   ohne Quelle Lücke, nur CodeQL ohne Workflow nicht prüfbar (Default-Setup serverseitig). Grenze: Drittaktionen, ein SARIF-Upload per API und eine gequotete `uses:`-Form erkennt der Punkt nicht. Spiegel und Workflows reicht `pruefLauf` herein wie bei `Required-Check-Quellen`.
  *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
@@ -309,7 +309,7 @@ function csQuelle(workflows, tool) {
  * Punkt `Code-Scanning-Quellen` (factory#339): jedes Werkzeug aus `spiegel.codeScanning` hat im Repo eine Workflow-Quelle in `workflows` (`[{ pfad, text }]`): CodeQL einen Schritt
  * `uses: github/codeql-action/analyze@`, jedes andere Werkzeug einen Schritt `uses: github/codeql-action/upload-sarif@` in einer Datei, die den Werkzeugnamen als Wort nennt (Groß-/Kleinschreibung egal).
  * Ein Werkzeug ohne Quelle ist eine Lücke (das Ruleset wartete ewig auf ein Ergebnis, das nie kommt); nur CodeQL ohne Workflow ist nicht prüfbar, weil das Default-Setup serverseitig läuft. Ohne Spiegel oder
- * nach Abbruch nicht prüfbar, ein Spiegel ohne `codeScanning` ist OK. Grenze: Drittaktionen und ein SARIF-Upload per API erkennt der Punkt nicht (dann Lücke oder nicht prüfbar, nie still grün). Pur.
+ * nach Abbruch nicht prüfbar, ein Spiegel ohne `codeScanning` ist OK. Grenze: Drittaktionen, ein SARIF-Upload per API und eine gequotete `uses:`-Form erkennt der Punkt nicht (dann Lücke oder nicht prüfbar, nie still grün). Pur.
  */
 export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = false }) {
   if (vorAbbruch || spiegel === undefined || spiegel === null) {

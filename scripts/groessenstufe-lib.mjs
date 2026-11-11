@@ -10,7 +10,7 @@
  *    `git diff --numstat --no-renames`, ohne Ausnahme für generierte Dateien, auch reines Markdown hat keinen Freibetrag);
  *  - kein Pfad aus `.github/protected-paths.json` (alle Gruppen) und keiner aus `GRUNDSCHUTZ` (Harness-Pfade, Gates, Hooks, Agenten, Skills,
  *    Abhängigkeiten), auch bei einer einzigen Zeile; ein Umzug zählt als Löschen plus Anlegen (`--no-renames`), trifft also den alten Pfad mit.
- *  - kein Pfad der Risikoklasse hoch (factory#333, `bestimmeRisikoklasse`: Muster der Projekt-Config `risiko.hoch`, sonst `RISIKO_STANDARDLISTE`; ein reiner `*.md`-Diff ist `doku`, `istDokuDiff` ist die einzige Stelle dieser Regel).
+ *  - kein Pfad der Risikoklasse hoch (factory#333, `bestimmeRisikoklasse`: Muster der Projekt-Config `risiko.hoch` (Vereinigung der Basis und des HEAD, factory#339; mit `--config` liest nur die HEAD-Seite die übergebene Datei, die Basis immer `PROJEKT_CONFIG` am Basis-Commit), sonst `RISIKO_STANDARDLISTE`; ein reiner `*.md`-Diff ist `doku`, `istDokuDiff` ist die einzige Stelle dieser Regel).
  * Fail-closed (immer `voll`, Risikoklasse `hoch`): nicht ladbare oder ungültige Risiko-Muster, leere oder nicht lesbare Dateiliste, Binärdatei (numstat `-`), ein von git quotierter Pfad, nicht ladbare
  * Schutzliste, git-Fehler. Die Schutzliste kommt vom Arbeitsbaum; eine Änderung an `.github/` ist wegen `GRUNDSCHUTZ` ohnehin `voll`.
  * Die Prognose (`prognose: true`, Planer vor der Umsetzung) kennt keine Zeilen und prüft nur Dateizahl und Pfade.
@@ -40,7 +40,7 @@ export const GRUNDSCHUTZ = Object.freeze([
 ]);
 
 /** Standardliste der Risikoklasse hoch (factory#333): projektneutrale Pfadmuster (Syntax wie `.github/protected-paths.json`, Groß-/Kleinschreibung egal).
- *  Gilt ohne Projekt-Config-Block `risiko`; ein Block ersetzt sie (nicht additiv). Teilwort-Muster sind bewusst grob: Fehlalarme gehen in die strenge Richtung. */
+ *  Gilt ohne Projekt-Config-Block `risiko`; ein Block ersetzt sie (nicht additiv; Basis und HEAD werden vereinigt, factory#339). Teilwort-Muster sind bewusst grob: Fehlalarme gehen in die strenge Richtung. */
 export const RISIKO_STANDARDLISTE = Object.freeze([
   // Hooks, Guards, CI
   "/.githooks/", "/.claude/hooks/", "/.claude/settings.json", "/.codex/", "/.mcp.json", "/.github/workflows/", "*guard*",
@@ -88,7 +88,7 @@ export function vereinigeRisiko(basis, kopf) {
     return { muster: null, quelle, fehler: fehler.length > 0 ? fehler : ["keine Risiko-Muster geladen"] };
   }
   const menge = [...new Set([...basis.muster, ...kopf.muster])];
-  if (menge.length === kopf.muster.length && menge.length === basis.muster.length) return kopf;
+  if (menge.length === new Set(kopf.muster).size && menge.length === new Set(basis.muster).size) return kopf;
   return { muster: menge, quelle };
 }
 

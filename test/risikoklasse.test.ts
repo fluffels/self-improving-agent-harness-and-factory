@@ -241,6 +241,16 @@ describe("Vereinigung der Muster von Basis und HEAD (factory#339)", () => {
     expect(lib.vereinigeRisiko(a, { muster: ["b", "a"], quelle: "y" })).toEqual({ muster: ["b", "a"], quelle: "y" });
     expect(lib.vereinigeRisiko(a, { muster: null, quelle: "y" })).toMatchObject({ muster: null, fehler: ["keine Risiko-Muster geladen"] });
     expect(lib.vereinigeRisiko({ muster: null, quelle: "x", fehler: ["kaputt"] }, a)).toMatchObject({ muster: null, fehler: ["kaputt"] });
+    expect(lib.vereinigeRisiko({ muster: null, quelle: "x" }, a)).toMatchObject({ muster: null, fehler: ["keine Risiko-Muster geladen"] });
+  });
+  test("vereinigeRisiko: HEAD streicht oder verdoppelt Muster der Basis, die Basis bleibt gültig", () => {
+    const basis: Risiko = { muster: ["*geheim*", "*x*"], quelle: "x" };
+    const streich = lib.vereinigeRisiko(basis, { muster: ["*x*"], quelle: "y" });
+    expect(streich.muster).toEqual(["*geheim*", "*x*"]);
+    const doppelt = lib.vereinigeRisiko(basis, { muster: ["*x*", "*x*"], quelle: "y" });
+    expect(doppelt.muster).toEqual(["*geheim*", "*x*"]);
+    expect(doppelt.quelle).toMatch(/Basis ∪ HEAD/);
+    expect(lib.vereinigeRisiko({ muster: ["*x*"], quelle: "x" }, { muster: ["*x*", "*y*"], quelle: "y" }).quelle).toMatch(/Basis ∪ HEAD/);
   });
 });
 

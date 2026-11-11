@@ -111,7 +111,8 @@ function wahlMitDateien(gruppen, sessionId) {
   const alle = gruppen.flat().sort((a, b) => a.ms - b.ms);
   const eigene = alle.filter((e) => e.sessionId === sessionId);
   if (eigene.some((e) => START.test(e.text))) return { ev: eigene, quelle: "session" };
-  const datei = gruppen.filter((g) => g.some((e) => e.sessionId === sessionId)).sort((a, b) => a.at(-1).ms - b.at(-1).ms).at(-1);
+  const jüngsteEigene = (g) => g.findLast((e) => e.sessionId === sessionId)?.ms;
+  const datei = gruppen.filter((g) => jüngsteEigene(g) !== undefined).sort((a, b) => jüngsteEigene(a) - jüngsteEigene(b)).at(-1);
   return datei ? { ev: datei, quelle: "prozess" } : { ev: alle, quelle: "rueckfall", fremd: true };
 }
 

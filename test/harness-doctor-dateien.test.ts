@@ -812,6 +812,24 @@ describe("Code-Scanning-Quellen (factory#339)", () => {
   test("ein Eintrag ohne Werkzeugnamen verfälscht nichts", () => {
     expect(p({ codeScanning: [null, {}, { tool: 5 }] }, []).ok).toBe(true);
   });
+  test("Teilwort zuerst, ganzes Wort später: zählt", () => {
+    expect(p(cs("zizmor"), [sarif("zizmorcore/x zizmor --sarif")]).ok).toBe(true);
+  });
+  test("Unterstrich und Ziffer neben dem Namen machen ihn zum Teilwort", () => {
+    for (const nachbar of ["zizmor_x", "zizmor2", "_zizmor", "2zizmor"]) expect(p(cs("zizmor"), [sarif(`${nachbar} --sarif`)]).ok).toBe(false);
+  });
+  test("ein Präfix mit zusätzlichen Zeichen vor dem @ ist keine analyze-Quelle", () => {
+    expect(p(cs("CodeQL"), [{ pfad: "c.yml", text: "      - uses: github/codeql-action/analyzer@abc\n" }]).nichtPruefbar).toBe(true);
+  });
+  test("ein kaputter codeScanning-Eintrag stürzt nicht ab und erzeugt keine Lücke", () => {
+    expect(p({ codeScanning: "zizmor" }, []).ok).toBe(true);
+    expect(p({ codeScanning: {} }, []).ok).toBe(true);
+    expect(p({ codeScanning: [{ tool: "" }] }, []).ok).toBe(true);
+  });
+  test("pruefeDateien reicht vorAbbruch an den Punkt", () => {
+    const e = pruefe({ rootDir: "/x", ...GESUND, vorAbbruch: true, spiegel: { requiredChecks: ["Beispiel Check"], codeScanning: [{ tool: "zizmor" }] }, git: fakeGit(gesund), existiert: () => true, config: {} });
+    expect(punkt(e, "Code-Scanning-Quellen")).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
   test("pruefeDateien reicht Spiegel und Workflows an den Punkt", () => {
     const e = pruefe({ rootDir: "/x", ...GESUND, spiegel: { requiredChecks: ["Beispiel Check"], codeScanning: [{ tool: "zizmor" }] }, git: fakeGit(gesund), existiert: () => true, config: {} });
     expect(punkt(e, "Code-Scanning-Quellen").ok).toBe(false);
