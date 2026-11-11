@@ -50,7 +50,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
+import { BEKANNTE_LENSES, CODE_LENSES, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, parseNachweis } from "./nachweis-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
 // hier bleibt der Export für die Aufrufer und Tests dieses Gates.
@@ -60,8 +60,8 @@ export { parseNachweis };
 export { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE };
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
-const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
-export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
+// Die Brillen-Schlüssel leben in nachweis-lib.mjs (auch der Lens-Auftrag-Guard braucht sie, ohne dieses Gate zu importieren); hier bleibt der Export.
+export { BEKANNTE_LENSES };
 
 /** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: Factory-Seite docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
 export const vorlage = (zeilen) =>

@@ -261,8 +261,8 @@ describe("Handback-Fallback und Werkzeug-Abbruch (#1821 L31, L35, L37)", () => {
   const abnahme = lies(".claude/agents/holdout-abnahme.md");
   const PFLICHT = /Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach\./;
 
-  test("der Pflichtsatz steht in Lens-Spawn-Vorlage, Abnahme- und Szenario-Agent", () => {
-    assert.match(LENSES, PFLICHT);
+  test("der Pflichtsatz steht in Lens-Definition, Abnahme- und Szenario-Agent", () => {
+    assert.match(liesMitProjektwerten(".claude/agents/factory-lens.md"), PFLICHT);
     assert.match(abnahme, PFLICHT);
     assert.match(szenario, PFLICHT);
   });
