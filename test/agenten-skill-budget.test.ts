@@ -48,6 +48,9 @@ describe("zeichenOhneBlock", () => {
   test("zählt ohne den Block samt Markern", () => {
     assert.equal(zeichenOhneBlock(text, MARKER), "kopf\n\nrest".length);
   });
+  test("ein Block gleich am Textanfang wird mitgeschnitten", () => {
+    assert.equal(zeichenOhneBlock(`${START}block${ENDE}rest`, MARKER), "rest".length);
+  });
   test("ohne Block oder mit nur einem Marker zählt der ganze Text; CRLF zählt wie LF", () => {
     assert.equal(zeichenOhneBlock("abc", MARKER), 3);
     assert.equal(zeichenOhneBlock(`a${START}b`, MARKER), `a${START}b`.length);
@@ -144,6 +147,12 @@ describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien
 });
 
 describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
+  test("ohne Argument misst der Collector das eigene Repo (Standard-Wurzel)", () => {
+    assert.deepEqual(collectFiles(undefined as unknown as string), collectFiles(WURZEL));
+    assert.deepEqual(collectSizes(undefined as unknown as string), collectSizes(WURZEL));
+    assert.ok(collectFiles(undefined as unknown as string).includes(".claude/agents/factory-umsetzer.md"));
+  });
+
   const manifest = JSON.parse(readFileSync(join(WURZEL, ".factory", "besitz.json"), "utf8")) as { eintraege: { pfad: string }[] };
   const pfade = manifest.eintraege.map((e) => e.pfad);
 
