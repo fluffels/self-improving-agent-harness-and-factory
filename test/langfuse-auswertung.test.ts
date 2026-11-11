@@ -469,6 +469,7 @@ describe("Funde Runde 1", () => {
     const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
     const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
     const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
+    expect(nimm("tage")?.abfrage.dimensions).toEqual([]);
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
     expect(b.rolle.zeilen[0]).toMatchObject({ name: "hauptchat", count: 10 });

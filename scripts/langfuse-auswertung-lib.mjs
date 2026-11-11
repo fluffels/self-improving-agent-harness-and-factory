@@ -89,7 +89,7 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
 const fehler = (pfad, text) => new Error(`${pfad}: ${text} (Abfragerezept: node scripts/langfuse-auswertung.mjs --rezept)`);
 
 const hatGenerationFilter = (abfrage) =>
-  Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f?.operator === "=" && String(f?.value).toUpperCase() === "GENERATION");
+  Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f.operator === "=" && String(f.value).toUpperCase() === "GENERATION");
 
 const fensterLesbar = (a) => !Number.isNaN(Date.parse(a.fromTimestamp)) && !Number.isNaN(Date.parse(a.toTimestamp));
 
