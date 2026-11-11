@@ -30,6 +30,8 @@ AGENTS.md @fluffels
 /scripts/*-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
+/scripts/langfuse-health.mjs @fluffels
+/scripts/agenten-namen.mjs @fluffels
 /scripts/cockpit/lauf.mjs @fluffels
 /scripts/besitz-lib.mjs @fluffels
 /scripts/projektwert-lib.mjs @fluffels

@@ -12,36 +12,14 @@ import { homedir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
+import { FRIST_MS, HEALTH_PFAD, bewerteHealth, pruefeLangfuse } from "./langfuse-health.mjs";
 
-export const HEALTH_PFAD = "/api/public/health";
-export const FRIST_MS = 3000;
+export { FRIST_MS, HEALTH_PFAD, bewerteHealth, pruefeLangfuse };
+
 const HINWEIS = "Langfuse aus, bitte starten (lokal: Rancher Desktop prüfen, notfalls `rdctl shutdown` und `rdctl start`, FAQ „Langfuse lokal aus“).";
-
-/** Urteil aus HTTP-Status oder Verbindungsfehler; ohne beides gilt es als nicht erreichbar. Pur. */
-export function bewerteHealth({ status, fehler } = {}) {
-  if (status === 200) return { ok: true, grund: "Langfuse erreichbar (HTTP 200)" };
-  if (typeof status === "number") return { ok: false, grund: `Langfuse antwortet mit HTTP ${status}` };
-  if (fehler) return { ok: false, grund: `Langfuse nicht erreichbar: ${fehler}` };
-  return { ok: false, grund: "Langfuse nicht erreichbar: keine Antwort" };
-}
 
 /** Basis-URL aus der Umgebung ohne Schrägstrich am Ende. Pur. */
 export const basisUrl = langfuseBasisUrl;
-
-/** Fragt den Health-Endpunkt mit Frist ab und bewertet die Antwort. Wirft nie. */
-export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRIST_MS }) {
-  const abbruch = new AbortController();
-  const uhr = setTimeout(() => abbruch.abort(), fristMs);
-  try {
-    const res = await fetchImpl(`${baseUrl}${HEALTH_PFAD}`, { signal: abbruch.signal });
-    return bewerteHealth({ status: res.status });
-  } catch (e) {
-    if (abbruch.signal.aborted) return bewerteHealth({ fehler: `Timeout nach ${fristMs} ms` });
-    return bewerteHealth({ fehler: e?.cause?.code ?? e?.code ?? e?.message ?? String(e) });
-  } finally {
-    clearTimeout(uhr);
-  }
-}
 
 const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]";
 

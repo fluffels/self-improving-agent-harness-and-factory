@@ -37,7 +37,7 @@ const L = libRaw as unknown as {
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[] }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
@@ -286,6 +286,27 @@ describe("Bericht", () => {
     const b = rep(...[...basis, ...alleRollen, ...alleEfforts].reverse().map((e) => rev(e as { data: unknown[] })));
     expect(L.renderMarkdown(b)).toBe(L.renderMarkdown(a));
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+});
+
+describe("Rezept mit Projektfilter (factory#313)", () => {
+  const TAGS = { column: "tags", operator: "any of", value: ["factory"], type: "arrayOptions" };
+  const ENV = { column: "environment", operator: "=", value: "proj", type: "string" };
+  test("ohne projektFilter bleibt die Ausgabe unverändert, mit Filter trägt jede Abfrage ihn und der Leser nimmt sie an", () => {
+    const ohne = L.rezept({ von: VON, bis: BIS });
+    for (const r of ohne) expect(r.abfrage.filters?.some((f: { column: string }) => f.column === "tags" || f.column === "environment")).toBe(false);
+    for (const pf of [TAGS, ENV]) {
+      const mit = L.rezept({ von: VON, bis: BIS, projektFilter: pf });
+      expect(mit).toHaveLength(ohne.length);
+      for (const r of mit) {
+        expect(r.abfrage.filters).toContainEqual(pf);
+        expect(() => lese({ art: r.art, abfrage: r.abfrage, data: [] })).not.toThrow();
+      }
+    }
+  });
+  test("ein ungültiger Filter wirft (stringObject, falscher Operator, leerer Wert, leere Liste, kein Objekt)", () => {
+    const schlecht = [{ column: "metadata", key: "k", operator: "=", value: "v", type: "stringObject" }, { ...ENV, operator: "<>" }, { ...ENV, value: "" }, { ...TAGS, value: [] }, { ...TAGS, value: [""] }, "x", { ...TAGS, type: "string" }, { ...ENV, type: "arrayOptions" }, { ...ENV, value: 5 }, { ...TAGS, operator: "=" }, { ...TAGS, value: [5] }, { ...TAGS, value: "x" }];
+    for (const pf of schlecht) expect(() => L.rezept({ von: VON, bis: BIS, projektFilter: pf })).toThrow(/projektFilter/);
   });
 });
 
