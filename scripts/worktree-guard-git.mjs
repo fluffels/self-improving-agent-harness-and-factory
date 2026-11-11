@@ -198,6 +198,16 @@ function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
   return true;
 }
 
+/** Grobe Wortregel für `git stash` (außer list/show), wenn Zerlegen oder Analyse scheitert. */
+export const STASH_GROB = /\bgit\b.*\bstash\b(?!\s+(?:list|show)\b)/s;
+
+/** `git stash`: nur `list`/`show` als erstes Wort lesen; alles andere (auch `-q list`, `-p show` = push, dynamisch) ändert den repoweit geteilten Stash. */
+function stashMerken(c, sub, rest) {
+  if (sub !== "stash") return;
+  const w = rest[0];
+  if (!w || w.dynamic || !["list", "show"].includes(w.text)) c.stash = true;
+}
+
 /** Wertet einen git-Aufruf ab Index `k` aus: geschützte Aufrufe tragen ihre Ziele in `c.targets` ein. */
 export function gitCall(words, k, pe, D, c, depth) {
   const g = parseGitArgs(words, k);
@@ -210,6 +220,7 @@ export function gitCall(words, k, pe, D, c, depth) {
   const rest = words.slice(g.subIdx + 1);
   if (sub === "config") return configAliasMerken(c, rest);
   if (aliasAufloesen(g, words, k, rest, pe, D, c, depth)) return;
+  stashMerken(c, sub, rest);
   if (PROTECTED_SUBS.has(sub) || (sub === "subtree" && rest[0]?.text === "push")) {
     for (const d of gitTargetDirs(g, pe, D, c)) c.targets.add(d);
     return;

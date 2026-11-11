@@ -28,7 +28,7 @@ const SKILL = ".agents/skills/review-lenses/SKILL.md";
 
 /** Nennt ein Regeltext die Staffel vollständig? EIN Prädikat für Artefakt und Gegenbeispiel. */
 const nenntStaffel = (s: string) =>
-  /`\*\.md`/.test(s) && /Doku/.test(s) && /Delta/.test(s) && /Test-Adäquanz immer mit/.test(s) && /[Ff]ail-closed/.test(s);
+  /`\*\.md`/.test(s) && /Doku/.test(s) && /Delta/.test(s) && /Test-Adäquanz immer mit/.test(s) && /`kombiniert`[^.]*Test-Teil enthalten/.test(s) && /[Ff]ail-closed/.test(s);
 /** Verlangt ein Text, den Patch nur einmal vollständig zu lesen? */
 const liestPatchEinmal = (s: string) => /einmal\s+vollständig/i.test(s) && /kein(?:en)?\s+zweites\s+Volllesen/i.test(s);
 /** Nennt der Text den Abschnitts-Helfer (#1379), statt nur „sehr große Patches abschnittsweise“ zu verlangen? */
@@ -48,7 +48,8 @@ describe("Der Skill regelt die Staffel (#1265)", () => {
     assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/factory-lens.md")), "factory-lens.md nennt patch-abschnitte.mjs nicht");
   });
   test("Prädikate greifen (Red-Green)", () => {
-    assert.ok(nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit; fail-closed"));
+    assert.ok(nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit (bei `kombiniert` ist der Test-Teil enthalten); fail-closed"));
+    assert.ok(!nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit; fail-closed"), "ohne kombiniert-Ausnahme unvollständig");
     assert.ok(!nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; fail-closed"), "ohne Test-Adäquanz-Pflicht unvollständig");
     assert.ok(!nenntStaffel("immer drei Lenses"));
     assert.ok(liestPatchEinmal("genau einmal vollständig lesen, danach gezielt, kein zweites Volllesen"));

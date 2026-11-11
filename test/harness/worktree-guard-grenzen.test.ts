@@ -12,7 +12,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 
-type Analyse = { targets: string[]; asks: Map<string, { reason: string; mainOnly: boolean }> };
+type Analyse = { stash?: boolean; targets: string[]; asks: Map<string, { reason: string; mainOnly: boolean }> };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/worktree-guard-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -146,5 +146,95 @@ describe("quote-folge: Backslash als letztes Zeichen", () => {
     const f = (qf as { quoteFolge: (t: string) => { masked: boolean }[] }).quoteFolge("a\\");
     assert.equal(f.length, 2);
     assert.equal(f.some((z) => z.masked), false);
+  });
+});
+
+// factory#323 L5: `git stash` (außer list/show) ist ortsunabhängig verboten (Stashes sind repoweit geteilt, refs/stash).
+type Decision = { block: boolean; ask?: boolean; reason?: string };
+const decide = (raw as { decide: (o: { cwd: string; command: string; repoRoot: string; deps: unknown }) => Decision }).decide;
+const pruefeStash = (command: string) => decide({ cwd: WT, command, repoRoot: HAUPT, deps });
+
+describe("git stash ist ortsunabhängig abgelehnt", () => {
+  for (const cmd of [
+    "git stash",
+    "git stash pop",
+    "git stash apply stash@{0}",
+    "git stash drop",
+    "git stash push -m x",
+    "git -C /repo/wt stash pop",
+    "git -c alias.s=stash s pop",
+    'bash -c "git stash pop"',
+    'git stash "$X"',
+  ]) {
+    test(cmd, () => {
+      const r = pruefeStash(cmd);
+      assert.equal(r.block, true);
+      assert.match(r.reason ?? "", /repoweit geteilt \(refs\/stash\)/);
+      assert.match(r.reason ?? "", /add -A.*WIP/s, "Meldung nennt den Ersatz");
+    });
+  }
+});
+
+describe("dynamische Unterbefehle und Analysefehler", () => {
+  test('list mit dynamischem Anhang und dynamische Option vor list sind abgelehnt', () => {
+    assert.equal(pruefeStash('git stash list"$X"').block, true);
+    assert.equal(pruefeStash('git stash -"$X" list').block, true);
+    assert.equal(pruefeStash("git stash show$(x)").block, true, "dynamisches Wort, dessen statischer Rest show lautet");
+  });
+
+  test("wirft die Analyse (homedir), greift die grobe Wortregel: pop blockt, list nicht", () => {
+    const kaputt = { ...deps, homedir: () => { throw new Error("h"); } };
+    const lauf = (command: string) => decide({ cwd: WT, command, repoRoot: HAUPT, deps: kaputt });
+    assert.equal(lauf("cd ~ && git stash pop").block, true);
+    assert.equal(lauf("cd ~ && git stash list").block, false);
+    assert.equal(lauf("cd ~ && git stash show").block, false, "Lesebefehl bleibt im Rückfall erlaubt");
+    assert.equal(lauf("cd ~ && git stash listx").block, true, "Wortgrenze hinter list");
+    assert.equal(lauf("cd ~ &&\ngit\nstash pop").block, true, "Zeilenumbruch zwischen git und stash");
+  });
+
+  test("Optionen vor list/show zählen nicht als Lesebefehl; nicht zerlegbarer Befehl fällt auf die grobe Regel", () => {
+    assert.equal(pruefeStash("git stash -q list").block, true);
+    assert.equal(pruefeStash("git stash -p show").block, true, "push -p mit Pfad show");
+    assert.equal(pruefeStash("for ((i=0;i<1;i++)); do git stash pop; done").block, true);
+    assert.equal(pruefeStash("git stash show -p").block, false);
+  });
+});
+
+describe("analyse meldet den Stash ohne Rückgriff auf die grobe Regel", () => {
+  test("git stash ohne Unterbefehl: stash gesetzt, ohne Fehler", () => {
+    assert.equal(lauf("git stash", WT).stash, true);
+    assert.ok(!lauf("git stash list", WT).stash);
+  });
+});
+
+describe("erlaubt bleibt", () => {
+  for (const cmd of ["git stash list", "git stash show -p", 'echo "git stash pop"', 'gh issue comment --body "git stash"', "git status"]) {
+    test(cmd, () => assert.equal(pruefeStash(cmd).block, false));
+  }
+
+  test("Regression: git commit im eigenen Worktree bleibt erlaubt", () => {
+    assert.deepEqual(pruefeStash('git -C /repo/wt commit -m "x"'), { block: false });
+  });
+});
+
+describe("Analysefehler bei geschütztem Befehl (factory#332 L38)", () => {
+  const gitMock = (_c: string, _a: string[], o: { cwd: string }) => `${o.cwd}\n${HAUPT}/.git\n`;
+  const kaputt = { ...deps, execFileSync: gitMock, statSync: (q: string) => ({ isDirectory: () => q.startsWith(HAUPT) }), homedir: () => { throw new Error("h"); } };
+  const lauf2 = (command: string, cwd: string) => decide({ cwd, command, repoRoot: HAUPT, deps: kaputt });
+
+  test("git -C ~/x commit im Worktree fragt statt still durchzugehen", () => {
+    const r = lauf2("git -C ~/x commit -m a", WT);
+    assert.equal(r.block, false);
+    assert.equal(r.ask, true);
+    assert.match(r.reason ?? "", /Ziel nicht bestimmbar \(Analysefehler\)/);
+  });
+
+  test("im Haupt-Checkout blockt die cwd-Prüfung weiter", () => {
+    assert.equal(lauf2("git -C ~/x commit -m a", HAUPT).block, true);
+  });
+
+  test("ungeschützter Befehl bleibt erlaubt", () => {
+    assert.deepEqual(lauf2("git -C ~/x status", WT), { block: false });
+    assert.deepEqual(lauf2("cd ~ && git status", HAUPT), { block: false }, "kein Ziel [cwd] bei ungeschütztem Befehl");
   });
 });
