@@ -968,9 +968,9 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
   describe("CLI", () => {
     const P = (K as unknown as { parseArgs: (a: string[]) => { ttl?: boolean; jeTicket?: boolean; fehler?: string } }).parseArgs;
     test("--ttl setzt das Feld, --ttl mit --je-ticket ist ein Aufruf-Fehler", () => {
-      expect(P(["--von", "v", "--ttl"]).ttl).toBe(true);
-      expect(P(["--von", "v"]).ttl).toBeUndefined();
-      expect(P(["--von", "v", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
+      expect(P(["--von", "2026-01-01T00:00:00Z", "--ttl"]).ttl).toBe(true);
+      expect(P(["--von", "2026-01-01T00:00:00Z"]).ttl).toBeUndefined();
+      expect(P(["--von", "2026-01-01T00:00:00Z", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
     });
     test("--von/--bis ohne ISO-Zeitpunkt sind ein Aufruf-Fehler (factory#323), mit und ohne --ttl", () => {
       expect(P(["--von", "kein-datum", "--ttl"]).fehler).toMatch(/--von.*kein-datum/);
