@@ -12,7 +12,7 @@
  */
 import { parseBash } from "./bash-parser.mjs";
 import { MAX_INTERPRETER } from "./hook-io.mjs";
-import { gitCall } from "./worktree-guard-git.mjs";
+import { STASH_GROB, gitCall } from "./worktree-guard-git.mjs";
 import {
   CD_LIKE,
   CD_WRAPPERS,
@@ -449,7 +449,7 @@ export function analyse(command, cwd, deps = {}) {
   c.evalString = (text, D) => evalString(text, D, c);
   if (!command) return { targets: [], asks: c.asks };
   const parsed = parseBash(command);
-  if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks };
+  if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks, stash: STASH_GROB.test(command) };
   evalList(parsed.ast, new Set([c.cwd]), c);
-  return { targets: [...c.targets], asks: c.asks };
+  return { targets: [...c.targets], asks: c.asks, stash: c.stash };
 }

@@ -35,7 +35,8 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
   });
   test("der Umsetzer setzt, wartet, sichert, nimmt zurück und räumt die Marke", () => {
     const text = lies(".agents/skills/factory/umsetzer-gruppen.md");
-    for (const teil of ["Marke `touch \"$(git", "stash push -u -m", "git revert --no-edit", "entferne die Marke (`rm -f` auf denselben Pfad)", "kein `TaskStop` am Gruppen-Umsetzer"]) expect(text).toContain(teil);
+    for (const teil of ["Marke `touch \"$(git", "add -A", "WIP gruppe <k> verworfen", "git revert --no-edit", "entferne die Marke (`rm -f` auf denselben Pfad)", "kein `TaskStop` am Gruppen-Umsetzer"]) expect(text).toContain(teil);
+    expect(text).not.toContain("stash push");
     expect(text).toContain("warte auf den Bericht der Gruppe");
     expect(text).toContain("warte, bis der Worktree ruht: `git -C <worktree> status --porcelain` und `git -C <worktree> diff HEAD` sind bei zwei Messungen im Abstand von 5 Minuten gleich");
     expect(text).not.toContain("kein neuer Commit auf dem Branch");

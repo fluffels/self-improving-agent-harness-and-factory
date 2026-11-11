@@ -450,6 +450,13 @@ describe("Verdrahtung und Guards (Runde 2)", () => {
     const werte = rezepte.filter((x) => x.art === "metadaten").flatMap((x) => x.abfrage.filters.map((y) => (y as { value?: string }).value));
     expect(werte).toContain("sonderrolle");
   });
+  test("kein Bericht (Exit 4): grund in Ausgabe und stderr ohne Key-Muster", async () => {
+    const ladeLive = () => Promise.resolve({ ladeLiveExporte: () => Promise.resolve({ status: "unerreichbar", grund: "401 sk-lf-geheim123 pk-lf-oeffentlich" }) });
+    const r = await auswerten(parseArgs([]), { jetzt: JETZT, projekt: PROJEKT, ladeLive });
+    expect(r.exitCode).toBe(4);
+    expect(r.stdout + r.stderr).not.toMatch(/sk-lf-geheim123|pk-lf-oeffentlich/);
+    expect(r.stderr).toContain("[geschwärzt]");
+  });
   test("Ruhefrist an der Aufrufstelle: um 00:40Z Montag gilt schon die gerade beendete Woche", async () => {
     const r = await lauf([], satz(), { jetzt: new Date("2026-11-09T00:40:00Z") });
     expect(r.stdout).toContain("# Langfuse-Wochenbericht 2026-11-02");

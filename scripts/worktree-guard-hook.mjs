@@ -18,6 +18,7 @@
  *    ein dynamisches Ziel (`cd "$X"`, `cd -`, `popd`) fügt Session-`cwd` und einen Unbekannt-Marker hinzu.
  *    Subshells, Substitutionen, Pipelines und Hintergrundlisten (`&`) wirken nicht nach außen; `{ … }` und
  *    `eval` schon; if/Schleifen/case vereinigen die Enden aller Zweige.
+ *  - Ortsunabhängig verboten (auch im eigenen Worktree): `git stash` außer `list`/`show` (repoweit geteilter Stash, factory#323).
  *  - Geschützt sind `git commit`/`git push`, `git subtree push`, die Unterkommandos von `git submodule foreach` und
  *    `git rebase -x/--exec`, Git-Aliase (`-c alias.p=push p`, `git config alias.*`) und exportiertes
  *    `GIT_DIR`/`GIT_WORK_TREE`. Ziel ist je Verzeichnis aus `D`: `-C`-Kette (relativ, `~` per `os.homedir()`,
@@ -37,6 +38,7 @@
  *    Quotes zählt bei reinen Text-Kommandos (gh, echo, printf, cat, grep, egrep, fgrep, rg ohne `--pre`) nicht.
  *  - Nicht zerlegbar (offenes Quote, `for ((…))`, Verschachtelung über MAX_TIEFE): grobe Wortregel (Wortsuche
  *    "git" + "commit"/"push") gegen das Session-`cwd`.
+ *  - Wirft die Analyse bei einem grob geschützten Befehl, fragt der Hook im Worktree (Ziel nicht bestimmbar); im Haupt-Checkout blockt er (factory#332).
  *  - Fail-open nur bei fehlendem `cwd`, Nicht-Git-Verzeichnis und anderem Repo (dieselbe "kein falsches Rot"-
  *    Philosophie wie check-diffsize.mjs).
  *  - Ersetzt NICHT den PR-Gate (#592): das bleibt die Durchsetzung für Code-Qualität. Der Hook fängt die EINE
@@ -75,6 +77,7 @@ import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
+import { STASH_GROB } from "./worktree-guard-git.mjs";
 import { coarseProtected, fromMsysPath, pathFor } from "./worktree-guard-tabellen.mjs";
 
 export { parseHookInput, buildDenyOutput, analyse, coarseProtected, fromMsysPath };
@@ -208,8 +211,25 @@ const BLOCK_REASON = (top, deps, w) =>
 export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
   const kontextCache = deps.kontextCache ?? new Map();
+  const stash = stashBlock(command, cwd, deps);
+  if (stash) return stash;
   if (!kannZielHaben(command, cwd, deps)) return { block: false }; // kein Ziel, keine Rückfrage: weder Config lesen noch git fragen
   return jeSchutzWurzel(repoRoot, deps, (w) => entscheideFuer({ cwd, command, w, deps, kontextCache }));
+}
+
+const STASH_REASON =
+  "git stash (außer list/show) ist verboten: Stashes sind repoweit geteilt (refs/stash); pop/apply kann fremden WIP anwenden. " +
+  "Zwischenstand stattdessen per `git -C <worktree> add -A` und `git -C <worktree> commit -m \"… WIP …\"` auf dem eigenen Branch sichern (später per `git revert` zurücknehmen) oder als Kopie in den Scratchpad. (factory#323)";
+
+/** Ortsunabhängiger Block für `git stash` (Aliase, Interpreter, dynamischer Unterbefehl eingeschlossen); sonst null. */
+function stashBlock(command, cwd, deps) {
+  let stash;
+  try {
+    stash = analyse(command, cwd, { ...deps, repoRoot: undefined }).stash;
+  } catch {
+    stash = STASH_GROB.test(command); // Analyse wirft: grobe Wortregel statt Durchwinken
+  }
+  return stash ? { block: true, reason: STASH_REASON } : null;
 }
 
 /**
@@ -230,15 +250,19 @@ function entscheideFuer({ cwd, command, w, deps, kontextCache }) {
   const repoRoot = w.wurzel;
   const d = { ...deps, kontextCache, repoRoot };
   let found;
+  let analyseFehler = false;
   try {
     found = analyse(command, cwd, d);
   } catch {
-    found = { targets: coarseProtected(command) ? [cwd] : [], asks: new Map() }; // unerwarteter Fehler: grobe Regel statt Durchwinken
+    analyseFehler = coarseProtected(command);
+    found = { targets: analyseFehler ? [cwd] : [], asks: new Map() }; // unerwarteter Fehler: grobe Regel statt Durchwinken
   }
   for (const target of found.targets) {
     const ctx = resolveGitContext(target, repoRoot, d);
     if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel, deps, w) };
   }
+  // Das `-C`-Ziel ist unbekannt (nur cwd geprüft): fragen statt still durchlassen (factory#332 L38).
+  if (analyseFehler) return { block: false, ask: true, reason: "Worktree-Guard: Ziel nicht bestimmbar (Analysefehler). Den Ort literal angeben (`git -C <worktree-pfad> …`) oder bestätigen." };
   for (const [dir, a] of found.asks) {
     const ctx = resolveGitContext(dir, repoRoot, d);
     if (!ctx.relevant || (a.mainOnly && !ctx.isMainWorktree)) continue;

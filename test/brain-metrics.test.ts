@@ -62,7 +62,7 @@ describe("isBrainPage", () => {
     for (const p of [
       "docs/x.md",
       "C:\\r\\docs\\adr\\0013-a.md",
-      "/r/.claude/worktrees/wt-1/docs/module/sim.md",
+      "/r/.claude/worktrees/wt-1/docs/module/y.md",
     ])
       assert.equal(isBrainPage(p), true, p);
   });
