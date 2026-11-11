@@ -612,6 +612,11 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     }
     assert.equal(run(`WT=${wt}; git -C "$WT" commit -m x`, wt), false, "auch aus dem Worktree");
     assert.equal(run(`WT=${wt}; (git -C $WT commit -m x)`), false, "Subshell sieht die Zuweisung");
+    const eltern = `${repoRoot}/.claude`;
+    assert.equal(run(`WT=${eltern}; git -C $WT/worktrees/${wt.split("/").pop()} commit -m x`), false, "Suffix wird angehängt");
+    assert.equal(run(`WT=${eltern}; git -C "\${WT}/worktrees/${wt.split("/").pop()}" commit -m x`), false, "Suffix in der Quote-Form");
+    assert.equal(run(`WT=${eltern}; git -C "$WT" commit -m x`), true, "ohne Suffix gilt nur der Wert");
+    assert.equal(run(`WT=${wt}; git -C "$WT" commit -m x`), false);
     assert.equal(run(`WT=${wt}; X=$(git -C $WT status); git commit -m x`), true, "Substitution wirkt nicht nach außen, aber der Commit läuft im Haupt-Checkout");
   });
 
@@ -641,6 +646,16 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     blockt(`W=${repoRoot}; WT=${wt}; git -C $W"T" commit -m x`);
     blockt(`WT=${wt}; git --git-dir=$WT/.git commit -m x`);
     assert.equal(ask(`WT=${wt}; unset WT; git -C $WT commit -m x`, wt), true, "unset: im Worktree Rückfrage");
+    blockt(`WT=${wt} & git -C $WT commit -m x`); // Hintergrund-Zuweisung läuft in einer Subshell
+    blockt(`WT=${wt}; local WT; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; export WT+=/x; git -C $WT commit -m x`);
+    blockt(`WT=${wt}; git -C $WT/$X commit -m x`);
+    blockt(`WT=${wt}; git -C $WT/a$X commit -m x`);
+    assert.equal(run(`WT=${wt}; ./WT+=x; git -C $WT commit -m x`), false, "ein Pfad mit `WT+=` im Namen ändert WT nicht");
+    assert.equal(run(`WT=${wt}; WT+x; git -C $WT commit -m x`), false, "`WT+x` ist keine Anhänge-Zuweisung");
+    assert.equal(ask(`WT=$HOME/x; git -C $WT commit -m x`, wt), true, "dynamischer Wert bleibt dynamisch");
+    assert.equal(ask(`WT=; git -C $WT commit -m x`, wt), true, "leerer Wert bleibt dynamisch");
+    assert.equal(ask(`WT=~/x; git -C $WT commit -m x`, wt, withHome(repoRoot)), true, "Wert mit Tilde bleibt dynamisch");
   });
 
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {

@@ -236,7 +236,7 @@ export function setVar(c, name, word) {
 
 /** Das Wort mit aufgelöster Variable (statisch, nicht dynamisch), sonst unverändert. */
 export function aufgeloest(c, w) {
-  const m = w.dynamic && typeof w.raw === "string" ? VAR_FORM.exec(w.raw) : null;
+  const m = VAR_FORM.exec(w.raw); // ohne `raw` (undefined) und bei statischen Wörtern passt keine Form
   if (!m) return w;
   const wert = c.vars.get(m[1] ?? m[2] ?? m[4] ?? m[5]);
   if (typeof wert !== "string") return w;
