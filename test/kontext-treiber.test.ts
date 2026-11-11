@@ -800,3 +800,122 @@ describe("sessions je Zeile (#1814 L8)", () => {
     expect(zeilen({ laeufe: [a, b, c], jeTicket: true })[0].sessions).toEqual(["sess-a", "sess-b"]);
   });
 });
+
+describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
+  type Ttl = { laeufe: number; sessions: string[]; offen: number; calls: number; uebersprungen: number; pausenUeber5: number; neuaufbauUeber5: number; vermeidbar: number; ueber60: number; warmstart: { kandidaten: number; sockel: number }; ist: number; sim: number; simMitWarmstart: number; netto: number; nettoMitWarmstart: number; empfehlung: string; preisStand: string };
+  const ttlBericht = (laeufe: Lauf[]) => (K as unknown as { kontextTreiber: (e: object) => { ttl: Ttl } }).kontextTreiber({ laeufe, ttl: true }).ttl;
+  const mitSession = (l: Lauf, session: string): Lauf => ({ ...l, session } as Lauf);
+  const zwei = (abstandMin: number, zweiterRead: number, agentType = UMSETZER) => lauf("#1 x", [{ min: 0, ctx: 10_000, cacheRead: 0 }, { min: abstandMin, ctx: 12_000, cacheRead: zweiterRead }], agentType);
+
+  test("Pause 10 min mit Neuaufbau: die Simulation liest den Präfix statt ihn zu schreiben (Preise Sonnet ab 2026-10-07)", () => {
+    const r = ttlBericht([zwei(10, 500)]);
+    expect(r.ist).toBeCloseTo(0.0538, 9);
+    expect(r.sim).toBeCloseTo(0.049, 9);
+    expect(r.netto).toBeCloseTo(0.0048, 9);
+    expect([r.pausenUeber5, r.neuaufbauUeber5, r.vermeidbar, r.ueber60]).toEqual([1, 1, 1, 0]);
+  });
+  test("Pause 70 min: nicht vermeidbar, nur der 1h-Aufschlag, Netto negativ", () => {
+    const r = ttlBericht([zwei(70, 500)]);
+    expect(r.sim).toBeCloseTo(0.08605, 9);
+    expect(r.netto).toBeCloseTo(-0.03225, 9);
+    expect([r.pausenUeber5, r.neuaufbauUeber5, r.vermeidbar, r.ueber60]).toEqual([1, 1, 0, 1]);
+  });
+  test("Pause 60 min genau ist noch vermeidbar, 61 min nicht (Grenze)", () => {
+    expect(ttlBericht([zwei(60, 500)]).vermeidbar).toBe(1);
+    expect(ttlBericht([zwei(61, 500)]).vermeidbar).toBe(0);
+  });
+  test("Pause 3 min: nur der Aufschlag", () => {
+    const r = ttlBericht([zwei(3, 10_000)]);
+    expect(r.ist).toBeCloseTo(0.031, 9);
+    expect(r.sim).toBeCloseTo(0.049, 9);
+    expect([r.pausenUeber5, r.neuaufbauUeber5, r.vermeidbar]).toEqual([0, 0, 0]);
+  });
+  test("Pause 10 min mit hohem Read: kein Neuaufbau, nicht vermeidbar", () => {
+    const r = ttlBericht([zwei(10, 10_000)]);
+    expect([r.pausenUeber5, r.neuaufbauUeber5, r.vermeidbar]).toEqual([1, 0, 0]);
+    expect(r.sim).toBeCloseTo(0.049, 9);
+  });
+  test("Call ohne gültige Zeit zählt nur als übersprungen", () => {
+    const l = zwei(10, 500);
+    const zeilen = l.zeilen.map((z, i, alle) => (i === alle.length - 1 ? { ...z, timestamp: "kaputt" } : z));
+    const r = ttlBericht([{ ...l, zeilen }]);
+    expect(r.uebersprungen).toBe(1);
+    expect(r.calls).toBe(1);
+    expect(r.ist).toBeCloseTo(0.025, 9);
+  });
+  test("Call ohne Preis (unbekanntes Modell) ist übersprungen, nie 0 $", () => {
+    const l = lauf("#1 x", [{ min: 0 }]);
+    const zeilen = l.zeilen.map((z) => (z.type === "assistant" ? { ...z, message: { ...(z.message as object), model: "claude-unbekannt-9" } } : z));
+    const r = ttlBericht([{ ...l, zeilen }]);
+    expect([r.calls, r.uebersprungen]).toEqual([0, 1]);
+  });
+  test("Haiku über 100k Prompt-Tokens: die Preisstufe greift in Ist und Simulation", () => {
+    const l = lauf("#1 x", [{ min: 0, ctx: 150_000, cacheRead: 0 }]);
+    const zeilen = l.zeilen.map((z) => (z.type === "assistant" ? { ...z, message: { ...(z.message as object), model: "claude-haiku-5-5" } } : z));
+    const r = ttlBericht([{ ...l, zeilen }]);
+    expect(r.ist).toBeCloseTo(0.09375, 9);
+    expect(r.sim).toBeCloseTo(0.15, 9);
+  });
+  test("offene Läufe zählen nur in offen; Preisstand und Läufe stehen im Ergebnis", () => {
+    const offen = lauf("#2 x", [{ min: 0, tools: [{ name: "Bash", input: { command: "ls" }, result: null }] }]);
+    const r = ttlBericht([zwei(10, 500), offen]);
+    expect([r.laeufe, r.offen, r.preisStand]).toEqual([1, 1, "2026-10-08"]);
+  });
+  test("Sessions: eindeutig und sortiert", () => {
+    expect(ttlBericht([mitSession(zwei(3, 10_000), "b"), mitSession(zwei(3, 10_000), "a"), mitSession(zwei(3, 10_000), "b")]).sessions).toEqual(["a", "b"]);
+  });
+
+  describe("Warmstart über Läufe", () => {
+    const warm = (session: string, ab: number) => mitSession(lauf("#1 x", [{ min: ab, ctx: 10_000, cacheRead: 8000 }, { min: ab + 1, ctx: 10_500, cacheRead: 10_000 }]), session);
+    const kalt = (session: string, ab: number) => mitSession(lauf("#1 x", [{ min: ab, ctx: 10_000, cacheRead: 0 }, { min: ab + 1, ctx: 10_500, cacheRead: 10_000 }]), session);
+    const kandidaten = (a: Lauf, b: Lauf, ...rest: Lauf[]) => ttlBericht([a, b, ...rest]).warmstart.kandidaten;
+    test("10 min nach dem letzten Call eines anderen Laufs derselben Session ist der kalte Start ein Kandidat", () => {
+      const r = ttlBericht([warm("s", -20), kalt("s", 10)]);
+      expect(r.warmstart).toEqual({ kandidaten: 1, sockel: 8000 });
+      expect(r.netto).toBeCloseTo(r.nettoMitWarmstart - (r.sim - r.simMitWarmstart), 12);
+      expect(r.simMitWarmstart).toBeCloseTo(r.sim - (8000 * (4 - 0.1)) / 1e6, 9);
+    });
+    test("3 min Abstand, 70 min Abstand oder eine andere Session: kein Kandidat", () => {
+      expect(kandidaten(warm("s", -20), kalt("s", -17))).toBe(0);
+      expect(kandidaten(warm("s", 0), kalt("s", 71))).toBe(0);
+      expect(kandidaten(warm("s", 0), kalt("t", 10))).toBe(0);
+    });
+    test("ein weiterer Lauf mit Call in den 5 min davor macht den Start nicht zum Kandidaten", () => {
+      expect(kandidaten(warm("s", -20), warm("s", 7), kalt("s", 10))).toBe(0);
+    });
+    test("ohne warm gestartete erste Calls ist der Sockel 0, die Ersparnis 0", () => {
+      const r = ttlBericht([kalt("s", -20), kalt("s", 10)]);
+      expect(r.warmstart).toEqual({ kandidaten: 1, sockel: 0 });
+      expect(r.simMitWarmstart).toBeCloseTo(r.sim, 12);
+    });
+  });
+
+  describe("Empfehlung", () => {
+    const viele = (n: number, abstandMin: number) => Array.from({ length: n }, (_, i) => mitSession(zwei(abstandMin, 500), `s${i}`));
+    test("1h nur ab 10 Läufen mit Netto > 0; darunter 5m", () => {
+      expect(ttlBericht(viele(10, 10)).empfehlung).toBe("1h");
+      expect(ttlBericht(viele(9, 10)).empfehlung).toBe("5m");
+    });
+    test("Netto der Kette negativ: 5m", () => {
+      expect(ttlBericht(viele(10, 70)).empfehlung).toBe("5m");
+    });
+  });
+
+  describe("CLI", () => {
+    const P = (K as unknown as { parseArgs: (a: string[]) => { ttl?: boolean; jeTicket?: boolean; fehler?: string } }).parseArgs;
+    test("--ttl setzt das Feld, --ttl mit --je-ticket ist ein Aufruf-Fehler", () => {
+      expect(P(["--von", "v", "--ttl"]).ttl).toBe(true);
+      expect(P(["--von", "v"]).ttl).toBeUndefined();
+      expect(P(["--von", "v", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
+    });
+    test("Markdown nennt Fenster, Preisstand, Zähler und Netto", () => {
+      const bericht = (K as unknown as { kontextTreiber: (e: object) => object }).kontextTreiber({ laeufe: [zwei(10, 500)], ttl: true, von: "2026-10-08T00:00:00Z", bis: "2026-10-09T00:00:00Z" });
+      const md = K.renderMarkdown(bericht as never);
+      expect(md).toContain("Fenster 2026-10-08T00:00:00Z bis 2026-10-09T00:00:00Z");
+      expect(md).toContain("Preisstand 2026-10-08");
+      expect(md).toContain("vermeidbar (bis 60 min): 1");
+      expect(md).toContain("Netto in $ (positiv: 1h spart): Kette 0,0048");
+      expect(md).toContain(`\`${UMSETZER}\``);
+    });
+  });
+});
