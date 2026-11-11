@@ -37,7 +37,7 @@
  *
  * Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` und `.agents/skills/<name>/**`.md haben je Datei ein Budget (`AGENTEN_SKILL_BUDGETS`, Default `AGENTEN_SKILL_DEFAULT_BUDGET`
  * für Dateien ohne Eintrag, auch projekt-eigene im Bezieher), gemessen ohne Projektwerte (Block und Werte der Frontmatter-Zeilen); `collectAgentSkillSizes`. Der Ratchet (ein Budget wächst nicht gegenüber der Merge-Base) steht
- * als Fabrik-Wächter in test/harness/kontext-budget-ratchet.test.ts.
+ * als Fabrik-Wächter in test/harness/kontext-budget-ratchet.test.ts. Bei einer Verletzung nennt `fixHinweis` für diese Dateien Kürzen bzw. Auslagern in eine bedingte Zusatzdatei (nicht „modul-lokale AGENTS.md“, die gilt nur für AGENTS.md).
  *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */
@@ -105,6 +105,27 @@ export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_B
     chars: zeichenOhneBlock(leereProjektwerte(readFileSync(join(rootDir, file), "utf8"), file), marker),
     budget: budgetOf.get(file) ?? defaultBudget,
   }));
+}
+
+/** Agenten- oder Skill-Datei (nicht AGENTS.md): ihr Budget gehört dem Kern, die Fix-Zeile unterscheidet sich von der einer AGENTS.md. */
+const istAgentSkill = (file) => file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/");
+
+/** Pur: Fix-Zeile zu den Budget-Verletzungen [{ file }] (leer ohne Verletzung): AGENTS.md → auslagern in modul-lokale AGENTS.md bzw. Tiefendoc; Agenten-/Skill-Datei → kürzen oder in eine bedingte Zusatzdatei bzw. Brain-Seite auslagern, das Budget nie anheben (Ratchet). */
+export function fixHinweis(violations) {
+  const teile = [];
+  if (violations.some((v) => !istAgentSkill(v.file))) {
+    teile.push(
+      "Inhalt auslagern – bereichsspezifische Tiefe in eine modul-lokale AGENTS.md bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in " +
+        "ausnahmen.kontext in " + PROJEKT_CONFIG + " aufnehmen (datei, grund mit #<nr>).",
+    );
+  }
+  if (violations.some((v) => istAgentSkill(v.file))) {
+    teile.push(
+      `Agenten-/Skill-Datei: kürzen oder in eine bedingte Zusatzdatei unter ${QUELL_VERZEICHNIS}/<name>/ bzw. eine Brain-Seite auslagern; das Budget wächst nicht (Ratchet: test/harness/kontext-budget-ratchet.test.ts). ` +
+        "Nur mit offenem Ticket ausnahmsweise unter ausnahmen.kontext in " + PROJEKT_CONFIG + " aufnehmen (datei, grund mit #<nr>).",
+    );
+  }
+  return teile.join(" ");
 }
 
 /** Dateien strikt über ihrem eigenen Budget. */
@@ -180,13 +201,7 @@ function main() {
     return;
   }
 
-  if (violations.length)
-    console.error(
-      `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
-        `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md ` +
-        `bzw. ein Modul-Tiefendoc (struktur.moduldoku der Projekt-Config) – oder, mit offenem Auslagerungs-Ticket (Harness: das Sammelticket), bewusst in ` +
-        `ausnahmen.kontext in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
-    );
+  if (violations.length) console.error(`\n${violations.length} Kontextdatei(en) über dem Budget. ${fixHinweis(violations)}`);
   process.exit(1);
 }
 
