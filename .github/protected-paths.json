@@ -67,7 +67,7 @@
     "/scripts/worktree-guard-eval.mjs",
     "/scripts/worktree-guard-git.mjs",
     "/scripts/worktree-guard-tabellen.mjs",
-    "/scripts/lens-arm.mjs",
+    "/scripts/lens-arm-lib.mjs",
     "/scripts/lens-auftrag-guard.mjs",
     "/scripts/nachweis-lib.mjs",
     "/scripts/groessenstufe.mjs",

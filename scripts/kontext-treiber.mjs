@@ -39,7 +39,7 @@ import { PRICES, PRICES_STAND, priceFor, priceParts } from "./preise.mjs";
 import { bereinige, CACHE_TTL_MS, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
-import { armeZuordnen, lensTypen } from "./lens-arm.mjs";
+import { armeZuordnen, lensTypen } from "./lens-arm-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
@@ -678,15 +678,19 @@ function zeitpunktFehler(werte) {
   return name && `--${name} erwartet einen ISO-Zeitpunkt, nicht ${werte[name]}`;
 }
 
+/** `--agent` (wiederholbar, factory#235): `agent` ist der erste Typ (Standard `agenten.umsetzer`), `agenten` die Liste ab zwei verschiedenen Typen. */
+function agentenAus(werte, namen) {
+  const typen = [...new Set(werte.agent ?? [])];
+  return { agent: typen[0] ?? namen?.agenten?.umsetzer, ...(typen.length > 1 ? { agenten: typen } : {}) };
+}
+
 /** `namen` liefert den Standard-Agenten (`agenten.umsetzer`), wenn `--agent` fehlt. */
 export function parseArgs(argv, namen) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string", multiple: true }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, ttl: { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
-  const typen = [...new Set(werte.agent ?? [])];
-  const a = { agent: typen[0] ?? namen?.agenten?.umsetzer, tickets, ohne, json: werte.json === true };
-  if (typen.length > 1) a.agenten = typen;
+  const a = { ...agentenAus(werte, namen), tickets, ohne, json: werte.json === true };
   for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
   if (werte["je-ticket"] === true) a.jeTicket = true;
   ttlFlag(werte, a);

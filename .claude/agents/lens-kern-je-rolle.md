@@ -96,7 +96,7 @@ Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vol
 
 - **PR-gegated, ein PR pro Ticket.** Feature-Branch im Worktree, PR mit Body `Closes #<nr>`, Auto-Merge (`--squash --delete-branch --auto`), grün mergt, rot auf demselben Branch fixen. `main` ist serverseitig geschützt (kein Direkt-Push, kein `--no-verify`).
 - **Projekt-Stopps:** keine über die Kern-Liste hinaus.
-- **Fabrik ohne Zugriff auf Bezieher (factory#162, ADR 0031).** Ein Fabrik-Lauf schreibt nie in ein Bezieher-Repo (kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar); Bezieher holen Updates selbst (`factory-update.yml`), Auffälligkeiten werden Sammelticket-Zeilen „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“; erreicht ein Befund sein Ziel nicht, wird er ein Issue „Nicht eintragbar: …“ im eigenen Repo ([Mechanik](docs/ticket-reihenfolge.md#offene-punkte-der-maintainerin-factory152)). Die Regel gilt nur in der Fabrik und steht darum hier, nicht im Kern-Block.
+- **Fabrik ohne Zugriff auf Bezieher (factory#162, ADR 0031).** Ein Fabrik-Lauf schreibt nie in ein Bezieher-Repo (kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar); Bezieher holen Updates selbst (`factory-update.yml`), Auffälligkeiten werden Sammelticket-Zeilen „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“; erreicht ein Befund sein Ziel nicht, wird er ein Issue „Nicht eintragbar: …“ im eigenen Repo ([Mechanik](../../docs/ticket-reihenfolge.md#offene-punkte-der-maintainerin-factory152)). Die Regel gilt nur in der Fabrik und steht darum hier, nicht im Kern-Block.
 
 ### Gates
 
@@ -112,7 +112,7 @@ Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks 
 
 ### Verifikation
 
-- **Langfuse-Erfassung erhalten (quellprojekt#1293).** Agenten, Subagenten, MCP-Server, Hooks (Registrierung), Plugins geändert: PR belegt per Probe-Lauf, dass Langfuse sie erfasst; [Wann/Ablauf](docs/model-routing.md#langfuse-erfassung-belegen-1293). **Vorbedingung:** kein Ticketlauf startet ohne erreichbares Langfuse (`node scripts/langfuse-vorbedingung.mjs`, Exit 1: stoppen, melden).
+- **Langfuse-Erfassung erhalten (quellprojekt#1293).** Agenten, Subagenten, MCP-Server, Hooks (Registrierung), Plugins geändert: PR belegt per Probe-Lauf, dass Langfuse sie erfasst; [Wann/Ablauf](../../docs/model-routing.md#langfuse-erfassung-belegen-1293). **Vorbedingung:** kein Ticketlauf startet ohne erreichbares Langfuse (`node scripts/langfuse-vorbedingung.mjs`, Exit 1: stoppen, melden).
 - **Im Browser verifizieren.** Sicht- oder bedienbare Ausgaben prüft der Agent per Playwright-MCP, nicht nur „sollte gehen“; den Zustand zuerst über den Dev-Helfer des Projekts lesen, einen Screenshot nur für die Optik.
 - **Doku aktuell halten ist Teil von „fertig“.** Sie beschreibt den Ist-Zustand; Historie gehört in ADRs und `git log`, nicht in Agenten-Kontext.
 - **Projekt-Brain pflegen.** Am Ticket-Ende im selben PR Übertragbares (in sechs Monaten noch wahr, nicht aus Code oder Git ableitbar) nach Wissensart ablegen: Regel → AGENTS.md, Entscheidung → ADR, Evergreen → Brain-Seite.

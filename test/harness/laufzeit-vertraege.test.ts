@@ -2,7 +2,7 @@
  * CI-Job. Geschlossene Vertragsliste:
  *  V1 Skills: die Zeiger-Parität prüft `skills-sync.test.ts`; hier wird nur dessen Existenz verlangt.
  *  V2 Rollen: jede `quelle` aus `rollenFuer(config)` (scripts/codex-rollen.mjs) ist eine Agentendatei `.claude/agents/<quelle>.md`;
- *     jede Agentendatei ist Rollenquelle oder steht mit Grund in AGENTEN_AUSNAHMEN.
+ *     jede Agentendatei ist Rollenquelle oder steht mit Grund in AGENTEN_AUSNAHMEN (heute `lens-kern-je-rolle`, Arm B der A/B-Messung factory#235: Codex-Rollen sind Forks, `omitClaudeMd` ist dort nicht abbildbar).
  *  V3 Hooks: jedes Hook-Skript aus `.claude/settings.json` hat genau eine Zeile in HOOK_TABELLE {hook, modul, codex, grenze};
  *     `codex: null` braucht eine Grenze mit Ticketnummer (heute #84); ein Adapter muss dieselben Auswertungsmodule importieren;
  *     importiert ein `scripts/codex-*.mjs` ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen.

@@ -32,7 +32,7 @@ import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } fr
 import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
-import { armeZuordnen } from "./lens-arm.mjs";
+import { armeZuordnen } from "./lens-arm-lib.mjs";
 import { ticketNamen } from "./ticket-namen.mjs";
 import { projektOrdner } from "./transkript.mjs";
 

@@ -35,7 +35,7 @@ import { BEKANNTE_LENSES, HEX_HEAD } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
-import { lensArm, lensTypen } from "./lens-arm.mjs";
+import { lensArm, lensTypen } from "./lens-arm-lib.mjs";
 import { patchAus } from "./patch-zugriff.mjs";
 import { ticketAusLauf } from "./subagent-laeufe.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -99,6 +99,23 @@ function brillenGrund(text) {
   return `Lens-Auftrag unvollständig: der Prompt beginnt nicht mit „Brille: <Schlüssel>“ mit einer bekannten Brille (${BEKANNTE_LENSES.join(", ")}); die Lens liest ihre Brillen-Datei (brille-<Schlüssel>.md) selbst und braucht den Schlüssel. ${HINWEIS}`;
 }
 
+/** R3: Grund, wenn `erwarteter HEAD:` kein Commit-Hash ist (fehlt das Feld, `null`). Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt. Pure. */
+function headGrund(head) {
+  const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
+  if (head === undefined || HEX_HEAD.test((hash ?? "").toLowerCase())) return null;
+  return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
+}
+
+/** R2: Grund, wenn ein Kopf-Feld noch einen Platzhalter `<…>` trägt; sonst `null`. Pure. */
+function platzhalterGrund(felder) {
+  for (const [name, wert] of Object.entries(felder)) {
+    if (/<[^<>\r\n]*>/.test(wert)) {
+      return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). Ein Zusatz in derselben Zeile zählt mit, auch ein erklärendes „<…>“: Erklärungen in eine eigene Zeile schreiben. ${HINWEIS}`;
+    }
+  }
+  return null;
+}
+
 /** R6: Grund, wenn der Typ nicht der Arm des Tickets ist; `null` ohne Lens-Typ, ohne ableitbare Nummer oder bei passendem Typ. Pur bei übergebenem `bezieher` (Funktion). */
 function armGrund(subagentType, text, namen, bezieher) {
   if (!lensTypen(namen).includes(subagentType)) return null;
@@ -119,19 +136,12 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
     return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (die Plan-Prüfliste wurde nicht eingesetzt). ${HINWEIS}`;
   }
   const felder = parseLensAuftrag(text);
-  for (const [name, wert] of Object.entries(felder)) {
-    if (/<[^<>\r\n]*>/.test(wert)) {
-      return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). Ein Zusatz in derselben Zeile zählt mit, auch ein erklärendes „<…>“: Erklärungen in eine eigene Zeile schreiben. ${HINWEIS}`;
-    }
-  }
+  const offen = platzhalterGrund(felder);
+  if (offen) return offen;
   const endung = unbekannteLensEndung(text, namen);
   if (endung) return endung;
-  const head = felder["erwarteter HEAD"];
-  // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
-  const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
-  if (head !== undefined && !HEX_HEAD.test((hash ?? "").toLowerCase())) {
-    return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
-  }
+  const kopf = headGrund(felder["erwarteter HEAD"]);
+  if (kopf) return kopf;
   // Kein Prompt-Feld (kaputte oder fremde Eingabe) bleibt fail-open wie bisher.
   if (prompt === undefined) return null;
   return brillenGrund(text) ?? armGrund(subagentType, text, namen, deps.bezieher ?? (() => istBezieher(WURZEL)));

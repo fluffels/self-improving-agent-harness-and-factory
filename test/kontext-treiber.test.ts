@@ -1034,14 +1034,14 @@ describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
     expect(r.aus).toMatch(new RegExp(`Ungültig.*#3 \\(${[LENS_B, LENS].sort().join(" \\+ ")}\\)`));
     const j = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B, "--json"], laeufeJeTyp);
     expect(j.code).toBe(3);
-    expect(JSON.parse(j.aus).ungueltig).toHaveLength(1);
+    expect((JSON.parse(j.aus) as JeTyp).ungueltig).toHaveLength(1);
   });
   test("CLI: gültige Messung Exit 0; ein einzelnes --agent gibt den Bericht ohne Typ-Umschlag aus", () => {
     const gueltig = { [LENS]: [lensLauf(2, LENS)], [LENS_B]: [lensLauf(1, LENS_B)] };
     expect(cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B], gueltig).code).toBe(0);
     const einzeln = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS_B, "--json"], gueltig);
     expect(einzeln.code).toBe(0);
-    expect(Object.keys(JSON.parse(einzeln.aus))).toContain("gesamt");
-    expect(JSON.parse(einzeln.aus).agenten).toBeUndefined();
+    expect(Object.keys(JSON.parse(einzeln.aus) as object)).toContain("gesamt");
+    expect((JSON.parse(einzeln.aus) as Partial<JeTyp>).agenten).toBeUndefined();
   });
 });

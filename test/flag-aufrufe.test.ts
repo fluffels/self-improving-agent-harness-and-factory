@@ -129,8 +129,8 @@ const ZEILEN: Zeile[] = [
     exit: 2,
     erste: (m) => m,
     aufruf: /^Aufruf: node scripts\/kontext-treiber\.mjs --von <ISO>/m,
-    faelle: { unbekannt: ["--bogus"], ohneWert: ["--agent"], doppelt: ["--agent", "a", "--agent", "b"] },
-    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--agent braucht einen Wert", doppelt: "--agent ist doppelt angegeben" },
+    faelle: { unbekannt: ["--bogus"], ohneWert: ["--agent"], doppelt: ["--projekt", "a", "--projekt", "b"] },
+    meldungen: { unbekannt: STD.unbekannt, ohneWert: "--agent braucht einen Wert", doppelt: "--projekt ist doppelt angegeben" },
   },
   {
     skript: "langfuse-abgleich",

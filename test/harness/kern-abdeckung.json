@@ -23,6 +23,10 @@
     "art": "projekt",
     "grund": "manueller verify-Lauf dieses Projekts auf macOS (ganze Datei über die Extraktionsliste)"
   },
+  ".claude/agents/lens-kern-je-rolle.md": {
+    "art": "projekt",
+    "grund": "Arm B der A/B-Messung Kern je Rolle (factory#235): Messung nur der Fabrik, trägt den Projekt-Block der AGENTS.md, Bezieher laufen in Arm A"
+  },
   ".agents/skills/factory-ticket/SKILL.md": {
     "art": "projekt",
     "grund": "Ticket-Skill des Projekts (Ticket-Ablauf dieses Repos)"

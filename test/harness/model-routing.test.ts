@@ -94,7 +94,7 @@ import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as lensArmRoh from "../../scripts/lens-arm.mjs";
+import * as lensArmRoh from "../../scripts/lens-arm-lib.mjs";
 const lensArm = lensArmRoh as unknown as { LENS_B: string };
 
 const escapeRegex = (namenRoh as unknown as { escapeRegex: (t: string) => string }).escapeRegex;

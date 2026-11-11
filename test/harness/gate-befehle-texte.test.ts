@@ -121,7 +121,7 @@ function scanUmfang(): { quellen: Quelle[]; zaehler: Record<string, number> } {
   const ganz = (pfad: string, z: keyof typeof zaehler) => {
     gesehen.add(pfad);
     zaehler[z] += 1;
-    quellen.push({ pfad, fund: funde(pfad, lies(pfad), { istAgentsMd: pfad === "AGENTS.md" }) });
+    quellen.push({ pfad, fund: funde(pfad, lies(pfad), { istAgentsMd: pfad === "AGENTS.md" || pfad === ".claude/agents/lens-kern-je-rolle.md" }) }); // die Arm-B-Lens (factory#235) trägt den Projekt-Block der AGENTS.md
   };
   ganz("AGENTS.md", "agents");
   for (const f of repoDateien().filter((p) => /^\.claude\/agents\/[^/]+\.md$/.test(p))) ganz(f, "agenten");

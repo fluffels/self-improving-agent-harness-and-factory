@@ -12,12 +12,14 @@ import { projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as armRaw from "../../scripts/lens-arm.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as armLibRaw from "../../scripts/lens-arm-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRaw from "../../scripts/ticket-namen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as besitzRaw from "../../scripts/besitz-lib.mjs";
 
 type Namen = { agenten: Record<string, string> };
-const arm = armRaw as unknown as {
+const arm = { ...(armLibRaw as object), ...(armRaw as object) } as unknown as {
   LENS_B: string;
   lensTypen: (n: Namen) => string[];
   lensArm: (nr: number, o: { namen: Namen; bezieher?: boolean }) => { arm: string; typ: string };
@@ -115,7 +117,8 @@ describe("Parität: Arm A und Arm B unterscheiden sich in genau einer Variable",
   });
   test("Projekt-Block im Rumpf von Arm B == Projekt-Block der AGENTS.md", () => {
     const agents = lies("AGENTS.md");
-    const soll = agents.slice(agents.indexOf(PROJEKT_BLOCK_START)).trimEnd();
+    // Die Links der AGENTS.md sind wurzelrelativ, der Agent liegt zwei Ordner tiefer (`../../`): nur diese Umrechnung ist erlaubt.
+    const soll = agents.slice(agents.indexOf(PROJEKT_BLOCK_START)).trimEnd().replace(/\]\((?!https?:|#|\.\.\/)([^)\s]+)\)/g, "](../../$1)");
     const ist = (b.rumpf.split(`\n${BLOCK_B_UEBERSCHRIFT}\n`)[1] ?? "").trimStart().trimEnd();
     expect(agents.includes(PROJEKT_BLOCK_START)).toBe(true);
     expect(ist, `Der Projekt-Block in ${B_PFAD} ist nicht der aus AGENTS.md ab ${PROJEKT_BLOCK_START}: Block neu kopieren (Variante D, factory#235).`).toBe(soll);
