@@ -558,6 +558,7 @@ describe("Kosten je Merge (factory#324)", () => {
     expect(ohne).toMatchObject({ deltaJeMergeProzent: null, jeMerge: null, merges: null, deltaProzent: 50 });
     expect(E.kennzahlen(bw(30), bw(0, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
     expect(E.kennzahlen(bw(30), bw(0, 4), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
+    expect(E.kennzahlen(bw(30), bw(5, 0), { woche: 3, vorwoche: 3 }).deltaProzent).toBeNull();
     expect(E.kennzahlen(bw(30), bw(5, 0), { woche: 3, vorwoche: 3 }).deltaJeMergeProzent).toBeNull();
   });
   test("ohne Merges: Urteil meldet kostenAnstiegProzent nicht bewertbar", () => {
@@ -571,7 +572,7 @@ describe("Kosten je Merge (factory#324)", () => {
     const ohne = lib.renderWochenbericht(MONTAG, PF, lib.wochenAuswertung(lib_ordne(satz()), { schwellen: SCHWELLEN }));
     expect(ohne).toContain("Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.");
     const ohneKosten = (await lauf([], satz({ kostenV: 0 }))).stdout;
-    expect(ohneKosten).toContain("Δ – (Vorwoche ohne Kosten, nicht bewertbar)");
+    expect(ohneKosten).toMatch(/^Gemergte PRs:.*Δ – \(Vorwoche ohne Kosten, nicht bewertbar\)/m);
     expect(ohneKosten).toContain("Gemergte PRs: Woche 10, Vorwoche 10;");
   });
   test("auswerten: Markdown trägt die Zeile Kosten je Merge, JSON summe.merges; gh-Aufrufe für Woche und Vorwoche", async () => {

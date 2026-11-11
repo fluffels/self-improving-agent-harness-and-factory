@@ -204,18 +204,17 @@ export function mergeAnzahl(text) {
 
 /**
  * Summe, Δ, Kosten je Merge und Anteil unzugeordnet aus den Berichten der Woche und der Vorwoche; nicht bewertbare Werte sind `null`.
- * `merges` = `{ woche, vorwoche }` gemergte PRs (Nenner mindestens 1); ohne `merges` ist `deltaJeMergeProzent` `null`, bei 0 Merges in beiden Wochen gilt das Summen-Δ.
+ * `merges` = `{ woche, vorwoche }` gemergte PRs (Nenner mindestens 1); ohne `merges` ist `deltaJeMergeProzent` `null`, bei 0 Merges in beiden Wochen ergibt der Nenner 1 beider Seiten das Summen-Δ.
  */
 export function kennzahlen(b, bV, merges = null) {
   const bewertbar = bV.bereinigt.count > 0 && bV.bereinigt.cost > 0;
   const delta = bewertbar ? ((b.bereinigt.cost - bV.bereinigt.cost) / bV.bereinigt.cost) * 100 : null;
   const unz = b.bereinigt.cost > 0 ? (b.unzugeordnet.cost / b.bereinigt.cost) * 100 : null;
   const je = (cost, n) => cost / Math.max(n, 1);
-  const beideNull = merges !== null && merges.woche === 0 && merges.vorwoche === 0;
   const jeMerge = merges === null ? null : je(b.bereinigt.cost, merges.woche);
   const jeMergeVor = merges === null ? null : je(bV.bereinigt.cost, merges.vorwoche);
   let deltaJe = null;
-  if (bewertbar && merges !== null) deltaJe = beideNull ? delta : ((jeMerge - jeMergeVor) / jeMergeVor) * 100;
+  if (bewertbar && merges !== null) deltaJe = ((jeMerge - jeMergeVor) / jeMergeVor) * 100;
   return { summe: b.bereinigt.cost, vorwoche: bV.bereinigt.cost, deltaProzent: delta, merges, jeMerge, jeMergeVorwoche: jeMergeVor, deltaJeMergeProzent: deltaJe, unzugeordnetProzent: unz };
 }
 
