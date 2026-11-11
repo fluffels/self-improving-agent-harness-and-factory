@@ -400,7 +400,8 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
   });
 
   test("ein cwd, das es nicht mehr gibt, und Quellen ohne claudeDir: kein effort, kein Fehler", () => {
-    const w = welt({ "c/settings.json": JSON.stringify({ effortLevel: "high" }), "p/x": "" });
+    const w = welt({ "c/agents/e.md": AGENT("Explore"), "c/settings.json": JSON.stringify({ effortLevel: "high" }), "p/x": "" });
+    expect(subZ(w)?.effort).toBe("high"); // Gegenprobe: mit vorhandenem cwd greift der Benutzerwert
     expect(subZ(w, undefined, join(w.root, "weg"))).not.toHaveProperty("effort");
     const ohneDir = Zo.zuordnungen({ id: "s1", main: [...mitCwd("h", w.cwd), ...spawn0()], subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: "Explore", toolUseId: "tu0" }, zeilen: mitCwd("m", w.cwd) }] }, { env: {} } as unknown as Q);
     expect(ohneDir.get("m")).not.toHaveProperty("effort");
@@ -420,7 +421,11 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
   test("Laufbeginn: Zeilen ohne oder mit ungültigem Zeitstempel zählen nicht; ganz ohne Zeitstempel ist der Beginn unbekannt", () => {
     const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low") });
     utimesSync(join(w.root, "p/.claude/agents/e.md"), new Date(), new Date()); // jünger als jeder Zeitstempel im Transkript
-    const ohneZeit = mitCwd("m", w.cwd).map(({ timestamp: _t, ...r }) => r);
+    const ohneZeit: Row[] = mitCwd("m", w.cwd).map((r) => {
+      const kopie: Row = { ...r };
+      delete kopie.timestamp;
+      return kopie;
+    });
     const kaputtUndGut = [...mitCwd("m", w.cwd).map((r) => ({ ...r, timestamp: "kaputt" })), ...mitCwd("m", w.cwd)];
     const z = (zeilen: Row[]) => Zo.zuordnungen({ id: "s1", main: spawn0(), subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: "Explore", toolUseId: "tu0" }, zeilen }] }, w.q).get("m");
     expect(z(ohneZeit)).not.toHaveProperty("effort");

@@ -289,7 +289,7 @@ const effortAusMeta = (meta) => statusVon(meta?.effort);
 
 /** Stufe „`effort` im Agent-`tool_use`“ (über `toolUseId`): nicht auffindbar ⇒ nicht bestimmbar; gefunden ohne `effort` ⇒ weiter. */
 function effortAusSpawn(toolUseId, aufrufe) {
-  return toolUseId !== undefined && aufrufe.has(toolUseId) ? statusVon(aufrufe.get(toolUseId)) : UNBEKANNT;
+  return aufrufe.has(toolUseId) ? statusVon(aufrufe.get(toolUseId)) : UNBEKANNT;
 }
 
 /** Stufe „Umgebung“: `CLAUDE_CODE_EFFORT_LEVEL` in der Prozess-Umgebung oder in `env` einer Settings-Datei überschreibt jede Datei-Einstellung. */
@@ -372,8 +372,9 @@ const textOderUndefined = (v) => (typeof v === "string" && v !== "" ? v : undefi
  * - `agent_type`: Hauptdatei ⇒ `hauptchat`, Subagent ⇒ `agentType` der `meta.json`; fehlt er dort, fehlt der Schlüssel (nie eine Rolle erfinden).
  * - `effort`: der an der Message beobachtete Wert; fehlt er dort, der `effort` der `meta.json`, dann der `effort` im Agent-`tool_use`
  *   (über `toolUseId` der Meta), dann (nur mit `quellen` = `{ claudeDir, env }`) `effort` im Frontmatter der Agentendefinition und die Effort-Einstellung
- *   der Settings (`effortLevel`). Jede dieser Dateien muss seit Laufbeginn unverändert sein (mtime ≤ erster Call der Datei), die Definition eindeutig,
- *   `cwd` bekannt, `CLAUDE_CODE_EFFORT_LEVEL` nirgends gesetzt und kein `/effort`/`/model` in der Hauptdatei; sonst oder bei ungültigem Wert fehlt der Schlüssel.
+ *   der Settings (`effortLevel`). Ein fehlendes Feld geht zur nächsten Stufe; ein ungültiger Wert (auch am Zeilenwert), ein nicht auffindbarer Aufruf und jede
+ *   Unsicherheit beenden die Kette ohne Schlüssel: Datei seit Laufbeginn geändert (mtime > erster Call der Datei), Definition fehlt oder mehrdeutig,
+ *   `cwd` unbekannt oder nicht mehr vorhanden, `CLAUDE_CODE_EFFORT_LEVEL` gesetzt (Umgebung oder Settings-env), kaputte Settings, `/effort`/`/model` in der Hauptdatei.
  * - Steht eine Message in mehr als einer Datei, entfallen `agent_type` und `effort` (Rolle nicht eindeutig); `thinking` bleibt als ODER.
  * Eine EINZIGE Ableitung für den Nachlieferer und den Hook.
  */
