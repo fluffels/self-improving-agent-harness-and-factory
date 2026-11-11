@@ -57,7 +57,7 @@ function eintragsGruende(e, muster, prognose) {
   if (e.pfad.startsWith('"')) return [`Pfad von git quotiert (${e.pfad}): nicht prüfbar`];
   const gruende = [];
   if (trifftLeitplanke(e.pfad, muster)) gruende.push(`${e.pfad} liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill)`);
-  if (!prognose && e.zeilen === null) gruende.push(`${e.pfad} ist binär (Zeilen nicht zählbar)`);
+  if (!prognose && !Number.isInteger(e.zeilen)) gruende.push(`${e.pfad} ist binär oder ohne lesbare Zeilenzahl (Zeilen nicht zählbar)`);
   return gruende;
 }
 
@@ -73,7 +73,7 @@ export function bestimmeGroessenstufe({ eintraege, muster, prognose = false }) {
   const gruende = eintraege.flatMap((e) => eintragsGruende(e, alle, prognose));
   if (eintraege.length > GROESSENSTUFE_S.maxDateien) gruende.push(`${eintraege.length} Dateien (höchstens ${GROESSENSTUFE_S.maxDateien})`);
   if (!prognose) {
-    const summe = eintraege.reduce((a, e) => a + (Number.isInteger(e?.zeilen) ? e.zeilen : 0), 0);
+    const summe = eintraege.reduce((a, e) => a + e.zeilen, 0);
     if (summe > GROESSENSTUFE_S.maxZeilen) gruende.push(`${summe} Zeilen (höchstens ${GROESSENSTUFE_S.maxZeilen})`);
   }
   return { stufe: gruende.length === 0 ? "S" : "voll", gruende };

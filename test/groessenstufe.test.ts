@@ -61,7 +61,7 @@ describe("bestimmeGroessenstufe: Kriterium (K1)", () => {
   });
   test("die Prognose kennt keine Zeilen: nur Dateizahl und Pfade zählen", () => {
     expect(stufe([{ pfad: "docs/a.md" }, { pfad: "src/b.ts" }], MUSTER, true).stufe).toBe("S");
-    expect(stufe([{ pfad: "docs/a.md" }], MUSTER, false).stufe).toBe("S");
+    expect(stufe([{ pfad: "docs/a.md" }], MUSTER, false).stufe).toBe("voll");
     expect(stufe([{ pfad: "src/save/a.ts" }], MUSTER, true).stufe).toBe("voll");
   });
 });
@@ -122,6 +122,10 @@ describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
       { pfad: "bild.bin", zeilen: null },
       { pfad: "bild2.bin", zeilen: null },
     ]);
+  });
+  test("ohne lesbare Zeilenzahl (fehlend, Text, Bruch) ist der Diff voll, in der Prognose nicht", () => {
+    for (const zeilen of [undefined, "5", 1.5, Number.NaN]) expect(stufe([{ pfad: "docs/a.md", zeilen: zeilen as unknown as number }]).stufe, String(zeilen)).toBe("voll");
+    expect(stufe([{ pfad: "docs/a.md", zeilen: null }], MUSTER, true).stufe).toBe("S");
   });
   test("ein Pfad aus Leerraum ist kein Pfad (voll); die Prognose ignoriert angegebene Zeilen", () => {
     expect(stufe([{ pfad: "   ", zeilen: 1 }]).stufe).toBe("voll");
