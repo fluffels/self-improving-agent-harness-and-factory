@@ -62,6 +62,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       plan: "AB-Plan",
       review: "AB-Review",
       abnahme: "AB-Abnahme",
+      bedrohungen: "AB-Bedrohungen",
       reviewOverride: "AB-Review-Override",
       abnahmeOverride: "AB-Abnahme-Override",
       diffsizeOverride: "AB-Diffsize-Override",
