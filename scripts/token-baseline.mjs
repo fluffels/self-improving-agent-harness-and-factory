@@ -131,14 +131,12 @@ export function countReviewRounds(reviewDescriptions) {
 
 /**
  * Umsetzer (nicht Gruppen-Umsetzer): exakter Name `agenten.umsetzer`, sonst dieselbe Namens-Heuristik wie
- * `classifySubagent` (Planer, Lens und Recherche gehen vor, `agenten.gruppe` zählt nicht).
+ * `classifySubagent` (Planer-, Lens- und Recherche-Namen zählen nicht, `agenten.gruppe` ebenso nicht).
  */
 function istUmsetzer(agentType, agenten = {}) {
-  const t = String(agentType ?? "");
-  if (t === "") return false;
-  if (t === agenten.planer || t === agenten.lens || t === agenten.gruppe) return false;
+  const t = typeof agentType === "string" ? agentType : "";
   if (t === agenten.umsetzer) return true;
-  return !/planner|explore|lens/i.test(t) && /umsetzer/i.test(t);
+  return t !== agenten.gruppe && !/planner|explore|lens/i.test(t) && /umsetzer/i.test(t);
 }
 
 const subKey = (c) => c.subagent.id ?? c.subagent;

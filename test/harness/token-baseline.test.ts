@@ -825,6 +825,17 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
       assert.equal(mitNamen(calls).sockel.umsetzer, null);
     });
 
+    test("ohne agenten gilt die Namens-Heuristik: „umsetzer“ im Typ (groß oder klein) zählt, Planer-, Explore- und Lens-Namen und ein Typ ohne Namen nicht", () => {
+      const sockelFuer = (agentType: string | undefined, agenten?: Agenten): number | null =>
+        mRoh.summarize({ calls: [at("2026-10-05T10:10:00Z", 30_000, { subagent: { id: "x", agentType, description: "x" } })] }, {}, null, { umsetzer: a.umsetzer, ...(agenten ? { agenten } : {}) }).sockel.umsetzer;
+      assert.equal(sockelFuer("x-umsetzer"), 30_000);
+      assert.equal(sockelFuer("X-UMSETZER"), 30_000);
+      for (const name of ["x-planner-umsetzer", "x-explore-umsetzer", "x-lens-umsetzer", "general-purpose", undefined]) assert.equal(sockelFuer(name), null, String(name));
+      assert.equal(sockelFuer(undefined, {} as Agenten), null, "ein Typ ohne Namen ist auch bei leeren agenten kein Umsetzer");
+      assert.equal(sockelFuer("zz-umsetzer-gruppe", { ...a, gruppe: "zz-umsetzer-gruppe" }), null, "der Gruppen-Umsetzer zählt nicht, auch wenn sein Name „umsetzer“ enthält");
+      assert.equal(sockelFuer("zz-umsetzer-gruppe", { ...a, gruppe: "andere" }), 30_000);
+    });
+
     test("renderMarkdown nennt den Umsetzer-Sockel nach der Lens", () => {
       const md = m.renderMarkdown(mitNamen([at("2026-10-05T10:10:00Z", 41_000, { subagent: umsA })]));
       assert.match(md, /Lens [^·]*· Umsetzer 41\.000/);
