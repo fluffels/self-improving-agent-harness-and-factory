@@ -37,7 +37,8 @@ import { designGrund } from "./design-lib.mjs";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pfadHinweis } from "./pfadwurzeln-lib.mjs";
-import { CODEQUALITAET_SAMMELTICKET_TITEL, NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
+import { ALLE_SAMMELTICKET_TITEL } from "./sammelticket-titel.mjs";
+import { CODEQUALITAET_SAMMELTICKET_TITEL, NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -273,7 +274,7 @@ const uebersprungenEintrag = (nr, r) => ({ nr, grund: r.grund, ...(r.fehlt ? { f
 const ticketVon = (item, r) => ({ nr: item.number, titel: item.title, ...(r.bestandFehlt ? { spezifikation: { bestand: true, fehlt: r.bestandFehlt } } : {}) });
 
 /** Kopf-Items (Status-Ticket, Notfälle), Sammel- und Epic-Tickets haben eigene Formate und sind vom Spezifikations-Gate ausgenommen. */
-const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || SAMMELTICKET_TITEL_LISTE.includes(t.titel) || istEpicTitel(t.titel);
+const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || ALLE_SAMMELTICKET_TITEL.includes(t.titel) || istEpicTitel(t.titel);
 
 const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
 const FUELLSTAND_OHNE_LADER = () => ({ fehler: "kein Lader" });

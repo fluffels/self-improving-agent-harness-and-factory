@@ -104,6 +104,22 @@ describe("Verbleib gate-erzwungener Regeln", () => {
     assert.match(verbleibBefunde({ eintraege, lies }).join("\n"), /factory-umsetzer\.md × pre-flight: der gespeicherte Text steht in .* nicht/);
   });
 
+  test("Negativfall am echten Stand (factory#309): fehlt je Regel ihr gespeicherter Text an ihrem Ort, ist der Kern des Review-Skills rot", () => {
+    const eintraege = echteListe().filter((e) => e.datei === SCAN_DATEIEN[1]);
+    assert.equal(eintraege.length, Object.keys(REGELN).length);
+    for (const eintrag of eintraege) {
+      const lies = (pfad: string): string | null => {
+        const t = echtLesen(pfad);
+        return t !== null && pfad === eintrag.ort ? t.split(eintrag.text).join("") : t;
+      };
+      assert.match(
+        verbleibBefunde({ eintraege: echteListe(), lies }).join("\n"),
+        new RegExp(`review-lenses/SKILL\\.md × ${eintrag.regel}: der gespeicherte Text steht in .* nicht`),
+        `${eintrag.regel}: ohne den Text an seinem Ort muss der Wächter rot werden`,
+      );
+    }
+  });
+
   describe("Mechanik (Befund je Klasse)", () => {
     const satz = "Der Stopp gilt nur bei Irreversiblem oder Außenwirkung und nie bei einer bloßen Ermessensfrage, die der Agent selbst entscheidet.";
     const fremd = "Fremdtext-Kommentare liest du nur über `node scripts/fremdtext.mjs`, mit Plan `<praefixe.commitZeile>Plan:` und Review `<praefixe.commitZeile>Review:` hat das nichts zu tun.";

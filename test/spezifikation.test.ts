@@ -448,6 +448,53 @@ describe("Sprache als Projektwert (#1711)", () => {
   });
 });
 
+describe("anlegen --epic (L1): native Unteraufgabe", () => {
+  const MIT = (...e: string[]) => [...ANLEGEN, ...e.flatMap((x) => ["--epic", x])];
+  const mitKnoten = (extra: Record<string, unknown> = {}) => {
+    const verknuepft: unknown[] = [];
+    const u = umgebung({ "b.md": GUT });
+    const io = {
+      ...u.io,
+      erzeuge: (a: Parameters<Io["erzeuge"]>[0]) => ({ ...u.io.erzeuge(a), node_id: "N900" }),
+      verknuepfeEpic: (a: unknown) => void verknuepft.push(a),
+      ...extra,
+    };
+    return { io: io as unknown as Io, verknuepft, aufrufe: u.aufrufe };
+  };
+  test("--epic 275: genau ein Aufruf mit neuer Knoten-ID und Epic-Nummer im Ziel-Repo", () => {
+    const { io, verknuepft } = mitKnoten();
+    const r = S.fuehreAus(MIT("275"), io);
+    expect(r.code).toBe(0);
+    expect(verknuepft).toEqual([{ issueNodeId: "N900", epic: 275, repo: FREMD.repo }]);
+  });
+  test("ohne --epic kein Aufruf", () => {
+    const { io, verknuepft } = mitKnoten();
+    S.fuehreAus(ANLEGEN, io);
+    expect(verknuepft).toEqual([]);
+  });
+  test("--epic abc: Exit 2 vor jedem I/O, nichts angelegt; bei reparieren abgelehnt", () => {
+    for (const bad of ["abc", "0", "1.5"]) {
+      const { io, aufrufe } = umgebung({ "b.md": GUT });
+      const r = S.fuehreAus(MIT(bad), io);
+      expect(r.code, bad).toBe(2);
+      expect(r.err).toContain("--epic");
+      expect(aufrufe.erzeuge).toEqual([]);
+    }
+    expect(S.aufrufPruefen(["reparieren", "5", "--body-datei", "b.md", "--epic", "3"]).fehler).toBe("Unbekanntes Argument: --epic");
+  });
+  test("Fehler der Verknüpfung: Warnung auf stderr, Exit 0, Einsortieren unverändert", () => {
+    const { io, aufrufe } = mitKnoten({
+      verknuepfeEpic: () => {
+        throw new Error("kaputt");
+      },
+    });
+    const r = S.fuehreAus(MIT("275"), io);
+    expect(r.code).toBe(0);
+    expect(r.err).toMatch(/Unteraufgabe von #275 nicht gesetzt.*kaputt/s);
+    expect(aufrufe.einsortiere).toHaveLength(1);
+  });
+});
+
 describe("anlegen --blocker (#1860)", () => {
   const MIT = (...bl: string[]) => [...ANLEGEN, ...bl.flatMap((b) => ["--blocker", b])];
   test("aufrufPruefen: --blocker mehrfach, als Zahlen; ohne Flag eine leere Liste", () => {
@@ -864,6 +911,23 @@ describe("echteIo: die Lambdas reichen das Ziel-Repo durch (#78 L13h)", () => {
     io.verknuepfeBlocker({ issueNodeId: "NEU_NODE", blocker: { repo: EIGENES, nummer: 7 }, repo: "zz-org/ziel" });
     expect(aufrufe[2]?.opts).toEqual({ token: undefined });
     expect(aufrufe[3]?.opts).toEqual({ token: "pt" });
+  });
+  test("verknuepfeEpic: Lookup des Epics im Ziel-Repo, Mutation addSubIssue mit issueId = Epic, subIssueId = neues Ticket", () => {
+    const aufrufe: { args: string[]; opts: unknown }[] = [];
+    const gh = (args: string[], opts: unknown) => (aufrufe.push({ args, opts }), { node_id: "EPIC_NODE" });
+    const io = E.echteIo(config, { ghJson: gh, env: { PROJECT_TOKEN: "pt" } }) as unknown as { verknuepfeEpic: (a: { issueNodeId: string; epic: number; repo: string }) => void };
+    io.verknuepfeEpic({ issueNodeId: "NEU_NODE", epic: 275, repo: "zz-org/ziel" });
+    expect(aufrufe[0]?.args).toEqual(["api", "repos/zz-org/ziel/issues/275"]);
+    expect(aufrufe[0]?.opts).toEqual({ token: "pt" });
+    const mutation = aufrufe[1]?.args ?? [];
+    expect(mutation.slice(0, 2)).toEqual(["api", "graphql"]);
+    expect(mutation).toContain("i=EPIC_NODE");
+    expect(mutation).toContain("s=NEU_NODE");
+    const query = mutation.find((a) => a.startsWith("query=")) ?? "";
+    expect(query).toContain("addSubIssue");
+    expect(query).toMatch(/issueId:\s*\$i\b/);
+    expect(query).toMatch(/subIssueId:\s*\$s\b/);
+    expect(aufrufe[1]?.opts).toEqual({ token: "pt" });
   });
   test("einsortiere startet board-place mit --repo <repo> (nach und notfall)", () => {
     const { io, exec } = bau();

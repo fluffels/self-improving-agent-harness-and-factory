@@ -140,7 +140,7 @@
     "complexity": 8
   },
   "scripts/spezifikation.mjs": {
-    "complexity": 5
+    "complexity": 1
   },
   "scripts/statusline.mjs": {
     "max-depth": 1

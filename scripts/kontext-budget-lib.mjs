@@ -98,7 +98,11 @@ export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, mark
 export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/factory/SKILL.md", budget: 1_500 },
   { file: ".agents/skills/factory/ablauf.md", budget: 37_500 },
-  { file: ".agents/skills/review-lenses/SKILL.md", budget: 30_500 },
+  { file: ".agents/skills/review-lenses/SKILL.md", budget: 10_000 },
+  { file: ".agents/skills/review-lenses/ablauf-abnahme-fix.md", budget: 1_500 },
+  { file: ".agents/skills/review-lenses/ablauf-merge-main.md", budget: 6_000 },
+  { file: ".agents/skills/review-lenses/ablauf-nachweis.md", budget: 3_000 },
+  { file: ".agents/skills/review-lenses/ablauf-zusatzpass.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-architektur.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-doku.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-kombiniert.md", budget: 1_500 },

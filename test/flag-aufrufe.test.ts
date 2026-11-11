@@ -17,7 +17,7 @@ const SAMMEL_USAGE = "Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr
 const SPEZ_AUFRUF = [
   "Aufruf:",
   "  node scripts/spezifikation.mjs pruefen --body-datei <pfad>",
-  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …]',
+  '  node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pfad> --label area:<x> [--label <l> …] (--nach <nr> --weil "<grund>" | --notfall <art>) [--blocker <nr> …] [--epic <nr>]',
   "  node scripts/spezifikation.mjs reparieren <nr> --body-datei <pfad>",
   '  node scripts/spezifikation.mjs gescheitert <nr> --mangel "<text>"',
 ].join("\n");

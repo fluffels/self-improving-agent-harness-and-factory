@@ -10,6 +10,7 @@ import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
+import { SICHERHEITS_SAMMELTICKET_TITEL } from "./sammelticket-titel.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
@@ -50,7 +51,7 @@ export async function inboxStart(argv, { skript, praefix, ladeConfig = () => lad
 }
 
 /** Titel des Sammeltickets für Sicherheits-Zeilen im Bezieher (factory#153): Zeilen ohne eigenes Ticket, im eigenen Repo, ohne 🔒, am Ende der Todo-Spalte. */
-export const REST_TITEL = "Sicherheit: Rest-Befunde (gesammelt)";
+export const REST_TITEL = SICHERHEITS_SAMMELTICKET_TITEL;
 const REST_BODY = "Sammelticket für Sicherheitsbefunde dieses Projekts ohne eigenes Ticket (Audit- und Code-Scanning-Zeilen unterhalb der Alarmschwelle). Die Befunde bleiben im eigenen Repo und gehen nie an das Eingangs-Repo der Fabrik. Befunde als Kommentar `- [ ] …` anhängen; abarbeiten und das Ticket schließen, der nächste Lauf legt es bei neuen Zeilen neu an.";
 
 /**
