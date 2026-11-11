@@ -153,7 +153,8 @@ const agentKey = (c) => (c.subagent ? subKey(c) : c.session ? `main:${c.session}
  * Sockel (#1198/#1206): Kontext des ERSTEN Calls des Hauptagenten (Größe der Session, darum
  * sessionweit und unabhängig von `--from`) bzw. je Subagent; Planung und Review als Median über
  * die Subagenten IM Ticket-Fenster (`windowCalls`: nach `--from`, ohne Nachlauf), damit der Planer
- * eines anderen Tickets derselben Session nicht mitzählt.
+ * eines anderen Tickets derselben Session nicht mitzählt. Der Umsetzer-Sockel (factory#307) ist derselbe Median über die
+ * Umsetzer-Subagenten (auch der Fortsetzungs-Umsetzer des Phasen-Schnitts), ohne Gruppen-Umsetzer.
  */
 function sockelOf(allCalls, windowCalls, agenten) {
   const first = (calls) => [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
