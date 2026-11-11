@@ -972,6 +972,12 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
       expect(P(["--von", "v"]).ttl).toBeUndefined();
       expect(P(["--von", "v", "--ttl", "--je-ticket"]).fehler).toMatch(/--ttl und --je-ticket/);
     });
+    test("--von/--bis ohne ISO-Zeitpunkt sind ein Aufruf-Fehler (factory#323), mit und ohne --ttl", () => {
+      expect(P(["--von", "kein-datum", "--ttl"]).fehler).toMatch(/--von.*kein-datum/);
+      expect(P(["--von", "kein-datum"]).fehler).toMatch(/--von/);
+      expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "kein-datum"]).fehler).toMatch(/--bis.*kein-datum/);
+      expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "2026-11-11T13:18:00Z", "--ttl"]).fehler).toBeUndefined();
+    });
     test("Markdown nennt Fenster, Preisstand, Zähler und Netto", () => {
       const bericht = (K as unknown as { kontextTreiber: (e: object) => object }).kontextTreiber({ laeufe: [zwei(10, 500)], ttl: true, von: "2026-10-08T00:00:00Z", bis: "2026-10-09T00:00:00Z" });
       const md = K.renderMarkdown(bericht as never);
