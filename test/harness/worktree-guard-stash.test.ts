@@ -39,6 +39,20 @@ describe("git stash ist ortsunabhängig abgelehnt", () => {
   }
 });
 
+describe("dynamische Unterbefehle und Analysefehler", () => {
+  test('list mit dynamischem Anhang und dynamische Option vor list sind abgelehnt', () => {
+    assert.equal(pruefe('git stash list"$X"').block, true);
+    assert.equal(pruefe('git stash -"$X" list').block, true);
+  });
+
+  test("wirft die Analyse (homedir), greift die grobe Wortregel: pop blockt, list nicht", () => {
+    const kaputt = { ...deps, homedir: () => { throw new Error("h"); } };
+    const lauf = (command: string) => decide({ cwd: WT, command, repoRoot: ROOT, deps: kaputt });
+    assert.equal(lauf("cd ~ && git stash pop").block, true);
+    assert.equal(lauf("cd ~ && git stash list").block, false);
+  });
+});
+
 describe("erlaubt bleibt", () => {
   for (const cmd of ["git stash list", "git stash show -p", 'echo "git stash pop"', 'gh issue comment --body "git stash"', "git status"]) {
     test(cmd, () => assert.equal(pruefe(cmd).block, false));

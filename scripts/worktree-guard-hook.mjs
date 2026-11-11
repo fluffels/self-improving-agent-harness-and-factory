@@ -221,11 +221,13 @@ const STASH_REASON =
 
 /** Ortsunabhängiger Block für `git stash` (Aliase, Interpreter, dynamischer Unterbefehl eingeschlossen); sonst null. */
 function stashBlock(command, cwd, deps) {
+  let stash;
   try {
-    return analyse(command, cwd, { ...deps, repoRoot: undefined }).stash ? { block: true, reason: STASH_REASON } : null;
+    stash = analyse(command, cwd, { ...deps, repoRoot: undefined }).stash;
   } catch {
-    return null; // die Prüfung je Wurzel entscheidet fail-closed
+    stash = /\bgit\b.*\bstash\b(?!\s+(?:list|show)\b)/s.test(command); // Analyse wirft: grobe Wortregel statt Durchwinken
   }
+  return stash ? { block: true, reason: STASH_REASON } : null;
 }
 
 /**
