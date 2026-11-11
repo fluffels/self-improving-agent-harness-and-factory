@@ -141,7 +141,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     const doc = parse(readRepo(".github/workflows/ci.yml")) as { jobs: Record<string, { steps: CiSchritt[] }> };
     const treffer = Object.values(doc.jobs).flatMap((j) => j.steps).filter((s) => s.name.startsWith("Verify"));
     expect(treffer, "ci.yml braucht genau einen Schritt \"Verify…\"").toHaveLength(1);
-    return treffer[0]!;
+    return treffer[0];
   }
 
   it("factory#270: die CI fährt die Suite einmal mit Coverage (kein eigener Coverage-Gate-Schritt, Env am Verify-Schritt)", () => {
