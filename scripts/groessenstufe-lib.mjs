@@ -76,6 +76,31 @@ export function ladeRisikoMuster({ pfad } = {}) {
   return risikoMusterAus(ladeProjektConfig({ pfad, pruefen: false }));
 }
 
+/**
+ * Die Risiko-Muster als Vereinigung von Basis und HEAD (factory#339): ein Diff darf die eigene Muster-Liste nicht schmaler machen, um sich aus Klasse hoch zu nehmen.
+ * `basis === null` (nur Tests): nur HEAD. Hat eine Seite `fehler` oder keine Muster: `muster: null` (fail-closed, hoch). Gleiche Mengen: HEAD unverändert. Pur.
+ */
+export function vereinigeRisiko(basis, kopf) {
+  if (basis === null) return kopf;
+  const quelle = "Projekt-Config (Basis ∪ HEAD)";
+  const fehler = [basis, kopf].flatMap((r) => (r.fehler?.length ? r.fehler : []));
+  if (fehler.length > 0 || !Array.isArray(basis.muster) || !Array.isArray(kopf.muster)) {
+    return { muster: null, quelle, fehler: fehler.length > 0 ? fehler : ["keine Risiko-Muster geladen"] };
+  }
+  const menge = [...new Set([...basis.muster, ...kopf.muster])];
+  if (menge.length === kopf.muster.length && menge.length === basis.muster.length) return kopf;
+  return { muster: menge, quelle };
+}
+
+/** Die Risiko-Muster der Basis über `git show <base>:.factory/projekt.json`; nicht lesbar (Datei fehlt, kein JSON): Standardliste als Basisanteil. Ein ungültiger `risiko`-Block bleibt `fehler`. */
+function risikoDerBasis(git, base) {
+  try {
+    return risikoMusterAus(JSON.parse(git(["show", `${base}:.factory/projekt.json`])));
+  } catch {
+    return { ...STANDARD_RISIKO };
+  }
+}
+
 const pfadFehler = (p) => {
   if (typeof p !== "string" || p.trim() === "") return "Dateiliste nicht lesbar (Eintrag ohne Pfad)";
   return p.startsWith('"') ? `Pfad von git quotiert (${p}): nicht prüfbar` : null;
@@ -186,13 +211,13 @@ export function ladeLeitplankenMuster(quelle = new URL("../.github/protected-pat
 /**
  * Die Größenstufe des Diffs `base...head` über die injizierte git-Funktion (`git(args)` liefert stdout, wirft bei Fehler). Fail-closed:
  * ein Fehler beim Laden der Schutzliste, der Risiko-Muster oder bei git ist `voll` (Risikoklasse `hoch`) mit dem Grund. Mit `zweiPunkt` gilt `base..head`
- * (für einen einzelnen Commit `sha^..sha`). `ladeRisiko` liefert die Risiko-Muster (Standard: Projekt-Config des Repos).
+ * (für einen einzelnen Commit `sha^..sha`). `ladeRisiko` liefert die Risiko-Muster von HEAD (Standard: Projekt-Config des Repos), `ladeRisikoBasis` die der Basis (Standard: `git show`, `null` = kein Basisanteil, nur Tests); gerechnet wird mit der Vereinigung (`vereinigeRisiko`). `core.quotepath=off` hält Umlaut-Pfade unquotiert.
  */
-export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = ladeLeitplankenMuster, ladeRisiko = () => ladeRisikoMuster(), zweiPunkt = false } = {}) {
+export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = ladeLeitplankenMuster, ladeRisiko = () => ladeRisikoMuster(), ladeRisikoBasis = () => risikoDerBasis(git, base), zweiPunkt = false } = {}) {
   const meldung = (e) => (e instanceof Error ? e.message : String(e));
   let risiko;
   try {
-    risiko = ladeRisiko();
+    risiko = vereinigeRisiko(ladeRisikoBasis(), ladeRisiko());
   } catch (e) {
     risiko = { muster: null, quelle: "Projekt-Config", fehler: [`Projekt-Config nicht ladbar: ${meldung(e)}`] };
   }
@@ -204,7 +229,7 @@ export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = lad
     return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle), sweep: sweepVoll(grund) };
   }
   try {
-    const ausgabe = git(["diff", "--numstat", "--no-renames", `${base}${zweiPunkt ? ".." : "..."}${head}`]);
+    const ausgabe = git(["-c", "core.quotepath=off", "diff", "--numstat", "--no-renames", `${base}${zweiPunkt ? ".." : "..."}${head}`]);
     return bestimmeGroessenstufe({ eintraege: parseNumstatNoRenames(ausgabe), muster, risiko });
   } catch (e) {
     const grund = `git-Fehler beim Zählen des Diffs: ${meldung(e)}`;

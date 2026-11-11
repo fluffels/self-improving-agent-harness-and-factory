@@ -148,8 +148,8 @@ describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
   });
   test("ohne head zählt der Aufruf bis HEAD", () => {
     const aufrufe: string[] = [];
-    lib.groessenstufeAusGit((a) => (aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n"), "B", undefined, { ladeMuster: () => MUSTER });
-    expect(aufrufe).toEqual(["diff --numstat --no-renames B...HEAD"]);
+    lib.groessenstufeAusGit((a) => (a[0] === "show" ? "" : aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n"), "B", undefined, { ladeMuster: () => MUSTER });
+    expect(aufrufe).toEqual(["-c core.quotepath=off diff --numstat --no-renames B...HEAD"]);
   });
   test("Zeilen werden summiert, Binärdateien sind null, Müll hat keinen Pfad", () => {
     expect(lib.parseNumstatNoRenames("3\t4\tdocs/a.md\n-\t-\tbild.png\nkaputt\n\n")).toEqual([
@@ -161,12 +161,12 @@ describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
   test("der git-Aufruf zählt mit --no-renames über base...head, mit zweiPunkt über base..head", () => {
     const aufrufe: string[] = [];
     const git = (a: string[]) => {
-      aufrufe.push(a.join(" "));
+      if (a[0] !== "show") aufrufe.push(a.join(" "));
       return "1\t0\tdocs/a.md\n";
     };
     expect(lib.groessenstufeAusGit(git, "B", "H", { ladeMuster: () => MUSTER }).stufe).toBe("S");
     lib.groessenstufeAusGit(git, "B", "H", { ladeMuster: () => MUSTER, zweiPunkt: true });
-    expect(aufrufe).toEqual(["diff --numstat --no-renames B...H", "diff --numstat --no-renames B..H"]);
+    expect(aufrufe).toEqual(["-c core.quotepath=off diff --numstat --no-renames B...H", "-c core.quotepath=off diff --numstat --no-renames B..H"]);
   });
   test("ein git-Fehler und ein Ladefehler der Schutzliste sind voll (fail-closed)", () => {
     const wirft = () => {
@@ -188,8 +188,8 @@ describe("CLI groessenstufe.mjs", () => {
   });
   test("--commit rechnet <sha>^..<sha>", () => {
     const aufrufe: string[] = [];
-    cli.laufe(["--commit", "abc1234"], { ...o, git: (a) => (aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n") });
-    expect(aufrufe).toEqual(["diff --numstat --no-renames abc1234^..abc1234"]);
+    cli.laufe(["--commit", "abc1234"], { ...o, git: (a) => (a[0] === "show" ? "" : aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n") });
+    expect(aufrufe).toEqual(["-c core.quotepath=off diff --numstat --no-renames abc1234^..abc1234"]);
   });
   test("--pfade ist die Prognose; ein geschützter Pfad gibt voll samt Grund, --json liefert das Objekt", () => {
     expect(cli.laufe(["--pfade", "docs/x.md", "docs/y.md"], o).ausgabe).toBe("STUFE: S\nRISIKO: doku — nur *.md\nSWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch");
@@ -209,7 +209,7 @@ describe("CLI groessenstufe.mjs", () => {
     expect(fehler.stderr).toMatch(/Aufruf: node scripts\/groessenstufe\.mjs/);
   });
   describe("RISIKO-Zeile (factory#333)", () => {
-    const STD = { muster: ["*auth*"], quelle: "Standardliste" };
+    const STD = lib.risikoMusterAus({});
     const mit = { ...o, ladeRisiko: () => STD };
     test("ohne Argument, --commit und --pfade: zweite Zeile RISIKO", () => {
       const authGit = () => "1\t0\tsrc/auth/x.ts\n";

@@ -439,7 +439,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
     if (j === "rev-parse HEAD") return "d".repeat(40);
     if (j.startsWith("log --reverse")) return `${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}\n${extra}`;
     if (j.startsWith("diff --name-only")) return "src/a.ts\n";
-    if (j.startsWith("diff --numstat")) return "100\t0\tsrc/a.ts\n"; // sonst fiele die Risikoklasse fail-closed auf hoch (factory#334)
+    if (j.startsWith("-c core.quotepath=off diff --numstat")) return "100\t0\tsrc/a.ts\n"; // sonst fiele die Risikoklasse fail-closed auf hoch (factory#334)
     if (j.startsWith("rev-parse --verify")) return SHA;
     if (j.startsWith("rev-list --count")) return "1";
     if (j.startsWith("rev-list --merges")) return "";
