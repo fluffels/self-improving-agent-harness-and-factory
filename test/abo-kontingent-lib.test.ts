@@ -300,7 +300,6 @@ describe("Claims", () => {
 describe("aboKontingent und Abschnitt", () => {
   const claim = T0;
   const merge = T0 + 60 * MIN;
-  const FRIST = 14 * 24 * 60 * MIN;
   const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", fristAbgelaufen: true, ...extra });
   const eins = (punkte: Punkt[], t: Ticketzeile[] = [zeile(1)], kaputt = 0) =>
     L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000 });
