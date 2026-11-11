@@ -97,25 +97,43 @@ function ereignisse(zeilen, seitMs) {
 
 const nichtPruefbar = (grund) => ({ status: "nicht-pruefbar", grund });
 
-/** Zeilen der Session, wenn sie einen eigenen Start haben, sonst alle (Rückfall: Subagent oder Resume ohne eigenen Start). Pur. */
-function wahlZeilen(ev, sessionId) {
+/** Wahl der Zeilen ohne Dateizuordnung: die der Session, wenn sie einen eigenen Start haben, sonst alle (Rückfall). Pur. */
+function wahlOhneDateien(ev, sessionId) {
   const eigene = sessionId ? ev.filter((e) => e.sessionId === sessionId) : [];
   return eigene.some((e) => START.test(e.text)) ? { ev: eigene, quelle: "session" } : { ev, quelle: "rueckfall" };
 }
 
 /**
+ * Wahl mit Dateizuordnung (je Prozess eine Log-Datei, sie überlebt einen Wechsel der Session-ID): eigener Start → die eigenen Zeilen (`session`);
+ * sonst die Datei mit den jüngsten eigenen Zeilen, ganz (`prozess`); sonst alle Dateien (Rückfall, `fremd: true`). Pur.
+ */
+function wahlMitDateien(gruppen, sessionId) {
+  const alle = gruppen.flat().sort((a, b) => a.ms - b.ms);
+  const eigene = alle.filter((e) => e.sessionId === sessionId);
+  if (eigene.some((e) => START.test(e.text))) return { ev: eigene, quelle: "session" };
+  const datei = gruppen.filter((g) => g.some((e) => e.sessionId === sessionId)).sort((a, b) => a.at(-1).ms - b.at(-1).ms).at(-1);
+  return datei ? { ev: datei, quelle: "prozess" } : { ev: alle, quelle: "rueckfall", fremd: true };
+}
+
+const wahlZeilen = (ev, sessionId, gruppen) => (gruppen && sessionId ? wahlMitDateien(gruppen, sessionId) : wahlOhneDateien(ev, sessionId));
+
+/**
  * Urteil über die Verbindung eines MCP-Servers aus seinen JSONL-Zeilen: `{ status: "verbunden"|"getrennt"|"nicht-pruefbar", grund, quelle, url, code, zeit }`.
  * Es zählt der letzte `Starting connection` ab `seit`; danach entscheidet das letzte Ergebnis (`Successfully connected` = verbunden, Verbindungsfehler ohne spätere Neuverbindung = getrennt).
- * Hat die Session (`sessionId`) keinen eigenen Start, zählt der jüngste Start im Fenster (`quelle: "rueckfall"`, kann eine fremde Session sein). Kein Start oder Start ohne Ergebnis: nicht prüfbar. Pur.
+ * Die Session-ID wechselt nach /clear oder Resume (Prozess und Log-Datei bleiben), Sub-Agenten teilen sie. Mit `dateien` (Zeilenlisten je Log-Datei) gilt darum: eigener Start → `session`; sonst die Datei mit eigenen Zeilen → `prozess`;
+ * sonst Rückfall auf den jüngsten Start im Fenster (`rueckfall`, eine fremde Session): getrennt bleibt getrennt (streng), verbunden wird nicht prüfbar (der Erfolg gehört nicht diesem Prozess).
+ * Ohne `dateien` ist der Rückfall nur die Zeilenmenge. Kein Start oder Start ohne Ergebnis: nicht prüfbar. Pur.
  */
-export function mcpVerbindung(zeilen, { sessionId, seit }) {
-  const { ev, quelle } = wahlZeilen(ereignisse(zeilen, Date.parse(seit)), sessionId);
+export function mcpVerbindung(zeilen, { sessionId, seit, dateien }) {
+  const seitMs = Date.parse(seit);
+  const gruppen = dateien?.map((d) => ereignisse(d, seitMs));
+  const { ev, quelle, fremd } = wahlZeilen(ereignisse(zeilen, seitMs), sessionId, gruppen);
   const start = ev.findLastIndex((e) => START.test(e.text));
   if (start < 0) return { ...nichtPruefbar("kein Verbindungsstart im Fenster"), quelle };
   const letzte = ev.slice(start + 1).findLast((e) => ERFOLG.test(e.text) || FEHLER.test(e.text));
   if (!letzte) return { ...nichtPruefbar("Verbindungsstart ohne Ergebnis"), quelle };
   const url = ev.slice(0, start).findLast((e) => MCP_URL.test(e.text))?.text.match(MCP_URL)?.[1] ?? null;
-  if (ERFOLG.test(letzte.text)) return { status: "verbunden", grund: "Verbindung steht", quelle, url };
+  if (ERFOLG.test(letzte.text)) return fremd ? { ...nichtPruefbar("nur fremde Session verbunden"), quelle, url } : { status: "verbunden", grund: "Verbindung steht", quelle, url };
   const code = netzCode(letzte.text) || "Verbindungsfehler";
   const zeit = new Date(letzte.ms).toISOString();
   return { status: "getrennt", grund: `Verbindung fehlgeschlagen (${code}, ${zeit})`, quelle, url, code, zeit };

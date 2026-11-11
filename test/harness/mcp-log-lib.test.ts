@@ -13,7 +13,7 @@ import * as raw from "../../scripts/mcp-log-lib.mjs";
 type Urteil = { status: string; grund: string; quelle: string; url?: string | null; code?: string; zeit?: string };
 type Datei = { ordner: string; suffix: string; zeilen: string[] };
 type Lib = {
-  mcpVerbindung: (zeilen: string[], o: { sessionId?: string; seit: string }) => Urteil;
+  mcpVerbindung: (zeilen: string[], o: { sessionId?: string; seit: string; dateien?: string[][] }) => Urteil;
   urlAbweichung: (mcpUrl: string | null, basisUrl: string) => string | null;
   istArbeitsplatzGeladen: (config?: unknown) => boolean;
   leseLogDateien: (o: { basis: string; wurzel: string; seitMs: number; mitArbeitsplatz?: boolean; ordnerFilter?: (o: string) => boolean }) => Datei[] | null;
@@ -81,6 +81,33 @@ describe("mcpVerbindung", () => {
   test("hat die Session einen eigenen Start, zählt nur sie, auch wenn eine fremde Session jünger ist", () => {
     const z = [START("2026-11-11T09:00:00.000Z"), ERFOLG("2026-11-11T09:00:00.050Z"), START("2026-11-11T09:30:00.000Z", "andere"), REFUSED("2026-11-11T09:30:01.000Z", "andere")];
     expect(l.mcpVerbindung(z, { sessionId: SID, seit: SEIT })).toMatchObject({ status: "verbunden", quelle: "session" });
+  });
+  describe("Zuordnung zur Prozess-Datei (Session-ID-Wechsel nach /clear oder Resume)", () => {
+    const alt = [START("2026-11-11T09:00:00.000Z", "sid-alt"), REFUSED("2026-11-11T09:00:01.000Z", "sid-alt"), zeile("Tool 'x' completed successfully in 5ms", "2026-11-11T09:10:00.000Z", "sid-neu")];
+    const fremd = [START("2026-11-11T09:30:00.000Z", "sid-fremd"), ERFOLG("2026-11-11T09:30:00.050Z", "sid-fremd")];
+    const urteil = (dateien: string[][], sessionId = "sid-neu") => l.mcpVerbindung(dateien.flat(), { sessionId, seit: SEIT, dateien });
+    test("neue Session-ID ohne Start in der Prozess-Datei: deren Ausfall zählt, nicht der Erfolg einer fremden Datei", () => {
+      expect(urteil([alt, fremd])).toMatchObject({ status: "getrennt", quelle: "prozess", code: "ECONNREFUSED" });
+    });
+    test("Reconnect später in der Prozess-Datei: verbunden (quelle prozess)", () => {
+      const re = [...alt, START("2026-11-11T09:20:00.000Z", "sid-alt"), ERFOLG("2026-11-11T09:20:00.050Z", "sid-alt")];
+      expect(urteil([re, fremd])).toMatchObject({ status: "verbunden", quelle: "prozess" });
+    });
+    test("mehrere Prozess-Dateien mit eigenen Zeilen: die mit den jüngsten eigenen Zeilen zählt, unabhängig von der Listenfolge", () => {
+      const jung = [START("2026-11-11T09:20:00.000Z", "sid-alt"), ERFOLG("2026-11-11T09:20:00.050Z", "sid-alt"), zeile("Tool 'x' completed successfully in 5ms", "2026-11-11T09:25:00.000Z", "sid-neu")];
+      expect(urteil([jung, alt])).toMatchObject({ status: "verbunden", quelle: "prozess" });
+      expect(urteil([alt, jung])).toMatchObject({ status: "verbunden", quelle: "prozess" });
+    });
+    test("eigener Start vorhanden: quelle session, auch mit Dateien", () => {
+      const eigen = [START("2026-11-11T09:00:00.000Z", "sid-neu"), ERFOLG("2026-11-11T09:00:00.050Z", "sid-neu")];
+      expect(urteil([eigen, [START("2026-11-11T09:30:00.000Z", "x"), REFUSED("2026-11-11T09:30:01.000Z", "x")]])).toMatchObject({ status: "verbunden", quelle: "session" });
+    });
+    test("keine eigene Zeile, fremde Session verbunden: nicht prüfbar", () => {
+      expect(urteil([fremd])).toMatchObject({ status: "nicht-pruefbar", grund: "nur fremde Session verbunden" });
+    });
+    test("keine eigene Zeile, fremde Session getrennt: bleibt getrennt (streng)", () => {
+      expect(urteil([[START("2026-11-11T09:30:00.000Z", "sid-fremd"), REFUSED("2026-11-11T09:30:01.000Z", "sid-fremd")]])).toMatchObject({ status: "getrennt", quelle: "rueckfall" });
+    });
   });
   test("Fenstergrenze: ein Start genau an `seit` zählt, eine Millisekunde davor nicht", () => {
     const an = [START("2026-11-11T08:00:00.000Z"), REFUSED("2026-11-11T08:00:00.500Z")];
