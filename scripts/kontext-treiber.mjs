@@ -670,6 +670,12 @@ function ttlFlag(werte, a) {
   if (a.jeTicket) a.fehler ??= "--ttl und --je-ticket schließen sich aus";
 }
 
+/** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`Date.parse` NaN), als Aufruf-Fehler; sonst undefined. */
+function zeitpunktFehler(werte) {
+  const name = ["von", "bis"].find((n) => werte[n] !== undefined && Number.isNaN(Date.parse(werte[n])));
+  return name && `--${name} erwartet einen ISO-Zeitpunkt, nicht ${werte[name]}`;
+}
+
 /** `namen` liefert den Standard-Agenten (`agenten.umsetzer`), wenn `--agent` fehlt. */
 export function parseArgs(argv, namen) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, ttl: { type: "boolean" }, json: { type: "boolean" } };
@@ -680,7 +686,7 @@ export function parseArgs(argv, namen) {
   for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
   if (werte["je-ticket"] === true) a.jeTicket = true;
   ttlFlag(werte, a);
-  const gefunden = fehler?.text ?? ticketFehler;
+  const gefunden = [fehler?.text, ticketFehler, zeitpunktFehler(werte)].find(Boolean);
   if (gefunden) a.fehler = gefunden;
   const delta = werte.delta;
   if (delta !== undefined && delta !== "ja" && delta !== "nein") a.fehler ??= `--delta erwartet ja|nein, nicht ${delta}`;

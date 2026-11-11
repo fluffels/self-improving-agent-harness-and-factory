@@ -106,17 +106,16 @@
     "complexity": 5
   },
   "scripts/langfuse-takt.mjs": {
-    "complexity": 8
+    "complexity": 5
   },
   "scripts/langfuse-vorbedingung.mjs": {
-    "complexity": 4
+    "complexity": 2
   },
   "scripts/lauf-ergebnis.mjs": {
     "complexity": 5
   },
   "scripts/mcp-ausfall.mjs": {
-    "complexity": 21,
-    "max-depth": 2
+    "complexity": 21
   },
   "scripts/naechstes-ticket.mjs": {
     "complexity": 6

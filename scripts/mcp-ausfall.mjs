@@ -10,14 +10,15 @@
  * Ordner wird sichtbar genannt, unbekannte Zeilen werden ignoriert. Plattform-Pfade: Windows gemessen, macOS/Linux nach env-paths-Konvention.
  * Meldepflicht: AGENTS.md › Harness-Befunde sind Zeilen. Reines Node-Skript (nur Builtins); die Funktionen sind pur bzw. nehmen Eingaben als Parameter.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { hauptWurzelAus, istArbeitsplatz, ordnerSlug } from "./arbeitsplatz-lib.mjs";
+import { istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, umgebungsWert } from "./projekt-config-lib.mjs";
+import { hauptWurzel, istArbeitsplatzGeladen, leseLogDateien, logBasis, netzCode, serverOrdner, slug } from "./mcp-log-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 
 /** Server-Arten aus `.mcp.json`, die das Skript kennt (ein Wächter-Test hält `.mcp.json` dagegen). */
@@ -25,13 +26,6 @@ export const BEKANNTE_ARTEN = ["stdio", "http"];
 
 /** Normaler Verbindungs-Betrieb von http/SSE-Servern, der kein Ausfall ist. */
 export const ROUTINE = /SSE stream disconnected|Terminal connection error|max consecutive terminal errors|HTTP connection dropped|attempting automatic reconnection|reconnection successful/i;
-
-/** Netzabbruch-Code in einer Logzeile (`ECONNRESET`, `fetch failed`, `socket`) oder `""`. Pur. */
-export function netzCode(text) {
-  const m = /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE)\b|fetch failed|\bsocket\b/i.exec(text);
-  if (!m) return "";
-  return m[1] ?? m[0].toLowerCase();
-}
 
 const MAX_ZEILEN = 10;
 
@@ -52,24 +46,6 @@ export function fehlendeVariablen(server, env) {
   return [...namen].filter((n) => !env[n]);
 }
 
-/** Ordnername, wie Claude Code ihn aus einem Pfad bildet. Pur. */
-export const slug = ordnerSlug;
-
-/** Basisordner der Claude-Code-Logs je Plattform; `FACTORY_MCP_LOG_DIR` hat Vorrang. Liest den Altpräfix lazy aus der Config (Fehler egal). */
-export function logBasis({ plattform, env, home }) {
-  const dir = umgebungsWert(env, "FACTORY_MCP_LOG_DIR");
-  if (dir) return dir;
-  if (plattform === "win32") return join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "claude-cli-nodejs", "Cache");
-  if (plattform === "darwin") return join(home, "Library", "Caches", "claude-cli-nodejs");
-  return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
-}
-
-/**
- * Pfad des Hauptcheckouts zu einer Wurzel, die auch ein Worktree darunter sein darf (`.claude/worktrees/<name>`). Mit `mitArbeitsplatz` (Config mit Block `arbeitsplatz`)
- * ist es die Arbeitsplatz-Wurzel und der Worktree liegt unter `.claude/worktrees/<repo>/<name>`; ohne die Angabe lässt der Aufbau `<repo>/<name>` den Pfad unverändert (er wäre sonst nicht von einem tieferen Pfad zu unterscheiden). Pur.
- */
-export const hauptWurzel = (wurzel, mitArbeitsplatz = false) => hauptWurzelAus(wurzel, mitArbeitsplatz ? "arbeitsplatz" : "eingebettet");
-
 /**
  * Stand-Datei des Hooks: je Hauptcheckout eine (auch für seine Worktrees), Name `<praefixe.worktree>mcp-ausfall-<Slug>.json` aus der Projekt-Config;
  * `FACTORY_MCP_AUSFALL_STAND` hat Vorrang (dann braucht es nur den lazy gelesenen Altpräfix, keine Worktree-Angabe). Ohne `praefixe.worktree` in der Config wirft die Funktion mit Fix-Zeile.
@@ -80,25 +56,6 @@ export function standPfad(wurzel, env, tmp, config) {
   const c = config ?? ladeProjektConfig();
   return join(tmp, `${worktreePraefix(c)}mcp-ausfall-${slug(hauptWurzel(wurzel, istArbeitsplatz(c)))}.json`);
 }
-
-/** Hat die Config (oder, ohne Angabe, die geladene) einen Block `arbeitsplatz`? Wirft nie (ohne lesbare Config `false`). */
-const istArbeitsplatzGeladen = (config) => {
-  try {
-    return istArbeitsplatz(config ?? ladeProjektConfig({ pruefen: false }));
-  } catch {
-    return false;
-  }
-};
-
-/** Projekt-Ordner (Hauptcheckout und seine Worktrees) unter den Namen des Basisordners; Suffix `""` = Hauptcheckout. `mitArbeitsplatz` wie bei `hauptWurzel`. Pur. */
-export function projektOrdner(namen, wurzel, mitArbeitsplatz = false) {
-  const haupt = slug(hauptWurzel(wurzel, mitArbeitsplatz));
-  const praefix = `${haupt}--claude-worktrees-`;
-  return namen.filter((n) => n === haupt || n.startsWith(praefix)).map((n) => ({ ordner: n, suffix: n.slice(haupt.length) }));
-}
-
-/** Log-Ordnername eines Servers. Pur. */
-export const serverOrdner = (name) => `mcp-logs-${slug(name)}`;
 
 /** Server-Name zu einem Log-Ordner: der Konfig-Name bei Treffer, sonst der Ordnername ohne Präfix (user-scope-Server wie langfuse stehen nicht in `.mcp.json`); kein `mcp-logs-`-Ordner ergibt `null`. Pur. */
 export function serverNameFuerOrdner(ordner, server) {
@@ -215,44 +172,12 @@ export function parseSeit(arg, jetzt, standardStunden = 24) {
   return new Date(jetzt - standardStunden * 3600_000).toISOString();
 }
 
+/** Befunde aller Server-Logs des Projekts ab `seit`; Basisordner nicht lesbar: `null`. */
 function lies(basis, wurzel, server, seit, mitArbeitsplatz) {
-  const alle = [];
-  let namen;
-  try {
-    namen = readdirSync(basis);
-  } catch {
-    return null;
-  }
-  const seitMs = Date.parse(seit);
-  for (const p of projektOrdner(namen, wurzel, mitArbeitsplatz)) {
-    // Alle `mcp-logs-*`-Ordner des Projekts, nicht nur die Server aus `.mcp.json`: user-scope-Server (langfuse) haben dort keinen Eintrag.
-    let ordnerNamen;
-    try {
-      ordnerNamen = readdirSync(join(basis, p.ordner));
-    } catch {
-      continue;
-    }
-    for (const o of ordnerNamen) {
-      const name = serverAnzeige(o, server);
-      if (!name) continue;
-      const dir = join(basis, p.ordner, o);
-      let dateien;
-      try {
-        dateien = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
-      } catch {
-        continue;
-      }
-      for (const f of dateien) {
-        try {
-          if (statSync(join(dir, f)).mtimeMs < seitMs) continue;
-          const zeilen = readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean);
-          for (const b of klassifiziere(zeilen)) alle.push({ ...b, server: name, suffix: p.suffix });
-        } catch {
-          // unlesbare Datei überspringen
-        }
-      }
-    }
-  }
+  // Alle `mcp-logs-*`-Ordner des Projekts, nicht nur die Server aus `.mcp.json`: user-scope-Server (langfuse) haben dort keinen Eintrag.
+  const dateien = leseLogDateien({ basis, wurzel, seitMs: Date.parse(seit), mitArbeitsplatz, ordnerFilter: (o) => serverAnzeige(o, server) !== null });
+  if (!dateien) return null;
+  const alle = dateien.flatMap((d) => klassifiziere(d.zeilen).map((b) => ({ ...b, server: serverAnzeige(d.ordner, server), suffix: d.suffix })));
   return neuSeit(alle, seit);
 }
 

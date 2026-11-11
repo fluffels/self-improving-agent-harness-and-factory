@@ -29,6 +29,7 @@ AGENTS.md @fluffels
 /.mcp.json @fluffels
 /scripts/*-mcp.mjs @fluffels
 /scripts/mcp-ausfall.mjs @fluffels
+/scripts/mcp-log-lib.mjs @fluffels
 /scripts/langfuse-vorbedingung.mjs @fluffels
 /scripts/langfuse-health.mjs @fluffels
 /scripts/agenten-namen.mjs @fluffels
@@ -149,6 +150,9 @@ AGENTS.md @fluffels
 /scripts/langfuse-lock.mjs @fluffels
 /scripts/langfuse-auftrag.mjs @fluffels
 /scripts/langfuse-auftrag-lib.mjs @fluffels
+/scripts/langfuse-wochenbericht.mjs @fluffels
+/scripts/langfuse-wochenbericht-lib.mjs @fluffels
+/scripts/langfuse-wochenbericht-live.mjs @fluffels
 /scripts/worktree-aufraeumen.mjs @fluffels
 /scripts/fremdtext-lib.mjs @fluffels
 /scripts/flag-lib.mjs @fluffels

@@ -271,6 +271,9 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["lauf-ergebnis", ["--start-agent"], 1, "--start-agent erwartet einen Agent-Typ"],
     ["kontext-treiber", ["--ticket"], 2, "--ticket erwartet eine Ticketnummer, nicht nichts"],
     ["kontext-treiber", ["--delta", "vielleicht"], 2, "--delta erwartet ja|nein, nicht vielleicht"],
+    ["kontext-treiber", ["--von", "kein-datum", "--ttl"], 2, "--von erwartet einen ISO-Zeitpunkt, nicht kein-datum"],
+    ["kontext-treiber", ["--von", "kein-datum"], 2, "--von erwartet einen ISO-Zeitpunkt, nicht kein-datum"],
+    ["kontext-treiber", ["--von", "2026-10-28T00:00:00Z", "--bis", "kein-datum"], 2, "--bis erwartet einen ISO-Zeitpunkt, nicht kein-datum"],
     ["naechstes-ticket", [], 2, "✖ naechstes-ticket: Aufruf ohne Auswahl: --bereich agentic|produkt (oberstes freies Ticket des Bereichs) oder --ticket <nr> (Einzelprüfung)"],
     ["naechstes-ticket", ["--ticket", "1", "--bereich", "produkt"], 2, "✖ naechstes-ticket: --ticket und --bereich schließen sich aus"],
     ["naechstes-ticket", ["--config", "test/fixtures/projekt-fremd.json", "--bereich", "spiel"], 2, "✖ naechstes-ticket: --bereich erwartet agentic oder produkt (bekommen: „spiel“)"], // Config ohne Alias (#1943)
