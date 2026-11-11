@@ -836,6 +836,11 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
       assert.equal(sockelFuer("zz-umsetzer-gruppe", { ...a, gruppe: "andere" }), 30_000);
     });
 
+    test("renderMarkdown: eine Zusammenfassung ohne Sockel und Median-Kontext (ältere Aufrufer) zeigt Striche statt zu brechen", () => {
+      const s = { ...mitNamen([at("2026-10-05T10:10:00Z", 41_000, { subagent: umsA })]), sockel: undefined, medianContext: undefined };
+      assert.match(m.renderMarkdown(s as unknown as Summary), /Sockel Haupt – · Planer – · Lens – · Umsetzer – · Median-Kontext Haupt – \/ gesamt –/);
+    });
+
     test("renderMarkdown nennt den Umsetzer-Sockel nach der Lens", () => {
       const md = m.renderMarkdown(mitNamen([at("2026-10-05T10:10:00Z", 41_000, { subagent: umsA })]));
       assert.match(md, /Lens [^·]*· Umsetzer 41\.000/);
