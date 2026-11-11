@@ -233,6 +233,34 @@ describe("Payload (Golden)", () => {
     expect(a["langfuse.observation.metadata.quelle"]).toBe("abgleich");
   });
 
+  test("Zuordnungs-Metadaten (factory#287): agent_type, effort, thinking aus der Zuordnung, repo aus dem Repo-Namen; der Subagent-Span bleibt unverändert", () => {
+    const z = { agent_type: "Explore", effort: "high", thinking: "ja" };
+    const { chunks } = baue([{ ...eintrag(1), zuordnung: z } as Eintrag, eintrag(2, { rolle: { agentId: "x1", agentType: "Explore", description: "L" } })]);
+    const [g1] = spansVon(chunks[0].payload).filter((s) => s.name === "Call");
+    const a = attrs(g1);
+    expect(a["langfuse.observation.metadata.agent_type"]).toBe("Explore");
+    expect(a["langfuse.observation.metadata.effort"]).toBe("high");
+    expect(a["langfuse.observation.metadata.thinking"]).toBe("ja");
+    expect(a["langfuse.observation.metadata.repo"]).toBe(REPO_NAME);
+    const subSpan = spansVon(chunks[0].payload).find((s) => s.name.startsWith("Subagent:"));
+    expect(Object.keys(attrs(subSpan as Span)).filter((k) => k.endsWith(".effort") || k.endsWith(".thinking") || k.endsWith(".repo"))).toEqual([]);
+  });
+
+  test("zuordnungsAttribute ohne repoName: kein repo-Schlüssel, kein Wert 'undefined'", () => {
+    const f = (O as unknown as { zuordnungsAttribute: (z: unknown, r?: string) => { key: string }[] }).zuordnungsAttribute;
+    expect(f({ agent_type: "x" }, undefined).map((a) => a.key)).toEqual(["langfuse.observation.metadata.agent_type"]);
+    expect(f({}, "").map((a) => a.key)).toEqual([]);
+  });
+
+  test("Negativfall: ohne Zuordnung fehlen agent_type, effort und thinking (kein \"undefined\", keine erfundene Rolle); repo bleibt", () => {
+    for (const zuordnung of [undefined, {}, { agent_type: "", effort: undefined }]) {
+      const [s] = spansVon(baue([{ ...eintrag(1), zuordnung } as Eintrag]).chunks[0].payload);
+      const a = attrs(s);
+      for (const k of ["agent_type", "effort", "thinking"]) expect(a).not.toHaveProperty(`langfuse.observation.metadata.${k}`);
+      expect(a["langfuse.observation.metadata.repo"]).toBe(REPO_NAME);
+    }
+  });
+
   test("Trace-Attribute auf jedem Span: Session, Tags, Name, Projekt; Scope ohne langfuse-sdk-Präfix", () => {
     const sub = { agentId: "x1", agentType: FREMD.agenten.lens, description: "L" };
     const { chunks } = baue([eintrag(1), eintrag(2, { rolle: sub }), eintrag(3, { ticket: T9 })]);
@@ -584,6 +612,37 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
       expect(m.aufrufe).toHaveLength(0);
       expect(existsSync(a.ledger)).toBe(false);
     }
+  });
+  test("Zuordnungs-Metadaten (factory#287): gesendete Calls tragen agent_type (hauptchat bzw. Subagent-Typ), effort, thinking und repo", async () => {
+    const meta = JSON.stringify({ agentType: FREMD.agenten.lens, description: "L" });
+    const haupt = msg("h1", 1, { effort: "xhigh" });
+    const a = aufbau([haupt], { [`${PRAEFIX}/s1/subagents/agent-x1.jsonl`]: msg("s1a", 2, { effort: "high" }), [`${PRAEFIX}/s1/subagents/agent-x1.meta.json`]: meta });
+    const m = mock({ ist: 0, obs: [] });
+    await lauf(a, m);
+    const calls = spansVon(m.otlp[0]).filter((s) => s.name === "Call");
+    const je = (id: string) => attrs(calls.find((s) => attrs(s)["langfuse.observation.metadata.message_id"] === id) as Span);
+    expect(je("h1")).toMatchObject({ "langfuse.observation.metadata.agent_type": "hauptchat", "langfuse.observation.metadata.effort": "xhigh", "langfuse.observation.metadata.thinking": "nein", "langfuse.observation.metadata.repo": REPO_NAME });
+    expect(je("s1a")).toMatchObject({ "langfuse.observation.metadata.agent_type": FREMD.agenten.lens, "langfuse.observation.metadata.effort": "high", "langfuse.observation.metadata.repo": REPO_NAME });
+  });
+  test("Effort-Rückfall (factory#287): die Settings im Benutzerordner neben dem State-Ordner und das cwd der Zeile liefern effort, sonst fehlt er", async () => {
+    const a = aufbau([msg("h1", 1, { cwd: fixture({}) })]);
+    const settings = join(a.state, "..", "settings.json");
+    writeFileSync(settings, JSON.stringify({ effortLevel: "high" }));
+    utimesSync(settings, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    const m = mock({ ist: 0, obs: [] });
+    await lauf(a, m);
+    const [call] = spansVon(m.otlp[0]).filter((s) => s.name === "Call");
+    expect(attrs(call)["langfuse.observation.metadata.effort"]).toBe("high");
+
+    // Weiche 4: CLAUDE_CODE_EFFORT_LEVEL in der Umgebung des Laufs sperrt den Rückfall (die Umgebung des Laufs erreicht die Ableitung).
+    const a2 = aufbau([msg("h1", 1, { cwd: fixture({}) })]);
+    const settings2 = join(a2.state, "..", "settings.json");
+    writeFileSync(settings2, JSON.stringify({ effortLevel: "high" }));
+    utimesSync(settings2, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    const m2 = mock({ ist: 0, obs: [] });
+    await lauf(a2, m2, {}, SPAET(), { ...ZUGANG, CLAUDE_CODE_EFFORT_LEVEL: "max" });
+    const [call2] = spansVon(m2.otlp[0]).filter((s) => s.name === "Call");
+    expect(attrs(call2)).not.toHaveProperty("langfuse.observation.metadata.effort");
   });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
     const meta = JSON.stringify({ agentType: FREMD.agenten.lens, description: "Lens R1" });

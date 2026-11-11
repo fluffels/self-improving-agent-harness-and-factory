@@ -16,11 +16,12 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { worktreePraefix } from "./ticket-namen.mjs";
 import { hauptrepoPfad, ladeSessionDatei, projekteWurzel, projektSlug } from "./transkript.mjs";
+import { zuordnungen } from "./transkript-calls.mjs";
 import {
   diffMultimenge,
   findeSessions,
@@ -38,6 +39,7 @@ import {
   standUnveraendert,
   scoreId,
   sollEintraege,
+  sollMitZuordnung,
   vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
@@ -269,7 +271,7 @@ async function schliesseAb({ s, c, rec, alt, eintrag, e, ok, soll, observations,
 
 /** Eine Session bis zum Ledger-Stand; mutiert `ledger.sessions[id]` nur um angenommene Chunks und eine vollständige Bestätigung. */
 async function verarbeite(s, c) {
-  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo } = c;
+  const { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, claudeDir } = c;
   const alt = ledger.sessions[s.id];
   const unveraendert = standUnveraendert(alt, s);
   const rec = { session: s.id, status: "", gesendet: 0, dubletten: 0, unzuordenbar: 0, wuerdeSenden: 0, ausstehend: 0, befund: null, endeVerworfen: false, fortgesetzt: false };
@@ -281,7 +283,8 @@ async function verarbeite(s, c) {
   const vermerke = (status) => {
     if (!args.trocken) ledger.sessions[s.id] = { gesendet: [], spans: [], gesendetAm: {}, pfad: s.pfad, groesse: s.groesse, mtime: s.mtime, bestaetigt: false, beendet, vermerk: status };
   };
-  const soll = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
+  const sitzung = ladeSessionDatei(s.pfad);
+  const soll = sollMitZuordnung(sollEintraege(sitzung, { session: s.id, worktree }), zuordnungen(sitzung, { claudeDir, env }));
   if (!soll.length) {
     vermerke(STATUS.OHNE_CALLS);
     return Object.assign(rec, { status: STATUS.OHNE_CALLS });
@@ -362,7 +365,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     }
     protokoll.geprueft += 1;
     try {
-      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, startMarke });
+      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, startMarke, claudeDir: dirname(stateDir) });
     } catch (e) {
       protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }

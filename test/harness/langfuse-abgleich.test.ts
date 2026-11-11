@@ -227,6 +227,14 @@ describe("Soll (pur)", () => {
   });
 });
 
+describe("sollMitZuordnung (factory#287)", () => {
+  const mit = (kernRoh as unknown as { sollMitZuordnung: (s: unknown[], m: Map<string, unknown>) => { messageId: string; zuordnung: unknown }[] }).sollMitZuordnung;
+  test("hängt die Zuordnung der Message an; ohne Treffer ist sie leer, nichts wird erfunden", () => {
+    const r = mit([{ messageId: "a" }, { messageId: "b" }], new Map([["a", { agent_type: "hauptchat" }]]));
+    expect(r.map((e) => e.zuordnung)).toEqual([{ agent_type: "hauptchat" }, {}]);
+  });
+});
+
 describe("Session-Auswahl", () => {
   test("fremder Projektordner wird nicht gelesen; Worktree-Ordner des Projekts schon; --seit filtert nach mtime, --session nicht", () => {
     const root = fixture({
