@@ -141,7 +141,7 @@ describe("Verbleib gate-erzwungener Regeln", () => {
     });
 
     test("unzulässiger Ort: docs/, Archiv, Pfad ohne .md", () => {
-      for (const ort of ["docs/archiv/regeln.md", "scripts/x.mjs", ".claude/agents/ordner/tief.md.txt"]) {
+      for (const ort of ["docs/archiv/regeln.md", "scripts/x.mjs", ".claude/agents/a.md.txt", ".agents/skills/s/z.md.txt", "vorn/.claude/agents/a.md", ".claude/agents/ordner/tief.md", "vorn/.agents/skills/s/z.md", "docs/AGENTS.md"]) {
         assert.match(befunde((l) => l.map((x) => (x === preFlight(l) ? { ...x, ort } : x))), /pre-flight: unzulässiger Ort/);
       }
     });
@@ -152,6 +152,10 @@ describe("Verbleib gate-erzwungener Regeln", () => {
       assert.match(befunde(bedingt("wenn X")), /verweist nicht per Pfad/);
       const mitVerweis = (p: string): string | null => (p === SCAN_DATEIEN[0] ? `${dateien[p]}\nSiehe .claude/agents/bedingt.md` : lies(p));
       assert.equal(befunde(bedingt("wenn X"), mitVerweis), "");
+      const skillOrt = ".agents/skills/s/tief/zusatz.md";
+      const imSkill = (l: Eintrag[]) => l.map((x) => (x === preFlight(l) ? { ...x, ort: skillOrt, bedingung: "wenn X" } : x));
+      const lesenSkill = (p: string): string | null => (p === skillOrt ? `Nur wenn X: ${satz}` : p === SCAN_DATEIEN[0] ? `${dateien[p]}\nSiehe ${skillOrt}` : lies(p));
+      assert.equal(befunde(imSkill, lesenSkill), "", "auch eine bedingte Skill-Zusatzdatei ist ein zulässiger Ort");
     });
 
     test("Text steht am Ort nicht: Satz entfernt, Ort fehlt, Leerraum ist egal", () => {
