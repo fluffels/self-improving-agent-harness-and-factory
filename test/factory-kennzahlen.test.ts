@@ -1076,7 +1076,7 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
   const punkt = (min: number, pct: number) => JSON.stringify({ stand: T0 + min * 60_000, sevenDay: { pct, resetsAt: (T0 + 7 * 864e5) / 1000 } });
   const verlauf = [punkt(60, 0), punkt(120, 10)].join("\n");
   const callZeile = (id: string) => JSON.stringify({ type: "assistant", timestamp: new Date(T0 + 90 * 60_000).toISOString(), uuid: id, message: { id, role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1000, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
-  type Lader = (e: { von: string; bis: string }, io: { lies: (p: string) => string; pfad: string; wurzel: string }) => { luecke?: string; aufbau?: { sitzungen: number; calls: number }; limits?: { sevenDay: { gesamt: { tokens: number; jePp: number } } } };
+  type Lader = (e: { von: string; bis: string }, io: { lies: (p: string) => string; pfad: string; wurzel: string }) => { luecke?: string; aufbau?: { sitzungen: number; calls: number }; limits?: { sevenDay: { gesamt: { tokens: number; jePp: number }; ausgelassen: { ohneCallsN: number; ohneCallsPp: number } } } };
   const lade = (raw as unknown as { ladeTokensJeProzentpunkt: Lader }).ladeTokensJeProzentpunkt;
 
   test("Lader: Calls aus beiden Projektordnern der Wurzel zählen (das Limit gilt kontoweit)", () => {
