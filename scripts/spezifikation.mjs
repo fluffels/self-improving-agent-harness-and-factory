@@ -191,6 +191,16 @@ function positionPruefen(werte) {
 /** Pur: die Ausgabezeile zur Position (`hinter #<nr>, weil <grund>` bzw. `ganz oben, weil <art>`). */
 const positionText = (nach, werte) => (nach !== null ? `hinter #${nach}, weil ${einzeilig(werte.weil)}` : `ganz oben, weil ${werte.notfall}`);
 
+/** Pur: Position aus `--nach`/`--notfall`: `{ nach }` (Nummer oder `null`, einmal geparst: `#12` und `12` sind dieselbe) oder `{ fehler }`. */
+function positionLesen(werte) {
+  const positionsFehler = positionPruefen(werte);
+  if (positionsFehler) return { fehler: positionsFehler };
+  const nach = werte.nach ? positiveZahl(werte.nach) : null;
+  if (werte.nach && nach === null) return { fehler: "--nach braucht eine Ticketnummer" };
+  if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return { fehler: `--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})` };
+  return { nach };
+}
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
@@ -198,11 +208,9 @@ function anlegen(werte, io, sprache) {
   if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
     return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
   }
-  const positionsFehler = positionPruefen(werte);
-  if (positionsFehler) return aufrufFehler(positionsFehler);
-  const nach = werte.nach ? positiveZahl(werte.nach) : null; // einmal parsen: `#12` und `12` sind dieselbe Nummer
-  if (werte.nach && nach === null) return aufrufFehler("--nach braucht eine Ticketnummer");
-  if (werte.notfall && !NOTFALL_ARTEN.includes(werte.notfall)) return aufrufFehler(`--notfall kennt ${NOTFALL_ARTEN.join(", ")} (bekommen: ${werte.notfall})`);
+  const pos = positionLesen(werte);
+  if (pos.fehler) return aufrufFehler(pos.fehler);
+  const { nach } = pos;
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
   const body = mitBlockerZeile(b.body, werte.blocker, sprache);

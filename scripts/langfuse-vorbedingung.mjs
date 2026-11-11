@@ -13,7 +13,8 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { logBasis, netzCode, projektOrdner, serverOrdner } from "./mcp-ausfall.mjs";
+import { hauptWurzelAus, ordnerSlug } from "./arbeitsplatz-lib.mjs";
+import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
@@ -51,8 +52,17 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
 const MCP_FENSTER_MS = 24 * 3600 * 1000;
 const MCP_FEHLER = /Connection failed|version negotiation probe failed|ECONNREFUSED/;
 
-/** Zeitstempel und Code der Zeile; ohne Netzcode „Verbindungsfehler“. Pur. */
-const fehlerZeile = (z) => ({ zeit: z.timestamp, code: netzCode(z.debug) || "Verbindungsfehler" });
+/** Zeitstempel und Netzcode der Zeile (`ECONNREFUSED` …); ohne Netzcode „Verbindungsfehler“. Pur. */
+const fehlerZeile = (z) => ({ zeit: z.timestamp, code: /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE)\b/.exec(z.debug)?.[1] ?? "Verbindungsfehler" });
+
+/** Basisordner der Claude-Code-Logs je Plattform (`FACTORY_MCP_LOG_DIR` hat Vorrang), wie in mcp-ausfall.mjs; ein Einstiegsskript importiert nicht aus einem anderen. */
+function logBasisOrdner({ env, home }) {
+  const dir = umgebungsWert(env, "FACTORY_MCP_LOG_DIR");
+  if (dir) return dir;
+  if (process.platform === "win32") return join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "claude-cli-nodejs", "Cache");
+  if (process.platform === "darwin") return join(home, "Library", "Caches", "claude-cli-nodejs");
+  return join(env.XDG_CACHE_HOME || join(home, ".cache"), "claude-cli-nodejs");
+}
 
 /**
  * Urteil über die MCP-Spur der Session aus den JSONL-Zeilen des Langfuse-MCP-Logs: ab dem letzten `Starting connection` der Session entscheidet das letzte Ergebnis
@@ -81,11 +91,12 @@ export function bewerteMcpSpur(zeilen, sessionId) {
 
 /** JSONL-Zeilen der Langfuse-MCP-Logs des Projekts (Hauptcheckout und Worktrees), nur Dateien der letzten 24 h; Pfade über die Helfer von mcp-ausfall.mjs. Wirft nie. */
 export function mcpZeilenLesen({ env, home, jetzt, wurzel, fs = { readdirSync, statSync, readFileSync } }) {
-  const basis = logBasis({ plattform: process.platform, env, home });
+  const basis = logBasisOrdner({ env, home });
+  const haupt = ordnerSlug(hauptWurzelAus(wurzel));
   const zeilen = [];
   try {
-    for (const p of projektOrdner(fs.readdirSync(basis), wurzel)) {
-      const dir = join(basis, p.ordner, serverOrdner("langfuse"));
+    for (const ordner of fs.readdirSync(basis).filter((n) => n === haupt || n.startsWith(`${haupt}--claude-worktrees-`))) {
+      const dir = join(basis, ordner, "mcp-logs-langfuse");
       for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
         if (fs.statSync(join(dir, f)).mtimeMs < jetzt - MCP_FENSTER_MS) continue;
         zeilen.push(...fs.readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean));
@@ -98,19 +109,27 @@ export function mcpZeilenLesen({ env, home, jetzt, wurzel, fs = { readdirSync, s
 }
 
 /** Sperr-Urteil der MCP-Spur dieser Session (`ok:false`) oder `null`; ein werfender Leser ergibt `null`. */
-function mcpSperre(env, mcpZeilen) {
-  if (!env.CLAUDE_CODE_SESSION_ID) return null;
+function mcpSperre({ env, home, mcpZeilen, sessionstart }) {
+  if (sessionstart || !env.CLAUDE_CODE_SESSION_ID) return null;
+  const lesen = mcpZeilen ?? (() => mcpZeilenLesen({ env, home, jetzt: Date.now(), wurzel: process.cwd() }));
   try {
-    const u = bewerteMcpSpur(mcpZeilen(), env.CLAUDE_CODE_SESSION_ID);
+    const u = bewerteMcpSpur(lesen(), env.CLAUDE_CODE_SESSION_ID);
     return u?.ok === false ? u : null;
   } catch {
     return null;
   }
 }
 
+/** Exit bei erreichbarer Health: Sperre der MCP-Spur (mit Hinweis auf stderr) → 1, sonst 0. */
+function mcpExit(spur, err) {
+  if (!spur) return 0;
+  err(`Langfuse erreichbar, aber der Langfuse-MCP dieser Session verband nicht (${spur.zeit}, ${spur.code}); \`/mcp\` → langfuse neu verbinden, dann erneut prüfen.`);
+  return 1;
+}
+
 const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]";
 
-export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, mcpZeilen = () => mcpZeilenLesen({ env, home, jetzt: Date.now(), wurzel: process.cwd() }) } = {}) {
+export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, mcpZeilen } = {}) {
   const { werte, fehler } = flagsLesen(argv, { sessionstart: { type: "boolean" }, json: { type: "boolean" } });
   const aufrufFehler = fehler?.text ?? (werte.sessionstart && werte.json ? "--json und --sessionstart schließen sich aus" : null);
   if (aufrufFehler) {
@@ -123,11 +142,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, out 
     out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund }));
     return urteil.ok ? 0 : 1;
   }
-  if (urteil.ok) {
-    const spur = sessionstart ? null : mcpSperre(env, mcpZeilen);
-    if (spur) err(`Langfuse erreichbar, aber der Langfuse-MCP dieser Session verband nicht (${spur.zeit}, ${spur.code}); \`/mcp\` → langfuse neu verbinden, dann erneut prüfen.`);
-    return spur ? 1 : 0;
-  }
+  if (urteil.ok) return mcpExit(mcpSperre({ env, home, mcpZeilen, sessionstart }), err);
   const text = `${urteil.grund}. ${HINWEIS}`;
   if (sessionstart) {
     const warnung = `WARNUNG Langfuse-Vorbedingung: ${text} Ohne Langfuse startet kein Ticket.`;
