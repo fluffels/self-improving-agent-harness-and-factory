@@ -69,11 +69,11 @@ Langfuse bepreist die Generationen des Hook-Plugins selbst, und nur bei der Inge
 | claude-sonnet-5-5 | Modellstart | angelegt 2026-10-26 |
 | claude-sonnet-5-5 | 2026-10-07 | angelegt 2026-10-26 |
 | claude-opus-5-5 | Modellstart | angelegt 2026-10-26 |
-| claude-opus-5 | Modellstart | offen |
+| claude-opus-5 | Modellstart | angelegt 2026-11-11 |
 | claude-haiku-5-5 | Modellstart | angelegt 2026-10-24 |
-| claude-haiku-4-5 | Modellstart | offen |
+| claude-haiku-4-5 | Modellstart | angelegt 2026-11-11 |
 
-Belege: Sonnet 5.5 (Periode ab 2026-10-07) stimmt mit `preise.mjs` gegen die Kosten einer Hook-Generation überein; für Haiku 5.5 ist die Anlage per `listModels` belegt, es gab noch keine Hook-Generation zum Gegenrechnen.
+Belege: Sonnet 5.5 (Periode ab 2026-10-07) stimmt mit `preise.mjs` gegen die Kosten einer Hook-Generation überein; für Haiku 5.5 ist die Anlage per `listModels` belegt, es gab noch keine Hook-Generation zum Gegenrechnen. Opus 5 und Haiku 4.5: per `listModels` gelesen und gleich `preise.mjs` (factory#338).
 
 ## Fehlende Sessions (#1382)
 
