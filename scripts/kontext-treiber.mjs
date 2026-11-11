@@ -2,7 +2,7 @@
 /**
  * Kontext-Treiber eines Subagent-Typs (#1559), Standard der Umsetzer der Projekt-Config (`agenten.umsetzer`): was macht den Kontext je Call groß und was kostet es?
  *
- *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent <name>] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket | --ttl] [--json]
+ *   node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent <name>]… [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket | --ttl] [--json]
  *
  * Die Agentennamen (`agenten.umsetzer` als Standard, `agenten.lens` für die Review-Phase) und das Worktree-Präfix kommen aus der Projekt-Config; fehlt sie oder ein Schlüssel, endet das CLI mit Exit 1 und der Meldung samt `Fix:`-Zeile (fail-closed).
  *
@@ -24,6 +24,7 @@
  * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
  * `--ttl` (factory#312): statt der Kennzahlen die Gegenrechnung, ob die 1h-TTL für die Rolle netto spart (Mehrkosten des 1h-Schreibens gegen vermiedene Cache-Misse nach Pausen von 5 bis 60 min; Preise aus `preise.mjs`, Warmstart über Läufe derselben Session getrennt ausgewiesen). Grenzen: ein Treffer bis 60 min, Zeiten mit Nutzungsguthaben ignorieren 1h (Überschätzung); schließt `--je-ticket` aus.
+ * Mehrfaches `--agent` (factory#235, A/B Kern je Rolle): Bericht je Typ (`{ agenten: { <typ>: <Bericht> }, ungueltig }`); ein Ticket mit Läufen in mehr als einem der Typen ist ungültig, fällt aus allen Typen heraus (wie `--ohne`) und setzt Exit 3. Mit einem `--agent` bleibt die Ausgabe unverändert.
  * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
  * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
  * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`mitVorlauf`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
@@ -38,6 +39,7 @@ import { PRICES, PRICES_STAND, priceFor, priceParts } from "./preise.mjs";
 import { bereinige, CACHE_TTL_MS, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
+import { armeZuordnen, lensTypen } from "./lens-arm.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
@@ -54,7 +56,7 @@ const num = (x) => (Number.isFinite(x) ? x : 0);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
 
 const befehlVon = (tool) => (SHELL_TOOLS.has(tool.tool) ? String(tool.input?.command ?? "") : "");
-const istLinse = (tool, namen) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === namen.agenten.lens;
+const istLinse = (tool, namen) => tool.tool === "Agent" && lensTypen(namen).includes(String(tool.input?.subagent_type ?? ""));
 
 /** Kurzbeschreibung eines Tool-Aufrufs für die Top-10 (Tool plus ~60 Zeichen Befehl, Pfad oder Muster). */
 function labelVon(tool, wurzel, namen) {
@@ -678,11 +680,13 @@ function zeitpunktFehler(werte) {
 
 /** `namen` liefert den Standard-Agenten (`agenten.umsetzer`), wenn `--agent` fehlt. */
 export function parseArgs(argv, namen) {
-  const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, ttl: { type: "boolean" }, json: { type: "boolean" } };
+  const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string", multiple: true }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, ttl: { type: "boolean" }, json: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { meldung: ticketMeldung });
   // Eine Nicht-Ganzzahl wäre NaN und würde still nichts filtern: Aufruf-Fehler statt falscher Teilmenge.
   const { tickets, ohne, fehler: ticketFehler } = ticketFilterAus(werte);
-  const a = { agent: werte.agent ?? namen?.agenten?.umsetzer, tickets, ohne, json: werte.json === true };
+  const typen = [...new Set(werte.agent ?? [])];
+  const a = { agent: typen[0] ?? namen?.agenten?.umsetzer, tickets, ohne, json: werte.json === true };
+  if (typen.length > 1) a.agenten = typen;
   for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
   if (werte["je-ticket"] === true) a.jeTicket = true;
   ttlFlag(werte, a);
@@ -695,7 +699,20 @@ export function parseArgs(argv, namen) {
 }
 
 /**
- * Das CLI als Funktion: gibt den Exit-Code zurück (0 ok, 1 Projekt-Config nicht nutzbar, 2 Aufruf-Fehler). Die Namen kommen aus der Projekt-Config
+ * Mehrere Typen (factory#235): je Typ ein Bericht; Tickets mit Läufen in mehr als einem Typ sind ungültig und zählen in keinem (zweiter Durchlauf mit erweitertem `ohne`).
+ * @param {{ laeufeJeTyp: Record<string, object[]> } & object} e wie `kontextTreiber`, statt `laeufe`/`agent` die Läufe je Typ
+ * @returns {{ agenten: Record<string, object>, ungueltig: { ticket: number, grund: string, typen: string[] }[] }}
+ */
+export function kontextTreiberJeTyp({ laeufeJeTyp, ohne = [], ...rest }) {
+  const lauf = (extra) => Object.fromEntries(Object.entries(laeufeJeTyp).map(([agent, laeufe]) => [agent, kontextTreiber({ ...rest, laeufe, agent, ohne: [...ohne, ...extra] })]));
+  const typenJe = new Map();
+  for (const [typ, b] of Object.entries(lauf([]))) for (const l of b.laeufe ?? []) if (l.ticket) typenJe.set(l.ticket, [...(typenJe.get(l.ticket) ?? []), typ]);
+  const ungueltig = armeZuordnen(typenJe).ungueltig;
+  return { agenten: ungueltig.length ? lauf(ungueltig.map((u) => u.ticket)) : lauf([]), ungueltig };
+}
+
+/**
+ * Das CLI als Funktion: gibt den Exit-Code zurück (0 ok, 1 Projekt-Config nicht nutzbar, 2 Aufruf-Fehler, 3 ungültige Zuordnung bei mehreren `--agent`). Die Namen kommen aus der Projekt-Config
  * (`config` ersetzt das Laden, Test) und werden vor allem anderen geprüft: ohne `agenten.umsetzer` liest es kein Transkript.
  */
 export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = ladeLaeufe, wurzel = hauptrepoWurzel, out = console.log, err = console.error } = {}) {
@@ -708,14 +725,24 @@ export function hauptlauf(argv, { config, ordner = projektOrdner, ladeTyp = lade
   const args = parseArgs(argv, namen);
   if (args.fehler || !args.von) {
     if (args.fehler) err(args.fehler);
-    err(`Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent ${namen.agenten.umsetzer}] [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket | --ttl] [--json]`);
+    err(`Aufruf: node scripts/kontext-treiber.mjs --von <ISO> [--bis <ISO>] [--agent ${namen.agenten.umsetzer}]… [--ticket <nr>]… [--ohne <nr>]… [--delta ja|nein] [--brille <name>] [--projekt <slug>] [--je-ticket | --ttl] [--json]`);
     return 2;
   }
   const dir = ordner(args.projekt);
   readdirSync(dir);
+  if (args.agenten) return mehrTypLauf({ args, dir, namen, ladeTyp, wurzel, out });
   const bericht = kontextTreiber({ laeufe: ladeTyp(dir, args.agent, ladeVon(args.von, Boolean(args.jeTicket))), namen, agent: args.agent, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: wurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket), ttl: Boolean(args.ttl) });
   out(args.json ? JSON.stringify(bericht, null, 2) : renderMarkdown(bericht));
   return 0;
+}
+
+/** Mehrere `--agent` (factory#235): Bericht je Typ, Exit 3 bei ungültig zugeordneten Tickets (Liste auf stderr, `--json` trägt sie im Bericht). */
+function mehrTypLauf({ args, dir, namen, ladeTyp, wurzel, out }) {
+  const laeufeJeTyp = Object.fromEntries(args.agenten.map((typ) => [typ, ladeTyp(dir, typ, ladeVon(args.von, Boolean(args.jeTicket)))]));
+  const bericht = kontextTreiberJeTyp({ laeufeJeTyp, namen, von: args.von, bis: args.bis, tickets: args.tickets, ohne: args.ohne, wurzel: wurzel(), delta: args.delta ?? null, brille: args.brille ?? null, jeTicket: Boolean(args.jeTicket) });
+  const meldung = bericht.ungueltig.map((u) => `#${u.ticket} (${u.typen.join(" + ")})`).join(", ");
+  out(args.json ? JSON.stringify(bericht, null, 2) : [...Object.values(bericht.agenten).map(renderMarkdown), ...(meldung ? [`Ungültig (Läufe in mehreren Typen, aus allen Berichten ausgenommen): ${meldung}`] : [])].join("\n\n"));
+  return bericht.ungueltig.length ? 3 : 0;
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = hauptlauf(process.argv.slice(2));

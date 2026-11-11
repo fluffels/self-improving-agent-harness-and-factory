@@ -1,5 +1,6 @@
 /* Kontext-Treiber (#1559): Kern pur, synthetische Transkriptzeilen ohne IO. */
 import { describe, expect, test } from "vitest";
+import { tmpdir } from "node:os";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as kontextRoh from "../scripts/kontext-treiber.mjs";
 import { FREMD, FREMD_NAMEN } from "./support/fremd-config";
@@ -775,7 +776,6 @@ describe("parseArgs strikt (#1790)", () => {
   test("unbekanntes Flag, Flag ohne Wert und doppeltes Einzel-Flag setzen fehler", () => {
     expect(PS(["--bogus"]).fehler).toMatch(/Unbekanntes Argument: --bogus/);
     expect(PS(["--agent"]).fehler).toMatch(/--agent braucht einen Wert/);
-    expect(PS(["--agent", "a", "--agent", "b"]).fehler).toMatch(/--agent ist doppelt/);
     expect(PS(["--je-ticket", "--je-ticket"]).fehler).toMatch(/--je-ticket ist doppelt/);
     expect(PS(["--delta"]).fehler).toMatch(/--delta braucht einen Wert/);
   });
@@ -987,5 +987,61 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
       expect(md).toContain("Netto in $ (positiv: 1h spart): Kette 0,0048");
       expect(md).toContain(`\`${UMSETZER}\``);
     });
+  });
+});
+
+describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
+  const LENS_B = "lens-kern-je-rolle";
+  type JeTyp = { agenten: Record<string, { gesamt: { gesamt: { n: number } | null }; laeufe: { ticket: number | null }[] }>; ungueltig: { ticket: number; grund: string; typen: string[] }[] };
+  const jeTyp = (e: object) => (kontextRoh as unknown as { kontextTreiberJeTyp: (e: object) => JeTyp }).kontextTreiberJeTyp({ namen: NAMEN, ...e });
+  const lensLauf = (nr: number, typ: string) => lauf(`#${nr} x`, [{ min: 1, tools: [edit()] }], typ);
+  const laeufeJeTyp = { [LENS]: [lensLauf(2, LENS), lensLauf(3, LENS)], [LENS_B]: [lensLauf(1, LENS_B), lensLauf(3, LENS_B)] };
+
+  test("ein Spawn des Arm-B-Typs eröffnet die Review-Phase wie der Arm-A-Typ", () => {
+    const spawnB: Tool = { name: "Agent", input: { subagent_type: LENS_B, description: "Lens Doku R1" } };
+    expect(K.phaseDerCalls(lauf("#1 x", [{ min: 1, tools: [edit()] }, { min: 2, tools: [spawnB] }, { min: 3 }]).zeilen)).toEqual(["Umsetzung", "Review", "Review"]);
+  });
+  test("parseArgs: mehrere --agent geben die Typenliste, ein einzelnes bleibt unverändert", () => {
+    const PS = (K as unknown as { parseArgs: (a: string[]) => { agent: string; agenten?: string[]; fehler?: string } }).parseArgs;
+    expect(PS(["--agent", LENS, "--agent", LENS_B])).toEqual({ agent: LENS, agenten: [LENS, LENS_B], tickets: [], ohne: [], json: false });
+    expect(PS(["--agent", LENS])).toEqual({ agent: LENS, tickets: [], ohne: [], json: false });
+    expect(PS(["--agent", LENS, "--agent", LENS])).toEqual({ agent: LENS, tickets: [], ohne: [], json: false });
+  });
+  test("Bericht je Typ; ein Ticket mit Läufen in beiden Typen ist ungültig und fällt aus beiden Gruppen", () => {
+    const r = jeTyp({ laeufeJeTyp });
+    expect(r.ungueltig).toEqual([{ ticket: 3, grund: "beide", typen: [LENS_B, LENS].sort() }]);
+    expect(r.agenten[LENS].laeufe.map((l) => l.ticket)).toEqual([2]);
+    expect(r.agenten[LENS_B].laeufe.map((l) => l.ticket)).toEqual([1]);
+    expect(r.agenten[LENS].gesamt.gesamt?.n).toBe(1);
+  });
+  test("ohne Überschneidung: nichts ungültig, jeder Typ hat seine Läufe", () => {
+    const r = jeTyp({ laeufeJeTyp: { [LENS]: [lensLauf(2, LENS)], [LENS_B]: [lensLauf(1, LENS_B)] } });
+    expect(r.ungueltig).toEqual([]);
+    expect(r.agenten[LENS_B].gesamt.gesamt?.n).toBe(1);
+  });
+
+  const cli = (argv: string[], laeufe: Record<string, Lauf[]>) => {
+    const aus: string[] = [];
+    const fehler: string[] = [];
+    const code = (kontextRoh as unknown as { hauptlauf: (a: string[], d: object) => number }).hauptlauf(argv, {
+      config: FREMD, ordner: () => tmpdir(), ladeTyp: (_d: string, typ: string) => laeufe[typ] ?? [], wurzel: () => "/x", out: (s: string) => aus.push(s), err: (s: string) => fehler.push(s),
+    });
+    return { code, aus: aus.join("\n"), fehler: fehler.join("\n") };
+  };
+  test("CLI: Exit 3 bei ungültigem Ticket, Meldung nennt Ticket und Typen, --json trägt die Liste", () => {
+    const r = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B], laeufeJeTyp);
+    expect(r.code).toBe(3);
+    expect(r.aus).toMatch(new RegExp(`Ungültig.*#3 \\(${[LENS_B, LENS].sort().join(" \\+ ")}\\)`));
+    const j = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B, "--json"], laeufeJeTyp);
+    expect(j.code).toBe(3);
+    expect(JSON.parse(j.aus).ungueltig).toHaveLength(1);
+  });
+  test("CLI: gültige Messung Exit 0; ein einzelnes --agent gibt den Bericht ohne Typ-Umschlag aus", () => {
+    const gueltig = { [LENS]: [lensLauf(2, LENS)], [LENS_B]: [lensLauf(1, LENS_B)] };
+    expect(cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B], gueltig).code).toBe(0);
+    const einzeln = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS_B, "--json"], gueltig);
+    expect(einzeln.code).toBe(0);
+    expect(Object.keys(JSON.parse(einzeln.aus))).toContain("gesamt");
+    expect(JSON.parse(einzeln.aus).agenten).toBeUndefined();
   });
 });

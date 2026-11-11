@@ -14,7 +14,7 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as nachweisLib from "../scripts/nachweis-lib.mjs";
 const { abnahmeMarker } = nachweisLib as unknown as { abnahmeMarker: (z: Zeilen) => string };
-import { FREMD, FREMD_OWNER, projektConfig } from "./support/fremd-config";
+import { FREMD, FREMD_NAMEN, FREMD_OWNER, projektConfig } from "./support/fremd-config";
 
 type Commit = { sha: string; datum: string; body: string };
 type Pr = {
@@ -832,5 +832,78 @@ describe("parseArgs strikt (#1790)", () => {
   test("--start-agent mit Wert, doppelt oder mit Inline-Wert", () => {
     assert.match(mod.parseArgs(["--start-agent", "a", "--start-agent", "b"]).fehler ?? "", /--start-agent ist doppelt/);
     assert.equal(mod.parseArgs(["--start-agent=x-agent"]).startAgent, "x-agent");
+  });
+});
+
+describe("--je-agent: Kennzahlen je Lens-Typ (factory#235)", () => {
+  type JeAgent = { zeilen: { pr: number; ticket: number | null }[]; jeAgent: Record<string, { zeilen: { pr: number }[]; kennzahlen: { prs: number; runde1MitBlocker: number } }>; ungueltig: { ticket: number; grund: string; typen: string[] }[] };
+  const je = raw as unknown as {
+    laufErgebnisJeAgent: (e: { ergebnis: unknown; laeufeJeTyp: Record<string, unknown[]>; namen: unknown }) => JeAgent;
+    formatiereJeAgent: (r: JeAgent) => string;
+    ladeJeAgentLaeufe: (dir: string, typen: string[], von: string) => Record<string, unknown[]>;
+    kennzahlenAus: (z: unknown[]) => { prs: number };
+  };
+  const A = "lens-a";
+  const B = "lens-b";
+  const prs = [
+    pr({ number: 50, closingIssuesReferences: [{ number: 40 }], mergeCommit: { oid: "1".repeat(40) } }),
+    pr({ number: 51, closingIssuesReferences: [{ number: 41 }], mergeCommit: { oid: "2".repeat(40) } }),
+    pr({ number: 52, closingIssuesReferences: [{ number: 42 }], mergeCommit: { oid: "3".repeat(40) } }),
+    pr({ number: 53, closingIssuesReferences: [{ number: 43 }], mergeCommit: { oid: "4".repeat(40) } }),
+    pr({ number: 54, title: "chore: ohne Ticket", closingIssuesReferences: [], mergeCommit: { oid: "5".repeat(40) } }),
+  ];
+  const commits = [
+    commit(review("runden=2 lenses=doku blocker=doku:1"), MERGED, "1".repeat(40)),
+    commit(review("runden=1 lenses=doku blocker=doku:0"), MERGED, "2".repeat(40)),
+    commit(review("runden=1 lenses=doku blocker=doku:0"), MERGED, "3".repeat(40)),
+    commit(review("runden=1 lenses=doku blocker=doku:0"), MERGED, "4".repeat(40)),
+  ];
+  const ergebnis = mod.bewertePrs({ prs, commits, ci: {}, festgefahren: {}, jetzt: SPAETER });
+  const lauf = (ticket: number, typ: string) => ({ meta: { agentType: typ }, zeilen: [{ type: "user", timestamp: "2026-10-01T09:00:00Z", message: { role: "user", content: `Ticket #${ticket}: x` } }] });
+  const rechne = (laeufeJeTyp: Record<string, unknown[]>) => je.laufErgebnisJeAgent({ ergebnis, laeufeJeTyp, namen: FREMD_NAMEN });
+
+  test("ein Typ je Ticket: Zeilen und Kennzahlen getrennt je Typ; PRs ohne Ticket zählen nicht", () => {
+    const r = rechne({ [A]: [lauf(40, A), lauf(42, A)], [B]: [lauf(41, B), lauf(43, B)] });
+    assert.deepEqual(r.ungueltig, []);
+    assert.deepEqual(r.jeAgent[A].zeilen.map((z) => z.pr), [50, 52]);
+    assert.deepEqual(r.jeAgent[B].zeilen.map((z) => z.pr), [51, 53]);
+    assert.equal(r.jeAgent[A].kennzahlen.runde1MitBlocker, 1);
+    assert.equal(r.jeAgent[B].kennzahlen.runde1MitBlocker, 0);
+    assert.equal(r.jeAgent[A].kennzahlen.prs, 2);
+  });
+  test("ein Ticket in beiden Typen oder in keinem ist ungültig und fehlt in allen Gruppen", () => {
+    const r = rechne({ [A]: [lauf(40, A), lauf(41, A)], [B]: [lauf(41, B), lauf(43, B)] });
+    assert.deepEqual(r.ungueltig, [{ ticket: 41, grund: "beide", typen: [A, B] }, { ticket: 42, grund: "keiner", typen: [] }]);
+    assert.deepEqual(r.jeAgent[A].zeilen.map((z) => z.pr), [50]);
+    assert.deepEqual(r.jeAgent[B].zeilen.map((z) => z.pr), [53]);
+  });
+  test("ein Lauf eines Tickets außerhalb der PR-Menge verfälscht nichts, ein mehrfacher Lauf im selben Typ ist gültig", () => {
+    const r = rechne({ [A]: [lauf(40, A), lauf(40, A), lauf(99, A)], [B]: [lauf(41, B), lauf(42, B), lauf(43, B)] });
+    assert.deepEqual(r.ungueltig, []);
+    assert.deepEqual(r.jeAgent[A].zeilen.map((z) => z.pr), [50]);
+  });
+  test("formatiereJeAgent nennt je Typ die Tickets und die ungültigen mit Grund", () => {
+    const text = je.formatiereJeAgent(rechne({ [A]: [lauf(40, A), lauf(41, A)], [B]: [lauf(41, B)] }));
+    assert.match(text, new RegExp(`## ${A}: 1 Tickets`));
+    assert.match(text, /Ungültig.*#41 \(Läufe in lens-a \+ lens-b\), #42 \(kein Lauf der Typen\), #43 \(kein Lauf der Typen\)/);
+    assert.match(je.formatiereJeAgent(rechne({ [A]: [lauf(40, A), lauf(42, A)], [B]: [lauf(41, B), lauf(43, B)] })), /Ungültig: keine/);
+  });
+  test("kennzahlenAus rechnet wie bewertePrs (gleiche Zahl, leere Menge ohne Fehler)", () => {
+    assert.deepEqual(je.kennzahlenAus(ergebnis.zeilen), ergebnis.kennzahlen);
+    assert.equal(je.kennzahlenAus([]).prs, 0);
+  });
+  test("parseArgs: --je-agent wiederholbar und ohne Wert ein Fehler; ohne das Flag bleibt die Form", () => {
+    assert.deepEqual(mod.parseArgs(["--je-agent", A, "--je-agent", B, "--je-agent", A]), { von: undefined, bis: undefined, tickets: [], ohne: [], json: false, fehler: null, jeAgent: [A, B] });
+    assert.match(mod.parseArgs(["--je-agent"]).fehler ?? "", /--je-agent erwartet einen Agent-Typ/);
+    assert.equal("jeAgent" in mod.parseArgs([]), false);
+  });
+  test("ladeJeAgentLaeufe: fehlender Ordner ist ein Datenfehler, ein Typ ohne Läufe ein leerer Arm", () => {
+    assert.throws(() => je.ladeJeAgentLaeufe(join(tmpdir(), "gibt-es-nicht-235"), [A], MERGED), mod.DatenFehler);
+    const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-235-"));
+    try {
+      assert.deepEqual(je.ladeJeAgentLaeufe(dir, [A, B], MERGED), { [A]: [], [B]: [] });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

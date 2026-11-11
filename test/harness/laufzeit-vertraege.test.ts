@@ -31,7 +31,9 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: OFFEN },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Statuszeile ist Claude-spezifisch: #84" },
 ];
-export const AGENTEN_AUSNAHMEN: Record<string, string> = {};
+export const AGENTEN_AUSNAHMEN: Record<string, string> = {
+  "lens-kern-je-rolle": "Arm B der A/B-Messung (factory#235): nur Claude Code, `omitClaudeMd: true`. Codex-Rollen sind Forks und erben `AGENTS.md`, der Schalter ist dort nicht abbildbar (belegt in factory#233, Fall g, Thread 01a1b309-be91-72f1-9cef-0a21f3e85617); Codex bleibt bei Arm A.",
+};
 export const CODEX_AGENTS_MAX_BYTES = 32768;
 
 export const v1 = (existiert: (p: string) => boolean): string[] => existiert("test/harness/skills-sync.test.ts") ? [] : ["V1: test/harness/skills-sync.test.ts fehlt"];
