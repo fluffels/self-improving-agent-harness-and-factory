@@ -53,3 +53,7 @@
 - Der Planer lief als Hauptthread-Agent (`--agent`), nicht als gespawnter Subagent, die Checkouts sind Exporte ohne Git-Historie, und die Planer-Definition ist in allen Checkouts die aktuelle. Die Kommentare des Tickets bis zum Claim stehen im Prompt (die Sammelzeilen stehen dort, nicht im Body).
 - Der Richter bekam nicht die Requirement-Treue-Blocker der Runde 1, nur Ticket, PR-Text und Dateiliste; er bewertet den Plan gegen das Endergebnis, nicht gegen den Zwischenstand.
 - Ausgangswert für den Rückfall-Trigger (`node scripts/lauf-ergebnis.mjs --von 2026-10-28T00:00:00Z --bis 2026-11-12T00:00:00Z --json`, Feld `blocker` der Brille `requirement-treue` je gemergtem PR): alle PRs Ø 1,51 je PR (Σ 115 bei 76 PRs mit Blockerfeld), PRs der Klasse `high` Ø 2,76 (Σ 69 bei 25 PRs). Die Klasse `high` liegt schon heute klar über dem Gesamtwert; ein Trigger gegen 1,51 wäre für sie immer ausgelöst.
+
+**Befunde.** Zwei Kosmetik-Zeilen im Harness-Sammelticket (factory#303): die doppelte Sammelticket-Erkennung per Regex neben der Titelliste, und der Hinweis, dass Sammelzeilen in den Kommentaren stehen (Messläufe laden sie bis zum ersten `assigned`-Ereignis).
+
+**Wiedervorlage.** Nur ein neuer Opus-Release; Rezept wie hier, die Entscheidungsregel vorher festlegen. Die Klassen-Idee (Planer-Effort nach Ticketart) ist damit verworfen, solange `high` die Regel verfehlt; das Skript zur Klassenbestimmung wurde nicht übernommen (ungenutzt).
