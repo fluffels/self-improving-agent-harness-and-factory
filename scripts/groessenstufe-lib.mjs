@@ -10,7 +10,7 @@
  *    `git diff --numstat --no-renames`, ohne Ausnahme für generierte Dateien, auch reines Markdown hat keinen Freibetrag);
  *  - kein Pfad aus `.github/protected-paths.json` (alle Gruppen) und keiner aus `GRUNDSCHUTZ` (Harness-Pfade, Gates, Hooks, Agenten, Skills,
  *    Abhängigkeiten), auch bei einer einzigen Zeile; ein Umzug zählt als Löschen plus Anlegen (`--no-renames`), trifft also den alten Pfad mit.
- *  - kein Pfad der Risikoklasse hoch (factory#333, `bestimmeRisikoklasse`: Muster der Projekt-Config `risiko.hoch`, sonst `RISIKO_STANDARDLISTE`; ein reiner `*.md`-Diff ist `doku`, `istDokuDiff` ist die einzige Stelle dieser Regel).
+ *  - kein Pfad der Risikoklasse hoch (factory#333, `bestimmeRisikoklasse`: Muster der Projekt-Config `risiko.hoch` (Vereinigung der Basis und des HEAD, factory#339; mit `--config` liest nur die HEAD-Seite die übergebene Datei, die Basis immer `PROJEKT_CONFIG` am Basis-Commit), sonst `RISIKO_STANDARDLISTE`; ein reiner `*.md`-Diff ist `doku`, `istDokuDiff` ist die einzige Stelle dieser Regel).
  * Fail-closed (immer `voll`, Risikoklasse `hoch`): nicht ladbare oder ungültige Risiko-Muster, leere oder nicht lesbare Dateiliste, Binärdatei (numstat `-`), ein von git quotierter Pfad, nicht ladbare
  * Schutzliste, git-Fehler. Die Schutzliste kommt vom Arbeitsbaum; eine Änderung an `.github/` ist wegen `GRUNDSCHUTZ` ohnehin `voll`.
  * Die Prognose (`prognose: true`, Planer vor der Umsetzung) kennt keine Zeilen und prüft nur Dateizahl und Pfade.
@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
 import { pruefeRisiko } from "./projekt-config-bloecke.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 /** Obergrenzen der Stufe S (Summe über den ganzen Diff). */
 export const GROESSENSTUFE_S = Object.freeze({ maxDateien: 3, maxZeilen: 60 });
@@ -40,7 +40,7 @@ export const GRUNDSCHUTZ = Object.freeze([
 ]);
 
 /** Standardliste der Risikoklasse hoch (factory#333): projektneutrale Pfadmuster (Syntax wie `.github/protected-paths.json`, Groß-/Kleinschreibung egal).
- *  Gilt ohne Projekt-Config-Block `risiko`; ein Block ersetzt sie (nicht additiv). Teilwort-Muster sind bewusst grob: Fehlalarme gehen in die strenge Richtung. */
+ *  Gilt ohne Projekt-Config-Block `risiko`; ein Block ersetzt sie (nicht additiv; Basis und HEAD werden vereinigt, factory#339). Teilwort-Muster sind bewusst grob: Fehlalarme gehen in die strenge Richtung. */
 export const RISIKO_STANDARDLISTE = Object.freeze([
   // Hooks, Guards, CI
   "/.githooks/", "/.claude/hooks/", "/.claude/settings.json", "/.codex/", "/.mcp.json", "/.github/workflows/", "*guard*",
@@ -74,6 +74,31 @@ export function risikoMusterAus(config) {
 /** Lädt die Risiko-Muster aus der Projekt-Config (ungeprüft geladen, geprüft wird nur der Block `risiko`); wirft, wenn die Config fehlt oder kein JSON ist. */
 export function ladeRisikoMuster({ pfad } = {}) {
   return risikoMusterAus(ladeProjektConfig({ pfad, pruefen: false }));
+}
+
+/**
+ * Die Risiko-Muster als Vereinigung von Basis und HEAD (factory#339): ein Diff darf die eigene Muster-Liste nicht schmaler machen, um sich aus Klasse hoch zu nehmen.
+ * `basis === null` (nur Tests): nur HEAD. Hat eine Seite `fehler` oder keine Muster: `muster: null` (fail-closed, hoch). Gleiche Mengen: HEAD unverändert. Pur.
+ */
+export function vereinigeRisiko(basis, kopf) {
+  if (basis === null) return kopf;
+  const quelle = "Projekt-Config (Basis ∪ HEAD)";
+  const fehler = [basis, kopf].flatMap((r) => (r.fehler?.length ? r.fehler : []));
+  if (fehler.length > 0 || !Array.isArray(basis.muster) || !Array.isArray(kopf.muster)) {
+    return { muster: null, quelle, fehler: fehler.length > 0 ? fehler : ["keine Risiko-Muster geladen"] };
+  }
+  const menge = [...new Set([...basis.muster, ...kopf.muster])];
+  if (menge.length === new Set(kopf.muster).size) return kopf; // die Basis steckt schon im HEAD
+  return { muster: menge, quelle };
+}
+
+/** Die Risiko-Muster der Basis über `git show <base>:<PROJEKT_CONFIG>`; nicht lesbar (Datei fehlt, kein JSON): Standardliste als Basisanteil. Ein ungültiger `risiko`-Block bleibt `fehler`. */
+function risikoDerBasis(git, base) {
+  try {
+    return risikoMusterAus(JSON.parse(git(["show", `${base}:${PROJEKT_CONFIG}`])));
+  } catch {
+    return { ...STANDARD_RISIKO };
+  }
 }
 
 const pfadFehler = (p) => {
@@ -186,13 +211,13 @@ export function ladeLeitplankenMuster(quelle = new URL("../.github/protected-pat
 /**
  * Die Größenstufe des Diffs `base...head` über die injizierte git-Funktion (`git(args)` liefert stdout, wirft bei Fehler). Fail-closed:
  * ein Fehler beim Laden der Schutzliste, der Risiko-Muster oder bei git ist `voll` (Risikoklasse `hoch`) mit dem Grund. Mit `zweiPunkt` gilt `base..head`
- * (für einen einzelnen Commit `sha^..sha`). `ladeRisiko` liefert die Risiko-Muster (Standard: Projekt-Config des Repos).
+ * (für einen einzelnen Commit `sha^..sha`). `ladeRisiko` liefert die Risiko-Muster von HEAD (Standard: Projekt-Config des Repos), `ladeRisikoBasis` die der Basis (Standard: `git show`, `null` = kein Basisanteil, nur Tests); gerechnet wird mit der Vereinigung (`vereinigeRisiko`). `core.quotepath=off` hält Umlaut-Pfade unquotiert.
  */
-export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = ladeLeitplankenMuster, ladeRisiko = () => ladeRisikoMuster(), zweiPunkt = false } = {}) {
+export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = ladeLeitplankenMuster, ladeRisiko = () => ladeRisikoMuster(), ladeRisikoBasis = () => risikoDerBasis(git, base), zweiPunkt = false } = {}) {
   const meldung = (e) => (e instanceof Error ? e.message : String(e));
   let risiko;
   try {
-    risiko = ladeRisiko();
+    risiko = vereinigeRisiko(ladeRisikoBasis(), ladeRisiko());
   } catch (e) {
     risiko = { muster: null, quelle: "Projekt-Config", fehler: [`Projekt-Config nicht ladbar: ${meldung(e)}`] };
   }
@@ -204,7 +229,7 @@ export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = lad
     return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle), sweep: sweepVoll(grund) };
   }
   try {
-    const ausgabe = git(["diff", "--numstat", "--no-renames", `${base}${zweiPunkt ? ".." : "..."}${head}`]);
+    const ausgabe = git(["-c", "core.quotepath=off", "diff", "--numstat", "--no-renames", `${base}${zweiPunkt ? ".." : "..."}${head}`]);
     return bestimmeGroessenstufe({ eintraege: parseNumstatNoRenames(ausgabe), muster, risiko });
   } catch (e) {
     const grund = `git-Fehler beim Zählen des Diffs: ${meldung(e)}`;

@@ -59,4 +59,4 @@ Entscheidung 3 (Generationsgrenze samt Nachfolger-Anlage im Board-Takt), der Gre
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen als Dateien unter [`fortschreibungen/`](fortschreibungen/0026-268-sammelticket-deckel.md) (Konvention: [README](README.md#format)); dort: [factory#268](fortschreibungen/0026-268-sammelticket-deckel.md) führt einen Deckel je Sammelticket-Lauf ein (Zahl nur in AGENTS.md); der Rest geht ins Folge-Sammelticket.
+Neue Fortschreibungen dieses ADR stehen als Dateien unter [`fortschreibungen/`](fortschreibungen/0026-268-sammelticket-deckel.md) (Konvention: [README](README.md#format)); dort: [factory#268](fortschreibungen/0026-268-sammelticket-deckel.md) führt einen Deckel je Sammelticket-Lauf ein (Zahl nur in AGENTS.md); der Rest geht ins Folge-Sammelticket; [factory#339](fortschreibungen/0026-339-auswahl-nach-klasse.md) wählt die Zeilen zuerst nach Klasse.

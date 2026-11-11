@@ -5,7 +5,7 @@
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { describe, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -19,7 +19,7 @@ type Vorbedingung = {
   bewerteHealth: (e: { status?: number; fehler?: string }) => Urteil;
   basisUrl: (env: Record<string, string | undefined>) => string;
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
-  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] | null; jetzt?: number }) => Promise<number>;
+  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] | string[][] | null; jetzt?: number }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
 const WURZEL = process.cwd();
@@ -181,7 +181,7 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
   const GETRENNT = [INIT("http://localhost:3000/api/public/mcp"), START("2026-11-11T09:00:00.001Z"), REFUSED("2026-11-11T09:00:00.020Z")];
   const VERBUNDEN = [START("2026-11-11T09:00:00.000Z"), ERFOLG("2026-11-11T09:00:00.050Z")];
 
-  const lauf = async (argv: string[], env: Record<string, string | undefined>, mcpZeilen: (() => string[] | null) | undefined, fetchImpl: Fetch = antwort(200)) => {
+  const lauf = async (argv: string[], env: Record<string, string | undefined>, mcpZeilen: (() => string[] | string[][] | null) | undefined, fetchImpl: Fetch = antwort(200)) => {
     const out: string[] = [];
     const err: string[] = [];
     let gelesen = 0;
@@ -239,10 +239,35 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     const leer = await lauf2({ ...env, FACTORY_MCP_LOG_DIR: join(basis, "gibt-es-nicht") });
     expect(leer).toEqual({ code: 0, err: "Langfuse-MCP-Verbindung der Session nicht prüfbar (kein MCP-Log gefunden)." });
   });
+  test("liest die echten Log-Dateien je Prozess: neue Session-ID, Prozess-Datei getrennt, fremde Datei verbunden: Exit 1", async () => {
+    const basis = mkdtempSync(join(tmpdir(), "vorb-logs2-"));
+    const wurzel = "/dev/vorb-proj2";
+    const dir = join(basis, "-dev-vorb-proj2", "mcp-logs-langfuse");
+    mkdirSync(dir, { recursive: true });
+    const vor = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+    writeFileSync(join(dir, "prozess.jsonl"), [START(vor(30), "sid-alt"), REFUSED(vor(29), "sid-alt"), z("Tool 'x' completed successfully in 5ms", vor(20), "sid-neu")].join("\n"));
+    writeFileSync(join(dir, "fremd.jsonl"), [START(vor(10), "sid-fremd"), ERFOLG(vor(9), "sid-fremd")].join("\n"));
+    const env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "sid-neu", CLAUDE_PROJECT_DIR: wurzel, FACTORY_MCP_LOG_DIR: basis };
+    const err: string[] = [];
+    try {
+      const code = await v.main([], env, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
+      expect(code).toBe(1);
+      expect(err.join("\n")).toContain("ECONNREFUSED");
+    } finally {
+      rmSync(basis, { recursive: true, force: true });
+    }
+  });
   test("Rückfall (Session ohne eigenen Start): bewertet den jüngsten Start und sagt es", async () => {
     const r = await lauf([], { ...CC, CLAUDE_CODE_SESSION_ID: "subagent" }, () => GETRENNT);
     expect(r.code).toBe(1);
     expect(r.err.join("\n")).toContain("keinen eigenen Verbindungsstart");
+  });
+  test("Session-ID gewechselt (Prozess-Datei getrennt, fremde Datei verbunden): getrennt, Exit 1", async () => {
+    const prozess = [...GETRENNT, z("Tool 'x' completed successfully in 5ms", "2026-11-11T09:10:00.000Z", "sid-neu")];
+    const fremd = [START("2026-11-11T09:30:00.000Z", "sid-fremd"), ERFOLG("2026-11-11T09:30:00.050Z", "sid-fremd")];
+    const r = await lauf([], { ...CC, CLAUDE_CODE_SESSION_ID: "sid-neu" }, () => [prozess, fremd]);
+    expect(r.code).toBe(1);
+    expect(r.err.join("\n")).toContain("ECONNREFUSED");
   });
   test("nicht prüfbar (Start ohne Ergebnis): Exit 0 und eine sichtbare Zeile auf stderr", async () => {
     const r = await lauf([], CC, () => [START("2026-11-11T09:00:00.000Z")]);

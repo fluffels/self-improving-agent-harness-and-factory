@@ -259,7 +259,7 @@ function fakeGit(o: {
     if (cmd === `log --reverse --format=%B ${B}..HEAD`) return chrono.join("\n\n");
     if (cmd === `log --format=%B ${B}..HEAD`) return [...chrono].reverse().join("\n\n");
     if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
-    if (cmd === `diff --numstat --no-renames ${B}...HEAD`) {
+    if (cmd === `-c core.quotepath=off diff --numstat --no-renames ${B}...HEAD`) {
       if (o.numstat !== undefined) return o.numstat;
       return (o.files ?? "src/x.ts\n").split(/\r?\n/).filter((l) => l.trim() !== "").map((f) => `100\t0\t${f}`).join("\n") + "\n";
     }
@@ -824,6 +824,8 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git("init", "-q", "-b", "main");
     writeFileSync(join(d, "README.md"), "x\n");
+    mkdirSync(join(d, ".factory"), { recursive: true });
+    writeFileSync(join(d, ".factory", "projekt.json"), JSON.stringify({ risiko: { hoch: ["/geheim/"] } }));
     git("add", "-A");
     git("commit", "-q", "-m", "basis");
     const basis = git("rev-parse", "HEAD").trim();
@@ -1004,7 +1006,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     });
 
     test("numstat-Fehler: fail-closed hoch, die Meldung nennt den git-Grund", () => {
-      const r = pruefe(nachweis([]), { files: "src/x.ts\n", throws: "diff --numstat" });
+      const r = pruefe(nachweis([]), { files: "src/x.ts\n", throws: "-c core.quotepath=off diff --numstat" });
       assert.equal(r.ok, false);
       assert.match(r.fehler.join(), /git-Fehler beim Zählen des Diffs/);
     });

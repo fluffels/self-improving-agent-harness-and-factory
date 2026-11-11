@@ -25,7 +25,8 @@ const lib = libRaw as unknown as {
   risikoMusterAus: (c: unknown) => Risiko;
   bestimmeRisikoklasse: (p: unknown, r?: Risiko) => Klasse;
   bestimmeGroessenstufe: (o: { eintraege: unknown; muster: string[] | null; prognose?: boolean; risiko?: Risiko }) => { stufe: string; gruende: string[]; risiko: Klasse };
-  groessenstufeAusGit: (git: (a: string[]) => string, b: string, h?: string, o?: { ladeMuster?: () => string[]; ladeRisiko?: () => Risiko }) => { stufe: string; gruende: string[]; risiko: Klasse };
+  groessenstufeAusGit: (git: (a: string[]) => string, b: string, h?: string, o?: { ladeMuster?: () => string[]; ladeRisiko?: () => Risiko; ladeRisikoBasis?: () => Risiko | null }) => { stufe: string; gruende: string[]; risiko: Klasse };
+  vereinigeRisiko: (basis: Risiko | null, kopf: Risiko) => Risiko;
 };
 const STANDARD: Risiko = { muster: lib.RISIKO_STANDARDLISTE, quelle: "Standardliste" };
 const klasse = (pfade: unknown, r: Risiko = STANDARD) => lib.bestimmeRisikoklasse(pfade, r);
@@ -176,12 +177,16 @@ const PL = FREMD.agenten.planer;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; abnahme: string } };
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 
-function repo(aenderungen: Record<string, string>, nachweis: string) {
+function repo(aenderungen: Record<string, string>, nachweis: string, basisConfig?: object) {
   const dir = mkdtempSync(join(tmpdir(), "risiko-"));
   dirs.push(dir);
   const git = (a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   git(["init", "-q", "-b", "main"]);
   writeFileSync(join(dir, "README.md"), "x\n");
+  if (basisConfig) {
+    mkdirSync(join(dir, ".factory"), { recursive: true });
+    writeFileSync(join(dir, ".factory/projekt.json"), JSON.stringify(basisConfig));
+  }
   git(["add", "-A"]);
   git(["commit", "-q", "-m", "basis"]);
   const base = git(["rev-parse", "HEAD"]).trim();
@@ -196,9 +201,91 @@ function repo(aenderungen: Record<string, string>, nachweis: string) {
   return { git, base };
 }
 
+describe("Vereinigung der Muster von Basis und HEAD (factory#339)", () => {
+  const eintraege = (pfad: string) => "1\t0\t" + pfad + "\n";
+  const gitMit = (basisJson: string | Error, pfad: string, aufrufe: string[] = []) => (a: string[]) => {
+    aufrufe.push(a.join(" "));
+    if (a[0] === "show") {
+      if (basisJson instanceof Error) throw basisJson;
+      return basisJson;
+    }
+    return eintraege(pfad);
+  };
+  const rechne = (git: (a: string[]) => string, kopf: string[], extra: { ladeRisikoBasis?: () => Risiko | null } = {}) =>
+    lib.groessenstufeAusGit(git, "B", "H", { ladeMuster: () => ["/x/"], ladeRisiko: () => ({ muster: kopf, quelle: "Projekt-Config" }), ...extra });
+  test("Basis meldet *geheim*, HEAD schmaler: der Diff bleibt hoch mit dem Basis-Muster als Treffer", () => {
+    const aufrufe: string[] = [];
+    const r = rechne(gitMit('{"risiko":{"hoch":["*geheim*"]}}', "src/geheim.ts", aufrufe), ["*anders*"]);
+    expect(r).toMatchObject({ stufe: "voll", risiko: { klasse: "hoch", quelle: "Projekt-Config (Basis ∪ HEAD)", treffer: [{ pfad: "src/geheim.ts", muster: "*geheim*" }] } });
+    expect(aufrufe[0]).toBe("show B:.factory/projekt.json");
+  });
+  test("Basis ohne Config: die Standardliste ist der Basisanteil, src/auth.ts bleibt hoch trotz schmalem HEAD", () => {
+    const r = rechne(gitMit(new Error("fatal: path does not exist"), "src/auth.ts"), ["*x*"]);
+    expect(r.risiko).toMatchObject({ klasse: "hoch", treffer: [{ pfad: "src/auth.ts", muster: "*auth*" }] });
+    expect(rechne(gitMit("kein json", "src/auth.ts"), ["*x*"]).risiko.klasse).toBe("hoch");
+  });
+  test("gleiche Listen in Basis und HEAD: Klasse und Quelle unverändert", () => {
+    const g = gitMit('{"risiko":{"hoch":["*geheim*"]}}', "src/geheim.ts");
+    expect(rechne(g, ["*geheim*"]).risiko).toMatchObject({ klasse: "hoch", quelle: "Projekt-Config" });
+    expect(rechne(gitMit('{"risiko":{"hoch":["*geheim*"]}}', "src/a.ts"), ["*geheim*"]).risiko).toMatchObject({ klasse: "normal", quelle: "Projekt-Config" });
+  });
+  test("ungültiger risiko-Block in der Basis: fail-closed hoch mit dem Grund; ladeRisikoBasis null: nur HEAD", () => {
+    const r = rechne(gitMit('{"risiko":{"hoch":"nein"}}', "src/a.ts"), ["*x*"]);
+    expect(r.risiko.klasse).toBe("hoch");
+    expect(r.risiko.gruende[0]).not.toMatch(/keine Risiko-Muster geladen/);
+    expect(rechne(gitMit("{}", "src/auth.ts"), ["*x*"], { ladeRisikoBasis: () => null }).risiko.klasse).toBe("normal");
+  });
+  test("vereinigeRisiko: Menge ohne Doppelte; eine Seite ohne Muster ist null mit Fehler", () => {
+    const a: Risiko = { muster: ["a", "b"], quelle: "x" };
+    expect(lib.vereinigeRisiko(a, { muster: ["b", "c"], quelle: "y" }).muster).toEqual(["a", "b", "c"]);
+    expect(lib.vereinigeRisiko(a, { muster: ["b", "a"], quelle: "y" })).toEqual({ muster: ["b", "a"], quelle: "y" });
+    expect(lib.vereinigeRisiko(a, { muster: null, quelle: "y" })).toMatchObject({ muster: null, fehler: ["keine Risiko-Muster geladen"] });
+    expect(lib.vereinigeRisiko({ muster: null, quelle: "x", fehler: ["kaputt"] }, a)).toMatchObject({ muster: null, fehler: ["kaputt"] });
+    expect(lib.vereinigeRisiko({ muster: null, quelle: "x" }, a)).toMatchObject({ muster: null, fehler: ["keine Risiko-Muster geladen"] });
+  });
+  test("vereinigeRisiko: HEAD streicht oder verdoppelt Muster der Basis, die Basis bleibt gültig", () => {
+    const basis: Risiko = { muster: ["*geheim*", "*x*"], quelle: "x" };
+    const streich = lib.vereinigeRisiko(basis, { muster: ["*x*"], quelle: "y" });
+    expect(streich.muster).toEqual(["*geheim*", "*x*"]);
+    const doppelt = lib.vereinigeRisiko(basis, { muster: ["*x*", "*x*"], quelle: "y" });
+    expect(doppelt.muster).toEqual(["*geheim*", "*x*"]);
+    expect(doppelt.quelle).toMatch(/Basis ∪ HEAD/);
+    expect(lib.vereinigeRisiko({ muster: ["*x*"], quelle: "x" }, { muster: ["*x*", "*y*"], quelle: "y" })).toEqual({ muster: ["*x*", "*y*"], quelle: "y" });
+  });
+});
+
+describe("Pfade mit Umlaut bleiben unquotiert (factory#339)", () => {
+  const echtesRepo = (datei: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "quote-"));
+    dirs.push(dir);
+    const git = (a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git(["init", "-q", "-b", "main"]);
+    git(["config", "core.quotepath", "true"]);
+    writeFileSync(join(dir, "README.md"), "x\n");
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "basis"]);
+    const base = git(["rev-parse", "HEAD"]).trim();
+    mkdirSync(dirname(join(dir, datei)), { recursive: true });
+    writeFileSync(join(dir, datei), "x\n");
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "umsetzung"]);
+    return { git, base };
+  };
+  const rechne = (datei: string) => {
+    const { git, base } = echtesRepo(datei);
+    return lib.groessenstufeAusGit(git, base, "HEAD", { ladeMuster: () => ["/x/"], ladeRisiko: () => STANDARD, ladeRisikoBasis: () => null });
+  };
+  test("docs/größe.md ist doku trotz core.quotepath=true", () => {
+    expect(rechne("docs/größe.md").risiko).toMatchObject({ klasse: "doku" });
+  });
+  test("ein Pfad mit Anführungszeichen bleibt von git quotiert und damit hoch", () => {
+    expect(rechne('docs/a"b.md').risiko).toMatchObject({ klasse: "hoch", gruende: [expect.stringMatching(/quotiert/)] });
+  });
+});
+
 describe("Wächter rechnen mit der Risikoklasse", () => {
-  const review = (aenderungen: Record<string, string>, nachweis: string, ladeRisiko?: () => Risiko) => {
-    const { git, base } = repo(aenderungen, nachweis);
+  const review = (aenderungen: Record<string, string>, nachweis: string, ladeRisiko?: () => Risiko, basisConfig?: object) => {
+    const { git, base } = repo(aenderungen, nachweis, basisConfig);
     return (reviewRaw as { checkReviewNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkReviewNachweis({ runGit: git, env: { FACTORY_DIFF_BASE: base }, ladeZeilen: () => Z, ladeRisiko });
   };
   const nach = `${Z.plan}: ${PL} — skizze\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`;
@@ -206,11 +293,11 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
     const f = review({ "src/auth/a.ts": "x\n" }, nach, () => STANDARD).fehler.join("\n");
     expect(f).toMatch(/gilt nur bei Größenstufe S/);
     expect(f).toMatch(/kombiniert genügt nur bei Größenstufe S/);
-    expect(review({ "src/auth/a.ts": "x\n" }, nach, () => ({ muster: ["/geheim/"], quelle: "Projekt-Config" })).fehler).toEqual([]);
+    expect(review({ "src/auth/a.ts": "x\n" }, nach, () => ({ muster: ["/geheim/"], quelle: "Projekt-Config" }), { risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
   });
   const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
-  const abnahme = (aenderungen: Record<string, string>, config: Record<string, unknown>) => {
-    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert verdikt=ok\n${Z.abnahme}: entfaellt — klein: nichts zu beobachten`);
+  const abnahme = (aenderungen: Record<string, string>, config: Record<string, unknown>, basisConfig?: object) => {
+    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert verdikt=ok\n${Z.abnahme}: entfaellt — klein: nichts zu beobachten`, basisConfig);
     return (abnahmeRaw as { checkAbnahmeNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkAbnahmeNachweis({
       runGit: git,
       gh: () => ({ body: "## Akzeptanzkriterien\n1. eins\n2. zwei\n" }),
@@ -220,6 +307,6 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
   };
   test("Abnahme: entfaellt — klein mit Risiko-Pfad ist rot, mit CONFIG.risiko.hoch ohne Treffer grün", () => {
     expect(abnahme({ "src/auth/a.ts": "x\n" }, CONFIG).ok).toBe(false);
-    expect(abnahme({ "src/auth/a.ts": "x\n" }, { ...CONFIG, risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
+    expect(abnahme({ "src/auth/a.ts": "x\n" }, { ...CONFIG, risiko: { hoch: ["/geheim/"] } }, { risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
   });
 });

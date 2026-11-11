@@ -109,13 +109,15 @@ describe("modulFehler (Manifest)", () => {
     expect(lib.modulFehler({ pfad: "x.yml", ring: "kern" })).toEqual([]);
     expect(lib.modulFehler({ pfad: "x.yml", ring: "kern", modul: "codeql" })).toEqual([]);
   });
+  test("pflichtChecks sind an einer Moduleinheit erlaubt (der Doctor verlangt sie nur bei vorhandener Workflow-Datei, factory#339)", () => {
+    expect(lib.modulFehler({ pfad: ".github/workflows/x.yml", modul: "x", pflichtChecks: ["Job"] })).toEqual([]);
+  });
   test.each([
     ["kaputter Name", { modul: "Code QL", ring: "kern" }, "Name"],
     ["Name mit ungültigem Rest", { modul: "code ql", ring: "kern" }, "Name"],
     ["an einem Block", { modul: "codeql", ring: "kern", block: "b" }, "ganzen Datei"],
     ["an einem Schlüssel", { modul: "codeql", ring: "kern", schluessel: "k" }, "ganzen Datei"],
     ["mit art vorlage", { modul: "codeql", ring: "kern", art: "vorlage" }, "art"],
-    ["mit pflichtChecks", { modul: "codeql", ring: "kern", pflichtChecks: ["x"] }, "pflichtChecks"],
     ["im Ring oberflaeche", { modul: "codeql", ring: "oberflaeche" }, "oberflaeche"],
   ])("Fehler: %s", (_n, e, teil) => {
     expect(lib.modulFehler(e).join("\n")).toContain(teil);
