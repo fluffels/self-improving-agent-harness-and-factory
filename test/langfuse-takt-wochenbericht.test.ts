@@ -37,6 +37,13 @@ describe("entscheideTakt mit Wochenbericht", () => {
     expect(r).toMatchObject({ aktion: "anlegen", anlass: "Wochenbericht 2026-11-02 fehlt" });
     expect(r.grund).toContain("Anlass");
   });
+  test("der grund ist einzeilig, ohne Backticks und gekappt (er geht ins Actions-Log, eine Zeile mit :: wäre ein Workflow-Befehl)", () => {
+    const roh = `erste\n::error::boese \`x\` ${"y".repeat(400)}`;
+    const r = e({ ausloeser: "workflow_dispatch", anlass: roh, wochenbericht: W });
+    expect(r.grund).toBe(`Anlass: erste ::error::boese x ${"y".repeat(400)}`.slice(0, "Anlass: ".length + 300) + "…");
+    expect(r.grund).not.toMatch(/[\n`]/);
+    expect(r.anlass).toBe(roh.trim());
+  });
   test("Dispatch ohne Anlass (leer, nur Leerraum, fehlend): nichts", () => {
     for (const anlass of [undefined, "", "  \n "]) expect(e({ ausloeser: "workflow_dispatch", anlass, mergesSeit: 99, wochenbericht: W }).aktion).toBe("nichts");
   });

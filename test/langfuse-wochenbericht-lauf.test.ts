@@ -32,6 +32,12 @@ const MONTAG = "2026-11-02";
 const MI = new Date("2026-11-11T12:00:00Z");
 const DO = new Date("2026-11-12T00:00:00Z");
 const temps: string[] = [];
+/** Umgebung der Prozess-Tests: umgebogenes Home, ohne Langfuse-Zugang und gh-Token (eine Regression darf nie den Live-Weg oder einen Dispatch erreichen). */
+const kindUmgebung = (home: string): NodeJS.ProcessEnv => {
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home };
+  for (const k of Object.keys(env)) if (k.startsWith("LANGFUSE_") || k === "GH_TOKEN" || k === "GITHUB_TOKEN") delete env[k];
+  return env;
+};
 afterAll(() => {
   for (const d of temps) rmSync(d, { recursive: true, force: true });
 });
@@ -337,7 +343,7 @@ describe("Wochenbericht-Lauf: Ränder der Ausgänge", () => {
   test("Ende zu Ende: --ausloeser sessionstart schreibt nichts auf stdout und endet bei unlesbarer Config mit Exit 1 und Logzeile fehler", () => {
     const home = mkdtempSync(join(tmpdir(), "wbe-"));
     temps.push(home);
-    const r = spawnSync(process.execPath, ["scripts/langfuse-wochenbericht.mjs", "--ausloeser", "sessionstart", "--wurzel", join(home, "gibt-es-nicht")], { encoding: "utf8", env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 30_000 });
+    const r = spawnSync(process.execPath, ["scripts/langfuse-wochenbericht.mjs", "--ausloeser", "sessionstart", "--wurzel", join(home, "gibt-es-nicht")], { encoding: "utf8", env: kindUmgebung(home), timeout: 30_000 });
     expect(r.status).toBe(1);
     expect(r.stdout).toBe("");
     const zeile = JSON.parse(readFileSync(join(home, ".claude", "state", "langfuse-wochenbericht.log"), "utf8").trim()) as Record<string, unknown>;
@@ -351,7 +357,7 @@ describe("Wochenbericht-Lauf: Aufruf des Auswertens, Ergänzen, Kappung, Produkt
     const u = umgebung({ exit: 0 });
     await u.lauf();
     expect(u.a.argumente).toHaveLength(1);
-    expect(u.a.argumente[0].args).toMatchObject({ woche: MONTAG, ablegen: true, json: true, exporte: [], rezept: false });
+    expect(u.a.argumente[0].args).toEqual({ woche: MONTAG, ablegen: true, json: true, exporte: [], rezept: false, rollen: [] });
     expect(u.a.argumente[0].deps).toMatchObject({ home: u.home, jetzt: MI, env: { LANGFUSE_PUBLIC_KEY: "pk" } });
     expect(u.a.argumente[0].deps.projekt).toBe((u.deps as { projekt: unknown }).projekt);
   });
@@ -384,7 +390,7 @@ describe("Wochenbericht-Lauf: Aufruf des Auswertens, Ergänzen, Kappung, Produkt
   test("Ende zu Ende: --ausloeser mit unbekanntem Wert endet mit Exit 2 und startet keinen Lauf (kein Log)", () => {
     const home = mkdtempSync(join(tmpdir(), "wbf-"));
     temps.push(home);
-    const r = spawnSync(process.execPath, ["scripts/langfuse-wochenbericht.mjs", "--ausloeser", "foo"], { encoding: "utf8", env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 30_000 });
+    const r = spawnSync(process.execPath, ["scripts/langfuse-wochenbericht.mjs", "--ausloeser", "foo"], { encoding: "utf8", env: kindUmgebung(home), timeout: 30_000 });
     expect(r.status).toBe(2);
     expect(r.stdout).toBe("");
     expect(existsSync(join(home, ".claude"))).toBe(false);
