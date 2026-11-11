@@ -374,7 +374,7 @@ describe("echte Nähte", () => {
       expect(naehte.fehler()).toEqual([]);
       expect(P.fuehreSchritte([rot], io)).toEqual([{ id: "rot", status: expect.any(Number) }]);
       const fehler = naehte.fehler().join("\n");
-      expect(fehler).toContain("fatal");
+      expect(fehler).toMatch(/gibtsnicht.*(?:fatal|Schwerwiegend|No such file)/su);
       expect(fehler).toContain("status");
     });
   });
@@ -458,14 +458,14 @@ describe("Negativfälle der Kette (echter Klon)", () => {
   /** Fixture bis nach dem Sync und `projektwerte --write` bauen; → Pfad des Fixture-Projekts. */
   const bezieher = (dir: string, k: string, name: string): string => {
     const scratch = join(dir, name);
-    const naehte = P.echteNaehte("ignore");
+    const naehte = P.echteNaehte(["ignore", "ignore", "pipe"]);
     const sha = naehte.kopf(k) as string;
     const alle = P.probeSchritte({ quelle: k, scratch, tag: P.PROBE_TAG, sha });
     const bis = alle.findIndex((s) => s.id === "projektwerte");
     const kette = alle.slice(0, bis + 1).filter((s) => s.id !== "install" && s.id !== "lint-prune");
     const io = { ...naehte.mitScratch(scratch), melde: () => undefined };
     const ergebnisse = P.fuehreSchritte(kette, io);
-    expect(ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id))).toEqual([]);
+    expect(ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id)), naehte.fehler().join("\n")).toEqual([]);
     return join(scratch, "bezieher");
   };
 

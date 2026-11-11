@@ -187,11 +187,20 @@ export function main(argv, io) {
   return { code: urteil.code, out: `${[mess ?? "Messung nicht möglich (AGENTS.md des Fixture-Projekts fehlt oder ohne Marker)", ...urteil.zeilen].join("\n")}\n`, err: "" };
 }
 
+const FEHLER_ENDE = 2000;
+
 /** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
 export function echteNaehte(stdio = "inherit") {
   const lies = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
-  const lauf = (argv, cwd) => spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio }).status;
+  const fehlerListe = [];
+  const lauf = (argv, cwd) => {
+    const r = spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio });
+    if (r.status !== 0 && r.stderr?.length) fehlerListe.push(`${argv.join(" ")}: ${String(r.stderr).trim().slice(-FEHLER_ENDE)}`);
+    return r.status;
+  };
   const io = {
+    /** Befehl und stderr-Ende jedes fehlgeschlagenen Schritts (nur bei gepipetem stderr, sonst leer). */
+    fehler: () => [...fehlerListe],
     lies,
     istGitRepo: (p) => spawnSync("git", ["-C", p, "rev-parse", "--git-dir"], { stdio: "ignore" }).status === 0,
     istLeer: (p) => !existsSync(p) || readdirSync(p).length === 0,
