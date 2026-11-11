@@ -195,7 +195,7 @@ export function echteNaehte(stdio = "inherit") {
   const fehlerListe = [];
   const lauf = (argv, cwd) => {
     const r = spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio });
-    if (r.status === 0 && r.stderr?.length) fehlerListe.push(`${argv.join(" ")}: ${String(r.stderr).trim().slice(-FEHLER_ENDE)}`);
+    if (r.status !== 0 && r.stderr?.length) fehlerListe.push(`${argv.join(" ")}: ${String(r.stderr).trim().slice(-FEHLER_ENDE)}`);
     return r.status;
   };
   const io = {

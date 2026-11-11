@@ -372,10 +372,14 @@ describe("echte Nähte", () => {
       const gruen = { id: "gruen", argv: [process.execPath, "-e", "0"], cwd: dir, kritisch: false };
       expect(P.fuehreSchritte([gruen], io)).toEqual([{ id: "gruen", status: 0 }]);
       expect(naehte.fehler()).toEqual([]);
-      expect(P.fuehreSchritte([rot], io)).toEqual([{ id: "rot", status: expect.any(Number) }]);
+      expect(P.fuehreSchritte([rot], io).map((e) => [e.id, e.status !== 0])).toEqual([["rot", true]]);
       const fehler = naehte.fehler().join("\n");
       expect(fehler).toMatch(/gibtsnicht.*(?:fatal|Schwerwiegend|No such file)/su);
       expect(fehler).toContain("status");
+      // ohne gepipeten stderr (stderr null) bleibt der Fehlschlag ohne Absturz und ohne Eintrag
+      const still = P.echteNaehte("ignore");
+      expect(P.fuehreSchritte([rot], { ...still.mitScratch(join(dir, "t")), melde: () => undefined }).map((e) => e.status !== 0)).toEqual([true]);
+      expect(still.fehler()).toEqual([]);
     });
   });
 
