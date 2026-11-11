@@ -80,10 +80,15 @@ describe("Reset und Ketten", () => {
     expect(s).toMatchObject({ reset: 1, veraltet: 1 });
     expect(s.liste.map((x) => x.delta)).toEqual([2]);
     const genau = [
-      { stand: T0 + H, sevenDay: { pct: 10, resetsAt: RESET } },
+      { stand: T0 + H, sevenDay: { pct: 10, resetsAt: (T0 + 2 * H) / 1000 } },
       { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: (T0 + 2 * H) / 1000 } },
     ];
-    expect(L.strecken(genau, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
+    expect(L.strecken(genau, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, reset: 0, liste: [] });
+    const frueherer = [
+      { stand: T0 + H, sevenDay: { pct: 10, resetsAt: RESET } },
+      { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: (T0 + 5 * D) / 1000 } },
+    ];
+    expect(L.strecken(frueherer, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
   });
 });
 
