@@ -105,6 +105,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/review-lenses/ablauf-zusatzpass.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-architektur.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-doku.md", budget: 2_000 },
+  { file: ".agents/skills/review-lenses/brille-kombiniert.md", budget: 2_000 },
   { file: ".agents/skills/review-lenses/brille-requirement-treue.md", budget: 4_000 },
   { file: ".agents/skills/review-lenses/brille-test-adaequanz.md", budget: 7_500 },
   { file: ".claude/agents/explore.md", budget: 1_500 },

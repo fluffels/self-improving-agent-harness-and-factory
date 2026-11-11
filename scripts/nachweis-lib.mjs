@@ -13,7 +13,9 @@ import { escapeRegex } from "./regex-lib.mjs";
 export const HEX = "[0-9a-f]{7,40}";
 /** Brillen-Schlüssel (Quelle für Review-Zeile, Lens-Auftrag-Guard und die Dateien `brille-<Schlüssel>.md` des Skills `review-lenses`). */
 export const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
-export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
+/** Kombi-Lens der Größenstufe S (factory#271): eine Lens statt der drei Code-Brillen; sie zählt nur bei berechnetem S als Code-Satz (check-review-nachweis). */
+export const KOMBI_LENS = "kombiniert";
+export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, "doku"];
 
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
 
@@ -102,6 +104,24 @@ function abnahmefixAus(reviewWert) {
   return wert.trim() === "1" ? 1 : { ungueltig: wert };
 }
 
+/** Liest den Grund einer Plan- oder Abnahme-Ausnahme der Größenstufe S (factory#271): `klein: <Begründung>`. `null`, wenn der Grund nicht mit `klein` beginnt;
+ *  `{art:"klein", begruendung}` mit nicht leerer Begründung, sonst `{art:"klein-ohne-begruendung"}`. Ob die Stufe stimmt, prüft der Wächter gegen den Diff. Pur. */
+export function kleinGrund(grund) {
+  const g = String(grund ?? "").trim();
+  if (!/^klein\b/.test(g)) return null;
+  const m = /^klein\s*:\s*(\S.*)$/.exec(g);
+  return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
+}
+
+/** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
+function planAus(planWert, planer) {
+  if (planWert === null) return null;
+  if (planWert === planer) return { art: "planer" };
+  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
+  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
+  return ohne ? { art: "ohne", grund: ohne[1].trim() } : { art: "ungueltig", zeile: planWert };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -109,14 +129,7 @@ export function parseNachweis(text, zeilen) {
   if (!zeilen || typeof zeilen.plan !== "string" || typeof zeilen.review !== "string" || typeof zeilen.planer !== "string" || typeof zeilen.abnahme !== "string") {
     throw new Error("parseNachweis braucht die Commit-Zeilen (commitZeilen(praefix, planer)), keinen Standardwert");
   }
-  const planWert = lastLine(text, zeilen.plan);
-  let plan = null;
-  if (planWert !== null) {
-    const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-    if (planWert === zeilen.planer) plan = { art: "planer" };
-    else if (ohne) plan = { art: "ohne", grund: ohne[1].trim() };
-    else plan = { art: "ungueltig", zeile: planWert };
-  }
+  const plan = planAus(lastLine(text, zeilen.plan), zeilen.planer);
   const reviewWert = lastLine(text, zeilen.review);
   let review = null;
   if (reviewWert !== null) {

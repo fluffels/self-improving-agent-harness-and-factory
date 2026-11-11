@@ -662,6 +662,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/groessenstufe.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/review-nachweis.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
