@@ -1,7 +1,7 @@
 import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -10,6 +10,13 @@ import * as libRaw from "../scripts/langfuse-wochenbericht-lib.mjs";
 import * as cliRaw from "../scripts/langfuse-wochenbericht.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as liveRaw from "../scripts/langfuse-wochenbericht-live.mjs";
+
+/** Das echte `gh` erreicht nie ein Test: `ghText` ist gemockt, geprüft wird nur, mit welchen Argumenten der Rückfall (`deps.gh` fehlt) es ruft (factory#324). */
+const ghMockAufrufe = vi.hoisted(() => [] as string[][]);
+vi.mock("../scripts/gh-cli.mjs", async (orig) => {
+  const echt = await orig<Record<string, unknown>>();
+  return { ...echt, ghText: (args: string[]) => { ghMockAufrufe.push(args); return JSON.stringify({ total_count: 7, incomplete_results: false }); } };
+});
 
 type Abfr = { view: string; filters: unknown[]; fromTimestamp: string; toTimestamp: string };
 type Rez = { art: string; name: string; abfrage: Abfr };
@@ -572,6 +579,16 @@ describe("Kosten je Merge (factory#324)", () => {
     expect(k.ghDer({})).toBe(k.ghEcht);
     expect(typeof k.ghEcht).toBe("function");
     expect(k.ghDer({ gh: stub })).toBe(stub);
+  });
+  test("auswerten ohne deps.gh (manueller Aufruf) ruft das echte gh mit den Such-Argumenten beider Wochen (Red-Green: Aufrufstelle auf deps.gh umstellen macht rot)", async () => {
+    ghMockAufrufe.length = 0;
+    const r = await lauf(["--json"], satz(), { gh: undefined });
+    expect(r.exitCode).toBe(0);
+    expect(ghMockAufrufe.map((a) => a.find((x) => x.startsWith("q=")))).toEqual([
+      "q=repo:own/repo is:pr is:merged merged:2026-11-02T00:00:00+00:00..2026-11-08T23:59:59+00:00",
+      "q=repo:own/repo is:pr is:merged merged:2026-10-26T00:00:00+00:00..2026-11-01T23:59:59+00:00",
+    ]);
+    expect(lese<{ summe: { merges: unknown } }>(r.stdout).summe.merges).toEqual({ woche: 7, vorwoche: 7 });
   });
   test("Markdown: ohne Merges und bei Vorwoche ohne Kosten steht der Grund in der Zeile Kosten je Merge", async () => {
     const lib = libRaw as unknown as { wochenAuswertung: (g: unknown, o: Record<string, unknown>) => unknown; renderWochenbericht: (m: string, f: unknown, a: unknown) => string };
