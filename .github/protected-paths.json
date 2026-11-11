@@ -103,6 +103,8 @@
     "/scripts/budget-lib.mjs",
     "/scripts/budget-pacing.mjs",
     "/scripts/abo-kontingent-lib.mjs",
+    "/scripts/langfuse-auswertung-lib.mjs",
+    "/scripts/langfuse-auswertung.mjs",
     "/scripts/tokens-je-prozentpunkt-lib.mjs",
     "/scripts/sammelticket-anlegen.mjs",
     "/scripts/fremdtext.mjs",
