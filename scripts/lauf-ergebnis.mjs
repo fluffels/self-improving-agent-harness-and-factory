@@ -65,6 +65,11 @@ export function ticketVon(pr) {
   return alle.length > 0 ? Number(alle[alle.length - 1][1]) : null;
 }
 
+/** Ist die Nacharbeitsfrist (Merge + NACHARBEIT_TAGE) bei `jetzt` abgelaufen? Einzige Fristberechnung, auch Quelle der Folge-Quote im Abo-Kontingent. Pure. */
+export function fristAbgelaufen({ mergedAt, jetzt }) {
+  return jetzt.getTime() >= new Date(mergedAt).getTime() + NACHARBEIT_TAGE * TAG_MS;
+}
+
 /** Nacharbeit nach dem Merge: 'revert' | 'folge' | 'nein' | 'offen' (Fenster läuft noch, kein Treffer). Pure. */
 export function nacharbeitVon({ pr, ticket, mergeSha, mergedAt, commits, jetzt }) {
   const von = new Date(mergedAt).getTime();
@@ -78,7 +83,7 @@ export function nacharbeitVon({ pr, ticket, mergeSha, mergedAt, commits, jetzt }
     const folge = [...c.body.matchAll(/^Folge #(\d+)\b/gm)].some((m) => Number(m[1]) === ticket || Number(m[1]) === pr);
     if (folge) return "folge";
   }
-  return jetzt.getTime() < bis ? "offen" : "nein";
+  return fristAbgelaufen({ mergedAt, jetzt }) ? "nein" : "offen";
 }
 
 /** Anzahl distinct Head-SHAs roter CI-Läufe zwischen PR-Erstellung und Merge (Zählung: ci-laeufe.mjs). Pure. */
@@ -140,6 +145,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
       festgefahren: festgefahren[pr.number] ?? 0,
       nacharbeit: nacharbeitVon({ pr: pr.number, ticket, mergeSha, mergedAt: pr.mergedAt, commits, jetzt }),
+      fristAbgelaufen: fristAbgelaufen({ mergedAt: pr.mergedAt, jetzt }),
     };
   });
   const mitNachweis = eintraege.filter((z) => z.runden !== null);

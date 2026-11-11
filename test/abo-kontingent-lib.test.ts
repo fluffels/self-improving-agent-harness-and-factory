@@ -33,7 +33,7 @@ const L = raw as unknown as {
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
-  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string; jetzt?: number }) => { luecke?: string } & Partial<Auswertung>;
+  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string }) => { luecke?: string } & Partial<Auswertung>;
   erstelle: (a: unknown, io: unknown) => { bericht: { kontingent?: unknown }; exit: number };
   renderMarkdown: (b: unknown) => string;
 };
@@ -394,7 +394,7 @@ describe("aboKontingent und Abschnitt", () => {
 });
 
 describe("ladeAboKontingent und Bericht", () => {
-  const tickets: Ticketzeile[] = [{ ticket: 7, pr: 70, gemergt: "2026-10-15T11:00:00Z", blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein" }];
+  const tickets: Ticketzeile[] = [{ ticket: 7, pr: 70, gemergt: "2026-10-15T11:00:00Z", blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", fristAbgelaufen: true }];
   const von = "2026-10-15T00:00:00Z";
   const bis = "2026-10-16T00:00:00Z";
   const claimAntwort = { data: { repository: { i7: { timelineItems: { nodes: [{ createdAt: "2026-10-15T10:00:00Z" }] } } } } };
@@ -406,12 +406,11 @@ describe("ladeAboKontingent und Bericht", () => {
     expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 2.73 }]); // 3 pp über 66 min, davon 60 min im Ticket-Fenster
     expect(aufrufe).toHaveLength(1);
   });
-  test("die Frist läuft ab dem Merge: vor 14 Tagen zählt eine Folge als offen, danach als Folge (jetzt eingespritzt)", () => {
-    const folgeTicket: Ticketzeile[] = [{ ...tickets[0], nacharbeit: "folge" }];
-    const merge = Date.parse("2026-10-15T11:00:00Z");
+  test("die Frist kommt aus dem Feld fristAbgelaufen der Lauf-Zeile: laufende Frist zählt eine Folge als offen, abgelaufene als Folge", () => {
     const io = { gh: () => claimAntwort, lies: () => verlauf, pfad: "/x" };
-    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 13 * 86_400_000 }).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
-    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 15 * 86_400_000 }).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
+    const folge = (fristAbgelaufen: boolean): Ticketzeile[] => [{ ...tickets[0], nacharbeit: "folge", fristAbgelaufen }];
+    expect(K.ladeAboKontingent({ von, bis, tickets: folge(false) }, io).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
+    expect(K.ladeAboKontingent({ von, bis, tickets: folge(true) }, io).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
     const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0], ticket: 100 + i, pr: 500 + i }));

@@ -138,8 +138,8 @@ export function vertragPruefen(json) {
   if (!ab || typeof ab !== "object") return { luecke: "lauf-ergebnis: Kennzahl-Feld fehlt: abnahme (Vertrag verletzt)" };
   const abFehlt = ABNAHME_FELDER.filter((f) => !Number.isFinite(ab[f]));
   if (abFehlt.length > 0) return { luecke: `lauf-ergebnis: Kennzahl-Feld fehlt: ${abFehlt.map((f) => `abnahme.${f}`).join(", ")} (Vertrag verletzt)` };
-  const kaputt = json.zeilen.find((z) => !z || !Number.isFinite(z.pr) || !Number.isFinite(z.ciFix) || !gueltig(z.gemergt) || typeof z.nacharbeit !== "string" || !abnahmeGueltig(z.abnahme));
-  if (kaputt !== undefined) return { luecke: "lauf-ergebnis: Zeile ohne pr/ciFix/gemergt/nacharbeit/abnahme (Vertrag verletzt)" };
+  const kaputt = json.zeilen.find((z) => !z || !Number.isFinite(z.pr) || !Number.isFinite(z.ciFix) || !gueltig(z.gemergt) || typeof z.nacharbeit !== "string" || typeof z.fristAbgelaufen !== "boolean" || !abnahmeGueltig(z.abnahme));
+  if (kaputt !== undefined) return { luecke: "lauf-ergebnis: Zeile ohne pr/ciFix/gemergt/nacharbeit/fristAbgelaufen/abnahme (Vertrag verletzt)" };
   return { daten: json };
 }
 
@@ -523,7 +523,7 @@ const KONTINGENT_BLOCK = 50;
  * Abo-Kontingent je Ticket (factory#285): Verlauf lesen, Claims per GraphQL holen (Blöcke zu `KONTINGENT_BLOCK`), auswerten.
  * `tickets` = Lauf-Zeilen des Zeitraums. Verlauf oder gh nicht verfügbar: `{ luecke }` mit Grund, nie 0. IO injizierbar; kein Langfuse.
  */
-export function ladeAboKontingent({ von, bis, tickets }, { jetzt = Date.now(), gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
+export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
   let text;
   try {
     text = lies(pfad);
@@ -543,7 +543,7 @@ export function ladeAboKontingent({ von, bis, tickets }, { jetzt = Date.now(), g
   } catch (err) {
     return { luecke: `Claims nicht ladbar: ${fehlerText(err, 200)}` };
   }
-  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis), jetzt, fristMs: NACHARBEIT_TAGE * TAG_MS });
+  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis) });
 }
 
 /** Sitzungen aller Projektordner unter `wurzel` (das Limit gilt kontoweit), jeweils ab `von`; ein Ordner nach dem anderen. */
