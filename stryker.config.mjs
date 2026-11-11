@@ -1,7 +1,7 @@
 // Projektanteil des Mutationslaufs (factory#299): Adapter für den Gate-Befehl `mutation` (`befehle.mutation` in .factory/projekt.json).
 // Aufruf über `node scripts/mutation-lauf.mjs`: der Kern übergibt die Zeilenbereiche des Diffs als JSON-Datei und den Berichtspfad
 // per Umgebungsvariable (Vertrag: docs/adr/fortschreibungen/0022-299-mutation-adapter.md). Die Namen stehen hier als Literale
-// (kein Import aus dem Kern, damit die Datei auch in historische Stände kopierbar ist); der Vertragstest in test/gate-befehl.test.ts pinnt die Namen des Kerns, die Gleichheit mit diesen Literalen belegt der Probelauf (docs/mutation-messung-2026-11.md).
+// (kein Import aus dem Kern, damit die Datei auch in historische Stände kopierbar ist); der Vertragstest in test/gate-befehl.test.ts pinnt die Namen des Kerns, die Gleichheit mit diesen Literalen belegt jeder erfolgreiche Messlauf (docs/mutation-messung-2026-11.md, Namensgleichheit).
 import { readFileSync } from "node:fs";
 
 const bereichePfad = process.env.FACTORY_MUTATION_BEREICHE;

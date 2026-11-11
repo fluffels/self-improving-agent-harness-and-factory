@@ -286,6 +286,15 @@ describe("Ablauf", () => {
     }
     assert.equal(existsSync(ordner), false);
   });
+  test("echteNaehte ohne env-Argument übergibt die Prozess-Umgebung (der Produktionsweg von main)", () => {
+    assert.equal(lib.echteNaehte("/w").env, process.env);
+  });
+  test("Smoke im Kindprozess: main gibt den Exit-Code weiter (unbekanntes Flag: Exit 2 mit Fix-Zeile)", () => {
+    const wurzel = fileURLToPath(new URL("../", import.meta.url));
+    const r = spawnSync(process.execPath, ["scripts/mutation-lauf.mjs", "--unbekannt"], { cwd: wurzel, encoding: "utf8" });
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /Fix: node scripts\/mutation-lauf\.mjs ohne Argumente aufrufen/);
+  });
   test("ein vorhandener alter Bericht wird nie gelesen: der Berichtspfad liegt im frischen Ordner", () => {
     const { io, log } = umgebung({ bericht: null, alt: gutBericht });
     assert.equal(lib.cli([], io), 1);

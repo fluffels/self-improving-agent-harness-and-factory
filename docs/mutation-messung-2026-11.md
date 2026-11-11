@@ -103,6 +103,8 @@ Laufzeit wall-clock je Lauf (nur der erfolgreiche Lauf, ohne `npm ci`); „aktiv
 | factory#229 | c | 455 | 0:55 | 717 | 630 | 72 | 1 | 14 | 0 | 1 % |
 | factory#120 (ergänzend) | `3e76a140` | 218 | 0:21 | 326 | 243 | 67 | 15 | 1 | 0 | 18 % |
 
+**Namensgleichheit Kern und Projektanteil.** Die Config des Projektanteils wirft, wenn eine der beiden Umgebungsvariablen fehlt; jeder erfolgreiche Messlauf (alle zehn Läufe dieser Seite) belegt damit, dass ihre Literale den Namen des Kerns entsprechen.
+
 **Messabweichungen (offen genannt).**
 
 - Bei factory#174 scheitert der Probelauf, weil zwei Tests (`test/sammelticket-anlegen.test.ts` › „Verdrahtung der Selbstkorrektur“, `test/tag-takt-main.test.ts` › „gitEcht fängt stderr ab“) den Quelltext oder das Standard-Error eines Skripts prüfen, das das Werkzeug an Ort und Stelle instrumentiert; beide Tests wurden in allen drei Ständen im Scratchpad-Worktree mit `test.skip` ausgeschaltet. Das ist eine Eigenschaft des Werkzeugs im Modus `inPlace` und dieses Repos (viele Tests lesen Quelltext), kein Fehler des Messaufbaus; ein Projekt mit solchen Wächter-Tests braucht eine Test-Ausnahmeliste im Projektanteil.
