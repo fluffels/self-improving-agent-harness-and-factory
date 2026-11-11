@@ -195,8 +195,8 @@ describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
     }
   });
 
-  test("Default >= größte Datei der Liste (nach dem Vorbild MODULE_AGENTS_BUDGET)", () => {
-    assert.ok(DEFAULT >= Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)));
+  test("Default = größtes Budget der Liste (nachgezogen)", () => {
+    assert.equal(DEFAULT, Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)));
   });
 });
 
