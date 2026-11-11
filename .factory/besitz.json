@@ -250,7 +250,7 @@
     {"pfad":".github/workflows/scorecard.yml","ring":"kern","modul":"scorecard","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":".github/workflows/secret-scan.yml","ring":"kern","modul":"secret-scan","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":"scripts/secret-inbox.mjs","ring":"kern","modul":"secret-scan","quelle":"Sicherheits-Modul (factory#119)"},
-    {"pfad":".github/workflows/dependency-review.yml","ring":"kern","modul":"dependency-review","quelle":"Sicherheits-Modul (factory#119)"},
+    {"pfad":".github/workflows/dependency-review.yml","ring":"kern","modul":"dependency-review","pflichtChecks":["Abhängigkeiten prüfen (Dependency Review)"],"quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":".github/workflows/zizmor.yml","ring":"kern","modul":"zizmor","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":".github/workflows/codescanning-inbox.yml","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":"scripts/codescanning-inbox.mjs","ring":"kern","modul":"codescanning-inbox","quelle":"Sicherheits-Modul (factory#119)"},

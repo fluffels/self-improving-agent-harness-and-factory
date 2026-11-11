@@ -16,6 +16,9 @@
  *   Workflow-Datei (Flow-Form, Anker, Alias, Tag, Merge-Schlüssel …), ein fehlender Ruleset-Spiegel oder eine leere Soll-Liste machen den Punkt nicht prüfbar. Spiegel, Workflows und Soll-Liste liest `pruefLauf` einmal und reicht sie herein.
  *   Der Punkt `Meldestelle` (factory#208) gehört nicht hierher: er braucht `gh` und steht in harness-doctor-meldestelle.mjs.
  *
+ *   `Code-Scanning-Quellen` (factory#339): jedes Werkzeug aus `spiegel.codeScanning` hat eine Workflow-Quelle (CodeQL: `uses: github/codeql-action/analyze@`, jedes andere Werkzeug: `uses: github/codeql-action/upload-sarif@` in einer Datei, die den Namen als Wort nennt);
+ *   ohne Quelle Lücke, nur CodeQL ohne Workflow nicht prüfbar (Default-Setup serverseitig). Grenze: Drittaktionen und ein SARIF-Upload per API erkennt der Punkt nicht. Spiegel und Workflows reicht `pruefLauf` herein wie bei `Required-Check-Quellen`.
+ *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
@@ -277,8 +280,51 @@ export function requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks, v
   return gut(punkt);
 }
 
+const CS_PUNKT = "Code-Scanning-Quellen";
+const CS_FIX = `Sicherheits-Modul wählen (\`module\` in \`${PROJEKT_CONFIG}\`) oder Workflow mit SARIF-Upload ergänzen, sonst das Werkzeug aus Ruleset und Spiegel nehmen (Pre-Flight)`;
+const CS_ANALYZE = "uses: github/codeql-action/analyze@";
+const CS_UPLOAD = "uses: github/codeql-action/upload-sarif@";
+const WORT_ZEICHEN = /[a-z0-9_-]/;
+
+/** Zeilen einer Workflow-Datei, getrimmt, ein führendes `- ` der Listenform entfernt (eine Kommentarzeile `# uses: …` beginnt mit `#` und passt auf kein Muster). */
+const csZeilen = (text) => text.split("\n").map((z) => z.trim().replace(/^- /, ""));
+/** Steht `name` (klein geschrieben) als ganzes Wort in `text` (klein geschrieben)? Wortzeichen sind Buchstaben, Ziffern, `_` und `-`. */
+function alsWort(text, name) {
+  for (let i = text.indexOf(name); i !== -1; i = text.indexOf(name, i + 1)) {
+    if (!WORT_ZEICHEN.test(text[i - 1] ?? " ") && !WORT_ZEICHEN.test(text[i + name.length] ?? " ")) return true;
+  }
+  return false;
+}
+/** Hat `workflows` eine Quelle für das Werkzeug `tool`: `analyze` für CodeQL, sonst `upload-sarif` in einer Datei, die den Namen als Wort nennt? */
+function csQuelle(workflows, tool) {
+  const klein = tool.toLowerCase();
+  return workflows.some((w) => {
+    const zeilen = csZeilen(w.text);
+    if (klein === "codeql") return zeilen.some((z) => z.startsWith(CS_ANALYZE));
+    return zeilen.some((z) => z.startsWith(CS_UPLOAD)) && alsWort(w.text.toLowerCase(), klein);
+  });
+}
+
+/**
+ * Punkt `Code-Scanning-Quellen` (factory#339): jedes Werkzeug aus `spiegel.codeScanning` hat im Repo eine Workflow-Quelle in `workflows` (`[{ pfad, text }]`): CodeQL einen Schritt
+ * `uses: github/codeql-action/analyze@`, jedes andere Werkzeug einen Schritt `uses: github/codeql-action/upload-sarif@` in einer Datei, die den Werkzeugnamen als Wort nennt (Groß-/Kleinschreibung egal).
+ * Ein Werkzeug ohne Quelle ist eine Lücke (das Ruleset wartete ewig auf ein Ergebnis, das nie kommt); nur CodeQL ohne Workflow ist nicht prüfbar, weil das Default-Setup serverseitig läuft. Ohne Spiegel oder
+ * nach Abbruch nicht prüfbar, ein Spiegel ohne `codeScanning` ist OK. Grenze: Drittaktionen und ein SARIF-Upload per API erkennt der Punkt nicht (dann Lücke oder nicht prüfbar, nie still grün). Pur.
+ */
+export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = false }) {
+  if (vorAbbruch || spiegel === undefined || spiegel === null) {
+    return nichtPruefbar(CS_PUNKT, "Config bzw. Ruleset-Spiegel nicht geladen: die Soll-Liste der Code-Scanning-Werkzeuge ist unbekannt", "erst den Config- bzw. Spiegel-Fehler oben beheben (`rulesetSpiegel` in der Projekt-Config), dann erneut prüfen");
+  }
+  const werkzeuge = (Array.isArray(spiegel.codeScanning) ? spiegel.codeScanning : []).map((e) => e?.tool).filter((t) => typeof t === "string" && t !== "");
+  const ohne = werkzeuge.filter((t) => !csQuelle(workflows ?? [], t));
+  const echt = ohne.filter((t) => t.toLowerCase() !== "codeql");
+  if (echt.length > 0) return luecke(CS_PUNKT, `${echt.map((t) => `„${t}“`).join(", ")}: keine Workflow-Quelle mit SARIF-Upload (ein Ruleset-Werkzeug ohne Quelle blockiert jeden PR ewig)`, CS_FIX);
+  if (ohne.length > 0) return nichtPruefbar(CS_PUNKT, "CodeQL: kein Workflow mit `github/codeql-action/analyze` (das Default-Setup läuft serverseitig und ist aus den Dateien nicht belegbar)", `unter Einstellungen > Code security prüfen, ob das Default-Setup aktiv ist, oder das Sicherheits-Modul \`codeql\` wählen (\`module\` in \`${PROJEKT_CONFIG}\`)`);
+  return gut(CS_PUNKT);
+}
+
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Workflow-Auslöser"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
@@ -292,6 +338,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Langfuse-Takt": () => langfuseTaktPunkt(rootDir, existiert, config),
     "Gezielter Test": () => gezielterTestPunkt(config),
     "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks, vorAbbruch }),
+    "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());

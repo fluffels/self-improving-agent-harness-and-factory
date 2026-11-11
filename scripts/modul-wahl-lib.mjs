@@ -59,7 +59,7 @@ export function modulWahl(config, manifest, { configPfad = "die Projekt-Config" 
   return { gewaehlt, erlaubt, nichtGewaehlt: erlaubt.filter((n) => !gewaehlt.includes(n)), fehlt: !istListe(config?.module), fehler };
 }
 
-/** Manifest-Fehler des Felds `modul` an einer Einheit (leer = gültig oder nicht gesetzt): Name nach Muster, nur an ganzen Dateien, weder Vorlage noch `pflichtChecks`, nicht im Ring `oberflaeche`. */
+/** Manifest-Fehler des Felds `modul` an einer Einheit (leer = gültig oder nicht gesetzt): Name nach Muster, nur an ganzen Dateien, keine Vorlage (`pflichtChecks` sind erlaubt: der Doctor verlangt sie nur, wenn die Workflow-Datei im Repo liegt), nicht im Ring `oberflaeche`. */
 export function modulFehler(e) {
   // Roh prüfen, nicht über istModulEinheit: `modul: 5` ist eine Moduleinheit mit ungültigem Namen und muss gemeldet werden.
   if (e.modul === undefined) return [];
@@ -67,7 +67,6 @@ export function modulFehler(e) {
   const f = [];
   if (e.block !== undefined || e.schluessel !== undefined) f.push("modul nur an einer ganzen Datei (kein block, kein schluessel)");
   if (e.art !== undefined) f.push("modul und art zugleich (eine Vorlage gehört keinem Modul)");
-  if (e.pflichtChecks !== undefined) f.push("modul trägt keine pflichtChecks (Kern-Pflicht-Checks müssen in jedem Bezieher existieren)");
   if (e.ring === "oberflaeche") f.push("modul nicht im Ring oberflaeche");
   return f;
 }

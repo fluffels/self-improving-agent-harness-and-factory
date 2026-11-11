@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt } from "../scripts/harness-doctor-dateien.mjs";
+import { DATEI_PUNKTE as rawDateiPunkte, gitStandard as rawGitStandard, LF_BEISPIELE as rawBeispiele, pfadeOhneEolRegel as rawOhneRegel, PROJEKTDATEIEN as rawProjektdateien, pruefeDateien as rawPruefe, requiredCheckQuellenPunkt as rawQuellenPunkt, codeScanningQuellenPunkt as rawCsPunkt } from "../scripts/harness-doctor-dateien.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { blockformAusloeser as rawBlockformAusloeser } from "../scripts/workflow-blockform.mjs";
 import { BEZIEHER_NPM_SKRIPTE } from "./support/bezieher-npm-skripte";
@@ -20,6 +20,7 @@ type Git = (args: string[], input?: string) => string;
 const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
 const DATEI_PUNKTE = rawDateiPunkte as readonly string[];
 const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis;
+const csPunkt = rawCsPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
 const pfadeOhneEolRegel = rawOhneRegel as (z: string) => string[];
 const BEISPIELE = rawBeispiele as string[];
 const PROJEKTDATEIEN = rawProjektdateien as { pfad: string; fix?: string }[];
@@ -628,12 +629,13 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Workflow-Auslöser"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-2)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-3)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-2)).toBe("Code-Scanning-Quellen");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });
@@ -743,5 +745,77 @@ describe("Required-Check-Quellen (factory#148)", () => {
   });
   test("ohne die neuen Felder (Abbruchpfad) ist der Punkt nicht prüfbar statt grün", () => {
     expect(punkt(pruefe({ rootDir: "/x", git: fakeGit(gesund), existiert: () => true, config: {} }), "Required-Check-Quellen")).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+});
+
+describe("Code-Scanning-Quellen (factory#339)", () => {
+  const cs = (...tools: string[]) => ({ requiredChecks: [], codeScanning: tools.map((tool) => ({ tool })) });
+  const analyze = (text = ""): Workflow => ({ pfad: ".github/workflows/codeql.yml", text: `jobs:\n  a:\n    steps:\n      - uses: github/codeql-action/analyze@abc # v3\n${text}` });
+  const sarif = (text: string, pfad = ".github/workflows/zizmor.yml"): Workflow => ({ pfad, text: `jobs:\n  a:\n    steps:\n      - run: ${text}\n      - uses: github/codeql-action/upload-sarif@abc # v3\n` });
+  const p = (spiegel: unknown, workflows: Workflow[], vorAbbruch = false) => csPunkt({ spiegel, workflows, vorAbbruch });
+
+  test("CodeQL und zizmor mit echten Workflows: OK", () => {
+    expect(p(cs("CodeQL", "zizmor"), [analyze(), sarif("zizmor --format sarif .")])).toEqual({ punkt: "Code-Scanning-Quellen", ok: true });
+  });
+  test("zizmor im Spiegel, Workflow fehlt: LÜCKE mit Fix", () => {
+    const e = p(cs("CodeQL", "zizmor"), [analyze()]);
+    expect(e).toMatchObject({ ok: false });
+    expect(e.nichtPruefbar).toBeUndefined();
+    expect(e.befund).toContain("zizmor");
+    expect(e.fix).toContain("Sicherheits-Modul wählen (`module` in `.factory/projekt.json`) oder Workflow mit SARIF-Upload ergänzen, sonst das Werkzeug aus Ruleset und Spiegel nehmen (Pre-Flight)");
+  });
+  test("CodeQL ohne Workflow mit analyze: NICHT PRÜFBAR (Default-Setup serverseitig)", () => {
+    const e = p(cs("CodeQL"), [sarif("x")]);
+    expect(e).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(e.befund).toContain("Default-Setup");
+  });
+  test("eine Lücke schlägt NICHT PRÜFBAR derselben Prüfung", () => {
+    const e = p(cs("CodeQL", "zizmor"), []);
+    expect(e.nichtPruefbar).toBeUndefined();
+    expect(e.befund).toContain("zizmor");
+  });
+  test("upload-sarif ohne den Werkzeugnamen in der Datei: LÜCKE", () => {
+    expect(p(cs("zizmor"), [sarif("anderes --sarif")])).toMatchObject({ ok: false });
+  });
+  test("Name als Teilwort eines anderen Wortes zählt nicht", () => {
+    expect(p(cs("zizmor"), [sarif("zizmor-ng --sarif")]).ok).toBe(false);
+    expect(p(cs("zizmor"), [sarif("xzizmor --sarif")]).ok).toBe(false);
+  });
+  test("Name ganz am Anfang oder ganz am Ende der Datei zählt als Wort", () => {
+    const upload = "uses: github/codeql-action/upload-sarif@abc\n";
+    expect(p(cs("zizmor"), [{ pfad: "a.yml", text: `zizmor\n${upload}` }]).ok).toBe(true);
+    expect(p(cs("zizmor"), [{ pfad: "b.yml", text: `${upload}zizmor` }]).ok).toBe(true);
+  });
+  test("Werkzeugname ohne Upload-Schritt: LÜCKE", () => {
+    expect(p(cs("zizmor"), [{ pfad: "z.yml", text: "jobs:\n  a:\n    steps:\n      - run: zizmor .\n" }]).ok).toBe(false);
+  });
+  test("ein auskommentierter Upload zählt nicht", () => {
+    expect(p(cs("zizmor"), [{ pfad: "z.yml", text: "jobs:\n  a:\n    steps:\n      - run: zizmor .\n      # - uses: github/codeql-action/upload-sarif@abc\n" }]).ok).toBe(false);
+    expect(p(cs("CodeQL"), [{ pfad: "c.yml", text: "# uses: github/codeql-action/analyze@abc\n" }]).nichtPruefbar).toBe(true);
+  });
+  test("Groß- und Kleinschreibung ist egal", () => {
+    expect(p(cs("CodeQL", "ZIZMOR"), [analyze(), sarif("Zizmor --sarif")]).ok).toBe(true);
+    expect(p(cs("CODEQL"), [analyze()]).ok).toBe(true);
+  });
+  test("ohne Spiegel oder nach Abbruch: NICHT PRÜFBAR wie bei Required-Check-Quellen", () => {
+    expect(p(null, [])).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p(undefined, [])).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(p(cs("zizmor"), [], true)).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("Spiegel ohne codeScanning oder mit leerer Liste: OK", () => {
+    expect(p({ requiredChecks: [] }, []).ok).toBe(true);
+    expect(p(cs(), []).ok).toBe(true);
+  });
+  test("ohne Workflow-Liste: Lücke statt Absturz", () => {
+    expect(csPunkt({ spiegel: cs("zizmor") }).ok).toBe(false);
+  });
+  test("ein Eintrag ohne Werkzeugnamen verfälscht nichts", () => {
+    expect(p({ codeScanning: [null, {}, { tool: 5 }] }, []).ok).toBe(true);
+  });
+  test("pruefeDateien reicht Spiegel und Workflows an den Punkt", () => {
+    const e = pruefe({ rootDir: "/x", ...GESUND, spiegel: { requiredChecks: ["Beispiel Check"], codeScanning: [{ tool: "zizmor" }] }, git: fakeGit(gesund), existiert: () => true, config: {} });
+    expect(punkt(e, "Code-Scanning-Quellen").ok).toBe(false);
+    const mitQuelle = pruefe({ rootDir: "/x", ...GESUND, workflows: [...GESUND.workflows, sarif("zizmor")], spiegel: { requiredChecks: ["Beispiel Check"], codeScanning: [{ tool: "zizmor" }] }, git: fakeGit(gesund), existiert: () => true, config: {} });
+    expect(punkt(mitQuelle, "Code-Scanning-Quellen").ok).toBe(true);
   });
 });

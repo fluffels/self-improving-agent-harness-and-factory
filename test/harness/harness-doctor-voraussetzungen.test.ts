@@ -142,10 +142,17 @@ describe("Pflicht-Checks des Kerns (factory#117)", () => {
     }
   });
 
+  test("pflichtChecks einer Moduleinheit stehen in der Soll-Liste nur bei vorhandener Workflow-Datei (factory#339)", () => {
+    const manifest = { eintraege: [{ pfad: ".github/workflows/mod.yml", ring: "kern", modul: "mod", pflichtChecks: ["Modul-Check"] }] };
+    const soll = (workflowDateien: { pfad: string; text: string }[]): string[] => doctor.voraussetzungenAus({ config: { labels: {}, boards: [] }, workflows: workflowDateien, spiegel: { requiredChecks: [] }, besitz: { wert: manifest } }).pflichtChecks;
+    assert.deepEqual(soll([{ pfad: ".github/workflows/mod.yml", text: "name: m\n" }]), ["Modul-Check"]);
+    assert.deepEqual(soll([{ pfad: ".github/workflows/andere.yml", text: "name: a\n" }]), []);
+  });
+
   test("jeder Spiegel-Check, den ein Besitz-Workflow erzeugt, steht in pflichtChecks dieser Einheit", () => {
     let funde = 0;
-    // Moduleinheiten tragen nie pflichtChecks (Fortschreibung 0022-119: Kern-Pflicht-Checks müssen in jedem Bezieher existieren); ihr Spiegel-Check ist Sache des Beziehers, der das Modul wählt (factory#335).
-    for (const e of ganzeWorkflows.filter((w) => w.modul === undefined)) {
+    // Auch Moduleinheiten tragen pflichtChecks (Fortschreibung 0022-119): der Doctor verlangt sie nur, wenn ihre Workflow-Datei im Repo liegt.
+    for (const e of ganzeWorkflows) {
       for (const j of jobsVon(lies(e.pfad))) {
         if (j.kontext === null || !spiegel.requiredChecks.includes(j.kontext)) continue;
         funde++;
