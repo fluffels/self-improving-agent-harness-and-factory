@@ -88,7 +88,7 @@ export function vereinigeRisiko(basis, kopf) {
     return { muster: null, quelle, fehler: fehler.length > 0 ? fehler : ["keine Risiko-Muster geladen"] };
   }
   const menge = [...new Set([...basis.muster, ...kopf.muster])];
-  if (menge.length === new Set(kopf.muster).size && menge.length === new Set(basis.muster).size) return kopf;
+  if (menge.length === new Set(kopf.muster).size) return kopf; // die Basis steckt schon im HEAD
   return { muster: menge, quelle };
 }
 

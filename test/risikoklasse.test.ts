@@ -250,7 +250,7 @@ describe("Vereinigung der Muster von Basis und HEAD (factory#339)", () => {
     const doppelt = lib.vereinigeRisiko(basis, { muster: ["*x*", "*x*"], quelle: "y" });
     expect(doppelt.muster).toEqual(["*geheim*", "*x*"]);
     expect(doppelt.quelle).toMatch(/Basis ∪ HEAD/);
-    expect(lib.vereinigeRisiko({ muster: ["*x*"], quelle: "x" }, { muster: ["*x*", "*y*"], quelle: "y" }).quelle).toMatch(/Basis ∪ HEAD/);
+    expect(lib.vereinigeRisiko({ muster: ["*x*"], quelle: "x" }, { muster: ["*x*", "*y*"], quelle: "y" })).toEqual({ muster: ["*x*", "*y*"], quelle: "y" });
   });
 });
 
