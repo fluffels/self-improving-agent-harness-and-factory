@@ -226,6 +226,21 @@ describe("CLI groessenstufe.mjs", () => {
       expect(zeile.split("; ")).toHaveLength(5);
       expect((JSON.parse(cli.laufe(["--pfade", ...viele, "--json"], mit).ausgabe) as { risiko: { treffer: unknown[] } }).risiko.treffer).toHaveLength(7);
     });
+    test("Textfenster: genau 5 Gründe ohne weitere, 6 mit (+1 weitere)", () => {
+      const pfade = (n: number) => Array.from({ length: n }, (_, i) => `src/auth/${i}.ts`);
+      expect(cli.laufe(["--pfade", ...pfade(5)], mit).ausgabe.split("\n")[1]).not.toMatch(/weitere/);
+      expect(cli.laufe(["--pfade", ...pfade(6)], mit).ausgabe.split("\n")[1]).toMatch(/\(\+1 weitere\)$/);
+    });
+    test("fail-closed-Zweige tragen RISIKO: hoch (Schutzliste nicht ladbar, keine Basis)", () => {
+      const wirft = () => { throw new Error("x"); };
+      expect(cli.laufe(["--pfade", "src/a.ts"], { ...mit, ladeMuster: wirft }).ausgabe).toMatch(/\nRISIKO: hoch — Schutzliste nicht ladbar/);
+      expect(cli.laufe([], { ...mit, git: () => "", env: {} }).ausgabe).toMatch(/\nRISIKO: hoch — keine Vergleichs-Basis/);
+    });
+    test("als Prozess ohne Injektion: Standardliste der Repo-Config, hoch bei src/auth/x.ts", () => {
+      const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
+      const aus = execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" });
+      expect(aus).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \(Standardliste\)/);
+    });
     test("ein Ladefehler der Risiko-Muster ist hoch (fail-closed), kein Absturz", () => {
       const r = cli.laufe(["--pfade", "src/a.ts"], { ...o, ladeRisiko: () => { throw new Error("kaputt"); } });
       expect(r.code).toBe(0);

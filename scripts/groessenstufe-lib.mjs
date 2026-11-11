@@ -10,7 +10,8 @@
  *    `git diff --numstat --no-renames`, ohne Ausnahme für generierte Dateien, auch reines Markdown hat keinen Freibetrag);
  *  - kein Pfad aus `.github/protected-paths.json` (alle Gruppen) und keiner aus `GRUNDSCHUTZ` (Harness-Pfade, Gates, Hooks, Agenten, Skills,
  *    Abhängigkeiten), auch bei einer einzigen Zeile; ein Umzug zählt als Löschen plus Anlegen (`--no-renames`), trifft also den alten Pfad mit.
- * Fail-closed (immer `voll`): leere oder nicht lesbare Dateiliste, Binärdatei (numstat `-`), ein von git quotierter Pfad, nicht ladbare
+ *  - kein Pfad der Risikoklasse hoch (factory#333, `bestimmeRisikoklasse`: Muster der Projekt-Config `risiko.hoch`, sonst `RISIKO_STANDARDLISTE`; ein reiner `*.md`-Diff ist `doku`, `istDokuDiff` ist die einzige Stelle dieser Regel).
+ * Fail-closed (immer `voll`, Risikoklasse `hoch`): nicht ladbare oder ungültige Risiko-Muster, leere oder nicht lesbare Dateiliste, Binärdatei (numstat `-`), ein von git quotierter Pfad, nicht ladbare
  * Schutzliste, git-Fehler. Die Schutzliste kommt vom Arbeitsbaum; eine Änderung an `.github/` ist wegen `GRUNDSCHUTZ` ohnehin `voll`.
  * Die Prognose (`prognose: true`, Planer vor der Umsetzung) kennt keine Zeilen und prüft nur Dateizahl und Pfade.
  */
@@ -148,7 +149,7 @@ export function bestimmeGroessenstufe({ eintraege, muster, prognose = false, ris
   const gruende = eintraege.flatMap((e) => eintragsGruende(e, alle, prognose));
   if (eintraege.length > GROESSENSTUFE_S.maxDateien) gruende.push(`${eintraege.length} Dateien (höchstens ${GROESSENSTUFE_S.maxDateien})`);
   if (!prognose) {
-    const summe = eintraege.reduce((a, e) => a + e.zeilen, 0);
+    const summe = eintraege.reduce((a, e) => a + (Number.isInteger(e?.zeilen) ? e.zeilen : 0), 0);
     if (summe > GROESSENSTUFE_S.maxZeilen) gruende.push(`${summe} Zeilen (höchstens ${GROESSENSTUFE_S.maxZeilen})`);
   }
   if (klasse.klasse === "hoch") gruende.push(risikoGrund(klasse));

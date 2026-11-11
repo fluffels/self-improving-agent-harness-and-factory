@@ -43,6 +43,22 @@ describe("Standardliste und Muster", () => {
     expect(k.gruende[0]).toBe("src/auth/x.ts trifft *auth* (Standardliste)");
     for (const p of ["src/db/a.sql", ".github/workflows/ci.yml", ".githooks/pre-push", "keys/server.pem", ".env.local", "src/PasswordForm.ts"]) expect(klasse([p]).klasse, p).toBe("hoch");
   });
+  test("jedes Muster der Standardliste trifft einen Beispielpfad (alle Kategorien)", () => {
+    const beispiele: Record<string, string> = {
+      "/.githooks/": ".githooks/pre-push", "/.claude/hooks/": ".claude/hooks/x.mjs", "/.claude/settings.json": ".claude/settings.json", "/.codex/": ".codex/config.toml", "/.mcp.json": ".mcp.json",
+      "/.github/workflows/": ".github/workflows/ci.yml", "*guard*": "scripts/x-guard.mjs", "*auth*": "src/auth.ts", "*login*": "src/login.ts", "*session*": "src/session.ts", "*permission*": "src/permission.ts",
+      "*crypt*": "src/crypto.ts", "*secret*": "src/secret.ts", "*credential*": "src/credentials.ts", "*password*": "src/password.ts", ".env*": ".env.local", "*.pem": "k/a.pem", "*.key": "k/a.key",
+      "*privacy*": "src/privacy.ts", "*consent*": "src/consent.ts", "*personal*": "src/personal.ts", "*gdpr*": "src/gdpr.ts", "*dsgvo*": "src/dsgvo.ts",
+      "*migration*": "src/migration.ts", "*persist*": "src/persist.ts", "*storage*": "src/storage.ts", "*database*": "src/database.ts", "db/": "db/schema.sql",
+    };
+    expect(Object.keys(beispiele).sort()).toEqual([...lib.RISIKO_STANDARDLISTE].sort());
+    for (const [m, pfad] of Object.entries(beispiele)) expect(klasse([pfad], { muster: [m], quelle: "t" }).treffer, m).toEqual([{ pfad, muster: m }]);
+  });
+  test("Groß-/Kleinschreibung gilt auch für das Muster; ohne risiko-Argument und mit null-Eintrag fail-closed", () => {
+    expect(klasse(["src/geheim/x.ts"], { muster: ["/SRC/Geheim/"], quelle: "Projekt-Config" }).klasse).toBe("hoch");
+    expect(lib.bestimmeRisikoklasse(["src/a.ts"])).toMatchObject({ klasse: "hoch", quelle: "Standardliste" });
+    expect(lib.bestimmeGroessenstufe({ eintraege: [null], muster: ["/x/"], risiko: STANDARD })).toMatchObject({ stufe: "voll", risiko: { klasse: "hoch" } });
+  });
   test("Groß-/Kleinschreibung egal; verankertes Muster trifft nur an der Wurzel", () => {
     expect(klasse(["src/AuthService.ts"]).klasse).toBe("hoch");
     expect(klasse(["docs/.github/workflows/x.ts"]).klasse).toBe("normal");
@@ -76,6 +92,22 @@ describe("risikoMusterAus: Config ersetzt die Standardliste", () => {
       expect(r.muster, JSON.stringify(schlecht)).toBeNull();
       expect(klasse(["src/a.ts"], r).klasse).toBe("hoch");
     }
+  });
+});
+
+describe("ladeRisikoMuster liest die Projekt-Config (pruefen: false)", () => {
+  const lade = (inhalt: string) => {
+    const d = mkdtempSync(join(tmpdir(), "risiko-cfg-"));
+    dirs.push(d);
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, inhalt);
+    return () => (libRaw as { ladeRisikoMuster: (o: { pfad: string }) => Risiko }).ladeRisikoMuster({ pfad });
+  };
+  test("mit Block die Config-Muster (auch wenn die Config sonst ungültig ist), ohne Block die Standardliste, kein JSON wirft", () => {
+    expect(lade(JSON.stringify({ risiko: { hoch: ["/geheim/"] } }))()).toEqual({ muster: ["/geheim/"], quelle: "Projekt-Config" });
+    expect(lade(JSON.stringify({ version: 2 }))()).toEqual({ muster: lib.RISIKO_STANDARDLISTE, quelle: "Standardliste" });
+    expect(lade(JSON.stringify({ risiko: { hoch: [] } }))().muster).toBeNull();
+    expect(lade("kein json")).toThrow();
   });
 });
 
@@ -115,7 +147,7 @@ describe("Größenstufe mit Risikoklasse", () => {
 describe("Doku-Regel nur im Klassifikator", () => {
   const FAELLE: unknown[] = [[], null, undefined, ["a.md"], ["A.MD"], [" a.md "], ["a.md", "b.ts"], [""], [null], ["a.mdx"], ["a.md", ""]];
   test("istDokuDiff: nur Pfade, die auf .md enden; Endung muss am Ende stehen", () => {
-    expect(lib.istDokuDiff(["a.md", "b/C.MD"])).toBe(true);
+    expect(lib.istDokuDiff(["a.md", "b/C.MD", " c.md "])).toBe(true);
     for (const nein of [["a.mdx"], ["a.md.ts"], ["a.md", "b.ts"]]) expect(lib.istDokuDiff(nein), JSON.stringify(nein)).toBe(false);
   });
   test("pflichtLenses folgt istDokuDiff über eine Falltabelle", () => {
@@ -126,12 +158,12 @@ describe("Doku-Regel nur im Klassifikator", () => {
     // Grenze: nur diese geschlossene Liste und nur diese beiden bekannten Schreibweisen.
     const wurzel = join(dirname(fileURLToPath(import.meta.url)), "..");
     const dateien = ["scripts/check-review-nachweis.mjs", "scripts/check-abnahme-nachweis.mjs", "scripts/nachweis-lib.mjs", "scripts/groessenstufe.mjs"];
-    const regexMd = new RegExp(String.fromCharCode(92, 92) + ".md" + String.fromCharCode(36) + "/");
-    for (const d of dateien) {
-      const text = readFileSync(join(wurzel, d), "utf8");
-      expect(text.includes(".endsWith(\".md\")"), d).toBe(false);
-      expect(regexMd.test(text), d).toBe(false);
-    }
+    const regexMd = String.fromCharCode(92) + ".md" + String.fromCharCode(36) + "/";
+    const treffer = (text: string) => text.includes(regexMd) || text.includes(".endsWith(\".md\")");
+    // Gegenprobe: der Wächter erkennt die frühere Kopie der Regel
+    expect(treffer("return dateien.every((d) => /" + regexMd + "i.test(d.trim()));")).toBe(true);
+    expect(treffer("x.endsWith(\".md\")")).toBe(true);
+    for (const d of dateien) expect(treffer(readFileSync(join(wurzel, d), "utf8")), d).toBe(false);
   });
 });
 
