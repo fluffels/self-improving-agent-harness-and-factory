@@ -100,6 +100,25 @@ export function bestimmeRisikoklasse(pfade, risiko) {
   return { klasse: "normal", quelle, treffer: [], gruende: [`kein Pfad trifft ein Risiko-Muster (${quelle})`] };
 }
 
+/** Testdatei (`*.test.*`, `*.spec.*`, auch `.mts`/`.cjs`): die einzige Nicht-Doku-Datei, die `stichprobe` erlaubt; `anker-liste.mjs` nutzt dieselbe Regel. */
+export const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
+
+/**
+ * Die Sweep-Tiefe der Test-Lens (factory#272): `{tiefe: "voll" | "stichprobe", gruende}`. `stichprobe` (Stichprobenregel der Test-Brille) nur, wenn die Risikoklasse
+ * nicht hoch ist und jeder Pfad `*.md` oder eine Testdatei ist (Text-Wächter, kein Guard-, Parser- oder Gate-Code); alles andere, auch Konfiguration,
+ * `test/support` und JSON-Listen, ist `voll` (Vollsweep je Anker). Nicht lesbare Listen und fehlende Risiko-Muster sind `voll` (fail-closed, über die Risikoklasse). Der Sweep hängt nicht von der Schutzliste ab; die Zweige, die den Diff gar nicht rechnen können (Schutzliste oder git wirft), tragen `voll`. Bekannte Grenze: Hilfslogik mit Verzweigungen in einer Testdatei zählt als Text-Wächter (die Stichprobenregel sabotiert Assertions; eine grüne Probe löst den Vollsweep der Datei aus). Pur.
+ */
+export function bestimmeSweeptiefe(pfade, risiko) {
+  const klasse = bestimmeRisikoklasse(pfade, risiko);
+  if (klasse.klasse === "hoch") return { tiefe: "voll", gruende: [klasse.gruende[0]] };
+  const code = pfade.find((p) => !istDokuDiff([p]) && !TESTDATEI.test(p));
+  if (code !== undefined) return { tiefe: "voll", gruende: [`${code} ist Code oder Konfiguration`] };
+  return { tiefe: "stichprobe", gruende: ["nur Doku und Testdateien, Risikoklasse nicht hoch"] };
+}
+
+/** Sweep-Block eines fail-closed Ergebnisses ohne Rechnung. */
+const sweepVoll = (grund) => ({ tiefe: "voll", gruende: [grund] });
+
 /** Grund für die Größenstufe bei Klasse hoch: erster Treffer bzw. Grund, mit der Zahl der weiteren. */
 function risikoGrund(r) {
   const [erster, ...rest] = r.gruende;
@@ -138,11 +157,12 @@ function eintragsGruende(e, muster, prognose) {
  * Bestimmt die Größenstufe. `eintraege`: `[{pfad, zeilen}]` (`zeilen` `null` = binär; bei `prognose` darf es fehlen); `muster`: die Muster aus
  * `.github/protected-paths.json` (Pflicht, ein leeres Array ist ein Ladefehler und wird `voll`); `GRUNDSCHUTZ` kommt immer dazu.
  * `risiko` (`risikoMusterAus`, Standard: `RISIKO_STANDARDLISTE`): Klasse `hoch` ist nie `S` (factory#333). Der Standard dient Pur-Tests, echte Aufrufer übergeben ihn.
- * Liefert `{stufe: "S" | "voll", gruende: [...], risiko}`; `gruende` ist bei `S` leer. Pur.
+ * Liefert `{stufe: "S" | "voll", gruende: [...], risiko, sweep}`; `gruende` ist bei `S` leer, `sweep` ist `bestimmeSweeptiefe` (factory#272). Pur.
  */
 export function bestimmeGroessenstufe({ eintraege, muster, prognose = false, risiko = STANDARD_RISIKO }) {
   const klasse = bestimmeRisikoklasse(Array.isArray(eintraege) ? eintraege.map((e) => e?.pfad) : null, risiko);
-  const voll = (...gruende) => ({ stufe: "voll", gruende, risiko: klasse });
+  const sweep = bestimmeSweeptiefe(Array.isArray(eintraege) ? eintraege.map((e) => e?.pfad) : null, risiko);
+  const voll = (...gruende) => ({ stufe: "voll", gruende, risiko: klasse, sweep });
   if (!Array.isArray(muster) || muster.length === 0) return voll("Schutzliste (protected-paths) leer oder nicht geladen");
   if (!Array.isArray(eintraege) || eintraege.length === 0) return voll("keine Dateiliste (leer oder nicht lesbar)");
   const alle = [...muster, ...GRUNDSCHUTZ];
@@ -153,7 +173,7 @@ export function bestimmeGroessenstufe({ eintraege, muster, prognose = false, ris
     if (summe > GROESSENSTUFE_S.maxZeilen) gruende.push(`${summe} Zeilen (höchstens ${GROESSENSTUFE_S.maxZeilen})`);
   }
   if (klasse.klasse === "hoch") gruende.push(risikoGrund(klasse));
-  return { stufe: gruende.length === 0 ? "S" : "voll", gruende, risiko: klasse };
+  return { stufe: gruende.length === 0 ? "S" : "voll", gruende, risiko: klasse, sweep };
 }
 
 /** Leitplanken-Muster: Vereinigung der String-Arrays in `.github/protected-paths.json` des Arbeitsbaums; wirft, wenn die Datei fehlt oder kein JSON ist. */
@@ -181,13 +201,13 @@ export function groessenstufeAusGit(git, base, head = "HEAD", { ladeMuster = lad
     muster = ladeMuster();
   } catch (e) {
     const grund = `Schutzliste nicht ladbar: ${meldung(e)}`;
-    return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle) };
+    return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle), sweep: sweepVoll(grund) };
   }
   try {
     const ausgabe = git(["diff", "--numstat", "--no-renames", `${base}${zweiPunkt ? ".." : "..."}${head}`]);
     return bestimmeGroessenstufe({ eintraege: parseNumstatNoRenames(ausgabe), muster, risiko });
   } catch (e) {
     const grund = `git-Fehler beim Zählen des Diffs: ${meldung(e)}`;
-    return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle) };
+    return { stufe: "voll", gruende: [grund], risiko: risikoHoch(grund, risiko.quelle), sweep: sweepVoll(grund) };
   }
 }

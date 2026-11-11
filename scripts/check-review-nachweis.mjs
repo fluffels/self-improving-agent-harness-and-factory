@@ -37,6 +37,7 @@
  * `<praefixe.commitZeile>Plan: <Planer> — skizze`, `Plan: ohne — klein: <Begründung>` und bei Code-Diff `lenses=kombiniert` statt der drei Code-Brillen;
  * bei `voll` sind diese Varianten rot, `klein` ohne Begründung immer. Die Risikoklasse hoch (Pfadmuster der Projekt-Config `risiko.hoch`, sonst Standardliste,
  * factory#333) ist nie `S`; die Doku-Regel (nur `*.md`) steht nur in `groessenstufe-lib.mjs` (`istDokuDiff`). Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
+ * Bei Risikoklasse hoch verlangt `bewerteKlasseHoch` zusätzlich die Zeile `<praefixe.commitZeile>Bedrohungen:` (vier Teile, kein leerer) und die Brille `sicherheit` in `lenses` (factory#334); bei `normal` und `doku` entfällt beides.
  *
  * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config (Test, fremdes Projekt), sonst die des Repos.
  *
@@ -55,7 +56,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, kleinGrund, parseNachweis } from "./nachweis-lib.mjs";
+import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SICHERHEITS_LENS, kleinGrund, parseNachweis } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -77,7 +78,9 @@ export const vorlage = (zeilen) =>
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
   `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)\n` +
   `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
-  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n>`;
+  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n>\n` +
+  `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> und ` +
+  `${zeilen.bedrohungen}: daten=… | grenzen=… | missbrauch=… | datenschutz=… (wörtlich aus dem Plan)`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
@@ -183,9 +186,35 @@ function bewerteLensSatz(review, dateien, stufe, zeilen) {
   ];
 }
 
+/** Ein Teil der Bedrohungs-Zeile gilt als leer: leer oder nur ein Platzhalter (der Parser hat den Wert getrimmt) (`…`, `...`, `-`, `<…>`). */
+const istLeer = (wert) => wert === undefined || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(wert);
+
+/** Fehler der Bedrohungs-Zeile (Klasse hoch): fehlende Zeile, leere, fehlende, doppelte, unbekannte oder schlüssellose Teile. Pur. */
+function bedrohungsFehler(b, zeilen, hinweis) {
+  const B = zeilen.bedrohungen;
+  if (!b) return [`${B}-Zeile fehlt (${hinweis}): ${B}: ${BEDROHUNGS_TEILE.map((t) => `${t}=…`).join(" | ")}.`];
+  const fehler = BEDROHUNGS_TEILE.filter((t) => istLeer(b.teile[t])).map((t) => `${B}: Teil ${t} fehlt oder ist leer (${hinweis}).`);
+  if (b.unbekannt.length > 0) fehler.push(`${B}: unbekannte Teile ${b.unbekannt.join(", ")} (erlaubt: ${BEDROHUNGS_TEILE.join(", ")}).`);
+  if (b.doppelt.length > 0) fehler.push(`${B}: Teile doppelt: ${b.doppelt.join(", ")}.`);
+  if (b.ohneSchluessel.length > 0) fehler.push(`${B}: Teil ohne \`=\` (erwartet <teil>=<wert>): ${b.ohneSchluessel.join(" | ")}.`);
+  return fehler;
+}
+
+/** Risikoklasse hoch (factory#334): die einzige Stelle der Prüfregel. Verlangt die Bedrohungs-Zeile (vier nicht leere Teile) und, sobald eine Review-Zeile da ist,
+ *  die Brille `sicherheit` in `lenses`. Bei `normal` und `doku` weder verlangt noch bewertet. Pur. */
+export function bewerteKlasseHoch(nachweis, risiko, zeilen) {
+  if ((risiko?.klasse ?? "hoch") !== "hoch") return []; // ohne Angabe fail-closed hoch
+  const hinweis = `Risikoklasse hoch: ${risiko?.gruende?.[0] ?? "Risikoklasse nicht übergeben (fail-closed)"}; Abschnitt beim ${zeilen.planer} holen, nie selbst schreiben; Skill review-lenses › ablauf-klasse-hoch.md`;
+  const fehler = bedrohungsFehler(nachweis.bedrohungen, zeilen, hinweis);
+  if (nachweis.review && !nachweis.review.lenses.includes(SICHERHEITS_LENS)) {
+    fehler.push(`${zeilen.review}: lenses fehlt ${SICHERHEITS_LENS} (${hinweis}).`);
+  }
+  return fehler;
+}
+
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll" }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = [];
@@ -205,7 +234,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     );
   }
   const { plan, review } = nachweis;
-  fehler.push(...bewertePlan(plan, stufe, zeilen));
+  fehler.push(...bewertePlan(plan, stufe, zeilen), ...bewerteKlasseHoch(nachweis, risiko, zeilen));
   if (!review) {
     fehler.push(`${R}-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).`);
     return fehler;
@@ -284,6 +313,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       hd = commitImSlice(git, base, nachweis.review.head);
       if (hd.imSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim());
     }
+    const groesse = groessenstufeAusGit(git, base, "HEAD", { ladeRisiko });
     const fehler = bewerteNachweis({
       nachweis,
       dateien,
@@ -292,7 +322,8 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       konfliktMerges: hd.konfliktMerges,
       aenderungsCommits: hd.aenderungsCommits,
       zeilen,
-      stufe: groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe,
+      stufe: groesse.stufe,
+      risiko: groesse.risiko,
     });
     return {
       ok: fehler.length === 0,
