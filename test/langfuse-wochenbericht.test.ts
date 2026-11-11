@@ -353,7 +353,7 @@ describe("Randfälle (Guards)", () => {
     const echt = CLI.ladeProjekt();
     expect(echt.repo).toBe("self-improving-agent-harness-and-factory");
     expect(echt.owner).toBe("fluffels");
-    expect(typeof echt.schwellen).toBe("object");
+    expect(echt.schwellen).toEqual(expect.any(Object));
     expect(Array.isArray(echt.tags)).toBe(true);
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a, b ,," } })).tags).toEqual(["a", "b"]);
     expect(CLI.ladeProjekt(process.cwd(), () => { throw new Error("ENOENT"); }).tags).toEqual([]);
@@ -429,6 +429,30 @@ describe("Verdrahtung und Guards (Runde 1)", () => {
       scores: [],
     });
     expect(p).toMatchObject({ n: 2 });
+  });
+});
+
+describe("Verdrahtung und Guards (Runde 2)", () => {
+  test("kennzahlen: Anteil unzugeordnet und Δ sind echte Quotienten", () => {
+    const k = E.kennzahlen({ bereinigt: { cost: 20, count: 3 }, unzugeordnet: { cost: 5 } }, { bereinigt: { cost: 10, count: 2 } });
+    expect(k).toMatchObject({ unzugeordnetProzent: 25, deltaProzent: 100 });
+  });
+  test("Score-Namensfilter verlangt die Spalte name", async () => {
+    const c = satz();
+    c["scores.json"] = { ...(c["scores.json"] as Wb), abfrage: { filters: [{ ...SCORE_FILTER, column: "traceName" }], fromTimestamp: F.vorVon, toTimestamp: F.bis } };
+    await fehler(c, "Filter name any of [erfassung, erfassung_hook] fehlt");
+  });
+  test("--rolle gelangt im Live-Weg in die Rezepte", async () => {
+    let rezepte: Rez[] = [];
+    const ladeLive = () => Promise.resolve({ ladeLiveExporte: (o: { rezepte: Rez[] }) => { rezepte = o.rezepte; return Promise.resolve({ status: "unerreichbar", grund: "x" }); } });
+    const r = await auswerten(parseArgs(["--rolle", "sonderrolle"]), { jetzt: JETZT, projekt: PROJEKT, ladeLive });
+    expect(r.exitCode).toBe(4);
+    const werte = rezepte.filter((x) => x.art === "metadaten").flatMap((x) => x.abfrage.filters.map((y) => (y as { value?: string }).value));
+    expect(werte).toContain("sonderrolle");
+  });
+  test("Ruhefrist an der Aufrufstelle: um 00:40Z Montag gilt schon die gerade beendete Woche", async () => {
+    const r = await lauf([], satz(), { jetzt: new Date("2026-11-09T00:40:00Z") });
+    expect(r.stdout).toContain("# Langfuse-Wochenbericht 2026-11-02");
   });
 });
 

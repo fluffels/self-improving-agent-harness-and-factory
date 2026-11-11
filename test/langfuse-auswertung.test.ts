@@ -305,7 +305,7 @@ describe("Rezept mit Projektfilter (factory#313)", () => {
     }
   });
   test("ein ungültiger Filter wirft (stringObject, falscher Operator, leerer Wert, leere Liste, kein Objekt)", () => {
-    const schlecht = [{ column: "metadata", key: "k", operator: "=", value: "v", type: "stringObject" }, { ...ENV, operator: "<>" }, { ...ENV, value: "" }, { ...TAGS, value: [] }, { ...TAGS, value: [""] }, "x", { ...TAGS, type: "string" }, { ...ENV, type: "arrayOptions" }, { ...ENV, value: 5 }];
+    const schlecht = [{ column: "metadata", key: "k", operator: "=", value: "v", type: "stringObject" }, { ...ENV, operator: "<>" }, { ...ENV, value: "" }, { ...TAGS, value: [] }, { ...TAGS, value: [""] }, "x", { ...TAGS, type: "string" }, { ...ENV, type: "arrayOptions" }, { ...ENV, value: 5 }, { ...TAGS, operator: "=" }, { ...TAGS, value: [5] }, { ...TAGS, value: "x" }];
     for (const pf of schlecht) expect(() => L.rezept({ von: VON, bis: BIS, projektFilter: pf })).toThrow(/projektFilter/);
   });
 });
