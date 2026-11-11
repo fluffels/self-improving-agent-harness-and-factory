@@ -1,9 +1,9 @@
 /* Langfuse-Auswertung (factory#289): Export lesen, Quellen, Rolle/Effort/Repo/Modell, „unzugeordnet“, Datenlücken, CLI, Wächter Secret-Key. */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/langfuse-auswertung-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -35,7 +35,7 @@ const L = libRaw as unknown as {
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[] }) => { art: string; name: string; abfrage: Ex["abfrage"] & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[] }) => { art: string; name: string; abfrage: Ex["abfrage"] & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
@@ -44,7 +44,7 @@ const L = libRaw as unknown as {
 const C = cliRaw as unknown as {
   parseArgs: (a: string[]) => unknown;
   auswerten: (a: unknown, d?: Record<string, unknown>) => { exitCode: number; text: string };
-  agentenNamen: (ordner: string) => string[];
+  agentenNamen: (ordner: string, deps?: unknown) => string[];
 };
 
 const VON = "2026-11-01T00:00:00Z";
@@ -366,6 +366,13 @@ describe("Randfälle", () => {
     expect(L.quelleVon("Abgleich", null)).toBe("nachgeliefert");
     expect(rep(exp("gesamt", [g("Fremd", null as unknown as string, "m", "r", 1, 1)]), tageVoll).quelle.zeilen.find((z) => z.name === "sonstige")).toMatchObject({ count: 1 });
   });
+  test("das Rezept nimmt abweichende Effort- und Codex-Listen (Default-Parameter nicht vakuös)", () => {
+    const r = L.rezept({ von: VON, bis: BIS, efforts: ["min"], codexRollen: ["solo"] }).filter((x) => x.art === "metadaten").map((x) => `${x.abfrage.filters?.[1]?.key}=${x.abfrage.filters?.[1]?.value}`);
+    expect(r).toContain("effort=min");
+    expect(r).toContain("agent_role=solo");
+    expect(r).not.toContain("effort=high");
+    expect(r).not.toContain("agent_role=main");
+  });
   test("das Rezept braucht keine Rollenliste", () => {
     expect(L.rezept({ von: VON, bis: BIS }).length).toBeGreaterThan(3);
   });
@@ -402,6 +409,15 @@ describe("Randfälle", () => {
 });
 
 describe("CLI", () => {
+  const ordner: string[] = [];
+  const neuerOrdner = () => {
+    const d = mkdtempSync(join(tmpdir(), "auswertung-"));
+    ordner.push(d);
+    return d;
+  };
+  afterEach(() => {
+    for (const d of ordner.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
   const dateien: Record<string, string> = {};
   const lies = (p: string) => {
     if (!(p in dateien)) throw new Error(`ENOENT ${p}`);
@@ -437,7 +453,7 @@ describe("CLI", () => {
     expect((JSON.parse(js.text) as Bericht).roh).toEqual({ count: 34, cost: 17 });
   });
   test("--rezept liest die Agentennamen aus einem Agentenordner", () => {
-    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    const dir = neuerOrdner();
     writeFileSync(join(dir, "a.md"), "---\nname: mein-agent\ndescription: x\n---\n");
     writeFileSync(join(dir, "b.txt"), "name: ignoriert\n");
     expect(C.agentenNamen(dir)).toEqual(["mein-agent"]);
@@ -456,7 +472,7 @@ describe("CLI", () => {
     expect(r.text).toContain("Fehler:");
   });
   test("Agentenname: nur eine ganze Zeile name: <wort> zählt (kein Mittendrin, kein Mehrwort)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    const dir = neuerOrdner();
     writeFileSync(join(dir, "a.md"), "---\ndescription: x name: falsch\nname: richtig\n---\n");
     writeFileSync(join(dir, "b.md"), "---\nname: zwei woerter\n---\n");
     writeFileSync(join(dir, "c.md"), "---\nname:ohneleerzeichen\n---\n");
@@ -466,14 +482,17 @@ describe("CLI", () => {
     writeFileSync(join(dir, "g.md"), "---\nname:\tmittab\t\n---\n");
     expect(C.agentenNamen(dir)).toEqual(["mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
   });
+  test("agentenNamen nimmt eingespeiste Leser", () => {
+    expect(C.agentenNamen("/x", { lies: () => "name: eingespeist\n", liste: () => ["a.md", "b.txt"] })).toEqual(["eingespeist"]);
+  });
   test("eine Agentendatei ohne name wird übersprungen", () => {
-    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    const dir = neuerOrdner();
     writeFileSync(join(dir, "ohne.md"), "---\ndescription: x\n---\n");
     writeFileSync(join(dir, "mit.md"), "---\nname: a\n---\n");
     expect(C.agentenNamen(dir)).toEqual(["a"]);
   });
   test("ohne eingespeiste Leser liest die CLI die echte Datei", () => {
-    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    const dir = neuerOrdner();
     writeFileSync(join(dir, "g.json"), JSON.stringify(gesamt));
     const r = C.auswerten(C.parseArgs(["--export", join(dir, "g.json")]));
     expect(r.exitCode).toBe(0);
