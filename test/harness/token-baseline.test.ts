@@ -60,7 +60,7 @@ type Summary = {
   unpricedModels?: Record<string, number>;
   costParts: Parts;
   medianContext: { all: number | null; main: number | null };
-  sockel: { main: number | null; planung: number | null; review: number | null };
+  sockel: { main: number | null; planung: number | null; review: number | null; umsetzer: number | null };
 };
 type PEv = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number; agent: string | null };
 type Bounds = { from?: string; claimAt?: string; prCreatedAt?: string; mergedAt?: string };
@@ -775,6 +775,84 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
       ],
     });
     assert.equal(s.sockel.review, 50_000);
+  });
+
+  describe("Umsetzer-Sockel (factory#307)", () => {
+    const a = FREMD.agenten;
+    const umsA: Sub = { id: "ua", agentType: a.umsetzer, description: "Umsetzung #1" };
+    const umsB: Sub = { id: "ub", agentType: a.umsetzer, description: "Umsetzung #1 Fortsetzung" };
+    const mitNamen = (calls: Call[], bounds: Bounds = {}) => mRoh.summarize({ calls }, bounds, null, { umsetzer: a.umsetzer, agenten: a });
+
+    test("Median der ersten Calls je Umsetzer-Subagent, spätere Calls zählen nicht", () => {
+      const s = mitNamen([
+        at("2026-10-05T10:00:00Z", 60_000),
+        at("2026-10-05T10:10:00Z", 40_000, { subagent: umsA }),
+        at("2026-10-05T10:11:00Z", 99_000, { subagent: umsA }),
+        at("2026-10-05T10:20:00Z", 50_000, { subagent: umsB }),
+      ]);
+      assert.equal(s.sockel.umsetzer, 45_000);
+    });
+
+    test("Gruppen-Umsetzer und Planer zählen nicht mit", () => {
+      const gruppe: Sub = { id: "g", agentType: a.gruppe, description: "GRUPPE 1/2" };
+      const planer: Sub = { id: "p", agentType: a.planer, description: "Planungspass" };
+      const s = mitNamen([
+        at("2026-10-05T10:00:00Z", 60_000),
+        at("2026-10-05T10:10:00Z", 40_000, { subagent: umsA }),
+        at("2026-10-05T10:11:00Z", 90_000, { subagent: gruppe }),
+        at("2026-10-05T10:12:00Z", 70_000, { subagent: planer }),
+      ]);
+      assert.equal(s.sockel.umsetzer, 40_000);
+    });
+
+    test("Umsetzer vor --from und im Nachlauf nach dem Merge zählen nicht", () => {
+      const s = mitNamen(
+        [
+          at("2026-10-05T09:00:00Z", 99_000, { subagent: umsB }),
+          at("2026-10-05T10:10:00Z", 40_000, { subagent: umsA }),
+          at("2026-10-05T12:00:00Z", 77_000, { subagent: { id: "uc", agentType: a.umsetzer, description: "x" } }),
+        ],
+        { from: "2026-10-05T10:00:00Z", mergedAt: "2026-10-05T11:00:00Z" },
+      );
+      assert.equal(s.sockel.umsetzer, 40_000);
+    });
+
+    test("ohne Umsetzer ist der Sockel null; ein exakter Name aus agenten trifft auch ohne „umsetzer“ im Namen", () => {
+      assert.equal(mitNamen([at("2026-10-05T10:00:00Z", 60_000)]).sockel.umsetzer, null);
+      const eigen: Sub = { id: "e", agentType: "zz-macher", description: "x" };
+      const calls = [at("2026-10-05T10:10:00Z", 31_000, { subagent: eigen })];
+      assert.equal(mRoh.summarize({ calls }, {}, null, { umsetzer: "zz-macher", agenten: { ...a, umsetzer: "zz-macher" } }).sockel.umsetzer, 31_000);
+      assert.equal(mitNamen(calls).sockel.umsetzer, null);
+    });
+
+    test("renderMarkdown nennt den Umsetzer-Sockel nach der Lens", () => {
+      const md = m.renderMarkdown(mitNamen([at("2026-10-05T10:10:00Z", 41_000, { subagent: umsA })]));
+      assert.match(md, /Lens [^·]*· Umsetzer 41\.000/);
+    });
+
+    test("CLI: Transkript-Fixture mit zwei Umsetzer-Subagenten weist den Median aus", () => {
+      const home = mkdtempSync(join(tmpdir(), "tb-ums-"));
+      try {
+        const projekt = join(home, ".claude", "projects", "p1");
+        const sitzung = "sess-ums";
+        const zeile = (id: string, ts: string, cacheRead: number) =>
+          JSON.stringify({ type: "assistant", timestamp: ts, uuid: id, message: { id, model: "claude-sonnet-5-5", usage: { input_tokens: 0, output_tokens: 5, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
+        mkdirSync(join(projekt, sitzung, "subagents"), { recursive: true });
+        writeFileSync(join(projekt, `${sitzung}.jsonl`), `${zeile("m1", "2026-09-29T10:00:00Z", 60_000)}\n`);
+        for (const [id, wert] of [["u1", 40_000], ["u2", 50_000]] as const) {
+          writeFileSync(join(projekt, sitzung, "subagents", `${id}.jsonl`), `${zeile(`s-${id}`, "2026-09-29T10:30:00Z", wert)}\n${zeile(`t-${id}`, "2026-09-29T10:31:00Z", 99_000)}\n`);
+          writeFileSync(join(projekt, sitzung, "subagents", `${id}.meta.json`), JSON.stringify({ agentType: a.umsetzer, description: "Umsetzung" }));
+        }
+        const env = { ...process.env, HOME: home, USERPROFILE: home };
+        const r = spawnSync(process.execPath, ["scripts/token-baseline.mjs", "--config", FREMD_CONFIG_PFAD, "--session", sitzung, "--json"], { encoding: "utf8", env, timeout: 30_000 });
+        assert.equal(r.status, 0, r.stderr);
+        const out = JSON.parse(r.stdout) as { sockel: { main: number; umsetzer: number } };
+        assert.equal(out.sockel.umsetzer, 45_000);
+        assert.equal(out.sockel.main, 60_000);
+      } finally {
+        rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      }
+    }, 60_000);
   });
 
   test("renderMarkdown: ohne Kosten keine Kostenanteile, ohne unpriced keine Warnung, null-Sockel als –", () => {

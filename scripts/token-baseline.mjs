@@ -129,6 +129,18 @@ export function countReviewRounds(reviewDescriptions) {
 }
 
 
+/**
+ * Umsetzer (nicht Gruppen-Umsetzer): exakter Name `agenten.umsetzer`, sonst dieselbe Namens-Heuristik wie
+ * `classifySubagent` (Planer, Lens und Recherche gehen vor, `agenten.gruppe` zählt nicht).
+ */
+function istUmsetzer(agentType, agenten = {}) {
+  const t = String(agentType ?? "");
+  if (t === "") return false;
+  if (t === agenten.planer || t === agenten.lens || t === agenten.gruppe) return false;
+  if (t === agenten.umsetzer) return true;
+  return !/planner|explore|lens/i.test(t) && /umsetzer/i.test(t);
+}
+
 const subKey = (c) => c.subagent.id ?? c.subagent;
 /**
  * Schlüssel der Konversation eines Calls (#1331): Subagent über `subKey`, der Hauptagent über `main:<sessionId>`. Mehrere
@@ -154,7 +166,10 @@ function sockelOf(allCalls, windowCalls, agenten) {
         .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description, agenten) === phase)
         .map(kontextVon),
     );
-  return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
+  const umsetzer = median(
+    [...firstBySub.values()].filter((c) => istUmsetzer(c.subagent.agentType, agenten)).map(kontextVon),
+  );
+  return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review"), umsetzer };
 }
 
 /** Ohne Preis, aber nur echte Modelle: der Client-Platzhalter `<synthetic>` hat nie einen Preis (#1663). */
@@ -524,7 +539,7 @@ export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
   const mc = summary.medianContext;
   lines.push(
     "",
-    `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
+    `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Umsetzer ${dash(sk?.umsetzer)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
   );
   const parts = summary.costParts;
   const sum = parts ? sumParts(parts) : 0;
