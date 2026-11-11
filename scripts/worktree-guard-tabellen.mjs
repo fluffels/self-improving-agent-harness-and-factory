@@ -1,7 +1,8 @@
 // Kein Shebang: Baustein des Worktree-Guards (scripts/worktree-guard-hook.mjs), wird von dessen Modulen und Tests importiert.
 /**
  * Tabellen, Kontext und Wort-Helfer des Worktree-Guards (#1311): Wrapper-Tabelle, bekannte git-Unterbefehle, der
- * Auswertungs-Kontext `makeCtx`, Pfad-Helfer und `peel` (Zuweisungen und Wrapper vor dem eigentlichen Kommando).
+ * Auswertungs-Kontext `makeCtx`, Pfad-Helfer und `peel` (Zuweisungen und Wrapper vor dem eigentlichen Kommando) sowie die
+ * Vormerkung statischer Shell-Variablen (`setVar`, `aufgeloest`, `bedingt`, `isoliert`, `kindShell`).
  * Pur und ohne Abhängigkeit von den Auswerter-Modulen (kein Import-Zyklus): `worktree-guard-git.mjs` und
  * `worktree-guard-eval.mjs` bauen darauf auf.
  *

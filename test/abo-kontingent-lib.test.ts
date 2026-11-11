@@ -29,7 +29,7 @@ const L = raw as unknown as {
   gueltigeFolge: (p: Punkt[], limit: string) => { folge: Punkt[]; veraltet: Punkt[] };
   claimAbfrage: (n: number[]) => string;
   claimsAusAntwort: (a: unknown, m: Map<number, string>) => Map<number, { claim?: number; luecke?: string }>;
-  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number; jetzt?: number }) => Auswertung;
+  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number }) => Auswertung;
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
@@ -303,7 +303,7 @@ describe("aboKontingent und Abschnitt", () => {
   const FRIST = 14 * 24 * 60 * MIN;
   const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", fristAbgelaufen: true, ...extra });
   const eins = (punkte: Punkt[], t: Ticketzeile[] = [zeile(1)], kaputt = 0) =>
-    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000, jetzt: merge + FRIST });
+    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000 });
 
   test("Messwert, Median und Kontrollzahl", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 14)]);
@@ -339,7 +339,7 @@ describe("aboKontingent und Abschnitt", () => {
     const stunde = (x: Ticketzeile, h: number) => Date.parse(x.gemergt) + h * 60 * MIN;
     const fern = jetzt / 1000 + 7 * 86_400;
     const punkte = [punkt(stunde(t[1], -1), 10, fern), punkt(stunde(t[1], 0), 11, fern), punkt(stunde(t[0], -1), 14, fern), punkt(stunde(t[0], 0), 15, fern)];
-    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt });
+    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt });
     expect(a.folge).toEqual({ n: 1, von: 2, offen: 1, offenMitFolge: 1 });
     const text = L.aboKontingentAbschnitt(a).join("\n");
     expect(text).toContain("- Folge-Quote (Nacharbeit, Frist abgelaufen): 50 % (1/2), offen: 1, davon schon mit Folge: 1");

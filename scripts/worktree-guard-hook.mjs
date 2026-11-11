@@ -48,10 +48,12 @@
  * Bewusste Grenzen:
  *  - Eine Shell-Variable als Ziel (`git -C $WT commit`, `cd "$WT" && git commit`) wird nur aufgelöst, wenn sie vorher im selben Befehl ein statisches
  *    Literal bekam (`WT=<pfad>; …`, `export WT=<pfad>`) und das Wort genau `$V`, `${V}`, `"$V"` oder `$V/<literal>` ist (geschlossene Formenliste;
- *    Scoping wie Subshell/Zweige: Änderungen in Subshell, `$(…)`, Pipeline, `&` und nach `&&`/`||`, if/case/Schleifen gelten danach als unbekannt).
+ *    Scoping wie Subshell/Zweige: Änderungen in Subshell, `$(…)`, Pipeline, `&` und nach `&&`/`||`, if/case/Schleifen gelten danach als unbekannt;
+ *    eine Kind-Shell (`bash -c`, Heredoc, `!`-Alias) startet ohne Vormerkung und gibt nichts nach außen).
  *    Alles andere bleibt dynamisch und gilt wie jedes dynamische Ziel: aus dem Haupt-Checkout als Session-`cwd` wird geblockt, im Worktree gefragt:
  *    unzugewiesene Variable, `WT=$(pwd)`/`WT=$X`, Präfix-Zuweisung `WT=<wt> git -C "$WT" …` (Bash expandiert vor der Zuweisung), `unset`/`read`/`local`,
- *    `for WT in …`, `WT+=`, `$WT$X`, `${WT:-x}`, Wert mit `~`.
+ *    `for WT in …`, `WT+=`, `$WT$X`, `${WT:-x}`, Wert mit `~`. Nur `-C` und `cd` lösen auf: `--git-dir`/`--work-tree`, `env -C` und `sudo -D` mit Variable bleiben dynamisch.
+ *    Nicht erkannt (Bekannte Grenze): `WT[0]=…`, `let WT=1`, `((WT=1))` und `source datei` ändern den Wert, ohne dass der Guard es merkt.
  *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
  *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
  *  - `ausserhalbRepo` ist rein lexikalisch: ein verlinkter (Linked) Worktree außerhalb des Repo-Ordners (`repoRoot`) zählt als außerhalb.
