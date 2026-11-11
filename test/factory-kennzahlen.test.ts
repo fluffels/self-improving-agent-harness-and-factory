@@ -1094,6 +1094,8 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
     const frueh = [punkt(-120, 0), punkt(-60, 5), punkt(60, 5), punkt(120, 15), punkt(26 * 60, 99)].join("\n");
     const r = lade({ von, bis }, { lies: () => frueh, pfad: "/x/v.jsonl", wurzel });
     expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 1000, jePp: 100 });
+    // Strecken vor von (5 pp ohne Calls im Fenster) dürfen auch nicht als „ohne Calls“ auftauchen
+    expect(r.limits?.sevenDay.ausgelassen).toMatchObject({ ohneCallsN: 0, ohneCallsPp: 0 });
     expect(r.aufbau).toMatchObject({ ohneZeit: 1 });
   });
 
