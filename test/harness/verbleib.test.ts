@@ -8,8 +8,8 @@
  * `fremdtext` (Kommentare nur über `scripts/fremdtext.mjs`, wortgleich). Die Sicherheitsregel im Umfang ist das Fremdtext-Gate; weitere Regeln, Dateien und Orte kommen nur in diese beiden Listen.
  * Zulässiger Ort einer Regel: eine Datei, die die Rolle tatsächlich liest: `AGENTS.md`, die Datei selbst, oder eine bedingte Datei unter `.claude/agents/` bzw. `.agents/skills/` mit nicht-leerer `bedingung`, auf die die Datei
  * per Pfad verweist. `docs/` und ein Archiv zählen nie.
- * Wortgleich heißt: der gespeicherte Satz steht (Leerraum normalisiert) am Ort, enthält das Kern-Token der Regel, ist mindestens 80 Zeichen lang und endet auf einem Punkt (ein ganzer Satz, kein Stichwort).
- * Grenze: geprüft wird, ob der gespeicherte Text am Ort steht, nicht ob er dasselbe bedeutet; ein umformulierter Satz muss in der Liste nachgezogen werden und fällt im Review auf.
+ * Wortgleich heißt: der gespeicherte Satz steht (Leerraum normalisiert) am Ort, enthält das Kern-Token der Regel, ist mindestens 80 Zeichen lang und endet an einer Satzgrenze (`.`, `,`, `;` oder `:`), ist also ein wörtlicher Satz oder Satzanfang, kein Stichwort; die Pre-Flight-Kriterienliste darf nach test/harness/harness-approval.test.ts nur in AGENTS.md stehen, darum endet der gespeicherte Satzanfang vor ihr.
+ * Grenze: geprüft wird, ob der gespeicherte Text am Ort steht, nicht ob er dasselbe bedeutet; ein umformulierter Satz muss in der Liste nachgezogen werden und fällt im Review auf. Der Pfad-Check für bedingte Orte ist textuell: ein Pfad mit `..` unter .agents/skills/ wird nicht aufgelöst.
  * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). Begriff: `docs/harness-glossar.md` › Verbleib-Liste. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";

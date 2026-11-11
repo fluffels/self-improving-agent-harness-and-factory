@@ -878,13 +878,13 @@ Basis für die Kürzungen aus dem Epic factory#273: Sockel (Kontext des ersten C
 | factory#263 | ohne | a4524566-50e0-4ca8-87c2-534da81f4616 | 11-10 21:27 bis 11-10 22:06 | 55.098 | 44.678 |
 | factory#280 | verify | dd04ec9a-1779-4d6c-8aec-60a0959d664b | 11-10 22:25 bis 11-10 23:25 | 55.793 | 42.946 |
 | factory#285 | pr | d487b1a6-e8ff-4768-b2f9-83dcfc179e2b | 11-10 22:57 bis 11-11 00:06 | 55.117 | 47.361 |
-| factory#286 | verify | e570d4da-fec8-4269-999a-c75d0bb54.349 | 11-10 22:59 bis 11-10 23:37 | 54.994 | 43.726 |
+| factory#286 | verify | e570d4da-fec8-4269-999a-c75d0bb54349 | 11-10 22:59 bis 11-10 23:37 | 54.994 | 43.726 |
 | factory#287 | pr | 9d0dff3d-24fe-41b7-89bb-a50e58ff7a51 | 11-10 23:46 bis 11-11 00:48 | 55.883 | 46.206 |
 | factory#283 | pr | 163695ac-6ccb-4a4a-bb97-3a696ee336ba | 11-10 23:49 bis 11-11 00:18 | 55.163 | 42.601 |
 | factory#290 | verify | 6df6d767-de0b-4cc6-8d21-65d27f3650f2 | 11-11 08:16 bis 11-11 09:12 | 54.481 | 45.835 |
 | factory#289 | pr | c5e40eda-7d8f-4288-8726-67aa751d13a4 | 11-11 08:18 bis 11-11 09:44 | 56.134 | 48.803 |
 | factory#294 | verify | 40417485-9403-41e9-b4d9-715c92197f61 | 11-11 09:11 bis 11-11 09:49 | 53.388 | 44.371 |
-| factory#298 | verify | 9c0df781-cd6b-4c56-813d-73d065130.877 | 11-11 09:16 bis 11-11 09:40 | 53.414 | 43.771 |
+| factory#298 | verify | 9c0df781-cd6b-4c56-813d-73d065130877 | 11-11 09:16 bis 11-11 09:40 | 53.414 | 43.771 |
 
 **Mediane:** Haupt 55.022 Tokens (n = 17 Sessions, Spanne 53.388 bis 56.134), Umsetzer 44.390 (n = 17 Tickets, Spanne 41.717 bis 49.748). Der Haupt-Sockel ist je Session der erste Call (die Größe der Session), der Umsetzer-Sockel je Ticket der Median über dessen Umsetzer-Subagenten.
 

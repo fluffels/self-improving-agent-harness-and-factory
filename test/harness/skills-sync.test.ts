@@ -582,6 +582,7 @@ describe("Skill-Pfade stehen als Code-Literal nur in skill-pfade.mjs (#1866)", (
     expect(codeTreffer("const c = `${QUELL_VERZEICHNIS}/x`;")).toEqual([]);
     expect(codeTreffer('  { file: ".agents/skills/x/SKILL.md", budget: 1_500 },')).toEqual([]);
     expect(codeTreffer('  { file: ".agents/skills/x/SKILL.md", budget: 1_500 }, g(".agents/skills")')).toHaveLength(1);
+    expect(codeTreffer('g(".agents/skills/a"), { file: "x", budget: 1 },')).toHaveLength(1);
     expect(codeTreffer('const a = { file: ".agents/skills/x.md", budget: 1 };')).toHaveLength(1);
   });
 
