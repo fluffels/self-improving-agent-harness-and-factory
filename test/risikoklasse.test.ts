@@ -108,12 +108,16 @@ describe("Größenstufe mit Risikoklasse", () => {
     const g = lib.groessenstufeAusGit(wirft, "B", "H", { ladeMuster: () => ["/x/"], ladeRisiko: () => STANDARD });
     expect(g).toMatchObject({ stufe: "voll", risiko: { klasse: "hoch", gruende: [expect.stringMatching(/git-Fehler/)] } });
     const s = lib.groessenstufeAusGit(() => "1\t0\tsrc/a.ts\n", "B", "H", { ladeMuster: wirft, ladeRisiko: () => STANDARD });
-    expect(s.risiko.klasse).toBe("hoch");
+    expect(s.risiko).toMatchObject({ klasse: "hoch", gruende: [expect.stringMatching(/Schutzliste nicht ladbar: kaputt/)] });
   });
 });
 
 describe("Doku-Regel nur im Klassifikator", () => {
   const FAELLE: unknown[] = [[], null, undefined, ["a.md"], ["A.MD"], [" a.md "], ["a.md", "b.ts"], [""], [null], ["a.mdx"], ["a.md", ""]];
+  test("istDokuDiff: nur Pfade, die auf .md enden; Endung muss am Ende stehen", () => {
+    expect(lib.istDokuDiff(["a.md", "b/C.MD"])).toBe(true);
+    for (const nein of [["a.mdx"], ["a.md.ts"], ["a.md", "b.ts"]]) expect(lib.istDokuDiff(nein), JSON.stringify(nein)).toBe(false);
+  });
   test("pflichtLenses folgt istDokuDiff über eine Falltabelle", () => {
     const { pflichtLenses } = reviewRaw as { pflichtLenses: (d: unknown) => string[] };
     for (const f of FAELLE) expect(pflichtLenses(f)[0] === "doku", JSON.stringify(f)).toBe(lib.istDokuDiff(f));

@@ -253,7 +253,7 @@ function guardWarnungOderNull(messages, ankerZahl) {
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko = () => ladeRisikoMuster(), ankerZahl } = {}) {
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ankerZahl } = {}) {
   let zeilen;
   try {
     zeilen = ladeZeilen();

@@ -218,16 +218,20 @@ describe("CLI groessenstufe.mjs", () => {
       expect(cli.laufe(["--pfade", "src/a.ts"], mit).ausgabe).toBe("STUFE: S\nRISIKO: normal — kein Pfad trifft ein Risiko-Muster (Standardliste)");
     });
     test("--json trägt risiko mit allen Treffern, der Text höchstens fünf plus Zahl der weiteren", () => {
-      const j = JSON.parse(cli.laufe(["--pfade", "src/auth/x.ts", "--json"], mit).ausgabe);
+      const j = JSON.parse(cli.laufe(["--pfade", "src/auth/x.ts", "--json"], mit).ausgabe) as { risiko: unknown };
       expect(j.risiko).toMatchObject({ klasse: "hoch", quelle: "Standardliste", treffer: [{ pfad: "src/auth/x.ts", muster: "*auth*" }] });
       const viele = Array.from({ length: 7 }, (_, i) => `src/auth/${i}.ts`);
-      expect(cli.laufe(["--pfade", ...viele], mit).ausgabe).toMatch(/RISIKO: hoch — .*\(\+2 weitere\)$/);
-      expect(JSON.parse(cli.laufe(["--pfade", ...viele, "--json"], mit).ausgabe).risiko.treffer).toHaveLength(7);
+      const zeile = cli.laufe(["--pfade", ...viele], mit).ausgabe.split("\n")[1];
+      expect(zeile).toMatch(/RISIKO: hoch — .*\(\+2 weitere\)$/);
+      expect(zeile.split("; ")).toHaveLength(5);
+      expect((JSON.parse(cli.laufe(["--pfade", ...viele, "--json"], mit).ausgabe) as { risiko: { treffer: unknown[] } }).risiko.treffer).toHaveLength(7);
     });
     test("ein Ladefehler der Risiko-Muster ist hoch (fail-closed), kein Absturz", () => {
       const r = cli.laufe(["--pfade", "src/a.ts"], { ...o, ladeRisiko: () => { throw new Error("kaputt"); } });
       expect(r.code).toBe(0);
       expect(r.ausgabe).toMatch(/^STUFE: voll — Risikoklasse hoch: Projekt-Config nicht ladbar: kaputt\nRISIKO: hoch/);
+      const c = cli.laufe(["--commit", "abc"], { ...o, git: () => "1\t0\tsrc/a.ts\n", ladeRisiko: () => { throw new Error("kaputt"); } });
+      expect(c.ausgabe).toMatch(/\nRISIKO: hoch — Projekt-Config nicht ladbar: kaputt/);
     });
   });
   test("Aufruf-Fehler: Exit 2; keine Basis und Ladefehler: voll statt Absturz", () => {
