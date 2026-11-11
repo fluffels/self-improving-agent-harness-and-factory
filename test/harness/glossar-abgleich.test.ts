@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Die Lens-Fassung steht im Skill `review-lenses` (Lens-Struktur: lens-abgleich.test.ts); hier steht nur,
+ * Die Lens-Fassung steht in `review-lenses/brille-requirement-treue.md` (Lens-Struktur: lens-abgleich.test.ts); hier steht nur,
  * dass der Punkt überhaupt vorhanden ist und die Planer-Definition den Pflichtpunkt trägt.
  */
 import { describe, test } from "vitest";
@@ -30,8 +30,8 @@ describe("Glossar-Abgleich (#1561 Z5)", () => {
     assert.deepEqual(zuLang, [], `Glossar-Zeile über ${MAX_ZEILE} Zeichen: Details auf die verlinkte Brain-Seite verschieben`);
   });
 
-  test("die Requirement-Treue-Lens prüft neue Begriffe gegen das Glossar, im Skill", () => {
-    for (const rel of [".agents/skills/review-lenses/SKILL.md"]) {
+  test("die Requirement-Treue-Lens prüft neue Begriffe gegen das Glossar, in ihrer Brillen-Datei", () => {
+    for (const rel of [".agents/skills/review-lenses/brille-requirement-treue.md"]) {
       const text = lies(rel).replace(/`/g, "");
       assert.match(text, /Neue Begriffe in Texten\/Bezeichnern gegen docs\/glossar\.md \(Projekt\) und docs\/harness-glossar\.md \(Harness\): ein Wort der Anti-Corruption-Layer des Projekts im falschen Text oder umgekehrt ist blockierend/, rel);
       assert.match(text, /Neue Ein- oder Ausgabe \(Speicher, Eingabeart, Export, Content-Quelle\) gegen die hexagonale Sicht in docs\/arc42-architektur\.md: fehlt der Adapter dort oder steht er in einer anderen Schicht, ist das blockierend/, rel);

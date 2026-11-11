@@ -149,9 +149,10 @@ describe("AGENTS.md: Kern- und Projekt-Block (#1708)", () => {
     const planer = lese(".claude/agents/factory-planer.md");
     const umsetzer = lese(".claude/agents/factory-umsetzer.md");
     const lenses = lese(".agents/skills/review-lenses/SKILL.md");
-    for (const t of [planer, umsetzer, lenses]) assert.deepEqual(projektliteraleIn(t), []);
+    const brillen = ["architektur", "requirement-treue", "test-adaequanz", "doku"].map((b) => lese(`.agents/skills/review-lenses/brille-${b}.md`));
+    for (const t of [planer, umsetzer, lenses, ...brillen]) assert.deepEqual(projektliteraleIn(t), []);
     assert.match(planer, /Projekt-Leitfrage/);
-    assert.match(lenses, /Projekt-Leitfrage/);
+    assert.match(brillen[0], /Projekt-Leitfrage/);
     assert.match(planer, /Optik-Messlatte/);
     assert.match(umsetzer, /Optik-Messlatte/);
     const projekt = agents.slice(agents.indexOf(PROJEKT_START), agents.indexOf(PROJEKT_ENDE));

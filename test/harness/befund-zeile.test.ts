@@ -123,6 +123,7 @@ describe("Erzeuger verweisen auf die Regel (geschlossene Liste)", () => {
     { datei: ".claude/agents/factory-umsetzer.md", zeile: /^\*\*Sammeltickets \(Titel/ },
     { datei: ".claude/agents/factory-umsetzer.md", zeile: /^Befunde außerhalb des Tickets/ },
     { datei: ".agents/skills/review-lenses/SKILL.md", zeile: /^Am Ende \*\*ein Gesamt-Verdikt/ },
+    { datei: ".claude/agents/factory-lens.md", zeile: /^Fällt dir außerhalb des Ticket-Scopes/ },
     { datei: ".agents/skills/factory/ablauf.md", zeile: /^Fehlerwege: Fehlt ein Bericht/ },
     { datei: "docs/model-routing.md", zeile: /^\*\*Eingangsfilter \(factory#269\)/ },
     { datei: "docs/ticket-reihenfolge.md", zeile: /^Der Workflow \[`harness-doctor\.yml`\]/ },

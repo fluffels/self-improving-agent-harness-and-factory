@@ -363,24 +363,58 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   const deny = (text: string) => hook.dispatch(text, WURZEL, undefined, undefined, { config: FREMD });
   const grund = (text: string) => deny(text)?.hookSpecificOutput.permissionDecisionReason ?? "";
 
-  // Die ECHTEN Blöcke aus dem Skill, wie der Orchestrator sie wörtlich in den Prompt kopiert (Fehlalarm-Schutz: sie tragen absichtlich `<…>`).
+  // Die ECHTE Spawn-Vorlage aus dem Skill (Fehlalarm-Schutz: sie trägt absichtlich `<…>`-Platzhalter, die der Orchestrator einsetzt).
   const skill = lies(".agents/skills/review-lenses/SKILL.md");
-  const diaet = skill.slice(skill.indexOf("### Kontext-Diät je Lens"), skill.indexOf("> **Was die Diät ausdrücklich NICHT trifft:**"));
-  const format = /## Findings-Format[\s\S]*?```\n([\s\S]*?)```/.exec(skill)?.[1] ?? "";
-  const KOPF = "Brille: Architektur (Schichtregeln)";
+  const vorlage = /prompt: "([^"]*)"/.exec(skill)?.[1] ?? "";
+  const KOPF = "Brille: architektur";
   const gut = (extra = "") =>
-    `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · ${diaet} · ${format}`;
+    `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · Plan-Prüfliste: entfällt`;
 
-  test("die echten Skill-Blöcke tragen `<…>` und gehen trotzdem durch (kein generischer Platzhalter-Test)", () => {
-    assert.match(diaet, /<Arbeitsverzeichnis>/);
-    assert.match(format, /<Befund>/);
+  test("die echte Spawn-Vorlage aus dem Skill geht mit eingesetzten Werten durch, ohne Werte wird sie verweigert (kein generischer Platzhalter-Test)", () => {
+    assert.match(vorlage, /^Brille: <architektur\|requirement-treue\|test-adaequanz\|doku> · Arbeitsverzeichnis: <worktree>/);
+    assert.equal(deny(agent(vorlage))?.hookSpecificOutput.permissionDecision, "deny");
+    const wt = FREMD.praefixe.worktree;
+    const gefuellt = vorlage
+      .replace("<architektur|requirement-treue|test-adaequanz|doku>", "test-adaequanz")
+      .replace("<worktree>", `C:/dev/projekt/.claude/worktrees/${wt}1`)
+      .replace("<TMP>/<praefixe.worktree><nr>-r<runde>.patch", `/tmp/x/${wt}1-r1.patch`)
+      .replace("erwarteter HEAD: <sha>", "erwarteter HEAD: abc1234def")
+      .replace("Probe-Protokoll: <Commit-SHAs mit Protokoll | keins>", "Probe-Protokoll: keins")
+      .replace(/Plan-Prüfliste: <[^>]*(?:\([^)]*\))?[^>]*>/, "Plan-Prüfliste: entfällt");
+    assert.doesNotMatch(gefuellt, /[<>]/, "alle Platzhalter ersetzt");
+    assert.equal(deny(agent(gefuellt)), null, gefuellt);
     assert.equal(deny(agent(gut())), null);
     assert.equal(deny(agent(gut(), "general-purpose")), null);
   });
 
+  test("R5: ohne `Brille: <Schlüssel>` am Prompt-Anfang oder mit unbekannter Brille wird verweigert, die Meldung nennt die bekannten Brillen", () => {
+    const rest = `Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`;
+    for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · ", "Brille: Architektur · ", "Brille: Test-Adäquanz · ", "Brille: `doku` · ", "Brille: do`ku · "]) {
+      const out = deny(agent(`${kopf}${rest}`));
+      assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", kopf);
+      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, doku/, kopf);
+    }
+    // Fallback-Spawn (general-purpose) mit der Lens-Definition, aber ohne Brille
+    assert.equal(deny(agent(`Lies zuerst factory-lens.md · ${rest}`, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
+  });
+
+  test("R5 lässt genau die vier exakten Schlüssel durch (auch als Fallback-Spawn); Reihenfolge: R1 bis R3 behalten ihren Grund", () => {
+    const rest = `Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`;
+    for (const wert of ["architektur", "requirement-treue", "test-adaequanz", "doku"]) {
+      assert.equal(deny(agent(`Brille: ${wert} · ${rest}`)), null, wert);
+      assert.equal(deny(agent(`Brille: ${wert} · Lies zuerst factory-lens.md · ${rest}`, "general-purpose")), null, `Fallback ${wert}`);
+    }
+    // Schreibweisen der Kopfzeile: ohne Leerzeichen, mit führendem Leerraum, ohne Trenner-Leerzeichen vor dem `·`
+    for (const kopf of ["Brille:doku · ", "  \n Brille: doku · ", "Brille: doku· ", "Brille:  doku · "]) assert.equal(deny(agent(`${kopf}${rest}`)), null, JSON.stringify(kopf));
+    // R1 bis R3 behalten ihren Grund auch ohne gültige Brille (R5 prüft zuletzt); verankert am regelspezifischen Text, nicht am gemeinsamen HINWEIS
+    assert.match(grund(agent("<Plan-Prüfliste WÖRTLICH> · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234")), /Platzhalter „… WÖRTLICH>“/);
+    assert.match(grund(agent("Patch: <TMP>/x.patch · erwarteter HEAD: abc1234")), /das Feld „Patch:“/);
+    assert.match(grund(agent("Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc")), /kein Commit-Hash/);
+  });
+
   test("R1: ein stehengebliebenes `<… WÖRTLICH>` wird verweigert", () => {
-    for (const rest of ["<Brille WÖRTLICH>", "<Kontext-Diät WÖRTLICH>", "<Findings-Format WÖRTLICH>"]) {
-      const out = deny(agent(`${rest} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`));
+    for (const rest of ["<Plan-Prüfliste WÖRTLICH>", "Plan-Prüfliste: <Abschnitt 4 WÖRTLICH>"]) {
+      const out = deny(agent(`${KOPF} · ${rest} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`));
       assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", rest);
       assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /WÖRTLICH/);
     }
@@ -424,17 +458,19 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   });
 
   test("durchgelassen: Nicht-Lens-Agenten mit `<TMP>`, Workflow-Format ohne Kopf-Felder, kaputtes JSON, fehlendes Prompt-Feld", () => {
-    const mitPlatzhalter = "Patch: <TMP>/x.patch · erwarteter HEAD: <sha> · <Brille WÖRTLICH>";
+    const mitPlatzhalter = "Patch: <TMP>/x.patch · erwarteter HEAD: <sha> · <Plan-Prüfliste WÖRTLICH>";
     for (const typ of ["Explore", FREMD.agenten.planer, FREMD.agenten.umsetzer, "general-purpose", null]) {
       assert.equal(deny(agent(mitPlatzhalter, typ)), null, String(typ));
     }
-    assert.equal(deny(agent(`Prüfe den Patch ${"/p.patch"} mit der Brille Architektur; Findings als <Befund> auflisten.`)), null);
+    // Seit factory#308 verlangt ein Lens-Spawn das Kopf-Feld `Brille:`: ein Auftrag im Fließtext ohne Kopf wird verweigert (R5).
+    assert.equal(deny(agent(`Prüfe den Patch ${"/p.patch"} mit der Brille Architektur; Findings als <Befund> auflisten.`))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(deny(agent(`Prüfe den Patch ${"/p.patch"} mit der Brille Architektur.`, "Explore")), null);
     assert.equal(deny("{kaputt"), null);
     assert.equal(deny(JSON.stringify({ tool_name: "Agent", tool_input: { subagent_type: FREMD.agenten.lens } })), null);
   });
 
   test("je Feld zählt der LETZTE Treffer: ein Beispiel in der Brille sperrt den echten Kopf nicht, ein Platzhalter im Kopf wird trotz früherem Treffer gefunden", () => {
-    const beispiel = "Brille mit Beispiel `Patch: <TMP>/x.patch` im Text";
+    const beispiel = "Brille: architektur mit Beispiel `Patch: <TMP>/x.patch` im Text";
     assert.equal(deny(agent(`${beispiel} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
     assert.match(grund(agent(`Fall mit Patch: /a/b.patch davor · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`)), /Patch/);
   });
