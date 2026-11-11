@@ -13,7 +13,8 @@
  *   2. **Die Pfadlisten driften auseinander.** Die geschützten Pfade stehen genau einmal in
  *      `.github/protected-paths.json`; der Abschluss-Wächter (`scripts/umsetzer-abschluss.mjs`) gleicht
  *      CODEOWNERS-artig gegen sie ab. `.github/CODEOWNERS` bleibt handgepflegt (GitHub kann keine Datei einbinden),
- *      ist nur noch informativ und wird hier gegen die Quelle geprüft.
+ *      ist nur noch informativ und spiegelt die Pflicht-Review-Liste (Gruppe `pflichtReview`, factory#348), ohne die
+ *      Gruppe die ganze Quelle; hier wird das gegen die Quelle geprüft.
  *   3. **Die abgelöste Label-Mechanik kehrt zurück.** Ein Scan über die versionierten Dateien
  *      (außer ADRs als Historie) hält fest, dass der frühere CI-Riegel samt Label nirgends mehr
  *      vorkommt – weder als Workflow noch als Anleitung in Doku und Prompts.
@@ -52,9 +53,10 @@ import { markerEnde, markerStart } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex as escapeRe } from "../../scripts/regex-lib.mjs";
 
-const { trifftLeitplanke, leitplankenMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
+const { trifftLeitplanke, leitplankenMuster, pflichtReviewMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
   leitplankenMuster: () => string[];
+  pflichtReviewMuster: (text: string) => string[] | null;
 };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -152,6 +154,23 @@ const codeownersMuster = (text: string): string[] =>
     .filter((p): p is string => p !== undefined);
 
 /**
+ * Prüft den Spiegel (factory#348): CODEOWNERS führt genau die Pflicht-Review-Liste (Gruppe `pflichtReview`, ohne Gruppe die
+ * ganze Quelle). Meldet eine Gruppe ohne `/.github/CODEOWNERS` (Selbstschutz), ein Soll-Muster ohne CODEOWNERS-Zeile und
+ * eine CODEOWNERS-Zeile außerhalb des Soll; (b)/(c) normalisiert über `normalizeProtected`.
+ */
+function pflichtReviewProbleme(quelleText: string, codeownersText: string): string[] {
+  const sollMuster = pflichtReviewMuster(quelleText) ?? [];
+  const probleme: string[] = [];
+  const hatGruppe = (JSON.parse(quelleText) as ProtectedSource).pflichtReview !== undefined;
+  if (hatGruppe && !trifftLeitplanke(".github/CODEOWNERS", sollMuster)) probleme.push("Gruppe pflichtReview ohne /.github/CODEOWNERS");
+  const sollNorm = new Set(sollMuster.map(normalizeProtected));
+  const istNorm = codeownersPaths(codeownersText);
+  for (const p of sollNorm) if (!istNorm.has(p)) probleme.push(`nicht in CODEOWNERS: ${p}`);
+  for (const p of istNorm) if (!sollNorm.has(p)) probleme.push(`nicht in der Pflicht-Review-Liste: ${p}`);
+  return probleme;
+}
+
+/**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
  * Quest-Zahl): die Regel darf umformuliert werden, aber der tragende Begriff muss stehen bleiben,
  * sonst findet ihn ein fremder Agent nicht mehr.
@@ -167,6 +186,8 @@ const AGENTS_MARKER = [
 const codeowners = read(".github/CODEOWNERS");
 const QUELLE = ".github/protected-paths.json";
 const quelle = JSON.parse(read(QUELLE)) as ProtectedSource;
+/** Die Pflicht-Review-Liste: Gruppe `pflichtReview`, ohne die Gruppe die ganze Quelle (Vollspiegel, factory#348). */
+const pflichtListe = pflichtReviewMuster(read(QUELLE)) ?? [];
 const agentsMd = read("AGENTS.md");
 
 describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #1157)", () => {
@@ -187,12 +208,12 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     }
   });
 
-  test("CODEOWNERS schützt genau die Pfade der Quelle", () => {
+  test("CODEOWNERS spiegelt genau die Pflicht-Review-Liste (ohne Gruppe: die ganze Quelle)", () => {
     assert.deepEqual(
-      [...codeownersPaths(codeowners)].sort(),
-      [...sourcePaths(quelle)].sort(),
-      `.github/CODEOWNERS und ${QUELLE} sind auseinandergelaufen – neue Leitplanken in der Quelle eintragen ` +
-        "und die CODEOWNERS-Zeile nachziehen (GitHub kann CODEOWNERS nicht aus einer Datei einbinden).",
+      pflichtReviewProbleme(read(QUELLE), codeowners),
+      [],
+      `.github/CODEOWNERS und ${QUELLE} sind auseinandergelaufen – die Pflicht-Review-Liste (Gruppe pflichtReview) in der Quelle ` +
+        "pflegen und die CODEOWNERS-Zeile nachziehen (GitHub kann CODEOWNERS nicht aus einer Datei einbinden).",
     );
   });
 
@@ -212,12 +233,17 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     );
   });
 
-  test("MCP-Launcher sind per Namenskonvention `scripts/*-mcp.mjs` geschützt, in Quelle UND CODEOWNERS (#1693)", () => {
+  test("MCP-Launcher sind per Namenskonvention `scripts/*-mcp.mjs` geschützt, in der Quelle und, soweit die Pflicht-Review-Liste sie nennt, in CODEOWNERS (#1693)", () => {
     // Der Normalisierer schneidet am Glob ab (`scripts/`), darum prüft nur der Roh-Eintrag die Konvention; ein neuer Launcher braucht keinen eigenen Eintrag.
     assert.ok(Object.values(quelle).flat().includes("/scripts/*-mcp.mjs"), "Quelle ohne /scripts/*-mcp.mjs");
-    assert.match(codeowners, /^\/scripts\/\*-mcp\.mjs\s+@/m, "CODEOWNERS ohne /scripts/*-mcp.mjs");  });
+    assert.equal(
+      codeownersMuster(codeowners).includes("/scripts/*-mcp.mjs"),
+      pflichtListe.includes("/scripts/*-mcp.mjs"),
+      "CODEOWNERS weicht von der Pflicht-Review-Liste für /scripts/*-mcp.mjs ab",
+    );
+  });
 
-  test("jede AGENTS.md ist geschützt, auch modul-lokale – in Quelle UND CODEOWNERS (#1168)", () => {
+  test("jede AGENTS.md ist geschützt, auch modul-lokale – in der Quelle und, soweit die Pflicht-Review-Liste sie nennt, in CODEOWNERS (#1168)", () => {
     // Der Sync-Test oben fängt das nicht: `/AGENTS.md` und `AGENTS.md` normalisieren beide auf
     // `AGENTS.md`. Der Substring-Abgleich trifft modul-lokale Dateien schon immer, CODEOWNERS
     // (root-verankert) nicht – darum der Anker-Test auf die rohe Schreibweise.
@@ -226,14 +252,10 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     assert.ok(!roh.includes("/AGENTS.md"), `${QUELLE}: '/AGENTS.md' ist root-verankert und trifft in CODEOWNERS keine modul-lokale AGENTS.md`);
   });
 
-  test("CODEOWNERS spiegelt die Anker-Form der Quelle: unverankert genau die tiefen-unabhängigen Einträge (#1168)", () => {
+  test("CODEOWNERS spiegelt die Anker-Form der Pflicht-Review-Liste: unverankert genau deren tiefen-unabhängige Einträge (#1168)", () => {
     // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form.
-    const roh = codeowners
-      .split(/\r?\n/)
-      .map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1])
-      .filter((p): p is string => p !== undefined);
-    const unverankert = roh.filter((p) => !p.startsWith("/")).sort();
-    assert.deepEqual(unverankert, [...TIEFENUNABHAENGIG].sort(), "CODEOWNERS: Anker-Form weicht von der Quelle ab (#1168)");
+    const unverankert = codeownersMuster(codeowners).filter((p) => !p.startsWith("/")).sort();
+    assert.deepEqual(unverankert, pflichtListe.filter((p) => !p.startsWith("/")).sort(), "CODEOWNERS: Anker-Form weicht von der Pflicht-Review-Liste ab (#1168)");
   });
 
   test("die Quelle schützt den Wächter-Ordner als Präfix (#1156, #1165)", () => {
@@ -614,13 +636,13 @@ function ungeschuetzt(skripte: string[], src: ProtectedSource): string[] {
 }
 
 describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
-  test("jedes Hook-Skript und jeder lokale Import davon steht in der Quelle UND in CODEOWNERS", () => {
+  test("jedes Hook-Skript und jeder lokale Import davon steht in der Quelle und, soweit die Pflicht-Review-Liste es nennt, in CODEOWNERS", () => {
     const skripte = lokaleImporteTransitiv(hookSkripte(read(".claude/settings.json")), read);
     assert.ok(skripte.includes("scripts/worktree-aufraeumen.mjs"), "der Stop-Hook importiert worktree-aufraeumen.mjs");
     assert.ok(skripte.includes("scripts/umsetzer-abschluss.mjs"), "der Stop-Hook importiert umsetzer-abschluss.mjs");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
     const owners = codeownersMuster(codeowners);
-    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
+    assert.deepEqual(skripte.filter((s) => trifftLeitplanke(s, pflichtListe) && !trifftLeitplanke(s, owners)), [], "von der Pflicht-Review-Liste genannt, aber nicht in .github/CODEOWNERS");
   });
 
   test("jedes Gate-Skript (scripts/check-*.mjs) und jeder lokale Import davon ist geschützt (E1)", () => {
@@ -633,7 +655,7 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.ok(skripte.includes("scripts/docs-gen/markdown.mjs"), "check-docdrift.mjs importiert docs-gen/markdown.mjs (Unterordner)");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
     const owners = codeownersMuster(codeowners);
-    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
+    assert.deepEqual(skripte.filter((s) => trifftLeitplanke(s, pflichtListe) && !trifftLeitplanke(s, owners)), [], "von der Pflicht-Review-Liste genannt, aber nicht in .github/CODEOWNERS");
   });
 
   test("jedes Skript der harness-Liste und jeder lokale Import davon ist geschützt (E2)", () => {
@@ -643,7 +665,7 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.ok(skripte.includes("scripts/kontingent-lib.mjs"), "board-takt.mjs importiert kontingent-lib.mjs");
     assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
     const owners = codeownersMuster(codeowners);
-    assert.deepEqual(skripte.filter((s) => !trifftLeitplanke(s, owners)), [], "nicht in .github/CODEOWNERS");
+    assert.deepEqual(skripte.filter((s) => trifftLeitplanke(s, pflichtListe) && !trifftLeitplanke(s, owners)), [], "von der Pflicht-Review-Liste genannt, aber nicht in .github/CODEOWNERS");
   });
 
   test("Red-Green: ein Glob-Muster deckt nicht das ganze Verzeichnis (#90 L20)", () => {
@@ -678,5 +700,46 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     }
     // Kein Fehlalarm: ein Paket-Import und ein Ausdruck mit Klammern ohne lokalen Pfad bleiben außen vor.
     assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], () => 'import "node:fs"; const x = f(a)("text"); import("pkg");'), ["scripts/a.mjs"]);
+  });
+});
+
+// ── Pflicht-Review-Liste (factory#348) ───────────────────────────────────────
+
+describe("Pflicht-Review-Liste (factory#348)", () => {
+  const eigen = "/.github/CODEOWNERS";
+  const quelleMit = (gruppe: string[], rest: string[] = ["/scripts/a.mjs", "/docs/"]): string => JSON.stringify({ gate: rest, pflichtReview: gruppe });
+  const zeilen = (...pfade: string[]): string => `# Kopf\n${pfade.map((p) => `${p} @team`).join("\n")}\n`;
+
+  test("passende Gruppe und CODEOWNERS-Zeilen sind grün", () => {
+    assert.deepEqual(pflichtReviewProbleme(quelleMit([eigen, "/.mcp.json"]), zeilen(eigen, "/.mcp.json")), []);
+  });
+
+  test("Red-Green: ein Eintrag der Gruppe ohne CODEOWNERS-Zeile ist rot", () => {
+    assert.deepEqual(pflichtReviewProbleme(quelleMit([eigen, "/.mcp.json"]), zeilen(eigen)), ["nicht in CODEOWNERS: .mcp.json"]);
+  });
+
+  test("Red-Green: eine CODEOWNERS-Zeile ohne Eintrag in der Gruppe ist rot", () => {
+    assert.deepEqual(pflichtReviewProbleme(quelleMit([eigen]), zeilen(eigen, "/docs/")), ["nicht in der Pflicht-Review-Liste: docs/"]);
+  });
+
+  test("Red-Green: eine Gruppe ohne /.github/CODEOWNERS ist rot (Selbstschutz)", () => {
+    const probleme = pflichtReviewProbleme(quelleMit(["/.mcp.json"]), zeilen("/.mcp.json"));
+    assert.deepEqual(probleme, ["Gruppe pflichtReview ohne /.github/CODEOWNERS"]);
+  });
+
+  test("ohne Gruppe: CODEOWNERS als Vereinigung aller Gruppen ist grün", () => {
+    const ohne = JSON.stringify({ gate: ["/scripts/a.mjs"], harness: ["/docs/", "AGENTS.md"] });
+    assert.deepEqual(pflichtReviewProbleme(ohne, zeilen("/scripts/a.mjs", "/docs/", "AGENTS.md")), []);
+  });
+
+  test("ohne Gruppe: eine Teilmenge in CODEOWNERS ist rot", () => {
+    const ohne = JSON.stringify({ gate: ["/scripts/a.mjs"], harness: ["/docs/"] });
+    assert.deepEqual(pflichtReviewProbleme(ohne, zeilen("/scripts/a.mjs")), ["nicht in CODEOWNERS: docs/"]);
+  });
+
+  test("Fallback auf die echte Quelle ohne Gruppe: der daraus erzeugte Vollspiegel ist grün", () => {
+    const ohneGruppe = JSON.stringify(Object.fromEntries(Object.entries(quelle).filter(([g]) => g !== "pflichtReview")));
+    const voll = zeilen(...Object.values(JSON.parse(ohneGruppe) as ProtectedSource).flat());
+    assert.deepEqual(pflichtReviewProbleme(ohneGruppe, voll), []);
   });
 });

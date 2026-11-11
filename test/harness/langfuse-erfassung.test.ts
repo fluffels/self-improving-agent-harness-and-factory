@@ -19,6 +19,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 import { lokaleImporteTransitiv } from "./hook-importe";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pflichtReviewMuster } from "../../scripts/besitz-extraktion.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
@@ -395,19 +397,22 @@ describe("Automatischer Abgleich verdrahtet (#1578)", () => {
   const hookQuelle = read("scripts/langfuse-abgleich-hook.mjs");
   const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => eintraege.some((p) => p !== "" && rel.startsWith(p.replace(/^\//, "")));
   const echte = (JSON.parse(read(".github/protected-paths.json")) as { harness: string[] }).harness;
+  // CODEOWNERS spiegelt nur die Pflicht-Review-Liste (factory#348): geprüft wird, was sie nennt.
+  const pflichtListe = (pflichtReviewMuster as (t: string) => string[] | null)(read(".github/protected-paths.json")) ?? [];
   const owners = read(".github/CODEOWNERS")
     .split("\n")
     .map((z) => z.trim().split(/\s+/)[0])
     .filter((p) => p.startsWith("/"));
+  const ownersDecken = (rel: string): boolean => !geschuetztDurch(pflichtListe)(rel) || geschuetztDurch(owners)(rel);
   const eintrag = (ereignis: string) => ({ [ereignis]: [{ hooks: [{ type: "command", command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"] }] }] });
   const mit = (hooks: Record<string, unknown>) => JSON.stringify({ hooks });
 
-  test("echte Dateien: beide Hook-Einträge, Spawn-Ziel samt Importen in protected-paths.json UND CODEOWNERS", () => {
+  test("echte Dateien: beide Hook-Einträge, Spawn-Ziel samt Importen in protected-paths.json und, soweit die Pflicht-Review-Liste sie nennt, in CODEOWNERS", () => {
     assert.ok(abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(echte), read));
-    assert.ok(abgleichVerdrahtet(settings, hookQuelle, geschuetztDurch(owners), read));
+    assert.ok(abgleichVerdrahtet(settings, hookQuelle, (rel: string) => geschuetztDurch(echte)(rel) && ownersDecken(rel), read));
     // die ganze Kette, die der Spawn nachzieht
     for (const n of ["langfuse-abgleich-hook", "langfuse-nachliefern", "langfuse-otlp", "langfuse-abgleich", "langfuse-api", "preise", "transkript", "transkript-calls"]) {
-      assert.ok(geschuetztDurch(echte)(`scripts/${n}.mjs`) && geschuetztDurch(owners)(`scripts/${n}.mjs`), n);
+      assert.ok(geschuetztDurch(echte)(`scripts/${n}.mjs`) && ownersDecken(`scripts/${n}.mjs`), n);
     }
   });
 
