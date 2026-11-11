@@ -17,7 +17,7 @@ export default {
   testRunner: "vitest",
   vitest: { pool: "forks" }, // Standard ist threads; Tests mit process.chdir scheitern in Worker-Threads
   coverageAnalysis: "perTest",
-  mutator: { excludedMutations: ["StringLiteral"] }, // Kalibrierung: Meldungs- und Fix-Texte bindet kein Test wörtlich (docs/mutation-messung-2026-11.md)
+  mutator: { excludedMutations: ["StringLiteral", "ObjectLiteral"] }, // Kalibrierung: Meldungstexte und Options-/Rückgabeobjekte, deren Wegfall kein Test beobachtet (docs/mutation-messung-2026-11.md)
   reporters: ["json"],
   jsonReporter: { fileName: berichtPfad },
   inPlace: true, // Tests lesen git (ls-files, diff): in einer Sandbox-Kopie ohne .git scheitern sie schon im Probelauf

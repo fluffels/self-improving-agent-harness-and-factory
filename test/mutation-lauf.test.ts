@@ -49,6 +49,7 @@ describe("Diff zu Zeilenbereichen", () => {
     assert.equal(lib.istTestPfad("src/atest.mjs"), false);
     assert.equal(lib.istTestPfad("src/a.test.mjs.bak"), true);
     assert.equal(lib.istTestPfad("src/a.test"), false);
+    assert.equal(lib.istTestPfad("src/a.test.x/c.mjs"), false);
   });
   test("Zeilen direkt hintereinander aus zwei Hunks verschmelzen zu einem Bereich", () => {
     const d = `${hunk("src/a.mjs", "@@ -1,0 +3,2 @@")}@@ -9 +5,2 @@\n+y\n`;
@@ -90,6 +91,16 @@ describe("Bericht-Parser fail-closed", () => {
       assert.equal(typeof r.fehler, "string", t);
       assert.equal(r.mutanten, undefined, t);
     }
+  });
+  test("Null-Werte und fehlende Teile in Datei, Mutant und Ort sind Fehler, kein Absturz", () => {
+    const fall = [{ files: null }, { files: { "src/a.mjs": null } }, { files: { "src/a.mjs": { mutants: [null] } } }, { files: { "src/a.mjs": { mutants: [m({ location: undefined })] } } }, { files: { "src/a.mjs": { mutants: [m({ location: { start: null } })] } } }];
+    for (const f of fall) {
+      const r = lib.berichtLesen(JSON.stringify(f), WURZEL);
+      assert.equal(typeof r.fehler, "string", JSON.stringify(f));
+    }
+  });
+  test("ein Wurzelpfad mit mehreren Schrägstrichen am Ende wird vollständig abgeschnitten", () => {
+    assert.deepEqual(lib.berichtLesen(bericht({ "/w/src/a.mjs": { mutants: [m()] } }), "/w//").mutanten?.map((x) => x.datei), ["src/a.mjs"]);
   });
   test("ein leerer Bericht ohne Dateien ist gültig und ergibt null Mutanten", () => {
     assert.deepEqual(lib.berichtLesen(bericht({}), WURZEL), { mutanten: [] });
@@ -145,6 +156,11 @@ describe("Filter und Ausgabe", () => {
     assert.equal(z[1], `src/a.mjs:9 | ConditionalExpression | ${"y".repeat(79)}…`);
     assert.equal(z[2], `src/a.mjs:10 | ConditionalExpression | ${"y".repeat(80)}`);
     assert.equal(z[3], "src/a.mjs:100 | ConditionalExpression | true");
+  });
+  test("Leerraum am Rand des Ersatzes wird entfernt, ein null-Ersatz ist „–“", () => {
+    const z = lib.formatiere([mu({ ersatz: "  x  " }), mu({ zeile: 6, ersatz: null as unknown as undefined })]);
+    assert.equal(z[1], "src/a.mjs:5 | ConditionalExpression | x");
+    assert.equal(z[2], "src/a.mjs:6 | ConditionalExpression | –");
   });
   test("ohne Überlebende gibt es nur die Summenzeile", () => {
     assert.deepEqual(lib.formatiere([mu({ status: "Killed" })]), ["Mutanten: 1 · getötet 1 · überlebt 0 · ohne Abdeckung 0 · Timeout 0 · sonstige 0"]);
@@ -220,6 +236,12 @@ describe("Ablauf", () => {
       assert.ok(!log.out.some((z) => z.startsWith("Mutanten:")));
       assert.deepEqual(log.entfernt, ["/tmp/m1"]);
     }
+    const a = umgebung({ lauf: { status: 3 } });
+    lib.cli([], a.io);
+    assert.match(a.log.err.join("\n"), /endete mit Exit 3/);
+    const b = umgebung({ lauf: { error: new Error("boom") } });
+    lib.cli([], b.io);
+    assert.match(b.log.err.join("\n"), /endete mit boom/);
   });
   test("fehlender, kaputter oder unvollständiger Bericht: Exit 1, nie die Summenzeile „keine Mutanten“", () => {
     for (const b of [null, "{", "{}", bericht({ "/w/src/a.mjs": { mutants: [m({ status: "Wat" })] } })]) {
