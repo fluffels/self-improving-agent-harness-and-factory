@@ -450,6 +450,14 @@ describe("Sweep-Tiefe (factory#272)", () => {
     expect(tiefe(["test/billing.test.ts", "docs/a.md"], eigen)).toBe("voll");
     expect(tiefe(["test/billing.test.ts", "docs/a.md"])).toBe("stichprobe");
   });
+  test("TESTDATEI: nur *.test.* und *.spec.* mit js/ts-Endung (auch mjs, cts) zählen, alles andere ist voll", () => {
+    for (const p of ["test/a.test.ts", "test/a.spec.js", "test/a.test.mjs", "test/a.spec.cts"]) expect(tiefe([p]), p).toBe("stichprobe");
+    for (const p of ["test/a.test.ts.bak", "test/atest.ts", "test/a.tests.ts", "test/a.test.tsx", "test/a.test-ts", "test/a.test.json", "test/a.test"]) expect(tiefe([p]), p).toBe("voll");
+  });
+  test("bestimmeGroessenstufe trägt sweep, auch bei Eintrag null oder ohne Liste", () => {
+    expect(lib.bestimmeGroessenstufe({ eintraege: null, muster: MUSTER })).toMatchObject({ sweep: { tiefe: "voll" } });
+    expect(stufe([null as unknown as Eintrag])).toMatchObject({ sweep: { tiefe: "voll" } });
+  });
   test("bestimmeGroessenstufe trägt sweep, auch im fail-closed-Zweig", () => {
     expect(stufe([eins("docs/x.md")])).toMatchObject({ sweep: { tiefe: "stichprobe" } });
     expect(stufe([eins("docs/x.md")], null)).toMatchObject({ sweep: { tiefe: "stichprobe" } });
