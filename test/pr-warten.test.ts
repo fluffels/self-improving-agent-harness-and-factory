@@ -212,7 +212,7 @@ describe("warten: Konflikt wird erst nach zweiter Abfrage gemeldet (#1663 L33)",
 
 describe("parseArgs", () => {
   test("PR-Nummer und Optionen, Standardwerte", () => {
-    expect(P.parseArgs(["12"])).toEqual({ pr: "12", maxSekunden: 240, intervall: 30 });
+    expect(P.parseArgs(["12"])).toEqual({ pr: "12", maxSekunden: 150, intervall: 30 });
     expect(P.parseArgs(["--max-sekunden", "60", "--intervall", "10", "7"])).toEqual({ pr: "7", maxSekunden: 60, intervall: 10 });
   });
 });
@@ -424,7 +424,7 @@ describe("parseArgs: strikt (#1790)", () => {
     expect(PF.parseArgs(["abc"]).fehler).toBe("PR-Nummer erwartet, nicht abc");
     expect(PF.parseArgs(["1a"]).fehler).toMatch(/PR-Nummer/);
     expect(PF.parseArgs(["a1"]).fehler).toBe("PR-Nummer erwartet, nicht a1");
-    expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 240, intervall: 30 });
+    expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 150, intervall: 30 });
   });
 });
 

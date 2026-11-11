@@ -2,10 +2,10 @@
 /**
  * Auf die CI eines PR warten, ohne den Kontext zu fluten und ohne den Prompt-Cache ablaufen zu lassen (#1559).
  *
- *   node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]
+ *   node scripts/pr-warten.mjs <pr> [--max-sekunden 150] [--intervall 30]
  *
- * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 240, unter der 5-Minuten-Standard-Cache-TTL der Subagenten: eine längere
- * Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem Nicht-Pflicht-Check zusätzlich eine `HINWEIS`-Zeile):
+ * Ein Aufruf pollt höchstens `--max-sekunden` (Standard 150: Gesamtlaufzeit unter 180 s auch mit einer letzten gh-Abfrage (30 s Timeout), weil Claude Code ab v2.1.318 in Hintergrund-Subagenten einen Shell-Befehl nach 3 Minuten in den Hintergrund schiebt; zugleich unter der 5-Minuten-Standard-Cache-TTL der Subagenten:
+ * eine längere Pause baut den ganzen Kontext neu auf, docs/model-routing.md § Umsetzer-Kontext) und gibt eine kompakte Zeile aus (bei rotem Nicht-Pflicht-Check zusätzlich eine `HINWEIS`-Zeile):
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
@@ -167,7 +167,7 @@ export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, interv
 
 export function parseArgs(argv) {
   const { werte, positionale, fehler } = flagsLesen(argv, { "max-sekunden": { type: "string" }, intervall: { type: "string" } }, { positionale: true });
-  const a = { pr: null, maxSekunden: 240, intervall: 30 };
+  const a = { pr: null, maxSekunden: 150, intervall: 30 };
   if (fehler) a.fehler = fehler.text;
   else if (positionale.length > 1) a.fehler = `Unbekanntes Argument: ${positionale[1]}`;
   else if (positionale.length === 1 && !/^\d+$/.test(positionale[0])) a.fehler = `PR-Nummer erwartet, nicht ${positionale[0]}`;
@@ -264,7 +264,7 @@ function schreibeDiagnose(pr, roh, schreibe, meldeFehler, repo) {
 function main() {
   const a = parseArgs(process.argv.slice(2));
   if (a.fehler || !a.pr || !(a.maxSekunden > 0) || !(a.intervall > 0)) {
-    console.error(`${a.fehler ? `${a.fehler}\n` : ""}Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 240] [--intervall 30]`);
+    console.error(`${a.fehler ? `${a.fehler}\n` : ""}Aufruf: node scripts/pr-warten.mjs <pr> [--max-sekunden 150] [--intervall 30]`);
     process.exit(3);
   }
   const r = lauf(a);
