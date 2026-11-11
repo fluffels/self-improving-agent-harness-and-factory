@@ -176,6 +176,23 @@ export function eindeutigeCalls(calls) {
   return [...byId.values()];
 }
 
+/**
+ * Alle Calls einer geladenen Session (`ladeSessionDatei`, factory#290; ausgelagert aus `token-baseline.mjs`): Hauptdatei, dann jeder Subagent
+ * mit Deskriptor, am Ende `eindeutigeCalls` (dieselbe `message.id` in Haupt- und Subagent-Datei zählt einmal). `session` setzt die Session-ID
+ * nur an die Calls der Hauptdatei. Ergebnis: `{ calls, questions }`. Pur.
+ */
+export function callsDerSitzung(sitzung, { session } = {}) {
+  const all = callsFromTranscript(sitzung.main);
+  if (session !== undefined) for (const c of all.calls) c.session = session;
+  for (const { datei, meta, zeilen } of sitzung.subagents) {
+    const sub = { id: datei, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
+    const r = callsFromTranscript(zeilen, sub);
+    all.calls.push(...r.calls);
+    all.questions += r.questions;
+  }
+  return { calls: eindeutigeCalls(all.calls), questions: all.questions };
+}
+
 /** Effort-Stufen laut `docs/model-routing.md` (Phasen-Matrix): nur diese Werte gelten als Effort, alles andere fehlt. */
 export const EFFORT_STUFEN = ["low", "medium", "high", "xhigh", "max"];
 

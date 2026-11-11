@@ -12,6 +12,15 @@ export function median(werte) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+/** Quartil `p` (0..1) einer Zahlenliste, lineare Interpolation (Typ 7); nicht endliche Werte ignoriert, `null` bei leerer Liste. */
+export function quartil(werte, p) {
+  const s = werte.filter((w) => Number.isFinite(w)).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const pos = (s.length - 1) * p;
+  const i = Math.floor(pos);
+  return i + 1 < s.length ? s[i] + (s[i + 1] - s[i]) * (pos - i) : s[i];
+}
+
 /** Cache-TTL-Schwellen in Millisekunden: 5 Minuten (Standard-Cache) und 1 Stunde (erweiterter Cache). */
 export const CACHE_TTL_MS = Object.freeze({ fuenfMin: 5 * 60_000, eineStunde: 60 * 60_000 });
 

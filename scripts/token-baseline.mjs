@@ -39,7 +39,7 @@ import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFro
 import { ladeSessionDatei, projekteWurzel } from "./transkript.mjs";
 import { CACHE_TTL_MS, istEchtesModell, istNeuaufbau, kontextVon, median } from "./mess-lib.mjs";
 import { PRICES, PRICES_STAND, num, periodAt, priceCall, priceParts, sumParts } from "./preise.mjs";
-import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
+import { callsDerSitzung, callsFromTranscript } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
@@ -360,19 +360,10 @@ export function readTranscriptSession(sessionId, projectsRoot) {
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
   const sitzung = ladeSessionDatei(main);
-  const all = callsFromTranscript(sitzung.main);
-  for (const c of all.calls) c.session = sessionId;
+  const all = callsDerSitzung(sitzung, { session: sessionId });
+  // Die Tool-Events tragen keine Message-übergreifende ID und werden nicht dedupliziert (Messung #1573: 20 von 31.042 Messages).
   all.events = toolEventsFromTranscript(sitzung.main, `main:${sessionId}`);
-  for (const { datei, meta, zeilen } of sitzung.subagents) {
-    const sub = { id: datei, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
-    const r = callsFromTranscript(zeilen, sub);
-    all.events.push(...toolEventsFromTranscript(zeilen, sub.id));
-    all.calls.push(...r.calls);
-    all.questions += r.questions;
-  }
-  // Dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (Messung #1573: 20 von 31.042 Messages). Grenze: die Tool-Events
-  // darüber tragen keine Message-übergreifende ID und werden nicht dedupliziert.
-  all.calls = eindeutigeCalls(all.calls);
+  for (const { datei, zeilen } of sitzung.subagents) all.events.push(...toolEventsFromTranscript(zeilen, datei));
   return all;
 }
 
