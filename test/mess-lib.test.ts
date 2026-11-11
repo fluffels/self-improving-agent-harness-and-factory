@@ -20,6 +20,17 @@ describe("median", () => {
   });
 });
 
+describe("quartil", () => {
+  const Q = raw as unknown as { quartil: (w: number[], p: number) => number | null };
+  test("lineare Interpolation (Typ 7), Einzelwert, leer, nicht endliche Werte ignoriert", () => {
+    expect([0.25, 0.5, 0.75].map((p) => Q.quartil([4, 1, 3, 2], p))).toEqual([1.75, 2.5, 3.25]);
+    expect(Q.quartil([7], 0.75)).toBe(7);
+    expect(Q.quartil([1, 2], 1)).toBe(2);
+    expect(Q.quartil([], 0.5)).toBeNull();
+    expect(Q.quartil([Number.NaN, 5], 0.25)).toBe(5);
+  });
+});
+
 describe("CACHE_TTL_MS", () => {
   test("Schwellen 5 min und 1 h, eingefroren", () => {
     expect(M.CACHE_TTL_MS).toEqual({ fuenfMin: 300_000, eineStunde: 3_600_000 });

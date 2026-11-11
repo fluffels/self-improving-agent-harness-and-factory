@@ -13,6 +13,7 @@ import * as rawSlice from "../scripts/slice-override.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../scripts/token-baseline.mjs";
 import { FREMD, FREMD_OWNER } from "./support/fremd-config";
+import { fixture } from "./support/tmp-fixture";
 
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
 type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; abnahme: Abnahme };
@@ -1055,5 +1056,43 @@ describe("Spezifikations-Mängel im Wochenbericht (#1860)", () => {
     expect(mit.bericht.spezifikation).toEqual({ luecke: "weg" });
     expect(mit.exit).toBe(0);
     expect(erstelle({ von, bis }, { run, claimKarte: () => new Map() }).bericht.spezifikation).toBeUndefined();
+  });
+});
+
+describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
+  const von = "2026-11-02T00:00:00Z";
+  const bis = "2026-11-03T00:00:00Z";
+  const T0 = Date.parse(von);
+  const punkt = (min: number, pct: number) => JSON.stringify({ stand: T0 + min * 60_000, sevenDay: { pct, resetsAt: (T0 + 7 * 864e5) / 1000 } });
+  const verlauf = [punkt(60, 0), punkt(120, 10)].join("\n");
+  const callZeile = (id: string) => JSON.stringify({ type: "assistant", timestamp: new Date(T0 + 90 * 60_000).toISOString(), uuid: id, message: { id, role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1000, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
+  type Lader = (e: { von: string; bis: string }, io: { lies: (p: string) => string; pfad: string; wurzel: string }) => { luecke?: string; aufbau?: { sitzungen: number; calls: number }; limits?: { sevenDay: { gesamt: { tokens: number; jePp: number } } } };
+  const lade = (raw as unknown as { ladeTokensJeProzentpunkt: Lader }).ladeTokensJeProzentpunkt;
+
+  test("Lader: Calls aus beiden Projektordnern der Wurzel zählen (das Limit gilt kontoweit)", () => {
+    const wurzel = fixture({ "a/s1.jsonl": callZeile("m1"), "b/s2.jsonl": callZeile("m2") });
+    const r = lade({ von, bis }, { lies: () => verlauf, pfad: "/x/v.jsonl", wurzel });
+    expect(r.aufbau).toMatchObject({ sitzungen: 2, calls: 2 });
+    expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 2000, jePp: 200 });
+  });
+
+  test("Lader: fehlender Verlauf nennt den Pfad, fehlende Wurzel ist eine Lücke, nie ein Wert", () => {
+    const nein = () => {
+      throw new Error("ENOENT");
+    };
+    expect(lade({ von, bis }, { lies: nein, pfad: "/x/v.jsonl", wurzel: "/nirgends" }).luecke).toBe("Kontingent-Verlauf fehlt: /x/v.jsonl");
+    expect(lade({ von, bis }, { lies: () => verlauf, pfad: "/x", wurzel: "/nirgends" }).luecke).toMatch(/^Transkripte nicht lesbar \(\/nirgends\): .*ENOENT/);
+  });
+
+  test("erstelle: tokensLader läuft unabhängig vom Lauf-Ergebnis, Abschnitt erscheint, der Exit-Code bleibt bei einer Lücke", () => {
+    type E = (e: { von: string; bis: string }, d: { run: Run; claimKarte: () => Map<number, never[]>; tokensLader?: (e: { von: string; bis: string }) => unknown }) => { bericht: { tokensJePp?: unknown; lauf: Lage }; exit: number };
+    const erstelle = (raw as unknown as { erstelle: E }).erstelle;
+    const kein: Run = () => ({ status: 1, stdout: "", stderr: "x" });
+    const gesehen: unknown[] = [];
+    const r = erstelle({ von, bis }, { run: kein, claimKarte: () => new Map(), tokensLader: (e) => (gesehen.push(e), { luecke: "weg" }) });
+    expect(gesehen).toEqual([{ von, bis }]);
+    expect(r.bericht.tokensJePp).toEqual({ luecke: "weg" });
+    expect(F.renderMarkdown(r.bericht)).toContain("**Tokens je Abo-Prozentpunkt**\n- Lücke: weg");
+    expect(erstelle({ von, bis }, { run: kein, claimKarte: () => new Map() }).bericht.tokensJePp).toBeUndefined();
   });
 });

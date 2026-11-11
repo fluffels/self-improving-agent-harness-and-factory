@@ -88,6 +88,7 @@
     {"pfad":"scripts/blocker-migration.mjs","ring":"kern","quelle":"Native Blocker-Kante (factory#202)"},
     {"pfad":"scripts/factory-kennzahlen.mjs","ring":"kern","quelle":"ADR 0022 F14 (#1616)"},
     {"pfad":"scripts/abo-kontingent-lib.mjs","ring":"kern","quelle":"Abo-Kontingent je Ticket (factory#285)"},
+    {"pfad":"scripts/tokens-je-prozentpunkt-lib.mjs","ring":"kern","quelle":"Tokens je Abo-Prozentpunkt (factory#290)"},
     {"pfad":"scripts/ci-laeufe.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/brain-metrics.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/transkript.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
