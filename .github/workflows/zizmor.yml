@@ -1,8 +1,8 @@
 name: zizmor
 
-# Statische Sicherheitsprüfung der Workflows (#92) mit zizmor. BERICHTEND, kein Required-Check: Funde landen als SARIF im
+# Statische Sicherheitsprüfung der Workflows (#92) mit zizmor. Der Job bleibt grün (`--no-exit-codes`): Funde landen als SARIF im
 # Security-Tab (Code-Scanning, Kategorie `zizmor`) und kommen über die Code-Scanning-Inbox (codescanning-inbox.yml) als Zeilen
-# ins Sammelticket; der Lauf sperrt den Merge nicht (`--no-exit-codes`).
+# ins Sammelticket. Den Merge sperrt seit factory#335 die `code_scanning`-Regel des Rulesets (Werkzeug `zizmor`, Schwelle `errors`).
 #
 # OFFLINE: `--offline`, kein Token an zizmor, keine Online-Audits (die bräuchten die GitHub-API und ein Token). Die CLI läuft im
 # Container, per Digest gepinnt (v1.31.1, Digest des Multi-Arch-Index aus ghcr.io/zizmorcore/zizmor); bewusst nicht zizmor-action
