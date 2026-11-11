@@ -253,6 +253,18 @@ export function bedingt(c, fn) {
   }
 }
 
+/** Teillauf in einer Kind-Shell (`bash -c`, Heredoc, `!`-Alias): sie erbt nur exportierte Variablen, die der Guard nicht
+ *  unterscheidet; darum startet sie ohne Vormerkung (`$V` bleibt dynamisch), und nichts wirkt nach außen. */
+export function kindShell(c, fn) {
+  const vorher = c.vars;
+  c.vars = new Map();
+  try {
+    return fn();
+  } finally {
+    c.vars = vorher;
+  }
+}
+
 /** Teillauf in eigener Subshell: Variablenänderungen wirken nicht nach außen. */
 export function isoliert(c, fn) {
   const vorher = new Map(c.vars);

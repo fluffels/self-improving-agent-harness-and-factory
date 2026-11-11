@@ -40,6 +40,7 @@ import {
   aufgeloest,
   bedingt,
   isoliert,
+  kindShell,
   setVar,
   baseName,
   ausserhalbRepo,
@@ -301,14 +302,14 @@ function shellCall(args, cmd, opts, hereString, D, c) {
   if (a.sawC) {
     if (!a.script) return;
     if (a.script.dynamic) ask(c, real(D), "Interpreter mit nicht statischem Text (`bash -c \"$X\"`).", true);
-    else evalString(a.script.text, D, c);
+    else kindShell(c, () => evalString(a.script.text, D, c));
     return;
   }
   if (a.operand && !a.stdinFlag) return; // `bash skript.sh`: Dateiinhalt ist nicht auswertbar
   const text = stdinText(cmd, opts, hereString);
   if (text === undefined) return; // keine Eingabe (interaktive Shell)
   if (text === null) ask(c, real(D), "Interpreter mit nicht statischer Eingabe (Heredoc/Pipe).", true);
-  else evalString(text, D, c);
+  else kindShell(c, () => evalString(text, D, c));
 }
 
 /** `find … -exec CMD … ;|+`: jedes innere Kommando einzeln bewerten. */

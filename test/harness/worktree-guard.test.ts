@@ -656,6 +656,30 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask(`WT=$HOME/x; git -C $WT commit -m x`, wt), true, "dynamischer Wert bleibt dynamisch");
     assert.equal(ask(`WT=; git -C $WT commit -m x`, wt), true, "leerer Wert bleibt dynamisch");
     assert.equal(ask(`WT=~/x; git -C $WT commit -m x`, wt, withHome(repoRoot)), true, "Wert mit Tilde bleibt dynamisch");
+    assert.equal(ask(`WT=$(pwd); git -C $WT commit -m x`, wt), true, "Substitution bleibt dynamisch (Rückfrage statt Pfad)");
+    assert.equal(ask(`WT=${wt}; WT=$X; git -C $WT commit -m x`, wt), true, "dynamische Neu-Zuweisung bleibt dynamisch");
+  });
+
+  test("Variablen ändernde Builtins machen den Wert unbekannt: jedes Mitglied von VAR_AENDERER (L4)", () => {
+    for (const cmd of [
+      `printf -v WT %s ${repoRoot}`,
+      `mapfile WT`,
+      `readarray WT`,
+      `getopts ab WT`,
+    ]) {
+      assert.equal(run(`WT=${wt}; ${cmd}; git -C $WT commit -m x`), true, `${cmd}: Block`);
+      assert.equal(ask(`WT=${wt}; ${cmd}; git -C $WT commit -m x`, wt), true, `${cmd}: im Worktree Rückfrage`);
+    }
+  });
+
+  test("Kind-Shells (bash -c, Heredoc, !-Alias) sehen keine Vormerkung und geben keine nach außen (L4)", () => {
+    const blockt = (cmd: string) => assert.equal(run(cmd), true, `${cmd}: Block`);
+    blockt(`bash -c 'WT=${wt}'; git -C "$WT" commit -m x`); // WT bleibt außen leer
+    blockt(`WT=${wt}; bash -c 'git -C "$WT" commit -m x'`); // nicht exportiert: die Kind-Shell sieht einen leeren Wert
+    blockt(`WT=${wt}; bash <<'E'\ngit -C "$WT" commit -m x\nE`);
+    blockt(`sh <<'E'\nWT=${wt}\nE\ngit -C "$WT" commit -m x`);
+    blockt(`git -c alias.q='!WT=${wt}' q; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git -c alias.q='!git -C "$WT" commit -m x' q`);
   });
 
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {

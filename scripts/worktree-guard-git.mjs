@@ -9,7 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { MAX_INTERPRETER } from "./hook-io.mjs";
-import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, aufgeloest, ask, ausserhalbRepo, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
+import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, aufgeloest, ask, ausserhalbRepo, isDir, kindShell, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
 
 // Die vier Optionen mit eigener Auswertung (-C, -c, --git-dir, --work-tree) behandelt gitOption selbst; der Rest der Tabelle nimmt nur einen Wert.
 const VALUE_OPTS = [...GIT_GLOBAL_MIT_WERT].filter((o) => !["-C", "-c", "--git-dir", "--work-tree"].includes(o));
@@ -187,7 +187,7 @@ function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
     const vorher = c.cAliases;
     c.cAliases = new Map([...vorher, ...g.aliases]);
     try {
-      c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c));
+      kindShell(c, () => c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c)));
     } finally {
       c.cAliases = vorher;
     }
@@ -219,6 +219,6 @@ export function gitCall(words, k, pe, D, c, depth) {
   const dirs = gitTargetDirs(g, pe, D, c);
   for (const w of inner) {
     if (w.dynamic) ask(c, [...dirs], "Unterkommando von `git submodule foreach`/`git rebase -x` ist nicht statisch.", true);
-    else c.evalString(w.text, dirs);
+    else kindShell(c, () => c.evalString(w.text, dirs));
   }
 }
