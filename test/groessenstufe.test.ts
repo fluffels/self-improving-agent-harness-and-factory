@@ -32,7 +32,7 @@ const lib = libRaw as unknown as {
   groessenstufeAusGit: (git: (a: string[]) => string, base: string, head?: string, o?: { ladeMuster?: () => string[]; zweiPunkt?: boolean }) => Ergebnis;
   ladeLeitplankenMuster: (quelle?: string) => string[];
 };
-const cli = cliRaw as unknown as { laufe: (argv: string[], o?: { git?: (a: string[]) => string; ladeMuster?: () => string[]; env?: Record<string, string> }) => { code: number; ausgabe: string } };
+const cli = cliRaw as unknown as { laufe: (argv: string[], o?: { git?: (a: string[]) => string; ladeMuster?: () => string[]; ladeRisiko?: () => unknown; env?: Record<string, string> }) => { code: number; ausgabe: string } };
 const nl = nlRaw as unknown as { kleinGrund: (g: string) => { art: string; begruendung?: string } | null; parseNachweis: (t: string, z: unknown) => { plan: { art: string; grund?: string } | null; review: { lenses: string[] } | null } };
 type Zeilen = { plan: string; planer: string; review: string; abnahme: string; praefix: string };
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen };
@@ -48,7 +48,7 @@ describe("bestimmeGroessenstufe: Kriterium (K1)", () => {
     expect(lib.GROESSENSTUFE_S).toEqual({ maxDateien: 3, maxZeilen: 60 });
   });
   test("eine Doku-Datei mit einer Zeile ist S", () => {
-    expect(stufe([eins("docs/x.md")])).toEqual({ stufe: "S", gruende: [] });
+    expect(stufe([eins("docs/x.md")])).toMatchObject({ stufe: "S", gruende: [] });
   });
   test("Grenze: 3 Dateien und 60 Zeilen sind S, 4 Dateien oder 61 Zeilen sind voll", () => {
     expect(stufe([eins("docs/a.md", 20), eins("docs/b.md", 20), eins("docs/c.md", 20)]).stufe).toBe("S");
@@ -182,7 +182,7 @@ describe("CLI groessenstufe.mjs", () => {
   };
   const o = { git, ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
   test("ohne Argument: Diff gegen die Basis; Ausgabe STUFE: S, Exit 0", () => {
-    expect(cli.laufe([], o)).toEqual({ code: 0, ausgabe: "STUFE: S" });
+    expect(cli.laufe([], o)).toEqual({ code: 0, ausgabe: "STUFE: S\nRISIKO: doku — nur *.md" });
   });
   test("--commit rechnet <sha>^..<sha>", () => {
     const aufrufe: string[] = [];
@@ -190,21 +190,64 @@ describe("CLI groessenstufe.mjs", () => {
     expect(aufrufe).toEqual(["diff --numstat --no-renames abc1234^..abc1234"]);
   });
   test("--pfade ist die Prognose; ein geschützter Pfad gibt voll samt Grund, --json liefert das Objekt", () => {
-    expect(cli.laufe(["--pfade", "docs/x.md", "docs/y.md"], o).ausgabe).toBe("STUFE: S");
+    expect(cli.laufe(["--pfade", "docs/x.md", "docs/y.md"], o).ausgabe).toBe("STUFE: S\nRISIKO: doku — nur *.md");
     expect(cli.laufe(["--pfade", "docs/x.md", "scripts/y.mjs"], o).ausgabe).toMatch(/^STUFE: voll — scripts\/y\.mjs liegt in einem geschützten Pfad/);
     expect(JSON.parse(cli.laufe(["--pfade", "scripts/y.mjs", "--json"], o).ausgabe)).toMatchObject({ stufe: "voll" });
   });
   test("--pfade normalisiert Backslashes und ./: ein geschützter Pfad in Windows-Schreibweise ist voll", () => {
     expect(cli.laufe(["--pfade", ".\\scripts\\x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
     expect(cli.laufe(["--pfade", "./scripts/x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
-    expect(cli.laufe(["--pfade", "./docs/x.md"], o).ausgabe).toBe("STUFE: S");
+    expect(cli.laufe(["--pfade", "./docs/x.md"], o).ausgabe).toBe("STUFE: S\nRISIKO: doku — nur *.md");
   });
   test("als Prozess: STUFE-Zeile mit Exit 0, Aufruf-Fehler mit Exit 2 und Aufrufzeile", () => {
     const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
-    expect(execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim()).toBe("STUFE: S");
+    expect(execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim()).toBe("STUFE: S\nRISIKO: doku — nur *.md");
     const fehler = spawnSync("node", [skript, "--unbekannt"], { encoding: "utf8" });
     expect(fehler.status).toBe(2);
     expect(fehler.stderr).toMatch(/Aufruf: node scripts\/groessenstufe\.mjs/);
+  });
+  describe("RISIKO-Zeile (factory#333)", () => {
+    const STD = { muster: ["*auth*"], quelle: "Standardliste" };
+    const mit = { ...o, ladeRisiko: () => STD };
+    test("ohne Argument, --commit und --pfade: zweite Zeile RISIKO", () => {
+      const authGit = () => "1\t0\tsrc/auth/x.ts\n";
+      expect(cli.laufe([], { ...mit, git: (a) => (a[0] === "rev-parse" ? "b".repeat(40) : authGit()) }).ausgabe).toBe(
+        "STUFE: voll — Risikoklasse hoch: src/auth/x.ts trifft *auth* (Standardliste)\nRISIKO: hoch — src/auth/x.ts trifft *auth* (Standardliste)",
+      );
+      expect(cli.laufe(["--commit", "abc"], { ...mit, git: authGit }).ausgabe).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\*/);
+      expect(cli.laufe(["--pfade", "src/a.ts"], mit).ausgabe).toBe("STUFE: S\nRISIKO: normal — kein Pfad trifft ein Risiko-Muster (Standardliste)");
+    });
+    test("--json trägt risiko mit allen Treffern, der Text höchstens fünf plus Zahl der weiteren", () => {
+      const j = JSON.parse(cli.laufe(["--pfade", "src/auth/x.ts", "--json"], mit).ausgabe) as { risiko: unknown };
+      expect(j.risiko).toMatchObject({ klasse: "hoch", quelle: "Standardliste", treffer: [{ pfad: "src/auth/x.ts", muster: "*auth*" }] });
+      const viele = Array.from({ length: 7 }, (_, i) => `src/auth/${i}.ts`);
+      const zeile = cli.laufe(["--pfade", ...viele], mit).ausgabe.split("\n")[1];
+      expect(zeile).toMatch(/RISIKO: hoch — .*\(\+2 weitere\)$/);
+      expect(zeile.split("; ")).toHaveLength(5);
+      expect((JSON.parse(cli.laufe(["--pfade", ...viele, "--json"], mit).ausgabe) as { risiko: { treffer: unknown[] } }).risiko.treffer).toHaveLength(7);
+    });
+    test("Textfenster: genau 5 Gründe ohne weitere, 6 mit (+1 weitere)", () => {
+      const pfade = (n: number) => Array.from({ length: n }, (_, i) => `src/auth/${i}.ts`);
+      expect(cli.laufe(["--pfade", ...pfade(5)], mit).ausgabe.split("\n")[1]).not.toMatch(/weitere/);
+      expect(cli.laufe(["--pfade", ...pfade(6)], mit).ausgabe.split("\n")[1]).toMatch(/\(\+1 weitere\)$/);
+    });
+    test("fail-closed-Zweige tragen RISIKO: hoch (Schutzliste nicht ladbar, keine Basis)", () => {
+      const wirft = () => { throw new Error("x"); };
+      expect(cli.laufe(["--pfade", "src/a.ts"], { ...mit, ladeMuster: wirft }).ausgabe).toMatch(/\nRISIKO: hoch — Schutzliste nicht ladbar/);
+      expect(cli.laufe([], { ...mit, git: () => "", env: {} }).ausgabe).toMatch(/\nRISIKO: hoch — keine Vergleichs-Basis/);
+    });
+    test("als Prozess ohne Injektion: Standardliste der Repo-Config, hoch bei src/auth/x.ts", () => {
+      const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
+      const aus = execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" });
+      expect(aus).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \(Standardliste\)/);
+    });
+    test("ein Ladefehler der Risiko-Muster ist hoch (fail-closed), kein Absturz", () => {
+      const r = cli.laufe(["--pfade", "src/a.ts"], { ...o, ladeRisiko: () => { throw new Error("kaputt"); } });
+      expect(r.code).toBe(0);
+      expect(r.ausgabe).toMatch(/^STUFE: voll — Risikoklasse hoch: Projekt-Config nicht ladbar: kaputt\nRISIKO: hoch/);
+      const c = cli.laufe(["--commit", "abc"], { ...o, git: () => "1\t0\tsrc/a.ts\n", ladeRisiko: () => { throw new Error("kaputt"); } });
+      expect(c.ausgabe).toMatch(/\nRISIKO: hoch — Projekt-Config nicht ladbar: kaputt/);
+    });
   });
   test("Aufruf-Fehler: Exit 2; keine Basis und Ladefehler: voll statt Absturz", () => {
     expect(cli.laufe(["--pfade"], o).code).toBe(2);

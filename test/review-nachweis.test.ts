@@ -8,7 +8,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -805,6 +805,31 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const r = lauf(mkdir(), ["--config"]);
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /--config braucht einen Pfad/);
+  });
+
+  test("Risiko-Muster der --config gelten (factory#333): Ein-Zeilen-Diff unter src/auth mit skizze/kombiniert ist ohne Block rot, mit risiko.hoch ohne Treffer grün", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "README.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    mkdirSync(join(d, "src", "auth"), { recursive: true });
+    writeFileSync(join(d, "src", "auth", "a.ts"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "umsetzung");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
+    const ohne = join(d, "ohne.json");
+    writeFileSync(ohne, JSON.stringify(echteConfig()));
+    const mit = join(d, "mit.json");
+    writeFileSync(mit, JSON.stringify({ ...echteConfig(), risiko: { hoch: ["/geheim/"] } }));
+    const rot = lauf(d, ["--config", ohne], { FACTORY_DIFF_BASE: basis });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /nur bei Größenstufe S/);
+    const gruen = lauf(d, ["--config", mit], { FACTORY_DIFF_BASE: basis });
+    assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
   });
 
   test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), die Zeilen einer anderen Config nicht (Exit 1)", () => {

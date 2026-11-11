@@ -12,7 +12,7 @@
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;
  *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist; mit Kriterien genügt `entfaellt — klein: <Begründung>` bei berechneter
- *    Größenstufe S (factory#271, `groessenstufe-lib.mjs`: aus dem Diff gerechnet, nie behauptet), wenn sich nichts beobachten lässt; bei `voll` bleibt es rot.
+ *    Größenstufe S (factory#271, `groessenstufe-lib.mjs`: aus dem Diff gerechnet, nie behauptet; Risikoklasse hoch ist nie S), wenn sich nichts beobachten lässt; bei `voll` bleibt es rot.
  *
  * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
  * Ein Entwurfs-PR wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Den Entwurfs-Status liest der Wächter live vom PR (`repos/<repo>/pulls/<nr>`, ein Rerun trägt sonst den veralteten Ereigniswert); `FACTORY_PR_DRAFT` gilt nur ohne PR-Nummer, ein fehlgeschlagener Abruf ist rot. Jeder git- oder gh-Fehler ist rot
@@ -29,7 +29,7 @@ import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { MAX_REVIEW_PAESSE, kleinGrund, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { groessenstufeAusGit } from "./groessenstufe-lib.mjs";
+import { groessenstufeAusGit, risikoMusterAus } from "./groessenstufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
@@ -203,7 +203,8 @@ export function entwurfLive({ gh, env, repo }) {
 }
 
 /** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
-const stufeFuerEntfaellt = (nachweis, git, base) => (nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base).stufe : "voll");
+const stufeFuerEntfaellt = (nachweis, git, base, config) =>
+  nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe : "voll";
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
@@ -226,7 +227,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
     if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead, reviewOverride), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe: stufeFuerEntfaellt(nachweis, git, base) });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe: stufeFuerEntfaellt(nachweis, git, base, config) });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

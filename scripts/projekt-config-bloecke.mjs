@@ -212,6 +212,21 @@ export function pruefeLangfuseWochenbericht(b) {
   });
 }
 
+/** Pur: prüft den optionalen Block `risiko` (factory#333): `hoch` ist eine nicht-leere Liste von Pfadmustern (POSIX, Syntax der Schutzliste); fehlt der Block, gilt die Standardliste. */
+export function pruefeRisiko(b) {
+  if (b === undefined) return [];
+  if (!istObjekt(b)) return ["risiko muss ein Objekt mit dem Schlüssel hoch sein"];
+  const fehler = Object.keys(b).filter((k) => k !== "hoch").map((k) => `risiko.${k} ist kein bekannter Schlüssel (erlaubt: hoch)`);
+  if (!Array.isArray(b.hoch) || b.hoch.length === 0) {
+    return [...fehler, "risiko.hoch muss eine nicht-leere Liste von Pfadmustern sein (ohne den Block gilt die Standardliste; leer schaltet die Klasse hoch nicht ab)"];
+  }
+  b.hoch.forEach((m, i) => {
+    if (!istText(m)) fehler.push(`risiko.hoch[${i}] muss ein nicht-leerer Text sein`);
+    else if (m.includes(String.fromCharCode(92))) fehler.push(`risiko.hoch[${i}] enthält einen Backslash (Pfadmuster sind POSIX mit /)`);
+  });
+  return fehler;
+}
+
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
 const VORPRUEFUNG_KEYS = ["befehle", "userScopeServer"];
