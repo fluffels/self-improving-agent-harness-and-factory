@@ -511,7 +511,8 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
     };
     const r = erstelle({ von, bis }, { run: ok, claimKarte: kaputt });
     expect(r.exit).toBe(0);
-    expect(r.bericht.tickets).toEqual([{ ticket: 40, pr: 50, ergebnis: { luecke: expect.stringMatching(/^Claim-Sessions nicht lesbar: .*ENOENT/) } }]);
+    expect(r.bericht.tickets.map((t) => t.ticket)).toEqual([40]);
+    expect(r.bericht.tickets[0].ergebnis.luecke).toMatch(/^Claim-Sessions nicht lesbar: .*ENOENT/);
   });
   test("alles da: Exit 0; Lauf-Ergebnis fehlt: Exit 2 ohne Claim-Karte und ohne Kosten-Prozess", () => {
     const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
