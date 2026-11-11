@@ -35,17 +35,23 @@
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts (im Factory-Repo) importiert –
  * EINE Quelle der Wahrheit für Budget (hier) und Ausnahmen (`ausnahmen.kontext` der Projekt-Config).
  *
+ * Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` und `.agents/skills/<name>/**`.md haben je Datei ein Budget (`AGENTEN_SKILL_BUDGETS`, Default `AGENTEN_SKILL_DEFAULT_BUDGET`
+ * für Dateien ohne Eintrag, auch projekt-eigene im Bezieher), gemessen ohne den Projektwerte-Block; `collectAgentSkillSizes`. Der Ratchet (ein Budget wächst nicht gegenüber der Merge-Base) steht
+ * als Fabrik-Wächter in test/harness/kontext-budget-ratchet.test.ts.
+ *
  * Ausführen mit:  npm run check:contextsize   (oder als Teil von: npm run verify)
  */
 
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 // Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
-import { CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
+import { PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
+import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ausnahmenAus, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
@@ -79,6 +85,36 @@ export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, m
     const chars = existsSync(abs) ? countChars(readFileSync(abs, "utf8")) : 0;
     return { file, chars, budget: budgetOf.get(file) ?? moduleBudget };
   });
+}
+
+/** Alle .md-Dateien unter `dir` (rekursiv, repo-relativer POSIX-Pfad `rel`); ein fehlender Ordner gibt eine leere Liste. */
+function mdRekursiv(rootDir, rel) {
+  const abs = join(rootDir, rel);
+  if (!existsSync(abs)) return [];
+  return readdirSync(abs, { withFileTypes: true }).flatMap((e) => {
+    const sub = `${rel}/${e.name}`;
+    if (e.isDirectory()) return mdRekursiv(rootDir, sub);
+    return e.name.endsWith(".md") ? [sub] : [];
+  });
+}
+
+/** Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` (nur oberste Ebene) und `.agents/skills/<name>/**`.md rekursiv, ohne AGENTS.md (die misst `collectAgentsFiles`); repo-relativer POSIX-Pfad, sortiert. */
+export function collectAgentSkillFiles(rootDir = ROOT) {
+  const agenten = existsSync(join(rootDir, ".claude/agents"))
+    ? readdirSync(join(rootDir, ".claude/agents"), { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => `.claude/agents/${e.name}`)
+    : [];
+  return [...agenten, ...mdRekursiv(rootDir, QUELL_VERZEICHNIS)].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
+}
+
+/** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte-Block; ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
+export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_BUDGETS, defaultBudget = AGENTEN_SKILL_DEFAULT_BUDGET) {
+  const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
+  const marker = { start: PROJEKTWERT_START, ende: PROJEKTWERT_ENDE };
+  return collectAgentSkillFiles(rootDir).map((file) => ({
+    file,
+    chars: zeichenOhneBlock(readFileSync(join(rootDir, file), "utf8"), marker),
+    budget: budgetOf.get(file) ?? defaultBudget,
+  }));
 }
 
 /** Dateien strikt über ihrem eigenen Budget. */
@@ -117,7 +153,7 @@ function main() {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const sizes = collectContextSizes();
+  const sizes = [...collectContextSizes(), ...collectAgentSkillSizes()];
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));

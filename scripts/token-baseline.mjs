@@ -129,6 +129,16 @@ export function countReviewRounds(reviewDescriptions) {
 }
 
 
+/**
+ * Umsetzer (nicht Gruppen-Umsetzer): exakter Name `agenten.umsetzer`, sonst dieselbe Namens-Heuristik wie
+ * `classifySubagent` (Planer-, Lens- und Recherche-Namen zählen nicht, `agenten.gruppe` ebenso nicht).
+ */
+function istUmsetzer(agentType, agenten = {}) {
+  const t = typeof agentType === "string" ? agentType : "";
+  if (t === agenten.umsetzer) return true;
+  return t !== agenten.gruppe && !/planner|explore|lens/i.test(t) && /umsetzer/i.test(t);
+}
+
 const subKey = (c) => c.subagent.id ?? c.subagent;
 /**
  * Schlüssel der Konversation eines Calls (#1331): Subagent über `subKey`, der Hauptagent über `main:<sessionId>`. Mehrere
@@ -141,7 +151,8 @@ const agentKey = (c) => (c.subagent ? subKey(c) : c.session ? `main:${c.session}
  * Sockel (#1198/#1206): Kontext des ERSTEN Calls des Hauptagenten (Größe der Session, darum
  * sessionweit und unabhängig von `--from`) bzw. je Subagent; Planung und Review als Median über
  * die Subagenten IM Ticket-Fenster (`windowCalls`: nach `--from`, ohne Nachlauf), damit der Planer
- * eines anderen Tickets derselben Session nicht mitzählt.
+ * eines anderen Tickets derselben Session nicht mitzählt. Der Umsetzer-Sockel (factory#307) ist derselbe Median über die
+ * Umsetzer-Subagenten (auch der Fortsetzungs-Umsetzer des Phasen-Schnitts), ohne Gruppen-Umsetzer.
  */
 function sockelOf(allCalls, windowCalls, agenten) {
   const first = (calls) => [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
@@ -154,7 +165,17 @@ function sockelOf(allCalls, windowCalls, agenten) {
         .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description, agenten) === phase)
         .map(kontextVon),
     );
-  return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
+  const umsetzer = median(
+    [...firstBySub.values()].filter((c) => istUmsetzer(c.subagent.agentType, agenten)).map(kontextVon),
+  );
+  return { main: main ? kontextVon(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review"), umsetzer };
+}
+
+/** Report-Zeile mit Sockel (Haupt, Planer, Lens, Umsetzer) und Median-Kontext; `dash` setzt für fehlende Werte den Strich. */
+function sockelZeile(summary, dash) {
+  const sk = summary.sockel;
+  const mc = summary.medianContext;
+  return `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Umsetzer ${dash(sk?.umsetzer)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`;
 }
 
 /** Ohne Preis, aber nur echte Modelle: der Client-Platzhalter `<synthetic>` hat nie einen Preis (#1663). */
@@ -520,12 +541,7 @@ export function renderMarkdown(summary, loop = {}, { planZeile } = {}) {
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
   const dash = (v) => (v === null || v === undefined ? "–" : fmt(v));
   const brain = summary.brain;
-  const sk = summary.sockel;
-  const mc = summary.medianContext;
-  lines.push(
-    "",
-    `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
-  );
+  lines.push("", sockelZeile(summary, dash));
   const parts = summary.costParts;
   const sum = parts ? sumParts(parts) : 0;
   if (sum > 0) {

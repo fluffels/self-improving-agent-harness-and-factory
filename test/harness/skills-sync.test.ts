@@ -561,11 +561,14 @@ describe("Verweise zeigen auf die Skill-Quelle, nicht auf den Zeiger (#1849)", (
 describe("Skill-Pfade stehen als Code-Literal nur in skill-pfade.mjs (#1866)", () => {
   const PFAD = /\.agents\/skills|\.claude\/skills/;
   const LIB = "scripts/skill-pfade.mjs";
+  /** Eine Datenzeile der Budget-Liste (`AGENTEN_SKILL_BUDGETS`, factory#307): ein Dateiname als Schlüssel, kein Zugriff über den Pfad. */
+  const BUDGET_ZEILE = /^\s*\{ file: "[^"]+", budget: [\d_]+ \},$/;
   /** Zeilen mit dem Pfad außerhalb von Kommentaren. Pur. */
   const codeTreffer = (text: string): string[] =>
     text
       .split(/\r?\n/)
       .filter((z) => !/^\s*(\/\/|\/\*|\*)/.test(z))
+      .filter((z) => !BUDGET_ZEILE.test(z))
       .map((z) => z.replace(/\s\/\/ .*$/, ""))
       .filter((z) => PFAD.test(z));
   const kandidaten = (): string[] => repoDateien().filter((f) => /\.(mjs|cjs|js|ts)$/.test(f) && !f.startsWith("test/"));
@@ -577,6 +580,10 @@ describe("Skill-Pfade stehen als Code-Literal nur in skill-pfade.mjs (#1866)", (
     expect(codeTreffer(" * Quelle `.claude/skills`")).toEqual([]);
     expect(codeTreffer("const b = 1; // .agents/skills")).toEqual([]);
     expect(codeTreffer("const c = `${QUELL_VERZEICHNIS}/x`;")).toEqual([]);
+    expect(codeTreffer('  { file: ".agents/skills/x/SKILL.md", budget: 1_500 },')).toEqual([]);
+    expect(codeTreffer('  { file: ".agents/skills/x/SKILL.md", budget: 1_500 }, g(".agents/skills")')).toHaveLength(1);
+    expect(codeTreffer('g(".agents/skills/a"), { file: "x", budget: 1 },')).toHaveLength(1);
+    expect(codeTreffer('const a = { file: ".agents/skills/x.md", budget: 1 };')).toHaveLength(1);
   });
 
   test("die Lib führt beide Literale, der Scan ist nicht leer", () => {
