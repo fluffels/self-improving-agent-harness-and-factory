@@ -15,6 +15,7 @@ const { bereiche } = JSON.parse(readFileSync(bereichePfad, "utf8"));
 export default {
   mutate: bereiche.map((b) => `${b.datei}:${b.von}-${b.bis}`),
   testRunner: "vitest",
+  vitest: { pool: "forks" }, // Standard ist threads; Tests mit process.chdir scheitern in Worker-Threads
   coverageAnalysis: "perTest",
   reporters: ["json"],
   jsonReporter: { fileName: berichtPfad },
