@@ -24,7 +24,7 @@ const A = auftrag as unknown as {
   parseHoldoutInput: (t: string) => { tool?: string; subagentType?: string; text?: string };
 };
 const G = raw as unknown as {
-  bewerteAbnahmeWrite: (p: unknown, cwd?: string, deps?: { tmp?: string }) => Urteil;
+  bewerteAbnahmeWrite: (p: unknown, cwd?: string, deps?: { tmp?: string; plattform?: string }) => Urteil;
   bewerteSzenarioLesen: (tool: string, input: unknown, cwd?: string, deps?: { root?: string }) => Urteil;
   entscheideHook: (modus: string | undefined, text: string, deps?: { tmp?: string; root?: string }) => Deny;
 };
@@ -106,6 +106,27 @@ describe("bewerteAbnahmeWrite", () => {
       expect(G.bewerteAbnahmeWrite("/tmp/a.mjs", "", { tmp: "/tmp" }).block).toBe(false);
       expect(G.bewerteAbnahmeWrite("/TMP/a.mjs", "", { tmp: "/tmp" }).block).toBe(true);
       expect(G.bewerteSzenarioLesen("Read", { file_path: "/home/u/Repo/docs/x.md" }, "", { root: "/home/u/repo" }).block).toBe(true);
+    });
+  });
+  describe("POSIX: auch /tmp und /private/tmp (Scratchpad der Session, L6)", () => {
+    const d = { tmp: "/var/folders/ab/xyz/T", plattform: "darwin" };
+    const w = (p: string) => G.bewerteAbnahmeWrite(p, "/Users/x/repo", d);
+    test("Scratchpad unter /private/tmp und /tmp: erlaubt", () => {
+      expect(w("/private/tmp/claude-501/-x/sess/scratchpad/abnahme-287-1/probe.mjs").block).toBe(false);
+      expect(w("/tmp/a.mjs").block).toBe(false);
+      expect(w("/var/folders/ab/xyz/T/a.mjs").block).toBe(false);
+    });
+    test("Präfix ohne Segmentgrenze und Traversal aus /private/tmp: abgelehnt", () => {
+      for (const p of ["/private/tmpx/a.mjs", "/tmpx/a.mjs", "/private/tmp/../../Users/x/repo/a.mjs"]) expect(w(p).block, p).toBe(true);
+    });
+    test("Windows: /tmp ist keine Wurzel", () => {
+      expect(G.bewerteAbnahmeWrite("/tmp/a.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(true);
+      expect(G.bewerteAbnahmeWrite("C:/Temp/a.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(false);
+      expect(G.bewerteAbnahmeWrite("c:/temp/A.mjs", "", { tmp: "C:/Temp", plattform: "win32" }).block).toBe(false); // Groß-/Kleinschreibung nur unter win32
+    });
+    test("Ablehnungsgrund nennt alle erlaubten Wurzeln", () => {
+      const r = w("/Users/x/repo/a.mjs").reason ?? "";
+      for (const wz of ["/var/folders/ab/xyz/T", "/tmp", "/private/tmp"]) expect(r).toContain(wz);
     });
   });
   test("echtes os.tmpdir() ohne Test-Eingabe: ein Pfad darunter ist erlaubt", () => {

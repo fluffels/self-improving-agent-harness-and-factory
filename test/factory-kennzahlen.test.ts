@@ -504,6 +504,16 @@ describe("erstelle (Verdrahtung, Exit-Codes)", () => {
       ["2026-09-28T00:00:00.000Z", "2026-10-02T00:00:00.000Z"],
     ]);
   });
+  test("Claim-Karte nicht lesbar (ENOENT): kein Throw, Kosten-Zeilen zeigen die Lücke mit Grund, Exit 0", () => {
+    const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: "{}", stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
+    const kaputt = () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory, scandir '/h/.claude/projects/x'"), { code: "ENOENT" });
+    };
+    const r = erstelle({ von, bis }, { run: ok, claimKarte: kaputt });
+    expect(r.exit).toBe(0);
+    expect(r.bericht.tickets.map((t) => t.ticket)).toEqual([40]);
+    expect(r.bericht.tickets[0].ergebnis.luecke).toMatch(/^Claim-Sessions nicht lesbar: .*ENOENT/);
+  });
   test("alles da: Exit 0; Lauf-Ergebnis fehlt: Exit 2 ohne Claim-Karte und ohne Kosten-Prozess", () => {
     const ok: Run = (name) => (name === "token-baseline.mjs" ? { status: 0, stdout: JSON.stringify({ total: { calls: 1, cost: 2 }, hasCost: true, unpriced: 0 }), stderr: "" } : { status: 0, stdout: lauf([ZEILE()]), stderr: "" });
     expect(erstelle({ von, bis }, { run: ok, claimKarte }).exit).toBe(0);
@@ -1081,7 +1091,7 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
     const vorher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 - 90 * 60_000).toISOString(), uuid: "u8", message: { id: "x8", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 5000, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
     const nachher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 + 25 * 60 * 60_000).toISOString(), uuid: "u7", message: { id: "x7", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 7777, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
     const wurzel = fixture({ "a/s1.jsonl": [callZeile("m1"), vorher, nachher, ohne].join("\n") });
-    const frueh = [punkt(-120, 50), punkt(-60, 90), verlauf, punkt(26 * 60, 99)].join("\n");
+    const frueh = [punkt(-120, 0), punkt(-60, 0), verlauf, punkt(26 * 60, 99)].join("\n");
     const r = lade({ von, bis }, { lies: () => frueh, pfad: "/x/v.jsonl", wurzel });
     expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 1000, jePp: 100 });
     expect(r.aufbau).toMatchObject({ ohneZeit: 1 });

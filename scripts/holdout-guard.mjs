@@ -9,7 +9,8 @@
  *
  * Bewusste Grenzen:
  *   - Schreiben über Bash/PowerShell fängt der Hook nicht; das Netz ist die Worktree-Probe in `abnahme.mjs` (Exit 1 „Worktree verändert“).
- *   - `os.tmpdir()` erlaubt das ganze Temp-Verzeichnis, nicht nur das Scratchpad des Laufs.
+ *   - Erlaubt ist das ganze Temp-Verzeichnis (`os.tmpdir()`), unter POSIX auch das ganze `/tmp` und `/private/tmp`, nicht nur das Scratchpad
+ *     des Laufs: Claude Code legt das Scratchpad unter /tmp an, während `os.tmpdir()` auf macOS `/var/folders/…/T` ist.
  *   - Pfade werden lexikalisch geprüft (kein Symlink-/Junction-Auflösen).
  *
  * Reines Node-Skript (nur Builtins und hook-io.mjs), pure Funktionen, keine I/O beim Import.
@@ -21,15 +22,17 @@ import { emit, liegtUnter, normalisierePfad, readStdin, toolGuardHook } from "./
 
 const istAbsolut = (p) => /^([a-z]:)?\//i.test(p);
 
-/** Darf der Abnahme-Agent hier per `Write` schreiben? Nur unter dem Temp-Verzeichnis. Pure (`deps.tmp` für Tests). */
+/** Darf der Abnahme-Agent hier per `Write` schreiben? Nur unter dem Temp-Verzeichnis, unter POSIX auch unter `/tmp` und `/private/tmp`.
+ *  Pure (`deps.tmp`, `deps.plattform` für Tests). */
 export function bewerteAbnahmeWrite(filePath, cwd = "", deps = {}) {
   if (typeof filePath !== "string" || filePath.trim() === "") return { block: true, reason: "Abnahme-Write ohne Dateipfad: nicht prüfbar, darum abgelehnt." };
-  const tmp = normalisierePfad(deps.tmp ?? tmpdir(), "");
+  const plattform = deps.plattform ?? process.platform;
+  const wurzeln = [normalisierePfad(deps.tmp ?? tmpdir(), ""), ...(plattform !== "win32" ? ["/tmp", "/private/tmp"] : [])];
   const norm = normalisierePfad(filePath, cwd);
-  if (liegtUnter(norm, tmp)) return { block: false };
+  if (wurzeln.some((w) => liegtUnter(norm, w, plattform))) return { block: false };
   return {
     block: true,
-    reason: `${ABNAHME_EMPFAENGER} schreibt nichts im Repo oder Worktree: Write gilt nur im Scratchpad unter dem Temp-Verzeichnis (${tmp}). Probe-Skripte und Ausgaben dort ablegen.`,
+    reason: `${ABNAHME_EMPFAENGER} schreibt nichts im Repo oder Worktree: Write gilt nur im Scratchpad unter dem Temp-Verzeichnis (${wurzeln.join(", ")}). Probe-Skripte und Ausgaben dort ablegen.`,
   };
 }
 

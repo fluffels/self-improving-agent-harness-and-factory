@@ -1,12 +1,12 @@
 // Kein Shebang, kein Direktaufruf: Lib für `factory-kennzahlen.mjs` (factory#290, Konvention #1398: gemeinsamer Code steht in einer Lib).
 /**
  * Tokens je Abo-Prozentpunkt (pp): die Tokens der lokalen Transkripte (`transkript-calls.mjs`, keine zweite Zählung) zwischen zwei Punkten des
- * Kontingent-Verlaufs (`abo-kontingent-lib.mjs` › `verlaufAus`) geteilt durch den Zuwachs des Limits (7-Tage und 5-Stunden getrennt).
+ * Kontingent-Verlaufs (`abo-kontingent-lib.mjs` › `verlaufAus`, `gueltigeFolge`) geteilt durch den Zuwachs des Limits (7-Tage und 5-Stunden getrennt).
  * Pur (der Lader reicht die Sitzungen herein): `callsAus`, `strecken`, `isoWoche`, `tokensJeProzentpunkt`, `tokensJeProzentpunktAbschnitt`.
  * Ein Zeitraum ohne Verlauf, ohne Calls oder mit zu wenig Zuwachs ist eine Lücke bzw. „nicht aussagekräftig“ mit Grund, nie 0 und nie ∞.
  * Die gewichtete Variante rechnet mit Listenpreisen (`preise.mjs`) und ist eine Schätzung. Grenzen: docs/model-routing.md (Fabrik) › „Tokens je Abo-Prozentpunkt“.
  */
-import { verlaufAus } from "./abo-kontingent-lib.mjs";
+import { gueltigeFolge, verlaufAus } from "./abo-kontingent-lib.mjs";
 import { median, quartil } from "./mess-lib.mjs";
 import { callsDerSitzung } from "./transkript-calls.mjs";
 
@@ -54,30 +54,25 @@ export function callsAus(sitzungen) {
 
 /**
  * Abschnitte zwischen aufeinanderfolgenden Verlaufspunkten eines Limits, nur ganz in `[von, bis]`. Reset (`resetsAt` des Vorpunkts <= Stand): Abschnitt
- * ausgelassen, neue Kette. Veraltet (übersprungen und gezählt, der Zuwachs rechnet vom Vorpunkt): ein Punkt unter dem bisherigen Höchststand und ein Nachzügler
- * aus einem früheren Fenster (sein `resetsAt` liegt vor seinem Stand oder vor dem des Vorpunkts).
- * Ergebnis `{ punkte, liste: [{ von, bis, delta, kette, pos }], reset, veraltet }`. Pur.
+ * ausgelassen, neue Kette. Veraltete Punkte (`gueltigeFolge` aus `abo-kontingent-lib.mjs`: Rückgang ohne Reset, Nachzügler aus einem früheren Fenster) werden
+ * übersprungen und gezählt (nur die in `[von, bis]`), der Zuwachs rechnet vom Vorpunkt.
+ * Ergebnis `{ punkte, liste: [{ von, bis, delta, kette, pos }], reset, veraltet }` (`punkte` = alle Punkte des Limits im Bereich). Pur.
  */
 export function strecken(punkte, limit, { von, bis }) {
-  const ps = punkte.filter((p) => p[limit] && p.stand >= von && p.stand <= bis);
+  const { folge, veraltet: alt } = gueltigeFolge(punkte, limit);
+  const imBereich = (p) => p.stand >= von && p.stand <= bis;
+  const ps = folge.filter(imBereich);
   const liste = [];
-  let [reset, veraltet, kette, ref] = [0, 0, 0, ps[0]];
+  let [reset, kette, ref] = [0, 0, ps[0]];
   for (const q of ps.slice(1)) {
-    const r = q[limit].resetsAt;
-    if (r * 1000 <= q.stand || r < ref[limit].resetsAt) {
-      veraltet += 1; // Nachzügler aus einem früheren Fenster (seine Zurücksetzung liegt vor dem Stand oder vor der des Vorpunkts)
-      continue;
-    }
     if (ref[limit].resetsAt * 1000 <= q.stand) {
       reset += 1;
       kette += 1;
-    } else if (q[limit].pct < ref[limit].pct) {
-      veraltet += 1;
-      continue;
     } else liste.push({ von: ref.stand, bis: q.stand, delta: runde(q[limit].pct - ref[limit].pct), kette, pos: liste.length });
     ref = q;
   }
-  return { punkte: ps.length, liste, reset, veraltet };
+  const veraltet = alt.filter(imBereich).length;
+  return { punkte: punkte.filter((p) => p[limit] && imBereich(p)).length, liste, reset, veraltet };
 }
 
 /** Index des ersten Calls mit `t > grenze` (Calls sortiert). */
@@ -195,7 +190,12 @@ export function tokensJeProzentpunkt({ verlaufText, calls, von, bis }) {
 }
 
 const tok = (x) => (x >= 1e6 ? `${(x / 1e6).toFixed(2)} Mio` : x >= 1e3 ? `${Math.round(x / 1e3)} Tsd` : String(Math.round(x))).replace(".", ",");
-const usd = (x) => `$${x.toFixed(2)}`.replace(".", ",");
+/** Dollar-Text: ab 0,01 zwei Nachkommastellen, darunter zwei geltende Ziffern (höchstens 6 Stellen), 0 bleibt $0,00, darunter „< $0,000001“. */
+export const usd = (x) => {
+  if (x === 0 || x >= 0.01) return `$${x.toFixed(2)}`.replace(".", ",");
+  if (x < 0.000001) return "< $0,000001";
+  return `$${x.toFixed(Math.min(6, 1 - Math.floor(Math.log10(x))))}`.replace(".", ",");
+};
 const verhaeltnis = (x) => (x === null ? "–" : String(runde(x)).replace(".", ","));
 const GEW = "(Schätzung, Listenpreis-Gewichte, ungesichert)";
 

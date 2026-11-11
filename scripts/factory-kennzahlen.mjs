@@ -485,6 +485,15 @@ function auditUndArten(auditLader, { von, bis, lauf, tickets }) {
   return { audit: selbstAudit({ ...daten, zeilen }), arten };
 }
 
+/** Claim-Karte laden; nicht lesbar (etwa fehlender Transkript-Ordner) → `{ luecke }` mit Grund statt Abbruch, sonst `{ claims }`. */
+export function claimsOderLuecke(claimKarte) {
+  try {
+    return { claims: claimKarte() };
+  } catch (err) {
+    return { luecke: `Claim-Sessions nicht lesbar: ${fehlerText(err, 200)}` };
+  }
+}
+
 /**
  * Setzt den Bericht zusammen; IO injiziert (`run` für die Unterprozesse, `claimKarte` liefert die Karte Ticket → Sessions).
  * Exit 2, wenn Lauf-Ergebnis oder Nacharbeit-Lauf fehlen (der Block erscheint trotzdem). Nur mit gültigem `von`/`bis` rufen.
@@ -496,10 +505,10 @@ export function erstelle({ von, bis, langfuse = false }, { run = runSkript, clai
   let tickets = [];
   let kontingent;
   if (lauf.daten) {
-    const claims = claimKarte();
+    const { claims, luecke } = claimsOderLuecke(claimKarte);
     const reihen = ticketLaeufe(lauf.daten.zeilen).tickets;
     kontingent = kontingentLader ? kontingentLader({ von, bis, tickets: reihen }) : undefined; // eine Lücke dort ändert den Exit-Code nicht
-    tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
+    tickets = reihen.map((z) => ({ ticket: z.ticket, pr: z.pr, ergebnis: luecke ? { luecke } : holeKosten({ ticket: z.ticket, pr: z.pr, claims: claims.get(z.ticket), langfuse }, run) }));
   } else if (kontingentLader) kontingent = { luecke: "kein Lauf-Ergebnis" };
   const tokensJePp = tokensLader ? tokensLader({ von, bis }) : undefined; // unabhängig vom Lauf-Ergebnis, eine Lücke ändert den Exit-Code nicht
   const { audit, arten } = auditUndArten(auditLader, { von, bis, lauf, tickets });
@@ -514,7 +523,7 @@ const KONTINGENT_BLOCK = 50;
  * Abo-Kontingent je Ticket (factory#285): Verlauf lesen, Claims per GraphQL holen (Blöcke zu `KONTINGENT_BLOCK`), auswerten.
  * `tickets` = Lauf-Zeilen des Zeitraums. Verlauf oder gh nicht verfügbar: `{ luecke }` mit Grund, nie 0. IO injizierbar; kein Langfuse.
  */
-export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
+export function ladeAboKontingent({ von, bis, tickets }, { jetzt = Date.now(), gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
   let text;
   try {
     text = lies(pfad);
@@ -534,7 +543,7 @@ export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (
   } catch (err) {
     return { luecke: `Claims nicht ladbar: ${fehlerText(err, 200)}` };
   }
-  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis) });
+  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis), jetzt, fristMs: NACHARBEIT_TAGE * TAG_MS });
 }
 
 /** Sitzungen aller Projektordner unter `wurzel` (das Limit gilt kontoweit), jeweils ab `von`; ein Ordner nach dem anderen. */
@@ -598,7 +607,9 @@ export function datenbasisAbschnitt(d) {
 export function erstelleDatenbasis({ von, bis }, { run = runSkript, claimKarte }) {
   const lauf = holeLauf(von, bis, run);
   if (lauf.luecke) return { text: `### Datenbasis\n\n- Lücke: ${lauf.luecke}`, exit: 2 };
-  const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims: claimKarte() });
+  const { claims, luecke } = claimsOderLuecke(claimKarte);
+  if (luecke) return { text: `### Datenbasis\n\n- Lücke: ${luecke}`, exit: 2 };
+  const d = datenbasis({ tickets: ticketLaeufe(lauf.daten.zeilen).tickets, claims });
   return { text: datenbasisAbschnitt(d), exit: d.stand === "verletzt" ? 3 : 0 };
 }
 

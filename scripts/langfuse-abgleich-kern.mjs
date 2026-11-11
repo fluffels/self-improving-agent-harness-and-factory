@@ -10,7 +10,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
-import { callsFromTranscript, eindeutigeCalls } from "./transkript-calls.mjs";
+import { callsDerSitzung } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
@@ -105,20 +105,8 @@ export function ticketAusBranch(gitBranch, worktree) {
  */
 export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) {
   if (typeof worktree !== "string" || worktree === "") throw new Error("sollEintraege braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
-  const quellen = [
-    { zeilen: sitzung.main, rolle: null },
-    ...sitzung.subagents.map((s) => ({
-      zeilen: s.zeilen,
-      rolle: {
-        agentId: s.datei.replace(/\.jsonl$/, "").replace(/^agent-/, ""),
-        agentType: s.meta?.agentType,
-        description: s.meta?.description,
-        parentAgentId: s.meta?.parentAgentId,
-      },
-    })),
-  ];
-  // Dieselbe Zusammenführung wie `readTranscriptSession` (token-baseline): die Rolle steht als `subagent` am Call.
-  const calls = eindeutigeCalls(quellen.flatMap(({ zeilen, rolle }) => callsFromTranscript(zeilen, rolle).calls));
+  // Dieselbe Zusammenführung wie die Kosten-Messung (token-baseline): `callsDerSitzung` setzt die Rolle als `subagent` an den Call.
+  const { calls } = callsDerSitzung(sitzung);
   return calls.map((c) => {
     const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
     return {
@@ -129,7 +117,9 @@ export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) 
       model: c.model ?? null,
       ts: c.ts,
       usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
-      rolle: c.subagent,
+      rolle: c.subagent
+        ? { agentId: c.subagent.id.replace(/\.jsonl$/, "").replace(/^agent-/, ""), agentType: c.subagent.agentType, description: c.subagent.description, parentAgentId: c.subagent.parentAgentId }
+        : null,
       ticket: ticketAusBranch(c.gitBranch, worktree),
     };
   });

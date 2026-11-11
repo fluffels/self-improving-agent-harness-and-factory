@@ -28,6 +28,7 @@ const L = raw as unknown as {
   strecken: (p: unknown[], l: string, f: { von: number; bis: number }) => { liste: { delta: number }[]; veraltet: number; reset: number };
   callsAus: (s: unknown[]) => { calls: Call[]; sitzungen: number; ohneZeit: number };
   isoWoche: (ms: number) => string;
+  usd: (x: number) => string;
 };
 
 const H = 3_600_000;
@@ -91,6 +92,22 @@ describe("Reset und Ketten", () => {
     expect(L.strecken(frueherer, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
     const eineSekunde = [frueherer[0], { stand: T0 + 2 * H, sevenDay: { pct: 20, resetsAt: RESET - 1 } }];
     expect(L.strecken(eineSekunde, "sevenDay", { von: T0, bis: T0 + D })).toMatchObject({ veraltet: 1, liste: [] });
+  });
+});
+
+describe("strecken: veraltet nur im Bereich", () => {
+  test("ein veralteter Punkt vor von zählt nicht mit, der Vorpunkt vor von bestimmt die Folge, punkte zählt alle Punkte im Bereich", () => {
+    const pk = [
+      { stand: T0, sevenDay: { pct: 50, resetsAt: RESET } },
+      { stand: T0 + H, sevenDay: { pct: 40, resetsAt: RESET } },
+      { stand: T0 + 3 * H, sevenDay: { pct: 45, resetsAt: RESET } },
+      { stand: T0 + 4 * H, sevenDay: { pct: 44, resetsAt: RESET } },
+      { stand: T0 + 5 * H, sevenDay: { pct: 52, resetsAt: RESET } },
+      { stand: T0 + 6 * H, sevenDay: { pct: 53, resetsAt: RESET } },
+    ];
+    const s = L.strecken(pk, "sevenDay", { von: T0 + 2 * H, bis: T0 + D });
+    expect(s).toMatchObject({ punkte: 4, veraltet: 2, reset: 0 });
+    expect(s.liste.map((x) => x.delta)).toEqual([1]); // 45 und 44 sind veraltet (< 50, der Vorpunkt vor von), 40 vor von zählt nicht mit
   });
 });
 
@@ -256,6 +273,17 @@ describe("Zeitraum, Sortierung, Streuung und Wochen", () => {
     expect(text).toContain("| ↳ Tageswerte | Median 25 Tsd, Q1 bis Q3 18 Tsd bis 33 Tsd (n=4) | | | | |");
     expect(text).toContain("| Modell | input | output | cache_read | cache_creation 5m | cache_creation 1h |");
     expect(text).toContain("| m | 1,00 Mio | 0 | 0 | 0 | 0 |");
+  });
+
+  test("usd: ab 0,01 zwei Nachkommastellen, darunter zwei geltende Ziffern, 0 bleibt $0,00, unter 1e-6 eine Untergrenze", () => {
+    expect(L.usd(0.5)).toBe("$0,50");
+    expect(L.usd(0.01)).toBe("$0,01");
+    expect(L.usd(0.0085)).toBe("$0,0085");
+    expect(L.usd(0.00123)).toBe("$0,0012");
+    expect(L.usd(0.000012345)).toBe("$0,000012");
+    expect(L.usd(0)).toBe("$0,00");
+    expect(L.usd(0.0000004)).toBe("< $0,000001");
+    expect(L.usd(0.000001)).toBe("$0,000001");
   });
 
   test("Preis 0 ergibt Median 0: IQR/Median ist null und steht als Strich, ohne aussagekräftige Tage als Text", () => {

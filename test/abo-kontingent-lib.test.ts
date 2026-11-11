@@ -16,7 +16,7 @@ type Auswertung = {
   median: number | null;
   kontrolle: { luecke?: string; quotient?: number; summe?: number; resets?: number };
   blocker: { n: number; von: number };
-  folge: { n: number; von: number; offen: number };
+  folge: { n: number; von: number; offen: number; offenMitFolge: number };
   kaputt: number;
 };
 const L = raw as unknown as {
@@ -25,14 +25,15 @@ const L = raw as unknown as {
   messfenster: (p: Punkt[], o: { claim: number; merge: number }) => Fenster;
   zuwachsIm: (p: Punkt[], a: number, b: number) => number;
   teileZeitanteilig: (f: { ticket: number; claim: number; merge: number; delta?: number }[], z: (a: number, b: number) => number) => Map<number, number>;
-  kontrollzahl: (p: Punkt[], o: { von: number; bis: number; anzahlTickets: number }) => { luecke?: string; summe?: number; resets?: number; quotient?: number };
+  kontrollzahl: (p: Punkt[], o: { von: number; bis: number; anzahlTickets: number }) => { luecke?: string; summe?: number; resets?: number; quotient?: number; veraltet?: number };
+  gueltigeFolge: (p: Punkt[], limit: string) => { folge: Punkt[]; veraltet: Punkt[] };
   claimAbfrage: (n: number[]) => string;
   claimsAusAntwort: (a: unknown, m: Map<number, string>) => Map<number, { claim?: number; luecke?: string }>;
-  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number }) => Auswertung;
+  aboKontingent: (o: { tickets: Ticketzeile[]; punkte: Punkt[]; kaputt: number; claims: Map<number, { claim?: number; luecke?: string }>; von: number; bis: number; jetzt?: number; fristMs?: number }) => Auswertung;
   aboKontingentAbschnitt: (a: unknown) => string[];
 };
 const K = kennzahlenRaw as unknown as {
-  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string }) => { luecke?: string } & Partial<Auswertung>;
+  ladeAboKontingent: (o: { von: string; bis: string; tickets: Ticketzeile[] }, io: { gh: (a: string[]) => unknown; lies: (p: string) => string; pfad: string; jetzt?: number }) => { luecke?: string } & Partial<Auswertung>;
   erstelle: (a: unknown, io: unknown) => { bericht: { kontingent?: unknown }; exit: number };
   renderMarkdown: (b: unknown) => string;
 };
@@ -65,6 +66,19 @@ describe("verlaufAus", () => {
   test("ein ungültiges fiveHour neben gültigem sevenDay wird verworfen, der Punkt bleibt", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: { pct: 3, resetsAt: 5 }, fiveHour: "x" }));
     expect(v.punkte.map((q) => [q.fiveHour, q.sevenDay])).toEqual([[undefined, { pct: 3, resetsAt: 5 }]]);
+  });
+  test.each([[-5], [101]])("pct %s außerhalb 0 bis 100 ist ein ungültiges Fenster: nur sevenDay ergibt eine kaputte Zeile", (pct) => {
+    const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: { pct, resetsAt: 5 } }));
+    expect(v).toEqual({ punkte: [], kaputt: 1 });
+  });
+  test("pct 0 und 100 sind gültig", () => {
+    const v = L.verlaufAus([JSON.stringify(punkt(T0, 0)), JSON.stringify(punkt(T0 + 1, 100))].join("\n"));
+    expect(v.kaputt).toBe(0);
+    expect(v.punkte).toHaveLength(2);
+  });
+  test("ein sevenDay mit pct -5 neben gültigem fiveHour wird verworfen, der Punkt bleibt", () => {
+    const v = L.verlaufAus(JSON.stringify({ stand: T0, sevenDay: { pct: -5, resetsAt: 5 }, fiveHour: { pct: 3, resetsAt: 5 } }));
+    expect(v.punkte.map((q) => [q.sevenDay, q.fiveHour])).toEqual([[undefined, { pct: 3, resetsAt: 5 }]]);
   });
   test("nur 5-Stunden-Fenster ist ein gültiger Punkt, aber ohne sevenDay", () => {
     const v = L.verlaufAus(JSON.stringify({ stand: T0, fiveHour: { pct: 3, resetsAt: 5 } }));
@@ -105,15 +119,30 @@ describe("messfenster", () => {
   });
   test("Reset genau zum Ende-Punkt zählt als Reset, eine Sekunde danach nicht", () => {
     const reset = (merge + 5 * MIN) / 1000;
-    expect(w({ claim, merge }, [punkt(claim, 10, reset), punkt(merge + 5 * MIN, 12, reset)])).toEqual({ luecke: "Fenster-Reset im Ticket-Fenster" });
+    expect(w({ claim, merge }, [punkt(claim, 10, reset), punkt(merge + 5 * MIN, 12, reset + 7 * 86_400)])).toEqual({ luecke: "Fenster-Reset im Ticket-Fenster" });
     expect(w({ claim, merge }, [punkt(claim, 10, reset + 1), punkt(merge + 5 * MIN, 12, reset + 1)])).toEqual({ delta: 2 });
   });
   test("Punkte ohne 7-Tage-Fenster werden ignoriert", () => {
     const ohne: Punkt = { stand: claim - MIN, fiveHour: { pct: 1, resetsAt: 1 } };
     expect(w({ claim, merge }, [ohne, { ...ohne, stand: merge + MIN }])).toHaveProperty("luecke");
   });
-  test("negatives Delta ist eine Lücke", () => {
-    expect(w({ claim, merge }, [punkt(claim, 10), punkt(merge, 8)])).toEqual({ luecke: "negatives Delta im Verlauf" });
+  test("ein Rückgang ohne Reset ist ein veralteter Punkt und zählt nicht als Ende: Lücke, nie ein negatives Delta", () => {
+    expect(w({ claim, merge }, [punkt(claim, 10), punkt(merge, 8)])).toEqual({ luecke: "kein Punkt höchstens 30 min nach dem Merge" });
+  });
+  test("ein Nachzügler des Vorfensters (kleineres resetsAt, hoher Stand) ist nie das Ende", () => {
+    const [r1, r2] = [RESET, RESET + 7 * 86_400];
+    const nachzuegler = punkt(merge + 5 * MIN, 88, r1);
+    const gut = punkt(merge + 10 * MIN, 12, r2);
+    expect(w({ claim, merge }, [punkt(claim - 5 * MIN, 10, r2), nachzuegler, gut])).toEqual({ delta: 2 });
+    expect(w({ claim, merge }, [punkt(claim - 5 * MIN, 10, r2), nachzuegler])).toEqual({ luecke: "kein Punkt höchstens 30 min nach dem Merge" });
+  });
+  test("ein Nachzügler des Vorfensters ist nie der Start", () => {
+    const [r1, r2] = [RESET, RESET + 7 * 86_400];
+    const pk = [punkt(claim - 20 * MIN, 10, r2), punkt(claim - 5 * MIN, 88, r1), punkt(merge + MIN, 13, r2)];
+    expect(w({ claim, merge }, pk)).toEqual({ delta: 3 });
+    expect(w({ claim, merge }, [punkt(claim - 40 * MIN, 10, r2), punkt(claim - 5 * MIN, 88, r1), punkt(merge + MIN, 13, r2)])).toEqual({
+      luecke: "kein Punkt höchstens 30 min vor dem Claim",
+    });
   });
   test("das Ende ist der erste Punkt ab dem Merge, nicht der letzte davor", () => {
     expect(w({ claim, merge }, [punkt(claim, 10), punkt(merge - 10 * MIN, 11), punkt(merge + MIN, 15)])).toEqual({ delta: 5 });
@@ -122,6 +151,10 @@ describe("messfenster", () => {
 
 describe("zuwachsIm und teileZeitanteilig", () => {
   const lin = (a: number, b: number) => (b - a) * 0.5; // gleichmäßiger Zuwachs, 0,5 pp je Einheit
+  test("zuwachsIm rechnet ohne veraltete Punkte: 58, 57, 59 zwischen 1 und 2 min ergibt 0,5 statt 2", () => {
+    const pk = [punkt(0, 58), punkt(MIN, 57), punkt(2 * MIN, 59)];
+    expect(L.zuwachsIm(pk, MIN, 2 * MIN)).toBe(0.5);
+  });
   test("zuwachsIm interpoliert linear zwischen den Punkten, nie negativ, ohne Punkt davor oder danach 0", () => {
     const pk = [punkt(0, 10), punkt(100, 20)];
     expect(L.zuwachsIm(pk, 0, 100)).toBe(10);
@@ -161,6 +194,37 @@ describe("zuwachsIm und teileZeitanteilig", () => {
   });
 });
 
+describe("gueltigeFolge", () => {
+  const r1 = RESET;
+  const r2 = RESET + 7 * 86_400;
+  const f = (pk: Punkt[]) => {
+    const e = L.gueltigeFolge(pk, "sevenDay");
+    return [e.folge.map((p) => p.sevenDay?.pct), e.veraltet.map((p) => p.sevenDay?.pct)];
+  };
+  test("ein Rückgang ohne Reset ist veraltet, der Vorpunkt bleibt die Referenz", () => {
+    expect(f([punkt(0, 58), punkt(MIN, 57), punkt(2 * MIN, 59)])).toEqual([[58, 59], [57]]);
+  });
+  test("ein Rückgang über einen Reset hinweg ist gültig", () => {
+    const reset = (2 * MIN) / 1000;
+    expect(f([punkt(0, 80, reset), punkt(3 * MIN, 5, r2)])).toEqual([[80, 5], []]);
+  });
+  test("Nachzügler: resetsAt nicht nach dem eigenen Stand ist veraltet, auch als erster Punkt", () => {
+    expect(f([punkt(5 * MIN, 50, (5 * MIN) / 1000), punkt(6 * MIN, 51, r1)])).toEqual([[51], [50]]);
+  });
+  test("Nachzügler: resetsAt vor dem des Vorpunkts ist veraltet, auch bei höherem Stand", () => {
+    expect(f([punkt(0, 10, r2), punkt(MIN, 88, r1), punkt(2 * MIN, 12, r2)])).toEqual([[10, 12], [88]]);
+  });
+  test("Rückgang genau zum Reset-Zeitpunkt des Vorpunkts ist ein Reset, der Punkt bleibt gültig", () => {
+    const reset = (2 * MIN) / 1000;
+    expect(f([punkt(0, 80, reset), punkt(2 * MIN, 5, r2)])).toEqual([[80, 5], []]);
+  });
+  test("Punkte ohne das Limit werden übergangen, auch wenn sie nicht zählen", () => {
+    const ohne: Punkt = { stand: MIN, fiveHour: { pct: 1, resetsAt: r1 } };
+    const e = L.gueltigeFolge([punkt(0, 5), ohne], "sevenDay");
+    expect([e.folge.length, e.veraltet.length]).toEqual([1, 0]);
+  });
+});
+
 describe("kontrollzahl", () => {
   const von = T0;
   const bis = T0 + 10 * 3_600_000;
@@ -168,9 +232,33 @@ describe("kontrollzahl", () => {
     const k = L.kontrollzahl([punkt(von - MIN, 10), punkt(von + MIN, 14), punkt(bis - MIN, 20)], { von, bis, anzahlTickets: 5 });
     expect(k).toMatchObject({ summe: 10, quotient: 2, resets: 0 });
   });
-  test("ein Punkt nach bis wird ignoriert, von zwei Punkten vor von zählt der letzte als Basis, ein Rückgang ohne Reset trägt 0 bei", () => {
+  test("ein Punkt nach bis wird ignoriert, von zwei Punkten vor von zählt der letzte als Basis, ein Rückgang ohne Reset ist veraltet, der Zuwachs rechnet vom Vorpunkt", () => {
     const k = L.kontrollzahl([punkt(von - 2 * MIN, 1), punkt(von - MIN, 10), punkt(von + MIN, 8), punkt(von + 2 * MIN, 12), punkt(bis + MIN, 90)], { von, bis, anzahlTickets: 1 });
-    expect(k).toMatchObject({ summe: 4, quotient: 4, erster: von - MIN, letzter: von + 2 * MIN });
+    expect(k).toMatchObject({ summe: 2, quotient: 2, veraltet: 1, erster: von - MIN, letzter: von + 2 * MIN });
+  });
+  test("58, 57, 59: der veraltete Punkt zählt nicht, die Summe ist 1", () => {
+    const k = L.kontrollzahl([punkt(von, 58), punkt(von + MIN, 57), punkt(von + 2 * MIN, 59)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 1, veraltet: 1, resets: 0 });
+  });
+  test("ein Nachzügler aus dem alten Fenster nach einem Reset zählt weder als Reset noch als Zuwachs", () => {
+    const reset = (von + 2 * MIN) / 1000;
+    const r2 = reset + 7 * 86_400;
+    const k = L.kontrollzahl([punkt(von, 80, reset), punkt(von + 3 * MIN, 5, r2), punkt(von + 4 * MIN, 90, reset), punkt(von + 5 * MIN, 7, r2)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 7, resets: 1, veraltet: 1 });
+  });
+  test("veraltete Punkte vor von und nach bis zählen nicht in veraltet", () => {
+    const k = L.kontrollzahl([punkt(von - 3 * MIN, 20), punkt(von - 2 * MIN, 15), punkt(von - MIN, 21), punkt(von + MIN, 22), punkt(bis + MIN, 30), punkt(bis + 2 * MIN, 25)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 1, veraltet: 0 });
+  });
+  test("veraltete Punkte genau auf von und genau auf bis zählen mit", () => {
+    const k = L.kontrollzahl([punkt(von - MIN, 10), punkt(von, 5), punkt(von + MIN, 12), punkt(bis, 3)], { von, bis, anzahlTickets: 1 });
+    expect(k).toMatchObject({ summe: 2, veraltet: 2 });
+  });
+  test("die Textzeile nennt veraltete Punkte nur bei v > 0", () => {
+    const ok = L.kontrollzahl([punkt(von, 1), punkt(von + MIN, 2)], { von, bis, anzahlTickets: 1 });
+    const alt = L.kontrollzahl([punkt(von, 5), punkt(von + MIN, 4), punkt(von + 2 * MIN, 6)], { von, bis, anzahlTickets: 1 });
+    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: ok, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0, offenMitFolge: 0 }, kaputt: 0 }).join("\n")).not.toContain("veraltete Punkte");
+    expect(L.aboKontingentAbschnitt({ zeilen: [], gemessen: 0, gesamt: 0, median: null, kontrolle: alt, blocker: { n: 0, von: 0 }, folge: { n: 0, von: 0, offen: 0, offenMitFolge: 0 }, kaputt: 0 }).join("\n")).toContain("veraltete Punkte 1");
   });
   test("ein Punkt genau auf bis zählt mit, ein einziger Punkt genau auf von ist noch keine Folge", () => {
     expect(L.kontrollzahl([punkt(von - MIN, 10), punkt(bis, 15)], { von, bis, anzahlTickets: 1 })).toMatchObject({ summe: 5 });
@@ -212,9 +300,10 @@ describe("Claims", () => {
 describe("aboKontingent und Abschnitt", () => {
   const claim = T0;
   const merge = T0 + 60 * MIN;
+  const FRIST = 14 * 24 * 60 * MIN;
   const zeile = (ticket: number, extra: Partial<Ticketzeile> = {}): Ticketzeile => ({ ticket, pr: ticket + 100, gemergt: new Date(merge).toISOString(), blocker: [{ lens: "a", n: 0 }], nacharbeit: "nein", ...extra });
   const eins = (punkte: Punkt[], t: Ticketzeile[] = [zeile(1)], kaputt = 0) =>
-    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000 });
+    L.aboKontingent({ tickets: t, punkte, kaputt, claims: new Map(t.map((x) => [x.ticket, { claim }])), von: T0 - 3_600_000, bis: merge + 3_600_000, jetzt: merge + FRIST, fristMs: FRIST });
 
   test("Messwert, Median und Kontrollzahl", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 14)]);
@@ -240,7 +329,21 @@ describe("aboKontingent und Abschnitt", () => {
     const a = eins([punkt(claim, 10), punkt(merge, 11)], t);
     expect(a.gemessen).toBe(3);
     expect(a.blocker).toEqual({ n: 1, von: 2 });
-    expect(a.folge).toEqual({ n: 2, von: 2, offen: 1 });
+    expect(a.folge).toEqual({ n: 2, von: 2, offen: 1, offenMitFolge: 0 });
+  });
+  test("Folge-Quote: Folgen bei offener Frist zählen nicht in Zähler und Nenner, erscheinen aber als offen mit Folge", () => {
+    const TAG = 24 * 60 * MIN;
+    const jetzt = merge + 30 * TAG;
+    const tage = (d: number) => new Date(jetzt - d * TAG).toISOString();
+    const t = [zeile(1, { gemergt: tage(3), nacharbeit: "folge" }), zeile(2, { gemergt: tage(20), nacharbeit: "nein" }), zeile(3, { gemergt: tage(20), nacharbeit: "folge" })];
+    const stunde = (x: Ticketzeile, h: number) => Date.parse(x.gemergt) + h * 60 * MIN;
+    const fern = jetzt / 1000 + 7 * 86_400;
+    const punkte = [punkt(stunde(t[1], -1), 10, fern), punkt(stunde(t[1], 0), 11, fern), punkt(stunde(t[0], -1), 14, fern), punkt(stunde(t[0], 0), 15, fern)];
+    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt, fristMs: FRIST });
+    expect(a.folge).toEqual({ n: 1, von: 2, offen: 1, offenMitFolge: 1 });
+    const text = L.aboKontingentAbschnitt(a).join("\n");
+    expect(text).toContain("- Folge-Quote (Nacharbeit, Frist abgelaufen): 50 % (1/2), offen: 1, davon schon mit Folge: 1");
+    expect(L.aboKontingentAbschnitt({ ...a, folge: { ...a.folge, offenMitFolge: 0 } }).join("\n")).not.toContain("davon schon mit Folge");
   });
   test("eine Claim-Lücke (kein assigned-Event) erscheint mit ihrem Grund, nicht mit einem Messgrund", () => {
     const a = L.aboKontingent({ tickets: [zeile(1)], punkte: [punkt(claim, 10), punkt(merge, 14)], kaputt: 0, claims: new Map([[1, { luecke: "kein assigned-Event vor dem Merge" }]]), von: T0, bis: merge });
@@ -279,7 +382,7 @@ describe("aboKontingent und Abschnitt", () => {
     expect(text).toContain("Gemessen: 1 von 2; Median: 1,25 pp");
     expect(text).toContain("Kontrollzahl: 1,25 pp je Ticket (Σ Zuwachs 2,5 pp, 2 Tickets, Resets 0");
     expect(text).toContain("Blocker-Quote (Runde 1 mit Blocker): 0 % (0/1)");
-    expect(text).toContain("Folge-Quote (Nacharbeit): 0 % (0/1), offen: 0");
+    expect(text).toContain("Folge-Quote (Nacharbeit, Frist abgelaufen): 0 % (0/1), offen: 0");
     expect(L.aboKontingentAbschnitt({ luecke: "weg" })).toEqual(["- Lücke: weg"]);
   });
   test("ohne Messwert steht für Median und Quoten ein Strich", () => {
@@ -302,6 +405,13 @@ describe("ladeAboKontingent und Bericht", () => {
     const r = K.ladeAboKontingent({ von, bis, tickets }, { gh: (a) => (aufrufe.push(a), claimAntwort), lies: () => verlauf, pfad: "/x/v.jsonl" });
     expect(r.zeilen).toEqual([{ ticket: 7, pr: 70, pp: 2.73 }]); // 3 pp über 66 min, davon 60 min im Ticket-Fenster
     expect(aufrufe).toHaveLength(1);
+  });
+  test("die Frist läuft ab dem Merge: vor 14 Tagen zählt eine Folge als offen, danach als Folge (jetzt eingespritzt)", () => {
+    const folgeTicket: Ticketzeile[] = [{ ...tickets[0], nacharbeit: "folge" }];
+    const merge = Date.parse("2026-10-15T11:00:00Z");
+    const io = { gh: () => claimAntwort, lies: () => verlauf, pfad: "/x" };
+    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 13 * 86_400_000 }).folge).toEqual({ n: 0, von: 0, offen: 1, offenMitFolge: 1 });
+    expect(K.ladeAboKontingent({ von, bis, tickets: folgeTicket }, { ...io, jetzt: merge + 15 * 86_400_000 }).folge).toEqual({ n: 1, von: 1, offen: 0, offenMitFolge: 0 });
   });
   test("51 Tickets gehen in zwei Blöcken (50 und 1) an gh, jeder Block mit eigenen Aliasen, owner und name stehen in den Argumenten", () => {
     const viele: Ticketzeile[] = Array.from({ length: 51 }, (_, i) => ({ ...tickets[0], ticket: 100 + i, pr: 500 + i }));
