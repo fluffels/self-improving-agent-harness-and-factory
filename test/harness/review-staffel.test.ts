@@ -48,7 +48,8 @@ describe("Der Skill regelt die Staffel (#1265)", () => {
     assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/factory-lens.md")), "factory-lens.md nennt patch-abschnitte.mjs nicht");
   });
   test("Prädikate greifen (Red-Green)", () => {
-    assert.ok(nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit; fail-closed"));
+    assert.ok(nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit (bei `kombiniert` ist der Test-Teil enthalten); fail-closed"));
+    assert.ok(!nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; Test-Adäquanz immer mit; fail-closed"), "ohne kombiniert-Ausnahme unvollständig");
     assert.ok(!nenntStaffel("nur `*.md` → Doku; ab Runde 2 Delta; fail-closed"), "ohne Test-Adäquanz-Pflicht unvollständig");
     assert.ok(!nenntStaffel("immer drei Lenses"));
     assert.ok(liestPatchEinmal("genau einmal vollständig lesen, danach gezielt, kein zweites Volllesen"));
