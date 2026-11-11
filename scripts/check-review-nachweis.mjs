@@ -203,8 +203,8 @@ function bedrohungsFehler(b, zeilen, hinweis) {
 /** Risikoklasse hoch (factory#334): die einzige Stelle der Prüfregel. Verlangt die Bedrohungs-Zeile (vier nicht leere Teile) und, sobald eine Review-Zeile da ist,
  *  die Brille `sicherheit` in `lenses`. Bei `normal` und `doku` weder verlangt noch bewertet. Pur. */
 export function bewerteKlasseHoch(nachweis, risiko, zeilen) {
-  if (risiko?.klasse !== "hoch") return [];
-  const hinweis = `Risikoklasse hoch: ${risiko.gruende?.[0] ?? "kein Grund genannt"}; Abschnitt beim ${zeilen.planer} holen, nie selbst schreiben; Skill review-lenses › ablauf-klasse-hoch.md`;
+  if ((risiko?.klasse ?? "hoch") !== "hoch") return []; // ohne Angabe fail-closed hoch
+  const hinweis = `Risikoklasse hoch: ${risiko?.gruende?.[0] ?? "Risikoklasse nicht übergeben (fail-closed)"}; Abschnitt beim ${zeilen.planer} holen, nie selbst schreiben; Skill review-lenses › ablauf-klasse-hoch.md`;
   const fehler = bedrohungsFehler(nachweis.bedrohungen, zeilen, hinweis);
   if (nachweis.review && !nachweis.review.lenses.includes(SICHERHEITS_LENS)) {
     fehler.push(`${zeilen.review}: lenses fehlt ${SICHERHEITS_LENS} (${hinweis}).`);
@@ -214,7 +214,7 @@ export function bewerteKlasseHoch(nachweis, risiko, zeilen) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko = { klasse: "hoch", gruende: ["Risikoklasse nicht übergeben (fail-closed)"] } }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = [];
