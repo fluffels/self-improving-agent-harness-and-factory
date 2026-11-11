@@ -113,7 +113,7 @@ describe("MCP-Server", () => {
   test("ein unbekannter Server ist ein Mangel, mehrere Dateien werden zusammen genannt", () => {
     const m = lauf({ ".claude/agents/a.md": agent("mcp__neu__x"), ".claude/agents/b.md": agent("mcp__neu__y"), ".mcp.json": '{"mcpServers":{"playwright":{}}}' });
     expect(m).toHaveLength(1);
-    expect(m[0].text).toContain("a.md, .claude/agents/b.md");
+    expect(m[0].text).toContain("fehlt: .claude/agents/a.md, .claude/agents/b.md nennt");
   });
   test("nur Markdown-Dateien im Agentenordner zählen; .mcp.json ohne mcpServers kennt keinen Projekt-Server", () => {
     expect(lauf({ ".claude/agents/notiz.txt": PW })).toEqual([]);
