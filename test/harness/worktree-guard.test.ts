@@ -680,6 +680,11 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     blockt(`sh <<'E'\nWT=${wt}\nE\ngit -C "$WT" commit -m x`);
     blockt(`git -c alias.q='!WT=${wt}' q; git -C "$WT" commit -m x`);
     blockt(`WT=${wt}; git -c alias.q='!git -C "$WT" commit -m x' q`);
+    blockt(`git submodule foreach 'WT=${wt}'; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git submodule foreach 'git -C "$WT" commit -m x'`);
+    blockt(`git rebase -x 'WT=${wt}' main; git -C "$WT" commit -m x`);
+    blockt(`WT=${wt}; git rebase -x 'git -C "$WT" commit -m x' main`);
+    assert.equal(ask(`WT=${wt}; bash -c 'git -C "$WT" commit -m x'`, wt), true, "nicht exportierte Variable: im Worktree Rückfrage statt Auflösung");
   });
 
   test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {
