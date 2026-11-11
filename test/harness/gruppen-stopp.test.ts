@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 /**
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Wächter für die Gruppen-Stopp-Marke (factory#283 L4): Ein Umsetzer kann seinen laufenden Gruppen-Agenten nicht per
  * TaskStop stoppen (nur der Besitzer darf), also stoppt eine Marke im Git-Verzeichnis des Worktrees die Gruppe
  * kooperativ. Geprüft wird nur das Vorkommen des Regeltexts in den Anweisungen (Gruppen-Agent, Umsetzer, Hauptchat-Ablauf,
