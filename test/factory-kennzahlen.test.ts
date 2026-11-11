@@ -16,7 +16,7 @@ import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 import { fixture } from "./support/tmp-fixture";
 
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
-type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; abnahme: Abnahme };
+type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; abnahme: Abnahme };
 type AbnahmeKenn = { gemessen: number; ersterDurchgang: number; entfaellt: number; override: number; ohne: number };
 type Kennzahlen = Record<string, number | AbnahmeKenn>;
 type Daten = { zeilen: Zeile[]; kennzahlen: Kennzahlen };
@@ -43,7 +43,7 @@ const LAUF = rawLauf as unknown as {
 const ZEILEN = (rawSlice as unknown as { commitZeilen: (praefix: string, planer: string) => { abnahme: string; abnahmeOverride: string } }).commitZeilen(FREMD.praefixe.commitZeile, FREMD.agenten.planer);
 const BASE = rawBase as unknown as { summarize: (run: { calls: unknown[]; questions: number; events?: unknown[] }, bounds?: unknown) => unknown };
 
-const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", abnahme: null, ...o });
+const ZEILE = (o: Partial<Zeile> = {}): Zeile => ({ pr: 50, ticket: 40, gemergt: "2026-10-14T10:00:00Z", runden: 1, ciFix: 0, festgefahren: 0, nacharbeit: "nein", fristAbgelaufen: true, abnahme: null, ...o });
 const KENN: Kennzahlen = { prs: 1, ohneNacharbeit: 1, nachweisbareFenster: 1, nacharbeitOffen: 0, ciFixSumme: 0, festgefahrenSumme: 0, runde1MitBlocker: 0, mitBlockerFeld: 1, abnahme: { gemessen: 0, ersterDurchgang: 0, entfaellt: 0, override: 0, ohne: 1 } };
 const daten = (zeilen: Zeile[], k: Kennzahlen = {}): Lage => ({ daten: { zeilen, kennzahlen: { ...KENN, prs: zeilen.length, ...k } } });
 const claimZeile = (cmd: string, ts: string) => ({ type: "assistant", timestamp: ts, message: { id: ts, content: [{ type: "tool_use", id: `t${ts}`, name: "Bash", input: { command: cmd } }] } });
@@ -224,7 +224,7 @@ describe("vertragPruefen", () => {
     const ohneCiFix = { ...ZEILE(), ciFix: undefined } as unknown as Zeile;
     expect(F.vertragPruefen({ zeilen: [ohneCiFix], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
     expect(F.vertragPruefen({ zeilen: [ZEILE({ gemergt: "kaputt" })], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
-    for (const z of [null, { ...ZEILE(), pr: undefined }, { ...ZEILE(), pr: "7" }, { ...ZEILE(), nacharbeit: undefined }]) {
+    for (const z of [null, { ...ZEILE(), pr: undefined }, { ...ZEILE(), pr: "7" }, { ...ZEILE(), nacharbeit: undefined }, { ...ZEILE(), fristAbgelaufen: undefined }, { ...ZEILE(), fristAbgelaufen: "ja" }]) {
       expect(F.vertragPruefen({ zeilen: [z], kennzahlen: KENN }).luecke).toMatch(/Zeile/);
     }
   });
@@ -1091,7 +1091,7 @@ describe("Tokens je Abo-Prozentpunkt im Bericht (factory#290)", () => {
     const vorher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 - 90 * 60_000).toISOString(), uuid: "u8", message: { id: "x8", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 5000, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
     const nachher = JSON.stringify({ type: "assistant", timestamp: new Date(T0 + 25 * 60 * 60_000).toISOString(), uuid: "u7", message: { id: "x7", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 7777, output_tokens: 0 }, content: [{ type: "text", text: "x" }] } });
     const wurzel = fixture({ "a/s1.jsonl": [callZeile("m1"), vorher, nachher, ohne].join("\n") });
-    const frueh = [punkt(-120, 0), punkt(-60, 0), verlauf, punkt(26 * 60, 99)].join("\n");
+    const frueh = [punkt(-120, 0), punkt(-60, 5), punkt(60, 5), punkt(120, 15), punkt(26 * 60, 99)].join("\n");
     const r = lade({ von, bis }, { lies: () => frueh, pfad: "/x/v.jsonl", wurzel });
     expect(r.limits?.sevenDay.gesamt).toMatchObject({ tokens: 1000, jePp: 100 });
     expect(r.aufbau).toMatchObject({ ohneZeit: 1 });
