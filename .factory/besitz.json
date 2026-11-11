@@ -67,6 +67,7 @@
     {"pfad":"scripts/quellwurzeln-lib.mjs","ring":"kern","quelle":"Quellwurzeln und Endungsliste der Projekt-Config (factory#181)"},
     {"pfad":"scripts/gate-befehl.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
     {"pfad":"scripts/gate-befehl-lib.mjs","ring":"kern","quelle":"Gate-Befehle (factory#182)"},
+    {"pfad":"scripts/mutation-lauf.mjs","ring":"kern","quelle":"Mutationslauf (factory#299)"},
     {"pfad":"scripts/projekt-config-lib.mjs","ring":"kern","quelle":"Plan #1611 (ADR 0022 F2)"},
     {"pfad":"scripts/ticket-namen.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1742)"},
     {"pfad":"scripts/board-lib.mjs","ring":"kern","quelle":"ADR 0022 F3 (#1744)"},

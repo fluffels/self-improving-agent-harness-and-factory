@@ -13,9 +13,10 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 
 type Config = Record<string, unknown>;
 interface Lauf { status?: number | null; error?: Error }
-interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, ...rest: unknown[]) => Lauf; cwd: string; out: (t: string) => void; err: (t: string) => void }
+interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, ...rest: unknown[]) => Lauf; cwd: string; out: (t: string) => void; err: (t: string) => void; env?: Record<string, string> }
 const lib = raw as unknown as {
-  STANDARD_BEFEHLE: Record<string, string>;
+  STANDARD_BEFEHLE: Record<string, string | null>;
+  MUTATION_UMGEBUNG: { bereiche: string; bericht: string };
   GATE_BEFEHL_NAMEN: string[];
   PRUEFLAUF_ART: Record<string, string | null>;
   ZEIGEN_FLAG: string;
@@ -26,7 +27,8 @@ const lib = raw as unknown as {
 const pc = rawPc as unknown as { pruefeProjektConfig(c: unknown): string[]; ladeProjektConfig(o: { pfad: string }): Config };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
-const HEUTE = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage", testGezielt: "npx vitest run" };
+const HEUTE: Record<string, string | null> = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage", testGezielt: "npx vitest run", mutation: null };
+const BEFEHLE_MIT_STRING = Object.entries(HEUTE).filter((e): e is [string, string] => e[1] !== null);
 
 /** Fake-Umgebung: `spawn` protokolliert den Aufruf; `ausgabe` sammelt stdout und stderr. */
 const umgebung = (config: Config = {}, lauf: Lauf = { status: 0 }) => {
@@ -38,6 +40,7 @@ const umgebung = (config: Config = {}, lauf: Lauf = { status: 0 }) => {
     lade: () => { geladen++; return config; },
     spawn: (befehl, o, ...rest) => { aufrufe.push({ befehl, opt: o, rest }); return lauf; },
     cwd: "/wurzel",
+    env: {},
     out: (t) => out.push(t),
     err: (t) => err.push(t),
   };
@@ -53,7 +56,7 @@ describe("Standardbefehle ohne Block (K2)", () => {
     for (const [name, befehl] of Object.entries(HEUTE)) assert.equal(lib.befehlAus({}, name), befehl, name);
   });
   test("cli startet je Name genau diesen String als Shell-Befehl, ohne Args-Array", () => {
-    for (const [name, befehl] of Object.entries(HEUTE).filter(([n]) => n !== "testGezielt")) {
+    for (const [name, befehl] of BEFEHLE_MIT_STRING.filter(([n]) => n !== "testGezielt")) {
       const u = umgebung();
       assert.equal(lib.cli([name], u.opt), 0);
       assert.equal(u.aufrufe.length, 1);
@@ -65,6 +68,7 @@ describe("Standardbefehle ohne Block (K2)", () => {
   test("Drift-Wächter: jedes npm-Skript der Standardbefehle existiert in package.json", () => {
     const skripte = (JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8")) as { scripts: Record<string, string> }).scripts;
     for (const befehl of Object.values(lib.STANDARD_BEFEHLE)) {
+      if (befehl === null) continue;
       const m = /^npm run (\S+)$/.exec(befehl);
       if (m) assert.ok(Object.hasOwn(skripte, m[1]), `${befehl}: Skript fehlt`);
     }
@@ -98,7 +102,7 @@ describe("Form des Blocks (K1)", () => {
       assert.equal(f.length, 1, JSON.stringify(wert));
       assert.match(f[0], /befehle\.verify/);
     }
-    assert.deepEqual(lib.pruefeBefehle({ ...HEUTE }), []);
+    assert.deepEqual(lib.pruefeBefehle({ ...Object.fromEntries(BEFEHLE_MIT_STRING), mutation: "x" }), []);
   });
   test("die Schema-Prüfung der Projekt-Config bindet den Block ein", () => {
     const config = pc.ladeProjektConfig({ pfad: "test/fixtures/projekt-fremd.json" });
@@ -167,8 +171,16 @@ describe("testGezielt mit angehängten Pfaden (factory#193)", () => {
   test("ohne Pfad endet testGezielt mit Exit 2 und Fix-Zeile", () => {
     const u = umgebung();
     assert.equal(lib.cli(["testGezielt"], u.opt), 2);
-    assert.match(u.err.join("\n"), /Fix:/);
+    assert.match(u.err.join("\n"), /testGezielt braucht mindestens einen Pfad[\s\S]*Fix:/);
     assert.equal(u.aufrufe.length, 0);
+  });
+  test("die Meldungen der Aufruf-Fehler nennen die Ursache, nicht nur die Fix-Zeile", () => {
+    const schlecht = umgebung();
+    assert.equal(lib.cli(["testGezielt", "a;b"], schlecht.opt), 2);
+    assert.match(schlecht.err.join("\n"), /Pfad „a;b“ enthält unerlaubte Zeichen/);
+    const zwei = umgebung();
+    assert.equal(lib.cli(["verify", "install"], zwei.opt), 2);
+    assert.match(zwei.err.join("\n"), /genau ein Gate-Befehl-Name erwartet/);
   });
   test("Shell-Metazeichen im Pfad enden mit Exit 2, nichts wird gestartet", () => {
     for (const pfad of ["a;b", "a b", "a&b", "a|b", "$(x)", "`x`", 'a"b', "a'b", "a>b", "a<b", "a*b", "a\nb", "a%b", "a!b", "a^b", "a(b)", "a#b", "~x", ""]) {
@@ -194,6 +206,77 @@ describe("testGezielt mit angehängten Pfaden (factory#193)", () => {
     assert.equal(ok.stdout.trim(), 'npx vitest run "test/a.test.ts"');
     const falsch = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "testGezielt", "a;b", "--zeigen"], { cwd: WURZEL, encoding: "utf8" });
     assert.equal(falsch.status, 2);
+  });
+});
+
+describe("mutation: opt-in Gate-Befehl (factory#299)", () => {
+  const MIT = { befehle: { mutation: "werkzeug lauf" } };
+  const ENV = { FACTORY_MUTATION_BEREICHE: "/tmp/b.json", FACTORY_MUTATION_BERICHT: "/tmp/r.json" };
+  const mitEnv = (u: ReturnType<typeof umgebung>, env: Record<string, string>) => ({ ...u.opt, env });
+  const cliEnv = (argv: string[], u: ReturnType<typeof umgebung>, env: Record<string, string>) => (lib.cli as unknown as (a: string[], o: unknown) => number)(argv, mitEnv(u, env));
+  test("Standard ist nicht eingerichtet (null) und der Prüflauf-Art ist null", () => {
+    assert.equal(lib.befehlAus({}, "mutation"), null);
+    assert.equal(lib.PRUEFLAUF_ART.mutation, null);
+  });
+  test("nicht eingerichtet: Exit 0 mit Meldung, ohne Spawn, auch mit --zeigen", () => {
+    for (const argv of [["mutation"], ["mutation", "--zeigen"]]) {
+      const u = umgebung();
+      assert.equal(cliEnv(argv, u, ENV), 0);
+      assert.deepEqual(u.out, ["mutation: nicht eingerichtet"]);
+      assert.equal(u.aufrufe.length, 0);
+    }
+  });
+  test("eingerichtet ohne oder mit leeren Umgebungsvariablen: Exit 2 mit Fix, ohne Spawn", () => {
+    for (const env of [{} as Record<string, string>, { FACTORY_MUTATION_BEREICHE: "/tmp/b.json" }, { FACTORY_MUTATION_BERICHT: "/tmp/r.json" }, { ...ENV, FACTORY_MUTATION_BERICHT: "" }, { ...ENV, FACTORY_MUTATION_BEREICHE: "" }]) {
+      const u = umgebung(MIT);
+      assert.equal(cliEnv(["mutation"], u, env), 2, JSON.stringify(env));
+      assert.match(u.err.join("\n"), /Fix: .*mutation-lauf\.mjs/);
+      assert.equal(u.aufrufe.length, 0);
+    }
+  });
+  test("eingerichtet mit beiden Variablen: die konfigurierte Zeile wird gestartet", () => {
+    const u = umgebung(MIT);
+    assert.equal(cliEnv(["mutation"], u, ENV), 0);
+    assert.equal(u.aufrufe.length, 1);
+    assert.equal(u.aufrufe[0].befehl, "werkzeug lauf");
+  });
+  test("--zeigen gibt die konfigurierte Zeile auch ohne Variablen aus", () => {
+    const u = umgebung(MIT);
+    assert.equal(cliEnv(["mutation", "--zeigen"], u, {}), 0);
+    assert.deepEqual(u.out, ["werkzeug lauf"]);
+  });
+  test("Formprüfung: leer und mehrzeilig sind Fehler, ein String ist gültig, auch über die Projekt-Config", () => {
+    for (const wert of ["", "a\nb"]) assert.equal(lib.pruefeBefehle({ mutation: wert }).length, 1, JSON.stringify(wert));
+    assert.deepEqual(lib.pruefeBefehle({ mutation: "x" }), []);
+    const config = pc.ladeProjektConfig({ pfad: "test/fixtures/projekt-fremd.json" });
+    assert.deepEqual(pc.pruefeProjektConfig({ ...config, befehle: { mutation: "x" } }), []);
+    assert.ok(pc.pruefeProjektConfig({ ...config, befehle: { mutation: "" } }).some((f) => f.includes("befehle.mutation")));
+  });
+  test("Vertrag: die Umgebungsvariablen heißen genau wie dokumentiert", () => {
+    assert.deepEqual(lib.MUTATION_UMGEBUNG, { bereiche: "FACTORY_MUTATION_BEREICHE", bericht: "FACTORY_MUTATION_BERICHT" });
+  });
+});
+
+describe("mutation im Kindprozess: der Produktionsweg übergibt die Prozess-Umgebung (factory#299)", () => {
+  const lauf = (env: Record<string, string>) => {
+    const d = mkdtempSync(join(tmpdir(), "gate-befehl-mutation-"));
+    dirs.push(d);
+    const config = JSON.parse(readFileSync(join(WURZEL, "test/fixtures/projekt-fremd.json"), "utf8")) as Config;
+    config.befehle = { mutation: "node --version" };
+    const pfad = join(d, "projekt.json");
+    writeFileSync(pfad, JSON.stringify(config));
+    const basis: Record<string, string | undefined> = { ...process.env, VITEST: "1", FACTORY_PROJEKT_WURZEL: WURZEL, FACTORY_PROJEKT_CONFIG: pfad };
+    delete basis.FACTORY_MUTATION_BEREICHE;
+    delete basis.FACTORY_MUTATION_BERICHT;
+    return spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "mutation"], { cwd: WURZEL, encoding: "utf8", env: { ...basis, ...env } });
+  };
+  test("mit beiden Variablen startet die konfigurierte Zeile (Exit 0), ohne sie endet der Aufruf mit Exit 2", () => {
+    const mit = lauf({ FACTORY_MUTATION_BEREICHE: "/tmp/b.json", FACTORY_MUTATION_BERICHT: "/tmp/r.json" });
+    assert.equal(mit.status, 0, mit.stderr);
+    assert.match(mit.stderr, /Gate-Befehl mutation: node --version/);
+    const ohne = lauf({});
+    assert.equal(ohne.status, 2);
+    assert.match(ohne.stderr, /braucht die Umgebungsvariablen/);
   });
 });
 
