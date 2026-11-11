@@ -37,7 +37,7 @@ const L = libRaw as unknown as {
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[] }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;

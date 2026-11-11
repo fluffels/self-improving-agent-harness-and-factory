@@ -55,6 +55,11 @@
     "quelle": "scripts",
     "moduldoku": null
   },
+  "langfuseWochenbericht": {
+    "erfassungLueckenMax": 0,
+    "kostenAnstiegProzent": 50,
+    "wochenOhneLaufMax": 4
+  },
   "bereiche": {
     "aliase": {}
   },

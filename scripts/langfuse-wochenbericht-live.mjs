@@ -6,7 +6,7 @@
 
 import { queryMetrics, langfuseZugang } from "./langfuse-api.mjs";
 import { kindEnv, langfuseBasisUrl } from "./langfuse-zugang.mjs";
-import { pruefeLangfuse } from "./langfuse-vorbedingung.mjs";
+import { pruefeLangfuse } from "./langfuse-health.mjs";
 
 /**
  * Holt die Exporte zu `rezepte` (`{ art, name, abfrage }`). Rückgabe `{ status: "ok", exporte: [{ json, pfad }] }` oder

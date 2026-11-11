@@ -10,12 +10,13 @@
  * Exit 0 Bericht (auch mit Datenlücken), 1 Export- oder Lesefehler, 2 Aufruffehler.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen, AUFRUF_EXIT } from "./flag-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { agentenNamen } from "./agenten-namen.mjs";
 import { bericht, leseExport, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -50,15 +51,7 @@ export function parseArgs(argv) {
   return a;
 }
 
-/** Agentennamen aus `^name:` der Frontmatter-Dateien eines Ordners (sortiert). */
-export function agentenNamen(ordner, { lies = readFileSync, liste = readdirSync } = {}) {
-  const namen = [];
-  for (const datei of liste(ordner).filter((f) => f.endsWith(".md"))) {
-    const m = /^name:[ \t]*(\S+)[ \t]*$/m.exec(lies(join(ordner, datei), "utf8"));
-    if (m) namen.push(m[1].replace(/^["']|["']$/g, ""));
-  }
-  return namen.sort();
-}
+export { agentenNamen };
 
 function rezeptAusgeben(args, deps) {
   if (Number.isNaN(Date.parse(args.von)) || Number.isNaN(Date.parse(args.bis)) || Date.parse(args.von) >= Date.parse(args.bis)) {

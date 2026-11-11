@@ -22,7 +22,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen, AUFRUF_EXIT } from "./flag-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { ladeProjektConfig, repoName, repoOwner } from "./projekt-config-lib.mjs";
-import { agentenNamen } from "./langfuse-auswertung.mjs";
+import { agentenNamen } from "./agenten-namen.mjs";
 import { RUHEFRIST_MS, letzteVolleWoche, ordneExporte, projektFilterAus, pruefeAbgeschlossen, renderWochenbericht, wochenAuswertung, wochenJson, wochenRezept } from "./langfuse-wochenbericht-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -53,14 +53,17 @@ export function parseArgs(argv) {
 /** Projekt-Eingaben aus der Repo-Wurzel: Repo, Schwellen aus der Config, Projekt-Tags aus `.claude/settings.json` (`CC_LANGFUSE_TRACE_TAGS`). */
 export function ladeProjekt(wurzel = WURZEL, lies = readFileSync) {
   const config = ladeProjektConfig({ rootDir: wurzel });
-  let tags = [];
+  return { owner: repoOwner(config), repo: repoName(config), schwellen: config.langfuseWochenbericht, tags: projektTags(wurzel, lies), wurzel };
+}
+
+/** Projekt-Tags aus `env.CC_LANGFUSE_TRACE_TAGS` der Settings (komma-getrennt); ohne lesbare Settings leer (der Filter trägt dann nur den Repo-Namen). */
+function projektTags(wurzel, lies) {
   try {
     const roh = JSON.parse(lies(join(wurzel, ".claude", "settings.json"), "utf8"))?.env?.CC_LANGFUSE_TRACE_TAGS;
-    tags = typeof roh === "string" ? roh.split(",").map((t) => t.trim()).filter(Boolean) : [];
+    return typeof roh === "string" ? roh.split(",").map((t) => t.trim()).filter(Boolean) : [];
   } catch {
-    tags = []; // keine oder kaputte Settings: der Filter trägt dann nur den Repo-Namen
+    return [];
   }
-  return { owner: repoOwner(config), repo: repoName(config), schwellen: config.langfuseWochenbericht, tags, wurzel };
 }
 
 function exporteLesen(pfade, lies) {
@@ -105,6 +108,19 @@ async function holeExporte(args, deps, p, montag, jetzt, filter) {
   return live.ladeLiveExporte({ rezepte, env: deps.env ?? process.env, home: deps.home ?? homedir(), fetchImpl: deps.fetchImpl });
 }
 
+/** Exit 0 oder 3 mit Markdown bzw. JSON; mit `--ablegen` schreibt es `.md` und `.json`. */
+function berichtAusgeben(args, deps, p, montag, a, filter) {
+  const md = renderWochenbericht(montag, filter, a);
+  const json = wochenJson(montag, filter, a);
+  if (args.ablegen) {
+    const d = dateien(deps.home ?? homedir(), p);
+    (deps.mkdir ?? mkdirSync)(d.ordner, { recursive: true });
+    (deps.schreibe ?? writeFileSync)(d.md(montag), md + "\n");
+    (deps.schreibe ?? writeFileSync)(d.json(montag), JSON.stringify(json, null, 2) + "\n");
+  }
+  return { exitCode: a.urteil.agentLaufNoetig ? EXIT_AGENT_LAUF : 0, stdout: args.json ? JSON.stringify(json, null, 2) : md, stderr: "" };
+}
+
 /** Ablauf ohne `process.exit` (testbar): `{ exitCode, stdout, stderr }`. */
 export async function auswerten(args, deps = {}) {
   const aufruf = (text) => ({ exitCode: AUFRUF_EXIT, stdout: "", stderr: `${text}\n${aufrufHilfe()}` });
@@ -126,16 +142,7 @@ export async function auswerten(args, deps = {}) {
     const geordnet = ordneExporte(geholt.exporte, { montag, projektFilter: filter });
     const gesamtW = geordnet.woche.find((e) => e.art === "gesamt");
     if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}`);
-    const a = wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk });
-    const md = renderWochenbericht(montag, filter, a);
-    const json = wochenJson(montag, filter, a);
-    if (args.ablegen) {
-      const d = dateien(deps.home ?? homedir(), p);
-      (deps.mkdir ?? mkdirSync)(d.ordner, { recursive: true });
-      (deps.schreibe ?? writeFileSync)(d.md(montag), md + "\n");
-      (deps.schreibe ?? writeFileSync)(d.json(montag), JSON.stringify(json, null, 2) + "\n");
-    }
-    return { exitCode: a.urteil.agentLaufNoetig ? EXIT_AGENT_LAUF : 0, stdout: args.json ? JSON.stringify(json, null, 2) : md, stderr: "" };
+    return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk }), filter);
   } catch (e) {
     return { exitCode: 1, stdout: "", stderr: `Fehler: ${e.message}` };
   }

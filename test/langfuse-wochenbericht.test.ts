@@ -2,10 +2,40 @@ import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import * as W from "../scripts/langfuse-wochenbericht-lib.mjs";
-import { auswerten, parseArgs } from "../scripts/langfuse-wochenbericht.mjs";
-import { ladeLiveExporte } from "../scripts/langfuse-wochenbericht-live.mjs";
+import { spawnSync } from "node:child_process";
 import { importHuelle } from "./support/import-huelle";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as libRaw from "../scripts/langfuse-wochenbericht-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as cliRaw from "../scripts/langfuse-wochenbericht.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as liveRaw from "../scripts/langfuse-wochenbericht-live.mjs";
+
+type Abfr = { view: string; filters: unknown[]; fromTimestamp: string; toTimestamp: string };
+type Rez = { art: string; name: string; abfrage: Abfr };
+type Ist = { erfassungLueckenMax: number | null; kostenAnstiegProzent: number | null; unzugeordnetProzent: number | null };
+type Urteil = { konfiguriert: boolean; agentLaufNoetig: boolean; gruende: unknown[]; hinweise: string[] };
+const W = libRaw as unknown as {
+  RUHEFRIST_MS: number;
+  KEINE_SCHWELLEN: string;
+  wochenFenster: (m: string) => { von: string; bis: string; vorVon: string; vorBis: string };
+  letzteVolleWoche: (d: Date) => string;
+  projektFilterAus: (o: { tags?: string[]; repoName: string; environment?: string }) => { filter: unknown; vermerk: string | null };
+  wochenRezept: (o: { montag: string; jetzt: string; rollen?: string[]; projektFilter: unknown }) => Rez[];
+  erfassungsprobe: (o: { sessionsW: unknown[]; sessionsV: unknown[]; scores: unknown[] }) => Record<string, number | null>;
+  urteil: (s: Record<string, number> | undefined, i: Ist) => Urteil;
+};
+type Ergebnis = { exitCode: number; stdout: string; stderr: string };
+type Wb = Record<string, unknown>;
+const E = libRaw as unknown as {
+  pruefeAbgeschlossen: (m: string, jetzt: string) => void;
+  ordneExporte: (roh: Array<{ json: unknown; pfad: string }>, o: { montag: string; projektFilter: unknown }) => unknown;
+  kennzahlen: (b: Wb, bV: Wb) => { deltaProzent: number | null; unzugeordnetProzent: number | null };
+};
+const C = cliRaw as unknown as { parseArgs: (a: string[]) => unknown; auswerten: (a: unknown, d?: Record<string, unknown>) => Promise<Ergebnis> };
+const { parseArgs, auswerten } = C;
+const CLI = cliRaw as unknown as { ladeProjekt: (w?: string, lies?: (p: string, e: string) => string) => { owner: string; repo: string; tags: string[]; schwellen?: Record<string, number> } };
+const ladeLiveExporte = (liveRaw as unknown as { ladeLiveExporte: (o: Record<string, unknown>) => Promise<{ status: string }> }).ladeLiveExporte;
 
 const MONTAG = "2026-11-02";
 const JETZT = new Date("2026-11-11T12:00:00Z");
@@ -21,6 +51,7 @@ const SCORE_FILTER = { column: "name", operator: "any of", value: ["erfassung", 
 const sess = (art: string, von: string, bis: string, ids: Array<[string, string]>) => exp(art, von, bis, ids.map(([sessionId, traceName]) => ({ sessionId, traceName, count_count: 3 })));
 const scoreExp = (rows: Array<[string, string, number]>) => ({ art: "erfassung", abfrage: { view: "scores-numeric", filters: [SCORE_FILTER], fromTimestamp: F.vorVon, toTimestamp: "2026-11-11T11:30:00.000Z" }, data: rows.map(([sessionId, name, avg_value]) => ({ sessionId, name, avg_value })) });
 
+const lese = <T,>(t: string): T => JSON.parse(t) as T;
 type Satz = Record<string, unknown>;
 function satz(opt: { kostenW?: number; kostenV?: number; sessionsW?: Array<[string, string]>; sessionsV?: Array<[string, string]>; scores?: Array<[string, string, number]>; luecke?: boolean } = {}): Satz {
   return {
@@ -35,10 +66,15 @@ function satz(opt: { kostenW?: number; kostenV?: number; sessionsW?: Array<[stri
 
 const PROJEKT = { owner: "own", repo: "repo", schwellen: undefined as Satz | undefined, tags: ["factory"], wurzel: process.cwd() };
 function lauf(argv: string[], dateien: Satz, deps: Satz = {}) {
-  const lies = (p: string) => (p in dateien ? (typeof dateien[p] === "string" ? (dateien[p] as string) : JSON.stringify(dateien[p])) : (() => { throw new Error("ENOENT " + p); })());
+  const lies = (p: string) => (p in dateien ? (typeof dateien[p] === "string" ? dateien[p] : JSON.stringify(dateien[p])) : (() => { throw new Error("ENOENT " + p); })());
   return auswerten(parseArgs([...argv, ...(argv.includes("--rezept") ? [] : Object.keys(dateien).flatMap((p) => ["--export", p]))]), { jetzt: JETZT, projekt: PROJEKT, lies, ...deps });
 }
 const tmp = () => mkdtempSync(join(tmpdir(), "wb-"));
+const fehler = async (dateien: Satz, text: string) => {
+  const r = await lauf([], dateien);
+  expect(r.exitCode).toBe(1);
+  expect(r.stderr).toContain(text);
+};
 const SCHWELLEN = { erfassungLueckenMax: 0, kostenAnstiegProzent: 50, unzugeordnetProzent: 90 };
 
 describe("Woche", () => {
@@ -70,10 +106,10 @@ describe("Projektfilter und Rezept", () => {
     const rez = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF });
     for (const r of rez.filter((x: { abfrage: { view: string } }) => x.abfrage.view === "observations")) expect(r.abfrage.filters).toContainEqual(PF);
     const v = rez.find((r: { name: string }) => r.name === "gesamt Vorwoche");
-    expect(v.abfrage).toMatchObject({ fromTimestamp: F.vorVon, toTimestamp: F.vorBis });
+    expect(v?.abfrage).toMatchObject({ fromTimestamp: F.vorVon, toTimestamp: F.vorBis });
     const s = rez.find((r: { art: string }) => r.art === "erfassung");
-    expect(s.abfrage).toMatchObject({ view: "scores-numeric", fromTimestamp: F.vorVon, toTimestamp: "2026-11-11T11:30:00.000Z" });
-    expect(s.abfrage.filters[0]).toEqual(SCORE_FILTER);
+    expect(s?.abfrage).toMatchObject({ view: "scores-numeric", fromTimestamp: F.vorVon, toTimestamp: "2026-11-11T11:30:00.000Z" });
+    expect(s?.abfrage.filters[0]).toEqual(SCORE_FILTER);
     expect(rez.filter((r: { art: string }) => r.art === "sessions")).toHaveLength(2);
   });
 });
@@ -147,7 +183,8 @@ describe("Urteil", () => {
   test("Erfassungslücke aus der Vorwoche löst Exit 3 aus", async () => {
     const r = await lauf([], satz({ sessionsV: [["v9", "Claude Code Turn"]] }), { projekt: { ...PROJEKT, schwellen: { erfassungLueckenMax: 0 } } });
     expect(r.exitCode).toBe(3);
-    expect(JSON.parse((await lauf(["--json"], satz({ sessionsV: [["v9", "Claude Code Turn"]] }), { projekt: { ...PROJEKT, schwellen: { erfassungLueckenMax: 0 } } })).stdout).urteil.agentLaufNoetig).toBe(true);
+    const j = await lauf(["--json"], satz({ sessionsV: [["v9", "Claude Code Turn"]] }), { projekt: { ...PROJEKT, schwellen: { erfassungLueckenMax: 0 } } });
+    expect(lese<{ urteil: { agentLaufNoetig: boolean } }>(j.stdout).urteil.agentLaufNoetig).toBe(true);
   });
 });
 
@@ -155,17 +192,17 @@ describe("Fehler (Exit 1)", () => {
   test("Export ohne Projektfilter, fehlender Pflicht-Export, kaputtes JSON, abgeschnittener Export", async () => {
     const ohne = satz();
     ohne["gesamtW.json"] = exp("gesamt", F.von, F.bis, gesamtW(), [TYPE]);
-    expect(await lauf([], ohne)).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("Projektfilter fehlt") });
+    await fehler(ohne, "Projektfilter fehlt");
     const fehlt = satz();
     delete fehlt["scores.json"];
-    expect(await lauf([], fehlt)).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("Pflicht-Export fehlt: erfassung") });
-    expect(await lauf([], { ...satz(), "kaputt.json": "{nicht json" })).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("kein lesbares JSON") });
+    await fehler(fehlt, "Pflicht-Export fehlt: erfassung");
+    await fehler({ ...satz(), "kaputt.json": "{nicht json" }, "kein lesbares JSON");
     const voll = satz();
     voll["sessW.json"] = sess("sessions", F.von, F.bis, Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]));
-    expect(await lauf([], voll)).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("abgeschnitten") });
+    await fehler(voll, "abgeschnitten");
   });
   test("ein Export mit fremdem Fenster wird abgelehnt", async () => {
-    expect(await lauf([], { ...satz(), "alt.json": exp("gesamt", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z", gesamtW()) })).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("weder zur Woche noch zur Vorwoche") });
+    await fehler({ ...satz(), "alt.json": exp("gesamt", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z", gesamtW()) }, "weder zur Woche noch zur Vorwoche");
   });
 });
 
@@ -187,41 +224,41 @@ describe("Negativfälle (Exit 4)", () => {
   test("Langfuse unerreichbar (Live-Modul, Health scheitert): Exit 4, status unerreichbar, keine .md, keine Metrics-Abfrage", async () => {
     const home = tmp();
     const urls: string[] = [];
-    const fetchImpl = async (url: string) => { urls.push(url); throw new Error("ECONNREFUSED"); };
+    const fetchImpl = (url: string) => { urls.push(url); return Promise.reject(new Error("ECONNREFUSED")); };
     const r = await auswerten(parseArgs(["--ablegen", "--json"]), { jetzt: JETZT, projekt: PROJEKT, home, env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", LANGFUSE_BASE_URL: "http://127.0.0.1:9" }, fetchImpl });
     const ordner = join(home, ".claude", "state", "langfuse-wochenbericht", "own__repo");
     expect(r.exitCode).toBe(4);
     expect(r.stderr).toContain("unerreichbar");
-    expect(JSON.parse(r.stdout).status).toBe("unerreichbar");
-    expect(JSON.parse(readFileSync(join(ordner, `${MONTAG}.json`), "utf8")).status).toBe("unerreichbar");
+    expect(lese<{ status: string }>(r.stdout).status).toBe("unerreichbar");
+    expect(lese<{ status: string }>(readFileSync(join(ordner, `${MONTAG}.json`), "utf8")).status).toBe("unerreichbar");
     expect(existsSync(join(ordner, `${MONTAG}.md`))).toBe(false);
     expect(urls.every((u) => u.includes("/api/public/health"))).toBe(true);
   });
   test("Health 503 ist unerreichbar, nie eine Abfrage", async () => {
     const urls: string[] = [];
-    const r = await ladeLiveExporte({ rezepte: [{ art: "gesamt", name: "x", abfrage: {} }], env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, home: tmp(), fetchImpl: (async (u: string) => { urls.push(u); return { status: 503, ok: false }; }) as never });
-    expect(r).toMatchObject({ status: "unerreichbar" });
+    const r = await ladeLiveExporte({ rezepte: [{ art: "gesamt", name: "x", abfrage: {} }], env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, home: tmp(), fetchImpl: (u: string) => { urls.push(u); return Promise.resolve({ status: 503, ok: false }); } });
+    expect(r.status).toBe("unerreichbar");
     expect(urls).toHaveLength(1);
   });
   test("Live mit Health 200 und leeren Daten ergibt keine-daten; fehlender Zugang ist Exit 1", async () => {
-    const fetchImpl = async (url: string) => (url.includes("/health") ? { status: 200, ok: true } : { ok: true, status: 200, json: async () => ({ data: [] }) });
+    const fetchImpl = (url: string) => Promise.resolve(url.includes("/health") ? { status: 200, ok: true } : { ok: true, status: 200, json: () => Promise.resolve({ data: [] }) });
     const r = await auswerten(parseArgs(["--json"]), { jetzt: JETZT, projekt: PROJEKT, home: tmp(), env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, fetchImpl });
     expect(r.exitCode).toBe(4);
-    expect(JSON.parse(r.stdout).status).toBe("keine-daten");
+    expect(lese<{ status: string }>(r.stdout).status).toBe("keine-daten");
     const ohneKey = await auswerten(parseArgs([]), { jetzt: JETZT, projekt: PROJEKT, home: tmp(), env: {}, fetchImpl });
     expect(ohneKey.exitCode).toBe(1);
   });
   test("Live mit Daten liefert einen Bericht", async () => {
-    const fetchImpl = async (url: string) => {
-      if (url.includes("/health")) return { status: 200, ok: true };
-      const q = JSON.parse(decodeURIComponent(url.split("query=")[1]));
+    const fetchImpl = (url: string) => {
+      if (url.includes("/health")) return Promise.resolve({ status: 200, ok: true });
+      const q = lese<{ fromTimestamp: string; view: string; dimensions?: Array<{ field: string }>; timeDimension?: unknown; filters: Array<{ type: string }> }>(decodeURIComponent(url.split("query=")[1]));
       const von = q.fromTimestamp;
       const data = q.view === "scores-numeric" ? [{ sessionId: "s1", name: "erfassung", avg_value: 1 }]
         : q.dimensions?.[0]?.field === "sessionId" ? [{ sessionId: "s1", traceName: "Claude Code Turn", count_count: 2 }]
         : q.timeDimension ? tage(von)
-        : q.filters.some((x: { type: string }) => x.type === "stringObject") ? []
+        : q.filters.some((x) => x.type === "stringObject") ? []
         : [{ ...g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 4, 2), min_latency: 1 }];
-      return { ok: true, status: 200, json: async () => ({ data }) };
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data }) });
     };
     const r = await auswerten(parseArgs([]), { jetzt: JETZT, projekt: PROJEKT, home: tmp(), env: { LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }, fetchImpl });
     expect(r.exitCode).toBe(0);
@@ -235,7 +272,7 @@ describe("Schlüsselgrenze", () => {
     expect((await lauf([], satz(), { ladeLive })).exitCode).toBe(0);
     const rez = await lauf(["--rezept"], {}, { ladeLive });
     expect(rez.exitCode).toBe(0);
-    expect(JSON.parse(rez.stdout).length).toBeGreaterThan(10);
+    expect(lese<unknown[]>(rez.stdout).length).toBeGreaterThan(10);
   });
   test("die statische Import-Hülle der CLI enthält weder langfuse-api noch langfuse-zugang, keinen Key und kein fetch; der Live-Pfad ist ein eigenes, dynamisch geladenes Modul", () => {
     const lies = (p: string) => readFileSync(p, "utf8");
@@ -255,6 +292,68 @@ describe("Schlüsselgrenze", () => {
     const imports = readFileSync("scripts/langfuse-wochenbericht-lib.mjs", "utf8").match(/^import .*$/gm) ?? [];
     expect(imports).toHaveLength(1);
     expect(imports[0]).toContain("./langfuse-auswertung-lib.mjs");
+  });
+});
+
+describe("Randfälle (Guards)", () => {
+  test("Ruhefrist: genau 30 min nach Wochenende ist erlaubt, eine Sekunde früher nicht", () => {
+    expect(() => E.pruefeAbgeschlossen(MONTAG, "2026-11-09T00:30:00.000Z")).not.toThrow();
+    expect(() => E.pruefeAbgeschlossen(MONTAG, "2026-11-09T00:29:59.000Z")).toThrow(/noch nicht abgeschlossen/);
+  });
+  test("negatives Δ trägt das Minuszeichen; Summe ohne Kosten der Woche macht Anteil unzugeordnet nicht bewertbar", async () => {
+    const r = await lauf([], satz({ kostenW: 10, kostenV: 20 }));
+    expect(r.stdout).toContain("Δ -50.0 %");
+    const k = E.kennzahlen({ bereinigt: { cost: 0, count: 0 }, unzugeordnet: { cost: 0 } }, { bereinigt: { cost: 5, count: 3 } });
+    expect(k).toMatchObject({ deltaProzent: -100, unzugeordnetProzent: null });
+  });
+  test("Eigene Exporte: Fenster fehlt, Score-Filter fehlt und Projektfilter an sessions fehlen sind Fehler; jeder fehlende Pflicht-Export steht im Text", async () => {
+    const a = satz();
+    a["sessW.json"] = { art: "sessions", abfrage: { filters: [TYPE, PF] }, data: [] };
+    await fehler(a, "Fenster (fromTimestamp/toTimestamp) fehlt");
+    const b = satz();
+    b["scores.json"] = { ...(b["scores.json"] as Wb), abfrage: { filters: [], fromTimestamp: F.vorVon, toTimestamp: F.bis } };
+    await fehler(b, "Filter name any of [erfassung, erfassung_hook] fehlt");
+    const c = satz();
+    c["sessV.json"] = sess("sessions", F.vorVon, F.vorBis, []);
+    (c["sessV.json"] as { abfrage: { filters: unknown[] } }).abfrage.filters = [TYPE];
+    await fehler(c, "Projektfilter fehlt oder weicht ab");
+    const d = satz();
+    delete d["sessV.json"];
+    delete d["tageW.json"];
+    await fehler(d, "Pflicht-Export fehlt: tage der Woche, sessions der Vorwoche");
+    const e = satz();
+    e["sessW.json"] = { ...(e["sessW.json"] as Wb), data: "x" };
+    await fehler(e, "data fehlt oder ist kein Array");
+  });
+  test("ohne Hook-Scores steht Ø erfassung_hook als „–“", async () => {
+    const r = await lauf([], satz({ scores: [["s1", "erfassung", 1], ["s2", "erfassung", 1], ["s0", "erfassung", 1]] }));
+    expect(r.stdout).toContain("Ø erfassung_hook –.");
+  });
+  test("Sessions ohne ID, Scores mit fremdem Namen oder ohne Zahl zählen nicht", () => {
+    const p = W.erfassungsprobe({
+      sessionsW: [{ sessionId: null, traceName: "Claude Code Turn" }, { sessionId: " ", traceName: "Claude Code Turn" }, { sessionId: "a", traceName: "Claude Code Turn" }],
+      sessionsV: [],
+      scores: [{ sessionId: "a", name: "anderes", avg_value: 1 }, { sessionId: "a", name: "erfassung", avg_value: "x" }, { sessionId: "", name: "erfassung", avg_value: 1 }],
+    });
+    expect(p).toMatchObject({ n: 1, k: 0, m: 0, j: 1 });
+  });
+  test("ladeProjekt liest Repo und Schwellen aus der Config, Tags aus den Settings; fehlende oder falsche Settings ergeben keine Tags", () => {
+    const echt = CLI.ladeProjekt();
+    expect(echt.repo).toBe("self-improving-agent-harness-and-factory");
+    expect(echt.owner).toBe("fluffels");
+    expect(echt.schwellen).toEqual({ erfassungLueckenMax: 0, kostenAnstiegProzent: 50, wochenOhneLaufMax: 4 });
+    expect(echt.tags).toEqual(["factory"]);
+    expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a, b ,," } })).tags).toEqual(["a", "b"]);
+    expect(CLI.ladeProjekt(process.cwd(), () => { throw new Error("ENOENT"); }).tags).toEqual([]);
+    expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } })).tags).toEqual([]);
+  });
+  test("als Prozess: Aufruffehler ist Exit 2 ohne Netz, --rezept gibt JSON aus", () => {
+    const a = spawnSync("node", ["scripts/langfuse-wochenbericht.mjs", "--woche", "2026-11-03"], { encoding: "utf8" });
+    expect(a.status).toBe(2);
+    expect(a.stderr).toContain("kein Montag");
+    const b = spawnSync("node", ["scripts/langfuse-wochenbericht.mjs", "--rezept", "--woche", MONTAG], { encoding: "utf8" });
+    expect(b.status).toBe(0);
+    expect(lese<unknown[]>(b.stdout).length).toBeGreaterThan(10);
   });
 });
 
