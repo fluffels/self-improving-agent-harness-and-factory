@@ -164,7 +164,7 @@ function ttlZeilenAusDoku(md: string): TtlZeile[] {
 /** Pfade aller Schlüssel, die nach Cache-TTL heißen (`cache.?ttl`, ohne Groß-/Kleinschreibung), samt Wert; verschachtelt gesucht. */
 function ttlSchluessel(wert: unknown, pfad = ""): { pfad: string; wert: unknown }[] {
   if (typeof wert !== "object" || wert === null) return [];
-  return Object.entries(wert).flatMap(([k, v]) => {
+  return Object.entries(wert as Record<string, unknown>).flatMap(([k, v]) => {
     const p = pfad ? `${pfad}.${k}` : k;
     return [...(/cache.?ttl/i.test(k) ? [{ pfad: p, wert: v }] : []), ...ttlSchluessel(v, p)];
   });
@@ -217,7 +217,7 @@ function agentenYaml(): { name: string; fm: Record<string, unknown> }[] {
   return readdirSync(`${REPO_ROOT}.claude/agents`)
     .filter((f) => f.endsWith(".md"))
     .map((f) => frontmatterYaml(read(`.claude/agents/${f}`)))
-    .map((fm) => ({ name: String(fm.name ?? ""), fm }));
+    .map((fm) => ({ name: typeof fm.name === "string" ? fm.name : "", fm }));
 }
 
 /** Die in der Routing-Doku genannten User-Scope-MCP-Server, deren Namen das Repo voraussetzt. */

@@ -531,15 +531,9 @@ function jeTicketBericht(agent, analysen, { von, bis }) {
   };
 }
 
-/**
- * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
- * `delta` (true = nur Läufe mit Delta-Patch-Pfad im Prompt, false = nur ohne) und `brille` (Name wie in `laufAus`, z. B. `Architektur`) filtern zusätzlich (#1582).
- * @param {{ laeufe: { meta: object, zeilen: object[] }[], namen: object, agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null, jeTicket?: boolean }} e
- * `jeTicket` (#1592): alle Läufe eines Tickets sind ein Lauf (Vorgänger und Nachfolger nach einer Übergabe), das Fenster gilt für den ersten Start.
- */
-export function kontextTreiber({ laeufe, namen, agent = namen?.agenten?.umsetzer, von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null, jeTicket = false, ttl = false }) {
-  if (typeof agent !== "string" || agent === "") throw new Error("kontextTreiber braucht den Agenten-Typ: `agent` oder namen.agenten.umsetzer");
-  const analysen = laeufe
+/** Läufe des Typs im Start-Fenster, nach Ticket, Delta und Brille gefiltert (gemeinsame Vorstufe der Berichte). */
+function gefilterteAnalysen(laeufe, { namen, agent, von, bis, tickets, ohne, wurzel, delta, brille, jeTicket }) {
+  return laeufe
     .filter((l) => l?.meta?.agentType === agent)
     .map((l) => analysiereLauf(l, { wurzel, namen }))
     .filter(Boolean)
@@ -547,8 +541,25 @@ export function kontextTreiber({ laeufe, namen, agent = namen?.agenten?.umsetzer
     .filter((a) => passtTicketFilter(a.ticket, { tickets, ohne }))
     .filter((a) => delta === null || a.delta === delta)
     .filter((a) => !brille || a.brille === brille);
+}
+
+/** Je-Ticket-Bericht oder TTL-Gegenrechnung statt der Kennzahlen je Gruppe; `null`, wenn keiner von beiden gefragt ist. */
+function sonderBericht({ agent, analysen, von, bis, jeTicket, ttl }) {
   if (jeTicket) return jeTicketBericht(agent, analysen, { von, bis });
-  if (ttl) return { agent, von: von ?? null, bis: bis ?? null, ttl: ttlGegenrechnung(analysen) };
+  return ttl ? { agent, von: von ?? null, bis: bis ?? null, ttl: ttlGegenrechnung(analysen) } : null;
+}
+
+/**
+ * Kern: Läufe des Typs im Start-Fenster [von, bis] (optional nur/ohne bestimmte Tickets) → Bericht je Gruppe (alle, ohne Sammeltickets, Sammeltickets).
+ * `delta` (true = nur Läufe mit Delta-Patch-Pfad im Prompt, false = nur ohne) und `brille` (Name wie in `laufAus`, z. B. `Architektur`) filtern zusätzlich (#1582).
+ * @param {{ laeufe: { meta: object, zeilen: object[] }[], namen: object, agent?: string, von?: string, bis?: string, tickets?: number[], ohne?: number[], delta?: boolean|null, brille?: string|null, jeTicket?: boolean }} e
+ * `jeTicket` (#1592): alle Läufe eines Tickets sind ein Lauf (Vorgänger und Nachfolger nach einer Übergabe), das Fenster gilt für den ersten Start.
+ */
+export function kontextTreiber({ laeufe, namen, agent = namen?.agenten?.umsetzer, von, bis, tickets = [], ohne = [], wurzel = null, delta = null, brille = null, jeTicket = false, ttl }) {
+  if (typeof agent !== "string" || agent === "") throw new Error("kontextTreiber braucht den Agenten-Typ: `agent` oder namen.agenten.umsetzer");
+  const analysen = gefilterteAnalysen(laeufe, { namen, agent, von, bis, tickets, ohne, wurzel, delta, brille, jeTicket });
+  const sonder = sonderBericht({ agent, analysen, von, bis, jeTicket, ttl });
+  if (sonder) return sonder;
   return {
     agent,
     laeufe: laeufeListe(analysen),
@@ -652,6 +663,13 @@ function renderTtl(r) {
 
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
+/** `--ttl` übernehmen; zusammen mit `--je-ticket` ist es ein Aufruf-Fehler (die TTL-Rechnung kennt keine zusammengelegten Tickets). */
+function ttlFlag(werte, a) {
+  if (werte.ttl !== true) return;
+  a.ttl = true;
+  if (a.jeTicket) a.fehler ??= "--ttl und --je-ticket schließen sich aus";
+}
+
 /** `namen` liefert den Standard-Agenten (`agenten.umsetzer`), wenn `--agent` fehlt. */
 export function parseArgs(argv, namen) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, agent: { type: "string" }, ...TICKET_OPTIONEN, projekt: { type: "string" }, brille: { type: "string" }, delta: { type: "string" }, "je-ticket": { type: "boolean" }, ttl: { type: "boolean" }, json: { type: "boolean" } };
@@ -661,8 +679,7 @@ export function parseArgs(argv, namen) {
   const a = { agent: werte.agent ?? namen?.agenten?.umsetzer, tickets, ohne, json: werte.json === true };
   for (const name of ["von", "bis", "projekt", "brille"]) if (werte[name] !== undefined) a[name] = werte[name];
   if (werte["je-ticket"] === true) a.jeTicket = true;
-  if (werte.ttl === true) a.ttl = true;
-  if (a.ttl && a.jeTicket) a.fehler ??= "--ttl und --je-ticket schließen sich aus";
+  ttlFlag(werte, a);
   const gefunden = fehler?.text ?? ticketFehler;
   if (gefunden) a.fehler = gefunden;
   const delta = werte.delta;
