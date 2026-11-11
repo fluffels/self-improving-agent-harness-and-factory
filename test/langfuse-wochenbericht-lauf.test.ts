@@ -447,5 +447,7 @@ describe("Wochenbericht-Lauf: kein Schlüssel in grund (Sicherheit)", () => {
     expect(C.ohneSchluessel("Basic ab+cd/ef=")).toBe("[geschwärzt]");
     expect(C.ohneSchluessel("LANGFUSE_PROJECT_SECRET=x")).toBe("[geschwärzt]");
     expect(C.ohneSchluessel("Basic auth failed")).toBe("Basic auth failed");
+    expect(C.ohneSchluessel("Basic abcdefg")).toBe("Basic abcdefg"); // 7 Zeichen: unter der Schwelle
+    expect(C.ohneSchluessel("Basic abcdefgh")).toBe("[geschwärzt]"); // genau 8 Zeichen
   });
 });
