@@ -54,9 +54,9 @@ interface Eingabe {
   quellVerzeichnis: string;
 }
 
-/** Kern ohne Frontmatter und Projektwerte-Block (zeilenenden-neutral). */
+/** Kern ohne Frontmatter und Projektwerte-Block (erwartet LF; der Aufrufer normalisiert CRLF). */
 function rumpf(kern: string): string {
-  const t = kern.replace(/\r\n/g, "\n").replace(/^---\n[\s\S]*?\n---\n/, "");
+  const t = kern.replace(/^---\n[\s\S]*?\n---\n/, "");
   const a = t.indexOf("<!-- factory:projektwerte:start -->");
   const endMarke = "<!-- factory:projektwerte:end -->";
   const b = t.indexOf(endMarke);
@@ -169,7 +169,7 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
 
   test("jedes Windows-Token im Kern-Rumpf ist rot", () => {
     const e = echt();
-    for (const t of WINDOWS_TOKENS) assert.match(bedingteDateienBefunde({ ...e, kern: `${e.kern}\n${t}\n` }).join("\n"), new RegExp(`Windows-Sonderfall „${t.replace(/\$/g, "\\$")}“`), t);
+    for (const t of ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"]) assert.match(bedingteDateienBefunde({ ...e, kern: `${e.kern}\n${t}\n` }).join("\n"), new RegExp(`Windows-Sonderfall „${t.replace(/\$/g, "\\$")}“`), t);
   });
 
   test("CRLF-Checkout: der echte Kern mit \\r\\n ist in Ordnung (Frontmatter wird trotzdem abgetrennt)", () => {
