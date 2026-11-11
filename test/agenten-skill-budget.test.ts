@@ -115,7 +115,7 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
       assert.match(t, /kürzen/);
       assert.match(t, /\.agents\/skills\/<name>\//);
       assert.match(t, /Brain-Seite/);
-      assert.match(t, /kontext-budget-ratchet\.test\.ts/);
+      assert.match(t, /Ratchet/);
       assert.match(t, /ausnahmen\.kontext/);
       assert.match(t, /Ticket/);
       assert.doesNotMatch(t, /modul-lokale AGENTS\.md/);
@@ -126,13 +126,21 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
     const t = fixHinweis([agents]);
     assert.match(t, /modul-lokale AGENTS\.md/);
     assert.match(t, /ausnahmen\.kontext/);
-    assert.doesNotMatch(t, /kontext-budget-ratchet/);
+    assert.doesNotMatch(t, /Ratchet/);
+  });
+
+  test("AGENTS.md unter dem Skill-Verzeichnis und Pfade mit gleichem Präfix ohne Schrägstrich sind keine Agenten-/Skill-Dateien", () => {
+    for (const file of [".agents/skills/s/AGENTS.md", ".agents/skillsX/s.md"]) {
+      const t = fixHinweis([{ file }]);
+      assert.match(t, /modul-lokale AGENTS\.md/);
+      assert.doesNotMatch(t, /Ratchet/);
+    }
   });
 
   test("gemischt: beide Teile; ohne Verletzung leer", () => {
     const t = fixHinweis([agents, agent]);
     assert.match(t, /modul-lokale AGENTS\.md/);
-    assert.match(t, /kontext-budget-ratchet\.test\.ts/);
+    assert.match(t, /Ratchet/);
     assert.equal(fixHinweis([]), "");
   });
 });
@@ -156,7 +164,7 @@ describe("Projektwert-Zeilen der Frontmatter (L3/L6b)", () => {
   test("ein kaputter Zeilen-Marker wirft (als Gate-Fehler)", () => {
     temp((dir) => {
       datei(dir, ".claude/agents/planer.md", `---\n# factory:projektwert agenten.planer\n---\nx\n`);
-      assert.throws(() => collectSizes(dir), /Zeilen-Marker/);
+      assert.throws(() => collectSizes(dir), /planer\.md:2: .*Zeilen-Marker/);
     });
   });
 });
@@ -200,6 +208,8 @@ describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien
       const rot = lauf();
       assert.equal(rot.status, 1, rot.text);
       assert.match(rot.text, /✖ \.agents\/skills\/proj\/SKILL\.md/);
+      assert.match(rot.text, /Agenten-\/Skill-Datei: kürzen/);
+      assert.doesNotMatch(rot.text, /modul-lokale AGENTS\.md/);
     });
   });
 });
