@@ -106,7 +106,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/factory/umsetzer-pr-merge.md", budget: 4_000 },
   { file: ".agents/skills/review-lenses/SKILL.md", budget: 10_000 },
   { file: ".agents/skills/review-lenses/ablauf-abnahme-fix.md", budget: 1_500 },
-  { file: ".agents/skills/review-lenses/ablauf-klasse-hoch.md", budget: 2_000 },
+  { file: ".agents/skills/review-lenses/ablauf-klasse-hoch.md", budget: 2_500 },
   { file: ".agents/skills/review-lenses/ablauf-merge-main.md", budget: 6_000 },
   { file: ".agents/skills/review-lenses/ablauf-nachweis.md", budget: 3_000 },
   { file: ".agents/skills/review-lenses/ablauf-zusatzpass.md", budget: 2_000 },

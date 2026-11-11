@@ -943,6 +943,24 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     assert.deepEqual(bewerte(`${mitSicherheit()}\n* ${Z.bedrohungen}: ${ZEILE}`), []);
   });
 
+  test("Gültige Werte, die Platzhaltern ähneln oder Sonderzeichen tragen, bleiben grün (Gegenseite von istLeer und Parser)", () => {
+    for (const wert of ["API", "<Client> zu <Server>", "a..b", "--flag", "x -- y", "Header Authorization=Bearer"]) {
+      const f = bewerte(mitZeile(ZEILE.replace("daten=Token vom Client zum Server", `daten=${wert}`)));
+      assert.deepEqual(f, [], wert);
+    }
+    for (const zeile of [`${ZEILE} |`, `${ZEILE} ||`, ZEILE.toUpperCase().replace(/ \|/g, " |"), ZEILE.replace(/ \| /g, "|")]) {
+      assert.deepEqual(bewerte(mitZeile(zeile)), [], zeile);
+    }
+    const n = parseNachweis(mitZeile("daten=Header Authorization=Bearer | grenzen=b | missbrauch=c | datenschutz=d"));
+    assert.equal(n.bedrohungen?.teile.daten, "Header Authorization=Bearer");
+    assert.equal(parseNachweis(mitZeile("Daten=a | Grenzen=b | missbrauch=c | datenschutz=d")).bedrohungen?.teile.grenzen, "b");
+  });
+
+  test("die Lens-Meldung nennt Klasse-hoch-Grund und Weg", () => {
+    const f = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
+    assert.match(f[0], /lenses fehlt sicherheit \(Risikoklasse hoch: src\/auth\.ts trifft.*ablauf-klasse-hoch\.md\)/);
+  });
+
   test("parseNachweis verlangt den Schlüssel der Bedrohungs-Zeile in den Commit-Zeilen (kein Standardwert)", () => {
     const { bedrohungen: _weg, ...ohne } = Z;
     assert.throws(() => (raw as Mod).parseNachweis("x", ohne as Zeilen), /braucht die Commit-Zeilen/);
