@@ -42,6 +42,7 @@ import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 import * as rawHerkunftsform from "../../scripts/herkunftsform.mjs";
 import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 import { FREMD, projektConfig } from "../support/fremd-config";
+import { escapeRe } from "../support/regex";
 import type { BegriffsConfig } from "./kern-reinheit.test";
 
 const { begriffeAus } = rawBesitz as unknown as { begriffeAus: (config: BegriffsConfig) => Record<string, RegExp> };
@@ -439,7 +440,7 @@ describe("Ticketnummern (#95)", () => {
         const texte = { ...echteTexte(), [pfad]: lesen(pfad) + "\nSiehe #1234.\n" };
         const m = vergleicheNummern(zaehleNummern(texte), baseline());
         assert.equal(m.length, 1, pfad);
-        assert.match(m[0] ?? "", new RegExp(`^${pfad.replace(".", "\\.")}: nackte Ticketnummer \\d+x statt \\d+x`));
+        assert.match(m[0] ?? "", new RegExp(`^${escapeRe(pfad)}: nackte Ticketnummer \\d+x statt \\d+x`));
       }
     });
     test("die Baseline ist sortiert, kennt nur Ticketnummer und Werte > 0", () => {

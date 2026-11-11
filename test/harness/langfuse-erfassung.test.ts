@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 import { lokaleImporteTransitiv } from "./hook-importe";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pflichtReviewMuster } from "../../scripts/besitz-extraktion.mjs";
+import { pflichtReviewMuster, trifftLeitplanke } from "../../scripts/besitz-extraktion.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p: string): string => readFileSync(resolve(ROOT, p), "utf8");
@@ -395,7 +395,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
 describe("Automatischer Abgleich verdrahtet (#1578)", () => {
   const settings = read(".claude/settings.json");
   const hookQuelle = read("scripts/langfuse-abgleich-hook.mjs");
-  const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => eintraege.some((p) => p !== "" && rel.startsWith(p.replace(/^\//, "")));
+  const geschuetztDurch = (eintraege: string[]) => (rel: string): boolean => (trifftLeitplanke as (pfad: string, muster: string[]) => boolean)(rel, eintraege.filter((p) => p !== ""));
   const echte = (JSON.parse(read(".github/protected-paths.json")) as { harness: string[] }).harness;
   // CODEOWNERS spiegelt nur die Pflicht-Review-Liste (factory#348): geprüft wird, was sie nennt.
   const pflichtListe = (pflichtReviewMuster as (t: string) => string[] | null)(read(".github/protected-paths.json")) ?? [];
@@ -414,6 +414,13 @@ describe("Automatischer Abgleich verdrahtet (#1578)", () => {
     for (const n of ["langfuse-abgleich-hook", "langfuse-nachliefern", "langfuse-otlp", "langfuse-abgleich", "langfuse-api", "preise", "transkript", "transkript-calls"]) {
       assert.ok(geschuetztDurch(echte)(`scripts/${n}.mjs`) && ownersDecken(`scripts/${n}.mjs`), n);
     }
+  });
+
+  test("geschuetztDurch kennt Glob und Verzeichnis wie CODEOWNERS (factory#347 L6): ein Stern-Muster trifft, ein Präfix-Vergleich träfe nicht", () => {
+    assert.ok(geschuetztDurch(["/scripts/*-mcp.mjs"])("scripts/x-mcp.mjs"));
+    assert.ok(!geschuetztDurch(["/scripts/*-mcp.mjs"])("scripts/x-mcp.txt"));
+    assert.ok(geschuetztDurch([".claude/agents/"])(".claude/agents/a.md"));
+    assert.ok(!geschuetztDurch([""])("scripts/x.mjs"));
   });
 
   test("rote Gegenbeispiele: SessionEnd fehlt, SessionStart fehlt, Stop/SubagentStop-Eintrag, ungeschütztes Kettenglied, Hook startet ungeschütztes Skript", () => {
