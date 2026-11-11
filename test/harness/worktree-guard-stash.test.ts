@@ -43,6 +43,7 @@ describe("dynamische Unterbefehle und Analysefehler", () => {
   test('list mit dynamischem Anhang und dynamische Option vor list sind abgelehnt', () => {
     assert.equal(pruefe('git stash list"$X"').block, true);
     assert.equal(pruefe('git stash -"$X" list').block, true);
+    assert.equal(pruefe("git stash show$(x)").block, true, "dynamisches Wort, dessen statischer Rest show lautet");
   });
 
   test("wirft die Analyse (homedir), greift die grobe Wortregel: pop blockt, list nicht", () => {
@@ -50,6 +51,14 @@ describe("dynamische Unterbefehle und Analysefehler", () => {
     const lauf = (command: string) => decide({ cwd: WT, command, repoRoot: ROOT, deps: kaputt });
     assert.equal(lauf("cd ~ && git stash pop").block, true);
     assert.equal(lauf("cd ~ && git stash list").block, false);
+  });
+});
+
+describe("analyse meldet den Stash ohne Rückgriff auf die grobe Regel", () => {
+  const analyse = (raw as { analyse: (c: string, cwd: string, d: unknown) => { stash: boolean } }).analyse;
+  test("git stash ohne Unterbefehl: stash gesetzt, ohne Fehler", () => {
+    assert.equal(analyse("git stash", WT, deps).stash, true);
+    assert.equal(analyse("git stash list", WT, deps).stash, false);
   });
 });
 
