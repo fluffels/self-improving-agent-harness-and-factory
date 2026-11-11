@@ -1,4 +1,5 @@
 /* Langfuse-Auswertung (factory#289): Export lesen, Quellen, Rolle/Effort/Repo/Modell, „unzugeordnet“, Datenlücken, CLI, Wächter Secret-Key. */
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -115,7 +116,7 @@ describe("unzugeordnet (AK7)", () => {
   test("Modell null oder leer ist unzugeordnet, auch bei bekannter Rolle", () => {
     const ohne = ["Claude Code Turn", "LLM Call", null, "repoA"] as const;
     const leerModell = ["Claude Code Turn", "Subagent LLM Call", "", "repoA"] as const;
-    const b = rep(exp("gesamt", [...gesamtRows, g(...ohne, 3, 1), g(...leerModell, 2, 1)]), tageVoll, latenzOk, ...alleRollen, meta("agent_type", "Explore", [g(...ohne, 3, 1), g(...leerModell, 2, 1)]));
+    const b = rep(exp("gesamt", [...gesamtRows, g(...ohne, 3, 1), g(...leerModell, 2, 1)]), tageVoll, latenzOk, ...alleRollen, meta("agent_type", "Explore", [g(...ohne, 3, 1, 3), g(...leerModell, 2, 1, 3)]));
     expect(b.modell.zeilen.find((z) => z.name === "unzugeordnet")).toMatchObject({ count: 5, cost: 2 });
     expect(b.unzugeordnet).toEqual({ count: 5, cost: 2 });
     expect(b.rolle.zeilen.find((z) => z.name === "Explore")).toMatchObject({ count: 5 });
@@ -144,6 +145,16 @@ describe("Export lesen und prüfen", () => {
     expect(() => lese(exp("gesamt", viele(L.ROW_LIMIT)))).toThrow(/abgeschnitten/);
     expect(() => lese(exp("latenz", viele(L.ROW_LIMIT)))).toThrow(/abgeschnitten/);
     expect(() => lese(exp("gesamt", viele(L.ROW_LIMIT - 1)))).not.toThrow();
+  });
+  test("eine Zeile ohne numerische Metriken oder ohne min_latency (außer gesamt) wirft, nie eine stille 0", () => {
+    expect(() => lese(exp("gesamt", [{ ...g(...R1, 1, 1), sum_totalCost: undefined }]))).toThrow(/gesamt-Zeile 1 ohne numerische Metriken/);
+    expect(() => lese(exp("gesamt", [{ ...g(...R1, 1, 1), count_count: null }]))).toThrow(/ohne numerische Metriken/);
+    expect(() => lese(exp("gesamt", [g(...R1, 1, 1), { ...g(...R2, 1, 1), sum_totalCost: "viel" }]))).toThrow(/gesamt-Zeile 2/);
+    expect(() => lese(exp("latenz", [g(...R1, 1, 1)]))).toThrow(/latenz-Zeile 1 ohne numerisches min_latency/);
+    expect(() => lese(exp("latenz", [{ ...g(...R1, 1, 1), min_latency: null }]))).toThrow(/min_latency/);
+    expect(() => lese(meta("agent_type", "Plan", [g(...R1, 1, 1)]))).toThrow(/metadaten-Zeile 1 ohne numerisches min_latency/);
+    expect(() => lese(exp("gesamt", [null]))).toThrow(/ohne numerische Metriken/);
+    expect(() => lese(exp("gesamt", [g(...R1, 0, 0)]))).not.toThrow();
   });
   test("metadaten braucht genau einen stringObject-Filter mit auswertbarem Schlüssel", () => {
     expect(() => lese(exp("metadaten", []))).toThrow(/genau einen stringObject-Filter/);
@@ -283,6 +294,65 @@ describe("Wächter Secret-Key (AK8)", () => {
   });
 });
 
+describe("Randfälle", () => {
+  test("Köpfe: kein Objekt, nur ein Zeitstempel, falscher Filter (Operator, Spalte) werfen", () => {
+    for (const j of [null, "x", 5]) expect(() => lese(j)).toThrow(/selbstbeschreibend/);
+    expect(() => lese({ ...gesamt, abfrage: { filters: [FILTER], fromTimestamp: VON } })).toThrow(/Fenster/);
+    expect(() => lese({ ...gesamt, abfrage: { filters: [FILTER], toTimestamp: BIS } })).toThrow(/Fenster/);
+    expect(() => lese(exp("gesamt", gesamtRows, [{ ...FILTER, operator: "<>" }]))).toThrow(/type = GENERATION/);
+    expect(() => lese(exp("gesamt", gesamtRows, [{ ...FILTER, column: "name" }]))).toThrow(/type = GENERATION/);
+    expect(() => lese(exp("gesamt", gesamtRows, [{ ...FILTER, value: "generation" }]))).not.toThrow();
+  });
+  test("stringObject-Filter: zwei Filter, falsche Spalte, falscher Operator, Schlüssel oder Wert ohne Text werfen", () => {
+    const so = { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" };
+    expect(() => lese(exp("metadaten", [], [FILTER, so, so]))).toThrow(/genau einen stringObject-Filter \(gefunden: 2\)/);
+    for (const kaputt of [{ column: "name" }, { operator: "contains" }, { key: undefined }, { value: 5 }]) {
+      expect(() => lese(exp("metadaten", [], [FILTER, { ...so, ...kaputt }]))).toThrow(/column metadata, operator =, key und value als Text/);
+    }
+  });
+  test("die Meldung bei doppeltem Metadaten-Export nennt Schlüssel und Wert", () => {
+    expect(() => rep(gesamt, meta("agent_type", "Plan", []), meta("agent_type", "Plan", []))).toThrow(/agent_type=Plan/);
+  });
+  test("Tage: ungültige Zeit ergibt keine Lücken, ein Fensterende genau um Mitternacht schließt den Tag aus", () => {
+    expect(L.tagesLuecken("kaputt", BIS, [])).toEqual([]);
+    expect(L.tagesLuecken(VON, "kaputt", [])).toEqual([]);
+    expect(L.tagesLuecken("2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z", [])).toEqual(["2026-11-01"]);
+  });
+  test("eine Zelle ohne Gegenstück in gesamt ist eine Lücke; eine Audit-Zelle ist es nicht", () => {
+    const fremd = ["Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoZ"] as const;
+    const b = rep(...basis, meta("agent_type", "Plan", [g(...fremd, 1, 1, 3)]));
+    expect(b.luecken.join("\n")).toMatch(/Rolle: Exporte nicht konsistent \(0 Zeile\(n\) mit Rest unter 0, 1 Zelle\(n\) ohne Gegenstück/);
+  });
+  test("Rest: nur die Kosten über der Zelle (Calls gleich) und Rundungsrauschen unterscheiden Lücke und Null", () => {
+    expect(rep(...basis, meta("agent_type", "Plan", [g(...R1, 10, 6, 3)])).luecken.join("\n")).toMatch(/1 Zeile\(n\) mit Rest unter 0/);
+    const rauschen = rep(...basis, meta("agent_type", "Plan", [g(...R1, 9, 5.0000000000001, 3), g(...R2, 20, 10, 3)]), alleRollen[1]);
+    expect(rauschen.luecken.join("\n")).not.toMatch(/nicht konsistent/);
+    expect(unzZeile(rauschen.rolle)).toMatchObject({ count: 1, cost: 0 });
+  });
+  test("Rolle: ein Rest mit Calls aber 0 $ bleibt sichtbar (Calls zählen)", () => {
+    const b = rep(...basis, meta("agent_type", "Plan", [g(...R1, 6, 5, 3)]));
+    expect(unzZeile(b.rolle)).toMatchObject({ count: 4 + 20 + 4, cost: 10 + 2 });
+  });
+  test("gleiche Kosten sortieren nach Name; „Davon“ steht nur bei Rolle und Effort; „keine“ Lücken steht als Zeile", () => {
+    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Abgleich", "Call", "b-modell", "repoA", 1, 1), g("Abgleich", "Call", "a-modell", "repoA", 1, 1)]), tageVoll);
+    expect(b.modell.zeilen.map((z) => z.name)).toEqual(["a-modell", "b-modell", "claude-sonnet-5-5", "unzugeordnet"]);
+    const md = L.renderMarkdown(rep(...basis, ...alleRollen, ...alleEfforts));
+    expect(md.match(/Davon unzugeordnet/g)).toHaveLength(2);
+    expect(md).toContain("- keine\n");
+  });
+  test("Zellen derselben Gruppe aus zwei Exporten (agent_type und agent_role) addieren sich", () => {
+    const b = rep(...basis, meta("agent_type", "Plan", [g(...R1, 4, 2, 3)]), meta("agent_type", "Explore", [g(...R1, 3, 1, 3)]));
+    expect(b.rolle.zeilen.find((z) => z.name === "Plan")).toMatchObject({ count: 4 });
+    expect(b.rolle.zeilen.find((z) => z.name === "Explore")).toMatchObject({ count: 3 });
+    expect(unzZeile(b.rolle)).toMatchObject({ count: 3 + 20 + 4 });
+  });
+  test("zwei Zeilen mit gleichem Schlüssel (null und leere Umgebung) werden summiert", () => {
+    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Abgleich", "Call", "m", null, 2, 2), g("Abgleich", "Call", "m", "", 3, 3)]), tageVoll);
+    expect(b.bereinigt).toEqual({ count: 6, cost: 6 });
+    expect(b.modell.zeilen.find((z) => z.name === "m")).toMatchObject({ count: 5, cost: 5 });
+  });
+});
+
 describe("CLI", () => {
   const dateien: Record<string, string> = {};
   const lies = (p: string) => {
@@ -327,5 +397,36 @@ describe("CLI", () => {
     expect(r.exitCode).toBe(0);
     const werte = (JSON.parse(r.text) as { abfrage: Ex["abfrage"] }[]).map((x) => x.abfrage.filters?.[1]?.value);
     expect(werte).toEqual(expect.arrayContaining(["mein-agent", "extra"]));
+  });
+  test("rezept: bis allein, ungültige Zeiten, von gleich bis und ein fehlender Agentenordner sind Fehler", () => {
+    erwarte(["--rezept", "--bis", BIS], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", "kaputt", "--bis", BIS], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", VON, "--bis", "kaputt"], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", VON, "--bis", VON], 2, "--rezept braucht");
+    const r = lauf(["--rezept", "--von", VON, "--bis", BIS, "--agenten", join(tmpdir(), "gibt-es-nicht-289")]);
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toContain("Fehler:");
+  });
+  test("eine Agentendatei ohne name wird übersprungen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    writeFileSync(join(dir, "ohne.md"), "---\ndescription: x\n---\n");
+    writeFileSync(join(dir, "mit.md"), "---\nname: a\n---\n");
+    expect(C.agentenNamen(dir)).toEqual(["a"]);
+  });
+  test("ohne eingespeiste Leser liest die CLI die echte Datei", () => {
+    const dir = mkdtempSync(join(tmpdir(), "auswertung-"));
+    writeFileSync(join(dir, "g.json"), JSON.stringify(gesamt));
+    const r = C.auswerten(C.parseArgs(["--export", join(dir, "g.json")]));
+    expect(r.exitCode).toBe(0);
+    expect(r.text).toContain("# Langfuse-Auswertung");
+  });
+  test("als Prozess: Bericht auf stdout mit Exit 0, Aufruffehler auf stderr mit Exit 2", () => {
+    const ok = spawnSync("node", ["scripts/langfuse-auswertung.mjs", "--rezept", "--von", VON, "--bis", BIS], { encoding: "utf8" });
+    expect(ok.status).toBe(0);
+    expect(JSON.parse(ok.stdout)).toBeInstanceOf(Array);
+    const schlecht = spawnSync("node", ["scripts/langfuse-auswertung.mjs", "--gibtsnicht"], { encoding: "utf8" });
+    expect(schlecht.status).toBe(2);
+    expect(schlecht.stderr).toContain("Aufruf: node scripts/langfuse-auswertung.mjs");
+    expect(schlecht.stdout).toBe("");
   });
 });

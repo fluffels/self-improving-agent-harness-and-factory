@@ -29,7 +29,6 @@ const EPS = 1e-9;
 const DIMS_GESAMT = ["traceName", "name", "providedModelName", "environment"];
 const MS_TAG = 86400000;
 
-const zahl = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const istAudit = (name) => typeof name === "string" && name.startsWith(AUDIT_PRAEFIX);
 const ohnePraefix = (name) => (istAudit(name) ? name.slice(AUDIT_PRAEFIX.length) : name);
 const leer = (v) => v === undefined || v === null || String(v).trim() === "";
@@ -40,7 +39,7 @@ const sortName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export function quelleVon(traceName, name) {
   const n = ohnePraefix(name);
   if (traceName === TRACE_NAME_ABGLEICH) return "nachgeliefert";
-  if (n === "Model response" || String(traceName ?? "").startsWith("Codex:")) return "codex";
+  if (n === "Model response" || String(traceName).startsWith("Codex:")) return "codex";
   if (traceName === "Claude Code Turn" || n === "LLM Call" || n === "Subagent LLM Call") return "live";
   return "sonstige";
 }
@@ -92,7 +91,7 @@ const hatGenerationFilter = (abfrage) =>
   Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f?.operator === "=" && String(f?.value).toUpperCase() === "GENERATION");
 
 function pruefeKopf(json, pfad) {
-  if (!json || Array.isArray(json) || typeof json !== "object" || !("art" in json)) {
+  if (!json || typeof json !== "object" || !("art" in json)) {
     throw fehler(pfad, "kein selbstbeschreibender Export { art, abfrage, data } (nacktes {data} oder Array)");
   }
   if (!ARTEN.includes(json.art)) throw fehler(pfad, `unbekannte art ${JSON.stringify(json.art)}`);
@@ -113,16 +112,25 @@ function metaFilter(abfrage, pfad) {
   return { schluessel: f.key, wert: f.value };
 }
 
-function zeileVon(r) {
-  const z = { traceName: r.traceName, name: r.name, providedModelName: r.providedModelName, environment: r.environment };
-  return { ...z, key: keyVon(z), count: zahl(r.count_count), cost: zahl(r.sum_totalCost), minLatency: r.min_latency === undefined || r.min_latency === null ? null : Number(r.min_latency) };
+const zeigeZeile = (art, i) => `${art}-Zeile ${i + 1}`;
+const numerisch = (v) => v !== null && v !== undefined && Number.isFinite(Number(v));
+
+/** Normalisiert eine Zeile; fehlende oder nicht numerische Metriken sind ein Formfehler, nie eine stille 0. */
+function zeileVon(r, art, pfad, i) {
+  const z = { traceName: r?.traceName, name: r?.name, providedModelName: r?.providedModelName, environment: r?.environment };
+  if (!numerisch(r?.count_count) || !numerisch(r?.sum_totalCost)) {
+    throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerische Metriken count_count und sum_totalCost`);
+  }
+  if (art === "gesamt") return { ...z, key: keyVon(z), count: Number(r.count_count), cost: Number(r.sum_totalCost), minLatency: null };
+  if (!numerisch(r.min_latency)) throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerisches min_latency (Negativ-Latenz nicht prüfbar)`);
+  return { ...z, key: keyVon(z), count: Number(r.count_count), cost: Number(r.sum_totalCost), minLatency: Number(r.min_latency) };
 }
 
 /** Prüft einen Export und liefert `{ art, pfad, von, bis, data, zeilen, schluessel?, wert? }`; wirft bei jedem Formfehler. */
 export function leseExport(json, pfad) {
   pruefeKopf(json, pfad);
   const ex = { art: json.art, pfad, von: json.abfrage.fromTimestamp, bis: json.abfrage.toTimestamp, data: json.data };
-  ex.zeilen = json.art === "tage" ? [] : json.data.map(zeileVon);
+  ex.zeilen = json.art === "tage" ? [] : json.data.map((r, i) => zeileVon(r, json.art, pfad, i));
   return json.art === "metadaten" ? { ...ex, ...metaFilter(json.abfrage, pfad) } : ex;
 }
 
@@ -133,7 +141,7 @@ export function pruefeExporte(exporte) {
   if (fenster.size > 1) throw fehler("Exporte", `ungleiche Fenster: ${[...fenster].join(" ; ")}`);
   const doppelt = new Set();
   for (const e of exporte) {
-    const id = `${e.art}|${e.schluessel ?? ""}|${e.wert ?? ""}`;
+    const id = `${e.art}|${e.schluessel}|${e.wert}`;
     if (doppelt.has(id)) throw fehler("Exporte", `Export ${e.art}${e.schluessel ? ` ${e.schluessel}=${e.wert}` : ""} mehrfach (${e.pfad})`);
     doppelt.add(id);
   }
@@ -144,7 +152,7 @@ export function pruefeExporte(exporte) {
 
 /** UTC-Tage, die das Fenster schneiden und im Tage-Export keine Zeile haben. */
 export function tagesLuecken(von, bis, tageData) {
-  const have = new Set(tageData.map((r) => String(r.time_dimension ?? "").slice(0, 10)));
+  const have = new Set(tageData.map((r) => String(r.time_dimension).slice(0, 10)));
   const start = Date.parse(von);
   const ende = Date.parse(bis);
   const out = [];
@@ -156,6 +164,7 @@ export function tagesLuecken(von, bis, tageData) {
   return out;
 }
 
+const istNegativ = (z) => z.minLatency !== null && z.minLatency < 0;
 const summe = (liste) => liste.reduce((s, z) => ({ count: s.count + z.count, cost: s.cost + z.cost }), { count: 0, cost: 0 });
 
 function anreichern(z) {
@@ -164,7 +173,7 @@ function anreichern(z) {
 
 /** Teilt `gesamt` in Basis (geht in die bereinigten Summen), Audit-Kopien und Gruppen mit negativer Latenz. */
 function teile(gesamtZeilen, latenzZeilen) {
-  const negativ = new Set((latenzZeilen ?? []).filter((z) => z.minLatency !== null && z.minLatency < 0).map((z) => z.key));
+  const negativ = new Set((latenzZeilen ?? []).filter(istNegativ).map((z) => z.key));
   const basis = new Map();
   const audit = [];
   const neg = [];
@@ -178,7 +187,6 @@ function teile(gesamtZeilen, latenzZeilen) {
 }
 
 const zellenLabel = (z) => (z.wert === "unbekannt" ? UNZUGEORDNET : z.schluessel === "agent_type" ? z.wert : `${z.schluessel}:${z.wert}`);
-const istNegativ = (z) => z.minLatency !== null && z.minLatency < 0;
 
 /** Posten der Metadaten-Zellen; merkt Summen je Gruppe, Gruppen mit negativer Latenz und Zellen ohne Gegenstück. */
 function zellenPosten(teil, metaExporte) {
@@ -220,7 +228,7 @@ function dimensionPosten(teil, metaExporte, name) {
   if (!metaExporte.length) luecken.push(`${name}: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)`);
   if (st.kaputt.size) luecken.push(`${name}: ${st.kaputt.size} Gruppe(n) mit negativer Latenz in einer Metadaten-Zelle, ${rest.luecke.count} Calls (${usd(rest.luecke.cost)}) aus den Summen genommen`);
   if (rest.inkonsistent || st.ohneGegenstueck) luecken.push(`${name}: Exporte nicht konsistent (${rest.inkonsistent} Zeile(n) mit Rest unter 0, ${st.ohneGegenstueck} Zelle(n) ohne Gegenstück in gesamt; Fenster in der Vergangenheit wählen)`);
-  return { posten: [...st.posten, ...rest.posten], luecken, kaputt: st.kaputt };
+  return { posten: [...st.posten, ...rest.posten], luecken };
 }
 
 const usd = (x) => `${x.toFixed(2)} $`;
@@ -289,8 +297,8 @@ export function bericht(exporte) {
 
 /** Generations ohne Rolle (Schlüssel fehlt oder `unbekannt`) oder ohne Modell; ohne Rollen-Export gilt alles als ohne Rolle. */
 function unzugeordnetGesamt(teil, rolle) {
-  const ohneModell = [...teil.basis.values()].filter((b) => b.modell === UNZUGEORDNET && !rolle.kaputt.has(b.key));
-  const ohneRolle = rolle.posten.filter((p) => p.label === UNZUGEORDNET && teil.basis.get(p.key)?.modell !== UNZUGEORDNET);
+  const ohneModell = [...teil.basis.values()].filter((b) => b.modell === UNZUGEORDNET);
+  const ohneRolle = rolle.posten.filter((p) => p.label === UNZUGEORDNET && teil.basis.get(p.key).modell !== UNZUGEORDNET);
   return summe([...ohneModell, ...ohneRolle]);
 }
 
