@@ -1,4 +1,4 @@
-/* Agentennamen aus den Frontmatter-Dateien eines Ordners (aus langfuse-auswertung.mjs herausgelöst, factory#313): Blatt-Modul ohne Einstieg. */
+/* Agentennamen aus den Frontmatter-Dateien eines Ordners (aus langfuse-auswertung.mjs herausgelöst, factory#313): Bibliotheksmodul ohne Einstieg. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

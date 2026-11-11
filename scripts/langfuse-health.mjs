@@ -1,5 +1,5 @@
 /* Langfuse-Health (aus langfuse-vorbedingung.mjs herausgelöst, factory#313): Bewertung und Abfrage von GET <Langfuse>/api/public/health.
- * Blatt-Modul ohne Einstieg, damit auch andere Skripte die Prüfung nutzen (ein Einstiegsskript importiert nie aus einem anderen); fetch wird injiziert, kein Secret-Key. */
+ * Bibliotheksmodul ohne Einstieg, damit auch andere Skripte die Prüfung nutzen (ein Einstiegsskript importiert nie aus einem anderen); fetch wird injiziert, kein Secret-Key. */
 
 export const HEALTH_PFAD = "/api/public/health";
 export const FRIST_MS = 3000;

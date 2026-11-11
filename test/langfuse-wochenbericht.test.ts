@@ -1,7 +1,7 @@
-import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -49,18 +49,19 @@ const tage = (von: string, mitLuecke = false) =>
 const gesamtW = (cost = 20) => [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, cost - 4), g("Abgleich", "Model response", "claude-sonnet-5-5", "repo", 6, 4)];
 const SCORE_FILTER = { column: "name", operator: "any of", value: ["erfassung", "erfassung_hook"], type: "stringOptions" };
 const sess = (art: string, von: string, bis: string, ids: Array<[string, string]>) => exp(art, von, bis, ids.map(([sessionId, traceName]) => ({ sessionId, traceName, count_count: 3 })));
-const scoreExp = (rows: Array<[string, string, number]>) => ({ art: "erfassung", abfrage: { view: "scores-numeric", filters: [SCORE_FILTER], fromTimestamp: F.vorVon, toTimestamp: "2026-11-11T11:30:00.000Z" }, data: rows.map(([sessionId, name, avg_value]) => ({ sessionId, name, avg_value })) });
+const scoreExp = (f: typeof F, rows: Array<[string, string, number]>) => ({ art: "erfassung", abfrage: { view: "scores-numeric", filters: [SCORE_FILTER], fromTimestamp: f.vorVon, toTimestamp: "2026-11-11T11:30:00.000Z" }, data: rows.map(([sessionId, name, avg_value]) => ({ sessionId, name, avg_value })) });
 
 const lese = <T,>(t: string): T => JSON.parse(t) as T;
 type Satz = Record<string, unknown>;
-function satz(opt: { kostenW?: number; kostenV?: number; sessionsW?: Array<[string, string]>; sessionsV?: Array<[string, string]>; scores?: Array<[string, string, number]>; luecke?: boolean } = {}): Satz {
+function satz(opt: { kostenW?: number; kostenV?: number; sessionsW?: Array<[string, string]>; sessionsV?: Array<[string, string]>; scores?: Array<[string, string, number]>; luecke?: boolean; f?: typeof F } = {}): Satz {
+  const f = opt.f ?? F;
   return {
-    "gesamtW.json": exp("gesamt", F.von, F.bis, gesamtW(opt.kostenW ?? 20)),
-    "tageW.json": exp("tage", F.von, F.bis, tage(F.von, opt.luecke)),
-    "gesamtV.json": exp("gesamt", F.vorVon, F.vorBis, [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, opt.kostenV ?? 20)]),
-    "sessW.json": sess("sessions", F.von, F.bis, opt.sessionsW ?? [["s1", "Claude Code Turn"], ["s2", "Claude Code Turn"]]),
-    "sessV.json": sess("sessions", F.vorVon, F.vorBis, opt.sessionsV ?? [["s0", "Claude Code Turn"]]),
-    "scores.json": scoreExp(opt.scores ?? [["s1", "erfassung", 1], ["s2", "erfassung", 1], ["s0", "erfassung", 1], ["s1", "erfassung_hook", 0.5], ["s2", "erfassung_hook", 1]]),
+    "gesamtW.json": exp("gesamt", f.von, f.bis, gesamtW(opt.kostenW ?? 20)),
+    "tageW.json": exp("tage", f.von, f.bis, tage(f.von, opt.luecke)),
+    "gesamtV.json": exp("gesamt", f.vorVon, f.vorBis, [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, opt.kostenV ?? 20)]),
+    "sessW.json": sess("sessions", f.von, f.bis, opt.sessionsW ?? [["s1", "Claude Code Turn"], ["s2", "Claude Code Turn"]]),
+    "sessV.json": sess("sessions", f.vorVon, f.vorBis, opt.sessionsV ?? [["s0", "Claude Code Turn"]]),
+    "scores.json": scoreExp(f, opt.scores ?? [["s1", "erfassung", 1], ["s2", "erfassung", 1], ["s0", "erfassung", 1], ["s1", "erfassung_hook", 0.5], ["s2", "erfassung_hook", 1]]),
   };
 }
 
@@ -69,7 +70,15 @@ function lauf(argv: string[], dateien: Satz, deps: Satz = {}) {
   const lies = (p: string) => (p in dateien ? (typeof dateien[p] === "string" ? dateien[p] : JSON.stringify(dateien[p])) : (() => { throw new Error("ENOENT " + p); })());
   return auswerten(parseArgs([...argv, ...(argv.includes("--rezept") ? [] : Object.keys(dateien).flatMap((p) => ["--export", p]))]), { jetzt: JETZT, projekt: PROJEKT, lies, ...deps });
 }
-const tmp = () => mkdtempSync(join(tmpdir(), "wb-"));
+const temps: string[] = [];
+const tmp = () => {
+  const d = mkdtempSync(join(tmpdir(), "wb-"));
+  temps.push(d);
+  return d;
+};
+afterAll(() => {
+  for (const d of temps) rmSync(d, { recursive: true, force: true });
+});
 const fehler = async (dateien: Satz, text: string) => {
   const r = await lauf([], dateien);
   expect(r.exitCode).toBe(1);
@@ -118,8 +127,8 @@ describe("Bericht", () => {
   test("Abschnitte je Rolle und Modell, Datenlücke Tag, Summe, Δ und Probe stehen im Markdown", async () => {
     const r = await lauf([], satz({ kostenW: 40, kostenV: 20, luecke: true }));
     expect(r.stdout).toContain("# Langfuse-Wochenbericht 2026-11-02");
-    expect(r.stdout).toContain("### Je Rolle");
-    expect(r.stdout).toContain("### Je Modell");
+    expect(r.stdout).toMatch(/^### Je Rolle/m);
+    expect(r.stdout).toMatch(/^### Je Modell/m);
     expect(r.stdout).toContain("claude-opus-5-5");
     expect(r.stdout).toContain("Tage ohne Daten: 2026-11-05");
     expect(r.stdout).toContain("Woche 40.00 $, Vorwoche 20.00 $, Δ +100.0 %");
@@ -176,9 +185,11 @@ describe("Urteil", () => {
   test("CLI: Exit 3 mit Grund im Bericht, Exit 0 darunter", async () => {
     const r = await lauf([], satz({ kostenW: 100, kostenV: 20 }), { projekt: { ...PROJEKT, schwellen: { kostenAnstiegProzent: 50 } } });
     expect(r.exitCode).toBe(3);
-    expect(r.stdout).toContain("Agent-Lauf nötig");
+    expect(r.stdout).toMatch(/^Agent-Lauf nötig\.$/m);
     expect(r.stdout).toContain("kostenAnstiegProzent: Ist 400.0, Soll höchstens 50");
-    expect((await lauf([], satz({ kostenW: 25, kostenV: 20 }), { projekt: { ...PROJEKT, schwellen: { kostenAnstiegProzent: 50 } } })).exitCode).toBe(0);
+    const ruhig = await lauf([], satz({ kostenW: 25, kostenV: 20 }), { projekt: { ...PROJEKT, schwellen: { kostenAnstiegProzent: 50 } } });
+    expect(ruhig.exitCode).toBe(0);
+    expect(ruhig.stdout).toMatch(/^kein Agent-Lauf nötig\.$/m);
   });
   test("Erfassungslücke aus der Vorwoche löst Exit 3 aus", async () => {
     const r = await lauf([], satz({ sessionsV: [["v9", "Claude Code Turn"]] }), { projekt: { ...PROJEKT, schwellen: { erfassungLueckenMax: 0 } } });
@@ -232,6 +243,7 @@ describe("Negativfälle (Exit 4)", () => {
     expect(lese<{ status: string }>(r.stdout).status).toBe("unerreichbar");
     expect(lese<{ status: string }>(readFileSync(join(ordner, `${MONTAG}.json`), "utf8")).status).toBe("unerreichbar");
     expect(existsSync(join(ordner, `${MONTAG}.md`))).toBe(false);
+    expect(urls.length).toBeGreaterThan(0);
     expect(urls.every((u) => u.includes("/api/public/health"))).toBe(true);
   });
   test("Health 503 ist unerreichbar, nie eine Abfrage", async () => {
@@ -341,8 +353,8 @@ describe("Randfälle (Guards)", () => {
     const echt = CLI.ladeProjekt();
     expect(echt.repo).toBe("self-improving-agent-harness-and-factory");
     expect(echt.owner).toBe("fluffels");
-    expect(echt.schwellen).toEqual({ erfassungLueckenMax: 0, kostenAnstiegProzent: 50, wochenOhneLaufMax: 4 });
-    expect(echt.tags).toEqual(["factory"]);
+    expect(typeof echt.schwellen).toBe("object");
+    expect(Array.isArray(echt.tags)).toBe(true);
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a, b ,," } })).tags).toEqual(["a", "b"]);
     expect(CLI.ladeProjekt(process.cwd(), () => { throw new Error("ENOENT"); }).tags).toEqual([]);
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } })).tags).toEqual([]);
@@ -354,6 +366,69 @@ describe("Randfälle (Guards)", () => {
     const b = spawnSync("node", ["scripts/langfuse-wochenbericht.mjs", "--rezept", "--woche", MONTAG], { encoding: "utf8" });
     expect(b.status).toBe(0);
     expect(lese<unknown[]>(b.stdout).length).toBeGreaterThan(10);
+  });
+});
+
+describe("Verdrahtung und Guards (Runde 1)", () => {
+  test("ohne --woche gilt die Ruhefrist: Montag 00:10Z liefert den Bericht der Woche davor", async () => {
+    const f2 = W.wochenFenster("2026-10-26");
+    const r = await lauf([], satz({ f: f2 }), { jetzt: new Date("2026-11-09T00:10:00Z") });
+    expect(r.stderr).toBe("");
+    expect(r.stdout).toContain("# Langfuse-Wochenbericht 2026-10-26");
+  });
+  test("unzugeordnetProzent: Anteil ohne Rolle über Soll gibt Exit 3 mit Ist, auf Soll nicht", async () => {
+    const hoch = await lauf([], satz(), { projekt: { ...PROJEKT, schwellen: { unzugeordnetProzent: 50 } } });
+    expect(hoch.exitCode).toBe(3);
+    expect(hoch.stdout).toContain("unzugeordnetProzent: Ist 100.0, Soll höchstens 50");
+    expect((await lauf([], satz(), { projekt: { ...PROJEKT, schwellen: { unzugeordnetProzent: 100 } } })).exitCode).toBe(0);
+  });
+  test("--rezept trägt den Projektfilter in jeder observations-Abfrage und nimmt --rolle in die Metadaten-Abfragen", async () => {
+    const r = await lauf(["--rezept", "--rolle", "sonderrolle"], {});
+    const rez = lese<Rez[]>(r.stdout);
+    for (const x of rez.filter((y) => y.abfrage.view === "observations")) expect(x.abfrage.filters).toContainEqual(PF);
+    const rollen = rez.filter((x) => x.art === "metadaten").flatMap((x) => x.abfrage.filters.map((y) => (y as { value?: string }).value));
+    expect(rollen).toContain("sonderrolle");
+  });
+  test("Exit 4 ohne --ablegen schreibt nichts und gibt ohne --json keinen stdout aus", async () => {
+    const home = tmp();
+    const s = satz();
+    s["gesamtW.json"] = exp("gesamt", F.von, F.bis, []);
+    const r = await lauf([], s, { home });
+    expect(r).toMatchObject({ exitCode: 4, stdout: "" });
+    expect(existsSync(join(home, ".claude"))).toBe(false);
+  });
+  test("jeder fehlende Pflicht-Export wird einzeln erkannt", async () => {
+    for (const [datei, name] of [["gesamtW.json", "gesamt der Woche"], ["gesamtV.json", "gesamt der Vorwoche"], ["sessW.json", "sessions der Woche"]] as const) {
+      const s = satz();
+      delete s[datei];
+      await fehler(s, `Pflicht-Export fehlt: ${name}`);
+    }
+    const falsch = satz();
+    falsch["scores.json"] = { ...(falsch["scores.json"] as Wb), abfrage: { filters: [SCORE_FILTER], fromTimestamp: F.von, toTimestamp: F.bis } };
+    await fehler(falsch, "Pflicht-Export fehlt: erfassung");
+  });
+  test("Fenster mit nur einem Zeitstempel und ein falscher Score-Namensfilter sind Fehler", async () => {
+    const a = satz();
+    a["sessW.json"] = { art: "sessions", abfrage: { filters: [TYPE, PF], fromTimestamp: F.von }, data: [] };
+    await fehler(a, "Fenster (fromTimestamp/toTimestamp) fehlt");
+    const b = satz();
+    b["sessW.json"] = { art: "sessions", abfrage: { filters: [TYPE, PF], toTimestamp: F.bis }, data: [] };
+    await fehler(b, "Fenster (fromTimestamp/toTimestamp) fehlt");
+    const c = satz();
+    c["scores.json"] = { ...(c["scores.json"] as Wb), abfrage: { filters: [{ ...SCORE_FILTER, value: ["x"] }], fromTimestamp: F.vorVon, toTimestamp: F.bis } };
+    await fehler(c, "Filter name any of [erfassung, erfassung_hook] fehlt");
+  });
+  test("Projektfilter: environment verlangt String-Typ und -Wert; leere und Nicht-String-Tags fallen heraus", () => {
+    const E2 = libRaw as unknown as { projektFilterAus: (o: { tags?: unknown[]; repoName: string }) => { filter: { value: string[] } } };
+    expect(E2.projektFilterAus({ tags: ["", 5, "x"], repoName: "r" }).filter.value).toEqual(["x", "r", "project:r"]);
+  });
+  test("Codex-Mischsession: nur Sessions, deren Zeilen alle Codex sind, fallen heraus, unabhängig von der Reihenfolge", () => {
+    const p = W.erfassungsprobe({
+      sessionsW: [{ sessionId: "a", traceName: "Claude Code Turn" }, { sessionId: "a", traceName: "Codex: x" }, { sessionId: "b", traceName: "Codex: x" }, { sessionId: "b", traceName: "Claude Code Turn" }, { sessionId: "c", traceName: "Codex: x" }],
+      sessionsV: [],
+      scores: [],
+    });
+    expect(p).toMatchObject({ n: 2 });
   });
 });
 

@@ -161,9 +161,10 @@ describe("pruefeProjektConfig", () => {
     const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), langfuseWochenbericht: b });
     assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
     assert.deepEqual(mit({}), []);
+    assert.deepEqual(mit({ wochenOhneLaufMax: 1, erfassungLueckenMax: 0 }), []);
     assert.deepEqual(mit({ erfassungLueckenMax: 0, kostenAnstiegProzent: 50.5, unzugeordnetProzent: 0, wochenOhneLaufMax: 4 }), []);
     assert.match(mit({ tippfehler: 1 }).join("\n"), /langfuseWochenbericht\.tippfehler ist kein bekannter Schlüssel/);
-    for (const [feld, schlecht] of [["erfassungLueckenMax", -1], ["erfassungLueckenMax", 1.5], ["kostenAnstiegProzent", -1], ["kostenAnstiegProzent", "50"], ["unzugeordnetProzent", Infinity], ["wochenOhneLaufMax", 0], ["wochenOhneLaufMax", 1.5]] as const) {
+    for (const [feld, schlecht] of [["erfassungLueckenMax", -1], ["erfassungLueckenMax", 1.5], ["kostenAnstiegProzent", -1], ["kostenAnstiegProzent", "50"], ["unzugeordnetProzent", -1], ["unzugeordnetProzent", Infinity], ["wochenOhneLaufMax", 0], ["wochenOhneLaufMax", 1.5]] as const) {
       assert.match(mit({ [feld]: schlecht }).join("\n"), new RegExp(`langfuseWochenbericht\\.${feld} muss`));
     }
     for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /langfuseWochenbericht muss ein Objekt/);

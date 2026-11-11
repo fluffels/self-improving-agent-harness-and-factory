@@ -251,6 +251,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Bewertung | Urteil | nein |", "| 3 Tokenfresser | Bewertung | Urteil | vielleicht |")), "Wochenbericht-Spalte");
     assert.ok(!hatInventar(mr + "\n" + "| Punkt | Teil | Einordnung | im Wochenbericht | Quelle |\n"), "zweite Tabelle");
     assert.ok(!hatInventar(mr.replace("| Verdichtungszeile | Datenvollständigkeit |", "| Verdichtung | Datenvollständigkeit |").replaceAll("| Verdichtungszeile |", "| Verdichtung |")), "Verdichtungszeile fehlt");
+    assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Bewertung | Urteil | nein | Bericht |", "| 3 Tokenfresser | Bewertung | Urteil | nein |")), "Zellzahl");
     assert.ok(!hatInventar(""));
   });
 
