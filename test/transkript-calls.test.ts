@@ -470,3 +470,19 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
     expect(z(main(), null)).not.toHaveProperty("effort");
   });
 });
+
+describe("callsDerSitzung (factory#290)", () => {
+  type Sitzung = { main: Row[]; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Row[] }[] };
+  const S = raw as unknown as { callsDerSitzung: (s: Sitzung, o?: { session?: string }) => { calls: (Call & { session?: string; subagent?: { id: string } })[]; questions: number } };
+  test("dieselbe message.id in Haupt- und Subagent-Datei zählt einmal (Output = Maximum), session nur an der Hauptdatei", () => {
+    const sitzung: Sitzung = {
+      main: [...msg("m1", 100, [text(4)], 5), ...msg("m2", 200, [text(4)], 7)],
+      subagents: [{ datei: "agent-1.jsonl", meta: { agentType: "x" }, zeilen: [...msg("m2", 200, [text(4)], 40), ...msg("s1", 300, [text(4)], 9)] }],
+    };
+    const { calls } = S.callsDerSitzung(sitzung, { session: "sess" });
+    expect(calls.map((c) => [c.messageId, c.output])).toEqual([["m1", 5], ["m2", 40], ["s1", 9]]);
+    expect(calls.map((c) => c.session)).toEqual(["sess", "sess", undefined]);
+    expect(calls[2].subagent?.id).toBe("agent-1.jsonl");
+    expect(S.callsDerSitzung(sitzung).calls[0]).not.toHaveProperty("session");
+  });
+});
