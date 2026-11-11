@@ -27,12 +27,18 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
   test("der Gruppen-Agent koppelt den Commit an die Marke und meldet den Abbruch", () => {
     const text = lies(".claude/agents/factory-gruppe.md");
     expect(text).toContain(`test ! -e "$(git -C <worktree> rev-parse --path-format=absolute --git-path ${MARKE})" && git -C <worktree> commit`);
-    expect(text).toContain("GRUPPE: abgebrochen");
-    expect(text).toContain("Planwechsel (Stopp-Marke)");
+    expect(text).toContain("`GRUPPE: abgebrochen` mit `OFFEN: Planwechsel (Stopp-Marke)`");
+    expect(text).toContain("Zu Beginn jeder Zeile und bei jedem Commit im selben Shell-Aufruf");
+    expect(text).toContain("nichts mehr editieren und nicht committen");
+    expect(text).toContain("stoppt dich bei einem Planwechsel eine Marke");
+    expect(text).not.toContain("stoppt ihn bei einem Planwechsel");
   });
   test("der Umsetzer setzt, wartet, sichert, nimmt zurück und räumt die Marke", () => {
     const text = lies(".claude/agents/factory-umsetzer.md");
     for (const teil of ["Marke `touch \"$(git", "stash push -u -m", "git revert --no-edit", "entferne die Marke (`rm -f` auf denselben Pfad)", "kein `TaskStop` am Gruppen-Umsetzer"]) expect(text).toContain(teil);
+    expect(text).toContain("warte auf den Bericht der Gruppe");
+    expect(text).toContain("warte, bis der Worktree ruht: `git -C <worktree> status --porcelain` und `git -C <worktree> diff HEAD` sind bei zwei Messungen im Abstand von 5 Minuten gleich");
+    expect(text).not.toContain("kein neuer Commit auf dem Branch");
     expect(text).toContain("liegt dort eine verwaiste Marke");
     expect(text).toContain("vor der ersten Gruppe mit `rm -f` auf denselben Pfad");
   });
@@ -44,6 +50,10 @@ describe("Gruppen-Stopp-Marke (factory#283 L4)", () => {
     expect(text).not.toContain("setzt er danach selbst die Marke");
   });
   test("das Glossar erklärt die Gruppen-Stopp-Marke", () => {
-    expect(lies("docs/harness-glossar.md")).toContain("Gruppen-Stopp-Marke");
+    const text = lies("docs/harness-glossar.md");
+    expect(text).toContain("Gruppen-Stopp-Marke");
+    expect(text).toContain("prüft sie zu Beginn jeder Zeile und vor jedem Commit");
+    expect(text).toContain("meldet bei gesetzter Marke `abgebrochen`");
+    expect(text).toContain("sobald der Worktree ruht (5 Minuten ohne Dateiänderung)");
   });
 });
