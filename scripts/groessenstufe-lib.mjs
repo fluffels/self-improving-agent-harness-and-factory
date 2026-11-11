@@ -106,7 +106,7 @@ export const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
 /**
  * Die Sweep-Tiefe der Test-Lens (factory#272): `{tiefe: "voll" | "stichprobe", gruende}`. `stichprobe` (Stichprobenregel der Test-Brille) nur, wenn die Risikoklasse
  * nicht hoch ist und jeder Pfad `*.md` oder eine Testdatei ist (Text-Wächter, kein Guard-, Parser- oder Gate-Code); alles andere, auch Konfiguration,
- * `test/support` und JSON-Listen, ist `voll` (Vollsweep je Anker). Nicht lesbare Listen und fehlende Risiko-Muster sind `voll` (fail-closed, über die Risikoklasse). Der Sweep hängt nicht von der Schutzliste ab; die Zweige, die den Diff gar nicht rechnen können (Schutzliste oder git wirft), tragen `voll`. Pur.
+ * `test/support` und JSON-Listen, ist `voll` (Vollsweep je Anker). Nicht lesbare Listen und fehlende Risiko-Muster sind `voll` (fail-closed, über die Risikoklasse). Der Sweep hängt nicht von der Schutzliste ab; die Zweige, die den Diff gar nicht rechnen können (Schutzliste oder git wirft), tragen `voll`. Bekannte Grenze: Hilfslogik mit Verzweigungen in einer Testdatei zählt als Text-Wächter (die Stichprobenregel sabotiert Assertions; eine grüne Probe löst den Vollsweep der Datei aus). Pur.
  */
 export function bestimmeSweeptiefe(pfade, risiko) {
   const klasse = bestimmeRisikoklasse(pfade, risiko);
