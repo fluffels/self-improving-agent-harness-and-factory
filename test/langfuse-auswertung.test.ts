@@ -173,6 +173,33 @@ describe("Export lesen und prüfen", () => {
 });
 
 describe("Datenlücken und Bereinigung", () => {
+  test("Kosten null bei Calls (queryMetrics ohne Preis): Zeile zählt mit 0 $, der Bericht nennt die Lücke, nie eine stille 0", () => {
+    const ohne = g(...R2, 3, 0);
+    const b = rep(exp("gesamt", [g(...R1, 10, 5), { ...ohne, sum_totalCost: null }]), tageVoll);
+    expect(b.roh).toEqual({ count: 13, cost: 5 });
+    expect(b.luecken).toContain("Kosten unvollständig: 3 Calls in 1 Gruppen ohne Preis (claude-opus-5-5)");
+    expect(L.renderMarkdown(b)).toContain("- Kosten unvollständig: 3 Calls in 1 Gruppen ohne Preis (claude-opus-5-5)");
+    const zwei = rep(exp("gesamt", [{ ...g(...R2, 3, 0), sum_totalCost: null }, { ...g(...R1, 2, 0), sum_totalCost: null }, { ...g("X", "Y", null, null, 1, 0), sum_totalCost: null }]), tageVoll);
+    expect(zwei.luecken).toContain("Kosten unvollständig: 6 Calls in 3 Gruppen ohne Preis (claude-opus-5-5, claude-sonnet-5-5, unzugeordnet)");
+  });
+  test("Kosten null ohne Calls, belegte Kosten, oder in einer ausgeschlossenen Gruppe: keine Lücke", () => {
+    const leer = rep(exp("gesamt", [g(...R1, 10, 5), { ...g(...R2, 0, 0), sum_totalCost: null }]), tageVoll);
+    expect(leer.luecken.join("\n")).not.toContain("Kosten unvollständig");
+    expect(rep(gesamt, tageVoll).luecken.join("\n")).not.toContain("Kosten unvollständig");
+    const audit = rep(exp("gesamt", [g(...R1, 10, 5), { ...g("Abgleich", "[duplicate audit] Call", "claude-opus-5-5", "repoA", 4, 0), sum_totalCost: null }]), tageVoll);
+    expect(audit.luecken.join("\n")).not.toContain("Kosten unvollständig");
+    const neg = rep(exp("gesamt", [g(...R1, 10, 5), { ...g(...R2, 4, 0), sum_totalCost: null }]), tageVoll, exp("latenz", [g(...R1, 10, 5, 0), g(...R2, 4, 0, -1)]));
+    expect(neg.luecken.join("\n")).not.toContain("Kosten unvollständig");
+  });
+  test("Kosten null gilt auch für latenz und metadaten; Formfehler bleiben Formfehler", () => {
+    const n = (r: object) => ({ ...r, sum_totalCost: null });
+    expect(() => lese(exp("latenz", [n(g(...R1, 3, 0, 1))]))).not.toThrow();
+    expect(() => lese(meta("agent_type", "Plan", [n(g(...R1, 3, 0, 1))]))).not.toThrow();
+    expect(() => lese(exp("gesamt", [n(g(...R1, 3, 0))]))).not.toThrow();
+    expect(() => lese(exp("gesamt", [{ ...g(...R1, 3, 0), sum_totalCost: "abc" }]))).toThrow(/ohne numerische Metriken/);
+    expect(() => lese(exp("gesamt", [{ ...g(...R1, 3, 0), sum_totalCost: undefined }]))).toThrow(/ohne numerische Metriken/);
+    expect(() => lese(exp("gesamt", [{ ...n(g(...R1, 3, 0)), count_count: null }]))).toThrow(/ohne numerische Metriken/);
+  });
   test("negative Latenz einer Gruppe: gezählt, aus allen Summen genommen, roh ungleich bereinigt, Lücke genannt", () => {
     const b = rep(gesamt, tageVoll, exp("latenz", [g(...R1, 10, 5, 0), g(...R2, 20, 10, -5), g(...R3, 4, 2, 7)]));
     expect(b.roh).toEqual({ count: 34, cost: 17 });
