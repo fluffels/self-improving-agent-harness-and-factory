@@ -6,7 +6,9 @@
  *   node scripts/langfuse-vorbedingung.mjs --json         maschinenlesbar für das Cockpit: stdout `{"erreichbar":bool,"grund":string|null}`, Exit-Codes wie ohne Flag; nicht mit --sessionstart kombinierbar (Exit 2)
  *
  * Aufrufer: der Ticket-Skill (Schritt 0); bewusst NICHT im Board-Takt.
- * Bekannte Grenze: prüft nur /api/public/health, nicht die MCP-Verbindung der Session; die verbindet beim Session-Start vor Schritt 0 (Ausfall: mcp-ausfall.mjs).
+ * MCP-Verbindung der Session (factory#323 L1/L7/L18): der Langfuse-MCP verbindet nur beim Session-Start, Health allein sagt darüber nichts. Nach grüner Health (Standard- und --json-Modus, nicht bei --sessionstart: Race beim Start) wertet das Skript
+ * die Logs `mcp-logs-langfuse` der letzten 24 h aus (Lib mcp-log-lib.mjs): getrennt (letzter Verbindungsversuch fehlgeschlagen) → Exit 1 mit Hinweis `/mcp` → langfuse neu verbinden oder Session neu starten; bei abweichender MCP-URL (Host/Port) nennt der Hinweis das.
+ * Hat die Session keinen eigenen `Starting connection` (Subagent), zählt der jüngste Versuch im Projekt (Rückfall, kann eine fremde Session sein). Nur unter Claude Code (`CLAUDECODE=1`); sonst, ohne Log oder bei Lesefehler steht „nicht prüfbar (Grund)“ auf stderr, Exit 0. `--json` bekommt additiv das Feld `mcp`.
  * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -69,25 +71,33 @@ function mcpAbschluss(u, json, err) {
   return 0;
 }
 
+/** MCP-Prüfung bei erreichbarem Langfuse: Urteil, bei `--json` als Feld `mcp`, Exit nach `mcpAbschluss`. `mcpZeilen` und `jetzt` sind Naht für Tests. */
+function mcpLauf({ env, home, baseUrl, json, out, err, mcpZeilen, jetzt = Date.now() }) {
+  const lesen = mcpZeilen ?? (() => langfuseZeilen({ env, home, jetzt, wurzel: env.CLAUDE_PROJECT_DIR || process.cwd() }));
+  const mcp = mcpUrteil({ env, basisUrl: baseUrl, lesen, jetzt });
+  if (json) out(JSON.stringify({ erreichbar: true, grund: null, mcp }));
+  return mcpAbschluss(mcp, json, err);
+}
+
 const USAGE = "Aufruf: node scripts/langfuse-vorbedingung.mjs [--sessionstart | --json]";
 
-export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, mcpZeilen, jetzt = Date.now() } = {}) {
+/** Liest den Aufruf (`--sessionstart`, `--json`): `{ sessionstart, json }` oder `{ fehler }` (Text samt Aufrufzeile). Pur. */
+function aufrufLesen(argv) {
   const { werte, fehler } = flagsLesen(argv, { sessionstart: { type: "boolean" }, json: { type: "boolean" } });
-  const aufrufFehler = fehler?.text ?? (werte.sessionstart && werte.json ? "--json und --sessionstart schließen sich aus" : null);
-  if (aufrufFehler) {
-    err(`${aufrufFehler}. ${USAGE}`);
+  const text = fehler?.text ?? (werte.sessionstart && werte.json ? "--json und --sessionstart schließen sich aus" : null);
+  return text ? { fehler: `${text}. ${USAGE}` } : { sessionstart: werte.sessionstart === true, json: werte.json === true };
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, ...mcpOptionen } = {}) {
+  const aufruf = aufrufLesen(argv);
+  if (aufruf.fehler) {
+    err(aufruf.fehler);
     return AUFRUF_EXIT;
   }
-  const sessionstart = werte.sessionstart === true;
+  const { sessionstart, json } = aufruf;
   const baseUrl = basisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
   const urteil = await pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
-  const json = werte.json === true;
-  if (urteil.ok && !sessionstart) {
-    const lesen = mcpZeilen ?? (() => langfuseZeilen({ env, home, jetzt, wurzel: env.CLAUDE_PROJECT_DIR || process.cwd() }));
-    const mcp = mcpUrteil({ env, basisUrl: baseUrl, lesen, jetzt });
-    if (json) out(JSON.stringify({ erreichbar: true, grund: null, mcp }));
-    return mcpAbschluss(mcp, json, err);
-  }
+  if (urteil.ok && !sessionstart) return mcpLauf({ env, home, baseUrl, json, out, err, ...mcpOptionen });
   if (json) {
     out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund }));
     return urteil.ok ? 0 : 1;

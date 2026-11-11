@@ -100,6 +100,9 @@ describe("urlAbweichung", () => {
     expect(l.urlAbweichung("http://localhost:3000/api/public/mcp", "http://localhost:3000")).toBeNull();
     expect(l.urlAbweichung("https://lf.example/api/public/mcp", "https://lf.example:443")).toBeNull();
   });
+  test("derselbe Host mit http und https hat andere Standardports: Abweichung", () => {
+    expect(l.urlAbweichung("http://lf.example/x", "https://lf.example")).toContain("lf.example:80");
+  });
   test.each([
     ["http://localhost:3000/x", "http://127.0.0.1:3000", "localhost:3000", "127.0.0.1:3000"],
     ["http://localhost:3000/x", "http://localhost:4000", "localhost:3000", "localhost:4000"],

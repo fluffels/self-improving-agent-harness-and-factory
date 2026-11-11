@@ -109,7 +109,7 @@
     "complexity": 8
   },
   "scripts/langfuse-vorbedingung.mjs": {
-    "complexity": 4
+    "complexity": 2
   },
   "scripts/lauf-ergebnis.mjs": {
     "complexity": 5

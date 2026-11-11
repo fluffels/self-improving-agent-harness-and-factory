@@ -5,7 +5,7 @@
  *
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface. */
 import { describe, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -222,6 +222,11 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
     mkdirSync(dir, { recursive: true });
     const vor = (min: number) => new Date(Date.now() - min * 60000).toISOString();
     writeFileSync(join(dir, "a.jsonl"), [START(vor(5)), REFUSED(vor(4))].join("\n"));
+    const zwei = new Date(Date.now() - 2 * 3600 * 1000);
+    utimesSync(join(dir, "a.jsonl"), zwei, zwei);
+    // Ein anderer Server mit jüngerem Erfolg darf das Urteil nicht überstimmen.
+    mkdirSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer"), { recursive: true });
+    writeFileSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer", "b.jsonl"), [START(vor(2)), ERFOLG(vor(1))].join("\n"));
     const env = { ...CC, CLAUDE_PROJECT_DIR: `${wurzel}/.claude/worktrees/wt-1`, FACTORY_MCP_LOG_DIR: basis };
     const lauf2 = async (e: Record<string, string | undefined>) => {
       const err: string[] = [];
