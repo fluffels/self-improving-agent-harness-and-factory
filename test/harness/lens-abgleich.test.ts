@@ -139,3 +139,34 @@ describe("Beide Laufzeiten erreichen die Brille (factory#308, AK4)", () => {
     assert.equal(rollen.find((r) => r.name === "holdout-szenario")?.ohneShell, true);
   });
 });
+
+describe("Bedingte Ablauf-Dateien des Review-Skills (factory#309)", () => {
+  const ERWARTET = ["ablauf-abnahme-fix.md", "ablauf-merge-main.md", "ablauf-nachweis.md", "ablauf-zusatzpass.md"];
+  /** Die Menge der in `skill` mit vollem Pfad genannten `ablauf-*.md` (sortiert). */
+  const genannt = (skill: string): string[] =>
+    [...new Set([...skill.matchAll(/\.agents\/skills\/review-lenses\/(ablauf-[a-z-]+\.md)/g)].map((m) => m[1]))].sort();
+  /** Befund-Text: Dateien im Ordner und Verweise im Kern müssen übereinstimmen (leer = grün). */
+  const abgleich = (skill: string, dateien: string[]): string[] => {
+    const out: string[] = [];
+    for (const d of dateien) if (!genannt(skill).includes(d)) out.push(`verwaist: ${d} steht in SKILL.md nicht mit vollem Pfad`);
+    for (const g of genannt(skill)) if (!dateien.includes(g)) out.push(`Verweis ohne Datei: ${g}`);
+    return out;
+  };
+  const imOrdner = (): string[] =>
+    readdirSync(new URL(`${BRILLEN_ORDNER}/`, WURZEL))
+      .filter((d) => /^ablauf-.+\.md$/.test(d))
+      .sort();
+
+  test("die Menge der ablauf-*.md ist genau die erwartete und der Kern nennt jede mit vollem Pfad", () => {
+    assert.deepEqual(imOrdner(), ERWARTET, "eine neue bedingte Datei: ERWARTET, Besitz-Manifest und Budget mitziehen");
+    assert.deepEqual(genannt(SKILL), ERWARTET);
+    assert.deepEqual(abgleich(SKILL, imOrdner()), []);
+  });
+
+  test("Negativfall: ein entfernter Verweis und eine verwaiste Datei werden rot", () => {
+    const ohneVerweis = SKILL.split(".agents/skills/review-lenses/ablauf-zusatzpass.md").join("");
+    assert.match(abgleich(ohneVerweis, imOrdner()).join("\n"), /verwaist: ablauf-zusatzpass\.md/);
+    assert.match(abgleich(SKILL, [...imOrdner(), "ablauf-neu.md"]).join("\n"), /verwaist: ablauf-neu\.md/);
+    assert.match(abgleich(`${SKILL}\n.agents/skills/review-lenses/ablauf-weg.md`, imOrdner()).join("\n"), /Verweis ohne Datei: ablauf-weg\.md/);
+  });
+});

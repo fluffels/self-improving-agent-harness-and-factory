@@ -43,6 +43,10 @@ const BLOECKE: string[] = [
   agentPfad("umsetzer"),
   agentPfad("lens"),
   ".agents/skills/review-lenses/SKILL.md",
+  ".agents/skills/review-lenses/ablauf-abnahme-fix.md",
+  ".agents/skills/review-lenses/ablauf-merge-main.md",
+  ".agents/skills/review-lenses/ablauf-nachweis.md",
+  ".agents/skills/review-lenses/ablauf-zusatzpass.md",
   ".agents/skills/factory/ablauf.md",
 ];
 
