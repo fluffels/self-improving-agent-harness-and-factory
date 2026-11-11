@@ -330,6 +330,19 @@ describe("fuehreSchritte und baueFixture", () => {
     expect(aufrufe).toEqual(["--- a", "--- f", "F"]);
   });
 
+  it("Modus stderr: ein roter Schritt liefert sein stderr-Ende im Ergebnis, ein grüner keins", () => {
+    temp((dir) => {
+      const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
+      const e = P.fuehreSchritte([
+        { id: "gut", argv: [process.execPath, "-e", "console.error('ignoriert')"], cwd: dir, kritisch: false },
+        { id: "rot", argv: [process.execPath, "-e", "console.error('kaputt');process.exit(3)"], cwd: dir, kritisch: false },
+        { id: "viel", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'ENDE');process.exitCode=4"], cwd: dir, kritisch: false },
+      ], io);
+      expect(e.slice(0, 2)).toStrictEqual([{ id: "gut", status: 0 }, { id: "rot", status: 3, stderr: "kaputt\n" }]);
+      expect(e[2]).toMatchObject({ status: 4, stderr: expect.stringMatching(/xxENDE$/) as string });
+    });
+  });
+
   it("baueFixture schreibt die Projektdateien aus der Quelle, die Config aus der Fixture, nie einen Stub", () => {
     const geschrieben: Record<string, string> = {};
     const quelle: Record<string, string> = Object.fromEntries(P.fixturePfade().filter((p) => p !== "AGENTS.md").map((p) => [join("/von", p === ".factory/projekt.json" ? P.FIXTURE_PFAD : p), p === "package.json" ? '{"scripts":{}}' : p === ".factory/projekt.json" ? "{}" : `inhalt ${p}`]));
@@ -443,14 +456,15 @@ describe("Negativfälle der Kette (echter Klon)", () => {
   /** Fixture bis nach dem Sync und `projektwerte --write` bauen; → Pfad des Fixture-Projekts. */
   const bezieher = (dir: string, k: string, name: string): string => {
     const scratch = join(dir, name);
-    const naehte = P.echteNaehte("ignore");
+    const naehte = P.echteNaehte("stderr");
     const sha = naehte.kopf(k) as string;
     const alle = P.probeSchritte({ quelle: k, scratch, tag: P.PROBE_TAG, sha });
     const bis = alle.findIndex((s) => s.id === "projektwerte");
     const kette = alle.slice(0, bis + 1).filter((s) => s.id !== "install" && s.id !== "lint-prune");
     const io = { ...naehte.mitScratch(scratch), melde: () => undefined };
     const ergebnisse = P.fuehreSchritte(kette, io);
-    expect(ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id))).toEqual([]);
+    const rot = ergebnisse.filter((e) => e.status !== 0 && ["klon", "tag", "fixture", "sync-tag", "befehle"].includes(e.id));
+    expect(rot, JSON.stringify(rot)).toEqual([]);
     return join(scratch, "bezieher");
   };
 

@@ -163,13 +163,14 @@ export function baueFixture({ von, ziel, raum, io }) {
   }
 }
 
-/** Führt die Schritte nacheinander aus (`io.fuehre(schritt)` → Exit oder `null`), bricht nach einem kritischen Rot ab. → `[{ id, status }]`. */
+/** Führt die Schritte nacheinander aus (`io.fuehre(schritt)` → Exit oder `null`), bricht nach einem kritischen Rot ab. → `[{ id, status, stderr? }]` (`stderr` = Ende der Fehlerausgabe, falls die Naht `stderrRest(id)` hat). */
 export function fuehreSchritte(schritte, io) {
   const ergebnisse = [];
   for (const s of schritte) {
     io.melde(`--- ${s.id}`);
     const status = s.art ? io[s.art](s) : io.fuehre(s);
-    ergebnisse.push({ id: s.id, status });
+    const rest = status !== 0 ? io.stderrRest?.(s.id) : undefined;
+    ergebnisse.push(rest ? { id: s.id, status, stderr: rest } : { id: s.id, status });
     if (status !== 0 && s.kritisch) break;
   }
   return ergebnisse;
@@ -187,10 +188,19 @@ export function main(argv, io) {
   return { code: urteil.code, out: `${[mess ?? "Messung nicht möglich (AGENTS.md des Fixture-Projekts fehlt oder ohne Marker)", ...urteil.zeilen].join("\n")}\n`, err: "" };
 }
 
-/** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
+/** Zeichen vom Ende der Fehlerausgabe eines Schritts, die `stderrRest` behält. */
+const STDERR_REST = 2000;
+
+/** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es, `"stderr"` ignoriert stdout und fängt stderr für `stderrRest`; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
 export function echteNaehte(stdio = "inherit") {
   const lies = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
-  const lauf = (argv, cwd) => spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio }).status;
+  const reste = new Map();
+  const lauf = (argv, cwd, id) => {
+    const fange = stdio === "stderr";
+    const r = spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio: fange ? ["ignore", "ignore", "pipe"] : stdio, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    if (fange) reste.set(id, String(r.stderr ?? "").slice(-STDERR_REST));
+    return r.status;
+  };
   const io = {
     lies,
     istGitRepo: (p) => spawnSync("git", ["-C", p, "rev-parse", "--git-dir"], { stdio: "ignore" }).status === 0,
@@ -204,7 +214,8 @@ export function echteNaehte(stdio = "inherit") {
       mkdirSync(scratch, { recursive: true });
       return {
         ...io,
-        fuehre: (s) => lauf(s.argv, s.cwd),
+        fuehre: (s) => lauf(s.argv, s.cwd, s.id),
+        stderrRest: (id) => reste.get(id),
         befehle: (s) => {
           try {
             const seite = join(s.cwd, "docs", "referenz", "befehle.md");
