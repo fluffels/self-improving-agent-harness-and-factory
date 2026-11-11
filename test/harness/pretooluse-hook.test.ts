@@ -24,6 +24,8 @@ import * as ghRaw0 from "../../scripts/gh-guard-hook.mjs";
 import * as tabRaw from "../../scripts/shell-tabellen.mjs";
 import { FREMD, projektConfig } from "../support/fremd-config";
 import { besitzAnker } from "../support/besitz-anker";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pflichtReviewMuster } from "../../scripts/besitz-extraktion.mjs";
 
 const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
 type Guards = Record<string, (o: never) => unknown>;
@@ -227,6 +229,8 @@ describe("Verdrahtung (#1311)", () => {
   test("Dispatcher und alle seine transitiven ./*.mjs-Importe sind geschützte Pfade", () => {
     const quelle = JSON.parse(lies(".github/protected-paths.json")) as { harness: string[] };
     const codeowners = lies(".github/CODEOWNERS");
+    // CODEOWNERS spiegelt nur die Pflicht-Review-Liste (factory#348); ohne Gruppe die ganze Quelle.
+    const soll = (pflichtReviewMuster as (t: string) => string[] | null)(lies(".github/protected-paths.json")) ?? [];
     const gesehen = new Set<string>();
     const besuche = (datei: string) => {
       if (gesehen.has(datei)) return;
@@ -238,7 +242,7 @@ describe("Verdrahtung (#1311)", () => {
     assert.ok(gesehen.has("bash-parser.mjs") && gesehen.has("hook-io.mjs"), "Import-Ableitung funktioniert");
     for (const f of gesehen) {
       assert.ok(quelle.harness.includes(`/scripts/${f}`), `protected-paths.json › harness braucht /scripts/${f}`);
-      assert.ok(codeowners.includes(`/scripts/${f} @`), `CODEOWNERS braucht /scripts/${f}`);
+      assert.equal(codeowners.includes(`/scripts/${f} @`), soll.includes(`/scripts/${f}`), `CODEOWNERS weicht von der Pflicht-Review-Liste ab: /scripts/${f}`);
     }
   });
 
