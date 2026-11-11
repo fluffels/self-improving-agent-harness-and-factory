@@ -170,6 +170,19 @@ describe("pruefeProjektConfig", () => {
     for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /langfuseWochenbericht muss ein Objekt/);
   });
 
+  test("risiko (factory#333): optional; hoch ist eine nicht-leere Liste nicht-leerer POSIX-Muster, kein stilles Abschalten", () => {
+    const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), risiko: b });
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit({ hoch: ["/x/"] }), []);
+    assert.deepEqual(mit({ hoch: ["/x/", "*auth*"] }), []);
+    for (const schlecht of [{ hoch: [] }, {}, { hoch: "x" }, { hoch: null }]) assert.match(mit(schlecht).join("\n"), /risiko\.hoch muss eine nicht-leere Liste/);
+    assert.match(mit({ hoch: [1] }).join("\n"), /risiko\.hoch\[0\] muss ein nicht-leerer Text sein/);
+    assert.match(mit({ hoch: ["  "] }).join("\n"), /risiko\.hoch\[0\] muss ein nicht-leerer Text sein/);
+    assert.match(mit({ hoch: ["a", "a\\b"] }).join("\n"), /risiko\.hoch\[1\] enthält einen Backslash/);
+    assert.match(mit({ hoch: ["x"], extra: 1 }).join("\n"), /risiko\.extra ist kein bekannter Schlüssel/);
+    for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /risiko muss ein Objekt/);
+  });
+
   test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: "eingang/meldungen" }), []);
     for (const schlecht of ["", "foo", 3]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: schlecht }).join("\n"), /meldestelle muss die Form owner\/name[\s\S]*Fix:/);
