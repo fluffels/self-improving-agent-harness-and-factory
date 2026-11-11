@@ -943,6 +943,11 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     assert.deepEqual(bewerte(`${mitSicherheit()}\n* ${Z.bedrohungen}: ${ZEILE}`), []);
   });
 
+  test("parseNachweis verlangt den Schlüssel der Bedrohungs-Zeile in den Commit-Zeilen (kein Standardwert)", () => {
+    const { bedrohungen: _weg, ...ohne } = Z;
+    assert.throws(() => (raw as Mod).parseNachweis("x", ohne as Zeilen), /braucht die Commit-Zeilen/);
+  });
+
   test("bewerteKlasseHoch ist die einzige Prüfstelle: normal und doku liefern [], hoch ohne Zeile nicht", () => {
     const n = parseNachweis(mitSicherheit());
     const { bewerteKlasseHoch } = raw as Mod;
