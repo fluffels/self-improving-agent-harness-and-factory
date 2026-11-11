@@ -39,19 +39,19 @@ Die Änderungen des Tickets gegen `origin/main`. **Der Diff wird EINMAL in eine 
 ```bash
 TMP=$(mktemp -d)                                        # Scratch-Ordner der Session
 git fetch origin
-git status --porcelain                                  # MUSS leer sein — s.u.
-git diff origin/main...HEAD --stat                      # Überblick: welche Dateien
+git status --porcelain                                  # MUSS leer sein
+git diff origin/main...HEAD --stat
 git diff origin/main...HEAD > "$TMP/<praefixe.worktree><nr>-r<runde>.patch"   # die EINE Grundlage aller Lenses
-git rev-parse HEAD                                      # Frische-Guard, s.u.
+git rev-parse HEAD                                      # Frische-Guard
 ```
 
-Der Drei-Punkt-Diff zeigt genau den Slice, den `check:diffsize` misst; ein Zwei-Punkt-Diff (auch „plus Arbeitsbaum“) ist verboten. Er enthält **nur Committetes**: vorher `git status --porcelain` prüfen, sonst reviewt niemand die letzte Änderung. Die Patch-Datei liegt im Scratch-Ordner, nicht im Worktree.
+Der Drei-Punkt-Diff zeigt genau den Slice, den `check:diffsize` misst; ein Zwei-Punkt-Diff (auch „plus Arbeitsbaum“) ist verboten. Er enthält **nur Committetes**: vorher `git status --porcelain` prüfen, sonst reviewt niemand die letzte Änderung.
 
 ⚠️ **Frische-Guard.** Der Patch trägt die Rundennummer, jede Lens prüft mit `git rev-parse HEAD`, dass der Stand zum Patch passt. Weicht der HEAD ab: Patch neu schreiben **und die Abweichung melden**, nicht den alten Stand reviewen.
 
 ### Kontext-Diät je Lens (#1034)
 
-Kontext-Diät, Findings-Format, Pflichtsatz und Blocker-Maßstab stehen in der Lens-Definition, die Prüfpunkte in `brille-<brille>.md` neben dieser Datei (die Lens liest sie von `origin/main`).
+Kontext-Diät, Findings-Format und Blocker-Maßstab stehen in der Lens-Definition, die Prüfpunkte in `brille-<brille>.md` neben dieser Datei (die Lens liest sie von `origin/main`).
 
 ## Ablauf — Stufe 0 zuerst, dann (nur bei Grün) die Lenses
 
@@ -70,8 +70,7 @@ node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, a
 
 **Welche Lenses laufen — die Review-Staffel (quellprojekt#1265):**
 
-- **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** ⇒ läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**, außer bei Größenstufe S (nächster Punkt).
-- **Größenstufe S (factory#271):** vor jedem Lens-Pass und vor dem Nachweis `node scripts/groessenstufe.mjs` (rechnet den Diff gegen die Basis, dieselbe Zahl wie der Wächter). Bei `STUFE: S` und Code-Diff läuft **eine** Lens `Brille: kombiniert` statt Lens 1–3 (Delta-Runden ebenso, sie liest die drei Teil-Brillen), ein reiner Markdown-Diff bleibt bei Lens 4. Bei `voll`, auch wenn der Diff nach Runde 1 über die Grenze wächst (fail-closed): der volle Satz auf dem vollen Patch.
+- **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** ⇒ läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**; bei Größenstufe S (factory#271, `node scripts/groessenstufe.mjs` vor jedem Pass) mit Code-Diff **eine** Lens `kombiniert` (`brille-kombiniert.md`), bei `voll` der volle Satz.
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/<praefixe.worktree><nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art. Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird. Rote `verify`-Fixe davor zählen nicht als Fix-Runde.
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass, fiel eine Lens aus, wechselte die Diff-Art oder wurde rebased: der volle Satz auf dem vollen Patch.
@@ -92,11 +91,11 @@ Der PreToolUse-Guard `scripts/lens-auftrag-guard.mjs` weist einen Auftrag mit of
 
 Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohne Neu-Spawn. Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“ Der Bericht vermerkt den Fallback.
 
-⚠️ **Die Lenses lesen, sie schreiben nicht** (die Lens-Definition sagt „du liest, du änderst nichts“); **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>` (`git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
+⚠️ **Die Lenses lesen, sie schreiben nicht**; **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>` (`git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
 
 **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sonst meldet sie „nicht belegt“.
 
-Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌), vom Orchestrator aus den Lens-Verdikten gebildet. Funde außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets; ohne Beleg nur im Bericht), Produkt-/Inhalts-Befund → Issue, gebündelt (AGENTS.md § Befunde sofort festhalten), nicht inline mitfixen.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌). Funde außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen; ohne Beleg nur im Bericht), Produkt-/Inhalts-Befund → gebündeltes Issue (AGENTS.md § Befunde sofort festhalten), nicht inline mitfixen.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 
