@@ -105,7 +105,7 @@ describe("leseLogDateien", () => {
   const SEIT_MS = Date.parse("2026-11-11T08:00:00.000Z");
   const baue = () => {
     const basis = mkdtempSync(join(tmpdir(), "mcp-log-lib-"));
-    const ablegen = (projekt: string, server: string, name: string, text: string, zeit: Date) => {
+    const ablegen = (projekt: string, server: string, name: string, text: string, zeit: Date | number) => {
       const dir = join(basis, projekt, server);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, name), text);
@@ -131,10 +131,11 @@ describe("leseLogDateien", () => {
     expect(r.map((d) => d.zeilen[0]).sort()).toEqual(["haupt", "wt"]);
     expect(r.find((d) => d.zeilen[0] === "wt")?.suffix).toBe("--claude-worktrees-wt-1");
   });
-  test("Fenstergrenze der Datei: mtime genau an `seit` zählt, eine Millisekunde davor nicht", () => {
+  test("Fenstergrenze der Datei: mtime knapp nach `seit` zählt, eine Millisekunde davor nicht", () => {
     const { basis, ablegen } = baue();
-    ablegen("-dev-proj", "mcp-logs-langfuse", "an.jsonl", "an\n", new Date(SEIT_MS));
-    ablegen("-dev-proj", "mcp-logs-langfuse", "davor.jsonl", "davor\n", new Date(SEIT_MS - 1));
+    // Sekunden als Float mit Bruchteil unter einer Millisekunde: `utimesSync(Date)` rundet auf Linux ab (FAQ „mtime-Vergleich … flaky“), die mtime läge sonst knapp unter `seit`.
+    ablegen("-dev-proj", "mcp-logs-langfuse", "an.jsonl", "an\n", SEIT_MS / 1000 + 0.0005);
+    ablegen("-dev-proj", "mcp-logs-langfuse", "davor.jsonl", "davor\n", (SEIT_MS - 1) / 1000);
     expect((l.leseLogDateien({ basis, wurzel: "/dev/proj", seitMs: SEIT_MS }) ?? []).map((d) => d.zeilen[0])).toEqual(["an"]);
   });
   test("ordnerFilter wählt die Server-Ordner", () => {

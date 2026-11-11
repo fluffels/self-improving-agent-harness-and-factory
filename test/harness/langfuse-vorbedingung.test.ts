@@ -18,7 +18,7 @@ type Vorbedingung = {
   bewerteHealth: (e: { status?: number; fehler?: string }) => Urteil;
   basisUrl: (env: Record<string, string | undefined>) => string;
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
-  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string }) => Promise<number>;
+  main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] | null; jetzt?: number }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
 const WURZEL = process.cwd();
@@ -151,7 +151,7 @@ describe("main", () => {
   test("--json erreichbar: Exit 0 und {erreichbar:true, grund:null} auf stdout, stderr leer", async () => {
     const r = await lauf(["--json"], antwort(200));
     expect(r.code).toBe(0);
-    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: true, grund: null }]);
+    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: true, grund: null, mcp: { status: "nicht-pruefbar", grund: "keine Claude-Code-Session" } }]);
     expect(r.err).toEqual([]);
   });
   test("--json nicht erreichbar: Exit 1, stdout nennt den Grund, stderr bleibt leer", async () => {
@@ -165,6 +165,102 @@ describe("main", () => {
     expect(r.code).toBe(2);
     expect(r.out).toEqual([]);
     expect(r.err.join("\n")).toContain("--json");
+  });
+});
+
+describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
+  const JETZT = Date.parse("2026-11-11T10:00:00.000Z");
+  const SID = "sess-1";
+  const z = (debug: string, zeit: string, sessionId = SID) => JSON.stringify({ debug, timestamp: zeit, sessionId, cwd: "/x" });
+  const START = (zeit: string, sid = SID) => z("Starting connection with timeout of 30000ms", zeit, sid);
+  const ERFOLG = (zeit: string, sid = SID) => z("Successfully connected (transport: http) in 46ms", zeit, sid);
+  const REFUSED = (zeit: string, sid = SID) => z("HTTP Connection failed after 19ms: ECONNREFUSED: Unable to connect (code: ECONNREFUSED, errno: none)", zeit, sid);
+  const INIT = (url: string) => z(`Initializing HTTP transport to ${url}`, "2026-11-11T09:00:00.000Z");
+  const CC = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: SID };
+  const GETRENNT = [INIT("http://localhost:3000/api/public/mcp"), START("2026-11-11T09:00:00.001Z"), REFUSED("2026-11-11T09:00:00.020Z")];
+  const VERBUNDEN = [START("2026-11-11T09:00:00.000Z"), ERFOLG("2026-11-11T09:00:00.050Z")];
+
+  const lauf = async (argv: string[], env: Record<string, string | undefined>, mcpZeilen: (() => string[] | null) | undefined, fetchImpl: Fetch = antwort(200)) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    let gelesen = 0;
+    const lesen = mcpZeilen && (() => ((gelesen += 1), mcpZeilen()));
+    const code = await v.main(argv, env, (s) => out.push(s), (s) => err.push(s), { fetchImpl, fristMs: 20, home: "/h", lies: keineDatei, mcpZeilen: lesen, jetzt: JETZT });
+    return { code, out, err, gelesen: () => gelesen };
+  };
+
+  test("verbunden: Exit 0, stderr leer", async () => {
+    const r = await lauf([], CC, () => VERBUNDEN);
+    expect(r.code).toBe(0);
+    expect(r.err).toEqual([]);
+  });
+  test("getrennt: Exit 1 mit Hinweis (Code, Zeit, /mcp, neu starten), stderr nennt „MCP-Verbindung der Session“", async () => {
+    const r = await lauf([], CC, () => GETRENNT);
+    expect(r.code).toBe(1);
+    const t = r.err.join("\n");
+    expect(t).toContain("Langfuse-MCP-Verbindung dieser Session fehlt (ECONNREFUSED, 2026-11-11T09:00:00.020Z)");
+    expect(t).toContain("`/mcp` → langfuse neu verbinden oder Session neu starten, erst dann Ticket starten");
+    expect(t).not.toContain("Spur");
+  });
+  test("getrennt mit abweichender Adresse: der Hinweis nennt die Abweichung zusätzlich", async () => {
+    const r = await lauf([], { ...CC, LANGFUSE_BASE_URL: "http://127.0.0.1:3000" }, () => GETRENNT);
+    expect(r.err.join("\n")).toContain("MCP-URL localhost:3000 weicht von der Langfuse-Basis-URL 127.0.0.1:3000 ab");
+    const gleich = await lauf([], { ...CC, LANGFUSE_BASE_URL: "http://localhost:3000" }, () => GETRENNT);
+    expect(gleich.err.join("\n")).not.toContain("weicht");
+  });
+  test("Rückfall (Session ohne eigenen Start): bewertet den jüngsten Start und sagt es", async () => {
+    const r = await lauf([], { ...CC, CLAUDE_CODE_SESSION_ID: "subagent" }, () => GETRENNT);
+    expect(r.code).toBe(1);
+    expect(r.err.join("\n")).toContain("keinen eigenen Verbindungsstart");
+  });
+  test("nicht prüfbar (Start ohne Ergebnis): Exit 0 und eine sichtbare Zeile auf stderr", async () => {
+    const r = await lauf([], CC, () => [START("2026-11-11T09:00:00.000Z")]);
+    expect(r.code).toBe(0);
+    expect(r.err).toEqual(["Langfuse-MCP-Verbindung der Session nicht prüfbar (Verbindungsstart ohne Ergebnis)."]);
+  });
+  test("kein Log-Ordner: nicht prüfbar, Exit 0, sichtbar", async () => {
+    const r = await lauf([], CC, () => null);
+    expect(r.code).toBe(0);
+    expect(r.err.join("\n")).toContain("nicht prüfbar (kein MCP-Log gefunden)");
+  });
+  test("werfender Leser: nicht prüfbar statt Absturz oder Sperre", async () => {
+    const r = await lauf([], CC, () => {
+      throw new Error("kaputt");
+    });
+    expect(r.code).toBe(0);
+    expect(r.err.join("\n")).toContain("nicht prüfbar (MCP-Log nicht lesbar)");
+  });
+  test("ohne CLAUDECODE (Codex, Shell): nicht prüfbar, sichtbar, der Leser läuft nicht", async () => {
+    const r = await lauf([], { CLAUDE_CODE_SESSION_ID: SID }, () => GETRENNT);
+    expect(r.code).toBe(0);
+    expect(r.err).toEqual(["Langfuse-MCP-Verbindung der Session nicht prüfbar (keine Claude-Code-Session)."]);
+    expect(r.gelesen()).toBe(0);
+  });
+  test("Health aus: Exit 1 wie bisher, ohne MCP-Prüfung", async () => {
+    const r = await lauf([], CC, () => VERBUNDEN, antwort(500));
+    expect(r.code).toBe(1);
+    expect(r.err.join("\n")).toContain("Langfuse aus, bitte starten");
+    expect(r.gelesen()).toBe(0);
+  });
+  test("--sessionstart prüft die MCP-Verbindung nicht (Race beim Start)", async () => {
+    const r = await lauf(["--sessionstart"], CC, () => GETRENNT);
+    expect(r.code).toBe(0);
+    expect(r.out).toEqual([]);
+    expect(r.gelesen()).toBe(0);
+  });
+  test("--json enthält `mcp` (additiv, `erreichbar` bleibt die Health-Aussage); getrennt ergibt Exit 1", async () => {
+    const r = await lauf(["--json"], CC, () => GETRENNT);
+    expect(r.code).toBe(1);
+    const j = JSON.parse(r.out[0]) as { erreichbar: boolean; grund: null; mcp: { status: string; code: string } };
+    expect(j).toMatchObject({ erreichbar: true, grund: null, mcp: { status: "getrennt", code: "ECONNREFUSED" } });
+    expect(r.err).toEqual([]);
+    const ok = JSON.parse((await lauf(["--json"], CC, () => VERBUNDEN)).out[0]) as { mcp: { status: string } };
+    expect(ok.mcp.status).toBe("verbunden");
+  });
+  test("--json bei Health aus: keine MCP-Prüfung, kein Feld `mcp`", async () => {
+    const r = await lauf(["--json"], CC, () => GETRENNT, antwort(500));
+    expect(Object.keys(JSON.parse(r.out[0]) as object)).toEqual(["erreichbar", "grund"]);
+    expect(r.gelesen()).toBe(0);
   });
 });
 
