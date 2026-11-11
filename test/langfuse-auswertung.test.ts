@@ -279,7 +279,7 @@ describe("Wächter Secret-Key (AK8)", () => {
     if (gesehen.has(start)) return gesehen;
     gesehen.add(start);
     const text = readFileSync(join("scripts", start), "utf8");
-    for (const m of text.matchAll(/from "\.\/([^"]+)"/g)) huelle(m[1], gesehen);
+    for (const m of text.matchAll(/(?:from|import)\s*\(?\s*"\.\/([^"]+)"/g)) huelle(m[1], gesehen);
     return gesehen;
   };
   test("die Import-Hülle der CLI enthält weder langfuse-api noch langfuse-zugang, keinen Key und kein fetch", () => {
