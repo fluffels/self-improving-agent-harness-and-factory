@@ -918,7 +918,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     assert.match(bewerte(mitZeile("daten=a | grenzen=b | missbrauch=c")).join(), /Teil datenschutz fehlt/);
     assert.match(bewerte(mitZeile(`${ZEILE} | daten=nochmal`)).join(), /doppelt: daten/);
     assert.match(bewerte(mitZeile(`${ZEILE} | sonstiges=x`)).join(), /unbekannte Teile sonstiges/);
-    assert.match(bewerte(mitZeile(`${ZEILE} | Freitext ohne Gleichheitszeichen`)).join(), /ohne \`=\`.*Freitext/);
+    assert.match(bewerte(mitZeile(`${ZEILE} | Freitext ohne Gleichheitszeichen`)).join(), /Teil ohne .=. .erwartet.*Freitext/);
   });
 
   test("normal ohne beides und Doku-Diff mit lenses=doku sind ohne Bedrohungs-Fehler (Doku-Diff wird nicht belastet)", () => {

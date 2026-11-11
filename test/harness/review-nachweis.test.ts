@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null };
+type Nachweis = { plan: { art: string } | null; review: { head: string | null; runden: number; lenses: string[]; verdikt: string | null } | null; bedrohungen?: { teile: Record<string, string> } | null };
 type Mod = {
   MAX_FIX_RUNDEN: number;
   parseNachweis: (t: string, z: unknown) => Nachweis;

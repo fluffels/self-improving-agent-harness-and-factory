@@ -392,7 +392,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · ", "Brille: Architektur · ", "Brille: Test-Adäquanz · ", "Brille: `doku` · ", "Brille: do`ku · "]) {
       const out = deny(agent(`${kopf}${rest}`));
       assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", kopf);
-      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, kombiniert, doku/, kopf);
+      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, kombiniert, sicherheit, doku/, kopf);
     }
     // Fallback-Spawn (general-purpose) mit der Lens-Definition, aber ohne Brille
     assert.equal(deny(agent(`Lies zuerst factory-lens.md · ${rest}`, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
