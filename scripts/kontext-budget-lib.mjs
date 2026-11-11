@@ -118,7 +118,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".claude/agents/factory-gruppe.md", budget: 7_500 },
   { file: ".claude/agents/factory-lens.md", budget: 12_000 },
   { file: ".claude/agents/factory-planer.md", budget: 17_500 },
-  { file: ".claude/agents/factory-umsetzer.md", budget: 19_500 },
+  { file: ".claude/agents/factory-umsetzer.md", budget: 19_460 },
   { file: ".claude/agents/holdout-abnahme.md", budget: 7_000 },
   { file: ".claude/agents/holdout-szenario.md", budget: 3_500 },
 ];
