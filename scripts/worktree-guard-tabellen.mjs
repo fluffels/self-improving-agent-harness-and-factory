@@ -83,6 +83,7 @@ export function makeCtx(cwd, deps) {
     cwd: P.resolve(cwd),
     targets: new Set(),
     asks: new Map(),
+    stash: false, // `git stash` (außer list/show) im Befehl: ortsunabhängig verboten (factory#323)
     fns: new Map(),
     aliases: new Map(),
     expanding: new Set(),

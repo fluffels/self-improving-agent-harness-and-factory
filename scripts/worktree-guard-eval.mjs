@@ -447,9 +447,9 @@ function grobesNetz(name, words, pe, D, c, result) {
 export function analyse(command, cwd, deps = {}) {
   const c = makeCtx(cwd, deps);
   c.evalString = (text, D) => evalString(text, D, c);
-  if (!command) return { targets: [], asks: c.asks };
+  if (!command) return { targets: [], asks: c.asks, stash: false };
   const parsed = parseBash(command);
-  if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks };
+  if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks, stash: false };
   evalList(parsed.ast, new Set([c.cwd]), c);
-  return { targets: [...c.targets], asks: c.asks };
+  return { targets: [...c.targets], asks: c.asks, stash: c.stash };
 }
