@@ -175,6 +175,7 @@ describe("kleinGrund und parseNachweis: skizze und ohne — klein", () => {
     expect(nl.kleinGrund("klein")).toEqual({ art: "klein-ohne-begruendung" });
     expect(nl.kleinGrund("klein:   ")).toEqual({ art: "klein-ohne-begruendung" });
     expect(nl.kleinGrund("Revert eines PR")).toBeNull();
+    expect(nl.kleinGrund("kleinlich: x")).toBeNull();
   });
   test("Plan-Zeile: skizze wird erkannt, ein anderer Zusatz bleibt ungültig", () => {
     expect(nl.parseNachweis(`${Z.plan}: ${PL} — skizze`, Z).plan).toEqual({ art: "skizze" });
