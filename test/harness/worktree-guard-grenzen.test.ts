@@ -170,6 +170,7 @@ describe("git stash ist ortsunabhängig abgelehnt", () => {
       const r = pruefeStash(cmd);
       assert.equal(r.block, true);
       assert.match(r.reason ?? "", /repoweit geteilt \(refs\/stash\)/);
+      assert.match(r.reason ?? "", /add -A.*WIP/s, "Meldung nennt den Ersatz");
     });
   }
 });
