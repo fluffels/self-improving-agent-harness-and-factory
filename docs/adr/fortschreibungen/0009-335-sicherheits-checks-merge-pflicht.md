@@ -1,0 +1,11 @@
+# Fortschreibung #335 (2026-11-11): Dependency Review und zizmor sind Merge-Pflicht
+
+Ergänzt [ADR 0009](../0009-pr-gating-required-checks.md); Querverweis [Pflicht-Checks des Kerns](0022-117-pflicht-checks-des-kerns.md). Herkunft: Abgleich der Workflows gegen die Required Checks in factory#333 (K4), Entscheidung in factory#335.
+
+- **Entscheidung (Maintainerin):** Dependency Review wird Required Check, zizmor kommt in die `code_scanning`-Regel des Rulesets `main-schutz`. Beides steht im Spiegel `.github/ruleset-main-schutz.json` (`requiredChecks` um `Abhängigkeiten prüfen (Dependency Review)`, `codeScanning` um `zizmor` mit `high_or_higher` und `errors`, symmetrisch zu CodeQL) und live im Ruleset 25905018.
+- **Evidenz:** Dependency Review lief auf jedem PR grün (auch Dependabot); zizmor hatte 0 offene Alerts, die letzten Analysen auf `main` meldeten 0 Ergebnisse. Der Negativbeleg liegt als Kommentar am PR (zwei Probe-PRs, nie gemergt).
+- **Wirkung:** zizmor-Jobs bleiben grün (`--no-exit-codes`); gesperrt wird über die Ergebnisse im Code-Scanning. Ein ignorierter oder abgewiesener Alert hebt den Block auf (sichtbares Druckventil).
+- **Bezieher-Folge:** `dependency-review.yml` ist Moduleinheit und trägt darum kein `pflichtChecks` (Regel aus [Fortschreibung #119](0022-119-sicherheits-module.md)); der Wächter `harness-doctor-voraussetzungen.test.ts` nimmt Moduleinheiten aus der Prüfung „Spiegel-Check steht in pflichtChecks“ aus. Der Doctor meldet einem Bezieher also nicht, wenn sein Ruleset den Check nach Wahl des Moduls nicht nennt: er trägt ihn selbst ein (Migrationszeile im PR, Satz in `docs/erstbezug.md`). Das Re-Evaluierungs-Kriterium der Fortschreibung #119 („Modul braucht eigene Pflicht-Checks“) ist damit eingetreten und bleibt offen (Befund im Sammelticket). Ein Pflicht-Werkzeug ohne Konfiguration blockiert jeden PR.
+- **Grenze:** `secret-scan.yml` (nur Zeitplan/Dispatch) und `scorecard.yml` haben keinen PR-Trigger und können nicht Required sein; bewusst so.
+- **Rückweg:** `git revert` des PR plus PUT auf das Ruleset mit dem vorher gesicherten Stand.
+- **Risiko:** ein Ausfall des Dependency Graph macht den Check rot bis zum Rerun (akzeptiert).

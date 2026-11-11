@@ -393,7 +393,7 @@ function pruefeZizmor(yml: string): string[] {
   return fehler;
 }
 
-/** Regelverstöße von `dependency-review.yml` (leer = ok): nur berichtend, ohne jedes Schreibrecht, `fail-on-severity: high`, kein PR-Kommentar. */
+/** Regelverstöße von `dependency-review.yml` (leer = ok): Required Check (factory#335), ohne jedes Schreibrecht, `fail-on-severity: high`, kein PR-Kommentar. */
 function pruefeDepReview(yml: string): string[] {
   const fehler: string[] = [];
   let wf: unknown;
