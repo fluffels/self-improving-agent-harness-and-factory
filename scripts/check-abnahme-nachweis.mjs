@@ -11,7 +11,8 @@
  *    hinter einer bestandenen Abnahme ist ein Pass);
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;
- *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist.
+ *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist; mit Kriterien genügt `entfaellt — klein: <Begründung>` bei berechneter
+ *    Größenstufe S (factory#271, `groessenstufe-lib.mjs`: aus dem Diff gerechnet, nie behauptet), wenn sich nichts beobachten lässt; bei `voll` bleibt es rot.
  *
  * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
  * Ein Entwurfs-PR wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Den Entwurfs-Status liest der Wächter live vom PR (`repos/<repo>/pulls/<nr>`, ein Rerun trägt sonst den veralteten Ereigniswert); `FACTORY_PR_DRAFT` gilt nur ohne PR-Nummer, ein fehlgeschlagener Abruf ist rot. Jeder git- oder gh-Fehler ist rot
@@ -27,7 +28,8 @@ import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { MAX_REVIEW_PAESSE, kleinGrund, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { groessenstufeAusGit } from "./groessenstufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
@@ -51,7 +53,7 @@ const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",")
 
 /** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite docs/agent-harness.md §3a). */
 const vorlage = (zeilen) =>
-  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>`;
+  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Größenstufe S: ${zeilen.abnahme}: entfaellt — klein: <Begründung>`;
 
 /** Urteil je Kriterium gegen die Kriterien des Tickets (`[{k, nachMerge}]`) und gegen `erfuellt`; `nach-merge` gilt nur an einem Nach-Merge-Kriterium. */
 function bewerteUrteil(urteil, liste, nachMerge) {
@@ -103,17 +105,26 @@ function bewerteSpur(a, marker) {
   return fehler;
 }
 
+/** `entfaellt` bei einem Ticket mit Kriterien: nur `klein: <Begründung>` bei berechneter Größenstufe S (factory#271). Pure. */
+function bewerteEntfaellt(a, ticket, stufe, zeilen) {
+  const klein = kleinGrund(a.grund);
+  if (klein?.art === "klein" && stufe === "S") return [];
+  const ausnahme = klein ? ` (die Ausnahme "entfaellt — klein: <Begründung>" gilt nur bei Größenstufe S mit Begründung; berechnet aus dem Diff: ${stufe})` : "";
+  return [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt${ausnahme}.`];
+}
+
 /**
  * Bewertet den Abnahme-Nachweis; liefert `fehler[]` (leer = grün). Pur.
  * `reviewOverride` (bool): eine gültige Review-Override-Zeile steht im Slice, Cap- und Review-head-Vergleich entfallen.
+ * `stufe` (`"S"` | `"voll"`, Standard `voll`): die aus dem Diff berechnete Größenstufe, nur für `entfaellt — klein: …` relevant.
  * `ticket` = `{nr, kriterien: <Liste aus kriterien()>, nachMerge: <Präfix aus sprache.spezifikation>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
-export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false }) {
+export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll" }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
-    return ticket && ticket.kriterien.length > 0 ? [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt.`] : [];
+    return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, stufe, zeilen) : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
   return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead, reviewOverride), ...bewerteSpur(a, marker)];
@@ -191,6 +202,9 @@ export function entwurfLive({ gh, env, repo }) {
   return pr.draft;
 }
 
+/** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
+const stufeFuerEntfaellt = (nachweis, git, base) => (nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base).stufe : "voll");
+
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
   const repo = repoVon(env, config);
@@ -212,7 +226,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
     if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead, reviewOverride), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe: stufeFuerEntfaellt(nachweis, git, base) });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
