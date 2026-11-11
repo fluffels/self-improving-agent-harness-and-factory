@@ -30,6 +30,7 @@ const BRILLEN: { key: string; kopf: string; punkt: RegExp }[] = [
   { key: "architektur", kopf: "**Lens 1 — Architektur.**", punkt: /^- / },
   { key: "requirement-treue", kopf: "**Lens 2 — Requirement-Treue.**", punkt: /^- / },
   { key: "test-adaequanz", kopf: "**Lens 3 — Test-Adäquanz.**", punkt: /^- / },
+  { key: "kombiniert", kopf: "**Lens K — Kombiniert**", punkt: /^- / },
   { key: "doku", kopf: "**Lens 4 — Doku**", punkt: /^\d+\. / },
 ];
 

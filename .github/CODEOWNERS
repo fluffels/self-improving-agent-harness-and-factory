@@ -72,6 +72,8 @@ AGENTS.md @fluffels
 /scripts/worktree-guard-tabellen.mjs @fluffels
 /scripts/lens-auftrag-guard.mjs @fluffels
 /scripts/nachweis-lib.mjs @fluffels
+/scripts/groessenstufe.mjs @fluffels
+/scripts/groessenstufe-lib.mjs @fluffels
 /scripts/stdin-skript-guard.mjs @fluffels
 /scripts/ticket-lock.mjs @fluffels
 /scripts/ticket-lock-lib.mjs @fluffels

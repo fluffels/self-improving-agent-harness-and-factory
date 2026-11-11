@@ -371,11 +371,11 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · Plan-Prüfliste: entfällt`;
 
   test("die echte Spawn-Vorlage aus dem Skill geht mit eingesetzten Werten durch, ohne Werte wird sie verweigert (kein generischer Platzhalter-Test)", () => {
-    assert.match(vorlage, /^Brille: <architektur\|requirement-treue\|test-adaequanz\|doku> · Arbeitsverzeichnis: <worktree>/);
+    assert.match(vorlage, /^Brille: <architektur\|requirement-treue\|test-adaequanz\|kombiniert\|doku> · Arbeitsverzeichnis: <worktree>/);
     assert.equal(deny(agent(vorlage))?.hookSpecificOutput.permissionDecision, "deny");
     const wt = FREMD.praefixe.worktree;
     const gefuellt = vorlage
-      .replace("<architektur|requirement-treue|test-adaequanz|doku>", "test-adaequanz")
+      .replace("<architektur|requirement-treue|test-adaequanz|kombiniert|doku>", "test-adaequanz")
       .replace("<worktree>", `C:/dev/projekt/.claude/worktrees/${wt}1`)
       .replace("<TMP>/<praefixe.worktree><nr>-r<runde>.patch", `/tmp/x/${wt}1-r1.patch`)
       .replace("erwarteter HEAD: <sha>", "erwarteter HEAD: abc1234def")
@@ -392,7 +392,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     for (const kopf of ["", "Brille: stil · ", "Brille: · ", "Brille: <architektur|requirement-treue|test-adaequanz|doku> · ", "Prüfe das. Brille: architektur · ", "brille architektur · ", "Brille:\narchitektur · ", "Brille: Architektur · ", "Brille: Test-Adäquanz · ", "Brille: `doku` · ", "Brille: do`ku · "]) {
       const out = deny(agent(`${kopf}${rest}`));
       assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", kopf);
-      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, doku/, kopf);
+      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /architektur, requirement-treue, test-adaequanz, kombiniert, doku/, kopf);
     }
     // Fallback-Spawn (general-purpose) mit der Lens-Definition, aber ohne Brille
     assert.equal(deny(agent(`Lies zuerst factory-lens.md · ${rest}`, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
