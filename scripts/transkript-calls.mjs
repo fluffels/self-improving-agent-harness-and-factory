@@ -205,15 +205,19 @@ export function thinkingJeMessage(zeilen) {
   return map;
 }
 
-/** `tool_use`-ID → `effort` des Aufrufs (`input.effort`, nur Werkzeug `Agent`, nur gültige Stufen); ID ohne Effort fehlt in der Map. */
-export function spawnEfforts(zeilen) {
+/** `tool_use`-ID → roher `input.effort` (auch undefined) aller Agent-Aufrufe mit ID: wer in der Map steht, wurde gefunden. */
+function spawnAufrufe(zeilen) {
   const map = new Map();
   for (const [, row] of assistantZeilen(zeilen)) {
-    for (const b of row.message.content) {
-      const e = b?.type === "tool_use" && b.name === "Agent" ? gueltigerEffort(b.input?.effort) : undefined;
-      if (e && b.id) map.set(b.id, e);
-    }
+    for (const b of row.message.content) if (b?.type === "tool_use" && b.name === "Agent" && b.id) map.set(b.id, b.input?.effort);
   }
+  return map;
+}
+
+/** `tool_use`-ID → `effort` des Aufrufs (`input.effort`, nur Werkzeug `Agent`, nur gültige Stufen); ID ohne gültigen Effort fehlt in der Map. */
+export function spawnEfforts(zeilen) {
+  const map = new Map();
+  for (const [id, roh] of spawnAufrufe(zeilen)) if (gueltigerEffort(roh)) map.set(id, roh);
   return map;
 }
 
@@ -221,11 +225,13 @@ export function spawnEfforts(zeilen) {
  * Effort je Message einer Datei aus dem Transkript selbst: Claude Code schreibt `effort` (und gleichlautend `perTurnEffort`) an jede
  * Assistant-Zeile. Ein gültiger Wert gilt; widersprechen sich die Zeilen einer Message, fehlt er (nie raten).
  */
+const UNGUELTIG = "ungültig";
 function effortJeMessage(zeilen) {
   const werte = new Map();
   for (const [id, row] of assistantZeilen(zeilen)) {
     const set = werte.get(id) ?? new Set();
-    set.add(gueltigerEffort(row.effort ?? row.perTurnEffort) ?? null);
+    const roh = row.effort ?? row.perTurnEffort;
+    set.add(roh === undefined ? null : (gueltigerEffort(roh) ?? UNGUELTIG));
     werte.set(id, set);
   }
   return werte;
@@ -278,6 +284,28 @@ function agentDefinition(agentType, verzeichnisse) {
 
 const statusVon = (v) => (v === undefined ? LEER : gueltigerEffort(v) ? { status: "wert", wert: v } : UNBEKANNT);
 
+/** Stufe „`effort` der `meta.json`“: fehlt das Feld, geht es weiter; ein ungültiger Wert beendet die Kette. */
+const effortAusMeta = (meta) => statusVon(meta?.effort);
+
+/** Stufe „`effort` im Agent-`tool_use`“ (über `toolUseId`): nicht auffindbar ⇒ nicht bestimmbar; gefunden ohne `effort` ⇒ weiter. */
+function effortAusSpawn(toolUseId, aufrufe) {
+  return toolUseId !== undefined && aufrufe.has(toolUseId) ? statusVon(aufrufe.get(toolUseId)) : UNBEKANNT;
+}
+
+/** Stufe „Umgebung“: `CLAUDE_CODE_EFFORT_LEVEL` in der Prozess-Umgebung oder in `env` einer Settings-Datei überschreibt jede Datei-Einstellung. */
+function effortUmgebung({ claudeDir, cwd, env }) {
+  if (!cwd || !claudeDir || env?.CLAUDE_CODE_EFFORT_LEVEL) return UNBEKANNT;
+  for (const pfad of settingsPfade(cwd, claudeDir)) {
+    if (!existsSync(pfad)) continue;
+    try {
+      if (JSON.parse(readFileSync(pfad, "utf8"))?.env?.CLAUDE_CODE_EFFORT_LEVEL) return UNBEKANNT;
+    } catch {
+      return UNBEKANNT;
+    }
+  }
+  return LEER;
+}
+
 /** Stufe „Frontmatter `effort` der Agentendefinition“: nur, wenn die Datei seit Laufbeginn (`start`, ms) unverändert ist. */
 function effortAusDefinition(agentType, { claudeDir, cwd }, start) {
   if (!agentType || !cwd || !claudeDir) return UNBEKANNT;
@@ -287,11 +315,14 @@ function effortAusDefinition(agentType, { claudeDir, cwd }, start) {
   return statusVon(frontmatterWert(def.text, "effort"));
 }
 
+/** Settings-Dateien in der Rangfolge lokal, Projekt, Benutzer. */
+const settingsPfade = (cwd, claudeDir) => [join(cwd, ".claude", "settings.local.json"), join(cwd, ".claude", "settings.json"), join(claudeDir, "settings.json")];
+
 /** Stufe „Effort-Einstellung der Settings“ (`effortLevel`; Rang: lokal, Projekt, Benutzer): jede vorhandene Datei muss seit Laufbeginn unverändert sein. */
 function effortAusSettings({ claudeDir, cwd, env }, start) {
   if (!cwd || !claudeDir || start === null || env?.CLAUDE_CODE_EFFORT_LEVEL) return UNBEKANNT;
   let wert;
-  for (const pfad of [join(cwd, ".claude", "settings.local.json"), join(cwd, ".claude", "settings.json"), join(claudeDir, "settings.json")]) {
+  for (const pfad of settingsPfade(cwd, claudeDir)) {
     if (!existsSync(pfad)) continue;
     let json;
     try {
@@ -326,7 +357,7 @@ function dateiZuordnungen(zeilen, agentType, rueckfall) {
     const beobachtet = werte && werte.size === 1 ? [...werte][0] : undefined;
     const z = { thinking: hat };
     if (agentType) z.agent_type = agentType;
-    const e = beobachtet ?? (werte?.has(null) && werte.size === 1 ? rueckfall() : undefined);
+    const e = beobachtet === UNGUELTIG ? undefined : (beobachtet ?? (werte?.has(null) && werte.size === 1 ? rueckfall() : undefined));
     if (e) z.effort = e;
     out.set(id, z);
   }
@@ -347,19 +378,25 @@ const textOderUndefined = (v) => (typeof v === "string" && v !== "" ? v : undefi
  * Eine EINZIGE Ableitung für den Nachlieferer und den Hook.
  */
 export function zuordnungen(sitzung, quellen = null) {
-  const spawn = spawnEfforts([...sitzung.main, ...sitzung.subagents.flatMap((s) => s.zeilen)]);
+  const aufrufe = spawnAufrufe([...sitzung.main, ...sitzung.subagents.flatMap((s) => s.zeilen)]);
   const mainCwd = sitzung.main.find((r) => r?.cwd)?.cwd;
-  const umfeld = (zeilen) => ({ claudeDir: quellen?.claudeDir, env: quellen?.env, cwd: zeilen.find((r) => r?.cwd)?.cwd ?? mainCwd });
-  const hauptRueckfall = () => (quellen && !hatEffortBefehl(sitzung.main) ? effortKette([() => effortAusSettings(umfeld(sitzung.main), laufbeginn(sitzung.main))]) : undefined);
+  const cwdVon = (zeilen) => zeilen.find((r) => r?.cwd)?.cwd ?? mainCwd;
+  // Ein `cwd`, das es nicht mehr gibt (entfernter Worktree), macht Projekt-Settings und -Agenten unsichtbar: nicht bestimmbar.
+  const umfeld = (zeilen) => ({ claudeDir: quellen?.claudeDir, env: quellen?.env, cwd: existsSync(cwdVon(zeilen) ?? "") ? cwdVon(zeilen) : undefined });
+  // Nach `/effort` oder `/model` in der Hauptdatei gilt keine Datei-Einstellung mehr (auch nicht für Subagenten, die den Session-Effort erben).
+  const dateiQuellen = quellen && !hatEffortBefehl(sitzung.main);
+  const hauptRueckfall = () => (dateiQuellen ? effortKette([() => effortAusSettings(umfeld(sitzung.main), laufbeginn(sitzung.main))]) : undefined);
   const dateien = [
     dateiZuordnungen(sitzung.main, "hauptchat", hauptRueckfall),
     ...sitzung.subagents.map((s) => {
       const agentType = textOderUndefined(s.meta?.agentType);
       const start = laufbeginn(s.zeilen);
       const rueckfall = () =>
-        gueltigerEffort(s.meta?.effort) ??
-        spawn.get(s.meta?.toolUseId) ??
-        (quellen ? effortKette([() => effortAusDefinition(agentType, umfeld(s.zeilen), start), () => effortAusSettings(umfeld(s.zeilen), start)]) : undefined);
+        effortKette([
+          () => effortAusMeta(s.meta),
+          () => effortAusSpawn(s.meta?.toolUseId, aufrufe),
+          ...(dateiQuellen ? [() => effortUmgebung(umfeld(s.zeilen)), () => effortAusDefinition(agentType, umfeld(s.zeilen), start), () => effortAusSettings(umfeld(s.zeilen), start)] : []),
+        ]);
       return dateiZuordnungen(s.zeilen, agentType, rueckfall);
     }),
   ];

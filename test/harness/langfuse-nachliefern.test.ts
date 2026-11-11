@@ -9,7 +9,6 @@
  */
 import { describe, expect, test } from "vitest";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, posix } from "node:path";
@@ -626,7 +625,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     expect(je("s1a")).toMatchObject({ "langfuse.observation.metadata.agent_type": FREMD.agenten.lens, "langfuse.observation.metadata.effort": "high", "langfuse.observation.metadata.repo": REPO_NAME });
   });
   test("Effort-Rückfall (factory#287): die Settings im Benutzerordner neben dem State-Ordner und das cwd der Zeile liefern effort, sonst fehlt er", async () => {
-    const a = aufbau([msg("h1", 1, { cwd: join(tmpdir(), "gibt-es-nicht-287") })]);
+    const a = aufbau([msg("h1", 1, { cwd: fixture({}) })]);
     const settings = join(a.state, "..", "settings.json");
     writeFileSync(settings, JSON.stringify({ effortLevel: "high" }));
     utimesSync(settings, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
@@ -634,6 +633,16 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     await lauf(a, m);
     const [call] = spansVon(m.otlp[0]).filter((s) => s.name === "Call");
     expect(attrs(call)["langfuse.observation.metadata.effort"]).toBe("high");
+
+    // Weiche 4: CLAUDE_CODE_EFFORT_LEVEL in der Umgebung des Laufs sperrt den Rückfall (die Umgebung des Laufs erreicht die Ableitung).
+    const a2 = aufbau([msg("h1", 1, { cwd: fixture({}) })]);
+    const settings2 = join(a2.state, "..", "settings.json");
+    writeFileSync(settings2, JSON.stringify({ effortLevel: "high" }));
+    utimesSync(settings2, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    const m2 = mock({ ist: 0, obs: [] });
+    await lauf(a2, m2, {}, SPAET(), { ...ZUGANG, CLAUDE_CODE_EFFORT_LEVEL: "max" });
+    const [call2] = spansVon(m2.otlp[0]).filter((s) => s.name === "Call");
+    expect(attrs(call2)).not.toHaveProperty("langfuse.observation.metadata.effort");
   });
   test("Subagent-Span je Session nur einmal; Kind-Call hängt am Span des Subagenten", async () => {
     const meta = JSON.stringify({ agentType: FREMD.agenten.lens, description: "Lens R1" });
