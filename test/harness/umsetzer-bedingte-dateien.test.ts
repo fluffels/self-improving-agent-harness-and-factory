@@ -148,6 +148,7 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
     assert.match(bedingteDateienBefunde({ ...e, kern: `${ohneFm}\n---\ntaskkill\n---\n` }).join("\n"), /Windows-Sonderfall „taskkill“/, "ohne Frontmatter: kein Strip über Rumpf-Trennlinien (Anker ^)");
     assert.deepEqual(bedingteDateienBefunde({ ...e, kern: e.kern.replace(/^---\n/, "---\nx: a---\ntaskkill: y\n") }), [], "ein Wert, der auf --- endet, beendet das Frontmatter nicht");
     assert.match(bedingteDateienBefunde({ ...e, kern: `---x\ntaskkill\n---\n${ohneFm}` }).join("\n"), /Windows-Sonderfall „taskkill“/, "ein Kopf `---x` ist kein Frontmatter");
+    assert.deepEqual(bedingteDateienBefunde({ ...e, kern: e.kern.replace(/^---\n/, "---\nx: a\n---x\ntaskkill: y\n") }), [], "eine Zeile ---x beendet das Frontmatter nicht");
     assert.ok(e.kern.includes("**vor** dem Nachweis-Commit `git fetch origin` und `origin/main` einmergen"), "Abnahme-Absatz: fetch vor dem Merge");
   });
 
