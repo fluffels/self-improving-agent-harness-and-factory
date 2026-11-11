@@ -281,8 +281,8 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
   };
   const text = { type: "text", text: "y" };
   const mitCwd = (id: string, cwd: string | undefined, extra: Row = {}) => msg(id, 100, [text]).map((r) => ({ ...r, ...(cwd ? { cwd } : {}), ...extra }));
-  const subZ = (w: { cwd: string; q: Q }, meta: Row = { agentType: "Explore" }, cwd: string | undefined = w.cwd) =>
-    Zo.zuordnungen({ id: "s1", main: [], subagents: [{ datei: "agent-a1.jsonl", meta, zeilen: mitCwd("m", cwd) }] }, w.q).get("m");
+  const subZ = (w: { cwd: string; q: Q }, meta: Row = { agentType: "Explore" }, cwd: string | null = w.cwd) =>
+    Zo.zuordnungen({ id: "s1", main: [], subagents: [{ datei: "agent-a1.jsonl", meta, zeilen: mitCwd("m", cwd ?? undefined) }] }, w.q).get("m");
 
   test("effortKette: Wert gewinnt, leer geht weiter, unbekannt beendet ohne Wert", () => {
     const wert = (w: string) => () => ({ status: "wert", wert: w });
@@ -319,7 +319,22 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
     expect(subZ(doppelt)).not.toHaveProperty("effort");
     const ohne = welt({ "p/.claude/agents/e.md": AGENT("Anderer", "low"), ...settings });
     expect(subZ(ohne)).not.toHaveProperty("effort");
-    expect(subZ(ohne, { agentType: "Explore" }, undefined)).not.toHaveProperty("effort");
+    expect(subZ(ohne, { agentType: "Explore" }, null)).not.toHaveProperty("effort");
+  });
+
+  test("Laufbeginn ist der erste Call der Datei: eine Definition, die zwischen erstem und letztem Call geändert wurde, gilt nicht", () => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low") });
+    const zeilen = [...mitCwd("m1", w.cwd), ...mitCwd("m2", w.cwd)];
+    const erster = Date.parse(String((zeilen[0] as { timestamp: string }).timestamp));
+    utimesSync(join(w.root, "p/.claude/agents/e.md"), new Date(erster + 500), new Date(erster + 500));
+    const m = Zo.zuordnungen({ id: "s1", main: [], subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: "Explore" }, zeilen }] }, w.q);
+    expect(m.get("m1")).not.toHaveProperty("effort");
+  });
+
+  test("cwd fehlt in der Subagent-Datei: das cwd der Hauptdatei gilt", () => {
+    const w = welt({ "p/.claude/agents/e.md": AGENT("Explore", "low") });
+    const m = Zo.zuordnungen({ id: "s1", main: mitCwd("h", w.cwd), subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: "Explore" }, zeilen: mitCwd("m", undefined) }] }, w.q);
+    expect(m.get("m")?.effort).toBe("low");
   });
 
   test("ungültiger Frontmatter-effort: kein effort und kein Rückfall auf die Settings", () => {
@@ -353,14 +368,14 @@ describe("Effort-Rückfall: Agentendefinition und Settings", () => {
 
   test("Hauptchat: Settings-Einstellung als Rückfall; nach /effort oder /model, ohne cwd und ohne Quellen fehlt sie", () => {
     const w = welt({ "c/settings.json": JSON.stringify({ effortLevel: "high" }), "p/x": "" });
-    const main = (extra: Row[] = [], cwd: string | undefined = w.cwd) => [...mitCwd("h", cwd), ...extra];
+    const main = (extra: Row[] = [], cwd: string | null = w.cwd) => [...mitCwd("h", cwd ?? undefined), ...extra];
     const z = (zeilen: Row[], q: Q | null = w.q) => Zo.zuordnungen({ id: "s1", main: zeilen, subagents: [] }, q ?? undefined).get("h");
     expect(z(main())).toMatchObject({ agent_type: "hauptchat", effort: "high" });
     const befehl = (n: string): Row => ({ type: "user", message: { role: "user", content: `<command-name>/${n}</command-name>` } });
     expect(z(main([befehl("effort")]))).not.toHaveProperty("effort");
     expect(z(main([{ type: "user", message: { role: "user", content: [{ type: "text", text: "<command-name>/model</command-name>" }] } }]))).not.toHaveProperty("effort");
     expect(z(main([befehl("clear")]))).toMatchObject({ effort: "high" });
-    expect(z(main([], undefined))).not.toHaveProperty("effort");
+    expect(z(main([], null))).not.toHaveProperty("effort");
     expect(z(main(), null)).not.toHaveProperty("effort");
   });
 });
