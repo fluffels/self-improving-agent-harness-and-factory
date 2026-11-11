@@ -514,7 +514,7 @@ const KONTINGENT_BLOCK = 50;
  * Abo-Kontingent je Ticket (factory#285): Verlauf lesen, Claims per GraphQL holen (Blöcke zu `KONTINGENT_BLOCK`), auswerten.
  * `tickets` = Lauf-Zeilen des Zeitraums. Verlauf oder gh nicht verfügbar: `{ luecke }` mit Grund, nie 0. IO injizierbar; kein Langfuse.
  */
-export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
+export function ladeAboKontingent({ von, bis, tickets }, { jetzt = Date.now(), gh = ghJson, lies = (p) => readFileSync(p, "utf8"), pfad = verlaufPfad() } = {}) {
   let text;
   try {
     text = lies(pfad);
@@ -534,7 +534,7 @@ export function ladeAboKontingent({ von, bis, tickets }, { gh = ghJson, lies = (
   } catch (err) {
     return { luecke: `Claims nicht ladbar: ${fehlerText(err, 200)}` };
   }
-  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis) });
+  return aboKontingent({ tickets, punkte, kaputt, claims, von: Date.parse(von), bis: Date.parse(bis), jetzt, fristMs: NACHARBEIT_TAGE * TAG_MS });
 }
 
 /** Sitzungen aller Projektordner unter `wurzel` (das Limit gilt kontoweit), jeweils ab `von`; ein Ordner nach dem anderen. */

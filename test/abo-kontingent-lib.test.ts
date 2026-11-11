@@ -328,7 +328,10 @@ describe("aboKontingent und Abschnitt", () => {
     const jetzt = merge + 30 * TAG;
     const tage = (d: number) => new Date(jetzt - d * TAG).toISOString();
     const t = [zeile(1, { gemergt: tage(3), nacharbeit: "folge" }), zeile(2, { gemergt: tage(20), nacharbeit: "nein" }), zeile(3, { gemergt: tage(20), nacharbeit: "folge" })];
-    const a = L.aboKontingent({ tickets: t, punkte: [punkt(jetzt - 21 * TAG, 10), punkt(jetzt, 12)], kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: jetzt - 21 * TAG }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt, fristMs: FRIST });
+    const stunde = (x: Ticketzeile, h: number) => Date.parse(x.gemergt) + h * 60 * MIN;
+    const fern = jetzt / 1000 + 7 * 86_400;
+    const punkte = [punkt(stunde(t[1], -1), 10, fern), punkt(stunde(t[1], 0), 11, fern), punkt(stunde(t[0], -1), 14, fern), punkt(stunde(t[0], 0), 15, fern)];
+    const a = L.aboKontingent({ tickets: t, punkte, kaputt: 0, claims: new Map(t.map((x) => [x.ticket, { claim: stunde(x, -1) }])), von: jetzt - 22 * TAG, bis: jetzt, jetzt, fristMs: FRIST });
     expect(a.folge).toEqual({ n: 1, von: 2, offen: 1, offenMitFolge: 1 });
     const text = L.aboKontingentAbschnitt(a).join("\n");
     expect(text).toContain("- Folge-Quote (Nacharbeit, Frist abgelaufen): 50 % (1/2), offen: 1, davon schon mit Folge: 1");

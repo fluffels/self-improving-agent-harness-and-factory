@@ -190,7 +190,12 @@ export function tokensJeProzentpunkt({ verlaufText, calls, von, bis }) {
 }
 
 const tok = (x) => (x >= 1e6 ? `${(x / 1e6).toFixed(2)} Mio` : x >= 1e3 ? `${Math.round(x / 1e3)} Tsd` : String(Math.round(x))).replace(".", ",");
-const usd = (x) => `$${x.toFixed(2)}`.replace(".", ",");
+/** Dollar-Text: ab 0,01 zwei Nachkommastellen, darunter zwei geltende Ziffern (höchstens 6 Stellen), 0 bleibt $0,00, darunter „< $0,000001“. */
+export const usd = (x) => {
+  if (x === 0 || x >= 0.01) return `$${x.toFixed(2)}`.replace(".", ",");
+  if (x < 0.000001) return "< $0,000001";
+  return `$${x.toFixed(Math.min(6, 1 - Math.floor(Math.log10(x))))}`.replace(".", ",");
+};
 const verhaeltnis = (x) => (x === null ? "–" : String(runde(x)).replace(".", ","));
 const GEW = "(Schätzung, Listenpreis-Gewichte, ungesichert)";
 

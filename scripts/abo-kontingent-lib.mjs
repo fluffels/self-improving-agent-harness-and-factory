@@ -167,9 +167,9 @@ export function claimsAusAntwort(antwort, mergeJeTicket) {
 
 /**
  * Wertet den Zeitraum aus. `tickets` = Lauf-Zeilen `{ ticket, pr, gemergt, blocker, nacharbeit }`, `claims` = Map aus `claimsAusAntwort`,
- * `von`/`bis` in ms. Blocker-Quote über die gemessenen Tickets mit `blocker`-Feld, Folge-Quote über gemessene Tickets mit abgelaufener Nacharbeitsfrist. Pur.
+ * `von`/`bis`/`jetzt` in ms, `fristMs` = Nacharbeitsfrist. Blocker-Quote über die gemessenen Tickets mit `blocker`-Feld, Folge-Quote über gemessene Tickets mit abgelaufener Nacharbeitsfrist. Pur.
  */
-export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
+export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis, jetzt, fristMs }) {
   const rohe = tickets.map((t) => {
     const c = claims.get(t.ticket);
     const merge = Date.parse(t.gemergt);
@@ -181,7 +181,8 @@ export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
   const zeilen = rohe.map((r) => ({ ticket: r.t.ticket, pr: r.t.pr, ...(anteile.has(r.t.ticket) ? { pp: anteile.get(r.t.ticket) } : { luecke: r.luecke }) }));
   const gemessen = rohe.filter((r) => anteile.has(r.t.ticket)).map((r) => r.t);
   const mitBlocker = gemessen.filter((t) => t.blocker !== null && t.blocker !== undefined);
-  const mitFrist = gemessen.filter((t) => t.nacharbeit !== "offen");
+  const mitFrist = gemessen.filter((t) => t.nacharbeit !== "offen" && Date.parse(t.gemergt) + fristMs <= jetzt);
+  const istFolge = (t) => t.nacharbeit === "folge" || t.nacharbeit === "revert";
   return {
     zeilen,
     gemessen: gemessen.length,
@@ -189,7 +190,7 @@ export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
     median: median(zeilen.map((z) => z.pp).filter((x) => x !== undefined)),
     kontrolle: kontrollzahl(punkte, { von, bis, anzahlTickets: tickets.length }),
     blocker: { n: mitBlocker.filter((t) => t.blocker.some((b) => b.n > 0)).length, von: mitBlocker.length },
-    folge: { n: mitFrist.filter((t) => t.nacharbeit === "folge" || t.nacharbeit === "revert").length, von: mitFrist.length, offen: gemessen.length - mitFrist.length },
+    folge: { n: mitFrist.filter(istFolge).length, von: mitFrist.length, offen: gemessen.length - mitFrist.length, offenMitFolge: gemessen.filter((t) => !mitFrist.includes(t) && istFolge(t)).length },
     kaputt,
   };
 }
@@ -213,7 +214,7 @@ export function aboKontingentAbschnitt(a) {
     `- Gemessen: ${a.gemessen} von ${a.gesamt}; Median: ${a.median === null ? "–" : pp(a.median)} (obere Grenze: kontoweit gemessen)`,
     kontrolle,
     `- Blocker-Quote (Runde 1 mit Blocker): ${quote(a.blocker.n, a.blocker.von)}`,
-    `- Folge-Quote (Nacharbeit): ${quote(a.folge.n, a.folge.von)}, offen: ${a.folge.offen}`,
+    `- Folge-Quote (Nacharbeit, Frist abgelaufen): ${quote(a.folge.n, a.folge.von)}, offen: ${a.folge.offen}${a.folge.offenMitFolge > 0 ? `, davon schon mit Folge: ${a.folge.offenMitFolge}` : ""}`,
     ...(a.kaputt > 0 ? [`- Datenlücken im Verlauf: ${a.kaputt} kaputte Zeilen übersprungen`] : []),
   ];
 }
