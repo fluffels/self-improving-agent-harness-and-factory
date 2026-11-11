@@ -1,6 +1,6 @@
 # Fortschreibung #270 (2026-11-12): Ein Testlauf mit Coverage in der CI
 
-Ergänzt [ADR 0009](../0009-pr-gating-required-checks.md) und [ADR 0026](../0026-sammelticket-gruppen.md): Die CI fährt die Vitest-Suite je Lauf einmal, instrumentiert, statt zweimal. Herkunft: factory#270.
+Ergänzt [ADR 0009](../0009-pr-gating-required-checks.md): Die CI fährt die Vitest-Suite je Lauf einmal, instrumentiert, statt zweimal. Herkunft: factory#270.
 
 ## Kontext: Messwerte (Stand 2026-11-11)
 
@@ -8,7 +8,7 @@ Ergänzt [ADR 0009](../0009-pr-gating-required-checks.md) und [ADR 0026](../0026
   - Job „Tests, Typecheck & Builds“: 119–187 s. Darin „Verify“ 68–109 s und „Coverage-Gate“ 41–64 s (zweite, instrumentierte Suite).
   - Job „Probe-Erstbezug“: 27–38 s (Schritt 14–19 s), Security-Audit 7–13 s, Doku-Aktualität 5–14 s; beide parallel zu `build-test`.
 - **Lokal** (macOS, `verifyKompakt`, 54 s gesamt): typecheck 3 s, lint 10 s, test 40 s, alle `check:*` je unter 1 s. Suite 38,96 s ohne und 37,66 s mit `--coverage`: die Instrumentierung kostet lokal nichts Messbares, der zweite Lauf war reiner Doppelaufwand.
-- **Gate-Aussage vorher gleich nachher:** Summen aus `coverage/coverage-summary.json` (lines 93,63 % = 17550/18742, branches 91,74 % = 17619/19204, functions 93,6 %, statements 93,33 %), 283 Testdateien; `check:diffcoverage` liest denselben `coverage/lcov.info`. Die Tests stiegen nur um die zwei neuen Wächter (10137 → 10139).
+- **Gate-Aussage vorher gleich nachher** (verglichen: `npx vitest run --coverage` ohne Schalter, das war der Inhalt des alten Schritts, gegen `FACTORY_COVERAGE=1 node scripts/gate-befehl.mjs verify`): Summen aus `coverage/coverage-summary.json` (lines 93,63 % = 17550/18742, branches 91,74 % = 17619/19204, functions 93,6 %, statements 93,33 %), 283 Testdateien; `check:diffcoverage` liest denselben `coverage/lcov.info`. Die Tests stiegen nur um die zwei neuen Wächter (10137 → 10139).
 
 ## Entscheidung
 

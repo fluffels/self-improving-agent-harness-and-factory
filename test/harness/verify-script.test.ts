@@ -23,6 +23,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawNamen from "../../scripts/regex-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -122,39 +123,39 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
       // In der CI erzeugt der Verify-Schritt den Bericht (factory#270: ein Testlauf mit Coverage über FACTORY_COVERAGE=1); der Standard von `coverage` bleibt der npm-Lauf.
       expect(STANDARD_BEFEHLE.coverage, "Standard von coverage ist der Erzeuger").toBe(`npm run ${producer}`);
-      expect(verifySchritt(ci), "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verify haben").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+      expect(verifySchritt().run, "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verify haben").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
       expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
       // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
       expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
       // NICHT in der schnellen verify-Kette — dort läuft der Erzeuger nicht.
       expect(needle.test(scripts.verify), `"${gate}" gehört nicht in die verify-Kette`).toBe(false);
       expect(needle.test(ci), `"${gate}" muss als eigener CI-Schritt laufen`).toBe(true);
-      expect(ci.indexOf(`npm run ${gate}`), `"${gate}" muss in der CI NACH dem Verify-Schritt (Erzeuger von ${producer}) stehen`).toBeGreaterThan(ci.indexOf("- name: Verify"));
+      expect(ci.indexOf(`npm run ${gate}`), `"${gate}" muss in der CI NACH dem Verify-Schritt (Erzeuger von ${producer}) stehen`).toBeGreaterThan(ci.indexOf(`- name: ${verifySchritt().name}`));
     }
   });
 
   // factory#270: Suite einmal, instrumentiert. Der Schalter hängt nur am Verify-Schritt der CI; lokal bleibt verify uninstrumentiert.
-  function verifySchritt(ci: string): string {
-    const start = ci.indexOf("      - name: Verify");
-    expect(start, "ci.yml braucht einen Schritt \"Verify…\"").toBeGreaterThan(-1);
-    const rest = ci.slice(start + 1);
-    const ende = rest.search(/\n {6}- name: /);
-    return ende === -1 ? rest : rest.slice(0, ende);
+  // Der Schritt wird geparst (kein Regex über den Text): ein auskommentierter Schalter zählt nicht.
+  type CiSchritt = { name: string; run?: string; env?: Record<string, unknown> };
+  function verifySchritt(): CiSchritt {
+    const doc = parse(readRepo(".github/workflows/ci.yml")) as { jobs: Record<string, { steps: CiSchritt[] }> };
+    const treffer = Object.values(doc.jobs).flatMap((j) => j.steps).filter((s) => s.name.startsWith("Verify"));
+    expect(treffer, "ci.yml braucht genau einen Schritt \"Verify…\"").toHaveLength(1);
+    return treffer[0]!;
   }
 
-  it("factory#270: die CI fährt die Suite einmal mit Coverage (kein eigener Coverage-Gate-Schritt, Env am Verify-Schritt, diffcoverage dahinter)", () => {
+  it("factory#270: die CI fährt die Suite einmal mit Coverage (kein eigener Coverage-Gate-Schritt, Env am Verify-Schritt)", () => {
     const ci = readRepo(".github/workflows/ci.yml");
     expect(ci, "kein zweiter Suite-Lauf über den Gate-Befehl coverage").not.toMatch(/^\s*run:\s*node scripts\/gate-befehl\.mjs coverage\b/m);
-    expect(verifySchritt(ci)).toMatch(/FACTORY_COVERAGE:\s*"1"/);
-    expect(verifySchritt(ci)).toMatch(/run:\s*node scripts\/gate-befehl\.mjs verify\s*$/m);
-    expect(ci.indexOf("npm run check:diffcoverage")).toBeGreaterThan(ci.indexOf("- name: Verify"));
+    expect(verifySchritt().env?.FACTORY_COVERAGE).toBe("1");
+    expect(verifySchritt().run).toBe("node scripts/gate-befehl.mjs verify");
   });
 
   it("factory#270: die Vitest-Config schaltet Coverage nur über FACTORY_COVERAGE=1 ein und behält die Floors", async () => {
     type Cfg = { default: { test: { coverage: { enabled?: boolean; thresholds: Record<string, number> } } } };
-    const laden = async (wert: string): Promise<Cfg["default"]["test"]["coverage"]> => {
+    const laden = async (wert: string | undefined): Promise<Cfg["default"]["test"]["coverage"]> => {
       vi.resetModules();
-      // Auch ohne Wert stubben: die CI setzt FACTORY_COVERAGE=1 für diesen ganzen Lauf, unstubAllEnvs stellte das wieder her.
+      // Auch „nicht gesetzt“ per Stub (undefined löscht die Variable): die CI setzt FACTORY_COVERAGE=1 für diesen ganzen Lauf, unstubAllEnvs stellte das wieder her.
       vi.stubEnv("FACTORY_COVERAGE", wert);
       const cfg = (await import("../../vite.config")) as unknown as Cfg;
       return cfg.default.test.coverage;
@@ -163,8 +164,9 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       const an = await laden("1");
       expect(an.enabled).toBe(true);
       expect(Object.keys(an.thresholds)).toEqual(expect.arrayContaining(["lines", "branches"]));
-      const aus = await laden("");
-      expect(aus.enabled).toBe(false);
+      const aus = await laden(undefined);
+      expect(aus.enabled, "lokaler Normalfall: Variable nicht gesetzt").toBe(false);
+      expect((await laden("0")).enabled, "nur der Wert 1 schaltet ein").toBe(false);
       expect(aus.thresholds, "die Floors gelten unabhängig vom Schalter").toEqual(an.thresholds);
     } finally {
       vi.unstubAllEnvs();

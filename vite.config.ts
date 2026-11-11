@@ -9,7 +9,7 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     // Zugangs-Variablen (LANGFUSE_*, GH_TOKEN, GITHUB_TOKEN) entfernt das Setup aus process.env, damit kein Prozess-Test einen echten Zugang erbt (Wächter: test/harness/test-umgebung.test.ts).
     setupFiles: ["test/support/zugaenge-entfernen.ts"],
-    // Coverage misst nur ein Lauf mit --coverage; lcovonly schreibt coverage/lcov.info, das check-diffcoverage.mjs gegen den Diff auswertet.
+    // Coverage misst nur ein Lauf mit --coverage oder FACTORY_COVERAGE=1; lcovonly schreibt coverage/lcov.info, das check-diffcoverage.mjs gegen den Diff auswertet.
     coverage: {
       // factory#270: nur die CI schaltet es am Verify-Schritt ein (FACTORY_COVERAGE=1), damit sie die Suite einmal instrumentiert statt zweimal fährt; lokal bleibt verify uninstrumentiert, `--coverage` und test:coverage gehen weiter.
       enabled: process.env.FACTORY_COVERAGE === "1",
