@@ -71,7 +71,7 @@ node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, a
 **Welche Lenses laufen — die Review-Staffel (quellprojekt#1265):**
 
 - **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** ⇒ läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**; bei Größenstufe S (factory#271, `node scripts/groessenstufe.mjs` vor jedem Pass) mit Code-Diff **eine** Lens `kombiniert` (`brille-kombiniert.md`), bei `voll` der volle Satz.
-- **Risikoklasse hoch** (`RISIKO: hoch` der Ausgabe): zusätzlich Lens `sicherheit`, vorher `.agents/skills/review-lenses/ablauf-klasse-hoch.md` lesen.
+- **Risikoklasse hoch** (`RISIKO: hoch`): dazu Lens `sicherheit`, vorher `.agents/skills/review-lenses/ablauf-klasse-hoch.md` lesen.
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/<praefixe.worktree><nr>-r<runde>-delta.patch"`), mit deren Blockern als Prüfliste. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit** (bei `kombiniert` ist der Test-Teil enthalten).
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art. Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird. Rote `verify`-Fixe davor zählen nicht als Fix-Runde.
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass, fiel eine Lens aus, wechselte die Diff-Art oder wurde rebased: der volle Satz auf dem vollen Patch.
@@ -84,7 +84,7 @@ Agent({
   subagent_type: "<agenten.lens>",
   description: "Lens <Architektur|Requirement-Treue|Test-Adäquanz|Kombiniert|Sicherheit|Doku> R<runde>",   // R<runde> zählt die Messung (token-baseline)
   // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/factory-lens.md (opus/high, docs/model-routing.md §1)
-  prompt: "Brille: <architektur|requirement-treue|test-adaequanz|kombiniert|sicherheit|doku> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/<praefixe.worktree><nr>-r<runde>.patch · erwarteter HEAD: <sha> · Probe-Protokoll: <Commit-SHAs mit Protokoll | keins> (nur Test- und Kombi-Lens) · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · Plan-Prüfliste: <Plan-Abschnitt 4 und 7 (Requirement-, Test-, Kombi-Lens; Sicherheit: Bedrohungsabschnitt), sonst „entfällt“ WÖRTLICH>"
+  prompt: "Brille: <architektur|requirement-treue|test-adaequanz|kombiniert|sicherheit|doku> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/<praefixe.worktree><nr>-r<runde>.patch · erwarteter HEAD: <sha> · Probe-Protokoll: <Commit-SHAs mit Protokoll | keins> (nur Test- und Kombi-Lens) · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · Plan-Prüfliste: <Plan-Abschnitt 4 und 7 (Requirement-, Test-, Kombi-, Sicherheits-Lens), sonst „entfällt“ WÖRTLICH>"
 })
 ```
 
