@@ -12,6 +12,7 @@ import { istEchtesModell, vereinigungsLaenge } from "./mess-lib.mjs";
 import { toolPaare, transkriptZeilen } from "./transkript.mjs";
 import { patchAus, patchPfade } from "./patch-zugriff.mjs";
 import { ticketAusRef } from "./ticket-refs.mjs";
+import { enthaeltSammelticketTitel } from "./sammelticket-titel.mjs";
 
 export const ms = (ts) => Date.parse(ts);
 const gueltig = (ts) => Number.isFinite(ms(ts));
@@ -126,7 +127,7 @@ export function laufAus({ meta, zeilen, datei, session }, namen) {
     ersterCall: erster ? { input: erster.input ?? 0, cacheWrite: erster.cacheWrite ?? 0, cacheRead: erster.cacheRead ?? 0 } : null,
     patch,
     ticket: ticketAusLauf({ patch, prompt }, namen),
-    sammel: /\(gesammelt\)/i.test(erstesZeile(prompt)),
+    sammel: enthaeltSammelticketTitel(erstesZeile(prompt)),
     schnitt: schnittZeile(prompt, "Schnitt"),
     einstieg: schnittZeile(prompt, "Einstieg"),
     start,

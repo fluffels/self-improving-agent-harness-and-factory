@@ -13,6 +13,15 @@ export const CODEQUALITAET_SAMMELTICKET_TITEL = "Codequalität (gesammelt)";
 /** Alle Sammeltickets, die das Einsortieren kennt (die Ankersuche und das Einsortieren kennen alle, nicht nur das Harness-Sammelticket). */
 export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, CODEQUALITAET_SAMMELTICKET_TITEL];
 
+/** Titel des Rest-Tickets der Sicherheits-Inbox (angelegt von `inbox-start-lib.mjs`). */
+export const SICHERHEITS_SAMMELTICKET_TITEL = "Sicherheit: Rest-Befunde (gesammelt)";
+
+/** Alle Sammeltickets inklusive Sicherheits-Rest-Ticket: die eine Quelle für „ist das ein Sammelticket-Titel?“. */
+export const ALLE_SAMMELTICKET_TITEL = [...SAMMELTICKET_TITEL_LISTE, SICHERHEITS_SAMMELTICKET_TITEL];
+
+/** Nennt `text` (etwa die Titelzeile eines Prompts) den Titel eines Sammeltickets? Pur. */
+export const enthaeltSammelticketTitel = (text) => ALLE_SAMMELTICKET_TITEL.some((t) => String(text).includes(t));
+
 /** Titelpräfix eines Issues, das einen Befund festhält, der sein Ziel-Repo nicht erreichte (Weg: ADR 0031, Fortschreibung zu factory#152). */
 export const NICHT_EINTRAGBAR_PRAEFIX = "Nicht eintragbar: ";
 
