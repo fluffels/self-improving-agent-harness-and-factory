@@ -905,7 +905,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   test("je Teil: leer, nur …, ..., - oder <…> ist rot und nennt den Schlüssel; die anderen Teile bleiben grün", () => {
     const teile = ["daten", "grenzen", "missbrauch", "datenschutz"];
     for (const t of teile) {
-      for (const leer of ["", "…", "...", "-", "<was fließt wohin>"]) {
+      for (const leer of ["", "…", "...", "-", "<>", "<was fließt wohin>"]) {
         const z = teile.map((k) => `${k}=${k === t ? leer : "belegt"}`).join(" | ");
         const f = bewerte(mitZeile(z));
         assert.equal(f.length, 1, `${t}=${leer}: ${f.join("\n")}`);
@@ -918,7 +918,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     assert.match(bewerte(mitZeile("daten=a | grenzen=b | missbrauch=c")).join(), /Teil datenschutz fehlt/);
     assert.match(bewerte(mitZeile(`${ZEILE} | daten=nochmal`)).join(), /doppelt: daten/);
     assert.match(bewerte(mitZeile(`${ZEILE} | sonstiges=x`)).join(), /unbekannte Teile sonstiges/);
-    assert.match(bewerte(mitZeile(`${ZEILE} | Freitext ohne Gleichheitszeichen`)).join(), /Teil ohne .=. .erwartet.*Freitext/);
+    assert.match(bewerte(mitZeile(`${ZEILE} | Freitext ohne Gleichheitszeichen`)).join(), /Teil ohne .=. .erwartet[^:]*: Freitext ohne Gleichheitszeichen\.$/);
   });
 
   test("normal ohne beides und Doku-Diff mit lenses=doku sind ohne Bedrohungs-Fehler (Doku-Diff wird nicht belastet)", () => {
@@ -944,11 +944,11 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   });
 
   test("Gültige Werte, die Platzhaltern ähneln oder Sonderzeichen tragen, bleiben grün (Gegenseite von istLeer und Parser)", () => {
-    for (const wert of ["API", "<Client> zu <Server>", "a..b", "--flag", "x -- y", "Header Authorization=Bearer"]) {
+    for (const wert of ["API", "<Client> zu <Server>", "a..b", "--flag", "x -- y", "..", "....", "--", "Header Authorization=Bearer"]) {
       const f = bewerte(mitZeile(ZEILE.replace("daten=Token vom Client zum Server", `daten=${wert}`)));
       assert.deepEqual(f, [], wert);
     }
-    for (const zeile of [`${ZEILE} |`, `${ZEILE} ||`, ZEILE.toUpperCase().replace(/ \|/g, " |"), ZEILE.replace(/ \| /g, "|")]) {
+    for (const zeile of [`${ZEILE} |`, `${ZEILE} ||`, ZEILE.toUpperCase(), ZEILE.replace(/ \| /g, "|")]) {
       assert.deepEqual(bewerte(mitZeile(zeile)), [], zeile);
     }
     const n = parseNachweis(mitZeile("daten=Header Authorization=Bearer | grenzen=b | missbrauch=c | datenschutz=d"));

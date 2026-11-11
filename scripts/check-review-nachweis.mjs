@@ -186,8 +186,8 @@ function bewerteLensSatz(review, dateien, stufe, zeilen) {
   ];
 }
 
-/** Ein Teil der Bedrohungs-Zeile gilt als leer: nach `trim` leer oder nur ein Platzhalter (`…`, `...`, `-`, `<…>`). */
-const istLeer = (wert) => wert === undefined || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(wert.trim());
+/** Ein Teil der Bedrohungs-Zeile gilt als leer: leer oder nur ein Platzhalter (der Parser hat den Wert getrimmt) (`…`, `...`, `-`, `<…>`). */
+const istLeer = (wert) => wert === undefined || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(wert);
 
 /** Fehler der Bedrohungs-Zeile (Klasse hoch): fehlende Zeile, leere, fehlende, doppelte, unbekannte oder schlüssellose Teile. Pur. */
 function bedrohungsFehler(b, zeilen, hinweis) {
