@@ -78,6 +78,11 @@ describe("Regex-Escape: Muster erkennen (Red-Green-Fixtures)", () => {
     assert.deepEqual(befunde(aufruf("\"" + BS + "t\"", BS2 + "t")), ["M2 nur erster Treffer"]);
     assert.deepEqual(befunde("s.replace( /[.*]/g , \"" + BS2 + "$&\")"), ["M1 Escape ohne Backslash"]);
     assert.deepEqual(befunde("s.replace('" + BS + "t', '" + BS2 + "t')"), ["M2 nur erster Treffer"]);
+    // Pfadtrenner-Tausch mit Einfach- und Template-Literal ist ebenfalls kein Escape
+    assert.deepEqual(befunde("s.replace(/" + BS + "//g, '" + BS2 + "')"), []);
+    assert.deepEqual(befunde("s.replace(/" + BS + "//g, `" + BS2 + "`)"), []);
+    // mehrere Flags
+    assert.deepEqual(befunde(aufruf("/[.*]/gi", BS2 + "$&")), ["M1 Escape ohne Backslash"]);
     // verdoppelter Backslash im Ersatz (maskiert den Backslash selbst) ist kein Escape
     assert.deepEqual(befunde(aufruf("/" + BS + "//", BS2 + BS2)), []);
   });
