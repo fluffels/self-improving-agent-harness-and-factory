@@ -938,6 +938,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
       "(a) CODEOWNERS führt /AGENTS.md verankert": ["(a)", { ".github/CODEOWNERS": "/AGENTS.md @team\n/.github/CODEOWNERS @team\n" }],
       "(b) die Quelle führt /AGENTS.md verankert": ["(b)", { ".github/protected-paths.json": QUELLE_VERANKERT, ".github/CODEOWNERS": "/AGENTS.md @team\n/.github/CODEOWNERS @team\n" }],
       "(c) Wächter-Marker außerhalb von test/harness/": ["(c)", { "test/w.test.ts": "/* x\n * @harness-waechter\n */\n" }],
+      "(c) Wächter-Marker als //-Zeile in einem Skript": ["(c)", { "scripts/pruef.mjs": "// @harness-waechter\n" }],
       "(d) Kopie der Pre-Flight-Kriterien in der Doku": ["(d)", { "docs/x.md": "Rückfrage nötig bei Löschen, Ruleset/Secrets/Repo-Einstellungen\n" }],
       "(e) abgelöste Label-Mechanik in der Doku": ["(e)", { "docs/x.md": "setze das Label maintainer-approved\n" }],
     };

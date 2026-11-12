@@ -264,7 +264,7 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
   });
 
   test("jeder Test mit @harness-waechter liegt in test/harness/ – und jeder dort trägt den Marker (#1165)", () => {
-    const falsch: string[] = waechterAusserhalb(Object.fromEntries(testDateien().map((f) => [f, read(f)])));
+    const falsch: string[] = waechterAusserhalb({ ...agentenKontextDateien(), ...Object.fromEntries(testDateien().map((f) => [f, read(f)])) });
     for (const f of testDateien()) {
       const markiert = WAECHTER_MARKER.test(read(f));
       const imOrdner = f.startsWith(WAECHTER_ORDNER);
@@ -342,7 +342,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
 
 describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1165)", () => {
   test("Kopf-Zeilen werden erkannt", () => {
-    for (const kopf of [" * @harness-waechter", "/* @harness-waechter */", "/** @harness-waechter", "// x\n * @harness-waechter (#1165)"]) {
+    for (const kopf of [" * @harness-waechter", "/* @harness-waechter */", "/** @harness-waechter", "// @harness-waechter", "// x\n * @harness-waechter (#1165)"]) {
       assert.match(kopf, WAECHTER_MARKER, `nicht erkannt: ${kopf}`);
     }
   });

@@ -83,14 +83,17 @@ describe("(c) bis (e): Textfunde", () => {
 });
 
 describe("waechterAusserhalb (Modul)", () => {
-  test("nur *.test.ts unter test/, außerhalb von test/harness/, mit Marker als eigener Zeile", () => {
+  test("Marker als eigene Zeile außerhalb von test/harness/ in Tests und Agenten-Kontext", () => {
     expect(waechterAusserhalb({ "test/x.test.ts": MARKER })).toHaveLength(1);
     expect(waechterAusserhalb({ "test/harness/x.test.ts": MARKER })).toEqual([]);
-    expect(waechterAusserhalb({ "test/x.ts": MARKER, "src/x.test.ts": MARKER, "scripts/x.test.ts": MARKER })).toEqual([]);
+    expect(waechterAusserhalb({ "test/x.ts": MARKER, "src/x.test.ts": MARKER, "assets/x.test.ts": MARKER })).toEqual([]);
     expect(waechterAusserhalb({ "test/x.test.ts": "kein Marker\n" })).toEqual([]);
     expect(waechterAusserhalb({ "src/test/w.test.ts": MARKER, "packages/a/test/w.test.ts": MARKER })).toEqual([]);
     expect(waechterAusserhalb({ "test/w.test.ts.bak": MARKER, "test/w.test.tsx": MARKER })).toEqual([]);
     expect(waechterAusserhalb({ "test/a/b/w.test.ts": MARKER })).toHaveLength(1);
+    // auch jede Datei des Agenten-Kontexts, mit //-Kommentar und ohne test/-Ordner
+    expect(waechterAusserhalb({ "scripts/pruef.mjs": "// @harness-waechter\n", "test/unit/w.test.ts": "// @harness-waechter\n", "docs/w.md": "@harness-waechter\n" })).toHaveLength(3);
+    expect(waechterAusserhalb({ "scripts/t.mjs": "// siehe @harness-waechter im Text\n", "assets/n.txt": MARKER, "test/harness/x.test.ts": "// @harness-waechter\n" })).toEqual([]);
   });
 });
 

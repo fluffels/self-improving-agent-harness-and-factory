@@ -33,7 +33,7 @@ export const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, a
  * nur noch „den Ordner vergessen“. Erkannt nur als eigene Kommentar-Zeile, damit eine Erwähnung im Fließtext oder Code nicht zählt.
  * Grenze: ein Wächter, der weder Marker noch Ordner bekommt, bleibt unsichtbar.
  */
-export const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter(?![\w-])/m;
+export const WAECHTER_MARKER = /^\s*(?:\/\*+|\*|\/\/)?\s*@harness-waechter(?![\w-])/m;
 
 /** Der geschützte Ordner der Wächter-Tests (Präfix, kein Glob: `normalizeProtected` kürzt jedes Glob ab dem `*`). */
 export const WAECHTER_ORDNER = "test/harness/";
@@ -133,9 +133,9 @@ export const kriterienKopien = (dateien) =>
 /** Eine `*.test.ts` unter `test/` (verankert, beliebig tief; `src/test/x.test.ts` und `x.test.tsx` zählen nicht). */
 export const istTestDatei = (pfad) => /^test\/.*\.test\.ts$/.test(pfad);
 
-/** Wächter-Tests (Marker als eigene Kommentarzeile) unter `test/`, die außerhalb des geschützten Ordners liegen. */
+/** Dateien mit dem Marker als eigener Kommentarzeile (`/*`, `*` oder `//`), die außerhalb des geschützten Ordners liegen: gescannt werden `*.test.ts` unter `test/` und der Agenten-Kontext mit Scan-Endung. */
 export function waechterAusserhalb(dateien) {
   return Object.entries(dateien)
-    .filter(([pfad, inhalt]) => istTestDatei(pfad) && !pfad.startsWith(WAECHTER_ORDNER) && WAECHTER_MARKER.test(inhalt))
-    .map(([pfad]) => `${pfad}: trägt @harness-waechter, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
+    .filter(([pfad, inhalt]) => (istTestDatei(pfad) || istScanDatei(pfad)) && !pfad.startsWith(WAECHTER_ORDNER) && WAECHTER_MARKER.test(inhalt))
+    .map(([pfad]) => `${pfad}: trägt den Wächter-Marker, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
 }
