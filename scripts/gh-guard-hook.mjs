@@ -116,7 +116,7 @@ const ghUnterbefehl = (woerter) => new RegExp(String.raw`${WORTANFANG}(?:[\w.:~-
 /** Unumkehrbare gh-Unterbefehle (Pre-Flight-Stopp Löschen): gleich den ask/deny-`gh`-Regeln der settings.json ohne `issue create` (eigener Weg, #1693). */
 export const GH_DESTRUKTIV = Object.freeze(["issue delete", "issue transfer", "label delete", "project delete", "project item-delete", "project field-delete", "repo delete"]);
 const GH_DESTRUKTIV_TREFFER = ghUnterbefehl(GH_DESTRUKTIV);
-const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${GH_DESTRUKTIV.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})\b`);
+const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${GH_DESTRUKTIV.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})\b`, "i");
 const ISSUE_ANLEGEN = ghUnterbefehl(["issue create"]);
 const GRAPHQL_ANLEGEN = /\bcreateIssue(?=\s*\()/;
 

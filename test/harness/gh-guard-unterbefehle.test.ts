@@ -54,6 +54,10 @@ const WEITERE = [
 ];
 const NEGATIV = [
   "gh issue view 5",
+  "gh issue deleted 5",
+  "gh issue delete-all 5",
+  "xgh issue delete 5",
+  "ghx issue delete 5",
   "gh issue list",
   "gh issue close 5",
   "gh project item-list 1",
@@ -68,6 +72,7 @@ describe("Claude: destruktive gh-Unterbefehle hinter Wrappern fragen", () => {
   });
   test("PowerShell: Pfadform mit .exe", () => {
     expect(guard.bewerte("C:\\tools\\gh.exe issue delete 5", { shell: "powershell" }).ask).toBe(true);
+    expect(guard.bewerte("C:\\tools\\GH.EXE ISSUE DELETE 5", { shell: "powershell" }).ask).toBe(true);
   });
   test.each(guard.GH_DESTRUKTIV ?? [])("env gh %s x", (e) => {
     expect(guard.bewerte(`env gh ${e} x`, { shell: "bash" }).ask).toBe(true);
