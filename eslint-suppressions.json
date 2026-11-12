@@ -212,11 +212,6 @@
       "count": 3
     }
   },
-  "scripts/pretooluse-hook.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/projekt-config-lib.mjs": {
     "complexity": {
       "count": 2

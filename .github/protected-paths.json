@@ -157,6 +157,7 @@
     "/scripts/fremdtext-lib.mjs",
     "/scripts/flag-lib.mjs",
     "/scripts/codex-*.mjs",
+    "/scripts/pretooluse-dispatch.mjs",
     "/test/support/bezieher-npm-skripte.ts",
     "/test/groessenstufe.test.ts",
     "/.agents/",
