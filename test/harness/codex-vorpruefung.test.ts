@@ -160,7 +160,7 @@ test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", () 
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0 }).spawn })).toBeNull();
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: "codex-cli 1.2.3", error: { code: "ETIMEDOUT" } }).spawn })).toBeNull();
   for (const [roh, soll] of [["codex-cli 10.2.3", "10.2.3"], ["codex-cli 0.164.10", "0.164.10"], ["codex-cli 1.20.30", "1.20.30"]]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBe(soll);
-  for (const roh of ["codex-cli 1.2.3.4", "codex-cli x1.2.3", "codex-cli 1.2.3x", "codex-cli 1x2x3"]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBeNull();
+  for (const roh of ["codex-cli 1.2.3.4", "codex-cli x1.2.3", "codex-cli 1.2.3x", "codex-cli 1x2x3", "codex-cli 1x2.3", "codex-cli 1.2x3"]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBeNull();
 });
 test("Belege-Datei mit null: kein Absturz, Mangel statt Fehlerpfad", () => {
   const r = lauf(["--belege", datei("null")], { codexVersion: () => "9.9.9", freigaben: tabelle() });
@@ -170,7 +170,9 @@ test("Standard-Verdrahtung: ohne Naht fragt main die echte Versionsabfrage (code
   spawnMock.mockReturnValue({ status: 0, stdout: "codex-cli 9.9.9\n" });
   const ok = lauf(["--belege", belegeFuer("9.9.9")], { freigaben: tabelle() });
   expect(ok).toMatchObject({ code: 0, autonom: true });
-  expect(spawnMock).toHaveBeenCalledWith(expect.stringMatching(/^codex(\.cmd)?$/), ["--version"], expect.anything());
+  const win = process.platform === "win32";
+  expect(spawnMock).toHaveBeenCalledWith(win ? "codex.cmd" : "codex", ["--version"], expect.objectContaining({ shell: win }));
   spawnMock.mockReturnValue({ status: null, error: { code: "ENOENT" } });
-  expect(lauf(["--belege", belegeFuer("9.9.9")], { freigaben: tabelle() }).code).toBe(1);
+  const weg = lauf(["--belege", belegeFuer("9.9.9")], { freigaben: tabelle() });
+  expect(weg.code).toBe(1); expect(weg.maengel).toEqual([expect.stringContaining("nicht ermittelbar")]);
 });

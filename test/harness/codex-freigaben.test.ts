@@ -65,7 +65,7 @@ test("freigabeMaengel: belegte Version keine oder ungültig, Versionsschlüssel 
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: undefined, tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version keine ab"]);
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "böse\nzeile", tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version ungültig ab"]);
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "1.2.3", tabelle: t })).toEqual([]);
-  for (const v of ["v1.2.3", "1.2.3.4", "1.2", "1x2x3"]) expect(eine(voll(), v)).toEqual([expect.stringContaining("keine Version")]);
+  for (const v of ["v1.2.3", "1.2.3.4", "1.2", "1x2x3", "1x2.3", "1.2x3"]) expect(eine(voll(), v)).toEqual([expect.stringContaining("keine Version")]);
   for (const v of ["10.0.0", "0.164.10", "10.20.30"]) expect(eine(voll(), v)).toEqual([]);
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: ["1.2.3"], tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version ungültig ab"]);
   expect(g.freigabeMaengel({ installiert: undefined as unknown as null, belegt: "1.2.3", tabelle: t })).toEqual([expect.stringContaining("nicht ermittelbar")]);
