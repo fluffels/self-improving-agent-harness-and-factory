@@ -3,9 +3,10 @@
  * (ein Required Check deckt so eine wechselnde Job-Menge; `needs` wirkt nur innerhalb eines Workflows), und einen Alarm-Job, der bei rotem Lauf auf main das Alarm-Issue öffnet.
  *
  *   L53 (needs-Vollständigkeit): jeder Schlüssel unter `jobs` steht in `needs` des Sammel-Jobs. Ausgenommen sind der Sammel-Job selbst, Jobs mit `uses: ./.github/workflows/alarm-rot-main.yml` und Jobs, die (auch über mehrere Stufen) selbst am Sammel-Job hängen (ein Eintrag dort wäre ein Zyklus; solche Jobs gaten den Required Check nicht).
+ *   factory#413 L6 (Ergebnisprüfung): GitHub wertet einen übersprungenen Job als bestanden, auch als Required Check; läuft der Sammel-Job nicht, wenn ein Bedarfsjob rot ist, deckt er nichts. Sein `if` enthält darum `always()` oder `!cancelled()`, und sein Block wertet `needs.<job>.result` (auch `needs.*.result`) oder `toJSON(needs)` aus (Textsuche im Job-Block ohne Kommentarzeilen; rot bei failure und cancelled, nicht bei skipped). Grenze: eine Auswertung in einer Composite-Action oder einem wiederverwendbaren Workflow erkennt der Punkt nicht.
  *   L52 (Alarm bei rotem main): es gibt einen Job mit genau diesem `uses`, dessen `needs` den Sammel-Job nennt und dessen `if` `failure()` und `github.event_name == 'push'` enthält; der Workflow läuft auf `push`.
  *
- * Gelesen wird in Blockform ohne `yaml` (`blockformJobs`); eine nicht lesbare Datei macht den Punkt nicht prüfbar. Grenzen: `if: always()` im Sammel-Job prüft der Punkt nicht; das `if` des Alarm-Jobs ist eine Textsuche (`failure() || github.event_name == 'push'` besteht), und er prüft den Auslöser `push`, nicht den Branch `main` (ein Push-Auslöser ohne `branches` ließe den Alarm auch für Feature-Branches laufen).
+ * Gelesen wird in Blockform ohne `yaml` (`blockformJobs`); eine nicht lesbare Datei macht den Punkt nicht prüfbar. Grenzen: das `if` des Alarm-Jobs ist eine Textsuche (`failure() || github.event_name == 'push'` besteht), und er prüft den Auslöser `push`, nicht den Branch `main` (ein Push-Auslöser ohne `branches` ließe den Alarm auch für Feature-Branches laufen).
  * Ohne `sammelChecks` ist der Punkt OK mit Hinweis (nur ein Bezieher mit Produkt-CI konfiguriert ihn); die Fabrik selbst hat keine Produkt-CI. */
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { blockformJobs } from "./workflow-blockform.mjs";
@@ -17,10 +18,10 @@ const PRUEFEN = "node scripts/harness-doctor.mjs --pruefen";
 const aufruf = (job) => `  alarm-rot-main:\n    needs: [${job}]\n    if: failure() && github.event_name == 'push'\n    permissions: { contents: read, issues: write }\n    uses: ${ALARM_USES}\n    with: { label: <Alarm-Label> }\n    secrets: { PROJECT_TOKEN: \${{ secrets.PROJECT_TOKEN }} }`;
 
 /** Die Lücken eines gelesenen Workflows `{ ausloeser, jobs }` für den Sammel-Job `job`; je Lücke `{ befund, fix }`. */
-function luecken({ ausloeser, jobs }, workflow, job) {
+function luecken({ ausloeser, jobs }, workflow, job, text) {
   const sammel = jobs.find((j) => j.id === job);
-  if (!sammel) return [{ befund: `${workflow}: der Sammel-Job „${job}“ fehlt`, fix: `den Job „${job}“ mit \`needs: [<alle anderen Jobs>]\` anlegen oder \`sammelChecks\` der Projekt-Config korrigieren` }];
-  return [...needsLuecke(jobs, sammel, workflow), ...alarmLuecke(jobs, ausloeser, job, workflow)];
+  if (!sammel) return [{ befund: `${workflow}: der Sammel-Job „${job}“ fehlt`, fix: `den Job „${job}“ mit \`needs: [<alle anderen Jobs außer Jobs, die selbst am Sammel-Job hängen>]\` anlegen oder \`sammelChecks\` der Projekt-Config korrigieren` }];
+  return [...needsLuecke(jobs, sammel, workflow), ...ergebnisLuecke(sammel, text, workflow), ...alarmLuecke(jobs, ausloeser, job, workflow)];
 }
 
 /** Hängt der Job `j` (über beliebig viele Stufen) per `needs` an `ziel`? Ein solcher Job kann nie im `needs` von `ziel` stehen (Zyklus). */
@@ -35,7 +36,31 @@ function needsLuecke(jobs, sammel, workflow) {
   const fehlend = pflicht.filter((j) => !sammel.needs.includes(j.id)).map((j) => j.id);
   if (fehlend.length === 0) return [];
   const alle = pflicht.map((j) => j.id);
-  return [{ befund: `${workflow}: der Sammel-Job „${sammel.id}“ wartet nicht auf ${fehlend.map((j) => `„${j}“`).join(", ")} (needs)`, fix: `\`needs: [${alle.join(", ")}]\` im Job „${sammel.id}“ setzen (ohne den Eintrag deckt der Required Check den Job nicht), dann ${PRUEFEN}` }];
+  return [{ befund: `${workflow}: der Sammel-Job „${sammel.id}“ wartet nicht auf ${fehlend.map((j) => `„${j}“`).join(", ")} (needs)`, fix: `\`needs: [${alle.join(", ")}]\` im Job „${sammel.id}“ setzen (alle anderen Jobs außer denen, die selbst am Sammel-Job hängen; ohne den Eintrag deckt der Required Check den Job nicht), dann ${PRUEFEN}` }];
+}
+
+/** Der Block des Jobs `id` aus dem Workflow-Text ohne Kommentarzeilen (ab "  <id>:" bis zur nächsten Zeile mit Einrückung höchstens 2). */
+function jobBlock(text, id) {
+  const zeilen = String(text).replace(/^﻿/, "").split(/\r?\n/);
+  const start = zeilen.findIndex((z) => z.replace(/\s+#.*$/, "").trimEnd() === `  ${id}:`);
+  if (start < 0) return "";
+  const block = [];
+  for (const z of zeilen.slice(start + 1)) {
+    if (z.trim() === "" || z.trimStart().startsWith("#")) continue;
+    if (/^ {0,2}\S/.test(z)) break;
+    block.push(z);
+  }
+  return block.join("\n");
+}
+
+const VORLAGE = "if: ${{ !cancelled() }}\n    steps:\n      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')\n        run: exit 1";
+
+function ergebnisLuecke(sammel, text, workflow) {
+  const fehlt = [];
+  if (!/(?:^|[^\w!])(?:always\(\)|!cancelled\(\))/.test(String(sammel.if))) fehlt.push("if enthält weder always() noch !cancelled() (ein übersprungener Sammel-Job gälte als bestanden)");
+  if (!/needs\.(\*|[\w-]+)\.result|toJSON\(needs\)/.test(jobBlock(text, sammel.id))) fehlt.push("kein Schritt wertet needs.<job>.result oder toJSON(needs) aus");
+  if (fehlt.length === 0) return [];
+  return [{ befund: `${workflow}: Sammel-Job „${sammel.id}“: ${fehlt.join("; ")}`, fix: `im Job „${sammel.id}“ setzen (rot bei einem roten oder abgebrochenen Bedarfsjob, ein übersprungener Job gälte sonst als bestanden), dann ${PRUEFEN}:\n    ${VORLAGE}` }];
 }
 
 function alarmLuecke(jobs, ausloeser, job, workflow) {
@@ -59,7 +84,7 @@ function eintragPruefen(e, workflows) {
   if (!datei) return { luecken: [{ befund: `${e.workflow}: Workflow-Datei fehlt unter .github/workflows/`, fix: `die Datei anlegen oder \`sammelChecks\` der Projekt-Config korrigieren` }] };
   const gelesen = blockformJobs(datei.text);
   if (gelesen.fehler) return { nichtPruefbar: `${e.workflow}:${gelesen.fehler.zeile} ${gelesen.fehler.konstrukt}` };
-  return { luecken: luecken(gelesen, e.workflow, e.job) };
+  return { luecken: luecken(gelesen, e.workflow, e.job, datei.text) };
 }
 
 /** Der Punkt `Sammel-Check` aus `config.sammelChecks` und den Workflow-Dateien `[{ pfad, text }]`. Pur. */
