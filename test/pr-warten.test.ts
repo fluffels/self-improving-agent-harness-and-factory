@@ -1,4 +1,5 @@
 /* PR-Warten (#1559): Kern pur, kein gh-Aufruf, kein echter Schlaf. */
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -546,5 +547,13 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, "HINWEIS x")).toEqual({ exit: 2, zeilen: ["OFFEN", "HINWEIS x"] });
     expect(C.mitHinweis({ exit: 0, zeilen: ["MERGED a"] }, "HINWEIS x")).toEqual({ exit: 0, zeilen: ["MERGED a"] });
     expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, null)).toEqual({ exit: 2, zeilen: ["OFFEN"] });
+  });
+});
+
+describe("CLI: Aufruftext nennt den Standard des Zeitbudgets (factory#347 L4)", () => {
+  test("ohne PR-Nummer: Exit 3 und der Text trägt denselben Standardwert wie parseArgs", () => {
+    const r = spawnSync(process.execPath, ["scripts/pr-warten.mjs"], { encoding: "utf8" });
+    expect(r.status).toBe(3);
+    expect(r.stderr).toContain(`--max-sekunden ${P.parseArgs([]).maxSekunden}]`);
   });
 });
