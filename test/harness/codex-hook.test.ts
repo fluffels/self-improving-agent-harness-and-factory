@@ -276,6 +276,7 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
   });
   test("Regel-Anker: nur `Bash(...)` am Anfang und Ende der Regel zählt", async () => {
     const regeln = (r: string) => ({ lies: () => JSON.stringify({ permissions: { deny: [r] } }) });
+    expect(await lauf(nutzlast("Bash", { command: "a.exe.b x" }), regeln("Bash(a.b:*)"))).toBeNull(); // `.exe` fällt nur am Ende weg (Anker $)
     expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln("Bash(curl:*)"))).not.toBeNull();
     for (const r of ["xBash(curl:*)", "Bash(curl:*)x", "Read(curl:*)"]) expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln(r)), r).toBeNull();
   });
