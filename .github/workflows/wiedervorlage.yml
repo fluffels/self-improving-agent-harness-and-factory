@@ -3,7 +3,7 @@ name: Wiedervorlage
 # Täglicher Lauf der Wiedervorlage (#1628): je fälligem Eintrag aus .github/wiedervorlagen.json ohne Ticket
 # (Dedupe über den Marker im Body) wird ein Ticket "⏰ Wiedervorlage: …" angelegt und per
 # `board-place.mjs --notfall wiedervorlage --top` ganz oben einsortiert. Bleibt ein fälliger Eintrag ohne
-# Ticket, wird der Lauf rot (Wächter). Mechanik: docs/ticket-reihenfolge.md › Wiedervorlage.
+# Ticket, wird der Lauf rot (Wächter). Mechanik: docs/ticket-reihenfolge.md (Fabrik) › Wiedervorlage.
 #
 # ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope);
 # das Standard-GITHUB_TOKEN legt nur das Issue an.
