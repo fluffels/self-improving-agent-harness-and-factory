@@ -485,6 +485,7 @@ export function leitplankenQuellePunkt({ git, lies }) {
   const codeowners = lies(".github/CODEOWNERS");
   if (codeowners === null) return luecke(LQ_PUNKT, ".github/CODEOWNERS fehlt", ".github/CODEOWNERS anlegen: eine Zeile `<muster> @<owner>` je Eintrag der Pflicht-Review-Liste");
   const scan = lesePfade(pfade.filter(istScanDatei), lies);
+  // Der Filter begrenzt nur die Lesemenge; maßgeblich ist derselbe istTestDatei in waechterAusserhalb.
   const tests = lesePfade(pfade.filter(istTestDatei), lies);
   const funde = [...ankerFunde(quelle, codeowners, roh), ...agentsFunde(roh), ...textFunde(scan, tests)];
   return funde.length === 0 ? gut(LQ_PUNKT) : luecke(LQ_PUNKT, funde.join("; "), lqFix(funde));

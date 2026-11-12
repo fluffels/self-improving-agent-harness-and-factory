@@ -151,6 +151,13 @@ describe("Punkt Leitplanken-Quelle", () => {
     });
   });
 
+  test("(a) ein unverankerter Eintrag nur in einer anderen Gruppe als pflichtReview macht den Punkt rot (roh wird durchgereicht)", () => {
+    const quelle = JSON.stringify({ harness: ["AGENTS.md", "/.github/CODEOWNERS", "docs/y.md"], pflichtReview: ["AGENTS.md", "/.github/CODEOWNERS"] });
+    const p = punkt(welt({ ".github/protected-paths.json": quelle, ".github/CODEOWNERS": OWNERS }));
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("(a) unverankerter Eintrag docs/y.md der Quelle ist nicht bewusst tiefen-unabhängig");
+  });
+
   test("(c) auch ein verschachtelter Test unter test/ (nicht nur direkt darunter) wird gelesen", () => {
     const p = punkt(welt({ ...GESUND, "test/sub/w.test.ts": MARKER }));
     expect(p.befund).toContain("(c) test/sub/w.test.ts");
