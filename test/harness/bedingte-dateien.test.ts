@@ -167,9 +167,8 @@ const echt = (k: Kern): Eingabe => ({
 });
 const befund = (k: Kern, e: Eingabe): string => bedingteDateienBefunde(k, e).join("\n");
 describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)", () => {
-  test("der Katalog nennt genau die beiden Kerne (die Schleifen unten sind nicht leer)", () => {
-    assert.deepEqual(KATALOG.map((k) => k.kern), [".agents/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md"]);
-  });
+  test("der Katalog nennt genau die beiden Kerne (die Schleifen unten sind nicht leer)", () =>
+    assert.deepEqual(KATALOG.map((k) => k.kern), [".agents/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md"]));
 
   for (const k of KATALOG) {
     describe(k.kern, () => {
@@ -226,8 +225,7 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
     const ohneToken = e.kern.split("\n").map((z) => (z.includes(`${ORDNER}/umsetzer-gruppen.md`) ? z.split("GRUPPEN").join("X") : z)).join("\n");
     assert.match(befund(UMSETZER, { ...e, kern: ohneToken }), /umsetzer-gruppen\.md: die Zeile mit dem Pfad nennt die Bedingung nicht \(fehlt: GRUPPEN\)/);
     assert.deepEqual(KATALOG[0].dateien.flatMap((d) => d.tokens), [], "Review-Skill: mehr Pflicht wäre Härten ohne Evidenz");
-    const umbenannt = e.rollen.map((r) => (r.quelle === "factory-umsetzer" ? { ...r, quelle: "anderer-umsetzer" } : r));
-    assert.match(befund(UMSETZER, { ...e, rollen: umbenannt }), /keine Codex-Rolle mit Quelle factory-umsetzer/);
+    assert.match(befund(UMSETZER, { ...e, rollen: e.rollen.map((r) => ({ ...r, quelle: "anderer-umsetzer" })) }), /keine Codex-Rolle mit Quelle factory-umsetzer/);
     assert.match(befund(UMSETZER, { ...e, quellVerzeichnis: ".andere/skills" }), /liegt nicht im gemeinsamen Skill-Verzeichnis/);
     assert.deepEqual(bedingteDateienBefunde(KATALOG[0], { ...echt(KATALOG[0]), rollen: [], quellVerzeichnis: ".andere/skills" }), []);
   });

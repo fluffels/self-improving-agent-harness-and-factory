@@ -70,7 +70,6 @@ export const MODULE_AGENTS_BUDGET = 12_000;
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
 
-/** Dateiname (nicht Namensende) ist genau `AGENTS.md`: `X-AGENTS.md` ist keine AGENTS.md. */
 const istAgentsMd = (file) => file.split("/").pop() === "AGENTS.md";
 
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
@@ -149,18 +148,17 @@ export function kernBlockPruefung(rootDir = ROOT) {
   return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir), marker: { start: markerStart("kern"), ende: markerEnde("kern") } });
 }
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
-/** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces (fail-closed: Exit 1). */
-function messeAlle(red) {
-  const kontext = collectContextSizes();
+/** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces: `melde(text)` beendet den Lauf (CLI: Exit 1, fail-closed). */
+export function messeAlle(rootDir, melde) {
+  const kontext = collectContextSizes(rootDir);
   try {
-    return [...kontext, ...collectAgentSkillSizes()];
+    return [...kontext, ...collectAgentSkillSizes(rootDir)];
   } catch (e) {
-    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`));
-    process.exit(1);
+    return melde(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`);
   }
 }
 
+// ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const tty = process.stdout.isTTY;
   const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -177,7 +175,7 @@ function main() {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const sizes = messeAlle(red);
+  const sizes = messeAlle(ROOT, (text) => (console.error(red(text)), process.exit(1)));
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));

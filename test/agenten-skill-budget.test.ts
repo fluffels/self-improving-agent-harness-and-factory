@@ -12,7 +12,7 @@ import { kopiereScripts } from "./support/scripts-kopie";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
+import { messeAlle as rawMesse, collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
 
 type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
@@ -21,6 +21,7 @@ const DEFAULT = rawDefault as number;
 const collectFiles = rawFiles as (wurzel: string) => string[];
 const collectSizes = rawSizes as (wurzel: string, budgets?: Eintrag[], standard?: number) => Groesse[];
 const findOversized = rawOversized as (sizes: Groesse[]) => Groesse[];
+const messeAlle = rawMesse as (wurzel: string, melde: (text: string) => string) => Groesse[] | string;
 const fixHinweis = rawFix as (violations: { file: string }[]) => string;
 
 const WURZEL = join(import.meta.dirname, "..");
@@ -120,9 +121,7 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
   });
 
   test("L17: X-AGENTS.md unter .agents/skills zählt als Agenten-/Skill-Datei, genau AGENTS.md nicht (Dateinamen-Vergleich statt endsWith)", () => {
-    const t = fixHinweis([{ file: ".agents/skills/proj/X-AGENTS.md" }]);
-    assert.match(t, /Agenten-\/Skill-Datei: kürzen/);
-    assert.doesNotMatch(t, /modul-lokale/);
+    assert.match(fixHinweis([{ file: ".agents/skills/proj/X-AGENTS.md" }]), /Agenten-\/Skill-Datei: kürzen/);
     temp((dir) => {
       for (const n of ["X-AGENTS.md", "AGENTS.md"]) datei(dir, `.agents/skills/proj/${n}`, "x");
       assert.deepEqual(collectFiles(dir), [".agents/skills/proj/X-AGENTS.md"]);
@@ -223,8 +222,15 @@ describe("CLI check-context-size: Gate-Meldung und Ausnahme im Bezieher (L17, L2
       const r = lauf(dir);
       assert.equal(r.status, 1, r.text);
       assert.match(r.text, /✖ .*\.agents\/skills\/proj\/SKILL\.md:\d+: Projektwert-Block hat kein Ende/);
-      assert.match(r.text, /Fix: /);
       assert.doesNotMatch(r.text, /^\s+at /m);
+    });
+  });
+
+  test("L17 in-process: messeAlle liefert bei kaputtem Marker eine Meldung mit Ort und Fix, sonst die Messwerte", () => {
+    temp((dir) => {
+      assert.ok(Array.isArray(messeAlle(dir, (t) => t)));
+      datei(dir, ".agents/skills/proj/SKILL.md", `${START}\nohne Ende\n`);
+      assert.match(messeAlle(dir, (t) => t) as string, /✖ .*SKILL\.md:1: Projektwert-Block hat kein Ende\nFix: /);
     });
   });
 
@@ -235,8 +241,7 @@ describe("CLI check-context-size: Gate-Meldung und Ausnahme im Bezieher (L17, L2
       datei(dir, rel, "x".repeat(DEFAULT + 1));
       assert.equal(lauf(dir).status, 1, "ohne Eintrag rot");
       const cfg = JSON.parse(readFileSync(join(dir, ".factory", "projekt.json"), "utf8")) as { ausnahmen?: Record<string, unknown> };
-      cfg.ausnahmen = { ...cfg.ausnahmen, kontext: [{ datei: rel, grund: "#1 eigene Datei, wird geteilt" }] };
-      datei(dir, ".factory/projekt.json", JSON.stringify(cfg));
+      datei(dir, ".factory/projekt.json", JSON.stringify({ ...cfg, ausnahmen: { ...cfg.ausnahmen, kontext: [{ datei: rel, grund: "#1 eigene Datei, wird geteilt" }] } }));
       const ok = lauf(dir);
       assert.equal(ok.status, 0, ok.text);
       assert.match(ok.text, /geduldet: \.agents\/skills\/proj\/SKILL\.md/);

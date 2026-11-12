@@ -127,6 +127,5 @@ export const AGENTEN_SKILL_BUDGETS = [
 ];
 
 /** Budget für jede Agenten- und Skill-Datei ohne Eintrag (gleich dem größten Budget der Liste, `test/agenten-skill-budget.test.ts` verlangt das).
- *  Herleitung: eine Datei ohne Eintrag, auch eine projekt-eigene im Bezieher, wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (`kontext-budget-ratchet`).
- *  Bezieher-Fall: eine eigene Datei über dem Default kürzen oder in eine bedingte Zusatzdatei teilen; kein eigenes Budget im Bezieher, nur `ausnahmen.kontext` mit offenem Ticket. */
+ *  Herleitung: eine Datei ohne Eintrag, auch eine projekt-eigene im Bezieher, wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (`kontext-budget-ratchet`). Bezieher-Fall: eigene Datei darüber kürzen oder in eine bedingte Zusatzdatei teilen, nur `ausnahmen.kontext` mit offenem Ticket. */
 export const AGENTEN_SKILL_DEFAULT_BUDGET = 37_500;
