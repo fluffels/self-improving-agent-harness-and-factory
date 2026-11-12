@@ -41,8 +41,8 @@ function needsLuecke(jobs, sammel, workflow) {
 
 /** Der Block des Jobs `id` aus dem Workflow-Text ohne Kommentarzeilen (ab "  <id>:" bis zur nächsten Zeile mit Einrückung höchstens 2). */
 function jobBlock(text, id) {
-  const zeilen = String(text).replace(/^﻿/, "").split(/\r?\n/);
-  const start = zeilen.findIndex((z) => z.replace(/\s+#.*$/, "").trimEnd() === `  ${id}:`);
+  const zeilen = String(text).split(/\r?\n/);
+  const start = zeilen.findIndex((z) => z.replace(/\s+#.*$/, "").trimEnd().replaceAll(/["']/g, "") === `  ${id}:`);
   if (start < 0) return "";
   const block = [];
   for (const z of zeilen.slice(start + 1)) {
@@ -57,7 +57,7 @@ const VORLAGE = "if: ${{ !cancelled() }}\n    steps:\n      - if: contains(needs
 
 function ergebnisLuecke(sammel, text, workflow) {
   const fehlt = [];
-  if (!/(?:^|[^\w!])(?:always\(\)|!cancelled\(\))/.test(String(sammel.if))) fehlt.push("if enthält weder always() noch !cancelled() (ein übersprungener Sammel-Job gälte als bestanden)");
+  if (!/always\(\)|!cancelled\(\)/.test(String(sammel.if))) fehlt.push("if enthält weder always() noch !cancelled() (ein übersprungener Sammel-Job gälte als bestanden)");
   if (!/needs\.(\*|[\w-]+)\.result|toJSON\(needs\)/.test(jobBlock(text, sammel.id))) fehlt.push("kein Schritt wertet needs.<job>.result oder toJSON(needs) aus");
   if (fehlt.length === 0) return [];
   return [{ befund: `${workflow}: Sammel-Job „${sammel.id}“: ${fehlt.join("; ")}`, fix: `im Job „${sammel.id}“ setzen (rot bei einem roten oder abgebrochenen Bedarfsjob, ein übersprungener Job gälte sonst als bestanden), dann ${PRUEFEN}:\n    ${VORLAGE}` }];

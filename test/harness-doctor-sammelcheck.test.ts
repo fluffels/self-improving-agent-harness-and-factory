@@ -212,6 +212,11 @@ describe("Sammel-Check, Ergebnisprüfung (factory#413 L6)", () => {
     expect(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - uses: re-actors/alls-green@x\n        with:\n          jobs: ${{ toJSON(needs) }}\n")).ok).toBe(true);
   });
 
+  test("OK: gequoteter Job-Schlüssel mit Zeilenkommentar, Leer- und Kommentarzeilen und CRLF im Block", () => {
+    const text = GUT.replace(GATE, `  "gate":  # Sammel-Job\n    needs: [build, audit]\n    if: always()\n\n    # Hinweis\n${RUN}\n    steps:\n      - run: echo \${{ needs.build.result }}\n`).replaceAll("\n", "\r\n");
+    expect(lauf(text)).toEqual({ punkt: "Sammel-Check", ok: true });
+  });
+
   test("Auswertung steht im Sammel-Job-Block, nicht in einem Nachbarjob", () => {
     const fremd = GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n    if: always()\n${RUN}  nach:\n    needs: [gate]\n    steps:\n      - run: echo \${{ needs.gate.result }}\n`);
     ohneEnde(lauf(fremd));
