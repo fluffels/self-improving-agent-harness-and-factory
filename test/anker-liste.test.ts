@@ -28,8 +28,9 @@ const ankerListe = ankerRoh as unknown as {
   lauf: (argv: string[], u: Umgebung) => Lauf;
   echteUmgebung: () => Umgebung;
   MUSTER: { name: string }[];
+  MUSTER_SHELL: { name: string }[];
 };
-const { guardListe, formatiere, lauf, MUSTER, echteUmgebung } = ankerListe;
+const { guardListe, formatiere, lauf, MUSTER, MUSTER_SHELL, echteUmgebung } = ankerListe;
 const istQuelle = (p: string) => p.startsWith("scripts/") && p.endsWith(".mjs");
 
 /** Eine neue Datei mit allen Zeilen als Diff-Zeilen. */
@@ -261,6 +262,44 @@ describe("guardListe: Funktionszuordnung", () => {
     ]);
   });
 
+  // factory#396 L64: die Modulebene-Grenze ist eine geschlossene Liste aus Spalte 0.
+  test("Modulebene-Grenze: `const` in Spalte 0 nach einer einzeiligen Funktion beendet sie (Defekt L64, STATUS_PFADE)", () => {
+    const r = neu("const f = (x) => x;\nconst LISTE = [\n  /a/,\n  /b/,\n];");
+    expect(r.map((e) => [e.funktion, e.zeile, e.anker.map((a) => a.zeile)])).toEqual([["(Modulebene)", 3, [3, 4]]]);
+  });
+
+  test.each([
+    ["schließendes }", "function g() {\n  if (a) {}\n}\nfoo(a || b);"],
+    ["class", "function g() { if (a) {} }\nclass K {\n  x = a || b;\n}"],
+    ["let", "function g() { if (a) {} }\nlet y = a || b;"],
+    ["var", "function g() { if (a) {} }\nvar y = a || b;"],
+  ])("Modulebene-Grenze %s: der Anker danach gehört nicht zu g", (_n, quelle) => {
+    const r = neu(quelle);
+    expect(r.map((e) => [e.funktion, e.anker.map((a) => a.muster)])).toEqual([
+      ["g", ["if"]],
+      ["(Modulebene)", ["||"]],
+    ]);
+  });
+
+  test("Modulebene-Grenze: `export const` und der Direktaufruf-Block nach einer einzeiligen Funktion beenden sie, `variante(` und `main();` nicht", () => {
+    const e = neu("function g() { if (a) {} }\nexport const L = [\n  /a/,\n];");
+    expect(e.map((x) => [x.funktion, x.anker.map((a) => a.zeile)])).toEqual([["g", [1]], ["(Modulebene)", [3]]]);
+    const d = neu("function g() { if (a) {} }\nif (istDirektaufruf(x)) {\n  g(a || b);\n}");
+    expect(d.map((x) => [x.funktion, x.anker.map((a) => a.muster)])).toEqual([["g", ["if"]], ["(Modulebene)", ["if", "||"]]]);
+    for (const k of ["if(istDirektaufruf(x)) {", "if ( istDirektaufruf(x)) {"]) {
+      expect(neu(`function g() { if (a) {} }\n${k}\n  g(a || b);\n}`).map((x) => x.funktion), k).toEqual(["g", "(Modulebene)"]);
+    }
+    const v = neu("function g() { if (a) {} }\nvariante(a || b);");
+    expect(v.map((x) => [x.funktion, x.anker.map((a) => a.muster)])).toEqual([["g", ["if", "||"]]]);
+  });
+
+  test("Modulebene-Grenze Negativfall: eingerücktes } und const im Rumpf beenden die Funktion nicht; ein Kopf in Spalte 0 bleibt Kopf", () => {
+    const r = neu("function f() {\n  if (a) {\n  }\n  const z = 1;\n  if (b) {}\n}");
+    expect(r.map((e) => [e.funktion, e.anker.map((a) => a.zeile)])).toEqual([["f", [2, 5]]]);
+    const k = neu("function davor() {}\nexport const h = (a) => {\n  if (a) {}\n};");
+    expect(k.map((e) => [e.funktion, e.zeile])).toEqual([["h", 2]]);
+  });
+
   test.each(["if", "for", "while", "switch", "catch", "return"])("%s-Zeile mit Block ist kein Methodenkopf", (wort) => {
     const r = neu(`function f() {\n  ${wort} (a) {\n    g(a || b);\n  }\n}`);
     expect(r.map((e) => e.funktion)).toEqual(["f"]);
@@ -333,6 +372,122 @@ describe("istGemessen", () => {
   test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts", "test/x.test.mjs", "scripts/a.test.mjs"])("%s ist nicht gemessen", (p) =>
     expect(istGemessen(p, "scripts")).toBe(false),
   );
+});
+
+describe("Shell (*.sh, factory#396 L2)", () => {
+  const istShell = (p: string) => p.endsWith(".sh");
+  const sh = (inhalt: string): Eintrag[] => guardListe({ diffText: "", neueDateien: [{ pfad: "betrieb/x.sh", inhalt }], lies: () => undefined, istQuelle: istShell });
+  const namen = (zeile: string) => sh(`f() {\n${zeile}\n}`)[0]?.anker.map((a) => a.muster) ?? [];
+  const SHELL_FAELLE: [string, string][] = [
+    ["if", "  if [[ -f x ]]; then"],
+    ["if", "  elif [ -d y ]; then"],
+    ["[[", "  [[ -f x ]] && echo a"],
+    ["case", '  case "$1" in'],
+    ["&&", "  a && b"],
+    ["||", "  a || b"],
+  ];
+  test.each(SHELL_FAELLE)("%s ist ein Anker", (name, zeile) => expect(namen(zeile)).toContain(name));
+
+  test("die Shell-Tabelle hat genau die getesteten Muster", () => {
+    expect([...new Set(MUSTER_SHELL.map((m) => m.name))].sort()).toEqual([...new Set(SHELL_FAELLE.map(([n]) => n))].sort());
+  });
+
+  test("Kombinationen: if samt [[, elif als if, && und || nebeneinander", () => {
+    expect(namen("  if [[ -f x ]]; then")).toEqual(["if", "[["]);
+    expect(namen("  a && b || c")).toEqual(["&&", "||"]);
+  });
+
+  test.each([
+    "  # if [ -f x ]; then",
+    "  #!/bin/bash",
+    '  echo "a && b"',
+    "  echo 'if x'",
+    "  n=${#arr[@]}",
+    '  echo "$#"',
+    "  x=$# # a || b",
+    "  echo if-not",
+  ])("Negativfall ohne Anker: %s", (z) => expect(namen(z), z).toEqual([]));
+
+  test("$# und ${#a[@]} sind Code, kein Kommentarbeginn: der Anker dahinter zählt", () => {
+    expect(namen("  if [ $# -gt 0 ]; then")).toEqual(["if"]);
+    expect(namen("  n=${#arr[@]} && x")).toEqual(["&&"]);
+  });
+
+  test("Kommentare in Spalte 0, Wortgrenzen, Escape im String und function name() {", () => {
+    expect(sh("# if [ -f x ]; then\n# a && b\n")).toEqual([]);
+    expect(namen("  diff a b")).toEqual([]);
+    expect(namen("  notif x")).toEqual([]);
+    expect(namen("  echo showcase x")).toEqual([]);
+    expect(namen("  lowercase x")).toEqual([]);
+    expect(namen("  x[[ -f y")).toEqual([]);
+    expect(sh("[[ -f x ]] || exit 1\n").map((e) => e.anker.map((a) => a.muster))).toEqual([["[[", "||"]]);
+    expect(namen('  echo "a \\" && b"')).toEqual([]);
+    expect(namen('  echo "q \\" || x \\" y"')).toEqual([]);
+    const r = sh("function b() {\n  c || d\n}\n");
+    expect(r.map((e) => [e.funktion, e.zeile])).toEqual([["b", 1]]);
+  });
+
+  test("Komponenten der Muster: Bindestrich-Wortgrenze, [[ und case nur als Wort, Pipe und Hintergrund kein Anker", () => {
+    for (const z of ["  run-if x", "  ls [[:digit:]]*", "  cases=1", "  case_x=1", "  a | b", "  a &"]) expect(namen(z), z).toEqual([]);
+  });
+
+  test("Strings: mehrere je Zeile (g-Flag, Quantor) und leere Strings", () => {
+    for (const z of ['  echo "x" "a && b"', '  echo "" "a && b"', "  echo '' 'a && b'", "  echo 'x' 'a && b'"]) expect(namen(z), z).toEqual([]);
+  });
+
+  test("Köpfe: Leerzeichen vor (), Namensklasse, Einrückung; ${x} in Spalte 1 beendet die Funktion nicht", () => {
+    const kopf = (q: string) => sh(q).map((e) => [e.funktion, e.zeile]);
+    expect(kopf("f () {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("my-func() {\n  a || b\n}")).toEqual([["my-func", 1]]);
+    expect(kopf("lib.fn() {\n  a || b\n}")).toEqual([["lib.fn", 1]]);
+    expect(kopf("function lib.fn {\n  a || b\n}")).toEqual([["lib.fn", 1]]);
+    expect(kopf("function my-fn {\n  a || b\n}")).toEqual([["my-fn", 1]]);
+    expect(kopf("ns::fn() {\n  a || b\n}")).toEqual([["ns::fn", 1]]);
+    expect(kopf("function f () {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("function f( ) {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("f ( ) {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("functions() {\n  a || b\n}")).toEqual([["functions", 1]]);
+    expect(kopf("function_x() {\n  a || b\n}")).toEqual([["function_x", 1]]);
+    expect(kopf("f() {\n  # function g {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("function ns::fn {\n  a || b\n}")).toEqual([["ns::fn", 1]]);
+    expect(kopf("if x; then\n  g() {\n    a || b\n  }\nfi")).toEqual([["(Modulebene)", 1], ["g", 2]]);
+    expect(kopf("  function g {\n    a || b\n  }")).toEqual([["g", 1]]);
+    expect(kopf("f() {\n  echo ${x}\n  a || b\n}")).toEqual([["f", 1]]);
+  });
+
+  test("dialektVon: nur die Endung .sh wählt Shell (a.shared.mjs und a.sh.mjs bleiben JS)", () => {
+    for (const pfad of ["scripts/a.shared.mjs", "scripts/a.sh.mjs"]) {
+      const r = guardListe({ diffText: "", neueDateien: [{ pfad, inhalt: "function g() {\n  return a ?? b;\n}" }], lies: () => undefined, istQuelle: () => true });
+      expect(r.map((e) => [e.funktion, e.anker.map((a) => a.muster)]), pfad).toEqual([["g", ["??"]]]);
+    }
+  });
+
+  test("Shebang in Zeile 1 ist kein Anker; ein Case-Zweig mit * am Anfang zählt als Code (kein Blockkommentar)", () => {
+    expect(sh("#!/bin/bash\nset -e\n")).toEqual([]);
+    expect(namen("  *) a || b ;;")).toEqual(["||"]);
+  });
+
+  test("Köpfe name() {, function name { und } in Spalte 0 als Modulebene", () => {
+    const r = sh("a() {\n  if x; then\n  fi\n}\nfunction b {\n  c || d\n}\ne && f\n");
+    expect(r.map((e) => [e.funktion, e.zeile, e.anker.map((a) => a.muster)])).toEqual([
+      ["a", 1, ["if"]],
+      ["b", 5, ["||"]],
+      ["(Modulebene)", 8, ["&&"]],
+    ]);
+  });
+
+  test("ein Kommentar mit Funktionskopf ist kein Kopf", () => {
+    const r = sh("a() {\n}\n# b() {\nc && d\n");
+    expect(r.map((e) => e.funktion)).toEqual(["(Modulebene)"]);
+  });
+
+  test("istGemessen: .sh nur in der Ordner-Klausel; Root-Datei, ohne und Tests nicht", () => {
+    const gem = (ankerRoh as unknown as { istGemessen: (p: string, q: unknown) => boolean }).istGemessen;
+    expect(gem("betrieb/x.sh", "scripts")).toBe(true);
+    expect(gem("scripts/x.sh", "scripts")).toBe(true);
+    expect(gem("x.sh", "scripts")).toBe(false);
+    expect(gem("betrieb/x.sh", { wurzeln: ["scripts"], endungen: [".mjs"], ohne: ["betrieb/**"] })).toBe(false);
+  });
 });
 
 describe("istGemessen: JS/TS-Familie zusätzlich zu struktur.endungen", () => {
