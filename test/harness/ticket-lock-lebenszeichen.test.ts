@@ -138,17 +138,15 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
   test("lebenszeichenMs: Maximum aller Zeitfelder, Ungültiges entfällt, ohne Werte null", () => {
     const a = iso(JETZT - 5 * MIN);
     assert.equal(L.lebenszeichenMs({ erstellt: iso(JETZT - 60 * MIN), zuletzt: { zeit: a } }), JETZT - 5 * MIN);
-    assert.equal(L.lebenszeichenMs({ erstellt: iso(JETZT - 60 * MIN), uebergabe: { gesetzt: iso(JETZT - 50 * MIN), verbraucht: iso(JETZT - 40 * MIN) } }), JETZT - 40 * MIN);
+    assert.equal(L.lebenszeichenMs({ erstellt: iso(JETZT - 60 * MIN), gestoppt: { gesetzt: iso(JETZT - 50 * MIN), verbraucht: iso(JETZT - 40 * MIN) } }), JETZT - 40 * MIN);
     assert.equal(L.lebenszeichenMs({ erstellt: iso(JETZT - 60 * MIN), gestoppt: { gesetzt: iso(JETZT - 7 * MIN), verbraucht: null } }), JETZT - 7 * MIN);
-    assert.equal(L.lebenszeichenMs({ erstellt: "kein Datum", zuletzt: { zeit: 5 }, uebergabe: { gesetzt: null } }), null);
+    assert.equal(L.lebenszeichenMs({ erstellt: "kein Datum", zuletzt: { zeit: 5 }, gestoppt: { gesetzt: null } }), null);
     assert.equal(L.lebenszeichenMs({ erstellt: "kein Datum", zuletzt: { zeit: a } }), JETZT - 5 * MIN);
     assert.equal(L.lebenszeichenMs(null), null);
     assert.equal(L.lebenszeichenMs({}), null);
   });
 
   test.each([
-    ["uebergabe.gesetzt", { uebergabe: { gesetzt: iso(JETZT - 1 * MIN), verbraucht: null } }],
-    ["uebergabe.verbraucht", { uebergabe: { gesetzt: iso(JETZT - 9 * MIN), verbraucht: iso(JETZT - 1 * MIN) } }],
     ["gestoppt.gesetzt", { gestoppt: { gesetzt: iso(JETZT - 1 * MIN), verbraucht: null } }],
     ["gestoppt.verbraucht", { gestoppt: { gesetzt: iso(JETZT - 9 * MIN), verbraucht: iso(JETZT - 1 * MIN) } }],
     ["zuletzt.zeit", { zuletzt: { zeit: iso(JETZT - 1 * MIN) } }],
@@ -164,12 +162,12 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
     assert.equal(h(null), null);
   });
 
-  test("oeffentlicheSicht nennt nie nonce oder nonceHash und fasst Übergabe und Stopp zusammen", () => {
-    const sicht = L.oeffentlicheSicht({ nr: 5, nonce: "geheim", nonceHash: "auch", erstellt: "x", uebergabe: { gesetzt: "a", verbraucht: null }, gestoppt: { gesetzt: "a", verbraucht: "b" } });
+  test("oeffentlicheSicht nennt nie nonce oder nonceHash und fasst den Stopp-Vermerk zusammen", () => {
+    const sicht = L.oeffentlicheSicht({ nr: 5, nonce: "geheim", nonceHash: "auch", erstellt: "x", gestoppt: { gesetzt: "a", verbraucht: "b" } });
     assert.doesNotMatch(JSON.stringify(sicht), /geheim|"auch"|nonce/);
-    assert.equal(sicht.uebergabeStand, "offen");
     assert.equal(sicht.gestopptStand, "verbraucht");
-    assert.equal(L.oeffentlicheSicht({ nonceHash: "h" }).uebergabeStand, "keine");
+    assert.equal(L.oeffentlicheSicht({ nonceHash: "h" }).gestopptStand, "keine");
+    assert.equal(L.oeffentlicheSicht({ gestoppt: { gesetzt: "a", verbraucht: null } }).gestopptStand, "offen");
   });
 
   test("ticket-lock.mjs re-exportiert die Konstanten der Lib unverändert", () => {
@@ -200,8 +198,8 @@ describe("claim schreibt sandbox", { timeout: 30_000 }, () => {
 });
 
 describe("lebenszeichen <nr> --nonce", { timeout: 30_000 }, () => {
-  test("eigene Nonce setzt zuletzt und schritt; Übergabe, Stopp, sandbox und nonceHash bleiben", () => {
-    const extra = { uebergabe: { gesetzt: "u", verbraucht: null }, gestoppt: { gesetzt: "g", verbraucht: "v" } };
+  test("eigene Nonce setzt zuletzt und schritt; Stopp-Vermerk, sandbox und nonceHash bleiben", () => {
+    const extra = { gestoppt: { gesetzt: "g", verbraucht: "v" } };
     const nonce = eigenerLock(5, extra);
     const vorher = liesLock(5);
     const r = lauf(["lebenszeichen", "5", "--nonce", nonce, "--schritt", "2/4"], {}, JETZT + 10 * MIN);
@@ -209,7 +207,7 @@ describe("lebenszeichen <nr> --nonce", { timeout: 30_000 }, () => {
     const nachher = liesLock(5);
     assert.deepEqual(nachher.zuletzt, { zeit: iso(JETZT + 10 * MIN), quelle: "schritt" });
     assert.equal(nachher.schritt, "2/4");
-    for (const k of ["nr", "nonceHash", "erstellt", "sandbox", "uebergabe", "gestoppt"]) assert.deepEqual(nachher[k], vorher[k], k);
+    for (const k of ["nr", "nonceHash", "erstellt", "sandbox", "gestoppt"]) assert.deepEqual(nachher[k], vorher[k], k);
   });
 
   test("ohne --schritt bleibt ein früherer schritt stehen, mit --schritt=<x> wird er ersetzt", () => {
@@ -250,7 +248,7 @@ describe("lebenszeichen <nr> --nonce", { timeout: 30_000 }, () => {
 
 describe("lebenszeichen --commit (post-commit-Hook)", { timeout: 30_000 }, () => {
   test("Ticket-Branch mit Lock: nur zuletzt (quelle commit) ändert sich", () => {
-    eigenerLock(5, { schritt: "1/3", uebergabe: { gesetzt: "u", verbraucht: null } });
+    eigenerLock(5, { schritt: "1/3", gestoppt: { gesetzt: "u", verbraucht: null } });
     const vorher = liesLock(5);
     const r = lauf(["lebenszeichen", "--commit"], { branch: `${BRP}5-irgendwas` }, JETZT + 5 * MIN);
     assert.deepEqual(r, { code: 0, out: "", err: "" });

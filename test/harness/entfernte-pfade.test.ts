@@ -14,6 +14,9 @@
  * Bewusste Grenze: freie Umschreibungen ohne einen der Namen („orchestrierter Workflow, der dieselben Phasen fährt“)
  * fängt der Scan nicht; das Wort „Workflow“ allein wäre zu breit (GitHub-Actions-Workflows, generische Mechanik).
  *
+ * Dazu (factory#399): der Phasen-Schnitt ist zurückgebaut (Befehl `uebergeben`, Token `uebergabe`, `SCHNITT:`/`UEBERGABE:`, Prompt-Zeilen `Schnitt:`/`Einstieg:`); `RESTE_SCHNITT` scannt
+ * die Namen. Bewusste Grenze: der Name „Phasen-Schnitt“ und freie Umschreibungen werden nicht gescannt, er bleibt in Messberichten erlaubt (die Messskripte `kontext-treiber`/`subagent-laeufe` stehen in `AUSNAHMEN_SCHNITT`).
+ *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
  * Namen mit Projektwort und ein Platzhalter als Dateiname (`<agenten.…>.md`) sind Rückfälle.
  *
@@ -22,11 +25,20 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { type Datei, type Rest, AUSNAHMEN, findeReste, getrackteTextdateien, meldungMitFix, REGEL_AUSNAHMEN, SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START } from "../support/entfernte-pfade";
-import { projektConfig } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 import { escapeRe as esc } from "../support/regex";
 
 // Die Namen kommen aus der echten Projekt-Config, nicht aus Literalen: der Scan liest die echten Repo-Dateien.
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as lockRaw from "../../scripts/ticket-lock.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as lockLibRaw from "../../scripts/ticket-lock-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
+
 const C = projektConfig();
 const ROLLEN_AGENTEN = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];
 
@@ -278,5 +290,97 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   test("jede Ausnahme nennt einen Grund", () => {
     for (const a of REGEL_AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.pfad} ohne Grund`);
     for (const a of AUSNAHMEN) assert.ok(a.grund.length > 10, `Ausnahme ${a.praefix} ohne Grund`);
+  });
+});
+
+// ---- Phasen-Schnitt zurückgebaut (factory#399) ----
+
+/** Namen des zurückgebauten Phasen-Schnitts; die Liste ist geschlossen (je Regel ein Beispiel im Negativfall-Test). */
+export const RESTE_SCHNITT: Rest[] = [
+  { name: "Befehl uebergeben", muster: /\buebergeben\b/, fix: "den Befehl gibt es nicht mehr: ticket-lock kennt claim, pruefe, uebernehmen, gestoppt, freigeben, wiederherstellen, lebenszeichen, erzwingen" },
+  { name: "Token und Lock-Feld uebergabe", muster: /\buebergabe\b/, fix: "das Ergebnis-Token und das Lock-Feld sind entfernt: gültig sind gemergt, entscheidung-noetig, festgefahren, abgebrochen, abnahme" },
+  { name: "Berichtszeile SCHNITT:", muster: /\bSCHNITT:/, fix: "die Berichtszeile SCHNITT: ist entfernt, der Umsetzer arbeitet immer bis zum Merge" },
+  { name: "Berichtszeile UEBERGABE:", muster: /\bUEBERGABE:/, fix: "die Berichtszeile UEBERGABE: ist entfernt" },
+  { name: "Prompt-Zeile Schnitt: oder Einstieg:", muster: /\b(?:Schnitt|Einstieg): (?:pr|verify)\b|`(?:Schnitt|Einstieg):/, fix: "die Prompt-Zeilen Schnitt:/Einstieg: gibt es nicht mehr; eine Fortsetzung beginnt mit Schritt 1 des Umsetzer-Ablaufs" },
+  { name: "Bezeichner des Schnitts", muster: /\b(?:uebergabeBlockade|uebergabeOffen|uebergabeStand|frischeUebergabe|SCHNITTE)\b/, fix: "den Bezeichner entfernen, es gibt ihn nicht mehr" },
+  { name: "Einstieg nach Übergabe", muster: /Einstieg nach Übergabe/, fix: "den Abschnitt gibt es nicht mehr" },
+];
+
+/** Die Messskripte werten Alt-Transkripte des beendeten Schnitts aus (Entscheidung factory#272) und dürfen die Namen tragen. */
+export const AUSNAHMEN_SCHNITT = [
+  ...AUSNAHMEN,
+  { praefix: "scripts/kontext-treiber.mjs", grund: "misst Alt-Transkripte des beendeten Schnitts (--je-ticket)" },
+  { praefix: "test/kontext-treiber.test.ts", grund: "Tests der Messung von Alt-Transkripten des beendeten Schnitts" },
+  { praefix: "scripts/subagent-laeufe.mjs", grund: "misst Alt-Transkripte des beendeten Schnitts (schnittZeile)" },
+  { praefix: "test/subagent-laeufe.test.ts", grund: "Tests der Messung von Alt-Transkripten des beendeten Schnitts" },
+];
+
+describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
+  const schnitt = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_SCHNITT, AUSNAHMEN_SCHNITT);
+
+  test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
+    const treffer = findeReste(getrackteTextdateien(), RESTE_SCHNITT, AUSNAHMEN_SCHNITT);
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_SCHNITT)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test.each([
+    ["Befehl uebergeben", "ticket-lock uebergeben 1 --nonce x"],
+    ["Token und Lock-Feld uebergabe", "ERGEBNIS: uebergabe"],
+    ["Token und Lock-Feld uebergabe", 'lock.uebergabe = { gesetzt }'],
+    ["Berichtszeile SCHNITT:", "SCHNITT: pr"],
+    ["Berichtszeile UEBERGABE:", "UEBERGABE: Worktree"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit Schnitt: pr"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Einstieg: verify"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Schnitt:` oder `Einstieg:`"],
+    ["Bezeichner des Schnitts", "uebergabeBlockade(x)"],
+    ["Bezeichner des Schnitts", "uebergabeOffen"],
+    ["Bezeichner des Schnitts", "uebergabeStand"],
+    ["Bezeichner des Schnitts", "frischeUebergabe"],
+    ["Bezeichner des Schnitts", "SCHNITTE.includes(x)"],
+    ["Einstieg nach Übergabe", "## Einstieg nach Übergabe"],
+  ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
+    assert.deepEqual(schnitt(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
+  });
+
+  test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
+    const nachbarn = ["uebergabeProbleme", "uebergabeKennzahlen", "ABSCHNITTE", "Übergabe mit Umlaut", "// Einstieg: liest die Datei", "/^Schnitt:/ ohne Backtick", "Phasen-Schnitt im Messbericht"];
+    assert.deepEqual(schnitt(nachbarn.join("\n")), []);
+  });
+
+  test("Ausnahmen: Messskripte, ADRs und dieser Wächter dürfen die Namen tragen, andere Pfade nicht", () => {
+    assert.deepEqual(schnitt("ERGEBNIS: uebergabe", "scripts/kontext-treiber.mjs"), []);
+    assert.deepEqual(schnitt("ERGEBNIS: uebergabe", "docs/adr/fortschreibungen/0028.md"), []);
+    assert.equal(schnitt("ERGEBNIS: uebergabe", "scripts/ticket-lock.mjs").length, 1);
+  });
+
+  const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+  const lock = lockRaw as unknown as { fuehreAus: (a: string[], d: object) => { code: number; stdout?: string; stderr?: string } };
+  test("Negativfall: ticket-lock uebergeben endet mit Exit 2 (unbekannter Befehl), in der Funktion und als CLI", () => {
+    const r = lock.fuehreAus(["uebergeben", "1", "--nonce", "x"], {});
+    assert.equal(r.code, 2);
+    assert.match(JSON.stringify(r), /unbekannter Befehl/);
+    const cli = spawnSync(process.execPath, ["scripts/ticket-lock.mjs", "uebergeben", "1", "--nonce", "x"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(cli.status, 2, cli.stderr);
+    assert.ok(!/\| uebergeben/.test(cli.stderr), "USAGE nennt uebergeben nicht mehr");
+  });
+
+  test("Negativfall: ERGEBNIS: uebergabe ist ein ungültiges Token, auch im Hook", () => {
+    const abschluss = abschlussRaw as unknown as {
+      ERGEBNIS_WERTE: string[];
+      parseErgebnis: (t: string) => { token: string | null };
+      abschlussBlockade: (i: object, d: object) => string | null;
+    };
+    const text = "ERGEBNIS: uebergabe\nPR: -\nBEFUNDE: keine";
+    assert.equal(abschluss.parseErgebnis(text).token, null);
+    assert.ok(!abschluss.ERGEBNIS_WERTE.includes("uebergabe"));
+    const g = abschluss.abschlussBlockade({ hookEvent: "PreToolUse", toolName: "SubagentHandback", agentType: FREMD.agenten.umsetzer, lastMessage: text }, { config: FREMD, prDateien: () => [] });
+    assert.match(g ?? "", /kein gültiges ERGEBNIS-Token/);
+  });
+
+  test("Altformat: ein Lock mit Feld uebergabe wird gelesen, aber nicht mehr gewertet", () => {
+    const lib = lockLibRaw as unknown as { oeffentlicheSicht: (l: object) => Record<string, unknown>; lebenszeichenMs: (l: object) => number | null };
+    const alt = { erstellt: "2026-01-01T00:00:00Z", uebergabe: { gesetzt: "2026-06-01T00:00:00Z", verbraucht: null } };
+    assert.ok(!("uebergabeStand" in lib.oeffentlicheSicht(alt)));
+    assert.equal(lib.lebenszeichenMs(alt), Date.parse("2026-01-01T00:00:00Z"));
   });
 });

@@ -45,7 +45,7 @@ type Status = { state: string; autoMergeRequest: object | null; labels?: { name:
 type Eingabe = { hookEvent?: string; agentType?: string; toolName?: string; lastMessage?: string | null };
 const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
-  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; schnitt: string | null; uebergabe: boolean; festgefahren: string | null };
+  parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null; festgefahren: string | null };
   ERGEBNIS_WERTE: string[];
   AUDIT_KOPF: string;
   GRAPHQL_DATEIEN_GRENZE: number;
@@ -168,16 +168,14 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
   });
 
   test("parseErgebnis: Token, Zusatz und PR; fehlende Zeilen und unbekannte Werte sind null", () => {
-    assert.deepEqual(parseErgebnis(bericht("Gemergt")), { token: "gemergt", zusatz: "", pr: "https://github.com/x/y/pull/1330", schnitt: null, uebergabe: false, festgefahren: null });
+    assert.deepEqual(parseErgebnis(bericht("Gemergt")), { token: "gemergt", zusatz: "", pr: "https://github.com/x/y/pull/1330", festgefahren: null });
     assert.deepEqual(parseErgebnis(bericht("festgefahren (NICHT gemergt, Lauf beendet)")), {
       token: "festgefahren",
       zusatz: "(NICHT gemergt, Lauf beendet)",
       pr: "https://github.com/x/y/pull/1330",
-      schnitt: null,
-      uebergabe: false,
       festgefahren: null,
     });
-    assert.deepEqual(parseErgebnis("Text ohne Format"), { token: null, zusatz: null, pr: null, schnitt: null, uebergabe: false, festgefahren: null });
+    assert.deepEqual(parseErgebnis("Text ohne Format"), { token: null, zusatz: null, pr: null, festgefahren: null });
     assert.equal(parseErgebnis(bericht("fertig")).token, null);
     assert.equal(parseErgebnis(bericht("gemergt | abgebrochen")).zusatz, "| abgebrochen");
   });
@@ -449,73 +447,6 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
   test("Bindung: Entscheidungen kommen in den PR-Text, auch die der Gruppen-Umsetzer (#1740 L3)", () => {
     assert.match(UMSETZER, /im PR-Text \(„Entscheidung: X, weil Y“\)/);
     assert.match(abschnitt(GRUPPEN_DATEI, /^\*\*Gruppen \(quellprojekt#1647/), /ENTSCHEIDUNGEN[^.]*PR-Text/);
-  });
-});
-
-describe("uebergabe: Phasen-Schnitt (#1592)", () => {
-  const uebergabe = (schnitt: string | null, pr = "-", block = true) =>
-    ["ERGEBNIS: uebergabe", "TICKET: #1", `PR: ${pr}`, "BEFUNDE: keine", ...(schnitt === null ? [] : [`SCHNITT: ${schnitt}`]), ...(block ? ["UEBERGABE:", "  Worktree: /x", "  HEAD: abc"] : [])].join(String.fromCharCode(10));
-  const PR = "https://github.com/x/y/pull/9";
-  const ohneAuto = () => ({ state: "OPEN", autoMergeRequest: null });
-  const nichtAufrufen = () => {
-    throw new Error("gh darf nicht gefragt werden");
-  };
-
-  test("parseErgebnis: Token, SCHNITT (case-insensitiv normalisiert) und UEBERGABE-Zeile", () => {
-    assert.deepEqual(parseErgebnis(uebergabe("pr", PR)), { token: "uebergabe", zusatz: "", pr: PR, schnitt: "pr", uebergabe: true, festgefahren: null });
-    assert.equal(parseErgebnis(uebergabe("Verify")).schnitt, "verify");
-    assert.equal(parseErgebnis(uebergabe("pr", PR, false)).uebergabe, false);
-    assert.equal(parseErgebnis(uebergabe(null)).schnitt, null);
-  });
-
-  test("R4: ohne SCHNITT, mit unbekanntem Schnitt (auch mit Zusatz) oder ohne UEBERGABE-Zeile blockiert, in beiden Ereignissen", () => {
-    for (const mk of [eingabe, vorher]) {
-      assert.match(blockade(mk(uebergabe(null)), { prStatus: nichtAufrufen }) ?? "", /SCHNITT: fehlt oder ist unbekannt/);
-      assert.match(blockade(mk(uebergabe("review")), { prStatus: nichtAufrufen }) ?? "", /SCHNITT: fehlt oder ist unbekannt/);
-      assert.match(blockade(mk(uebergabe("pr (fertig)", PR)), { prStatus: offenMitAuto }) ?? "", /SCHNITT: fehlt oder ist unbekannt/);
-      assert.match(blockade(mk(uebergabe("verify", "-", false)), { prStatus: nichtAufrufen }) ?? "", /UEBERGABE:-Zeile fehlt/);
-    }
-  });
-
-  test("R5: pr ohne Auto-Merge, CLOSED oder ohne PR-Nummer blockiert; OPEN mit Auto-Merge frei; gh-Fehler frei", () => {
-    assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: ohneAuto }) ?? "", /nicht OPEN mit Auto-Merge \(Status OPEN, Auto-Merge nein\)/);
-    for (const state of ["CLOSED"]) assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state, autoMergeRequest: { enabledAt: "x" } }) }) ?? "", new RegExp(`Status ${state}`));
-    assert.match(blockade(eingabe(uebergabe("pr", "-")), { prStatus: nichtAufrufen }) ?? "", /braucht eine PR:-Zeile/);
-    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: offenMitAuto }), null);
-    assert.equal(blockade(vorher(uebergabe("pr", PR)), { prStatus: offenMitAuto }), null, "R1 feuert für uebergabe nicht");
-    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: nichtAufrufen }), null, "gh-Fehler: fail-open");
-    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => null as unknown as Status }), null);
-  });
-
-  test("R5: ein schon gemergter PR gibt den Weg frei (#1646), CLOSED ohne Merge und OPEN ohne Auto-Merge sperren", () => {
-    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "MERGED", autoMergeRequest: null }) }), null);
-    assert.equal(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "MERGED", autoMergeRequest: { enabledAt: "x" } }) }), null);
-    assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: () => ({ state: "CLOSED", autoMergeRequest: null }) }) ?? "", /Status CLOSED/);
-    assert.match(blockade(eingabe(uebergabe("pr", PR)), { prStatus: ohneAuto }) ?? "", /Status OPEN/);
-  });
-
-  test("UEBERGABE: zählt nur am Zeilenanfang (eingerückt ok), nicht mitten in der Zeile", () => {
-    const text = (zeile: string) => ["ERGEBNIS: uebergabe", "PR: -", "SCHNITT: verify", zeile].join(String.fromCharCode(10));
-    assert.equal(parseErgebnis(text("Text UEBERGABE: x")).uebergabe, false);
-    assert.equal(parseErgebnis(text("  UEBERGABE: x")).uebergabe, true);
-    assert.match(blockade(eingabe(text("Text UEBERGABE: x")), { prStatus: nichtAufrufen }) ?? "", /UEBERGABE:-Zeile fehlt/);
-  });
-
-  test("verify mit PR: - ist frei und fragt gh nicht", () => {
-    assert.equal(blockade(eingabe(uebergabe("verify")), { prStatus: nichtAufrufen }), null);
-    assert.equal(blockade(vorher(uebergabe("verify")), { prStatus: nichtAufrufen }), null);
-  });
-
-  test("R0 gilt weiter: uebergabe mit Zusatz oder ohne PR-Zeile wird vor der Zustellung verweigert", () => {
-    assert.match(blockade(vorher(uebergabe("verify").replace("uebergabe", "uebergabe (Schnitt)")), { prStatus: nichtAufrufen }) ?? "", /Zusatz hinter dem Token/);
-    assert.match(blockade(vorher(uebergabe("verify").split("PR: -").join("")), { prStatus: nichtAufrufen }) ?? "", /PR:-Zeile fehlt/);
-  });
-
-  test("Bindung: SCHNITTE stimmen mit dem Formatblock des Umsetzers überein", () => {
-    const block = abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1] ?? "";
-    assert.match(block, /SCHNITT: .*pr.*verify|SCHNITT: .*verify.*pr/);
-    assert.match(block, /^UEBERGABE:/m);
-    assert.deepEqual((abschluss as unknown as { SCHNITTE: string[] }).SCHNITTE, ["pr", "verify"]);
   });
 });
 
@@ -947,10 +878,9 @@ describe("Leitplanken-Audit (#1067)", () => {
     assert.equal(gemergt({ prDateien: () => ["AGENTS.md"], prKommentare: wirft }), null);
   });
 
-  test("abgebrochen, festgefahren, uebergabe sind nicht betroffen", () => {
+  test("abgebrochen und festgefahren sind nicht betroffen", () => {
     const deps: AuditDeps = { prDateien: () => ["AGENTS.md"], prKommentare: () => mit("x") };
     assert.equal(ruf("ERGEBNIS: abgebrochen\nPR: #7", deps), null);
     assert.equal(ruf("ERGEBNIS: festgefahren\nPR: #7", deps), null);
-    assert.equal(ruf("ERGEBNIS: uebergabe\nPR: #7\nSCHNITT: pr\nUEBERGABE: x", deps), null);
   });
 });
