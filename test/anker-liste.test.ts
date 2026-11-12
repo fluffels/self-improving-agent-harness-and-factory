@@ -443,6 +443,12 @@ describe("Shell (*.sh, factory#396 L2)", () => {
     expect(kopf("function lib.fn {\n  a || b\n}")).toEqual([["lib.fn", 1]]);
     expect(kopf("function my-fn {\n  a || b\n}")).toEqual([["my-fn", 1]]);
     expect(kopf("ns::fn() {\n  a || b\n}")).toEqual([["ns::fn", 1]]);
+    expect(kopf("function f () {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("function f( ) {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("f ( ) {\n  a || b\n}")).toEqual([["f", 1]]);
+    expect(kopf("functions() {\n  a || b\n}")).toEqual([["functions", 1]]);
+    expect(kopf("function_x() {\n  a || b\n}")).toEqual([["function_x", 1]]);
+    expect(kopf("f() {\n  # function g {\n  a || b\n}")).toEqual([["f", 1]]);
     expect(kopf("function ns::fn {\n  a || b\n}")).toEqual([["ns::fn", 1]]);
     expect(kopf("if x; then\n  g() {\n    a || b\n  }\nfi")).toEqual([["(Modulebene)", 1], ["g", 2]]);
     expect(kopf("  function g {\n    a || b\n  }")).toEqual([["g", 1]]);
