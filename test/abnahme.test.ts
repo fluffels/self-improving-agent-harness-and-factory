@@ -37,7 +37,7 @@ const A = raw as unknown as {
   }) => string;
   fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string };
   parseBericht: (t: string, nr: number, k: { k: string; text: string }[]) => { urteile?: { k: string; wert: string; beleg: string }[]; fehler?: string[] };
-  entscheide: (u: { wert: string }[]) => string;
+  entscheide: (u: { wert: string; ursache?: string }[]) => string;
   zaehleDurchgang: (k: Kommentar[], owner: string, z: Zeilen) => number;
   ABNAHME_AGENT: string;
 };
@@ -99,7 +99,7 @@ describe("auswerten: Entscheidung und Spur", () => {
   test("fix: PR-Kommentar, Belege der nicht erfüllten Kriterien, kein Ticket-Kommentar", () => {
     const r = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=umsetzung — Rot weil X", "K3: nicht-erfuellt ursache=szenario — Rot weil Y"]));
     expect(r.code).toBe(0);
-    expect(r.out).toBe("ENTSCHEIDUNG: fix\nK2 nicht erfüllt: Rot weil X\nK3 nicht erfüllt: Rot weil Y\n");
+    expect(r.out).toBe("ENTSCHEIDUNG: fix\nK2 nicht erfüllt: Rot weil X\n");
     expect(r.posts.map((p) => p.nr)).toEqual([70]);
   });
   test("handoff hat Vorrang vor fix: genau ein Ticket-Kommentar mit Marker, beiden Kriterien, Grund und Reparaturweg", () => {
@@ -117,7 +117,18 @@ describe("auswerten: Entscheidung und Spur", () => {
     expect(t).toContain("spezifikation.mjs reparieren");
     expect(r.posts[0].body).not.toContain(`${MARKER}-handoff`);
   });
-  test("entscheide: Vorrang handoff > fix > bestanden", () => {
+  test("nur ursache=szenario: ENTSCHEIDUNG szenario, Szenario-Zeilen statt nicht erfüllt, kein Ticket-Kommentar (factory#358)", () => {
+    const r = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=szenario — Szenario zu streng", "K3: nicht-erfuellt ursache=szenario — Szenario fremd"]));
+    expect(r.code).toBe(0);
+    expect(r.out).toBe("ENTSCHEIDUNG: szenario\nK2 Szenario prüfte über das Kriterium hinaus: Szenario zu streng\nK3 Szenario prüfte über das Kriterium hinaus: Szenario fremd\n");
+    expect(r.posts.map((p) => p.nr)).toEqual([70]);
+  });
+  test("entscheide: Vorrang handoff > fix > szenario > bestanden", () => {
+    const sz = { wert: "nicht-erfuellt", ursache: "szenario" };
+    expect(A.entscheide([{ wert: "erfuellt" }, sz])).toBe("szenario");
+    expect(A.entscheide([sz, { wert: "nicht-erfuellt", ursache: "umsetzung" }])).toBe("fix");
+    expect(A.entscheide([sz, { wert: "nicht-erfuellt", ursache: "kriterium" }])).toBe("fix");
+    expect(A.entscheide([sz, { wert: "nicht-pruefbar" }])).toBe("handoff");
     expect(A.entscheide([{ wert: "erfuellt" }])).toBe("bestanden");
     expect(A.entscheide([{ wert: "erfuellt" }, { wert: "nicht-erfuellt" }])).toBe("fix");
     expect(A.entscheide([{ wert: "nicht-erfuellt" }, { wert: "nicht-pruefbar" }])).toBe("handoff");
