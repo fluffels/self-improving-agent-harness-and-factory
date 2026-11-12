@@ -107,6 +107,13 @@ describe("Regel-SSOT in AGENTS.md und ticket-reihenfolge.md", () => {
     assert.ok(befunde.includes("Beleg"));
     assert.ok(befunde.includes(`${titel.VERFALL_TAGE / 7} Wochen`));
   });
+  test("AGENTS.md nennt die Mengengrenze je Agentenlauf, die Mechanik wiederholt sie nicht", () => {
+    for (const s of ["Je Agentenlauf", "höchstens **eine**", "am Laufende", "keine** bei einem `Defekt`/`Blocker`"]) assert.ok(befunde.includes(s), `AGENTS.md ohne „${s}“`);
+    const mechanik = zeileMit("docs/ticket-reihenfolge.md", /^- \*\*Zeilenformat, Klasse, Verfall/);
+    assert.ok(!mechanik.includes("höchstens eine"), "Mengengrenze steht nur in AGENTS.md (SSOT)");
+    const glossar = zeileMit("docs/harness-glossar.md", /^\| Befund-Zeile/);
+    assert.ok(glossar.includes("Mengengrenze") && !glossar.includes("höchstens eine"), "Glossar erklärt den Begriff, der Zählwert steht nur in AGENTS.md");
+  });
   test("„Kein Parken“ nennt den Verfall", () => {
     assert.match(zeileMit("AGENTS.md", /^- \*\*Kein Parken/), /Verfall .* kein Parken/);
   });
