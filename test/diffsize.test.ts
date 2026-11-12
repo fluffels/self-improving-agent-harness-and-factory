@@ -756,6 +756,34 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(unlesbar("").sammelOverride, null, "unlesbares Ereignis ohne Override: nicht relevant");
   });
 
+  test("checkDiffSize ohne PR-Ereignis (lokal): Grund mit mehreren Zeilen L<n> rot, eine oder keine ok (factory#379)", () => {
+    const tightEnv = { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" };
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const lokal = (grund: string) =>
+      checkDiffSizeRoh({
+        zeilen: ZEILEN,
+        runGit: (a: string[]) => {
+          if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+          if (a[0] === "merge-base") throw new Error("keine Basis");
+          if (a[0] === "rev-parse") return "HEADSHA\n";
+          if (a[0] === "diff") return OVER;
+          if (a[0] === "log") return `chore: x\n\n${OVERRIDE_KEY}: ${grund}\n`;
+          throw new Error("unerwartet: " + a.join(" "));
+        },
+        env: { ...tightEnv },
+        lies: () => {
+          throw new Error("ohne Ereignis darf nichts gelesen werden");
+        },
+      } as never);
+    const f = lokal("#379 L3 und L4 zu breit").sammelOverride;
+    assert.equal(typeof f, "string", "zwei Zeilen: rot");
+    assert.match(String(f), /lokal ohne PR-Titel an den Zeilen-Nennungen erkannt/);
+    assert.match(String(f), /nur für eine einzelne Zeile/);
+    assert.equal(lokal("#379 L3 allein über Budget").sammelOverride, null, "eine Zeile");
+    assert.equal(lokal("#379 L3 und noch mal L3").sammelOverride, null, "dieselbe Zeile zählt einmal");
+    assert.equal(lokal("#379 Lockfile").sammelOverride, null, "keine Zeile");
+  });
+
   describe("CLI (main): der Exit-Code des Sammel-Override-Pfads", () => {
     const SKRIPT = fileURLToPath(new URL("../scripts/check-diffsize.mjs", import.meta.url));
     const schluessel = commitZeilenAus(projektConfig()).diffsizeOverride;
