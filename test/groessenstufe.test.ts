@@ -27,6 +27,7 @@ type Ergebnis = { stufe: "S" | "voll"; gruende: string[] };
 const lib = libRaw as unknown as {
   GROESSENSTUFE_S: { maxDateien: number; maxZeilen: number };
   GRUNDSCHUTZ: string[];
+  WAECHTER_PFAD: string;
   bestimmeSweeptiefe: (p: unknown, r: unknown) => { tiefe: "voll" | "stichprobe"; gruende: string[] };
   risikoMusterAus: (c: unknown) => unknown;
   parseNumstatNoRenames: (t: string) => { pfad: string | null; zeilen: number | null }[];
@@ -442,8 +443,23 @@ describe("Sweep-Tiefe (factory#272)", () => {
     expect(tiefe(["test/x.test.ts"], { muster: null, quelle: "Projekt-Config", fehler: ["kaputt"] })).toBe("voll");
   });
   test("Positiv: nur Doku und Testdateien, Risikoklasse nicht hoch, ist stichprobe", () => {
-    expect(tiefe(["docs/a.md", ".agents/skills/x/SKILL.md", "test/harness/x.test.ts"])).toBe("stichprobe");
+    expect(tiefe(["docs/a.md", ".agents/skills/x/SKILL.md", "test/x.test.ts"])).toBe("stichprobe");
     expect(tiefe(["docs/a.md"])).toBe("stichprobe");
+  });
+  // factory#396 L40: Wächter-Tests unter test/harness/ tragen eigene Parser- und Regex-Logik, die Ablage unter test/ darf die Regel nicht umgehen.
+  test("Wächter-Test unter test/harness/ plus Doku ist voll, mit eigenem Grund", () => {
+    expect(lib.bestimmeSweeptiefe(["test/harness/verbleib.test.ts", "docs/x.md"], std)).toEqual({
+      tiefe: "voll",
+      gruende: ["test/harness/verbleib.test.ts ist ein Wächter-Test (test/harness/)"],
+    });
+    expect(tiefe(["test/harness/sub/x.test.ts", "docs/x.md"])).toBe("voll");
+  });
+  test("Negativfall: test/x.test.ts plus Doku und test/harness-alt/x.test.ts bleiben stichprobe", () => {
+    expect(tiefe(["test/x.test.ts", "docs/x.md"])).toBe("stichprobe");
+    expect(tiefe(["test/harness-alt/x.test.ts", "docs/x.md"])).toBe("stichprobe");
+  });
+  test("WAECHTER_PFAD ist der Pfad aus dem Grundschutz (eine Quelle)", () => {
+    expect(lib.GRUNDSCHUTZ).toContain(lib.WAECHTER_PFAD);
   });
   test("ein Treffer in einer injizierten Projekt-Risikoliste macht voll", () => {
     const eigen = lib.risikoMusterAus({ risiko: { hoch: ["*billing*"] } });
@@ -482,6 +498,7 @@ describe("Sweep-Tiefe (factory#272)", () => {
   test("CLI: dritte Zeile SWEEP, JSON-Feld sweep, fail-closed-Zweige voll", () => {
     const o = { git: () => "b".repeat(40), ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
     expect(cli.laufe(["--pfade", "scripts/x.mjs", "test/x.test.ts"], o).ausgabe).toMatch(/\nSWEEP: voll — scripts\/x\.mjs ist Code oder Konfiguration$/);
+    expect(cli.laufe(["--pfade", "test/harness/x.test.ts"], o).ausgabe).toMatch(/\nSWEEP: voll — test\/harness\/x\.test\.ts ist ein Wächter-Test/);
     expect(JSON.parse(cli.laufe(["--pfade", "docs/x.md", "--json"], o).ausgabe)).toMatchObject({ sweep: { tiefe: "stichprobe" } });
     const wirft = () => {
       throw new Error("kaputt");

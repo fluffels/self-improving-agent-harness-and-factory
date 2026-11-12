@@ -8,9 +8,10 @@
  * Strings, verschachtelte Template-Literale und mehrzeilige `${…}` (die Ausdrücke einzeiliger `${…}` werten wir gegen `MUSTER` aus), Regex-Literale mit Anführungszeichen und Guards außerhalb der Musterliste (`MUSTER`) fehlen; die Lens ergänzt sie.
  * Verdrahtung reiner Helfer an der Aufrufstelle (`opt: helfer(…)` als Argument) ist keine Verzweigung und kein Anker; die Lens prüft sie.
  * Regex-Literale: erkannt nach Zeilenanfang oder einem Operator aus `[=>(,:;!&|?{}[]` (auch nach `=>`); ein Regex-Literal nach anderem Vorlauf (etwa `return /x/`) fehlt, eine Division bleibt eine Division.
- * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`; der Kopf `if (istDirektaufruf(` (Spalte 0) zählt als `(Modulebene)`.
+ * Zuordnung: nächster vorangehender Funktionskopf; eine Zeile in Spalte 0 mit `}`, `const`/`let`/`var`/`class` (auch `export`) oder `if (istDirektaufruf(` beendet ihn, danach gilt `(Modulebene)` (factory#396 L64). Bewusste Grenzen: andere Spalte-0-Anweisungen nach einer Funktion (`main();`) zählen weiter zur vorigen Funktion; ein `}` in Spalte 0 in einem mehrzeiligen String oder Template beendet zu früh.
+ * Shell (`*.sh`, factory#396 L2): eigene Musterliste `MUSTER_SHELL` (`if` samt `elif`, `[[`, `case`, `&&`, `||`), Köpfe `name() {` und `function name {`, `}` in Spalte 0 beendet die Funktion; Strings und `#`-Kommentare (auch Shebang) zählen nicht, `$#` und `${#a[@]}` bleiben Code. Bewusste Grenzen: `.bash`/`.zsh` und Dateien nur mit Shebang fehlen; Heredocs, `while`/`until`, `[ … ]` ohne `if` und `${x:-y}` ergeben keinen Anker.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
- * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste oder der JS/TS-Familie (Hilfsdateien wie `test/support/x.ts`, Werkzeugskripte `tools/x.mjs` auch bei Java-Profil); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
+ * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste, der JS/TS-Familie oder `.sh` (nur hier, nicht in `check:size` und Coverage; Hilfsdateien wie `test/support/x.ts`, Werkzeugskripte `tools/x.mjs` auch bei Java-Profil); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
  * Bewusste Grenze: Testklassen ohne `.test.`/`.spec.` im Namen (Java: `RechnerTest.java`) zählen über die Ordner-Klausel als Hilfsdatei. Kein Gate.
  */
 import { execFileSync } from "node:child_process";
@@ -83,8 +84,8 @@ const KOPF = [
   /^\s+(?:static\s+)?(?:async\s+)?(?!(?:if|for|while|switch|catch|return|function)\b)([\w$]+)\s*\([^)]*\)\s*(?::[^{]+)?\{/,
   /^\s+(?:async\s+)?([\w$]+)\s*:\s*(?:async\s+)?(?:function\b|\(.*\)\s*(?::[^=]+)?=>|[\w$]+\s*=>)/,
 ];
-/** Der Block `if (istDirektaufruf(…))` auf Modulebene: nicht der vorigen Funktion zuordnen. */
-const DIREKTAUFRUF_KOPF = /^if\s*\(\s*istDirektaufruf\(/;
+/** Geschlossene Grenzliste (nur Spalte 0, geprüft nach dem Funktionskopf): ein schließendes `}`, `const`/`let`/`var`/`class` (auch `export`) und der Block `if (istDirektaufruf(…))` beenden die vorige Funktion, danach gilt `(Modulebene)` (factory#396 L64). */
+const MODULEBENE_GRENZE = /^(?:\}|(?:export\s+)?(?:const|let|var|class)\b|if\s*\(\s*istDirektaufruf\()/;
 const DEFAULT_PARAMETER = /[^=!<>]=(?![=>])/g;
 
 /** Der Name der Funktion, deren Kopf die Zeile ist, sonst `undefined`. */
@@ -104,7 +105,7 @@ function parameterListe(text) {
 }
 
 /** Die Anker-Namen einer Zeile (ohne Kommentar- und String-Inhalte) in Tabellenreihenfolge; Kopfzeilen je Default-Parameter ein Anker „Default-Parameter“ zusätzlich. */
-function ankerNamen(zeile) {
+function jsAnkerNamen(zeile) {
   const text = leereStrings(zeile).replace(/\/\/.*$/, "");
   const ohneRegex = text.replace(REGEX_LITERAL, "$1 R");
   const namen = MUSTER.filter((m) => m.re.test(m.auf === "text" ? text : ohneRegex)).map((m) => m.name);
@@ -113,22 +114,52 @@ function ankerNamen(zeile) {
   return [...namen, ...defaults];
 }
 
+/** Shell (`*.sh`, factory#396 L2): geschlossene Musterliste, `elif` zählt als `if`; `[[` und `case` nur als Wort. */
+export const MUSTER_SHELL = [
+  { name: "if", re: /(?<![\w-])(?:if|elif)\s/ },
+  { name: "[[", re: /(?:^|\s)\[\[\s/ },
+  { name: "case", re: /^\s*case\s/ },
+  { name: "&&", re: /&&/ },
+  { name: "||", re: /\|\|/ },
+];
+const SHELL_STRINGS = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
+const SHELL_KOMMENTAR = /(?:^|\s)#.*$/;
+const SHELL_KOEPFE = [/^\s*function\s+([\w:.-]+)\s*(?:\(\s*\))?\s*\{/, /^\s*([\w:.-]+)\s*\(\s*\)\s*\{/];
+
+/** Pur: die Shell-Zeile ohne String-Inhalte (`""`) und ohne Kommentar (auch Shebang); `$#` und `${#a[@]}` bleiben Code. */
+const shellBereinigt = (zeile) => zeile.replace(SHELL_STRINGS, '""').replace(SHELL_KOMMENTAR, "");
+
+/** Dialekt je Endung: Köpfe, Text für die Kopf-Erkennung, Anker-Namen einer Zeile, Grenze zur Modulebene, Blockkommentar-Logik. */
+const DIALEKT_JS = { kopf: (text) => kopfName(text.replace(STRINGS, '""')), namen: jsAnkerNamen, grenze: MODULEBENE_GRENZE, blockKommentar: true };
+const DIALEKT_SHELL = {
+  kopf: (text) => SHELL_KOEPFE.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined),
+  namen: (zeile) => {
+    const text = shellBereinigt(zeile);
+    return MUSTER_SHELL.filter((m) => m.re.test(text)).map((m) => m.name);
+  },
+  grenze: /^\}/,
+  blockKommentar: false,
+};
+const SHELL_ENDUNGEN = [".sh"];
+const dialektVon = (datei) => (SHELL_ENDUNGEN.some((e) => datei.endsWith(e)) ? DIALEKT_SHELL : DIALEKT_JS);
+
 /** Anker einer Datei: nur die Zeilen in `zeilen` (`null` = alle), je Funktion gruppiert. */
 function dateiAnker(datei, inhalt, zeilen) {
   const gruppen = new Map();
+  const dialekt = dialektVon(datei);
   let funktion = { name: MODULEBENE, zeile: null };
   let imBlock = false;
   inhalt.split(/\r?\n/).forEach((roh, i) => {
     const n = i + 1;
     const t = roh.trim();
-    const kommentar = imBlock || t.startsWith("/*") || t.startsWith("*");
+    const kommentar = dialekt.blockKommentar && (imBlock || t.startsWith("/*") || t.startsWith("*"));
     if (t.startsWith("/*") || imBlock) imBlock = !t.includes("*/");
     if (kommentar) return;
-    const name = kopfName(roh.replace(STRINGS, '""'));
+    const name = dialekt.kopf(roh);
     if (name !== undefined) funktion = { name, zeile: n };
-    else if (DIREKTAUFRUF_KOPF.test(roh)) funktion = { name: MODULEBENE, zeile: null };
+    else if (dialekt.grenze.test(roh)) funktion = { name: MODULEBENE, zeile: null };
     if (zeilen !== null && !zeilen.has(n)) return;
-    const namen = ankerNamen(roh);
+    const namen = dialekt.namen(roh);
     if (namen.length === 0) return;
     const eintrag = gruppen.get(funktion.name + funktion.zeile) ?? { datei, funktion: funktion.name, zeile: funktion.zeile ?? n, anker: [] };
     eintrag.anker.push(...namen.map((muster) => ({ zeile: n, muster })));
@@ -190,7 +221,7 @@ export function lauf(argv, { git, lesen, istQuelle }) {
 /** Pur: Quellwurzeln und Endungsliste (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`, `tools/x.mjs`) mit Endungsliste plus JS/TS-Familie; Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
 export function istGemessen(pfad, quelle) {
   const q = quellenObjekt(quelle);
-  const familie = { ...q, wurzeln: [posix.dirname(pfad)], endungen: [...new Set([...q.endungen, ...STANDARD_ENDUNGEN])] };
+  const familie = { ...q, wurzeln: [posix.dirname(pfad)], endungen: [...new Set([...q.endungen, ...STANDARD_ENDUNGEN, ...SHELL_ENDUNGEN])] };
   return !TESTDATEI.test(pfad) && (isMeasured(pfad, q) || isMeasured(pfad, familie));
 }
 

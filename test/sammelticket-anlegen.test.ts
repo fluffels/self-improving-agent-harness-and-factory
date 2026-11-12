@@ -615,7 +615,7 @@ describe("Token und Lesezugriff im Ziel-Repo (#97 L7 b, L11 j, L12 a)", () => {
   });
 });
 
-describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung je Art als Verhalten", () => {
+describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung je Art als Verhalten", { timeout: 1000 }, () => {
   type Ruf = [string, ...unknown[]];
   const M = (raw as unknown as { main: (argv: string[], deps: object) => Promise<void> }).main;
   const BOARD = (rawLib as unknown as { boardFuerRolle: (r: string) => unknown }).boardFuerRolle;

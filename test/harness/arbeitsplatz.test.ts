@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { FREMD } from "../support/fremd-config";
+import { quelleMitBareKlon } from "../support/git-quelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../../scripts/arbeitsplatz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -353,12 +354,7 @@ describe("Integration mit echtem Git (K3, K5)", { timeout: 120_000 }, () => {
     const quelle = join(basis, "quelle");
     ap = join(basis, "ap");
     web = join(ap, "web");
-    mkdirSync(quelle);
-    git(quelle, "init", "-q", "-b", "main");
-    writeFileSync(join(quelle, "README.md"), "x\n");
-    git(quelle, "add", "-A");
-    git(quelle, "commit", "-q", "-m", "init");
-    git(basis, "clone", "-q", "--bare", quelle, origin);
+    quelleMitBareKlon(git, quelle, origin);
     mkdirSync(ap);
     git(ap, "clone", "-q", origin, "web");
     mkdirSync(join(ap, ".factory"));

@@ -6,7 +6,8 @@
 // Grenzen: geprüft wird der Commit `HEAD` der Quelle (nicht der Arbeitsbaum), nur das JS/TS-Profil (andere Profile: factory#224), ohne echte Projekt-Blöcke und Projekt-Eigenes;
 // der Probe-Erstbezug ersetzt keinen echten Bezieher. Die Sync-Warnung `Kontextbudget knapp` ist kein Fund (factory#220).
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
@@ -102,7 +103,7 @@ export function probeSchritte({ quelle, scratch, tag, sha }) {
   const mech = mechanischeSchritte(PFAD_TOKEN).map((befehl, i) => ({ id: mechanisch[i], argv: teile(befehl).map((t) => t.replaceAll(PFAD_TOKEN, q)), cwd: b, kritisch: false }));
   const verify = UPDATE_SCHRITTE.find((s) => s.id === "verify");
   return [
-    k("klon", ["git", "clone", "--quiet", quelle, q], scratch),
+    k("klon", ["git", "clone", "--no-local", "--quiet", quelle, q], scratch),
     k("klon-origin", ["git", "-C", q, "remote", "remove", "origin"], scratch),
     k("tag", ["git", "-C", q, "tag", tag, sha], scratch),
     k("detach", ["git", "-C", q, "checkout", "--quiet", "--detach", sha], scratch),
@@ -191,15 +192,36 @@ export function main(argv, io) {
 /** Zeichen vom Ende der Fehlerausgabe eines Schritts, die `stderrRest` behält. */
 const STDERR_REST = 2000;
 
-/** Echte Nähte: Dateisystem, `spawnSync` (Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es, `"stderr"` ignoriert stdout und fängt stderr für `stderrRest`; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
-export function echteNaehte(stdio = "inherit") {
+/** Letzte `STDERR_REST` Zeichen der Datei hinter `fd`: nur das Ende wird gelesen (Fenster in Bytes, weil ein Zeichen bis zu 4 Bytes hat; ein am Fensteranfang angeschnittenes Zeichen fällt beim Kürzen weg). */
+function stderrEnde(fd) {
+  const groesse = fstatSync(fd).size;
+  const laenge = Math.min(groesse, STDERR_REST * 4 + 3);
+  const puffer = Buffer.alloc(laenge);
+  let gelesen = 0;
+  while (gelesen < laenge) {
+    const n = readSync(fd, puffer, gelesen, laenge - gelesen, groesse - laenge + gelesen);
+    if (n === 0) break;
+    gelesen += n;
+  }
+  return puffer.subarray(0, gelesen).toString("utf8").slice(-STDERR_REST);
+}
+
+/** Echte Nähte: Dateisystem, `spawn` (Standard `spawnSync`; Ausgabe der Schritte standardmäßig geerbt, `stdio` überschreibt es, `"stderr"` ignoriert stdout und leitet stderr in eine Temp-Datei, von der `stderrRest` nur das Ende liest: kein Pipe-Puffer, kein `maxBuffer`, das Kind wird nie wegen zu viel Ausgabe abgebrochen; ohne Zeitlimit, damit kein Prozessbaum zurückbleibt). */
+export function echteNaehte(stdio = "inherit", { spawn = spawnSync } = {}) {
   const lies = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
   const reste = new Map();
   const lauf = (argv, cwd, id) => {
-    const fange = stdio === "stderr";
-    const r = spawnSync(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio: fange ? ["ignore", "ignore", "pipe"] : stdio, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-    if (fange) reste.set(id, String(r.stderr ?? "").slice(-STDERR_REST));
-    return r.status;
+    if (stdio !== "stderr") return spawn(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio, encoding: "utf8" }).status;
+    const ordner = mkdtempSync(join(tmpdir(), "probe-stderr-"));
+    const fd = openSync(join(ordner, "stderr.log"), "w+");
+    try {
+      const r = spawn(argv[0], argv.slice(1), { cwd, env: kindUmgebung(process.env), stdio: ["ignore", "ignore", fd], encoding: "utf8" });
+      reste.set(id, stderrEnde(fd));
+      return r.status;
+    } finally {
+      closeSync(fd);
+      rmSync(ordner, { recursive: true, force: true });
+    }
   };
   const io = {
     lies,
