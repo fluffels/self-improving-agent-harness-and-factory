@@ -161,6 +161,7 @@ test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Ab
   expect(v5(doku(`${alle}, \`NeuesEreignis\` abgerufen am 2026-11-12`))).toHaveLength(1);
   expect(v5(doku(alle))[0]).toContain("Abrufdatum");
   expect(v5(doku(`${alle} abgerufen am gestern`))).toHaveLength(1);
+  expect(v5(doku(`${alle} ohne Datum x`))).toHaveLength(1); // keine Alternative im Datum-Muster
   expect(v5(`# Titel\n\n${ABSCHNITT}\n\n${alle}. abgerufen am 2026-11-12`)).toEqual([]); // letzter Abschnitt, ohne Schluss-Zeilenumbruch
   expect(v5(doku(`${alle} Stand 2026-11-12`))).toHaveLength(1); // Datum ohne „abgerufen am“
   expect(v5(doku(`${alle} abgerufen am 2026-11`))).toHaveLength(1); // unvollständiges Datum
