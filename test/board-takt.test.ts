@@ -528,11 +528,14 @@ describe("langfuseSammelEntscheidung (factory#379: Takt für das Langfuse-Sammel
   test("steht es schon dort (auch mit geschlossenen Items dazwischen): nichts, idempotent", () => {
     expect(e([status(2), lf(12), it(10)], 1).aktion).toBe("nichts");
     expect(e([status(2), it(9, { state: "closed" }), lf(12), it(10)], 1).aktion).toBe("nichts");
+    // ein geschlossenes Item mitten im Kopf beendet ihn nicht
+    expect(e([rot(1), it(9, { state: "closed" }), status(2), it(10), lf(12)], 1)).toMatchObject({ aktion: "verschieben", afterId: "I2" });
     expect(e([lf(12), it(10)], 1).aktion).toBe("nichts");
   });
 
   test("geclaimt, geschlossen, fehlend oder Vorgänger mit Assignee offen: nichts", () => {
     expect(e([status(2), it(10), lf(12, { assignees: ["x"] })], 3).aktion).toBe("nichts");
+    expect(e([status(2), it(10), lf(12, { assignees: ["x"] })], 3).grund).toMatch(/kein ungeclaimtes/);
     expect(e([status(2), it(10), lf(12, { state: "closed" })], 3).aktion).toBe("nichts");
     expect(e([status(2), it(10)], 3).aktion).toBe("nichts");
     expect(e([status(2), it(10), lf(11, { assignees: ["x"] }), lf(12)], 3).grund).toMatch(/Vorgänger #11/);

@@ -754,12 +754,12 @@ describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () 
   const STATUS = "Langfuse-Status überprüfen";
   const befund = { user: { login: OWNER, type: "User" }, body: "- [ ] Befund" };
 
-  function lauf(opt: { kommentare?: unknown[] | Error; okay?: boolean; bezieher?: boolean; dry?: boolean; ohneTicket?: boolean; hKommentare?: number } = {}) {
+  function lauf(opt: { kommentare?: unknown[] | Error; okay?: boolean; bezieher?: boolean; dry?: boolean; ohneTicket?: boolean; hKommentare?: number; ohneStatus?: boolean } = {}) {
     const log: string[] = [];
     const langfuse: { nr?: number; afterId?: string | null; rolle: string }[] = [];
     const geladen: number[] = [];
     const harness: number[] = [];
-    const items = [it(50, { title: STATUS }), it(10), it(12, { title: "Harness-Härtung (gesammelt)" }), it(11), ...(opt.ohneTicket ? [] : [it(160, { title: "Langfuse-Befunde (gesammelt)" })])];
+    const items = [...(opt.ohneStatus ? [] : [it(50, { title: STATUS })]), it(10), it(12, { title: "Harness-Härtung (gesammelt)" }), it(11), ...(opt.ohneTicket ? [] : [it(160, { title: "Langfuse-Befunde (gesammelt)" })])];
     const io: Io = {
       ghJson: (args) => (args.join(" ").includes("state=closed") ? [[]] : [[]]),
       loadItems: nurFactory(items),
@@ -786,6 +786,10 @@ describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () 
     expect(r.fehler).toBe(false);
   });
 
+  test("das Harness-Sammelticket, das in derselben Runde nach vorn kommt, zählt zum Kopf (Liste nachgezogen)", () => {
+    expect(lauf({ kommentare: [befund], hKommentare: 10, ohneStatus: true }).langfuse).toMatchObject([{ nr: 160, afterId: "I12" }]);
+  });
+
   test("0 Befund-Kommentare, --dry-run, Ladefehler (Warnung) oder fehlendes Ticket bewegen nichts", () => {
     expect(lauf().langfuse).toEqual([]);
     expect(lauf({ kommentare: [befund], dry: true }).langfuse).toEqual([]);
@@ -806,7 +810,7 @@ describe("fuehreLangfuseAus: Rückgabe und Fehlertext (factory#379)", () => {
   const F = (raw as unknown as {
     fuehreLangfuseAus: (l: { nr: number; afterId: string | null }, items: { id: string; number: number }[], token: string, rolle: string, o: { setze: (...a: unknown[]) => void; log: (z: string) => void }) => boolean;
   }).fuehreLangfuseAus;
-  const items = [{ id: "I7", number: 7 }];
+  const items = [{ id: "I1", number: 1 }, { id: "I7", number: 7 }];
   test("Erfolg: setzt die Position des Items und gibt true zurück", () => {
     const aufrufe: unknown[][] = [];
     const log: string[] = [];
