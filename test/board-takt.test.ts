@@ -197,7 +197,11 @@ describe("Produktquote im Takt (#1425)", () => {
     expect(Q.befundKommentare([k(OWNER.toUpperCase())], OWNER)).toBe(1); // Login ohne Groß-/Kleinschreibung
     expect(Q.befundKommentare([], OWNER)).toBe(0);
     expect(Q.befundKommentare([k(OWNER)], "")).toBe(0); // ohne Owner ist niemand vertraut
-    expect(Q.befundKommentare([{ user: { login: `${OWNER}[bot]`, type: "User" } }], `${OWNER}[bot]`)).toBe(0); // ein [bot]-Login zählt nie
+    const botKommentar = (login: string) => ({ user: { login, type: "User" }, body: "- [ ] Befund" });
+    expect(Q.befundKommentare([botKommentar(`${OWNER}[bot]`)], `${OWNER}[bot]`)).toBe(0); // ein [bot]-Login zählt nie, auch wenn er als Owner vertraut wäre
+    expect(Q.befundKommentare([botKommentar(`${OWNER}[BOT]`)], `${OWNER}[BOT]`)).toBe(0); // ohne Groß-/Kleinschreibung
+    expect(Q.befundKommentare([botKommentar(`${OWNER}[bot]x`)], `${OWNER}[bot]x`)).toBe(1); // nur ein Login, der auf [bot] endet, ist ein Bot
+    expect(Q.befundKommentare([null, undefined, botKommentar(OWNER)], OWNER)).toBe(1); // kaputte Listeneinträge zählen nicht und werfen nicht
     expect(() => Q.befundKommentare({}, OWNER)).toThrow(/Liste/);
     expect(() => Q.befundKommentare(null, OWNER)).toThrow(/Liste/);
   });
