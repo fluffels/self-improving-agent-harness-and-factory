@@ -75,6 +75,7 @@ export interface Eintrag {
   quelle: string;
   pflichtChecks?: unknown;
   modul?: string;
+  art?: string;
 }
 interface Manifest {
   version: number;
@@ -205,10 +206,13 @@ const ABDECK_ARTEN = ["projekt", "modul", "offen"];
 
 const musterRe = (muster: string): RegExp => new RegExp(`^${muster.split("*").map(escapeRe).join("[^/]*")}$`);
 
-/** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv. */
+/** Vorlagen (`art: vorlage`) in einem Projekt-Ordner (geschlossene Liste): der Sync legt sie nur an, der Ordner bleibt Projektbesitz und wird kein Kern-Verzeichnis (sonst müsste jede Projekt-Seite dort eingeordnet werden). Wächst nur mit Begründung. */
+export const VORLAGEN_IN_PROJEKTORDNERN: readonly string[] = ["docs/glossar.md"];
+
+/** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv, ohne die Vorlagen in `VORLAGEN_IN_PROJEKTORDNERN`. */
 export function kernVerzeichnisse(eintraege: Eintrag[]): Set<string> {
   const out = new Set<string>();
-  for (const e of eintraege) if (istGanzeDatei(e)) out.add(posix.dirname(e.pfad));
+  for (const e of eintraege) if (istGanzeDatei(e) && !VORLAGEN_IN_PROJEKTORDNERN.includes(e.pfad)) out.add(posix.dirname(e.pfad));
   return out;
 }
 
@@ -737,6 +741,17 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
   const dateien = ["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs", ".claude/agents/x.md", "scripts/docs-gen/tief.mjs", "src/y.ts", ".claude/settings.json"];
   test("Kern-Verzeichnisse sind die Ordner der Ganz-Datei-Einheiten, nicht rekursiv, Teil-Einheiten zählen nicht", () => {
     assert.deepEqual([...kernVerzeichnisse(E)].sort(), [".claude/agents", "scripts"]);
+  });
+  test("jeder Pfad in VORLAGEN_IN_PROJEKTORDNERN ist im Manifest eine Vorlage", () => {
+    const m = JSON.parse(readFileSync(WURZEL + ".factory/besitz.json", "utf8")) as { eintraege: Eintrag[] };
+    for (const pfad of VORLAGEN_IN_PROJEKTORDNERN) assert.equal(m.eintraege.find((e) => e.pfad === pfad)?.art, "vorlage", pfad);
+  });
+  test("eine Vorlage der geschlossenen Liste macht ihren Ordner nicht zum Kern-Verzeichnis, eine andere Vorlage schon (L3)", () => {
+    const mitVorlage = [...E, ein("docs/glossar.md", { art: "vorlage" })];
+    assert.deepEqual([...kernVerzeichnisse(mitVorlage)].sort(), [".claude/agents", "scripts"]);
+    assert.deepEqual(pruefeAbdeckung(mitVorlage, [...dateien, "docs/glossar.md", "docs/projekt-seite.md"], klar()), []);
+    assert.deepEqual([...kernVerzeichnisse([...E, ein("docs/x.md")])].sort(), [".claude/agents", "docs", "scripts"]);
+    assert.deepEqual([...kernVerzeichnisse([...E, ein(".github/d.yml", { art: "vorlage" })])].sort(), [".claude/agents", ".github", "scripts"]);
   });
   test("eingeordnete Dateien sind grün; Dateien außerhalb der Kern-Verzeichnisse und tiefer liegende zählen nicht", () => {
     assert.deepEqual(pruefeAbdeckung(E, dateien, klar()), []);

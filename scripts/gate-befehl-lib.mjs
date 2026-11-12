@@ -1,9 +1,13 @@
 // Gate-Befehle (factory#182): Block `befehle` der Projekt-Config und der Läufer `node scripts/gate-befehl.mjs <name>`.
 // Die Sammelbefehle (Installation, verify, verify:kompakt, verify:changed, Abdeckung) stehen je Projekt in der Config;
 // pre-push, CI und alle Laufzeiten rufen denselben Läufer, damit Kern-Texte kein Build-Werkzeug nennen. Ohne Block gelten die npm-Standards.
-// Lib ohne Direktaufruf-Guard; importiert nur flag-lib (kein Zyklus mit der Config-Lib, der Lader wird injiziert).
+// Lib ohne Direktaufruf-Guard; importiert nur flag-lib und quellwurzeln-lib (beide ohne Config-Lib, kein Zyklus; der Lader wird injiziert).
+// testGezielt (L8): weicht `befehle.testGezielt` vom Standard ab und nennt `struktur.endungen` eine Endung außerhalb von JS/TS, teilt `laeuferAufteilung` die Pfade auf: JS/TS-Dateien außerhalb der Quellwurzeln
+// (oder mit einer Endung, die nicht in `struktur.endungen` steht) gehen an den Standard `npx vitest run`, Dateien mit Endung aus `struktur.endungen` und Ordner an den Projekt-Befehl, alles andere endet mit Exit 2.
+// Grenze: die Aufteilung kennt nur Endung und Quellwurzel, keine Test-Konvention; ein JS/TS-Test in einer Quellwurzel mit `.ts` in `struktur.endungen` bleibt beim Projekt-Befehl.
 // Grenze: endet der Befehl selbst mit 2, ist das vom Aufruf-Fehler nur an der Fix-Zeile auf stderr zu unterscheiden.
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { quellenAus, STANDARD_ENDUNGEN, wurzelPraefixe } from "./quellwurzeln-lib.mjs";
 
 export const STANDARD_BEFEHLE = Object.freeze({
   install: "npm ci",
@@ -32,6 +36,9 @@ export const E2E_UMGEBUNG = Object.freeze({ browser: "FACTORY_E2E_BROWSER" });
 export const PFAD_NAME = "testGezielt";
 /** Erlaubte Zeichen eines angehängten Pfads (keine Shell-Metazeichen, kein Leerzeichen). */
 const PFAD_MUSTER = /^[\w./\\:@+=,-]+$/;
+
+/** Anfang der Zeile, die der Gate-Befehl vor dem Lauf auf stderr druckt (`▶ Gate-Befehl <name>: <befehl>`); gate-fundquote erkennt Läufe daran. */
+export const KOPF_PRAEFIX = "▶ Gate-Befehl ";
 
 /** Flag, das nur die Befehlszeile ausgibt, statt sie zu starten. */
 export const ZEIGEN_FLAG = "--zeigen";
@@ -97,28 +104,83 @@ function argumenteLesen(argv) {
   return { name, pfade, nurZeigen: Boolean(werte[ZEIGEN_FLAG.slice(2)]) };
 }
 
+const MIT_ENDUNG = (pfad, endungen) => endungen.some((e) => pfad.endsWith(e));
+
+/** Pur: der Pfad relativ zu `cwd` in POSIX-Schreibweise (Backslashes → /, absoluter Pfad unter `cwd` gekürzt). */
+function relativZu(pfad, cwd) {
+  const p = pfad.replace(/\\/g, "/");
+  const wurzel = `${String(cwd).replace(/\\/g, "/").replace(/\/$/, "")}/`;
+  return p.startsWith(wurzel) ? p.slice(wurzel.length) : p;
+}
+
+/**
+ * Pur: teilt die Pfade von `testGezielt` auf die Läufer auf (L8). Rückgabe `{ laeufe: [{ befehl, pfade }] }` (Projekt-Befehl zuerst, dann Vitest; leere Läufer entfallen)
+ * oder `{ meldung }` (Pfad ohne passenden Läufer, Aufruf-Fehler samt Fix-Zeile). Ohne abweichenden Befehl oder ohne Endung außerhalb von JS/TS in `struktur.endungen` ein Lauf mit allen Pfaden.
+ * Wirft die Fehler von `quellenAus` (fehlende `struktur.quelle`).
+ */
+export function laeuferAufteilung(pfade, config, cwd) {
+  const projekt = befehlAus(config, PFAD_NAME);
+  const endungen = config?.struktur?.endungen;
+  const fremd = Array.isArray(endungen) && endungen.some((e) => !STANDARD_ENDUNGEN.includes(e));
+  if (!fremd || projekt === STANDARD_BEFEHLE[PFAD_NAME]) return { laeufe: [{ befehl: projekt, pfade }] };
+  const { wurzeln } = quellenAus(config);
+  const projektPfade = [];
+  const vitestPfade = [];
+  for (const pfad of pfade) {
+    const rel = relativZu(pfad, cwd);
+    const jsTs = MIT_ENDUNG(rel, STANDARD_ENDUNGEN);
+    const eigene = MIT_ENDUNG(rel, endungen);
+    if (jsTs && (!eigene || wurzelPraefixe(rel, wurzeln).length === 0)) vitestPfade.push(pfad);
+    else if (eigene || !rel.split("/").at(-1).includes(".")) projektPfade.push(pfad);
+    else return { meldung: `Pfad „${pfad}“ hat keinen passenden Läufer (Endung weder in struktur.endungen noch JS/TS).\nFix: den Test mit seinem eigenen Läufer starten oder die Endung in struktur.endungen eintragen.` };
+  }
+  return { laeufe: [{ befehl: projekt, pfade: projektPfade }, { befehl: STANDARD_BEFEHLE[PFAD_NAME], pfade: vitestPfade }].filter((l) => l.pfade.length > 0) };
+}
+
+/** Befehlszeile samt in doppelten Anführungszeichen angehängten Pfaden. */
+const mitPfaden = (befehl, pfade) => `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
+
+/** Startet alle Läufe (keiner bricht die anderen ab) und gibt den ersten Exit ≠ 0 zurück, sonst 0. */
+function fuehreLaeufeAus(name, zeilen, { spawn, cwd, err }) {
+  let exit = 0;
+  for (const z of zeilen) {
+    err(`${KOPF_PRAEFIX}${name}: ${z}`);
+    const code = fuehreAus(z, { spawn, cwd, err });
+    if (exit === 0) exit = code;
+  }
+  return exit;
+}
+
+/** Pur: die zu startenden Befehlszeilen: `{ befehl, zeilen }` (`befehl` null = nicht eingerichtet) oder `{ meldung }`; wirft die Fehler von `befehlAus` und `quellenAus`. */
+function zeilenAus(name, pfade, config, cwd) {
+  const befehl = befehlAus(config, name);
+  if (pfade.length === 0) return { befehl, zeilen: [befehl] };
+  const { laeufe, meldung } = laeuferAufteilung(pfade, config, cwd);
+  return meldung === undefined ? { befehl, zeilen: laeufe.map((l) => mitPfaden(l.befehl, l.pfade)) } : { meldung };
+}
+
 /** Einstieg: `<name> [--zeigen]` (`testGezielt` zusätzlich mit Pfaden); gibt den Exit-Code zurück (der Einstieg setzt `process.exitCode`). */
 export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.error, env = process.env }) {
   const { meldung, name, pfade, nurZeigen } = argumenteLesen(argv);
   if (meldung !== undefined) return aufrufFehler(err, meldung);
-  let befehl;
+  let aufloesung;
   try {
     if (!istName(name)) befehlAus({}, name);
-    befehl = befehlAus(lade(), name);
+    aufloesung = zeilenAus(name, pfade, lade(), cwd);
   } catch (e) {
     return aufrufFehler(err, e.message);
   }
+  if (aufloesung.meldung !== undefined) return aufrufFehler(err, aufloesung.meldung);
+  const { befehl, zeilen } = aufloesung;
   if (befehl === null) {
     out(`${name}: nicht eingerichtet`);
     return 0;
   }
   const umgebungsFehler = nurZeigen ? null : mutationUmgebungFehler(name, env);
   if (umgebungsFehler !== null) return aufrufFehler(err, umgebungsFehler);
-  if (pfade.length > 0) befehl = `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
   if (nurZeigen) {
-    out(befehl);
+    for (const z of zeilen) out(z);
     return 0;
   }
-  err(`▶ Gate-Befehl ${name}: ${befehl}`);
-  return fuehreAus(befehl, { spawn, cwd, err });
+  return fuehreLaeufeAus(name, zeilen, { spawn, cwd, err });
 }

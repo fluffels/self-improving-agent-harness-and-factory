@@ -22,6 +22,7 @@ const vl = vlModule as {
   engungSicher: (lade: () => Eng) => Eng;
   sammleTests: (dir?: string) => { pfad: string; text: string }[];
   statusVon: (r: { status: number | null }) => number;
+  main: (argv: string[], deps: { pkg: unknown; log: (t: string) => void }) => number;
   laufe: (a: { schritte: string[]; engung?: Eng | null; run: (j: Job) => { status: number; output: string }; jetzt?: () => number }) => Erg[];
 };
 const ketteAusPackage = (pkg: unknown) => (kettenModule as { ketteAusPackage: (p: unknown, k: string[], n: string) => string[] }).ketteAusPackage(pkg, ["verify"], "verify");
@@ -101,6 +102,26 @@ describe("Einengung (--changed)", () => {
     assert.deepEqual(jobs[0], { art: "npm", schritt: "typecheck" });
     assert.deepEqual(jobs[1], { art: "node", args: ["eslint", "--max-warnings", "0", "--no-warn-ignored", "src/x.ts"] });
     assert.deepEqual(jobs[2], { art: "node", args: ["vitest", "related", "--run", "--passWithNoTests", "src/x.ts", "docs/foo.md", "test/a.test.ts"] });
+  });
+});
+
+describe("Gate-Befehl als Kettenschritt (L67)", () => {
+  test("ein Token gate-befehl:<name> läuft als node scripts/gate-befehl.mjs <name>, nicht als npm-Skript", () => {
+    const jobs: Job[] = [];
+    const r = vl.laufe({ schritte: ["lint", "gate-befehl:coverage"], run: (j) => (jobs.push(j), { status: 0, output: "" }) });
+    assert.deepEqual(jobs[0], { art: "npm", schritt: "lint" });
+    assert.deepEqual(jobs[1], { art: "node", args: ["gate-befehl", "coverage"] });
+    assert.deepEqual(r.map((x) => x.ok), [true, true]);
+  });
+  test("main führt einen Gate-Befehl-Schritt echt aus (BIN-Zuordnung): nicht eingerichtet ist grün", () => {
+    const log: string[] = [];
+    const code = vl.main([], { pkg: { scripts: { verify: "node scripts/gate-befehl.mjs mutation" } }, log: (t) => log.push(t) });
+    assert.equal(code, 0, log.join("\n"));
+    assert.match(log.join("\n"), /gate-befehl:mutation ok/);
+  });
+  test("kuerze nennt für den Token die volle Ausgabe über den Gate-Befehl", () => {
+    const text = Array.from({ length: 400 }, (_, i) => "z" + String(i)).join("\n");
+    assert.match(vl.kuerze(text, "gate-befehl:coverage"), /volle Ausgabe: node scripts\/gate-befehl\.mjs coverage/);
   });
 });
 

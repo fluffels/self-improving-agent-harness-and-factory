@@ -1,5 +1,5 @@
 /* e2e-Gate-Profil (factory#246): Matrix-Leser für die CI und Drift des Rezepts auf der Kern-Seite. */
-import { afterEach, describe, test } from "vitest";
+import { afterEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -101,5 +101,25 @@ describe("Rezept-Drift: YAML-Block der Kern-Seite", () => {
     const run = yaml.split("\n").filter((z) => /^\s*(-\s+)?run:/.test(z));
     assert.ok(run.length > 0);
     for (const z of run) assert.doesNotMatch(z, /\$\{\{/);
+  });
+});
+
+describe("pruefeE2e nennt den Variablennamen aus E2E_UMGEBUNG (L57)", () => {
+  type Pruefer = { pruefeE2e(e2e: unknown, befehle: unknown): string[] };
+  afterEach(() => { vi.doUnmock("../scripts/gate-befehl-lib.mjs"); vi.resetModules(); });
+  test("die Meldung trägt den Namen aus E2E_UMGEBUNG.browser", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const m = (await import("../scripts/projekt-config-bloecke.mjs")) as unknown as Pruefer;
+    const meldung = m.pruefeE2e({ browser: ["a"] }, undefined).join("\n");
+    assert.ok(meldung.includes((E2E_UMGEBUNG as unknown as { browser: string }).browser));
+  });
+  test("ein anderer Wert in E2E_UMGEBUNG erscheint in der Meldung (kein Literal im Prüfer)", async () => {
+    vi.resetModules();
+    vi.doMock("../scripts/gate-befehl-lib.mjs", () => ({ E2E_UMGEBUNG: { browser: "PROBE_E2E" } }));
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const m = (await import("../scripts/projekt-config-bloecke.mjs")) as unknown as Pruefer;
+    const meldung = m.pruefeE2e({ browser: ["a"] }, undefined).join("\n");
+    assert.ok(meldung.includes("PROBE_E2E"));
+    assert.ok(!meldung.includes("FACTORY_E2E_BROWSER"));
   });
 });

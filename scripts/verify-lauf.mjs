@@ -18,7 +18,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { resolveBase } from "./check-basis.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
+import { gateBefehlName, ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
 import { ohneFarbcodes } from "./regex-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -58,7 +58,7 @@ export function kuerze(text, schritt) {
   const zeilen = String(text ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "").split("\n");
   if (zeilen.length <= MAX_ZEILEN) return zeilen.join("\n");
   const weg = zeilen.length - KOPF - ENDE;
-  return [...zeilen.slice(0, KOPF), `… ${weg} Zeilen gekürzt, volle Ausgabe: npm run ${schritt}`, ...zeilen.slice(-ENDE)].join("\n");
+  return [...zeilen.slice(0, KOPF), `… ${weg} Zeilen gekürzt, volle Ausgabe: ${gateBefehlName(schritt) === null ? `npm run ${schritt}` : `node scripts/gate-befehl.mjs ${gateBefehlName(schritt)}`}`, ...zeilen.slice(-ENDE)].join("\n");
 }
 
 /** Testdateien aus den `FAIL`-Zeilen der vitest-Ausgabe (auch Ladefehler einer Datei), je Datei einmal, in Reihenfolge. Pur. */
@@ -104,7 +104,8 @@ export function laufe({ schritte, engung = null, run, jetzt = () => Date.now() }
   const eng = engung && !engung.voll ? engung : null;
   return schritte.map((name) => {
     const t0 = jetzt();
-    let job = { art: "npm", schritt: name };
+    const gateName = gateBefehlName(name);
+    let job = gateName === null ? { art: "npm", schritt: name } : { art: "node", args: ["gate-befehl", gateName] };
     let info = "";
     if (eng && name === "lint") {
       if (!eng.lint.length) return { name, ok: true, uebersprungen: true, ms: 0, info: "keine Dateien" };
@@ -162,7 +163,7 @@ function ladeEngungUngesichert({ git: g, existiert, sammleTests: tests }) {
   return bestimmeEngung({ base, dateien, tests: tests() });
 }
 
-const BIN = { eslint: "node_modules/eslint/bin/eslint.js", vitest: "node_modules/vitest/vitest.mjs" };
+const BIN = { eslint: "node_modules/eslint/bin/eslint.js", vitest: "node_modules/vitest/vitest.mjs", "gate-befehl": "scripts/gate-befehl.mjs" };
 
 function echterLauf(job) {
   const opt = { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 };

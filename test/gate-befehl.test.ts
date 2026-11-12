@@ -210,6 +210,91 @@ describe("testGezielt mit angehängten Pfaden (factory#193)", () => {
   });
 });
 
+describe("testGezielt teilt Pfade auf Läufer auf (L8)", () => {
+  const JAVA = { struktur: { quelle: ["backend"], endungen: [".java", ".ts"] }, befehle: { testGezielt: "mvn -q test" } };
+  const VITEST = 'npx vitest run';
+  test("ein TS-Test außerhalb der Quellwurzeln geht an Vitest, Java-Dateien in der Wurzel an den Projekt-Befehl", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend/A.java"', VITEST + ' "test/tools/x.test.ts"']);
+  });
+  test("ein TS-Pfad innerhalb der Quellwurzel mit Endung in endungen bleibt beim Projekt-Befehl", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "backend/b.spec.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend/b.spec.ts"']);
+  });
+  test("steht .ts nicht in endungen, geht auch ein TS-Pfad in der Wurzel an Vitest", () => {
+    const u = umgebung({ struktur: { quelle: ["backend"], endungen: [".java"] }, befehle: { testGezielt: "mvn -q test" } });
+    assert.equal(lib.cli(["testGezielt", "backend/b.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), [VITEST + ' "backend/b.ts"']);
+  });
+  test("ein absoluter Pfad außerhalb der Wurzel und ein Windows-Pfad werden getrennt eingeordnet", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "/wurzel/test/tools/x.test.ts", "backend\\A.java"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\A.java"', VITEST + ' "/wurzel/test/tools/x.test.ts"']);
+  });
+  test("--zeigen gibt beide Zeilen aus und startet nichts", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java", "--zeigen"], u.opt), 0);
+    assert.equal(u.out.length, 2);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("Negativfall: eine Datei ohne passenden Läufer endet mit Exit 2, Pfad und Fix-Zeile, nichts startet", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "backend/A.java", "docs/x.md"], u.opt), 2);
+    assert.match(u.err.join("\n"), /docs\/x\.md[\s\S]*Fix:/);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("ein roter Lauf lässt den anderen laufen, der erste Exit ≠ 0 gewinnt", () => {
+    const u = umgebung(JAVA, { status: 3 });
+    assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java"], u.opt), 3);
+    assert.equal(u.aufrufe.length, 2);
+  });
+  test("ein Ordner (Pfad ohne Endung) geht an den Projekt-Befehl", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "backend/src/test"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend/src/test"']);
+  });
+  test("Backslashes im Pfad und im cwd (Windows) werden vor der Wurzelprüfung zu /", () => {
+    const u = umgebung(JAVA);
+    u.opt.cwd = "C:\\projekt\\";
+    assert.equal(lib.cli(["testGezielt", "backend\\b.spec.ts", "C:/projekt/test/tools/x.test.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\b.spec.ts"', VITEST + ' "C:/projekt/test/tools/x.test.ts"']);
+  });
+  test("ein absoluter Pfad unter cwd wird gekürzt (auch mit Schrägstrich am Ende von cwd) und liegt dann in der Wurzel", () => {
+    for (const cwd of ["/projekt", "/projekt/", "C:\\projekt", "C:\\projekt\\"]) {
+      const u = umgebung(JAVA);
+      u.opt.cwd = cwd;
+      const pfad = cwd.startsWith("C:") ? "C:/projekt/backend/b.spec.ts" : "/projekt/backend/b.spec.ts";
+      assert.equal(lib.cli(["testGezielt", pfad], u.opt), 0);
+      assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "' + pfad + '"'], cwd);
+    }
+  });
+  test("der erste Exit ≠ 0 gewinnt auch, wenn ein späterer Lauf grün ist", () => {
+    const u = umgebung(JAVA);
+    const codes = [3, 0];
+    u.opt.spawn = (befehl, o, ...rest) => { u.aufrufe.push({ befehl, opt: o, rest }); return { status: codes.shift() }; };
+    assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java"], u.opt), 3);
+    assert.equal(u.aufrufe.length, 2);
+  });
+  test("ohne Endung außerhalb von JS/TS in struktur.endungen bleibt alles beim einen Befehl (unverändert)", () => {
+    const u = umgebung({ struktur: { quelle: ["src"], endungen: [".ts"] }, befehle: { testGezielt: "mvn -q test" } });
+    assert.equal(lib.cli(["testGezielt", "docs/x.md", "test/a.test.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "docs/x.md" "test/a.test.ts"']);
+  });
+  test("ohne eigenen Befehl (Standard) bleibt alles bei Vitest, auch mit .java in endungen", () => {
+    const u = umgebung({ struktur: { quelle: ["backend"], endungen: [".java"] } });
+    assert.equal(lib.cli(["testGezielt", "docs/x.md"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), [VITEST + ' "docs/x.md"']);
+  });
+  test("endungen ohne struktur.quelle: Exit 2 mit der Fix-Zeile des Laders", () => {
+    const u = umgebung({ struktur: { endungen: [".java"] }, befehle: { testGezielt: "mvn -q test" } });
+    assert.equal(lib.cli(["testGezielt", "backend/A.java"], u.opt), 2);
+    assert.match(u.err.join("\n"), /struktur\.quelle[\s\S]*Fix:/);
+    assert.equal(u.aufrufe.length, 0);
+  });
+});
+
 describe("mutation: opt-in Gate-Befehl (factory#299)", () => {
   const MIT = { befehle: { mutation: "werkzeug lauf" } };
   const ENV = { FACTORY_MUTATION_BEREICHE: "/tmp/b.json", FACTORY_MUTATION_BERICHT: "/tmp/r.json" };

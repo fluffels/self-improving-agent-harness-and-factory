@@ -40,7 +40,8 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
 import { ASSIGN_RE, parseBash } from "./bash-parser.mjs";
-import { ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
+import { GATE_BEFEHL_TOKEN, ketteAusPackage } from "./docs-gen/npm-ketten.mjs";
+import { KOPF_PRAEFIX } from "./gate-befehl-lib.mjs";
 import { escapeRegex, ohneFarbcodes, SCHRITT_NAME } from "./regex-lib.mjs";
 import { hauptrepoWurzel, istProjektOrdner, ladeSessionDatei, ladeSessions, projekteWurzel, projektSlug, toolPaare } from "./transkript.mjs";
 
@@ -117,11 +118,19 @@ export function befehlsform(command) {
 // ── Kopfzeilen ───────────────────────────────────────────────────────────────
 
 const KOPF = /^> (\S+)@(\S+) (\S+)(?: .*)?$/;
+/** Die vom Gate-Befehl gedruckte Zeile (`▶ Gate-Befehl <name>: …`): ein Gate `gate-befehl:<name>` des Pakets. */
+const GATE_BEFEHL_KOPF = new RegExp(`^${escapeRegex(KOPF_PRAEFIX)}(\\w+):`);
 
 /** Kopfzeilen der Ausgabe als `[{ name, art: gate|kette|fremd, ms }]`; `zeilen`: `[{ text, ms }]`. Pur. */
 function kopfEintraege(zeilen, { paket, gates }) {
   const out = [];
   for (const z of zeilen) {
+    const g = GATE_BEFEHL_KOPF.exec(z.text);
+    if (g) {
+      const name = GATE_BEFEHL_TOKEN + g[1];
+      out.push({ name, art: gates.includes(name) ? "gate" : "fremd", ms: z.ms ?? null });
+      continue;
+    }
     const m = KOPF.exec(z.text);
     if (!m) continue;
     const eigen = m[1] === paket;

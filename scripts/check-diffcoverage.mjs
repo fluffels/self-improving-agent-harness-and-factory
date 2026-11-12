@@ -39,11 +39,14 @@ import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides,
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
 // scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
-/** Fix-Zeile bei kaputten Schichtdaten: Aufbau des Modells in `scripts/schichten-kern.cjs`, Beschreibung der Schichtdatei in `docs/erstbezug.md` (nur Kern-Pfade, Bezieher haben die Vorlage des Quellprojekts nicht). */
-export const SCHICHT_FIX = "in scripts/docs-gen/config.json unter schichten.layers den Pfad der Schichtdatei eintragen (Aufbau: scripts/schichten-kern.cjs, Beschreibung: docs/erstbezug.md) und die Datei dort anlegen";
-
 /** Die Schicht-Schlüssel und ihr Diff-Floor (Prozent oder `null` = nur berichten); ein Schlüssel mit Floor muss in `LAYERS` der Schichtdatei stehen. */
 const FLOOR_JE_SCHLUESSEL = { DOMAIN: 90, APPLICATION: 80, PRESENTATION: null, ENTRY: null };
+
+/** Die Schicht-Schlüssel, die `LAYERS` der Schichtdatei enthalten muss (Floor ≠ null). */
+export const PFLICHT_SCHICHTEN = Object.keys(FLOOR_JE_SCHLUESSEL).filter((k) => FLOOR_JE_SCHLUESSEL[k] !== null);
+
+/** Fix-Zeile bei kaputten Schichtdaten: Vertrag der Schichtdatei (Exporte `LAYERS` und `layerOf`, Pflichtschlüssel in `LAYERS`) in der Zeile; Aufbau des Modells in `scripts/schichten-kern.cjs`, Beschreibung der Schichtdatei in `docs/erstbezug.md` (nur Kern-Pfade, Bezieher haben die Vorlage des Quellprojekts nicht). */
+export const SCHICHT_FIX = `in scripts/docs-gen/config.json unter schichten.layers den Pfad der Schichtdatei eintragen und die Datei dort anlegen: sie exportiert LAYERS (mit den Schlüsseln ${PFLICHT_SCHICHTEN.join(" und ")}) und layerOf (Aufbau: scripts/schichten-kern.cjs, Beschreibung: docs/erstbezug.md)`;
 
 /** Fehler der Schichtdaten zur Laufzeit (fremde Schicht-ID): `main` beendet damit mit Exit 2 statt mit einem Stacktrace. */
 export class SchichtFehler extends Error {}
