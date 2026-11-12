@@ -168,7 +168,7 @@ describe("githubMenge (synthetisches Repo)", () => {
     try {
       mkdirSync(join(dir, "scripts"));
       const schreibe = (n: string, t: string) => writeFileSync(join(dir, "scripts", n), t);
-      schreibe("beleg.mjs", 'export const F = { d: "https://api.github.com/repositories/1434788646/pulls/82", k: \'https://api.github.com/repositories/1/issues/comments/5\', b: \`https://api.github.com/repositories/1/pulls/82\` };\n');
+      schreibe("beleg.mjs", 'export const F = { d: "https://api.github.com/repositories/1434788646/pulls/82", k: \'https://api.github.com/repositories/1/issues/comments/5\', b: `https://api.github.com/repositories/1/pulls/82` };\n');
       schreibe("beleg-nutzer.mjs", 'import { F } from "./beleg.mjs";\n');
       schreibe("beleg-gebaut.mjs", "const u = `https://api.github.com/repositories/1/pulls/${id}`;\n");
       schreibe("beleg-aufruf.mjs", 'fetch("https://api.github.com/repositories/1/pulls/82");\n');
