@@ -1,6 +1,6 @@
 // Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, datengroesse, gates, factoryLinks, labels, skills,
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
-// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad), `modul-wahl-lib.mjs` (importfrei, `NAME_MUSTER`), `gate-befehl-lib.mjs` (importiert nur `flag-lib.mjs`, `E2E_UMGEBUNG`) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
+// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad), `modul-wahl-lib.mjs` (importfrei, `NAME_MUSTER`), `gate-befehl-lib.mjs` (importiert nur `flag-lib.mjs` und `quellwurzeln-lib.mjs`, `E2E_UMGEBUNG`) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { GATE_FORM } from "./regex-lib.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
