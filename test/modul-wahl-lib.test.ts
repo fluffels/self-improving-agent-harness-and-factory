@@ -234,6 +234,9 @@ describe("modulKopienBefunde (factory#244)", () => {
   test("(a) Datei, Modul nicht gewählt, nicht im Stand, ohne Grund: Befund", () => {
     expect(lauf({ da: ["a.yml"] })).toEqual([{ pfad: "a.yml", art: "ohne-grund", modul: "codeql" }]);
   });
+  test("Modul gewählt, Datei da, nicht im Stand, ohne Grund: kein Befund (kein Fehlalarm vor dem Sync)", () => {
+    expect(lauf({ gewaehlt: ["codeql"], da: ["a.yml"] })).toEqual([]);
+  });
   test("(b) mit Begründung kein Befund", () => {
     expect(lauf({ da: ["a.yml"], kopien: [kopie("a.yml")] })).toEqual([]);
   });

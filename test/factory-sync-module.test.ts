@@ -109,7 +109,8 @@ describe("planeSync und Sicherheits-Module", () => {
   });
   test("(a2c) eine unlesbare Ziel-Config bei vorhandener Modulkopie meldet nur den Config-Fehler, kein Absturz", () => {
     const p = sync.planeSync({ quelleLies: (q) => QUELLE[q] ?? null, zielLies: (q) => (q === CODEQL ? "x\n" : null), zielConfig: () => { throw new Error("kaputt"); } });
-    expect(p.fehler.join("\n")).toContain("Ziel-Config: kaputt");
+    expect(p.fehler).toEqual(["Ziel-Config: kaputt"]);
+    expect(p.meldungen.join("\n")).not.toContain("Modulkopie");
   });
   test("(a3) ein gewähltes Modul mit Zieldatei gibt keinen Hinweis", () => {
     const p = plane((c) => {
@@ -242,6 +243,7 @@ describe("Drift-Gate und Sicherheits-Module", () => {
       expect(f.filter((m) => m.includes(ZIZMOR))).toHaveLength(1);
       const m = f.join("\n");
       expect(m).toContain("Modulkopie");
+      expect(m).toContain("Modul 'zizmor' ist nicht gewählt");
       expect(m).toContain("Modul in module wählen");
       expect(m).toContain("--uebernehmen");
       expect(m).toContain("Datei löschen");
