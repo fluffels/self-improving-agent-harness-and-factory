@@ -37,7 +37,7 @@ const BEDINGTE: { datei: string; tokens: string[] }[] = [
   { datei: "umsetzer-guard-proben.md", tokens: ["Guard", "anker-liste"] },
   { datei: "umsetzer-browser.md", tokens: ["Browser", "Langfuse-Status"] },
   { datei: "umsetzer-pr-merge.md", tokens: ["pr-warten", "Exit 1"] },
-  { datei: "umsetzer-fortsetzung.md", tokens: ["Schnitt:", "Einstieg:", "bestanden"] },
+  { datei: "umsetzer-fortsetzung.md", tokens: ["bestanden", "fix", "handoff"] },
 ];
 /** Windows-Sonderfälle: sie gehören hinter die Plattform-Weiche (`plattform-windows.md`), nicht in den Kern-Rumpf. */
 const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"];

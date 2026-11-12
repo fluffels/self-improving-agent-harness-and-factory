@@ -458,7 +458,7 @@ const BELEG: Welt = {
     ["origin/HEAD", sek("2026-10-16T08:00:00Z")],
   ],
   locks: {
-    "1530.json": lock({ erstellt: "2026-10-16T02:11:00.000Z", uebergabe: { gesetzt: "2026-10-16T03:10:00.000Z", verbraucht: "2026-10-16T03:20:00.000Z" } }),
+    "1530.json": lock({ erstellt: "2026-10-16T02:11:00.000Z", gestoppt: { gesetzt: "2026-10-16T03:10:00.000Z", verbraucht: "2026-10-16T03:20:00.000Z" } }),
     "1672.json": lock({ erstellt: "2026-10-16T03:11:00.000Z" }),
     "1628.json": lock({ erstellt: "2026-10-16T00:10:00.000Z" }),
     "notiz.json": "{}",
@@ -534,7 +534,7 @@ describe("fuehreAus: Belegfall vom 2026-10-16", () => {
     const c1628 = d.claims.find((c) => c.nr === 1628);
     assert.equal(c1628?.worktree?.pfad, WTPFAD, "der Lens-Worktree ist nie der Ticket-Worktree");
     assert.equal(d.claims.find((c) => c.nr === 1530)?.lebenszeichen, "2026-10-16T03:20:00.000Z");
-    assert.equal(d.claims.find((c) => c.nr === 1530)?.lock.uebergabeStand, "verbraucht");
+    assert.equal(d.claims.find((c) => c.nr === 1530)?.lock.gestopptStand, "verbraucht");
   });
 
   test("ein Lens-Worktree ist nie der Ticket-Worktree: auch vor dem echten gelistet oder allein wird er nie entfernt", () => {

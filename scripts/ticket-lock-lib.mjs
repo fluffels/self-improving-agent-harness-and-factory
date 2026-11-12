@@ -34,10 +34,10 @@ export function parseLock(text) {
   }
 }
 
-/** Jüngstes Lebenszeichen eines Locks in ms: Max aus `erstellt`, `zuletzt.zeit`, Übergabe- und Stopp-Zeitpunkten; nicht endliche entfallen, sonst `null`. Pur. */
+/** Jüngstes Lebenszeichen eines Locks in ms: Max aus `erstellt`, `zuletzt.zeit` und den Stopp-Zeitpunkten; nicht endliche entfallen, sonst `null`. Pur. */
 export function lebenszeichenMs(lock) {
   if (!lock || typeof lock !== "object") return null;
-  const werte = [lock.erstellt, lock.zuletzt?.zeit, lock.uebergabe?.gesetzt, lock.uebergabe?.verbraucht, lock.gestoppt?.gesetzt, lock.gestoppt?.verbraucht]
+  const werte = [lock.erstellt, lock.zuletzt?.zeit, lock.gestoppt?.gesetzt, lock.gestoppt?.verbraucht]
     .map((t) => (typeof t === "string" ? Date.parse(t) : Number.NaN))
     .filter((w) => Number.isFinite(w));
   return werte.length ? Math.max(...werte) : null;
@@ -51,8 +51,8 @@ export function herzschlagMs(lock) {
 
 const stand = (v) => (!v ? "keine" : v.verbraucht ? "verbraucht" : "offen");
 
-/** Öffentliche Sicht eines Locks: alle Felder außer `nonce` und `nonceHash`, dazu der Stand von Übergabe und Stopp (`keine`, `offen`, `verbraucht`). Pur. */
+/** Öffentliche Sicht eines Locks: alle Felder außer `nonce` und `nonceHash`, dazu der Stand des Stopp-Vermerks (`keine`, `offen`, `verbraucht`). Pur. */
 export function oeffentlicheSicht(lock) {
   const rest = Object.fromEntries(Object.entries(lock ?? {}).filter(([k]) => k !== "nonce" && k !== "nonceHash"));
-  return { ...rest,uebergabeStand: stand(lock?.uebergabe), gestopptStand: stand(lock?.gestoppt) };
+  return { ...rest, gestopptStand: stand(lock?.gestoppt) };
 }

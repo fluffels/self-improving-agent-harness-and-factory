@@ -673,9 +673,20 @@ function ttlFlag(werte, a) {
   if (a.agenten) a.fehler ??= "--ttl und mehrere --agent schließen sich aus";
 }
 
-/** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`Date.parse` NaN), als Aufruf-Fehler; sonst undefined. */
+const ISO_ZEITPUNKT = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+
+/** ISO-8601-Zeitpunkt (factory#399): `JJJJ-MM-TT`, optional `THH:MM[:SS[.sss]]`, optional `Z` oder `±HH:MM`; Kalendertag und Uhrzeit müssen existieren (kein `2026`, `1`, `2026-02-30`, kein Leerzeichen-Trenner). */
+export function istIsoZeitpunkt(text) {
+  const m = ISO_ZEITPUNKT.exec(String(text));
+  if (!m || Number.isNaN(Date.parse(text))) return false;
+  const tag = new Date(0);
+  tag.setUTCFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return tag.getUTCDate() === Number(m[3]); // ein Überlauf (30. Februar, 31. April) verschiebt den Tag; Monat und Uhrzeit prüft Date.parse
+}
+
+/** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`istIsoZeitpunkt`), als Aufruf-Fehler; sonst undefined. */
 function zeitpunktFehler(werte) {
-  const name = ["von", "bis"].find((n) => werte[n] !== undefined && Number.isNaN(Date.parse(werte[n])));
+  const name = ["von", "bis"].find((n) => werte[n] !== undefined && !istIsoZeitpunkt(werte[n]));
   return name && `--${name} erwartet einen ISO-Zeitpunkt, nicht ${werte[name]}`;
 }
 

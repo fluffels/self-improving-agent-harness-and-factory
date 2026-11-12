@@ -148,7 +148,7 @@
     "complexity": 5
   },
   "scripts/ticket-lock.mjs": {
-    "complexity": 6
+    "complexity": 1
   },
   "scripts/token-baseline.mjs": {
     "complexity": 11
@@ -160,7 +160,7 @@
     "complexity": 21
   },
   "scripts/umsetzer-abschluss.mjs": {
-    "complexity": 26
+    "complexity": 25
   },
   "scripts/wiedervorlage.mjs": {
     "complexity": 11

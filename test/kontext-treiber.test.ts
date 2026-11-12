@@ -978,6 +978,23 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
       expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "kein-datum"]).fehler).toMatch(/--bis.*kein-datum/);
       expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "2026-11-11T13:18:00Z", "--ttl"]).fehler).toBeUndefined();
     });
+    test("--von/--bis nehmen nur ISO-8601 an, nicht Zahl, Jahr, Kalenderirrtum oder Leerzeichen-Trenner (factory#399)", () => {
+      for (const schlecht of ["1", "2026", "2026-02-30", "2025-02-29", "2026-04-31", "2026-10-28 10:00", "2026-10-28t10:00z", "2026-10-28t10:00", "2026-10-28T10:00z", "2026-10-28T25:00", "2026-10-28T10:00:00.Z", "2026-10-28T1:00", "2026-13-01", "x2026-10-28", "2026-10-28x", "2026-10-28T10:00Zx", "2026-10-28T10:00+0200", "2026-10-28T10", "2026-1-28", "2026-10-8", "12026-10-28", "02026-10-28"]) {
+        expect(P(["--von", schlecht]).fehler, schlecht).toMatch(/--von.*ISO-Zeitpunkt/);
+        expect(P(["--von", "2026-10-28", "--bis", schlecht]).fehler, schlecht).toMatch(/--bis.*ISO-Zeitpunkt/);
+      }
+      for (const gut of ["2026-10-28", "2026-10-28T10:00Z", "2026-10-28T10:00:00.123+02:00", "2026-10-28T10:00", "2024-02-29", "2026-10-28T10:00:00", "2026-10-28T10:00:00-05:30", "2026-10-28T10:00+02:00", "2026-10-28T10:00:00Z"]) {
+        expect(P(["--von", gut]).fehler, gut).toBeUndefined();
+      }
+    });
+    test("hauptlauf: --von 1 und --von 2026 enden mit Exit 2 (factory#399)", () => {
+      for (const schlecht of ["1", "2026"]) {
+        const fehler: string[] = [];
+        const code = (K as unknown as { hauptlauf: (a: string[], d: object) => number }).hauptlauf(["--ttl", "--von", schlecht], { config: FREMD, ordner: () => tmpdir(), ladeTyp: () => [], wurzel: () => "/x", out: () => undefined, err: (s: string) => fehler.push(s) });
+        expect(code).toBe(2);
+        expect(fehler.join("\n")).toMatch(/ISO-Zeitpunkt/);
+      }
+    });
     test("Markdown nennt Fenster, Preisstand, Zähler und Netto", () => {
       const bericht = (K as unknown as { kontextTreiber: (e: object) => object }).kontextTreiber({ laeufe: [zwei(10, 500)], ttl: true, von: "2026-10-08T00:00:00Z", bis: "2026-10-09T00:00:00Z" });
       const md = K.renderMarkdown(bericht as never);
