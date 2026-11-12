@@ -89,9 +89,9 @@ export const PROJEKT_BLOCK_VERWEIS = abgeleitet(String.raw`(Projekt-Block) (›|
 /** Zitatform `<pfad>.md § „A“` (auch `(Fabrik) ›`): Muster 8 sieht den Abschnitt nicht (`„` beendet ihn, das Segment ist leer). `fabrik` = mit ` (Fabrik)`. */
 const ZITAT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md)( \(Fabrik\))? (›|§) ?„([^"“\n]+)["“]/g;
 
-/** Verweise in Zitatform (Code nicht maskiert); Gruppen wie `Verweis`, `fabrik` trennt die Fabrik-Form von der normalen. Pur. */
-export function zitatVerweise(text: string): (Verweis & { fabrik: boolean })[] {
-  return [...text.matchAll(ZITAT_VERWEIS)].map((m) => ({ pfad: m[1], trenner: m[3], segmente: [m[4].trim()], index: m.index ?? 0, fabrik: m[2] !== undefined }));
+/** Verweise in Zitatform (Code nur mit `istMarkdown` maskiert, wie beim Fabrik-Muster); Gruppen wie `Verweis`, `fabrik` trennt die Fabrik-Form von der normalen. Pur. */
+export function zitatVerweise(text: string, istMarkdown = false): (Verweis & { fabrik: boolean })[] {
+  return [...(istMarkdown ? markdown.codeMaskiert(text) : text).matchAll(ZITAT_VERWEIS)].map((m) => ({ pfad: m[1], trenner: m[3], segmente: [m[4].trim()], index: m.index ?? 0, fabrik: m[2] !== undefined }));
 }
 
 /** `` `<pfad>.md` › A `` (Pfad in Backticks): ein Textverweis, den `check:docdrift` nicht sieht; für die strenge Form zählt er wie jeder andere. */
@@ -234,7 +234,7 @@ export function scanneFabrik(wurzel: string): { funde: Fund[]; verweise: number 
   const funde: Fund[] = [];
   let verweise = 0;
   for (const { datei, text, spannen } of dateien) {
-    for (const v of [...verweiseNachMuster(FABRIK_VERWEIS, text, datei.endsWith(".md")), ...zitatVerweise(text).filter((z) => z.fabrik)]) {
+    for (const v of [...verweiseNachMuster(FABRIK_VERWEIS, text, datei.endsWith(".md")), ...zitatVerweise(text, datei.endsWith(".md")).filter((z) => z.fabrik)]) {
       if (!imSpann(spannen, v.index)) continue;
       verweise++;
       const ziel = zielVon(datei, v.pfad, lies);

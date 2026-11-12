@@ -63,6 +63,7 @@ import {
   ladeKernLinkAnker,
   musterVerweise,
   scanneAgents,
+  zitatVerweise,
   scanneFabrik,
   scanneLinkAnker,
   strengMeldung,
@@ -144,6 +145,21 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
     const f = (text: string): string[] => funde(scanneFabrik(mit(text)));
     assert.deepEqual(f("Siehe docs/seite.md (Fabrik) › „Echte Überschrift“\n"), []);
     assert.deepEqual(f("Siehe docs/seite.md (Fabrik) § „Gibt es nicht“\n"), ["skill.md -> docs/seite.md: Gibt es nicht"]);
+    assert.deepEqual(f("Siehe docs/seite.md (Fabrik) › „Gibt es nicht“\n"), ["skill.md -> docs/seite.md: Gibt es nicht"]);
+    assert.deepEqual(scanneFabrik(mit("Siehe docs/seite.md § „Gibt es nicht“\n")), { funde: [], verweise: 0 }, "ohne (Fabrik) ist es Sache der strengen Form");
+    assert.deepEqual(strengeFunde(mit("Siehe docs/seite.md (Fabrik) § „Echte Überschrift“\n"), LISTE), { funde: [], verweise: 0 }, "die Fabrik-Form gehört nicht in die strenge Form");
+    assert.deepEqual(f("`docs/seite.md (Fabrik) › „Gibt es nicht“`\n\n```\ndocs/seite.md (Fabrik) › „Gibt es nicht“\n```\n"), [], "Markdown: Code maskiert");
+  });
+
+  test("Zitatform im Detail: Leerzeichen, Anführungszeichen, erstes Zitat, Zeilenumbruch, leer, trim", () => {
+    const seg = (t: string): string[][] => zitatVerweise(t).map((z) => z.segmente);
+    assert.deepEqual(seg("docs/x.md §„A“"), [["A"]]);
+    assert.deepEqual(seg("docs/x.md § „A“ und „B“"), [["A"]]);
+    assert.deepEqual(seg('docs/x.md § „A" und „B"'), [["A"]]);
+    assert.deepEqual(seg("docs/x.md § „A\nB“"), []);
+    assert.deepEqual(seg("docs/x.md § „“"), []);
+    assert.deepEqual(seg("docs/x.md § „ A “"), [["A"]]);
+    assert.deepEqual(zitatVerweise("docs/x.md (Fabrik) › „A“").map((z) => [z.fabrik, z.trenner]), [[true, "›"]]);
   });
 
   test("ein Bild-Link `![…](…)` ist keine strenge Form (rot)", () => {
