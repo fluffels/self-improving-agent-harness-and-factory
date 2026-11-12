@@ -228,7 +228,8 @@ export function auditDocDrift(rootDir = ROOT) {
 
 // ── Abschnittsverweise (factory#157) ─────────────────────────────────────────────
 
-const ABSCHNITT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md) (›|§) ?([^\n`"“”„\]|]*)/g;
+/** Muster 8: `<pfad>.md › A` / `§ A`. Exportiert, damit Wächter ihre Nebenformen daraus ableiten (factory#245) statt zu kopieren. */
+export const ABSCHNITT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md) (›|§) ?([^\n`"“”„\]|]*)/g;
 const SANFTER_STOPP = /[.,;:()!?]/;
 
 /** Textverweise `<pfad>.md › A › B` und `<pfad>.md § A` in `text` (Muster 8 im Kopfkommentar): `[{ pfad, trenner, segmente, index }]`; leere Segmente und Platzhalter (`<` am Anfang) entfallen. Markdown wird vorher von Code maskiert. */

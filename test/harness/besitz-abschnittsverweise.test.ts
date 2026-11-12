@@ -1,26 +1,32 @@
-/* Bezieher-Sicht auf Abschnittsverweise in Besitz-Text (factory#177, Vor-Tag-Probe; Folge von factory#157).
+/* Kern-Verweis-Wächter: Bezieher-Sicht auf Verweise in Besitz-Text (factory#177, Vor-Tag-Probe; factory#245 vereinigt die früheren Wächter `agents-refs` und Regel 7 (3) aus `ticket-ablauf`).
  *
- * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/. Die Scans stehen in `kern-verweise.ts`.
  *
- * Regel: Kein Verweis aus verteiltem Besitz-Text darf in einem Bezieher ins Leere zeigen. Ein Abschnittsverweis
- * (`<pfad>.md › A` / `§ A`, Muster 8 von check:docdrift) trifft nur, was ein Bezieher sicher hat:
- *   (i)   Ziel AGENTS.md: nur Titel des Kern-Blocks (der Projekt-Block ist Bezieher-Eigenes).
+ * Regel: Kein Verweis aus verteiltem Besitz-Text darf in einem Bezieher ins Leere zeigen. Umfang: verteilte Manifest-Einheiten ohne JSON-Schlüssel,
+ * Endungen .md/.mjs/.cjs/.js, nur innerhalb der Besitz-Spannen; ADRs und Dateien mit Datum im Namen sind wie im Gate ausgenommen; Code wird NICHT maskiert
+ * (ein Verweis in Inline-Code oder Fence zählt wie jeder andere); fehlt das Ziel eines normalen Verweises, bleibt es still (das meldet check:docdrift).
+ *   (i)   Verweise auf AGENTS.md und den Projekt-Block (Formenliste unten): nur Titel des Kern-Blocks bzw. der Projekt-Block-Vorlage (Bezieher-Eigenes).
  *   (ii)  Ziel ist selbst eine ganze Besitz-Datei: kommt unverändert an, übersprungen.
- *   (iii) jedes andere Ziel: nur Überschriften der Fabrik-Seite, deren Anker ein Kern-Link trägt (relativer `.md`-Link aus der
- *         Besitz-Spanne einer verteilten `.md`-Einheit, `kernLinkZiele`). Diese Anker garantieren Anker-Stubs und `stub-anker`
- *         von check:factorylinks; der Rest der Seite (Fettdruck-Anfänge, andere Überschriften) ist im Bezieher nicht garantiert.
- * Alles andere schreibt der Besitz-Text als Fabrik-Verweis `<pfad>.md (Fabrik) › A` (auch `§`): die Regex von check:docdrift
- * erkennt ihn nicht (Pfad, Leerzeichen, Trenner), also prüft der Bezieher ihn nie; in der Fabrik prüft dieser Wächter ihn gegen die
- * VOLLE Seite (Überschriften und Fettdruck-Anfänge), der Drift-Schutz bleibt. Ein Fabrik-Verweis gilt in den Besitz-Spannen aller
- * Manifest-Einheiten, auch im Ring oberflaeche; ein fehlendes Ziel ist ein Fund.
- * Umfang: verteilte Manifest-Einheiten ohne JSON-Schlüssel, Endungen .md/.mjs/.cjs/.js, nur innerhalb der Besitz-Spannen;
- * ADRs und Dateien mit Datum im Namen sind wie im Gate ausgenommen; fehlt das Ziel eines normalen Verweises, bleibt es still
- * (das meldet check:docdrift).
+ *   (iii) jedes andere Ziel, die STRENGE FORM: der Verweis ist der Link-Text eines Markdown-Links `[<pfad>.md › A](<relativ>/<pfad>.md#<anker>)` auf dieselbe
+ *         Seite, der Anker steht in der Ankerliste `KERN_LINK_ANKER` (`kern-link-anker.json`), es ist genau ein Segment, und das Segment trifft die Überschrift
+ *         des Ankers. Die Ankerliste garantiert pro Anker die Überschrift im Bezieher (Anker-Stubs, `stub-anker` von check:factorylinks). Alles andere
+ *         schreibt der Text als Fabrik-Form `<pfad>.md (Fabrik) › A` (auch `§`, auch Ketten): die Regex von check:docdrift erkennt sie nicht (Pfad, Leerzeichen,
+ *         Trenner), also prüft der Bezieher sie nie; in der Fabrik prüft dieser Wächter sie gegen die VOLLE Seite (Überschriften und Fettdruck-Anfänge).
+ *         Die Fabrik-Form gilt in den Besitz-Spannen aller Manifest-Einheiten, auch im Ring oberflaeche; ein fehlendes Ziel ist ein Fund.
  *
- * Grenzen (geschlossen): nur Muster 8 (andere Verweisarten decken Anker-Stubs bzw. dieser Wächter unten ab; Test-Pfade und `.yml`
- * sind im Bezieher still). Der Ring oberflaeche reist nie in einen Bezieher (ADR 0029): keine strenge Regel, nur die
- * Fabrik-Verweis-Prüfung; liegt dort eine Kopie so einer Datei, ist sie Bezieher-Eigenes (Projekt-Text, Bezieher-Migration).
- * Kern-Links zählen nur aus `.md`-Quellen wie im Sync. Zusätzliche Überschriften auf einer eigenen Bezieher-Seite zählen nicht.
+ * Formenliste der Verweise auf AGENTS.md (geschlossen, Abgleich mit `abschnittTrifft` gegen die Titel, Wortgrenze wie in check:docdrift):
+ *   (1) `AGENTS.md § A` / `› A` (Muster 8), (2) `AGENTS.md (§ A`, (3) `Projekt-Block › A` / `§ A`: in allen Kern-Einheiten (Besitz-Spannen), Ziel Kern-Block bzw. Vorlage
+ *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"`:
+ *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
+ *   gegen die ganze AGENTS.md. Ein `CLAUDE.md`-Ziel ist immer rot (die Datei ist verboten).
+ *
+ * Ankerliste: sortiertes JSON `test/harness/kern-link-anker.json`; sie wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile, `tag-takt` führt neue Einträge seit dem
+ * Basis-Tag im Tag-Ticket als Bezieher-Migration auf. Gleichstand gilt für Links aus `.md`-Quellen (Sync-Verhalten); Link-Anker aus Skripten müssen in der Liste stehen
+ * (Teilmenge). Ein Eintrag, den kein Besitz-Text mehr setzt, ist rot (streichen).
+ *
+ * Grenzen (geschlossen): nur Muster 8 und die Formen oben (andere Verweisarten decken Anker-Stubs ab; Test-Pfade und `.yml` sind im Bezieher still). Der Ring oberflaeche reist
+ * nie in einen Bezieher (ADR 0029): keine strenge Form, nur die Fabrik-Form-Prüfung. Ob die Bezieher-Seite die Überschrift wirklich trägt, sieht nur die Vor-Tag-Probe.
+ * Zusätzliche Überschriften auf einer eigenen Bezieher-Seite zählen nicht.
  *
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
  * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
@@ -28,364 +34,148 @@
  * deckt `kern-laufzeittexte.test.ts` mit derselben Liste ab. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
  * mit einer `SIH-Bezieher-Migration:`-Zeile.
  *
- * Dritte Regel (factory#220 L34): Link-Anker `docs/<x>.md#<anker>` in Besitz-Spannen verteilter `.md`-Einheiten auf eine Fabrik-Seite, die
- * nicht als ganze Datei verteilt wird, stehen in der geschlossenen Liste `KERN_LINK_ANKER` (neu: rot mit Weg; veraltet: rot). Ein Bezieher
- * mit eigener Seite braucht dort die Überschrift; die Liste wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile und wandert ab 60
- * Ankern als JSON neben den Test (`test/harness/kern-link-anker.json`, gleiche Regel). Grenze (bewusst): ob die Bezieher-Seite die
- * Überschrift wirklich trägt, sieht nur die Vor-Tag-Probe; verlinkt wird nur über `[…](docs/<x>.md#<anker>)`, Verweise ohne Anker und
- * Ziele außerhalb von `docs/` bleiben unerfasst.
- *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join, posix } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-docdrift.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawBesitz from "../../scripts/besitz-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawLinks from "../../scripts/factory-links-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 import { BEZIEHER_NPM_SKRIPTE } from "../support/bezieher-npm-skripte";
 import { fixture } from "../support/tmp-fixture";
+import { repoDateien } from "./repo-texte";
+import {
+  ANKERLISTE,
+  type Einheit,
+  STRENG_MELDUNG,
+  abgeleitet,
+  absatzVerweise,
+  besitzDateien,
+  ladeKernLinkAnker,
+  musterVerweise,
+  scanneAgents,
+  scanneFabrik,
+  scanneLinkAnker,
+  strengMeldung,
+  strengeFunde,
+  tote,
+  titelVon,
+  vergleicheAnker,
+  verweiseNachMuster,
+  vorlageOderProjektBlock,
+  FABRIK_VERWEIS,
+  PROJEKT_BLOCK_VERWEIS,
+  AGENTS_KLAMMER_VERWEIS,
+} from "./kern-verweise";
 
-interface Verweis {
-  pfad: string;
-  trenner: string;
-  segmente: string[];
-  index: number;
-}
-interface Einheit {
-  pfad: string;
-  block?: string;
-  schluessel?: string;
-  ring?: string;
-}
 const drift = rawDrift as unknown as {
-  abschnittVerweise: (text: string, o: { istMarkdown: boolean }) => Verweis[];
-  abschnittTitel: (md: string) => string[][];
-  abschnittTrifft: (segment: string, titel: string[][]) => boolean;
-  stripFencedCode: (md: string) => string;
+  abschnittVerweise: (text: string, o: { istMarkdown: boolean }) => { pfad: string; segmente: string[]; index: number }[];
   parseNpmRunMentions: (md: string) => Set<string>;
-  linkStellen: (md: string) => { start: number; path: string; anchor: string }[];
-  linkZiel: (datei: string, pfad: string) => string;
-  slugify: (text: string) => string;
-};
-const links = rawLinks as unknown as {
-  kernLinkZiele: (o: { besitz: Einheit[]; lies: (p: string) => string | null }) => { quelle: string; zeile: number; ziel: string; anker: string }[];
-};
-const markdown = rawMarkdown as unknown as { codeMaskiert: (md: string) => string };
-const besitz = rawBesitz as unknown as {
-  besitzSpannen: (einheiten: Einheit[], pfad: string, text: string) => [number, number][];
-  einheitText: (e: { pfad: string; block?: string }, text: string) => string | null;
-  wirdVerteilt: (e: Einheit) => boolean;
-  istGanzeDatei: (e: Einheit) => boolean;
+  ABSCHNITT_VERWEIS: RegExp;
 };
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-
-interface Fund {
-  datei: string;
-  ziel: string;
-  segment: string;
-}
-
-interface BesitzDatei {
-  datei: string;
-  text: string;
-  spannen: [number, number][];
-}
-
-/** Gemeinsame Ermittlung (Abschnittsverweise und npm-Kommandos): Besitz-Dateien samt Spannen. `wurzel` trägt `.factory/besitz.json`; `alle` nimmt auch nicht verteilte Einheiten (Ring oberflaeche) mit. */
-function besitzDateien(wurzel: string, endung: RegExp, alle = false): { lies: (p: string) => string | null; einheiten: Einheit[]; verteilt: Einheit[]; dateien: BesitzDatei[] } {
-  const lies = (p: string): string | null => {
-    const a = join(wurzel, p);
-    return existsSync(a) && statSync(a).isFile() ? readFileSync(a, "utf8").replace(/\r/g, "") : null;
-  };
-  const manifest = JSON.parse(lies(".factory/besitz.json") ?? "{}") as { eintraege: Einheit[] };
-  const verteilt = manifest.eintraege.filter(besitz.wirdVerteilt);
-  const einheiten = (alle ? manifest.eintraege : verteilt).filter((e) => e.schluessel === undefined);
-  const dateien: BesitzDatei[] = [];
-  for (const datei of new Set(einheiten.map((e) => e.pfad))) {
-    if (!endung.test(datei) || /^docs\/adr\//.test(datei) || /\d{4}-\d{2}-\d{2}/.test(datei)) continue;
-    const text = lies(datei);
-    if (text !== null) dateien.push({ datei, text, spannen: besitz.besitzSpannen(einheiten, datei, text) });
-  }
-  return { lies, einheiten, verteilt, dateien };
-}
-
-/** Überschriften einer Seite (außerhalb von Fences) als `{ slug, zeile }`; Slugs wie GitHub (`-1` bei Duplikaten). */
-function ueberschriften(md: string): { slug: string; zeile: string }[] {
-  const gesehen = new Map<string, number>();
-  return drift
-    .stripFencedCode(md)
-    .split("\n")
-    .filter((z) => /^#{1,6}\s+.*\S\s*$/.test(z))
-    .map((m) => {
-      const basis = drift.slugify(m.replace(/^#{1,6}\s+/, ""));
-      const n = gesehen.get(basis) ?? 0;
-      gesehen.set(basis, n + 1);
-      return { slug: n === 0 ? basis : `${basis}-${n}`, zeile: m };
-    });
-}
-
-/** Alle Verweise aus Besitz-Text, die für einen Bezieher nicht treffen (Regeln (i)–(iii) im Kopfkommentar). `wurzel` trägt `.factory/besitz.json`. */
-function scanne(wurzel: string): { funde: Fund[]; verweise: number } {
-  const { lies, einheiten, verteilt, dateien } = besitzDateien(wurzel, /\.(md|mjs|cjs|js)$/);
-  const ganzeDateien = new Set(einheiten.filter(besitz.istGanzeDatei).map((e) => e.pfad));
-  const agents = lies("AGENTS.md");
-  const kernTitel = drift.abschnittTitel(agents === null ? "" : (besitz.einheitText({ pfad: "AGENTS.md", block: "kern" }, agents) ?? ""));
-  const kernAnker = new Map<string, Set<string>>();
-  for (const k of links.kernLinkZiele({ besitz: verteilt, lies })) kernAnker.set(k.ziel, (kernAnker.get(k.ziel) ?? new Set<string>()).add(k.anker));
-  const funde: Fund[] = [];
-  let verweise = 0;
-  for (const { datei, text, spannen } of dateien) {
-    for (const v of drift.abschnittVerweise(text, { istMarkdown: datei.endsWith(".md") })) {
-      if (!spannen.some(([a, b]) => v.index >= a && v.index <= b)) continue;
-      const ziel = [v.pfad, posix.join(posix.dirname(datei), v.pfad)].find((p) => lies(p) !== null);
-      if (ziel === undefined || (ziel !== "AGENTS.md" && ganzeDateien.has(ziel))) continue;
-      verweise++;
-      const garantiert = kernAnker.get(ziel) ?? new Set<string>();
-      const titel =
-        ziel === "AGENTS.md"
-          ? kernTitel
-          : drift.abschnittTitel(
-              ueberschriften(lies(ziel) ?? "")
-                .filter((h) => garantiert.has(h.slug))
-                .map((h) => h.zeile)
-                .join("\n"),
-            );
-      const tot = v.segmente.find((s) => !drift.abschnittTrifft(s, titel));
-      if (tot !== undefined) funde.push({ datei, ziel, segment: tot });
-    }
-  }
-  return { funde, verweise };
-}
-
-/** Fabrik-Verweis `<pfad>.md (Fabrik) › A`: Kopie von ABSCHNITT_VERWEIS in check-docdrift.mjs mit ` (Fabrik)` zwischen Pfad und Trenner (die Gate-Regex erkennt ihn darum nie). */
-const FABRIK_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md) \(Fabrik\) (›|§) ?([^\n`"“”„\]|]*)/g;
-
-/** Fabrik-Verweise in Besitz-Spannen aller Manifest-Einheiten (auch Ring oberflaeche), geprüft gegen die VOLLE Fabrik-Seite (Überschriften und Fettdruck-Anfänge). Fehlt die Seite, ist das ein Fund. */
-function scanneFabrik(wurzel: string): { funde: Fund[]; verweise: number } {
-  const { lies, dateien } = besitzDateien(wurzel, /\.(md|mjs|cjs|js)$/, true);
-  const funde: Fund[] = [];
-  let verweise = 0;
-  for (const { datei, text, spannen } of dateien) {
-    const md = datei.endsWith(".md");
-    const quelle = md ? markdown.codeMaskiert(text) : text;
-    for (const m of quelle.matchAll(FABRIK_VERWEIS)) {
-      if (!spannen.some(([a, b]) => m.index >= a && m.index <= b)) continue;
-      verweise++;
-      const start = m.index + m[0].length - m[3].length;
-      const roh = md ? text.slice(start, start + m[3].length).split("`")[0] : m[3];
-      const segmente = roh
-        .split(" › ")
-        .map((s) => s.trim())
-        .filter((s) => s !== "" && !s.startsWith("<"));
-      const ziel = [m[1], posix.join(posix.dirname(datei), m[1])].find((p) => lies(p) !== null);
-      if (ziel === undefined) {
-        funde.push({ datei, ziel: `${m[1]} (fehlt)`, segment: segmente[0] ?? "" });
-        continue;
-      }
-      const titel = drift.abschnittTitel(lies(ziel) ?? "");
-      const tot = segmente.find((s) => !drift.abschnittTrifft(s, titel));
-      if (tot !== undefined) funde.push({ datei, ziel, segment: tot });
-    }
-  }
-  return { funde, verweise };
-}
-
 const MANIFEST = (eintraege: Einheit[]): string => JSON.stringify({ version: 3, eintraege });
 const KERN = (inhalt: string): string => `# Kopf\n<!-- factory-besitz:start kern -->\n${inhalt}\n<!-- factory-besitz:ende kern -->\n## Projekt\n`;
+const funde = (r: { funde: { datei: string; ziel: string; segment: string }[] }): string[] => r.funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment}`);
 
-describe("Abschnittsverweise in Besitz-Text aus Sicht des Beziehers", () => {
-  test("Fettdruck-Ziel ist rot, Überschrift grün (Ziel außerhalb von AGENTS.md)", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Fetter Abschnitt\nund docs/seite.md › Echte Überschrift\nKern: [x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": "# Seite\n\n## Echte Überschrift\n\n**Fetter Abschnitt** Text.\n",
-    });
-    const { funde } = scanne(wurzel);
-    assert.deepEqual(funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Fetter Abschnitt" }]);
-  });
-
+describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
   const SEITE = "# Seite\n\n## Echte Überschrift\n\n## Andere\n";
+  const LISTE = new Set(["docs/seite.md#echte-überschrift", "docs/seite.md#andere"]);
+  const mit = (skill: string, pfad = "skill.md", seite = SEITE): string =>
+    fixture({ ".factory/besitz.json": MANIFEST([{ pfad, ring: "kern" }]), [pfad]: skill, "docs/seite.md": seite });
+  const grund = (wurzel: string, erlaubt = LISTE): string[] => strengeFunde(wurzel, erlaubt).funde.map((f) => f.grund.slice(0, 3));
 
-  test("eine Überschrift ohne Kern-Anker ist rot, mit Kern-Link auf ihren Anker grün", () => {
-    const ohne = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Echte Überschrift\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(ohne).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Echte Überschrift" }]);
-    const mit = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Echte Überschrift\n[x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(mit).funde, []);
+  test("ein Link-Text mit Anker der Ankerliste ist grün, jeder Verweis wird gezählt", () => {
+    const wurzel = mit("Siehe [docs/seite.md › Echte Überschrift](docs/seite.md#echte-überschrift) und [docs/seite.md § Andere](docs/seite.md#andere)\n");
+    assert.deepEqual(strengeFunde(wurzel, LISTE), { funde: [], verweise: 2 });
   });
 
-  test("der Kern-Link garantiert nur seinen Anker, nicht die Nachbar-Überschrift", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Andere\n[x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Andere" }]);
+  test("ein reiner Textverweis ist rot, die Meldung nennt alle drei Wege samt Fabrik-Form und AGENTS.md § (L12c)", () => {
+    const wurzel = mit("Siehe docs/seite.md › Echte Überschrift\n");
+    assert.deepEqual(grund(wurzel), ["(a)"]);
+    for (const teil of ["(Fabrik)", "AGENTS.md §", "kern-link-anker.json", "SIH-Bezieher-Migration:"]) assert.ok(STRENG_MELDUNG.includes(teil), teil);
+    assert.ok(strengMeldung(strengeFunde(wurzel, LISTE).funde).includes(STRENG_MELDUNG));
   });
 
-  test("ein Kern-Link nur aus .mjs-Text gibt keine Garantie (der Sync verlinkt nur .md-Quellen)", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }]),
-      "scripts/x.mjs": "// siehe docs/seite.md › Echte Überschrift\n// [x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: "scripts/x.mjs", ziel: "docs/seite.md", segment: "Echte Überschrift" }]);
+  test("ein Anker außerhalb der Ankerliste ist rot (Negativfall)", () => {
+    const wurzel = mit("Siehe [docs/seite.md › Andere](docs/seite.md#andere)\n");
+    assert.deepEqual(grund(wurzel, new Set(["docs/seite.md#echte-überschrift"])), ["(c)"]);
+    assert.deepEqual(grund(wurzel, new Set()), ["(c)"]);
   });
 
-  test("ein Kern-Link außerhalb der Block-Spanne gibt keine Garantie", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
-      "AGENTS.md": KERN("Siehe docs/seite.md › Echte Überschrift.") + "Projekt: [x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: "AGENTS.md", ziel: "docs/seite.md", segment: "Echte Überschrift." }]);
+  test("ein Link auf eine andere Seite, ein Segment, das die Anker-Überschrift verfehlt, und eine Kette sind rot", () => {
+    assert.deepEqual(grund(mit("[docs/seite.md › Andere](docs/andere.md#x)\n"), new Set(["docs/andere.md#x"])), ["(b)"]);
+    assert.deepEqual(grund(mit("[docs/seite.md › Andere](docs/seite.md#echte-überschrift)\n")), ["(e)"]);
+    assert.deepEqual(grund(mit("[docs/seite.md › Echte Überschrift › Andere](docs/seite.md#echte-überschrift)\n")), ["(d)"]);
+    assert.deepEqual(grund(mit("[docs/seite.md › Echte Überschrift](docs/seite.md#gibt-es-nicht)\n"), new Set(["docs/seite.md#gibt-es-nicht"])), ["(e)"]);
   });
 
-  test("AGENTS.md: ein Titel nur im Projekt-Block ist rot, im Kern-Block grün", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Nach AGENTS.md § Kern-Regel\nund AGENTS.md § Nur Projekt\n",
-      "AGENTS.md": `${KERN("- **Kern-Regel** Text")}- **Nur Projekt** Text\n`,
-    });
-    const { funde } = scanne(wurzel);
-    assert.deepEqual(funde, [{ datei: "skill.md", ziel: "AGENTS.md", segment: "Nur Projekt" }]);
+  test("ein Verweis in Inline-Code oder Code-Fence zählt (nicht maskiert) und ist rot, auch ein Link darin", () => {
+    assert.deepEqual(grund(mit("`docs/seite.md › Echte Überschrift`\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("```\n[docs/seite.md › Echte Überschrift](docs/seite.md#echte-überschrift)\n```\n")), ["(a)"]);
   });
 
-  test("ein Kern-Link aus einer nicht verteilten Einheit (Ring oberflaeche) gibt keine Garantie", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([
-        { pfad: "skill.md", ring: "kern" },
-        { pfad: "ober.md", ring: "oberflaeche" },
-      ]),
-      "skill.md": "Siehe docs/seite.md › Echte Überschrift\n",
-      "ober.md": "[x](docs/seite.md#echte-überschrift)\n",
-      "docs/seite.md": SEITE,
-    });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Echte Überschrift" }]);
+  test("eine Überschrift im Code-Fence der Zielseite ist kein Anker (rot)", () => {
+    const wurzel = mit("[docs/seite.md › Nur im Fence](docs/seite.md#nur-im-fence)\n", "skill.md", "# Seite\n\n```\n## Nur im Fence\n```\n");
+    assert.deepEqual(grund(wurzel, new Set(["docs/seite.md#nur-im-fence"])), ["(e)"]);
   });
 
-  test("doppelte Überschriften: der Kern-Link auf #foo-1 garantiert die zweite, #foo-2 gibt es nicht", () => {
-    const seite = "# S\n\n## Foo\n\n## Foo\n";
-    const mit = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Foo\n[x](docs/seite.md#foo-1)\n",
-      "docs/seite.md": seite,
-    });
-    assert.deepEqual(scanne(mit).funde, []);
-    const ohne = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Foo\n[x](docs/seite.md#foo-2)\n",
-      "docs/seite.md": seite,
-    });
-    assert.deepEqual(scanne(ohne).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Foo" }]);
+  test("Skriptdatei (.mjs): ein Link im Kommentar ist grün, ein Textverweis rot", () => {
+    assert.deepEqual(strengeFunde(mit("// siehe [docs/seite.md › Andere](../docs/seite.md#andere)\n", "scripts/x.mjs"), LISTE).funde, []);
+    assert.deepEqual(grund(mit("// siehe docs/seite.md › Andere\n", "scripts/x.mjs")), ["(a)"]);
   });
 
-  test("ein Verweis außerhalb der Besitz-Spanne (Block einer Datei) wird ignoriert", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
-      "AGENTS.md": KERN("- **Kern-Regel** Text") + "Projekt: docs/seite.md › Fetter Abschnitt\n",
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.deepEqual(scanne(wurzel), { funde: [], verweise: 0 });
-  });
-
-  test("ein Verweis innerhalb der Block-Spanne wird gezählt und geprüft", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
-      "AGENTS.md": KERN("Siehe docs/seite.md › Fetter Abschnitt."),
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.equal(scanne(wurzel).funde.length, 1);
-  });
-
-  test("Ziel ist eine ganze Besitz-Datei: Fettdruck-Abschnitt kommt an, grün", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([
-        { pfad: "skill.md", ring: "kern" },
-        { pfad: "docs/seite.md", ring: "kern" },
-      ]),
-      "skill.md": "Siehe docs/seite.md › Fetter Abschnitt.\n",
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.deepEqual(scanne(wurzel), { funde: [], verweise: 0 });
-  });
-
-  test("fehlendes Ziel bleibt still, ADR und Datum im Namen sind ausgenommen", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([
-        { pfad: "skill.md", ring: "kern" },
-        { pfad: "docs/adr/0001-x.md", ring: "kern" },
-        { pfad: "notiz-2026-01-01.md", ring: "kern" },
-      ]),
-      "skill.md": "Siehe docs/fehlt.md › Irgendwas.\n",
-      "docs/adr/0001-x.md": "Siehe docs/seite.md › Fetter Abschnitt.\n",
-      "notiz-2026-01-01.md": "Siehe docs/seite.md › Fetter Abschnitt.\n",
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.deepEqual(scanne(wurzel), { funde: [], verweise: 0 });
-  });
-
-  test("Skriptdatei (.mjs) im Besitz wird gescannt", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }]),
-      "scripts/x.mjs": "// siehe docs/seite.md › Fetter Abschnitt\n",
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.equal(scanne(wurzel).funde.length, 1);
-  });
-
-  test("eine nur in der Fabrik liegende Einheit (Ring oberflaeche, nicht verteilt) wird ignoriert", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "oberflaeche" }]),
-      "skill.md": "Siehe docs/seite.md › Fetter Abschnitt\n",
-      "docs/seite.md": "**Fetter Abschnitt** Text.\n",
-    });
-    assert.deepEqual(scanne(wurzel), { funde: [], verweise: 0 });
-  });
-
-  test("ein Ziel relativ zur verweisenden Datei wird aufgelöst und geprüft", () => {
+  test("ein Ziel relativ zur verweisenden Datei wird aufgelöst, der Anker steht dann mit dem aufgelösten Pfad in der Liste", () => {
     const wurzel = fixture({
       ".factory/besitz.json": MANIFEST([{ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }]),
-      ".agents/skills/x/SKILL.md": "Siehe seite.md › Fetter Abschnitt\n",
-      ".agents/skills/x/seite.md": "**Fetter Abschnitt** Text.\n",
+      ".agents/skills/x/SKILL.md": "Siehe [seite.md › Echte Überschrift](seite.md#echte-überschrift)\n",
+      ".agents/skills/x/seite.md": SEITE,
     });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: ".agents/skills/x/SKILL.md", ziel: ".agents/skills/x/seite.md", segment: "Fetter Abschnitt" }]);
+    assert.deepEqual(strengeFunde(wurzel, new Set([".agents/skills/x/seite.md#echte-überschrift"])), { funde: [], verweise: 1 });
+    assert.deepEqual(grund(wurzel), ["(c)"]);
   });
 
-  test("eine Überschrift im Code-Fence der Zielseite ist kein Abschnitt", () => {
+  test("übersprungen: Ziel AGENTS.md, Ziel ganze Besitz-Datei, fehlendes Ziel, außerhalb der Spanne, ADR, Datum, nicht verteilte Einheit", () => {
     const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
-      "skill.md": "Siehe docs/seite.md › Nur im Fence\n",
-      "docs/seite.md": "# Seite\n\n```\n## Nur im Fence\n```\n",
+      ".factory/besitz.json": MANIFEST([
+        { pfad: "AGENTS.md", block: "kern", ring: "kern" },
+        { pfad: "skill.md", ring: "kern" },
+        { pfad: "docs/ganz.md", ring: "kern" },
+        { pfad: "docs/adr/0001-x.md", ring: "kern" },
+        { pfad: "notiz-2026-01-01.md", ring: "kern" },
+        { pfad: "ober.md", ring: "oberflaeche" },
+      ]),
+      "AGENTS.md": KERN("Kern: AGENTS.md § Regel.") + "Projekt: docs/seite.md › Andere\n",
+      "skill.md": "docs/ganz.md › Fett\nAGENTS.md § Regel\ndocs/fehlt.md › X\n",
+      "docs/ganz.md": "**Fett** Text.\n",
+      "docs/adr/0001-x.md": "docs/seite.md › Andere\n",
+      "notiz-2026-01-01.md": "docs/seite.md › Andere\n",
+      "ober.md": "docs/seite.md › Andere\n",
+      "docs/seite.md": SEITE,
     });
-    assert.deepEqual(scanne(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Nur im Fence" }]);
+    assert.deepEqual(strengeFunde(wurzel, LISTE), { funde: [], verweise: 0 });
   });
 
-  test("echtes Repo: kein Besitz-Verweis, der für einen Bezieher ins Leere zeigt (und der Scan ist nicht leer)", () => {
-    const { funde, verweise } = scanne(ROOT);
-    assert.ok(verweise > 20, `Scan extrahiert nur ${verweise} Verweise: Muster oder Umfang kaputt (Leerlauf)`);
-    assert.deepEqual(funde, [], `Verweise ohne Treffer in der Bezieher-Sicht:\n${funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment}`).join("\n")}`);
+  test("Innerhalb der Block-Spanne einer Datei wird geprüft", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "AGENTS.md": KERN("Siehe docs/seite.md › Andere."),
+      "docs/seite.md": SEITE,
+    });
+    assert.deepEqual(grund(wurzel), ["(a)"]);
+  });
+
+  test("echtes Repo: jeder Kern-Verweis auf eine Fabrik-Seite hat die strenge Form (und der Scan ist nicht leer)", () => {
+    const r = strengeFunde(ROOT, new Set(ladeKernLinkAnker(ROOT)));
+    assert.ok(r.verweise >= 10, `Scan extrahiert nur ${r.verweise} Verweise: Muster oder Umfang kaputt (Leerlauf)`);
+    assert.deepEqual(r.funde, [], strengMeldung(r.funde));
   });
 });
 
-describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
+describe("Fabrik-Form `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
   const SEITE_FETT = "# Seite\n\n## Echte Überschrift\n\n**Fetter Abschnitt** Text.\n";
   const fabrik = (ring: string, text: string, seite: string | null = SEITE_FETT): string =>
     fixture({
@@ -399,31 +189,23 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(scanneFabrik(wurzel), { funde: [], verweise: 2 });
   });
 
-  test("ein Abschnitt, den die Fabrik-Seite nicht trägt, ist rot", () => {
-    const wurzel = fabrik("kern", "Siehe docs/seite.md (Fabrik) › Gibt es nicht\n");
-    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
-  });
-
-  test("fehlt die Fabrik-Seite, ist das ein Fund", () => {
-    const wurzel = fabrik("kern", "Siehe docs/fehlt.md (Fabrik) › Irgendwas\n", null);
-    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "skill.md", ziel: "docs/fehlt.md (fehlt)", segment: "Irgendwas" }]);
+  test("ein Abschnitt, den die Fabrik-Seite nicht trägt, ist rot; fehlt die Seite, ist das ein Fund", () => {
+    assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/seite.md (Fabrik) › Gibt es nicht\n")).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
+    assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/fehlt.md (Fabrik) › Irgendwas\n", null)).funde, [{ datei: "skill.md", ziel: "docs/fehlt.md (fehlt)", segment: "Irgendwas" }]);
   });
 
   test("Ring oberflaeche: ein normaler Verweis ist kein Fund (reist nie), der Fabrik-Verweis wird geprüft", () => {
     const normal = fabrik("oberflaeche", "Siehe docs/seite.md › Fetter Abschnitt\n");
-    assert.deepEqual(scanne(normal), { funde: [], verweise: 0 });
+    assert.deepEqual(strengeFunde(normal, new Set()), { funde: [], verweise: 0 });
     assert.deepEqual(scanneFabrik(normal), { funde: [], verweise: 0 });
     const wurzel = fabrik("oberflaeche", "Siehe docs/seite.md (Fabrik) › Gibt es nicht\n");
     assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
   });
 
-  test("Kette: jedes Segment wird geprüft, der Fund nennt das tote Segment", () => {
+  test("Kette: jedes Segment wird geprüft, der Fund nennt das tote Segment; ein Platzhalter-Segment ist kein Fund", () => {
     assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/seite.md (Fabrik) › Echte Überschrift › Fetter Abschnitt\n")), { funde: [], verweise: 1 });
     const rot = fabrik("kern", "Siehe docs/seite.md (Fabrik) › Echte Überschrift › Gibt es nicht\n");
     assert.deepEqual(scanneFabrik(rot).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
-  });
-
-  test("ein Platzhalter-Segment (`<…>`) ist kein Fund", () => {
     assert.deepEqual(scanneFabrik(fabrik("kern", "Siehe docs/seite.md (Fabrik) › <Abschnitt>\n")).funde, []);
   });
 
@@ -449,22 +231,15 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
     assert.deepEqual(scanneFabrik(ende).funde, [{ datei: "skill.md", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
   });
 
-  test("Skriptdatei (.mjs): ein Fabrik-Verweis in Backticks wird nicht maskiert, sondern geprüft", () => {
+  test("Skriptdatei (.mjs): ein Fabrik-Verweis in Backticks wird nicht maskiert, sondern geprüft; ein Ziel relativ zur Datei wird aufgelöst", () => {
     const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }]),
+      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }, { pfad: ".agents/skills/x/SKILL.md", ring: "kern" }]),
       "scripts/x.mjs": "// siehe `docs/seite.md (Fabrik) › Gibt es nicht`\n",
       "docs/seite.md": SEITE_FETT,
-    });
-    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: "scripts/x.mjs", ziel: "docs/seite.md", segment: "Gibt es nicht" }]);
-  });
-
-  test("ein Ziel relativ zur verweisenden Datei wird aufgelöst (nicht als fehlend gemeldet)", () => {
-    const wurzel = fixture({
-      ".factory/besitz.json": MANIFEST([{ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }]),
       ".agents/skills/x/SKILL.md": "Siehe seite.md (Fabrik) › Gibt es nicht\n",
       ".agents/skills/x/seite.md": SEITE_FETT,
     });
-    assert.deepEqual(scanneFabrik(wurzel).funde, [{ datei: ".agents/skills/x/SKILL.md", ziel: ".agents/skills/x/seite.md", segment: "Gibt es nicht" }]);
+    assert.deepEqual(funde(scanneFabrik(wurzel)).sort(), [".agents/skills/x/SKILL.md -> .agents/skills/x/seite.md: Gibt es nicht", "scripts/x.mjs -> docs/seite.md: Gibt es nicht"]);
   });
 
   test("Vertrag: check:docdrift erkennt die Fabrik-Form nicht (kein Verweis, der Bezieher prüft sie nie)", () => {
@@ -473,9 +248,149 @@ describe("Fabrik-Verweise `<pfad>.md (Fabrik) › A` in Besitz-Text", () => {
   });
 
   test("echtes Repo: Fabrik-Verweise treffen alle (und der Scan ist nicht leer)", () => {
-    const { funde, verweise } = scanneFabrik(ROOT);
+    const { funde: f, verweise } = scanneFabrik(ROOT);
     assert.ok(verweise >= 15, `Scan extrahiert nur ${verweise} Fabrik-Verweise: Muster oder Umfang kaputt (Leerlauf)`);
-    assert.deepEqual(funde, [], `Fabrik-Verweise ohne Treffer in der Fabrik-Seite:\n${funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment}`).join("\n")}`);
+    assert.deepEqual(f, [], `Fabrik-Verweise ohne Treffer in der Fabrik-Seite:\n${funde({ funde: f }).join("\n")}`);
+  });
+});
+
+describe("Muster aus ABSCHNITT_VERWEIS abgeleitet (factory#245 L12b)", () => {
+  test("Vertrag: jede abgeleitete Form hat die Quelle der Original-Regex mit ersetztem Vorspann und dieselben Flags", () => {
+    const quelle = drift.ABSCHNITT_VERWEIS.source;
+    for (const re of [FABRIK_VERWEIS, PROJEKT_BLOCK_VERWEIS, AGENTS_KLAMMER_VERWEIS]) {
+      assert.notEqual(re.source, quelle);
+      assert.equal(re.flags, drift.ABSCHNITT_VERWEIS.flags);
+      assert.ok(re.source.endsWith(quelle.slice(quelle.indexOf("(›|§)") + "(›|§)".length)), "der Abschnittstext-Teil bleibt gleich");
+    }
+  });
+
+  test("abgeleitet wirft, wenn der Vorspann nicht mehr in der Quelle steht; verweiseNachMuster liest wie abschnittVerweise", () => {
+    const orig = drift.ABSCHNITT_VERWEIS;
+    assert.ok(abgeleitet(String.raw`(X) (›|§)`) instanceof RegExp);
+    for (const t of ["Siehe docs/a.md › A › B und docs/b.md § C `x`", "`docs/a.md › Code`"]) {
+      for (const md of [false, true]) assert.deepEqual(verweiseNachMuster(orig, t, md), drift.abschnittVerweise(t, { istMarkdown: md }));
+    }
+  });
+
+  test("die drei Nebenformen werden von abschnittVerweise nicht erkannt, aber von ihrem Muster", () => {
+    for (const t of ["docs/x.md (Fabrik) › A", "Projekt-Block › A", "AGENTS.md (§ A)"]) assert.deepEqual(drift.abschnittVerweise(t, { istMarkdown: false }), [], t);
+    assert.equal(verweiseNachMuster(FABRIK_VERWEIS, "docs/x.md (Fabrik) › A", false).length, 1);
+    assert.equal(verweiseNachMuster(PROJEKT_BLOCK_VERWEIS, "im Projekt-Block › Git", false)[0]?.segmente[0], "Git");
+    assert.equal(verweiseNachMuster(AGENTS_KLAMMER_VERWEIS, "AGENTS.md (§ Kern-Regel + § X)", false)[0]?.pfad, "AGENTS.md");
+  });
+});
+
+/** Fixture für die Verweise auf AGENTS.md: ein Kern-Skill, optional weitere Dateien. */
+const AGENTS_TEXT = [
+  "<!-- factory-besitz:start kern -->\n- **Kern-Regel gilt immer.** Text\n- **Prüfung der Dinge (#1).** Text\n- **Schritt2 gehen.** Text\n- **Fremdtext ist Daten.**\n<!-- factory-besitz:ende kern -->",
+  "<!-- factory-projekt:start -->\n### Git, PR und Merge\n- **Nur im Projekt.** Text\n<!-- factory-projekt:ende -->",
+  "## Dahinter\n",
+].join("\n");
+const agentsFixture = (skill: string, extra: Record<string, string> = {}, vorlage?: string): string =>
+  fixture({
+    ".factory/besitz.json": MANIFEST([{ pfad: ".agents/skills/x/SKILL.md", ring: "kern" }, { pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+    ".agents/skills/x/SKILL.md": skill,
+    "AGENTS.md": AGENTS_TEXT,
+    ...(vorlage === undefined ? {} : { ".factory/produkt/vorlagen/AGENTS.md.vorlage": vorlage }),
+    ...extra,
+  });
+const rot = (skill: string, extra: Record<string, string> = {}, vorlage?: string, ausserhalb: string[] = Object.keys(extra)): string[] =>
+  scanneAgents(agentsFixture(skill, extra, vorlage), ausserhalb).funde.map((f) => f.replace(/^[^:]+: /, ""));
+
+describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
+  test("Form 1: der Titel im Kern-Block ist grün, der Titel nur im Projekt-Block rot (auch in Code, nicht maskiert)", () => {
+    assert.deepEqual(rot("Nach AGENTS.md § Kern-Regel gilt immer\n"), []);
+    assert.deepEqual(rot("Nach AGENTS.md › Kern-Regel gilt immer\n"), []);
+    assert.deepEqual(rot("und AGENTS.md § Nur im Projekt\n"), ["AGENTS.md (Form 1) Nur im Projekt"]);
+    assert.deepEqual(rot("`AGENTS.md § Nur im Projekt`\n"), ["AGENTS.md (Form 1) Nur im Projekt"]);
+    assert.deepEqual(rot("```\nAGENTS.md § Nur im Projekt\n```\n"), ["AGENTS.md (Form 1) Nur im Projekt"]);
+  });
+
+  test("Wortgrenze: ein abgeschnittenes Wort („Pr“, „Schritt“, „Fremd“) ist rot, das ganze Wort grün", () => {
+    for (const t of ["Pr", "Schritt", "Fremd"]) assert.equal(rot(`AGENTS.md § ${t})\n`).length, 1, t);
+    assert.deepEqual(rot("AGENTS.md § Prüfung der Dinge)\n"), []);
+    assert.deepEqual(rot("AGENTS.md § Fremdtext ist Daten)\n"), []);
+  });
+
+  test("Segmentende an Komma, Semikolon, Doppelpunkt, eckiger Klammer und Zeilenende", () => {
+    for (const ende of [", danach mehr", "; weiter", ": weiter", "]\nweiter", "\nund Erfundenes"]) assert.deepEqual(rot(`AGENTS.md § Fremdtext ist Daten${ende}\n`), [], ende);
+  });
+
+  test("ein erfundener Abschnitt und ein Prosa-Anhängsel an einem echten Titel sind rot", () => {
+    assert.equal(rot("AGENTS.md § Erfundener Abschnitt Xyzzy\n").length, 1);
+    assert.equal(rot("(AGENTS.md § Fremdtext gilt weiter)\n").length, 1);
+  });
+
+  test("Form 2: `AGENTS.md (§ X` trifft den Kern-Block, ein Projekt-Titel ist rot", () => {
+    assert.deepEqual(rot("(AGENTS.md (§ Fremdtext ist Daten)\n"), []);
+    assert.deepEqual(rot("(AGENTS.md (§ Nur im Projekt)\n"), ["AGENTS.md (Form 2) Nur im Projekt)"]);
+  });
+
+  test("Form 3: `Projekt-Block › X` trifft die Vorlage bzw. den eigenen Projekt-Block, nie den Kern-Block; ein volles Segment mit Komma zählt", () => {
+    assert.deepEqual(rot("Projekt-Block › Git, PR und Merge\n"), []);
+    assert.deepEqual(rot("Projekt-Block › Nur im Projekt\n"), []);
+    assert.equal(rot("Projekt-Block › Kern-Regel gilt immer\n").length, 1, "der Kern-Block zählt nicht als Projekt-Block");
+    assert.equal(rot("Projekt-Block › Nur im Projekt\n", {}, "- **Anderes.**").length, 1, "die Vorlage gilt, wo sie liegt");
+    assert.deepEqual(rot("Projekt-Block › Anderes\n", {}, "- **Anderes.**"), []);
+    assert.equal(rot("AGENTS.md § Anderes\n", {}, "- **Anderes.**").length, 1, "streng: ein Vorlagen-Titel trifft `AGENTS.md §` nicht");
+    assert.equal(rot("Projekt-Block › Gibt es nicht\n").length, 1);
+  });
+
+  test("Formen 4 und 5: bares § erbt die Zieldatei im Absatz, `AGENTS.md „X“` zitiert; Absatzgrenze und fremdes `*.md §` setzen zurück", () => {
+    assert.deepEqual(rot("AGENTS.md (§ Kern-Regel gilt immer + § Fremdtext ist Daten)\n"), []);
+    assert.deepEqual(rot("AGENTS.md § Kern-Regel gilt immer\n- § Nur im Projekt — Text\n"), ["AGENTS.md (Form 4) Nur im Projekt"]);
+    assert.deepEqual(rot("AGENTS.md „Nur im Projekt“ und AGENTS.md „Fremdtext ist Daten“\n"), ["AGENTS.md (Form 5) Nur im Projekt"]);
+    assert.deepEqual(rot("AGENTS.md § Kern-Regel gilt immer\n\n§ Anderer Absatz\n"), []);
+    assert.deepEqual(rot("siehe docs/agent-harness.md § 2.5 und § Irgendwas\n"), []);
+    assert.deepEqual(rot("AGENTS.md + CLAUDE.md liegen bereits im Kontext.\n"), []);
+    assert.deepEqual(absatzVerweise("AGENTS.md § „Alpha … Beta“").map((v) => v.segmente), [["Alpha", "Beta"]]);
+  });
+
+  test("Formen 4 und 5 gelten nur unter .claude/ und .agents/ (W8), die Formen 1 bis 3 überall im Kern", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "docs/x.md", ring: "kern" }, { pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "docs/x.md": "AGENTS.md § Kern-Regel gilt immer und § Nur im Projekt\n\nAGENTS.md „Nur im Projekt“\n",
+      "AGENTS.md": AGENTS_TEXT,
+    });
+    assert.deepEqual(scanneAgents(wurzel, []).funde, []);
+    const f1 = fixture({ ".factory/besitz.json": MANIFEST([{ pfad: "docs/x.md", ring: "kern" }, { pfad: "AGENTS.md", block: "kern", ring: "kern" }]), "docs/x.md": "AGENTS.md § Nur im Projekt\n", "AGENTS.md": AGENTS_TEXT });
+    assert.equal(scanneAgents(f1, []).funde.length, 1);
+  });
+
+  test("ein Verweis außerhalb der Besitz-Spanne (Projekt-Teil der AGENTS.md) wird ignoriert", () => {
+    assert.deepEqual(scanneAgents(agentsFixture("x\n", {}), []).verweise, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "AGENTS.md": KERN("Kern.") + "Projekt: AGENTS.md § Gibt es nicht\n",
+    });
+    assert.deepEqual(scanneAgents(wurzel, []), { funde: [], verweise: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, dateien: new Set() });
+  });
+
+  test("außerhalb des Kerns: alle Formen gegen die ganze AGENTS.md (auch Projekt-Titel), CLAUDE.md ist rot", () => {
+    const extra = { ".claude/hooks/h.mjs": "// AGENTS.md § Nur im Projekt\n// AGENTS.md § Nirgends\n// CLAUDE.md § Befehle\n" };
+    assert.deepEqual(rot("x\n", extra), ["AGENTS.md (Form 1) Nirgends", "CLAUDE.md (Form 1) Befehle"]);
+    assert.deepEqual(rot("x\n", { ".claude/hooks/h.mjs": "AGENTS.md „Nur im Projekt“ und Projekt-Block › Git, PR und Merge\n" }), []);
+  });
+
+  test("Titel: Kern-Block, Vorlage bzw. Projekt-Block; ohne Projekt-Block bleibt die Vorlage leer (streng)", () => {
+    assert.equal(vorlageOderProjektBlock("- **Vorlagen-Titel.**", AGENTS_TEXT), "- **Vorlagen-Titel.**");
+    assert.match(vorlageOderProjektBlock(null, AGENTS_TEXT), /Nur im Projekt/);
+    assert.doesNotMatch(vorlageOderProjektBlock(null, AGENTS_TEXT), /Dahinter|Kern-Regel/);
+    assert.equal(vorlageOderProjektBlock(null, "- **Kern-Titel.**"), "");
+    assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:ende -->\n<!-- factory-projekt:start -->\nx"), "");
+    assert.equal(vorlageOderProjektBlock(null, "<!-- factory-projekt:start -->\n- **Nur Start.**\nRest"), "");
+    const t = titelVon(AGENTS_TEXT, null);
+    assert.equal(tote(musterVerweise("AGENTS.md § Dahinter"), t.kern).length, 1);
+    assert.equal(tote(musterVerweise("AGENTS.md § Dahinter"), t.ganz).length, 0);
+  });
+
+  test("echtes Repo: jeder Verweis auf AGENTS.md trifft (alle Formen 1 bis 5 kommen vor, Leerlauf-Schutz)", () => {
+    const ausserhalb = repoDateien().filter((f) => /^\.(claude|agents)\//.test(f) && /\.(md|js|mjs|cjs|ts)$/.test(f));
+    const scan = scanneAgents(ROOT, ausserhalb);
+    for (const form of [1, 2, 3, 4, 5] as const) assert.ok(scan.verweise[form] > 0, `keine Verweise der Form ${form} gefunden: Extraktion kaputt oder Form ausgestorben?`);
+    assert.ok(scan.verweise[1] >= 20, `nur ${scan.verweise[1]} Verweise der Form 1: Muster oder Umfang kaputt (Leerlauf)`);
+    assert.ok([...scan.dateien].some((d) => d.startsWith(".claude/agents/")) && [...scan.dateien].some((d) => d.startsWith(".agents/skills/")));
+    assert.deepEqual(scan.funde, [], "Diese Verweise zeigen ins Leere: den Titel des Kern-Blocks (AGENTS.md § …) bzw. des Projekt-Blocks (Projekt-Block › …) wörtlich übernehmen");
   });
 });
 
@@ -535,67 +450,13 @@ describe("npm-Kommandos in Besitz-Text aus Sicht des Beziehers", () => {
   });
 
   test("echtes Repo: Besitz-Text nennt nur Grundausstattungs-Skripte (und der Scan ist nicht leer)", () => {
-    const { funde, erwaehnungen } = scanneKommandos(ROOT);
+    const { funde: f, erwaehnungen } = scanneKommandos(ROOT);
     assert.ok(erwaehnungen >= 5, `Scan findet nur ${erwaehnungen} Erwähnungen: Umfang kaputt (Leerlauf)`);
-    assert.deepEqual(funde, [], `npm-Kommandos, die ein Bezieher nicht hat (stattdessen node scripts/<x>.mjs):\n${funde.map((f) => `${f.name} <- ${f.datei}`).join("\n")}`);
+    assert.deepEqual(f, [], `npm-Kommandos, die ein Bezieher nicht hat (stattdessen node scripts/<x>.mjs):\n${f.map((x) => `${x.name} <- ${x.datei}`).join("\n")}`);
   });
 });
 
-/**
- * Geschlossene Liste der Link-Anker (`docs/<x>.md#<anker>`), die verteilter Besitz-Text auf Fabrik-Seiten setzt, die als ganze Datei nicht verteilt werden
- * (factory#220 L34, strenge Form aus factory#177). Ein Bezieher mit eigener Seite braucht dort genau diese Überschrift. Wächter wie `BEZIEHER_NPM_SKRIPTE`;
- * die Liste wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile und steht bei mehr als 60 Ankern als JSON neben dem Test (`test/harness/kern-link-anker.json`).
- */
-const KERN_LINK_ANKER = new Set<string>([
-  "docs/agent-harness-faq.md#der-auto-mode-blockt-die-sabotage-probe-der-test-lens-self-modification-was-tun",
-  "docs/agent-harness-faq.md#wie-entferne-ich-einen-worktree-unter-windows-sauber-und-was-ist-mit-nodemodules",
-  "docs/agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis",
-  "docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser",
-  "docs/agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren",
-  "docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd",
-  "docs/agent-harness.md#4-die-sichere-autonomie-schleife",
-  "docs/model-routing.md#1-phasen-matrix",
-  "docs/model-routing.md#messen",
-  "docs/model-routing.md#phasen-schnitt-vertrag-ab-regel-messrezept",
-  "docs/model-routing.md#umsetzer-kontext",
-  "docs/ticket-reihenfolge.md#am-ticket-ende",
-  "docs/ticket-reihenfolge.md#langfuse-befunde-gesammelt",
-  "docs/ticket-reihenfolge.md#sammelticket-mechanik",
-  "docs/ticket-reihenfolge.md#wiederaufnahme-verwaister-claims",
-]);
-
-/** Ab dieser Zahl wandert `KERN_LINK_ANKER` in eine JSON-Datei neben dem Test (gleiche Regel). */
-const KERN_LINK_ANKER_MAX_IM_TEST = 60;
-
-const ANKER_MELDUNG = "neuen Anker in KERN_LINK_ANKER aufnehmen und eine `SIH-Bezieher-Migration:`-Zeile schreiben (Bezieher mit eigener Seite brauchen die Überschrift)";
-
-/** Link-Anker `docs/<x>.md#<anker>` in Besitz-Spannen verteilter `.md`-Einheiten, deren Ziel keine ganze Besitz-Datei ist (die kommt mit ihren Überschriften an). */
-function scanneLinkAnker(wurzel: string): { anker: Set<string>; links: number } {
-  const { lies, einheiten, dateien } = besitzDateien(wurzel, /\.md$/);
-  const ganzeDateien = new Set(einheiten.filter(besitz.istGanzeDatei).map((e) => e.pfad));
-  const anker = new Set<string>();
-  let links = 0;
-  for (const { datei, text, spannen } of dateien) {
-    for (const l of drift.linkStellen(text)) {
-      if (l.anchor === "" || !l.path.endsWith(".md") || !spannen.some(([a, b]) => l.start >= a && l.start <= b)) continue;
-      const ziel = drift.linkZiel(datei, l.path);
-      if (!ziel.startsWith("docs/") || lies(ziel) === null || ganzeDateien.has(ziel)) continue;
-      links++;
-      anker.add(`${ziel}#${l.anchor}`);
-    }
-  }
-  return { anker, links };
-}
-
-/** Meldungen (leer = grün): neue Anker und Einträge der Liste, die kein Besitz-Text mehr setzt. */
-function vergleicheAnker(gefunden: Set<string>, erlaubt: Set<string>): string[] {
-  return [
-    ...[...gefunden].filter((a) => !erlaubt.has(a)).sort().map((a) => `${a}: ${ANKER_MELDUNG}`),
-    ...[...erlaubt].filter((a) => !gefunden.has(a)).sort().map((a) => `${a}: kein Besitz-Text setzt diesen Anker mehr, aus KERN_LINK_ANKER streichen`),
-  ];
-}
-
-describe("Link-Anker in Besitz-Text auf nicht verteilte Fabrik-Seiten (factory#220 L34)", () => {
+describe("Ankerliste kern-link-anker.json (factory#220 L34)", () => {
   const manifest = (...e: Einheit[]): string => MANIFEST(e);
 
   test("ein Anker auf eine Fabrik-Seite in Kern-.md wird gefunden, der Pfad relativ zur Datei aufgelöst, ein Doppel zählt als Link, nicht als Anker", () => {
@@ -638,25 +499,39 @@ describe("Link-Anker in Besitz-Text auf nicht verteilte Fabrik-Seiten (factory#2
     assert.deepEqual(scanneLinkAnker(wurzel), { anker: new Set(), links: 0 });
   });
 
-  test("ein neuer Anker ist rot mit dem Weg, ein veralteter Listeneintrag ist rot, Gleichstand grün", () => {
+  test("ein neuer Anker ist rot mit dem Weg, ein entfernter Eintrag wird gemeldet, Gleichstand grün (beide Richtungen)", () => {
     const erlaubt = new Set(["docs/a.md#eins", "docs/a.md#alt"]);
     assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins", "docs/a.md#alt"]), erlaubt), []);
     assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins", "docs/a.md#alt", "docs/b.md#neu"]), erlaubt), [
-      "docs/b.md#neu: neuen Anker in KERN_LINK_ANKER aufnehmen und eine `SIH-Bezieher-Migration:`-Zeile schreiben (Bezieher mit eigener Seite brauchen die Überschrift)",
+      "docs/b.md#neu: neuen Anker in kern-link-anker.json aufnehmen und eine `SIH-Bezieher-Migration:`-Zeile schreiben (Bezieher mit eigener Seite brauchen die Überschrift)",
     ]);
-    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins"]), erlaubt), ["docs/a.md#alt: kein Besitz-Text setzt diesen Anker mehr, aus KERN_LINK_ANKER streichen"]);
+    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins"]), erlaubt), ["docs/a.md#alt: kein Besitz-Text setzt diesen Anker mehr, aus kern-link-anker.json streichen"]);
+    assert.deepEqual(vergleicheAnker(new Set(["docs/a.md#eins"]), erlaubt, true), [], "Skripte: nur neue Anker zählen (Teilmenge)");
   });
 
-  test("Orakel: die Liste ist sortiert, nur docs-Anker, ohne Doppelte und bleibt im Test, solange sie höchstens 60 Einträge trägt", () => {
-    const liste = [...KERN_LINK_ANKER];
+  test("Orakel: die Liste ist sortiert, nur docs-Anker, ohne Doppelte", () => {
+    const liste = ladeKernLinkAnker(ROOT);
     assert.deepEqual(liste, [...liste].sort(), "alphabetisch halten");
     assert.ok(liste.every((a) => /^docs\/[^#]+\.md#[^#\s]+$/.test(a)));
-    assert.ok(liste.length <= KERN_LINK_ANKER_MAX_IM_TEST, `mehr als ${KERN_LINK_ANKER_MAX_IM_TEST} Anker: Liste als JSON neben den Test (test/harness/kern-link-anker.json), gleiche Regel`);
+    assert.equal(new Set(liste).size, liste.length);
+    assert.ok(existsSync(ROOT + ANKERLISTE));
+    assert.ok(Array.isArray(JSON.parse(readFileSync(ROOT + ANKERLISTE, "utf8"))));
   });
 
-  test("echtes Repo: Besitz-Text setzt nur Anker der geschlossenen Liste (und der Scan ist nicht leer)", () => {
+  test("echtes Repo: Besitz-Text setzt nur Anker der Liste (Gleichstand für .md, Teilmenge für Skripte) und der Scan ist nicht leer", () => {
+    const erlaubt = new Set(ladeKernLinkAnker(ROOT));
     const { anker, links } = scanneLinkAnker(ROOT);
     assert.ok(links >= 10, `Scan findet nur ${links} Links: Umfang kaputt (Leerlauf)`);
-    assert.deepEqual(vergleicheAnker(anker, KERN_LINK_ANKER), []);
+    assert.deepEqual(vergleicheAnker(anker, erlaubt), []);
+    assert.deepEqual(vergleicheAnker(scanneLinkAnker(ROOT, /\.(mjs|cjs|js)$/).anker, erlaubt, true), []);
+  });
+
+  test("AK3: entfernt man einen Eintrag aus der Liste, meldet der Vergleich ihn (jeder Eintrag einzeln)", () => {
+    const erlaubt = ladeKernLinkAnker(ROOT);
+    const { anker } = scanneLinkAnker(ROOT);
+    for (const weg of erlaubt) {
+      const meldungen = vergleicheAnker(anker, new Set(erlaubt.filter((a) => a !== weg)));
+      assert.ok(meldungen.some((m) => m.startsWith(`${weg}: `)), `ohne ${weg} bleibt der Vergleich still`);
+    }
   });
 });
