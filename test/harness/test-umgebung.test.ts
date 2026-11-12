@@ -46,7 +46,8 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
   it.skipIf(GH_FEHLT)("echtes gh (Leseaufruf) ist abgemeldet: Exit 4 und 'gh auth login'", () => {
     const r = spawnSync("gh", ["api", "user"], { encoding: "utf8" });
     expect(r.status).toBe(4);
-    expect(r.stderr).toMatch(/gh auth login/u);
+    // Lokal nennt gh `gh auth login`, in GitHub Actions (GITHUB_ACTIONS gesetzt) die Aufforderung, GH_TOKEN zu setzen.
+    expect(r.stderr).toMatch(/gh auth login|GH_TOKEN environment variable/u);
   });
 
   it("process.env des Testworkers hat keinen Zugangs-Schlüssel", () => {
