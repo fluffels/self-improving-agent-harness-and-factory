@@ -6,10 +6,10 @@ import { pruefeE2e } from "./projekt-config-bloecke.mjs";
 
 /** Pur: Ausgabezeilen für `$GITHUB_OUTPUT` zur Config. Wirft bei Formfehlern des Profils (Text samt Fix-Zeile). */
 export function matrixZeilen(config) {
-  const fehler = pruefeE2e(config?.e2e, config?.befehle);
+  const fehler = pruefeE2e(config.e2e, config.befehle);
   if (fehler.length > 0) throw new Error(`e2e-Profil in der Projekt-Config ungültig: ${fehler.join("; ")}`);
-  const browser = config?.e2e?.browser ?? [];
-  return [`aktiv=${config?.e2e !== undefined}`, `browser=${JSON.stringify(browser)}`];
+  const browser = config.e2e?.browser ?? [];
+  return [`aktiv=${config.e2e !== undefined}`, `browser=${JSON.stringify(browser)}`];
 }
 
 /** Einstieg: `matrix`; gibt den Exit-Code zurück (2 bei Aufruf- oder Config-Fehler samt Fix-Zeile auf stderr). */
