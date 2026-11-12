@@ -185,6 +185,7 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
   test("Hänge-Schwelle: 24 min und die daraus abgeleitete Aufrufzahl beim Standardbudget (factory#375 L39)", () => {
     const g = blockade(eingabe(bericht("gemergt")), { prStatus: offenMitAuto }) ?? "";
     const aufrufe = Math.ceil((24 * 60) / pw.MAX_SEKUNDEN_STANDARD);
+    assert.equal((abschlussRaw as unknown as { HAENGE_AUFRUFE: number }).HAENGE_AUFRUFE, aufrufe);
     assert.match(g, /Hängt die CI 24 min ohne Fortschritt/);
     assert.match(g, new RegExp(`beim Standardbudget ${aufrufe} Aufrufe`));
     assert.match(g, /`AKTUALISIERT` zählen als Fortschritt/);
