@@ -7,7 +7,7 @@
  * R2: jede Datei der GitHub-Menge und jeder Workflow steht in einer GitHub-Zeile,
  * R3: jeder genannte Pfad existiert, R4: die Spalte Git-Host hat nur die zwei Werte, R5: die vier Abschnitte gibt es.
  * GitHub-Menge (geschlossene Musterliste): scripts/gh-cli.mjs, Code ohne Kommentarzeilen mit process.env.GITHUB_ / process.env.GH_ /
- * api.github.com (ein vollständiger Beleg-Link in API-Form als ganzes String-Literal ist Daten und zählt nicht, außer als direktes Aufruf-Argument), dazu die transitive Hülle über relative Importe mit String-Literal.
+ * api.github.com / ProjectV2 / dem String-Literal 'graphql' bzw. "graphql" (GraphQL-Aufruf über gh api; ein vollständiger Beleg-Link in API-Form als ganzes String-Literal ist Daten und zählt nicht, außer als direktes Aufruf-Argument), dazu die transitive Hülle über relative Importe mit String-Literal.
  * Bewusste Grenzen: Workflows zählen nur mit Endung .yml; GitHub-Daten, die ein Skript über eine Naht hereingereicht bekommt (reine Doktor-Bibliotheken),
  * liegen außerhalb der Menge und stehen von Hand in der Seite; eine Variable mit Beleg-Link oder ein Beleg-Link als zweites oder späteres Argument oder in einem Objekt, der später an fetch geht, wird nicht erkannt; berechnete Importpfade, Kindprozesse anderer Skripte und reine Kommentar- oder Link-Erwähnungen werden nicht erkannt
  * (ein direktes gh außerhalb von gh-cli.mjs verbietet gh-cli.test.ts); Board, Agenten- und Skill-Texte und Dienste (Dependabot,
@@ -23,7 +23,7 @@ const WURZEL = process.cwd();
 const SEITE = "docs/git-host.md";
 const ABSCHNITTE = ["Gates", "Skripte", "Workflows", "Board"];
 const KOPF = "| Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |";
-const MARKER = /process\.env\.(GITHUB_|GH_)|api\.github\.com/;
+const MARKER = /process\.env\.(GITHUB_|GH_)|api\.github\.com|ProjectV2|["']graphql["']/;
 // Beleg-Link in API-Form als ganzes String-Literal (Daten, z. B. Codex-Freigabetabelle); direktes Aufruf-Argument `f("…")` bleibt Nutzung.
 const BELEG_LINK = /(?<!\(\s*)(["'`])https:\/\/api\.github\.com\/repositories\/\d+\/(?:pulls|issues)(?:\/comments)?\/\d+\1/g;
 
@@ -152,12 +152,21 @@ describe("githubMenge (synthetisches Repo)", () => {
       schreibe("env-gh.mjs", "const t = process.env.GH_TOKEN;\n");
       schreibe("env-github.mjs", "const t = process.env.GITHUB_TOKEN;\n");
       schreibe("api.mjs", 'const u = "https://api.github.com/repos";\n');
+      schreibe("projekt.mjs", 'const q = "query { node { ... on ProjectV2 { id } } }";\n');
+      schreibe("graphql-doppelt.mjs", 'const a = ["api", "graphql", "-f"];\n');
+      schreibe("graphql-einfach.mjs", "const a = ['api', 'graphql'];\n");
+      schreibe("graphql-nur-kommentar.mjs", '// ProjectV2 und "graphql"\nexport const z = 3;\n');
+      schreibe("graphql-teilwort.mjs", 'const a = "graphqlish";\n');
+      schreibe("graphql-vorsilbe.mjs", 'const a = "subgraphql";\n');
       schreibe("per-require.cjs", 'const m = require("./env-gh.mjs");\n');
       schreibe("endungslos.mjs", 'import x from "./mitte";\n');
       schreibe("kommentar.mjs", "// process.env.GITHUB_TOKEN und api.github.com\n/* api.github.com */\nexport const x = 1;\n");
       schreibe("rein.mjs", "export const y = 2;\n");
       expect([...githubMenge(dir)].sort()).toEqual(
-        ["api.mjs", "aussen.mjs", "endungslos.mjs", "env-gh.mjs", "env-github.mjs", "gh-cli.mjs", "mitte.mjs", "per-require.cjs"].map((n) => `scripts/${n}`),
+        [
+          "api.mjs", "aussen.mjs", "endungslos.mjs", "env-gh.mjs", "env-github.mjs", "gh-cli.mjs", "graphql-doppelt.mjs", "graphql-einfach.mjs",
+          "mitte.mjs", "per-require.cjs", "projekt.mjs",
+        ].map((n) => `scripts/${n}`),
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });

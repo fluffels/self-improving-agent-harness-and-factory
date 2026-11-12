@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,7 +83,7 @@ afterEach(() => {
 
 const BESITZ_LEER = JSON.stringify({ version: 1, eintraege: [] });
 interface Lauf { code: number; out: string[]; err: string[]; aufrufe: string[] }
-function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; lokal?: ((a: { rootDir: string; config: unknown }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean; relativ?: boolean } = {}): Lauf {
+function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string, unknown>; workflow?: string | null; spiegel?: unknown; besitz?: string | null; langfuse?: number; langfuseJson?: Record<string, unknown>; argv?: string[]; env?: Record<string, string>; kernEnv?: () => string[]; dateien?: ((a: { rootDir: string }) => unknown[]) | "echt"; lokal?: ((a: { rootDir: string; config: unknown }) => unknown[]) | "echt"; vorbereiten?: (root: string) => void; fremderRoot?: boolean; relativ?: boolean } = {}): Lauf {
   const root = mkdtempSync(join(tmpdir(), "doctor-"));
   ordner.push(root);
   opt.vorbereiten?.(root);
@@ -121,7 +121,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
     ...(opt.lokal === "echt" ? {} : { lokal: opt.lokal ?? (() => []) }), // "echt": Default von main (Git-Hooks, Board-Ansicht); sonst leer, damit kein Test das echte git liest
     ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
-    langfuse: () => ({ status: opt.langfuse ?? 0, stderr: opt.langfuse ? "Langfuse aus." : "" }),
+    langfuse: () => ({ status: opt.langfuse ?? 0, stdout: JSON.stringify(opt.langfuseJson ?? { erreichbar: !opt.langfuse, grund: opt.langfuse ? "Langfuse aus." : null, mcp: null }), stderr: "" }),
     out: (s: string) => r.out.push(s),
     err: (s: string) => r.err.push(s),
   });
@@ -564,6 +564,18 @@ describe("harness-doctor --pruefen", () => {
     const r = lauf({}, { langfuse: 1 });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Langfuse: Langfuse aus\. Fix:/);
+  });
+
+  test("Langfuse erreichbar, MCP getrennt (factory#362 L30): Lücke mit Fix `/mcp`, nicht `Langfuse starten`", () => {
+    const r = lauf({}, { langfuseJson: { erreichbar: true, grund: null, mcp: { status: "getrennt" } } });
+    assert.equal(r.code, 1);
+    assert.match(luecken(r)[0], /Langfuse:.*MCP.*Fix: `\/mcp`/);
+    assert.doesNotMatch(luecken(r)[0], /Langfuse starten/);
+  });
+
+  test("Langfuse-Aufruf bekommt --json (factory#362 L30)", () => {
+    const spawn = readFileSync(join(import.meta.dirname, "..", "scripts", "harness-doctor.mjs"), "utf8");
+    assert.match(spawn, /"langfuse-vorbedingung\.mjs"\), "--json"\]/);
   });
 
   describe("Code-Scanning-Regel (#92 L2)", () => {
