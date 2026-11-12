@@ -322,17 +322,25 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
 describe("istGemessen", () => {
   const istGemessen = (ankerRoh as unknown as { istGemessen: (p: string, q: string) => boolean }).istGemessen;
   test.each(["test/support/x.ts", "scripts/a.mjs"])("%s ist gemessen", (p) => expect(istGemessen(p, "scripts")).toBe(true));
-  test("Listenform: die Ordner-Klausel nimmt die Endungsliste und ohne des Projekts, nicht die Standard-Endungen", () => {
+  test("Listenform: die Ordner-Klausel nimmt die Endungsliste und ohne des Projekts plus die JS/TS-Familie, sonst nichts", () => {
     const java = { wurzeln: ["*/src/main/java"], endungen: [".java"] };
     const gem = istGemessen as unknown as (p: string, q: unknown) => boolean;
     expect(gem("modul-a/src/main/java/de/X.java", java)).toBe(true);
     expect(gem("modul-a/src/test/java/de/Hilfe.java", java)).toBe(true);
-    expect(gem("test/support/x.mjs", { wurzeln: ["scripts"], endungen: [".ts"] })).toBe(false);
+    expect(gem("test/support/x.json", { wurzeln: ["scripts"], endungen: [".ts"] })).toBe(false);
     expect(gem("modul-a/src/test/java/de/Hilfe.java", { ...java, ohne: ["*/src/test/**"] })).toBe(false);
   });
   test.each(["test/x.test.ts", "test/support/x.spec.ts", "docs/a.md", "src/a.d.ts", "vite.config.ts", "test/x.test.mjs", "scripts/a.test.mjs"])("%s ist nicht gemessen", (p) =>
     expect(istGemessen(p, "scripts")).toBe(false),
   );
+});
+
+describe("istGemessen: JS/TS-Familie zusätzlich zu struktur.endungen", () => {
+  const gem = (ankerRoh as unknown as { istGemessen: (p: string, q: unknown) => boolean }).istGemessen;
+  const java = { quelle: "backend/src", wurzeln: ["backend/src"], endungen: [".java"] };
+  test.each(["tools/x.mjs", "scripts/layers.cjs", "backend/src/A.java"])("%s ist gemessen", (p) => expect(gem(p, java)).toBe(true));
+  test.each(["tools/x.test.mjs", "README.md", "x.mjs"])("%s ist nicht gemessen", (p) => expect(gem(p, java)).toBe(false));
+  test("ohne greift auch für die Familie", () => expect(gem("tools/x.mjs", { ...java, ohne: ["tools/**"] })).toBe(false));
 });
 
 describe("formatiere und lauf", () => {

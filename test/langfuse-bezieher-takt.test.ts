@@ -16,6 +16,8 @@ type Ctx = { ziel?: { rolle: string; label: string | null }; items?: unknown[]; 
 interface Aufrufe {
   status: Ctx[];
   harness: number;
+  langfuse: { nr?: number; afterId?: string | null; rolle: string }[];
+  geladen: number[];
   suche: string[];
   commitRepos: string[];
   ladeRepos: { rolle: string; repo?: string }[];
@@ -34,6 +36,9 @@ interface Opt {
   statusOk?: boolean;
   itemsWirft?: boolean;
   config?: unknown;
+  boardItems?: Record<string, unknown[]>;
+  kommentare?: unknown[] | Error;
+  langfuseOk?: boolean;
 }
 type Io = Record<string, unknown>;
 const takt = rawTakt as unknown as { fuehreTaktAus: (a: { jetzt: Date; dry?: boolean; repo: string; token?: string; io: Io; config: unknown; bezieher?: boolean; ausloeser?: string }) => { fehler: boolean } };
@@ -51,7 +56,7 @@ const treffer = (number: number, state: string, extra: Record<string, unknown> =
 const antwort = (...nodes: unknown[]) => ({ data: { search: { nodes } } });
 
 function lauf(opt: Opt = {}) {
-  const a: Aufrufe = { status: [], harness: 0, suche: [], commitRepos: [], ladeRepos: [], zweit: [], itemsUeber: [], log: [] };
+  const a: Aufrufe = { status: [], harness: 0, langfuse: [], geladen: [], suche: [], commitRepos: [], ladeRepos: [], zweit: [], itemsUeber: [], log: [] };
   const io: Io = {
     ghJson: (args: string[]) => {
       const text = args.join(" ");
@@ -71,7 +76,7 @@ function lauf(opt: Opt = {}) {
       return [(opt.offen ?? []).map((n) => n)];
     },
     // Je Rolle unterscheidbare Items: Produkt-Liste = #900, Factory-Liste = #901.
-    loadItems: (rolle: string, o: { repo?: string }) => (a.ladeRepos.push({ rolle, repo: o.repo }), [{ id: rolle === "produkt" ? "P" : "F", number: rolle === "produkt" ? 900 : 901, status: "Todo", title: "x", assignees: [], state: "open" }]),
+    loadItems: (rolle: string, o: { repo?: string }) => (a.ladeRepos.push({ rolle, repo: o.repo }), opt.boardItems?.[rolle] ?? [{ id: rolle === "produkt" ? "P" : "F", number: rolle === "produkt" ? 900 : 901, status: "Todo", title: "x", assignees: [], state: "open" }]),
     frischeOffeneIssues: (z: { label: string | null }) => (a.zweit.push({ label: z.label }), []),
     itemsUeberIssues: (_r: string, n: number[]) => {
       a.itemsUeber.push(n);
@@ -81,6 +86,12 @@ function lauf(opt: Opt = {}) {
     addToBoardTodo: () => "ITEM",
     fuehreStatusAus: (_e: unknown, ctx: Ctx) => (a.status.push(ctx), { ok: opt.statusOk ?? true, nr: 77, itemId: "I77" }),
     fuehreHarnessAus: () => (a.harness++, true),
+    ladeKommentare: (nr: number) => {
+      a.geladen.push(nr);
+      if (opt.kommentare instanceof Error) throw opt.kommentare;
+      return opt.kommentare ?? [];
+    },
+    fuehreLangfuseAus: (l: { nr?: number; afterId?: string | null }, _items: unknown[], _token: string, rolle: string) => (a.langfuse.push({ ...l, rolle }), opt.langfuseOk ?? true),
     ersterCommitDatum: () => null,
     env: {},
     log: (z: string) => a.log.push(z),
@@ -288,5 +299,53 @@ describe("fuehreStatusAus mit ziel (factory#195)", () => {
 
   test("ohne ziel (Upstream): labels[] = Harness-Label der Config wie bisher", () => {
     expect(ausfuehren({}).post).toContain(`labels[]=${FREMD.labels.harness}`);
+  });
+});
+
+describe("Takt im Bezieher: Langfuse-Sammelticket hinter den Kopf (factory#379)", () => {
+  const it = (number: number, title: string, extra: Record<string, unknown> = {}) => ({ id: "I" + number, number, status: "Todo", title, assignees: [], state: "open", ...extra });
+  const LF = "Langfuse-Befunde (gesammelt)";
+  const board = [it(900, "T900"), it(901, "T901"), it(902, LF)];
+  const befund = { user: { login: FREMD_OWNER, type: "User" }, body: "- [ ] Befund" };
+
+  test("ein Befund-Kommentar: das Sammelticket kommt auf dem Board des Status-Tickets (produkt) hinter den Kopf; Kommentare nur für dieses Ticket", () => {
+    const { r, a, log } = lauf({ boardItems: { produkt: board }, kommentare: [befund] });
+    expect(a.langfuse).toMatchObject([{ nr: 902, afterId: "I77", rolle: "produkt" }]); // hinter dem frisch angelegten, nachgezogenen Status-Ticket
+    expect(a.geladen).toEqual([902]);
+    expect(log).toContain("Langfuse-Sammelticket: verschieben #902");
+    expect(r.fehler).toBe(false);
+  });
+
+  test("Kandidat: ein geschlossenes ungeclaimtes Langfuse-Ticket zählt nicht, Kommentare werden nur für das offene geladen", () => {
+    const mitGeschlossenem = [it(900, "T900"), it(903, LF, { state: "closed" }), it(902, LF)];
+    expect(lauf({ boardItems: { produkt: mitGeschlossenem }, kommentare: [befund] }).a.geladen).toEqual([902]);
+  });
+
+  test("Kandidat: ein geclaimtes Langfuse-Ticket allein lädt nichts und bewegt nichts", () => {
+    const geclaimt = [it(900, "T900"), it(902, LF, { assignees: [{ login: "x" }] })];
+    const { a } = lauf({ boardItems: { produkt: geclaimt }, kommentare: [befund] });
+    expect(a.geladen).toEqual([]);
+    expect(a.langfuse).toEqual([]);
+  });
+
+  test("ohne Befund-Kommentar, im --dry-run, bei Ladefehler und ohne Token bewegt der Takt nichts (Ladefehler: Warnung)", () => {
+    expect(lauf({ boardItems: { produkt: board } }).a.langfuse).toEqual([]);
+    expect(lauf({ boardItems: { produkt: board }, kommentare: [befund], dry: true }).a.langfuse).toEqual([]);
+    const fehl = lauf({ boardItems: { produkt: board }, kommentare: new Error("HTTP 502") });
+    expect(fehl.a.langfuse).toEqual([]);
+    expect(fehl.log).toContain("::warning::Langfuse-Takt: Füllstand von #902 nicht ladbar");
+    expect(fehl.r.fehler).toBe(false);
+    expect(lauf({ token: "", boardItems: { produkt: board }, kommentare: [befund] }).a.langfuse).toEqual([]);
+  });
+
+  test("scheitert das Verschieben, wird der Lauf rot", () => {
+    expect(lauf({ boardItems: { produkt: board }, kommentare: [befund], langfuseOk: false }).r.fehler).toBe(true);
+  });
+
+  test("bei fremd geführtem Factory-Board (kein Board führt das eigene Repo) entfällt der Schritt", () => {
+    const keins = { ...bezieherConfig, boards: bezieherConfig.boards.map((b) => ({ ...b, repo: FABRIK })) };
+    const { a } = lauf({ config: keins, boardItems: { produkt: board, factory: board }, kommentare: [befund] });
+    expect(a.langfuse).toEqual([]);
+    expect(a.geladen).toEqual([]);
   });
 });

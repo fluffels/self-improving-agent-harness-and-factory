@@ -220,3 +220,36 @@ describe("schnappschussBloecke (eine Auslegung für beide Wächter)", () => {
     assert.deepEqual(lauf("a", S, "b"), { bloecke: [], fehler: [{ zeile: 1, art: "ohne-ende" }] });
   });
 });
+
+describe("slugify und entferneMarkup: Unterstrich wie GitHub", () => {
+  const f = md as unknown as { slugify: (s: string) => string; entferneMarkup: (s: string) => string };
+  test("Code-Span behält den Unterstrich", () => {
+    assert.equal(f.slugify("Wie entferne ich einen Worktree, was ist mit `node_modules`?"), "wie-entferne-ich-einen-worktree-was-ist-mit-node_modules");
+    assert.equal(f.entferneMarkup("mit `node_modules`"), "mit node_modules");
+  });
+  test("Code-Span-Inhalt bleibt wörtlich, auch Rand-Unterstriche und Sternchen", () => {
+    assert.equal(f.entferneMarkup("ein `_privat_` Feld"), "ein _privat_ Feld");
+    assert.equal(f.entferneMarkup("Muster `a*b`"), "Muster a*b");
+  });
+  test("zwei Code-Spans: Markup dazwischen entfällt, die Spans enden am nächsten Backtick", () => {
+    assert.equal(f.entferneMarkup("`a` _x_ `b`"), "a x b");
+    assert.equal(f.slugify("`a` _x_ `b`"), "a-x-b");
+  });
+  test("Unterstrich zwischen Ziffern oder Ziffer und Buchstabe bleibt", () => {
+    assert.equal(f.entferneMarkup("v1_2"), "v1_2");
+    assert.equal(f.entferneMarkup("abc_123"), "abc_123");
+  });
+  test("ein einzelner Backtick ohne Partner entfällt", () => {
+    assert.equal(f.entferneMarkup("ein `Rest"), "ein Rest");
+  });
+  test("Kursiv-Unterstriche am Wortrand entfallen", () => {
+    assert.equal(f.slugify("_kursiv_ Wort"), "kursiv-wort");
+  });
+  test("Unterstrich zwischen Buchstaben bleibt", () => {
+    assert.equal(f.slugify("snake_case"), "snake_case");
+  });
+  test("fett und durchgestrichen entfallen", () => {
+    assert.equal(f.slugify("**fett**"), "fett");
+    assert.equal(f.entferneMarkup("~~weg~~"), "weg");
+  });
+});

@@ -479,12 +479,12 @@ describe("planeAnkerStubs (pur, factory#167)", () => {
     assert.deepEqual(e.r.hinweise, ["Anker-Stub: docs/s.md gibt es am Tag v2 nicht, keine Stub-Seite (check:factorylinks meldet stub-ziel)"]);
   });
 
-  test("Überschriften aller Ebenen bis 6 werden unverändert übernommen, Markup (** _) entfällt slug-neutral", () => {
+  test("Überschriften aller Ebenen bis 6 werden unverändert übernommen, Markup (**) entfällt slug-neutral, Unterstrich im Wort bleibt wie bei GitHub", () => {
     const seite = "# T\n\n### Tief\n\n###### Ganz **Fett** und_so\n";
-    const e = stubs(kern("#tief", "#ganz-fett-undso"), { "docs/s.md": seite });
+    const e = stubs(kern("#tief", "#ganz-fett-und_so"), { "docs/s.md": seite });
     const text = e.r.dateien.get("docs/s.md") ?? "";
     assert.match(text, /^### Tief$/m);
-    assert.match(text, /^###### Ganz Fett undso$/m);
+    assert.match(text, /^###### Ganz Fett und_so$/m);
     assert.deepEqual(wirkt(e).befunde, []);
   });
 
