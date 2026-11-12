@@ -27,18 +27,21 @@ describe("pruefeAudit (factory#395 L54)", () => {
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawV from "../scripts/audit-verzeichnisse.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawLib from "../scripts/audit-verzeichnisse-lib.mjs";
 
 type Lauf = (verzeichnis: string, args: string[]) => number;
 const V = rawV as unknown as {
-  auditVerzeichnisse: (config: unknown) => string[];
   main: (argv: string[], deps: { ladeConfig: () => unknown; fuehreAus: Lauf; log: (t: string) => void; err: (t: string) => void }) => number;
 };
 
+const V2 = rawLib as unknown as { auditVerzeichnisse: (config: unknown) => string[] };
+
 describe("auditVerzeichnisse", () => {
   test("ohne Block nur die Wurzel, mit Block Wurzel plus Verzeichnisse", () => {
-    expect(V.auditVerzeichnisse({})).toEqual(["."]);
-    expect(V.auditVerzeichnisse({ audit: { verzeichnisse: [] } })).toEqual(["."]);
-    expect(V.auditVerzeichnisse({ audit: { verzeichnisse: ["frontend"] } })).toEqual([".", "frontend"]);
+    expect(V2.auditVerzeichnisse({})).toEqual(["."]);
+    expect(V2.auditVerzeichnisse({ audit: { verzeichnisse: [] } })).toEqual(["."]);
+    expect(V2.auditVerzeichnisse({ audit: { verzeichnisse: ["frontend"] } })).toEqual([".", "frontend"]);
   });
 });
 
@@ -77,7 +80,7 @@ describe("main (npm audit je Verzeichnis)", () => {
 
   test.each([[[]], [["--audit-level"]], [["--audit-level", "sehr-hoch"]], [["--audit-level", "high", "extra"]]])("falsche Bedienung %j: Exit 2, kein npm-Aufruf", (argv) => {
     const l = lauf({});
-    expect(l.run(argv as string[])).toBe(2);
+    expect(l.run(argv)).toBe(2);
     expect(l.gerufen).toEqual([]);
   });
 

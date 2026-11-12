@@ -18,7 +18,7 @@ import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktion
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
-import { auditVerzeichnisse, npmAuditJson } from "./audit-verzeichnisse.mjs";
+import { auditVerzeichnisse, npmAuditJson } from "./audit-verzeichnisse-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
