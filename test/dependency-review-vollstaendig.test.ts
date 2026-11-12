@@ -117,6 +117,8 @@ describe("main", () => {
     const l = lauf(["--schwere", "high"], [], { GITHUB_REPOSITORY: "My-Org_1/repo.js", BASIS: echt, KOPF: echt });
     expect(l.code).toBe(0);
     expect(l.aufrufe).toEqual([["My-Org_1/repo.js", echt, echt]]);
+    const name = lauf(["--schwere", "high"], [], { GITHUB_REPOSITORY: "o/My-Repo_2.js", BASIS: echt, KOPF: echt });
+    expect(name.aufrufe).toEqual([["o/My-Repo_2.js", echt, echt]]);
   });
 
   test.each([

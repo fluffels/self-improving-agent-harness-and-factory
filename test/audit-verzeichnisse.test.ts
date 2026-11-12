@@ -1,4 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pruefeAudit } from "../scripts/projekt-config-bloecke.mjs";
 
@@ -134,5 +138,21 @@ describe("main (npm audit je Verzeichnis)", () => {
     const code = V.main(["--audit-level", "high"], { ladeConfig: () => { throw new Error("kaputt"); }, fuehreAus, log: (t) => log.push(t), err: (t) => log.push(t) });
     expect(code).toBe(2);
     expect(log.join("\n")).toMatch(/kaputt/);
+  });
+});
+
+describe("Standard-Verdrahtung (echter Aufruf mit Fake-npm im PATH)", () => {
+  test.skipIf(process.platform === "win32")("meldet npm Exit 1, endet die CLI mit 1; meldet npm Exit 0, mit 0", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fake-npm-"));
+    try {
+      const fake = (code: number) => {
+        writeFileSync(join(dir, "npm"), `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+        return spawnSync(process.execPath, ["scripts/audit-verzeichnisse.mjs", "--audit-level", "high"], { encoding: "utf8", env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` } }).status;
+      };
+      expect(fake(1)).toBe(1);
+      expect(fake(0)).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
