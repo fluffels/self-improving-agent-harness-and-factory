@@ -149,7 +149,7 @@ describe("Gliederung docs/agent-harness.md", () => {
   });
 
   test("Red-Green: Gate-Schlüssel mitten in einer Zeile ist kein Fund, am Anfang in Absatzform schon", () => {
-    const mitten = SAUBER.replace("- **Nachweis (x).** Text", "- **Nachweis (x).** Text mit **npm run lint** mittendrin");
+    const mitten = SAUBER.replace("- **Nachweis (x).** Text", "- Nachweis (x): Text mit **npm run lint** mittendrin");
     expect(gliederungsFunde(mitten)).toEqual([]);
     const absatz = SAUBER.replace("- **Nachweis (x).** Text", "**Skript-Konvention: x (quellprojekt#1).** Text");
     expect(gliederungsFunde(absatz).some((f) => f.includes("Skript-Konvention"))).toBe(true);
