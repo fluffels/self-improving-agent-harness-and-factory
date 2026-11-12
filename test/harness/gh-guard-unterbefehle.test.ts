@@ -93,7 +93,7 @@ describe("Codex: aus ask wird Deny durch den gh-Guard", () => {
 });
 
 describe("Sync mit der settings.json", () => {
-  const s = JSON.parse(readFileSync(".claude/settings.json", "utf8")).permissions as { ask: string[]; deny: string[] };
+  const s = (JSON.parse(readFileSync(".claude/settings.json", "utf8")) as { permissions: { ask: string[]; deny: string[] } }).permissions;
   const regeln = [...s.ask, ...s.deny];
   const bash = new Set(regeln.map((r) => /^Bash\(gh (\w+ [\w-]+):\*\)$/.exec(r)?.[1]).filter((x): x is string => !!x && x !== "issue create"));
   test("GH_DESTRUKTIV ist gleich den Bash(gh …)-Regeln ohne issue create", () => {
