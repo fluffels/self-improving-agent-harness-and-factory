@@ -765,7 +765,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(guard.coarseProtected("commit das mit git"), true, "Reihenfolge egal");
     assert.equal(guard.coarseProtected("git status && echo commit"), false, "verschiedene Segmente");
     assert.equal(guard.coarseProtected("digit commit"), false, "git nur als Wort");
-    for (const c of ["git log commits", "git show recommit", "git log commitgraph", "git log commit-graphs", "git config pre-commit"]) assert.equal(guard.coarseProtected(c), false, c);
+    for (const c of ["git log commits", "git show recommit", "git log commitgraph", "git log commit-graphs", "git config pre-commit", "git log --grep digit-commit"]) assert.equal(guard.coarseProtected(c), false, c);
     for (const c of ["git-commit -m x", "/usr/lib/git-core/git-push origin"]) assert.equal(guard.coarseProtected(c), true, c);
     assert.equal(guard.coarseProtected("git status"), false);
   });

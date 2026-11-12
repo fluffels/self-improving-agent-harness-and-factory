@@ -48,10 +48,13 @@ const blockt = (command: string, cwd?: string) => assert.equal(pruefe(command, c
 const laeuft = (command: string, cwd?: string) => assert.equal(pruefe(command, cwd).block, false, command);
 
 describe("L77: Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
-  test("Lesebefehle auf commit-graphs und pre-commit laufen, git commit blockt weiter", () => {
+  test("Lesebefehle auf commit-graphs und pre-commit laufen, git commit blockt weiter (auch über den Interpreter-Weg)", () => {
     laeuft("Get-ChildItem .git/objects/info/commit-graphs");
     laeuft("Get-Content .git/hooks/pre-commit");
+    laeuft("cmd /c type .git/hooks/pre-commit");
+    laeuft("cmd /c git log commit-graphs");
     blockt("git commit -m x");
+    blockt("cmd /c git-commit -m x");
   });
 });
 

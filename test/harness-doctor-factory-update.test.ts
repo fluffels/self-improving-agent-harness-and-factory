@@ -321,6 +321,8 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
 
 /* Vertrag des Doctor-Wochenlaufs (harness-doctor.yml hat kein `npm ci`): der statische Importgraph von Doctor und Meldestellen-Lauf enthält nur `node:`-Builtins und lokale Module, nie ein npm-Paket wie `yaml`. */
 const IMPORT = /\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+/** Entfernt Block- und Zeilenkommentare, die am Zeilenanfang beginnen (Prosa wie `import("…")` im JSDoc ist kein Import); ein `/*` mitten in einer Zeile (z. B. ein Glob im String) bleibt unberührt, damit kein Import verschwindet. */
+const ohneZeilenKommentare = (text: string): string => text.replace(/^\s*\/\*[\s\S]*?\*\//gm, "").replace(/^\s*\/\/.*$/gm, "");
 /** Alle Modulnamen, die der Importgraph ab `einstieg` anspricht, die kein `node:`-Builtin und kein lokales Modul sind. */
 function externeImporte(einstieg: string, lese: (pfad: string) => string): string[] {
   const gesehen = new Set<string>();
@@ -329,7 +331,7 @@ function externeImporte(einstieg: string, lese: (pfad: string) => string): strin
   for (let pfad = offen.pop(); pfad !== undefined; pfad = offen.pop()) {
     if (gesehen.has(pfad)) continue;
     gesehen.add(pfad);
-    for (const m of lese(pfad).matchAll(IMPORT)) {
+    for (const m of ohneZeilenKommentare(lese(pfad)).matchAll(IMPORT)) {
       const name = m[1];
       if (name.startsWith("./") || name.startsWith("../")) offen.push(join(dirname(pfad), name));
       else if (!name.startsWith("node:")) extern.add(name);
@@ -353,6 +355,10 @@ describe("Importgraph des Doctor-Wochenlaufs", () => {
     };
     expect(externeImporte("/s/a.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv", "yaml"]);
     expect(externeImporte("/s/b.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv"]);
+  });
+  test("Kommentar-Prosa mit import-Form ist kein Import, ein Glob mitten in der Zeile versteckt keinen echten Import", () => {
+    const text = '/**\n * Beispiel: import("yaml") und from "ajv"\n */\n// import "zod";\nconst g = "scripts/*.mjs"; import { x } from "echt-extern";\n';
+    expect(externeImporte("/s/k.mjs", () => text)).toEqual(["echt-extern"]);
   });
 });
 

@@ -135,6 +135,14 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
       expect(n.lensPfadMuster.test(`/.claude/worktrees/${schlecht}`), schlecht).toBe(false);
     }
   });
+  test("L2: der Lens-Edit-Guard erlaubt Edits im Lens-Worktree mit Brillen-Endung, ein Pfadtrick bleibt blockiert", () => {
+    for (const n of ["lens-r1-test-adaequanz", "lens-m2-architektur", "lens-a1-sicherheit"]) {
+      expect(lensEdit.bewerteLensEdit(`/r/.claude/worktrees/ab-12-${n}/src/a.ts`, "", { config: AB }).block, n).toBe(false);
+    }
+    for (const n of ["lens-r1-/a.ts", "lens-r1-1/a.ts", "lens-r1-../a.ts", "lens-r1x/a.ts"]) {
+      expect(lensEdit.bewerteLensEdit(`/r/.claude/worktrees/ab-12-${n}`, "", { config: AB }).block, n).toBe(true);
+    }
+  });
   test("dateiMuster und ticketBranchMuster sind am Namensanfang verankert: ein vorangestelltes Präfix passt nicht", () => {
     expect(n.dateiMuster.test("ab-7.bak")).toBe(true);
     expect(n.dateiMuster.test("x-ab-7.bak")).toBe(false);
