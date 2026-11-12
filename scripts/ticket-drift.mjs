@@ -89,7 +89,10 @@ function erzeuge({ config, repo, ghLesen, sicht, heute, boards }) {
 
 /** Liest die Items beider Boards (REST) für `blocker-dahinter`; ohne Token oder bei Lesefehler `null` (Hinweis im Bericht, Warnung im Log, kein Abbruch). Der Fehlertext steht nur im Log, nie im Bericht. */
 function ladeBoardListen({ token, ladeBoards, libs, repo, log }) {
-  if (!token) return null;
+  if (!token) {
+    log("::warning::Ticket-Drift: PROJECT_TOKEN fehlt, blocker-dahinter ausgesetzt.");
+    return null;
+  }
   try {
     return ladeBoards ? ladeBoards(token) : ["produkt", "factory"].map((r) => libs.loadItems(libs.boardFuerRolle(r), { repo, token }));
   } catch (e) {

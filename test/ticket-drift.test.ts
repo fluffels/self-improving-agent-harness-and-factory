@@ -118,6 +118,26 @@ describe("pruefe: blocker-dahinter (factory#407)", () => {
     expect(dahinter(lauf({ blockedBy: { nodes: [{ number: 7, state: "CLOSED", url: url(7) }] } }, [[item(1), item(7)]]))).toEqual([]);
     expect(lauf({ body: `${sprache.blocker} x/y#2` }, [[item(1), item(2)]]).befunde).toEqual([]);
   });
+  test("das Paar steht nur auf einem von zwei Boards: genau ein Befund", () => {
+    expect(klassen(lauf(blockiertDurch(2), [[item(1), item(2)], [item(3)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test("Textzeile und native Kante auf denselben Blocker: ein Befund", () => {
+    expect(dahinter(lauf({ ...blockiertDurch(2), blockedBy: { nodes: [{ number: 2, state: "OPEN", url: url(2) }] } }, [[item(1), item(2)]]))).toHaveLength(1);
+  });
+  test("null-Knoten in blockedBy wirft nicht, der gültige Knoten zählt", () => {
+    expect(klassen(lauf({ blockedBy: { nodes: [null, { number: 7, state: "OPEN", url: url(7) }] } }, [[item(1), item(7)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test.each([
+    ["Bindestrich und Punkt in Owner und Repo", url(7, "my-org.x/sih-tool.y"), "my-org.x/sih-tool.y", 1],
+    ["Schrägstrich am Ende", url(7) + "/", "o/r", 1],
+    ["Anhang hinter der Nummer", url(7) + "/x", "o/r", 0],
+  ])("native url: %s", (_n, u, repo, erwartet) => {
+    const e = L.pruefe([issue(1, { blockedBy: { nodes: [{ number: 7, state: "OPEN", url: u }] } }), issue(7, { title: "Ganz anderer Gegenstand hier" })], { ...ctx(git()), repo, boards: [[item(1), item(7)]] });
+    expect(dahinter(e)).toHaveLength(erwartet);
+  });
+  test("Textverweis mit ausgeschriebenem eigenem Repo zählt wie unqualifiziert", () => {
+    expect(klassen(lauf({ body: `${sprache.blocker} o/r#2` }, [[item(1), item(2)]]))).toEqual(["1:blocker-dahinter"]);
+  });
   test.each([
     ["Blocker in anderer Spalte", [[item(1, "Todo"), item(2, "In Progress")]]],
     ["Ticket und Blocker auf verschiedenen Boards", [[item(1)], [item(2)]]],
@@ -407,10 +427,15 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
       expect([code, aufrufe]).toEqual([0, [[{ rolle: "produkt" }, { repo: "o/r", token: "t" }], [{ rolle: "factory" }, { repo: "o/r", token: "t" }]]]);
       expect(out.join("\n")).toContain("## blocker-dahinter (1)");
     });
+    test("native Kante im Lauf: repo erreicht pruefe", async () => {
+      const nativ = [issue(1, { blockedBy: { nodes: [{ number: 2, state: "OPEN", url: "https://github.com/o/r/issues/2" }] } }), issue(2, { title: "Ganz anderer Gegenstand hier" })];
+      expect((await lauf(nativ, ["--dry-run"], { PROJECT_TOKEN: "t" }, undefined, undefined, () => boards)).out).toContain("## blocker-dahinter (1)");
+    });
     test("ohne Token wird ladeBoards nicht aufgerufen", async () => {
       let n = 0;
       const r = await lauf(paar, ["--dry-run"], {}, undefined, undefined, () => (n++, boards));
       expect([n, r.code, r.out.includes("Hinweis: Board nicht gelesen")]).toEqual([0, 0, true]);
+      expect(r.out).toContain("::warning::Ticket-Drift: PROJECT_TOKEN fehlt, blocker-dahinter ausgesetzt.");
     });
   });
   test("--dry-run: keine Schreibaufrufe, Bericht auf stdout", async () => {

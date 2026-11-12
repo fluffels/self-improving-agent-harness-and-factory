@@ -607,6 +607,15 @@ describe("entscheideSammelTakt und fuehreSammelAus: eine allgemeine Funktion je 
     expect(S.fuehreSammelAus(art, { nr: 5, afterId: null }, [{ id: "I5", number: 5 }], "t", "factory", { setze: wirf, log: (z) => fehler.push(z) })).toBe(false);
     expect(fehler.join("\n")).toBe("::error::Dritte-Art-Position nicht gesetzt: kaputt\nDie Wiederholung ist idempotent.");
   });
+  test("die Gründe der beiden Arten sind zeichengleich zu den alten Texten", () => {
+    const { harness, langfuse } = S.SAMMEL_ARTEN;
+    expect(S.entscheideSammelTakt(harness, [it(1), { ...dritte(5), title: harness.titel }], 9)).toEqual({ aktion: "nichts", grund: "Füllstand 9/10 offene Befund-Zeilen (Schwelle 10), der Takt lässt es liegen" });
+    expect(S.entscheideSammelTakt(harness, [it(1), { ...dritte(5), title: harness.titel }], 10).grund).toBe("Füllstand 10/10 offene Befund-Zeilen, #5 kommt an die Spitze");
+    expect(S.entscheideSammelTakt(harness, [{ ...dritte(5), title: harness.titel }, it(1)], 10).grund).toBe("#5 steht schon an der Spitze (hinter den Notfall-Items)");
+    expect(S.entscheideSammelTakt(langfuse, [it(1), { ...dritte(5), title: langfuse.titel }], 0).grund).toBe("Füllstand 0/1 offene Befund-Zeilen, der Takt lässt es liegen");
+    expect(S.entscheideSammelTakt(langfuse, [it(1), { ...dritte(5), title: langfuse.titel }], 1).grund).toBe("Füllstand 1/1 offene Befund-Zeilen, #5 kommt hinter den Kopf");
+    expect(S.entscheideSammelTakt(langfuse, [{ ...dritte(5), title: langfuse.titel }, it(1)], 1).grund).toBe("#5 steht schon hinter dem Kopf");
+  });
   test("die beiden Arten tragen Titel, Schwelle und Aktion der alten Entscheidungen", () => {
     const { harness, langfuse } = S.SAMMEL_ARTEN;
     expect([harness.titel, harness.schwelle, harness.aktion, langfuse.titel, langfuse.schwelle, langfuse.aktion]).toEqual(["Harness-Härtung (gesammelt)", 10, "nach-oben", "Langfuse-Befunde (gesammelt)", 1, "verschieben"]);

@@ -2,7 +2,7 @@
 // tote Pfade und Zeilen, geschlossene Blocker, Titel-Duplikate, Rückstellungen. Der Lauf schreibt nur einen Bericht; die Bewertung macht ein Agent nach `.agents/skills/factory/ticket-drift.md`.
 //
 // Feldformen von `gh issue list --json …` (Probe 2026-11-12): `author {login, is_bot}` (Apps als `app/<name>`), `comments[] {author {login}, authorAssociation, body, createdAt}`,
-// `blockedBy {nodes[] {number, state}}`, `labels[] {name}`, `updatedAt` (ISO).
+// `blockedBy {nodes[] {number, state, url}}`, `labels[] {name}`, `updatedAt` (ISO).
 //
 // Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos (auch native Kanten ohne `url` im eigenen Repo), weiche Bezüge ohne Nummer, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
 // Reihenfolge (`blocker-dahinter`): ein Ticket steht im Board vor seinem offenen Blocker (Textzeile oder native Kante), verglichen nur innerhalb derselben Spalte eines Boards; ohne gelesene Boards (`boards: null`) ausgesetzt, mit Hinweis.
@@ -70,7 +70,7 @@ export function blockerBefunde(issue, offene, sprache) {
 /** Nummern der offenen Blocker eines Tickets im eigenen Repo: Textzeilen (Nummer in `offene`) und native Kanten mit Zustand OPEN und Issue-URL des eigenen `repo` (ohne `url` übersprungen). Sortiert, ohne Doppelte. */
 export function offeneBlocker(issue, offene, sprache, repo) {
   const nummern = new Set();
-  for (const v of blockerVerweise(issue.body ?? "", sprache)) if (v.repo === null && offene.has(v.nummer)) nummern.add(v.nummer);
+  for (const v of blockerVerweise(issue.body ?? "", sprache)) if ((v.repo === null || gleichesRepo(v.repo, repo)) && offene.has(v.nummer)) nummern.add(v.nummer);
   for (const n of issue.blockedBy?.nodes ?? []) {
     const urlRepo = /\/([\w.-]+\/[\w.-]+)\/issues\/\d+\/?$/.exec(String(n?.url ?? ""))?.[1];
     if (n?.state === "OPEN" && gleichesRepo(urlRepo, repo)) nummern.add(n.number);
