@@ -176,6 +176,10 @@ describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"), kopf("check:diffcoverage"));
     expect(erg(lauf(text)[0])).toEqual({ lint: "gruen", "gate-befehl:coverage": "gruen", "check:diffcoverage": "gruen" });
   });
+  test("ein Gate-Befehl, der nicht zum Gate-Satz gehört (verify), zählt nicht als Gate", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl verify: npm run verify\n", "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("check:diffcoverage"));
+    expect(erg(lauf(text)[0])).toEqual({ lint: "gruen", "gate-befehl:coverage": "gruen", "check:diffcoverage": "gruen" });
+  });
   test("Negativ: ohne die gedruckte Zeile fehlt das Gate (nicht erreicht oder nicht gezählt)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), kopf("test:coverage"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("nicht-erreicht");

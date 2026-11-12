@@ -138,7 +138,7 @@ export function laeuferAufteilung(pfade, config, cwd) {
 }
 
 /** Befehlszeile samt in doppelten Anführungszeichen angehängten Pfaden. */
-const mitPfaden = (befehl, pfade) => (pfade.length > 0 ? `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}` : befehl);
+const mitPfaden = (befehl, pfade) => `${befehl} ${pfade.map((x) => `"${x}"`).join(" ")}`;
 
 /** Startet alle Läufe (keiner bricht die anderen ab) und gibt den ersten Exit ≠ 0 zurück, sonst 0. */
 function fuehreLaeufeAus(name, zeilen, { spawn, cwd, err }) {
@@ -154,7 +154,7 @@ function fuehreLaeufeAus(name, zeilen, { spawn, cwd, err }) {
 /** Pur: die zu startenden Befehlszeilen: `{ befehl, zeilen }` (`befehl` null = nicht eingerichtet) oder `{ meldung }`; wirft die Fehler von `befehlAus` und `quellenAus`. */
 function zeilenAus(name, pfade, config, cwd) {
   const befehl = befehlAus(config, name);
-  if (befehl === null || pfade.length === 0) return { befehl, zeilen: [befehl] };
+  if (pfade.length === 0) return { befehl, zeilen: [befehl] };
   const { laeufe, meldung } = laeuferAufteilung(pfade, config, cwd);
   return meldung === undefined ? { befehl, zeilen: laeufe.map((l) => mitPfaden(l.befehl, l.pfade)) } : { meldung };
 }

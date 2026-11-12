@@ -250,6 +250,24 @@ describe("testGezielt teilt Pfade auf Läufer auf (L8)", () => {
     assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java"], u.opt), 3);
     assert.equal(u.aufrufe.length, 2);
   });
+  test("ein Ordner (Pfad ohne Endung) geht an den Projekt-Befehl", () => {
+    const u = umgebung(JAVA);
+    assert.equal(lib.cli(["testGezielt", "backend/src/test"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend/src/test"']);
+  });
+  test("Backslashes im Pfad und im cwd (Windows) werden vor der Wurzelprüfung zu /", () => {
+    const u = umgebung(JAVA);
+    u.opt.cwd = "C:\\wurzel\\";
+    assert.equal(lib.cli(["testGezielt", "backend\\b.spec.ts", "C:/wurzel/test/tools/x.test.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\b.spec.ts"', VITEST + ' "C:/wurzel/test/tools/x.test.ts"']);
+  });
+  test("der erste Exit ≠ 0 gewinnt auch, wenn ein späterer Lauf grün ist", () => {
+    const u = umgebung(JAVA);
+    const codes = [3, 0];
+    u.opt.spawn = (befehl, o, ...rest) => { u.aufrufe.push({ befehl, opt: o, rest }); return { status: codes.shift() }; };
+    assert.equal(lib.cli(["testGezielt", "test/tools/x.test.ts", "backend/A.java"], u.opt), 3);
+    assert.equal(u.aufrufe.length, 2);
+  });
   test("ohne Endung außerhalb von JS/TS in struktur.endungen bleibt alles beim einen Befehl (unverändert)", () => {
     const u = umgebung({ struktur: { quelle: ["src"], endungen: [".ts"] }, befehle: { testGezielt: "mvn -q test" } });
     assert.equal(lib.cli(["testGezielt", "docs/x.md", "test/a.test.ts"], u.opt), 0);
