@@ -389,7 +389,7 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
     }
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo  **bar**“").map((v) => v.segmente), [["Foo bar"]]);
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo „bar”“").map((v) => v.segmente), [["Foo bar"]]);
-    assert.deepEqual(absatzVerweise("AGENTS.md [§ Foo bar").map((v) => v.segmente), [], "`[` vor dem § ist keine Form der Liste");
+    assert.deepEqual(absatzVerweise("AGENTS.md [§ Kern + § Foo bar").map((v) => v.segmente), [], "`[` vor dem § ist keine Form der Liste");
     assert.deepEqual(absatzVerweise("AGENTS.md § Kern\n§ `Foo`  bar").map((v) => v.segmente), [["Foo bar"]]);
   });
 
