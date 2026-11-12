@@ -15,7 +15,7 @@ export function langfusePunkt(lf) {
   } catch {
     urteil = null;
   }
-  if (urteil === null || typeof urteil !== "object") {
+  if (urteil === null || typeof urteil !== "object" || Array.isArray(urteil)) {
     const text = String(lf?.stderr ?? "").trim().split("\n")[0];
     return nichtPruefbar(PUNKT, `Ausgabe von langfuse-vorbedingung.mjs --json nicht lesbar${text ? ` (${text})` : ""}`, FIX_JSON);
   }

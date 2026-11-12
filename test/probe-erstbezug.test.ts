@@ -1,7 +1,7 @@
 /* Probe-Erstbezug (factory#234): reine Teile (Füll-Block, Schrittliste, Urteil), Aufruf-Fehler und die Negativfälle der Kette (Budget, toter Kern-Verweis) gegen einen echten Klon; Test-Commits ohne Auto-Wartung (factory#383). */
 import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,7 +32,7 @@ const P = raw as unknown as {
   baueFixture: (a: { von: string; ziel: string; raum: number; io: Io }) => void;
   fuehreSchritte: (s: Schritt[], io: Io) => { id: string; status: number | null }[];
   main: (argv: string[], io: Io) => { code: number; out: string; err: string };
-  echteNaehte: (stdio?: string) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
+  echteNaehte: (stdio?: string, naht?: { spawn?: (c: string, a: string[], o: Record<string, unknown>) => { status: number } }) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
 };
 const B = budgetRaw as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; kernBlockZeichen: (t: string, m: { start: string; ende: string }) => number | null; countChars: (t: string) => number };
 const R = releaseRaw as unknown as { mechanischeSchritte: (q: string) => string[] };
@@ -213,6 +213,10 @@ describe("probeSchritte", () => {
     expect(schritte.find((s) => s.id === "sync-vorschau")?.argv?.slice(-2)).toEqual(["--entwurf", "--trocken"]);
   });
 
+  it("klont mit --no-local: kein Hardlink-Klon aus dem Objektspeicher des Checkouts (factory#383)", () => {
+    expect(schritte.find((s) => s.id === "klon")?.argv).toEqual(["git", "clone", "--no-local", "--quiet", "/q", join("/s", "quelle")]);
+  });
+
   it("enthält jeden mechanischen Update-Schritt aus UPDATE_SCHRITTE mit der Quelle des Scratch-Klons", () => {
     const erwartet = R.mechanischeSchritte(join("/s", "quelle"));
     const echt = schritte.filter((s) => ["lint-prune", "projektwerte", "docs-gen", "factorylinks"].includes(s.id)).map((s) => (s.argv as string[]).join(" "));
@@ -371,6 +375,64 @@ describe("fuehreSchritte und baueFixture", () => {
       ], io);
       expect(e.slice(0, 2)).toStrictEqual([{ id: "gut", status: 0 }, { id: "rot", status: 3, stderr: "kaputt\n" }]);
       expect(e[2]).toMatchObject({ status: 4, stderr: expect.stringMatching(/xxENDE$/) as string });
+    });
+  });
+
+  it("Modus stderr: stderr geht in eine Datei (Dateinummer statt Pipe, kein maxBuffer), das Kind wird nie wegen Pufferüberlauf abgebrochen", () => {
+    const optionen: Record<string, unknown>[] = [];
+    const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => (optionen.push(o), { status: 0 });
+    temp((dir) => {
+      const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s")) as { fuehre: (s: object) => number; stderrRest: (id: string) => string };
+      n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+      const stdio = optionen[0].stdio as unknown[];
+      expect(stdio.slice(0, 2)).toEqual(["ignore", "ignore"]);
+      expect(typeof stdio[2]).toBe("number");
+      expect(optionen[0].maxBuffer).toBeUndefined();
+      expect(n.stderrRest("a")).toBe("");
+    });
+  });
+
+  it("Modus stderr: das Ende wird auf Zeichengrenze geschnitten, ein Mehrbyte-Zeichen am Fensteranfang bleibt ohne Ersatzzeichen", () => {
+    temp((dir) => {
+      const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
+      const e = P.fuehreSchritte([{ id: "umlaut", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'ä'.repeat(2500));process.exitCode=2"], cwd: dir, kritisch: false }], io);
+      expect(e[0]).toStrictEqual({ id: "umlaut", status: 2, stderr: "ä".repeat(2000) });
+    });
+  });
+
+  it("Modus stderr: der Temp-Ordner ist nach dem Schritt weg, auch wenn spawn wirft", () => {
+    const marke = `marke-${process.pid}-${Date.now()}`;
+    const ordnerMitMarke = () => readdirSync(tmpdir()).filter((n) => n.startsWith("probe-stderr-")).map((n) => join(tmpdir(), n)).filter((p) => existsSync(join(p, "stderr.log")) && readFileSync(join(p, "stderr.log"), "utf8").includes(marke));
+    for (const wirft of [false, true]) {
+      let gesehen: string[] = [];
+      const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => {
+        writeSync((o.stdio as number[])[2], marke);
+        gesehen = ordnerMitMarke();
+        if (wirft) throw new Error("spawn kaputt");
+        return { status: 0 };
+      };
+      temp((dir) => {
+        const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s")) as { fuehre: (s: object) => number };
+        const fehler = (() => {
+          try {
+            n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+            return null;
+          } catch (e) {
+            return String(e);
+          }
+        })();
+        expect(fehler === null ? "" : fehler).toBe(wirft ? "Error: spawn kaputt" : "");
+      });
+      expect(gesehen).toHaveLength(1);
+      expect(ordnerMitMarke()).toEqual([]);
+    }
+  });
+
+  it("Modus stderr: ein 3-Byte-Zeichen am Fensteranfang bleibt ohne Ersatzzeichen und das Ende hat genau 2000 Zeichen", () => {
+    temp((dir) => {
+      const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
+      const e = P.fuehreSchritte([{ id: "euro", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'€'.repeat(2500));process.exitCode=2"], cwd: dir, kritisch: false }], io);
+      expect(e[0]).toStrictEqual({ id: "euro", status: 2, stderr: "€".repeat(2000) });
     });
   });
 

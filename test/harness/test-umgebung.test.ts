@@ -2,19 +2,23 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
  *
- * Regel: vite.config.ts lädt test/support/zugaenge-entfernen.ts als setupFiles; sie löscht LANGFUSE_*, GH_TOKEN und
- * GITHUB_TOKEN aus process.env jedes Testworkers, damit auch ein Kindprozess (spawnSync, Skript-Lauf) nie einen echten
- * Zugang erbt (kein Live-Weg, kein Dispatch durch eine Regression).
- * Grenze: das Setup entfernt nur Umgebungsvariablen. Zugänge in Keyring, Dateien (~/.config/gh) oder selbst gesetzte
+ * Regel: vite.config.ts lädt test/support/zugaenge-entfernen.ts als setupFiles; sie löscht LANGFUSE_*, GH_TOKEN,
+ * GITHUB_TOKEN, PROJECT_TOKEN und die GH_/GITHUB_ENTERPRISE_TOKEN aus process.env jedes Testworkers und setzt
+ * GH_CONFIG_DIR auf einen leeren Ordner (gh findet weder Keyring-Anmeldung noch ~/.config/gh), damit auch ein
+ * Kindprozess (spawnSync, Skript-Lauf) nie einen echten Zugang erbt und kein gh-Schreibaufruf gelingt (factory#398).
+ * Grenze: die Sperre wirkt nur, wenn die Kind-Umgebung aus process.env abgeleitet ist (geerbt oder
+ * env: { ...process.env, … }); eine von Grund auf gebaute Umgebung (env: { PATH: … }) verliert sie. Selbst gesetzte
  * Fake-Werte, die ein Test absichtlich einsetzt, bleiben unberührt; ein Test mit Kind-Umgebung räumt sie selbst.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { istZugang } from "../support/zugaenge";
 
 const WURZEL = join(__dirname, "..", "..");
+const TOKEN_NAMEN = ["GH_TOKEN", "GITHUB_TOKEN", "PROJECT_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
+const GH_FEHLT = spawnSync("gh", ["--version"]).status !== 0;
 
 describe("Test-Umgebung ohne Zugangs-Variablen", () => {
   it("vite.config.ts lädt das Setup zugaenge-entfernen.ts", () => {
@@ -27,6 +31,25 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
     expect(["PATH", "HOME", "GITHUB_ACTIONS", "NOT_LANGFUSE_X"].filter(istZugang)).toEqual([]);
   });
 
+  it("istZugang erkennt auch PROJECT_TOKEN und die Enterprise-Token", () => {
+    expect(TOKEN_NAMEN.filter(istZugang)).toEqual(TOKEN_NAMEN);
+    expect(["GH_HOST", "PROJECT_TOKENS", "GH_CONFIG_DIR"].filter(istZugang)).toEqual([]);
+  });
+
+  it("GH_CONFIG_DIR zeigt auf einen Ordner ohne hosts.yml (gh ohne Anmeldung)", () => {
+    const dir = process.env.GH_CONFIG_DIR ?? "";
+    expect(dir).not.toBe("");
+    expect(existsSync(dir)).toBe(true);
+    expect(existsSync(join(dir, "hosts.yml"))).toBe(false);
+  });
+
+  it.skipIf(GH_FEHLT)("echtes gh (Leseaufruf) ist abgemeldet: Exit 4 und 'gh auth login'", () => {
+    const r = spawnSync("gh", ["api", "user"], { encoding: "utf8" });
+    expect(r.status).toBe(4);
+    // Lokal nennt gh `gh auth login`, in GitHub Actions (GITHUB_ACTIONS gesetzt) die Aufforderung, GH_TOKEN zu setzen.
+    expect(r.stderr).toMatch(/gh auth login|GH_TOKEN environment variable/u);
+  });
+
   it("process.env des Testworkers hat keinen Zugangs-Schlüssel", () => {
     expect(Object.keys(process.env).filter(istZugang)).toEqual([]);
   });
@@ -35,6 +58,7 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
     process.env.LANGFUSE_PROBE = "x";
     process.env.GH_TOKEN = "x";
     process.env.GITHUB_TOKEN = "x";
+    process.env.PROJECT_TOKEN = "x";
     process.env.NICHT_ZUGANG = "x";
     vi.resetModules();
     await import("../support/zugaenge-entfernen");
@@ -43,8 +67,11 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
     delete process.env.NICHT_ZUGANG;
   });
 
-  it("ein Kindprozess sieht keinen Zugangs-Schlüssel", () => {
-    const r = spawnSync(process.execPath, ["-e", "console.log(Object.keys(process.env).filter(k => k.startsWith('LANGFUSE_') || k === 'GH_TOKEN' || k === 'GITHUB_TOKEN').join(','))"], { encoding: "utf8" });
-    expect(r.stdout.trim()).toBe("");
+  it("ein Kindprozess sieht keinen Zugangs-Schlüssel, aber GH_CONFIG_DIR", () => {
+    const skript = "const n = JSON.parse(process.argv[1]); console.log(Object.keys(process.env).filter(k => k.startsWith('LANGFUSE_') || n.includes(k)).join(',') + '|' + (process.env.GH_CONFIG_DIR ?? ''))";
+    const r = spawnSync(process.execPath, ["-e", skript, JSON.stringify(TOKEN_NAMEN)], { encoding: "utf8", env: { ...process.env, PROJECT_TOKEN: "" } });
+    expect(r.stdout.trim()).toBe(`PROJECT_TOKEN|${process.env.GH_CONFIG_DIR}`);
+    const sauber = spawnSync(process.execPath, ["-e", skript, JSON.stringify(TOKEN_NAMEN)], { encoding: "utf8" });
+    expect(sauber.stdout.trim()).toBe(`|${process.env.GH_CONFIG_DIR}`);
   });
 });
