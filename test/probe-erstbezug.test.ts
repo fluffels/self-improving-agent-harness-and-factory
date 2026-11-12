@@ -1,7 +1,7 @@
 /* Probe-Erstbezug (factory#234): reine Teile (Füll-Block, Schrittliste, Urteil), Aufruf-Fehler und die Negativfälle der Kette (Budget, toter Kern-Verweis) gegen einen echten Klon; Test-Commits ohne Auto-Wartung (factory#383). */
 import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -397,6 +397,35 @@ describe("fuehreSchritte und baueFixture", () => {
       const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
       const e = P.fuehreSchritte([{ id: "umlaut", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'ä'.repeat(2500));process.exitCode=2"], cwd: dir, kritisch: false }], io);
       expect(e[0]).toStrictEqual({ id: "umlaut", status: 2, stderr: "ä".repeat(2000) });
+    });
+  });
+
+  it("Modus stderr: der Temp-Ordner ist nach dem Schritt weg, auch wenn spawn wirft", () => {
+    const marke = `marke-${process.pid}-${Date.now()}`;
+    const ordnerMitMarke = () => readdirSync(tmpdir()).filter((n) => n.startsWith("probe-stderr-")).map((n) => join(tmpdir(), n)).filter((p) => existsSync(join(p, "stderr.log")) && readFileSync(join(p, "stderr.log"), "utf8").includes(marke));
+    for (const wirft of [false, true]) {
+      let gesehen: string[] = [];
+      const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => {
+        writeSync((o.stdio as number[])[2], marke);
+        gesehen = ordnerMitMarke();
+        if (wirft) throw new Error("spawn kaputt");
+        return { status: 0 };
+      };
+      temp((dir) => {
+        const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s")) as { fuehre: (s: object) => number };
+        if (wirft) expect(() => n.fuehre({ argv: ["x"], cwd: "/", id: "a" })).toThrow(/spawn kaputt/);
+        else n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+      });
+      expect(gesehen).toHaveLength(1);
+      expect(ordnerMitMarke()).toEqual([]);
+    }
+  });
+
+  it("Modus stderr: ein 3-Byte-Zeichen am Fensteranfang bleibt ohne Ersatzzeichen und das Ende hat genau 2000 Zeichen", () => {
+    temp((dir) => {
+      const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
+      const e = P.fuehreSchritte([{ id: "euro", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'€'.repeat(2500));process.exitCode=2"], cwd: dir, kritisch: false }], io);
+      expect(e[0]).toStrictEqual({ id: "euro", status: 2, stderr: "€".repeat(2000) });
     });
   });
 
