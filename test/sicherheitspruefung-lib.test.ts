@@ -104,6 +104,11 @@ describe("filtere", () => {
     expect(r.map((x) => x.punkt)).toEqual(["Required-Check Tests", "Admin-Recht"]);
     expect(r.some((x) => x.nichtPruefbar === true)).toBe(false);
   });
+  test("Soll-Zustand: ein eigenes Ruleset-Ergebnis genügt, kein zusätzliches nicht prüfbar", () => {
+    const r = L.filtere([{ punkt: "Ruleset", ok: true }, { punkt: "Admin-Recht", ok: true }], ["Ruleset", "Required-Check", "Admin-Recht"]);
+    expect(r.map((x) => x.punkt)).toEqual(["Ruleset", "Admin-Recht"]);
+    expect(r.some((x) => x.nichtPruefbar === true)).toBe(false);
+  });
   test("ohne Ruleset-Ergebnis und ohne Required-Check-Ergebnis bleibt Ruleset nicht prüfbar", () => {
     const r = L.filtere([{ punkt: "Admin-Recht", ok: true }], ["Ruleset", "Admin-Recht"]);
     expect(r.map((x) => x.punkt)).toEqual(["Admin-Recht", "Ruleset"]);
