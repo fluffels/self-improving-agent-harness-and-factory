@@ -922,6 +922,8 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     const rolle = read(".claude/agents/factory-planer.md");
     assert.match(rolle, /^## Bei einem Epic/m);
     assert.match(rolle, /Lege keine Issues selbst an/);
+    const abschnitt = /^## Bei einem Epic[\s\S]*?(?=^## |(?![\s\S]))/m.exec(rolle)?.[0] ?? "";
+    assert.match(abschnitt, /je Kind:[^\n]*mindestens einem Negativfall-Kriterium/, "der Epic-Abschnitt verlangt je Kind ein Negativfall-Kriterium");
     assert.match(liesTicketAblauf(), /Epic: liefere die Aufteilung/, "der Skill gibt dem Planer den Epic-Hinweis");
   });
 
