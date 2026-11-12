@@ -32,6 +32,7 @@ import { ladeProjektConfig, langfuseZiel, repoName, repoOwner } from "./projekt-
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { lockFreigeben, lockNehmen, logAnhaengen } from "./langfuse-lock.mjs";
+import { projektTagsAus } from "./langfuse-otlp.mjs";
 import { agentenNamen } from "./agenten-namen.mjs";
 import { RUHEFRIST_MS, anlassText, letzteVolleWoche, mergeAnzahl, mergeSucheArgs, ordneExporte, projektFilterAus, pruefeAbgeschlossen, renderWochenbericht, wochenAuswertung, wochenberichtAblage, wochenberichtTermin, wochenFenster, wochenJson, wochenRezept, wochenStand } from "./langfuse-wochenbericht-lib.mjs";
 
@@ -74,7 +75,7 @@ export function ladeProjekt(wurzel = WURZEL, lies = readFileSync) {
 function projektTags(wurzel, lies) {
   try {
     const roh = JSON.parse(lies(join(wurzel, ".claude", "settings.json"), "utf8"))?.env?.CC_LANGFUSE_TRACE_TAGS;
-    return typeof roh === "string" ? roh.split(",").map((t) => t.trim()).filter(Boolean) : [];
+    return projektTagsAus(roh);
   } catch {
     return [];
   }

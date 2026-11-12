@@ -1,7 +1,7 @@
 /**
  * Langfuse-Wochenbericht (factory#313): pure Lib. Baut aus selbstbeschreibenden `queryMetrics`-Exporten den Bericht der letzten
  * vollen Woche (Mo bis So, UTC) samt Urteil „Agent-Lauf nötig“ nach Schwellen aus der Config (`langfuseWochenbericht`).
- * Einziger Import ist die pure `langfuse-auswertung-lib.mjs`; kein fs, kein env, kein Netz, kein Secret-Key. Der Live-Weg liegt im
+ * Imports sind die pure `langfuse-auswertung-lib.mjs` und das Tag-Schema aus `langfuse-otlp.mjs` (pur); kein fs, kein env, kein Netz, kein Secret-Key. Der Live-Weg liegt im
  * Modul `langfuse-wochenbericht-live.mjs`, das die CLI nur ohne `--export` dynamisch lädt.
  *
  * Export-Arten: die der Auswertung (`gesamt`, `tage`, `latenz`, `metadaten`) und zwei eigene, `sessions` (Sessions der Woche,
@@ -12,6 +12,7 @@
  * Score sind (die Ruhefrist des Abgleichs ist dann sicher um). Codex-Sessions zählen nie (der Abgleich liest nur Claude-Transkripte).
  */
 
+import { projektFilterTags } from "./langfuse-otlp.mjs";
 import { ROW_LIMIT, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 export const MS_TAG = 86400000;
@@ -56,7 +57,7 @@ export function pruefeAbgeschlossen(montag, jetzt) {
 /** Projektfilter aus Dateien der Repo-Wurzel: `environment` (wenn der Aufrufer ihn belegt hat) sonst Tags; nie aus dem Ordnernamen. Pur. */
 export function projektFilterAus({ tags = [], repoName, environment }) {
   if (environment) return { filter: pruefeProjektFilter({ column: "environment", operator: "=", value: environment, type: "string" }), vermerk: null };
-  const liste = [...new Set([...tags, repoName, `project:${repoName}`].filter((t) => typeof t === "string" && t !== ""))];
+  const liste = projektFilterTags({ tags, repoName });
   return { filter: pruefeProjektFilter({ column: "tags", operator: "any of", value: liste, type: "arrayOptions" }), vermerk: VERMERK_TAGS };
 }
 

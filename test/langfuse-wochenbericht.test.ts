@@ -352,10 +352,11 @@ describe("Schlüsselgrenze", () => {
     expect(cli.match(/import\("\.\/langfuse-wochenbericht-live\.mjs"\)/g)).toHaveLength(1);
     expect(importHuelle("scripts/langfuse-wochenbericht-live.mjs", lies)).toContain("scripts/langfuse-zugang.mjs");
   });
-  test("die Lib importiert nur die pure Auswertungs-Lib", () => {
+  test("die Lib importiert nur die pure Auswertungs-Lib und das pure Tag-Schema", () => {
     const imports = readFileSync("scripts/langfuse-wochenbericht-lib.mjs", "utf8").match(/^import .*$/gm) ?? [];
-    expect(imports).toHaveLength(1);
-    expect(imports[0]).toContain("./langfuse-auswertung-lib.mjs");
+    expect(imports).toHaveLength(2);
+    expect(imports.some((i) => i.includes("./langfuse-auswertung-lib.mjs"))).toBe(true);
+    expect(imports.some((i) => i.includes("./langfuse-otlp.mjs"))).toBe(true);
   });
 });
 
