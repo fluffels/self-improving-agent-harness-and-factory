@@ -1466,7 +1466,7 @@ describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", ()
     assert.match(mit({ browser: ["chromium"] }).join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
   });
   test("Fix-Text nennt den Variablennamen aus E2E_UMGEBUNG.browser, kein zweites Literal (L6)", () => {
-    assert.ok(mit({ browser: ["chromium"] }).join("\n").includes(String(E2E_UMGEBUNG.browser)));
+    assert.ok(mit({ browser: ["chromium"] }).join("\n").includes((E2E_UMGEBUNG as { browser: string }).browser));
   });
   test("leere befehle.e2e mit Block ist ein Fehler mit Fix", () => {
     assert.match(mit({ browser: ["chromium"] }, "").join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);

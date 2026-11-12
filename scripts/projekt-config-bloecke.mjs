@@ -1,12 +1,13 @@
 // Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, datengroesse, gates, factoryLinks, labels, skills,
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
-// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad), `modul-wahl-lib.mjs` (importfrei, `NAME_MUSTER`) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
+// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad), `modul-wahl-lib.mjs` (importfrei, `NAME_MUSTER`), `gate-befehl-lib.mjs` (nur `flag-lib.mjs`, für `E2E_UMGEBUNG`) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { GATE_FORM } from "./regex-lib.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { endungenMaengel, quellenMaengel } from "./quellwurzeln-lib.mjs";
 import { NAME_MUSTER } from "./modul-wahl-lib.mjs";
+import { E2E_UMGEBUNG } from "./gate-befehl-lib.mjs";
 
 export const istText = (v) => typeof v === "string" && v.trim() !== "";
 export const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -298,7 +299,7 @@ export function pruefeE2e(e2e, befehle) {
   if (!istObjekt(e2e)) return ["e2e muss ein Objekt mit der Liste browser sein.\nFix: e2e als { \"browser\": [\"<name>\"] } schreiben."];
   const fehler = Object.keys(e2e).filter((k) => k !== "browser").map((k) => `e2e.${k} ist kein bekannter Schlüssel (erlaubt: browser).\nFix: den Schlüssel entfernen.`);
   fehler.push(...browserMaengel(e2e.browser));
-  if (!hatBefehl || !istText(befehle.e2e)) fehler.push("e2e braucht befehle.e2e als nicht-leere Befehlszeile.\nFix: befehle.e2e setzen (der Befehl liest den Browser aus FACTORY_E2E_BROWSER) oder den Block e2e entfernen.");
+  if (!hatBefehl || !istText(befehle.e2e)) fehler.push(`e2e braucht befehle.e2e als nicht-leere Befehlszeile.\nFix: befehle.e2e setzen (der Befehl liest den Browser aus ${E2E_UMGEBUNG.browser}) oder den Block e2e entfernen.`);
   return fehler;
 }
 
