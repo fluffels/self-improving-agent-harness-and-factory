@@ -409,7 +409,7 @@ PR: https://github.com/x/y/pull/7`, ...extra });
     assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: FREMD.labels.festgefahren }] }) }).exit, 0);
   });
 
-  test("uebergabe (#1592): ein aktiver, registrierter Worktree ist keine Waise, der Stop bleibt frei; ohne Auto-Merge blockt R5", () => {
+  test("abnahme (#1754): ein aktiver, registrierter Worktree ist keine Waise, der Stop bleibt frei; ein PR, der kein Entwurf ist, blockt R7", () => {
     const WT = "/root/.claude/worktrees";
     const registriert = ["/root", `${WT}/${W}1592`];
     const befehle: string[] = [];
@@ -429,15 +429,15 @@ PR: https://github.com/x/y/pull/7`, ...extra });
         },
         platform: "linux",
       });
-    const uebergabe = JSON.stringify({
+    const abnahme = JSON.stringify({
       hook_event_name: "SubagentStop",
       agent_type: FREMD.agenten.umsetzer,
-      last_assistant_message: `ERGEBNIS: uebergabe\nPR: https://github.com/x/y/pull/7\nSCHNITT: pr\nUEBERGABE:\n  Worktree: /root/.claude/worktrees/${W}1592`,
+      last_assistant_message: `ERGEBNIS: abnahme\nPR: https://github.com/x/y/pull/7\nABNAHME: head=abc1234 worktree=/root/.claude/worktrees/${W}1592`,
     });
-    assert.deepEqual(runHook(uebergabe, "/root", echteWaisenPruefung, { prStatus: offen }), { exit: 0, stdout: "", stderr: "" });
+    assert.deepEqual(runHook(abnahme, "/root", echteWaisenPruefung, { prStatus: () => ({ state: "OPEN", isDraft: true, autoMergeRequest: null }) }), { exit: 0, stdout: "", stderr: "" });
     assert.ok(befehle.some((c) => c.includes("worktree list")), "die Waisenprüfung lief wirklich");
     assert.ok(!befehle.some((c) => c.includes("worktree remove")), "kein Worktree wurde entfernt");
-    assert.equal(runHook(uebergabe, "/root", echteWaisenPruefung, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null }) }).exit, 2);
+    assert.equal(runHook(abnahme, "/root", echteWaisenPruefung, { prStatus: () => ({ state: "OPEN", isDraft: false, autoMergeRequest: null }) }).exit, 2);
   });
 
   test("frei bei stop_hook_active und bei gh-Fehler", () => {
