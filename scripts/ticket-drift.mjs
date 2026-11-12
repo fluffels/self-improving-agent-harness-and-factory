@@ -29,7 +29,7 @@ export function gitSicht(wurzel = WURZEL, git = (args) => execFileSync("git", ar
     if (!cache.has(p)) {
       try {
         const text = readFileSync(join(wurzel, p), "utf8");
-        cache.set(p, text.split("\n").length - (text.endsWith("\n") ? 1 : 0));
+        cache.set(p, text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0));
       } catch {
         cache.set(p, Number.POSITIVE_INFINITY); // Verzeichnis oder unlesbar: keine Zeilenprüfung statt Abbruch des Laufs
       }
@@ -87,14 +87,14 @@ function erzeuge({ config, repo, ghLesen, sicht, heute }) {
   return { issues, ergebnis, datum, text: berichtText(ergebnis, { sha: s.sha, datum }) };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs` (liefert `REPO`, `platziereAmEnde`), `ghLesen(args)`, `ghSchreiben(args, input)`, `platziere(nr, token)`, `sicht` (von `gitSicht`), `env`, `heute`, `schreibeSummary(pfad, text)`, `log`, `err`. */
+/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs` (liefert `REPO`, `platziereAmEnde`), `ghLesen(args)`, `ghSchreiben(args, input)`, `sicht` (von `gitSicht`), `env`, `heute`, `schreibeSummary(pfad, text)`, `log`, `err`. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
-  const { ladeConfig, ladeLibs, ghLesen = (args) => ghJson(args), ghSchreiben = ghSchreibenStandard, platziere, env = process.env, log = console.log, err = console.error } = deps;
+  const { ladeConfig, ladeLibs, ghLesen = (args) => ghJson(args), ghSchreiben = ghSchreibenStandard, env = process.env, log = console.log, err = console.error } = deps;
   const start = await inboxStart(argv, { skript: "ticket-drift", praefix: "Ticket-Drift: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, config, libs } = start;
   const repo = libs.REPO;
-  const setzeAmEnde = platziere ?? ((nr, token) => libs.platziereAmEnde(nr, token));
+  const setzeAmEnde = (nr, token) => libs.platziereAmEnde(nr, token);
   try {
     const { issues, ergebnis, text, datum } = erzeuge({ config, repo, ghLesen, sicht: deps.sicht, heute: deps.heute });
     log(text);

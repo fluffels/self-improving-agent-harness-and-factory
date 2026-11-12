@@ -101,7 +101,8 @@ export function nutzerAus(author) {
 
 const kommentarVertraut = (c, owner) => c?.authorAssociation === "OWNER" || istVertraut(nutzerAus(c?.author), owner);
 
-/** Ist `issue` ein Bericht dieses Laufs: Marker im Body, Titelpräfix und vertrauter Autor (kein Fremdeingang)? Nur ein solches Issue darf das Schreibziel sein. */
+/** Bekannte Grenze: vertraut ist der Autor (Owner, `github-actions[bot]`), nicht der einzelne Workflow; ein anderer Bot-Workflow mit Titelpräfix und Marker würde überschrieben (Schaden: dieses eine Issue).
+ * Ist `issue` ein Bericht dieses Laufs: Marker im Body, Titelpräfix und vertrauter Autor (kein Fremdeingang)? Nur ein solches Issue darf das Schreibziel sein. */
 export function istBerichtIssue(issue, owner, config) {
   return String(issue.body ?? "").includes(BERICHT_MARKER) && String(issue.title ?? "").startsWith(BERICHT_TITEL_PRAEFIX) && !istFremdeingang({ user: nutzerAus(issue.author), labels: issue.labels }, owner, { config }).fremdeingang;
 }
@@ -124,7 +125,7 @@ export function pruefe(issues, { config, owner, tops, git, sprache }) {
   const pruefbar = [];
   for (const i of issues) {
     const fremd = istFremdeingang({ user: nutzerAus(i.author), labels: i.labels }, owner, { config }).fremdeingang;
-    if (fremd || String(i.body ?? "").includes(BERICHT_MARKER)) uebersprungen.push(i.number);
+    if (fremd || istBerichtIssue(i, owner, config)) uebersprungen.push(i.number);
     else pruefbar.push(i);
   }
   const offene = new Set(issues.map((i) => i.number));

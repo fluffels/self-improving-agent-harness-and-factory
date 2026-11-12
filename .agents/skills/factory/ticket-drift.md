@@ -17,4 +17,4 @@ Der Monatslauf legt ein Issue „🔎 Ticket-Drift-Bericht <JJJJ-MM>“ an (Mark
 
 ## Grenzen des Laufs
 
-Nicht erfasst: Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos. Ein Shallow-Klon setzt die Git-Prüfungen aus (steht im Bericht).
+Nicht erfasst: Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos. Rückstellungs-Marker und Stoppwörter sind deutsch, ohne deutsche Marker meldet `rueckstellung` nie. Ein Shallow-Klon setzt die Git-Prüfungen aus (steht im Bericht).

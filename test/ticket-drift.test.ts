@@ -117,6 +117,7 @@ describe("pruefe: Duplikate", () => {
     ["genau drei Wörter genügen", paar("alpha bravo charlie", "alpha bravo charlie"), ["1:duplikat"]],
     ["Wörter mit drei Zeichen zählen", paar("abc def ghi", "abc def ghi"), ["1:duplikat"]],
     ["Groß-/Kleinschreibung egal", paar("ALPHA BRAVO CHARLIE", "alpha bravo charlie"), ["1:duplikat"]],
+    ["Ziffern zählen als Wörter", paar("alpha bravo 1234", "alpha bravo 1234"), ["1:duplikat"]],
     ["Stoppwörter zählen nicht", paar("alpha bravo charlie und oder mit", "alpha bravo charlie"), ["1:duplikat"]],
     ["Serie", paar("Umbau 1/6: Cache Layer Schnitt vorbereiten", "Umbau 2/6: Cache Layer Schnitt vorbereiten"), []],
     ["nur ein Titel mit Serie", paar("Umbau 1/6: Cache Layer Schnitt vorbereiten", "Cache Layer Schnitt vorbereiten Umbau"), ["1:duplikat"]],
@@ -126,6 +127,10 @@ describe("pruefe: Duplikate", () => {
     ["verschieden", paar("Wiederkehrender Ticket-Drift-Check Routine", "Browser Screenshot Vergleich Werkzeug"), []],
   ])("%s", (_n, issues, erwartet) => {
     expect(klassen(L.pruefe(issues, ctx(git())))).toEqual(erwartet);
+  });
+  test("mehrere Duplikate einer Nummer: nach Text sortiert", () => {
+    const gleich = (nr: number) => issue(nr, { title: "alpha bravo charlie" });
+    expect(L.pruefe([gleich(1), gleich(9), gleich(10)], ctx(git())).befunde.map((b) => `${b.nr}:${b.text}`)).toEqual(["1:Titel ähnlich zu #10 (1.00)", "1:Titel ähnlich zu #9 (1.00)", "9:Titel ähnlich zu #10 (1.00)"]);
   });
   test("Fremdeingang taucht in keinem Duplikat auf", () => {
     const fremd = { author: { login: "fremd", is_bot: false } };
@@ -173,8 +178,10 @@ describe("pruefe: Rückstellung und Eingang", () => {
     expect(text).not.toMatch(/geheim-login|Zitat-Titel/);
   });
   test("Bericht-Issue selbst wird übersprungen", () => {
-    const e = L.pruefe([issue(9, { body: `${L.BERICHT_MARKER}\n\`scripts/a.mjs:50\`` })], ctx(git({ existiert: () => false, letzteAenderung: () => "2026-01-01T00:00:00Z" })));
-    expect(e.uebersprungen).toEqual([9]);
+    const g = git({ existiert: () => false, letzteAenderung: () => "2026-01-01T00:00:00Z" });
+    const bericht = issue(9, { title: "🔎 Ticket-Drift-Bericht 2026-10", body: `${L.BERICHT_MARKER}\n\`scripts/a.mjs:50\``, author: { login: "app/github-actions", is_bot: true } });
+    expect(L.pruefe([bericht], ctx(g)).uebersprungen).toEqual([9]);
+    expect(klassen(L.pruefe([{ ...bericht, title: "Ticket über den Lauf" }], ctx(g)))).toEqual(["9:pfad-entfernt"]);
   });
 });
 
@@ -227,7 +234,9 @@ describe("berichtText", () => {
     expect(L.berichtText(e([], { hinweise: ["Shallow-Klon: Git-Prüfungen ausgesetzt"] }), { sha: "abc", datum: "2026-11-12" })).toContain("Hinweis: Shallow-Klon: Git-Prüfungen ausgesetzt");
   });
   test("keine Befunde", () => {
-    expect(L.berichtText(e([]), { sha: "abc", datum: "2026-11-12" })).toContain("keine Befunde");
+    const t = L.berichtText(e([]), { sha: "abc", datum: "2026-11-12" });
+    expect(t).toContain("keine Befunde");
+    expect(t).toContain("übersprungen (Fremdeingang, Bericht): keine.");
   });
   test("Kürzung mit exakter Restzahl", () => {
     const viele = Array.from({ length: 3000 }, (_, i) => ({ nr: i + 1, klasse: "blocker-zu", text: "Blocker #99999 ist geschlossen, bitte prüfen" }));
@@ -258,10 +267,9 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const out: string[] = [];
     r.code = await S.main(argv, {
       ladeConfig: () => config,
-      ladeLibs: () => Promise.resolve({ REPO, platziereAmEnde: () => { throw new Error("echter Board-Aufruf"); } }),
+      ladeLibs: () => Promise.resolve({ REPO, platziereAmEnde: (nr: number, token: string) => r.aufrufe.push(["board", String(nr), token]) }),
       ghLesen: (args: string[]) => { r.lesen.push(args); return issues; },
       ghSchreiben: (args: string[], input: string) => { r.aufrufe.push(["gh", ...args]); r.bodies.push(input); return antwort; },
-      platziere: (nr: number, token: string) => r.aufrufe.push(["board", String(nr), token]),
       sicht: { tops: TOPS, sha: "abc", git: git({ zeilen: () => 10 }) },
       env, heute: "2026-11-12", log: (m: string) => out.push(m), err: (m: string) => out.push(m),
     });
@@ -276,13 +284,17 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 t"]);
     expect(r.bodies[0].startsWith(MARKER)).toBe(true);
     expect(r.bodies[0]).toContain("#2: Blocker #99 ist geschlossen");
-    expect(r.aufrufe[0]).toContain("🔎 Ticket-Drift-Bericht 2026-11");
+    expect(r.aufrufe[0]).toEqual(["gh", "issue", "create", "--title", "🔎 Ticket-Drift-Bericht 2026-11", "--body-file", "-"]);
     expect(verboten(r.aufrufe)).toEqual([]);
   });
   test("Bericht offen, ungeclaimt: genau edit mit Titel-Monat und Body auf die Bericht-Nummer", async () => {
     const r = await lauf(fixture(bericht(40)));
     expect(r.aufrufe).toEqual([["gh", "issue", "edit", "40", "--title", "🔎 Ticket-Drift-Bericht 2026-11", "--body-file", "-"]]);
     expect(r.bodies[0]).toContain("#2: Blocker #99 ist geschlossen");
+  });
+  test("Bericht der Maintainerin (Owner aus REPO) ist Ziel", async () => {
+    const r = await lauf(fixture(bericht(40, { author: { login: "o", is_bot: false } })));
+    expect(r.aufrufe[0].slice(0, 4)).toEqual(["gh", "issue", "edit", "40"]);
   });
   test("mehrere Berichte: der mit der kleinsten Nummer", async () => {
     expect((await lauf(fixture(bericht(40), bericht(30)))).aufrufe[0].slice(0, 4)).toEqual(["gh", "issue", "edit", "30"]);
@@ -293,6 +305,7 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
   test.each([
     ["Marker eines Fremden", issue(30, { title: TITEL, body: MARKER, author: { login: "fremd", is_bot: false } })],
     ["Marker zitiert, anderer Titel", issue(30, { title: "Ticket über den Lauf", body: `Der Marker ${MARKER} steht im Bericht.` })],
+    ["Titel und Bot, aber kein Marker im Body", issue(30, { title: TITEL, body: "", author: bot })],
     ["Fremder mit Forum-Label", issue(30, { title: TITEL, body: MARKER, labels: [{ name: config.labels.forum }] })],
   ])("kein Ziel: %s (Neuanlage statt edit)", async (_n, fremd) => {
     const r = await lauf(fixture(fremd));
@@ -337,7 +350,8 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const eigeneIssues = [issue(2, { body: `${sprache.blocker} #99`, author: { login: eigenes.split("/")[0], is_bot: false } })];
     const fremdRepo = await lauf(fixture(), [], { PROJECT_TOKEN: "t" }, "https://github.com/user1/r/issues/77\n");
     const eigenRepo = await lauf(eigeneIssues, [], { PROJECT_TOKEN: "t" }, "https://github.com/user1/r/issues/77\n", eigenes);
-    expect([fremdRepo.aufrufe[0].includes("--label"), eigenRepo.aufrufe[0].includes("--label")]).toEqual([false, true]);
+    expect(fremdRepo.aufrufe[0]).not.toContain("--label");
+    expect(eigenRepo.aufrufe[0].slice(-2)).toEqual(["--label", config.labels.harness]);
     expect([fremdRepo.aufrufe[1], eigenRepo.aufrufe[1]]).toEqual([["board", "77", "t"], ["board", "77", "t"]]);
   });
   test.each([["kaputt"], ["https://github.com/o/r/issues/0"], ["https://github.com/o/r/pull/12"]])("unlesbare Nummer %s: Exit 1, kein Board-Aufruf", async (antwort) => {
@@ -376,7 +390,7 @@ describe("Wächter", () => {
 });
 
 describe("gitSicht", () => {
-  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_DATE: DATUM, GIT_COMMITTER_DATE: DATUM } });
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_DATE: DATUM, GIT_COMMITTER_DATE: DATUM } });
   const DATUM = "2026-09-01T10:00:00+00:00";
   test("echtes Wegwerf-Repo: gelöscht, geändert nach updatedAt, unverändert, Zeilenzahl, Verzeichnis", () => {
     const wurzel = mkdtempSync(join(tmpdir(), "drift-"));
@@ -388,6 +402,7 @@ describe("gitSicht", () => {
       writeFileSync(join(wurzel, "docs", "alt.md"), "x\n");
       writeFileSync(join(wurzel, "docs", "stabil.md"), "eins\nzwei");
       writeFileSync(join(wurzel, "docs", "geaendert.md"), "a\n");
+      writeFileSync(join(wurzel, "docs", "leer.md"), "");
       git(wurzel, "add", "-A");
       git(wurzel, "commit", "-q", "-m", "eins");
       rmSync(join(wurzel, "docs", "alt.md"));
@@ -402,6 +417,7 @@ describe("gitSicht", () => {
       expect(sicht.git.geaendertSeit("docs/geaendert.md", "2026-10-01T00:00:00Z")).toBe(false);
       expect([sicht.git.zeilen("docs/stabil.md"), sicht.git.zeilen("docs/geaendert.md")]).toEqual([2, 1]);
       expect(sicht.git.zeilen("docs")).toBe(Number.POSITIVE_INFINITY);
+      expect(sicht.git.zeilen("docs/leer.md")).toBe(0);
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
