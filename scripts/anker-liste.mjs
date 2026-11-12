@@ -132,7 +132,7 @@ const shellBereinigt = (zeile) => zeile.replace(SHELL_STRINGS, '""').replace(SHE
 /** Dialekt je Endung: Köpfe, Text für die Kopf-Erkennung, Anker-Namen einer Zeile, Grenze zur Modulebene, Blockkommentar-Logik. */
 const DIALEKT_JS = { kopf: (text) => kopfName(text.replace(STRINGS, '""')), namen: jsAnkerNamen, grenze: MODULEBENE_GRENZE, blockKommentar: true };
 const DIALEKT_SHELL = {
-  kopf: (text) => SHELL_KOEPFE.map((re) => re.exec(shellBereinigt(text))?.[1]).find((n) => n !== undefined),
+  kopf: (text) => SHELL_KOEPFE.map((re) => re.exec(text)?.[1]).find((n) => n !== undefined),
   namen: (zeile) => {
     const text = shellBereinigt(zeile);
     return MUSTER_SHELL.filter((m) => m.re.test(text)).map((m) => m.name);
@@ -153,7 +153,7 @@ function dateiAnker(datei, inhalt, zeilen) {
     const n = i + 1;
     const t = roh.trim();
     const kommentar = dialekt.blockKommentar && (imBlock || t.startsWith("/*") || t.startsWith("*"));
-    if (dialekt.blockKommentar && (t.startsWith("/*") || imBlock)) imBlock = !t.includes("*/");
+    if (t.startsWith("/*") || imBlock) imBlock = !t.includes("*/");
     if (kommentar) return;
     const name = dialekt.kopf(roh);
     if (name !== undefined) funktion = { name, zeile: n };
