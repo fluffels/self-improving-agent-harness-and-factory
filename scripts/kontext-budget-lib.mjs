@@ -128,3 +128,10 @@ export const AGENTEN_SKILL_BUDGETS = [
 /** Budget für jede Agenten- und Skill-Datei ohne Eintrag (gleich dem größten Budget der Liste, `test/agenten-skill-budget.test.ts` verlangt das). */
 export const AGENTEN_SKILL_DEFAULT_BUDGET = 37_500;
 
+/** Zeichen eines Textes ohne den Block von `marker.start` bis einschließlich `marker.ende` (zeilenenden-neutral); fehlt ein Marker oder steht das Ende vor dem Start, zählt der ganze Text. Die Marker gibt der Aufrufer vor (Blatt). */
+export function zeichenOhneBlock(text, { start, ende }) {
+  const a = text.indexOf(start);
+  const b = text.indexOf(ende);
+  if (a < 0 || b < a) return countChars(text);
+  return countChars(text.slice(0, a) + text.slice(b + ende.length));
+}

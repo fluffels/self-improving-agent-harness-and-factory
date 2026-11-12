@@ -50,8 +50,8 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
-import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
-import { ohneProjektwertBlock } from "./projektwert-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
+import { leereProjektwerte, PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -99,24 +99,16 @@ export function collectAgentSkillFiles(rootDir = ROOT) {
 /** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen); ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
 export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_BUDGETS, defaultBudget = AGENTEN_SKILL_DEFAULT_BUDGET) {
   const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
+  const marker = { start: PROJEKTWERT_START, ende: PROJEKTWERT_ENDE };
   return collectAgentSkillFiles(rootDir).map((file) => ({
     file,
-    chars: countChars(ohneProjektwertBlock(readFileSync(join(rootDir, file), "utf8"), file)),
+    chars: zeichenOhneBlock(leereProjektwerte(readFileSync(join(rootDir, file), "utf8"), file), marker),
     budget: budgetOf.get(file) ?? defaultBudget,
   }));
 }
 
-/** Wie `collectAgentSkillSizes`, aber ein kaputter Projektwert-Marker wird `{ fehler }` (Meldung mit Dateiname und Zeile) statt einer Ausnahme; sonst `{ sizes }` (fail-closed: der Aufrufer bricht bei `fehler` ab). */
-export function messeAgentSkills(rootDir = ROOT) {
-  try {
-    return { sizes: collectAgentSkillSizes(rootDir) };
-  } catch (e) {
-    return { fehler: e instanceof Error ? e.message : String(e) };
-  }
-}
-
 /** Agenten- oder Skill-Datei (nicht AGENTS.md): ihr Budget gehört dem Kern, die Fix-Zeile unterscheidet sich von der einer AGENTS.md. */
-const istAgentSkill = (file) => file.split("/").pop() !== "AGENTS.md" && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
+const istAgentSkill = (file) => !file.endsWith("AGENTS.md") && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
 
 /** Pur: Fix-Zeile zu den Budget-Verletzungen [{ file }] (leer ohne Verletzung): AGENTS.md → auslagern in modul-lokale AGENTS.md bzw. Tiefendoc; Agenten-/Skill-Datei → kürzen oder in eine bedingte Zusatzdatei bzw. Brain-Seite auslagern, das Budget nie anheben (Ratchet). */
 export function fixHinweis(violations) {
@@ -172,12 +164,7 @@ function main() {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const agentSkill = messeAgentSkills();
-  if (agentSkill.fehler !== undefined) {
-    console.error(red(`✖ ${agentSkill.fehler}`));
-    process.exit(1);
-  }
-  const sizes = [...collectContextSizes(), ...agentSkill.sizes];
+  const sizes = [...collectContextSizes(), ...collectAgentSkillSizes()];
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));
