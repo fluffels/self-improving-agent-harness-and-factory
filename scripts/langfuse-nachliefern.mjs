@@ -344,7 +344,7 @@ function sessionsWaehlen({ args, projectsRoot, repoRoot, seitMs }) {
 function ledgerOeffnen(ledgerDatei, args, now) {
   const { ledger, kaputt } = ledgerLesen(ledgerDatei);
   if (kaputt && !args.trocken) renameSync(ledgerDatei, `${ledgerDatei}.kaputt-${new Date(now).toISOString().replace(/[:.]/g, "-")}`);
-  return ledger;
+  return { ledger, kaputt };
 }
 
 /**
@@ -377,7 +377,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   if (wahl.ergebnis) return { ...wahl.ergebnis, protokoll };
   const { sessions, args: lAufgeloest } = wahl;
   const ledgerDatei = join(stateDir, LEDGER_NAME);
-  const ledger = ledgerOeffnen(ledgerDatei, args, now);
+  const { ledger, kaputt } = ledgerOeffnen(ledgerDatei, args, now);
   const vorher = JSON.stringify(ledger);
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
