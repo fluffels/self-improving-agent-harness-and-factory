@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lies, repoDateien } from "./repo-texte";
 import { FREMD, projektConfig } from "../support/fremd-config";
+import { escapeRe } from "../support/regex";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as configLibRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -147,7 +148,7 @@ describe("ticketNamen: fehlender Schlüssel (AK3)", () => {
     ["praefixe.worktree", OHNE_WORKTREE],
     ["praefixe.branch", OHNE_BRANCH],
   ])("%s fehlt: wirft mit Schlüssel und Fix-Zeile, ohne stillen Standardwert", (schluessel, cfg) => {
-    expect(() => N.ticketNamen(cfg)).toThrow(new RegExp(schluessel.replace(".", "\\.")));
+    expect(() => N.ticketNamen(cfg)).toThrow(new RegExp(escapeRe(schluessel)));
     expect(() => N.ticketNamen(cfg)).toThrow(/Fix: .*\.factory\/projekt\.json/);
   });
   test("leerer oder kein Text zählt als fehlend, kein Config-Objekt ebenso", () => {

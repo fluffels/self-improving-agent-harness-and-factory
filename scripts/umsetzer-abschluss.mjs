@@ -98,7 +98,7 @@ export function ghPrStatus(nummer) {
 const FORMAT =
   "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe | abnahme (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -) sowie BEFUNDE: (je Befund „<Befund> → #<nr>“, sonst keine); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile; abnahme zusätzlich ABNAHME: head=<sha> worktree=<pfad>";
 const WARTEN = (nr) =>
-  `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 300000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
+  `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 200000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
   `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
 
 /**

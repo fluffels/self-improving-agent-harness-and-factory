@@ -1,4 +1,5 @@
 /* PR-Warten (#1559): Kern pur, kein gh-Aufruf, kein echter Schlaf. */
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -212,7 +213,7 @@ describe("warten: Konflikt wird erst nach zweiter Abfrage gemeldet (#1663 L33)",
 
 describe("parseArgs", () => {
   test("PR-Nummer und Optionen, Standardwerte", () => {
-    expect(P.parseArgs(["12"])).toEqual({ pr: "12", maxSekunden: 240, intervall: 30 });
+    expect(P.parseArgs(["12"])).toEqual({ pr: "12", maxSekunden: 150, intervall: 30 });
     expect(P.parseArgs(["--max-sekunden", "60", "--intervall", "10", "7"])).toEqual({ pr: "7", maxSekunden: 60, intervall: 10 });
   });
 });
@@ -424,7 +425,7 @@ describe("parseArgs: strikt (#1790)", () => {
     expect(PF.parseArgs(["abc"]).fehler).toBe("PR-Nummer erwartet, nicht abc");
     expect(PF.parseArgs(["1a"]).fehler).toMatch(/PR-Nummer/);
     expect(PF.parseArgs(["a1"]).fehler).toBe("PR-Nummer erwartet, nicht a1");
-    expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 240, intervall: 30 });
+    expect(PF.parseArgs([])).toEqual({ pr: null, maxSekunden: 150, intervall: 30 });
   });
 });
 
@@ -546,5 +547,13 @@ describe("Code-Scanning-Werkzeuge aus den Ruleset-Regeln (#92 L2)", () => {
     expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, "HINWEIS x")).toEqual({ exit: 2, zeilen: ["OFFEN", "HINWEIS x"] });
     expect(C.mitHinweis({ exit: 0, zeilen: ["MERGED a"] }, "HINWEIS x")).toEqual({ exit: 0, zeilen: ["MERGED a"] });
     expect(C.mitHinweis({ exit: 2, zeilen: ["OFFEN"] }, null)).toEqual({ exit: 2, zeilen: ["OFFEN"] });
+  });
+});
+
+describe("CLI: Aufruftext nennt den Standard des Zeitbudgets (factory#347 L4)", () => {
+  test("ohne PR-Nummer: Exit 3 und der Text trägt denselben Standardwert wie parseArgs", () => {
+    const r = spawnSync(process.execPath, ["scripts/pr-warten.mjs"], { encoding: "utf8" });
+    expect(r.status).toBe(3);
+    expect(r.stderr).toContain(`--max-sekunden ${P.parseArgs([]).maxSekunden}]`);
   });
 });

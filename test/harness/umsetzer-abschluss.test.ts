@@ -150,11 +150,16 @@ const eingabe = (lastMessage: string | null, extra = {}) => ({ hookEvent: "Subag
 const vorher = (lastMessage: string | null, extra = {}) => eingabe(lastMessage, { hookEvent: "PreToolUse", toolName: "SubagentHandback", ...extra });
 
 describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
+  test("Prosa im Umsetzer: eigenes Issue nur per spezifikation.mjs anlegen mit Akzeptanzkriterien (factory#347 L8)", () => {
+    assert.match(UMSETZER, /nur per `node scripts\/spezifikation\.mjs anlegen`/);
+    assert.match(UMSETZER, /`## Akzeptanzkriterien` samt Negativfall/);
+    assert.doesNotMatch(UMSETZER.replace("spezifikation.mjs anlegen", "x"), /nur per `node scripts\/spezifikation\.mjs anlegen`/);
+  });
   test("Prosa im Umsetzer: kein Ende bei Auto-Merge, Timeout kein Abbruchgrund, Hook genannt", () => {
     const a = abschnitt(UMSETZER, /^## Letzte Nachricht/);
     assert.match(a, /offener PR mit Auto-Merge ist kein Ende/);
     assert.match(a, /Tool-Timeout beim CI-Warten ist kein Abbruchgrund/);
-    assert.match(a, /timeout: 300000/);
+    assert.match(a, /timeout: 200000/);
     assert.match(a, /umsetzer-abschluss\.mjs/);
     assert.doesNotMatch(abschnitt(UMSETZER.replace("ist kein Ende.", "ist ok."), /^## Letzte Nachricht/), /ist kein Ende\./);
   });
