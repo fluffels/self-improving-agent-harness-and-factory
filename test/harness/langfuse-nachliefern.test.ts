@@ -67,7 +67,7 @@ const O = { ...rawOtlp, bauePayloads: (s: string, e: unknown, o: object) => otlp
   costDetails: (e: Eintrag) => Record<string, number> | null;
   bauePayloads: (s: string, e: Eintrag[], o: { soll?: Eintrag[]; ledgerSpans?: string[]; env?: Record<string, string>; project: string; maxSpans?: number }) => { chunks: Chunk[] };
 };
-const A = rawAbgleich as unknown as {
+const A = { ...rawAbgleich, ...rawOtlp } as unknown as {
   RUHEFRIST_MIN: number;
   beobachtungsId: (s: string, m: string) => string;
   subagentSpanId: (s: string, a: string) => string;
