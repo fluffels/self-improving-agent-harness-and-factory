@@ -75,6 +75,7 @@ export interface Eintrag {
   quelle: string;
   pflichtChecks?: unknown;
   modul?: string;
+  art?: string;
 }
 interface Manifest {
   version: number;
@@ -205,10 +206,10 @@ const ABDECK_ARTEN = ["projekt", "modul", "offen"];
 
 const musterRe = (muster: string): RegExp => new RegExp(`^${muster.split("*").map(escapeRe).join("[^/]*")}$`);
 
-/** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv. */
+/** Kern-Verzeichnisse: die Ordner der Ganz-Datei-Einheiten, nicht rekursiv; eine Vorlage (`art: vorlage`) ist eine Projektdatei, die der Sync nur anlegt, und macht ihren Ordner nicht zum Kern-Verzeichnis. */
 export function kernVerzeichnisse(eintraege: Eintrag[]): Set<string> {
   const out = new Set<string>();
-  for (const e of eintraege) if (istGanzeDatei(e)) out.add(posix.dirname(e.pfad));
+  for (const e of eintraege) if (istGanzeDatei(e) && e.art !== "vorlage") out.add(posix.dirname(e.pfad));
   return out;
 }
 
@@ -737,6 +738,12 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
   const dateien = ["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs", ".claude/agents/x.md", "scripts/docs-gen/tief.mjs", "src/y.ts", ".claude/settings.json"];
   test("Kern-Verzeichnisse sind die Ordner der Ganz-Datei-Einheiten, nicht rekursiv, Teil-Einheiten zählen nicht", () => {
     assert.deepEqual([...kernVerzeichnisse(E)].sort(), [".claude/agents", "scripts"]);
+  });
+  test("eine Vorlage (art vorlage) macht ihren Ordner nicht zum Kern-Verzeichnis (L3)", () => {
+    const mitVorlage = [...E, ein("docs/glossar.md", { art: "vorlage" })];
+    assert.deepEqual([...kernVerzeichnisse(mitVorlage)].sort(), [".claude/agents", "scripts"]);
+    assert.deepEqual(pruefeAbdeckung(mitVorlage, [...dateien, "docs/glossar.md", "docs/projekt-seite.md"], klar()), []);
+    assert.deepEqual([...kernVerzeichnisse([...E, ein("docs/x.md")])].sort(), [".claude/agents", "docs", "scripts"]);
   });
   test("eingeordnete Dateien sind grün; Dateien außerhalb der Kern-Verzeichnisse und tiefer liegende zählen nicht", () => {
     assert.deepEqual(pruefeAbdeckung(E, dateien, klar()), []);

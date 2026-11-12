@@ -108,6 +108,7 @@ describe("pruefeE2e nennt den Variablennamen aus E2E_UMGEBUNG (L57)", () => {
   type Pruefer = { pruefeE2e(e2e: unknown, befehle: unknown): string[] };
   afterEach(() => { vi.doUnmock("../scripts/gate-befehl-lib.mjs"); vi.resetModules(); });
   test("die Meldung trägt den Namen aus E2E_UMGEBUNG.browser", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
     const m = (await import("../scripts/projekt-config-bloecke.mjs")) as unknown as Pruefer;
     const meldung = m.pruefeE2e({ browser: ["a"] }, undefined).join("\n");
     assert.ok(meldung.includes((E2E_UMGEBUNG as unknown as { browser: string }).browser));
@@ -115,6 +116,7 @@ describe("pruefeE2e nennt den Variablennamen aus E2E_UMGEBUNG (L57)", () => {
   test("ein anderer Wert in E2E_UMGEBUNG erscheint in der Meldung (kein Literal im Prüfer)", async () => {
     vi.resetModules();
     vi.doMock("../scripts/gate-befehl-lib.mjs", () => ({ E2E_UMGEBUNG: { browser: "PROBE_E2E" } }));
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
     const m = (await import("../scripts/projekt-config-bloecke.mjs")) as unknown as Pruefer;
     const meldung = m.pruefeE2e({ browser: ["a"] }, undefined).join("\n");
     assert.ok(meldung.includes("PROBE_E2E"));
