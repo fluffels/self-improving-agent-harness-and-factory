@@ -248,6 +248,25 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG }), ghAufrufe };
   }
 
+  describe("Szenario-Durchgang zählt nicht gegen das Cap (factory#358, Ende zu Ende)", () => {
+    const marker2 = (d: number, urteil: string, ursache = "") => ({ user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=${urteil}${ursache} -->` });
+    const zeile2 = `${Z.abnahme}: head=${H} durchgaenge=2 urteil=K1:erfuellt,K2:erfuellt`;
+    const messages = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${zeile2}`;
+    const kommentare = (ursache: string) => [marker2(1, "K1:erfuellt,K2:nicht-erfuellt", ursache), marker2(2, "K1:erfuellt,K2:erfuellt")];
+    test("D1 szenario, D2 bestanden bei runden=1: grün", () => {
+      const { r } = lauf({ messages, kommentare: kommentare(" ursache=K2:szenario") });
+      expect(r.fehler).toEqual([]);
+    });
+    test("D1 mit ursache=umsetzung bei sonst gleichen Daten: rot", () => {
+      const { r } = lauf({ messages, kommentare: kommentare(" ursache=K2:umsetzung") });
+      rot(r.fehler, /durchgaenge=2 ist größer als runden=1/);
+    });
+    test("alle Marker zählen, nicht nur der jüngste: zwei Szenario-Durchgänge decken durchgaenge=3 bei runden=2", () => {
+      const m3 = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=3 urteil=K1:erfuellt,K2:erfuellt`;
+      const k = [marker2(1, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(2, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(3, "K1:erfuellt,K2:erfuellt")];
+      expect(lauf({ messages: m3, kommentare: k }).r.fehler).toEqual([]);
+    });
+  });
   test("grün: Urteil, Spur und head passen", () => {
     const { r } = lauf();
     expect(r.fehler).toEqual([]);

@@ -10,7 +10,7 @@
  *
  * Bericht: erste nicht leere Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium `K<i>: erfuellt|nicht-pruefbar — <Beleg>` bzw. `K<i>: nicht-erfuellt ursache=kriterium|szenario|umsetzung — <Beleg>`
  * (Beleg Pflicht; andere Zeilen werden ignoriert, Szenarien gehören nicht in den Kommentar). Ausgabe `ENTSCHEIDUNG: bestanden|fix|szenario|handoff`
- * (Vorrang handoff > fix > szenario > bestanden): bestanden mit der fertigen Abnahme-Zeile, fix mit den Belegen der nicht erfüllten Kriterien ohne `ursache=szenario`,
+ * (Vorrang handoff > fix > szenario > bestanden): bestanden mit der fertigen Abnahme-Zeile, fix mit den Belegen der nicht erfüllten Kriterien ohne `ursache=szenario` (deren Szenario-Zeilen hängen getrennt an, nicht für den Umsetzer),
  * szenario (alle nicht erfüllten Kriterien `ursache=szenario`, kein Fix) mit den Szenario-Belegen,
  * handoff mit den Gründen (ein Ticket-Kommentar mit dem Hand-off-Marker, genau einer je Aufruf).
  *

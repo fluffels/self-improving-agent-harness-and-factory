@@ -235,7 +235,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
   let marker = null;
   let szenarioDurchgaenge = 0;
   if (nachweis.abnahme?.art === "urteil") {
-    // Ohne PR-Nummer bleibt es rot (fail-closed), zeigt aber vorher die Head-Fehler (Konflikt-Merge hinter der Abnahme), damit der lokale Lauf sie sieht.
+    // Ohne PR-Nummer bleibt es rot (fail-closed), zeigt aber vorher die Head-Fehler (Konflikt-Merge hinter der Abnahme), damit der lokale Lauf sie sieht (ohne Kommentare kennt er die Szenario-Durchgänge nicht: eine Cap-Meldung kann lokal erscheinen, die die CI nicht zeigt).
     if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead, reviewOverride), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
     const kommentare = issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo);
     marker = vertrauterMarker(kommentare, owner, zeilen);
