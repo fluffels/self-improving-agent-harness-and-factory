@@ -204,7 +204,7 @@ export const STATUS_TITEL = "Langfuse-Status überprüfen";
  * das Ticket anlegt); test/board.test.ts bindet jeden Eintrag daran. Security hat keinen Workflow: der Marker steht in docs/ticket-reihenfolge.md.
  */
 export const NOTFAELLE = [
-  { art: "rot-main", marker: "🚨 CI rot auf main", quelle: ".github/workflows/ci.yml" },
+  { art: "rot-main", marker: "🚨 CI rot auf main", quelle: ".github/workflows/alarm-rot-main.yml" },
   { art: "security", marker: "🔒 Security:", quelle: "docs/ticket-reihenfolge.md" },
   { art: "dependabot", marker: "🤖 Dependabot-PRs auflösen", quelle: ".github/workflows/dependabot-inbox.yml" },
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },

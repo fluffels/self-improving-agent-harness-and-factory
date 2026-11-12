@@ -16,8 +16,8 @@
  * Bekannte Grenze (fail-closed, factory#260): die zeilenweise Flow-Listen-Erkennung kennt ein Quote mitten in einem unquotierten Eintrag nicht wie YAML (`[c'd]` wird
  * NICHT PRÜFBAR statt gelesen); bei belegtem Bedarf auf einen echten Parser umstellen.
  *
- * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`) und `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
- * eigene Grenze im Kopf von `blockformAusloeser`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
+ * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`), `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
+ * eigene Grenze im Kopf von `blockformAusloeser`) und `Sammel-Check` (`blockformJobs`, liest die Auslöser unter `on` und je Job `needs`, `if`, `uses`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
  *
  * Nicht gelesen wird (fail-closed): `blockformNamen` liefert dann `{ fehler: { zeile, konstrukt } }`, nie still weniger Namen. Geschlossene Liste: Flow-Collection als `jobs`, Job,
  * `steps`, Step oder `name`-Wert; Anker `&`, Alias `*`, Tag `!` an diesen Stellen; Merge-Schlüssel `<<` und `?`-Schlüssel in einem gelesenen Mapping; Tab in der Einrückung einer

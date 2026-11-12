@@ -161,83 +161,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/check-doc-tickets.mjs
 
-  # Post-hoc-Netz auf main: ein roter `main` trotz grüner PR-Checks (semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required
-  # Check, ein Admin- oder Force-Push) öffnet ein Alarm-Issue, NUR auf push und ohne den Workflow zu blockieren. Ein roter PR ist Sache der
-  # Autorin. Priorisiert über die Board-Position: Issue mit einem existierenden Label anlegen und per `board-place.mjs --notfall rot-main --top`
-  # an die OBERSTE Board-Position setzen (ein roter `main` blockiert jeden parallelen Agenten). Dedup läuft über den Titel-Präfix, nicht über ein
-  # Label. Board-Schreibzugriff braucht das Secret PROJECT_TOKEN (das Standard-GITHUB_TOKEN kann kein User-Project V2 schreiben); fehlt es,
-  # entsteht das Issue trotzdem und steht nur nicht garantiert oben.
+  # Post-hoc-Netz auf main: ein roter `main` trotz grüner PR-Checks öffnet ein Alarm-Issue, nur auf push und ohne den Workflow zu blockieren. Die Mechanik
+  # (Dedup, Board-Position, PROJECT_TOKEN) wohnt im Kern-Workflow alarm-rot-main.yml; das Label (ein existierendes Label des Projekts) kommt als Input. Der Doctor-Punkt "Sammel-Check" prüft diesen Aufruf.
   alarm-red-main:
     name: Alarm bei rotem main
     needs: [build-test, security-audit, probe-erstbezug]
     if: failure() && github.event_name == 'push'
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-    steps:
-      # Volles Repo und Node für scripts/board-place.mjs (Board-Position mit Wiederholung); kein npm ci nötig.
-      # continue-on-error: scheitert der Checkout, entsteht das Issue trotzdem, die Positionierung scheitert dann sichtbar rot.
-      - name: Repo auschecken
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Node einrichten
-        continue-on-error: true
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-
-      - name: Alarm-Issue öffnen oder ergänzen
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-          # Das Standard-GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben, dafür ein PAT mit project-Scope als Secret PROJECT_TOKEN.
-          # Fehlt es, wird nur gewarnt.
-          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # Existierendes Label des Projekts.
-          ALARM_LABEL: area:harness
-        run: |
-          set -euo pipefail
-          marker="🚨 CI rot auf main"
-          short="${SHA:0:7}"
-
-          # Gibt es schon ein OFFENES Alarm-Issue? Titel-Präfix-Match über die offenen Issues mit dem Alarm-Label. Solange main rot bleibt,
-          # hängen weitere rote Läufe nur einen Kommentar an, statt zu spammen.
-          existing=$(gh issue list --repo "$REPO" --state open --label "$ALARM_LABEL" --limit 1000 \
-            --json number,title \
-            --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
-
-          if [ -n "$existing" ]; then
-            echo "Bestehendes Alarm-Issue #$existing – ergänze Kommentar."
-            gh issue comment "$existing" --repo "$REPO" \
-              --body "🔴 Erneut rot auf \`main\` bei Commit [\`${short}\`](${COMMIT_URL}) → [CI-Lauf](${RUN_URL})."
-          else
-            echo "Lege neues Alarm-Issue an."
-            body=$(printf '%s\n' \
-              "Der CI-Lauf auf \`main\` ist **rot**, obwohl \`main\` PR-gegated ist: ein semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check oder ein Admin- oder Force-Push." \
-              "" \
-              "- Commit: [\`${short}\`](${COMMIT_URL})" \
-              "- Fehlgeschlagener Lauf: ${RUN_URL}" \
-              "" \
-              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen, auf einem Fix-Branch reparieren, per PR mergen, dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
-            new_url=$(gh issue create --repo "$REPO" \
-              --title "${marker} (${short})" \
-              --label "$ALARM_LABEL" \
-              --body "$body")
-            echo "Angelegt: ${new_url}"
-            # An die oberste Board-Position schieben, nur beim NEUEN Issue, nicht beim Ergänzen eines bestehenden.
-            # board-place.mjs wiederholt den Wettlauf (frisches Issue ohne GraphQL-Node) mit Pause; scheitert es endgültig, wird der Lauf rot.
-            nr="${new_url##*/}"
-            if [ -z "${PROJECT_TOKEN:-}" ]; then
-              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für #${nr} nicht gesetzt (Alarm-Issue steht dann irgendwo statt oben). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
-            elif ! GH_TOKEN="$PROJECT_TOKEN" node scripts/board-place.mjs --notfall rot-main --top "$nr"; then
-              echo "::error::Board-Position für #${nr} nicht gesetzt – board-place.mjs ist endgültig gescheitert (Token-Scope: Issues-Zugriff auf ${REPO} UND Projects-Schreibrecht)."
-              exit 1
-            fi
-          fi
+    uses: ./.github/workflows/alarm-rot-main.yml
+    with:
+      label: area:harness
+    secrets:
+      PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}

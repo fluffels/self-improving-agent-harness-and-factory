@@ -246,6 +246,7 @@
     {"pfad":"scripts/offene-punkte-lib.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},
     {"pfad":"scripts/offene-punkte.mjs","ring":"kern","quelle":"Offene Punkte der Maintainerin (factory#152)"},
     {"pfad":"scripts/tag-takt.mjs","ring":"kern","quelle":"Tag-Takt (#103)"},
+    {"pfad":".github/workflows/alarm-rot-main.yml","ring":"kern","quelle":"Alarm bei rotem main als workflow_call (factory#401)"},
     {"pfad":".github/workflows/factory-update.yml","ring":"kern","quelle":"Factory-Update-Check (#90 L17)"},
     {"pfad":"scripts/check-factory-drift.mjs","ring":"kern","quelle":"ADR 0022 F9 (#1613)"},
     {"pfad":".claude/agents/factory-gruppe.md","ring":"kern","quelle":"Inventar, Gruppen-Agent, Agentenname aus Config ADR 0022 F3 (#1613), Pfad ADR 0022 F3h (#1748)"},
