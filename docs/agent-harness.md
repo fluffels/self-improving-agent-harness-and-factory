@@ -23,7 +23,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Skripte | ≥ 210 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 120 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 16 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 19 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 20 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 

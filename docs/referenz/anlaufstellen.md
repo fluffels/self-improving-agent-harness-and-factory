@@ -38,6 +38,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0028 Genau ein Ticket-Ablauf](../adr/0028-ein-ticket-ablauf.md) | wenn ein zweiter Ablauf neben dem Ticket-Ablauf (Ticket-Skills mit gemeinsamem ablauf.md; Workflow-Skript, Zeiger-Skill) vorgeschlagen wird, oder der Ersatz einer früher nur im Workflow deterministischen Garantie gesucht wird |
 | [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
 | [0031 Fabrik ohne Zugriff auf Bezieher](../adr/0031-fabrik-ohne-zugriff-auf-bezieher.md) | wenn ein Fabrik-Lauf in ein Bezieher-Repo schreiben soll (Sync-PR, Issue, Kommentar, Trockenlauf im Bezieher), ein Bezieher-Befund gemeldet wird oder die Verteilung per Tag und `factory-update.yml` geändert wird |
+| [0032 Fabrik bleibt an GitHub gebunden](../adr/0032-git-host-bindung.md) | wenn ein anderer Git-Host als GitHub für Fabrik oder Bezieher erwogen wird, vor dem Anbinden (Auslöser: v1.0.0, Bedarf über die Meldestelle) |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
@@ -71,6 +72,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [harness-glossar.md](../harness-glossar.md) | wenn dir ein Harness-Begriff fehlt (Subagent, Lens, Leitplanke, Override, Sammelticket, Dark Factory) |
 | [sandbox-anbinden.md](../sandbox-anbinden.md) | wenn du den Harness mit Docker Sandboxes (`sbx`), einer eigenen Container-Sandbox oder der Cloud-Sitzung betreiben willst (Einrichtung, Eigenheiten) |
 | [sicherheit-agenten.md](../sicherheit-agenten.md) | wenn ein Lauf Text Dritter liest oder du eine Sicherheitslücke des Harness einordnest |
+| [git-host.md](../git-host.md) | wenn du wissen willst, welche Fabrik-Teile hostneutral sind und welche GitHub voraussetzen, oder einen anderen Git-Host erwägst |
 | [harness-inventar.md](../harness-inventar.md) | wenn ein Claude-Code-Release oder Werkzeug-Update erscheint oder du prüfen willst, ob ein Eigenbau nativ ersetzbar ist |
 | [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, Java-Profil (Maven, Angular, ArchUnit), docs-gen übernehmen |
 | [erstbezug.md](../erstbezug.md) | wenn du den Harness in ein neues, leeres Repo holst: Schrittfolge, Projektdateien mit Vorlagen, Probe `harness-doctor --pruefen`; dazu die Meldestelle eines Beziehers (Schlüssel `meldestelle`, `melden.mjs`, Token, Doctor-Punkt `Meldestelle`) |
