@@ -133,7 +133,7 @@ const KOPIE_MELDUNG = {
 };
 
 /** Modulkopien (factory#244) als Drift-Meldungen; bei Formfehler (`kopien: null`) wird nichts geprüft, `Modul-Wahl:` meldet ihn. */
-function kopienFehler(manifest, stand, wahl, lies) {
+function modulKopienMeldungen(manifest, stand, wahl, lies) {
   if (wahl.kopien === null) return [];
   const imStand = (e) => einheitId(e) in stand.einheiten;
   const vorhanden = (p) => pfadSicher(p) && lies(p) !== null;
@@ -177,7 +177,7 @@ export function pruefeDrift(lies) {
   const fehler = aufteilung.aktiv.flatMap((e) => einheitFehler(e, { lies, stand, ergaenzung, configKaputt }));
   const rest = restFehler(manifest, stand, ids, { wahl, ...aufteilung });
   const alle = [...herkunft, ...fehler, ...rest.fehler];
-  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...kopienFehler(manifest, stand, wahl, lies), ...wahl.fehler], einheiten: ids.size };
+  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...modulKopienMeldungen(manifest, stand, wahl, lies), ...wahl.fehler], einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

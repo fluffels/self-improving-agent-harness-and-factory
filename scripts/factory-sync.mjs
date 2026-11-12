@@ -118,7 +118,7 @@ function waehleModule(manifest, zielConfig) {
   }
   const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
   const liste = (l) => (l.length > 0 ? l.join(", ") : "keine");
-  const begruendet = (Array.isArray(config?.modulKopien) ? config.modulKopien : []).map((k) => k?.datei);
+  const begruendet = (config?.modulKopien ?? []).map((k) => k.datei);
   return { gewaehlt: w.gewaehlt, fehler: w.fehler, begruendet, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
 }
 

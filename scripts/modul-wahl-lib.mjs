@@ -49,7 +49,7 @@ function sprachenFehler(c, m) {
 
 const KOPIEN_FIX = 'modulKopien als Liste aus { "datei": "<repo-relativer Pfad>", "grund": "<Begründung>" } eintragen';
 const textOk = (w) => typeof w === "string" && w.trim() !== "";
-const posixOk = (p) => textOk(p) && !p.includes("\\") && !p.startsWith("/") && p.split("/").every((s) => s !== "" && s !== "." && s !== "..");
+const posixOk = (p) => textOk(p) && !p.includes("\\") && !p.includes(":") && !p.startsWith("/") && p.split("/").every((s) => s !== "" && s !== "." && s !== "..");
 
 function kopieFehler(k, i) {
   if (k === null || typeof k !== "object" || Array.isArray(k)) return [`modulKopien[${i}] muss ein Objekt { datei, grund } sein\nFix: ${KOPIEN_FIX}`];

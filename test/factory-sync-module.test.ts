@@ -107,6 +107,10 @@ describe("planeSync und Sicherheits-Module", () => {
     expect(p.meldungen.join("\n")).not.toContain(`im Ziel liegt ${CODEQL}`);
     expect(p.meldungen.join("\n")).toContain(`im Ziel liegt ${ZIZMOR}`);
   });
+  test("(a2c) eine unlesbare Ziel-Config bei vorhandener Modulkopie meldet nur den Config-Fehler, kein Absturz", () => {
+    const p = sync.planeSync({ quelleLies: (q) => QUELLE[q] ?? null, zielLies: (q) => (q === CODEQL ? "x\n" : null), zielConfig: () => { throw new Error("kaputt"); } });
+    expect(p.fehler.join("\n")).toContain("Ziel-Config: kaputt");
+  });
   test("(a3) ein gewähltes Modul mit Zieldatei gibt keinen Hinweis", () => {
     const p = plane((c) => {
       c.module = ["zizmor"];

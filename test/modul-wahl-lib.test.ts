@@ -210,6 +210,8 @@ describe("modulKopien: Form (factory#244)", () => {
     ["datei mit Backslash", { modulKopien: [{ ...ok, datei: "a\\b" }] }, /datei muss ein repo-relativer POSIX-Pfad/],
     ["datei absolut", { modulKopien: [{ ...ok, datei: "/a" }] }, /datei muss/],
     ["datei mit ..", { modulKopien: [{ ...ok, datei: "a/../b" }] }, /datei muss/],
+    ["datei nur Leerzeichen", { modulKopien: [{ ...ok, datei: "  " }] }, /datei muss/],
+    ["datei mit Laufwerk", { modulKopien: [{ ...ok, datei: "C:/x" }] }, /datei muss/],
     ["datei mit .", { modulKopien: [{ ...ok, datei: "a/./b" }] }, /datei muss/],
     ["datei mit leerem Segment", { modulKopien: [{ ...ok, datei: "a//b" }] }, /datei muss/],
     ["Eintrag ist eine Liste", { modulKopien: [[]] }, /modulKopien\[0\] muss ein Objekt/],
@@ -255,6 +257,17 @@ describe("modulKopienBefunde (factory#244)", () => {
     const o = { vorhanden: () => true, imStand: () => false, kopien: [kopie("a.yml")] };
     expect(lib.modulKopienBefunde(zwei, { gewaehlt: ["codeql"] }, o)).toEqual([{ pfad: "a.yml", art: "modul-gewaehlt" }]);
     expect(lib.modulKopienBefunde(undefined, { gewaehlt: [] }, { ...o, kopien: [] })).toEqual([]);
+  });
+  test("ein Pfad bei zwei Modulen ohne Grund ergibt genau einen Befund", () => {
+    const zwei = { eintraege: [{ pfad: "a.yml", modul: "codeql" }, { pfad: "a.yml", modul: "zizmor" }] };
+    const b = lib.modulKopienBefunde(zwei, { gewaehlt: [] }, { vorhanden: () => true, imStand: () => false, kopien: [] });
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ pfad: "a.yml", art: "ohne-grund" });
+  });
+  test("Einträge ohne datei erzeugen nur ihre Formfehler, keine Doppelt-Meldung", () => {
+    const f = lib.modulFormFehler({ modulKopien: [{ grund: "x" }, { grund: "y" }] });
+    expect(f.join("\n")).not.toContain("doppelt");
+    expect(f).toHaveLength(2);
   });
   test("(g) unbestimmte Wahl: nichts", () => {
     expect(lauf({ unbestimmt: true, da: ["a.yml"], kopien: [kopie("zz")] })).toEqual([]);
