@@ -89,6 +89,7 @@ export const DOC_EXEMPT_SCRIPTS = new Set([
   "preview", // Vite-Vorschau des Host-Builds — lokale Convenience
   "preview:offline", // dito für den Offline-Build
   "test:watch", // Watch-Modus von Vitest — lokale Convenience (dokumentiert ist `npm test`)
+  "coverage:gate", // Schritt von verify:full über den Gate-Befehl coverage (factory#379), kein eigener Einstieg; dokumentiert ist `node scripts/gate-befehl.mjs coverage`
 ]);
 
 // ── Kommandos ───────────────────────────────────────────────────────────────────

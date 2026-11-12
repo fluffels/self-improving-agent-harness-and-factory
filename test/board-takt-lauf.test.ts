@@ -761,7 +761,7 @@ describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () 
     const harness: number[] = [];
     const items = [...(opt.ohneStatus ? [] : [it(50, { title: STATUS })]), it(10), it(12, { title: "Harness-Härtung (gesammelt)" }), it(11), ...(opt.ohneTicket ? [] : [it(160, { title: "Langfuse-Befunde (gesammelt)" })])];
     const io: Io = {
-      ghJson: (args) => [[]],
+      ghJson: () => [[]],
       loadItems: nurFactory(items),
       loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-07T00:00:00Z", assignees: [] }]],
       ladeKommentare: (nr) => {
