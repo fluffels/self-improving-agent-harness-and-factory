@@ -376,9 +376,9 @@ describe("eigenerLogin und zeileBekannt (factory#208 L6): Dedupe am eigenen Kont
 });
 
 describe("keinSammelticketText (factory#208 L24): ein Wortlaut für alle Schreiber", () => {
-  test("Agentenvariante: voller Wortlaut samt Bezieher-Teil „Zeile unter BEFUNDE im Bericht nennen“", () => {
+  test("Agentenvariante: rollenneutraler Wortlaut samt „Zeile unter BEFUNDE im Bericht nennen“", () => {
     expect(lib.keinSammelticketText({ fuer: "in eingang/privat" })).toBe(
-      "kein ungeclaimtes Harness-Sammelticket in eingang/privat\nFix: node scripts/sammelticket-anlegen.mjs harness; im Bezieher die Zeile unter BEFUNDE im Bericht nennen",
+      "kein ungeclaimtes Harness-Sammelticket in eingang/privat\nFix: node scripts/sammelticket-anlegen.mjs harness; ohne Zugriff dort die Zeile unter BEFUNDE im Bericht nennen",
     );
   });
   test("CI-Variante: kein Bericht, stattdessen Sammelticket anlegen lassen und der nächste Wochenlauf meldet erneut; Trenner wählbar", () => {
