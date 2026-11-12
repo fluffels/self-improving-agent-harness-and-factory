@@ -6,7 +6,7 @@ Diese Seite **bewertet** jeden Harness-Eigenbau: ersetzbar durch ein natives Cla
 
 ## Prüfstand
 
-Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellprojekt#1362) fortschreibt. Nur Claude Code trägt ein `v`. Der Stand ist der zuletzt gesichtete: bei Claude Code das neueste Release im Changelog, bei Langfuse die installierte Plugin-Version laut Patch-Doku.
+Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellprojekt#1362) fortschreibt. Nur Claude Code trägt ein `v`. Der Stand ist der zuletzt gesichtete: bei Claude Code das neueste Release laut GitHub-Releases von `anthropics/claude-code` (nicht die Rohdatei `CHANGELOG.md`), bei Langfuse die installierte Plugin-Version laut Patch-Doku.
 
 - Geprüft bis Claude Code v2.1.294
 - Geprüft bis Langfuse 1.2.0
@@ -15,7 +15,7 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellproj
 
 | Werkzeug | Bezugskomponente | Versionsquelle |
 |---|---|---|
-| Claude Code | `@anthropic-ai/claude-code` | npm (hinkte am 2026-10-08 dem Changelog nach: 2.1.293 gegen 2.1.294) und [CHANGELOG](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) |
+| Claude Code | `@anthropic-ai/claude-code` | npm (hinkte am 2026-10-08 den Releases nach: 2.1.293 gegen 2.1.294) und [GitHub-Releases](https://github.com/anthropics/claude-code/releases) |
 | Langfuse | Plugin `langfuse-observability` (Stand laut [langfuse-hook-patch.md](langfuse-hook-patch.md)) | GitHub-Releases des Plugin-Repos |
 | Playwright | `@playwright/mcp` | npm, Lockfile |
 | GitHub | `gh` (und der GitHub-MCP-Server als Alternative) | Releases von `cli/cli` |

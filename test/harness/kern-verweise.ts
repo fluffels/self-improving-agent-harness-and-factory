@@ -5,7 +5,8 @@
  * Kopfkommentar des Wächters.
  *
  * Die Muster der Nebenformen (Fabrik-Verweis, `Projekt-Block ›`, `AGENTS.md (§`) werden aus `ABSCHNITT_VERWEIS` von
- * `check:docdrift` abgeleitet (Vorspann ersetzt), nicht kopiert; ändert sich dessen Vorspann, bricht `abgeleitet` laut.
+ * `check:docdrift` abgeleitet (Vorspann ersetzt), nicht kopiert; ändert sich dessen Vorspann, bricht `abgeleitet` laut. Die Zitatform
+ * (`ZITAT_VERWEIS`) liegt in `check:docdrift` selbst, hier nur ein dünner Wrapper.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, posix } from "node:path";
@@ -18,6 +19,12 @@ import * as rawTagTakt from "../../scripts/tag-takt.mjs";
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjektwert from "../../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProjektConfig from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawRegex from "../../scripts/regex-lib.mjs";
 import { projektBlock } from "../support/projekt-block";
 
 export interface Verweis {
@@ -39,6 +46,10 @@ export interface Fund {
 }
 export interface StrengFund extends Fund {
   grund: string;
+  /** 1-basierte Zeile des Verweises. */
+  zeile: number;
+  /** Der verweisende Text ab dem Verweis bis Zeilenende, getrimmt, höchstens 80 Zeichen (sonst mit „…“ gekürzt). */
+  text: string;
 }
 export interface BesitzDatei {
   datei: string;
@@ -49,6 +60,7 @@ export interface BesitzDatei {
 const drift = rawDrift as unknown as {
   ABSCHNITT_VERWEIS: RegExp;
   abschnittVerweise: (text: string, o: { istMarkdown: boolean }) => Verweis[];
+  zitatVerweise: (text: string, o: { istMarkdown: boolean }) => (Verweis & { fabrik: boolean })[];
   abschnittTitel: (md: string) => string[][];
   abschnittTrifft: (segment: string, titel: string[][]) => boolean;
   linkStellen: (md: string) => { start: number; path: string; anchor: string; bild: boolean }[];
@@ -58,6 +70,9 @@ const markdown = rawMarkdown as unknown as {
   codeMaskiert: (md: string) => string;
   ueberschriftenStellen: (md: string) => { ebene: number; slug: string; zeile: number }[];
 };
+const projektwert = rawProjektwert as unknown as { leereProjektwerte: (text: string, pfad?: string) => string };
+const escapeRegex = (rawRegex as unknown as { escapeRegex: (text: string) => string }).escapeRegex;
+const PROJEKT_CONFIG = (rawProjektConfig as unknown as { PROJEKT_CONFIG: string }).PROJEKT_CONFIG;
 const besitz = rawBesitz as unknown as {
   besitzSpannen: (einheiten: Einheit[], pfad: string, text: string) => [number, number][];
   einheitText: (e: { pfad: string; block?: string }, text: string) => string | null;
@@ -86,12 +101,9 @@ export function abgeleitet(vorspann: string, original: RegExp = drift.ABSCHNITT_
 export const FABRIK_VERWEIS = abgeleitet(String.raw`([\w./-]*\w\.md) \(Fabrik\) (›|§)`);
 /** `Projekt-Block › A` bzw. `§ A`: Verweis auf den Projekt-Block der AGENTS.md. */
 export const PROJEKT_BLOCK_VERWEIS = abgeleitet(String.raw`(Projekt-Block) (›|§)`);
-/** Zitatform `<pfad>.md § „A“` (auch `(Fabrik) ›`): Muster 8 sieht den Abschnitt nicht (`„` beendet ihn, das Segment ist leer). `fabrik` = mit ` (Fabrik)`. */
-const ZITAT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md)( \(Fabrik\))? (›|§) ?„([^"“\n]+)["“]/g;
-
-/** Verweise in Zitatform (Code nur mit `istMarkdown` maskiert, wie beim Fabrik-Muster); Gruppen wie `Verweis`, `fabrik` trennt die Fabrik-Form von der normalen. Pur. */
+/** Verweise in Zitatform `<pfad>.md § „A“` (auch `(Fabrik) ›`): die Regex `ZITAT_VERWEIS` und die Extraktion gehören `check:docdrift` (factory#403 L6, das Gate prüft die normale Form selbst); `fabrik` trennt die Fabrik-Form von der normalen. Pur. */
 export function zitatVerweise(text: string, istMarkdown = false): (Verweis & { fabrik: boolean })[] {
-  return [...(istMarkdown ? markdown.codeMaskiert(text) : text).matchAll(ZITAT_VERWEIS)].map((m) => ({ pfad: m[1], trenner: m[3], segmente: [m[4].trim()], index: m.index ?? 0, fabrik: m[2] !== undefined }));
+  return drift.zitatVerweise(text, { istMarkdown });
 }
 
 /** `` `<pfad>.md` › A `` (Pfad in Backticks): ein Textverweis, den `check:docdrift` nicht sieht; für die strenge Form zählt er wie jeder andere. */
@@ -187,7 +199,7 @@ export const STRENG_MELDUNG =
 
 /** Meldungstext zu den Funden der strengen Form. */
 export function strengMeldung(funde: StrengFund[]): string {
-  return `Verweise auf Fabrik-Seiten ohne strenge Form:\n${funde.map((f) => `${f.datei} -> ${f.ziel}: ${f.segment} (${f.grund})`).join("\n")}\n${STRENG_MELDUNG}`;
+  return `Verweise auf Fabrik-Seiten ohne strenge Form:\n${funde.map((f) => `${f.datei}:${f.zeile} -> ${f.ziel}: ${f.segment} (${f.grund}) – Text: „${f.text}“`).join("\n")}\n${STRENG_MELDUNG}`;
 }
 
 /**
@@ -207,10 +219,16 @@ export function strengeFunde(wurzel: string, erlaubt: Set<string>): { funde: Str
       if (!imSpann(spannen, v.index) || ziel === undefined || ziel === "AGENTS.md" || ganzeDateien.has(ziel)) continue;
       verweise++;
       const grund = strengPruefung(datei, v, ziel, stellen, erlaubt, lies);
-      if (grund !== null) funde.push({ datei, ziel, segment: v.segmente.join(" › "), grund });
+      if (grund !== null) funde.push({ datei, ziel, segment: v.segmente.join(" › "), grund, ...stelleVon(text, v.index) });
     }
   }
   return { funde, verweise };
+}
+
+/** Zeile (1-basiert) und verweisender Text (ab `index` bis Zeilenende, getrimmt, höchstens 80 Zeichen) für die Meldung der strengen Form. Pur. */
+function stelleVon(text: string, index: number): { zeile: number; text: string } {
+  const roh = (text.slice(index).split("\n")[0] ?? "").trim();
+  return { zeile: text.slice(0, index).split("\n").length, text: roh.length > 80 ? `${roh.slice(0, 79)}…` : roh };
 }
 
 /** `null` = streng genug, sonst der Grund (Prüfpunkte (a) bis (e) in `strengeFunde`). */
@@ -224,6 +242,42 @@ function strengPruefung(datei: string, v: Verweis, ziel: string, stellen: Return
   const kopf = markdown.ueberschriftenStellen(lies(ziel) ?? "").find((h) => h.slug === l.anchor);
   if (kopf === undefined || !drift.abschnittTrifft(v.segmente[0], drift.abschnittTitel(zeilen[kopf.zeile]))) return "(e) das Segment trifft die Überschrift des Ankers nicht";
   return null;
+}
+
+// ── Eingesetzte Präfix-Literale (factory#403 L25) ─────────────────────────────────────────────────────────────────
+
+export interface PraefixFund {
+  datei: string;
+  literal: string;
+  stelle: string;
+}
+
+/**
+ * Die eingesetzten Werte der Projektwert-Gruppe `praefixe` (`commitZeile`, `branch`, `worktree`) aus der Projekt-Config, nur nicht leere Texte,
+ * längster zuerst. Geschlossener Umfang: `agenten.*`, Labels und zur Laufzeit zusammengesetzte Strings erfasst der Scan nicht.
+ */
+export function praefixWerte(wurzel: string): string[] {
+  const config = JSON.parse(readFileSync(join(wurzel, PROJEKT_CONFIG), "utf8")) as { praefixe?: Record<string, unknown> };
+  const werte = Object.values(config.praefixe ?? {}).filter((w): w is string => typeof w === "string" && w !== "");
+  return [...new Set(werte)].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Eingesetzte Präfix-Literale (`werte`, z. B. `SIH-` in `SIH-Plan:`) am Wortanfang in den Besitz-Spannen verteilter Einheiten (`endung`, ganzer Text samt Kommentaren):
+ * ein Kern-Text nennt den Wert nur als Platzhalter `<praefixe.commitZeile>`. Generierte Stellen (Projektwert-Block, Frontmatter-Wertzeilen) entfallen
+ * (`leereProjektwerte`). Pur bis auf das Lesen. Grenze: nur Werte aus `werte`, nur Text in Besitz-Spannen verteilter Einheiten (kein Ring oberflaeche).
+ */
+export function praefixFunde(wurzel: string, werte: string[], endung: RegExp): { funde: PraefixFund[]; dateien: number } {
+  if (werte.length === 0) return { funde: [], dateien: 0 };
+  const maskiert = [...werte].sort((a, b) => b.length - a.length).map((w) => escapeRegex(w).replace(/\\-/g, "-")); // Flag u: `\-` außerhalb einer Zeichenklasse ist ungültig
+  const muster = new RegExp(`(?<![\\p{L}\\p{N}_-])(${maskiert.join("|")})`, "gu");
+  const { dateien } = besitzDateien(wurzel, endung);
+  const funde: PraefixFund[] = [];
+  for (const { datei, text, spannen } of dateien) {
+    const innen = projektwert.leereProjektwerte(spannen.map(([a, b]) => text.slice(a, b + 1)).join("\n"), datei);
+    for (const m of innen.matchAll(muster)) funde.push({ datei, literal: m[1], stelle: innen.slice(m.index, (m.index ?? 0) + 30).split("\n")[0] });
+  }
+  return { funde, dateien: dateien.length };
 }
 
 // ── Fabrik-Verweise ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -265,9 +319,9 @@ const ZIELE: Record<string, AgentsZiel> = { "AGENTS.md": "AGENTS.md", "CLAUDE.md
 const zielName = (datei: string): AgentsZiel | null => ZIELE[datei.split("/").pop() ?? ""] ?? null;
 
 /** Gruppe 1: Dateiname, 2: Trenner, 3: quotierter Begriff, 4: freier Begriff bis zum Terminator (Absatzlogik der Formen 4 und 5). */
-const ABSATZ_RE = /(?=[\w./-]+\.md|Projekt-Block|§|›)(?:([\w./-]+\.md|Projekt-Block)[\s(]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“…§›]{2,160}))/g;
+const ABSATZ_RE = /(?=[\w./-]+\.md|Projekt-Block|§|›)(?:([\w./-]+\.md|Projekt-Block)[\s(]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“§›]{2,160}))/g;
 
-/** Formen 4 und 5 (absatzweise, damit ein bares `§` die Zieldatei nur aus SEINEM Absatz erbt): bares `§ X` erbt die Zieldatei des letzten `<datei> § …` im Absatz, `AGENTS.md „X"` zitiert. `…` trennt Fragmente nur im Zitat. Pur. */
+/** Formen 4 und 5 (absatzweise, damit ein bares `§` die Zieldatei nur aus SEINEM Absatz erbt): bares `§ X` erbt die Zieldatei des letzten `<datei> § …` im Absatz, `AGENTS.md „X"` zitiert. `…` trennt Fragmente auch im freien Text (factory#403 L16). Pur. */
 export function absatzVerweise(text: string): AgentsVerweis[] {
   const verweise: AgentsVerweis[] = [];
   for (const absatz of text.split(/\n\s*\n/)) {
