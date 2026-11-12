@@ -21,6 +21,7 @@ interface Lib {
   PROJEKTWERT_ENDE: string;
   projektwertStellen(t: string, pfad?: string): { bloecke: { start: number; ende: number }[]; zeilen: { folge: number; schluessel: string }[] };
   leereProjektwerte(t: string, pfad?: string): string;
+  ohneProjektwerte(t: string, pfad?: string): string;
   rendereProjektwerte(t: string, c: Cfg | (() => Cfg), pfad?: string): string;
   projektwertWert(c: Cfg, k: string): string;
   platzhalterMuster(): RegExp;
@@ -359,6 +360,33 @@ describe("Grenzfälle der Lib", () => {
   test("fehlende oder leere Gruppe nennt den Ort des Blocks; Gruppe null bricht mit Meldung ab", () => {
     assert.throws(() => lib.rendereProjektwerte(`a\n${S}\n${E}\n`, { praefixe: {}, agenten: {} }, "a.md"), /a\.md:2: .*Gruppe 'labels'/s);
     assert.throws(() => lib.rendereProjektwerte(`${S}\n${E}\n`, { praefixe: {}, agenten: null, labels: {} }, "a.md"), /Gruppe 'agenten'/);
+  });
+});
+
+describe("ohneProjektwerte (L17): Text ohne Block samt Markern und ohne Werte der Zeilen-Marker", () => {
+  test("Block samt beiden Marker-Zeilen entfällt, der Rest bleibt", () => {
+    assert.equal(lib.ohneProjektwerte(`kopf\n${S}\nblock\n${E}\nrest`), "kopf\nrest");
+  });
+  test("ein Block am Textanfang und mehrere Blöcke werden je einzeln entfernt", () => {
+    assert.equal(lib.ohneProjektwerte(`${S}\nblock\n${E}\nrest`), "rest");
+    assert.equal(lib.ohneProjektwerte(`A\n${S}\nx\n${E}\nB\n${S}\ny\n${E}\nC\n`), "A\nB\nC\n");
+  });
+  test("der Wert einer Frontmatter-Zeile wird geleert", () => {
+    assert.equal(
+      lib.ohneProjektwerte("---\n# factory:projektwert agenten.planer\nname: x\n---\nText\n"),
+      "---\n# factory:projektwert agenten.planer\nname:\n---\nText\n",
+    );
+  });
+  test("ohne Kennung (auch in Backticks) bleibt der Text unverändert; CRLF und LF ergeben dieselbe Zeichenzahl", () => {
+    const t = "Beispiel `# factory:projektwert agenten.planer` hier\n";
+    assert.equal(lib.ohneProjektwerte(t), t);
+    const lf = `kopf\n${S}\nblock\n${E}\nrest`;
+    assert.equal(lib.ohneProjektwerte(lf.replace(/\n/g, "\r\n")).replace(/\r/g, ""), lib.ohneProjektwerte(lf));
+  });
+  test("ein kaputter Block wirft mit Ort (Start ohne Ende, Ende ohne Start)", () => {
+    assert.throws(() => lib.ohneProjektwerte(`a\n${S}\nb`, "x.md"), /x\.md:2: Projektwert-Block hat kein Ende/);
+    assert.throws(() => lib.ohneProjektwerte(`a\n${S}\nb`), /<text>:2: Projektwert-Block hat kein Ende/, "ohne Pfad-Argument");
+    assert.throws(() => lib.ohneProjektwerte(`a\n${E}\nb`, "x.md"), /x\.md:2: Projektwert-Block endet ohne Start/);
   });
 });
 

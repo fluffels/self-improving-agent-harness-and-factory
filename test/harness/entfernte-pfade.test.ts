@@ -52,6 +52,7 @@ export const RESTE: Rest[] = [
   { name: "beruehrtHarness", muster: /beruehrtHarness/, fix: "den Bezeichner entfernen, das Feld gibt es nicht mehr" },
   { name: "urteilFehler (entfernter Export von nachweis-lib)", muster: /urteilFehler/, fix: "den Export aus nachweis-lib nicht mehr nennen, er ist entfernt" },
   { name: "Konstante NACH_MERGE_PRAEFIX", muster: /\bNACH_MERGE_PRAEFIX\b/, fix: "sprache.spezifikation.nachMerge aus der Projekt-Config nutzen, die Konstante ist entfernt" },
+  { name: "zeichenOhneBlock (entfernter Export von kontext-budget-lib)", muster: /zeichenOhneBlock/, fix: "ohneProjektwerte aus projektwert-lib nutzen, der Export ist entfernt (L17, factory#405)" },
   { name: "Konstante FACTORY_LABEL", muster: /\bFACTORY_LABEL\b/, fix: "die Konstante aus board-lib nicht mehr nennen, sie ist entfernt" },
   { name: "Ausnahmeliste des Flag-Parser-Wächters", muster: /noch nicht migrierten Skripte stehen dort/, fix: "die Ausnahmeliste gibt es nicht mehr, den Ist-Zustand des Wächters beschreiben" },
   { name: "Docs-Gen-Schlüssel diagramme.ruleset", muster: /diagramme\.ruleset/, fix: "den Schlüssel aus der Docs-Gen-Konfiguration nicht mehr nennen, er ist entfernt" },
@@ -116,6 +117,7 @@ const meldungKern = (treffer: string[]): string => meldungMitFix(treffer, RESTE)
 /** Entfernte Dateien, die nie wieder angelegt werden dürfen (exakter Pfad, je Eintrag der Grund). */
 export const ENTFERNTE_DATEIEN: { pfad: string; grund: string }[] = [
   { pfad: "test/harness/kern-test-literale-baseline.json", grund: "Null-Regel der Kern-Tests (#1903)" },
+  { pfad: "test/harness/umsetzer-bedingte-dateien.test.ts", grund: "aufgegangen in test/harness/bedingte-dateien.test.ts (factory#405)" },
   { pfad: "test/harness/kern-links-baseline.json", grund: "Kern-Links: Deckung per Anker-Stub statt Baseline (factory#132)" },
 ];
 
@@ -236,6 +238,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       beruehrtHarness: "Auftrag beruehrtHarness",
       "urteilFehler (entfernter Export von nachweis-lib)": "import { urteilFehler } from nachweis-lib",
       "Konstante NACH_MERGE_PRAEFIX": "import { NACH_MERGE_PRAEFIX } from spezifikation-lib",
+      "zeichenOhneBlock (entfernter Export von kontext-budget-lib)": "import { zeichenOhneBlock } from kontext-budget-lib",
       "Konstante FACTORY_LABEL": "import { FACTORY_LABEL } from board-lib",
       "Ausnahmeliste des Flag-Parser-Wächters": "die noch nicht migrierten Skripte stehen dort als Liste",
       "Docs-Gen-Schlüssel diagramme.ruleset": "config.diagramme.ruleset fehlt",

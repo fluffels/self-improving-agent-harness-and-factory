@@ -73,13 +73,27 @@ export function projektwertStellen(text, pfad = "<text>") {
   return { bloecke, zeilen: stellen };
 }
 
-/** Text mit geleerten Projektwerten (Block-Rumpf entfernt, Wert der Frontmatter-Zeile entfernt). Wirft wie `projektwertStellen`. */
-export function leereProjektwerte(text, pfad = "<text>") {
-  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
+/** Gemeinsame Auslegung von `leereProjektwerte` und `ohneProjektwerte`: Zeilen mit geleerten Werten der Frontmatter-Marker, dazu die Blöcke (Wirft wie `projektwertStellen`). */
+function geleerteZeilen(text, pfad) {
   const st = projektwertStellen(text, pfad);
   const zeilen = text.split("\n");
   for (const z of st.zeilen) zeilen[z.folge] = `${z.einrueckung}${z.name}:`;
-  for (const b of [...st.bloecke].reverse()) zeilen.splice(b.start + 1, b.ende - b.start - 1);
+  return { zeilen, bloecke: [...st.bloecke].reverse() };
+}
+
+/** Text mit geleerten Projektwerten (Block-Rumpf entfernt, Wert der Frontmatter-Zeile entfernt). Wirft wie `projektwertStellen`. */
+export function leereProjektwerte(text, pfad = "<text>") {
+  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
+  const { zeilen, bloecke } = geleerteZeilen(text, pfad);
+  for (const b of bloecke) zeilen.splice(b.start + 1, b.ende - b.start - 1);
+  return zeilen.join("\n");
+}
+
+/** Text ohne Projektwerte (Block samt beiden Marker-Zeilen entfernt, Wert der Frontmatter-Zeile entfernt): die Messgrundlage der Agenten- und Skill-Budgets (L17, eine Auslegung statt zwei Parser). Wirft wie `projektwertStellen`. */
+export function ohneProjektwerte(text, pfad = "<text>") {
+  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
+  const { zeilen, bloecke } = geleerteZeilen(text, pfad);
+  for (const b of bloecke) zeilen.splice(b.start, b.ende - b.start + 1);
   return zeilen.join("\n");
 }
 
