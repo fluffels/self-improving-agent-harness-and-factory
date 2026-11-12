@@ -15,8 +15,8 @@ const SPERRE = "Nachweise 1, 2, 3, 4, 5";
 const config = { repo: "owner/probe", agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
 const temps: string[] = [];
 afterEach(() => { for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true }); });
-/** Wurzel ohne `.codex/agents` und `.mcp.json`: die Tests lesen nie den ungetrackten Zustand des Checkouts. */
-function leerRoot() { const d = mkdtempSync(join(tmpdir(), "codex-leer-")); temps.push(d); return d; }
+/** Wurzel ohne `.codex/agents` und `.mcp.json`, aber mit der Soll-Hook-Registrierung: die Tests lesen nie den ungetrackten Zustand des Checkouts. */
+function leerRoot() { const d = mkdtempSync(join(tmpdir(), "codex-leer-")); temps.push(d); mkdirSync(join(d, ".codex")); writeFileSync(join(d, ".codex", "hooks.json"), lib.hookRegistrierung()); return d; }
 function datei(text: string) { const d = mkdtempSync(join(tmpdir(), "codex-vorpruefung-")); temps.push(d); const p = join(d, "belege.json"); writeFileSync(p, text); return p; }
 test("ohne und mit selbst attestierten Belegen gesperrt", () => {
   const out: string[] = [], err: string[] = [];
@@ -44,7 +44,7 @@ test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe",
   expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain(SPERRE); expect(err).toEqual([]);
 });
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["x"] } } };
-const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string>; pruefeAusgabe: (r: string) => string; quellDatei: (r: string, p: string) => string };
+const lib = lib0 as unknown as { hookRegistrierung: () => string; lokaleHookMaengel: (r: string) => string[]; lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string>; pruefeAusgabe: (r: string) => string; quellDatei: (r: string, p: string) => string };
 function projekt(rollen: Record<string, string>) {
   const d = mkdtempSync(join(tmpdir(), "codex-rollen-")); temps.push(d);
   mkdirSync(join(d, ".codex", "agents"), { recursive: true }); writeFileSync(join(d, ".mcp.json"), JSON.stringify(mcp));
@@ -61,6 +61,27 @@ test("lokale Rollen: aktuell, veraltet, verwaist und fehlender Ordner", () => {
   expect(verwaist).toHaveLength(1); expect(verwaist[0]).toContain("verwaist"); expect(verwaist[0]).toContain("weg.toml");
   const leer = mkdtempSync(join(tmpdir(), "codex-rollen-")); temps.push(leer);
   expect(lib.lokaleRollenMaengel(leer, config, mcp)).toEqual([]);
+});
+test("lokale Hook-Registrierung (factory#364): fehlt, weicht ab, ist Symlink oder steht inline in config.toml, je ein Mangel; Soll meldet nichts", () => {
+  const d = leerRoot();
+  expect(lib.lokaleHookMaengel(d)).toEqual([]);
+  const fehlt = mkdtempSync(join(tmpdir(), "codex-hook-leer-")); temps.push(fehlt);
+  expect(lib.lokaleHookMaengel(fehlt)).toHaveLength(1); expect(lib.lokaleHookMaengel(fehlt)[0]).toContain("fehlt");
+  writeFileSync(join(d, ".codex", "hooks.json"), lib.hookRegistrierung().replace("30", "600"));
+  expect(lib.lokaleHookMaengel(d)[0]).toContain("weicht vom Soll ab");
+  writeFileSync(join(d, ".codex", "hooks.json"), lib.hookRegistrierung());
+  writeFileSync(join(d, ".codex", "config.toml"), "[agents]\nenabled = true\n");
+  expect(lib.lokaleHookMaengel(d)).toEqual([]);
+  writeFileSync(join(d, ".codex", "config.toml"), "[[hooks.PreToolUse]]\nmatcher = \"x\"\n");
+  expect(lib.lokaleHookMaengel(d)[0]).toContain("inline");
+  const l = mkdtempSync(join(tmpdir(), "codex-hook-link-")); temps.push(l);
+  mkdirSync(join(l, ".codex")); symlinkSync(join(d, ".codex", "hooks.json"), join(l, ".codex", "hooks.json"));
+  expect(() => lib.lokaleHookMaengel(l)).toThrow("Symlink");
+});
+test("Vorprüfung: fehlende Hook-Registrierung ist ein Mangel auch ohne .codex/agents", () => {
+  const fehlt = mkdtempSync(join(tmpdir(), "codex-hook-leer-")); temps.push(fehlt);
+  const r = lauf([], { root: fehlt, codexVersion: () => null });
+  expect(r).toMatchObject({ code: 1, autonom: false }); expect(r.maengel?.join()).toContain(".codex/hooks.json");
 });
 test("lokale Rollen: ein Ordner an der Stelle einer Rollen-Datei ist veraltet, kein Absturz", () => {
   const soll = Object.keys(lib.setupDateien(mcp, config, "http://localhost/")).filter(k => k.startsWith(".codex/agents/")).map(k => k.split("/").pop() as string);

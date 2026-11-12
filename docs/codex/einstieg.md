@@ -34,7 +34,7 @@ await collaboration.send_message({ target: planer.task_name, message: "Ergänzun
 await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
 ```
 
-Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Die technischen Claude-Guards `lens-edit`, `lens-auftrag`, `holdout-auftrag` und `holdout-guard` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) sind nicht auf diese Aufrufe portiert.
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Von den technischen Claude-Guards deckt der [Codex-Hook-Adapter](#codex-hook-schnittstelle-und-adapter-factory364) `lens-auftrag` und `holdout-auftrag` für `spawn_agent` ab (Wirkung im echten Lauf: factory#367); `lens-edit`, `holdout-guard` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) und die Nachrichtentrennung für `send_message`/`followup_task` sind nicht portiert.
 
 ## Reproduzierbares Setup
 
@@ -60,6 +60,8 @@ Beim direkten Langfuse-Endpunkt ist das ein Basic-Header mit Public-/Secret-Key.
 
 **Modus `--langfuse-auth host`:** lässt `env_http_headers` weg (Standard `env`, ungültiger Wert Exit 2); `required = true` und die Lese-Toolliste bleiben. Der MCP-Host liefert dann die Anmeldung selbst. Die Wirkung ist eine **Beobachtung aus einem Bezieher-Pilot** und in der Fabrik nicht geprüft.
 
+Das Setup schreibt außerdem `.codex/hooks.json` (PreToolUse-Hook auf `node scripts/codex-hook.mjs`, fester Timeout, [Schnittstelle](#codex-hook-schnittstelle-und-adapter-factory364)); die Datei ist lokal und ungetrackt, `node scripts/codex-vorpruefung.mjs` meldet eine fehlende oder abweichende Registrierung (und eine inline `[hooks]`-Tabelle in `.codex/config.toml`) als Mangel. Codex lädt Projekt-Hooks nur bei vertrauter `.codex/`-Ebene, neue oder geänderte Hooks laufen erst nach der Prüfung per `/hooks`.
+
 Anschließend in einer neu geladenen, vertrauenswürdig eingerichteten Sitzung `codex --strict-config doctor --summary`, tatsächliche Rollen-Discovery und echte MCP-Aufrufe prüfen. Doctor oder eine Serverliste allein belegen keine nutzbare Verbindung. Generierte Konfiguration bleibt lokal; im Konsumenten kommen die Generatoren über das Besitz-Manifest. Ein Konsumenten-Sync gehört nicht zum Setup.
 
 ## Windows-Probe
@@ -82,13 +84,28 @@ Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **f
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
 | `SessionStart` / `SessionEnd`: Langfuse-Abgleich (`SessionStart` startet zusätzlich den Wochenbericht-Lauf) | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
-| `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
-| Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung, `holdout-guard.mjs` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
+| `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Adapter `scripts/codex-hook.mjs` für `exec_command`/Shell und `apply_patch` (Schreibziele); Wirkung im echten Codex-Lauf erst mit factory#367 belegt |
+| Lens-Auftrags- und Holdout-Auftrags-Guard | Adapter für `spawn_agent` (immer Arm A der A/B-Messung); Wirkung erst mit factory#367 belegt |
+| Lens-Edit-Guard, Holdout-Nachrichtentrennung (`send_message`, `followup_task`), `holdout-guard.mjs` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) | **nicht abgedeckt**: keine technische Erzwingung für Codex; Feature-Reduktion ersetzt diese Guards nicht |
 | `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
 | Git-/PR-Gates und Nachweise | bleiben bestehen; ersetzen keinen PreToolUse-Schutz |
 | Fremdtext | bestehendes `fremdtext.mjs` verweigert unvertraute Autoren/Forum-Tickets; allgemeine Subagenten sind keine Quarantäne |
 
-Hook-Fehler und Timeouts können ohne Werkzeugblockade enden. Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
+Hook-Fehler und Timeouts können beim Host ohne Werkzeugblockade enden (fail-open, außerhalb unserer Kontrolle; der Adapter verweigert bei eigenem Fehler selbst). Dokumentierte Matcher-Aliase für `exec_command`, `spawn_agent` und `apply_patch` belegen nicht alle Pfade: etwa `write_stdin` hat kein neues PreToolUse, gehostete Websuche ist nicht überall erfasst. Direkte Dateiwerkzeuge, private Connectoren und schreibende MCPs gehören deshalb in die reale Negativprobe.
+
+## Codex-Hook-Schnittstelle und Adapter (factory#364)
+
+Quelle aller Angaben: [Hooks](https://learn.chatgpt.com/docs/hooks), abgerufen am 2026-11-12 (Zusammenfassung der Seite, Version nicht belegt; die Doku warnt, Schemas auf `main` könnten Felder enthalten, die im Release fehlen). Test-Fixtures folgen nur den hier genannten Formen; **nicht dokumentiert** heißt: der Adapter verweigert fail-closed, bis factory#367 das echte Format belegt.
+
+- **Registrierung:** `<repo>/.codex/hooks.json` oder inline `[hooks]` in `<repo>/.codex/config.toml` (beides wird geladen; das Setup nutzt `hooks.json`). Form: `{"hooks":{"PreToolUse":[{"matcher":"<Regex auf tool_name>","hooks":[{"type":"command","command":"…","timeout":30}]}]}}`; `timeout` in Sekunden (Standard 600). Projekt-Hooks laden nur bei vertrauter `.codex/`-Ebene; neue oder geänderte Hooks werden bis zur Prüfung per `/hooks` übersprungen.
+- **Arbeitsverzeichnis:** der Befehl läuft im Session-`cwd`; ein relativer Befehl wie `node scripts/codex-hook.mjs` setzt voraus, dass die Session im Repo-Wurzelordner läuft (die Doku empfiehlt die Auflösung über die Git-Wurzel). Grenze, solange factory#367 es nicht belegt.
+- **Payload (stdin):** `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, `turn_id`, `tool_name`, `tool_use_id`, `tool_input`. Shell-Befehle (auch `exec_command`) melden `tool_name: "Bash"` mit `tool_input.command`; `apply_patch` meldet `tool_name: "apply_patch"` mit dem Patchtext in `tool_input.command`; `spawn_agent` passt auch auf den Matcher `Agent`. Nicht dokumentiert: `tool_input` von `spawn_agent` (der Adapter erwartet `agent_type` und `message`), das Feld `workdir` der Shell (der Adapter wertet es aus, falls vorhanden), die Grammatik des Patchtextes (der Adapter erwartet `*** Begin Patch`, `Add|Update|Delete File`, `Move to`, `End Patch` und verweigert jede andere Direktive), die Shell von `exec_command` unter Windows (der Adapter behandelt `Bash` und `exec_command` als Shell).
+- **Deny:** `hookSpecificOutput.permissionDecision: "deny"` samt `permissionDecisionReason` auf stdout (wie `buildDenyOutput`), alternativ Exit 2 mit Grund auf stderr. `ask` wird nicht unterstützt: der Lauf gilt als fehlgeschlagen und das Werkzeug läuft; der Adapter macht darum aus jedem `ask` ein Deny. Ungültige Ausgabe, Fehler und Timeout lassen das Werkzeug laufen (fail-open beim Host); die Doku nennt Hooks „a useful guardrail, not a complete enforcement boundary“.
+- **Ohne PreToolUse:** `write_stdin` (löst es für einen schon geprüften Befehl nicht erneut aus), gehostete Websuche, einzelne spezialisierte Werkzeugpfade.
+
+**Adapter `scripts/codex-hook.mjs`:** übersetzt in die Claude-Form und ruft `dispatch` aus `scripts/pretooluse-hook.mjs`, es gibt keine Kopie der Guard-Logik. Shell → `Bash` (Worktree-, gh-, Stdin-Skript-Guard) und danach die `Bash(…)`-Regeln aus `permissions.deny`/`permissions.ask` der `.claude/settings.json` je Befehlssegment (so greift `gh issue delete`, das Claude nur über `ask` fängt); `apply_patch` → je Schreibziel ein `Write` an den Schreibziel-Guard (Haupt-Checkout und `.git` gesperrt, Selbstschutz für `.codex`); `spawn_agent` → `Agent` (Lens-Auftrags- und Holdout-Auftrags-Guard, Codex bleibt bei Arm A). Unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard und unlesbare `settings.json` ergeben für diese Werkzeuge ein Deny; andere Werkzeugnamen bleiben unberührt.
+
+**Grenzen:** `write_stdin`, direkte Dateiwerkzeuge außer `apply_patch`, MCP, `send_message`/`followup_task`, gehostete Websuche; Hook-Trust beim Host (die Vorprüfung sieht ihn nicht, globale Codex-Dateien liest sie nicht); Fehler und Timeout beim Host fail-open; relativer `command`; Schreibzugriffe aus der Shell ohne Pfad-Guard (wie bei Claude); Push auf `main` aus einem Worktree (Serverschutz wie bei Claude); ob ein Lauf in einem verlinkten Worktree die `.codex/hooks.json` des Haupt-Checkouts lädt, ist offen. Die reale Wirkung und die Langfuse-Erfassung in Codex belegt factory#367.
 
 ## Vorprüfung und Nachweisformat
 
@@ -114,8 +131,8 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (heute alle Hooks ohne Codex-Adapter, Grenze factory#249) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#249.
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (der `PreToolUse`-Dispatcher hat den Adapter `scripts/codex-hook.mjs`, dessen transitive Importe den Dispatcher und seine Guards decken; die übrigen Hooks ohne Codex-Adapter mit Grenze factory#365 bzw. factory#249) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#249.
 
 ## Quellen
 
-Dokumentationsbasis vom 2026-10-27: [Custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Hooks](https://learn.chatgpt.com/docs/hooks), [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), [Permissions](https://learn.chatgpt.com/docs/permissions), [App-Server](https://learn.chatgpt.com/docs/app-server), [erweiterte Konfiguration](https://learn.chatgpt.com/docs/config-file/config-advanced) und [Langfuse MCP/Auth](https://langfuse.com/docs/api-and-data-platform/features/mcp-server). OTel gehört in den User-Scope; OTel-Logs sind nicht automatisch Langfuse-Generationen. Produktdokumentation ersetzt keine Harness-Probe.
+Hook-Schnittstelle abgerufen am 2026-11-12 (siehe Abschnitt Codex-Hook-Schnittstelle). Dokumentationsbasis vom 2026-10-27: [Custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Hooks](https://learn.chatgpt.com/docs/hooks), [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), [Permissions](https://learn.chatgpt.com/docs/permissions), [App-Server](https://learn.chatgpt.com/docs/app-server), [erweiterte Konfiguration](https://learn.chatgpt.com/docs/config-file/config-advanced) und [Langfuse MCP/Auth](https://langfuse.com/docs/api-and-data-platform/features/mcp-server). OTel gehört in den User-Scope; OTel-Logs sind nicht automatisch Langfuse-Generationen. Produktdokumentation ersetzt keine Harness-Probe.

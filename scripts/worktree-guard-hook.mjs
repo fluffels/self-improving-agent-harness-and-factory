@@ -73,7 +73,7 @@ import { statSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arbeitsplatzAus, istArbeitsplatz, standardzweigVon, worktreeBefehl } from "./arbeitsplatz-lib.mjs";
-import { buildDenyOutput, parseHookInput } from "./hook-io.mjs";
+import { buildDenyOutput, normalisierePfad, parseHookInput } from "./hook-io.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { analyse } from "./worktree-guard-eval.mjs";
@@ -215,6 +215,38 @@ export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (stash) return stash;
   if (!kannZielHaben(command, cwd, deps)) return { block: false }; // kein Ziel, keine Rückfrage: weder Config lesen noch git fragen
   return jeSchutzWurzel(repoRoot, deps, (w) => entscheideFuer({ cwd, command, w, deps, kontextCache }));
+}
+
+/** Nächster existierender Ordner zu `abs` (die Datei selbst, falls sie existiert, per realpath aufgelöst): ein neuer Ordner unter dem Haupt-Checkout zählt als dieser. */
+function naechsterOrdner(abs, deps) {
+  const stat = deps.statSync ?? statSync;
+  let p = abs;
+  for (;;) {
+    try {
+      const echt = realpathSync.native(p);
+      return stat(echt).isDirectory() ? echt : dirname(echt);
+    } catch {
+      const oben = dirname(p);
+      if (oben === p) return p;
+      p = oben;
+    }
+  }
+}
+
+/** Schreibziel-Guard (factory#364, Codex-Adapter `apply_patch`): blockt ein Schreibziel im geteilten Haupt-Checkout einer Schutz-Wurzel und jeden Pfad mit Segment `.git`;
+ *  verlinkte Worktrees und Orte außerhalb jedes geschützten Repos lassen durch. Kein Pfad oder kein cwd: kein Block (der Adapter prüft das Format selbst, fail-closed). */
+export function decideSchreibziel({ cwd, pfad, repoRoot, deps = {} }) {
+  if (typeof pfad !== "string" || !pfad || !cwd) return { block: false };
+  const abs = normalisierePfad(pfad, cwd);
+  if (abs.split("/").includes(".git")) return { block: true, reason: `Schreiben in .git (${abs}) ist blockiert: Git-Interna ändert nur git selbst.` };
+  const kontextCache = deps.kontextCache ?? new Map();
+  const ordner = naechsterOrdner(abs, deps);
+  return jeSchutzWurzel(repoRoot, deps, (w) => {
+    const ctx = resolveGitContext(ordner, w.wurzel, { ...deps, kontextCache });
+    return ctx.relevant && ctx.isMainWorktree
+      ? { block: true, reason: `Schreiben nach ${abs} würde im geteilten main-Checkout (${ctx.toplevel}) landen und ist blockiert. Im eigenen Worktree arbeiten (AGENTS.md § Eigener Worktree): ${neuerWorktreeHinweis(deps, w)}` }
+      : { block: false };
+  });
 }
 
 const STASH_REASON =
