@@ -83,7 +83,7 @@ node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, a
 Agent({
   subagent_type: "<Typ aus `node scripts/lens-arm.mjs <nr>`>",   // A/B (factory#235), nie von Hand
   description: "Lens <Architektur|Requirement-Treue|Test-Adäquanz|Kombiniert|Sicherheit|Doku> R<runde>",   // R<runde> zählt die Messung (token-baseline)
-  // kein model/effort am Spawn: beides steht im Frontmatter der Lens-Definition (opus/high, docs/model-routing.md §1)
+  // kein model/effort am Spawn: beides im Frontmatter der Lens-Definition (opus/high, docs/model-routing.md (Fabrik) §1)
   prompt: "Brille: <architektur|requirement-treue|test-adaequanz|kombiniert|sicherheit|doku> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/<praefixe.worktree><nr>-r<runde>.patch · erwarteter HEAD: <sha> · Probe-Protokoll: <Commit-SHAs mit Protokoll | keins> (nur Test- und Kombi-Lens) · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · Plan-Prüfliste: <Plan-Abschnitt 4 und 7 (Requirement-, Test-, Kombi-Lens), Bedrohungsabschnitt (Sicherheit), sonst „entfällt“ WÖRTLICH>"
 })
 ```

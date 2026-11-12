@@ -70,7 +70,7 @@ const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 // Die Brillen-Schlüssel leben in nachweis-lib.mjs (auch der Lens-Auftrag-Guard braucht sie, ohne dieses Gate zu importieren); hier bleibt der Export.
 export { BEKANNTE_LENSES };
 
-/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: Factory-Seite docs/agent-harness.md §3a); Schlüssel und Planer aus `zeilen`. */
+/** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: Factory-Seite [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)); Schlüssel und Planer aus `zeilen`. */
 export const vorlage = (zeilen) =>
   `${zeilen.plan}: ${zeilen.planer}\n` +
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
