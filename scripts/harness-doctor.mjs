@@ -53,8 +53,8 @@ const SKRIPTE = dirname(fileURLToPath(import.meta.url));
 const USAGE = "Aufruf: node scripts/harness-doctor.mjs --pruefen [--config <pfad>] | --einrichten [--dry-run] [--config <pfad>]";
 
 const erste = (e) => fehlerText(e).split("\n")[0];
-const langfuseStandard = () =>
-  spawnSync(process.execPath, [join(SKRIPTE, "langfuse-vorbedingung.mjs"), "--json"], { encoding: "utf8", windowsHide: true, timeout: 10000 });
+export const langfuseStandard = (spawn = spawnSync) =>
+  spawn(process.execPath, [join(SKRIPTE, "langfuse-vorbedingung.mjs"), "--json"], { encoding: "utf8", windowsHide: true, timeout: 10000 });
 
 const ohneCr = (t) => t.replace(/\r\n/g, "\n");
 const einzeilig = (t) => t.replace(/\s*\n\s*/g, " ");

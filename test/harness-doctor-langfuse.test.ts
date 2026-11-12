@@ -49,6 +49,16 @@ describe("Langfuse-Punkt (langfusePunkt)", () => {
     expect(x.befund).not.toContain("undefined");
     expect((raw as (a: unknown) => Ergebnis)(undefined).nichtPruefbar).toBe(true);
   });
+  test("Array statt Objekt (factory#398 L58): nicht prüfbar mit Fix auf --json; `{erreichbar:false}` bleibt Lücke", () => {
+    for (const stdout of ["[]", '[{"erreichbar":true}]']) {
+      const x = punkt({ status: 0, stdout });
+      expect(x.nichtPruefbar, stdout).toBe(true);
+      expect(x.fix, stdout).toContain("--json");
+    }
+    const luecke = json({ erreichbar: false }, 1);
+    expect(luecke.nichtPruefbar).toBeUndefined();
+    expect(luecke.fix).toContain("Langfuse starten");
+  });
   test("Objekt ohne erreichbar-Feld: Lücke (nur `true` gilt als erreichbar)", () => {
     const x = json({});
     expect(x.ok).toBe(false);

@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -598,8 +598,15 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("Langfuse-Aufruf bekommt --json (factory#362 L30)", () => {
-    const spawn = readFileSync(join(import.meta.dirname, "..", "scripts", "harness-doctor.mjs"), "utf8");
-    assert.match(spawn, /"langfuse-vorbedingung\.mjs"\), "--json"\]/);
+    const aufrufe: unknown[][] = [];
+    const aufzeichnen = (...a: unknown[]) => { aufrufe.push(a); return { status: 0, stdout: "{}" }; };
+    (rawDoctor as unknown as { langfuseStandard: (s: typeof aufzeichnen) => unknown }).langfuseStandard(aufzeichnen);
+    assert.equal(aufrufe.length, 1);
+    assert.equal(aufrufe[0][0], process.execPath);
+    const argv = aufrufe[0][1] as string[];
+    assert.equal(argv.length, 2);
+    assert.match(argv[0], /langfuse-vorbedingung\.mjs$/);
+    assert.equal(argv[1], "--json");
   });
 
   describe("Code-Scanning-Regel (#92 L2)", () => {

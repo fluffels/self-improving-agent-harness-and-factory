@@ -99,8 +99,9 @@ describe("Verbleib gate-erzwungener Regeln", () => {
     assert.ok(eintrag);
     const lies = (pfad: string): string | null => {
       const t = echtLesen(pfad);
-      return t !== null && pfad === eintrag.ort ? t.replace(eintrag.text, "") : t;
+      return t !== null && pfad === eintrag.ort ? (t + eintrag.text).replaceAll(eintrag.text, "") : t;
     };
+    assert.ok(!(lies(eintrag.ort) ?? "").includes(eintrag.text), "alle Treffer entfernt, nicht nur der erste");
     assert.match(verbleibBefunde({ eintraege, lies }).join("\n"), /factory-umsetzer\.md × pre-flight: der gespeicherte Text steht in .* nicht/);
   });
 
