@@ -1,5 +1,5 @@
 /* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
- * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
+ * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native, line-endings und (Fitness-Anteil) harness-approval im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
  *   `Root-Kontextdatei`: keine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt): sie schaltet das native Laden von AGENTS.md ab.
@@ -21,6 +21,12 @@
  *
  *   `CODEOWNERS-Spiegel` (factory#382): `.github/CODEOWNERS` führt genau die Gruppe `pflichtReview` von `.github/protected-paths.json` (ohne Gruppe die ganze Liste); fehlt eine der Dateien, meldet `Projektdateien` das.
  *
+ *   `Leitplanken-Quelle` (factory#149): der Fitness-Anteil von harness-approval gegen die eigene Quelle des Beziehers (`.github/protected-paths.json` über `schutzlistenMuster`/`trifftLeitplanke`, `.github/CODEOWNERS`, die getrackten Dateien).
+ *   Teilregeln, eine Lücke nennt alle Funde: (a) CODEOWNERS schützt genau die Pfadmenge der Pflicht-Review-Liste (ohne Gruppe der ganzen Quelle) und spiegelt deren Anker-Form; (b) die Quelle enthält `AGENTS.md` unverankert;
+ *   (c) eine Datei mit dem Wächter-Marker als eigener Kommentarzeile liegt nur unter `test/harness/`; (d) keine Kopie der Pre-Flight-Kriterien außerhalb von `AGENTS.md`, `docs/adr/` und den Ankerdateien; (e) keine abgelöste Label-Mechanik außerhalb von `docs/adr/`.
+ *   Die Muster stehen in leitplanken-muster.mjs. Fehlt die Quelle oder ist sie kein JSON, ist Git nicht lesbar oder der Index leer, ist der Punkt nicht prüfbar; fehlt CODEOWNERS bei vorhandener Quelle, ist es eine Lücke.
+ *   Grenzen: (c) liest die getrackten `*.test.ts` unter `test/`, (d) und (e) nur den Agenten-Kontext mit Scan-Endung; ein umformulierter Begriff und eine ungetrackte Datei bleiben unsichtbar.
+ *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
  *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
@@ -34,7 +40,8 @@ import { join } from "node:path";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
-import { pflichtReviewMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
+import { pflichtReviewMuster, schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
+import { abgeloesteFundstellen, istScanDatei, kriterienKopien, TIEFENUNABHAENGIG, waechterAusserhalb } from "./leitplanken-muster.mjs";
 import { sammelCheckPunkt } from "./harness-doctor-sammelcheck.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
@@ -330,7 +337,7 @@ export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = fals
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Sammel-Check"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
@@ -347,6 +354,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
     "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
+    "Leitplanken-Quelle": () => leitplankenQuellePunkt({ git, lies }),
     "Sammel-Check": () => sammelCheckPunkt({ config, workflows, vorAbbruch }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
@@ -407,6 +415,79 @@ export function codeownersSpiegelPunkt(lies) {
   const probleme = codeownersSpiegelProbleme(quelle, codeowners);
   if (probleme.length === 0) return gut(SPIEGEL_PUNKT);
   return luecke(SPIEGEL_PUNKT, probleme.join("; "), `.github/CODEOWNERS und die Gruppe pflichtReview in .github/protected-paths.json (ohne Gruppe: die ganze Liste) gleichziehen, jede Zeile \`<muster> @<owner>\`; Vorlage: .github/CODEOWNERS der Quelle`);
+}
+
+/* Punkt `Leitplanken-Quelle` (factory#149): der Fitness-Anteil von harness-approval gegen die eigene Quelle des Beziehers. Teilregeln (a) bis (e) siehe Kopfkommentar; jede Funktion liefert ihre Funde mit Präfix. */
+const LQ_PUNKT = "Leitplanken-Quelle";
+const QUELLE_PFAD = ".github/protected-paths.json";
+const LQ_FIXE = {
+  a: "die Zeilen in .github/CODEOWNERS und die Pflicht-Review-Liste der Quelle gleichziehen (unverankert ist nur AGENTS.md, sonst mit führendem /)",
+  b: "in .github/protected-paths.json AGENTS.md ohne führenden / eintragen (ein /AGENTS.md trifft in CODEOWNERS keine modul-lokale Datei)",
+  c: "die Wächter-Datei nach test/harness/ verschieben oder den Marker entfernen (nur dort ist sie geschützt)",
+  d: "die ausgeschriebene Kriterienliste durch einen Verweis auf AGENTS.md ersetzen",
+  e: "die abgelöste Mechanik aus der Datei entfernen (Historie gehört nur in docs/adr/)",
+};
+const unverankert = (muster) => muster.filter((m) => !m.startsWith("/")).sort();
+
+/** (a): Menge laut `codeownersSpiegelProbleme`, dazu die Anker-Form: unverankert in CODEOWNERS genau die der Pflicht-Review-Liste, und jeder unverankerte Quell-Eintrag steht in TIEFENUNABHAENGIG. Pur. */
+export function ankerFunde(quelleText, codeownersText, roh) {
+  const funde = codeownersSpiegelProbleme(quelleText, codeownersText);
+  const soll = unverankert(pflichtReviewMuster(quelleText) ?? []);
+  const ist = unverankert(codeownersMuster(codeownersText));
+  if (soll.join("\n") !== ist.join("\n")) funde.push(`Anker-Form: CODEOWNERS unverankert [${ist.join(", ")}], Pflicht-Review-Liste [${soll.join(", ")}]`);
+  for (const p of unverankert(roh)) if (!TIEFENUNABHAENGIG.includes(p)) funde.push(`unverankerter Eintrag ${p} der Quelle ist nicht bewusst tiefen-unabhängig`);
+  return funde.map((f) => `(a) ${f}`);
+}
+
+/** (b): die Quelle enthält `AGENTS.md` unverankert und nicht `/AGENTS.md`. Pur. */
+export function agentsFunde(roh) {
+  const funde = [];
+  if (!roh.includes("AGENTS.md")) funde.push("(b) AGENTS.md fehlt unverankert in der Quelle");
+  if (roh.includes("/AGENTS.md")) funde.push("(b) /AGENTS.md ist root-verankert und trifft keine modul-lokale AGENTS.md");
+  return funde;
+}
+
+/** (c) bis (e) über die getrackten Dateien: `scan` ist Pfad → Text des Agenten-Kontexts, `tests` Pfad → Text der getrackten `*.test.ts` unter `test/`. Pur. */
+export function textFunde(scan, tests) {
+  return [...waechterAusserhalb(tests).map((f) => `(c) ${f}`), ...kriterienKopien(scan).map((f) => `(d) ${f}`), ...abgeloesteFundstellen(scan).map((f) => `(e) ${f}`)];
+}
+
+/** Liest die Pfade in `pfade` (übersprungen: nicht lesbar) zu Pfad → Text. */
+function lesePfade(pfade, lies) {
+  const aus = {};
+  for (const p of pfade) {
+    const text = lies(p);
+    if (text !== null) aus[p] = text;
+  }
+  return aus;
+}
+
+/** Die getrackten Pfade; `null`, wenn Git nicht lesbar ist oder der Index leer bleibt (nie still grün). */
+function getrackte(git) {
+  try {
+    const pfade = git(["ls-files", "-z"]).split("\0").filter(Boolean).map((p) => p.replaceAll("\\", "/"));
+    return pfade.length > 0 ? pfade : null;
+  } catch {
+    return null;
+  }
+}
+
+const lqFix = (funde) => ["a", "b", "c", "d", "e"].filter((k) => funde.some((f) => f.startsWith(`(${k})`))).map((k) => LQ_FIXE[k]).join("; ");
+
+/** Punkt `Leitplanken-Quelle`: `git` wie bei `Zeilenenden`, `lies(rel)` liefert Text oder `null`. */
+export function leitplankenQuellePunkt({ git, lies }) {
+  const quelle = lies(QUELLE_PFAD);
+  if (quelle === null) return nichtPruefbar(LQ_PUNKT, `${QUELLE_PFAD} fehlt oder ist nicht lesbar`, `${QUELLE_PFAD} anlegen (Gruppe→Pfade, Vorlage: die Quelle), dann erneut prüfen`);
+  const roh = schutzlistenMuster(quelle);
+  if (roh === null) return nichtPruefbar(LQ_PUNKT, `${QUELLE_PFAD} ist kein gültiges JSON`, `${QUELLE_PFAD} als JSON (Gruppe→Pfade) reparieren, dann erneut prüfen`);
+  const pfade = getrackte(git);
+  if (pfade === null) return nichtPruefbar(LQ_PUNKT, "Git nicht lesbar oder kein getrackter Index", "den Doctor im Git-Checkout des Projekts starten (git ls-files muss laufen), dann erneut prüfen");
+  const codeowners = lies(".github/CODEOWNERS");
+  if (codeowners === null) return luecke(LQ_PUNKT, ".github/CODEOWNERS fehlt", ".github/CODEOWNERS anlegen: eine Zeile `<muster> @<owner>` je Eintrag der Pflicht-Review-Liste");
+  const scan = lesePfade(pfade.filter(istScanDatei), lies);
+  const tests = lesePfade(pfade.filter((p) => /^test\/.*\.test\.ts$/.test(p)), lies);
+  const funde = [...ankerFunde(quelle, codeowners, roh), ...agentsFunde(roh), ...textFunde(scan, tests)];
+  return funde.length === 0 ? gut(LQ_PUNKT) : luecke(LQ_PUNKT, funde.join("; "), lqFix(funde));
 }
 
 /* Punkt `Workflow-Auslöser`: gelesen vom Blockform-Leser `blockformAusloeser` (workflow-blockform.mjs, ohne `yaml`: der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI` unter `workflows`.

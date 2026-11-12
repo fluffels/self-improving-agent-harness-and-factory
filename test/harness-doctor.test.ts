@@ -853,7 +853,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   const dateien = rawDateien as (a: { rootDir: string }) => unknown[];
   /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
   /** Inhalte der Projektdateien, die der Punkt `CODEOWNERS-Spiegel` liest (gespiegelt: eine Zeile, die sich selbst schützt). */
-  const INHALT: Record<string, string> = { "AGENTS.md": "regeln\n", ".github/protected-paths.json": '{"a":["/.github/CODEOWNERS"]}\n', ".github/CODEOWNERS": "/.github/CODEOWNERS @team\n" };
+  const INHALT: Record<string, string> = { "AGENTS.md": "regeln\n", ".github/protected-paths.json": '{"a":["AGENTS.md","/.github/CODEOWNERS"]}\n', ".github/CODEOWNERS": "AGENTS.md @team\n/.github/CODEOWNERS @team\n" };
   const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n", ausser: string[] = []) => (root: string) => {
     writeFileSync(join(root, ".gitattributes"), regel);
     for (const d of [...(rawProjektdateien as { pfad: string }[]), { pfad: ".github/workflows/board-takt.yml" }, { pfad: "scripts/langfuse-takt.mjs" }]) {
@@ -861,7 +861,10 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
       mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
       writeFileSync(join(root, d.pfad), INHALT[d.pfad] ?? "");
     }
-    for (const [rel, text] of Object.entries(extra)) writeFileSync(join(root, rel), text);
+    for (const [rel, text] of Object.entries(extra)) {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), text);
+    }
     const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
     g("init", "-q");
     g("add", "-A");
@@ -879,6 +882,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.ok(r.out.includes("OK Langfuse-Takt"));
     assert.ok(r.out.includes("OK Required-Check-Quellen"), r.out.join("\n"));
     assert.ok(r.out.includes("OK CODEOWNERS-Spiegel"), r.out.join("\n"));
+    assert.ok(r.out.includes("OK Leitplanken-Quelle"), r.out.join("\n"));
     assert.equal(r.code, 0);
   });
 
@@ -924,6 +928,30 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
       assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
       assert.equal(r.code, 1);
     });
+  });
+
+  describe("factory#149 Negativfall: je Teilregel macht genau Leitplanken-Quelle rot", () => {
+    const ohneZeile = (r: Lauf) => r.out.filter((z) => !z.includes("Leitplanken-Quelle") && !z.startsWith("Harness-Doctor: "));
+    const basis = () => lauf({}, { dateien: "echt", vorbereiten: repo() });
+    const QUELLE_VERANKERT = '{"a":["/AGENTS.md","/.github/CODEOWNERS"]}\n';
+    const FAELLE: Record<string, [string, Record<string, string>]> = {
+      "(a) CODEOWNERS führt /AGENTS.md verankert": ["(a)", { ".github/CODEOWNERS": "/AGENTS.md @team\n/.github/CODEOWNERS @team\n" }],
+      "(b) die Quelle führt /AGENTS.md verankert": ["(b)", { ".github/protected-paths.json": QUELLE_VERANKERT, ".github/CODEOWNERS": "/AGENTS.md @team\n/.github/CODEOWNERS @team\n" }],
+      "(c) Wächter-Marker außerhalb von test/harness/": ["(c)", { "test/w.test.ts": "/* x\n * @harness-waechter\n */\n" }],
+      "(d) Kopie der Pre-Flight-Kriterien in der Doku": ["(d)", { "docs/x.md": "Rückfrage nötig bei Löschen, Ruleset/Secrets/Repo-Einstellungen\n" }],
+      "(e) abgelöste Label-Mechanik in der Doku": ["(e)", { "docs/x.md": "setze das Label maintainer-approved\n" }],
+    };
+    test("Basislauf: gesund", () => {
+      assert.ok(basis().out.includes("OK Leitplanken-Quelle"), basis().out.join("\n"));
+    });
+    for (const [titel, [teil, extra]] of Object.entries(FAELLE)) {
+      test(titel, () => {
+        const r = lauf({}, { dateien: "echt", vorbereiten: repo(extra) });
+        assert.ok(r.out.some((z) => z.startsWith("LÜCKE Leitplanken-Quelle: ") && z.includes(teil) && z.includes("Fix: ")), r.out.join("\n"));
+        assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
+        assert.equal(r.code, 1);
+      });
+    }
   });
 
   test("factory#208 L8: der Standard-Weg von --pruefen trägt den Punkt Meldestelle nur bei einer fremden Meldestelle (Actions ohne Token: Lücke, ohne gh-Aufruf)", () => {
