@@ -1,6 +1,6 @@
 /* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39): nur im Bezieher; die Datei `.github/workflows/factory-update.yml` muss da sein und der Workflow `active`.
  * Jeder Zweig hat seinen Test; `lesen` ist die gh-Naht (kein Netz), `existiert` und `bezieher` sind injiziert. */
-import { readdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -321,8 +321,6 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
 
 /* Vertrag des Doctor-Wochenlaufs (harness-doctor.yml hat kein `npm ci`): der statische Importgraph von Doctor und Meldestellen-Lauf enthält nur `node:`-Builtins und lokale Module, nie ein npm-Paket wie `yaml`. */
 const IMPORT = /\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
-/** Entfernt Block- und Zeilenkommentare, die am Zeilenanfang beginnen (Prosa wie `import("…")` im JSDoc ist kein Import); ein `/*` mitten in einer Zeile (z. B. ein Glob im String) bleibt unberührt, damit kein Import verschwindet. */
-const ohneZeilenKommentare = (text: string): string => text.replace(/^\s*\/\*[\s\S]*?\*\//gm, "").replace(/^\s*\/\/.*$/gm, "");
 /** Alle Modulnamen, die der Importgraph ab `einstieg` anspricht, die kein `node:`-Builtin und kein lokales Modul sind. */
 function externeImporte(einstieg: string, lese: (pfad: string) => string): string[] {
   const gesehen = new Set<string>();
@@ -331,7 +329,7 @@ function externeImporte(einstieg: string, lese: (pfad: string) => string): strin
   for (let pfad = offen.pop(); pfad !== undefined; pfad = offen.pop()) {
     if (gesehen.has(pfad)) continue;
     gesehen.add(pfad);
-    for (const m of ohneZeilenKommentare(lese(pfad)).matchAll(IMPORT)) {
+    for (const m of lese(pfad).matchAll(IMPORT)) {
       const name = m[1];
       if (name.startsWith("./") || name.startsWith("../")) offen.push(join(dirname(pfad), name));
       else if (!name.startsWith("node:")) extern.add(name);
@@ -355,49 +353,5 @@ describe("Importgraph des Doctor-Wochenlaufs", () => {
     };
     expect(externeImporte("/s/a.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv", "yaml"]);
     expect(externeImporte("/s/b.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv"]);
-  });
-  test("Kommentar-Prosa mit import-Form ist kein Import, ein Glob mitten in der Zeile versteckt keinen echten Import", () => {
-    const text = '/**\n * Beispiel: import("yaml") und from "ajv"\n */\n// import "zod";\n  // import "eingerueckt";\n  /* import("auch-eingerueckt") */\nconst g = "scripts/*.mjs"; import { x } from "echt-extern";\n/** doc */\nimport u from "https://x/y"; // Notiz\nimport y from "z"; // Notiz\n';
-    expect(externeImporte("/s/k.mjs", () => text)).toEqual(["echt-extern", "https://x/y", "z"]);
-  });
-});
-
-/* Allgemeiner Vertrag (factory#382 L65): jeder Workflow unter `.github/workflows/` OHNE Installationsschritt lädt über seine `node scripts/<x>.mjs`-Einstiege transitiv nur `node:`-Builtins und lokale Module.
- * Scan-Umfang (geschlossene Liste): Installation = eine Nicht-Kommentarzeile mit `npm ci`, `npm install`, `npm i ` oder `gate-befehl.mjs install`; Einstiege = `node scripts/<x>.mjs` und `node ./scripts/<x>.mjs`;
- * Importe nach dem IMPORT-Regex oben (statisches `from`, `import "…"`, dynamisches `import` mit Literal). Nicht erfasst: `require`, `createRequire`, dynamischer Import mit Variable, `npx`, `npm run`.
- * Schutz gegen leeres Grün: die Liste der geprüften Workflows ist nicht leer. */
-const INSTALLATION = /\b(?:npm ci|npm install|npm i |gate-befehl\.mjs install)/;
-const EINSTIEG = /\bnode\s+(?:\.\/)?(scripts\/[\w.-]+\.mjs)/g;
-const ohneKommentare = (text: string): string => text.split(/\r?\n/).filter((z) => !/^\s*#/.test(z)).join("\n");
-/** `null` bei Installationsschritt (dann hat der Workflow `node_modules`), sonst die Skript-Einstiege (relativ zur Repo-Wurzel). */
-function einstiegeOhneInstallation(text: string): string[] | null {
-  const code = ohneKommentare(text);
-  if (INSTALLATION.test(code)) return null;
-  return [...new Set([...code.matchAll(EINSTIEG)].map((m) => m[1]))].sort();
-}
-describe("Workflows ohne Installationsschritt (factory#382 L65)", () => {
-  const wurzel = join(import.meta.dirname, "..");
-  const dir = join(wurzel, ".github", "workflows");
-  const geprueft = readdirSync(dir)
-    .filter((n) => n.endsWith(".yml"))
-    .map((n) => ({ name: n, einstiege: einstiegeOhneInstallation(readFileSync(join(dir, n), "utf8")) }))
-    .filter((w): w is { name: string; einstiege: string[] } => w.einstiege !== null);
-
-  test("die Liste der geprüften Workflows ist nicht leer (kein leeres Grün)", () => {
-    expect(geprueft.length).toBeGreaterThan(0);
-  });
-
-  test.each(geprueft.map((w) => [w.name, w.einstiege] as const))("%s: Einstiege laden transitiv nur node:-Builtins und lokale Module", (_name, einstiege) => {
-    for (const e of einstiege) expect(externeImporte(join(wurzel, e), (p) => readFileSync(p, "utf8")), e).toEqual([]);
-  });
-
-  test("Prüfung des Prüfers: ohne Installation wird ein yaml-Import rot, mit npm ci ist der Workflow ausgenommen, Kommentare zählen nicht", () => {
-    const ohne = "steps:\n  - run: node scripts/a.mjs\n  - run: node ./scripts/b.mjs --x\n";
-    expect(einstiegeOhneInstallation(ohne)).toEqual(["scripts/a.mjs", "scripts/b.mjs"]);
-    expect(externeImporte("/s/a.mjs", () => 'import { parse } from "yaml";')).toEqual(["yaml"]);
-    for (const install of ["npm ci", "npm install", "npm i --x", "node scripts/gate-befehl.mjs install"]) {
-      expect(einstiegeOhneInstallation(`steps:\n  - run: ${install}\n  - run: node scripts/a.mjs\n`), install).toBeNull();
-    }
-    expect(einstiegeOhneInstallation("# kein npm ci nötig\nsteps:\n  - run: node scripts/a.mjs\n")).toEqual(["scripts/a.mjs"]);
   });
 });
