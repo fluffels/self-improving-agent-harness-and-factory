@@ -88,6 +88,14 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
     expect((await lauf(nutzlast("Bash", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect((await lauf(nutzlast("exec_command", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
   });
+  test("Stash-Sperre (factory#323) wirkt auch unter Codex (factory#397, L38): git stash, pop und env git stash verweigert, list und status laufen durch", async () => {
+    for (const c of ["git stash", "git stash pop", "env git stash"]) {
+      const o = await lauf(nutzlast("exec_command", { command: c }));
+      expect(o?.hookSpecificOutput.permissionDecision, c).toBe("deny");
+      expect(grund(o), c).toContain("git stash");
+    }
+    for (const c of ["git stash list", "git status"]) expect(await lauf(nutzlast("exec_command", { command: c })), c).toBeNull();
+  });
   test("Annahme (undokumentiert): workdir gilt als cwd", async () => {
     expect(await lauf(nutzlast("Bash", { command: "git commit --allow-empty -m x", workdir: haupt }, wt))).not.toBeNull();
   });
