@@ -367,6 +367,13 @@ function dynamischerAufruf(k, raw) {
   return k.ort === null ? unklar("commit/push") : blockiert(k, k.ort, "commit/push (über ein dynamisches Kommando)");
 }
 
+/** `git …` oder Dash-Form `git-commit …`: Ergebnis von gitStatement, sonst undefined (kein git-Aufruf). */
+function gitAufruf(k, kopfWert, rest) {
+  if (istGit(kopfWert)) return gitStatement(k, rest);
+  const dash = gitDashUnter(kopfWert);
+  return dash ? gitStatement(k, [{ value: dash, literal: true }, ...rest]) : undefined;
+}
+
 /** Ein Statement bewerten: Ortswechsel, git oder Interpreter; Ergebnis `{ block }`, `{ ask }` oder null. */
 function statement(k, stmt) {
   const toks = stmt.tokens;
@@ -381,9 +388,8 @@ function statement(k, stmt) {
     ortWechsel(k, toks.slice(aufruf ? 2 : 1));
     return null;
   }
-  if (kopfTok && istGit(kopfWert)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
-  const dash = kopfTok ? gitDashUnter(kopfWert) : null;
-  if (dash) return gitStatement(k, [{ value: dash, literal: true }, ...toks.slice(aufruf ? 2 : 1)]);
+  const gitErgebnis = kopfTok ? gitAufruf(k, kopfWert, toks.slice(aufruf ? 2 : 1)) : undefined;
+  if (gitErgebnis !== undefined) return gitErgebnis;
   if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd)) || LAUFZEITEN.has(basename(cmd).toLowerCase())) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
   return null;
 }
