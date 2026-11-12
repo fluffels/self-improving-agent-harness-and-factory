@@ -310,3 +310,15 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
     expect(abnahme({ "src/auth/a.ts": "x\n" }, { ...CONFIG, risiko: { hoch: ["/geheim/"] } }, { risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
   });
 });
+
+describe("Workflow-Folge-Fixes in der Prognose (factory#400 L46)", () => {
+  test("Hypothese bestätigt: ein reiner Kommentar-Fix in .github/workflows/ ist Klasse hoch (Standardliste)", () => {
+    expect(lib.bestimmeRisikoklasse([".github/workflows/dependency-review.yml"])).toMatchObject({ klasse: "hoch", quelle: "Standardliste" });
+  });
+  test("der Planer verlangt, absehbare Folge-Fixes in .github/workflows/ in die --pfade der Prognose zu nehmen", () => {
+    const planer = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude/agents/factory-planer.md"), "utf8");
+    const absatz = planer.split("\n").find((z) => z.startsWith("**Risikoklasse hoch")) ?? "";
+    expect(absatz).toContain(".github/workflows/");
+    expect(absatz).toMatch(/Folge-Fixes[^`]*`\.github\/workflows\/`[^`]*`--pfade`/);
+  });
+});
