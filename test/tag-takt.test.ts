@@ -762,6 +762,18 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
     expect(mit).not.toContain("keine gemeldet");
     expect(mitTag()).toContain("keine gemeldet");
   });
+  it("factory#362 L8: eine lange Migrationszeile mit Backtick-Befehl steht vollständig im Body, PR-Zeilen bleiben gekappt", () => {
+    const text = `Bitte ${"sehr ".repeat(50)}\ndann \`node scripts/x.mjs --y\` ausführen`;
+    const body = mitTag({ migrationen: [{ pr: "#7", text }] });
+    expect(body).toContain(`- #7 Bitte ${"sehr ".repeat(50)} dann \`node scripts/x.mjs --y\` ausführen`);
+    expect(mitTag({ migrationen: [{ pr: "#7", text: "  \n " }] })).toContain("- #7 -");
+    const ohneText = mitTag({ migrationen: [{ pr: "#9", text: undefined }] });
+    expect(ohneText).toContain("- #9 -");
+    expect(ohneText).not.toContain("undefined");
+    expect(mitTag({ migrationen: [{ pr: "#7", text: "a\r\n\r\nb\n\nc" }] })).toContain("- #7 a b c\n");
+    const lang = mitTag({ prs: [{ ...reihe(1)[0], betreff: "x".repeat(300) }] });
+    expect(lang).not.toContain("x".repeat(121));
+  });
   it("factory#162 L26: Migrationen gehören dem Bezieher beim Update; Schritte im Bezieher stehen nicht mehr in der Checkliste der Fabrik", () => {
     const b = mitTag();
     for (const teil of ["Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen)", "Gate-Lücke: welches Bezieher-Gate hätte es melden müssen"]) expect(b, teil).toContain(teil);

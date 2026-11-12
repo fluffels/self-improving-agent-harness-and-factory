@@ -54,7 +54,7 @@ const USAGE = "Aufruf: node scripts/harness-doctor.mjs --pruefen [--config <pfad
 
 const erste = (e) => fehlerText(e).split("\n")[0];
 const langfuseStandard = () =>
-  spawnSync(process.execPath, [join(SKRIPTE, "langfuse-vorbedingung.mjs")], { encoding: "utf8", windowsHide: true, timeout: 10000 });
+  spawnSync(process.execPath, [join(SKRIPTE, "langfuse-vorbedingung.mjs"), "--json"], { encoding: "utf8", windowsHide: true, timeout: 10000 });
 
 const ohneCr = (t) => t.replace(/\r\n/g, "\n");
 const einzeilig = (t) => t.replace(/\s*\n\s*/g, " ");

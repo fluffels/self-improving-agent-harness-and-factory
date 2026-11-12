@@ -5,7 +5,7 @@
 // Erst-Übernahme-Schutz und Vorlagen (factory#118, `sync-abgleich-lib.mjs`): eine abweichende Ziel-Datei, die noch nicht im Stand steht, überschreibt erst `--uebernehmen <pfad>`; eine Vorlage wird nur angelegt.
 // Überschrieben wird nur Besitz (Datei, Block, JSON-Schlüssel), nie gemerged; Projektteile bleiben byte-gleich (einzige Ausnahme: der Link-Schritt unten schreibt Factory-Link-Refs und den Index, er legt fehlende Anker-Stub-Seiten an und erneuert reine Stubs). Hash und Vergleich
 // sind CRLF-neutral, geschrieben wird nur bei inhaltlicher Änderung im Zeilenende-Stil der Zieldatei. Erst alles prüfen, dann schreiben.
-// Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); ein unbekannter Manifest-Versionsfehler trägt den Werkzeug-Hinweis.
+// Hinweise ohne Fehler: eine Projektkopie einer Test-Hilfe (nicht verteilt), die von der Quelle abweicht (`testHilfeKopienAbweichend`); jeder Quell-Manifest-Fehler trägt den Werkzeug-Hinweis (einmal je Lauf).
 // Link-Schritt (factory#131, nur mit `--tag`): auf dem Ergebnis des Sync-Plans (neue Texte, neuer Sync-Stand) prüft `linkSchritt` die Factory-Links des Ziels gegen den Baum des Tags
 // und stellt Refs und `.factory/factory-links.json` mit um; ein Link-Befund heißt Exit 1 und nichts geschrieben (auch mit `--trocken`), `--entwurf` macht keinen Link-Schritt.
 // Anker-Stubs (factory#167): eine Seite, auf die ein Kern-Link zeigt und die es im Ziel nicht gibt, legt `planeAnkerStubs` mit den verlinkten Überschriften und Factory-Links auf den Tag an; eine reine Stub-Seite (`istReinerStub`, nur Sync-Ausgabe) erneuert er bei jedem Sync (factory#166), jede andere vorhandene Seite wird nie angefasst.
@@ -19,7 +19,7 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
@@ -38,14 +38,14 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${versionUnbekannt(m) ? `
-Fix: ${WERKZEUG_HINWEIS}` : ""}`);
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
     const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istVerteilteGanzdatei(e) && !istVorlage(e));
     if (!ganz) fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
   }
+  if (fehler.length > 0) fehler.push(`Fix: ${WERKZEUG_HINWEIS}`);
   return fehler;
 }
 

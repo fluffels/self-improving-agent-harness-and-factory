@@ -202,7 +202,8 @@ describe("Prozessstart", () => {
     expect(ok.stdout).toBe("");
     expect(start("{kaputt").stdout).toContain("deny");
   });
-  test("der Adapter steht in den Leitplanken", () => {
-    expect(readFileSync(".github/protected-paths.json", "utf8")).toContain("/scripts/codex-hook.mjs");
+  test("der Adapter steht in den Leitplanken (Muster codex-*.mjs), der Dispatcher ausdrücklich", () => {
+    expect(readFileSync(".github/protected-paths.json", "utf8")).toContain("/scripts/codex-*.mjs");
+    expect(readFileSync(".github/protected-paths.json", "utf8")).toContain("/scripts/pretooluse-dispatch.mjs");
   });
 });
