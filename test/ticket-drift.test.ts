@@ -181,6 +181,7 @@ describe("pruefe: Rückstellung und Eingang", () => {
     const g = git({ existiert: () => false, letzteAenderung: () => "2026-01-01T00:00:00Z" });
     const bericht = issue(9, { title: "🔎 Ticket-Drift-Bericht 2026-10", body: `${L.BERICHT_MARKER}\n\`scripts/a.mjs:50\``, author: { login: "app/github-actions", is_bot: true } });
     expect(L.pruefe([bericht], ctx(g)).uebersprungen).toEqual([9]);
+    expect(L.pruefe([{ ...bericht, author: { login: "o", is_bot: false } }], ctx(g)).uebersprungen).toEqual([9]);
     expect(klassen(L.pruefe([{ ...bericht, title: "Ticket über den Lauf" }], ctx(g)))).toEqual(["9:pfad-entfernt"]);
   });
 });
