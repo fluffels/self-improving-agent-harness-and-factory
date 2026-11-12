@@ -782,7 +782,7 @@ describe("gestoppt (#1693 L65, TaskStop des eigenen Umsetzers)", () => {
   const aktiv: Welt = { worktrees: [wt], refs: [`${BRP}5-x`], commitSek: (JETZT - 1 * MIN) / 1000, reflogSek: (JETZT - 1 * MIN) / 1000 };
   const lockDatei5 = () => join(dir, `${WTP}locks`, "5.json");
   const lockJson = () =>
-    JSON.parse(readFileSync(lockDatei5(), "utf8")) as { gestoppt?: unknown; gestoppt?: { gesetzt: string; verbraucht: string | null } };
+    JSON.parse(readFileSync(lockDatei5(), "utf8")) as { gestoppt?: { gesetzt: string; verbraucht: string | null } };
 
   test("eigene Nonce: Exit 0, pruefe meldet trotz Aktivität uebernehmbar ohne Verbrauch, das nächste uebernehmen verbraucht den Vermerk, das zweite wieder aktiv (#1593)", () => {
     const n = nonceVon(lauf(["claim", "5"]));

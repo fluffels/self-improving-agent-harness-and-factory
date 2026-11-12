@@ -249,7 +249,7 @@
   },
   "scripts/ticket-lock.mjs": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "scripts/token-baseline.mjs": {
