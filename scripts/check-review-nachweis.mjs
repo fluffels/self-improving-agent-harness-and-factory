@@ -105,15 +105,6 @@ export function feldHinweise(r) {
   ].filter((z) => z !== null);
 }
 
-/** Größenstufe nur zur Anzeige (Override-Zweig): ein Fehler macht den Zweig nie rot, die Stufe ist dann `null`. */
-function stufeOderNull(git, base, ladeRisiko) {
-  try {
-    return groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe;
-  } catch {
-    return null;
-  }
-}
-
 /** Prüft das optionale Feld `teilbrillen=` (factory#402): die Aufteilung von `blocker=kombiniert:<n>` je Teil-Brille. Nur mit `kombiniert` in lenses und
  *  einem kombiniert-Blocker; genau die drei Code-Brillen je einmal, ganze Zahlen ≥ 0, Summe gleich n. Fehlt das Feld, ist die Zeile gültig (alte Zeilen). Pure. */
 function bewerteTeilbrillen(review, zeilen) {
@@ -125,13 +116,13 @@ function bewerteTeilbrillen(review, zeilen) {
   const gesehen = new Set();
   for (const { lens, n } of review.teilbrillen) {
     if (!CODE_LENSES.includes(lens)) fehler.push(`${R}: teilbrillen nennt "${lens}", erlaubt sind nur ${CODE_LENSES.join(", ")}.`);
-    if (!Number.isInteger(n) || n < 0) fehler.push(`${R}: teilbrillen=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
+    if (!Number.isInteger(n)) fehler.push(`${R}: teilbrillen=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
     if (gesehen.has(lens)) fehler.push(`${R}: teilbrillen nennt die Brille ${lens} doppelt.`);
     gesehen.add(lens);
   }
   const fehlt = CODE_LENSES.filter((l) => !gesehen.has(l));
   if (fehlt.length > 0) fehler.push(`${R}: teilbrillen nennt ${fehlt.join(", ")} nicht (alle drei Teil-Brillen je einmal).`);
-  const summe = review.teilbrillen.reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
+  const summe = review.teilbrillen.reduce((a, e) => a + e.n, 0); // nur erreicht, wenn alle n ganze Zahlen sind (sonst steht schon ein Fehler)
   if (fehler.length === 0 && summe !== kombi.n) fehler.push(`${R}: teilbrillen ergeben die Summe ${summe}, blocker=${KOMBI_LENS}:${kombi.n} verlangt ${kombi.n}.`);
   return fehler;
 }
@@ -348,7 +339,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     // Die jüngste gültige Zeile entscheidet; ein Widerruf (`#<nr> entfällt`) ist kein Override (wie bei den übrigen Gates).
     const grund = aktiverOverride(messages, zeilen.reviewOverride);
     if (grund !== null) {
-      return { ok: true, override: grund, fehler: [], invalid: ov.invalid, stufe: stufeOderNull(git, base, ladeRisiko) };
+      return { ok: true, override: grund, fehler: [], invalid: ov.invalid, stufe: groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])

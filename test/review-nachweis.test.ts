@@ -257,9 +257,27 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
       assert.match(mit(t).join(), /teilbrillen/, `"${t}" müsste rot sein`);
     }
   });
+  test("leeres Feld meldet \"leer\"; bei anderen Fehlern erscheint keine Summen-Meldung", () => {
+    assert.match(mit("").join(), /teilbrillen ist leer/);
+    const f = mit("architektur:x,requirement-treue:0,test-adaequanz:0").join();
+    assert.match(f, /keine ganze Zahl/);
+    assert.doesNotMatch(f, /Summe/);
+    assert.doesNotMatch(mit("architektur:1,requirement-treue:1,test-adaequanz:1,doku:5").join(), /Summe/);
+  });
+  test("lenses ohne kombiniert, aber mit kombiniert-Blocker: teilbrillen gilt nicht; die Summe stammt vom kombiniert-Eintrag", () => {
+    assert.match(mit(GUT, { lenses: DREI, blocker: "kombiniert:3" }).join(), /teilbrillen gilt nur mit/);
+    assert.deepEqual(mit(GUT, { blocker: "architektur:5,kombiniert:3" }), []);
+  });
   test("teilbrillen ohne kombiniert in lenses oder ohne kombiniert-Blocker ist rot", () => {
     assert.match(mit(GUT, { lenses: DREI, blocker: "architektur:1,requirement-treue:1,test-adaequanz:1" }).join(), /teilbrillen.*kombiniert/);
     assert.match(mit(GUT, { blocker: "architektur:3" }).join(), /teilbrillen.*kombiniert/);
+  });
+  test("Override-Zweig: scheitert git beim Diff, bleibt er grün, die Stufe ist fail-closed voll", () => {
+    const git = fakeGit({ messages: `x\n\n${Z.reviewOverride}: #9 Revert-PR`, throws: "diff" });
+    const r = checkReviewNachweis({ runGit: git, env: { FACTORY_DIFF_BASE: "base" } }) as { ok: boolean; override?: string; stufe?: string | null };
+    assert.equal(r.ok, true);
+    assert.match(r.override ?? "", /#9/);
+    assert.equal(r.stufe, "voll");
   });
   test("checkReviewNachweis: teilbrillenFehlt nur bei kombiniert ohne Feld", () => {
     const lauf = (felder: string) => checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { FACTORY_DIFF_BASE: "base" } }) as { teilbrillenFehlt?: boolean };

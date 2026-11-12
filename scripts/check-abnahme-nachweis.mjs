@@ -212,14 +212,8 @@ export function entwurfLive({ gh, env, repo }) {
   return pr.draft;
 }
 
-/** Größenstufe nur zur Anzeige (factory#402 L26): ein Fehler macht den Lauf nie rot, die Stufe ist dann `null`. */
-function anzeigeStufe(git, base, config) {
-  try {
-    return groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
-  } catch {
-    return null;
-  }
-}
+/** Größenstufe nur zur Anzeige (factory#402 L26); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
+const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
 const stufeFuerEntfaellt = (nachweis, git, base, config) =>

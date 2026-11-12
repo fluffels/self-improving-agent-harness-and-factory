@@ -217,10 +217,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
+      if (o.diffFehler && a[0] === "diff") throw new Error("diff kaputt");
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
       if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
@@ -420,6 +421,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(r.override).toMatch(/#9/);
     expect(ghAufrufe).toEqual([]);
     rot(lauf({ messages: `${ov}\n${Z.abnahmeOverride}: #9 entfällt` }).r.fehler, /Zeile fehlt/);
+  });
+  test("Override: scheitert git beim Diff, bleibt er grün und die Anzeige-Stufe ist fail-closed voll (factory#402 L26)", () => {
+    const { r } = lauf({ messages: `${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug gestartet`, diffFehler: true });
+    expect(r.ok).toBe(true);
+    expect((r as { stufe?: string | null }).stufe).toBe("voll");
   });
   test("Basis == HEAD: nichts zu prüfen, kein gh", () => {
     const spy = vi.fn();
