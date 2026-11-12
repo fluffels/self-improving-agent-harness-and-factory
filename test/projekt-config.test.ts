@@ -1448,6 +1448,7 @@ describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", ()
       [{ browser: "chromium" }, /e2e\.browser muss/],
       [{ browser: ["Chromium"] }, /e2e\.browser\[0\]/],
       [{ browser: ["a b"] }, /e2e\.browser\[0\]/],
+      [{ browser: [null] }, /e2e\.browser\[0\]/],
       [{ browser: ["a", "a"] }, /doppelt/],
       [{ browser: ["a"], tippfehler: 1 }, /e2e\.tippfehler ist kein bekannter Schlüssel/],
       [[], /e2e muss ein Objekt/],
@@ -1461,6 +1462,9 @@ describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", ()
   });
   test("Block ohne befehle.e2e ist ein Fehler mit Fix", () => {
     assert.match(mit({ browser: ["chromium"] }).join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
+  });
+  test("leere befehle.e2e mit Block ist ein Fehler mit Fix", () => {
+    assert.match(mit({ browser: ["chromium"] }, "").join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
   });
   test("befehle.e2e ohne Block ist ein Fehler mit Fix", () => {
     assert.match(mit(undefined, "lauf").join("\n"), /befehle\.e2e[\s\S]*Block e2e[\s\S]*Fix:/);
