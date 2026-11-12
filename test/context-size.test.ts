@@ -243,7 +243,7 @@ describe("Ladekette je Blatt-AGENTS.md (factory#33)", () => {
   test("T1: Kette = Wurzel + Vorfahren + Blatt, absteigend nach Summe; Wurzel und Zwischenebene sind keine Blätter", () => {
     const ketten = ladeketten([
       groesse("AGENTS.md", 100), groesse("src/AGENTS.md", 50), groesse("src/a/AGENTS.md", 20),
-      groesse("src/b/AGENTS.md", 30), groesse("docs/AGENTS.md", 10), groesse("README.md", 999), groesse(".agents/skills/x/SKILL.md", 999),
+      groesse("src/b/AGENTS.md", 30), groesse("docs/AGENTS.md", 10), groesse("README.md", 999), groesse(".agents/skills/x/SKILL.md", 999), groesse("foo/XAGENTS.md", 999),
     ]);
     assert.deepEqual(ketten, [
       { blatt: "src/b", kette: ["AGENTS.md", "src/AGENTS.md", "src/b/AGENTS.md"], chars: 180 },
@@ -257,6 +257,12 @@ describe("Ladekette je Blatt-AGENTS.md (factory#33)", () => {
     assert.deepEqual(ketten.map((k) => k.blatt).sort(), ["src/a", "src/ab"]);
     const ab = ketten.find((k) => k.blatt === "src/ab");
     assert.deepEqual(ab, { blatt: "src/ab", kette: ["AGENTS.md", "src/ab/AGENTS.md"], chars: 17 });
+  });
+
+  test("T1b: Eingabe in Code-Unit-Ordnung (tiefere Datei vor ihrem Vorfahren): Kette läuft trotzdem von der Wurzel zum Blatt", () => {
+    const ketten = ladeketten([groesse("ADR/AGENTS.md", 1), groesse("AGENTS.md", 1), groesse("src/0/AGENTS.md", 1), groesse("src/AGENTS.md", 1)]);
+    assert.deepEqual(ketten.find((k) => k.blatt === "src/0")?.kette, ["AGENTS.md", "src/AGENTS.md", "src/0/AGENTS.md"]);
+    assert.deepEqual(ketten.find((k) => k.blatt === "ADR")?.kette, ["AGENTS.md", "ADR/AGENTS.md"]);
   });
 
   test("T3: nur Wurzel: genau eine Kette; Wurzel mit 0 Zeichen bleibt Glied", () => {

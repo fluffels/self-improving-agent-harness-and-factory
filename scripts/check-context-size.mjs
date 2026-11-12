@@ -221,7 +221,7 @@ function main() {
   const kernBefund = kernBlockPruefung();
   if (kernBefund) console.error(red(`✖ ${kernBefund}`));
 
-  const zeilen = ladekettenZeilen(ladeketten(collectContextSizes()));
+  const zeilen = ladekettenZeilen(ladeketten(sizes));
   for (const z of zeilen) console.log(dim(z));
 
   const total = sizes.reduce((sum, s) => sum + s.chars, 0);
