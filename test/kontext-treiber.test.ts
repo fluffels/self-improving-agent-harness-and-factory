@@ -1036,6 +1036,37 @@ describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
     expect(j.code).toBe(3);
     expect((JSON.parse(j.aus) as JeTyp).ungueltig).toHaveLength(1);
   });
+  const VON = ["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B, "--json"];
+  const jeTypJson = (r: { aus: string }) => JSON.parse(r.aus) as JeTyp;
+  test("CLI: --ohne gilt für beide Typen und hebt die Ungültigkeit auf (die dokumentierte Abhilfe bei Exit 3)", () => {
+    const r = cli([...VON, "--ohne", "3"], laeufeJeTyp);
+    expect(r.code).toBe(0);
+    expect(jeTypJson(r).ungueltig).toEqual([]);
+    expect(jeTypJson(r).agenten[LENS].laeufe.map((l) => l.ticket)).toEqual([2]);
+    expect(jeTypJson(r).agenten[LENS_B].laeufe.map((l) => l.ticket)).toEqual([1]);
+  });
+  test("CLI: --ticket wählt die Tickets für beide Typen", () => {
+    const r = jeTypJson(cli([...VON, "--ticket", "2"], laeufeJeTyp));
+    expect(r.agenten[LENS].laeufe.map((l) => l.ticket)).toEqual([2]);
+    expect(r.agenten[LENS_B].laeufe).toEqual([]);
+    expect(r.ungueltig).toEqual([]);
+  });
+  test("CLI: --je-ticket schaltet jeden Typ-Bericht in den Ticket-Modus", () => {
+    const r = jeTypJson(cli([...VON, "--ohne", "3", "--je-ticket"], laeufeJeTyp));
+    expect((r.agenten[LENS] as { jeTicket?: boolean }).jeTicket).toBe(true);
+    expect((r.agenten[LENS_B] as { jeTicket?: boolean }).jeTicket).toBe(true);
+  });
+  test("Läufe ohne ableitbare Ticketnummer in beiden Typen sind kein ungültiges Ticket null (Exit 0)", () => {
+    const ohneNr = (typ: string) => lauf("Probe ohne Nummer", [{ min: 1, tools: [edit()] }], typ);
+    const r = cli(VON, { [LENS]: [ohneNr(LENS)], [LENS_B]: [ohneNr(LENS_B)] });
+    expect(r.code).toBe(0);
+    expect(jeTypJson(r).ungueltig).toEqual([]);
+  });
+  test("--ttl zusammen mit mehreren --agent ist ein Aufruf-Fehler (die TTL-Rechnung kennt keine Typ-Berichte)", () => {
+    const r = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B, "--ttl"], laeufeJeTyp);
+    expect(r.code).toBe(2);
+    expect(r.fehler).toMatch(/--ttl und mehrere --agent/);
+  });
   test("CLI: ohne --von oder mit falschem Flag Exit 2 samt Aufrufzeile mit wiederholbarem --agent", () => {
     const r = cli(["--agent", LENS, "--agent", LENS_B], laeufeJeTyp);
     expect(r.code).toBe(2);

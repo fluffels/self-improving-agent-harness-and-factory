@@ -384,6 +384,13 @@ export function formatiereJeAgent(r) {
   return [...gruppen, ungueltig.length ? `Ungültig (aus allen Gruppen ausgenommen, \`--ohne\` mit Spur): ${ungueltig.join(", ")}` : "Ungültig: keine"].join("\n\n");
 }
 
+/** `--je-agent` als Funktion (Test): lädt die Läufe, rechnet je Typ, schreibt über `out` und gibt den Exit-Code zurück (0, 3 bei ungültigen Tickets). */
+export function jeAgentAusgabe({ ergebnis, jeAgent, von, dir, namen, json, out = console.log }) {
+  const je = laufErgebnisJeAgent({ ergebnis, laeufeJeTyp: ladeJeAgentLaeufe(dir, jeAgent, von), namen });
+  out(json ? JSON.stringify(je, null, 2) : [formatiere(ergebnis), formatiereJeAgent(je)].join("\n\n"));
+  return je.ungueltig.length > 0 ? 3 : 0;
+}
+
 export const AUFRUFHILFE = "Aufruf: node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--je-agent <typ>…] [--json]";
 
 /** Argumente: `--von`, `--bis`, wiederholbar `--ticket <nr>` (nur diese) und `--ohne <nr>` (alle außer diesen), `--json`. `--start-agent <typ>` (kein Default, nicht mit `--ticket`). Eine Nicht-Ganzzahl oder ein fehlender Wert setzt `fehler`. */
@@ -411,9 +418,7 @@ function main(argv) {
     const io = { von, bis, runGit: run("git"), runGh: ghText, ohne };
     const ergebnis = startAgent === undefined ? laufErgebnis({ ...io, tickets }) : laufErgebnisStartAgent({ ...io, laeufe: ladeStartLaeufe(projektOrdner(), startAgent, von) });
     if (jeAgent === undefined) return console.log(json ? JSON.stringify(ergebnis, null, 2) : formatiere(ergebnis));
-    const je = laufErgebnisJeAgent({ ergebnis, laeufeJeTyp: ladeJeAgentLaeufe(projektOrdner(), jeAgent, von), namen: ticketNamen(ladeProjektConfig()) });
-    console.log(json ? JSON.stringify(je, null, 2) : [formatiere(ergebnis), formatiereJeAgent(je)].join("\n\n"));
-    if (je.ungueltig.length > 0) process.exitCode = 3;
+    process.exitCode = jeAgentAusgabe({ ergebnis, jeAgent, von, dir: projektOrdner(), namen: ticketNamen(ladeProjektConfig()), json });
   } catch (e) {
     console.error(`✖ lauf-ergebnis: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(2);

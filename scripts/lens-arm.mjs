@@ -1,9 +1,6 @@
 // Kein Shebang (Konvention der Skripte, die ein Test importiert).
 /**
- * A/B-Arm der Lens je Ticket (factory#235): Arm A ist die Lens mit Root-Kontext (`agenten.lens` der Projekt-Config), Arm B die Lens
- * „Kern je Rolle“ (`LENS_B`, ohne Root-Kontextdatei). Beide laufen im selben Fenster an echten Tickets; die Zuordnung ist
- * deterministisch nach Ticket-Parität (gerade = A, ungerade = B), damit sie weder vom Orchestrator noch von einer Laune abhängt.
- * Ein Bezieher kennt die Arm-B-Definition nicht und läuft immer in Arm A.
+ * CLI zur A/B-Wahl der Lens je Ticket (factory#235; Regel, Typen und Begründung: `lens-arm-lib.mjs`).
  *
  *   node scripts/lens-arm.mjs <nr> [--json]    gibt den Agententyp für den Lens-Spawn dieses Tickets aus (`--json`: `{arm, typ}`)
  *

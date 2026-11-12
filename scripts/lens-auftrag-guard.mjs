@@ -17,7 +17,7 @@
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
  *  R6  (factory#235, A/B Kern je Rolle) der Agententyp ist einer der beiden Lens-Typen (`lensTypen`), lässt sich die Ticketnummer aus dem Auftrag ableiten
- *      (`ticketAusLauf` wie in der Messung: Patch-Pfad, sonst Worktree-Pfad) und entspricht nicht dem Typ, den `lensArm(nr)` für das Ticket wählt; die Meldung nennt den richtigen Typ.
+ *      (`ticketAusLauf` wie in der Messung: Titelzeile, Patch-Pfad, Worktree-Pfad, zuletzt das erste `#<nr>` im Prompt; eine fremde `#<nr>` ohne Patch-Pfad kann so den Arm eines anderen Tickets wählen, Bekannte Grenze: nur die Messung betroffen) und entspricht nicht dem Typ, den `lensArm(nr)` für das Ticket wählt; die Meldung nennt den richtigen Typ.
  * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *

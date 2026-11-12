@@ -888,6 +888,47 @@ describe("--je-agent: Kennzahlen je Lens-Typ (factory#235)", () => {
     assert.match(text, /Ungültig.*#41 \(Läufe in lens-a \+ lens-b\), #42 \(kein Lauf der Typen\), #43 \(kein Lauf der Typen\)/);
     assert.match(je.formatiereJeAgent(rechne({ [A]: [lauf(40, A), lauf(42, A)], [B]: [lauf(41, B), lauf(43, B)] })), /Ungültig: keine/);
   });
+  test("ein Typ ohne gültiges Ticket bekommt keine Zeilen (leerer Arm), nicht alle", () => {
+    const r = rechne({ [A]: [lauf(40, A), lauf(41, A), lauf(42, A), lauf(43, A)], [B]: [] });
+    assert.deepEqual(r.jeAgent[B].zeilen, []);
+    assert.equal(r.jeAgent[B].kennzahlen.prs, 0);
+    assert.equal(r.jeAgent[A].kennzahlen.prs, 4);
+  });
+  const mitDatei = (dir: string, name: string, typ: string, ticket: number, sekundenVorVon: number) => {
+    const sub = join(dir, "s1", "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, `${name}.meta.json`), JSON.stringify({ agentType: typ }));
+    writeFileSync(join(sub, `${name}.jsonl`), JSON.stringify({ type: "user", timestamp: "2026-10-01T09:00:00Z", message: { role: "user", content: `Ticket #${ticket}: x` } }) + "\n");
+    const t = new Date(Date.parse("2026-10-01T00:00:00Z") - sekundenVorVon * 1000);
+    utimesSync(join(sub, `${name}.jsonl`), t, t);
+  };
+  test("ladeJeAgentLaeufe lädt mit 48 h Vorlauf: 47 h vor von wird geladen, 49 h nicht", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-235-vorlauf-"));
+    try {
+      mitDatei(dir, "a-drin", A, 40, 47 * 3600);
+      mitDatei(dir, "a-draussen", A, 41, 49 * 3600);
+      const geladen = je.ladeJeAgentLaeufe(dir, [A], "2026-10-01T00:00:00Z")[A] as { datei: string }[];
+      assert.deepEqual(geladen.map((l) => l.datei), ["s1/subagents/a-drin.jsonl"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("jeAgentAusgabe: Exit 3 bei einem ungültigen Ticket (beide Typen), Exit 0 ohne; ein fehlender Lauf (keiner) zählt ebenso", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lauf-ergebnis-235-exit-"));
+    const aus: string[] = [];
+    const lauf3 = (jeAgent: string[], ergebnisZeilen = ergebnis) =>
+      (raw as unknown as { jeAgentAusgabe: (e: object) => number }).jeAgentAusgabe({ ergebnis: ergebnisZeilen, jeAgent, von: "2026-10-01T00:00:00Z", dir, namen: FREMD_NAMEN, json: false, out: (s: string) => aus.push(s) });
+    try {
+      for (const nr of [40, 41, 42, 43]) mitDatei(dir, `a-${nr}`, nr % 2 ? B : A, nr, 3600);
+      assert.equal(lauf3([A, B]), 0);
+      mitDatei(dir, "a-40-b", B, 40, 3600);
+      assert.equal(lauf3([A, B]), 3);
+      assert.match(aus.join("\n"), /Ungültig.*#40/);
+      assert.equal(lauf3([A]), 3, "Ticket 41 hat keinen Lauf im Typ A allein: keiner");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   test("kennzahlenAus rechnet wie bewertePrs (gleiche Zahl, leere Menge ohne Fehler)", () => {
     assert.deepEqual(je.kennzahlenAus(ergebnis.zeilen), ergebnis.kennzahlen);
     assert.equal(je.kennzahlenAus([]).prs, 0);

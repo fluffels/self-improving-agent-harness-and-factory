@@ -464,9 +464,9 @@ sequenceDiagram
   participant E as Explore<br/>haiku · low
   participant U as sih-umsetzer<br/>sonnet · medium
   participant G as sih-gruppe · sonnet · medium<br/>je Gruppe eines Sammeltickets
-  participant L1 as sih-lens · opus · high<br/>Brille Architektur (ungerade Tickets: lens-kern-je-rolle)
+  participant L1 as sih-lens · opus · high<br/>Brille Architektur
   participant L2 as sih-lens · opus · high<br/>Brille Requirement-Treue
-  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz
+  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz (alle Brillen eines ungeraden Tickets: lens-kern-je-rolle)
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen

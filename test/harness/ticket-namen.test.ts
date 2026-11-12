@@ -250,6 +250,15 @@ describe("lens-auftrag-guard R6: Arm der A/B-Messung (factory#235)", () => {
   test("Delta-Patch und Worktree-Pfad liefern dieselbe Nummer wie die Messung", () => {
     expect(pruefe("ab-lens", "Brille: doku\nArbeitsverzeichnis: /w\nDelta-Patch: /t/ab-7-r2-delta.patch\nerwarteter HEAD: abcdef1")).toMatch(/Ticket #7/);
   });
+  test("die Nummer kommt auch aus dem Arbeitsverzeichnis, wenn kein Patch-Pfad da ist (wie ticketAusLauf der Messung)", () => {
+    expect(pruefe("ab-lens", "Brille: doku\nArbeitsverzeichnis: /w/.claude/worktrees/ab-235\nerwarteter HEAD: abcdef1")).toMatch(/Ticket #235 gehört zu Arm B/);
+    expect(pruefe("lens-kern-je-rolle", "Brille: doku\nArbeitsverzeichnis: /w/.claude/worktrees/ab-235\nerwarteter HEAD: abcdef1")).toBeNull();
+  });
+  test("ohne injizierten Bezieher gilt der Sync-Stand dieses Repos (Fabrik: kein Bezieher): Arm B für ein ungerades Ticket geht durch", () => {
+    const echt = (subagentType: string) => lensAuftrag.lensAuftragBlockade({ subagentType, prompt: auftrag(235) }, { config: AB });
+    expect(echt("lens-kern-je-rolle")).toBeNull();
+    expect(echt("ab-lens")).toMatch(/Arm B/);
+  });
   test("ohne ableitbare Nummer bleibt R6 offen (fail-open), ebenso der general-purpose-Fallback", () => {
     const ohneNummer = "Brille: doku\nArbeitsverzeichnis: /w\nerwarteter HEAD: abcdef1";
     expect(pruefe("lens-kern-je-rolle", ohneNummer)).toBeNull();

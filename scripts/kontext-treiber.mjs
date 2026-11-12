@@ -670,6 +670,7 @@ function ttlFlag(werte, a) {
   if (werte.ttl !== true) return;
   a.ttl = true;
   if (a.jeTicket) a.fehler ??= "--ttl und --je-ticket schließen sich aus";
+  if (a.agenten) a.fehler ??= "--ttl und mehrere --agent schließen sich aus";
 }
 
 /** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`Date.parse` NaN), als Aufruf-Fehler; sonst undefined. */
