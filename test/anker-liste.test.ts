@@ -322,7 +322,7 @@ describe("guardListe: einzeilige Köpfe (Methode, Eigenschaft)", () => {
 describe("istGemessen", () => {
   const istGemessen = (ankerRoh as unknown as { istGemessen: (p: string, q: string) => boolean }).istGemessen;
   test.each(["test/support/x.ts", "scripts/a.mjs"])("%s ist gemessen", (p) => expect(istGemessen(p, "scripts")).toBe(true));
-  test("Listenform: die Ordner-Klausel nimmt die Endungsliste und ohne des Projekts, nicht die Standard-Endungen", () => {
+  test("Listenform: die Ordner-Klausel nimmt die Endungsliste und ohne des Projekts plus die JS/TS-Familie, sonst nichts", () => {
     const java = { wurzeln: ["*/src/main/java"], endungen: [".java"] };
     const gem = istGemessen as unknown as (p: string, q: unknown) => boolean;
     expect(gem("modul-a/src/main/java/de/X.java", java)).toBe(true);

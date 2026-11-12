@@ -981,10 +981,17 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
     assert.ok(pfade.length > 0);
     for (const p of pfade) assert.ok(kern.has(p), `${p} ist kein Kern-Besitz`);
   });
-  test("verify:full fährt die Abdeckung über den Gate-Befehl, nicht über test:coverage (L9)", () => {
-    const v = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> }).scripts["verify:full"] ?? "";
-    assert.ok(v.includes("gate-befehl.mjs coverage"), v);
+  test("verify:full fährt die Abdeckung über den Gate-Befehl, nicht über test:coverage (L9)", async () => {
+    const s = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> }).scripts;
+    const v = s["verify:full"] ?? "";
+    assert.ok(v.includes("npm run coverage:gate"), v);
     assert.ok(!v.includes("test:coverage"), v);
+    // Ein einfaches npm-Skript als Schritt, damit gate-fundquote die Kette liest (ketteAusPackage lässt nur solche zu).
+    assert.ok((s["coverage:gate"] ?? "").includes("gate-befehl.mjs coverage"), s["coverage:gate"]);
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const { ketteAusPackage } = (await import("../scripts/docs-gen/npm-ketten.mjs")) as { ketteAusPackage: (p: unknown, k: string[], n: string) => string[] };
+    const schritte = ketteAusPackage({ scripts: s }, ["verify", "verify:full"], "verify:full");
+    assert.ok(schritte.includes("coverage:gate") && schritte.includes("check:diffcoverage"), schritte.join());
   });
   test("fremde Schicht-ID: evaluateByLayer wirft mit Pfad, Schicht-ID und Fix (L7)", () => {
     const tmp = mkdtempSync(join(tmpdir(), "diffcov-fremd-"));

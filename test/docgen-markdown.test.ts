@@ -227,6 +227,17 @@ describe("slugify und entferneMarkup: Unterstrich wie GitHub", () => {
     assert.equal(f.slugify("Wie entferne ich einen Worktree, was ist mit `node_modules`?"), "wie-entferne-ich-einen-worktree-was-ist-mit-node_modules");
     assert.equal(f.entferneMarkup("mit `node_modules`"), "mit node_modules");
   });
+  test("Code-Span-Inhalt bleibt wörtlich, auch Rand-Unterstriche und Sternchen", () => {
+    assert.equal(f.entferneMarkup("ein `_privat_` Feld"), "ein _privat_ Feld");
+    assert.equal(f.entferneMarkup("Muster `a*b`"), "Muster a*b");
+  });
+  test("Unterstrich zwischen Ziffern oder Ziffer und Buchstabe bleibt", () => {
+    assert.equal(f.entferneMarkup("v1_2"), "v1_2");
+    assert.equal(f.entferneMarkup("abc_123"), "abc_123");
+  });
+  test("ein einzelner Backtick ohne Partner entfällt", () => {
+    assert.equal(f.entferneMarkup("ein `Rest"), "ein Rest");
+  });
   test("Kursiv-Unterstriche am Wortrand entfallen", () => {
     assert.equal(f.slugify("_kursiv_ Wort"), "kursiv-wort");
   });

@@ -38,6 +38,7 @@ const T = rawTakt as unknown as {
     loadItems: (r: string, o: object) => unknown[];
   };
   fuehreHarnessAus: (h: object, items: object[], token: string, io: { log: () => void }) => boolean;
+  fuehreLangfuseAus: (l: object, items: object[], token: string, rolle: string, o?: { log: () => void }) => boolean;
 };
 const LF = rawLangfuse as unknown as {
   fuehreStatusAus: (e: object, o: object) => { ok: boolean; itemId: string | null };
@@ -112,6 +113,14 @@ describe("Default-Wrapper der Takt-Skripte schreiben ins Factory-Board", () => {
   test("fuehreHarnessAus: Default `setze` setzt die Position im Factory-Board", () => {
     expect(T.fuehreHarnessAus({ nr: 5, afterId: "ITEM_a" }, [{ number: 5, id: "ITEM_5" }], "tok", { log: () => {} })).toBe(true);
     nur(factory, produkt);
+    expect(flach()).toContain("i=ITEM_5");
+  });
+  test.each([
+    ["produkt", produkt, factory],
+    ["factory", factory, produkt],
+  ] as const)("fuehreLangfuseAus (%s): Default `setze` setzt die Position im Board der Rolle", (rolle, soll, fremd) => {
+    expect(T.fuehreLangfuseAus({ nr: 5, afterId: "ITEM_a" }, [{ number: 5, id: "ITEM_5" }], "tok", rolle, { log: () => {} })).toBe(true);
+    nur(soll, fremd);
     expect(flach()).toContain("i=ITEM_5");
   });
   test("langfuse-takt fuehreStatusAus: Default `imBoardAnlegen` und `setze` treffen das Factory-Board", () => {

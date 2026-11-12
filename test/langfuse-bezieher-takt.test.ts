@@ -316,6 +316,18 @@ describe("Takt im Bezieher: Langfuse-Sammelticket hinter den Kopf (factory#379)"
     expect(r.fehler).toBe(false);
   });
 
+  test("Kandidat: ein geschlossenes ungeclaimtes Langfuse-Ticket zählt nicht, Kommentare werden nur für das offene geladen", () => {
+    const mitGeschlossenem = [it(900, "T900"), it(903, LF, { state: "closed" }), it(902, LF)];
+    expect(lauf({ boardItems: { produkt: mitGeschlossenem }, kommentare: [befund] }).a.geladen).toEqual([902]);
+  });
+
+  test("Kandidat: ein geclaimtes Langfuse-Ticket allein lädt nichts und bewegt nichts", () => {
+    const geclaimt = [it(900, "T900"), it(902, LF, { assignees: [{ login: "x" }] })];
+    const { a } = lauf({ boardItems: { produkt: geclaimt }, kommentare: [befund] });
+    expect(a.geladen).toEqual([]);
+    expect(a.langfuse).toEqual([]);
+  });
+
   test("ohne Befund-Kommentar, im --dry-run, bei Ladefehler und ohne Token bewegt der Takt nichts (Ladefehler: Warnung)", () => {
     expect(lauf({ boardItems: { produkt: board } }).a.langfuse).toEqual([]);
     expect(lauf({ boardItems: { produkt: board }, kommentare: [befund], dry: true }).a.langfuse).toEqual([]);

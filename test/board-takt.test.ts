@@ -510,6 +510,11 @@ describe("langfuseSammelEntscheidung (factory#379: Takt für das Langfuse-Sammel
   const e = (items: Item[], n: number) => (raw as unknown as { langfuseSammelEntscheidung: (i: Item[], f: number) => { aktion: string; nr?: number; afterId?: string | null; grund: string } }).langfuseSammelEntscheidung(items, n);
   const konst = raw as unknown as { LANGFUSE_TAKT_KOMMENTARE: number };
 
+  test("items keine Liste: wirft", () => {
+    expect(() => e(null as unknown as Item[], 1)).toThrow(/items muss eine Liste sein/);
+    expect(() => e("x" as unknown as Item[], 1)).toThrow(/items muss eine Liste sein/);
+  });
+
   test("Schwelle 1: 0 Befund-Kommentare lassen es liegen, ab 1 kommt es hinter den Kopf", () => {
     expect(konst.LANGFUSE_TAKT_KOMMENTARE).toBe(1);
     const board = [status(2), it(10), it(11), lf(12)];
