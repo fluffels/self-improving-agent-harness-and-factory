@@ -99,7 +99,7 @@ describe("auswerten: Entscheidung und Spur", () => {
   test("fix: PR-Kommentar, Belege der nicht erfüllten Kriterien, kein Ticket-Kommentar", () => {
     const r = lauf(BERICHT(["K1: erfuellt — a", "K2: nicht-erfuellt ursache=umsetzung — Rot weil X", "K3: nicht-erfuellt ursache=szenario — Rot weil Y"]));
     expect(r.code).toBe(0);
-    expect(r.out).toBe("ENTSCHEIDUNG: fix\nK2 nicht erfüllt: Rot weil X\n");
+    expect(r.out).toBe("ENTSCHEIDUNG: fix\nK2 nicht erfüllt: Rot weil X\nK3 Szenario prüfte über das Kriterium hinaus: Rot weil Y\n");
     expect(r.posts.map((p) => p.nr)).toEqual([70]);
   });
   test("handoff hat Vorrang vor fix: genau ein Ticket-Kommentar mit Marker, beiden Kriterien, Grund und Reparaturweg", () => {

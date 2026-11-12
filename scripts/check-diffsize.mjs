@@ -283,7 +283,7 @@ export function sammelOverrideFehler(titel, grund) {
   const zeilen = new Set(String(grund).match(/\bL\d+\b/g));
   if (zeilen.size === 1) return null;
   return (
-    "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile (Fortschreibung 0026-268): " +
+    "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile: " +
     "der Grund muss genau eine Zeile L<n> nennen, nicht die ganze Auswahl. Besser: den Slice teilen."
   );
 }

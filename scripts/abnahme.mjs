@@ -249,7 +249,8 @@ function ausgabe(entscheidung, urteile, io, head, durchgang, kommentare) {
   }
   if (entscheidung === "fix") {
     const zeilen = urteile.filter(istFixFall).map((u) => `${u.k} nicht erfüllt: ${u.beleg}`);
-    return `ENTSCHEIDUNG: fix\n${zeilen.join("\n")}\n`;
+    const szenario = urteile.filter((u) => u.wert === "nicht-erfuellt" && !istFixFall(u)).map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);
+    return `ENTSCHEIDUNG: fix\n${[...zeilen, ...szenario].join("\n")}\n`;
   }
   if (entscheidung === "szenario") {
     const zeilen = urteile.filter((u) => u.wert === "nicht-erfuellt").map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);

@@ -81,7 +81,7 @@ Codex unterstützt Hooks; die folgenden Claude-Registrierungen sind trotzdem **f
 | Bestehender Schutz | Codex-Stand |
 |---|---|
 | `SessionStart`: Haupt-Sync, Sandbox-/MCP-Diagnose und Langfuse-Health | manuelle Skripte sind keine automatische Codex-Registrierung |
-| `SessionStart` / `SessionEnd`: Langfuse-Abgleich (`SessionStart` startet seit factory#314 zusätzlich den Wochenbericht-Lauf) | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
+| `SessionStart` / `SessionEnd`: Langfuse-Abgleich (`SessionStart` startet zusätzlich den Wochenbericht-Lauf) | Claude-Transkripte/Plugin sind kein reproduzierbarer Codex-Exporter |
 | `PreToolUse`: Worktree-, GitHub-, Stdin-Skript-Guard | Payload und gesamte Codex-Toolabdeckung separat zu prüfen |
 | Lens-Edit-/Auftragsguard, Holdout-Auftrags-/Nachrichtentrennung, `holdout-guard.mjs` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) | keine technische Erzwingung für Codex nachgewiesen; Feature-Reduktion ersetzt diese Guards nicht |
 | `SubagentHandback`, `Stop` / `SubagentStop` | keine belegte Codex-Abschluss-/Commit-/Worktree-Erzwingung |
