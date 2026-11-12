@@ -520,11 +520,13 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("R4 kennt auch die Slug-Form (Lauf ohne Ticket): unbekannte Endung wird verweigert, bekannte mit Brille geht durch (factory#426 L1)", () => {
     const wt = FREMD.praefixe.worktree;
-    for (const ende of ["feature-x-lens-b1", "ohne-ticket-lens-z3-test"]) {
+    for (const ende of ["feature-x-lens-b1", "ohne-ticket-lens-z3-test", "demo-lens-b1"]) {
       const pfad = `/w/.claude/worktrees/${wt}${ende}`;
       assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: ${pfad}`))?.hookSpecificOutput.permissionDecision, "deny", pfad);
     }
     assert.match(grund(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}feature-x-lens-b1`)), /-<brille>/);
+    // Slug beginnt mit einem Buchstaben (wie lensNameKern): leerer Slug und Ziffer-Buchstabe-Form bleiben unerkannt
+    for (const ende of ["-lens-b1", "7a-lens-b1"]) assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}${ende}`)), null, ende);
     for (const ende of ["feature-x-lens-r1-test-adaequanz", "feature-x-lens-m2-architektur", "feature-x-lens-r<runde>-<brille>", "x-lens-worktree"]) {
       assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}${ende}`)), null, ende);
     }
