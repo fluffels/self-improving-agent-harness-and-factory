@@ -3,7 +3,8 @@ name: Audit-Einordnung
 # Täglicher Lauf (#1628): wertet den vollen `npm audit` (inkl. Dev) und die offenen Dependabot-Alerts aus. Je neuem Advisory
 # (Dedupe über die GHSA-ID) entsteht eine Zeile im jüngsten ungeclaimten Harness-Sammelticket; nur bei critical UND ausgelieferter
 # Produktiv-Abhängigkeit ein Ticket "🔒 Security: …" ganz oben im Board. Mechanik: docs/ticket-reihenfolge.md (Fabrik) › Audit-Einordnung.
-# Ergänzt die Stufe 2 des Jobs security-audit in ci.yml (nur Bericht), die nirgends landet.
+# Geprüft werden die Wurzel und die Verzeichnisse aus `audit.verzeichnisse` der Projekt-Config (factory#395); der Job security-audit in ci.yml
+# blockt bei high und höher, dieser Lauf ordnet auch Dev-Funde und Dependabot-Alerts aller Ökosysteme ein.
 #
 # ⚠️ Das Board braucht wie dependabot-inbox.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne Token nur eine Warnung zum Alarm.
 # Kommentare postet github-actions[bot] (in scripts/fremdtext-lib.mjs vertraut, sonst blendet scripts/fremdtext.mjs die Zeilen aus).

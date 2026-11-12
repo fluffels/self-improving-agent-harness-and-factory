@@ -13,12 +13,12 @@
  */
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { execFileSync } from "node:child_process";
 import { fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { ladeBoardLibs, inboxStart, sicherheitsLibs, vertrauterOwner, zielAktionen, ladeWiedervorlagen } from "./inbox-start-lib.mjs";
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { ALARM_PRAEFIX, bekannteGhsa, ghsaIn, vertrauteBodies } from "./ghsa-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { auditVerzeichnisse, npmAuditJson } from "./audit-verzeichnisse.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
@@ -70,6 +70,12 @@ function gepatchteVersion(a) {
   return typeof fix === "string" && fix !== "" ? fix : undefined;
 }
 
+/** Ausgeliefert: Runtime-Scope in einem Ökosystem außer GitHub-Actions (npm, maven, docker …); ohne Scope oder Ökosystem nie. */
+function istProdAlert(a) {
+  const eco = a?.dependency?.package?.ecosystem;
+  return a?.dependency?.scope === "runtime" && typeof eco === "string" && eco !== "" && eco !== "actions";
+}
+
 function befundAusAlert(a) {
   const ghsa = ghsaIn(a?.security_advisory?.ghsa_id)[0];
   if (!ghsa) return [];
@@ -80,7 +86,7 @@ function befundAusAlert(a) {
       ghsa,
       paket: String(paket?.name ?? "unbekannt"),
       schwere: String(a?.security_advisory?.severity ?? "unknown").toLowerCase(),
-      prod: a?.dependency?.scope === "runtime" && typeof paket?.ecosystem === "string" && paket.ecosystem !== "" && paket.ecosystem !== "actions",
+      prod: istProdAlert(a),
       fixVerfuegbar: fix !== undefined,
       fixVersion: fix,
     },
@@ -145,16 +151,12 @@ export function ordneEin({ befunde, bekannt }) {
 
 // ---- IO (ungetestet) ----
 
-/** `npm audit --json` liefert bei Funden Exit 1 mit gültigem JSON auf stdout. */
-function npmAudit(extra = []) {
-  let text;
-  try {
-    text = execFileSync("npm", ["audit", "--json", ...extra], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, shell: process.platform === "win32" });
-  } catch (err) {
-    text = err?.stdout ? String(err.stdout) : "";
-    if (!text) throw err;
-  }
-  return JSON.parse(text);
+/** `npm audit --json` im Verzeichnis (Standard: Wurzel), siehe `npmAuditJson`. */
+const npmAudit = (extra = [], verzeichnis = ".") => npmAuditJson(verzeichnis, extra);
+
+/** Befunde aus dem vollen Audit und dem Audit ohne Dev je Verzeichnis (Wurzel plus `audit.verzeichnisse`); `prod` je Verzeichnis, GHSA-Dedupe danach. */
+function befundeAusVerzeichnissen(config, npmAuditLaden) {
+  return auditVerzeichnisse(config).flatMap((v) => markiereProd(befundeAusNpmAudit(npmAuditLaden([], v)), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"], v))));
 }
 
 function ladeAlerts(repo) {
@@ -216,9 +218,9 @@ function postZeilenAnZiel(zeilen, { waehleSammelticket, offene, postZeilen, log,
   return true;
 }
 
-/** Einstieg. `deps` (Tests): `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, bezieher, bereite, lies, log = console.log, err = console.error } = {}) {
-  const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeLibs, log, err });
+/** Einstieg. `deps` (Tests): `ladeConfig()`, `ladeLibs()` (liefert `REPO` und die Inbox-Bausteine), `npmAuditLaden(extra, verzeichnis)`, `alertsLaden(repo)`, `gh` (`{ text, json }`, Standard: echtes gh), `log`, `err`. Rückgabe: Exit-Code. */
+export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs = ladeBoardLibs, npmAuditLaden = npmAudit, alertsLaden = ladeAlerts, gh = { text: ghText, json: ghJson }, bezieher, bereite, lies, log = console.log, err = console.error } = {}) {
+  const start = await inboxStart(argv, { skript: "audit-einordnung", praefix: "Audit-Einordnung: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken } = start;
   const libs = sicherheitsLibs(start.libs, { bezieher, log, gh });
@@ -227,7 +229,7 @@ export async function main(argv = process.argv.slice(2), { ladeLibs = ladeBoardL
   const kontext = ladeSammelKontext();
   const { rohe, offene, kommentare } = kontext;
   const bekannt = ladeBekannte({ kommentare, rohe, OWNER: vertrauterOwner(kontext, libs), offeneTitel, lies });
-  const voll = markiereProd(befundeAusNpmAudit(npmAuditLaden()), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"])));
+  const voll = befundeAusVerzeichnissen(start.config, npmAuditLaden);
   const aktionen = ordneEin({ befunde: [...voll, ...befundeAusAlerts(alertsLaden(REPO))], bekannt });
   if (aktionen.length === 0) {
     log("Audit-Einordnung: nichts Neues.");

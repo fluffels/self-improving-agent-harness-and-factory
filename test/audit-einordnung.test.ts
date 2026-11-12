@@ -369,3 +369,44 @@ describe("main: ohne .github/wiedervorlagen.json", () => {
     await expect(main([], deps(() => "{kaputt", []))).rejects.toThrow(SyntaxError);
   });
 });
+
+describe("main: audit.verzeichnisse (factory#395 L54)", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const fe = { vulnerabilities: { "fe-paket": { severity: "high", via: [{ url: `https://github.com/advisories/${G1}`, name: "fe-paket", severity: "high" }] } } };
+  const leer = { vulnerabilities: {} };
+  const aufbau = (config: unknown, audit: (verzeichnis: string, extra: string[]) => unknown) => {
+    const aufrufe: string[] = [];
+    const log: string[] = [];
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: () => undefined,
+      waehleSammelticket: (offene: { number: number }[]) => offene[0],
+    };
+    const npmAuditLaden = (extra: string[] = [], verzeichnis = ".") => (aufrufe.push(`${verzeichnis}${extra.join("")}`), audit(verzeichnis, extra));
+    const deps = { ladeConfig: () => config, ladeLibs: () => Promise.resolve(libs), npmAuditLaden, alertsLaden: () => [], bezieher: false, log: (m: string) => log.push(m), err: () => undefined };
+    return { aufrufe, log, deps };
+  };
+
+  test("Advisory nur im Verzeichnis frontend wird eingeordnet; mit --omit=dev dort ist sie prod", async () => {
+    const { aufrufe, log, deps } = aufbau({ audit: { verzeichnisse: ["frontend"] } }, (v) => (v === "frontend" ? fe : leer));
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(aufrufe).toEqual([".", ".--omit=dev", "frontend", "frontend--omit=dev"]);
+    expect(log.join("\n")).toContain(`${G1.toLowerCase()} fe-paket (high, prod)`);
+  });
+
+  test("nur im vollen Audit von frontend (nicht ohne Dev): dev", async () => {
+    const { log, deps } = aufbau({ audit: { verzeichnisse: ["frontend"] } }, (v, extra) => (v === "frontend" && extra.length === 0 ? fe : leer));
+    await main(["--dry-run"], deps);
+    expect(log.join("\n")).toContain(`${G1.toLowerCase()} fe-paket (high, dev)`);
+  });
+
+  test("ohne Block wird nur die Wurzel geprüft", async () => {
+    const { aufrufe, deps } = aufbau({}, () => leer);
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(aufrufe).toEqual([".", ".--omit=dev"]);
+  });
+});
