@@ -25,7 +25,7 @@ GitLab als Beispiel für einen anderen Host: Pipeline-Zeitpläne liegen dort in 
 | Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |
 |---|---|---|---|
 | Board und Ticket | `board-lib.mjs`, `board-place.mjs`, `naechstes-ticket.mjs`, `ticket-lock.mjs`, `claims-pruefen.mjs`, `spezifikation.mjs`, `design-schritt.mjs`, `sammelticket-anlegen.mjs`, `blocker-lib.mjs`, `blocker-migration.mjs`, `produktquote-lib.mjs`, `fremdtext.mjs` | GitHub | Issues, Projects v2, Assignee-Claim, Blocker-Kante, Kommentare |
-| Ticketlauf-Abschluss | `umsetzer-abschluss.mjs`, `pr-warten.mjs`, `abnahme.mjs`, `cleanup-worktrees.mjs` | GitHub | PR-Status, Checks, Auto-Merge, Issue-Zustand |
+| Ticketlauf-Abschluss | `umsetzer-abschluss.mjs`, `pr-warten.mjs`, `abnahme.mjs`, `cleanup-worktrees.mjs` | GitHub | PR-Status, Checks, Auto-Merge, Branch-Update (`gh pr update-branch`), Issue-Zustand |
 | Hooks | `pretooluse-hook.mjs`, `pretooluse-dispatch.mjs`, `stop-verify-hook.mjs`, `gh-guard-hook.mjs` | GitHub | die ersten drei hängen über `umsetzer-abschluss.mjs` an `gh-cli.mjs`; `gh-guard-hook.mjs` schützt Projects-v2-Aufrufe (`ProjectV2`) |
 | Codex-Adapter | `codex-hook.mjs`, `codex-hook-lib.mjs`, `codex-lib.mjs`, `codex-setup.mjs`, `codex-vorpruefung.mjs` | GitHub | laden den Dispatcher (`pretooluse-dispatch.mjs`) und damit `umsetzer-abschluss.mjs`/`gh-cli.mjs` |
 | Inboxen und Takt | `inbox-lib.mjs`, `inbox-start-lib.mjs`, `wiedervorlage.mjs`, `secret-inbox.mjs`, `codescanning-inbox.mjs`, `audit-einordnung.mjs`, `board-takt.mjs`, `langfuse-takt.mjs`, `tag-takt.mjs`, `factory-update-check.mjs` | GitHub | Issues als Inbox, Alerts, Releases |

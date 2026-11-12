@@ -22,7 +22,7 @@ import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
-  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
+  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean; befund?: string; nichtPruefbar?: boolean }[];
   voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; optionaleSecrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
 }
 const doctor = rawDoctor as unknown as Doctor;
@@ -72,7 +72,7 @@ const GESUND: Record<string, unknown> = {
   "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 8 },
   "api orgs/acme/projectsV2/7/fields/5": feld,
   "api orgs/acme/projectsV2/8/fields/5": feld,
-  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }, CODEQL],
+  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } }, CODEQL],
 };
 const SPIEGEL = { name: "main-schutz", requiredChecks: ["CI", "Audit"], bypassActors: [] };
 
@@ -364,7 +364,7 @@ describe("harness-doctor --pruefen", () => {
     assert.equal(luecken(r).length, 1, r.out.join("\n"));
     assert.match(luecken(r)[0], /^LÜCKE Required-Check Kern: Required-Check "Kern" fehlt auf main Fix: "Kern" in Ruleset "main-schutz"/);
     assert.deepEqual(r.out.filter((z) => z.startsWith("HINWEIS Required-Check")), [], "eine Lücke ohne hinweis trägt keine HINWEIS-Zeile");
-    const regeln = [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }, { context: "Kern" }] } }, CODEQL];
+    const regeln = [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }, { context: "Kern", integration_id: 15368 }] } }, CODEQL];
     const gruen = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": regeln }, { besitz: KERN_BESITZ });
     assert.equal(gruen.code, 0, gruen.out.join("\n"));
   });
@@ -416,11 +416,11 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("K4: fehlender Required-Check ergibt Exit 1 mit Fix-Zeile; zwei fehlende ergeben zwei Zeilen", () => {
-    const eins = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }, CODEQL] });
+    const eins = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }] } }, CODEQL] });
     assert.equal(eins.code, 1);
     assert.equal(luecken(eins).length, 1);
     assert.match(luecken(eins)[0], /Required-Check "Audit" fehlt.*Fix: "Audit" in Ruleset "main-schutz"/);
-    const zwei = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }, CODEQL] });
+    const zwei = lauf({ "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X", integration_id: 15368 }] } }, CODEQL] });
     assert.equal(luecken(zwei).length, 2);
   });
 
@@ -436,12 +436,12 @@ describe("harness-doctor --pruefen", () => {
     const r = lauf({ "api repos/acme/demo": repo });
     assert.equal(r.code, 1);
     assert.ok(r.out.some((z) => /^NICHT PRÜFBAR Ruleset: .*trunk/.test(z)), r.out.join("\n"));
-    const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    const ohneCs = lauf({ "api repos/acme/demo": repo, "api --paginate --slurp repos/acme/demo/rules/branches/trunk?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } }] });
     assert.match(luecken(ohneCs)[0], /^LÜCKE Code-Scanning: keine Code-Scanning-Regel auf trunk/);
   });
 
   test("privates Repo ohne Code-Scanning-Regel: der Befund nennt die Grenze der Rulesets (privat und Zweig sind verdrahtet)", () => {
-    const r = lauf({ "api repos/acme/demo": { ...REPO_OK, private: true } , "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }] });
+    const r = lauf({ "api repos/acme/demo": { ...REPO_OK, private: true } , "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } }] });
     assert.match(luecken(r)[0], /^LÜCKE Code-Scanning: .*auf main \(private Repos auf GitHub Free/);
   });
 
@@ -454,12 +454,36 @@ describe("harness-doctor --pruefen", () => {
   });
 
   test("Regeln über zwei Seiten (--slurp): Checks beider Seiten zählen, ein Check nur auf Seite 2 fehlend ist eine Lücke", () => {
-    const seite = (c: string) => [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: c }] } }];
+    const seite = (c: string) => [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: c, integration_id: 15368 }] } }];
     const k = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
     assert.equal(lauf({ [k]: [[...seite("CI"), CODEQL], seite("Audit")] }).code, 0);
     const r = lauf({ [k]: [[...seite("CI"), CODEQL], seite("Anderes")] });
     assert.equal(r.code, 1);
     assert.match(luecken(r)[0], /Required-Check "Audit" fehlt/);
+  });
+
+  test("Required-Check-Pin (factory#375 L51): aus rules/branches, auch im Wochenlauf ohne --pruefen; ohne integration_id LÜCKE mit Kontexten, sonst OK", () => {
+    // Der Wochenlauf ruft `pruefe` (ohne die lokale Naht `lokal`/`--pruefen`); der Pin kommt aus rules/branches, nicht aus dem Admin-Endpunkt rulesets/<id>.
+    const punkteMit = (regeln: unknown) => {
+      const gh = (a: string[]): string => {
+        if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
+        if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) {
+          if (regeln instanceof Error) throw regeln;
+          return JSON.stringify([regeln]);
+        }
+        throw new Error("404");
+      };
+      const leer = { secrets: [], variablen: [], labels: [], boards: [] };
+      return doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh, langfuse: null }).filter((p) => p.punkt === "Required-Check-Pin");
+    };
+    const regel = (checks: unknown[]) => [{ type: "required_status_checks", parameters: { required_status_checks: checks } }];
+    const ohne = punkteMit(regel([{ context: "CI" }, { context: "Audit", integration_id: 15368 }]));
+    assert.equal(ohne.length, 1);
+    assert.equal(ohne[0].ok, false);
+    assert.match(ohne[0].befund ?? "", /integration_id: CI$/);
+    assert.equal(punkteMit(regel([{ context: "CI", integration_id: 15368 }]))[0].ok, true);
+    assert.equal(punkteMit(new Error("HTTP 403"))[0].nichtPruefbar, true);
+    assert.deepEqual(punkteMit([]), []);
   });
 
   test("Regel ohne parameters zählt als ohne Checks", () => {
@@ -541,11 +565,11 @@ describe("harness-doctor --pruefen", () => {
     const leer = { secrets: [], variablen: [], labels: [], boards: [] };
     const gh = (a: string[]): string => {
       if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
-      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X", integration_id: 15368 }] } }]]);
       throw new Error("404");
     };
     const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: undefined, gh, langfuse: null });
-    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")), []);
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check ")), []);
     assert.ok(punkte.some((p) => p.punkt === "Ruleset" && p.ok));
   });
 
@@ -553,11 +577,11 @@ describe("harness-doctor --pruefen", () => {
     const leer = { secrets: [], variablen: [], labels: [], boards: [] };
     const gh = (a: string[]): string => {
       if (a.join(" ") === "api -i user") return "HTTP/2.0 200 OK\nX-Oauth-Scopes: repo, project\n\n{}";
-      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X" }] } }]]);
+      if (a[0] === "api" && a.includes("--slurp") && a.some((x) => x.includes("/rules/branches/"))) return JSON.stringify([[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "X", integration_id: 15368 }] } }]]);
       throw new Error("404");
     };
     const punkte = doctor.pruefe({ config: { repo: "acme/demo" }, voraussetzungen: leer, spiegel: { name: "s", requiredChecks: ["CI"] }, gh, langfuse: null });
-    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check")).map((p) => p.punkt), ["Required-Check CI"]);
+    assert.deepEqual(punkte.filter((p) => p.punkt.startsWith("Required-Check ")).map((p) => p.punkt), ["Required-Check CI"]);
   });
 
   test("Langfuse nicht erreichbar: Lücke mit Befund aus stderr und Fix", () => {
@@ -580,7 +604,7 @@ describe("harness-doctor --pruefen", () => {
 
   describe("Code-Scanning-Regel (#92 L2)", () => {
     const REGELN = "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100";
-    const required = { type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } };
+    const required = { type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } };
     const cs = (tool: string) => ({ type: "code_scanning", parameters: { code_scanning_tools: [{ tool, alerts_threshold: "errors", security_alerts_threshold: "high_or_higher" }] } });
     const MIT = { ...SPIEGEL, codeScanning: [{ tool: "CodeQL", sicherheitsSchwelle: "high_or_higher", alertSchwelle: "errors" }] };
     test("Spiegel nennt CodeQL, live gesetzt: gut", () => {
@@ -758,7 +782,7 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
     "api repos/acme/demo": { ...REPO_OK, ...AUS },
     "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: false },
     "api repos/acme/demo/private-vulnerability-reporting": { enabled: false },
-    [REGELN]: [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }, { context: "Audit" }] } }],
+    [REGELN]: [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } }],
   };
   const welten: [string, Record<string, unknown>][] = [
     ["gesund", {}],

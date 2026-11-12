@@ -57,7 +57,7 @@ const GESUND: Record<string, unknown> = {
   "api orgs/acme/projectsV2/8": { node_id: "p_zwei", number: 8 },
   "api orgs/acme/projectsV2/7/fields/5": feld,
   "api orgs/acme/projectsV2/8/fields/5": feld,
-  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }, CODEQL]],
+  "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }] } }, CODEQL]],
 };
 
 /** Schreibt dieser `gh api`-Aufruf? `-X`/`--method` außer GET, oder Felder (-f, -F, --field, --raw-field, --input) ohne `-X GET` (dann ist `gh api` ein POST). */
@@ -207,7 +207,7 @@ describe("harness-doctor --einrichten", () => {
       "api repos/acme/demo": { ...REPO_OK, security_and_analysis: aus },
       "api repos/acme/demo/actions/permissions": { enabled: true, allowed_actions: "all", sha_pinning_required: false },
       "api repos/acme/demo/private-vulnerability-reporting": { enabled: false },
-      "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI" }] } }]],
+      "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [[{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }] } }]],
     });
     const r = fahre(root, w, EINR(root));
     for (const p of ["Secret Scanning", "Push Protection", "Non-Provider-Patterns", "Validity Checks", "PVR", "Dependabot Security Updates", "Code-Scanning", "SHA-Pinning"]) {

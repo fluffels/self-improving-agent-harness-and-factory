@@ -21,6 +21,9 @@ import { liesMitProjektwerten } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as pwRaw from "../../scripts/pr-warten.mjs";
+const pw = pwRaw as unknown as { MAX_SEKUNDEN_STANDARD: number };
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as extraktionRaw from "../../scripts/besitz-extraktion.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as festRaw from "../../scripts/check-festgefahren.mjs";
@@ -177,6 +180,15 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
     assert.deepEqual(parseErgebnis("Text ohne Format"), { token: null, zusatz: null, pr: null, schnitt: null, uebergabe: false, festgefahren: null });
     assert.equal(parseErgebnis(bericht("fertig")).token, null);
     assert.equal(parseErgebnis(bericht("gemergt | abgebrochen")).zusatz, "| abgebrochen");
+  });
+
+  test("Hänge-Schwelle: 24 min und die daraus abgeleitete Aufrufzahl beim Standardbudget (factory#375 L39)", () => {
+    const g = blockade(eingabe(bericht("gemergt")), { prStatus: offenMitAuto }) ?? "";
+    const aufrufe = Math.ceil((24 * 60) / pw.MAX_SEKUNDEN_STANDARD);
+    assert.equal((abschlussRaw as unknown as { HAENGE_AUFRUFE: number }).HAENGE_AUFRUFE, aufrufe);
+    assert.match(g, /Hängt die CI 24 min ohne Fortschritt/);
+    assert.match(g, new RegExp(`beim Standardbudget ${aufrufe} Aufrufe`));
+    assert.match(g, /`AKTUALISIERT` zählen als Fortschritt/);
   });
 
   test("blockiert: gemergt oder abgebrochen bei offenem PR mit Auto-Merge, auch mit Zusatz; Grund nennt keinen Monitor-Weg", () => {

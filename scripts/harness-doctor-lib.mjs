@@ -13,7 +13,7 @@ import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
 import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
-import { rulesetPunkte } from "./harness-doctor-ruleset.mjs";
+import { pinPunkt, rulesetPunkte } from "./harness-doctor-ruleset.mjs";
 import { langfusePunkt } from "./harness-doctor-langfuse.mjs";
 import { istWorkflowDatei } from "./workflow-blockform.mjs";
 import { manifestKenntModule, MODUL_STANDARD, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
@@ -359,6 +359,7 @@ export function pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebun
     const branch = r.repo.default_branch ?? "main";
     const regeln = hole(() => seiten(gh, `repos/${repo}/rules/branches/${branch}?per_page=100`));
     ergebnis.push(...pruefeRuleset(regeln, r.repo, spiegel, sollChecks(voraussetzungen, spiegel)));
+    ergebnis.push(...pinPunkt(regeln));
     ergebnis.push(...pruefeSicherheit({ ...quellen, regeln, pvr: hole(() => json(gh, ["api", `repos/${repo}/private-vulnerability-reporting`])), spiegel, branch, privat: r.repo.private === true }));
   } else {
     const aus = { fehler: "gh nicht angemeldet oder ohne Zugriff", fix: "erst den Token-Punkt beheben" };

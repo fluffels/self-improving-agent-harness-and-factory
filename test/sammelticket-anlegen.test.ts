@@ -639,6 +639,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
       loadItems: (...a: unknown[]) => (rufe.push(["loadItems", ...a]), listeVoll()),
       setPosition: (...a: unknown[]) => rufe.push(["setPosition", ...a]),
       setzeUndPruefe: (a: unknown) => (rufe.push(["setzeUndPruefe", a]), Promise.resolve("ok")),
+      verknuepfeBlocker: () => {},
       ...extra,
     };
     return { deps, rufe, log };
@@ -821,9 +822,10 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
 
   test("Vorgänger: vorgaengerZustand wird mit Vorgänger und Ziel-Repo gefragt, offen landet die Blocker-Zeile im Body", async () => {
     const gefragt: unknown[][] = [];
-    const { deps, rufe } = fakes({ vorgaengerZustand: (...a: unknown[]) => (gefragt.push(a), "offen") });
+    const { deps, rufe, log } = fakes({ vorgaengerZustand: (...a: unknown[]) => (gefragt.push(a), "offen") });
     await M(["harness", "--vorgaenger", "7"], deps);
     expect(gefragt).toEqual([[7, FABRIK]]);
+    expect(log.filter((z) => z.includes("native Abhängigkeit nicht gesetzt"))).toEqual([]);
     expect((rufe.find((r) => r[0] === "legeAn")![1] as { body: string }).body).toMatch(/#7/);
   });
 

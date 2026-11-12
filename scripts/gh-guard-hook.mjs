@@ -27,6 +27,10 @@
  * Wörter. Laufzeit: Befehle mit `gh api` über `LAENGE_MAX` Zeichen und Befehle mit mehr als `STELLEN_MAX` Fundstellen
  * (gh/Interpreter) fragen pauschal, damit die Prüfung nie zum Timeout des Dispatchers wird.
  *
+ * Required-Check-Schutz (factory#375 L50): ein schreibender Aufruf auf `…/statuses/<sha>` oder `…/check-runs[/<id>]` fragt ebenfalls (ein Agent
+ * könnte sonst einen Required Check grün melden); `…/check-runs/<id>/rerequest` und Lesezugriffe laufen durch. Der laufzeitneutrale Riegel ist
+ * der `integration_id`-Pin im Ruleset (Doctor-Punkt Required-Check-Pin); Codex hat diesen Hook nicht.
+ *
  * Bewusste Grenzen:
  *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
  *    Queries bleiben ein Segment), kein vollständiges Shell-Parsing. Er fängt die dokumentierten Formen, keine
@@ -35,6 +39,8 @@
  *  - Backtick-Ersetzungen werden nur unter Bash erkannt und nicht geschachtelt; Wrapper vor einer Variablen höchstens mit 4
  *    Options-/Wertwörtern; neue Umwege (Verschleierung, exotische Shell-Formen) sind Bekannte Grenzen und kein Fehler des Guards
  *    (Blocker-Maßstab, Factory-Seite [docs/agent-harness.md §4](../docs/agent-harness.md#4-die-sichere-autonomie-schleife)). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
+ *  - Required-Check-Schutz: nicht erkannt werden die GraphQL-Mutationen `createCheckRun`/`updateCheckRun`, ein abschließender `/` nach `check-runs` und eine abweichende Groß-/Kleinschreibung des Pfads;
+ *    der wirksame Riegel ist der `integration_id`-Pin im Ruleset.
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *
@@ -87,6 +93,14 @@ const REST_PFADE = [
   /\/transfer\b/,
   /\/git\/refs\//,
 ];
+
+/** Commit-Status und Check-Läufe (factory#375 L50): ein schreibender Aufruf könnte einen Required Check grün melden (ohne integration_id-Pin).
+ *  `…/check-runs/<id>/rerequest` bleibt erlaubt (stößt nur neu an), `…/commits/<sha>/statuses` ist ein Lesepfad. */
+const STATUS_PFADE = [
+  /\/statuses\//,
+  /\/check-runs(?:\/\d+)?(?=$|[\s'"?])/,
+];
+const STATUS_GRUND = "setzt einen Commit-Status oder Check-Lauf (könnte einen Required Check grün melden)";
 
 /** Anlege-Sperre (#1693): neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Pflichtfelder, Board-Platz). */
 const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Position mit `--nach <nr> --weil \"<grund>\"` oder `--notfall <art>`)";
@@ -254,6 +268,13 @@ function methode(segment) {
 /** Trägt der Aufruf Felder (`-f`/`-F`/`--field`/`--raw-field`/`--input`)? Dann ist die implizite Methode POST. */
 const hatFelder = (segment) => /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:\s|=)/.test(segment);
 
+/** Grund für einen schreibenden Aufruf auf einen geschützten REST-Pfad (Status/Check-Läufe zuerst), sonst `null`. */
+function restPfadGrund(segment) {
+  if (STATUS_PFADE.some((muster) => muster.test(segment))) return STATUS_GRUND;
+  const muster = REST_PFADE.find((m) => m.test(segment));
+  return muster ? `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})` : null;
+}
+
 /** Der erste Treffer-Grund für ein einzelnes `gh api`-Segment oder null. */
 function segmentGrund(segment) {
   const m = methode(segment);
@@ -270,7 +291,8 @@ function segmentGrund(segment) {
   }
   const mutierend = m !== null ? m !== "GET" : hatFelder(segment);
   if (!mutierend) return null; // reiner Lesezugriff auf Einstellungspfade ist erlaubt
-  for (const muster of REST_PFADE) if (muster.test(segment)) return `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})`;
+  const pfadGrund = restPfadGrund(segment);
+  if (pfadGrund !== null) return pfadGrund;
   if (m === "PATCH" && /\brepos\/[^/\s'"]+\/[^/\s'"]+(?=\s|$|['"])/.test(segment)) return "PATCH auf die Repo-Einstellungen";
   return null;
 }

@@ -10,8 +10,9 @@ type Erg = { exit: number; zeilen: string[] };
 const P = raw as unknown as {
   bewerte: (pr: object, pflicht?: readonly string[] | null) => Erg;
   konfliktStand: (seit: number | null, jetzt: number) => { bestaetigt: boolean; seit: number };
-  warten: (e: { hole: () => object; pflicht?: () => readonly string[]; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
+  warten: (e: { hole: () => object; pflicht?: () => readonly string[]; aktualisiere?: () => void; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
   parseArgs: (a: string[]) => { pr: string | null; maxSekunden: number; intervall: number };
+  MAX_SEKUNDEN_STANDARD: number;
 };
 
 const lauf = (name: string, status: string, conclusion: string | null = null, url = `https://x/runs/${name}`) => ({ __typename: "CheckRun", name, status, conclusion, detailsUrl: url });
@@ -555,5 +556,123 @@ describe("CLI: Aufruftext nennt den Standard des Zeitbudgets (factory#347 L4)", 
     const r = spawnSync(process.execPath, ["scripts/pr-warten.mjs"], { encoding: "utf8" });
     expect(r.status).toBe(3);
     expect(r.stderr).toContain(`--max-sekunden ${P.parseArgs([]).maxSekunden}]`);
+  });
+});
+
+describe("bewerte: Branch hinter main (factory#375 L1)", () => {
+  const gruen = [lauf("a", "COMPLETED", "SUCCESS")];
+  test("BEHIND mit grünen Checks: Exit 2 HINTER MAIN, aktualisieren", () => {
+    const r = P.bewerte(offen(gruen, { mergeStateStatus: "BEHIND" }));
+    expect(r).toEqual({ exit: 2, zeilen: ["HINTER MAIN"], aktualisieren: true });
+  });
+  test("BEHIND mit rotem Check: ROT hat Vorrang", () => {
+    expect(P.bewerte(offen([lauf("a", "COMPLETED", "FAILURE")], { mergeStateStatus: "BEHIND" })).exit).toBe(1);
+  });
+  test("BEHIND mit Konflikt: KONFLIKT hat Vorrang", () => {
+    expect(P.bewerte(offen(gruen, { mergeStateStatus: "BEHIND", mergeable: "CONFLICTING" })).zeilen).toEqual(["KONFLIKT"]);
+  });
+  test("CLEAN bleibt: Merge steht aus", () => {
+    expect(P.bewerte(offen(gruen, { mergeStateStatus: "CLEAN" }))).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
+  });
+  test("BEHIND mit laufendem Check: weiter OFFEN, kein Update", () => {
+    expect(P.bewerte(offen([lauf("a", "IN_PROGRESS")], { mergeStateStatus: "BEHIND" })).zeilen[0]).toMatch(/^OFFEN 0\/1/);
+  });
+});
+
+describe("warten: Branch aktualisieren (factory#375 L1)", () => {
+  const u = () => {
+    let t = 0;
+    return { jetzt: () => t, schlafe: (ms: number) => void (t += ms) };
+  };
+  const hinten = offen([lauf("a", "COMPLETED", "SUCCESS")], { mergeStateStatus: "BEHIND" });
+  test("ein Aufruf je Lauf; wieder BEHIND: kein zweiter Aufruf, am Ende HINTER MAIN", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => hinten, aktualisiere: () => void n++, ...u(), maxMs: 90_000, intervallMs: 30_000 });
+    expect(n).toBe(1);
+    expect(r).toMatchObject({ exit: 2, zeilen: ["HINTER MAIN"] });
+  });
+  test("nach dem Update liefert hole den neuen Stand: weiter gepollt", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => (n++ === 0 ? hinten : offen([lauf("a", "COMPLETED", "SUCCESS")])), aktualisiere: () => undefined, ...u(), maxMs: 90_000, intervallMs: 30_000 });
+    expect(r.zeilen).toEqual(["OFFEN 1/1 grün, Merge steht aus"]);
+  });
+  test("kurzes Budget: Update läuft trotzdem, Ergebnis AKTUALISIERT mit Exit 2", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => hinten, aktualisiere: () => void n++, ...u(), maxMs: 10_000, intervallMs: 30_000 });
+    expect(n).toBe(1);
+    expect(r.zeilen[0]).toBe("AKTUALISIERT");
+    expect(r.exit).toBe(2);
+  });
+  test("aktualisiere wirft: Exit 3 AKTUALISIEREN FEHLGESCHLAGEN mit erster Zeile", () => {
+    const r = P.warten({
+      hole: () => hinten,
+      aktualisiere: () => {
+        throw new Error("boom\nzweite Zeile");
+      },
+      ...u(),
+      maxMs: 90_000,
+      intervallMs: 30_000,
+    });
+    expect(r).toEqual({ exit: 3, zeilen: ["AKTUALISIEREN FEHLGESCHLAGEN boom"] });
+  });
+  test("Stand ohne BEHIND (wartend, ROT, Merge steht aus): die Naht wird nie gerufen", () => {
+    const stand = [offen([lauf("a", "IN_PROGRESS")], { mergeStateStatus: "BEHIND" }), offen([lauf("a", "COMPLETED", "FAILURE")], { mergeStateStatus: "BEHIND" }), offen([lauf("a", "COMPLETED", "SUCCESS")], { mergeStateStatus: "CLEAN" })];
+    for (const s of stand) {
+      let n = 0;
+      P.warten({ hole: () => s, aktualisiere: () => void n++, ...u(), maxMs: 10_000, intervallMs: 30_000 });
+      expect(n, JSON.stringify(s.statusCheckRollup)).toBe(0);
+    }
+  });
+  test("ohne aktualisiere-Naht bleibt es bei HINTER MAIN", () => {
+    expect(P.warten({ hole: () => hinten, ...u(), maxMs: 10_000, intervallMs: 30_000 }).zeilen).toEqual(["HINTER MAIN"]);
+  });
+});
+
+describe("lauf: Branch-Update über gh (factory#375 L1)", () => {
+  test("HINTER MAIN ruft gh pr update-branch <pr> genau einmal", () => {
+    const L = raw as unknown as { lauf: (a: object, d: object) => Erg };
+    const aufrufe: string[][] = [];
+    const hinten = offen([lauf("Tests", "COMPLETED", "SUCCESS")], { mergeStateStatus: "BEHIND" });
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      if (a[0] === "api") return "[]";
+      if (a.includes("--required")) return JSON.stringify([{ name: "Tests" }]);
+      // wie gh: nur die angefragten --json-Felder kommen zurück (fehlt mergeStateStatus in FELDER, sieht der Lauf kein BEHIND)
+      const felder = (a[a.indexOf("--json") + 1] ?? "").split(",");
+      return JSON.stringify(Object.fromEntries(Object.entries(a.includes("baseRefName") ? { baseRefName: "main" } : hinten).filter(([k]) => felder.includes(k))));
+    };
+    let t = 0;
+    const r = L.lauf({ pr: "7", maxSekunden: 60, intervall: 30 }, { gh, schlafe: (ms: number) => void (t += ms), jetzt: () => t, schreibe: () => undefined, meldeFehler: () => undefined });
+    expect(aufrufe.filter((a) => a[1] === "update-branch")).toEqual([["pr", "update-branch", "7"]]);
+    expect(r.zeilen[0]).toBe("HINTER MAIN");
+  });
+});
+
+describe("versucheUpdate: Fehlertext (factory#375 L1)", () => {
+  const V = raw as unknown as { versucheUpdate: (f: () => void) => Erg };
+  const wirf = (w: unknown) => () => {
+    throw w;
+  };
+  const text = (w: unknown) => V.versucheUpdate(wirf(w)).zeilen[0];
+  test("Erfolg: AKTUALISIERT mit Exit 2", () => {
+    expect(V.versucheUpdate(() => undefined)).toEqual({ exit: 2, zeilen: ["AKTUALISIERT"] });
+  });
+  test("die erste Zeile wird auf 120 Zeichen gekürzt (120 bleibt, 121 wird gekürzt)", () => {
+    const kopf = "AKTUALISIEREN FEHLGESCHLAGEN ";
+    expect(text(new Error("x".repeat(120)))).toBe(kopf + "x".repeat(120));
+    expect(text(new Error("x".repeat(121)))).toBe(kopf + "x".repeat(120));
+    expect(text(new Error("x".repeat(300) + "\nzweite"))).toBe(kopf + "x".repeat(120));
+  });
+  test("geworfener Text statt Error (Rückfall auf den Wert) und mehrzeilige Meldung: nur die erste Zeile", () => {
+    expect(V.versucheUpdate(wirf("nur Text"))).toEqual({ exit: 3, zeilen: ["AKTUALISIEREN FEHLGESCHLAGEN nur Text"] });
+    expect(text("eins\nzwei")).toBe("AKTUALISIEREN FEHLGESCHLAGEN eins");
+    expect(text(undefined)).toBe("AKTUALISIEREN FEHLGESCHLAGEN undefined");
+  });
+});
+
+describe("parseArgs: Standardbudget (factory#375 L39)", () => {
+  test("Standard ist die exportierte Konstante", () => {
+    expect(P.parseArgs(["5"]).maxSekunden).toBe(P.MAX_SEKUNDEN_STANDARD);
+    expect(P.MAX_SEKUNDEN_STANDARD).toBe(150);
   });
 });
