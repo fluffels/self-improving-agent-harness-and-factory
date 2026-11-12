@@ -12,9 +12,9 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
-import { kernAnteil } from "../../scripts/besitz-lib.mjs";
+import * as besitzRaw from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
-import { berechtigungenAus } from "../../scripts/projekt-config-lib.mjs";
+import * as pcRaw from "../../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as guardRaw from "../../scripts/gh-guard-hook.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -26,6 +26,9 @@ type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisio
 const guard = guardRaw as unknown as { bewerte: (c: string, o?: { shell?: string }) => { ask: boolean; reason?: string }; GH_DESTRUKTIV: readonly string[] };
 const adapter = adapterRaw as unknown as { entscheide: (t: string, root: string) => Promise<Out> };
 const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: string) => Out };
+
+const kernAnteil = (besitzRaw as unknown as { kernAnteil: (p: unknown, e: unknown) => unknown }).kernAnteil;
+const berechtigungenAus = (pcRaw as unknown as { berechtigungenAus: (c: unknown) => { ask?: string[] } }).berechtigungenAus;
 
 let tmp = "";
 let haupt = "";
