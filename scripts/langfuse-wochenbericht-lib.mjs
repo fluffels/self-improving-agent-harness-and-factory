@@ -13,7 +13,7 @@
  */
 
 import { projektFilterTags } from "./langfuse-otlp.mjs";
-import { ROW_LIMIT, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
+import { ABGESCHNITTEN, ROW_LIMIT, abgeschnittenFehler, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 export const MS_TAG = 86400000;
 export const MS_WOCHE = 7 * MS_TAG;
@@ -98,7 +98,7 @@ const fenstergleich = (e, von, bis) => Date.parse(e.von) === Date.parse(von) && 
 function leseEigene(json, pfad) {
   const wo = (t) => new Error(`${pfad}: ${t} (Abfragerezept: node scripts/langfuse-wochenbericht.mjs --rezept)`);
   if (!Array.isArray(json.data)) throw wo("data fehlt oder ist kein Array");
-  if (json.data.length >= ROW_LIMIT) throw wo(`Export abgeschnitten (${json.data.length} Zeilen = row_limit)`);
+  if (json.data.length >= ROW_LIMIT) throw abgeschnittenFehler(pfad, json.data.length);
   const a = json.abfrage;
   if (Number.isNaN(Date.parse(a?.fromTimestamp)) || Number.isNaN(Date.parse(a?.toTimestamp))) throw wo("Fenster (fromTimestamp/toTimestamp) fehlt");
   const nameFilter = (a.filters ?? []).some((f) => f?.column === "name" && gleich(f.value, SCORE_NAMEN));
@@ -308,7 +308,7 @@ export function wochenberichtTermin(jetzt) {
 
 /**
  * Pur: Stand einer Woche aus ihrer `<montag>.json`: `erledigt` (Bericht ohne Schwellenüberschreitung, `gemeldet`, `ruhe`), `melden` (Bericht mit
- * Schwellenüberschreitung, Meldung noch offen) oder `offen` (fehlt, kaputt, `unerreichbar`, `keine-daten`, `fehler`). Ohne Bericht nie `erledigt`.
+ * Schwellenüberschreitung, Meldung noch offen) oder `offen` (fehlt, kaputt, `unerreichbar`, `keine-daten`, `abgeschnitten`, `fehler`, Unbekanntes). Ohne Bericht nie `erledigt`.
  */
 export function wochenStand(json) {
   const status = json && typeof json === "object" ? json.status : undefined;
@@ -328,5 +328,6 @@ export function wochenberichtAblage(repo, home = "~") {
 export function anlassText({ art, montag, gruende = [], klasse }) {
   if (art === "schwelle") return `Wochenbericht ${montag}: Agent-Lauf nötig (${gruende.map((g) => `${g.schwelle} Ist ${Number(g.ist).toFixed(1)}, Soll höchstens ${g.soll}`).join("; ")})`;
   if (art === "ohne-daten") return `Wochenbericht ${montag}: Woche ohne Daten trotz Commits auf main (Erfassung prüfen)`;
-  return `Wochenbericht ${montag} fehlt: ${klasse === "unerreichbar" ? "Langfuse unerreichbar" : "Fehler im Live-Weg"} (Details im lokalen Log)`;
+  const was = { unerreichbar: "Langfuse unerreichbar", [ABGESCHNITTEN]: "Export am Zeilenlimit abgeschnitten" }[klasse] ?? "Fehler im Live-Weg";
+  return `Wochenbericht ${montag} fehlt: ${was} (Details im lokalen Log)`;
 }

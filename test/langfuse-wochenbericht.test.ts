@@ -440,8 +440,8 @@ describe("Randfälle (Guards)", () => {
     expect(V(() => { throw new Error("ENOENT /x/y"); })).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen");
     expect(V(() => "{nicht json")).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein gültiges JSON), Filter nur über den Repo-Namen");
     expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
-    expect(V(() => JSON.stringify({ env: {} }))).toBeUndefined();
-    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a" } }))).toBeUndefined();
+    expect(V(() => JSON.stringify({ env: {} }))).toBeNull();
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a" } }))).toBeNull();
   });
   test("tagsVermerk steht im Bericht (Markdown und JSON) und im Grund von keine-daten; ohne Vermerk bleibt die Ausgabe gleich", async () => {
     const mit = { ...PROJEKT, tagsVermerk: "Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen" };
