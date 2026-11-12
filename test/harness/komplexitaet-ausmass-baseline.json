@@ -126,9 +126,6 @@
   "scripts/pr-warten.mjs": {
     "complexity": 7
   },
-  "scripts/pretooluse-hook.mjs": {
-    "complexity": 2
-  },
   "scripts/projekt-config-lib.mjs": {
     "complexity": 14
   },

@@ -1,7 +1,7 @@
 // Kein Shebang: wird über `.claude/settings.json` per `node scripts/pretooluse-hook.mjs` gestartet UND von
 // test/harness/pretooluse-hook.test.ts importiert.
 /**
- * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell`, `SubagentHandback` (Abschluss-Wächter, #1342), `Agent` (Lens-Auftrag-Guard, #1425, und Holdout-Trennung) und `SendMessage` (Holdout-Trennung): EIN Node-Prozess je Tool-Aufruf statt drei.
+ * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell`, `SubagentHandback` (Abschluss-Wächter, #1342), `Agent` (Lens-Auftrag-Guard, #1425, und Holdout-Trennung) und `SendMessage` (Holdout-Trennung): EIN Node-Prozess je Tool-Aufruf statt drei. Die Entscheidungslogik (`dispatch`) liegt in `scripts/pretooluse-dispatch.mjs` (Lib, auch vom Codex-Adapter genutzt, factory#364); dieser Einstieg re-exportiert sie.
  *
  * Er liest das Payload einmal (`hook-io.mjs`) und fragt die Guards:
  *  - Bash:       Worktree-Guard (`decide`, scripts/worktree-guard-hook.mjs), gh-Guard (`bewerte`) und Stdin-Skript-Guard (`bewerteStdinSkript`, #1561)
@@ -17,59 +17,11 @@
  *
  * Reines Node-Skript (nur Builtins).
  */
-import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
-import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { buildDenyOutput, emit, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
-import { holdoutAuftragBlockade, parseHoldoutInput } from "./holdout-auftrag-guard.mjs";
-import { lensAuftragBlockade, parseAgentInput } from "./lens-auftrag-guard.mjs";
-import { bewerteStdinSkript } from "./stdin-skript-guard.mjs";
-import { namenOderGrund } from "./ticket-namen.mjs";
-import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
-import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
-import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
+import { emit, readStdin } from "./hook-io.mjs";
+import { dispatch } from "./pretooluse-dispatch.mjs";
+import { repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
 
-const sicher = (fn) => {
-  try {
-    return fn();
-  } catch {
-    return null;
-  }
-};
-
-/** Entscheidet für ein Payload (Text) und gibt das Hook-Output-Objekt oder null (durchlassen) zurück. */
-export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL, deps = {}) {
-  const { tool, cwd, command } = parseHookInput(text);
-  if (tool === "SubagentHandback") {
-    // Abschluss-Wächter des Umsetzers (#1342): vor der Zustellung des Berichts; fremde Agenten und jeder Fehler lassen durch.
-    // Die Config lädt dieser Einstiegspunkt (ohne nutzbare Config blockiert er fail-closed); der Kern bekommt sie als Parameter.
-    const grund = sicher(() => {
-      const geladen = namenOderGrund("Umsetzer-Abschluss", deps);
-      return geladen.grund ?? abschlussBlockade(parseAbschlussInput(text), { ...deps, config: geladen.config });
-    });
-    return grund ? buildDenyOutput(grund) : null;
-  }
-  if (tool === "Agent") {
-    // Lens-Auftrag-Guard (#1425): ein Lens-Spawn mit übrig gebliebenen Platzhaltern wird verweigert; alles andere läuft durch.
-    const grund = sicher(() => lensAuftragBlockade(parseAgentInput(text), deps)) ?? sicher(() => holdoutAuftragBlockade(parseHoldoutInput(text)));
-    return grund ? buildDenyOutput(grund) : null;
-  }
-  if (tool === "SendMessage") {
-    // Holdout-Trennung (ADR 0022 F13): Szenarien gehen nie per Nachricht an einen Agenten.
-    const grund = sicher(() => holdoutAuftragBlockade(parseHoldoutInput(text)));
-    return grund ? buildDenyOutput(grund) : null;
-  }
-  if (tool === undefined || !Object.hasOwn(shellVonTool, tool)) return null;
-  const shell = shellVonTool[tool]; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick) UND Wahl des Worktree-Guards
-  const worktreeGuard = { bash: () => guards.decide({ cwd, command, repoRoot }), powershell: () => guards.bewertePowerShell({ command, cwd, repoRoot }) }[shell]; // ein neues Tool braucht hier bewusst einen eigenen Guard
-  // Fail-closed (#1331): eine Shell in der Tabelle ohne Worktree-Guard darf nicht still durchlaufen.
-  const worktree = worktreeGuard
-    ? sicher(worktreeGuard)
-    : { block: true, reason: `Dispatcher: für die Shell "${shell}" gibt es keinen Worktree-Guard (SHELL_VON_TOOL und Dispatcher driften auseinander).` };
-  if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
-  // Stdin-Skript-Guard (#1561): nur Bash; ein deny wie beim Worktree-Guard, ein werfender Guard lässt durch.
-  const stdin = shell === "bash" ? sicher(() => (guards.bewerteStdin ?? bewerteStdinSkript)(command)) : null;
-  return mergeDecisions([worktree, stdin, sicher(() => guards.bewerteGh(command, { shell }))]);
-}
+export { dispatch };
 
 if (istDirektaufruf(import.meta.url)) emit(dispatch(readStdin(), repoRootFromScriptUrl(import.meta.url)));

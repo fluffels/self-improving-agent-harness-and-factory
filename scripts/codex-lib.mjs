@@ -6,6 +6,7 @@ import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
 import { LANGFUSE_LESE_TOOLS } from "./langfuse-zugang.mjs";
+import { CODEX_HOOK_TIMEOUT_S, CODEX_HOOK_WERKZEUGE } from "./codex-hook-lib.mjs";
 export { rollenFuer } from "./codex-rollen.mjs";
 export { bewerteBelege } from "./codex-belege.mjs";
 const q = JSON.stringify;
@@ -21,6 +22,12 @@ function pruefeMcp(mcp, endpoint) {
 
 export const LANGFUSE_AUTH_MODI = ["env", "host"];
 
+/** Soll-Inhalt von `.codex/hooks.json` (factory#364): PreToolUse-Hook auf den Adapter, Matcher aus der Werkzeugtabelle des Adapters, fester Timeout; endpunktunabhängig. */
+export function hookRegistrierung() {
+  const matcher = `^(${Object.keys(CODEX_HOOK_WERKZEUGE).join("|")})$`;
+  return `${JSON.stringify({ hooks: { PreToolUse: [{ matcher, hooks: [{ type: "command", command: "node scripts/codex-hook.mjs", timeout: CODEX_HOOK_TIMEOUT_S }] }] } }, null, 2)}\n`;
+}
+
 /** `langfuseAuth`: `env` (Standard) bezieht den Header per `env_http_headers`; `host` lässt ihn weg (der MCP-Host liefert die Anmeldung). */
 export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
   if (!LANGFUSE_AUTH_MODI.includes(langfuseAuth)) throw new Error(`langfuseAuth: ${LANGFUSE_AUTH_MODI.join(" oder ")} erforderlich`);
@@ -32,6 +39,7 @@ export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
     const features = `\n[features]\napps = false\nplugins = false\nmemories = false\nrequest_permissions_tool = false\n${r.ohneShell ? "shell_tool = false\n" : ""}`;
     files[`.codex/agents/${r.name}.toml`] = `name = ${q(r.name)}\ndescription = ${q(r.aufgabe)}\nmodel_reasoning_effort = ${q(r.effort)}\ndeveloper_instructions = ${q(anweisung)}\n${features}`;
   }
+  files[".codex/hooks.json"] = hookRegistrierung();
   files[".codex/config.toml"] = `# Generiert aus gemeinsamen Quellen; keine autonome Freigabe.\n[agents]\nenabled = true\n\n[mcp_servers.playwright]\ncommand = ${q(p.command)}\nargs = ${q(p.args)}\nrequired = true\n\n[mcp_servers.langfuse]\nurl = ${q(endpoint)}\n${header}required = true\nenabled_tools = [${LANGFUSE_LESE_TOOLS.map(q).join(", ")}]\n`;
   return files;
 }
@@ -81,7 +89,7 @@ export function quellDatei(root, pfad) {
   return p;
 }
 export function pruefeQuellen(root, config) {
-  const pfade = [".mcp.json", PROJEKT_CONFIG, "AGENTS.md", "docs/codex/einstieg.md", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
+  const pfade = [".mcp.json", PROJEKT_CONFIG, "AGENTS.md", "docs/codex/einstieg.md", "scripts/codex-hook.mjs", "scripts/codex-hook-lib.mjs", ...rollenFuer(config).map(r => `.claude/agents/${r.quelle}.md`)];
   for (const p of pfade) quellDatei(root, p);
 }
 function sichererPfad(root, pfad) {
@@ -102,6 +110,21 @@ export function lokaleRollenMaengel(root, config, mcp) {
   }
   return maengel;
 }
+/** Vergleicht die lokale Hook-Registrierung mit dem Soll: fehlende oder abweichende `.codex/hooks.json` und eine inline `[hooks`-Tabelle in `.codex/config.toml` sind Mängel (der Host lädt beide und würde doppelt oder abweichend laufen); rein lesend, folgt keinem Symlink. */
+export function lokaleHookMaengel(root) {
+  const fix = "node scripts/codex-setup.mjs --langfuse-url <URL> --write";
+  const datei = join(root, ".codex", "hooks.json");
+  ohneSymlinks(datei, root);
+  const maengel = [];
+  const st = lstatSync(datei, { throwIfNoEntry: false });
+  if (!st) maengel.push(`Codex-Hook-Registrierung fehlt: .codex/hooks.json (Fix: ${fix})`);
+  else if (!st.isFile() || readFileSync(datei, "utf8") !== hookRegistrierung()) maengel.push(`Codex-Hook-Registrierung weicht vom Soll ab: .codex/hooks.json (Datei löschen, dann ${fix})`);
+  const toml = join(root, ".codex", "config.toml");
+  ohneSymlinks(toml, root);
+  if (lstatSync(toml, { throwIfNoEntry: false })?.isFile() && /^\s*\[+\s*hooks\b/m.test(readFileSync(toml, "utf8"))) maengel.push("Codex-Hook-Registrierung doppelt: inline [hooks] in .codex/config.toml (Tabelle entfernen, die Registrierung steht in .codex/hooks.json)");
+  return maengel;
+}
+
 /** Alle Quellen/Ziele/Kollisionen vor erstem Schreiben prüfen; identische Dateien bleiben unverändert. */
 export function schreibeSetup(root, dateien) {
   root = pruefeAusgabe(root);
