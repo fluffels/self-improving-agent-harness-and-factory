@@ -278,6 +278,7 @@ describe("blockformJobs (factory#401): der Leser stimmt mit der yaml-Bibliothek 
     expect(jobsLesen("on: push\njobs:\n")).toEqual({ ausloeser: ["push"], jobs: [] });
     expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: '    needs: ["", b]' }] });
     expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: "    needs: b" }] });
+    expect(jobsLesen("on: push\njobs:\n  a:\n    # c\n\n    needs: b  # x\n    if: y\n").jobs?.[0]).toMatchObject({ needs: ["b"], if: "y", text: "    needs: b\n    if: y" });
     expect(jobsLesen("on: push\njobs:\n  a:\n    - x\n").fehler?.konstrukt).toBe("Liste als Job");
     expect(jobsLesen("on: push\njobs:\n  - a\n").fehler?.konstrukt).toBe("Liste als jobs");
     expect(jobsLesen("jobs:\n  a:\n    needs: x\n").ausloeser).toEqual([]);
