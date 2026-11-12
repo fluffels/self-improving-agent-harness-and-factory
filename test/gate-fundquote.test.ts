@@ -204,6 +204,32 @@ describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("docs:gen"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
   });
+  const GB = "▶ Gate-Befehl coverage: ";
+  const namen = (text: string, c: Ctx = ctxFull) =>
+    gf.laeufeAusTranskript(zeilen([{ command: "npm run verify:full", fehler: true, text: "Exit code 1\n" + text }]), { sessionId: "s", liesDatei: lies, ctx: c })[0].gates.map((g) => `${g.name}:${g.ergebnis}`);
+  test("ein Folgekopf eines anderen Skripts setzt das Ziel zurück: ein späteres test:coverage ist nicht verschachtelt", () => {
+    const text = voll(GB + "npm run test:coverage\n", kopf("lint"), kopf("test:coverage"));
+    expect(namen(text)).toEqual(["gate-befehl:coverage:gruen", "lint:gruen"]);
+  });
+  test("die Kopfzeile eines fremden Pakets mit dem Skriptnamen des Ziels ist nicht verschachtelt (grün)", () => {
+    const text = voll(GB + "npm run test:coverage\n", "> fremd@1.0.0 test:coverage\n> body\n\n");
+    expect(namen(text)).toEqual(["gate-befehl:coverage:gruen"]);
+  });
+  test.each([
+    ["vitest run --coverage", "test"], // kein npm
+    ["npm testing", "test"], // `npm test` nur als ganzes Wort
+    ["echo npm test", "test"], // nur am Zeilenanfang
+    ["echo npm run test:coverage", "test:coverage"],
+  ])("Negativ: Zeile %j macht den Folgekopf %s nicht verschachtelt (grün)", (rest, skript) => {
+    expect(namen(voll(GB + rest + "\n", kopf(skript)))).toEqual(["gate-befehl:coverage:gruen"]);
+  });
+  test.each([["npm test", "test"], ["npm test -- x", "test"], ["  npm run test:coverage --silent", "test:coverage"]])("Positiv: Zeile %j macht den Folgekopf %s verschachtelt (rot)", (rest, skript) => {
+    expect(namen(voll(GB + rest + "\n", kopf(skript)))).toEqual(["gate-befehl:coverage:rot"]);
+  });
+  test("verschachtelter Folgekopf zählt nicht noch einmal als eigenes Gate (auch wenn er im Gate-Satz steht)", () => {
+    const c: Ctx = { paket: "beispiel", gates: ["lint", "gate-befehl:coverage", "test:coverage"], verify: ["lint"] };
+    expect(namen(voll(kopf("verify:full"), kopf("verify"), kopf("lint"), GB + "npm run test:coverage\n", kopf("test:coverage")), c)).toEqual(["lint:gruen", "gate-befehl:coverage:rot"]);
+  });
 });
 
 describe("Kopfzeilen im Transkript", () => {
