@@ -176,7 +176,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?): Abnahme-Nachweis nicht prüfbar."], invalid: [] };
   let fehler;
   let rov = { reason: null, invalid: [] };
-  let stufe = null; // nur Anzeige (factory#402 L26); bewertet wird sie in pruefe
+  let stufe = null; // einmal berechnet: Anzeige (factory#402 L26) und Bewertung von `entfaellt — klein` (factory#271, nur dort zählt sie)
   let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
     if (git(["rev-parse", "HEAD"]).trim() === base) return { ok: true, skipped: true, fehler: [], invalid: [] };
@@ -185,7 +185,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
     if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe };
     rov = sliceOverride(git, base, zeilen.reviewOverride);
     entwurf = entwurfLive({ gh, env, repo: repoVon(env, config) });
-    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null });
+    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null, stufe });
   } catch (e) {
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
@@ -215,12 +215,8 @@ export function entwurfLive({ gh, env, repo }) {
 /** Größenstufe nur zur Anzeige (factory#402 L26); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
 const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
-/** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
-const stufeFuerEntfaellt = (nachweis, git, base, config) =>
-  nachweis.abnahme?.art === "entfaellt" ? groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe : "voll";
-
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
-function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
+function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe }) {
   const repo = repoVon(env, config);
   const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
@@ -243,7 +239,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
     marker = vertrauterMarker(kommentare, owner, zeilen);
     szenarioDurchgaenge = zaehleSzenarioDurchgaenge(vertrauteAbnahmeMarker(kommentare, owner, zeilen));
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe: stufeFuerEntfaellt(nachweis, git, base, config) });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

@@ -819,6 +819,10 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(frei.messung).toContain("#62 (8)");
     expect(frei.messung).toContain("Review-Override");
     expect(von({ zeilen: [ZEILE({ pr: 62, runden: 8, reviewOverride: false })] }, "Lens-Zahl").status).toBe("ABWEICHUNG");
+    const ohneFreigabe = von({ zeilen: [ZEILE({ runden: 3 }), ZEILE({ runden: 7, reviewOverride: true })] }, "Lens-Zahl");
+    expect(ohneFreigabe.status).toBe("ok");
+    expect(ohneFreigabe.messung).not.toContain("Review-Override");
+    expect(von({ zeilen: [ZEILE({ runden: 3 })] }, "Lens-Zahl").messung).not.toContain("Review-Override");
     expect(von({ zeilen: [ZEILE({ pr: 62, runden: 8 })] }, "Lens-Zahl").status).toBe("ABWEICHUNG");
     const gemischt = von({ zeilen: [ZEILE({ pr: 62, runden: 8, reviewOverride: true }), ZEILE({ pr: 63, runden: 9 })] }, "Lens-Zahl");
     expect(gemischt.status).toBe("ABWEICHUNG");

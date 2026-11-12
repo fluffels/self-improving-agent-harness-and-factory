@@ -590,6 +590,11 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
   });
+  test("Rot: keine Stufenzeile in der Ausgabe (factory#402 L26)", () => {
+    const r = cli(cliRepo("nur Code"));
+    expect(r.status).toBe(1);
+    expect(r.stdout).not.toMatch(/Größenstufe:/);
+  });
   test("Review-Override (L24a): die Ausgabe nennt, was entfällt; ohne die Zeile fehlt der Hinweis", () => {
     const abn = `${Z.abnahme}: head=${"c".repeat(40)} durchgaenge=1 urteil=K1:erfuellt`;
     const mit = cli(cliRepo(`x\n\n${abn}\n${Z.reviewOverride}: #9 Revert-PR`), { FACTORY_PR_DRAFT: "true" });

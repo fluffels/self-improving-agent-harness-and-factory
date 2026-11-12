@@ -257,6 +257,19 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
       assert.match(mit(t).join(), /teilbrillen/, `"${t}" müsste rot sein`);
     }
   });
+  test("teilbrillen ohne blocker-Feld: Meldung statt Absturz", () => {
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert teilbrillen=${GUT} verdikt=ok`));
+    const f = bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, stufe: "S" }).join();
+    assert.match(f, /teilbrillen gilt nur mit/);
+  });
+  test("feldHinweise: je fehlendes optionales Feld eine Hinweiszeile, sonst keine", () => {
+    const H = (raw as unknown as { feldHinweise: (r: { blockerFehlt?: boolean; teilbrillenFehlt?: boolean }) => string[] }).feldHinweise;
+    assert.deepEqual(H({ blockerFehlt: false, teilbrillenFehlt: false }), []);
+    assert.match(H({ blockerFehlt: true, teilbrillenFehlt: false }).join("\n"), /^• Hinweis: blocker= fehlt/);
+    assert.equal(H({ blockerFehlt: true, teilbrillenFehlt: false }).length, 1);
+    assert.match(H({ blockerFehlt: false, teilbrillenFehlt: true }).join("\n"), /^• Hinweis: teilbrillen= fehlt/);
+    assert.equal(H({ blockerFehlt: true, teilbrillenFehlt: true }).length, 2);
+  });
   test("leeres Feld meldet \"leer\"; bei anderen Fehlern erscheint keine Summen-Meldung", () => {
     assert.match(mit("").join(), /teilbrillen ist leer/);
     const f = mit("architektur:x,requirement-treue:0,test-adaequanz:0").join();
