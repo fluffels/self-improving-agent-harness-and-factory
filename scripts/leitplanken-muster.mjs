@@ -130,9 +130,12 @@ export const abgeloesteFundstellen = (dateien) =>
 export const kriterienKopien = (dateien) =>
   fundstellen(dateien, KRITERIEN, KRITERIEN_VORFILTER, (p) => p === "AGENTS.md" || p.startsWith("docs/adr/") || istAnkerDatei(p));
 
+/** Eine `*.test.ts` unter `test/` (verankert, beliebig tief; `src/test/x.test.ts` und `x.test.tsx` zählen nicht). */
+export const istTestDatei = (pfad) => /^test\/.*\.test\.ts$/.test(pfad);
+
 /** Wächter-Tests (Marker als eigene Kommentarzeile) unter `test/`, die außerhalb des geschützten Ordners liegen. */
 export function waechterAusserhalb(dateien) {
   return Object.entries(dateien)
-    .filter(([pfad, inhalt]) => /^test\/.*\.test\.ts$/.test(pfad) && !pfad.startsWith(WAECHTER_ORDNER) && WAECHTER_MARKER.test(inhalt))
+    .filter(([pfad, inhalt]) => istTestDatei(pfad) && !pfad.startsWith(WAECHTER_ORDNER) && WAECHTER_MARKER.test(inhalt))
     .map(([pfad]) => `${pfad}: trägt @harness-waechter, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
 }

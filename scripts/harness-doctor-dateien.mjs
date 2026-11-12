@@ -1,6 +1,6 @@
 /* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native, line-endings und (Fitness-Anteil) harness-approval im Bezieher; der Unit-Anteil
- * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
+ * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul (für harness-approval: `ankerFunde`, `agentsFunde` und die Muster-Funktionen aus leitplanken-muster.mjs).
  *
  *   `Root-Kontextdatei`: keine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt): sie schaltet das native Laden von AGENTS.md ab.
  *   `Zeilenenden`: `.claude/**`, `.agents/**` und `LF_BEISPIELE` haben `eol=lf`, jede andere Textdatei eine eol-Regel (`lf` oder ausdrücklich `crlf`),
@@ -22,7 +22,7 @@
  *   `CODEOWNERS-Spiegel` (factory#382): `.github/CODEOWNERS` führt genau die Gruppe `pflichtReview` von `.github/protected-paths.json` (ohne Gruppe die ganze Liste); fehlt eine der Dateien, meldet `Projektdateien` das.
  *
  *   `Leitplanken-Quelle` (factory#149): der Fitness-Anteil von harness-approval gegen die eigene Quelle des Beziehers (`.github/protected-paths.json` über `schutzlistenMuster`/`trifftLeitplanke`, `.github/CODEOWNERS`, die getrackten Dateien).
- *   Teilregeln, eine Lücke nennt alle Funde: (a) CODEOWNERS schützt genau die Pfadmenge der Pflicht-Review-Liste (ohne Gruppe der ganzen Quelle) und spiegelt deren Anker-Form; (b) die Quelle enthält `AGENTS.md` unverankert;
+ *   Teilregeln (dieselben Funktionen `ankerFunde`, `agentsFunde` und `waechterAusserhalb` ruft der Kern-Wächter harness-approval), eine Lücke nennt alle Funde: (a) CODEOWNERS schützt genau die Pfadmenge der Pflicht-Review-Liste (ohne Gruppe der ganzen Quelle) und spiegelt deren Anker-Form; (b) die Quelle enthält `AGENTS.md` unverankert;
  *   (c) eine Datei mit dem Wächter-Marker als eigener Kommentarzeile liegt nur unter `test/harness/`; (d) keine Kopie der Pre-Flight-Kriterien außerhalb von `AGENTS.md`, `docs/adr/` und den Ankerdateien; (e) keine abgelöste Label-Mechanik außerhalb von `docs/adr/`.
  *   Die Muster stehen in leitplanken-muster.mjs. Fehlt die Quelle oder ist sie kein JSON, ist Git nicht lesbar oder der Index leer, ist der Punkt nicht prüfbar; fehlt CODEOWNERS bei vorhandener Quelle, ist es eine Lücke.
  *   Grenzen: (c) liest die getrackten `*.test.ts` unter `test/`, (d) und (e) nur den Agenten-Kontext mit Scan-Endung; ein umformulierter Begriff und eine ungetrackte Datei bleiben unsichtbar.
@@ -41,7 +41,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { pflichtReviewMuster, schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
-import { abgeloesteFundstellen, istScanDatei, kriterienKopien, TIEFENUNABHAENGIG, waechterAusserhalb } from "./leitplanken-muster.mjs";
+import { abgeloesteFundstellen, istScanDatei, istTestDatei, kriterienKopien, TIEFENUNABHAENGIG, waechterAusserhalb } from "./leitplanken-muster.mjs";
 import { sammelCheckPunkt } from "./harness-doctor-sammelcheck.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
@@ -465,7 +465,7 @@ function lesePfade(pfade, lies) {
 /** Die getrackten Pfade; `null`, wenn Git nicht lesbar ist oder der Index leer bleibt (nie still grün). */
 function getrackte(git) {
   try {
-    const pfade = git(["ls-files", "-z"]).split("\0").filter(Boolean).map((p) => p.replaceAll("\\", "/"));
+    const pfade = git(["ls-files", "-z"]).split("\0").filter(Boolean);
     return pfade.length > 0 ? pfade : null;
   } catch {
     return null;
@@ -485,7 +485,7 @@ export function leitplankenQuellePunkt({ git, lies }) {
   const codeowners = lies(".github/CODEOWNERS");
   if (codeowners === null) return luecke(LQ_PUNKT, ".github/CODEOWNERS fehlt", ".github/CODEOWNERS anlegen: eine Zeile `<muster> @<owner>` je Eintrag der Pflicht-Review-Liste");
   const scan = lesePfade(pfade.filter(istScanDatei), lies);
-  const tests = lesePfade(pfade.filter((p) => /^test\/.*\.test\.ts$/.test(p)), lies);
+  const tests = lesePfade(pfade.filter(istTestDatei), lies);
   const funde = [...ankerFunde(quelle, codeowners, roh), ...agentsFunde(roh), ...textFunde(scan, tests)];
   return funde.length === 0 ? gut(LQ_PUNKT) : luecke(LQ_PUNKT, funde.join("; "), lqFix(funde));
 }

@@ -68,11 +68,15 @@ const {
   codeownersPaths,
   codeownersMuster,
   codeownersSpiegelProbleme: pflichtReviewProbleme,
+  ankerFunde,
+  agentsFunde,
 } = doctorDateienRaw as unknown as {
   normalizeProtected: (p: string) => string;
   codeownersPaths: (text: string) => Set<string>;
   codeownersMuster: (text: string) => string[];
   codeownersSpiegelProbleme: (quelleText: string, codeownersText: string) => string[];
+  ankerFunde: (quelleText: string, codeownersText: string, roh: string[]) => string[];
+  agentsFunde: (roh: string[]) => string[];
 };
 
 const { trifftLeitplanke, leitplankenMuster, pflichtReviewMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
@@ -95,6 +99,7 @@ const {
   baueVorfilter,
   vorfilterProbleme,
   istAnkerDatei,
+  waechterAusserhalb,
 } = musterRaw as unknown as {
   ABGELOEST: RegExp[];
   KRITERIEN: RegExp[];
@@ -109,6 +114,7 @@ const {
   baueVorfilter: (muster: readonly RegExp[]) => RegExp | null;
   vorfilterProbleme: (muster: readonly RegExp[]) => string[];
   istAnkerDatei: (pfad: string) => boolean;
+  waechterAusserhalb: (dateien: Record<string, string>) => string[];
 };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -224,15 +230,12 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     // Der Sync-Test oben fängt das nicht: `/AGENTS.md` und `AGENTS.md` normalisieren beide auf
     // `AGENTS.md`. Der Substring-Abgleich trifft modul-lokale Dateien schon immer, CODEOWNERS
     // (root-verankert) nicht – darum der Anker-Test auf die rohe Schreibweise.
-    const roh = Object.values(quelle).flat();
-    assert.ok(roh.includes("AGENTS.md"), `${QUELLE}: tiefen-unabhängiger Eintrag 'AGENTS.md' fehlt`);
-    assert.ok(!roh.includes("/AGENTS.md"), `${QUELLE}: '/AGENTS.md' ist root-verankert und trifft in CODEOWNERS keine modul-lokale AGENTS.md`);
+    assert.deepEqual(agentsFunde(Object.values(quelle).flat()), [], `${QUELLE}: 'AGENTS.md' muss unverankert stehen (ein '/AGENTS.md' trifft in CODEOWNERS keine modul-lokale Datei)`);
   });
 
   test("CODEOWNERS spiegelt die Anker-Form der Pflicht-Review-Liste: unverankert genau deren tiefen-unabhängige Einträge (#1168)", () => {
-    // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form.
-    const unverankert = codeownersMuster(codeowners).filter((p) => !p.startsWith("/")).sort();
-    assert.deepEqual(unverankert, pflichtListe.filter((p) => !p.startsWith("/")).sort(), "CODEOWNERS: Anker-Form weicht von der Pflicht-Review-Liste ab (#1168)");
+    // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form, dieselbe Funktion wie der Doctor-Punkt.
+    assert.deepEqual(ankerFunde(read(QUELLE), codeowners, Object.values(quelle).flat()), [], "CODEOWNERS: Anker-Form weicht von der Pflicht-Review-Liste ab (#1168)");
   });
 
   test("die Quelle schützt den Wächter-Ordner als Präfix (#1156, #1165)", () => {
@@ -261,11 +264,10 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
   });
 
   test("jeder Test mit @harness-waechter liegt in test/harness/ – und jeder dort trägt den Marker (#1165)", () => {
-    const falsch: string[] = [];
+    const falsch: string[] = waechterAusserhalb(Object.fromEntries(testDateien().map((f) => [f, read(f)])));
     for (const f of testDateien()) {
       const markiert = WAECHTER_MARKER.test(read(f));
       const imOrdner = f.startsWith(WAECHTER_ORDNER);
-      if (markiert && !imOrdner) falsch.push(`${f}: trägt @harness-waechter, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
       if (!markiert && imOrdner) falsch.push(`${f}: liegt in ${WAECHTER_ORDNER}, aber ohne @harness-waechter im Kopf`);
     }
     assert.deepEqual(falsch, [], `Wächter-Tests falsch abgelegt (#1165):\n${falsch.join("\n")}`);

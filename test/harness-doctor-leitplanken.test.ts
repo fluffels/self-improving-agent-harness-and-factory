@@ -45,9 +45,16 @@ describe("(a) CODEOWNERS: Menge und Anker-Form", () => {
 });
 
 describe("(a) Sonderfälle", () => {
+  test("ein unverankerter Eintrag nur in einer anderen Gruppe als pflichtReview ist ein Fund", () => {
+    const quelle = JSON.stringify({ harness: ["AGENTS.md", "/.github/CODEOWNERS", "docs/y.md"], pflichtReview: ["AGENTS.md", "/.github/CODEOWNERS"] });
+    expect(ankerFunde(quelle, OWNERS, ["AGENTS.md", "/.github/CODEOWNERS", "docs/y.md"])).toEqual(["(a) unverankerter Eintrag docs/y.md der Quelle ist nicht bewusst tiefen-unabhängig"]);
+  });
   test("pflichtReview ohne Liste: die Quelle gilt als nicht lesbar, ohne Wurf", () => {
     const funde = ankerFunde(JSON.stringify({ pflichtReview: "x" }), OWNERS, ["AGENTS.md"]);
-    expect(funde.some((f) => f.includes("nicht lesbar"))).toBe(true);
+    expect(funde).toEqual([
+      "(a) .github/protected-paths.json nicht lesbar oder pflichtReview ist keine Liste",
+      "(a) Anker-Form: CODEOWNERS unverankert [AGENTS.md], Pflicht-Review-Liste []",
+    ]);
   });
 });
 
@@ -81,6 +88,9 @@ describe("waechterAusserhalb (Modul)", () => {
     expect(waechterAusserhalb({ "test/harness/x.test.ts": MARKER })).toEqual([]);
     expect(waechterAusserhalb({ "test/x.ts": MARKER, "src/x.test.ts": MARKER, "scripts/x.test.ts": MARKER })).toEqual([]);
     expect(waechterAusserhalb({ "test/x.test.ts": "kein Marker\n" })).toEqual([]);
+    expect(waechterAusserhalb({ "src/test/w.test.ts": MARKER, "packages/a/test/w.test.ts": MARKER })).toEqual([]);
+    expect(waechterAusserhalb({ "test/w.test.ts.bak": MARKER, "test/w.test.tsx": MARKER })).toEqual([]);
+    expect(waechterAusserhalb({ "test/a/b/w.test.ts": MARKER })).toHaveLength(1);
   });
 });
 
@@ -106,9 +116,10 @@ describe("Punkt Leitplanken-Quelle", () => {
     const p = punkt(welt(dateien));
     expect(p.ok).toBe(false);
     expect(p.nichtPruefbar).toBeUndefined();
-    for (const teil of ["(a)", "(b)", "(c)", "(d)", "(e)"]) {
+    const KENNTEIL: Record<string, string> = { "(a)": "gleichziehen", "(b)": "ohne führenden /", "(c)": "Marker entfernen", "(d)": "Verweis auf AGENTS.md", "(e)": "abgelöste Mechanik" };
+    for (const [teil, kenn] of Object.entries(KENNTEIL)) {
       expect(p.befund, teil).toContain(teil);
-      expect(p.fix, teil).toBeTruthy();
+      expect(p.fix, teil).toContain(kenn);
     }
     expect(p.befund).toContain("docs/k.md");
     expect(p.befund).toContain("docs/e.md");
@@ -132,10 +143,12 @@ describe("Punkt Leitplanken-Quelle", () => {
       punkt({ git: () => { throw new Error("kein git"); }, lies: (p) => (GESUND as Record<string, string>)[p] ?? null }),
       punkt(welt(GESUND, [])),
     ];
-    for (const p of fall) {
+    const grund = ["fehlt oder ist nicht lesbar", "kein gültiges JSON", "Git nicht lesbar", "Git nicht lesbar"];
+    fall.forEach((p, i) => {
       expect(p).toMatchObject({ ok: false, nichtPruefbar: true });
+      expect(p.befund).toContain(grund[i]);
       expect(p.fix).toBeTruthy();
-    }
+    });
   });
 
   test("(c) auch ein verschachtelter Test unter test/ (nicht nur direkt darunter) wird gelesen", () => {
@@ -155,11 +168,14 @@ describe("Punkt Leitplanken-Quelle", () => {
     const getrackt = Object.keys(dateien).filter((p) => p !== "docs/u.md");
     expect(punkt(welt(dateien, getrackt))).toEqual({ punkt: "Leitplanken-Quelle", ok: true });
     expect(punkt(welt(dateien)).ok).toBe(false);
+    const ohneEndung = { ...GESUND, ".githooks/pre-push": KRITERIUM, "docs/bild.png": ABGELOEST, "src/test/w.test.ts": MARKER };
+    expect(punkt(welt(ohneEndung))).toEqual({ punkt: "Leitplanken-Quelle", ok: true });
   });
 
   test("Dogfood: dieses Repo ist gesund (echtes git, echte Dateien)", async () => {
     const { readFileSync } = await import("node:fs");
-    const wurzel = new URL("../", import.meta.url).pathname;
+    const { fileURLToPath } = await import("node:url");
+    const wurzel = fileURLToPath(new URL("../", import.meta.url));
     const lies = (rel: string): string | null => {
       try {
         return readFileSync(wurzel + rel, "utf8");
