@@ -414,11 +414,12 @@ describe("Shell (*.sh, factory#396 L2)", () => {
     expect(sh("# if [ -f x ]; then\n# a && b\n")).toEqual([]);
     expect(namen("  diff a b")).toEqual([]);
     expect(namen("  notif x")).toEqual([]);
-    expect(namen("  echo showcase")).toEqual([]);
-    expect(namen("  lowercase=1")).toEqual([]);
+    expect(namen("  echo showcase x")).toEqual([]);
+    expect(namen("  lowercase x")).toEqual([]);
     expect(namen("  x[[ -f y")).toEqual([]);
     expect(sh("[[ -f x ]] || exit 1\n").map((e) => e.anker.map((a) => a.muster))).toEqual([["[[", "||"]]);
     expect(namen('  echo "a \\" && b"')).toEqual([]);
+    expect(namen('  echo "q \\" || x \\" y"')).toEqual([]);
     const r = sh("function b() {\n  c || d\n}\n");
     expect(r.map((e) => [e.funktion, e.zeile])).toEqual([["b", 1]]);
   });
