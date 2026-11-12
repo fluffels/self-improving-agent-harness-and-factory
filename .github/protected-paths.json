@@ -25,6 +25,7 @@
   ],
   "harness": [
     "AGENTS.md",
+    "/.github/sicherheitspruefung.json",
     "/CLAUDE.md",
     "/CLAUDE.local.md",
     "/.claude/",

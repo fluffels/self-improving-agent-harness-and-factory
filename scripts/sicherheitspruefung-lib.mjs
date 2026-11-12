@@ -4,7 +4,7 @@
 // Soll-Liste: `kern` (vom Sync verteilt, Besitz-Schlüssel) und `projekt` (vom Bezieher gepflegt, der Sync lässt ihn unberührt). Der Bezieher erweitert nur über bekannte Punktnamen (`PUNKTE`), Manifest-Muster
 // und begründete Ausnahmen, nie über frei definierte Abfragen. Ein unbekannter Punkt, ein unbekannter Schlüssel und eine Ausnahme ohne `grund` sind Konfigurationsfehler (Exit 2 im Einstieg).
 //
-// Grenzen: „nicht prüfbar“ zählt als Abweichung (fail-closed; der Fix nennt das fehlende Recht). CodeQL-Ist: bei gewähltem Modul `codeql` die Sprachen der Projekt-Config, sonst das Default-Setup
+// Grenzen: Verweise wie `#12` in Pfaden gehen unmaskiert in die Tabelle (die Quelle ist der eigene, PR-gegatete Checkout); Required-Check-Pin hängt am Ruleset-Spiegel und fehlt ohne ihn still; „nicht prüfbar“ zählt als Abweichung (fail-closed; der Fix nennt das fehlende Recht). CodeQL-Ist: bei gewähltem Modul `codeql` die Sprachen der Projekt-Config, sonst das Default-Setup
 // des Repos; ein von Hand gepflegter CodeQL-Workflow ohne das Modul wird nicht gelesen (dann `codeqlOhne` mit Grund oder das Modul wählen). Die Sprachen-Zuordnung (`kern.codeql`) kennt nur die dort
 // eingetragenen Sprachen. Das Ticket trägt nur Zustände und Pfade, nie Secret-Werte, Alert-Inhalte oder Konten.
 import { luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
@@ -42,7 +42,7 @@ export const SOLL_JE_PUNKT = {
 /** Die geschlossene Liste der Punktnamen, die eine Soll-Liste nennen darf. */
 export const PUNKTE = [...new Set([...SICHERHEIT_PUNKTE, ...Object.keys(SOLL_JE_PUNKT)])];
 /** Punkte des Prüflaufs (Harness-Doctor), deren Ergebnis nie fehlen darf: fehlt es, ist der Punkt „nicht prüfbar“. */
-const PFLICHT_DOCTOR = ["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Code-Scanning", "Ruleset", "Ruleset-Spiegel"];
+const PFLICHT_DOCTOR = ["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Code-Scanning", "Ruleset", "Ruleset-Spiegel", "Admin-Recht"];
 
 const fehler = (text) => new Error(`${text}\nFix: .github/sicherheitspruefung.json prüfen (Struktur und Punktnamen: docs/agent-harness.md (Fabrik) § 2.2)`);
 const istObjekt = (w) => w !== null && typeof w === "object" && !Array.isArray(w);
@@ -54,9 +54,13 @@ function pruefeListe(w, was, element) {
   w.forEach((e, i) => element(e, `${was}[${i}]`));
   return w;
 }
-const mitGrund = (feld) => (e, was) => {
+const verzeichnisPfad = (e, was) => {
+  if (typeof e.pfad === "string" && (/[*?]/.test(e.pfad) || /^[/.]*$/.test(e.pfad))) throw fehler(`${was}: \`pfad\` muss ein einzelnes Verzeichnis sein (kein Muster, nicht die Wurzel)`);
+};
+const mitGrund = (feld, weiter = () => undefined) => (e, was) => {
   if (!istObjekt(e) || !textFeld(e[feld])) throw fehler(`${was}: Feld \`${feld}\` fehlt`);
   if (!textFeld(e.grund)) throw fehler(`${was}: Feld \`grund\` fehlt (eine Ausnahme braucht eine Begründung)`);
+  weiter(e, was);
 };
 const manifestEintrag = (e, was) => {
   if (!istObjekt(e) || !textFeld(e.oekosystem) || !textFeld(e.datei)) throw fehler(`${was}: Felder \`oekosystem\` und \`datei\` fehlen`);
@@ -82,14 +86,18 @@ export function ladeSollListe(text) {
   if (fremd.length > 0) throw fehler(`unbekannter Schlüssel auf oberster Ebene: ${fremd.join(", ")}`);
   const p = w.projekt ?? {};
   if (!istObjekt(p)) throw fehler("`projekt` muss ein Objekt sein");
-  const unbekannt = Object.keys(p).filter((k) => !["punkte", "manifeste", "ausnahmen", "codeqlOhne"].includes(k));
+  const unbekannt = Object.keys(p).filter((k) => !["punkte", "punkteOhne", "manifeste", "ausnahmen", "codeqlOhne"].includes(k));
   if (unbekannt.length > 0) throw fehler(`unbekannter Schlüssel in \`projekt\`: ${unbekannt.join(", ")}`);
   if (!istObjekt(w.kern.codeql ?? {})) throw fehler("kern.codeql muss ein Objekt (Sprache → CodeQL-Sprache) sein");
+  const punkteOhne = pruefeListe(p.punkteOhne, "projekt.punkteOhne", mitGrund("punkt", (e, was) => {
+    if (!PUNKTE.includes(e.punkt)) throw fehler(`${was}: unbekannter Punkt „${e.punkt}“`);
+  }));
   return {
-    punkte: [...new Set([...punktListe(w.kern.punkte, "kern.punkte"), ...punktListe(p.punkte, "projekt.punkte")])],
+    punkte: [...new Set([...punktListe(w.kern.punkte, "kern.punkte"), ...punktListe(p.punkte, "projekt.punkte")])].filter((n) => !punkteOhne.some((o) => o.punkt === n)),
+    punkteOhne,
     manifeste: [...pruefeListe(w.kern.manifeste, "kern.manifeste", manifestEintrag), ...pruefeListe(p.manifeste, "projekt.manifeste", manifestEintrag)],
     codeql: w.kern.codeql ?? {},
-    ausnahmen: pruefeListe(p.ausnahmen, "projekt.ausnahmen", mitGrund("pfad")),
+    ausnahmen: pruefeListe(p.ausnahmen, "projekt.ausnahmen", mitGrund("pfad", verzeichnisPfad)),
     codeqlOhne: pruefeListe(p.codeqlOhne, "projekt.codeqlOhne", mitGrund("sprache")),
   };
 }
@@ -100,7 +108,7 @@ const trifft = (punkt, name) => punkt === name || String(punkt).startsWith(`${na
 export function filtere(ergebnisse, punkte) {
   const treffer = ergebnisse.filter((r) => punkte.some((n) => trifft(r.punkt, n)));
   const fehlend = PFLICHT_DOCTOR.filter((n) => punkte.includes(n) && !ergebnisse.some((r) => trifft(r.punkt, n)));
-  return [...treffer, ...fehlend.map((n) => nichtPruefbar(n, "kein Ergebnis des Prüflaufs", "Prüflauf mit einem Token mit Admin-Recht wiederholen (Secret PROJECT_TOKEN)"))];
+  return [...treffer, ...fehlend.map((n) => nichtPruefbar(n, "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht, oder der Ruleset-Spiegel der Projekt-Config hat keine id)", "Prüflauf mit einem Token mit Admin-Recht wiederholen (Secret PROJECT_TOKEN) und die id des Rulesets im Spiegel eintragen; trifft der Punkt im Projekt nicht zu, mit Grund in projekt.punkteOhne abwählen"))];
 }
 
 /** Der Punkt `Dependabot Alerts` aus dem HTTP-Status von `repos/<repo>/vulnerability-alerts` (204: an; 404 mit Admin-Recht: aus; sonst nicht prüfbar). Pur. */
@@ -157,10 +165,10 @@ const sollFuer = (r) => r.soll ?? SOLL_JE_PUNKT[Object.keys(SOLL_JE_PUNKT).filte
 export const berichtTitel = (datum) => `${TITEL_PRAEFIX}${String(datum).slice(0, 7)}`;
 
 /** Markdown-Body: Marker, Tabelle Punkt/Ist/Soll/Fix je Abweichung, danach die aktiven Ausnahmen mit Grund; über `BERICHT_MAX` gekürzt. Pur und deterministisch. */
-export function berichtText({ abweichungen, ausnahmen = [], codeqlOhne = [], datum }) {
+export function berichtText({ abweichungen, ausnahmen = [], codeqlOhne = [], punkteOhne = [], datum }) {
   const kopf = [MARKER, `Monatliche Sicherheits- und Konfigurationsprüfung (${String(datum).slice(0, 10)}): ${abweichungen.length} Abweichung(en) vom Soll. Nicht prüfbare Punkte zählen als Abweichung; der Fix nennt dann das fehlende Recht. Mechanik: docs/agent-harness.md (Fabrik) § 2.2. Ein offenes Ticket unterdrückt neue Läufe: nach dem Beheben schließen.`, "", "| Punkt | Ist | Soll | Fix |", "| --- | --- | --- | --- |"];
   const fuss = [];
-  const aus = [...ausnahmen.map((a) => `- Dependabot-Ausnahme \`${zelle(a.pfad)}\`: ${zelle(a.grund)}`), ...codeqlOhne.map((a) => `- CodeQL ohne \`${zelle(a.sprache)}\`: ${zelle(a.grund)}`)];
+  const aus = [...ausnahmen.map((a) => `- Dependabot-Ausnahme \`${zelle(a.pfad)}\`: ${zelle(a.grund)}`), ...codeqlOhne.map((a) => `- CodeQL ohne \`${zelle(a.sprache)}\`: ${zelle(a.grund)}`), ...punkteOhne.map((a) => `- Punkt abgewählt \`${zelle(a.punkt)}\`: ${zelle(a.grund)}`)];
   if (aus.length > 0) fuss.push("", "Aktive Ausnahmen der Soll-Liste (projekt):", ...aus);
   const zeilen = abweichungen.map((r) => `| ${zelle(r.punkt)} | ${zelle(r.befund)} | ${zelle(sollFuer(r))} | ${zelle(r.fix)} |`);
   const voll = [...kopf, ...zeilen, ...fuss].join("\n");

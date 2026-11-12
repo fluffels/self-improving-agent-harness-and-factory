@@ -50,13 +50,36 @@ describe("ladeSollListe", () => {
     ["Ausnahmen keine Liste", liste({ kern: KERN, projekt: { ausnahmen: {} } })],
     ["projekt kein Objekt", liste({ kern: KERN, projekt: "x" })],
     ["projekt eine Liste", liste({ kern: KERN, projekt: [] })],
+    ["Manifest ohne Ökosystem", liste({ kern: KERN, projekt: { manifeste: [{ datei: "x" }] } })],
+    ["kern.codeql kein Objekt", liste({ kern: { ...KERN, codeql: [] } })],
+    ["Ausnahme mit Muster", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "**", grund: "alles" }] } })],
+    ["Ausnahme Wurzel", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "/", grund: "alles" }] } })],
+    ["punkteOhne unbekannter Punkt", liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "Erfunden", grund: "g" }] } })],
+    ["punkteOhne ohne Grund", liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "PVR" }] } })],
     ["Manifest ohne Datei", liste({ kern: KERN, projekt: { manifeste: [{ oekosystem: "mix" }] } })],
   ])("Konfigurationsfehler: %s", (_n, text) => {
     expect(() => L.ladeSollListe(text)).toThrow(/Fix:/);
   });
 });
 
+describe("punkteOhne", () => {
+  test("wählt einen Kern-Punkt mit Grund ab und nennt ihn im Fuß des Tickets", () => {
+    const s = L.ladeSollListe(liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "Required-Check", grund: "kein Ruleset im Plan" }] } })) as Soll & { punkteOhne: { punkt: string; grund: string }[] };
+    expect(s.punkte).toEqual(["Secret Scanning", "Dependabot Alerts"]);
+    const t = L.berichtText({ abweichungen: [{ punkt: "X", ok: false, befund: "b", fix: "f" }], punkteOhne: s.punkteOhne, datum: "2026-11-12" });
+    expect(t).toContain("Punkt abgewählt `Required-Check`: kein Ruleset im Plan");
+  });
+  test("der Rückfall-Soll-Text nennt den Doctor", () => {
+    expect(L.berichtText({ abweichungen: [{ punkt: "Unbekannt", ok: false, befund: "b", fix: "f" }], datum: "2026-11-12" })).toContain("| Unbekannt | b | grün laut Harness-Doctor | f |");
+  });
+});
+
 describe("filtere", () => {
+  test("Admin-Recht ist Pflicht-Punkt; der Fix nennt punkteOhne", () => {
+    const r = L.filtere([], ["Admin-Recht", "Ruleset-Spiegel"]);
+    expect(r.map((x) => x.punkt)).toEqual(["Ruleset-Spiegel", "Admin-Recht"]);
+    expect(r[0].fix).toMatch(/punkteOhne/);
+  });
   const e: Erg[] = [{ punkt: "Secret Scanning", ok: true }, { punkt: "Required-Check build", ok: false }, { punkt: "Required-Check-Pin", ok: false }, { punkt: "Langfuse", ok: false }];
   test("Präfix mit Leerzeichen: Required-Check trifft Required-Check <ctx>, nicht Required-Check-Pin", () => {
     expect(L.filtere(e, ["Required-Check"]).map((x) => x.punkt)).toEqual(["Required-Check build"]);
@@ -87,6 +110,12 @@ describe("pruefeAlerts", () => {
 });
 
 describe("CodeQL-Sprachen", () => {
+  test("Sprachen der Config werden normalisiert; ein Default-Setup ohne Einrichtung steht im Ist-Text", () => {
+    expect(L.istSprachen({ config: { module: ["codeql"], codeql: { sprachen: ["javascript", "Java"] } } }).sprachen).toEqual(["javascript-typescript", "java-kotlin"]);
+    const nicht = L.pruefeCodeql({ languages: { Java: 1 }, kern: KERN.codeql, workflows: false, ohne: [], ist: { sprachen: [], state: "not-configured" } });
+    expect(nicht.befund).toContain("Ist: Default-Setup not-configured");
+    expect(L.pruefeCodeql({ languages: { Java: 1 }, kern: KERN.codeql, workflows: false, ohne: [], ist: { sprachen: [] } }).befund).toContain("Ist: keine");
+  });
   const kern = KERN.codeql;
   test("Soll aus languages, actions bei Workflows, abzüglich codeqlOhne", () => {
     expect(L.sollSprachen({ languages: { JavaScript: 1, TypeScript: 2, Shell: 3, Java: 4 }, kern, workflows: true })).toEqual(["actions", "java-kotlin", "javascript-typescript"]);
@@ -152,6 +181,10 @@ describe("entscheide", () => {
   test("Ticket eines Fremden mit Marker zählt nicht; Fremdeingang-Label zählt nicht", () => {
     expect(L.entscheide({ abweichungen: abw, offene: [ticket({ user: { login: "fremd", type: "User" } })], owner: "o", config }).aktion).toBe("anlegen");
     expect(L.istTicket(ticket({ labels: ["forum"] }), "o", config)).toBe(false);
+  });
+  test("ein geclaimtes Ticket (Assignee) zählt als offen", () => {
+    const e = L.entscheide({ abweichungen: abw, offene: [ticket({ assignees: [{ login: "o" }] })], owner: "o", config });
+    expect(e.aktion).toBe("nichts");
   });
   test("Titel oder Marker fehlt → zählt nicht; sonst anlegen", () => {
     expect(L.istTicket(ticket({ title: "anderes" }), "o", config)).toBe(false);

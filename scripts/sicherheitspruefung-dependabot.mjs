@@ -5,7 +5,7 @@
 // Anführungszeichen, Kommentare). Er ist bewusst kein YAML-Parser (der Job hat kein `npm ci`, ein Paket wäre dort Fremdcode mit Schreibrecht): fehlt `updates:` oder ein Eintrag
 // ohne Ökosystem oder Verzeichnis, ist der Punkt „nicht prüfbar“ (fail-closed).
 //
-// Grenzen (bewusst nicht erfasst): Anker und Aliase, `multi-ecosystem-groups`, Manifeste außerhalb der geschlossenen Liste `MANIFESTE` (Erweiterung: `projekt.manifeste` der Soll-Liste),
+// Grenzen (bewusst nicht erfasst): die Manifest-Liste ist enger als die des Ökosystem-Wächters test/harness/dependabot-oekosysteme.test.ts (der kennt compose*.yml und requirements*.txt, dafür kein maven/gradle); Anker und Aliase, `multi-ecosystem-groups`, Manifeste außerhalb der geschlossenen Liste `MANIFESTE` (Erweiterung: `projekt.manifeste` der Soll-Liste),
 // Maven-`<modules>` und Gradle-`settings.gradle` (ein Vorfahr-Verzeichnis mit eigenem Manifest desselben Ökosystems gilt als Aggregator), `.gitignore`d Dateien (Quelle ist `git ls-files`).
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 
@@ -22,7 +22,7 @@ export const MANIFESTE = [
   ["gomod", (b) => b === "go.mod"],
   ["cargo", (b) => b === "Cargo.toml"],
 ];
-const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/;
+export const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/;
 const AGGREGATOR = new Set(["maven", "gradle"]);
 
 const entquote = (w) => w.trim().replace(/^(["'])(.*)\1$/, "$2");
@@ -133,18 +133,25 @@ export function findeManifeste(dateien, { manifeste = [], ausnahmen = [] } = {})
 const direkt = (eintraege, oe, verz) => eintraege.some((e) => e.oekosystem === oe && e.verzeichnisse.some((m) => passtVerzeichnis(m, verz)));
 const vorfahren = (verz) => normVerz(verz).split("/").filter(Boolean).map((_, i, teile) => normVerz(teile.slice(0, i).join("/")));
 
-/** Workspace-Muster des `package.json` in `verz` (Array oder `.packages`), relativ zu `verz`; ohne Negationen. */
+/** Workspace-Muster des `package.json` in `verz` (Array oder `.packages`) als `{ ein, aus }`, relativ zu `verz`; `aus` sind die Negationen (`!muster`). */
 function workspaces(lese, verz) {
   const pkg = lese(verz);
   const w = Array.isArray(pkg?.workspaces) ? pkg.workspaces : pkg?.workspaces?.packages;
-  return (Array.isArray(w) ? w : []).filter((p) => typeof p === "string" && !p.startsWith("!")).map((p) => normVerz(`${verz === "/" ? "" : verz}/${p.replace(/^\.\//, "")}`));
+  const texte = (Array.isArray(w) ? w : []).filter((p) => typeof p === "string");
+  const voll = (p) => normVerz(`${verz}/${p.replace(/^\.\//, "")}`);
+  return { ein: texte.filter((p) => !p.startsWith("!")).map(voll), aus: texte.filter((p) => p.startsWith("!")).map((p) => voll(p.slice(1))) };
 }
 
 /** Ist das Manifest `m` abgedeckt: direkt, per npm-Workspace eines abgedeckten Vorfahren oder per Maven-/Gradle-Aggregator (abgedeckter Vorfahr mit eigenem Manifest)? Pur bis auf `lesePackageJson`. */
 function abgedeckt(m, { eintraege, alle, lesePackageJson }) {
   if (direkt(eintraege, m.oekosystem, m.verzeichnis)) return true;
   const ahnen = vorfahren(m.verzeichnis).filter((a) => direkt(eintraege, m.oekosystem, a));
-  if (m.oekosystem === "npm") return ahnen.some((a) => workspaces(lesePackageJson, a).some((p) => passtVerzeichnis(p, m.verzeichnis)));
+  if (m.oekosystem === "npm") {
+    return ahnen.some((a) => {
+      const w = workspaces(lesePackageJson, a);
+      return w.ein.some((p) => passtVerzeichnis(p, m.verzeichnis)) && !w.aus.some((p) => passtVerzeichnis(p, m.verzeichnis));
+    });
+  }
   return AGGREGATOR.has(m.oekosystem) && ahnen.some((a) => alle.some((x) => x.oekosystem === m.oekosystem && x.verzeichnis === a));
 }
 

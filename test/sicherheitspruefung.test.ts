@@ -31,7 +31,7 @@ const DOCTOR_LUECKE = [{ punkt: "Secret Scanning", ok: false, befund: "aus", fix
 const ticket = (extra: Record<string, unknown> = {}) => ({ number: 5, title: `${L.TITEL_PRAEFIX}2026-10`, body: `${L.MARKER}\nx`, author: { login: owner, is_bot: false }, labels: [], ...extra });
 
 type Lauf = { code: number; schreib: string[][]; bodies: string[]; lesen: string[][]; board: string[][]; out: string; doctor: number };
-type Opt = { sprachen?: Record<string, number>; lesePkg?: (p: string) => string | null; boardFehler?: boolean; dateien?: string[]; config?: Record<string, unknown>; doctor?: unknown[]; issues?: unknown[]; frisch?: unknown[]; env?: Record<string, string>; argv?: string[]; soll?: string | null; dependabot?: string; alerts?: number; doctorFehler?: boolean; antwort?: string };
+type Opt = { frischFehler?: boolean; sprachen?: Record<string, number>; lesePkg?: (p: string) => string | null; boardFehler?: boolean; dateien?: string[]; config?: Record<string, unknown>; doctor?: unknown[]; issues?: unknown[]; frisch?: unknown[]; env?: Record<string, string>; argv?: string[]; soll?: string | null; dependabot?: string; alerts?: number; doctorFehler?: boolean; antwort?: string };
 
 /** Alle Nähte eingespeist; ein Schreibaufruf wird nur aufgezeichnet (nie ein echtes gh). */
 async function lauf(o: Opt = {}): Promise<Lauf> {
@@ -57,7 +57,10 @@ async function lauf(o: Opt = {}): Promise<Lauf> {
       if (a.includes("/languages")) return JSON.stringify(o.sprachen ?? { JavaScript: 100 });
       if (a.includes("code-scanning/default-setup")) return JSON.stringify({ state: "configured", languages: ["javascript-typescript", "actions"] });
       if (args[0] === "issue") return JSON.stringify(o.issues ?? []);
-      if (a.includes("issues?state=open")) return JSON.stringify(o.frisch ?? []);
+      if (a.includes("issues?state=open")) {
+        if (o.frischFehler) throw new Error("HTTP 502");
+        return JSON.stringify(o.frisch ?? []);
+      }
       return "{}";
     },
     schreibe: (args: string[], input: string) => {
@@ -68,7 +71,7 @@ async function lauf(o: Opt = {}): Promise<Lauf> {
     lese: (p: string) => (p in dateien ? dateien[p] : o.lesePkg?.(p) ?? null),
     dateien: () => o.dateien ?? ["package.json", ".github/workflows/ci.yml"],
     env: o.env ?? { PROJECT_TOKEN: "t" },
-    heute: "2026-11-12",
+    heute: "2031-04-09",
     log: (m: string) => out.push(m),
     err: (m: string) => out.push(m),
   });
@@ -106,7 +109,8 @@ describe("sicherheitspruefung.mjs", () => {
     expect(r.schreib).toHaveLength(1);
     expect(r.schreib[0].slice(0, 4)).toEqual(["issue", "create", "--repo", REPO]);
     expect(r.schreib[0]).toContain("--title");
-    expect(r.schreib[0]).toContain("🛡️ Sicherheitsprüfung 2026-11");
+    expect(r.schreib[0]).toContain("🛡️ Sicherheitsprüfung 2031-04");
+    expect(r.bodies[0]).toContain("(2031-04-09)");
     expect(r.bodies[0].startsWith(L.MARKER)).toBe(true);
     expect(r.bodies[0]).toContain("| Secret Scanning | aus | aktiviert | aktivieren |");
     expect(r.board).toEqual([["77", "t"]]);
@@ -147,6 +151,70 @@ describe("sicherheitspruefung.mjs", () => {
     expect(r.schreib).toEqual([]);
     const ohne = await lauf({ dateien: ["package.json", "frontend/package.json"] });
     expect(ohne.bodies[0]).toContain("npm /frontend");
+  });
+
+  describe("Projektschlüssel und Verdrahtung", () => {
+    const soll = (projekt: Record<string, unknown>, punkte = ["Dependabot-Abdeckung", "CodeQL-Sprachen"]) => JSON.stringify({ kern: { punkte, codeql: { JavaScript: "javascript-typescript", Python: "python" } }, projekt });
+    const mitFrontend = { dateien: ["package.json", "frontend/package.json", ".github/workflows/ci.yml"], doctor: [] };
+
+    test("projekt.ausnahmen nimmt ein Verzeichnis aus; ohne sie entsteht die Lücke; die Ausnahme steht im Ticket", async () => {
+      expect((await lauf({ ...mitFrontend, soll: soll({}) })).bodies[0]).toContain("npm /frontend");
+      expect((await lauf({ ...mitFrontend, soll: soll({ ausnahmen: [{ pfad: "frontend", grund: "Fixture" }] }) })).schreib).toEqual([]);
+      const mit = await lauf({ ...mitFrontend, soll: soll({ ausnahmen: [{ pfad: "frontend", grund: "Fixture" }] }, ["Dependabot-Abdeckung", "Secret Scanning"]), doctor: DOCTOR_LUECKE });
+      expect(mit.bodies[0]).toContain("Dependabot-Ausnahme `frontend`: Fixture");
+    });
+
+    test("projekt.manifeste ergänzt ein Ökosystem", async () => {
+      const r = await lauf({ dateien: ["x/mix.exs"], doctor: [], soll: soll({ manifeste: [{ oekosystem: "mix", datei: "mix.exs" }] }, ["Dependabot-Abdeckung"]) });
+      expect(r.bodies[0]).toContain("mix /x");
+    });
+
+    test("projekt.codeqlOhne nimmt eine Sprache aus und steht im Ticket", async () => {
+      const basis = { doctor: [], sprachen: { JavaScript: 1, Python: 2 }, dateien: ["package.json"] };
+      expect((await lauf({ ...basis, soll: soll({}, ["CodeQL-Sprachen"]) })).bodies[0]).toContain("python");
+      expect((await lauf({ ...basis, soll: soll({ codeqlOhne: [{ sprache: "python", grund: "Skripte" }] }, ["CodeQL-Sprachen"]) })).schreib).toEqual([]);
+      const r = await lauf({ ...basis, doctor: DOCTOR_LUECKE, soll: soll({ codeqlOhne: [{ sprache: "python", grund: "Skripte" }] }, ["CodeQL-Sprachen", "Secret Scanning"]) });
+      expect(r.bodies[0]).toContain("CodeQL ohne `python`: Skripte");
+    });
+
+    test("actions zählt nur mit getrackten Workflows", async () => {
+      const cfg = { ...config, codeql: { sprachen: ["javascript-typescript"] } };
+      const basis = { config: cfg, doctor: [], soll: soll({}, ["CodeQL-Sprachen"]) };
+      expect((await lauf({ ...basis, dateien: ["package.json"] })).schreib).toEqual([]);
+      expect((await lauf({ ...basis, dateien: ["package.json", ".github/workflows/ci.yml"] })).bodies[0]).toContain("actions");
+    });
+
+    test("punkteOhne wählt einen Punkt ab; ein fehlender Ruleset-Spiegel nennt den Fix", async () => {
+      const kern = ["Secret Scanning", "Ruleset-Spiegel"];
+      const ohneSpiegel = await lauf({ doctor: DOCTOR_OK, soll: soll({}, kern) });
+      expect(ohneSpiegel.bodies[0]).toMatch(/Ruleset-Spiegel | kein Ergebnis des Prüflaufs.*punkteOhne/);
+      const abgewaehlt = await lauf({ doctor: DOCTOR_OK, soll: soll({ punkteOhne: [{ punkt: "Ruleset-Spiegel", grund: "kein Spiegel" }] }, kern) });
+      expect(abgewaehlt.schreib).toEqual([]);
+    });
+
+    test("verschachtelte package.json eines Workspace-Wurzelverzeichnisses wird gelesen", async () => {
+      const dependabot = 'updates:\n  - package-ecosystem: npm\n    directory: "/web"\n  - package-ecosystem: github-actions\n    directory: "/"\n';
+      const pkg = (p: string) => (p === "web/package.json" ? JSON.stringify({ workspaces: ["apps/*"] }) : null);
+      const r = await lauf({ dateien: ["web/package.json", "web/apps/a/package.json", ".github/workflows/ci.yml"], lesePkg: pkg, dependabot, doctor: [], soll: soll({}, ["Dependabot-Abdeckung"]) });
+      expect(r.schreib).toEqual([]);
+    });
+
+    test("ein offenes Ticket mit Label forum unterdrückt den Lauf nicht", async () => {
+      const r = await lauf({ doctor: DOCTOR_LUECKE, issues: [ticket({ labels: [{ name: config.labels.forum }] })] });
+      expect(r.schreib).toHaveLength(1);
+    });
+
+    test("Zweitabfrage schlägt fehl → kein Anlegen, Warnung (fail-closed)", async () => {
+      const r = await lauf({ doctor: DOCTOR_LUECKE, frischFehler: true });
+      expect(r.code).toBe(0);
+      expect(r.schreib).toEqual([]);
+      expect(r.out).toMatch(/::warning::.*Zweitabfrage vor dem Anlegen fehlgeschlagen/);
+    });
+
+    test("Ticketnummer 0 in der Antwort ist ein Fehler", async () => {
+      const r = await lauf({ doctor: DOCTOR_LUECKE, antwort: `https://github.com/${REPO}/issues/0` });
+      expect(r.code).toBe(1);
+    });
   });
 
   test("Dependabot-Lücke aus den Dateien erzeugt eine Zeile mit Ist, Soll und Fix", async () => {

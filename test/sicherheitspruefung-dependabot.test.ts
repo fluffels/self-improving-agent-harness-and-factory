@@ -154,3 +154,64 @@ describe("pruefeDependabot", () => {
     expect(e[0].punkt).toBe("Dependabot-Abdeckung mix /x");
   });
 });
+
+
+describe("Runde 1: Manifest-Liste, Leser und Abdeckung im Detail", () => {
+  const lauf = (extra: Record<string, unknown>) => D.pruefeDependabot({ dependabotText: BELEG, ...extra });
+  const punkte = (e: Erg[]) => e.map((x) => x.punkt).sort();
+
+  test("jedes Ökosystem der geschlossenen Liste wird erkannt", () => {
+    const m = D.findeManifeste(["g/build.gradle", "g2/build.gradle.kts", "p/requirements.txt", "p2/pyproject.toml", "go/go.mod", "rs/Cargo.toml", "d/Dockerfile", "m/pom.xml", "n/package.json"]);
+    expect(m.map((x) => x.oekosystem + " " + x.verzeichnis).sort()).toEqual(["cargo /rs", "docker /d", "gomod /go", "gradle /g", "gradle /g2", "maven /m", "npm /n", "pip /p", "pip /p2"]);
+  });
+
+  test("Workflow-Dateien: nur direkt unter .github/workflows, .yml und .yaml", () => {
+    const m = D.findeManifeste([".github/workflows/a.yaml", ".github/workflows/b.yml", "x/.github/workflows/c.yml", ".github/workflows/sub/d.yml", ".github/workflows/e.yml.bak", ".github/workflows/f.yamll"]);
+    expect(m.map((x) => x.datei)).toEqual([".github/workflows/a.yaml", ".github/workflows/b.yml"]);
+    expect(m.every((x) => x.oekosystem === "github-actions" && x.verzeichnis === "/")).toBe(true);
+  });
+
+  test("zwei Manifeste im selben Verzeichnis und Ökosystem sind eine Zeile", () => {
+    const e = lauf({ dateien: ["py/requirements.txt", "py/pyproject.toml"] });
+    expect(punkte(e)).toEqual(["Dependabot-Abdeckung pip /py"]);
+  });
+
+  test("Kommentarzeile in Spalte 0 zwischen zwei Einträgen verliert keinen Eintrag", () => {
+    const g = D.liesDependabot("updates:\n  - package-ecosystem: npm\n    directory: /\n# Kommentar\n  - package-ecosystem: maven\n    directory: /m\n");
+    expect(g.eintraege?.map((e) => e.oekosystem)).toEqual(["npm", "maven"]);
+  });
+
+  test("ein Komma am Ende der Flow-Liste fügt kein Verzeichnis hinzu", () => {
+    const g = D.liesDependabot('updates:\n  - package-ecosystem: npm\n    directories: ["/a", ]\n');
+    expect(g.eintraege?.[0].verzeichnisse).toEqual(["/a"]);
+    expect(lauf({ dateien: ["package.json"], dependabotText: 'updates:\n  - package-ecosystem: npm\n    directories: ["/a", ]\n' })[0].ok).toBe(false);
+  });
+
+  test("gemischte Anführungszeichen werden nicht abgeschnitten; updates mit Leerraum zählt, mit Wert nicht", () => {
+    expect(D.liesDependabot("updates:\n  - package-ecosystem: npm\n    directory: \"/a'\n").eintraege?.[0].verzeichnisse).toEqual(["\"/a'"]);
+    expect(D.liesDependabot("updates:   \n  - package-ecosystem: npm\n    directory: /\n").eintraege).toHaveLength(1);
+    expect(D.liesDependabot("updates: []\n  - package-ecosystem: npm\n    directory: /\n").fehler).toBeTruthy();
+  });
+
+  test("Workspaces: ./-Präfix, Nicht-Strings und Negationen", () => {
+    const lese = (w: unknown) => (v: string) => (v === "/" ? { workspaces: w } : null);
+    const mit = (w: unknown, datei: string) => lauf({ dateien: ["package.json", datei], lesePackageJson: lese(w), dependabotText: 'updates:\n  - package-ecosystem: npm\n    directory: "/"\n' });
+    expect(mit(["./packages/*"], "packages/a/package.json")[0].ok).toBe(true);
+    expect(mit([1, null, "frontend"], "frontend/package.json")[0].ok).toBe(true);
+    expect(mit(["packages/*", "!packages/legacy"], "packages/legacy/package.json").map((x) => x.punkt)).toEqual(["Dependabot-Abdeckung npm /packages/legacy"]);
+    expect(mit(["packages/*", "!packages/legacy"], "packages/a/package.json")[0].ok).toBe(true);
+  });
+
+  test("Aggregator: der Vorfahr braucht ein eigenes Manifest, gleiches Ökosystem und eigene Abdeckung", () => {
+    const maven = (d: string) => 'updates:\n  - package-ecosystem: maven\n    directory: "' + d + '"\n';
+    // Vorfahr ohne eigenes pom.xml
+    expect(punkte(lauf({ dateien: ["backend/core/pom.xml"], dependabotText: maven("/backend") }))).toEqual(["Dependabot-Abdeckung maven /backend/core"]);
+    // Vorfahr hat nur ein anderes Ökosystem
+    expect(punkte(lauf({ dateien: ["backend/package.json", "backend/core/pom.xml"], dependabotText: maven("/backend") })).sort()).toEqual(["Dependabot-Abdeckung maven /backend/core", "Dependabot-Abdeckung npm /backend"]);
+    // Vorfahr selbst nicht abgedeckt
+    expect(punkte(lauf({ dateien: ["backend/pom.xml", "backend/core/pom.xml"], dependabotText: maven("/andere") }))).toEqual(["Dependabot-Abdeckung maven /backend", "Dependabot-Abdeckung maven /backend/core"]);
+    // Gradle-Aggregator
+    const gradle = 'updates:\n  - package-ecosystem: gradle\n    directory: "/app"\n';
+    expect(lauf({ dateien: ["app/build.gradle.kts", "app/sub/build.gradle"], dependabotText: gradle })[0].ok).toBe(true);
+  });
+});

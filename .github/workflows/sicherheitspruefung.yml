@@ -5,7 +5,7 @@ name: Sicherheitsprüfung (Monatslauf)
 # Der Lauf schreibt nie in ein anderes Repo; ist alles gleich dem Soll oder schon ein Ticket offen, entsteht nichts. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
 #
 # ⚠️ Gelesen wird mit dem Secret PROJECT_TOKEN (PAT mit Admin-Recht und project-Scope); ohne es meldet der Lauf genau das als Abweichung und liest nur eingeschränkt mit github.token.
-# Geschrieben wird ausschließlich mit github.token (issues: write).
+# Geschrieben wird das Ticket ausschließlich mit github.token (issues: write); danach sortiert board-place.mjs es mit PROJECT_TOKEN ans Ende der Todo-Spalte des eigenen Boards (ohne Secret nur eine Warnung).
 
 on:
   schedule:

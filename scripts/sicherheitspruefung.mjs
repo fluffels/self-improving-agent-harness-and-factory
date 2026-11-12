@@ -16,7 +16,7 @@ import { pruefLauf } from "./harness-doctor-lib.mjs";
 import { bestaetigeAnlegen, inboxStart } from "./inbox-start-lib.mjs";
 import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
-import { pruefeDependabot } from "./sicherheitspruefung-dependabot.mjs";
+import { WORKFLOW, pruefeDependabot } from "./sicherheitspruefung-dependabot.mjs";
 import { berichtText, berichtTitel, entscheide, filtere, istSprachen, istTicket, ladeSollListe, pruefeAlerts, pruefeCodeql } from "./sicherheitspruefung-lib.mjs";
 import { nutzerAus } from "./ticket-drift-lib.mjs";
 
@@ -82,7 +82,7 @@ function dependabotErgebnisse({ soll, lese, liste }) {
 function codeqlErgebnis({ soll, repo, config, gh, liste }) {
   const languages = quelle(() => JSON.parse(gh(["api", `repos/${repo}/languages`])));
   const defaultSetup = (config.module ?? []).includes("codeql") ? undefined : quelle(() => JSON.parse(gh(["api", `repos/${repo}/code-scanning/default-setup`])));
-  const workflows = liste.some((p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p));
+  const workflows = liste.some((p) => WORKFLOW.test(p));
   return pruefeCodeql({ languages: languages.wert, kern: soll.codeql, workflows, ohne: soll.codeqlOhne, ist: istSprachen({ config, defaultSetup }) });
 }
 
@@ -110,7 +110,8 @@ function offeneIssues(gh, repo) {
 
 /** Zweitabfrage vor dem Anlegen (REST, hinkt weniger als die Liste): offene Issues desselben Repos in der Normalform. */
 const frischeIssues = (gh, repo) =>
-  JSON.parse(gh(["api", `repos/${repo}/issues?state=open&per_page=100`]))
+  JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]))
+    .flat()
     .filter((i) => !i.pull_request)
     .map((i) => ({ number: i.number, title: i.title, body: i.body, user: { login: i.user?.login, type: i.user?.type }, labels: (i.labels ?? []).map((l) => l.name) }));
 
@@ -184,7 +185,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     const datum = deps.heute ?? new Date().toISOString().slice(0, 10);
     const e = entscheideLauf({ abweichungen, gh, repo, config });
     for (const w of e.warnungen) log(`::warning::${w}`);
-    const text = berichtText({ abweichungen, ausnahmen: soll.ausnahmen, codeqlOhne: soll.codeqlOhne, datum });
+    const text = berichtText({ abweichungen, ausnahmen: soll.ausnahmen, codeqlOhne: soll.codeqlOhne, punkteOhne: soll.punkteOhne, datum });
     ausfuehren({ trocken, e, titel: berichtTitel(datum), text }, { repo, config, schreibe, log, env, libs });
     return 0;
   } catch (e) {
