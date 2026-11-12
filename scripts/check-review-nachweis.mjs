@@ -89,6 +89,11 @@ export function pflichtLenses(dateien) {
   return istDokuDiff(dateien) ? ["doku"] : [...CODE_LENSES];
 }
 
+/** Die optionalen Felder `blocker` und `teilbrillen`: nur vorhandene werden bewertet (alte Zeilen bleiben gültig). Pure. */
+function bewerteOptionaleFelder(review, zeilen) {
+  return [...(review.blocker === null ? [] : bewerteBlocker(review, zeilen)), ...(review.teilbrillen === null ? [] : bewerteTeilbrillen(review, zeilen))];
+}
+
 /** Kombi-Lens ohne Aufteilung je Teil-Brille (alte Zeile, nur Hinweis). Pur. */
 const teilbrillenFehlen = (review) => review?.lenses.includes(KOMBI_LENS) === true && review.teilbrillen === null;
 
@@ -296,8 +301,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   if (unbekannt.length > 0) {
     fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
-  if (review.blocker !== null) fehler.push(...bewerteBlocker(review, zeilen));
-  if (review.teilbrillen !== null) fehler.push(...bewerteTeilbrillen(review, zeilen));
+  fehler.push(...bewerteOptionaleFelder(review, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
 }
