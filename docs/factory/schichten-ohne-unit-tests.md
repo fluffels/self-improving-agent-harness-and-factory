@@ -11,7 +11,7 @@ Eine **Schicht ohne Unit-Tests** ist eine Schicht, deren Diff-Floor im Coverage-
 ## Floor
 
 - **Diff-Floor:** `scripts/check-diffcoverage.mjs` kennt je Schicht einen Mindestwert für die geänderten Zeilen. Für Schichten ohne Unit-Tests steht dort `null`, also nur berichtend. Die Werte sind Kern-Konstanten, kein Projektschlüssel.
-- **Aggregat-Floor:** In der Test-Config des Projekts steht ein expliziter Floor über 0, niedrig, aber nicht 0 (kein stilles Absacken); trennt die Test-Config Schichten, je Schicht, sonst wie im Factory-Repo (`vite.config.ts`) einer für das ganze Repo. Die Zahl ist ein Projektwert.
+- **Aggregat-Floor:** In der Test-Config des Projekts steht ein expliziter Floor über 0, niedrig, aber nicht 0 (kein stilles Absacken); trennt die Test-Config Schichten, steht er je Schicht, sonst einer für das ganze Repo. Die Zahl ist ein Projektwert.
 
 ## Ratchet
 
