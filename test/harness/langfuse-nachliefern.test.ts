@@ -819,6 +819,52 @@ describe("Auswahl", () => {
   });
 });
 
+describe("--session: ID oder eindeutiger Präfix (factory#354)", () => {
+  const VOLL = "abcd1234-0000-4000-8000-000000000001";
+  const ANDERE = "abcd9999-0000-4000-8000-000000000002";
+  const traceIdVon = (rawOtlp as unknown as { traceIdVon: (s: string) => string }).traceIdVon;
+  const aufbauSession = (dateien: Record<string, string>) => aufbau([msg("a", 1)], dateien);
+
+  test("eindeutiger Präfix sendet für die volle ID", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd1234" });
+    expect(r.exitCode).toBe(0);
+    expect(m.otlp).toHaveLength(1);
+    expect(spansVon(m.otlp[0])[0].traceId).toBe(traceIdVon(VOLL));
+  });
+
+  test("mehrdeutiger Präfix: Exit 2 mit Kandidaten, nichts gesendet, kein Ledger", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3), [`${PRAEFIX}/${ANDERE}.jsonl`]: msg("w", 4) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd" });
+    expect(r.exitCode).toBe(2);
+    expect(r.text).toContain(VOLL);
+    expect(r.text).toContain(ANDERE);
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+  });
+
+  test("Präfix ohne Treffer: Exit 1, nichts gesendet", async () => {
+    const a = aufbauSession({});
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "zzzz" });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/nicht gefunden.*nichts gesendet/);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("ID nur in fremdem Projektordner: Exit 1 „außerhalb des Projekts“, nichts gesendet", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}-tools/${VOLL}.jsonl`]: msg("v", 3) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd1234" });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/außerhalb des Projekts.*nichts gesendet/);
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+  });
+});
+
 describe("Scores", () => {
   test("deterministische IDs, NUMERIC, sessionId; erfassung_hook ignoriert Abgleich-Observations", async () => {
     const a = aufbau([msg("a", 1), msg("b", 2), msg("c", 3)]);
