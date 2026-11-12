@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { bewerteBelege, lokaleRollenMaengel } from "./codex-lib.mjs";
+import { bewerteBelege, lokaleHookMaengel, lokaleRollenMaengel } from "./codex-lib.mjs";
 import { werkzeugMaengel } from "./werkzeug-lib.mjs";
 import { FREIGABEN, freigabeMaengel } from "./codex-freigaben.mjs";
 
@@ -19,8 +19,9 @@ export function installierteCodexVersion({ plattform = process.platform, spawn =
 }
 
 function lokaleMaengel(root, config) {
-  if (!existsSync(join(root, ".codex", "agents"))) return [];
-  return lokaleRollenMaengel(root, config, JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8")));
+  const hooks = lokaleHookMaengel(root); // immer: auch ohne Rollen-Ordner muss der Hook-Schutz stehen (factory#364)
+  if (!existsSync(join(root, ".codex", "agents"))) return hooks;
+  return [...lokaleRollenMaengel(root, config, JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"))), ...hooks];
 }
 
 export function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)), werkzeug = (r, l) => werkzeugMaengel({ root: r, lade: l }), codexVersion = installierteCodexVersion, freigaben = FREIGABEN } = {}) {
