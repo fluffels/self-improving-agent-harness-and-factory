@@ -381,13 +381,15 @@ describe("fuehreSchritte und baueFixture", () => {
   it("Modus stderr: stderr geht in eine Datei (Dateinummer statt Pipe, kein maxBuffer), das Kind wird nie wegen Pufferüberlauf abgebrochen", () => {
     const optionen: Record<string, unknown>[] = [];
     const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => (optionen.push(o), { status: 0 });
-    const n = P.echteNaehte("stderr", { spawn });
-    n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
-    const stdio = optionen[0].stdio as unknown[];
-    expect(stdio.slice(0, 2)).toEqual(["ignore", "ignore"]);
-    expect(typeof stdio[2]).toBe("number");
-    expect(optionen[0].maxBuffer).toBeUndefined();
-    expect(n.stderrRest("a")).toBe("");
+    temp((dir) => {
+      const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s"));
+      n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+      const stdio = optionen[0].stdio as unknown[];
+      expect(stdio.slice(0, 2)).toEqual(["ignore", "ignore"]);
+      expect(typeof stdio[2]).toBe("number");
+      expect(optionen[0].maxBuffer).toBeUndefined();
+      expect(n.stderrRest("a")).toBe("");
+    });
   });
 
   it("Modus stderr: das Ende wird auf Zeichengrenze geschnitten, ein Mehrbyte-Zeichen am Fensteranfang bleibt ohne Ersatzzeichen", () => {
