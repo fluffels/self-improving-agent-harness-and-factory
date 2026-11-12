@@ -9,6 +9,8 @@ type Ergebnis = { punkt: string; ok: boolean; befund?: string; fix?: string; nic
 type Lesen = (args: string[], token?: string) => unknown;
 interface Lib {
   factoryUpdatePunkt(a: { rootDir: string; config: unknown; lesen: Lesen; existiert?: (p: string) => boolean; bezieher?: (w: string) => boolean; vorAbbruch?: boolean }): Ergebnis[];
+  dependabotAusschlussPunkt(a: { rootDir: string; existiert?: (p: string) => boolean; lies?: (p: string) => string | null; bezieher?: (w: string) => boolean }): Ergebnis[];
+  mitDependabotAusschluss(dateien: (a: { rootDir: string; config: unknown }) => Ergebnis[], o: { existiert?: (p: string) => boolean; lies?: (p: string) => string | null; bezieher?: (w: string) => boolean }): (a: { rootDir: string; config: unknown; vorAbbruch?: boolean }) => Ergebnis[];
   mitFactoryUpdate(dateien: (a: { rootDir: string; config: unknown }) => Ergebnis[], o: { lesen: Lesen; existiert?: (p: string) => boolean; bezieher?: (w: string) => boolean }): (a: { rootDir: string; config: unknown; vorAbbruch?: boolean }) => Ergebnis[];
 }
 const lib = raw as unknown as Lib;
@@ -103,6 +105,101 @@ describe("mitFactoryUpdate", () => {
   });
 });
 
+/* Punkt `Dependabot-Ausschluss` (factory#375 L5): Dependabot-PRs auf Besitz-Workflows scheitern an check:factorydrift. */
+const eintrag = (pfad: string, extra: Record<string, unknown> = {}) => ({ pfad, ring: "kern", ...extra });
+const manifest = (...e: unknown[]) => JSON.stringify({ version: 3, eintraege: e });
+const BESITZ = [".github/workflows/codeql.yml", ".github/workflows/zizmor.yml"];
+const MANI = manifest(eintrag(BESITZ[0]!, { modul: "codeql" }), eintrag(BESITZ[1]!, { modul: "zizmor" }), eintrag("scripts/x.mjs"), eintrag(".github/workflows/nur-fabrik.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/ci.yml", { block: "b" }));
+const actions = (exclude?: string[]) => `- package-ecosystem: github-actions\n  directory: /\n${exclude ? `  exclude-paths:\n${exclude.map((x) => `    - "${x}"\n`).join("")}` : ""}`;
+const dependabot = (...eintraege: string[]) => `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${eintraege.map((e) => e.replace(/^/gm, "  ")).join("")}`;
+const dateien = (inhalt: Record<string, string | null>) => ({
+  existiert: (p: string) => Object.keys(inhalt).some((k) => p.endsWith(k) && inhalt[k] !== null),
+  lies: (p: string) => Object.entries(inhalt).find(([k]) => p.endsWith(k))?.[1] ?? null,
+});
+const ALLE = { ".factory/besitz.json": MANI, ".github/workflows/codeql.yml": "x", ".github/workflows/zizmor.yml": "x", ".github/workflows/nur-fabrik.yml": "x", ".github/workflows/ci.yml": "x" };
+const pruefe = (db: string | null, rest: Record<string, string | null> = ALLE, bezieher = ja) => lib.dependabotAusschlussPunkt({ rootDir: "/x", ...dateien({ ...rest, ".github/dependabot.yml": db }), bezieher });
+
+describe("dependabotAusschlussPunkt", () => {
+  test("Fabrik (kein Bezieher): kein Punkt", () => {
+    expect(pruefe(dependabot(actions()), ALLE, nein)).toEqual([]);
+  });
+  test("ohne .github/dependabot.yml: OK", () => {
+    expect(pruefe(null)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("ohne Eintrag github-actions: OK", () => {
+    expect(pruefe(dependabot())).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("Eintrag ohne exclude-paths bei zwei Besitz-Workflows: Lücke mit beiden Pfaden und Fix", () => {
+    const [p] = pruefe(dependabot(actions()));
+    expect(p).toMatchObject({ punkt: "Dependabot-Ausschluss", ok: false });
+    expect(p?.nichtPruefbar).toBeUndefined();
+    for (const w of BESITZ) expect(p?.befund).toContain(w);
+    expect(p?.befund).not.toContain("nur-fabrik.yml");
+    expect(p?.befund).not.toContain("ci.yml");
+    expect(p?.fix).toContain("in .github/dependabot.yml je github-actions-Eintrag unter exclude-paths ergänzen: ");
+    for (const w of BESITZ) expect(p?.fix).toContain(w);
+    expect(p?.fix).toContain("scheitert an check:factorydrift, der Bump kommt per Factory-Update");
+    expect(p?.fix).not.toContain("npm run");
+  });
+  test("alle ausgeschlossen: OK", () => {
+    expect(pruefe(dependabot(actions(BESITZ)))).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("nur einer ausgeschlossen: Lücke nennt nur den fehlenden", () => {
+    const [p] = pruefe(dependabot(actions([BESITZ[0]!])));
+    expect(p).toMatchObject({ ok: false });
+    expect(p?.befund).toContain(BESITZ[1]!);
+    expect(p?.befund).not.toContain(BESITZ[0]!);
+  });
+  test("zwei github-actions-Einträge, einer unvollständig: Lücke", () => {
+    const [p] = pruefe(dependabot(actions(BESITZ), actions([BESITZ[0]!])));
+    expect(p).toMatchObject({ ok: false });
+    expect(p?.befund).toContain(BESITZ[1]!);
+  });
+  test("Glob-Einträge zählen nicht (dokumentierte Grenze)", () => {
+    expect(pruefe(dependabot(actions([".github/workflows/*.yml"])))[0]).toMatchObject({ ok: false });
+  });
+  test("Manifest-Workflow fehlt im Projekt (abgewähltes Modul): nicht gefordert; fehlen alle: OK", () => {
+    const [p] = pruefe(dependabot(actions([BESITZ[0]!])), { ...ALLE, ".github/workflows/zizmor.yml": null });
+    expect(p).toEqual({ punkt: "Dependabot-Ausschluss", ok: true });
+    expect(pruefe(dependabot(actions()), { ...ALLE, ".github/workflows/zizmor.yml": null, ".github/workflows/codeql.yml": null })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("Projekt-Workflow (nicht im Manifest) wird nie gefordert", () => {
+    const mani = manifest(eintrag("scripts/x.mjs"));
+    expect(pruefe(dependabot(actions()), { ...ALLE, ".factory/besitz.json": mani, ".github/workflows/projekt.yml": "x" })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("kaputtes YAML: NICHT PRÜFBAR", () => {
+    const [p] = pruefe("updates: [\n  - x: {");
+    expect(p).toMatchObject({ punkt: "Dependabot-Ausschluss", ok: false, nichtPruefbar: true });
+    expect(p?.befund).toContain(".github/dependabot.yml");
+  });
+  test("YAML ohne Liste updates (Text, Skalar): wie ohne github-actions-Eintrag OK", () => {
+    expect(pruefe("version: 2\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe("42\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe("updates:\n  - 3\n  - null\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("Manifest fehlt, kein JSON oder ohne Liste: NICHT PRÜFBAR", () => {
+    for (const m of [null, "{", "{}"]) {
+      const [p] = pruefe(dependabot(actions()), { ...ALLE, ".factory/besitz.json": m });
+      expect(p, String(m)).toMatchObject({ punkt: "Dependabot-Ausschluss", ok: false, nichtPruefbar: true });
+      expect(p?.befund).toContain(".factory/besitz.json");
+    }
+  });
+  test("exclude-paths kein Array: zählt als nicht ausgeschlossen", () => {
+    expect(pruefe(dependabot("- package-ecosystem: github-actions\n  exclude-paths: x\n"))[0]).toMatchObject({ ok: false });
+  });
+  test("Standard-existiert und -lies lesen das Dateisystem (Bezieher ohne Dateien: OK)", () => {
+    expect(lib.dependabotAusschlussPunkt({ rootDir: "/gibt/es/nicht", bezieher: ja })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+});
+
+describe("mitDependabotAusschluss", () => {
+  test("hängt den Punkt an; im Vorab-Abbruch fehlt er", () => {
+    const f = lib.mitDependabotAusschluss(() => [{ punkt: "Eins", ok: true }], { ...dateien({ ...ALLE, ".github/dependabot.yml": dependabot(actions()) }), bezieher: ja });
+    expect(f({ rootDir: "/x", config }).map((p) => p.punkt)).toEqual(["Eins", "Dependabot-Ausschluss"]);
+    expect(f({ rootDir: "/x", config, vorAbbruch: true }).map((p) => p.punkt)).toEqual(["Eins"]);
+  });
+});
+
 const aufraeumen: string[] = [];
 afterEach(() => {
   for (const d of aufraeumen.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -126,7 +223,7 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
     const f = doctor.dateienStandard({ env: {}, lesen, pruefe: () => [{ punkt: "Eins", ok: true }] });
     expect(f({ rootDir: fabrik, config }).map((p) => p.punkt)).toEqual(["Eins"]);
     const e = f({ rootDir: bezieher, config });
-    expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update", "Dependabot-Ausschluss"]);
     expect(e[1]).toMatchObject({ ok: false });
   });
 });
