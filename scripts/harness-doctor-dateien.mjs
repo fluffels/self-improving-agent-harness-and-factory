@@ -378,7 +378,7 @@ export function codeownersPaths(text) {
 export function codeownersSpiegelProbleme(quelleText, codeownersText) {
   const sollMuster = pflichtReviewMuster(quelleText);
   if (sollMuster === null) return [".github/protected-paths.json nicht lesbar oder pflichtReview ist keine Liste"];
-  let hatGruppe = false;
+  let hatGruppe;
   try {
     hatGruppe = JSON.parse(quelleText).pflichtReview !== undefined;
   } catch {

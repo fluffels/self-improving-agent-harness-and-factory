@@ -61,8 +61,9 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(${lensOrdner(config)}${namen.worktreeName("<nr>")}-lens-r<runde>-<brille>${istArbeitsplatz(config) ? "" : " (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>)"} bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      `(${lensOrdner(config)}${namen.worktreeName("<nr>")}-lens-r<runde>${istArbeitsplatz(config) ? "" : " (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>)"} bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
       (istArbeitsplatz(config) ? "Worktree-Ordner je Repo: `node scripts/arbeitsplatz.mjs pfade`. " : "") +
+      "Je Brille ein eigener Worktree: der Name endet auf `-<brille>` (`-lens-r<runde>-<brille>`), sonst teilen parallele Lenses ihn. " +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }

@@ -435,7 +435,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     }
   });
 
-  test("L77: cd \$VAR && git commit bleibt ask (fail-closed, statisch nicht bestimmbar)", () => {
+  test("L77: cd $VAR && git commit bleibt ask (fail-closed, statisch nicht bestimmbar)", () => {
     const r = decide({ cwd: repoRoot, command: "cd $ZIEL && git commit -m x", repoRoot, deps: fsFake([wt]) });
     assert.ok(r.block || r.ask === true);
   });

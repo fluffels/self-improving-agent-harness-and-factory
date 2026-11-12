@@ -845,12 +845,14 @@ describe("harness-doctor --pruefen: die acht Sicherheitspunkte (factory#116)", (
 describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Beziehers", () => {
   const dateien = rawDateien as (a: { rootDir: string }) => unknown[];
   /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
+  /** Inhalte der Projektdateien, die der Punkt `CODEOWNERS-Spiegel` liest (gespiegelt: eine Zeile, die sich selbst schützt). */
+  const INHALT: Record<string, string> = { "AGENTS.md": "regeln\n", ".github/protected-paths.json": '{"a":["/.github/CODEOWNERS"]}\n', ".github/CODEOWNERS": "/.github/CODEOWNERS @team\n" };
   const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n", ausser: string[] = []) => (root: string) => {
     writeFileSync(join(root, ".gitattributes"), regel);
     for (const d of [...(rawProjektdateien as { pfad: string }[]), { pfad: ".github/workflows/board-takt.yml" }, { pfad: "scripts/langfuse-takt.mjs" }]) {
       if (ausser.includes(d.pfad)) continue;
       mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
-      writeFileSync(join(root, d.pfad), d.pfad === "AGENTS.md" ? "regeln\n" : "");
+      writeFileSync(join(root, d.pfad), INHALT[d.pfad] ?? "");
     }
     for (const [rel, text] of Object.entries(extra)) writeFileSync(join(root, rel), text);
     const g = (...a: string[]) => execFileSync("git", ["-C", root, "-c", "core.autocrlf=false", ...a], { encoding: "utf8" });
@@ -862,13 +864,14 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     writeFileSync(join(root, "CLAUDE.md"), "x\n");
   };
 
-  test("gesund: alle sechs Punkte OK, Exit 0", () => {
+  test("gesund: alle Punkte OK (auch CODEOWNERS-Spiegel), Exit 0", () => {
     const r = lauf({}, { dateien, vorbereiten: repo() });
     assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Zeilenenden"));
     assert.ok(r.out.includes("OK Projektdateien"));
     assert.ok(r.out.includes("OK Langfuse-Takt"));
     assert.ok(r.out.includes("OK Required-Check-Quellen"), r.out.join("\n"));
+    assert.ok(r.out.includes("OK CODEOWNERS-Spiegel"), r.out.join("\n"));
     assert.equal(r.code, 0);
   });
 
