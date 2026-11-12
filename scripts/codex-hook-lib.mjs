@@ -61,28 +61,11 @@ function musterTrifft(muster, seg) {
 const ZUWEISUNG = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const WRAPPER = new Set(["command", "exec", "nohup", "time"]);
 const INTERPRETER = new Set(["bash", "sh", "zsh", "dash"]);
+const SHELL_FLAGS = new Set(["-c", "-lc"]);
 const MAX_TIEFE = 3;
 
 /** Wörter eines Segments, getrennt an Leerraum außerhalb von Quotes (Quotes bleiben im Wort). */
-function woerter(seg) {
-  const out = [];
-  let cur = "";
-  let quote = null;
-  for (let i = 0; i < seg.length; i++) {
-    const c = seg[i];
-    if (quote === null && /\s/.test(c)) {
-      if (cur) out.push(cur);
-      cur = "";
-      continue;
-    }
-    cur += c;
-    if (quote === null && (c === "'" || c === '"')) quote = c;
-    else if (quote === c) quote = null;
-    else if (quote === '"' && c === "\\" && i + 1 < seg.length) cur += seg[++i];
-  }
-  if (cur) out.push(cur);
-  return out;
-}
+const woerter = (seg) => seg.match(/(?:'[^']*'|"(?:\\.|[^"\\])*"|\S)+/g) ?? [];
 
 /** Basisname eines Programmworts: Verzeichnis (auch Windows-Backslash) und `.exe` fallen weg. */
 const basisname = (wort) => wort.replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "");
@@ -91,8 +74,9 @@ const basisname = (wort) => wort.replace(/\\/g, "/").split("/").pop().replace(/\
 function ohneWrapper(w) {
   let t = w;
   for (;;) {
-    const basis = basisname(t[0] ?? "");
-    if (ZUWEISUNG.test(t[0] ?? "") || WRAPPER.has(basis)) t = t.slice(1);
+    const kopf = t[0] ?? "";
+    const basis = basisname(kopf);
+    if (ZUWEISUNG.test(kopf) || WRAPPER.has(basis)) t = t.slice(1);
     else if (basis === "env") t = envOptionen(t.slice(1));
     else return t;
   }
@@ -109,18 +93,16 @@ function envOptionen(w) {
 
 /** Der Inhalt eines vollständig gequoteten Worts (`'…'` wörtlich, `"…"` mit `\"` und `\\`), sonst `null`. */
 function entquote(wort) {
-  const q = wort[0];
-  if ((q !== "'" && q !== '"') || wort.length < 2 || wort.at(-1) !== q) return null;
-  const innen = wort.slice(1, -1);
-  if (q === "'") return innen.includes("'") ? null : innen;
-  const roh = innen.replace(/\\(["\\])/g, "");
-  return roh.includes('"') ? null : innen.replace(/\\(["\\])/g, "$1");
+  const einfach = /^'([^']*)'$/.exec(wort);
+  if (einfach) return einfach[1];
+  const doppelt = /^"((?:\\["\\]|[^"\\])*)"$/.exec(wort);
+  return doppelt ? doppelt[1].replace(/\\(["\\])/g, "$1") : null;
 }
 
 /** Der Befehlstext hinter `bash|sh|zsh|dash -c|-lc "<ein Argument>"`, sonst `null`. */
 function interpreterText(w) {
-  if (w.length !== 3 || !INTERPRETER.has(w[0]) || (w[1] !== "-c" && w[1] !== "-lc")) return null;
-  return entquote(w[2]);
+  const [shell, flag, arg] = w;
+  return w.length === 3 && INTERPRETER.has(shell) && SHELL_FLAGS.has(flag) ? entquote(arg) : null;
 }
 
 /** Das Originalsegment plus normalisierte Formen (Leerraum zusammengezogen, Wrapper und Pfad abgestreift, `sh -c`-Text rekursiv bis Tiefe 3), damit Regeln auch Wrapper-Formen treffen. */
