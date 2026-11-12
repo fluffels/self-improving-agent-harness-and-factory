@@ -104,14 +104,13 @@ export function parseBericht(text, nr, kriterienListe) {
   return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }
 
-const istSzenario = (u) => u.wert === "nicht-erfuellt" && u.ursache === "szenario";
 const istFixFall = (u) => u.wert === "nicht-erfuellt" && u.ursache !== "szenario";
 
 /** Vorrang handoff > fix > szenario > bestanden; `szenario` heißt: alle nicht erfüllten Kriterien sind `ursache=szenario` (das Szenario prüfte über das Kriterium hinaus, kein Fix); `nach-merge` zählt nicht mit. Pur. */
 export function entscheide(urteile) {
   if (urteile.some((u) => u.wert === "nicht-pruefbar")) return "handoff";
   if (urteile.some(istFixFall)) return "fix";
-  if (urteile.some(istSzenario)) return "szenario";
+  if (urteile.some((u) => u.wert === "nicht-erfuellt")) return "szenario"; // nur noch ursache=szenario übrig
   return "bestanden";
 }
 
@@ -253,7 +252,7 @@ function ausgabe(entscheidung, urteile, io, head, durchgang, kommentare) {
     return `ENTSCHEIDUNG: fix\n${zeilen.join("\n")}\n`;
   }
   if (entscheidung === "szenario") {
-    const zeilen = urteile.filter(istSzenario).map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);
+    const zeilen = urteile.filter((u) => u.wert === "nicht-erfuellt").map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);
     return `ENTSCHEIDUNG: szenario\n${zeilen.join("\n")}\n`;
   }
   const zeilen = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `${u.k} nicht prüfbar: ${u.beleg}`);
