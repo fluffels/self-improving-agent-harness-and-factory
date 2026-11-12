@@ -33,7 +33,7 @@ export function meldestellePunkt({ config, env, lesen }) {
   if (zugang === null) return [];
   const { stelle, token } = zugang;
   if (token === undefined && env.GITHUB_ACTIONS === "true") {
-    return [luecke(PUNKT, `die Meldestelle ${stelle} ist ein fremdes Repo, aber weder MELDESTELLE_TOKEN noch PROJECT_TOKEN ist gesetzt: der Wochenlauf kann dort weder lesen noch posten`, `Secret MELDESTELLE_TOKEN (Issues: Lesen und Schreiben an ${stelle}) im Repo anlegen und im Workflow harness-doctor.yml als Umgebungsvariable reichen (Anlegen ist ein Pre-Flight-Stopp, Anleitung: Seite docs/erstbezug.md des Factory-Repos, Abschnitt Meldestelle)`)];
+    return [luecke(PUNKT, `die Meldestelle ${stelle} ist ein fremdes Repo, aber weder MELDESTELLE_TOKEN noch PROJECT_TOKEN ist gesetzt: der Wochenlauf kann dort weder lesen noch posten`, `Secret MELDESTELLE_TOKEN (Issues: Lesen und Schreiben an ${stelle}) im Repo anlegen und im Workflow harness-doctor.yml als Umgebungsvariable reichen (Anlegen ist ein Pre-Flight-Stopp, Anleitung: Seite docs/erstbezug.md (Fabrik) › Meldestelle)`)];
   }
   let repo;
   try {
