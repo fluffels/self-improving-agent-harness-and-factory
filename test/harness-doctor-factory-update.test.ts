@@ -112,7 +112,7 @@ const eintrag = (pfad: string, extra: Record<string, unknown> = {}) => ({ pfad, 
 const manifest = (...e: unknown[]) => JSON.stringify({ version: 3, eintraege: e });
 const BESITZ = [".github/workflows/codeql.yml", ".github/workflows/zizmor.yml"];
 const MANI = manifest(eintrag(BESITZ[0], { modul: "codeql" }), eintrag(BESITZ[1], { modul: "zizmor" }), eintrag("scripts/x.mjs"), eintrag(".github/workflows/nur-fabrik.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/ci.yml", { block: "b" }));
-const actions = (exclude?: string[]) => `- package-ecosystem: github-actions\n  directory: /\n${exclude ? `  exclude-paths:\n${exclude.map((x) => `    - "${x}"\n`).join("")}` : ""}`;
+const actions = (exclude?: string[]) => `- package-ecosystem: github-actions\n  directory: /\n${exclude ? `  exclude-paths:\n${exclude.map((x) => `    - ${x}\n`).join("")}` : ""}`;
 const dependabot = (...eintraege: string[]) => `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${eintraege.map((e) => e.split("\n").filter(Boolean).map((z) => `  ${z}\n`).join("")).join("")}`;
 const dateien = (inhalt: Record<string, string | null>) => ({
   existiert: (p: string) => Object.keys(inhalt).some((k) => p.endsWith(k) && inhalt[k] !== null),
@@ -208,21 +208,20 @@ describe("dependabotAusschlussPunkt", () => {
       "updates: [\n  - x: {", "updates:\n  - {package-ecosystem: github-actions}\n", "updates:\n  - &a\n", "updates:\n  - package-ecosystem:\n", "updates:\n  -\n    package-ecosystem: github-actions\n",
       "updates:\n  - package-ecosystem: x\n  y\n", "updates: []\nupdates: []\n", "updates: []\n  - package-ecosystem: github-actions\n",
       ex(" *a"), ex(" [a,\n      b]"), ex(" [a, b]"), ex(" |\n      a"), ex(" []\n    exclude-paths: []"), ex(' [a,,b]'), ex(' "a'), ex(" x\n      y"),
-      ex('\n      - "a'), ex('\n      -'), ex('\n      - # leer'), ex('\n      - "'), ex('\n      - "a"b"'), ex('\n      - "a\\b"'), ex("\n      - a\n        - b"), ex("\n      a: b"),
+      ex('\n      - "a'), ex('\n      -'), ex('\n      - # leer'), ex('\n      - "'), ex('\n      - "a"b"'), ex('\n      - "a\\b"'), ex('\n      - "a\''), ex("\n      - 'a'b'"), ex('\n      - ".github/workflows/codeql.yml"'), ex("\n      - '.github/workflows/codeql.yml'"), ex("\n      - a\n        - b"), ex("\n      a: b"),
       `updates:\n${aktion}   y: z\n`, `updates:\n${aktion}    package-ecosystem: npm\n`, `  updates:\n${aktion}`,
       `${np}    directory: /\n   y: z\n`, `${np}      y\n`, "updates:\n  - 3\n - 4\n", "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n",
     );
   });
   test("jedes Sonderzeichen am Wertanfang (Anker, Alias, Tag, Block-Skalar, Flow, Direktive, reserviert, ?-Schlüssel) ist NICHT PRÜFBAR", () => {
-    for (const c of ["&", "*", "!", "|", ">", "{", "%", "@", "`", "?", "["]) nichtPruefbar(`updates:\n  - package-ecosystem: ${c}x\n`);
+    for (const c of ["&", "*", "!", "|", ">", "{", "%", "@", "`", "?", "[", '"', "'"]) nichtPruefbar(`updates:\n  - package-ecosystem: ${c}x\n`);
   });
-  test("gelesene Formen: Listenpunkt, Quotes, Kommentare auch direkt hinter `schlüssel:`, --- am Anfang, CRLF", () => {
-    const voll = `---\n# Kommentar\nupdates:\n  - package-ecosystem: 'github-actions' # Aktionen\n    exclude-paths: # Besitz\n      - ".github/workflows/codeql.yml" # a\n      - '.github/workflows/zizmor.yml'\n`;
+  test("gelesene Formen: Listenpunkt, eingerückte Kommentar- und Leerzeilen, Kommentare auch direkt hinter `schlüssel:`, --- am Anfang, CRLF", () => {
+    const voll = `---\n# Kommentar\nupdates:\n  - package-ecosystem: github-actions # Aktionen\n    # eingerückter Kommentar\n    exclude-paths: # Besitz\n      # tiefer Kommentar\n      - .github/workflows/codeql.yml # a\n   \n      - .github/workflows/zizmor.yml\n\n`;
     for (const roh of [voll, voll.replace("updates:", "updates: # Liste"), voll.replaceAll("\n", "\r\n"), `${voll}version: 2\n`, `${voll}# Ende\n\n`]) expect(pruefe(roh), JSON.stringify(roh)).toEqual(OK);
-    // echte Lücken (nicht „nicht prüfbar“): leere Liste, leerer Block, nur Kommentar, anderer Schlüssel, Quotes um das Ökosystem
+    // echte Lücken (nicht „nicht prüfbar“): leere Liste, leerer Block, nur Kommentar, anderer Schlüssel
     const ga = "updates:\n  - package-ecosystem: github-actions\n";
     for (const rest of ["    exclude-paths: []\n", "    exclude-paths:\n", "    exclude-paths: # nichts\n", "    schedule:\n      interval: weekly\n"]) luecke(pruefe(`${ga}${rest}`)[0], rest);
-    luecke(pruefe("updates:\n  - package-ecosystem: 'github-actions'\n")[0], "Quotes");
     luecke(pruefe("updates:\n  - package-ecosystem: github-actions # Aktionen\n")[0], "Kommentar");
   });
   test("dependabotEintraege: nur NichtLesbar wird zu `{ fehler }`, jeder andere Fehler wird weitergeworfen", () => {

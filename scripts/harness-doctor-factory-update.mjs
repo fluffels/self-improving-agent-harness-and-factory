@@ -68,16 +68,14 @@ const besitzWorkflows = (manifest, rootDir, existiert) => manifest.eintraege.fil
 class NichtLesbar extends Error {}
 const nl = (was) => new NichtLesbar(was);
 const SCHLUESSEL = /^([A-Za-z0-9_./-]+):(?: (.*))?$/;
-const SONDER = /^[&*!|>{%@`?[]/;
+const SONDER = /^[&*!|>{%@`?["']/;
 const ohneKommentar = (s) => s.replace(/(^| )#.*$/, "").trim();
 
-/** Ein Skalar (plain oder in einem Quote-Paar); Anker, Alias, Tag, Block-Skalar, Flow und Escapes sind nicht lesbar. Leer bleibt leer. */
+/** Ein plain Skalar; Quotes, Anker, Alias, Tag, Block-Skalar und Flow am Wertanfang sind nicht lesbar. Leer bleibt leer. */
 function skalar(roh) {
   const s = ohneKommentar(roh);
   if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
-  if (s[0] !== '"' && s[0] !== "'") return s;
-  if (!/^(["'])[^"'\\]*\1$/.test(s)) throw nl("Quote oder Escape in einem Wert");
-  return s.slice(1, -1);
+  return s;
 }
 
 /** Die inhaltlichen Zeilen `{ einr, text }` (ohne Leer- und Kommentarzeilen); ein Tab irgendwo ist nicht lesbar. */
@@ -128,8 +126,8 @@ function ausschlussListe({ wert, rumpf }) {
 /** Ein Listeneintrag von `updates` als `{ oekosystem, ausschluss }`; `null` für ein Mapping ohne `package-ecosystem` (das ein github-actions-Eintrag nie ist). */
 function eintragVon({ kopf, rumpf }) {
   if (!kopf.text.startsWith("- ")) throw nl("`updates` ist keine einfache Blockliste");
-  const erste = kopf.text.slice(2).trimStart();
-  const einr = kopf.einr + kopf.text.length - erste.length;
+  const erste = kopf.text.slice(2);
+  const einr = kopf.einr + 2;
   const felder = gruppen([{ einr, text: erste }, ...rumpf], einr, "einem Eintrag").map((g) => ({ ...feld(g.kopf.text), rumpf: g.rumpf }));
   const finde = (name) => {
     const treffer = felder.filter((f) => f.schluessel === name);
@@ -161,8 +159,8 @@ function eintraegeVon(zeilen) {
 
 /**
  * Die Einträge von `updates` als `{ eintraege: [{ oekosystem, ausschluss }] }` oder `{ fehler }` (Blockform ohne `yaml`-Bibliothek: der Doctor-Wochenlauf läuft ohne `npm ci`, nur Node-Builtins).
- * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als Skalar (plain oder im Quote-Paar), `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen, `---` am Anfang.
- * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Escapes, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
+ * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als plain Skalar, `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen, `---` am Anfang.
+ * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Quotes am Wertanfang, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
  */
 export function dependabotEintraege(text) {
   try {
