@@ -979,7 +979,7 @@ describe("TTL-Gegenrechnung je Rolle (factory#312)", () => {
       expect(P(["--von", "2026-10-28T00:00:00Z", "--bis", "2026-11-11T13:18:00Z", "--ttl"]).fehler).toBeUndefined();
     });
     test("--von/--bis nehmen nur ISO-8601 an, nicht Zahl, Jahr, Kalenderirrtum oder Leerzeichen-Trenner (factory#399)", () => {
-      for (const schlecht of ["1", "2026", "2026-02-30", "2025-02-29", "2026-04-31", "2026-10-28 10:00", "2026-10-28t10:00z", "2026-10-28T25:00", "2026-10-28T10:00:00.Z", "2026-10-28T1:00", "2026-13-01", "x2026-10-28", "2026-10-28x", "2026-10-28T10:00Zx", "2026-10-28T10:00+0200", "2026-10-28T10"]) {
+      for (const schlecht of ["1", "2026", "2026-02-30", "2025-02-29", "2026-04-31", "2026-10-28 10:00", "2026-10-28t10:00z", "2026-10-28T25:00", "2026-10-28T10:00:00.Z", "2026-10-28T1:00", "2026-13-01", "x2026-10-28", "2026-10-28x", "2026-10-28T10:00Zx", "2026-10-28T10:00+0200", "2026-10-28T10", "2026-1-28", "2026-10-8", "12026-10-28", "02026-10-28"]) {
         expect(P(["--von", schlecht]).fehler, schlecht).toMatch(/--von.*ISO-Zeitpunkt/);
         expect(P(["--von", "2026-10-28", "--bis", schlecht]).fehler, schlecht).toMatch(/--bis.*ISO-Zeitpunkt/);
       }

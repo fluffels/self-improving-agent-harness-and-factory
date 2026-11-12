@@ -167,6 +167,7 @@ describe("Lib: lockVerzeichnis, parseLock, lebenszeichenMs, oeffentlicheSicht", 
     assert.doesNotMatch(JSON.stringify(sicht), /geheim|"auch"|nonce/);
     assert.equal(sicht.gestopptStand, "verbraucht");
     assert.equal(L.oeffentlicheSicht({ nonceHash: "h" }).gestopptStand, "keine");
+    assert.equal(L.oeffentlicheSicht(null as never).gestopptStand, "keine", "ohne Lock");
     assert.equal(L.oeffentlicheSicht({ gestoppt: { gesetzt: "a", verbraucht: null } }).gestopptStand, "offen");
   });
 
