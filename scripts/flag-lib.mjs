@@ -5,7 +5,7 @@
  * `direktaufruf` schreibt (über eine austauschbare `ausgabe`) und setzt `process.exitCode`.
  *
  * Aufbau: `parseArgs` aus `node:util` im nicht-strikten Token-Modus, dazu eine eigene Token-Prüfung. Das erste
- * Problem in der Argumentreihenfolge gewinnt.
+ * Problem in der Argumentreihenfolge gewinnt. Dazu `istIsoZeitpunkt`: die gemeinsame Prüfung der Zeitpunkt-Flags `--von`/`--bis` (factory#399, factory#426).
  */
 import { parseArgs } from "node:util";
 
@@ -88,6 +88,17 @@ export function befehlLesen(argv, befehle, { meldung } = {}) {
     return { befehl: name, ...r, fehler: { art: "positional", flag, text: meldungText(meldung, "positional", flag) ?? STANDARD.positional(flag) } };
   }
   return { befehl: name, ...r };
+}
+
+const ISO_ZEITPUNKT = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+
+/** ISO-8601-Zeitpunkt (factory#399): `JJJJ-MM-TT`, optional `THH:MM[:SS[.sss]]`, optional `Z` oder `±HH:MM`; Kalendertag und Uhrzeit müssen existieren (kein `2026`, `1`, `2026-02-30`, kein Leerzeichen-Trenner). */
+export function istIsoZeitpunkt(text) {
+  const m = ISO_ZEITPUNKT.exec(String(text));
+  if (!m || Number.isNaN(Date.parse(text))) return false;
+  const tag = new Date(0);
+  tag.setUTCFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return tag.getUTCDate() === Number(m[3]); // ein Überlauf (30. Februar, 31. April) verschiebt den Tag; Monat und Uhrzeit prüft Date.parse
 }
 
 /**
