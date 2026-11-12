@@ -28,7 +28,7 @@ import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, stufeZeile, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, risikoMusterAus } from "./groessenstufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
@@ -176,11 +176,13 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?): Abnahme-Nachweis nicht prüfbar."], invalid: [] };
   let fehler;
   let rov = { reason: null, invalid: [] };
+  let stufe = null; // nur Anzeige (factory#402 L26); bewertet wird sie in pruefe
   let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
     if (git(["rev-parse", "HEAD"]).trim() === base) return { ok: true, skipped: true, fehler: [], invalid: [] };
+    stufe = anzeigeStufe(git, base, config);
     const ov = sliceOverride(git, base, zeilen.abnahmeOverride);
-    if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: ov.invalid };
+    if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe };
     rov = sliceOverride(git, base, zeilen.reviewOverride);
     entwurf = entwurfLive({ gh, env, repo: repoVon(env, config) });
     fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null });
@@ -188,7 +190,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
   const hinweise = rov.reason === null ? [] : [REVIEW_OVERRIDE_HINWEIS];
-  return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, hinweise, invalid: rov.invalid };
+  return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, hinweise, invalid: rov.invalid, stufe };
 }
 
 const repoVon = (env, config) => env.GITHUB_REPOSITORY || config.repo;
@@ -208,6 +210,15 @@ export function entwurfLive({ gh, env, repo }) {
   }
   if (typeof pr?.draft !== "boolean") throw new Error(`Entwurfs-Status des PR #${nr} nicht lesbar (Feld draft fehlt).`);
   return pr.draft;
+}
+
+/** Größenstufe nur zur Anzeige (factory#402 L26): ein Fehler macht den Lauf nie rot, die Stufe ist dann `null`. */
+function anzeigeStufe(git, base, config) {
+  try {
+    return groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
+  } catch {
+    return null;
+  }
 }
 
 /** Die Größenstufe, nur wenn die Abnahme-Zeile `entfaellt` lautet (nur dort zählt sie, factory#271); sonst `voll`. */
@@ -255,11 +266,13 @@ function main(argv = process.argv.slice(2)) {
   }
   if (r.override) {
     console.log(`• geduldet: ${r.overrideKey} — ${r.override}`);
+    console.log(stufeZeile(r.stufe));
     console.log("✔ Abnahme-Nachweis ok (Override mit Begründung).");
     return;
   }
   meldeUngueltigeOverrides(r.invalid);
   for (const h of r.hinweise ?? []) console.log(`• ${h}`);
+  if (r.ok) console.log(stufeZeile(r.stufe));
   if (r.entwurf) {
     console.log("• Entwurf, nur Bericht (maßgeblich ist der Lauf nach ready_for_review):");
     for (const f of r.fehler) console.log(`  - ${f}`);

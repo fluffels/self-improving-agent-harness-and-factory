@@ -577,6 +577,12 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
     expect(r.stdout).toMatch(/Zeile fehlt/);
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+  });
+  test("Größenstufe wird bei Erfolg genannt, auch bei Abnahme-Zeile entfaellt (factory#402 L26)", () => {
+    const r = cli(cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
   });
   test("Review-Override (L24a): die Ausgabe nennt, was entfällt; ohne die Zeile fehlt der Hinweis", () => {
     const abn = `${Z.abnahme}: head=${"c".repeat(40)} durchgaenge=1 urteil=K1:erfuellt`;
@@ -589,6 +595,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const r = cli(cliRepo(`x\n\n${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug`));
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(new RegExp(`${Z.abnahmeOverride} — #9 Sitzung vor dem Werkzeug`));
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
     // Die Message trägt das Fremd-Präfix: mit der gültigen Fremd-Config grün (Exit 0), mit der kaputten kommt Exit 1 aus dem --config-Zweig (nicht aus der Zeile).
