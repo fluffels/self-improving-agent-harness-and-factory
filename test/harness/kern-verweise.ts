@@ -86,6 +86,8 @@ export function abgeleitet(vorspann: string, original: RegExp = drift.ABSCHNITT_
 export const FABRIK_VERWEIS = abgeleitet(String.raw`([\w./-]*\w\.md) \(Fabrik\) (›|§)`);
 /** `Projekt-Block › A` bzw. `§ A`: Verweis auf den Projekt-Block der AGENTS.md. */
 export const PROJEKT_BLOCK_VERWEIS = abgeleitet(String.raw`(Projekt-Block) (›|§)`);
+/** `` `<pfad>.md` › A `` (Pfad in Backticks): ein Textverweis, den `check:docdrift` nicht sieht; für die strenge Form zählt er wie jeder andere. */
+export const BACKTICK_VERWEIS = abgeleitet(String.raw`\`([\w./-]*\w\.md)\` (›|§)`);
 /** `AGENTS.md (§ A`: Klammerform des Verweises auf AGENTS.md. */
 export const AGENTS_KLAMMER_VERWEIS = abgeleitet(String.raw`(AGENTS\.md) \((§)`);
 
@@ -192,7 +194,7 @@ export function strengeFunde(wurzel: string, erlaubt: Set<string>): { funde: Str
   let verweise = 0;
   for (const { datei, text, spannen } of dateien) {
     const stellen = drift.linkStellen(text);
-    for (const v of drift.abschnittVerweise(text, { istMarkdown: false })) {
+    for (const v of [...drift.abschnittVerweise(text, { istMarkdown: false }), ...verweiseNachMuster(BACKTICK_VERWEIS, text, false)]) {
       const ziel = zielVon(datei, v.pfad, lies);
       if (!imSpann(spannen, v.index) || ziel === undefined || ziel === "AGENTS.md" || ganzeDateien.has(ziel)) continue;
       verweise++;
@@ -262,7 +264,8 @@ export function absatzVerweise(text: string): AgentsVerweis[] {
   const verweise: AgentsVerweis[] = [];
   for (const absatz of text.split(/\n\s*\n/)) {
     let geerbt: AgentsZiel | null = null;
-    for (const m of absatz.matchAll(ABSATZ_RE)) {
+    // Die Fabrik-Form `<pfad>.md (Fabrik) §` nennt eine fremde Datei: sie setzt das Erbe zurück wie jedes `<datei> §`.
+    for (const m of absatz.replace(/([\w./-]+\.md) \(Fabrik\)/g, "$1").matchAll(ABSATZ_RE)) {
       const [, datei, trenner, zitat, frei] = m;
       let form: AgentsForm | null = null;
       if (trenner === "§") form = datei === undefined ? 4 : null;

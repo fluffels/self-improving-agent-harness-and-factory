@@ -28,6 +28,13 @@
  * nie in einen Bezieher (ADR 0029): keine strenge Form, nur die Fabrik-Form-Prüfung. Ob die Bezieher-Seite die Überschrift wirklich trägt, sieht nur die Vor-Tag-Probe.
  * Zusätzliche Überschriften auf einer eigenen Bezieher-Seite zählen nicht.
  *
+ * Abgrenzung zu den Repo-weiten Gates (factory#245 K2): dieser Wächter ist der einzige für die BEZIEHER-Sicht auf Kern-Verweise (Kern-Block statt ganze AGENTS.md, Ankerliste, strenge Form). Die Gates
+ * `check:docdrift` (tote Abschnitte und Anker im ganzen Repo), `kern-links.test.ts` und `besitz-verweise.test.ts` (Link-Hülle: Ziel und Anker existieren) prüfen eine andere Frage, nämlich dass das Ziel in DIESEM
+ * Repo existiert, auch für Projekt-Text; sie bleiben, denn ohne sie fiele ein toter Anker außerhalb des Kerns oder in der Fabrik nicht mehr auf. Eine Überschneidung (ein toter Kern-Verweis wird von beiden Seiten
+ * gemeldet) ist gewollt und kein Doppelschutz derselben Regel.
+ * Bewusste Grenze der Erkennung: nur Verweise, die einen Abschnitt nennen (`<pfad>.md › A` / `§ A`, auch `\`<pfad>.md\` › A`); eine bloße Seitennennung ohne Abschnitt (`Mechanik: docs/x.md`) oder ein Satz mit Komma
+ * (`docs/x.md, Abschnitt A`) ist kein Abschnittsverweis und bleibt unerfasst.
+ *
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
  * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
  * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; die .mjs-Laufzeittexte
@@ -121,6 +128,12 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
   test("eine Überschrift im Code-Fence der Zielseite ist kein Anker (rot)", () => {
     const wurzel = mit("[docs/seite.md › Nur im Fence](docs/seite.md#nur-im-fence)\n", "skill.md", "# Seite\n\n```\n## Nur im Fence\n```\n");
     assert.deepEqual(grund(wurzel, new Set(["docs/seite.md#nur-im-fence"])), ["(e)"]);
+  });
+
+  test("ein Verweis mit Pfad in Backticks (`docs/seite.md` › A) zählt wie jeder andere: ohne Link rot, als Link-Text mit Listenanker grün", () => {
+    assert.deepEqual(grund(mit("Siehe `docs/seite.md` › Echte Überschrift\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("Siehe `docs/seite.md` › Gibtsnicht\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("Siehe [`docs/seite.md` › Echte Überschrift](docs/seite.md#echte-überschrift)\n")), []);
   });
 
   test("ein Bild-Link `![…](…)` ist keine strenge Form (rot)", () => {
@@ -381,6 +394,7 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
   test("Formen 4 und 5 im Detail: Zitat nach bares §, Erbe nur durch `<datei> §`, Klammerform, Terminatoren, Normalisierung", () => {
     assert.deepEqual(absatzVerweise("AGENTS.md § Kern\n§ „Alpha Beta“").map((v) => [v.form, v.segmente]), [[4, ["Alpha Beta"]]]);
     assert.deepEqual(absatzVerweise("AGENTS.md › Foo bar\n§ Baz qux"), [], "› erbt nicht");
+    assert.deepEqual(absatzVerweise("AGENTS.md § Kern; docs/x.md (Fabrik) § Foo bar"), [], "die Fabrik-Form setzt das Erbe zurück");
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo bar“\n§ Baz qux").map((v) => v.form), [5], "ein Zitat erbt nicht");
     assert.deepEqual(rot("(AGENTS.md (§ Kern-Regel gilt immer + § Erfundenes Xyz)\n"), ["AGENTS.md (Form 4) Erfundenes Xyz"]);
     for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“", "…"]) {
