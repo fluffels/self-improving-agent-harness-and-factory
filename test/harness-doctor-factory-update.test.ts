@@ -217,8 +217,15 @@ describe("dependabotAusschlussPunkt", () => {
       `updates:\n${aktion}    package-ecosystem: npm\n`,
       "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n",
       `  updates:\n${aktion}`,
+      "updates: []\nfoo:bar\n",
+      "updates:\n  -y\n",
     ];
     for (const roh of faelle) expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("jedes Sonderzeichen am Wertanfang (Anker, Alias, Tag, Block-Skalar, Flow, Direktive, reserviert, ?-Schlüssel) ist NICHT PRÜFBAR, als Wert wie als Listeneintrag", () => {
+    for (const c of ["&", "*", "!", "|", ">", "{", "%", "@", "`", "?", "["]) {
+      for (const roh of [`updates:\n  - package-ecosystem: ${c}x\n`, `updates:\n  - ${c}x\n`]) expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ ok: false, nichtPruefbar: true });
+    }
   });
   test("gelesene Formen: Listenpunkt auf Höhe von updates, Flow-Liste, einfache Quotes, Kommentare, --- am Anfang, CRLF", () => {
     const voll = `---\n# Kommentar\nupdates:\n- package-ecosystem: 'github-actions' # Aktionen\n  exclude-paths: [".github/workflows/codeql.yml", '.github/workflows/zizmor.yml']\n`;
