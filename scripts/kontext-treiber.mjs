@@ -679,9 +679,9 @@ const ISO_ZEITPUNKT = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)
 export function istIsoZeitpunkt(text) {
   const m = ISO_ZEITPUNKT.exec(String(text));
   if (!m || Number.isNaN(Date.parse(text))) return false;
-  const [j, mo, t] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const d = new Date(Date.UTC(j, mo - 1, t));
-  return d.getUTCFullYear() === j && d.getUTCMonth() === mo - 1 && d.getUTCDate() === t;
+  const tag = new Date(0);
+  tag.setUTCFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return tag.getUTCDate() === Number(m[3]); // ein Überlauf (30. Februar, 31. April) verschiebt den Tag; Monat und Uhrzeit prüft Date.parse
 }
 
 /** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`istIsoZeitpunkt`), als Aufruf-Fehler; sonst undefined. */
