@@ -2,7 +2,8 @@
 /* Herkunft der Fixtures (K1, docs/codex/einstieg.md § Codex-Hook-Schnittstelle): dokumentiert sind die Payload-Felder (`cwd`, `tool_name`, `tool_input.command`), `tool_name: "Bash"` und
  * `"apply_patch"` mit dem Patchtext in `tool_input.command` sowie die Deny-Form; `spawn_agent` folgt dem dokumentierten Aufrufbeispiel `collaboration.spawn_agent({ agent_type, message })` aus
  * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht). Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
- * der Alias `Agent` und die Patch-Direktiven; sie stehen in Tests mit dem Zusatz „Annahme“. */
+ * der Alias `Agent` und die Patch-Direktiven. Tests, die nur eine Annahme prüfen, tragen den Zusatz „Annahme“; `exec_command` und `Agent` erscheinen zusätzlich in einzelnen Mischtests
+ * (K4-Muster, sauberer Lens-Auftrag, Werkzeugtabelle), `workdir` im Test der Fehlerursachen, und jede `apply_patch`-Fixture nutzt die angenommene Patch-Grammatik (die Hook-Seite beschreibt sie nicht). */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, symlinkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
