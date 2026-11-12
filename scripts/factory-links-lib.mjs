@@ -175,7 +175,7 @@ export function stubBefunde({ lies, einheiten, repo, tag, ausnahmen = [] }) {
 
 // ── Anker-Stub-Seiten anlegen (factory#167): fehlende Kern-Link-Ziele bekommen beim Sync eine Seite aus Überschriften und Factory-Links ──
 
-/** Slug-neutral: `[t](u)` wird `t`, Backticks und Inline-Markup-Zeichen entfallen (`slugify` streicht beides ohnehin, der Anker bleibt gleich). */
+/** Slug-neutral: derselbe Markup-Schritt wie in `slugify` (`entferneMarkup`): `[t](u)` wird `t`, Backticks, `*`, `~` und `_` am Wortrand entfallen, `_` zwischen Buchstaben und Ziffern bleibt (in Text und Slug); der Anker bleibt darum gleich. */
 const schlichterText = (t) => entferneMarkup(t).trim();
 
 /** Die aufzunehmenden Überschriften einer Tag-Seite: die erste Ebene-1-Überschrift, jede mit einem Kern-Anker als Slug und vor ihr alle früheren mit gleichem Basis-Slug (die `-1`-Suffixe bleiben so gleich). */

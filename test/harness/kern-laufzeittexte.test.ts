@@ -9,6 +9,11 @@
  * und ein Zeilenende-Kommentar (` // …`) werden entfernt, was an `npm run` übrig bleibt, steht zwangsläufig in einem Stringliteral.
  * Grenze: zur Laufzeit zusammengesetzte Strings (`"npm " + "run x"`, `["npm", "run", x]`) erkennt der Scan nicht.
  *
+ * Zweite Regel (factory#403 L25): kein eingesetzter Wert der Projektwert-Gruppe `praefixe` (`commitZeile`, `branch`, `worktree`, etwa `<Präfix>Plan:`) in verteilten
+ * Skript-Einheiten (`.mjs/.cjs/.js`), auch nicht in Kommentaren; der Kern nennt den Wert nur als Platzhalter `<praefixe.commitZeile>` (Projekt-Leitfrage). Grenze: nur diese
+ * Werte am Wortanfang; nicht erfasst sind `agenten.*`, Labels, zur Laufzeit zusammengesetzte Strings und nicht verteilte Einheiten. Die Nicht-Skript-Einheiten deckt
+ * `besitz-abschnittsverweise.test.ts` ab (Helfer `praefixFunde` in `kern-verweise.ts`).
+ *
  * Geschlossene Ausnahmen (Datei -> Namen): Standardbefehle, die ein Bezieher per `befehle`-Block der Projekt-Config überschreibt
  * (`gate-befehl-lib.mjs`, `docs-gen.mjs`) und die Update-Schritte in `release-tag-lib.mjs`; sie wachsen nur zusammen mit einer Bezieher-Migrationszeile im Commit.
  */
@@ -19,6 +24,8 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 import { BEZIEHER_NPM_SKRIPTE } from "../support/bezieher-npm-skripte";
+import { fixture } from "../support/tmp-fixture";
+import { praefixFunde, praefixWerte } from "./kern-verweise";
 
 const besitz = rawBesitz as unknown as {
   wirdVerteilt: (e: Eintrag) => boolean;
@@ -115,5 +122,28 @@ describe("Laufzeit-Strings verteilter .mjs nennen nur Bezieher-npm-Skripte", () 
   test("Blockkommentar über mehrere Zeilen verdeckt, danach zählt der Code wieder", () => {
     const text = "/*\n npm run cockpit\n*/\nconst a = `npm run cockpit`;\n";
     expect(fremdeNamen([{ pfad: "scripts/x.mjs", text }])).toEqual([{ datei: "scripts/x.mjs", name: "cockpit" }]);
+  });
+});
+
+describe("Verteilte Skripte nennen kein eingesetztes Präfix-Literal (factory#403 L25)", () => {
+  const WERTE = praefixWerte(ROOT);
+  const SKRIPT = /\.(mjs|cjs|js)$/;
+  const mit = (text: string, ring = "kern"): string => fixture({ ".factory/besitz.json": JSON.stringify({ version: 3, eintraege: [{ pfad: "scripts/x.mjs", ring }] }), "scripts/x.mjs": text });
+  const literale = (text: string, ring?: string): string[] => praefixFunde(mit(text, ring), WERTE, SKRIPT).funde.map((f) => f.literal);
+
+  test("Negativfall: ein eingesetztes Literal im String oder Kommentar ist rot, die Platzhalterform grün", () => {
+    const wert = WERTE.find((w) => /^[A-Z]/.test(w)) ?? "";
+    expect(wert).not.toBe("");
+    expect(literale(`const a = "${wert}Plan:";\n`)).toEqual([wert]);
+    expect(literale(`// ${wert}Plan: x\n`)).toEqual([wert]);
+    expect(literale('const a = "<praefixe.commitZeile>Plan:";\n')).toEqual([]);
+    expect(literale(`const a = "Wort${wert}Plan:";\n`)).toEqual([]);
+    expect(literale(`// ${wert}Plan:\n`, "oberflaeche")).toEqual([]);
+  });
+
+  test("echtes Repo: kein verteiltes Skript trägt ein Präfix-Literal, der Scan ist nicht leer", () => {
+    const r = praefixFunde(ROOT, WERTE, SKRIPT);
+    expect(r.dateien).toBeGreaterThan(100);
+    expect(r.funde).toEqual([]);
   });
 });

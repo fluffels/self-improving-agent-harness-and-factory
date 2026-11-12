@@ -34,6 +34,8 @@
  *      (Kern der Regex: Pfad auf `.md`, ein Leerzeichen, dann das Trennzeichen):
  *        (a) `<pfad>.md › <Abschnitt>`           (b) `<pfad>.md § <Abschnitt>` (auch `§2a`; deckt `AGENTS.md § …` ab)
  *        (c) Ketten `<pfad>.md › A › B`: jedes Segment wird gegen dieselbe Zieldatei geprüft.
+ *        (d) Zitatform `<pfad>.md › „A“` / `§ „A“` (factory#403): nur das erste Zitat, gegen dieselbe Zieldatei.
+ *            Der Lookbehind der Regex ist gleichwertig zum Pfadanfang (leftmost-greedy), keine Sabotage-Form. Nicht erkannt: schließendes ” (U+201D), die Form ‚A‘ und die Fabrik-Form `<pfad>.md (Fabrik) › „A“` (sie prüft nur die Fabrik).
  *      Der Abschnittstext endet am Zeilenende oder an Backtick, `"`, `“`, `”`, `„`, `]`, `|`.
  *      Gescannt: alle Markdown-Dateien des Gates plus `scripts/**` (`.mjs`, `.cjs`, `.js`: Kommentare und
  *      Strings); in Markdown sind Code-Fences und Inline-Code maskiert. Übersprungen: Abschnitt mit `<`
@@ -47,8 +49,8 @@
  *      Verweises und des Abschnitts stimmen auf einem gemeinsamen Präfix von mindestens
  *      min(Abschnittswörter, Verweiswörter bis zum ersten `. , ; : ( ) ! ?`, 2) Wörtern überein.
  *      Grenze: Prosa direkt hinter dem Abschnittsnamen ohne Satzzeichen („<Datei> › Name gilt“) zählt
- *      zum Namen und ist rot; Abschnittsnamen mit Satzzeichen abschließen. Namen in Anführungszeichen
- *      direkt hinter dem Trenner und Verweise aus Test-Dateien prüft das Gate nicht.
+ *      zum Namen und ist rot; Abschnittsnamen mit Satzzeichen abschließen. Verweise aus Test-Dateien
+ *      und Zitate in Code-Fences prüft das Gate nicht.
  *
  * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-docmap.mjs/
  * check-size.mjs: läuft plattformübergreifend über `npm run check:docdrift` und
@@ -246,6 +248,15 @@ export function abschnittVerweise(text, { istMarkdown = false } = {}) {
   return treffer;
 }
 
+/** Zitatform `<pfad>.md › „A“` / `§ „A“` (auch `(Fabrik) ›`): Muster 8 sieht den Abschnitt nicht (`„` beendet ihn, das Segment ist leer). `fabrik` = mit ` (Fabrik)`. factory#403 L6: das Gate prüft die normale Form, die Fabrik-Form prüft nur die Fabrik. */
+export const ZITAT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md)( \(Fabrik\))? (›|§) ?„([^"“\n]+)["“]/g;
+
+/** Zitatverweise in `text`: `[{ pfad, trenner, segmente: [A], index, fabrik }]`. Markdown wird vorher von Code maskiert. */
+export function zitatVerweise(text, { istMarkdown = false } = {}) {
+  const quelle = istMarkdown ? codeMaskiert(text) : text;
+  return [...quelle.matchAll(ZITAT_VERWEIS)].map((m) => ({ pfad: m[1], trenner: m[3], segmente: [m[4].trim()], index: m.index, fabrik: m[2] !== undefined }));
+}
+
 /** Normalisierte Wortliste eines Abschnittsnamens: klein, ohne `**`/Backticks/Link-Syntax, `(…#<nr>)`-Herkunft und `§`; Satzzeichen trennen Wörter, reine Striche entfallen. */
 function abschnittsWoerter(text) {
   return text
@@ -313,7 +324,7 @@ function auditAbschnittVerweise(rootDir, mdFiles, content) {
   const fehler = [];
   const dateien = [...mdFiles.map((f) => [f, true]), ...skriptDateien(rootDir).map((f) => [f, false])];
   fuerDokuTexte(rootDir, dateien, content, ({ f, text, istMarkdown, still, imBesitz }) => {
-    for (const v of abschnittVerweise(text, { istMarkdown })) {
+    for (const v of [...abschnittVerweise(text, { istMarkdown }), ...zitatVerweise(text, { istMarkdown }).filter((z) => !z.fabrik)]) {
       const ziel = [v.pfad, posix.join(posix.dirname(f), v.pfad)].find(istDatei);
       const basis = { file: f, pfad: v.pfad, trenner: v.trenner };
       if (ziel === undefined) {
