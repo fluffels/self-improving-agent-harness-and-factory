@@ -261,7 +261,12 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       const { r } = lauf({ messages, kommentare: kommentare(" ursache=K2:umsetzung") });
       rot(r.fehler, /durchgaenge=2 ist größer als runden=1/);
     });
-    test("alle Marker zählen, nicht nur der jüngste: zwei Szenario-Durchgänge decken durchgaenge=3 bei runden=2", () => {
+    test("ein Szenario-Marker eines Fremden senkt das Cap nicht (Vertrauensgrenze): rot", () => {
+      const fremd = { user: { login: "fremd", type: "User" }, body: marker2(1, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario").body };
+      const { r } = lauf({ messages, kommentare: [fremd, marker2(2, "K1:erfuellt,K2:erfuellt")] });
+      rot(r.fehler, /durchgaenge=2 ist größer als runden=1/);
+    });
+    test("alle Marker zählen, nicht nur der jüngste: zwei Szenario-Durchgänge decken durchgaenge=3 bei runden=1", () => {
       const m3 = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=3 urteil=K1:erfuellt,K2:erfuellt`;
       const k = [marker2(1, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(2, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(3, "K1:erfuellt,K2:erfuellt")];
       expect(lauf({ messages: m3, kommentare: k }).r.fehler).toEqual([]);
