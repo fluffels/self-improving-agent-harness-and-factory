@@ -20,7 +20,7 @@ type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
 const AGENTEN_SKILL_BUDGETS = rawBudgets as Eintrag[];
 const DEFAULT = rawDefault as number;
-const ohneProjektwertBlock = rawOhneBlock as (text: string, pfad: string) => string;
+const ohneProjektwertBlock = rawOhneBlock as (text: string, pfad?: string) => string;
 const countChars = rawCount as (text: string) => number;
 const messeAgentSkills = rawMesse as (wurzel: string) => { sizes?: Groesse[]; fehler?: string };
 const collectFiles = rawFiles as (wurzel: string) => string[];
