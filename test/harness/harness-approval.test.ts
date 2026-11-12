@@ -35,6 +35,11 @@
  * nicht ein eigener Substring-Abgleich. `normalizeProtected` bleibt nur für den String-Vergleich CODEOWNERS ↔ Quelle.
  * Wird eine Abdeckungsfrage rot, ist die Ursache an der Quelle `.github/protected-paths.json` zu beheben, nicht am Test.
  *
+ * Der Fitness-Anteil dieses Wächters läuft in jedem Bezieher als Doctor-Punkt `Leitplanken-Quelle` (factory#149, scripts/harness-doctor-dateien.mjs):
+ * Anker-Form und Menge der CODEOWNERS-Zeilen, `AGENTS.md` unverankert, Wächter-Marker, Pre-Flight-Kriterien, abgelöste Mechanik. Die Muster dafür
+ * (`ABGELOEST`, `KRITERIEN`, `WAECHTER_MARKER`, `AGENTEN_KONTEXT`, Vorfilter, `istAnkerDatei`) stehen in genau einem Modul, scripts/leitplanken-muster.mjs;
+ * dieser Test und der Doctor importieren es, der Wächter „Muster stehen nur im Modul“ unten hält das fest.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -43,7 +48,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { hookSkripte, lokaleImporteTransitiv } from "./hook-importe";
 import { fileURLToPath } from "node:url";
-import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } from "./repo-texte";
+import { agentenKontextDateien } from "./repo-texte";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as musterRaw from "../../scripts/leitplanken-muster.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -61,17 +68,53 @@ const {
   codeownersPaths,
   codeownersMuster,
   codeownersSpiegelProbleme: pflichtReviewProbleme,
+  ankerFunde,
+  agentsFunde,
 } = doctorDateienRaw as unknown as {
   normalizeProtected: (p: string) => string;
   codeownersPaths: (text: string) => Set<string>;
   codeownersMuster: (text: string) => string[];
   codeownersSpiegelProbleme: (quelleText: string, codeownersText: string) => string[];
+  ankerFunde: (quelleText: string, codeownersText: string, roh: string[]) => string[];
+  agentsFunde: (roh: string[]) => string[];
 };
 
 const { trifftLeitplanke, leitplankenMuster, pflichtReviewMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
   leitplankenMuster: () => string[];
   pflichtReviewMuster: (text: string) => string[] | null;
+};
+
+const {
+  ABGELOEST,
+  KRITERIEN,
+  WAECHTER_MARKER,
+  WAECHTER_ORDNER,
+  TIEFENUNABHAENGIG,
+  KERN_WAECHTER,
+  MUSTER_MODUL,
+  AGENTEN_KONTEXT,
+  abgeloesteFundstellen,
+  kriterienKopien,
+  baueVorfilter,
+  vorfilterProbleme,
+  istAnkerDatei,
+  waechterAusserhalb,
+} = musterRaw as unknown as {
+  ABGELOEST: RegExp[];
+  KRITERIEN: RegExp[];
+  WAECHTER_MARKER: RegExp;
+  WAECHTER_ORDNER: string;
+  TIEFENUNABHAENGIG: string[];
+  KERN_WAECHTER: string;
+  MUSTER_MODUL: string;
+  AGENTEN_KONTEXT: (pfad: string) => boolean;
+  abgeloesteFundstellen: (dateien: Record<string, string>) => string[];
+  kriterienKopien: (dateien: Record<string, string>) => string[];
+  baueVorfilter: (muster: readonly RegExp[]) => RegExp | null;
+  vorfilterProbleme: (muster: readonly RegExp[]) => string[];
+  istAnkerDatei: (pfad: string) => boolean;
+  waechterAusserhalb: (dateien: Record<string, string>) => string[];
 };
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -95,26 +138,6 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 // Dasselbe gilt für CLAUDE.local.md (#1116) – `CLAUDE.md` trifft sie nicht (der Matcher der Produktion verankert Dateinamen).
 const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/agents/x.md", ".mcp.json", "scripts/mcp-ausfall.mjs", ".agents/x.md", "docs/agent-harness.md"];
 
-/**
- * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
- * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
- * Wächter ohne Audit-Spur still abschwächen. Seit #1165 liegen sie alle in EINEM Ordner,
- * der als echtes Präfix geschützt ist: ein neuer Wächter braucht damit keinen eigenen Eintrag mehr
- * (vorher vier: Quelle, CODEOWNERS, diese Liste, Prosa). Ein Präfix statt eines Globs, weil
- * `normalizeProtected` jedes Glob ab dem `*` kürzt (`/test/*harness*` → `test/`).
- * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
- */
-const WAECHTER_ORDNER = "test/harness/";
-
-/**
- * Marker im Dateikopf jedes Wächter-Tests (#1165). Erst er macht den Ordner prüfbar: ohne ihn hieße
- * „vier Einträge vergessen" nur noch „den Ordner vergessen" – ein neuer Wächter direkt unter test/
- * wäre wieder still ungeschützt. Erkannt nur als eigene Kommentar-Zeile (` * @harness-waechter`),
- * damit eine Erwähnung im Fließtext oder Code nicht zählt. Grenze: ein Wächter, der weder Marker
- * noch Ordner bekommt, bleibt unsichtbar – die Regel senkt die Vergess-Stellen von vier auf eine.
- */
-const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter(?![\w-])/m;
-
 /** Alle `*.test.ts` unter `test/` (rekursiv), relativ zum Repo-Root mit `/`. */
 function testDateien(): string[] {
   const wurzel = fileURLToPath(new URL("../../", import.meta.url));
@@ -122,14 +145,6 @@ function testDateien(): string[] {
     .map((f) => `test/${f.replace(/\\/g, "/")}`)
     .filter((f) => f.endsWith(".test.ts"));
 }
-
-/**
- * Bewusst tiefen-unabhängige Einträge (#1168): ohne führenden `/` schützen sie die Datei auf JEDER
- * Ebene – in CODEOWNERS (gitignore-Semantik) genauso wie im Substring-Abgleich. Jede modul-lokale
- * AGENTS.md (#1088) ist eine Agenten-Anweisung und damit Leitplanke. Geschlossene Liste: jeder
- * andere unverankerte Eintrag bleibt ein Fehler.
- */
-const TIEFENUNABHAENGIG = ["AGENTS.md"];
 
 /**
  * Deckt ein Schutz-Muster den ganzen test/-Ordner ab? Ein Test direkt unter test/ (außerhalb des Wächter-Ordners)
@@ -215,15 +230,12 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     // Der Sync-Test oben fängt das nicht: `/AGENTS.md` und `AGENTS.md` normalisieren beide auf
     // `AGENTS.md`. Der Substring-Abgleich trifft modul-lokale Dateien schon immer, CODEOWNERS
     // (root-verankert) nicht – darum der Anker-Test auf die rohe Schreibweise.
-    const roh = Object.values(quelle).flat();
-    assert.ok(roh.includes("AGENTS.md"), `${QUELLE}: tiefen-unabhängiger Eintrag 'AGENTS.md' fehlt`);
-    assert.ok(!roh.includes("/AGENTS.md"), `${QUELLE}: '/AGENTS.md' ist root-verankert und trifft in CODEOWNERS keine modul-lokale AGENTS.md`);
+    assert.deepEqual(agentsFunde(Object.values(quelle).flat()), [], `${QUELLE}: 'AGENTS.md' muss unverankert stehen (ein '/AGENTS.md' trifft in CODEOWNERS keine modul-lokale Datei)`);
   });
 
   test("CODEOWNERS spiegelt die Anker-Form der Pflicht-Review-Liste: unverankert genau deren tiefen-unabhängige Einträge (#1168)", () => {
-    // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form.
-    const unverankert = codeownersMuster(codeowners).filter((p) => !p.startsWith("/")).sort();
-    assert.deepEqual(unverankert, pflichtListe.filter((p) => !p.startsWith("/")).sort(), "CODEOWNERS: Anker-Form weicht von der Pflicht-Review-Liste ab (#1168)");
+    // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form, dieselbe Funktion wie der Doctor-Punkt.
+    assert.deepEqual(ankerFunde(read(QUELLE), codeowners, Object.values(quelle).flat()), [], "CODEOWNERS: Anker-Form weicht von der Pflicht-Review-Liste ab (#1168)");
   });
 
   test("die Quelle schützt den Wächter-Ordner als Präfix (#1156, #1165)", () => {
@@ -252,11 +264,10 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
   });
 
   test("jeder Test mit @harness-waechter liegt in test/harness/ – und jeder dort trägt den Marker (#1165)", () => {
-    const falsch: string[] = [];
+    const falsch: string[] = waechterAusserhalb({ ...agentenKontextDateien(), ...Object.fromEntries(testDateien().map((f) => [f, read(f)])) });
     for (const f of testDateien()) {
       const markiert = WAECHTER_MARKER.test(read(f));
       const imOrdner = f.startsWith(WAECHTER_ORDNER);
-      if (markiert && !imOrdner) falsch.push(`${f}: trägt @harness-waechter, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
       if (!markiert && imOrdner) falsch.push(`${f}: liegt in ${WAECHTER_ORDNER}, aber ohne @harness-waechter im Kopf`);
     }
     assert.deepEqual(falsch, [], `Wächter-Tests falsch abgelegt (#1165):\n${falsch.join("\n")}`);
@@ -331,7 +342,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
 
 describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1165)", () => {
   test("Kopf-Zeilen werden erkannt", () => {
-    for (const kopf of [" * @harness-waechter", "/* @harness-waechter */", "/** @harness-waechter", "// x\n * @harness-waechter (#1165)"]) {
+    for (const kopf of [" * @harness-waechter", "/* @harness-waechter */", "/** @harness-waechter", "// @harness-waechter", "// x\n * @harness-waechter (#1165)"]) {
       assert.match(kopf, WAECHTER_MARKER, `nicht erkannt: ${kopf}`);
     }
   });
@@ -343,79 +354,24 @@ describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1
   });
 });
 
-/**
- * Begriffe der abgelösten Label-Mechanik (ADR 0014, #1303): der frühere CI-Riegel samt Label, seine
- * Job-Bezeichnung (Required-Check-Kontext im Ruleset) und der Pflicht-Begriff. In ADRs bleibt die
- * Historie stehen; sonst darf keine versionierte Datei sie mehr tragen.
- */
-const ABGELOEST = [
-  /maintainer-approved/i,
-  /gate-change-guard/i,
-  /Gate-Config-Aenderungsschutz/i,
-  /Label-Pflicht/i,
-  /Label selbst/i,
-  /bis die Maintainerin entschieden hat/i,
-  /legt die Maintainerin fest/i,
-  /Optik-Abstimmung/i,
-  /Optik[^.\n]{0,60}(per|mit|braucht)[^.\n]{0,20}Rückfrage/i,
-  /(Optik|Stil|Look)[^.\n]{0,40}mit der Maintainerin abstimmen/i,
-  /(was|wie) in (\*\*)?einen(\*\*)? PR pass(t|en)/i,
-  /Rest und neue Befunde ins nächste Sammelticket/i,
-  /zweite Hälfte[^.\n]{0,80}(Sammelticket|übertrag)/i,
-  /erste Hälfte[^.\n]{0,80}(PR|Sammelticket)/i,
-];
-/**
- * Eine Alternation über alle Muster: die meisten Dateien treffen keins, dann entfallen die Einzelläufe. Lässt sie sich nicht
- * sicher bauen (abweichende Flags, Rückverweise), ist der Vorfilter `null` und jedes Muster läuft einzeln (fail-safe);
- * der Test „Vorfilter: Muster sind kombinierbar“ meldet das als Rot, damit niemand unbemerkt langsamer wird.
- */
 const ABGELOEST_VORFILTER = baueVorfilter(ABGELOEST);
-const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
-const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
-/** Projekt-Teil der Stopps-Prüfung, falls ein Projekt einen mitbringt: `test/harness/<name>stopps-projekt.test.ts` (neutrales Muster, kein Pfad-Literal eines Projekts). */
-const PROJEKT_TEIL_MUSTER = /^test\/harness\/[\w-]*stopps-projekt\.test\.ts$/;
-/** Wächterdateien mit den Ankerlisten der festen Stopps (diese Datei und der Projekt-Teil): vom Kriterien-Scan ausgenommen. */
-export const istAnkerDatei = (pfad: string): boolean => pfad === EIGENE_DATEI || PROJEKT_TEIL_MUSTER.test(pfad);
-
-/**
- * Alle versionierten Textdateien im Agenten-Kontext (Pfad → Inhalt), die die Text-Wächter unten durchsuchen: Doku, Prompts,
- * Skills, Workflows, Hooks, Skripte, Wächter und jede `*.md`, nicht der Spiel-Code (Umfang: `AGENTEN_KONTEXT`). Einmal je
- * Testdatei geladen und geteilt: die Dateiliste und die Inhalte kommen aus dem gecachten Scan-Helfer.
- */
-function agentenKontextDateien(): Record<string, string> {
-  const dateien: Record<string, string> = {};
-  for (const f of repoDateien().filter(AGENTEN_KONTEXT)) {
-    if (SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS") dateien[f] = lies(f);
-  }
-  return dateien;
-}
-
-/** Fundstellen der abgelösten Begriffe; ADRs (Historie) und diese Wächterdatei zählen nicht. */
-function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
-  const funde: string[] = [];
-  for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
-    if (ABGELOEST_VORFILTER && !ABGELOEST_VORFILTER.test(inhalt)) continue;
-    for (const muster of ABGELOEST) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
-  }
-  return funde;
-}
 
 describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", () => {
   test("der Guard-Workflow existiert nicht mehr", () => {
     assert.equal(existsSync(WURZEL + ".github/workflows/gate-change-guard.yml"), false);
   });
 
-  test("die Fundstellen-Suche zählt Doku, aber weder ADRs noch den Wächter selbst (Red-Green)", () => {
+  test("die Fundstellen-Suche zählt Doku, aber weder ADRs noch Wächter und Muster-Modul (Red-Green)", () => {
     const text = "setze das Label maintainer-approved";
     assert.equal(abgeloesteFundstellen({ "docs/agent-harness.md": text }).length, 1);
-    assert.equal(abgeloesteFundstellen({ "docs/adr/0012-x.md": text, [EIGENE_DATEI]: text }).length, 0);
+    assert.equal(abgeloesteFundstellen({ "docs/adr/0012-x.md": text, [KERN_WAECHTER]: text, [MUSTER_MODUL]: text }).length, 0);
     assert.equal(abgeloesteFundstellen({ "test/harness/beispiel-stopps-projekt.test.ts": text }).length, 1, "der Projekt-Teil wird auf abgelöste Mechanik gescannt");
     assert.equal(abgeloesteFundstellen({ "README.md": "harmlos" }).length, 0);
   });
 
-  test("istAnkerDatei: diese Datei und ein Projekt-Teil `<name>stopps-projekt.test.ts` unter test/harness/, sonst keine", () => {
-    assert.equal(istAnkerDatei(EIGENE_DATEI), true);
+  test("istAnkerDatei: diese Datei, das Muster-Modul und ein Projekt-Teil `<name>stopps-projekt.test.ts` unter test/harness/, sonst keine", () => {
+    assert.equal(istAnkerDatei(KERN_WAECHTER), true);
+    assert.equal(istAnkerDatei(MUSTER_MODUL), true);
     assert.equal(istAnkerDatei("test/harness/beispiel-stopps-projekt.test.ts"), true);
     assert.equal(istAnkerDatei("test/harness/stopps-projekt.test.ts"), true);
     assert.equal(istAnkerDatei("test/harness/beispiel-stopps-projekt.test.ts.bak"), false);
@@ -454,21 +410,7 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
   });
 });
 
-/** Die Kriterien des Pflicht-Stopps stehen nur in AGENTS.md; alle anderen Stellen verweisen darauf (#1311). */
-const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, an Secrets/, /Löschen, Ruleset/];
-
 const KRITERIEN_VORFILTER = baueVorfilter(KRITERIEN);
-
-/** Fundstellen der ausgeschriebenen Kriterienliste außerhalb von AGENTS.md; ADRs (Historie) und diese Datei zählen nicht. */
-function kriterienKopien(dateien: Record<string, string>): string[] {
-  const funde: string[] = [];
-  for (const [pfad, inhalt] of Object.entries(dateien)) {
-    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || istAnkerDatei(pfad)) continue;
-    if (KRITERIEN_VORFILTER && !KRITERIEN_VORFILTER.test(inhalt)) continue;
-    for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
-  }
-  return funde;
-}
 
 describe("Scan-Vorfilter und Scan-Umfang (#1526)", () => {
   test("Vorfilter: Muster sind kombinierbar (ABGELOEST, KRITERIEN)", () => {
@@ -492,13 +434,32 @@ describe("Scan-Vorfilter und Scan-Umfang (#1526)", () => {
     assert.ok(baueVorfilter([/a/i, /b/i])?.test("xB"));
   });
 
-  test("Scan-Umfang: Agenten-Kontext ja (auch modul-lokale AGENTS.md), Spiel-Code und Spiel-Tests nein", () => {
+  test("Scan-Umfang: Agenten-Kontext ja (auch modul-lokale AGENTS.md), Produktcode und Produkttests nein", () => {
     for (const drin of ["AGENTS.md", "src/content/AGENTS.md", ".github/workflows/x.yml", "docs/x.md", ".claude/skills/a/SKILL.md", "scripts/a.mjs", "test/harness/a.test.ts", "package.json"]) {
       assert.ok(AGENTEN_KONTEXT(drin), drin);
     }
     for (const draussen of ["src/sim/a.ts", "test/sim/b.test.ts", "assets/a.png", "package-lock.json"]) {
       assert.ok(!AGENTEN_KONTEXT(draussen), draussen);
     }
+  });
+});
+
+describe("Die Muster stehen nur im Modul (factory#149)", () => {
+  // Geschlossene Liste der verschobenen Namen (diese Datei ist ausgenommen: ihre Red-Green-Fälle tragen Beispiele); Grenze: eine neue Kopie unter anderem Namen bleibt unsichtbar. Das Muster entsteht per RegExp-Bau, damit diese Datei sich nicht selbst trifft.
+  const KONSTANTEN = ["ABGELOEST", "KRITERIEN", "WAECHTER_MARKER", "WAECHTER_ORDNER", "TIEFENUNABHAENGIG", "AGENTEN_KONTEXT", "SCAN_ENDUNGEN", "istAnkerDatei", "istScanDatei", "abgeloesteFundstellen", "kriterienKopien"];
+  const FUNKTIONEN = ["baueVorfilter", "vorfilterProbleme"];
+  const DEFINITION = new RegExp(`(?:const|let|var)\\s+(?:${KONSTANTEN.join("|")})\\s*[=:]|function\\s+(?:${FUNKTIONEN.join("|")})\\s*\\(`);
+  const doppelt = (dateien: Record<string, string>): string[] => Object.entries(dateien).filter(([pfad, text]) => pfad !== MUSTER_MODUL && pfad !== KERN_WAECHTER && DEFINITION.test(text)).map(([pfad]) => pfad);
+
+  test("keine zweite Definition der Muster im Agenten-Kontext", () => {
+    assert.deepEqual(doppelt(agentenKontextDateien()), [], "Muster stehen nur in scripts/leitplanken-muster.mjs; importieren statt kopieren");
+  });
+
+  test("Red-Green: eine Kopie wird erkannt, ein Import und das Modul nicht", () => {
+    assert.deepEqual(doppelt({ "scripts/x.mjs": "const KRITERIEN = [/a/];" }), ["scripts/x.mjs"]);
+    assert.deepEqual(doppelt({ "scripts/x.mjs": "export function baueVorfilter(m) {}" }), ["scripts/x.mjs"]);
+    assert.deepEqual(doppelt({ "scripts/x.mjs": 'import { KRITERIEN } from "./leitplanken-muster.mjs";' }), []);
+    assert.deepEqual(doppelt({ [MUSTER_MODUL]: "export const KRITERIEN = [];" }), []);
   });
 });
 

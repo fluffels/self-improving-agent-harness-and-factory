@@ -4,13 +4,15 @@
  * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht). Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
  * der Alias `Agent` und die Patch-Direktiven. Tests, die nur eine Annahme prüfen, tragen den Zusatz „Annahme“; `exec_command` und `Agent` erscheinen zusätzlich in einzelnen Mischtests
  * (K4-Muster, sauberer Lens-Auftrag, Werkzeugtabelle), `workdir` im Test der Fehlerursachen, und jede `apply_patch`-Fixture nutzt die angenommene Patch-Grammatik (die Hook-Seite beschreibt sie nicht). */
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, symlinkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as adapterRaw from "../../scripts/codex-hook-lib.mjs";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import * as gesundRaw from "../../scripts/langfuse-health.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as dispatcherRaw from "../../scripts/pretooluse-dispatch.mjs";
 
@@ -49,7 +51,9 @@ beforeAll(() => {
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 const nutzlast = (tool_name: string, tool_input: unknown, cwd = wt) => JSON.stringify({ session_id: "s", cwd, hook_event_name: "PreToolUse", tool_name, tool_input });
-const lauf = (text: string, d: Record<string, unknown> = {}) => adapter.entscheide(text, haupt, d);
+const OK200 = { status: 200, text: () => Promise.resolve(`{"status":"OK"}`) }; // gültige Health-Antwort
+const gesund = () => Promise.resolve({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" }); // kein Test trifft das echte Netz
+const lauf = (text: string, d: Record<string, unknown> = {}) => adapter.entscheide(text, haupt, { health: gesund, ...d });
 const grund = (o: Out) => o?.hookSpecificOutput.permissionDecisionReason ?? "";
 const patch = (...zeilen: string[]) => ["*** Begin Patch", ...zeilen, "*** End Patch", ""].join("\n");
 const KOPF = "Brille: architektur · Arbeitsverzeichnis: x";
@@ -335,5 +339,94 @@ describe("Prozessstart", () => {
   test("der Adapter steht in den Leitplanken", () => {
     expect(readFileSync(".github/protected-paths.json", "utf8")).toContain("/scripts/codex-*.mjs");
     expect(readFileSync(".github/protected-paths.json", "utf8")).toContain("/scripts/pretooluse-dispatch.mjs");
+  });
+});
+
+describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
+  const health = gesundRaw as unknown as { pruefeLangfuse: (a: { baseUrl: string; fetchImpl: unknown; fristMs: number }) => Promise<{ ok: boolean; grund: string }>; pruefeLangfuseAusUmgebung: (a: Record<string, unknown>) => Promise<{ ok: boolean; grund: string }> };
+  const ausfaelle: [string, unknown][] = [
+    ["Verbindung verweigert", () => Promise.reject(Object.assign(new Error("x"), { code: "ECONNREFUSED" }))],
+    ["Frist überschritten", (_u: string, o: { signal: AbortSignal }) => new Promise((_r, rej) => o.signal.addEventListener("abort", () => rej(new Error("abort"))))],
+    ["HTTP 503", () => Promise.resolve({ status: 503 })],
+    ["ungültige Antwort ohne Status", () => Promise.resolve({})],
+  ];
+  const spawn = nutzlast("spawn_agent", { agent_type: "sih-lens", message: `${KOPF} · Ticket #365 · Patch: /tmp/x.patch` });
+  for (const [name, stub] of ausfaelle) {
+    test(`Ausfall (${name}): Deny, Dispatcher wird nicht geladen, auch beim Alias Agent`, async () => {
+      let geladen = 0;
+      const d = { health: () => health.pruefeLangfuse({ baseUrl: "http://lf.test", fetchImpl: stub, fristMs: 20 }), lade: () => { geladen++; return Promise.reject(new Error("nicht laden")); } };
+      expect(grund(await lauf(spawn, d))).toContain("Tracing-Ausfallstopp");
+      expect(grund(await lauf(nutzlast("Agent", { agent_type: "explore", message: "Suche." }), d))).toContain("Tracing-Ausfallstopp");
+      expect(geladen).toBe(0);
+    });
+  }
+  test("ungültige 200-Antwort (HTML, {}, falscher Status, kein Body) → Deny, Dispatcher nicht geladen; gültiger Body lässt durch", async () => {
+    let geladen = 0;
+    const lade = () => { geladen++; return Promise.reject(new Error("nicht laden")); };
+    const mitBody = (text: string) => () => health.pruefeLangfuseAusUmgebung({ env: { LANGFUSE_BASE_URL: "http://lf.test" }, fetchImpl: () => Promise.resolve({ status: 200, text: () => Promise.resolve(text) }) });
+    for (const text of ["<html>hi</html>", "{}", '{"status":"FAIL"}']) expect(grund(await lauf(spawn, { health: mitBody(text), lade })), text).toContain("Tracing-Ausfallstopp");
+    const ohneBody = () => health.pruefeLangfuseAusUmgebung({ env: { LANGFUSE_BASE_URL: "http://lf.test" }, fetchImpl: () => Promise.resolve({ status: 200 }) });
+    expect(grund(await lauf(spawn, { health: ohneBody, lade }))).toContain("Tracing-Ausfallstopp");
+    expect(geladen).toBe(0);
+    expect(await lauf(spawn, { health: mitBody('{"status":"OK"}') })).toBeNull();
+  });
+  test("werfende Health und Urteil ohne ok → Deny", async () => {
+    expect(grund(await lauf(spawn, { health: () => { throw new Error("kaputt"); } }))).toContain("Health-Prüfung gescheitert: kaputt");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({}) }))).toContain("Tracing-Ausfallstopp");
+  });
+  test("erreichbar: Guard-Entscheid bleibt, Health genau einmal je spawn_agent", async () => {
+    let n = 0;
+    const d = { health: () => { n++; return Promise.resolve({ ok: true, grund: "ok" }); } };
+    expect(grund(await lauf(nutzlast("spawn_agent", { agent_type: "sih-lens", message: "Prüfe das mal." }), d))).toContain("Brille");
+    expect(await lauf(spawn, d)).toBeNull();
+    expect(n).toBe(2);
+  });
+  test("Shell, apply_patch und fremde Werkzeuge rufen die Health nie; ungültiges Payload endet vor ihr", async () => {
+    const d = { health: () => { throw new Error("darf nicht gerufen werden"); } };
+    expect(await lauf(nutzlast("Bash", { command: "ls" }), d)).toBeNull();
+    expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: n.txt", "+x") }), d)).toBeNull();
+    expect(await lauf(nutzlast("update_plan", {}), d)).toBeNull();
+    expect(grund(await lauf(nutzlast("spawn_agent", { agent_type: "x", message: 3 }), d))).toContain("message");
+  });
+  test("Standardprüfung: ohne deps.health fragt der Adapter die Umgebung ab (global fetch, LANGFUSE_BASE_URL), Erreichbarkeit lässt durch", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve(OK200); });
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
+    try {
+      expect(await adapter.entscheide(spawn, haupt)).toBeNull();
+      expect(urls).toEqual(["http://lf.test/api/public/health"]);
+    } finally {
+      vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+  test("Standardprüfung: Ausfall nennt den Grund der Health-Prüfung (kein Ladefehler)", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(Object.assign(new Error("x"), { code: "ECONNREFUSED" })));
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
+    try {
+      expect(grund(await adapter.entscheide(spawn, haupt))).toContain("Langfuse nicht erreichbar: ECONNREFUSED");
+    } finally {
+      vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+  test("Standardfrist der Umgebungsprüfung ist FRIST_MS (3000 ms) auch im Hook-Pfad", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", (_u: string, o: { signal: AbortSignal }) => new Promise((_r, rej) => o.signal.addEventListener("abort", () => rej(new Error("abort")))));
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
+    try {
+      const hang = adapter.entscheide(spawn, haupt);
+      await vi.advanceTimersByTimeAsync(2999);
+      let fertig = false; void hang.then(() => { fertig = true; });
+      await vi.advanceTimersByTimeAsync(0); expect(fertig).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(grund(await hang)).toContain("Timeout nach 3000 ms");
+    } finally {
+      vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+  test("Urteil ohne Auskunft: nur ok === true lässt durch, Grund-Fallback und Nicht-Error-Wurf", async () => {
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: false }) }))).toContain("Health ohne Urteil");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve(undefined) }))).toContain("Health ohne Urteil");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: "ja" }) }))).toContain("Tracing-Ausfallstopp");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve().then(() => { throw JSON.parse(`"textwurf"`); }) }))).toContain("textwurf");
   });
 });

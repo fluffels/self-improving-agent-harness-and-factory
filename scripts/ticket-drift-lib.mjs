@@ -59,11 +59,14 @@ export function pfadBefunde(issue, tops, git) {
   return befunde;
 }
 
-/** Blocker-Befunde: Textverweise auf das eigene Repo ohne offenes Issue und native Blocker mit Zustand CLOSED. `offene`: Menge der offenen Nummern. Fremde Repos werden übersprungen. */
-export function blockerBefunde(issue, offene, sprache) {
+/** Repo (`owner/name`) aus der Issue-URL einer nativen Blocker-Kante; ohne `url` oder bei fremder Form `undefined`. Pur. */
+const kantenRepo = (n) => /\/([\w.-]+\/[\w.-]+)\/issues\/\d+\/?$/.exec(String(n?.url ?? ""))?.[1];
+
+/** Blocker-Befunde: Textverweise auf das eigene Repo (ohne Repo oder ausgeschrieben `repo`) ohne offenes Issue und native Blocker mit Zustand CLOSED und Issue-URL des eigenen `repo` (ohne `url` übersprungen). `offene`: Menge der offenen Nummern. Fremde Repos werden übersprungen. */
+export function blockerBefunde(issue, offene, sprache, repo) {
   const nummern = new Set();
-  for (const v of blockerVerweise(issue.body ?? "", sprache)) if (v.repo === null && !offene.has(v.nummer)) nummern.add(v.nummer);
-  for (const n of issue.blockedBy?.nodes ?? []) if (n?.state === "CLOSED") nummern.add(n.number);
+  for (const v of blockerVerweise(issue.body ?? "", sprache)) if ((v.repo === null || gleichesRepo(v.repo, repo)) && !offene.has(v.nummer)) nummern.add(v.nummer);
+  for (const n of issue.blockedBy?.nodes ?? []) if (n?.state === "CLOSED" && gleichesRepo(kantenRepo(n), repo)) nummern.add(n.number);
   return [...nummern].filter(Number.isInteger).sort((a, b) => a - b).map((n) => ({ nr: issue.number, klasse: "blocker-zu", text: `Blocker #${n} ist geschlossen` }));
 }
 
@@ -71,10 +74,7 @@ export function blockerBefunde(issue, offene, sprache) {
 export function offeneBlocker(issue, offene, sprache, repo) {
   const nummern = new Set();
   for (const v of blockerVerweise(issue.body ?? "", sprache)) if ((v.repo === null || gleichesRepo(v.repo, repo)) && offene.has(v.nummer)) nummern.add(v.nummer);
-  for (const n of issue.blockedBy?.nodes ?? []) {
-    const urlRepo = /\/([\w.-]+\/[\w.-]+)\/issues\/\d+\/?$/.exec(String(n?.url ?? ""))?.[1];
-    if (n?.state === "OPEN" && gleichesRepo(urlRepo, repo)) nummern.add(n.number);
-  }
+  for (const n of issue.blockedBy?.nodes ?? []) if (n?.state === "OPEN" && gleichesRepo(kantenRepo(n), repo)) nummern.add(n.number);
   return [...nummern].filter(Number.isInteger).sort((a, b) => a - b);
 }
 
@@ -159,7 +159,7 @@ export function pruefe(issues, { config, owner, tops, git, sprache, repo, boards
   if (boards === null) hinweise.push("Board nicht gelesen: blocker-dahinter ausgesetzt");
   const karten = Array.isArray(boards) ? boards.map(rangKarte) : [];
   for (const i of pruefbar) {
-    befunde.push(...pfadBefunde(i, tops, git), ...blockerBefunde(i, offene, sprache), ...reihenfolgeBefunde(i, offene, sprache, repo, karten));
+    befunde.push(...pfadBefunde(i, tops, git), ...blockerBefunde(i, offene, sprache, repo), ...reihenfolgeBefunde(i, offene, sprache, repo, karten));
     const r = rueckstellungBefund(i, owner);
     if (r) befunde.push(r);
     if ((i.comments ?? []).length >= 100) hinweise.push(`#${i.number}: Kommentarliste möglicherweise abgeschnitten`);

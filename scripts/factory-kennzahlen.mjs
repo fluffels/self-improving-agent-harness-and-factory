@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { flagsLesen } from "./flag-lib.mjs";
+import { flagsLesen, istIsoZeitpunkt } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { REPO } from "./board-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
@@ -56,7 +56,7 @@ export function parseArgs(argv) {
   const optionen = { von: { type: "string" }, bis: { type: "string" }, langfuse: { type: "boolean" }, json: { type: "boolean" }, datenbasis: { type: "boolean" } };
   const { werte, fehler } = flagsLesen(argv, optionen, { pflicht: ["von", "bis"], meldung });
   const a = { von: werte.von, bis: werte.bis, langfuse: werte.langfuse === true, json: werte.json === true, datenbasis: werte.datenbasis === true, fehler: fehler?.text ?? null };
-  if (!gueltig(a.von) || !gueltig(a.bis)) a.fehler ??= "--von und --bis brauchen je ein gültiges ISO-Datum.";
+  if (!istIsoZeitpunkt(a.von) || !istIsoZeitpunkt(a.bis)) a.fehler ??= "--von und --bis brauchen je ein gültiges ISO-Datum.";
   return a;
 }
 

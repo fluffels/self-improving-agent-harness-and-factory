@@ -225,3 +225,13 @@ describe("direktaufruf", () => {
     expect(r.code).toBe(0);
   });
 });
+
+describe("istIsoZeitpunkt (factory#426 L3)", () => {
+  const istIso = (flagLib as { istIsoZeitpunkt: (text: string) => boolean }).istIsoZeitpunkt;
+  test("gültige ISO-Formen, auch Schaltjahr", () => {
+    for (const ok of ["2026-10-12", "2026-10-12T00:00Z", "2026-10-12T00:00:00.123+02:00", "2028-02-29"]) expect(istIso(ok), ok).toBe(true);
+  });
+  test("ungültig: zu kurz, Kalenderüberlauf, Leerzeichen-Trenner, Text, leer", () => {
+    for (const schlecht of ["1", "2026", "2026-02-30", "2027-02-29", "2026-04-31", "2026-10-12 00:00", "kaputt", ""]) expect(istIso(schlecht), schlecht).toBe(false);
+  });
+});

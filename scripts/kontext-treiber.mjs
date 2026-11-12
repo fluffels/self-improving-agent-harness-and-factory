@@ -37,7 +37,7 @@ import { callsFromTranscript } from "./transkript-calls.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { PRICES, PRICES_STAND, priceFor, priceParts } from "./preise.mjs";
 import { bereinige, CACHE_TTL_MS, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
-import { flagsLesen } from "./flag-lib.mjs";
+import { flagsLesen, istIsoZeitpunkt } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
 import { armeZuordnen, lensTypen } from "./lens-arm-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
@@ -671,17 +671,6 @@ function ttlFlag(werte, a) {
   a.ttl = true;
   if (a.jeTicket) a.fehler ??= "--ttl und --je-ticket schließen sich aus";
   if (a.agenten) a.fehler ??= "--ttl und mehrere --agent schließen sich aus";
-}
-
-const ISO_ZEITPUNKT = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
-
-/** ISO-8601-Zeitpunkt (factory#399): `JJJJ-MM-TT`, optional `THH:MM[:SS[.sss]]`, optional `Z` oder `±HH:MM`; Kalendertag und Uhrzeit müssen existieren (kein `2026`, `1`, `2026-02-30`, kein Leerzeichen-Trenner). */
-export function istIsoZeitpunkt(text) {
-  const m = ISO_ZEITPUNKT.exec(String(text));
-  if (!m || Number.isNaN(Date.parse(text))) return false;
-  const tag = new Date(0);
-  tag.setUTCFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return tag.getUTCDate() === Number(m[3]); // ein Überlauf (30. Februar, 31. April) verschiebt den Tag; Monat und Uhrzeit prüft Date.parse
 }
 
 /** Erster `--von`/`--bis`-Wert, der kein ISO-Zeitpunkt ist (`istIsoZeitpunkt`), als Aufruf-Fehler; sonst undefined. */

@@ -30,9 +30,10 @@ const gitStandard = rawGitStandard as (rootDir: string) => Git;
 interface Datei { pfad: string; index?: string; eol?: string; attr?: string }
 const lf = (pfad: string): Datei => ({ pfad, eol: "lf" });
 
-/** Fake-Git: `ls-files --eol` und `check-attr --stdin -z eol` aus einer Dateiliste; Pfade ohne Eintrag (die Beispiele) haben `eol` aus `beispielEol`. */
+/** Fake-Git: `ls-files --eol`, `ls-files -z` und `check-attr --stdin -z eol` aus einer Dateiliste; Pfade ohne Eintrag (die Beispiele) haben `eol` aus `beispielEol`. */
 function fakeGit(dateien: Datei[], beispielEol = "lf"): Git {
   return (args, input) => {
+    if (args[0] === "ls-files" && args.includes("-z")) return dateien.map((d) => d.pfad).join("\0");
     if (args[0] === "ls-files") return dateien.map((d) => `i/${d.index ?? "lf"}    w/lf    attr/${d.attr ?? ""} \t${d.pfad}`).join("\n");
     if (args[0] === "check-attr") {
       const werte = new Map(dateien.map((d) => [d.pfad, d.eol ?? "unspecified"]));
@@ -45,8 +46,11 @@ const TAKT_DATEIEN = [".github/workflows/board-takt.yml", "scripts/langfuse-takt
 const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x/SKILL.md"), lf("docs/a.md")];
 /** Gesunde Quellen für `Required-Check-Quellen`: ein Kontext mit genau einer Quelle. */
 const GESUND = { spiegel: { requiredChecks: ["Beispiel Check"] }, workflows: [{ pfad: "ci.yml", text: "jobs:\n  a:\n    name: Beispiel Check\n" }], pflichtChecks: ["Beispiel Check"] };
+/** Die gesunde Quelle für `Leitplanken-Quelle`: Quelle und CODEOWNERS spiegeln sich, alle anderen Dateien sind leer. */
+const GESUNDE_QUELLE = JSON.stringify({ harness: ["AGENTS.md", "/.github/CODEOWNERS"] });
+const gesundesLies = (p: string): string | null => (p === ".github/protected-paths.json" ? GESUNDE_QUELLE : p === ".github/CODEOWNERS" ? "AGENTS.md @team\n/.github/CODEOWNERS @team\n" : "");
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
+  pruefe({ rootDir: "/x", ...GESUND, lies: gesundesLies, git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
@@ -614,7 +618,7 @@ describe("Workflow-Auslöser", () => {
     }
   });
   test("steht in DATEI_PUNKTE vor CODEOWNERS-Spiegel", () => {
-    expect(DATEI_PUNKTE.at(-3)).toBe("Workflow-Auslöser");
+    expect(DATEI_PUNKTE.at(-4)).toBe("Workflow-Auslöser");
   });
 });
 
@@ -629,13 +633,14 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Sammel-Check"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-5)).toBe("Required-Check-Quellen");
-    expect(DATEI_PUNKTE.at(-4)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-6)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-5)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-2)).toBe("Leitplanken-Quelle");
     expect(DATEI_PUNKTE.at(-1)).toBe("Sammel-Check");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });

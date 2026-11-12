@@ -6,9 +6,8 @@ import { join } from "node:path";
 import { readAdrs } from "./adr.mjs";
 import { brauche, byCodeUnit, leseJson, renderTable } from "./markdown.mjs";
 import { kettenSchritte } from "./npm-ketten.mjs";
+import { WAECHTER_MARKER } from "../leitplanken-muster.mjs"; // Wächter-Marker: eine Quelle mit dem Kern-Wächter und dem Doctor
 
-/** Wächter-Marker: nur als eigene Kommentar-Zeile (` * @harness-waechter`), wie im Factory-Repo in test/harness/harness-approval.test.ts. */
-const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter(?![\w-])/m;
 const ueberspringe = new Set(["node_modules", ".git"]);
 
 /** Alle Dateien unter `abs` (rekursiv, ohne node_modules und .git), relativ zu `abs`, sortiert. */
