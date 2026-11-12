@@ -270,8 +270,9 @@ describe("guardListe: Funktionszuordnung", () => {
 
   test.each([
     ["schließendes }", "function g() {\n  if (a) {}\n}\nfoo(a || b);"],
-    ["class", "function g() {\n  if (a) {}\n}\nclass K {\n  x = a || b;\n}"],
-    ["let", "function g() {\n  if (a) {}\n}\nlet y = a || b;"],
+    ["class", "function g() { if (a) {} }\nclass K {\n  x = a || b;\n}"],
+    ["let", "function g() { if (a) {} }\nlet y = a || b;"],
+    ["var", "function g() { if (a) {} }\nvar y = a || b;"],
   ])("Modulebene-Grenze %s: der Anker danach gehört nicht zu g", (_n, quelle) => {
     const r = neu(quelle);
     expect(r.map((e) => [e.funktion, e.anker.map((a) => a.muster)])).toEqual([
@@ -394,6 +395,11 @@ describe("Shell (*.sh, factory#396 L2)", () => {
     "  x=$# # a || b",
     "  echo if-not",
   ])("Negativfall ohne Anker: %s", (z) => expect(namen(z), z).toEqual([]));
+
+  test("$# und ${#a[@]} sind Code, kein Kommentarbeginn: der Anker dahinter zählt", () => {
+    expect(namen("  if [ $# -gt 0 ]; then")).toEqual(["if"]);
+    expect(namen("  n=${#arr[@]} && x")).toEqual(["&&"]);
+  });
 
   test("Shebang in Zeile 1 ist kein Anker; ein Case-Zweig mit * am Anfang zählt als Code (kein Blockkommentar)", () => {
     expect(sh("#!/bin/bash\nset -e\n")).toEqual([]);
