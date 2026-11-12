@@ -109,7 +109,7 @@ describe("mitFactoryUpdate", () => {
 const eintrag = (pfad: string, extra: Record<string, unknown> = {}) => ({ pfad, ring: "kern", ...extra });
 const manifest = (...e: unknown[]) => JSON.stringify({ version: 3, eintraege: e });
 const BESITZ = [".github/workflows/codeql.yml", ".github/workflows/zizmor.yml"];
-const MANI = manifest(eintrag(BESITZ[0]!, { modul: "codeql" }), eintrag(BESITZ[1]!, { modul: "zizmor" }), eintrag("scripts/x.mjs"), eintrag(".github/workflows/nur-fabrik.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/ci.yml", { block: "b" }));
+const MANI = manifest(eintrag(BESITZ[0], { modul: "codeql" }), eintrag(BESITZ[1], { modul: "zizmor" }), eintrag("scripts/x.mjs"), eintrag(".github/workflows/nur-fabrik.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/ci.yml", { block: "b" }));
 const actions = (exclude?: string[]) => `- package-ecosystem: github-actions\n  directory: /\n${exclude ? `  exclude-paths:\n${exclude.map((x) => `    - "${x}"\n`).join("")}` : ""}`;
 const dependabot = (...eintraege: string[]) => `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${eintraege.map((e) => e.split("\n").filter(Boolean).map((z) => `  ${z}\n`).join("")).join("")}`;
 const dateien = (inhalt: Record<string, string | null>) => ({
@@ -145,21 +145,21 @@ describe("dependabotAusschlussPunkt", () => {
     expect(pruefe(dependabot(actions(BESITZ)))).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
   test("nur einer ausgeschlossen: Lücke nennt nur den fehlenden", () => {
-    const [p] = pruefe(dependabot(actions([BESITZ[0]!])));
+    const [p] = pruefe(dependabot(actions([BESITZ[0]])));
     expect(p).toMatchObject({ ok: false });
-    expect(p?.befund).toContain(BESITZ[1]!);
-    expect(p?.befund).not.toContain(BESITZ[0]!);
+    expect(p?.befund).toContain(BESITZ[1]);
+    expect(p?.befund).not.toContain(BESITZ[0]);
   });
   test("zwei github-actions-Einträge, einer unvollständig: Lücke", () => {
-    const [p] = pruefe(dependabot(actions(BESITZ), actions([BESITZ[0]!])));
+    const [p] = pruefe(dependabot(actions(BESITZ), actions([BESITZ[0]])));
     expect(p).toMatchObject({ ok: false });
-    expect(p?.befund).toContain(BESITZ[1]!);
+    expect(p?.befund).toContain(BESITZ[1]);
   });
   test("Glob-Einträge zählen nicht (dokumentierte Grenze)", () => {
     expect(pruefe(dependabot(actions([".github/workflows/*.yml"])))[0]).toMatchObject({ ok: false });
   });
   test("Manifest-Workflow fehlt im Projekt (abgewähltes Modul): nicht gefordert; fehlen alle: OK", () => {
-    const [p] = pruefe(dependabot(actions([BESITZ[0]!])), { ...ALLE, ".github/workflows/zizmor.yml": null });
+    const [p] = pruefe(dependabot(actions([BESITZ[0]])), { ...ALLE, ".github/workflows/zizmor.yml": null });
     expect(p).toEqual({ punkt: "Dependabot-Ausschluss", ok: true });
     expect(pruefe(dependabot(actions()), { ...ALLE, ".github/workflows/zizmor.yml": null, ".github/workflows/codeql.yml": null })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
@@ -197,7 +197,7 @@ describe("dependabotAusschlussPunkt", () => {
     expect(pruefe(dependabot(), { ...ALLE, ".factory/besitz.json": "{" })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
   test("Befund: Einzahl bei einem, Mehrzahl bei mehreren fehlenden Pfaden", () => {
-    expect(pruefe(dependabot(actions([BESITZ[0]!])))[0]?.befund).toContain("zizmor.yml fehlt unter");
+    expect(pruefe(dependabot(actions([BESITZ[0]])))[0]?.befund).toContain("zizmor.yml fehlt unter");
     expect(pruefe(dependabot(actions()))[0]?.befund).toContain("zizmor.yml fehlen unter");
   });
   test("Standard-existiert und -lies lesen das Dateisystem", async () => {
