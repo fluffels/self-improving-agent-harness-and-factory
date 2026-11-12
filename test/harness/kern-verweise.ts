@@ -129,7 +129,7 @@ const imSpann = (spannen: [number, number][], index: number): boolean => spannen
 
 /** Ziel eines Verweises: Pfad wörtlich oder relativ zur verweisenden Datei, der erste, der existiert. */
 function zielVon(datei: string, pfad: string, lies: (p: string) => string | null): string | undefined {
-  return [pfad, posix.join(posix.dirname(datei), pfad)].filter((p) => !p.startsWith("..")).find((p) => lies(p) !== null);
+  return [pfad, posix.join(posix.dirname(datei), pfad)].map((p) => posix.normalize(p)).filter((p) => !p.startsWith("..")).find((p) => lies(p) !== null);
 }
 
 // ── Ankerliste (geschlossen, JSON neben dem Wächter) ──────────────────────────────────────────────────────────────
@@ -255,9 +255,9 @@ const ZIELE: Record<string, AgentsZiel> = { "AGENTS.md": "AGENTS.md", "CLAUDE.md
 const zielName = (datei: string): AgentsZiel | null => ZIELE[datei.split("/").pop() ?? ""] ?? null;
 
 /** Gruppe 1: Dateiname, 2: Trenner, 3: quotierter Begriff, 4: freier Begriff bis zum Terminator (Absatzlogik der Formen 4 und 5). */
-const ABSATZ_RE = /(?=[\w./-]+\.md|Projekt-Block|§|›)(?:([\w./-]+\.md|Projekt-Block)[\s([]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“…§›]{2,160}))/g;
+const ABSATZ_RE = /(?=[\w./-]+\.md|Projekt-Block|§|›)(?:([\w./-]+\.md|Projekt-Block)[\s(]*)?(§|›)?\s*(?:„([^"“\n]{2,160})["“]|([^\n,.;:()[\]+—„"“…§›]{2,160}))/g;
 
-/** Formen 4 und 5 (absatzweise, damit ein bares `§` die Zieldatei nur aus SEINEM Absatz erbt): bares `§ X` erbt die Zieldatei des letzten `<datei> § …` im Absatz, `AGENTS.md „X"` zitiert. `…` trennt Fragmente. Pur. */
+/** Formen 4 und 5 (absatzweise, damit ein bares `§` die Zieldatei nur aus SEINEM Absatz erbt): bares `§ X` erbt die Zieldatei des letzten `<datei> § …` im Absatz, `AGENTS.md „X"` zitiert. `…` trennt Fragmente nur im Zitat. Pur. */
 export function absatzVerweise(text: string): AgentsVerweis[] {
   const verweise: AgentsVerweis[] = [];
   for (const absatz of text.split(/\n\s*\n/)) {

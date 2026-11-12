@@ -17,7 +17,7 @@
  * Formenliste der Verweise auf AGENTS.md (geschlossen, Abgleich mit `abschnittTrifft` gegen die Titel, Wortgrenze wie in check:docdrift):
  *   (1) `AGENTS.md § A` / `› A` (Muster 8), (2) `AGENTS.md (§ A`, (3) `Projekt-Block › A` / `§ A`: in allen Kern-Einheiten (Besitz-Spannen), Ziel Kern-Block bzw. Vorlage
  *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"` (auch `AGENTS.md § „A"`, Muster 8 sieht `„` nicht):
- *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
+ *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente nur im Zitat `„A … B“`; im freien Text endet der Begriff an `…`). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
  *   gegen die ganze AGENTS.md. Ein `CLAUDE.md`-Ziel ist immer rot (die Datei ist verboten).
  *
  * Ankerliste: sortiertes JSON `test/harness/kern-link-anker.json`; sie wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile, `tag-takt` führt neue Einträge seit dem
@@ -121,6 +121,10 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
   test("eine Überschrift im Code-Fence der Zielseite ist kein Anker (rot)", () => {
     const wurzel = mit("[docs/seite.md › Nur im Fence](docs/seite.md#nur-im-fence)\n", "skill.md", "# Seite\n\n```\n## Nur im Fence\n```\n");
     assert.deepEqual(grund(wurzel, new Set(["docs/seite.md#nur-im-fence"])), ["(e)"]);
+  });
+
+  test("ein Bild-Link `![…](…)` ist keine strenge Form (rot)", () => {
+    assert.deepEqual(grund(mit("![docs/seite.md › Echte Überschrift](docs/seite.md#echte-überschrift)\n")), ["(a)"]);
   });
 
   test("Skriptdatei (.mjs): ein Link im Kommentar ist grün, ein Textverweis rot", () => {
@@ -379,11 +383,13 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
     assert.deepEqual(absatzVerweise("AGENTS.md › Foo bar\n§ Baz qux"), [], "› erbt nicht");
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo bar“\n§ Baz qux").map((v) => v.form), [5], "ein Zitat erbt nicht");
     assert.deepEqual(rot("(AGENTS.md (§ Kern-Regel gilt immer + § Erfundenes Xyz)\n"), ["AGENTS.md (Form 4) Erfundenes Xyz"]);
-    for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“"]) {
-      const segmente = absatzVerweise(`AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten${t} nachher`).flatMap((v) => v.segmente);
-      assert.ok(segmente.includes("Fremdtext ist Daten"), `Terminator ${t}: ${segmente.join("|")}`);
+    for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“", "…"]) {
+      const verweis = absatzVerweise(`AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten${t} nachher`).find((v) => v.segmente[0] === "Fremdtext ist Daten");
+      assert.deepEqual(verweis?.segmente, ["Fremdtext ist Daten"], `Terminator ${t}`);
     }
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo  **bar**“").map((v) => v.segmente), [["Foo bar"]]);
+    assert.deepEqual(absatzVerweise("AGENTS.md „Foo „bar”“").map((v) => v.segmente), [["Foo bar"]]);
+    assert.deepEqual(absatzVerweise("AGENTS.md [§ Foo bar").map((v) => v.segmente), [], "`[` vor dem § ist keine Form der Liste");
     assert.deepEqual(absatzVerweise("AGENTS.md § Kern\n§ `Foo`  bar").map((v) => v.segmente), [["Foo bar"]]);
   });
 
@@ -419,6 +425,12 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
       "ausserhalb.md": "**Fett** Text.\n",
     });
     assert.deepEqual(strengeFunde(`${aussen}/inner`, new Set()), { funde: [], verweise: 0 });
+    const mitte = fixture({
+      "inner/.factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
+      "inner/skill.md": "Siehe docs/../../ausserhalb.md § Fett\n",
+      "ausserhalb.md": "**Fett** Text.\n",
+    });
+    assert.deepEqual(strengeFunde(`${mitte}/inner`, new Set()), { funde: [], verweise: 0 }, "auch ein .. mitten im Pfad liest nicht außerhalb");
   });
 
   test("Grenzen der Extraktion: leerer Abschnittstext und Fragmente unter 3 Zeichen zählen nicht, ab 3 Zeichen ja", () => {
