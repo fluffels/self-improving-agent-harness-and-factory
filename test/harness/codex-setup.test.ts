@@ -231,6 +231,11 @@ test("L10 Negativfall: ist schon alles ignoriert, entsteht keine .codex/.gitigno
   expect(r.out.join()).not.toContain(".codex/.gitignore");
   expect(existsSync(join(ziel, ".codex/.gitignore"))).toBe(false);
 });
+test("L10: ist nur ein Teil der erzeugten Dateien ignoriert, entsteht .codex/.gitignore trotzdem", () => {
+  const root = quelle();
+  const r = lauf(root, ["--langfuse-url", endpoint], { istIgnoriert: (p) => p.endsWith("hooks.json") });
+  expect(r.out.join()).toContain(".codex/.gitignore");
+});
 test("L10: die Vorschau nennt .codex/.gitignore, wenn nicht ignoriert (Injektion), schreibt aber nichts", () => {
   const root = quelle();
   const r = lauf(root, ["--langfuse-url", endpoint], { istIgnoriert: () => false });
