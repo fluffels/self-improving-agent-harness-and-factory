@@ -51,6 +51,6 @@
     "id": "git-host-248",
     "faellig": "2027-05-12",
     "titel": "Git-Host-Bindung neu prüfen (factory#248, ADR 0032)",
-    "text": "Auslöser prüfen: steht der Tag v1.0.0, oder kam über die Meldestelle ein Bedarf an einem anderen Git-Host? Erfüllt: neu entscheiden mit docs/git-host.md als Startpunkt (anbinden mit Folgetickets oder bewusst nicht, ADR 0032 fortschreiben). Nicht erfüllt: faellig verschieben oder den Eintrag löschen."
+    "text": "Auslöser prüfen: steht der Tag v1.0.0, oder kam über die Meldestelle ein Bedarf an einem anderen Git-Host? Erfüllt: neu entscheiden mit docs/git-host.md als Startpunkt (anbinden mit Folgetickets oder bewusst nicht, ADR 0032 fortschreiben). Nicht erfüllt: faellig verschieben oder den Eintrag löschen. Wächter `test/harness/git-host-liste.test.ts` (ADR 0027): echte Funde (rote Läufe durch eine neue echte GitHub-Bindung)? Ohne Fund und Beleg lockern, sonst „bleibt“ vermerken."
   }
 ]

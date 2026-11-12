@@ -9,7 +9,7 @@
 
 ## Kontext
 
-Die Fabrik nutzt GitHub an vielen Stellen: `gh` und die API, Projects v2 als Board, Issues als Tickets, Auto-Merge, Ruleset und Required Checks, Actions mit `schedule`. Ob ein Bezieher auf einem anderen Host (etwa GitLab, dessen Pipeline-Zeitpläne in der Oberfläche liegen, nicht in der Datei) angebunden werden kann, war offen. Die Messung (Wächter in `test/harness/git-host-liste.test.ts`): mehr als ein Viertel der Skript-Dateien unter `scripts/`, alle Workflows, das Board, das Ruleset und die Ablauf-Texte der Agenten setzen GitHub voraus. Lokale Gates, Nachweise aus `git log`, Besitz-Sync, Guards, Langfuse und Playwright sind hostneutral.
+Die Fabrik nutzt GitHub an vielen Stellen: `gh` und die API, Projects v2 als Board, Issues als Tickets, Auto-Merge, Ruleset und Required Checks, Actions mit `schedule`. Ob ein Bezieher auf einem anderen Host (etwa GitLab, dessen Pipeline-Zeitpläne in der Oberfläche liegen, nicht in der Datei) angebunden werden kann, war offen. Die Messung (Wächter in `test/harness/git-host-liste.test.ts`): knapp ein Viertel der Skript-Dateien unter `scripts/` (52 von 212), alle Workflows, das Board, das Ruleset und die Ablauf-Texte der Agenten setzen GitHub voraus. Lokale Gates, Nachweise aus `git log`, Besitz-Sync, Guards, Langfuse und Playwright sind hostneutral.
 
 ## Optionen
 

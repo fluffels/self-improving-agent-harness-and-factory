@@ -8,13 +8,16 @@
  * R3: jeder genannte Pfad existiert, R4: die Spalte Git-Host hat nur die zwei Werte, R5: die vier Abschnitte gibt es.
  * GitHub-Menge (geschlossene Musterliste): scripts/gh-cli.mjs, Code ohne Kommentarzeilen mit process.env.GITHUB_ / process.env.GH_ /
  * api.github.com, dazu die transitive Hülle über relative Importe mit String-Literal.
- * Bewusste Grenzen: berechnete Importpfade, Kindprozesse anderer Skripte und reine Kommentar- oder Link-Erwähnungen werden nicht erkannt
+ * Bewusste Grenzen: Workflows zählen nur mit Endung .yml; GitHub-Daten, die ein Skript über eine Naht hereingereicht bekommt (reine Doktor-Bibliotheken),
+ * liegen außerhalb der Menge und stehen von Hand in der Seite; berechnete Importpfade, Kindprozesse anderer Skripte und reine Kommentar- oder Link-Erwähnungen werden nicht erkannt
  * (ein direktes gh außerhalb von gh-cli.mjs verbietet gh-cli.test.ts); Board, Agenten- und Skill-Texte und Dienste (Dependabot,
  * Code-Scanning) sind Handliste ohne Dateiabgleich. Backtick-Token mit .mjs/.cjs lösen unter scripts/ auf, mit .yml unter .github/workflows/, andere sind Prosa. */
 import { describe, expect, test } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, posix } from "node:path";
+import { dateienUnter } from "../support/dateien";
+import { kandidatenPfade, relativeImporte } from "./hook-importe";
 
 const WURZEL = process.cwd();
 const SEITE = "docs/git-host.md";
@@ -24,27 +27,21 @@ const MARKER = /process\.env\.(GITHUB_|GH_)|api\.github\.com/;
 
 type Zeile = { abschnitt: string; teil: string; host: string; zellen: string[]; text: string };
 
-function skriptDateien(wurzel: string, dir = "scripts"): string[] {
-  return readdirSync(join(wurzel, dir), { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? skriptDateien(wurzel, `${dir}/${e.name}`) : /\.(mjs|cjs)$/.test(e.name) ? [`${dir}/${e.name}`] : [],
-  );
-}
-
 function codeOhneKommentar(text: string): string {
   return text.split("\n").filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join("\n");
 }
 
-export function githubMenge(wurzel: string): Set<string> {
-  const code = new Map(skriptDateien(wurzel).map((f) => [f, codeOhneKommentar(readFileSync(join(wurzel, f), "utf8"))]));
-  const menge = new Set([...code].filter(([f, c]) => f === "scripts/gh-cli.mjs" || MARKER.test(c)).map(([f]) => f));
-  const importe = (f: string) =>
-    [...(code.get(f) ?? "").matchAll(/(?:from\s+|import\s*\(\s*)["'](\.[^"']+)["']/g)].map((m) =>
-      relative(wurzel, resolve(wurzel, dirname(f), m[1])).split("\\").join("/"),
-    );
+function githubMenge(wurzel: string): Set<string> {
+  const dateien = dateienUnter(wurzel, "scripts", /\.(mjs|cjs)$/);
+  const text = new Map(dateien.map((f) => [f, readFileSync(join(wurzel, f), "utf8")]));
+  const menge = new Set(dateien.filter((f) => f === "scripts/gh-cli.mjs" || MARKER.test(codeOhneKommentar(text.get(f) ?? ""))));
+  // Importe wie die Wächter und die Test-Hülle (hook-importe.ts, fail-closed: auch Importe in Kommentaren zählen).
+  const ziele = (f: string) =>
+    relativeImporte(text.get(f) ?? "").flatMap((spec) => kandidatenPfade(posix.join(posix.dirname(f), spec)).filter((k) => text.has(k)));
   for (let neu = true; neu; ) {
     neu = false;
-    for (const f of code.keys()) {
-      if (!menge.has(f) && importe(f).some((i) => menge.has(i))) {
+    for (const f of dateien) {
+      if (!menge.has(f) && ziele(f).some((z) => menge.has(z))) {
         menge.add(f);
         neu = true;
       }
@@ -53,7 +50,7 @@ export function githubMenge(wurzel: string): Set<string> {
   return menge;
 }
 
-export function zeilen(seite: string): Zeile[] {
+function zeilen(seite: string): Zeile[] {
   const aus: Zeile[] = [];
   let abschnitt = "";
   for (const l of seite.split("\n")) {
@@ -66,13 +63,13 @@ export function zeilen(seite: string): Zeile[] {
   return aus;
 }
 
-export function pfade(z: Zeile): string[] {
+function pfade(z: Zeile): string[] {
   return [...z.text.matchAll(/`([^`\s]+\.(?:mjs|cjs|yml))`/g)].map((m) =>
     m[1].endsWith(".yml") ? `.github/workflows/${m[1]}` : `scripts/${m[1]}`,
   );
 }
 
-export function pruefe(seite: string, menge: Set<string>, existiert: (p: string) => boolean, workflows: string[]): string[] {
+function pruefe(seite: string, menge: Set<string>, existiert: (p: string) => boolean, workflows: string[]): string[] {
   const fehler: string[] = [];
   const alle = zeilen(seite);
   for (const a of ABSCHNITTE) {
@@ -121,6 +118,10 @@ describe("pure Hilfsfunktionen (Negativfälle, synthetisch)", () => {
     const f = pruefe(rumpf(ok[1], ok[2]), SYNTH_MENGE, alleDa, WF);
     expect(f).toEqual(["R2: scripts/a.mjs setzt GitHub voraus und steht in keiner GitHub-Zeile von docs/git-host.md"]);
   });
+  test("R2: Workflow ohne GitHub-Zeile", () => {
+    const f = pruefe(rumpf(ok[0], ok[2]), SYNTH_MENGE, alleDa, WF);
+    expect(f).toEqual(["R2: .github/workflows/x.yml setzt GitHub voraus und steht in keiner GitHub-Zeile von docs/git-host.md"]);
+  });
   test("R3: Geister-Pfad", () => {
     const f = pruefe(rumpf(...ok, "| Geist | `weg.mjs` | GitHub | |"), SYNTH_MENGE, (p) => p !== "scripts/weg.mjs", WF);
     expect(f).toEqual(["R3: Geist: scripts/weg.mjs existiert nicht"]);
@@ -129,23 +130,36 @@ describe("pure Hilfsfunktionen (Negativfälle, synthetisch)", () => {
     const f = pruefe(rumpf(...ok, "| Misch | `b.mjs` | teilweise | |"), SYNTH_MENGE, alleDa, WF);
     expect(f.join("\n")).toMatch(/R4: Misch: Git-Host „teilweise“/);
   });
+  test("R5: Abschnitt nur als Präfix zählt nicht", () => {
+    expect(pruefe(rumpf(...ok).replace("## Board", "## Board alt"), SYNTH_MENGE, alleDa, WF)).toEqual(['R5: Abschnitt „Board“ fehlt']);
+  });
   test("R5: fehlender Abschnitt", () => {
     expect(pruefe(rumpf(...ok).replace("## Board", "## Anderes"), SYNTH_MENGE, alleDa, WF)).toEqual(['R5: Abschnitt „Board“ fehlt']);
   });
 });
 
 describe("githubMenge (synthetisches Repo)", () => {
-  test("transitiver Import wird erkannt, Marker nur im Kommentar zählt nicht", () => {
+  test("alle Marker-Alternativen, transitive Importe (auch require und endungslos); Marker nur im Kommentar zählt nicht", () => {
     const dir = mkdtempSync(join(tmpdir(), "git-host-"));
-    mkdirSync(join(dir, "scripts"));
-    const schreibe = (n: string, t: string) => writeFileSync(join(dir, "scripts", n), t);
-    schreibe("gh-cli.mjs", "export const gh = 1;\n");
-    schreibe("mitte.mjs", 'import { gh } from "./gh-cli.mjs";\n');
-    schreibe("aussen.mjs", 'const m = await import("./mitte.mjs");\n');
-    schreibe("env.mjs", "const t = process.env.GH_TOKEN;\n");
-    schreibe("kommentar.mjs", "// process.env.GITHUB_TOKEN und api.github.com\n/* api.github.com */\nexport const x = 1;\n");
-    schreibe("rein.mjs", "export const y = 2;\n");
-    expect([...githubMenge(dir)].sort()).toEqual(["scripts/aussen.mjs", "scripts/env.mjs", "scripts/gh-cli.mjs", "scripts/mitte.mjs"]);
+    try {
+      mkdirSync(join(dir, "scripts"));
+      const schreibe = (n: string, t: string) => writeFileSync(join(dir, "scripts", n), t);
+      schreibe("gh-cli.mjs", "export const gh = 1;\n");
+      schreibe("mitte.mjs", 'import { gh } from "./gh-cli.mjs";\n');
+      schreibe("aussen.mjs", 'const m = await import("./mitte.mjs");\n');
+      schreibe("env-gh.mjs", "const t = process.env.GH_TOKEN;\n");
+      schreibe("env-github.mjs", "const t = process.env.GITHUB_TOKEN;\n");
+      schreibe("api.mjs", 'const u = "https://api.github.com/repos";\n');
+      schreibe("per-require.cjs", 'const m = require("./env-gh.mjs");\n');
+      schreibe("endungslos.mjs", 'import x from "./mitte";\n');
+      schreibe("kommentar.mjs", "// process.env.GITHUB_TOKEN und api.github.com\n/* api.github.com */\nexport const x = 1;\n");
+      schreibe("rein.mjs", "export const y = 2;\n");
+      expect([...githubMenge(dir)].sort()).toEqual(
+        ["api.mjs", "aussen.mjs", "endungslos.mjs", "env-gh.mjs", "env-github.mjs", "gh-cli.mjs", "mitte.mjs", "per-require.cjs"].map((n) => `scripts/${n}`),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -156,8 +170,9 @@ describe("echte Seite gegen echte Dateien", () => {
     const fehler = pruefe(seite, githubMenge(WURZEL), (p) => existsSync(join(WURZEL, p)), workflows);
     expect(fehler, `Fix: die Datei in eine GitHub-Zeile von ${SEITE} eintragen (oder aus einer hostneutral-Zeile nehmen)`).toEqual([]);
   });
-  test("die Hook-Zeile für umsetzer-abschluss.mjs ist GitHub", () => {
-    const z = zeilen(seite).find((r) => pfade(r).includes("scripts/umsetzer-abschluss.mjs"));
+  test("die Hooks-Zeile ist GitHub und nennt den Zweig über umsetzer-abschluss.mjs", () => {
+    const z = zeilen(seite).find((r) => r.teil === "Hooks");
     expect(z?.host).toBe("GitHub");
+    expect(z?.text).toContain("umsetzer-abschluss.mjs");
   });
 });

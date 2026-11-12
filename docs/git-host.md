@@ -29,11 +29,11 @@ GitLab als Beispiel für einen anderen Host: Pipeline-Zeitpläne liegen dort in 
 | Hooks | `pretooluse-hook.mjs`, `stop-verify-hook.mjs` | GitHub | hängen über `umsetzer-abschluss.mjs` an `gh-cli.mjs` |
 | Inboxen und Takt | `inbox-lib.mjs`, `inbox-start-lib.mjs`, `wiedervorlage.mjs`, `secret-inbox.mjs`, `codescanning-inbox.mjs`, `audit-einordnung.mjs`, `board-takt.mjs`, `langfuse-takt.mjs`, `tag-takt.mjs`, `factory-update-check.mjs` | GitHub | Issues als Inbox, Alerts, Releases |
 | Meldestelle und Offene Punkte | `melden.mjs`, `meldung-lib.mjs`, `offene-punkte.mjs`, `offene-punkte-lib.mjs` | GitHub | Kommentare am Sammelticket, Issues |
-| Harness-Doctor | `harness-doctor.mjs`, `harness-doctor-lib.mjs`, `harness-doctor-melden.mjs`, `harness-doctor-meldestelle.mjs`, `harness-doctor-factory-update.mjs`, `sandbox-doctor.mjs` | GitHub | Ruleset, Board, Meldestelle; `sandbox-doctor.mjs` liest `GH_TOKEN` für `api.github.com` |
+| Harness-Doctor | `harness-doctor.mjs`, `harness-doctor-lib.mjs`, `harness-doctor-melden.mjs`, `harness-doctor-meldestelle.mjs`, `harness-doctor-factory-update.mjs`, `harness-doctor-ruleset.mjs`, `harness-doctor-sicherheit.mjs`, `sandbox-doctor.mjs` | GitHub | Ruleset, Board, Meldestelle, Secret Protection und PVR (die beiden reinen Bibliotheken `harness-doctor-ruleset.mjs` und `harness-doctor-sicherheit.mjs` bekommen die Daten von außen, liegen darum außerhalb der Menge des Wächters); `sandbox-doctor.mjs` liest `GH_TOKEN` für `api.github.com` |
 | Messen mit PR- und CI-Daten | `ci-laeufe.mjs`, `factory-kennzahlen.mjs`, `gate-fundquote.mjs`, `hauptchat-zerlegung.mjs`, `lauf-ergebnis.mjs`, `token-baseline.mjs`, `langfuse-wochenbericht.mjs` | GitHub | PR- und Workflow-Läufe per `gh` |
 | GitHub-Zugang | `gh-cli.mjs`, `gh-kontingent.mjs`, `kontingent-lib.mjs` | GitHub | die einzige `gh`-Naht und ihr Kontingent |
 | Probe-Erstbezug | `probe-erstbezug.mjs` | GitHub | legt ein Probe-Repo an |
-| Übrige Skripte unter `scripts/` | Besitz-Sync, Messen aus Transkript und Langfuse, Guards, Codex-Adapter, Docs-Gen, Cockpit | hostneutral | nichts (der Wächter belegt es: sie liegen außerhalb der GitHub-Menge) |
+| Übrige Skripte unter `scripts/` | Besitz-Sync, Messen aus Transkript und Langfuse, Guards, Codex-Adapter, Docs-Gen, Cockpit | hostneutral | nichts (nach der Musterliste des Wächters: sie liegen außerhalb der GitHub-Menge) |
 
 ## Workflows
 
