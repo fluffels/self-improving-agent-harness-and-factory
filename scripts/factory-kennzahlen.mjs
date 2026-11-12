@@ -314,7 +314,7 @@ function auditQuote(commits, luecke, harnessIssues, harnessLuecke, produktQuelle
 }
 
 function auditTakt({ commits, luecke, sammelAbschluss, sammelIssues, sammelInArbeit }) {
-  const soll = "reine Messung, kein Soll: der Takt hängt am Füllstand der Befund-Kommentare, ein still liegendes Sammelticket ist gewollt";
+  const soll = "reine Messung, kein Soll: der Takt hängt am Füllstand der offenen Befund-Zeilen, ein still liegendes Sammelticket ist gewollt";
   if (luecke) return { mechanismus: "Härtungs-Takt", messung: luecke, soll, status: "Lücke" };
   if (sammelInArbeit) return { mechanismus: "Härtungs-Takt", messung: `Vorgänger #${sammelInArbeit} in Arbeit, der Takt zählt erst ab dessen Abschluss`, soll, status: "ok" };
   if (!sammelAbschluss) return { mechanismus: "Härtungs-Takt", messung: "kein abgeschlossenes Sammelticket gefunden, kein Zählanfang", soll, status: "Lücke" };

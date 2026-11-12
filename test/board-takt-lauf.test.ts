@@ -111,17 +111,18 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
 
   const spiel = (n: number) => c(`feat(sim): s${n} (#${200 + n})`, "2026-10-06T10:00:00Z");
   const doku = c("docs(adr): Wächter (#102)", "2026-10-06T11:00:00Z");
-  const kommentar = (login: string, type = "User") => ({ user: { login, type }, body: "- [ ] Befund" });
+  const kommentar = (login: string, type = "User", body = "- [ ] Befund") => ({ user: { login, type }, body });
+  const zeilen = (n: number) => Array.from({ length: n }, (_, i) => `- [ ] Befund ${i + 1}`).join("\n");
   const befunde = (n: number) => Array.from({ length: n }, () => kommentar(OWNER));
 
-  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Produkt-Merges plus ein Harness-Doku-Commit (ohne Befund-Kommentare) holen nichts", () => {
+  test("das Harness-Fenster beginnt 60 s nach dem Abschluss des Sammeltickets und die Label-Menge wird durchgereicht: zwei Produkt-Merges plus ein Harness-Doku-Commit (ohne offene Befund-Zeilen) holen nichts", () => {
     const { log, aufrufe } = lauf([spiel(1), spiel(2), doku]);
     expect(aufrufe.harness).toHaveLength(0);
     expect(log.join("\n")).toContain("Fenster ab 2026-10-01T00:01:00.000Z");
     expect(log.join("\n")).toMatch(/1 Harness- auf 2 Produkt-Merges/);
   });
 
-  test("zehn Befund-Kommentare (Füllstand 10/10) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn); die Kommentare lädt der Takt nur für dieses Ticket", () => {
+  test("zehn offene Befund-Zeilen (Füllstand 10/10) holen das Sammelticket; die Liste ist nach der Status-Aktion nachgezogen (Status-Ticket vorn); die Kommentare lädt der Takt nur für dieses Ticket", () => {
     const { r, aufrufe, geladen, log } = lauf([spiel(1)], { offeneStatus: true, kommentare: befunde(10) });
     expect(aufrufe.status).toHaveLength(1);
     expect(aufrufe.harness).toHaveLength(1);
@@ -150,12 +151,21 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(rot.r.fehler).toBe(true);
   });
 
-  test("neun Befund-Kommentare holen nichts, auch bei vielen Merges (die Merge-Zahl zählt nicht mehr); Merges ohne Kommentare ebenso", () => {
+  test("neun offene Befund-Zeilen holen nichts, auch bei vielen Merges (die Merge-Zahl zählt nicht mehr); Merges ohne Kommentare ebenso", () => {
     const viele = [spiel(1), spiel(2), spiel(3), spiel(4), spiel(5), doku];
     const neun = lauf(viele, { kommentare: befunde(9) });
     expect(neun.aufrufe.harness).toHaveLength(0);
     expect(neun.log.join("\n")).toContain("Füllstand 9/10");
     expect(lauf(viele).aufrufe.harness).toHaveLength(0);
+  });
+
+  test("Negativfall (factory#411): neun offene Zeilen, auch auf drei Kommentare verteilt, lösen den Takt nicht aus; zehn Zeilen in einem Kommentar lösen ihn aus", () => {
+    const verteilt = lauf([], { kommentare: [kommentar(OWNER, "User", zeilen(3)), kommentar(OWNER, "User", zeilen(3)), kommentar(OWNER, "User", zeilen(3))] });
+    expect(verteilt.aufrufe.harness).toHaveLength(0);
+    expect(verteilt.log.join("\n")).toContain("Füllstand 9/10");
+    const einer = lauf([], { kommentare: [kommentar(OWNER, "User", zeilen(10))] });
+    expect(einer.aufrufe.harness).toHaveLength(1);
+    expect(einer.log.join("\n")).toContain("Füllstand 10/10 offene Befund-Zeilen");
   });
 
   test("fremde, Bot- und anonyme Kommentare füllen nicht: 9 vom Owner plus 5 andere bleiben bei 9", () => {
@@ -778,7 +788,7 @@ describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () 
     return { r, log, langfuse, geladen, harness };
   }
 
-  test("ab einem Befund-Kommentar kommt es hinter Harness-Sammelticket und Status-Ticket (Harness-Ticket in derselben Runde schon vorn)", () => {
+  test("ab einer offenen Befund-Zeile kommt es hinter Harness-Sammelticket und Status-Ticket (Harness-Ticket in derselben Runde schon vorn)", () => {
     const { r, langfuse, geladen, log } = lauf({ kommentare: [befund], hKommentare: 10 });
     expect(langfuse).toMatchObject([{ nr: 160, afterId: "I50", rolle: "factory" }]);
     expect(geladen).toEqual([12, 160]);
@@ -790,7 +800,7 @@ describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () 
     expect(lauf({ kommentare: [befund], hKommentare: 10, ohneStatus: true }).langfuse).toMatchObject([{ nr: 160, afterId: "I12" }]);
   });
 
-  test("0 Befund-Kommentare, --dry-run, Ladefehler (Warnung) oder fehlendes Ticket bewegen nichts", () => {
+  test("0 offene Befund-Zeilen, --dry-run, Ladefehler (Warnung) oder fehlendes Ticket bewegen nichts", () => {
     expect(lauf().langfuse).toEqual([]);
     expect(lauf({ kommentare: [befund], dry: true }).langfuse).toEqual([]);
     const fehl = lauf({ kommentare: new Error("HTTP 502") });

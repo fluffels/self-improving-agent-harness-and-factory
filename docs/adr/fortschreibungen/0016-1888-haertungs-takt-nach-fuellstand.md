@@ -33,3 +33,7 @@ Entscheidung: das ungeclaimte Harness-Sammelticket kommt ab 10 Befund-Kommentare
 - **Entscheidung:** `befundKommentare` zählt einen Kommentar vertrauter Nicht-Bot-Autoren nur, wenn er mindestens eine Checkbox-Zeile enthält (`BEFUND_ZEILE` in `scripts/produktquote-lib.mjs`, dieselbe Erkennung wie die Zeilenzählung des Sammeltickets). Fließtext ohne `- [ ]` ist keine abhakbare Zeile und füllt das Sammelticket nicht; die Anleitung verlangt `- [ ] …` je Zeile.
 - **Warum das Lesen des Textes hier vertretbar ist:** gelesen wird nur das Zeilenmuster der Kommentare vertrauter Autoren, die ohnehin geladen werden; der Text wird nicht ausgeführt und nicht gedeutet. Ohne die Bedingung zählten Kommentare, die keine abhakbaren Zeilen enthalten, und das Ticket kam zu früh an die Spitze.
 - Der Punkt „Zeilenzahl statt Kommentarzahl“ unter „Verworfen“ gilt weiter für die Zählweise (je Kommentar, nicht je Zeile).
+
+## Nachtrag factory#411
+
+Die Zählweise je Kommentar (hier und im Nachtrag factory#215) ist abgelöst: gezählt werden die offenen Befund-Zeilen, siehe [Fortschreibung factory#411](0016-411-fuellstand-nach-offenen-zeilen.md).

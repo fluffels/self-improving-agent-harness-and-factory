@@ -308,7 +308,7 @@ describe("Takt im Bezieher: Langfuse-Sammelticket hinter den Kopf (factory#379)"
   const board = [it(900, "T900"), it(901, "T901"), it(902, LF)];
   const befund = { user: { login: FREMD_OWNER, type: "User" }, body: "- [ ] Befund" };
 
-  test("ein Befund-Kommentar: das Sammelticket kommt auf dem Board des Status-Tickets (produkt) hinter den Kopf; Kommentare nur für dieses Ticket", () => {
+  test("eine offene Befund-Zeile: das Sammelticket kommt auf dem Board des Status-Tickets (produkt) hinter den Kopf; Kommentare nur für dieses Ticket", () => {
     const { r, a, log } = lauf({ boardItems: { produkt: board }, kommentare: [befund] });
     expect(a.langfuse).toMatchObject([{ nr: 902, afterId: "I77", rolle: "produkt" }]); // hinter dem frisch angelegten, nachgezogenen Status-Ticket
     expect(a.geladen).toEqual([902]);
@@ -328,7 +328,7 @@ describe("Takt im Bezieher: Langfuse-Sammelticket hinter den Kopf (factory#379)"
     expect(a.langfuse).toEqual([]);
   });
 
-  test("ohne Befund-Kommentar, im --dry-run, bei Ladefehler und ohne Token bewegt der Takt nichts (Ladefehler: Warnung)", () => {
+  test("ohne offene Befund-Zeile, im --dry-run, bei Ladefehler und ohne Token bewegt der Takt nichts (Ladefehler: Warnung)", () => {
     expect(lauf({ boardItems: { produkt: board } }).a.langfuse).toEqual([]);
     expect(lauf({ boardItems: { produkt: board }, kommentare: [befund], dry: true }).a.langfuse).toEqual([]);
     const fehl = lauf({ boardItems: { produkt: board }, kommentare: new Error("HTTP 502") });
