@@ -333,6 +333,8 @@ describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
     ["Berichtszeile UEBERGABE:", "UEBERGABE: Worktree"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit Schnitt: pr"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Einstieg: verify"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Schnitt: pr, danach Merge"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Einstieg: verify (Fortsetzung)"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Schnitt:`"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Einstieg:`"],
     ["Bezeichner des Schnitts", "uebergabeBlockade(x)"],
@@ -346,7 +348,7 @@ describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
   });
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
-    const nachbarn = ["uebergabeProbleme", "uebergabeKennzahlen", "ABSCHNITTE", "Übergabe mit Umlaut", "// Einstieg: liest die Datei", "/^Schnitt:/ ohne Backtick", "Einstieg: prüfe den Lock", "Schnitt: präzise", "ABSCHNITT: x", "Zwischenuebergabe", "SCHNITTEN", "ABUEBERGABE: x", "Phasen-Schnitt im Messbericht"];
+    const nachbarn = ["uebergabeProbleme", "uebergabeKennzahlen", "ABSCHNITTE", "Übergabe mit Umlaut", "// Einstieg: liest die Datei", "/^Schnitt:/ ohne Backtick", "Einstieg: prüfe den Lock", "Einstieg: prompt", "Schnitt: verifyLauf", "Einstieg: pröbe", "Schnitt: prß", "QuerSchnitt: pr", "die uebergebenen Werte", "zuuebergeben", "Schnitt: präzise", "ABSCHNITT: x", "Zwischenuebergabe", "SCHNITTEN", "ABUEBERGABE: x", "Phasen-Schnitt im Messbericht"];
     assert.deepEqual(schnitt(nachbarn.join("\n")), []);
   });
 
