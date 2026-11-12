@@ -156,7 +156,7 @@ describe("pruefeDependabot", () => {
 });
 
 
-describe("Runde 1: Manifest-Liste, Leser und Abdeckung im Detail", () => {
+describe("Manifest-Liste, Leser und Abdeckung im Detail", () => {
   const lauf = (extra: Record<string, unknown>) => D.pruefeDependabot({ dependabotText: BELEG, ...extra });
   const punkte = (e: Erg[]) => e.map((x) => x.punkt).sort();
 

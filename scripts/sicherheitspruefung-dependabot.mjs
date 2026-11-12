@@ -5,7 +5,7 @@
 // Anführungszeichen, Kommentare). Er ist bewusst kein YAML-Parser (der Job hat kein `npm ci`, ein Paket wäre dort Fremdcode mit Schreibrecht): fehlt `updates:` oder ein Eintrag
 // ohne Ökosystem oder Verzeichnis, ist der Punkt „nicht prüfbar“ (fail-closed).
 //
-// Grenzen (bewusst nicht erfasst): die Manifest-Liste ist enger als die des Ökosystem-Wächters test/harness/dependabot-oekosysteme.test.ts (der kennt compose*.yml und requirements*.txt, dafür kein maven/gradle); Anker und Aliase, `multi-ecosystem-groups`, Manifeste außerhalb der geschlossenen Liste `MANIFESTE` (Erweiterung: `projekt.manifeste` der Soll-Liste),
+// Grenzen (bewusst nicht erfasst): die Manifest-Liste ist enger als die des Ökosystem-Wächters test/harness/dependabot-oekosysteme.test.ts (der kennt compose*.yml und requirements*.txt, dafür kein maven/gradle); npm-Negationen in `workspaces` schließen unabhängig von der Reihenfolge aus (konservativ: eher Lücke als falsches Grün), Anker und Aliase, `multi-ecosystem-groups`, Manifeste außerhalb der geschlossenen Liste `MANIFESTE` (Erweiterung: `projekt.manifeste` der Soll-Liste),
 // Maven-`<modules>` und Gradle-`settings.gradle` (ein Vorfahr-Verzeichnis mit eigenem Manifest desselben Ökosystems gilt als Aggregator), `.gitignore`d Dateien (Quelle ist `git ls-files`).
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 

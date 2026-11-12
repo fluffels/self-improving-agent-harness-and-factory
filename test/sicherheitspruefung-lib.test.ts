@@ -55,6 +55,11 @@ describe("ladeSollListe", () => {
     ["Ausnahme mit Muster", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "**", grund: "alles" }] } })],
     ["Ausnahme Wurzel", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "/", grund: "alles" }] } })],
     ["punkteOhne unbekannter Punkt", liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "Erfunden", grund: "g" }] } })],
+    ["punkteOhne Pflichtpunkt", liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "Secret Scanning", grund: "g" }] } })],
+    ["alle Punkte abgewählt", liste({ kern: { ...KERN, punkte: ["Ruleset"] }, projekt: { punkteOhne: [{ punkt: "Ruleset", grund: "g" }] } })],
+    ["Ausnahme mit Fragezeichen", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "a?", grund: "g" }] } })],
+    ["Ausnahme Punkt", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: ".", grund: "g" }] } })],
+    ["Ausnahme Punkt-Schrägstrich", liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: "./", grund: "g" }] } })],
     ["punkteOhne ohne Grund", liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "PVR" }] } })],
     ["Manifest ohne Datei", liste({ kern: KERN, projekt: { manifeste: [{ oekosystem: "mix" }] } })],
   ])("Konfigurationsfehler: %s", (_n, text) => {
@@ -76,9 +81,16 @@ describe("punkteOhne", () => {
 
 describe("filtere", () => {
   test("Admin-Recht ist Pflicht-Punkt; der Fix nennt punkteOhne", () => {
-    const r = L.filtere([], ["Admin-Recht", "Ruleset-Spiegel"]);
-    expect(r.map((x) => x.punkt)).toEqual(["Ruleset-Spiegel", "Admin-Recht"]);
-    expect(r[0].fix).toMatch(/punkteOhne/);
+    const r = L.filtere([], ["Admin-Recht", "Ruleset-Spiegel", "Secret Scanning"]);
+    expect(r.map((x) => x.punkt)).toEqual(["Secret Scanning", "Ruleset-Spiegel", "Admin-Recht"]);
+    expect(r[1].fix).toMatch(/punkteOhne/);
+    expect(r[1].befund).toMatch(/keine id/);
+    const abwaehlbar = L.filtere([], ["Code-Scanning", "Ruleset"]);
+    expect(abwaehlbar[0].fix).toMatch(/Code-Scanning-Modul.*punkteOhne/);
+    expect(abwaehlbar[1].fix).toMatch(/kein Ruleset.*punkteOhne/);
+    // kein Hinweis auf Abwahl bei Punkten, die Pflicht bleiben
+    expect(r[0].fix).not.toMatch(/punkteOhne/);
+    expect(r[2].fix).not.toMatch(/punkteOhne/);
   });
   const e: Erg[] = [{ punkt: "Secret Scanning", ok: true }, { punkt: "Required-Check build", ok: false }, { punkt: "Required-Check-Pin", ok: false }, { punkt: "Langfuse", ok: false }];
   test("Präfix mit Leerzeichen: Required-Check trifft Required-Check <ctx>, nicht Required-Check-Pin", () => {

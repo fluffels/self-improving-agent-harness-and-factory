@@ -135,6 +135,13 @@ function lege(d, { titel, text }) {
 /** Standard-Nähte des Einstiegs (Tests überschreiben sie über `deps`). */
 const STANDARD = { doctor: pruefLauf, schreibe: schreibenStandard, lese: lesenStandard, dateien: dateienStandard, env: process.env, log: console.log, err: console.error };
 
+/** Die aktiven Ausnahmen und Abwahlen der Soll-Liste als Logzeilen (bei jedem Lauf sichtbar, auch ohne Ticket). */
+const aktiveAbwahlen = (soll) => [
+  ...soll.ausnahmen.map((a) => `Dependabot-Ausnahme ${a.pfad}: ${a.grund}`),
+  ...soll.codeqlOhne.map((a) => `CodeQL ohne ${a.sprache}: ${a.grund}`),
+  ...soll.punkteOhne.map((a) => `Punkt abgewählt ${a.punkt}: ${a.grund}`),
+];
+
 /** Gibt die Entscheidung aus (Trockenlauf: Bericht und Entscheidung, nichts geschrieben) oder legt das Ticket an. */
 function ausfuehren({ trocken, e, titel, text }, io) {
   if (trocken) return io.log(`[dry-run] ${titel}\n${text}\n[dry-run] Entscheidung: ${e.aktion} (${e.grund})`);
@@ -185,6 +192,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     const datum = deps.heute ?? new Date().toISOString().slice(0, 10);
     const e = entscheideLauf({ abweichungen, gh, repo, config });
     for (const w of e.warnungen) log(`::warning::${w}`);
+    for (const z of aktiveAbwahlen(soll)) log(`Sicherheitsprüfung: ${z}`);
     const text = berichtText({ abweichungen, ausnahmen: soll.ausnahmen, codeqlOhne: soll.codeqlOhne, punkteOhne: soll.punkteOhne, datum });
     ausfuehren({ trocken, e, titel: berichtTitel(datum), text }, { repo, config, schreibe, log, env, libs });
     return 0;

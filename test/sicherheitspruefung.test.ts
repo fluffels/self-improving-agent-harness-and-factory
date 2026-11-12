@@ -59,7 +59,8 @@ async function lauf(o: Opt = {}): Promise<Lauf> {
       if (args[0] === "issue") return JSON.stringify(o.issues ?? []);
       if (a.includes("issues?state=open")) {
         if (o.frischFehler) throw new Error("HTTP 502");
-        return JSON.stringify(o.frisch ?? []);
+        // echte Form von gh api --paginate --slurp: ein Array von Seiten, das Ticket steht auf Seite 2
+        return JSON.stringify(args.includes("--slurp") ? [[], o.frisch ?? []] : (o.frisch ?? []));
       }
       return "{}";
     },
@@ -162,6 +163,7 @@ describe("sicherheitspruefung.mjs", () => {
       expect((await lauf({ ...mitFrontend, soll: soll({ ausnahmen: [{ pfad: "frontend", grund: "Fixture" }] }) })).schreib).toEqual([]);
       const mit = await lauf({ ...mitFrontend, soll: soll({ ausnahmen: [{ pfad: "frontend", grund: "Fixture" }] }, ["Dependabot-Abdeckung", "Secret Scanning"]), doctor: DOCTOR_LUECKE });
       expect(mit.bodies[0]).toContain("Dependabot-Ausnahme `frontend`: Fixture");
+      expect(mit.out).toContain("Sicherheitsprüfung: Dependabot-Ausnahme frontend: Fixture");
     });
 
     test("projekt.manifeste ergänzt ein Ökosystem", async () => {
@@ -175,6 +177,7 @@ describe("sicherheitspruefung.mjs", () => {
       expect((await lauf({ ...basis, soll: soll({ codeqlOhne: [{ sprache: "python", grund: "Skripte" }] }, ["CodeQL-Sprachen"]) })).schreib).toEqual([]);
       const r = await lauf({ ...basis, doctor: DOCTOR_LUECKE, soll: soll({ codeqlOhne: [{ sprache: "python", grund: "Skripte" }] }, ["CodeQL-Sprachen", "Secret Scanning"]) });
       expect(r.bodies[0]).toContain("CodeQL ohne `python`: Skripte");
+      expect(r.out).toContain("Sicherheitsprüfung: CodeQL ohne python: Skripte");
     });
 
     test("actions zählt nur mit getrackten Workflows", async () => {
@@ -187,9 +190,12 @@ describe("sicherheitspruefung.mjs", () => {
     test("punkteOhne wählt einen Punkt ab; ein fehlender Ruleset-Spiegel nennt den Fix", async () => {
       const kern = ["Secret Scanning", "Ruleset-Spiegel"];
       const ohneSpiegel = await lauf({ doctor: DOCTOR_OK, soll: soll({}, kern) });
-      expect(ohneSpiegel.bodies[0]).toMatch(/Ruleset-Spiegel | kein Ergebnis des Prüflaufs.*punkteOhne/);
+      expect(ohneSpiegel.bodies[0]).toMatch(/\| Ruleset-Spiegel \| kein Ergebnis des Prüflaufs.*punkteOhne/);
       const abgewaehlt = await lauf({ doctor: DOCTOR_OK, soll: soll({ punkteOhne: [{ punkt: "Ruleset-Spiegel", grund: "kein Spiegel" }] }, kern) });
       expect(abgewaehlt.schreib).toEqual([]);
+      expect(abgewaehlt.out).toContain("Sicherheitsprüfung: Punkt abgewählt Ruleset-Spiegel: kein Spiegel");
+      const mitLuecke = await lauf({ doctor: DOCTOR_LUECKE, soll: soll({ punkteOhne: [{ punkt: "Ruleset-Spiegel", grund: "kein Spiegel" }] }, ["Secret Scanning", ...kern]) });
+      expect(mitLuecke.bodies[0]).toContain("Punkt abgewählt `Ruleset-Spiegel`: kein Spiegel");
     });
 
     test("verschachtelte package.json eines Workspace-Wurzelverzeichnisses wird gelesen", async () => {
@@ -197,6 +203,13 @@ describe("sicherheitspruefung.mjs", () => {
       const pkg = (p: string) => (p === "web/package.json" ? JSON.stringify({ workspaces: ["apps/*"] }) : null);
       const r = await lauf({ dateien: ["web/package.json", "web/apps/a/package.json", ".github/workflows/ci.yml"], lesePkg: pkg, dependabot, doctor: [], soll: soll({}, ["Dependabot-Abdeckung"]) });
       expect(r.schreib).toEqual([]);
+    });
+
+    test("das Label steht nur am Ticket, wenn sein Board dieses Repo führt", async () => {
+      const fremd = { ...config, boards: (config as unknown as { boards: Record<string, unknown>[] }).boards.map((b) => ({ ...b, repo: "fremd/x" })) };
+      const r = await lauf({ doctor: DOCTOR_LUECKE, config: fremd });
+      expect(r.schreib).toHaveLength(1);
+      expect(r.schreib[0]).not.toContain("--label");
     });
 
     test("ein offenes Ticket mit Label forum unterdrückt den Lauf nicht", async () => {
@@ -251,6 +264,7 @@ describe("sicherheitspruefung.mjs", () => {
     const r = await lauf({ doctor: DOCTOR_LUECKE, frisch });
     expect(r.schreib).toEqual([]);
     expect(r.out).toMatch(/Zweitabfrage/);
+    expect(r.lesen.some((a) => a.includes("--paginate") && a.includes("--slurp"))).toBe(true);
   });
 
   test("--dry-run: Bericht und Entscheidung auf stdout, kein Schreibaufruf", async () => {

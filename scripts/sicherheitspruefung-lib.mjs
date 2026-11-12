@@ -42,6 +42,8 @@ export const SOLL_JE_PUNKT = {
 /** Die geschlossene Liste der Punktnamen, die eine Soll-Liste nennen darf. */
 export const PUNKTE = [...new Set([...SICHERHEIT_PUNKTE, ...Object.keys(SOLL_JE_PUNKT)])];
 /** Punkte des Prüflaufs (Harness-Doctor), deren Ergebnis nie fehlen darf: fehlt es, ist der Punkt „nicht prüfbar“. */
+/** Die einzigen Punkte, die ein Bezieher mit Grund abwählen darf (`projekt.punkteOhne`): sie hängen an Ruleset, Spiegel und Code-Scanning-Modul, die ein Projekt nicht haben muss. Alles andere (Secret Scanning, Push Protection, Dependabot, Admin-Recht, CodeQL-Sprachen) bleibt Pflicht. */
+export const ABWAEHLBAR = ["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"];
 const PFLICHT_DOCTOR = ["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Code-Scanning", "Ruleset", "Ruleset-Spiegel", "Admin-Recht"];
 
 const fehler = (text) => new Error(`${text}\nFix: .github/sicherheitspruefung.json prüfen (Struktur und Punktnamen: docs/agent-harness.md (Fabrik) § 2.2)`);
@@ -90,10 +92,12 @@ export function ladeSollListe(text) {
   if (unbekannt.length > 0) throw fehler(`unbekannter Schlüssel in \`projekt\`: ${unbekannt.join(", ")}`);
   if (!istObjekt(w.kern.codeql ?? {})) throw fehler("kern.codeql muss ein Objekt (Sprache → CodeQL-Sprache) sein");
   const punkteOhne = pruefeListe(p.punkteOhne, "projekt.punkteOhne", mitGrund("punkt", (e, was) => {
-    if (!PUNKTE.includes(e.punkt)) throw fehler(`${was}: unbekannter Punkt „${e.punkt}“`);
+    if (!ABWAEHLBAR.includes(e.punkt)) throw fehler(`${was}: „${e.punkt}“ ist nicht abwählbar (erlaubt: ${ABWAEHLBAR.join(", ")})`);
   }));
+  const punkte = [...new Set([...punktListe(w.kern.punkte, "kern.punkte"), ...punktListe(p.punkte, "projekt.punkte")])].filter((n) => !punkteOhne.some((o) => o.punkt === n));
+  if (punkte.length === 0) throw fehler("die Punktliste ist leer (alle Punkte abgewählt)");
   return {
-    punkte: [...new Set([...punktListe(w.kern.punkte, "kern.punkte"), ...punktListe(p.punkte, "projekt.punkte")])].filter((n) => !punkteOhne.some((o) => o.punkt === n)),
+    punkte,
     punkteOhne,
     manifeste: [...pruefeListe(w.kern.manifeste, "kern.manifeste", manifestEintrag), ...pruefeListe(p.manifeste, "projekt.manifeste", manifestEintrag)],
     codeql: w.kern.codeql ?? {},
@@ -108,8 +112,17 @@ const trifft = (punkt, name) => punkt === name || String(punkt).startsWith(`${na
 export function filtere(ergebnisse, punkte) {
   const treffer = ergebnisse.filter((r) => punkte.some((n) => trifft(r.punkt, n)));
   const fehlend = PFLICHT_DOCTOR.filter((n) => punkte.includes(n) && !ergebnisse.some((r) => trifft(r.punkt, n)));
-  return [...treffer, ...fehlend.map((n) => nichtPruefbar(n, "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht, oder der Ruleset-Spiegel der Projekt-Config hat keine id)", "Prüflauf mit einem Token mit Admin-Recht wiederholen (Secret PROJECT_TOKEN) und die id des Rulesets im Spiegel eintragen; trifft der Punkt im Projekt nicht zu, mit Grund in projekt.punkteOhne abwählen"))];
+  return [...treffer, ...fehlend.map((n) => nichtPruefbar(n, FEHLT_BEFUND[n] ?? FEHLT_BEFUND_STANDARD, FEHLT_FIX[n] ?? FEHLT_FIX_STANDARD))];
 }
+
+const FEHLT_BEFUND_STANDARD = "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht)";
+const FEHLT_FIX_STANDARD = "Prüflauf mit einem Token mit Admin-Recht wiederholen (Secret PROJECT_TOKEN)";
+const FEHLT_BEFUND = { "Ruleset-Spiegel": "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht, oder der Ruleset-Spiegel der Projekt-Config hat keine id)" };
+const FEHLT_FIX = {
+  "Ruleset-Spiegel": FEHLT_FIX_STANDARD + " und die id des Rulesets im Spiegel eintragen; hat das Projekt kein Ruleset, mit Grund in projekt.punkteOhne abwählen",
+  "Code-Scanning": FEHLT_FIX_STANDARD + "; hat das Projekt kein Code-Scanning-Modul, mit Grund in projekt.punkteOhne abwählen",
+  Ruleset: FEHLT_FIX_STANDARD + "; hat das Projekt kein Ruleset (privates Repo ohne Plan), mit Grund in projekt.punkteOhne abwählen",
+};
 
 /** Der Punkt `Dependabot Alerts` aus dem HTTP-Status von `repos/<repo>/vulnerability-alerts` (204: an; 404 mit Admin-Recht: aus; sonst nicht prüfbar). Pur. */
 export function pruefeAlerts({ status, admin, repo }) {
