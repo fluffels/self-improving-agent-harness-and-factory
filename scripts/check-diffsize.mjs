@@ -270,7 +270,7 @@ export function prTitelAusEreignis(env, lies) {
   try {
     const ereignis = JSON.parse(lies(pfad));
     if (ereignis === null || typeof ereignis !== "object" || !("pull_request" in ereignis)) return null;
-    const titel = ereignis.pull_request?.title;
+    const titel = ereignis.pull_request.title;
     return typeof titel === "string" ? { titel } : { fehler: "PR ohne Titeltext im Ereignis" };
   } catch {
     return { fehler: "PR-Ereignis nicht lesbar" };
@@ -279,8 +279,8 @@ export function prTitelAusEreignis(env, lies) {
 
 /** Meldung (ohne Titel), wenn ein Sammelticket-PR einen Override-Grund trägt, der nicht genau eine Zeile `L<n>` nennt; sonst null. Pur. */
 export function sammelOverrideFehler(titel, grund) {
-  if (titel === null || titel === undefined || !enthaeltSammelticketTitel(titel)) return null;
-  const zeilen = new Set(String(grund).match(/\bL\d+\b/g) ?? []);
+  if (!enthaeltSammelticketTitel(titel)) return null;
+  const zeilen = new Set(String(grund).match(/\bL\d+\b/g));
   if (zeilen.size === 1) return null;
   return (
     "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile (Fortschreibung 0026-268): " +

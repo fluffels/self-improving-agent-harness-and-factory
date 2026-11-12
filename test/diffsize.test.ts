@@ -684,6 +684,15 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
   test("sammelOverrideFehler: genau eine Zeile bei einem Sammelticket-Titel ist ok", () => {
     assert.equal(m.sammelOverrideFehler(SAMMEL, "#339 L44 braucht 900 Zeilen"), null);
     assert.equal(m.sammelOverrideFehler(SAMMEL, "L5 und noch mal L5 sind breit"), null, "dieselbe Zeile zählt einmal");
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "XL1 und L2"), null, "XL1 ist keine Zeilenmarke (Wortgrenze vorn)");
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "L1x und L2"), null, "L1x ist keine Zeilenmarke (Wortgrenze hinten)");
+    assert.equal(typeof m.sammelOverrideFehler(SAMMEL, "L12 und L1"), "string", "mehrstellige Nummer zählt als eine, L12 und L1 sind zwei");
+  });
+
+  test("prTitelAusEreignis: JSON ohne Objekt ist kein PR-Ereignis (null)", () => {
+    const env = { GITHUB_EVENT_PATH: "e.json" };
+    assert.equal(m.prTitelAusEreignis(env, lies("null")), null);
+    assert.equal(m.prTitelAusEreignis(env, lies("5")), null);
   });
 
   test("sammelOverrideFehler: mehrere Zeilen, ein Bereich oder keine Zeile ist rot, ohne Titel in der Meldung", () => {
@@ -732,5 +741,14 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(lauf(SAMMEL, `chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
     assert.equal(lauf("SIH-9 Ticket (factory#9)", OV).sammelOverride, null, "kein Sammelticket");
     assert.equal(lauf(SAMMEL, "").sammelOverride, null, "kein Override");
+    const unlesbar = (log: string) =>
+      checkDiffSizeRoh({
+        zeilen: ZEILEN,
+        runGit: gitWith(log),
+        env: { GITHUB_EVENT_PATH: "e.json", ...tightEnv },
+        lies: () => "{ kaputt",
+      } as never);
+    assert.equal(typeof unlesbar(OV).sammelOverride, "string", "unlesbares Ereignis bei aktivem Override: rot");
+    assert.equal(unlesbar("").sammelOverride, null, "unlesbares Ereignis ohne Override: nicht relevant");
   });
 });
