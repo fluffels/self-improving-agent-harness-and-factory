@@ -1,5 +1,5 @@
 /* Harness-Doctor, Punkt `Ruleset-Spiegel` (factory#247 L3): gleicht den Spiegel in Git (`rulesetSpiegel` der Projekt-Config) mit dem Ruleset auf dem Server ab:
- * `name`, `requiredChecks` (Menge), `codeScanning` (Werkzeug und beide Schwellen) und `bypassActors`. Ersetzt den Handbefehl `gh api repos/<repo>/rulesets/<id>`.
+ * `name`, `requiredChecks` (Menge), `strict` (Branch muss aktuell sein; fehlt es im Spiegel, ist das eine Abweichung), `codeScanning` (Werkzeug und beide Schwellen) und `bypassActors`. Ersetzt den Handbefehl `gh api repos/<repo>/rulesets/<id>`.
  *
  * Der Spiegel-Abgleich läuft nur im lokalen `--pruefen`: `bypass_actors` liefert GitHub nur mit Admin-Recht, das Token des Wochenlaufs hat es nicht (der Pin-Punkt `Required-Check-Pin` liest dagegen `rules/branches/<branch>` ohne Admin-Recht, `pinPunkt`, und läuft auch im Wochenlauf). Fehlt das Feld oder scheitert der Endpunkt
  * (403, 404, Netz), ist der Punkt `NICHT PRÜFBAR` (fail-closed), nie still grün. Ein Spiegel ohne `id` oder ein Aufruf ohne `lesen` lässt den Punkt aus (`rulesetPunkte`). Pur bis auf die Naht `lesen(args)` (liefert die geparste
@@ -18,7 +18,9 @@ const sortiert = (liste) => liste.map((e) => JSON.stringify(e)).sort();
 const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const checksAus = (regeln) => regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context)).sort();
-const werkzeugeAus = (regeln) => regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? [])
+/** `strict_required_status_checks_policy` des Rulesets (Branch muss aktuell sein): `true`, wenn eine Regel `required_status_checks` es setzt. Fehlt `strict` im Spiegel, ist das nie gleich (fail-closed). */
+const strictAus = (regeln) => regeln.filter((r) => r.type === "required_status_checks").some((r) => r.parameters?.strict_required_status_checks_policy === true);
+const werkzeugeAus =(regeln) => regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? [])
   .map((w) => ({ tool: w.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll, ist]) => [soll, w[ist]])) }))
   .sort((a, b) => String(a.tool).localeCompare(String(b.tool)));
 
@@ -29,6 +31,7 @@ function abweichungen(spiegel, live) {
   return [
     live.name !== spiegel.name && "name",
     !gleich(checksAus(regeln), [...spiegel.requiredChecks].sort()) && "requiredChecks",
+    strictAus(regeln) !== spiegel.strict && "strict",
     !gleich(werkzeugeAus(regeln), sollWerkzeuge.map((e) => ({ tool: e.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll]) => [soll, e[soll]])) }))) && "codeScanning",
     !gleich(sortiert(live.bypass_actors), sortiert(spiegel.bypassActors)) && "bypassActors",
   ].filter(Boolean);
