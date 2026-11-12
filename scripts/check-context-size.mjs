@@ -155,8 +155,7 @@ function messeAlle(red) {
   try {
     return [...collectContextSizes(), ...collectAgentSkillSizes()];
   } catch (e) {
-    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
-    console.error(red("Fix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen."));
+    console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`));
     process.exit(1);
   }
 }

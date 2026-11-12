@@ -3,15 +3,11 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Geprüft wird (reine Funktion `bedingteDateienBefunde(kern, eingabe)`, geschlossener Katalog `KATALOG`, genau zwei Kerne):
- *  (a) der Kern nennt jede bedingte Datei mit vollem Pfad, und die Zeile mit dem Pfad enthält die Bedingungs-Tokens der Datei (Tokens je Kern, leer = nur der Pfad);
- *  (b) die Datei existiert, steht in `AGENTEN_SKILL_BUDGETS` und im Besitz-Manifest, ihr Kopf nennt den Kern-Pfad;
- *  (c) geschlossene Menge: jede Datei im Ordner, die auf das Namensmuster des Kerns passt, steht im Katalog (eine Waise ist rot); ein Verweis im Kern ohne Datei ist rot;
- *  (d) nur mit `codexQuelle`: die Codex-Rolle liest den Kern als Quelle, und die Dateien liegen im gemeinsamen Skill-Verzeichnis.
- * Plattform-Weiche (`plattformWeicheBefunde`, eigener Block): Windows-Sonderfälle (`WINDOWS_TOKENS`) stehen nicht im Kern-Rumpf (ohne Frontmatter und Projektwerte-Block); die weiteren Leser (`WEICHE_LESER`) ebenso.
- * Grenze: geprüft wird die Verdrahtung (Pfad, Bedingung, Budget, Manifest, Weiche), nicht ob ein Lauf die Datei bei Eintritt der Bedingung tatsächlich liest;
- * die Windows-Tokens sind eine geschlossene Liste, ein neuer Sonderfall mit anderem Wort fällt im Review auf. Der Rumpf-Check kennt nur Groß-/Kleinschreibung wie in der Liste.
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). Begriffe: `docs/harness-glossar.md` › Plattform-Weiche, Bedingte Datei (Skill). */
+ * Geprüft wird (`bedingteDateienBefunde(kern, eingabe)`, geschlossener Katalog `KATALOG`, genau zwei Kerne): (a) der Kern nennt jede bedingte Datei mit vollem Pfad, die Zeile enthält die Bedingungs-Tokens
+ * (je Kern, leer = nur der Pfad); (b) die Datei existiert, steht in `AGENTEN_SKILL_BUDGETS` und im Besitz-Manifest, ihr Kopf nennt den Kern; (c) jede Datei im Ordner nach dem Namensmuster des Kerns
+ * steht im Katalog (Waise rot), ein Verweis ohne Datei ist rot; (d) nur mit `codexQuelle`: Codex-Rolle und gemeinsames Skill-Verzeichnis. Plattform-Weiche (eigener Block): Windows-Sonderfälle (`WINDOWS_TOKENS`)
+ * stehen nicht im Kern-Rumpf (ohne Frontmatter und Projektwerte-Block), die weiteren Leser (`WEICHE_LESER`) ebenso.
+ * Grenze: geprüft wird die Verdrahtung, nicht das Lesen im Lauf; die Windows-Tokens sind eine geschlossene Liste. Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). Begriffe: `docs/harness-glossar.md` › Plattform-Weiche, Bedingte Datei (Skill). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -43,7 +39,7 @@ const KATALOG: Kern[] = [
     ordner: ".agents/skills/review-lenses",
     muster: /^ablauf-.+\.md$/,
     codexQuelle: null,
-    dateien: ["ablauf-abnahme-fix.md", "ablauf-klasse-hoch.md", "ablauf-merge-main.md", "ablauf-nachweis.md", "ablauf-zusatzpass.md"].map((datei) => ({ datei, tokens: [] })),
+    dateien: ["abnahme-fix", "klasse-hoch", "merge-main", "nachweis", "zusatzpass"].map((n) => ({ datei: `ablauf-${n}.md`, tokens: [] })),
   },
   {
     kern: ".claude/agents/factory-umsetzer.md",
@@ -61,8 +57,7 @@ const KATALOG: Kern[] = [
   },
 ];
 const UMSETZER = KATALOG[1];
-const ORDNER = UMSETZER.ordner;
-const KERN = UMSETZER.kern;
+const { ordner: ORDNER, kern: KERN } = UMSETZER;
 
 /** Windows-Sonderfälle: sie gehören hinter die Plattform-Weiche (`plattform-windows.md`), nicht in den Kern-Rumpf. */
 const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync", "Test-Path"];
@@ -177,11 +172,11 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
 
   for (const k of KATALOG) {
     describe(k.kern, () => {
-      test("echter Stand: Pfade, Bedingungen, Köpfe, Budgets, Manifest, Waisen und Verweise sind in Ordnung; der Ordner enthält genau die Katalogdateien", () => {
+      test("echter Stand: Pfade, Bedingungen, Köpfe, Budgets, Manifest, Waisen und Verweise sind in Ordnung (auch mit CRLF); der Ordner enthält genau die Katalogdateien", () => {
         const e = echt(k);
         assert.deepEqual(bedingteDateienBefunde(k, e), []);
+        assert.deepEqual(bedingteDateienBefunde(k, { ...e, kern: e.kern.replace(/\n/g, "\r\n") }), [], "CRLF-Checkout");
         assert.deepEqual(e.ordnerDateien.filter((d) => k.muster.test(d)).sort(), k.dateien.map((d) => d.datei).sort());
-        assert.deepEqual(genannt(k, e.kern), k.dateien.map((d) => d.datei).sort(), "der Kern nennt jede mit vollem Pfad");
       });
 
       test("Negativfall (L32): ein entfernter Verweis macht jede einzelne bedingte Datei rot (der Kern nennt den Pfad nicht)", () => {
@@ -201,19 +196,14 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
         assert.deepEqual(bedingteDateienBefunde(k, { ...e, ordnerDateien: [...e.ordnerDateien, ...harmlos] }), []);
       });
 
-      test("Negativfall: ein Verweis auf eine Datei, die es nicht gibt, ist rot", () => {
-        const e = echt(k);
-        const weg = `${k.dateien[0].datei.split("-")[0]}-weg.md`;
-        assert.match(befund(k, { ...e, kern: `${e.kern}\n${k.ordner}/${weg}\n` }), new RegExp(`Verweis ohne Datei: ${escapeRe(weg)}`));
-      });
-
-      test("Negativfall Budget und Manifest: ein fehlender Eintrag je Datei ist rot", () => {
+      test("Negativfall: ein Verweis auf eine Datei, die es nicht gibt, ein fehlender Budget- oder Manifest-Eintrag sind rot", () => {
         const e = echt(k);
         const { datei } = k.dateien[0];
         const pfad = `${k.ordner}/${datei}`;
-        const re = (t: string): RegExp => new RegExp(`${escapeRe(datei)}: ${t}`);
-        assert.match(befund(k, { ...e, budgets: e.budgets.filter((b) => b.file !== pfad) }), re("kein Eintrag in AGENTEN_SKILL_BUDGETS"));
-        assert.match(befund(k, { ...e, besitz: e.besitz.filter((p) => p !== pfad) }), re("kein Eintrag im Besitz-Manifest"));
+        const weg = `${datei.split("-")[0]}-weg.md`;
+        assert.match(befund(k, { ...e, kern: `${e.kern}\n${k.ordner}/${weg}\n` }), new RegExp(`Verweis ohne Datei: ${escapeRe(weg)}`));
+        assert.match(befund(k, { ...e, budgets: e.budgets.filter((b) => b.file !== pfad) }), new RegExp(`${escapeRe(datei)}: kein Eintrag in AGENTEN_SKILL_BUDGETS`));
+        assert.match(befund(k, { ...e, besitz: e.besitz.filter((p) => p !== pfad) }), new RegExp(`${escapeRe(datei)}: kein Eintrag im Besitz-Manifest`));
       });
 
       test("Negativfall Datei und Kopf: eine fehlende Datei und ein Kopf ohne Kern-Pfad sind rot; das Kopf-Fenster endet bei Zeichen 600", () => {
@@ -228,22 +218,14 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
         assert.doesNotMatch(befund(k, { ...e, lies: mit(500) }), /: der Kopf nennt den Kern/);
       });
 
-      test("CRLF-Checkout: der echte Kern mit \\r\\n ist in Ordnung", () => {
-        const e = echt(k);
-        assert.deepEqual(bedingteDateienBefunde(k, { ...e, kern: e.kern.replace(/\n/g, "\r\n") }), []);
-      });
     });
   }
 
-  test("Negativfall Bedingung: nur der Umsetzer-Kern verlangt Tokens; der Pfad ohne sein Token ist rot", () => {
+  test("Negativfall Bedingung und Codex: der Pfad ohne sein Token ist rot (nur der Umsetzer-Kern hat Tokens und Codex-Quelle)", () => {
     const e = echt(UMSETZER);
     const ohneToken = e.kern.split("\n").map((z) => (z.includes(`${ORDNER}/umsetzer-gruppen.md`) ? z.split("GRUPPEN").join("X") : z)).join("\n");
     assert.match(befund(UMSETZER, { ...e, kern: ohneToken }), /umsetzer-gruppen\.md: die Zeile mit dem Pfad nennt die Bedingung nicht \(fehlt: GRUPPEN\)/);
     assert.deepEqual(KATALOG[0].dateien.flatMap((d) => d.tokens), [], "Review-Skill: mehr Pflicht wäre Härten ohne Evidenz");
-  });
-
-  test("Negativfall Codex: ohne Rolle mit Quelle factory-umsetzer, oder mit anderem Skill-Verzeichnis, ist es rot; der Review-Kern hat keine Codex-Quelle", () => {
-    const e = echt(UMSETZER);
     const umbenannt = e.rollen.map((r) => (r.quelle === "factory-umsetzer" ? { ...r, quelle: "anderer-umsetzer" } : r));
     assert.match(befund(UMSETZER, { ...e, rollen: umbenannt }), /keine Codex-Rolle mit Quelle factory-umsetzer/);
     assert.match(befund(UMSETZER, { ...e, quellVerzeichnis: ".andere/skills" }), /liegt nicht im gemeinsamen Skill-Verzeichnis/);
@@ -253,33 +235,22 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
 
 describe("Plattform-Weiche des Umsetzers (factory#310)", () => {
   const kernText = readFileSync(WURZEL + KERN, "utf8");
-  const weiche = (kern: string): string => plattformWeicheBefunde(kern).join("\n");
-
-  test("echter Stand: der Satz der Weiche steht, der Kern-Rumpf trägt keinen Windows-Sonderfall", () => {
+  const weiche = (kern: string): string => plattformWeicheBefunde(kern).join("\n");  test("echter Stand: der Satz der Weiche steht, der Kern-Rumpf trägt keinen Windows-Sonderfall", () => {
     assert.deepEqual(plattformWeicheBefunde(kernText), []);
   });
 
-  test("Negativfall Weiche: fehlt der Satz mit `process.platform`/`win32`, ist es rot", () => {
-    assert.match(weiche(kernText.split("`win32`").join("`other`")), /Plattform-Weiche: der Kern nennt Bedingung/);
-  });
-
-  test("Negativfall Weiche: jede Komponente des Satzes zählt (Eigenschaft, Wert, Zeitpunkt, Ort)", () => {
+  test("Negativfall Weiche: jede Komponente des Satzes zählt (Eigenschaft, Wert, Zeitpunkt, Ort), auch ein Zeilenumbruch dazwischen", () => {
     for (const [von, nach] of [
       ["process.platform", "os.platform"],
-      ["den Wert `win32`", "den Wert `linux`"],
+      ["`win32`", "`other`"],
       ["liest du vor Schritt 1", "liest du nach Schritt 1"],
+      ["liest du vor Schritt 1", "\nliest du vor Schritt 1"],
       ["factory/plattform-windows.md`.", "factory/plattform-linux.md`."],
     ]) {
       const kern = kernText.split(von).join(nach);
       assert.notEqual(kern, kernText, `Muster „${von}“ muss treffen`);
       assert.match(weiche(kern), /Plattform-Weiche: der Kern nennt Bedingung/, von);
     }
-  });
-
-  test("Weiche: Bedingung und Ort in verschiedenen Zeilen sind nicht ein Satz, also rot", () => {
-    const kern = kernText.split("liest du vor Schritt 1").join("\nliest du vor Schritt 1");
-    assert.notEqual(kern, kernText);
-    assert.match(weiche(kern), /Plattform-Weiche: der Kern nennt Bedingung/);
   });
 
   test("Negativfall Weiche: ein Windows-Sonderfall im Kern-Rumpf (taskkill) ist rot, im Frontmatter oder Projektwerte-Block nicht", () => {
@@ -299,18 +270,11 @@ describe("Plattform-Weiche des Umsetzers (factory#310)", () => {
     assert.ok(kernText.includes("**vor** dem Nachweis-Commit `git fetch origin` und `origin/main` einmergen"), "Abnahme-Absatz: fetch vor dem Merge");
   });
 
-  test("Rumpf ohne Projektwerte-Block: der ganze Text zählt, ein Windows-Token ist rot", () => {
+  test("jedes Windows-Token im Kern-Rumpf ist rot; ohne Projektwerte-Block zählt der ganze Text; CRLF-Checkout ist in Ordnung", () => {
     const ohneBlock = kernText.split("<!-- factory:projektwerte:start -->").join("").split("<!-- factory:projektwerte:end -->").join("");
     assert.deepEqual(plattformWeicheBefunde(ohneBlock), []);
-    assert.match(weiche(`${ohneBlock}\ntaskkill\n`), /Windows-Sonderfall „taskkill“/);
-  });
-
-  test("jedes Windows-Token im Kern-Rumpf ist rot", () => {
-    for (const t of ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"]) assert.ok(weiche(`${kernText}\n${t}\n`).includes(`Windows-Sonderfall „${t}“`), t);
-  });
-
-  test("CRLF-Checkout: der echte Kern mit \\r\\n ist in Ordnung (Frontmatter wird trotzdem abgetrennt)", () => {
     assert.deepEqual(plattformWeicheBefunde(kernText.replace(/\n/g, "\r\n")), []);
+    for (const t of ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"]) assert.ok(weiche(`${ohneBlock}\n${t}\n`).includes(`Windows-Sonderfall „${t}“`), t);
   });
 
   test("Windows-Sonderfälle stehen in der Plattform-Datei (die Weiche verschiebt sie, sie entfallen nicht)", () => {

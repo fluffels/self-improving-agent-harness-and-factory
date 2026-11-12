@@ -122,11 +122,10 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
   test("L17: X-AGENTS.md unter .agents/skills zählt als Agenten-/Skill-Datei, genau AGENTS.md nicht (Dateinamen-Vergleich statt endsWith)", () => {
     const t = fixHinweis([{ file: ".agents/skills/proj/X-AGENTS.md" }]);
     assert.match(t, /Agenten-\/Skill-Datei: kürzen/);
-    assert.doesNotMatch(t, /modul-lokale AGENTS\.md/);
+    assert.doesNotMatch(t, /modul-lokale/);
     assert.match(fixHinweis([{ file: ".agents/skills/proj/AGENTS.md" }]), /modul-lokale AGENTS\.md/);
     temp((dir) => {
-      datei(dir, ".agents/skills/proj/X-AGENTS.md", "x");
-      datei(dir, ".agents/skills/proj/AGENTS.md", "x");
+      for (const n of ["X-AGENTS.md", "AGENTS.md"]) datei(dir, `.agents/skills/proj/${n}`, "x");
       assert.deepEqual(collectFiles(dir), [".agents/skills/proj/X-AGENTS.md"]);
     });
   });
@@ -211,9 +210,7 @@ describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien
 describe("CLI check-context-size: Gate-Meldung und Ausnahme im Bezieher (L17, L24)", () => {
   const bezieher = (dir: string): void => {
     kopiereScripts(dir);
-    datei(dir, ".factory/projekt.json", readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8"));
-    datei(dir, ".factory/sync-stand.json", JSON.stringify({ version: 2 }));
-    datei(dir, "AGENTS.md", "# Projekt\n");
+    for (const [rel, inhalt] of [[".factory/projekt.json", readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")], [".factory/sync-stand.json", JSON.stringify({ version: 2 })], ["AGENTS.md", "# Projekt\n"]]) datei(dir, rel, inhalt);
   };
   const lauf = (dir: string) => {
     const r = spawnSync(process.execPath, [join(dir, "scripts", "check-context-size.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 });
