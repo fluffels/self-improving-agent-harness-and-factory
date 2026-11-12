@@ -347,7 +347,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
     "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
-    "Sammel-Check": () => sammelCheckPunkt({ config, workflows }),
+    "Sammel-Check": () => sammelCheckPunkt({ config, workflows, vorAbbruch }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }

@@ -6,9 +6,12 @@ import { sammelCheckPunkt as rawPunkt } from "../scripts/harness-doctor-sammelch
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { blockformJobs as rawJobs } from "../scripts/workflow-blockform.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeDateien as rawDateien } from "../scripts/harness-doctor-dateien.mjs";
+
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; hinweis?: string; befund?: string; fix?: string }
-const punktFuer = rawPunkt as (e: { config?: unknown; workflows?: Workflow[] }) => Ergebnis;
+const punktFuer = rawPunkt as (e: { config?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
 const jobsLesen = rawJobs as (t: string) => { ausloeser?: string[]; jobs?: { id: string; needs: string[]; if: string | null; uses: string | null }[]; fehler?: { zeile: number; konstrukt: string } };
 
 const ALARM_USES = "./.github/workflows/alarm-rot-main.yml";
@@ -117,6 +120,63 @@ describe("Sammel-Check (factory#401)", () => {
     expect(gut.ok).toBe(true);
     const schlecht = punktFuer({ config, workflows: ci(GUT) });
     expect(schlecht.befund).toMatch(/b\.yml/);
+  });
+});
+
+describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
+  const dateipunkt = (a: Record<string, unknown>) => (rawDateien({ rootDir: "/nirgends", git: () => [], existiert: () => true, lies: () => null, ...a }) as Ergebnis[]).find((p) => p.punkt === "Sammel-Check")!;
+
+  test("Verdrahtung: pruefeDateien reicht config und workflows an den Punkt (Lücke und gesund)", () => {
+    const schlecht = dateipunkt({ config: CONFIG, workflows: ci(GUT.replace(BUILD, `${BUILD}  neu:\n    runs-on: x\n`)) });
+    expect(schlecht.ok).toBe(false);
+    expect(schlecht.befund).toMatch(/neu/);
+    const gesund = dateipunkt({ config: CONFIG, workflows: ci(GUT) });
+    expect(gesund).toEqual({ punkt: "Sammel-Check", ok: true });
+  });
+
+  test("Vorab-Abbruch: nicht prüfbar statt einer Fehl-Lücke „Workflow-Datei fehlt“", () => {
+    const p = dateipunkt({ config: CONFIG, workflows: [], vorAbbruch: true });
+    expect(p.nichtPruefbar).toBe(true);
+    expect(p.befund).not.toMatch(/fehlt unter/);
+    expect(punktFuer({ config: CONFIG, workflows: ci(GUT), vorAbbruch: true }).nichtPruefbar).toBe(true);
+  });
+
+  test("ein Eintrag, der kein Objekt ist, wirft nicht (ungeprüfte Config im Vorab-Abbruch)", () => {
+    for (const e of [null, "x", 3]) expect(lauf(GUT, { sammelChecks: [e] }).nichtPruefbar).toBe(true);
+  });
+
+  test("nachgelagerte Jobs (deploy hinter dem Sammel-Job) sind keine Pflicht-needs, direkt und über mehrere Stufen", () => {
+    const deploy = "  deploy:\n    needs: [gate]\n    runs-on: x\n  spaeter:\n    needs: [deploy]\n    runs-on: x\n";
+    const p = lauf(GUT.replace(ALARM, `${deploy}${ALARM}`));
+    expect(p).toEqual({ punkt: "Sammel-Check", ok: true });
+    const fehlt = lauf(GUT.replace(ALARM, `${deploy}  neu:\n    runs-on: x\n${ALARM}`));
+    expect(fehlt.befund).toMatch(/„neu“/);
+    expect(fehlt.befund).not.toMatch(/deploy|spaeter/);
+    expect(fehlt.fix).toContain("`needs: [build, audit, neu]`");
+  });
+
+  test("Zyklus in needs führt nicht zur Endlosschleife", () => {
+    expect(lauf(KOPF + "  a:\n    needs: [b]\n  b:\n    needs: [a]\n  gate:\n    needs: [a, b]\n" + ALARM).ok).toBe(true);
+  });
+
+  test("zwei Sammel-Jobs in einem Workflow: jeder braucht seinen eigenen Alarm-Aufruf mit needs auf ihn", () => {
+    const config = { sammelChecks: [{ workflow: "ci.yml", job: "gate" }, { workflow: "ci.yml", job: "g2" }] };
+    const g2 = "  g2:\n    needs: [build, audit, gate]\n    runs-on: x\n";
+    const alarm2 = ALARM.replace("alarm:", "alarm2:").replace("needs: [gate]", "needs: [g2]");
+    expect(punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM + alarm2)) })).toEqual({ punkt: "Sammel-Check", ok: true });
+    const nur1 = punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM)) });
+    expect(nur1.ok).toBe(false);
+    expect(nur1.befund).toMatch(/Alarm-Job „alarm“.*needs nennt „g2“ nicht/);
+  });
+
+  test("Alarm-if: failure als Wort und ein verlängertes push sind keine Treffer", () => {
+    expect(lauf(GUT.replace("failure()", "steps.x.outputs.failure == 'true'")).befund).toMatch(/failure\(\)/);
+    expect(lauf(GUT.replace("== 'push'", "== 'pushx'")).befund).toMatch(/push/);
+  });
+
+  test("Fix-Text und Befund nennen Jobname, Zeile und Konstrukt", () => {
+    expect(lauf(KOPF + BUILD + GATE).fix).toContain("needs: [gate]");
+    expect(lauf("name: CI\non:\n  push:\njobs: {a: 1}\n").befund).toMatch(/ci\.yml:4 /);
   });
 });
 

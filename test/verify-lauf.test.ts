@@ -203,6 +203,16 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
     expect(lokal.log).not.toContain("z80\n");
   });
 
+  test("factory#401 L61: nur GITHUB_ACTIONS=true schaltet die Kürzung ab; CRLF und Leerzeilen am Ende werden normalisiert", () => {
+    const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
+    const rotRun = (text: string) => (j: Job) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? text : "" });
+    for (const wert of ["false", "", "1"]) expect(lauf([], rotRun(lang), undefined, { GITHUB_ACTIONS: wert }).log).toMatch(/50 Zeilen gekürzt/);
+    const crlf = lauf([], rotRun("a\r\nb\r\n\r\n\r\n"), undefined, { GITHUB_ACTIONS: "true" }).log;
+    expect(crlf).toContain("──\na\nb\n\n");
+    expect(crlf).not.toContain("\r");
+    expect(crlf).not.toContain("b\n\n\n");
+  });
+
   test("ergebnisAusProzess: status null (Signal, Timeout, Startfehler) ist rot und nennt den Fehler", () => {
     const r = io.ergebnisAusProzess({ status: null, stdout: "a", error: new Error("ETIMEDOUT") });
     expect(r.status).toBe(1);

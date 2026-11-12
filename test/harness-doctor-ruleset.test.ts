@@ -125,6 +125,14 @@ describe("Ruleset-Spiegel: LÜCKE je Feld", () => {
     expect(x.ok).toBe(false);
     expect(x.befund).toContain("strict");
   });
+  test("strict: nur eine required_status_checks-Regel zählt, auch ohne parameters (factory#401)", () => {
+    const fremd = live();
+    fremd.rules.push({ type: "pull_request", parameters: { strict_required_status_checks_policy: true } } as never);
+    expect(lauf(fremd).ok).toBe(true);
+    const ohneParameter = live();
+    ohneParameter.rules.unshift({ type: "required_status_checks" } as never);
+    expect(lauf(ohneParameter).ok).toBe(true);
+  });
   test("Bypass-Akteur live, Spiegel leer", () => {
     const x = lauf(live({ bypass_actors: [{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }] }));
     expect(x.ok).toBe(false);
