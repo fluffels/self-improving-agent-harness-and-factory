@@ -38,7 +38,7 @@ export async function tracingMaengel({ fetchImpl = fetch, fristMs = FRIST_MS, en
   }
 }
 
-export async function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)), werkzeug = (r, l) => werkzeugMaengel({ root: r, lade: l }), codexVersion = installierteCodexVersion, freigaben = FREIGABEN, fetchImpl = fetch, fristMs = FRIST_MS, env = process.env, home = homedir(), lies } = {}) {
+export async function main(argv = process.argv.slice(2), { out = console.log, err = console.error, lade = ladeProjektConfig, root = fileURLToPath(new URL("../", import.meta.url)), werkzeug = (r, l) => werkzeugMaengel({ root: r, lade: l }), codexVersion = installierteCodexVersion, freigaben = FREIGABEN, ...tracing } = {}) {
   const { werte, fehler } = flagsLesen(argv, { belege: { type: "string" } });
   if (fehler) { err(fehler.text); return 2; }
   try {
@@ -48,7 +48,7 @@ export async function main(argv = process.argv.slice(2), { out = console.log, er
     maengel.push(...lokaleMaengel(root, config));
     maengel.push(...werkzeug(root, lade).map((m) => `Werkzeug-Vorprüfung: ${m.text} (Fix: ${m.fix})`));
     maengel.push(...freigabeMaengel({ installiert: codexVersion(), belegt: belege?.version, tabelle: freigaben }));
-    maengel.push(...(await tracingMaengel({ fetchImpl, fristMs, env, home, lies })));
+    maengel.push(...(await tracingMaengel(tracing)));
     const autonom = maengel.length === 0;
     out(JSON.stringify({ autonom, maengel }));
     return autonom ? 0 : 1;

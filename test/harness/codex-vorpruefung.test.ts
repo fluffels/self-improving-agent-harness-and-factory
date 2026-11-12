@@ -52,7 +52,7 @@ function projekt(rollen: Record<string, string>) {
   for (const [n, t] of Object.entries(rollen)) writeFileSync(join(d, ".codex", "agents", n), t);
   return d;
 }
-test("lokale Rollen: aktuell, veraltet, verwaist und fehlender Ordner", async () => {
+test("lokale Rollen: aktuell, veraltet, verwaist und fehlender Ordner", () => {
   const soll = Object.entries(lib.setupDateien(mcp, config, "http://localhost/")).filter(([k]) => k.startsWith(".codex/agents/")).map(([k, t]) => [k.split("/").pop() as string, t] as const);
   const [name, text] = soll[0];
   expect(lib.lokaleRollenMaengel(projekt(Object.fromEntries(soll)), config, mcp)).toEqual([]);
@@ -63,7 +63,7 @@ test("lokale Rollen: aktuell, veraltet, verwaist und fehlender Ordner", async ()
   const leer = mkdtempSync(join(tmpdir(), "codex-rollen-")); temps.push(leer);
   expect(lib.lokaleRollenMaengel(leer, config, mcp)).toEqual([]);
 });
-test("lokale Hook-Registrierung (factory#364): fehlt, weicht ab, ist Symlink oder steht inline in config.toml, je ein Mangel; Soll meldet nichts", async () => {
+test("lokale Hook-Registrierung (factory#364): fehlt, weicht ab, ist Symlink oder steht inline in config.toml, je ein Mangel; Soll meldet nichts", () => {
   const d = leerRoot();
   expect(lib.lokaleHookMaengel(d)).toEqual([]);
   const fehlt = mkdtempSync(join(tmpdir(), "codex-hook-leer-")); temps.push(fehlt);
@@ -79,7 +79,7 @@ test("lokale Hook-Registrierung (factory#364): fehlt, weicht ab, ist Symlink ode
   mkdirSync(join(l, ".codex")); symlinkSync(join(d, ".codex", "hooks.json"), join(l, ".codex", "hooks.json"));
   expect(() => lib.lokaleHookMaengel(l)).toThrow("Symlink");
 });
-test("lokale Hook-Registrierung: inline [hooks] in jeder Schreibweise und an beliebiger Stelle, Ordner statt Datei und config.toml als Symlink", async () => {
+test("lokale Hook-Registrierung: inline [hooks] in jeder Schreibweise und an beliebiger Stelle, Ordner statt Datei und config.toml als Symlink", () => {
   const d = leerRoot();
   const toml = (text: string) => { writeFileSync(join(d, ".codex", "config.toml"), text); return lib.lokaleHookMaengel(d); };
   for (const text of ["# Kopf\n[agents]\nenabled = true\n\n[hooks]\n", "[agents]\n  [hooks]\n", "[agents]\n[ hooks.PreToolUse ]\n", "[agents]\n[[hooks.PreToolUse]]\n"]) expect(toml(text), text).toHaveLength(1);
@@ -102,7 +102,7 @@ test("Vorprüfung: fehlende Hook-Registrierung ist ein Mangel auch ohne .codex/a
   const r = await lauf([], { root: fehlt, codexVersion: () => null });
   expect(r).toMatchObject({ code: 1, autonom: false }); expect(r.maengel?.join()).toContain(".codex/hooks.json");
 });
-test("lokale Rollen: ein Ordner an der Stelle einer Rollen-Datei ist veraltet, kein Absturz", async () => {
+test("lokale Rollen: ein Ordner an der Stelle einer Rollen-Datei ist veraltet, kein Absturz", () => {
   const soll = Object.keys(lib.setupDateien(mcp, config, "http://localhost/")).filter(k => k.startsWith(".codex/agents/")).map(k => k.split("/").pop() as string);
   const d = projekt({}); mkdirSync(join(d, ".codex", "agents", soll[0]));
   const m = lib.lokaleRollenMaengel(d, config, mcp);
@@ -116,13 +116,13 @@ function unterVerlinktemVorfahren() {
   symlinkSync(real, join(d, "link"), "junction");
   return { d, root: join(d, "link", "repo") };
 }
-test("Wurzel unter verlinktem Vorfahren ist erlaubt (Guard prüft nur unterhalb der Wurzel)", async () => {
+test("Wurzel unter verlinktem Vorfahren ist erlaubt (Guard prüft nur unterhalb der Wurzel)", () => {
   const { root } = unterVerlinktemVorfahren();
   expect(lib.lokaleRollenMaengel(root, config, mcp)).toEqual([]);
   expect(lib.pruefeAusgabe(root)).toBe(root);
   expect(lib.quellDatei(root, ".mcp.json")).toBe(join(root, ".mcp.json"));
 });
-test("Symlink innerhalb der Wurzel bleibt ein Fehler", async () => {
+test("Symlink innerhalb der Wurzel bleibt ein Fehler", () => {
   const { d, root } = unterVerlinktemVorfahren();
   const ziel = join(d, "anderswo"); mkdirSync(ziel);
   rmSync(join(root, ".codex", "agents"), { recursive: true }); symlinkSync(ziel, join(root, ".codex", "agents"), "junction");
@@ -186,7 +186,7 @@ test("Freigabe: Version fehlt in der Tabelle, weicht ab oder ist nicht ermittelb
   const keine = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => null, freigaben: tabelle() });
   expect(keine.code).toBe(1); expect(keine.maengel).toEqual([expect.stringMatching(/nicht ermittelbar.*PATH/)]);
 });
-test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", async () => {
+test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", () => {
   const stub = (r: unknown) => { const calls: unknown[][] = []; return { calls, spawn: (...a: unknown[]) => { calls.push(a); return r; } }; };
   const win = stub({ status: 0, stdout: "codex-cli 0.164.0\n" });
   expect(p.installierteCodexVersion({ plattform: "win32", spawn: win.spawn })).toBe("0.164.0");
@@ -225,7 +225,7 @@ const ausfaelle: [string, unknown][] = [
   ["ungültige Antwort ohne Status", () => Promise.resolve({})],
 ];
 for (const [name, stub] of ausfaelle) {
-  test(`Tracing-Ausfall (${name}): Mangel \"Tracing-Ausfall\" und Exit 1, auch bei sonst vollständiger Freigabe`, async () => {
+  test(`Tracing-Ausfall (${name}): Mangel „Tracing-Ausfall“ und Exit 1, auch bei sonst vollständiger Freigabe`, async () => {
     const r = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(stub) });
     expect(r.code).toBe(1); expect(r.autonom).toBe(false);
     expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: /);

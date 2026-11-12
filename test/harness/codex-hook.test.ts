@@ -48,7 +48,7 @@ beforeAll(() => {
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 const nutzlast = (tool_name: string, tool_input: unknown, cwd = wt) => JSON.stringify({ session_id: "s", cwd, hook_event_name: "PreToolUse", tool_name, tool_input });
-const gesund = async () => ({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" }); // kein Test trifft das echte Netz
+const gesund = () => Promise.resolve({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" }); // kein Test trifft das echte Netz
 const lauf = (text: string, d: Record<string, unknown> = {}) => adapter.entscheide(text, haupt, { health: gesund, ...d });
 const grund = (o: Out) => o?.hookSpecificOutput.permissionDecisionReason ?? "";
 const patch = (...zeilen: string[]) => ["*** Begin Patch", ...zeilen, "*** End Patch", ""].join("\n");
@@ -283,11 +283,11 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
   }
   test("werfende Health und Urteil ohne ok → Deny", async () => {
     expect(grund(await lauf(spawn, { health: () => { throw new Error("kaputt"); } }))).toContain("kaputt");
-    expect(grund(await lauf(spawn, { health: async () => ({}) }))).toContain("Tracing-Ausfallstopp");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({}) }))).toContain("Tracing-Ausfallstopp");
   });
   test("erreichbar: Guard-Entscheid bleibt, Health genau einmal je spawn_agent", async () => {
     let n = 0;
-    const d = { health: async () => { n++; return { ok: true, grund: "ok" }; } };
+    const d = { health: () => { n++; return Promise.resolve({ ok: true, grund: "ok" }); } };
     expect(grund(await lauf(nutzlast("spawn_agent", { agent_type: "sih-lens", message: "Prüfe das mal." }), d))).toContain("Brille");
     expect(await lauf(spawn, d)).toBeNull();
     expect(n).toBe(2);

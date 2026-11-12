@@ -40,7 +40,8 @@ type Werkzeug = {
 const w = raw as unknown as Werkzeug;
 const lib = rawLib as unknown as { ladeProjektConfig: () => unknown; vorpruefungAus: (c: unknown) => { befehle: unknown[]; userScopeServer: string[] }; pruefeProjektConfig: (c: unknown) => string[] };
 const bloecke = rawBloecke as unknown as { pruefeVorpruefung: (b: unknown) => string[] };
-const codex = rawCodex as unknown as { main: (argv: string[], o: Record<string, unknown>) => number };
+const codex = rawCodex as unknown as { main: (argv: string[], o: Record<string, unknown>) => Promise<number> };
+const GESUND = { fetchImpl: () => Promise.resolve({ status: 200 }), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
 
 const agent = (tools: string) => `---\nname: x\ntools: ${tools}\n---\ntext`;
 const PW = agent("Read, mcp__playwright__browser_click, mcp__playwright__browser_close");
@@ -254,13 +255,13 @@ describe("CLI und Codex", () => {
     const x = io();
     expect(w.main([], x.o)).toBe(0);
   });
-  test("codex-vorpruefung nimmt Werkzeug-Mängel auf", () => {
+  test("codex-vorpruefung nimmt Werkzeug-Mängel auf", async () => {
     const out: string[] = [];
-    const code = codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [{ text: "T", fix: "F" }] });
+    const code = await codex.main([], { ...GESUND, out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [{ text: "T", fix: "F" }] });
     expect(code).toBe(1);
     expect((JSON.parse(out[0]) as { maengel: string[] }).maengel).toContain("Werkzeug-Vorprüfung: T (Fix: F)");
     out.length = 0;
-    codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [] });
+    await codex.main([], { ...GESUND, out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [] });
     expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.some((m: string) => m.startsWith("Werkzeug-Vorprüfung"))).toBe(false);
   });
 });
@@ -351,12 +352,12 @@ describe("Review-Runde 1 (factory#260): echter Runner, Wurzel als cwd, Signal un
     expect(spawnSync(node, [skript, "--x"], { encoding: "utf8" }).status).toBe(2);
     expect(spawnSync(node, [skript], { encoding: "utf8" }).status).toBe(0);
   });
-  test("codex-vorpruefung: die Standard-Verdrahtung reicht root und lade an die Werkzeug-Vorprüfung", () => {
+  test("codex-vorpruefung: die Standard-Verdrahtung reicht root und lade an die Werkzeug-Vorprüfung", async () => {
     const root = tempRoot();
     mkdirSync(join(root, ".claude", "agents"), { recursive: true });
     writeFileSync(join(root, ".claude", "agents", "u.md"), PW);
     const out: string[] = [];
-    codex.main([], { out: (s: string) => out.push(s), err: () => {}, root, codexVersion: () => null, lade: () => ({ ...(lib.ladeProjektConfig() as object), ...block([node, "-e", "process.exit(1)"]) }) });
+    await codex.main([], { ...GESUND, out: (s: string) => out.push(s), err: () => {}, root, codexVersion: () => null, lade: () => ({ ...(lib.ladeProjektConfig() as object), ...block([node, "-e", "process.exit(1)"]) }) });
     const maengel = (JSON.parse(out[0]) as { maengel: string[] }).maengel;
     expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: MCP-Server „playwright“ fehlt"))).toBe(true);
     expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: Werkzeug „Probe“ nicht bereit"))).toBe(true);
