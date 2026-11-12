@@ -499,3 +499,48 @@ describe("factoryListe mit Issue-Repo (#238 L28)", () => {
     expect(liste([harness(1, FREMD.repo)], [1], FREMD)).toEqual([1]);
   });
 });
+
+describe("langfuseSammelEntscheidung (factory#379: Takt für das Langfuse-Sammelticket)", () => {
+  const LF = "Langfuse-Befunde (gesammelt)";
+  const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const lf = (number: number, extra: Partial<Item> = {}) => it(number, { title: LF, ...extra });
+  const harnessT = (number: number, extra: Partial<Item> = {}) => it(number, { title: "Harness-Härtung (gesammelt)", ...extra });
+  const status = (number: number) => it(number, { title: STATUS_TITEL });
+  const rot = (number: number) => it(number, { title: "🚨 CI rot auf main" });
+  const e = (items: Item[], n: number) => (raw as unknown as { langfuseSammelEntscheidung: (i: Item[], f: number) => { aktion: string; nr?: number; afterId?: string | null; grund: string } }).langfuseSammelEntscheidung(items, n);
+  const konst = raw as unknown as { LANGFUSE_TAKT_KOMMENTARE: number };
+
+  test("Schwelle 1: 0 Befund-Kommentare lassen es liegen, ab 1 kommt es hinter den Kopf", () => {
+    expect(konst.LANGFUSE_TAKT_KOMMENTARE).toBe(1);
+    const board = [status(2), it(10), it(11), lf(12)];
+    expect(e(board, 0)).toMatchObject({ aktion: "nichts" });
+    expect(e(board, 0).grund).toMatch(/Füllstand 0\/1/);
+    expect(e(board, 1)).toMatchObject({ aktion: "verschieben", nr: 12, afterId: "I2" });
+    expect(e(board, 5)).toMatchObject({ aktion: "verschieben", nr: 12, afterId: "I2" });
+  });
+
+  test("ohne Kopf auf die Spitze; Notfälle, Harness-Sammelticket und Status-Ticket an der Spitze zählen zum Kopf", () => {
+    expect(e([it(10), lf(12)], 1)).toMatchObject({ aktion: "verschieben", afterId: null });
+    expect(e([rot(1), harnessT(3), status(2), it(10), lf(12)], 1)).toMatchObject({ aktion: "verschieben", afterId: "I2" });
+    expect(e([rot(1), harnessT(3), it(10), lf(12)], 1)).toMatchObject({ aktion: "verschieben", afterId: "I3" });
+  });
+
+  test("steht es schon dort (auch mit geschlossenen Items dazwischen): nichts, idempotent", () => {
+    expect(e([status(2), lf(12), it(10)], 1).aktion).toBe("nichts");
+    expect(e([status(2), it(9, { state: "closed" }), lf(12), it(10)], 1).aktion).toBe("nichts");
+    expect(e([lf(12), it(10)], 1).aktion).toBe("nichts");
+  });
+
+  test("geclaimt, geschlossen, fehlend oder Vorgänger mit Assignee offen: nichts", () => {
+    expect(e([status(2), it(10), lf(12, { assignees: ["x"] })], 3).aktion).toBe("nichts");
+    expect(e([status(2), it(10), lf(12, { state: "closed" })], 3).aktion).toBe("nichts");
+    expect(e([status(2), it(10)], 3).aktion).toBe("nichts");
+    expect(e([status(2), it(10), lf(11, { assignees: ["x"] }), lf(12)], 3).grund).toMatch(/Vorgänger #11/);
+    expect(e([status(2), it(10), lf(11, { assignees: ["x"] }), lf(12)], 3).aktion).toBe("nichts");
+  });
+
+  test("ungültiger Füllstand wirft", () => {
+    expect(() => e([lf(12)], -1)).toThrow(/ganze Zahl/);
+    expect(() => e([lf(12)], 1.5)).toThrow(/ganze Zahl/);
+  });
+});

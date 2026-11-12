@@ -16,6 +16,7 @@ type Io = {
   loadOpenIssuePages: (repo: string) => unknown[];
   fuehreStatusAus: (e: { aktion: string; nr?: number }, ctx: unknown) => { ok: boolean; nr?: number; itemId?: string };
   fuehreHarnessAus: (h: { aktion: string; nr?: number }, items: Item[], token: string) => boolean;
+  fuehreLangfuseAus?: (l: { aktion: string; nr?: number; afterId?: string | null }, items: Item[], token: string, rolle: string) => boolean;
   itemsUeberIssues?: (rolle: string, nummern: number[], o: { token?: string; repo?: string }) => ({ number: number } | null)[];
   frischeOffeneIssues?: (a: { repo: string; label: string; anzahl: number; mitBoard?: boolean }) => { number: number; titel: string }[];
   addToBoardTodo?: (rolle: string, nodeId: string, o: { token?: string }) => string;
@@ -745,5 +746,81 @@ describe("Lesefehler und env im Takt (#97 L7 c, L11 b/d)", () => {
     });
     T.fuehreTaktAus({ config: zweiRepos, repo: FREMD.repo, jetzt, token: "t", io });
     expect(tokens).toEqual({ [FREMD.repo]: undefined, [PRODUKT]: "pt" });
+  });
+});
+
+describe("fuehreTaktAus: Langfuse-Sammelticket in der Fabrik (factory#379)", () => {
+  const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: "I" + number, number, status: "Todo", title: "T" + number, assignees: [], state: "open", ...extra });
+  const STATUS = "Langfuse-Status überprüfen";
+  const befund = { user: { login: OWNER, type: "User" }, body: "- [ ] Befund" };
+
+  function lauf(opt: { kommentare?: unknown[] | Error; okay?: boolean; bezieher?: boolean; dry?: boolean; ohneTicket?: boolean; hKommentare?: number } = {}) {
+    const log: string[] = [];
+    const langfuse: { nr?: number; afterId?: string | null; rolle: string }[] = [];
+    const geladen: number[] = [];
+    const harness: number[] = [];
+    const items = [it(50, { title: STATUS }), it(10), it(12, { title: "Harness-Härtung (gesammelt)" }), it(11), ...(opt.ohneTicket ? [] : [it(160, { title: "Langfuse-Befunde (gesammelt)" })])];
+    const io: Io = {
+      ghJson: (args) => (args.join(" ").includes("state=closed") ? [[]] : [[]]),
+      loadItems: nurFactory(items),
+      loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-07T00:00:00Z", assignees: [] }]],
+      ladeKommentare: (nr) => {
+        geladen.push(nr);
+        if (opt.kommentare instanceof Error) throw opt.kommentare;
+        return nr === 12 ? Array.from({ length: opt.hKommentare ?? 0 }, () => befund) : (opt.kommentare ?? []);
+      },
+      fuehreStatusAus: () => ({ ok: true }),
+      fuehreHarnessAus: (h) => (h.nr !== undefined && harness.push(h.nr), true),
+      fuehreLangfuseAus: (l, _i, _t, rolle) => (langfuse.push({ ...l, rolle }), opt.okay ?? true),
+      log: (z) => log.push(z),
+    };
+    const r = T.fuehreTaktAus({ config: CFG, jetzt: new Date("2026-10-08T12:00:00Z"), repo: FREMD.repo, token: "t", io, bezieher: opt.bezieher, dry: opt.dry });
+    return { r, log, langfuse, geladen, harness };
+  }
+
+  test("ab einem Befund-Kommentar kommt es hinter Harness-Sammelticket und Status-Ticket (Harness-Ticket in derselben Runde schon vorn)", () => {
+    const { r, langfuse, geladen, log } = lauf({ kommentare: [befund], hKommentare: 10 });
+    expect(langfuse).toMatchObject([{ nr: 160, afterId: "I50", rolle: "factory" }]);
+    expect(geladen).toEqual([12, 160]);
+    expect(log.join("\n")).toContain("Langfuse-Sammelticket: verschieben #160");
+    expect(r.fehler).toBe(false);
+  });
+
+  test("0 Befund-Kommentare, --dry-run, Ladefehler (Warnung) oder fehlendes Ticket bewegen nichts", () => {
+    expect(lauf().langfuse).toEqual([]);
+    expect(lauf({ kommentare: [befund], dry: true }).langfuse).toEqual([]);
+    const fehl = lauf({ kommentare: new Error("HTTP 502") });
+    expect(fehl.langfuse).toEqual([]);
+    expect(fehl.log.join("\n")).toContain("::warning::Langfuse-Takt: Füllstand von #160 nicht ladbar");
+    expect(fehl.r.fehler).toBe(false);
+    expect(lauf({ kommentare: [befund], ohneTicket: true }).langfuse).toEqual([]);
+  });
+
+  test("scheitert das Verschieben, ist der Lauf rot; im Bezieher-Modus der Fabrik läuft der Schritt ebenfalls", () => {
+    expect(lauf({ kommentare: [befund], okay: false }).r.fehler).toBe(true);
+    expect(lauf({ kommentare: [befund], bezieher: true }).langfuse).toHaveLength(1);
+  });
+});
+
+describe("fuehreLangfuseAus: Rückgabe und Fehlertext (factory#379)", () => {
+  const F = (raw as unknown as {
+    fuehreLangfuseAus: (l: { nr: number; afterId: string | null }, items: { id: string; number: number }[], token: string, rolle: string, o: { setze: (...a: unknown[]) => void; log: (z: string) => void }) => boolean;
+  }).fuehreLangfuseAus;
+  const items = [{ id: "I7", number: 7 }];
+  test("Erfolg: setzt die Position des Items und gibt true zurück", () => {
+    const aufrufe: unknown[][] = [];
+    const log: string[] = [];
+    expect(F({ nr: 7, afterId: "A" }, items, "t", "factory", { setze: (...a) => aufrufe.push(a), log: (z) => log.push(z) })).toBe(true);
+    expect(aufrufe).toEqual([["I7", "A", { token: "t" }]]);
+    expect(log).toEqual(["Langfuse-Sammelticket-Position gesetzt."]);
+  });
+  test("setze wirft: Log trägt Präfix und idempotent, Rückgabe false", () => {
+    const log: string[] = [];
+    const wirf = () => {
+      throw new Error("HTTP 502");
+    };
+    expect(F({ nr: 7, afterId: null }, items, "t", "factory", { setze: wirf, log: (z) => log.push(z) })).toBe(false);
+    expect(log.join("\n")).toMatch(/^::error::Langfuse-Sammelticket-Position nicht gesetzt: HTTP 502/);
+    expect(log.join("\n")).toContain("Die Wiederholung ist idempotent.");
   });
 });
