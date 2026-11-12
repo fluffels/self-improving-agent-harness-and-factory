@@ -10,18 +10,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/langfuse-vorbedingung.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as healthRaw from "../../scripts/langfuse-health.mjs";
 
 type Urteil = { ok: boolean; grund: string };
 type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{ status: number }>;
-type Vorbedingung = {
+type Health = {
   HEALTH_PFAD: string;
   FRIST_MS: number;
   bewerteHealth: (e: { status?: number; fehler?: string }) => Urteil;
-  basisUrl: (env: Record<string, string | undefined>) => string;
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
+};
+type Vorbedingung = {
   main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] | string[][] | null; jetzt?: number }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
+const h = healthRaw as unknown as Health;
 const WURZEL = process.cwd();
 const lies = (p: string) => readFileSync(join(WURZEL, p), "utf8");
 
@@ -34,27 +38,20 @@ const haengt: Fetch = (_url, init) =>
 
 describe("bewerteHealth", () => {
   test("HTTP 200 ist erreichbar", () => {
-    expect(v.bewerteHealth({ status: 200 })).toEqual({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" });
+    expect(h.bewerteHealth({ status: 200 })).toEqual({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" });
   });
   test.each([500, 503, 404, 302])("HTTP %i ist nicht erreichbar und nennt den Status", (status) => {
-    const u = v.bewerteHealth({ status });
+    const u = h.bewerteHealth({ status });
     expect(u.ok).toBe(false);
     expect(u.grund).toContain(String(status));
   });
   test("Verbindungsfehler ist nicht erreichbar und nennt ihn", () => {
-    const u = v.bewerteHealth({ fehler: "ECONNREFUSED" });
+    const u = h.bewerteHealth({ fehler: "ECONNREFUSED" });
     expect(u.ok).toBe(false);
     expect(u.grund).toContain("ECONNREFUSED");
   });
   test("weder Status noch Fehler ist nicht erreichbar (fail-closed)", () => {
-    expect(v.bewerteHealth({}).ok).toBe(false);
-  });
-});
-
-describe("basisUrl", () => {
-  test("LANGFUSE_BASE_URL gewinnt, Standard ist localhost:3000, ein Schrägstrich am Ende fällt weg", () => {
-    expect(v.basisUrl({ LANGFUSE_BASE_URL: "http://x:4000/" })).toBe("http://x:4000");
-    expect(v.basisUrl({})).toBe("http://localhost:3000");
+    expect(h.bewerteHealth({}).ok).toBe(false);
   });
 });
 
@@ -62,25 +59,25 @@ describe("pruefeLangfuse", () => {
   test("ruft /api/public/health und bewertet 200 als ok", async () => {
     let url = "";
     const f: Fetch = (u) => ((url = u), Promise.resolve({ status: 200 }));
-    expect((await v.pruefeLangfuse({ baseUrl: "http://h:1", fetchImpl: f })).ok).toBe(true);
-    expect(url).toBe(`http://h:1${v.HEALTH_PFAD}`);
-    expect(v.HEALTH_PFAD).toBe("/api/public/health");
+    expect((await h.pruefeLangfuse({ baseUrl: "http://h:1", fetchImpl: f })).ok).toBe(true);
+    expect(url).toBe(`http://h:1${h.HEALTH_PFAD}`);
+    expect(h.HEALTH_PFAD).toBe("/api/public/health");
   });
   test("HTTP 500 ist nicht ok", async () => {
-    expect((await v.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: antwort(500) })).ok).toBe(false);
+    expect((await h.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: antwort(500) })).ok).toBe(false);
   });
   test("ECONNREFUSED ist nicht ok und nennt den Code", async () => {
-    const u = await v.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: verbindungAbgelehnt });
+    const u = await h.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: verbindungAbgelehnt });
     expect(u.ok).toBe(false);
     expect(u.grund).toContain("ECONNREFUSED");
   });
   test("Timeout bricht ab und ist nicht ok", async () => {
-    const u = await v.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: haengt, fristMs: 20 });
+    const u = await h.pruefeLangfuse({ baseUrl: "http://h", fetchImpl: haengt, fristMs: 20 });
     expect(u.ok).toBe(false);
     expect(u.grund).toMatch(/Timeout/);
   });
   test("die Frist beträgt 3 s", () => {
-    expect(v.FRIST_MS).toBe(3000);
+    expect(h.FRIST_MS).toBe(3000);
   });
 });
 

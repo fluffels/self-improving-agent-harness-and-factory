@@ -1,4 +1,5 @@
 // Diagnostische Auswertung von Langfuse-Exporten, keine Laufzeitattestierung und keine autonome Freigabe.
+import { codexProjektTag } from "./langfuse-otlp.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
 import { isDeepStrictEqual } from "node:util";
 const liste = v => Array.isArray(v) ? v : [];
@@ -45,7 +46,7 @@ function eindeutigeObservations(daten, fehler) {
   return [...nachId.values()].filter(o => !konflikte.has(o.id));
 }
 function traceMaengel(b, rollen, repo) {
-  const fehler = [], tag = `project:${repo.split("/").at(-1)}`;
+  const fehler = [], tag = codexProjektTag(repo.split("/").at(-1));
   const imScope = liste(b.observations).filter(o => o && text(o.id) && text(b.sessionId) && o.sessionId === b.sessionId && liste(o.tags).includes(tag));
   const daten = eindeutigeObservations(imScope, fehler);
   const gens = daten.filter(o => o.type === "GENERATION" && text(o.metadata?.agent_id) && usage(o));

@@ -422,7 +422,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     const r = await lauf(a, m);
     expect(r.exitCode).toBe(0);
     expect(m.otlp).toHaveLength(0);
-    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(readdirSync(a.state).filter((n) => /^langfuse-abgleich\.json\.kaputt-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z$/.test(n))).toHaveLength(1);
     expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(true);
     // fehlendes Ledger: gleiche Antwort ohne Sicherungsdatei
     const b = aufbau([msg("a", 1), msg("b", 2)]);
@@ -438,7 +438,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     writeFileSync(a.ledger, "{kaputt");
     const r = await lauf(a, mock({ ist: 0 }), { seit: "2100-01-01T00:00:00Z" }); // keine Session im Fenster
     expect(r.exitCode).toBe(0);
-    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(readdirSync(a.state).filter((n) => /^langfuse-abgleich\.json\.kaputt-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z$/.test(n))).toHaveLength(1);
     expect(JSON.parse(readFileSync(a.ledger, "utf8"))).toEqual({ version: 1, sessions: {} });
   });
 
@@ -816,6 +816,67 @@ describe("Auswahl", () => {
     expect(readdirSync(a.state)).toEqual(["langfuse-abgleich.json"]);
     expect(r.protokoll).toMatchObject({ gesendet: 0, wuerdeSenden: 1 });
     expect(r.text).toMatch(/würde senden: 1/);
+  });
+});
+
+describe("--session: ID oder eindeutiger Präfix (factory#354)", () => {
+  const VOLL = "abcd1234-0000-4000-8000-000000000001";
+  const ANDERE = "abcd9999-0000-4000-8000-000000000002";
+  const traceIdVon = (rawOtlp as unknown as { traceIdVon: (s: string) => string }).traceIdVon;
+  const aufbauSession = (dateien: Record<string, string>) => aufbau([msg("a", 1)], dateien);
+
+  test("eindeutiger Präfix sendet für die volle ID", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd1234" });
+    expect(r.exitCode).toBe(0);
+    expect(m.otlp).toHaveLength(1);
+    expect(spansVon(m.otlp[0])[0].traceId).toBe(traceIdVon(VOLL));
+  });
+
+  test("Präfix wirkt wie die volle ID: die Session gilt als beendet (3 min ruhig) und die Startmarke der vollen ID greift", async () => {
+    const jung = async (angabe: string, marke: boolean) => {
+      const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3) });
+      const jetzt = Date.now();
+      const t = new Date(jetzt - 3 * 60_000);
+      utimesSync(join(a.root, PRAEFIX, `${VOLL}.jsonl`), t, t);
+      if (marke) L.markiereStart(a.state, VOLL, jetzt - 60_000);
+      const r = await lauf(a, mock({ ist: 0 }), { session: angabe, ende: jetzt - 120_000 }, jetzt);
+      return r.protokoll.sessions[0];
+    };
+    expect((await jung("abcd1234", false)).status).toBe("gesendet");
+    expect((await jung("abcd1234", true))).toMatchObject({ status: "läuft", endeVerworfen: true });
+    expect((await jung(VOLL, true))).toMatchObject({ status: "läuft", endeVerworfen: true });
+  });
+
+  test("mehrdeutiger Präfix: Exit 2 mit Kandidaten, nichts gesendet, kein Ledger", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3), [`${PRAEFIX}/${ANDERE}.jsonl`]: msg("w", 4) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd" });
+    expect(r.exitCode).toBe(2);
+    expect(r.text).toContain(VOLL);
+    expect(r.text).toContain(ANDERE);
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
+  });
+
+  test("Präfix ohne Treffer: Exit 1, nichts gesendet", async () => {
+    const a = aufbauSession({});
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "zzzz" });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/nicht gefunden.*nichts gesendet/);
+    expect(m.aufrufe).toHaveLength(0);
+  });
+
+  test("ID nur in fremdem Projektordner: Exit 1 „außerhalb des Projekts“, nichts gesendet", async () => {
+    const a = aufbauSession({ [`${PRAEFIX}-tools/${VOLL}.jsonl`]: msg("v", 3) });
+    const m = mock({ ist: 0 });
+    const r = await lauf(a, m, { session: "abcd1234" });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toMatch(/außerhalb des Projekts.*nichts gesendet/);
+    expect(m.aufrufe).toHaveLength(0);
+    expect(existsSync(a.ledger)).toBe(false);
   });
 });
 

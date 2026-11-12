@@ -24,6 +24,8 @@ export const EINGEBAUTE_ROLLEN = ["general-purpose", "Explore", "Plan", "statusl
 /** Namenspräfix, mit dem die Audit-Markierung Kopien kennzeichnet (Metadatum `audit_status: duplicate`). */
 export const AUDIT_PRAEFIX = "[duplicate audit] ";
 export const ROW_LIMIT = 1000;
+/** Fehlercode (`code`) eines Exports am Zeilenlimit: der Wochenbericht macht daraus Exit 4 statt Exit 1 (factory#406). */
+export const ABGESCHNITTEN = "abgeschnitten";
 export const UNZUGEORDNET = "unzugeordnet";
 export const ROLLE_SCHLUESSEL = ["agent_type", "agent_role"];
 export const EFFORT_SCHLUESSEL = ["effort", "reasoning_effort"];
@@ -100,6 +102,8 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
 // ── Export lesen und prüfen ──────────────────────────────────────────────────
 
 const fehler = (pfad, text) => new Error(`${pfad}: ${text} (Abfragerezept: node scripts/langfuse-auswertung.mjs --rezept)`);
+/** Der Fehler eines Exports mit `ROW_LIMIT` oder mehr Zeilen, erkennbar am `code`. */
+export const abgeschnittenFehler = (pfad, n) => Object.assign(fehler(pfad, `Export abgeschnitten (${n} Zeilen = row_limit): Fenster enger wählen`), { code: ABGESCHNITTEN });
 
 const hatGenerationFilter = (abfrage) =>
   Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f.operator === "=" && String(f.value).toUpperCase() === "GENERATION");
@@ -114,7 +118,7 @@ function pruefeKopf(json, pfad) {
   if (!Array.isArray(json.data)) throw fehler(pfad, "data fehlt oder ist kein Array");
   if (!hatGenerationFilter(json.abfrage)) throw fehler(pfad, "Filter type = GENERATION fehlt (Spans mit Rolle unbekannt würden mitzählen)");
   if (!fensterLesbar(json.abfrage)) throw fehler(pfad, "Fenster (fromTimestamp/toTimestamp) fehlt oder ist kein Zeitstempel in abfrage");
-  if (json.data.length >= ROW_LIMIT) throw fehler(pfad, `Export abgeschnitten (${json.data.length} Zeilen = row_limit): Fenster enger wählen`);
+  if (json.data.length >= ROW_LIMIT) throw abgeschnittenFehler(pfad, json.data.length);
 }
 
 function metaFilter(abfrage, pfad) {

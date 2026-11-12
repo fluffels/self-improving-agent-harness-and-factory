@@ -138,6 +138,22 @@ function agentenVon(soll) {
   return agenten;
 }
 
+// Tag-Schema, einzige Quelle; Sendeseite: bauePayloads, Codex-Prüfung: codex-belege, Filter: projektFilterAus (langfuse-wochenbericht-lib).
+/** Projekt-Tags aus dem kommagetrennten Text von `CC_LANGFUSE_TRACE_TAGS`: getrimmt, ohne Leere; kein Text → []. */
+export function projektTagsAus(roh) {
+  return typeof roh === "string" ? roh.split(",").map((t) => t.trim()).filter(Boolean) : [];
+}
+
+/** Das Tag der Codex-Observations eines Repos. */
+export function codexProjektTag(repoName) {
+  return `project:${repoName}`;
+}
+
+/** Tags des Projektfilters: Projekt-Tags, Repo-Name und Codex-Tag, ohne Dubletten und Leere. */
+export function projektFilterTags({ tags = [], repoName }) {
+  return [...new Set([...tags, repoName, codexProjektTag(repoName)].filter((t) => typeof t === "string" && t !== ""))];
+}
+
 /**
  * Payloads für `eintraege` (die zu sendenden Generationen) einer Session. `soll` = das vollständige Soll (Agenten, Zeiten, Tags),
  * `ledgerSpans` = schon gesendete Subagent-Spans (werden nicht erneut gesendet). Benötigte Eltern-Spans kommen mit; Spans
@@ -149,7 +165,7 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
   const scope = scopeName(repoName);
   const traceId = traceIdVon(session);
   // `repoName` bleibt das erste Tag; die Projekt-Tags der Hook-Traces (`CC_LANGFUSE_TRACE_TAGS`, kommagetrennt) kommen additiv dazu, damit der Tag-Filter beide erfasst (#78).
-  const projektTags = String(env.CC_LANGFUSE_TRACE_TAGS ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const projektTags = projektTagsAus(env.CC_LANGFUSE_TRACE_TAGS);
   const tags = [...new Set([repoName, ...projektTags, "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()])];
   const traceAttrs = traceAttribute({ session, tags, project, env });
   const agenten = agentenVon(soll);

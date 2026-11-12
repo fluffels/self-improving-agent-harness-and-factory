@@ -7,6 +7,8 @@ import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/langfuse-wochenbericht-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as otlpRaw from "../scripts/langfuse-otlp.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as cliRaw from "../scripts/langfuse-wochenbericht.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as liveRaw from "../scripts/langfuse-wochenbericht-live.mjs";
@@ -120,6 +122,40 @@ describe("Woche", () => {
   });
 });
 
+type Otlp = {
+  bauePayloads: (s: string, e: unknown[], o: object) => { chunks: { payload: { resourceSpans: { scopeSpans: { spans: { attributes: { key: string; value: { arrayValue?: { values: { stringValue: string }[] } } }[] }[] }[] }[] } }[] };
+  projektTagsAus: (roh: unknown) => string[];
+  codexProjektTag: (repoName: string) => string;
+  projektFilterTags: (o: { tags?: string[]; repoName: string }) => string[];
+};
+const OTLP = otlpRaw as unknown as Otlp;
+const sendeTags = (env: object, ticket: string | null): string[] => {
+  const e = { id: "g1", traceId: "t".repeat(32), session: "s1", messageId: "m1", model: "claude-opus-5-5", ts: "2026-11-01T10:00:00.000Z", usage: { input: 1, output: 0, cacheRead: 0, cacheCreation: 0 }, rolle: null, ticket };
+  const span = OTLP.bauePayloads("s1", [e], { env, project: "repo", repoName: "repo" }).chunks[0].payload.resourceSpans[0].scopeSpans[0].spans[0];
+  return span.attributes.find((a) => a.key === "langfuse.trace.tags")!.value.arrayValue!.values.map((v) => v.stringValue);
+};
+
+describe("Tag-Schema, einzige Quelle (factory#406)", () => {
+  test("Charakterisierung: Sendetags = [repo, ...Projekt-Tags getrimmt ohne Leere, abgleich, ...Tickets]", () => {
+    expect(sendeTags({ CC_LANGFUSE_TRACE_TAGS: " x, ,y" }, "factory#9")).toEqual(["repo", "x", "y", "abgleich", "factory#9"]);
+    expect(sendeTags({}, null)).toEqual(["repo", "abgleich"]);
+  });
+  test("projektTagsAus: kommagetrennt, getrimmt, ohne Leere; kein Text gibt []", () => {
+    expect(OTLP.projektTagsAus(" x, ,y")).toEqual(["x", "y"]);
+    for (const roh of [undefined, null, 5, ""]) expect(OTLP.projektTagsAus(roh)).toEqual([]);
+  });
+  test("codexProjektTag und projektFilterTags: Filter enthält Settings-Tags, Repo-Name und project:<Repo> ohne Dublette", () => {
+    expect(OTLP.codexProjektTag("repo")).toBe("project:repo");
+    expect(OTLP.projektFilterTags({ tags: ["x", "repo"], repoName: "repo" })).toEqual(["x", "repo", "project:repo"]);
+    expect(OTLP.projektFilterTags({ repoName: "repo" })).toEqual(["repo", "project:repo"]);
+  });
+  test("Vertrag: jedes projektbezogene Sendetag und das Codex-Tag liegt im Projektfilter", () => {
+    const tags = OTLP.projektTagsAus("x,y");
+    const filter = W.projektFilterAus({ tags, repoName: "repo" }).filter as { value: string[] };
+    for (const t of [...sendeTags({ CC_LANGFUSE_TRACE_TAGS: "x,y" }, null).filter((t) => t !== "abgleich"), OTLP.codexProjektTag("repo")]) expect(filter.value).toContain(t);
+  });
+});
+
 describe("Projektfilter und Rezept", () => {
   test("Tags: Settings-Tags, Repo-Name und project:<Repo> ohne Dublette, mit Vermerk; environment gilt nur, wenn der Aufrufer ihn belegt", () => {
     const t = W.projektFilterAus({ tags: ["factory", "repo"], repoName: "repo" });
@@ -225,8 +261,46 @@ describe("Fehler (Exit 1)", () => {
     await fehler(fehlt, "Pflicht-Export fehlt: erfassung");
     await fehler({ ...satz(), "kaputt.json": "{nicht json" }, "kein lesbares JSON");
     const voll = satz();
+    voll["sessW.json"] = { ...(voll["sessW.json"] as object), data: "kein Array" };
+    await fehler(voll, "kein Array");
+    const anderer = satz();
+    anderer["sessW.json"] = sess("sessions", F.von, F.bis, [["s1", "Claude Code Turn"]]);
+    (anderer["sessW.json"] as { abfrage: { filters: unknown[] } }).abfrage.filters = [TYPE];
+    await fehler(anderer, "Projektfilter fehlt");
+  });
+  test("Export am Zeilenlimit (genau 1000 Zeilen): Exit 4, Status abgeschnitten, grund nennt den Export; 999 bleibt Bericht", async () => {
+    const zeilen = Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]);
+    const sessions = satz();
+    sessions["sessW.json"] = sess("sessions", F.von, F.bis, zeilen);
+    const r = await lauf(["--json"], sessions);
+    expect(r.exitCode).toBe(4);
+    expect(lese<{ status: string; woche: string }>(r.stdout)).toMatchObject({ status: "abgeschnitten", woche: MONTAG });
+    expect(lese<{ grund: string }>(r.stdout).grund).toContain("sessW.json");
+    expect(lese<{ grund: string }>(r.stdout).grund).toContain("node scripts/langfuse-wochenbericht.mjs --rezept");
+    expect(lese<{ grund: string }>(r.stdout).grund).not.toContain("langfuse-auswertung.mjs");
+    expect(r.stderr).toContain("abgeschnitten");
+    const gesamt = satz();
+    gesamt["gesamtW.json"] = exp("gesamt", F.von, F.bis, Array.from({ length: 1000 }, () => g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 1, 1)));
+    const r2 = await lauf(["--json"], gesamt);
+    expect(r2.exitCode).toBe(4);
+    expect(lese<{ status: string }>(r2.stdout)).toMatchObject({ status: "abgeschnitten" });
+    expect(lese<{ grund: string }>(r2.stdout).grund).toContain("gesamtW.json");
+    const knapp = satz();
+    knapp["sessW.json"] = sess("sessions", F.von, F.bis, zeilen.slice(0, 999));
+    expect((await lauf([], knapp)).exitCode).not.toBe(4);
+  });
+  test("abgeschnitten mit --ablegen: .json mit Status über die Ablage-Nähte; scheitert das Ablegen, bleibt es Exit 1", async () => {
+    const voll = satz();
     voll["sessW.json"] = sess("sessions", F.von, F.bis, Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]));
-    await fehler(voll, "abgeschnitten");
+    const angelegt: string[] = [];
+    const geschrieben: Record<string, string> = {};
+    const r = await lauf(["--ablegen"], voll, { home: "/h", mkdir: (d: string) => angelegt.push(d), entferne: () => undefined, schreibe: (f: string, t: string) => { geschrieben[f] = t; } });
+    expect(r.exitCode).toBe(4);
+    expect(angelegt).toEqual(["/h/.claude/state/langfuse-wochenbericht/own__repo"]);
+    expect(JSON.parse(geschrieben[`/h/.claude/state/langfuse-wochenbericht/own__repo/${MONTAG}.json`] ?? "{}")).toMatchObject({ status: "abgeschnitten", woche: MONTAG });
+    const kaputt = await lauf(["--ablegen"], voll, { home: "/h", mkdir: () => { throw new Error("boom"); } });
+    expect(kaputt.exitCode).toBe(1);
+    expect(kaputt.stderr).toContain("Fehler: boom");
   });
   test("ein Export mit fremdem Fenster wird abgelehnt", async () => {
     await fehler({ ...satz(), "alt.json": exp("gesamt", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z", gesamtW()) }, "weder zur Woche noch zur Vorwoche");
@@ -316,10 +390,11 @@ describe("Schlüsselgrenze", () => {
     expect(cli.match(/import\("\.\/langfuse-wochenbericht-live\.mjs"\)/g)).toHaveLength(1);
     expect(importHuelle("scripts/langfuse-wochenbericht-live.mjs", lies)).toContain("scripts/langfuse-zugang.mjs");
   });
-  test("die Lib importiert nur die pure Auswertungs-Lib", () => {
+  test("die Lib importiert nur die pure Auswertungs-Lib und das pure Tag-Schema", () => {
     const imports = readFileSync("scripts/langfuse-wochenbericht-lib.mjs", "utf8").match(/^import .*$/gm) ?? [];
-    expect(imports).toHaveLength(1);
-    expect(imports[0]).toContain("./langfuse-auswertung-lib.mjs");
+    expect(imports).toHaveLength(2);
+    expect(imports.some((i) => i.includes("./langfuse-auswertung-lib.mjs"))).toBe(true);
+    expect(imports.some((i) => i.includes("./langfuse-otlp.mjs"))).toBe(true);
   });
 });
 
@@ -374,6 +449,32 @@ describe("Randfälle (Guards)", () => {
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a, b ,," } })).tags).toEqual(["a", "b"]);
     expect(CLI.ladeProjekt(process.cwd(), () => { throw new Error("ENOENT"); }).tags).toEqual([]);
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } })).tags).toEqual([]);
+  });
+  test("ladeProjekt: unlesbare Settings ergeben einen Vermerk ohne Pfad, ein fehlender Schlüssel keinen", () => {
+    const V = (lies: (p: string, e: string) => string) => (CLI.ladeProjekt(process.cwd(), lies) as unknown as { tags: string[]; tagsVermerk?: string }).tagsVermerk;
+    expect(V(() => { throw new Error("ENOENT /x/y"); })).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen");
+    expect(V(() => "{nicht json")).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein gültiges JSON), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: null } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: {} }))).toBeNull();
+    expect(V(() => "{}")).toBeNull();
+    expect(V(() => "null")).toBeNull();
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a" } }))).toBeNull();
+  });
+  test("tagsVermerk steht im Bericht (Markdown und JSON) und im Grund von keine-daten; ohne Vermerk bleibt die Ausgabe gleich", async () => {
+    const mit = { ...PROJEKT, tagsVermerk: "Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen" };
+    const md = await lauf([], satz(), { projekt: mit });
+    expect(md.stdout).toContain("Projekt-Tags nicht lesbar");
+    const js = await lauf(["--json"], satz(), { projekt: mit });
+    expect(lese<{ vermerk: string }>(js.stdout).vermerk).toContain("; Projekt-Tags nicht lesbar");
+    const leer = satz();
+    leer["gesamtW.json"] = exp("gesamt", F.von, F.bis, []);
+    const kd = await lauf(["--json"], leer, { projekt: mit });
+    expect(lese<{ grund: string }>(kd.stdout).grund).toContain("; Projekt-Tags nicht lesbar");
+    const ohne = await lauf(["--json"], leer);
+    expect(lese<{ grund: string }>(ohne.stdout).grund).not.toMatch(/Projekt-Tags|;|undefined/);
+    const normal = await lauf(["--json"], satz());
+    expect(lese<{ vermerk: string }>(normal.stdout).vermerk).not.toContain("; ");
   });
   test("als Prozess: Aufruffehler ist Exit 2 ohne Netz, --rezept gibt JSON aus", () => {
     const a = spawnSync("node", ["scripts/langfuse-wochenbericht.mjs", "--woche", "2026-11-03"], { encoding: "utf8" });

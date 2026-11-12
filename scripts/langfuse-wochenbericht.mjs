@@ -17,8 +17,8 @@
  * (`langfuse-abgleich-hook.mjs`) liest den Secret-Key über den Live-Weg, kein Agent startet es. Er arbeitet nur mit dem Config-Schlüssel
  * `langfuseWochenbericht`, ab Dienstag nach dem Wochenende, einmal je Woche (atomarer Claim), schreibt nichts auf stdout und löst Meldungen per
  * `gh workflow run board-takt.yml -f langfuse_anlass=…` aus; Mechanik: docs/model-routing.md (Wochenbericht-Lauf).
- * Exit 0 Bericht, keine Schwelle überschritten; 3 Bericht, Agent-Lauf nötig; 4 kein Bericht (Langfuse unerreichbar oder keine Daten
- * der Woche; Warnung auf stderr, `.json` mit `status`, keine `.md`); 1 Fehler; 2 Aufruffehler.
+ * Exit 0 Bericht, keine Schwelle überschritten; 3 Bericht, Agent-Lauf nötig; 4 kein Bericht (Langfuse unerreichbar, keine Daten
+ * der Woche oder ein Export am Zeilenlimit `abgeschnitten`; Warnung auf stderr, `.json` mit `status`, keine `.md`); 1 Fehler; 2 Aufruffehler.
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -32,6 +32,8 @@ import { ladeProjektConfig, langfuseZiel, repoName, repoOwner } from "./projekt-
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { lockFreigeben, lockNehmen, logAnhaengen } from "./langfuse-lock.mjs";
+import { ABGESCHNITTEN } from "./langfuse-auswertung-lib.mjs";
+import { projektTagsAus } from "./langfuse-otlp.mjs";
 import { agentenNamen } from "./agenten-namen.mjs";
 import { RUHEFRIST_MS, anlassText, letzteVolleWoche, mergeAnzahl, mergeSucheArgs, ordneExporte, projektFilterAus, pruefeAbgeschlossen, renderWochenbericht, wochenAuswertung, wochenberichtAblage, wochenberichtTermin, wochenFenster, wochenJson, wochenRezept, wochenStand } from "./langfuse-wochenbericht-lib.mjs";
 
@@ -67,17 +69,25 @@ export function parseArgs(argv) {
 /** Projekt-Eingaben aus der Repo-Wurzel: Repo, Schwellen aus der Config, Projekt-Tags aus `.claude/settings.json` (`CC_LANGFUSE_TRACE_TAGS`). */
 export function ladeProjekt(wurzel = WURZEL, lies = readFileSync) {
   const config = ladeProjektConfig({ rootDir: wurzel });
-  return { owner: repoOwner(config), repo: repoName(config), schwellen: config.langfuseWochenbericht, tags: projektTags(wurzel, lies), wurzel, config };
+  const { tags, vermerk } = projektTags(wurzel, lies);
+  return { owner: repoOwner(config), repo: repoName(config), schwellen: config.langfuseWochenbericht, tags, tagsVermerk: vermerk, wurzel, config };
 }
 
-/** Projekt-Tags aus `env.CC_LANGFUSE_TRACE_TAGS` der Settings (komma-getrennt); ohne lesbare Settings leer (der Filter trägt dann nur den Repo-Namen). */
+const tagsVermerk = (grund) => `Projekt-Tags nicht lesbar (.claude/settings.json: ${grund}), Filter nur über den Repo-Namen`;
+
+/**
+ * Projekt-Tags aus `env.CC_LANGFUSE_TRACE_TAGS` der Settings (komma-getrennt) samt Vermerk: ohne lesbare Settings oder ohne Text leer (der Filter trägt dann
+ * nur den Repo-Namen) und `vermerk` nennt den Grund ohne Pfad; fehlt der Schlüssel in lesbaren Settings, ist das Absicht und `vermerk` bleibt `null`.
+ */
 function projektTags(wurzel, lies) {
+  let json;
   try {
-    const roh = JSON.parse(lies(join(wurzel, ".claude", "settings.json"), "utf8"))?.env?.CC_LANGFUSE_TRACE_TAGS;
-    return typeof roh === "string" ? roh.split(",").map((t) => t.trim()).filter(Boolean) : [];
-  } catch {
-    return [];
+    json = JSON.parse(lies(join(wurzel, ".claude", "settings.json"), "utf8"));
+  } catch (e) {
+    return { tags: [], vermerk: tagsVermerk(e instanceof SyntaxError ? "kein gültiges JSON" : "fehlt") };
   }
+  const roh = json?.env?.CC_LANGFUSE_TRACE_TAGS;
+  return { tags: projektTagsAus(roh), vermerk: roh === undefined || typeof roh === "string" ? null : tagsVermerk("kein Text") };
 }
 
 function exporteLesen(pfade, lies) {
@@ -95,30 +105,40 @@ const dateien = (home, p) => {
   return { ordner, md: (m) => join(ordner, `${m}.md`), json: (m) => join(ordner, `${m}.json`) };
 };
 
+/** Die Ablage der Woche für `--ablegen`: Dateinamen, Ordner ist angelegt. */
+function ablage(deps, p) {
+  const d = dateien(deps.home ?? homedir(), p);
+  (deps.mkdir ?? mkdirSync)(d.ordner, { recursive: true });
+  return d;
+}
+
 /** Exit 4: Warnung auf stderr; mit `--ablegen` die `.json` mit Status und Grund, eine alte `.md` entfällt. */
 function keinBericht(args, deps, p, montag, status, grund) {
   grund = ohneSchluessel(grund);
   const obj = { status, woche: montag, grund };
   const warnung = `WARNUNG Langfuse-Wochenbericht ${montag}: kein Bericht (${status}): ${grund}`;
   if (args.ablegen) {
-    const d = dateien(deps.home ?? homedir(), p);
-    (deps.mkdir ?? mkdirSync)(d.ordner, { recursive: true });
+    const d = ablage(deps, p);
     (deps.entferne ?? ((f) => rmSync(f, { force: true })))(d.md(montag));
     (deps.schreibe ?? writeFileSync)(d.json(montag), JSON.stringify(obj, null, 2) + "\n");
   }
   return { exitCode: EXIT_KEIN_BERICHT, stdout: args.json ? JSON.stringify(obj, null, 2) : "", stderr: warnung };
 }
 
-function rezeptAusgeben(args, deps, p, montag, jetzt) {
+/** Abfragerezepte der Woche: Agentenrollen aus dem Repo plus `--rolle`, Projektfilter eingesetzt. */
+function rezepteVon(args, deps, p, montag, jetzt, filter) {
   const rollen = [...agentenNamen(deps.agenten ?? join(p.wurzel, ".claude", "agents")), ...args.rollen];
+  return wochenRezept({ montag, jetzt: jetzt.toISOString(), rollen, projektFilter: filter });
+}
+
+function rezeptAusgeben(args, deps, p, montag, jetzt) {
   const { filter } = projektFilterAus({ tags: p.tags, repoName: p.repo });
-  return { exitCode: 0, stdout: JSON.stringify(wochenRezept({ montag, jetzt: jetzt.toISOString(), rollen, projektFilter: filter }), null, 2), stderr: "" };
+  return { exitCode: 0, stdout: JSON.stringify(rezepteVon(args, deps, p, montag, jetzt, filter), null, 2), stderr: "" };
 }
 
 async function holeExporte(args, deps, p, montag, jetzt, filter) {
   if (args.exporte.length) return { status: "ok", exporte: exporteLesen(args.exporte, deps.lies ?? readFileSync) };
-  const rollen = [...agentenNamen(deps.agenten ?? join(p.wurzel, ".claude", "agents")), ...args.rollen];
-  const rezepte = wochenRezept({ montag, jetzt: jetzt.toISOString(), rollen, projektFilter: filter });
+  const rezepte = rezepteVon(args, deps, p, montag, jetzt, filter);
   const live = await (deps.ladeLive ?? (() => import("./langfuse-wochenbericht-live.mjs")))();
   return live.ladeLiveExporte({ rezepte, env: deps.env ?? process.env, home: deps.home ?? homedir(), fetchImpl: deps.fetchImpl });
 }
@@ -128,8 +148,7 @@ function berichtAusgeben(args, deps, p, montag, a, filter) {
   const md = renderWochenbericht(montag, filter, a);
   const json = wochenJson(montag, filter, a);
   if (args.ablegen) {
-    const d = dateien(deps.home ?? homedir(), p);
-    (deps.mkdir ?? mkdirSync)(d.ordner, { recursive: true });
+    const d = ablage(deps, p);
     (deps.schreibe ?? writeFileSync)(d.md(montag), md + "\n");
     (deps.schreibe ?? writeFileSync)(d.json(montag), JSON.stringify(json, null, 2) + "\n");
   }
@@ -148,6 +167,31 @@ function mergesDerWochen(gh, p, montag) {
   return { woche: zaehle(f.von, f.bis), vorwoche: zaehle(f.vorVon, f.vorBis) };
 }
 
+/** Der Ablauf hinter dem Aufruf-Check: Exporte holen, ordnen, auswerten; wirft bei Fehlern (der Aufrufer macht daraus Exit 1 oder 4). */
+async function berichtErzeugen(args, deps, p, montag, jetzt) {
+  if (args.rezept) return rezeptAusgeben(args, deps, p, montag, jetzt);
+  const { filter, vermerk } = projektFilterAus({ tags: p.tags, repoName: p.repo });
+  const geholt = await holeExporte(args, deps, p, montag, jetzt, filter);
+  if (geholt.status !== "ok") return keinBericht(args, deps, p, montag, geholt.status, geholt.grund);
+  const geordnet = ordneExporte(geholt.exporte, { montag, projektFilter: filter });
+  const gesamtW = geordnet.woche.find((e) => e.art === "gesamt");
+  const tagsHinweis = p.tagsVermerk ? `; ${p.tagsVermerk}` : "";
+  if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}${tagsHinweis}`);
+  const merges = mergesDerWochen(ghDer(deps), p, montag);
+  const alleVermerke = [vermerk, p.tagsVermerk].filter(Boolean).join("; ");
+  return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk: alleVermerke, merges }), filter);
+}
+
+/** Wurf des Ablaufs: ein Export am Zeilenlimit ist Exit 4 (`abgeschnitten`, factory#406), alles andere Exit 1. */
+function wurfErgebnis(e, args, deps, p, montag) {
+  try {
+    if (e.code === ABGESCHNITTEN) return keinBericht(args, deps, p, montag, ABGESCHNITTEN, e.message);
+  } catch (e2) {
+    e = e2;
+  }
+  return { exitCode: 1, stdout: "", stderr: `Fehler: ${e.message}` };
+}
+
 /** Ablauf ohne `process.exit` (testbar): `{ exitCode, stdout, stderr }`. */
 export async function auswerten(args, deps = {}) {
   const aufruf = (text) => ({ exitCode: AUFRUF_EXIT, stdout: "", stderr: `${text}\n${aufrufHilfe()}` });
@@ -160,19 +204,12 @@ export async function auswerten(args, deps = {}) {
   } catch (e) {
     return aufruf(e.message);
   }
+  let p;
   try {
-    const p = deps.projekt ?? ladeProjekt();
-    if (args.rezept) return rezeptAusgeben(args, deps, p, montag, jetzt);
-    const { filter, vermerk } = projektFilterAus({ tags: p.tags, repoName: p.repo });
-    const geholt = await holeExporte(args, deps, p, montag, jetzt, filter);
-    if (geholt.status !== "ok") return keinBericht(args, deps, p, montag, geholt.status, geholt.grund);
-    const geordnet = ordneExporte(geholt.exporte, { montag, projektFilter: filter });
-    const gesamtW = geordnet.woche.find((e) => e.art === "gesamt");
-    if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}`);
-    const merges = mergesDerWochen(ghDer(deps), p, montag);
-    return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk, merges }), filter);
+    p = deps.projekt ?? ladeProjekt();
+    return await berichtErzeugen(args, deps, p, montag, jetzt);
   } catch (e) {
-    return { exitCode: 1, stdout: "", stderr: `Fehler: ${e.message}` };
+    return wurfErgebnis(e, args, deps, p, montag);
   }
 }
 
@@ -230,9 +267,10 @@ function commitsDerWoche(k) {
   }
 }
 
-/** Exit 4 des Auswertens: `unerreichbar` (ab Donnerstag melden) oder `keine-daten` (mit Commits melden, ohne `ruhe`). */
+/** Exit 4 des Auswertens: `abgeschnitten` (sofort melden, ein Warten behebt das Limit nicht), `unerreichbar` (ab Donnerstag melden) oder `keine-daten` (mit Commits melden, ohne `ruhe`). */
 function keinBerichtFolge(k, obj) {
   const basis = { status: obj.status, woche: k.montag, grund: obj.grund };
+  if (obj.status === ABGESCHNITTEN) return melde(k, basis, anlassText({ art: "fehlt", montag: k.montag, klasse: ABGESCHNITTEN }));
   if (obj.status === "unerreichbar") {
     if (!k.termin.meldenAb) {
       jsonErgaenzen(k, basis, { warnung: "Langfuse unerreichbar, neuer Versuch beim nächsten SessionStart" });

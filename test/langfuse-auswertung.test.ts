@@ -10,6 +10,8 @@ import * as libRaw from "../scripts/langfuse-auswertung-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as cliRaw from "../scripts/langfuse-auswertung.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as agentenRoh from "../scripts/agenten-namen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { EFFORT_STUFEN as EFFORT_TRANSKRIPT } from "../scripts/transkript-calls.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { TRACE_NAME as TRACE_NAME_OTLP } from "../scripts/langfuse-otlp.mjs";
@@ -46,8 +48,8 @@ const L = libRaw as unknown as {
 const C = cliRaw as unknown as {
   parseArgs: (a: string[]) => unknown;
   auswerten: (a: unknown, d?: Record<string, unknown>) => { exitCode: number; text: string };
-  agentenNamen: (ordner: string, deps?: unknown) => string[];
 };
+const agentenNamen = (agentenRoh as unknown as { agentenNamen: (ordner: string, deps?: unknown) => string[] }).agentenNamen;
 
 const VON = "2026-11-01T00:00:00Z";
 const BIS = "2026-11-04T00:00:00Z";
@@ -590,7 +592,7 @@ describe("CLI", () => {
     const dir = neuerOrdner();
     writeFileSync(join(dir, "a.md"), "---\nname: mein-agent\ndescription: x\n---\n");
     writeFileSync(join(dir, "b.txt"), "name: ignoriert\n");
-    expect(C.agentenNamen(dir)).toEqual(["mein-agent"]);
+    expect(agentenNamen(dir)).toEqual(["mein-agent"]);
     const r = C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS, "--rolle", "extra", "--agenten", dir]));
     expect(r.exitCode).toBe(0);
     const werte = (JSON.parse(r.text) as { abfrage: Ex["abfrage"] }[]).map((x) => x.abfrage.filters?.[1]?.value);
@@ -618,22 +620,22 @@ describe("CLI", () => {
     writeFileSync(join(dir, "i.md"), "---\nname: 'einfach'\n---\n");
     writeFileSync(join(dir, "j.md"), "---\nname: it's\n---\n");
     writeFileSync(join(dir, "k.md"), "---\nname: a\"b\n---\n");
-    expect(C.agentenNamen(dir)).toEqual(["a\"b", "einfach", "gequotet", "it's", "mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
+    expect(agentenNamen(dir)).toEqual(["a\"b", "einfach", "gequotet", "it's", "mitplatz", "mittab", "ohneleerzeichen", "richtig", "windows"]);
   });
   test("der Standard-Agentenordner ist .claude/agents des Repos und enthält Agenten", () => {
     const a = C.parseArgs([]) as { agenten: string };
     expect(isAbsolute(a.agenten)).toBe(true);
     expect(a.agenten).toMatch(/\.claude[\\/]agents$/);
-    expect(C.agentenNamen(a.agenten).length).toBeGreaterThan(0);
+    expect(agentenNamen(a.agenten).length).toBeGreaterThan(0);
   });
   test("agentenNamen nimmt eingespeiste Leser", () => {
-    expect(C.agentenNamen("/x", { lies: () => "name: eingespeist\n", liste: () => ["a.md", "b.txt"] })).toEqual(["eingespeist"]);
+    expect(agentenNamen("/x", { lies: () => "name: eingespeist\n", liste: () => ["a.md", "b.txt"] })).toEqual(["eingespeist"]);
   });
   test("eine Agentendatei ohne name wird übersprungen", () => {
     const dir = neuerOrdner();
     writeFileSync(join(dir, "ohne.md"), "---\ndescription: x\n---\n");
     writeFileSync(join(dir, "mit.md"), "---\nname: a\n---\n");
-    expect(C.agentenNamen(dir)).toEqual(["a"]);
+    expect(agentenNamen(dir)).toEqual(["a"]);
   });
   test("ohne eingespeiste Leser liest die CLI die echte Datei", () => {
     const dir = neuerOrdner();
