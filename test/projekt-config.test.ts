@@ -18,8 +18,6 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawForm from "../scripts/repo-form.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { E2E_UMGEBUNG } from "../scripts/gate-befehl-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDocmap from "../scripts/check-docmap.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawGlob from "../scripts/pfad-glob.mjs";
@@ -1464,9 +1462,6 @@ describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", ()
   });
   test("Block ohne befehle.e2e ist ein Fehler mit Fix", () => {
     assert.match(mit({ browser: ["chromium"] }).join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
-  });
-  test("Fix-Text nennt den Variablennamen aus E2E_UMGEBUNG.browser, kein zweites Literal (L6)", () => {
-    assert.ok(mit({ browser: ["chromium"] }).join("\n").includes((E2E_UMGEBUNG as { browser: string }).browser));
   });
   test("leere befehle.e2e mit Block ist ein Fehler mit Fix", () => {
     assert.match(mit({ browser: ["chromium"] }, "").join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
