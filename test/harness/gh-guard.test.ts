@@ -72,6 +72,10 @@ describe("gh api mit Außenwirkung fragt nach (#1204)", () => {
     ["mehrzeilig in doppelten Anführungszeichen (PowerShell)", 'gh api graphql -f query="\nmutation {\n  deleteProjectV2Item(input:{}) { deletedItemId }\n}"'],
     ["Variablen-Zuweisung vor gh api", "GH_TOKEN=x gh api -X DELETE repos/o/r/labels/y"],
     ["nach Pipe", "echo x | gh api -X DELETE repos/o/r/labels/z"],
+    ["Commit-Status setzen (POST)", "gh api -X POST repos/o/r/statuses/abc -f state=success -f context=x"],
+    ["Commit-Status setzen (implizites POST über -f)", "gh api repos/o/r/statuses/abc123 -f state=success -f context=x"],
+    ["Check-Lauf anlegen", "gh api -X POST repos/o/r/check-runs -f name=x"],
+    ["Check-Lauf ändern (PATCH)", "gh api -X PATCH repos/o/r/check-runs/5 -f conclusion=success"],
   ])("%s → ask", (_name, command) => {
     const r = hook.bewerte(command);
     assert.equal(r.ask, true, command);
@@ -98,7 +102,10 @@ describe("Alltags-Aufrufe laufen durch (kein Dauer-Nachfragen)", () => {
     ["mehrzeilige Lese-Query", "gh api graphql -f query='\nquery {\n  viewer { login }\n}'"],
     ["Mutationsname als Wert, ohne Aufruf", "gh api graphql -f query='mutation { __typename }' -f note=deleteIssue"],
     ["Commit-Text", 'git commit -m "feat: deleteIssue-Guard (gh api)"'],
-    ["Issue-Kommentar per REST", "gh api repos/o/r/issues/5/comments -f body=hallo"],
+    ["Commit-Status lesen (GET)", "gh api repos/o/r/commits/abc/statuses"],
+    ["Check-Lauf erneut anfordern (rerequest)", "gh api -X POST repos/o/r/check-runs/5/rerequest"],
+    ["Check-Läufe eines Commits lesen", "gh api repos/o/r/commits/abc/check-runs --jq '.check_runs[].app.id'"],
+    ["Issue-Kommentar per REST","gh api repos/o/r/issues/5/comments -f body=hallo"],
     ["leerer Befehl", ""],
     ["kein gh", "npm run verify"],
   ])("%s → durch", (_name, command) => {
