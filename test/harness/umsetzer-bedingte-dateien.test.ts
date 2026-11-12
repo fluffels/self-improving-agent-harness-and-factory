@@ -246,7 +246,7 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
 
   test("Windows-Sonderfälle stehen in der Plattform-Datei (die Weiche verschiebt sie, sie entfallen nicht)", () => {
     const windows = readFileSync(WURZEL + `${ORDNER}/plattform-windows.md`, "utf8");
-    for (const t of ["taskkill", "$LASTEXITCODE", "CRLF", "execSync"]) assert.ok(windows.includes(t), `plattform-windows.md ohne „${t}“`);
+    for (const t of ["taskkill", "$LASTEXITCODE", "CRLF", "execSync", "Test-Path", "Backslash-Ausdruck"]) assert.ok(windows.includes(t), `plattform-windows.md ohne „${t}“`);
   });
 
   test("L23: die weiteren Leser tragen keine Windows-Sonderfälle, Lens und Hauptchat-Ablauf nennen die Weiche (echter Stand)", () => {

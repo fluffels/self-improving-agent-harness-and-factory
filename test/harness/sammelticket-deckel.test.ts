@@ -394,7 +394,7 @@ describe("Rest-Übertrag direkt nach dem Planer (factory#400 L73)", () => {
   test("echter Stand: Hauptchat überträgt REST nach dem Plan, der Umsetzer meldet es nicht noch einmal", () => {
     assert.deepEqual(restUebertragBefunde(echt()), []);
   });
-  test("Negativfall: der Umsetzer, der REST selbst meldet, ist rot (doppelt); jede Stelle einzeln", () => {
+  test("Negativfall: der Umsetzer, der REST selbst meldet, ist rot (doppelt); Stellen: Planer, Abarbeiten, Schritt 2", () => {
     const e = echt();
     const doppelt = e.umsetzer.split("\n").map((z) => (z.startsWith("**Sammeltickets (Titel") ? z + " `REST`, später Dazugekommenes gehen ins Folge-Sammelticket." : z)).join("\n");
     assert.match(restUebertragBefunde({ ...e, umsetzer: doppelt }).join("\n"), /meldet REST noch selbst/);

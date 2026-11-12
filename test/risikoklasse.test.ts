@@ -319,7 +319,6 @@ describe("Workflow-Folge-Fixes in der Prognose (factory#400 L46)", () => {
     const planer = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude/agents/factory-planer.md"), "utf8");
     const absatz = planer.split("\n").find((z) => z.startsWith("**Risikoklasse hoch")) ?? "";
     expect(absatz).toContain(".github/workflows/");
-    expect(absatz).toMatch(/Folge-Fix/);
-    expect(absatz).toContain("--pfade");
+    expect(absatz).toMatch(/Folge-Fixes[^`]*`\.github\/workflows\/`[^`]*`--pfade`/);
   });
 });
