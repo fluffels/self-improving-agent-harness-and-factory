@@ -36,34 +36,35 @@ function abweichungen(spiegel, live) {
 
 const FIX_PIN = "je Kontext integration_id der Quell-App setzen (GitHub Actions; ID prüfbar per gh api repos/<repo>/commits/<sha>/check-runs --jq '[.check_runs[].app.id]|unique'); die Ruleset-Änderung ist Pre-Flight, danach den Spiegel nachziehen";
 
-/** Der Punkt `Required-Check-Pin`: Required Checks ohne `integration_id` (jede App könnte den Kontext melden); ohne Regel `required_status_checks` ein leeres Ergebnis. */
-function pinPunkt(live) {
-  const regeln = Array.isArray(live.rules) ? live.rules : [];
-  const checks = regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => r.parameters?.required_status_checks ?? []);
+/** Der Punkt `Required-Check-Pin` (factory#375 L51) aus den Branch-Regeln (`rules/branches/<branch>`, ohne Admin-Recht, auch im Wochenlauf): `regeln` ist das Ergebnis von `hole` (`{ wert }` oder `{ fehler }`). Required Checks ohne `integration_id` (jede App könnte den Kontext melden) sind eine Lücke; ohne Regel `required_status_checks` ein leeres Ergebnis; ein Lesefehler ist `NICHT PRÜFBAR`. */
+export function pinPunkt(regeln) {
+  if (regeln.fehler !== undefined) return [nichtPruefbar(PIN_PUNKT, `Regeln auf dem Branch nicht lesbar (${regeln.fehler})`, "gh auth status prüfen, dann den Doctor erneut starten", LINK)];
+  const liste = Array.isArray(regeln.wert) ? regeln.wert : [];
+  const checks = liste.filter((r) => r.type === "required_status_checks").flatMap((r) => r.parameters?.required_status_checks ?? []);
   if (checks.length === 0) return [];
   const offen = checks.filter((c) => c.integration_id == null).map((c) => c.context).sort();
   if (offen.length === 0) return [gut(PIN_PUNKT)];
   return [luecke(PIN_PUNKT, `Required Checks ohne integration_id: ${offen.join(", ")}`, FIX_PIN, LINK)];
 }
 
-/** Die Zeilen des Punkts für `pruefLauf`: leer ohne `lesen` (Wochenlauf, `--einrichten`), ohne Spiegel oder ohne `id` im Spiegel (dann ist der Abgleich nicht angefordert), sonst aus einem Lesevorgang der Spiegel-Punkt und der Punkt `Required-Check-Pin` (nur wenn das Ruleset Required Checks hat). */
+/** Die Zeilen des Punkts für `pruefLauf`: leer ohne `lesen` (Wochenlauf, `--einrichten`), ohne Spiegel oder ohne `id` im Spiegel (dann ist der Abgleich nicht angefordert), sonst der Spiegel-Punkt (der Pin-Punkt kommt aus `pinPunkt`, factory#375 L51). */
 export const rulesetPunkte = ({ spiegel, repo, lesen }) => (typeof lesen === "function" && spiegel?.id != null ? rulesetErgebnisse({ spiegel, repo, lesen }) : []);
 
 /** Der Punkt `Ruleset-Spiegel`: ein Ergebnis (`gut`, `luecke` oder `nichtPruefbar`). */
 export const pruefeRulesetSpiegel = (e) => rulesetErgebnisse(e)[0];
 
-/** Ein Lesevorgang, zwei Punkte: der Spiegel-Abgleich zuerst, dann der Pin-Punkt (bei Lesefehler oder fehlendem `bypass_actors` ebenfalls nicht prüfbar, fail-closed). */
+/** Der Spiegel-Abgleich aus einem Lesevorgang (bei Lesefehler oder fehlendem `bypass_actors` nicht prüfbar, fail-closed). */
 function rulesetErgebnisse({ spiegel, repo, lesen }) {
-  const beide = (grund) => [nichtPruefbar(PUNKT, grund, FIX_PRUEFEN, LINK), nichtPruefbar(PIN_PUNKT, grund, FIX_PRUEFEN, LINK)];
+  const nicht = (grund) => [nichtPruefbar(PUNKT, grund, FIX_PRUEFEN, LINK)];
   let live;
   try {
     live = lesen(["api", `repos/${repo}/rulesets/${spiegel.id}`]);
   } catch (e) {
-    return beide(`Ruleset ${spiegel.id} nicht lesbar (${String(e?.message ?? e).split("\n")[0]})`);
+    return nicht(`Ruleset ${spiegel.id} nicht lesbar (${String(e?.message ?? e).split("\n")[0]})`);
   }
-  if (live === null || typeof live !== "object") return beide(`Ruleset ${spiegel.id}: Antwort ist kein Objekt`);
-  if (!Array.isArray(live.bypass_actors)) return beide("bypass_actors fehlt in der Antwort (sichtbar nur mit Admin-Recht)");
+  if (live === null || typeof live !== "object") return nicht(`Ruleset ${spiegel.id}: Antwort ist kein Objekt`);
+  if (!Array.isArray(live.bypass_actors)) return nicht("bypass_actors fehlt in der Antwort (sichtbar nur mit Admin-Recht)");
   const felder = abweichungen(spiegel, live);
   const abgleich = felder.length === 0 ? gut(PUNKT) : luecke(PUNKT, `Ruleset ${spiegel.id} weicht vom Spiegel ab: ${felder.join(", ")}`, "den Spiegel im selben PR nachziehen oder das Ruleset angleichen (Pre-Flight)", LINK);
-  return [abgleich, ...pinPunkt(live)];
+  return [abgleich];
 }
