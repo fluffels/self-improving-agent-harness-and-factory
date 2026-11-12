@@ -417,8 +417,18 @@ function pruefeDepReview(yml: string): string[] {
     if (w["fail-on-severity"] !== "high") fehler.push("fail-on-severity ist nicht high");
     if (w["comment-summary-in-pr"] !== undefined && w["comment-summary-in-pr"] !== "never") fehler.push("PR-Kommentar aktiviert");
   }
+  fehler.push(...vollstaendigFehler(wf, dr));
   for (const u of ungepinnteUses(String(yml ?? ""))) fehler.push(`Action nicht per SHA mit Versionskommentar gepinnt: ${u}`);
   return fehler;
+}
+
+/** Ergänzungsschritt gegen die Paging-Lücke der Action (factory#395): `dependency-review-vollstaendig.mjs` läuft mit derselben Schwelle wie `fail-on-severity`. */
+function vollstaendigFehler(wf: Obj, dr: Obj[]): string[] {
+  const schritt = alleSchritte(wf).find((s) => typeof s.run === "string" && s.run.includes("scripts/dependency-review-vollstaendig.mjs"));
+  if (!schritt) return ["Schritt scripts/dependency-review-vollstaendig.mjs fehlt (Paging-Lücke der Action)"];
+  const schwere = /--schwere\s+(\S+)/.exec(String(schritt.run))?.[1];
+  const sollen = dr.map((s) => (istObj(s.with) ? s.with["fail-on-severity"] : undefined));
+  return sollen.every((w) => w === schwere) ? [] : [`--schwere (${schwere}) weicht von fail-on-severity ab`];
 }
 
 describe("zizmor.yml und dependency-review.yml (#92)", () => {
@@ -439,7 +449,7 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
       `        with:\n          category: ${o.category ?? "zizmor"}`,
       o.extra ?? "",
     ].join("\n");
-  const depRev = (o: { top?: string; job?: string; with?: string; trig?: string; checkout?: string } = {}) =>
+  const depRev = (o: { top?: string; job?: string; with?: string; trig?: string; checkout?: string; skript?: string } = {}) =>
     [
       `on:\n${o.trig ?? "  pull_request:"}`,
       o.top ?? "permissions: {}",
@@ -451,6 +461,7 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
       o.checkout ?? "      - run: echo vorher",
       `      - uses: actions/dependency-review-action@${SHA} # v5.0.0`,
       `        with:\n${o.with ?? "          fail-on-severity: high"}`,
+      o.skript ?? "      - run: node scripts/dependency-review-vollstaendig.mjs --schwere high",
     ].join("\n");
   const nur = (f: string[], teil: string) => expect(f, f.join(" | ")).toEqual([expect.stringContaining(teil)]);
 
@@ -504,9 +515,14 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
   test("zizmor: kein Job mit security-events: write", () => {
     nur(pruefeZizmor(zizmor({ job: "      contents: read" })), "security-events: write in 0 Jobs statt genau einem");
   });
+  test("Dependency Review: Ergänzungsschritt gegen die Paging-Lücke fehlt oder hat eine andere Schwelle (factory#395)", () => {
+    nur(pruefeDepReview(depRev({ skript: "      - run: echo nichts" })), "dependency-review-vollstaendig.mjs fehlt");
+    nur(pruefeDepReview(depRev({ skript: "      - run: node scripts/dependency-review-vollstaendig.mjs --schwere critical" })), "weicht von fail-on-severity ab");
+    nur(pruefeDepReview(depRev({ skript: "      - run: node scripts/dependency-review-vollstaendig.mjs" })), "weicht von fail-on-severity ab");
+  });
   test("Dependency Review: security-events: write ist auch hier verboten", () => nur(pruefeDepReview(depRev({ job: "      security-events: write" })), "Schreibrecht"));
   test("Dependency Review: falsche Schwelle, PR-Kommentar", () => {
-    nur(pruefeDepReview(depRev({ with: "          fail-on-severity: critical" })), "fail-on-severity");
+    nur(pruefeDepReview(depRev({ with: "          fail-on-severity: critical", skript: "      - run: node scripts/dependency-review-vollstaendig.mjs --schwere critical" })), "fail-on-severity");
     nur(pruefeDepReview(depRev({ with: "          fail-on-severity: high\n          comment-summary-in-pr: always" })), "PR-Kommentar");
   });
   test("Dependency Review: pull_request_target statt pull_request", () => {
