@@ -193,6 +193,8 @@ function schritt(z, i) {
 const basename = baseName; // Verzeichnis, .exe und Groß-/Kleinschreibung weg (eine Quelle: shell-tabellen.mjs)
 /** Ist das Token der Befehl `git` (auch `git.exe`, voller Pfad)? */
 const istGit = (t) => /^git(\.exe)?$/.test(basename(t));
+/** `git-commit`, `git-push.exe`, `…/git-core/git-commit.exe`: die Dash-Form ruft dasselbe Unterkommando wie `git commit`; liefert dessen Namen oder null. */
+const gitDashUnter = (t) => /^git-([a-z][a-z-]*)$/.exec(basename(t))?.[1] ?? null;
 /** Klammern und Subexpression-Präfix vom Befehlsnamen lösen: `$(git`, `(git`. */
 const befehlsname = (v) => String(v).replace(/^[\s(@$]*\(?/, "").replace(/[)]+$/, "");
 
@@ -380,6 +382,8 @@ function statement(k, stmt) {
     return null;
   }
   if (kopfTok && istGit(kopfWert)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
+  const dash = kopfTok ? gitDashUnter(kopfWert) : null;
+  if (dash) return gitStatement(k, [{ value: dash, literal: true }, ...toks.slice(aufruf ? 2 : 1)]);
   if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd)) || LAUFZEITEN.has(basename(cmd).toLowerCase())) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
   return null;
 }

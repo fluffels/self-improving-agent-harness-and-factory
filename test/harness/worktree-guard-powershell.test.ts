@@ -47,7 +47,20 @@ const pruefe = (command: string, cwd: string = HAUPT) => g.bewertePowerShell({ c
 const blockt = (command: string, cwd?: string) => assert.equal(pruefe(command, cwd).block, true, command);
 const laeuft = (command: string, cwd?: string) => assert.equal(pruefe(command, cwd).block, false, command);
 
-describe("L77: Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
+describe("L2: Dash-Form git-commit / git-push (factory#394)", () => {
+  test("blockt im Haupt-Checkout, auch als Pfad mit .exe", () => {
+    blockt("git-commit -m x");
+    blockt("git-push origin");
+    blockt("& C:/Git/mingw64/libexec/git-core/git-commit.exe -m x");
+    blockt(String.raw`& "C:\Program Files\Git\mingw64\libexec\git-core\git-push.exe" origin`);
+  });
+  test("Negativ: git-status im Haupt-Checkout und git-commit im Feature-Worktree laufen", () => {
+    laeuft("git-status");
+    laeuft("git-commit -m x", WT);
+  });
+});
+
+describe("L77:Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
   test("Lesebefehle auf commit-graphs und pre-commit laufen, git commit blockt weiter (auch über den Interpreter-Weg)", () => {
     laeuft("Get-ChildItem .git/objects/info/commit-graphs");
     laeuft("Get-Content .git/hooks/pre-commit");
