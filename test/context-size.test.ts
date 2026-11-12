@@ -9,7 +9,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { kopiereScripts } from "./support/scripts-kopie";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -56,6 +58,7 @@ function withTempRepo(files: Record<string, string>, fn: (dir: string) => void):
   }
 }
 
+const WURZEL = join(import.meta.dirname, "..");
 const sizes = collectContextSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.datei));
 
@@ -224,5 +227,82 @@ describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
       { datei: "src/b/AGENTS.md", grund: "#2 Auslagerung offen" },
     ];
     assert.deepEqual(findStale(sized, allow).map((a) => a.datei), ["src/a/AGENTS.md"]);
+  });
+});
+
+// ── Ladekette je Blatt-AGENTS.md (factory#33) ────────────────────────────────
+type Kette = { blatt: string; kette: string[]; chars: number };
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const ladeketten: (s: Sized[]) => Kette[] = checkContextSize.ladeketten;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const ladekettenZeilen: (k: Kette[]) => string[] = checkContextSize.ladekettenZeilen;
+
+const groesse = (file: string, chars: number): Sized => ({ file, chars, budget: 1 });
+
+describe("Ladekette je Blatt-AGENTS.md (factory#33)", () => {
+  test("T1: Kette = Wurzel + Vorfahren + Blatt, absteigend nach Summe; Wurzel und Zwischenebene sind keine Blätter", () => {
+    const ketten = ladeketten([
+      groesse("AGENTS.md", 100), groesse("src/AGENTS.md", 50), groesse("src/a/AGENTS.md", 20),
+      groesse("src/b/AGENTS.md", 30), groesse("docs/AGENTS.md", 10), groesse("README.md", 999), groesse(".agents/skills/x/SKILL.md", 999),
+    ]);
+    assert.deepEqual(ketten, [
+      { blatt: "src/b", kette: ["AGENTS.md", "src/AGENTS.md", "src/b/AGENTS.md"], chars: 180 },
+      { blatt: "src/a", kette: ["AGENTS.md", "src/AGENTS.md", "src/a/AGENTS.md"], chars: 170 },
+      { blatt: "docs", kette: ["AGENTS.md", "docs/AGENTS.md"], chars: 110 },
+    ]);
+  });
+
+  test("T2: Präfix-Falle: src/a ist kein Vorfahr von src/ab", () => {
+    const ketten = ladeketten([groesse("AGENTS.md", 10), groesse("src/a/AGENTS.md", 5), groesse("src/ab/AGENTS.md", 7)]);
+    assert.deepEqual(ketten.map((k) => k.blatt).sort(), ["src/a", "src/ab"]);
+    const ab = ketten.find((k) => k.blatt === "src/ab");
+    assert.deepEqual(ab, { blatt: "src/ab", kette: ["AGENTS.md", "src/ab/AGENTS.md"], chars: 17 });
+  });
+
+  test("T3: nur Wurzel: genau eine Kette; Wurzel mit 0 Zeichen bleibt Glied", () => {
+    assert.deepEqual(ladeketten([groesse("AGENTS.md", 0)]), [{ blatt: "", kette: ["AGENTS.md"], chars: 0 }]);
+    assert.deepEqual(ladeketten([]), []);
+  });
+
+  test("T4: Zeilen: Suffix an jeder Höchstsumme, Format, kein npm run", () => {
+    const zeilen = ladekettenZeilen(ladeketten([groesse("AGENTS.md", 1000), groesse("b/AGENTS.md", 234), groesse("a/AGENTS.md", 234), groesse("c/AGENTS.md", 5)]));
+    assert.equal(zeilen.length, 3);
+    assert.match(zeilen[0] ?? "", /Ladekette a: 1\.234 Zeichen .*= AGENTS\.md \+ a\/AGENTS\.md ← längste Ladekette, kein Gate$/);
+    assert.match(zeilen[1] ?? "", /Ladekette b: 1\.234 .*← längste Ladekette, kein Gate$/);
+    assert.doesNotMatch(zeilen[2] ?? "", /längste/);
+    assert.doesNotMatch(zeilen.join("\n"), /npm run/);
+    assert.deepEqual(ladekettenZeilen([]), []);
+    assert.match(ladekettenZeilen(ladeketten([groesse("AGENTS.md", 5)]))[0] ?? "", /Ladekette AGENTS\.md: 5 Zeichen/);
+  });
+
+  test("T5: Walk: node_modules und Worktrees zählen nicht", () => {
+    withTempRepo({
+      "AGENTS.md": "a".repeat(10), "src/AGENTS.md": "b".repeat(5), "src/x/AGENTS.md": "c".repeat(2),
+      "node_modules/x/AGENTS.md": "d".repeat(99), ".claude/worktrees/w/AGENTS.md": "e".repeat(99),
+    }, (dir) => {
+      const ketten = ladeketten(collectContextSizes(dir, [{ file: "AGENTS.md", budget: 100 }], 100));
+      assert.deepEqual(ketten.map((k) => [k.blatt, k.chars]), [["src/x", 17]]);
+    });
+  });
+
+  test("T6: CLI: lange Kette lässt check:contextsize nicht rot werden (AK2), Einzelbudget schon", { timeout: 60_000 }, () => {
+    withTempRepo({
+      "AGENTS.md": "x".repeat(20_000), "src/AGENTS.md": "x".repeat(11_000), "src/a/AGENTS.md": "x".repeat(11_000),
+      ".factory/projekt.json": readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8"),
+    }, (dir) => {
+      kopiereScripts(dir);
+      const lauf = () => {
+        const r = spawnSync(process.execPath, [join(dir, "scripts", "check-context-size.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 });
+        return { status: r.status, text: `${r.stderr}${r.stdout}` };
+      };
+      const ok = lauf();
+      assert.equal(ok.status, 0, ok.text);
+      assert.match(ok.text, /Ladekette src\/a: 42\.000 Zeichen/);
+      assert.match(ok.text, /längste/);
+      writeFileSync(join(dir, "src/a/AGENTS.md"), "x".repeat(12_001));
+      const rot = lauf();
+      assert.equal(rot.status, 1, rot.text);
+      assert.match(rot.text, /✖ src\/a\/AGENTS\.md/);
+    });
   });
 });
