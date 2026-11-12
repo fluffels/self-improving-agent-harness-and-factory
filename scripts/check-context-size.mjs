@@ -13,6 +13,11 @@
  * brächte nur einen Gate-Config-Diff pro Content-PR). Bewusst KEIN Summen-Gate: modul-lokale
  * Dateien laden nur bei Bedarf, ein Summen-Cap bestrafte genau das Auslagern, das das
  * Wurzel-Gate erzwingen soll – die Summe steht darum nur als INFO in der CLI.
+ * Ladekette (factory#33): je Blatt-AGENTS.md gibt die CLI die Kette Wurzel + Vorfahren + Blatt mit
+ * Zeichensumme aus, ebenfalls nur INFO. Entscheidung: kein Ketten-Budget als Gate, weil jedes Glied
+ * schon ein Einzelbudget hat und ein Ketten-Cap entweder überflüssig ist (Wurzelbudget + Tiefe ×
+ * MODULE_AGENTS_BUDGET) oder das Auslagern in tiefere Ebenen bestraft. Neu entscheiden, sobald eine Kette
+ * Tiefe 2 erreicht oder ein Ablauf Codex in einem Unterordner startet (project_doc_max_bytes 32.768 Bytes).
  *
  * Hintergrund (#719): anders als src/-Module (check:size, #390) hatte die Wurzel-AGENTS.md,
  * die JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
@@ -90,6 +95,33 @@ export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, m
   });
 }
 
+// Ordner einer AGENTS.md; die Wurzel ("AGENTS.md" ist kürzer als der Schnitt) ergibt "".
+const ordnerVon = (file) => file.slice(0, -"/AGENTS.md".length);
+const istVorfahrOderSelbst = (a, b) => a === "" || b === a || b.startsWith(a + "/");
+
+/** Ladekette je Blatt-AGENTS.md (factory#33): ein Blatt ist eine AGENTS.md, unter deren Ordner keine weitere liegt (ohne modul-lokale Datei die Wurzel); die Kette sind alle AGENTS.md, deren Ordner Vorfahr des Blatt-Ordners oder dieser selbst ist, von der Wurzel zum Blatt. Absteigend nach Summe, Gleichstand nach Blatt. Nur AGENTS.md-Einträge aus `sizes` zählen. */
+export function ladeketten(sizes) {
+  const agents = sizes.filter((s) => s.file === "AGENTS.md" || s.file.endsWith("/AGENTS.md")).map((s) => ({ ...s, ordner: ordnerVon(s.file) }));
+  const blaetter = agents.filter((b) => !agents.some((o) => o.ordner !== b.ordner && istVorfahrOderSelbst(b.ordner, o.ordner)));
+  return blaetter
+    .map((b) => {
+      const glieder = agents.filter((a) => istVorfahrOderSelbst(a.ordner, b.ordner)).sort((x, y) => (x.ordner < y.ordner ? -1 : 1));
+      return { blatt: b.ordner, kette: glieder.map((g) => g.file), chars: glieder.reduce((sum, g) => sum + g.chars, 0) };
+    })
+    .sort((x, y) => y.chars - x.chars || (x.blatt < y.blatt ? -1 : 1));
+}
+
+const fmt = (n) => n.toLocaleString("de-DE");
+const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
+
+/** INFO-Zeilen zur Ladekette (factory#33), je Blatt eine; jede Kette mit der Höchstsumme trägt den Suffix "längste Ladekette, kein Gate". */
+export function ladekettenZeilen(ketten) {
+  const hoechst = Math.max(0, ...ketten.map((k) => k.chars));
+  return ketten.map(
+    (k) => `• INFO Ladekette ${k.blatt || "AGENTS.md"}: ${fmt(k.chars)} Zeichen (${tokens(k.chars)}) = ${k.kette.join(" + ")}${k.chars === hoechst ? " ← längste Ladekette, kein Gate" : ""}`,
+  );
+}
+
 /** Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` (nur oberste Ebene) und `.agents/skills/<name>/**`.md rekursiv, ohne AGENTS.md (die misst `collectAgentsFiles`); repo-relativer POSIX-Pfad, sortiert. */
 export function collectAgentSkillFiles(rootDir = ROOT) {
   const agenten = existsSync(join(rootDir, ".claude/agents"))
@@ -165,8 +197,6 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
-  const fmt = (n) => n.toLocaleString("de-DE");
-  const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
 
   let ALLOWLIST;
   try {
@@ -201,6 +231,9 @@ function main() {
 
   const kernBefund = kernBlockPruefung();
   if (kernBefund) console.error(red(`✖ ${kernBefund}`));
+
+  const zeilen = ladekettenZeilen(ladeketten(sizes));
+  for (const z of zeilen) console.log(dim(z));
 
   const total = sizes.reduce((sum, s) => sum + s.chars, 0);
   console.log(dim(`• INFO: ${sizes.length} Kontextdatei(en), zusammen ${fmt(total)} Zeichen (${tokens(total)}), kein Gate.`));
