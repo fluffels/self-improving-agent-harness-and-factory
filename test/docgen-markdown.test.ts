@@ -220,3 +220,21 @@ describe("schnappschussBloecke (eine Auslegung für beide Wächter)", () => {
     assert.deepEqual(lauf("a", S, "b"), { bloecke: [], fehler: [{ zeile: 1, art: "ohne-ende" }] });
   });
 });
+
+describe("slugify und entferneMarkup: Unterstrich wie GitHub", () => {
+  const f = md as unknown as { slugify: (s: string) => string; entferneMarkup: (s: string) => string };
+  test("Code-Span behält den Unterstrich", () => {
+    assert.equal(f.slugify("Wie entferne ich einen Worktree, was ist mit `node_modules`?"), "wie-entferne-ich-einen-worktree-was-ist-mit-node_modules");
+    assert.equal(f.entferneMarkup("mit `node_modules`"), "mit node_modules");
+  });
+  test("Kursiv-Unterstriche am Wortrand entfallen", () => {
+    assert.equal(f.slugify("_kursiv_ Wort"), "kursiv-wort");
+  });
+  test("Unterstrich zwischen Buchstaben bleibt", () => {
+    assert.equal(f.slugify("snake_case"), "snake_case");
+  });
+  test("fett und durchgestrichen entfallen", () => {
+    assert.equal(f.slugify("**fett**"), "fett");
+    assert.equal(f.entferneMarkup("~~weg~~"), "weg");
+  });
+});
