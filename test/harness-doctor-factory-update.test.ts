@@ -189,7 +189,7 @@ describe("dependabotAusschlussPunkt", () => {
   });
   test("keine `schlüssel: wert`-Zeile (Skalar, Quotes um den Schlüssel, Leerzeichen vor dem Doppelpunkt): NICHT PRÜFBAR statt falsch OK", () => {
     nichtPruefbar(
-      "updates: x\n", "42\n", "null\n", "updates: null\n", "updates:\n  a: b\n", "updates:\n  - 3\n  - null\n", "updates:\n  - x\n", "updates:\n  -y\n",
+      "updates: x\n", "42\n", "null\n", "updates: null\n", "updates:\n  a: b\n", "updates:\n  - 3\n  - null\n", "updates:\n  - x\n", "updates:\n  -y\n", "updates:\n  xxpackage-ecosystem: github-actions\n",
       '    - package-ecosystem: x\n', "updates:\n  - package-ecosystem: x\n    foo\n",
       '  - "package-ecosystem": github-actions\n', "updates:\n  - 'package-ecosystem': github-actions\n", "updates:\n  - package-ecosystem : github-actions\n",
       'updates:\n  - package-ecosystem: x\n    "exclude-paths": y\n', "updates: []\nfoo:bar\n",
