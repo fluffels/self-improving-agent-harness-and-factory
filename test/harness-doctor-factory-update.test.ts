@@ -111,7 +111,7 @@ const manifest = (...e: unknown[]) => JSON.stringify({ version: 3, eintraege: e 
 const BESITZ = [".github/workflows/codeql.yml", ".github/workflows/zizmor.yml"];
 const MANI = manifest(eintrag(BESITZ[0]!, { modul: "codeql" }), eintrag(BESITZ[1]!, { modul: "zizmor" }), eintrag("scripts/x.mjs"), eintrag(".github/workflows/nur-fabrik.yml", { ring: "oberflaeche" }), eintrag(".github/workflows/ci.yml", { block: "b" }));
 const actions = (exclude?: string[]) => `- package-ecosystem: github-actions\n  directory: /\n${exclude ? `  exclude-paths:\n${exclude.map((x) => `    - "${x}"\n`).join("")}` : ""}`;
-const dependabot = (...eintraege: string[]) => `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${eintraege.map((e) => e.replace(/^/gm, "  ")).join("")}`;
+const dependabot = (...eintraege: string[]) => `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${eintraege.map((e) => e.split("\n").filter(Boolean).map((z) => `  ${z}\n`).join("")).join("")}`;
 const dateien = (inhalt: Record<string, string | null>) => ({
   existiert: (p: string) => Object.keys(inhalt).some((k) => p.endsWith(k) && inhalt[k] !== null),
   lies: (p: string) => Object.entries(inhalt).find(([k]) => p.endsWith(k))?.[1] ?? null,

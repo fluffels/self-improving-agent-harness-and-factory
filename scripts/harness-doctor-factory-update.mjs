@@ -9,8 +9,10 @@
  * `--einrichten` ändert den Punkt nie (er läuft nur in `--pruefen` und im Wochenlauf); im Vorab-Abbruch (Config nicht geladen) entfällt er. Der Wochenlauf des Doctors braucht dafür `permissions: actions: read`.
  * `lesen(args, token)` ist die `gh`-Naht (liefert die geparste Antwort, wirft bei einem Fehler); `mitFactoryUpdate` hängt den Punkt an die Dateipunkte (`dateien({ rootDir, config, ... })`).
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "yaml";
+import { MANIFEST_PFAD, istWorkflowEinheit, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { fehlerText } from "./gh-cli.mjs";
 import { pruefeDateien } from "./harness-doctor-dateien.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
@@ -49,8 +51,51 @@ function zustandPunkt(config, lesen) {
   return luecke(PUNKT, `der Workflow ${WORKFLOW} ist nicht aktiv (Zustand: ${String(antwort.state)}): der Wochenlauf legt kein Issue „Factory-Update“ an (GitHub schaltet Zeitpläne nach etwa 60 Tagen ohne Aktivität in öffentlichen Repos ab)`, `\`gh workflow enable ${WORKFLOW}\` ausführen oder im Reiter Actions den Workflow „Factory-Update“ wählen und aktivieren`);
 }
 
+const AUSSCHLUSS = "Dependabot-Ausschluss";
+const DEPENDABOT = ".github/dependabot.yml";
+const liesDatei = (pfad) => {
+  try {
+    return readFileSync(pfad, "utf8");
+  } catch {
+    return null;
+  }
+};
+
+/** Die Besitz-Workflows des Projekts: Ganzdatei-Einträge des Manifests unter `.github/workflows/`, die verteilt werden und im Projekt da sind. */
+const besitzWorkflows = (manifest, rootDir, existiert) => manifest.eintraege.filter((e) => istWorkflowEinheit(e) && wirdVerteilt(e) && existiert(join(rootDir, e.pfad))).map((e) => e.pfad);
+
+/** Die Pfade, die ein github-actions-Eintrag von `updates` ausschließt (nur wörtliche Pfade; Globs zählen nicht). */
+const ausgeschlossen = (eintrag) => (Array.isArray(eintrag["exclude-paths"]) ? eintrag["exclude-paths"] : []);
+
+/**
+ * Der Punkt `Dependabot-Ausschluss` (factory#375 L5) als Liste: nur im Bezieher. Ein Dependabot-PR auf einen Besitz-Workflow (etwa `codeql.yml`) scheitert strukturell an `check:factorydrift`:
+ * der Bezieher kann ihn weder mergen noch lokal fixen, der Bump kommt per Factory-Update. Darum muss jeder `github-actions`-Eintrag in `.github/dependabot.yml` jeden vorhandenen Besitz-Workflow unter `exclude-paths` führen.
+ * Ohne Datei oder ohne `github-actions`-Eintrag: OK. Unlesbares YAML oder Manifest: `NICHT PRÜFBAR`. Grenze: nur wörtliche Pfade, Globs zählen nicht; ob `exclude-paths` für `github-actions` wirkt, ist Dependabot-seitig.
+ */
+export function dependabotAusschlussPunkt({ rootDir, existiert = existsSync, lies = liesDatei, bezieher = istBezieher }) {
+  if (!bezieher(rootDir)) return [];
+  if (!existiert(join(rootDir, DEPENDABOT))) return [gut(AUSSCHLUSS)];
+  let updates;
+  try {
+    updates = parse(lies(join(rootDir, DEPENDABOT)) ?? "")?.updates;
+  } catch (e) {
+    return [nichtPruefbar(AUSSCHLUSS, `${DEPENDABOT} ist kein lesbares YAML (${fehlerText(e).split("\n")[0]})`, `${DEPENDABOT} reparieren, dann erneut prüfen`)];
+  }
+  const aktionen = (Array.isArray(updates) ? updates : []).filter((u) => u?.["package-ecosystem"] === "github-actions");
+  if (aktionen.length === 0) return [gut(AUSSCHLUSS)];
+  const m = manifestAusText(lies(join(rootDir, MANIFEST_PFAD)));
+  if (m.manifest === undefined) return [nichtPruefbar(AUSSCHLUSS, `${m.text}: die Besitz-Workflows sind nicht bestimmbar`, "den Sync erneut ausführen, dann erneut prüfen")];
+  const fehlend = besitzWorkflows(m.manifest, rootDir, existiert).filter((w) => aktionen.some((a) => !ausgeschlossen(a).includes(w)));
+  if (fehlend.length === 0) return [gut(AUSSCHLUSS)];
+  const liste = fehlend.join(", ");
+  return [luecke(AUSSCHLUSS, `${liste} fehlt${fehlend.length > 1 ? "en" : ""} unter exclude-paths in ${DEPENDABOT}: Dependabot-PRs darauf scheitern an check:factorydrift`, `in ${DEPENDABOT} je github-actions-Eintrag unter exclude-paths ergänzen: ${liste}; ein Dependabot-PR darauf scheitert an check:factorydrift, der Bump kommt per Factory-Update`)];
+}
+
+/** Die Dateipunkte `dateien` samt Punkt `Dependabot-Ausschluss` (nur im Bezieher, nicht im Vorab-Abbruch). */
+export const mitDependabotAusschluss = (dateien, { existiert, lies, bezieher }) => (a) => [...dateien(a), ...(a.vorAbbruch === true ? [] : dependabotAusschlussPunkt({ rootDir: a.rootDir, existiert, lies, bezieher }))];
+
 /** Die Dateipunkte `dateien` samt Punkt `Factory-Update` (Config aus dem Aufruf, `lesen` vom Rand): dieselbe Form `dateien({ rootDir, config, … })`. */
 export const mitFactoryUpdate = (dateien, { lesen, existiert, bezieher }) => (a) => [...dateien(a), ...factoryUpdatePunkt({ rootDir: a.rootDir, config: a.config, vorAbbruch: a.vorAbbruch === true, lesen, existiert, bezieher })];
 
-/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht der beiden letzten. */
-export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen });
+/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` und `Dependabot-Ausschluss` (nur im Bezieher);`lesen(args, token)` ist die `gh`-Naht der beiden letzten. */
+export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitDependabotAusschluss(mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen }), {});
