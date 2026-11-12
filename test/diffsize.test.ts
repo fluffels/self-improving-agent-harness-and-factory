@@ -709,14 +709,25 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
 
   test("checkDiffSize: Override über das Sammelticket → sammelOverride gesetzt, sonst null", () => {
     const OV = `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
-    const ereignis = (titel: string) => ({ GITHUB_EVENT_PATH: "e.json", ...tightEnv, titel });
-    const lauf = (titel: string, log: string, numstat = OVER) =>
-      checkDiffSize({
-        runGit: gitWith("BASE", numstat, log),
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const tightEnv = { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" };
+    const gitWith =
+      (log: string): RunGit =>
+      (a) => {
+        if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+        if (a[0] === "merge-base") throw new Error("keine Basis");
+        if (a[0] === "rev-parse") return "HEADSHA\n";
+        if (a[0] === "diff") return OVER;
+        if (a[0] === "log") return log;
+        throw new Error("unerwartet: " + a.join(" "));
+      };
+    const lauf = (titel: string, log: string) =>
+      checkDiffSizeRoh({
+        zeilen: ZEILEN,
+        runGit: gitWith(log),
         env: { GITHUB_EVENT_PATH: "e.json", ...tightEnv },
         lies: () => JSON.stringify({ pull_request: { title: titel } }),
       } as never);
-    void ereignis;
     assert.equal(typeof lauf(SAMMEL, OV).sammelOverride, "string", "Sammelticket-PR mit Mehrfach-Override");
     assert.equal(lauf(SAMMEL, `chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
     assert.equal(lauf("SIH-9 Ticket (factory#9)", OV).sammelOverride, null, "kein Sammelticket");
