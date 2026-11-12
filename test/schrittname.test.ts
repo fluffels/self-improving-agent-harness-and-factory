@@ -59,6 +59,8 @@ describe("gemeinsamer Schrittname", () => {
     "echo hi; node scripts/gate-befehl.mjs coverage",
     "node scripts/gate-befehl.mjs 1x",
     "node scripts/gate-befehl.mjs _x",
+    "nodescripts/gate-befehl.mjs coverage",
+    "node scripts/gate-befehl.mjscoverage",
   ])("L67 Negativ: %s bleibt ein Fehler", (schritt) => {
     const scripts = { verify: "npm run lint", lint: "eslint .", "verify:full": "npm run verify && " + schritt };
     expect(() => k.ketteAusPackage({ scripts }, ["verify", "verify:full"], "verify:full")).toThrow(/Shell-Zeichen/);
