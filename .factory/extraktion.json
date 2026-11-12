@@ -482,6 +482,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/workflow-skripte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/harness/rollen-schalter.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

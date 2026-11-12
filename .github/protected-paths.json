@@ -8,6 +8,8 @@
     "/scripts/ci-laeufe.mjs",
     "/scripts/audit-verzeichnisse.mjs",
     "/scripts/audit-verzeichnisse-lib.mjs",
+    "/scripts/probe-erstbezug.mjs",
+    "/scripts/audit-einordnung.mjs",
     "/scripts/dependency-review-vollstaendig.mjs",
     "/scripts/verify-lauf.mjs",
     "/scripts/docs-gen*",
