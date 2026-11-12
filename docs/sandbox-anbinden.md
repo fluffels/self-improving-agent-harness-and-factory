@@ -1,5 +1,7 @@
 # Sandbox anbinden
 
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
 > Evergreen. Der Harness setzt keine bestimmte Sandbox voraus, sondern den Vertrag in [ADR 0025](adr/0025-sandbox-als-austauschbare-laufumgebung.md) (Zeilen V0 bis V7). Diese Seite sagt, wie man ihn erfüllt; die Vertragszeilen stehen nur dort. Standard- und Rückfallweg: ADR 0025, Abschnitt Fortschreibung quellprojekt#1827. Den WSL2-Weg beschreibt [agent-harness.md](agent-harness.md#agenten-sandbox-wsl2).
 
 ## Docker Sandboxes (`sbx`)

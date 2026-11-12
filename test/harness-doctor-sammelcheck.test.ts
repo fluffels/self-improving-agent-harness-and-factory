@@ -18,7 +18,8 @@ const ALARM_USES = "./.github/workflows/alarm-rot-main.yml";
 const CONFIG = { sammelChecks: [{ workflow: "ci.yml", job: "gate" }] };
 const KOPF = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n";
 const BUILD = "  build:\n    runs-on: ubuntu-latest\n  audit:\n    runs-on: ubuntu-latest\n";
-const GATE = "  gate:\n    needs: [build, audit]\n    if: always()\n    runs-on: ubuntu-latest\n";
+const PRUEF = "    steps:\n      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')\n        run: exit 1\n";
+const GATE = `  gate:\n    needs: [build, audit]\n    if: \${{ !cancelled() }}\n    runs-on: ubuntu-latest\n${PRUEF}`;
 const ALARM = `  alarm:\n    needs: [gate]\n    if: failure() && github.event_name == 'push'\n    uses: ${ALARM_USES}\n    with:\n      label: area:x\n`;
 const GUT = KOPF + BUILD + GATE + ALARM;
 const ci = (text: string): Workflow[] => [{ pfad: "ci.yml", text }];
@@ -50,7 +51,7 @@ describe("Sammel-Check (factory#401)", () => {
 
   test("L53: needs als Skalar oder Block-Liste zählen, ein Alarm-Aufruf braucht keinen Eintrag", () => {
     expect(lauf(GUT.replace("needs: [build, audit]", "needs:\n      - build\n      - audit")).ok).toBe(true);
-    expect(lauf(KOPF + "  build:\n    runs-on: x\n  gate:\n    needs: build\n" + ALARM).ok).toBe(true);
+    expect(lauf(KOPF + "  build:\n    runs-on: x\n  gate:\n    needs: build\n    if: always()\n" + PRUEF + ALARM).ok).toBe(true);
     expect(lauf(GUT.replace("needs: [build, audit]", "needs: [build]")).befund).toMatch(/audit/);
   });
 
@@ -156,12 +157,12 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
   });
 
   test("Zyklus in needs führt nicht zur Endlosschleife", () => {
-    expect(lauf(KOPF + "  a:\n    needs: [b]\n  b:\n    needs: [a]\n  gate:\n    needs: [a, b]\n" + ALARM).ok).toBe(true);
+    expect(lauf(KOPF + "  a:\n    needs: [b]\n  b:\n    needs: [a]\n  gate:\n    needs: [a, b]\n    if: always()\n" + PRUEF + ALARM).ok).toBe(true);
   });
 
   test("zwei Sammel-Jobs in einem Workflow: jeder braucht seinen eigenen Alarm-Aufruf mit needs auf ihn", () => {
     const config = { sammelChecks: [{ workflow: "ci.yml", job: "gate" }, { workflow: "ci.yml", job: "g2" }] };
-    const g2 = "  g2:\n    needs: [build, audit, gate]\n    runs-on: x\n";
+    const g2 = "  g2:\n    needs: [build, audit, gate]\n    if: always()\n    runs-on: x\n" + PRUEF;
     const alarm2 = ALARM.replace("alarm:", "alarm2:").replace("needs: [gate]", "needs: [g2]");
     expect(punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM + alarm2)) })).toEqual({ punkt: "Sammel-Check", ok: true });
     const nur1 = punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM)) });
@@ -177,6 +178,86 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
   test("Fix-Text und Befund nennen Jobname, Zeile und Konstrukt", () => {
     expect(lauf(KOPF + BUILD + GATE).fix).toContain("needs: [gate]");
     expect(lauf("name: CI\non:\n  push:\njobs: {a: 1}\n").befund).toMatch(/ci\.yml:4 /);
+  });
+});
+
+describe("Sammel-Check, Ergebnisprüfung (factory#413 L6)", () => {
+  const RUN = "    runs-on: ubuntu-latest\n";
+  const gate = (kopf: string) => GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n${kopf}`);
+  const ohneEnde = (p: Ergebnis) => { expect(p.ok).toBe(false); expect(p.nichtPruefbar).toBeUndefined(); return p; };
+
+  test("Lücke: Sammel-Job ohne if mit always()/!cancelled() (ein übersprungener Job gälte als bestanden)", () => {
+    const p = ohneEnde(lauf(gate(RUN + PRUEF)));
+    expect(p.befund).toMatch(/ci\.yml.*gate.*always\(\)|ci\.yml.*gate.*cancelled\(\)/);
+    expect(p.fix).toContain("if: ${{ !cancelled() }}");
+    expect(p.fix).toContain("contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')");
+    expect(p.fix).toContain("exit 1");
+    expect(p.fix).not.toContain("npm run");
+    ohneEnde(lauf(gate("    if: github.event_name == 'push'\n" + RUN + PRUEF)));
+  });
+
+  test("Lücke: if mit !cancelled(), aber keine Auswertung von needs.*.result", () => {
+    const p = ohneEnde(lauf(gate("    if: ${{ !cancelled() }}\n" + RUN)));
+    expect(p.befund).toMatch(/needs.*result/);
+    ohneEnde(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - run: echo ${{ needs.build.outputs.x }}\n")));
+  });
+
+  test("Lücke: Auswertung nur in einer Kommentarzeile", () => {
+    ohneEnde(lauf(gate("    if: always()\n" + RUN + "    # contains(needs.*.result, 'failure') -> exit 1\n")));
+  });
+
+  test("OK: always() oder !cancelled() mit Auswertung (Platzhalter, benannter Job, toJSON)", () => {
+    expect(lauf(GUT)).toEqual({ punkt: "Sammel-Check", ok: true });
+    expect(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - run: test \"${{ needs.build.result }}\" = success\n")).ok).toBe(true);
+    expect(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - uses: re-actors/alls-green@x\n        with:\n          jobs: ${{ toJSON(needs) }}\n")).ok).toBe(true);
+  });
+
+  test("OK: gequoteter Job-Schlüssel mit Zeilenkommentar, Leer- und Kommentarzeilen und CRLF im Block", () => {
+    const text = GUT.replace(GATE, `  "gate":  # Sammel-Job\n    needs: [build, audit]\n    if: always()\n\n    # Hinweis\n${RUN}\n    steps:\n      - run: echo \${{ needs.build.result }}\n`).replaceAll("\n", "\r\n");
+    expect(lauf(text)).toEqual({ punkt: "Sammel-Check", ok: true });
+  });
+
+  test("Auswertung steht im Sammel-Job-Block, nicht in einem Nachbarjob", () => {
+    const fremd = GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n    if: always()\n${RUN}  nach:\n    needs: [gate]\n    steps:\n      - run: echo \${{ needs.gate.result }}\n`);
+    ohneEnde(lauf(fremd));
+  });
+
+  const VIER = (gateZeilen: string) => `name: CI\non:\n    push:\n        branches: [main]\njobs:\n    build:\n        runs-on: x\n    gate:\n        needs: [build]\n${gateZeilen}    alarm:\n        needs: [gate]\n        if: failure() && github.event_name == 'push'\n        uses: ${ALARM_USES}\n`;
+
+  test("Einrückung mit vier Leerzeichen: OK mit Auswertung, Lücke ohne", () => {
+    expect(lauf(VIER("        if: always()\n        steps:\n            - run: echo ${{ needs.build.result }}\n"))).toEqual({ punkt: "Sammel-Check", ok: true });
+    const p = ohneEnde(lauf(VIER("        if: always()\n        runs-on: x\n")));
+    expect(p.befund).toMatch(/needs.*result/);
+    expect(p.befund).not.toMatch(/always\(\)/);
+  });
+
+  test("Job-ID mit Bindestrich, einfach gequotetes Schlüsselwort", () => {
+    const text = GUT.replace(GATE, "  'gate':\n    needs: [build, audit]\n    if: always()\n    steps:\n      - run: echo ${{ needs.build-test.result }}\n");
+    expect(lauf(text)).toEqual({ punkt: "Sammel-Check", ok: true });
+  });
+
+  test("ein Schlüssel in Spalte 0 hinter dem Sammel-Job gehört nicht zu seinem Block", () => {
+    const text = GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n    if: always()\n${RUN}`) + "ausserhalb: ${{ needs.gate.result }}\n";
+    ohneEnde(lauf(text));
+  });
+
+  test("if: cancelled() ohne Negation reicht nicht (der Job liefe nach Abbruch nicht)", () => {
+    const p = ohneEnde(lauf(gate("    if: cancelled()\n" + RUN + PRUEF)));
+    expect(p.befund).toMatch(/always\(\)/);
+  });
+
+  test("Zeilenend-Kommentar zählt nicht als Auswertung", () => {
+    ohneEnde(lauf(gate("    if: always()\n    runs-on: x  # contains(needs.a.result, 'failure')\n")));
+  });
+
+  test("Kommentar-Grenze: # ohne Leerraum davor ist kein Kommentar, Tab davor schon", () => {
+    expect(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - run: echo \"a#b ${{ needs.build.result }}\"\n")).ok).toBe(true);
+    ohneEnde(lauf(gate("    if: always()\n    runs-on: x\t# needs.a.result\n")));
+  });
+
+  test("Fix-Text der needs-Lücke nennt die Ausnahme der Jobs, die selbst am Sammel-Job hängen", () => {
+    const p = lauf(GUT.replace(BUILD, `${BUILD}  neu:\n    runs-on: x\n`));
+    expect(p.fix).toContain("außer denen, die selbst am Sammel-Job hängen");
   });
 });
 
@@ -198,10 +279,12 @@ describe("blockformJobs (factory#401): der Leser stimmt mit der yaml-Bibliothek 
   });
 
   test("Randfälle: leerer Job, leeres on und jobs, leere Listeneinträge, BOM, CRLF, Listen statt Mapping", () => {
-    expect(jobsLesen("on:\njobs:\n  a:\n  b:\n    needs: a\n")).toEqual({ ausloeser: [], jobs: [{ id: "a", needs: [], if: null, uses: null }, { id: "b", needs: ["a"], if: null, uses: null }] });
+    expect(jobsLesen("on:\njobs:\n  a:\n  b:\n    needs: a\n")).toEqual({ ausloeser: [], jobs: [{ id: "a", needs: [], if: null, uses: null, text: "" }, { id: "b", needs: ["a"], if: null, uses: null, text: "    needs: a" }] });
     expect(jobsLesen("on: push\njobs:\n")).toEqual({ ausloeser: ["push"], jobs: [] });
-    expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null }] });
-    expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null }] });
+    expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: '    needs: ["", b]' }] });
+    expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: "    needs: b" }] });
+    expect(jobsLesen("on: push\njobs:\n  a:\n    # c\n# spalte 0\n\n    needs: b  # x\n    if: y\n").jobs?.[0]).toMatchObject({ needs: ["b"], if: "y", text: "    needs: b\n    if: y" });
+    expect(jobsLesen("on: push\njobs:\n  a:\n    needs: b\n   \n    if: y\n").jobs?.[0]).toMatchObject({ text: "    needs: b\n    if: y" });
     expect(jobsLesen("on: push\njobs:\n  a:\n    - x\n").fehler?.konstrukt).toBe("Liste als Job");
     expect(jobsLesen("on: push\njobs:\n  - a\n").fehler?.konstrukt).toBe("Liste als jobs");
     expect(jobsLesen("jobs:\n  a:\n    needs: x\n").ausloeser).toEqual([]);
