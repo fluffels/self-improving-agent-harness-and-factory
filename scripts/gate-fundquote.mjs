@@ -122,7 +122,7 @@ const KOPF = /^> (\S+)@(\S+) (\S+)(?: .*)?$/;
 /** Die vom Gate-Befehl gedruckte Zeile (`▶ Gate-Befehl <name>: …`): ein Gate `gate-befehl:<name>` des Pakets. */
 const GATE_BEFEHL_KOPF = new RegExp(`^${escapeRegex(KOPF_PRAEFIX)}(\\w+):(.*)$`);
 /** Ziel-Skript der gedruckten Gate-Befehl-Zeile: `npm run <x>` (x) oder `npm test` (test), sonst null. */
-const npmZiel = (rest) => /^\s*npm run (\S+)(?:\s|$)/.exec(rest)?.[1] ?? (/^\s*npm test(?:\s|$)/.test(rest) ? "test" : null);
+const npmZiel = (rest) => /^\s*npm run (\S+)/.exec(rest)?.[1] ?? (/^\s*npm test(?:\s|$)/.test(rest) ? "test" : null);
 
 /** Kopfzeilen der Ausgabe als `[{ name, art: gate|kette|fremd, ms }]`; `zeilen`: `[{ text, ms }]`. Pur. */
 function kopfEintraege(zeilen, { paket, gates }) {
