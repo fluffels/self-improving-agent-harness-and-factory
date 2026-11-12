@@ -214,8 +214,8 @@ function taktZiel(config) {
 
 /**
  * Punkt `Langfuse-Takt`: beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
- * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
- * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
+ * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status-Ticket, Harness- und Langfuse-Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
+ * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und dort das Langfuse-Sammelticket holt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
  * führt im Bezieher kein Board das eigene Repo (`langfuseZiel` wirft), ist der Punkt eine Lücke, weil der Takt dort kein Status-Ticket anlegt (factory#202).
  */
 export function langfuseTaktPunkt(rootDir, existiert, config) {
@@ -232,9 +232,9 @@ export function langfuseTaktPunkt(rootDir, existiert, config) {
     }
   }
   if (fremd !== null && bezieher) {
-    return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
+    return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an und holt dort das Langfuse-Sammelticket, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
   }
-  return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter`);
+  return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket, Harness- und Langfuse-Sammelticket, hier läuft nur der Board-Wächter`);
 }
 
 /** Die Config für den Langfuse-Takt-Punkt: ungeprüft gelesen, bei Fehler null (der Punkt braucht sie nur für den Hinweis). */
