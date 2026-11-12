@@ -159,9 +159,15 @@ function befundeAusVerzeichnissen(config, npmAuditLaden) {
   return auditVerzeichnisse(config).flatMap((v) => markiereProd(befundeAusNpmAudit(npmAuditLaden([], v)), befundeAusNpmAudit(npmAuditLaden(["--omit=dev"], v))));
 }
 
+/** Pur: verflacht die Seitenliste von `--slurp`; jede Seite muss eine Liste sein, sonst wirft sie (kein stilles „keine Alerts“; `ladeAlerts` meldet es als `::warning::`). */
+export function alertsAusSeiten(seiten) {
+  if (!Array.isArray(seiten) || seiten.some((s) => !Array.isArray(s))) throw new Error("Unerwartete Alerts-Antwort (Seite ohne Liste).");
+  return seiten.flat();
+}
+
 function ladeAlerts(repo) {
   try {
-    return JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${repo}/dependabot/alerts?state=open&per_page=100`])).flat();
+    return alertsAusSeiten(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${repo}/dependabot/alerts?state=open&per_page=100`])));
   } catch (err) {
     console.log(`::warning::Dependabot-Alerts nicht lesbar (${fehlerText(err, 200)}); weiter mit npm audit allein.`);
     return [];
