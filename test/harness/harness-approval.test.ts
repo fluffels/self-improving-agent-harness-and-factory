@@ -59,10 +59,12 @@ import * as doctorDateienRaw from "../../scripts/harness-doctor-dateien.mjs";
 const {
   normalizeProtected,
   codeownersPaths,
+  codeownersMuster,
   codeownersSpiegelProbleme: pflichtReviewProbleme,
 } = doctorDateienRaw as unknown as {
   normalizeProtected: (p: string) => string;
   codeownersPaths: (text: string) => Set<string>;
+  codeownersMuster: (text: string) => string[];
   codeownersSpiegelProbleme: (quelleText: string, codeownersText: string) => string[];
 };
 
@@ -135,13 +137,6 @@ const TIEFENUNABHAENGIG = ["AGENTS.md"];
  */
 const UNGESCHUETZTER_TEST = "test/ungeschuetzt.test.ts";
 const decktTestOrdnerAb = (muster: string[]): boolean => trifftLeitplanke(UNGESCHUETZTER_TEST, muster);
-
-/** Die rohen Muster aus `.github/CODEOWNERS` (jeweils vor dem `@owner`). */
-const codeownersMuster = (text: string): string[] =>
-  text
-    .split(/\r?\n/)
-    .map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1])
-    .filter((p): p is string => p !== undefined);
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
@@ -644,7 +639,7 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
   test("Red-Green: ein Glob-Muster deckt nicht das ganze Verzeichnis (#90 L20)", () => {
     assert.deepEqual(ungeschuetzt(["scripts/x-lib.mjs"], { harness: ["/scripts/*-mcp.mjs"] }), ["scripts/x-lib.mjs"]);
     assert.deepEqual(ungeschuetzt(["scripts/a-mcp.mjs"], { harness: ["/scripts/*-mcp.mjs"] }), []);
-    assert.deepEqual(codeownersMuster("# k\n/scripts/*-mcp.mjs @team"), ["/scripts/*-mcp.mjs"]);
+    assert.deepEqual(codeownersMuster("# k\n# @team\n/scripts/*-mcp.mjs @team"), ["/scripts/*-mcp.mjs"]);
   });
 
   test("Red-Green: ein ungeschütztes Modul in der Importkette wird gefunden", () => {
