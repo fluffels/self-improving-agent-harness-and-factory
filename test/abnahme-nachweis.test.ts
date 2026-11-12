@@ -21,13 +21,14 @@ interface Zeilen {
   reviewOverride: string;
 }
 type Urteil = { k: string; wert: string }[];
-type Marker = { durchgang: number; head: string; urteil: Urteil } | null;
+type Marker = { durchgang: number; head: string; urteil: Urteil; ursache?: { k: string; klasse: string }[] } | null;
 type AbnahmeHead = { bekannt: boolean; imSlice: boolean; nachReviewHead: boolean; konfliktMerges: string[]; aenderungsCommits: { sha: string; dateien: string[] }[] };
 type Nachweis = { review: { head: string | null; runden: number } | null; abnahme: unknown };
 interface Mod {
   verknuepfteTickets: (body: string) => number[];
+  zaehleSzenarioDurchgaenge: (markers: NonNullable<Marker>[]) => number;
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
@@ -50,9 +51,10 @@ const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wer
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number }) =>
   m.bewerteAbnahme({
     reviewOverride: o.reviewOverride,
+    szenarioDurchgaenge: o.szenarioDurchgaenge,
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
     ticket: o.ticket === undefined ? { nr: 9, kriterien: kr(2) } : o.ticket,
     marker: o.marker === undefined ? marker() : o.marker,
@@ -93,6 +95,32 @@ describe("K2: nicht erfüllt, nicht prüfbar", () => {
   test.each(["nicht-erfuellt", "nicht-pruefbar"])("%s ist rot", (wert) => {
     const u = ur("erfuellt", wert);
     rot(bewerte({ abnahme: urteilZeile({ urteil: u }), marker: marker({ urteil: u }) }), new RegExp(`K2: ${wert}`));
+  });
+});
+
+describe("K3: Cap und Szenario-Durchgänge", () => {
+  const szenario = (urteil: Urteil, ursache: { k: string; klasse: string }[]) => ({ durchgang: 1, head: H, urteil, ursache });
+  test("ein reiner Szenario-Durchgang zählt nicht gegen das Cap (runden=1, durchgaenge=2)", () => {
+    const n = bewerte({ abnahme: urteilZeile({ durchgaenge: 2 }), runden: 1, marker: marker({ durchgang: 2 }), szenarioDurchgaenge: 1 });
+    expect(n).toEqual([]);
+  });
+  test("ohne Szenario-Durchgang bleibt durchgaenge > runden rot", () => {
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 2 }), runden: 1, marker: marker({ durchgang: 2 }), szenarioDurchgaenge: 0 }), /durchgaenge=2 ist größer als runden=1/);
+  });
+  test("ein Szenario-Durchgang deckt nur einen Durchgang, nicht zwei", () => {
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 1, marker: marker({ durchgang: 3 }), szenarioDurchgaenge: 1 }), /durchgaenge=3 ist größer als runden=1/);
+  });
+  test("zaehleSzenarioDurchgaenge: nur Marker, deren nicht erfüllte Kriterien alle ursache=szenario tragen", () => {
+    const z = (x: NonNullable<Marker>[]) => m.zaehleSzenarioDurchgaenge(x);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(1);
+    expect(z([szenario(ur("nicht-erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }, { k: "K2", klasse: "szenario" }])])).toBe(1);
+    expect(z([szenario(ur("nicht-erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "umsetzung" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "erfuellt"), [])])).toBe(0);
+    expect(z([{ durchgang: 1, head: H, urteil: ur("erfuellt", "nicht-erfuellt") }])).toBe(0);
+    expect(z([szenario(ur("nicht-pruefbar", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }]), szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(2);
   });
 });
 
@@ -220,6 +248,30 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG }), ghAufrufe };
   }
 
+  describe("Szenario-Durchgang zählt nicht gegen das Cap (factory#358, Ende zu Ende)", () => {
+    const marker2 = (d: number, urteil: string, ursache = "") => ({ user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=${urteil}${ursache} -->` });
+    const zeile2 = `${Z.abnahme}: head=${H} durchgaenge=2 urteil=K1:erfuellt,K2:erfuellt`;
+    const messages = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${zeile2}`;
+    const kommentare = (ursache: string) => [marker2(1, "K1:erfuellt,K2:nicht-erfuellt", ursache), marker2(2, "K1:erfuellt,K2:erfuellt")];
+    test("D1 szenario, D2 bestanden bei runden=1: grün", () => {
+      const { r } = lauf({ messages, kommentare: kommentare(" ursache=K2:szenario") });
+      expect(r.fehler).toEqual([]);
+    });
+    test("D1 mit ursache=umsetzung bei sonst gleichen Daten: rot", () => {
+      const { r } = lauf({ messages, kommentare: kommentare(" ursache=K2:umsetzung") });
+      rot(r.fehler, /durchgaenge=2 ist größer als runden=1/);
+    });
+    test("ein Szenario-Marker eines Fremden senkt das Cap nicht (Vertrauensgrenze): rot", () => {
+      const fremd = { user: { login: "fremd", type: "User" }, body: marker2(1, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario").body };
+      const { r } = lauf({ messages, kommentare: [fremd, marker2(2, "K1:erfuellt,K2:erfuellt")] });
+      rot(r.fehler, /durchgaenge=2 ist größer als runden=1/);
+    });
+    test("alle Marker zählen, nicht nur der jüngste: zwei Szenario-Durchgänge decken durchgaenge=3 bei runden=1", () => {
+      const m3 = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: head=${H} durchgaenge=3 urteil=K1:erfuellt,K2:erfuellt`;
+      const k = [marker2(1, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(2, "K1:erfuellt,K2:nicht-erfuellt", " ursache=K2:szenario"), marker2(3, "K1:erfuellt,K2:erfuellt")];
+      expect(lauf({ messages: m3, kommentare: k }).r.fehler).toEqual([]);
+    });
+  });
   test("grün: Urteil, Spur und head passen", () => {
     const { r } = lauf();
     expect(r.fehler).toEqual([]);

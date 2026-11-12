@@ -11,8 +11,8 @@
  * geänderten Zeilen der NEUEN Seite (alle Quellwurzeln der Projekt-Config, Endungsliste, ohne `struktur.ohne`); geschnitten mit den
  * Coverage-Berichten (`coverage.berichte` der Projekt-Config, Standard `coverage/lcov.info`; lcov und JaCoCo, Leser in
  * scripts/coverage-berichte.mjs) ergibt das je Zeile „getestet / nicht getestet". Jeder konfigurierte Bericht ist Pflicht. Bewertet
- * wird PRO SCHICHT über `layerOf()` aus der Schicht-SSOT scripts/layers.cjs — dieselben
- * Grenzen, an denen auch die Aggregat-Floors in vite.config.ts hängen. Die Basis-Semantik
+ * wird PRO SCHICHT über `layerOf()` der Schicht-Definition aus `schichten.layers` (scripts/docs-gen/config.json); die Floors je Schicht
+ * stehen in LAYER_DIFF_FLOORS, die Aggregat-Floors in vite.config.ts gelten global. Die Basis-Semantik
  * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als

@@ -16,6 +16,10 @@
  * Ausführen mit:  npm test   (oder gezielt: npm run check:diffsize)
  */
 import { describe, test } from "vitest";
+import { execFileSync, spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { fixture } from "./support/tmp-fixture";
 import { FREMD, projektConfig } from "./support/fremd-config";
@@ -649,5 +653,140 @@ describe("check:diffsize: Verdrahtung der docgen-Wurzeln (#1411)", () => {
     const r = m.checkDiffSize({ runGit: git, env: {}, docgenWurzeln: [] });
     assert.equal(r.genLines, 0);
     assert.equal(r.changedLines, 2);
+  });
+});
+
+describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile eines Sammeltickets", () => {
+  type Ereignis = null | { titel: string } | { fehler: string };
+  const m = checkDiffRaw as unknown as {
+    prTitelAusEreignis: (env: Env, lies: (pfad: string) => string) => Ereignis;
+    sammelOverrideFehler: (titel: string | null, grund: string) => string | null;
+  };
+  const SAMMEL = `${FREMD.praefixe.commitZeile}9 Harness-Härtung (gesammelt): L44, L45 (factory#9)`;
+  const lies = (inhalt: string) => () => inhalt;
+
+  test("prTitelAusEreignis: kein Ereignis oder kein PR-Ereignis → null, Titel → {titel}", () => {
+    assert.equal(m.prTitelAusEreignis({}, lies("x")), null, "ohne GITHUB_EVENT_PATH");
+    assert.equal(m.prTitelAusEreignis({ GITHUB_EVENT_PATH: "e.json" }, lies('{"ref":"main"}')), null, "push-Ereignis");
+    assert.deepEqual(
+      m.prTitelAusEreignis({ GITHUB_EVENT_PATH: "e.json" }, lies(JSON.stringify({ pull_request: { title: SAMMEL } }))),
+      { titel: SAMMEL },
+    );
+  });
+
+  test("prTitelAusEreignis: unlesbar oder kaputt → fehler (fail-closed)", () => {
+    const wirft = () => {
+      throw new Error("weg");
+    };
+    const env = { GITHUB_EVENT_PATH: "e.json" };
+    assert.ok("fehler" in (m.prTitelAusEreignis(env, wirft) ?? {}), "Lesefehler");
+    assert.ok("fehler" in (m.prTitelAusEreignis(env, lies("{ kaputt")) ?? {}), "kaputtes JSON");
+    assert.ok("fehler" in (m.prTitelAusEreignis(env, lies('{"pull_request":{}}')) ?? {}), "PR ohne Titel");
+    assert.ok("fehler" in (m.prTitelAusEreignis(env, lies('{"pull_request":{"title":5}}')) ?? {}), "Titel kein Text");
+  });
+
+  test("sammelOverrideFehler: genau eine Zeile bei einem Sammelticket-Titel ist ok", () => {
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "#339 L44 braucht 900 Zeilen"), null);
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "L5 und noch mal L5 sind breit"), null, "dieselbe Zeile zählt einmal");
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "XL1 und L2"), null, "XL1 ist keine Zeilenmarke (Wortgrenze vorn)");
+    assert.equal(m.sammelOverrideFehler(SAMMEL, "L1x und L2"), null, "L1x ist keine Zeilenmarke (Wortgrenze hinten)");
+    assert.equal(typeof m.sammelOverrideFehler(SAMMEL, "L12 und L1"), "string", "mehrstellige Nummer zählt als eine, L12 und L1 sind zwei");
+  });
+
+  test("prTitelAusEreignis: JSON ohne Objekt ist kein PR-Ereignis (null)", () => {
+    const env = { GITHUB_EVENT_PATH: "e.json" };
+    assert.equal(m.prTitelAusEreignis(env, lies("null")), null);
+    assert.equal(m.prTitelAusEreignis(env, lies("5")), null);
+  });
+
+  test("sammelOverrideFehler: mehrere Zeilen, ein Bereich oder keine Zeile ist rot, ohne Titel in der Meldung", () => {
+    for (const grund of ["Zeile L44 ... L48", "#339 Sammelticket mit 12 Zeilen", "L1–L7 gemeinsam", "ohne Zeilenangabe"]) {
+      const f = m.sammelOverrideFehler(SAMMEL, grund);
+      assert.equal(typeof f, "string", grund);
+      assert.ok(!f?.includes("Harness-Härtung"), "Titel (Fremdtext) nie in der Meldung");
+      assert.ok(!/npm run|#\d/.test(f ?? ""), "Kern-Text ohne npm run und nackte Nummer");
+    }
+  });
+
+  test("sammelOverrideFehler: ohne Sammelticket-Titel oder ohne Titel nie rot", () => {
+    assert.equal(m.sammelOverrideFehler(`${FREMD.praefixe.commitZeile}9 normales Ticket (factory#9)`, "L1 L2 L3"), null);
+    assert.equal(m.sammelOverrideFehler(null, "L1 L2 L3"), null);
+    assert.equal(m.sammelOverrideFehler("", "L1 L2"), null);
+  });
+
+  test("sammelOverrideFehler: jeder Sammelticket-Titel greift", () => {
+    for (const t of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Codequalität (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)"]) {
+      assert.equal(typeof m.sammelOverrideFehler(`${FREMD.praefixe.commitZeile}1 ${t}: L1, L2`, "L1 L2"), "string", t);
+    }
+  });
+
+  test("checkDiffSize: Override über das Sammelticket → sammelOverride gesetzt, sonst null", () => {
+    const OV = `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const tightEnv = { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" };
+    const gitWith =
+      (log: string): RunGit =>
+      (a) => {
+        if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+        if (a[0] === "merge-base") throw new Error("keine Basis");
+        if (a[0] === "rev-parse") return "HEADSHA\n";
+        if (a[0] === "diff") return OVER;
+        if (a[0] === "log") return log;
+        throw new Error("unerwartet: " + a.join(" "));
+      };
+    const lauf = (titel: string, log: string) =>
+      checkDiffSizeRoh({
+        zeilen: ZEILEN,
+        runGit: gitWith(log),
+        env: { GITHUB_EVENT_PATH: "e.json", ...tightEnv },
+        lies: () => JSON.stringify({ pull_request: { title: titel } }),
+      } as never);
+    assert.equal(typeof lauf(SAMMEL, OV).sammelOverride, "string", "Sammelticket-PR mit Mehrfach-Override");
+    assert.equal(lauf(SAMMEL, `chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
+    assert.equal(lauf(`${FREMD.praefixe.commitZeile}9 Ticket (factory#9)`, OV).sammelOverride, null, "kein Sammelticket");
+    assert.equal(lauf(SAMMEL, "").sammelOverride, null, "kein Override");
+    const unlesbar = (log: string) =>
+      checkDiffSizeRoh({
+        zeilen: ZEILEN,
+        runGit: gitWith(log),
+        env: { GITHUB_EVENT_PATH: "e.json", ...tightEnv },
+        lies: () => "{ kaputt",
+      } as never);
+    assert.equal(typeof unlesbar(OV).sammelOverride, "string", "unlesbares Ereignis bei aktivem Override: rot");
+    assert.equal(unlesbar("").sammelOverride, null, "unlesbares Ereignis ohne Override: nicht relevant");
+  });
+
+  describe("CLI (main): der Exit-Code des Sammel-Override-Pfads", () => {
+    const SKRIPT = fileURLToPath(new URL("../scripts/check-diffsize.mjs", import.meta.url));
+    const schluessel = commitZeilenAus(projektConfig()).diffsizeOverride;
+    // Temp-Git-Repo: Basis-Commit, darauf ein Commit mit zwei Zeilen (über dem Budget von 1 Zeile) und der Override-Zeile; das Skript läuft mit cwd dort.
+    const cli = (titel: string, grund: string) => {
+      const repo = fixture({ "a.txt": "a\n" });
+      const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...a], { cwd: repo, encoding: "utf8" }).trim();
+      git("init", "-q");
+      git("add", "-A");
+      git("commit", "-q", "-m", "basis");
+      const basis = git("rev-parse", "HEAD");
+      writeFileSync(join(repo, "a.txt"), "a\nb\nc\n");
+      git("commit", "-q", "-am", `aenderung\n\n${schluessel}: #9 ${grund}`);
+      const ereignis = join(repo, "ereignis.json");
+      writeFileSync(ereignis, JSON.stringify({ pull_request: { title: titel } }));
+      const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", FACTORY_DIFF_BASE: basis, FACTORY_DIFFSIZE_MAX_LINES: "1", GITHUB_EVENT_PATH: ereignis };
+      return spawnSync(process.execPath, [SKRIPT], { cwd: repo, env, encoding: "utf8" });
+    };
+    test("Sammelticket mit zwei Zeilen im Grund: Exit 1, Meldung ohne Titel", () => {
+      const r = cli(SAMMEL, "L1 L2 breit");
+      assert.equal(r.status, 1, r.stdout + r.stderr);
+      assert.match(r.stderr, /genau eine Zeile/);
+      assert.ok(!(r.stdout + r.stderr).includes("Harness-Härtung"), "der PR-Titel steht nicht in der Ausgabe");
+    });
+    test("Sammelticket mit einer Zeile: der Override gilt, Exit 0", () => {
+      const r = cli(SAMMEL, "L1 breit");
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+    });
+    test("normales Ticket mit zwei Zeilen im Grund: Exit 0", () => {
+      const r = cli(`${FREMD.praefixe.commitZeile}9 Ticket (factory#9)`, "L1 L2 breit");
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+    });
   });
 });

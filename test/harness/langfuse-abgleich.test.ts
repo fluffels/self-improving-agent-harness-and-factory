@@ -17,6 +17,8 @@ import { FREMD, projektConfig } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
@@ -42,6 +44,7 @@ const einstiegRoh = rawAbgleichEinstieg as unknown as { pruefen: (a: unknown, d:
 const A = {
   ...rawAbgleichEinstieg,
   ...rawKern,
+  ...rawOtlp,
   pruefen: (a: unknown, d: object) => einstiegRoh.pruefen(a, { config: FREMD, ...d }),
   sollEintraege: (s: unknown, o?: object) => kernRoh.sollEintraege(s, { worktree: WORKTREE, ...o }),
   ticketAusBranch: (b: unknown) => kernRoh.ticketAusBranch(b, WORKTREE),

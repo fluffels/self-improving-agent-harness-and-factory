@@ -11,7 +11,7 @@ import { istProjektOrdner } from "./transkript.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { callsDerSitzung } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
-import { beobachtungsId, traceIdVon, subagentSpanId, scoreId } from "./langfuse-otlp.mjs";
+import { beobachtungsId, traceIdVon } from "./langfuse-otlp.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
 export const RUHEFRIST_MIN = 30;
@@ -78,9 +78,6 @@ export function ledgerLesen(datei) {
   }
   return { ledger: leeresLedger(), kaputt: true };
 }
-
-// Die ID-Funktionen stehen in langfuse-otlp.mjs (pur, ohne langfuse-api); hier nur weitergereicht.
-export { beobachtungsId, traceIdVon, subagentSpanId, scoreId };
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
