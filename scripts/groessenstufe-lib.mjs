@@ -23,6 +23,9 @@ import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 /** Obergrenzen der Stufe S (Summe über den ganzen Diff). */
 export const GROESSENSTUFE_S = Object.freeze({ maxDateien: 3, maxZeilen: 60 });
 
+/** Ordner der Wächter-Tests (eigene Parser- und Regex-Logik): nie Stufe S und nie `stichprobe` (factory#396 L40). */
+export const WAECHTER_PFAD = "/test/harness/";
+
 /** Pfade, die nie Stufe S sind, auch wenn `.github/protected-paths.json` sie nicht (oder in einem Bezieher anders) nennt (Muster wie CODEOWNERS, `trifftLeitplanke`). */
 export const GRUNDSCHUTZ = Object.freeze([
   "AGENTS.md",
@@ -34,7 +37,7 @@ export const GRUNDSCHUTZ = Object.freeze([
   "/.codex/",
   "/.mcp.json",
   "/scripts/",
-  "/test/harness/",
+  WAECHTER_PFAD,
   "/package.json",
   "/package-lock.json",
 ]);
@@ -130,14 +133,16 @@ export const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]s$/;
 
 /**
  * Die Sweep-Tiefe der Test-Lens (factory#272): `{tiefe: "voll" | "stichprobe", gruende}`. `stichprobe` (Stichprobenregel der Test-Brille) nur, wenn die Risikoklasse
- * nicht hoch ist und jeder Pfad `*.md` oder eine Testdatei ist (Text-Wächter, kein Guard-, Parser- oder Gate-Code); alles andere, auch Konfiguration,
- * `test/support` und JSON-Listen, ist `voll` (Vollsweep je Anker). Nicht lesbare Listen und fehlende Risiko-Muster sind `voll` (fail-closed, über die Risikoklasse). Der Sweep hängt nicht von der Schutzliste ab; die Zweige, die den Diff gar nicht rechnen können (Schutzliste oder git wirft), tragen `voll`. Bekannte Grenze: Hilfslogik mit Verzweigungen in einer Testdatei zählt als Text-Wächter (die Stichprobenregel sabotiert Assertions; eine grüne Probe löst den Vollsweep der Datei aus). Pur.
+ * nicht hoch ist und jeder Pfad `*.md` oder eine Testdatei außerhalb von `test/harness/` ist (Text-Wächter, kein Guard-, Parser- oder Gate-Code); alles andere, auch Konfiguration,
+ * `test/support`, JSON-Listen und die Wächter-Tests unter `test/harness/` (eigene Parser- und Regex-Logik, factory#396 L40), ist `voll` (Vollsweep je Anker). Nicht lesbare Listen und fehlende Risiko-Muster sind `voll` (fail-closed, über die Risikoklasse). Der Sweep hängt nicht von der Schutzliste ab; die Zweige, die den Diff gar nicht rechnen können (Schutzliste oder git wirft), tragen `voll`. Bekannte Grenze: Hilfslogik mit Verzweigungen in einer Testdatei außerhalb von `test/harness/` zählt als Text-Wächter (die Stichprobenregel sabotiert Assertions; eine grüne Probe löst den Vollsweep der Datei aus). Pur.
  */
 export function bestimmeSweeptiefe(pfade, risiko) {
   const klasse = bestimmeRisikoklasse(pfade, risiko);
   if (klasse.klasse === "hoch") return { tiefe: "voll", gruende: [klasse.gruende[0]] };
   const code = pfade.find((p) => !istDokuDiff([p]) && !TESTDATEI.test(p));
   if (code !== undefined) return { tiefe: "voll", gruende: [`${code} ist Code oder Konfiguration`] };
+  const waechter = pfade.find((p) => trifftLeitplanke(p, [WAECHTER_PFAD]));
+  if (waechter !== undefined) return { tiefe: "voll", gruende: [`${waechter} ist ein Wächter-Test (test/harness/)`] };
   return { tiefe: "stichprobe", gruende: ["nur Doku und Testdateien, Risikoklasse nicht hoch"] };
 }
 
