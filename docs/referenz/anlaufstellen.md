@@ -50,7 +50,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | arc42-architektur.md | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
 | arc42 › Hexagonale Sicht | wenn du einen neuen Adapter oder eine neue Ein- oder Ausgabe baust (Speicher, Eingabeart, Export, Content-Quelle): welcher Port, welche Schicht, welche Tabellenzeile |
 | architektur/harness.c4 | für die Harness-Sichten desselben Modells (Übersicht, Bausteine, Gates und Leitplanken, Gate-Ketten `verify` und `verify:full`, CI und Board, der Ticket-Lauf als dynamische View; Elemente gegen `.claude/`, Hooks, Gates, CI und `.mcp.json` abgeglichen) |
-| glossar.md | wenn dir ein Begriff des Projekts fehlt (Harness-Begriffe: [harness-glossar.md](../harness-glossar.md)) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
+| [glossar.md](../glossar.md) | wenn dir ein Begriff des Projekts fehlt (Vorlage des Sync, das Projekt trägt seine Fachbegriffe ein; Harness-Begriffe: [harness-glossar.md](../harness-glossar.md)) |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 
 ### Arbeitsablauf und Nachschlagen

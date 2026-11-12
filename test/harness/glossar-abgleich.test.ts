@@ -7,7 +7,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const lies = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
@@ -21,6 +21,18 @@ describe("Glossar-Abgleich (#1561 Z5)", () => {
     assert.match(planer, /\*\*Glossar-Abgleich \(Pflicht\):\*\*[^\n]*docs\/harness-glossar\.md[^\n]*keine neuen Begriffe/);
     assert.match(planer, /je Kind der Glossar-Abgleich/);
     assert.match(planer, /keine neuen Begriffe“; neue Ein- oder Ausgabe[^\n]*hexagonalen Sicht[^\n]*`docs\/arc42-architektur\.md`/);
+  });
+
+  test("Erstbezug ohne Projekt-Glossar (L3): docs/glossar.md ist eine Vorlage im Besitz-Manifest, der Planer nennt den Fall", () => {
+    const manifest = JSON.parse(lies(".factory/besitz.json")) as { eintraege: { pfad: string; ring: string; art?: string }[] };
+    const eintrag = manifest.eintraege.find((e) => e.pfad === "docs/glossar.md");
+    assert.ok(eintrag, "besitz.json hat keinen Eintrag docs/glossar.md");
+    assert.equal(eintrag.art, "vorlage");
+    assert.equal(eintrag.ring, "kern");
+    assert.ok(existsSync(new URL("../../docs/glossar.md", import.meta.url)), "docs/glossar.md fehlt");
+    assert.match(lies("docs/glossar.md"), /\| Begriff \| Bedeutung \|/);
+    assert.match(lies(".claude/agents/factory-planer.md"), /fehlt `docs\/glossar\.md`[^\n]*legt der Sync die Vorlage an[^\n]*, Ergebnis je Begriff/);
+    assert.match(lies("docs/erstbezug.md"), /docs\/glossar\.md[^\n]*Vorlage[^\n]*nie/);
   });
 
   test("keine Glossar-Tabellenzeile ist länger als die Grenze, Details stehen auf der verlinkten Brain-Seite", () => {

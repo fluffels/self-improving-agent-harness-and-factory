@@ -188,6 +188,7 @@
     {"pfad":".agents/skills/factory/ablauf.md","ring":"kern","quelle":"ADR 0028 Fortschreibung #1806, Umzug #1850"},
     {"pfad":".github/workflows/board-takt.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/festgefahren.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"docs/glossar.md","ring":"kern","art":"vorlage","quelle":"Vorlage (factory#404)"},
     {"pfad":".github/dependabot.yml","ring":"kern-nach-entkopplung","art":"vorlage","quelle":"Vorlage (factory#118)"},
     {"pfad":".github/workflows/dependabot-inbox.yml","ring":"kern-nach-entkopplung","modul":"dependabot-inbox","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":".github/workflows/internalrefs-pr-text.yml","ring":"kern-nach-entkopplung","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)","pflichtChecks":["PR-Text interne Bezuege pruefen"]},

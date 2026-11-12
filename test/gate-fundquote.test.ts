@@ -1,7 +1,10 @@
 /* Gate-Fundquote (factory#39): Verhalten von scripts/gate-fundquote.mjs. Fixtures mit synthetischem Paket, IO ist injiziert. */
+import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gfModule from "../scripts/gate-fundquote.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { GATE_BEFEHL_NAMEN } from "../scripts/gate-befehl-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as vlModule from "../scripts/verify-lauf.mjs";
 
@@ -67,6 +70,15 @@ describe("gateSatz", () => {
     expect(s.gates).toEqual(["typecheck", "lint", "check:size", "test", "test:coverage"]);
     expect(s.verify).toEqual(["typecheck", "lint", "check:size", "test"]);
     expect(s.gates).not.toContain("docs:gen");
+  });
+  test("das echte package.json: gateSatz wirft nicht, jedes Gate ist ein Skript oder ein Gate-Befehl (L68)", () => {
+    const echt = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> };
+    const s = gf.gateSatz(echt);
+    expect(s.gates).toContain("check:diffcoverage");
+    expect(s.verify.length).toBeGreaterThan(0);
+    const gateBefehle = s.gates.filter((g) => g.startsWith("gate-befehl:")).map((g) => g.slice("gate-befehl:".length));
+    for (const n of gateBefehle) expect(GATE_BEFEHL_NAMEN as string[]).toContain(n);
+    for (const g of s.gates.filter((x) => !x.startsWith("gate-befehl:"))) expect(echt.scripts[g], g).toBeTypeOf("string");
   });
   test("wirft ohne verify", () => {
     expect(() => gf.gateSatz({ name: "x", scripts: { lint: "eslint ." } })).toThrow(/verify/);
@@ -152,6 +164,33 @@ describe("befehlsform", () => {
     const t0 = Date.now();
     expect(gf.befehlsform("A=".repeat(50000) + " !").art).toBe("befehlsform");
     expect(Date.now() - t0).toBeLessThan(2000);
+  });
+});
+
+describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
+  const ctxFull: Ctx = { paket: "beispiel", gates: ["lint", "gate-befehl:coverage", "check:diffcoverage"], verify: ["lint"] };
+  const voll = (...teile: string[]) => teile.join("");
+  const lauf = (text: string, fehler = false) =>
+    gf.laeufeAusTranskript(zeilen([{ command: "npm run verify:full", fehler, text: fehler ? "Exit code 1\n" + text : text }]), { sessionId: "s", liesDatei: lies, ctx: ctxFull });
+  test("die gedruckte Zeile des Gate-Befehls zählt als Gate gate-befehl:coverage", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"), kopf("check:diffcoverage"));
+    expect(erg(lauf(text)[0])).toEqual({ lint: "gruen", "gate-befehl:coverage": "gruen", "check:diffcoverage": "gruen" });
+  });
+  test("ein Gate-Befehl, der nicht zum Gate-Satz gehört (verify), zählt nicht als Gate", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl verify: npm run verify\n", "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("check:diffcoverage"));
+    expect(erg(lauf(text)[0])).toEqual({ lint: "gruen", "gate-befehl:coverage": "gruen", "check:diffcoverage": "gruen" });
+  });
+  test.each(["Fehler: ▶ Gate-Befehl coverage: npm run x\n", "▶ Gate-Befehl coverage npm run x\n"])("Negativ: Präfix mitten in der Zeile oder Name ohne Doppelpunkt zählt nicht (%j)", (zeile) => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), zeile, kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("nicht-erreicht");
+  });
+  test("Negativ: ohne die gedruckte Zeile fehlt das Gate (nicht erreicht oder nicht gezählt)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("nicht-erreicht");
+  });
+  test("Befund: ein rotes Coverage wird vom Folgekopf test:coverage als grün gezählt (bekannte Grenze, Sammelzeile)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
   });
 });
 

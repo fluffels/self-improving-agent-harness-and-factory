@@ -7,7 +7,7 @@ import * as drift from "../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as markdown from "../scripts/docs-gen/markdown.mjs";
 
-const k = ketten as { SCHRITT_RE: RegExp; ketteAusPackage: (p: unknown, c: string[], n: string) => string[] };
+const k = ketten as { parseChain: (s: string) => string[]; SCHRITT_RE: RegExp; ketteAusPackage: (p: unknown, c: string[], n: string) => string[] };
 const d = drift as { parseVerifyChain: (s: Record<string, string>) => string[]; findDocumentedVerifyChains: (md: string) => string[][] };
 const m = markdown as { parseNpmRunMentions: (md: string) => Set<string> };
 
@@ -38,5 +38,32 @@ describe("gemeinsamer Schrittname", () => {
     expect([...m.parseNpmRunMentions("Danach npm run lint:prune. Dann weiter.")]).toEqual(["lint:prune"]);
     expect([...m.parseNpmRunMentions("(npm run skills:sync.)")]).toEqual(["skills:sync"]);
     expect(k.SCHRITT_RE.test("verify.")).toBe(false);
+  });
+
+  test("L67: node scripts/gate-befehl.mjs <name> ist ein Kettenschritt gate-befehl:<name>", () => {
+    expect(k.parseChain("npm run verify && node scripts/gate-befehl.mjs coverage")).toEqual(["verify", "gate-befehl:coverage"]);
+    const scripts = { verify: "npm run lint", lint: "eslint .", "verify:full": "npm run verify && node scripts/gate-befehl.mjs coverage && npm run check:x", "check:x": "node x" };
+    expect(k.ketteAusPackage({ scripts }, ["verify", "verify:full"], "verify:full")).toEqual(["gate-befehl:coverage", "check:x"]);
+  });
+
+  test("L67: mehrere Leerzeichen zwischen den Teilen ergeben denselben Token", () => {
+    expect(k.parseChain("node  scripts/gate-befehl.mjs  coverage")).toEqual(["gate-befehl:coverage"]);
+  });
+
+  test.each([
+    "node scripts/gate-befehl.mjs coverage; rm x",
+    "node scripts/gate-befehl.mjs testGezielt a.ts",
+    "node scripts/gate-befehl.mjs coverage --zeigen",
+    "node scripts/gate-befehl.mjs a|b",
+    "node scripts/gate-befehl.mjs",
+    "echo hi; node scripts/gate-befehl.mjs coverage",
+    "node scripts/gate-befehl.mjs 1x",
+    "node scripts/gate-befehl.mjs _x",
+    "nodescripts/gate-befehl.mjs coverage",
+    "node scripts/gate-befehl.mjscoverage",
+    "node scripts/gate-befehlXmjs coverage",
+  ])("L67 Negativ: %s bleibt ein Fehler", (schritt) => {
+    const scripts = { verify: "npm run lint", lint: "eslint .", "verify:full": "npm run verify && " + schritt };
+    expect(() => k.ketteAusPackage({ scripts }, ["verify", "verify:full"], "verify:full")).toThrow(/Shell-Zeichen/);
   });
 });
