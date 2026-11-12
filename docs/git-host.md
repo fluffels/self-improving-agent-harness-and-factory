@@ -43,7 +43,7 @@ Alle Workflows laufen in GitHub Actions; der `schedule` steht in der Datei.
 | Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |
 |---|---|---|---|
 | CI | `ci.yml`, `verify-macos.yml` | GitHub | Actions, Required Checks |
-| Sicherheit | `codeql.yml`, `codescanning-inbox.yml`, `dependency-review.yml`, `dependabot-inbox.yml`, `scorecard.yml`, `secret-scan.yml`, `zizmor.yml` | GitHub | Code-Scanning, Dependency-Review, Dependabot |
+| Sicherheit | `codeql.yml`, `codescanning-inbox.yml`, `dependency-review.yml`, `dependency-review-vollstaendig.mjs`, `dependabot-inbox.yml`, `scorecard.yml`, `secret-scan.yml`, `zizmor.yml` | GitHub | Code-Scanning, Dependency-Review, Dependabot |
 | Board und Takt | `board-takt.yml`, `wiedervorlage.yml`, `ticket-drift.yml`, `festgefahren.yml`, `audit-einordnung.yml`, `harness-doctor.yml` | GitHub | Actions, Issues, Labels |
 | Verteilung und PR-Text | `factory-update.yml`, `internalrefs-pr-text.yml` | GitHub | Actions, PR-Text, Releases |
 

@@ -27,7 +27,7 @@
         "description": "Review-Nachweis (Plan- und Review-Zeile) im PR"
       },
       {
-        "command": "npm audit --audit-level=high",
+        "command": "node scripts/audit-verzeichnisse.mjs --audit-level high",
         "source": ".github/workflows/ci.yml",
         "description": "Security-Gate über die Abhängigkeiten"
       }

@@ -228,6 +228,21 @@ export function pruefeRisiko(b) {
   return fehler;
 }
 
+/** Pur: prüft den optionalen Block `audit` (factory#395): `verzeichnisse` ist eine Liste repo-relativer POSIX-Pfade ohne Doppelte (npm-Lockfile-Verzeichnisse zusätzlich zur Wurzel; leer erlaubt); fehlt der Block, wird nur die Wurzel geprüft. */
+export function pruefeAudit(b) {
+  if (b === undefined) return [];
+  if (!istObjekt(b)) return ["audit muss ein Objekt mit dem Schlüssel verzeichnisse sein"];
+  const fehler = Object.keys(b).filter((k) => k !== "verzeichnisse").map((k) => `audit.${k} ist kein bekannter Schlüssel (erlaubt: verzeichnisse)`);
+  const liste = b.verzeichnisse;
+  if (!Array.isArray(liste)) return [...fehler, "audit.verzeichnisse muss eine Liste repo-relativer Pfade sein"];
+  liste.forEach((p, i) => {
+    if (!istText(p)) fehler.push(`audit.verzeichnisse[${i}] muss ein nicht-leerer String (repo-relativer Pfad) sein`);
+    else if (!istRelativPosix(p)) fehler.push(`audit.verzeichnisse[${i}] muss ein repo-relativer POSIX-Pfad sein: ${JSON.stringify(p)}`);
+  });
+  const doppelt = liste.filter((p, i) => istText(p) && liste.indexOf(p) !== i);
+  return [...fehler, ...[...new Set(doppelt)].map((p) => `audit.verzeichnisse enthält ${p} doppelt`)];
+}
+
 const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
 const VORPRUEFUNG_KEYS = ["befehle", "userScopeServer"];

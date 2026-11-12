@@ -271,6 +271,9 @@
     {"pfad":"scripts/ghsa-lib.mjs","ring":"kern","quelle":"Sicherheits-Modul (factory#119)"},
     {"pfad":".github/workflows/audit-einordnung.yml","ring":"kern","modul":"audit-einordnung","quelle":"Modul (factory#139)"},
     {"pfad":"scripts/audit-einordnung.mjs","ring":"kern","modul":"audit-einordnung","quelle":"Modul (factory#139)"},
+    {"pfad":"scripts/audit-verzeichnisse-lib.mjs","ring":"kern","quelle":"Bausteine für npm audit je Lockfile-Verzeichnis (factory#395), von audit-verzeichnisse.mjs und dem Modul audit-einordnung genutzt"},
+    {"pfad":"scripts/audit-verzeichnisse.mjs","ring":"kern","quelle":"npm audit je Lockfile-Verzeichnis (factory#395), vom Job security-audit in ci.yml und vom Modul audit-einordnung genutzt"},
+    {"pfad":"scripts/dependency-review-vollstaendig.mjs","ring":"kern","modul":"dependency-review","quelle":"Dependency Review ohne Paging-Lücke (factory#395)"},
     {"pfad":"scripts/modul-wahl-lib.mjs","ring":"kern","quelle":"Sicherheits-Modul (factory#119)"}
   ]
 }

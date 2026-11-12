@@ -7,6 +7,10 @@ name: Dependency Review
 # Bewusst keine Lizenzregel, kein PR-Kommentar (`comment-summary-in-pr` bleibt aus) und keine Schreibrechte: der Job liest nur den Diff.
 # Der Jobname beschattet nie einen Required-Check (Wächter: required-check-shadowing.test.ts).
 # Alle Actions sind per Commit-SHA gepinnt (Wächter: test/harness/sicherheits-workflows.test.ts).
+# Lücke der Action (factory#395): sie ruft die Compare-API mit per_page=5, die API pagt nach Manifest und liefert ohne Link-Header nur das erste
+# (ein Maven-Manifest neben package-lock.json bliebe unbemerkt). Darum prüft der Schritt danach `scripts/dependency-review-vollstaendig.mjs` alle
+# Manifeste ohne Paging mit derselben Schwelle (Wächter: --schwere gleich fail-on-severity); die Action bleibt wegen Lizenzprüfung und Zusammenfassung.
+# Der Checkout lädt den PR-Merge-Stand (nie die Basis, nie ein ref:); Werte gehen nur über env in den Schritt, nie per ${{ }} in die Shell-Zeile.
 # Voraussetzung: das Dependency Graph des Repos ist an (Repo-Einstellung, hier nicht änderbar); sonst scheitert der Lauf sichtbar.
 
 on:
@@ -26,8 +30,27 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
       - name: Abhängigkeiten gegen Advisories prüfen
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
+
+      - name: Alle Manifeste ohne Paging prüfen (ab high)
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BASIS: ${{ github.event.pull_request.base.sha }}
+          KOPF: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/dependency-review-vollstaendig.mjs --schwere high
