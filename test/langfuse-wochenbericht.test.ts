@@ -276,6 +276,8 @@ describe("Fehler (Exit 1)", () => {
     expect(r.exitCode).toBe(4);
     expect(lese<{ status: string; woche: string }>(r.stdout)).toMatchObject({ status: "abgeschnitten", woche: MONTAG });
     expect(lese<{ grund: string }>(r.stdout).grund).toContain("sessW.json");
+    expect(lese<{ grund: string }>(r.stdout).grund).toContain("node scripts/langfuse-wochenbericht.mjs --rezept");
+    expect(lese<{ grund: string }>(r.stdout).grund).not.toContain("langfuse-auswertung.mjs");
     expect(r.stderr).toContain("abgeschnitten");
     const gesamt = satz();
     gesamt["gesamtW.json"] = exp("gesamt", F.von, F.bis, Array.from({ length: 1000 }, () => g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 1, 1)));
