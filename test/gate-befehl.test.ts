@@ -257,15 +257,15 @@ describe("testGezielt teilt Pfade auf Läufer auf (L8)", () => {
   });
   test("Backslashes im Pfad und im cwd (Windows) werden vor der Wurzelprüfung zu /", () => {
     const u = umgebung(JAVA);
-    u.opt.cwd = "C:\\wurzel\\";
-    assert.equal(lib.cli(["testGezielt", "backend\\b.spec.ts", "C:/wurzel/test/tools/x.test.ts"], u.opt), 0);
-    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\b.spec.ts"', VITEST + ' "C:/wurzel/test/tools/x.test.ts"']);
+    u.opt.cwd = "C:\\proj\\";
+    assert.equal(lib.cli(["testGezielt", "backend\\b.spec.ts", "C:/proj/test/tools/x.test.ts"], u.opt), 0);
+    assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\b.spec.ts"', VITEST + ' "C:/proj/test/tools/x.test.ts"']);
   });
   test("ein absoluter Pfad unter cwd wird gekürzt (auch mit Schrägstrich am Ende von cwd) und liegt dann in der Wurzel", () => {
-    for (const cwd of ["/wurzel", "/wurzel/", "C:\\wurzel", "C:\\wurzel\\"]) {
+    for (const cwd of ["/proj", "/proj/", "C:\\proj", "C:\\proj\\"]) {
       const u = umgebung(JAVA);
       u.opt.cwd = cwd;
-      const pfad = cwd.startsWith("C:") ? "C:/wurzel/backend/b.spec.ts" : "/wurzel/backend/b.spec.ts";
+      const pfad = cwd.startsWith("C:") ? "C:/proj/backend/b.spec.ts" : "/proj/backend/b.spec.ts";
       assert.equal(lib.cli(["testGezielt", pfad], u.opt), 0);
       assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "' + pfad + '"'], cwd);
     }
