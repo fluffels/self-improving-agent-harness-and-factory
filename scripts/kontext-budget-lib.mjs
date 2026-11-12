@@ -92,7 +92,7 @@ export function kernBlockBefund({ text, fabrik, budget = KERN_BLOCK_BUDGET, mark
 }
 
 /** Zeichen-Budget je Agenten- und Skill-Datei (factory#307): `.claude/agents/*.md`, `.agents/skills/<name>/**` (SKILL.md und Zusatzdateien). Nur die verteilten Pfade aus dem Besitz-Manifest stehen hier (der Kern nennt keine Fabrik-Dateien);
- *  jede andere Datei dieser Ordner, auch eine projekt-eigene im Bezieher, bekommt `AGENTEN_SKILL_DEFAULT_BUDGET`. Gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen; sie wachsen mit der Projekt-Config, nicht mit dem Kern).
+ *  jede andere Datei dieser Ordner, auch eine projekt-eigene im Bezieher, bekommt `AGENTEN_SKILL_DEFAULT_BUDGET`. Gemessen OHNE Projektwerte (`ohneProjektwerte`: Block samt Markern und Werte der Frontmatter-Zeilen; sie wachsen mit der Projekt-Config, nicht mit dem Kern).
  *  Kalibriert am 2026-11-11 (main e31542f): Ist + 10 %, aufgerundet auf 500 Zeichen. Ratchet: ein Budget sinkt nur, wächst es gegenüber der Merge-Base, wird `test/harness/kontext-budget-ratchet.test.ts` rot.
  *  Je Eintrag genau eine Zeile `{ file: "<pfad>", budget: <zahl> },` (der Ratchet-Test liest sie). Verfall: Prüftermin laut Wiedervorlage `regeln-verfall-2027-03` (ADR 0027). */
 export const AGENTEN_SKILL_BUDGETS = [
@@ -126,13 +126,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".claude/agents/holdout-szenario.md", budget: 3_500 },
 ];
 
-/** Budget für jede Agenten- und Skill-Datei ohne Eintrag (gleich dem größten Budget der Liste, `test/agenten-skill-budget.test.ts` verlangt das). */
+/** Budget für jede Agenten- und Skill-Datei ohne Eintrag (gleich dem größten Budget der Liste, `test/agenten-skill-budget.test.ts` verlangt das).
+ *  Herleitung: eine Datei ohne Eintrag, auch eine projekt-eigene im Bezieher, wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (`kontext-budget-ratchet`).
+ *  Bezieher-Fall: eine eigene Datei über dem Default wird gekürzt oder in eine bedingte Zusatzdatei geteilt; ein eigenes Budget gibt es im Bezieher nicht, nur `ausnahmen.kontext` mit offenem Ticket. */
 export const AGENTEN_SKILL_DEFAULT_BUDGET = 37_500;
-
-/** Zeichen eines Textes ohne den Block von `marker.start` bis einschließlich `marker.ende` (zeilenenden-neutral); fehlt ein Marker oder steht das Ende vor dem Start, zählt der ganze Text. Die Marker gibt der Aufrufer vor (Blatt). */
-export function zeichenOhneBlock(text, { start, ende }) {
-  const a = text.indexOf(start);
-  const b = text.indexOf(ende);
-  if (a < 0 || b < a) return countChars(text);
-  return countChars(text.slice(0, a) + text.slice(b + ende.length));
-}
