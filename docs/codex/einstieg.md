@@ -114,7 +114,7 @@ Quelle aller Angaben: [Hooks](https://learn.chatgpt.com/docs/hooks), abgerufen a
 
 **Tracing-Ausfallstopp:** Ein Codex-Lauf beginnt nicht und spawnt keine Rolle, solange Langfuse nicht erreichbar ist. Zwei Stellen, beide über `pruefeLangfuseAusUmgebung` in `scripts/langfuse-health.mjs` (GET `<Adresse>/api/public/health`, Frist `FRIST_MS` = 3 s, kein Secret-Key):
 
-- **Vorprüfung** (`node scripts/codex-vorpruefung.mjs`): unerreichbar, Frist überschritten, HTTP ≠ 200 oder Antwort ohne Status ergibt den Mangel „Tracing-Ausfall“ und Exit 1, auch bei sonst vollständiger Freigabe.
+- **Vorprüfung** (`node scripts/codex-vorpruefung.mjs`): unerreichbar, Frist überschritten, HTTP ≠ 200 oder ein 200 ohne gültigen Body (JSON mit `status` = „OK“, wie `/api/public/health` ihn liefert) ergibt den Mangel „Tracing-Ausfall“ und Exit 1, auch bei sonst vollständiger Freigabe.
 - **Hook-Adapter** (`scripts/codex-hook-lib.mjs`): vor `spawn_agent` (Alias Agent) und vor dem Dispatcher; Ausfall oder werfende Prüfung ergibt ein Deny „Tracing-Ausfallstopp“, kein Spawn. Bei Erreichbarkeit bleibt der Guard-Entscheid (Lens-Auftrag, Holdout) unverändert. Shell und `apply_patch` rufen die Health nicht; die Latenz bei Ausfall beträgt höchstens 3 s je Aufruf.
 
 **Adresse:** `LANGFUSE_BASE_URL`, sonst die Plugin-Optionen der Claude-User-Settings, sonst `http://localhost:3000` (wie `langfuse-vorbedingung.mjs`, das unter Claude unverändert bleibt). Den Exporter-Endpunkt im Codex-User-Scope liest die Prüfung nicht; weicht er von der Adresse ab, ist `LANGFUSE_BASE_URL` zu setzen.
