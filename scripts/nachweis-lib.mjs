@@ -215,6 +215,19 @@ function abnahmeFehler(wert, head, durch, u) {
 /** Klassen der Abnahme-Ursache (factory#260): Verhalten widerspricht dem Kriterium, Szenario prüft darüber hinaus, Kriterium lässt eine andere Lesart zu. */
 export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
 
+/** Ein Urteil `{wert, ursache?}` ist ein Szenario-Fall: nicht erfüllt, weil das Szenario über das Kriterium hinaus prüfte (kein Fix nötig). Pur. */
+export const istSzenarioFall = (u) => u.wert === "nicht-erfuellt" && u.ursache === "szenario";
+
+/** Der Durchgang besteht nur wegen `ursache=szenario` nicht (factory#402 L50, ADR 0022 Fortschreibung): mindestens ein Kriterium offen, jedes offene ein
+ *  Szenario-Fall, nichts nicht prüfbar. Die eine Definition für `entscheide` (abnahme.mjs) und `zaehleSzenarioDurchgaenge` (check-abnahme-nachweis.mjs). Pur. */
+export function nurSzenarioOffen(urteile) {
+  const offen = urteile.filter((u) => u.wert === "nicht-erfuellt");
+  return offen.length > 0 && urteile.every((u) => u.wert !== "nicht-pruefbar") && offen.every(istSzenarioFall);
+}
+
+/** Adapter: Marker `{urteil:[{k,wert}], ursache?:[{k,klasse}]}` → Urteile `[{k,wert,ursache?}]` für `nurSzenarioOffen`. Pur. */
+export const markerUrteile = (marker) => marker.urteil.map((u) => ({ ...u, ursache: (marker.ursache ?? []).find((x) => x.k === u.k)?.klasse }));
+
 /** Marker-Feld `ursache=K2:umsetzung,…` → `{ursache: [{k, klasse}]}` oder `{fehler}`; jedes K muss im Urteil nicht-erfuellt sein. */
 function parseUrsache(wert, urteil) {
   const ursache = [];

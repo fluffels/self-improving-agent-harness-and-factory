@@ -291,3 +291,31 @@ describe("Abnahme-Ursache (factory#260): Marker-Feld ursache= und Zeilen-Feld ur
     }
   });
 });
+
+describe("Szenario-Prädikat (factory#402 L50): eine Definition für Urteile und Marker", () => {
+  const P = raw as unknown as {
+    istSzenarioFall: (u: { wert: string; ursache?: string }) => boolean;
+    nurSzenarioOffen: (urteile: { wert: string; ursache?: string }[]) => boolean;
+    markerUrteile: (m: { urteil: { k: string; wert: string }[]; ursache?: { k: string; klasse: string }[] }) => { k: string; wert: string; ursache?: string }[];
+  };
+  it("istSzenarioFall: nur nicht-erfuellt mit ursache=szenario", () => {
+    expect(P.istSzenarioFall({ wert: "nicht-erfuellt", ursache: "szenario" })).toBe(true);
+    expect(P.istSzenarioFall({ wert: "nicht-erfuellt", ursache: "umsetzung" })).toBe(false);
+    expect(P.istSzenarioFall({ wert: "nicht-erfuellt" })).toBe(false);
+    expect(P.istSzenarioFall({ wert: "erfuellt", ursache: "szenario" })).toBe(false);
+  });
+  it("nurSzenarioOffen: alle offenen szenario, nichts nicht-pruefbar, mindestens eines offen", () => {
+    const s = { wert: "nicht-erfuellt", ursache: "szenario" };
+    expect(P.nurSzenarioOffen([{ wert: "erfuellt" }, s, s])).toBe(true);
+    expect(P.nurSzenarioOffen([s, { wert: "nicht-erfuellt", ursache: "umsetzung" }])).toBe(false);
+    expect(P.nurSzenarioOffen([s, { wert: "nicht-pruefbar" }])).toBe(false);
+    expect(P.nurSzenarioOffen([{ wert: "erfuellt" }])).toBe(false);
+    expect(P.nurSzenarioOffen([])).toBe(false);
+  });
+  it("markerUrteile: legt die Klasse je K an das Urteil", () => {
+    const m = { urteil: [{ k: "K1", wert: "erfuellt" }, { k: "K2", wert: "nicht-erfuellt" }], ursache: [{ k: "K2", klasse: "szenario" }] };
+    expect(P.markerUrteile(m)).toEqual([{ k: "K1", wert: "erfuellt", ursache: undefined }, { k: "K2", wert: "nicht-erfuellt", ursache: "szenario" }]);
+    expect(P.nurSzenarioOffen(P.markerUrteile(m))).toBe(true);
+    expect(P.markerUrteile({ urteil: [{ k: "K1", wert: "erfuellt" }] })).toHaveLength(1);
+  });
+});

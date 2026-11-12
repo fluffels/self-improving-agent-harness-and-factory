@@ -30,7 +30,7 @@ import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { ABNAHME_EMPFAENGER } from "./holdout-auftrag-guard.mjs";
 import { befehlLesen, direktaufruf } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
-import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, normalisiereWert, URTEILSWERTE, URSACHEN, hoechsterAbnahmeDurchgang, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { abnahmeMarker, formatAbnahme, formatAbnahmeMarker, HEX_HEAD, istSzenarioFall, normalisiereWert, nurSzenarioOffen, URTEILSWERTE, URSACHEN, hoechsterAbnahmeDurchgang, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
 import { kriterien } from "./spezifikation-lib.mjs";
 
@@ -104,13 +104,13 @@ export function parseBericht(text, nr, kriterienListe) {
   return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }
 
-const istFixFall = (u) => u.wert === "nicht-erfuellt" && u.ursache !== "szenario";
+const istFixFall = (u) => u.wert === "nicht-erfuellt" && !istSzenarioFall(u);
 
 /** Vorrang handoff > fix > szenario > bestanden; `szenario` heißt: alle nicht erfüllten Kriterien sind `ursache=szenario` (das Szenario prüfte über das Kriterium hinaus, kein Fix); `nach-merge` zählt nicht mit. Pur. */
 export function entscheide(urteile) {
   if (urteile.some((u) => u.wert === "nicht-pruefbar")) return "handoff";
   if (urteile.some(istFixFall)) return "fix";
-  if (urteile.some((u) => u.wert === "nicht-erfuellt")) return "szenario"; // nur noch ursache=szenario übrig
+  if (nurSzenarioOffen(urteile)) return "szenario"; // nur noch ursache=szenario übrig
   return "bestanden";
 }
 

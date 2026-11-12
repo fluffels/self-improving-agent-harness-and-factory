@@ -28,7 +28,7 @@ import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, kleinGrund, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, risikoMusterAus } from "./groessenstufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
@@ -74,10 +74,7 @@ function bewerteUrteil(urteil, liste, nachMerge) {
  * Anzahl der Durchgänge, die nur wegen `ursache=szenario` nicht bestanden (jeder nicht erfüllte Wert trägt die Ursache szenario, nichts nicht prüfbar): kein Fix, also kein Lens-Pass, sie zählen nicht gegen das Cap. Pur.
  */
 export function zaehleSzenarioDurchgaenge(markers) {
-  return markers.filter((m) => {
-    const offen = m.urteil.filter((u) => u.wert === "nicht-erfuellt");
-    return offen.length > 0 && m.urteil.every((u) => u.wert !== "nicht-pruefbar") && offen.every((u) => (m.ursache ?? []).some((x) => x.k === u.k && x.klasse === "szenario"));
-  }).length;
+  return markers.filter((m) => nurSzenarioOffen(markerUrteile(m))).length;
 }
 
 /** Cap-Regel: die Review-Zeile trägt `runden` und deckt `durchgaenge` der Abnahme, abzüglich der reinen Szenario-Durchgänge (`szenario`). */
