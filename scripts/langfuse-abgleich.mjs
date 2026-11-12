@@ -38,6 +38,7 @@ import {
   findeSessions,
   gleich,
   hatDifferenz,
+  sessionAufloesen,
   holeMetrics,
   istAbfragen,
   istAusMetrics,
@@ -154,6 +155,7 @@ export function summenzeile(bewertungen) {
     sessions: fest.length,
     laeuft: bewertungen.length - fest.length,
     scoreAusstehend: fest.filter((b) => b.score === "ausstehend").length,
+    fehlendAusstehend: fest.filter((b) => b.score === "ausstehend").reduce((s, b) => s + b.fehlend, 0),
     vorStichtag: fest.filter((b) => b.score === "vor Stichtag").length,
     callsTranskript: t,
     callsLangfuse: fest.reduce((s, b) => s + b.callsLangfuse, 0),
@@ -187,22 +189,38 @@ function preisZeilen(festeSessions) {
   return out;
 }
 
+/** Statuszelle: bei Score `ausstehend` ein fester Status mit Zusatz; `vollständig` bleibt „vollständig, Score ausstehend“, jeder andere feste Status wird „<Status>, Nachlieferer wartet“ (factory#354: eine Lücke ist dann ein Prüfauftrag, kein Datenverlust). */
+export function statusZelle(b) {
+  if (b.score !== "ausstehend" || b.status === "läuft") return b.status;
+  return b.status === "vollständig" ? "vollständig, Score ausstehend" : `${b.status}, Nachlieferer wartet`;
+}
+
+/** Summenzeile als Text; Sessions mit Score ausstehend stehen mit Kürzel da, die Lücke darin getrennt (Quote und `fehlend` bleiben unverändert). */
+function summenText(sum, bewertungen) {
+  const teile = [];
+  if (sum.scoreAusstehend) {
+    const wartend = bewertungen.filter((b) => b.status !== "läuft" && b.score === "ausstehend");
+    teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch: ${kuerzel(wartend)})`);
+  }
+  if (sum.ohneKostenExport) teile.push(`ohne Kosten-Export: ${sum.ohneKostenExport}`);
+  if (sum.vorStichtag) teile.push(`${sum.vorStichtag} vor dem Stichtag (nie gesendet, kein Score)`);
+  const zusatz = teile.length ? `; ${teile.join(", ")}` : "";
+  const wartet = sum.fehlendAusstehend ? ` (davon ${sum.fehlendAusstehend} in Sessions, auf die der Nachlieferer noch wartet: noch kein Befund)` : "";
+  const laeuft = sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : "";
+  return `**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, Kosten ${paarUsd(sum.kostenTranskript, sum.kostenLangfuse)} $, fehlend ${sum.fehlend}${wartet}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${laeuft}${zusatz}.`;
+}
+
 export function renderMarkdown(bewertungen, sum) {
   const kopf = ["Session", "Ticket", "Status", "Calls T/L", "Input T/L", "Output T/L", "Cache-Read T/L", "Cache-Write T/L", "Kosten T/L ($)", "fehlend", "Dubletten", "Quote"];
   const zeilen = [`| ${kopf.join(" | ")} |`, `|${kopf.map(() => "---").join("|")}|`];
   for (const b of bewertungen) {
     const l = b.tokensLangfuse;
     zeilen.push(
-      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${b.status === "vollständig" && b.score === "ausstehend" ? "vollständig, Score ausstehend" : b.status} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${paarUsd(b.kostenTranskript, b.kostenLangfuse)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
+      `| ${String(b.session).slice(0, 8)} | ${b.tickets.join(", ") || "–"} | ${statusZelle(b)} | ${paar(b.callsTranskript, b.callsLangfuse)} | ${paar(b.tokensTranskript.input, l?.input ?? null)} | ${paar(b.tokensTranskript.output, l?.output ?? null)} | ${paar(b.tokensTranskript.cacheRead, l?.cacheRead ?? null)} | ${paar(b.tokensTranskript.cacheWrite, l?.cacheWrite ?? null)} | ${paarUsd(b.kostenTranskript, b.kostenLangfuse)} | ${b.fehlend} | ${b.dubletten} | ${pct(b.quote)} |`,
     );
   }
   const out = ["# Langfuse-Abgleich (T = Transkript, L = Langfuse)", "", ...zeilen, ""];
-  const teile = [];
-  if (sum.scoreAusstehend) teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch)`);
-  if (sum.ohneKostenExport) teile.push(`ohne Kosten-Export: ${sum.ohneKostenExport}`);
-  if (sum.vorStichtag) teile.push(`${sum.vorStichtag} vor dem Stichtag (nie gesendet, kein Score)`);
-  const zusatz = teile.length ? `; ${teile.join(", ")}` : "";
-  out.push(`**Summe:** ${sum.sessions} Session(s), Calls ${fmt(sum.callsTranskript)} / ${fmt(sum.callsLangfuse)}, Kosten ${paarUsd(sum.kostenTranskript, sum.kostenLangfuse)} $, fehlend ${sum.fehlend}, Dubletten ${sum.dubletten}, Erfassungsquote ${pct(sum.quote)}${sum.laeuft ? `; ${sum.laeuft} Session(s) läuft noch (Ruhefrist ${RUHEFRIST_MIN} min, nicht in Σ)` : ""}${zusatz}.`);
+  out.push(summenText(sum, bewertungen));
   for (const b of bewertungen.filter((x) => x.fehlendeCalls?.length)) {
     out.push("", `Fehlende Calls ${String(b.session).slice(0, 8)} (Schlüssel: ${b.schluessel}):`);
     for (const c of b.fehlendeCalls.slice(0, FEHLEND_ANZEIGE)) out.push(`- ${c.messageId} · ${c.ts} · ${c.model}`);
@@ -261,13 +279,37 @@ async function istHolen({ args, soll, zugang, now, fetchImpl, leseDatei }) {
     return istAusMetrics(rows);
   }
   const fruehester = Math.min(...[...soll.values()].flat().map((e) => Date.parse(e.ts)).filter(Number.isFinite));
-  const q = istAbfragen({ von: new Date(fruehester - 3_600_000).toISOString(), bis: new Date(now + 60_000).toISOString(), session: args.session });
+  const q = istAbfragen({ von: new Date(fruehester - 3_600_000).toISOString(), bis: new Date(now + 60_000).toISOString(), session: args.session }); // `args.session` ist hier schon die volle ID (sollLaden)
   const rows = [];
   for (const abfrage of [q.zaehlung, q.tokens, q.kosten]) rows.push(...(await holeMetrics(abfrage, zugang, fetchImpl)));
   return istAusMetrics(rows);
 }
 
-/** `--pruefen` ausführen: `{ exitCode, text }`. 0 = Bericht (auch mit Lücken: Messwerkzeug, kein Gate), 1 = Fehler beim Lesen/Abfragen, 2 = Aufruf oder Zugang fehlt. */
+/**
+ * Soll laden: bei `--session` zuerst die Angabe (ID oder Präfix) auflösen (factory#354), dann die Sessions lesen.
+ * Rückgabe `{ soll, staende, sessionId }` oder `{ ergebnis }` (vorzeitiges Ergebnis: mehrdeutig Exit 2, nicht gefunden oder ohne Calls Exit 1, ohne `--session` leer Exit 0).
+ */
+function sollLaden({ args, projectsRoot, repoRoot, seitMs, worktree }) {
+  let sessionId = null;
+  if (args.session) {
+    const r = sessionAufloesen({ projectsRoot, angabe: args.session });
+    if (r.fehler === "mehrdeutig") return { ergebnis: { exitCode: 2, text: `--session ${args.session} ist mehrdeutig, Kandidaten: ${r.kandidaten.join(", ")}\n${AUFRUFHILFE}` } };
+    if (r.fehler) return { ergebnis: { exitCode: 1, text: `Session ${args.session} nicht gefunden: nichts geprüft.` } };
+    sessionId = r.id;
+  }
+  const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId, alleOrdner: Boolean(sessionId) });
+  const soll = new Map();
+  const staende = new Map();
+  for (const s of sessions) {
+    const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
+    if (eintraege.length) soll.set(s.id, eintraege);
+    staende.set(s.id, { mtime: s.mtime, groesse: s.groesse, ausserhalb: Boolean(s.ausserhalb) });
+  }
+  if (!soll.size && sessionId) return { ergebnis: { exitCode: 1, text: `Session ${sessionId}: Transkript ohne Calls, nichts geprüft.` } };
+  return { soll, staende, sessionId };
+}
+
+/** `--pruefen` ausführen: `{ exitCode, text }`. 0 = Bericht (auch mit Lücken: Messwerkzeug, kein Gate), 1 = Fehler beim Lesen/Abfragen oder genannte Session nicht gefunden bzw. ohne Calls, 2 = Aufruf oder Zugang fehlt oder Session-Präfix mehrdeutig. */
 export async function pruefen(args, { env = process.env, now = Date.now(), projectsRoot, repoRoot, fetchImpl = fetch, leseDatei = readFileSync, stateDir = null, config } = {}) {
   if (args.fehler) return { exitCode: 2, text: `${args.fehler}\n${AUFRUFHILFE}` };
   if (!args.pruefen) return { exitCode: 2, text: AUFRUFHILFE };
@@ -289,18 +331,13 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
     return { exitCode: 1, text: `Fehler: ${e.message}` };
   }
   try {
-    const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId: args.session, alleOrdner: Boolean(args.session) });
-    const soll = new Map();
-    const staende = new Map();
-    for (const s of sessions) {
-      const eintraege = sollEintraege(ladeSessionDatei(s.pfad), { session: s.id, worktree });
-      if (eintraege.length) soll.set(s.id, eintraege);
-      staende.set(s.id, { mtime: s.mtime, groesse: s.groesse, ausserhalb: Boolean(s.ausserhalb) });
-    }
+    const geladen = sollLaden({ args, projectsRoot, repoRoot, seitMs, worktree });
+    if (geladen.ergebnis) return geladen.ergebnis;
+    const { soll, staende, sessionId } = geladen;
     if (!soll.size) return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: [], summe: summenzeile([]) }) : "Keine Sessions mit Calls im Fenster." };
     // Ledger nur lesen (bekanntes Ende für die Score-Spalte); kaputt oder fehlend heißt: kein bekanntes Ende, nie schreiben oder sichern.
     const ledger = stateDir ? ledgerLesen(join(stateDir, LEDGER_NAME)).ledger : { sessions: {} };
-    const ist = await istHolen({ args, soll, zugang, now, fetchImpl, leseDatei });
+    const ist = await istHolen({ args: { ...args, session: sessionId }, soll, zugang, now, fetchImpl, leseDatei });
     const bewertungen = [];
     for (const [id, eintraege] of soll) {
       const istSession = ist.get(id) ?? { calls: 0, tokens: leereSumme(), kosten: null };
