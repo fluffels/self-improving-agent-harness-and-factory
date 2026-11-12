@@ -89,6 +89,17 @@ export function pflichtLenses(dateien) {
   return istDokuDiff(dateien) ? ["doku"] : [...CODE_LENSES];
 }
 
+/** Kombi-Lens ohne Aufteilung je Teil-Brille (alte Zeile, nur Hinweis). Pur. */
+const teilbrillenFehlen = (review) => review?.lenses.includes(KOMBI_LENS) === true && review.teilbrillen === null;
+
+/** Hinweis-Zeilen zu fehlenden optionalen Feldern der gültigen Review-Zeile (nie ein Fehler). Pur. */
+export function feldHinweise(r) {
+  return [
+    r.blockerFehlt ? "• Hinweis: blocker= fehlt (Messung #1123)." : null,
+    r.teilbrillenFehlt ? "• Hinweis: teilbrillen= fehlt (Kombi-Lens ohne Aufteilung je Teil-Brille, factory#402)." : null,
+  ].filter((z) => z !== null);
+}
+
 /** Größenstufe nur zur Anzeige (Override-Zweig): ein Fehler macht den Zweig nie rot, die Stufe ist dann `null`. */
 function stufeOderNull(git, base, ladeRisiko) {
   try {
@@ -364,7 +375,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       commitsNachReview,
       stufe: groesse.stufe,
       blockerFehlt: nachweis.review?.blocker === null,
-      teilbrillenFehlt: nachweis.review?.lenses.includes(KOMBI_LENS) === true && nachweis.review.teilbrillen === null,
+      teilbrillenFehlt: teilbrillenFehlen(nachweis.review),
       guardWarnung: guardWarnungOderNull(messages, ankerZahl),
       zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
     };
@@ -410,8 +421,7 @@ function main(argv = process.argv.slice(2)) {
     }
     if (r.guardWarnung) console.log(r.guardWarnung);
     console.log(stufeZeile(r.stufe));
-    if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
-    if (r.teilbrillenFehlt) console.log("• Hinweis: teilbrillen= fehlt (Kombi-Lens ohne Aufteilung je Teil-Brille, factory#402).");
+    for (const h of feldHinweise(r)) console.log(h);
     const zusatz = zusatzpassZeile(r);
     if (zusatz) console.log(zusatz);
     console.log("✔ Review-/Plan-Nachweis ok.");

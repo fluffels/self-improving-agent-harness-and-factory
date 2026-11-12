@@ -746,7 +746,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
         if (a[0] === "log") return log;
         throw new Error("unerwartet: " + a.join(" "));
       };
-    const lauf = (log: string) => checkDiffSizeRoh({ zeilen: ZEILEN, runGit: git(log), env: { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" } } as never);
+    const lauf = (log: string) => checkDiffSizeRoh({ zeilen: ZEILEN, runGit: git(log), env: { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" } });
     assert.equal(typeof lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit, auch L8\n`).sammelOverride, "string");
     assert.equal(lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
     assert.equal(lauf("").sammelOverride, null, "kein Override");
