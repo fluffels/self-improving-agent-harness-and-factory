@@ -52,8 +52,7 @@
  * Sammelticket-PR (factory#358): Ein Override gilt für EINE Zeile eines Sammeltickets, nie für die ganze Auswahl. Trägt
  * der PR-Titel den Titel eines Sammeltickets und ist ein Override-Grund aktiv, muss dieser Grund genau eine Zeile
  * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Grenzen: erkannt wird nur am PR-Titel aus dem Ereignis
- * (`GITHUB_EVENT_PATH`); lokal ohne PR-Ereignis fehlt der Titel, dann rot nur, wenn der Grund mehrere verschiedene
- * `L<n>` nennt (`sammelOverrideLokalFehler`, factory#379; ein Grund ohne Zeilenangabe bleibt lokal unerkannt); geprüft wird nur der aktive jüngste Grund; ein
+ * (`GITHUB_EVENT_PATH`; lokal ohne PR-Ereignis keine Prüfung); geprüft wird nur der aktive jüngste Grund; ein
  * unlesbares PR-Ereignis ist rot (fail-closed). Der PR-Titel ist Fremdtext: nur lineare Muster, er steht nie in
  * einer Ausgabe, und der Pfad kann nur rot machen, nie etwas durchlassen.
  *
@@ -278,30 +277,22 @@ export function prTitelAusEreignis(env, lies) {
   }
 }
 
-const SAMMEL_OVERRIDE_MELDUNG =
-  "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile: " +
-  "der Grund muss genau eine Zeile L<n> nennen, nicht die ganze Auswahl. Besser: den Slice teilen.";
-
 /** Meldung (ohne Titel), wenn ein Sammelticket-PR einen Override-Grund trägt, der nicht genau eine Zeile `L<n>` nennt; sonst null. Pur. */
 export function sammelOverrideFehler(titel, grund) {
   if (!enthaeltSammelticketTitel(titel)) return null;
   const zeilen = new Set(String(grund).match(/\bL\d+\b/g));
   if (zeilen.size === 1) return null;
-  return SAMMEL_OVERRIDE_MELDUNG;
-}
-
-/** Lokal ohne PR-Titel (factory#379): nennt der Grund mehrere verschiedene `L<n>`, dieselbe Meldung plus Hinweis; sonst null. Pur. */
-export function sammelOverrideLokalFehler(grund) {
-  const zeilen = new Set(String(grund).match(/\bL\d+\b/g));
-  if (zeilen.size < 2) return null;
-  return `${SAMMEL_OVERRIDE_MELDUNG} (lokal ohne PR-Titel an den Zeilen-Nennungen erkannt)`;
+  return (
+    "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile: " +
+    "der Grund muss genau eine Zeile L<n> nennen, nicht die ganze Auswahl. Besser: den Slice teilen."
+  );
 }
 
 /** Prüft den aktiven Override-Grund gegen den PR-Titel (null = ok oder nicht prüfbar, sonst die Meldung). */
 function sammelOverrideUrteil(env, lies, reason) {
   if (reason === null) return null;
   const e = prTitelAusEreignis(env, lies);
-  if (e === null) return sammelOverrideLokalFehler(reason);
+  if (e === null) return null;
   return "fehler" in e ? e.fehler : sammelOverrideFehler(e.titel, reason);
 }
 
