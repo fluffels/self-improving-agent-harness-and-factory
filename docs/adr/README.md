@@ -28,6 +28,7 @@
 | [0031](/docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md) | Fabrik ohne Zugriff auf Bezieher | akzeptiert | 04.11.2026 |
 | [0032](/docs/adr/0032-git-host-bindung.md) | Fabrik bleibt an GitHub gebunden | akzeptiert | 12.11.2026 |
 | [0033](/docs/adr/0033-ticket-drift-lauf.md) | Ticket-Drift als deterministischer Monatslauf | akzeptiert | 12.11.2026 |
+| [0034](/docs/adr/0034-kein-ki-reviewer-in-ci.md) | Kein zusätzlicher KI-Reviewer in der CI | akzeptiert | 12.11.2026 |
 
 <!-- GEN:adr-liste END -->
 
