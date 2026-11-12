@@ -17,6 +17,7 @@ import * as raw from "../../scripts/lens-edit-guard.mjs";
 
 const G = raw as unknown as {
   bewerteLensEdit: (p: unknown, cwd?: string, deps?: { config: unknown }) => { block: boolean; reason?: string };
+  bewerteLensBefehl: (eingabe: unknown, tool?: string) => { deny: boolean; grund: string } | null;
   entscheideHook: (text: string, deps?: { config: unknown }) => { hookSpecificOutput: { permissionDecision: string } } | null;
 };
 
@@ -165,6 +166,40 @@ describe("entscheideHook", () => {
   });
 });
 
+describe("Hintergrund-Läufe (factory#413 L4): Bash und PowerShell der Lens laufen im Vordergrund", () => {
+  const cmd = (tool_name: string, command: string, extra: Record<string, unknown> = {}) => JSON.stringify({ tool_name, cwd: LENS, tool_input: { command, ...extra } });
+  const urteil = (tool: string, command: string, extra: Record<string, unknown> = {}) => G.entscheideHook(cmd(tool, command, extra), DEPS)?.hookSpecificOutput.permissionDecision ?? null;
+
+  test("Bash: Hintergrund-Muster werden verweigert", () => {
+    for (const c of ["node probe.mjs p.json &", "a & b", "nohup node x", "setsid x", "x; disown", "node x&"]) expect(urteil("Bash", c), c).toBe("deny");
+  });
+  test("run_in_background: true wird verweigert, false nicht", () => {
+    expect(urteil("Bash", "echo hi", { run_in_background: true })).toBe("deny");
+    expect(urteil("PowerShell", "echo hi", { run_in_background: true })).toBe("deny");
+    expect(urteil("Bash", "echo hi", { run_in_background: false })).toBeNull();
+  });
+  test("PowerShell: Start-Job, Start-ThreadJob, Start-Process und nachgestelltes & werden verweigert", () => {
+    for (const c of ["Start-Job { node x }", "Start-ThreadJob { node x }", "Start-Process node", "node x &"]) expect(urteil("PowerShell", c), c).toBe("deny");
+  });
+  test("Vordergrund-Befehle bleiben erlaubt (&&, 2>&1, &>, |&, Testlauf)", () => {
+    for (const c of ["a && b", "cmd 2>&1", "cmd &>log", "a |& b", "node scripts/gate-befehl.mjs testGezielt test/x.test.ts", "git -C w diff --stat"]) expect(urteil("Bash", c), c).toBeNull();
+    expect(urteil("PowerShell", "cmd 2>&1")).toBeNull();
+  });
+  test("PowerShell-Aufrufoperator am Befehls- oder Segmentanfang ist erlaubt, in Bash nicht", () => {
+    for (const c of ["& node x", "echo a; & node x", "echo a | & node x"]) expect(urteil("PowerShell", c), c).toBeNull();
+    expect(urteil("Bash", "& node x")).toBe("deny");
+  });
+  test("die Ablehnung nennt den Weg (Vordergrund, Serie aufteilen)", () => {
+    const r = G.entscheideHook(cmd("Bash", "nohup x"), DEPS)?.hookSpecificOutput as unknown as { permissionDecisionReason: string };
+    expect(r.permissionDecisionReason).toMatch(/Vordergrund/);
+    expect(r.permissionDecisionReason).toMatch(/10 Minuten/);
+  });
+  test("bewerteLensBefehl: ohne Befehl und ohne Muster null", () => {
+    expect(G.bewerteLensBefehl({}, "Bash")).toBeNull();
+    expect(G.bewerteLensBefehl(undefined, "Bash")).toBeNull();
+  });
+});
+
 describe("Prozess-Start ohne deps (echter Hook-Pfad, liest die Projekt-Config selbst)", () => {
   const echt = projektConfig().praefixe.worktree;
   const start = (file_path: string): string =>
@@ -182,7 +217,7 @@ describe("Verdrahtung", () => {
   test("die Lens-Definition startet den Guard als PreToolUse-Hook mit Matcher Edit (und nur dafür)", () => {
     const md = readFileSync(new URL("../../.claude/agents/factory-lens.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const kopf = /^---\n([\s\S]*?)\n---/.exec(md)?.[1] ?? "";
-    expect(kopf).toMatch(/hooks:\s*\n\s+PreToolUse:\s*\n\s+- matcher: "Edit"/);
+    expect(kopf).toMatch(/hooks:\s*\n\s+PreToolUse:\s*\n\s+- matcher: "Edit\|Bash\|PowerShell"/);
     expect(kopf).toContain("/scripts/lens-edit-guard.mjs");
     expect(kopf).toMatch(/^tools:.*\bEdit\b/m);
   });
