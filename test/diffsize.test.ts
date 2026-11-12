@@ -772,7 +772,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
       const ereignis = join(repo, "ereignis.json");
       writeFileSync(ereignis, JSON.stringify({ pull_request: { title: titel } }));
       const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", FACTORY_DIFF_BASE: basis, FACTORY_DIFFSIZE_MAX_LINES: "1", GITHUB_EVENT_PATH: ereignis };
-      return spawnSync("node", [SKRIPT], { cwd: repo, env, encoding: "utf8" });
+      return spawnSync(process.execPath, [SKRIPT], { cwd: repo, env, encoding: "utf8" });
     };
     test("Sammelticket mit zwei Zeilen im Grund: Exit 1, Meldung ohne Titel", () => {
       const r = cli(SAMMEL, "L1 L2 breit");
