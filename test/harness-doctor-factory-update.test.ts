@@ -187,8 +187,39 @@ describe("dependabotAusschlussPunkt", () => {
   test("exclude-paths kein Array: zählt als nicht ausgeschlossen", () => {
     expect(pruefe(dependabot("- package-ecosystem: github-actions\n  exclude-paths: x\n"))[0]).toMatchObject({ ok: false });
   });
-  test("Standard-existiert und -lies lesen das Dateisystem (Bezieher ohne Dateien: OK)", () => {
-    expect(lib.dependabotAusschlussPunkt({ rootDir: "/gibt/es/nicht", bezieher: ja })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  test("exclude-paths als Text mit dem Pfad zählt nicht (kein Array)", () => {
+    expect(pruefe(dependabot(`- package-ecosystem: github-actions\n  exclude-paths: ${BESITZ.join(" ")}\n`))[0]).toMatchObject({ ok: false });
+  });
+  test("leere oder null-Datei dependabot.yml: OK statt Absturz", () => {
+    for (const leer of ["", "null\n"]) expect(pruefe(leer), JSON.stringify(leer)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("ohne github-actions-Eintrag wird das Manifest nicht gebraucht (kaputt: trotzdem OK)", () => {
+    expect(pruefe(dependabot(), { ...ALLE, ".factory/besitz.json": "{" })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("Befund: Einzahl bei einem, Mehrzahl bei mehreren fehlenden Pfaden", () => {
+    expect(pruefe(dependabot(actions([BESITZ[0]!])))[0]?.befund).toContain("zizmor.yml fehlt unter");
+    expect(pruefe(dependabot(actions()))[0]?.befund).toContain("zizmor.yml fehlen unter");
+  });
+  test("Standard-existiert und -lies lesen das Dateisystem", async () => {
+    const { mkdirSync, mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const w = mkdtempSync(join(tmpdir(), "doc-dep-"));
+    aufraeumen.push(w);
+    expect(lib.dependabotAusschlussPunkt({ rootDir: w, bezieher: ja })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    mkdirSync(join(w, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(w, ".factory"));
+    writeFileSync(join(w, ".github", "dependabot.yml"), dependabot(actions()));
+    const [ohne] = lib.dependabotAusschlussPunkt({ rootDir: w, bezieher: ja });
+    expect(ohne).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(ohne?.befund).toContain("fehlt");
+    writeFileSync(join(w, ".factory", "besitz.json"), MANI);
+    writeFileSync(join(w, ".github", "workflows", "codeql.yml"), "x");
+    const [mit] = lib.dependabotAusschlussPunkt({ rootDir: w, bezieher: ja });
+    expect(mit).toMatchObject({ ok: false });
+    expect(mit?.nichtPruefbar).toBeUndefined();
+    expect(mit?.befund).toContain("codeql.yml");
+    expect(mit?.befund).not.toContain("zizmor.yml");
   });
 });
 

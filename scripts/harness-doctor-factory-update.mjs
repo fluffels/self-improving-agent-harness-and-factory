@@ -70,14 +70,15 @@ const ausgeschlossen = (eintrag) => (Array.isArray(eintrag["exclude-paths"]) ? e
 /**
  * Der Punkt `Dependabot-Ausschluss` (factory#375 L5) als Liste: nur im Bezieher. Ein Dependabot-PR auf einen Besitz-Workflow (etwa `codeql.yml`) scheitert strukturell an `check:factorydrift`:
  * der Bezieher kann ihn weder mergen noch lokal fixen, der Bump kommt per Factory-Update. Darum muss jeder `github-actions`-Eintrag in `.github/dependabot.yml` jeden vorhandenen Besitz-Workflow unter `exclude-paths` führen.
- * Ohne Datei oder ohne `github-actions`-Eintrag: OK. Unlesbares YAML oder Manifest: `NICHT PRÜFBAR`. Grenze: nur wörtliche Pfade, Globs zählen nicht; ob `exclude-paths` für `github-actions` wirkt, ist Dependabot-seitig.
+ * Ohne Datei (`lies` liefert `null`) oder ohne `github-actions`-Eintrag: OK. Unlesbares YAML oder Manifest: `NICHT PRÜFBAR`. Grenze: nur wörtliche Pfade, Globs zählen nicht; ob `exclude-paths` für `github-actions` wirkt, ist Dependabot-seitig.
  */
 export function dependabotAusschlussPunkt({ rootDir, existiert = existsSync, lies = liesDatei, bezieher = istBezieher }) {
   if (!bezieher(rootDir)) return [];
-  if (!existiert(join(rootDir, DEPENDABOT))) return [gut(AUSSCHLUSS)];
+  const text = lies(join(rootDir, DEPENDABOT));
+  if (text === null) return [gut(AUSSCHLUSS)];
   let updates;
   try {
-    updates = parse(lies(join(rootDir, DEPENDABOT)) ?? "")?.updates;
+    updates = parse(text)?.updates;
   } catch (e) {
     return [nichtPruefbar(AUSSCHLUSS, `${DEPENDABOT} ist kein lesbares YAML (${fehlerText(e).split("\n")[0]})`, `${DEPENDABOT} reparieren, dann erneut prüfen`)];
   }
@@ -88,7 +89,7 @@ export function dependabotAusschlussPunkt({ rootDir, existiert = existsSync, lie
   const fehlend = besitzWorkflows(m.manifest, rootDir, existiert).filter((w) => aktionen.some((a) => !ausgeschlossen(a).includes(w)));
   if (fehlend.length === 0) return [gut(AUSSCHLUSS)];
   const liste = fehlend.join(", ");
-  return [luecke(AUSSCHLUSS, `${liste} fehlt${fehlend.length > 1 ? "en" : ""} unter exclude-paths in ${DEPENDABOT}: Dependabot-PRs darauf scheitern an check:factorydrift`, `in ${DEPENDABOT} je github-actions-Eintrag unter exclude-paths ergänzen: ${liste}; ein Dependabot-PR darauf scheitert an check:factorydrift, der Bump kommt per Factory-Update`)];
+  return [luecke(AUSSCHLUSS, `${liste} ${fehlend.length > 1 ? "fehlen" : "fehlt"} unter exclude-paths in ${DEPENDABOT}: Dependabot-PRs darauf scheitern an check:factorydrift`, `in ${DEPENDABOT} je github-actions-Eintrag unter exclude-paths ergänzen: ${liste}; ein Dependabot-PR darauf scheitert an check:factorydrift, der Bump kommt per Factory-Update`)];
 }
 
 /** Die Dateipunkte `dateien` samt Punkt `Dependabot-Ausschluss` (nur im Bezieher, nicht im Vorab-Abbruch). */
