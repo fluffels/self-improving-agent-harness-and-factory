@@ -46,6 +46,10 @@ describe("gemeinsamer Schrittname", () => {
     expect(k.ketteAusPackage({ scripts }, ["verify", "verify:full"], "verify:full")).toEqual(["gate-befehl:coverage", "check:x"]);
   });
 
+  test("L67: mehrere Leerzeichen zwischen den Teilen ergeben denselben Token", () => {
+    expect(k.parseChain("node  scripts/gate-befehl.mjs  coverage")).toEqual(["gate-befehl:coverage"]);
+  });
+
   test.each([
     "node scripts/gate-befehl.mjs coverage; rm x",
     "node scripts/gate-befehl.mjs testGezielt a.ts",
@@ -53,6 +57,8 @@ describe("gemeinsamer Schrittname", () => {
     "node scripts/gate-befehl.mjs a|b",
     "node scripts/gate-befehl.mjs",
     "echo hi; node scripts/gate-befehl.mjs coverage",
+    "node scripts/gate-befehl.mjs 1x",
+    "node scripts/gate-befehl.mjs _x",
   ])("L67 Negativ: %s bleibt ein Fehler", (schritt) => {
     const scripts = { verify: "npm run lint", lint: "eslint .", "verify:full": "npm run verify && " + schritt };
     expect(() => k.ketteAusPackage({ scripts }, ["verify", "verify:full"], "verify:full")).toThrow(/Shell-Zeichen/);

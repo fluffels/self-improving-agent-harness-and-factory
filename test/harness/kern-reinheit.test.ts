@@ -742,6 +742,10 @@ describe("kernVerzeichnisse / pruefeAbdeckung (#1613)", () => {
   test("Kern-Verzeichnisse sind die Ordner der Ganz-Datei-Einheiten, nicht rekursiv, Teil-Einheiten zählen nicht", () => {
     assert.deepEqual([...kernVerzeichnisse(E)].sort(), [".claude/agents", "scripts"]);
   });
+  test("jeder Pfad in VORLAGEN_IN_PROJEKTORDNERN ist im Manifest eine Vorlage", () => {
+    const m = JSON.parse(readFileSync(WURZEL + ".factory/besitz.json", "utf8")) as { eintraege: Eintrag[] };
+    for (const pfad of VORLAGEN_IN_PROJEKTORDNERN) assert.equal(m.eintraege.find((e) => e.pfad === pfad)?.art, "vorlage", pfad);
+  });
   test("eine Vorlage der geschlossenen Liste macht ihren Ordner nicht zum Kern-Verzeichnis, eine andere Vorlage schon (L3)", () => {
     const mitVorlage = [...E, ein("docs/glossar.md", { art: "vorlage" })];
     assert.deepEqual([...kernVerzeichnisse(mitVorlage)].sort(), [".claude/agents", "scripts"]);

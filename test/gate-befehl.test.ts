@@ -228,7 +228,7 @@ describe("testGezielt teilt Pfade auf Läufer auf (L8)", () => {
     assert.equal(lib.cli(["testGezielt", "backend/b.ts"], u.opt), 0);
     assert.deepEqual(u.aufrufe.map((a) => a.befehl), [VITEST + ' "backend/b.ts"']);
   });
-  test("absolute und Windows-Pfade werden relativ zu cwd gewertet", () => {
+  test("ein absoluter Pfad außerhalb der Wurzel und ein Windows-Pfad werden getrennt eingeordnet", () => {
     const u = umgebung(JAVA);
     assert.equal(lib.cli(["testGezielt", "/wurzel/test/tools/x.test.ts", "backend\\A.java"], u.opt), 0);
     assert.deepEqual(u.aufrufe.map((a) => a.befehl), ['mvn -q test "backend\\A.java"', VITEST + ' "/wurzel/test/tools/x.test.ts"']);
