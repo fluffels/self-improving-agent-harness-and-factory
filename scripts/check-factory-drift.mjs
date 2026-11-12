@@ -4,6 +4,7 @@
 // `quelle.sauber`): ein Stand ohne Tag oder mit `sauber: false` (Entwurfs-Sync, Version 1) ist rot, der Weg ist ein Sync von einem Tag. Ohne Sync-Stand ist das Projekt
 // selbst Quelle des Besitzes, die Besitz-Prüfung entfällt mit einer Zeile. Die Projektwert-Stellen (aus der Config erzeugte Blöcke und
 // Frontmatter-Zeilen, `scripts/projektwerte.mjs`) werden immer gegen die Config geprüft, auch ohne Sync-Stand.
+// Modulkopien (factory#244): eine Datei am Pfad eines nicht gewählten Moduls ist rot, außer die Config führt sie mit Grund in `modulKopien`.
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { existsSync, readFileSync } from "node:fs";
@@ -13,7 +14,7 @@ import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar
 import { projektwertLauf } from "./projektwert-lauf.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
-import { manifestKenntModule, modulAufteilung, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
+import { manifestKenntModule, modulAufteilung, modulFormFehler, modulKopienBefunde, modulWahl } from "./modul-wahl-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
 const WEG = "Weg: Änderung upstream im Factory-Repo, dort neu taggen und von diesem Tag neu syncen (`node scripts/factory-sync.mjs --quelle <pfad> --tag <name>`), oder den Projektwert in `" + PROJEKT_CONFIG + "` auslagern";
@@ -68,11 +69,11 @@ export function pruefeErgaenzung(lies) {
 }
 
 /**
- * Modulwahl des Projekts (factory#119): `{ gewaehlt, fehler, unbestimmt }`. Ohne Einheiten mit `modul` im Manifest gibt es nichts zu wählen; eine fehlende oder
+ * Modulwahl des Projekts (factory#119): `{ gewaehlt, fehler, unbestimmt, kopien }`; `kopien` sind die begründeten Modulkopien (factory#244), `null` bei Formfehler. Ohne Einheiten mit `modul` im Manifest gibt es nichts zu wählen; eine fehlende oder
  * unlesbare Config macht die Wahl `unbestimmt` (fail-closed, genau ein Fehler statt einem je Einheit); unbekannte Namen und Formfehler sind Fehler mit Fix.
  */
 function modulWahlAus(manifest, lies) {
-  if (!manifestKenntModule(manifest)) return { gewaehlt: [], fehler: [], unbestimmt: false };
+  if (!manifestKenntModule(manifest)) return { gewaehlt: [], fehler: [], unbestimmt: false, kopien: [] };
   let config = null;
   try {
     config = JSON.parse(lies(PROJEKT_CONFIG) ?? "null");
@@ -80,10 +81,11 @@ function modulWahlAus(manifest, lies) {
     // unlesbar: bleibt null
   }
   if (config === null || typeof config !== "object" || Array.isArray(config)) {
-    return { gewaehlt: [], unbestimmt: true, fehler: [`Modul-Auswahl nicht bestimmbar (${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON-Objekt). Weg: Config reparieren (Schlüssel module), dann erneut prüfen`] };
+    return { gewaehlt: [], unbestimmt: true, kopien: null, fehler: [`Modul-Auswahl nicht bestimmbar (${PROJEKT_CONFIG} fehlt oder ist kein gültiges JSON-Objekt). Weg: Config reparieren (Schlüssel module), dann erneut prüfen`] };
   }
   const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
-  return { gewaehlt: w.gewaehlt, fehler: [...modulFormFehler(config), ...w.fehler].map((f) => `Modul-Wahl: ${f}`), unbestimmt: false };
+  const form = modulFormFehler(config);
+  return { gewaehlt: w.gewaehlt, fehler: [...form, ...w.fehler].map((f) => `Modul-Wahl: ${f}`), unbestimmt: false, kopien: form.length === 0 ? (config.modulKopien ?? []) : null };
 }
 
 const STAND_KAPUTT = (stand) => (stand.version !== 1 && stand.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object";
@@ -120,6 +122,22 @@ function einheitFehler(e, { lies, stand, ergaenzung, configKaputt }) {
   const hinweis = e.block !== undefined ? BLOCK_HINWEIS : istErgaenzbar(e) ? ergaenzungHinweis(e) : "";
   if (hash === null) return [`${id}: Besitz fehlt oder ist nicht auflösbar (Datei gelöscht, Marker oder Schlüssel entfernt, Projektwert-Marker kaputt)`];
   return hash !== stand.einheiten[id] ? [`${id}: Besitz wurde im Projekt verändert${hinweis}`] : [];
+}
+
+const KOPIE_WEG = "Weg: Modul in module wählen und neu syncen (abweichende Datei: `--uebernehmen <pfad>`), Datei löschen oder in modulKopien (" + PROJEKT_CONFIG + ") mit Grund führen";
+const KOPIE_MELDUNG = {
+  "modul-gewaehlt": (b) => `modulKopien nennt ${b.pfad}, das Modul ist aber gewählt. Weg: den Eintrag aus modulKopien (${PROJEKT_CONFIG}) entfernen`,
+  "keine-moduleinheit": (b) => `modulKopien nennt ${b.pfad}, das gehört zu keiner Moduleinheit. Weg: den Eintrag aus modulKopien (${PROJEKT_CONFIG}) entfernen`,
+  fehlt: (b) => `modulKopien nennt ${b.pfad}, die Datei fehlt. Weg: den Eintrag aus modulKopien (${PROJEKT_CONFIG}) entfernen`,
+  "ohne-grund": (b) => `${b.pfad}: Modulkopie (Projektdatei, kein Factory-Besitz): Modul '${b.modul}' ist nicht gewählt, die Datei liegt trotzdem im Projekt. ${KOPIE_WEG}`,
+};
+
+/** Modulkopien (factory#244) als Drift-Meldungen; bei Formfehler (`kopien: null`) wird nichts geprüft, `Modul-Wahl:` meldet ihn. */
+function kopienFehler(manifest, stand, wahl, lies) {
+  if (wahl.kopien === null) return [];
+  const imStand = (e) => einheitId(e) in stand.einheiten;
+  const vorhanden = (p) => pfadSicher(p) && lies(p) !== null;
+  return modulKopienBefunde(manifest, wahl, { vorhanden, imStand, kopien: wahl.kopien }).map((b) => KOPIE_MELDUNG[b.art](b));
 }
 
 /** Fehler der Sync-Stand-Einheiten ohne aktive Einheit: `{ fehler, modulRot }` (Modul abgewählt wird getrennt gemeldet). */
@@ -159,7 +177,7 @@ export function pruefeDrift(lies) {
   const fehler = aufteilung.aktiv.flatMap((e) => einheitFehler(e, { lies, stand, ergaenzung, configKaputt }));
   const rest = restFehler(manifest, stand, ids, { wahl, ...aufteilung });
   const alle = [...herkunft, ...fehler, ...rest.fehler];
-  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...wahl.fehler], einheiten: ids.size };
+  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...kopienFehler(manifest, stand, wahl, lies), ...wahl.fehler], einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

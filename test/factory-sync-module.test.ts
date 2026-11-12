@@ -95,9 +95,17 @@ describe("planeSync und Sicherheits-Module", () => {
   test("(a2) liegt im Ziel eine Datei am Pfad einer nicht gewählten Moduleinheit, kommt ein Hinweis (kein Fehler, nichts geschrieben)", () => {
     const p = plane(() => undefined, { [CODEQL]: "eigene Kopie\n" });
     expect(p.fehler).toEqual([]);
-    expect(p.meldungen.join("\n")).toContain(`Modul 'codeql' nicht gewählt, im Ziel liegt ${CODEQL} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
+    expect(p.meldungen.join("\n")).toContain(`Modul 'codeql' nicht gewählt, im Ziel liegt ${CODEQL} (Modulkopie): Modul wählen, Datei löschen oder in modulKopien (.factory/projekt.json) mit Grund führen`);
     expect(p.meldungen.join("\n")).not.toContain(`im Ziel liegt ${ZIZMOR}`);
     expect(p.dateien.has(CODEQL)).toBe(false);
+  });
+  test("(a2b) eine begründete Modulkopie erzeugt keinen Hinweis, eine andere weiter", () => {
+    const p = plane((c) => {
+      c.modulKopien = [{ datei: CODEQL, grund: "bewusst eigene Fassung" }];
+    }, { [CODEQL]: "eigene Kopie\n", [ZIZMOR]: "auch eine\n" });
+    expect(p.fehler).toEqual([]);
+    expect(p.meldungen.join("\n")).not.toContain(`im Ziel liegt ${CODEQL}`);
+    expect(p.meldungen.join("\n")).toContain(`im Ziel liegt ${ZIZMOR}`);
   });
   test("(a3) ein gewähltes Modul mit Zieldatei gibt keinen Hinweis", () => {
     const p = plane((c) => {
@@ -191,9 +199,10 @@ const drift = rawDrift as unknown as { pruefeDrift(lies: (p: string) => string |
 const besitz = rawBesitz as unknown as { einheitHash(e: unknown, t: string): string; einheitId(e: unknown): string; textHash(t: string): string };
 const mitModul = MANIFEST.eintraege.filter((e) => e.pfad.startsWith(".github/"));
 
-/** Projekt-Dateien mit passendem Sync-Stand über alle Moduleinheiten; `config` ist der Text der Projekt-Config (`null` = fehlt). */
-function projekt(config: string | null, einheiten = mitModul): (p: string) => string | null {
+/** Projekt-Dateien mit passendem Sync-Stand über `einheiten`; `config` ist der Text der Projekt-Config (`null` = fehlt). Moduldateien außerhalb von `einheiten` fehlen im Projekt, außer `kopien` (factory#244: dann liegen sie als Modulkopie da). */
+function projekt(config: string | null, einheiten = mitModul, kopien = false): (p: string) => string | null {
   const dateien: Record<string, string> = { ...QUELLE };
+  if (!kopien) for (const e of mitModul.filter((m) => !einheiten.includes(m))) delete dateien[e.pfad];
   const stand = { version: 2, quelle: { commit: "0".repeat(40), tag: "v1", sauber: true }, manifest: besitz.textHash(QUELLE[".factory/besitz.json"]), einheiten: Object.fromEntries([...MANIFEST.eintraege.filter((e) => !e.pfad.startsWith(".github/")), ...einheiten].map((e) => [besitz.einheitId(e), besitz.einheitHash(e, dateien[e.pfad] ?? "")])) };
   dateien[".factory/sync-stand.json"] = JSON.stringify(stand);
   if (config !== null) dateien[".factory/projekt.json"] = config;
@@ -219,6 +228,44 @@ describe("Drift-Gate und Sicherheits-Module", () => {
     expect(f).toContain(`${ZIZMOR}: im Sync-Stand, Modul 'zizmor' ist aber nicht gewählt`);
     expect(f).toContain("Weg:");
     expect(r.fehler).toHaveLength(2);
+  });
+  describe("Modulkopien (factory#244)", () => {
+    const nurDep = mitModul.filter((e) => e.pfad === DEPENDABOT);
+    const grund = { datei: ZIZMOR, grund: "Projekt führt den Workflow selbst" };
+    const lauf = (c: Record<string, unknown>, einheiten = nurDep) => drift.pruefeDrift(projekt(cfg(c), einheiten, true)).fehler;
+    test("eine Kopie ohne Grund ist rot und nennt die drei Wege", () => {
+      const f = lauf({});
+      expect(f.filter((m) => m.includes(ZIZMOR))).toHaveLength(1);
+      const m = f.join("\n");
+      expect(m).toContain("Modulkopie");
+      expect(m).toContain("Modul in module wählen");
+      expect(m).toContain("--uebernehmen");
+      expect(m).toContain("Datei löschen");
+      expect(m).toContain("modulKopien");
+    });
+    test("mit Grund in modulKopien ist es grün", () => {
+      expect(lauf({ modulKopien: [grund, { datei: CODEQL, grund: "ebenso" }] })).toEqual([]);
+    });
+    test("kein Befund, wenn die Datei fehlt", () => {
+      expect(drift.pruefeDrift(projekt(cfg({}), nurDep, false)).fehler).toEqual([]);
+    });
+    test("veraltete Einträge sind rot: Modul gewählt, keine Moduleinheit, Datei fehlt", () => {
+      const gewaehlt = lauf({ module: ["zizmor", "dependabot-inbox"], modulKopien: [grund] }, mitModul.filter((e) => e.pfad !== CODEQL));
+      expect(gewaehlt.join("\n")).toContain(`modulKopien nennt ${ZIZMOR}, das Modul ist aber gewählt`);
+      expect(lauf({ modulKopien: [{ datei: "scripts/a.mjs", grund: "x" }] }).join("\n")).toContain("gehört zu keiner Moduleinheit");
+      const fehlt = drift.pruefeDrift(projekt(cfg({ modulKopien: [{ datei: CODEQL, grund: "x" }] }), nurDep, false)).fehler;
+      expect(fehlt.join("\n")).toContain(`modulKopien nennt ${CODEQL}, die Datei fehlt`);
+    });
+    test("eine abgewählte Stand-Einheit wird genau einmal gemeldet (kein zusätzlicher Kopien-Befund)", () => {
+      const f = drift.pruefeDrift(projekt(cfg({ module: ["dependabot-inbox"] }), mitModul, true)).fehler;
+      expect(f.filter((m) => m.includes(ZIZMOR))).toHaveLength(1);
+    });
+    test("ein Formfehler in modulKopien ist rot über Modul-Wahl, ohne zusätzliche Kopien-Befunde", () => {
+      const f = lauf({ modulKopien: [{ datei: ZIZMOR, grund: "" }] });
+      expect(f.join("\n")).toMatch(/Modul-Wahl: modulKopien\[0\]\.grund.*Fix:/s);
+      expect(f.join("\n")).not.toContain("Modulkopie (Projektdatei");
+      expect(f.filter((m) => m.includes(ZIZMOR) && !m.startsWith("Modul-Wahl"))).toEqual([]);
+    });
   });
   test("ein unbekannter Name ist rot mit Fix", () => {
     expect(drift.pruefeDrift(projekt(cfg({ module: ["gibtsnicht", "zizmor", "codeql"], codeql: { sprachen: ["a"] } }))).fehler.join("\n")).toMatch(/Modul-Wahl: .*gibtsnicht.*Fix:/s);

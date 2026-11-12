@@ -1,6 +1,7 @@
 // Blatt-Modul ohne Importe (factory#119): Sicherheits-Module als wählbarer Besitz; die Libs für Besitz und Config nutzen sie, ein Zyklus wäre sonst unvermeidbar.
 // Eine Besitz-Einheit mit Manifest-Feld `modul` wird nur an Bezieher verteilt, die den Namen in der Config-Liste `module` gewählt haben; ohne den Schlüssel gilt `MODUL_STANDARD`.
 // Die erlaubten Namen sind die `modul`-Felder des Manifests (eine Quelle). Pfade der Config für Meldungen reicht der Aufrufer als `configPfad` herein.
+// Modulkopien (factory#244): eine Datei am Pfad einer Moduleinheit eines nicht gewählten Moduls ist nur mit Eintrag `{ datei, grund }` in der Config-Liste `modulKopien` geduldet.
 // Bekannte Grenze: geprüft wird nur die Form und die Namensmenge, nicht ob der Bezieher die Workflows des Moduls tatsächlich braucht.
 
 /** Module, die ohne Schlüssel `module` in der Config gelten (der Stand vor factory#119). */
@@ -46,8 +47,53 @@ function sprachenFehler(c, m) {
   return [];
 }
 
-/** Fehler der Form von `module` und `codeql.sprachen` in der Config (leer = in Ordnung); Namen gegen das Manifest prüft `modulWahl`. */
-export const modulFormFehler = (config) => [...moduleFehler(config?.module), ...sprachenFehler(config?.codeql, config?.module)];
+const KOPIEN_FIX = 'modulKopien als Liste aus { "datei": "<repo-relativer Pfad>", "grund": "<Begründung>" } eintragen';
+const textOk = (w) => typeof w === "string" && w.trim() !== "";
+const posixOk = (p) => textOk(p) && !p.includes("\\") && !p.startsWith("/") && p.split("/").every((s) => s !== "" && s !== "." && s !== "..");
+
+function kopieFehler(k, i) {
+  if (k === null || typeof k !== "object" || Array.isArray(k)) return [`modulKopien[${i}] muss ein Objekt { datei, grund } sein\nFix: ${KOPIEN_FIX}`];
+  const f = [];
+  if (!posixOk(k.datei)) f.push(`modulKopien[${i}].datei muss ein repo-relativer POSIX-Pfad sein\nFix: ${KOPIEN_FIX}`);
+  if (!textOk(k.grund)) f.push(`modulKopien[${i}].grund muss ein nicht leerer Text sein (warum das Modul bewusst fehlt und die Datei bleibt)\nFix: ${KOPIEN_FIX}`);
+  return f;
+}
+
+/** Form von `modulKopien` (optional): Liste aus `{ datei, grund }`, `datei` je einmal. */
+function kopienFehler(liste) {
+  if (liste === undefined) return [];
+  if (!istListe(liste)) return [`modulKopien muss eine Liste sein\nFix: ${KOPIEN_FIX}`];
+  const fehler = liste.flatMap(kopieFehler);
+  const dateien = liste.map((k) => k?.datei).filter((d) => typeof d === "string");
+  const doppelt = [...new Set(dateien.filter((d, i) => dateien.indexOf(d) !== i))];
+  return [...fehler, ...doppelt.map((d) => `modulKopien enthält ${d} doppelt\nFix: den doppelten Eintrag entfernen`)];
+}
+
+/** Fehler der Form von `module`, `codeql.sprachen` und `modulKopien` in der Config (leer = in Ordnung); Namen gegen das Manifest prüft `modulWahl`. */
+export const modulFormFehler = (config) => [...moduleFehler(config?.module), ...sprachenFehler(config?.codeql, config?.module), ...kopienFehler(config?.modulKopien)];
+
+/**
+ * Befunde zu Dateien an Pfaden nicht gewählter Module (factory#244): `[{ pfad, art, modul? }]`. `art`: `ohne-grund` (Datei da, Modul abgewählt, nicht im Stand, nicht begründet),
+ * `modul-gewaehlt`, `keine-moduleinheit`, `fehlt` (veralteter Eintrag in `modulKopien`). `gewaehlt`/`unbestimmt` wie bei `modulAufteilung`; `vorhanden(pfad)` und `imStand(einheit)` liefert der Aufrufer.
+ */
+export function modulKopienBefunde(manifest, { gewaehlt, unbestimmt }, { vorhanden, imStand, kopien }) {
+  if (unbestimmt) return [];
+  const einheiten = (manifest?.eintraege ?? []).filter(istModulEinheit);
+  const begruendet = new Set(kopien.map((k) => k.datei));
+  const ohneGrund = einheiten.filter((e) => !modulGewaehlt(e, gewaehlt) && vorhanden(e.pfad) && !imStand(e) && !begruendet.has(e.pfad));
+  const befunde = [...new Map(ohneGrund.map((e) => [e.pfad, { pfad: e.pfad, art: "ohne-grund", modul: e.modul }])).values()];
+  for (const k of kopien) {
+    const art = veraltetArt(einheiten.filter((e) => e.pfad === k.datei), gewaehlt, vorhanden(k.datei));
+    if (art !== null) befunde.push({ pfad: k.datei, art });
+  }
+  return befunde;
+}
+
+function veraltetArt(einheiten, gewaehlt, vorhanden) {
+  if (einheiten.length === 0) return "keine-moduleinheit";
+  if (einheiten.some((e) => modulGewaehlt(e, gewaehlt))) return "modul-gewaehlt";
+  return vorhanden ? null : "fehlt";
+}
 
 /** Modulwahl gegen das Manifest: `{ gewaehlt, erlaubt, nichtGewaehlt, fehlt, fehler }`; `fehlt` heißt, der Schlüssel `module` steht nicht in der Config. */
 export function modulWahl(config, manifest, { configPfad = "die Projekt-Config" } = {}) {
