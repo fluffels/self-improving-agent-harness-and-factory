@@ -53,6 +53,19 @@ import { markerEnde, markerStart } from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { escapeRegex as escapeRe } from "../../scripts/regex-lib.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as doctorDateienRaw from "../../scripts/harness-doctor-dateien.mjs";
+
+const {
+  normalizeProtected,
+  codeownersPaths,
+  codeownersSpiegelProbleme: pflichtReviewProbleme,
+} = doctorDateienRaw as unknown as {
+  normalizeProtected: (p: string) => string;
+  codeownersPaths: (text: string) => Set<string>;
+  codeownersSpiegelProbleme: (quelleText: string, codeownersText: string) => string[];
+};
+
 const { trifftLeitplanke, leitplankenMuster, pflichtReviewMuster } = { ...abschlussRaw, ...extraktionRaw } as unknown as {
   trifftLeitplanke: (pfad: string, muster: string[]) => boolean;
   leitplankenMuster: () => string[];
@@ -61,29 +74,6 @@ const { trifftLeitplanke, leitplankenMuster, pflichtReviewMuster } = { ...abschl
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");
-
-/**
- * Normalisiert einen geschützten Pfad auf seine Substring-Form: führenden `/` weg
- * (CODEOWNERS-Anker) und ab dem ersten Glob-`*` abschneiden. So werden die zwei
- * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und die Substring-Form
- * (Anker und Glob abgeschnitten) landen beide auf `scripts/check-`.
- */
-function normalizeProtected(p: string): string {
-  return p.replace(/^\//, "").replace(/\*.*$/, "");
-}
-
-
-/** Die geschützten Pfade aus `.github/CODEOWNERS` (jeweils vor dem `@owner`). */
-function codeownersPaths(text: string): Set<string> {
-  const set = new Set<string>();
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const m = line.match(/^(\S+)\s+@\S+/);
-    if (m) set.add(normalizeProtected(m[1]));
-  }
-  return set;
-}
 
 /** Die Quelle der geschützten Pfade (#1157): Gruppe → Pfade in CODEOWNERS-Schreibweise. */
 type ProtectedSource = Record<string, string[]>;
@@ -152,23 +142,6 @@ const codeownersMuster = (text: string): string[] =>
     .split(/\r?\n/)
     .map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1])
     .filter((p): p is string => p !== undefined);
-
-/**
- * Prüft den Spiegel (factory#348): CODEOWNERS führt genau die Pflicht-Review-Liste (Gruppe `pflichtReview`, ohne Gruppe die
- * ganze Quelle). Meldet eine Gruppe ohne `/.github/CODEOWNERS` (Selbstschutz), ein Soll-Muster ohne CODEOWNERS-Zeile und
- * eine CODEOWNERS-Zeile außerhalb des Soll; (b)/(c) normalisiert über `normalizeProtected`.
- */
-function pflichtReviewProbleme(quelleText: string, codeownersText: string): string[] {
-  const sollMuster = pflichtReviewMuster(quelleText) ?? [];
-  const probleme: string[] = [];
-  const hatGruppe = (JSON.parse(quelleText) as ProtectedSource).pflichtReview !== undefined;
-  if (hatGruppe && !trifftLeitplanke(".github/CODEOWNERS", sollMuster)) probleme.push("Gruppe pflichtReview ohne /.github/CODEOWNERS");
-  const sollNorm = new Set(sollMuster.map(normalizeProtected));
-  const istNorm = codeownersPaths(codeownersText);
-  for (const p of sollNorm) if (!istNorm.has(p)) probleme.push(`nicht in CODEOWNERS: ${p}`);
-  for (const p of istNorm) if (!sollNorm.has(p)) probleme.push(`nicht in der Pflicht-Review-Liste: ${p}`);
-  return probleme;
-}
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die

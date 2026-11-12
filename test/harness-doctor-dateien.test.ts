@@ -17,7 +17,7 @@ const rawAusloeser = rawBlockformAusloeser as (text: string) => { ausloeser: str
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; lies?: (p: string) => string | null; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
 const DATEI_PUNKTE = rawDateiPunkte as readonly string[];
 const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis;
 const csPunkt = rawCsPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
@@ -613,8 +613,8 @@ describe("Workflow-Auslöser", () => {
       expect(r.ausloeser, text).toEqual(soll);
     }
   });
-  test("steht als letzter Punkt in DATEI_PUNKTE", () => {
-    expect(DATEI_PUNKTE.at(-1)).toBe("Workflow-Auslöser");
+  test("steht in DATEI_PUNKTE vor CODEOWNERS-Spiegel", () => {
+    expect(DATEI_PUNKTE.at(-2)).toBe("Workflow-Auslöser");
   });
 });
 
@@ -629,13 +629,13 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-3)).toBe("Required-Check-Quellen");
-    expect(DATEI_PUNKTE.at(-2)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-4)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-3)).toBe("Code-Scanning-Quellen");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });
@@ -839,5 +839,61 @@ describe("Code-Scanning-Quellen (factory#339)", () => {
     expect(punkt(e, "Code-Scanning-Quellen").ok).toBe(false);
     const mitQuelle = pruefe({ rootDir: "/x", ...GESUND, workflows: [...GESUND.workflows, sarif("zizmor")], spiegel: { requiredChecks: ["Beispiel Check"], codeScanning: [{ tool: "zizmor" }] }, git: fakeGit(gesund), existiert: () => true, config: {} });
     expect(punkt(mitQuelle, "Code-Scanning-Quellen").ok).toBe(true);
+  });
+});
+
+describe("CODEOWNERS-Spiegel (factory#382 L11, L69)", () => {
+  const QUELLE = JSON.stringify({ pflichtReview: ["/scripts/a.mjs", "/.github/CODEOWNERS", "/docs/"], andere: ["/x/"] });
+  const eigenes = (z: string[]) => z.join("\n");
+  const SOLL = eigenes(["# Kopf", "/scripts/a.mjs @team", "/.github/CODEOWNERS @team", "/docs/ @team"]);
+  const punktFuer = (quelle: string | null, codeowners: string | null, existiert = true) =>
+    punkt(
+      pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(gesund), existiert: () => existiert, config: {}, lies: (p) => (p.replaceAll("\\", "/").endsWith("protected-paths.json") ? quelle : codeowners) }),
+      "CODEOWNERS-Spiegel",
+    );
+
+  test("(a) CODEOWNERS spiegelt die Gruppe pflichtReview: OK", () => {
+    expect(punktFuer(QUELLE, SOLL).ok).toBe(true);
+  });
+
+  test("(b) Soll-Muster fehlt in CODEOWNERS: Lücke, die den Pfad nennt (kein Owner-Handle)", () => {
+    const p = punktFuer(QUELLE, eigenes(["/scripts/a.mjs @geheim-handle", "/.github/CODEOWNERS @geheim-handle"]));
+    expect(p.ok).toBe(false);
+    expect(p.nichtPruefbar).toBeUndefined();
+    expect(p.befund).toContain("nicht in CODEOWNERS: docs/");
+    expect(JSON.stringify(p)).not.toContain("geheim-handle");
+  });
+
+  test("(c) CODEOWNERS-Zeile außerhalb des Soll: Lücke", () => {
+    const p = punktFuer(QUELLE, SOLL + "\n/fremd/ @team");
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("nicht in der Pflicht-Review-Liste: fremd/");
+  });
+
+  test("(d) Gruppe pflichtReview ohne /.github/CODEOWNERS: Lücke (Selbstschutz)", () => {
+    const quelle = JSON.stringify({ pflichtReview: ["/scripts/a.mjs"] });
+    const p = punktFuer(quelle, "/scripts/a.mjs @team");
+    expect(p.ok).toBe(false);
+    expect(p.befund).toContain("ohne /.github/CODEOWNERS");
+  });
+
+  test("ohne Gruppe pflichtReview gilt die ganze Liste", () => {
+    const quelle = JSON.stringify({ a: ["/scripts/a.mjs", "/.github/CODEOWNERS"], b: ["/docs/"] });
+    expect(punktFuer(quelle, SOLL).ok).toBe(true);
+    expect(punktFuer(quelle, "/scripts/a.mjs @t").ok).toBe(false);
+  });
+
+  test("(e) eine der Dateien fehlt oder ist nicht lesbar: kein Befund hier (Projektdateien meldet das), nie ein Wurf", () => {
+    expect(punktFuer(null, SOLL).ok).toBe(true);
+    expect(punktFuer(QUELLE, null).ok).toBe(true);
+    expect(punktFuer(QUELLE, SOLL, false).ok).toBe(true);
+  });
+
+  test("(f) kaputtes JSON oder eine Gruppe, die keine Liste ist: Lücke mit Grund, kein Wurf", () => {
+    for (const quelle of ["{kaputt", JSON.stringify({ pflichtReview: "x" })]) {
+      const p = punktFuer(quelle, SOLL);
+      expect(p.ok, quelle).toBe(false);
+      expect(p.befund, quelle).toMatch(/nicht lesbar|keine Liste/);
+    }
   });
 });

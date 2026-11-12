@@ -1,4 +1,4 @@
-/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): sechs Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
+/* Harness-Doctor, Dateipunkte (factory#94, ADR 0022): Kern-Regeln gegen die Projektdateien des Beziehers, je Punkt `OK`, `LÜCKE` oder
  * `NICHT PRÜFBAR` (nie still grün; fehlt die `AGENTS.md` im Root, ist `Root-Kontextdatei` nicht prüfbar statt leer grün). Sie ersetzen die Projekt-Kopien der Kern-Tests agents-md-native und line-endings im Bezieher; der Unit-Anteil
  * (Parser, Erkennung) bleibt Kern-Test und ruft dieselben Funktionen aus diesem Modul.
  *
@@ -19,17 +19,20 @@
  *   `Code-Scanning-Quellen` (factory#339): jedes Werkzeug aus `spiegel.codeScanning` hat eine Workflow-Quelle (CodeQL: `uses: github/codeql-action/analyze@`, jedes andere Werkzeug: `uses: github/codeql-action/upload-sarif@` in einer Datei, die den Namen als Wort nennt);
  *   ohne Quelle Lücke, nur CodeQL ohne Workflow nicht prüfbar (Default-Setup serverseitig). Grenze: Drittaktionen, ein SARIF-Upload per API und eine gequotete `uses:`-Form erkennt der Punkt nicht. Spiegel und Workflows reicht `pruefLauf` herein wie bei `Required-Check-Quellen`.
  *
+ *   `CODEOWNERS-Spiegel` (factory#382): `.github/CODEOWNERS` führt genau die Gruppe `pflichtReview` von `.github/protected-paths.json` (ohne Gruppe die ganze Liste); fehlt eine der Dateien, meldet `Projektdateien` das.
+ *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { pflichtReviewMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
 import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
@@ -324,13 +327,13 @@ export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = fals
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
  * ohne sie ist `Required-Check-Quellen` nicht prüfbar.
  */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), lies = dateiOderNull(rootDir, existiert), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
   const punkte = {
     "Root-Kontextdatei": () => kontextPunkt(rootDir, existiert),
     Zeilenenden: () => zeilenendenPunkt(git),
@@ -340,8 +343,66 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Required-Check-Quellen": () => requiredCheckQuellenPunkt({ spiegel, workflows, pflichtChecks, vorAbbruch }),
     "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
+    "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
+}
+
+/** Der Standard-Leser: Text der Datei unter `rootDir` oder `null`, wenn sie fehlt oder nicht lesbar ist (nie ein Wurf). */
+const dateiOderNull = (rootDir, existiert) => (rel) => {
+  try {
+    return existiert(join(rootDir, rel)) ? readFileSync(join(rootDir, rel), "utf8") : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Pfad-Normalform eines Schutz-Musters: führendes `/` weg, ab dem ersten `*` abgeschnitten (CODEOWNERS `/scripts/check-*.mjs` und die Substring-Form landen beide auf `scripts/check-`). */
+export const normalizeProtected = (p) => p.replace(/^\//, "").replace(/\*.*$/, "");
+
+/** Die Muster aus CODEOWNERS-Text, normalisiert (jeweils vor dem `@owner`; Kommentare und Leerzeilen zählen nicht). */
+export function codeownersPaths(text) {
+  const set = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const m = raw.trim().match(/^(\S+)\s+@\S+/);
+    if (m && !m[1].startsWith("#")) set.add(normalizeProtected(m[1]));
+  }
+  return set;
+}
+
+/**
+ * Spiegel-Probleme (factory#348, factory#382): CODEOWNERS führt genau die Pflicht-Review-Liste (Gruppe `pflichtReview`, ohne Gruppe die ganze Quelle).
+ * Meldet eine Gruppe ohne `/.github/CODEOWNERS` (Selbstschutz), ein Soll-Muster ohne CODEOWNERS-Zeile und eine CODEOWNERS-Zeile außerhalb des Soll;
+ * nur Pfade, nie Owner-Handles. Kaputtes JSON oder eine Gruppe, die keine Liste ist: ein Problem mit Grund, kein Wurf. Pur.
+ */
+export function codeownersSpiegelProbleme(quelleText, codeownersText) {
+  const sollMuster = pflichtReviewMuster(quelleText);
+  if (sollMuster === null) return [".github/protected-paths.json nicht lesbar oder pflichtReview ist keine Liste"];
+  let hatGruppe = false;
+  try {
+    hatGruppe = JSON.parse(quelleText).pflichtReview !== undefined;
+  } catch {
+    hatGruppe = false;
+  }
+  const probleme = [];
+  if (hatGruppe && !trifftLeitplanke(".github/CODEOWNERS", sollMuster)) probleme.push("Gruppe pflichtReview ohne /.github/CODEOWNERS");
+  const sollNorm = new Set(sollMuster.map(normalizeProtected));
+  const istNorm = codeownersPaths(codeownersText);
+  for (const p of sollNorm) if (!istNorm.has(p)) probleme.push(`nicht in CODEOWNERS: ${p}`);
+  for (const p of istNorm) if (!sollNorm.has(p)) probleme.push(`nicht in der Pflicht-Review-Liste: ${p}`);
+  return probleme;
+}
+
+const SPIEGEL_PUNKT = "CODEOWNERS-Spiegel";
+
+/** Punkt `CODEOWNERS-Spiegel` (factory#382): `.github/CODEOWNERS` gleicht der Pflicht-Review-Liste von `.github/protected-paths.json` ab. Fehlt eine der Dateien (oder ist unlesbar), steht kein Befund hier: `Projektdateien` meldet das. `lies(rel)` liefert den Text oder `null`. */
+export function codeownersSpiegelPunkt(lies) {
+  const quelle = lies(".github/protected-paths.json");
+  const codeowners = lies(".github/CODEOWNERS");
+  if (quelle === null || codeowners === null) return gut(SPIEGEL_PUNKT, "Datei fehlt oder ist nicht lesbar (Punkt Projektdateien)");
+  const probleme = codeownersSpiegelProbleme(quelle, codeowners);
+  if (probleme.length === 0) return gut(SPIEGEL_PUNKT);
+  return luecke(SPIEGEL_PUNKT, probleme.join("; "), `.github/CODEOWNERS und die Gruppe pflichtReview in .github/protected-paths.json (ohne Gruppe: die ganze Liste) gleichziehen, jede Zeile \`<muster> @<owner>\`; Vorlage: .github/CODEOWNERS der Quelle`);
 }
 
 /* Punkt `Workflow-Auslöser`: gelesen vom Blockform-Leser `blockformAusloeser` (workflow-blockform.mjs, ohne `yaml`: der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI` unter `workflows`.

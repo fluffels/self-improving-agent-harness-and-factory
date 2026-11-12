@@ -39,6 +39,7 @@ type Namen = {
   worktreeName: (nr: number | string) => string;
   branchName: (nr: number | string, slug: string) => string;
   lensNameKern: string;
+  lensWorktreeMuster: RegExp;
   ticketAus: (t: string) => number | null;
   patchMuster: { ticketRunde: RegExp; voll: RegExp; delta: RegExp };
   dateiMuster: RegExp;
