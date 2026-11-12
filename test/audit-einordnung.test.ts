@@ -107,6 +107,19 @@ describe("befundeAusAlerts", () => {
     expect(A.befundeAusAlerts([alert("npm", "development")])[0].prod).toBe(false);
   });
 
+  test("maven und docker runtime sind prod, development nicht (factory#395 L55)", () => {
+    expect(A.befundeAusAlerts([alert("maven", "runtime")])[0].prod).toBe(true);
+    expect(A.befundeAusAlerts([alert("docker", "runtime")])[0].prod).toBe(true);
+    expect(A.befundeAusAlerts([alert("maven", "development")])[0].prod).toBe(false);
+  });
+
+  test("ohne Scope oder ohne Ökosystem nicht prod", () => {
+    const ohneScope = { ...alert("maven", "runtime"), dependency: { package: { ecosystem: "maven", name: "p" } } };
+    const ohneEco = { ...alert("maven", "runtime"), dependency: { scope: "runtime", package: { name: "p" } } };
+    expect(A.befundeAusAlerts([ohneScope])[0].prod).toBe(false);
+    expect(A.befundeAusAlerts([ohneEco])[0].prod).toBe(false);
+  });
+
   test("Ökosystem actions ist nie prod", () => {
     expect(A.befundeAusAlerts([alert("actions", "runtime")])[0].prod).toBe(false);
   });

@@ -62,8 +62,8 @@ export function befundeAusNpmAudit(json) {
 }
 
 /**
- * Befunde aus den offenen Dependabot-Alerts (REST-Form). `prod` nur für das Ökosystem npm mit `dependency.scope === "runtime"`;
- * GitHub-Actions und alles andere zählt nie als ausgeliefert. Pur.
+ * Befunde aus den offenen Dependabot-Alerts (REST-Form). `prod` für jedes Ökosystem außer GitHub-Actions (npm, maven, docker …)
+ * mit `dependency.scope === "runtime"`; GitHub-Actions und Dev-Scope zählen nie als ausgeliefert (factory#395). Pur.
  */
 function gepatchteVersion(a) {
   const fix = a?.security_vulnerability?.first_patched_version?.identifier;
@@ -80,7 +80,7 @@ function befundAusAlert(a) {
       ghsa,
       paket: String(paket?.name ?? "unbekannt"),
       schwere: String(a?.security_advisory?.severity ?? "unknown").toLowerCase(),
-      prod: paket?.ecosystem === "npm" && a?.dependency?.scope === "runtime",
+      prod: a?.dependency?.scope === "runtime" && typeof paket?.ecosystem === "string" && paket.ecosystem !== "" && paket.ecosystem !== "actions",
       fixVerfuegbar: fix !== undefined,
       fixVersion: fix,
     },
