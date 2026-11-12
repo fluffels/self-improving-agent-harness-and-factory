@@ -259,8 +259,8 @@ describe("Kern-Schnitt: Module der Ring-kern-Ableitung importieren nichts außer
   const KERN = kernPfade.flatMap((p) => /^scripts\/docs-gen\/([\w-]+)\.mjs$/.exec(p)?.[1] ?? []);
   // Die CommonJS-Kern-Module (Schicht-Kern, #1612) darf schichten.mjs laden (relativer Spezifizierer aus scripts/docs-gen/).
   const KERN_CJS = kernPfade.flatMap((p) => (/^scripts\/[\w-]+\.cjs$/.test(p) ? `../${p.slice("scripts/".length)}` : []));
-  // Die importfreien Kern-Blätter neben docs-gen/ (skill-pfade.mjs, regex-lib.mjs) dürfen geladen werden.
-  const KERN_SKRIPTE = ["skill-pfade", "regex-lib"].flatMap((n) => (kernPfade.includes(`scripts/${n}.mjs`) ? [`../${n}.mjs`] : []));
+  // Die importfreien Kern-Blätter neben docs-gen/ (skill-pfade.mjs, regex-lib.mjs, leitplanken-muster.mjs) dürfen geladen werden.
+  const KERN_SKRIPTE = ["skill-pfade", "regex-lib", "leitplanken-muster"].flatMap((n) => (kernPfade.includes(`scripts/${n}.mjs`) ? [`../${n}.mjs`] : []));
   test("die Ableitung aus dem Besitz-Manifest ist nicht leer und enthält den Schicht-Kern", () => {
     assert.ok(KERN.includes("schichten"), KERN.join());
     assert.ok(KERN_CJS.includes("../schichten-kern.cjs"), KERN_CJS.join());
