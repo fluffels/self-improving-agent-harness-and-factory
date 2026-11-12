@@ -1,7 +1,10 @@
 /* Gate-Fundquote (factory#39): Verhalten von scripts/gate-fundquote.mjs. Fixtures mit synthetischem Paket, IO ist injiziert. */
+import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gfModule from "../scripts/gate-fundquote.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { GATE_BEFEHL_NAMEN } from "../scripts/gate-befehl-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as vlModule from "../scripts/verify-lauf.mjs";
 
@@ -67,6 +70,17 @@ describe("gateSatz", () => {
     expect(s.gates).toEqual(["typecheck", "lint", "check:size", "test", "test:coverage"]);
     expect(s.verify).toEqual(["typecheck", "lint", "check:size", "test"]);
     expect(s.gates).not.toContain("docs:gen");
+  });
+  test("das echte package.json: gateSatz wirft nicht, jedes Gate ist ein Skript oder ein Gate-Befehl (L68)", () => {
+    const echt = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> };
+    const s = gf.gateSatz(echt);
+    expect(s.gates).toContain("check:diffcoverage");
+    expect(s.verify.length).toBeGreaterThan(0);
+    for (const g of s.gates) {
+      const befehl = /^gate-befehl:(\w+)$/.exec(g);
+      if (befehl) expect(GATE_BEFEHL_NAMEN as string[]).toContain(befehl[1]);
+      else expect(echt.scripts[g], g).toBeTypeOf("string");
+    }
   });
   test("wirft ohne verify", () => {
     expect(() => gf.gateSatz({ name: "x", scripts: { lint: "eslint ." } })).toThrow(/verify/);
