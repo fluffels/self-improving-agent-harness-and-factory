@@ -76,11 +76,11 @@ function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
   return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
 }
 
-/** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (vermutlich Projektkopie; geschrieben wird nichts). */
-function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies) {
+/** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (Modulkopie, factory#244; geschrieben wird nichts); `begruendet` sind die Pfade aus `modulKopien`. */
+function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies, begruendet) {
   return manifest.eintraege
-    .filter((e) => istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null)
-    .map((e) => `Modul '${e.modul}' nicht gewählt, im Ziel liegt ${e.pfad} (Projektkopie?): Modul wählen oder als Projektdatei führen`);
+    .filter((e) => istModulEinheit(e) && !modulGewaehlt(e, gewaehlt) && zielLies(e.pfad) !== null && !begruendet.includes(e.pfad))
+    .map((e) => `Modul '${e.modul}' nicht gewählt, im Ziel liegt ${e.pfad} (Modulkopie): Modul wählen, Datei löschen oder in modulKopien (${PROJEKT_CONFIG}) mit Grund führen`);
 }
 
 /** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
@@ -105,20 +105,21 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
 }
 
 /**
- * Modulwahl des Ziels (factory#119): `{ gewaehlt, fehler, meldungen }`. Nur wenn das Quell-Manifest Einheiten mit `modul` hat, wird die Ziel-Config gelesen;
+ * Modulwahl des Ziels (factory#119): `{ gewaehlt, fehler, meldungen, begruendet }` (`begruendet`: Pfade aus `modulKopien`). Nur wenn das Quell-Manifest Einheiten mit `modul` hat, wird die Ziel-Config gelesen;
  * ohne den Schlüssel `module` gilt der Standard, die Namen prüft `modulWahl` gegen das Quell-Manifest (ein neues Modul ist sofort wählbar).
  */
 function waehleModule(manifest, zielConfig) {
-  if (!manifestKenntModule(manifest)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [] };
+  if (!manifestKenntModule(manifest)) return { gewaehlt: MODUL_STANDARD, fehler: [], meldungen: [], begruendet: [] };
   let config;
   try {
     config = zielConfig();
   } catch (err) {
-    return { gewaehlt: [], fehler: [`Ziel-Config: ${err.message}`], meldungen: [] };
+    return { gewaehlt: [], fehler: [`Ziel-Config: ${err.message}`], meldungen: [], begruendet: [] };
   }
   const w = modulWahl(config, manifest, { configPfad: PROJEKT_CONFIG });
   const liste = (l) => (l.length > 0 ? l.join(", ") : "keine");
-  return { gewaehlt: w.gewaehlt, fehler: w.fehler, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
+  const begruendet = (config.modulKopien ?? []).map((k) => k.datei);
+  return { gewaehlt: w.gewaehlt, fehler: w.fehler, begruendet, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
 }
 
 /**
@@ -154,7 +155,7 @@ export function planeSync({
   const nachPfad = new Map();
   const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
   const verteilt = alle.filter((e) => !istVorlage(e));
-  res.meldungen.push(...projektkopienAbgewaehlt(manifest, wahl.gewaehlt, zielLies));
+  res.meldungen.push(...projektkopienAbgewaehlt(manifest, wahl.gewaehlt, zielLies, wahl.begruendet));
   const alt = leseAltStand(zielLies);
   for (const e of verteilt) nachPfad.set(e.pfad, [...(nachPfad.get(e.pfad) ?? []), e]);
   const { erg, fehler: ergFehler } = liesErgaenzungen(verteilt, quelleLies, zielLies);
