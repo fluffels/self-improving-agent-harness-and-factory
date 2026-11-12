@@ -212,7 +212,7 @@ export function entwurfLive({ gh, env, repo }) {
   return pr.draft;
 }
 
-/** Größenstufe nur zur Anzeige (factory#402 L26); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
+/** Größenstufe für die Anzeige (factory#402 L26) und die Bewertung von `entfaellt — klein` (factory#271); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
 const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
