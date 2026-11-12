@@ -114,7 +114,7 @@ const WORTANFANG = String.raw`(^|[^\w.:~\\/-])`;
 /** Das Kommando `gh issue create` an Kommandoposition oder hinter Trennern (Text in Quotes ist maskiert). */
 const ghUnterbefehl = (woerter) => new RegExp(String.raw`${WORTANFANG}(?:[\w.:~-]*[\\/])*gh(?:\.exe)?\s+(${woerter.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})(?![\w-])`, "i");
 /** Unumkehrbare gh-Unterbefehle (Pre-Flight-Stopp Löschen): gleich den ask/deny-`gh`-Regeln der settings.json ohne `issue create` (eigener Weg, #1693). */
-export const GH_DESTRUKTIV = Object.freeze(["issue delete", "issue transfer", "label delete", "project delete", "project item-delete", "project field-delete"]);
+export const GH_DESTRUKTIV = Object.freeze(["issue delete", "issue transfer", "label delete", "project delete", "project item-delete", "project field-delete", "repo delete"]);
 const GH_DESTRUKTIV_TREFFER = ghUnterbefehl(GH_DESTRUKTIV);
 const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${GH_DESTRUKTIV.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})\b`);
 const ISSUE_ANLEGEN = ghUnterbefehl(["issue create"]);
@@ -424,7 +424,7 @@ function ersetzung(segment, tiefe, command) {
 function segmentUrteil(segment, command, tiefe) {
   const maske = ohneQuoteInhalt(segment);
   const destruktiv = GH_DESTRUKTIV_TREFFER.exec(maske);
-  if (false && destruktiv) return frage(`\`gh ${destruktiv[2].replace(/\s+/g, " ")}\` ist unumkehrbar (Pre-Flight-Stopp Löschen)`, "factory#397");
+  if (destruktiv) return frage(`\`gh ${destruktiv[2].replace(/\s+/g, " ")}\` ist unumkehrbar (Pre-Flight-Stopp Löschen)`, "factory#397");
   if (ISSUE_ANLEGEN.test(maske)) return frage(`\`gh issue create\` legt ein Ticket an: ${ANLEGE_WEG}`, "#1693");
   const stellen = ghStellen(segment, maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele gh-api-Aufrufe für die Textprüfung");
