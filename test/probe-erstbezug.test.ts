@@ -213,6 +213,10 @@ describe("probeSchritte", () => {
     expect(schritte.find((s) => s.id === "sync-vorschau")?.argv?.slice(-2)).toEqual(["--entwurf", "--trocken"]);
   });
 
+  it("klont mit --no-local: kein Hardlink-Klon aus dem Objektspeicher des Checkouts (factory#383)", () => {
+    expect(schritte.find((s) => s.id === "klon")?.argv).toEqual(["git", "clone", "--no-local", "--quiet", "/q", join("/s", "quelle")]);
+  });
+
   it("enthält jeden mechanischen Update-Schritt aus UPDATE_SCHRITTE mit der Quelle des Scratch-Klons", () => {
     const erwartet = R.mechanischeSchritte(join("/s", "quelle"));
     const echt = schritte.filter((s) => ["lint-prune", "projektwerte", "docs-gen", "factorylinks"].includes(s.id)).map((s) => (s.argv as string[]).join(" "));

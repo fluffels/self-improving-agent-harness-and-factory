@@ -319,7 +319,7 @@ describe("CI-Zustand und Body", () => {
       expect(zeilen.indexOf("git -C <s>/quelle checkout --detach " + "b".repeat(40))).toBeGreaterThan(zeilen.indexOf("git -C <s>/quelle tag v1.3.0 " + "b".repeat(40)));
       expect(block).not.toMatch(/gate-befehl\.mjs verify(?!Kompakt)/);
       expect(block).toContain("fährt jeden Schritt auch nach einem Rot");
-      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verifyKompakt", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
+      for (const teil of ["rot heißt: nicht taggen", "nur lesend", "Klon im Scratch", "git clone --depth 1 https://github.com/<owner/name>.git", "git clone --no-local <checkout> <s>/quelle", "remote remove origin", "tag v1.3.0 " + "b".repeat(40), "--entwurf --trocken", "--tag v1.3.0", "node scripts/gate-befehl.mjs install", "npm run lint:prune", "node scripts/projektwerte.mjs --write", "npm run docs:gen", "npm run check:factorylinks -- --schreiben", "node scripts/gate-befehl.mjs verifyKompakt", "kein Rot durch Factory-Besitz", "Befund bzw. eine Bezieher-Migration", "node scripts/tag-takt.mjs --probe"]) {
         expect(block, teil).toContain(teil);
       }
     });
