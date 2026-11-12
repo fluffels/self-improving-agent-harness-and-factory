@@ -97,6 +97,7 @@ Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vol
 - **PR-gegated, ein PR pro Ticket.** Feature-Branch im Worktree, PR mit Body `Closes #<nr>`, Auto-Merge (`--squash --delete-branch --auto`), grün mergt, rot auf demselben Branch fixen. `main` ist serverseitig geschützt (kein Direkt-Push, kein `--no-verify`).
 - **Projekt-Stopps:** keine über die Kern-Liste hinaus.
 - **Fabrik ohne Zugriff auf Bezieher (factory#162, ADR 0031).** Ein Fabrik-Lauf schreibt nie in ein Bezieher-Repo (kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar); Bezieher holen Updates selbst (`factory-update.yml`), Auffälligkeiten werden Sammelticket-Zeilen „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“; erreicht ein Befund sein Ziel nicht, wird er ein Issue „Nicht eintragbar: …“ im eigenen Repo ([Mechanik](../../docs/ticket-reihenfolge.md#offene-punkte-der-maintainerin-factory152)). Die Regel gilt nur in der Fabrik und steht darum hier, nicht im Kern-Block.
+- **Harness-Sammelticket anlegen (factory#221).** Meldet `node scripts/melden.mjs` kein ungeclaimtes, legt es `node scripts/sammelticket-anlegen.mjs harness` an (Position 4 des Factory-Boards); `melden.mjs` legt nie an.
 
 ### Gates
 

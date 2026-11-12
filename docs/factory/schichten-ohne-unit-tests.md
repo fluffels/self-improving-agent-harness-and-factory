@@ -1,5 +1,7 @@
 # Schichten ohne Unit-Tests und das e2e-Gate-Profil
 
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
 Kern-Politik (factory#246): Wie ein Projekt mit Schichten umgeht, die sich nicht sinnvoll unit-testen lassen (Oberfläche, Einstieg, Framework-Anbindung), und wie es optional ein e2e-Gate zuschaltet. Konkrete Zahlen, Frameworks und Werkzeuge sind Projektwerte; diese Seite nennt keine.
 
 ## Geltung
@@ -9,7 +11,7 @@ Eine **Schicht ohne Unit-Tests** ist eine Schicht, deren Diff-Floor im Coverage-
 ## Floor
 
 - **Diff-Floor:** `scripts/check-diffcoverage.mjs` kennt je Schicht einen Mindestwert für die geänderten Zeilen. Für Schichten ohne Unit-Tests steht dort `null`, also nur berichtend. Die Werte sind Kern-Konstanten, kein Projektschlüssel.
-- **Aggregat-Floor:** In der Test-Config des Projekts steht je Schicht ein expliziter Floor über 0, niedrig, aber nicht 0 (kein stilles Absacken). Die Zahl ist ein Projektwert.
+- **Aggregat-Floor:** In der Test-Config des Projekts steht ein expliziter Floor über 0, niedrig, aber nicht 0 (kein stilles Absacken); trennt die Test-Config Schichten, steht er je Schicht, sonst einer für das ganze Repo. Die Zahl ist ein Projektwert.
 
 ## Ratchet
 
@@ -42,7 +44,7 @@ Opt-in, laufzeitneutral (CI plus Läufer, kein Claude- oder Codex-Adapter nötig
 }
 ```
 
-- `e2e.browser`: nicht leere Liste kleingeschriebener Namen ohne Doppelte (z. B. `a`, `b`); keine weiteren Schlüssel.
+- `e2e.browser`: nicht leere Liste von Namen aus Kleinbuchstaben, Ziffern und `-`, beginnend mit einem Buchstaben, ohne Doppelte (z. B. `a`, `b`); keine weiteren Schlüssel.
 - `befehle.e2e`: die Befehlszeile, die der Läufer `node scripts/gate-befehl.mjs e2e` startet.
 - Ein Teil ohne den anderen ist ein Config-Fehler mit `Fix:` (fail-closed); ein halb konfiguriertes Profil ist nie still.
 
