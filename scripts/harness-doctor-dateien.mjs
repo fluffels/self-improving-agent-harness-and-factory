@@ -378,12 +378,7 @@ export function codeownersPaths(text) {
 export function codeownersSpiegelProbleme(quelleText, codeownersText) {
   const sollMuster = pflichtReviewMuster(quelleText);
   if (sollMuster === null) return [".github/protected-paths.json nicht lesbar oder pflichtReview ist keine Liste"];
-  let hatGruppe;
-  try {
-    hatGruppe = JSON.parse(quelleText).pflichtReview !== undefined;
-  } catch {
-    hatGruppe = false;
-  }
+  const hatGruppe = JSON.parse(quelleText).pflichtReview !== undefined; // gültiges JSON: `pflichtReviewMuster` lieferte sonst null
   const probleme = [];
   if (hatGruppe && !trifftLeitplanke(".github/CODEOWNERS", sollMuster)) probleme.push("Gruppe pflichtReview ohne /.github/CODEOWNERS");
   const sollNorm = new Set(sollMuster.map(normalizeProtected));

@@ -889,6 +889,25 @@ describe("CODEOWNERS-Spiegel (factory#382 L11, L69)", () => {
     expect(punktFuer(QUELLE, SOLL, false).ok).toBe(true);
   });
 
+  test("Standard-Leser: liest unter rootDir, fehlende oder nicht lesbare Datei (Ordner statt Datei) bleibt ohne Befund", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "csp-"));
+    try {
+      const gh = join(wurzel, ".github");
+      mkdirSync(gh, { recursive: true });
+      const echt = () => punkt(pruefe({ rootDir: wurzel, ...GESUND, git: fakeGit(gesund), config: {} }), "CODEOWNERS-Spiegel");
+      expect(echt().ok).toBe(true); // beide fehlen
+      writeFileSync(join(gh, "protected-paths.json"), JSON.stringify({ a: ["/scripts/a.mjs"] }));
+      writeFileSync(join(gh, "CODEOWNERS"), "/anderes/ @team\n");
+      expect(echt().ok).toBe(false); // gelesen: weicht ab
+      rmSync(join(gh, "CODEOWNERS"));
+      mkdirSync(join(gh, "CODEOWNERS"));
+      const e = echt();
+      expect(e.ok).toBe(true); // existiert, aber nicht lesbar: kein Wurf
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
   test("(f) kaputtes JSON oder eine Gruppe, die keine Liste ist: Lücke mit Grund, kein Wurf", () => {
     for (const quelle of ["{kaputt", JSON.stringify({ pflichtReview: "x" })]) {
       const p = punktFuer(quelle, SOLL);
