@@ -1,4 +1,8 @@
 /* @harness-waechter: Codex-Hook-Adapter und Schreibziel-Route des Dispatchers (factory#364); K4/K5 je Muster Red-Green. */
+/* Herkunft der Fixtures (K1, docs/codex/einstieg.md § Codex-Hook-Schnittstelle): dokumentiert sind die Payload-Felder (`cwd`, `tool_name`, `tool_input.command`), `tool_name: "Bash"` und
+ * `"apply_patch"` mit dem Patchtext in `tool_input.command` sowie die Deny-Form; `spawn_agent` folgt dem dokumentierten Aufrufbeispiel `collaboration.spawn_agent({ agent_type, message })` aus
+ * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht). Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
+ * der Alias `Agent` und die Patch-Direktiven; sie stehen in Tests mit dem Zusatz „Annahme“. */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, symlinkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -83,7 +87,7 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
     expect((await lauf(nutzlast("Bash", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect((await lauf(nutzlast("exec_command", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
   });
-  test("workdir gilt als cwd", async () => {
+  test("Annahme (undokumentiert): workdir gilt als cwd", async () => {
     expect(await lauf(nutzlast("Bash", { command: "git commit --allow-empty -m x", workdir: haupt }, wt))).not.toBeNull();
   });
   test("Schreiben außerhalb des eigenen Worktrees: apply_patch Add File im Haupt-Checkout", async () => {
@@ -135,8 +139,8 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     ["Payload ohne tool_name", () => "{}"],
     ["tool_input fehlt", () => nutzlast("Bash", undefined)],
     ["command als Array", () => nutzlast("Bash", { command: ["git", "status"] })],
-    ["command als Zahl", () => nutzlast("exec_command", { command: 5 })],
-    ["workdir als Zahl", () => nutzlast("Bash", { command: "ls", workdir: 5 })],
+    ["Annahme: exec_command mit command als Zahl", () => nutzlast("exec_command", { command: 5 })],
+    ["Annahme: workdir als Zahl", () => nutzlast("Bash", { command: "ls", workdir: 5 })],
     ["Patch ohne Begin Patch", () => nutzlast("apply_patch", { command: "*** Add File: a\n+x\n*** End Patch" })],
     ["Patch ohne End Patch", () => nutzlast("apply_patch", { command: "*** Begin Patch\n*** Add File: a\n+x\n" })],
     ["Patch mit leerem Ziel", () => nutzlast("apply_patch", { command: patch("*** Add File:  ", "+x") })],
