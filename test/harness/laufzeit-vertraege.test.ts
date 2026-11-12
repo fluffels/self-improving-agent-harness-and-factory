@@ -125,6 +125,9 @@ test("V3 Negativfälle: Hook ohne Zeile, Zeile ohne Hook, Grenze ohne Ticket, Ad
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: factory#365" }], {})[0]).toContain("Codex-Ereignis"); // Ticket ohne Ereignis
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStartX factory#365" }], {})).toHaveLength(1); // Teilwort zählt nicht
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#249" }], {})).toEqual([]);
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: quellprojekt#12" }], {})).toEqual([]); // beide Herkünfte
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: factory#" }], {})).toHaveLength(1); // Nummer fehlt
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "xSessionStart factory#365" }], {})).toHaveLength(1); // Teilwort davor
   const quellen: Record<string, string> = { "scripts/codex-x.mjs": 'import { a } from "./m.mjs";', "scripts/m.mjs": "export const a = 1;" };
   const lies = (p: string) => { if (!(p in quellen)) throw new Error(`nicht da: ${p}`); return quellen[p]; };
   const imp = { "scripts/codex-x.mjs": quellen["scripts/codex-x.mjs"] };
@@ -155,6 +158,7 @@ test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Ab
   expect(v5(doku(`${alle}, \`NeuesEreignis\` abgerufen am 2026-11-12`))).toHaveLength(1);
   expect(v5(doku(alle))[0]).toContain("Abrufdatum");
   expect(v5(doku(`${alle} abgerufen am gestern`))).toHaveLength(1);
+  expect(v5(`# Titel\n\n${ABSCHNITT}\n\n${alle}. abgerufen am 2026-11-12.\n`)).toEqual([]); // letzter Abschnitt der Seite
 });
 test("V4 Negativfall: zu große AGENTS.md", () => {
   expect(v4(CODEX_AGENTS_MAX_BYTES)).toEqual([]);

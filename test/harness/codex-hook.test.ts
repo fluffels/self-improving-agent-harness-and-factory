@@ -4,7 +4,7 @@
  * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht). Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
  * der Alias `Agent` und die Patch-Direktiven. Tests, die nur eine Annahme prüfen, tragen den Zusatz „Annahme“; `exec_command` und `Agent` erscheinen zusätzlich in einzelnen Mischtests
  * (K4-Muster, sauberer Lens-Auftrag, Werkzeugtabelle), `workdir` im Test der Fehlerursachen, und jede `apply_patch`-Fixture nutzt die angenommene Patch-Grammatik (die Hook-Seite beschreibt sie nicht). */
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, symlinkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -299,13 +299,45 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
     expect(await lauf(nutzlast("update_plan", {}), d)).toBeNull();
     expect(grund(await lauf(nutzlast("spawn_agent", { agent_type: "x", message: 3 }), d))).toContain("message");
   });
-  test("Standardprüfung: ohne deps.health fragt der Adapter die Umgebung (LANGFUSE_BASE_URL) ab", async () => {
-    const alt = process.env.LANGFUSE_BASE_URL;
-    process.env.LANGFUSE_BASE_URL = "http://127.0.0.1:1"; // nichts hört dort: Verbindung verweigert
+  test("Standardprüfung: ohne deps.health fragt der Adapter die Umgebung ab (global fetch, LANGFUSE_BASE_URL), Erreichbarkeit lässt durch", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); });
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
     try {
-      expect(grund(await adapter.entscheide(spawn, haupt))).toContain("Tracing-Ausfallstopp");
+      expect(await adapter.entscheide(spawn, haupt)).toBeNull();
+      expect(urls).toEqual(["http://lf.test/api/public/health"]);
     } finally {
-      if (alt === undefined) delete process.env.LANGFUSE_BASE_URL; else process.env.LANGFUSE_BASE_URL = alt;
+      vi.unstubAllGlobals(); vi.unstubAllEnvs();
     }
+  });
+  test("Standardprüfung: Ausfall nennt den Grund der Health-Prüfung (kein Ladefehler)", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(Object.assign(new Error("x"), { code: "ECONNREFUSED" })));
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
+    try {
+      expect(grund(await adapter.entscheide(spawn, haupt))).toContain("Langfuse nicht erreichbar: ECONNREFUSED");
+    } finally {
+      vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+  test("Standardfrist der Umgebungsprüfung ist FRIST_MS (3000 ms) auch im Hook-Pfad", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", (_u: string, o: { signal: AbortSignal }) => new Promise((_r, rej) => o.signal.addEventListener("abort", () => rej(new Error("abort")))));
+    vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
+    try {
+      const hang = adapter.entscheide(spawn, haupt);
+      await vi.advanceTimersByTimeAsync(2999);
+      let fertig = false; void hang.then(() => { fertig = true; });
+      await vi.advanceTimersByTimeAsync(0); expect(fertig).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(grund(await hang)).toContain("Timeout nach 3000 ms");
+    } finally {
+      vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+  test("Urteil ohne Auskunft: nur ok === true lässt durch, Grund-Fallback und Nicht-Error-Wurf", async () => {
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: false }) }))).toContain("Health ohne Urteil");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve(undefined) }))).toContain("Health ohne Urteil");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: "ja" }) }))).toContain("Tracing-Ausfallstopp");
+    expect(grund(await lauf(spawn, { health: () => Promise.reject("textwurf") }))).toContain("textwurf");
   });
 });

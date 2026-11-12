@@ -31,7 +31,7 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
   }
 }
 
-/** Health-Prüfung für die Adresse aus der Umgebung (siehe Kopf); fetch, Frist und Dateizugriff sind injizierbar. Wirft nie. */
+/** Health-Prüfung für die Adresse aus der Umgebung (siehe Kopf); fetch, Frist und Dateizugriff sind injizierbar. Wirft nur bei unbrauchbarer Umgebung (`env` ohne Objekt); die Aufrufer fangen das. */
 export async function pruefeLangfuseAusUmgebung({ env = process.env, home = homedir(), lies, fetchImpl = fetch, fristMs = FRIST_MS } = {}) {
   const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
   return pruefeLangfuse({ baseUrl, fetchImpl, fristMs });

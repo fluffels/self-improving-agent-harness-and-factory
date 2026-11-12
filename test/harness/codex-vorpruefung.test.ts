@@ -1,9 +1,11 @@
 /* @harness-waechter: Freigabe nur über die Freigabetabelle mit fünf Belegen, Offline-Belege allein schalten nichts frei. */
 import { afterEach, expect, test, vi } from "vitest";
 const spawnMock = vi.hoisted(() => vi.fn());
-vi.mock("node:child_process", async (orig) => ({ ...(await orig<typeof import("node:child_process")>()), spawnSync: spawnMock }));
+const echtSpawn = vi.hoisted(() => ({ fn: undefined as unknown as typeof import("node:child_process").spawnSync }));
+vi.mock("node:child_process", async (orig) => { const echt = await orig<typeof import("node:child_process")>(); echtSpawn.fn = echt.spawnSync; return { ...echt, spawnSync: spawnMock }; });
+const realSpawn: typeof import("node:child_process").spawnSync = (...a: Parameters<typeof import("node:child_process").spawnSync>) => echtSpawn.fn(...a);
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as raw from "../../scripts/codex-vorpruefung.mjs";
@@ -253,4 +255,35 @@ test("Tracing: werfende Prüfung ergibt einen Mangel, kein Absturz; Standardfris
   } finally {
     vi.useRealTimers();
   }
+});
+test("Tracing-Standardwerte: global fetch, process.env, Home für die Plugin-Optionen, Rückfall localhost:3000", async () => {
+  const urls: string[] = [];
+  vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); });
+  vi.stubEnv("LANGFUSE_BASE_URL", "http://env.test");
+  try {
+    expect(await p.tracingMaengel({})).toEqual([]);
+    expect(urls).toEqual(["http://env.test/api/public/health"]);
+    urls.length = 0;
+    const gelesen: string[] = [];
+    const ohneSettings = (pfad: string) => { gelesen.push(pfad); throw new Error("keine Settings"); };
+    expect(await p.tracingMaengel({ env: {}, lies: ohneSettings })).toEqual([]);
+    expect(urls).toEqual(["http://localhost:3000/api/public/health"]);
+    expect(gelesen[0].startsWith(homedir())).toBe(true);
+    urls.length = 0;
+    const settings = () => JSON.stringify({ pluginConfigs: { "langfuse@x": { options: { LANGFUSE_BASE_URL: "http://plugin.test/" } } } });
+    expect(await p.tracingMaengel({ env: {}, lies: settings })).toEqual([]);
+    expect(urls).toEqual(["http://plugin.test/api/public/health"]);
+  } finally {
+    vi.unstubAllGlobals(); vi.unstubAllEnvs();
+  }
+});
+test("Tracing: Nicht-Error-Wurf der Prüfung erscheint im Mangel", async () => {
+  const bos = new Proxy({}, { get() { throw "textwurf"; } });
+  const m = await p.tracingMaengel({ env: bos, fetchImpl: () => Promise.resolve({ status: 200 }) });
+  expect(m).toHaveLength(1); expect(m[0]).toContain("Health-Prüfung gescheitert (textwurf)");
+});
+test("CLI-Einstieg als Prozess: Langfuse unerreichbar ergibt Exit 1 und den Mangel „Tracing-Ausfall“", () => {
+  const r = realSpawn(process.execPath, [join(process.cwd(), "scripts", "codex-vorpruefung.mjs")], { encoding: "utf8", env: { ...process.env, LANGFUSE_BASE_URL: "http://127.0.0.1:1" } });
+  expect(r.status).toBe(1);
+  expect(r.stdout).toContain("Tracing-Ausfall: Langfuse nicht erreichbar");
 });
