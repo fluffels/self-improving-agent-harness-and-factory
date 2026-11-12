@@ -408,6 +408,38 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`git -C '${fremd}' push`), false);
   });
 
+  test("L77: Lesebefehle mit Bindestrich-Komposita (commit-graphs, pre-commit) und git config blocken nicht", () => {
+    const hook = join(repoRoot, ".git", "hooks", "pre-commit");
+    for (const cmd of [
+      "ls .git/objects/info/commit-graphs",
+      `ls ${hook}`,
+      "git config --get-regexp 'core\\.commitgraph'",
+      `for i in 1 2; do git -C /tmp/nicht-existent-382 -c gc.auto=0 commit -m m; done`,
+    ]) {
+      const r = decide({ cwd: repoRoot, command: cmd, repoRoot, deps: fsFake([wt]) });
+      assert.equal(r.block, false, cmd);
+      assert.notEqual(r.ask, true, cmd);
+    }
+  });
+
+  test("L77: echte commit/push-Aufrufe blocken weiter (Pfad, Großschreibung, -c, Interpreter)", () => {
+    for (const cmd of [
+      "git commit -m x",
+      "git push",
+      "/usr/bin/git commit",
+      "git -c gc.auto=0 commit -m x",
+      `node -e "require('child_process').execSync('git commit -m x')"`,
+      `bash -c "git commit -m x"`,
+    ]) {
+      assert.equal(run(cmd), true, cmd);
+    }
+  });
+
+  test("L77: cd \$VAR && git commit bleibt ask (fail-closed, statisch nicht bestimmbar)", () => {
+    const r = decide({ cwd: repoRoot, command: "cd $ZIEL && git commit -m x", repoRoot, deps: fsFake([wt]) });
+    assert.ok(r.block || r.ask === true);
+  });
+
   test("die Meldung nennt den Haupt-Checkout und beide erlaubten Wege", () => {
     const r = decide({ cwd: repoRoot, command: "git commit -m x", repoRoot, deps: fsFake([wt]) });
     assert.match(r.reason ?? "", /git -C <worktree>.*cd <worktree> && git/s);
