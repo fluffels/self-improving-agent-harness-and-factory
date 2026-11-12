@@ -226,7 +226,7 @@ describe("dependabotAusschlussPunkt", () => {
     luecke(pruefe("updates:\n  - package-ecosystem: github-actions # Aktionen\n")[0], "Kommentar");
   });
   test("dependabotEintraege: nur NichtLesbar wird zu `{ fehler }`, jeder andere Fehler wird weitergeworfen", () => {
-    expect(lib.dependabotEintraege("42\n")).toMatchObject({ fehler: expect.any(String) });
+    expect(typeof lib.dependabotEintraege("42\n").fehler).toBe("string");
     expect(() => lib.dependabotEintraege(null as unknown as string)).toThrow(TypeError);
   });
   test("Fallback .github/dependabot.yaml, wenn die .yml fehlt (die .yml gilt zuerst); der Befund nennt die gelesene Datei", () => {
