@@ -23,9 +23,9 @@
  *
  *   `Leitplanken-Quelle` (factory#149): der Fitness-Anteil von harness-approval gegen die eigene Quelle des Beziehers (`.github/protected-paths.json` über `schutzlistenMuster`/`trifftLeitplanke`, `.github/CODEOWNERS`, die getrackten Dateien).
  *   Teilregeln (dieselben Funktionen `ankerFunde`, `agentsFunde` und `waechterAusserhalb` ruft der Kern-Wächter harness-approval), eine Lücke nennt alle Funde: (a) CODEOWNERS schützt genau die Pfadmenge der Pflicht-Review-Liste (ohne Gruppe der ganzen Quelle) und spiegelt deren Anker-Form; (b) die Quelle enthält `AGENTS.md` unverankert;
- *   (c) keine Datei mit dem Wächter-Marker als eigener Kommentarzeile liegt nur unter `test/harness/`; (d) keine Kopie der Pre-Flight-Kriterien außerhalb von `AGENTS.md`, `docs/adr/` und den Ankerdateien; (e) keine abgelöste Label-Mechanik außerhalb von `docs/adr/`.
+ *   (c) eine Datei mit dem Wächter-Marker als eigener Kommentarzeile liegt nur unter `test/harness/`; (d) keine Kopie der Pre-Flight-Kriterien außerhalb von `AGENTS.md`, `docs/adr/` und den Ankerdateien; (e) keine abgelöste Label-Mechanik außerhalb von `docs/adr/`.
  *   Die Muster stehen in leitplanken-muster.mjs. Fehlt die Quelle oder ist sie kein JSON, ist Git nicht lesbar oder der Index leer, ist der Punkt nicht prüfbar; fehlt CODEOWNERS bei vorhandener Quelle, ist es eine Lücke.
- *   Grenzen: (c) liest den Agenten-Kontext mit Scan-Endung und die getrackten `*.test.ts` unter `test/`, (d) und (e) nur den Agenten-Kontext mit Scan-Endung; der Marker gilt als `/*`-, `*`- oder `//`-Kommentarzeile; ein umformulierter Begriff und eine ungetrackte Datei bleiben unsichtbar.
+ *   Grenzen: (c) liest den Agenten-Kontext mit Scan-Endung und die getrackten `*.test.ts` unter `test/`, (d) und (e) nur den Agenten-Kontext mit Scan-Endung; der Marker gilt als `/*`-, `*`- oder `//`-Kommentarzeile (auch ein Codeblock in einer Doku-Seite, der den Marker so zeigt, ist ein Fund); ein umformulierter Begriff und eine ungetrackte Datei bleiben unsichtbar.
  *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *

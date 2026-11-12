@@ -93,7 +93,7 @@ describe("waechterAusserhalb (Modul)", () => {
     expect(waechterAusserhalb({ "test/a/b/w.test.ts": MARKER })).toHaveLength(1);
     // auch jede Datei des Agenten-Kontexts, mit //-Kommentar und ohne test/-Ordner
     expect(waechterAusserhalb({ "scripts/pruef.mjs": "// @harness-waechter\n", "test/unit/w.test.ts": "// @harness-waechter\n", "docs/w.md": "@harness-waechter\n" })).toHaveLength(3);
-    expect(waechterAusserhalb({ "scripts/t.mjs": "// siehe @harness-waechter im Text\n", "assets/n.txt": MARKER, "test/harness/x.test.ts": "// @harness-waechter\n" })).toEqual([]);
+    expect(waechterAusserhalb({ "scripts/t.mjs": "// siehe @harness-waechter im Text\n", "assets/n.txt": MARKER, "test/harness/x.test.ts": "// @harness-waechter\n", "scripts/x.txt": MARKER, "scripts/z.mjs": "foo(); // @harness-waechter\n" })).toEqual([]);
   });
 });
 
