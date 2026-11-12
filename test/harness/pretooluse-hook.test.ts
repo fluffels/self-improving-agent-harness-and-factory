@@ -328,7 +328,7 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
     assert.deepEqual({ ...tabellen.SHELL_VON_TOOL }, { Bash: "bash", PowerShell: "powershell" });
     assert.equal(Object.isFrozen(tabellen.SHELL_VON_TOOL), true);
     assert.deepEqual(ghRaw.GEPRUEFTE_TOOLS, Object.keys(tabellen.SHELL_VON_TOOL));
-    for (const quelle of ["scripts/pretooluse-hook.mjs", "scripts/gh-guard-hook.mjs"]) {
+    for (const quelle of ["scripts/pretooluse-dispatch.mjs", "scripts/gh-guard-hook.mjs"]) {
       const text = lies(quelle);
       assert.match(text, /SHELL_VON_TOOL/, `${quelle} nutzt die Tabelle`);
       assert.doesNotMatch(text, /tool === "PowerShell" \? "powershell"|tool === "Bash" \? "bash"/, `${quelle}: keine zweite Zuordnung`);
@@ -342,7 +342,7 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
   });
 
   test("jeder Guard (Direktaufruf, als Lib des Dispatchers gekennzeichnet oder vom Dispatcher importiert) trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
-    const vomDispatcher = new Set([...lies("scripts/pretooluse-hook.mjs").matchAll(/from "\.\/([\w-]+\.mjs)"/g)].map((m) => m[1]));
+    const vomDispatcher = new Set([...`${lies("scripts/pretooluse-hook.mjs")}\n${lies("scripts/pretooluse-dispatch.mjs")}`.matchAll(/from "\.\/([\w-]+\.mjs)"/g)].map((m) => m[1]));
     const guards = readdirSync(resolve(WURZEL, "scripts")).filter(
       (n) => /guard.*\.mjs$/.test(n) && (vomDispatcher.has(n) || lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)") || lies(`scripts/${n}`).startsWith("// Kein Einstieg, kein Direktaufruf")),
     );
