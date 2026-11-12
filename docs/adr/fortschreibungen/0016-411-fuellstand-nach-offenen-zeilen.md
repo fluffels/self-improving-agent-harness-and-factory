@@ -1,4 +1,4 @@
-# Fortschreibung factory#411 (2026-11-12): Füllstand nach offenen Befund-Zeilen
+# Fortschreibung #411 (2026-11-12): Füllstand nach offenen Befund-Zeilen
 
 Ergänzt [ADR 0016](../0016-langfuse-takt-woechentlich.md) und löst die Zählweise „je Kommentar“ der [Fortschreibung quellprojekt#1888](0016-1888-haertungs-takt-nach-fuellstand.md) samt Nachtrag factory#215 ab. Schwelle, Auswahl und Takt-Mechanik bleiben.
 
