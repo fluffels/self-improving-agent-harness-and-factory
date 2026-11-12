@@ -298,7 +298,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 
 ## 3a. Langfassung der harten Regeln (ausgelagert aus AGENTS.md)
 
-> Wörtlich aus [AGENTS.md](../AGENTS.md) ausgelagert (quellprojekt#1064): dort steht jetzt nur die knappe Regel, hier die Langbegründung + Historie. **Bei Konflikt gilt AGENTS.md.** Die Gate-Regeln stehen je Gate in §3; hier stehen Ablauf, Review und Eskalation, auch dort, wo die CI die Spur prüft (Review-, Plan- und Abnahme-Nachweis, Post-hoc-Alarm).
+> Wörtlich aus [AGENTS.md](../AGENTS.md) ausgelagert (quellprojekt#1064): dort steht jetzt nur die knappe Regel, hier die Langbegründung + Historie. **Bei Konflikt gilt AGENTS.md.** Die Gate-Regeln stehen je Gate in §3; hier stehen Ablauf, Review und Eskalation, auch dort, wo die CI die Spur prüft (Review-, Plan- und Abnahme-Nachweis, Post-hoc-Alarm). Lesart: „Gate-Regel“ meint die Gates mit eigenem §3-Abschnitt; die Nachweis-Prüfungen (`check-review-nachweis`, `check-abnahme-nachweis`) bleiben als Ablaufregel mit ihrer CI-Spur hier, weil ein Umzug über 20 Stellen am Anker dieses Abschnitts träfe.
 
 ### Ablauf, Review und Eskalation
 
