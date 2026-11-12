@@ -20,7 +20,7 @@ const SPIEGEL = {
 const live = (ueber: Record<string, unknown> = {}) => ({
   name: "main-schutz",
   rules: [
-    { type: "required_status_checks", parameters: { required_status_checks: [{ context: "B" }, { context: "A" }] } },
+    { type: "required_status_checks", parameters: { required_status_checks: [{ context: "B", integration_id: 15368 }, { context: "A", integration_id: 15368 }] } },
     { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL", security_alerts_threshold: "high_or_higher", alerts_threshold: "errors" }] } },
   ],
   bypass_actors: [],
@@ -31,8 +31,11 @@ const lauf = (antwort: unknown, spiegel: unknown = SPIEGEL) => pruefe({ spiegel,
 describe("Ruleset-Spiegel: Punkt nur auf Anforderung (rulesetPunkte)", () => {
   const { id: _id, ...ohneId } = SPIEGEL;
   void _id;
-  test("mit lesen und id: genau ein Punkt", () => {
-    expect(punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => live() })).toHaveLength(1);
+  test("mit lesen und id: Spiegel-Punkt und Pin-Punkt aus einem Lesevorgang", () => {
+    let n = 0;
+    const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => (n++, live()) });
+    expect(x.map((e) => e.punkt)).toEqual(["Ruleset-Spiegel", "Required-Check-Pin"]);
+    expect(n).toBe(1);
   });
   test("ohne lesen (Wochenlauf, --einrichten): kein Punkt", () => {
     expect(punkte({ spiegel: SPIEGEL, repo: "o/r" })).toEqual([]);
@@ -110,5 +113,48 @@ describe("Ruleset-Spiegel: NICHT PRÜFBAR (fail-closed)", () => {
   });
   test("Antwort ist kein Objekt", () => {
     expect(lauf(null).nichtPruefbar).toBe(true);
+  });
+});
+
+describe("Required-Check-Pin (factory#362 L48): integration_id je Required Check", () => {
+  const mit = (checks: unknown[]) => live({ rules: [{ type: "required_status_checks", parameters: { required_status_checks: checks } }] });
+  const pin = (antwort: unknown) => punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => antwort }).find((e) => e.punkt === "Required-Check-Pin");
+  test("ohne integration_id: Lücke mit den Kontexten und Fix-Text", () => {
+    const x = pin(mit([{ context: "Zeta" }, { context: "Beta", integration_id: 15368 }, { context: "Gamma", integration_id: null }, { context: "Alpha" }]));
+    expect(x?.ok).toBe(false);
+    expect(x?.nichtPruefbar).toBeUndefined();
+    expect(x?.befund).toContain("Alpha, Gamma, Zeta");
+    expect(x?.befund).not.toContain("Beta");
+    expect(x?.fix).toContain("integration_id");
+    expect(x?.fix).toContain("check-runs");
+    expect(x?.fix).toContain("Pre-Flight");
+  });
+  test("alle gepinnt: OK", () => {
+    expect(pin(mit([{ context: "A", integration_id: 15368 }]))?.ok).toBe(true);
+  });
+  test("keine required_status_checks-Regel: kein eigenes Ergebnis", () => {
+    expect(pin(live({ rules: [] }))).toBeUndefined();
+  });
+  test("rules fehlt oder Regel ohne parameters: kein Pin-Ergebnis", () => {
+    const { rules: _r, ...ohneRules } = live();
+    void _r;
+    expect(pin(ohneRules)).toBeUndefined();
+    expect(pin(live({ rules: [{ type: "required_status_checks" }] }))).toBeUndefined();
+  });
+  test("andere Regel mit gleichnamigem Parameter zählt nicht", () => {
+    const fremd = { type: "code_scanning", parameters: { required_status_checks: [{ context: "X" }] } };
+    expect(pin(live({ rules: [fremd, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "A", integration_id: 1 }] } }] }))?.ok).toBe(true);
+  });
+  test("Antwort ist kein Objekt: Pin-Punkt nicht prüfbar", () => {
+    expect(pin(null)?.nichtPruefbar).toBe(true);
+  });
+  test("Lesefehler: Pin-Punkt nicht prüfbar", () => {
+    const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => { throw new Error("HTTP 403"); } }).find((e) => e.punkt === "Required-Check-Pin");
+    expect(x?.nichtPruefbar).toBe(true);
+  });
+  test("bypass_actors fehlt: Pin-Punkt nicht prüfbar", () => {
+    const { bypass_actors: _w, ...ohne } = mit([{ context: "A" }]);
+    void _w;
+    expect(pin(ohne)?.nichtPruefbar).toBe(true);
   });
 });

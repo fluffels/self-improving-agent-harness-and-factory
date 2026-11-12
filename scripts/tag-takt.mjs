@@ -65,6 +65,9 @@ const zelle = (x) =>
     .trim()
     .slice(0, 120) || "-";
 
+/** Migrationszeile als Listenpunkt: Zeilenumbrüche zu Leerzeichen, Backticks bleiben, keine Kappung (ein zu großer Body scheitert laut beim Anlegen). Pur. */
+const migrationsText = (x) => String(x ?? "").replace(/[\r\n]+/g, " ").trim() || "-";
+
 /** Pur: Commits aus `git log --first-parent --format=%x1e%H%x1f%cI%x1f%B%x1f --name-only --no-renames` als `{ sha, datum, betreff, body, dateien[] }`. */
 export function commitsAusLog(text) {
   return String(text)
@@ -313,7 +316,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     ...zeilen,
     "",
     "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen):",
-    ...(migrationen.length + ankerNeu.length > 0 ? [...migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`), ...ankerNeu.map((a) => `- Ankerliste: \`${a}\` neu (Bezieher mit eigener Seite braucht die Überschrift)`)] : ["- keine gemeldet"]),
+    ...(migrationen.length + ankerNeu.length > 0 ? [...migrationen.map((m) => `- ${m.pr} ${migrationsText(m.text)}`), ...ankerNeu.map((a) => `- Ankerliste: \`${a}\` neu (Bezieher mit eigener Seite braucht die Überschrift)`)] : ["- keine gemeldet"]),
     "",
     "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
     "",
