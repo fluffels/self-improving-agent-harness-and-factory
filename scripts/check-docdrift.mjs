@@ -35,7 +35,7 @@
  *        (a) `<pfad>.md › <Abschnitt>`           (b) `<pfad>.md § <Abschnitt>` (auch `§2a`; deckt `AGENTS.md § …` ab)
  *        (c) Ketten `<pfad>.md › A › B`: jedes Segment wird gegen dieselbe Zieldatei geprüft.
  *        (d) Zitatform `<pfad>.md › „A“` / `§ „A“` (factory#403): nur das erste Zitat, gegen dieselbe Zieldatei.
- *            Nicht erkannt: schließendes ” (U+201D), die Form ‚A‘ und die Fabrik-Form `<pfad>.md (Fabrik) › „A“` (sie prüft nur die Fabrik).
+ *            Der Lookbehind der Regex ist gleichwertig zum Pfadanfang (leftmost-greedy), keine Sabotage-Form. Nicht erkannt: schließendes ” (U+201D), die Form ‚A‘ und die Fabrik-Form `<pfad>.md (Fabrik) › „A“` (sie prüft nur die Fabrik).
  *      Der Abschnittstext endet am Zeilenende oder an Backtick, `"`, `“`, `”`, `„`, `]`, `|`.
  *      Gescannt: alle Markdown-Dateien des Gates plus `scripts/**` (`.mjs`, `.cjs`, `.js`: Kommentare und
  *      Strings); in Markdown sind Code-Fences und Inline-Code maskiert. Übersprungen: Abschnitt mit `<`

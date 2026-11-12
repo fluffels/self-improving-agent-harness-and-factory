@@ -17,7 +17,7 @@
  * Formenliste der Verweise auf AGENTS.md (geschlossen, Abgleich mit `abschnittTrifft` gegen die Titel, Wortgrenze wie in check:docdrift):
  *   (1) `AGENTS.md § A` / `› A` (Muster 8), (2) `AGENTS.md (§ A`, (3) `Projekt-Block › A` / `§ A`: in allen Kern-Einheiten (Besitz-Spannen), Ziel Kern-Block bzw. Vorlage
  *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"` (auch `AGENTS.md § „A"`, Muster 8 sieht `„` nicht):
- *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente nur im Zitat `„A … B“`; im freien Text trennt `…` ebenso, das Fragment danach wird wie ein eigener Begriff geprüft). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
+ *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente im Zitat `„A … B“`; im freien Text trennt `…` ebenso, das Fragment danach wird wie ein eigener Begriff geprüft). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
  *   gegen die ganze AGENTS.md. Ein `CLAUDE.md`-Ziel ist immer rot (die Datei ist verboten).
  *
  * Ankerliste: sortiertes JSON `test/harness/kern-link-anker.json`; sie wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile, `tag-takt` führt neue Einträge seit dem
@@ -116,6 +116,7 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
     assert.ok(meldung.includes("„docs/seite.md › Echte Überschrift und mehr“"), meldung);
     const zweizeilig = strengeFunde(mit("Siehe docs/seite.md › Echte Überschrift\nnächste Zeile\n"), LISTE).funde[0];
     assert.equal(zweizeilig.text, "docs/seite.md › Echte Überschrift", "der Text endet am Zeilenende");
+    assert.equal(strengeFunde(mit("Siehe docs/seite.md › Echte Überschrift   \r\nx\n"), LISTE).funde[0].text, "docs/seite.md › Echte Überschrift", "getrimmt (Leerraum, CR)");
     const lang = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(200)}\n`), LISTE).funde[0];
     const genau = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(80 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
     const eins = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(81 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
@@ -691,6 +692,7 @@ describe("Präfix-Literale in Besitz-Text (factory#403 L25)", () => {
     for (const davor of ["1", "_", "-"]) assert.deepEqual(lauf(`x${davor}${COMMIT}Plan:\n`), [], `nach ${davor}`);
     assert.deepEqual(praefixFunde(mit("skill.md", "axb- und a.b- hier\n"), ["a.b-"], TEXT).funde.map((f) => f.stelle), ["a.b- hier"], "Sonderzeichen im Wert sind wörtlich");
     assert.deepEqual(praefixFunde(mit("skill.md", `x ${COMMIT}Plan: y\nzweite\n`), WERTE, TEXT).funde.map((f) => f.stelle), [`${COMMIT}Plan: y`], "Kontext endet am Zeilenende");
+    assert.deepEqual(praefixFunde(mit("skill.md", "A-B-x\n"), ["A-", "A-B-"], TEXT).funde.map((f) => f.literal), ["A-B-"], "längster Wert zuerst, auch bei unsortierter Eingabe");
     const branch = WERTE.find((w) => w.includes("/")) ?? "";
     assert.deepEqual(lauf(`git switch -c ${branch}1-x\n`), [branch]);
     assert.equal(lauf(`.claude/worktrees/${WERTE[WERTE.length - 1]}1\n`).length, 1);

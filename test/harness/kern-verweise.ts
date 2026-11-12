@@ -269,7 +269,7 @@ export function praefixWerte(wurzel: string): string[] {
  */
 export function praefixFunde(wurzel: string, werte: string[], endung: RegExp): { funde: PraefixFund[]; dateien: number } {
   if (werte.length === 0) return { funde: [], dateien: 0 };
-  const maskiert = werte.map((w) => escapeRegex(w).replace(/\\-/g, "-")); // Flag u: `\-` außerhalb einer Zeichenklasse ist ungültig
+  const maskiert = [...werte].sort((a, b) => b.length - a.length).map((w) => escapeRegex(w).replace(/\\-/g, "-")); // Flag u: `\-` außerhalb einer Zeichenklasse ist ungültig
   const muster = new RegExp(`(?<![\\p{L}\\p{N}_-])(${maskiert.join("|")})`, "gu");
   const { dateien } = besitzDateien(wurzel, endung);
   const funde: PraefixFund[] = [];
