@@ -33,7 +33,7 @@
  * Repo existiert, auch für Projekt-Text; sie bleiben, denn ohne sie fiele ein toter Anker außerhalb des Kerns oder in der Fabrik nicht mehr auf. Eine Überschneidung (ein toter Kern-Verweis wird von beiden Seiten
  * gemeldet) ist gewollt und kein Doppelschutz derselben Regel.
  * Bewusste Grenze der Erkennung: nur Verweise, die einen Abschnitt nennen (`<pfad>.md › A` / `§ A`, auch `\`<pfad>.md\` › A`); eine bloße Seitennennung ohne Abschnitt (`Mechanik: docs/x.md`) oder ein Satz mit Komma
- * (`docs/x.md, Abschnitt A`) ist kein Abschnittsverweis und bleibt unerfasst; die Zitatform `<pfad>.md § „A“` ist ein Abschnittsverweis (wie die Fabrik-Form mit Zitat geprüft).
+ * (`docs/x.md, Abschnitt A`) ist kein Abschnittsverweis und bleibt unerfasst; die Zitatform `<pfad>.md § „A“` ist ein Abschnittsverweis (wie die Fabrik-Form mit Zitat geprüft); unerkannt bleiben Zitate mit schließendem ” (U+201D), die Form ‚A‘ und `<pfad>.md` § „A“ mit Backticks.
  *
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
  * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
