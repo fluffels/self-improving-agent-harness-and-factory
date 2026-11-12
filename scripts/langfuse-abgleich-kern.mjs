@@ -121,6 +121,24 @@ export const sollMitZuordnung = (soll, map) => soll.map((e) => ({ ...e, zuordnun
 const jsonlDateien = (dir) => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".jsonl")) : []);
 
 /**
+ * Session-Angabe (volle ID oder Präfix) über alle Ordner unter `projectsRoot` auflösen (factory#354, wie `alleOrdner` bei `--session`):
+ * `{ id }` bei einem Treffer, `{ fehler: "nicht gefunden" }` ohne, `{ fehler: "mehrdeutig", kandidaten }` (sortiert, volle IDs) bei mehreren.
+ * Ein exakter Treffer gewinnt gegen Präfix-Treffer; dieselbe ID in mehreren Ordnern zählt einmal. Die Angabe wird nur verglichen, nie in einen Pfad gesetzt.
+ */
+export function sessionAufloesen({ projectsRoot, angabe }) {
+  const ids = new Set();
+  if (angabe && existsSync(projectsRoot)) {
+    for (const d of readdirSync(projectsRoot)) {
+      for (const datei of jsonlDateien(join(projectsRoot, d))) ids.add(datei.replace(/\.jsonl$/, ""));
+    }
+  }
+  if (ids.has(angabe)) return { id: angabe };
+  const kandidaten = [...ids].filter((id) => id.startsWith(angabe)).sort();
+  if (kandidaten.length === 1) return { id: kandidaten[0] };
+  return kandidaten.length ? { fehler: "mehrdeutig", kandidaten } : { fehler: "nicht gefunden" };
+}
+
+/**
  * Sessions des Projekts: `[{ id, pfad, mtime, groesse }]` (mtime = jüngste Datei der Session, groesse = Bytes von Haupt- und Subagent-Dateien).
  * Nur der Ordner `<präfix>` selbst und `<präfix>--claude-worktrees-…` zählen (kein Geschwister-Repo wie `<präfix>-tools`).
  * `seitMs` filtert nach mtime, `sessionId` gilt unabhängig davon. `alleOrdner` wirkt NUR zusammen mit `sessionId` (#1862): dann
