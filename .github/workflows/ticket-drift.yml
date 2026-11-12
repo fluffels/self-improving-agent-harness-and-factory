@@ -1,0 +1,51 @@
+name: Ticket-Drift (Monatslauf)
+
+# Monatlicher Ticket-Drift-Lauf (factory#28, ADR 0033): `scripts/ticket-drift.mjs` prüft die offenen Tickets deterministisch gegen den Checkout und legt genau einen Bericht ab
+# (Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM>", Step-Summary). Er schließt, labelt und kommentiert kein anderes Ticket. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
+#
+# ⚠️ Das Board braucht wie wiedervorlage.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne es entsteht nur eine Warnung.
+
+on:
+  schedule:
+    - cron: "41 5 3 * *"
+  workflow_dispatch:
+    inputs:
+      trocken:
+        description: "Nur prüfen und ausgeben, nichts schreiben"
+        type: boolean
+        default: false
+
+concurrency: ticket-drift
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ticket-drift:
+    runs-on: ubuntu-latest
+    steps:
+      # Volle Historie: `git log` je entferntem Pfad; kein npm ci nötig (wie wiedervorlage.yml).
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Ticket-Drift-Bericht erzeugen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          TROCKEN: ${{ inputs.trocken }}
+        run: |
+          if [ "$TROCKEN" = "true" ]; then
+            node scripts/ticket-drift.mjs --dry-run
+          else
+            node scripts/ticket-drift.mjs
+          fi

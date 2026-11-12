@@ -1,5 +1,11 @@
 [
   {
+    "id": "ticket-drift-28",
+    "faellig": "2027-02-10",
+    "titel": "Ticket-Drift-Lauf nach drei Läufen auswerten (factory#28, ADR 0027)",
+    "text": "Messen: Befunde je Lauf (Bericht-Issues \"🔎 Ticket-Drift-Bericht\" bzw. Step-Summary der drei Läufe) und wie viele davon zu einer Ticket-Änderung (Body nachgezogen, Duplikat oder Rückstellung entschieden) führten. Unter 1 verwertbarem Befund je Lauf: Takt auf Quartal stellen oder den Workflow ticket-drift.yml samt Skript streichen (ADR 0033 ergänzen); sonst Entscheidung „bleibt“ im ADR vermerken. Dann diesen Eintrag löschen."
+  },
+  {
     "id": "planer-kosten-nach-112",
     "faellig": "2026-11-13",
     "titel": "Planer-Kosten auf geschätzter Basis nachmessen (#112)",
