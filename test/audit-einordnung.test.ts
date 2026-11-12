@@ -107,6 +107,24 @@ describe("befundeAusAlerts", () => {
     expect(A.befundeAusAlerts([alert("npm", "development")])[0].prod).toBe(false);
   });
 
+  test("maven und docker runtime sind prod, development nicht (factory#395 L55)", () => {
+    expect(A.befundeAusAlerts([alert("maven", "runtime")])[0].prod).toBe(true);
+    expect(A.befundeAusAlerts([alert("docker", "runtime")])[0].prod).toBe(true);
+    expect(A.befundeAusAlerts([alert("maven", "development")])[0].prod).toBe(false);
+  });
+
+  test("leeres Ökosystem ist nicht prod", () => {
+    const leer = { ...alert("maven", "runtime"), dependency: { scope: "runtime", package: { ecosystem: "", name: "p" } } };
+    expect(A.befundeAusAlerts([leer])[0].prod).toBe(false);
+  });
+
+  test("ohne Scope oder ohne Ökosystem nicht prod", () => {
+    const ohneScope = { ...alert("maven", "runtime"), dependency: { package: { ecosystem: "maven", name: "p" } } };
+    const ohneEco = { ...alert("maven", "runtime"), dependency: { scope: "runtime", package: { name: "p" } } };
+    expect(A.befundeAusAlerts([ohneScope])[0].prod).toBe(false);
+    expect(A.befundeAusAlerts([ohneEco])[0].prod).toBe(false);
+  });
+
   test("Ökosystem actions ist nie prod", () => {
     expect(A.befundeAusAlerts([alert("actions", "runtime")])[0].prod).toBe(false);
   });
@@ -354,5 +372,57 @@ describe("main: ohne .github/wiedervorlagen.json", () => {
   });
   test("ungültiges JSON bleibt ein Fehler", async () => {
     await expect(main([], deps(() => "{kaputt", []))).rejects.toThrow(SyntaxError);
+  });
+});
+
+describe("npmAudit (Verdrahtung, factory#395 L54)", () => {
+  const npmAudit = (raw as unknown as { npmAudit: (extra?: string[], verzeichnis?: string, lade?: (v: string, e: string[]) => unknown) => unknown }).npmAudit;
+  test("reicht Verzeichnis und extra (--omit=dev) an den Lader weiter, nicht vertauscht", () => {
+    const aufrufe: [string, string[]][] = [];
+    const lade = (v: string, e: string[]) => (aufrufe.push([v, e]), { vulnerabilities: {} });
+    npmAudit(["--omit=dev"], "frontend", lade);
+    npmAudit(undefined, undefined, lade);
+    expect(aufrufe).toEqual([["frontend", ["--omit=dev"]], [".", []]]);
+  });
+});
+
+describe("main: audit.verzeichnisse (factory#395 L54)", () => {
+  const main = (raw as unknown as { main: (argv: string[], deps: Record<string, unknown>) => Promise<number> }).main;
+  const fe = { vulnerabilities: { "fe-paket": { severity: "high", via: [{ url: `https://github.com/advisories/${G1}`, name: "fe-paket", severity: "high" }] } } };
+  const leer = { vulnerabilities: {} };
+  const aufbau = (config: unknown, audit: (verzeichnis: string, extra: string[]) => unknown) => {
+    const aufrufe: string[] = [];
+    const log: string[] = [];
+    const libs = {
+      OWNER: "o",
+      REPO: "o/r",
+      ladeSammelKontext: () => ({ rohe: [], offene: [{ number: 5 }], kommentare: [] }),
+      offeneTitel: () => [],
+      platziereOben: () => undefined,
+      postZeilen: () => undefined,
+      waehleSammelticket: (offene: { number: number }[]) => offene[0],
+    };
+    const npmAuditLaden = (extra: string[] = [], verzeichnis = ".") => (aufrufe.push(`${verzeichnis}${extra.join("")}`), audit(verzeichnis, extra));
+    const deps = { ladeConfig: () => config, ladeLibs: () => Promise.resolve(libs), npmAuditLaden, alertsLaden: () => [], bezieher: false, log: (m: string) => log.push(m), err: () => undefined };
+    return { aufrufe, log, deps };
+  };
+
+  test("Advisory nur im Verzeichnis frontend wird eingeordnet; mit --omit=dev dort ist sie prod", async () => {
+    const { aufrufe, log, deps } = aufbau({ audit: { verzeichnisse: ["frontend"] } }, (v) => (v === "frontend" ? fe : leer));
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(aufrufe).toEqual([".", ".--omit=dev", "frontend", "frontend--omit=dev"]);
+    expect(log.join("\n")).toContain(`${G1.toLowerCase()} fe-paket (high, prod)`);
+  });
+
+  test("nur im vollen Audit von frontend (nicht ohne Dev): dev", async () => {
+    const { log, deps } = aufbau({ audit: { verzeichnisse: ["frontend"] } }, (v, extra) => (v === "frontend" && extra.length === 0 ? fe : leer));
+    await main(["--dry-run"], deps);
+    expect(log.join("\n")).toContain(`${G1.toLowerCase()} fe-paket (high, dev)`);
+  });
+
+  test("ohne Block wird nur die Wurzel geprüft", async () => {
+    const { aufrufe, deps } = aufbau({}, () => leer);
+    expect(await main(["--dry-run"], deps)).toBe(0);
+    expect(aufrufe).toEqual([".", ".--omit=dev"]);
   });
 });

@@ -183,6 +183,13 @@ describe("pruefeProjektConfig", () => {
     for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /risiko muss ein Objekt/);
   });
 
+  test("audit (factory#395): optional; verzeichnisse sind relative POSIX-Pfade, verdrahtet in pruefeProjektConfig", () => {
+    const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), audit: b });
+    assert.deepEqual(mit({ verzeichnisse: ["frontend"] }), []);
+    assert.match(mit({ verzeichnisse: ["../x"] }).join("\n"), /audit\.verzeichnisse\[0\] muss ein repo-relativer POSIX-Pfad sein/);
+    assert.match(mit({ verzeichnisse: ["/etc"] }).join("\n"), /audit\.verzeichnisse\[0\]/);
+  });
+
   test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: "eingang/meldungen" }), []);
     for (const schlecht of ["", "foo", 3]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: schlecht }).join("\n"), /meldestelle muss die Form owner\/name[\s\S]*Fix:/);
