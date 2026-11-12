@@ -95,7 +95,7 @@ const REST_PFADE = [
 /** Commit-Status und Check-Läufe (factory#375 L50): ein schreibender Aufruf könnte einen Required Check grün melden (ohne integration_id-Pin).
  *  `…/check-runs/<id>/rerequest` bleibt erlaubt (stößt nur neu an), `…/commits/<sha>/statuses` ist ein Lesepfad. */
 const STATUS_PFADE = [
-  /\/statuses\/[^\s'"/]+/,
+  /\/statuses\//,
   /\/check-runs(?:\/\d+)?(?=$|[\s'"?])/,
 ];
 const STATUS_GRUND = "setzt einen Commit-Status oder Check-Lauf (könnte einen Required Check grün melden)";
