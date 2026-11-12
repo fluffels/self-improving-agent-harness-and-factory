@@ -188,8 +188,16 @@ describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), kopf("test:coverage"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("nicht-erreicht");
   });
-  test("Befund: ein rotes Coverage wird vom Folgekopf test:coverage als grün gezählt (bekannte Grenze, Sammelzeile)", () => {
+  test("ein rotes Coverage bleibt rot: der Folgekopf test:coverage ist verschachtelt und beendet das Gate nicht", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("rot");
+  });
+  test("Negativ: ohne npm run in der Zeile endet das Gate an der fremden Kopfzeile (grün)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: vitest run --coverage\n", kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
+  });
+  test("Negativ: eine Kopfzeile eines anderen Skripts als des Ziels ist nicht verschachtelt (grün)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("docs:gen"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
   });
 });
