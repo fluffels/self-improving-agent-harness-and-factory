@@ -39,6 +39,8 @@
  *  - Backtick-Ersetzungen werden nur unter Bash erkannt und nicht geschachtelt; Wrapper vor einer Variablen höchstens mit 4
  *    Options-/Wertwörtern; neue Umwege (Verschleierung, exotische Shell-Formen) sind Bekannte Grenzen und kein Fehler des Guards
  *    (Blocker-Maßstab, Factory-Seite [docs/agent-harness.md §4](../docs/agent-harness.md#4-die-sichere-autonomie-schleife)). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
+ *  - Required-Check-Schutz: nicht erkannt werden die GraphQL-Mutationen `createCheckRun`/`updateCheckRun`, ein abschließender `/` nach `check-runs` und eine abweichende Groß-/Kleinschreibung des Pfads;
+ *    der wirksame Riegel ist der `integration_id`-Pin im Ruleset.
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *
@@ -266,7 +268,6 @@ function methode(segment) {
 /** Trägt der Aufruf Felder (`-f`/`-F`/`--field`/`--raw-field`/`--input`)? Dann ist die implizite Methode POST. */
 const hatFelder = (segment) => /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:\s|=)/.test(segment);
 
-/** Der erste Treffer-Grund für ein einzelnes `gh api`-Segment oder null. */
 /** Grund für einen schreibenden Aufruf auf einen geschützten REST-Pfad (Status/Check-Läufe zuerst), sonst `null`. */
 function restPfadGrund(segment) {
   if (STATUS_PFADE.some((muster) => muster.test(segment))) return STATUS_GRUND;
@@ -274,6 +275,7 @@ function restPfadGrund(segment) {
   return muster ? `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})` : null;
 }
 
+/** Der erste Treffer-Grund für ein einzelnes `gh api`-Segment oder null. */
 function segmentGrund(segment) {
   const m = methode(segment);
   if (m === "DELETE") return "`gh api` mit Methode DELETE löscht etwas (unumkehrbar)";

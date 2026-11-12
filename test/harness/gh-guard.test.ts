@@ -76,6 +76,10 @@ describe("gh api mit Außenwirkung fragt nach (#1204)", () => {
     ["Commit-Status setzen (implizites POST über -f)", "gh api repos/o/r/statuses/abc123 -f state=success -f context=x"],
     ["Check-Lauf anlegen", "gh api -X POST repos/o/r/check-runs -f name=x"],
     ["Check-Lauf ändern (PATCH)", "gh api -X PATCH repos/o/r/check-runs/5 -f conclusion=success"],
+    ["Check-Lauf: Pfad am Segmentende", "gh api -f name=x repos/o/r/check-runs"],
+    ["Check-Lauf: Pfad in doppelten Anführungszeichen", 'gh api -X POST "repos/o/r/check-runs" -f name=x'],
+    ["Check-Lauf: Pfad in einfachen Anführungszeichen", "gh api -X POST 'repos/o/r/check-runs' -f name=x"],
+    ["Check-Lauf: Pfad mit Query-String", "gh api -X POST repos/o/r/check-runs?x=1 -f name=x"],
   ])("%s → ask", (_name, command) => {
     const r = hook.bewerte(command);
     assert.equal(r.ask, true, command);
@@ -103,6 +107,7 @@ describe("Alltags-Aufrufe laufen durch (kein Dauer-Nachfragen)", () => {
     ["Mutationsname als Wert, ohne Aufruf", "gh api graphql -f query='mutation { __typename }' -f note=deleteIssue"],
     ["Commit-Text", 'git commit -m "feat: deleteIssue-Guard (gh api)"'],
     ["Commit-Status lesen (GET)", "gh api repos/o/r/commits/abc/statuses"],
+    ["Status-Pfad als GET (kein Schreibzugriff)", "gh api repos/o/r/statuses/abc"],
     ["Check-Lauf erneut anfordern (rerequest)", "gh api -X POST repos/o/r/check-runs/5/rerequest"],
     ["Check-Läufe eines Commits lesen", "gh api repos/o/r/commits/abc/check-runs --jq '.check_runs[].app.id'"],
     ["Issue-Kommentar per REST","gh api repos/o/r/issues/5/comments -f body=hallo"],
