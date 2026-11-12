@@ -1,5 +1,9 @@
 /* Langfuse-Health (aus langfuse-vorbedingung.mjs herausgelöst, factory#313): Bewertung und Abfrage von GET <Langfuse>/api/public/health.
- * Bibliotheksmodul ohne Einstieg, damit auch andere Skripte die Prüfung nutzen (ein Einstiegsskript importiert nie aus einem anderen); fetch wird injiziert, kein Secret-Key. */
+ * Bibliotheksmodul ohne Einstieg, damit auch andere Skripte die Prüfung nutzen (ein Einstiegsskript importiert nie aus einem anderen); fetch wird injiziert, kein Secret-Key.
+ * `pruefeLangfuseAusUmgebung` löst die Adresse wie `langfuse-vorbedingung.mjs` auf (Umgebung, sonst Plugin-Optionen, sonst localhost:3000; nie eine Secret-Datei) und nutzt
+ * die Codex-Vorprüfung und der Codex-Hook-Adapter für den Tracing-Ausfallstopp (factory#365). */
+import { homedir } from "node:os";
+import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
 
 export const HEALTH_PFAD = "/api/public/health";
 export const FRIST_MS = 3000;
@@ -25,4 +29,10 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
   } finally {
     clearTimeout(uhr);
   }
+}
+
+/** Health-Prüfung für die Adresse aus der Umgebung (siehe Kopf); fetch, Frist und Dateizugriff sind injizierbar. Wirft nie. */
+export async function pruefeLangfuseAusUmgebung({ env = process.env, home = homedir(), lies, fetchImpl = fetch, fristMs = FRIST_MS } = {}) {
+  const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
+  return pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
 }

@@ -7,7 +7,8 @@
  *  - Shell:       Worktree-, gh- und Stdin-Skript-Guard über den Dispatcher (Werkzeug `Bash`), danach die `Bash(...)`-Regeln aus `permissions.deny`/`permissions.ask`
  *                 der `.claude/settings.json` je Befehlssegment (Claude wendet sie selbst an, Codex nicht: `gh issue delete`, `git push --force` …)
  *  - apply_patch: jedes Schreibziel des Patches als Claude-`Write` an den Schreibziel-Guard des Dispatchers (kein Schreiben in den Haupt-Checkout oder nach `.git`); Selbstschutz für `.codex`
- *  - spawn_agent: Lens-Auftrag- und Holdout-Guard über den Dispatcher (Werkzeug `Agent`); Codex bleibt immer bei Arm A der A/B-Messung
+ *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, kein Spawn, factory#365), dann Lens-Auftrag- und
+ *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`); Codex bleibt immer bei Arm A der A/B-Messung
  * Fail-closed für diese drei Werkzeuge: unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard ergibt ein Deny mit Grund; ein `ask` des Dispatchers wird ein Deny,
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
@@ -147,6 +148,19 @@ function lesePayload(text) {
   return grund ? { antwort: q(grund) } : { art, eingabe: data.tool_input, payloads };
 }
 
+/** Tracing-Ausfallstopp für `spawn_agent`: Deny bei nicht erreichbarem Langfuse oder werfender Prüfung, sonst `null`. `deps.health` ersetzt die Prüfung (Tests). */
+async function tracingStopp(deps) {
+  const health = deps.health ?? (async () => (await import("./langfuse-health.mjs")).pruefeLangfuseAusUmgebung());
+  let urteil;
+  try {
+    urteil = await health();
+  } catch (e) {
+    urteil = { ok: false, grund: `Health-Prüfung gescheitert: ${String(e?.message ?? e)}` };
+  }
+  if (urteil?.ok === true) return null;
+  return buildDenyOutput(`Tracing-Ausfallstopp: ${urteil?.grund ?? "Health ohne Urteil"}. Ohne erreichbares Langfuse startet keine Rolle (spawn_agent verweigert); Langfuse starten, dann erneut.`);
+}
+
 /**
  * Entscheidet für ein Codex-Hook-Payload (Text): Deny-Output-Objekt oder `null` (durchlassen); wirft nie.
  * `deps.lade` ersetzt das Laden des Dispatchers, `deps.lies` das Lesen der settings.json (Tests).
@@ -156,6 +170,10 @@ export async function entscheide(text, repoRoot, deps = {}) {
     const gelesen = lesePayload(text);
     if (gelesen.antwort !== undefined) return gelesen.antwort;
     const { art, eingabe, payloads } = gelesen;
+    if (art === "agent") {
+      const stopp = await tracingStopp(deps);
+      if (stopp) return stopp;
+    }
     const { dispatch, segmente } = await (deps.lade ?? ladeStandard)();
     const denied = befrage(dispatch, payloads, repoRoot);
     if (denied || art !== "shell") return denied;
