@@ -4,12 +4,14 @@
 // Feldformen von `gh issue list --json …` (Probe 2026-11-12): `author {login, is_bot}` (Apps als `app/<name>`), `comments[] {author {login}, authorAssociation, body, createdAt}`,
 // `blockedBy {nodes[] {number, state}}`, `labels[] {name}`, `updatedAt` (ISO).
 //
-// Grenzen (bewusst nicht erfasst): Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
+// Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
 // Der Bericht trägt nur Nummern, Pfade der Whitelist (`PFAD_FORM`, ohne `..`, `@`, Backtick, Leerraum), Daten und Zählungen: keine Logins, keine Zitate (er entsteht als vertrauter Bot-Text).
 import { blockerVerweise } from "./spezifikation-lib.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { enthaeltSammelticketTitel } from "./sammelticket-titel.mjs";
 
+/** Titelpräfix des Bericht-Issues (der Monat folgt). */
+export const BERICHT_TITEL_PRAEFIX = "🔎 Ticket-Drift-Bericht ";
 /** Marker im Bericht-Issue: Dedupe-Schlüssel, damit der Lauf das offene Issue aktualisiert statt zu verdoppeln. */
 export const BERICHT_MARKER = "<!-- ticket-drift-bericht -->";
 /** Obergrenze des Berichts in Zeichen (GitHub erlaubt 65 536 je Body). */
@@ -90,11 +92,19 @@ export function duplikatBefunde(issues, schwelle = 0.6) {
   return befunde;
 }
 
-const kommentarVertraut = (c, owner) => {
-  const login = String(c?.author?.login ?? "");
-  const bot = login.startsWith("app/") ? `${login.slice(4)}[bot]` : login;
-  return c?.authorAssociation === "OWNER" || istVertraut({ login: bot, type: login.startsWith("app/") || login.endsWith("[bot]") ? "Bot" : "User" }, owner);
-};
+/** REST-Form eines Nutzers aus der gh-CLI-Form (`app/<name>` ist ein Bot, `/` kann in keinem Login vorkommen). Die eine Stelle der Bot-Regel. */
+export function nutzerAus(author) {
+  const login = String(author?.login ?? "");
+  const bot = login.startsWith("app/") || login.endsWith("[bot]");
+  return { login: login.startsWith("app/") ? `${login.slice(4)}[bot]` : login, type: bot ? "Bot" : "User" };
+}
+
+const kommentarVertraut = (c, owner) => c?.authorAssociation === "OWNER" || istVertraut(nutzerAus(c?.author), owner);
+
+/** Ist `issue` ein Bericht dieses Laufs: Marker im Body, Titelpräfix und vertrauter Autor (kein Fremdeingang)? Nur ein solches Issue darf das Schreibziel sein. */
+export function istBerichtIssue(issue, owner, config) {
+  return String(issue.body ?? "").includes(BERICHT_MARKER) && String(issue.title ?? "").startsWith(BERICHT_TITEL_PRAEFIX) && !istFremdeingang({ user: nutzerAus(issue.author), labels: issue.labels }, owner, { config }).fremdeingang;
+}
 
 /** Rückstellungs-Befund: der jüngste vertraute Kommentar trägt einen Marker und kein vertrauter Kommentar folgt danach. `hinweis` bei möglich abgeschnittener Liste (≥ 100 Kommentare). */
 export function rueckstellungBefund(issue, owner) {
@@ -113,9 +123,7 @@ export function pruefe(issues, { config, owner, tops, git, sprache }) {
   const uebersprungen = [];
   const pruefbar = [];
   for (const i of issues) {
-    const autor = String(i.author?.login ?? "");
-    const user = { login: autor.startsWith("app/") ? `${autor.slice(4)}[bot]` : autor, type: i.author?.is_bot ? "Bot" : "User" };
-    const fremd = istFremdeingang({ user, labels: i.labels }, owner, { config }).fremdeingang;
+    const fremd = istFremdeingang({ user: nutzerAus(i.author), labels: i.labels }, owner, { config }).fremdeingang;
     if (fremd || String(i.body ?? "").includes(BERICHT_MARKER)) uebersprungen.push(i.number);
     else pruefbar.push(i);
   }
@@ -137,7 +145,7 @@ export function pruefe(issues, { config, owner, tops, git, sprache }) {
 /** Markdown-Bericht; über `BERICHT_MAX` Zeichen gekürzt mit Hinweis auf die Step-Summary. Pur und deterministisch. */
 export function berichtText({ befunde, geprueft, uebersprungen, hinweise }, { sha, datum }) {
   const kopf = [`${BERICHT_MARKER}`, `Stand: \`${sha}\`, ${datum}. Geprüft: ${geprueft}, übersprungen (Fremdeingang, Bericht): ${uebersprungen.length ? uebersprungen.map((n) => `#${n}`).join(", ") : "keine"}.`, ...hinweise.map((h) => `Hinweis: ${h}`), ""];
-  const fuss = ["", "Abarbeiten nach der Prompt-Datei `ticket-drift.md` (Besitz-Ordner der Fabrik-Skills). Der Lauf schließt, ändert und kommentiert nichts."];
+  const fuss = ["", "Abarbeiten nach der Prompt-Datei `ticket-drift.md` (genannt in docs/agent-harness.md (Fabrik) § 2.2). Der Lauf schließt, ändert und kommentiert nichts."];
   if (befunde.length === 0) return [...kopf, "keine Befunde", ...fuss].join("\n") + "\n";
   const zeilen = [];
   for (const k of KLASSEN) {

@@ -21,13 +21,13 @@ Das Ticket-Review vom 2026-09-29 fand bei 74 offenen Tickets veraltete Pfade, Ze
 
 ## Entscheidung
 
-Entscheidung: C, weil der Lauf deterministisch ist (kein Modell, keine Secrets außer `PROJECT_TOKEN` fürs Board), für jeden Bezieher gleich läuft und die Zusage „schließt nichts selbst“ per Test belegt wird. Die Rückstellung gilt damit nicht mehr: ihr Grund (Token-Kosten) entfällt, und der Wochenbericht ist der falsche Träger. Der Lauf legt genau ein offenes Bericht-Issue „🔎 Ticket-Drift-Bericht <JJJJ-MM>“ an (Marker im Body) oder aktualisiert es; ein Bericht mit Assignee bleibt unberührt. Die Bewertung der Befunde steht in `.agents/skills/factory/ticket-drift.md` und läuft, wenn das Bericht-Ticket dran ist.
+Entscheidung: C, weil der Lauf deterministisch ist (kein Modell, keine Secrets außer `PROJECT_TOKEN` fürs Board), für jeden Bezieher gleich läuft und die Zusage „schließt nichts selbst“ per Test belegt wird. Die Rückstellung gilt damit nicht mehr: ihr Grund (Token-Kosten) entfällt, und der Wochenbericht ist der falsche Träger. Der Lauf legt genau ein offenes Bericht-Issue „🔎 Ticket-Drift-Bericht <JJJJ-MM>“ an (Marker im Body) oder aktualisiert es (Body und Titel-Monat); ein Bericht mit Assignee bleibt unberührt. Schreibziel ist nur ein Issue mit Marker, Titelpräfix und vertrautem Autor, nie ein fremdes Issue mit zitiertem Marker. Ein neuer Bericht kommt ans Ende der Todo-Spalte, nicht an die Spitze: `--top` ohne Notfall-Art ließe den Kopf des Boards bei 0 enden. Die Bewertung der Befunde steht in `.agents/skills/factory/ticket-drift.md` und läuft, wenn das Bericht-Ticket dran ist.
 
 ## Konsequenzen
 
 - Prüfliste und Grenzen: [docs/agent-harness.md](../agent-harness.md) § 2.2. Falsch-Positive (`zeile-verschoben`, Duplikat-Paare) sind Kandidaten, kein Urteil.
 - Der Workflow hat `issues: write` und das Board-PAT; der Bericht entsteht als vertrauter Bot und trägt darum nur Nummern, Pfade der Whitelist, Daten und Zählungen, keine Logins und keine Zitate.
-- Bezieher bekommen Skript und Workflow per Sync; ohne `PROJECT_TOKEN` steht der Bericht nicht oben im Board (Warnung).
+- Bezieher bekommen Skript und Workflow per Sync; ohne `PROJECT_TOKEN` steht der Bericht nicht im Board (Warnung).
 
 ## Re-Evaluierung
 
