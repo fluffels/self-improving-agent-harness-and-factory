@@ -1016,6 +1016,15 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
       assert.match(cli.stderr, /✖ check:diffcoverage: Schicht-ID "fremd" für scripts\/a\.mjs/);
       assert.ok(cli.stderr.includes(`Fix: ${SCHICHT_FIX}`), cli.stderr);
       assert.ok(!/\n\s+at /.test(cli.stderr), cli.stderr);
+      // Ein anderer Fehler der Schichtdatei bleibt ein Wurf (kein Exit 2 mit Fix-Zeile, die ihn falsch erklärte).
+      writeFileSync(join(tmp, "scripts", "fremd.cjs"), "const L = require('./layers.cjs');\nmodule.exports = { LAYERS: L.LAYERS, layerOf: () => { throw new Error('boom'); } };\n");
+      const wurf = spawnSync(process.execPath, [join(tmp, "scripts", "check-diffcoverage.mjs")], { encoding: "utf8", cwd: tmp, env: { ...process.env, FACTORY_DIFF_BASE: "HEAD~1" } });
+      assert.notEqual(wurf.status, 2, wurf.stderr);
+      assert.ok(/\n\s+at /.test(wurf.stderr) && wurf.stderr.includes("boom"), wurf.stderr);
+      // LAYERS nur mit den Floor-Schlüsseln: LAYER_DIFF_FLOORS hat nur diese, keinen Schlüssel "undefined".
+      writeFileSync(join(tmp, "scripts", "fremd.cjs"), "module.exports = { LAYERS: { DOMAIN: 'd', APPLICATION: 'a' }, layerOf: () => 'd' };\n");
+      const keys = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(skript)}).then((m) => console.log(JSON.stringify(m.LAYER_DIFF_FLOORS)))`], { encoding: "utf8", cwd: tmp });
+      assert.equal(keys.stdout.trim(), JSON.stringify({ d: 90, a: 80 }), keys.stderr);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

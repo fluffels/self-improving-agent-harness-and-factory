@@ -138,6 +138,14 @@ function pruefeOptionen(optionen) {
   if (unbekannt.length > 0) throw new TypeError(`evaluateByLayer: unbekannte Option(en) ${unbekannt.join(", ")} im dritten Argument (erlaubt: ${EVALUATE_OPTIONEN.join(", ")}); eine Floor-Map gehört in \`floors\``);
 }
 
+/** Der Bucket der Schicht von `path`; eine Schicht-ID außerhalb von `LAYERS` wirft `SchichtFehler` mit Pfad, ID und Fix. */
+function bucketVon(buckets, path) {
+  const schicht = layerOf(path);
+  const bucket = buckets[schicht];
+  if (bucket === undefined) throw new SchichtFehler(`Schicht-ID ${JSON.stringify(schicht)} für ${path} steht nicht in LAYERS (${Object.values(LAYERS).join(", ")}); Fix: ${SCHICHT_FIX}`);
+  return bucket;
+}
+
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
  *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
@@ -160,9 +168,7 @@ export function evaluateByLayer(changed, lcov, optionen = {}) {
       missing.push(path);
       continue;
     }
-    const schicht = layerOf(path);
-    const bucket = buckets[schicht];
-    if (bucket === undefined) throw new SchichtFehler(`Schicht-ID ${JSON.stringify(schicht)} für ${path} steht nicht in LAYERS (${Object.values(LAYERS).join(", ")}); Fix: ${SCHICHT_FIX}`);
+    const bucket = bucketVon(buckets, path);
     const { total, covered, uncovered } = zeilenBilanz(lines, record);
     if (total === 0) continue;
     bucket.total += total;
