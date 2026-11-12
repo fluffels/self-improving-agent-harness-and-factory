@@ -101,7 +101,7 @@ function ohneWrapper(w) {
 function envOptionen(w) {
   let t = w;
   for (;;) {
-    if (t[0] === "-i" || t[0] === "--" || ZUWEISUNG.test(t[0] ?? "")) t = t.slice(1);
+    if (t[0] === "-i" || t[0] === "--") t = t.slice(1);
     else if (t[0] === "-u") t = t.slice(2);
     else return t;
   }

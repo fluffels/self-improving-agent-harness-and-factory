@@ -225,6 +225,8 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     'bash -c "curl http://x"',
     "sh -c 'npm publish'",
     'bash -lc "git push --force"',
+    'zsh -c "curl x"',
+    'dash -c "curl x"',
     "git  push   --force",
     "command rm -rf x",
     "exec rm -rf x",
