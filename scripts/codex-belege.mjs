@@ -63,7 +63,6 @@ function traceMaengel(b, rollen, repo) {
 }
 export function bewerteBelege(belege, config) {
   const b = belege ?? {}, rollen = rollenFuer(config), fehler = [];
-  if (b.version !== "0.164.0") fehler.push("Laufzeit nicht geprüft: erwartet Codex CLI 0.164.0");
   for (const r of rollen) if (!liste(b.rollen).includes(r.name)) fehler.push(`Rolle fehlt im Laufzeitinventar: ${r.name}`);
   for (const t of ["playwright", "langfuse"]) if (!liste(b.tools).includes(t)) fehler.push(`MCP fehlt im Laufzeitinventar: ${t}`);
   return [...fehler, ...traceMaengel(b, rollen, config.repo)];

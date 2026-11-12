@@ -1,4 +1,4 @@
-/* @harness-waechter: Der Prototyp schaltet auch durch Offline-Belege keine autonomen Läufe frei. */
+/* @harness-waechter: Freigabe nur über die Freigabetabelle mit fünf Belegen, Offline-Belege allein schalten nichts frei. */
 import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,8 +7,9 @@ import { join } from "node:path";
 import * as raw from "../../scripts/codex-vorpruefung.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as lib0 from "../../scripts/codex-lib.mjs";
-type Naht = { out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string };
-const p = raw as unknown as { main: (a: string[], n: Naht) => number };
+type Naht = { out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string; codexVersion?: () => string | null; freigaben?: unknown; werkzeug?: () => unknown[] };
+const p = raw as unknown as { main: (a: string[], n: Naht) => number; installierteCodexVersion: (n: { plattform: string; spawn: (...a: unknown[]) => unknown }) => string | null };
+const SPERRE = "Nachweise 1, 2, 3, 4, 5";
 const config = { repo: "owner/probe", agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
 const temps: string[] = [];
 afterEach(() => { for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -17,10 +18,10 @@ function leerRoot() { const d = mkdtempSync(join(tmpdir(), "codex-leer-")); temp
 function datei(text: string) { const d = mkdtempSync(join(tmpdir(), "codex-vorpruefung-")); temps.push(d); const p = join(d, "belege.json"); writeFileSync(p, text); return p; }
 test("ohne und mit selbst attestierten Belegen gesperrt", () => {
   const out: string[] = [], err: string[] = [];
-  const naht = () => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade: () => config, root: leerRoot() });
+  const naht = () => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade: () => config, root: leerRoot(), codexVersion: () => "0.164.0" });
   expect(p.main([], naht())).toBe(1);
   expect(p.main(["--belege", datei('{"tracing":true}')], naht())).toBe(1);
-  expect(out.at(-1)).toContain('"autonom":false'); expect(out.at(-1)).toContain("Quarantäne"); expect(err).toEqual([]);
+  expect(out.at(-1)).toContain('"autonom":false'); expect(out.at(-1)).toContain(SPERRE); expect(err).toEqual([]);
 });
 test("Direktaufruf ohne Naht (wie der CLI-Einstieg) stürzt nicht ab: Aufruf-Fehler endet mit Exit 2", () => {
   const stumm = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -36,9 +37,9 @@ test("auch vollständige diagnostische Belege erteilen keine autonome Freigabe",
   const row = (id: string, rolle?: string) => ({ id, type: "GENERATION", sessionId: "probe", tags: ["project:probe"], usageDetails: { input: 1, output: 1 }, metadata: { agent_id: id, agent_role: rolle ? "subagent" : "main", parent_thread_id: rolle ? "main" : "", "agent_source.subagent.thread_spawn.agent_role": rolle } });
   const b = { version: "0.164.0", sessionId: "probe", rollen, tools: ["playwright", "langfuse"], observations: [row("main"), ...rollen.map(r => row(r, r)), { ...row("tool"), type: "TOOL" }] };
   const out: string[] = [], err: string[] = [];
-  expect(p.main(["--belege", datei(JSON.stringify(b))], { out: s => out.push(s), err: s => err.push(s), lade: () => config, root: leerRoot() })).toBe(1);
+  expect(p.main(["--belege", datei(JSON.stringify(b))], { out: s => out.push(s), err: s => err.push(s), lade: () => config, root: leerRoot(), codexVersion: () => "0.164.0" })).toBe(1);
   const result = JSON.parse(out[0]) as { autonom: boolean; maengel: string[] };
-  expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain("Quarantäne"); expect(err).toEqual([]);
+  expect(result.autonom).toBe(false); expect(result.maengel).toHaveLength(1); expect(result.maengel[0]).toContain(SPERRE); expect(err).toEqual([]);
 });
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["x"] } } };
 const lib = lib0 as unknown as { lokaleRollenMaengel: (r: string, c: unknown, m: unknown) => string[]; setupDateien: (m: unknown, c: unknown, e: string) => Record<string, string>; pruefeAusgabe: (r: string) => string; quellDatei: (r: string, p: string) => string };
@@ -92,15 +93,73 @@ test("Symlink innerhalb der Wurzel bleibt ein Fehler", () => {
 });
 test("Vorprüfung meldet verwaiste Rolle in root", () => {
   const d = projekt({ "alt.toml": "x" }); const out: string[] = [];
-  expect(p.main([], { out: s => out.push(s), err: () => undefined, lade: () => config, root: d })).toBe(1);
+  expect(p.main([], { out: s => out.push(s), err: () => undefined, lade: () => config, root: d, codexVersion: () => "0.164.0" })).toBe(1);
   expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.join("\n")).toContain("verwaist");
 });
 test("Aufruf-, Lese-, JSON- und Configfehler sind geschlossen", () => {
   const out: string[] = [], err: string[] = [];
-  const naht = (lade: () => unknown = () => config) => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade, root: leerRoot() });
+  const naht = (lade: () => unknown = () => config) => ({ out: (s: string) => out.push(s), err: (s: string) => err.push(s), lade, root: leerRoot(), codexVersion: () => "0.164.0" });
   expect(p.main(["--issue", "79"], naht())).toBe(2);
   expect(p.main(["--belege", `${datei("{}")}fehlt`], naht())).toBe(1);
   expect(p.main(["--belege", datei("{")], naht())).toBe(1);
   expect(p.main([], naht(() => { throw new Error("Config unlesbar"); }))).toBe(1);
   expect(out).toEqual([]); expect(err).toHaveLength(4);
+});
+
+const URL_OK = "https://api.github.com/repositories/1/pulls/1";
+const beleg = { beleg: URL_OK };
+const tabelle = (nachweise: Record<string, unknown> = { 1: beleg, 2: beleg, 3: beleg, 4: beleg, 5: beleg }) => ({ "9.9.9": { diagnose: URL_OK, nachweise } });
+function belegeFuer(version: string) {
+  const rollen = [...Object.values(config.agenten), "explore", "holdout-szenario", "holdout-abnahme"];
+  const row = (id: string, rolle?: string) => ({ id, type: "GENERATION", sessionId: "probe", tags: ["project:probe"], usageDetails: { input: 1, output: 1 }, metadata: { agent_id: id, agent_role: rolle ? "subagent" : "main", parent_thread_id: rolle ? "main" : "", "agent_source.subagent.thread_spawn.agent_role": rolle } });
+  return datei(JSON.stringify({ version, sessionId: "probe", rollen, tools: ["playwright", "langfuse"], observations: [row("main"), ...rollen.map(r => row(r, r)), { ...row("tool"), type: "TOOL" }] }));
+}
+function lauf(belege: string[], n: Partial<Naht>) {
+  const out: string[] = [];
+  const code = p.main(belege, { out: s => out.push(s), err: () => undefined, lade: () => config, root: leerRoot(), werkzeug: () => [], ...n });
+  return { code, ...(JSON.parse(out[0] ?? "{}") as { autonom?: boolean; maengel?: string[] }) };
+}
+test("Freigabe: alle fünf Belege, passende Version und kein anderer Mangel ergeben Exit 0", () => {
+  const ok = lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle() });
+  expect(ok).toMatchObject({ code: 0, autonom: true, maengel: [] });
+  const werkzeug = lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), werkzeug: () => [{ text: "T", fix: "F" }] });
+  expect(werkzeug).toMatchObject({ code: 1, autonom: false });
+});
+test("Freigabe: ein offener oder leerer Nachweis sperrt und nennt genau seine Nummer", () => {
+  const b = ["--belege", belegeFuer("9.9.9")];
+  const offen = lauf(b, { codexVersion: () => "9.9.9", freigaben: tabelle({ 1: beleg, 2: beleg, 3: "offen", 4: beleg, 5: beleg }) });
+  expect(offen.code).toBe(1); expect(offen.autonom).toBe(false);
+  expect(offen.maengel?.join()).toContain("Nachweise 3 "); expect(offen.maengel?.join()).not.toMatch(/Nachweise [^3]/);
+  const leer = lauf(b, { codexVersion: () => "9.9.9", freigaben: tabelle({ 1: beleg, 2: { beleg: "" }, 3: beleg, 4: beleg, 5: beleg }) });
+  expect(leer.code).toBe(1); expect(leer.maengel).toHaveLength(2);
+  expect(leer.maengel?.join("\n")).toContain("Nachweis 2"); expect(leer.maengel?.join("\n")).toContain("Nachweise 2 ");
+  const ohneBelege = lauf([], { codexVersion: () => "9.9.9", freigaben: tabelle() });
+  expect(ohneBelege.code).toBe(1); expect(ohneBelege.autonom).toBe(false);
+});
+test("Freigabe: Version fehlt in der Tabelle, weicht ab oder ist nicht ermittelbar, je ein eigener Mangel", () => {
+  const nichtDrin = lauf(["--belege", belegeFuer("9.9.8")], { codexVersion: () => "9.9.8", freigaben: tabelle() });
+  expect(nichtDrin.code).toBe(1); expect(nichtDrin.maengel).toEqual([expect.stringContaining("nicht in der Freigabetabelle")]);
+  const weicht = lauf(["--belege", belegeFuer("9.9.8")], { codexVersion: () => "9.9.9", freigaben: tabelle() });
+  expect(weicht.code).toBe(1); expect(weicht.maengel).toEqual([expect.stringContaining("weicht von der belegten Version 9.9.8 ab")]);
+  const keine = lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => null, freigaben: tabelle() });
+  expect(keine.code).toBe(1); expect(keine.maengel).toEqual([expect.stringMatching(/nicht ermittelbar.*PATH/)]);
+});
+test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", () => {
+  const stub = (r: unknown) => { const calls: unknown[][] = []; return { calls, spawn: (...a: unknown[]) => { calls.push(a); return r; } }; };
+  const win = stub({ status: 0, stdout: "codex-cli 0.164.0\n" });
+  expect(p.installierteCodexVersion({ plattform: "win32", spawn: win.spawn })).toBe("0.164.0");
+  expect(win.calls[0][0]).toBe("codex.cmd"); expect(win.calls[0][1]).toEqual(["--version"]); expect(win.calls[0][2]).toMatchObject({ shell: true });
+  const lin = stub({ status: 0, stdout: "codex-cli 1.2.3" });
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: lin.spawn })).toBe("1.2.3");
+  expect(lin.calls[0][0]).toBe("codex"); expect(lin.calls[0][2]).toMatchObject({ shell: false });
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ error: { code: "ENOENT" }, status: null }).spawn })).toBeNull();
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 1, stdout: "codex-cli 1.2.3" }).spawn })).toBeNull();
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: "kaputt" }).spawn })).toBeNull();
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0 }).spawn })).toBeNull();
+  expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: "codex-cli 1.2.3", error: { code: "ETIMEDOUT" } }).spawn })).toBeNull();
+  for (const roh of ["codex-cli 1.2.3.4", "codex-cli x1.2.3", "codex-cli 1.2.3x"]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBeNull();
+});
+test("Belege-Datei mit null: kein Absturz, Mangel statt Fehlerpfad", () => {
+  const r = lauf(["--belege", datei("null")], { codexVersion: () => "9.9.9", freigaben: tabelle() });
+  expect(r.code).toBe(1); expect(r.maengel?.join("\n")).toContain("belegten Version keine");
 });

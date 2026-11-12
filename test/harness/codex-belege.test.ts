@@ -94,8 +94,8 @@ test("reiner Spawn, fehlender Main und fehlendes Tool werden abgelehnt", () => {
   expect(bewerte(b).join()).toContain("Hauptagent"); expect(bewerte(b).join()).toContain("Rolle probe-planer");
   const other = fixture(); other.observations = other.observations.filter(o => o.type !== "TOOL"); expect(bewerte(other).join()).toContain("Werkzeug");
 });
-test("Laufzeit, Inventar und unvollständige Daten sind eigenständige Fehler", () => {
-  expect(bewerte({ ...fixture(), version: "0.1.0" })).toEqual(["Laufzeit nicht geprüft: erwartet Codex CLI 0.164.0"]);
+test("Inventar und unvollständige Daten sind eigenständige Fehler, die Version prüft die Vorprüfung", () => {
+  expect(bewerte({ ...fixture(), version: "0.1.0" })).toEqual([]);
   expect(bewerte({ ...fixture(), rollen: [], tools: [] }).join()).toContain("Laufzeitinventar");
   for (const v of [null, true, {}, { tracing: true }, { ...fixture(), observations: 3 }, { ...fixture(), sessionId: "" }]) expect(bewerte(v).length).toBeGreaterThan(0);
 });
