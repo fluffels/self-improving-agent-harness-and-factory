@@ -189,6 +189,24 @@ describe("Hintergrund-Läufe (factory#413 L4): Bash und PowerShell der Lens lauf
     for (const c of ["& node x", "echo a; & node x", "echo a | & node x"]) expect(urteil("PowerShell", c), c).toBeNull();
     expect(urteil("Bash", "& node x")).toBe("deny");
   });
+  test("PowerShell-Aufrufoperator in Klammer, Scriptblock, nach Zeilenumbruch, nach && und mehrfach (g): erlaubt", () => {
+    for (const c of ["(& node x)", "{ & node x }", "a\n& node x", "a && & node x", "& a; & b"]) expect(urteil("PowerShell", c), c).toBeNull();
+  });
+  test("PowerShell-Aufrufoperator braucht Leerraum dahinter (`&node` bleibt verweigert, fail-closed)", () => {
+    expect(urteil("PowerShell", "&node x")).toBe("deny");
+  });
+  test("& neben Umleitungen und Pipe ist kein Hintergrund (`<&3`, `&|`, `&<`)", () => {
+    for (const c of ["cmd <&3", "a &| b", "x &<f"]) expect(urteil("Bash", c), c).toBeNull();
+  });
+  test("Hintergrund-Wörter: Groß-/Kleinschreibung egal, nur als ganzes Wort", () => {
+    expect(urteil("PowerShell", "start-job { x }")).toBe("deny");
+    expect(urteil("Bash", "NOHUP x")).toBe("deny");
+    for (const c of ["nohupx", "xnohup"]) expect(urteil("Bash", c), c).toBeNull();
+  });
+  test("nicht-String-Befehl (auch PowerShell) und run_in_background als String: kein deny", () => {
+    expect(G.bewerteLensBefehl({ command: 42 }, "PowerShell")).toBeNull();
+    expect(urteil("Bash", "echo hi", { run_in_background: "true" })).toBeNull();
+  });
   test("die Ablehnung nennt den Weg (Vordergrund, Serie aufteilen)", () => {
     const r = G.entscheideHook(cmd("Bash", "nohup x"), DEPS)?.hookSpecificOutput as unknown as { permissionDecisionReason: string };
     expect(r.permissionDecisionReason).toMatch(/Vordergrund/);
@@ -216,7 +234,7 @@ describe("Prozess-Start ohne deps (echter Hook-Pfad, liest die Projekt-Config se
 });
 
 describe("Verdrahtung", () => {
-  test("die Lens-Definition startet den Guard als PreToolUse-Hook mit Matcher Edit (und nur dafür)", () => {
+  test("die Lens-Definition startet den Guard als PreToolUse-Hook mit Matcher Edit|Bash|PowerShell", () => {
     const md = readFileSync(new URL("../../.claude/agents/factory-lens.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const kopf = /^---\n([\s\S]*?)\n---/.exec(md)?.[1] ?? "";
     expect(kopf).toMatch(/hooks:\s*\n\s+PreToolUse:\s*\n\s+- matcher: "Edit\|Bash\|PowerShell"/);

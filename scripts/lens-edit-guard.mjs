@@ -16,7 +16,7 @@
  *     über eine geschlossene Liste: `run_in_background: true`; ein einzelnes `&`, das weder an `&`, `>`, `<` noch `|` grenzt
  *     (PowerShell-Aufrufoperator `& node x` am Befehls-/Segmentanfang ausgenommen); die Wörter `nohup`, `setsid`, `disown`, `Start-Job`,
  *     `Start-ThreadJob`, `Start-Process`. Rohtext-Scan: ein `&` in Quotes wird auch verweigert (fail-closed); ein Hintergrund über ein Skript mit
- *     eigenem spawn/detached erkennt er nicht.
+ *     eigenem spawn/detached erkennt er nicht; ebenso nicht `coproc`, `screen`, `tmux` und `at`. Die Wörter gelten auch in Argumenten und Grep-Mustern (`grep nohup x` wird verweigert, fail-closed).
  *   - Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung); jeder Pfad mit einem Segment `.claude/worktrees/<worktree-präfix><nr>-lens-r<n>/`, `-lens-m<n>/`, `-lens-a<n>/` oder `-lens-c<n>/` gilt als Lens-Worktree, auch ein verschachtelter.
  *
  * Präfixe und Agentenname kommen je Aufruf aus der Projekt-Config (`ticket-namen.mjs`); ist sie nicht nutzbar, lehnt der Guard ab (fail-closed).
@@ -91,7 +91,7 @@ export function bewerteLensBefehl(eingabe, tool = "Bash") {
   return {
     deny: true,
     grund:
-      "Lens-Befehle laufen im Vordergrund: kein `run_in_background`, kein `&` am Ende, kein nohup/setsid/disown/Start-Job/Start-ThreadJob/Start-Process " +
+      "Lens-Befehle laufen im Vordergrund: kein `run_in_background`, kein einzelnes `&` (nicht nur am Ende, auch mitten im Befehl oder in Quotes), kein nohup/setsid/disown/Start-Job/Start-ThreadJob/Start-Process " +
       "(ein abgebrochener Hintergrund-Lauf schreibt sonst parallel in dieselbe Datei weiter). Dauert eine Probe-Serie über 10 Minuten (Bash-Deckel), teile sie in mehrere Vordergrund-Läufe auf.",
   };
 }
