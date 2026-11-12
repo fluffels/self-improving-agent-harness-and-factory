@@ -11,8 +11,8 @@
  *  1. Kopfzeile `> <paket>@<version> <skript>`: nur Skripte des Gate-Satzes zählen; ein anderer Paketname oder ein Skript außerhalb
  *     des Gate-Satzes ist fremd, trennt Abschnitte und wird nie gezählt. Die Kettennamen (`verify`, `verify:full`) sind keine Gates.
  *  2. Ein Gate, dem eine weitere Kopfzeile folgt, ist grün; das letzte ist grün bei Exit 0, sonst rot (ist es fremd, ist kein Gate rot).
- *     Die Kopfzeile des Skripts, das ein Gate-Befehl per `npm run <x>`/`npm test` selbst startet, ist „verschachtelt“ und beendet das
- *     Gate nicht (ein rotes `gate-befehl:coverage` wird nicht vom Folgekopf `test:coverage` grün). Folgt auf eine Kettenkopfzeile ein Rot, zählen die übrigen Gates der Kette als „nicht erreicht“, nie als grün (npm druckt bei
+ *     Die Kopfzeile des Skripts, das ein Gate-Befehl per `npm run <x>`/`npm test` selbst startet, ist „verschachtelt“: sie beendet das
+ *     Gate nicht (ein rotes `gate-befehl:coverage` wird nicht vom Folgekopf `test:coverage` grün) und zählt nicht noch einmal als eigenes Gate. Folgt auf eine Kettenkopfzeile ein Rot, zählen die übrigen Gates der Kette als „nicht erreicht“, nie als grün (npm druckt bei
  *     einem roten Schritt keine Fehlerzeile: Rot ist nur aus Kopfzeilen und Exit-Status ableitbar).
  *  3. Transkript: gezählt wird nur eine reine `&&`-Kette aus `cd`, Env-Zuweisungen und Gate-Aufrufen (`npm run`, `npm test`,
  *     `gate-befehl.mjs`, `verify-lauf.mjs`); Pipe (Grund „Pipe“) und jede andere Form (Grund „Befehlsform“) fallen heraus.
@@ -171,7 +171,7 @@ export function bewerteKopfLauf({ zeilen, exit, paket, gates, verify }) {
   const ende = zeilen.length ? zeilen[zeilen.length - 1].ms : null;
   const ergebnis = [];
   eintraege.forEach((e, i) => {
-    if (e.art !== "gate") return;
+    if (e.art !== "gate" || e.verschachtelt) return;
     const naechste = eintraege.slice(i + 1).find((x) => !x.verschachtelt);
     const bis = naechste ? naechste.ms : ende;
     const sek = e.ms != null && bis != null ? Math.max(0, (bis - e.ms) / 1000) : null;
