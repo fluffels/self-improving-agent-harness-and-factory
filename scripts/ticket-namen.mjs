@@ -37,15 +37,15 @@ export function worktreePraefix(config) {
 /** Alle Worktree-Muster aus dem rohen Präfix (einzige Stelle, die es maskiert und baut). Pur. */
 function worktreeTeil(worktree) {
   const w = escapeRegex(worktree);
-  const lensNameKern = String.raw`(${w}\d+)-lens-[rmac]\d+(?:-[a-z](?:[a-z-]*[a-z])?)?`;
+  const lensNameKern = String.raw`(${w}(?:\d+|[a-z][a-z0-9]*(?:-(?!lens-[rmac]\d)[a-z0-9]+)*))-lens-[rmac]\d+(?:-[a-z](?:[a-z-]*[a-z])?)?`;
   return {
-    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>`, `-lens-m<n>`, `-lens-a<n>` oder `-lens-c<n>`), optional mit Brillen-Endung `-<brille>` (`[a-z-]`, je Brille ein eigener Worktree); Gruppe 1 ist `<wt><nr>`. */
+    /** Muster eines Lens-Worktree-Namens (`<wt><nr>-lens-r<runde>`, `-lens-m<n>`, `-lens-a<n>` oder `-lens-c<n>`), optional mit Brillen-Endung `-<brille>` (`[a-z-]`, je Brille ein eigener Worktree); Gruppe 1 ist `<wt><nr>` oder `<wt><slug>` (Lauf ohne Ticket; der Slug beginnt mit einem Buchstaben und enthält kein `-lens-<r|m|a|c><ziffer>`). */
     lensNameKern,
     /** Ganzer Lens-Worktree-Name (`^…$`). */
     lensWorktreeMuster: new RegExp(`^${lensNameKern}$`),
     /** Pfadform `/.claude/worktrees/[<Repo>/]<Lens-Name>/` (Repo-Segment im Arbeitsplatz), Groß-/Kleinschreibung egal (Windows-Pfade). */
     lensPfadMuster: new RegExp(String.raw`/\.claude/worktrees/${repoSegment(w, "/")}${lensNameKern}/`, "i"),
-    /** Lose Datei `<wt><nr>` gefolgt von `-`, `.` oder Ende; Gruppe 1 ist der Eltern-Worktree. */
+    /** Lose Datei `<wt><nr>` gefolgt von `-`, `.` oder Ende; Gruppe 1 ist der Eltern-Worktree. Bewusst nur Nummern: ein Slug-Worktree (Lauf ohne Ticket) hat keine losen Dateien. */
     dateiMuster: new RegExp(String.raw`^(${w}\d+)(?=[-.]|$)`),
   };
 }

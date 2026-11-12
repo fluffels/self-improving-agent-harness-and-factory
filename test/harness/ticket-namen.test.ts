@@ -121,6 +121,19 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(re.test(`${ECHT.praefixe.worktree}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x1")).toBe(false);
   });
+  test("L12: Lauf ohne Ticket: Gruppe 1 darf der Slug des Feature-Worktrees sein, Feature-Pfade und Doppel-lens treffen nicht", () => {
+    const re = n.lensWorktreeMuster;
+    expect(re.exec("ab-eingangsfilter-lens-r3")?.[1]).toBe("ab-eingangsfilter");
+    expect(re.exec("ab-eingangsfilter-lens-r3-test")?.[1]).toBe("ab-eingangsfilter");
+    expect(re.exec("ab-ein-gang2-lens-m1-architektur")?.[1]).toBe("ab-ein-gang2");
+    expect(n.lensPfadMuster.test("/x/.claude/worktrees/ab-eingangsfilter-lens-r3/AGENTS.md")).toBe(true);
+    expect(n.lensPfadMuster.test("/x/.claude/worktrees/ab-eingangsfilter/AGENTS.md")).toBe(false);
+    for (const schlecht of ["ab-lens-r1", "ab-409-fix-lens-r1", "ab-x-lens-r1-lens-r2", "ab--lens-r1"]) {
+      expect(re.test(schlecht), schlecht).toBe(false);
+    }
+    expect(re.exec("ab-12-lens-r1")?.[1]).toBe("ab-12");
+    expect(n.dateiMuster.test("ab-eingangsfilter.json")).toBe(false);
+  });
   test("L2: Lens-Name trägt optional die Brille als Endung (parallele Lenses je eigener Worktree); Gruppe 1 bleibt Worktree-Name", () => {
     const re = n.lensWorktreeMuster;
     expect(re.exec("ab-12-lens-r1-test-adaequanz")?.[1]).toBe("ab-12");
