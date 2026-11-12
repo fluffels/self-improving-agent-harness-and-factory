@@ -1,6 +1,7 @@
 /* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39): nur im Bezieher; die Datei `.github/workflows/factory-update.yml` muss da sein und der Workflow `active`.
  * Jeder Zweig hat seinen Test; `lesen` ist die gh-Naht (kein Netz), `existiert` und `bezieher` sind injiziert. */
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/harness-doctor-factory-update.mjs";
@@ -167,15 +168,53 @@ describe("dependabotAusschlussPunkt", () => {
     const mani = manifest(eintrag("scripts/x.mjs"));
     expect(pruefe(dependabot(actions()), { ...ALLE, ".factory/besitz.json": mani, ".github/workflows/projekt.yml": "x" })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
-  test("kaputtes YAML: NICHT PRÜFBAR", () => {
+  test("kaputtes YAML (Flow, unbeendet): NICHT PRÜFBAR", () => {
     const [p] = pruefe("updates: [\n  - x: {");
     expect(p).toMatchObject({ punkt: "Dependabot-Ausschluss", ok: false, nichtPruefbar: true });
     expect(p?.befund).toContain(".github/dependabot.yml");
   });
-  test("YAML ohne Liste updates (Text, Skalar): wie ohne github-actions-Eintrag OK", () => {
+  test("YAML ohne updates (Text, Skalar-Dokument): OK nur ohne `updates` als Mapping; Skalar-Einträge zählen nicht", () => {
     expect(pruefe("version: 2\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
-    expect(pruefe("42\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
     expect(pruefe("updates:\n  - 3\n  - null\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe("updates: []\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe("updates:\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  });
+  test("updates als Text, Skalar-Dokument oder null: NICHT PRÜFBAR statt falsch OK (Nicht-Listen-Zweig)", () => {
+    for (const roh of ["updates: x\n", "42\n", "null\n", "updates: null\n", "updates:\n  a: b\n"]) {
+      expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ punkt: "Dependabot-Ausschluss", ok: false, nichtPruefbar: true });
+    }
+  });
+  test("nicht gelesene Formen sind NICHT PRÜFBAR: Tab, Flow-Eintrag, Anker, Alias, doppelte Schlüssel, mehrzeilige Flow-Liste, Block-Skalar", () => {
+    const aktion = "  - package-ecosystem: github-actions\n";
+    const faelle = [
+      "updates:\n\t- package-ecosystem: github-actions\n",
+      "updates:\n  - {package-ecosystem: github-actions}\n",
+      "updates:\n  - &a\n",
+      `updates:\n${aktion}    exclude-paths: *a\n`,
+      `updates:\n${aktion}    exclude-paths: [a,\n      b]\n`,
+      `updates:\n${aktion}    exclude-paths: |\n      a\n`,
+      `updates:\n${aktion}    exclude-paths: []\n    exclude-paths: []\n`,
+      `updates:\n${aktion}    exclude-paths:\n      - "a\n`,
+      `updates:\n${aktion}    exclude-paths:\n      -\n`,
+      `updates:\n${aktion}    exclude-paths: [a,,b]\n`,
+      "updates:\n  - package-ecosystem:\n",
+      "updates:\n  -\n    package-ecosystem: github-actions\n",
+      "updates:\n  - package-ecosystem: x\n  y\n",
+      "updates:\n- package-ecosystem: x\nupdates: []\n",
+    ];
+    for (const roh of faelle) expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ ok: false, nichtPruefbar: true });
+  });
+  test("gelesene Formen: Listenpunkt auf Höhe von updates, Flow-Liste, einfache Quotes, Kommentare, --- am Anfang, CRLF", () => {
+    const voll = `---\n# Kommentar\nupdates:\n- package-ecosystem: 'github-actions' # Aktionen\n  exclude-paths: [".github/workflows/codeql.yml", '.github/workflows/zizmor.yml']\n`;
+    expect(pruefe(voll)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe(voll.replaceAll("\n", "\r\n"))).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths: []\n")[0]).toMatchObject({ ok: false });
+    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n")[0]).toMatchObject({ ok: false });
+    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    schedule:\n      interval: weekly\n")[0]).toMatchObject({ ok: false });
+  });
+  test("Fallback .github/dependabot.yaml, wenn die .yml fehlt (die .yml gilt zuerst)", () => {
+    expect(pruefe(null, { ...ALLE, ".github/dependabot.yaml": dependabot(actions()) })[0]).toMatchObject({ ok: false });
+    expect(pruefe(dependabot(), { ...ALLE, ".github/dependabot.yaml": dependabot(actions()) })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
   test("Manifest fehlt, kein JSON oder ohne Liste: NICHT PRÜFBAR", () => {
     for (const m of [null, "{", "{}"]) {
@@ -190,8 +229,8 @@ describe("dependabotAusschlussPunkt", () => {
   test("exclude-paths als Text mit dem Pfad zählt nicht (kein Array)", () => {
     expect(pruefe(dependabot(`- package-ecosystem: github-actions\n  exclude-paths: ${BESITZ.join(" ")}\n`))[0]).toMatchObject({ ok: false });
   });
-  test("leere oder null-Datei dependabot.yml: OK statt Absturz", () => {
-    for (const leer of ["", "null\n"]) expect(pruefe(leer), JSON.stringify(leer)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+  test("leere oder Kommentar-Datei dependabot.yml: OK statt Absturz", () => {
+    for (const leer of ["", "# nur Kommentar\n", "\n"]) expect(pruefe(leer), JSON.stringify(leer)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
   test("ohne github-actions-Eintrag wird das Manifest nicht gebraucht (kaputt: trotzdem OK)", () => {
     expect(pruefe(dependabot(), { ...ALLE, ".factory/besitz.json": "{" })).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
@@ -256,5 +295,42 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
     const e = f({ rootDir: bezieher, config });
     expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update", "Dependabot-Ausschluss"]);
     expect(e[1]).toMatchObject({ ok: false });
+  });
+});
+
+/* Vertrag des Doctor-Wochenlaufs (harness-doctor.yml hat kein `npm ci`): der statische Importgraph von Doctor und Meldestellen-Lauf enthält nur `node:`-Builtins und lokale Module, nie ein npm-Paket wie `yaml`. */
+const IMPORT = /\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+/** Alle Modulnamen, die der Importgraph ab `einstieg` anspricht, die kein `node:`-Builtin und kein lokales Modul sind. */
+function externeImporte(einstieg: string, lese: (pfad: string) => string): string[] {
+  const gesehen = new Set<string>();
+  const extern = new Set<string>();
+  const offen = [einstieg];
+  for (let pfad = offen.pop(); pfad !== undefined; pfad = offen.pop()) {
+    if (gesehen.has(pfad)) continue;
+    gesehen.add(pfad);
+    for (const m of lese(pfad).matchAll(IMPORT)) {
+      const name = m[1] as string;
+      if (name.startsWith("./") || name.startsWith("../")) offen.push(join(dirname(pfad), name));
+      else if (!name.startsWith("node:")) extern.add(name);
+    }
+  }
+  return [...extern].sort();
+}
+describe("Importgraph des Doctor-Wochenlaufs", () => {
+  test("harness-doctor.mjs und harness-doctor-melden.mjs importieren transitiv nur node:-Builtins und lokale Module", () => {
+    const skripte = join(import.meta.dirname, "..", "scripts");
+    for (const einstieg of ["harness-doctor.mjs", "harness-doctor-melden.mjs"]) {
+      expect(externeImporte(join(skripte, einstieg), (p) => readFileSync(p, "utf8")), einstieg).toEqual([]);
+    }
+  });
+  test("der Graph-Leser folgt relativen Importen und findet ein npm-Paket (Prüfung des Prüfers)", () => {
+    const dateien: Record<string, string> = {
+      "/s/a.mjs": 'import { x } from "./b.mjs";\nimport fs from "node:fs";\nimport("./c.mjs");',
+      "/s/b.mjs": 'import "../t/d.mjs";',
+      "/s/c.mjs": 'import { parse } from "yaml";',
+      "/t/d.mjs": 'export { y } from "ajv";',
+    };
+    expect(externeImporte("/s/a.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv", "yaml"]);
+    expect(externeImporte("/s/b.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv"]);
   });
 });
