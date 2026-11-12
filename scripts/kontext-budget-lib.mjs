@@ -101,7 +101,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/factory/plattform-windows.md", budget: 2_500 },
   { file: ".agents/skills/factory/ticket-drift.md", budget: 2_500 },
   { file: ".agents/skills/factory/umsetzer-browser.md", budget: 2_000 },
-  { file: ".agents/skills/factory/umsetzer-fortsetzung.md", budget: 5_000 },
+  { file: ".agents/skills/factory/umsetzer-fortsetzung.md", budget: 3_000 },
   { file: ".agents/skills/factory/umsetzer-gruppen.md", budget: 3_500 },
   { file: ".agents/skills/factory/umsetzer-guard-proben.md", budget: 2_500 },
   { file: ".agents/skills/factory/umsetzer-pr-merge.md", budget: 4_000 },
