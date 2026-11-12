@@ -1,4 +1,4 @@
-/* Probe-Erstbezug (factory#234): reine Teile (Füll-Block, Schrittliste, Urteil), Aufruf-Fehler und die Negativfälle der Kette (Budget, toter Kern-Verweis) gegen einen echten Klon. */
+/* Probe-Erstbezug (factory#234): reine Teile (Füll-Block, Schrittliste, Urteil), Aufruf-Fehler und die Negativfälle der Kette (Budget, toter Kern-Verweis) gegen einen echten Klon; Test-Commits ohne Auto-Wartung (factory#383). */
 import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -51,6 +51,37 @@ const temp = <T>(fn: (dir: string) => T): T => {
     rmSync(dir, { recursive: true, force: true });
   }
 };
+
+/** Test-Git: Identität per `-c`; der Commit startet sonst `git maintenance run --auto --quiet --detach`, dessen Commit-Graph-Schreiben (`commit-graphs/tmp_graph_*`) mit einem folgenden lokalen Klon um Hardlinks läuft (factory#383). `maintenance.auto=false` und `gc.auto=0` verhindern den Start (gemessen mit Git 2.56 je allein; beide, damit ältere Git-Stände ebenfalls ruhig bleiben). */
+const git = (cwd: string, ...args: string[]): void => {
+  const r = spawnSync("git", ["-C", cwd, "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "user.name=t", "-c", "user.email=t@e.invalid", ...args], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+};
+
+describe("Test-Helfer git (factory#383)", () => {
+  it("Test-Commits starten keine Auto-Wartung (sonst Hardlink-Race beim folgenden lokalen Klon)", () => {
+    temp((dir) => {
+      const leer = join(dir, "leer.gitconfig");
+      writeFileSync(leer, "");
+      vi.stubEnv("GIT_CONFIG_GLOBAL", leer);
+      vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+      try {
+        const repo = join(dir, "r");
+        spawnSync("git", ["init", "-q", "-b", "main", repo]);
+        const kontrolle = join(dir, "kontrolle.txt");
+        spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "k"], { env: { ...process.env, GIT_TRACE: kontrolle } });
+        expect(readFileSync(kontrolle, "utf8")).toMatch(/maintenance run --auto|gc --auto/);
+        const spur = join(dir, "spur.txt");
+        vi.stubEnv("GIT_TRACE", spur);
+        git(repo, "commit", "-q", "--allow-empty", "-m", "x");
+        expect(readFileSync(spur, "utf8")).toMatch(/built-in: git commit/);
+        expect(readFileSync(spur, "utf8")).not.toMatch(/maintenance run|gc --auto/);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+  });
+});
 
 describe("fuellAgentsMd", () => {
   /** Kleinster Raum, den das Gerüst zulässt. */
@@ -372,7 +403,7 @@ describe("echte Nähte", () => {
       expect(n.kopf(dir)).toBeNull();
       spawnSync("git", ["init", "-q", "-b", "main", dir]);
       expect(n.istGitRepo(dir)).toBe(true);
-      spawnSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
+      git(dir, "commit", "-q", "--allow-empty", "-m", "x");
       expect(n.kopf(dir)).toMatch(/^[0-9a-f]{40}$/);
     });
   });
@@ -414,7 +445,7 @@ process.exitCode = io.fuehre({ argv: [process.execPath, "-e", "console.log('SICH
       const q = join(dir, "q");
       mkdirSync(q);
       spawnSync("git", ["init", "-q", "-b", "main", q]);
-      spawnSync("git", ["-C", q, "-c", "user.name=t", "-c", "user.email=t@e.invalid", "commit", "-q", "--allow-empty", "-m", "x"]);
+      git(q, "commit", "-q", "--allow-empty", "-m", "x");
       const r = spawnSync(process.execPath, [join(WURZEL, "scripts", "probe-erstbezug.mjs"), "--quelle", q, "--scratch", join(dir, "s")], { encoding: "utf8" });
       expect(r.status).toBe(1);
       expect(r.stdout).toMatch(/--- klon[\s\S]*--- fixture[\s\S]*ROT fixture: Exit 1/);
@@ -433,10 +464,6 @@ process.exitCode = io.fuehre({ argv: [process.execPath, "-e", "console.log('SICH
 /* Integration: echte Kette gegen einen Klon der Quelle (HEAD, ohne Netz), je Fall ein eigener Klon-Commit und Scratch. Ohne `install` und ohne verifyKompakt: das eine Gate per Skript im Fixture-Projekt. */
 describe("Negativfälle der Kette (echter Klon)", () => {
   const TIMEOUT = 180_000;
-  const git = (cwd: string, ...args: string[]): void => {
-    const r = spawnSync("git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@e.invalid", ...args], { encoding: "utf8" });
-    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-  };
   const kern = (text: string): { vor: string; kern: string; nach: string } => {
     const a = text.indexOf(START);
     const b = text.indexOf(ENDE);
@@ -446,7 +473,8 @@ describe("Negativfälle der Kette (echter Klon)", () => {
   /** Klon der Quelle mit einer Änderung an der AGENTS.md (`aender` bekommt den Text), als Commit. */
   const klon = (dir: string, aender: (t: string) => string): string => {
     const k = join(dir, "klon");
-    spawnSync("git", ["clone", "-q", WURZEL, k], { encoding: "utf8" });
+    mkdirSync(dir, { recursive: true });
+    git(dir, "clone", "-q", "--no-local", WURZEL, k);
     const p = join(k, "AGENTS.md");
     writeFileSync(p, aender(readFileSync(p, "utf8")));
     git(k, "commit", "-q", "-a", "--allow-empty", "-m", "Sabotage");
