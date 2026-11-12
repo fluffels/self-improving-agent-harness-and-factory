@@ -6,11 +6,11 @@
  * Regel: Die Langfassung eines Gates steht in seinem eigenen `###`-Abschnitt von §3 (WAS, WARUM, Absicherung);
  * §3a hält nur Regeln zu Ablauf, Review und Eskalation. Geprüft werden (a) je Schlüssel der geschlossenen Liste
  * `GATE_SCHLUESSEL` genau ein §3-Abschnitt mit den drei Bausteinen, (b) die Test-Infrastruktur im Abschnitt `npm test`,
- * (c) in §3a weder eine Überschrift noch ein fetter Leitsatz am Bullet-Anfang, der einen Schlüssel oder einen
+ * (c) in §3a weder eine Überschrift noch ein fetter Leitsatz am Zeilen- oder Bullet-Anfang, der einen Schlüssel oder einen
  * Leitsatz der geschlossenen Liste `VERSCHOBEN` nennt.
  *
  * Bewusste Grenze: nur Überschriften und Leitsätze der geschlossenen Listen, Fließtext wird nicht geprüft; ein neues
- * Gate kommt nur per Eintrag in `GATE_SCHLUESSEL` unter die Prüfung.
+ * Gate kommt nur per Eintrag in `GATE_SCHLUESSEL` unter die Prüfung. Fehlt `## 3.` oder `## 3a.` (auch abgewandelt), ist das ein Fund.
  */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
@@ -35,7 +35,16 @@ const VERSCHOBEN = [
   "Skript-Konvention",
   "Test-Infrastruktur",
   "Sammelticket-PR",
+  "Lint muss grün bleiben",
+  "Größen-Gate",
+  "no-explicit-any",
+  "Die Größe EINER Änderung",
+  "Testabdeckung wird gemessen",
+  "Abhängigkeiten bleiben aktuell",
 ] as const;
+
+// Die einzigen Überschriften, die in §3a stehen dürfen.
+const ERLAUBTE_3A_UEBERSCHRIFTEN = ["Ablauf, Review und Eskalation", "Forum-Eingang"] as const;
 
 // Abschnitte, deren Absicherung ein eigenes Bullet ist, das nicht "Absicherung" heißen muss, gibt es nicht:
 // jeder Abschnitt braucht alle drei Bausteine.
@@ -66,6 +75,8 @@ function gliederungsFunde(md: string): string[] {
   const funde: string[] = [];
   const drei = ausschnitt(md, /^## 3\. /, /^## 3a\. /);
   const dreiA = ausschnitt(md, /^## 3a\. /, /^## 4\. /);
+  if (drei === "") funde.push("§3: Überschrift \"## 3. \" fehlt");
+  if (dreiA === "") funde.push("§3a: Überschrift \"## 3a. \" fehlt");
   const abschnitte = unterabschnitte(drei);
   for (const schluessel of GATE_SCHLUESSEL) {
     const treffer = abschnitte.filter((a) => a.titel.includes(schluessel));
@@ -82,10 +93,10 @@ function gliederungsFunde(md: string): string[] {
     funde.push("npm test: Leitsatz Test-Infrastruktur fehlt");
   }
   for (const z of dreiA.split("\n")) {
-    if (z.startsWith("### ") && !z.includes("Ablauf, Review und Eskalation") && !z.includes("Forum-Eingang")) {
+    if (z.startsWith("### ") && !ERLAUBTE_3A_UEBERSCHRIFTEN.some((u) => z.includes(u))) {
       funde.push(`§3a: unerwartete Überschrift ${z}`);
     }
-    const leitsatz = /^- \*\*(.+?)\*\*/.exec(z)?.[1];
+    const leitsatz = /^(?:- )?\*\*(.+?)\*\*/.exec(z)?.[1];
     if (leitsatz === undefined) continue;
     const verboten = [...GATE_SCHLUESSEL, ...VERSCHOBEN].find((s) => leitsatz.includes(s));
     if (verboten !== undefined) funde.push(`§3a: Gate-Regel „${leitsatz}“ gehört nach §3 (${verboten})`);
@@ -123,6 +134,30 @@ describe("Gliederung docs/agent-harness.md", () => {
   test("Red-Green: Gate-Bullet in §3a ist ein Fund", () => {
     const md = SAUBER.replace("- **Nachweis (x).** Text", "- **Lint muss grün bleiben (npm run lint).** Text");
     expect(gliederungsFunde(md).some((f) => f.startsWith("§3a: Gate-Regel"))).toBe(true);
+  });
+
+  test("Red-Green: unerwartete Überschrift in §3a ist ein Fund", () => {
+    const md = SAUBER.replace("- **Nachweis (x).** Text", "### Lint (npm run lint)\n- **Nachweis (x).** Text");
+    expect(gliederungsFunde(md)).toContain("§3a: unerwartete Überschrift ### Lint (npm run lint)");
+  });
+
+  test("Red-Green: fehlende oder abgewandelte §3a-Überschrift ist ein Fund", () => {
+    const md = SAUBER.replace("## 3a. Langfassung", "## 3a Langfassung");
+    expect(gliederungsFunde(md)).toContain("§3a: Überschrift \"## 3a. \" fehlt");
+    const ohne3 = SAUBER.replace("## 3. Die", "## 3 Die");
+    expect(gliederungsFunde(ohne3)).toContain("§3: Überschrift \"## 3. \" fehlt");
+  });
+
+  test("Red-Green: Gate-Schlüssel mitten in einer Zeile ist kein Fund, am Anfang in Absatzform schon", () => {
+    const mitten = SAUBER.replace("- **Nachweis (x).** Text", "- **Nachweis (x).** Text mit **npm run lint** mittendrin");
+    expect(gliederungsFunde(mitten)).toEqual([]);
+    const absatz = SAUBER.replace("- **Nachweis (x).** Text", "**Skript-Konvention: x (quellprojekt#1).** Text");
+    expect(gliederungsFunde(absatz).some((f) => f.includes("Skript-Konvention"))).toBe(true);
+  });
+
+  test("Red-Green: echter alter Leitsatz in §3a ist ein Fund", () => {
+    const md = SAUBER.replace("- **Nachweis (x).** Text", "- **Lint muss grün bleiben.** Text");
+    expect(gliederungsFunde(md).some((f) => f.includes("Lint muss grün bleiben"))).toBe(true);
   });
 
   test("Red-Green: verschobener Leitsatz in §3a ist ein Fund", () => {
