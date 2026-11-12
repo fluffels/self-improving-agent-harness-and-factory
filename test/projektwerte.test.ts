@@ -367,7 +367,7 @@ describe("ohneProjektwerte (L17): Text ohne Block samt Markern und ohne Werte de
   test("Block samt beiden Marker-Zeilen entfällt, der Rest bleibt", () => {
     assert.equal(lib.ohneProjektwerte(`kopf\n${S}\nblock\n${E}\nrest`), "kopf\nrest");
   });
-  test("ein Block am Textanfang oder -ende und mehrere Blöcke werden je einzeln entfernt", () => {
+  test("ein Block am Textanfang und mehrere Blöcke werden je einzeln entfernt", () => {
     assert.equal(lib.ohneProjektwerte(`${S}\nblock\n${E}\nrest`), "rest");
     assert.equal(lib.ohneProjektwerte(`A\n${S}\nx\n${E}\nB\n${S}\ny\n${E}\nC\n`), "A\nB\nC\n");
   });

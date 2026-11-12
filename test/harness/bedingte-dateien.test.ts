@@ -190,8 +190,8 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
 
       test("Negativfall Waise: eine Datei nach Muster im Ordner ohne Katalogeintrag ist rot, eine andere Datei, ein Namensanfang mitten im Namen und eine Endung dahinter nicht", () => {
         const e = echt(k);
-        const neu = k.dateien[0].datei.replace(/^(\w+)-.*$/, "$1-neu.md");
-        assert.match(befund(k, { ...e, ordnerDateien: [...e.ordnerDateien, neu] }), new RegExp(`${escapeRe(neu)}: Waise`));
+        for (const neu of k === UMSETZER ? ["umsetzer-neu.md", "plattform-neu.md"] : ["ablauf-neu.md"])
+          assert.match(befund(k, { ...e, ordnerDateien: [...e.ordnerDateien, neu] }), new RegExp(`${escapeRe(neu)}: Waise`), "jede Alternative des Musters");
         assert.deepEqual(bedingteDateienBefunde(k, { ...e, ordnerDateien: [...e.ordnerDateien, ...k.harmlos] }), []);
       });
 
