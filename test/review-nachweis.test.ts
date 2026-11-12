@@ -20,7 +20,7 @@ afterEach(() => {
 
 type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
-  review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; verdikt: string | null } | null;
+  review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
   bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
 type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
@@ -219,6 +219,53 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
       assert.ok(mit(b).length > 0, `"${b}" müsste rot sein`);
       assert.match(mit(b).join(), /blocker/);
     }
+  });
+});
+
+describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => {
+  const mit = (teil: string | null, o: { lenses?: string; blocker?: string } = {}) =>
+    bewerteNachweis({
+      nachweis: parseNachweis(
+        review(`head=${SHA} runden=2 lenses=${o.lenses ?? "kombiniert"} blocker=${o.blocker ?? "kombiniert:3"}${teil === null ? "" : ` teilbrillen=${teil}`} verdikt=ok`),
+      ),
+      dateien: ["src/x.ts"],
+      headBekannt: true,
+      headImSlice: true,
+      stufe: "S",
+    });
+  const GUT = "architektur:1,requirement-treue:1,test-adaequanz:1";
+  test("Parser: Feld fehlt → null, sonst Liste wie blocker (Umlaute, Leerzeichen)", () => {
+    assert.equal(parseNachweis(review(`head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`)).review?.teilbrillen, null);
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:2 teilbrillen=Architektur:2, Test-Adäquanz:0 verdikt=ok`));
+    assert.deepEqual(n.review?.teilbrillen, [
+      { lens: "architektur", n: 2 },
+      { lens: "test-adaequanz", n: 0 },
+    ]);
+    assert.deepEqual(n.review?.blocker, [{ lens: "kombiniert", n: 2 }]);
+  });
+  test("alte Zeile ohne teilbrillen bleibt gültig; passende Aufteilung ist ok", () => {
+    assert.deepEqual(mit(null), []);
+    assert.deepEqual(mit(GUT), []);
+    assert.deepEqual(mit("architektur:3,requirement-treue:0,test-adaequanz:0"), []);
+  });
+  test("falsche Summe ist rot", () => {
+    assert.match(mit("architektur:1,requirement-treue:1,test-adaequanz:0").join(), /teilbrillen.*Summe 2.*kombiniert:3/);
+    assert.match(mit("architektur:2,requirement-treue:2,test-adaequanz:2").join(), /Summe 6/);
+  });
+  test("ungültige Teilwerte sind rot: unbekannte, doppelte, fehlende Brille, kaputte Zahl, leer", () => {
+    for (const t of ["architektur:3,requirement-treue:0", "architektur:1,architektur:1,requirement-treue:1,test-adaequanz:0", "architektur:1,requirement-treue:1,test-adaequanz:1,doku:0", "architektur:x,requirement-treue:0,test-adaequanz:0", "architektur:-1,requirement-treue:4,test-adaequanz:0", ""]) {
+      assert.match(mit(t).join(), /teilbrillen/, `"${t}" müsste rot sein`);
+    }
+  });
+  test("teilbrillen ohne kombiniert in lenses oder ohne kombiniert-Blocker ist rot", () => {
+    assert.match(mit(GUT, { lenses: DREI, blocker: "architektur:1,requirement-treue:1,test-adaequanz:1" }).join(), /teilbrillen.*kombiniert/);
+    assert.match(mit(GUT, { blocker: "architektur:3" }).join(), /teilbrillen.*kombiniert/);
+  });
+  test("checkReviewNachweis: teilbrillenFehlt nur bei kombiniert ohne Feld", () => {
+    const lauf = (felder: string) => checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { FACTORY_DIFF_BASE: "base" } }) as { teilbrillenFehlt?: boolean };
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 verdikt=ok`).teilbrillenFehlt, true);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 teilbrillen=${GUT} verdikt=ok`).teilbrillenFehlt, false);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).teilbrillenFehlt, false);
   });
 });
 
@@ -844,6 +891,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(rot.stderr, /nur bei Größenstufe S/);
     const gruen = lauf(d, ["--config", mit], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
+    assert.match(gruen.stdout, /Größenstufe: S/);
   });
 
   test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), die Zeilen einer anderen Config nicht (Exit 1)", () => {
@@ -868,6 +916,25 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
+    assert.match(gruen.stdout, /Größenstufe: (S|voll)/);
+  });
+
+  test("Override-Lauf nennt die Größenstufe ebenfalls (factory#402 L26)", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "a.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(d, "a.md"), "y\n");
+    git("commit", "-q", "-am", "doku", "-m", "ZD-Review-Override: #1270 Revert-PR");
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    const r = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /geduldet/);
+    assert.match(r.stdout, /Größenstufe: (S|voll)/);
   });
 });
 

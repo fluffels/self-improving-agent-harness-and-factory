@@ -56,7 +56,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SICHERHEITS_LENS, kleinGrund, parseNachweis } from "./nachweis-lib.mjs";
+import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SICHERHEITS_LENS, kleinGrund, parseNachweis, stufeZeile } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -78,7 +78,7 @@ export const vorlage = (zeilen) =>
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
   `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)\n` +
   `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
-  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n>\n` +
+  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
   `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> und ` +
   `${zeilen.bedrohungen}: daten=… | grenzen=… | missbrauch=… | datenschutz=… (wörtlich aus dem Plan)`;
 
@@ -87,6 +87,37 @@ export const vorlage = (zeilen) =>
  *  Regel der Review-Staffel (Skill `review-lenses`, Wächter review-staffel.test.ts). */
 export function pflichtLenses(dateien) {
   return istDokuDiff(dateien) ? ["doku"] : [...CODE_LENSES];
+}
+
+/** Größenstufe nur zur Anzeige (Override-Zweig): ein Fehler macht den Zweig nie rot, die Stufe ist dann `null`. */
+function stufeOderNull(git, base, ladeRisiko) {
+  try {
+    return groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe;
+  } catch {
+    return null;
+  }
+}
+
+/** Prüft das optionale Feld `teilbrillen=` (factory#402): die Aufteilung von `blocker=kombiniert:<n>` je Teil-Brille. Nur mit `kombiniert` in lenses und
+ *  einem kombiniert-Blocker; genau die drei Code-Brillen je einmal, ganze Zahlen ≥ 0, Summe gleich n. Fehlt das Feld, ist die Zeile gültig (alte Zeilen). Pure. */
+function bewerteTeilbrillen(review, zeilen) {
+  const R = zeilen.review;
+  const kombi = review.blocker?.find((e) => e.lens === KOMBI_LENS);
+  if (!review.lenses.includes(KOMBI_LENS) || kombi === undefined) return [`${R}: teilbrillen gilt nur mit lenses=${KOMBI_LENS} und blocker=${KOMBI_LENS}:<n>.`];
+  if (review.teilbrillen.length === 0) return [`${R}: teilbrillen ist leer (erwartet: ${CODE_LENSES.map((l) => `${l}:<n>`).join(",")}).`];
+  const fehler = [];
+  const gesehen = new Set();
+  for (const { lens, n } of review.teilbrillen) {
+    if (!CODE_LENSES.includes(lens)) fehler.push(`${R}: teilbrillen nennt "${lens}", erlaubt sind nur ${CODE_LENSES.join(", ")}.`);
+    if (!Number.isInteger(n) || n < 0) fehler.push(`${R}: teilbrillen=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
+    if (gesehen.has(lens)) fehler.push(`${R}: teilbrillen nennt die Brille ${lens} doppelt.`);
+    gesehen.add(lens);
+  }
+  const fehlt = CODE_LENSES.filter((l) => !gesehen.has(l));
+  if (fehlt.length > 0) fehler.push(`${R}: teilbrillen nennt ${fehlt.join(", ")} nicht (alle drei Teil-Brillen je einmal).`);
+  const summe = review.teilbrillen.reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
+  if (fehler.length === 0 && summe !== kombi.n) fehler.push(`${R}: teilbrillen ergeben die Summe ${summe}, blocker=${KOMBI_LENS}:${kombi.n} verlangt ${kombi.n}.`);
+  return fehler;
 }
 
 /** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
@@ -255,6 +286,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
   if (review.blocker !== null) fehler.push(...bewerteBlocker(review, zeilen));
+  if (review.teilbrillen !== null) fehler.push(...bewerteTeilbrillen(review, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
 }
@@ -301,7 +333,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     // Die jüngste gültige Zeile entscheidet; ein Widerruf (`#<nr> entfällt`) ist kein Override (wie bei den übrigen Gates).
     const grund = aktiverOverride(messages, zeilen.reviewOverride);
     if (grund !== null) {
-      return { ok: true, override: grund, fehler: [], invalid: ov.invalid };
+      return { ok: true, override: grund, fehler: [], invalid: ov.invalid, stufe: stufeOderNull(git, base, ladeRisiko) };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
@@ -330,7 +362,9 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       fehler,
       invalid: ov.invalid,
       commitsNachReview,
+      stufe: groesse.stufe,
       blockerFehlt: nachweis.review?.blocker === null,
+      teilbrillenFehlt: nachweis.review?.lenses.includes(KOMBI_LENS) === true && nachweis.review.teilbrillen === null,
       guardWarnung: guardWarnungOderNull(messages, ankerZahl),
       zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
     };
@@ -365,6 +399,7 @@ function main(argv = process.argv.slice(2)) {
   }
   if (r.override) {
     console.log(`• geduldet: ${zeilen.reviewOverride} — ${r.override}`);
+    console.log(stufeZeile(r.stufe));
     console.log("✔ Review-/Plan-Nachweis ok (Override mit Begründung).");
     return;
   }
@@ -374,7 +409,9 @@ function main(argv = process.argv.slice(2)) {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
     }
     if (r.guardWarnung) console.log(r.guardWarnung);
+    console.log(stufeZeile(r.stufe));
     if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
+    if (r.teilbrillenFehlt) console.log("• Hinweis: teilbrillen= fehlt (Kombi-Lens ohne Aufteilung je Teil-Brille, factory#402).");
     const zusatz = zusatzpassZeile(r);
     if (zusatz) console.log(zusatz);
     console.log("✔ Review-/Plan-Nachweis ok.");

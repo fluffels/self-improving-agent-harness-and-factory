@@ -319,3 +319,12 @@ describe("Szenario-Prädikat (factory#402 L50): eine Definition für Urteile und
     expect(P.markerUrteile({ urteil: [{ k: "K1", wert: "erfuellt" }] })).toHaveLength(1);
   });
 });
+
+describe("stufeZeile (factory#402 L26)", () => {
+  const stufeZeile = (raw as unknown as { stufeZeile: (s: string | null) => string }).stufeZeile;
+  it("nennt die Stufe, bei null ausdrücklich nicht berechenbar", () => {
+    expect(stufeZeile("S")).toBe("• Größenstufe: S");
+    expect(stufeZeile("voll")).toBe("• Größenstufe: voll");
+    expect(stufeZeile(null)).toBe("• Größenstufe: (nicht berechenbar)");
+  });
+});

@@ -73,10 +73,10 @@ function lensenAus(reviewWert) {
     .filter(Boolean);
 }
 
-/** Runde-1-Blocker je Brille (#1123): `name:n,…` → `[{lens, n}]`; `null`, wenn das Feld fehlt (alte Zeilen).
+/** Feld `<key>=name:n,…` der Review-Zeile (`blocker` #1123, `teilbrillen` factory#402) → `[{lens, n}]`; `null`, wenn das Feld fehlt (alte Zeilen).
  *  Eine kaputte Zahl wird NaN, bewertet erst bewerteNachweis. */
-function blockerAus(reviewWert) {
-  const wert = feldWert(reviewWert, "blocker");
+function brillenZahlenAus(reviewWert, key) {
+  const wert = feldWert(reviewWert, key);
   if (wert === null) return null;
   return wert
     .split(",")
@@ -166,7 +166,8 @@ export function parseNachweis(text, zeilen) {
       head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
-      blocker: blockerAus(reviewWert),
+      blocker: brillenZahlenAus(reviewWert, "blocker"),
+      teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
       zusatzpass: zusatzpassAus(reviewWert),
       abnahmefix: abnahmefixAus(reviewWert),
       verdikt: felder.verdikt ?? null,
@@ -214,6 +215,10 @@ function abnahmeFehler(wert, head, durch, u) {
 
 /** Klassen der Abnahme-Ursache (factory#260): Verhalten widerspricht dem Kriterium, Szenario prüft darüber hinaus, Kriterium lässt eine andere Lesart zu. */
 export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
+
+/** CLI-Zeile zur Größenstufe (factory#402 L26): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der S-Läufe sie aus der CI-Ausgabe liest.
+ *  `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
+export const stufeZeile = (stufe) => `• Größenstufe: ${stufe ?? "(nicht berechenbar)"}`;
 
 /** Ein Urteil `{wert, ursache?}` ist ein Szenario-Fall: nicht erfüllt, weil das Szenario über das Kriterium hinaus prüfte (kein Fix nötig). Pur. */
 export const istSzenarioFall = (u) => u.wert === "nicht-erfuellt" && u.ursache === "szenario";
