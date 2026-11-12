@@ -11,6 +11,9 @@ import { join } from "node:path";
 import * as raw from "../../scripts/codex-vorpruefung.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as lib0 from "../../scripts/codex-lib.mjs";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import * as healthRaw from "../../scripts/langfuse-health.mjs";
+const health = healthRaw as unknown as { pruefeLangfuseAusUmgebung: (n: Record<string, unknown>) => Promise<{ ok: boolean }> };
 type Naht = { fetchImpl?: unknown; fristMs?: number; env?: Record<string, string>; out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string; codexVersion?: () => string | null; freigaben?: unknown; werkzeug?: () => unknown[] };
 const p = raw as unknown as { main: (a: string[], n: Naht) => Promise<number>; tracingMaengel: (n: Record<string, unknown>) => Promise<string[]>; installierteCodexVersion: (n: { plattform: string; spawn: (...a: unknown[]) => unknown }) => string | null };
 const gesund = { fetchImpl: () => Promise.resolve({ status: 200 }), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
@@ -286,4 +289,11 @@ test("CLI-Einstieg als Prozess: Langfuse unerreichbar ergibt Exit 1 und den Mang
   const r = realSpawn(process.execPath, [join(process.cwd(), "scripts", "codex-vorpruefung.mjs")], { encoding: "utf8", env: { ...process.env, LANGFUSE_BASE_URL: "http://127.0.0.1:1" } });
   expect(r.status).toBe(1);
   expect(r.stdout).toContain("Tracing-Ausfall: Langfuse nicht erreichbar");
+});
+test("pruefeLangfuseAusUmgebung: Standard-Home ist das Home des Nutzers (Plugin-Optionen), Adresse folgt der Kette", async () => {
+  const gelesen: string[] = [], urls: string[] = [];
+  const fetchImpl = (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); };
+  const urteil = await health.pruefeLangfuseAusUmgebung({ env: {}, fetchImpl, lies: (pfad: string) => { gelesen.push(pfad); throw new Error("keine Settings"); } });
+  expect(urteil.ok).toBe(true); expect(urls).toEqual(["http://localhost:3000/api/public/health"]);
+  expect(gelesen).toEqual([join(homedir(), ".claude", "settings.json")]);
 });
