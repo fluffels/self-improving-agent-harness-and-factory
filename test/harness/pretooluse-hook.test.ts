@@ -538,7 +538,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     assert.equal(deny(agent(`${gut()} · Pfad: /w/${wt}${"a-".repeat(5000)}x`)), null);
     assert.ok(Date.now() - start < 2000);
     // Lookbehind (factory#426): das Präfix zählt nur am Wortanfang, sonst liefe die Suche von jedem Treffer bis ans Ende (quadratisch)
-    assert.equal(deny(agent(`${gut()} · Pfad: x${wt}feature-lens-b1 und a-${wt}7-lens-b1`)), null);
+    assert.equal(deny(agent(`${gut()} · Pfad: x${wt}feature-lens-b1, a-${wt}7-lens-b1 und 7${wt}feature-lens-b1`)), null);
   });
 
   test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
