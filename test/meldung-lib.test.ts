@@ -219,6 +219,71 @@ describe("melden.mjs (AK1, AK2, AK3)", () => {
   });
 });
 
+describe("melden.mjs in der Fabrik (factory#221 AK1): kein Sync-Stand, Meldestelle ist das eigene Repo", () => {
+  const REPO = "fabrik/harness";
+  const TITEL = "Harness-Härtung (gesammelt)";
+  const wurzeln: string[] = [];
+  afterEach(() => {
+    for (const w of wurzeln.splice(0)) rmSync(w, { recursive: true, force: true });
+  });
+  const roh = (number: number, title: string, assignee?: string) => ({ number, title, created_at: "2026-01-01T00:00:00Z", assignees: assignee ? [{ login: assignee }] : [] });
+  const einzel = (nr: number): unknown => {
+    if (nr === 25) return { state: "open", assignees: [{ login: "x" }], user: { login: "fabrik", type: "User" } };
+    return { state: "open", assignees: [], user: { login: "fabrik", type: "User" } };
+  };
+  // Der echte Auswahlweg (ladeSammelKontext, waehleSammelticket) gegen injizierte Liste und Einzelabrufe: kein gemocktes `waehleSammelticket`.
+  async function fahre(offene: unknown[]) {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const inbox = (await import("../scripts/inbox-lib.mjs")) as { ladeSammelKontext(io: object): unknown; waehleSammelticket: (...a: unknown[]) => unknown };
+    const wurzel = mkdtempSync(join(tmpdir(), "melden-fabrik-"));
+    wurzeln.push(wurzel);
+    const posts: unknown[][] = [];
+    const err: string[] = [];
+    const aufrufe: { args: string[]; token: unknown }[] = [];
+    const api = (args: string[], o: { token?: string }) => {
+      aufrufe.push({ args, token: o.token });
+      return einzel(Number(args[1].split("/").pop()));
+    };
+    const libs = {
+      MELDESTELLE: REPO,
+      REPO,
+      ladeSammelKontext: (io: object) => inbox.ladeSammelKontext({ ...io, ladeOffene: () => [offene], ladeKommentare: () => [] }),
+      waehleSammelticket: (o: unknown, r: string, a: unknown) => inbox.waehleSammelticket(o, r, a as never, TITEL),
+      postZeilen: (...a: unknown[]) => { posts.push(a); },
+    };
+    const code = await melden.main(["--zeile", "Defekt: x Beleg: y"], {
+      ladeConfig: () => ({}),
+      ladeLibs: () => Promise.resolve(libs),
+      env: { MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" },
+      log: () => undefined,
+      err: (s: string) => err.push(s),
+      api,
+      bereite: (z: string[], o: object) => lib.bereiteMeldung(z, { wurzel, pruefe: () => true, ...o }),
+    });
+    return { code, posts, err: err.join("\n"), aufrufe };
+  }
+
+  test("schreibt ins jüngste ungeclaimte Sammelticket: ohne Stand-Zeile, ohne Herkunft, ohne Token", async () => {
+    const r = await fahre([roh(10, TITEL), roh(20, TITEL), roh(25, TITEL), roh(30, TITEL, "x"), roh(40, "Fremder Titel")]);
+    expect(r.code).toBe(0);
+    expect(r.posts).toEqual([[20, "- [ ] Defekt: x Beleg: y", REPO, undefined]]);
+    expect(r.aufrufe.length).toBeGreaterThan(0);
+    for (const a of r.aufrufe) {
+      expect(a.args.slice(0, 1)).toEqual(["api"]);
+      expect(a.args[1]).toMatch(/^repos\/fabrik\/harness\/issues\/\d+$/);
+      expect(a.token).toBeUndefined();
+    }
+  });
+  test("ohne ungeclaimtes Sammelticket: Exit 1 mit Fix-Zeile, nichts gepostet, nichts angelegt", async () => {
+    const r = await fahre([roh(30, TITEL, "x"), roh(40, "Fremder Titel")]);
+    expect(r.code).toBe(1);
+    expect(r.posts).toEqual([]);
+    expect(r.err).toMatch(/kein ungeclaimtes Harness-Sammelticket in fabrik\/harness/);
+    expect(r.err).toMatch(/Fix: node scripts\/sammelticket-anlegen\.mjs harness/);
+    for (const a of r.aufrufe) expect(a.args.join(" ")).not.toMatch(/issue.*create|-f title/);
+  });
+});
+
 describe("meldestelleZugang (factory#208 L11): ein Zugang für alle Schreiber", () => {
   const env = { MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" };
   test("fremde Stelle: fremd, Herkunft ist das eigene Repo, Token wie meldestelleToken", () => {
