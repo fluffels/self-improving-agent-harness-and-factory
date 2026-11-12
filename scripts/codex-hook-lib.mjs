@@ -13,13 +13,13 @@
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
  * Bekannte Grenzen (Details und Quellen in docs/codex/einstieg.md): `write_stdin`, direkte Dateiwerkzeuge außer `apply_patch`, MCP und `send_message`/`followup_task` lösen keinen
- * geprüften Pfad aus; Hook-Fehler und Timeout sind beim Host fail-open; die Wirkung im echten Codex-Lauf belegt factory#367.
+ * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; die Wirkung im echten Codex-Lauf belegt factory#367.
  *
  * Reines Node-Skript (nur Builtins); der Dispatcher wird dynamisch geladen, damit ein Ladefehler ein Deny statt eines Prozessabbruchs (fail-open beim Host) ergibt.
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { buildDenyOutput } from "./hook-io.mjs";
+import { MAX_INTERPRETER, buildDenyOutput } from "./hook-io.mjs";
 
 /** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`); `spawn_agent` passt laut Doku auch auf den Matcher `Agent`. */
 export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent", Agent: "agent" };
@@ -59,13 +59,71 @@ function musterTrifft(muster, seg) {
   return new RegExp(`^${muster.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s").test(seg);
 }
 
-/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment an (Formen siehe `musterTrifft`). Gibt die erste Fundstelle oder `null`. */
+const ZUWEISUNG = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const WRAPPER = new Set(["command", "exec", "nohup", "time"]);
+const INTERPRETER = new Set(["bash", "sh", "zsh", "dash"]);
+const SHELL_FLAGS = new Set(["-c", "-lc"]);
+
+/** Wörter eines Segments, getrennt an Leerraum außerhalb von Quotes (Quotes bleiben im Wort). */
+const woerter = (seg) => seg.match(/(?:'[^']*'|"(?:\\.|[^"\\])*"|\S)+/g) ?? [];
+
+/** Basisname eines Programmworts: Verzeichnis (auch Windows-Backslash) und `.exe` fallen weg. */
+const basisname = (wort) => wort.replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "");
+
+/** Streift Zuweisungen, `env` (mit `-i`, `-u <n>`, `--`, Zuweisungen), `command`, `exec`, `nohup`, `time` vorn ab. */
+function ohneWrapper(w) {
+  let t = w;
+  for (;;) {
+    const kopf = t[0] ?? "";
+    const basis = basisname(kopf);
+    if (ZUWEISUNG.test(kopf) || WRAPPER.has(basis)) t = t.slice(1);
+    else if (basis === "env") t = envOptionen(t.slice(1));
+    else return t;
+  }
+}
+
+function envOptionen(w) {
+  let t = w;
+  for (;;) {
+    if (t[0] === "-i" || t[0] === "--") t = t.slice(1);
+    else if (t[0] === "-u") t = t.slice(2);
+    else return t;
+  }
+}
+
+/** Der Inhalt eines vollständig gequoteten Worts (`'…'` wörtlich, `"…"` mit `\"` und `\\`), sonst `null`. */
+function entquote(wort) {
+  const einfach = /^'([^']*)'$/.exec(wort);
+  if (einfach) return einfach[1];
+  const doppelt = /^"((?:\\["\\]|[^"\\])*)"$/.exec(wort);
+  return doppelt ? doppelt[1].replace(/\\(["\\])/g, "$1") : null;
+}
+
+/** Der Befehlstext hinter `bash|sh|zsh|dash -c|-lc "<ein Argument>"`, sonst `null`. */
+function interpreterText(w) {
+  const [shell, flag, arg] = w;
+  return w.length === 3 && INTERPRETER.has(shell) && SHELL_FLAGS.has(flag) ? entquote(arg) : null;
+}
+
+/** Das Originalsegment plus normalisierte Formen (Leerraum zusammengezogen, Wrapper und Pfad abgestreift, `sh -c`-Text rekursiv bis Tiefe 3), damit Regeln auch Wrapper-Formen treffen. */
+export function varianten(seg, segmente, tiefe = 0) {
+  const w = woerter(seg);
+  const roh = ohneWrapper(w);
+  const kern = roh.length > 0 ? [basisname(roh[0]), ...roh.slice(1)] : roh;
+  const out = new Set([seg, kern.join(" ")]);
+  const inner = tiefe < MAX_INTERPRETER ? interpreterText(kern) : null;
+  if (inner !== null) for (const s of segmente(inner)) for (const v of varianten(s.trim(), segmente, tiefe + 1)) out.add(v);
+  return [...out];
+}
+
+/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment und jede Variante (siehe `varianten`) an (Formen siehe `musterTrifft`). Gibt die erste Fundstelle oder `null`. */
 function regelTreffer(befehl, regeln, segmente) {
   for (const seg of segmente(befehl).map((s) => s.trim())) {
-    for (const regel of regeln) {
-      const m = /^Bash\((.*)\)$/s.exec(regel);
-      if (!m) continue;
-      if (musterTrifft(m[1], seg)) return { regel, segment: seg };
+    for (const variante of varianten(seg, segmente)) {
+      for (const regel of regeln) {
+        const m = /^Bash\((.*)\)$/s.exec(regel);
+        if (m && musterTrifft(m[1], variante)) return { regel, segment: seg };
+      }
     }
   }
   return null;

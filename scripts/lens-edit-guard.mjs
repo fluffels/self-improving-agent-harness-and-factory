@@ -5,13 +5,18 @@
  * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>-<brille>`, je Brille ein eigener Worktree, damit parallele Lenses sich keinen teilen; die Endung `-<brille>` (`[a-z-]`) ist optional; bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`, bei der Delta-Lens nach einem CI-Fix hinter dem Nachweis `…-lens-c<n>`; für einen fremden Klon: `git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>`, das Präfix liest der Guard aus `<klon>/.factory/projekt.json`, ohne lesbare Config gilt das der Session); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
  * anderen Lenses (so passiert im Review von #1331). Die Regel stand bisher nur als Text in der Lens-Definition.
  *
- * Dieser Hook (Frontmatter der Lens-Definition unter `.claude/agents/`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
+ * Dieser Hook (Frontmatter der Lens-Definition unter `.claude/agents/`, Matcher `Edit|Bash|PowerShell`, gilt nur für diesen Subagenten) erzwingt sie:
  * `Edit` ist erlaubt, wenn der aufgelöste Zielpfad in einem Lens-Worktree liegt, sonst `deny`. Ein fehlender Pfad ist `deny`.
  *
  * Bewusste Grenzen:
  *   - Außerhalb von `.claude/worktrees/` (auch ein Klon selbst) erlaubt der Guard nie.
- *   - Bash/PowerShell (`sed -i`, `Set-Content`) fängt er nicht ab; die Lens-Definition verbietet es per Text, der
+ *   - Bash/PowerShell-Schreibzugriffe (`sed -i`, `Set-Content`) fängt er nicht ab; die Lens-Definition verbietet es per Text, der
  *     Frische-Guard der Folge-Runde und `git status --porcelain` im Feature-Worktree machen eine Änderung sichtbar.
+ *   - Hintergrund-Läufe (factory#413 L4: ein abgebrochener Probe-Lauf schrieb im Hintergrund parallel in dieselbe Datei weiter) verweigert er in Bash und PowerShell
+ *     über eine geschlossene Liste: `run_in_background: true`; ein einzelnes `&`, das weder an `&`, `>`, `<` noch `|` grenzt
+ *     (PowerShell-Aufrufoperator `& node x` am Befehls-/Segmentanfang ausgenommen); die Wörter `nohup`, `setsid`, `disown`, `Start-Job`,
+ *     `Start-ThreadJob`, `Start-Process`. Rohtext-Scan: ein `&` in Quotes wird auch verweigert (fail-closed); ein Hintergrund über ein Skript mit
+ *     eigenem spawn/detached erkennt er nicht; ebenso nicht `coproc`, `screen`, `tmux` und `at`. Die Wörter gelten auch in Argumenten und Grep-Mustern (`grep nohup x` wird verweigert, fail-closed).
  *   - Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung); jeder Pfad mit einem Segment `.claude/worktrees/<worktree-präfix><nr>-lens-r<n>/`, `-lens-m<n>/`, `-lens-a<n>/` oder `-lens-c<n>/` gilt als Lens-Worktree, auch ein verschachtelter.
  *
  * Präfixe und Agentenname kommen je Aufruf aus der Projekt-Config (`ticket-namen.mjs`); ist sie nicht nutzbar, lehnt der Guard ab (fail-closed).
@@ -19,7 +24,7 @@
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { istArbeitsplatz } from "./arbeitsplatz-lib.mjs";
-import { emit, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
+import { buildDenyOutput, emit, normalisierePfad, pfadGuardHook, readStdin } from "./hook-io.mjs";
 import { ROLLEN_PFADE, ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { namenOderGrund, worktreeNamenOderGrund } from "./ticket-namen.mjs";
 
@@ -68,7 +73,46 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
   };
 }
 
-/** Hook-stdin → Entscheidung. Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). `deps` wie bei `bewerteLensEdit` (Test: injizierte Config). */
-export const entscheideHook = (text, deps = {}) => pfadGuardHook("Edit", (p, cwd) => bewerteLensEdit(p, cwd, deps))(text);
+// PowerShell-Aufrufoperator `& node x` am Befehls-/Segmentanfang (Anfang, nach `;`, `|`, `(`, `{`, Zeilenumbruch, `&&`, `||`): kein Hintergrund.
+const POWERSHELL_AUFRUF = /(^|[;|({\n]|&&)(\s*)&(?=\s)/g;
+// Ein einzelnes `&`, das weder an `&` (`&&`), `>` (`2>&1`, `&>log`), `<` noch `|` (`|&`) grenzt, schickt den Befehl in den Hintergrund.
+const EINZEL_UND = /(?<![&><|])&(?![&><|])/;
+const HINTERGRUND_WORT = /\b(?:nohup|setsid|disown|Start-Job|Start-ThreadJob|Start-Process)\b/i;
+
+/**
+ * Startet dieser Bash-/PowerShell-Aufruf der Lens etwas im Hintergrund (factory#413 L4)? Ein abgebrochener Probe-Lauf im Hintergrund
+ * schrieb parallel in dieselbe Datei weiter. Pur. Liefert `{ deny: true, grund }` oder `null`.
+ */
+export function bewerteLensBefehl(eingabe, tool = "Bash") {
+  const befehl = typeof eingabe?.command === "string" ? eingabe.command : "";
+  const text = tool === "PowerShell" ? befehl.replace(POWERSHELL_AUFRUF, "$1$2 ") : befehl;
+  const hintergrund = eingabe?.run_in_background === true || EINZEL_UND.test(text) || HINTERGRUND_WORT.test(text);
+  if (!hintergrund) return null;
+  return {
+    deny: true,
+    grund:
+      "Lens-Befehle laufen im Vordergrund: kein `run_in_background`, kein einzelnes `&` (nicht nur am Ende, auch mitten im Befehl oder in Quotes), kein nohup/setsid/disown/Start-Job/Start-ThreadJob/Start-Process " +
+      "(ein abgebrochener Hintergrund-Lauf schreibt sonst parallel in dieselbe Datei weiter). Dauert eine Probe-Serie über 10 Minuten (Bash-Deckel), teile sie in mehrere Vordergrund-Läufe auf.",
+  };
+}
+
+/**
+ * Hook-stdin → Entscheidung, verteilt nach `tool_name`: `Bash`/`PowerShell` an `bewerteLensBefehl`, alles andere (`Edit`, auch ohne `tool_name`) an `bewerteLensEdit`.
+ * Kaputter Input: durchlassen (ein Hook darf nie selbst alles blockieren). `deps` wie bei `bewerteLensEdit` (Test: injizierte Config).
+ */
+export function entscheideHook(text, deps = {}) {
+  let tool;
+  let eingabe;
+  try {
+    ({ tool_name: tool, tool_input: eingabe } = JSON.parse(text));
+  } catch {
+    return null;
+  }
+  if (tool === "Bash" || tool === "PowerShell") {
+    const urteil = bewerteLensBefehl(eingabe, tool);
+    return urteil ? buildDenyOutput(urteil.grund) : null;
+  }
+  return pfadGuardHook("Edit", (p, cwd) => bewerteLensEdit(p, cwd, deps))(text);
+}
 
 if (istDirektaufruf(import.meta.url)) emit(entscheideHook(readStdin()));
