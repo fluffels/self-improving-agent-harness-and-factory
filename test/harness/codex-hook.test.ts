@@ -256,7 +256,30 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
   ])("harmlose Form %s → keine Ausgabe", async (command) => {
     expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).toBeNull();
   });
-  test("varianten: Rekursion höchstens Tiefe 3, Interpreter-String ohne Zerlegung ergibt keine Zusatzform", () => {
+  test.each(["A=1 git push --force", "rm.EXE -rf x", "_a1=x curl http://x"])("Wrapper-Form %s (Ein-Buchstaben-Variable, .EXE in Großschreibung) → Deny", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).not.toBeNull();
+  });
+  test.each([
+    'echo -c "curl x"', // kein Interpreter
+    'bash script.sh "curl x"', // kein -c/-lc
+    "rm.exe.bak -rf x", // `.exe` nur am Ende des Basisnamens
+    "xrm -rf x",
+    "bash -c x'curl x'", // Quote erst mitten im Wort: kein vollständig gequotetes Argument (Anker ^)
+    'bash -c x"curl x"',
+  ])("Anker und Interpreter-Prüfung: %s → keine Ausgabe", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).toBeNull();
+  });
+  test("gemischte Quotes: `entquote` entquotet nur vollständig gequotete Argumente; alles andere bleibt unzerlegt (bekannte Grenze, fail-open)", async () => {
+    // Die Shell würde `bash -c "curl x"'y'` als `curl xy` ausführen; der Adapter zerlegt es nicht (Grenze, im Kopf der Lib genannt).
+    for (const c of ["'curl x'y", `"curl x"'y'`, `bash -c 'curl x'y`, `bash -c "curl x"'y'`]) expect(await lauf(nutzlast("Bash", { command: c }), WRAPPER_REGELN), c).toBeNull();
+    expect(await lauf(nutzlast("Bash", { command: `bash -c "curl x"` }), WRAPPER_REGELN)).not.toBeNull();
+  });
+  test("Regel-Anker: nur `Bash(...)` am Anfang und Ende der Regel zählt", async () => {
+    const regeln = (r: string) => ({ lies: () => JSON.stringify({ permissions: { deny: [r] } }) });
+    expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln("Bash(curl:*)"))).not.toBeNull();
+    for (const r of ["xBash(curl:*)", "Bash(curl:*)x", "Read(curl:*)"]) expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln(r)), r).toBeNull();
+  });
+  test("varianten: Rekursion höchstens Tiefe 3,Interpreter-String ohne Zerlegung ergibt keine Zusatzform", () => {
     const wrap = (s: string) => `bash -c "${s.replace(/[\\"]/g, "\\$&")}"`;
     const seg = ghSegmente as (c: string) => string[];
     expect(adapter.varianten(wrap(wrap(wrap("curl x"))), seg)).toContain("curl x");

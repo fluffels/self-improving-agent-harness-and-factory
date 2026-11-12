@@ -12,13 +12,13 @@
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
  * Bekannte Grenzen (Details und Quellen in docs/codex/einstieg.md): `write_stdin`, direkte Dateiwerkzeuge außer `apply_patch`, MCP und `send_message`/`followup_task` lösen keinen
- * geprüften Pfad aus; Hook-Fehler und Timeout sind beim Host fail-open; die Wirkung im echten Codex-Lauf belegt factory#367.
+ * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; die Wirkung im echten Codex-Lauf belegt factory#367.
  *
  * Reines Node-Skript (nur Builtins); der Dispatcher wird dynamisch geladen, damit ein Ladefehler ein Deny statt eines Prozessabbruchs (fail-open beim Host) ergibt.
  */
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { buildDenyOutput } from "./hook-io.mjs";
+import { MAX_INTERPRETER, buildDenyOutput } from "./hook-io.mjs";
 
 /** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`); `spawn_agent` passt laut Doku auch auf den Matcher `Agent`. */
 export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent", Agent: "agent" };
@@ -62,7 +62,6 @@ const ZUWEISUNG = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const WRAPPER = new Set(["command", "exec", "nohup", "time"]);
 const INTERPRETER = new Set(["bash", "sh", "zsh", "dash"]);
 const SHELL_FLAGS = new Set(["-c", "-lc"]);
-const MAX_TIEFE = 3;
 
 /** Wörter eines Segments, getrennt an Leerraum außerhalb von Quotes (Quotes bleiben im Wort). */
 const woerter = (seg) => seg.match(/(?:'[^']*'|"(?:\\.|[^"\\])*"|\S)+/g) ?? [];
@@ -111,7 +110,7 @@ export function varianten(seg, segmente, tiefe = 0) {
   const roh = ohneWrapper(w);
   const kern = roh.length > 0 ? [basisname(roh[0]), ...roh.slice(1)] : roh;
   const out = new Set([seg, kern.join(" ")]);
-  const inner = tiefe < MAX_TIEFE ? interpreterText(kern) : null;
+  const inner = tiefe < MAX_INTERPRETER ? interpreterText(kern) : null;
   if (inner !== null) for (const s of segmente(inner)) for (const v of varianten(s.trim(), segmente, tiefe + 1)) out.add(v);
   return [...out];
 }
