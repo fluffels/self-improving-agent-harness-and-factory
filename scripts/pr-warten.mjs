@@ -9,6 +9,8 @@
  *   Exit 0  `MERGED <sha>`
  *   Exit 1  `ROT <check> <url>` je rotem Check (Log nur bei Bedarf: `gh run view <id> --log-failed | tail -n 80`)
  *   Exit 2  `OFFEN x/y grün, wartend: …` nach Ablauf des Zeitbudgets: erneut aufrufen
+ *   Exit 2  `HINTER MAIN` (alle Pflicht-Checks grün, Branch aber hinter der Basis, `mergeStateStatus` BEHIND) → der Lauf ruft einmal `gh pr update-branch`, danach `AKTUALISIERT` und weiter pollen (factory#375; greift, sobald das Ruleset aktuelle Branches verlangt)
+ *   Exit 3  `AKTUALISIEREN FEHLGESCHLAGEN <Grund>` (das Update schlug fehl: `origin/main` einmergen wie bei `KONFLIKT`)
  *   Exit 3  `KONFLIKT` | `GESCHLOSSEN` | `GRÜN OHNE AUTO-MERGE` | `GH-FEHLER …` (braucht Handeln), auch ein Aufruf-Fehler (unbekanntes Flag, Flag ohne Wert, doppeltes Flag, keine oder falsche PR-Nummer: Meldung und Aufrufzeile auf stderr)
  *   Zusatz bei Exit 1, 2, 3: `HINWEIS <check> <url> (kein Pflicht-Check, kein Merge-Gate)` je rotem Check außerhalb der Pflicht-Checks (kein ROT, zählt nicht mit).
  *   Zusatz bei ROT durch CANCELLED ohne laufenden Geschwister-Lauf: `HINWEIS <check> CANCELLED …: kein gh run rerun, leerer Commit mit Push` (ein Rerun behält das Ereignis samt `draft`).
@@ -32,7 +34,9 @@ const ROT = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "ST
 const GRUEN = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
 /** Mindestabstand der zwei Abfragen, bevor ein Konflikt gemeldet wird: `mergeable` ist kurz nach einem Push UNKNOWN oder flackert. */
 export const KONFLIKT_ABSTAND_MS = 15_000;
-export const FELDER = "state,mergeable,statusCheckRollup,autoMergeRequest,mergeCommit";
+export const FELDER = "state,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest,mergeCommit";
+/** Standard-Zeitbudget je Aufruf in Sekunden (`--max-sekunden`); `umsetzer-abschluss.mjs` leitet daraus die Aufrufzahl der Hänge-Schwelle ab. */
+export const MAX_SEKUNDEN_STANDARD = 150;
 
 /** Ist der Rollup-Eintrag ein StatusContext (kein CheckRun)? Pur. */
 const istStatusContext = (e) => e?.__typename === "StatusContext" || Boolean(e?.context);
@@ -106,6 +110,8 @@ export function bewerte(pr, pflicht = null) {
   const gruen = checks.filter((c) => c.art === "gruen").length;
   const offen = checks.filter((c) => c.art === "offen");
   // Ein leerer Rollup ist nicht grün: die Checks sind noch nicht gestartet.
+  // Grün, aber hinter main: die Pflicht-Checks liefen gegen einen alten Basis-Stand (factory#375), der Branch braucht ein Update.
+  if (!offen.length && checks.length && pr?.mergeStateStatus === "BEHIND") return { ...mit(2, ["HINTER MAIN"]), aktualisieren: true };
   if (!offen.length && checks.length) {
     return pr?.autoMergeRequest ? mit(2, [`OFFEN ${gruen}/${checks.length} grün, Merge steht aus`]) : mit(3, ["GRÜN OHNE AUTO-MERGE"]);
   }
@@ -127,8 +133,9 @@ export function konfliktStand(seit, jetzt) {
  * Ein Konflikt wird erst gemeldet, wenn eine zweite Abfrage mindestens `KONFLIKT_ABSTAND_MS` später ihn bestätigt (auch über das Budget hinaus).
  * @param {{ hole: () => object, pflicht?: () => readonly string[], schlafe: (ms: number) => void, jetzt: () => number, maxMs: number, intervallMs: number }} e
  */
-export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, intervallMs }) {
+export function warten({ hole, pflicht = () => [], aktualisiere = null, schlafe, jetzt, maxMs, intervallMs }) {
   const ende = jetzt() + maxMs;
+  let aktualisiert = false;
   let fehler = 0;
   let letzte;
   let liste = null;
@@ -158,6 +165,15 @@ export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, interv
       continue;
     }
     konfliktSeit = null;
+    if (letzte.aktualisieren && aktualisiere && !aktualisiert) {
+      aktualisiert = true; // höchstens ein Update je Lauf
+      try {
+        aktualisiere();
+        letzte = { exit: 2, zeilen: ["AKTUALISIERT"] };
+      } catch (err) {
+        return { exit: 3, zeilen: [`AKTUALISIEREN FEHLGESCHLAGEN ${String(err?.message ?? err).split("\n")[0].slice(0, 120)}`] };
+      }
+    }
     if (letzte.exit !== 2 || jetzt() + intervallMs >= ende) return letzte;
     schlafe(intervallMs);
   }
@@ -167,7 +183,7 @@ export function warten({ hole, pflicht = () => [], schlafe, jetzt, maxMs, interv
 
 export function parseArgs(argv) {
   const { werte, positionale, fehler } = flagsLesen(argv, { "max-sekunden": { type: "string" }, intervall: { type: "string" } }, { positionale: true });
-  const a = { pr: null, maxSekunden: 150, intervall: 30 };
+  const a = { pr: null, maxSekunden: MAX_SEKUNDEN_STANDARD, intervall: 30 };
   if (fehler) a.fehler = fehler.text;
   else if (positionale.length > 1) a.fehler = `Unbekanntes Argument: ${positionale[1]}`;
   else if (positionale.length === 1 && !/^\d+$/.test(positionale[0])) a.fehler = `PR-Nummer erwartet, nicht ${positionale[0]}`;
@@ -229,6 +245,7 @@ export function lauf(a, { gh = ghText, schlafe = (ms) => Atomics.wait(new Int32A
   const r = mitHinweis(warten({
     hole: () => (roh = JSON.parse(gh(["pr", "view", a.pr, "--json", FELDER], { timeout: 30_000 }))),
     pflicht: () => pflichtListe(holePflicht(a.pr, gh), w.werkzeuge),
+    aktualisiere: () => void gh(["pr", "update-branch", a.pr], { timeout: 60_000 }),
     schlafe,
     jetzt,
     maxMs: a.maxSekunden * 1000,

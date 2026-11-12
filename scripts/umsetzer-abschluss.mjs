@@ -18,6 +18,7 @@
  * Reines Node-Skript (nur Builtins); `prStatus` ist injizierbar.
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
+import { MAX_SEKUNDEN_STANDARD } from "./pr-warten.mjs";
 import { schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
 import { readFileSync } from "node:fs";
 import { labelAus } from "./projekt-config-lib.mjs";
@@ -97,9 +98,12 @@ export function ghPrStatus(nummer) {
 
 const FORMAT =
   "ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen | uebergabe | abnahme (nur das Wort, ohne Zusatz) und eine PR:-Zeile (URL oder -) sowie BEFUNDE: (je Befund „<Befund> → #<nr>“, sonst keine); uebergabe zusätzlich SCHNITT: pr|verify und eine UEBERGABE:-Zeile; abnahme zusätzlich ABNAHME: head=<sha> worktree=<pfad>";
+/** Hänge-Schwelle in Minuten ohne Fortschritt; die Aufrufzahl folgt aus dem Standardbudget von `pr-warten.mjs`. */
+export const HAENGE_MINUTEN = 24;
+export const HAENGE_AUFRUFE = Math.ceil((HAENGE_MINUTEN * 60) / MAX_SEKUNDEN_STANDARD);
 const WARTEN = (nr) =>
   `Warte im Vordergrund und blockierend: \`node scripts/pr-warten.mjs ${nr}\` (Bash-timeout: 200000), bei Exit 2 erneut, bis der PR MERGED ist. ` +
-  `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI (6 Aufrufe ohne Fortschritt), melde entscheidung-noetig.`;
+  `Ein Monitor hält deinen Lauf nicht offen. Hängt die CI ${HAENGE_MINUTEN} min ohne Fortschritt (beim Standardbudget ${HAENGE_AUFRUFE} Aufrufe; mehr grüne Checks, ein neuer Head oder \`AKTUALISIERT\` zählen als Fortschritt), melde entscheidung-noetig.`;
 
 /**
  * Grund für die Blockade oder `null`. `input`: `{ hookEvent, agentType, toolName, lastMessage }`.

@@ -620,6 +620,24 @@ describe("warten: Branch aktualisieren (factory#375 L1)", () => {
   });
 });
 
+describe("lauf: Branch-Update über gh (factory#375 L1)", () => {
+  test("HINTER MAIN ruft gh pr update-branch <pr> genau einmal", () => {
+    const L = raw as unknown as { lauf: (a: object, d: object) => Erg };
+    const aufrufe: string[][] = [];
+    const hinten = offen([lauf("Tests", "COMPLETED", "SUCCESS")], { mergeStateStatus: "BEHIND" });
+    const gh = (a: string[]) => {
+      aufrufe.push(a);
+      if (a[0] === "api") return "[]";
+      if (a.includes("--required")) return JSON.stringify([{ name: "Tests" }]);
+      return a.includes("baseRefName") ? JSON.stringify({ baseRefName: "main" }) : JSON.stringify(hinten);
+    };
+    let t = 0;
+    const r = L.lauf({ pr: "7", maxSekunden: 60, intervall: 30 }, { gh, schlafe: (ms: number) => void (t += ms), jetzt: () => t, schreibe: () => undefined, meldeFehler: () => undefined });
+    expect(aufrufe.filter((a) => a[1] === "update-branch")).toEqual([["pr", "update-branch", "7"]]);
+    expect(r.zeilen[0]).toBe("HINTER MAIN");
+  });
+});
+
 describe("parseArgs: Standardbudget (factory#375 L39)", () => {
   test("Standard ist die exportierte Konstante", () => {
     expect(P.parseArgs(["5"]).maxSekunden).toBe(P.MAX_SEKUNDEN_STANDARD);
