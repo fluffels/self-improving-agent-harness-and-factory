@@ -363,3 +363,43 @@ describe("Sammelticket-Deckel: keine zweite Zeilenzahl-Regel im ganzen Brain (fa
     assert.equal(zeilenzahlVerstoesse([{ pfad: "x.md", text: "Sammelticket: 16 Zeilen" }], [{ pfad: "x.md", treffer: "6 Zeilen", grund: "g" }]).length, 2);
   });
 });
+
+/** Zum Rest-Übertrag (factory#400 L73): der Hauptchat überträgt die REST-Zeilen direkt nach dem Plan, der Umsetzer nur Dazugekommenes, vom DECKEL-Ende Abgegebenes und Funde. */
+export function restUebertragBefunde(q: { ablauf: string; planer: string; umsetzer: string; mechanik: string }): string[] {
+  const out: string[] = [];
+  const von = q.ablauf.indexOf("2. **Planen");
+  const bis = q.ablauf.indexOf("3. **Pre-Flight");
+  const schritt2 = von >= 0 && bis > von ? q.ablauf.slice(von, bis) : "";
+  for (const w of ["melden.mjs", "REST", "ÜBERTRAGEN:"]) if (!schritt2.includes(w)) out.push(`ablauf.md Schritt 2: nennt „${w}“ nicht`);
+  const spawn = q.ablauf.indexOf('subagent_type: "<agenten.umsetzer>"');
+  if (spawn < 0 || !q.ablauf.slice(spawn, q.ablauf.indexOf("```", spawn)).includes("ÜBERTRAGEN:")) out.push("ablauf.md: die Umsetzer-Prompt-Vorlage nennt „ÜBERTRAGEN:“ nicht");
+  const absatz = (text: string, kopf: string): string => text.split("\n").find((z) => z.startsWith(kopf)) ?? "";
+  const planer = absatz(q.planer, "**Sammeltickets (Titel");
+  if (!planer.includes("der Rest geht ins Folge-Sammelticket") || !planer.includes("Hauptchat")) out.push("Planer: der Sammelticket-Absatz nennt den Übertrag durch den Hauptchat nicht");
+  const mech = absatz(q.mechanik, "- **Abarbeiten:**");
+  if (!mech.includes("Hauptchat") || !mech.includes("ÜBERTRAGEN")) out.push("ticket-reihenfolge.md: die Zeile Abarbeiten nennt Hauptchat und ÜBERTRAGEN nicht");
+  const ums = absatz(q.umsetzer, "**Sammeltickets (Titel");
+  if (!ums.includes("ÜBERTRAGEN") || !ums.includes("nicht noch einmal")) out.push("Umsetzer: der Sammelticket-Absatz nennt ÜBERTRAGEN und „nicht noch einmal“ nicht");
+  if (ums.includes("`REST`, später Dazugekommenes")) out.push("Umsetzer: meldet REST noch selbst (doppelt zum Übertrag des Hauptchats)");
+  return out;
+}
+
+describe("Rest-Übertrag direkt nach dem Planer (factory#400 L73)", () => {
+  const echt = () => ({
+    ablauf: lies(".agents/skills/factory/ablauf.md"),
+    planer: lies(".claude/agents/factory-planer.md"),
+    umsetzer: lies(".claude/agents/factory-umsetzer.md"),
+    mechanik: lies("docs/ticket-reihenfolge.md"),
+  });
+  test("echter Stand: Hauptchat überträgt REST nach dem Plan, der Umsetzer meldet es nicht noch einmal", () => {
+    assert.deepEqual(restUebertragBefunde(echt()), []);
+  });
+  test("Negativfall: der Umsetzer, der REST selbst meldet, ist rot (doppelt); jede Stelle einzeln", () => {
+    const e = echt();
+    const doppelt = e.umsetzer.split("\n").map((z) => (z.startsWith("**Sammeltickets (Titel") ? z + " `REST`, später Dazugekommenes gehen ins Folge-Sammelticket." : z)).join("\n");
+    assert.match(restUebertragBefunde({ ...e, umsetzer: doppelt }).join("\n"), /meldet REST noch selbst/);
+    assert.match(restUebertragBefunde({ ...e, ablauf: e.ablauf.split("ÜBERTRAGEN:").join("X:") }).join("\n"), /Schritt 2: nennt „ÜBERTRAGEN:“/);
+    assert.match(restUebertragBefunde({ ...e, planer: e.planer.split("Hauptchat").join("Umsetzer") }).join("\n"), /Planer: der Sammelticket-Absatz/);
+    assert.match(restUebertragBefunde({ ...e, mechanik: e.mechanik.split("ÜBERTRAGEN").join("X") }).join("\n"), /Abarbeiten nennt/);
+  });
+});
