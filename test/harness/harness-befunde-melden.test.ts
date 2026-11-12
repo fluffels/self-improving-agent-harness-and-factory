@@ -86,8 +86,19 @@ describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
   });
 
   test("nur Markdown unter .claude/agents und .agents/skills zählt zur Scan-Menge", () => {
-    const e = (pfad: string) => ({ pfad, ring: "kern" });
-    expect(umfang([e(".claude/agents/a.md"), e(".agents/skills/x/b.md"), e(".claude/agents/c.json"), e("docs/d.md")])).toEqual([".agents/skills/x/b.md", ".claude/agents/a.md"]);
+    const e = (pfad: string, ring = "kern") => ({ pfad, ring });
+    const eintraege = [
+      e(".claude/agents/a.md"),
+      e(".claude/agents/a.md"), // doppelter Pfad: einmal gescannt
+      e(".agents/skills/x/b.md"),
+      e(".claude/agents/c.json"),
+      e("docs/d.md"),
+      e(".claude/agents/o.md", "oberflaeche"), // nur in der Fabrik: darf die Fabrik nennen
+      { ...e(".claude/agents/blk.md"), block: "b" }, // nur ein Block der Datei
+      e(".claude/agents/c.md.bak"),
+      e("x/.claude/agents/e.md"),
+    ];
+    expect(umfang(eintraege)).toEqual([".agents/skills/x/b.md", ".claude/agents/a.md"]);
   });
 
   test("rollenneutral oder in getrennten Sätzen: kein Fund; die Zeilennummer zählt ab `ab`", () => {
