@@ -1,4 +1,4 @@
-/* Kern-Verweis-Wächter: Bezieher-Sicht auf Verweise in Besitz-Text (factory#177, Vor-Tag-Probe; factory#245 vereinigt die früheren Wächter `agents-refs` und Regel 7 (3) aus `ticket-ablauf`).
+/* Kern-Verweis-Wächter: Bezieher-Sicht auf Verweise in Besitz-Text (factory#177, Vor-Tag-Probe; factory#245 vereinigt den früheren Wächter für Verweise auf AGENTS.md und Regel 7 (3) aus `ticket-ablauf`).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/. Die Scans stehen in `kern-verweise.ts`.
  *
@@ -16,7 +16,7 @@
  *
  * Formenliste der Verweise auf AGENTS.md (geschlossen, Abgleich mit `abschnittTrifft` gegen die Titel, Wortgrenze wie in check:docdrift):
  *   (1) `AGENTS.md § A` / `› A` (Muster 8), (2) `AGENTS.md (§ A`, (3) `Projekt-Block › A` / `§ A`: in allen Kern-Einheiten (Besitz-Spannen), Ziel Kern-Block bzw. Vorlage
- *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"`:
+ *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"` (auch `AGENTS.md § „A"`, Muster 8 sieht `„` nicht):
  *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
  *   gegen die ganze AGENTS.md. Ein `CLAUDE.md`-Ziel ist immer rot (die Datei ist verboten).
  *

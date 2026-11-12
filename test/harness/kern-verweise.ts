@@ -240,7 +240,7 @@ export function scanneFabrik(wurzel: string): { funde: Fund[]; verweise: number 
 // ── Verweise auf AGENTS.md (Kern-Block, Projekt-Block) ────────────────────────────────────────────────────────────
 
 export type AgentsZiel = "AGENTS.md" | "CLAUDE.md" | "Projekt-Block";
-/** Form des Verweises: 1 `AGENTS.md §|›`, 2 `AGENTS.md (§`, 3 `Projekt-Block ›|§`, 4 bares `§` im Absatz, 5 `AGENTS.md „X"`. */
+/** Form des Verweises: 1 `AGENTS.md §|›`, 2 `AGENTS.md (§`, 3 `Projekt-Block ›|§`, 4 bares `§` im Absatz, 5 `AGENTS.md „X"` (auch `AGENTS.md § „X"`). */
 export type AgentsForm = 1 | 2 | 3 | 4 | 5;
 export interface AgentsVerweis {
   ziel: AgentsZiel;

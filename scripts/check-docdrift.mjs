@@ -301,7 +301,7 @@ function skriptDateien(rootDir, ordner = "scripts") {
   });
 }
 
-/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird gegen seine Abschnitte geprüft, außer im Bezieher bei einem Verweis aus Besitz-Text auf einen Anker-Stub (`istAnkerStub`: nur Überschriften, der Fettdruck-Abschnitt fehlt dort; die Fabrik prüft gegen die volle Seite). Der Vertrag für Kern-Verweise auf AGENTS.md-Titel (ein `AGENTS.md`-Verweis trifft den Kern-Block, ein `Projekt-Block`-Verweis die Vorlage) gehört `test/harness/agents-refs.test.ts`. */
+/** 8. Abschnittsverweise (factory#157): `[{ file, art: "abschnitt" | "ziel", pfad, trenner, segment, ziel }]`. Ziel fehlt → `art: "ziel"`; im Bezieher bleibt das still, wenn der Verweis in verteiltem Besitz-Text steht und das Ziel kein Besitz ist (#110). Ein vorhandenes Ziel wird gegen seine Abschnitte geprüft, außer im Bezieher bei einem Verweis aus Besitz-Text auf einen Anker-Stub (`istAnkerStub`: nur Überschriften, der Fettdruck-Abschnitt fehlt dort; die Fabrik prüft gegen die volle Seite). Der Vertrag für Kern-Verweise auf AGENTS.md-Titel (ein `AGENTS.md`-Verweis trifft den Kern-Block, ein `Projekt-Block`-Verweis die Vorlage) gehört `test/harness/besitz-abschnittsverweise.test.ts`. */
 function auditAbschnittVerweise(rootDir, mdFiles, content) {
   const abschnittCache = new Map();
   const titelVon = (ziel) => {

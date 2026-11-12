@@ -84,6 +84,11 @@ export const RESTE: Rest[] = [
     muster: /spielquote-lib|\bSPIEL_QUOTE\b|\bzaehleSpielMerges\b/,
     fix: "den Kern-Begriff Produktquote nutzen: scripts/produktquote-lib.mjs, PRODUKT_QUOTE, zaehleProduktMerges (#1942)",
   },
+  {
+    name: "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)",
+    muster: /agents-refs/,
+    fix: "Kern-Verweise auf AGENTS.md prüft test/harness/besitz-abschnittsverweise.test.ts (factory#245), den Wächter nicht mehr nennen",
+  },
 ];
 
 const reste = (dateien: Datei[]): string[] => findeReste(dateien, RESTE);
@@ -224,6 +229,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
       "alter Titel des Tag-Tickets": "Kopf-Ticket „🏷️ Tag v1.3.0 setzen und syncen“",
       "Baseline der Kern-Links": "gelesen aus test/harness/kern-links-baseline.json",
+      "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)": "siehe test/harness/agents-refs.test.ts",
       "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
     };
     const text = beispiele[r.name];

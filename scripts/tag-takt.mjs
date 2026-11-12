@@ -145,6 +145,30 @@ export function bezieherMigrationen(besitz, migrationKey) {
   return besitz.flatMap((c) => [...c.body.matchAll(zeilenRe(migrationKey))].map((m) => ({ pr: c.pr, text: m[2].trim() })).filter((x) => x.text !== ""));
 }
 
+/** Die Ankerliste der Kern-Links (factory#245 L1): geschlossene Liste der Fabrik-Seiten-Anker, die Besitz-Text verlinkt; ein Bezieher mit eigener Seite braucht dort die Überschrift. */
+export const ANKER_LISTE = "test/harness/kern-link-anker.json";
+
+const ANKER_FORMAT = /^docs\/[^#]+\.md#[^#\s`]+$/;
+
+/**
+ * Pur (factory#245 L1): neue Einträge der Ankerliste seit dem Tag (`altText` am Tag, `neuText` an HEAD, je der JSON-Inhalt), sortiert; nur Einträge im Format `docs/<x>.md#<anker>`
+ * (Missbrauchsschutz: der Text landet im Tag-Ticket). Fehlt die Liste am Tag oder ist sie unlesbar, bleibt es leer (fail-open: der erste Tag mit Liste hat keine Basis); fehlt sie an HEAD, ebenso.
+ */
+export function neueKernLinkAnker(altText, neuText) {
+  const lese = (text) => {
+    try {
+      const liste = JSON.parse(text ?? "");
+      return Array.isArray(liste) ? liste.filter((a) => typeof a === "string" && ANKER_FORMAT.test(a)) : null;
+    } catch {
+      return null;
+    }
+  };
+  const alt = lese(altText);
+  const neu = lese(neuText);
+  if (alt === null || neu === null) return [];
+  return neu.filter((a) => !alt.includes(a)).sort();
+}
+
 /** Pur: das Alter der ältesten Änderung in ganzen Tagen (Kommazahl) oder `null`; `datum` ISO. */
 const alterTage = (besitz, jetzt) => (besitz.length === 0 ? null : (jetzt.getTime() - Math.min(...besitz.map((c) => Date.parse(c.datum)))) / TAG_MS);
 
@@ -272,7 +296,7 @@ function probeAblauf({ tag, sha }) {
 }
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
-export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [], bezieher = [] }) {
+export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [], ankerNeu = [], bezieher = [] }) {
   const wt = `.claude/worktrees/tag-${tag}`;
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
@@ -289,7 +313,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     ...zeilen,
     "",
     "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen):",
-    ...(migrationen.length > 0 ? migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`) : ["- keine gemeldet"]),
+    ...(migrationen.length + ankerNeu.length > 0 ? [...migrationen.map((m) => `- ${m.pr} ${zelle(m.text)}`), ...ankerNeu.map((a) => `- Ankerliste: \`${a}\` neu (Bezieher mit eigener Seite braucht die Überschrift)`)] : ["- keine gemeldet"]),
     "",
     "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
     "",
@@ -361,6 +385,16 @@ function ladeMilestoneAusloeser(io, letzterTag, log) {
   }
 }
 
+/** Neue Einträge der Ankerliste seit dem Tag (factory#245 L1); ohne `io.zeigeDatei`, ohne Tag oder bei einem Lesefehler leer. */
+function ankerNeuAus(io, letzterTag, sha) {
+  if (!io.zeigeDatei || !letzterTag) return [];
+  try {
+    return neueKernLinkAnker(io.zeigeDatei(letzterTag, ANKER_LISTE), io.zeigeDatei(sha, ANKER_LISTE));
+  } catch {
+    return [];
+  }
+}
+
 /** Liest alles Nötige; wirft bei einem Git-Fehler. `io.ladeLaeufe` darf werfen (dann `unbekannt`). */
 function sammle(io, log) {
   const letzterTag = vergleicheTags(io.tags());
@@ -375,7 +409,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], bezieher: io.bezieher ?? [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
+  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], ankerNeu: ankerNeuAus(io, letzterTag, sha), bezieher: io.bezieher ?? [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -407,11 +441,11 @@ function fuehreAus(e, io, log) {
 }
 
 /** Pur: Soll-Titel und Soll-Body des Tickets. */
-function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, bezieher }) {
+function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, ankerNeu, bezieher }) {
   const tag = naechsterTag(letzterTag, besitz, entfernt);
   const aeltestes = besitz.reduce((a, c) => (Date.parse(c.datum) < Date.parse(a.datum) ? c : a));
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
-  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, bezieher }) };
+  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, ankerNeu, bezieher }) };
 }
 
 /**
