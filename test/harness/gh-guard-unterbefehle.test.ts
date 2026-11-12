@@ -12,6 +12,10 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import { kernAnteil } from "../../scripts/besitz-lib.mjs";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import { berechtigungenAus } from "../../scripts/projekt-config-lib.mjs";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as guardRaw from "../../scripts/gh-guard-hook.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as adapterRaw from "../../scripts/codex-hook-lib.mjs";
@@ -55,6 +59,10 @@ const WEITERE = [
 const NEGATIV = [
   "gh issue view 5",
   "gh issue deleted 5",
+  "gh issue deleted 5 && gh api user",
+  "xgh issue delete 5 && gh api user",
+  "gh label deletex y; gh api user",
+  "gh issue delete-all 5 && gh api user",
   "gh issue delete-all 5",
   "xgh issue delete 5",
   "ghx issue delete 5",
@@ -77,6 +85,9 @@ describe("Claude: destruktive gh-Unterbefehle hinter Wrappern fragen", () => {
   test.each(guard.GH_DESTRUKTIV ?? [])("env gh %s x", (e) => {
     expect(guard.bewerte(`env gh ${e} x`, { shell: "bash" }).ask).toBe(true);
   });
+  test("Grund nennt den normalisierten Unterbefehl", () => {
+    expect(guard.bewerte("gh  issue   delete 5", { shell: "bash" }).reason).toContain("`gh issue delete` ist unumkehrbar");
+  });
   test("Dispatcher-Weg liefert ask", () => {
     const o = dispatcher.dispatch(JSON.stringify({ session_id: "s", cwd: haupt, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "env gh issue delete 5" } }), haupt);
     expect(o?.hookSpecificOutput.permissionDecision).toBe("ask");
@@ -97,14 +108,22 @@ describe("Codex: aus ask wird Deny durch den gh-Guard", () => {
   });
 });
 
-describe("Sync mit der settings.json", () => {
-  const s = (JSON.parse(readFileSync(".claude/settings.json", "utf8")) as { permissions: { ask: string[]; deny: string[] } }).permissions;
-  const regeln = [...s.ask, ...s.deny];
-  const bash = new Set(regeln.map((r) => /^Bash\(gh (\w+ [\w-]+):\*\)$/.exec(r)?.[1]).filter((x): x is string => !!x && x !== "issue create"));
-  test("GH_DESTRUKTIV ist gleich den Bash(gh …)-Regeln ohne issue create", () => {
-    expect([...guard.GH_DESTRUKTIV].sort()).toEqual([...bash].sort());
+describe("Sync mit der settings.json (Kern-Anteil: Ergänzungen eines Beziehers dürfen den Test nicht rot machen)", () => {
+  type Perm = { ask: string[]; deny: string[] };
+  const settings = (JSON.parse(readFileSync(".claude/settings.json", "utf8")) as { permissions: Perm }).permissions;
+  const erg = berechtigungenAus(JSON.parse(readFileSync(".factory/projekt.json", "utf8")));
+  const kernRegeln = (perm: Perm, e: unknown): string[] => { const k = kernAnteil(perm, e) as Partial<Perm>; return [...(k.ask ?? []), ...(k.deny ?? [])]; };
+  const bashAus = (regeln: string[]) => new Set(regeln.map((r) => /^Bash\(gh (\w+ [\w-]+):\*\)$/.exec(r)?.[1]).filter((x): x is string => !!x && x !== "issue create"));
+  const regeln = kernRegeln(settings, erg);
+  test("GH_DESTRUKTIV ist gleich den Bash(gh …)-Regeln des Kern-Anteils ohne issue create", () => {
+    expect([...guard.GH_DESTRUKTIV].sort()).toEqual([...bashAus(regeln)].sort());
   });
-  test.each([...bash])("PowerShell-Zwilling für %s", (e) => {
+  test.each([...guard.GH_DESTRUKTIV])("PowerShell-Zwilling für %s", (e) => {
     expect(regeln).toContain(`PowerShell(gh ${e} *)`);
+  });
+  test("Negativfall: eine Ergänzungsregel eines Beziehers (Bash(gh release delete:*)) ändert den Kern-Vergleich nicht", () => {
+    const ergPlus = { ...erg, ask: [...(erg.ask ?? []), "Bash(gh release delete:*)", "PowerShell(gh release delete *)"] };
+    const mit = { ...settings, ask: [...settings.ask, "Bash(gh release delete:*)", "PowerShell(gh release delete *)"] };
+    expect([...bashAus(kernRegeln(mit, ergPlus))].sort()).toEqual([...guard.GH_DESTRUKTIV].sort());
   });
 });

@@ -44,7 +44,8 @@
  *  - Destruktive gh-Unterbefehle (factory#397): die geschlossene Liste `GH_DESTRUKTIV` (gleich den ask/deny-`gh`-Regeln der settings.json, Sync-Wächter
  *    test/harness/gh-guard-unterbefehle.test.ts) fragt an jeder Stelle außerhalb von Quotes, auch hinter `env`, Zuweisung, Pfad (`/usr/bin/gh`), Wrapper
  *    und Interpreter-String; die wörtlichen Präfix-Regeln der settings.json fangen diese Formen nicht. Nicht erkannt: gequoteter Kommandoname
- *    (`'gh' issue delete`), zerstückelte Wörter (`g""h`), Skriptdateien, `node -e`, Aliase.
+ *    (`'gh' issue delete`), zerstückelte Wörter (`g""h`), Optionen oder Zeilenfortsetzung zwischen den Unterbefehl-Wörtern (`gh issue -R o/r delete`), Skriptdateien, `node -e`, Aliase.
+ *    Auch `gh repo delete` (in settings.json `deny`) fragt hier nur (`ask`, der Guard sagt nie `deny`); unter Codex wird daraus Deny.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
@@ -112,11 +113,12 @@ const ISSUES_ENDPUNKT = /^["']?\/?repos\/[^/\s'"]+\/[^/\s'"]+\/issues\/?(?:\?[^\
 /** Zeichen vor einem Kommandowort: alles außer den Zeichen, die zu einem Pfad/Namen gehören (`~`, `:` inklusive: sonst quadratisches Backtracking bei `~/~/…`). */
 const WORTANFANG = String.raw`(^|[^\w.:~\\/-])`;
 /** Das Kommando `gh issue create` an Kommandoposition oder hinter Trennern (Text in Quotes ist maskiert). */
-const ghUnterbefehl = (woerter) => new RegExp(String.raw`${WORTANFANG}(?:[\w.:~-]*[\\/])*gh(?:\.exe)?\s+(${woerter.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})(?![\w-])`, "i");
+const wortFolge = (woerter) => woerter.map((w) => w.replace(" ", String.raw`\s+`)).join("|");
+const ghUnterbefehl = (woerter) => new RegExp(String.raw`${WORTANFANG}(?:[\w.:~-]*[\\/])*gh(?:\.exe)?\s+(${wortFolge(woerter)})(?![\w-])`, "i");
 /** Unumkehrbare gh-Unterbefehle (Pre-Flight-Stopp Löschen): gleich den ask/deny-`gh`-Regeln der settings.json ohne `issue create` (eigener Weg, #1693). */
 export const GH_DESTRUKTIV = Object.freeze(["issue delete", "issue transfer", "label delete", "project delete", "project item-delete", "project field-delete", "repo delete"]);
 const GH_DESTRUKTIV_TREFFER = ghUnterbefehl(GH_DESTRUKTIV);
-const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${GH_DESTRUKTIV.map((w) => w.replace(" ", String.raw`\s+`)).join("|")})\b`, "i");
+const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${wortFolge(GH_DESTRUKTIV)})\b`, "i");
 const ISSUE_ANLEGEN = ghUnterbefehl(["issue create"]);
 const GRAPHQL_ANLEGEN = /\bcreateIssue(?=\s*\()/;
 
@@ -476,7 +478,7 @@ function bewerteIntern(command, tiefe, kontext, d) {
   dialekt = d;
   try {
     if (!command || typeof command !== "string") return { ask: false };
-    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && (/\bapi\b/.test(kontext) || /\bissue\s+create\b/.test(kontext) || GH_DESTRUKTIV_VORFILTER.test(kontext)))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && (/\bapi\b/.test(kontext) || /\bissue\s+create\b/i.test(kontext) || GH_DESTRUKTIV_VORFILTER.test(kontext)))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
     if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
     const text = ohneDatenHeredocs(command);
     for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
