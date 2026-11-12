@@ -340,6 +340,13 @@ function sessionsWaehlen({ args, projectsRoot, repoRoot, seitMs }) {
   return { sessions, args: { ...args, session: sessionId } }; // args mit aufgelöster ID: `--session` gilt als Ende nur bei gleicher ID
 }
 
+/** Ledger lesen; ein kaputtes wird (außer im Trockenlauf) beiseitegelegt und durch ein leeres ersetzt. */
+function ledgerOeffnen(ledgerDatei, args, now) {
+  const { ledger, kaputt } = ledgerLesen(ledgerDatei);
+  if (kaputt && !args.trocken) renameSync(ledgerDatei, `${ledgerDatei}.kaputt-${new Date(now).toISOString().replace(/[:.]/g, "-")}`);
+  return ledger;
+}
+
 /**
  * Nachliefern ausführen: `{ exitCode, text, protokoll }`. 0 = Bericht, 1 = mindestens ein Fehler (übrige Sessions liefen weiter),
  * 2 = Aufruf oder Zugang fehlt (vor jedem Request).
@@ -370,8 +377,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   if (wahl.ergebnis) return { ...wahl.ergebnis, protokoll };
   const { sessions, args: lAufgeloest } = wahl;
   const ledgerDatei = join(stateDir, LEDGER_NAME);
-  const { ledger, kaputt } = ledgerLesen(ledgerDatei);
-  if (kaputt && !args.trocken) renameSync(ledgerDatei, `${ledgerDatei}.kaputt-${new Date(now).toISOString().replace(/[:.]/g, "-")}`);
+  const ledger = ledgerOeffnen(ledgerDatei, args, now);
   const vorher = JSON.stringify(ledger);
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
