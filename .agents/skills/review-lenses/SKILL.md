@@ -92,7 +92,7 @@ Der PreToolUse-Guard `scripts/lens-auftrag-guard.mjs` weist einen Auftrag mit of
 
 Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an. Kennt das Tool den Typ nicht („Agent type … not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“ Der Bericht vermerkt den Fallback.
 
-⚠️ **Die Lenses lesen, sie schreiben nicht**; **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde und Brille in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>-<brille>` (ohne Ticket `<slug>` statt `<nr>`; `git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
+⚠️ **Die Lenses lesen, sie schreiben nicht**; **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde und Brille in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>-<brille>` (`git -C <feature-worktree> worktree add --detach <Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
 
 **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sonst meldet sie „nicht belegt“.
 
