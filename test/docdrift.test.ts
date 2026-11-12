@@ -720,6 +720,7 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     abschnittTitel: (md: string) => string[][];
     abschnittTrifft: (segment: string, titel: string[][]) => boolean;
     segmentKurz: (segment: string) => string;
+    zitatVerweise: (text: string, opt?: { istMarkdown?: boolean }) => (Verweis & { fabrik: boolean })[];
     auditDocDrift: (root: string) => { abschnittFehler: { file: string; art: string; pfad: string; segment: string }[] };
   };
 
@@ -780,6 +781,16 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
       ["docs/y.md", "abschnitt", "Secret-Inbox."],
       ["scripts/a.mjs", "abschnitt", "Secret-Inbox"],
     ]);
+  });
+
+  test("Zitatform (factory#403 L6): `<pfad>.md › „A“` und `§ „A“` werden gegen die Zieldatei geprüft, die Fabrik-Form nicht", () => {
+    const x = { "docs/x.md": "# X\n## Secret-Inbox\n" };
+    const rot = fixture({ ...x, "docs/y.md": "Siehe docs/x.md › „Gibts nicht“\n", "scripts/a.mjs": "// docs/x.md § „Auch nicht“\n" });
+    assert.deepEqual(rot.map((f) => [f.file, f.art, f.segment]), [["docs/y.md", "abschnitt", "Gibts nicht"], ["scripts/a.mjs", "abschnitt", "Auch nicht"]]);
+    assert.deepEqual(fixture({ ...x, "docs/y.md": "Siehe docs/x.md § „Secret-Inbox“\n" }), []);
+    assert.deepEqual(fixture({ ...x, "docs/y.md": "```\ndocs/x.md › „Gibts nicht“\n```\n" }), [], "Code-Fence maskiert");
+    assert.deepEqual(fixture({ ...x, "docs/y.md": "docs/x.md (Fabrik) › „Gibts nicht“\n" }), [], "Fabrik-Form prüft nur die Fabrik");
+    assert.deepEqual(api.zitatVerweise("docs/x.md › „A b“ und docs/x.md (Fabrik) › „C“").map((z) => [z.pfad, z.segmente, z.fabrik]), [["docs/x.md", ["A b"], false], ["docs/x.md", ["C"], true]]);
   });
 
   test("AGENTS.md § <Abschnitt> in Skript und Doku: toter Abschnitt rot, vorhandener grün", () => {
