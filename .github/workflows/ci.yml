@@ -163,7 +163,7 @@ jobs:
         run: node scripts/check-doc-tickets.mjs
 
   # Post-hoc-Netz auf main: ein roter `main` trotz grüner PR-Checks öffnet ein Alarm-Issue, nur auf push und ohne den Workflow zu blockieren. Die Mechanik
-  # (Dedup, Board-Position, PROJECT_TOKEN) wohnt im Kern-Workflow alarm-rot-main.yml; das Label (ein existierendes Label des Projekts) kommt als Input. Der Doctor-Punkt "Sammel-Check" prüft diesen Aufruf.
+  # (Dedup, Board-Position, PROJECT_TOKEN) wohnt im Kern-Workflow alarm-rot-main.yml; das Label (ein existierendes Label des Projekts) kommt als Input. Ein Workflow mit eigenem Sammel-Job trägt denselben Aufruf; der Doctor-Punkt "Sammel-Check" prüft das für die Workflows aus `sammelChecks` (hier nicht gesetzt: dieser Job hängt an drei Jobs).
   alarm-red-main:
     name: Alarm bei rotem main
     needs: [build-test, security-audit, probe-erstbezug]

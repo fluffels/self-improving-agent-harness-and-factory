@@ -20,5 +20,5 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Kern-Schnitt u
 
 ## Grenzen
 
-- Ob der Sammel-Job selbst `if: always()` trägt (sonst würde ein roter Vorgänger ihn überspringen und der Required Check bliebe grün-neutral), prüft der Punkt nicht; das ist als Befund im Ticket festgehalten.
+- Ob der Sammel-Job selbst `if: always()` trägt (sonst würde ein roter Vorgänger ihn überspringen und der Required Check bliebe grün-neutral), prüft der Punkt nicht; das ist als Zeile im Harness-Sammelticket festgehalten.
 - Ein Bezieher übernimmt die Änderung über den Sync: `alarm-rot-main.yml` kommt als neue Kern-Datei, die `ci.yml`-Vorlage ist Projekt-Besitz und muss den Aufruf selbst tragen (Migrationszeile im Commit).

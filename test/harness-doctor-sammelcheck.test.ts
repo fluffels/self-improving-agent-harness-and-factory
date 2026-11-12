@@ -124,7 +124,7 @@ describe("Sammel-Check (factory#401)", () => {
 });
 
 describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
-  const dateipunkt = (a: Record<string, unknown>) => (rawDateien({ rootDir: "/nirgends", git: () => [], existiert: () => true, lies: () => null, ...a }) as Ergebnis[]).find((p) => p.punkt === "Sammel-Check")!;
+  const dateipunkt = (a: Record<string, unknown>) => (rawDateien as (x: Record<string, unknown>) => Ergebnis[])({ rootDir: "/nirgends", git: () => [], existiert: () => true, lies: () => null, ...a }).find((p) => p.punkt === "Sammel-Check")!;
 
   test("Verdrahtung: pruefeDateien reicht config und workflows an den Punkt (Lücke und gesund)", () => {
     const schlecht = dateipunkt({ config: CONFIG, workflows: ci(GUT.replace(BUILD, `${BUILD}  neu:\n    runs-on: x\n`)) });

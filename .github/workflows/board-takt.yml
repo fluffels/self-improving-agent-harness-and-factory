@@ -13,7 +13,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 # 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 offenen Befund-Zeilen (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand; eine Zeile `- [ ]` zählt, `- [x]` nicht) holt derselbe Lauf das
 #    ungeclaimte an die Spitze des Boards (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket; #1349, #1888, factory#162). Unter der Schwelle
 #    schiebt er nichts, auch nicht zurück.
-#    Dazu das Langfuse-Sammelticket „Langfuse-Befunde (gesammelt)“ (factory#379; im Bezieher das eigene): dieselbe Füllstand-Entscheidung, ein ungeclaimtes holt der Lauf auf die erste Position hinter dem Kopf.
+#    Dazu das Langfuse-Sammelticket „Langfuse-Befunde (gesammelt)“ (factory#379; im Bezieher das eigene): eigene Füllstand-Entscheidung (`langfuseSammelEntscheidung`, schon ab einer offenen Zeile), ein ungeclaimtes holt der Lauf auf die erste Position hinter dem Kopf.
 # 3. Tag-Takt (#103): derselbe Lauf zählt die Besitz-PRs seit dem letzten Release-Tag und hält ab 3 PRs, über 7 Tage Alter oder einem
 #    Dringlich-Signal genau ein Kopf-Ticket „🏷️ Tag v<x> setzen“ (scripts/tag-takt.mjs; braucht die volle Historie und lesenden
 #    Zugriff auf die Workflow-Läufe für den CI-Status).
