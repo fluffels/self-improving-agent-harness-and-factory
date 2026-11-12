@@ -50,8 +50,8 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
-import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
-import { leereProjektwerte, PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { ohneProjektwerte } from "./projektwert-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -70,9 +70,11 @@ export const MODULE_AGENTS_BUDGET = 12_000;
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
 
+const istAgentsMd = (file) => file.split("/").pop() === "AGENTS.md";
+
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
 export function collectAgentsFiles(rootDir = ROOT) {
-  return collectMarkdown(rootDir).filter((f) => f === "AGENTS.md" || f.endsWith("/AGENTS.md"));
+  return collectMarkdown(rootDir).filter(istAgentsMd);
 }
 
 /** Zeichenzahl je Kontextdatei gegen ihr Budget: alle konfigurierten Dateien (auch
@@ -93,22 +95,21 @@ export function collectAgentSkillFiles(rootDir = ROOT) {
   const agenten = existsSync(join(rootDir, ".claude/agents"))
     ? readdirSync(join(rootDir, ".claude/agents"), { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => `.claude/agents/${e.name}`)
     : [];
-  return [...agenten, ...collectMd(rootDir, [QUELL_VERZEICHNIS])].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
+  return [...agenten, ...collectMd(rootDir, [QUELL_VERZEICHNIS])].filter((f) => !istAgentsMd(f)).sort();
 }
 
 /** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen); ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
 export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_BUDGETS, defaultBudget = AGENTEN_SKILL_DEFAULT_BUDGET) {
   const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
-  const marker = { start: PROJEKTWERT_START, ende: PROJEKTWERT_ENDE };
   return collectAgentSkillFiles(rootDir).map((file) => ({
     file,
-    chars: zeichenOhneBlock(leereProjektwerte(readFileSync(join(rootDir, file), "utf8"), file), marker),
+    chars: countChars(ohneProjektwerte(readFileSync(join(rootDir, file), "utf8"), file)),
     budget: budgetOf.get(file) ?? defaultBudget,
   }));
 }
 
 /** Agenten- oder Skill-Datei (nicht AGENTS.md): ihr Budget gehört dem Kern, die Fix-Zeile unterscheidet sich von der einer AGENTS.md. */
-const istAgentSkill = (file) => !file.endsWith("AGENTS.md") && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
+const istAgentSkill = (file) => !istAgentsMd(file) && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
 
 /** Pur: Fix-Zeile zu den Budget-Verletzungen [{ file }] (leer ohne Verletzung): AGENTS.md → auslagern in modul-lokale AGENTS.md bzw. Tiefendoc; Agenten-/Skill-Datei → kürzen oder in eine bedingte Zusatzdatei bzw. Brain-Seite auslagern, das Budget nie anheben (Ratchet). */
 export function fixHinweis(violations) {
@@ -147,6 +148,16 @@ export function kernBlockPruefung(rootDir = ROOT) {
   return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir), marker: { start: markerStart("kern"), ende: markerEnde("kern") } });
 }
 
+/** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces: `melde(text)` beendet den Lauf (CLI: Exit 1, fail-closed). */
+export function messeAlle(rootDir, melde) {
+  const kontext = collectContextSizes(rootDir);
+  try {
+    return [...kontext, ...collectAgentSkillSizes(rootDir)];
+  } catch (e) {
+    return melde(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`);
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const tty = process.stdout.isTTY;
@@ -164,7 +175,7 @@ function main() {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const sizes = [...collectContextSizes(), ...collectAgentSkillSizes()];
+  const sizes = messeAlle(ROOT, (text) => (console.error(red(text)), process.exit(1)));
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));
