@@ -840,13 +840,13 @@ describe("--session: ID oder eindeutiger Präfix (factory#354)", () => {
       const jetzt = Date.now();
       const t = new Date(jetzt - 3 * 60_000);
       utimesSync(join(a.root, PRAEFIX, `${VOLL}.jsonl`), t, t);
-      if (marke) rawLock.markiereStart(a.state, VOLL, jetzt - 60_000);
-      const r = await lauf(a, mock({ ist: 0 }), { session: angabe }, jetzt);
+      if (marke) L.markiereStart(a.state, VOLL, jetzt - 60_000);
+      const r = await lauf(a, mock({ ist: 0 }), { session: angabe, ende: jetzt - 120_000 }, jetzt);
       return r.protokoll.sessions[0];
     };
     expect((await jung("abcd1234", false)).status).toBe("gesendet");
-    expect((await jung("abcd1234", true)).fortgesetzt).toBeDefined();
-    expect((await jung(VOLL, true)).status).toBe((await jung("abcd1234", true)).status);
+    expect((await jung("abcd1234", true))).toMatchObject({ status: "läuft", endeVerworfen: true });
+    expect((await jung(VOLL, true))).toMatchObject({ status: "läuft", endeVerworfen: true });
   });
 
   test("mehrdeutiger Präfix: Exit 2 mit Kandidaten, nichts gesendet, kein Ledger", async () => {

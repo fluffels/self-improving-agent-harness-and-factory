@@ -325,7 +325,7 @@ function bericht(args, protokoll) {
 
 /**
  * Sessions des Laufs wählen. Mit `--session` zuerst die Angabe (volle ID oder eindeutiger Präfix, factory#354) auflösen, dann nur im Projekt suchen.
- * Rückgabe `{ sessions, sessionId }` oder `{ ergebnis }` (vorzeitig, vor jedem Request und jedem Ledger-Zugriff: mehrdeutig Exit 2, nicht gefunden oder außerhalb des Projekts Exit 1, nichts gesendet).
+ * Rückgabe `{ sessions, args }` (args mit aufgelöster ID) oder `{ ergebnis }` (vorzeitig, vor jedem Request und jedem Ledger-Zugriff: mehrdeutig Exit 2, nicht gefunden oder außerhalb des Projekts Exit 1, nichts gesendet).
  */
 function sessionsWaehlen({ args, projectsRoot, repoRoot, seitMs }) {
   let sessionId = null;
@@ -337,7 +337,7 @@ function sessionsWaehlen({ args, projectsRoot, repoRoot, seitMs }) {
   }
   const sessions = findeSessions({ projectsRoot, praefix: projektSlug(repoRoot), seitMs, sessionId });
   if (sessionId && !sessions.length) return { ergebnis: { exitCode: 1, text: `Session ${sessionId} liegt außerhalb des Projekts: nichts gesendet.` } };
-  return { sessions, sessionId };
+  return { sessions, args: { ...args, session: sessionId } }; // args mit aufgelöster ID: `--session` gilt als Ende nur bei gleicher ID
 }
 
 /**
@@ -368,14 +368,14 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
   }
   const wahl = sessionsWaehlen({ args, projectsRoot, repoRoot, seitMs });
   if (wahl.ergebnis) return { ...wahl.ergebnis, protokoll };
-  const { sessions, sessionId } = wahl;
+  const { sessions, args: lAufgeloest } = wahl;
   const ledgerDatei = join(stateDir, LEDGER_NAME);
   const { ledger, kaputt } = ledgerLesen(ledgerDatei);
   if (kaputt && !args.trocken) renameSync(ledgerDatei, `${ledgerDatei}.kaputt-${new Date(now).toISOString().replace(/[:.]/g, "-")}`);
   const vorher = JSON.stringify(ledger);
   // resume: die Session läuft wieder, ein früheres SessionEnd gilt nicht mehr (sonst sendete der nächste Lauf nach der kurzen Ruhefrist mitten in die Session).
   if (args.aktuell && !args.trocken && ledger.sessions[args.aktuell]?.beendet) ledger.sessions[args.aktuell].beendet = false;
-  const startMarke = args.beendet || args.session ? leseStartMarke(stateDir, args.beendet ?? sessionId) : null;
+  const startMarke = args.beendet || args.session ? leseStartMarke(stateDir, args.beendet ?? lAufgeloest.session) : null;
   // Gesamtfrist: nach GESAMTFRIST_MS beginnt keine weitere Session; die übrigen folgen beim nächsten Lauf.
   const start = uhr();
   for (const [i, s] of sessions.entries()) {
@@ -385,7 +385,7 @@ export async function nachliefern(args, { env = process.env, now = Date.now(), u
     }
     protokoll.geprueft += 1;
     try {
-      await verarbeite(s, { args, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, startMarke, claudeDir: dirname(stateDir) });
+      await verarbeite(s, { args: lAufgeloest, ledger, zugang, env, now, fetchImpl, repoRoot, protokoll, worktree, repo, startMarke, claudeDir: dirname(stateDir) });
     } catch (e) {
       protokoll.fehler.push({ session: s.id, status: e.status ?? null, meldung: fehlerText(e) });
     }
