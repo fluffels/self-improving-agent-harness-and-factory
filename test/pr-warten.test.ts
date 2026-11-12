@@ -10,8 +10,9 @@ type Erg = { exit: number; zeilen: string[] };
 const P = raw as unknown as {
   bewerte: (pr: object, pflicht?: readonly string[] | null) => Erg;
   konfliktStand: (seit: number | null, jetzt: number) => { bestaetigt: boolean; seit: number };
-  warten: (e: { hole: () => object; pflicht?: () => readonly string[]; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
+  warten: (e: { hole: () => object; pflicht?: () => readonly string[]; aktualisiere?: () => void; schlafe: (ms: number) => void; jetzt: () => number; maxMs: number; intervallMs: number }) => Erg;
   parseArgs: (a: string[]) => { pr: string | null; maxSekunden: number; intervall: number };
+  MAX_SEKUNDEN_STANDARD: number;
 };
 
 const lauf = (name: string, status: string, conclusion: string | null = null, url = `https://x/runs/${name}`) => ({ __typename: "CheckRun", name, status, conclusion, detailsUrl: url });
@@ -555,5 +556,73 @@ describe("CLI: Aufruftext nennt den Standard des Zeitbudgets (factory#347 L4)", 
     const r = spawnSync(process.execPath, ["scripts/pr-warten.mjs"], { encoding: "utf8" });
     expect(r.status).toBe(3);
     expect(r.stderr).toContain(`--max-sekunden ${P.parseArgs([]).maxSekunden}]`);
+  });
+});
+
+describe("bewerte: Branch hinter main (factory#375 L1)", () => {
+  const gruen = [lauf("a", "COMPLETED", "SUCCESS")];
+  test("BEHIND mit grünen Checks: Exit 2 HINTER MAIN, aktualisieren", () => {
+    const r = P.bewerte(offen(gruen, { mergeStateStatus: "BEHIND" }));
+    expect(r).toEqual({ exit: 2, zeilen: ["HINTER MAIN"], aktualisieren: true });
+  });
+  test("BEHIND mit rotem Check: ROT hat Vorrang", () => {
+    expect(P.bewerte(offen([lauf("a", "COMPLETED", "FAILURE")], { mergeStateStatus: "BEHIND" })).exit).toBe(1);
+  });
+  test("BEHIND mit Konflikt: KONFLIKT hat Vorrang", () => {
+    expect(P.bewerte(offen(gruen, { mergeStateStatus: "BEHIND", mergeable: "CONFLICTING" })).zeilen).toEqual(["KONFLIKT"]);
+  });
+  test("CLEAN bleibt: Merge steht aus", () => {
+    expect(P.bewerte(offen(gruen, { mergeStateStatus: "CLEAN" }))).toEqual({ exit: 2, zeilen: ["OFFEN 1/1 grün, Merge steht aus"] });
+  });
+  test("BEHIND mit laufendem Check: weiter OFFEN, kein Update", () => {
+    expect(P.bewerte(offen([lauf("a", "IN_PROGRESS")], { mergeStateStatus: "BEHIND" })).zeilen[0]).toMatch(/^OFFEN 0\/1/);
+  });
+});
+
+describe("warten: Branch aktualisieren (factory#375 L1)", () => {
+  const u = () => {
+    let t = 0;
+    return { jetzt: () => t, schlafe: (ms: number) => void (t += ms) };
+  };
+  const hinten = offen([lauf("a", "COMPLETED", "SUCCESS")], { mergeStateStatus: "BEHIND" });
+  test("ein Aufruf je Lauf; wieder BEHIND: kein zweiter Aufruf, am Ende HINTER MAIN", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => hinten, aktualisiere: () => void n++, ...u(), maxMs: 90_000, intervallMs: 30_000 });
+    expect(n).toBe(1);
+    expect(r).toMatchObject({ exit: 2, zeilen: ["HINTER MAIN"] });
+  });
+  test("nach dem Update liefert hole den neuen Stand: weiter gepollt", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => (n++ === 0 ? hinten : offen([lauf("a", "COMPLETED", "SUCCESS")])), aktualisiere: () => undefined, ...u(), maxMs: 90_000, intervallMs: 30_000 });
+    expect(r.zeilen).toEqual(["OFFEN 1/1 grün, Merge steht aus"]);
+  });
+  test("kurzes Budget: Update läuft trotzdem, Ergebnis AKTUALISIERT mit Exit 2", () => {
+    let n = 0;
+    const r = P.warten({ hole: () => hinten, aktualisiere: () => void n++, ...u(), maxMs: 10_000, intervallMs: 30_000 });
+    expect(n).toBe(1);
+    expect(r.zeilen[0]).toBe("AKTUALISIERT");
+    expect(r.exit).toBe(2);
+  });
+  test("aktualisiere wirft: Exit 3 AKTUALISIEREN FEHLGESCHLAGEN mit erster Zeile", () => {
+    const r = P.warten({
+      hole: () => hinten,
+      aktualisiere: () => {
+        throw new Error("boom\nzweite Zeile");
+      },
+      ...u(),
+      maxMs: 90_000,
+      intervallMs: 30_000,
+    });
+    expect(r).toEqual({ exit: 3, zeilen: ["AKTUALISIEREN FEHLGESCHLAGEN boom"] });
+  });
+  test("ohne aktualisiere-Naht bleibt es bei HINTER MAIN", () => {
+    expect(P.warten({ hole: () => hinten, ...u(), maxMs: 10_000, intervallMs: 30_000 }).zeilen).toEqual(["HINTER MAIN"]);
+  });
+});
+
+describe("parseArgs: Standardbudget (factory#375 L39)", () => {
+  test("Standard ist die exportierte Konstante", () => {
+    expect(P.parseArgs(["5"]).maxSekunden).toBe(P.MAX_SEKUNDEN_STANDARD);
+    expect(P.MAX_SEKUNDEN_STANDARD).toBe(150);
   });
 });
