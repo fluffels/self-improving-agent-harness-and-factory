@@ -658,7 +658,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     prTitelAusEreignis: (env: Env, lies: (pfad: string) => string) => Ereignis;
     sammelOverrideFehler: (titel: string | null, grund: string) => string | null;
   };
-  const SAMMEL = "SIH-9 Harness-Härtung (gesammelt): L44, L45 (factory#9)";
+  const SAMMEL = `${FREMD.praefixe.commitZeile}9 Harness-Härtung (gesammelt): L44, L45 (factory#9)`;
   const lies = (inhalt: string) => () => inhalt;
 
   test("prTitelAusEreignis: kein Ereignis oder kein PR-Ereignis → null, Titel → {titel}", () => {
@@ -705,14 +705,14 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
   });
 
   test("sammelOverrideFehler: ohne Sammelticket-Titel oder ohne Titel nie rot", () => {
-    assert.equal(m.sammelOverrideFehler("SIH-9 normales Ticket (factory#9)", "L1 L2 L3"), null);
+    assert.equal(m.sammelOverrideFehler(`${FREMD.praefixe.commitZeile}9 normales Ticket (factory#9)`, "L1 L2 L3"), null);
     assert.equal(m.sammelOverrideFehler(null, "L1 L2 L3"), null);
     assert.equal(m.sammelOverrideFehler("", "L1 L2"), null);
   });
 
   test("sammelOverrideFehler: jeder Sammelticket-Titel greift", () => {
     for (const t of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Codequalität (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)"]) {
-      assert.equal(typeof m.sammelOverrideFehler(`SIH-1 ${t}: L1, L2`, "L1 L2"), "string", t);
+      assert.equal(typeof m.sammelOverrideFehler(`${FREMD.praefixe.commitZeile}1 ${t}: L1, L2`, "L1 L2"), "string", t);
     }
   });
 
@@ -739,7 +739,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
       } as never);
     assert.equal(typeof lauf(SAMMEL, OV).sammelOverride, "string", "Sammelticket-PR mit Mehrfach-Override");
     assert.equal(lauf(SAMMEL, `chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
-    assert.equal(lauf("SIH-9 Ticket (factory#9)", OV).sammelOverride, null, "kein Sammelticket");
+    assert.equal(lauf(`${FREMD.praefixe.commitZeile}9 Ticket (factory#9)`, OV).sammelOverride, null, "kein Sammelticket");
     assert.equal(lauf(SAMMEL, "").sammelOverride, null, "kein Override");
     const unlesbar = (log: string) =>
       checkDiffSizeRoh({
