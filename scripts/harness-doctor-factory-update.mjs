@@ -1,4 +1,4 @@
-/* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39; `dateienStandard` unten ist die eine Verdrahtung der Standard-Dateipunkte für `--pruefen` und den Wochenlauf): prüft im Bezieher, ob der Wochenlauf `.github/workflows/factory-update.yml` da ist und aktiv läuft.
+/* Harness-Doctor, Punkte `Factory-Update` (factory#220 L39) und `Dependabot-Ausschluss` (factory#375 L5, eigener Abschnitt weiter unten; `dateienStandard` ist die eine Verdrahtung der Standard-Dateipunkte für `--pruefen` und den Wochenlauf). Beide nur im Bezieher; die Datei importiert nur `node:`-Builtins und lokale Module (der Wochenlauf läuft ohne `npm ci`, Wächter im Test). `Factory-Update` prüft im Bezieher, ob der Wochenlauf `.github/workflows/factory-update.yml` da ist und aktiv läuft.
  * Fehlt die Datei oder ruht der Workflow, kommt nie ein Issue „Factory-Update“, und niemand merkt es. Nur im Bezieher (Sync-Stand vorhanden, `istBezieher`, Rollen-Schalter): in der Fabrik gibt es den Punkt nicht.
  *
  *   - Datei fehlt: Lücke (Fix: Sync erneut ausführen, er liefert die Datei).
@@ -7,7 +7,7 @@
  *
  * Grenze: GitHub schaltet Zeitpläne in öffentlichen Repos nach etwa 60 Tagen ohne Aktivität selbst ab; der Punkt sieht das erst beim nächsten Doctor-Lauf (der Wochenlauf des Doctors ist selbst Aktivität des Repos nur, wenn er läuft).
  * `--einrichten` ändert den Punkt nie (er läuft nur in `--pruefen` und im Wochenlauf); im Vorab-Abbruch (Config nicht geladen) entfällt er. Der Wochenlauf des Doctors braucht dafür `permissions: actions: read`.
- * `lesen(args, token)` ist die `gh`-Naht (liefert die geparste Antwort, wirft bei einem Fehler); `mitFactoryUpdate` hängt den Punkt an die Dateipunkte (`dateien({ rootDir, config, ... })`).
+ * `lesen(args, token)` ist die `gh`-Naht von `Factory-Update` (und der Meldestelle; liefert die geparste Antwort, wirft bei einem Fehler); `mitFactoryUpdate` hängt den Punkt an die Dateipunkte (`dateien({ rootDir, config, ... })`).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -236,5 +236,5 @@ export const mitDependabotAusschluss = (dateien, { existiert, lies, bezieher }) 
 /** Die Dateipunkte `dateien` samt Punkt `Factory-Update` (Config aus dem Aufruf, `lesen` vom Rand): dieselbe Form `dateien({ rootDir, config, … })`. */
 export const mitFactoryUpdate = (dateien, { lesen, existiert, bezieher }) => (a) => [...dateien(a), ...factoryUpdatePunkt({ rootDir: a.rootDir, config: a.config, vorAbbruch: a.vorAbbruch === true, lesen, existiert, bezieher })];
 
-/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` und `Dependabot-Ausschluss` (nur im Bezieher);`lesen(args, token)` ist die `gh`-Naht der beiden letzten. */
+/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` und `Dependabot-Ausschluss` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht von Meldestelle und Factory-Update (`Dependabot-Ausschluss` liest nur Dateien). */
 export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitDependabotAusschluss(mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen }), {});

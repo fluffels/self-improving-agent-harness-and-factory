@@ -38,6 +38,16 @@ describe("Ruleset-Spiegel: Punkt nur auf Anforderung (rulesetPunkte)", () => {
     expect(x.map((e) => e.punkt)).toEqual(["Ruleset-Spiegel"]);
     expect(n).toBe(1);
   });
+  test("Lesefehler, Antwort kein Objekt, bypass_actors fehlt: genau der eine Spiegel-Punkt NICHT PRÜFBAR, nie ein zweiter Pin-Punkt", () => {
+    const wirft = () => {
+      throw new Error("HTTP 403");
+    };
+    for (const lesen of [wirft, () => null, () => "text", () => ({})]) {
+      const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen });
+      expect(x.map((e) => e.punkt)).toEqual(["Ruleset-Spiegel"]);
+      expect(x[0]).toMatchObject({ ok: false, nichtPruefbar: true });
+    }
+  });
   test("ohne lesen (Wochenlauf, --einrichten): kein Punkt", () => {
     expect(punkte({ spiegel: SPIEGEL, repo: "o/r" })).toEqual([]);
   });

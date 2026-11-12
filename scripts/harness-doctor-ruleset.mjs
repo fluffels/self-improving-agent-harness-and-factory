@@ -1,7 +1,7 @@
 /* Harness-Doctor, Punkt `Ruleset-Spiegel` (factory#247 L3): gleicht den Spiegel in Git (`rulesetSpiegel` der Projekt-Config) mit dem Ruleset auf dem Server ab:
  * `name`, `requiredChecks` (Menge), `codeScanning` (Werkzeug und beide Schwellen) und `bypassActors`. Ersetzt den Handbefehl `gh api repos/<repo>/rulesets/<id>`.
  *
- * Nur im lokalen `--pruefen`: `bypass_actors` liefert GitHub nur mit Admin-Recht, das Token des Wochenlaufs hat es nicht. Fehlt das Feld oder scheitert der Endpunkt
+ * Der Spiegel-Abgleich läuft nur im lokalen `--pruefen`: `bypass_actors` liefert GitHub nur mit Admin-Recht, das Token des Wochenlaufs hat es nicht (der Pin-Punkt `Required-Check-Pin` liest dagegen `rules/branches/<branch>` ohne Admin-Recht, `pinPunkt`, und läuft auch im Wochenlauf). Fehlt das Feld oder scheitert der Endpunkt
  * (403, 404, Netz), ist der Punkt `NICHT PRÜFBAR` (fail-closed), nie still grün. Ein Spiegel ohne `id` oder ein Aufruf ohne `lesen` lässt den Punkt aus (`rulesetPunkte`). Pur bis auf die Naht `lesen(args)` (liefert die geparste
  * Antwort, wirft bei einem Fehler; der Aufrufer reicht `gh` herein). Importiert nur die Ergebnis-Form und die Schwellen-Zuordnung des Sicherheitspunkts. Der Spiegel kommt vom Lader (`ladeRulesetSpiegel`),
  * der `name`, `requiredChecks`, `codeScanning` (fehlt → `[]`) und `bypassActors` als gültig garantiert; darum steht hier kein Rückfall für diese Felder (die Live-Antwort bleibt ungeprüft: fehlt `rules`, ist `requiredChecks` eine Lücke).
