@@ -51,8 +51,8 @@
  *
  * Sammelticket-PR (factory#358): Ein Override gilt für EINE Zeile eines Sammeltickets, nie für die ganze Auswahl. Trägt
  * der PR-Titel den Titel eines Sammeltickets und ist ein Override-Grund aktiv, muss dieser Grund genau eine Zeile
- * (\`L<n>\`) nennen, sonst rot (\`sammelOverrideFehler\`). Grenzen: erkannt wird nur am PR-Titel aus dem Ereignis
- * (\`GITHUB_EVENT_PATH\`; lokal ohne PR-Ereignis keine Prüfung); geprüft wird nur der aktive jüngste Grund; ein
+ * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Grenzen: erkannt wird nur am PR-Titel aus dem Ereignis
+ * (`GITHUB_EVENT_PATH`; lokal ohne PR-Ereignis keine Prüfung); geprüft wird nur der aktive jüngste Grund; ein
  * unlesbares PR-Ereignis ist rot (fail-closed). Der PR-Titel ist Fremdtext: nur lineare Muster, er steht nie in
  * einer Ausgabe, und der Pfad kann nur rot machen, nie etwas durchlassen.
  *
@@ -262,8 +262,8 @@ function ohneGenZeilen(git, base, files, wurzeln) {
   }
 }
 
-/** Titel des PR aus dem Ereignis-JSON (\`GITHUB_EVENT_PATH\`): null ohne Ereignis oder ohne PR-Ereignis, \`{ titel }\`,
- *  sonst \`{ fehler }\` (unlesbar, kaputt, kein Titeltext; fail-closed). \`lies(pfad)\` liefert den Dateitext. Pur. */
+/** Titel des PR aus dem Ereignis-JSON (`GITHUB_EVENT_PATH`): null ohne Ereignis oder ohne PR-Ereignis, `{ titel }`,
+ *  sonst `{ fehler }` (unlesbar, kaputt, kein Titeltext; fail-closed). `lies(pfad)` liefert den Dateitext. Pur. */
 export function prTitelAusEreignis(env, lies) {
   const pfad = env.GITHUB_EVENT_PATH;
   if (!pfad) return null;
@@ -277,7 +277,7 @@ export function prTitelAusEreignis(env, lies) {
   }
 }
 
-/** Meldung (ohne Titel), wenn ein Sammelticket-PR einen Override-Grund trägt, der nicht genau eine Zeile \`L<n>\` nennt; sonst null. Pur. */
+/** Meldung (ohne Titel), wenn ein Sammelticket-PR einen Override-Grund trägt, der nicht genau eine Zeile `L<n>` nennt; sonst null. Pur. */
 export function sammelOverrideFehler(titel, grund) {
   if (titel === null || titel === undefined || !enthaeltSammelticketTitel(titel)) return null;
   const zeilen = new Set(String(grund).match(/\bL\d+\b/g) ?? []);
