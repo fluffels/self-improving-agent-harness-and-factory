@@ -834,6 +834,21 @@ describe("--session: ID oder eindeutiger Präfix (factory#354)", () => {
     expect(spansVon(m.otlp[0])[0].traceId).toBe(traceIdVon(VOLL));
   });
 
+  test("Präfix wirkt wie die volle ID: die Session gilt als beendet (3 min ruhig) und die Startmarke der vollen ID greift", async () => {
+    const jung = async (angabe: string, marke: boolean) => {
+      const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3) });
+      const jetzt = Date.now();
+      const t = new Date(jetzt - 3 * 60_000);
+      utimesSync(join(a.root, PRAEFIX, `${VOLL}.jsonl`), t, t);
+      if (marke) rawLock.markiereStart(a.state, VOLL, jetzt - 60_000);
+      const r = await lauf(a, mock({ ist: 0 }), { session: angabe }, jetzt);
+      return r.protokoll.sessions[0];
+    };
+    expect((await jung("abcd1234", false)).status).toBe("gesendet");
+    expect((await jung("abcd1234", true)).fortgesetzt).toBeDefined();
+    expect((await jung(VOLL, true)).status).toBe((await jung("abcd1234", true)).status);
+  });
+
   test("mehrdeutiger Präfix: Exit 2 mit Kandidaten, nichts gesendet, kein Ledger", async () => {
     const a = aufbauSession({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("v", 3), [`${PRAEFIX}/${ANDERE}.jsonl`]: msg("w", 4) });
     const m = mock({ ist: 0 });
