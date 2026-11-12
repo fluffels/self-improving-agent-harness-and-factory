@@ -19,7 +19,7 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, versionUnbekannt, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
@@ -38,14 +38,14 @@ const leseAltStand = (zielLies) => syncStandAusText(zielLies(STAND_PFAD)).stand;
 
 /** Fehler des Quell-Manifests: Schema, Projekt-Config nie Besitz, jede Besitz-Rolle (#1871) eine ganze, verteilte Einheit (die Rollen des Projekts stehen nicht im Manifest). */
 function manifestFehler(manifest, quelleLies) {
-  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}${versionUnbekannt(m) ? `
-Fix: ${WERKZEUG_HINWEIS}` : ""}`);
+  const fehler = pruefeManifest(manifest, quelleLies).map((m) => `Quell-Manifest: ${m}`);
   if (manifest.eintraege.some((e) => e.pfad === PROJEKT_PFAD)) fehler.push(`Quell-Manifest: ${PROJEKT_PFAD} ist Projekt-Config und nie Besitz`);
   for (const [rolle, pfad] of Object.entries(ROLLEN_PFADE)) {
     if (PROJEKT_ROLLEN.includes(rolle)) continue;
     const ganz = manifest.eintraege.some((e) => e.pfad === pfad && istVerteilteGanzdatei(e) && !istVorlage(e));
     if (!ganz) fehler.push(`Quell-Manifest: Rollen-Pfad '${pfad}' (${rolle}) ist keine verteilte Einheit (ganze Datei)`);
   }
+  if (fehler.length > 0) fehler.push(`Fix: ${WERKZEUG_HINWEIS}`);
   return fehler;
 }
 

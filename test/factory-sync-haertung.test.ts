@@ -29,9 +29,16 @@ describe("L4: Versionsfehler trägt den Werkzeug-Hinweis", () => {
     expect(p.fehler.join("\n")).toContain("version 4 unbekannt");
     expect(p.fehler.join("\n")).toContain(tag.WERKZEUG_HINWEIS);
   });
-  test("anderer Manifest-Fehler (version 3, unbekannter Ring): kein Hinweis", () => {
+  const vorkommen = (t: string, n: string): number => t.split(n).length - 1;
+  test("factory#362 L7: jeder Quell-Manifest-Fehler (unbekannter Ring) trägt den Hinweis genau einmal", () => {
     const p = sync.planeSync({ quelleLies: leser({ ".factory/besitz.json": JSON.stringify({ version: 3, eintraege: [{ pfad: "x", ring: "zz", quelle: "t" }] }) }), zielLies: leser({}) });
     expect(p.fehler.length).toBeGreaterThan(0);
+    expect(vorkommen(p.fehler.join("\n"), tag.WERKZEUG_HINWEIS)).toBe(1);
+  });
+  test("factory#362 L7: Fehler ohne Quell-Manifest-Bezug (unlesbares Manifest) hat keinen Hinweis", () => {
+    const p = sync.planeSync({ quelleLies: leser({ ".factory/besitz.json": "kein json" }), zielLies: leser({}) });
+    expect(p.fehler.length).toBeGreaterThan(0);
+    expect(p.fehler.some((f) => f.startsWith("Quelle:"))).toBe(true);
     expect(p.fehler.join("\n")).not.toContain(tag.WERKZEUG_HINWEIS);
   });
 });
