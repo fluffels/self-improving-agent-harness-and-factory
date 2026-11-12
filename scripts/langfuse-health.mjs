@@ -31,8 +31,25 @@ export async function pruefeLangfuse({ baseUrl, fetchImpl = fetch, fristMs = FRI
   }
 }
 
-/** Health-Prüfung für die Adresse aus der Umgebung (siehe Kopf); fetch, Frist und Dateizugriff sind injizierbar. Wirft nur bei unbrauchbarer Umgebung (`env` ohne Objekt); die Aufrufer fangen das. */
+/** Gültiger Health-Body: JSON mit `status` = "OK" (so liefert ihn `/api/public/health`); alles andere, auch ein nicht lesbarer Body, ist ungültig. */
+async function healthBodyGueltig(res) {
+  try {
+    return JSON.parse(await res.text())?.status === "OK";
+  } catch {
+    return false;
+  }
+}
+
+/** Health-Prüfung für die Adresse aus der Umgebung (siehe Kopf); fetch, Frist und Dateizugriff sind injizierbar. Zusätzlich zum HTTP-Status prüft sie den Body (JSON mit `status` = "OK"). Wirft nur bei unbrauchbarer Umgebung (`env` ohne Objekt); die Aufrufer fangen das. */
 export async function pruefeLangfuseAusUmgebung({ env = process.env, home = homedir(), lies, fetchImpl = fetch, fristMs = FRIST_MS } = {}) {
   const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
-  return pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
+  let bodyGueltig = true;
+  const mitBody = async (url, optionen) => { // der Body wird innerhalb der Frist gelesen; `bewerteHealth` bleibt unberührt (Claude-Pfad unverändert)
+    const res = await fetchImpl(url, optionen);
+    if (res.status === 200) bodyGueltig = await healthBodyGueltig(res);
+    return res;
+  };
+  const urteil = await pruefeLangfuse({ baseUrl, fetchImpl: mitBody, fristMs });
+  if (urteil.ok && !bodyGueltig) return { ok: false, grund: "Langfuse antwortet ohne gültigen Health-Body (HTTP 200, erwartet JSON mit status OK)" };
+  return urteil;
 }

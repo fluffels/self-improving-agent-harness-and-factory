@@ -48,6 +48,7 @@ beforeAll(() => {
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 const nutzlast = (tool_name: string, tool_input: unknown, cwd = wt) => JSON.stringify({ session_id: "s", cwd, hook_event_name: "PreToolUse", tool_name, tool_input });
+const OK200 = { status: 200, text: () => Promise.resolve(`{"status":"OK"}`) }; // gültige Health-Antwort
 const gesund = () => Promise.resolve({ ok: true, grund: "Langfuse erreichbar (HTTP 200)" }); // kein Test trifft das echte Netz
 const lauf = (text: string, d: Record<string, unknown> = {}) => adapter.entscheide(text, haupt, { health: gesund, ...d });
 const grund = (o: Out) => o?.hookSpecificOutput.permissionDecisionReason ?? "";
@@ -264,7 +265,7 @@ describe("Prozessstart", () => {
 });
 
 describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
-  const health = gesundRaw as unknown as { pruefeLangfuse: (a: { baseUrl: string; fetchImpl: unknown; fristMs: number }) => Promise<{ ok: boolean; grund: string }> };
+  const health = gesundRaw as unknown as { pruefeLangfuse: (a: { baseUrl: string; fetchImpl: unknown; fristMs: number }) => Promise<{ ok: boolean; grund: string }>; pruefeLangfuseAusUmgebung: (a: Record<string, unknown>) => Promise<{ ok: boolean; grund: string }> };
   const ausfaelle: [string, unknown][] = [
     ["Verbindung verweigert", () => Promise.reject(Object.assign(new Error("x"), { code: "ECONNREFUSED" }))],
     ["Frist überschritten", (_u: string, o: { signal: AbortSignal }) => new Promise((_r, rej) => o.signal.addEventListener("abort", () => rej(new Error("abort"))))],
@@ -281,6 +282,16 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
       expect(geladen).toBe(0);
     });
   }
+  test("ungültige 200-Antwort (HTML, {}, falscher Status, kein Body) → Deny, Dispatcher nicht geladen; gültiger Body lässt durch", async () => {
+    let geladen = 0;
+    const lade = () => { geladen++; return Promise.reject(new Error("nicht laden")); };
+    const mitBody = (text: string) => () => health.pruefeLangfuseAusUmgebung({ env: { LANGFUSE_BASE_URL: "http://lf.test" }, fetchImpl: () => Promise.resolve({ status: 200, text: () => Promise.resolve(text) }) });
+    for (const text of ["<html>hi</html>", "{}", '{"status":"FAIL"}']) expect(grund(await lauf(spawn, { health: mitBody(text), lade })), text).toContain("Tracing-Ausfallstopp");
+    const ohneBody = () => health.pruefeLangfuseAusUmgebung({ env: { LANGFUSE_BASE_URL: "http://lf.test" }, fetchImpl: () => Promise.resolve({ status: 200 }) });
+    expect(grund(await lauf(spawn, { health: ohneBody, lade }))).toContain("Tracing-Ausfallstopp");
+    expect(geladen).toBe(0);
+    expect(await lauf(spawn, { health: mitBody('{"status":"OK"}') })).toBeNull();
+  });
   test("werfende Health und Urteil ohne ok → Deny", async () => {
     expect(grund(await lauf(spawn, { health: () => { throw new Error("kaputt"); } }))).toContain("Health-Prüfung gescheitert: kaputt");
     expect(grund(await lauf(spawn, { health: () => Promise.resolve({}) }))).toContain("Tracing-Ausfallstopp");
@@ -301,7 +312,7 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
   });
   test("Standardprüfung: ohne deps.health fragt der Adapter die Umgebung ab (global fetch, LANGFUSE_BASE_URL), Erreichbarkeit lässt durch", async () => {
     const urls: string[] = [];
-    vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); });
+    vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve(OK200); });
     vi.stubEnv("LANGFUSE_BASE_URL", "http://lf.test");
     try {
       expect(await adapter.entscheide(spawn, haupt)).toBeNull();

@@ -5,6 +5,8 @@ const echtSpawn = vi.hoisted(() => ({ fn: undefined as unknown as typeof import(
 vi.mock("node:child_process", async (orig) => { const echt = await orig<typeof import("node:child_process")>(); echtSpawn.fn = echt.spawnSync; return { ...echt, spawnSync: spawnMock }; });
 const realSpawn = (cmd: string, args: string[], opt: import("node:child_process").SpawnSyncOptionsWithStringEncoding) => echtSpawn.fn(cmd, args, opt);
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -16,7 +18,8 @@ import * as healthRaw from "../../scripts/langfuse-health.mjs";
 const health = healthRaw as unknown as { pruefeLangfuseAusUmgebung: (n?: Record<string, unknown>) => Promise<{ ok: boolean }> };
 type Naht = { fetchImpl?: unknown; fristMs?: number; env?: Record<string, string>; out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string; codexVersion?: () => string | null; freigaben?: unknown; werkzeug?: () => unknown[] };
 const p = raw as unknown as { main: (a: string[], n: Naht) => Promise<number>; tracingMaengel: (n?: Record<string, unknown>) => Promise<string[]>; installierteCodexVersion: (n: { plattform: string; spawn: (...a: unknown[]) => unknown }) => string | null };
-const gesund = { fetchImpl: () => Promise.resolve({ status: 200 }), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
+const OK200 = { status: 200, text: () => Promise.resolve(`{"status":"OK"}`) }; // gültige Health-Antwort
+const gesund = { fetchImpl: () => Promise.resolve(OK200), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
 const SPERRE = "Nachweise 1, 2, 3, 4, 5";
 const config = { repo: "owner/probe", agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
 const temps: string[] = [];
@@ -239,7 +242,7 @@ for (const [name, stub] of ausfaelle) {
 }
 test("Tracing: erreichbar (HTTP 200) ergibt keinen Mangel, die Abfrage geht an <LANGFUSE_BASE_URL>/api/public/health", async () => {
   const urls: string[] = [];
-  const fetchImpl = (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); };
+  const fetchImpl = (u: string) => { urls.push(u); return Promise.resolve(OK200); };
   expect(await p.tracingMaengel(ausfall(fetchImpl))).toEqual([]);
   expect(urls).toEqual(["http://lf.test/api/public/health"]);
   const ok = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(fetchImpl) });
@@ -263,7 +266,7 @@ test("Tracing: werfende Prüfung ergibt einen Mangel, kein Absturz; Standardfris
 });
 test("Tracing-Standardwerte: global fetch, process.env, Home für die Plugin-Optionen, Rückfall localhost:3000", async () => {
   const urls: string[] = [];
-  vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); });
+  vi.stubGlobal("fetch", (u: string) => { urls.push(u); return Promise.resolve(OK200); });
   vi.stubEnv("LANGFUSE_BASE_URL", "http://env.test");
   try {
     expect(await p.tracingMaengel({})).toEqual([]);
@@ -284,10 +287,10 @@ test("Tracing-Standardwerte: global fetch, process.env, Home für die Plugin-Opt
 });
 test("Tracing: home und lies werden an die Adressauflösung durchgereicht, tracingMaengel ohne Argument nutzt die Standardwerte", async () => {
   const gelesen: string[] = [];
-  const fetchImpl = () => Promise.resolve({ status: 200 });
+  const fetchImpl = () => Promise.resolve(OK200);
   await p.tracingMaengel({ env: {}, home: "/fixture", fetchImpl, lies: (pfad: string) => { gelesen.push(pfad); throw new Error("keine Settings"); } });
   expect(gelesen).toEqual([join("/fixture", ".claude", "settings.json")]);
-  vi.stubGlobal("fetch", () => Promise.resolve({ status: 200 }));
+  vi.stubGlobal("fetch", () => Promise.resolve(OK200));
   vi.stubEnv("LANGFUSE_BASE_URL", "http://env.test");
   try {
     expect(await p.tracingMaengel()).toEqual([]);
@@ -298,7 +301,7 @@ test("Tracing: home und lies werden an die Adressauflösung durchgereicht, traci
 });
 test("Tracing: Nicht-Error-Wurf der Prüfung erscheint im Mangel", async () => {
   const bos = new Proxy({}, { get() { throw JSON.parse(`"textwurf"`); } });
-  const m = await p.tracingMaengel({ env: bos, fetchImpl: () => Promise.resolve({ status: 200 }) });
+  const m = await p.tracingMaengel({ env: bos, fetchImpl: () => Promise.resolve(OK200) });
   expect(m).toHaveLength(1); expect(m[0]).toContain("Health-Prüfung gescheitert (textwurf)");
 });
 test("CLI-Einstieg als Prozess: Langfuse unerreichbar ergibt Exit 1 und den Mangel „Tracing-Ausfall“", () => {
@@ -308,8 +311,39 @@ test("CLI-Einstieg als Prozess: Langfuse unerreichbar ergibt Exit 1 und den Mang
 });
 test("pruefeLangfuseAusUmgebung: Standard-Home ist das Home des Nutzers (Plugin-Optionen), Adresse folgt der Kette", async () => {
   const gelesen: string[] = [], urls: string[] = [];
-  const fetchImpl = (u: string) => { urls.push(u); return Promise.resolve({ status: 200 }); };
+  const fetchImpl = (u: string) => { urls.push(u); return Promise.resolve(OK200); };
   const urteil = await health.pruefeLangfuseAusUmgebung({ env: {}, fetchImpl, lies: (pfad: string) => { gelesen.push(pfad); throw new Error("keine Settings"); } });
   expect(urteil.ok).toBe(true); expect(urls).toEqual(["http://localhost:3000/api/public/health"]);
   expect(gelesen).toEqual([join(homedir(), ".claude", "settings.json")]);
+});
+
+const ungueltig: [string, unknown][] = [
+  ["200 mit HTML", { status: 200, text: () => Promise.resolve("<html>hi</html>") }],
+  ["200 mit leerem JSON-Objekt", { status: 200, text: () => Promise.resolve("{}") }],
+  ["200 mit falschem Status", { status: 200, text: () => Promise.resolve('{"status":"FAIL"}') }],
+  ["200 mit Status als Nicht-Text", { status: 200, text: () => Promise.resolve('{"status":true}') }],
+  ["200 ohne lesbaren Body", { status: 200 }],
+  ["200 mit werfendem Body", { status: 200, text: () => Promise.reject(new Error("Body abgebrochen")) }],
+];
+for (const [name, antwort] of ungueltig) {
+  test(`Tracing: ungültige Antwort (${name}) ergibt „Tracing-Ausfall“ und Exit 1; ein gültiger Body (JSON mit status OK) bleibt grün`, async () => {
+    const r = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(() => Promise.resolve(antwort)) });
+    expect(r.code).toBe(1); expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: .*Health/);
+    const ok = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(() => Promise.resolve({ status: 200, text: () => Promise.resolve('{"status":"OK","version":"3.1.0"}') })) });
+    expect(ok).toMatchObject({ code: 0, autonom: true });
+  });
+}
+test("Tracing mit echtem fetch und lokalem HTTP-Server: HTML und {} sind ein Ausfall, JSON mit status OK ist erreichbar", async () => {
+  let antwort = "<html>hi</html>";
+  const server = createServer((_q, res) => { res.writeHead(200); res.end(antwort); });
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  const { port } = server.address() as AddressInfo;
+  try {
+    const env = { LANGFUSE_BASE_URL: `http://127.0.0.1:${port}` };
+    expect(await p.tracingMaengel({ env })).toHaveLength(1);
+    antwort = "{}"; expect(await p.tracingMaengel({ env })).toHaveLength(1);
+    antwort = '{"status":"OK","version":"3.1.0"}'; expect(await p.tracingMaengel({ env })).toEqual([]);
+  } finally {
+    await new Promise((ok) => server.close(ok));
+  }
 });

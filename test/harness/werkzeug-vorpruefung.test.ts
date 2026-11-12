@@ -41,7 +41,8 @@ const w = raw as unknown as Werkzeug;
 const lib = rawLib as unknown as { ladeProjektConfig: () => unknown; vorpruefungAus: (c: unknown) => { befehle: unknown[]; userScopeServer: string[] }; pruefeProjektConfig: (c: unknown) => string[] };
 const bloecke = rawBloecke as unknown as { pruefeVorpruefung: (b: unknown) => string[] };
 const codex = rawCodex as unknown as { main: (argv: string[], o: Record<string, unknown>) => Promise<number> };
-const GESUND = { fetchImpl: () => Promise.resolve({ status: 200 }), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
+const OK200 = { status: 200, text: () => Promise.resolve(`{"status":"OK"}`) }; // gültige Health-Antwort
+const GESUND = { fetchImpl: () => Promise.resolve(OK200), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
 
 const agent = (tools: string) => `---\nname: x\ntools: ${tools}\n---\ntext`;
 const PW = agent("Read, mcp__playwright__browser_click, mcp__playwright__browser_close");
