@@ -17,7 +17,7 @@
  * NICHT PRÜFBAR statt gelesen); bei belegtem Bedarf auf einen echten Parser umstellen.
  *
  * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`), `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
- * eigene Grenze im Kopf von `blockformAusloeser`) und `Sammel-Check` (`blockformJobs`, liest die Auslöser unter `on` und je Job `needs`, `if`, `uses`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
+ * eigene Grenze im Kopf von `blockformAusloeser`) und `Sammel-Check` (`blockformJobs`, liest die Auslöser unter `on` und je Job `needs`, `if`, `uses` und den Block-Text). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
  *
  * Nicht gelesen wird (fail-closed): `blockformNamen` liefert dann `{ fehler: { zeile, konstrukt } }`, nie still weniger Namen. Geschlossene Liste: Flow-Collection als `jobs`, Job,
  * `steps`, Step oder `name`-Wert; Anker `&`, Alias `*`, Tag `!` an diesen Stellen; Merge-Schlüssel `<<` und `?`-Schlüssel in einem gelesenen Mapping; Tab in der Einrückung einer
@@ -484,9 +484,14 @@ export function blockformAusloeser(text) {
   return { name, ausloeser: ausloeser.filter((n) => n !== "") };
 }
 
-/** Ein Job für `blockformJobs`: liest `needs` (Skalar, Flow- oder Block-Liste), `if` und `uses`; `steps` und alles andere wird übersprungen. */
+/** Der Text des Job-Blocks: die Zeilen `von` bis `bis` (ohne) ohne Leer- und Kommentarzeilen, ohne Zeilenend-Kommentar (` #…`). */
+function blockText(c, von, bis) {
+  return c.z.slice(von, bis).filter((s) => !LEER.test(s) && !KOMMENTAR.test(s)).map((s) => s.replace(/[ \t]+#.*$/, "")).join("\n");
+}
+
+/** Ein Job für `blockformJobs`: liest `needs` (Skalar, Flow- oder Block-Liste), `if` und `uses` und merkt den Block-Text; `steps` und alles andere wird übersprungen. */
 function jobDetails(c, id, z, rest, jobs) {
-  const eintrag = { id, needs: [], if: null, uses: null };
+  const eintrag = { id, needs: [], if: null, uses: null, text: "" };
   jobs.push(eintrag);
   const n = blockUnter(c, z, rest, "Job");
   if (n === null) return;
@@ -499,6 +504,7 @@ function jobDetails(c, id, z, rest, jobs) {
     return true;
   });
   eintrag.needs = eintrag.needs.filter((n2) => n2 !== "");
+  eintrag.text = blockText(c, z.k + 1, lesen(c)?.k ?? c.z.length);
 }
 
 /** Der Wert von `on` für `blockformJobs`: die Auslöser-Namen (Skalar, Flow- oder Block-Liste, Schlüssel des Block-Mappings); ein Flow-Mapping ist nicht lesbar. */
@@ -518,7 +524,7 @@ function ausloeserWert(c, z, rest, namen) {
 }
 
 /**
- * Liest für den Doctor-Punkt `Sammel-Check` (factory#401) die Auslöser unter `on` und je Job `id`, `needs`, `if` und `uses`. Liefert `{ ausloeser: string[], jobs: [{ id, needs: string[], if: string | null, uses: string | null }] }`
+ * Liest für den Doctor-Punkt `Sammel-Check` (factory#401) die Auslöser unter `on` und je Job `id`, `needs`, `if`, `uses` und `text` (der Block unter dem Job-Schlüssel ohne Leer-, Kommentarzeilen und Zeilenend-Kommentare, unabhängig von der Einrückung). Liefert `{ ausloeser: string[], jobs: [{ id, needs: string[], if: string | null, uses: string | null, text: string }] }`
  * oder `{ fehler: { zeile, konstrukt } }`; Grenzen wie bei `blockformAusloeser` (Flow-Mapping als `on`, Anker, Alias, Tag, mehrzeilige Flow-Liste unter `needs` sind nicht lesbar).
  */
 export function blockformJobs(text) {

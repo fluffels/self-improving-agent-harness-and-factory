@@ -221,6 +221,39 @@ describe("Sammel-Check, Ergebnisprüfung (factory#413 L6)", () => {
     const fremd = GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n    if: always()\n${RUN}  nach:\n    needs: [gate]\n    steps:\n      - run: echo \${{ needs.gate.result }}\n`);
     ohneEnde(lauf(fremd));
   });
+
+  const VIER = (gateZeilen: string) => `name: CI\non:\n    push:\n        branches: [main]\njobs:\n    build:\n        runs-on: x\n    gate:\n        needs: [build]\n${gateZeilen}    alarm:\n        needs: [gate]\n        if: failure() && github.event_name == 'push'\n        uses: ${ALARM_USES}\n`;
+
+  test("Einrückung mit vier Leerzeichen: OK mit Auswertung, Lücke ohne", () => {
+    expect(lauf(VIER("        if: always()\n        steps:\n            - run: echo ${{ needs.build.result }}\n"))).toEqual({ punkt: "Sammel-Check", ok: true });
+    const p = ohneEnde(lauf(VIER("        if: always()\n        runs-on: x\n")));
+    expect(p.befund).toMatch(/needs.*result/);
+    expect(p.befund).not.toMatch(/always\(\)/);
+  });
+
+  test("Job-ID mit Bindestrich, einfach gequotetes Schlüsselwort", () => {
+    const text = GUT.replace(GATE, "  'gate':\n    needs: [build, audit]\n    if: always()\n    steps:\n      - run: echo ${{ needs.build-test.result }}\n");
+    expect(lauf(text)).toEqual({ punkt: "Sammel-Check", ok: true });
+  });
+
+  test("ein Schlüssel in Spalte 0 hinter dem Sammel-Job gehört nicht zu seinem Block", () => {
+    const text = GUT.replace(GATE, `  gate:\n    needs: [build, audit]\n    if: always()\n${RUN}`) + "ausserhalb: ${{ needs.gate.result }}\n";
+    ohneEnde(lauf(text));
+  });
+
+  test("if: cancelled() ohne Negation reicht nicht (der Job liefe nach Abbruch nicht)", () => {
+    const p = ohneEnde(lauf(gate("    if: cancelled()\n" + RUN + PRUEF)));
+    expect(p.befund).toMatch(/always\(\)/);
+  });
+
+  test("Zeilenend-Kommentar zählt nicht als Auswertung", () => {
+    ohneEnde(lauf(gate("    if: always()\n    runs-on: x  # contains(needs.a.result, 'failure')\n")));
+  });
+
+  test("Fix-Text der needs-Lücke nennt die Ausnahme der Jobs, die selbst am Sammel-Job hängen", () => {
+    const p = lauf(GUT.replace(BUILD, `${BUILD}  neu:\n    runs-on: x\n`));
+    expect(p.fix).toContain("außer denen, die selbst am Sammel-Job hängen");
+  });
 });
 
 describe("blockformJobs (factory#401): der Leser stimmt mit der yaml-Bibliothek überein", () => {
@@ -241,10 +274,10 @@ describe("blockformJobs (factory#401): der Leser stimmt mit der yaml-Bibliothek 
   });
 
   test("Randfälle: leerer Job, leeres on und jobs, leere Listeneinträge, BOM, CRLF, Listen statt Mapping", () => {
-    expect(jobsLesen("on:\njobs:\n  a:\n  b:\n    needs: a\n")).toEqual({ ausloeser: [], jobs: [{ id: "a", needs: [], if: null, uses: null }, { id: "b", needs: ["a"], if: null, uses: null }] });
+    expect(jobsLesen("on:\njobs:\n  a:\n  b:\n    needs: a\n")).toEqual({ ausloeser: [], jobs: [{ id: "a", needs: [], if: null, uses: null, text: "" }, { id: "b", needs: ["a"], if: null, uses: null, text: "    needs: a" }] });
     expect(jobsLesen("on: push\njobs:\n")).toEqual({ ausloeser: ["push"], jobs: [] });
-    expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null }] });
-    expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null }] });
+    expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: '    needs: ["", b]' }] });
+    expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: "    needs: b" }] });
     expect(jobsLesen("on: push\njobs:\n  a:\n    - x\n").fehler?.konstrukt).toBe("Liste als Job");
     expect(jobsLesen("on: push\njobs:\n  - a\n").fehler?.konstrukt).toBe("Liste als jobs");
     expect(jobsLesen("jobs:\n  a:\n    needs: x\n").ausloeser).toEqual([]);
