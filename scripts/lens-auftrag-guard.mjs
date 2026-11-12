@@ -13,7 +13,7 @@
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
  *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
  *      ein Fließtext statt Hash wird verweigert).
- *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
+ *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` (Lauf ohne Ticket: `<worktree-präfix><slug>-lens-<x>`) mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
  *  R6  (factory#235, A/B Kern je Rolle) der Agententyp ist einer der beiden Lens-Typen (`lensTypen`), lässt sich die Ticketnummer aus dem Auftrag ableiten
@@ -78,16 +78,16 @@ function istLensSpawn(subagentType, prompt, typen) {
 const HINWEIS =
   "Setze die Werte aus Stufe 0 ein (Brille als `Brille: <Schlüssel>` am Prompt-Anfang, Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) laut Spawn-Vorlage im Skill `review-lenses`.";
 
-/** R4: Grund, wenn ein Pfadsegment `<wt><nr>-lens-<x>…` eine Endung `<x>` trägt, die das Muster aus `ticket-namen.mjs` (`lensNameKern`) nicht kennt; sonst `null`.
+/** R4: Grund, wenn ein Pfadsegment `<wt><nr>-lens-<x>…` oder `<wt><slug>-lens-<x>…` (Lauf ohne Ticket, Slug ohne `-lens-<Buchstabe><Ziffer>`) eine Endung `<x>` trägt, die das Muster aus `ticket-namen.mjs` (`lensNameKern`) nicht kennt; sonst `null`.
  *  Ein Platzhalter nach dem Buchstaben (`-lens-r<runde>`) zählt wie eine Ziffer; die erlaubten Endungen stehen nur in `lensNameKern`. Pure. */
 function unbekannteLensEndung(text, namen) {
   const wt = escapeRegex(namen.praefixe.worktree);
-  const segmente = text.matchAll(new RegExp(String.raw`${wt}(?:\d+|<[^<>\s]*>)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
+  const segmente = text.matchAll(new RegExp(String.raw`${wt}(?:\d+|<[^<>\s]*>|[a-z][a-z0-9]*(?:-(?!lens-[a-z](?:\d|<))[a-z0-9]+)*)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
   const bekannt = new RegExp(namen.lensNameKern);
   for (const [segment] of segmente) {
     if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
     const erlaubt = /-lens-\[([a-z]+)\]/.exec(namen.lensNameKern)?.[1] ?? "";
-    return `Lens-Auftrag unbekannt: der Lens-Worktree „${segment}“ trägt eine Endung, die es nicht gibt. Erlaubt sind ${[...erlaubt].join(", ")} (Muster aus ticket-namen.mjs: -lens-r<runde> Review, -lens-m<n> Merge-Delta, -lens-a<n> Abnahme-Delta, -lens-c<n> CI-Fix-Delta), sonst blockiert der Lens-Edit-Guard die Sabotage-Probe. ${HINWEIS}`;
+    return `Lens-Auftrag unbekannt: der Lens-Worktree „${segment}“ trägt eine Endung, die es nicht gibt. Erlaubt sind ${[...erlaubt].join(", ")} (Muster aus ticket-namen.mjs: -lens-r<runde> Review, -lens-m<n> Merge-Delta, -lens-a<n> Abnahme-Delta, -lens-c<n> CI-Fix-Delta, je mit Endung -<brille>; Lauf ohne Ticket: <wt><slug>-lens-…), sonst blockiert der Lens-Edit-Guard die Sabotage-Probe. ${HINWEIS}`;
   }
   return null;
 }

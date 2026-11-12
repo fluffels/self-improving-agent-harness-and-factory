@@ -518,6 +518,25 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}<>-lens-r<>`)), null);
   });
 
+  test("R4 kennt auch die Slug-Form (Lauf ohne Ticket): unbekannte Endung wird verweigert, bekannte mit Brille geht durch (factory#426 L1)", () => {
+    const wt = FREMD.praefixe.worktree;
+    for (const ende of ["feature-x-lens-b1", "ohne-ticket-lens-z3-test"]) {
+      const pfad = `/w/.claude/worktrees/${wt}${ende}`;
+      assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: ${pfad}`))?.hookSpecificOutput.permissionDecision, "deny", pfad);
+    }
+    assert.match(grund(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}feature-x-lens-b1`)), /-<brille>/);
+    for (const ende of ["feature-x-lens-r1-test-adaequanz", "feature-x-lens-m2-architektur", "feature-x-lens-r<runde>-<brille>", "x-lens-worktree"]) {
+      assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}${ende}`)), null, ende);
+    }
+  });
+
+  test("R4: ein langes Segment ohne -lens- läuft in linearer Zeit (kein ReDoS)", () => {
+    const wt = FREMD.praefixe.worktree;
+    const start = Date.now();
+    assert.equal(deny(agent(`${gut()} · Pfad: /w/${wt}${"a-".repeat(5000)}x`)), null);
+    assert.ok(Date.now() - start < 2000);
+  });
+
   test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
     const settings = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
     const trifft = (tool: string) => settings.hooks.PreToolUse.filter((e) => new RegExp(`^(${e.matcher})$`).test(tool)).flatMap((e) => e.hooks.flatMap((h) => h.args ?? []));
