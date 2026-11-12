@@ -950,6 +950,36 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(gruen.stdout, /Größenstufe: (S|voll)/);
   });
 
+  test("CLI-Ausgabe: Hinweis-Zeilen zu fehlendem blocker= und teilbrillen=, bei vollständiger Zeile keine (factory#402 L21)", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "a.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(d, "a.ts"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "code");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    const nachweis = (review: string) => git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 ${review} verdikt=ok`);
+    nachweis("lenses=kombiniert");
+    const ohneBeides = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.equal(ohneBeides.status, 0, ohneBeides.stdout + ohneBeides.stderr);
+    assert.match(ohneBeides.stdout, /• Hinweis: blocker= fehlt/);
+    assert.match(ohneBeides.stdout, /• Hinweis: teilbrillen= fehlt/);
+    nachweis("lenses=kombiniert blocker=kombiniert:0");
+    const nurTeil = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.doesNotMatch(nurTeil.stdout, /blocker= fehlt/);
+    assert.match(nurTeil.stdout, /• Hinweis: teilbrillen= fehlt/);
+    nachweis("lenses=kombiniert blocker=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0");
+    const voll = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.equal(voll.status, 0, voll.stdout + voll.stderr);
+    assert.doesNotMatch(voll.stdout, /Hinweis:/);
+  });
+
   test("Override-Lauf nennt die Größenstufe ebenfalls (factory#402 L26)", () => {
     const d = mkdir();
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
