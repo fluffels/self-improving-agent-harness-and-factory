@@ -267,6 +267,13 @@ function methode(segment) {
 const hatFelder = (segment) => /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:\s|=)/.test(segment);
 
 /** Der erste Treffer-Grund für ein einzelnes `gh api`-Segment oder null. */
+/** Grund für einen schreibenden Aufruf auf einen geschützten REST-Pfad (Status/Check-Läufe zuerst), sonst `null`. */
+function restPfadGrund(segment) {
+  if (STATUS_PFADE.some((muster) => muster.test(segment))) return STATUS_GRUND;
+  const muster = REST_PFADE.find((m) => m.test(segment));
+  return muster ? `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})` : null;
+}
+
 function segmentGrund(segment) {
   const m = methode(segment);
   if (m === "DELETE") return "`gh api` mit Methode DELETE löscht etwas (unumkehrbar)";
@@ -282,8 +289,8 @@ function segmentGrund(segment) {
   }
   const mutierend = m !== null ? m !== "GET" : hatFelder(segment);
   if (!mutierend) return null; // reiner Lesezugriff auf Einstellungspfade ist erlaubt
-  if (STATUS_PFADE.some((muster) => muster.test(segment))) return STATUS_GRUND;
-  for (const muster of REST_PFADE) if (muster.test(segment)) return `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})`;
+  const pfadGrund = restPfadGrund(segment);
+  if (pfadGrund !== null) return pfadGrund;
   if (m === "PATCH" && /\brepos\/[^/\s'"]+\/[^/\s'"]+(?=\s|$|['"])/.test(segment)) return "PATCH auf die Repo-Einstellungen";
   return null;
 }

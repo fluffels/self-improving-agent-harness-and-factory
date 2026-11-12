@@ -72,7 +72,7 @@
     "complexity": 7
   },
   "scripts/gh-guard-hook.mjs": {
-    "complexity": 2
+    "complexity": 1
   },
   "scripts/harness-doctor.mjs": {
     "complexity": 5
@@ -124,7 +124,7 @@
     "complexity": 10
   },
   "scripts/pr-warten.mjs": {
-    "complexity": 9
+    "complexity": 7
   },
   "scripts/pretooluse-hook.mjs": {
     "complexity": 2

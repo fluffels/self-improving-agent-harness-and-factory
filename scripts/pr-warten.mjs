@@ -82,6 +82,12 @@ function abgeloest(e, rollup) {
   return rollup.some((o) => o !== e && !istStatusContext(o) && (o?.workflowName ?? "") === (e?.workflowName ?? "") && String(o?.status ?? "").toUpperCase() !== "COMPLETED");
 }
 
+/** Alle Pflicht-Checks grün: hinter main → Update nötig (die Checks liefen gegen einen alten Basis-Stand, factory#375), sonst Merge-Stand. */
+function gruenStand(pr, gruen, anzahl, mit) {
+  if (pr?.mergeStateStatus === "BEHIND") return { ...mit(2, ["HINTER MAIN"]), aktualisieren: true };
+  return pr?.autoMergeRequest ? mit(2, [`OFFEN ${gruen}/${anzahl} grün, Merge steht aus`]) : mit(3, ["GRÜN OHNE AUTO-MERGE"]);
+}
+
 /**
  * `gh pr view --json ${FELDER}` →`{ exit, zeilen }`. Exit 2 heißt: noch offen, weiter warten.
  * `pflicht`: Namen der Pflicht-Checks (exakt); nur sie gaten, ein rotes anderes Check wird ein `HINWEIS`. Fehlt die Liste
@@ -110,11 +116,7 @@ export function bewerte(pr, pflicht = null) {
   const gruen = checks.filter((c) => c.art === "gruen").length;
   const offen = checks.filter((c) => c.art === "offen");
   // Ein leerer Rollup ist nicht grün: die Checks sind noch nicht gestartet.
-  // Grün, aber hinter main: die Pflicht-Checks liefen gegen einen alten Basis-Stand (factory#375), der Branch braucht ein Update.
-  if (!offen.length && checks.length && pr?.mergeStateStatus === "BEHIND") return { ...mit(2, ["HINTER MAIN"]), aktualisieren: true };
-  if (!offen.length && checks.length) {
-    return pr?.autoMergeRequest ? mit(2, [`OFFEN ${gruen}/${checks.length} grün, Merge steht aus`]) : mit(3, ["GRÜN OHNE AUTO-MERGE"]);
-  }
+  if (!offen.length && checks.length) return gruenStand(pr, gruen, checks.length, mit);
   return mit(2, [`OFFEN ${gruen}/${checks.length} grün, wartend: ${offen.map((c) => c.name).join(", ") || "Checks starten"}`]);
 }
 
@@ -127,15 +129,35 @@ export function konfliktStand(seit, jetzt) {
   return { bestaetigt: jetzt - seit >= KONFLIKT_ABSTAND_MS, seit };
 }
 
+/** Ein Branch-Update über die Naht (factory#375): `AKTUALISIERT` (Exit 2) oder `AKTUALISIEREN FEHLGESCHLAGEN <erste Zeile>` (Exit 3). */
+export function versucheUpdate(aktualisiere) {
+  try {
+    aktualisiere();
+    return { exit: 2, zeilen: ["AKTUALISIERT"] };
+  } catch (err) {
+    return { exit: 3, zeilen: [`AKTUALISIEREN FEHLGESCHLAGEN ${String(err?.message ?? err).split("\n")[0].slice(0, 120)}`] };
+  }
+}
+
+/** Liefert eine Funktion, die bei `stand.aktualisieren` höchstens einmal je Lauf das Update fährt und dessen Stand zurückgibt (sonst `stand`; ohne Naht nie). */
+export function einmalUpdate(aktualisiere) {
+  let getan = false;
+  return (stand) => {
+    if (!stand.aktualisieren || !aktualisiere || getan) return stand;
+    getan = true;
+    return versucheUpdate(aktualisiere);
+  };
+}
+
 /**
  * Pollt `hole()` bis ein Ergebnis ≠ Exit 2 kommt oder das Zeitbudget abläuft. Drei gh-Fehler in Folge → Exit 3.
  * `pflicht()` liefert die Namen der Pflicht-Checks (einmal nicht leer geholt, sonst bei jeder Abfrage neu; ein Fehler oder eine leere Liste heißt: alle gaten).
  * Ein Konflikt wird erst gemeldet, wenn eine zweite Abfrage mindestens `KONFLIKT_ABSTAND_MS` später ihn bestätigt (auch über das Budget hinaus).
  * @param {{ hole: () => object, pflicht?: () => readonly string[], schlafe: (ms: number) => void, jetzt: () => number, maxMs: number, intervallMs: number }} e
  */
-export function warten({ hole, pflicht = () => [], aktualisiere = null, schlafe, jetzt, maxMs, intervallMs }) {
+export function warten({ hole, pflicht = () => [], aktualisiere, schlafe, jetzt, maxMs, intervallMs }) {
   const ende = jetzt() + maxMs;
-  let aktualisiert = false;
+  const update = einmalUpdate(aktualisiere);
   let fehler = 0;
   let letzte;
   let liste = null;
@@ -165,15 +187,7 @@ export function warten({ hole, pflicht = () => [], aktualisiere = null, schlafe,
       continue;
     }
     konfliktSeit = null;
-    if (letzte.aktualisieren && aktualisiere && !aktualisiert) {
-      aktualisiert = true; // höchstens ein Update je Lauf
-      try {
-        aktualisiere();
-        letzte = { exit: 2, zeilen: ["AKTUALISIERT"] };
-      } catch (err) {
-        return { exit: 3, zeilen: [`AKTUALISIEREN FEHLGESCHLAGEN ${String(err?.message ?? err).split("\n")[0].slice(0, 120)}`] };
-      }
-    }
+    letzte = update(letzte); // Exit 3 bei fehlgeschlagenem Update geht durch die Prüfung darunter
     if (letzte.exit !== 2 || jetzt() + intervallMs >= ende) return letzte;
     schlafe(intervallMs);
   }
