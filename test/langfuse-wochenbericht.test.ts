@@ -7,6 +7,8 @@ import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/langfuse-wochenbericht-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as otlpRaw from "../scripts/langfuse-otlp.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as cliRaw from "../scripts/langfuse-wochenbericht.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as liveRaw from "../scripts/langfuse-wochenbericht-live.mjs";
@@ -117,6 +119,40 @@ describe("Woche", () => {
   });
   test("wochenFenster: Mo 00:00Z bis nächster Mo, Vorwoche davor", () => {
     expect(F).toEqual({ von: "2026-11-02T00:00:00.000Z", bis: "2026-11-09T00:00:00.000Z", vorVon: "2026-10-26T00:00:00.000Z", vorBis: "2026-11-02T00:00:00.000Z" });
+  });
+});
+
+type Otlp = {
+  bauePayloads: (s: string, e: unknown[], o: object) => { chunks: { payload: { resourceSpans: { scopeSpans: { spans: { attributes: { key: string; value: { arrayValue?: { values: { stringValue: string }[] } } }[] }[] }[] }[] } }[] };
+  projektTagsAus: (roh: unknown) => string[];
+  codexProjektTag: (repoName: string) => string;
+  projektFilterTags: (o: { tags?: string[]; repoName: string }) => string[];
+};
+const OTLP = otlpRaw as unknown as Otlp;
+const sendeTags = (env: object, ticket: string | null): string[] => {
+  const e = { id: "g1", traceId: "t".repeat(32), session: "s1", messageId: "m1", model: "claude-opus-5-5", ts: "2026-11-01T10:00:00.000Z", usage: { input: 1, output: 0, cacheRead: 0, cacheCreation: 0 }, rolle: null, ticket };
+  const span = OTLP.bauePayloads("s1", [e], { env, project: "repo", repoName: "repo" }).chunks[0].payload.resourceSpans[0].scopeSpans[0].spans[0];
+  return span.attributes.find((a) => a.key === "langfuse.trace.tags")!.value.arrayValue!.values.map((v) => v.stringValue);
+};
+
+describe("Tag-Schema, einzige Quelle (factory#406)", () => {
+  test("Charakterisierung: Sendetags = [repo, ...Projekt-Tags getrimmt ohne Leere, abgleich, ...Tickets]", () => {
+    expect(sendeTags({ CC_LANGFUSE_TRACE_TAGS: " x, ,y" }, "factory#9")).toEqual(["repo", "x", "y", "abgleich", "factory#9"]);
+    expect(sendeTags({}, null)).toEqual(["repo", "abgleich"]);
+  });
+  test("projektTagsAus: kommagetrennt, getrimmt, ohne Leere; kein Text gibt []", () => {
+    expect(OTLP.projektTagsAus(" x, ,y")).toEqual(["x", "y"]);
+    for (const roh of [undefined, null, 5, ""]) expect(OTLP.projektTagsAus(roh)).toEqual([]);
+  });
+  test("codexProjektTag und projektFilterTags: Filter enthält Settings-Tags, Repo-Name und project:<Repo> ohne Dublette", () => {
+    expect(OTLP.codexProjektTag("repo")).toBe("project:repo");
+    expect(OTLP.projektFilterTags({ tags: ["x", "repo"], repoName: "repo" })).toEqual(["x", "repo", "project:repo"]);
+    expect(OTLP.projektFilterTags({ repoName: "repo" })).toEqual(["repo", "project:repo"]);
+  });
+  test("Vertrag: jedes projektbezogene Sendetag und das Codex-Tag liegt im Projektfilter", () => {
+    const tags = OTLP.projektTagsAus("x,y");
+    const filter = W.projektFilterAus({ tags, repoName: "repo" }).filter as { value: string[] };
+    for (const t of [...sendeTags({ CC_LANGFUSE_TRACE_TAGS: "x,y" }, null).filter((t) => t !== "abgleich"), OTLP.codexProjektTag("repo")]) expect(filter.value).toContain(t);
   });
 });
 
