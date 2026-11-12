@@ -11,7 +11,8 @@
  *  1. Kopfzeile `> <paket>@<version> <skript>`: nur Skripte des Gate-Satzes zählen; ein anderer Paketname oder ein Skript außerhalb
  *     des Gate-Satzes ist fremd, trennt Abschnitte und wird nie gezählt. Die Kettennamen (`verify`, `verify:full`) sind keine Gates.
  *  2. Ein Gate, dem eine weitere Kopfzeile folgt, ist grün; das letzte ist grün bei Exit 0, sonst rot (ist es fremd, ist kein Gate rot).
- *     Folgt auf eine Kettenkopfzeile ein Rot, zählen die übrigen Gates der Kette als „nicht erreicht“, nie als grün (npm druckt bei
+ *     Die Kopfzeile des Skripts, das ein Gate-Befehl per `npm run <x>`/`npm test` selbst startet, ist „verschachtelt“: sie beendet das
+ *     Gate nicht (ein rotes `gate-befehl:coverage` wird nicht vom Folgekopf `test:coverage` grün) und zählt nicht noch einmal als eigenes Gate. Folgt auf eine Kettenkopfzeile ein Rot, zählen die übrigen Gates der Kette als „nicht erreicht“, nie als grün (npm druckt bei
  *     einem roten Schritt keine Fehlerzeile: Rot ist nur aus Kopfzeilen und Exit-Status ableitbar).
  *  3. Transkript: gezählt wird nur eine reine `&&`-Kette aus `cd`, Env-Zuweisungen und Gate-Aufrufen (`npm run`, `npm test`,
  *     `gate-befehl.mjs`, `verify-lauf.mjs`); Pipe (Grund „Pipe“) und jede andere Form (Grund „Befehlsform“) fallen heraus.
@@ -119,23 +120,28 @@ export function befehlsform(command) {
 
 const KOPF = /^> (\S+)@(\S+) (\S+)(?: .*)?$/;
 /** Die vom Gate-Befehl gedruckte Zeile (`▶ Gate-Befehl <name>: …`): ein Gate `gate-befehl:<name>` des Pakets. */
-const GATE_BEFEHL_KOPF = new RegExp(`^${escapeRegex(KOPF_PRAEFIX)}(\\w+):`);
+const GATE_BEFEHL_KOPF = new RegExp(`^${escapeRegex(KOPF_PRAEFIX)}(\\w+):(.*)$`);
+/** Ziel-Skript der gedruckten Gate-Befehl-Zeile: `npm run <x>` (x) oder `npm test` (test), sonst null. */
+const npmZiel = (rest) => /^\s*npm run (\S+)/.exec(rest)?.[1] ?? (/^\s*npm test(?:\s|$)/.test(rest) ? "test" : null);
 
 /** Kopfzeilen der Ausgabe als `[{ name, art: gate|kette|fremd, ms }]`; `zeilen`: `[{ text, ms }]`. Pur. */
 function kopfEintraege(zeilen, { paket, gates }) {
   const out = [];
+  let ziel = null;
   for (const z of zeilen) {
     const g = GATE_BEFEHL_KOPF.exec(z.text);
     if (g) {
       const name = GATE_BEFEHL_TOKEN + g[1];
       out.push({ name, art: gates.includes(name) ? "gate" : "fremd", ms: z.ms ?? null });
+      ziel = npmZiel(g[2]);
       continue;
     }
     const m = KOPF.exec(z.text);
     if (!m) continue;
     const eigen = m[1] === paket;
     const art = eigen && gates.includes(m[3]) ? "gate" : eigen && KETTEN.includes(m[3]) ? "kette" : "fremd";
-    out.push({ name: m[3], art, ms: z.ms ?? null });
+    out.push({ name: m[3], art, ms: z.ms ?? null, verschachtelt: eigen && ziel === m[3] });
+    ziel = null;
   }
   return out;
 }
@@ -165,8 +171,8 @@ export function bewerteKopfLauf({ zeilen, exit, paket, gates, verify }) {
   const ende = zeilen.length ? zeilen[zeilen.length - 1].ms : null;
   const ergebnis = [];
   eintraege.forEach((e, i) => {
-    if (e.art !== "gate") return;
-    const naechste = eintraege[i + 1];
+    if (e.art !== "gate" || e.verschachtelt) return;
+    const naechste = eintraege.slice(i + 1).find((x) => !x.verschachtelt);
     const bis = naechste ? naechste.ms : ende;
     const sek = e.ms != null && bis != null ? Math.max(0, (bis - e.ms) / 1000) : null;
     ergebnis.push({ name: e.name, ergebnis: naechste || exit === 0 ? "gruen" : "rot", sek });

@@ -18,9 +18,12 @@ type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisio
 const adapter = adapterRaw as unknown as {
   entscheide: (t: string, root: string, d?: Record<string, unknown>) => Promise<Out>;
   patchZiele: (p: unknown) => string[] | null;
+  varianten: (seg: string, segmente: (c: string) => string[], tiefe?: number) => string[];
   CODEX_HOOK_WERKZEUGE: Record<string, string>;
   CODEX_HOOK_TIMEOUT_S: number;
 };
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import { segmente as ghSegmente } from "../../scripts/gh-guard-hook.mjs";
 const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: string, g?: unknown, s?: unknown, d?: Record<string, unknown>) => Out };
 
 let tmp = "";
@@ -209,6 +212,81 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     const werfend = { lies: () => { throw new Error("nicht lesen"); } };
     expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: n.txt", "+x") }), werfend)).toBeNull();
     expect(await lauf(nutzlast("spawn_agent", { agent_type: "explore", message: "Suche etwas." }), werfend)).toBeNull();
+  });
+  const WRAPPER_REGELN = { lies: () => JSON.stringify({ permissions: { deny: ["Bash(git push --force:*)", "Bash(rm -rf:*)", "Bash(curl:*)"], ask: ["Bash(npm publish:*)"] } }) };
+  test.each([
+    "env git push --force",
+    "FOO=1 git push --force",
+    "env -i FOO=1 curl http://x",
+    "env -u A -- curl http://x",
+    "/bin/rm -rf x",
+    "/usr/bin/env curl http://x",
+    "C:\\Git\\usr\\bin\\rm.exe -rf x",
+    'bash -c "curl http://x"',
+    "sh -c 'npm publish'",
+    'bash -lc "git push --force"',
+    'zsh -c "curl x"',
+    'dash -c "curl x"',
+    "git  push   --force",
+    "command rm -rf x",
+    "exec rm -rf x",
+    "nohup curl x",
+    "time curl x",
+    'bash -c "bash -c \\"curl x\\""',
+  ])("Wrapper-Form %s → Deny", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).not.toBeNull();
+  });
+  test.each([
+    'echo "rm -rf x"',
+    "envsubst < a",
+    "bash script.sh",
+    "git push origin feature",
+    "rm -r x",
+    "env FOO=1 ls",
+    "FOO=1",
+    "a-b=1 curl x",
+    "ls ;",
+    "env",
+    'bash -c "echo \\\\"',
+    'bash -c "echo a" "b"',
+    'bash -c "curl x',
+    "bash -c 'curl x' extra",
+    'bash -c "echo hallo"',
+    'bash -c "curl x" extra',
+  ])("harmlose Form %s → keine Ausgabe", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).toBeNull();
+  });
+  test.each(["A=1 git push --force", "rm.EXE -rf x", "_a1=x curl http://x", "foo=1 curl http://x", "MY_VAR=1 curl http://x", "MY_VAR=1 git push --force"])("Wrapper-Form %s (Ein-Buchstaben-Variable, .EXE in Großschreibung) → Deny", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).not.toBeNull();
+  });
+  test.each([
+    'echo -c "curl x"', // kein Interpreter
+    'bash script.sh "curl x"', // kein -c/-lc
+    "rm.exe.bak -rf x", // `.exe` nur am Ende des Basisnamens
+    "xrm -rf x",
+    "bash -c x'curl x'", // Quote erst mitten im Wort: kein vollständig gequotetes Argument (Anker ^)
+    'bash -c x"curl x"',
+  ])("Anker und Interpreter-Prüfung: %s → keine Ausgabe", async (command) => {
+    expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).toBeNull();
+  });
+  test("gemischte Quotes: `entquote` entquotet nur vollständig gequotete Argumente; alles andere bleibt unzerlegt (bekannte Grenze, fail-open)", async () => {
+    // Die Shell würde `bash -c "curl x"'y'` als `curl xy` ausführen; der Adapter zerlegt es nicht (Grenze, im Kopf der Lib genannt).
+    for (const c of ["'curl x'y", `"curl x"'y'`, `bash -c 'curl x'y`, `bash -c "curl x"'y'`]) expect(await lauf(nutzlast("Bash", { command: c }), WRAPPER_REGELN), c).toBeNull();
+    expect(await lauf(nutzlast("Bash", { command: `bash -c "curl x"` }), WRAPPER_REGELN)).not.toBeNull();
+  });
+  test("Regel-Anker: nur `Bash(...)` am Anfang und Ende der Regel zählt", async () => {
+    const regeln = (r: string) => ({ lies: () => JSON.stringify({ permissions: { deny: [r] } }) });
+    expect(await lauf(nutzlast("Bash", { command: "a.exe.b x" }), regeln("Bash(a.b:*)"))).toBeNull(); // `.exe` fällt nur am Ende weg (Anker $)
+    expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln("Bash(curl:*)"))).not.toBeNull();
+    for (const r of ["xBash(curl:*)", "Bash(curl:*)x", "Read(curl:*)"]) expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln(r)), r).toBeNull();
+  });
+  test("varianten: Rekursion höchstens Tiefe 3, Interpreter-String ohne Zerlegung ergibt keine Zusatzform", () => {
+    const wrap = (s: string) => `bash -c "${s.replace(/[\\"]/g, "\\$&")}"`;
+    const seg = ghSegmente as (c: string) => string[];
+    expect(adapter.varianten(wrap(wrap(wrap("curl x"))), seg)).toContain("curl x");
+    expect(adapter.varianten(wrap(wrap(wrap(wrap("curl x")))), seg)).not.toContain("curl x");
+    expect(adapter.varianten("bash -c \"curl x\" y", seg)).toEqual(["bash -c \"curl x\" y"]); // Interpreter mit Zusatzwort: keine Zerlegung
+    expect(adapter.varianten("bash -c curl", seg)).toEqual(["bash -c curl"]);
   });
   test("unlesbare settings.json → Deny mit Fix-Zeile", async () => {
     const o = await lauf(nutzlast("Bash", { command: "ls" }), { lies: () => { throw new Error("weg"); } });

@@ -1,6 +1,8 @@
 # Architekturentscheidungen (ADRs)
 
-> Index und Vorlage. Die Tabelle unten wird aus den ADR-Köpfen erzeugt (`npm run docs:gen`, Generator `adr-liste`, [ADR 0017](0017-lebende-doku-generierte-abschnitte.md)); die Zeitleiste in der [README](../../README.md) nutzt dieselben Köpfe. **Wann welcher ADR zu lesen ist:** [Anlaufstellen](../referenz/anlaufstellen.md).
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
+> Index und Vorlage. Die Tabelle unten wird aus den ADR-Köpfen erzeugt (`npm run docs:gen`, Generator `adr-liste`, [ADR 0017](0017-lebende-doku-generierte-abschnitte.md)); der Generator `zeitleiste` (Zeitleiste einer README) liest dieselben Köpfe, diese README trägt keine. **Wann welcher ADR zu lesen ist:** [Anlaufstellen](../referenz/anlaufstellen.md).
 
 <!-- GEN:adr-liste START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
@@ -36,7 +38,7 @@
 
 - **Historisch:** ein ADR wird nie umgeschrieben, sondern verknüpft; die Regel steht in AGENTS.md › Projekt-Brain pflegen. Ein Nachtrag zu einer laufenden Entscheidung ist eine eigene Datei `fortschreibungen/<NNNN>-<ticket>-<slug>.md` mit erster Zeile `# Fortschreibung #<Ticket> (JJJJ-MM-TT): <Thema>`; das ADR trägt am Ende einen Zeiger `fortschreibungen/<NNNN>-…` (Abschnitt „Weitere Fortschreibungen (als Dateien)“). Die älteren angehängten `## Fortschreibung`-Abschnitte bleiben stehen, ihre Zahl je ADR ist eingefroren (`test/harness/adr-fortschreibung.test.ts`).
 - **Dateiname** `NNNN-kurzer-slug.md` (ASCII, vierstellig fortlaufend), **erste Zeile** `# ADR NNNN: Titel` (die Nummer muss zum Dateinamen passen).
-- **Kopf-Format** (vom Generator erzwungen, sonst ist `check:docgen` rot): vor der ersten `##`-Überschrift die Zeile `> Status: **<Status>** · Datum: JJJJ-MM-TT · Ticket: #<nr>`. Das Datum ist ein gültiges Kalenderdatum und hat nichts dahinter hängen. Das ältere Listenformat `- **Status:** <Status> (JJJJ-MM-TT)` wird weiter gelesen, für neue ADRs gilt das Blockquote-Format.
+- **Kopf-Format** (vom Generator erzwungen, sonst ist `check:docgen` rot): vor der ersten `##`-Überschrift die Zeile `> Status: **<Status>** · Datum: JJJJ-MM-TT · Ticket: factory#<nr>` (Herkunftsform, ADR-Köpfe der Praxis: `factory#<nr>`; der Generator liest nur Status und Datum). Das Datum ist ein gültiges Kalenderdatum und hat nichts dahinter hängen. Das ältere Listenformat `- **Status:** <Status> (JJJJ-MM-TT)` wird weiter gelesen, für neue ADRs gilt das Blockquote-Format.
 - **Abschnittsfolge:** Status, Kontext, Optionen (mit Bewertung), Entscheidung („Entscheidung: X, weil Y“), Konsequenzen, Re-Evaluierung (nachprüfbarer Auslöser statt „für immer“).
 - **Index:** die Tabelle oben zieht `npm run docs:gen` nach; die „wann lesen“-Zeile steht in [Anlaufstellen](../referenz/anlaufstellen.md).
 
@@ -46,7 +48,7 @@
 # ADR NNNN: Titel
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert** · Datum: JJJJ-MM-TT · Ticket: #<nr>
+> Status: **akzeptiert** · Datum: JJJJ-MM-TT · Ticket: factory#<nr>
 
 ## Status
 

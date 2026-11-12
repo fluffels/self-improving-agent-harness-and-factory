@@ -29,7 +29,7 @@
  *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
- *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
+ *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs (außer Jobs, die selbst am Sammel-Job hängen), der mit `!cancelled()` läuft und bei einem roten oder abgebrochenen Bedarfsjob selbst rot wird (factory#413), und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
  *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
