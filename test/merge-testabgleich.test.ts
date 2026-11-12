@@ -232,7 +232,8 @@ describe("Wächter-Lauf-Hinweis", () => {
   const W = M as unknown as {
     WAECHTER_PFAD: RegExp;
     waechterDateien: (u: string[], i: string[]) => string[];
-    waechterHinweis: (d: string[]) => string;
+    waechterHinweis: (d: string[], u?: { harnessDa: boolean; testGezieltStandard: boolean }) => string;
+    waechterUmgebung: (w: string, d: { lade: () => unknown; existiert: (p: string) => boolean }) => { harnessDa: boolean; testGezieltStandard: boolean };
   };
   test("Pfadliste: .claude/, .github/, docs/, test/harness/, README.md, jede AGENTS.md (auch modul-lokal)", () => {
     for (const p of [".claude/a", ".github/workflows/x.yml", "docs/x.md", "test/harness/a.test.ts", "README.md", "AGENTS.md", "src/content/AGENTS.md"]) {
@@ -256,6 +257,24 @@ describe("Wächter-Lauf-Hinweis", () => {
     assert.deepEqual(W.waechterDateien(["src/a.ts"], ["docs/a.md"]), []);
     assert.deepEqual(W.waechterDateien(["docs-alt/a.md", "AGENTS.mdx"], ["docs-alt/a.md", "AGENTS.mdx"]), []);
     assert.deepEqual(W.waechterDateien([], []), []);
+  });
+  test("L13: ohne test/harness oder mit eigenem testGezielt nennt der Hinweis verifyKompakt, nur beides Standard den gezielten Lauf", () => {
+    const d = ["docs/a.md"];
+    for (const [harnessDa, testGezieltStandard] of [[false, true], [true, false], [false, false]] as const) {
+      const t = W.waechterHinweis(d, { harnessDa, testGezieltStandard });
+      assert.match(t, /gate-befehl\.mjs verifyKompakt/);
+      assert.doesNotMatch(t, /testGezielt test\/harness/);
+    }
+    assert.match(W.waechterHinweis(d, { harnessDa: true, testGezieltStandard: true }), /testGezielt test\/harness/);
+  });
+  test("L13: waechterUmgebung liest Ordner und Config; Ladefehler gibt verifyKompakt-Umgebung", () => {
+    const nurHarness = (p: string): boolean => p === join("/w", "test", "harness");
+    assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({}), existiert: nurHarness }), { harnessDa: true, testGezieltStandard: true });
+    const da = (): boolean => true;
+    assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({}), existiert: da }), { harnessDa: true, testGezieltStandard: true });
+    assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({ befehle: { testGezielt: "pytest {pfad}" } }), existiert: da }), { harnessDa: true, testGezieltStandard: false });
+    assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({}), existiert: () => false }), { harnessDa: false, testGezieltStandard: true });
+    assert.deepEqual(W.waechterUmgebung("/w", { lade: () => { throw new Error("x"); }, existiert: da }), { harnessDa: true, testGezieltStandard: false });
   });
   test("waechterHinweis: leer ohne Dateien, bis 5 Dateien alle genannt, ab 6 gekürzt", () => {
     assert.equal(W.waechterHinweis([]), "");
@@ -305,6 +324,19 @@ describe("pruefeMerge nennt den Wächter-Lauf", { timeout: REPO_TIMEOUT_MS }, ()
   const lies = (root: string) => (p: string) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8") : null);
   const HINWEIS = /Wächter-Lauf nötig: node scripts\/gate-befehl\.mjs testGezielt test\/harness/;
 
+  test("L13: pruefeMerge reicht die Umgebung an den Hinweis durch (ohne test/harness: verifyKompakt)", () => {
+    const { root, g } = merge("docs/a.md", "docs/b.md");
+    const r = M.pruefeMerge({ git: g, lies: lies(root), umgebung: { harnessDa: false, testGezieltStandard: true } } as never);
+    assert.match(r.text, /gate-befehl\.mjs verifyKompakt/);
+    assert.doesNotMatch(r.text, HINWEIS);
+  });
+  test("L13: der CLI-Lauf in einem Repo ohne test/harness nennt verifyKompakt", () => {
+    const { root } = merge("docs/a.md", "docs/b.md");
+    const SKRIPT = fileURLToPath(new URL("../scripts/merge-testabgleich.mjs", import.meta.url));
+    const r = spawnSync("node", [SKRIPT], { cwd: root, encoding: "utf8" });
+    assert.match(r.stdout + r.stderr, /gate-befehl\.mjs verifyKompakt/);
+    assert.doesNotMatch(r.stdout + r.stderr, HINWEIS);
+  });
   test("nur eine Seite berührt docs/: kein Hinweis", () => {
     const { root, g } = merge("docs/a.md", "src/x.ts");
     const r = M.pruefeMerge({ git: g, lies: lies(root) });

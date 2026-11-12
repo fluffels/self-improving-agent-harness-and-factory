@@ -408,6 +408,41 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`git -C '${fremd}' push`), false);
   });
 
+  test("L77: Lesebefehle mit Bindestrich-Komposita (commit-graphs, pre-commit) und git config blocken nicht", () => {
+    const hook = join(repoRoot, ".git", "hooks", "pre-commit");
+    for (const cmd of [
+      "ls .git/objects/info/commit-graphs",
+      `ls ${hook}`,
+      "git config --get-regexp 'core\\.commitgraph'",
+      `for i in 1 2; do git -C /tmp/nicht-existent-382 -c gc.auto=0 commit -m m; done`,
+    ]) {
+      const r = decide({ cwd: repoRoot, command: cmd, repoRoot, deps: fsFake([wt]) });
+      assert.equal(r.block, false, cmd);
+      assert.notEqual(r.ask, true, cmd);
+    }
+  });
+
+  test("L77: echte commit/push-Aufrufe blocken weiter (Pfad, Großschreibung, -c, Interpreter)", () => {
+    for (const cmd of [
+      "git commit -m x",
+      "git push",
+      "/usr/bin/git commit",
+      "git -c gc.auto=0 commit -m x",
+      "git-commit -m x",
+      "/usr/lib/git-core/git-push origin main",
+      "sh -c 'git-commit -m x'",
+      `node -e "require('child_process').execSync('git commit -m x')"`,
+      `bash -c "git commit -m x"`,
+    ]) {
+      assert.equal(run(cmd), true, cmd);
+    }
+  });
+
+  test("L77: cd $VAR && git commit bleibt ask (fail-closed, statisch nicht bestimmbar)", () => {
+    const r = decide({ cwd: repoRoot, command: "cd $ZIEL && git commit -m x", repoRoot, deps: fsFake([wt]) });
+    assert.ok(r.block || r.ask === true);
+  });
+
   test("die Meldung nennt den Haupt-Checkout und beide erlaubten Wege", () => {
     const r = decide({ cwd: repoRoot, command: "git commit -m x", repoRoot, deps: fsFake([wt]) });
     assert.match(r.reason ?? "", /git -C <worktree>.*cd <worktree> && git/s);
@@ -730,6 +765,8 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(guard.coarseProtected("commit das mit git"), true, "Reihenfolge egal");
     assert.equal(guard.coarseProtected("git status && echo commit"), false, "verschiedene Segmente");
     assert.equal(guard.coarseProtected("digit commit"), false, "git nur als Wort");
+    for (const c of ["git log commits", "git show recommit", "git log commitgraph", "git log commit-graphs", "git config pre-commit", "git log --grep digit-commit"]) assert.equal(guard.coarseProtected(c), false, c);
+    for (const c of ["git-commit -m x", "/usr/lib/git-core/git-push origin"]) assert.equal(guard.coarseProtected(c), true, c);
     assert.equal(guard.coarseProtected("git status"), false);
   });
 

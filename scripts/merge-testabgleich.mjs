@@ -15,7 +15,7 @@
  * liest man in PowerShell aus `$LASTEXITCODE` (nicht aus `$?`), die Meldung nennt ihn zusätzlich.
  * Zusätzlich der Hinweis „Wächter-Lauf nötig“, wenn BEIDE Seiten Wächter-relevante Dateien berühren (`WAECHTER_PFAD`: `.claude/`, `.github/`, `docs/`,
  * `test/harness/`, `README.md`, jede `AGENTS.md`), auch verschiedene (Kopplung über zwei Dateien); die Liste nennt höchstens 5 Dateien. Grenze: der Hinweis
- * sagt nur, dass der Lauf nötig ist, er führt ihn nicht aus; Wächter über Pfade außerhalb der Liste (z.B. `src/`-Texte) erkennt er nicht.
+ * sagt nur, dass der Lauf nötig ist, er führt ihn nicht aus (genannt wird `testGezielt test/harness` nur mit Ordner `test/harness` und Standard-`befehle.testGezielt`, sonst `verifyKompakt`; Ladefehler der Config: `verifyKompakt`); Wächter über Pfade außerhalb der Liste (z.B. `src/`-Texte) erkennt er nicht.
  * Bewusste Grenzen: nur Titel, die als erstes Argument ein Zeichenketten-Literal tragen (`test.each([...])("%s", …)` mit Vorlage zählt als ein Titel, die
  * Tabelle nicht); ein umbenannter Test gilt als bewusst entfernt, wenn der alte Titel in der Fassung der entfernenden Seite fehlt; Dateien außerhalb von `test/` zählen nicht.
  * Pur bis auf das CLI; der Kern ist getestet.
@@ -24,6 +24,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { befehlAus, STANDARD_BEFEHLE } from "./gate-befehl-lib.mjs";
+import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 
 // `test(`, `it(`, `describe(` samt `.skip`/`.only`/`.each`-Zusätzen vor der Klammer, dann ein Zeichenketten-Literal als erstes Argument.
 const TITEL = /\b(?:test|it|describe)(?:\.\w+)*\s*\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;
@@ -49,10 +51,11 @@ export function waechterDateien(unsere, ihre) {
 }
 
 /** Hinweiszeile (mit führendem Zeilenumbruch) für die Wächter-Dateien; ab 6 Dateien auf 5 gekürzt; ohne Dateien leer. Pur. */
-export function waechterHinweis(dateien) {
+export function waechterHinweis(dateien, { harnessDa = true, testGezieltStandard = true } = {}) {
   if (!dateien.length) return "";
   const rest = dateien.length > 5 ? ` und ${dateien.length - 5} weitere` : "";
-  return `\nWächter-Lauf nötig: node scripts/gate-befehl.mjs testGezielt test/harness (beide Seiten berühren Wächter-Dateien: ${dateien.slice(0, 5).join(", ")}${rest}).`;
+  const befehl = harnessDa && testGezieltStandard ? "testGezielt test/harness" : "verifyKompakt";
+  return `\nWächter-Lauf nötig: node scripts/gate-befehl.mjs ${befehl} (beide Seiten berühren Wächter-Dateien: ${dateien.slice(0, 5).join(", ")}${rest}).`;
 }
 
 /**
@@ -86,7 +89,7 @@ export function formatiere(verloren) {
  * Orchestrierung mit injiziertem IO: `git(args)` liefert stdout oder wirft; `lies(pfad)` liest eine Datei des Arbeitsbaums oder gibt `null` zurück.
  * Rückgabe `{ code, text }` (0 sauber, 1 verloren, 2 kein Merge oder git-Fehler).
  */
-export function pruefeMerge({ git, lies }) {
+export function pruefeMerge({ git, lies, umgebung }) {
   const versuch = (args) => {
     try {
       return git(args).trim();
@@ -114,15 +117,25 @@ export function pruefeMerge({ git, lies }) {
   const ergebnis = imMerge ? Object.fromEntries(dateien.map((p) => [p, lies(p)])) : aus("HEAD");
   const verloren = verloreneTests({ basis: aus(basisRev), unsere: aus(unsereRev), ihre: aus(ihreRev), ergebnis });
   const alle = (a, b) => (versuch(["diff", "--name-only", a, b]) ?? "").split("\n").filter(Boolean);
-  const hinweis = waechterHinweis(waechterDateien(alle(basisRev, unsereRev), alle(basisRev, ihreRev)));
+  const hinweis = waechterHinweis(waechterDateien(alle(basisRev, unsereRev), alle(basisRev, ihreRev)), umgebung);
   return { code: verloren.length ? 1 : 0, text: formatiere(verloren) + hinweis };
+}
+
+/** Ob der Ordner `test/harness` da ist und `befehle.testGezielt` der Standard (`npx vitest run`): nur dann nennt der Hinweis den gezielten Wächter-Lauf, sonst `verifyKompakt` (ein Bezieher hat oft keinen Wächter-Ordner oder einen anderen Test-Läufer; L13). Ladefehler der Config: `verifyKompakt`. */
+export function waechterUmgebung(wurzel, { lade = () => ladeProjektConfig(), existiert = existsSync } = {}) {
+  const harnessDa = existiert(join(wurzel, "test", "harness"));
+  try {
+    return { harnessDa, testGezieltStandard: befehlAus(lade(), "testGezielt") === STANDARD_BEFEHLE.testGezielt };
+  } catch {
+    return { harnessDa, testGezieltStandard: false };
+  }
 }
 
 function main() {
   const git = (args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   const wurzel = git(["rev-parse", "--show-toplevel"]).trim();
   const lies = (p) => (existsSync(join(wurzel, p)) ? readFileSync(join(wurzel, p), "utf8") : null);
-  const r = pruefeMerge({ git, lies });
+  const r = pruefeMerge({ git, lies, umgebung: waechterUmgebung(wurzel) });
   (r.code === 0 ? console.log : console.error)(r.text);
   process.exitCode = r.code;
 }

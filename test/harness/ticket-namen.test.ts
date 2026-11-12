@@ -39,6 +39,7 @@ type Namen = {
   worktreeName: (nr: number | string) => string;
   branchName: (nr: number | string, slug: string) => string;
   lensNameKern: string;
+  lensWorktreeMuster: RegExp;
   ticketAus: (t: string) => number | null;
   patchMuster: { ticketRunde: RegExp; voll: RegExp; delta: RegExp };
   dateiMuster: RegExp;
@@ -119,6 +120,28 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(re.exec("ab-12-lens-m2")?.[1]).toBe("ab-12");
     expect(re.test(`${ECHT.praefixe.worktree}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x1")).toBe(false);
+  });
+  test("L2: Lens-Name trägt optional die Brille als Endung (parallele Lenses je eigener Worktree); Gruppe 1 bleibt Worktree-Name", () => {
+    const re = n.lensWorktreeMuster;
+    expect(re.exec("ab-12-lens-r1-test-adaequanz")?.[1]).toBe("ab-12");
+    expect(re.exec("ab-12-lens-m2-architektur")?.[1]).toBe("ab-12");
+    expect(re.test("ab-12-lens-r1")).toBe(true); // alte Namen ohne Endung bleiben gültig
+    expect(re.test("ab-12-lens-r1-a")).toBe(true); // Endung mit einem Buchstaben
+    for (const schlecht of ["ab-12-lens-r1-", "ab-12-lens-r1-Test", "ab-12-lens-r1x", "ab-12-lens-r1-1", "ab-12-lens-r1-..", "ab-12-lens-r1-a/b", "ab-12-lens-r1-a-", "ab-12-lens-r1--a"]) {
+      expect(re.test(schlecht), schlecht).toBe(false);
+    }
+    expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12-lens-r1-sicherheit/x")).toBe(true);
+    for (const schlecht of ["ab-12-lens-r1-/x", "ab-12-lens-r1x/x", "ab-12-lens-r1-1/x", "ab-12-lens-r1-../x"]) {
+      expect(n.lensPfadMuster.test(`/.claude/worktrees/${schlecht}`), schlecht).toBe(false);
+    }
+  });
+  test("L2: der Lens-Edit-Guard erlaubt Edits im Lens-Worktree mit Brillen-Endung, ein Pfadtrick bleibt blockiert", () => {
+    for (const n of ["lens-r1-test-adaequanz", "lens-m2-architektur", "lens-a1-sicherheit"]) {
+      expect(lensEdit.bewerteLensEdit(`/r/.claude/worktrees/ab-12-${n}/src/a.ts`, "", { config: AB }).block, n).toBe(false);
+    }
+    for (const n of ["lens-r1-/a.ts", "lens-r1-1/a.ts", "lens-r1-../a.ts", "lens-r1x/a.ts"]) {
+      expect(lensEdit.bewerteLensEdit(`/r/.claude/worktrees/ab-12-${n}`, "", { config: AB }).block, n).toBe(true);
+    }
   });
   test("dateiMuster und ticketBranchMuster sind am Namensanfang verankert: ein vorangestelltes Präfix passt nicht", () => {
     expect(n.dateiMuster.test("ab-7.bak")).toBe(true);
