@@ -378,6 +378,26 @@ describe("fuehreSchritte und baueFixture", () => {
     });
   });
 
+  it("Modus stderr: stderr geht in eine Datei (Dateinummer statt Pipe, kein maxBuffer), das Kind wird nie wegen Pufferüberlauf abgebrochen", () => {
+    const optionen: Record<string, unknown>[] = [];
+    const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => (optionen.push(o), { status: 0 });
+    const n = P.echteNaehte("stderr", { spawn });
+    n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+    const stdio = optionen[0].stdio as unknown[];
+    expect(stdio.slice(0, 2)).toEqual(["ignore", "ignore"]);
+    expect(typeof stdio[2]).toBe("number");
+    expect(optionen[0].maxBuffer).toBeUndefined();
+    expect(n.stderrRest("a")).toBe("");
+  });
+
+  it("Modus stderr: das Ende wird auf Zeichengrenze geschnitten, ein Mehrbyte-Zeichen am Fensteranfang bleibt ohne Ersatzzeichen", () => {
+    temp((dir) => {
+      const io = { ...P.echteNaehte("stderr").mitScratch(join(dir, "s")), melde: () => undefined };
+      const e = P.fuehreSchritte([{ id: "umlaut", argv: [process.execPath, "-e", "process.stderr.write('x'.repeat(3e6)+'ä'.repeat(2500));process.exitCode=2"], cwd: dir, kritisch: false }], io);
+      expect(e[0]).toStrictEqual({ id: "umlaut", status: 2, stderr: "ä".repeat(2000) });
+    });
+  });
+
   it("baueFixture schreibt die Projektdateien aus der Quelle, die Config aus der Fixture, nie einen Stub", () => {
     const geschrieben: Record<string, string> = {};
     const quelle: Record<string, string> = Object.fromEntries(P.fixturePfade().filter((p) => p !== "AGENTS.md").map((p) => [join("/von", p === ".factory/projekt.json" ? P.FIXTURE_PFAD : p), p === "package.json" ? '{"scripts":{}}' : p === ".factory/projekt.json" ? "{}" : `inhalt ${p}`]));
