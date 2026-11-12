@@ -88,7 +88,7 @@ export function v5(doku: string): string[] {
   const genannt = new Set([...text.matchAll(/`([A-Z][A-Za-z]+)`/g)].map(m => m[1]));
   for (const e of CODEX_HOOK_EREIGNISSE) if (!genannt.has(e)) f.push(`V5: Ereignis ${e} fehlt im Abschnitt`);
   for (const g of genannt) if (!CODEX_HOOK_EREIGNISSE.includes(g)) f.push(`V5: Ereignis ${g} steht im Abschnitt, aber nicht in CODEX_HOOK_EREIGNISSE`);
-  if (!/abgerufen am \d{4}-\d{2}-\d{2}/.test(text)) f.push("V5: Abrufdatum („abgerufen am JJJJ-MM-TT“) fehlt im Abschnitt");
+  if (!/abgerufen am \d{4}-\d{2}-\d{2}(?!\d)/.test(text)) f.push("V5: Abrufdatum („abgerufen am JJJJ-MM-TT“) fehlt im Abschnitt");
   return f;
 }
 
@@ -164,7 +164,7 @@ test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Ab
   expect(v5(`# Titel\n\n${ABSCHNITT}\n\n${alle}. abgerufen am 2026-11-12`)).toEqual([]); // letzter Abschnitt, ohne Schluss-Zeilenumbruch
   expect(v5(doku(`${alle} Stand 2026-11-12`))).toHaveLength(1); // Datum ohne „abgerufen am“
   expect(v5(doku(`${alle} abgerufen am 2026-11`))).toHaveLength(1); // unvollständiges Datum
-  for (const d of ["26-11-12", "2026-1-12", "2026-11-1"]) expect(v5(doku(`${alle} abgerufen am ${d}`)), d).toHaveLength(1); // Quantoren je Teil
+  for (const d of ["26-11-12", "2026-1-12", "2026-11-1", "12026-11-12", "2026-111-12", "2026-11-123"]) expect(v5(doku(`${alle} abgerufen am ${d}`)), d).toHaveLength(1); // Quantoren je Teil
   expect(v5(doku(`${alle} \`fremd\` abgerufen am 2026-11-12`))).toEqual([]); // Kleinbuchstaben-Wort ist kein Ereignis
   expect(v5(doku(`${alle} abgerufen am 2026-11-12 \`X\``))).toEqual([]); // einzelner Großbuchstabe ist kein Ereignis
   expect(v5(doku(`Einleitung\n\n### Unterabschnitt\n\n${alle} abgerufen am 2026-11-12`))).toEqual([]); // ### beendet den Abschnitt nicht
