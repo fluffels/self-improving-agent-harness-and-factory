@@ -753,6 +753,20 @@ describe("Lücke bei Score ausstehend (factory#354)", () => {
     expect(A.statusZelle({ status: "Lücke", score: "vor Stichtag" })).toBe("Lücke");
   });
 
+  test("Summe: fehlendAusstehend zählt fehlende Calls (nicht Sessions), das Kürzel nennt nur wartende Sessions, ohne Zusatz kein Semikolon", () => {
+    const drei = luecke({ soll: [eintrag(1), eintrag(2), eintrag(3)] });
+    expect(A.summenzeile([drei])).toMatchObject({ fehlend: 2, fehlendAusstehend: 2 });
+    const fertig = { ...luecke({ mtime: now - 25 * 3_600_000 }), session: "fertig22-x" };
+    const warte = { ...luecke(), session: "warte111-y" };
+    const md = A.renderMarkdown([warte, fertig], A.summenzeile([warte, fertig]));
+    expect(md).toContain("(Nachlieferer wartet noch: warte111)");
+    expect(md).not.toContain("fertig22)");
+    const ruhig = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null, kosten: 1 }, mtime: now - 25 * 3_600_000, now });
+    const ohne = A.renderMarkdown([ruhig], A.summenzeile([ruhig]));
+    expect(ohne).toMatch(/Erfassungsquote 100,0 %\.$/m);
+    expect(ohne).not.toContain("läuft noch");
+  });
+
   test("fehlendAusstehend zählt nur feste Sessions mit Score ausstehend, läuft und vor Stichtag nicht", () => {
     const sum = A.summenzeile([luecke(), luecke(), luecke({ mtime: now - 25 * 3_600_000 }), luecke({ mtime: now - 10 * 60_000 })]);
     expect(sum).toMatchObject({ fehlend: 3, fehlendAusstehend: 2, scoreAusstehend: 2 });
@@ -769,6 +783,7 @@ describe("Session auflösen (factory#354)", () => {
       [`${PRAEFIX}--claude-worktrees-wt/abcd1234-aaaa.jsonl`]: msg("m"),
       [`${PRAEFIX}/abcd9999-bbbb.jsonl`]: msg("m"),
       "Y--anders/feed0001-cccc.jsonl": msg("m"),
+      "Y--anders/abcd0000-cccc.jsonl": msg("m"),
       [`${PRAEFIX}/ab.jsonl`]: msg("m"),
       [`${PRAEFIX}/abc.jsonl`]: msg("m"),
     });
@@ -789,7 +804,7 @@ describe("Session auflösen (factory#354)", () => {
   });
 
   test("mehrdeutiger Präfix nennt sortierte volle IDs, ohne Treffer: nicht gefunden", () => {
-    expect(auf("abcd")).toEqual({ fehler: "mehrdeutig", kandidaten: ["abcd1234-aaaa", "abcd9999-bbbb"] });
+    expect(auf("abcd")).toEqual({ fehler: "mehrdeutig", kandidaten: ["abcd0000-cccc", "abcd1234-aaaa", "abcd9999-bbbb"] });
     expect(auf("zzzz")).toEqual({ fehler: "nicht gefunden" });
     // nur Anfang, nie Mitte; eine leere Angabe trifft nichts
     expect(auf("1234")).toEqual({ fehler: "nicht gefunden" });
