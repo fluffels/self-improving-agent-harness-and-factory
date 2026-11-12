@@ -102,7 +102,7 @@ export function probeSchritte({ quelle, scratch, tag, sha }) {
   const mech = mechanischeSchritte(PFAD_TOKEN).map((befehl, i) => ({ id: mechanisch[i], argv: teile(befehl).map((t) => t.replaceAll(PFAD_TOKEN, q)), cwd: b, kritisch: false }));
   const verify = UPDATE_SCHRITTE.find((s) => s.id === "verify");
   return [
-    k("klon", ["git", "clone", "--quiet", quelle, q], scratch),
+    k("klon", ["git", "clone", "--no-local", "--quiet", quelle, q], scratch),
     k("klon-origin", ["git", "-C", q, "remote", "remove", "origin"], scratch),
     k("tag", ["git", "-C", q, "tag", tag, sha], scratch),
     k("detach", ["git", "-C", q, "checkout", "--quiet", "--detach", sha], scratch),

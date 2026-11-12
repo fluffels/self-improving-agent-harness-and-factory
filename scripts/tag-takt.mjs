@@ -283,7 +283,7 @@ function probeAblauf({ tag, sha }) {
     "```",
     "git clone --depth 1 https://github.com/<owner/name>.git <s>/bezieher",
     "git -C <s>/bezieher remote remove origin",
-    "git clone <checkout> <s>/quelle",
+    "git clone --no-local <checkout> <s>/quelle",
     "git -C <s>/quelle remote remove origin",
     `git -C <s>/quelle tag ${tag} ${sha}`,
     `git -C <s>/quelle checkout --detach ${sha}`,
