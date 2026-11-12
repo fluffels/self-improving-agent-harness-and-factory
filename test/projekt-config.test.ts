@@ -1427,3 +1427,46 @@ describe("Block design (factory#172)", () => {
     assert.match(meld(c), /design muss ein Objekt/);
   });
 });
+
+describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", () => {
+  const mit = (e2e?: unknown, befehl?: unknown) => {
+    const c: Record<string, unknown> = { ...gueltig() };
+    if (e2e !== undefined) c.e2e = e2e;
+    if (befehl !== undefined) c.befehle = { e2e: befehl };
+    return pc.pruefeProjektConfig(c);
+  };
+  test("weder Block noch Befehl: keine Fehler (Negativfall: ohne Profil ändert sich nichts)", () => {
+    assert.deepEqual(mit(), []);
+  });
+  test("gültiges Paar: keine Fehler", () => {
+    assert.deepEqual(mit({ browser: ["chromium", "firefox"] }, "lauf"), []);
+  });
+  test("Fehlerfälle der Form, je mit Fix-Zeile", () => {
+    const faelle: [unknown, RegExp][] = [
+      [{}, /e2e\.browser/],
+      [{ browser: [] }, /e2e\.browser muss/],
+      [{ browser: "chromium" }, /e2e\.browser muss/],
+      [{ browser: ["Chromium"] }, /e2e\.browser\[0\]/],
+      [{ browser: ["a b"] }, /e2e\.browser\[0\]/],
+      [{ browser: [null] }, /e2e\.browser\[0\]/],
+      [{ browser: ["a", "a"] }, /doppelt/],
+      [{ browser: ["a"], tippfehler: 1 }, /e2e\.tippfehler ist kein bekannter Schlüssel/],
+      [[], /e2e muss ein Objekt/],
+      [null, /e2e muss ein Objekt/],
+    ];
+    for (const [block, muster] of faelle) {
+      const t = mit(block, "lauf").join("\n");
+      assert.match(t, muster, JSON.stringify(block));
+      assert.match(t, /Fix:/, JSON.stringify(block));
+    }
+  });
+  test("Block ohne befehle.e2e ist ein Fehler mit Fix", () => {
+    assert.match(mit({ browser: ["chromium"] }).join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
+  });
+  test("leere befehle.e2e mit Block ist ein Fehler mit Fix", () => {
+    assert.match(mit({ browser: ["chromium"] }, "").join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
+  });
+  test("befehle.e2e ohne Block ist ein Fehler mit Fix", () => {
+    assert.match(mit(undefined, "lauf").join("\n"), /befehle\.e2e[\s\S]*Block e2e[\s\S]*Fix:/);
+  });
+});

@@ -17,6 +17,7 @@ interface Optionen { lade: () => Config; spawn: (befehl: string, opt: unknown, .
 const lib = raw as unknown as {
   STANDARD_BEFEHLE: Record<string, string | null>;
   MUTATION_UMGEBUNG: { bereiche: string; bericht: string };
+  E2E_UMGEBUNG: { browser: string };
   GATE_BEFEHL_NAMEN: string[];
   PRUEFLAUF_ART: Record<string, string | null>;
   ZEIGEN_FLAG: string;
@@ -27,7 +28,7 @@ const lib = raw as unknown as {
 const pc = rawPc as unknown as { pruefeProjektConfig(c: unknown): string[]; ladeProjektConfig(o: { pfad: string }): Config };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
-const HEUTE: Record<string, string | null> = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage", testGezielt: "npx vitest run", mutation: null };
+const HEUTE: Record<string, string | null> = { install: "npm ci", verify: "npm run verify", verifyKompakt: "npm run verify:kompakt", verifyChanged: "npm run verify:changed", coverage: "npm run test:coverage", testGezielt: "npx vitest run", mutation: null, e2e: null };
 const BEFEHLE_MIT_STRING = Object.entries(HEUTE).filter((e): e is [string, string] => e[1] !== null);
 
 /** Fake-Umgebung: `spawn` protokolliert den Aufruf; `ausgabe` sammelt stdout und stderr. */
@@ -310,5 +311,28 @@ describe("Ausführung (K3)", () => {
     const falsch = spawnSync(process.execPath, ["scripts/gate-befehl.mjs", "gibtsnicht"], { cwd: WURZEL, encoding: "utf8" });
     assert.equal(falsch.status, 2);
     assert.match(falsch.stderr, /Fix:/);
+  });
+});
+
+describe("e2e: opt-in Gate-Befehl (factory#246)", () => {
+  test("ist ein bekannter Name, Standard nicht eingerichtet, Prüflauf-Art null", () => {
+    assert.ok(lib.GATE_BEFEHL_NAMEN.includes("e2e"));
+    assert.equal(lib.befehlAus({}, "e2e"), null);
+    assert.equal(lib.PRUEFLAUF_ART.e2e, null);
+  });
+  test("ohne Eintrag: Exit 0 mit Meldung, ohne Spawn", () => {
+    const u = umgebung();
+    assert.equal(lib.cli(["e2e"], u.opt), 0);
+    assert.deepEqual(u.out, ["e2e: nicht eingerichtet"]);
+    assert.equal(u.aufrufe.length, 0);
+  });
+  test("mit Eintrag startet die konfigurierte Zeile", () => {
+    const u = umgebung({ befehle: { e2e: "browser-lauf" } });
+    assert.equal(lib.cli(["e2e"], u.opt), 0);
+    assert.equal(u.aufrufe.length, 1);
+    assert.equal(u.aufrufe[0].befehl, "browser-lauf");
+  });
+  test("Vertrag: die Umgebungsvariable heißt genau wie dokumentiert", () => {
+    assert.deepEqual(lib.E2E_UMGEBUNG, { browser: "FACTORY_E2E_BROWSER" });
   });
 });
