@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Monatlicher Ticket-Drift-Lauf (factory#28, ADR 0033): prüft die offenen Tickets deterministisch gegen den Checkout (Pfade, Zeilen, Blocker, Duplikate, Rückstellungen) und legt genau einen
+// Monatlicher Ticket-Drift-Lauf (factory#28, ADR 0033): prüft die offenen Tickets deterministisch gegen den Checkout (Pfade, Zeilen, Blocker, Board-Reihenfolge, Duplikate, Rückstellungen) und legt genau einen
 // Bericht ab: Stdout, Step-Summary und das eine Bericht-Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM>" (Marker im Body). Er schließt, labelt und kommentiert kein Ticket; die Bewertung macht ein Agent nach
 // `.agents/skills/factory/ticket-drift.md`. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
 //   node scripts/ticket-drift.mjs [--dry-run]    # --dry-run schreibt nur Stdout/Step-Summary
@@ -10,7 +10,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { fehlerMeldung, ghJson, ghText } from "./gh-cli.mjs";
+import { fehlerMeldung, fehlerText, ghJson, ghText } from "./gh-cli.mjs";
 import { inboxStart } from "./inbox-start-lib.mjs";
 import { labelAus, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
@@ -78,16 +78,30 @@ function schreibe(ziel, text, { config, repo, datum, env, ghSchreiben, platziere
 }
 
 /** Lädt die offenen Issues (fail-closed bei Limit), prüft und baut den Bericht. Rückgabe `{ issues, ergebnis, text, datum }`. */
-function erzeuge({ config, repo, ghLesen, sicht, heute }) {
+function erzeuge({ config, repo, ghLesen, sicht, heute, boards }) {
   const issues = ghLesen(["issue", "list", "--state", "open", "--limit", String(LIMIT), "--json", FELDER]);
   if (!Array.isArray(issues) || issues.length >= LIMIT) throw new Error(`Issue-Liste unvollständig (${Array.isArray(issues) ? issues.length : "kein Array"} von höchstens ${LIMIT}): kein Bericht`);
   const s = sicht ?? gitSicht();
-  const ergebnis = pruefe(issues, { config, owner: zerlegeRepo(repo).owner, tops: s.tops, git: s.git, sprache: spracheAus(config).spezifikation });
+  const ergebnis = pruefe(issues, { config, owner: zerlegeRepo(repo).owner, tops: s.tops, git: s.git, sprache: spracheAus(config).spezifikation, repo, boards });
   const datum = heute ?? new Date().toISOString().slice(0, 10);
   return { issues, ergebnis, datum, text: berichtText(ergebnis, { sha: s.sha, datum }) };
 }
 
-/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs` (liefert `REPO`, `platziereAmEnde`), `ghLesen(args)`, `ghSchreiben(args, input)`, `sicht` (von `gitSicht`), `env`, `heute`, `schreibeSummary(pfad, text)`, `log`, `err`. */
+/** Liest die Items beider Boards (REST) für `blocker-dahinter`; ohne Token oder bei Lesefehler `null` (Hinweis im Bericht, Warnung im Log, kein Abbruch). Der Fehlertext steht nur im Log, nie im Bericht. */
+function ladeBoardListen({ token, ladeBoards, libs, repo, log }) {
+  if (!token) {
+    log("::warning::Ticket-Drift: PROJECT_TOKEN fehlt, blocker-dahinter ausgesetzt.");
+    return null;
+  }
+  try {
+    return ladeBoards ? ladeBoards(token) : ["produkt", "factory"].map((r) => libs.loadItems(libs.boardFuerRolle(r), { repo, token }));
+  } catch (e) {
+    log(`::warning::Ticket-Drift: Board nicht lesbar, blocker-dahinter ausgesetzt: ${fehlerText(e)}`);
+    return null;
+  }
+}
+
+/** Einstieg. `deps` (Tests): `ladeConfig`, `ladeLibs` (liefert `REPO`, `platziereAmEnde`), `ladeBoards(token)` (Board-Item-Listen), `ghLesen(args)`, `ghSchreiben(args, input)`, `sicht` (von `gitSicht`), `env`, `heute`, `schreibeSummary(pfad, text)`, `log`, `err`. */
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const { ladeConfig, ladeLibs, ghLesen = (args) => ghJson(args), ghSchreiben = ghSchreibenStandard, env = process.env, log = console.log, err = console.error } = deps;
   const start = await inboxStart(argv, { skript: "ticket-drift", praefix: "Ticket-Drift: Projekt-Config nicht lesbar: ", ladeConfig, ladeLibs, log, err });
@@ -96,13 +110,13 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const repo = libs.REPO;
   const setzeAmEnde = (nr, token) => libs.platziereAmEnde(nr, token);
   try {
-    const { issues, ergebnis, text, datum } = erzeuge({ config, repo, ghLesen, sicht: deps.sicht, heute: deps.heute });
+    const { issues, ergebnis, text, datum } = erzeuge({ config, repo, ghLesen, sicht: deps.sicht, heute: deps.heute, boards: ladeBoardListen({ token: env.PROJECT_TOKEN, ladeBoards: deps.ladeBoards, libs, repo, log }) });
     log(text);
     if (env.GITHUB_STEP_SUMMARY) (deps.schreibeSummary ?? ((p, t) => appendFileSync(p, t)))(env.GITHUB_STEP_SUMMARY, text);
     if (!trocken) schreibe(waehleZiel(issues, ergebnis.befunde.length > 0, { owner: zerlegeRepo(repo).owner, config }), text, { config, repo, datum, env, ghSchreiben, platziere: setzeAmEnde, log });
     return 0;
   } catch (e) {
-    log(fehlerMeldung(e, { praefix: "::error::Ticket-Drift: " }));
+    log(fehlerMeldung(e, { praefix: "Ticket-Drift: " }));
     return 1;
   }
 }
