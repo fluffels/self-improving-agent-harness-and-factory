@@ -144,15 +144,12 @@ describe("SessionStart-Hook führt Aufträge aus", () => {
     expect(A.auftraegeLesen(a.stateDir, T0)).toEqual(["alt1"]);
   });
 
-  test("Lauf mit Fehlerexit: der Auftrag bleibt; eine unbekannte Session (kein Treffer) erledigt ihn", async () => {
+  test("Lauf mit Fehlerexit (auch: unbekannte Session, Exit 1 „nicht gefunden“): der Auftrag bleibt bis Verfall (AUFTRAG_ALTER_MS)", async () => {
     const rot = aufbau({}, 1);
     A.auftragLegen(rot.stateDir, "alt1", T0 - 1000);
     await rot.fahre(START);
     expect(A.auftraegeLesen(rot.stateDir, T0)).toEqual(["alt1"]);
-    const leer = aufbau({ alt1: "" });
-    A.auftragLegen(leer.stateDir, "alt1", T0 - 1000);
-    await leer.fahre(START);
-    expect(A.auftraegeLesen(leer.stateDir, T0)).toEqual([]);
+    expect(A.auftraegeLesen(rot.stateDir, T0 + A.AUFTRAG_ALTER_MS)).toEqual([]);
   });
 
   test("belegter Lock: der Auftrag bleibt, es läuft nichts", async () => {
