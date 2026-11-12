@@ -845,7 +845,7 @@ describe("Code-Scanning-Quellen (factory#339)", () => {
 describe("CODEOWNERS-Spiegel (factory#382 L11, L69)", () => {
   const QUELLE = JSON.stringify({ pflichtReview: ["/scripts/a.mjs", "/.github/CODEOWNERS", "/docs/"], andere: ["/x/"] });
   const eigenes = (z: string[]) => z.join("\n");
-  const SOLL = eigenes(["# Kopf", "/scripts/a.mjs @team", "/.github/CODEOWNERS @team", "/docs/ @team"]);
+  const SOLL = eigenes(["# Kopf", "# @team", "/scripts/a.mjs @team", "/.github/CODEOWNERS @team", "/docs/ @team"]);
   const punktFuer = (quelle: string | null, codeowners: string | null, existiert = true) =>
     punkt(
       pruefe({ rootDir: "/x", ...GESUND, git: fakeGit(gesund), existiert: () => existiert, config: {}, lies: (p) => (p.replaceAll("\\", "/").endsWith("protected-paths.json") ? quelle : codeowners) }),

@@ -333,7 +333,7 @@ export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
  * ohne sie ist `Required-Check-Quellen` nicht prüfbar.
  */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), lies = dateiOderNull(rootDir, existiert), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), lies = dateiOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
   const punkte = {
     "Root-Kontextdatei": () => kontextPunkt(rootDir, existiert),
     Zeilenenden: () => zeilenendenPunkt(git),
@@ -348,16 +348,16 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }
 
-/** Der Standard-Leser: Text der Datei unter `rootDir` oder `null`, wenn sie fehlt oder nicht lesbar ist (nie ein Wurf). */
-const dateiOderNull = (rootDir, existiert) => (rel) => {
+/** Der Standard-Leser: Text der Datei unter `rootDir` oder `null`, wenn sie fehlt oder nicht lesbar ist (nie ein Wurf; `existiert` gilt hier nicht, der Lesefehler genügt). */
+const dateiOderNull = (rootDir) => (rel) => {
   try {
-    return existiert(join(rootDir, rel)) ? readFileSync(join(rootDir, rel), "utf8") : null;
+    return readFileSync(join(rootDir, rel), "utf8");
   } catch {
     return null;
   }
 };
 
-/** Pfad-Normalform eines Schutz-Musters: führendes `/` weg, ab dem ersten `*` abgeschnitten (CODEOWNERS `/scripts/check-*.mjs` und die Substring-Form landen beide auf `scripts/check-`). */
+/** Pfad-Normalform eines Schutz-Musters: führendes `/` weg, ab dem ersten `*` abgeschnitten (CODEOWNERS `/scripts/check-*.mjs` und die Substring-Form landen beide auf `scripts/check-`). Grenze: Muster mit gleichem Präfix vor dem ersten `*` gelten als gleich. */
 export const normalizeProtected = (p) => p.replace(/^\//, "").replace(/\*.*$/, "");
 
 /** Die Muster aus CODEOWNERS-Text, normalisiert (jeweils vor dem `@owner`; Kommentare und Leerzeilen zählen nicht). */
