@@ -1,5 +1,7 @@
 # Codex im Harness
 
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
 Der Adapter ist ein **Einrichtungs- und Review-Prototyp** für die lokale Codex CLI. Ob ein autonomer Ticketlauf erlaubt ist, entscheidet allein die **Freigabetabelle** `scripts/codex-freigaben.mjs`: je geprüfter CLI-Version ein Diagnose-Beleg und die fünf Nachweise unten, je Nachweis `offen` oder ein Beleg. Nur eine installierte Version, deren Eintrag alle fünf Nachweise mit Beleg führt, lässt den Einstieg aus [AGENTS.md](../../AGENTS.md) mit Exit 0 enden; heute ist keine Version freigegeben, auch vollständig aussehende Offline-Belege enden mit Exit 1. Eine neue Version braucht einen neuen Tabelleneintrag per reviewtem PR. Ein beauftragter Implementierungs-PR ist keine bestandene Ende-zu-Ende-Abnahme.
 
 Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige Unterstützung benötigt drei weitere Arbeitspakete: Hooks und Quarantäne, korrekte Tracing-Zuordnung samt Ausfallerkennung sowie ein isoliertes Gesamtsetup mit Probeauftrag. Die konkreten Nachfolger und Rohbelege sind im zugehörigen Implementierungs-PR verlinkt. Erst die Gesamtabnahme kann eine autonome Freigabe begründen.
@@ -17,9 +19,9 @@ Der Prototyp umfasst Setup, Rollenquellen und Belegdiagnose. Die vollständige U
 | Szenarien / Abnahme | `holdout-szenario` / `holdout-abnahme` | gleichnamige Dateien |
 | Quarantäne | **keine freigegebene Rolle** | Sicherheitsregeln in `AGENTS.md` |
 
-Eine erzeugte Rolle ist erst nach erneutem Laden und tatsächlicher Discovery nutzbar. Ein Spawn von `default` belegt keine Custom-Agent-Datei. Planung und Lenses verwenden `high`, Umsetzung und Explore `medium`; das Modell wird geerbt und im Probebericht anhand der Laufmetadaten benannt. Claude-Aliase haben keine belegte Codex-Entsprechung. Der Hauptagent übergibt den fachlichen Rollenvertrag aus der gemeinsamen Quelle; der Szenario-Agent erhält nur diesen Vertrag und das Ticket, keine zusätzliche Quellenbeschaffung.
+Eine erzeugte Rolle ist erst nach erneutem Laden und tatsächlicher Discovery nutzbar. Ein Spawn von `default` belegt keine Custom-Agent-Datei. Planung, Lenses und die beiden Holdout-Rollen verwenden `high`, Umsetzung, Gruppen und Explore `medium` (Tabelle `ROLLEN` in `scripts/codex-rollen.mjs`); das Modell wird geerbt und im Probebericht anhand der Laufmetadaten benannt. Claude-Aliase haben keine belegte Codex-Entsprechung. Der Hauptagent übergibt den fachlichen Rollenvertrag aus der gemeinsamen Quelle; der Szenario-Agent erhält nur diesen Vertrag und das Ticket, keine zusätzliche Quellenbeschaffung.
 
-Alle Rollen reduzieren `apps`, `plugins`, `memories` und `request_permissions_tool`; der Szenario-Agent zusätzlich `shell_tool`. Die Lens behält die für isolierte Sabotage nötigen Werkzeuge. **Read-Pflicht der Rollenquellen:** wo die Claude-Skills `Read` verlangen, entspricht in Codex `exec_command` mit einem Node-Lesebefehl; Pfad- und Holdout-Grenzen bleiben unverändert, Shell-Lesen ist kein Quarantäne-Grund (die generierten Rollentexte nennen das; die praktische Prüfung gehört zur Abnahme factory#249). Diese Reduktionen sind **keine** vollständige Tool-Allowlist, Read-only-Sandbox oder Quarantäne. `sandbox_mode`, `approval_policy` und `mcp_servers` lassen sich durch eine Custom-Agent-Datei nicht unabhängig von der Elternsession überschreiben. Eine TOML-Datei oder ein Prompt-Verbot allein belegt keine Rechteisolation.
+Alle Rollen reduzieren `apps`, `plugins`, `memories` und `request_permissions_tool`; der Szenario-Agent zusätzlich `shell_tool`. Die Lens behält die für isolierte Sabotage nötigen Werkzeuge. **Read-Pflicht der Rollenquellen:** wo die Claude-Skills `Read` verlangen, entspricht in Codex `exec_command` mit einem Node-Lesebefehl; Pfad- und Holdout-Grenzen bleiben unverändert, Shell-Lesen ist kein Quarantäne-Grund (die generierten Rollentexte nennen das; die praktische Prüfung gehört zur Gesamtabnahme factory#367). Diese Reduktionen sind **keine** vollständige Tool-Allowlist, Read-only-Sandbox oder Quarantäne. `sandbox_mode`, `approval_policy` und `mcp_servers` lassen sich durch eine Custom-Agent-Datei nicht unabhängig von der Elternsession überschreiben. Eine TOML-Datei oder ein Prompt-Verbot allein belegt keine Rechteisolation.
 
 ## Konkrete Aufrufe
 
@@ -133,7 +135,7 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (der `PreToolUse`-Dispatcher hat den Adapter `scripts/codex-hook.mjs`, dessen transitive Importe den Dispatcher und seine Guards decken; die übrigen Hooks ohne Codex-Adapter mit Grenze factory#365 bzw. factory#249) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#249.
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (der `PreToolUse`-Dispatcher hat den Adapter `scripts/codex-hook.mjs`, dessen transitive Importe den Dispatcher und seine Guards decken; die übrigen Hooks ohne Codex-Adapter mit Grenze factory#365 bzw. factory#249) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#367 (Epic factory#249).
 
 ## Quellen
 
