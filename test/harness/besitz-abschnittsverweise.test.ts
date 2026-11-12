@@ -33,7 +33,7 @@
  * Repo existiert, auch für Projekt-Text; sie bleiben, denn ohne sie fiele ein toter Anker außerhalb des Kerns oder in der Fabrik nicht mehr auf. Eine Überschneidung (ein toter Kern-Verweis wird von beiden Seiten
  * gemeldet) ist gewollt und kein Doppelschutz derselben Regel.
  * Bewusste Grenze der Erkennung: nur Verweise, die einen Abschnitt nennen (`<pfad>.md › A` / `§ A`, auch `\`<pfad>.md\` › A`); eine bloße Seitennennung ohne Abschnitt (`Mechanik: docs/x.md`) oder ein Satz mit Komma
- * (`docs/x.md, Abschnitt A`) ist kein Abschnittsverweis und bleibt unerfasst.
+ * (`docs/x.md, Abschnitt A`) ist kein Abschnittsverweis und bleibt unerfasst; die Zitatform `<pfad>.md § „A“` ist ein Abschnittsverweis (wie die Fabrik-Form mit Zitat geprüft).
  *
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
  * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
@@ -132,8 +132,18 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
 
   test("ein Verweis mit Pfad in Backticks (`docs/seite.md` › A) zählt wie jeder andere: ohne Link rot, als Link-Text mit Listenanker grün", () => {
     assert.deepEqual(grund(mit("Siehe `docs/seite.md` › Echte Überschrift\n")), ["(a)"]);
-    assert.deepEqual(grund(mit("Siehe `docs/seite.md` › Gibtsnicht\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("Siehe `docs/seite.md` § Echte Überschrift\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("Siehe [`docs/seite.md` § Echte Überschrift](docs/seite.md#echte-überschrift)\n")), []);
+    assert.deepEqual(grund(mit("Siehe [`docs/seite.md` › Andere](docs/seite.md#echte-überschrift)\n")), ["(e)"]);
     assert.deepEqual(grund(mit("Siehe [`docs/seite.md` › Echte Überschrift](docs/seite.md#echte-überschrift)\n")), []);
+  });
+
+  test("Zitatform `<pfad>.md § „A“`: ohne Link rot (a), als Link-Text mit Listenanker grün; Fabrik-Form mit Zitat wird gegen die Seite geprüft", () => {
+    assert.deepEqual(grund(mit("Siehe docs/seite.md § „Echte Überschrift“\n")), ["(a)"]);
+    assert.deepEqual(grund(mit("Siehe [docs/seite.md § „Echte Überschrift“](docs/seite.md#echte-überschrift)\n")), []);
+    const f = (text: string): string[] => funde(scanneFabrik(mit(text)));
+    assert.deepEqual(f("Siehe docs/seite.md (Fabrik) › „Echte Überschrift“\n"), []);
+    assert.deepEqual(f("Siehe docs/seite.md (Fabrik) § „Gibt es nicht“\n"), ["skill.md -> docs/seite.md: Gibt es nicht"]);
   });
 
   test("ein Bild-Link `![…](…)` ist keine strenge Form (rot)", () => {

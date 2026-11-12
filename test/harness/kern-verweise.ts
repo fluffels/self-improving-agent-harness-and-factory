@@ -86,6 +86,14 @@ export function abgeleitet(vorspann: string, original: RegExp = drift.ABSCHNITT_
 export const FABRIK_VERWEIS = abgeleitet(String.raw`([\w./-]*\w\.md) \(Fabrik\) (›|§)`);
 /** `Projekt-Block › A` bzw. `§ A`: Verweis auf den Projekt-Block der AGENTS.md. */
 export const PROJEKT_BLOCK_VERWEIS = abgeleitet(String.raw`(Projekt-Block) (›|§)`);
+/** Zitatform `<pfad>.md § „A“` (auch `(Fabrik) ›`): Muster 8 sieht den Abschnitt nicht (`„` beendet ihn, das Segment ist leer). `fabrik` = mit ` (Fabrik)`. */
+const ZITAT_VERWEIS = /(?<![\w./-])([\w./-]*\w\.md)( \(Fabrik\))? (›|§) ?„([^"“\n]+)["“]/g;
+
+/** Verweise in Zitatform (Code nicht maskiert); Gruppen wie `Verweis`, `fabrik` trennt die Fabrik-Form von der normalen. Pur. */
+export function zitatVerweise(text: string): (Verweis & { fabrik: boolean })[] {
+  return [...text.matchAll(ZITAT_VERWEIS)].map((m) => ({ pfad: m[1], trenner: m[3], segmente: [m[4].trim()], index: m.index ?? 0, fabrik: m[2] !== undefined }));
+}
+
 /** `` `<pfad>.md` › A `` (Pfad in Backticks): ein Textverweis, den `check:docdrift` nicht sieht; für die strenge Form zählt er wie jeder andere. */
 export const BACKTICK_VERWEIS = abgeleitet(String.raw`\`([\w./-]*\w\.md)\` (›|§)`);
 /** `AGENTS.md (§ A`: Klammerform des Verweises auf AGENTS.md. */
@@ -194,7 +202,7 @@ export function strengeFunde(wurzel: string, erlaubt: Set<string>): { funde: Str
   let verweise = 0;
   for (const { datei, text, spannen } of dateien) {
     const stellen = drift.linkStellen(text);
-    for (const v of [...drift.abschnittVerweise(text, { istMarkdown: false }), ...verweiseNachMuster(BACKTICK_VERWEIS, text, false)]) {
+    for (const v of [...drift.abschnittVerweise(text, { istMarkdown: false }), ...verweiseNachMuster(BACKTICK_VERWEIS, text, false), ...zitatVerweise(text).filter((z) => !z.fabrik)]) {
       const ziel = zielVon(datei, v.pfad, lies);
       if (!imSpann(spannen, v.index) || ziel === undefined || ziel === "AGENTS.md" || ganzeDateien.has(ziel)) continue;
       verweise++;
@@ -226,7 +234,7 @@ export function scanneFabrik(wurzel: string): { funde: Fund[]; verweise: number 
   const funde: Fund[] = [];
   let verweise = 0;
   for (const { datei, text, spannen } of dateien) {
-    for (const v of verweiseNachMuster(FABRIK_VERWEIS, text, datei.endsWith(".md"))) {
+    for (const v of [...verweiseNachMuster(FABRIK_VERWEIS, text, datei.endsWith(".md")), ...zitatVerweise(text).filter((z) => z.fabrik)]) {
       if (!imSpann(spannen, v.index)) continue;
       verweise++;
       const ziel = zielVon(datei, v.pfad, lies);
