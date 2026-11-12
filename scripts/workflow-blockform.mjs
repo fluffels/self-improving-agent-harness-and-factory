@@ -486,7 +486,7 @@ export function blockformAusloeser(text) {
 
 /** Der Text des Job-Blocks: die Zeilen `von` bis `bis` (ohne) ohne Leer- und Kommentarzeilen, ohne Zeilenend-Kommentar (` #…`). */
 function blockText(c, von, bis) {
-  return c.z.slice(von, bis).map((s) => s.replace(/^[ \t]*#.*$|[ \t]+#.*$/, "")).filter((s) => s.trim() !== "").join("\n");
+  return c.z.slice(von, bis).map((s) => s.replace(/(?:^|[ \t]+)#.*$/, "")).filter((s) => s.trim() !== "").join("\n");
 }
 
 /** Ein Job für `blockformJobs`: liest `needs` (Skalar, Flow- oder Block-Liste), `if` und `uses` und merkt den Block-Text; `steps` und alles andere wird übersprungen. */
