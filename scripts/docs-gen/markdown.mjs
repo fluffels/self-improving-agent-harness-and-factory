@@ -356,8 +356,11 @@ export function linkZiel(datei, pfad) {
   return r === "." ? "" : r;
 }
 
-/** Der Markup-Schritt von Überschriften: `[text](url)` wird `text`, Inline-Markup-Zeichen entfallen (gemeinsam für `slugify` und die Stub-Überschriften). */
-export const entferneMarkup = (text) => text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_~]/g, "");
+/** Der Markup-Schritt von Überschriften: `[text](url)` wird `text`, Code-Span-Inhalt bleibt wörtlich, außerhalb entfallen `*`, `~`, einzelne Backticks und `_` (außer zwischen zwei Buchstaben/Ziffern, wie bei GitHub; gemeinsam für `slugify` und die Stub-Überschriften). */
+export const entferneMarkup = (text) =>
+  text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`]*)`|[`*~]|(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, (_m, code) => code ?? "");
 
 /** GitHub-Überschriften-Slug: klein, Markup entfernt, Satzzeichen/Emoji raus,
  *  Leerzeichen → Bindestrich. Duplikate hängt der Aufrufer mit -1/-2 an. */
