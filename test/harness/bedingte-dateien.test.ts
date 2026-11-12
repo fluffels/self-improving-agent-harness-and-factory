@@ -225,7 +225,7 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
     const ohneToken = e.kern.split("\n").map((z) => (z.includes(`${ORDNER}/umsetzer-gruppen.md`) ? z.split("GRUPPEN").join("X") : z)).join("\n");
     assert.match(befund(UMSETZER, { ...e, kern: ohneToken }), /umsetzer-gruppen\.md: die Zeile mit dem Pfad nennt die Bedingung nicht \(fehlt: GRUPPEN\)/);
     assert.deepEqual(KATALOG[0].dateien.flatMap((d) => d.tokens), [], "Review-Skill: mehr Pflicht wäre Härten ohne Evidenz");
-    assert.match(befund(UMSETZER, { ...e, rollen: e.rollen.map((r) => ({ ...r, quelle: "anderer-umsetzer" })) }), /keine Codex-Rolle mit Quelle factory-umsetzer/);
+    assert.match(befund(UMSETZER, { ...e, rollen: e.rollen.map((r) => (r.quelle === "factory-umsetzer" ? { ...r, quelle: "anderer-umsetzer" } : r)) }), /keine Codex-Rolle mit Quelle factory-umsetzer/);
     assert.match(befund(UMSETZER, { ...e, quellVerzeichnis: ".andere/skills" }), /liegt nicht im gemeinsamen Skill-Verzeichnis/);
     assert.deepEqual(bedingteDateienBefunde(KATALOG[0], { ...echt(KATALOG[0]), rollen: [], quellVerzeichnis: ".andere/skills" }), []);
   });

@@ -228,7 +228,7 @@ describe("CLI check-context-size: Gate-Meldung und Ausnahme im Bezieher (L17, L2
 
   test("L17 in-process: messeAlle liefert bei kaputtem Marker eine Meldung mit Ort und Fix, sonst die Messwerte", () => {
     temp((dir) => {
-      assert.ok(Array.isArray(messeAlle(dir, (t) => t)));
+      assert.deepEqual((messeAlle(dir, (t) => t) as Groesse[]).map((s) => [s.file, s.chars]), [["AGENTS.md", 0]], "misst die übergebene Wurzel, nicht das eigene Repo");
       datei(dir, ".agents/skills/proj/SKILL.md", `${START}\nohne Ende\n`);
       assert.match(messeAlle(dir, (t) => t) as string, /✖ .*SKILL\.md:1: Projektwert-Block hat kein Ende\nFix: /);
     });
