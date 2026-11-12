@@ -620,7 +620,7 @@ describe("warten: Branch aktualisieren (factory#375 L1)", () => {
     for (const s of stand) {
       let n = 0;
       P.warten({ hole: () => s, aktualisiere: () => void n++, ...u(), maxMs: 10_000, intervallMs: 30_000 });
-      expect(n, JSON.stringify(s.mergeStateStatus)).toBe(0);
+      expect(n, JSON.stringify(s.statusCheckRollup)).toBe(0);
     }
   });
   test("ohne aktualisiere-Naht bleibt es bei HINTER MAIN", () => {

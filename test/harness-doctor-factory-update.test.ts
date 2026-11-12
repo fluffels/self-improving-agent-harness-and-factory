@@ -186,39 +186,16 @@ describe("dependabotAusschlussPunkt", () => {
   });
   test("nicht gelesene Formen sind NICHT PRÜFBAR: Tab, Flow-Eintrag, Anker, Alias, doppelte Schlüssel, mehrzeilige Flow-Liste, Block-Skalar", () => {
     const aktion = "  - package-ecosystem: github-actions\n";
+    const ex = (rest: string) => `updates:\n${aktion}    exclude-paths:${rest}\n`;
+    const np = "updates:\n  - package-ecosystem: npm\n";
     const faelle = [
-      "updates:\n\t- package-ecosystem: github-actions\n",
-      "updates:\n  - {package-ecosystem: github-actions}\n",
-      "updates:\n  - &a\n",
-      `updates:\n${aktion}    exclude-paths: *a\n`,
-      `updates:\n${aktion}    exclude-paths: [a,\n      b]\n`,
-      `updates:\n${aktion}    exclude-paths: |\n      a\n`,
-      `updates:\n${aktion}    exclude-paths: []\n    exclude-paths: []\n`,
-      `updates:\n${aktion}    exclude-paths:\n      - "a\n`,
-      `updates:\n${aktion}    exclude-paths:\n      -\n`,
-      `updates:\n${aktion}    exclude-paths: [a,,b]\n`,
-      "updates:\n  - package-ecosystem:\n",
-      "updates:\n  -\n    package-ecosystem: github-actions\n",
-      "updates:\n  - package-ecosystem: x\n  y\n",
-      "updates:\n- package-ecosystem: x\nupdates: []\n",
-      `updates:\n${aktion}    exclude-paths:\n      - "\n`,
-      `updates:\n${aktion}    exclude-paths:\n      - "a"b"\n`,
-      `updates:\n${aktion}    exclude-paths:\n      - "a\\b"\n`,
-      `updates:\n${aktion}    exclude-paths: [a, bc\n`,
-      `updates:\n${aktion}    exclude-paths: x\n      y\n`,
-      "updates:\n  - package-ecosystem: npm\n    directory: /\n   y: z\n",
-      "updates:\n  - package-ecosystem: npm\n    directory: /\n    foo\n",
-      "updates:\n  - package-ecosystem: npm\n      y\n",
-      "updates:\n  - 3\n - 4\n",
-      `updates:\n${aktion}    exclude-paths:\n      - a\n        - b\n`,
-      `updates:\n${aktion}    exclude-paths:\n      a: b\n`,
-      `updates:\n${aktion}    exclude-paths: "a\n`,
-      `updates:\n${aktion}   y: z\n`,
-      `updates:\n${aktion}    package-ecosystem: npm\n`,
-      "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n",
-      `  updates:\n${aktion}`,
-      "updates: []\nfoo:bar\n",
-      "updates:\n  -y\n",
+      "updates:\n\t- package-ecosystem: github-actions\n", "updates:\n  - {package-ecosystem: github-actions}\n", "updates:\n  - &a\n", "updates:\n  - package-ecosystem:\n",
+      "updates:\n  -\n    package-ecosystem: github-actions\n", "updates:\n  - package-ecosystem: x\n  y\n", "updates:\n- package-ecosystem: x\nupdates: []\n",
+      ex(" *a"), ex(" [a,\n      b]"), ex(" |\n      a"), ex(" []\n    exclude-paths: []"), ex(' [a,,b]'), ex(" [a, bc"), ex(' "a'), ex(" x\n      y"),
+      ex('\n      - "a'), ex('\n      -'), ex('\n      - "'), ex('\n      - "a"b"'), ex('\n      - "a\\b"'), ex("\n      - a\n        - b"), ex("\n      a: b"),
+      `updates:\n${aktion}   y: z\n`, `updates:\n${aktion}    package-ecosystem: npm\n`, `  updates:\n${aktion}`,
+      `${np}    directory: /\n   y: z\n`, `${np}    directory: /\n    foo\n`, `${np}      y\n`,
+      "updates:\n  - 3\n - 4\n", "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n", "updates: []\nfoo:bar\n", "updates:\n  -y\n",
     ];
     for (const roh of faelle) expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ ok: false, nichtPruefbar: true });
   });
@@ -342,7 +319,7 @@ function externeImporte(einstieg: string, lese: (pfad: string) => string): strin
     if (gesehen.has(pfad)) continue;
     gesehen.add(pfad);
     for (const m of lese(pfad).matchAll(IMPORT)) {
-      const name = m[1] as string;
+      const name = m[1];
       if (name.startsWith("./") || name.startsWith("../")) offen.push(join(dirname(pfad), name));
       else if (!name.startsWith("node:")) extern.add(name);
     }
