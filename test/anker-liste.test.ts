@@ -337,7 +337,7 @@ describe("istGemessen", () => {
 
 describe("istGemessen: JS/TS-Familie zusätzlich zu struktur.endungen", () => {
   const gem = (ankerRoh as unknown as { istGemessen: (p: string, q: unknown) => boolean }).istGemessen;
-  const java = { quelle: "backend/src", endungen: [".java"] };
+  const java = { quelle: "backend/src", wurzeln: ["backend/src"], endungen: [".java"] };
   test.each(["tools/x.mjs", "scripts/layers.cjs", "backend/src/A.java"])("%s ist gemessen", (p) => expect(gem(p, java)).toBe(true));
   test.each(["tools/x.test.mjs", "README.md", "x.mjs"])("%s ist nicht gemessen", (p) => expect(gem(p, java)).toBe(false));
   test("ohne greift auch für die Familie", () => expect(gem("tools/x.mjs", { ...java, ohne: ["tools/**"] })).toBe(false));
