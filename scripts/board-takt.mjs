@@ -510,15 +510,25 @@ export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "sc
     if (w.fehler) fehler = true;
   }
 
-  // Harness-Sammelticket: im Bezieher entfällt es (factory#202 L20, ADR 0031), sonst Füllstand (eigenes Fenster) auf der nachgezogenen Liste.
+  const sammel = sammelSchritte({ items, offene, repo, io, commits, abHarness, harnessIssues, dry, token, bezieher });
+  return { fehler: fehler || sammel.fehler };
+}
+
+/**
+ * Harness- und Langfuse-Sammelticket des Fabrik-Laufs (aus `fuehreTaktAus` herausgelöst, factory#379). Harness-Sammelticket: im Bezieher
+ * entfällt es (factory#202 L20, ADR 0031), sonst Füllstand (eigenes Fenster) auf der nachgezogenen Liste. Langfuse-Sammelticket zuletzt,
+ * damit Notfälle, Harness-Sammelticket und Status-Ticket vor ihm stehen.
+ */
+function sammelSchritte({ items, offene, repo, io, commits, abHarness, harnessIssues, dry, token, bezieher }) {
+  let fehler = false;
+  let liste = items;
   if (bezieher) io.log("Harness-Sammelticket: nichts (Bezieher, ADR 0031: nur im Factory-Repo)");
   else {
-    const hs = harnessSchritt({ items, offene, repo, io, commits, abHarness, harnessIssues, dry, token });
+    const hs = harnessSchritt({ items: liste, offene, repo, io, commits, abHarness, harnessIssues, dry, token });
     if (hs.fehler) fehler = true;
-    items = hs.items;
+    liste = hs.items;
   }
-  // Langfuse-Sammelticket (factory#379): zuletzt, damit Notfälle, Harness-Sammelticket und Status-Ticket vor ihm stehen.
-  const lf = langfuseSchritt({ items, repo, io, dry, token, rolle: "factory" });
+  const lf = langfuseSchritt({ items: liste, repo, io, dry, token, rolle: "factory" });
   return { fehler: fehler || lf.fehler };
 }
 
