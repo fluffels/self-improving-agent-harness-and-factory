@@ -201,6 +201,17 @@ describe("dependabotAusschlussPunkt", () => {
       "updates:\n  -\n    package-ecosystem: github-actions\n",
       "updates:\n  - package-ecosystem: x\n  y\n",
       "updates:\n- package-ecosystem: x\nupdates: []\n",
+      `updates:\n${aktion}    exclude-paths:\n      - "\n`,
+      `updates:\n${aktion}    exclude-paths:\n      - "a"b"\n`,
+      `updates:\n${aktion}    exclude-paths:\n      - "a\\b"\n`,
+      `updates:\n${aktion}    exclude-paths: [a, b\n`,
+      `updates:\n${aktion}    exclude-paths:\n      - a\n        - b\n`,
+      `updates:\n${aktion}    exclude-paths:\n      a: b\n`,
+      `updates:\n${aktion}    exclude-paths: "a\n`,
+      `updates:\n${aktion}   y: z\n`,
+      `updates:\n${aktion}    package-ecosystem: npm\n`,
+      "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n",
+      `  updates:\n${aktion}`,
     ];
     for (const roh of faelle) expect(pruefe(roh)[0], JSON.stringify(roh)).toMatchObject({ ok: false, nichtPruefbar: true });
   });
@@ -208,6 +219,8 @@ describe("dependabotAusschlussPunkt", () => {
     const voll = `---\n# Kommentar\nupdates:\n- package-ecosystem: 'github-actions' # Aktionen\n  exclude-paths: [".github/workflows/codeql.yml", '.github/workflows/zizmor.yml']\n`;
     expect(pruefe(voll)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
     expect(pruefe(voll.replaceAll("\n", "\r\n"))).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    expect(pruefe(`${voll}version: 2\n`)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]); // ein Schlüssel nach der Liste endet sie
+    expect(pruefe(`${voll}# Ende\n\n`)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
     expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths: []\n")[0]).toMatchObject({ ok: false });
     expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n")[0]).toMatchObject({ ok: false });
     expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    schedule:\n      interval: weekly\n")[0]).toMatchObject({ ok: false });

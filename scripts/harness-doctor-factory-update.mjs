@@ -75,7 +75,7 @@ const ohneKommentar = (s) => s.replace(/(^|[ \t])#.*$/, "").trim();
 /** Ein Skalar (plain oder in einem Quote-Paar); Anker, Alias, Tag, Block-Skalar, Flow und Escapes sind nicht lesbar. Leer bleibt leer. */
 function skalar(roh) {
   const s = ohneKommentar(roh);
-  if (s !== "" && SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
+  if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
   const q = s[0];
   if (q !== '"' && q !== "'") return s;
   if (s.length < 2 || !s.endsWith(q) || s.slice(1, -1).includes(q) || s.includes("\\")) throw nl("Quote oder Escape in einem Wert");
