@@ -74,7 +74,7 @@ const ABNAHME_TOOLS = [
 
 const SKILL = liesTicketAblauf();
 const LENSES = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
-/** Kern und bedingte Dateien des Umsetzers (factory#310): Gruppen-Absatz und Nachfolger-Vorlagen stehen in den bedingten Dateien neben dem Ablauf-Skill. */
+/** Kern und bedingte Dateien des Umsetzers (factory#310): der Gruppen-Absatz steht in den bedingten Dateien neben dem Ablauf-Skill. */
 const UMSETZER_BEDINGT = ["umsetzer-gruppen", "umsetzer-fortsetzung"].map((n) => liesMitProjektwerten(`.agents/skills/factory/${n}.md`));
 const UMSETZER = [liesMitProjektwerten(".claude/agents/factory-umsetzer.md"), ...UMSETZER_BEDINGT].join(NL);
 const GANZE_DATEIEN: [string, string][] = [
@@ -93,9 +93,6 @@ export function uebergabeProbleme(skill: string, lenses: string, umsetzer: strin
   if (abnahme.length !== 1) probleme.push(`erwartet genau eine Abnahme-Vorlage, gefunden ${abnahme.length}`);
   else if (!szenarioBezug(abnahme[0])) probleme.push("die Abnahme-Vorlage trägt keinen Szenario-Platzhalter (der Test wäre vakuös)");
   for (const b of bloecke) if (spawnTyp(b) !== "holdout-abnahme" && szenarioBezug(b)) probleme.push(`Vorlage ${spawnTyp(b) ?? "ohne Typ"} trägt Szenario-Bezug`);
-  const nachfolger = skill.split(NL).find((z) => z.startsWith("- **`uebergabe`**")) ?? "";
-  if (!nachfolger) probleme.push("Bullet uebergabe (Nachfolger-Vorlage) fehlt im Skill");
-  else if (szenarioBezug(nachfolger)) probleme.push("Nachfolger-Vorlage (Bullet uebergabe) trägt Szenario-Bezug");
   const gruppen = umsetzer.split(NL).find((z) => z.startsWith("**Gruppen (quellprojekt#1647")) ?? "";
   if (!gruppen) probleme.push("Absatz Gruppen fehlt in der Umsetzer-Definition");
   else if (szenarioBezug(gruppen)) probleme.push("Gruppen-Vorlage trägt Szenario-Bezug");
@@ -124,10 +121,7 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     assert.match(uebergabeProbleme(SKILL, lens, UMSETZER).join(NL), /Vorlage .*lens-arm\.mjs.* trägt Szenario-Bezug/);
   });
 
-  test("Negativ: Nachfolger-Bullet und Gruppen-Absatz mit Szenario-Bezug sind rot", () => {
-    const bullet = "- **`uebergabe`** (Phasen-Schnitt";
-    assert.ok(SKILL.includes(bullet));
-    assert.match(uebergabeProbleme(SKILL.replace(bullet, bullet + " <Szenarien>"), LENSES, UMSETZER).join(NL), /Nachfolger-Vorlage/);
+  test("Negativ: ein Gruppen-Absatz mit Szenario-Bezug ist rot", () => {
     const gruppen = "**Gruppen (quellprojekt#1647, ADR 0026):**";
     assert.ok(UMSETZER.includes(gruppen));
     assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace(gruppen, gruppen + " SZENARIEN")).join(NL), /Gruppen-Vorlage/);
@@ -138,11 +132,10 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     assert.match(uebergabeProbleme(SKILL.replace("<Szenarien aus Schritt 2>", "nichts"), LENSES, UMSETZER).join(NL), /vakuös/);
   });
 
-  test("Negativ: zwei Abnahme-Vorlagen, fehlender Nachfolger-Bullet und fehlender Gruppen-Absatz sind rot (kein stilles Nichtprüfen)", () => {
+  test("Negativ: zwei Abnahme-Vorlagen und fehlender Gruppen-Absatz sind rot (kein stilles Nichtprüfen)", () => {
     const bloecke = agentBloecke(SKILL).filter((b) => spawnTyp(b) === "holdout-abnahme");
     assert.equal(bloecke.length, 1);
     assert.match(uebergabeProbleme(SKILL + NL + bloecke[0], LENSES, UMSETZER).join(NL), /genau eine Abnahme-Vorlage, gefunden 2/);
-    assert.match(uebergabeProbleme(SKILL.replace("- **`uebergabe`** (Phasen-Schnitt", "- **`xuebergabe`** (Phasen-Schnitt"), LENSES, UMSETZER).join(NL), /Bullet uebergabe .* fehlt/);
     assert.match(uebergabeProbleme(SKILL, LENSES, UMSETZER.replace("**Gruppen (quellprojekt#1647", "**Gruppe (quellprojekt#1647")).join(NL), /Absatz Gruppen fehlt/);
   });
 
