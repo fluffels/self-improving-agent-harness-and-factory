@@ -146,6 +146,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       runden: review && Number.isInteger(review.runden) ? review.runden : null,
       blocker: review?.blocker ?? null,
       abnahme: abnahmeVon(body, abnahme, konfigZeilen),
+      reviewOverride: aktiverOverride(body, konfigZeilen.reviewOverride) !== null,
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
       festgefahren: festgefahren[pr.number] ?? 0,
       nacharbeit: nacharbeitVon({ pr: pr.number, ticket, mergeSha, mergedAt: pr.mergedAt, commits, jetzt }),

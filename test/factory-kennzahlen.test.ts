@@ -16,7 +16,7 @@ import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 import { fixture } from "./support/tmp-fixture";
 
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
-type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; abnahme: Abnahme };
+type Zeile = { pr: number; ticket: number | null; gemergt: string; runden: number | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; abnahme: Abnahme; reviewOverride?: boolean };
 type AbnahmeKenn = { gemessen: number; ersterDurchgang: number; entfaellt: number; override: number; ohne: number };
 type Kennzahlen = Record<string, number | AbnahmeKenn>;
 type Daten = { zeilen: Zeile[]; kennzahlen: Kennzahlen };
@@ -811,6 +811,19 @@ describe("Selbst-Audit (#1787): je Mechanismus eine Messung, Abweichung und Lüc
     expect(ohne.status).toBe("Lücke");
     expect(ohne.messung).toMatch(/ohne Review-Nachweiszeile/);
     expect(von({ zeilen: null }, "Lens-Zahl")).toMatchObject({ status: "Lücke", messung: "kein Lauf-Ergebnis" });
+  });
+
+  test("Lens-Zahl mit Review-Override (factory#402 L47): freigegebene Ausnahme, ohne Override bleibt ABWEICHUNG, gemischt listet nur den PR ohne Override", () => {
+    const frei = von({ zeilen: [ZEILE({ pr: 62, runden: 8, reviewOverride: true })] }, "Lens-Zahl");
+    expect(frei.status).toBe("ok");
+    expect(frei.messung).toContain("#62 (8)");
+    expect(frei.messung).toContain("Review-Override");
+    expect(von({ zeilen: [ZEILE({ pr: 62, runden: 8, reviewOverride: false })] }, "Lens-Zahl").status).toBe("ABWEICHUNG");
+    expect(von({ zeilen: [ZEILE({ pr: 62, runden: 8 })] }, "Lens-Zahl").status).toBe("ABWEICHUNG");
+    const gemischt = von({ zeilen: [ZEILE({ pr: 62, runden: 8, reviewOverride: true }), ZEILE({ pr: 63, runden: 9 })] }, "Lens-Zahl");
+    expect(gemischt.status).toBe("ABWEICHUNG");
+    expect(gemischt.messung).toContain("#63 (9)");
+    expect(gemischt.messung).not.toContain("#62 (8)");
   });
 
   test("auditAbschnitt: je Mechanismus eine Zeile Messung · Soll · Status; renderMarkdown hängt den Abschnitt nur mit Audit an", () => {

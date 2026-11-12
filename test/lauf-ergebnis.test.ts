@@ -269,6 +269,24 @@ describe("bewertePrs und Aggregate", () => {
   });
 });
 
+describe("Review-Override je PR (factory#402 L47)", () => {
+  const NL = String.fromCharCode(10);
+  const nachricht = (...zeilen: string[]) => ["feat: y (#40) (#50)", "", `${Z.plan}: ${PLANER}`, ...zeilen].join(NL);
+  const von = (...zeilen: string[]) => {
+    const prs = [pr({ number: 50, mergeCommit: { oid: "1".repeat(40) } })];
+    const commits = [commit(nachricht(...zeilen), MERGED, "1".repeat(40))];
+    return roh.bewertePrs({ prs, commits, ci: {}, festgefahren: {}, jetzt: SPAETER, konfigZeilen: Z }).zeilen[0].reviewOverride;
+  };
+  test("aktive Review-Override-Zeile des Projekt-Präfixes: true", () => {
+    assert.equal(von(`${Z.reviewOverride}: #268 Freigabe der Maintainerin`), true);
+  });
+  test("ohne Zeile, mit fremdem Präfix oder widerrufen: false", () => {
+    assert.equal(von(), false);
+    assert.equal(von("XX-Review-Override: #268 Freigabe"), false);
+    assert.equal(von(`${Z.reviewOverride}: #268 Freigabe`, `${Z.reviewOverride}: #268 entfällt`), false);
+  });
+});
+
 describe("Abnahme je PR (#1756)", () => {
   const NL = String.fromCharCode(10);
   const H = "b".repeat(40);
