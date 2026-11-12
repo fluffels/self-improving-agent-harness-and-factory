@@ -41,9 +41,9 @@ export const SOLL_JE_PUNKT = {
 };
 /** Die geschlossene Liste der Punktnamen, die eine Soll-Liste nennen darf. */
 export const PUNKTE = [...new Set([...SICHERHEIT_PUNKTE, ...Object.keys(SOLL_JE_PUNKT)])];
-/** Punkte des Prüflaufs (Harness-Doctor), deren Ergebnis nie fehlen darf: fehlt es, ist der Punkt „nicht prüfbar“. */
 /** Die einzigen Punkte, die ein Bezieher mit Grund abwählen darf (`projekt.punkteOhne`): sie hängen an Ruleset, Spiegel und Code-Scanning-Modul, die ein Projekt nicht haben muss. Alles andere (Secret Scanning, Push Protection, Dependabot, Admin-Recht, CodeQL-Sprachen) bleibt Pflicht. */
 export const ABWAEHLBAR = ["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"];
+/** Punkte des Prüflaufs (Harness-Doctor), deren Ergebnis nie fehlen darf: fehlt es, ist der Punkt „nicht prüfbar“. */
 const PFLICHT_DOCTOR = ["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Code-Scanning", "Ruleset", "Ruleset-Spiegel", "Admin-Recht"];
 
 const fehler = (text) => new Error(`${text}\nFix: .github/sicherheitspruefung.json prüfen (Struktur und Punktnamen: docs/agent-harness.md (Fabrik) § 2.2)`);

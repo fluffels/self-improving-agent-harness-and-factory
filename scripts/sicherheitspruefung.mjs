@@ -136,11 +136,12 @@ function lege(d, { titel, text }) {
 const STANDARD = { doctor: pruefLauf, schreibe: schreibenStandard, lese: lesenStandard, dateien: dateienStandard, env: process.env, log: console.log, err: console.error };
 
 /** Die aktiven Ausnahmen und Abwahlen der Soll-Liste als Logzeilen (bei jedem Lauf sichtbar, auch ohne Ticket). */
-const aktiveAbwahlen = (soll) => [
-  ...soll.ausnahmen.map((a) => `Dependabot-Ausnahme ${a.pfad}: ${a.grund}`),
-  ...soll.codeqlOhne.map((a) => `CodeQL ohne ${a.sprache}: ${a.grund}`),
-  ...soll.punkteOhne.map((a) => `Punkt abgewählt ${a.punkt}: ${a.grund}`),
-];
+const aktiveAbwahlen = (soll) =>
+  [
+    ...soll.ausnahmen.map((a) => `Dependabot-Ausnahme ${a.pfad}: ${a.grund}`),
+    ...soll.codeqlOhne.map((a) => `CodeQL ohne ${a.sprache}: ${a.grund}`),
+    ...soll.punkteOhne.map((a) => `Punkt abgewählt ${a.punkt}: ${a.grund}`),
+  ].map((z) => z.replace(/\s*\r?\n\s*/g, " "));
 
 /** Gibt die Entscheidung aus (Trockenlauf: Bericht und Entscheidung, nichts geschrieben) oder legt das Ticket an. */
 function ausfuehren({ trocken, e, titel, text }, io) {

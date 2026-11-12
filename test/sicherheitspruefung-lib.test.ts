@@ -18,6 +18,7 @@ const L = raw as unknown as {
   istTicket: (i: Record<string, unknown>, o: string, c: Record<string, unknown>) => boolean;
   entscheide: (a: Record<string, unknown>) => { aktion: string; grund: string };
   MARKER: string;
+  ABWAEHLBAR: string[];
   TITEL_PRAEFIX: string;
   BERICHT_MAX: number;
 };
@@ -68,6 +69,23 @@ describe("ladeSollListe", () => {
 });
 
 describe("punkteOhne", () => {
+  test("Orakel: die abwählbaren Punkte sind genau diese fünf", () => {
+    expect(L.ABWAEHLBAR).toEqual(["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"]);
+  });
+  test.each(["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Dependabot Alerts", "Dependabot-Abdeckung", "CodeQL-Sprachen", "Admin-Recht", "PVR", "Actions"])("Pflichtpunkt %s ist nicht abwählbar", (punkt) => {
+    expect(() => L.ladeSollListe(liste({ kern: KERN, projekt: { punkteOhne: [{ punkt, grund: "g" }] } }))).toThrow(/nicht abwählbar/);
+  });
+  test.each(["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"])("%s ist abwählbar und fällt aus der Punktliste", (punkt) => {
+    const s = L.ladeSollListe(liste({ kern: { ...KERN, punkte: [...KERN.punkte, punkt] }, projekt: { punkteOhne: [{ punkt, grund: "g" }] } }));
+    expect(s.punkte).not.toContain(punkt);
+  });
+  test("eine leere Punktliste ist ein Konfigurationsfehler", () => {
+    expect(() => L.ladeSollListe(liste({ kern: { ...KERN, punkte: ["Ruleset"] }, projekt: { punkteOhne: [{ punkt: "Ruleset", grund: "g" }] } }))).toThrow(/Punktliste ist leer/);
+  });
+  test("gültige Verzeichnisse mit Punkt oder Unterordner sind als Ausnahme erlaubt", () => {
+    const s = L.ladeSollListe(liste({ kern: KERN, projekt: { ausnahmen: [{ pfad: ".devcontainer", grund: "g" }, { pfad: "apps/web", grund: "g" }, { pfad: "./frontend", grund: "g" }] } }));
+    expect(s.ausnahmen).toHaveLength(3);
+  });
   test("wählt einen Kern-Punkt mit Grund ab und nennt ihn im Fuß des Tickets", () => {
     const s = L.ladeSollListe(liste({ kern: KERN, projekt: { punkteOhne: [{ punkt: "Required-Check", grund: "kein Ruleset im Plan" }] } })) as Soll & { punkteOhne: { punkt: string; grund: string }[] };
     expect(s.punkte).toEqual(["Secret Scanning", "Dependabot Alerts"]);
@@ -80,7 +98,7 @@ describe("punkteOhne", () => {
 });
 
 describe("filtere", () => {
-  test("Admin-Recht ist Pflicht-Punkt; der Fix nennt punkteOhne", () => {
+  test("Admin-Recht ist Pflicht-Punkt; punkteOhne steht nur im Fix der abwählbaren Punkte", () => {
     const r = L.filtere([], ["Admin-Recht", "Ruleset-Spiegel", "Secret Scanning"]);
     expect(r.map((x) => x.punkt)).toEqual(["Secret Scanning", "Ruleset-Spiegel", "Admin-Recht"]);
     expect(r[1].fix).toMatch(/punkteOhne/);
