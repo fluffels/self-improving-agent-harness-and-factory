@@ -51,7 +51,6 @@ export function parseArgs(argv) {
   return a;
 }
 
-export { agentenNamen };
 
 function rezeptAusgeben(args, deps) {
   if (Number.isNaN(Date.parse(args.von)) || Number.isNaN(Date.parse(args.bis)) || Date.parse(args.von) >= Date.parse(args.bis)) {

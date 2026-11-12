@@ -15,14 +15,9 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { basisUrlAus, langfuseBasisUrl } from "./langfuse-zugang.mjs";
 import { istArbeitsplatzGeladen, leseLogDateien, logBasis, mcpVerbindung, serverOrdner, urlAbweichung } from "./mcp-log-lib.mjs";
-import { FRIST_MS, HEALTH_PFAD, bewerteHealth, pruefeLangfuse } from "./langfuse-health.mjs";
-
-export { FRIST_MS, HEALTH_PFAD, bewerteHealth, pruefeLangfuse };
+import { FRIST_MS, pruefeLangfuse } from "./langfuse-health.mjs";
 
 const HINWEIS = "Langfuse aus, bitte starten (lokal: Rancher Desktop prüfen, notfalls `rdctl shutdown` und `rdctl start`, FAQ „Langfuse lokal aus“).";
-
-/** Basis-URL aus der Umgebung ohne Schrägstrich am Ende. Pur. */
-export const basisUrl = langfuseBasisUrl;
 
 const MCP_FENSTER_MS = 24 * 3600 * 1000;
 
@@ -96,7 +91,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, out 
     return AUFRUF_EXIT;
   }
   const { sessionstart, json } = aufruf;
-  const baseUrl = basisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
+  const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
   const urteil = await pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
   if (urteil.ok && !sessionstart) return mcpLauf({ env, home, baseUrl, json, out, err, ...mcpOptionen });
   if (json) {
