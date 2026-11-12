@@ -92,7 +92,7 @@ const FIX_SAMMELTICKET = "Fix: node scripts/sammelticket-anlegen.mjs harness";
  */
 export const keinSammelticketText = ({ fuer, ci = false, trenner = "\n" }) =>
   `kein ungeclaimtes Harness-Sammelticket ${fuer}${trenner}${FIX_SAMMELTICKET}; ${
-    ci ? "im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut" : "ohne Zugriff dort die Zeile unter BEFUNDE im Bericht nennen"
+    ci ? "im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut" : "ohne Zugriff auf die Meldestelle die Zeile unter BEFUNDE im Bericht nennen"
   }`;
 
 /** `check-internalrefs --text` als Kindprozess; nur Exit 0 ist sauber. `exec` ist die Test-Naht (Standard `spawnSync`). */

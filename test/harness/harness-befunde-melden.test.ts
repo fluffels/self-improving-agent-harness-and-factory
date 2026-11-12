@@ -5,7 +5,7 @@
  * Scan-Umfang (geschlossen): (a) der Kern-Block der AGENTS.md, (b) jede verteilte Ganzdatei des Besitz-Manifests unter `.claude/agents/` und `.agents/skills/` (`.md`).
  * Einheit ist der Satzteil (Zeile, geteilt nach `.`, `;`, `!`, `?` und Leerraum). Ein Fund ist ein Satzteil mit einem TRIGGER-Wort (Harness-Befund, Sammelticket, `melden.mjs` …)
  * UND einem ROLLE-Wort (Bezieher, Fabrik, Factory-Repo, Factory-Board, upstream).
- * Grenzen: eine Heuristik mit zwei Wortlisten; eine Umschreibung ohne Listenwort fällt durch, zwei getrennte Sätze zählen nicht als Fund. Nicht gescannt: Factory-Seiten (`docs/`),
+ * Grenzen: eine Heuristik mit zwei Wortlisten; eine Umschreibung ohne Listenwort fällt durch (auch das blanke „Sammelticket“ und `sammelticket-anlegen.mjs` sind kein TRIGGER; die Position des Anlegens sichert `sammelticketPosition`), zwei getrennte Sätze zählen nicht als Fund. Nicht gescannt: Factory-Seiten (`docs/`),
  * der Projekt-Block (Form 4 erlaubt dort Fabrik-Text) und `.mjs`-Laufzeittexte (die Inventur der übrigen Rollen-Texte ist factory#222).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -46,8 +46,8 @@ function kernBlock(): { text: string; ab: number } {
 }
 
 /** Pur-nah: die verteilten Textdateien (ganze Datei, `.md` unter `.claude/agents` und `.agents/skills`) des Besitz-Manifests. */
-function umfang(): string[] {
-  const { eintraege } = ladeBesitzManifest<{ pfad: string; ring: string; block?: string; schluessel?: string }>();
+type Eintrag = { pfad: string; ring: string; block?: string; schluessel?: string };
+function umfang(eintraege: Eintrag[] = ladeBesitzManifest<Eintrag>().eintraege): string[] {
   return [...new Set(eintraege.filter((e) => istVerteilteGanzdatei(e) && TEXT_PFAD.test(e.pfad)).map((e) => e.pfad))].sort();
 }
 
@@ -73,6 +73,21 @@ describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
       expect(f[0]).toContain("x.md:1: nennt für Harness-Befunde eine Rolle");
       expect(f[0]).toContain("node scripts/melden.mjs");
     }
+  });
+
+  test("jede Alternative der Wortlisten löst allein (mit genau einem Wort der Gegenliste) einen Fund aus", () => {
+    for (const z of ["Harness-Befund beim Bezieher", "Kern-Befunde beim Bezieher", "Harness-Sammelticket beim Bezieher", "Harness-Härtung (gesammelt) beim Bezieher", "Sammelticket-Zeile beim Bezieher", "melden.mjs beim Bezieher"]) expect(rollenFunde("x.md", z), z).toHaveLength(1);
+    for (const z of ["melden.mjs beim Bezieher", "melden.mjs in der Fabrik", "melden.mjs im Factory-Repo", "melden.mjs auf dem Factory-Board", "melden.mjs upstream"]) expect(rollenFunde("x.md", z), z).toHaveLength(1);
+  });
+
+  test("Satzende mit ! oder ? trennt die Satzteile", () => {
+    expect(rollenFunde("x.md", "Ein Bezieher holt Updates! Harness-Befunde per melden.mjs.")).toEqual([]);
+    expect(rollenFunde("x.md", "Holt ein Bezieher Updates? Harness-Befunde per melden.mjs.")).toEqual([]);
+  });
+
+  test("nur Markdown unter .claude/agents und .agents/skills zählt zur Scan-Menge", () => {
+    const e = (pfad: string) => ({ pfad, ring: "kern" });
+    expect(umfang([e(".claude/agents/a.md"), e(".agents/skills/x/b.md"), e(".claude/agents/c.json"), e("docs/d.md")])).toEqual([".agents/skills/x/b.md", ".claude/agents/a.md"]);
   });
 
   test("rollenneutral oder in getrennten Sätzen: kein Fund; die Zeilennummer zählt ab `ab`", () => {

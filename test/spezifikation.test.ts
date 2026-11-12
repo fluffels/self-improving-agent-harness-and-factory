@@ -733,7 +733,7 @@ describe("gescheitert: scheiternde Reparatur wird eine Zeile im Sammelticket (#1
   });
   test("kein ungeclaimtes Sammelticket: voller Wortlaut der Agentenvariante", () => {
     const { io } = gumgebung({ ziel: null });
-    expect(S.fuehreAus(ARGS, io).err).toBe("✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; ohne Zugriff dort die Zeile unter BEFUNDE im Bericht nennen\n");
+    expect(S.fuehreAus(ARGS, io).err).toBe("✖ kein ungeclaimtes Harness-Sammelticket für die Zeile\nFix: node scripts/sammelticket-anlegen.mjs harness; ohne Zugriff auf die Meldestelle die Zeile unter BEFUNDE im Bericht nennen\n");
   });
 });
 
