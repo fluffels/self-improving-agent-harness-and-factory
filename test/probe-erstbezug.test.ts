@@ -413,8 +413,15 @@ describe("fuehreSchritte und baueFixture", () => {
       };
       temp((dir) => {
         const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s")) as { fuehre: (s: object) => number };
-        if (wirft) expect(() => n.fuehre({ argv: ["x"], cwd: "/", id: "a" })).toThrow(/spawn kaputt/);
-        else n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+        const fehler = (() => {
+          try {
+            n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
+            return null;
+          } catch (e) {
+            return String(e);
+          }
+        })();
+        expect(fehler === null ? "" : fehler).toBe(wirft ? "Error: spawn kaputt" : "");
       });
       expect(gesehen).toHaveLength(1);
       expect(ordnerMitMarke()).toEqual([]);
