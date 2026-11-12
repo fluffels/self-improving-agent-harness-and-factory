@@ -20,7 +20,7 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const checksAus = (regeln) => regeln.filter((r) => r.type === "required_status_checks").flatMap((r) => (r.parameters?.required_status_checks ?? []).map((c) => c.context)).sort();
 /** `strict_required_status_checks_policy` des Rulesets (Branch muss aktuell sein): `true`, wenn eine Regel `required_status_checks` es setzt. Fehlt `strict` im Spiegel, ist das nie gleich (fail-closed). */
 const strictAus = (regeln) => regeln.filter((r) => r.type === "required_status_checks").some((r) => r.parameters?.strict_required_status_checks_policy === true);
-const werkzeugeAus =(regeln) => regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? [])
+const werkzeugeAus = (regeln) => regeln.filter((r) => r.type === "code_scanning").flatMap((r) => r.parameters?.code_scanning_tools ?? [])
   .map((w) => ({ tool: w.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll, ist]) => [soll, w[ist]])) }))
   .sort((a, b) => String(a.tool).localeCompare(String(b.tool)));
 
