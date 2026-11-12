@@ -1,4 +1,5 @@
 /* @harness-waechter: Codex-Konfiguration und ausschließlich lokale Setup-Dateien (#79). */
+import { execFileSync } from "node:child_process";
 import { afterEach, expect, test, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
@@ -10,7 +11,7 @@ import * as cliRaw from "../../scripts/codex-setup.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import { LANGFUSE_LESE_TOOLS } from "../../scripts/langfuse-zugang.mjs";
 const c = raw as unknown as { setupDateien: (m: unknown, c: unknown, u: string, a?: string) => Record<string, string>; schreibeSetup: (r: string, f: Record<string, string>) => string[] };
-const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void) => number };
+const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void, d?: { istIgnoriert?: (p: string) => boolean }) => number };
 const config = { agenten: { planer: "probe-planer", umsetzer: "probe-umsetzer", lens: "probe-lens", gruppe: "probe-gruppe" } };
 const mcp = { mcpServers: { playwright: { command: "npx", args: ["--probe"] } } };
 const endpoint = "https://example.test/api/public/mcp";
@@ -26,7 +27,8 @@ function quelle() {
   mkdirSync(join(root, ".factory")); writeFileSync(join(root, ".factory/projekt.json"), JSON.stringify(cfg));
   writeFileSync(join(root, ".mcp.json"), JSON.stringify(mcp)); return root;
 }
-function lauf(root: string, args: string[]) { const out: string[] = [], err: string[] = []; const code = cli.main(args, root, x => out.push(x), x => err.push(x)); return { code, out, err }; }
+// Standard: alles gilt als ignoriert (die 9-Datei-Annahmen der übrigen Tests); die Ignore-Tests (factory#397) übergeben `d` bzw. `null` (echte git-Prüfung).
+function lauf(root: string, args: string[], d: { istIgnoriert?: (p: string) => boolean } | null = { istIgnoriert: () => true }) { const out: string[] = [], err: string[] = []; const code = cli.main(args, root, x => out.push(x), x => err.push(x), d ?? undefined); return { code, out, err }; }
 
 test("Auth ist externer vollständiger Authorization-Header; keine Berechtigungsaufweichung", () => {
   const files = c.setupDateien(mcp, config, endpoint);
@@ -201,4 +203,42 @@ test("Setup stoppt, wenn der Hook-Adapter als Quelle fehlt", () => {
   const r = lauf(root, ["--langfuse-url", endpoint]);
   expect(r.code).not.toBe(0);
   expect(r.err.join()).toContain("scripts/codex-hook.mjs");
+});
+
+function gitRepo(ignore?: string) {
+  const ziel = temp();
+  execFileSync("git", ["init", "-q", ziel]);
+  if (ignore !== undefined) writeFileSync(join(ziel, ".gitignore"), ignore);
+  return ziel;
+}
+const gitIn = (cwd: string, ...a: string[]) => { try { return { status: 0, out: execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }) }; } catch (e) { return { status: (e as { status: number }).status, out: "" }; } };
+
+test("L10 (factory#397): ohne Ignore im Ziel entsteht .codex/.gitignore; danach ist alles ignoriert und git status sauber", () => {
+  const root = quelle(), ziel = gitRepo();
+  const r = lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"], null);
+  expect(r.code).toBe(0);
+  expect(r.out.join()).toContain(".codex/.gitignore");
+  expect(readFileSync(join(ziel, ".codex/.gitignore"), "utf8")).toContain("/hooks.json");
+  expect(gitIn(ziel, "check-ignore", "-q", ".codex/hooks.json").status).toBe(0);
+  expect(gitIn(ziel, "status", "--porcelain").out).toBe("");
+  // Idempotenz: zweiter Lauf schreibt nichts mehr
+  expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"], null).out.join()).toContain('"dateien":[]');
+});
+test("L10 Negativfall: ist schon alles ignoriert, entsteht keine .codex/.gitignore", () => {
+  const root = quelle(), ziel = gitRepo(".codex/config.toml\n.codex/agents/\n.codex/hooks.json\n");
+  const r = lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"], null);
+  expect(r.code).toBe(0);
+  expect(r.out.join()).not.toContain(".codex/.gitignore");
+  expect(existsSync(join(ziel, ".codex/.gitignore"))).toBe(false);
+});
+test("L10: die Vorschau nennt .codex/.gitignore, wenn nicht ignoriert (Injektion), schreibt aber nichts", () => {
+  const root = quelle();
+  const r = lauf(root, ["--langfuse-url", endpoint], { istIgnoriert: () => false });
+  expect(r.out.join()).toContain(".codex/.gitignore");
+  expect(existsSync(join(root, ".codex"))).toBe(false);
+});
+test("L10: ohne git im Ziel (Exit 128) gilt als nicht ignoriert, die Datei wird geschrieben", () => {
+  const root = quelle(), ziel = temp();
+  expect(lauf(root, ["--langfuse-url", endpoint, "--ausgabe", ziel, "--write"], null).code).toBe(0);
+  expect(existsSync(join(ziel, ".codex/.gitignore"))).toBe(true);
 });

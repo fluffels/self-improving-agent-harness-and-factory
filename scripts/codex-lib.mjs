@@ -44,6 +44,14 @@ export function setupDateien(mcp, config, endpoint, langfuseAuth = "env") {
   return files;
 }
 
+/** Inhalt von `.codex/.gitignore` (factory#397): ignoriert die lokal erzeugten Dateien und sich selbst; die Projekt-`.gitignore` bleibt unberührt (Projektbesitz). */
+export const CODEX_IGNORE_TEXT = "# von codex-setup erzeugt, lokal: Codex-Setup ist reproduzierbar, Entwürfe und MCP-Adressen bleiben lokal.\n/config.toml\n/hooks.json\n/agents/\n/.gitignore\n";
+
+/** Ergänzt `.codex/.gitignore`, wenn mindestens eine erzeugte Datei nicht ignoriert ist (`istIgnoriert(pfad)`); sonst unverändert (rein). */
+export function ignoreErgaenzen(dateien, istIgnoriert) {
+  return Object.keys(dateien).every((p) => istIgnoriert(p)) ? dateien : { ...dateien, ".codex/.gitignore": CODEX_IGNORE_TEXT };
+}
+
 /** Prüft `pfad` und alle Komponenten bis einschließlich `wurzel` (Vorfahren oberhalb, etwa /var auf macOS, bleiben unbeachtet); tote Symlinks zählen, kein Link wird gefolgt. Keine Race-Garantie. */
 function ohneSymlinks(pfad, wurzel) {
   ohneSymlinksBis(pfad, dirname(resolve(wurzel)));
