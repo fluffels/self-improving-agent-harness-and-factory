@@ -128,6 +128,9 @@ test("V3 Negativfälle: Hook ohne Zeile, Zeile ohne Hook, Grenze ohne Ticket, Ad
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: quellprojekt#12" }], {})).toEqual([]); // beide Herkünfte
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: factory#" }], {})).toHaveLength(1); // Nummer fehlt
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "xSessionStart factory#365" }], {})).toHaveLength(1); // Teilwort davor
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "XSessionStart factory#365" }], {})).toHaveLength(1); // Großbuchstabe davor
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStartx factory#365" }], {})).toHaveLength(1); // Kleinbuchstabe danach
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart factory365" }], {})).toHaveLength(1); // ohne Raute
   const quellen: Record<string, string> = { "scripts/codex-x.mjs": 'import { a } from "./m.mjs";', "scripts/m.mjs": "export const a = 1;" };
   const lies = (p: string) => { if (!(p in quellen)) throw new Error(`nicht da: ${p}`); return quellen[p]; };
   const imp = { "scripts/codex-x.mjs": quellen["scripts/codex-x.mjs"] };
@@ -158,7 +161,12 @@ test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Ab
   expect(v5(doku(`${alle}, \`NeuesEreignis\` abgerufen am 2026-11-12`))).toHaveLength(1);
   expect(v5(doku(alle))[0]).toContain("Abrufdatum");
   expect(v5(doku(`${alle} abgerufen am gestern`))).toHaveLength(1);
-  expect(v5(`# Titel\n\n${ABSCHNITT}\n\n${alle}. abgerufen am 2026-11-12.\n`)).toEqual([]); // letzter Abschnitt der Seite
+  expect(v5(`# Titel\n\n${ABSCHNITT}\n\n${alle}. abgerufen am 2026-11-12`)).toEqual([]); // letzter Abschnitt, ohne Schluss-Zeilenumbruch
+  expect(v5(doku(`${alle} Stand 2026-11-12`))).toHaveLength(1); // Datum ohne „abgerufen am“
+  expect(v5(doku(`${alle} abgerufen am 2026-11`))).toHaveLength(1); // unvollständiges Datum
+  expect(v5(doku(`${alle} abgerufen am 2026-11-12 \`X\``))).toEqual([]); // einzelner Großbuchstabe ist kein Ereignis
+  expect(v5(doku(`Einleitung\n\n### Unterabschnitt\n\n${alle} abgerufen am 2026-11-12`))).toEqual([]); // ### beendet den Abschnitt nicht
+  expect(v5(`# Titel\n\n### Tracing-Ausfallstopp und Sitzungs-Hooks\n\n${alle} abgerufen am 2026-11-12\n`)).toHaveLength(1); // Unterüberschrift ist kein Abschnitt
 });
 test("V4 Negativfall: zu große AGENTS.md", () => {
   expect(v4(CODEX_AGENTS_MAX_BYTES)).toEqual([]);

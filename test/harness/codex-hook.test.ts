@@ -282,7 +282,7 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
     });
   }
   test("werfende Health und Urteil ohne ok → Deny", async () => {
-    expect(grund(await lauf(spawn, { health: () => { throw new Error("kaputt"); } }))).toContain("kaputt");
+    expect(grund(await lauf(spawn, { health: () => { throw new Error("kaputt"); } }))).toContain("Health-Prüfung gescheitert: kaputt");
     expect(grund(await lauf(spawn, { health: () => Promise.resolve({}) }))).toContain("Tracing-Ausfallstopp");
   });
   test("erreichbar: Guard-Entscheid bleibt, Health genau einmal je spawn_agent", async () => {

@@ -13,9 +13,9 @@ import * as raw from "../../scripts/codex-vorpruefung.mjs";
 import * as lib0 from "../../scripts/codex-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as healthRaw from "../../scripts/langfuse-health.mjs";
-const health = healthRaw as unknown as { pruefeLangfuseAusUmgebung: (n: Record<string, unknown>) => Promise<{ ok: boolean }> };
+const health = healthRaw as unknown as { pruefeLangfuseAusUmgebung: (n?: Record<string, unknown>) => Promise<{ ok: boolean }> };
 type Naht = { fetchImpl?: unknown; fristMs?: number; env?: Record<string, string>; out: (s: string) => void; err: (s: string) => void; lade: () => unknown; root: string; codexVersion?: () => string | null; freigaben?: unknown; werkzeug?: () => unknown[] };
-const p = raw as unknown as { main: (a: string[], n: Naht) => Promise<number>; tracingMaengel: (n: Record<string, unknown>) => Promise<string[]>; installierteCodexVersion: (n: { plattform: string; spawn: (...a: unknown[]) => unknown }) => string | null };
+const p = raw as unknown as { main: (a: string[], n: Naht) => Promise<number>; tracingMaengel: (n?: Record<string, unknown>) => Promise<string[]>; installierteCodexVersion: (n: { plattform: string; spawn: (...a: unknown[]) => unknown }) => string | null };
 const gesund = { fetchImpl: () => Promise.resolve({ status: 200 }), env: { LANGFUSE_BASE_URL: "http://lf.test" } }; // kein Test trifft das echte Netz
 const SPERRE = "Nachweise 1, 2, 3, 4, 5";
 const config = { repo: "owner/probe", agenten: { planer: "p", umsetzer: "u", lens: "l", gruppe: "g" } };
@@ -234,6 +234,7 @@ for (const [name, stub] of ausfaelle) {
     const r = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(stub) });
     expect(r.code).toBe(1); expect(r.autonom).toBe(false);
     expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: /);
+    if (name === "Frist überschritten") expect(r.maengel?.[0]).toContain("Timeout nach 20 ms"); // fristMs wird bis pruefeLangfuse durchgereicht
   });
 }
 test("Tracing: erreichbar (HTTP 200) ergibt keinen Mangel, die Abfrage geht an <LANGFUSE_BASE_URL>/api/public/health", async () => {
@@ -247,6 +248,7 @@ test("Tracing: erreichbar (HTTP 200) ergibt keinen Mangel, die Abfrage geht an <
 test("Tracing: werfende Prüfung ergibt einen Mangel, kein Absturz; Standardfrist ist FRIST_MS", async () => {
   const werfend = await p.tracingMaengel({ ...ausfall(() => Promise.resolve({})), lies: () => "{}", home: "/x", env: null });
   expect(werfend).toHaveLength(1); expect(werfend[0]).toContain("Health-Prüfung gescheitert");
+  expect(werfend[0]).toContain("gescheitert (Cannot"); // e.message statt String(e)
   vi.useFakeTimers();
   try {
     const hang = p.tracingMaengel({ fetchImpl: (_u: string, o: { signal: AbortSignal }) => new Promise((_r, rej) => o.signal.addEventListener("abort", () => rej(new Error("abort")))), env: { LANGFUSE_BASE_URL: "http://lf.test" } });
@@ -276,6 +278,20 @@ test("Tracing-Standardwerte: global fetch, process.env, Home für die Plugin-Opt
     const settings = () => JSON.stringify({ pluginConfigs: { "langfuse@x": { options: { LANGFUSE_BASE_URL: "http://plugin.test/" } } } });
     expect(await p.tracingMaengel({ env: {}, lies: settings })).toEqual([]);
     expect(urls).toEqual(["http://plugin.test/api/public/health"]);
+  } finally {
+    vi.unstubAllGlobals(); vi.unstubAllEnvs();
+  }
+});
+test("Tracing: home und lies werden an die Adressauflösung durchgereicht, tracingMaengel ohne Argument nutzt die Standardwerte", async () => {
+  const gelesen: string[] = [];
+  const fetchImpl = () => Promise.resolve({ status: 200 });
+  await p.tracingMaengel({ env: {}, home: "/fixture", fetchImpl, lies: (pfad: string) => { gelesen.push(pfad); throw new Error("keine Settings"); } });
+  expect(gelesen).toEqual([join("/fixture", ".claude", "settings.json")]);
+  vi.stubGlobal("fetch", () => Promise.resolve({ status: 200 }));
+  vi.stubEnv("LANGFUSE_BASE_URL", "http://env.test");
+  try {
+    expect(await p.tracingMaengel()).toEqual([]);
+    expect((await health.pruefeLangfuseAusUmgebung()).ok).toBe(true);
   } finally {
     vi.unstubAllGlobals(); vi.unstubAllEnvs();
   }
