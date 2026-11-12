@@ -217,27 +217,31 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
   });
   test("liest die echten Log-Dateien: Hauptcheckout-Ordner, nur Langfuse, Fenster ab jetzt − 24 h; ohne Ordner nicht prüfbar", async () => {
     const basis = mkdtempSync(join(tmpdir(), "vorb-logs-"));
-    const wurzel = "/dev/vorb-proj";
-    const dir = join(basis, "-dev-vorb-proj", "mcp-logs-langfuse");
-    mkdirSync(dir, { recursive: true });
-    const vor = (min: number) => new Date(Date.now() - min * 60000).toISOString();
-    writeFileSync(join(dir, "a.jsonl"), [START(vor(5)), REFUSED(vor(4))].join("\n"));
-    const zwei = new Date(Date.now() - 2 * 3600 * 1000);
-    utimesSync(join(dir, "a.jsonl"), zwei, zwei);
-    // Ein anderer Server mit jüngerem Erfolg darf das Urteil nicht überstimmen.
-    mkdirSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer"), { recursive: true });
-    writeFileSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer", "b.jsonl"), [START(vor(2)), ERFOLG(vor(1))].join("\n"));
-    const env = { ...CC, CLAUDE_PROJECT_DIR: `${wurzel}/.claude/worktrees/wt-1`, FACTORY_MCP_LOG_DIR: basis };
-    const lauf2 = async (e: Record<string, string | undefined>) => {
-      const err: string[] = [];
-      const code = await v.main([], e, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
-      return { code, err: err.join("\n") };
-    };
-    const r = await lauf2(env);
-    expect(r.code).toBe(1);
-    expect(r.err).toContain("ECONNREFUSED");
-    const leer = await lauf2({ ...env, FACTORY_MCP_LOG_DIR: join(basis, "gibt-es-nicht") });
-    expect(leer).toEqual({ code: 0, err: "Langfuse-MCP-Verbindung der Session nicht prüfbar (kein MCP-Log gefunden)." });
+    try {
+      const wurzel = "/dev/vorb-proj";
+      const dir = join(basis, "-dev-vorb-proj", "mcp-logs-langfuse");
+      mkdirSync(dir, { recursive: true });
+      const vor = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+      writeFileSync(join(dir, "a.jsonl"), [START(vor(5)), REFUSED(vor(4))].join("\n"));
+      const zwei = new Date(Date.now() - 2 * 3600 * 1000);
+      utimesSync(join(dir, "a.jsonl"), zwei, zwei);
+      // Ein anderer Server mit jüngerem Erfolg darf das Urteil nicht überstimmen.
+      mkdirSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer"), { recursive: true });
+      writeFileSync(join(basis, "-dev-vorb-proj", "mcp-logs-anderer", "b.jsonl"), [START(vor(2)), ERFOLG(vor(1))].join("\n"));
+      const env = { ...CC, CLAUDE_PROJECT_DIR: `${wurzel}/.claude/worktrees/wt-1`, FACTORY_MCP_LOG_DIR: basis };
+      const lauf2 = async (e: Record<string, string | undefined>) => {
+        const err: string[] = [];
+        const code = await v.main([], e, () => {}, (s) => err.push(s), { fetchImpl: antwort(200), home: "/h", lies: keineDatei });
+        return { code, err: err.join("\n") };
+      };
+      const r = await lauf2(env);
+      expect(r.code).toBe(1);
+      expect(r.err).toContain("ECONNREFUSED");
+      const leer = await lauf2({ ...env, FACTORY_MCP_LOG_DIR: join(basis, "gibt-es-nicht") });
+      expect(leer).toEqual({ code: 0, err: "Langfuse-MCP-Verbindung der Session nicht prüfbar (kein MCP-Log gefunden)." });
+    } finally {
+      rmSync(basis, { recursive: true, force: true });
+    }
   });
   test("liest die echten Log-Dateien je Prozess: neue Session-ID, Prozess-Datei getrennt, fremde Datei verbunden: Exit 1", async () => {
     const basis = mkdtempSync(join(tmpdir(), "vorb-logs2-"));
