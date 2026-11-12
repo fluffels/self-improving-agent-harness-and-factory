@@ -372,6 +372,19 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
     assert.deepEqual(rot("x\n", { ".claude/hooks/h.mjs": "AGENTS.md „Nur im Projekt“ und Projekt-Block › Git, PR und Merge\n" }), []);
   });
 
+  test("Grenzen der Extraktion: leerer Abschnittstext und Fragmente unter 3 Zeichen zählen nicht, ab 3 Zeichen ja", () => {
+    assert.deepEqual(verweiseNachMuster(drift.ABSCHNITT_VERWEIS, "docs/a.md § ", false), []);
+    assert.deepEqual(absatzVerweise("AGENTS.md „ab“"), []);
+    assert.deepEqual(absatzVerweise("AGENTS.md „abc“").map((v) => v.segmente), [["abc"]]);
+  });
+
+  test("außerhalb des Kerns: eine Kern-Datei in der Liste wird nicht doppelt gezählt, eine fehlende Datei übersprungen", () => {
+    const wurzel = agentsFixture("AGENTS.md § Kern-Regel gilt immer\n");
+    const einmal = scanneAgents(wurzel, []).verweise[1];
+    assert.equal(einmal, 1);
+    assert.equal(scanneAgents(wurzel, [".agents/skills/x/SKILL.md", ".claude/fehlt.md"]).verweise[1], einmal);
+  });
+
   test("Titel: Kern-Block, Vorlage bzw. Projekt-Block; ohne Projekt-Block bleibt die Vorlage leer (streng)", () => {
     assert.equal(vorlageOderProjektBlock("- **Vorlagen-Titel.**", AGENTS_TEXT), "- **Vorlagen-Titel.**");
     assert.match(vorlageOderProjektBlock(null, AGENTS_TEXT), /Nur im Projekt/);
