@@ -661,6 +661,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
   const m = checkDiffRaw as unknown as {
     prTitelAusEreignis: (env: Env, lies: (pfad: string) => string) => Ereignis;
     sammelOverrideFehler: (titel: string | null, grund: string) => string | null;
+    sammelOverrideLokal: (grund: string) => string | null;
   };
   const SAMMEL = `${FREMD.praefixe.commitZeile}9 Harness-Härtung (gesammelt): L44, L45 (factory#9)`;
   const lies = (inhalt: string) => () => inhalt;
@@ -720,6 +721,37 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     }
   });
 
+  test("sammelOverrideLokal (factory#402 L5): mehrere verschiedene Zeilen sind rot, eine oder keine nie", () => {
+    const f = m.sammelOverrideLokal("L5 und L21 brauchen Platz");
+    assert.equal(typeof f, "string");
+    assert.match(f ?? "", /Lokal ohne PR-Titel/);
+    assert.equal(m.sammelOverrideLokal("#402 L5 braucht 900 Zeilen"), null, "genau eine Zeile");
+    assert.equal(m.sammelOverrideLokal("L5 braucht L5"), null, "dieselbe Zeile zählt einmal");
+    assert.equal(m.sammelOverrideLokal("XL1 und L2"), null, "XL1 ist keine Zeilenmarke");
+    assert.equal(m.sammelOverrideLokal("L1x und L2"), null, "L1x ist keine Zeilenmarke");
+    assert.equal(typeof m.sammelOverrideLokal("L12 und L1"), "string", "L12 und L1 sind zwei");
+    assert.equal(m.sammelOverrideLokal(""), null, "kein Grund");
+    assert.equal(m.sammelOverrideLokal("breit, kein Zeilenbezug"), null, "keine Zeilenmarke");
+  });
+
+  test("checkDiffSize ohne PR-Ereignis: Mehrfach-Override → sammelOverride gesetzt, eine Zeile oder kein Override → null", () => {
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const git =
+      (log: string): RunGit =>
+      (a) => {
+        if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+        if (a[0] === "merge-base") throw new Error("keine Basis");
+        if (a[0] === "rev-parse") return "HEADSHA\n";
+        if (a[0] === "diff") return OVER;
+        if (a[0] === "log") return log;
+        throw new Error("unerwartet: " + a.join(" "));
+      };
+    const lauf = (log: string) => checkDiffSizeRoh({ zeilen: ZEILEN, runGit: git(log), env: { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" } } as never);
+    assert.equal(typeof lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit, auch L8\n`).sammelOverride, "string");
+    assert.equal(lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
+    assert.equal(lauf("").sammelOverride, null, "kein Override");
+  });
+
   test("checkDiffSize: Override über das Sammelticket → sammelOverride gesetzt, sonst null", () => {
     const OV = `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
     const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
@@ -760,7 +792,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     const SKRIPT = fileURLToPath(new URL("../scripts/check-diffsize.mjs", import.meta.url));
     const schluessel = commitZeilenAus(projektConfig()).diffsizeOverride;
     // Temp-Git-Repo: Basis-Commit, darauf ein Commit mit zwei Zeilen (über dem Budget von 1 Zeile) und der Override-Zeile; das Skript läuft mit cwd dort.
-    const cli = (titel: string, grund: string) => {
+    const cli = (titel: string | null, grund: string) => {
       const repo = fixture({ "a.txt": "a\n" });
       const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...a], { cwd: repo, encoding: "utf8" }).trim();
       git("init", "-q");
@@ -771,7 +803,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
       git("commit", "-q", "-am", `aenderung\n\n${schluessel}: #9 ${grund}`);
       const ereignis = join(repo, "ereignis.json");
       writeFileSync(ereignis, JSON.stringify({ pull_request: { title: titel } }));
-      const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", FACTORY_DIFF_BASE: basis, FACTORY_DIFFSIZE_MAX_LINES: "1", GITHUB_EVENT_PATH: ereignis };
+      const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", FACTORY_DIFF_BASE: basis, FACTORY_DIFFSIZE_MAX_LINES: "1", ...(titel === null ? {} : { GITHUB_EVENT_PATH: ereignis }) };
       return spawnSync(process.execPath, [SKRIPT], { cwd: repo, env, encoding: "utf8" });
     };
     test("Sammelticket mit zwei Zeilen im Grund: Exit 1, Meldung ohne Titel", () => {
@@ -783,6 +815,13 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     test("Sammelticket mit einer Zeile: der Override gilt, Exit 0", () => {
       const r = cli(SAMMEL, "L1 breit");
       assert.equal(r.status, 0, r.stdout + r.stderr);
+    });
+    test("ohne PR-Ereignis (lokal, factory#402 L5): mehrere Zeilen im Grund Exit 1, eine Zeile Exit 0", () => {
+      const rot = cli(null, "L1 L2 breit");
+      assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+      assert.match(rot.stderr, /Lokal ohne PR-Titel/);
+      const gruen = cli(null, "L1 breit");
+      assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     });
     test("normales Ticket mit zwei Zeilen im Grund: Exit 0", () => {
       const r = cli(`${FREMD.praefixe.commitZeile}9 Ticket (factory#9)`, "L1 L2 breit");
