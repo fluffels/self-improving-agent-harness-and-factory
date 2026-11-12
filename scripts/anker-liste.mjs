@@ -10,7 +10,7 @@
  * Regex-Literale: erkannt nach Zeilenanfang oder einem Operator aus `[=>(,:;!&|?{}[]` (auch nach `=>`); ein Regex-Literal nach anderem Vorlauf (etwa `return /x/`) fehlt, eine Division bleibt eine Division.
  * Zuordnung: nächster vorangehender Funktionskopf, auch wenn die Funktion davor schon endete; sonst `(Modulebene)`; der Kopf `if (istDirektaufruf(` (Spalte 0) zählt als `(Modulebene)`.
  * Ungetrackte Dateien mit Nicht-ASCII-Namen (git quotet sie) fehlen.
- * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste (Hilfsdateien wie `test/support/x.ts`); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
+ * Messumfang (`istGemessen`): Quellwurzeln und Endungsliste der Projekt-Config (`struktur.quelle`, `struktur.endungen`, `struktur.ohne`, auch die Listen- und Glob-Form) über `isMeasured`, dazu Nicht-Test-Dateien in jedem Unterverzeichnis mit einer Endung der Liste oder der JS/TS-Familie (Hilfsdateien wie `test/support/x.ts`, Werkzeugskripte `tools/x.mjs` auch bei Java-Profil); `*.test.*`/`*.spec.*`, `.d.ts`, Doku und Root-Dateien fehlen.
  * Bewusste Grenze: Testklassen ohne `.test.`/`.spec.` im Namen (Java: `RechnerTest.java`) zählen über die Ordner-Klausel als Hilfsdatei. Kein Gate.
  */
 import { execFileSync } from "node:child_process";
@@ -23,7 +23,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { TESTDATEI } from "./groessenstufe-lib.mjs";
-import { quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
+import { STANDARD_ENDUNGEN, quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const AUFRUF = "Aufruf: node scripts/anker-liste.mjs [--basis <ref>] [--json]";
@@ -187,10 +187,11 @@ export function lauf(argv, { git, lesen, istQuelle }) {
   return { code: 0, out: r.werte.json ? `${JSON.stringify(ergebnis)}\n` : formatiere(ergebnis), err: "" };
 }
 
-/** Pur: Quellwurzeln und Endungsliste (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`); Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
+/** Pur: Quellwurzeln und Endungsliste (`isMeasured`) oder das Verzeichnis als eigene Wurzel (`test/support/x.ts`, `tools/x.mjs`) mit Endungsliste plus JS/TS-Familie; Testdateien (`*.test.*`, `*.spec.*`, auch in der Quelle), Doku und Root-Dateien nie. */
 export function istGemessen(pfad, quelle) {
   const q = quellenObjekt(quelle);
-  return !TESTDATEI.test(pfad) && (isMeasured(pfad, q) || isMeasured(pfad, { ...q, wurzeln: [posix.dirname(pfad)] }));
+  const familie = { ...q, wurzeln: [posix.dirname(pfad)], endungen: [...new Set([...q.endungen, ...STANDARD_ENDUNGEN])] };
+  return !TESTDATEI.test(pfad) && (isMeasured(pfad, q) || isMeasured(pfad, familie));
 }
 
 /** Die echte Umgebung: git im Repo-Root, Dateien relativ dazu (nicht lesbar: `undefined`), Quelle aus der Projekt-Config. */
