@@ -248,7 +248,7 @@ describe("melden.mjs in der Fabrik (factory#221 AK1): kein Sync-Stand, Meldestel
       MELDESTELLE: REPO,
       REPO,
       ladeSammelKontext: (io: object) => inbox.ladeSammelKontext({ ...io, ladeOffene: () => [offene], ladeKommentare: () => [] }),
-      waehleSammelticket: (o: unknown, r: string, a: unknown) => inbox.waehleSammelticket(o, r, a as never, TITEL),
+      waehleSammelticket: (o: unknown, r: string, a: unknown) => inbox.waehleSammelticket(o, r, a, TITEL),
       postZeilen: (...a: unknown[]) => { posts.push(a); },
     };
     const code = await melden.main(["--zeile", "Defekt: x Beleg: #5 y"], {

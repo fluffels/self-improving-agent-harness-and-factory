@@ -52,7 +52,7 @@ const PFLICHT: Record<string, { name: string; muster: RegExp }[]> = {
     { name: "nur aus Evidenz", muster: /nur aus Evidenz/ },
     { name: "gemergter PR erledigt es nicht mehr", muster: /gemergter PR/ },
     { name: "sofort, Hauptchat direkt nach dem Bericht", muster: /\*\*sofort\*\* ein[^\n]*direkt nach dem Bericht/ },
-    { name: "Sammelticket nur im Factory-Repo", muster: /Sammelticket lebt nur im Factory-Repo/ },
+    { name: "Harness-Befunde nur per melden.mjs", muster: /Eintragen nur per `node scripts\/melden\.mjs`/ },
   ],
   ".agents/skills/factory/ablauf.md": [
     { name: "BEFUNDE:-Feld im Sitzungsabschluss", muster: /\*\*Sitzungsabschluss\.\*\*[^\n]*BEFUNDE:/ },
