@@ -17,7 +17,7 @@
  * Formenliste der Verweise auf AGENTS.md (geschlossen, Abgleich mit `abschnittTrifft` gegen die Titel, Wortgrenze wie in check:docdrift):
  *   (1) `AGENTS.md § A` / `› A` (Muster 8), (2) `AGENTS.md (§ A`, (3) `Projekt-Block › A` / `§ A`: in allen Kern-Einheiten (Besitz-Spannen), Ziel Kern-Block bzw. Vorlage
  *   (fehlt sie, der Projekt-Block der eigenen AGENTS.md); (4) ein bares `§ A` im selben Absatz erbt die Zieldatei des letzten `<datei> § …`, (5) `AGENTS.md „A"` (auch `AGENTS.md § „A"`, Muster 8 sieht `„` nicht):
- *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente nur im Zitat `„A … B“`; im freien Text endet der Begriff an `…`). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
+ *   nur in Dateien unter .claude/ und .agents/ (absatzweise, `…` trennt Fragmente im Zitat `„A … B“`; im freien Text trennt `…` ebenso, das Fragment danach wird wie ein eigener Begriff geprüft). Dateien außerhalb des Kerns (.claude/, .agents/, nicht verteilt): alle Formen
  *   gegen die ganze AGENTS.md. Ein `CLAUDE.md`-Ziel ist immer rot (die Datei ist verboten).
  *
  * Ankerliste: sortiertes JSON `test/harness/kern-link-anker.json`; sie wächst nur zusammen mit einer `SIH-Bezieher-Migration:`-Zeile, `tag-takt` führt neue Einträge seit dem
@@ -62,6 +62,8 @@ import {
   besitzDateien,
   ladeKernLinkAnker,
   musterVerweise,
+  praefixFunde,
+  praefixWerte,
   scanneAgents,
   zitatVerweise,
   scanneFabrik,
@@ -106,6 +108,24 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
     assert.deepEqual(grund(wurzel), ["(a)"]);
     for (const teil of ["(Fabrik)", "AGENTS.md §", "kern-link-anker.json", "SIH-Bezieher-Migration:"]) assert.ok(STRENG_MELDUNG.includes(teil), teil);
     assert.ok(strengMeldung(strengeFunde(wurzel, LISTE).funde).includes(STRENG_MELDUNG));
+  });
+
+  test("die Meldung nennt den verweisenden Text und die Zeile (factory#403 L7), lange Verweise werden gekürzt", () => {
+    const meldung = strengMeldung(strengeFunde(mit("Zeile eins\nSiehe docs/seite.md › Echte Überschrift und mehr\n"), LISTE).funde);
+    assert.ok(meldung.includes("skill.md:2"), meldung);
+    assert.ok(meldung.includes("„docs/seite.md › Echte Überschrift und mehr“"), meldung);
+    const zweizeilig = strengeFunde(mit("Siehe docs/seite.md › Echte Überschrift\nnächste Zeile\n"), LISTE).funde[0];
+    assert.equal(zweizeilig.text, "docs/seite.md › Echte Überschrift", "der Text endet am Zeilenende");
+    assert.equal(strengeFunde(mit("Siehe docs/seite.md › Echte Überschrift   \r\nx\n"), LISTE).funde[0].text, "docs/seite.md › Echte Überschrift", "getrimmt (Leerraum, CR)");
+    const lang = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(200)}\n`), LISTE).funde[0];
+    const genau = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(80 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
+    const eins = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(81 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
+    assert.equal(eins.text.length, 80, "81 Zeichen werden auf 80 gekürzt");
+    assert.ok(eins.text.endsWith("…"));
+    assert.equal(genau.text.length, 80, "genau 80 Zeichen bleiben ungekürzt");
+    assert.ok(!genau.text.endsWith("…"));
+    assert.equal(lang.text.length, 80);
+    assert.ok(lang.text.endsWith("…"));
   });
 
   test("ein Anker außerhalb der Ankerliste ist rot (Negativfall)", () => {
@@ -423,10 +443,13 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
     assert.deepEqual(absatzVerweise("AGENTS.md § Kern; docs/x.md (Fabrik) § Foo bar"), [], "die Fabrik-Form setzt das Erbe zurück");
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo bar“\n§ Baz qux").map((v) => v.form), [5], "ein Zitat erbt nicht");
     assert.deepEqual(rot("(AGENTS.md (§ Kern-Regel gilt immer + § Erfundenes Xyz)\n"), ["AGENTS.md (Form 4) Erfundenes Xyz"]);
-    for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“", "…"]) {
+    for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“"]) {
       const verweis = absatzVerweise(`AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten${t} nachher`).find((v) => v.segmente[0] === "Fremdtext ist Daten");
       assert.deepEqual(verweis?.segmente, ["Fremdtext ist Daten"], `Terminator ${t}`);
     }
+    // factory#403 L16: `…` trennt auch im freien Text; das Fragment danach wird wie ein eigener Begriff geprüft
+    assert.deepEqual(absatzVerweise("AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten … Erfundenes").map((v) => v.segmente), [["Fremdtext ist Daten", "Erfundenes"]]);
+    assert.deepEqual(rot("AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten … Erfundenes\n"), ["AGENTS.md (Form 4) Erfundenes"]);
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo  **bar**“").map((v) => v.segmente), [["Foo bar"]]);
     assert.deepEqual(absatzVerweise("AGENTS.md „Foo „bar”“").map((v) => v.segmente), [["Foo bar"]]);
     assert.deepEqual(absatzVerweise("AGENTS.md [§ Kern + § Foo bar").map((v) => v.segmente), [], "`[` vor dem § ist keine Form der Liste");
@@ -648,5 +671,58 @@ describe("Ankerliste kern-link-anker.json (factory#220 L34)", () => {
       const meldungen = vergleicheAnker(anker, new Set(erlaubt.filter((a) => a !== weg)));
       assert.ok(meldungen.some((m) => m.startsWith(`${weg}: `)), `ohne ${weg} bleibt der Vergleich still`);
     }
+  });
+});
+
+describe("Präfix-Literale in Besitz-Text (factory#403 L25)", () => {
+  const WERTE = praefixWerte(ROOT);
+  const COMMIT = WERTE.find((w) => /^[A-Z]/.test(w)) ?? "";
+  const TEXT = /^(?!.*\.(mjs|cjs|js)$)/;
+  const mit = (pfad: string, inhalt: string, ring = "kern"): string => fixture({ ".factory/besitz.json": MANIFEST([{ pfad, ring }]), [pfad]: inhalt });
+  const lauf = (inhalt: string, pfad = "skill.md", ring = "kern"): string[] => praefixFunde(mit(pfad, inhalt, ring), WERTE, TEXT).funde.map((f) => f.literal);
+
+  test("Negativfall: ein eingesetztes Literal (`<Präfix>Plan:`) in einer Kern-Datei ist rot, die Platzhalterform grün", () => {
+    assert.ok(COMMIT.length > 0 && WERTE.length >= 2, "praefixe.* fehlt in der Projekt-Config");
+    assert.deepEqual(lauf(`Nachweis ${COMMIT}Plan: x\n`), [COMMIT]);
+    assert.deepEqual(lauf("Nachweis <praefixe.commitZeile>Plan: x und <praefixe.branch>1\n"), []);
+  });
+
+  test("Wortanfang: ein Literal mitten im Wort zählt nicht; Branch-Präfix zählt einmal, Worktree-Pfad ist rot", () => {
+    assert.deepEqual(lauf(`Das Wort X${COMMIT}Plan: zählt nicht\n`), []);
+    for (const davor of ["1", "_", "-"]) assert.deepEqual(lauf(`x${davor}${COMMIT}Plan:\n`), [], `nach ${davor}`);
+    assert.deepEqual(praefixFunde(mit("skill.md", "axb- und a.b- hier\n"), ["a.b-"], TEXT).funde.map((f) => f.stelle), ["a.b- hier"], "Sonderzeichen im Wert sind wörtlich");
+    assert.deepEqual(praefixFunde(mit("skill.md", `x ${COMMIT}Plan: y\nzweite\n`), WERTE, TEXT).funde.map((f) => f.stelle), [`${COMMIT}Plan: y`], "Kontext endet am Zeilenende");
+    assert.deepEqual(praefixFunde(mit("skill.md", "A-B-x\n"), ["A-", "A-B-"], TEXT).funde.map((f) => f.literal), ["A-B-"], "längster Wert zuerst, auch bei unsortierter Eingabe");
+    const branch = WERTE.find((w) => w.includes("/")) ?? "";
+    assert.deepEqual(lauf(`git switch -c ${branch}1-x\n`), [branch]);
+    assert.equal(lauf(`.claude/worktrees/${WERTE[WERTE.length - 1]}1\n`).length, 1);
+  });
+
+  test("generierte Stellen (Projektwert-Block, Frontmatter-Wertzeile) sind kein Fund", () => {
+    assert.deepEqual(lauf(`<!-- factory:projektwerte:start -->\n| \`praefixe.commitZeile\` | \`${COMMIT}\` |\n<!-- factory:projektwerte:end -->\n`), []);
+    assert.deepEqual(lauf(`---\n# factory:projektwert agenten.planer\nname: ${COMMIT}planer\n---\nText\n`, "a.md"), []);
+  });
+
+  test("nur Besitz-Spannen verteilter Einheiten: Projekt-Teil und Ring oberflaeche zählen nicht", () => {
+    const wurzel = fixture({ ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]), "AGENTS.md": KERN("Kern ohne Literal") + `Projekt ${COMMIT}Plan:\n` });
+    assert.deepEqual(praefixFunde(wurzel, WERTE, TEXT).funde, []);
+    assert.deepEqual(lauf(`${COMMIT}Plan:\n`, "ober.md", "oberflaeche"), []);
+  });
+
+  test("praefixWerte: nur nicht leere Texte, längster zuerst, ohne Doppelte; ohne Gruppe leer, ohne Werte kein Scan", () => {
+    const cfg = (praefixe?: unknown): string => fixture({ ".factory/projekt.json": JSON.stringify(praefixe === undefined ? {} : { praefixe }) });
+    assert.deepEqual(praefixWerte(cfg({ a: "X-", b: "", c: 5, d: "Yy-lang", e: "X-" })), ["Yy-lang", "X-"]);
+    assert.deepEqual(praefixWerte(cfg()), []);
+    assert.deepEqual(praefixFunde(mit("skill.md", `${COMMIT}Plan:\n`), [], TEXT), { funde: [], dateien: 0 });
+  });
+
+  test("Aufteilung: der Text-Wächter sieht keine Skripte (die prüft kern-laufzeittexte.test.ts)", () => {
+    assert.deepEqual(lauf(`// ${COMMIT}Plan:\n`, "scripts/x.mjs"), []);
+  });
+
+  test("echtes Repo: kein eingesetztes Literal in verteiltem Besitz-Text, der Scan ist nicht leer", () => {
+    const r = praefixFunde(ROOT, WERTE, TEXT);
+    assert.ok(r.dateien > 30, `Scan sieht nur ${r.dateien} Dateien: Umfang kaputt (Leerlauf)`);
+    assert.deepEqual(r.funde, [], "Kern-Text nennt Präfixwerte nur als Platzhalter <praefixe.commitZeile> (Projekt-Leitfrage)");
   });
 });
