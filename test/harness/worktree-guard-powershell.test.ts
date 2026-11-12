@@ -47,6 +47,14 @@ const pruefe = (command: string, cwd: string = HAUPT) => g.bewertePowerShell({ c
 const blockt = (command: string, cwd?: string) => assert.equal(pruefe(command, cwd).block, true, command);
 const laeuft = (command: string, cwd?: string) => assert.equal(pruefe(command, cwd).block, false, command);
 
+describe("L77: Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
+  test("Lesebefehle auf commit-graphs und pre-commit laufen, git commit blockt weiter", () => {
+    laeuft("Get-ChildItem .git/objects/info/commit-graphs");
+    laeuft("Get-Content .git/hooks/pre-commit");
+    blockt("git commit -m x");
+  });
+});
+
 describe("Tokenizer: was zählt als Befehl (#1311)", () => {
   const worte = (s: string) => g.zerlege(s).map((st) => st.tokens.map((t) => t.value));
 

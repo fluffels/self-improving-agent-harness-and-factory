@@ -908,6 +908,13 @@ describe("CODEOWNERS-Spiegel (factory#382 L11, L69)", () => {
     }
   });
 
+  test("Zeilenform: Zeile ohne @owner zählt nicht, nur das erste Wort ist das Muster, Einrückung stört nicht", () => {
+    const quelle = JSON.stringify({ pflichtReview: ["/scripts/a.mjs", "/.github/CODEOWNERS", "/docs/"] });
+    expect(punktFuer(quelle, SOLL + "\n/ohne-owner/").ok).toBe(true);
+    expect(punktFuer(quelle, SOLL + "\n/dritte/ /b-extra/ @t").ok).toBe(true); // drei Wörter: keine CODEOWNERS-Zeile, kein Muster `b-extra/`
+    expect(punktFuer(quelle, eigenes(["  /scripts/a.mjs @team", "\t/.github/CODEOWNERS @team", " /docs/ @team"])).ok).toBe(true);
+  });
+
   test("(f) kaputtes JSON oder eine Gruppe, die keine Liste ist: Lücke mit Grund, kein Wurf", () => {
     for (const quelle of ["{kaputt", JSON.stringify({ pflichtReview: "x" })]) {
       const p = punktFuer(quelle, SOLL);

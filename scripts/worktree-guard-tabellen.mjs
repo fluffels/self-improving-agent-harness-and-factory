@@ -19,14 +19,14 @@ export { SHELLS, baseName };
 
 /** Benannte Wortteile der groben Regel (eine Quelle für coarseProtected, PowerShell- und Bash-Guard): "git"(.exe) bzw. commit/push als Wort. */
 export const GIT_WORT = /\bgit(\.exe)?\b/i;
-export const COMMIT_PUSH_WORT = /(?<![\w-])(commit|push)(?![\w-])/i;
+export const COMMIT_PUSH_WORT = /(?:(?<![\w-])|(?<=\bgit-))(commit|push)(?![\w-])/i;
 /** `git … commit|push` im selben Statement (Reihenfolge fest, Trenner `;`/`|` beendet). Groß-/Kleinschreibung egal (Windows: `GIT.EXE`). */
 export const GIT_COMMIT_PUSH = new RegExp(`${GIT_WORT.source}[^;|]*${COMMIT_PUSH_WORT.source}`, "i");
 
 /** Grobe Wortregel (Rückfall, wenn der Parser nicht zerlegen kann oder ein Interpreter den eigentlichen
  *  Befehl verbirgt): ein Segment (Split auf `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort, Reihenfolge egal.
  *  Bewusst grob und fail-closed: kann im Haupt-Checkout auch Text treffen, der nur beide Wörter nennt.
- *  Grenze: Bindestrich-Komposita (`commit-graphs`, `pre-commit`) zählen nicht als Wort. */
+ *  Grenze: Bindestrich-Komposita (`commit-graphs`, `pre-commit`) zählen nicht als Wort; die git-Binaries `git-commit`/`git-push` (Exec-Pfad) schon. */
 export function coarseProtected(command) {
   const segments = String(command).split(/&&|\|\||;|\n/);
   return segments.some((seg) => GIT_WORT.test(seg) && COMMIT_PUSH_WORT.test(seg));

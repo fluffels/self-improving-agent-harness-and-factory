@@ -126,7 +126,8 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(re.exec("ab-12-lens-r1-test-adaequanz")?.[1]).toBe("ab-12");
     expect(re.exec("ab-12-lens-m2-architektur")?.[1]).toBe("ab-12");
     expect(re.test("ab-12-lens-r1")).toBe(true); // alte Namen ohne Endung bleiben gültig
-    for (const schlecht of ["ab-12-lens-r1-", "ab-12-lens-r1-Test", "ab-12-lens-r1x", "ab-12-lens-r1-1", "ab-12-lens-r1-..", "ab-12-lens-r1-a/b"]) {
+    expect(re.test("ab-12-lens-r1-a")).toBe(true); // Endung mit einem Buchstaben
+    for (const schlecht of ["ab-12-lens-r1-", "ab-12-lens-r1-Test", "ab-12-lens-r1x", "ab-12-lens-r1-1", "ab-12-lens-r1-..", "ab-12-lens-r1-a/b", "ab-12-lens-r1-a-", "ab-12-lens-r1--a"]) {
       expect(re.test(schlecht), schlecht).toBe(false);
     }
     expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12-lens-r1-sicherheit/x")).toBe(true);
