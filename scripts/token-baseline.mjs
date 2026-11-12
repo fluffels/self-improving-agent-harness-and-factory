@@ -3,7 +3,7 @@
 /**
  * Token- und Loop-Baseline pro Ticket-Lauf (#1068): Tokens nach Phase × Modell
  * (Input / Cache-Write / Cache-Read / Output) plus Loop-Kennzahlen.
- * Aufruf, Phasen-Regeln und Baseline: docs/model-routing.md › Messen.
+ * Aufruf, Phasen-Regeln und Baseline: [docs/model-routing.md › Messen](../docs/model-routing.md#messen).
  *
  *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
  *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json] [--config <pfad>]
@@ -15,7 +15,7 @@
  *      Nur so vollständig wie die Hook-Aufzeichnung — ohne den lokalen
  *      Hook-Patch aus #1084 fehlt Folgearbeit nach Hintergrund-Subagenten
  *      (für #1064 der Großteil), mit Patch Calls und Tokens identisch. Die Baseline misst
- *      deshalb über das Transkript (docs/model-routing.md › Messen).
+ *      deshalb über das Transkript ([docs/model-routing.md › Messen](../docs/model-routing.md#messen)).
  *
  * Projekt-Brain-Kennzahlen (#1205): Tool-Events beider Quellen → `brain` (scripts/brain-metrics.mjs).
  *

@@ -29,4 +29,4 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 
 **Ab Runde 2 und bei jeder Delta-Lens** (Fix, Merge, Abnahme-Fix, CI-Fix) läuft `sicherheit` mit, wenn sie in der Vorrunde blockiert hat oder `node scripts/groessenstufe.mjs --pfade <Delta-Pfade>` `RISIKO: hoch` meldet. Wird der Diff erst nach Runde 1 hoch (Wechsel der Diff-Art): voller Satz samt `sicherheit` auf dem vollen Patch.
 
-**Nachweis:** `lenses` und `blocker` der Review-Zeile nennen `sicherheit`, der Nachweis-Commit trägt die Zeile `<praefixe.commitZeile>Bedrohungen:` aus dem Plan wörtlich (Format: docs/agent-harness.md §3a). Ohne beides bleibt `check-review-nachweis` rot.
+**Nachweis:** `lenses` und `blocker` der Review-Zeile nennen `sicherheit`, der Nachweis-Commit trägt die Zeile `<praefixe.commitZeile>Bedrohungen:` aus dem Plan wörtlich (Format: [docs/agent-harness.md §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)). Ohne beides bleibt `check-review-nachweis` rot.

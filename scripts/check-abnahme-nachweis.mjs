@@ -51,7 +51,7 @@ export function vertrauterMarker(kommentare, owner, zeilen) {
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",");
 
-/** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite docs/agent-harness.md §3a). */
+/** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)). */
 const vorlage = (zeilen) =>
   `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Größenstufe S: ${zeilen.abnahme}: entfaellt — klein: <Begründung>`;
 

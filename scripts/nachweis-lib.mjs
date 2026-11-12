@@ -18,7 +18,7 @@ export const KOMBI_LENS = "kombiniert";
 /** Sicherheits-Lens der Risikoklasse hoch (factory#334): läuft zusätzlich zu den Code-Brillen, Prüffragen in `brille-sicherheit.md`. */
 export const SICHERHEITS_LENS = "sicherheit";
 export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, SICHERHEITS_LENS, "doku"];
-/** Die vier Teile der Bedrohungs-Zeile (factory#334, Format: docs/agent-harness.md §3a); die Prüfregel steht nur in `bewerteKlasseHoch` (check-review-nachweis.mjs). */
+/** Die vier Teile der Bedrohungs-Zeile (factory#334, Format: [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)); die Prüfregel steht nur in `bewerteKlasseHoch` (check-review-nachweis.mjs). */
 export const BEDROHUNGS_TEILE = Object.freeze(["daten", "grenzen", "missbrauch", "datenschutz"]);
 
 export const HEX_HEAD = new RegExp(`^${HEX}$`);
