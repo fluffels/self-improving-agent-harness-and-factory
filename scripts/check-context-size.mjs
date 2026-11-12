@@ -13,6 +13,11 @@
  * brächte nur einen Gate-Config-Diff pro Content-PR). Bewusst KEIN Summen-Gate: modul-lokale
  * Dateien laden nur bei Bedarf, ein Summen-Cap bestrafte genau das Auslagern, das das
  * Wurzel-Gate erzwingen soll – die Summe steht darum nur als INFO in der CLI.
+ * Ladekette (factory#33): je Blatt-AGENTS.md gibt die CLI die Kette Wurzel + Vorfahren + Blatt mit
+ * Zeichensumme aus, ebenfalls nur INFO. Entscheidung: kein Ketten-Budget als Gate, weil jedes Glied
+ * schon ein Einzelbudget hat und ein Ketten-Cap entweder überflüssig ist (Wurzelbudget + Tiefe ×
+ * MODULE_AGENTS_BUDGET) oder das Auslagern in tiefere Ebenen bestraft. Neu entscheiden, sobald eine Kette
+ * Tiefe 2 erreicht oder ein Ablauf Codex in einem Unterordner startet (project_doc_max_bytes 32.768 Bytes).
  *
  * Hintergrund (#719): anders als src/-Module (check:size, #390) hatte die Wurzel-AGENTS.md,
  * die JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
@@ -50,8 +55,8 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
-import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund, zeichenOhneBlock } from "./kontext-budget-lib.mjs";
-import { leereProjektwerte, PROJEKTWERT_ENDE, PROJEKTWERT_START } from "./projektwert-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { ohneProjektwerte } from "./projektwert-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -70,9 +75,11 @@ export const MODULE_AGENTS_BUDGET = 12_000;
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
 
+const istAgentsMd = (file) => file.split("/").pop() === "AGENTS.md";
+
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
 export function collectAgentsFiles(rootDir = ROOT) {
-  return collectMarkdown(rootDir).filter((f) => f === "AGENTS.md" || f.endsWith("/AGENTS.md"));
+  return collectMarkdown(rootDir).filter(istAgentsMd);
 }
 
 /** Zeichenzahl je Kontextdatei gegen ihr Budget: alle konfigurierten Dateien (auch
@@ -88,27 +95,53 @@ export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, m
   });
 }
 
+// Ordner einer AGENTS.md; die Wurzel ("AGENTS.md" ist kürzer als der Schnitt) ergibt "".
+const ordnerVon = (file) => file.slice(0, -"/AGENTS.md".length);
+const istVorfahrOderSelbst = (a, b) => a === "" || b === a || b.startsWith(a + "/");
+
+/** Ladekette je Blatt-AGENTS.md (factory#33): ein Blatt ist eine AGENTS.md, unter deren Ordner keine weitere liegt (ohne modul-lokale Datei die Wurzel); die Kette sind alle AGENTS.md, deren Ordner Vorfahr des Blatt-Ordners oder dieser selbst ist, von der Wurzel zum Blatt. Absteigend nach Summe, Gleichstand nach Blatt. Nur AGENTS.md-Einträge aus `sizes` zählen. */
+export function ladeketten(sizes) {
+  const agents = sizes.filter((s) => s.file === "AGENTS.md" || s.file.endsWith("/AGENTS.md")).map((s) => ({ ...s, ordner: ordnerVon(s.file) }));
+  const blaetter = agents.filter((b) => !agents.some((o) => o.ordner !== b.ordner && istVorfahrOderSelbst(b.ordner, o.ordner)));
+  return blaetter
+    .map((b) => {
+      const glieder = agents.filter((a) => istVorfahrOderSelbst(a.ordner, b.ordner)).sort((x, y) => (x.ordner < y.ordner ? -1 : 1));
+      return { blatt: b.ordner, kette: glieder.map((g) => g.file), chars: glieder.reduce((sum, g) => sum + g.chars, 0) };
+    })
+    .sort((x, y) => y.chars - x.chars || (x.blatt < y.blatt ? -1 : 1));
+}
+
+const fmt = (n) => n.toLocaleString("de-DE");
+const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
+
+/** INFO-Zeilen zur Ladekette (factory#33), je Blatt eine; jede Kette mit der Höchstsumme trägt den Suffix "längste Ladekette, kein Gate". */
+export function ladekettenZeilen(ketten) {
+  const hoechst = Math.max(0, ...ketten.map((k) => k.chars));
+  return ketten.map(
+    (k) => `• INFO Ladekette ${k.blatt || "AGENTS.md"}: ${fmt(k.chars)} Zeichen (${tokens(k.chars)}) = ${k.kette.join(" + ")}${k.chars === hoechst ? " ← längste Ladekette, kein Gate" : ""}`,
+  );
+}
+
 /** Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` (nur oberste Ebene) und `.agents/skills/<name>/**`.md rekursiv, ohne AGENTS.md (die misst `collectAgentsFiles`); repo-relativer POSIX-Pfad, sortiert. */
 export function collectAgentSkillFiles(rootDir = ROOT) {
   const agenten = existsSync(join(rootDir, ".claude/agents"))
     ? readdirSync(join(rootDir, ".claude/agents"), { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => `.claude/agents/${e.name}`)
     : [];
-  return [...agenten, ...collectMd(rootDir, [QUELL_VERZEICHNIS])].filter((f) => f.split("/").pop() !== "AGENTS.md").sort();
+  return [...agenten, ...collectMd(rootDir, [QUELL_VERZEICHNIS])].filter((f) => !istAgentsMd(f)).sort();
 }
 
 /** Zeichenzahl je Agenten- und Skill-Datei gegen ihr Budget (Eintrag in `budgets`, sonst `defaultBudget`), gemessen OHNE Projektwerte (Block und Werte der Frontmatter-Zeilen); ein Eintrag ohne Datei wird übersprungen (nicht mit 0 gemeldet). */
 export function collectAgentSkillSizes(rootDir = ROOT, budgets = AGENTEN_SKILL_BUDGETS, defaultBudget = AGENTEN_SKILL_DEFAULT_BUDGET) {
   const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
-  const marker = { start: PROJEKTWERT_START, ende: PROJEKTWERT_ENDE };
   return collectAgentSkillFiles(rootDir).map((file) => ({
     file,
-    chars: zeichenOhneBlock(leereProjektwerte(readFileSync(join(rootDir, file), "utf8"), file), marker),
+    chars: countChars(ohneProjektwerte(readFileSync(join(rootDir, file), "utf8"), file)),
     budget: budgetOf.get(file) ?? defaultBudget,
   }));
 }
 
 /** Agenten- oder Skill-Datei (nicht AGENTS.md): ihr Budget gehört dem Kern, die Fix-Zeile unterscheidet sich von der einer AGENTS.md. */
-const istAgentSkill = (file) => !file.endsWith("AGENTS.md") && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
+const istAgentSkill = (file) => !istAgentsMd(file) && (file.startsWith(".claude/agents/") || file.startsWith(QUELL_VERZEICHNIS + "/"));
 
 /** Pur: Fix-Zeile zu den Budget-Verletzungen [{ file }] (leer ohne Verletzung): AGENTS.md → auslagern in modul-lokale AGENTS.md bzw. Tiefendoc; Agenten-/Skill-Datei → kürzen oder in eine bedingte Zusatzdatei bzw. Brain-Seite auslagern, das Budget nie anheben (Ratchet). */
 export function fixHinweis(violations) {
@@ -147,6 +180,16 @@ export function kernBlockPruefung(rootDir = ROOT) {
   return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir), marker: { start: markerStart("kern"), ende: markerEnde("kern") } });
 }
 
+/** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces: `melde(text)` beendet den Lauf (CLI: Exit 1, fail-closed). */
+export function messeAlle(rootDir, melde) {
+  const kontext = collectContextSizes(rootDir);
+  try {
+    return [...kontext, ...collectAgentSkillSizes(rootDir)];
+  } catch (e) {
+    return melde(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`);
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const tty = process.stdout.isTTY;
@@ -154,8 +197,6 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
-  const fmt = (n) => n.toLocaleString("de-DE");
-  const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
 
   let ALLOWLIST;
   try {
@@ -164,7 +205,7 @@ function main() {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}`));
     process.exit(1);
   }
-  const sizes = [...collectContextSizes(), ...collectAgentSkillSizes()];
+  const sizes = messeAlle(ROOT, (text) => (console.error(red(text)), process.exit(1)));
   const allow = new Map(ALLOWLIST.map((a) => [a.datei, a.grund]));
   const oversized = findOversized(sizes);
   const oversizedFiles = new Set(oversized.map((s) => s.file));
@@ -190,6 +231,9 @@ function main() {
 
   const kernBefund = kernBlockPruefung();
   if (kernBefund) console.error(red(`✖ ${kernBefund}`));
+
+  const zeilen = ladekettenZeilen(ladeketten(sizes));
+  for (const z of zeilen) console.log(dim(z));
 
   const total = sizes.reduce((sum, s) => sum + s.chars, 0);
   console.log(dim(`• INFO: ${sizes.length} Kontextdatei(en), zusammen ${fmt(total)} Zeichen (${tokens(total)}), kein Gate.`));

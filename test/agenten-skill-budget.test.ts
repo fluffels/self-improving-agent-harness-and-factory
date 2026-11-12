@@ -1,4 +1,4 @@
-/* Budget je Agenten- und Skill-Datei (factory#307): Mechanik (Messung ohne Projektwerte-Block, Collector, Default für Dateien ohne Eintrag), der Bezieher-Fall
+/* Budget je Agenten- und Skill-Datei (factory#307): Mechanik (Messung ohne Projektwerte, Collector, Default für Dateien ohne Eintrag; der Default ist das größte Budget der Liste, ein Bezieher mit größerer eigener Datei kürzt oder trägt ausnahmen.kontext ein), der Bezieher-Fall
  * mit verlängerter Projektwerte-Tabelle und die Fabrik-Invarianten (Manifest-Abgleich, Nachzieh-Ratchet). Der Ratchet gegen die Merge-Base steht in
  * test/harness/kontext-budget-ratchet.test.ts. */
 import { describe, test } from "vitest";
@@ -10,24 +10,23 @@ import { join } from "node:path";
 import { kopiereScripts } from "./support/scripts-kopie";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault, zeichenOhneBlock as rawOhneBlock } from "../scripts/kontext-budget-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
+import { messeAlle as rawMesse, collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
 
 type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
 const AGENTEN_SKILL_BUDGETS = rawBudgets as Eintrag[];
 const DEFAULT = rawDefault as number;
-const zeichenOhneBlock = rawOhneBlock as (text: string, marker: { start: string; ende: string }) => number;
 const collectFiles = rawFiles as (wurzel: string) => string[];
 const collectSizes = rawSizes as (wurzel: string, budgets?: Eintrag[], standard?: number) => Groesse[];
 const findOversized = rawOversized as (sizes: Groesse[]) => Groesse[];
+const messeAlle = rawMesse as (wurzel: string, melde: (text: string) => string) => Groesse[] | string;
 const fixHinweis = rawFix as (violations: { file: string }[]) => string;
 
 const WURZEL = join(import.meta.dirname, "..");
 const START = "<!-- factory:projektwerte:start -->";
 const ENDE = "<!-- factory:projektwerte:end -->";
-const MARKER = { start: START, ende: ENDE };
 
 const temp = (fn: (dir: string) => void): void => {
   const dir = mkdtempSync(join(tmpdir(), "agentenbudget-"));
@@ -43,22 +42,6 @@ const datei = (dir: string, rel: string, inhalt: string): void => {
 };
 /** Verlängert den Projektwerte-Block einer Datei um `n` Zeichen (eine Tabelle mit vielen Zeilen im Bezieher). */
 const verlaengert = (text: string, n: number): string => text.replace(ENDE, `${"| `x` | `y` |\n".repeat(Math.ceil(n / 14))}${ENDE}`);
-
-describe("zeichenOhneBlock", () => {
-  const text = `kopf\n${START}\nblock\n${ENDE}\nrest`;
-  test("zählt ohne den Block samt Markern", () => {
-    assert.equal(zeichenOhneBlock(text, MARKER), "kopf\n\nrest".length);
-  });
-  test("ein Block gleich am Textanfang wird mitgeschnitten", () => {
-    assert.equal(zeichenOhneBlock(`${START}block${ENDE}rest`, MARKER), "rest".length);
-  });
-  test("ohne Block oder mit nur einem Marker zählt der ganze Text; CRLF zählt wie LF", () => {
-    assert.equal(zeichenOhneBlock("abc", MARKER), 3);
-    assert.equal(zeichenOhneBlock(`a${START}b`, MARKER), `a${START}b`.length);
-    assert.equal(zeichenOhneBlock(`a${ENDE}b${START}c`, MARKER), `a${ENDE}b${START}c`.length, "Ende vor Start: kein Block");
-    assert.equal(zeichenOhneBlock(text.replace(/\n/g, "\r\n"), MARKER), zeichenOhneBlock(text, MARKER));
-  });
-});
 
 describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
   test("erfasst Agenten (nur oberste Ebene) und alle Skill-Dateien rekursiv, ohne AGENTS.md; fehlende Ordner geben eine leere Liste", () => {
@@ -96,10 +79,10 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
     });
   });
 
-  test("die Messung ignoriert den Projektwerte-Block (mit countChars statt zeichenOhneBlock wären die echten Dateien rot)", () => {
+  test("die Messung ignoriert den Projektwerte-Block (mit countChars statt ohneProjektwerte wären die echten Dateien rot)", () => {
     temp((dir) => {
       datei(dir, ".claude/agents/a.md", `kopf\n${START}\n${"| x |\n".repeat(50_000)}${ENDE}\nrest`);
-      assert.deepEqual(collectSizes(dir).map((s) => s.chars), ["kopf\n\nrest".length]);
+      assert.deepEqual(collectSizes(dir).map((s) => s.chars), ["kopf\nrest".length]);
     });
   });
 });
@@ -137,6 +120,14 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
     }
   });
 
+  test("L17: X-AGENTS.md unter .agents/skills zählt als Agenten-/Skill-Datei, genau AGENTS.md nicht (Dateinamen-Vergleich statt endsWith)", () => {
+    assert.match(fixHinweis([{ file: ".agents/skills/proj/X-AGENTS.md" }]), /Agenten-\/Skill-Datei: kürzen/);
+    temp((dir) => {
+      for (const n of ["X-AGENTS.md", "AGENTS.md"]) datei(dir, `.agents/skills/proj/${n}`, "x");
+      assert.deepEqual(collectFiles(dir), [".agents/skills/proj/X-AGENTS.md"]);
+    });
+  });
+
   test("gemischt: beide Teile; ohne Verletzung leer", () => {
     const t = fixHinweis([agents, agent]);
     assert.match(t, /modul-lokale AGENTS\.md/);
@@ -156,7 +147,7 @@ describe("Projektwert-Zeilen der Frontmatter (L3/L6b)", () => {
         datei(lang, ".claude/agents/planer.md", agent("ein-sehr-langer-projektname-planer", "| x |\n".repeat(40)));
         const chars = (d: string): number[] => collectSizes(d).map((s) => s.chars);
         assert.deepEqual(chars(lang), chars(kurz));
-        assert.equal(chars(kurz)[0], `---\n# factory:projektwert agenten.planer\nname:\n---\nrumpf\n\nrest\n`.length);
+        assert.equal(chars(kurz)[0], `---\n# factory:projektwert agenten.planer\nname:\n---\nrumpf\nrest\n`.length);
       });
     });
   });
@@ -214,6 +205,50 @@ describe("Bezieher: verlängerte Projektwerte-Tabelle und projekt-eigene Dateien
   });
 });
 
+describe("CLI check-context-size: Gate-Meldung und Ausnahme im Bezieher (L17, L24)", () => {
+  const bezieher = (dir: string): void => {
+    kopiereScripts(dir);
+    for (const [rel, inhalt] of [[".factory/projekt.json", readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8")], [".factory/sync-stand.json", JSON.stringify({ version: 2 })], ["AGENTS.md", "# Projekt\n"]]) datei(dir, rel, inhalt);
+  };
+  const lauf = (dir: string) => {
+    const r = spawnSync(process.execPath, [join(dir, "scripts", "check-context-size.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 });
+    return { status: r.status, text: `${r.stderr}${r.stdout}` };
+  };
+
+  test("L17: ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix-Zeile, keinen Stacktrace (fail-closed: Exit 1)", { timeout: 60_000 }, () => {
+    temp((dir) => {
+      bezieher(dir);
+      datei(dir, ".agents/skills/proj/SKILL.md", `kopf\n${START}\nohne Ende\n`);
+      const r = lauf(dir);
+      assert.equal(r.status, 1, r.text);
+      assert.match(r.text, /✖ .*\.agents\/skills\/proj\/SKILL\.md:\d+: Projektwert-Block hat kein Ende/);
+      assert.doesNotMatch(r.text, /^\s+at /m);
+    });
+  });
+
+  test("L17 in-process: messeAlle liefert bei kaputtem Marker eine Meldung mit Ort und Fix, sonst die Messwerte", () => {
+    temp((dir) => {
+      assert.deepEqual((messeAlle(dir, (t) => t) as Groesse[]).map((s) => [s.file, s.chars]), [["AGENTS.md", 0]], "misst die übergebene Wurzel, nicht das eigene Repo");
+      datei(dir, ".agents/skills/proj/SKILL.md", `${START}\nohne Ende\n`);
+      assert.match(messeAlle(dir, (t) => t) as string, /✖ .*SKILL\.md:1: Projektwert-Block hat kein Ende\nFix: /);
+    });
+  });
+
+  test("L24 Bezieher-Fall: eine eigene Datei über dem Default ist rot; mit ausnahmen.kontext (Ticket-Grund) geduldet, Exit 0", { timeout: 60_000 }, () => {
+    temp((dir) => {
+      bezieher(dir);
+      const rel = ".agents/skills/proj/SKILL.md";
+      datei(dir, rel, "x".repeat(DEFAULT + 1));
+      assert.equal(lauf(dir).status, 1, "ohne Eintrag rot");
+      const cfg = JSON.parse(readFileSync(join(dir, ".factory", "projekt.json"), "utf8")) as { ausnahmen?: Record<string, unknown> };
+      datei(dir, ".factory/projekt.json", JSON.stringify({ ...cfg, ausnahmen: { ...cfg.ausnahmen, kontext: [{ datei: rel, grund: "#1 eigene Datei, wird geteilt" }] } }));
+      const ok = lauf(dir);
+      assert.equal(ok.status, 0, ok.text);
+      assert.match(ok.text, /geduldet: \.agents\/skills\/proj\/SKILL\.md/);
+    });
+  });
+});
+
 describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
   test("ohne Argument misst der Collector das eigene Repo (Standard-Wurzel)", () => {
     assert.deepEqual(collectFiles(undefined as unknown as string), collectFiles(WURZEL));
@@ -240,7 +275,8 @@ describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
   });
 
   test("Default = größtes Budget der Liste (nachgezogen)", () => {
-    assert.equal(DEFAULT, Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)));
+    const herleitung = "eine Datei ohne Eintrag (auch eine projekt-eigene im Bezieher) wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (kontext-budget-ratchet)";
+    assert.equal(DEFAULT, Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)), herleitung);
   });
 });
 

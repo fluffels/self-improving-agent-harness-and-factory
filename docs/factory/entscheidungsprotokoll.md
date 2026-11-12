@@ -1,5 +1,7 @@
 # Entscheidungsprotokoll für Hand-offs und Weichen
 
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
 > Wissensart: Verfahren (Evergreen). Gilt für jede Entscheidung, bei der ein Agent sonst eine Optionsfrage an die Maintainerin stellen würde: Hand-off nach `festgefahren`, Zusatzpass, Override, Auslagern, Plan-Weichen. Repo, Labels, Board und Namen kommen aus der Projekt-Config (`.factory/projekt.json`), diese Seite nennt keine. Der Name der Factory wird ein Config-Wert, sobald er feststeht; bis dahin heißt sie „Factory“.
 
 ## Grundsatz
