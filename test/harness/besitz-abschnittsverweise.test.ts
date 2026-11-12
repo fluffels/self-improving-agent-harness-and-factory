@@ -114,7 +114,15 @@ describe("Strenge Form: Verweise auf Fabrik-Seiten (Regel iii)", () => {
     const meldung = strengMeldung(strengeFunde(mit("Zeile eins\nSiehe docs/seite.md › Echte Überschrift und mehr\n"), LISTE).funde);
     assert.ok(meldung.includes("skill.md:2"), meldung);
     assert.ok(meldung.includes("„docs/seite.md › Echte Überschrift und mehr“"), meldung);
+    const zweizeilig = strengeFunde(mit("Siehe docs/seite.md › Echte Überschrift\nnächste Zeile\n"), LISTE).funde[0];
+    assert.equal(zweizeilig.text, "docs/seite.md › Echte Überschrift", "der Text endet am Zeilenende");
     const lang = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(200)}\n`), LISTE).funde[0];
+    const genau = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(80 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
+    const eins = strengeFunde(mit(`docs/seite.md › Echte Überschrift ${"x".repeat(81 - "docs/seite.md › Echte Überschrift ".length)}\n`), LISTE).funde[0];
+    assert.equal(eins.text.length, 80, "81 Zeichen werden auf 80 gekürzt");
+    assert.ok(eins.text.endsWith("…"));
+    assert.equal(genau.text.length, 80, "genau 80 Zeichen bleiben ungekürzt");
+    assert.ok(!genau.text.endsWith("…"));
     assert.equal(lang.text.length, 80);
     assert.ok(lang.text.endsWith("…"));
   });
@@ -680,6 +688,9 @@ describe("Präfix-Literale in Besitz-Text (factory#403 L25)", () => {
 
   test("Wortanfang: ein Literal mitten im Wort zählt nicht; Branch-Präfix zählt einmal, Worktree-Pfad ist rot", () => {
     assert.deepEqual(lauf(`Das Wort X${COMMIT}Plan: zählt nicht\n`), []);
+    for (const davor of ["1", "_", "-"]) assert.deepEqual(lauf(`x${davor}${COMMIT}Plan:\n`), [], `nach ${davor}`);
+    assert.deepEqual(praefixFunde(mit("skill.md", "axb- und a.b- hier\n"), ["a.b-"], TEXT).funde.map((f) => f.stelle), ["a.b- hier"], "Sonderzeichen im Wert sind wörtlich");
+    assert.deepEqual(praefixFunde(mit("skill.md", `x ${COMMIT}Plan: y\nzweite\n`), WERTE, TEXT).funde.map((f) => f.stelle), [`${COMMIT}Plan: y`], "Kontext endet am Zeilenende");
     const branch = WERTE.find((w) => w.includes("/")) ?? "";
     assert.deepEqual(lauf(`git switch -c ${branch}1-x\n`), [branch]);
     assert.equal(lauf(`.claude/worktrees/${WERTE[WERTE.length - 1]}1\n`).length, 1);
@@ -694,6 +705,13 @@ describe("Präfix-Literale in Besitz-Text (factory#403 L25)", () => {
     const wurzel = fixture({ ".factory/besitz.json": MANIFEST([{ pfad: "AGENTS.md", block: "kern", ring: "kern" }]), "AGENTS.md": KERN("Kern ohne Literal") + `Projekt ${COMMIT}Plan:\n` });
     assert.deepEqual(praefixFunde(wurzel, WERTE, TEXT).funde, []);
     assert.deepEqual(lauf(`${COMMIT}Plan:\n`, "ober.md", "oberflaeche"), []);
+  });
+
+  test("praefixWerte: nur nicht leere Texte, längster zuerst, ohne Doppelte; ohne Gruppe leer, ohne Werte kein Scan", () => {
+    const cfg = (praefixe?: unknown): string => fixture({ ".factory/projekt.json": JSON.stringify(praefixe === undefined ? {} : { praefixe }) });
+    assert.deepEqual(praefixWerte(cfg({ a: "X-", b: "", c: 5, d: "Yy-lang", e: "X-" })), ["Yy-lang", "X-"]);
+    assert.deepEqual(praefixWerte(cfg()), []);
+    assert.deepEqual(praefixFunde(mit("skill.md", `${COMMIT}Plan:\n`), [], TEXT), { funde: [], dateien: 0 });
   });
 
   test("Aufteilung: der Text-Wächter sieht keine Skripte (die prüft kern-laufzeittexte.test.ts)", () => {

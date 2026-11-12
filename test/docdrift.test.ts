@@ -790,6 +790,9 @@ describe("check:docdrift prüft Abschnittsverweise (factory#157)", () => {
     assert.deepEqual(fixture({ ...x, "docs/y.md": "Siehe docs/x.md § „Secret-Inbox“\n" }), []);
     assert.deepEqual(fixture({ ...x, "docs/y.md": "```\ndocs/x.md › „Gibts nicht“\n```\n" }), [], "Code-Fence maskiert");
     assert.deepEqual(fixture({ ...x, "docs/y.md": "docs/x.md (Fabrik) › „Gibts nicht“\n" }), [], "Fabrik-Form prüft nur die Fabrik");
+    assert.deepEqual(api.zitatVerweise("das .md › „A“"), [], "ein Pfad braucht ein Wortzeichen vor .md");
+    assert.equal(api.zitatVerweise("`docs/x.md › „A“`").length, 1, "Standard: Code nicht maskiert");
+    assert.equal(api.zitatVerweise("`docs/x.md › „A“`", { istMarkdown: true }).length, 0, "Markdown maskiert Inline-Code");
     assert.deepEqual(api.zitatVerweise("docs/x.md › „A b“ und docs/x.md (Fabrik) › „C“").map((z) => [z.pfad, z.segmente, z.fabrik]), [["docs/x.md", ["A b"], false], ["docs/x.md", ["C"], true]]);
   });
 
