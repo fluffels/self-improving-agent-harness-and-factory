@@ -31,7 +31,7 @@ function abweichungen(spiegel, live) {
   return [
     live.name !== spiegel.name && "name",
     !gleich(checksAus(regeln), [...spiegel.requiredChecks].sort()) && "requiredChecks",
-    false && "strict",
+    strictAus(regeln) !== spiegel.strict && "strict",
     !gleich(werkzeugeAus(regeln), sollWerkzeuge.map((e) => ({ tool: e.tool, ...Object.fromEntries(SCHWELLEN_FELDER.map(([soll]) => [soll, e[soll]])) }))) && "codeScanning",
     !gleich(sortiert(live.bypass_actors), sortiert(spiegel.bypassActors)) && "bypassActors",
   ].filter(Boolean);
