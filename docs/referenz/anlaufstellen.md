@@ -39,6 +39,8 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0029 Harness-Cockpit](../adr/0029-harness-cockpit.md) | wenn eine Oberfläche, ein Dashboard oder ein Werkzeug zur Agenten-Übersicht gebaut, ein Bausatz erwogen oder etwas der Factory zugeordnet wird, das nicht in Projekte verteilt wird |
 | [0031 Fabrik ohne Zugriff auf Bezieher](../adr/0031-fabrik-ohne-zugriff-auf-bezieher.md) | wenn ein Fabrik-Lauf in ein Bezieher-Repo schreiben soll (Sync-PR, Issue, Kommentar, Trockenlauf im Bezieher), ein Bezieher-Befund gemeldet wird oder die Verteilung per Tag und `factory-update.yml` geändert wird |
 | [0032 Fabrik bleibt an GitHub gebunden](../adr/0032-git-host-bindung.md) | wenn ein anderer Git-Host als GitHub für Fabrik oder Bezieher erwogen wird, vor dem Anbinden (Auslöser: v1.0.0, Bedarf über die Meldestelle) |
+| [0033 Ticket-Drift als Monatslauf](../adr/0033-ticket-drift-lauf.md) | wenn offene Tickets maschinell gegen den Code vorgeprüft, der Ticket-Drift-Bericht oder `scripts/ticket-drift.mjs` angefasst oder ein Modell-Lauf für die Ticket-Pflege erwogen wird |
+| [0034 Kein KI-Reviewer in der CI](../adr/0034-kein-ki-reviewer-in-ci.md) | wenn ein KI-Reviewer in der CI, ein Managed-Review-Dienst oder ein weiteres Secret für Review erwogen wird |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
