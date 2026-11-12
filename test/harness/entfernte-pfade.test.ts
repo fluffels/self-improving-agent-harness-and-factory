@@ -17,6 +17,8 @@
  * Dazu (factory#399): der Phasen-Schnitt ist zurückgebaut (Befehl `uebergeben`, Token `uebergabe`, `SCHNITT:`/`UEBERGABE:`, Prompt-Zeilen `Schnitt:`/`Einstieg:`); `RESTE_SCHNITT` scannt
  * die Namen. Bewusste Grenze: der Name „Phasen-Schnitt“ und freie Umschreibungen werden nicht gescannt, er bleibt in Messberichten erlaubt (die Messskripte `kontext-treiber`/`subagent-laeufe` stehen in `AUSNAHMEN_SCHNITT`).
  *
+ * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
+ *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
  * Namen mit Projektwort und ein Platzhalter als Dateiname (`<agenten.…>.md`) sind Rückfälle.
  *
@@ -301,7 +303,7 @@ export const RESTE_SCHNITT: Rest[] = [
   { name: "Token und Lock-Feld uebergabe", muster: /\buebergabe\b/, fix: "das Ergebnis-Token und das Lock-Feld sind entfernt: gültig sind gemergt, entscheidung-noetig, festgefahren, abgebrochen, abnahme" },
   { name: "Berichtszeile SCHNITT:", muster: /\bSCHNITT:/, fix: "die Berichtszeile SCHNITT: ist entfernt, der Umsetzer arbeitet immer bis zum Merge" },
   { name: "Berichtszeile UEBERGABE:", muster: /\bUEBERGABE:/, fix: "die Berichtszeile UEBERGABE: ist entfernt" },
-  { name: "Prompt-Zeile Schnitt: oder Einstieg:", muster: /\b(?:Schnitt|Einstieg): (?:pr|verify)\b|`(?:Schnitt|Einstieg):/, fix: "die Prompt-Zeilen Schnitt:/Einstieg: gibt es nicht mehr; eine Fortsetzung beginnt mit Schritt 1 des Umsetzer-Ablaufs" },
+  { name: "Prompt-Zeile Schnitt: oder Einstieg:", muster: /\b(?:Schnitt|Einstieg): (?:pr|verify)(?![\wäöüß])|`(?:Schnitt|Einstieg):/, fix: "die Prompt-Zeilen Schnitt:/Einstieg: gibt es nicht mehr; eine Fortsetzung beginnt mit Schritt 1 des Umsetzer-Ablaufs" },
   { name: "Bezeichner des Schnitts", muster: /\b(?:uebergabeBlockade|uebergabeOffen|uebergabeStand|frischeUebergabe|SCHNITTE)\b/, fix: "den Bezeichner entfernen, es gibt ihn nicht mehr" },
   { name: "Einstieg nach Übergabe", muster: /Einstieg nach Übergabe/, fix: "den Abschnitt gibt es nicht mehr" },
 ];
@@ -331,7 +333,8 @@ describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
     ["Berichtszeile UEBERGABE:", "UEBERGABE: Worktree"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit Schnitt: pr"],
     ["Prompt-Zeile Schnitt: oder Einstieg:", "Einstieg: verify"],
-    ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Schnitt:` oder `Einstieg:`"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Schnitt:`"],
+    ["Prompt-Zeile Schnitt: oder Einstieg:", "Prompt mit `Einstieg:`"],
     ["Bezeichner des Schnitts", "uebergabeBlockade(x)"],
     ["Bezeichner des Schnitts", "uebergabeOffen"],
     ["Bezeichner des Schnitts", "uebergabeStand"],
@@ -343,7 +346,7 @@ describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
   });
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
-    const nachbarn = ["uebergabeProbleme", "uebergabeKennzahlen", "ABSCHNITTE", "Übergabe mit Umlaut", "// Einstieg: liest die Datei", "/^Schnitt:/ ohne Backtick", "Phasen-Schnitt im Messbericht"];
+    const nachbarn = ["uebergabeProbleme", "uebergabeKennzahlen", "ABSCHNITTE", "Übergabe mit Umlaut", "// Einstieg: liest die Datei", "/^Schnitt:/ ohne Backtick", "Einstieg: prüfe den Lock", "Schnitt: präzise", "ABSCHNITT: x", "Zwischenuebergabe", "SCHNITTEN", "ABUEBERGABE: x", "Phasen-Schnitt im Messbericht"];
     assert.deepEqual(schnitt(nachbarn.join("\n")), []);
   });
 

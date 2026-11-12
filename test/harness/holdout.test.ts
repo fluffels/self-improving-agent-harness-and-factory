@@ -74,7 +74,7 @@ const ABNAHME_TOOLS = [
 
 const SKILL = liesTicketAblauf();
 const LENSES = liesMitProjektwerten(".agents/skills/review-lenses/SKILL.md");
-/** Kern und bedingte Dateien des Umsetzers (factory#310): Gruppen-Absatz und Nachfolger-Vorlagen stehen in den bedingten Dateien neben dem Ablauf-Skill. */
+/** Kern und bedingte Dateien des Umsetzers (factory#310): der Gruppen-Absatz steht in den bedingten Dateien neben dem Ablauf-Skill. */
 const UMSETZER_BEDINGT = ["umsetzer-gruppen", "umsetzer-fortsetzung"].map((n) => liesMitProjektwerten(`.agents/skills/factory/${n}.md`));
 const UMSETZER = [liesMitProjektwerten(".claude/agents/factory-umsetzer.md"), ...UMSETZER_BEDINGT].join(NL);
 const GANZE_DATEIEN: [string, string][] = [
