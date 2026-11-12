@@ -72,7 +72,7 @@ describe("punkteOhne", () => {
   test("Orakel: die abwählbaren Punkte sind genau diese fünf", () => {
     expect(L.ABWAEHLBAR).toEqual(["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"]);
   });
-  test.each(["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Dependabot Alerts", "Dependabot-Abdeckung", "CodeQL-Sprachen", "Admin-Recht", "PVR", "Actions"])("Pflichtpunkt %s ist nicht abwählbar", (punkt) => {
+  test.each(["Secret Scanning", "Push Protection", "Dependabot Security Updates", "Dependabot Alerts", "Dependabot-Abdeckung", "CodeQL-Sprachen", "Admin-Recht", "PVR", "Actions", "Non-Provider-Patterns", "Validity Checks", "SHA-Pinning"])("Pflichtpunkt %s ist nicht abwählbar", (punkt) => {
     expect(() => L.ladeSollListe(liste({ kern: KERN, projekt: { punkteOhne: [{ punkt, grund: "g" }] } }))).toThrow(/nicht abwählbar/);
   });
   test.each(["Ruleset", "Required-Check", "Required-Check-Pin", "Ruleset-Spiegel", "Code-Scanning"])("%s ist abwählbar und fällt aus der Punktliste", (punkt) => {

@@ -166,6 +166,19 @@ describe("sicherheitspruefung.mjs", () => {
       expect(mit.out).toContain("Sicherheitsprüfung: Dependabot-Ausnahme frontend: Fixture");
     });
 
+    test.each(["\n", "\r\n"])("ein Grund mit Zeilenumbruch %j wird in der Logzeile einzeilig (kein Workflow-Command)", async (umbruch) => {
+      const grund = `a${umbruch}::error::x`;
+      const projekt = { ausnahmen: [{ pfad: "frontend", grund }], codeqlOhne: [{ sprache: "python", grund }], punkteOhne: [{ punkt: "Ruleset", grund }] };
+      const r = await lauf({ ...mitFrontend, soll: soll(projekt) });
+      const zeilen = r.out.split("\n");
+      expect(zeilen.filter((z) => z.includes("::error::"))).toEqual([
+        "Sicherheitsprüfung: Dependabot-Ausnahme frontend: a ::error::x",
+        "Sicherheitsprüfung: CodeQL ohne python: a ::error::x",
+        "Sicherheitsprüfung: Punkt abgewählt Ruleset: a ::error::x",
+      ]);
+      expect(zeilen.some((z) => z.startsWith("::error::"))).toBe(false);
+    });
+
     test("projekt.manifeste ergänzt ein Ökosystem", async () => {
       const r = await lauf({ dateien: ["x/mix.exs"], doctor: [], soll: soll({ manifeste: [{ oekosystem: "mix", datei: "mix.exs" }] }, ["Dependabot-Abdeckung"]) });
       expect(r.bodies[0]).toContain("mix /x");
