@@ -98,6 +98,17 @@ describe("punkteOhne", () => {
 });
 
 describe("filtere", () => {
+  test("Abnahme-Fix: ein fehlender Required-Check ersetzt das Ruleset-Ergebnis, kein falsches nicht prüfbar", () => {
+    const ist: Erg[] = [{ punkt: "Required-Check Tests", ok: false, befund: "fehlt auf main", fix: "ergänzen" }, { punkt: "Admin-Recht", ok: true }];
+    const r = L.filtere(ist, ["Ruleset", "Required-Check", "Admin-Recht"]);
+    expect(r.map((x) => x.punkt)).toEqual(["Required-Check Tests", "Admin-Recht"]);
+    expect(r.some((x) => x.nichtPruefbar === true)).toBe(false);
+  });
+  test("ohne Ruleset-Ergebnis und ohne Required-Check-Ergebnis bleibt Ruleset nicht prüfbar", () => {
+    const r = L.filtere([{ punkt: "Admin-Recht", ok: true }], ["Ruleset", "Admin-Recht"]);
+    expect(r.map((x) => x.punkt)).toEqual(["Admin-Recht", "Ruleset"]);
+    expect(r[1].nichtPruefbar).toBe(true);
+  });
   test("Admin-Recht ist Pflicht-Punkt; punkteOhne steht nur im Fix der abwählbaren Punkte", () => {
     const r = L.filtere([], ["Admin-Recht", "Ruleset-Spiegel", "Secret Scanning"]);
     expect(r.map((x) => x.punkt)).toEqual(["Secret Scanning", "Ruleset-Spiegel", "Admin-Recht"]);

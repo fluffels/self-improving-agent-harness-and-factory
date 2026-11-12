@@ -111,10 +111,13 @@ const trifft = (punkt, name) => punkt === name || String(punkt).startsWith(`${na
 /** Filtert die Ergebnisse des Prüflaufs auf die Punkte der Soll-Liste; fehlt das Ergebnis eines Doctor-Pflichtpunkts der Liste, kommt ein „nicht prüfbar“ dazu. Pur. */
 export function filtere(ergebnisse, punkte) {
   const treffer = ergebnisse.filter((r) => punkte.some((n) => trifft(r.punkt, n)));
-  const fehlend = PFLICHT_DOCTOR.filter((n) => punkte.includes(n) && !ergebnisse.some((r) => trifft(r.punkt, n)));
+  const da = (n) => [n, ...(ERSATZ[n] ?? [])].some((m) => ergebnisse.some((r) => trifft(r.punkt, m)));
+  const fehlend = PFLICHT_DOCTOR.filter((n) => punkte.includes(n) && !da(n));
   return [...treffer, ...fehlend.map((n) => nichtPruefbar(n, FEHLT_BEFUND[n] ?? FEHLT_BEFUND_STANDARD, FEHLT_FIX[n] ?? FEHLT_FIX_STANDARD))];
 }
 
+/** Der Doctor meldet `Ruleset` nur im Soll-Zustand (`OK`) oder ohne jeden Required Check; fehlt ein Pflicht-Check, steht dort nur `Required-Check <ctx>`: auch das belegt, dass die Regeln gelesen wurden. */
+const ERSATZ = { Ruleset: ["Required-Check"] };
 const FEHLT_BEFUND_STANDARD = "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht)";
 const FEHLT_FIX_STANDARD = "Prüflauf mit einem Token mit Admin-Recht wiederholen (Secret PROJECT_TOKEN)";
 const FEHLT_BEFUND = { "Ruleset-Spiegel": "kein Ergebnis des Prüflaufs (Token ohne Admin-Recht, oder der Ruleset-Spiegel der Projekt-Config hat keine id)" };

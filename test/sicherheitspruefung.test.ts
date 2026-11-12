@@ -91,6 +91,15 @@ describe("sicherheitspruefung.mjs", () => {
     expect(r.lesen.some((a) => a.join(" ").includes("default-setup"))).toBe(false);
   });
 
+  test("Abnahme-Fix: fehlt ein Pflicht-Check, steht nur die Zeile Required-Check im Ticket, kein Ruleset nicht prüfbar", async () => {
+    const soll = JSON.stringify({ kern: { punkte: ["Ruleset", "Required-Check", "Admin-Recht"] } });
+    const doctor = [{ punkt: "Required-Check Tests", ok: false, befund: "Required-Check \"Tests\" fehlt auf main", fix: "ergänzen" }, { punkt: "Admin-Recht", ok: true }];
+    const r = await lauf({ soll, doctor });
+    expect(r.bodies[0]).toContain("| Required-Check Tests |");
+    expect(r.bodies[0]).not.toContain("| Ruleset |");
+    expect(r.bodies[0]).not.toContain("kein Ergebnis des Prüflaufs");
+  });
+
   test("Zeile Secret PROJECT_TOKEN nur in Actions und nur ohne Token", async () => {
     const mit = await lauf({ doctor: DOCTOR_LUECKE, env: { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "t" } });
     expect(mit.bodies[0]).not.toContain("Secret PROJECT_TOKEN");
