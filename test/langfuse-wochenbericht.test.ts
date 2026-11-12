@@ -261,8 +261,31 @@ describe("Fehler (Exit 1)", () => {
     await fehler(fehlt, "Pflicht-Export fehlt: erfassung");
     await fehler({ ...satz(), "kaputt.json": "{nicht json" }, "kein lesbares JSON");
     const voll = satz();
-    voll["sessW.json"] = sess("sessions", F.von, F.bis, Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]));
-    await fehler(voll, "abgeschnitten");
+    voll["sessW.json"] = { ...(voll["sessW.json"] as object), data: "kein Array" };
+    await fehler(voll, "kein Array");
+    const anderer = satz();
+    anderer["sessW.json"] = sess("sessions", F.von, F.bis, [["s1", "Claude Code Turn"]]);
+    (anderer["sessW.json"] as { abfrage: { filters: unknown[] } }).abfrage.filters = [TYPE];
+    await fehler(anderer, "Projektfilter fehlt");
+  });
+  test("Export am Zeilenlimit (genau 1000 Zeilen): Exit 4, Status abgeschnitten, grund nennt den Export; 999 bleibt Bericht", async () => {
+    const zeilen = Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]);
+    const sessions = satz();
+    sessions["sessW.json"] = sess("sessions", F.von, F.bis, zeilen);
+    const r = await lauf(["--json"], sessions);
+    expect(r.exitCode).toBe(4);
+    expect(lese<{ status: string; woche: string }>(r.stdout)).toMatchObject({ status: "abgeschnitten", woche: MONTAG });
+    expect(lese<{ grund: string }>(r.stdout).grund).toContain("sessW.json");
+    expect(r.stderr).toContain("abgeschnitten");
+    const gesamt = satz();
+    gesamt["gesamtW.json"] = exp("gesamt", F.von, F.bis, Array.from({ length: 1000 }, () => g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 1, 1)));
+    const r2 = await lauf(["--json"], gesamt);
+    expect(r2.exitCode).toBe(4);
+    expect(lese<{ status: string }>(r2.stdout)).toMatchObject({ status: "abgeschnitten" });
+    expect(lese<{ grund: string }>(r2.stdout).grund).toContain("gesamtW.json");
+    const knapp = satz();
+    knapp["sessW.json"] = sess("sessions", F.von, F.bis, zeilen.slice(0, 999));
+    expect((await lauf([], knapp)).exitCode).not.toBe(4);
   });
   test("ein Export mit fremdem Fenster wird abgelehnt", async () => {
     await fehler({ ...satz(), "alt.json": exp("gesamt", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z", gesamtW()) }, "weder zur Woche noch zur Vorwoche");
@@ -411,6 +434,29 @@ describe("Randfälle (Guards)", () => {
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a, b ,," } })).tags).toEqual(["a", "b"]);
     expect(CLI.ladeProjekt(process.cwd(), () => { throw new Error("ENOENT"); }).tags).toEqual([]);
     expect(CLI.ladeProjekt(process.cwd(), () => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } })).tags).toEqual([]);
+  });
+  test("ladeProjekt: unlesbare Settings ergeben einen Vermerk ohne Pfad, ein fehlender Schlüssel keinen", () => {
+    const V = (lies: (p: string, e: string) => string) => (CLI.ladeProjekt(process.cwd(), lies) as unknown as { tags: string[]; tagsVermerk?: string }).tagsVermerk;
+    expect(V(() => { throw new Error("ENOENT /x/y"); })).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen");
+    expect(V(() => "{nicht json")).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein gültiges JSON), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: {} }))).toBeUndefined();
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a" } }))).toBeUndefined();
+  });
+  test("tagsVermerk steht im Bericht (Markdown und JSON) und im Grund von keine-daten; ohne Vermerk bleibt die Ausgabe gleich", async () => {
+    const mit = { ...PROJEKT, tagsVermerk: "Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen" };
+    const md = await lauf([], satz(), { projekt: mit });
+    expect(md.stdout).toContain("Projekt-Tags nicht lesbar");
+    const js = await lauf(["--json"], satz(), { projekt: mit });
+    expect(lese<{ vermerk: string }>(js.stdout).vermerk).toContain("; Projekt-Tags nicht lesbar");
+    const leer = satz();
+    leer["gesamtW.json"] = exp("gesamt", F.von, F.bis, []);
+    const kd = await lauf(["--json"], leer, { projekt: mit });
+    expect(lese<{ grund: string }>(kd.stdout).grund).toContain("; Projekt-Tags nicht lesbar");
+    const ohne = await lauf(["--json"], leer);
+    expect(lese<{ grund: string }>(ohne.stdout).grund).not.toContain("Projekt-Tags");
+    const normal = await lauf(["--json"], satz());
+    expect(lese<{ vermerk: string }>(normal.stdout).vermerk).not.toContain("; ");
   });
   test("als Prozess: Aufruffehler ist Exit 2 ohne Netz, --rezept gibt JSON aus", () => {
     const a = spawnSync("node", ["scripts/langfuse-wochenbericht.mjs", "--woche", "2026-11-03"], { encoding: "utf8" });

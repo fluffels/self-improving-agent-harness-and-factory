@@ -54,7 +54,7 @@ describe("Termin und Stand (Lib)", () => {
     expect(t("2026-11-16T12:00:00Z")).toEqual({ montag: "2026-11-09", faellig: false, meldenAb: false });
   });
   test("wochenStand: nur Bericht ohne Schwelle, gemeldet und ruhe sind erledigt; alles ohne Bericht ist offen", () => {
-    for (const j of [null, "x", {}, { status: "unerreichbar" }, { status: "keine-daten" }, { status: "fehler" }, { status: "unbekannt" }]) expect(L.wochenStand(j)).toBe("offen");
+    for (const j of [null, "x", {}, { status: "unerreichbar" }, { status: "keine-daten" }, { status: "fehler" }, { status: "abgeschnitten" }, { status: "unbekannt" }]) expect(L.wochenStand(j)).toBe("offen");
     expect(L.wochenStand({ status: "bericht", urteil: { agentLaufNoetig: true } })).toBe("melden");
     expect(L.wochenStand({ status: "bericht", urteil: { agentLaufNoetig: false } })).toBe("erledigt");
     expect(L.wochenStand({ status: "bericht" })).toBe("erledigt");
@@ -65,6 +65,7 @@ describe("Termin und Stand (Lib)", () => {
     expect(L.anlassText({ art: "schwelle", montag: MONTAG, gruende: [{ schwelle: "erfassungLueckenMax", ist: 2, soll: 0 }] })).toBe(`Wochenbericht ${MONTAG}: Agent-Lauf nötig (erfassungLueckenMax Ist 2.0, Soll höchstens 0)`);
     expect(L.anlassText({ art: "fehlt", montag: MONTAG, klasse: "unerreichbar" })).toBe(`Wochenbericht ${MONTAG} fehlt: Langfuse unerreichbar (Details im lokalen Log)`);
     expect(L.anlassText({ art: "fehlt", montag: MONTAG, klasse: "fehler" })).toBe(`Wochenbericht ${MONTAG} fehlt: Fehler im Live-Weg (Details im lokalen Log)`);
+    expect(L.anlassText({ art: "fehlt", montag: MONTAG, klasse: "abgeschnitten" })).toBe(`Wochenbericht ${MONTAG} fehlt: Export am Zeilenlimit abgeschnitten (Details im lokalen Log)`);
     expect(L.anlassText({ art: "ohne-daten", montag: MONTAG })).toBe(`Wochenbericht ${MONTAG}: Woche ohne Daten trotz Commits auf main (Erfassung prüfen)`);
   });
   test("wochenberichtAblage: <home>/.claude/state/langfuse-wochenbericht/<owner>__<repo>", () => {
@@ -252,6 +253,18 @@ describe("Wochenbericht-Lauf: Ausgänge der Auswertung", () => {
     await don.lauf();
     expect(don.a.gh).toEqual([dispatchArgs("own/repo", `Wochenbericht ${MONTAG} fehlt: Langfuse unerreichbar (Details im lokalen Log)`)]);
     expect(don.json()?.status).toBe("gemeldet");
+  });
+  test("Exit 4 abgeschnitten: sofort Meldung, auch am Mittwoch, Anlass ohne Fehlertext; scheitert der Dispatch, dispatch-fehler", async () => {
+    const mi = umgebung({ exit: 4, grund: "abgeschnitten" });
+    await mi.lauf();
+    const anlass = `Wochenbericht ${MONTAG} fehlt: Export am Zeilenlimit abgeschnitten (Details im lokalen Log)`;
+    expect(mi.a.gh).toEqual([dispatchArgs("own/repo", anlass)]);
+    expect(mi.json()?.status).toBe("gemeldet");
+    expect(mi.zeilen()[0]).toMatchObject({ status: "gemeldet", anlass });
+    const kaputt = umgebung({ exit: 4, grund: "abgeschnitten", dispatchFehler: true });
+    await kaputt.lauf();
+    expect(kaputt.zeilen()[0]).toMatchObject({ status: "dispatch-fehler" });
+    expect(kaputt.json()?.status).toBe("abgeschnitten");
   });
   test("Exit 4 keine Daten: mit Commits Meldung, ohne Commits ruhe, bei gh-Fehler offen (nie ruhe)", async () => {
     const mit = umgebung({ exit: 4, grund: "keine-daten", commits: '[{"sha":"a"}]' });
