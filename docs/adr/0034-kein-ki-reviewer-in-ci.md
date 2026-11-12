@@ -23,12 +23,12 @@ Die geforderte Unabhängigkeit besteht schon: Jede Lens ist ein frischer Kritike
 
 ## Entscheidung
 
-Entscheidung: E, weil Kosten, Planverfügbarkeit und Sicherheitsrisiko gegen einen CI-Reviewer sprechen und es keinen Beleg für eine Lücke der Lenses gibt (ADR 0027 §2: Härten braucht dieselbe Evidenz wie Lockern).
+Entscheidung: E, weil Kosten, Planverfügbarkeit und Sicherheitsrisiko gegen einen CI-Reviewer sprechen und es keinen Beleg für eine Lücke der Lenses gibt (Härten braucht dieselbe Evidenz wie Lockern: [ADR 0027](0027-regeln-lockern.md), Fortschreibung [factory#298](fortschreibungen/0027-298-symmetrische-evidenz.md)).
 
 - **Kosten.** Offizielle Zahl je Review: keine; Drittquellen nennen 15–25 $, unbelegt und hier nicht als Fakt gewertet. Eigene Größenordnung, **Schätzung**: 437 Lens-Läufe, Σ 225,80 $ (Opus 5.5) im Fenster 2026-10-07T12:00Z bis 2026-10-09T12:18Z (Quelle: `docs/model-routing.md` › Lens-Kostenstruktur), also rund 0,52 $ je Lauf; 63 gemergte PRs vom 2026-11-05 bis 2026-11-11 (gezählt mit `gh pr list --state merged --search "merged:2026-11-05..2026-11-11"`, Dependabot eingeschlossen). Ergebnis: mindestens rund 33 $ pro Woche bei einem lens-großen Pass je PR, bei Review je Push ein Vielfaches. Mit OAuth-Token wäre dasselbe Volumen Abo-Kontingent, das die Harness-Phase senken soll.
 - **Planverfügbarkeit.** Claude Code Review ist nur für Team und Enterprise verfügbar und braucht die Claude-GitHub-App; ohne diese Pläne bleiben `/code-review` lokal, Ultrareview oder eine eigene CI mit API-Key bzw. Cloud-Zugang. Welcher Plan vorliegt, steht nicht im Repo und gehört nicht in diesen öffentlichen ADR; die Entscheidung hängt davon nicht ab, weil Kosten und Sicherheit sie allein tragen.
 - **Sicherheit.** Bei Fork-PRs gibt GitHub keine Secrets heraus: die Action reviewt nur Branches desselben Repos, Code Review überspringt Drafts und Forks, PRs Dritter bekämen also keinen Review (eigene Agenten-PRs haben schon Lenses und Holdout). `pull_request_target` ist in der Fabrik ausgeschlossen (`docs/sicherheit-agenten.md`). Ein CI-Reviewer verarbeitet PR-Text, hält ein Secret und postet nach außen, das verletzt die Rule-of-Two (`docs/sicherheit-agenten.md`); die Action filtert Prompt-Injection nur teilweise („new bypasses may exist“, security.md der Action). Die Claude-GitHub-App verlangt breite Rechte (u. a. Workflows lesen und schreiben, Administration lesen, Repository-Hooks lesen und schreiben), das widerspricht minimalen Token-Rechten, zumal die Leitplanken unter `.github/workflows` liegen. Ein Secret anlegen oder die App installieren wäre ein Pre-Flight-Stopp (Secrets, Repo-Einstellungen).
-- **Required-Check oder berichtend:** entfällt, ein Pilot ist nicht vorgesehen (die Action würde nur berichten, die Check-Run endet laut Doku nicht als Fehlschlag).
+- **Required-Check oder berichtend:** entfällt, ein Pilot ist nicht vorgesehen (die Action würde nur berichten, der Check-Run endet laut Doku nicht als Fehlschlag).
 - **Gate-Config-Änderung** (quellprojekt#1069): entfällt, es gibt keinen Workflow, keinen Leitplanken-Pfad und keinen Audit-Kommentar; `maintainer-approved` wird seit ADR 0014 nicht mehr gesetzt.
 - **Akzeptanzkriterium „Pilot bei Ja“:** entfällt, die Antwort lautet Nein.
 
@@ -40,7 +40,7 @@ Entscheidung: E, weil Kosten, Planverfügbarkeit und Sicherheitsrisiko gegen ein
 
 ## Re-Evaluierung
 
-Neu bewerten, wenn eines eintritt: (a) drei Status-Läufe in Folge zeigen Nacharbeit (`Folge #`/Revert, `scripts/factory-kennzahlen.mjs` › Nacharbeit) mit echten Defekten, die im Diff sichtbar waren und keine Lens gefunden hat (Evidenzregel analog ADR 0027 §2); (b) die Code-Review-Seite nennt Verfügbarkeit für den vorhandenen Plan ohne Zusatz-Credits. Prüftermin sonst 2027-05-12.
+Neu bewerten, wenn eines eintritt: (a) ein belegter Fund: ein Defekt, der im Diff sichtbar war und den keine Lens gefunden hat, mit Beleg `Folge #`-Commit oder Revert (`scripts/factory-kennzahlen.mjs` › Nacharbeit), gemäß der Fortschreibung factory#298 von ADR 0027; (b) die Code-Review-Seite nennt Verfügbarkeit für den vorhandenen Plan ohne Zusatz-Credits. Prüftermin sonst 2027-05-12 (ohne Wiedervorlage-Eintrag, also ohne automatischen Auslöser).
 
 ## Quellen
 
