@@ -193,6 +193,8 @@ function schritt(z, i) {
 const basename = baseName; // Verzeichnis, .exe und Groß-/Kleinschreibung weg (eine Quelle: shell-tabellen.mjs)
 /** Ist das Token der Befehl `git` (auch `git.exe`, voller Pfad)? */
 const istGit = (t) => /^git(\.exe)?$/.test(basename(t));
+/** `git-commit`, `git-push.exe`, `…/git-core/git-commit.exe`: die Dash-Form ruft dasselbe Unterkommando wie `git commit`; liefert dessen Namen oder null. */
+const gitDashUnter = (t) => /^git-([a-z][a-z-]*)$/.exec(basename(t))?.[1] ?? null;
 /** Klammern und Subexpression-Präfix vom Befehlsnamen lösen: `$(git`, `(git`. */
 const befehlsname = (v) => String(v).replace(/^[\s(@$]*\(?/, "").replace(/[)]+$/, "");
 
@@ -365,6 +367,13 @@ function dynamischerAufruf(k, raw) {
   return k.ort === null ? unklar("commit/push") : blockiert(k, k.ort, "commit/push (über ein dynamisches Kommando)");
 }
 
+/** `git …` oder Dash-Form `git-commit …`: Ergebnis von gitStatement, sonst undefined (kein git-Aufruf). */
+function gitAufruf(k, kopfWert, rest) {
+  if (istGit(kopfWert)) return gitStatement(k, rest);
+  const dash = gitDashUnter(kopfWert);
+  return dash ? gitStatement(k, [{ value: dash, literal: true }, ...rest]) : undefined;
+}
+
 /** Ein Statement bewerten: Ortswechsel, git oder Interpreter; Ergebnis `{ block }`, `{ ask }` oder null. */
 function statement(k, stmt) {
   const toks = stmt.tokens;
@@ -379,7 +388,8 @@ function statement(k, stmt) {
     ortWechsel(k, toks.slice(aufruf ? 2 : 1));
     return null;
   }
-  if (kopfTok && istGit(kopfWert)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
+  const gitErgebnis = kopfTok ? gitAufruf(k, kopfWert, toks.slice(aufruf ? 2 : 1)) : undefined;
+  if (gitErgebnis !== undefined) return gitErgebnis;
   if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd)) || LAUFZEITEN.has(basename(cmd).toLowerCase())) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
   return null;
 }

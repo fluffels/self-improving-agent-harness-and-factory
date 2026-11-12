@@ -190,7 +190,7 @@ const IMPORT_ENDUNGEN = ["", ".ts", ".mjs", ".cjs", ".js"];
 
 /**
  * Alle Importspezifizierer eines Quelltexts (ohne Auflösung, mit `node:*` und Paketnamen): statische `import`/`export … from` (auch Side-Effect), dynamisches `import` mit Literal,
- * `require("…")`, `createRequire(…)("…")` und die großzügige Aufruf-Form `)("…")` (fail-closed). Nicht erkannt: ein dynamischer Pfad (`require(pfad)`).
+ * `require` mit Literal, `createRequire` mit anschließendem Aufruf und die großzügige Aufruf-Form (schließende Klammer, dann Literal in Klammern; fail-closed). Nicht erkannt: ein dynamischer Pfad (`require(pfad)`).
  */
 export function importeAus(text) {
   return [

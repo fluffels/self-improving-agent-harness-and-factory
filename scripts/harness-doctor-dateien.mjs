@@ -362,12 +362,17 @@ export const normalizeProtected = (p) => p.replace(/^\//, "").replace(/\*.*$/, "
 
 /** Die Muster aus CODEOWNERS-Text, normalisiert (jeweils vor dem `@owner`; Kommentare und Leerzeilen zählen nicht). */
 export function codeownersPaths(text) {
-  const set = new Set();
+  return new Set(codeownersMuster(text).map(normalizeProtected));
+}
+
+/** Die rohen Muster aus CODEOWNERS-Text (jeweils vor dem `@owner`, nicht normalisiert; `#`-Zeilen zählen nicht). */
+export function codeownersMuster(text) {
+  const muster = [];
   for (const raw of text.split(/\r?\n/)) {
     const m = raw.trim().match(/^(\S+)\s+@\S+/);
-    if (m && !m[1].startsWith("#")) set.add(normalizeProtected(m[1]));
+    if (m && !m[1].startsWith("#")) muster.push(m[1]);
   }
-  return set;
+  return muster;
 }
 
 /**

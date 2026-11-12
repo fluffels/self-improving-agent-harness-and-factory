@@ -1,12 +1,16 @@
 // Einstieg: node scripts/codex-setup.mjs --langfuse-url <MCP-URL> [--ausgabe <Ordner>] [--langfuse-auth env|host] [--write].
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
-import { LANGFUSE_AUTH_MODI, pruefeAusgabe,pruefeQuellen, quellDatei, setupDateien, schreibeSetup } from "./codex-lib.mjs";
+import { LANGFUSE_AUTH_MODI, ignoreErgaenzen, pruefeAusgabe, pruefeQuellen, quellDatei, setupDateien, schreibeSetup } from "./codex-lib.mjs";
 
-export function main(argv = process.argv.slice(2), root = fileURLToPath(new URL("../", import.meta.url)), out = console.log, err = console.error) {
+/** Ob git `pfad` im Ziel ignoriert (Exit 0); Exit 128 oder kein git gilt als nicht ignoriert (die Datei wird dann geschrieben, harmlos). */
+const gitIgnoriert = (ziel) => (pfad) => spawnSync("git", ["check-ignore", "-q", "--", pfad], { cwd: ziel }).status === 0;
+
+export function main(argv = process.argv.slice(2), root = fileURLToPath(new URL("../", import.meta.url)), out = console.log, err = console.error, deps = {}) {
   const { werte, fehler } = flagsLesen(argv, { "langfuse-url": { type: "string" }, ausgabe: { type: "string" }, write: { type: "boolean" }, "langfuse-auth": { type: "string" } }, { pflicht: ["langfuse-url"] });
   if (fehler) { err(fehler.text); return 2; }
   if (werte["langfuse-auth"] !== undefined && !LANGFUSE_AUTH_MODI.includes(werte["langfuse-auth"])) { err(`--langfuse-auth: ${LANGFUSE_AUTH_MODI.join(" oder ")} erforderlich`); return 2; }
@@ -14,7 +18,8 @@ export function main(argv = process.argv.slice(2), root = fileURLToPath(new URL(
     const ziel = pruefeAusgabe(werte.ausgabe ?? root, root);
     const mcpPfad = quellDatei(root, ".mcp.json"); quellDatei(root, PROJEKT_CONFIG);
     const config = ladeProjektConfig({ rootDir: root }); pruefeQuellen(root, config);
-    const dateien = setupDateien(JSON.parse(readFileSync(mcpPfad, "utf8")), config, werte["langfuse-url"], werte["langfuse-auth"]);
+    const alle = setupDateien(JSON.parse(readFileSync(mcpPfad, "utf8")), config, werte["langfuse-url"], werte["langfuse-auth"]);
+    const dateien = ignoreErgaenzen(alle, deps.istIgnoriert ?? gitIgnoriert(ziel)); // factory#397: `.codex/*` bleibt im Bezieher lokal
     const pfade = werte.write ? schreibeSetup(ziel, dateien) : Object.keys(dateien);
     out(JSON.stringify({ geschrieben: werte.write === true, ausgabe: ziel, dateien: pfade, autonom: false }));
     return 0;

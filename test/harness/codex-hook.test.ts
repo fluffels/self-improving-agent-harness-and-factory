@@ -88,6 +88,14 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
     expect((await lauf(nutzlast("Bash", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect((await lauf(nutzlast("exec_command", { command: "git commit -m x" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
   });
+  test("Stash-Sperre (factory#323) wirkt auch unter Codex (factory#397, L38): git stash, pop und env git stash verweigert, list und status laufen durch", async () => {
+    for (const c of ["git stash", "git stash pop", "env git stash"]) {
+      const o = await lauf(nutzlast("exec_command", { command: c }));
+      expect(o?.hookSpecificOutput.permissionDecision, c).toBe("deny");
+      expect(grund(o), c).toContain("git stash");
+    }
+    for (const c of ["git stash list", "git status"]) expect(await lauf(nutzlast("exec_command", { command: c })), c).toBeNull();
+  });
   test("Annahme (undokumentiert): workdir gilt als cwd", async () => {
     expect(await lauf(nutzlast("Bash", { command: "git commit --allow-empty -m x", workdir: haupt }, wt))).not.toBeNull();
   });
@@ -95,9 +103,9 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
     expect(grund(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: neu.txt", "+x") }, haupt)))).toContain("main-Checkout");
     expect(await lauf(nutzlast("apply_patch", { command: patch("*** Update File: a.txt", "@@", "-x", "+y", "*** Move to: ../../etc/y") }, wt))).toBeNull();
   });
-  test("gh issue delete (Ask-Regel der settings.json) und gh repo delete (Deny-Regel)", async () => {
+  test("gh issue delete und gh repo delete: der gh-Guard greift vor den settings-Regeln (factory#397)", async () => {
     expect(grund(await lauf(nutzlast("Bash", { command: "gh issue delete 5" })))).toContain("Codex kennt keine Rückfrage");
-    expect(grund(await lauf(nutzlast("Bash", { command: "git status && gh repo delete x" })))).toContain("Bash(gh repo delete:*)");
+    expect(grund(await lauf(nutzlast("Bash", { command: "git status && gh repo delete x" })))).toContain("gh-Guard (factory#397)");
   });
   test("Push auf main im Haupt-Checkout", async () => {
     expect((await lauf(nutzlast("Bash", { command: "git push origin main" }, haupt)))?.hookSpecificOutput.permissionDecision).toBe("deny");
@@ -237,7 +245,7 @@ describe("Prozessstart", () => {
   const start = (text: string) => spawnSync("node", [join(process.cwd(), "scripts/codex-hook.mjs")], { input: text, encoding: "utf8", cwd: wt });
   test("Deny-JSON auf stdout, sauberer Fall leer, immer Exit 0", () => {
     const echt = start(nutzlast("Bash", { command: "gh issue delete 1" })); // braucht repoRoot (settings.json des Repos)
-    expect((JSON.parse(echt.stdout) as NonNullable<Out>).hookSpecificOutput.permissionDecisionReason).toContain("Bash(gh issue delete:*)");
+    expect((JSON.parse(echt.stdout) as NonNullable<Out>).hookSpecificOutput.permissionDecisionReason).toContain("gh-Guard (factory#397)");
     const deny = start(nutzlast("Bash", { command: ["x"] }));
     expect(deny.status).toBe(0);
     expect((JSON.parse(deny.stdout) as NonNullable<Out>).hookSpecificOutput.permissionDecision).toBe("deny");
