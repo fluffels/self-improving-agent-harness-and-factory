@@ -59,6 +59,7 @@
     "/scripts/harness-doctor-board.mjs",
     "/scripts/harness-doctor-githooks.mjs",
     "/scripts/harness-doctor-dateien.mjs",
+    "/scripts/harness-doctor-sammelcheck.mjs",
     "/scripts/workflow-blockform.mjs",
     "/scripts/harness-doctor-meldestelle.mjs",
     "/scripts/harness-doctor-ergebnis.mjs",

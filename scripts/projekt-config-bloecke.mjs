@@ -228,6 +228,27 @@ export function pruefeRisiko(b) {
   return fehler;
 }
 
+const SAMMEL_WORKFLOW = /^[A-Za-z0-9._-]+\.ya?ml$/;
+const SAMMEL_JOB = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function sammelEintragFehler(e, i) {
+  if (!istObjekt(e)) return [`sammelChecks[${i}] muss ein Objekt { workflow, job } sein`];
+  const fehler = Object.keys(e).filter((k) => k !== "workflow" && k !== "job").map((k) => `sammelChecks[${i}].${k} ist kein bekannter Schlüssel (erlaubt: workflow, job)`);
+  if (typeof e.workflow !== "string" || !SAMMEL_WORKFLOW.test(e.workflow)) fehler.push(`sammelChecks[${i}].workflow muss ein Dateiname unter .github/workflows/ sein (ohne /, Endung .yml oder .yaml): ${JSON.stringify(e.workflow)}`);
+  if (typeof e.job !== "string" || !SAMMEL_JOB.test(e.job)) fehler.push(`sammelChecks[${i}].job muss eine Job-ID sein (Buchstabe oder _, dann Buchstaben, Ziffern, _ oder -): ${JSON.stringify(e.job)}`);
+  return fehler;
+}
+
+/** Pur: prüft den optionalen Schlüssel `sammelChecks` (factory#401): nicht leere Liste aus `{ workflow, job }` (Workflow-Dateiname unter `.github/workflows/`, Job-ID des Sammel-Jobs), jedes Paar höchstens einmal; fehlt der Schlüssel, entfällt der Doctor-Punkt Sammel-Check. */
+export function pruefeSammelChecks(liste) {
+  if (liste === undefined) return [];
+  if (!Array.isArray(liste) || liste.length === 0) return ["sammelChecks muss eine nicht leere Liste aus { workflow, job } sein"];
+  const fehler = liste.flatMap(sammelEintragFehler);
+  const paare = liste.filter(istObjekt).map((e) => `${e.workflow}/${e.job}`);
+  const doppelt = paare.filter((p, i) => paare.indexOf(p) !== i);
+  return [...fehler, ...[...new Set(doppelt)].map((p) => `sammelChecks enthält ${p} doppelt`)];
+}
+
 /** Pur: prüft den optionalen Block `audit` (factory#395): `verzeichnisse` ist eine Liste repo-relativer POSIX-Pfade ohne Doppelte (npm-Lockfile-Verzeichnisse zusätzlich zur Wurzel; leer erlaubt); fehlt der Block, wird nur die Wurzel geprüft. */
 export function pruefeAudit(b) {
   if (b === undefined) return [];

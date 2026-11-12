@@ -190,6 +190,27 @@ describe("pruefeProjektConfig", () => {
     assert.match(mit({ verzeichnisse: ["/etc"] }).join("\n"), /audit\.verzeichnisse\[0\]/);
   });
 
+  test("sammelChecks (factory#401): optional; Liste aus { workflow, job }, verdrahtet in pruefeProjektConfig", () => {
+    const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), sammelChecks: b });
+    const text = (b: unknown) => mit(b).join("\n");
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    assert.deepEqual(mit([{ workflow: "ci.yml", job: "gate_2-x" }, { workflow: "b.yaml", job: "gate" }]), []);
+    assert.match(text([{ workflow: "a/ci.yml", job: "gate" }]), /sammelChecks\[0\]\.workflow muss ein Dateiname/);
+    assert.match(text([{ workflow: "ci.txt", job: "gate" }]), /sammelChecks\[0\]\.workflow muss ein Dateiname/);
+    assert.match(text([{ workflow: "ci.yml", job: "" }]), /sammelChecks\[0\]\.job muss eine Job-ID/);
+    assert.match(text([{ workflow: "ci.yml", job: "1x" }]), /sammelChecks\[0\]\.job muss eine Job-ID/);
+    assert.match(text([{ workflow: "ci.yml", job: "g" }, { workflow: "ci.yml", job: "g" }]), /sammelChecks enthält ci\.yml\/g doppelt/);
+    assert.match(text([{ workflow: "ci.yml", job: "g", extra: 1 }]), /sammelChecks\[0\]\.extra ist kein bekannter Schlüssel/);
+    assert.match(text([]), /sammelChecks muss eine nicht leere Liste/);
+    for (const kein of [null, {}, "x", 3]) assert.match(text(kein), /sammelChecks muss eine nicht leere Liste/);
+    assert.match(text(["x"]), /sammelChecks\[0\] muss ein Objekt/);
+    assert.match(text([null, { workflow: "ci.yml", job: "g" }]), /sammelChecks\[0\] muss ein Objekt/);
+    assert.match(text([{ workflow: ["ci.yml"], job: "g" }]), /sammelChecks\[0\]\.workflow muss ein Dateiname/);
+    assert.match(text([{ workflow: "ci.yml", job: ["g"] }]), /sammelChecks\[0\]\.job muss eine Job-ID/);
+    assert.match(text([{ job: "g" }]), /sammelChecks\[0\]\.workflow muss ein Dateiname/);
+    assert.equal(mit([{ workflow: "ci.yml", job: "g" }, { workflow: "ci.yml", job: "h" }, { workflow: "b.yml", job: "g" }]).length, 0);
+  });
+
   test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
     assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: "eingang/meldungen" }), []);
     for (const schlecht of ["", "foo", 3]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), meldestelle: schlecht }).join("\n"), /meldestelle muss die Form owner\/name[\s\S]*Fix:/);

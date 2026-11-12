@@ -23,6 +23,8 @@
  *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
+ *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
+ *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
@@ -33,6 +35,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { pflichtReviewMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
+import { sammelCheckPunkt } from "./harness-doctor-sammelcheck.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
 import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
@@ -327,7 +330,7 @@ export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = fals
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
@@ -344,6 +347,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
     "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
+    "Sammel-Check": () => sammelCheckPunkt({ config, workflows }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }

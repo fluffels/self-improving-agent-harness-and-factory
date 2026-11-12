@@ -614,7 +614,7 @@ describe("Workflow-Auslöser", () => {
     }
   });
   test("steht in DATEI_PUNKTE vor CODEOWNERS-Spiegel", () => {
-    expect(DATEI_PUNKTE.at(-2)).toBe("Workflow-Auslöser");
+    expect(DATEI_PUNKTE.at(-3)).toBe("Workflow-Auslöser");
   });
 });
 
@@ -629,13 +629,14 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-4)).toBe("Required-Check-Quellen");
-    expect(DATEI_PUNKTE.at(-3)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-5)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-4)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-1)).toBe("Sammel-Check");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });
