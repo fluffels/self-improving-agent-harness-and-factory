@@ -37,7 +37,7 @@ const config = C.ladeProjektConfig();
 const sprache = C.spracheAus(config).spezifikation;
 const TOPS = new Set(["scripts", "docs", "test"]);
 const git = (extra: Partial<Git> = {}): Git => ({ shallow: false, existiert: () => true, zeilen: () => 100, letzteAenderung: () => null, geaendertSeit: () => false, ...extra });
-const ctx = (g: Git) => ({ config, owner: "o", tops: TOPS, git: g, sprache });
+const ctx = (g: Git) => ({ config, owner: "o", repo: "o/r", tops: TOPS, git: g, sprache });
 const issue = (number: number, extra: Record<string, unknown> = {}): Issue => ({
   number, title: `Titel ${number}`, body: "", author: { login: "o", is_bot: false }, labels: [], assignees: [], updatedAt: "2026-10-01T00:00:00Z", blockedBy: { nodes: [] }, comments: [], ...extra,
 });
@@ -186,10 +186,15 @@ describe("pruefe: Blocker", () => {
     ["Text, geschlossen", { body: blockerZeile("#9") }, ["1:blocker-zu"]],
     ["Text, offen", { body: blockerZeile("#2") }, []],
     ["Text, offen aber Fremdeingang (übersprungen)", { body: blockerZeile("#5") }, []],
-    ["nativ CLOSED", { blockedBy: { nodes: [{ number: 7, state: "CLOSED" }] } }, ["1:blocker-zu"]],
-    ["nativ OPEN", { blockedBy: { nodes: [{ number: 7, state: "OPEN" }] } }, []],
+    ["Text, ausgeschriebenes eigenes Repo, geschlossen", { body: blockerZeile("o/r#9") }, ["1:blocker-zu"]],
+    ["Text, eigenes Repo in anderer Schreibweise, geschlossen", { body: blockerZeile("O/R#9") }, ["1:blocker-zu"]],
+    ["Text, ausgeschriebenes eigenes Repo, offen", { body: blockerZeile("o/r#2") }, []],
+    ["nativ CLOSED mit eigener url", { blockedBy: { nodes: [{ number: 7, state: "CLOSED", url: "https://github.com/o/r/issues/7" }] } }, ["1:blocker-zu"]],
+    ["nativ CLOSED aus fremdem Repo", { blockedBy: { nodes: [{ number: 7, state: "CLOSED", url: "https://github.com/fremd/x/issues/7" }] } }, []],
+    ["nativ CLOSED ohne url", { blockedBy: { nodes: [{ number: 7, state: "CLOSED" }] } }, []],
+    ["nativ OPEN", { blockedBy: { nodes: [{ number: 7, state: "OPEN", url: "https://github.com/o/r/issues/7" }] } }, []],
     ["nativ ohne Zustand", { blockedBy: { nodes: [{ number: 7 }] } }, []],
-    ["nativ CLOSED ohne Nummer", { blockedBy: { nodes: [{ state: "CLOSED" }] } }, []],
+    ["nativ CLOSED ohne Nummer", { blockedBy: { nodes: [{ state: "CLOSED", url: "https://github.com/o/r/issues/7" }] } }, []],
     ["fremdes Repo übersprungen", { body: blockerZeile("x/y#9") }, []],
   ])("%s", (_n, extra, erwartet) => {
     const andere = [issue(2, { title: "Ganz anderer Gegenstand hier" }), issue(5, { title: "Fremdes Thema dort", author: { login: "fremd", is_bot: false } })];
