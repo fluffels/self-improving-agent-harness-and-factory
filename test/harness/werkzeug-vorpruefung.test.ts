@@ -256,11 +256,11 @@ describe("CLI und Codex", () => {
   });
   test("codex-vorpruefung nimmt Werkzeug-Mängel auf", () => {
     const out: string[] = [];
-    const code = codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", werkzeug: () => [{ text: "T", fix: "F" }] });
+    const code = codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [{ text: "T", fix: "F" }] });
     expect(code).toBe(1);
     expect((JSON.parse(out[0]) as { maengel: string[] }).maengel).toContain("Werkzeug-Vorprüfung: T (Fix: F)");
     out.length = 0;
-    codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", werkzeug: () => [] });
+    codex.main([], { out: (s: string) => out.push(s), err: () => {}, lade: () => lib.ladeProjektConfig(), root: "/nirgends", codexVersion: () => null, werkzeug: () => [] });
     expect((JSON.parse(out[0]) as { maengel: string[] }).maengel.some((m: string) => m.startsWith("Werkzeug-Vorprüfung"))).toBe(false);
   });
 });
@@ -356,7 +356,7 @@ describe("Review-Runde 1 (factory#260): echter Runner, Wurzel als cwd, Signal un
     mkdirSync(join(root, ".claude", "agents"), { recursive: true });
     writeFileSync(join(root, ".claude", "agents", "u.md"), PW);
     const out: string[] = [];
-    codex.main([], { out: (s: string) => out.push(s), err: () => {}, root, lade: () => ({ ...(lib.ladeProjektConfig() as object), ...block([node, "-e", "process.exit(1)"]) }) });
+    codex.main([], { out: (s: string) => out.push(s), err: () => {}, root, codexVersion: () => null, lade: () => ({ ...(lib.ladeProjektConfig() as object), ...block([node, "-e", "process.exit(1)"]) }) });
     const maengel = (JSON.parse(out[0]) as { maengel: string[] }).maengel;
     expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: MCP-Server „playwright“ fehlt"))).toBe(true);
     expect(maengel.some((m) => m.startsWith("Werkzeug-Vorprüfung: Werkzeug „Probe“ nicht bereit"))).toBe(true);
