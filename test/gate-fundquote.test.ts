@@ -192,6 +192,10 @@ describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("rot");
   });
+  test("auch npm test als gedruckter Befehl macht den Folgekopf test verschachtelt (rot)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm test\n", kopf("test"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("rot");
+  });
   test("Negativ: ohne npm run in der Zeile endet das Gate an der fremden Kopfzeile (grün)", () => {
     const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: vitest run --coverage\n", kopf("test:coverage"));
     expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
