@@ -79,6 +79,12 @@ function plane(aendere: (c: Record<string, unknown>) => void, ziel: Record<strin
 const namen = (p: Plan): string[] => [...p.dateien.keys()].filter((k) => k.startsWith(".github/")).sort();
 
 describe("planeSync und Sicherheits-Module", () => {
+  test("(z) Negativfall e2e-Profil (factory#246): eine Config ohne e2e erzeugt keine Meldung und keine e2e-Datei", () => {
+    const p = plane(() => undefined);
+    expect(p.fehler).toEqual([]);
+    expect(p.meldungen.join("\n")).not.toMatch(/e2e/i);
+    expect([...p.dateien.keys()].filter((k) => /e2e/i.test(k))).toEqual([]);
+  });
   test("(a) ohne Schlüssel module gilt der Standard: nur dependabot-inbox", () => {
     const p = plane(() => undefined);
     expect(p.fehler).toEqual([]);
