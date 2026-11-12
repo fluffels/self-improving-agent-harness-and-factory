@@ -328,7 +328,7 @@ const ungueltig: [string, unknown][] = [
 for (const [name, antwort] of ungueltig) {
   test(`Tracing: ungültige Antwort (${name}) ergibt „Tracing-Ausfall“ und Exit 1; ein gültiger Body (JSON mit status OK) bleibt grün`, async () => {
     const r = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(() => Promise.resolve(antwort)) });
-    expect(r.code).toBe(1); expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: .*Health/);
+    expect(r.code).toBe(1); expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: Langfuse antwortet ohne gültigen Health-Body \(HTTP 200, erwartet JSON mit status OK\)/);
     const ok = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(() => Promise.resolve({ status: 200, text: () => Promise.resolve('{"status":"OK","version":"3.1.0"}') })) });
     expect(ok).toMatchObject({ code: 0, autonom: true });
   });
@@ -344,6 +344,20 @@ test("Tracing mit echtem fetch und lokalem HTTP-Server: HTML und {} sind ein Aus
     antwort = "{}"; expect(await p.tracingMaengel({ env })).toHaveLength(1);
     antwort = '{"status":"OK","version":"3.1.0"}'; expect(await p.tracingMaengel({ env })).toEqual([]);
   } finally {
+    await new Promise((ok) => server.close(ok));
+  }
+});
+test("Tracing: ein Body, der nach den Headern stockt, wird innerhalb der Frist abgebrochen (Timeout statt Hängen)", async () => {
+  const server = createServer((_q, res) => { res.writeHead(200); res.write("{"); }); // Body endet nie
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  const { port } = server.address() as AddressInfo;
+  try {
+    const t0 = Date.now();
+    const m = await p.tracingMaengel({ env: { LANGFUSE_BASE_URL: `http://127.0.0.1:${port}` }, fristMs: 100 });
+    expect(m).toHaveLength(1); expect(m[0]).toContain("Timeout nach 100 ms");
+    expect(Date.now() - t0).toBeLessThan(2000);
+  } finally {
+    server.closeAllConnections();
     await new Promise((ok) => server.close(ok));
   }
 });

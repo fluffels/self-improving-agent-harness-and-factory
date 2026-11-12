@@ -47,6 +47,10 @@ export async function pruefeLangfuseAusUmgebung({ env = process.env, home = home
   const mitBody = async (url, optionen) => { // der Body wird innerhalb der Frist gelesen; `bewerteHealth` bleibt unberührt (Claude-Pfad unverändert)
     const res = await fetchImpl(url, optionen);
     if (res.status === 200) bodyUngueltig = !(await healthBodyGueltig(res));
+    if (optionen?.signal?.aborted) { // Frist beim Lesen des Bodys: pruefeLangfuse meldet den Timeout, nicht einen ungültigen Body
+      bodyUngueltig = false;
+      throw new Error("Frist überschritten");
+    }
     return res;
   };
   const urteil = await pruefeLangfuse({ baseUrl, fetchImpl: mitBody, fristMs });
