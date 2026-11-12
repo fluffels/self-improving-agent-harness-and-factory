@@ -12,6 +12,7 @@
     "/eslint-suppressions.json",
     "/any-suppressions.json",
     "/vite.config.ts",
+    "/tsconfig.json",
     "/.github/workflows/*.yml",
     "/.github/CODEOWNERS",
     "/.github/protected-paths.json",
@@ -154,7 +155,9 @@
     "/scripts/worktree-aufraeumen.mjs",
     "/scripts/fremdtext-lib.mjs",
     "/scripts/flag-lib.mjs",
-    "/scripts/codex-freigaben.mjs",
+    "/scripts/codex-*.mjs",
+    "/test/support/bezieher-npm-skripte.ts",
+    "/test/groessenstufe.test.ts",
     "/.agents/",
     "/.githooks/",
     "/docs/agent-harness*"
