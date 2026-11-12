@@ -27,6 +27,10 @@
  * Wörter. Laufzeit: Befehle mit `gh api` über `LAENGE_MAX` Zeichen und Befehle mit mehr als `STELLEN_MAX` Fundstellen
  * (gh/Interpreter) fragen pauschal, damit die Prüfung nie zum Timeout des Dispatchers wird.
  *
+ * Required-Check-Schutz (factory#375 L50): ein schreibender Aufruf auf `…/statuses/<sha>` oder `…/check-runs[/<id>]` fragt ebenfalls (ein Agent
+ * könnte sonst einen Required Check grün melden); `…/check-runs/<id>/rerequest` und Lesezugriffe laufen durch. Der laufzeitneutrale Riegel ist
+ * der `integration_id`-Pin im Ruleset (Doctor-Punkt Required-Check-Pin); Codex hat diesen Hook nicht.
+ *
  * Bewusste Grenzen:
  *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
  *    Queries bleiben ein Segment), kein vollständiges Shell-Parsing. Er fängt die dokumentierten Formen, keine
@@ -87,6 +91,14 @@ const REST_PFADE = [
   /\/transfer\b/,
   /\/git\/refs\//,
 ];
+
+/** Commit-Status und Check-Läufe (factory#375 L50): ein schreibender Aufruf könnte einen Required Check grün melden (ohne integration_id-Pin).
+ *  `…/check-runs/<id>/rerequest` bleibt erlaubt (stößt nur neu an), `…/commits/<sha>/statuses` ist ein Lesepfad. */
+const STATUS_PFADE = [
+  /\/statuses\/[^\s'"/]+/,
+  /\/check-runs(?:\/\d+)?(?=$|[\s'"?])/,
+];
+const STATUS_GRUND = "setzt einen Commit-Status oder Check-Lauf (könnte einen Required Check grün melden)";
 
 /** Anlege-Sperre (#1693): neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Pflichtfelder, Board-Platz). */
 const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Position mit `--nach <nr> --weil \"<grund>\"` oder `--notfall <art>`)";
@@ -270,6 +282,7 @@ function segmentGrund(segment) {
   }
   const mutierend = m !== null ? m !== "GET" : hatFelder(segment);
   if (!mutierend) return null; // reiner Lesezugriff auf Einstellungspfade ist erlaubt
+  if (STATUS_PFADE.some((muster) => muster.test(segment))) return STATUS_GRUND;
   for (const muster of REST_PFADE) if (muster.test(segment)) return `schreibender REST-Aufruf auf Einstellungen/Veröffentlichung (${muster.source})`;
   if (m === "PATCH" && /\brepos\/[^/\s'"]+\/[^/\s'"]+(?=\s|$|['"])/.test(segment)) return "PATCH auf die Repo-Einstellungen";
   return null;
