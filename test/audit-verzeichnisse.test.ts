@@ -24,3 +24,68 @@ describe("pruefeAudit (factory#395 L54)", () => {
     expect(pruefe({ verzeichnisse: ["a", "a"] }).join("\n")).toMatch(/audit\.verzeichnisse enthält a doppelt/);
   });
 });
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawV from "../scripts/audit-verzeichnisse.mjs";
+
+type Lauf = (verzeichnis: string, args: string[]) => number;
+const V = rawV as unknown as {
+  auditVerzeichnisse: (config: unknown) => string[];
+  main: (argv: string[], deps: { ladeConfig: () => unknown; fuehreAus: Lauf; log: (t: string) => void; err: (t: string) => void }) => number;
+};
+
+describe("auditVerzeichnisse", () => {
+  test("ohne Block nur die Wurzel, mit Block Wurzel plus Verzeichnisse", () => {
+    expect(V.auditVerzeichnisse({})).toEqual(["."]);
+    expect(V.auditVerzeichnisse({ audit: { verzeichnisse: [] } })).toEqual(["."]);
+    expect(V.auditVerzeichnisse({ audit: { verzeichnisse: ["frontend"] } })).toEqual([".", "frontend"]);
+  });
+});
+
+describe("main (npm audit je Verzeichnis)", () => {
+  const lauf = (codes: Record<string, number>, config: unknown = { audit: { verzeichnisse: ["frontend"] } }) => {
+    const gerufen: string[][] = [];
+    const log: string[] = [];
+    const fuehreAus: Lauf = (v, args) => {
+      gerufen.push([v, ...args]);
+      return codes[v] ?? 0;
+    };
+    const run = (argv: string[]) => V.main(argv, { ladeConfig: () => config, fuehreAus, log: (t) => log.push(t), err: (t) => log.push(t) });
+    return { run, gerufen, log };
+  };
+
+  test("Wurzel grün, frontend rot: Exit 1, beide Verzeichnisse geprüft", () => {
+    const l = lauf({ ".": 0, frontend: 1 });
+    expect(l.run(["--audit-level", "high"])).toBe(1);
+    expect(l.gerufen.map((g) => g[0])).toEqual([".", "frontend"]);
+    expect(l.gerufen[1]).toContain("--audit-level=high");
+    expect(l.log.join("\n")).toMatch(/frontend/);
+  });
+
+  test("Wurzel rot bricht nicht ab: auch frontend läuft", () => {
+    const l = lauf({ ".": 1 });
+    expect(l.run(["--audit-level", "high"])).toBe(1);
+    expect(l.gerufen).toHaveLength(2);
+  });
+
+  test("alle grün: Exit 0; ohne Block nur die Wurzel", () => {
+    expect(lauf({}).run(["--audit-level", "high"])).toBe(0);
+    const ohne = lauf({}, {});
+    expect(ohne.run(["--audit-level", "critical"])).toBe(0);
+    expect(ohne.gerufen.map((g) => g[0])).toEqual(["."]);
+  });
+
+  test.each([[[]], [["--audit-level"]], [["--audit-level", "sehr-hoch"]], [["--audit-level", "high", "extra"]]])("falsche Bedienung %j: Exit 2, kein npm-Aufruf", (argv) => {
+    const l = lauf({});
+    expect(l.run(argv as string[])).toBe(2);
+    expect(l.gerufen).toEqual([]);
+  });
+
+  test("nicht lesbare Config: Exit 2", () => {
+    const fuehreAus: Lauf = () => 0;
+    const log: string[] = [];
+    const code = V.main(["--audit-level", "high"], { ladeConfig: () => { throw new Error("kaputt"); }, fuehreAus, log: (t) => log.push(t), err: (t) => log.push(t) });
+    expect(code).toBe(2);
+    expect(log.join("\n")).toMatch(/kaputt/);
+  });
+});

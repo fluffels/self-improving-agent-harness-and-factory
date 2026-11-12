@@ -102,8 +102,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - name: Audit der Abhängigkeiten (blockt bei high und höher)
-        run: npm audit --audit-level=high
+      - name: Audit der Abhängigkeiten (Wurzel plus audit.verzeichnisse, blockt bei high und höher)
+        run: node scripts/audit-verzeichnisse.mjs --audit-level high
 
   # Probe-Erstbezug (factory#234): baut im Runner-Temp einen Fixture-Bezieher (Fixture-Projekt, AGENTS.md mit Kern-Markern und Projekt-Block in Größe von PROJEKT_BLOCK_RAUM), synct ihn aus einem lokalen Klon
   # dieses Commits mit lokalem Tag, fährt die mechanischen Update-Schritte und das volle verifyKompakt. Jeder Fund ist rot (Kern-Budget, tote Kern-Verweise): die Fabrik findet sie selbst, auch ohne
