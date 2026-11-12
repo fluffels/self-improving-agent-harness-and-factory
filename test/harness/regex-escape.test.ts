@@ -35,8 +35,10 @@ const AUFRUF = new RegExp(
   ].join(""),
   "g",
 );
-/** Ein Regex-Literal-Argument von `.replace(`, dessen Quelle den Backslash selbst maskiert (zwei Backslashes). */
-const MASKIERT_BACKSLASH = new RegExp("\\.replace\\(\\s*\\/[^/\\n]*\\\\\\\\[^/\\n]*\\/[a-z]*\\s*,");
+/** Das Regex-Literal-Argument eines `.replace(`-Aufrufs (Gruppe 1 = Quelle); dieselbe Teilgrammatik wie in AUFRUF, damit `\/` und Klassen stimmen. */
+const REGEX_ARG = new RegExp("\\.replace\\(\\s*\\/((?:\\\\.|\\[(?:\\\\.|[^\\]\\\\\\n])*\\]|[^/\\\\\\n\\[])+)\\/[a-z]*", "g");
+/** Maskiert irgendein `.replace(`-Regex-Literal der Zeile den Backslash selbst? Die Quelle wird in Escape-Paare zerlegt, ein Paar aus zwei Backslashes zählt. */
+const maskiertBackslash = (zeile: string): boolean => [...zeile.matchAll(REGEX_ARG)].some((m) => (m[1].match(/\\.|[^\\]/g) ?? ([] as string[])).includes(BS2));
 
 /** Die Befunde einer Zeile (leer = sauber). Pur. */
 export function befunde(zeile: string): string[] {
@@ -45,7 +47,7 @@ export function befunde(zeile: string): string[] {
     const [, quelle, flags] = m;
     const istRegex = quelle !== undefined;
     if (istRegex && flags.includes("g")) {
-      if (!MASKIERT_BACKSLASH.test(zeile)) out.push("M1 Escape ohne Backslash");
+      if (!maskiertBackslash(zeile)) out.push("M1 Escape ohne Backslash");
     } else if (!istRegex || !quelle.startsWith("^")) {
       out.push("M2 nur erster Treffer");
     }
@@ -92,6 +94,11 @@ describe("Regex-Escape: Muster erkennen (Red-Green-Fixtures)", () => {
     assert.deepEqual(befunde(aufruf("/(a)/g", "$1")), []);
     assert.deepEqual(befunde("s.replace(/[.*]/g, (m) => m)"), []);
     assert.deepEqual(befunde(aufruf("/^" + BS + "//", BS2 + "/")), []);
+    // klassische escapeRegExp-Formen mit maskiertem Schrägstrich sind sauber (Escape-Paare, nicht Teilstrings)
+    assert.deepEqual(befunde("s.replace(/[-" + BS + "/" + BS2 + "^$*+?.()|[" + BS + "]{}]/g, '" + BS2 + "$&')"), []);
+    assert.deepEqual(befunde("s.replace(/[.*+?^${}()|[" + BS + "]" + BS2 + BS + "/]/g, '" + BS2 + "$&')"), []);
+    // ein `.split` mit maskiertem Backslash auf derselben Zeile entlastet das `.replace` nicht
+    assert.deepEqual(befunde("const p = x.split(/" + BS2 + "/, 2), e = s.replace(/[.*]/g, \"" + BS2 + "$&\");"), ["M1 Escape ohne Backslash"]);
     // MASKIERT_BACKSLASH: Leerraum nach der Klammer und vor dem Komma, mehrere Flags (Fehlalarm-Schutz)
     assert.deepEqual(befunde("s.replace( /[.*]" + BS2 + "/g, \"" + BS2 + "$&\")"), []);
     assert.deepEqual(befunde("s.replace(/[.*]" + BS2 + "/g , \"" + BS2 + "$&\")"), []);
