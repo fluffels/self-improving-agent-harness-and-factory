@@ -19,6 +19,7 @@ const lib = raw as unknown as {
   modulGewaehlt(e: { modul?: string }, g: string[]): boolean;
   modulImportErlaubt(von: { modul?: string }, nach: { modul?: string }): boolean;
   modulFormFehler(c: unknown): string[];
+  modulKopienBefunde(m: unknown, w: { gewaehlt: string[]; unbestimmt?: boolean }, o: { vorhanden(p: string): boolean; imStand(e: { pfad: string }): boolean; kopien: { datei: string; grund: string }[] }): { pfad: string; art: string; modul?: string }[];
   modulWahl(c: unknown, m: unknown, o?: { configPfad: string }): Wahl;
   modulFehler(e: Record<string, unknown>): string[];
   manifestKenntModule(m: unknown): boolean;
@@ -192,6 +193,90 @@ describe("modul mit Nicht-Text-Wert (#145): eine Einheit gilt als Moduleinheit n
   });
   test("modulFehler meldet den Wert trotzdem (Validierung prüft roh)", () => {
     expect(lib.modulFehler({ pfad: "x.yml", ring: "kern", modul: 5 }).join("\n")).toContain("Name");
+  });
+});
+
+describe("modulKopien: Form (factory#244)", () => {
+  const ok = { datei: "scripts/x.mjs", grund: "wird hier bewusst anders geführt" };
+  test("gültig oder fehlend ist kein Fehler", () => {
+    expect(lib.modulFormFehler({ modulKopien: [] })).toEqual([]);
+    expect(lib.modulFormFehler({ modulKopien: [ok] })).toEqual([]);
+    expect(lib.modulFormFehler({})).toEqual([]);
+    expect(lib.modulFormFehler(undefined)).toEqual([]);
+  });
+  test.each([
+    ["keine Liste", { modulKopien: "x" }, /modulKopien muss eine Liste/],
+    ["Eintrag kein Objekt", { modulKopien: ["a"] }, /modulKopien\[0\] muss ein Objekt/],
+    ["datei mit Backslash", { modulKopien: [{ ...ok, datei: "a\\b" }] }, /datei muss ein repo-relativer POSIX-Pfad/],
+    ["datei absolut", { modulKopien: [{ ...ok, datei: "/a" }] }, /datei muss/],
+    ["datei mit ..", { modulKopien: [{ ...ok, datei: "a/../b" }] }, /datei muss/],
+    ["datei nur Leerzeichen", { modulKopien: [{ ...ok, datei: "  " }] }, /datei muss/],
+    ["datei mit Laufwerk", { modulKopien: [{ ...ok, datei: "C:/x" }] }, /datei muss/],
+    ["datei mit .", { modulKopien: [{ ...ok, datei: "a/./b" }] }, /datei muss/],
+    ["datei mit leerem Segment", { modulKopien: [{ ...ok, datei: "a//b" }] }, /datei muss/],
+    ["Eintrag ist eine Liste", { modulKopien: [[]] }, /modulKopien\[0\] muss ein Objekt/],
+    ["Eintrag ist null", { modulKopien: [null] }, /modulKopien\[0\] muss ein Objekt/],
+    ["grund leer", { modulKopien: [{ ...ok, grund: "  " }] }, /grund muss ein nicht leerer Text/],
+    ["grund fehlt", { modulKopien: [{ datei: "a" }] }, /grund muss/],
+    ["datei doppelt", { modulKopien: [ok, ok] }, /enthält scripts\/x\.mjs doppelt/],
+  ])("%s ist ein Fehler mit Fix", (_n, c, re) => {
+    const f = lib.modulFormFehler(c);
+    expect(f.join("\n")).toMatch(re);
+    for (const m of f) expect(m).toMatch(/\nFix: \S/);
+  });
+});
+
+describe("modulKopienBefunde (factory#244)", () => {
+  const m = { eintraege: [{ pfad: "a.yml", modul: "codeql" }, { pfad: "b.yml", modul: "zizmor" }, { pfad: "d.mjs" }] };
+  const kopie = (datei: string) => ({ datei, grund: "bewusst" });
+  const lauf = (o: { gewaehlt?: string[]; unbestimmt?: boolean; da?: string[]; stand?: string[]; kopien?: { datei: string; grund: string }[] }) =>
+    lib.modulKopienBefunde(m, { gewaehlt: o.gewaehlt ?? [], unbestimmt: o.unbestimmt }, { vorhanden: (p) => (o.da ?? []).includes(p), imStand: (e) => (o.stand ?? []).includes(e.pfad), kopien: o.kopien ?? [] });
+  test("(a) Datei, Modul nicht gewählt, nicht im Stand, ohne Grund: Befund", () => {
+    expect(lauf({ da: ["a.yml"] })).toEqual([{ pfad: "a.yml", art: "ohne-grund", modul: "codeql" }]);
+  });
+  test("Modul gewählt, Datei da, nicht im Stand, ohne Grund: kein Befund (kein Fehlalarm vor dem Sync)", () => {
+    expect(lauf({ gewaehlt: ["codeql"], da: ["a.yml"] })).toEqual([]);
+  });
+  test("(b) mit Begründung kein Befund", () => {
+    expect(lauf({ da: ["a.yml"], kopien: [kopie("a.yml")] })).toEqual([]);
+  });
+  test("ohne Datei kein Befund; Einheit ohne Modul nie", () => {
+    expect(lauf({ da: ["d.mjs"] })).toEqual([]);
+  });
+  test("(c) begründeter Pfad, Modul gewählt: veralteter Eintrag", () => {
+    expect(lauf({ gewaehlt: ["codeql"], da: ["a.yml"], kopien: [kopie("a.yml")] })).toEqual([{ pfad: "a.yml", art: "modul-gewaehlt" }]);
+  });
+  test("(d) begründeter Pfad ohne Moduleinheit", () => {
+    expect(lauf({ da: ["d.mjs", "z.txt"], kopien: [kopie("d.mjs"), kopie("z.txt")] }).map((b) => b.art)).toEqual(["keine-moduleinheit", "keine-moduleinheit"]);
+  });
+  test("(e) begründeter Pfad ohne Datei", () => {
+    expect(lauf({ kopien: [kopie("a.yml")] })).toEqual([{ pfad: "a.yml", art: "fehlt" }]);
+  });
+  test("(f) Pfad im Stand und Modul abgewählt: kein neuer Befund", () => {
+    expect(lauf({ da: ["a.yml"], stand: ["a.yml"] })).toEqual([]);
+  });
+  test("liegt der Pfad bei zwei Modulen, genügt ein gewähltes für den veralteten Eintrag; ohne Manifest nichts", () => {
+    const zwei = { eintraege: [{ pfad: "a.yml", modul: "codeql" }, { pfad: "a.yml", modul: "zizmor" }] };
+    const o = { vorhanden: () => true, imStand: () => false, kopien: [kopie("a.yml")] };
+    expect(lib.modulKopienBefunde(zwei, { gewaehlt: ["codeql"] }, o)).toEqual([{ pfad: "a.yml", art: "modul-gewaehlt" }]);
+    expect(lib.modulKopienBefunde(undefined, { gewaehlt: [] }, { ...o, kopien: [] })).toEqual([]);
+  });
+  test("ein Pfad bei zwei Modulen ohne Grund ergibt genau einen Befund", () => {
+    const zwei = { eintraege: [{ pfad: "a.yml", modul: "codeql" }, { pfad: "a.yml", modul: "zizmor" }] };
+    const b = lib.modulKopienBefunde(zwei, { gewaehlt: [] }, { vorhanden: () => true, imStand: () => false, kopien: [] });
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ pfad: "a.yml", art: "ohne-grund" });
+  });
+  test("Einträge ohne datei erzeugen nur ihre Formfehler, keine Doppelt-Meldung", () => {
+    const f = lib.modulFormFehler({ modulKopien: [{ grund: "x" }, { grund: "y" }] });
+    expect(f.join("\n")).not.toContain("doppelt");
+    expect(f).toHaveLength(2);
+  });
+  test("(g) unbestimmte Wahl: nichts", () => {
+    expect(lauf({ unbestimmt: true, da: ["a.yml"], kopien: [kopie("zz")] })).toEqual([]);
+  });
+  test("(h) mit dem Standard aus gewaehlteModule ({} wählt nur dependabot-inbox) ist die Datei eines anderen Moduls ein Befund", () => {
+    expect(lauf({ gewaehlt: lib.gewaehlteModule({}), da: ["b.yml"] }).map((b) => b.pfad)).toEqual(["b.yml"]);
   });
 });
 

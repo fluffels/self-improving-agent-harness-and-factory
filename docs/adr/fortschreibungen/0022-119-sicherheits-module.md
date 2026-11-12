@@ -16,7 +16,7 @@ Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Besitz-Manifes
 
 - Geprüft werden Form und Namensmenge der Wahl, nicht, ob der Bezieher die Workflows eines Moduls braucht oder die nötigen Secrets und Repo-Einstellungen hat (das bleibt Sache des Doctors).
 - `ghsa-lib.mjs` ist Kern (ohne `modul`), weil zwei Module sie importieren (`modulImportErlaubt`).
-- Die Projektwert-Fläche (`projektwertDateien`) nimmt jede `.yml` des Manifests auf, auch die eines abgewählten Moduls: eine liegengebliebene `codeql.yml` ohne `codeql.sprachen` hält das Drift-Gate rot, bis sie von Hand entfernt ist (die Sync-Meldung „im Ziel nicht gelöscht“ ist dann Pflicht, nicht optional).
+- Die Projektwert-Fläche (`projektwertDateien`) nimmt jede `.yml` des Manifests auf, auch die eines abgewählten Moduls: eine liegengebliebene `codeql.yml` ohne `codeql.sprachen` hält das Drift-Gate rot, bis sie von Hand entfernt ist (die Sync-Meldung „im Ziel nicht gelöscht“ ist dann Pflicht, nicht optional). Eine Datei an einem Modulpfad ohne Stand-Eintrag macht das Gate seit factory#244 rot, außer `modulKopien` begründet sie ([Fortschreibung #244](0022-244-modulkopien.md)).
 - `MODUL_STANDARD` (`dependabot-inbox`) ist die einzige Namensliste im Code; `test/harness/kern-reinheit.test.ts` hält sie gegen das echte Manifest.
 - Die Import-Regel sieht nur statische relative Importe und `export … from`, keine dynamischen Importe.
 - Ein Bezieher mit eigener Kopie eines Modul-Workflows bekommt beim Wählen ein `ABGLEICH` (Erst-Übernahme-Schutz, [Fortschreibung #118](0022-118-erst-uebernahme-und-vorlage.md)).
