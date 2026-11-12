@@ -54,14 +54,15 @@ jobs:
           fi
           echo "FACTORY_DIFF_BASE=$base" >> "$GITHUB_ENV"
 
-      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: der Gate-Befehl verify (Projekt-Config, Standard `npm run verify`, Kette: package.json › scripts.verify), nicht hier
-      # kopiert, damit die lokale Reihenfolge nicht von der CI driftet und kein Gate lokal vergessen wird. FACTORY_COVERAGE=1
+      # Alle Gates laufen über EINE Kette statt einzeln dupliziert: der Gate-Befehl verifyKompakt (Projekt-Config, Standard `npm run verify:kompakt`, Kette: package.json › scripts.verify), nicht hier
+      # kopiert, damit die lokale Reihenfolge nicht von der CI driftet und kein Gate lokal vergessen wird. Anders als die &&-Kette läuft er alle Schritte
+      # auch nach einem Rot und zeigt alle roten Blöcke auf einmal (in GitHub Actions ungekürzt, factory#401), ein Fix behebt so alle Funde in einer Runde. FACTORY_COVERAGE=1
       # (vite.config.ts › coverage.enabled) instrumentiert den Testschritt der Kette: eine Suite statt zweier (factory#270), die
       # Floors (thresholds) greifen am Ende dieses Schritts. Diff-Coverage ist der eigene Schritt dahinter (zusammen = `npm run verify:full`).
       - name: Verify, alle Gates in einer Kette
         env:
           FACTORY_COVERAGE: "1"
-        run: node scripts/gate-befehl.mjs verify
+        run: node scripts/gate-befehl.mjs verifyKompakt
 
       # Misst nur die im Slice geänderten Zeilen (coverage/lcov.info aus dem Verify-Lauf davor, geschnitten mit dem Diff), darum NACH
       # dem Verify-Schritt; FACTORY_DIFF_BASE kommt aus „Diff-Basis bestimmen“ oben.

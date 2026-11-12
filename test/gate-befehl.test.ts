@@ -285,6 +285,9 @@ describe("Ausführung (K3)", () => {
   test("der Exit-Code des Befehls wird weitergegeben", () => {
     assert.equal(lib.cli(["verify"], umgebung({}, { status: 0 }).opt), 0);
     assert.equal(lib.cli(["verify"], umgebung({}, { status: 3 }).opt), 3);
+    // factory#401: die CI fährt verifyKompakt, ein roter Lauf muss ihren Schritt rot machen
+    assert.equal(lib.cli(["verifyKompakt"], umgebung({}, { status: 1 }).opt), 1);
+    assert.equal(lib.cli(["verifyKompakt"], umgebung({}, { status: 0 }).opt), 0);
   });
   test("Signal (Status null) ist fail-closed 1", () => {
     assert.equal(lib.cli(["verify"], umgebung({}, { status: null }).opt), 1);

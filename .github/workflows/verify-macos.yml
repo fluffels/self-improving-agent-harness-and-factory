@@ -35,4 +35,4 @@ jobs:
         run: node scripts/gate-befehl.mjs install
 
       - name: Gate-Kette
-        run: node scripts/gate-befehl.mjs verify
+        run: node scripts/gate-befehl.mjs verifyKompakt

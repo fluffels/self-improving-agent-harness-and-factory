@@ -8,7 +8,7 @@
  *    (Slice gegen die Merge-Base, dieselbe Basis wie `check:diffsize`). Kein Gate, ersetzt nie den vollen Lauf.
  *
  * Die Kette wird aus `package.json` aufgelöst (`ketteAusPackage`, dieselbe Auflösung wie docgen/docdrift), nicht hier gepflegt:
- * ein neues Gate läuft automatisch in beiden Modi mit. Die CI fährt weiter das rohe `npm run verify`.
+ * ein neues Gate läuft automatisch in beiden Modi mit. Die CI fährt `verifyKompakt` (alle Schritte, nur rote Blöcke, in GitHub Actions ungekürzt).
  * Fail-closed: kann der Slice nicht sicher bestimmt werden, laufen Lint und Test voll.
  */
 import { fileURLToPath } from "node:url";
@@ -82,7 +82,7 @@ const testDateienZeile = (e) => {
 const sek = (ms) => `${Math.round(ms / 1000)} s`;
 
 /** Bericht aus den Schrittergebnissen `{ name, ok, ms, ausgabe, info, uebersprungen }`: grün eine Zeile, rot nur rote Blöcke + Summe. Pur. */
-export function bericht(ergebnisse, { modus = "kompakt", hinweis = "" } = {}) {
+export function bericht(ergebnisse, { modus = "kompakt", hinweis = "", ungekuerzt = false } = {}) {
   const rot = ergebnisse.filter((e) => !e.ok);
   const gesamt = ergebnisse.reduce((n, e) => n + e.ms, 0);
   const teil = (e) => `${e.name} ${e.uebersprungen ? "übersprungen" : e.ok ? "ok" : "ROT"} ${sek(e.ms)}${e.info ? ` (${e.info})` : ""}`;
@@ -91,7 +91,7 @@ export function bericht(ergebnisse, { modus = "kompakt", hinweis = "" } = {}) {
   if (!rot.length) {
     return `${kopf} grün · ${ergebnisse.length}/${ergebnisse.length} · ${sek(gesamt)} · ${ergebnisse.map(teil).join(", ")}${zusatz}`;
   }
-  const blöcke = rot.map((e) => `── ${e.name}: rot (Exit ${e.exit ?? "?"}, ${sek(e.ms)}) ──\n${testDateienZeile(e)}${kuerze(e.ausgabe, e.name)}`);
+  const blöcke = rot.map((e) => `── ${e.name}: rot (Exit ${e.exit ?? "?"}, ${sek(e.ms)}) ──\n${testDateienZeile(e)}${ungekuerzt ? String(e.ausgabe ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "") : kuerze(e.ausgabe, e.name)}`);
   const summe = `${kopf} ROT · ${ergebnisse.length - rot.length}/${ergebnisse.length} grün · ${sek(gesamt)} · rot: ${rot.map((e) => e.name).join(", ")}${zusatz}`;
   return `${blöcke.join("\n\n")}\n\n${summe}`;
 }
@@ -185,7 +185,7 @@ export const statusVon = (r) => r.status ?? 1;
 
 /**
  * Der Lauf als Funktion (#1428 Z9): liefert den Exit-Code statt `process.exitCode` zu setzen, die Zugriffe sind injizierbar
- * (`deps.pkg`, `deps.ladeEngung`, `deps.run`, `deps.log`, `deps.err`). Der Direktaufruf unten setzt `process.exitCode`.
+ * (`deps.pkg`, `deps.ladeEngung`, `deps.run`, `deps.log`, `deps.err`, `deps.env`). Der Direktaufruf unten setzt `process.exitCode`.
  */
 export function main(argv = process.argv.slice(2), deps = {}) {
   const { werte, fehler } = flagsLesen(argv, { changed: { type: "boolean" } });
@@ -200,7 +200,7 @@ Aufruf: node scripts/verify-lauf.mjs [--changed]`);
   const engung = changed ? lade() : null;
   const hinweis = engung?.voll ? `Lint und Test voll (${engung.grund})` : "";
   const ergebnisse = laufe({ schritte, engung, run });
-  log(bericht(ergebnisse, { modus: changed ? "changed" : "kompakt", hinweis }));
+  log(bericht(ergebnisse, { modus: changed ? "changed" : "kompakt", hinweis, ungekuerzt: (deps.env ?? process.env).GITHUB_ACTIONS === "true" }));
   return exitCode(ergebnisse);
 }
 

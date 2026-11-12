@@ -123,7 +123,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
       // In der CI erzeugt der Verify-Schritt den Bericht (factory#270: ein Testlauf mit Coverage über FACTORY_COVERAGE=1); der Standard von `coverage` bleibt der npm-Lauf.
       expect(STANDARD_BEFEHLE.coverage, "Standard von coverage ist der Erzeuger").toBe(`npm run ${producer}`);
-      expect(verifySchritt().run, "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verify haben").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+      expect(verifySchritt().run, "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verifyKompakt haben").toMatch(/node scripts\/gate-befehl\.mjs verifyKompakt\b/);
       expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
       // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
       expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
@@ -149,7 +149,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     const ci = readRepo(".github/workflows/ci.yml");
     expect(ci, "kein zweiter Suite-Lauf über den Gate-Befehl coverage").not.toMatch(/^\s*run:\s*node scripts\/gate-befehl\.mjs coverage\b/m);
     expect(verifySchritt().env?.FACTORY_COVERAGE).toBe("1");
-    expect(verifySchritt().run).toBe("node scripts/gate-befehl.mjs verify");
+    expect(verifySchritt().run).toBe("node scripts/gate-befehl.mjs verifyKompakt");
   });
 
   it("factory#270: die Vitest-Config schaltet Coverage nur über FACTORY_COVERAGE=1 ein und behält die Floors", async () => {
@@ -178,7 +178,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     for (const datei of [".github/workflows/ci.yml", ".github/workflows/verify-macos.yml"]) {
       const text = readRepo(datei);
       expect(text, `${datei}: Installation über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs install\b/);
-      expect(text, `${datei}: verify über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs verify\b/);
+      expect(text, `${datei}: verify über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs verifyKompakt\b/);
       expect(text, `${datei}: kein festes npm ci/npm run verify als Schritt`).not.toMatch(/run: npm (ci|run verify)\b/);
     }
   });
@@ -207,7 +207,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
 
   it("die CI ruft die `verify`-Kette auf, statt die Gates einzeln zu duplizieren", () => {
     const ci = readRepo(".github/workflows/ci.yml");
-    expect(ci, "ci.yml muss den Gate-Befehl verify aufrufen").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+    expect(ci, "ci.yml muss den Gate-Befehl verifyKompakt aufrufen").toMatch(/node scripts\/gate-befehl\.mjs verifyKompakt\b/);
     expect(STANDARD_BEFEHLE.verify, "Standard von verify ist die verify-Kette").toBe("npm run verify");
     // Die alten, einzeln duplizierten Gate-Steps dürfen NICHT mehr da sein –
     // sonst ist die SSOT wieder aufgeweicht (Gate läuft doppelt / kann driften).
