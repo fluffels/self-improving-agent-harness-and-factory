@@ -16,6 +16,10 @@
  * Ausführen mit:  npm test   (oder gezielt: npm run check:diffsize)
  */
 import { describe, test } from "vitest";
+import { execFileSync, spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { fixture } from "./support/tmp-fixture";
 import { FREMD, projektConfig } from "./support/fremd-config";
@@ -750,5 +754,39 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
       } as never);
     assert.equal(typeof unlesbar(OV).sammelOverride, "string", "unlesbares Ereignis bei aktivem Override: rot");
     assert.equal(unlesbar("").sammelOverride, null, "unlesbares Ereignis ohne Override: nicht relevant");
+  });
+
+  describe("CLI (main): der Exit-Code des Sammel-Override-Pfads", () => {
+    const SKRIPT = fileURLToPath(new URL("../scripts/check-diffsize.mjs", import.meta.url));
+    const schluessel = commitZeilenAus(projektConfig()).diffsizeOverride;
+    // Temp-Git-Repo: Basis-Commit, darauf ein Commit mit zwei Zeilen (über dem Budget von 1 Zeile) und der Override-Zeile; das Skript läuft mit cwd dort.
+    const cli = (titel: string, grund: string) => {
+      const repo = fixture({ "a.txt": "a\n" });
+      const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...a], { cwd: repo, encoding: "utf8" }).trim();
+      git("init", "-q");
+      git("add", "-A");
+      git("commit", "-q", "-m", "basis");
+      const basis = git("rev-parse", "HEAD");
+      writeFileSync(join(repo, "a.txt"), "a\nb\nc\n");
+      git("commit", "-q", "-am", `aenderung\n\n${schluessel}: #9 ${grund}`);
+      const ereignis = join(repo, "ereignis.json");
+      writeFileSync(ereignis, JSON.stringify({ pull_request: { title: titel } }));
+      const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", FACTORY_DIFF_BASE: basis, FACTORY_DIFFSIZE_MAX_LINES: "1", GITHUB_EVENT_PATH: ereignis };
+      return spawnSync("node", [SKRIPT], { cwd: repo, env, encoding: "utf8" });
+    };
+    test("Sammelticket mit zwei Zeilen im Grund: Exit 1, Meldung ohne Titel", () => {
+      const r = cli(SAMMEL, "L1 L2 breit");
+      assert.equal(r.status, 1, r.stdout + r.stderr);
+      assert.match(r.stderr, /genau eine Zeile/);
+      assert.ok(!(r.stdout + r.stderr).includes("Harness-Härtung"), "der PR-Titel steht nicht in der Ausgabe");
+    });
+    test("Sammelticket mit einer Zeile: der Override gilt, Exit 0", () => {
+      const r = cli(SAMMEL, "L1 breit");
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+    });
+    test("normales Ticket mit zwei Zeilen im Grund: Exit 0", () => {
+      const r = cli(`${FREMD.praefixe.commitZeile}9 Ticket (factory#9)`, "L1 L2 breit");
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+    });
   });
 });
