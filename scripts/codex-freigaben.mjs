@@ -21,7 +21,7 @@ export function istBelegUrl(v) {
 }
 
 const gueltigerNachweis = (w) => w === "offen" || (w !== null && typeof w === "object" && Object.keys(w).join() === "beleg" && istBelegUrl(w.beleg));
-const belegt = (w) => w !== null && typeof w === "object" && istBelegUrl(w.beleg);
+const belegt = (w) => w !== "offen" && gueltigerNachweis(w);
 
 function eintragMaengel(version, e) {
   const m = [];

@@ -1,4 +1,5 @@
 /* @harness-waechter: Die Codex-Freigabetabelle verlangt je Version einen Diagnose-Beleg (https-URL) und je Nachweis 1-5 `offen` oder einen Beleg; im Repo-Stand ist keine Version autonom freigegeben.
+ * Scan-Grenzen: `export * from` und dynamisches `import()` in der Tabelle sowie ein Re-Export der Tabelle über andere Dateien sind nicht erfasst (Scan iii bzw. ii).
  * Scan-Grenzen (geschlossene Listen): Versionsliteral nur in drei Codex-Dateien geprüft; Importe der Tabelle nur direkt unter scripts/, ein transitiver Import über die Vorprüfung ist nicht erfasst. */
 import { expect, test } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
@@ -49,7 +50,7 @@ test("Repo-Stand: keine Version ist autonom freigegeben", () => {
 const lies = (p: string) => readFileSync(p, "utf8");
 test("kein Versionsliteral in belege, vorpruefung und lib", () => {
   for (const p of ["scripts/codex-belege.mjs", "scripts/codex-vorpruefung.mjs", "scripts/codex-lib.mjs"]) {
-    const text = lies(p).replaceAll("127.0.0.1", "");
+    const text = lies(p);
     expect(text.match(/(?<![\w.])\d+\.\d+\.\d+(?![\w.])/g) ?? [], p).toEqual([]);
   }
 });
@@ -64,5 +65,14 @@ test("freigabeMaengel: belegte Version keine oder ungültig, Versionsschlüssel 
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: undefined, tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version keine ab"]);
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "böse\nzeile", tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version ungültig ab"]);
   expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "1.2.3", tabelle: t })).toEqual([]);
-  for (const v of ["v1.2.3", "1.2.3.4", "1.2"]) expect(eine(voll(), v)).toEqual([expect.stringContaining("keine Version")]);
+  for (const v of ["v1.2.3", "1.2.3.4", "1.2", "1x2x3"]) expect(eine(voll(), v)).toEqual([expect.stringContaining("keine Version")]);
+  for (const v of ["10.0.0", "0.164.10", "10.20.30"]) expect(eine(voll(), v)).toEqual([]);
+  expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: ["1.2.3"], tabelle: t })).toEqual(["Codex CLI 1.2.3 weicht von der belegten Version ungültig ab"]);
+  expect(g.freigabeMaengel({ installiert: undefined as unknown as null, belegt: "1.2.3", tabelle: t })).toEqual([expect.stringContaining("nicht ermittelbar")]);
+  expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "1.2.3", tabelle: undefined as unknown as Tabelle })).toEqual([expect.stringContaining("nicht in der Freigabetabelle")]);
+  expect(f.tabellenMaengel(undefined as unknown as Tabelle)).toEqual([]);
+  for (const x of ["x", 5]) expect(eine(x)).toEqual([expect.stringContaining("Eintrag fehlt")]);
+  const mitNull = { diagnose: URL_OK, nachweise: { ...voll().nachweise, 3: null } };
+  expect(f.offeneNachweise(mitNull)).toEqual([3]);
+  expect(g.freigabeMaengel({ installiert: "1.2.3", belegt: "1.2.3", tabelle: { "1.2.3": mitNull } }).join("\n")).toContain("Nachweise 3 ");
 });

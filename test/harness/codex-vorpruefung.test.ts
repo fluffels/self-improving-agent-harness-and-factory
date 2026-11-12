@@ -1,5 +1,7 @@
 /* @harness-waechter: Freigabe nur über die Freigabetabelle mit fünf Belegen, Offline-Belege allein schalten nichts frei. */
 import { afterEach, expect, test, vi } from "vitest";
+const spawnMock = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (orig) => ({ ...(await orig<typeof import("node:child_process")>()), spawnSync: spawnMock }));
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -148,7 +150,7 @@ test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", () 
   const stub = (r: unknown) => { const calls: unknown[][] = []; return { calls, spawn: (...a: unknown[]) => { calls.push(a); return r; } }; };
   const win = stub({ status: 0, stdout: "codex-cli 0.164.0\n" });
   expect(p.installierteCodexVersion({ plattform: "win32", spawn: win.spawn })).toBe("0.164.0");
-  expect(win.calls[0][0]).toBe("codex.cmd"); expect(win.calls[0][1]).toEqual(["--version"]); expect(win.calls[0][2]).toMatchObject({ shell: true });
+  expect(win.calls[0][0]).toBe("codex.cmd"); expect(win.calls[0][1]).toEqual(["--version"]); expect(win.calls[0][2]).toMatchObject({ shell: true, timeout: 10000 });
   const lin = stub({ status: 0, stdout: "codex-cli 1.2.3" });
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: lin.spawn })).toBe("1.2.3");
   expect(lin.calls[0][0]).toBe("codex"); expect(lin.calls[0][2]).toMatchObject({ shell: false });
@@ -157,9 +159,18 @@ test("installierteCodexVersion: Aufruf je Plattform und Ausgabe-Auswertung", () 
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: "kaputt" }).spawn })).toBeNull();
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0 }).spawn })).toBeNull();
   expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: "codex-cli 1.2.3", error: { code: "ETIMEDOUT" } }).spawn })).toBeNull();
-  for (const roh of ["codex-cli 1.2.3.4", "codex-cli x1.2.3", "codex-cli 1.2.3x"]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBeNull();
+  for (const [roh, soll] of [["codex-cli 10.2.3", "10.2.3"], ["codex-cli 0.164.10", "0.164.10"], ["codex-cli 1.20.30", "1.20.30"]]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBe(soll);
+  for (const roh of ["codex-cli 1.2.3.4", "codex-cli x1.2.3", "codex-cli 1.2.3x", "codex-cli 1x2x3"]) expect(p.installierteCodexVersion({ plattform: "linux", spawn: stub({ status: 0, stdout: roh }).spawn }), roh).toBeNull();
 });
 test("Belege-Datei mit null: kein Absturz, Mangel statt Fehlerpfad", () => {
   const r = lauf(["--belege", datei("null")], { codexVersion: () => "9.9.9", freigaben: tabelle() });
   expect(r.code).toBe(1); expect(r.maengel?.join("\n")).toContain("belegten Version keine");
+});
+test("Standard-Verdrahtung: ohne Naht fragt main die echte Versionsabfrage (codex --version) ab", () => {
+  spawnMock.mockReturnValue({ status: 0, stdout: "codex-cli 9.9.9\n" });
+  const ok = lauf(["--belege", belegeFuer("9.9.9")], { freigaben: tabelle() });
+  expect(ok).toMatchObject({ code: 0, autonom: true });
+  expect(spawnMock).toHaveBeenCalledWith(expect.stringMatching(/^codex(\.cmd)?$/), ["--version"], expect.anything());
+  spawnMock.mockReturnValue({ status: null, error: { code: "ENOENT" } });
+  expect(lauf(["--belege", belegeFuer("9.9.9")], { freigaben: tabelle() }).code).toBe(1);
 });

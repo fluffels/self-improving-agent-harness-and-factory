@@ -14,8 +14,8 @@ import { FREIGABEN, freigabeMaengel } from "./codex-freigaben.mjs";
 export function installierteCodexVersion({ plattform = process.platform, spawn = spawnSync } = {}) {
   const win = plattform === "win32";
   const r = spawn(win ? "codex.cmd" : "codex", ["--version"], { shell: win, encoding: "utf8", timeout: 10000, windowsHide: true });
-  if (!r || r.error || r.status !== 0) return null;
-  return /(?<![\w.])(\d+\.\d+\.\d+)(?![\w.])/.exec(String(r.stdout ?? ""))?.[1] ?? null;
+  if (r.error || r.status !== 0) return null;
+  return /(?<![\w.])(\d+\.\d+\.\d+)(?![\w.])/.exec(String(r.stdout))?.[1] ?? null;
 }
 
 function lokaleMaengel(root, config) {
