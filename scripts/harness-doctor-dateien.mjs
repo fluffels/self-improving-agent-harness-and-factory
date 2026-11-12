@@ -23,6 +23,8 @@
  *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
+ *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
+ *
  * Nur Node-Builtins (der Wochenlauf hat kein `npm ci`); `git` und `existiert` sind injizierbar (Tests). Fehlt Git oder der Index, ist `Zeilenenden`
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
@@ -33,6 +35,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { pflichtReviewMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
+import { sammelCheckPunkt } from "./harness-doctor-sammelcheck.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { blockformAusloeser, quellenJeKontext } from "./workflow-blockform.mjs";
 import { STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
@@ -211,8 +214,8 @@ function taktZiel(config) {
 
 /**
  * Punkt `Langfuse-Takt`: beide Dateien des Langfuse-Takts existieren (nur Vorhandensein, ohne Netz und ohne Secrets). Führt das Factory-Board
- * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status- und Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
- * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
+ * der Config ein fremdes Repo, bleibt der Punkt OK, nennt aber einen Hinweis: ohne Sync-Stand (Upstream), dass dort der Takt Status-Ticket, Harness- und Langfuse-Sammelticket pflegt (`nurWaechter` in board-takt.mjs);
+ * im Bezieher (Sync-Stand vorhanden, factory#195), dass der Takt das Status-Ticket im eigenen Repo anlegt und dort das Langfuse-Sammelticket holt und nur Harness-Sammelticket und Quote bei dem fremden Repo bleiben (`bezieherTakt`);
  * führt im Bezieher kein Board das eigene Repo (`langfuseZiel` wirft), ist der Punkt eine Lücke, weil der Takt dort kein Status-Ticket anlegt (factory#202).
  */
 export function langfuseTaktPunkt(rootDir, existiert, config) {
@@ -229,9 +232,9 @@ export function langfuseTaktPunkt(rootDir, existiert, config) {
     }
   }
   if (fremd !== null && bezieher) {
-    return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
+    return gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: der Takt legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an und holt dort das Langfuse-Sammelticket, Harness-Sammelticket und Quote pflegt der Takt von ${fremd}`);
   }
-  return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter`);
+  return fremd === null ? gut("Langfuse-Takt") : gut("Langfuse-Takt", `das Factory-Board führt ${fremd}: dort pflegt der Takt Status-Ticket, Harness- und Langfuse-Sammelticket, hier läuft nur der Board-Wächter`);
 }
 
 /** Die Config für den Langfuse-Takt-Punkt: ungeprüft gelesen, bei Fehler null (der Punkt braucht sie nur für den Hinweis). */
@@ -327,7 +330,7 @@ export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = fals
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
@@ -344,6 +347,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Code-Scanning-Quellen": () => codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch }),
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
     "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
+    "Sammel-Check": () => sammelCheckPunkt({ config, workflows, vorAbbruch }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
 }

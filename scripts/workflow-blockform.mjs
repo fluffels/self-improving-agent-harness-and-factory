@@ -16,8 +16,8 @@
  * Bekannte Grenze (fail-closed, factory#260): die zeilenweise Flow-Listen-Erkennung kennt ein Quote mitten in einem unquotierten Eintrag nicht wie YAML (`[c'd]` wird
  * NICHT PRÜFBAR statt gelesen); bei belegtem Bedarf auf einen echten Parser umstellen.
  *
- * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`) und `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
- * eigene Grenze im Kopf von `blockformAusloeser`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
+ * Geschlossene Liste der Doctor-Punkte mit diesem Leser: `Required-Check-Quellen` (`blockformNamen`), `Workflow-Auslöser` (`blockformAusloeser`, liest `name` und `on.workflow_run.workflows`;
+ * eigene Grenze im Kopf von `blockformAusloeser`) und `Sammel-Check` (`blockformJobs`, liest die Auslöser unter `on` und je Job `needs`, `if`, `uses`). Die Regex-Scans in harness-doctor-lib.mjs (Labels, Secrets, Umgebung) bleiben Text-Scans und gehören nicht dazu.
  *
  * Nicht gelesen wird (fail-closed): `blockformNamen` liefert dann `{ fehler: { zeile, konstrukt } }`, nie still weniger Namen. Geschlossene Liste: Flow-Collection als `jobs`, Job,
  * `steps`, Step oder `name`-Wert; Anker `&`, Alias `*`, Tag `!` an diesen Stellen; Merge-Schlüssel `<<` und `?`-Schlüssel in einem gelesenen Mapping; Tab in der Einrückung einer
@@ -482,6 +482,74 @@ export function blockformAusloeser(text) {
     throw e;
   }
   return { name, ausloeser: ausloeser.filter((n) => n !== "") };
+}
+
+/** Ein Job für `blockformJobs`: liest `needs` (Skalar, Flow- oder Block-Liste), `if` und `uses`; `steps` und alles andere wird übersprungen. */
+function jobDetails(c, id, z, rest, jobs) {
+  const eintrag = { id, needs: [], if: null, uses: null };
+  jobs.push(eintrag);
+  const n = blockUnter(c, z, rest, "Job");
+  if (n === null) return;
+  if (istStrich(n.text)) throw nl(n.k, "Liste als Job");
+  mapping(c, n.einr, (key, kz, krest) => {
+    if (key === "needs") workflowsWert(c, kz, krest, eintrag.needs);
+    else if (key === "if") eintrag.if = nameWert(c, kz, krest);
+    else if (key === "uses") eintrag.uses = nameWert(c, kz, krest);
+    else return false;
+    return true;
+  });
+  eintrag.needs = eintrag.needs.filter((n2) => n2 !== "");
+}
+
+/** Der Wert von `on` für `blockformJobs`: die Auslöser-Namen (Skalar, Flow- oder Block-Liste, Schlüssel des Block-Mappings); ein Flow-Mapping ist nicht lesbar. */
+function ausloeserWert(c, z, rest, namen) {
+  if (rest === "") {
+    const n = blockUnter(c, z, rest, "on");
+    if (n === null) return;
+    if (!istStrich(n.text)) {
+      mapping(c, n.einr, (key) => {
+        namen.push(key);
+        return false;
+      });
+      return;
+    }
+  }
+  workflowsWert(c, z, rest, namen);
+}
+
+/**
+ * Liest für den Doctor-Punkt `Sammel-Check` (factory#401) die Auslöser unter `on` und je Job `id`, `needs`, `if` und `uses`. Liefert `{ ausloeser: string[], jobs: [{ id, needs: string[], if: string | null, uses: string | null }] }`
+ * oder `{ fehler: { zeile, konstrukt } }`; Grenzen wie bei `blockformAusloeser` (Flow-Mapping als `on`, Anker, Alias, Tag, mehrzeilige Flow-Liste unter `needs` sind nicht lesbar).
+ */
+export function blockformJobs(text) {
+  const roh = String(text);
+  const c = { z: (roh.charCodeAt(0) === 0xfeff ? roh.slice(1) : roh).split(/\r\n|\n|\r/), i: 0 };
+  const ausloeser = [];
+  const jobs = [];
+  try {
+    dokumentStart(c);
+    mapping(c, 0, (key, z, rest) => {
+      if (key === "on") ausloeserWert(c, z, rest, ausloeser);
+      else if (key === "jobs") jobsMitDetails(c, z, rest, jobs);
+      else return false;
+      return true;
+    });
+  } catch (e) {
+    if (e instanceof NichtLesbar) return { fehler: { zeile: e.zeile, konstrukt: e.konstrukt } };
+    throw e;
+  }
+  return { ausloeser: ausloeser.filter((n) => n !== ""), jobs };
+}
+
+/** Der Wert von `jobs` für `blockformJobs`: ein Mapping von Jobs. */
+function jobsMitDetails(c, z, rest, jobs) {
+  const n = blockUnter(c, z, rest, "jobs");
+  if (n === null) return;
+  if (istStrich(n.text)) throw nl(n.k, "Liste als jobs");
+  mapping(c, n.einr, (id, jz, jrest) => {
+    jobDetails(c, id, jz, jrest, jobs);
+    return true;
+  });
 }
 
 /** GitHub liest beide Endungen: auch ein `fake.yaml` darf nicht entgehen. */
