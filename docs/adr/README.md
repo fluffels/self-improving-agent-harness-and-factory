@@ -26,6 +26,7 @@
 | [0029](/docs/adr/0029-harness-cockpit.md) | Harness-Cockpit als Ring „Oberfläche“ im Factory-Repo, Eigenbau, nur lesend | akzeptiert | 16.10.2026 |
 | [0030](/docs/adr/0030-team-betrieb-pod.md) | Team-Betrieb im Pod, Anforderungen und offene Entscheidungen | vorgeschlagen | 28.10.2026 |
 | [0031](/docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md) | Fabrik ohne Zugriff auf Bezieher | akzeptiert | 04.11.2026 |
+| [0032](/docs/adr/0032-git-host-bindung.md) | Fabrik bleibt an GitHub gebunden | akzeptiert | 12.11.2026 |
 
 <!-- GEN:adr-liste END -->
 
