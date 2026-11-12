@@ -81,16 +81,16 @@ node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, a
 
 ```
 Agent({
-  subagent_type: "<agenten.lens>",
+  subagent_type: "<Typ aus `node scripts/lens-arm.mjs <nr>`>",   // A/B (factory#235), nie von Hand
   description: "Lens <Architektur|Requirement-Treue|Test-Adäquanz|Kombiniert|Sicherheit|Doku> R<runde>",   // R<runde> zählt die Messung (token-baseline)
-  // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/factory-lens.md (opus/high, docs/model-routing.md §1)
+  // kein model/effort am Spawn: beides steht im Frontmatter der Lens-Definition (opus/high, docs/model-routing.md §1)
   prompt: "Brille: <architektur|requirement-treue|test-adaequanz|kombiniert|sicherheit|doku> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/<praefixe.worktree><nr>-r<runde>.patch · erwarteter HEAD: <sha> · Probe-Protokoll: <Commit-SHAs mit Protokoll | keins> (nur Test- und Kombi-Lens) · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · Plan-Prüfliste: <Plan-Abschnitt 4 und 7 (Requirement-, Test-, Kombi-Lens), Bedrohungsabschnitt (Sicherheit), sonst „entfällt“ WÖRTLICH>"
 })
 ```
 
-Der PreToolUse-Guard `scripts/lens-auftrag-guard.mjs` weist einen Auftrag mit offenem `<…>`, ohne Commit-Hash bei `erwarteter HEAD:` oder ohne `Brille: <Schlüssel>` am Anfang ab (Abhilfe in seiner Meldung): Werte einsetzen, neu spawnen. Endungen der Lens-Worktree-Namen: `factory-lens.md`.
+Der PreToolUse-Guard `scripts/lens-auftrag-guard.mjs` weist einen Auftrag mit offenem `<…>`, ohne Commit-Hash bei `erwarteter HEAD:` oder ohne `Brille: <Schlüssel>` am Anfang oder mit falschem Arm-Typ ab: Werte einsetzen, neu spawnen. Endungen der Lens-Worktree-Namen: `factory-lens.md`.
 
-Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohne Neu-Spawn. Kennt das Agent-Tool `<agenten.lens>` nicht („Agent type '<agenten.lens>' not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“ Der Bericht vermerkt den Fallback.
+Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an. Kennt das Tool den Typ nicht („Agent type … not found“): einmal mit `general-purpose` und `model: "opus"` spawnen, Prompt `Brille: <…> ·` und: „Lies zuerst die Lens-Definition vom Stand `origin/main` (`git -C <Arbeitsverzeichnis> show origin/main:.claude/agents/factory-lens.md`) und befolge deren Rumpf.“ Der Bericht vermerkt den Fallback.
 
 ⚠️ **Die Lenses lesen, sie schreiben nicht**; **die Sabotage-Proben der Test-Lens laufen nie im Feature-Worktree**, sondern je Runde in einem eigenen Lens-Worktree `<praefixe.worktree><nr>-lens-r<runde>` (`git -C <feature-worktree> worktree add --detach <absoluter Pfad> <erwarteter HEAD>`, danach `git worktree remove --force`). Pfade, Entfernen: `.claude/agents/factory-lens.md`, FAQ; Stop-Hook: §3a.
 

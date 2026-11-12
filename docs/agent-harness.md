@@ -20,7 +20,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | ≥ 200 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
+| Skripte | ≥ 210 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 120 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 16 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 19 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
@@ -331,7 +331,7 @@ flowchart TD
   umsetzen["Umsetzen (TDD)<br/>sih-umsetzer"]
   gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>sih-gruppe"]
   verify{"npm run verify grün?"}
-  lenses{"Lenses ohne Blocker?<br/>sih-lens"}
+  lenses{"Lenses ohne Blocker?<br/>sih-lens oder lens-kern-je-rolle"}
   fix["Fix-Runde"]
   handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
   entwurf["Entwurfs-PR ohne Auto-Merge"]
@@ -466,7 +466,7 @@ sequenceDiagram
   participant G as sih-gruppe · sonnet · medium<br/>je Gruppe eines Sammeltickets
   participant L1 as sih-lens · opus · high<br/>Brille Architektur
   participant L2 as sih-lens · opus · high<br/>Brille Requirement-Treue
-  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz
+  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz (alle Brillen eines ungeraden Tickets: lens-kern-je-rolle)
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen

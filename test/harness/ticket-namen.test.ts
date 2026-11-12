@@ -232,6 +232,49 @@ describe("lens-auftrag-guard mit Config", () => {
   });
 });
 
+describe("lens-auftrag-guard R6: Arm der A/B-Messung (factory#235)", () => {
+  const auftrag = (nr: number, extra = "") => `Brille: doku\nArbeitsverzeichnis: /w/ab-${nr}\nPatch: /t/ab-${nr}-r1.patch\nerwarteter HEAD: abcdef1${extra}`;
+  const pruefe = (subagentType: string | undefined, prompt: string, bezieher = false) =>
+    lensAuftrag.lensAuftragBlockade({ subagentType, prompt }, { config: AB, bezieher: () => bezieher } as never);
+  test("gerades Ticket: Arm A (ab-lens) passt, Arm B wird abgelehnt und der richtige Typ genannt", () => {
+    expect(pruefe("ab-lens", auftrag(234))).toBeNull();
+    expect(pruefe("lens-kern-je-rolle", auftrag(234))).toMatch(/Ticket #234 gehört zu Arm A.*„ab-lens“.*lens-arm\.mjs 234/);
+  });
+  test("ungerades Ticket: Arm B passt, Arm A wird abgelehnt und lens-kern-je-rolle genannt", () => {
+    expect(pruefe("lens-kern-je-rolle", auftrag(235))).toBeNull();
+    expect(pruefe("ab-lens", auftrag(235))).toMatch(/Ticket #235 gehört zu Arm B.*„lens-kern-je-rolle“/);
+  });
+  test("Bezieher: immer Arm A, Typ B wird auch bei ungerader Nummer abgelehnt", () => {
+    expect(pruefe("lens-kern-je-rolle", auftrag(235), true)).toMatch(/Arm A/);
+    expect(pruefe("ab-lens", auftrag(235), true)).toBeNull();
+  });
+  test("Delta-Patch und Worktree-Pfad liefern dieselbe Nummer wie die Messung", () => {
+    expect(pruefe("ab-lens", "Brille: doku\nArbeitsverzeichnis: /w\nDelta-Patch: /t/ab-7-r2-delta.patch\nerwarteter HEAD: abcdef1")).toMatch(/Ticket #7/);
+  });
+  test("die Nummer kommt auch aus dem Arbeitsverzeichnis, wenn kein Patch-Pfad da ist (wie ticketAusLauf der Messung)", () => {
+    expect(pruefe("ab-lens", "Brille: doku\nArbeitsverzeichnis: /w/.claude/worktrees/ab-235\nerwarteter HEAD: abcdef1")).toMatch(/Ticket #235 gehört zu Arm B/);
+    expect(pruefe("lens-kern-je-rolle", "Brille: doku\nArbeitsverzeichnis: /w/.claude/worktrees/ab-235\nerwarteter HEAD: abcdef1")).toBeNull();
+  });
+  test("ohne injizierten Bezieher gilt der Sync-Stand dieses Repos (Fabrik: kein Bezieher): Arm B für ein ungerades Ticket geht durch", () => {
+    const echt = (subagentType: string) => lensAuftrag.lensAuftragBlockade({ subagentType, prompt: auftrag(235) }, { config: AB });
+    expect(echt("lens-kern-je-rolle")).toBeNull();
+    expect(echt("ab-lens")).toMatch(/Arm B/);
+  });
+  test("ohne ableitbare Nummer bleibt R6 offen (fail-open), ebenso der general-purpose-Fallback", () => {
+    const ohneNummer = "Brille: doku\nArbeitsverzeichnis: /w\nerwarteter HEAD: abcdef1";
+    expect(pruefe("lens-kern-je-rolle", ohneNummer)).toBeNull();
+    expect(pruefe("ab-lens", ohneNummer)).toBeNull();
+    expect(pruefe("general-purpose", `${auftrag(235)}\nLies .claude/agents/factory-lens.md`)).toBeNull();
+  });
+  test("R1 bis R5 gelten auch für Arm B", () => {
+    expect(pruefe("lens-kern-je-rolle", "Brille: doku\nArbeitsverzeichnis: <worktree>\nPatch: /t/ab-235-r1.patch")).toMatch(/Arbeitsverzeichnis/);
+    expect(pruefe("lens-kern-je-rolle", auftrag(235).replace("Brille: doku", "Brille: unbekannt"))).toMatch(/Brille/);
+  });
+  test("ohne nutzbare Config: deny statt Arm-Wahl (fail-closed)", () => {
+    expect(lensAuftrag.lensAuftragBlockade({ subagentType: "lens-kern-je-rolle", prompt: auftrag(235) }, { config: OHNE_UMSETZER })).toMatch(/Fix:/);
+  });
+});
+
 describe("umsetzer-abschluss mit Config", () => {
   const bericht = "ERGEBNIS: festgefahren\nTICKET: #1\nPR: https://github.com/x/y/pull/5\nBEFUNDE: keine\n";
   const eingabe = (agentType: string) => ({ hookEvent: "SubagentStop", agentType, lastMessage: bericht });

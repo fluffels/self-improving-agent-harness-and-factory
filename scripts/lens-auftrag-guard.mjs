@@ -16,21 +16,31 @@
  *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
+ *  R6  (factory#235, A/B Kern je Rolle) der Agententyp ist einer der beiden Lens-Typen (`lensTypen`), lässt sich die Ticketnummer aus dem Auftrag ableiten
+ *      (`ticketAusLauf` wie in der Messung: Titelzeile, Patch-Pfad, Worktree-Pfad, zuletzt das erste `#<nr>` im Prompt; eine fremde `#<nr>` ohne Patch-Pfad kann so den Arm eines anderen Tickets wählen, Bekannte Grenze: nur die Messung betroffen) und entspricht nicht dem Typ, den `lensArm(nr)` für das Ticket wählt; die Meldung nennt den richtigen Typ.
  * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
  * Bewusste Grenzen:
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
+ *  - R6 greift nur bei explizitem Lens-Typ und ableitbarer Nummer: der `general-purpose`-Fallback und ein Auftrag ohne Ticketbezug bleiben offen (fail-open); die Messung (`kontext-treiber`, `lauf-ergebnis`) meldet ein solches Ticket als ungültig. Ein gefälschter Patch-Pfad wählt nur den Arm (Messung), keine Rechte: Tools, Hooks und deny sind in beiden Armen gleich.
  *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config trägt; ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
 import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
 import { BEKANNTE_LENSES, HEX_HEAD } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
+import { lensArm, lensTypen } from "./lens-arm-lib.mjs";
+import { patchAus } from "./patch-zugriff.mjs";
+import { ticketAusLauf } from "./subagent-laeufe.mjs";
+import { istBezieher } from "./sync-stand-lib.mjs";
+
+const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 /** Kopf-Felder des Auftrags, deren Wert kein `<…>` mehr tragen darf. `(?<![\w-])` trennt `Patch:` von `Delta-Patch:`. */
 const FELDER = ["Arbeitsverzeichnis", "Delta-Patch", "Patch", "erwarteter HEAD"];
@@ -56,10 +66,10 @@ export function parseAgentInput(text) {
   }
 }
 
-/** Wird dieser Spawn als Lens-Spawn behandelt? Typ `lens` (Agentenname aus der Config), oder der Fallback (`general-purpose`/ohne Typ),
+/** Wird dieser Spawn als Lens-Spawn behandelt? Einer der Lens-Typen (`lensTypen`: Agentenname aus der Config und Arm B), oder der Fallback (`general-purpose`/ohne Typ),
  *  dessen Prompt die Lens-Definition nennt: der feste Kern-Dateiname (`ROLLEN_PFADE.lens`). */
-function istLensSpawn(subagentType, prompt, lens) {
-  if (subagentType === lens) return true;
+function istLensSpawn(subagentType, prompt, typen) {
+  if (typen.includes(subagentType)) return true;
   const fallback = subagentType === undefined || subagentType === "general-purpose";
   const text = String(prompt ?? "");
   return fallback && text.includes(basename(ROLLEN_PFADE.lens));
@@ -89,29 +99,50 @@ function brillenGrund(text) {
   return `Lens-Auftrag unvollständig: der Prompt beginnt nicht mit „Brille: <Schlüssel>“ mit einer bekannten Brille (${BEKANNTE_LENSES.join(", ")}); die Lens liest ihre Brillen-Datei (brille-<Schlüssel>.md) selbst und braucht den Schlüssel. ${HINWEIS}`;
 }
 
-/** Grund für ein Deny oder `null` (durchlassen). Pure. */
-export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
-  const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
-  if (grund) return grund;
-  if (!istLensSpawn(subagentType, prompt, namen.agenten.lens)) return null;
-  const text = String(prompt ?? "");
-  if (text.includes("WÖRTLICH>")) {
-    return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (die Plan-Prüfliste wurde nicht eingesetzt). ${HINWEIS}`;
-  }
-  const felder = parseLensAuftrag(text);
+/** R3: Grund, wenn `erwarteter HEAD:` kein Commit-Hash ist (fehlt das Feld, `null`). Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt. Pure. */
+function headGrund(head) {
+  const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
+  if (head === undefined || HEX_HEAD.test((hash ?? "").toLowerCase())) return null;
+  return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
+}
+
+/** R2: Grund, wenn ein Kopf-Feld noch einen Platzhalter `<…>` trägt; sonst `null`. Pure. */
+function platzhalterGrund(felder) {
   for (const [name, wert] of Object.entries(felder)) {
     if (/<[^<>\r\n]*>/.test(wert)) {
       return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). Ein Zusatz in derselben Zeile zählt mit, auch ein erklärendes „<…>“: Erklärungen in eine eigene Zeile schreiben. ${HINWEIS}`;
     }
   }
+  return null;
+}
+
+/** R6: Grund, wenn der Typ nicht der Arm des Tickets ist; `null` ohne Lens-Typ, ohne ableitbare Nummer oder bei passendem Typ. Pur bei übergebenem `bezieher` (Funktion). */
+function armGrund(subagentType, text, namen, bezieher) {
+  if (!lensTypen(namen).includes(subagentType)) return null;
+  const nr = ticketAusLauf({ patch: patchAus(text, [], namen), prompt: text }, namen);
+  if (!nr) return null;
+  const soll = lensArm(nr, { namen, bezieher: bezieher() });
+  if (soll.typ === subagentType) return null;
+  return `Lens-Arm falsch: Ticket #${nr} gehört zu Arm ${soll.arm} der A/B-Messung (factory#235), also subagent_type „${soll.typ}“, nicht „${subagentType}“ (gerade Nummer = Arm A, ungerade = Arm B, Bezieher immer A). Den Typ liefert \`node scripts/lens-arm.mjs ${nr}\`, nie von Hand wählen. Kennt das Agent-Tool den Typ nicht (Session vor dem Merge gestartet), die Session neu starten: der general-purpose-Fallback macht das Ticket in der Messung ungültig.`;
+}
+
+/** Grund für ein Deny oder `null` (durchlassen). Pure. */
+export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
+  const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
+  if (grund) return grund;
+  if (!istLensSpawn(subagentType, prompt, lensTypen(namen))) return null;
+  const text = String(prompt ?? "");
+  if (text.includes("WÖRTLICH>")) {
+    return `Lens-Auftrag unvollständig: der Platzhalter „… WÖRTLICH>“ steht noch im Prompt (die Plan-Prüfliste wurde nicht eingesetzt). ${HINWEIS}`;
+  }
+  const felder = parseLensAuftrag(text);
+  const offen = platzhalterGrund(felder);
+  if (offen) return offen;
   const endung = unbekannteLensEndung(text, namen);
   if (endung) return endung;
-  const head = felder["erwarteter HEAD"];
-  // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
-  const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
-  if (head !== undefined && !HEX_HEAD.test((hash ?? "").toLowerCase())) {
-    return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
-  }
+  const kopf = headGrund(felder["erwarteter HEAD"]);
+  if (kopf) return kopf;
   // Kein Prompt-Feld (kaputte oder fremde Eingabe) bleibt fail-open wie bisher.
-  return prompt === undefined ? null : brillenGrund(text);
+  if (prompt === undefined) return null;
+  return brillenGrund(text) ?? armGrund(subagentType, text, namen, deps.bezieher ?? (() => istBezieher(WURZEL)));
 }

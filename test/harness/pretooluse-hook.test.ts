@@ -372,7 +372,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
   const vorlage = /prompt: "([^"]*)"/.exec(skill)?.[1] ?? "";
   const KOPF = "Brille: architektur";
   const gut = (extra = "") =>
-    `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}1 · Patch: /tmp/x/${FREMD.praefixe.worktree}1-r1.patch · erwarteter HEAD: abc1234def${extra} · Plan-Prüfliste: entfällt`;
+    `${KOPF} · Arbeitsverzeichnis: C:/dev/projekt/.claude/worktrees/${FREMD.praefixe.worktree}2 · Patch: /tmp/x/${FREMD.praefixe.worktree}2-r1.patch · erwarteter HEAD: abc1234def${extra} · Plan-Prüfliste: entfällt`;
 
   test("die echte Spawn-Vorlage aus dem Skill geht mit eingesetzten Werten durch, ohne Werte wird sie verweigert (kein generischer Platzhalter-Test)", () => {
     assert.match(vorlage, /^Brille: <architektur\|requirement-treue\|test-adaequanz\|kombiniert\|sicherheit\|doku> · Arbeitsverzeichnis: <worktree>/);
@@ -380,8 +380,8 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     const wt = FREMD.praefixe.worktree;
     const gefuellt = vorlage
       .replace("<architektur|requirement-treue|test-adaequanz|kombiniert|sicherheit|doku>", "test-adaequanz")
-      .replace("<worktree>", `C:/dev/projekt/.claude/worktrees/${wt}1`)
-      .replace("<TMP>/<praefixe.worktree><nr>-r<runde>.patch", `/tmp/x/${wt}1-r1.patch`)
+      .replace("<worktree>", `C:/dev/projekt/.claude/worktrees/${wt}2`)
+      .replace("<TMP>/<praefixe.worktree><nr>-r<runde>.patch", `/tmp/x/${wt}2-r1.patch`)
       .replace("erwarteter HEAD: <sha>", "erwarteter HEAD: abc1234def")
       .replace("Probe-Protokoll: <Commit-SHAs mit Protokoll | keins>", "Probe-Protokoll: keins")
       .replace(/Plan-Prüfliste: <[^>]*(?:\([^)]*\))?[^>]*>/, "Plan-Prüfliste: entfällt");

@@ -29,7 +29,7 @@ const lies = (rel: string): string => readFileSync(ROOT + rel, "utf8");
 const NL = String.fromCharCode(10);
 /** Echte Projektwerte: Skill und Agenten werden mit ihnen gelesen. */
 const ECHT = projektConfig();
-const { planer: PLANER, umsetzer: UMS, lens: LENS } = ECHT.agenten;
+const { planer: PLANER, umsetzer: UMS } = ECHT.agenten;
 
 /** Alle `Agent({ … })`-Aufrufe eines Textes (Codeblock oder Prosa): von `Agent({` bis zum ersten `})`. */
 export function agentBloecke(text: string): string[] {
@@ -118,8 +118,10 @@ describe("Holdout-Trennung der Übergabeprompts (#1754 K1)", () => {
     assert.match(uebergabeProbleme(mitPlatzhalter, LENSES, UMSETZER).join(NL), new RegExp(`Vorlage ${PLANER} trägt Szenario-Bezug`));
     const mitKopf = SKILL.replace(`subagent_type: "${UMS}"`, `subagent_type: "${UMS}"` + NL + '  prompt: "SZENARIEN #" + "12"');
     assert.match(uebergabeProbleme(mitKopf, LENSES, UMSETZER).join(NL), new RegExp(`Vorlage ${UMS} trägt Szenario-Bezug`));
-    const lens = LENSES.replace(`subagent_type: "${LENS}"`, `subagent_type: "${LENS}"` + NL + "  prompt: \"<Szenario-Auszug>\"");
-    assert.match(uebergabeProbleme(SKILL, lens, UMSETZER).join(NL), new RegExp(`Vorlage ${LENS} trägt Szenario-Bezug`));
+    const lensTyp = 'subagent_type: "<Typ aus `node scripts/lens-arm.mjs <nr>`>"'; // Arm-Wahl A/B (factory#235): der Typ ist kein fester Agentenname mehr
+    assert.ok(LENSES.includes(lensTyp));
+    const lens = LENSES.replace(lensTyp, lensTyp + NL + "  prompt: \"<Szenario-Auszug>\"");
+    assert.match(uebergabeProbleme(SKILL, lens, UMSETZER).join(NL), /Vorlage .*lens-arm\.mjs.* trägt Szenario-Bezug/);
   });
 
   test("Negativ: Nachfolger-Bullet und Gruppen-Absatz mit Szenario-Bezug sind rot", () => {

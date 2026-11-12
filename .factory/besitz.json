@@ -133,6 +133,8 @@
     {"pfad":"scripts/check-steuerbytes.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-doc-tickets.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/umsetzer-abschluss.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
+    {"pfad":"scripts/lens-arm.mjs","ring":"kern","quelle":"A/B Kern je Rolle (factory#235)"},
+    {"pfad":"scripts/lens-arm-lib.mjs","ring":"kern","quelle":"A/B Kern je Rolle (factory#235)"},
     {"pfad":"scripts/lens-auftrag-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/lens-edit-guard.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/holdout-guard.mjs","ring":"kern","quelle":"Sammelticket #1781 (aus #1754)"},
