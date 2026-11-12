@@ -13,6 +13,8 @@ import { join, posix } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawTagTakt from "../../scripts/tag-takt.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBesitz from "../../scripts/besitz-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
@@ -65,18 +67,19 @@ const besitz = rawBesitz as unknown as {
 
 export const ENDUNGEN = /\.(md|mjs|cjs|js)$/;
 export const VORLAGE = ".factory/produkt/vorlagen/AGENTS.md.vorlage";
-export const ANKERLISTE = "test/harness/kern-link-anker.json";
+/** Pfad der Ankerliste: eine Quelle, `tag-takt.mjs` (liest sie am Tag und an HEAD). */
+export const ANKERLISTE: string = (rawTagTakt as unknown as { ANKER_LISTE: string }).ANKER_LISTE;
 
 // ── Muster aus ABSCHNITT_VERWEIS abgeleitet (factory#245 L12b) ────────────────────────────────────────────────────
 
 const VORSPANN = String.raw`([\w./-]*\w\.md) (›|§)`;
 
 /** Ersetzt den Vorspann `<pfad>.md ›|§` von `ABSCHNITT_VERWEIS` durch `vorspann` (Gruppen: 1 Ziel, 2 Trenner, 3 Abschnittstext). Wirft, wenn der Vorspann nicht mehr dort steht. */
-export function abgeleitet(vorspann: string): RegExp {
-  const quelle = drift.ABSCHNITT_VERWEIS.source;
+export function abgeleitet(vorspann: string, original: RegExp = drift.ABSCHNITT_VERWEIS): RegExp {
+  const quelle = original.source;
   const neu = quelle.replace(VORSPANN, vorspann);
   if (neu === quelle) throw new Error("ABSCHNITT_VERWEIS trägt den erwarteten Vorspann nicht mehr: Ableitung in kern-verweise.ts nachziehen");
-  return new RegExp(neu, drift.ABSCHNITT_VERWEIS.flags);
+  return new RegExp(neu, original.flags);
 }
 
 /** Fabrik-Verweis `<pfad>.md (Fabrik) › A` (die Gate-Regex erkennt ihn nie, also prüft der Bezieher ihn nie). */
@@ -202,7 +205,7 @@ export function strengeFunde(wurzel: string, erlaubt: Set<string>): { funde: Str
 
 /** `null` = streng genug, sonst der Grund (Prüfpunkte (a) bis (e) in `strengeFunde`). */
 function strengPruefung(datei: string, v: Verweis, ziel: string, stellen: ReturnType<typeof drift.linkStellen>, erlaubt: Set<string>, lies: (p: string) => string | null): string | null {
-  const l = stellen.find((s) => !s.bild && s.start + 1 === v.index);
+  const l = stellen.find((s) => s.start + 1 === v.index);
   if (l === undefined) return "(a) kein Link-Text eines Markdown-Links";
   if (drift.linkZiel(datei, l.path) !== ziel) return "(b) der Link zeigt auf eine andere Seite";
   if (!erlaubt.has(`${ziel}#${l.anchor}`)) return "(c) Anker nicht in der Ankerliste";
@@ -278,7 +281,7 @@ export function absatzVerweise(text: string): AgentsVerweis[] {
   return verweise;
 }
 
-/** Formen 1 bis 3 (Muster 8 und seine abgeleiteten Nebenformen, Code nicht maskiert). `nurAgents`: Ziel muss AGENTS.md, Projekt-Block oder CLAUDE.md heißen. Pur. */
+/** Formen 1 bis 3 (Muster 8 und seine abgeleiteten Nebenformen, Code nicht maskiert). Das Ziel muss AGENTS.md, Projekt-Block oder CLAUDE.md heißen (sonst entfällt der Verweis). Pur. */
 export function musterVerweise(text: string): AgentsVerweis[] {
   const tabelle: [RegExp, AgentsForm][] = [[drift.ABSCHNITT_VERWEIS, 1], [AGENTS_KLAMMER_VERWEIS, 2], [PROJEKT_BLOCK_VERWEIS, 3]];
   return tabelle.flatMap(([re, form]) =>

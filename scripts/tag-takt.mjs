@@ -148,7 +148,7 @@ export function bezieherMigrationen(besitz, migrationKey) {
 /** Die Ankerliste der Kern-Links (factory#245 L1): geschlossene Liste der Fabrik-Seiten-Anker, die Besitz-Text verlinkt; ein Bezieher mit eigener Seite braucht dort die Überschrift. */
 export const ANKER_LISTE = "test/harness/kern-link-anker.json";
 
-const ANKER_FORMAT = /^docs\/[^#]+\.md#[^#\s`]+$/;
+const ANKER_FORMAT = /^docs\/[^\s`#]+\.md#[^\s`#]+$/;
 
 /**
  * Pur (factory#245 L1): neue Einträge der Ankerliste seit dem Tag (`altText` am Tag, `neuText` an HEAD, je der JSON-Inhalt), sortiert; nur Einträge im Format `docs/<x>.md#<anker>`

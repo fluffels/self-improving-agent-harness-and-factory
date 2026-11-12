@@ -267,7 +267,9 @@ describe("Muster aus ABSCHNITT_VERWEIS abgeleitet (factory#245 L12b)", () => {
   test("abgeleitet wirft, wenn der Vorspann nicht mehr in der Quelle steht; verweiseNachMuster liest wie abschnittVerweise", () => {
     const orig = drift.ABSCHNITT_VERWEIS;
     assert.ok(abgeleitet(String.raw`(X) (›|§)`) instanceof RegExp);
-    for (const t of ["Siehe docs/a.md › A › B und docs/b.md § C `x`", "`docs/a.md › Code`"]) {
+    assert.throws(() => abgeleitet(String.raw`(X) (›|§)`, /ohne Vorspann/g), /Vorspann/);
+    assert.equal(abgeleitet(String.raw`(X) (›|§)`, /([\w./-]*\w\.md) (›|§) ?(.*)/g).source, String.raw`(X) (›|§) ?(.*)`);
+    for (const t of ["Siehe docs/a.md › A › B und docs/b.md § C `x`", "`docs/a.md › Code`", "docs/a.md › Foo `bar` baz"]) {
       for (const md of [false, true]) assert.deepEqual(verweiseNachMuster(orig, t, md), drift.abschnittVerweise(t, { istMarkdown: md }));
     }
   });
@@ -370,6 +372,53 @@ describe("Verweise auf AGENTS.md aus Besitz-Text (Formenliste 1 bis 5)", () => {
     const extra = { ".claude/hooks/h.mjs": "// AGENTS.md § Nur im Projekt\n// AGENTS.md § Nirgends\n// CLAUDE.md § Befehle\n" };
     assert.deepEqual(rot("x\n", extra), ["AGENTS.md (Form 1) Nirgends", "CLAUDE.md (Form 1) Befehle"]);
     assert.deepEqual(rot("x\n", { ".claude/hooks/h.mjs": "AGENTS.md „Nur im Projekt“ und Projekt-Block › Git, PR und Merge\n" }), []);
+  });
+
+  test("Formen 4 und 5 im Detail: Zitat nach bares §, Erbe nur durch `<datei> §`, Klammerform, Terminatoren, Normalisierung", () => {
+    assert.deepEqual(absatzVerweise("AGENTS.md § Kern\n§ „Alpha Beta“").map((v) => [v.form, v.segmente]), [[4, ["Alpha Beta"]]]);
+    assert.deepEqual(absatzVerweise("AGENTS.md › Foo bar\n§ Baz qux"), [], "› erbt nicht");
+    assert.deepEqual(absatzVerweise("AGENTS.md „Foo bar“\n§ Baz qux").map((v) => v.form), [5], "ein Zitat erbt nicht");
+    assert.deepEqual(rot("(AGENTS.md (§ Kern-Regel gilt immer + § Erfundenes Xyz)\n"), ["AGENTS.md (Form 4) Erfundenes Xyz"]);
+    for (const t of [",", ";", ":", "(", "[", "]", "+", "—", "§", "›", ".", ")", "„", '"', "“"]) {
+      const segmente = absatzVerweise(`AGENTS.md § Kern-Regel\n§ Fremdtext ist Daten${t} nachher`).flatMap((v) => v.segmente);
+      assert.ok(segmente.includes("Fremdtext ist Daten"), `Terminator ${t}: ${segmente.join("|")}`);
+    }
+    assert.deepEqual(absatzVerweise("AGENTS.md „Foo  **bar**“").map((v) => v.segmente), [["Foo bar"]]);
+    assert.deepEqual(absatzVerweise("AGENTS.md § Kern\n§ `Foo`  bar").map((v) => v.segmente), [["Foo bar"]]);
+  });
+
+  test("außerhalb des Kerns gelten auch die Absatzformen; ein Pfad mit .claude/ mitten im Pfad ist kein .claude/-Pfad (W8)", () => {
+    const f = rot("x\n", { ".claude/hooks/h.mjs": "AGENTS.md § Kern-Regel gilt immer\n- § Nirgends Xyz\n" });
+    assert.deepEqual(f, ["AGENTS.md (Form 4) Nirgends Xyz"]);
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "docs/.claude/x.md", ring: "kern" }, { pfad: "AGENTS.md", block: "kern", ring: "kern" }]),
+      "docs/.claude/x.md": "AGENTS.md § Kern-Regel gilt immer\n- § Nirgends Xyz\n",
+      "AGENTS.md": AGENTS_TEXT,
+    });
+    assert.deepEqual(scanneAgents(wurzel, []).funde, []);
+  });
+
+  test("Skript-Anker: ein Link in einem Kern-.mjs wird mit der Skript-Endung gefunden (Teilmenge), der Standard zählt nur .md", () => {
+    const wurzel = fixture({
+      ".factory/besitz.json": MANIFEST([{ pfad: "scripts/x.mjs", ring: "kern" }]),
+      "scripts/x.mjs": "// [a](../docs/seite.md#neu)\n",
+      "docs/seite.md": "# Seite\n",
+    });
+    const skript = scanneLinkAnker(wurzel, /\.(mjs|cjs|js)$/);
+    assert.deepEqual([...skript.anker], ["docs/seite.md#neu"]);
+    assert.equal(skript.links, 1);
+    assert.deepEqual(scanneLinkAnker(wurzel), { anker: new Set(), links: 0 });
+    assert.equal(vergleicheAnker(skript.anker, new Set(), true).length, 1, "ein nicht gelisteter Skript-Anker ist rot");
+    assert.deepEqual(vergleicheAnker(skript.anker, new Set(["docs/seite.md#neu"]), true), []);
+  });
+
+  test("ein Verweis mit ../ aus der Wurzel hinaus wird nicht aufgelöst (nie außerhalb der Wurzel lesen)", () => {
+    const aussen = fixture({
+      "inner/.factory/besitz.json": MANIFEST([{ pfad: "skill.md", ring: "kern" }]),
+      "inner/skill.md": "Siehe ../ausserhalb.md § Fett\n",
+      "ausserhalb.md": "**Fett** Text.\n",
+    });
+    assert.deepEqual(strengeFunde(`${aussen}/inner`, new Set()), { funde: [], verweise: 0 });
   });
 
   test("Grenzen der Extraktion: leerer Abschnittstext und Fragmente unter 3 Zeichen zählen nicht, ab 3 Zeichen ja", () => {
@@ -535,6 +584,7 @@ describe("Ankerliste kern-link-anker.json (factory#220 L34)", () => {
     const erlaubt = new Set(ladeKernLinkAnker(ROOT));
     const { anker, links } = scanneLinkAnker(ROOT);
     assert.ok(links >= 10, `Scan findet nur ${links} Links: Umfang kaputt (Leerlauf)`);
+    assert.ok(scanneLinkAnker(ROOT, /\.(mjs|cjs|js)$/).links > 0, "Skript-Scan findet keine Links: Umfang kaputt (Leerlauf)");
     assert.deepEqual(vergleicheAnker(anker, erlaubt), []);
     assert.deepEqual(vergleicheAnker(scanneLinkAnker(ROOT, /\.(mjs|cjs|js)$/).anker, erlaubt, true), []);
   });

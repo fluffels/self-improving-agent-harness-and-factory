@@ -31,7 +31,7 @@ describe("neueKernLinkAnker (reine Funktion)", () => {
     expect(T.neueKernLinkAnker(liste(), null)).toEqual([]);
   });
   it("Missbrauchsschutz: nur Einträge im Format docs/<x>.md#<anker> ohne Backtick und Leerzeichen", () => {
-    const boese = ["README.md#x", "docs/a.md", "docs/a.md#x y", "docs/a.md#x`; rm -rf", "docs/a.md#ok", 7];
+    const boese = ["README.md#x", "docs/a.md", "docs/a.md#x y", "docs/a.md#x`; rm -rf", "docs/a.md#ok", 7, "xdocs/a.md#b", "../docs/a.md#b", "docs/a.md#x`y", "docs/a.md#x#y", "docs/a#x", "docs/a\n.md#b", "docs/a`b.md#c", "docs/a b.md#c", "docs/x` @org/team `.md#a"];
     expect(T.neueKernLinkAnker(liste(), JSON.stringify(boese))).toEqual(["docs/a.md#ok"]);
   });
   it("Pfad der Liste ist die JSON-Datei neben dem Wächter", () => {
