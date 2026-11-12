@@ -36,6 +36,15 @@ describe("bewerteLensEdit", () => {
     for (const r of [4, 5, 6]) expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}1349-lens-r${r}/src/a.ts`, "", DEPS).block, `r${r}`).toBe(false);
   });
 
+  test("L2: Lens-Worktree mit Brillen-Endung (`-lens-r1-test-adaequanz`) ist erlaubt, ein Pfadtrick nicht", () => {
+    for (const n of ["lens-r1-test-adaequanz", "lens-m2-architektur", "lens-a1-sicherheit"]) {
+      expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}1349-${n}/src/a.ts`, "", DEPS).block, n).toBe(false);
+    }
+    for (const n of ["lens-r1-/a.ts", "lens-r1-1/a.ts", "lens-r1-../a.ts", "lens-r1x/a.ts"]) {
+      expect(G.bewerteLensEdit(`C:/dev/projekt/.claude/worktrees/${W}1349-${n}`, "", DEPS).block, n).toBe(true);
+    }
+  });
+
   test("Datei im Feature-Worktree, im Hauptrepo oder anderswo: abgelehnt", () => {
     for (const p of [`${FEATURE}/src/a.ts`, "C:/dev/projekt/src/a.ts", "C:/Users/x/Temp/a.ts", `${FEATURE.replace(/\//g, "\\")}\\src\\a.ts`]) {
       const e = G.bewerteLensEdit(p, "", DEPS);

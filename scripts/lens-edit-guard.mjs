@@ -2,7 +2,7 @@
 /**
  * Lens-Sabotage-Guard (#1349): die Lens (`agenten.lens` der Projekt-Config) hat das Tool `Edit`, ausschließlich für die Sabotage-Probe der Test-Lens
  * (Implementierung testweise verfälschen, Test wird rot?). Die Probe gehört in einen eigenen Lens-Worktree
- * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>`, bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`, bei der Delta-Lens nach einem CI-Fix hinter dem Nachweis `…-lens-c<n>`; für einen fremden Klon: `git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>`, das Präfix liest der Guard aus `<klon>/.factory/projekt.json`, ohne lesbare Config gilt das der Session); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
+ * (`.claude/worktrees/<worktree-präfix><nr>-lens-r<runde>-<brille>`, je Brille ein eigener Worktree, damit parallele Lenses sich keinen teilen; die Endung `-<brille>` (`[a-z-]`) ist optional; bei der Merge-Delta-Lens `…-lens-m<n>`, bei der Delta-Lens nach einem Abnahme-Fix `…-lens-a<n>`, bei der Delta-Lens nach einem CI-Fix hinter dem Nachweis `…-lens-c<n>`; für einen fremden Klon: `git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>`, das Präfix liest der Guard aus `<klon>/.factory/projekt.json`, ohne lesbare Config gilt das der Session); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
  * anderen Lenses (so passiert im Review von #1331). Die Regel stand bisher nur als Text in der Lens-Definition.
  *
  * Dieser Hook (Frontmatter der Lens-Definition unter `.claude/agents/`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
@@ -61,7 +61,7 @@ export function bewerteLensEdit(filePath, cwd = "", deps = {}) {
     block: true,
     reason:
       `${namen.agenten.lens} ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt ` +
-      `(${lensOrdner(config)}${namen.worktreeName("<nr>")}-lens-r<runde>${istArbeitsplatz(config) ? "" : " (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>)"} bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
+      `(${lensOrdner(config)}${namen.worktreeName("<nr>")}-lens-r<runde>-<brille>${istArbeitsplatz(config) ? "" : " (fremder Klon: git -C <klon> worktree add --detach <klon>/.claude/worktrees/<präfix><nr>-lens-r<runde> <erwarteter HEAD>)"} bzw. ${namen.worktreeName("<nr>")}-lens-m<n> bzw. -lens-a<n> bzw. -lens-c<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in ${ROLLEN_PFADE.lens}). ` +
       (istArbeitsplatz(config) ? "Worktree-Ordner je Repo: `node scripts/arbeitsplatz.mjs pfade`. " : "") +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };

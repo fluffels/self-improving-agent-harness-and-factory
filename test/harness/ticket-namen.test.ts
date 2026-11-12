@@ -120,6 +120,19 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
     expect(re.test(`${ECHT.praefixe.worktree}12-lens-r1`)).toBe(false);
     expect(re.test("ab-12-lens-x1")).toBe(false);
   });
+  test("L2: Lens-Name trägt optional die Brille als Endung (parallele Lenses je eigener Worktree); Gruppe 1 bleibt Worktree-Name", () => {
+    const re = n.lensWorktreeMuster;
+    expect(re.exec("ab-12-lens-r1-test-adaequanz")?.[1]).toBe("ab-12");
+    expect(re.exec("ab-12-lens-m2-architektur")?.[1]).toBe("ab-12");
+    expect(re.test("ab-12-lens-r1")).toBe(true); // alte Namen ohne Endung bleiben gültig
+    for (const schlecht of ["ab-12-lens-r1-", "ab-12-lens-r1-Test", "ab-12-lens-r1x", "ab-12-lens-r1-1", "ab-12-lens-r1-..", "ab-12-lens-r1-a/b"]) {
+      expect(re.test(schlecht), schlecht).toBe(false);
+    }
+    expect(n.lensPfadMuster.test("/.claude/worktrees/ab-12-lens-r1-sicherheit/x")).toBe(true);
+    for (const schlecht of ["ab-12-lens-r1-/x", "ab-12-lens-r1x/x", "ab-12-lens-r1-1/x", "ab-12-lens-r1-../x"]) {
+      expect(n.lensPfadMuster.test(`/.claude/worktrees/${schlecht}`), schlecht).toBe(false);
+    }
+  });
   test("dateiMuster und ticketBranchMuster sind am Namensanfang verankert: ein vorangestelltes Präfix passt nicht", () => {
     expect(n.dateiMuster.test("ab-7.bak")).toBe(true);
     expect(n.dateiMuster.test("x-ab-7.bak")).toBe(false);
