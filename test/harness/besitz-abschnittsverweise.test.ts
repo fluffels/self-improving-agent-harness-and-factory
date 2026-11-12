@@ -51,6 +51,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-docdrift.mjs";
 import { BEZIEHER_NPM_SKRIPTE } from "../support/bezieher-npm-skripte";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 import { fixture } from "../support/tmp-fixture";
 import { repoDateien } from "./repo-texte";
