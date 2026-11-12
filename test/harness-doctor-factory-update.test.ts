@@ -204,7 +204,12 @@ describe("dependabotAusschlussPunkt", () => {
       `updates:\n${aktion}    exclude-paths:\n      - "\n`,
       `updates:\n${aktion}    exclude-paths:\n      - "a"b"\n`,
       `updates:\n${aktion}    exclude-paths:\n      - "a\\b"\n`,
-      `updates:\n${aktion}    exclude-paths: [a, b\n`,
+      `updates:\n${aktion}    exclude-paths: [a, bc\n`,
+      `updates:\n${aktion}    exclude-paths: x\n      y\n`,
+      "updates:\n  - package-ecosystem: npm\n    directory: /\n   y: z\n",
+      "updates:\n  - package-ecosystem: npm\n    directory: /\n    foo\n",
+      "updates:\n  - package-ecosystem: npm\n      y\n",
+      "updates:\n  - 3\n - 4\n",
       `updates:\n${aktion}    exclude-paths:\n      - a\n        - b\n`,
       `updates:\n${aktion}    exclude-paths:\n      a: b\n`,
       `updates:\n${aktion}    exclude-paths: "a\n`,
@@ -221,9 +226,17 @@ describe("dependabotAusschlussPunkt", () => {
     expect(pruefe(voll.replaceAll("\n", "\r\n"))).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
     expect(pruefe(`${voll}version: 2\n`)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]); // ein Schlüssel nach der Liste endet sie
     expect(pruefe(`${voll}# Ende\n\n`)).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
-    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths: []\n")[0]).toMatchObject({ ok: false });
-    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n")[0]).toMatchObject({ ok: false });
-    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    schedule:\n      interval: weekly\n")[0]).toMatchObject({ ok: false });
+    // echte Lücken (nicht „nicht prüfbar“): leere Liste, leerer Block, anderer Schlüssel
+    for (const rest of ["    exclude-paths: []\n", "    exclude-paths:\n", "    schedule:\n      interval: weekly\n"]) {
+      const [p] = pruefe(`updates:\n  - package-ecosystem: github-actions\n${rest}`);
+      expect(p, rest).toMatchObject({ ok: false });
+      expect(p?.nichtPruefbar, rest).toBeUndefined();
+    }
+    // einfache Quotes um das Ökosystem werden erkannt (sonst bliebe der Eintrag unbeachtet und es käme ein falsches OK)
+    expect(pruefe("updates:\n  - package-ecosystem: 'github-actions'\n")[0]).toMatchObject({ ok: false });
+    expect(pruefe("updates:\n  - package-ecosystem: github-actions\n    exclude-paths: ['.github/workflows/codeql.yml', '.github/workflows/zizmor.yml']\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    // Mappings ohne package-ecosystem zählen nicht
+    expect(pruefe("updates:\n  - directory: /\n")).toEqual([{ punkt: "Dependabot-Ausschluss", ok: true }]);
   });
   test("Fallback .github/dependabot.yaml, wenn die .yml fehlt (die .yml gilt zuerst)", () => {
     expect(pruefe(null, { ...ALLE, ".github/dependabot.yaml": dependabot(actions()) })[0]).toMatchObject({ ok: false });

@@ -78,16 +78,15 @@ function skalar(roh) {
   if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
   const q = s[0];
   if (q !== '"' && q !== "'") return s;
-  if (s.length < 2 || !s.endsWith(q) || s.slice(1, -1).includes(q) || s.includes("\\")) throw nl("Quote oder Escape in einem Wert");
+  if (!s.endsWith(q) || s.slice(1, -1).includes(q) || s.includes("\\")) throw nl("Quote oder Escape in einem Wert");
   return s.slice(1, -1);
 }
 
-/** Die inhaltlichen Zeilen `{ einr, text }` (ohne Leer- und Kommentarzeilen); ein Tab in der Einrückung ist nicht lesbar. */
+/** Die inhaltlichen Zeilen `{ einr, text }` (ohne Leer- und Kommentarzeilen). */
 function zeilenVon(text) {
   const zeilen = [];
   for (const roh of text.split(/\r?\n/)) {
     if (/^[ \t]*(#.*)?$/.test(roh)) continue;
-    if (/^ *\t/.test(roh)) throw nl("Tab in der Einrückung");
     const einr = /^ */.exec(roh)[0].length;
     zeilen.push({ einr, text: roh.slice(einr).trimEnd() });
   }
@@ -194,7 +193,7 @@ function eintraegeVon({ wert, rumpf }) {
 
 /**
  * Die Einträge von `updates` als `{ eintraege: [{ oekosystem, ausschluss }] }` oder `{ fehler }` (Blockform ohne `yaml`-Bibliothek: der Doctor-Wochenlauf läuft ohne `npm ci`, nur Node-Builtins).
- * Gelesen wird nur die übliche Blockform (Schlüssel `package-ecosystem` und `exclude-paths` mit Blockliste oder einzeiliger Flow-Liste, Skalare plain oder im Quote-Paar). Nicht lesbar (fehler, nie ein stilles OK): Tab in der Einrückung,
+ * Gelesen wird nur die übliche Blockform (Schlüssel `package-ecosystem` und `exclude-paths` mit Blockliste oder einzeiliger Flow-Liste, Skalare plain oder im Quote-Paar). Nicht lesbar (fehler, nie ein stilles OK): eine Zeile mit Tab in der Einrückung (keine `schlüssel:`-Zeile),
  * eine oberste Ebene ohne `schlüssel:`-Zeilen (auch ein Skalar oder `null`), `updates` als Flow, Text oder Mapping, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Escapes, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
  */
 export function dependabotEintraege(text) {
