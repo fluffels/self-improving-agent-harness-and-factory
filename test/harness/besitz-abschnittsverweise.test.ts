@@ -51,6 +51,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDrift from "../../scripts/check-docdrift.mjs";
 import { BEZIEHER_NPM_SKRIPTE } from "../support/bezieher-npm-skripte";
+import * as rawMarkdown from "../../scripts/docs-gen/markdown.mjs";
 import { fixture } from "../support/tmp-fixture";
 import { repoDateien } from "./repo-texte";
 import {
@@ -83,6 +84,8 @@ const drift = rawDrift as unknown as {
   parseNpmRunMentions: (md: string) => Set<string>;
   ABSCHNITT_VERWEIS: RegExp;
 };
+
+const markdown = rawMarkdown as unknown as { collectHeadingSlugs: (md: string) => string[] };
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MANIFEST = (eintraege: Einheit[]): string => JSON.stringify({ version: 3, eintraege });
@@ -630,6 +633,20 @@ describe("Ankerliste kern-link-anker.json (factory#220 L34)", () => {
     assert.equal(new Set(liste).size, liste.length);
     assert.ok(existsSync(ROOT + ANKERLISTE));
     assert.ok(Array.isArray(JSON.parse(readFileSync(ROOT + ANKERLISTE, "utf8"))));
+  });
+
+  /** Ankerlisten-Einträge, deren Seite die Überschrift (GitHub-Slug) nicht trägt; ein Fettdruck-Anfang zählt nicht (factory#400 L45). */
+  const ohneUeberschrift = (liste: string[], lies: (seite: string) => string): string[] =>
+    liste.filter((a) => {
+      const [seite, slug] = a.split("#");
+      return !markdown.collectHeadingSlugs(lies(seite)).includes(slug);
+    });
+
+  test("L45: jeder Eintrag der Ankerliste trifft eine echte Überschrift seiner Seite; ein Fettdruck-Anfang ist rot", () => {
+    const lies = (seite: string): string => readFileSync(ROOT + seite, "utf8");
+    assert.deepEqual(ohneUeberschrift(ladeKernLinkAnker(ROOT), lies), []);
+    const seite = "# Seite\n\n- **Abarbeiten:** Fettdruck, keine Überschrift\n\n## Echt\n";
+    assert.deepEqual(ohneUeberschrift(["docs/s.md#abarbeiten", "docs/s.md#echt"], () => seite), ["docs/s.md#abarbeiten"]);
   });
 
   test("echtes Repo: Besitz-Text setzt nur Anker der Liste (Gleichstand für .md, Teilmenge für Skripte) und der Scan ist nicht leer", () => {
