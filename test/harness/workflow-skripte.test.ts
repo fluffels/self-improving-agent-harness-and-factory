@@ -1,4 +1,4 @@
-/* Workflow-Skript-Wächter (factory#394, Zeilen L8-L10): was ein Workflow-Job per `node scripts/<x>.mjs` startet, hält zwei Verträge.
+/* Workflow-Skript-Wächter (factory#394, Zeilen L8-L10): was ein Workflow-Job per `node scripts/<x>.mjs` startet, hält drei Verträge.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
  *
@@ -9,7 +9,7 @@
  *     Schutzliste `.github/protected-paths.json` (`trifftLeitplanke`): sonst könnte ein PR den Gate-Lauf per Skript-Änderung still ändern.
  * L10: Der Job `security-audit` in ci.yml ruft `node scripts/audit-verzeichnisse.mjs` auf (nicht nur ein nacktes `npm audit`).
  *
- * Geschlossene Mustern-Liste (`SKRIPT_MUSTER`): `node scripts/<x>.mjs` und `node ./scripts/<x>.mjs`, auch hinter Env-Zuweisung, nach `&&`, `;`, `|`, `$(`,
+ * Geschlossene Muster-Liste (`SKRIPT_MUSTER`): `node scripts/<x>.mjs` und `node ./scripts/<x>.mjs`, auch hinter Env-Zuweisung, nach `&&`, `;`, `|`, `$(`,
  * in mehrzeiligem `run: |`. Grenzen (nicht erkannt): Ketten über `npm run <x>`, Composite Actions und `uses:`-Schritte, dynamische Pfade
  * (`node "$SKRIPT"`), `working-directory`, andere Aufrufer als `node`. Bewusst offen: `scripts/audit-einordnung.mjs` läuft nur im Zeitplan-Workflow
  * `audit-einordnung.yml` (kein Required Check), steht aber vorsorglich in der Schutzliste.
@@ -101,6 +101,10 @@ describe("jobSkripte (Parser)", () => {
   test("Job ohne Install mit zwei Einstiegen, ./ und Env-Zuweisung", () => {
     const [j] = jobSkripte("jobs:\n  b:\n    name: Bee\n    steps:\n      - run: FOO=1 node ./scripts/b.mjs --x\n      - run: |\n          if ! w=$(node scripts/a.mjs y); then exit 1; fi\n");
     expect(j).toEqual({ job: "b", name: "Bee", install: false, skripte: ["scripts/a.mjs", "scripts/b.mjs"] });
+  });
+  test("npm install zählt als Install", () => {
+    const [j] = jobSkripte("jobs:\n  f:\n    steps:\n      - run: npm install\n      - run: node scripts/f.mjs\n");
+    expect(j.install).toBe(true);
   });
   test("mehrzeiliges run: | mit Install über gate-befehl", () => {
     const [j] = jobSkripte("jobs:\n  c:\n    steps:\n      - run: |\n          node scripts/gate-befehl.mjs install\n          node scripts/c.mjs\n");

@@ -58,9 +58,13 @@ describe("L2: Dash-Form git-commit / git-push (factory#394)", () => {
     laeuft("git-status");
     laeuft("git-commit -m x", WT);
   });
+  test("Negativ: Fremdbefehle mit ähnlichem Namen laufen (Regex-Anker)", () => {
+    laeuft("legit-commit -m x");
+    laeuft("git-commit2 -m x");
+  });
 });
 
-describe("L77:Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
+describe("L77: Bindestrich-Komposita sind kein commit/push (factory#382)", () => {
   test("Lesebefehle auf commit-graphs und pre-commit laufen, git commit blockt weiter (auch über den Interpreter-Weg)", () => {
     laeuft("Get-ChildItem .git/objects/info/commit-graphs");
     laeuft("Get-Content .git/hooks/pre-commit");

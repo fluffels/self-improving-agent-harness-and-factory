@@ -9,6 +9,7 @@ const A = raw as unknown as {
   befundeAusNpmAudit: (j: unknown) => B[];
   befundeAusAlerts: (a: unknown) => B[];
   alertsAusSeiten: (seiten: unknown) => unknown[];
+  ladeAlerts: (repo: string, text: (args: string[]) => string) => unknown[];
   markiereProd: (voll: B[], prod: B[]) => B[];
   vertrauteBodies: (kommentare: { body?: string | null; user?: { login?: string; type?: string } | null }[], owner: string) => string[];
   bekannteGhsa: (a: { kommentare: string[]; wiedervorlagen: { id: string }[]; offeneTitel: string[] }) => Set<string>;
@@ -432,6 +433,18 @@ describe("alertsAusSeiten (L11)", () => {
   test("verflacht Seiten; leere Seitenliste gibt leere Liste", () => {
     expect(A.alertsAusSeiten([[{ a: 1 }], [{ b: 2 }]])).toEqual([{ a: 1 }, { b: 2 }]);
     expect(A.alertsAusSeiten([])).toEqual([]);
+  });
+  test("ladeAlerts: verdrahtet den Helfer; Seite ohne Liste gibt [] samt sichtbarer ::warning::", () => {
+    expect(A.ladeAlerts("o/r", () => JSON.stringify([[{ a: 1 }], [{ b: 2 }]]))).toEqual([{ a: 1 }, { b: 2 }]);
+    const zeilen: string[] = [];
+    const orig = console.log;
+    console.log = (m: string) => void zeilen.push(String(m));
+    try {
+      expect(A.ladeAlerts("o/r", () => JSON.stringify([[{ a: 1 }], {}]))).toEqual([]);
+    } finally {
+      console.log = orig;
+    }
+    expect(zeilen.join("\n")).toMatch(/::warning::Dependabot-Alerts nicht lesbar \(.*Seite ohne Liste/);
   });
   test("Seite ohne Liste wirft (fail-closed)", () => {
     for (const k of [{}, [{ message: "x" }], [[{ a: 1 }], {}]]) {

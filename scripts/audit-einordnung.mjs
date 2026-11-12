@@ -165,9 +165,9 @@ export function alertsAusSeiten(seiten) {
   return seiten.flat();
 }
 
-function ladeAlerts(repo) {
+export function ladeAlerts(repo, text = ghText) {
   try {
-    return alertsAusSeiten(JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${repo}/dependabot/alerts?state=open&per_page=100`])));
+    return alertsAusSeiten(JSON.parse(text(["api", "--paginate", "--slurp", `repos/${repo}/dependabot/alerts?state=open&per_page=100`])));
   } catch (err) {
     console.log(`::warning::Dependabot-Alerts nicht lesbar (${fehlerText(err, 200)}); weiter mit npm audit allein.`);
     return [];
