@@ -89,7 +89,7 @@ describe("main", () => {
   });
 
   test.each([[[]], [["--schwere"]], [["--schwere", "unbekannt"]], [["--schwere", "constructor"]], [["--schwere", "high", "x"]]])("falsche Bedienung %j: Exit 2", (argv) => {
-    const l = lauf(argv as string[], []);
+    const l = lauf(argv, []);
     expect(l.code).toBe(2);
     expect(l.aufrufe).toEqual([]);
   });

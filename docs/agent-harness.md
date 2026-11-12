@@ -20,7 +20,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | ≥ 210 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
+| Skripte | ≥ 220 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 130 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 17 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 21 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
@@ -131,7 +131,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
 | `npm test` | `verify` | Verhalten der Skripte und Harness-Wächter, inkl. Negativ- und Grenzfälle (Vitest) |
 | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (Plan- und Review-Zeile) im PR |
-| `npm audit --audit-level=high` | CI | Security-Gate über die Abhängigkeiten |
+| `node scripts/audit-verzeichnisse.mjs --audit-level high` | CI | Security-Gate über die Abhängigkeiten |
 
 <!-- GEN:gates END -->
 

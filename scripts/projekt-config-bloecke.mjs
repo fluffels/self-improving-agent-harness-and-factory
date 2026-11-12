@@ -243,7 +243,7 @@ export function pruefeAudit(b) {
   return [...fehler, ...[...new Set(doppelt)].map((p) => `audit.verzeichnisse enthält ${p} doppelt`)];
 }
 
-const SANDBOX_KEYS =["allowedDomains", "envVars"];
+const SANDBOX_KEYS = ["allowedDomains", "envVars"];
 
 const VORPRUEFUNG_KEYS = ["befehle", "userScopeServer"];
 
