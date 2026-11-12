@@ -58,6 +58,8 @@ const WEITERE = [
   'echo "$(gh issue delete 5)"',
   'pwsh -Command "gh issue delete 5"',
   "/usr/bin/gh issue create",
+  "gh ISSUE CREATE --title x",
+  "GH.EXE issue create --title x",
 ];
 const NEGATIV = [
   "gh issue view 5",
@@ -124,7 +126,7 @@ describe("Sync mit der settings.json (Kern-Anteil: Ergänzungen eines Beziehers 
   test.each([...guard.GH_DESTRUKTIV])("PowerShell-Zwilling für %s", (e) => {
     expect(regeln).toContain(`PowerShell(gh ${e} *)`);
   });
-  test("Negativfall: eine Ergänzungsregel eines Beziehers (Bash(gh release delete:*)) ändert den Kern-Vergleich nicht", () => {
+  test("Negativfall (prüft die Filtermechanik von kernAnteil): eine Ergänzungsregel eines Beziehers (Bash(gh release delete:*)) ändert den Kern-Vergleich nicht", () => {
     const ergPlus = { ...erg, ask: [...(erg.ask ?? []), "Bash(gh release delete:*)", "PowerShell(gh release delete *)"] };
     const mit = { ...settings, ask: [...settings.ask, "Bash(gh release delete:*)", "PowerShell(gh release delete *)"] };
     expect([...bashAus(kernRegeln(mit, ergPlus))].sort()).toEqual([...guard.GH_DESTRUKTIV].sort());
