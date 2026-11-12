@@ -132,7 +132,8 @@ describe("ticketNamen: Muster aus der Config (AK4)", () => {
       expect(re.test(schlecht), schlecht).toBe(false);
     }
     expect(re.test("ab-x-lens-m1-lens-r2")).toBe(false); // Lookahead deckt alle Rundenbuchstaben
-    expect(re.exec("ab-lens-rest-lens-r1")?.[1]).toBe("ab-lens-rest"); // nur lens- mit Ziffer sperrt
+    expect(re.exec("ab-lens-rest-lens-r1")?.[1]).toBe("ab-lens-rest");
+    expect(re.exec("ab-x-lens-rest-lens-r1")?.[1]).toBe("ab-x-lens-rest"); // ab dem 2. Segment sperrt nur lens- mit Ziffer
     expect(re.exec("ab-12-lens-r1")?.[1]).toBe("ab-12");
     expect(n.dateiMuster.test("ab-eingangsfilter.json")).toBe(false);
   });
