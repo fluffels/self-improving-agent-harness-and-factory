@@ -767,6 +767,8 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
     const body = mitTag({ migrationen: [{ pr: "#7", text }] });
     expect(body).toContain(`- #7 Bitte ${"sehr ".repeat(50)} dann \`node scripts/x.mjs --y\` ausführen`);
     expect(mitTag({ migrationen: [{ pr: "#7", text: "  \n " }] })).toContain("- #7 -");
+    expect(mitTag({ migrationen: [{ pr: "#7", text: undefined }] })).toContain("- #7 -");
+    expect(mitTag({ migrationen: [{ pr: "#7", text: "a\r\n\r\nb\n\nc" }] })).toContain("- #7 a b c\n");
     const lang = mitTag({ prs: [{ ...reihe(1)[0], betreff: "x".repeat(300) }] });
     expect(lang).not.toContain("x".repeat(121));
   });

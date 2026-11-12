@@ -54,10 +54,17 @@ describe("Langfuse-Punkt (langfusePunkt)", () => {
     expect(x.ok).toBe(false);
     expect(x.nichtPruefbar).toBeUndefined();
   });
+  test("erreichbar nur als boolean true: String und Zahl sind eine Lücke", () => {
+    for (const wert of ['"true"', "1"]) {
+      const x = punkt({ status: 0, stdout: `{"erreichbar":${wert}}` });
+      expect(x.ok, wert).toBe(false);
+      expect(x.nichtPruefbar, wert).toBeUndefined();
+    }
+  });
   test("leere Ausgabe: nicht prüfbar", () => {
     expect(punkt({ status: null }).nichtPruefbar).toBe(true);
   });
   test("JSON ohne Objekt: nicht prüfbar", () => {
-    expect(punkt({ status: 0, stdout: "null" }).nichtPruefbar).toBe(true);
+    for (const s of ["null", "42", "true", '"text"']) expect(punkt({ status: 0, stdout: s }).nichtPruefbar, s).toBe(true);
   });
 });

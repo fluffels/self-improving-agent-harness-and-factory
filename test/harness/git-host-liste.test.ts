@@ -157,6 +157,7 @@ describe("githubMenge (synthetisches Repo)", () => {
       schreibe("graphql-einfach.mjs", "const a = ['api', 'graphql'];\n");
       schreibe("graphql-nur-kommentar.mjs", '// ProjectV2 und "graphql"\nexport const z = 3;\n');
       schreibe("graphql-teilwort.mjs", 'const a = "graphqlish";\n');
+      schreibe("graphql-vorsilbe.mjs", 'const a = "subgraphql";\n');
       schreibe("per-require.cjs", 'const m = require("./env-gh.mjs");\n');
       schreibe("endungslos.mjs", 'import x from "./mitte";\n');
       schreibe("kommentar.mjs", "// process.env.GITHUB_TOKEN und api.github.com\n/* api.github.com */\nexport const x = 1;\n");

@@ -1,6 +1,7 @@
 /* Sync-Härtung (#145): Werkzeug-Hinweis bei unbekannter Manifest-Version (L4) und Hinweis auf abweichende Test-Hilfe-Kopien im Ziel (L7). Pur über Speicher-Leser. */
 import { describe, expect, test } from "vitest";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawSync from "../scripts/factory-sync.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -33,6 +34,16 @@ describe("L4: Versionsfehler trägt den Werkzeug-Hinweis", () => {
   test("factory#362 L7: jeder Quell-Manifest-Fehler (unbekannter Ring) trägt den Hinweis genau einmal", () => {
     const p = sync.planeSync({ quelleLies: leser({ ".factory/besitz.json": JSON.stringify({ version: 3, eintraege: [{ pfad: "x", ring: "zz", quelle: "t" }] }) }), zielLies: leser({}) });
     expect(p.fehler.length).toBeGreaterThan(0);
+    expect(vorkommen(p.fehler.join("\n"), tag.WERKZEUG_HINWEIS)).toBe(1);
+  });
+  test("factory#362 L7: genau ein Quell-Manifest-Fehler trägt den Hinweis ebenfalls (Grenze > 0, nicht > 1)", () => {
+    const echt: Lies = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
+    const m = JSON.parse(echt(".factory/besitz.json") ?? "{}") as { eintraege: { pfad: string; ring: string }[] };
+    const e = m.eintraege.find((x) => !ROLLEN.includes(x.pfad));
+    if (!e) throw new Error("kein Eintrag");
+    e.ring = "zz";
+    const p = sync.planeSync({ quelleLies: (x) => (x === ".factory/besitz.json" ? JSON.stringify(m) : echt(x)), zielLies: leser({}) });
+    expect(p.fehler.filter((f) => f.startsWith("Quell-Manifest:"))).toHaveLength(1);
     expect(vorkommen(p.fehler.join("\n"), tag.WERKZEUG_HINWEIS)).toBe(1);
   });
   test("factory#362 L7: Fehler ohne Quell-Manifest-Bezug (unlesbares Manifest) hat keinen Hinweis", () => {
