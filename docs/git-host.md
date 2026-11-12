@@ -27,7 +27,7 @@ GitLab als Beispiel für einen anderen Host: Pipeline-Zeitpläne liegen dort in 
 | Board und Ticket | `board-lib.mjs`, `board-place.mjs`, `naechstes-ticket.mjs`, `ticket-lock.mjs`, `claims-pruefen.mjs`, `spezifikation.mjs`, `design-schritt.mjs`, `sammelticket-anlegen.mjs`, `blocker-lib.mjs`, `blocker-migration.mjs`, `produktquote-lib.mjs`, `fremdtext.mjs` | GitHub | Issues, Projects v2, Assignee-Claim, Blocker-Kante, Kommentare |
 | Ticketlauf-Abschluss | `umsetzer-abschluss.mjs`, `pr-warten.mjs`, `abnahme.mjs`, `cleanup-worktrees.mjs` | GitHub | PR-Status, Checks, Auto-Merge, Issue-Zustand |
 | Hooks | `pretooluse-hook.mjs`, `stop-verify-hook.mjs`, `gh-guard-hook.mjs` | GitHub | die ersten beiden hängen über `umsetzer-abschluss.mjs` an `gh-cli.mjs`; `gh-guard-hook.mjs` schützt Projects-v2-Aufrufe (`ProjectV2`) |
-| Inboxen und Takt | `inbox-lib.mjs`, `inbox-start-lib.mjs`, `wiedervorlage.mjs`, `secret-inbox.mjs`, `codescanning-inbox.mjs`, `audit-einordnung.mjs`, `board-takt.mjs`, `langfuse-takt.mjs`, `tag-takt.mjs`, `factory-update-check.mjs` | GitHub | Issues als Inbox, Alerts, Releases |
+| Inboxen und Takt | `inbox-lib.mjs`, `inbox-start-lib.mjs`, `wiedervorlage.mjs`, `ticket-drift.mjs`, `secret-inbox.mjs`, `codescanning-inbox.mjs`, `audit-einordnung.mjs`, `board-takt.mjs`, `langfuse-takt.mjs`, `tag-takt.mjs`, `factory-update-check.mjs` | GitHub | Issues als Inbox, Alerts, Releases |
 | Meldestelle und Offene Punkte | `melden.mjs`, `meldung-lib.mjs`, `offene-punkte.mjs`, `offene-punkte-lib.mjs` | GitHub | Kommentare am Sammelticket, Issues |
 | Harness-Doctor | `harness-doctor.mjs`, `harness-doctor-lib.mjs`, `harness-doctor-board.mjs`, `harness-doctor-melden.mjs`, `harness-doctor-meldestelle.mjs`, `harness-doctor-factory-update.mjs`, `harness-doctor-ruleset.mjs`, `harness-doctor-sicherheit.mjs`, `sandbox-doctor.mjs` | GitHub | Ruleset, Board (`harness-doctor-board.mjs` fragt Projects v2 per `gh api graphql`), Meldestelle, Secret Protection und PVR (die beiden reinen Bibliotheken `harness-doctor-ruleset.mjs` und `harness-doctor-sicherheit.mjs` bekommen die Daten von außen, liegen darum außerhalb der Menge des Wächters); `sandbox-doctor.mjs` liest `GH_TOKEN` für `api.github.com` |
 | Messen mit PR- und CI-Daten | `ci-laeufe.mjs`, `factory-kennzahlen.mjs`, `gate-fundquote.mjs`, `hauptchat-zerlegung.mjs`, `lauf-ergebnis.mjs`, `token-baseline.mjs`, `langfuse-wochenbericht.mjs` | GitHub | PR- und Workflow-Läufe per `gh` |
@@ -43,7 +43,7 @@ Alle Workflows laufen in GitHub Actions; der `schedule` steht in der Datei.
 |---|---|---|---|
 | CI | `ci.yml`, `verify-macos.yml` | GitHub | Actions, Required Checks |
 | Sicherheit | `codeql.yml`, `codescanning-inbox.yml`, `dependency-review.yml`, `dependabot-inbox.yml`, `scorecard.yml`, `secret-scan.yml`, `zizmor.yml` | GitHub | Code-Scanning, Dependency-Review, Dependabot |
-| Board und Takt | `board-takt.yml`, `wiedervorlage.yml`, `festgefahren.yml`, `audit-einordnung.yml`, `harness-doctor.yml` | GitHub | Actions, Issues, Labels |
+| Board und Takt | `board-takt.yml`, `wiedervorlage.yml`, `ticket-drift.yml`, `festgefahren.yml`, `audit-einordnung.yml`, `harness-doctor.yml` | GitHub | Actions, Issues, Labels |
 | Verteilung und PR-Text | `factory-update.yml`, `internalrefs-pr-text.yml` | GitHub | Actions, PR-Text, Releases |
 
 ## Board

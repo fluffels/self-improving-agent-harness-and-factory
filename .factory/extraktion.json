@@ -727,6 +727,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/ticket-drift.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/wiedervorlage.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
