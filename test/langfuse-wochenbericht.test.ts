@@ -287,6 +287,19 @@ describe("Fehler (Exit 1)", () => {
     knapp["sessW.json"] = sess("sessions", F.von, F.bis, zeilen.slice(0, 999));
     expect((await lauf([], knapp)).exitCode).not.toBe(4);
   });
+  test("abgeschnitten mit --ablegen: .json mit Status über die Ablage-Nähte; scheitert das Ablegen, bleibt es Exit 1", async () => {
+    const voll = satz();
+    voll["sessW.json"] = sess("sessions", F.von, F.bis, Array.from({ length: 1000 }, (_, i) => [`s${i}`, "Claude Code Turn"] as [string, string]));
+    const angelegt: string[] = [];
+    const geschrieben: Record<string, string> = {};
+    const r = await lauf(["--ablegen"], voll, { home: "/h", mkdir: (d: string) => angelegt.push(d), entferne: () => undefined, schreibe: (f: string, t: string) => { geschrieben[f] = t; } });
+    expect(r.exitCode).toBe(4);
+    expect(angelegt).toEqual(["/h/.claude/state/langfuse-wochenbericht/own__repo"]);
+    expect(JSON.parse(geschrieben[`/h/.claude/state/langfuse-wochenbericht/own__repo/${MONTAG}.json`] ?? "{}")).toMatchObject({ status: "abgeschnitten", woche: MONTAG });
+    const kaputt = await lauf(["--ablegen"], voll, { home: "/h", mkdir: () => { throw new Error("boom"); } });
+    expect(kaputt.exitCode).toBe(1);
+    expect(kaputt.stderr).toContain("Fehler: boom");
+  });
   test("ein Export mit fremdem Fenster wird abgelehnt", async () => {
     await fehler({ ...satz(), "alt.json": exp("gesamt", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z", gesamtW()) }, "weder zur Woche noch zur Vorwoche");
   });
@@ -441,6 +454,8 @@ describe("Randfälle (Guards)", () => {
     expect(V(() => "{nicht json")).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein gültiges JSON), Filter nur über den Repo-Namen");
     expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
     expect(V(() => JSON.stringify({ env: {} }))).toBeNull();
+    expect(V(() => "{}")).toBeNull();
+    expect(V(() => "null")).toBeNull();
     expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "a" } }))).toBeNull();
   });
   test("tagsVermerk steht im Bericht (Markdown und JSON) und im Grund von keine-daten; ohne Vermerk bleibt die Ausgabe gleich", async () => {

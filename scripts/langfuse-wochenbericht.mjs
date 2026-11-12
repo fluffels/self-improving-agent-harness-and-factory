@@ -178,14 +178,14 @@ async function berichtErzeugen(args, deps, p, montag, jetzt) {
   const tagsHinweis = p.tagsVermerk ? `; ${p.tagsVermerk}` : "";
   if (gesamtW.zeilen.reduce((s, z) => s + z.count, 0) === 0) return keinBericht(args, deps, p, montag, "keine-daten", `0 Generations der Woche unter dem Projektfilter ${JSON.stringify(filter)}${tagsHinweis}`);
   const merges = mergesDerWochen(ghDer(deps), p, montag);
-  const alleVermerke = [vermerk, p.tagsVermerk].filter(Boolean).join("; ") || null;
+  const alleVermerke = [vermerk, p.tagsVermerk].filter(Boolean).join("; ");
   return berichtAusgeben(args, deps, p, montag, wochenAuswertung(geordnet, { schwellen: p.schwellen, vermerk: alleVermerke, merges }), filter);
 }
 
 /** Wurf des Ablaufs: ein Export am Zeilenlimit ist Exit 4 (`abgeschnitten`, factory#406), alles andere Exit 1. */
 function wurfErgebnis(e, args, deps, p, montag) {
   try {
-    if (p && e?.code === ABGESCHNITTEN) return keinBericht(args, deps, p, montag, ABGESCHNITTEN, e.message);
+    if (e.code === ABGESCHNITTEN) return keinBericht(args, deps, p, montag, ABGESCHNITTEN, e.message);
   } catch (e2) {
     e = e2;
   }
