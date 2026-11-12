@@ -1,7 +1,7 @@
 # AGENTS.md – Arbeitsanweisung für KI-Agenten
 
 <!-- factory-besitz:start kern -->
-> Diese Datei ist für dich als Agent und die **SSOT**: Sie sagt dir, **wie** hier gearbeitet wird, und **jede harte Regel steht genau hier — nur hier**. Langbegründungen und Historie stehen verlinkt in [docs/agent-harness.md › §3a](docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd) (bei Konflikt gilt diese Datei).
+> Diese Datei ist für dich als Agent und die **SSOT**: Sie sagt dir, **wie** hier gearbeitet wird, und **jede harte Regel steht genau hier — nur hier**. Langbegründungen und Historie stehen verlinkt in [docs/agent-harness.md › §3](docs/agent-harness.md#3-die-fitness-functions-im-detail) und §3a (bei Konflikt gilt diese Datei).
 > Das **Projekt-Brain** ist `docs/`, Index [Anlaufstellen](docs/referenz/anlaufstellen.md); [Befehle](docs/referenz/befehle.md). Steht der **Text einer Regel** dort doppelt, ist das ein Drift-Bug → hierher zurückführen; **bewusst gedoppelt** sind nur die **Gate-Markierungen** („hart, erzwingt `check:arch`").
 
 ## Kern-Regeln (Factory-Besitz)
