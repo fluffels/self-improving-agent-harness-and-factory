@@ -1,4 +1,4 @@
-/* @harness-waechter: Die Codex-Freigabetabelle verlangt je Version einen Diagnose-Beleg (https-URL) und je Nachweis 1-5 `offen` oder einen Beleg; im Repo-Stand ist keine Version autonom freigegeben.
+/* @harness-waechter: Die Codex-Freigabetabelle verlangt je Version einen Diagnose-Beleg (API-Form per Repo-ID) und je Nachweis 1-5 `offen` oder einen Beleg; im Repo-Stand ist keine Version autonom freigegeben.
  * Scan-Grenzen: `export * from` und dynamisches `import()` in der Tabelle sowie ein Re-Export der Tabelle über andere Dateien sind nicht erfasst (Scan iii bzw. ii).
  * Scan-Grenzen (geschlossene Listen): Versionsliteral nur in drei Codex-Dateien geprüft; Importe der Tabelle nur direkt unter scripts/, ein transitiver Import über die Vorprüfung ist nicht erfasst. */
 import { expect, test } from "vitest";
@@ -7,7 +7,7 @@ import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as raw from "../../scripts/codex-freigaben.mjs";
 type Tabelle = Record<string, unknown>;
-const f = raw as unknown as { FREIGABEN: Tabelle; istBelegUrl: (v: unknown) => boolean; tabellenMaengel: (t: Tabelle) => string[]; offeneNachweise: (e: unknown) => number[] };
+const f = raw as unknown as { BELEG_URL_QUELLE: string; FREIGABEN: Tabelle; istBelegUrl: (v: unknown) => boolean; tabellenMaengel: (t: Tabelle) => string[]; offeneNachweise: (e: unknown) => number[] };
 const URL_OK = "https://api.github.com/repositories/1/pulls/1";
 const beleg = { beleg: URL_OK };
 const voll = () => ({ diagnose: URL_OK, nachweise: { 1: beleg, 2: beleg, 3: beleg, 4: beleg, 5: beleg } as Record<string, unknown> });
@@ -33,9 +33,13 @@ test("jeder Formfehler ist ein eigener Mangel", () => {
   expect(eine(null)).toEqual([expect.stringContaining("Eintrag fehlt")]);
   expect(eine({ diagnose: URL_OK, nachweise: null }).join()).toContain("genau 1-5");
 });
-test("istBelegUrl: nur https ohne Zugangsdaten", () => {
+test("istBelegUrl: nur die API-Form per Repo-ID mit abschließender ID (eine Stelle: BELEG_URL_QUELLE)", () => {
   expect(f.istBelegUrl(URL_OK)).toBe(true);
-  for (const v of ["http://a.example/x", "ftp://a.example", "", "x", 5, null, "https://u:p@a.example/x", "https://u@a.example/x", "https://:p@a.example/x", ["https://a.example/x"]]) expect(f.istBelegUrl(v)).toBe(false);
+  for (const v of ["https://api.github.com/repositories/1/actions/runs/2", "https://api.github.com/repositories/1/issues/comments/5", "https://api.github.com/repositories/1434788646/pulls/82", "https://api.github.com/repositories/1/check-runs/5", "https://api.github.com/repositories/1/pull_requests/5"]) expect(f.istBelegUrl(v), v).toBe(true);
+  const nein = ["http://a.example/x", "ftp://a.example", "", "x", 5, null, "https://u:p@a.example/x", "https://u@a.example/x", "https://:p@a.example/x", ["https://a.example/x"],
+    "https://a.example/x", "https://github.com/o/r/pull/1", "https://api.github.com/repos/o/r/pulls/1", "https://api.github.com/repositories/1/pulls/82?x=1", "https://api.github.com/repositories/1/pulls/82#a",
+    "https://api.github.com/repositories/1/actions/secrets", "http://api.github.com/repositories/1/pulls/82", "https://api.github.com/repositories/owner/pulls/82", "https://api.githubXcom/repositories/1/pulls/82", "https://apiXgithub.com/repositories/1/pulls/82", "https://api.github.com/repositories/1/2", "https://api.github.com/repositories/1/1/2", "xhttps://api.github.com/repositories/1/pulls/82", "https://api.github.com/repositories/1/pulls/82/files/1", "https://api.github.com/repositories/1/pulls/x?y=1/2", ["https://api.github.com/repositories/1/pulls/82"], "https://u:p@api.github.com/repositories/1/pulls/82", "https://api.github.com/repositories/1/pulls/82\n"];
+  for (const v of nein) expect(f.istBelegUrl(v), String(v)).toBe(false);
 });
 test("offeneNachweise: nur gültige Belege zählen als erbracht (fail-closed)", () => {
   expect(f.offeneNachweise(voll())).toEqual([]);
