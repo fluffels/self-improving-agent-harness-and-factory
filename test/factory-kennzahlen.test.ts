@@ -53,6 +53,11 @@ describe("parseArgs", () => {
     expect(F.parseArgs(["--von", "2026-10-12T00:00:00Z", "--bis", "2026-10-16T00:00:00Z"]).fehler).toBeNull();
     expect(F.parseArgs(["--bis", "2026-10-16T00:00:00Z"]).fehler).toMatch(/--von/);
     expect(F.parseArgs(["--von", "kaputt", "--bis", "2026-10-16T00:00:00Z"]).fehler).toMatch(/ISO/);
+    // factory#426 L3: Date.parse nimmt "1", "2026" und einen Monatsüberlauf an, der Aufruf nicht
+    expect(F.parseArgs(["--von", "2026-02-30", "--bis", "2026-10-16T00:00:00Z"]).fehler).toMatch(/ISO/);
+    expect(F.parseArgs(["--von", "2026-10-12", "--bis", "2026"]).fehler).toMatch(/ISO/);
+    expect(F.parseArgs(["--von", "1", "--bis", "2026-10-16"]).fehler).toMatch(/ISO/);
+    expect(F.parseArgs(["--von", "2026-10-12", "--bis", "2026-10-16"]).fehler).toBeNull();
     expect(F.parseArgs(["--von", "2026-10-12T00:00:00Z", "--bis", "2026-10-16T00:00:00Z", "--x"]).fehler).toMatch(/Unbekannt/);
   });
   test("Schalter --langfuse und --json", () => {

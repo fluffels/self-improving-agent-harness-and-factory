@@ -474,6 +474,9 @@ describe("main", () => {
   test("Aufruf-Fehler: unbekanntes Flag, falsches Datum", () => {
     expect(gf.main(["--unbekannt"], basis().deps)).toBe(2);
     expect(gf.main(["--von", "gestern"], basis().deps)).toBe(2);
+    // factory#426 L3: nur ISO-Zeitpunkte, nicht alles, was Date.parse annimmt
+    expect(gf.main(["--von", "2026"], basis().deps)).toBe(2);
+    expect(gf.main(["--bis", "2026-02-30"], basis().deps)).toBe(2);
   });
   test("ohne Skript verify: Exit 2 mit Hinweis", () => {
     const b = basis({ pkg: { name: "x", scripts: {} } });

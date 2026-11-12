@@ -36,7 +36,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
+import { AUFRUF_EXIT, flagsLesen, istIsoZeitpunkt } from "./flag-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { median } from "./mess-lib.mjs";
 import { ASSIGN_RE, parseBash } from "./bash-parser.mjs";
@@ -422,6 +422,7 @@ function ciLaeufe(werte, fenster, ctx, d) {
 }
 
 function fensterAus(werte, jetzt) {
+  if ([werte.von, werte.bis].some((w) => w && !istIsoZeitpunkt(w))) return null;
   const bis = werte.bis ? Date.parse(werte.bis) : jetzt;
   const von = werte.von ? Date.parse(werte.von) : bis - 7 * TAG;
   return Number.isNaN(von) || Number.isNaN(bis) ? null : { von, bis };
@@ -439,7 +440,7 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   const { werte, fehler } = flagsLesen(argv, OPTIONEN);
   const fenster = fehler ? null : fensterAus(werte, d.jetzt());
   if (fehler || !fenster) {
-    d.err(`${fehler?.text ?? "--von/--bis ist kein Zeitpunkt"}\n${AUFRUF}`);
+    d.err(`${fehler?.text ?? "--von/--bis ist kein ISO-Zeitpunkt (JJJJ-MM-TT[THH:MM[:SS]][Z|±HH:MM])"}\n${AUFRUF}`);
     return AUFRUF_EXIT;
   }
   let satz;
