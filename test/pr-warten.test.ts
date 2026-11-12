@@ -615,6 +615,14 @@ describe("warten: Branch aktualisieren (factory#375 L1)", () => {
     });
     expect(r).toEqual({ exit: 3, zeilen: ["AKTUALISIEREN FEHLGESCHLAGEN boom"] });
   });
+  test("Stand ohne BEHIND (wartend, ROT, Merge steht aus): die Naht wird nie gerufen", () => {
+    const stand = [offen([lauf("a", "IN_PROGRESS")], { mergeStateStatus: "BEHIND" }), offen([lauf("a", "COMPLETED", "FAILURE")], { mergeStateStatus: "BEHIND" }), offen([lauf("a", "COMPLETED", "SUCCESS")], { mergeStateStatus: "CLEAN" })];
+    for (const s of stand) {
+      let n = 0;
+      P.warten({ hole: () => s, aktualisiere: () => void n++, ...u(), maxMs: 10_000, intervallMs: 30_000 });
+      expect(n, JSON.stringify(s.mergeStateStatus)).toBe(0);
+    }
+  });
   test("ohne aktualisiere-Naht bleibt es bei HINTER MAIN", () => {
     expect(P.warten({ hole: () => hinten, ...u(), maxMs: 10_000, intervallMs: 30_000 }).zeilen).toEqual(["HINTER MAIN"]);
   });
@@ -629,12 +637,36 @@ describe("lauf: Branch-Update über gh (factory#375 L1)", () => {
       aufrufe.push(a);
       if (a[0] === "api") return "[]";
       if (a.includes("--required")) return JSON.stringify([{ name: "Tests" }]);
-      return a.includes("baseRefName") ? JSON.stringify({ baseRefName: "main" }) : JSON.stringify(hinten);
+      // wie gh: nur die angefragten --json-Felder kommen zurück (fehlt mergeStateStatus in FELDER, sieht der Lauf kein BEHIND)
+      const felder = (a[a.indexOf("--json") + 1] ?? "").split(",");
+      return JSON.stringify(Object.fromEntries(Object.entries(a.includes("baseRefName") ? { baseRefName: "main" } : hinten).filter(([k]) => felder.includes(k))));
     };
     let t = 0;
     const r = L.lauf({ pr: "7", maxSekunden: 60, intervall: 30 }, { gh, schlafe: (ms: number) => void (t += ms), jetzt: () => t, schreibe: () => undefined, meldeFehler: () => undefined });
     expect(aufrufe.filter((a) => a[1] === "update-branch")).toEqual([["pr", "update-branch", "7"]]);
     expect(r.zeilen[0]).toBe("HINTER MAIN");
+  });
+});
+
+describe("versucheUpdate: Fehlertext (factory#375 L1)", () => {
+  const V = raw as unknown as { versucheUpdate: (f: () => void) => Erg };
+  const wirf = (w: unknown) => () => {
+    throw w;
+  };
+  const text = (w: unknown) => V.versucheUpdate(wirf(w)).zeilen[0];
+  test("Erfolg: AKTUALISIERT mit Exit 2", () => {
+    expect(V.versucheUpdate(() => undefined)).toEqual({ exit: 2, zeilen: ["AKTUALISIERT"] });
+  });
+  test("die erste Zeile wird auf 120 Zeichen gekürzt (120 bleibt, 121 wird gekürzt)", () => {
+    const kopf = "AKTUALISIEREN FEHLGESCHLAGEN ";
+    expect(text(new Error("x".repeat(120)))).toBe(kopf + "x".repeat(120));
+    expect(text(new Error("x".repeat(121)))).toBe(kopf + "x".repeat(120));
+    expect(text(new Error("x".repeat(300) + "\nzweite"))).toBe(kopf + "x".repeat(120));
+  });
+  test("geworfener Text statt Error (Rückfall auf den Wert) und mehrzeilige Meldung: nur die erste Zeile", () => {
+    expect(V.versucheUpdate(wirf("nur Text"))).toEqual({ exit: 3, zeilen: ["AKTUALISIEREN FEHLGESCHLAGEN nur Text"] });
+    expect(text("eins\nzwei")).toBe("AKTUALISIEREN FEHLGESCHLAGEN eins");
+    expect(text(undefined)).toBe("AKTUALISIEREN FEHLGESCHLAGEN undefined");
   });
 });
 
