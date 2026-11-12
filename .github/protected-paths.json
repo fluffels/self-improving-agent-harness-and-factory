@@ -50,6 +50,7 @@
     "/scripts/harness-doctor-lib.mjs",
     "/scripts/harness-doctor-sicherheit.mjs",
     "/scripts/harness-doctor-ruleset.mjs",
+    "/scripts/harness-doctor-langfuse.mjs",
     "/scripts/harness-doctor-board.mjs",
     "/scripts/harness-doctor-githooks.mjs",
     "/scripts/harness-doctor-dateien.mjs",
