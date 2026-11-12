@@ -231,6 +231,10 @@ describe("slugify und entferneMarkup: Unterstrich wie GitHub", () => {
     assert.equal(f.entferneMarkup("ein `_privat_` Feld"), "ein _privat_ Feld");
     assert.equal(f.entferneMarkup("Muster `a*b`"), "Muster a*b");
   });
+  test("zwei Code-Spans: Markup dazwischen entfällt, die Spans enden am nächsten Backtick", () => {
+    assert.equal(f.entferneMarkup("`a` _x_ `b`"), "a x b");
+    assert.equal(f.slugify("`a` _x_ `b`"), "a-x-b");
+  });
   test("Unterstrich zwischen Ziffern oder Ziffer und Buchstabe bleibt", () => {
     assert.equal(f.entferneMarkup("v1_2"), "v1_2");
     assert.equal(f.entferneMarkup("abc_123"), "abc_123");
