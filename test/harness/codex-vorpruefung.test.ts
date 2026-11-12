@@ -234,7 +234,7 @@ for (const [name, stub] of ausfaelle) {
     const r = await lauf(["--belege", belegeFuer("9.9.9")], { codexVersion: () => "9.9.9", freigaben: tabelle(), ...ausfall(stub) });
     expect(r.code).toBe(1); expect(r.autonom).toBe(false);
     expect(r.maengel).toHaveLength(1); expect(r.maengel?.[0]).toMatch(/^Tracing-Ausfall: /);
-    if (name === "Frist überschritten") expect(r.maengel?.[0]).toContain("Timeout nach 20 ms"); // fristMs wird bis pruefeLangfuse durchgereicht
+    expect(r.maengel?.[0]).toContain(name === "Frist überschritten" ? "Timeout nach 20 ms" : "Tracing-Ausfall"); // fristMs wird bis pruefeLangfuse durchgereicht
   });
 }
 test("Tracing: erreichbar (HTTP 200) ergibt keinen Mangel, die Abfrage geht an <LANGFUSE_BASE_URL>/api/public/health", async () => {
