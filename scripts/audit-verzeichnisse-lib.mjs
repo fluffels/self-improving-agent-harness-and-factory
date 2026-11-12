@@ -12,6 +12,16 @@ export const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 /** Pur: Wurzel (`.`) und die Verzeichnisse aus `audit.verzeichnisse`. */
 export const auditVerzeichnisse = (config) => [".", ...(config?.audit?.verzeichnisse ?? [])];
 
+/** `npm audit <args>` mit sichtbarer Ausgabe in `verzeichnis`; Rückgabe ist der Exit-Code von npm (fail-closed: kein Statuscode, etwa Signal oder nicht startbar, zählt als 1). */
+export function npmAuditLauf(verzeichnis, args, { fuehreAus = execFileSync, wurzel = WURZEL } = {}) {
+  try {
+    fuehreAus("npm", ["audit", ...args], { cwd: resolve(wurzel, verzeichnis), stdio: "inherit", shell: process.platform === "win32" });
+    return 0;
+  } catch (err) {
+    return typeof err?.status === "number" && err.status !== 0 ? err.status : 1;
+  }
+}
+
 /** `npm audit --json` in `verzeichnis` (relativ zur Repo-Wurzel). Bei Funden endet npm mit Exit 1 und gültigem JSON auf stdout. */
 export function npmAuditJson(verzeichnis, extra = [], { fuehreAus = execFileSync, wurzel = WURZEL } = {}) {
   let text;

@@ -8,24 +8,15 @@
  *
  * Die Bausteine (`auditVerzeichnisse`, `npmAuditJson`) stehen in `audit-verzeichnisse-lib.mjs`.
  */
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { auditVerzeichnisse, WURZEL } from "./audit-verzeichnisse-lib.mjs";
+import { auditVerzeichnisse, npmAuditLauf } from "./audit-verzeichnisse-lib.mjs";
 
 const STUFEN = ["info", "low", "moderate", "high", "critical"];
 const EXIT_AUFRUF = 2;
 
-/** Standard-Lauf: `npm audit --audit-level=<stufe>` mit sichtbarer Ausgabe; Rückgabe ist der Exit-Code von npm. */
-function npmAuditStufe(verzeichnis, args) {
-  try {
-    execFileSync("npm", ["audit", ...args], { cwd: resolve(WURZEL, verzeichnis), stdio: "inherit", shell: process.platform === "win32" });
-    return 0;
-  } catch (err) {
-    return typeof err?.status === "number" && err.status !== 0 ? err.status : 1;
-  }
-}
+/** Standard-Lauf: `npm audit --audit-level=<stufe>` mit sichtbarer Ausgabe, Rückgabe ist der Exit-Code von npm. */
+const npmAuditStufe = (verzeichnis, args) => npmAuditLauf(verzeichnis, args);
 
 function stufeAusArgv(argv) {
   const [flag, stufe, ...rest] = argv;

@@ -8,6 +8,8 @@ type Deps = { env: Record<string, string | undefined>; ladeVergleich: (repo: str
 const D = raw as unknown as {
   befundeAusVergleich: (eintraege: unknown, o: { schwere: string }) => { manifest: string; name: string; ghsa: string; schwere: string }[];
   main: (argv: string[], deps: Deps) => number;
+  flacheSeiten: (seiten: unknown) => unknown[];
+  ladeVergleich: (repo: string, basis: string, kopf: string, lese: (args: string[]) => string) => unknown[];
 };
 
 const BASIS = "a".repeat(40);
@@ -41,6 +43,15 @@ describe("befundeAusVergleich (factory#395 L4)", () => {
     expect(D.befundeAusVergleich([pom({ vulnerabilities: [vuln("seltsam")] })], { schwere: "high" })).toHaveLength(1);
   });
 
+  test("Schwere in Großschreibung wird wie klein gelesen", () => {
+    expect(D.befundeAusVergleich([pom({ vulnerabilities: [vuln("MODERATE")] })], { schwere: "high" })).toEqual([]);
+    expect(D.befundeAusVergleich([pom({ vulnerabilities: [vuln("HIGH")] })], { schwere: "high" })).toHaveLength(1);
+  });
+
+  test("Eintrag ohne Objekt (null, Liste, Text) wirft (fail-closed)", () => {
+    for (const kaputt of [null, [], "x"]) expect(() => D.befundeAusVergleich([kaputt, pom()], { schwere: "high" })).toThrow(/Eintrag ohne Objekt/);
+  });
+
   test("Schwere fehlt (null): zählt als Treffer", () => {
     expect(D.befundeAusVergleich([pom({ vulnerabilities: [{ ...vuln("high"), severity: null as unknown as string }] })], { schwere: "high" })).toHaveLength(1);
   });
@@ -48,6 +59,26 @@ describe("befundeAusVergleich (factory#395 L4)", () => {
   test("Eintrag ohne vulnerabilities-Liste ist kein Befund; keine Liste wirft", () => {
     expect(D.befundeAusVergleich([{ ...sauber, vulnerabilities: undefined }], { schwere: "high" })).toEqual([]);
     expect(() => D.befundeAusVergleich({ message: "Not Found" }, { schwere: "high" })).toThrow(/keine Liste/);
+  });
+});
+
+describe("Paging-Naht (factory#395 L4)", () => {
+  test("zwei Seiten werden zu einer Liste, das Advisory auf Seite 2 bleibt sichtbar", () => {
+    const seiten = [[sauber], [pom()]];
+    expect(D.flacheSeiten(seiten)).toHaveLength(2);
+    expect(D.befundeAusVergleich(D.flacheSeiten(seiten), { schwere: "high" })).toHaveLength(1);
+  });
+  test("eine Seite ohne Liste oder eine Nicht-Liste wirft (fail-closed)", () => {
+    expect(() => D.flacheSeiten([[sauber], { message: "x" }])).toThrow(/Seite ohne Liste/);
+    expect(() => D.flacheSeiten({ message: "x" })).toThrow(/Seite ohne Liste/);
+  });
+  test("ladeVergleich fragt mit --paginate --slurp ohne per_page und verflacht", () => {
+    const aufrufe: string[][] = [];
+    const lese = (args: string[]) => (aufrufe.push(args), JSON.stringify([[sauber], [pom()]]));
+    expect(D.ladeVergleich("o/r", BASIS, KOPF, lese)).toHaveLength(2);
+    expect(aufrufe[0].slice(0, 3)).toEqual(["api", "--paginate", "--slurp"]);
+    expect(aufrufe[0][3]).toBe(`repos/o/r/dependency-graph/compare/${BASIS}...${KOPF}`);
+    expect(aufrufe[0].join(" ")).not.toContain("per_page");
   });
 });
 
@@ -86,6 +117,16 @@ describe("main", () => {
     ["KOPF kein 40-hex", { GITHUB_REPOSITORY: "o/r", BASIS, KOPF: "$(x)" }],
     ["Repo nicht owner/name", { GITHUB_REPOSITORY: "o/r/../x", BASIS, KOPF }],
     ["Repo fehlt", { BASIS, KOPF }],
+    ["Repo mit .-Teil vorn", { GITHUB_REPOSITORY: "./x", BASIS, KOPF }],
+    ["Repo mit .-Teil hinten", { GITHUB_REPOSITORY: "o/.", BASIS, KOPF }],
+    ["Repo mit Strichpunkt am Ende", { GITHUB_REPOSITORY: "o/r;x", BASIS, KOPF }],
+    ["Repo mit Leerzeichen am Ende", { GITHUB_REPOSITORY: "o/r x", BASIS, KOPF }],
+    ["Repo mit Leerzeichen am Anfang", { GITHUB_REPOSITORY: " o/r", BASIS, KOPF }],
+    ["BASIS mit 41 Zeichen", { GITHUB_REPOSITORY: "o/r", BASIS: BASIS + "a", KOPF }],
+    ["BASIS mit 39 Zeichen", { GITHUB_REPOSITORY: "o/r", BASIS: BASIS.slice(1), KOPF }],
+    ["BASIS mit Nicht-Hex-Zeichen", { GITHUB_REPOSITORY: "o/r", BASIS: "g".repeat(40), KOPF }],
+    ["KOPF in Großbuchstaben", { GITHUB_REPOSITORY: "o/r", BASIS, KOPF: "B".repeat(40) }],
+    ["KOPF mit Anhang", { GITHUB_REPOSITORY: "o/r", BASIS, KOPF: KOPF + ";x" }],
     ["Repo mit ..-Teil vorn", { GITHUB_REPOSITORY: "../x", BASIS, KOPF }],
     ["Repo mit ..-Teil hinten", { GITHUB_REPOSITORY: "o/..", BASIS, KOPF }],
   ])("%s: Exit 2, kein Aufruf", (_n, env) => {

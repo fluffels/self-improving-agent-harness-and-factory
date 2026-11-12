@@ -113,6 +113,11 @@ describe("befundeAusAlerts", () => {
     expect(A.befundeAusAlerts([alert("maven", "development")])[0].prod).toBe(false);
   });
 
+  test("leeres Ökosystem ist nicht prod", () => {
+    const leer = { ...alert("maven", "runtime"), dependency: { scope: "runtime", package: { ecosystem: "", name: "p" } } };
+    expect(A.befundeAusAlerts([leer])[0].prod).toBe(false);
+  });
+
   test("ohne Scope oder ohne Ökosystem nicht prod", () => {
     const ohneScope = { ...alert("maven", "runtime"), dependency: { package: { ecosystem: "maven", name: "p" } } };
     const ohneEco = { ...alert("maven", "runtime"), dependency: { scope: "runtime", package: { name: "p" } } };
@@ -367,6 +372,17 @@ describe("main: ohne .github/wiedervorlagen.json", () => {
   });
   test("ungültiges JSON bleibt ein Fehler", async () => {
     await expect(main([], deps(() => "{kaputt", []))).rejects.toThrow(SyntaxError);
+  });
+});
+
+describe("npmAudit (Verdrahtung, factory#395 L54)", () => {
+  const npmAudit = (raw as unknown as { npmAudit: (extra?: string[], verzeichnis?: string, lade?: (v: string, e: string[]) => unknown) => unknown }).npmAudit;
+  test("reicht Verzeichnis und extra (--omit=dev) an den Lader weiter, nicht vertauscht", () => {
+    const aufrufe: [string, string[]][] = [];
+    const lade = (v: string, e: string[]) => (aufrufe.push([v, e]), { vulnerabilities: {} });
+    npmAudit(["--omit=dev"], "frontend", lade);
+    npmAudit(undefined, undefined, lade);
+    expect(aufrufe).toEqual([["frontend", ["--omit=dev"]], [".", []]]);
   });
 });
 

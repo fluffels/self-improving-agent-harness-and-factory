@@ -152,7 +152,7 @@ export function ordneEin({ befunde, bekannt }) {
 // ---- IO (ungetestet) ----
 
 /** `npm audit --json` im Verzeichnis (Standard: Wurzel), siehe `npmAuditJson`. */
-const npmAudit = (extra = [], verzeichnis = ".") => npmAuditJson(verzeichnis, extra);
+export const npmAudit = (extra = [], verzeichnis = ".", lade = npmAuditJson) => lade(verzeichnis, extra);
 
 /** Befunde aus dem vollen Audit und dem Audit ohne Dev je Verzeichnis (Wurzel plus `audit.verzeichnisse`); `prod` je Verzeichnis, GHSA-Dedupe danach. */
 function befundeAusVerzeichnissen(config, npmAuditLaden) {

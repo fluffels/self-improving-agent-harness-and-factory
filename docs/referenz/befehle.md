@@ -101,7 +101,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, quellprojekt#1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, quellprojekt#604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, quellprojekt#593) | `npm run check:lockfile` |
-| Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, quellprojekt#396) | `npm audit --omit=dev --audit-level=high` |
+| Security-Audit (CI-Gate blockt bei high+, Wurzel plus `audit.verzeichnisse`, quellprojekt#396, factory#395) | `node scripts/audit-verzeichnisse.mjs --audit-level high` |
 
 
 ## Umgebungsvariablen

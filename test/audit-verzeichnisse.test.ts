@@ -22,6 +22,8 @@ describe("pruefeAudit (factory#395 L54)", () => {
     expect(pruefe({}).join("\n")).toMatch(/audit\.verzeichnisse muss eine Liste/);
     expect(pruefe({ verzeichnisse: "frontend" }).join("\n")).toMatch(/audit\.verzeichnisse muss eine Liste/);
     expect(pruefe({ verzeichnisse: ["a", "a"] }).join("\n")).toMatch(/audit\.verzeichnisse enthält a doppelt/);
+    expect(pruefe({ verzeichnisse: ["a", "a", "a"] })).toEqual(["audit.verzeichnisse enthält a doppelt"]);
+    expect(pruefe({ verzeichnisse: [3, 3] }).join("\n")).not.toMatch(/doppelt/);
   });
 });
 
@@ -49,6 +51,26 @@ describe("npmAuditJson", () => {
   });
 });
 
+const LaufLib = rawLib as unknown as { npmAuditLauf: (v: string, args: string[], deps: { fuehreAus: Fuehre; wurzel: string }) => number };
+
+describe("npmAuditLauf (Standard-Lauf des CI-Gates)", () => {
+  const mit = (f: Fuehre) => LaufLib.npmAuditLauf("frontend", ["--audit-level=high"], { fuehreAus: f, wurzel: "/w" });
+  test("npm Exit 0: 0; cwd ist Wurzel/Verzeichnis, Argumente beginnen mit audit", () => {
+    const gerufen: { args: string[]; cwd: string }[] = [];
+    expect(mit((_p, args, o) => (gerufen.push({ args, cwd: o.cwd }), ""))).toBe(0);
+    expect(gerufen[0]).toEqual({ args: ["audit", "--audit-level=high"], cwd: "/w/frontend" });
+  });
+  test("npm Exit 1 bleibt 1, Exit 5 bleibt 5", () => {
+    expect(mit(() => { throw Object.assign(new Error("x"), { status: 1 }); })).toBe(1);
+    expect(mit(() => { throw Object.assign(new Error("x"), { status: 5 }); })).toBe(5);
+  });
+  test("fail-closed: Signal (status null), Status 0 im Fehler oder nicht startbar zählt als 1", () => {
+    expect(mit(() => { throw Object.assign(new Error("sig"), { status: null }); })).toBe(1);
+    expect(mit(() => { throw Object.assign(new Error("x"), { status: 0 }); })).toBe(1);
+    expect(mit(() => { throw new Error("ENOENT"); })).toBe(1);
+  });
+});
+
 type Lauf = (verzeichnis: string, args: string[]) => number;
 const V = rawV as unknown as {
   main: (argv: string[], deps: { ladeConfig: () => unknown; fuehreAus: Lauf; log: (t: string) => void; err: (t: string) => void }) => number;
@@ -59,6 +81,7 @@ const V2 = rawLib as unknown as { auditVerzeichnisse: (config: unknown) => strin
 describe("auditVerzeichnisse", () => {
   test("ohne Block nur die Wurzel, mit Block Wurzel plus Verzeichnisse", () => {
     expect(V2.auditVerzeichnisse({})).toEqual(["."]);
+    expect(V2.auditVerzeichnisse(undefined)).toEqual(["."]);
     expect(V2.auditVerzeichnisse({ audit: { verzeichnisse: [] } })).toEqual(["."]);
     expect(V2.auditVerzeichnisse({ audit: { verzeichnisse: ["frontend"] } })).toEqual([".", "frontend"]);
   });
@@ -81,7 +104,7 @@ describe("main (npm audit je Verzeichnis)", () => {
     expect(l.run(["--audit-level", "high"])).toBe(1);
     expect(l.gerufen.map((g) => g[0])).toEqual([".", "frontend"]);
     expect(l.gerufen[1]).toContain("--audit-level=high");
-    expect(l.log.join("\n")).toMatch(/frontend/);
+    expect(l.log).toContain("✖ Advisories ab high in: frontend");
   });
 
   test("Wurzel rot bricht nicht ab: auch frontend läuft", () => {

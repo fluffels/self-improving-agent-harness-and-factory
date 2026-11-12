@@ -27,6 +27,7 @@ function trifft(vuln, schwelle) {
 /** Pur: Befunde `{ manifest, name, version, ghsa, schwere }` aus der Compare-Antwort (Liste der Änderungen aller Manifeste). Wirft bei Nicht-Liste. */
 export function befundeAusVergleich(eintraege, { schwere }) {
   if (!Array.isArray(eintraege)) throw new Error("Unerwartete Compare-Antwort (keine Liste).");
+  if (eintraege.some((e) => e === null || typeof e !== "object" || Array.isArray(e))) throw new Error("Unerwartete Compare-Antwort (Eintrag ohne Objekt).");
   const schwelle = RANG[schwere];
   return eintraege
     .filter((e) => e?.change_type !== "removed" && e?.scope !== "development")
@@ -37,9 +38,15 @@ export function befundeAusVergleich(eintraege, { schwere }) {
     );
 }
 
-/** IO: alle Seiten der Compare-API ohne `per_page` (`--slurp` liefert eine Liste von Seiten), zu einer Liste verflacht. */
-function ladeVergleich(repo, basis, kopf) {
-  return JSON.parse(ghText(["api", "--paginate", "--slurp", `repos/${repo}/dependency-graph/compare/${basis}...${kopf}`])).flat();
+/** Pur: verflacht die Seitenliste von `--slurp` zu einer Liste; jede Seite muss eine Liste sein, sonst wirft sie (fail-closed, kein stilles „kein Advisory“). */
+export function flacheSeiten(seiten) {
+  if (!Array.isArray(seiten) || seiten.some((s) => !Array.isArray(s))) throw new Error("Unerwartete Compare-Antwort (Seite ohne Liste).");
+  return seiten.flat();
+}
+
+/** IO-Naht: alle Seiten der Compare-API ohne `per_page` (`--slurp` liefert eine Liste von Seiten). `lese` ist die Test-Naht für `ghText`. */
+export function ladeVergleich(repo, basis, kopf, lese = ghText) {
+  return flacheSeiten(JSON.parse(lese(["api", "--paginate", "--slurp", `repos/${repo}/dependency-graph/compare/${basis}...${kopf}`])));
 }
 
 function eingabe(argv, env) {
@@ -52,7 +59,7 @@ function eingabe(argv, env) {
 }
 
 /** Einstieg. `deps` (Tests): `env`, `ladeVergleich(repo, basis, kopf)`, `log`, `err`. Rückgabe: Exit-Code. */
-export function main(argv = process.argv.slice(2), { env = process.env, ladeVergleich: lade = ladeVergleich, log = console.log, err = console.error } = {}) {
+export function main(argv = process.argv.slice(2), { env = process.env, ladeVergleich: lade = (r, b, k) => ladeVergleich(r, b, k), log = console.log, err = console.error } = {}) {
   const e = eingabe(argv, env);
   if (e.fehler) {
     err(`✖ ${e.fehler}`);
