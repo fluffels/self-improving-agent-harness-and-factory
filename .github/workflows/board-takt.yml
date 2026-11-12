@@ -10,7 +10,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 #    Mit dem Config-Schlüssel `langfuseWochenbericht` (factory#314) gilt das nicht mehr: der Wochenbericht-Lauf (lokal, Hook-Kind am SessionStart) löst diesen
 #    Workflow bei einem Anlass per Dispatch mit dem Input `langfuse_anlass` aus, und nur der Anlass oder der Höchstabstand am Montags-Cron (`wochenOhneLaufMax` Wochen ohne
 #    Status-Ticket) legt an; der Push-Auslöser legt dann nicht mehr an, der Mindestabstand bleibt. Der Input erreicht das Skript nur per `env` (`LANGFUSE_ANLASS`), nie im `run:`.
-# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 Befund-Kommentaren (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand; ein Befund-Kommentar trägt mindestens eine Zeile `- [ ]`) holt derselbe Lauf das
+# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab 10 offenen Befund-Zeilen (vertraute Nicht-Bot-Autoren; Härtungs-Takt, Füllstand; eine Zeile `- [ ]` zählt, `- [x]` nicht) holt derselbe Lauf das
 #    ungeclaimte an die Spitze des Boards (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket; #1349, #1888, factory#162). Unter der Schwelle
 #    schiebt er nichts, auch nicht zurück.
 # 3. Tag-Takt (#103): derselbe Lauf zählt die Besitz-PRs seit dem letzten Release-Tag und hält ab 3 PRs, über 7 Tage Alter oder einem

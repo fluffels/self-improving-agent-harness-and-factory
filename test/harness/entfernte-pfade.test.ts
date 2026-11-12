@@ -51,7 +51,12 @@ export const RESTE: Rest[] = [
   {
     name: "Härtungs-Takt nach Merge-Zahl",
     muster: /\bHARNESS_TAKT_MERGES\b|\bharnessTaktAusCommits\b|\bmergesSeitAbschluss\b|(?:nach 5|fünf) Ticket-Merges jeder Art|Ticket-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf/,
-    fix: "den Härtungs-Takt nach Füllstand beschreiben: HARNESS_TAKT_KOMMENTARE Befund-Kommentare vertrauter Nicht-Bot-Autoren im Harness-Sammelticket (#1888)",
+    fix: "den Härtungs-Takt nach Füllstand beschreiben: HARNESS_TAKT_KOMMENTARE offene Befund-Zeilen in Kommentaren vertrauter Nicht-Bot-Autoren im Harness-Sammelticket (#1888, factory#411)",
+  },
+  {
+    name: "Füllstand in Befund-Kommentaren",
+    muster: /Befund-Kommentar/,
+    fix: "den Füllstand in offenen Befund-Zeilen beschreiben: `befundKommentare` zählt die `- [ ]`-Zeilen vertrauter Nicht-Bot-Autoren (Fortschreibung factory#411 zu ADR 0016)",
   },
   {
     name: "Klemmung und Selbstkorrektur des Sammeltickets",
@@ -225,6 +230,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Platzhalter als Dateiname, die Datei heißt nach der Rolle": "Lies .claude/agents/<agenten.lens>.md",
       "Altnamen-Rückfall": "const alt = altNameZuPraefix(name, praefix);",
       "Härtungs-Takt nach Merge-Zahl": "export const HARNESS_TAKT_MERGES = 5;",
+      "Füllstand in Befund-Kommentaren": "ab 10 Befund-Kommentaren holt der Takt das Sammelticket",
       "Spielquote-Bibliothek (heißt produktquote-lib)": "import { SPIEL_QUOTE } from board-takt",
       "Baseline der Kern-Test-Literale": "gelesen aus test/harness/kern-test-literale-baseline.json",
       "alter Titel des Tag-Tickets": "Kopf-Ticket „🏷️ Tag v1.3.0 setzen und syncen“",

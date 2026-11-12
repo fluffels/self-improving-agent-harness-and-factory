@@ -14,24 +14,26 @@ import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 /** Produktquote (#1425): höchstens 1 Harness-Ticket auf so viele Produkt-Tickets. */
 export const PRODUKT_QUOTE = 3;
 
-/** Härtungs-Takt (Füllstand): so viele Befund-Kommentare vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
+/** Härtungs-Takt (Füllstand): so viele offene Befund-Zeilen (`- [ ]`) in Kommentaren vertrauter Nicht-Bot-Autoren muss das ungeclaimte Harness-Sammelticket tragen, bevor der Takt es
  *  an die Spitze (hinter 🚨/🔒) holt und die Auswahl es nimmt. Eigene Zahl, nicht an die Seitenwahl (`PRODUKT_QUOTE`) gekoppelt. */
 export const HARNESS_TAKT_KOMMENTARE = 10;
 
 /** Die Zeilenerkennung eines Sammeltickets (`BEFUND_ZEILE`, `BEFUND_ZEILE_OFFEN`) steht im importfreien Blatt `sammelticket-titel.mjs` (auch `meldung-lib.mjs` liest sie von dort, ohne `board-lib`); hier weiter exportiert. */
 export { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN };
 
-/** Hat der Kommentartext mindestens eine Befund-Zeile (`BEFUND_ZEILE`)? Pur. */
-export const hatBefundZeile = (body) => String(body ?? "").split(/\r?\n/).some((z) => BEFUND_ZEILE.test(z));
+/** Zahl der offenen Befund-Zeilen (`BEFUND_ZEILE_OFFEN`, `- [ ]`) im Kommentartext; abgehakte Zeilen und Fließtext zählen nicht. Pur. */
+export const offeneBefundZeilen = (body) => String(body ?? "").split(/\r?\n/).filter((z) => BEFUND_ZEILE_OFFEN.test(z)).length;
 
 /**
- * Füllstand des Harness-Sammeltickets: Zahl der Kommentare (REST `repos/<repo>/issues/<nr>/comments`, flache Liste) von vertrauten Autoren
- * (`istVertraut`: Repo-Owner oder vertrauter Bot) ohne `[bot]`-Login, also nur Menschen-Kommentare des Owners, mit mindestens einer Befund-Zeile
- * (`hatBefundZeile`; Fließtext ohne `- [ ]` ist keine abhakbare Zeile und zählt nicht). Kommentare ohne `user.login` zählen nicht. Wirft, wenn `kommentare` keine Liste ist. Pur.
+ * Füllstand des Harness-Sammeltickets: Summe der offenen Befund-Zeilen (`offeneBefundZeilen`) aller Kommentare (REST `repos/<repo>/issues/<nr>/comments`, flache Liste)
+ * von vertrauten Autoren (`istVertraut`: Repo-Owner oder vertrauter Bot) ohne `[bot]`-Login, also nur Menschen-Kommentare des Owners. Abgehakte Zeilen und Fließtext zählen nicht,
+ * Kommentare ohne `user.login` auch nicht. Der Name bleibt (Fortschreibung factory#411 zu ADR 0016). Wirft, wenn `kommentare` keine Liste ist. Pur.
  */
 export function befundKommentare(kommentare, owner) {
   if (!Array.isArray(kommentare)) throw new Error("kommentare muss eine Liste sein.");
-  return kommentare.filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login)) && hatBefundZeile(k.body)).length;
+  return kommentare
+    .filter((k) => istVertraut(k?.user, owner) && !/\[bot\]$/i.test(String(k.user.login)))
+    .reduce((n, k) => n + offeneBefundZeilen(k.body), 0);
 }
 
 /**

@@ -171,6 +171,11 @@ describe("Produktquote im Takt (#1425)", () => {
       expect(r).toEqual({ wert: 2 });
       expect(gesehen).toEqual([[7, repo]]);
     });
+    test("summiert die offenen Zeilen: ein Owner-Kommentar mit 3 Zeilen plus ein fremder mit 3 Zeilen ergibt 3 (factory#411)", () => {
+      const drei = "- [ ] a\n- [ ] b\n- [ ] c";
+      const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => [{ ...k(OWNER), body: drei }, { ...k("fremd"), body: drei }] });
+      expect(r).toEqual({ wert: 3 });
+    });
     test("ein Ladefehler wird zu { fehler } mit erster Zeile (kein Wurf)", () => {
       const r = Q.fuellstandVon({ nr: 7, repo, ladeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); } });
       expect(r).toEqual({ fehler: "Kommentare von #7 nicht ladbar: HTTP 502" });
@@ -197,11 +202,15 @@ describe("Produktquote im Takt (#1425)", () => {
     expect(() => Q.befundKommentare(null, OWNER)).toThrow(/Liste/);
   });
 
-  test("befundKommentare (factory#215): nur Kommentare mit mindestens einer Checkbox-Zeile zählen; Fließtext zählt 0, ein abgehaktes `- [x]` zählt 1", () => {
-    const k = (body?: string) => ({ user: { login: OWNER, type: "User" }, ...(body === undefined ? {} : { body }) });
-    expect(Q.befundKommentare([k("Nur Fließtext ohne Zeile"), k(), k("Text mit - [ ] mittendrin")], OWNER)).toBe(0);
-    expect(Q.befundKommentare([k("- [x] erledigt")], OWNER)).toBe(1);
-    expect(Q.befundKommentare([k("Kopf\n* [X] a\n  - [ ] b"), k("- [ ] c")], OWNER)).toBe(2); // je Kommentar höchstens 1, egal wie viele Zeilen
+  test("befundKommentare (factory#411): zählt die offenen Checkbox-Zeilen vertrauter Nicht-Bot-Autoren; Fließtext und abgehakte Zeilen zählen 0", () => {
+    const k = (body?: string, login = OWNER) => ({ user: { login, type: login.endsWith("[bot]") ? "Bot" : "User" }, ...(body === undefined ? {} : { body }) });
+    const fuenf = "- [ ] a\n- [ ] b\n- [ ] c\n- [ ] d\n- [ ] e";
+    expect(Q.befundKommentare([k("- [ ] a\n- [ ] b\n- [ ] c")], OWNER)).toBe(3);
+    expect(Q.befundKommentare([k("- [x] erledigt")], OWNER)).toBe(0);
+    expect(Q.befundKommentare([k("Kopf\n* [X] a\n  - [ ] b"), k("- [ ] c")], OWNER)).toBe(2);
+    expect(Q.befundKommentare([k("Nur Fließtext ohne Zeile"), k(), k(""), k("Text mit - [ ] mittendrin")], OWNER)).toBe(0);
+    expect(Q.befundKommentare([k("- [ ] a\r\n- [ ] b\r\n")], OWNER)).toBe(2); // CRLF
+    expect(Q.befundKommentare([k(fuenf, "fremd"), k(fuenf, "github-actions[bot]")], OWNER)).toBe(0); // mehrzeilige Fremd- und Bot-Kommentare
   });
 });
 
@@ -215,7 +224,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Sammelticket an die Spitze factory#1
   const fueller = (von: number, bis: number) => Array.from({ length: bis - von + 1 }, (_, i) => it(von + i));
   const h = (items: Item[], n: number) => T.entscheideHarnessTakt({ items, befundKommentare: n });
 
-  test("Grenze 9/10/11: erst ab 10 Befund-Kommentaren nach oben (Härtungs-Takt, Füllstand #1888)", () => {
+  test("Grenze 9/10/11: erst ab 10 offenen Befund-Zeilen nach oben (Härtungs-Takt, Füllstand #1888)", () => {
     expect(T.HARNESS_TAKT_KOMMENTARE).toBe(10);
     expect(T.HARNESS_TAKT_KOMMENTARE).not.toBe(T.PRODUKT_QUOTE); // eigene Zahl, nicht an die Seitenwahl gekoppelt
     const board = [it(10), it(11), sammel(12)];
@@ -431,12 +440,13 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const yml = lies(".github/workflows/board-takt.yml");
     const doc = lies("docs/ticket-reihenfolge.md");
     const fortschreibung = lies("docs/adr/fortschreibungen/0016-1888-haertungs-takt-nach-fuellstand.md");
+    const zeilen = lies("docs/adr/fortschreibungen/0016-411-fuellstand-nach-offenen-zeilen.md"); // factory#411: Zählung nach offenen Zeilen
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
-    bindeAlle(/ab (\d+) Befund-Kommentaren/g, yml, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/ab (\d+) offenen Befund-Zeilen/g, yml, T.HARNESS_TAKT_KOMMENTARE);
     // #1428 Z21: der ADR wächst durch Fortschreibungen nur am Ende; die Bindung gilt dem LETZTEN Treffer (dem jüngsten Stand).
     expect(Number(letzterTreffer(/(\d+) Ticket-Merges \(ohne Bots\)/g, adr))).toBe(status.MIN_TICKET_MERGES_PUSH);
-    bindeAlle(/ab (\d+) Befund-Kommentaren/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
-    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, fortschreibung, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/ab (\d+) offenen Befund-Zeilen/g, zeilen, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/füllt sich \(k\/(\d+) offene Befund-Zeilen\)/g, zeilen, T.HARNESS_TAKT_KOMMENTARE);
     bindeAlle(/Spielquote 1:(\d+)/g, fortschreibung, T.PRODUKT_QUOTE);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
@@ -444,18 +454,18 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     // ticket-reihenfolge.md nennt Schwelle und Quote an mehreren Stellen (Takt-Absatz, Position, Kennzahl-Soll): jede muss stimmen.
     // factory#280 L3: die Schwellenzahl steht in der Doku genau einmal (Takt-Bullet, mit Verweis auf die Konstante); sonst Verweis statt Literal.
-    bindeAlle(/ab (\d+) Befund-Kommentaren/g, doc, T.HARNESS_TAKT_KOMMENTARE, 1);
-    expect([...doc.matchAll(/ab (\d+) Befund-Kommentaren/g)]).toHaveLength(1);
-    expect(doc).not.toMatch(/Schwelle \d+ Befund-Kommentare/);
+    bindeAlle(/ab (\d+) offenen Befund-Zeilen/g, doc, T.HARNESS_TAKT_KOMMENTARE, 1);
+    expect([...doc.matchAll(/ab (\d+) offenen Befund-Zeilen/g)]).toHaveLength(1);
+    expect(doc).not.toMatch(/Schwelle \d+ offene Befund-Zeilen/);
     expect(doc).not.toMatch(/füllt sich \(k\/\d+/);
     expect(doc).toContain("Konstante `HARNESS_TAKT_KOMMENTARE` in `scripts/produktquote-lib.mjs`");
     bindeAlle(/Produktquote 1:(\d+)/g, doc, T.PRODUKT_QUOTE, 2);
     // die Zahl steht auch in Glossar, Befehlsreferenz und Anlaufstellen
     expect(Number(/ab der Schwelle (\d+) greift der Härtungs-Takt/.exec(lies("docs/harness-glossar.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
     const befehle = lies("docs/referenz/befehle.md");
-    bindeAlle(/erst ab (\d+) Befund-Kommentaren als frei/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
-    bindeAlle(/füllt sich \(k\/(\d+) Befund-Kommentare\)/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
-    expect(Number(/Harness-Sammelticket ab (\d+) Befund-Kommentaren/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/erst ab (\d+) offenen Befund-Zeilen als frei/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
+    bindeAlle(/füllt sich \(k\/(\d+) offene Befund-Zeilen\)/g, befehle, T.HARNESS_TAKT_KOMMENTARE);
+    expect(Number(/Harness-Sammelticket ab (\d+) offenen Befund-Zeilen/.exec(lies("docs/referenz/anlaufstellen.md"))?.[1])).toBe(T.HARNESS_TAKT_KOMMENTARE);
   });
   test("das Kennzahl-Soll (#1729) trägt dieselbe Zahl in ticket-reihenfolge.md und, als jüngster Stand, in ADR 0016", () => {
     const wendung = /nach (\d+) Produkt-Merges \(Produktquote 1:\d+\) seit dem letzten Factory-Merge/;
@@ -515,7 +525,7 @@ describe("langfuseSammelEntscheidung (factory#379: Takt für das Langfuse-Sammel
     expect(() => e("x" as unknown as Item[], 1)).toThrow(/items muss eine Liste sein/);
   });
 
-  test("Schwelle 1: 0 Befund-Kommentare lassen es liegen, ab 1 kommt es hinter den Kopf", () => {
+  test("Schwelle 1: 0 offene Befund-Zeilen lassen es liegen, ab 1 kommt es hinter den Kopf", () => {
     expect(konst.LANGFUSE_TAKT_KOMMENTARE).toBe(1);
     const board = [status(2), it(10), it(11), lf(12)];
     expect(e(board, 0)).toMatchObject({ aktion: "nichts" });

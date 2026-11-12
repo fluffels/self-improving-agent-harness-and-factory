@@ -1107,10 +1107,10 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
   test("Grenze 9/10/11: unter der Schwelle übersprungen mit Grund, ab 10 gewählt", () => {
     const neun = mit(() => 9);
     expect(neun.ticket?.nr).toBe(2);
-    expect(neun.uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 Befund-Kommentare)" }]);
+    expect(neun.uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 offene Befund-Zeilen)" }]);
     expect(mit(() => 10).ticket?.nr).toBe(1);
     expect(mit(() => 11).ticket?.nr).toBe(1);
-    expect(mit(() => 0).uebersprungen[0].grund).toBe("füllt sich (0/10 Befund-Kommentare)");
+    expect(mit(() => 0).uebersprungen[0].grund).toBe("füllt sich (0/10 offene Befund-Zeilen)");
   });
   test("nicht ladbar oder ohne Lader: übersprungen (fail-closed), nie gewählt", () => {
     expect(mit(() => ({ fehler: "HTTP 502" })).uebersprungen).toEqual([{ nr: 1, grund: "Füllstand nicht prüfbar (HTTP 502)" }]);
@@ -1137,7 +1137,7 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
   test("factory#156: das Codequalität-Sammelticket hängt am selben Füllstand (9/10 übersprungen, 10 gewählt)", () => {
     const cq = { title: "Codequalität (gesammelt)", labels: [{ name: HARNESS }] };
     const lauf = (n: number) => (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, cq), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: () => n });
-    expect(lauf(9).uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 Befund-Kommentare)" }]);
+    expect(lauf(9).uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 offene Befund-Zeilen)" }]);
     expect(lauf(9).ticket?.nr).toBe(2);
     expect(lauf(10).ticket?.nr).toBe(1);
   });
@@ -1151,7 +1151,7 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     expect(lauf(() => 10).out.split("\n")[0]).toBe("#1\tT1".replace("T1", "Harness-Härtung (gesammelt)"));
     const r = lauf(() => 4);
     expect(r.out.split("\n")[0]).toBe("#2\tT2");
-    expect(r.out).toContain("übersprungen #1: füllt sich (4/10 Befund-Kommentare)");
+    expect(r.out).toContain("übersprungen #1: füllt sich (4/10 offene Befund-Zeilen)");
     expect(lauf().out).toContain("Füllstand nicht prüfbar");
   });
   test("Mängelliste und Einzelprüfung fragen den Füllstand nie", () => {
@@ -1169,6 +1169,15 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
       expect(f(5)).toBe(2);
       expect(f(5)).toBe(2);
       expect(n).toBe(1);
+    });
+    test("Negativfall (factory#411): 9 offene Zeilen auf 3 Kommentare verteilt füllen nicht, 10 Zeilen in einem Kommentar füllen", () => {
+      const zeilen = (n: number) => Array.from({ length: n }, (_, i) => `- [ ] Befund ${i + 1}`).join("\n");
+      const kom = (...n: number[]) => () => n.map((z) => ({ user: { login: OWNER, type: "User" }, body: zeilen(z) }));
+      const auswahl = (holeKommentare: () => unknown) => mit(lader({ holeKommentare, repo: `${OWNER}/x` }));
+      const neun = auswahl(kom(3, 3, 3));
+      expect(neun.ticket?.nr).toBe(2);
+      expect(neun.uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 offene Befund-Zeilen)" }]);
+      expect(auswahl(kom(10)).ticket?.nr).toBe(1);
     });
     test("ein Ladefehler oder eine falsche Form wird zu { fehler } (kein Wurf)", () => {
       const f = lader({ holeKommentare: () => { throw new Error("HTTP 502\nzweite Zeile"); }, repo: `${OWNER}/projekt` });

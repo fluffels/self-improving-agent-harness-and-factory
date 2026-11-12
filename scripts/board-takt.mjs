@@ -3,9 +3,9 @@
 /**
  * Generischer Board-Takt (#1390, ursprünglich #1351/#1349): der Workflow `.github/workflows/board-takt.yml` ruft dieses Skript. Es pflegt
  *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
- *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` Befund-Kommentaren (Härtungs-Takt, Füllstand) an die Spitze des
+ *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: ab `HARNESS_TAKT_KOMMENTARE` offenen Befund-Zeilen (Härtungs-Takt, Füllstand) an die Spitze des
  *     Boards holen (nur hinter 🚨/🔒-Notfällen, vor das Status-Ticket); unter der Schwelle schiebt der Takt nichts.
- *  3. das ungeclaimte Langfuse-Sammelticket „Langfuse-Befunde (gesammelt)“ (factory#379): ab `LANGFUSE_TAKT_KOMMENTARE` Befund-Kommentar auf die erste Position hinter dem Kopf (Notfälle, Harness-Sammelticket, Status-Ticket), auf dem Board des Status-Tickets (`langfuseZiel`); zuletzt im Lauf.
+ *  3. das ungeclaimte Langfuse-Sammelticket „Langfuse-Befunde (gesammelt)“ (factory#379): ab `LANGFUSE_TAKT_KOMMENTARE` offener Befund-Zeile auf die erste Position hinter dem Kopf (Notfälle, Harness-Sammelticket, Status-Ticket), auf dem Board des Status-Tickets (`langfuseZiel`); zuletzt im Lauf.
  * Mit dem Config-Schlüssel `langfuseWochenbericht` (factory#314) legt der Takt das Status-Ticket nur bei einem Anlass an (`LANGFUSE_ANLASS` aus dem Dispatch-Input `langfuse_anlass`) oder nach
  * `wochenOhneLaufMax` Wochen ohne Status-Ticket am Montags-Cron; ohne den Schlüssel bleibt alles wie bisher (Entscheidung: scripts/langfuse-takt.mjs).
  * Im Bezieher (Sync-Stand vorhanden), dessen Factory-Board das Repo der Fabrik führt, legt der Takt nur das Status-Ticket im eigenen Repo an (`bezieherTakt`, factory#195); das Harness-Sammelticket pflegt dort die Fabrik. Das Langfuse-Sammelticket des Beziehers holt der Takt dort selbst; bei fremd geführtem Factory-Board entfällt der Schritt.
@@ -97,7 +97,7 @@ export function quotenBericht(commits, seit = null, harnessIssues = null) {
 
 /**
  * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `befundKommentare` = Füllstand des ungeclaimten Sammeltickets
- * (`befundKommentare`: Kommentare vertrauter Nicht-Bot-Autoren). Eine Regel (factory#162): ab `HARNESS_TAKT_KOMMENTARE` kommt das erste
+ * (`befundKommentare`: offene Zeilen in Kommentaren vertrauter Nicht-Bot-Autoren). Eine Regel (factory#162): ab `HARNESS_TAKT_KOMMENTARE` kommt das erste
  * ungeclaimte Harness-Sammelticket an die Spitze des Boards, nur hinter den zusammenhängenden Notfall-Items ganz oben (🚨/🔒, `spitzenEnde`),
  * vor das Status-Ticket und alle übrigen Kopf-Items → `nach-oben`. Steht es dort schon, ist der Lauf idempotent. Ist ein Vorgänger
  * (offenes Sammelticket mit Assignee) in Arbeit, entfällt die Regel. Unter der Schwelle schiebt der Takt nie zurück: „still liegen“ leistet die
@@ -112,7 +112,7 @@ export function entscheideHarnessTakt({ items, befundKommentare: fuellstand }) {
   const ticket = sammelticketItem(items);
   if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${SAMMELTICKET_TITEL}“` };
   if (fuellstand < HARNESS_TAKT_KOMMENTARE) {
-    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare (Schwelle ${HARNESS_TAKT_KOMMENTARE}), der Takt lässt es liegen` };
+    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen (Schwelle ${HARNESS_TAKT_KOMMENTARE}), der Takt lässt es liegen` };
   }
   const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && !ungeclaimt(i));
   if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
@@ -125,15 +125,15 @@ export function entscheideHarnessTakt({ items, befundKommentare: fuellstand }) {
     aktion: "nach-oben",
     nr: ticket.number,
     afterId: ende > 0 ? items[ende - 1].id : null,
-    grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} Befund-Kommentare, #${ticket.number} kommt an die Spitze`,
+    grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen, #${ticket.number} kommt an die Spitze`,
   };
 }
 
-/** Schwelle des Langfuse-Takts (factory#379): ab einem Befund-Kommentar holt der Takt das ungeclaimte Langfuse-Sammelticket hinter den Kopf. */
+/** Schwelle des Langfuse-Takts (factory#379): ab einer offenen Befund-Zeile holt der Takt das ungeclaimte Langfuse-Sammelticket hinter den Kopf. */
 export const LANGFUSE_TAKT_KOMMENTARE = 1;
 
 /**
- * Langfuse-Sammelticket (factory#379): verallgemeinert aus `entscheideHarnessTakt`, mit `fuellstand` = Befund-Kommentare des ungeclaimten Tickets. Ab `LANGFUSE_TAKT_KOMMENTARE`
+ * Langfuse-Sammelticket (factory#379): verallgemeinert aus `entscheideHarnessTakt`, mit `fuellstand` = offene Befund-Zeilen des ungeclaimten Tickets. Ab `LANGFUSE_TAKT_KOMMENTARE`
  * kommt es auf die erste Position hinter dem Kopf: Notfälle und Status-Ticket (`istKopfItem`) sowie ein offenes Harness-Sammelticket an der Spitze zählen zum Kopf.
  * Steht es dort (geschlossene Items dazwischen stören nicht), ist der Lauf idempotent; ein offenes Langfuse-Sammelticket mit Assignee (Vorgänger in Arbeit) hält den Takt an.
  * Liefert `{ aktion: "verschieben" | "nichts", nr?, afterId?, grund }`. Pur.
@@ -145,7 +145,7 @@ export function langfuseSammelEntscheidung(items, fuellstand) {
   const ticket = offen.find(ungeclaimt);
   if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${LANGFUSE_SAMMELTICKET_TITEL}“` };
   if (fuellstand < LANGFUSE_TAKT_KOMMENTARE) {
-    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} Befund-Kommentare, der Takt lässt es liegen` };
+    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, der Takt lässt es liegen` };
   }
   const vorgaenger = offen.find((i) => !ungeclaimt(i));
   if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
@@ -157,7 +157,7 @@ export function langfuseSammelEntscheidung(items, fuellstand) {
     ende = k + 1;
   }
   if (items.slice(ende, idx).every((i) => i.state !== "open")) return { aktion: "nichts", grund: `#${ticket.number} steht schon hinter dem Kopf` };
-  return { aktion: "verschieben", nr: ticket.number, afterId: ende > 0 ? items[ende - 1].id : null, grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} Befund-Kommentare, #${ticket.number} kommt hinter den Kopf` };
+  return { aktion: "verschieben", nr: ticket.number, afterId: ende > 0 ? items[ende - 1].id : null, grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, #${ticket.number} kommt hinter den Kopf` };
 }
 
 /** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
@@ -189,7 +189,7 @@ export function harnessVoraussetzung({ items }) {
 
 /**
  * Die Harness-Entscheidung mit Füllstand (Härtungs-Takt): lädt die Kommentare NUR für das ungeclaimte Sammelticket (`sammelticketItem`), zählt die
- * Befund-Kommentare vertrauter Nicht-Bot-Autoren (`befundKommentare`) und fragt `entscheideHarnessTakt`. Fail-closed: lässt sich der Füllstand
+ * offenen Befund-Zeilen in Kommentaren vertrauter Nicht-Bot-Autoren (`befundKommentare`) und fragt `entscheideHarnessTakt`. Fail-closed: lässt sich der Füllstand
  * nicht laden, steht eine `::warning::` im Log und die Aktion ist `nichts` (der Lauf bleibt grün, der nächste versucht es erneut). Fehlt das
  * ungeclaimte Sammelticket in `items`, steht aber offen und ungeclaimt in `offene`, ist die Board-Liste im Verzug: Warnung statt stillem „keins“.
  * Liefert `{ ...Entscheidung, fuellstand }` (`fuellstand` null, wenn nicht geladen). `io.ladeKommentare(nr, repo)` liefert die flache Kommentar-Liste.
