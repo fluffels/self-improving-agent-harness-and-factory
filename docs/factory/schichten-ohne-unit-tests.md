@@ -13,7 +13,7 @@ Eine **Schicht ohne Unit-Tests** ist eine Schicht, deren Diff-Floor im Coverage-
 
 ## Ratchet
 
-- Ein Floor wird nur per reviewtem Commit **angehoben**, nie gesenkt, um ein Rot grün zu bekommen; `autoUpdate` bleibt aus.
+- Es gilt die Regel „Kein Grün-durch-Aufweichen“ der Arbeitsanweisung; hier konkret: Ein Floor wird nur per reviewtem Commit **angehoben**, nie gesenkt, um ein Rot grün zu bekommen; eine automatische Nachführung des Floors bleibt aus.
 - Das Ventil ist die Commit-Zeile `Diffcov-Override: #<nr> warum` (mit dem Commit-Zeilen-Präfix des Projekts), nur mit offenem Ticket und Begründung.
 - Eine Schicht geht erst von `null` auf einen harten Diff-Floor, wenn sie Unit-Tests hat. Vorher wäre der Floor eine Zahl ohne Aussage.
 

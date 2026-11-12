@@ -1,8 +1,10 @@
 /* e2e-Gate-Profil (factory#246): Matrix-Leser für die CI und Drift des Rezepts auf der Kern-Seite. */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/e2e-profil-lib.mjs";
@@ -11,6 +13,9 @@ import { E2E_UMGEBUNG } from "../scripts/gate-befehl-lib.mjs";
 
 const lib = raw as unknown as { cli(argv: string[], o: { lade: () => unknown; out: (t: string) => void; err: (t: string) => void }): number };
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
+
+const dirs: string[] = [];
+afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 const lauf = (argv: string[], config: unknown) => {
   const out: string[] = [];
@@ -39,7 +44,7 @@ describe("node scripts/e2e-profil.mjs matrix", () => {
   test("Config-Fehler (Block ohne Befehl): Exit 2 mit Fix, keine Ausgabe", () => {
     const r = lauf(["matrix"], { e2e: { browser: ["chromium"] } });
     assert.equal(r.code, 2);
-    assert.match(r.err.join("\n"), /Fix:/);
+    assert.match(r.err.join("\n"), /e2e braucht befehle\.e2e[\s\S]*Fix:/);
     assert.deepEqual(r.out, []);
   });
   test("unbekanntes oder fehlendes Unterkommando: Exit 2 mit Fix", () => {
@@ -49,11 +54,37 @@ describe("node scripts/e2e-profil.mjs matrix", () => {
       assert.match(r.err.join("\n"), /Fix:/);
     }
   });
-  test("Produktionsweg: in diesem Repo (ohne Block) Exit 0 und die zwei Zeilen", () => {
-    const r = spawnSync(process.execPath, ["scripts/e2e-profil.mjs", "matrix"], { cwd: WURZEL, encoding: "utf8" });
+  test("Ladefehler: Exit 2, die Meldung des Laders unverändert, keine Ausgabe", () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = lib.cli(["matrix"], { lade: () => { throw new Error("Projekt-Config kaputt\nFix: reparieren"); }, out: (t) => out.push(t), err: (t) => err.push(t) });
+    assert.equal(code, 2);
+    assert.deepEqual(err, ["Projekt-Config kaputt\nFix: reparieren"]);
+    assert.deepEqual(out, []);
+  });
+  const spawnMit = (config: unknown) => {
+    const d = mkdtempSync(join(tmpdir(), "e2e-profil-"));
+    dirs.push(d);
+    writeFileSync(join(d, "c.json"), JSON.stringify(config));
+    return spawnSync(process.execPath, ["scripts/e2e-profil.mjs", "matrix"], { cwd: WURZEL, encoding: "utf8", env: { ...process.env, VITEST: "true", FACTORY_PROJEKT_WURZEL: WURZEL, FACTORY_PROJEKT_CONFIG: join(d, "c.json") } });
+  };
+  const fremd = () => JSON.parse(readFileSync(WURZEL + "test/fixtures/projekt-fremd.json", "utf8")) as Record<string, unknown>;
+  test("Produktionsweg ohne Profil: Exit 0, die zwei Zeilen, stderr leer", () => {
+    const r = spawnMit(fremd());
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "aktiv=false\nbrowser=[]\n");
     assert.equal(r.stderr, "");
+  });
+  test("Produktionsweg mit Profil: aktiv=true und die Liste", () => {
+    const r = spawnMit({ ...fremd(), e2e: { browser: ["a", "b"] }, befehle: { e2e: "x" } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, 'aktiv=true\nbrowser=["a","b"]\n');
+  });
+  test("Produktionsweg mit kaputter Config: Exit 2, Fix auf stderr, stdout leer", () => {
+    const r = spawnMit({ ...fremd(), e2e: { browser: ["a"] } });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /e2e braucht befehle\.e2e[\s\S]*Fix:/);
+    assert.equal(r.stdout, "");
   });
 });
 

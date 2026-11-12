@@ -12,7 +12,7 @@ export function matrixZeilen(config) {
   return [`aktiv=${config.e2e !== undefined}`, `browser=${JSON.stringify(browser)}`];
 }
 
-/** Einstieg: `matrix`; gibt den Exit-Code zurück (2 bei Aufruf- oder Config-Fehler samt Fix-Zeile auf stderr). */
+/** Einstieg: `matrix`; gibt den Exit-Code zurück (2 bei Aufruf- oder Config-Fehler; die Meldung samt Fix-Zeile kommt vom Lader bzw. von `pruefeE2e`). */
 export function cli(argv, { lade, out = console.log, err = console.error }) {
   if (argv.length !== 1 || argv[0] !== "matrix") {
     err("Aufruf: node scripts/e2e-profil.mjs matrix\nFix: genau das Unterkommando matrix angeben.");
@@ -22,7 +22,7 @@ export function cli(argv, { lade, out = console.log, err = console.error }) {
   try {
     zeilen = matrixZeilen(lade());
   } catch (e) {
-    err(`${e.message}\nFix: den Block e2e und befehle.e2e der Projekt-Config korrigieren.`);
+    err(e.message); // trägt seine Fix-Zeile selbst (Lader und pruefeE2e)
     return AUFRUF_EXIT;
   }
   for (const z of zeilen) out(z);
