@@ -4,9 +4,11 @@
 // Feldformen von `gh issue list --json …` (Probe 2026-11-12): `author {login, is_bot}` (Apps als `app/<name>`), `comments[] {author {login}, authorAssociation, body, createdAt}`,
 // `blockedBy {nodes[] {number, state}}`, `labels[] {name}`, `updatedAt` (ISO).
 //
-// Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
+// Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos (auch native Kanten ohne `url` im eigenen Repo), weiche Bezüge ohne Nummer, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
+// Reihenfolge (`blocker-dahinter`): ein Ticket steht im Board vor seinem offenen Blocker (Textzeile oder native Kante), verglichen nur innerhalb derselben Spalte eines Boards; ohne gelesene Boards (`boards: null`) ausgesetzt, mit Hinweis.
 // Der Bericht trägt nur Nummern, Pfade der Whitelist (`PFAD_FORM`, ohne `..`, `@`, Backtick, Leerraum), Daten und Zählungen: keine Logins, keine Zitate (er entsteht als vertrauter Bot-Text).
 import { blockerVerweise } from "./spezifikation-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { enthaeltSammelticketTitel } from "./sammelticket-titel.mjs";
 
@@ -17,7 +19,7 @@ export const BERICHT_MARKER = "<!-- ticket-drift-bericht -->";
 /** Obergrenze des Berichts in Zeichen (GitHub erlaubt 65 536 je Body). */
 export const BERICHT_MAX = 60_000;
 /** Klassen in Berichtsreihenfolge. */
-export const KLASSEN = ["pfad-entfernt", "zeile-ausserhalb", "zeile-verschoben", "blocker-zu", "duplikat", "rueckstellung"];
+export const KLASSEN = ["pfad-entfernt", "zeile-ausserhalb", "zeile-verschoben", "blocker-zu", "blocker-dahinter", "duplikat", "rueckstellung"];
 /** Marker einer Rückstellung im Kommentar (geschlossene Liste, ohne Groß-/Kleinschreibung). */
 export const RUECKSTELLUNG_MARKER = ["zurückgestellt", "zurückstellen", "⏸"];
 
@@ -63,6 +65,28 @@ export function blockerBefunde(issue, offene, sprache) {
   for (const v of blockerVerweise(issue.body ?? "", sprache)) if (v.repo === null && !offene.has(v.nummer)) nummern.add(v.nummer);
   for (const n of issue.blockedBy?.nodes ?? []) if (n?.state === "CLOSED") nummern.add(n.number);
   return [...nummern].filter(Number.isInteger).sort((a, b) => a - b).map((n) => ({ nr: issue.number, klasse: "blocker-zu", text: `Blocker #${n} ist geschlossen` }));
+}
+
+/** Nummern der offenen Blocker eines Tickets im eigenen Repo: Textzeilen (Nummer in `offene`) und native Kanten mit Zustand OPEN und Issue-URL des eigenen `repo` (ohne `url` übersprungen). Sortiert, ohne Doppelte. */
+export function offeneBlocker(issue, offene, sprache, repo) {
+  const nummern = new Set();
+  for (const v of blockerVerweise(issue.body ?? "", sprache)) if (v.repo === null && offene.has(v.nummer)) nummern.add(v.nummer);
+  for (const n of issue.blockedBy?.nodes ?? []) {
+    const urlRepo = /\/([\w.-]+\/[\w.-]+)\/issues\/\d+\/?$/.exec(String(n?.url ?? ""))?.[1];
+    if (n?.state === "OPEN" && gleichesRepo(urlRepo, repo)) nummern.add(n.number);
+  }
+  return [...nummern].filter(Number.isInteger).sort((a, b) => a - b);
+}
+
+/** Rang-Karte eines Boards: Nummer → `{ rang, status }` unter den offenen Items in Board-Reihenfolge. */
+const rangKarte = (items) => new Map(items.filter((i) => i.state === "open").map((i, rang) => [i.number, { rang, status: i.status }]));
+
+/** Steht `nr` in einer der Rang-Karten in derselben Spalte vor `blocker`? */
+const stehtDavor = (karten, nr, blocker) => karten.some((k) => k.get(nr) && k.get(blocker) && k.get(nr).status === k.get(blocker).status && k.get(nr).rang < k.get(blocker).rang);
+
+/** Reihenfolge-Befunde: das Ticket steht im Board (gleiche Spalte) vor einem seiner offenen Blocker. `karten`: Rang-Karten der Boards. Je Paar einmal, auch bei mehreren Boards. */
+export function reihenfolgeBefunde(issue, offene, sprache, repo, karten) {
+  return offeneBlocker(issue, offene, sprache, repo).filter((b) => stehtDavor(karten, issue.number, b)).map((b) => ({ nr: issue.number, klasse: "blocker-dahinter", text: `Blocker #${b} steht im Board dahinter` }));
 }
 
 /** Wortmenge eines Titels: ohne Emoji/Satzzeichen, Serien-Präfix, Stoppwörter und Wörter ≤ 2 Zeichen. */
@@ -117,10 +141,10 @@ export function rueckstellungBefund(issue, owner) {
 }
 
 /**
- * Die ganze Prüfung. `ctx`: `{ config, owner, tops, git, sprache, berichtNr? }`. Fremdeingang und Bericht-Issues (Marker im Body) werden nicht geprüft, nur als Nummer gezählt.
+ * Die ganze Prüfung. `ctx`: `{ config, owner, tops, git, sprache, repo?, boards? }`; `boards`: Listen der Board-Items (`loadItems`) für `blocker-dahinter`, `null` = nicht gelesen (Hinweis), fehlend = Prüfung nicht angefordert. Fremdeingang und Bericht-Issues (Marker im Body) werden nicht geprüft, nur als Nummer gezählt.
  * Rückgabe `{ befunde, geprueft, uebersprungen: [nr], hinweise: [text] }`; Befunde nach Klasse und Nummer sortiert.
  */
-export function pruefe(issues, { config, owner, tops, git, sprache }) {
+export function pruefe(issues, { config, owner, tops, git, sprache, repo, boards }) {
   const uebersprungen = [];
   const pruefbar = [];
   for (const i of issues) {
@@ -132,8 +156,10 @@ export function pruefe(issues, { config, owner, tops, git, sprache }) {
   const befunde = [];
   const hinweise = [];
   if (git.shallow) hinweise.push("Shallow-Klon: Git-Prüfungen (entfernte Pfade, verschobene Zeilen) ausgesetzt");
+  if (boards === null) hinweise.push("Board nicht gelesen: blocker-dahinter ausgesetzt");
+  const karten = Array.isArray(boards) ? boards.map(rangKarte) : [];
   for (const i of pruefbar) {
-    befunde.push(...pfadBefunde(i, tops, git), ...blockerBefunde(i, offene, sprache));
+    befunde.push(...pfadBefunde(i, tops, git), ...blockerBefunde(i, offene, sprache), ...reihenfolgeBefunde(i, offene, sprache, repo, karten));
     const r = rueckstellungBefund(i, owner);
     if (r) befunde.push(r);
     if ((i.comments ?? []).length >= 100) hinweise.push(`#${i.number}: Kommentarliste möglicherweise abgeschnitten`);

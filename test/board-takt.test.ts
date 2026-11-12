@@ -567,3 +567,48 @@ describe("langfuseSammelEntscheidung (factory#379: Takt für das Langfuse-Sammel
     expect(() => e([lf(12)], 1.5)).toThrow(/ganze Zahl/);
   });
 });
+
+describe("entscheideSammelTakt und fuehreSammelAus: eine allgemeine Funktion je Sammelticket-Art (factory#407)", () => {
+  type Art = { titel: string; schwelle: number; ende: (i: Item[]) => number; aktion: string; feld: string; name: string; zuWenig: (f: number) => string; steht: (nr: number) => string; kommt: (f: number, nr: number) => string };
+  type Entscheidung = { aktion: string; nr?: number; afterId?: string | null; grund: string };
+  const S = raw as unknown as {
+    SAMMEL_ARTEN: Record<string, Art>;
+    entscheideSammelTakt: (a: Art, i: Item[], f: number) => Entscheidung;
+    fuehreSammelAus: (a: Art, e: { nr: number; afterId: string | null }, i: { id: string; number: number }[], t: string, rolle: string, o: { setze: (...a: unknown[]) => void; log: (z: string) => void }) => boolean;
+  };
+  const DRITTE = "Dritte Befunde (gesammelt)";
+  const art: Art = { titel: DRITTE, schwelle: 2, ende: () => 0, aktion: "verschieben", feld: "dritte", name: "Dritte-Art", zuWenig: (f) => `zu wenig ${f}`, steht: (nr) => `#${nr} steht schon`, kommt: (f, nr) => `${f}: #${nr} kommt` };
+  const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const dritte = (number: number, extra: Partial<Item> = {}) => it(number, { title: DRITTE, ...extra });
+  const e = (items: Item[], n: number) => S.entscheideSammelTakt(art, items, n);
+
+  test("erfundene dritte Art: unter der Schwelle nichts, ab der Schwelle verschieben, steht es schon: nichts", () => {
+    expect(e([it(1), dritte(5)], 1)).toEqual({ aktion: "nichts", grund: "zu wenig 1" });
+    expect(e([it(1), dritte(5)], 2)).toEqual({ aktion: "verschieben", nr: 5, afterId: null, grund: "2: #5 kommt" });
+    expect(e([dritte(5), it(1)], 2)).toEqual({ aktion: "nichts", grund: "#5 steht schon" });
+    expect(e([it(1), it(2)], 2).grund).toBe(`kein ungeclaimtes „${DRITTE}“`);
+  });
+  test("Vorgänger in Arbeit: nichts, auch über der Schwelle", () => {
+    const r = e([it(1), dritte(4, { assignees: [OWNER] }), dritte(5)], 9);
+    expect([r.aktion, r.grund]).toEqual(["nichts", "Vorgänger #4 in Arbeit, der Takt wartet auf dessen Abschluss"]);
+  });
+  test("afterId ist das Item vor der Zielposition; Fehlermeldung nennt das Feld der Art", () => {
+    expect(S.entscheideSammelTakt({ ...art, ende: () => 1 }, [it(1), it(2), dritte(5)], 2).afterId).toBe("I1");
+    expect(() => e([], -1)).toThrow(/dritte muss eine ganze Zahl ≥ 0 sein, war -1/);
+    expect(() => e(null as unknown as Item[], 1)).toThrow(/items muss eine Liste sein/);
+  });
+  test("fuehreSammelAus: Logtext mit Namen der Art, Fehlerpfad über fehlerMeldung", () => {
+    const log: string[] = [];
+    const aufrufe: unknown[][] = [];
+    expect(S.fuehreSammelAus(art, { nr: 5, afterId: "A" }, [{ id: "I5", number: 5 }], "t", "factory", { setze: (...a) => aufrufe.push(a), log: (z) => log.push(z) })).toBe(true);
+    expect([aufrufe, log]).toEqual([[["I5", "A", { token: "t" }]], ["Dritte-Art-Position gesetzt."]]);
+    const fehler: string[] = [];
+    const wirf = () => { throw new Error("kaputt"); };
+    expect(S.fuehreSammelAus(art, { nr: 5, afterId: null }, [{ id: "I5", number: 5 }], "t", "factory", { setze: wirf, log: (z) => fehler.push(z) })).toBe(false);
+    expect(fehler.join("\n")).toBe("::error::Dritte-Art-Position nicht gesetzt: kaputt\nDie Wiederholung ist idempotent.");
+  });
+  test("die beiden Arten tragen Titel, Schwelle und Aktion der alten Entscheidungen", () => {
+    const { harness, langfuse } = S.SAMMEL_ARTEN;
+    expect([harness.titel, harness.schwelle, harness.aktion, langfuse.titel, langfuse.schwelle, langfuse.aktion]).toEqual(["Harness-Härtung (gesammelt)", 10, "nach-oben", "Langfuse-Befunde (gesammelt)", 1, "verschieben"]);
+  });
+});
