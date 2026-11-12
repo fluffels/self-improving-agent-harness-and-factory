@@ -87,12 +87,12 @@ export function zeileBekannt({ kommentare, owner, eigen = null, schluessel }) {
 const FIX_SAMMELTICKET = "Fix: node scripts/sammelticket-anlegen.mjs harness";
 
 /**
- * Pur: der gemeinsame Text „kein ungeclaimtes Harness-Sammelticket `fuer`“ samt Fix. Agentenvariante (`melden.mjs`, `spezifikation.mjs`): der Bezieher nennt die Zeile unter BEFUNDE im Bericht;
+ * Pur: der gemeinsame Text „kein ungeclaimtes Harness-Sammelticket `fuer`“ samt Fix. Agentenvariante (`melden.mjs`, `spezifikation.mjs`): ohne Zugriff an der Meldestelle nennt der Lauf die Zeile unter BEFUNDE im Bericht;
  * CI-Variante (`ci`, Wochenlauf, kein Bericht): der Bezieher lässt an der Meldestelle ein Sammelticket anlegen, der nächste Wochenlauf meldet die Zeilen erneut. `trenner` trennt Befund und Fix (Zeilenumbruch, in einer Logzeile ein Leerzeichen).
  */
 export const keinSammelticketText = ({ fuer, ci = false, trenner = "\n" }) =>
   `kein ungeclaimtes Harness-Sammelticket ${fuer}${trenner}${FIX_SAMMELTICKET}; ${
-    ci ? "im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut" : "im Bezieher die Zeile unter BEFUNDE im Bericht nennen"
+    ci ? "im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut" : "ohne Zugriff auf die Meldestelle die Zeile unter BEFUNDE im Bericht nennen"
   }`;
 
 /** `check-internalrefs --text` als Kindprozess; nur Exit 0 ist sauber. `exec` ist die Test-Naht (Standard `spawnSync`). */
