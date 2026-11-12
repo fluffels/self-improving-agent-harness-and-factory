@@ -10,7 +10,7 @@
  * nur für Sessions mit Differenz. Ohne Secret-Key (Agentenläufe) ersatzweise `--ist <datei>` mit einem `queryMetrics`-Export
  * des Langfuse-MCP (mehrfach nutzbar: Zählung und Tokens dürfen zwei Exporte sein). `--ist` bleibt immer offline, auch bei gesetzten Schlüsseln.
  *
- * Mit `--session <id>` werden alle Ordner durchsucht (#1862); ein Treffer außerhalb des Projekts bekommt den Score „außerhalb“ und eine Hinweiszeile.
+ * Mit `--session <id>` (volle ID oder eindeutiger Präfix, factory#354: mehrdeutig Exit 2, nicht gefunden oder ohne Calls Exit 1) werden alle Ordner durchsucht (#1862); ein Treffer außerhalb des Projekts bekommt den Score „außerhalb“ und eine Hinweiszeile.
  * Das Präfix trifft sonst nur das Projekt selbst und seine Worktree-Ordner (`<präfix>--claude-worktrees-…`), nie Geschwister-Repos
  * mit gleichem Namensanfang. Importiert nur Builtins und die hook-tauglichen Module (`preise`, `transkript`, `transkript-calls`, `langfuse-api`, `langfuse-abgleich-kern`, `flag-lib`), damit es
  * später als Hook laufen kann, ohne die gh-/git-Kette von `token-baseline.mjs` mitzuziehen. Aufruf und Einordnung:

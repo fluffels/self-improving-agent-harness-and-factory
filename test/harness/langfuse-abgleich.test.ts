@@ -737,7 +737,7 @@ describe("Lücke bei Score ausstehend (factory#354)", () => {
     expect(sum).toMatchObject({ scoreAusstehend: 1, fehlendAusstehend: 1, fehlend: 1 });
     const md = A.renderMarkdown([b], sum);
     expect(md).toContain("| Lücke, Nachlieferer wartet |");
-    expect(md).toContain(`1 davon Score ausstehend (Nachlieferer wartet noch: ${String(b.session ?? "").slice(0, 8)})`);
+    expect(md).toContain(`1 davon Score ausstehend (Nachlieferer wartet noch: ${String((b as unknown as { session: string }).session).slice(0, 8)})`);
     expect(md).toContain("fehlend 1 (davon 1 in Sessions, auf die der Nachlieferer noch wartet: noch kein Befund)");
   });
 
