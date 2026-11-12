@@ -281,6 +281,15 @@ describe("guardListe: Funktionszuordnung", () => {
     ]);
   });
 
+  test("Modulebene-Grenze: `export const` und der Direktaufruf-Block nach einer einzeiligen Funktion beenden sie, `variante(` und `main();` nicht", () => {
+    const e = neu("function g() { if (a) {} }\nexport const L = [\n  /a/,\n];");
+    expect(e.map((x) => [x.funktion, x.anker.map((a) => a.zeile)])).toEqual([["g", [1]], ["(Modulebene)", [3]]]);
+    const d = neu("function g() { if (a) {} }\nif (istDirektaufruf(x)) {\n  g(a || b);\n}");
+    expect(d.map((x) => [x.funktion, x.anker.map((a) => a.muster)])).toEqual([["g", ["if"]], ["(Modulebene)", ["if", "||"]]]);
+    const v = neu("function g() { if (a) {} }\nvariante(a || b);");
+    expect(v.map((x) => [x.funktion, x.anker.map((a) => a.muster)])).toEqual([["g", ["if", "||"]]]);
+  });
+
   test("Modulebene-Grenze Negativfall: eingerücktes } und const im Rumpf beenden die Funktion nicht; ein Kopf in Spalte 0 bleibt Kopf", () => {
     const r = neu("function f() {\n  if (a) {\n  }\n  const z = 1;\n  if (b) {}\n}");
     expect(r.map((e) => [e.funktion, e.anker.map((a) => a.zeile)])).toEqual([["f", [2, 5]]]);
@@ -399,6 +408,19 @@ describe("Shell (*.sh, factory#396 L2)", () => {
   test("$# und ${#a[@]} sind Code, kein Kommentarbeginn: der Anker dahinter zählt", () => {
     expect(namen("  if [ $# -gt 0 ]; then")).toEqual(["if"]);
     expect(namen("  n=${#arr[@]} && x")).toEqual(["&&"]);
+  });
+
+  test("Kommentare in Spalte 0, Wortgrenzen, Escape im String und function name() {", () => {
+    expect(sh("# if [ -f x ]; then\n# a && b\n")).toEqual([]);
+    expect(namen("  diff a b")).toEqual([]);
+    expect(namen("  notif x")).toEqual([]);
+    expect(namen("  echo showcase")).toEqual([]);
+    expect(namen("  lowercase=1")).toEqual([]);
+    expect(namen("  x[[ -f y")).toEqual([]);
+    expect(sh("[[ -f x ]] || exit 1\n").map((e) => e.anker.map((a) => a.muster))).toEqual([["[[", "||"]]);
+    expect(namen('  echo "a \\" && b"')).toEqual([]);
+    const r = sh("function b() {\n  c || d\n}\n");
+    expect(r.map((e) => [e.funktion, e.zeile])).toEqual([["b", 1]]);
   });
 
   test("Shebang in Zeile 1 ist kein Anker; ein Case-Zweig mit * am Anfang zählt als Code (kein Blockkommentar)", () => {
