@@ -7,9 +7,9 @@
  * R2: jede Datei der GitHub-Menge und jeder Workflow steht in einer GitHub-Zeile,
  * R3: jeder genannte Pfad existiert, R4: die Spalte Git-Host hat nur die zwei Werte, R5: die vier Abschnitte gibt es.
  * GitHub-Menge (geschlossene Musterliste): scripts/gh-cli.mjs, Code ohne Kommentarzeilen mit process.env.GITHUB_ / process.env.GH_ /
- * api.github.com, dazu die transitive Hülle über relative Importe mit String-Literal.
+ * api.github.com (ein vollständiger Beleg-Link in API-Form als ganzes String-Literal ist Daten und zählt nicht, außer als direktes Aufruf-Argument), dazu die transitive Hülle über relative Importe mit String-Literal.
  * Bewusste Grenzen: Workflows zählen nur mit Endung .yml; GitHub-Daten, die ein Skript über eine Naht hereingereicht bekommt (reine Doktor-Bibliotheken),
- * liegen außerhalb der Menge und stehen von Hand in der Seite; berechnete Importpfade, Kindprozesse anderer Skripte und reine Kommentar- oder Link-Erwähnungen werden nicht erkannt
+ * liegen außerhalb der Menge und stehen von Hand in der Seite; eine Variable mit Beleg-Link oder ein Beleg-Link als zweites oder späteres Argument oder in einem Objekt, der später an fetch geht, wird nicht erkannt; berechnete Importpfade, Kindprozesse anderer Skripte und reine Kommentar- oder Link-Erwähnungen werden nicht erkannt
  * (ein direktes gh außerhalb von gh-cli.mjs verbietet gh-cli.test.ts); Board, Agenten- und Skill-Texte und Dienste (Dependabot,
  * Code-Scanning) sind Handliste ohne Dateiabgleich. Backtick-Token mit .mjs/.cjs lösen unter scripts/ auf, mit .yml unter .github/workflows/, andere sind Prosa. */
 import { describe, expect, test } from "vitest";
@@ -24,6 +24,8 @@ const SEITE = "docs/git-host.md";
 const ABSCHNITTE = ["Gates", "Skripte", "Workflows", "Board"];
 const KOPF = "| Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |";
 const MARKER = /process\.env\.(GITHUB_|GH_)|api\.github\.com/;
+// Beleg-Link in API-Form als ganzes String-Literal (Daten, z. B. Codex-Freigabetabelle); direktes Aufruf-Argument `f("…")` bleibt Nutzung.
+const BELEG_LINK = /(?<!\(\s*)(["'`])https:\/\/api\.github\.com\/repositories\/\d+\/(?:pulls|issues)(?:\/comments)?\/\d+\1/g;
 
 type Zeile = { abschnitt: string; teil: string; host: string; zellen: string[]; text: string };
 
@@ -34,7 +36,7 @@ function codeOhneKommentar(text: string): string {
 function githubMenge(wurzel: string): Set<string> {
   const dateien = dateienUnter(wurzel, "scripts", /\.(mjs|cjs)$/);
   const text = new Map(dateien.map((f) => [f, readFileSync(join(wurzel, f), "utf8")]));
-  const menge = new Set(dateien.filter((f) => f === "scripts/gh-cli.mjs" || MARKER.test(codeOhneKommentar(text.get(f) ?? ""))));
+  const menge = new Set(dateien.filter((f) => f === "scripts/gh-cli.mjs" || MARKER.test(codeOhneKommentar(text.get(f) ?? "").replace(BELEG_LINK, ""))));
   // Importe wie die Wächter und die Test-Hülle (hook-importe.ts, fail-closed: auch Importe in Kommentaren zählen).
   const ziele = (f: string) =>
     relativeImporte(text.get(f) ?? "").flatMap((spec) => kandidatenPfade(posix.join(posix.dirname(f), spec)).filter((k) => text.has(k)));
@@ -157,6 +159,24 @@ describe("githubMenge (synthetisches Repo)", () => {
       expect([...githubMenge(dir)].sort()).toEqual(
         ["api.mjs", "aussen.mjs", "endungslos.mjs", "env-gh.mjs", "env-github.mjs", "gh-cli.mjs", "mitte.mjs", "per-require.cjs"].map((n) => `scripts/${n}`),
       );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("Beleg-Link in API-Form als ganzes Literal ist Daten und zählt nicht; Aufruf-Argument, Template mit Platzhalter und Mischung zählen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "git-host-"));
+    try {
+      mkdirSync(join(dir, "scripts"));
+      const schreibe = (n: string, t: string) => writeFileSync(join(dir, "scripts", n), t);
+      schreibe("beleg.mjs", 'export const F = { d: "https://api.github.com/repositories/1434788646/pulls/82", k: \'https://api.github.com/repositories/1/issues/comments/5\', b: `https://api.github.com/repositories/1/pulls/82` };\n');
+      schreibe("beleg-nutzer.mjs", 'import { F } from "./beleg.mjs";\n');
+      schreibe("beleg-gebaut.mjs", "const u = `https://api.github.com/repositories/1/pulls/${id}`;\n");
+      schreibe("beleg-aufruf.mjs", 'fetch("https://api.github.com/repositories/1/pulls/82");\n');
+      schreibe("beleg-leerraum.mjs", 'fetch( "https://api.github.com/repositories/1/pulls/82");\n');
+      schreibe("beleg-repo-id.mjs", "const u = `https://api.github.com/repositories/${repo}/pulls/1`;\n");
+      schreibe("beleg-gemischt.mjs", 'const u = "https://api.github.com/repositories/1/pulls/82\';\n');
+      schreibe("beleg-plus-api.mjs", 'const d = "https://api.github.com/repositories/1/pulls/82";\nconst u = "https://api.github.com/repos";\n');
+      expect([...githubMenge(dir)].sort()).toEqual(["beleg-aufruf.mjs", "beleg-gebaut.mjs", "beleg-gemischt.mjs", "beleg-leerraum.mjs", "beleg-plus-api.mjs", "beleg-repo-id.mjs"].map((n) => `scripts/${n}`));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
