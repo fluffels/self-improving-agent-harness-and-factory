@@ -37,14 +37,13 @@ import {
   ENDE_SCHLUPF_MS,
   nachliefererWartet,
   standUnveraendert,
-  scoreId,
   sollEintraege,
   sollMitZuordnung,
   vorStichtag,
 } from "./langfuse-abgleich-kern.mjs";
 import { fetchSessionObservations, langfuseZugang, sendeOtlp, sendeScore } from "./langfuse-api.mjs";
 import { kindEnv } from "./langfuse-zugang.mjs";
-import { bauePayloads } from "./langfuse-otlp.mjs";
+import { bauePayloads, scoreId } from "./langfuse-otlp.mjs";
 import { auftraegeLesen, auftragErledigen, schreibeJsonAtomar } from "./langfuse-auftrag-lib.mjs";
 import { gesperrterLauf, kurzerStand, leseStartMarke, lockMeldung, markiereStart, warte, zeigenswert } from "./langfuse-lock.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";

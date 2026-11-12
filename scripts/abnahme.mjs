@@ -9,8 +9,9 @@
  *   node scripts/abnahme.mjs auswerten <nr> --pr <pr> --bericht <datei> --worktree <pfad> --head <sha>
  *
  * Bericht: erste nicht leere Zeile `ABNAHME #<nr> · holdout-abnahme`, dann je Kriterium `K<i>: erfuellt|nicht-pruefbar — <Beleg>` bzw. `K<i>: nicht-erfuellt ursache=kriterium|szenario|umsetzung — <Beleg>`
- * (Beleg Pflicht; andere Zeilen werden ignoriert, Szenarien gehören nicht in den Kommentar). Ausgabe `ENTSCHEIDUNG: bestanden|fix|handoff`
- * (Vorrang handoff > fix > bestanden): bestanden mit der fertigen Abnahme-Zeile, fix mit den Belegen der nicht erfüllten Kriterien,
+ * (Beleg Pflicht; andere Zeilen werden ignoriert, Szenarien gehören nicht in den Kommentar). Ausgabe `ENTSCHEIDUNG: bestanden|fix|szenario|handoff`
+ * (Vorrang handoff > fix > szenario > bestanden): bestanden mit der fertigen Abnahme-Zeile, fix mit den Belegen der nicht erfüllten Kriterien ohne `ursache=szenario` (deren Szenario-Zeilen hängen getrennt an, nicht für den Umsetzer),
+ * szenario (alle nicht erfüllten Kriterien `ursache=szenario`, kein Fix) mit den Szenario-Belegen,
  * handoff mit den Gründen (ein Ticket-Kommentar mit dem Hand-off-Marker, genau einer je Aufruf).
  *
  * Exit 0 = ausgewertet (Entscheidung auf stdout) bzw. Kriterienliste, 1 = Bericht oder Worktree ungültig (nichts gepostet), 2 = Aufruf- oder
@@ -103,10 +104,13 @@ export function parseBericht(text, nr, kriterienListe) {
   return { urteile: kriterienListe.map(({ k }) => (nachMerge.has(k) ? { k, wert: "nach-merge", beleg: NACH_MERGE_BELEG } : gefunden.get(k))) };
 }
 
-/** Vorrang handoff > fix > bestanden; `nach-merge` zählt nicht mit. Pur. */
+const istFixFall = (u) => u.wert === "nicht-erfuellt" && u.ursache !== "szenario";
+
+/** Vorrang handoff > fix > szenario > bestanden; `szenario` heißt: alle nicht erfüllten Kriterien sind `ursache=szenario` (das Szenario prüfte über das Kriterium hinaus, kein Fix); `nach-merge` zählt nicht mit. Pur. */
 export function entscheide(urteile) {
   if (urteile.some((u) => u.wert === "nicht-pruefbar")) return "handoff";
-  if (urteile.some((u) => u.wert === "nicht-erfuellt")) return "fix";
+  if (urteile.some(istFixFall)) return "fix";
+  if (urteile.some((u) => u.wert === "nicht-erfuellt")) return "szenario"; // nur noch ursache=szenario übrig
   return "bestanden";
 }
 
@@ -244,8 +248,13 @@ function ausgabe(entscheidung, urteile, io, head, durchgang, kommentare) {
     return `ENTSCHEIDUNG: bestanden\n${zeile}\n`;
   }
   if (entscheidung === "fix") {
-    const zeilen = urteile.filter((u) => u.wert === "nicht-erfuellt").map((u) => `${u.k} nicht erfüllt: ${u.beleg}`);
-    return `ENTSCHEIDUNG: fix\n${zeilen.join("\n")}\n`;
+    const zeilen = urteile.filter(istFixFall).map((u) => `${u.k} nicht erfüllt: ${u.beleg}`);
+    const szenario = urteile.filter((u) => u.wert === "nicht-erfuellt" && !istFixFall(u)).map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);
+    return `ENTSCHEIDUNG: fix\n${[...zeilen, ...szenario].join("\n")}\n`;
+  }
+  if (entscheidung === "szenario") {
+    const zeilen = urteile.filter((u) => u.wert === "nicht-erfuellt").map((u) => `${u.k} Szenario prüfte über das Kriterium hinaus: ${u.beleg}`);
+    return `ENTSCHEIDUNG: szenario\n${zeilen.join("\n")}\n`;
   }
   const zeilen = urteile.filter((u) => u.wert === "nicht-pruefbar").map((u) => `${u.k} nicht prüfbar: ${u.beleg}`);
   return `ENTSCHEIDUNG: handoff\n${zeilen.join("\n")}\n`;
