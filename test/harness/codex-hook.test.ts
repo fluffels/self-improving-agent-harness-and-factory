@@ -123,7 +123,7 @@ describe("Positive Fälle: nichts ausgeben", () => {
     expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: neu.txt", "+x", "*** Delete File: a.txt") }))).toBeNull();
     const lens = await lauf(nutzlast("spawn_agent", { agent_type: "sih-lens", message: `${KOPF} · Ticket #365 · Patch: /tmp/x.patch` }));
     expect(lens).toBeNull();
-    expect(await lauf(nutzlast("Agent", { agent_type: "sih-lens", message: "Prüfe das mal." }))).not.toBeNull(); // Alias Agent wird wie spawn_agent geprüft
+    expect(grund(await lauf(nutzlast("Agent", { agent_type: "sih-lens", message: "Prüfe das mal." })))).toContain("Lens-Auftrag"); // Alias Agent wird wie spawn_agent geprüft
     expect(await lauf(nutzlast("spawn_agent", { message: "Suche etwas im Repo." }))).toBeNull(); // ohne agent_type ist ein normaler Aufruf
   });
 });
@@ -162,6 +162,8 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     expect(grund(await lauf(nutzlast("Bash", { command: "gh x y" }), regeln(["Bash(gh x *)"])))).toContain("Bash(gh x *)");
     expect(grund(await lauf(nutzlast("Bash", { command: "git push origin main --force" }), regeln(["Bash(git push * --force)"])))).toContain("--force");
     expect(await lauf(nutzlast("Bash", { command: "git pushx" }), regeln(["Bash(git push * --force)"]))).toBeNull();
+    expect(await lauf(nutzlast("Bash", { command: "echo gh x y" }), regeln(["Bash(gh x *)"]))).toBeNull(); // die Regel gilt am Segmentanfang
+    expect(grund(await lauf(nutzlast("Bash", { command: 'gh x "a\nb"' }), regeln(["Bash(gh x *)"])))).toContain("Bash(gh x *)"); // Argument über mehrere Zeilen bleibt ein Segment
     expect(await lauf(nutzlast("Bash", { command: "ls a.b" }), regeln(["Bash(ls a.b)"]))).not.toBeNull();
     expect(await lauf(nutzlast("Bash", { command: "ls axb" }), regeln(["Bash(ls a.b)"]))).toBeNull(); // der Punkt gilt wörtlich
   });
