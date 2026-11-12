@@ -73,4 +73,4 @@ PR #1381 war grün, der Nachlauf auf `main` (913cf17) rot: die Override-Zeile wa
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0009-335-sicherheits-checks-merge-pflicht.md) (Konvention: [README](README.md#format)); dort die erste: Dependency Review und zizmor werden Merge-Pflicht.
+Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0009-335-sicherheits-checks-merge-pflicht.md) (Konvention: [README](README.md#format)); dort die erste: Dependency Review und zizmor werden Merge-Pflicht. Weitere: [CI fährt die Suite einmal mit Coverage](fortschreibungen/0009-270-ci-ein-testlauf.md) (factory#270).
