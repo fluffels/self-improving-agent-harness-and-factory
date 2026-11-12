@@ -122,7 +122,7 @@ export function pruefeMerge({ git, lies, umgebung }) {
 }
 
 /** Ob der Ordner `test/harness` da ist und `befehle.testGezielt` der Standard (`npx vitest run`): nur dann nennt der Hinweis den gezielten Wächter-Lauf, sonst `verifyKompakt` (ein Bezieher hat oft keinen Wächter-Ordner oder einen anderen Test-Läufer; L13). Ladefehler der Config: `verifyKompakt`. */
-export function waechterUmgebung(wurzel, { lade = () => ladeProjektConfig(), existiert = existsSync } = {}) {
+export function waechterUmgebung(wurzel, { lade = () => ladeProjektConfig({ rootDir: wurzel }), existiert = existsSync } = {}) {
   const harnessDa = existiert(join(wurzel, "test", "harness"));
   try {
     return { harnessDa, testGezieltStandard: befehlAus(lade(), "testGezielt") === STANDARD_BEFEHLE.testGezielt };
