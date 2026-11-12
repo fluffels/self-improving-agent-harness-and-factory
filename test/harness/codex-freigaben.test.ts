@@ -7,7 +7,7 @@ import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as raw from "../../scripts/codex-freigaben.mjs";
 type Tabelle = Record<string, unknown>;
-const f = raw as unknown as { FREIGABEN: Tabelle; istBelegUrl: (v: unknown) => boolean; tabellenMaengel: (t: Tabelle) => string[]; offeneNachweise: (e: unknown) => number[] };
+const f = raw as unknown as { BELEG_URL_QUELLE: string; FREIGABEN: Tabelle; istBelegUrl: (v: unknown) => boolean; tabellenMaengel: (t: Tabelle) => string[]; offeneNachweise: (e: unknown) => number[] };
 const URL_OK = "https://api.github.com/repositories/1/pulls/1";
 const beleg = { beleg: URL_OK };
 const voll = () => ({ diagnose: URL_OK, nachweise: { 1: beleg, 2: beleg, 3: beleg, 4: beleg, 5: beleg } as Record<string, unknown> });
@@ -33,9 +33,13 @@ test("jeder Formfehler ist ein eigener Mangel", () => {
   expect(eine(null)).toEqual([expect.stringContaining("Eintrag fehlt")]);
   expect(eine({ diagnose: URL_OK, nachweise: null }).join()).toContain("genau 1-5");
 });
-test("istBelegUrl: nur https ohne Zugangsdaten", () => {
+test("istBelegUrl: nur die API-Form per Repo-ID mit abschließender ID (eine Stelle: BELEG_URL_QUELLE)", () => {
   expect(f.istBelegUrl(URL_OK)).toBe(true);
-  for (const v of ["http://a.example/x", "ftp://a.example", "", "x", 5, null, "https://u:p@a.example/x", "https://u@a.example/x", "https://:p@a.example/x", ["https://a.example/x"]]) expect(f.istBelegUrl(v)).toBe(false);
+  for (const v of ["https://api.github.com/repositories/1/actions/runs/2", "https://api.github.com/repositories/1/issues/comments/5", "https://api.github.com/repositories/1434788646/pulls/82"]) expect(f.istBelegUrl(v), v).toBe(true);
+  const nein = ["http://a.example/x", "ftp://a.example", "", "x", 5, null, "https://u:p@a.example/x", "https://u@a.example/x", "https://:p@a.example/x", ["https://a.example/x"],
+    "https://a.example/x", "https://github.com/o/r/pull/1", "https://api.github.com/repos/o/r/pulls/1", "https://api.github.com/repositories/1/pulls/82?x=1", "https://api.github.com/repositories/1/pulls/82#a",
+    "https://api.github.com/repositories/1/actions/secrets", "https://u:p@api.github.com/repositories/1/pulls/82", "https://api.github.com/repositories/1/pulls/82\n"];
+  for (const v of nein) expect(f.istBelegUrl(v), String(v)).toBe(false);
 });
 test("offeneNachweise: nur gültige Belege zählen als erbracht (fail-closed)", () => {
   expect(f.offeneNachweise(voll())).toEqual([]);

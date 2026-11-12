@@ -16,6 +16,8 @@ import { describe, expect, test } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
+// @ts-expect-error: Node-Tooling ohne Declaration-Datei.
+import { BELEG_URL_QUELLE } from "../../scripts/codex-freigaben.mjs";
 import { dateienUnter } from "../support/dateien";
 import { kandidatenPfade, relativeImporte } from "./hook-importe";
 
@@ -25,7 +27,8 @@ const ABSCHNITTE = ["Gates", "Skripte", "Workflows", "Board"];
 const KOPF = "| Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |";
 const MARKER = /process\.env\.(GITHUB_|GH_)|api\.github\.com|ProjectV2|["']graphql["']/;
 // Beleg-Link in API-Form als ganzes String-Literal (Daten, z. B. Codex-Freigabetabelle); direktes Aufruf-Argument `f("…")` bleibt Nutzung.
-const BELEG_LINK = /(?<!\(\s*)(["'`])https:\/\/api\.github\.com\/repositories\/\d+\/(?:pulls|issues)(?:\/comments)?\/\d+\1/g;
+// Das Muster selbst steht an einer Stelle: BELEG_URL_QUELLE in scripts/codex-freigaben.mjs (factory#397).
+const BELEG_LINK = new RegExp(String.raw`(?<!\(\s*)(["'\`])` + BELEG_URL_QUELLE + String.raw`\1`, "g");
 
 type Zeile = { abschnitt: string; teil: string; host: string; zellen: string[]; text: string };
 
@@ -181,11 +184,13 @@ describe("githubMenge (synthetisches Repo)", () => {
       schreibe("beleg-nutzer.mjs", 'import { F } from "./beleg.mjs";\n');
       schreibe("beleg-gebaut.mjs", "const u = `https://api.github.com/repositories/1/pulls/${id}`;\n");
       schreibe("beleg-aufruf.mjs", 'fetch("https://api.github.com/repositories/1/pulls/82");\n');
+      schreibe("beleg-runs.mjs", 'export const R = "https://api.github.com/repositories/1/actions/runs/2";\n');
+      schreibe("beleg-runs-aufruf.mjs", 'fetch("https://api.github.com/repositories/1/actions/runs/2");\n');
       schreibe("beleg-leerraum.mjs", 'fetch( "https://api.github.com/repositories/1/pulls/82");\n');
       schreibe("beleg-repo-id.mjs", "const u = `https://api.github.com/repositories/${repo}/pulls/1`;\n");
       schreibe("beleg-gemischt.mjs", 'const u = "https://api.github.com/repositories/1/pulls/82\';\n');
       schreibe("beleg-plus-api.mjs", 'const d = "https://api.github.com/repositories/1/pulls/82";\nconst u = "https://api.github.com/repos";\n');
-      expect([...githubMenge(dir)].sort()).toEqual(["beleg-aufruf.mjs", "beleg-gebaut.mjs", "beleg-gemischt.mjs", "beleg-leerraum.mjs", "beleg-plus-api.mjs", "beleg-repo-id.mjs"].map((n) => `scripts/${n}`));
+      expect([...githubMenge(dir)].sort()).toEqual(["beleg-aufruf.mjs", "beleg-gebaut.mjs", "beleg-gemischt.mjs", "beleg-leerraum.mjs", "beleg-plus-api.mjs", "beleg-repo-id.mjs", "beleg-runs-aufruf.mjs"].map((n) => `scripts/${n}`));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
