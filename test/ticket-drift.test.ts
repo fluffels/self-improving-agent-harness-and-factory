@@ -28,6 +28,7 @@ const L = libRaw as unknown as {
   berichtText: (e: Ergebnis, o: { sha: string; datum: string }) => string;
   BERICHT_MARKER: string;
   BERICHT_MAX: number;
+  KLASSEN: string[];
 };
 const S = skriptRaw as unknown as { gitSicht: (w: string, g?: (a: string[]) => string) => { tops: Set<string>; shallow: boolean; sha: string; git: Git }; main: (a: string[], d: Record<string, unknown>) => Promise<number>; waehleZiel: (i: Issue[], b: boolean, p: { owner: string; config: unknown }) => { art: string; nr?: number } };
 
@@ -88,6 +89,94 @@ describe("pruefe: Pfade und Zeilen", () => {
   });
   test("shallow nennt den Hinweis", () => {
     expect(L.pruefe([issue(1, { body })], ctx(git({ shallow: true }))).hinweise[0]).toMatch(/Shallow/);
+  });
+});
+
+describe("pruefe: blocker-dahinter (factory#407)", () => {
+  type Item = { number: number; status: string; state: string };
+  const item = (number: number, status = "Todo", state = "open"): Item => ({ number, status, state });
+  const url = (nr: number, repo = "o/r") => `https://github.com/${repo}/issues/${nr}`;
+  const blockiertDurch = (nr: number) => ({ body: `${sprache.blocker} #${nr}` });
+  const lauf = (extra: Record<string, unknown>, boards: Item[][] | null, weitere: Issue[] = [issue(2, { title: "Ganz anderer Gegenstand hier" })]) =>
+    L.pruefe([issue(1, extra), ...weitere], { ...ctx(git()), repo: "o/r", boards });
+  const dahinter = (e: Ergebnis) => e.befunde.filter((b) => b.klasse === "blocker-dahinter");
+  test("Textzeile: Ticket 1 steht vor seinem offenen Blocker 2 in derselben Spalte", () => {
+    const e = lauf(blockiertDurch(2), [[item(1), item(2)]]);
+    expect(klassen(e)).toEqual(["1:blocker-dahinter"]);
+    expect(e.befunde[0].text).toBe("Blocker #2 steht im Board dahinter");
+  });
+  test("Negativfall: steht der Blocker davor, gibt es keinen Befund", () => {
+    expect(lauf(blockiertDurch(2), [[item(2), item(1)]]).befunde).toEqual([]);
+  });
+  test("native Kante OPEN mit eigener url: Befund; fremde url, ohne url: keiner", () => {
+    const boards = [[item(1), item(7)]];
+    expect(klassen(lauf({ blockedBy: { nodes: [{ number: 7, state: "OPEN", url: url(7) }] } }, boards))).toEqual(["1:blocker-dahinter"]);
+    expect(lauf({ blockedBy: { nodes: [{ number: 7, state: "OPEN", url: url(7, "x/y") }] } }, boards).befunde).toEqual([]);
+    expect(lauf({ blockedBy: { nodes: [{ number: 7, state: "OPEN" }] } }, boards).befunde).toEqual([]);
+  });
+  test("native Kante CLOSED mit eigener url und Textverweis auf ein fremdes Repo: kein blocker-dahinter", () => {
+    expect(dahinter(lauf({ blockedBy: { nodes: [{ number: 7, state: "CLOSED", url: url(7) }] } }, [[item(1), item(7)]]))).toEqual([]);
+    expect(lauf({ body: `${sprache.blocker} x/y#2` }, [[item(1), item(2)]]).befunde).toEqual([]);
+  });
+  test("das Paar steht nur auf einem von zwei Boards: genau ein Befund", () => {
+    expect(klassen(lauf(blockiertDurch(2), [[item(1), item(2)], [item(3)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test("Textzeile und native Kante auf denselben Blocker: ein Befund", () => {
+    expect(dahinter(lauf({ ...blockiertDurch(2), blockedBy: { nodes: [{ number: 2, state: "OPEN", url: url(2) }] } }, [[item(1), item(2)]]))).toHaveLength(1);
+  });
+  test.each([["ohne blockedBy", undefined], ["blockedBy ohne nodes", {}]])("Issue %s: wirft nicht, Textverweis zählt", (_n, blockedBy) => {
+    expect(klassen(lauf({ ...blockiertDurch(2), blockedBy }, [[item(1), item(2)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test("null-Knoten in blockedBy wirft nicht, der gültige Knoten zählt", () => {
+    expect(klassen(lauf({ blockedBy: { nodes: [null, { number: 7, state: "OPEN", url: url(7) }] } }, [[item(1), item(7)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test.each([
+    ["Bindestrich und Punkt in Owner und Repo", url(7, "my-org.x/tool-a.y"), "my-org.x/tool-a.y", 1],
+    ["Schrägstrich am Ende", url(7) + "/", "o/r", 1],
+    ["Anhang hinter der Nummer", url(7) + "/x", "o/r", 0],
+    ["Pull-Request-url statt Issue", url(7).replace("/issues/7", "/pull/7"), "o/r", 0],
+    ["url ohne Nummer", "https://github.com/o/r/issues/", "o/r", 0],
+  ])("native url: %s", (_n, u, repo, erwartet) => {
+    const e = L.pruefe([issue(1, { blockedBy: { nodes: [{ number: 7, state: "OPEN", url: u }] } }), issue(7, { title: "Ganz anderer Gegenstand hier" })], { ...ctx(git()), repo, boards: [[item(1), item(7)]] });
+    expect(dahinter(e)).toHaveLength(erwartet);
+  });
+  test("Textverweis mit ausgeschriebenem eigenem Repo zählt wie unqualifiziert", () => {
+    expect(klassen(lauf({ body: `${sprache.blocker} o/r#2` }, [[item(1), item(2)]]))).toEqual(["1:blocker-dahinter"]);
+  });
+  test.each([
+    ["Blocker in anderer Spalte", [[item(1, "Todo"), item(2, "In Progress")]]],
+    ["Ticket und Blocker auf verschiedenen Boards", [[item(1)], [item(2)]]],
+    ["Blocker nicht im Board", [[item(1)]]],
+    ["Blocker im Board geschlossen", [[item(1), item(2, "Todo", "closed")]]],
+  ])("kein Befund: %s", (_n, boards) => {
+    expect(lauf(blockiertDurch(2), boards).befunde).toEqual([]);
+  });
+  test("Blocker geschlossen: nur blocker-zu, kein blocker-dahinter", () => {
+    expect(klassen(lauf(blockiertDurch(9), [[item(1), item(9)]]))).toEqual(["1:blocker-zu"]);
+  });
+  test.each([["setzt auf #2 auf"], ["blockiert durch Design-Schritt"]])("weicher Bezug ohne Blocker-Wort oder Nummer: keiner (%s)", (zeile) => {
+    expect(lauf({ body: zeile }, [[item(1), item(2)]]).befunde).toEqual([]);
+  });
+  test("dasselbe Paar auf zwei Boards: genau ein Befund", () => {
+    expect(dahinter(lauf(blockiertDurch(2), [[item(1), item(2)], [item(1), item(2)]]))).toHaveLength(1);
+  });
+  test("boards null: Hinweis, keine Befunde der Klasse; ohne boards: keine Prüfung und kein Hinweis", () => {
+    const e = lauf(blockiertDurch(2), null);
+    expect([dahinter(e), e.hinweise]).toEqual([[], ["Board nicht gelesen: blocker-dahinter ausgesetzt"]]);
+    const ohne = L.pruefe([issue(1, blockiertDurch(2)), issue(2, { title: "Ganz anderer Gegenstand hier" })], ctx(git()));
+    expect([ohne.befunde, ohne.hinweise]).toEqual([[], []]);
+  });
+  test("Klasse steht nach blocker-zu und vor duplikat", () => {
+    const k = L.KLASSEN;
+    expect([k.indexOf("blocker-zu") < k.indexOf("blocker-dahinter"), k.indexOf("blocker-dahinter") < k.indexOf("duplikat")]).toEqual([true, true]);
+  });
+  test("Doku-Wächter: jede Klasse steht im Skill und in der Glossar-Zeile", () => {
+    const skill = lies(".agents/skills/factory/ticket-drift.md");
+    const glossar = lies("docs/harness-glossar.md").split("\n").find((z) => z.startsWith("| Ticket-Drift-Bericht |")) ?? "";
+    for (const k of L.KLASSEN) {
+      expect(skill, k).toContain(`\`${k}\``);
+      expect(glossar, k).toContain(`\`${k}\``);
+    }
   });
 });
 
@@ -263,12 +352,13 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
   ];
   type Lauf = { code: number; aufrufe: string[][]; bodies: string[]; lesen: string[][]; out: string };
   /** Alle Nähte eingespeist; ein nicht vorgesehener Schreibaufruf wirft (nie ein echtes gh). */
-  const lauf = async (issues: unknown, argv: string[] = [], env: Record<string, string> = { PROJECT_TOKEN: "t" }, antwort = "https://github.com/o/r/issues/77\n", REPO = "o/r"): Promise<Lauf> => {
+  const lauf = async (issues: unknown, argv: string[] = [], env: Record<string, string> = { PROJECT_TOKEN: "t" }, antwort = "https://github.com/o/r/issues/77\n", REPO = "o/r", ladeBoards: (t: string) => unknown = () => []): Promise<Lauf> => {
     const r: Lauf = { code: -1, aufrufe: [], bodies: [], lesen: [], out: "" };
     const out: string[] = [];
     r.code = await S.main(argv, {
       ladeConfig: () => config,
       ladeLibs: () => Promise.resolve({ REPO, platziereAmEnde: (nr: number, token: string) => r.aufrufe.push(["board", String(nr), token]) }),
+      ladeBoards,
       ghLesen: (args: string[]) => { r.lesen.push(args); return issues; },
       ghSchreiben: (args: string[], input: string) => { r.aufrufe.push(["gh", ...args]); r.bodies.push(input); return antwort; },
       sicht: { tops: TOPS, sha: "abc", git: git({ zeilen: () => 10 }) },
@@ -312,6 +402,48 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const r = await lauf(fixture(fremd));
     expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 t"]);
     expect(r.aufrufe.flat()).not.toContain("edit");
+  });
+  test("L1: Fehlerzeile trägt genau ein ::error::", async () => {
+    const r = await lauf(null);
+    const zeile = r.out.split("\n").find((z) => z.startsWith("::error::")) ?? "";
+    expect(zeile.startsWith("::error::Ticket-Drift: ")).toBe(true);
+    expect(zeile).not.toContain("::error::::error::");
+    expect((zeile.match(/::error::/g) ?? []).length).toBe(1);
+  });
+  describe("blocker-dahinter im Lauf", () => {
+    const paar = [issue(1, { body: `${sprache.blocker} #2` }), issue(2, { title: "Ganz anderer Gegenstand hier" })];
+    const boards = [[{ number: 1, status: "Todo", state: "open" }, { number: 2, status: "Todo", state: "open" }]];
+    test("mit Token und Boards steht der Abschnitt im Log", async () => {
+      const r = await lauf(paar, ["--dry-run"], { PROJECT_TOKEN: "t" }, undefined, undefined, () => boards);
+      expect(r.out).toContain("## blocker-dahinter (1)");
+    });
+    test("ladeBoards wirft: Warnung im Log, Hinweis im Bericht ohne Fehlertext, Exit 0", async () => {
+      const r = await lauf(paar, ["--dry-run"], { PROJECT_TOKEN: "t" }, undefined, undefined, () => { throw new Error("geheim-detail"); });
+      expect(r.code).toBe(0);
+      expect(r.out).toContain("::warning::Ticket-Drift: Board nicht lesbar, blocker-dahinter ausgesetzt: geheim-detail");
+      expect(r.out).toContain("Hinweis: Board nicht gelesen: blocker-dahinter ausgesetzt");
+      expect(r.out.split("\n").filter((z) => z.startsWith("Hinweis:")).join("")).not.toContain("geheim-detail");
+    });
+    test("Standard-Naht: loadItems je Board-Rolle mit Token und Repo", async () => {
+      const aufrufe: unknown[][] = [];
+      const libs = { REPO: "o/r", boardFuerRolle: (rolle: string) => ({ rolle }), loadItems: (board: unknown, opts: unknown) => (aufrufe.push([board, opts]), boards[0]) };
+      const out: string[] = [];
+      const code = await S.main(["--dry-run"], { ladeConfig: () => config, ladeLibs: () => Promise.resolve(libs), ghLesen: () => paar, sicht: { tops: TOPS, sha: "abc", git: git() }, env: { PROJECT_TOKEN: "t" }, heute: "2026-11-12", log: (m: string) => out.push(m), err: () => undefined });
+      expect([code, aufrufe]).toEqual([0, [[{ rolle: "produkt" }, { repo: "o/r", token: "t" }], [{ rolle: "factory" }, { repo: "o/r", token: "t" }]]]);
+      expect(out.join("\n")).toContain("## blocker-dahinter (1)");
+    });
+    test("native Kante im Lauf: repo erreicht pruefe", async () => {
+      const nativ = [issue(1, { blockedBy: { nodes: [{ number: 2, state: "OPEN", url: "https://github.com/o/r/issues/2" }] } }), issue(2, { title: "Ganz anderer Gegenstand hier" })];
+      const out = (await lauf(nativ, ["--dry-run"], { PROJECT_TOKEN: "t" }, undefined, undefined, () => boards)).out;
+      expect(out).toContain("## blocker-dahinter (1)");
+      expect(out).not.toContain("PROJECT_TOKEN fehlt");
+    });
+    test("ohne Token wird ladeBoards nicht aufgerufen", async () => {
+      let n = 0;
+      const r = await lauf(paar, ["--dry-run"], {}, undefined, undefined, () => (n++, boards));
+      expect([n, r.code, r.out.includes("Hinweis: Board nicht gelesen")]).toEqual([0, 0, true]);
+      expect(r.out).toContain("::warning::Ticket-Drift: PROJECT_TOKEN fehlt, blocker-dahinter ausgesetzt.");
+    });
   });
   test("--dry-run: keine Schreibaufrufe, Bericht auf stdout", async () => {
     const r = await lauf(fixture(), ["--dry-run"]);

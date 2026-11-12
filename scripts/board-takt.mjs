@@ -105,28 +105,7 @@ export function quotenBericht(commits, seit = null, harnessIssues = null) {
  * Liefert `{ aktion: "nach-oben" | "nichts", nr?, afterId?, grund }`. Ungültige Eingaben werfen. Pur.
  */
 export function entscheideHarnessTakt({ items, befundKommentare: fuellstand }) {
-  if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
-  if (!Number.isInteger(fuellstand) || fuellstand < 0) {
-    throw new Error(`befundKommentare muss eine ganze Zahl ≥ 0 sein, war ${String(fuellstand)}`);
-  }
-  const ticket = sammelticketItem(items);
-  if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${SAMMELTICKET_TITEL}“` };
-  if (fuellstand < HARNESS_TAKT_KOMMENTARE) {
-    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen (Schwelle ${HARNESS_TAKT_KOMMENTARE}), der Takt lässt es liegen` };
-  }
-  const vorgaenger = items.find((i) => i.state === "open" && i.title === SAMMELTICKET_TITEL && !ungeclaimt(i));
-  if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
-  const ende = spitzenEnde(items);
-  const idx = items.findIndex((i) => i.id === ticket.id);
-  if (items.slice(ende, idx).every((i) => i.state !== "open")) {
-    return { aktion: "nichts", grund: `#${ticket.number} steht schon an der Spitze (hinter den Notfall-Items)` };
-  }
-  return {
-    aktion: "nach-oben",
-    nr: ticket.number,
-    afterId: ende > 0 ? items[ende - 1].id : null,
-    grund: `Füllstand ${fuellstand}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen, #${ticket.number} kommt an die Spitze`,
-  };
+  return entscheideSammelTakt(SAMMEL_ARTEN.harness, items, fuellstand);
 }
 
 /** Schwelle des Langfuse-Takts (factory#379): ab einer offenen Befund-Zeile holt der Takt das ungeclaimte Langfuse-Sammelticket hinter den Kopf. */
@@ -139,25 +118,68 @@ export const LANGFUSE_TAKT_KOMMENTARE = 1;
  * Liefert `{ aktion: "verschieben" | "nichts", nr?, afterId?, grund }`. Pur.
  */
 export function langfuseSammelEntscheidung(items, fuellstand) {
-  if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
-  if (!Number.isInteger(fuellstand) || fuellstand < 0) throw new Error(`fuellstand muss eine ganze Zahl ≥ 0 sein, war ${String(fuellstand)}`);
-  const offen = items.filter((i) => i.state === "open" && i.title === LANGFUSE_SAMMELTICKET_TITEL);
-  const ticket = offen.find(ungeclaimt);
-  if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${LANGFUSE_SAMMELTICKET_TITEL}“` };
-  if (fuellstand < LANGFUSE_TAKT_KOMMENTARE) {
-    return { aktion: "nichts", grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, der Takt lässt es liegen` };
-  }
-  const vorgaenger = offen.find((i) => !ungeclaimt(i));
-  if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
-  const idx = items.findIndex((i) => i.id === ticket.id);
+  return entscheideSammelTakt(SAMMEL_ARTEN.langfuse, items, fuellstand);
+}
+
+/** Ende des Kopfs für das Langfuse-Sammelticket: Index hinter den offenen Kopf-Items und dem offenen Harness-Sammelticket an der Spitze. Pur. */
+function langfuseEnde(items) {
   let ende = 0;
   for (const [k, i] of items.entries()) {
     if (i.state !== "open") continue;
     if (!istKopfItem(i) && i.title !== SAMMELTICKET_TITEL) break;
     ende = k + 1;
   }
-  if (items.slice(ende, idx).every((i) => i.state !== "open")) return { aktion: "nichts", grund: `#${ticket.number} steht schon hinter dem Kopf` };
-  return { aktion: "verschieben", nr: ticket.number, afterId: ende > 0 ? items[ende - 1].id : null, grund: `Füllstand ${fuellstand}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, #${ticket.number} kommt hinter den Kopf` };
+  return ende;
+}
+
+/**
+ * Die Sammelticket-Arten des Takts (eine Entscheidungs- und eine Ausführungsfunktion für alle): `titel` des Sammeltickets, `schwelle` offener Befund-Zeilen, `ende(items)` = Index der Zielposition
+ * (davor steht der Kopf), `aktion` (`nach-oben` | `verschieben`), `feld` = Name des Füllstand-Parameters in der Fehlermeldung, `name` für den Logtext der Ausführung und die Texte `zuWenig(fuellstand)`,
+ * `steht(nr)`, `kommt(fuellstand, nr)` des Grunds. Ein drittes Sammelticket im Takt ist ein weiterer Eintrag, keine weitere Kopie.
+ */
+export const SAMMEL_ARTEN = {
+  harness: {
+    titel: SAMMELTICKET_TITEL,
+    schwelle: HARNESS_TAKT_KOMMENTARE,
+    ende: spitzenEnde,
+    aktion: "nach-oben",
+    feld: "befundKommentare",
+    name: "Sammelticket",
+    zuWenig: (f) => `Füllstand ${f}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen (Schwelle ${HARNESS_TAKT_KOMMENTARE}), der Takt lässt es liegen`,
+    steht: (nr) => `#${nr} steht schon an der Spitze (hinter den Notfall-Items)`,
+    kommt: (f, nr) => `Füllstand ${f}/${HARNESS_TAKT_KOMMENTARE} offene Befund-Zeilen, #${nr} kommt an die Spitze`,
+  },
+  langfuse: {
+    titel: LANGFUSE_SAMMELTICKET_TITEL,
+    schwelle: LANGFUSE_TAKT_KOMMENTARE,
+    ende: langfuseEnde,
+    aktion: "verschieben",
+    feld: "fuellstand",
+    name: "Langfuse-Sammelticket",
+    zuWenig: (f) => `Füllstand ${f}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, der Takt lässt es liegen`,
+    steht: (nr) => `#${nr} steht schon hinter dem Kopf`,
+    kommt: (f, nr) => `Füllstand ${f}/${LANGFUSE_TAKT_KOMMENTARE} offene Befund-Zeilen, #${nr} kommt hinter den Kopf`,
+  },
+};
+
+/**
+ * Die Entscheidung einer Sammelticket-Art (`art`, siehe `SAMMEL_ARTEN`): ohne ungeclaimtes Sammelticket, unter der Schwelle, mit einem Vorgänger in Arbeit (offenes Sammelticket mit Assignee)
+ * oder wenn es schon hinter `art.ende(items)` steht (geschlossene Items dazwischen stören nicht) → `nichts`, sonst `art.aktion` mit `afterId` = Item vor der Zielposition. Ungültige Eingaben werfen. Pur.
+ * Liefert `{ aktion, nr?, afterId?, grund }`.
+ */
+export function entscheideSammelTakt(art, items, fuellstand) {
+  if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
+  if (!Number.isInteger(fuellstand) || fuellstand < 0) throw new Error(`${art.feld} muss eine ganze Zahl ≥ 0 sein, war ${String(fuellstand)}`);
+  const offen = items.filter((i) => i.state === "open" && i.title === art.titel);
+  const ticket = offen.find(ungeclaimt);
+  if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${art.titel}“` };
+  if (fuellstand < art.schwelle) return { aktion: "nichts", grund: art.zuWenig(fuellstand) };
+  const vorgaenger = offen.find((i) => !ungeclaimt(i));
+  if (vorgaenger) return { aktion: "nichts", grund: `Vorgänger #${vorgaenger.number} in Arbeit, der Takt wartet auf dessen Abschluss` };
+  const ende = art.ende(items);
+  const idx = items.findIndex((i) => i.id === ticket.id);
+  if (items.slice(ende, idx).every((i) => i.state !== "open")) return { aktion: "nichts", grund: art.steht(ticket.number) };
+  return { aktion: art.aktion, nr: ticket.number, afterId: ende > 0 ? items[ende - 1].id : null, grund: art.kommt(fuellstand, ticket.number) };
 }
 
 /** Die Factory-Liste ohne Items, die auch auf dem Produkt-Board stehen und laut Trennregel dorthin gehören (`doppelt` aus `seitenListen`). Pur. */
@@ -210,28 +232,26 @@ export function entscheideMitFuellstand({ items, offene, repo, io }) {
   return { ...entscheideHarnessTakt({ items, befundKommentare: fuellstand }), fuellstand };
 }
 
-/** Harness-Entscheidung ausführen; true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
-export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) => setPosition(FACTORY_BOARD, id, afterId, opts), log = console.log } = {}) {
+/** Entscheidung einer Sammelticket-Art ausführen (Position auf dem Board der Rolle `rolle`); true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
+export function fuehreSammelAus(art, e, items, token, rolle, { setze = (id, afterId, opts) => setPosition(boardFuerRolle(rolle), id, afterId, opts), log = console.log } = {}) {
   try {
-    setze(items.find((i) => i.number === h.nr).id, h.afterId, { token });
-    log("Sammelticket-Position gesetzt.");
+    setze(items.find((i) => i.number === e.nr).id, e.afterId, { token });
+    log(`${art.name}-Position gesetzt.`);
     return true;
   } catch (err) {
-    log(fehlerMeldung(err, { praefix: "Sammelticket-Position nicht gesetzt: ", zusatz: "Die Wiederholung ist idempotent." }));
+    log(fehlerMeldung(err, { praefix: `${art.name}-Position nicht gesetzt: `, zusatz: "Die Wiederholung ist idempotent." }));
     return false;
   }
 }
 
+/** Harness-Entscheidung ausführen (Factory-Board); true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
+export function fuehreHarnessAus(h, items, token, { setze = (id, afterId, opts) => setPosition(FACTORY_BOARD, id, afterId, opts), log = console.log } = {}) {
+  return fuehreSammelAus(SAMMEL_ARTEN.harness, h, items, token, "factory", { setze, log });
+}
+
 /** Verschieben-Entscheidung des Langfuse-Takts ausführen (Position auf dem Board der Rolle `rolle`); true bei Erfolg. `setze` und `log` sind für den Test injizierbar. */
-export function fuehreLangfuseAus(l, items, token, rolle, { setze = (id, afterId, opts) => setPosition(boardFuerRolle(rolle), id, afterId, opts), log = console.log } = {}) {
-  try {
-    setze(items.find((i) => i.number === l.nr).id, l.afterId, { token });
-    log("Langfuse-Sammelticket-Position gesetzt.");
-    return true;
-  } catch (err) {
-    log(fehlerMeldung(err, { praefix: "Langfuse-Sammelticket-Position nicht gesetzt: ", zusatz: "Die Wiederholung ist idempotent." }));
-    return false;
-  }
+export function fuehreLangfuseAus(l, items, token, rolle, o = {}) {
+  return fuehreSammelAus(SAMMEL_ARTEN.langfuse, l, items, token, rolle, o);
 }
 
 /**
