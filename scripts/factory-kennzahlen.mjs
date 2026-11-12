@@ -338,10 +338,13 @@ function auditLens(zeilen) {
   const soll = `höchstens ${MAX_RUNDEN} Review-Runden je PR`;
   if (!zeilen) return { mechanismus: "Lens-Zahl", messung: "kein Lauf-Ergebnis", soll, status: "Lücke" };
   const gemessen = zeilen.filter((z) => Number.isInteger(z.runden));
-  const zuviel = gemessen.filter((z) => z.runden > MAX_RUNDEN);
+  // Ein aktiver Review-Override (factory#402 L47) ist eine freigegebene Ausnahme, keine Abweichung; fehlt das Feld, gilt strikt: kein Override.
+  const ueber = gemessen.filter((z) => z.runden > MAX_RUNDEN);
+  const zuviel = ueber.filter((z) => z.reviewOverride !== true);
+  const freigegeben = ueber.filter((z) => z.reviewOverride === true);
   if (zuviel.length > 0) return { mechanismus: "Lens-Zahl", messung: `${zuviel.length} PRs mit mehr als ${MAX_RUNDEN} Runden: ${zuviel.map((z) => `#${z.pr} (${z.runden})`).join(", ")}`, soll, status: "ABWEICHUNG" };
   if (gemessen.length === 0) return { mechanismus: "Lens-Zahl", messung: `kein PR mit Review-Nachweis (${zeilen.length} PRs ohne Review-Nachweiszeile)`, soll, status: "Lücke" };
-  return { mechanismus: "Lens-Zahl", messung: `${gemessen.length} von ${zeilen.length} PRs mit Nachweis, höchste Rundenzahl ${Math.max(...gemessen.map((z) => z.runden))}`, soll, status: "ok" };
+  return { mechanismus: "Lens-Zahl", messung: `${gemessen.length} von ${zeilen.length} PRs mit Nachweis, höchste Rundenzahl ${Math.max(...gemessen.map((z) => z.runden))}${freigegeben.length > 0 ? `; freigegeben per Review-Override: ${freigegeben.map((z) => `#${z.pr} (${z.runden})`).join(", ")}` : ""}`, soll, status: "ok" };
 }
 
 /**

@@ -1,0 +1,10 @@
+# Fortschreibung #402 (2026-11-12): Reine Szenario-Durchgänge zählen nicht gegen das Cap
+
+Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Cap-Kopplung `durchgaenge ≤ runden` und W1 in den Umsetzungsentscheidungen von quellprojekt#1755); die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)). Herkunft: Befundzeile L51 (und L50) aus factory#358.
+
+- **Ausgangslage:** ADR 0022 koppelt die Abnahme streng an das Review-Cap: `durchgaenge ≤ runden`, weil jede Abnahme-Fix-Runde einen Lens-Pass nach sich zieht. Mit factory#358 gilt die Regel `durchgaenge − szenario ≤ runden`: ein Durchgang, der nur wegen `ursache=szenario` nicht bestand, zählt nicht mit. Die Ausnahme stand bisher nur im Code und in der Langfassung, nicht im ADR.
+- **Entscheidung:** ein Durchgang ist ein reiner Szenario-Durchgang, wenn jedes nicht erfüllte Kriterium die Ursache `szenario` trägt und keines `nicht-pruefbar` ist (mindestens eines ist nicht erfüllt). Er löst keinen Fix aus, also keinen Lens-Pass; die Kopplungsprämisse („jede Fix-Runde zieht einen Pass nach sich“) trifft nicht zu. `nicht-pruefbar` bleibt ein Hand-off.
+- **Unverändert:** W1 (eine Delta-Lens nach CI-Fix oder Konflikt-Merge hinter einer bestandenen Abnahme zählt als Pass) und die Regel für echte Fix-Durchgänge.
+- **Eine Definition:** das Prädikat `nurSzenarioOffen` in `scripts/nachweis-lib.mjs` (factory#402) gilt für die Entscheidung in `scripts/abnahme.mjs` (`szenario`) und das Zählen im Wächter `scripts/check-abnahme-nachweis.mjs`; die beiden Datenformen (Urteile des Skripts, Marker des Kommentars) laufen über denselben Adapter.
+- **Grenze:** die Szenario-Durchgänge kennt nur der PR-Kommentar-Marker; lokal ohne PR-Nummer (`FACTORY_PR_NUMBER`) fehlen sie, eine Cap-Meldung kann dort erscheinen, die die CI nicht zeigt.
+- **Verworfen:** ein eigenes Zählfeld in der Abnahme-Zeile; die vertrauten Marker sind die Quelle, ein zweiter Zähler könnte von ihnen abweichen.

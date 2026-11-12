@@ -217,10 +217,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
+      if (o.diffFehler && a[0] === "diff") throw new Error("diff kaputt");
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
       if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
@@ -421,6 +422,11 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(ghAufrufe).toEqual([]);
     rot(lauf({ messages: `${ov}\n${Z.abnahmeOverride}: #9 entfällt` }).r.fehler, /Zeile fehlt/);
   });
+  test("Override: scheitert git beim Diff, bleibt er grün und die Anzeige-Stufe ist fail-closed voll (factory#402 L26)", () => {
+    const { r } = lauf({ messages: `${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug gestartet`, diffFehler: true });
+    expect(r.ok).toBe(true);
+    expect((r as { stufe?: string | null }).stufe).toBe("voll");
+  });
   test("Basis == HEAD: nichts zu prüfen, kein gh", () => {
     const spy = vi.fn();
     const r = m.checkAbnahmeNachweis({ runGit: () => "a".repeat(40), gh: spy, env: { FACTORY_DIFF_BASE: "a".repeat(40) }, ladeConfig: () => CONFIG });
@@ -577,6 +583,17 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
     expect(r.stdout).toMatch(/Zeile fehlt/);
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+  });
+  test("Größenstufe wird bei Erfolg genannt, auch bei Abnahme-Zeile entfaellt (factory#402 L26)", () => {
+    const r = cli(cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`));
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+  });
+  test("Rot: keine Stufenzeile in der Ausgabe (factory#402 L26)", () => {
+    const r = cli(cliRepo("nur Code"));
+    expect(r.status).toBe(1);
+    expect(r.stdout).not.toMatch(/Größenstufe:/);
   });
   test("Review-Override (L24a): die Ausgabe nennt, was entfällt; ohne die Zeile fehlt der Hinweis", () => {
     const abn = `${Z.abnahme}: head=${"c".repeat(40)} durchgaenge=1 urteil=K1:erfuellt`;
@@ -589,6 +606,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const r = cli(cliRepo(`x\n\n${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug`));
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(new RegExp(`${Z.abnahmeOverride} — #9 Sitzung vor dem Werkzeug`));
+    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
     // Die Message trägt das Fremd-Präfix: mit der gültigen Fremd-Config grün (Exit 0), mit der kaputten kommt Exit 1 aus dem --config-Zweig (nicht aus der Zeile).

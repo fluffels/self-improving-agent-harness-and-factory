@@ -51,8 +51,10 @@
  *
  * Sammelticket-PR (factory#358): Ein Override gilt für EINE Zeile eines Sammeltickets, nie für die ganze Auswahl. Trägt
  * der PR-Titel den Titel eines Sammeltickets und ist ein Override-Grund aktiv, muss dieser Grund genau eine Zeile
- * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Grenzen: erkannt wird nur am PR-Titel aus dem Ereignis
- * (`GITHUB_EVENT_PATH`; lokal ohne PR-Ereignis keine Prüfung); geprüft wird nur der aktive jüngste Grund; ein
+ * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Lokal ohne Ereignis-Datei (`GITHUB_EVENT_PATH` fehlt, factory#402 L5) kennt der Lauf den Titel nicht und
+ * wertet vorsorglich den Grund allein: nennt er mehrere verschiedene Zeilen `L<n>`, ist er rot (`sammelOverrideLokal`); ein
+ * Nicht-Sammelticket mit Zeilenliste im Grund ist damit lokal rot, in der CI grün (Abhilfe steht in der Meldung). Ein Ereignis ohne PR (push auf main, workflow_dispatch) wird nie lokal gewertet. Grenzen: der Titel
+ * kommt aus dem Ereignis (`GITHUB_EVENT_PATH`); geprüft wird nur der aktive jüngste Grund; ein
  * unlesbares PR-Ereignis ist rot (fail-closed). Der PR-Titel ist Fremdtext: nur lineare Muster, er steht nie in
  * einer Ausgabe, und der Pfad kann nur rot machen, nie etwas durchlassen.
  *
@@ -277,11 +279,22 @@ export function prTitelAusEreignis(env, lies) {
   }
 }
 
+/** Die verschiedenen Zeilenmarken `L<n>` eines Override-Grunds (Wortgrenzen, dieselbe Zeile zählt einmal). Pur. */
+const zeilenMarken = (grund) => new Set(String(grund).match(/\bL\d+\b/g));
+
+/** Lokale Vorprüfung ohne PR-Ereignis (factory#402 L5): der Grund nennt mehrere verschiedene Zeilen `L<n>` → Meldung (ohne Titel), sonst null. Pur. */
+export function sammelOverrideLokal(grund) {
+  if (zeilenMarken(grund).size <= 1) return null;
+  return (
+    "Lokal ohne PR-Titel: der Override-Grund nennt mehrere Zeilen L<n>; bei einem Sammelticket gilt er nur für eine einzelne Zeile. " +
+    "Kein Sammelticket: den Grund ohne Zeilenliste formulieren."
+  );
+}
+
 /** Meldung (ohne Titel), wenn ein Sammelticket-PR einen Override-Grund trägt, der nicht genau eine Zeile `L<n>` nennt; sonst null. Pur. */
 export function sammelOverrideFehler(titel, grund) {
   if (!enthaeltSammelticketTitel(titel)) return null;
-  const zeilen = new Set(String(grund).match(/\bL\d+\b/g));
-  if (zeilen.size === 1) return null;
+  if (zeilenMarken(grund).size === 1) return null;
   return (
     "Der Diffsize-Override gilt bei einem Sammelticket nur für eine einzelne Zeile: " +
     "der Grund muss genau eine Zeile L<n> nennen, nicht die ganze Auswahl. Besser: den Slice teilen."
@@ -292,7 +305,7 @@ export function sammelOverrideFehler(titel, grund) {
 function sammelOverrideUrteil(env, lies, reason) {
   if (reason === null) return null;
   const e = prTitelAusEreignis(env, lies);
-  if (e === null) return null;
+  if (e === null) return env.GITHUB_EVENT_PATH ? null : sammelOverrideLokal(reason); // nur ohne Ereignis-Datei (lokal); ein Nicht-PR-Ereignis der CI bleibt ungeprüft
   return "fehler" in e ? e.fehler : sammelOverrideFehler(e.titel, reason);
 }
 

@@ -27,7 +27,7 @@ type Pr = {
   closingIssuesReferences: { number: number }[];
 };
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
-type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean };
+type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; reviewOverride?: boolean };
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
@@ -266,6 +266,24 @@ describe("bewertePrs und Aggregate", () => {
     assert.match(t, /\| #50 \| #40 \| 2026-10-01 \| 2 \| architektur:2,requirement-treue:0,test-adaequanz:1 \| 1 \| 0 \| folge \|/);
     assert.match(t, /Lens-Trefferquote architektur: 50 % \(1\/2\), Σ Blocker 2 \(1,00 je PR\)/);
     assert.match(t, /ohne Review-Nachweis: 1/);
+  });
+});
+
+describe("Review-Override je PR (factory#402 L47)", () => {
+  const NL = String.fromCharCode(10);
+  const nachricht = (...zeilen: string[]) => ["feat: y (#40) (#50)", "", `${Z.plan}: ${PLANER}`, ...zeilen].join(NL);
+  const von = (...zeilen: string[]) => {
+    const prs = [pr({ number: 50, mergeCommit: { oid: "1".repeat(40) } })];
+    const commits = [commit(nachricht(...zeilen), MERGED, "1".repeat(40))];
+    return roh.bewertePrs({ prs, commits, ci: {}, festgefahren: {}, jetzt: SPAETER, konfigZeilen: Z }).zeilen[0].reviewOverride;
+  };
+  test("aktive Review-Override-Zeile des Projekt-Präfixes: true", () => {
+    assert.equal(von(`${Z.reviewOverride}: #268 Freigabe der Maintainerin`), true);
+  });
+  test("ohne Zeile, mit fremdem Präfix oder widerrufen: false", () => {
+    assert.equal(von(), false);
+    assert.equal(von("XX-Review-Override: #268 Freigabe"), false);
+    assert.equal(von(`${Z.reviewOverride}: #268 Freigabe`, `${Z.reviewOverride}: #268 entfällt`), false);
   });
 });
 
