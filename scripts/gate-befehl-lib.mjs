@@ -13,16 +13,20 @@ export const STANDARD_BEFEHLE = Object.freeze({
   coverage: "npm run test:coverage",
   testGezielt: "npx vitest run",
   mutation: null, // opt-in (factory#299): null = nicht eingerichtet
+  e2e: null, // opt-in (factory#246): null = nicht eingerichtet; gehört zum Block `e2e` der Config
 });
 
 export const GATE_BEFEHL_NAMEN = Object.freeze(Object.keys(STANDARD_BEFEHLE));
 
 /** Art des Prüflaufs je Gate-Befehl (Werkzeugmessung zählt `voll`/`gezielt`; null = kein Prüflauf); Schlüssel = `GATE_BEFEHL_NAMEN`. */
-export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null, mutation: null });
+export const PRUEFLAUF_ART = Object.freeze({ install: null, verify: "voll", verifyKompakt: "voll", verifyChanged: "gezielt", coverage: null, testGezielt: null, mutation: null, e2e: null });
 
 /** Adapter-Vertrag Mutation (factory#299): Umgebungsvariablen, über die `node scripts/mutation-lauf.mjs` Eingabe (Zeilenbereiche als JSON) und Ausgabe (Bericht) übergibt. */
 export const MUTATION_UMGEBUNG = Object.freeze({ bereiche: "FACTORY_MUTATION_BEREICHE", bericht: "FACTORY_MUTATION_BERICHT" });
 const MUTATION_NAME = "mutation";
+
+/** Adapter-Vertrag e2e-Gate-Profil (factory#246): Umgebungsvariable, über die die CI-Matrix den Browser-Namen an `befehle.e2e` übergibt. */
+export const E2E_UMGEBUNG = Object.freeze({ browser: "FACTORY_E2E_BROWSER" });
 
 /** Der einzige Name, der Pfade annimmt; sie werden in doppelten Anführungszeichen an die Befehlszeile angehängt. */
 export const PFAD_NAME = "testGezielt";

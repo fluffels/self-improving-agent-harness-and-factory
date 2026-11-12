@@ -1,11 +1,12 @@
 // Form-Prüfer der Blöcke der Projekt-Config (factory#162 L22): reine Funktionen `pruefeX(wert) → Fehlerliste` für struktur, sprache, ausnahmen, datengroesse, gates, factoryLinks, labels, skills,
 // berechtigungen, sandbox und die Literal-Objekte. `projekt-config-lib.mjs` importiert sie (`pruefeProjektConfig`, Accessoren); dieses Modul importiert nichts aus ihr (Blatt, kein Zyklus).
-// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
+// Nur Blatt-Importe: `regex-lib.mjs` (nur Builtins), `relativ-pfad.mjs` (importfrei), `pfad-glob.mjs` (nur relativ-pfad), `quellwurzeln-lib.mjs` (nur Builtins, pfad-glob und relativ-pfad), `modul-wahl-lib.mjs` (importfrei, `NAME_MUSTER`) und `spezifikation-lib.mjs` (zieht `markdown.mjs` und `repo-form.mjs`, nur Builtins).
 import { istRelativPosix } from "./relativ-pfad.mjs";
 import { GATE_FORM } from "./regex-lib.mjs";
 import { globMaengel } from "./pfad-glob.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { endungenMaengel, quellenMaengel } from "./quellwurzeln-lib.mjs";
+import { NAME_MUSTER } from "./modul-wahl-lib.mjs";
 
 export const istText = (v) => typeof v === "string" && v.trim() !== "";
 export const istObjekt = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -288,4 +289,28 @@ export function pruefeLiterale(wert, schluessel) {
   if (wert[schluessel] === undefined) return [];
   if (!istObjekt(wert[schluessel])) return [`${schluessel} muss ein Objekt (Name → String) sein`];
   return Object.entries(wert[schluessel]).filter(([, lit]) => !istText(lit)).map(([name]) => `${schluessel}.${name} muss ein nicht-leerer String sein`);
+}
+
+/** Pur: prüft das optionale e2e-Gate-Profil (factory#246): Block `e2e` mit der Liste `browser` und `befehle.e2e` gehören zusammen; fehlen beide, ist nichts zu prüfen (kein Profil, keine Meldung). */
+export function pruefeE2e(e2e, befehle) {
+  const hatBefehl = istObjekt(befehle) && befehle.e2e !== undefined;
+  if (e2e === undefined) return hatBefehl ? ["befehle.e2e ist gesetzt, aber der Block e2e fehlt.\nFix: den Block e2e mit der Liste browser ergänzen oder befehle.e2e entfernen."] : [];
+  if (!istObjekt(e2e)) return ["e2e muss ein Objekt mit der Liste browser sein.\nFix: e2e als { \"browser\": [\"<name>\"] } schreiben."];
+  const fehler = Object.keys(e2e).filter((k) => k !== "browser").map((k) => `e2e.${k} ist kein bekannter Schlüssel (erlaubt: browser).\nFix: den Schlüssel entfernen.`);
+  fehler.push(...browserMaengel(e2e.browser));
+  if (!hatBefehl || !istText(befehle.e2e)) fehler.push("e2e braucht befehle.e2e als nicht-leere Befehlszeile.\nFix: befehle.e2e setzen (der Befehl liest den Browser aus FACTORY_E2E_BROWSER) oder den Block e2e entfernen.");
+  return fehler;
+}
+
+/** Pur: Formfehler der Liste `e2e.browser` (nicht leer, Namen nach `NAME_MUSTER`, ohne Doppelte). */
+function browserMaengel(liste) {
+  const fix = "\nFix: e2e.browser als nicht-leere Liste kleingeschriebener Namen angeben (z. B. [\"a\", \"b\"]).";
+  if (!Array.isArray(liste) || liste.length === 0) return [`e2e.browser muss eine nicht-leere Liste von Browser-Namen sein.${fix}`];
+  const gesehen = new Set();
+  return liste.flatMap((n, i) => {
+    if (typeof n !== "string" || !NAME_MUSTER.test(n)) return [`e2e.browser[${i}] muss ein Name aus Kleinbuchstaben, Ziffern und - sein (${JSON.stringify(n)}).${fix}`];
+    if (gesehen.has(n)) return [`e2e.browser enthält „${n}“ doppelt.${fix}`];
+    gesehen.add(n);
+    return [];
+  });
 }
