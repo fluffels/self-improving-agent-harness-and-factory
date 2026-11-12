@@ -8,7 +8,7 @@ name: Alarm bei rotem main
 # garantiert oben.
 #
 # `needs` wirkt nur innerhalb eines Workflows: jeder Workflow, dessen roter Lauf auf main alarmieren soll, ruft diesen Workflow mit eigenem Job auf (der Doctor-Punkt
-# "Sammel-Check" prüft das für die Workflows aus `sammelChecks` der Projekt-Config). Aufruf (der Sammel-Job ist der Job, der per needs an allen anderen hängt):
+# "Sammel-Check" prüft das für die Workflows aus `sammelChecks` der Projekt-Config). Aufruf (der Sammel-Job ist der Job, der per needs an allen anderen hängt, außer an Jobs, die selbst an ihm hängen; er läuft mit `!cancelled()` und wird rot bei einem roten oder abgebrochenen Bedarfsjob):
 #
 #   alarm-rot-main:
 #     needs: [<sammel-job>]
