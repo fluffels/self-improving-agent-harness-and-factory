@@ -25,7 +25,7 @@
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
  *  - R6 greift nur bei explizitem Lens-Typ und ableitbarer Nummer: der `general-purpose`-Fallback und ein Auftrag ohne Ticketbezug bleiben offen (fail-open); die Messung (`kontext-treiber`, `lauf-ergebnis`) meldet ein solches Ticket als ungültig. Ein gefälschter Patch-Pfad wählt nur den Arm (Messung), keine Rechte: Tools, Hooks und deny sind in beiden Armen gleich.
- *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config trägt; ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
+ *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config am Wortanfang trägt (Lookbehind, hält die Suche linear); ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
@@ -82,7 +82,7 @@ const HINWEIS =
  *  Ein Platzhalter nach dem Buchstaben (`-lens-r<runde>`) zählt wie eine Ziffer; die erlaubten Endungen stehen nur in `lensNameKern`. Pure. */
 function unbekannteLensEndung(text, namen) {
   const wt = escapeRegex(namen.praefixe.worktree);
-  const segmente = text.matchAll(new RegExp(String.raw`${wt}(?:\d+|<[^<>\s]*>|[a-z][a-z0-9]*(?:-(?!lens-[a-z](?:\d|<))[a-z0-9]+)*)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
+  const segmente = text.matchAll(new RegExp(String.raw`(?<![a-z0-9-])${wt}(?:\d+|<[^<>\s]*>|[a-z][a-z0-9]*(?:-(?!lens-[a-z](?:\d|<))[a-z0-9]+)*)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
   const bekannt = new RegExp(namen.lensNameKern);
   for (const [segment] of segmente) {
     if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
