@@ -29,7 +29,7 @@
  *
  * Required-Check-Schutz (factory#375 L50): ein schreibender Aufruf auf `…/statuses/<sha>` oder `…/check-runs[/<id>]` fragt ebenfalls (ein Agent
  * könnte sonst einen Required Check grün melden); `…/check-runs/<id>/rerequest` und Lesezugriffe laufen durch. Der laufzeitneutrale Riegel ist
- * der `integration_id`-Pin im Ruleset (Doctor-Punkt Required-Check-Pin); Codex hat diesen Hook nicht.
+ * der `integration_id`-Pin im Ruleset (Doctor-Punkt Required-Check-Pin). Unter Codex wirkt der Guard über `codex-hook-lib.mjs` (aus ask wird Deny).
  *
  * Bewusste Grenzen:
  *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
@@ -41,7 +41,11 @@
  *    (Blocker-Maßstab, Factory-Seite [docs/agent-harness.md §4](../docs/agent-harness.md#4-die-sichere-autonomie-schleife)). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
  *  - Required-Check-Schutz: nicht erkannt werden die GraphQL-Mutationen `createCheckRun`/`updateCheckRun`, ein abschließender `/` nach `check-runs` und eine abweichende Groß-/Kleinschreibung des Pfads;
  *    der wirksame Riegel ist der `integration_id`-Pin im Ruleset.
- *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
+ *  - Destruktive gh-Unterbefehle (factory#397): die geschlossene Liste `GH_DESTRUKTIV` (gleich den ask/deny-`gh`-Regeln der settings.json, Sync-Wächter
+ *    test/harness/gh-guard-unterbefehle.test.ts) fragt an jeder Stelle außerhalb von Quotes, auch hinter `env`, Zuweisung, Pfad (`/usr/bin/gh`), Wrapper
+ *    und Interpreter-String; die wörtlichen Präfix-Regeln der settings.json fangen diese Formen nicht. Nicht erkannt: gequoteter Kommandoname
+ *    (`'gh' issue delete`), zerstückelte Wörter (`g""h`), Optionen oder Zeilenfortsetzung zwischen den Unterbefehl-Wörtern (`gh issue -R o/r delete`), Skriptdateien, `node -e`, Aliase.
+ *    Auch `gh repo delete` (in settings.json `deny`) fragt hier nur (`ask`, der Guard sagt nie `deny`); unter Codex wird daraus Deny.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
@@ -106,8 +110,16 @@ const STATUS_GRUND = "setzt einen Commit-Status oder Check-Lauf (könnte einen R
 const ANLEGE_WEG = "neue Tickets nur über `node scripts/spezifikation.mjs anlegen` (Position mit `--nach <nr> --weil \"<grund>\"` oder `--notfall <art>`)";
 /** Der Endpunkt `repos/<o>/<r>/issues` selbst (auch mit `?…`, führendem `/`, Quotes), nicht `/issues/<n>/…`. */
 const ISSUES_ENDPUNKT = /^["']?\/?repos\/[^/\s'"]+\/[^/\s'"]+\/issues\/?(?:\?[^\s'"]*)?["']?$/;
+/** Zeichen vor einem Kommandowort: alles außer den Zeichen, die zu einem Pfad/Namen gehören (`~`, `:` inklusive: sonst quadratisches Backtracking bei `~/~/…`). */
+const WORTANFANG = String.raw`(^|[^\w.:~\\/-])`;
 /** Das Kommando `gh issue create` an Kommandoposition oder hinter Trennern (Text in Quotes ist maskiert). */
-const ISSUE_ANLEGEN = /(?:^|[\s(!{&;|])gh(?:\.exe)?\s+issue\s+create\b/;
+const wortFolge = (woerter) => woerter.map((w) => w.replace(" ", String.raw`\s+`)).join("|");
+const ghUnterbefehl = (woerter) => new RegExp(String.raw`${WORTANFANG}(?:[\w.:~-]*[\\/])*gh(?:\.exe)?\s+(${wortFolge(woerter)})(?![\w-])`, "i");
+/** Unumkehrbare gh-Unterbefehle (Pre-Flight-Stopp Löschen): gleich den ask/deny-`gh`-Regeln der settings.json ohne `issue create` (eigener Weg, #1693). */
+export const GH_DESTRUKTIV = Object.freeze(["issue delete", "issue transfer", "label delete", "project delete", "project item-delete", "project field-delete", "repo delete"]);
+const GH_DESTRUKTIV_TREFFER = ghUnterbefehl(GH_DESTRUKTIV);
+const GH_DESTRUKTIV_VORFILTER = new RegExp(String.raw`\b(?:${wortFolge(GH_DESTRUKTIV)})\b`, "i");
+const ISSUE_ANLEGEN = ghUnterbefehl(["issue create"]);
 const GRAPHQL_ANLEGEN = /\bcreateIssue(?=\s*\()/;
 
 /** Befehle länger als das werden nicht mehr zerlegt (Laufzeit der Hook-Prüfung): enthält er `gh api`, wird gefragt. */
@@ -202,8 +214,6 @@ function wortWert(roh) {
 /** Basisname des Kommandowortes (`/usr/bin/gh`, `'gh'`, `C:\Windows\cmd.exe`): Quotes außen entfernen, der Rest bleibt roh (ein `\` ist hier ein Pfadtrenner). */
 const kommandoName = (roh) => baseName(roh.replace(/^['"]|['"]$/g, ""));
 
-/** Zeichen vor einem Kommandowort: alles außer den Zeichen, die zu einem Pfad/Namen gehören (`~`, `:` inklusive: sonst quadratisches Backtracking bei `~/~/…`). */
-const WORTANFANG = String.raw`(^|[^\w.:~\\/-])`;
 const GH_BARE = new RegExp(String.raw`${WORTANFANG}((?:[\w.:~-]*[\\/])*gh(?:\.exe)?)\s+(?:api\b|(['"])\uE000*\3)`, "gi");
 const GH_QUOTE = /(^|[^\w])(['"])\uE000*\2\s+(?:api\b|(['"])\uE000*\3)/g;
 const GH_QUOTE_ORIGINAL = /^(['"])(?:[^'"]*[\\/])?gh(?:\.exe)?\1\s/;
@@ -415,6 +425,8 @@ function ersetzung(segment, tiefe, command) {
 /** Ein Segment bewerten: jedes offene `gh api` (Außenwirkung), dann Umwege und Ersetzungen. */
 function segmentUrteil(segment, command, tiefe) {
   const maske = ohneQuoteInhalt(segment);
+  const destruktiv = GH_DESTRUKTIV_TREFFER.exec(maske);
+  if (destruktiv) return frage(`\`gh ${destruktiv[2].replace(/\s+/g, " ")}\` ist unumkehrbar (Pre-Flight-Stopp Löschen)`, "factory#397");
   if (ISSUE_ANLEGEN.test(maske)) return frage(`\`gh issue create\` legt ein Ticket an: ${ANLEGE_WEG}`, "#1693");
   const stellen = ghStellen(segment, maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele gh-api-Aufrufe für die Textprüfung");
@@ -466,7 +478,7 @@ function bewerteIntern(command, tiefe, kontext, d) {
   dialekt = d;
   try {
     if (!command || typeof command !== "string") return { ask: false };
-    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && (/\bapi\b/.test(kontext) || /\bissue\s+create\b/.test(kontext)))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && (/\bapi\b/.test(kontext) || /\bissue\s+create\b/i.test(kontext) || GH_DESTRUKTIV_VORFILTER.test(kontext)))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
     if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
     const text = ohneDatenHeredocs(command);
     for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
