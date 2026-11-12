@@ -141,7 +141,7 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
     expect(punktFuer({ config: CONFIG, workflows: ci(GUT), vorAbbruch: true }).nichtPruefbar).toBe(true);
   });
 
-  test("ein Eintrag, der kein Objekt ist, wirft nicht (ungeprüfte Config im Vorab-Abbruch)", () => {
+  test("ein Eintrag, der kein Objekt ist, ist nicht prüfbar und wirft nicht", () => {
     for (const e of [null, "x", 3]) expect(lauf(GUT, { sammelChecks: [e] }).nichtPruefbar).toBe(true);
   });
 
@@ -149,7 +149,7 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
     const deploy = "  deploy:\n    needs: [gate]\n    runs-on: x\n  spaeter:\n    needs: [deploy]\n    runs-on: x\n";
     const p = lauf(GUT.replace(ALARM, `${deploy}${ALARM}`));
     expect(p).toEqual({ punkt: "Sammel-Check", ok: true });
-    const fehlt = lauf(GUT.replace(ALARM, `${deploy}  neu:\n    runs-on: x\n${ALARM}`));
+    const fehlt = lauf(GUT.replace(ALARM, `${deploy}  neu:\n    needs: [build]\n    runs-on: x\n${ALARM}`));
     expect(fehlt.befund).toMatch(/„neu“/);
     expect(fehlt.befund).not.toMatch(/deploy|spaeter/);
     expect(fehlt.fix).toContain("`needs: [build, audit, neu]`");

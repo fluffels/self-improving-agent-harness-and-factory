@@ -203,6 +203,23 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
     expect(lokal.log).not.toContain("z80\n");
   });
 
+  test("factory#401 L61: ohne deps.env gilt process.env (der Direktaufruf in der CI)", () => {
+    const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
+    const log: string[] = [];
+    const saved = process.env.GITHUB_ACTIONS;
+    try {
+      for (const [wert, gekuerzt] of [["true", false], ["false", true]] as const) {
+        process.env.GITHUB_ACTIONS = wert;
+        log.length = 0;
+        io.main([], { pkg: kleinesPkg, run: (j) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? lang : "" }), log: (z) => log.push(z) });
+        expect(/Zeilen gekürzt/.test(log.join("\n"))).toBe(gekuerzt);
+      }
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_ACTIONS;
+      else process.env.GITHUB_ACTIONS = saved;
+    }
+  });
+
   test("factory#401 L61: nur GITHUB_ACTIONS=true schaltet die Kürzung ab; CRLF und Leerzeilen am Ende werden normalisiert", () => {
     const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
     const rotRun = (text: string) => (j: Job) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? text : "" });

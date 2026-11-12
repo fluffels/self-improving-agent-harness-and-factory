@@ -2,7 +2,7 @@
 /* Harness-Doctor, Punkt `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job, der per `needs` an allen anderen Jobs seines Workflows hängt
  * (ein Required Check deckt so eine wechselnde Job-Menge; `needs` wirkt nur innerhalb eines Workflows), und einen Alarm-Job, der bei rotem Lauf auf main das Alarm-Issue öffnet.
  *
- *   L53 (needs-Vollständigkeit): jeder Schlüssel unter `jobs` steht in `needs` des Sammel-Jobs. Ausgenommen sind der Sammel-Job selbst und Jobs mit `uses: ./.github/workflows/alarm-rot-main.yml`.
+ *   L53 (needs-Vollständigkeit): jeder Schlüssel unter `jobs` steht in `needs` des Sammel-Jobs. Ausgenommen sind der Sammel-Job selbst, Jobs mit `uses: ./.github/workflows/alarm-rot-main.yml` und Jobs, die (auch über mehrere Stufen) selbst am Sammel-Job hängen (ein Eintrag dort wäre ein Zyklus; solche Jobs gaten den Required Check nicht).
  *   L52 (Alarm bei rotem main): es gibt einen Job mit genau diesem `uses`, dessen `needs` den Sammel-Job nennt und dessen `if` `failure()` und `github.event_name == 'push'` enthält; der Workflow läuft auf `push`.
  *
  * Gelesen wird in Blockform ohne `yaml` (`blockformJobs`); eine nicht lesbare Datei macht den Punkt nicht prüfbar. Grenzen: `if: always()` im Sammel-Job prüft der Punkt nicht; das `if` des Alarm-Jobs ist eine Textsuche (`failure() || github.event_name == 'push'` besteht), und er prüft den Auslöser `push`, nicht den Branch `main` (ein Push-Auslöser ohne `branches` ließe den Alarm auch für Feature-Branches laufen).

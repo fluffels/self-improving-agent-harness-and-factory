@@ -212,6 +212,9 @@ describe("pruefeProjektConfig", () => {
     assert.match(text([{ workflow: "ci.yml.bak", job: "g" }]), /\.workflow muss ein Dateiname/);
     assert.match(text([{ workflow: "ci.yml", job: "gate!" }]), /\.job muss eine Job-ID/);
     assert.deepEqual(mit([{ workflow: "my-ci.yml", job: "_gate" }]), []);
+    assert.match(text([{ workflow: "ciXyml", job: "g" }]), /\.workflow muss ein Dateiname/);
+    assert.match(text([{ workflow: ".yml", job: "g" }]), /\.workflow muss ein Dateiname/);
+    assert.deepEqual(mit([{ workflow: "CI_2.v1.yml", job: "Gate" }, { workflow: "b.yaml", job: "buildAll_2" }]), []);
   });
 
   test("meldestelle (factory#153): Form owner/name, Standard ist das Repo des factory-Boards", () => {
