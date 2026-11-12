@@ -33,6 +33,9 @@ export const PFAD_NAME = "testGezielt";
 /** Erlaubte Zeichen eines angehängten Pfads (keine Shell-Metazeichen, kein Leerzeichen). */
 const PFAD_MUSTER = /^[\w./\\:@+=,-]+$/;
 
+/** Anfang der Zeile, die der Gate-Befehl vor dem Lauf auf stderr druckt (`▶ Gate-Befehl <name>: <befehl>`); gate-fundquote erkennt Läufe daran. */
+export const KOPF_PRAEFIX = "▶ Gate-Befehl ";
+
 /** Flag, das nur die Befehlszeile ausgibt, statt sie zu starten. */
 export const ZEIGEN_FLAG = "--zeigen";
 
@@ -119,6 +122,6 @@ export function cli(argv, { lade, spawn, cwd, out = console.log, err = console.e
     out(befehl);
     return 0;
   }
-  err(`▶ Gate-Befehl ${name}: ${befehl}`);
+  err(`${KOPF_PRAEFIX}${name}: ${befehl}`);
   return fuehreAus(befehl, { spawn, cwd, err });
 }

@@ -104,6 +104,20 @@ describe("Einengung (--changed)", () => {
   });
 });
 
+describe("Gate-Befehl als Kettenschritt (L67)", () => {
+  test("ein Token gate-befehl:<name> läuft als node scripts/gate-befehl.mjs <name>, nicht als npm-Skript", () => {
+    const jobs: Job[] = [];
+    const r = vl.laufe({ schritte: ["lint", "gate-befehl:coverage"], run: (j) => (jobs.push(j), { status: 0, output: "" }) });
+    assert.deepEqual(jobs[0], { art: "npm", schritt: "lint" });
+    assert.deepEqual(jobs[1], { art: "node", args: ["gate-befehl", "coverage"] });
+    assert.deepEqual(r.map((x) => x.ok), [true, true]);
+  });
+  test("kuerze nennt für den Token die volle Ausgabe über den Gate-Befehl", () => {
+    const text = Array.from({ length: 400 }, (_, i) => "z" + String(i)).join("\n");
+    assert.match(vl.kuerze(text, "gate-befehl:coverage"), /volle Ausgabe: node scripts\/gate-befehl\.mjs coverage/);
+  });
+});
+
 describe("Lauf und Bericht", () => {
   const schritte = ["typecheck", "lint", "test"];
   test("alle Schritte laufen nach einem Rot weiter; roter Schritt ergibt roten Lauf", () => {

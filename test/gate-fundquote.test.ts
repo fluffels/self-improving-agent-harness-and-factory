@@ -76,11 +76,9 @@ describe("gateSatz", () => {
     const s = gf.gateSatz(echt);
     expect(s.gates).toContain("check:diffcoverage");
     expect(s.verify.length).toBeGreaterThan(0);
-    for (const g of s.gates) {
-      const befehl = /^gate-befehl:(\w+)$/.exec(g);
-      if (befehl) expect(GATE_BEFEHL_NAMEN as string[]).toContain(befehl[1]);
-      else expect(echt.scripts[g], g).toBeTypeOf("string");
-    }
+    const gateBefehle = s.gates.filter((g) => g.startsWith("gate-befehl:")).map((g) => g.slice("gate-befehl:".length));
+    for (const n of gateBefehle) expect(GATE_BEFEHL_NAMEN as string[]).toContain(n);
+    for (const g of s.gates.filter((x) => !x.startsWith("gate-befehl:"))) expect(echt.scripts[g], g).toBeTypeOf("string");
   });
   test("wirft ohne verify", () => {
     expect(() => gf.gateSatz({ name: "x", scripts: { lint: "eslint ." } })).toThrow(/verify/);
@@ -166,6 +164,25 @@ describe("befehlsform", () => {
     const t0 = Date.now();
     expect(gf.befehlsform("A=".repeat(50000) + " !").art).toBe("befehlsform");
     expect(Date.now() - t0).toBeLessThan(2000);
+  });
+});
+
+describe("Gate-Befehl-Schritt in verify:full (L67)", () => {
+  const ctxFull: Ctx = { paket: "beispiel", gates: ["lint", "gate-befehl:coverage", "check:diffcoverage"], verify: ["lint"] };
+  const voll = (...teile: string[]) => teile.join("");
+  const lauf = (text: string, fehler = false) =>
+    gf.laeufeAusTranskript(zeilen([{ command: "npm run verify:full", fehler, text: fehler ? "Exit code 1\n" + text : text }]), { sessionId: "s", liesDatei: lies, ctx: ctxFull });
+  test("die gedruckte Zeile des Gate-Befehls zählt als Gate gate-befehl:coverage", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"), kopf("check:diffcoverage"));
+    expect(erg(lauf(text)[0])).toEqual({ lint: "gruen", "gate-befehl:coverage": "gruen", "check:diffcoverage": "gruen" });
+  });
+  test("Negativ: ohne die gedruckte Zeile fehlt das Gate (nicht erreicht oder nicht gezählt)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("nicht-erreicht");
+  });
+  test("Befund: ein rotes Coverage wird vom Folgekopf test:coverage als grün gezählt (bekannte Grenze, Sammelzeile)", () => {
+    const text = voll(kopf("verify:full"), kopf("verify"), kopf("lint"), "▶ Gate-Befehl coverage: npm run test:coverage\n", kopf("test:coverage"));
+    expect(erg(lauf(text, true)[0])["gate-befehl:coverage"]).toBe("gruen");
   });
 });
 

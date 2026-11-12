@@ -1,8 +1,17 @@
 // Kein Shebang (siehe docs-gen.mjs). npm-Ketten (#1428 Z11, vorher in markdown.mjs): `a && b`-Ketten aus package.json zerlegen und auflösen.
+// Ein Schritt `node scripts/gate-befehl.mjs <name>` wird zum Token `gate-befehl:<name>` (kein npm-Alias nötig); Grenze: ein npm-Skript, das wörtlich so heißt, ist von dem Token nicht zu unterscheiden.
 // Gemeinsam genutzt von Gate-Tabelle, Diagramm-Zahlen, Doku-Drift-Wächter und verify-lauf. Reines Node-Modul (nur das Blatt `regex-lib.mjs`).
 import { SCHRITT_NAME } from "../regex-lib.mjs";
 
-/** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
+/** Präfix des Kettenschritt-Tokens für einen Aufruf des Gate-Befehls (`gate-befehl:<name>`). */
+export const GATE_BEFEHL_TOKEN = "gate-befehl:";
+/** Ganzer Schritt `node scripts/gate-befehl.mjs <name>` ohne Argumente und Shell-Zeichen; ob der Name bekannt ist, prüft erst der Gate-Befehl zur Laufzeit (dieses Modul bleibt Blatt). */
+const GATE_BEFEHL_SCHRITT = /^node\s+scripts\/gate-befehl\.mjs\s+([A-Za-z]\w*)$/;
+
+/** Name des Gate-Befehls aus einem Token `gate-befehl:<name>` oder `null`. */
+export const gateBefehlName = (schritt) => (schritt.startsWith(GATE_BEFEHL_TOKEN) ? schritt.slice(GATE_BEFEHL_TOKEN.length) : null);
+
+/** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, `node scripts/gate-befehl.mjs X` → `gate-befehl:X`, sonst der Rohbefehl. */
 export function parseChain(script) {
   return script
     .split("&&")
@@ -12,6 +21,8 @@ export function parseChain(script) {
       // Argumente hinter `--` (`npm run X -- --flag`) gehören nicht zum Schrittnamen (Z5g).
       const run = /^npm run ([^\s]+)(?:\s+--(?:\s.*)?)?$/.exec(step);
       if (run) return run[1];
+      const gate = GATE_BEFEHL_SCHRITT.exec(step);
+      if (gate) return GATE_BEFEHL_TOKEN + gate[1];
       return /^npm test(?:\s+--(?:\s.*)?)?$/.test(step) ? "test" : step;
     });
 }
@@ -55,7 +66,7 @@ export function ketteAusPackage(pkg, ketten, kette) {
   if (typeof scripts[kette] !== "string") throw new Error(`package.json hat kein Skript "${kette}"`);
   const schritte = kettenSchritte(scripts, ketten, kette);
   for (const s of schritte) {
-    if (!SCHRITT_RE.test(s)) throw new Error(`Schritt "${s}" der ${kette}-Kette ist kein einfaches npm-Skript (Shell-Zeichen?)`);
+    if (!SCHRITT_RE.test(s)) throw new Error(`Schritt "${s}" der ${kette}-Kette ist kein einfaches npm-Skript und kein Aufruf des Gate-Befehls (Shell-Zeichen?)`);
   }
   return schritte;
 }

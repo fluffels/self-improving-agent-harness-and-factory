@@ -110,7 +110,7 @@ describe("pruefeE2e nennt den Variablennamen aus E2E_UMGEBUNG (L57)", () => {
   test("die Meldung trägt den Namen aus E2E_UMGEBUNG.browser", async () => {
     const m = (await import("../scripts/projekt-config-bloecke.mjs")) as unknown as Pruefer;
     const meldung = m.pruefeE2e({ browser: ["a"] }, undefined).join("\n");
-    assert.ok(meldung.includes(E2E_UMGEBUNG.browser));
+    assert.ok(meldung.includes((E2E_UMGEBUNG as unknown as { browser: string }).browser));
   });
   test("ein anderer Wert in E2E_UMGEBUNG erscheint in der Meldung (kein Literal im Prüfer)", async () => {
     vi.resetModules();
