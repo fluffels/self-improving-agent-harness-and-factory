@@ -128,7 +128,7 @@ describe("pruefe: blocker-dahinter (factory#407)", () => {
     expect(klassen(lauf({ blockedBy: { nodes: [null, { number: 7, state: "OPEN", url: url(7) }] } }, [[item(1), item(7)]]))).toEqual(["1:blocker-dahinter"]);
   });
   test.each([
-    ["Bindestrich und Punkt in Owner und Repo", url(7, "my-org.x/sih-tool.y"), "my-org.x/sih-tool.y", 1],
+    ["Bindestrich und Punkt in Owner und Repo", url(7, "my-org.x/tool-a.y"), "my-org.x/tool-a.y", 1],
     ["Schrägstrich am Ende", url(7) + "/", "o/r", 1],
     ["Anhang hinter der Nummer", url(7) + "/x", "o/r", 0],
   ])("native url: %s", (_n, u, repo, erwartet) => {
