@@ -40,6 +40,19 @@ describe("Langfuse-Punkt (langfusePunkt)", () => {
     const x = punkt({ status: 1, stdout: "kein json", stderr: "Boom" });
     expect(x.nichtPruefbar).toBe(true);
     expect(x.fix).toContain("node scripts/langfuse-vorbedingung.mjs --json");
+    expect(x.befund).toContain("(Boom)");
+  });
+  test("unlesbar ohne stderr oder ohne Ergebnis: nicht prüfbar, ohne Klammer und ohne `undefined`", () => {
+    const x = punkt({ status: 1, stdout: "kein json" });
+    expect(x.nichtPruefbar).toBe(true);
+    expect(x.befund).not.toContain("(");
+    expect(x.befund).not.toContain("undefined");
+    expect((raw as (a: unknown) => Ergebnis)(undefined).nichtPruefbar).toBe(true);
+  });
+  test("Objekt ohne erreichbar-Feld: Lücke (nur `true` gilt als erreichbar)", () => {
+    const x = json({});
+    expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBeUndefined();
   });
   test("leere Ausgabe: nicht prüfbar", () => {
     expect(punkt({ status: null }).nichtPruefbar).toBe(true);

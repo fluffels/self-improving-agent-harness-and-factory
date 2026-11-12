@@ -11,7 +11,7 @@ const FIX_JSON = "`node scripts/langfuse-vorbedingung.mjs --json` prüfen";
 export function langfusePunkt(lf) {
   let urteil;
   try {
-    urteil = JSON.parse(String(lf?.stdout ?? ""));
+    urteil = JSON.parse(lf.stdout); // fehlt `lf` oder `stdout`, wirft das (catch)
   } catch {
     urteil = null;
   }

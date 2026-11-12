@@ -120,12 +120,11 @@ describe("Required-Check-Pin (factory#362 L48): integration_id je Required Check
   const mit = (checks: unknown[]) => live({ rules: [{ type: "required_status_checks", parameters: { required_status_checks: checks } }] });
   const pin = (antwort: unknown) => punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => antwort }).find((e) => e.punkt === "Required-Check-Pin");
   test("ohne integration_id: Lücke mit den Kontexten und Fix-Text", () => {
-    const x = pin(mit([{ context: "A" }, { context: "B", integration_id: 15368 }, { context: "C", integration_id: null }]));
+    const x = pin(mit([{ context: "Zeta" }, { context: "Beta", integration_id: 15368 }, { context: "Gamma", integration_id: null }, { context: "Alpha" }]));
     expect(x?.ok).toBe(false);
     expect(x?.nichtPruefbar).toBeUndefined();
-    expect(x?.befund).toContain("A");
-    expect(x?.befund).toContain("C");
-    expect(x?.befund).not.toContain("B");
+    expect(x?.befund).toContain("Alpha, Gamma, Zeta");
+    expect(x?.befund).not.toContain("Beta");
     expect(x?.fix).toContain("integration_id");
     expect(x?.fix).toContain("check-runs");
     expect(x?.fix).toContain("Pre-Flight");
@@ -145,6 +144,9 @@ describe("Required-Check-Pin (factory#362 L48): integration_id je Required Check
   test("andere Regel mit gleichnamigem Parameter zählt nicht", () => {
     const fremd = { type: "code_scanning", parameters: { required_status_checks: [{ context: "X" }] } };
     expect(pin(live({ rules: [fremd, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "A", integration_id: 1 }] } }] }))?.ok).toBe(true);
+  });
+  test("Antwort ist kein Objekt: Pin-Punkt nicht prüfbar", () => {
+    expect(pin(null)?.nichtPruefbar).toBe(true);
   });
   test("Lesefehler: Pin-Punkt nicht prüfbar", () => {
     const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => { throw new Error("HTTP 403"); } }).find((e) => e.punkt === "Required-Check-Pin");
