@@ -338,6 +338,6 @@ describe("Tracing-Ausfallstopp für spawn_agent (factory#365)", () => {
     expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: false }) }))).toContain("Health ohne Urteil");
     expect(grund(await lauf(spawn, { health: () => Promise.resolve(undefined) }))).toContain("Health ohne Urteil");
     expect(grund(await lauf(spawn, { health: () => Promise.resolve({ ok: "ja" }) }))).toContain("Tracing-Ausfallstopp");
-    expect(grund(await lauf(spawn, { health: () => Promise.reject("textwurf") }))).toContain("textwurf");
+    expect(grund(await lauf(spawn, { health: () => Promise.resolve().then(() => { throw JSON.parse(`"textwurf"`); }) }))).toContain("textwurf");
   });
 });

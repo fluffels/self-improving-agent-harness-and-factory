@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 const spawnMock = vi.hoisted(() => vi.fn());
 const echtSpawn = vi.hoisted(() => ({ fn: undefined as unknown as typeof import("node:child_process").spawnSync }));
 vi.mock("node:child_process", async (orig) => { const echt = await orig<typeof import("node:child_process")>(); echtSpawn.fn = echt.spawnSync; return { ...echt, spawnSync: spawnMock }; });
-const realSpawn: typeof import("node:child_process").spawnSync = (...a: Parameters<typeof import("node:child_process").spawnSync>) => echtSpawn.fn(...a);
+const realSpawn = (cmd: string, args: string[], opt: import("node:child_process").SpawnSyncOptionsWithStringEncoding) => echtSpawn.fn(cmd, args, opt);
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -281,7 +281,7 @@ test("Tracing-Standardwerte: global fetch, process.env, Home für die Plugin-Opt
   }
 });
 test("Tracing: Nicht-Error-Wurf der Prüfung erscheint im Mangel", async () => {
-  const bos = new Proxy({}, { get() { throw "textwurf"; } });
+  const bos = new Proxy({}, { get() { throw JSON.parse(`"textwurf"`); } });
   const m = await p.tracingMaengel({ env: bos, fetchImpl: () => Promise.resolve({ status: 200 }) });
   expect(m).toHaveLength(1); expect(m[0]).toContain("Health-Prüfung gescheitert (textwurf)");
 });
