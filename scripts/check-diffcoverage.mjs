@@ -39,6 +39,15 @@ import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides,
 // Die Schichtdaten sind CommonJS (der dependency-cruiser-Config `require`t sie) und liegen im Projekt: der Pfad steht in
 // scripts/docs-gen/config.json › schichten.layers, ein Kern-Modul importiert sie nie statisch (Kern-Reinheit, ADR 0022 F7).
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+/** Fix-Zeile bei kaputten Schichtdaten: Aufbau des Modells in `scripts/schichten-kern.cjs`, Beschreibung der Schichtdatei in `docs/erstbezug.md` (nur Kern-Pfade, Bezieher haben die Vorlage des Quellprojekts nicht). */
+export const SCHICHT_FIX = "in scripts/docs-gen/config.json unter schichten.layers den Pfad der Schichtdatei eintragen (Aufbau: scripts/schichten-kern.cjs, Beschreibung: docs/erstbezug.md) und die Datei dort anlegen";
+
+/** Die Schicht-Schlüssel und ihr Diff-Floor (Prozent oder `null` = nur berichten); ein Schlüssel mit Floor muss in `LAYERS` der Schichtdatei stehen. */
+const FLOOR_JE_SCHLUESSEL = { DOMAIN: 90, APPLICATION: 80, PRESENTATION: null, ENTRY: null };
+
+/** Fehler der Schichtdaten zur Laufzeit (fremde Schicht-ID): `main` beendet damit mit Exit 2 statt mit einem Stacktrace. */
+export class SchichtFehler extends Error {}
+
 /**
  * Lädt die Schichtdaten unter `wurzel` (Slash am Ende): `{ LAYERS, layerOf }` oder `{ fehler }`, nie ein Wurf (ein Stacktrace beim Import sagt dem Bezieher nichts).
  * Prüft die Config, den Pfad `schichten.layers` und die beiden Exporte der Schichtdatei.
@@ -54,6 +63,8 @@ export function ladeSchichten(wurzel = WURZEL) {
   try {
     const { LAYERS, layerOf } = createRequire(import.meta.url)(`${wurzel}${pfad}`);
     if (typeof LAYERS !== "object" || LAYERS === null || typeof layerOf !== "function") return { fehler: `${pfad} exportiert LAYERS und layerOf nicht` };
+    const fehlt = Object.keys(FLOOR_JE_SCHLUESSEL).find((k) => FLOOR_JE_SCHLUESSEL[k] !== null && LAYERS[k] === undefined);
+    if (fehlt !== undefined) return { fehler: `${pfad}: LAYERS hat den Schlüssel ${fehlt} nicht (Floor ${FLOOR_JE_SCHLUESSEL[fehlt]} %); Fix: ${SCHICHT_FIX}` };
     return { LAYERS, layerOf };
   } catch (e) {
     return { fehler: `${pfad} nicht ladbar (${e instanceof Error ? e.message : String(e)})` };
@@ -78,12 +89,7 @@ export const LCOV_PATH = join(WURZEL, ...STANDARD_BERICHTE[0].pfad.split("/"));
  *  bei 100 %, Präsentation/Einstieg bei 0-47 %. Die 90/80 liegen bewusst unter dem Ist —
  *  Luft für defensive Guard-Zweige, sonst erzwingt jede Kleinigkeit ein Override (#395).
  *  RATCHET: nur per reviewtem Commit ANHEBEN, nie senken, um Rot grün zu bekommen. */
-export const LAYER_DIFF_FLOORS = {
-  [LAYERS.DOMAIN]: 90,
-  [LAYERS.APPLICATION]: 80,
-  [LAYERS.PRESENTATION]: null,
-  [LAYERS.ENTRY]: null,
-};
+export const LAYER_DIFF_FLOORS = Object.fromEntries(Object.entries(FLOOR_JE_SCHLUESSEL).filter(([k]) => LAYERS[k] !== undefined).map(([k, floor]) => [LAYERS[k], floor]));
 
 /** Geänderte Zeilen, die ausgeführt wurden (DA > 0), aber mindestens einen ungenommenen Zweig tragen
  *  (z. B. ein `catch` mit Weiterwurf auf derselben Zeile): die Zeilen-Coverage zählt sie als getestet,
@@ -154,7 +160,9 @@ export function evaluateByLayer(changed, lcov, optionen = {}) {
       missing.push(path);
       continue;
     }
-    const bucket = buckets[layerOf(path)];
+    const schicht = layerOf(path);
+    const bucket = buckets[schicht];
+    if (bucket === undefined) throw new SchichtFehler(`Schicht-ID ${JSON.stringify(schicht)} für ${path} steht nicht in LAYERS (${Object.values(LAYERS).join(", ")}); Fix: ${SCHICHT_FIX}`);
     const { total, covered, uncovered } = zeilenBilanz(lines, record);
     if (total === 0) continue;
     bucket.total += total;
@@ -347,7 +355,7 @@ function ladeConfigOderBeende(red) {
 
 function main() {
   if (SCHICHTEN.fehler !== undefined) {
-    console.error(`✖ check:diffcoverage: ${SCHICHTEN.fehler}\nFix: in scripts/docs-gen/config.json unter schichten.layers den Pfad der Schichtdatei eintragen (Vorlage: scripts/layers.cjs) und die Datei dort anlegen`);
+    console.error(`✖ check:diffcoverage: ${SCHICHTEN.fehler}\nFix: ${SCHICHT_FIX}`);
     process.exit(AUFRUF_EXIT);
   }
   // Die Commit-Zeilen kommen aus der Projekt-Config; ein Ladefehler endet mit der Meldung des Laders (Pfad, Schlüssel, Fix:).
@@ -358,7 +366,14 @@ function main() {
   const { red, green, dim } = colors;
 
   const { quelle, berichte } = ladeConfigOderBeende(red);
-  const r = checkDiffCoverage({ zeilen, quelle, berichte });
+  let r;
+  try {
+    r = checkDiffCoverage({ zeilen, quelle, berichte });
+  } catch (e) {
+    if (!(e instanceof SchichtFehler)) throw e;
+    console.error(red(`✖ check:diffcoverage: ${e.message}`));
+    process.exit(AUFRUF_EXIT);
+  }
 
   if (r.skipped) {
     console.log(dim("• check:diffcoverage übersprungen — keine Vergleichs-Basis (flacher Checkout / nichts gegenüber main)."));

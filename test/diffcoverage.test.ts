@@ -11,7 +11,7 @@
  */
 import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -976,7 +976,8 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
     assert.ok(!SCHICHT_FIX.includes("scripts/layers.cjs"), SCHICHT_FIX);
     const manifest = JSON.parse(readFileSync(new URL("../.factory/besitz.json", import.meta.url), "utf8")) as { eintraege: { pfad: string; ring: string }[] };
     const kern = new Set(manifest.eintraege.filter((e) => e.ring === "kern").map((e) => e.pfad));
-    const pfade = SCHICHT_FIX.match(/scripts\/[\w./-]+\.(?:cjs|mjs|json)/g) ?? [];
+    // config.json gehört dem Projekt (es trägt dort den Pfad ein), die anderen genannten Dateien muss ein Bezieher per Sync haben.
+    const pfade = (SCHICHT_FIX.match(/scripts\/[\w./-]+\.(?:cjs|mjs|json)/g) ?? []).filter((p) => p !== "scripts/docs-gen/config.json");
     assert.ok(pfade.length > 0);
     for (const p of pfade) assert.ok(kern.has(p), `${p} ist kein Kern-Besitz`);
   });
@@ -989,6 +990,7 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
     const tmp = mkdtempSync(join(tmpdir(), "diffcov-fremd-"));
     try {
       cpSync(fileURLToPath(new URL("../scripts", import.meta.url)), join(tmp, "scripts"), { recursive: true });
+      cpSync(fileURLToPath(new URL("../.factory", import.meta.url)), join(tmp, ".factory"), { recursive: true });
       writeFileSync(join(tmp, "scripts", "fremd.cjs"), "const L = require('./layers.cjs');\nmodule.exports = { LAYERS: L.LAYERS, layerOf: () => 'fremd' };\n");
       const cfgPfad = join(tmp, "scripts", "docs-gen", "config.json");
       const cfg = JSON.parse(readFileSync(cfgPfad, "utf8")) as { schichten: { layers: string } };
@@ -997,8 +999,23 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
       const skript = pathToFileURL(join(tmp, "scripts", "check-diffcoverage.mjs")).href;
       const probe = `import(${JSON.stringify(skript)}).then((m) => { try { m.evaluateByLayer(new Map([["scripts/a.mjs", new Set([1])]]), new Map([["scripts/a.mjs", new Map([[1, 1]])]]), { quelle: { wurzeln: ["scripts"], endungen: [".mjs"] } }); console.log("kein Wurf"); } catch (e) { console.log("WURF " + e.message); } });`;
       const f = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", cwd: tmp });
-      assert.match(f.stdout, /^WURF .*scripts\/a\.mjs.*"fremd"/, f.stdout + f.stderr);
+      assert.match(f.stdout, /^WURF Schicht-ID "fremd" für scripts\/a\.mjs steht nicht in LAYERS/, f.stdout + f.stderr);
       assert.ok(f.stdout.includes(SCHICHT_FIX), f.stdout);
+      // CLI: ein echter Diff mit einer Datei in der fremden Schicht endet mit Exit 2, ✖-Zeile und Fix, ohne Stacktrace.
+      const git = (...a: string[]) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...a], { cwd: tmp, encoding: "utf8" });
+      git("init", "-q");
+      git("add", "-A");
+      git("commit", "-q", "-m", "basis");
+      writeFileSync(join(tmp, "scripts", "a.mjs"), "export const a = 1;\n");
+      mkdirSync(join(tmp, "coverage"), { recursive: true });
+      writeFileSync(join(tmp, "coverage", "lcov.info"), "TN:\nSF:scripts/a.mjs\nDA:1,1\nend_of_record\n");
+      git("add", "-A");
+      git("commit", "-q", "-m", "aenderung");
+      const cli = spawnSync(process.execPath, [join(tmp, "scripts", "check-diffcoverage.mjs")], { encoding: "utf8", cwd: tmp, env: { ...process.env, FACTORY_DIFF_BASE: "HEAD~1" } });
+      assert.equal(cli.status, 2, cli.stdout + cli.stderr);
+      assert.match(cli.stderr, /✖ check:diffcoverage: Schicht-ID "fremd" für scripts\/a\.mjs/);
+      assert.ok(cli.stderr.includes(`Fix: ${SCHICHT_FIX}`), cli.stderr);
+      assert.ok(!/\n\s+at /.test(cli.stderr), cli.stderr);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
