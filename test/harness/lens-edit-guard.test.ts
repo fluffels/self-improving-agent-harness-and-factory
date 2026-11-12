@@ -197,6 +197,8 @@ describe("Hintergrund-Läufe (factory#413 L4): Bash und PowerShell der Lens lauf
   test("bewerteLensBefehl: ohne Befehl und ohne Muster null", () => {
     expect(G.bewerteLensBefehl({}, "Bash")).toBeNull();
     expect(G.bewerteLensBefehl(undefined, "Bash")).toBeNull();
+    expect(G.bewerteLensBefehl({ command: 42 }, "Bash")).toBeNull();
+    expect(G.bewerteLensBefehl({ command: "& x" })?.deny).toBe(true); // Standard-Tool Bash: kein Aufrufoperator
   });
 });
 
