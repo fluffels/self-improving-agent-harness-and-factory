@@ -256,7 +256,7 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
   ])("harmlose Form %s → keine Ausgabe", async (command) => {
     expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).toBeNull();
   });
-  test.each(["A=1 git push --force", "rm.EXE -rf x", "_a1=x curl http://x"])("Wrapper-Form %s (Ein-Buchstaben-Variable, .EXE in Großschreibung) → Deny", async (command) => {
+  test.each(["A=1 git push --force", "rm.EXE -rf x", "_a1=x curl http://x", "foo=1 curl http://x", "MY_VAR=1 curl http://x", "MY_VAR=1 git push --force"])("Wrapper-Form %s (Ein-Buchstaben-Variable, .EXE in Großschreibung) → Deny", async (command) => {
     expect(await lauf(nutzlast("Bash", { command }), WRAPPER_REGELN)).not.toBeNull();
   });
   test.each([
@@ -280,7 +280,7 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln("Bash(curl:*)"))).not.toBeNull();
     for (const r of ["xBash(curl:*)", "Bash(curl:*)x", "Read(curl:*)"]) expect(await lauf(nutzlast("Bash", { command: "curl x" }), regeln(r)), r).toBeNull();
   });
-  test("varianten: Rekursion höchstens Tiefe 3,Interpreter-String ohne Zerlegung ergibt keine Zusatzform", () => {
+  test("varianten: Rekursion höchstens Tiefe 3, Interpreter-String ohne Zerlegung ergibt keine Zusatzform", () => {
     const wrap = (s: string) => `bash -c "${s.replace(/[\\"]/g, "\\$&")}"`;
     const seg = ghSegmente as (c: string) => string[];
     expect(adapter.varianten(wrap(wrap(wrap("curl x"))), seg)).toContain("curl x");

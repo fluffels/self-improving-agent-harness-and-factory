@@ -250,6 +250,11 @@ describe("Sammel-Check, Ergebnisprüfung (factory#413 L6)", () => {
     ohneEnde(lauf(gate("    if: always()\n    runs-on: x  # contains(needs.a.result, 'failure')\n")));
   });
 
+  test("Kommentar-Grenze: # ohne Leerraum davor ist kein Kommentar, Tab davor schon", () => {
+    expect(lauf(gate("    if: always()\n" + RUN + "    steps:\n      - run: echo \"a#b ${{ needs.build.result }}\"\n")).ok).toBe(true);
+    ohneEnde(lauf(gate("    if: always()\n    runs-on: x\t# needs.a.result\n")));
+  });
+
   test("Fix-Text der needs-Lücke nennt die Ausnahme der Jobs, die selbst am Sammel-Job hängen", () => {
     const p = lauf(GUT.replace(BUILD, `${BUILD}  neu:\n    runs-on: x\n`));
     expect(p.fix).toContain("außer denen, die selbst am Sammel-Job hängen");
@@ -279,6 +284,7 @@ describe("blockformJobs (factory#401): der Leser stimmt mit der yaml-Bibliothek 
     expect(jobsLesen("on: [push, '']\njobs:\n  a:\n    needs: [\"\", b]\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: '    needs: ["", b]' }] });
     expect(jobsLesen("\ufeffon: push\r\njobs:\r\n  a:\r\n    needs: b\r\n")).toEqual({ ausloeser: ["push"], jobs: [{ id: "a", needs: ["b"], if: null, uses: null, text: "    needs: b" }] });
     expect(jobsLesen("on: push\njobs:\n  a:\n    # c\n# spalte 0\n\n    needs: b  # x\n    if: y\n").jobs?.[0]).toMatchObject({ needs: ["b"], if: "y", text: "    needs: b\n    if: y" });
+    expect(jobsLesen("on: push\njobs:\n  a:\n    needs: b\n   \n    if: y\n").jobs?.[0]).toMatchObject({ text: "    needs: b\n    if: y" });
     expect(jobsLesen("on: push\njobs:\n  a:\n    - x\n").fehler?.konstrukt).toBe("Liste als Job");
     expect(jobsLesen("on: push\njobs:\n  - a\n").fehler?.konstrukt).toBe("Liste als jobs");
     expect(jobsLesen("jobs:\n  a:\n    needs: x\n").ausloeser).toEqual([]);
