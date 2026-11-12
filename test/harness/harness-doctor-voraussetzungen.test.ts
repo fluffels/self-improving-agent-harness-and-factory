@@ -53,7 +53,8 @@ const secretsUndVars = (text: string): { art: string; name: string }[] =>
 const labelLiterale = (text: string): string[] => {
   const aus: string[] = [];
   for (const m of text.matchAll(/--(?:add-)?label[ =]+["']?([^\s"'$\\]+)["']?/g)) aus.push(...m[1].split(","));
-  for (const m of text.matchAll(/^\s*\w*LABEL\w*:\s*["']?([^\s"'$]+)["']?\s*$/gm)) if (!m[1].includes("{{")) aus.push(m[1]);
+  // `label:` ist der Input des Kern-Workflows alarm-rot-main.yml (factory#401), das Alarm-Label steht im Aufruf statt in `ALARM_LABEL`.
+  for (const m of text.matchAll(/^\s*(?:\w*LABEL\w*|label):\s*["']?([^\s"'$]+)["']?\s*$/gm)) if (!m[1].includes("{{")) aus.push(m[1]);
   return aus;
 };
 const skriptLabels = (text: string): string[] => [...text.matchAll(/"--(?:add-)?label",\s*"([^"$]+)"/g)].map((m) => m[1]);
@@ -94,7 +95,7 @@ describe("Scanner (Fixtures, nicht vakuös)", () => {
     assert.deepEqual(secretsUndVars("# ${{ vars.FOO }} ${{ secrets.BAR }} ${{ secrets.GITHUB_TOKEN }}"), [{ art: "vars", name: "FOO" }, { art: "secrets", name: "BAR" }]);
   });
   test("Label-Literale und gelesene Schlüssel", () => {
-    assert.deepEqual(labelLiterale('gh x --label forum --label "$V" --add-label a:b,c:d\n  ALARM_LABEL: area:x\n  L: ${{ y }}'), ["forum", "a:b", "c:d"].concat(["area:x"]));
+    assert.deepEqual(labelLiterale('gh x --label forum --label "$V" --add-label a:b,c:d\n  ALARM_LABEL: area:x\n  L: ${{ y }}\n    with:\n      label: area:z\n  label: ${{ inputs.label }}'), ["forum", "a:b", "c:d"].concat(["area:x", "area:z"]));
     assert.deepEqual(skriptLabels(`["--label", "${FREMD.labels.harness}", "--label", label]`), [FREMD.labels.harness]);
     assert.deepEqual(gelesenerSchluessel('labelAus(config, "harness") config.labels.forum labels.some(x)'), ["harness", "forum"]);
     assert.deepEqual(gelesenerSchluessel('optionalesLabel(config, "entscheidung")'), ["entscheidung"]);

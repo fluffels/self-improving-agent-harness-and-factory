@@ -12,6 +12,7 @@ export function pruefeRulesetSpiegel(roh, pfad) {
     throw new Error(`Ruleset-Spiegel ${pfad}: requiredChecks muss eine nicht leere Liste aus Texten sein`);
   }
   if (!Array.isArray(roh.bypassActors)) throw new Error(`Ruleset-Spiegel ${pfad}: bypassActors muss eine Liste sein`);
+  if (roh.strict !== undefined && typeof roh.strict !== "boolean") throw new Error(`Ruleset-Spiegel ${pfad}: strict muss true oder false sein`);
   pruefeCodeScanning(roh, pfad);
   return roh;
 }

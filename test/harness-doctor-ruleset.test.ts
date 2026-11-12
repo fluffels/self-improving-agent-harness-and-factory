@@ -4,6 +4,9 @@ import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { pinPunkt as rawPin, pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeRulesetSpiegel as ladeSpiegel } from "../scripts/docs-gen/ruleset-spiegel.mjs";
+
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Lesen = (args: string[]) => unknown;
 const pruefe = raw as (e: { spiegel: unknown; repo: string; lesen: Lesen }) => Ergebnis;
@@ -15,13 +18,14 @@ const SPIEGEL = {
   id: 7,
   name: "main-schutz",
   requiredChecks: ["A", "B"],
+  strict: false,
   codeScanning: [{ tool: "CodeQL", sicherheitsSchwelle: "high_or_higher", alertSchwelle: "errors" }],
   bypassActors: [],
 };
 const live = (ueber: Record<string, unknown> = {}) => ({
   name: "main-schutz",
   rules: [
-    { type: "required_status_checks", parameters: { required_status_checks: [{ context: "B", integration_id: 15368 }, { context: "A", integration_id: 15368 }] } },
+    { type: "required_status_checks", parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: "B", integration_id: 15368 }, { context: "A", integration_id: 15368 }] } },
     { type: "code_scanning", parameters: { code_scanning_tools: [{ tool: "CodeQL", security_alerts_threshold: "high_or_higher", alerts_threshold: "errors" }] } },
   ],
   bypass_actors: [],
@@ -60,6 +64,11 @@ describe("Ruleset-Spiegel: Punkt nur auf Anforderung (rulesetPunkte)", () => {
 });
 
 describe("Ruleset-Spiegel: OK", () => {
+  test("strict live true und Spiegel true: gut", () => {
+    const antwort = live();
+    (antwort.rules[0] as { parameters: Record<string, unknown> }).parameters.strict_required_status_checks_policy = true;
+    expect(lauf(antwort, { ...SPIEGEL, strict: true }).ok).toBe(true);
+  });
   test("alles gleich, Reihenfolge der Checks egal", () => {
     const x = lauf(live());
     expect(x.punkt).toBe("Ruleset-Spiegel");
@@ -100,6 +109,29 @@ describe("Ruleset-Spiegel: LÜCKE je Feld", () => {
     ] }));
     expect(x.ok).toBe(false);
     expect(x.befund).toContain("codeScanning");
+  });
+  test("strict live true, Spiegel false: Lücke strict", () => {
+    const antwort = live();
+    (antwort.rules[0] as { parameters: Record<string, unknown> }).parameters.strict_required_status_checks_policy = true;
+    const x = lauf(antwort);
+    expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBeUndefined();
+    expect(x.befund).toContain("strict");
+  });
+  test("Spiegel ohne strict: Lücke strict (fail-closed)", () => {
+    const { strict: _s, ...ohne } = SPIEGEL;
+    void _s;
+    const x = lauf(live(), ohne);
+    expect(x.ok).toBe(false);
+    expect(x.befund).toContain("strict");
+  });
+  test("strict: nur eine required_status_checks-Regel zählt, auch ohne parameters (factory#401)", () => {
+    const fremd = live();
+    fremd.rules.push({ type: "pull_request", parameters: { strict_required_status_checks_policy: true } } as never);
+    expect(lauf(fremd).ok).toBe(true);
+    const ohneParameter = live();
+    ohneParameter.rules.unshift({ type: "required_status_checks" } as never);
+    expect(lauf(ohneParameter).ok).toBe(true);
   });
   test("Bypass-Akteur live, Spiegel leer", () => {
     const x = lauf(live({ bypass_actors: [{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }] }));
@@ -164,5 +196,16 @@ describe("Required-Check-Pin (factory#375 L51): integration_id je Required Check
     expect(x?.punkt).toBe("Required-Check-Pin");
     expect(x?.nichtPruefbar).toBe(true);
     expect(x?.befund).toContain("HTTP 403");
+  });
+});
+
+describe("Ruleset-Spiegel-Lader: strict (factory#401 L62)", () => {
+  const basis = { name: "m", requiredChecks: ["A"], bypassActors: [] };
+  const lade = (roh: unknown) => (ladeSpiegel as (r: unknown, p: string) => unknown)(roh, "spiegel.json");
+  test.each([[true], [false], [undefined]])("strict %s ist gültig", (strict) => {
+    expect(() => lade({ ...basis, strict })).not.toThrow();
+  });
+  test.each([["nein"], [0], [null]])("strict %j wirft mit Pfad und Feldnamen", (strict) => {
+    expect(() => lade({ ...basis, strict })).toThrow(/spiegel\.json: strict muss true oder false sein/);
   });
 });

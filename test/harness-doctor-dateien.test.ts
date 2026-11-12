@@ -313,12 +313,12 @@ describe("Langfuse-Takt: Config aus dem Root (Standard ohne injizierte Config)",
   test("factory#195: im Bezieher (Sync-Stand vorhanden) nennt der Hinweis das Status-Ticket im eigenen Repo; Upstream behält den bisherigen Text", () => {
     const projekt = { ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "c/d" }, { rolle: "produkt" }] }) };
     const bezieher = lies(fixture({ ...projekt, ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
-    expect(bezieher.hinweis).toContain("legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an");
+    expect(bezieher.hinweis).toContain("legt das Status-Ticket „Langfuse-Status überprüfen“ im eigenen Repo an und holt dort das Langfuse-Sammelticket");
     expect(bezieher.hinweis).toContain("c/d");
     const eigenes = lies(fixture({ ".factory/projekt.json": JSON.stringify({ repo: "a/b", labels: { harness: "h" }, boards: [{ rolle: "factory", repo: "a/b" }] }), ".factory/sync-stand.json": JSON.stringify({ quelle: { tag: "v1", repo: "f/q" } }) }));
     expect(eigenes).toEqual({ punkt: "Langfuse-Takt", ok: true }); // Factory-Board im eigenen Repo: kein Hinweis, auch im Bezieher
     const upstream = lies(fixture(projekt));
-    expect(upstream.hinweis).toContain("dort pflegt der Takt Status-Ticket und Sammelticket, hier läuft nur der Board-Wächter");
+    expect(upstream.hinweis).toContain("dort pflegt der Takt Status-Ticket, Harness- und Langfuse-Sammelticket, hier läuft nur der Board-Wächter");
     expect(upstream.hinweis).not.toContain("im eigenen Repo");
   });
 
@@ -614,7 +614,7 @@ describe("Workflow-Auslöser", () => {
     }
   });
   test("steht in DATEI_PUNKTE vor CODEOWNERS-Spiegel", () => {
-    expect(DATEI_PUNKTE.at(-2)).toBe("Workflow-Auslöser");
+    expect(DATEI_PUNKTE.at(-3)).toBe("Workflow-Auslöser");
   });
 });
 
@@ -629,13 +629,14 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Sammel-Check"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-4)).toBe("Required-Check-Quellen");
-    expect(DATEI_PUNKTE.at(-3)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-5)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-4)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-1)).toBe("Sammel-Check");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });
 });

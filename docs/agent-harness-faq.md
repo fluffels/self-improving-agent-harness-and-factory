@@ -170,6 +170,13 @@ Nur über `node scripts/spezifikation.mjs anlegen --titel "<t>" --body-datei <pf
 
 Nicht raten, sondern vor dem Einbau lokal gegen die installierte Version prüfen. Beispiel Playwright (quellprojekt#1921): Browser-Revision und Cache-Ordner (`~/.cache/ms-playwright/chromium_headless_shell-<revision>`) stehen im installierten Paket (`node_modules/playwright-core/browsers.json`, Einträge `name`/`revision`); der Schritt in `.github/workflows/ci.yml` sucht deshalb per `find` nach dem Muster, statt einen Pfad fest zu verdrahten. Den abgeleiteten Pfad einmal lokal nachvollziehen, bevor der Schritt in die CI geht.
 
+## Ein Required Check hängt auf queued: was tun?
+
+Die vier Workflows mit Required-Check-Jobs brechen laufende PR-Läufe bei einem neuen Push ab (`concurrency` mit `cancel-in-progress` für Pull Requests: `.github/workflows/ci.yml:12-14`, `codeql.yml:19-21`, `zizmor.yml:23-25`, `dependency-review.yml:21-23`). Ein Lauf des **aktuellen** Heads in `queued` ist deshalb kein liegengebliebener Altlauf, sondern die Warteschlange bei GitHub (Runner knapp); meist reicht Warten. Hängt er unverhältnismäßig lang:
+
+1. `gh run cancel <id>` (nur falls der Lauf noch läuft), dann `gh run rerun <id>`.
+2. Ein leerer Commit (`git commit --allow-empty`) stößt alle Checks neu an, kostet aber eine volle CI-Runde.
+
 ## Verwandte Dokumente
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness

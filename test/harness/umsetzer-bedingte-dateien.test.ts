@@ -40,7 +40,16 @@ const BEDINGTE: { datei: string; tokens: string[] }[] = [
   { datei: "umsetzer-fortsetzung.md", tokens: ["bestanden", "fix", "handoff"] },
 ];
 /** Windows-Sonderfälle: sie gehören hinter die Plattform-Weiche (`plattform-windows.md`), nicht in den Kern-Rumpf. */
-const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync"];
+const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync", "Test-Path"];
+/** Weitere Leser der Plattform-Weiche (factory#400 L23, geschlossene Liste, nur diese fünf Dateien): Windows-Sonderfälle stehen nur in `plattform-windows.md`.
+ *  `weiche`: die Datei nennt die Weiche in einem Satz (`win32` und der Pfad); ohne: der Leser hat sie schon (Umsetzer bzw. Lens). */
+const WEICHE_LESER: { datei: string; weiche: boolean }[] = [
+  { datei: ".claude/agents/factory-lens.md", weiche: true },
+  { datei: ".claude/agents/lens-kern-je-rolle.md", weiche: true },
+  { datei: ".agents/skills/factory/ablauf.md", weiche: true },
+  { datei: ".agents/skills/review-lenses/ablauf-merge-main.md", weiche: false },
+  { datei: ".agents/skills/review-lenses/brille-test-adaequanz.md", weiche: false },
+];
 /** Der Satz der Weiche (Bedingung und Ort im Kern). */
 const WEICHE = /Ergibt `node -p process\.platform` den Wert `win32`[^\n]*liest du vor Schritt 1 `\.agents\/skills\/factory\/plattform-windows\.md`/;
 
@@ -88,6 +97,22 @@ export function bedingteDateienBefunde(e: Eingabe): string[] {
   for (const d of e.ordnerDateien) if (/^(umsetzer|plattform)-.*\.md$/.test(d) && !erwartet.has(d)) out.push(`${d}: Waise, steht nicht im Katalog (Kern, Budget und Manifest mitziehen)`);
   const body = rumpf(kern);
   for (const t of WINDOWS_TOKENS) if (body.includes(t)) out.push(`Windows-Sonderfall „${t}“ steht im Kern-Rumpf statt hinter der Plattform-Weiche`);
+  return out;
+}
+
+/** Befunde zu den weiteren Weiche-Lesern (leer = in Ordnung). */
+export function weicheLeserBefunde(lies: (pfad: string) => string | null): string[] {
+  const out: string[] = [];
+  for (const { datei, weiche } of WEICHE_LESER) {
+    const text = lies(datei);
+    if (text === null) {
+      out.push(`${datei}: die Datei fehlt`);
+      continue;
+    }
+    const body = rumpf(text.replace(/\r\n/g, "\n"));
+    for (const w of WINDOWS_TOKENS) if (body.includes(w)) out.push(`${datei}: Windows-Sonderfall „${w}“ steht ohne Plattform-Weiche im Text`);
+    if (weiche && !body.split("\n").some((z) => z.includes("win32") && z.includes(`${ORDNER}/plattform-windows.md`))) out.push(`${datei}: nennt die Plattform-Weiche (win32, plattform-windows.md) nicht`);
+  }
   return out;
 }
 
@@ -221,6 +246,27 @@ describe("Bedingte Dateien des Umsetzers und Plattform-Weiche (factory#310)", ()
 
   test("Windows-Sonderfälle stehen in der Plattform-Datei (die Weiche verschiebt sie, sie entfallen nicht)", () => {
     const windows = readFileSync(WURZEL + `${ORDNER}/plattform-windows.md`, "utf8");
-    for (const t of ["taskkill", "$LASTEXITCODE", "CRLF", "execSync"]) assert.ok(windows.includes(t), `plattform-windows.md ohne „${t}“`);
+    for (const t of ["taskkill", "$LASTEXITCODE", "CRLF", "execSync", "Test-Path", "Backslash-Ausdruck"]) assert.ok(windows.includes(t), `plattform-windows.md ohne „${t}“`);
+  });
+
+  test("L23: die weiteren Leser tragen keine Windows-Sonderfälle, Lens und Hauptchat-Ablauf nennen die Weiche (echter Stand)", () => {
+    assert.deepEqual(weicheLeserBefunde(lesen), []);
+  });
+
+  test("L23 Negativfall: taskkill im Lens-Text und eine Lens ohne Weiche-Satz sind rot", () => {
+    const lens = ".claude/agents/factory-lens.md";
+    const echtLens = readFileSync(WURZEL + lens, "utf8");
+    const mitTaskkill = (p: string): string | null => (p === lens ? echtLens + "\ntaskkill /PID 1\n" : lesen(p));
+    assert.match(weicheLeserBefunde(mitTaskkill).join("\n"), /factory-lens\.md: Windows-Sonderfall „taskkill“/);
+    const ohneWeiche = (p: string): string | null => (p === lens ? echtLens.split("plattform-windows.md").join("x.md") : lesen(p));
+    assert.match(weicheLeserBefunde(ohneWeiche).join("\n"), /factory-lens\.md: nennt die Plattform-Weiche/);
+  });
+
+  test("L33: Fix- und Ersetzungs-Skript-Regel steht plattformneutral im Umsetzer-Kern, nicht mehr nur hinter der Windows-Weiche", () => {
+    const kern = rumpf(readFileSync(WURZEL + KERN, "utf8"));
+    assert.match(kern, /Fix-Skript/);
+    assert.match(kern, /Ersetzungs-Skript/);
+    const windows = readFileSync(WURZEL + `${ORDNER}/plattform-windows.md`, "utf8");
+    assert.doesNotMatch(windows, /Fix-Skript|Ersetzungs-Skript/);
   });
 });

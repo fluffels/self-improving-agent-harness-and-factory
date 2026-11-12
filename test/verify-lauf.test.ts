@@ -169,14 +169,14 @@ describe("Lauf und Bericht", () => {
 describe("main und IO-Verdrahtung (#1428 Z9)", () => {
   type Zugriffe = { git: (a: string[]) => string; existiert: (d: string) => boolean; sammleTests: () => { pfad: string; text: string }[] };
   const io = vlModule as unknown as {
-    main: (argv: string[], deps: { pkg: unknown; ladeEngung?: () => Eng; run: (j: Job) => { status: number; output: string }; log: (z: string) => void }) => number;
+    main: (argv: string[], deps: { pkg: unknown; ladeEngung?: () => Eng; run: (j: Job) => { status: number; output: string }; log: (z: string) => void; env?: Record<string, string> }) => number;
     ergebnisAusProzess: (r: { status: number | null; stdout?: string; stderr?: string; error?: Error }) => { status: number; output: string };
     ladeEngung: (z: Zugriffe) => Eng;
   };
   const kleinesPkg = { scripts: { verify: "npm run lint && npm run test", lint: "x", test: "y" } };
-  const lauf = (argv: string[], run: (j: Job) => { status: number; output: string }, ladeEngung?: () => Eng) => {
+  const lauf = (argv: string[], run: (j: Job) => { status: number; output: string }, ladeEngung?: () => Eng, env: Record<string, string> = {}) => {
     const log: string[] = [];
-    const code = io.main(argv, { pkg: kleinesPkg, run, ladeEngung, log: (z) => log.push(z) });
+    const code = io.main(argv, { pkg: kleinesPkg, run, ladeEngung, env, log: (z) => log.push(z) });
     return { code, log: log.join("\n") };
   };
 
@@ -187,6 +187,47 @@ describe("main und IO-Verdrahtung (#1428 Z9)", () => {
     expect(gesehen).toEqual(["lint", "test"]);
     expect(rot.log).toMatch(/verify:kompakt ROT/);
     expect(lauf([], () => ({ status: 0, output: "" })).code).toBe(0);
+  });
+
+  test("factory#401 L61: in GitHub Actions bleibt die Ausgabe eines roten Schritts ungekürzt, lokal wird gekürzt; der Exit bleibt 1", () => {
+    const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
+    const rotRun = (j: Job) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? lang : "" });
+    const ci = lauf([], rotRun, undefined, { GITHUB_ACTIONS: "true" });
+    expect(ci.code).toBe(1);
+    expect(ci.log).toContain("z79");
+    expect(ci.log).toContain("z80");
+    expect(ci.log).not.toMatch(/Zeilen gekürzt/);
+    const lokal = lauf([], rotRun, undefined, {});
+    expect(lokal.code).toBe(1);
+    expect(lokal.log).toMatch(/50 Zeilen gekürzt/);
+    expect(lokal.log).not.toContain("z80\n");
+  });
+
+  test("factory#401 L61: ohne deps.env gilt process.env (der Direktaufruf in der CI)", () => {
+    const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
+    const log: string[] = [];
+    const saved = process.env.GITHUB_ACTIONS;
+    try {
+      for (const [wert, gekuerzt] of [["true", false], ["false", true]] as const) {
+        process.env.GITHUB_ACTIONS = wert;
+        log.length = 0;
+        io.main([], { pkg: kleinesPkg, run: (j) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? lang : "" }), log: (z) => log.push(z) });
+        expect(/Zeilen gekürzt/.test(log.join("\n"))).toBe(gekuerzt);
+      }
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_ACTIONS;
+      else process.env.GITHUB_ACTIONS = saved;
+    }
+  });
+
+  test("factory#401 L61: nur GITHUB_ACTIONS=true schaltet die Kürzung ab; CRLF und Leerzeilen am Ende werden normalisiert", () => {
+    const lang = Array.from({ length: 150 }, (_, i) => `z${i}`).join("\n");
+    const rotRun = (text: string) => (j: Job) => ({ status: j.art === "npm" && j.schritt === "lint" ? 1 : 0, output: j.art === "npm" && j.schritt === "lint" ? text : "" });
+    for (const wert of ["false", "", "1"]) expect(lauf([], rotRun(lang), undefined, { GITHUB_ACTIONS: wert }).log).toMatch(/50 Zeilen gekürzt/);
+    const crlf = lauf([], rotRun("a\r\nb\r\n\r\n\r\n"), undefined, { GITHUB_ACTIONS: "true" }).log;
+    expect(crlf).toContain("──\na\nb\n\n");
+    expect(crlf).not.toContain("\r");
+    expect(crlf).not.toContain("b\n\n\n");
   });
 
   test("ergebnisAusProzess: status null (Signal, Timeout, Startfehler) ist rot und nennt den Fehler", () => {

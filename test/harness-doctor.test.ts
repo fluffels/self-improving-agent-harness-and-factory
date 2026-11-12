@@ -74,7 +74,7 @@ const GESUND: Record<string, unknown> = {
   "api orgs/acme/projectsV2/8/fields/5": feld,
   "api --paginate --slurp repos/acme/demo/rules/branches/main?per_page=100": [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "CI", integration_id: 15368 }, { context: "Audit", integration_id: 15368 }] } }, CODEQL],
 };
-const SPIEGEL = { name: "main-schutz", requiredChecks: ["CI", "Audit"], bypassActors: [] };
+const SPIEGEL = { name: "main-schutz", requiredChecks: ["CI", "Audit"], strict: false, bypassActors: [] };
 
 const ordner: string[] = [];
 afterEach(() => {

@@ -123,7 +123,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
       // In der CI erzeugt der Verify-Schritt den Bericht (factory#270: ein Testlauf mit Coverage über FACTORY_COVERAGE=1); der Standard von `coverage` bleibt der npm-Lauf.
       expect(STANDARD_BEFEHLE.coverage, "Standard von coverage ist der Erzeuger").toBe(`npm run ${producer}`);
-      expect(verifySchritt().run, "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verify haben").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+      expect(verifySchritt().run, "ci.yml muss einen Schritt Verify mit dem Gate-Befehl verifyKompakt haben").toMatch(/node scripts\/gate-befehl\.mjs verifyKompakt\b/);
       expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
       // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
       expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
@@ -138,8 +138,9 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
   // Der Schritt wird geparst (kein Regex über den Text): ein auskommentierter Schalter zählt nicht.
   type CiSchritt = { name: string; run?: string; env?: Record<string, unknown> };
   function verifySchritt(): CiSchritt {
-    const doc = parse(readRepo(".github/workflows/ci.yml")) as { jobs: Record<string, { steps: CiSchritt[] }> };
-    const treffer = Object.values(doc.jobs).flatMap((j) => j.steps).filter((s) => s.name.startsWith("Verify"));
+    const doc = parse(readRepo(".github/workflows/ci.yml")) as { jobs: Record<string, { steps?: CiSchritt[] }> };
+    // Ein Job mit `uses:` (Aufruf eines Kern-Workflows, factory#401) hat keine Schritte.
+    const treffer = Object.values(doc.jobs).flatMap((j) => j.steps ?? []).filter((s) => s.name.startsWith("Verify"));
     expect(treffer, "ci.yml braucht genau einen Schritt \"Verify…\"").toHaveLength(1);
     return treffer[0];
   }
@@ -148,7 +149,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     const ci = readRepo(".github/workflows/ci.yml");
     expect(ci, "kein zweiter Suite-Lauf über den Gate-Befehl coverage").not.toMatch(/^\s*run:\s*node scripts\/gate-befehl\.mjs coverage\b/m);
     expect(verifySchritt().env?.FACTORY_COVERAGE).toBe("1");
-    expect(verifySchritt().run).toBe("node scripts/gate-befehl.mjs verify");
+    expect(verifySchritt().run).toBe("node scripts/gate-befehl.mjs verifyKompakt");
   });
 
   it("factory#270: die Vitest-Config schaltet Coverage nur über FACTORY_COVERAGE=1 ein und behält die Floors", async () => {
@@ -177,7 +178,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     for (const datei of [".github/workflows/ci.yml", ".github/workflows/verify-macos.yml"]) {
       const text = readRepo(datei);
       expect(text, `${datei}: Installation über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs install\b/);
-      expect(text, `${datei}: verify über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs verify\b/);
+      expect(text, `${datei}: verify über den Gate-Befehl`).toMatch(/run: node scripts\/gate-befehl\.mjs verifyKompakt\b/);
       expect(text, `${datei}: kein festes npm ci/npm run verify als Schritt`).not.toMatch(/run: npm (ci|run verify)\b/);
     }
   });
@@ -206,7 +207,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
 
   it("die CI ruft die `verify`-Kette auf, statt die Gates einzeln zu duplizieren", () => {
     const ci = readRepo(".github/workflows/ci.yml");
-    expect(ci, "ci.yml muss den Gate-Befehl verify aufrufen").toMatch(/node scripts\/gate-befehl\.mjs verify\b/);
+    expect(ci, "ci.yml muss den Gate-Befehl verifyKompakt aufrufen").toMatch(/node scripts\/gate-befehl\.mjs verifyKompakt\b/);
     expect(STANDARD_BEFEHLE.verify, "Standard von verify ist die verify-Kette").toBe("npm run verify");
     // Die alten, einzeln duplizierten Gate-Steps dürfen NICHT mehr da sein –
     // sonst ist die SSOT wieder aufgeweicht (Gate läuft doppelt / kann driften).
@@ -235,6 +236,7 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
  */
 describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   const ci = readRepo(".github/workflows/ci.yml");
+  const alarm = readRepo(".github/workflows/alarm-rot-main.yml");
 
   it("check:diffsize misst auf push:main gegen den Vorgänger-Commit (github.event.before)", () => {
     // Die verify-Basis muss auf push den Vorgänger heranziehen, damit der gemergte
@@ -262,42 +264,58 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci).toMatch(/if:\s*failure\(\)\s*&&\s*github\.event_name\s*==\s*'push'/);
     // Hängt an den Korrektheits-/Security-Gates (nicht am Devpanel-Kompilier-Gate).
     expect(ci).toMatch(/needs:\s*\[build-test,\s*security-audit,\s*probe-erstbezug\]/);
-    // Braucht Schreibrecht auf Issues, um den Alarm anzulegen.
+    // Braucht Schreibrecht auf Issues, um den Alarm anzulegen (Aufrufer und Kern-Workflow, sonst deckelt der Aufrufer die Rechte).
     expect(ci).toMatch(/issues:\s*write/);
+    expect(alarm).toMatch(/issues:\s*write/);
+  });
+
+  it("der Alarm-Job ruft den Kern-Workflow auf (factory#401): Label per Input, PROJECT_TOKEN einzeln, nie secrets: inherit", () => {
+    expect(ci).toContain("uses: ./.github/workflows/alarm-rot-main.yml");
+    expect(ci).toMatch(/with:\s*\n\s+label:\s*area:[\w-]+/);
+    expect(ci).toMatch(/secrets:\s*\n\s+PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
+    expect(ci).not.toMatch(/secrets:\s*inherit/);
+    expect(ci, "der Shell-Block wohnt im Kern-Workflow, nicht mehr in ci.yml").not.toContain("gh issue create");
+    expect(alarm).toMatch(/on:\s*\n\s+workflow_call:/);
+    expect(alarm).toMatch(/inputs:\s*\n\s+label:[\s\S]*?required:\s*true[\s\S]*?type:\s*string/);
+    expect(alarm).toMatch(/\n {6}PROJECT_TOKEN:[\s\S]*?required:\s*false/);
+    expect(alarm).not.toMatch(/secrets:\s*inherit/);
+    expect(alarm, "oben keine Rechte, die Rechte stehen je Job").toMatch(/^permissions:\s*\{\}\s*$/m);
+    expect(alarm, "gleichzeitige Alarme laufen nacheinander (kein Doppel-Issue)").toMatch(/concurrency:\s*\n\s+group:\s*alarm-rot-main\s*\n\s+cancel-in-progress:\s*false/);
   });
 
   it("legt das Alarm-Issue mit einem EXISTIERENDEN Label an (nicht dem entfernten prio:hoch, #658)", () => {
     // Das prio:hoch-Label ist seit #627 weg; ein create damit bräche mit „label not
     // found" – genau im Moment, in dem der Alarm greifen soll. Also existierendes Label.
     expect(
-      ci,
+      alarm,
       "der Alarm darf sich nicht mehr auf das entfernte prio:hoch-Label verlassen",
     ).not.toMatch(/--label "prio:hoch"/);
-    expect(ci).toMatch(/ALARM_LABEL:\s*area:[\w-]+/);
-    expect(ci).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
+    expect(alarm).toMatch(/ALARM_LABEL:\s*\$\{\{\s*inputs\.label\s*\}\}/);
+    expect(alarm, "das Label steht nie direkt im run:-Skript").not.toMatch(/run:[\s\S]*\$\{\{\s*inputs\./);
+    expect(alarm).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
   });
 
   it("priorisiert über die Board-Position per board-place.mjs (Wiederholung, Notfall-Art rot-main, #1628)", () => {
-    expect(ci).toContain('nr="${new_url##*/}"');
-    expect(ci).toContain('node scripts/board-place.mjs --notfall rot-main --top "$nr"');
-    expect(ci, "kein Board-ID-Literal im Workflow").not.toMatch(/\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
-    expect(ci, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
-    expect(ci, "die Mutationen liegen in board-lib").not.toContain("addProjectV2ItemById");
-    expect(ci).not.toContain("set_board_top");
+    expect(alarm).toContain('nr="${new_url##*/}"');
+    expect(alarm).toContain('node scripts/board-place.mjs --notfall rot-main --top "$nr"');
+    expect(alarm, "kein Board-ID-Literal im Workflow").not.toMatch(/\bPVT[A-Z]*_[A-Za-z0-9_-]{6,}/);
+    expect(alarm, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
+    expect(alarm, "die Mutationen liegen in board-lib").not.toContain("addProjectV2ItemById");
+    expect(alarm).not.toContain("set_board_top");
   });
 
   it("degradiert ohne PROJECT_TOKEN graceful (nur Warnung, Issue entsteht trotzdem, #658)", () => {
-    expect(ci).toMatch(/PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
-    expect(ci).toContain('if [ -z "${PROJECT_TOKEN:-}" ]');
-    expect(ci).toMatch(/::warning::[^\n]*PROJECT_TOKEN/);
+    expect(alarm).toMatch(/PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
+    expect(alarm).toContain('if [ -z "${PROJECT_TOKEN:-}" ]');
+    expect(alarm).toMatch(/::warning::[^\n]*PROJECT_TOKEN/);
   });
 
   it("dedupliziert über den Titel-Präfix (nicht über ein Label, #658)", () => {
     // Das offene Alarm-Issue wird über den 🚨-Titel-Präfix gefunden, nicht über prio:hoch.
-    expect(ci).toMatch(/startswith\(\\"\$marker\\"\)/);
+    expect(alarm).toMatch(/startswith\(\\"\$marker\\"\)/);
   });
 
   it("bleibt rot, wenn die Board-Position endgültig scheitert (#1628)", () => {
-    expect(ci).toMatch(/elif ! GH_TOKEN="\$PROJECT_TOKEN" node scripts\/board-place\.mjs[^\n]*\n\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/);
+    expect(alarm).toMatch(/elif ! GH_TOKEN="\$PROJECT_TOKEN" node scripts\/board-place\.mjs[^\n]*\n\s*echo "::error::[^\n]*"\n\s*exit 1\n\s*fi/);
   });
 });

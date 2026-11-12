@@ -263,7 +263,7 @@ describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1
   test("die Lens-Definition verlangt die Sabotage im Lens-Worktree, nie im Feature-Worktree", () => {
     assert.ok(beschreibtLensWorktree(lensAgent), "factory-lens.md beschreibt den Lens-Worktree nicht");
     assert.match(lensAgent, /nie im Feature-Worktree/);
-    assert.match(lensAgent, /Test-Path/);
+    assert.match(lensAgent, /test -e <pfad>/); // Windows-Variante (Test-Path) steht hinter der Plattform-Weiche (factory#400 L23)
   });
 
   test("der Skill: keine falsche Aussage mehr, Lens-Worktree und Nachbessern erst nach allen Berichten", () => {

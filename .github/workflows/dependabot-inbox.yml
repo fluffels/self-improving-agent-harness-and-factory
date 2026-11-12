@@ -6,7 +6,7 @@ name: Dependabot-Inbox
 # stehen, statt nur aufzufallen, wenn jemand explizit danach fragt.
 #
 # Dedupliziert über den Titel-Präfix "🤖 Dependabot-PRs auflösen" (dasselbe Muster
-# wie forum-inbox.yml und der alarm-red-main-Job in ci.yml): existiert das
+# wie forum-inbox.yml und der Kern-Workflow alarm-rot-main.yml): existiert das
 # Sammel-Issue schon, wird nur der PR-Stand per Kommentar aktualisiert statt ein
 # zweites Issue anzulegen. Sind KEINE Dependabot-PRs mehr offen, wird ein noch
 # offenes Sammel-Issue automatisch geschlossen (kein vergessenes Ticket ohne Grund).
