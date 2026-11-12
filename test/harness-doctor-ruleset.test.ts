@@ -2,7 +2,7 @@
  * OK, LÜCKE je Feld, NICHT PRÜFBAR (fail-closed: kein Admin-Recht, Endpunkt-Fehler, fehlende ID). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
+import { pinPunkt, pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Lesen = (args: string[]) => unknown;
@@ -31,10 +31,10 @@ const lauf = (antwort: unknown, spiegel: unknown = SPIEGEL) => pruefe({ spiegel,
 describe("Ruleset-Spiegel: Punkt nur auf Anforderung (rulesetPunkte)", () => {
   const { id: _id, ...ohneId } = SPIEGEL;
   void _id;
-  test("mit lesen und id: Spiegel-Punkt und Pin-Punkt aus einem Lesevorgang", () => {
+  test("mit lesen und id: nur der Spiegel-Punkt (der Pin-Punkt kommt aus rules/branches, factory#375 L51)", () => {
     let n = 0;
     const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => (n++, live()) });
-    expect(x.map((e) => e.punkt)).toEqual(["Ruleset-Spiegel", "Required-Check-Pin"]);
+    expect(x.map((e) => e.punkt)).toEqual(["Ruleset-Spiegel"]);
     expect(n).toBe(1);
   });
   test("ohne lesen (Wochenlauf, --einrichten): kein Punkt", () => {
@@ -116,11 +116,13 @@ describe("Ruleset-Spiegel: NICHT PRÜFBAR (fail-closed)", () => {
   });
 });
 
-describe("Required-Check-Pin (factory#362 L48): integration_id je Required Check", () => {
-  const mit = (checks: unknown[]) => live({ rules: [{ type: "required_status_checks", parameters: { required_status_checks: checks } }] });
-  const pin = (antwort: unknown) => punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => antwort }).find((e) => e.punkt === "Required-Check-Pin");
+
+describe("Required-Check-Pin (factory#375 L51): integration_id je Required Check aus rules/branches", () => {
+  const regel = (checks: unknown[]) => ({ type: "required_status_checks", parameters: { required_status_checks: checks } });
+  const pin = (wert: unknown) => pinPunkt({ wert }) as Ergebnis[];
   test("ohne integration_id: Lücke mit den Kontexten und Fix-Text", () => {
-    const x = pin(mit([{ context: "Zeta" }, { context: "Beta", integration_id: 15368 }, { context: "Gamma", integration_id: null }, { context: "Alpha" }]));
+    const x = pin([regel([{ context: "Zeta" }, { context: "Beta", integration_id: 15368 }, { context: "Gamma", integration_id: null }, { context: "Alpha" }])])[0];
+    expect(x?.punkt).toBe("Required-Check-Pin");
     expect(x?.ok).toBe(false);
     expect(x?.nichtPruefbar).toBeUndefined();
     expect(x?.befund).toContain("Alpha, Gamma, Zeta");
@@ -130,31 +132,26 @@ describe("Required-Check-Pin (factory#362 L48): integration_id je Required Check
     expect(x?.fix).toContain("Pre-Flight");
   });
   test("alle gepinnt: OK", () => {
-    expect(pin(mit([{ context: "A", integration_id: 15368 }]))?.ok).toBe(true);
+    const x = pin([regel([{ context: "A", integration_id: 15368 }])]);
+    expect(x).toHaveLength(1);
+    expect(x[0]?.ok).toBe(true);
   });
-  test("keine required_status_checks-Regel: kein eigenes Ergebnis", () => {
-    expect(pin(live({ rules: [] }))).toBeUndefined();
+  test("keine required_status_checks-Regel: kein Ergebnis", () => {
+    expect(pin([])).toEqual([]);
+    expect(pin([{ type: "pull_request" }])).toEqual([]);
   });
-  test("rules fehlt oder Regel ohne parameters: kein Pin-Ergebnis", () => {
-    const { rules: _r, ...ohneRules } = live();
-    void _r;
-    expect(pin(ohneRules)).toBeUndefined();
-    expect(pin(live({ rules: [{ type: "required_status_checks" }] }))).toBeUndefined();
+  test("Regel ohne parameters oder wert kein Array: kein Ergebnis", () => {
+    expect(pin([{ type: "required_status_checks" }])).toEqual([]);
+    expect(pin(null)).toEqual([]);
   });
   test("andere Regel mit gleichnamigem Parameter zählt nicht", () => {
     const fremd = { type: "code_scanning", parameters: { required_status_checks: [{ context: "X" }] } };
-    expect(pin(live({ rules: [fremd, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "A", integration_id: 1 }] } }] }))?.ok).toBe(true);
+    expect(pin([fremd, regel([{ context: "A", integration_id: 1 }])])[0]?.ok).toBe(true);
   });
-  test("Antwort ist kein Objekt: Pin-Punkt nicht prüfbar", () => {
-    expect(pin(null)?.nichtPruefbar).toBe(true);
-  });
-  test("Lesefehler: Pin-Punkt nicht prüfbar", () => {
-    const x = punkte({ spiegel: SPIEGEL, repo: "o/r", lesen: () => { throw new Error("HTTP 403"); } }).find((e) => e.punkt === "Required-Check-Pin");
+  test("Lesefehler aus hole: nicht prüfbar mit Grund", () => {
+    const x = (pinPunkt({ fehler: "HTTP 403" }) as Ergebnis[])[0];
+    expect(x?.punkt).toBe("Required-Check-Pin");
     expect(x?.nichtPruefbar).toBe(true);
-  });
-  test("bypass_actors fehlt: Pin-Punkt nicht prüfbar", () => {
-    const { bypass_actors: _w, ...ohne } = mit([{ context: "A" }]);
-    void _w;
-    expect(pin(ohne)?.nichtPruefbar).toBe(true);
+    expect(x?.befund).toContain("HTTP 403");
   });
 });
