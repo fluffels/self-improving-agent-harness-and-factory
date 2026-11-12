@@ -191,7 +191,7 @@ function preisZeilen(festeSessions) {
 
 /** Statuszelle: bei Score `ausstehend` ein fester Status mit Zusatz; `vollständig` bleibt „vollständig, Score ausstehend“, jeder andere feste Status wird „<Status>, Nachlieferer wartet“ (factory#354: eine Lücke ist dann ein Prüfauftrag, kein Datenverlust). */
 export function statusZelle(b) {
-  if (b.score !== "ausstehend" || b.status === "läuft") return b.status;
+  if (b.score !== "ausstehend") return b.status;
   return b.status === "vollständig" ? "vollständig, Score ausstehend" : `${b.status}, Nachlieferer wartet`;
 }
 
@@ -199,7 +199,7 @@ export function statusZelle(b) {
 function summenText(sum, bewertungen) {
   const teile = [];
   if (sum.scoreAusstehend) {
-    const wartend = bewertungen.filter((b) => b.status !== "läuft" && b.score === "ausstehend");
+    const wartend = bewertungen.filter((b) => b.score === "ausstehend");
     teile.push(`${sum.scoreAusstehend} davon Score ausstehend (Nachlieferer wartet noch: ${kuerzel(wartend)})`);
   }
   if (sum.ohneKostenExport) teile.push(`ohne Kosten-Export: ${sum.ohneKostenExport}`);

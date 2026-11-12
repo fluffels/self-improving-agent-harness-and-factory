@@ -756,6 +756,9 @@ describe("Lücke bei Score ausstehend (factory#354)", () => {
   test("fehlendAusstehend zählt nur feste Sessions mit Score ausstehend, läuft und vor Stichtag nicht", () => {
     const sum = A.summenzeile([luecke(), luecke(), luecke({ mtime: now - 25 * 3_600_000 }), luecke({ mtime: now - 10 * 60_000 })]);
     expect(sum).toMatchObject({ fehlend: 3, fehlendAusstehend: 2, scoreAusstehend: 2 });
+    // Lücke vor dem Stichtag (Score vor Stichtag) ist keine wartende Lücke
+    const alt = luecke({ soll: [eintrag(1, { ts: "2026-10-01T00:00:00Z" }), eintrag(2, { ts: "2026-10-01T00:00:00Z" })], mtime: now - 25 * 3_600_000 });
+    expect(A.summenzeile([alt, luecke()])).toMatchObject({ fehlend: 2, fehlendAusstehend: 1, vorStichtag: 1 });
   });
 });
 
@@ -788,6 +791,9 @@ describe("Session auflösen (factory#354)", () => {
   test("mehrdeutiger Präfix nennt sortierte volle IDs, ohne Treffer: nicht gefunden", () => {
     expect(auf("abcd")).toEqual({ fehler: "mehrdeutig", kandidaten: ["abcd1234-aaaa", "abcd9999-bbbb"] });
     expect(auf("zzzz")).toEqual({ fehler: "nicht gefunden" });
+    // nur Anfang, nie Mitte; eine leere Angabe trifft nichts
+    expect(auf("1234")).toEqual({ fehler: "nicht gefunden" });
+    expect(auf("")).toEqual({ fehler: "nicht gefunden" });
     expect(A.sessionAufloesen({ projectsRoot: join(root(), "gibtsnicht"), angabe: "ab" })).toEqual({ fehler: "nicht gefunden" });
   });
 });
