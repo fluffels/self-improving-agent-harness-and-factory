@@ -32,7 +32,7 @@ import * as rawV from "../scripts/audit-verzeichnisse.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/audit-verzeichnisse-lib.mjs";
 
-type Fuehre = (prog: string, args: string[], opts: { cwd: string }) => string;
+type Fuehre = (prog: string, args: string[], opts: { cwd: string; stdio?: string }) => string;
 const NpmJson = rawLib as unknown as { npmAuditJson: (v: string, extra: string[], deps: { fuehreAus: Fuehre; wurzel: string }) => unknown };
 
 describe("npmAuditJson", () => {
@@ -54,11 +54,11 @@ describe("npmAuditJson", () => {
 const LaufLib = rawLib as unknown as { npmAuditLauf: (v: string, args: string[], deps: { fuehreAus: Fuehre; wurzel: string }) => number };
 
 describe("npmAuditLauf (Standard-Lauf des CI-Gates)", () => {
-  const mit = (f: Fuehre) => LaufLib.npmAuditLauf("frontend", ["--audit-level=high"], { fuehreAus: f, wurzel: "/w" });
+  const mit = (f: (...a: Parameters<Fuehre>) => string) => LaufLib.npmAuditLauf("frontend", ["--audit-level=high"], { fuehreAus: f, wurzel: "/w" });
   test("npm Exit 0: 0; cwd ist Wurzel/Verzeichnis, Argumente beginnen mit audit", () => {
-    const gerufen: { args: string[]; cwd: string }[] = [];
-    expect(mit((_p, args, o) => (gerufen.push({ args, cwd: o.cwd }), ""))).toBe(0);
-    expect(gerufen[0]).toEqual({ args: ["audit", "--audit-level=high"], cwd: "/w/frontend" });
+    const gerufen: { args: string[]; cwd: string; stdio?: string }[] = [];
+    expect(mit((_p, args, o) => (gerufen.push({ args, cwd: o.cwd, stdio: o.stdio }), ""))).toBe(0);
+    expect(gerufen[0]).toEqual({ args: ["audit", "--audit-level=high"], cwd: "/w/frontend", stdio: "inherit" });
   });
   test("npm Exit 1 bleibt 1, Exit 5 bleibt 5", () => {
     expect(mit(() => { throw Object.assign(new Error("x"), { status: 1 }); })).toBe(1);
@@ -68,6 +68,8 @@ describe("npmAuditLauf (Standard-Lauf des CI-Gates)", () => {
     expect(mit(() => { throw Object.assign(new Error("sig"), { status: null }); })).toBe(1);
     expect(mit(() => { throw Object.assign(new Error("x"), { status: 0 }); })).toBe(1);
     expect(mit(() => { throw new Error("ENOENT"); })).toBe(1);
+    // eslint-disable-next-line @typescript-eslint/only-throw-error -- genau dieser Wurf (kein Error-Objekt) ist der Testfall
+    expect(mit(() => { throw undefined; })).toBe(1);
   });
 });
 

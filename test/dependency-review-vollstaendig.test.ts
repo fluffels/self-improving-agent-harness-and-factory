@@ -74,8 +74,8 @@ describe("Paging-Naht (factory#395 L4)", () => {
   });
   test("ladeVergleich fragt mit --paginate --slurp ohne per_page und verflacht", () => {
     const aufrufe: string[][] = [];
-    const lese = (args: string[]) => (aufrufe.push(args), JSON.stringify([[sauber], [pom()]]));
-    expect(D.ladeVergleich("o/r", BASIS, KOPF, lese)).toHaveLength(2);
+    const lese = (args: string[]) => (aufrufe.push(args), JSON.stringify([[sauber, pom()], [pom()]]));
+    expect(D.ladeVergleich("o/r", BASIS, KOPF, lese)).toEqual([sauber, pom(), pom()]);
     expect(aufrufe[0].slice(0, 3)).toEqual(["api", "--paginate", "--slurp"]);
     expect(aufrufe[0][3]).toBe(`repos/o/r/dependency-graph/compare/${BASIS}...${KOPF}`);
     expect(aufrufe[0].join(" ")).not.toContain("per_page");
@@ -112,11 +112,20 @@ describe("main", () => {
     expect(lauf(["--schwere", "high"], new Error("403")).code).toBe(2);
   });
 
+  test("gültige Eingaben mit Ziffern, Bindestrich, Punkt, Unterstrich und Großbuchstaben im Repo rufen die Abfrage auf", () => {
+    const echt = "0123456789abcdef".repeat(3).slice(0, 40);
+    const l = lauf(["--schwere", "high"], [], { GITHUB_REPOSITORY: "My-Org_1/repo.js", BASIS: echt, KOPF: echt });
+    expect(l.code).toBe(0);
+    expect(l.aufrufe).toEqual([["My-Org_1/repo.js", echt, echt]]);
+  });
+
   test.each([
     ["BASIS kein 40-hex", { GITHUB_REPOSITORY: "o/r", BASIS: "main", KOPF }],
     ["KOPF kein 40-hex", { GITHUB_REPOSITORY: "o/r", BASIS, KOPF: "$(x)" }],
     ["Repo nicht owner/name", { GITHUB_REPOSITORY: "o/r/../x", BASIS, KOPF }],
     ["Repo fehlt", { BASIS, KOPF }],
+    ["Repo ohne Owner", { GITHUB_REPOSITORY: "/r", BASIS, KOPF }],
+    ["Repo ohne Name", { GITHUB_REPOSITORY: "o/", BASIS, KOPF }],
     ["Repo mit .-Teil vorn", { GITHUB_REPOSITORY: "./x", BASIS, KOPF }],
     ["Repo mit .-Teil hinten", { GITHUB_REPOSITORY: "o/.", BASIS, KOPF }],
     ["Repo mit Strichpunkt am Ende", { GITHUB_REPOSITORY: "o/r;x", BASIS, KOPF }],

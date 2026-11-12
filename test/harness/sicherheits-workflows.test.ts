@@ -418,7 +418,7 @@ function pruefeDepReview(yml: string): string[] {
     if (w["comment-summary-in-pr"] !== undefined && w["comment-summary-in-pr"] !== "never") fehler.push("PR-Kommentar aktiviert");
   }
   fehler.push(...vollstaendigFehler(wf, dr));
-  for (const s of alleSchritte(wf)) if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && istObj(s.with) && "ref" in s.with) fehler.push("Checkout mit ref (nie die Basis oder einen fremden Stand laden)");
+  for (const s of alleSchritte(wf)) if (typeof s.uses === "string" && s.uses.startsWith("actions/checkout@") && istObj(s.with) && ("ref" in s.with || "repository" in s.with)) fehler.push("Checkout mit ref oder repository (nie die Basis oder einen fremden Stand laden)");
   for (const u of ungepinnteUses(String(yml ?? ""))) fehler.push(`Action nicht per SHA mit Versionskommentar gepinnt: ${u}`);
   return fehler;
 }
@@ -523,6 +523,7 @@ describe("zizmor.yml und dependency-review.yml (#92)", () => {
   });
   test("Dependency Review: Checkout mit ref ist verboten (factory#395)", () => {
     nur(pruefeDepReview(depRev({ checkout: CHECKOUT + "\n          ref: ${{ github.event.pull_request.base.sha }}" })), "Checkout mit ref");
+    nur(pruefeDepReview(depRev({ checkout: CHECKOUT + "\n          repository: o/fremd" })), "Checkout mit ref oder repository");
   });
   test("Dependency Review: security-events: write ist auch hier verboten", () => nur(pruefeDepReview(depRev({ job: "      security-events: write" })), "Schreibrecht"));
   test("Dependency Review: falsche Schwelle, PR-Kommentar", () => {

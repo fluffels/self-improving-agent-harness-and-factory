@@ -15,16 +15,13 @@ import { auditVerzeichnisse, npmAuditLauf } from "./audit-verzeichnisse-lib.mjs"
 const STUFEN = ["info", "low", "moderate", "high", "critical"];
 const EXIT_AUFRUF = 2;
 
-/** Standard-Lauf: `npm audit --audit-level=<stufe>` mit sichtbarer Ausgabe, Rückgabe ist der Exit-Code von npm. */
-const npmAuditStufe = (verzeichnis, args) => npmAuditLauf(verzeichnis, args);
-
 function stufeAusArgv(argv) {
   const [flag, stufe, ...rest] = argv;
   return flag === "--audit-level" && STUFEN.includes(stufe) && rest.length === 0 ? stufe : undefined;
 }
 
 /** Einstieg. `deps` (Tests): `ladeConfig()`, `fuehreAus(verzeichnis, args)` (liefert den Exit-Code), `log`, `err`. Rückgabe: Exit-Code. */
-export function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig(), fuehreAus = npmAuditStufe, log = console.log, err = console.error } = {}) {
+export function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig(), fuehreAus = npmAuditLauf, log = console.log, err = console.error } = {}) {
   const stufe = stufeAusArgv(argv);
   if (!stufe) {
     err(`✖ Aufruf: node scripts/audit-verzeichnisse.mjs --audit-level <${STUFEN.join("|")}>`);

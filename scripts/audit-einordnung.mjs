@@ -149,7 +149,7 @@ export function ordneEin({ befunde, bekannt }) {
     .map((b) => (istAlarm(b) ? { art: "alarm", befund: b, ...alarmText(b) } : { art: "zeile", befund: b, text: zeilenText(b) }));
 }
 
-// ---- IO (ungetestet) ----
+// ---- IO (bis auf die Verdrahtung `npmAudit` ungetestet) ----
 
 /** `npm audit --json` im Verzeichnis (Standard: Wurzel), siehe `npmAuditJson`. */
 export const npmAudit = (extra = [], verzeichnis = ".", lade = npmAuditJson) => lade(verzeichnis, extra);
