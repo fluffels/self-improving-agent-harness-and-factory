@@ -1,0 +1,52 @@
+name: Sicherheitsprüfung (Monatslauf)
+
+# Monatliche Sicherheits- und Konfigurationsprüfung (factory#388, Fortschreibung ADR 0031): `scripts/sicherheitspruefung.mjs` gleicht den Ist-Zustand des EIGENEN Repos
+# gegen die Soll-Liste `.github/sicherheitspruefung.json` ab und legt bei Abweichungen genau ein Ticket im eigenen Repo an (Punkt, Ist, Soll, Fix). Ohne Modell.
+# Der Lauf schreibt nie in ein anderes Repo; ist alles gleich dem Soll oder schon ein Ticket offen, entsteht nichts. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
+#
+# ⚠️ Gelesen wird mit dem Secret PROJECT_TOKEN (PAT mit Admin-Recht und project-Scope); ohne es meldet der Lauf genau das als Abweichung und liest nur eingeschränkt mit github.token.
+# Geschrieben wird das Ticket ausschließlich mit github.token (issues: write); danach sortiert board-place.mjs es mit PROJECT_TOKEN ans Ende der Todo-Spalte des eigenen Boards (ohne Secret nur eine Warnung).
+
+on:
+  schedule:
+    - cron: "29 5 1 * *"
+  workflow_dispatch:
+    inputs:
+      trocken:
+        description: "Nur prüfen und ausgeben, nichts schreiben"
+        type: boolean
+        default: false
+
+concurrency: sicherheitspruefung
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sicherheitspruefung:
+    runs-on: ubuntu-latest
+    steps:
+      # Ohne Install-Schritt: das Skript lädt nur Node-Builtins und relative Importe (der Job hat Schreibrecht und ein PAT).
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Sicherheitsprüfung ausführen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          TROCKEN: ${{ inputs.trocken }}
+        run: |
+          if [ "$TROCKEN" = "true" ]; then
+            node scripts/sicherheitspruefung.mjs --dry-run
+          else
+            node scripts/sicherheitspruefung.mjs
+          fi

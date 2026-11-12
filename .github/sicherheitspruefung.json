@@ -1,0 +1,39 @@
+{
+  "kern": {
+    "punkte": [
+      "Secret Scanning",
+      "Push Protection",
+      "Dependabot Security Updates",
+      "Dependabot Alerts",
+      "Dependabot-Abdeckung",
+      "Code-Scanning",
+      "CodeQL-Sprachen",
+      "Ruleset",
+      "Ruleset-Spiegel",
+      "Required-Check",
+      "Required-Check-Pin",
+      "Admin-Recht"
+    ],
+    "manifeste": [],
+    "codeql": {
+      "JavaScript": "javascript-typescript",
+      "TypeScript": "javascript-typescript",
+      "Java": "java-kotlin",
+      "Kotlin": "java-kotlin",
+      "Python": "python",
+      "Go": "go",
+      "Ruby": "ruby",
+      "C#": "csharp",
+      "C": "c-cpp",
+      "C++": "c-cpp",
+      "Swift": "swift",
+      "Rust": "rust"
+    }
+  },
+  "projekt": {
+    "punkte": [],
+    "manifeste": [],
+    "ausnahmen": [],
+    "codeqlOhne": []
+  }
+}
