@@ -251,7 +251,7 @@ describe("melden.mjs in der Fabrik (factory#221 AK1): kein Sync-Stand, Meldestel
       waehleSammelticket: (o: unknown, r: string, a: unknown) => inbox.waehleSammelticket(o, r, a as never, TITEL),
       postZeilen: (...a: unknown[]) => { posts.push(a); },
     };
-    const code = await melden.main(["--zeile", "Defekt: x Beleg: y"], {
+    const code = await melden.main(["--zeile", "Defekt: x Beleg: #5 y"], {
       ladeConfig: () => ({}),
       ladeLibs: () => Promise.resolve(libs),
       env: { MELDESTELLE_TOKEN: "mt", PROJECT_TOKEN: "pt" },
@@ -266,7 +266,7 @@ describe("melden.mjs in der Fabrik (factory#221 AK1): kein Sync-Stand, Meldestel
   test("schreibt ins jüngste ungeclaimte Sammelticket: ohne Stand-Zeile, ohne Herkunft, ohne Token", async () => {
     const r = await fahre([roh(10, TITEL), roh(20, TITEL), roh(25, TITEL), roh(30, TITEL, "x"), roh(40, "Fremder Titel")]);
     expect(r.code).toBe(0);
-    expect(r.posts).toEqual([[20, "- [ ] Defekt: x Beleg: y", REPO, undefined]]);
+    expect(r.posts).toEqual([[20, "- [ ] Defekt: x Beleg: #5 y", REPO, undefined]]);
     expect(r.aufrufe.length).toBeGreaterThan(0);
     for (const a of r.aufrufe) {
       expect(a.args.slice(0, 1)).toEqual(["api"]);
