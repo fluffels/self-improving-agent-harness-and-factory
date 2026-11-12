@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FREMD, FREMD_NAMEN } from "../support/fremd-config";
+import { quelleMitBareKlon } from "../support/git-quelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as wRaw from "../../scripts/worktree-aufraeumen.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -391,12 +392,7 @@ describe("Ende zu Ende im temporären Arbeitsplatz (echtes git, zwei Repos)", ()
     mkdirSync(ap);
     for (const repo of ["web", "api"]) {
       const quelle = join(basis, `${repo}-quelle`);
-      mkdirSync(quelle);
-      git(quelle, "init", "-q", "-b", "main");
-      writeFileSync(join(quelle, "README.md"), "x\n");
-      git(quelle, "add", "-A");
-      git(quelle, "commit", "-q", "-m", "init");
-      git(basis, "clone", "-q", "--bare", quelle, join(basis, `${repo}.git`));
+      quelleMitBareKlon(git, quelle, join(basis, `${repo}.git`));
       git(ap, "clone", "-q", join(basis, `${repo}.git`), repo);
     }
     mkdirSync(join(ap, ".factory"));
