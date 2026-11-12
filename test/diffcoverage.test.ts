@@ -49,6 +49,7 @@ type Verdict = { buckets: Record<string, Bucket>; missing: string[]; below: stri
 type CheckDiffCoverageModule = {
   LAYER_DIFF_FLOORS: Record<string, number | null>;
   SCHICHT_FIX: string;
+  PFLICHT_SCHICHTEN: string[];
   LCOV_PATH: string;
   GIT_OPTIONEN: { encoding: string; maxBuffer: number };
   normalizePath: (p: string) => string;
@@ -84,6 +85,7 @@ import * as checkCovRaw from "../scripts/check-diffcoverage.mjs";
 const {
   LAYER_DIFF_FLOORS,
   SCHICHT_FIX,
+  PFLICHT_SCHICHTEN,
   LCOV_PATH,
   GIT_OPTIONEN,
   isMeasured,
@@ -980,6 +982,13 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
     const pfade = (SCHICHT_FIX.match(/scripts\/[\w./-]+\.(?:cjs|mjs|json)/g) ?? []).filter((p) => p !== "scripts/docs-gen/config.json");
     assert.ok(pfade.length > 0);
     for (const p of pfade) assert.ok(kern.has(p), `${p} ist kein Kern-Besitz`);
+  });
+  test("SCHICHT_FIX und die Zeile zu schichten.layers in erstbezug.md nennen Exporte und Pflichtschlüssel des Vertrags (L69)", () => {
+    assert.deepEqual(PFLICHT_SCHICHTEN, ["DOMAIN", "APPLICATION"]);
+    const zeile = readFileSync(new URL("../docs/erstbezug.md", import.meta.url), "utf8").split("\n").find((z) => z.startsWith("| `scripts/docs-gen/config.json` |")) ?? "";
+    for (const text of [SCHICHT_FIX, zeile]) {
+      for (const name of ["LAYERS", "layerOf", ...PFLICHT_SCHICHTEN]) assert.ok(text.includes(name), name + " fehlt in: " + text);
+    }
   });
   test("verify:full fährt die Abdeckung über den Gate-Befehl, nicht über test:coverage (L9)", async () => {
     const s = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> }).scripts;
