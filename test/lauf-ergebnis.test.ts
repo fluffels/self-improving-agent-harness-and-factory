@@ -925,6 +925,12 @@ describe("--je-agent: Kennzahlen je Lens-Typ (factory#235)", () => {
       assert.equal(lauf3([A, B]), 3);
       assert.match(aus.join("\n"), /Ungültig.*#40/);
       assert.equal(lauf3([A]), 3, "Ticket 41 hat keinen Lauf im Typ A allein: keiner");
+      aus.length = 0;
+      const jsonCode = (raw as unknown as { jeAgentAusgabe: (e: object) => number }).jeAgentAusgabe({ ergebnis, jeAgent: [A, B], von: "2026-10-01T00:00:00Z", dir, namen: FREMD_NAMEN, json: true, out: (s: string) => aus.push(s) });
+      const j = JSON.parse(aus.join("")) as { ungueltig: { ticket: number }[]; jeAgent: Record<string, unknown> };
+      assert.equal(jsonCode, 3);
+      assert.deepEqual(j.ungueltig.map((u) => u.ticket), [40]);
+      assert.deepEqual(Object.keys(j.jeAgent), [A, B]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -23,7 +23,7 @@
  * Kontext beim ersten Call des Nachfolgers, Nachlese-Calls (Read oder cat/sed/head des Nachfolgers auf Pfade, die ein Vorgänger per Edit/Write geändert hat;
  * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
- * `--ttl` (factory#312): statt der Kennzahlen die Gegenrechnung, ob die 1h-TTL für die Rolle netto spart (Mehrkosten des 1h-Schreibens gegen vermiedene Cache-Misse nach Pausen von 5 bis 60 min; Preise aus `preise.mjs`, Warmstart über Läufe derselben Session getrennt ausgewiesen). Grenzen: ein Treffer bis 60 min, Zeiten mit Nutzungsguthaben ignorieren 1h (Überschätzung); schließt `--je-ticket` aus.
+ * `--ttl` (factory#312): statt der Kennzahlen die Gegenrechnung, ob die 1h-TTL für die Rolle netto spart (Mehrkosten des 1h-Schreibens gegen vermiedene Cache-Misse nach Pausen von 5 bis 60 min; Preise aus `preise.mjs`, Warmstart über Läufe derselben Session getrennt ausgewiesen). Grenzen: ein Treffer bis 60 min, Zeiten mit Nutzungsguthaben ignorieren 1h (Überschätzung); schließt `--je-ticket` und mehrere `--agent` aus.
  * Mehrfaches `--agent` (factory#235, A/B Kern je Rolle): Bericht je Typ (`{ agenten: { <typ>: <Bericht> }, ungueltig }`); ein Ticket mit Läufen in mehr als einem der Typen ist ungültig, fällt aus allen Typen heraus (wie `--ohne`) und setzt Exit 3. Mit einem `--agent` bleibt die Ausgabe unverändert.
  * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
  * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
@@ -665,7 +665,7 @@ function renderTtl(r) {
 
 // ── CLI (dünn, ungetestet: Dateisuche) ───────────────────────────────────────
 
-/** `--ttl` übernehmen; zusammen mit `--je-ticket` ist es ein Aufruf-Fehler (die TTL-Rechnung kennt keine zusammengelegten Tickets). */
+/** `--ttl` übernehmen; zusammen mit `--je-ticket` oder mehreren `--agent` ist es ein Aufruf-Fehler (die TTL-Rechnung kennt keine zusammengelegten Tickets und keine Typ-Berichte). */
 function ttlFlag(werte, a) {
   if (werte.ttl !== true) return;
   a.ttl = true;

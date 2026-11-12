@@ -1023,10 +1023,11 @@ describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
   const cli = (argv: string[], laeufe: Record<string, Lauf[]>) => {
     const aus: string[] = [];
     const fehler: string[] = [];
+    const vons: string[] = [];
     const code = (kontextRoh as unknown as { hauptlauf: (a: string[], d: object) => number }).hauptlauf(argv, {
-      config: FREMD, ordner: () => tmpdir(), ladeTyp: (_d: string, typ: string) => laeufe[typ] ?? [], wurzel: () => "/x", out: (s: string) => aus.push(s), err: (s: string) => fehler.push(s),
+      config: FREMD, ordner: () => tmpdir(), ladeTyp: (_d: string, typ: string, von: string) => (vons.push(von), laeufe[typ] ?? []), wurzel: () => "/x", out: (s: string) => aus.push(s), err: (s: string) => fehler.push(s),
     });
-    return { code, aus: aus.join("\n"), fehler: fehler.join("\n") };
+    return { code, aus: aus.join("\n"), fehler: fehler.join("\n"), vons };
   };
   test("CLI: Exit 3 bei ungültigem Ticket, Meldung nennt Ticket und Typen, --json trägt die Liste", () => {
     const r = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B], laeufeJeTyp);
@@ -1066,6 +1067,40 @@ describe("A/B Kern je Rolle: mehrere --agent (factory#235)", () => {
     const r = cli(["--von", "2026-01-01T00:00:00Z", "--agent", LENS, "--agent", LENS_B, "--ttl"], laeufeJeTyp);
     expect(r.code).toBe(2);
     expect(r.fehler).toMatch(/--ttl und mehrere --agent/);
+  });
+  test("CLI: --von und --bis begrenzen den Start in beiden Typen, die Läufe außerhalb zählen in keinem Bericht", () => {
+    const fensterLaeufe = {
+      [LENS]: [lensLauf(2, LENS), verschiebe(lensLauf(4, LENS), -600), verschiebe(lensLauf(6, LENS), 600)],
+      [LENS_B]: [lensLauf(1, LENS_B), verschiebe(lensLauf(3, LENS_B), -600), verschiebe(lensLauf(5, LENS_B), 600)],
+    };
+    const r = jeTypJson(cli(["--von", "2026-10-08T11:00:00Z", "--bis", "2026-10-08T13:00:00Z", "--agent", LENS, "--agent", LENS_B, "--json"], fensterLaeufe));
+    expect(r.agenten[LENS].laeufe.map((l) => l.ticket)).toEqual([2]);
+    expect(r.agenten[LENS_B].laeufe.map((l) => l.ticket)).toEqual([1]);
+  });
+  test("CLI: --je-ticket lädt 48 h vor --von, ohne --je-ticket genau ab --von (für beide Typen)", () => {
+    const von = "2026-10-08T11:00:00Z";
+    const mitJe = cli(["--von", von, "--agent", LENS, "--agent", LENS_B, "--je-ticket", "--json"], laeufeJeTyp);
+    expect(mitJe.vons).toEqual([new Date(Date.parse(von) - 48 * 3600_000).toISOString(), new Date(Date.parse(von) - 48 * 3600_000).toISOString()]);
+    expect(cli(["--von", von, "--agent", LENS, "--agent", LENS_B, "--json"], laeufeJeTyp).vons).toEqual([von, von]);
+  });
+  test("CLI: --delta und --brille filtern in beiden Typen", () => {
+    const mit = (nr: number, typ: string, beschr: string, prompt: string): Lauf => {
+      const l = lauf(prompt, [{ min: 1 }, { min: 2 }], typ);
+      (l.meta as Record<string, unknown>).description = beschr;
+      return l;
+    };
+    const laeufe = {
+      [LENS]: [mit(2, LENS, "Lens Architektur R1", `Patch: /t/${WT}2-r1.patch`), mit(2, LENS, "Lens Doku R2", `Patch: /t/${WT}2-r1.patch Delta-Patch: /t/${WT}2-r2-delta.patch`)],
+      [LENS_B]: [mit(1, LENS_B, "Lens Architektur R1", `Patch: /t/${WT}1-r1.patch`), mit(1, LENS_B, "Lens Doku R2", `Patch: /t/${WT}1-r1.patch Delta-Patch: /t/${WT}1-r2-delta.patch`)],
+    };
+    const n = (extra: string[]) => {
+      const r = jeTypJson(cli([...VON.slice(0, 2), "--agent", LENS, "--agent", LENS_B, "--json", ...extra], laeufe));
+      return [r.agenten[LENS].gesamt.gesamt?.n ?? 0, r.agenten[LENS_B].gesamt.gesamt?.n ?? 0];
+    };
+    expect(n([])).toEqual([2, 2]);
+    expect(n(["--delta", "ja"])).toEqual([1, 1]);
+    expect(n(["--brille", "Architektur"])).toEqual([1, 1]);
+    expect(n(["--brille", "Architektur", "--delta", "ja"])).toEqual([0, 0]);
   });
   test("CLI: ohne --von oder mit falschem Flag Exit 2 samt Aufrufzeile mit wiederholbarem --agent", () => {
     const r = cli(["--agent", LENS, "--agent", LENS_B], laeufeJeTyp);
