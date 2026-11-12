@@ -83,6 +83,16 @@ export function leereProjektwerte(text, pfad = "<text>") {
   return zeilen.join("\n");
 }
 
+/** Text ohne Projektwerte, zum Messen (L6c): Wert der Frontmatter-Zeilen entfernt, jeder Block samt Markern durch eine leere Zeile ersetzt. Wirft wie `projektwertStellen` (fail-closed). */
+export function ohneProjektwertBlock(text, pfad = "<text>") {
+  if (!text.includes(PROJEKTWERT_KENNUNG)) return text;
+  const st = projektwertStellen(text, pfad);
+  const zeilen = text.split("\n");
+  for (const z of st.zeilen) zeilen[z.folge] = `${z.einrueckung}${z.name}:`;
+  for (const b of [...st.bloecke].reverse()) zeilen.splice(b.start, b.ende - b.start + 1, "");
+  return zeilen.join("\n");
+}
+
 /** Der eine Projektwert, der `null` sein darf (kein Abschluss-Skill, factory#139); in der Tabelle steht `—`. */
 const NULLBARER_PROJEKTWERT = `skills.${NULLBARER_SKILL}`;
 

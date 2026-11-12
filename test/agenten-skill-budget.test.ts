@@ -51,7 +51,7 @@ describe("ohneProjektwertBlock (L6c): ein Parser für den Block", () => {
   const text = `kopf\n${START}\nblock\n${ENDE}\nrest`;
   test("schneidet den Block samt Markern aus (eine leere Zeile bleibt), leert die Werte der Frontmatter-Zeilen", () => {
     assert.equal(ohneProjektwertBlock(text, "x.md"), "kopf\n\nrest");
-    assert.equal(ohneProjektwertBlock(`---\n# factory:projektwert agenten.planer\nname: wert\n---\n${START}\nb\n${ENDE}\n`, "x.md"), "---\n# factory:projektwert agenten.planer\nname:\n---\n\n\n");
+    assert.equal(ohneProjektwertBlock(`---\n# factory:projektwert agenten.planer\nname: wert\n---\n${START}\nb\n${ENDE}\n`, "x.md"), "---\n# factory:projektwert agenten.planer\nname:\n---\n\n");
   });
   test("ohne Block zählt der ganze Text; CRLF zählt wie LF", () => {
     assert.equal(ohneProjektwertBlock("abc", "x.md"), "abc");
@@ -60,6 +60,7 @@ describe("ohneProjektwertBlock (L6c): ein Parser für den Block", () => {
   test("kaputter Block wirft mit Dateiname (fail-closed, kein stilles Ganz-Zählen)", () => {
     assert.throws(() => ohneProjektwertBlock(`a\n${START}\nb\n`, "x.md"), /x\.md:2: .*kein Ende/);
     assert.throws(() => ohneProjektwertBlock(`a\n${ENDE}\nb\n${START}\nc\n`, "x.md"), /x\.md:2: .*ohne Start/);
+    assert.throws(() => ohneProjektwertBlock(`a\n${START}\n`), /^Error: <text>:2: /, "ohne Pfad nennt die Meldung <text>");
   });
 });
 
