@@ -30,6 +30,25 @@ import * as rawV from "../scripts/audit-verzeichnisse.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/audit-verzeichnisse-lib.mjs";
 
+type Fuehre = (prog: string, args: string[], opts: { cwd: string }) => string;
+const NpmJson = rawLib as unknown as { npmAuditJson: (v: string, extra: string[], deps: { fuehreAus: Fuehre; wurzel: string }) => unknown };
+
+describe("npmAuditJson", () => {
+  const ok = JSON.stringify({ vulnerabilities: {} });
+  test("liest JSON von stdout, cwd ist Wurzel/Verzeichnis, extra wird angehängt", () => {
+    const gerufen: { args: string[]; cwd: string }[] = [];
+    const fuehreAus: Fuehre = (_p, args, opts) => (gerufen.push({ args, cwd: opts.cwd }), ok);
+    expect(NpmJson.npmAuditJson("frontend", ["--omit=dev"], { fuehreAus, wurzel: "/w" })).toEqual({ vulnerabilities: {} });
+    expect(gerufen[0]).toEqual({ args: ["audit", "--json", "--omit=dev"], cwd: "/w/frontend" });
+  });
+  test("Exit 1 mit stdout (Funde) liefert das JSON, ohne stdout wirft der Fehler", () => {
+    const mitFunden: Fuehre = () => { throw Object.assign(new Error("exit 1"), { stdout: ok }); };
+    const ohne: Fuehre = () => { throw new Error("npm fehlt"); };
+    expect(NpmJson.npmAuditJson(".", [], { fuehreAus: mitFunden, wurzel: "/w" })).toEqual({ vulnerabilities: {} });
+    expect(() => NpmJson.npmAuditJson(".", [], { fuehreAus: ohne, wurzel: "/w" })).toThrow("npm fehlt");
+  });
+});
+
 type Lauf = (verzeichnis: string, args: string[]) => number;
 const V = rawV as unknown as {
   main: (argv: string[], deps: { ladeConfig: () => unknown; fuehreAus: Lauf; log: (t: string) => void; err: (t: string) => void }) => number;

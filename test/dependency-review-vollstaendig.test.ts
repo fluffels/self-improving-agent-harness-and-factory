@@ -41,6 +41,10 @@ describe("befundeAusVergleich (factory#395 L4)", () => {
     expect(D.befundeAusVergleich([pom({ vulnerabilities: [vuln("seltsam")] })], { schwere: "high" })).toHaveLength(1);
   });
 
+  test("Schwere fehlt (null): zählt als Treffer", () => {
+    expect(D.befundeAusVergleich([pom({ vulnerabilities: [{ ...vuln("high"), severity: null as unknown as string }] })], { schwere: "high" })).toHaveLength(1);
+  });
+
   test("Eintrag ohne vulnerabilities-Liste ist kein Befund; keine Liste wirft", () => {
     expect(D.befundeAusVergleich([{ ...sauber, vulnerabilities: undefined }], { schwere: "high" })).toEqual([]);
     expect(() => D.befundeAusVergleich({ message: "Not Found" }, { schwere: "high" })).toThrow(/keine Liste/);
@@ -82,6 +86,8 @@ describe("main", () => {
     ["KOPF kein 40-hex", { GITHUB_REPOSITORY: "o/r", BASIS, KOPF: "$(x)" }],
     ["Repo nicht owner/name", { GITHUB_REPOSITORY: "o/r/../x", BASIS, KOPF }],
     ["Repo fehlt", { BASIS, KOPF }],
+    ["Repo mit ..-Teil vorn", { GITHUB_REPOSITORY: "../x", BASIS, KOPF }],
+    ["Repo mit ..-Teil hinten", { GITHUB_REPOSITORY: "o/..", BASIS, KOPF }],
   ])("%s: Exit 2, kein Aufruf", (_n, env) => {
     const l = lauf(["--schwere", "high"], [], env);
     expect(l.code).toBe(2);
