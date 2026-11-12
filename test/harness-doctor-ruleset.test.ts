@@ -2,12 +2,13 @@
  * OK, LÜCKE je Feld, NICHT PRÜFBAR (fail-closed: kein Admin-Recht, Endpunkt-Fehler, fehlende ID). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pinPunkt, pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
+import { pinPunkt as rawPin, pruefeRulesetSpiegel as raw, rulesetPunkte as rawPunkte } from "../scripts/harness-doctor-ruleset.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Lesen = (args: string[]) => unknown;
 const pruefe = raw as (e: { spiegel: unknown; repo: string; lesen: Lesen }) => Ergebnis;
 
+const pinPunkt = rawPin as (regeln: { wert?: unknown; fehler?: string }) => Ergebnis[];
 const punkte = rawPunkte as (e: { spiegel: unknown; repo: string; lesen?: Lesen }) => Ergebnis[];
 
 const SPIEGEL = {
@@ -119,7 +120,7 @@ describe("Ruleset-Spiegel: NICHT PRÜFBAR (fail-closed)", () => {
 
 describe("Required-Check-Pin (factory#375 L51): integration_id je Required Check aus rules/branches", () => {
   const regel = (checks: unknown[]) => ({ type: "required_status_checks", parameters: { required_status_checks: checks } });
-  const pin = (wert: unknown) => pinPunkt({ wert }) as Ergebnis[];
+  const pin = (wert: unknown) => pinPunkt({ wert });
   test("ohne integration_id: Lücke mit den Kontexten und Fix-Text", () => {
     const x = pin([regel([{ context: "Zeta" }, { context: "Beta", integration_id: 15368 }, { context: "Gamma", integration_id: null }, { context: "Alpha" }])])[0];
     expect(x?.punkt).toBe("Required-Check-Pin");
@@ -149,7 +150,7 @@ describe("Required-Check-Pin (factory#375 L51): integration_id je Required Check
     expect(pin([fremd, regel([{ context: "A", integration_id: 1 }])])[0]?.ok).toBe(true);
   });
   test("Lesefehler aus hole: nicht prüfbar mit Grund", () => {
-    const x = (pinPunkt({ fehler: "HTTP 403" }) as Ergebnis[])[0];
+    const x = pinPunkt({ fehler: "HTTP 403" })[0];
     expect(x?.punkt).toBe("Required-Check-Pin");
     expect(x?.nichtPruefbar).toBe(true);
     expect(x?.befund).toContain("HTTP 403");

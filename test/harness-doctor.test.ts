@@ -22,7 +22,7 @@ import { altEnvName as rawAltName } from "../scripts/projekt-config-lib.mjs";
 
 interface Doctor {
   main(argv: string[], opt: Record<string, unknown>): number;
-  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean }[];
+  pruefe(a: { config: { repo: string }; voraussetzungen: Record<string, unknown>; spiegel: unknown; gh: (a: string[]) => string; langfuse: null }): { punkt: string; ok: boolean; fatal?: boolean; befund?: string; nichtPruefbar?: boolean }[];
   voraussetzungenAus(a: { config: Record<string, unknown>; workflows: { pfad: string; text: string }[]; spiegel?: unknown; besitz?: unknown }): { secrets: string[]; optionaleSecrets: string[]; variablen: string[]; labels: string[]; pflichtChecks: string[]; besitzFehler: string | null };
 }
 const doctor = rawDoctor as unknown as Doctor;
@@ -480,7 +480,7 @@ describe("harness-doctor --pruefen", () => {
     const ohne = punkteMit(regel([{ context: "CI" }, { context: "Audit", integration_id: 15368 }]));
     assert.equal(ohne.length, 1);
     assert.equal(ohne[0].ok, false);
-    assert.match(ohne[0].befund, /integration_id: CI$/);
+    assert.match(ohne[0].befund ?? "", /integration_id: CI$/);
     assert.equal(punkteMit(regel([{ context: "CI", integration_id: 15368 }]))[0].ok, true);
     assert.equal(punkteMit(new Error("HTTP 403"))[0].nichtPruefbar, true);
     assert.deepEqual(punkteMit([]), []);
