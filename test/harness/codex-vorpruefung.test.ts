@@ -354,7 +354,7 @@ test("Tracing: ein Body, der nach den Headern stockt, wird innerhalb der Frist a
   try {
     const t0 = Date.now();
     const m = await p.tracingMaengel({ env: { LANGFUSE_BASE_URL: `http://127.0.0.1:${port}` }, fristMs: 100 });
-    expect(m).toHaveLength(1); expect(m[0]).toContain("Timeout nach 100 ms");
+    expect(m).toHaveLength(1); expect(m[0]).toMatch(/^Tracing-Ausfall: Langfuse nicht erreichbar: Timeout nach 100 ms /);
     expect(Date.now() - t0).toBeLessThan(2000);
   } finally {
     server.closeAllConnections();
