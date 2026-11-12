@@ -10,15 +10,19 @@ import { join } from "node:path";
 import { kopiereScripts } from "./support/scripts-kopie";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault, zeichenOhneBlock as rawOhneBlock } from "../scripts/kontext-budget-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS as rawBudgets, AGENTEN_SKILL_DEFAULT_BUDGET as rawDefault, countChars as rawCount } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix } from "../scripts/check-context-size.mjs";
+import { ohneProjektwertBlock as rawOhneBlock } from "../scripts/projektwert-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { collectAgentSkillFiles as rawFiles, collectAgentSkillSizes as rawSizes, findOversized as rawOversized, fixHinweis as rawFix, messeAgentSkills as rawMesse } from "../scripts/check-context-size.mjs";
 
 type Eintrag = { file: string; budget: number };
 type Groesse = { file: string; chars: number; budget: number };
 const AGENTEN_SKILL_BUDGETS = rawBudgets as Eintrag[];
 const DEFAULT = rawDefault as number;
-const zeichenOhneBlock = rawOhneBlock as (text: string, marker: { start: string; ende: string }) => number;
+const ohneProjektwertBlock = rawOhneBlock as (text: string, pfad: string) => string;
+const countChars = rawCount as (text: string) => number;
+const messeAgentSkills = rawMesse as (wurzel: string) => { sizes?: Groesse[]; fehler?: string };
 const collectFiles = rawFiles as (wurzel: string) => string[];
 const collectSizes = rawSizes as (wurzel: string, budgets?: Eintrag[], standard?: number) => Groesse[];
 const findOversized = rawOversized as (sizes: Groesse[]) => Groesse[];
@@ -27,7 +31,6 @@ const fixHinweis = rawFix as (violations: { file: string }[]) => string;
 const WURZEL = join(import.meta.dirname, "..");
 const START = "<!-- factory:projektwerte:start -->";
 const ENDE = "<!-- factory:projektwerte:end -->";
-const MARKER = { start: START, ende: ENDE };
 
 const temp = (fn: (dir: string) => void): void => {
   const dir = mkdtempSync(join(tmpdir(), "agentenbudget-"));
@@ -44,19 +47,49 @@ const datei = (dir: string, rel: string, inhalt: string): void => {
 /** Verlängert den Projektwerte-Block einer Datei um `n` Zeichen (eine Tabelle mit vielen Zeilen im Bezieher). */
 const verlaengert = (text: string, n: number): string => text.replace(ENDE, `${"| `x` | `y` |\n".repeat(Math.ceil(n / 14))}${ENDE}`);
 
-describe("zeichenOhneBlock", () => {
+describe("ohneProjektwertBlock (L6c): ein Parser für den Block", () => {
   const text = `kopf\n${START}\nblock\n${ENDE}\nrest`;
-  test("zählt ohne den Block samt Markern", () => {
-    assert.equal(zeichenOhneBlock(text, MARKER), "kopf\n\nrest".length);
+  test("schneidet den Block samt Markern aus (eine leere Zeile bleibt), leert die Werte der Frontmatter-Zeilen", () => {
+    assert.equal(ohneProjektwertBlock(text, "x.md"), "kopf\n\nrest");
+    assert.equal(ohneProjektwertBlock(`---\n# factory:projektwert agenten.planer\nname: wert\n---\n${START}\nb\n${ENDE}\n`, "x.md"), "---\n# factory:projektwert agenten.planer\nname:\n---\n\n\n");
   });
-  test("ein Block gleich am Textanfang wird mitgeschnitten", () => {
-    assert.equal(zeichenOhneBlock(`${START}block${ENDE}rest`, MARKER), "rest".length);
+  test("ohne Block zählt der ganze Text; CRLF zählt wie LF", () => {
+    assert.equal(ohneProjektwertBlock("abc", "x.md"), "abc");
+    assert.equal(countChars(ohneProjektwertBlock(text.replace(/\n/g, "\r\n"), "x.md")), countChars(ohneProjektwertBlock(text, "x.md")));
   });
-  test("ohne Block oder mit nur einem Marker zählt der ganze Text; CRLF zählt wie LF", () => {
-    assert.equal(zeichenOhneBlock("abc", MARKER), 3);
-    assert.equal(zeichenOhneBlock(`a${START}b`, MARKER), `a${START}b`.length);
-    assert.equal(zeichenOhneBlock(`a${ENDE}b${START}c`, MARKER), `a${ENDE}b${START}c`.length, "Ende vor Start: kein Block");
-    assert.equal(zeichenOhneBlock(text.replace(/\n/g, "\r\n"), MARKER), zeichenOhneBlock(text, MARKER));
+  test("kaputter Block wirft mit Dateiname (fail-closed, kein stilles Ganz-Zählen)", () => {
+    assert.throws(() => ohneProjektwertBlock(`a\n${START}\nb\n`, "x.md"), /x\.md:2: .*kein Ende/);
+    assert.throws(() => ohneProjektwertBlock(`a\n${ENDE}\nb\n${START}\nc\n`, "x.md"), /x\.md:2: .*ohne Start/);
+  });
+});
+
+describe("messeAgentSkills (L6a): kaputter Marker wird eine Gate-Meldung statt Stacktrace", () => {
+  test("Start ohne Ende: fehler mit Dateiname, keine Größen; sonst Größen ohne fehler", () => {
+    temp((dir) => {
+      datei(dir, ".claude/agents/planer.md", `x\n${START}\nohne ende\n`);
+      const r = messeAgentSkills(dir);
+      assert.match(r.fehler ?? "", /\.claude\/agents\/planer\.md:2: .*kein Ende/);
+      assert.equal(r.sizes, undefined);
+      assert.doesNotMatch(r.fehler ?? "", /npm run/);
+      datei(dir, ".claude/agents/planer.md", "x\n");
+      const ok = messeAgentSkills(dir);
+      assert.equal(ok.fehler, undefined);
+      assert.deepEqual(ok.sizes, [{ file: ".claude/agents/planer.md", chars: 2, budget: DEFAULT }]);
+    });
+  });
+
+  test("CLI: Exit 1 mit der Meldung (Dateiname), ohne Stacktrace", { timeout: 60_000 }, () => {
+    temp((dir) => {
+      kopiereScripts(dir);
+      datei(dir, ".factory/projekt.json", readFileSync(join(WURZEL, ".factory", "projekt.json"), "utf8"));
+      datei(dir, "AGENTS.md", "# Projekt\n");
+      datei(dir, ".claude/agents/planer.md", `x\n${START}\nohne ende\n`);
+      const r = spawnSync(process.execPath, [join(dir, "scripts", "check-context-size.mjs")], { encoding: "utf8", cwd: dir, timeout: 30_000 });
+      const text = `${r.stderr}${r.stdout}`;
+      assert.equal(r.status, 1, text);
+      assert.match(text, /✖ .*\.claude\/agents\/planer\.md:2: .*kein Ende/);
+      assert.doesNotMatch(text, /\n\s+at /);
+    });
   });
 });
 
@@ -96,7 +129,7 @@ describe("collectAgentSkillFiles und collectAgentSkillSizes", () => {
     });
   });
 
-  test("die Messung ignoriert den Projektwerte-Block (mit countChars statt zeichenOhneBlock wären die echten Dateien rot)", () => {
+  test("die Messung ignoriert den Projektwerte-Block (mit countChars statt ohneProjektwertBlock wären die echten Dateien rot)", () => {
     temp((dir) => {
       datei(dir, ".claude/agents/a.md", `kopf\n${START}\n${"| x |\n".repeat(50_000)}${ENDE}\nrest`);
       assert.deepEqual(collectSizes(dir).map((s) => s.chars), ["kopf\n\nrest".length]);
@@ -135,6 +168,12 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
       assert.match(t, /modul-lokale AGENTS\.md/);
       assert.doesNotMatch(t, /Ratchet/);
     }
+  });
+
+  test("L6b: der Dateiname entscheidet, nicht das Namensende (NICHT-AGENTS.md ist eine Skill-Datei)", () => {
+    const t = fixHinweis([{ file: ".agents/skills/x/NICHT-AGENTS.md" }]);
+    assert.match(t, /Ratchet/);
+    assert.doesNotMatch(t, /modul-lokale AGENTS\.md/);
   });
 
   test("gemischt: beide Teile; ohne Verletzung leer", () => {
