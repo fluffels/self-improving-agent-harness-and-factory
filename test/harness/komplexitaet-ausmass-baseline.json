@@ -94,7 +94,7 @@
     "complexity": 10
   },
   "scripts/langfuse-abgleich.mjs": {
-    "complexity": 43
+    "complexity": 35
   },
   "scripts/langfuse-lock.mjs": {
     "complexity": 4

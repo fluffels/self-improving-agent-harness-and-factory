@@ -60,6 +60,8 @@ const A = {
   ticketAusBranch: (b: unknown) => string | null;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null; alleOrdner?: boolean }) => { id: string; pfad: string; mtime: number; groesse: number; ausserhalb?: boolean }[];
+  sessionAufloesen: (o: { projectsRoot: string; angabe: string }) => { id?: string; fehler?: string; kandidaten?: string[] };
+  statusZelle: (b: { status: string; score: string | null }) => string;
   PREIS_TOLERANZ: number;
   preisVergleich: (o: { fehlend: number; dubletten: number; tokenAbweichung: boolean; kostenT: number; kostenL: number | null | undefined }) => { preisabweichung: number | null; hinweisUeberpreis: boolean };
   istAbfragen: (o: { von: string; bis: string; session?: string | null }) => { zaehlung: Record<string, unknown>; tokens: Record<string, unknown>; kosten: Record<string, unknown> };
@@ -71,7 +73,7 @@ const A = {
   ohneZugang: () => string;
   AUFRUFHILFE: string;
   bewerteSession: (o: { soll: Eintrag[]; ist: Ist; mtime: number; now: number; diff?: { fehlend: Eintrag[]; dubletten: Obs[]; art: string } | null; ledgerEintrag?: { beendet?: boolean; mtime?: number; groesse?: number | null } | null; groesse?: number | null; ausserhalb?: boolean }) => Bewertung;
-  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; vorStichtag: number; preisabweichung: number | null };
+  summenzeile: (b: Bewertung[]) => { sessions: number; laeuft: number; callsTranskript: number; callsLangfuse: number; fehlend: number; dubletten: number; quote: number; scoreAusstehend: number; fehlendAusstehend: number; vorStichtag: number; preisabweichung: number | null };
   pruefen: (
     args: { pruefen: boolean; json: boolean; seit: string | null; session: string | null; ist: string[]; fehler?: string },
     d: { env?: Record<string, string>; now?: number; projectsRoot: string; repoRoot: string; fetchImpl?: Fetch; leseDatei?: (p: string) => string; stateDir?: string | null; config?: unknown },
@@ -724,6 +726,93 @@ describe("Score ausstehend und vor Stichtag (getrennt vom Status)", () => {
   });
 });
 
+describe("Lücke bei Score ausstehend (factory#354)", () => {
+  const now = 1_000_000_000_000;
+  const luecke = (o: Record<string, unknown> = {}) => A.bewerteSession({ soll: [eintrag(1), eintrag(2)], ist: { calls: 1, tokens: null }, mtime: now - 60 * 60_000, now, ...o });
+
+  test("Lücke mit Score ausstehend steht als „Lücke, Nachlieferer wartet“ in der Tabelle, die Summenzeile nennt die Session mit Kürzel", () => {
+    const b = luecke();
+    expect(b).toMatchObject({ status: "Lücke", score: "ausstehend", fehlend: 1 });
+    const sum = A.summenzeile([b]);
+    expect(sum).toMatchObject({ scoreAusstehend: 1, fehlendAusstehend: 1, fehlend: 1 });
+    const md = A.renderMarkdown([b], sum);
+    expect(md).toContain("| Lücke, Nachlieferer wartet |");
+    expect(md).toContain(`1 davon Score ausstehend (Nachlieferer wartet noch: ${String((b as unknown as { session: string }).session).slice(0, 8)})`);
+    expect(md).toContain("fehlend 1 (davon 1 in Sessions, auf die der Nachlieferer noch wartet: noch kein Befund)");
+  });
+
+  test("Negativfälle: nach 24 h nur Lücke, vollständig bleibt „vollständig, Score ausstehend“, läuft bleibt läuft, ohne Wartende kein Zusatz", () => {
+    const alt = luecke({ mtime: now - 25 * 3_600_000 });
+    expect(A.statusZelle(alt)).toBe("Lücke");
+    expect(A.renderMarkdown([alt], A.summenzeile([alt]))).not.toMatch(/Nachlieferer wartet|noch kein Befund/);
+    const voll = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null }, mtime: now - 60 * 60_000, now });
+    expect(A.statusZelle(voll)).toBe("vollständig, Score ausstehend");
+    expect(A.statusZelle(luecke({ mtime: now - 10 * 60_000 }))).toBe("läuft");
+    expect(A.statusZelle({ status: "Dublette", score: "ausstehend" })).toBe("Dublette, Nachlieferer wartet");
+    expect(A.statusZelle({ status: "Abweichung", score: "ausstehend" })).toBe("Abweichung, Nachlieferer wartet");
+    expect(A.statusZelle({ status: "Lücke", score: "vor Stichtag" })).toBe("Lücke");
+  });
+
+  test("Summe: fehlendAusstehend zählt fehlende Calls (nicht Sessions), das Kürzel nennt nur wartende Sessions, ohne Zusatz kein Semikolon", () => {
+    const drei = luecke({ soll: [eintrag(1), eintrag(2), eintrag(3)] });
+    expect(A.summenzeile([drei])).toMatchObject({ fehlend: 2, fehlendAusstehend: 2 });
+    const fertig = { ...luecke({ mtime: now - 25 * 3_600_000 }), session: "fertig22-x" };
+    const warte = { ...luecke(), session: "warte111-y" };
+    const md = A.renderMarkdown([warte, fertig], A.summenzeile([warte, fertig]));
+    expect(md).toContain("(Nachlieferer wartet noch: warte111)");
+    expect(md).not.toContain("fertig22)");
+    const ruhig = A.bewerteSession({ soll: [eintrag(1)], ist: { calls: 1, tokens: null, kosten: 1 }, mtime: now - 25 * 3_600_000, now });
+    const ohne = A.renderMarkdown([ruhig], A.summenzeile([ruhig]));
+    expect(ohne).toMatch(/Erfassungsquote 100,0 %\.$/m);
+    expect(ohne).not.toContain("läuft noch");
+  });
+
+  test("fehlendAusstehend zählt nur feste Sessions mit Score ausstehend, läuft und vor Stichtag nicht", () => {
+    const sum = A.summenzeile([luecke(), luecke(), luecke({ mtime: now - 25 * 3_600_000 }), luecke({ mtime: now - 10 * 60_000 })]);
+    expect(sum).toMatchObject({ fehlend: 3, fehlendAusstehend: 2, scoreAusstehend: 2 });
+    // Lücke vor dem Stichtag (Score vor Stichtag) ist keine wartende Lücke
+    const alt = luecke({ soll: [eintrag(1, { ts: "2026-10-01T00:00:00Z" }), eintrag(2, { ts: "2026-10-01T00:00:00Z" })], mtime: now - 25 * 3_600_000 });
+    expect(A.summenzeile([alt, luecke()])).toMatchObject({ fehlend: 2, fehlendAusstehend: 1, vorStichtag: 1 });
+  });
+});
+
+describe("Session auflösen (factory#354)", () => {
+  const root = () =>
+    fixture({
+      [`${PRAEFIX}/abcd1234-aaaa.jsonl`]: msg("m"),
+      [`${PRAEFIX}--claude-worktrees-wt/abcd1234-aaaa.jsonl`]: msg("m"),
+      [`${PRAEFIX}/abcd9999-bbbb.jsonl`]: msg("m"),
+      "Y--anders/feed0001-cccc.jsonl": msg("m"),
+      "Y--anders/abcd0000-cccc.jsonl": msg("m"),
+      [`${PRAEFIX}/ab.jsonl`]: msg("m"),
+      [`${PRAEFIX}/abc.jsonl`]: msg("m"),
+    });
+  const auf = (angabe: string) => A.sessionAufloesen({ projectsRoot: root(), angabe });
+
+  test("exakter Treffer, eindeutiger Präfix, Treffer außerhalb der Projektordner", () => {
+    expect(auf("abcd9999-bbbb")).toEqual({ id: "abcd9999-bbbb" });
+    expect(auf("abcd9")).toEqual({ id: "abcd9999-bbbb" });
+    expect(auf("feed0001")).toEqual({ id: "feed0001-cccc" });
+  });
+
+  test("dieselbe ID in zwei Ordnern zählt einmal", () => {
+    expect(auf("abcd1234")).toEqual({ id: "abcd1234-aaaa" });
+  });
+
+  test("exakter Treffer gewinnt gegen Präfix-Treffer (ab neben abc)", () => {
+    expect(auf("ab")).toEqual({ id: "ab" });
+  });
+
+  test("mehrdeutiger Präfix nennt sortierte volle IDs, ohne Treffer: nicht gefunden", () => {
+    expect(auf("abcd")).toEqual({ fehler: "mehrdeutig", kandidaten: ["abcd0000-cccc", "abcd1234-aaaa", "abcd9999-bbbb"] });
+    expect(auf("zzzz")).toEqual({ fehler: "nicht gefunden" });
+    // nur Anfang, nie Mitte; eine leere Angabe trifft nichts
+    expect(auf("1234")).toEqual({ fehler: "nicht gefunden" });
+    expect(auf("")).toEqual({ fehler: "nicht gefunden" });
+    expect(A.sessionAufloesen({ projectsRoot: join(root(), "gibtsnicht"), angabe: "ab" })).toEqual({ fehler: "nicht gefunden" });
+  });
+});
+
 describe("pruefen (Ablauf)", () => {
   const args = (o: Partial<ReturnType<typeof A.parseArgs>> = {}) => ({ pruefen: true, json: false, seit: null, session: null, ist: [], ...o });
   const mitSession = (calls: string[]) => fixture({ [`${PRAEFIX}/s1.jsonl`]: calls.join("\n") });
@@ -819,6 +908,58 @@ describe("pruefen (Ablauf)", () => {
     expect(s2).toMatchObject({ status: "Lücke", fehlend: 2, quote: 0, callsLangfuse: 0 });
     expect(s2?.fehlendeCalls?.map((c) => c.messageId)).toEqual(["c", "d"]);
     expect(j.summe.fehlend).toBe(2);
+  });
+
+  describe("--session mit Präfix (factory#354)", () => {
+    const VOLL = "abcdef12-3456-7890-abcd-ef1234567890";
+    const wurzel = () => fixture({ [`${PRAEFIX}/${VOLL}.jsonl`]: msg("a"), [`${PRAEFIX}/abcdef99-0000.jsonl`]: msg("b"), [`${PRAEFIX}/leer0000-0000.jsonl`]: "{}" });
+    const ist = () => fixture({ "ist.json": JSON.stringify({ data: [] }) });
+    const leseDatei = (p: string) => readFileSync(p, "utf8");
+
+    test("--ist: der Präfix wird aufgelöst, der Bericht trägt die volle ID", async () => {
+      const i = ist();
+      const r = await A.pruefen(args({ json: true, session: "abcdef12", ist: [join(i, "ist.json")] }), { env: {}, now: SPAET(), projectsRoot: wurzel(), repoRoot: REPO, leseDatei });
+      expect(r.exitCode).toBe(0);
+      const j = JSON.parse(r.text) as { sessions: { session: string; callsTranskript: number }[] };
+      expect(j.sessions).toHaveLength(1);
+      expect(j.sessions[0]).toMatchObject({ session: VOLL, callsTranskript: 1 });
+    });
+
+    test("mit Zugang trägt der sessionId-Filter der Abfragen die volle ID, nicht den Präfix", async () => {
+      const m = mock({ zaehlung: [] });
+      const r = await A.pruefen(args({ json: true, session: "abcdef12" }), { env: ZUGANG, now: SPAET(), projectsRoot: wurzel(), repoRoot: REPO, fetchImpl: m.fetchImpl });
+      expect(r.exitCode).toBe(0);
+      const q = JSON.stringify(m.queries);
+      expect(q).toContain(`"${VOLL}"`);
+      expect(q).not.toContain('"abcdef12"');
+    });
+
+    test("unbekannte Session: Exit 1 mit Angabe, nie still sessions: []", async () => {
+      for (const json of [false, true]) {
+        const r = await A.pruefen(args({ json, session: "zzzz0000", ist: [join(ist(), "ist.json")] }), { env: {}, now: SPAET(), projectsRoot: wurzel(), repoRoot: REPO, leseDatei });
+        expect(r.exitCode).toBe(1);
+        expect(r.text).toContain("zzzz0000");
+        expect(r.text).toContain("nicht gefunden");
+        expect(r.text).toContain("nichts geprüft");
+        expect(r.text).not.toContain('"sessions"');
+      }
+    });
+
+    test("mehrdeutiger Präfix: Exit 2 mit beiden vollen IDs und Aufrufhilfe", async () => {
+      const r = await A.pruefen(args({ session: "abcdef", ist: [join(ist(), "ist.json")] }), { env: {}, now: SPAET(), projectsRoot: wurzel(), repoRoot: REPO, leseDatei });
+      expect(r.exitCode).toBe(2);
+      expect(r.text).toContain(VOLL);
+      expect(r.text).toContain("abcdef99-0000");
+      expect(r.text).toContain(A.AUFRUFHILFE);
+    });
+
+    test("Session gefunden, Transkript ohne Calls: Exit 1; ohne --session und ohne Sessions bleibt es bei Exit 0", async () => {
+      const r = await A.pruefen(args({ session: "leer0000", ist: [join(ist(), "ist.json")] }), { env: {}, now: SPAET(), projectsRoot: wurzel(), repoRoot: REPO, leseDatei });
+      expect(r.exitCode).toBe(1);
+      expect(r.text).toContain("Transkript ohne Calls, nichts geprüft");
+      const ohne = await A.pruefen(args({ ist: [join(ist(), "ist.json")] }), { env: {}, now: SPAET(), projectsRoot: fixture({ [`${PRAEFIX}/leer.jsonl`]: "{}" }), repoRoot: REPO, leseDatei });
+      expect(ohne).toEqual({ exitCode: 0, text: "Keine Sessions mit Calls im Fenster." });
+    });
   });
 
   test("Außerhalb (#1862): --session findet eine Session außerhalb der Projektordner, meldet sie als Lücke mit Score außerhalb; ohne --session erscheint sie nicht; --ist ohne Zugang genügt", async () => {
@@ -932,7 +1073,7 @@ describe("pruefen (Ablauf)", () => {
     const ohne = (await lauf(fixture({}))).text;
     const groesse = statSync(join(root, PRAEFIX, "s1.jsonl")).size;
     expect(ohne).toContain("| vollständig, Score ausstehend |");
-    expect(ohne).toContain("1 davon Score ausstehend (Nachlieferer wartet noch)");
+    expect(ohne).toContain("1 davon Score ausstehend (Nachlieferer wartet noch: s1)");
     expect(ohne).toContain(`vor ${A.STICHTAG.slice(0, 10)})`);
     const mitEnde = fixture({ "langfuse-abgleich.json": JSON.stringify({ version: 1, sessions: { s1: { beendet: true, mtime, groesse } } }) });
     const ende = (await lauf(mitEnde)).text;
@@ -983,11 +1124,11 @@ describe("pruefen (Ablauf)", () => {
     expect(A.ohneZugang()).toContain('Filter providedModelName none of ["claude"]');
   });
 
-  test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist bleibt Lücke und wird nie als „vollständig, Score ausstehend“ gezeigt", async () => {
+  test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist heißt „Lücke, Nachlieferer wartet“, nie „vollständig, Score ausstehend“", async () => {
     const root = mitSession([msg("a")]);
     const m = mock({ zaehlung: [], observations: [] });
     const r = await A.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl });
-    expect(r.text).toContain("| Lücke |");
+    expect(r.text).toContain("| Lücke, Nachlieferer wartet |");
     expect(r.text).not.toContain("vollständig, Score ausstehend");
   });
 
