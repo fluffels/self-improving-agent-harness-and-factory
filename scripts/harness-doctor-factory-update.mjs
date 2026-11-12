@@ -66,140 +66,107 @@ const besitzWorkflows = (manifest, rootDir, existiert) => manifest.eintraege.fil
 
 /** Der Leser kennt eine Form nicht (fail-closed: Ergebnis `NICHT PRÜFBAR`, nie ein stilles OK). */
 class NichtLesbar extends Error {}
-const nl = (konstrukt) => new NichtLesbar(konstrukt);
-const SCHLUESSEL = /^([A-Za-z0-9_./-]+):(?:[ \t]+(.*))?$/;
-const LISTENPUNKT = /^-(?: |$)/;
+const nl = (was) => new NichtLesbar(was);
+const SCHLUESSEL = /^([A-Za-z0-9_./-]+):(?: (.*))?$/;
 const SONDER = /^[&*!|>{%@`?[]/;
-const ohneKommentar = (s) => s.replace(/(^|[ \t])#.*$/, "").trim();
+const ohneKommentar = (s) => s.replace(/(^| )#.*$/, "").trim();
 
 /** Ein Skalar (plain oder in einem Quote-Paar); Anker, Alias, Tag, Block-Skalar, Flow und Escapes sind nicht lesbar. Leer bleibt leer. */
 function skalar(roh) {
   const s = ohneKommentar(roh);
   if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
-  const q = s[0];
-  if (q !== '"' && q !== "'") return s;
-  if (!s.endsWith(q) || s.slice(1, -1).includes(q) || s.includes("\\")) throw nl("Quote oder Escape in einem Wert");
+  if (s[0] !== '"' && s[0] !== "'") return s;
+  if (!/^(["'])[^"'\\]*\1$/.test(s)) throw nl("Quote oder Escape in einem Wert");
   return s.slice(1, -1);
 }
 
-/** Die inhaltlichen Zeilen `{ einr, text }` (ohne Leer- und Kommentarzeilen). */
+/** Die inhaltlichen Zeilen `{ einr, text }` (ohne Leer- und Kommentarzeilen); ein Tab irgendwo ist nicht lesbar. */
 function zeilenVon(text) {
   const zeilen = [];
   for (const roh of text.split(/\r?\n/)) {
-    if (/^[ \t]*(#.*)?$/.test(roh)) continue;
+    if (roh.includes("\t")) throw nl("Tab");
+    if (/^ *(#.*)?$/.test(roh)) continue;
     const einr = /^ */.exec(roh)[0].length;
     zeilen.push({ einr, text: roh.slice(einr).trimEnd() });
   }
   return zeilen;
 }
 
-/** Der Wert und der Rumpf des Schlüssels `updates` auf oberster Ebene (`null` ohne ihn); jede andere oberste Zeile muss `schlüssel:` sein. */
-function updatesAus(zeilen) {
-  let updates = null;
-  for (let i = zeilen[0]?.text === "---" ? 1 : 0; i < zeilen.length; ) {
-    const m = zeilen[i].einr === 0 ? SCHLUESSEL.exec(zeilen[i].text) : null;
-    if (!m) throw nl("oberste Ebene ist kein Mapping aus `schlüssel:`-Zeilen");
-    let j = i + 1;
-    while (j < zeilen.length && (zeilen[j].einr > 0 || LISTENPUNKT.test(zeilen[j].text))) j++;
-    if (m[1] === "updates") {
-      if (updates !== null) throw nl("`updates` doppelt");
-      updates = { wert: ohneKommentar(m[2] ?? ""), rumpf: zeilen.slice(i + 1, j) };
-    }
-    i = j;
+/** Gruppen `{ kopf, rumpf }`: ein Kopf je Zeile auf Höhe `einr`, tiefere Zeilen gehören zum Kopf davor; flachere oder ein tieferer Anfang sind nicht lesbar. */
+function gruppen(zeilen, einr, wo) {
+  const g = [];
+  for (const z of zeilen) {
+    if (z.einr < einr || (z.einr > einr && g.length === 0)) throw nl(`Einrückung in ${wo}`);
+    if (z.einr === einr) g.push({ kopf: z, rumpf: [] });
+    else g.at(-1).rumpf.push(z);
   }
-  return updates;
+  return g;
 }
 
-/** Ein nicht leerer Skalar (ein leerer Eintrag in `exclude-paths` ist nicht lesbar). */
-function pflichtWert(roh) {
-  const v = skalar(roh);
-  if (v === "") throw nl("leerer Eintrag in `exclude-paths`");
-  return v;
+/** Eine Zeile `schlüssel: wert` als `{ schluessel, wert }`; alles andere ist nicht lesbar. */
+function feld(text) {
+  const m = SCHLUESSEL.exec(text);
+  if (m === null) throw nl(`Zeile „${text}“ ist kein \`schlüssel: wert\``);
+  return { schluessel: m[1], wert: ohneKommentar(m[2] ?? "") };
 }
 
-/** Die Werte einer Blockliste unter `exclude-paths:` (`- pfad` je Zeile, gleiche Einrückung). */
-function blockListe(zeilen) {
-  return zeilen.map((z) => {
-    if (z.einr !== zeilen[0].einr || !LISTENPUNKT.test(z.text)) throw nl("`exclude-paths` ist keine einfache Blockliste");
-    return pflichtWert(z.text.slice(1));
+/** Die Pfade unter `exclude-paths`: Blockliste `- pfad`, `[]` oder ein einfacher Text, der wie bei Dependabot als keine Liste zählt. */
+function ausschlussListe({ wert, rumpf }) {
+  if (wert !== "") {
+    if (rumpf.length > 0) throw nl("`exclude-paths` mit Wert und Folgezeilen");
+    if (wert !== "[]") skalar(wert);
+    return [];
+  }
+  return gruppen(rumpf, rumpf[0]?.einr, "`exclude-paths`").map(({ kopf, rumpf: tiefer }) => {
+    if (tiefer.length > 0 || !kopf.text.startsWith("- ")) throw nl("`exclude-paths` ist keine einfache Blockliste");
+    const v = skalar(kopf.text.slice(2));
+    if (v === "") throw nl("leerer Eintrag in `exclude-paths`");
+    return v;
   });
 }
 
-/** Die Werte einer einzeiligen Flow-Liste `[a, "b"]`. */
-function flowListe(wert) {
-  if (!wert.endsWith("]")) throw nl("`exclude-paths` als mehrzeilige Flow-Liste");
-  const inner = wert.slice(1, -1).trim();
-  return inner === "" ? [] : inner.split(",").map(pflichtWert);
-}
-
-/** Die Pfade unter `exclude-paths`; ein einfacher Text statt Liste zählt als keine (wie bei Dependabot). */
-function ausschlussListe(g) {
-  if (g.wert === "") return blockListe(g.zeilen);
-  if (g.zeilen.length > 0) throw nl("`exclude-paths` mit Wert und Folgezeilen");
-  if (g.wert.startsWith("[")) return flowListe(g.wert);
-  skalar(g.wert);
-  return [];
-}
-
-/** Die Felder eines Listeneintrags als Gruppen `{ schluessel, wert, zeilen }` (Schlüssel auf der Höhe des ersten; tiefere Zeilen gehören zum Schlüssel darüber). */
-function felderVon(zeilen, schluesselEinr, erste) {
-  const gruppen = [];
-  for (const z of [{ einr: schluesselEinr, text: erste }, ...zeilen.slice(1)]) {
-    if (z.einr < schluesselEinr) throw nl("Einrückung im Listeneintrag");
-    const m = z.einr === schluesselEinr ? SCHLUESSEL.exec(z.text) : null;
-    if (z.einr === schluesselEinr && !m) throw nl("Zeile im Listeneintrag ohne `schlüssel:`");
-    if (m) gruppen.push({ schluessel: m[1], wert: ohneKommentar(m[2] ?? ""), zeilen: [] });
-    else gruppen.at(-1).zeilen.push(z);
-  }
-  return gruppen;
-}
-
-/** Ein Listeneintrag von `updates` als `{ oekosystem, ausschluss }`; `null` für Skalar-Einträge und Mappings ohne `package-ecosystem` (die ein github-actions-Eintrag nie sind). */
-function eintragVon(zeilen) {
-  const kopf = zeilen[0].text;
-  const erste = kopf.slice(1).trimStart();
-  if (erste === "") throw nl("Listeneintrag mit Schlüsseln erst in der Folgezeile");
-  if (!SCHLUESSEL.test(erste)) {
-    if (SONDER.test(erste)) throw nl(`Konstrukt „${erste[0]}“ als Listeneintrag`);
-    return null;
-  }
-  const gruppen = felderVon(zeilen, zeilen[0].einr + kopf.length - erste.length, erste);
+/** Ein Listeneintrag von `updates` als `{ oekosystem, ausschluss }`; `null` für ein Mapping ohne `package-ecosystem` (das ein github-actions-Eintrag nie ist). */
+function eintragVon({ kopf, rumpf }) {
+  if (!kopf.text.startsWith("- ")) throw nl("`updates` ist keine einfache Blockliste");
+  const erste = kopf.text.slice(2).trimStart();
+  const einr = kopf.einr + kopf.text.length - erste.length;
+  const felder = gruppen([{ einr, text: erste }, ...rumpf], einr, "einem Eintrag").map((g) => ({ ...feld(g.kopf.text), rumpf: g.rumpf }));
   const finde = (name) => {
-    const treffer = gruppen.filter((g) => g.schluessel === name);
+    const treffer = felder.filter((f) => f.schluessel === name);
     if (treffer.length > 1) throw nl(`\`${name}\` doppelt in einem Eintrag`);
     return treffer[0];
   };
   const oeko = finde("package-ecosystem");
   if (oeko === undefined) return null;
   const name = skalar(oeko.wert);
-  if (name === "" || oeko.zeilen.length > 0) throw nl("`package-ecosystem` ohne einfachen Wert");
+  if (name === "" || oeko.rumpf.length > 0) throw nl("`package-ecosystem` ohne einfachen Wert");
   const ausschluss = finde("exclude-paths");
   return { oekosystem: name, ausschluss: ausschluss === undefined ? [] : ausschlussListe(ausschluss) };
 }
 
-/** Die Einträge unter `updates` (nach der Form `- schlüssel: wert`); ein Eintrag je Listenpunkt. */
-function eintraegeVon({ wert, rumpf }) {
-  if (wert === "[]") return [];
-  if (wert !== "") throw nl("`updates` ist keine Blockliste");
-  const einr = rumpf[0]?.einr;
-  const eintraege = [];
-  for (const z of rumpf) {
-    if (z.einr < einr || (z.einr === einr && !LISTENPUNKT.test(z.text))) throw nl("`updates` ist keine einfache Blockliste");
-    if (z.einr === einr) eintraege.push([z]);
-    else eintraege.at(-1).push(z);
+/** Die Einträge unter dem Schlüssel `updates` auf oberster Ebene (keine ohne ihn); jede andere oberste Zeile muss `schlüssel: wert` sein. */
+function eintraegeVon(zeilen) {
+  let updates = null;
+  for (const { kopf, rumpf } of gruppen(zeilen.slice(zeilen[0]?.text === "---" ? 1 : 0), 0, "der obersten Ebene")) {
+    const f = feld(kopf.text);
+    if (f.schluessel !== "updates") continue;
+    if (updates !== null) throw nl("`updates` doppelt");
+    updates = { wert: f.wert, rumpf };
   }
-  return eintraege.map(eintragVon).filter((e) => e !== null);
+  if (updates === null) return [];
+  if (updates.wert === "[]" && updates.rumpf.length === 0) return [];
+  if (updates.wert !== "") throw nl("`updates` ist keine Blockliste");
+  return gruppen(updates.rumpf, updates.rumpf[0]?.einr, "`updates`").map(eintragVon).filter((e) => e !== null);
 }
 
 /**
  * Die Einträge von `updates` als `{ eintraege: [{ oekosystem, ausschluss }] }` oder `{ fehler }` (Blockform ohne `yaml`-Bibliothek: der Doctor-Wochenlauf läuft ohne `npm ci`, nur Node-Builtins).
- * Gelesen wird nur die übliche Blockform (Schlüssel `package-ecosystem` und `exclude-paths` mit Blockliste oder einzeiliger Flow-Liste, Skalare plain oder im Quote-Paar). Nicht lesbar (fehler, nie ein stilles OK): eine Zeile mit Tab in der Einrückung (keine `schlüssel:`-Zeile),
- * eine oberste Ebene ohne `schlüssel:`-Zeilen (auch ein Skalar oder `null`), `updates` als Flow, Text oder Mapping, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Escapes, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
+ * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als Skalar (plain oder im Quote-Paar), `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen, `---` am Anfang.
+ * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Escapes, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
  */
 export function dependabotEintraege(text) {
   try {
-    const updates = updatesAus(zeilenVon(text));
-    return { eintraege: updates === null ? [] : eintraegeVon(updates) };
+    return { eintraege: eintraegeVon(zeilenVon(text)) };
   } catch (e) {
     if (e instanceof NichtLesbar) return { fehler: e.message };
     throw e;
@@ -213,11 +180,12 @@ export function dependabotEintraege(text) {
  */
 export function dependabotAusschlussPunkt({ rootDir, existiert = existsSync, lies = liesDatei, bezieher = istBezieher }) {
   if (!bezieher(rootDir)) return [];
-  const text = lies(join(rootDir, DEPENDABOT)) ?? lies(join(rootDir, DEPENDABOT_YAML));
+  const datei = lies(join(rootDir, DEPENDABOT)) === null ? DEPENDABOT_YAML : DEPENDABOT;
+  const text = lies(join(rootDir, datei));
   if (text === null) return [gut(AUSSCHLUSS)];
   const gelesen = dependabotEintraege(text);
   if (gelesen.fehler !== undefined) {
-    return [nichtPruefbar(AUSSCHLUSS, `${DEPENDABOT} ist in dieser Form nicht lesbar (${gelesen.fehler}): der Doctor liest nur die übliche Blockform`, `${DEPENDABOT} in die übliche Blockform bringen (Liste \`updates\` mit \`- package-ecosystem: …\`, \`exclude-paths\` als Liste), dann erneut prüfen`)];
+    return [nichtPruefbar(AUSSCHLUSS, `${datei} ist in dieser Form nicht lesbar (${gelesen.fehler}): der Doctor liest nur die übliche Blockform`, `${datei} in die übliche Blockform bringen (Liste \`updates\` mit \`- package-ecosystem: …\`, \`exclude-paths\` als Liste), dann erneut prüfen`)];
   }
   const aktionen = gelesen.eintraege.filter((u) => u.oekosystem === "github-actions");
   if (aktionen.length === 0) return [gut(AUSSCHLUSS)];
@@ -226,7 +194,7 @@ export function dependabotAusschlussPunkt({ rootDir, existiert = existsSync, lie
   const fehlend = besitzWorkflows(m.manifest, rootDir, existiert).filter((w) => aktionen.some((a) => !a.ausschluss.includes(w)));
   if (fehlend.length === 0) return [gut(AUSSCHLUSS)];
   const liste = fehlend.join(", ");
-  return [luecke(AUSSCHLUSS, `${liste} ${fehlend.length > 1 ? "fehlen" : "fehlt"} unter exclude-paths in ${DEPENDABOT}: Dependabot-PRs darauf scheitern an check:factorydrift`, `in ${DEPENDABOT} je github-actions-Eintrag unter exclude-paths ergänzen: ${liste}; ein Dependabot-PR darauf scheitert an check:factorydrift, der Bump kommt per Factory-Update`)];
+  return [luecke(AUSSCHLUSS, `${liste} ${fehlend.length > 1 ? "fehlen" : "fehlt"} unter exclude-paths in ${datei}: Dependabot-PRs darauf scheitern an check:factorydrift`, `in ${datei} je github-actions-Eintrag unter exclude-paths ergänzen: ${liste}; ein Dependabot-PR darauf scheitert an check:factorydrift, der Bump kommt per Factory-Update`)];
 }
 
 /** Die Dateipunkte `dateien` samt Punkt `Dependabot-Ausschluss` (nur im Bezieher, nicht im Vorab-Abbruch). */
