@@ -58,13 +58,90 @@ function musterTrifft(muster, seg) {
   return new RegExp(`^${muster.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s").test(seg);
 }
 
-/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment an (Formen siehe `musterTrifft`). Gibt die erste Fundstelle oder `null`. */
+const ZUWEISUNG = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const WRAPPER = new Set(["command", "exec", "nohup", "time"]);
+const INTERPRETER = new Set(["bash", "sh", "zsh", "dash"]);
+const MAX_TIEFE = 3;
+
+/** Wörter eines Segments, getrennt an Leerraum außerhalb von Quotes (Quotes bleiben im Wort). */
+function woerter(seg) {
+  const out = [];
+  let cur = "";
+  let quote = null;
+  for (let i = 0; i < seg.length; i++) {
+    const c = seg[i];
+    if (quote === null && /\s/.test(c)) {
+      if (cur) out.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += c;
+    if (quote === null && (c === "'" || c === '"')) quote = c;
+    else if (quote === c) quote = null;
+    else if (quote === '"' && c === "\\" && i + 1 < seg.length) cur += seg[++i];
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Basisname eines Programmworts: Verzeichnis (auch Windows-Backslash) und `.exe` fallen weg. */
+const basisname = (wort) => wort.replace(/\\/g, "/").split("/").pop().replace(/\.exe$/i, "");
+
+/** Streift Zuweisungen, `env` (mit `-i`, `-u <n>`, `--`, Zuweisungen), `command`, `exec`, `nohup`, `time` vorn ab. */
+function ohneWrapper(w) {
+  let t = w;
+  for (;;) {
+    const basis = basisname(t[0] ?? "");
+    if (ZUWEISUNG.test(t[0] ?? "") || WRAPPER.has(basis)) t = t.slice(1);
+    else if (basis === "env") t = envOptionen(t.slice(1));
+    else return t;
+  }
+}
+
+function envOptionen(w) {
+  let t = w;
+  for (;;) {
+    if (t[0] === "-i" || t[0] === "--" || ZUWEISUNG.test(t[0] ?? "")) t = t.slice(1);
+    else if (t[0] === "-u") t = t.slice(2);
+    else return t;
+  }
+}
+
+/** Der Inhalt eines vollständig gequoteten Worts (`'…'` wörtlich, `"…"` mit `\"` und `\\`), sonst `null`. */
+function entquote(wort) {
+  const q = wort[0];
+  if ((q !== "'" && q !== '"') || wort.length < 2 || wort.at(-1) !== q) return null;
+  const innen = wort.slice(1, -1);
+  if (q === "'") return innen.includes("'") ? null : innen;
+  const roh = innen.replace(/\\(["\\])/g, "");
+  return roh.includes('"') ? null : innen.replace(/\\(["\\])/g, "$1");
+}
+
+/** Der Befehlstext hinter `bash|sh|zsh|dash -c|-lc "<ein Argument>"`, sonst `null`. */
+function interpreterText(w) {
+  if (w.length !== 3 || !INTERPRETER.has(w[0]) || (w[1] !== "-c" && w[1] !== "-lc")) return null;
+  return entquote(w[2]);
+}
+
+/** Das Originalsegment plus normalisierte Formen (Leerraum zusammengezogen, Wrapper und Pfad abgestreift, `sh -c`-Text rekursiv bis Tiefe 3), damit Regeln auch Wrapper-Formen treffen. */
+export function varianten(seg, segmente, tiefe = 0) {
+  const w = woerter(seg);
+  const roh = ohneWrapper(w);
+  const kern = roh.length > 0 ? [basisname(roh[0]), ...roh.slice(1)] : roh;
+  const out = new Set([seg, kern.join(" ")]);
+  const inner = tiefe < MAX_TIEFE ? interpreterText(kern) : null;
+  if (inner !== null) for (const s of segmente(inner)) for (const v of varianten(s.trim(), segmente, tiefe + 1)) out.add(v);
+  return [...out];
+}
+
+/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment und jede Variante (siehe `varianten`) an (Formen siehe `musterTrifft`). Gibt die erste Fundstelle oder `null`. */
 function regelTreffer(befehl, regeln, segmente) {
   for (const seg of segmente(befehl).map((s) => s.trim())) {
-    for (const regel of regeln) {
-      const m = /^Bash\((.*)\)$/s.exec(regel);
-      if (!m) continue;
-      if (musterTrifft(m[1], seg)) return { regel, segment: seg };
+    for (const variante of varianten(seg, segmente)) {
+      for (const regel of regeln) {
+        const m = /^Bash\((.*)\)$/s.exec(regel);
+        if (m && musterTrifft(m[1], variante)) return { regel, segment: seg };
+      }
     }
   }
   return null;

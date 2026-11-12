@@ -251,7 +251,8 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     const seg = ghSegmente as (c: string) => string[];
     expect(adapter.varianten(wrap(wrap(wrap("curl x"))), seg)).toContain("curl x");
     expect(adapter.varianten(wrap(wrap(wrap(wrap("curl x")))), seg)).not.toContain("curl x");
-    expect(adapter.varianten("bash -c \"echo $X\" y", seg)).toHaveLength(2);
+    expect(adapter.varianten("bash -c \"curl x\" y", seg)).toEqual(["bash -c \"curl x\" y"]); // Interpreter mit Zusatzwort: keine Zerlegung
+    expect(adapter.varianten("bash -c curl", seg)).toEqual(["bash -c curl"]);
   });
   test("unlesbare settings.json → Deny mit Fix-Zeile", async () => {
     const o = await lauf(nutzlast("Bash", { command: "ls" }), { lies: () => { throw new Error("weg"); } });
