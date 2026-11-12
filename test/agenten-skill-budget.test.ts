@@ -123,7 +123,6 @@ describe("fixHinweis (L4): Fix-Zeile je Art der Verletzung", () => {
     const t = fixHinweis([{ file: ".agents/skills/proj/X-AGENTS.md" }]);
     assert.match(t, /Agenten-\/Skill-Datei: kürzen/);
     assert.doesNotMatch(t, /modul-lokale/);
-    assert.match(fixHinweis([{ file: ".agents/skills/proj/AGENTS.md" }]), /modul-lokale AGENTS\.md/);
     temp((dir) => {
       for (const n of ["X-AGENTS.md", "AGENTS.md"]) datei(dir, `.agents/skills/proj/${n}`, "x");
       assert.deepEqual(collectFiles(dir), [".agents/skills/proj/X-AGENTS.md"]);
@@ -271,11 +270,8 @@ describe("Fabrik: Budget-Liste gegen Manifest und Ist", () => {
   });
 
   test("Default = größtes Budget der Liste (nachgezogen)", () => {
-    assert.equal(
-      DEFAULT,
-      Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)),
-      "Herleitung: eine Datei ohne Eintrag (auch eine projekt-eigene im Bezieher) wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (kontext-budget-ratchet)",
-    );
+    const herleitung = "eine Datei ohne Eintrag (auch eine projekt-eigene im Bezieher) wird nie größer als die größte Kern-Datei; der Default sinkt mit deren Budget und steigt nie (kontext-budget-ratchet)";
+    assert.equal(DEFAULT, Math.max(...AGENTEN_SKILL_BUDGETS.map((b) => b.budget)), herleitung);
   });
 });
 

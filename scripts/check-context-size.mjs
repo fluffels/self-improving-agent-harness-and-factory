@@ -70,9 +70,12 @@ export const MODULE_AGENTS_BUDGET = 12_000;
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
 
+/** Dateiname (nicht Namensende) ist genau `AGENTS.md`: `X-AGENTS.md` ist keine AGENTS.md. */
+const istAgentsMd = (file) => file.split("/").pop() === "AGENTS.md";
+
 /** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
 export function collectAgentsFiles(rootDir = ROOT) {
-  return collectMarkdown(rootDir).filter((f) => f === "AGENTS.md" || f.endsWith("/AGENTS.md"));
+  return collectMarkdown(rootDir).filter(istAgentsMd);
 }
 
 /** Zeichenzahl je Kontextdatei gegen ihr Budget: alle konfigurierten Dateien (auch
@@ -87,9 +90,6 @@ export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, m
     return { file, chars, budget: budgetOf.get(file) ?? moduleBudget };
   });
 }
-
-/** Dateiname (nicht Namensende) ist genau `AGENTS.md`: `X-AGENTS.md` ist keine AGENTS.md. */
-const istAgentsMd = (file) => file.split("/").pop() === "AGENTS.md";
 
 /** Agenten- und Skill-Dateien (factory#307): `.claude/agents/*.md` (nur oberste Ebene) und `.agents/skills/<name>/**`.md rekursiv, ohne AGENTS.md (die misst `collectAgentsFiles`); repo-relativer POSIX-Pfad, sortiert. */
 export function collectAgentSkillFiles(rootDir = ROOT) {
@@ -152,8 +152,9 @@ export function kernBlockPruefung(rootDir = ROOT) {
 // ── CLI ──────────────────────────────────────────────────────────────────────
 /** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces (fail-closed: Exit 1). */
 function messeAlle(red) {
+  const kontext = collectContextSizes();
   try {
-    return [...collectContextSizes(), ...collectAgentSkillSizes()];
+    return [...kontext, ...collectAgentSkillSizes()];
   } catch (e) {
     console.error(red(`✖ ${e instanceof Error ? e.message : String(e)}\nFix: Projektwert-Marker in der genannten Zeile korrigieren, danach node scripts/projektwerte.mjs --write ausführen.`));
     process.exit(1);

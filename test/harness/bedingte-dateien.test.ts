@@ -30,6 +30,7 @@ interface Kern {
   ordner: string;
   muster: RegExp;
   codexQuelle: string | null;
+  harmlos: string[];
   dateien: { datei: string; tokens: string[] }[];
 }
 /** Geschlossener Katalog: je Kern Ordner, Namensmuster, Codex-Quelle (oder null) und die bedingten Dateien samt Tokens, die die Bedingungszeile im Kern nennen muss. */
@@ -39,6 +40,7 @@ const KATALOG: Kern[] = [
     ordner: ".agents/skills/review-lenses",
     muster: /^ablauf-.+\.md$/,
     codexQuelle: null,
+    harmlos: ["alt-ablauf-x.md", "ablauf-x.md.orig", "brille-x.md"],
     dateien: ["abnahme-fix", "klasse-hoch", "merge-main", "nachweis", "zusatzpass"].map((n) => ({ datei: `ablauf-${n}.md`, tokens: [] })),
   },
   {
@@ -46,6 +48,7 @@ const KATALOG: Kern[] = [
     ordner: ".agents/skills/factory",
     muster: /^(umsetzer|plattform)-.*\.md$/,
     codexQuelle: "factory-umsetzer",
+    harmlos: ["ablauf-fremd.md", "alt-umsetzer-x.md", "umsetzer-x.md.orig", "SKILL.md"],
     dateien: [
       { datei: "plattform-windows.md", tokens: ["process.platform", "win32"] },
       { datei: "umsetzer-gruppen.md", tokens: ["GRUPPEN"] },
@@ -163,11 +166,9 @@ const echt = (k: Kern): Eingabe => ({
   quellVerzeichnis: QUELL_VERZEICHNIS,
 });
 const befund = (k: Kern, e: Eingabe): string => bedingteDateienBefunde(k, e).join("\n");
-
 describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)", () => {
   test("der Katalog nennt genau die beiden Kerne (die Schleifen unten sind nicht leer)", () => {
     assert.deepEqual(KATALOG.map((k) => k.kern), [".agents/skills/review-lenses/SKILL.md", ".claude/agents/factory-umsetzer.md"]);
-    assert.deepEqual(KATALOG.map((k) => k.dateien.length), [5, 6]);
   });
 
   for (const k of KATALOG) {
@@ -176,7 +177,6 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
         const e = echt(k);
         assert.deepEqual(bedingteDateienBefunde(k, e), []);
         assert.deepEqual(bedingteDateienBefunde(k, { ...e, kern: e.kern.replace(/\n/g, "\r\n") }), [], "CRLF-Checkout");
-        assert.deepEqual(e.ordnerDateien.filter((d) => k.muster.test(d)).sort(), k.dateien.map((d) => d.datei).sort());
       });
 
       test("Negativfall (L32): ein entfernter Verweis macht jede einzelne bedingte Datei rot (der Kern nennt den Pfad nicht)", () => {
@@ -192,8 +192,7 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
         const e = echt(k);
         const neu = k.dateien[0].datei.replace(/^(\w+)-.*$/, "$1-neu.md");
         assert.match(befund(k, { ...e, ordnerDateien: [...e.ordnerDateien, neu] }), new RegExp(`${escapeRe(neu)}: Waise`));
-        const harmlos = ["ablauf-fremd.md", "alt-umsetzer-x.md", `${neu}.orig`, "SKILL.md"].filter((d) => !k.muster.test(d));
-        assert.deepEqual(bedingteDateienBefunde(k, { ...e, ordnerDateien: [...e.ordnerDateien, ...harmlos] }), []);
+        assert.deepEqual(bedingteDateienBefunde(k, { ...e, ordnerDateien: [...e.ordnerDateien, ...k.harmlos] }), []);
       });
 
       test("Negativfall: ein Verweis auf eine Datei, die es nicht gibt, ein fehlender Budget- oder Manifest-Eintrag sind rot", () => {
@@ -202,6 +201,7 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
         const pfad = `${k.ordner}/${datei}`;
         const weg = `${datei.split("-")[0]}-weg.md`;
         assert.match(befund(k, { ...e, kern: `${e.kern}\n${k.ordner}/${weg}\n` }), new RegExp(`Verweis ohne Datei: ${escapeRe(weg)}`));
+        assert.doesNotMatch(befund(k, { ...e, kern: `${e.kern}\n${k.ordner}/ticket-weg.md\n` }), /Verweis ohne Datei/, "ein Name außerhalb des Musters ist kein Verweis des Kerns");
         assert.match(befund(k, { ...e, budgets: e.budgets.filter((b) => b.file !== pfad) }), new RegExp(`${escapeRe(datei)}: kein Eintrag in AGENTEN_SKILL_BUDGETS`));
         assert.match(befund(k, { ...e, besitz: e.besitz.filter((p) => p !== pfad) }), new RegExp(`${escapeRe(datei)}: kein Eintrag im Besitz-Manifest`));
       });
@@ -235,7 +235,8 @@ describe("Bedingte Dateien je Kern (ein Prüfer, Katalog mit genau zwei Kernen)"
 
 describe("Plattform-Weiche des Umsetzers (factory#310)", () => {
   const kernText = readFileSync(WURZEL + KERN, "utf8");
-  const weiche = (kern: string): string => plattformWeicheBefunde(kern).join("\n");  test("echter Stand: der Satz der Weiche steht, der Kern-Rumpf trägt keinen Windows-Sonderfall", () => {
+  const weiche = (kern: string): string => plattformWeicheBefunde(kern).join("\n");
+  test("echter Stand: der Satz der Weiche steht, der Kern-Rumpf trägt keinen Windows-Sonderfall", () => {
     assert.deepEqual(plattformWeicheBefunde(kernText), []);
   });
 

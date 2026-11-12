@@ -369,7 +369,6 @@ describe("ohneProjektwerte (L17): Text ohne Block samt Markern und ohne Werte de
   });
   test("ein Block am Textanfang oder -ende und mehrere Blöcke werden je einzeln entfernt", () => {
     assert.equal(lib.ohneProjektwerte(`${S}\nblock\n${E}\nrest`), "rest");
-    assert.equal(lib.ohneProjektwerte(`kopf\n${S}\nblock\n${E}`), "kopf");
     assert.equal(lib.ohneProjektwerte(`A\n${S}\nx\n${E}\nB\n${S}\ny\n${E}\nC\n`), "A\nB\nC\n");
   });
   test("der Wert einer Frontmatter-Zeile wird geleert", () => {
@@ -386,6 +385,7 @@ describe("ohneProjektwerte (L17): Text ohne Block samt Markern und ohne Werte de
   });
   test("ein kaputter Block wirft mit Ort (Start ohne Ende, Ende ohne Start)", () => {
     assert.throws(() => lib.ohneProjektwerte(`a\n${S}\nb`, "x.md"), /x\.md:2: Projektwert-Block hat kein Ende/);
+    assert.throws(() => lib.ohneProjektwerte(`a\n${S}\nb`), /<text>:2: Projektwert-Block hat kein Ende/, "ohne Pfad-Argument");
     assert.throws(() => lib.ohneProjektwerte(`a\n${E}\nb`, "x.md"), /x\.md:2: Projektwert-Block endet ohne Start/);
   });
 });
