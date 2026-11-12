@@ -192,7 +192,7 @@ test("Hook-Registrierung (factory#364): feste Werkzeuge, Adapter-Befehl und Time
   expect(h).toHaveLength(1);
   expect(h[0].hooks).toEqual([{ type: "command", command: "node scripts/codex-hook.mjs", timeout: 30 }]);
   for (const name of ["exec_command", "apply_patch", "spawn_agent"]) expect(new RegExp(h[0].matcher).test(name), name).toBe(true);
-  expect(new RegExp(h[0].matcher).test("write_stdin")).toBe(false);
+  for (const name of ["write_stdin", "Bash2", "xapply_patch", "spawn_agent2", ""]) expect(new RegExp(h[0].matcher).test(name), name).toBe(false);
 });
 
 test("Setup stoppt, wenn der Hook-Adapter als Quelle fehlt", () => {

@@ -20,8 +20,8 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { buildDenyOutput } from "./hook-io.mjs";
 
-/** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`). */
-export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent" };
+/** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`); `spawn_agent` passt laut Doku auch auf den Matcher `Agent`. */
+export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent", Agent: "agent" };
 /** Fester Timeout der Registrierung in Sekunden (der Host behandelt Timeout fail-open: knapp genug zum Messwert, weit unter dem Standard von 600). */
 export const CODEX_HOOK_TIMEOUT_S = 30;
 
@@ -49,15 +49,22 @@ export function patchZiele(patch) {
   return ziele.length > 0 && ziele.every((p) => p !== "") ? ziele : null;
 }
 
-/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment an: `Bash(<präfix>:*)` als Präfix mit Wortgrenze, sonst exakt. Gibt die erste Fundstelle oder `null`. */
+/** Muster einer `Bash(...)`-Regel gegen ein Segment: `<präfix>:*` als Präfix mit Wortgrenze, sonst Glob (`*` steht für beliebigen Text, alles andere wörtlich). */
+function musterTrifft(muster, seg) {
+  if (muster.endsWith(":*")) {
+    const praefix = muster.slice(0, -2);
+    return seg === praefix || seg.startsWith(`${praefix} `);
+  }
+  return new RegExp(`^${muster.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s").test(seg);
+}
+
+/** Wendet die `Bash(...)`-Regeln der Berechtigungsliste auf jedes Segment an (Formen siehe `musterTrifft`). Gibt die erste Fundstelle oder `null`. */
 function regelTreffer(befehl, regeln, segmente) {
   for (const seg of segmente(befehl).map((s) => s.trim())) {
     for (const regel of regeln) {
       const m = /^Bash\((.*)\)$/s.exec(regel);
       if (!m) continue;
-      const muster = m[1];
-      const praefix = muster.endsWith(":*") ? muster.slice(0, -2) : null;
-      if (praefix === null ? seg === muster : seg === praefix || seg.startsWith(`${praefix} `)) return { regel, segment: seg };
+      if (musterTrifft(m[1], seg)) return { regel, segment: seg };
     }
   }
   return null;
@@ -82,7 +89,7 @@ function uebersetzePatch(eingabe, data) {
   const ziele = patchZiele(eingabe.command);
   if (!ziele) return { grund: "apply_patch-Text nicht lesbar (Begin/End-Rahmen oder Zielzeile fehlt, unbekannte Direktive)" };
   if (!istText(data.cwd)) return { grund: "Payload ohne cwd" };
-  const verboten = ziele.find((z) => z.replace(/\\/g, "/").split("/").includes(".codex"));
+  const verboten = ziele.find((z) => z.replace(/\\/g, "/").toLowerCase().split("/").includes(".codex"));
   if (verboten) return { grund: `Schreibziel ${verboten} liegt in .codex (Hook-Registrierung und Rollen ändert nur das Setup)` };
   return { payloads: ziele.map((file_path) => ({ tool_name: "Write", cwd: data.cwd, tool_input: { file_path } })) };
 }

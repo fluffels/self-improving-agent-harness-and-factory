@@ -78,6 +78,24 @@ test("lokale Hook-Registrierung (factory#364): fehlt, weicht ab, ist Symlink ode
   mkdirSync(join(l, ".codex")); symlinkSync(join(d, ".codex", "hooks.json"), join(l, ".codex", "hooks.json"));
   expect(() => lib.lokaleHookMaengel(l)).toThrow("Symlink");
 });
+test("lokale Hook-Registrierung: inline [hooks] in jeder Schreibweise und an beliebiger Stelle, Ordner statt Datei und config.toml als Symlink", () => {
+  const d = leerRoot();
+  const toml = (text: string) => { writeFileSync(join(d, ".codex", "config.toml"), text); return lib.lokaleHookMaengel(d); };
+  for (const text of ["# Kopf\n[agents]\nenabled = true\n\n[hooks]\n", "[agents]\n  [hooks]\n", "[agents]\n[ hooks.PreToolUse ]\n", "[agents]\n[[hooks.PreToolUse]]\n"]) expect(toml(text), text).toHaveLength(1);
+  for (const text of ["[agents]\n[hooksx]\n", "# [hooks]\n[agents]\n", "[agents]\nname = \"[hooks]\"\n"]) expect(toml(text), text).toEqual([]);
+  rmSync(join(d, ".codex", "hooks.json")); mkdirSync(join(d, ".codex", "hooks.json"));
+  expect(lib.lokaleHookMaengel(d).join()).toContain("weicht vom Soll ab");
+  const l = leerRoot(); rmSync(join(l, ".codex", "config.toml"), { force: true });
+  const ziel = join(l, "echt.toml"); writeFileSync(ziel, "x"); symlinkSync(ziel, join(l, ".codex", "config.toml"));
+  expect(() => lib.lokaleHookMaengel(l)).toThrow("Symlink");
+});
+test("Vorprüfung: mit .codex/agents wird der Hook-Mangel zusätzlich zu den Rollen-Mängeln gemeldet", () => {
+  const soll = Object.fromEntries(Object.entries(lib.setupDateien(mcp, config, "http://localhost/")).filter(([k]) => k.startsWith(".codex/agents/")).map(([k, t]) => [k.split("/").pop() as string, t]));
+  const d = projekt({ ...soll, "weg.toml": "x" });
+  const r = lauf([], { root: d, codexVersion: () => null });
+  expect(r.maengel?.some((m) => m.includes("Codex-Rolle verwaist"))).toBe(true);
+  expect(r.maengel?.some((m) => m.includes("Codex-Hook-Registrierung fehlt"))).toBe(true);
+});
 test("Vorprüfung: fehlende Hook-Registrierung ist ein Mangel auch ohne .codex/agents", () => {
   const fehlt = mkdtempSync(join(tmpdir(), "codex-hook-leer-")); temps.push(fehlt);
   const r = lauf([], { root: fehlt, codexVersion: () => null });

@@ -1,7 +1,7 @@
 /* @harness-waechter: Codex-Hook-Adapter und Schreibziel-Route des Dispatchers (factory#364); K4/K5 je Muster Red-Green. */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, symlinkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -21,6 +21,7 @@ const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: str
 let tmp = "";
 let haupt = "";
 let wt = "";
+let fremd = "";
 const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 beforeAll(() => {
@@ -34,6 +35,8 @@ beforeAll(() => {
   git(haupt, "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-q", "-m", "init");
   wt = join(tmp, "wt");
   git(haupt, "worktree", "add", "-q", "-b", "feature/x", wt);
+  fremd = join(tmp, "fremd");
+  git(tmp, "init", "-q", "-b", "main", fremd);
 });
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
@@ -66,6 +69,12 @@ describe("Dispatcher für den Codex-Adapter", () => {
     expect(grund(write(join(wt, ".git", "config")))).toContain(".git");
     expect(write(join(wt, "neu", "b.txt"))).toBeNull();
     expect(write(join(tmp, "ausserhalb", "c.txt"))).toBeNull();
+    expect(write(join(fremd, "d.txt"))).toBeNull(); // Haupt-Checkout eines anderen, ungeschützten Repos
+  });
+  test("Write: .GIT in anderer Schreibweise und ein Symlink auf .git blocken", () => {
+    expect(grund(write(join(wt, ".GIT", "hooks", "pre-commit")))).toContain(".git");
+    symlinkSync(join(haupt, ".git"), join(wt, "lnk"));
+    expect(grund(write(join(wt, "lnk", "hooks", "pre-commit")))).toContain(".git");
   });
 });
 
@@ -96,6 +105,13 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
     const szenario = "Szenario 1.1: Gegeben ein Zustand, wenn x, dann y.";
     expect(grund(await lauf(nutzlast("spawn_agent", { agent_type: "explore", message: szenario })))).toContain("Holdout");
   });
+  test("Patch mit mehreren Zielen: ein verbotenes Ziel an späterer Stelle blockt", async () => {
+    const o = await lauf(nutzlast("apply_patch", { command: patch("*** Add File: ok.txt", "+x", `*** Add File: ${join(haupt, "neu.txt")}`, "+y") }));
+    expect(grund(o)).toContain("main-Checkout");
+  });
+  test("Selbstschutz: .codex auch mit Backslash und anderer Schreibweise", async () => {
+    for (const z of [".codex\\hooks.json", ".CODEX/hooks.json"]) expect(grund(await lauf(nutzlast("apply_patch", { command: patch(`*** Add File: ${z}`, "+{}") })))).toContain(".codex");
+  });
   test("Selbstschutz: Patch nach .codex", async () => {
     expect(grund(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: .codex/hooks.json", "+{}") })))).toContain(".codex");
   });
@@ -106,7 +122,9 @@ describe("Positive Fälle: nichts ausgeben", () => {
     expect(await lauf(nutzlast("Bash", { command: "git status" }))).toBeNull();
     expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: neu.txt", "+x", "*** Delete File: a.txt") }))).toBeNull();
     const lens = await lauf(nutzlast("spawn_agent", { agent_type: "sih-lens", message: `${KOPF} · Ticket #365 · Patch: /tmp/x.patch` }));
-    expect(grund(lens)).not.toContain("Lens-Arm falsch");
+    expect(lens).toBeNull();
+    expect(await lauf(nutzlast("Agent", { agent_type: "sih-lens", message: "Prüfe das mal." }))).not.toBeNull(); // Alias Agent wird wie spawn_agent geprüft
+    expect(await lauf(nutzlast("spawn_agent", { message: "Suche etwas im Repo." }))).toBeNull(); // ohne agent_type ist ein normaler Aufruf
   });
 });
 
@@ -128,11 +146,28 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     ["Patch als Zahl", () => nutzlast("apply_patch", { command: 7 })],
     ["spawn_agent message kein String", () => nutzlast("spawn_agent", { agent_type: "x", message: 3 })],
     ["spawn_agent agent_type kein String", () => nutzlast("spawn_agent", { agent_type: 3, message: "x" })],
+    ["apply_patch ohne cwd", () => JSON.stringify({ tool_name: "apply_patch", tool_input: { command: patch("*** Add File: n.txt", "+x") } })],
+    ["apply_patch mit leerem cwd", () => nutzlast("apply_patch", { command: patch("*** Add File: n.txt", "+x") }, "")],
+    ["command leer", () => nutzlast("Bash", { command: "" })],
+    ["message leer", () => nutzlast("spawn_agent", { agent_type: "x", message: "" })],
+    ["agent_type leer", () => nutzlast("spawn_agent", { agent_type: "", message: "x" })],
     ["Shell ohne cwd", () => JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" } })],
   ])("%s → Deny mit Grund", async (_n, text) => {
     const o = await lauf(text());
     expect(o?.hookSpecificOutput.permissionDecision).toBe("deny");
     expect(grund(o)).toContain("fail-closed");
+  });
+  test("Berechtigungsregeln als Glob: abschließendes Sternchen und Sternchen in der Mitte", async () => {
+    const regeln = (deny: string[]) => ({ lies: () => JSON.stringify({ permissions: { deny } }) });
+    expect(grund(await lauf(nutzlast("Bash", { command: "gh x y" }), regeln(["Bash(gh x *)"])))).toContain("Bash(gh x *)");
+    expect(grund(await lauf(nutzlast("Bash", { command: "git push origin main --force" }), regeln(["Bash(git push * --force)"])))).toContain("--force");
+    expect(await lauf(nutzlast("Bash", { command: "git pushx" }), regeln(["Bash(git push * --force)"]))).toBeNull();
+    expect(await lauf(nutzlast("Bash", { command: "ls a.b" }), regeln(["Bash(ls a.b)"]))).not.toBeNull();
+    expect(await lauf(nutzlast("Bash", { command: "ls axb" }), regeln(["Bash(ls a.b)"]))).toBeNull(); // der Punkt gilt wörtlich
+  });
+  test("apply_patch: Fehlerursache und CRLF-Patch", async () => {
+    expect(grund(await lauf(nutzlast("apply_patch", { command: "kein Patch" })))).toContain("apply_patch-Text nicht lesbar");
+    expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: crlf.txt", "+x").replace(/\n/g, "\r\n") }))).toBeNull();
   });
   test("Die Ursache steht im Grund: JSON null, tool_input fehlt oder Array, workdir kein Text", async () => {
     expect(grund(await lauf("null"))).toContain("ohne tool_name");
@@ -186,7 +221,7 @@ describe("Patch-Parser und Konstanten", () => {
     expect(adapter.patchZiele(patch("@@"))).toBeNull();
   });
   test("Werkzeugtabelle und Timeout", () => {
-    expect(Object.keys(adapter.CODEX_HOOK_WERKZEUGE).sort()).toEqual(["Bash", "apply_patch", "exec_command", "spawn_agent"]);
+    expect(Object.keys(adapter.CODEX_HOOK_WERKZEUGE).sort()).toEqual(["Agent", "Bash", "apply_patch", "exec_command", "spawn_agent"]);
     expect(adapter.CODEX_HOOK_TIMEOUT_S).toBe(30);
   });
 });
@@ -194,6 +229,8 @@ describe("Patch-Parser und Konstanten", () => {
 describe("Prozessstart", () => {
   const start = (text: string) => spawnSync("node", [join(process.cwd(), "scripts/codex-hook.mjs")], { input: text, encoding: "utf8", cwd: wt });
   test("Deny-JSON auf stdout, sauberer Fall leer, immer Exit 0", () => {
+    const echt = start(nutzlast("Bash", { command: "gh issue delete 1" })); // braucht repoRoot (settings.json des Repos)
+    expect((JSON.parse(echt.stdout) as NonNullable<Out>).hookSpecificOutput.permissionDecisionReason).toContain("Bash(gh issue delete:*)");
     const deny = start(nutzlast("Bash", { command: ["x"] }));
     expect(deny.status).toBe(0);
     expect((JSON.parse(deny.stdout) as NonNullable<Out>).hookSpecificOutput.permissionDecision).toBe("deny");

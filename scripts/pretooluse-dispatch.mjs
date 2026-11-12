@@ -54,8 +54,8 @@ const ROUTEN = {
   // Holdout-Trennung (ADR 0022 F13): Szenarien gehen nie per Nachricht an einen Agenten.
   SendMessage: ({ text, sicher }) => alsDeny(sicher(() => holdoutAuftragBlockade(parseHoldoutInput(text)))),
   // Schreibziel-Guard (factory#364): nur der Codex-Adapter schickt `Write` (aus `apply_patch`); Claude bleibt unverändert.
-  Write: ({ text, deps, sicher, cwd, repoRoot, guards }) =>
-    mergeDecisions([sicher(() => (guards.decideSchreibziel ?? decideSchreibziel)({ cwd, pfad: JSON.parse(text).tool_input?.file_path, repoRoot, deps }))]),
+  Write: ({ text, deps, sicher, cwd, repoRoot }) =>
+    mergeDecisions([sicher(() => decideSchreibziel({ cwd, pfad: JSON.parse(text).tool_input?.file_path, repoRoot, deps }))]),
 };
 
 /** Shell-Tools (`Bash`, `PowerShell`): Worktree-Guard, Stdin-Skript-Guard und gh-Guard; `null` für unbekannte Tools. */

@@ -117,6 +117,9 @@ test("V3 transitiv: ein nur mittelbar importiertes Modul zählt, ein fehlender A
   const alt = v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: #84" }], { "scripts/codex-x.mjs": quellen["scripts/codex-x.mjs"] }, lies);
   expect(alt).toHaveLength(1);
   expect(alt[0]).toContain("gelöschtes Ticket");
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: #840" }], { "scripts/codex-x.mjs": "" }, lies)).toEqual([]);
+  const kaputt = v3(["scripts/h.mjs"], [z], { "scripts/codex-x.mjs": 'import "./fehlt.mjs";' }, p => (p === "scripts/codex-x.mjs" ? 'import "./fehlt.mjs";' : lies(p)));
+  expect(kaputt.some(m => m.startsWith("V3: scripts/codex-x.mjs: Import"))).toBe(true);
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: factory#86" }], { "scripts/codex-x.mjs": "" }, lies).some(m => m.includes("gelöschtes Ticket"))).toBe(true);
 });
 test("V4 Negativfall: zu große AGENTS.md", () => {

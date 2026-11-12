@@ -1,5 +1,5 @@
 // Kein Einstieg, kein Direktaufruf (#1579, Konvention #1398): Lib des Dispatchers `scripts/pretooluse-hook.mjs`, der einzige registrierte
-// PreToolUse-Hook; wird von ihm, von worktree-guard-powershell.mjs und von test/harness/worktree-guard.test.ts importiert.
+// PreToolUse-Hook; wird von seiner Lib pretooluse-dispatch.mjs (auch über den Codex-Adapter codex-hook-lib.mjs), von worktree-guard-powershell.mjs und von test/harness/worktree-guard.test.ts importiert.
 /**
  * Worktree-Guard-Hook (#735) — Claude-Code-`PreToolUse`-Hook für `Bash`.
  *
@@ -238,9 +238,10 @@ function naechsterOrdner(abs, deps) {
 export function decideSchreibziel({ cwd, pfad, repoRoot, deps = {} }) {
   if (typeof pfad !== "string" || !pfad || !cwd) return { block: false };
   const abs = normalisierePfad(pfad, cwd);
-  if (abs.split("/").includes(".git")) return { block: true, reason: `Schreiben in .git (${abs}) ist blockiert: Git-Interna ändert nur git selbst.` };
   const kontextCache = deps.kontextCache ?? new Map();
   const ordner = naechsterOrdner(abs, deps);
+  // .git ohne Groß-/Kleinschreibung (case-insensitive Dateisysteme) und auch am aufgelösten Ort (Symlink auf .git): git selbst erkennt dort kein Arbeitsverzeichnis.
+  if ([abs, ordner].some((p) => p.replace(/\\/g, "/").toLowerCase().split("/").includes(".git"))) return { block: true, reason: `Schreiben in .git (${abs}) ist blockiert: Git-Interna ändert nur git selbst.` };
   return jeSchutzWurzel(repoRoot, deps, (w) => {
     const ctx = resolveGitContext(ordner, w.wurzel, { ...deps, kontextCache });
     return ctx.relevant && ctx.isMainWorktree
