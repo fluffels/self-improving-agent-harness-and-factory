@@ -21,13 +21,14 @@ interface Zeilen {
   reviewOverride: string;
 }
 type Urteil = { k: string; wert: string }[];
-type Marker = { durchgang: number; head: string; urteil: Urteil } | null;
+type Marker = { durchgang: number; head: string; urteil: Urteil; ursache?: { k: string; klasse: string }[] } | null;
 type AbnahmeHead = { bekannt: boolean; imSlice: boolean; nachReviewHead: boolean; konfliktMerges: string[]; aenderungsCommits: { sha: string; dateien: string[] }[] };
 type Nachweis = { review: { head: string | null; runden: number } | null; abnahme: unknown };
 interface Mod {
   verknuepfteTickets: (body: string) => number[];
+  zaehleSzenarioDurchgaenge: (markers: NonNullable<Marker>[]) => number;
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
@@ -50,9 +51,10 @@ const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wer
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number }) =>
   m.bewerteAbnahme({
     reviewOverride: o.reviewOverride,
+    szenarioDurchgaenge: o.szenarioDurchgaenge,
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
     ticket: o.ticket === undefined ? { nr: 9, kriterien: kr(2) } : o.ticket,
     marker: o.marker === undefined ? marker() : o.marker,
@@ -93,6 +95,32 @@ describe("K2: nicht erfüllt, nicht prüfbar", () => {
   test.each(["nicht-erfuellt", "nicht-pruefbar"])("%s ist rot", (wert) => {
     const u = ur("erfuellt", wert);
     rot(bewerte({ abnahme: urteilZeile({ urteil: u }), marker: marker({ urteil: u }) }), new RegExp(`K2: ${wert}`));
+  });
+});
+
+describe("K3: Cap und Szenario-Durchgänge", () => {
+  const szenario = (urteil: Urteil, ursache: { k: string; klasse: string }[]) => ({ durchgang: 1, head: H, urteil, ursache });
+  test("ein reiner Szenario-Durchgang zählt nicht gegen das Cap (runden=1, durchgaenge=2)", () => {
+    const n = bewerte({ abnahme: urteilZeile({ durchgaenge: 2 }), runden: 1, marker: marker({ durchgang: 2 }), szenarioDurchgaenge: 1 });
+    expect(n).toEqual([]);
+  });
+  test("ohne Szenario-Durchgang bleibt durchgaenge > runden rot", () => {
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 2 }), runden: 1, marker: marker({ durchgang: 2 }), szenarioDurchgaenge: 0 }), /durchgaenge=2 ist größer als runden=1/);
+  });
+  test("ein Szenario-Durchgang deckt nur einen Durchgang, nicht zwei", () => {
+    rot(bewerte({ abnahme: urteilZeile({ durchgaenge: 3 }), runden: 1, marker: marker({ durchgang: 3 }), szenarioDurchgaenge: 1 }), /durchgaenge=3 ist größer als runden=1/);
+  });
+  test("zaehleSzenarioDurchgaenge: nur Marker, deren nicht erfüllte Kriterien alle ursache=szenario tragen", () => {
+    const z = (x: NonNullable<Marker>[]) => m.zaehleSzenarioDurchgaenge(x);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(1);
+    expect(z([szenario(ur("nicht-erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }, { k: "K2", klasse: "szenario" }])])).toBe(1);
+    expect(z([szenario(ur("nicht-erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "umsetzung" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K1", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "erfuellt"), [])])).toBe(0);
+    expect(z([{ durchgang: 1, head: H, urteil: ur("erfuellt", "nicht-erfuellt") }])).toBe(0);
+    expect(z([szenario(ur("nicht-pruefbar", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(0);
+    expect(z([szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }]), szenario(ur("erfuellt", "nicht-erfuellt"), [{ k: "K2", klasse: "szenario" }])])).toBe(2);
   });
 });
 

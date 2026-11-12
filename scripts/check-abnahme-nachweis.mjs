@@ -70,10 +70,20 @@ function bewerteUrteil(urteil, liste, nachMerge) {
   return fehler;
 }
 
-/** Cap-Regel: die Review-Zeile trägt `runden` und deckt `durchgaenge` der Abnahme. */
-function bewerteCap(a, review) {
+/**
+ * Anzahl der Durchgänge, die nur wegen `ursache=szenario` nicht bestanden (jeder nicht erfüllte Wert trägt die Ursache szenario, nichts nicht prüfbar): kein Fix, also kein Lens-Pass, sie zählen nicht gegen das Cap. Pur.
+ */
+export function zaehleSzenarioDurchgaenge(markers) {
+  return markers.filter((m) => {
+    const offen = m.urteil.filter((u) => u.wert === "nicht-erfuellt");
+    return offen.length > 0 && m.urteil.every((u) => u.wert !== "nicht-pruefbar") && offen.every((u) => (m.ursache ?? []).some((x) => x.k === u.k && x.klasse === "szenario"));
+  }).length;
+}
+
+/** Cap-Regel: die Review-Zeile trägt `runden` und deckt `durchgaenge` der Abnahme, abzüglich der reinen Szenario-Durchgänge (`szenario`). */
+function bewerteCap(a, review, szenario = 0) {
   if (!review || !Number.isInteger(review.runden)) return ["Review-Zeile fehlt oder runden ist keine Zahl: die Abnahme zählt gegen das Cap der Review-Pässe."];
-  if (a.durchgaenge <= review.runden) return [];
+  if (a.durchgaenge - szenario <= review.runden) return [];
   return [
     `durchgaenge=${a.durchgaenge} ist größer als runden=${review.runden}: jeder Abnahme-Durchgang nach der Konvergenz zählt als Pass, ` +
       `die Review-Zeile muss runden >= durchgaenge tragen (Cap ${MAX_REVIEW_PAESSE} Pässe, darüber nur mit Zusatzpass).`,
@@ -84,8 +94,8 @@ function bewerteCap(a, review) {
  * Cap-Regel und head-Regel (`abnahmeHead`: {bekannt, imSlice, nachReviewHead, konfliktMerges, aenderungsCommits}).
  * Mit `reviewOverride` (gültige Review-Override-Zeile im Slice) entfallen Review-Zeile, Cap und der Vergleich mit dem Review-head; die übrigen head-Regeln gelten weiter.
  */
-function bewerteHead(a, review, abnahmeHead, reviewOverride = false) {
-  const fehler = reviewOverride ? [] : bewerteCap(a, review);
+function bewerteHead(a, review, abnahmeHead, reviewOverride = false, szenario = 0) {
+  const fehler = reviewOverride ? [] : bewerteCap(a, review, szenario);
   if (!abnahmeHead.bekannt) return [...fehler, `Abnahme: head=${a.head} ist kein bekannter Commit.`];
   if (!abnahmeHead.imSlice) return [...fehler, `Abnahme: head=${a.head} liegt nicht im Slice dieses PR.`];
   if (!reviewOverride && review?.head && !abnahmeHead.nachReviewHead) fehler.push(`Abnahme: head=${a.head} ist kein Nachfahre des Review-head ${review.head}.`);
@@ -116,10 +126,11 @@ function bewerteEntfaellt(a, ticket, stufe, zeilen) {
 /**
  * Bewertet den Abnahme-Nachweis; liefert `fehler[]` (leer = grün). Pur.
  * `reviewOverride` (bool): eine gültige Review-Override-Zeile steht im Slice, Cap- und Review-head-Vergleich entfallen.
+ * `szenarioDurchgaenge` (Zahl, Standard 0): Durchgänge nur mit `ursache=szenario` (`zaehleSzenarioDurchgaenge`), sie zählen nicht gegen das Cap.
  * `stufe` (`"S"` | `"voll"`, Standard `voll`): die aus dem Diff berechnete Größenstufe, nur für `entfaellt — klein: …` relevant.
  * `ticket` = `{nr, kriterien: <Liste aus kriterien()>, nachMerge: <Präfix aus sprache.spezifikation>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
-export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll" }) {
+export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll", szenarioDurchgaenge = 0 }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
@@ -127,7 +138,7 @@ export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, 
     return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, stufe, zeilen) : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
-  return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead, reviewOverride), ...bewerteSpur(a, marker)];
+  return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead, reviewOverride, szenarioDurchgaenge), ...bewerteSpur(a, marker)];
 }
 
 /** Ausgabe bei aktivem Review-Override (L24a): was der Override an der Abnahme-Prüfung auslässt. */
@@ -222,12 +233,15 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride }) {
   }
   const abnahmeHead = nachweis.abnahme?.art === "urteil" ? leseAbnahmeHead(git, base, nachweis.abnahme.head, nachweis.review?.head) : null;
   let marker = null;
+  let szenarioDurchgaenge = 0;
   if (nachweis.abnahme?.art === "urteil") {
     // Ohne PR-Nummer bleibt es rot (fail-closed), zeigt aber vorher die Head-Fehler (Konflikt-Merge hinter der Abnahme), damit der lokale Lauf sie sieht.
     if (!/^\d+$/.test(umgebungsWert(env, "FACTORY_PR_NUMBER") ?? "")) return [...bewerteHead(nachweis.abnahme, nachweis.review, abnahmeHead, reviewOverride), "PR-Nummer fehlt (FACTORY_PR_NUMBER): die Spur ist nicht prüfbar."];
-    marker = vertrauterMarker(issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo), owner, zeilen);
+    const kommentare = issueKommentare(umgebungsWert(env, "FACTORY_PR_NUMBER"), gh, repo);
+    marker = vertrauterMarker(kommentare, owner, zeilen);
+    szenarioDurchgaenge = zaehleSzenarioDurchgaenge(vertrauteAbnahmeMarker(kommentare, owner, zeilen));
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, stufe: stufeFuerEntfaellt(nachweis, git, base, config) });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe: stufeFuerEntfaellt(nachweis, git, base, config) });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
