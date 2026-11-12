@@ -357,8 +357,8 @@ describe("Importgraph des Doctor-Wochenlaufs", () => {
     expect(externeImporte("/s/b.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv"]);
   });
   test("Kommentar-Prosa mit import-Form ist kein Import, ein Glob mitten in der Zeile versteckt keinen echten Import", () => {
-    const text = '/**\n * Beispiel: import("yaml") und from "ajv"\n */\n// import "zod";\nconst g = "scripts/*.mjs"; import { x } from "echt-extern";\n';
-    expect(externeImporte("/s/k.mjs", () => text)).toEqual(["echt-extern"]);
+    const text = '/**\n * Beispiel: import("yaml") und from "ajv"\n */\n// import "zod";\nconst g = "scripts/*.mjs"; import { x } from "echt-extern";\n/** doc */\nimport u from "https://x/y"; // Notiz\nimport y from "z"; // Notiz\n';
+    expect(externeImporte("/s/k.mjs", () => text)).toEqual(["echt-extern", "https://x/y", "z"]);
   });
 });
 
