@@ -13,7 +13,7 @@
  */
 
 import { projektFilterTags } from "./langfuse-otlp.mjs";
-import { ABGESCHNITTEN, ROW_LIMIT, abgeschnittenFehler, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
+import { ABGESCHNITTEN, ROW_LIMIT, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 export const MS_TAG = 86400000;
 export const MS_WOCHE = 7 * MS_TAG;
@@ -98,7 +98,7 @@ const fenstergleich = (e, von, bis) => Date.parse(e.von) === Date.parse(von) && 
 function leseEigene(json, pfad) {
   const wo = (t) => new Error(`${pfad}: ${t} (Abfragerezept: node scripts/langfuse-wochenbericht.mjs --rezept)`);
   if (!Array.isArray(json.data)) throw wo("data fehlt oder ist kein Array");
-  if (json.data.length >= ROW_LIMIT) throw abgeschnittenFehler(pfad, json.data.length);
+  if (json.data.length >= ROW_LIMIT) throw Object.assign(wo(`Export abgeschnitten (${json.data.length} Zeilen = row_limit)`), { code: ABGESCHNITTEN });
   const a = json.abfrage;
   if (Number.isNaN(Date.parse(a?.fromTimestamp)) || Number.isNaN(Date.parse(a?.toTimestamp))) throw wo("Fenster (fromTimestamp/toTimestamp) fehlt");
   const nameFilter = (a.filters ?? []).some((f) => f?.column === "name" && gleich(f.value, SCORE_NAMEN));

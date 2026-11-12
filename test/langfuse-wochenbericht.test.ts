@@ -453,6 +453,7 @@ describe("Randfälle (Guards)", () => {
     expect(V(() => { throw new Error("ENOENT /x/y"); })).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: fehlt), Filter nur über den Repo-Namen");
     expect(V(() => "{nicht json")).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein gültiges JSON), Filter nur über den Repo-Namen");
     expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: 5 } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
+    expect(V(() => JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: null } }))).toBe("Projekt-Tags nicht lesbar (.claude/settings.json: kein Text), Filter nur über den Repo-Namen");
     expect(V(() => JSON.stringify({ env: {} }))).toBeNull();
     expect(V(() => "{}")).toBeNull();
     expect(V(() => "null")).toBeNull();
@@ -469,7 +470,7 @@ describe("Randfälle (Guards)", () => {
     const kd = await lauf(["--json"], leer, { projekt: mit });
     expect(lese<{ grund: string }>(kd.stdout).grund).toContain("; Projekt-Tags nicht lesbar");
     const ohne = await lauf(["--json"], leer);
-    expect(lese<{ grund: string }>(ohne.stdout).grund).not.toContain("Projekt-Tags");
+    expect(lese<{ grund: string }>(ohne.stdout).grund).not.toMatch(/Projekt-Tags|;|undefined/);
     const normal = await lauf(["--json"], satz());
     expect(lese<{ vermerk: string }>(normal.stdout).vermerk).not.toContain("; ");
   });

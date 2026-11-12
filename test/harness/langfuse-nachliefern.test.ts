@@ -422,7 +422,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     const r = await lauf(a, m);
     expect(r.exitCode).toBe(0);
     expect(m.otlp).toHaveLength(0);
-    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(readdirSync(a.state).filter((n) => /^langfuse-abgleich\.json\.kaputt-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z$/.test(n))).toHaveLength(1);
     expect(ledgerVon(a.ledger).s1.bestaetigt).toBe(true);
     // fehlendes Ledger: gleiche Antwort ohne Sicherungsdatei
     const b = aufbau([msg("a", 1), msg("b", 2)]);
@@ -438,7 +438,7 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
     writeFileSync(a.ledger, "{kaputt");
     const r = await lauf(a, mock({ ist: 0 }), { seit: "2100-01-01T00:00:00Z" }); // keine Session im Fenster
     expect(r.exitCode).toBe(0);
-    expect(readdirSync(a.state).filter((n) => n.startsWith("langfuse-abgleich.json.kaputt-"))).toHaveLength(1);
+    expect(readdirSync(a.state).filter((n) => /^langfuse-abgleich\.json\.kaputt-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z$/.test(n))).toHaveLength(1);
     expect(JSON.parse(readFileSync(a.ledger, "utf8"))).toEqual({ version: 1, sessions: {} });
   });
 

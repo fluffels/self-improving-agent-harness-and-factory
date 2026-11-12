@@ -155,7 +155,7 @@ export function projektFilterTags({ tags = [], repoName }) {
 }
 
 /**
- * Payloads für `eintraege`(die zu sendenden Generationen) einer Session. `soll` = das vollständige Soll (Agenten, Zeiten, Tags),
+ * Payloads für `eintraege` (die zu sendenden Generationen) einer Session. `soll` = das vollständige Soll (Agenten, Zeiten, Tags),
  * `ledgerSpans` = schon gesendete Subagent-Spans (werden nicht erneut gesendet). Benötigte Eltern-Spans kommen mit; Spans
  * stehen im ersten Chunk vor den Generationen. `repoName` (Namensteil von `repo` der Projekt-Config) ist Pflicht: er benennt Scope und Service und ist das erste Tag.
  * → `{ chunks: [{ payload, generationIds, spanIds }] }`.
