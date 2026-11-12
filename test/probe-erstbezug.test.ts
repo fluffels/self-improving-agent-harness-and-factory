@@ -32,7 +32,7 @@ const P = raw as unknown as {
   baueFixture: (a: { von: string; ziel: string; raum: number; io: Io }) => void;
   fuehreSchritte: (s: Schritt[], io: Io) => { id: string; status: number | null }[];
   main: (argv: string[], io: Io) => { code: number; out: string; err: string };
-  echteNaehte: (stdio?: string) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
+  echteNaehte: (stdio?: string, naht?: { spawn?: (c: string, a: string[], o: Record<string, unknown>) => { status: number } }) => { istGitRepo: (p: string) => boolean; istLeer: (p: string) => boolean; kopf: (p: string) => string | null; lies: (p: string) => string | null; mitScratch: (s: string) => Io };
 };
 const B = budgetRaw as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; kernBlockZeichen: (t: string, m: { start: string; ende: string }) => number | null; countChars: (t: string) => number };
 const R = releaseRaw as unknown as { mechanischeSchritte: (q: string) => string[] };
@@ -382,7 +382,7 @@ describe("fuehreSchritte und baueFixture", () => {
     const optionen: Record<string, unknown>[] = [];
     const spawn = (_c: string, _a: string[], o: Record<string, unknown>) => (optionen.push(o), { status: 0 });
     temp((dir) => {
-      const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s"));
+      const n = P.echteNaehte("stderr", { spawn }).mitScratch(join(dir, "s")) as { fuehre: (s: object) => number; stderrRest: (id: string) => string };
       n.fuehre({ argv: ["x"], cwd: "/", id: "a" });
       const stdio = optionen[0].stdio as unknown[];
       expect(stdio.slice(0, 2)).toEqual(["ignore", "ignore"]);
