@@ -1,4 +1,4 @@
-/* Dateigröße-Wächter (#390) – Frühwarnung gegen neue God-Files.
+/* Dateigröße-Wächter (quellprojekt#390) – Frühwarnung gegen neue God-Files.
  *
  * Große Module sind bei wachsendem Umfang teuer: Agenten lesen pro Änderung viel mehr
  * Kontext (Tokens), und je größer eine Datei, desto leichter schleichen sich
@@ -56,7 +56,7 @@ const { DECKEL, collectWorkflowSizes, pruefeDeckel } = deckelApi;
 const sizes = collectSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.datei));
 
-describe("Dateigröße-Budget (#390)", () => {
+describe("Dateigröße-Budget (quellprojekt#390)", () => {
   test(`kein src-Modul über ${LOC_BUDGET} LOC (außer dokumentierten Ausnahmen)`, () => {
     const violations = findOversized(sizes, LOC_BUDGET).filter((s) => !allowedFiles.has(s.file));
     assert.deepEqual(
@@ -64,12 +64,12 @@ describe("Dateigröße-Budget (#390)", () => {
       [],
       `Module über dem ${LOC_BUDGET}-LOC-Budget ohne Allowlist-Eintrag:\n` +
         violations.map((v) => `  ${v.file}: ${v.loc}`).join("\n") +
-        `\nAufteilen (siehe #392/#393) oder – mit offenem Split-Ticket – unter ausnahmen.groesse in .factory/projekt.json aufnehmen.`,
+        `\nAufteilen (siehe quellprojekt#392/quellprojekt#393) oder – mit offenem Split-Ticket – unter ausnahmen.groesse in .factory/projekt.json aufnehmen.`,
     );
   });
 
   test("Allowlist ist ehrlich: jeder Eintrag liegt wirklich noch über Budget (sonst stale)", () => {
-    // Sobald ein Split (#393/#397) eine Datei unter Budget bringt, wird der Eintrag stale
+    // Sobald ein Split (quellprojekt#393/quellprojekt#397) eine Datei unter Budget bringt, wird der Eintrag stale
     // und dieser Test bricht – das erinnert daran, die Ausnahme wieder zu entfernen.
     const bySize = new Map(sizes.map((s) => [s.file, s.loc]));
     const stale = ALLOWLIST.filter((a) => {

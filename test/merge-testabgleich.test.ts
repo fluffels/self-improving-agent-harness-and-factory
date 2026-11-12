@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach } from "vitest";
+import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/merge-testabgleich.mjs";
@@ -233,7 +234,7 @@ describe("Wächter-Lauf-Hinweis", () => {
     WAECHTER_PFAD: RegExp;
     waechterDateien: (u: string[], i: string[]) => string[];
     waechterHinweis: (d: string[], u?: { harnessDa: boolean; testGezieltStandard: boolean }) => string;
-    waechterUmgebung: (w: string, d: { lade: () => unknown; existiert: (p: string) => boolean }) => { harnessDa: boolean; testGezieltStandard: boolean };
+    waechterUmgebung: (w: string, d?: { lade: () => unknown; existiert: (p: string) => boolean }) => { harnessDa: boolean; testGezieltStandard: boolean };
   };
   test("Pfadliste: .claude/, .github/, docs/, test/harness/, README.md, jede AGENTS.md (auch modul-lokal)", () => {
     for (const p of [".claude/a", ".github/workflows/x.yml", "docs/x.md", "test/harness/a.test.ts", "README.md", "AGENTS.md", "src/content/AGENTS.md"]) {
@@ -275,6 +276,14 @@ describe("Wächter-Lauf-Hinweis", () => {
     assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({ befehle: { testGezielt: "pytest {pfad}" } }), existiert: da }), { harnessDa: true, testGezieltStandard: false });
     assert.deepEqual(W.waechterUmgebung("/w", { lade: () => ({}), existiert: () => false }), { harnessDa: false, testGezieltStandard: true });
     assert.deepEqual(W.waechterUmgebung("/w", { lade: () => { throw new Error("x"); }, existiert: da }), { harnessDa: true, testGezieltStandard: false });
+  });
+  test("L6: waechterUmgebung liest die Config der übergebenen Wurzel, nicht die des Arbeitsordners", () => {
+    const config = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".factory", "projekt.json"), "utf8")) as Record<string, unknown>;
+    const wurzel = fixture({
+      ".factory/projekt.json": JSON.stringify({ ...config, befehle: { testGezielt: "pytest {pfad}" } }),
+      "test/harness/.keep": "",
+    });
+    assert.deepEqual(W.waechterUmgebung(wurzel), { harnessDa: true, testGezieltStandard: false });
   });
   test("waechterHinweis: leer ohne Dateien, bis 5 Dateien alle genannt, ab 6 gekürzt", () => {
     assert.equal(W.waechterHinweis([]), "");

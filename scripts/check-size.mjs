@@ -4,7 +4,7 @@
 // stolpert über das `#!`-Token → „Invalid or unexpected token"), während sie für den
 // npm-Aufruf wirkungslos ist. Darum bewusst weggelassen.
 /**
- * Dateigröße-Wächter (#390) – Frühwarnung gegen neue God-Files.
+ * Dateigröße-Wächter (quellprojekt#390) – Frühwarnung gegen neue God-Files.
  *
  * Hintergrund: große Module sind bei wachsendem Umfang teuer – Agenten lesen pro
  * Änderung viel mehr Kontext (Tokens), und je größer eine Datei, desto leichter
@@ -222,7 +222,7 @@ function main() {
 
   if (violations.length)
     console.error(
-      `\n${violations.length} Modul(e) über dem Budget. Aufteilen (siehe #392/#393 als Vorlage) ` +
+      `\n${violations.length} Modul(e) über dem Budget. Aufteilen (siehe quellprojekt#392/quellprojekt#393 als Vorlage) ` +
         `oder – mit offenem Split-Ticket – bewusst unter ausnahmen.groesse in ${PROJEKT_CONFIG} aufnehmen (datei, grund mit #<nr>).`,
     )
   process.exit(1)

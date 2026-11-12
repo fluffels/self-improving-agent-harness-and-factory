@@ -8,6 +8,8 @@ const A = raw as unknown as {
   ordneEin: (a: { befunde: B[]; bekannt: Iterable<string> }) => Aktion[];
   befundeAusNpmAudit: (j: unknown) => B[];
   befundeAusAlerts: (a: unknown) => B[];
+  alertsAusSeiten: (seiten: unknown) => unknown[];
+  ladeAlerts: (repo: string, text: (args: string[]) => string) => unknown[];
   markiereProd: (voll: B[], prod: B[]) => B[];
   vertrauteBodies: (kommentare: { body?: string | null; user?: { login?: string; type?: string } | null }[], owner: string) => string[];
   bekannteGhsa: (a: { kommentare: string[]; wiedervorlagen: { id: string }[]; offeneTitel: string[] }) => Set<string>;
@@ -424,5 +426,29 @@ describe("main: audit.verzeichnisse (factory#395 L54)", () => {
     const { aufrufe, deps } = aufbau({}, () => leer);
     expect(await main(["--dry-run"], deps)).toBe(0);
     expect(aufrufe).toEqual([".", ".--omit=dev"]);
+  });
+});
+
+describe("alertsAusSeiten (L11)", () => {
+  test("verflacht Seiten; leere Seitenliste gibt leere Liste", () => {
+    expect(A.alertsAusSeiten([[{ a: 1 }], [{ b: 2 }]])).toEqual([{ a: 1 }, { b: 2 }]);
+    expect(A.alertsAusSeiten([])).toEqual([]);
+  });
+  test("ladeAlerts: verdrahtet den Helfer; Seite ohne Liste gibt [] samt sichtbarer ::warning::", () => {
+    expect(A.ladeAlerts("o/r", () => JSON.stringify([[{ a: 1 }], [{ b: 2 }]]))).toEqual([{ a: 1 }, { b: 2 }]);
+    const zeilen: string[] = [];
+    const orig = console.log;
+    console.log = (m: string) => void zeilen.push(String(m));
+    try {
+      expect(A.ladeAlerts("o/r", () => JSON.stringify([[{ a: 1 }], {}]))).toEqual([]);
+    } finally {
+      console.log = orig;
+    }
+    expect(zeilen.join("\n")).toMatch(/::warning::Dependabot-Alerts nicht lesbar \(.*Seite ohne Liste/);
+  });
+  test("Seite ohne Liste wirft (fail-closed)", () => {
+    for (const k of [{}, [{ message: "x" }], [[{ a: 1 }], {}]]) {
+      expect(() => A.alertsAusSeiten(k)).toThrow(/Unerwartete Alerts-Antwort \(Seite ohne Liste\)\./);
+    }
   });
 });
