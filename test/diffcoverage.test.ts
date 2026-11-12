@@ -48,6 +48,7 @@ type Verdict = { buckets: Record<string, Bucket>; missing: string[]; below: stri
 /** Die öffentliche Oberfläche des Wächters, wie dieser Test sie nutzt. */
 type CheckDiffCoverageModule = {
   LAYER_DIFF_FLOORS: Record<string, number | null>;
+  SCHICHT_FIX: string;
   LCOV_PATH: string;
   GIT_OPTIONEN: { encoding: string; maxBuffer: number };
   normalizePath: (p: string) => string;
@@ -82,6 +83,7 @@ import * as checkCovRaw from "../scripts/check-diffcoverage.mjs";
 
 const {
   LAYER_DIFF_FLOORS,
+  SCHICHT_FIX,
   LCOV_PATH,
   GIT_OPTIONEN,
   isMeasured,
@@ -945,14 +947,61 @@ describe("Diff-Coverage: Rot nennt Datei, Zeile und Bericht (factory#208)", () =
 
 describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stacktrace, Exit 2, fail-closed", () => {
   const lade = (checkCovRaw as unknown as { ladeSchichten: (w: string) => { LAYERS?: unknown; layerOf?: unknown; fehler?: string } }).ladeSchichten;
-  const GUT = "module.exports = { LAYERS: { DOMAIN: 'd' }, layerOf: () => 'd' };\n";
+  const GUT = "module.exports = { LAYERS: { DOMAIN: 'd', APPLICATION: 'a' }, layerOf: () => 'd' };\n";
   const wurzel = (config: string | null, layers: string | null): string =>
     fixture({ ...(config === null ? {} : { "scripts/docs-gen/config.json": config }), ...(layers === null ? {} : { "scripts/l.cjs": layers }) }) + "/";
 
   test("gültig: LAYERS und layerOf, kein Fehler", () => {
     const r = lade(wurzel('{"schichten":{"layers":"scripts/l.cjs"}}', GUT));
     assert.equal(r.fehler, undefined);
-    assert.deepEqual(r.LAYERS, { DOMAIN: "d" });
+    assert.deepEqual(r.LAYERS, { DOMAIN: "d", APPLICATION: "a" });
+  });
+  test("LAYERS ohne einen Schlüssel mit Floor (DOMAIN, APPLICATION): Fehler mit Schlüssel, Pfad und Fix (L7)", () => {
+    const cfg = '{"schichten":{"layers":"scripts/l.cjs"}}';
+    for (const [fehlt, js] of [
+      ["APPLICATION", "module.exports = { LAYERS: { DOMAIN: 'd' }, layerOf: () => 'd' };\n"],
+      ["DOMAIN", "module.exports = { LAYERS: { APPLICATION: 'a' }, layerOf: () => 'a' };\n"],
+    ]) {
+      const f = lade(wurzel(cfg, js)).fehler ?? "";
+      assert.match(f, new RegExp(`scripts/l\\.cjs: LAYERS hat den Schlüssel ${fehlt} nicht`), fehlt);
+      assert.ok(f.includes(SCHICHT_FIX), f);
+    }
+  });
+  test("LAYER_DIFF_FLOORS führt nur vorhandene Schlüssel, nie undefined (L7)", () => {
+    assert.ok(!("undefined" in LAYER_DIFF_FLOORS), Object.keys(LAYER_DIFF_FLOORS).join(","));
+  });
+  test("SCHICHT_FIX nennt schichten-kern.cjs und die Seite der Schichtdatei; jeder scripts/-Pfad darin ist Kern-Besitz (L8)", () => {
+    assert.match(SCHICHT_FIX, /scripts\/schichten-kern\.cjs/);
+    assert.match(SCHICHT_FIX, /docs\/erstbezug\.md/);
+    assert.ok(!SCHICHT_FIX.includes("scripts/layers.cjs"), SCHICHT_FIX);
+    const manifest = JSON.parse(readFileSync(new URL("../.factory/besitz.json", import.meta.url), "utf8")) as { eintraege: { pfad: string; ring: string }[] };
+    const kern = new Set(manifest.eintraege.filter((e) => e.ring === "kern").map((e) => e.pfad));
+    const pfade = SCHICHT_FIX.match(/scripts\/[\w./-]+\.(?:cjs|mjs|json)/g) ?? [];
+    assert.ok(pfade.length > 0);
+    for (const p of pfade) assert.ok(kern.has(p), `${p} ist kein Kern-Besitz`);
+  });
+  test("verify:full fährt die Abdeckung über den Gate-Befehl, nicht über test:coverage (L9)", () => {
+    const v = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> }).scripts["verify:full"] ?? "";
+    assert.ok(v.includes("gate-befehl.mjs coverage"), v);
+    assert.ok(!v.includes("test:coverage"), v);
+  });
+  test("fremde Schicht-ID: evaluateByLayer wirft mit Pfad, Schicht-ID und Fix (L7)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "diffcov-fremd-"));
+    try {
+      cpSync(fileURLToPath(new URL("../scripts", import.meta.url)), join(tmp, "scripts"), { recursive: true });
+      writeFileSync(join(tmp, "scripts", "fremd.cjs"), "const L = require('./layers.cjs');\nmodule.exports = { LAYERS: L.LAYERS, layerOf: () => 'fremd' };\n");
+      const cfgPfad = join(tmp, "scripts", "docs-gen", "config.json");
+      const cfg = JSON.parse(readFileSync(cfgPfad, "utf8")) as { schichten: { layers: string } };
+      cfg.schichten.layers = "scripts/fremd.cjs";
+      writeFileSync(cfgPfad, JSON.stringify(cfg));
+      const skript = pathToFileURL(join(tmp, "scripts", "check-diffcoverage.mjs")).href;
+      const probe = `import(${JSON.stringify(skript)}).then((m) => { try { m.evaluateByLayer(new Map([["scripts/a.mjs", new Set([1])]]), new Map([["scripts/a.mjs", new Map([[1, 1]])]]), { quelle: { wurzeln: ["scripts"], endungen: [".mjs"] } }); console.log("kein Wurf"); } catch (e) { console.log("WURF " + e.message); } });`;
+      const f = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", cwd: tmp });
+      assert.match(f.stdout, /^WURF .*scripts\/a\.mjs.*"fremd"/, f.stdout + f.stderr);
+      assert.ok(f.stdout.includes(SCHICHT_FIX), f.stdout);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
   test("config.json fehlt oder ist kein JSON: Fehler mit Pfad der Config", () => {
     assert.match(lade(wurzel(null, GUT)).fehler ?? "", /scripts\/docs-gen\/config\.json nicht lesbar/);
@@ -980,7 +1029,7 @@ describe("Schichtdaten fehlen oder sind kaputt (#238 L21a): Fix-Zeile statt Stac
       const r = spawnSync(process.execPath, [join(tmp, "scripts", "check-diffcoverage.mjs")], { encoding: "utf8", cwd: tmp });
       assert.equal(r.status, 2, r.stderr);
       assert.match(r.stderr, /✖ check:diffcoverage: scripts\/docs-gen\/config\.json: schichten\.layers fehlt/);
-      assert.match(r.stderr, /Fix: .*schichten\.layers.*scripts\/layers\.cjs/);
+      assert.match(r.stderr, /Fix: .*schichten\.layers.*scripts\/schichten-kern\.cjs.*docs\/erstbezug\.md/);
       assert.ok(!/\n\s+at /.test(r.stderr), r.stderr);
       // fail-closed: wer die Auswertung trotzdem importiert, bekommt beim Schicht-Zugriff den Fehler statt einer stillen Schicht.
       const skript = pathToFileURL(join(tmp, "scripts", "check-diffcoverage.mjs")).href;
