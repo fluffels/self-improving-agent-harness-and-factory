@@ -48,6 +48,12 @@ describe("Auswertung: Positivfälle", () => {
     expect(r.nachweise).toEqual({ 1: "belegt", 2: "belegt", 3: "grenze", 4: "belegt", 5: "belegt" });
     expect(a.auswertungExit(r)).toBe(0);
   });
+  test("Rangfolge je Nachweis: ein offener Punkt schlägt eine grenze, in beiden Reihenfolgen", () => {
+    for (const [grenze, offenerPunkt] of [["hook-timeout", "hook-fehler"], ["hook-fehler", "hook-timeout"]]) {
+      const r = lauf(mit((b) => { b.punkte[grenze].ergebnis = "grenze"; b.punkte[offenerPunkt].ergebnis = "offen"; }));
+      expect(r.nachweise["3"]).toBe("offen");
+    }
+  });
   test("Ausgabeschlüssel entsprechen genau NACHWEIS_NUMMERN der Freigabetabelle", () => {
     expect(Object.keys(lauf().nachweise)).toEqual([...NACHWEIS_NUMMERN]);
   });
