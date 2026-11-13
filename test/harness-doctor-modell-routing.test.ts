@@ -47,8 +47,15 @@ describe("Alias-Liste und (a) Projekt-Agent", () => {
   test.each(["inherit", "opusplan", "best", "claude-opus-5", ""])("model %s ist eine Lücke", (m) => {
     expect(agentFunde({ model: m, effort: "low" }, "x.md")).toEqual([`(a) x.md: model=${m || "fehlt"}`]);
   });
+  test("fehlender model:-Schlüssel ist eine Lücke", () => {
+    expect(agentFunde({ effort: "low" }, "x.md")).toEqual(["(a) x.md: model=fehlt"]);
+    const e = mit({ ".claude/agents/projekt.md": "---\nname: projekt\neffort: medium\n---\n" });
+    expect(e.befund).toContain("(a) .claude/agents/projekt.md: model=fehlt");
+  });
   test("effort: fehlt, leer und inherit sind Lücken", () => {
     expect(agentFunde({ model: "opus" }, "x.md")).toEqual(["(a) x.md: effort=fehlt"]);
+    expect(agentFunde({ model: "opus", effort: "" }, "x.md")).toEqual(["(a) x.md: effort=fehlt"]);
+    expect(mit({ ".claude/agents/projekt.md": "---\nname: projekt\nmodel: sonnet\neffort:\n---\n" }).befund).toContain("effort=fehlt");
     expect(agentFunde({ model: "opus", effort: "inherit" }, "x.md")).toEqual(["(a) x.md: effort=inherit"]);
   });
 });
@@ -145,11 +152,25 @@ describe("Punkt Modell-Routing", () => {
     expect(e.nichtPruefbar).toBeFalsy();
     expect(e.befund).toContain("(c)");
     expect(e.befund).toContain("nicht prüfbar");
+    expect(e.fix).toContain(".factory/besitz.json");
+    expect(e.fix).toContain("eigenen `name:`");
   });
   test("eine Agentendatei nicht lesbar: kein Wurf, nicht prüfbar", () => {
     const lies: Lies = (p) => (p === ".claude/agents/weg.md" ? null : (gesund()[p] ?? null));
     const liste: Liste = (o) => (o === ".claude/agents" ? ["projekt.md", "kern.md", "weg.md"] : null);
-    expect(punkt({ lies, liste })).toMatchObject({ ok: false, nichtPruefbar: true });
+    const e = punkt({ lies, liste });
+    expect(e).toMatchObject({ ok: false, nichtPruefbar: true });
+    expect(e.befund).toContain(".claude/agents/weg.md nicht lesbar");
+    expect(e.fix).toContain(".claude/agents/weg.md");
+  });
+  test(".claude/agents fehlt plus Fund in (d): LÜCKE, nennt die nicht prüfbaren Teile (a) und (c)", () => {
+    const lies: Lies = (p) => (p === ".claude/settings.json" ? '{"model":"opus"}' : p === ".factory/besitz.json" ? MANIFEST : null);
+    const e = punkt({ lies, liste: () => null });
+    expect(e.ok).toBe(false);
+    expect(e.nichtPruefbar).toBeFalsy();
+    expect(e.befund).toContain('(d) model="opus"');
+    expect(e.befund).toContain("nicht prüfbar: .claude/agents fehlt");
+    expect(e.fix).toContain("anlegen");
   });
   test("(e) Tabelle nennt einen Subagenten ohne Agentendatei: der Fund sagt, dass die Datei fehlt", () => {
     const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagent `weg`") });

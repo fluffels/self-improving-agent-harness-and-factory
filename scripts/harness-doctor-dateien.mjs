@@ -47,7 +47,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MANIFEST_PFAD, manifestAusText, markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
 import { parseFrontmatter } from "./docs-gen/markdown.mjs";
-import { doppelteNamen, hatHartenPin, hauptchatModellBefunde, projektAgentFunde, projektPhasenAbweichungen, routingPfade } from "./modell-routing-lib.mjs";
+import { doppelteNamen, hatHartenPin, MODELL_ALIASE, hauptchatModellBefunde, projektAgentFunde, projektPhasenAbweichungen, routingPfade } from "./modell-routing-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { pflichtReviewMuster, schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
@@ -517,9 +517,10 @@ const MR_PUNKT = "Modell-Routing";
 const MR_AGENTEN = ".claude/agents";
 const MR_SETTINGS = ".claude/settings.json";
 const MR_DOKU = "docs/model-routing.md";
+const ALIAS_TEXT = MODELL_ALIASE.join(", ");
 const MR_FIXE = {
-  a: "im Frontmatter jedes Projekt-Agenten unter .claude/agents/ (nicht im Besitz-Manifest) `model:` aus opus, sonnet, haiku oder fable und ein `effort:` (nicht inherit) setzen; Liste auf der Seite docs/model-routing.md des Factory-Repos",
-  b: "feste Modell-IDs (claude-<stufe>-<nr>) in Agenten, Skills, .claude/settings.json und .claude/workflows durch den Alias (opus, sonnet, haiku oder fable) ersetzen",
+  a: "im Frontmatter jedes Projekt-Agenten unter .claude/agents/ (nicht im Besitz-Manifest) `model:` aus " + ALIAS_TEXT + " und ein `effort:` (nicht inherit) setzen; Liste auf der Seite docs/model-routing.md des Factory-Repos",
+  b: "feste Modell-IDs (claude-<stufe>-<nr>) in Agenten, Skills, .claude/settings.json und .claude/workflows durch den Alias (" + ALIAS_TEXT + ") ersetzen",
   c: "jedem Agenten unter .claude/agents/ einen eigenen `name:` geben (auch gegenüber den mitgelieferten Agenten eindeutig)",
   d: ".claude/settings.json anlegen oder korrigieren: `model` genau `sonnet`, kein env-, Effort- oder Cache-TTL-Schlüssel, der es überstimmt",
   e: "Alias und Effort der Tabelle Projekt-Phase in docs/model-routing.md und das Frontmatter des Subagenten gleichziehen",
@@ -589,9 +590,10 @@ function mrTeilE(lies) {
 /** Punkt `Modell-Routing`: `lies(rel)` liefert Text oder `null`, `liste(ordner)` die Namen im Ordner oder `null`. Nie ein Wurf, nie still grün. */
 export function modellRoutingPunkt({ lies, liste }) {
   const a = mrAgenten(lies, liste);
-  if (a === null) return nichtPruefbar(MR_PUNKT, `${MR_AGENTEN} fehlt oder ist nicht lesbar: (a), (c) und (e) nicht prüfbar`, `${MR_AGENTEN} anlegen (die Agenten des Projekts und die mitgelieferten) oder den Doctor im Projekt-Root starten, dann erneut prüfen`);
-  const offenAgenten = a.unlesbar.map((p) => ({ grund: `${p} nicht lesbar`, fix: `${p} lesbar machen oder entfernen, dann erneut prüfen` }));
-  const teile = [mrTeilA(a.agenten, lies), mrTeilB(lies, liste), mrTeilC(a.agenten), mrTeilD(lies), mrTeilE(lies), { ...MR_LEER, offen: offenAgenten }];
+  const ohneOrdner = { ...MR_LEER, offen: [{ grund: `${MR_AGENTEN} fehlt oder ist nicht lesbar: (a) und (c) nicht prüfbar`, fix: `${MR_AGENTEN} anlegen (die Agenten des Projekts und die mitgelieferten) oder den Doctor im Projekt-Root starten, dann erneut prüfen` }] };
+  const offenAgenten = (a?.unlesbar ?? []).map((p) => ({ grund: `${p} nicht lesbar`, fix: `${p} lesbar machen oder entfernen, dann erneut prüfen` }));
+  // Rangfolge: (b), (d) und (e) brauchen den Ordner nicht und laufen auch ohne ihn.
+  const teile = a === null ? [ohneOrdner, mrTeilB(lies, liste), mrTeilD(lies), mrTeilE(lies)] : [mrTeilA(a.agenten, lies), mrTeilB(lies, liste), mrTeilC(a.agenten), mrTeilD(lies), mrTeilE(lies), { ...MR_LEER, offen: offenAgenten }];
   const funde = teile.flatMap((t) => t.funde);
   const offen = teile.flatMap((t) => t.offen);
   const hinweise = teile.flatMap((t) => t.hinweise);
