@@ -94,8 +94,10 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     expect(punkte.filter((p) => p.ohneExport).map((p) => p.id).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "tracing-ausfall"]);
   });
   test("leere version/sessionId auf beiden Seiten und ein Export ohne observations-Liste: alle fünf offen, kein Wurf", () => {
-    const e0 = export_(); const leer = { ...e0, version: "", sessionId: "", observations: e0.observations.map((o) => ({ ...o, sessionId: "" })) };
-    expect(offen(lauf(mit((b) => { b.version = ""; b.sessionId = ""; }), leer))).toEqual(["1", "2", "3", "4", "5"]);
+    const e0 = export_();
+    expect(offen(lauf(mit((b) => { b.version = ""; }), { ...e0, version: "" }))).toEqual(["1", "2", "3", "4", "5"]);
+    const ohneSession = { ...e0, sessionId: "", observations: e0.observations.map((o) => ({ ...o, sessionId: "" })) };
+    expect(offen(lauf(mit((b) => { b.sessionId = ""; }), ohneSession))).toEqual(["1", "2", "3", "4", "5"]);
     expect(offen(lauf(bericht(), { ...export_(), observations: undefined })).length).toBeGreaterThan(0);
   });
   test("ergebnis offen zählt als offen", () => {
