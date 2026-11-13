@@ -1,6 +1,6 @@
 // Einstieg: node scripts/codex-probe.mjs vorbereiten [--langfuse-url <MCP-URL>] [--langfuse-auth env|host]
 //           | auswerten --belege <Export.json> --bericht <Bericht.json> | aufraeumen   (Abnahmeweg: docs/codex/probe.md, factory#366).
-// Isolierter Probe-Lebenslauf der Codex-Gesamtabnahme (Worktree `codex-probe` von origin/main). Startet Codex nie, liest keine Secrets, schreibt nie in eine globale Konfiguration;
+// Isolierter Probe-Lebenslauf der Codex-Gesamtabnahme (Worktree `codex-probe` vom Standardzweig des Repos). Startet Codex nie, liest keine Secrets, schreibt nie in eine globale Konfiguration;
 // Befehle laufen nur über `deps.git` (git) und `deps.setup` (node + codex-setup.mjs im Probe-Worktree).
 // Bekannte Grenze des Quelltext-Wächters (test/harness/codex-probe.test.ts): er prüft eine geschlossene Musterliste (Umgebung, Home-Ordner, Prozessstart mit Literal `codex`), keine Obfuskation.
 import { spawnSync } from "node:child_process";

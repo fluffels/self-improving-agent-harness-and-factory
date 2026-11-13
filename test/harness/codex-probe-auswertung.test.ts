@@ -93,8 +93,14 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     expect(Object.fromEntries(punkte.map((p) => [p.id, p.nachweis]))).toEqual(soll);
     expect(punkte.filter((p) => p.ohneExport).map((p) => p.id).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "tracing-ausfall"]);
   });
+  test("leere version/sessionId auf beiden Seiten und ein Export ohne observations-Liste: alle fünf offen, kein Wurf", () => {
+    const leer = { ...export_(), version: "", sessionId: "" };
+    expect(offen(lauf(mit((b) => { b.version = ""; b.sessionId = ""; }), leer))).toEqual(["1", "2", "3", "4", "5"]);
+    expect(offen(lauf(bericht(), { ...export_(), observations: undefined })).length).toBeGreaterThan(0);
+  });
   test("ergebnis offen zählt als offen", () => {
-    expect(offen(lauf(mit((b) => { b.punkte.langfuse.ergebnis = "offen"; })))).toEqual(["2"]);
+    const r = lauf(mit((b) => { b.punkte.langfuse.ergebnis = "offen"; }));
+    expect([offen(r), r.maengel.join()]).toEqual([["2"], expect.stringContaining("langfuse")]);
   });
   test("playwright fehlt in tools: Nachweis 2 offen", () => {
     const e = export_(); e.tools = ["langfuse"];
@@ -114,7 +120,7 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     ["beobachtung kein Text", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { beobachtung: unknown }).beobachtung = 1; }],
     ["observations mit Nicht-ID", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { observations: unknown }).observations = ["tool-1", 2]; }],
     ["ausgabe kein Text", (b: ReturnType<typeof bericht>) => { (b.punkte.abnahme as { ausgabe: unknown }).ausgabe = 3; }],
-    ["Punkt kein Objekt", (b: ReturnType<typeof bericht>) => { (b.punkte as Record<string, unknown>).abnahme = "ok"; }],
+    ["Punkt kein Objekt", (b: ReturnType<typeof bericht>) => { (b.punkte as Record<string, unknown>).abnahme = null; }],
     ["frischeSession false", (b: ReturnType<typeof bericht>) => { (b as { frischeSession: boolean }).frischeSession = false; }],
     ["falscher Typ", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { observations: unknown }).observations = "tool-1"; }],
   ])("Schema-Mangel (%s): alle fünf Nachweise offen", (_n, aend) => {

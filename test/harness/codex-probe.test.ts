@@ -65,6 +65,8 @@ describe("vorbereiten und aufraeumen", () => {
     expect(worktreeListe()).toContain(`worktree ${probe}`);
     expect(git(haupt, "rev-parse", "codex-probe").trim()).toBe(git(haupt, "rev-parse", "origin/main").trim());
     expect(spawnSync("git", ["config", "branch.codex-probe.remote"], { cwd: haupt, encoding: "utf8" }).stdout).toBe("");
+    const vorlage = (JSON.parse(readFileSync(join(probe, ".codex", "probe", "bericht-vorlage.json"), "utf8")) as { punkte: Record<string, object> }).punkte;
+    expect(Object.keys(vorlage).filter((k) => "ausgabe" in vorlage[k]).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "tracing-ausfall"]);
     expect(readdirSync(join(probe, ".codex", "probe")).sort()).toEqual([".gitignore", "bericht-vorlage.json", "checkliste.md", "hook-fehler.mjs", "hook-timeout.mjs", "ticket.md"]);
     type Hooks = { hooks: { PreToolUse: { matcher: string; hooks: { timeout: number; command: string }[] }[] } };
     const hooks = (JSON.parse(readFileSync(join(probe, ".codex", "hooks.json"), "utf8")) as Hooks).hooks.PreToolUse;
@@ -142,6 +144,10 @@ describe("vorbereiten und aufraeumen", () => {
     expect(r.code).toBe(1);
     expect(r.err).toContain("Branch codex-probe");
     expect(calls.some((c) => c[0] === "fetch" || (c[0] === "worktree" && c[1] === "add"))).toBe(false);
+  });
+  test("git fetch scheitert: Exit 1 und kein Worktree, kein Branch", () => {
+    const r = lauf(["vorbereiten"], { git: (a, cwd) => (a[0] === "fetch" ? { status: 1, stdout: "", stderr: "offline" } : echtGit(a, cwd)) });
+    expect([r.code, r.err.includes("offline"), worktreeListe().includes("codex-probe"), branchListe().includes("codex-probe")]).toEqual([1, true, false, false]);
   });
   test("Setup scheitert: Rückbau, Exit 1 mit Ursache, nichts bleibt", () => {
     const r = lauf(["vorbereiten"], { setup: () => ({ status: 1, stderr: "kaputt" }) });
