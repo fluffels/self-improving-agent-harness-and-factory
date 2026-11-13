@@ -11,21 +11,23 @@ import * as libRaw from "../../scripts/codex-probe-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as belegeRaw from "../../scripts/codex-belege.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
-import { NACHWEIS_NUMMERN } from "../../scripts/codex-freigaben.mjs";
+import * as freigabenRaw from "../../scripts/codex-freigaben.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
-import { rollenFuer } from "../../scripts/codex-rollen.mjs";
+import * as rollenRaw from "../../scripts/codex-rollen.mjs";
 import config from "../fixtures/projekt-probe.json";
 
 type Punkt = { id: string; nachweis: number; ohneExport: boolean };
 type Ergebnis = { nachweise: Record<string, string>; maengel: string[]; autonom: boolean; version: string | null };
 const a = auswRaw as unknown as { auswerten: (x: unknown) => Ergebnis; auswertungExit: (e: Ergebnis) => number; nachweiseDerDiagnose: (m: string) => string[]; berichtSchemaMaengel: (b: unknown, e: unknown, p: Punkt[]) => string[] };
+const NACHWEIS_NUMMERN = (freigabenRaw as unknown as { NACHWEIS_NUMMERN: string[] }).NACHWEIS_NUMMERN;
 const lib = libRaw as unknown as { checklistenPunkte: (c: unknown) => Punkt[] };
 const belegeLib = belegeRaw as unknown as { bewerteBelege: (b: unknown, c: unknown) => string[] };
 
 const ROLLEN_KEY = "agent_source.subagent.thread_spawn.agent_role";
-const rollen = rollenFuer(config).map((r: { name: string }) => r.name);
-const gen = (id: string, parent: string, rolle?: string) => ({ id: `gen-${id}`, type: "GENERATION", sessionId: "s1", tags: ["project:qx-demo"], metadata: { agent_role: parent ? "subagent" : "main", agent_id: id, parent_thread_id: parent, ...(rolle ? { [ROLLEN_KEY]: rolle } : {}) }, usageDetails: { input: 1, output: 2 } });
-const export_ = () => ({ version: "9.9.9", sessionId: "s1", rollen: [...rollen], tools: ["playwright", "langfuse"], observations: [gen("main", ""), ...rollen.map((r: string) => gen(r, "main", r)), { ...gen("tool", ""), id: "tool-1", type: "TOOL", metadata: { agent_id: "main" } }] });
+const rollen = (rollenRaw as unknown as { rollenFuer: (c: unknown) => { name: string }[] }).rollenFuer(config).map((r) => r.name);
+type Obs = { id: string; type: string; sessionId: string; tags: string[]; metadata: Record<string, unknown>; usageDetails: unknown };
+const gen = (id: string, parent: string, rolle?: string): Obs => ({ id: `gen-${id}`, type: "GENERATION", sessionId: "s1", tags: ["project:qx-demo"], metadata: { agent_role: parent ? "subagent" : "main", agent_id: id, parent_thread_id: parent, ...(rolle ? { [ROLLEN_KEY]: rolle } : {}) }, usageDetails: { input: 1, output: 2 } });
+const export_ = () => ({ version: "9.9.9", sessionId: "s1", rollen: [...rollen], tools: ["playwright", "langfuse"], observations: [gen("main", ""), ...rollen.map((r) => gen(r, "main", r)), { ...gen("tool", ""), id: "tool-1", type: "TOOL", metadata: { agent_id: "main" } }] as Obs[] });
 const punkte = lib.checklistenPunkte(config);
 const bericht = () => ({
   version: "9.9.9", sessionId: "s1", frischeSession: true,
@@ -98,7 +100,7 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
   test("Rolle fehlt im Inventar: Nachweis 1; fehlende Rollen-Generation: Nachweise 1 und 4", () => {
     const e = export_(); e.rollen = e.rollen.slice(1);
     expect(offen(lauf(bericht(), e))).toEqual(["1"]);
-    const g = export_(); g.observations = g.observations.filter((o) => o.metadata[ROLLEN_KEY as "agent_id"] !== rollen[0]);
+    const g = export_(); g.observations = g.observations.filter((o) => o.metadata[ROLLEN_KEY] !== rollen[0]);
     expect(offen(lauf(bericht(), g))).toEqual(["1", "4"]);
   });
   test("Werkzeugbeleg fehlt: Nachweis 4", () => {

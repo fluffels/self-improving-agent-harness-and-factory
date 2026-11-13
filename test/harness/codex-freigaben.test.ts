@@ -58,9 +58,11 @@ test("kein Versionsliteral in belege, vorpruefung und lib", () => {
     expect(text.match(/(?<![\w.])\d+\.\d+\.\d+(?![\w.])/g) ?? [], p).toEqual([]);
   }
 });
-test("nur die Vorprüfung importiert die Tabelle; sie selbst ist pur", () => {
+test("nur die Vorprüfung importiert die Tabelle (die Probe-Auswertung nur die Nachweis-Nummern); sie selbst ist pur", () => {
   const nennen = readdirSync("scripts", { recursive: true, encoding: "utf8" }).filter((p) => p.endsWith(".mjs") && p !== "codex-freigaben.mjs" && lies(join("scripts", p)).includes("codex-freigaben"));
-  expect(nennen).toEqual(["codex-vorpruefung.mjs"]);
+  expect(nennen).toEqual(["codex-probe-auswertung.mjs", "codex-vorpruefung.mjs"]);
+  expect(lies("scripts/codex-probe-auswertung.mjs")).toMatch(/import \{ NACHWEIS_NUMMERN \} from "\.\/codex-freigaben\.mjs"/);
+  expect(lies("scripts/codex-probe-auswertung.mjs")).not.toMatch(/\bFREIGABEN\b/);
   expect(lies("scripts/codex-freigaben.mjs")).not.toMatch(/^\s*import[\s{(]/m);
 });
 test("freigabeMaengel: belegte Version keine oder ungültig, Versionsschlüssel exakt x.y.z", () => {

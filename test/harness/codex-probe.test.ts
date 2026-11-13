@@ -9,7 +9,7 @@ import * as cliRaw from "../../scripts/codex-probe.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as libRaw from "../../scripts/codex-probe-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
-import { hookRegistrierung } from "../../scripts/codex-lib.mjs";
+import * as codexLibRaw from "../../scripts/codex-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import * as adapterRaw from "../../scripts/codex-hook-lib.mjs";
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
@@ -20,7 +20,8 @@ type Res = { status: number; stdout: string; stderr: string };
 type Deps = { git?: (a: string[], cwd: string) => Res; setup?: (p: string, a: string[]) => { status: number; stderr: string }; lade?: () => unknown };
 type Probe = { art: string; grund: string; codex: { tool_name: string; tool_input: Record<string, string> }; claude: { tool_name: string; tool_input: Record<string, string> } };
 const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void, d?: Deps) => number };
-const lib = libRaw as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const hookRegistrierung = (codexLibRaw as unknown as { hookRegistrierung: () => string }).hookRegistrierung;
+const lib = libRaw as unknown as { PROBE_TICKET_NR: number; PROBE_HOOK_TIMEOUT_S: number; MARKER_FEHLER: string; MARKER_TIMEOUT: string; checklistenPunkte: (c: unknown) => { id: string }[]; fixtureHooks: () => Record<string, string>; negativproben: (a: { haupt: string; probe: string; config: unknown }) => Probe[] };
 const adapter = adapterRaw as unknown as { entscheide: (t: string, root: string, d?: Record<string, unknown>) => Promise<{ hookSpecificOutput: { permissionDecision: string } } | null>; CODEX_HOOK_WERKZEUGE: Record<string, string>; CODEX_HOOK_TIMEOUT_S: number };
 const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: string) => { hookSpecificOutput: { permissionDecision: string } } | null };
 
@@ -173,7 +174,7 @@ describe("Fixture-Hooks (echter Node-Start)", () => {
   const start = (datei: string, eingabe: string, timeout?: number) => {
     const ordner = join(tmp, "fix");
     mkdirSync(ordner, { recursive: true });
-    for (const [n, q] of Object.entries(lib.fixtureHooks() as Record<string, string>)) writeFileSync(join(ordner, n), q);
+    for (const [n, q] of Object.entries(lib.fixtureHooks())) writeFileSync(join(ordner, n), q);
     return spawnSync(process.execPath, [join(ordner, datei)], { input: eingabe, encoding: "utf8", timeout });
   };
   test("hook-fehler wirft nur bei seinem Marker (Exit 1), sonst Exit 0 ohne Ausgabe", () => {
@@ -216,7 +217,7 @@ describe("Negativproben (K3): der Claude-Dispatcher und der Codex-Adapter verwei
     expect(git(haupt, "for-each-ref")).toBe(vorher);
   });
   test("folgenlos: das Schreibziel im verlinkten Worktree ist nicht schreibbar (.git ist dort eine Datei)", () => {
-    const ziel = (proben.find((p) => p.art === "patch") as Probe).claude.tool_input.file_path.replace(wt, wt);
+    const ziel = (proben.find((p) => p.art === "patch") as Probe).claude.tool_input.file_path;
     expect(() => writeFileSync(ziel, "x")).toThrow();
   });
   test("folgenlos: die Agent-Probe nennt eine Rolle ohne Shell und das nicht existierende Probe-Ticket", () => {

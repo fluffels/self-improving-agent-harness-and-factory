@@ -16,7 +16,7 @@ Die Vorprüfung `node scripts/codex-vorpruefung.mjs` meldet im Probe-Worktree di
 
 ## Ort und Dateien
 
-Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht unter dem Ticket-Präfix) auf dem Branch `codex-probe` (von `origin/main`, ohne Upstream). `vorbereiten` erzeugt darin `.codex/` per `codex-setup.mjs --write` und ersetzt `.codex/hooks.json` durch die Probe-Variante: das Soll plus zwei Fixture-Hooks auf die Shell-Werkzeuge. Unter `.codex/probe/` (mit eigener `.gitignore`, bleibt unversioniert) liegen:
+Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht unter dem Ticket-Präfix) auf dem Branch `codex-probe` (von `origin/main`, ohne Tracking-Zweig). `vorbereiten` erzeugt darin `.codex/` per `codex-setup.mjs --write` und ersetzt `.codex/hooks.json` durch die Probe-Variante: das Soll plus zwei Fixture-Hooks auf die Shell-Werkzeuge. Unter `.codex/probe/` (mit eigener `.gitignore`, bleibt unversioniert) liegen:
 
 | Datei | Inhalt |
 | --- | --- |
