@@ -7,7 +7,7 @@
  *  - Shell:       Worktree-, gh- und Stdin-Skript-Guard über den Dispatcher (Werkzeug `Bash`), danach die `Bash(...)`-Regeln aus `permissions.deny`/`permissions.ask`
  *                 der `.claude/settings.json` je Befehlssegment (Claude wendet sie selbst an, Codex nicht: `gh issue delete`, `git push --force` …)
  *  - apply_patch: jedes Schreibziel des Patches als Claude-`Write` an den Schreibziel-Guard des Dispatchers (kein Schreiben in den Haupt-Checkout oder nach `.git`); Selbstschutz für `.codex`
- *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, kein Spawn, factory#365), dann Lens-Auftrag- und
+ *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, factory#365; Adapter-Logik, im echten Lauf nicht beobachtet, factory#455), dann Lens-Auftrag- und
  *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`)
  * Fail-closed für diese drei Werkzeuge: unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard ergibt ein Deny mit Grund; ein `ask` des Dispatchers wird ein Deny,
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).

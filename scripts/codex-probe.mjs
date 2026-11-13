@@ -66,10 +66,10 @@ function schreibeProbe({ haupt, probe, config }) {
   const ordner = join(probe, PROBE_ORDNER);
   mkdirSync(ordner, { recursive: true });
   const soll = readFileSync(join(probe, ".codex", "hooks.json"), "utf8");
-  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "hooks-soll.json": soll, "hooks-variante.json": hookVariante(soll), "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config)) };
+  const variante = hookVariante(soll);
+  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "hooks-soll.json": soll, "hooks-variante.json": variante, "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config)) };
   for (const [name, inhalt] of Object.entries(dateien)) writeFileSync(join(ordner, name), inhalt, { flag: "wx" });
-  const hooks = join(probe, ".codex", "hooks.json");
-  writeFileSync(hooks, hookVariante(readFileSync(hooks, "utf8")));
+  writeFileSync(join(probe, ".codex", "hooks.json"), variante);
 }
 function vorbereiten(werte, { root, out, err, git, setup, lade }) {
   const url = werte["langfuse-url"] ?? STANDARD_LANGFUSE_URL;

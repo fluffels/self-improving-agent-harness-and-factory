@@ -27,11 +27,12 @@ export function probeRepo(config, haupt) {
   if (!repo) throw new Error(`Repo ${h} steht nicht in der Projekt-Config (arbeitsplatz.repos)`);
   return repo;
 }
+const rolleOhneShell = (config) => rollenFuer(config).find((r) => r.ohneShell).name;
 const PROTOKOLL_PFAD = `${PROBE_ORDNER}/${PROTOKOLL_DATEI}`;
 const punkt = (id, nachweis, text, ohneExport = false) => ({ id, nachweis, ohneExport, text });
 /** Beobachtungspunkte der Ladeprobe und des Hook-Protokolls (factory#457); Beleg ist die `ausgabe` (Protokollzeile bzw. Deny-Text), kein Langfuse-Export. */
 function hookBeobachtung(config) {
-  const rolle = rollenFuer(config).find((r) => r.ohneShell).name;
+  const rolle = rolleOhneShell(config);
   const spawn = (marker) => `\`spawn_agent\` mit \`agent_type: "${rolle}"\` und der \`message\` "\`${marker}\`, Zeilenumbruch, Antworte nur mit OK."`;
   return [
     punkt("hooks-geladen", 3, () => `Ladeprobe (Abschnitt Ladeprobe oben) bis Schritt 5 ausführen. Befehl: \`/hooks\` und die Shell-Negativprobe (Marker \`${KEIN_REMOTE}\`). Erwartet: \`/hooks\` zeigt \`node scripts/codex-hook.mjs\` unter PreToolUse, die Negativprobe wird mit einem Deny-Text verweigert (wörtlich in \`ausgabe\`); wird sie durchgelassen oder fehlt der Eintrag, lädt die Datei allein nicht. Kein Export nötig.`, true),
@@ -68,7 +69,7 @@ export function negativproben({ haupt, probe, config }) {
   const command = `git -C ${haupt} push ${KEIN_REMOTE} HEAD:refs/heads/${NIRGENDWO}`;
   const ziel = `.git/${PROBE_NAME}-marker`;
   const patch = ["*** Begin Patch", `*** Add File: ${ziel}`, `+${PROBE_NAME}`, "*** End Patch", ""].join("\n");
-  const rolle = rollenFuer(config).find((r) => r.ohneShell).name;
+  const rolle = rolleOhneShell(config);
   // Kopf wie `SZENARIO_KOPF` des Holdout-Guards; das Ticket existiert nicht, die Nachricht verlangt nur „OK“ (Prompt-Text trägt keinen Szenario-Inhalt).
   const nachricht = `SZENARIEN #${PROBE_TICKET_NR}\nAntworte nur mit OK.`;
   return [

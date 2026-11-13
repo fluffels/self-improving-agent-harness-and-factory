@@ -187,7 +187,7 @@ describe("vorbereiten und aufraeumen", () => {
     expect(r.code).toBe(1);
     expect(existsSync(probe)).toBe(true);
   });
-  test("Quelltext-Wächter: kein process.env, kein homedir(, kein Prozessstart mit Literal codex (geschlossene Musterliste)", () => {
+  test("Quelltext-Wächter: kein process.env (außer process.env.LANGFUSE_BASE_URL, genau einmal in codex-probe-lib.mjs), kein homedir(, kein Prozessstart mit Literal codex (geschlossene Musterliste)", () => {
     for (const d of readdirSync("scripts").filter((n) => /^codex-probe.*\.mjs$/.test(n))) {
       const q = readFileSync(join("scripts", d), "utf8");
       expect(q, d).not.toMatch(/process\.env(?!\.LANGFUSE_BASE_URL\b)|homedir\(|\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*["'`]codex/);
@@ -274,8 +274,8 @@ describe("Hook-Protokoll (factory#457, echter Node-Start)", () => {
     expect([r.status, r.stdout, r.stderr]).toEqual([0, "", ""]);
   });
   test("Ursprung: leere Variable gilt als nicht gesetzt, Schema ohne Standard-Port hat port null, Schema ohne Host ist unlesbar", () => {
-    for (const url of ["", "ftp://h.example.test/x", "foo:bar"]) hook(v2(), { LANGFUSE_BASE_URL: url });
-    expect(zeilen().map((z) => z.langfuse)).toEqual([{ gesetzt: false }, { gesetzt: true, schema: "ftp", host: "h.example.test", port: null }, { gesetzt: true, lesbar: false }]);
+    for (const url of ["", "http://h.example.test", "ftp://h.example.test/x", "foo:bar"]) hook(v2(), { LANGFUSE_BASE_URL: url });
+    expect(zeilen().map((z) => z.langfuse)).toEqual([{ gesetzt: false }, { gesetzt: true, schema: "http", host: "h.example.test", port: "80" }, { gesetzt: true, schema: "ftp", host: "h.example.test", port: null }, { gesetzt: true, lesbar: false }]);
   });
   test("Payload ist ein Array oder eine Zahl: lesbar false, kein Wurf", () => {
     for (const roh of ["[1,2]", "7", "null"]) expect(hook(roh).status, roh).toBe(0);
