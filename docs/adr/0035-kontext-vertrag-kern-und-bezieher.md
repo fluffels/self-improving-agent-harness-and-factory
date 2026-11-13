@@ -34,7 +34,7 @@ node scripts/subagent-laufzeit.mjs --agent <typ> --von 2026-11-12T00:32:37Z --bi
 | Lens-Kosten je Ticket, Median (Σ / Mittel) | 4,849 $ (108,48 $ / 4,93 $) | 4,892 $ (103,09 $ / 5,15 $), +0,9 % |
 | Gesamtkosten je Ticket, Median (Σ) | 11,26 $ (258,38 $) | 12,85 $ (254,42 $), +14,1 % |
 | Lens-Anteil an den Gesamtkosten, Median je Ticket (Σ-Quote) | 42,8 % (42,0 %) | 38,1 % (40,5 %) |
-| Lens-Sockel (erster Call, Median je Ticket laut `kontext-treiber`; Median je Lauf laut `subagent-laufzeit`: 23.481 gegen 14.393, Δ −9.088) | 23.119 Tokens | 14.079,5 Tokens (Δ −9.040) |
+| Lens-Sockel (erster Call, Median je Ticket laut `kontext-treiber`; Median je Lauf laut `subagent-laufzeit` ohne ticketlose Läufe und ohne factory#436: 23.481 gegen 14.393, Δ −9.088) | 23.119 Tokens | 14.079,5 Tokens (Δ −9.040) |
 | Requests je Lens-Ticket, Median | 93 | 103 |
 | PRs mit Blocker in Runde 1 | 21/22 (95,5 %) | 18/20 (90,0 %) |
 | Runde-1-Blocker je Brille (PRs mit Treffer/PRs, Σ Blocker) | Architektur 6/20 (6), Requirement-Treue 9/20 (12), Test-Adäquanz 20/20 (66), Sicherheit 4/7 (4), Doku 1/2 (1) | Architektur 7/18 (7), Requirement-Treue 10/18 (16), Test-Adäquanz 17/18 (74), Sicherheit 2/7 (2), Doku 1/1 (1), Kombi 0/1 (0) |
