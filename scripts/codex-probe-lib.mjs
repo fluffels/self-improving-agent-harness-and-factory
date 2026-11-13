@@ -122,7 +122,7 @@ function vorspann({ version, startweg }) {
   return [
     "Vorspann (von Hand, ein Schritt nach dem anderen):",
     `1. \`codex --version\` ausführen: sie muss \`${version}\` zeigen; den Wert als \`versionVorStart\` in den Bericht eintragen. Weicht sie ab, nicht starten: \`node scripts/codex-probe.mjs aufraeumen\`, die richtige Version bereitstellen, neu \`vorbereiten --codex-version <Version>\`. Zwischen diesem Schritt und dem Start kein \`brew upgrade\` und kein \`npm i -g\`, ein Update-Angebot der CLI ablehnen (eine automatische Aktualisierung macht die Probe für die falsche Version).`,
-    `2. Im Probe-Worktree eine neue CLI-Session genau über den Startweg starten (keine Fortsetzung, nicht die App): \`${startweg}\`. Den Befehl als \`startweg\` in den Bericht eintragen; jeder andere Start macht alle Nachweise \`offen\`.`,
+    `2. Im Probe-Worktree eine neue CLI-Session genau über den Startweg starten (keine Fortsetzung, nicht die App): \`${startweg}\`. Den Befehl wörtlich kopiert als \`startweg\` in den Bericht eintragen; jeder andere Start macht alle Nachweise \`offen\`.`,
     "3. `/status` öffnen und die Version als `version` in den Bericht eintragen, dann `/hooks` öffnen, die Registrierung prüfen und vertrauen.",
     "4. `codex --strict-config doctor --summary` ausführen.",
   ];

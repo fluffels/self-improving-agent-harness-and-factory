@@ -2,7 +2,7 @@
 // Ergebnis je Nachweis `belegt|grenze|offen` (Rangfolge: offen vor grenze vor belegt); `autonom` ist immer false, die Übernahme in die Freigabetabelle entscheidet factory#368.
 import { bewerteBelege } from "./codex-belege.mjs";
 import { NACHWEIS_NUMMERN } from "./codex-freigaben.mjs";
-import { checklistenPunkte } from "./codex-probe-lib.mjs";
+import { CLI_VERSION_MUSTER, checklistenPunkte } from "./codex-probe-lib.mjs";
 
 const ERGEBNISSE = ["belegt", "grenze", "offen"];
 const RANG = { belegt: 0, grenze: 1, offen: 2 };
@@ -39,14 +39,13 @@ export function berichtSchemaMaengel(bericht, belege, punkte) {
   for (const [id, e] of Object.entries(bericht.punkte)) m.push(...(bekannt.has(id) ? eintragMaengel(id, e) : [`Bericht: unbekannter Punkt ${id}`]));
   return m;
 }
-const VERSION_MUSTER = /^\d+\.\d+\.\d+$/;
 const ohneWeissraum = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
 /** Mängel der Erwartung (factory#456): `erwartet.version`/`erwartet.startweg` gegen die berichtete Version vor dem Start, in der Session (`/status`), im Export und den genannten Startweg. Ein Nicht-Objekt meldet das Schema. */
 export function erwartungMaengel(bericht, belege) {
   if (!istObjekt(bericht)) return [];
   const e = istObjekt(bericht.erwartet) ? bericht.erwartet : {};
   const m = [];
-  if (!text(e.version) || !VERSION_MUSTER.test(e.version)) m.push("Bericht: erwartet.version fehlt oder ist keine Version x.y.z");
+  if (!text(e.version) || !CLI_VERSION_MUSTER.test(e.version)) m.push("Bericht: erwartet.version fehlt oder ist keine Version x.y.z");
   if (ohneWeissraum(e.startweg) === "") m.push("Bericht: erwartet.startweg fehlt (Vorlage von vorbereiten unverändert lassen)");
   if (m.length > 0) return m;
   const beobachtet = { vorStart: bericht.versionVorStart, session: bericht.version, export: belege?.version };

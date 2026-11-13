@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 import { befehlLesen } from "./flag-lib.mjs";
+import { HEX_HEAD } from "./nachweis-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
@@ -112,6 +113,7 @@ function auftragsStand(o, git) {
   if (!vorhanden(o.probe)) return { fehler: `Probe-Worktree fehlt: ${o.probe} (zuerst vorbereiten)` };
   let stand;
   try { stand = JSON.parse(readFileSync(join(o.probe, PROBE_ORDNER, "stand.json"), "utf8")); } catch { return { fehler: `${PROBE_ORDNER}/stand.json fehlt oder ist kein JSON (zuerst vorbereiten)` }; }
+  if (typeof stand?.basis !== "string" || !HEX_HEAD.test(stand.basis)) return { fehler: `${PROBE_ORDNER}/stand.json ungültig (basis fehlt oder ist kein Commit-Hash, zuerst vorbereiten)` };
   const lose = git(["status", "--porcelain"], o.probe).stdout.trim();
   if (lose !== "") return { fehler: `Probe-Worktree nicht sauber, Umsetzung zuerst lokal auf ${PROBE_NAME} committen: ${lose.split(/\r?\n/).join("; ")}` };
   const head = git(["rev-parse", "HEAD"], o.probe).stdout.trim();

@@ -168,7 +168,7 @@ describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
   test.each([["erwartet fehlt", undefined], ["Version nicht x.y.z", { version: "neu", startweg: STARTWEG }], ["Startweg leer", { version: "9.9.9", startweg: "" }]])("%s: alle offen", (_n, erwartet) => {
     alleOffen(lauf(mit((b) => { b.erwartet = erwartet; })));
   });
-  test.each(["v9.9.9", "9.9.9-beta", "9.9", "9.9.9.9", "x.y.z"])("erwartet.version %s ist keine Version x.y.z: eigene Meldung, alle offen", (v) => {
+  test.each(["v9.9.9", "9.9.9-beta", "9.9", "9.9.9.9", "x.y.z", "9-9-9"])("erwartet.version %s ist keine Version x.y.z: eigene Meldung, alle offen", (v) => {
     const r = lauf(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; b.version = v; b.versionVorStart = v; }), { ...export_(), version: v });
     alleOffen(r);
     expect(r.maengel.join("\n")).toContain("erwartet.version fehlt oder ist keine Version");
@@ -185,6 +185,7 @@ describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
     const m = a.erwartungMaengel(mit((b) => { b.versionVorStart = ""; }), {}).join("\n");
     expect(m).toContain("vor dem Start ?");
     expect(m).toContain("im Export ?");
+    expect(a.erwartungMaengel(mit((b) => { b.version = ""; }), export_()).join("\n")).toContain("in der Session ?");
     expect(a.erwartungMaengel(bericht(), null).join("\n")).toContain("im Export ?");
   });
   test("erwartungMaengel ist rein: Nicht-Objekt liefert keine Meldung (das Schema meldet es)", () => {

@@ -204,13 +204,14 @@ describe("vorbereiten und aufraeumen", () => {
     for (const t of [r.out, readFileSync(join(dir, "checkliste.md"), "utf8")]) {
       for (const teil of ["9.9.9", soll, "--no-daemon", "check_for_update_on_startup=false", "codex --version", basis]) expect(t).toContain(teil);
       expect(t).toContain(`${soll} -c mcp_servers.defekt.command=`);
+      expect(t).toContain(`LANGFUSE_BASE_URL=http://127.0.0.1:9 ${soll}\` starten`);
       expect(t).toContain("noch nicht erzeugt");
     }
     expect(readFileSync(join(dir, "ticket.md"), "utf8")).toContain("lokaler Commit auf dem Branch `codex-probe`");
   });
   test("CLI-Versionsmuster: nur x.y.z, auch mehrstellig, ohne Präfix und Zusatz", () => {
     for (const v of ["0.167.0", "10.20.30"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(true);
-    for (const v of ["0.167", "v1.2.3", "1.2.3-x", "1.2.3.4", "", "a.b.c"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(false);
+    for (const v of ["0.167", "v1.2.3", "1.2.3-x", "1.2.3.4", "", "a.b.c", "9-9-9", "1a2b3"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(false);
   });
   test("vorbereiten: ein unsauberer Probe-Worktree nach dem Setup baut zurück (Exit 1)", () => {
     const r = lauf(["vorbereiten", ...VERSION], { setup: (p) => { setupStub(p); writeFileSync(join(p, "lose.txt"), "x"); return { status: 0, stderr: "" }; } });
@@ -262,10 +263,20 @@ describe("auftraege (factory#456): committeter Stand, erwarteter HEAD, fertige A
     expect(r.code).toBe(1);
     expect(r.err).toContain("Kein Commit");
   });
-  test("ohne stand.json: Exit 1", () => {
+  test("ohne stand.json oder mit kaputter Datei: Exit 1 mit eigener Meldung", () => {
     lauf(["vorbereiten", ...VERSION]);
-    rmSync(join(probe, ".codex", "probe", "stand.json"));
-    expect(auftraege().code).toBe(1);
+    const datei = join(probe, ".codex", "probe", "stand.json");
+    rmSync(datei);
+    const fehlt = auftraege();
+    expect([fehlt.code, fehlt.err]).toEqual([1, expect.stringContaining("stand.json fehlt oder ist kein JSON")]);
+    writeFileSync(datei, "{kaputt");
+    expect(auftraege().err).toContain("stand.json fehlt oder ist kein JSON");
+  });
+  test.each(["{}", "null", '{"basis":5}', '{"basis":"nicht-hex"}'])("stand.json %s: Exit 1 \"ungültig\"", (inhalt) => {
+    lauf(["vorbereiten", ...VERSION]);
+    writeFileSync(join(probe, ".codex", "probe", "stand.json"), inhalt);
+    const r = auftraege();
+    expect([r.code, r.err]).toEqual([1, expect.stringContaining("stand.json ungültig")]);
   });
   test("Basis kein Vorfahr (Historie verändert): Exit 1", () => {
     lauf(["vorbereiten", ...VERSION]);
