@@ -7,12 +7,15 @@
  *     ein Import im Kommentar zählt mit, dann den Kommentar umschreiben).
  * L9: Jedes Skript aus einem Job eines Required-Check-Workflows (Job-`name` = Kontext aus `requiredChecks` des Ruleset-Spiegels) steht in der
  *     Schutzliste `.github/protected-paths.json` (`trifftLeitplanke`): sonst könnte ein PR den Gate-Lauf per Skript-Änderung still ändern.
+ * L9b (factory#447): Jedes Einstiegsskript eines privilegierten Jobs steht ebenfalls in der Schutzliste. Privilegiert (geschlossene Liste):
+ *     (a) `permissions` auf Workflow- oder Job-Ebene ist `write-all` oder enthält `write`; (b) Workflow oder Job verweist auf `secrets.<NAME>` mit
+ *     NAME ungleich GITHUB_TOKEN. Grenzen wie bei L9 (nur Einstiegsskripte, keine npm-run-Ketten).
  * L10: Der Job `security-audit` in ci.yml ruft `node scripts/audit-verzeichnisse.mjs` auf (nicht nur ein nacktes `npm audit`).
  *
  * Geschlossene Muster-Liste (`SKRIPT_MUSTER`): `node scripts/<x>.mjs` und `node ./scripts/<x>.mjs`, auch hinter Env-Zuweisung, nach `&&`, `;`, `|`, `$(`,
  * in mehrzeiligem `run: |`. Grenzen (nicht erkannt): Ketten über `npm run <x>`, Composite Actions und `uses:`-Schritte, dynamische Pfade
- * (`node "$SKRIPT"`), `working-directory`, andere Aufrufer als `node`. Bewusst offen: `scripts/audit-einordnung.mjs` läuft nur im Zeitplan-Workflow
- * `audit-einordnung.yml` (kein Required Check), steht aber vorsorglich in der Schutzliste.
+ * (`node "$SKRIPT"`), `working-directory`, andere Aufrufer als `node`. Bewusst offen: ein Skript, das weder in einem Required-Check-Job noch in einem
+ * privilegierten Job (L9b) läuft, ist nicht erzwungen (`scripts/audit-einordnung.mjs` steht vorsorglich in der Schutzliste).
  * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027).
  */
 import { describe, expect, test } from "vitest";
@@ -78,6 +81,19 @@ function requiredKontexte(): string[] {
   return roh.requiredChecks as string[];
 }
 
+const schreibt = (p: unknown): boolean => p === "write-all" || (p !== null && typeof p === "object" && Object.values(p).some((v) => v === "write"));
+const SECRET = /secrets\.(?!GITHUB_TOKEN\b)\w+/;
+
+/** Pur (L9b): Jobs mit Schreibrechten oder einem Secret ungleich GITHUB_TOKEN (Workflow-Ebene gilt für alle Jobs), samt ihren Skripten. */
+export function privilegierteJobs(workflowText: string): JobSkripte[] {
+  const doc = parse(workflowText, { schema: "failsafe" }) as { jobs?: Record<string, { permissions?: unknown }>; permissions?: unknown } | null;
+  const { jobs, ...kopf } = doc ?? {};
+  if (jobs === null || typeof jobs !== "object") return [];
+  const kopfPriv = schreibt(kopf.permissions) || SECRET.test(JSON.stringify(kopf));
+  const privat = (job: string): boolean => kopfPriv || schreibt(jobs[job]?.permissions) || SECRET.test(JSON.stringify(jobs[job]));
+  return jobSkripte(workflowText).filter((j) => privat(j.job));
+}
+
 /** Verstöße von L8 für eine Job-Liste: Job ohne Install, dessen Skript-Hülle ein Nicht-Builtin lädt. */
 export function huellenVerstoesse(jobs: JobSkripte[], leser: (pfad: string) => string): string[] {
   const aus: string[] = [];
@@ -119,6 +135,15 @@ describe("jobSkripte (Parser)", () => {
     const [j] = jobSkripte("jobs:\n  e:\n    steps:\n      - run: npm run check\n      - run: bash scripts/e.sh\n      - run: node scripts/e.js\n");
     expect(j.skripte).toEqual([]);
   });
+  test("privilegierteJobs: write-Recht und Secret sind privilegiert, GITHUB_TOKEN und read nicht", () => {
+    const w = (kopf: string, job: string) => privilegierteJobs(`${kopf}jobs:\n  a:\n${job}    steps:\n      - run: node scripts/p.mjs\n`).map((j) => j.job);
+    expect(w("", "    permissions: write-all\n")).toEqual(["a"]);
+    expect(w("", "    permissions:\n      issues: write\n")).toEqual(["a"]);
+    expect(w("permissions:\n  contents: write\n", "")).toEqual(["a"]);
+    expect(w("", "    env:\n      T: ${{ secrets.PROJECT_TOKEN }}\n")).toEqual(["a"]);
+    expect(w("env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n", "")).toEqual(["a"]);
+    expect(w("", "    permissions:\n      contents: read\n    env:\n      T: ${{ secrets.GITHUB_TOKEN }}\n")).toEqual([]);
+  });
   test("Hülle: Fixture mit Paket-Import ist ein Verstoß, mit node: keiner", () => {
     const quellen: Record<string, string> = { "scripts/ok.mjs": 'import fs from "node:fs";', "scripts/schlecht.mjs": 'import { parse } from "yaml";' };
     const leser = (p: string) => quellen[p];
@@ -146,6 +171,16 @@ describe("Workflow-Skripte (Repo)", () => {
     const required = alleWorkflows().filter((w) => w.jobs.some((j) => kontexte.includes(j.name)));
     expect(required.length).toBeGreaterThan(0);
     const frei = required.flatMap((w) => w.jobs.flatMap((j) => j.skripte.filter((s) => !trifftLeitplanke(s, muster as string[])).map((s) => `${w.datei} › ${j.job}: ${s}`)));
+    expect(frei).toEqual([]);
+  });
+
+  test("L9b: Skripte aus privilegierten Workflow-Jobs stehen in der Schutzliste", () => {
+    const muster = schutzlistenMuster(lies(".github/protected-paths.json"));
+    expect(muster).not.toBeNull();
+    const dateien = readdirSync(WORKFLOW_DIR).filter((d) => /\.ya?ml$/.test(d));
+    const priv = dateien.flatMap((datei) => privilegierteJobs(readFileSync(join(WORKFLOW_DIR, datei), "utf8")).map((j) => ({ datei, j })));
+    expect(priv.length).toBeGreaterThan(0);
+    const frei = priv.flatMap(({ datei, j }) => j.skripte.filter((s) => !trifftLeitplanke(s, muster as string[])).map((s) => `${datei} › ${j.job}: ${s}`));
     expect(frei).toEqual([]);
   });
 
