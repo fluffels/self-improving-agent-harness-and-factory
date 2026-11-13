@@ -93,9 +93,6 @@ import { USER_SCOPE_MCP_SERVER, unbekannteMcpServer, bekannteMcpServer } from ".
 import { FREMD, projektConfig, repoName } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as namenRoh from "../../scripts/regex-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as lensArmRoh from "../../scripts/lens-arm-lib.mjs";
-const lensArm = lensArmRoh as unknown as { LENS_B: string };
 
 const escapeRegex = (namenRoh as unknown as { escapeRegex: (t: string) => string }).escapeRegex;
 
@@ -342,7 +339,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
   });
 
-  test(`${REVIEW_SKILL} spawnt die Lenses über den Typ aus lens-arm.mjs (beide Arme opus/high), ohne model-Override`, () => {
+  test(`${REVIEW_SKILL} spawnt die Lenses über den Lens-Agenten (opus/high), ohne model-Override`, () => {
     const md = liesMitProjektwerten(REVIEW_SKILL);
     // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
     // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
@@ -350,8 +347,8 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     const spawn = /Agent\(\{[^}]*\}\)/s.exec(md)?.[0] ?? "";
     assert.match(
       spawn,
-      /subagent_type:\s*"<Typ aus `node scripts\/lens-arm\.mjs <nr>`>"/,
-      `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über den Typ aus \`node scripts/lens-arm.mjs <nr>\` starten (A/B Kern je Rolle, factory#235; ein fester Typ verfälscht die Messung): ` +
+      new RegExp(String.raw`subagent_type:\s*"${escapeRegex(AG.lens)}"`),
+      `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`${AG.lens}\` starten: ` +
         "nur dessen Frontmatter trägt `effort: high`, ein `effort:` am Spawn überstimmte es (#1209). " +
         "Laufen die Lenses inline im Hauptagenten, reviewt Sonnet, und der finale Blick wäre ein Self-Grading (#1012).",
     );
@@ -360,12 +357,10 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       /\bmodel\s*:/,
       "Ein `model:` am Spawn überstimmt das Frontmatter von " + AG.lens + " – das Modell steht nur dort (#1209).",
     );
-    for (const [datei, name] of [[".claude/agents/factory-lens.md", AG.lens], [".claude/agents/lens-kern-je-rolle.md", lensArm.LENS_B]] as const) {
-      const lens = frontmatter(read(datei));
-      assert.equal(lens.name, name);
-      assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
-      assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
-    }
+    const lens = frontmatter(read(".claude/agents/factory-lens.md"));
+    assert.equal(lens.name, AG.lens);
+    assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
+    assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
   });
 
   test("Erkennung greift wirklich (Red-Green): Frontmatter-Parser + Tier-Erkennung", () => {

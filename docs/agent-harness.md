@@ -23,7 +23,7 @@ Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI �
 | Skripte | ≥ 220 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 130 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 19 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
-| ADRs | 22 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
+| ADRs | 23 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
 <!-- GEN:harness-kennzahlen END -->
 
@@ -377,7 +377,7 @@ flowchart TD
   umsetzen["Umsetzen (TDD)<br/>sih-umsetzer"]
   gruppen["Sammelticket-Gruppen,<br/>je Gruppe frisch<br/>sih-gruppe"]
   verify{"npm run verify grün?"}
-  lenses{"Lenses ohne Blocker?<br/>sih-lens oder lens-kern-je-rolle"}
+  lenses{"Lenses ohne Blocker?<br/>sih-lens"}
   fix["Fix-Runde"]
   handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
   entwurf["Entwurfs-PR ohne Auto-Merge"]
@@ -512,7 +512,7 @@ sequenceDiagram
   participant G as sih-gruppe · sonnet · medium<br/>je Gruppe eines Sammeltickets
   participant L1 as sih-lens · opus · high<br/>Brille Architektur
   participant L2 as sih-lens · opus · high<br/>Brille Requirement-Treue
-  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz (alle Brillen eines ungeraden Tickets: lens-kern-je-rolle)
+  participant L3 as sih-lens · opus · high<br/>Brille Test-Adäquanz
   participant CI as CI und Required Checks
 
   H->>H: Ticket wählen und claimen

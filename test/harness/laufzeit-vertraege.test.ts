@@ -2,7 +2,7 @@
  * CI-Job. Geschlossene Vertragsliste:
  *  V1 Skills: die Zeiger-Parität prüft `skills-sync.test.ts`; hier wird nur dessen Existenz verlangt.
  *  V2 Rollen: jede `quelle` aus `rollenFuer(config)` (scripts/codex-rollen.mjs) ist eine Agentendatei `.claude/agents/<quelle>.md`;
- *     jede Agentendatei ist Rollenquelle oder steht mit Grund in AGENTEN_AUSNAHMEN (heute `lens-kern-je-rolle`, Arm B der A/B-Messung factory#235: Codex-Rollen sind Forks, `omitClaudeMd` ist dort nicht abbildbar).
+ *     jede Agentendatei ist Rollenquelle oder steht mit Grund in AGENTEN_AUSNAHMEN.
  *  V3 Hooks: jedes Hook-Skript aus `.claude/settings.json` hat genau eine Zeile in HOOK_TABELLE {hook, modul, codex, grenze};
  *     `codex: null` braucht eine Grenze mit Ticket in Herkunftsform (`factory#<nr>`/`quellprojekt#<nr>`) und einem Codex-Ereignis aus der geschlossenen Liste CODEX_HOOK_EREIGNISSE oder dem Wort „Statuszeile“ (der Wächter prüft den Ereignisbezug, nicht die Begründungsqualität); ein Adapter muss dieselben Auswertungsmodule importieren, auch
  *     über seine transitiven Importe (der Adapter lädt den Dispatcher dynamisch; `lokaleImporteTransitiv` aus hook-importe.ts);
@@ -34,9 +34,7 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: "Stop und SubagentStop gibt es in Codex, unbelegt sind Rollenname in agent_type und Abschlussformat (last_assistant_message statt Handback); Waisen-Worktrees räumt man unter Codex von Hand (cleanup-worktrees.mjs --fix): factory#367, Übernahme factory#368" },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Die Codex-Statuszeile kennt nur eingebaute Elemente (tui.status_line), keinen Befehl: factory#249" },
 ];
-export const AGENTEN_AUSNAHMEN: Record<string, string> = {
-  "lens-kern-je-rolle": "Arm B der A/B-Messung (factory#235): nur Claude Code, `omitClaudeMd: true`. Codex-Rollen sind Forks und erben `AGENTS.md`, der Schalter ist dort nicht abbildbar (belegt in factory#233, Fall g, Thread 01a1b309-be91-72f1-9cef-0a21f3e85617); Codex bleibt bei Arm A.",
-};
+export const AGENTEN_AUSNAHMEN: Record<string, string> = {};
 export const CODEX_AGENTS_MAX_BYTES = 32768;
 
 export const v1 = (existiert: (p: string) => boolean): string[] => existiert("test/harness/skills-sync.test.ts") ? [] : ["V1: test/harness/skills-sync.test.ts fehlt"];

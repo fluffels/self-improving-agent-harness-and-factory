@@ -68,7 +68,6 @@ const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS
  *  `weiche`: die Datei nennt die Weiche in einem Satz (`win32` und der Pfad); ohne: der Leser hat sie schon (Umsetzer bzw. Lens). */
 const WEICHE_LESER: { datei: string; weiche: boolean }[] = [
   { datei: ".claude/agents/factory-lens.md", weiche: true },
-  { datei: ".claude/agents/lens-kern-je-rolle.md", weiche: true },
   { datei: ".agents/skills/factory/ablauf.md", weiche: true },
   { datei: ".agents/skills/review-lenses/ablauf-merge-main.md", weiche: false },
   { datei: ".agents/skills/review-lenses/brille-test-adaequanz.md", weiche: false },
