@@ -528,6 +528,7 @@ describe("Projekt-Phasen der Matrix stimmen mit den Frontmatter ihrer Subagenten
     assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile, fm("opus", "medium")), ["Eigene Phase: Alias „sonnet“ ≠ Frontmatter x-agent „opus“"]);
     assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile.replace("x-agent", "y-agent"), fm("sonnet", "medium")), ["Eigene Phase: Agentendatei .claude/agents/y-agent.md fehlt"]);
     assert.match(projektPhasenAbweichungen(KOPF + zeile.replace("Subagent `x-agent`", "irgendwer"), fm("sonnet", "medium")).join(), /Eigene Phase: Ziel .* nicht zuordenbar/);
+    assert.match(projektPhasenAbweichungen(KOPF + zeile.replace("Subagent `x-agent`", "Subagent x-agent"), fm("sonnet", "medium")).join(), /Eigene Phase: Ziel .* nicht zuordenbar/, "ohne Backticks nicht zuordenbar (dokumentierte Grenze)");
     assert.match(projektPhasenAbweichungen("| Projekt-Phase | Alias | Skill-Pfad |\n|---|---|---|\n" + zeile, fm("sonnet", "medium")).join(), /Spalte fehlt/);
   });
   test("ohne Tabelle oder ohne Zeilen gibt es nichts zu prüfen; nach der Tabelle endet die Prüfung", () => {
