@@ -82,7 +82,7 @@ function wortschatz(sprache) {
   });
   return {
     blocker: s.blocker,
-    blockerRe: () => new RegExp(`${VOR}${textMuster(s.blocker)}${NACH}((?:[^(.\\n]|\\.(?!\\s|$))*)`, "giu"),
+    blockerRe: () => new RegExp(`${VOR}${textMuster(s.blocker)}${NACH}((?:[^(.\\n]|\\.(?!\\s))*)`, "giu"),
     abhaengigkeit,
     ziel: s.ziel,
     akNamen: s.akzeptanzkriterien,
