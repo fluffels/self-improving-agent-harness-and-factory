@@ -83,17 +83,17 @@ describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)
   const WURZEL = "C:/work/projekt";
   test("POSIX-Home und Claude-Projektordner-Slug tragen keinen Benutzernamen (Sicherheit, öffentliches Repo)", () => {
     const faelle: [string, string][] = [
-      ["/Users/alice/x", "~/x"],
-      ["cat /home/alice/x", "cat ~/x"],
-      ['open "/Users/alice/x" (/home/alice/y) a=/Users/alice/z', 'open "~/x" (~/y) a=~/z'],
-      ["/private/tmp/claude-501/-Users-alice-dev-repo/s/scratchpad/f.txt", "/private/tmp/claude-501/<projekt>/s/scratchpad/f.txt"],
-      ["C:\\Users\\alice\\.claude\\projects\\C--Users-alice-dev-repo\\a.jsonl", "~/.claude/projects/<projekt>/a.jsonl"],
-      ["/x/-home-alice-dev-repo/y", "/x/<projekt>/y"],
+      ["/Users/Max/x", "~/x"],
+      ["cat /home/Max/x", "cat ~/x"],
+      ['open "/Users/Max/x" (/home/Max/y) a=/Users/Max/z', 'open "~/x" (~/y) a=~/z'],
+      ["/private/tmp/claude-501/-Users-Max-dev-repo/s/scratchpad/f.txt", "/private/tmp/claude-501/<projekt>/s/scratchpad/f.txt"],
+      ["C:\\Users\\Max\\.claude\\projects\\C--Users-Max-dev-repo\\a.jsonl", "~/.claude/projects/<projekt>/a.jsonl"],
+      ["/x/-home-Max-dev-repo/y", "/x/<projekt>/y"],
     ];
     for (const [eingabe, soll] of faelle) {
       const aus = B.bereinige(eingabe);
       expect(aus, eingabe).toBe(soll);
-      expect(aus).not.toContain("alice");
+      expect(aus).not.toContain("Max");
     }
     for (const ok of ["src/Users/list.ts", "docs/home/x.md", "ls src/home/x", "foo-Users-x/y"]) expect(B.bereinige(ok), ok).toBe(ok);
   });

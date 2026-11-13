@@ -71,6 +71,7 @@ function schritt(c: CallSpec): Row[] {
     if (tool.result === null) return;
     rows.push({ type: "user", timestamp: t(c.min + 0.1), message: { content: [{ type: "tool_result", tool_use_id: `${id}-t${i}`, content: tool.result ?? "ok" }] } });
   });
+  rows.push({ type: "assistant", timestamp: t(c.min + 0.1) }); // Ende ohne Call (L12): ein Lauf, der auf einem Tool-Ergebnis endet, gilt als offen
   return rows;
 }
 const lauf = (prompt: string, calls: CallSpec[], agentType = UMSETZER): Lauf => ({ meta: { agentType }, zeilen: [user(0, prompt), ...calls.flatMap(schritt)] });
