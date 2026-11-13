@@ -8,9 +8,10 @@ import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { befehlLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { LANGFUSE_AUTH_MODI, pruefeAusgabe } from "./codex-lib.mjs";
-import { PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, probePfad, probeTicket } from "./codex-probe-lib.mjs";
+import { PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, probeRepo, probeTicket } from "./codex-probe-lib.mjs";
 import { auswerten, auswertungExit } from "./codex-probe-auswertung.mjs";
 
 const BEFEHLE = {
@@ -39,7 +40,7 @@ function ort(root, git, lade) {
   const r = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], root);
   if (r.status !== 0) return { fehler: `Kein Git-Repository: ${root}` };
   const haupt = dirname(r.stdout.trim());
-  try { const config = lade({ rootDir: haupt }); return { haupt, config, probe: probePfad(config, haupt) }; } catch (e) { return { fehler: `Projekt-Config nicht ladbar: ${e.message}` }; }
+  try { const config = lade({ rootDir: haupt }); const repo = probeRepo(config, haupt); return { haupt, config, probe: `${repo.worktreeOrdner}/${PROBE_NAME}`, basis: `origin/${standardzweigVon(repo)}` }; } catch (e) { return { fehler: `Projekt-Config nicht ladbar: ${e.message}` }; }
 }
 
 /** Alle Vorprüfungen von `vorbereiten`, vor der ersten Änderung; Liste der Fundstellen (leer = alles frei). */
@@ -87,7 +88,7 @@ function vorbereiten(werte, { root, out, err, git, setup, lade }) {
   const maengel = vorbereitenMaengel({ ...o, git });
   if (maengel.length > 0) { for (const m of maengel) err(`Codex-Probe gestoppt: ${m}`); return 1; }
   try {
-    for (const args of [["fetch", "origin"], ["worktree", "add", "--no-track", "-b", PROBE_NAME, o.probe, "origin/main"]]) {
+    for (const args of [["fetch", "origin"], ["worktree", "add", "--no-track", "-b", PROBE_NAME, o.probe, o.basis]]) {
       const r = git(args, o.haupt);
       if (r.status !== 0) throw new Error(`git ${args[0]} ${args[1] ?? ""} scheiterte: ${r.stderr.trim()}`);
     }

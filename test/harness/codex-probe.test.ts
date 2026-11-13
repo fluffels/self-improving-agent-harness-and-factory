@@ -54,7 +54,7 @@ const protokoll = (a: string[], cwd: string) => { calls.push(a); return echtGit(
 const setupStub = (p: string) => { mkdirSync(join(p, ".codex"), { recursive: true }); writeFileSync(join(p, ".codex", "hooks.json"), hookRegistrierung()); return { status: 0, stderr: "" }; };
 function lauf(args: string[], d: Deps = {}) {
   const out: string[] = [], err: string[] = [];
-  const code = cli.main(args, haupt, (x) => out.push(x), (x) => err.push(x), { git: protokoll, setup: (p) => { calls.push(["setup", p]); return setupStub(p); }, lade: () => config, ...d });
+  const code = cli.main(args, haupt, (x) => out.push(x), (x) => err.push(x), { git: protokoll, setup: (p, a) => { calls.push(["setup", p, ...a]); return setupStub(p); }, lade: () => config, ...d });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
 const worktreeListe = () => git(haupt, "worktree", "list", "--porcelain");
@@ -70,11 +70,12 @@ describe("vorbereiten und aufraeumen", () => {
     expect(git(haupt, "rev-parse", "codex-probe").trim()).toBe(git(haupt, "rev-parse", "origin/main").trim());
     expect(spawnSync("git", ["config", "branch.codex-probe.remote"], { cwd: haupt, encoding: "utf8" }).stdout).toBe("");
     expect(readdirSync(join(probe, ".codex", "probe")).sort()).toEqual([".gitignore", "bericht-vorlage.json", "checkliste.md", "hook-fehler.mjs", "hook-timeout.mjs", "ticket.md"]);
-    type Hooks = { hooks: { PreToolUse: { hooks: { timeout: number }[] }[] } };
+    type Hooks = { hooks: { PreToolUse: { matcher: string; hooks: { timeout: number; command: string }[] }[] } };
     const hooks = (JSON.parse(readFileSync(join(probe, ".codex", "hooks.json"), "utf8")) as Hooks).hooks.PreToolUse;
     const soll = (JSON.parse(hookRegistrierung()) as Hooks).hooks.PreToolUse;
     expect(hooks.slice(0, soll.length)).toEqual(soll);
-    expect(hooks.slice(soll.length).map((h) => h.hooks[0].timeout)).toEqual([adapter.CODEX_HOOK_TIMEOUT_S, lib.PROBE_HOOK_TIMEOUT_S]);
+    expect(hooks.slice(soll.length).map((h) => [h.matcher, h.hooks[0].command, h.hooks[0].timeout])).toEqual([["^(Bash|exec_command)$", "node .codex/probe/hook-fehler.mjs", adapter.CODEX_HOOK_TIMEOUT_S], ["^(Bash|exec_command)$", "node .codex/probe/hook-timeout.mjs", lib.PROBE_HOOK_TIMEOUT_S]]);
+    expect(calls.find((c) => c[0] === "setup")?.slice(2)).toEqual(["--langfuse-url", "http://localhost:3000/api/public/mcp", "--write"]);
     for (const p of lib.checklistenPunkte(config)) expect(r.out).toContain(`\`${p.id}\``);
     expect(r.out).not.toMatch(/npm run/);
     expect(git(haupt, "status", "--porcelain")).toBe("");
@@ -120,6 +121,24 @@ describe("vorbereiten und aufraeumen", () => {
     expect(a.code).toBe(1);
     expect(a.err).toContain(probe);
     expect(existsSync(probe)).toBe(true);
+  });
+  test("Setup-Argumente: abweichende URL und --langfuse-auth werden durchgereicht", () => {
+    expect(lauf(["vorbereiten", "--langfuse-url", "https://x.example/mcp", "--langfuse-auth", "host"]).code).toBe(0);
+    expect(calls.find((c) => c[0] === "setup")?.slice(2)).toEqual(["--langfuse-url", "https://x.example/mcp", "--langfuse-auth", "host", "--write"]);
+  });
+  test("Standardzweig des Repos (Arbeitsplatz-Config) ist die Basis, ein Repo außerhalb der Config stoppt mit Exit 1", () => {
+    git(haupt, "switch", "-q", "-c", "develop"); writeFileSync(join(haupt, "d.txt"), "d"); git(haupt, "add", "-A"); git(haupt, "commit", "-q", "-m", "develop");
+    git(haupt, "push", "-q", "origin", "develop"); git(haupt, "switch", "-q", "main");
+    const mitBlock = (name: string) => ({ ...config, arbeitsplatz: { wurzel: tmp, repos: [{ name, pfad: "haupt", standardzweig: "develop" }] } });
+    expect(lauf(["vorbereiten"], { lade: () => mitBlock("haupt") }).code).toBe(0);
+    expect(git(haupt, "rev-parse", "codex-probe").trim()).toBe(git(haupt, "rev-parse", "origin/develop").trim());
+    expect(lauf(["aufraeumen"], { lade: () => mitBlock("haupt") }).code).toBe(0);
+    expect(lauf(["vorbereiten"], { lade: () => ({ ...config, arbeitsplatz: { wurzel: tmp, repos: [{ name: "x", pfad: "anderes" }] } }) }).code).toBe(1);
+  });
+  test("Fehlerzweige: kein Git-Repository und nicht ladbare Config ergeben Exit 1", () => {
+    mkdirSync(join(tmp, "leer"));
+    expect(cli.main(["aufraeumen"], join(tmp, "leer"), () => undefined, () => undefined, { git: echtGit, lade: () => config })).toBe(1);
+    expect(lauf(["vorbereiten"], { lade: () => { throw new Error("kaputt"); } }).err).toContain("nicht ladbar");
   });
   test("vorhandener Branch codex-probe: Exit 1 ohne Änderung", () => {
     git(haupt, "branch", "codex-probe");

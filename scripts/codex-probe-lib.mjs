@@ -17,12 +17,12 @@ export const STANDARD_LANGFUSE_URL = "http://localhost:3000/api/public/mcp";
 const NIRGENDWO = "codex-probe-nirgendwo";
 const q = JSON.stringify;
 
-/** Probe-Pfad (Schrägstriche): `<worktreeOrdner>/codex-probe` des Repos, dessen Pfad `haupt` ist (Arbeitsplatz), sonst des ersten/einzigen. */
-export function probePfad(config, haupt) {
-  const plan = arbeitsplatzAus(config, haupt);
+/** Das Repo-Objekt (`arbeitsplatzAus`) zum Hauptcheckout `haupt`; ohne Treffer wirft es (fail-closed, kein Ersatz-Repo). */
+export function probeRepo(config, haupt) {
   const h = resolve(haupt).replaceAll("\\", "/");
-  const repo = plan.repos.find((r) => r.pfad === h) ?? plan.repos[0];
-  return `${repo.worktreeOrdner}/${PROBE_NAME}`;
+  const repo = arbeitsplatzAus(config, haupt).repos.find((r) => r.pfad === h);
+  if (!repo) throw new Error(`Repo ${h} steht nicht in der Projekt-Config (arbeitsplatz.repos)`);
+  return repo;
 }
 
 const punkt = (id, nachweis, text, ohneExport = false) => ({ id, nachweis, ohneExport, text });

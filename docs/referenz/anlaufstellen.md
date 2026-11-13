@@ -79,6 +79,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
 | [factory/schichten-ohne-unit-tests.md](../factory/schichten-ohne-unit-tests.md) | wenn eine Schicht keine Unit-Tests hat (Floor, Ratchet, Größenschwelle, Netz) oder ein Bezieher das optionale e2e-Gate-Profil (Block `e2e`, CI-Rezept) einrichtet |
 | [codex/einstieg.md](../codex/einstieg.md) | wenn Codex eingerichtet wird: native Rollen, MCP, Berechtigungen, Hook-Abbildung und noch fehlende autonome Freigabe |
+| [codex/probe.md](../codex/probe.md) | wenn die Codex-Gesamtabnahme gefahren wird: Probe vorbereiten, Checkliste abarbeiten, auswerten, aufräumen |
 | [langfuse-hook-patch.md](../langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst |
 
 ### Betrieb, Assets, Tests

@@ -2,7 +2,7 @@
 
 > 🧭 **Fachlich geprüft am: 2026-11-13.**
 
-Der Abnahmeweg für die Gesamtabnahme in Codex (die fünf Nachweise stehen in [Codex im Harness](einstieg.md)). Das Skript `node scripts/codex-probe.mjs` richtet eine isolierte Probe ein, wertet sie aus und räumt sie auf. Es **startet Codex nie**, liest keine Secrets (kein Langfuse-Secret-Key, keine Umgebungsvariable) und schreibt nie in eine globale Codex-Konfiguration; die Sitzung fährt die Maintainerin von Hand. Die Übernahme eines Ergebnisses in die Freigabetabelle bleibt ein reviewter PR (factory#368); `grenze` ist dort kein Beleg.
+Der Abnahmeweg für die Gesamtabnahme in Codex (die fünf Nachweise stehen in [Codex im Harness](einstieg.md)). Das Skript `node scripts/codex-probe.mjs` richtet eine isolierte Probe ein, wertet sie aus und räumt sie auf. Es **startet Codex nie**, liest keine Secrets (kein Langfuse-Secret-Key; Umgebung nur über die Schutzprüfung des Ziels, `CODEX_HOME`) und schreibt nie in eine globale Codex-Konfiguration; die Sitzung fährt die Maintainerin von Hand. Die Übernahme eines Ergebnisses in die Freigabetabelle bleibt ein reviewter PR (factory#368); `grenze` ist dort kein Beleg.
 
 ## Ablauf
 
@@ -15,13 +15,13 @@ Die Vorprüfung `node scripts/codex-vorpruefung.mjs` meldet im Probe-Worktree di
 
 ## Ort und Dateien
 
-Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht unter dem Ticket-Präfix) auf dem Branch `codex-probe` (von `origin/main`, ohne Tracking-Zweig). `vorbereiten` erzeugt darin `.codex/` per `codex-setup.mjs --write` und ersetzt `.codex/hooks.json` durch die Probe-Variante: das Soll plus zwei Fixture-Hooks auf die Shell-Werkzeuge. Unter `.codex/probe/` (mit eigener `.gitignore`, bleibt unversioniert) liegen:
+Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht unter dem Ticket-Präfix) auf dem Branch `codex-probe` (vom Standardzweig des Repos, `origin/main` ohne Angabe, ohne Tracking-Zweig). `vorbereiten` erzeugt darin `.codex/` per `codex-setup.mjs --write` und ersetzt `.codex/hooks.json` durch die Probe-Variante: das Soll plus zwei Fixture-Hooks auf die Shell-Werkzeuge. Unter `.codex/probe/` (mit eigener `.gitignore`, bleibt unversioniert) liegen:
 
 `hook-fehler.mjs` wirft (Exit 1) nur bei dem Marker `codex-probe-hook-fehler` in der Eingabe, `hook-timeout.mjs` schläft über den Timeout (2 s) hinaus nur bei `codex-probe-hook-timeout`; ohne Marker Exit 0 und keine Ausgabe. `ticket.md` ist das lokale Probe-Ticket (Nummer 999999999; kein GitHub-Issue, kein Claim, kein PR, kein Push; ein Lens-Worktree ist erlaubt) mit abgegrenzter Aufgabe und einem markierten Fremdtext-Block. `checkliste.md` hält Vorspann, Punkte, Negativproben und Abschluss, `bericht-vorlage.json` alle Punkt-IDs mit leeren Feldern.
 
 ## Negativproben
 
-Je Art eine Probe; jede verweigert der Hook (Claude-Dispatcher und Codex-Adapter, getestet) und bleibt auch bei durchgelassenem Hook folgenlos:
+Je Art (shell, patch, agent) eine Probe, weil die Werkzeugnamen einer Art Aliase sind, die Codex wählt; jede verweigert der Hook (Claude-Dispatcher und Codex-Adapter, getestet) und bleibt auch bei durchgelassenem Hook folgenlos:
 
 - **shell**: `git push` an den nicht existierenden Remote `codex-probe-kein-remote`; git scheitert selbst.
 - **patch**: Ziel `.git/codex-probe-marker` im Probe-Worktree; dort ist `.git` eine Datei, ein Schreiben scheitert.

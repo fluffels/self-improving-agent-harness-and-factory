@@ -83,6 +83,18 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     const r = lauf(mit((b) => { b.punkte.abnahme.observations = []; (b.punkte.abnahme as { ausgabe?: string }).ausgabe = "x"; }));
     expect(offen(r)).toEqual(["5"]);
   });
+  test("Beleg-Verweis streng: gemischte IDs und ohneExport ohne ausgabe sind offen; Langfuse-Mangel trifft Nachweis 4; Bericht null", () => {
+    expect(offen(lauf(mit((b) => { b.punkte.playwright.observations = ["tool-1", "gibt-es-nicht"]; })))).toEqual(["2"]);
+    expect(offen(lauf(mit((b) => { (b.punkte["defekter-mcp"] as { ausgabe: string }).ausgabe = ""; })))).toEqual(["2"]);
+    const e = export_(); e.observations = e.observations.filter((o) => o.type !== "TOOL");
+    expect(offen(lauf(mit((b) => { for (const p of Object.values(b.punkte)) if (p.observations.length) p.observations = ["gen-main"]; }), e))).toEqual(["4"]);
+    expect(offen(lauf(null))).toHaveLength(5);
+  });
+  test("Zuordnung der Punkte zu den Nachweisen und die ohneExport-Liste (abgeschrieben aus docs/codex/probe.md)", () => {
+    const soll = { "read-abbildung": 1, playwright: 2, langfuse: 2, "unbekannte-rolle": 2, "defekter-mcp": 2, "hook-deny:shell": 3, "hook-deny:patch": 3, "hook-deny:agent": 3, "hook-fehler": 3, "hook-timeout": 3, "write-stdin": 3, dateiwerkzeug: 3, fremdtext: 3, "tracing-ausfall": 4, abnahme: 5, ...Object.fromEntries(rollen.map((r) => [`rolle:${r}`, 1])) };
+    expect(Object.fromEntries(punkte.map((p) => [p.id, p.nachweis]))).toEqual(soll);
+    expect(punkte.filter((p) => p.ohneExport).map((p) => p.id).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "tracing-ausfall"]);
+  });
   test("ergebnis offen zählt als offen", () => {
     expect(offen(lauf(mit((b) => { b.punkte.langfuse.ergebnis = "offen"; })))).toEqual(["2"]);
   });
@@ -99,6 +111,12 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
   test.each([
     ["unbekannte Punkt-ID", (b: ReturnType<typeof bericht>) => { (b.punkte as Record<string, unknown>).erfunden = { ergebnis: "belegt", beobachtung: "", observations: [] }; }],
     ["Version ungleich", (b: ReturnType<typeof bericht>) => { b.version = "0.0.1"; }],
+    ["sessionId ungleich", (b: ReturnType<typeof bericht>) => { b.sessionId = "andere"; }],
+    ["ergebnis ungültig", (b: ReturnType<typeof bericht>) => { b.punkte.playwright.ergebnis = "ja"; }],
+    ["beobachtung kein Text", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { beobachtung: unknown }).beobachtung = 1; }],
+    ["observations mit Nicht-ID", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { observations: unknown }).observations = ["tool-1", 2]; }],
+    ["ausgabe kein Text", (b: ReturnType<typeof bericht>) => { (b.punkte.abnahme as { ausgabe: unknown }).ausgabe = 3; }],
+    ["Punkt kein Objekt", (b: ReturnType<typeof bericht>) => { (b.punkte as Record<string, unknown>).abnahme = "ok"; }],
     ["frischeSession false", (b: ReturnType<typeof bericht>) => { (b as { frischeSession: boolean }).frischeSession = false; }],
     ["falscher Typ", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { observations: unknown }).observations = "tool-1"; }],
   ])("Schema-Mangel (%s): alle fünf Nachweise offen", (_n, aend) => {
