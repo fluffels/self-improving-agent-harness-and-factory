@@ -11,10 +11,12 @@
  * eines Laufs gehen in einem Kommentar an das jüngste ungeclaimte Sammelticket der Meldestelle (factory#153, Schlüssel `meldestelle`, Standard das Repo des Factory-Boards), mit dem Factory-Stand als
  * Fußzeile und nach `check-internalrefs --text` (Treffer: nichts gesendet, Exit 1). Geprüft wird mit `PROJECT_TOKEN` (Project-Scope); gelesen und
  * gepostet wird im eigenen Repo mit dem Standard-`GH_TOKEN` (`github.token`), an einer fremden Meldestelle mit `MELDESTELLE_TOKEN` (Rückfall `PROJECT_TOKEN`); fehlt `PROJECT_TOKEN` in Actions, meldet der Lauf genau das als Lücke. Langfuse bleibt außen vor (läuft nur lokal).
+ * Punkte, die die Sicherheitsprüfung der Soll-Liste (`.github/sicherheitspruefung.json`) abdeckt, meldet deren Monatsticket und der Wochenlauf nicht doppelt (abgewählte Punkte meldet er weiter; ist die Liste unlesbar, entfällt nichts).
  * Exit 0: nichts Neues oder gemeldet (bzw. Dry-Run); 1: Doctor nicht lauffähig, kein ungeclaimtes Sammelticket oder Post fehlgeschlagen
  * (`::error::` mit Fix). Eigenes Skript statt Flag in harness-doctor.mjs: das lädt die Board-Libs nicht (deren Import-Zeit-Config
  * bräche dort den Exit-2-Vertrag der Config-Fehler).
  */
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inboxStart, ladeBoardLibs } from "./inbox-start-lib.mjs";
@@ -23,11 +25,20 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { dateienStandard } from "./harness-doctor-factory-update.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
+import { filtere, ladeSollListe } from "./sicherheitspruefung-lib.mjs";
 import { pruefeBefundZeile } from "./sammelticket-titel.mjs";
 import { bereiteMeldung, eigenerLogin, keinSammelticketText, meldestelleZugang, zeileBekannt } from "./meldung-lib.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const KENNUNG = "Harness-Doctor (Wochenlauf)";
+const SOLL_PFAD = ".github/sicherheitspruefung.json";
+const lesenOderNull = (pfad) => {
+  try {
+    return readFileSync(pfad, "utf8");
+  } catch {
+    return null;
+  }
+};
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ");
 
 /** Art der Meldung zu einem Ergebnis des Doctors: `NICHT PRÜFBAR` bei `nichtPruefbar`, sonst `LÜCKE`. Pur. */
@@ -49,15 +60,31 @@ export const plane = ({ luecken, kommentare, owner, heute, eigen = null }) =>
 /** Die Lücken, deren Zeile den Eingangsfilter nicht besteht (leerer Befund = kein Beleg): sie stehen nur im Bericht, nicht im Sammelticket. Pur. */
 export const ohneBeleg = (luecken) => luecken.filter((l) => !pruefeBefundZeile(zeileFuer(l, "2000-01-01")).ok);
 
+/** Die Punkte der Soll-Liste (`.github/sicherheitspruefung.json`, abgewählte Punkte nicht enthalten) aus dem Dateitext; `null` bei fehlender oder ungültiger Liste (dann lässt der Wochenlauf nichts weg). Pur. */
+export function sollPunkte(text) {
+  try {
+    return ladeSollListe(text).punkte;
+  } catch {
+    return null;
+  }
+}
+
+/** Lässt die Lücken weg, die die Sicherheitsprüfung (Monatsticket, `filtere`) schon abdeckt; `punkte === null`: nichts weglassen. Pur. */
+export function ohneSicherheitspruefung(luecken, punkte) {
+  if (punkte === null) return luecken;
+  const gedeckt = new Set(filtere(luecken, punkte));
+  return luecken.filter((l) => !gedeckt.has(l));
+}
+
 /**
  * Die Lücken dieses Laufs. In Actions ohne `PROJECT_TOKEN` kann der Doctor nichts prüfen (kein einziger Aufruf): dann ist genau das die Lücke.
  * `pruefe()` liefert die Ergebnisliste des Doctors.
  */
-export function ermittleLuecken({ env, repo, pruefe }) {
+export function ermittleLuecken({ env, repo, pruefe, sollPunkte: soll = null }) {
   if (env.GITHUB_ACTIONS === "true" && !env.PROJECT_TOKEN) {
     return [{ punkt: "Secret PROJECT_TOKEN", befund: "im Wochenlauf leer, der Doctor kann nicht prüfen", fix: `Wert per stdin, ohne TTY: \`<wert-quelle> | gh secret set PROJECT_TOKEN --repo ${repo}\` (z. B. \`Get-Clipboard | …\`)` }];
   }
-  return pruefe().filter((p) => !p.ok);
+  return ohneSicherheitspruefung(pruefe().filter((p) => !p.ok), soll);
 }
 
 /**
@@ -132,6 +159,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
       ermittleLuecken({
         env,
         repo: REPO,
+        sollPunkte: sollPunkte(lesenOderNull(join(WURZEL, SOLL_PFAD))),
         pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null, dateien: dateienStandard({ env, lesen: (a, token) => api(a, { token, timeout: 30000 }) }) }).ergebnis,
       }),
     kontext: () => {
