@@ -118,7 +118,7 @@ export function lokaleRollenMaengel(root, config, mcp) {
   }
   return maengel;
 }
-/** Vergleicht die lokale Hook-Registrierung mit dem Soll: fehlende oder abweichende `.codex/hooks.json` und eine inline `[hooks`-Tabelle in `.codex/config.toml` sind Mängel (der Host lädt beide und würde doppelt oder abweichend laufen); rein lesend, folgt keinem Symlink. */
+/** Vergleicht die lokale Hook-Registrierung mit dem Soll: fehlende oder abweichende `.codex/hooks.json` und eine inline `[hooks`-Tabelle in `.codex/config.toml` sind Mängel (laut Host-Doku lädt der Host beide und würde doppelt oder abweichend laufen; die beobachtete CLI-Version lädt die lokale Datei nicht, factory#458); rein lesend, folgt keinem Symlink. */
 export function lokaleHookMaengel(root) {
   const fix = "node scripts/codex-setup.mjs --langfuse-url <URL> --write";
   const datei = join(root, ".codex", "hooks.json");

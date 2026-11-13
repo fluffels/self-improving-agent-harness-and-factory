@@ -7,16 +7,16 @@
  *  - Shell:       Worktree-, gh- und Stdin-Skript-Guard über den Dispatcher (Werkzeug `Bash`), danach die `Bash(...)`-Regeln aus `permissions.deny`/`permissions.ask`
  *                 der `.claude/settings.json` je Befehlssegment (Claude wendet sie selbst an, Codex nicht: `gh issue delete`, `git push --force` …)
  *  - apply_patch: jedes Schreibziel des Patches als Claude-`Write` an den Schreibziel-Guard des Dispatchers (kein Schreiben in den Haupt-Checkout oder nach `.git`); Selbstschutz für `.codex`
- *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, factory#365; Adapter-Logik, im echten Lauf nicht beobachtet, factory#455), dann Lens-Auftrag- und
+ *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, factory#365; Adapter-Logik, im echten Lauf nicht beobachtet; Codex 0.168.0 lädt die Hook-Datei nicht, factory#458), dann Lens-Auftrag- und
  *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`)
  * Fail-closed für diese drei Werkzeuge: unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard ergibt ein Deny mit Grund; ein `ask` des Dispatchers wird ein Deny,
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
  * Bekannte Grenzen (Details und Quellen in docs/codex/einstieg.md): `write_stdin`, direkte Dateiwerkzeuge außer `apply_patch`, MCP und `send_message`/`followup_task` lösen keinen
- * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; Shell- und Patch-Deny sind in factory#367 beobachtet, `spawn_agent`-Deny und Tracing-Ausfallstopp waren dort nicht wirksam (Ursache offen, factory#455).
+ * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; Shell- und Patch-Deny sind in factory#367 beobachtet, `spawn_agent`-Deny und Tracing-Ausfallstopp waren dort nicht wirksam (Ursache offen), in Codex 0.168.0 (CLI-TUI) lädt `.codex/hooks.json` allein nicht (factory#458), beide Sperren sind dort unbeobachtet.
  *
- * ANNAHME bis factory#459: `spawn_agent` heißt im Payload auch mit genau einem Namensraum-Präfix (`collaboration__spawn_agent`, `collaboration.spawn_agent`, `collaboration/spawn_agent`), das `tool_input`
- * hat die v2-Form (`task_name`, `message`, optional `agent_type`, `fork_turns`). Ob der Host Hook und Matcher gegen den Namen mit oder ohne Präfix prüft, ist unbeobachtet; das Hook-Protokoll der Probe (factory#457) zeigt es.
+ * ANNAHME, unbeobachtet: in Codex 0.168.0 lädt die lokale Hook-Datei nicht (factory#458); Prüftermin: Wiederholung von factory#367. `spawn_agent` heißt im Payload auch mit genau einem Namensraum-Präfix (`collaboration__spawn_agent`, `collaboration.spawn_agent`, `collaboration/spawn_agent`), das `tool_input`
+ * hat die v2-Form (`task_name`, `message`, optional `agent_type`, `fork_turns`). Ob der Host Hook und Matcher gegen den Namen mit oder ohne Präfix prüft, ist unbeobachtet; das Hook-Protokoll der Probe (factory#457) wurde in factory#458 nie geschrieben.
  *
  * Reines Node-Skript (nur Builtins); der Dispatcher wird dynamisch geladen, damit ein Ladefehler ein Deny statt eines Prozessabbruchs (fail-open beim Host) ergibt.
  */
@@ -26,7 +26,7 @@ import { MAX_INTERPRETER, buildDenyOutput } from "./hook-io.mjs";
 
 /** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`); `spawn_agent` passt laut Doku auch auf den Matcher `Agent`. */
 export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent", Agent: "agent" };
-/** Werkzeuge, die zusätzlich mit genau einem Namensraum-Präfix vorkommen können (Annahme bis factory#459, Rust-Regex-tauglich: ohne Lookaround). */
+/** Werkzeuge, die zusätzlich mit genau einem Namensraum-Präfix vorkommen können (Annahme, unbeobachtet: factory#458; Rust-Regex-tauglich: ohne Lookaround). */
 export const CODEX_HOOK_NAMENSRAUM = ["spawn_agent"];
 const NAMENSRAUM = "[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*(?:__|\\.|/)";
 
