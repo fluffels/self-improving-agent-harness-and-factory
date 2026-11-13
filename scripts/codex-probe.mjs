@@ -1,10 +1,12 @@
-// Einstieg: node scripts/codex-probe.mjs vorbereiten [--langfuse-url <MCP-URL>] [--langfuse-auth env|host]
-//           | auswerten --belege <Export.json> --bericht <Bericht.json> | aufraeumen   (Abnahmeweg: docs/codex/probe.md, factory#366).
+// Einstieg: node scripts/codex-probe.mjs vorbereiten --codex-version <x.y.z> [--langfuse-url <MCP-URL>] [--langfuse-auth env|host]
+//           | auftraege (nach dem lokalen Umsetzungs-Commit: Patch, erwarteter HEAD, fertige Aufträge für Lens und Abnahme)
+//           | auswerten --belege <Export.json> --bericht <Bericht.json> | aufraeumen   (Abnahmeweg: docs/codex/probe.md, factory#366, factory#456).
 // Isolierter Probe-Lebenslauf der Codex-Gesamtabnahme (Worktree `codex-probe` vom Standardzweig des Repos). Startet Codex nie, liest keine Secrets, schreibt nie in eine globale Konfiguration;
 // Befehle laufen nur über `deps.git` (git) und `deps.setup` (node + codex-setup.mjs im Probe-Worktree).
 // Bekannte Grenze des Quelltext-Wächters (test/harness/codex-probe.test.ts): er prüft eine geschlossene Musterliste (Umgebung, Home-Ordner, Prozessstart mit Literal `codex`), keine Obfuskation.
 import { spawnSync } from "node:child_process";
 import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 import { befehlLesen } from "./flag-lib.mjs";
@@ -12,11 +14,12 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { standardzweigVon } from "./arbeitsplatz-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { LANGFUSE_AUTH_MODI, pruefeAusgabe } from "./codex-lib.mjs";
-import { PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, probeRepo, probeTicket } from "./codex-probe-lib.mjs";
+import { CLI_VERSION_MUSTER, PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, auftraegeText, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, probeRepo, probeTicket, startweg } from "./codex-probe-lib.mjs";
 import { auswerten, auswertungExit } from "./codex-probe-auswertung.mjs";
 
 const BEFEHLE = {
-  vorbereiten: { optionen: { "langfuse-url": { type: "string" }, "langfuse-auth": { type: "string" } }, positionale: 0 },
+  vorbereiten: { optionen: { "langfuse-url": { type: "string" }, "langfuse-auth": { type: "string" }, "codex-version": { type: "string" } }, positionale: 0 },
+  auftraege: { optionen: {}, positionale: 0 },
   auswerten: { optionen: { belege: { type: "string" }, bericht: { type: "string" } }, positionale: 0 },
   aufraeumen: { optionen: {}, positionale: 0 },
 };
@@ -62,15 +65,32 @@ function raeumen({ haupt, probe, git }) {
   return { rest: [...new Set(rest)] };
 }
 /** Schreibt die Probe-Dateien (Flag `wx`, nichts wird überschrieben) und ersetzt `.codex/hooks.json` durch die Variante. */
-function schreibeProbe({ haupt, probe, config }) {
+function schreibeProbe({ haupt, probe, config, stand }) {
   const ordner = join(probe, PROBE_ORDNER);
   mkdirSync(ordner, { recursive: true });
-  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config)) };
+  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config, stand }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config), { version: stand.version, startweg: stand.startweg }), "stand.json": `${JSON.stringify(stand, null, 2)}\n` };
   for (const [name, inhalt] of Object.entries(dateien)) writeFileSync(join(ordner, name), inhalt, { flag: "wx" });
   const hooks = join(probe, ".codex", "hooks.json");
   writeFileSync(hooks, hookVariante(readFileSync(hooks, "utf8")));
 }
+/** Legt Worktree, Setup und Probe-Dateien an und liefert den Stand `{ basis, version, startweg }`; wirft bei jedem Fehler (der Aufrufer baut zurück). */
+function anlegen(o, { git, setup, url, auth, version }) {
+  for (const args of [["fetch", "origin"], ["worktree", "add", "--no-track", "-b", PROBE_NAME, o.probe, o.basis]]) {
+    const r = git(args, o.haupt);
+    if (r.status !== 0) throw new Error(`git ${args[0]} ${args[1] ?? ""} scheiterte: ${r.stderr.trim()}`);
+  }
+  const s = setup(o.probe, ["--langfuse-url", url, ...(auth ? ["--langfuse-auth", auth] : []), "--write"]);
+  if (s.status !== 0) throw new Error(`codex-setup scheiterte: ${s.stderr.trim()}`);
+  const basis = git(["rev-parse", "HEAD"], o.probe).stdout.trim();
+  const stand = { basis, version, startweg: startweg(o.probe) };
+  schreibeProbe({ ...o, stand });
+  const lose = git(["status", "--porcelain"], o.probe).stdout.trim();
+  if (lose !== "") throw new Error(`Probe-Worktree nach vorbereiten nicht sauber: ${lose.split(/\r?\n/).join("; ")}`);
+  return stand;
+}
 function vorbereiten(werte, { root, out, err, git, setup, lade }) {
+  const version = werte["codex-version"];
+  if (version === undefined || !CLI_VERSION_MUSTER.test(version)) { err("--codex-version <x.y.z> erforderlich (die zu prüfende CLI-Version, etwa 0.167.0)"); return 2; }
   const url = werte["langfuse-url"] ?? STANDARD_LANGFUSE_URL;
   if (werte["langfuse-auth"] !== undefined && !LANGFUSE_AUTH_MODI.includes(werte["langfuse-auth"])) { err(`--langfuse-auth: ${LANGFUSE_AUTH_MODI.join(" oder ")} erforderlich`); return 2; }
   const o = ort(root, git, lade);
@@ -78,20 +98,39 @@ function vorbereiten(werte, { root, out, err, git, setup, lade }) {
   const maengel = vorbereitenMaengel({ ...o, git });
   if (maengel.length > 0) { for (const m of maengel) err(`Codex-Probe gestoppt: ${m}`); return 1; }
   try {
-    for (const args of [["fetch", "origin"], ["worktree", "add", "--no-track", "-b", PROBE_NAME, o.probe, o.basis]]) {
-      const r = git(args, o.haupt);
-      if (r.status !== 0) throw new Error(`git ${args[0]} ${args[1] ?? ""} scheiterte: ${r.stderr.trim()}`);
-    }
-    const s = setup(o.probe, ["--langfuse-url", url, ...(werte["langfuse-auth"] ? ["--langfuse-auth", werte["langfuse-auth"]] : []), "--write"]);
-    if (s.status !== 0) throw new Error(`codex-setup scheiterte: ${s.stderr.trim()}`);
-    schreibeProbe(o);
-    out(checklisteText(o));
+    const stand = anlegen(o, { git, setup, url, auth: werte["langfuse-auth"], version });
+    out(checklisteText({ ...o, stand }));
     return 0;
   } catch (e) {
     const { rest } = raeumen({ ...o, git });
     err(`Codex-Probe gestoppt: ${e.message}; zurückgebaut${rest.length ? `, Rest: ${rest.join("; ")}` : ""}`);
     return 1;
   }
+}
+/** Prüft den Stand vor `auftraege`: `{ fehler }` oder `{ stand, head }`; Quelle ist `stand.json` aus `vorbereiten`. */
+function auftragsStand(o, git) {
+  if (!vorhanden(o.probe)) return { fehler: `Probe-Worktree fehlt: ${o.probe} (zuerst vorbereiten)` };
+  let stand;
+  try { stand = JSON.parse(readFileSync(join(o.probe, PROBE_ORDNER, "stand.json"), "utf8")); } catch { return { fehler: `${PROBE_ORDNER}/stand.json fehlt oder ist kein JSON (zuerst vorbereiten)` }; }
+  const lose = git(["status", "--porcelain"], o.probe).stdout.trim();
+  if (lose !== "") return { fehler: `Probe-Worktree nicht sauber, Umsetzung zuerst lokal auf ${PROBE_NAME} committen: ${lose.split(/\r?\n/).join("; ")}` };
+  const head = git(["rev-parse", "HEAD"], o.probe).stdout.trim();
+  if (head === stand.basis) return { fehler: "Kein Commit über der Probe-Basis: die Umsetzung zuerst lokal committen" };
+  if (git(["merge-base", "--is-ancestor", stand.basis, head], o.probe).status !== 0) return { fehler: "Die Probe-Basis ist kein Vorfahr von HEAD (Historie verändert)" };
+  return { stand, head };
+}
+function auftraege(_werte, { root, out, err, git, lade, tmp }) {
+  const o = ort(root, git, lade);
+  if (o.fehler) { err(`Codex-Probe gestoppt: ${o.fehler}`); return 1; }
+  const { fehler, stand, head } = auftragsStand(o, git);
+  if (fehler) { err(`Codex-Probe gestoppt: ${fehler}`); return 1; }
+  const diff = git(["diff", `${stand.basis}..${head}`], o.probe);
+  if (diff.status !== 0) { err(`Codex-Probe gestoppt: git diff scheiterte: ${diff.stderr.trim()}`); return 1; }
+  const scratchpad = join(tmp, `codex-probe-${NUMMER}-abnahme`);
+  writeFileSync(join(o.probe, PROBE_ORDNER, "review.patch"), diff.stdout);
+  writeFileSync(join(o.probe, PROBE_ORDNER, "checkliste.md"), checklisteText({ ...o, stand, head, scratchpad }));
+  out(auftraegeText({ probe: o.probe, basis: stand.basis, head, scratchpad }).join("\n"));
+  return 0;
 }
 function aufraeumen(_werte, { root, out, err, git, lade }) {
   const o = ort(root, git, lade);
@@ -110,11 +149,11 @@ function auswertenBefehl(werte, { out, err, lade, root }) {
   out(JSON.stringify(ergebnis));
   return auswertungExit(ergebnis);
 }
-const UNTERBEFEHL = { vorbereiten, auswerten: auswertenBefehl, aufraeumen };
+const UNTERBEFEHL = { vorbereiten, auftraege, auswerten: auswertenBefehl, aufraeumen };
 export function main(argv = process.argv.slice(2), root = process.cwd(), out = console.log, err = console.error, deps = {}) {
   const { befehl, werte, fehler } = befehlLesen(argv, BEFEHLE);
   if (fehler) { err(fehler.text); return 2; }
-  const kontext = { root, out, err, git: deps.git ?? gitStandard, setup: deps.setup ?? setupStandard, lade: deps.lade ?? ladeProjektConfig };
+  const kontext = { root, out, err, git: deps.git ?? gitStandard, setup: deps.setup ?? setupStandard, lade: deps.lade ?? ladeProjektConfig, tmp: deps.tmp ?? tmpdir() };
   try { return UNTERBEFEHL[befehl](werte, kontext); } catch (e) { err(`Codex-Probe gestoppt: ${e.message}`); return 1; }
 }
 if (istDirektaufruf(import.meta.url)) process.exitCode = main(process.argv.slice(2), process.cwd());

@@ -39,6 +39,22 @@ export function berichtSchemaMaengel(bericht, belege, punkte) {
   for (const [id, e] of Object.entries(bericht.punkte)) m.push(...(bekannt.has(id) ? eintragMaengel(id, e) : [`Bericht: unbekannter Punkt ${id}`]));
   return m;
 }
+const VERSION_MUSTER = /^\d+\.\d+\.\d+$/;
+const ohneWeissraum = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
+/** Mängel der Erwartung (factory#456): `erwartet.version`/`erwartet.startweg` gegen die berichtete Version vor dem Start, in der Session (`/status`), im Export und den genannten Startweg. Ein Nicht-Objekt meldet das Schema. */
+export function erwartungMaengel(bericht, belege) {
+  if (!istObjekt(bericht)) return [];
+  const e = istObjekt(bericht.erwartet) ? bericht.erwartet : {};
+  const m = [];
+  if (!text(e.version) || !VERSION_MUSTER.test(e.version)) m.push("Bericht: erwartet.version fehlt oder ist keine Version x.y.z");
+  if (ohneWeissraum(e.startweg) === "") m.push("Bericht: erwartet.startweg fehlt (Vorlage von vorbereiten unverändert lassen)");
+  if (m.length > 0) return m;
+  const beobachtet = { vorStart: bericht.versionVorStart, session: bericht.version, export: belege?.version };
+  if (Object.values(beobachtet).some((v) => v !== e.version)) m.push(`Bericht: CLI-Version weicht ab: erwartet ${e.version}, vor dem Start ${beobachtet.vorStart || "?"}, in der Session ${beobachtet.session || "?"}, im Export ${beobachtet.export ?? "?"}`);
+  if (ohneWeissraum(bericht.startweg) === "") m.push("Bericht: Startweg nicht genannt (startweg leer)");
+  else if (ohneWeissraum(bericht.startweg) !== ohneWeissraum(e.startweg)) m.push("Bericht: Startweg weicht vom erzeugten ab (erwartet der von vorbereiten ausgegebene Startbefehl)");
+  return m;
+}
 /** Zeigt der Punkt auf einen Beleg: Observation-IDs im Export derselben Session, bei `ohneExport` ersatzweise eine nichtleere `ausgabe`. */
 function hatVerweis(p, e, belege) {
   const ids = new Set((Array.isArray(belege?.observations) ? belege.observations : []).filter((o) => o?.sessionId === belege.sessionId).map((o) => o.id));
@@ -59,7 +75,7 @@ export function auswerten({ belege, bericht, config }) {
   const nachweise = Object.fromEntries(NACHWEIS_NUMMERN.map((n) => [n, "belegt"]));
   const maengel = [];
   const setze = (n, z) => { nachweise[n] = schlechter(nachweise[n], z); };
-  const schema = berichtSchemaMaengel(bericht, belege, punkte);
+  const schema = [...berichtSchemaMaengel(bericht, belege, punkte), ...erwartungMaengel(bericht, belege)];
   if (schema.length > 0) {
     maengel.push(...schema);
     for (const n of alle()) setze(n, "offen");
