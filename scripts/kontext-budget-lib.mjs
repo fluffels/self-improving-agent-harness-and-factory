@@ -61,13 +61,13 @@ export function knappeBudgets({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [],
 
 /** Zeichen-Budget des Kern-Blocks von AGENTS.md (zwischen den Besitz-Markern `kern`, ohne den Projekt-Block): Ratchet auf den Ist-Wert, wächst nur bewusst per reviewtem Commit
  *  (factory#208 L19: der Kern wuchs zwischen zwei Tags um ~1,1k Zeichen und brachte einen Bezieher über sein Gesamtbudget). */
-export const KERN_BLOCK_BUDGET = 15_300; // factory#221: -137 (Ratchet-Test test/kern-block-budget.test.ts: Abstand < 100) (Rollen-Text für Harness-Befunde abgebaut), Raum wächst gleich; davor factory#269: +450 für den Eingangsfilter der Harness-Zeilen
+export const KERN_BLOCK_BUDGET = 15_200; // factory#222: -100 (Fabrik-Klausel in den Projekt-Block, Raum wächst gleich); davor factory#221: -137 (Ratchet-Test test/kern-block-budget.test.ts: Abstand < 100) (Rollen-Text für Harness-Befunde abgebaut), Raum wächst gleich; davor factory#269: +450 für den Eingangsfilter der Harness-Zeilen
 
 /** Raum, den der Kern jedem Bezieher außerhalb des Kern-Blocks in AGENTS.md lässt (Projekt-Block samt Projektwerten): `KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` ist genau das Gesamtbudget von AGENTS.md, ohne Lücke
  *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Der Raum sinkt nur zusammen mit einem bewusst erhöhten `KERN_BLOCK_BUDGET`; wächst ein Rest darüber, ist das ein Befund an den Bezieher.
  *  Lückenlos, damit der Probe-Erstbezug (`probe-erstbezug.mjs`, factory#234) mit vollem Raum und einem Kern ein Zeichen über dem Kern-Budget das Gesamtbudget reißt.
  *  Grenze: gerechnet wird mit dem Kern der Fabrik; im Bezieher trägt der Kern zusätzlich die Projektwert-Tabelle (wenige Dutzend Zeichen mehr). */
-export const PROJEKT_BLOCK_RAUM = 12_700;
+export const PROJEKT_BLOCK_RAUM = 12_800;
 
 /** Pur: Meldung, wenn Kern-Budget plus Projekt-Raum das Gesamtbudget von `AGENTS.md` übersteigt, sonst `null` (die Raum-Invariante, geprüft in `test/kern-block-budget.test.ts`). */
 export function kernRaumBefund({ kern, raum, gesamt }) {

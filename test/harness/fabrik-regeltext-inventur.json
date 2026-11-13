@@ -1,0 +1,11 @@
+{
+  "eintraege": [
+    { "einheit": "AGENTS.md#kern", "ausschnitt": "Änderungen nur upstream", "einordnung": "beide", "grund": "Bezieher-Regel (Kern-Änderungen laufen über die Fabrik); in der Fabrik von selbst erfüllt" },
+    { "einheit": ".claude/agents/factory-planer.md", "ausschnitt": "gegen die Fabrik-Fassung", "einordnung": "beide", "grund": "Der Bezieher gleicht sein Glossar-Stub gegen die Fabrik-Fassung ab" },
+    { "einheit": ".claude/agents/factory-planer.md", "ausschnitt": "(im Factory-Repo)", "einordnung": "beide", "grund": "Ortsangabe des Vorbild-Tests für den Bezieher (Link-Ziel liegt in der Fabrik)" },
+    { "einheit": "docs/codex/einstieg.md", "ausschnitt": "in der Fabrik nicht geprüft", "einordnung": "beide", "grund": "Stand der Evidenz: Beobachtung aus einem Bezieher-Pilot" },
+    { "einheit": ".agents/skills/review-lenses/brille-architektur.md", "ausschnitt": "existierenden Fabrik/Abstraktion", "einordnung": "beide", "grund": "Entwurfsmuster, kein Rollenbezug" },
+    { "einheit": ".agents/skills/factory/SKILL.md", "ausschnitt": "im Factory-Repo (dessen Issues das Factory-Board führt)", "einordnung": "beide", "grund": "Beschreibung des Skills, gilt für jeden Bezieher mit eigenem Factory-Board" },
+    { "einheit": ".agents/skills/factory/SKILL.md", "ausschnitt": "Factory-Board (im Repo, dessen Issues es führt: Factory-Repo)", "einordnung": "beide", "grund": "Erklärt das Factory-Board als Begriff, gilt in beiden Rollen" }
+  ]
+}

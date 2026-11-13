@@ -6,7 +6,7 @@
 
 ## Kern-Regeln (Factory-Besitz)
 
-Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg; ohne `.factory/sync-stand.json` ist dieses Repo selbst upstream). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
+Projektneutraler Factory-Besitz: Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg). Der Projekt-Block ergänzt und streicht nie; über allem steht dessen Projekt-Leitfrage („Oberste Regel“). Platzhalter `<gruppe.schlüssel>` setzt die Tabelle darunter ein.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
@@ -72,7 +72,7 @@ Hauptchat `sonnet`, Umsetzung `<agenten.umsetzer>` (Sonnet), Planung und Review 
 <!-- factory-besitz:ende kern -->
 
 <!-- factory-projekt:start -->
-> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält keinen Produktcode; Projekte beziehen den Besitz per Sync.
+> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält keinen Produktcode; Projekte beziehen den Besitz per Sync. Ohne `.factory/sync-stand.json` ist es selbst upstream: Kern-Änderungen geschehen hier.
 
 ## Das Wichtigste zuerst
 
