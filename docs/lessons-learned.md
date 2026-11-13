@@ -1,6 +1,6 @@
 # Lessons Learned: Muster aus dem Bau des Harness
 
-> **Fachlich geprüft am: 2026-10-09.**
+> 🧭 **Fachlich geprüft am: 2026-10-09.**
 > Wiederkehrende Muster mit datierten Belegen, für Außenstehende. Der Ticketstatus steht in GitHub, nicht hier: ein Ticket nennt diese Seite nur mit „Stand 2026-10-09“. Zählbares steht generiert (Gate-Tabelle: [agent-harness.md](agent-harness.md#3-die-fitness-functions-im-detail), Inventar: [README › Die Bausteine](../README.md)), laufende Messwerte in der [Verdichtungstabelle](model-routing.md#langfuse-status-überprüfen-1293). Begriffe: [Harness-Glossar](harness-glossar.md).
 
 Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt später ein Gate) steht schon an anderer Stelle: [README › Wie das gewachsen ist](../README.md) und [Bitte und Mauer](agent-harness.md#leitplanken-schichten-bitte-und-mauer). Hier folgen die übrigen Muster.

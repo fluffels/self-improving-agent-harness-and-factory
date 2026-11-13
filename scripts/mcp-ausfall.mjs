@@ -70,7 +70,7 @@ export function serverAnzeige(ordner, server) {
   return server.some((s) => serverOrdner(s.name) === ordner) ? name : `${name} [extern (nicht im Repo konfiguriert)]`;
 }
 
-/** Der npx-Hinweis des Launchers (`scripts/mcp-launch.mjs` › `npxHinweis`) als stderr-Zeile des Servers: Pfeil + `npx` oder `npx -y`. Pur. */
+/** Der npx-Hinweis eines projekteigenen Launchers als stderr-Zeile des Servers: Pfeil + `npx` oder `npx -y`. Pur. */
 export const istNpxFallback = (text) => /→\s*npx\b|\bnpx -y\b/.test(text);
 
 /** Vorspann jedes (Wieder-)Verbindens in den Logs: er sagt nichts über den Anlass und zählt nicht als Ursache eines Reconnects. */
