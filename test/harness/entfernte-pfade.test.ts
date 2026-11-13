@@ -189,6 +189,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     (name) => {
       assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: name }]), ["docs/ab.md:1: A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)"]);
       assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: `subagent_type: "${C.agenten.lens}", Kern je Rolle` }]), []);
+      assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: "LENS_BUDGET lensArmee lensTypenListe" }]), [], "Wortgrenzen: ein Name, der ein Wort nur enthält, ist kein Fund");
     },
   );
 

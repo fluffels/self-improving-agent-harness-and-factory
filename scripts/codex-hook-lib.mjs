@@ -164,7 +164,7 @@ const UEBERSETZER = { shell: uebersetzeShell, patch: uebersetzePatch, agent: ueb
 /** Der Dispatcher-Lauf für alle Teil-Payloads: erstes Deny gewinnt, ein `ask` wird ein Deny, ein geworfener Guard ebenso; sonst `null`. */
 function befrage(dispatch, payloads, repoRoot) {
   const fehler = [];
-  const deps = { beiFehler: (e) => fehler.push(e), bezieher: () => true };
+  const deps = { beiFehler: (e) => fehler.push(e) };
   for (const p of payloads) {
     const out = dispatch(JSON.stringify(p), repoRoot, undefined, undefined, deps)?.hookSpecificOutput;
     if (fehler.length > 0) return q(`Guard hat einen Fehler geworfen (${String(fehler[0]?.message ?? fehler[0])})`);

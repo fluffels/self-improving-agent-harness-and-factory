@@ -64,7 +64,7 @@ const { ordner: ORDNER, kern: KERN } = UMSETZER;
 
 /** Windows-Sonderfälle: sie gehören hinter die Plattform-Weiche (`plattform-windows.md`), nicht in den Kern-Rumpf. */
 const WINDOWS_TOKENS = ["taskkill", "$LASTEXITCODE", "PowerShell", "CRLF", "MSYS_NO_PATHCONV", "Git-Bash", "execSync", "Test-Path"];
-/** Weitere Leser der Plattform-Weiche (factory#400 L23, geschlossene Liste, nur diese fünf Dateien): Windows-Sonderfälle stehen nur in `plattform-windows.md`.
+/** Weitere Leser der Plattform-Weiche (factory#400 L23, geschlossene Liste, nur diese vier Dateien): Windows-Sonderfälle stehen nur in `plattform-windows.md`.
  *  `weiche`: die Datei nennt die Weiche in einem Satz (`win32` und der Pfad); ohne: der Leser hat sie schon (Umsetzer bzw. Lens). */
 const WEICHE_LESER: { datei: string; weiche: boolean }[] = [
   { datei: ".claude/agents/factory-lens.md", weiche: true },

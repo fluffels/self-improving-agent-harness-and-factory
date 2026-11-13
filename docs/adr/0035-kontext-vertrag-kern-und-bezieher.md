@@ -17,7 +17,7 @@ Das Epic factory#228 fragte, ob sich der Kontext-Sockel der Rollen senken lässt
 
 ## Messung
 
-Fenster: `--von 2026-11-12T00:32:37Z` (Merge von factory#235) bis `--bis 2026-11-13T07:20:06Z`, ohne das Ticket factory#235 selbst. Gerade Ticketnummer lief in Arm A (`sih-lens`, mit `AGENTS.md`), ungerade in Arm B (`lens-kern-je-rolle`, `omitClaudeMd: true`, Projekt-Block im Rumpf, Kern-Regeln per `grep`). Alle Werte stammen aus lokalen Transkripten, git und GitHub (ohne Langfuse, ohne Secret-Key), Preise aus `scripts/preise.mjs`; keiner ist geschätzt. Befehle (Exit 0, `ungueltig` leer, keine Tickets ausgeschlossen außer factory#235; factory#436 lief erst nach dem Fenster los und hatte noch keinen gemergten PR):
+Fenster: `--von 2026-11-12T00:32:37Z` (Merge von factory#235) bis `--bis 2026-11-13T07:20:06Z`, ohne das Ticket factory#235 selbst. Gerade Ticketnummer lief in Arm A (`sih-lens`, mit `AGENTS.md`), ungerade in Arm B (`lens-kern-je-rolle`, `omitClaudeMd: true`, Projekt-Block im Rumpf, Kern-Regeln per `grep`). Alle Werte stammen aus lokalen Transkripten, git und GitHub (ohne Langfuse, ohne Secret-Key), Preise aus `scripts/preise.mjs`; keiner ist geschätzt. Befehle (Exit 0, `ungueltig` leer, ausgeschlossen: factory#235; bei `kontext-treiber` zusätzlich factory#436, dessen Lens-Läufe um 07:17 und 07:19 UTC schon im Fenster liefen, dessen PR aber noch nicht gemergt war und darum bei `lauf-ergebnis` nicht erscheint):
 
 ```
 node scripts/lauf-ergebnis.mjs --von 2026-11-12T00:32:37Z --bis 2026-11-13T07:20:06Z --start-agent sih-umsetzer --ohne 235 --je-agent sih-lens --je-agent lens-kern-je-rolle --json
@@ -34,7 +34,7 @@ node scripts/subagent-laufzeit.mjs --agent <typ> --von 2026-11-12T00:32:37Z --bi
 | Lens-Kosten je Ticket, Median (Σ / Mittel) | 4,849 $ (108,48 $ / 4,93 $) | 4,892 $ (103,09 $ / 5,15 $), +0,9 % |
 | Gesamtkosten je Ticket, Median (Σ) | 11,26 $ (258,38 $) | 12,85 $ (254,42 $), +14,1 % |
 | Lens-Anteil an den Gesamtkosten, Median je Ticket (Σ-Quote) | 42,8 % (42,0 %) | 38,1 % (40,5 %) |
-| Lens-Sockel (erster Call, Median) | 23.119 Tokens | 14.079,5 Tokens (Δ −9.040) |
+| Lens-Sockel (erster Call, Median je Ticket laut `kontext-treiber`; Median je Lauf laut `subagent-laufzeit`: 23.481 gegen 14.393, Δ −9.088) | 23.119 Tokens | 14.079,5 Tokens (Δ −9.040) |
 | Requests je Lens-Ticket, Median | 93 | 103 |
 | PRs mit Blocker in Runde 1 | 21/22 (95,5 %) | 18/20 (90,0 %) |
 | Runde-1-Blocker je Brille (PRs mit Treffer/PRs, Σ Blocker) | Architektur 6/20 (6), Requirement-Treue 9/20 (12), Test-Adäquanz 20/20 (66), Sicherheit 4/7 (4), Doku 1/2 (1) | Architektur 7/18 (7), Requirement-Treue 10/18 (16), Test-Adäquanz 17/18 (74), Sicherheit 2/7 (2), Doku 1/1 (1), Kombi 0/1 (0) |
@@ -117,7 +117,7 @@ Entscheidung: A, weil die A/B-Regel entschieden ist und nichts Besseres belegt.
 - **Qualitäts-Veto (berichtet, nicht entscheidend).** Runde-1-Blocker: B 5,5 Prozentpunkte unter A (Toleranz 10, bestanden). Abnahme im ersten Durchgang: B 11,4 Prozentpunkte über A (bestanden). Nacharbeit: noch offen, die 14-Tage-Frist (`NACHARBEIT_TAGE`, `scripts/lauf-ergebnis.mjs`) läuft für die ersten Tickets frühestens am 2026-11-26 ab; vorläufig `Folge #` 1 in B gegen 2 in A. Das Veto hätte nur A halten können; die Entscheidung wartet darum nicht auf die Fristen.
 - **Grenze der Messung.** Arm B misst nur die Lens; Planer und Umsetzer ohne Root-Kontext sind nicht Teil der Messung. Die Aussage „Kern je Rolle spart nichts“ gilt damit für die Lens. Variante D bleibt für Planer und Umsetzer technisch möglich (Teil 1: Sockel-Δ −9.067 Tokens je Rolle), ist aber ungemessen und in Codex nicht umsetzbar.
 - **A/B-Regel beendet.** Die unterlegene Definition (Arm B), die Arm-Wahl (`lens-arm`), die Guard-Regel R6, die Besitz- und Protected-Paths-Einträge, ihre Wächter und die Wiedervorlage `kern-je-rolle-ab-235` sind entfernt; der Skill `review-lenses` spawnt wieder fest `<agenten.lens>`.
-- **Offenlegung (Abweichung von der Rückbau-Liste in `docs/model-routing.md`).** Die Mehr-Typ-Flags der Messskripte bleiben (`--je-agent` in `lauf-ergebnis.mjs`, mehrfaches `--agent` in `kontext-treiber.mjs`) und `armeZuordnen` zieht von `lens-arm-lib.mjs` nach `mess-lib.mjs`: sie sind generisch, projektneutral, tragen die Re-Evaluierung unten und halten den Diff klein. Ein Wächter (`test/harness/entfernte-pfade.test.ts`) hält die Namen des Rückbaus draußen.
+- **Offenlegung (Abweichung von der Rückbau-Liste in `docs/model-routing.md`).** Die Mehr-Typ-Flags der Messskripte bleiben (`--je-agent` in `lauf-ergebnis.mjs`, mehrfaches `--agent` in `kontext-treiber.mjs`) und `armeZuordnen` zieht von `lens-arm-lib.mjs` nach `mess-lib.mjs`: sie sind generisch, projektneutral, tragen die Re-Evaluierung unten und halten den Diff klein. Ein Wächter (`test/harness/entfernte-pfade.test.ts`) hält die Namen des Rückbaus draußen. Grenze: die Phasen-Erkennung von `kontext-treiber` (`istLinse`) kennt wieder nur `agenten.lens`; eine künftige Lens-A/B mit mehreren Typen muss sie wieder auf mehrere Typen erweitern, sonst öffnet ein Spawn des zweiten Typs keine Review-Phase (die Lens-Kosten bleiben richtig, die Phasenwerte des Umsetzers nicht).
 
 ## Konsequenzen
 

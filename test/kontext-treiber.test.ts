@@ -1013,7 +1013,7 @@ describe("Lens-Spawn eröffnet die Review-Phase (istLinse, factory#236)", () => 
   test("ein Spawn des Lens-Typs der Config eröffnet Review", () => {
     expect(phasen(spawn({ subagent_type: LENS, description: "Lens Doku R1" }))).toEqual(["Umsetzung", "Review", "Review"]);
   });
-  test("ein Spawn eines anderen Typs, ohne Typ oder ohne Eingabe tut es nicht (und wirft nicht)", () => {
+  test("ein Spawn eines anderen Typs, ohne Typ oder ohne Felder tut es nicht", () => {
     expect(phasen(spawn({ subagent_type: "anderer-typ" }))).not.toContain("Review");
     expect(phasen(spawn({ description: "ohne Typ" }))).not.toContain("Review");
     expect(phasen(spawn())).not.toContain("Review");
