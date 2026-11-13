@@ -21,13 +21,7 @@ Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht u
 
 ## Negativproben
 
-Je Art (shell, patch, agent) eine Probe, weil die Werkzeugnamen einer Art Aliase sind, die Codex wählt; jede verweigert der Hook (Claude-Dispatcher und Codex-Adapter, getestet) und bleibt auch bei durchgelassenem Hook folgenlos:
-
-- **shell**: `git push` an den nicht existierenden Remote `codex-probe-kein-remote`; git scheitert selbst.
-- **patch**: Ziel `.git/codex-probe-marker` im Probe-Worktree; dort ist `.git` eine Datei, ein Schreiben scheitert.
-- **agent**: die Rolle ohne Shell, ein nicht existierendes Ticket und die Anweisung, nur „OK“ zu antworten.
-
-`gh issue delete` ist keine Negativprobe (Löschen ist irreversibel).
+Je Art (shell, patch, agent) eine Probe, weil die Werkzeugnamen einer Art Aliase sind, die Codex wählt; jede verweigert der Hook (Claude-Dispatcher und Codex-Adapter, getestet) und bleibt auch bei durchgelassenem Hook folgenlos. **shell**: `git push` an den nicht existierenden Remote `codex-probe-kein-remote`; git scheitert selbst. **patch**: Ziel `.git/codex-probe-marker` im Probe-Worktree; dort ist `.git` eine Datei, ein Schreiben scheitert. **agent**: die Rolle ohne Shell, ein nicht existierendes Ticket und die Anweisung, nur „OK“ zu antworten. `gh issue delete` ist keine Negativprobe (Löschen ist irreversibel).
 
 ## Bericht und Auswertung
 

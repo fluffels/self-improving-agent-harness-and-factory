@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { parseWorktreeBloecke } from "./worktree-aufraeumen.mjs";
 import { befehlLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { standardzweigVon } from "./arbeitsplatz-lib.mjs";
@@ -28,11 +29,8 @@ const echt = (p) => { try { return posix(realpathSync(p)); } catch { return posi
 const gleich = (a, b) => echt(a) === echt(b);
 const vorhanden = (p) => lstatSync(p, { throwIfNoEntry: false }) !== undefined;
 
-/** Registrierte Worktrees `[{ pfad, branch }]` (Branch ohne `refs/heads/`, leer bei losem HEAD). */
-function worktrees(git, haupt) {
-  const r = git(["worktree", "list", "--porcelain"], haupt);
-  return r.stdout.split(/\r?\n\r?\n/).map((b) => ({ pfad: /^worktree (.+)$/m.exec(b)?.[1], branch: /^branch refs\/heads\/(.+)$/m.exec(b)?.[1] ?? "" })).filter((w) => w.pfad);
-}
+/** Registrierte Worktrees `[{ pfad, branch }]` (Parser: `parseWorktreeBloecke`; Branch leer bei losem HEAD). */
+const worktrees = (git, haupt) => parseWorktreeBloecke(git(["worktree", "list", "--porcelain"], haupt).stdout).map((b) => ({ pfad: b.pfad, branch: b.branch ?? "" }));
 const branches = (git, haupt, muster) => git(["branch", "--list", "--format=%(refname:short)", muster], haupt).stdout.split(/\r?\n/).filter(Boolean);
 
 /** Hauptcheckout und Projekt-Config oder Fehlertext (nie ein Wurf). */
@@ -49,7 +47,6 @@ function vorbereitenMaengel({ haupt, probe, git }) {
   try { pruefeAusgabe(probe, haupt); } catch (e) { m.push(`Probe-Ziel ungeeignet: ${e.message}`); }
   if (git(["status", "--porcelain"], haupt).stdout.trim() !== "") m.push(`Hauptcheckout ${haupt} ist nicht sauber (git status --porcelain)`);
   if (vorhanden(probe)) m.push(`Probe-Ordner existiert schon: ${probe} (zuerst node scripts/codex-probe.mjs aufraeumen)`);
-  if (worktrees(git, haupt).some((w) => gleich(w.pfad, probe))) m.push(`Probe-Worktree ist schon registriert: ${probe}`);
   if (branches(git, haupt, PROBE_NAME).length > 0) m.push(`Branch ${PROBE_NAME} existiert schon (zuerst node scripts/codex-probe.mjs aufraeumen)`);
   return m;
 }
