@@ -1475,6 +1475,13 @@ describe("e2e-Gate-Profil (factory#246): Block e2e zusammen mit befehle.e2e", ()
   test("gültiges Paar: keine Fehler", () => {
     assert.deepEqual(mit({ browser: ["chromium", "firefox"] }, "lauf"), []);
   });
+  test("Fix-Text und Eintragsmeldung nennen Ziffern, Bindestrich und Buchstabe am Anfang", () => {
+    for (const block of [{ browser: [] }, { browser: ["Chromium"] }]) {
+      const t = mit(block, "lauf").join("\n");
+      assert.match(t, /Ziffern und -/, JSON.stringify(block));
+      assert.match(t, /Buchstabe am Anfang/, JSON.stringify(block));
+    }
+  });
   test("Fehlerfälle der Form, je mit Fix-Zeile", () => {
     const faelle: [unknown, RegExp][] = [
       [{}, /e2e\.browser/],
