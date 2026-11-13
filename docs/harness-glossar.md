@@ -1,6 +1,7 @@
 # Harness-Glossar: die Begriffe der Agenten-Maschinerie
 
-> **Fachlich geprüft am: 2026-10-10.**
+> 🧭 **Fachlich geprüft am: 2026-10-10.**
+
 > Für Außenstehende, die den [Harness](agent-harness.md) lesen wollen. Die Begriffe des Projekts stehen getrennt im Glossar. Regelkonstanten und Zählwerte stehen hier bewusst nicht: sie driften, die verlinkte Quelle gilt. Muster mit Belegen: [Lessons Learned](lessons-learned.md).
 
 ## Akteure und Werkzeuge

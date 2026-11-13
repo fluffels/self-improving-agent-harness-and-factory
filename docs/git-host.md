@@ -1,6 +1,8 @@
 # Git-Host-Bindung der Fabrik
 
-> 🧭 **Fachlich geprüft am: 2026-11-12.** Antwort auf factory#248 (Idee aus factory#220, Zeile L42); Entscheidung: [ADR 0032](adr/0032-git-host-bindung.md).
+> 🧭 **Fachlich geprüft am: 2026-11-12.**
+
+> Antwort auf factory#248 (Idee aus factory#220, Zeile L42); Entscheidung: [ADR 0032](adr/0032-git-host-bindung.md).
 
 Diese Seite sagt je Fabrik-Teil, ob er **hostneutral** ist oder **GitHub** voraussetzt. Ein Wächter hält sie wahr (`test/harness/git-host-liste.test.ts`): Jede Skript-Datei, die `gh-cli.mjs`, GitHub-Umgebung, `api.github.com`, `ProjectV2` oder ein String-Literal `"graphql"` (etwa als Argument von `gh api`) nutzt (auch über Importe; ein Beleg-Link in API-Form als Daten-Literal, etwa in der Codex-Freigabetabelle, zählt nicht als Nutzung), und jeder Workflow steht in einer GitHub-Zeile; ein genannter Pfad muss existieren. Board, Agenten- und Skill-Texte und Dienste sind eine Handliste ohne Dateiabgleich.
 

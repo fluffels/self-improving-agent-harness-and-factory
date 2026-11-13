@@ -6,10 +6,10 @@
  *  V3 Hooks: jedes Hook-Skript aus `.claude/settings.json` hat genau eine Zeile in HOOK_TABELLE {hook, modul, codex, grenze};
  *     `codex: null` braucht eine Grenze mit Ticket in Herkunftsform (`factory#<nr>`/`quellprojekt#<nr>`) und einem Codex-Ereignis aus der geschlossenen Liste CODEX_HOOK_EREIGNISSE oder dem Wort „Statuszeile“ (der Wächter prüft den Ereignisbezug, nicht die Begründungsqualität); ein Adapter muss dieselben Auswertungsmodule importieren, auch
  *     über seine transitiven Importe (der Adapter lädt den Dispatcher dynamisch; `lokaleImporteTransitiv` aus hook-importe.ts);
- *     importiert ein `scripts/codex-*.mjs` transitiv ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen. Eine Grenze nennt nie die gelöschten Tickets factory#84/factory#86.
+ *     importiert ein `scripts/codex-*.mjs` transitiv ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen. Eine Grenze nennt nie die gelöschten oder abgelösten Tickets factory#84/factory#86/factory#249.
  *  V5 Doku: der Abschnitt `## Tracing-Ausfallstopp und Sitzungs-Hooks` in docs/codex/einstieg.md nennt genau die Menge CODEX_HOOK_EREIGNISSE in Backticks und trägt ein Abrufdatum („abgerufen am JJJJ-MM-TT“).
  *  V4 AGENTS.md ≤ 32768 Bytes (Codex-Standard `project_doc_max_bytes`); `check:contextsize` deckelt strenger, hier nur der Bezug.
- * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Wirkungsbeleg: factory#367, Epic factory#249).
+ * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Wirkungsbeleg: factory#367).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). */
 import { expect, test } from "vitest";
@@ -30,9 +30,9 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/sandbox-doctor.mjs", modul: ["scripts/sandbox-doctor.mjs"], codex: null, grenze: "SessionStart gibt es in Codex, der Doktor prüft aber die Claude-Sandbox; die Rechteprobe von Codex ist Nachweis 3: factory#367" },
   { hook: "scripts/mcp-ausfall.mjs", modul: ["scripts/mcp-ausfall.mjs"], codex: null, grenze: "SessionStart gibt es in Codex, das Skript liest aber die MCP-Logs von Claude Code; Codex prüft die Verbindung beim Start über required = true, ein Ausfall mitten im Lauf bleibt ohne Meldung: factory#367" },
   { hook: "scripts/langfuse-vorbedingung.mjs", modul: ["scripts/langfuse-health.mjs"], codex: "scripts/codex-vorpruefung.mjs", grenze: "Tracing-Ausfallstopp (factory#365): Vorprüfung vor dem Lauf, Health-Prüfung vor spawn_agent im Hook-Adapter" },
-  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook.mjs", grenze: "Adapter ohne Wirkungsbeleg im echten Codex-Lauf; write_stdin, direkte Dateiwerkzeuge, MCP und Nachrichtenwerkzeuge nicht abgedeckt: factory#367 (Epic factory#249)", modul: ["scripts/pretooluse-dispatch.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
+  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook.mjs", grenze: "Adapter ohne Wirkungsbeleg im echten Codex-Lauf; write_stdin, direkte Dateiwerkzeuge, MCP und Nachrichtenwerkzeuge nicht abgedeckt: factory#367", modul: ["scripts/pretooluse-dispatch.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: "Stop und SubagentStop gibt es in Codex, unbelegt sind Rollenname in agent_type und Abschlussformat (last_assistant_message statt Handback); Waisen-Worktrees räumt man unter Codex von Hand (cleanup-worktrees.mjs --fix): factory#367, Übernahme factory#368" },
-  { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Die Codex-Statuszeile kennt nur eingebaute Elemente (tui.status_line), keinen Befehl: factory#249" },
+  { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Die Codex-Statuszeile kennt nur eingebaute Elemente (tui.status_line), keinen Befehl: factory#368" },
 ];
 export const AGENTEN_AUSNAHMEN: Record<string, string> = {
   "lens-kern-je-rolle": "Arm B der A/B-Messung (factory#235): nur Claude Code, `omitClaudeMd: true`. Codex-Rollen sind Forks und erben `AGENTS.md`, der Schalter ist dort nicht abbildbar (belegt in factory#233, Fall g, Thread 01a1b309-be91-72f1-9cef-0a21f3e85617); Codex bleibt bei Arm A.",
@@ -64,7 +64,7 @@ export function v3(skripte: string[], tabelle: HookZeile[], codexTexte: Record<s
       if (!/(?:factory|quellprojekt)#\d+/.test(z.grenze)) f.push(`V3: ${z.hook}: codex null braucht eine Grenze mit Ticket in Herkunftsform (factory#<nr> oder quellprojekt#<nr>)`);
       if (!/Statuszeile/.test(z.grenze) && !CODEX_HOOK_EREIGNISSE.some(e => new RegExp(`(?<![A-Za-z])${e}(?![A-Za-z])`).test(z.grenze))) f.push(`V3: ${z.hook}: codex null braucht eine Grenze, die ein Codex-Ereignis (CODEX_HOOK_EREIGNISSE) oder die Statuszeile nennt`);
     }
-    if (/#(?:84|86)\b/.test(z.grenze)) f.push(`V3: ${z.hook}: die Grenze nennt ein gelöschtes Ticket (factory#84/factory#86), Ziel ist factory#249 bzw. das zuständige Kind`);
+    if (/#(?:84|86|249)\b/.test(z.grenze)) f.push(`V3: ${z.hook}: die Grenze nennt ein gelöschtes oder geschlossenes Ticket (factory#84, factory#86, factory#249), Ziel ist das zuständige Kind (factory#367, factory#368)`);
     if (z.codex !== null) {
       if (codexTexte[z.codex] === undefined) { f.push(`V3: Adapter ${z.codex} fehlt`); continue; }
       const imp = transitiv(z.codex);
@@ -124,7 +124,12 @@ test("V3 Negativfälle: Hook ohne Zeile, Zeile ohne Hook, Grenze ohne Ticket, Ad
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart offen: #365" }], {})).toHaveLength(1); // Nummer ohne Herkunft
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: factory#365" }], {})[0]).toContain("Codex-Ereignis"); // Ticket ohne Ereignis
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStartX factory#365" }], {})).toHaveLength(1); // Teilwort zählt nicht
-  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#249" }], {})).toEqual([]);
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#368" }], {})).toEqual([]);
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#249" }], {})[0]).toContain("gelöschtes oder geschlossenes Ticket"); // abgelöst
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#2490" }], {})).toEqual([]); // längere Nummer
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#24" }], {})).toEqual([]); // kürzere Nummer
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#250" }], {})).toEqual([]); // Nachbarnummer
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile 249 Zeichen: factory#368" }], {})).toEqual([]); // Zahl ohne #
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: quellprojekt#12" }], {})).toEqual([]); // beide Herkünfte
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: factory#" }], {})).toHaveLength(1); // Nummer fehlt
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "xSessionStart factory#365" }], {})).toHaveLength(1); // Teilwort davor
@@ -146,11 +151,11 @@ test("V3 transitiv: ein nur mittelbar importiertes Modul zählt, ein fehlender A
   expect(v3(["scripts/h.mjs"], [z], {}, lies)).toEqual(["V3: Adapter scripts/codex-x.mjs fehlt"]);
   const alt = v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: #84" }], { "scripts/codex-x.mjs": quellen["scripts/codex-x.mjs"] }, lies);
   expect(alt).toHaveLength(1);
-  expect(alt[0]).toContain("gelöschtes Ticket");
+  expect(alt[0]).toContain("gelöschtes oder geschlossenes Ticket");
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: #840" }], { "scripts/codex-x.mjs": "" }, lies)).toEqual([]);
   const kaputt = v3(["scripts/h.mjs"], [z], { "scripts/codex-x.mjs": 'import "./fehlt.mjs";' }, p => (p === "scripts/codex-x.mjs" ? 'import "./fehlt.mjs";' : lies(p)));
   expect(kaputt.some(m => m.startsWith("V3: scripts/codex-x.mjs: Import"))).toBe(true);
-  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: factory#86" }], { "scripts/codex-x.mjs": "" }, lies).some(m => m.includes("gelöschtes Ticket"))).toBe(true);
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "offen: factory#86" }], { "scripts/codex-x.mjs": "" }, lies).some(m => m.includes("gelöschtes oder geschlossenes Ticket"))).toBe(true);
 });
 test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Abrufdatum fehlt", () => {
   const alle = CODEX_HOOK_EREIGNISSE.map(e => `\`${e}\``).join(", ");

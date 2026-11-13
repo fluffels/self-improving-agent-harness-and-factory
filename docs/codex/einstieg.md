@@ -136,7 +136,7 @@ Quelle aller Angaben: [Hooks](https://learn.chatgpt.com/docs/hooks), abgerufen a
 | `sandbox-doctor` | `SessionStart` existiert; der Doktor prüft die Claude-Sandbox, die Rechteprobe von Codex ist Nachweis 3 (factory#367) |
 | `mcp-ausfall` | `SessionStart` existiert; das Skript liest die MCP-Logs von Claude Code, Codex prüft beim Start nativ über `required = true`, ein Ausfall mitten im Lauf bleibt ohne Meldung (factory#367) |
 | `stop-verify-hook` | `Stop`/`SubagentStop` existieren; Rollenname in `agent_type` und Abschlussformat (`last_assistant_message` statt Handback) sind unbelegt; Waisen-Worktrees räumt man unter Codex von Hand (`node scripts/cleanup-worktrees.mjs --fix`) (factory#367, factory#368) |
-| `statusline` | die Codex-Statuszeile kennt keinen Befehl; der Kontingent-Snapshot fehlt unter Codex (factory#249) |
+| `statusline` | die Codex-Statuszeile kennt keinen Befehl; der Kontingent-Snapshot fehlt unter Codex (factory#368) |
 
 ## Vorprüfung und Nachweisformat
 
@@ -164,7 +164,7 @@ Die Prüfung muss anhand echter Laufdaten erfolgen; die Liste selbst erteilt kei
 
 ## Laufzeit-Verträge
 
-`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (der `PreToolUse`-Dispatcher hat den Adapter `scripts/codex-hook.mjs`, dessen transitive Importe den Dispatcher und seine Guards decken; die Zeile `langfuse-vorbedingung` mit dem Adapter `codex-vorpruefung.mjs`, die übrigen Hooks ohne Codex-Adapter mit Ereignisbezug und Grenze factory#367, factory#368 bzw. factory#249; V5 gleicht die Ereignisliste des Abschnitts Tracing-Ausfallstopp mit dem Wächter ab) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#367 (Epic factory#249).
+`test/harness/laufzeit-vertraege.test.ts` hält Claude und Codex hermetisch in `verify` zusammen: Skill-Zeiger, Rollenquellen, Hook-Tabelle (der `PreToolUse`-Dispatcher hat den Adapter `scripts/codex-hook.mjs`, dessen transitive Importe den Dispatcher und seine Guards decken; die Zeile `langfuse-vorbedingung` mit dem Adapter `codex-vorpruefung.mjs`, die übrigen Hooks ohne Codex-Adapter mit Ereignisbezug und Grenze factory#367 bzw. factory#368; V5 gleicht die Ereignisliste des Abschnitts Tracing-Ausfallstopp mit dem Wächter ab) und die AGENTS.md-Größe gegen das Codex-Standardlimit. Ein echter Codex-Lauf ist in CI nicht möglich und gehört zur Gesamtabnahme factory#367.
 
 ## Quellen
 
