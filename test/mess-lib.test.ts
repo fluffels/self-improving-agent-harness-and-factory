@@ -81,6 +81,46 @@ describe("kontextVon und istNeuaufbau (#1572: ein Prädikat für countCacheRebui
 describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)", () => {
   const B = raw as unknown as { bereinige: (t: string, o?: { wurzel?: string | null; worktree?: string | null }) => string };
   const WURZEL = "C:/work/projekt";
+  test("POSIX-Home und Claude-Projektordner-Slug tragen keinen Benutzernamen (Sicherheit, öffentliches Repo)", () => {
+    const faelle: [string, string][] = [
+      ["/Users/Max/x", "~/x"],
+      ["cat /home/Max/x", "cat ~/x"],
+      ['open "/Users/Max/x" (/home/Max/y) a=/Users/Max/z', 'open "~/x" (~/y) a=~/z'],
+      ["/private/tmp/claude-501/-Users-Max-dev-repo/s/scratchpad/f.txt", "/private/tmp/claude-501/<projekt>/s/scratchpad/f.txt"],
+      ["C:\\Users\\Max\\.claude\\projects\\C--Users-Max-dev-repo\\a.jsonl", "~/.claude/projects/<projekt>/a.jsonl"],
+      ["/x/-home-Max-dev-repo/y", "/x/<projekt>/y"],
+    ];
+    for (const [eingabe, soll] of faelle) {
+      const aus = B.bereinige(eingabe);
+      expect(aus, eingabe).toBe(soll);
+      expect(aus).not.toContain("Max");
+    }
+    for (const ok of ["src/Users/list.ts", "docs/home/x.md", "ls src/home/x", "foo-Users-x/y"]) expect(B.bereinige(ok), ok).toBe(ok);
+  });
+  test("Home und Slug werden an jedem Anfangs- und Endzeichen der geschlossenen Liste ersetzt", () => {
+    const faelle: [string, string][] = [
+      ["a '/Users/Max/x'", "a '~/x'"],
+      ["a '/Users/Max'", "a '~'"],
+      ["cd /Users/Max && ls", "cd ~ && ls"],
+      ['"/Users/Max"', '"~"'],
+      ["(/home/Max)", "(~)"],
+      ["-Users-Max-dev-repo/a.jsonl", "<projekt>/a.jsonl"],
+      ["c--Users-Max-dev/x", "<projekt>/x"],
+      ["x -Users-Max-dev-repo a", "x <projekt> a"],
+      ['a "-Users-Max-dev" b', 'a "<projekt>" b'],
+      ["a '-Users-Max-dev' b", "a '<projekt>' b"],
+      ["k=-Users-Max-dev/x", "k=<projekt>/x"],
+      ["(-Users-Max-dev)", "(<projekt>)"],
+      ["-Users-Max-dev x", "<projekt> x"],
+      ['-Users-Max-dev"', '<projekt>"'],
+      ["-Users-Max-dev'", "<projekt>'"],
+    ];
+    for (const [eingabe, soll] of faelle) {
+      const aus = B.bereinige(eingabe);
+      expect(aus, eingabe).toBe(soll);
+      expect(aus).not.toContain("Max");
+    }
+  });
   test("Home und Worktree-Präfix werden ersetzt, Backslashes zu Schrägstrichen", () => {
     expect(B.bereinige("C:/Users/Max/dev/x.ts")).toBe("~/dev/x.ts");
     expect(B.bereinige("C:\\Users\\Max\\dev\\x.ts")).toBe("~/dev/x.ts");

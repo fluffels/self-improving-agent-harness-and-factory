@@ -203,6 +203,24 @@ describe("Punkt Modell-Routing", () => {
     const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagent `weg`") });
     expect(e.befund).toContain("Agentendatei .claude/agents/weg.md fehlt");
   });
+  test("(e) Subagent ohne Backticks: Format-Hinweis; ganz ohne „Subagent“: weiter nicht zuordenbar", () => {
+    const ohne = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagent foo-bar") });
+    expect(ohne.ok).toBe(false);
+    expect(ohne.befund).toContain("Subagent „foo-bar“ ohne Backticks; Format: Subagent `name`");
+    expect(ohne.befund).not.toContain("nicht zuordenbar");
+    const nichts = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "irgendwas") });
+    expect(nichts.befund).toContain("nicht zuordenbar");
+    expect(nichts.befund).not.toContain("ohne Backticks");
+  });
+  test("(e) „Subagent“ ohne Leerraum zum Namen ist nicht zuordenbar; beliebiger Leerraum (mehrere Leerzeichen, Tab) gibt den Format-Hinweis", () => {
+    const klebt = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagentfoo") });
+    expect(klebt.befund).toContain("nicht zuordenbar");
+    expect(klebt.befund).not.toContain("ohne Backticks");
+    for (const trenner of ["  ", "\t"]) {
+      const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", `Subagent${trenner}foo`) });
+      expect(e.befund, JSON.stringify(trenner)).toContain("Subagent „foo“ ohne Backticks; Format: Subagent `name`");
+    }
+  });
   test("docs/model-routing.md fehlt: OK mit Hinweis; ein Anker-Stub ohne Tabelle: OK ohne Hinweis", () => {
     const ohneSeite = mit({ "docs/model-routing.md": null });
     expect(ohneSeite.ok).toBe(true);

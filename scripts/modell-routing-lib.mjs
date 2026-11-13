@@ -28,6 +28,12 @@ export function hauptchatModellBefunde(settings) {
 
 const zelleOhneCode = (z) => z.replace(/`/g, "").trim();
 
+/** Fehltext zu einer Zielzelle ohne `Subagent \`name\``: mit Rückfall auf einen Namen ohne Backticks ein Format-Hinweis, sonst „nicht zuordenbar“. */
+function zielFehler(ziel) {
+  const roh = /Subagent\s+([\w-]+)/.exec(ziel)?.[1];
+  return roh === undefined ? "Ziel „Subagent name“ in der letzten Zelle nicht zuordenbar" : `Subagent „${roh}“ ohne Backticks; Format: Subagent \`name\``;
+}
+
 /**
  * Prüft die Tabelle „Projekt-Phase“ (Rollen außerhalb des Kerns) generisch gegen die Frontmatter ihrer Subagenten: je Zeile nennt die
  * letzte Zelle „Subagent `name`“, die Datei ist `.claude/agents/<name>.md`; Alias (Spalte „Alias“) und Effort (Spalte „Effort Skill-Pfad“)
@@ -45,9 +51,10 @@ export function projektPhasenAbweichungen(doku, fmVon) {
   for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
     const c = zellen(zeilen[i]);
     const phase = zelleOhneCode(c[0] ?? "");
-    const name = /Subagent `([\w-]+)`/.exec(c[c.length - 1] ?? "")?.[1];
+    const ziel = c[c.length - 1];
+    const name = /Subagent `([\w-]+)`/.exec(ziel)?.[1];
     if (name === undefined) {
-      fehler.push(`${phase}: Ziel „Subagent name“ in der letzten Zelle nicht zuordenbar`);
+      fehler.push(`${phase}: ${zielFehler(ziel)}`);
       continue;
     }
     const fm = fmVon(`.claude/agents/${name}.md`);

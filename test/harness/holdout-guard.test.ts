@@ -41,6 +41,15 @@ describe("holdoutAuftragBlockade", () => {
       }
     }
   });
+  test("Umsetzer-Prompt mit dem Kopf nur als Probe-Zitat: bleibt verweigert, der Grund nennt den Ausweg und gibt keinen Prompt-Inhalt wieder", () => {
+    const grund = A.holdoutAuftragBlockade({ tool: "Agent", subagentType: FREMD.agenten.umsetzer, text: `Probe-Wortlaut: ${KOPF} (nur Zitat)` });
+    expect(grund).toMatch(/Holdout-Trennung/);
+    expect(grund).toMatch(/nur als Zitat/);
+    expect(grund).toMatch(/ohne Ziffern \(`SZENARIEN #<nr>`\)/);
+    expect(grund).toMatch(/im Test zusammen/);
+    expect(grund).not.toContain(KOPF);
+    expect(grund).not.toContain("Probe-Wortlaut");
+  });
   test("Spawn an den Abnahme-Agenten: erlaubt", () => {
     expect(A.holdoutAuftragBlockade({ tool: "Agent", subagentType: "holdout-abnahme", text: `${KOPF}\n${ZEILE}` })).toBeNull();
   });

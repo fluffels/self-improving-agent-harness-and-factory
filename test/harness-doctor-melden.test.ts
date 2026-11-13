@@ -24,8 +24,11 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string, eigen?: string | null): boolean;
+  ohneSicherheitspruefung(luecken: Luecke[], punkte: string[] | null): Luecke[];
+  lesenOderNull(pfad: string): string | null;
+  sollPunkte(text: string | null): string[] | null;
   plane(a: { luecken: Luecke[]; kommentare: Kommentar[]; owner: string; heute: string; eigen?: string | null }): string[];
-  main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
+  main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; sollText?: () => string | null; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -246,6 +249,39 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
   });
 });
 
+describe("harness-doctor-melden: lesenOderNull (fehlende Soll-Datei lässt nichts entfallen)", () => {
+  test("fehlende Datei liefert null, vorhandene ihren Text", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "soll-"));
+    try {
+      assert.equal(melden.lesenOderNull(join(wurzel, "gibt-es-nicht.json")), null);
+      writeFileSync(join(wurzel, "da.json"), "inhalt");
+      assert.equal(melden.lesenOderNull(join(wurzel, "da.json")), "inhalt");
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+});
+describe("harness-doctor-melden: ohneSicherheitspruefung (Sicherheitspunkte meldet das Monatsticket)", () => {
+  const ruleset: Luecke = { punkt: "Ruleset", befund: "b", fix: "f" };
+  const token: Luecke = { punkt: "Token", befund: "b", fix: "f" };
+  const soll = JSON.stringify({ kern: { punkte: ["Ruleset"] } });
+  test("ein Sicherheitspunkt der Soll-Liste entfällt, ein anderer Punkt bleibt", () => {
+    assert.deepEqual(melden.ohneSicherheitspruefung([ruleset, token], ["Ruleset"]), [token]);
+  });
+  test("unlesbare oder fehlende Soll-Liste (null): nichts wird weggelassen", () => {
+    assert.deepEqual(melden.ohneSicherheitspruefung([ruleset, token], null), [ruleset, token]);
+    assert.equal(melden.sollPunkte(null), null);
+    assert.equal(melden.sollPunkte("kein json"), null);
+    assert.deepEqual(melden.sollPunkte(soll), ["Ruleset"]);
+  });
+  test("ermittleLuecken lässt Sicherheitspunkte mit sollPunkte weg, ohne sie nicht", () => {
+    const pruefe = () => [{ ok: false, punkt: "Ruleset", befund: "b", fix: "f" }, { ok: false, punkt: "Token", befund: "b", fix: "f" }];
+    const a = { env: {}, repo: "acme/demo", pruefe };
+    assert.deepEqual(melden.ermittleLuecken({ ...a, sollPunkte: ["Ruleset"] } as never).map((l) => l.punkt), ["Token"]);
+    assert.deepEqual(melden.ermittleLuecken(a).map((l) => l.punkt), ["Ruleset", "Token"]);
+  });
+});
+
 describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Import)", () => {
   test("kaputte Config → ::error:: mit Exit 2, die Board-Libs werden nie importiert", async () => {
     const log: string[] = [];
@@ -382,6 +418,33 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
+  });
+  describe("Soll-Liste in main: Sicherheitspunkte meldet das Monatsticket, nicht der Wochenlauf", () => {
+    const dryRun = async (sollText?: () => string | null) => {
+      const log: string[] = [];
+      const libs = { REPO: "acme/proj", ...(sollText ? { sollText } : {}), ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => assert.fail("Trockenlauf postet nicht") };
+      const pruefLauf = () => ({ ergebnis: [{ ok: false, punkt: "Ruleset", befund: "b", fix: "f" }, { ok: false, punkt: "Token", befund: "b", fix: "f" }] });
+      const code = await melden.main(["--dry-run"], { env: {}, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf });
+      assert.equal(code, 0);
+      return log.join("\n");
+    };
+    test("lesbare Soll-Liste: der Sicherheitspunkt Ruleset entfällt, nur Token wird gemeldet", async () => {
+      const log = await dryRun(() => JSON.stringify({ kern: { punkte: ["Ruleset"] } }));
+      assert.match(log, /LÜCKE Token: /);
+      assert.doesNotMatch(log, /LÜCKE Ruleset: /);
+    });
+    test("ohne Naht liest main die Soll-Datei des Repos: ein Sicherheitspunkt daraus entfällt, Token bleibt", async () => {
+      const log = await dryRun();
+      assert.match(log, /LÜCKE Token: /);
+      assert.doesNotMatch(log, /LÜCKE Ruleset: /);
+    });
+    test("fehlende oder unlesbare Soll-Liste: beide Lücken bleiben", async () => {
+      for (const text of [null, "kein json"]) {
+        const log = await dryRun(() => text);
+        assert.match(log, /LÜCKE Token: /);
+        assert.match(log, /LÜCKE Ruleset: /);
+      }
+    });
   });
   describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
     const lauf = async (ziel: string, env: Record<string, string>) => {

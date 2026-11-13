@@ -100,6 +100,68 @@ describe("laufzeiten: ein Lauf", () => {
     const b = S.laufzeiten({ laeufe: [kaputtesErgebnis] });
     expect(b.laeufe[0]).toMatchObject({ toolMin: 0, offen: true });
   });
+  test("Lauf, dessen letzte Zeile ein Tool-Ergebnis ist (Modell antwortet noch), ist offen und zählt nicht in die Mediane (L12)", () => {
+    const l = lauf("Plane #5", 0, 3);
+    l.zeilen.push(call(4, 7, "fertig"), result(5, "fertig"));
+    const r = S.laufzeiten({ laeufe: [l, lauf("Plane #6", 0, 8)] });
+    expect(r.laeufe[0]).toMatchObject({ offen: true });
+    expect(r.aggregat.offen).toBe(1);
+    expect(r.aggregat.gesamt.n).toBe(1);
+    expect(r.aggregat.gesamt.dauerMin).toBeCloseTo(8, 5);
+  });
+  test("Lauf, der mit Assistant-Text endet, bleibt beendet; Zeilen anderer Typen ändern das Ende nicht (L12)", () => {
+    const l = lauf("Plane #5", 0, 3, { tool: [1, 2] });
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0]).toMatchObject({ offen: false });
+    const mitSystem = lauf("Plane #6", 0, 3, { tool: [1, 2] });
+    mitSystem.zeilen.push({ type: "system", timestamp: t(4) }, { type: "user", timestamp: "kein-datum", message: { content: "x" } });
+    expect(S.laufzeiten({ laeufe: [mitSystem] }).laeufe[0]).toMatchObject({ offen: false });
+    const systemNachErgebnis = lauf("Plane #7", 0, 3);
+    systemNachErgebnis.zeilen.push(call(4, 7, "s1"), result(5, "s1"), { type: "system", timestamp: t(6) });
+    expect(S.laufzeiten({ laeufe: [systemNachErgebnis] }).laeufe[0]).toMatchObject({ offen: true });
+  });
+  test("Lauf, der auf dem Ergebnis des Rückgabe-Tools endet, ist beendet; ein anderes Tool mit gleicher Form nicht (L12)", () => {
+    const handback = (min: number, id: string, name: string): Row => {
+      const c = call(min, 7, id);
+      ((c.message as { content: { name: string }[] }).content[0]).name = name;
+      return c;
+    };
+    const ende = lauf("Plane #8", 0, 3);
+    ende.zeilen.push(handback(4, "h1", "SubagentHandback"), result(5, "h1"));
+    expect(S.laufzeiten({ laeufe: [ende] }).laeufe[0]).toMatchObject({ offen: false });
+    const anderes = lauf("Plane #9", 0, 3);
+    anderes.zeilen.push(handback(4, "h2", "Handback"), result(5, "h2"));
+    expect(S.laufzeiten({ laeufe: [anderes] }).laeufe[0]).toMatchObject({ offen: true });
+    const danach = lauf("Plane #10", 0, 3);
+    danach.zeilen.push(handback(4, "h3", "SubagentHandback"), result(5, "h3"), call(6, 7, "r3"), result(7, "r3"));
+    expect(S.laufzeiten({ laeufe: [danach] }).laeufe[0]).toMatchObject({ offen: true });
+  });
+  test("istOffen: ein früheres Tool mit Ergebnis ändert nichts, wenn der Lauf auf dem Ergebnis des Rückgabe-Tools endet", () => {
+    const l = lauf("Plane #11", 0, 3);
+    const hb = call(6, 7, "hb");
+    ((hb.message as { content: { name: string }[] }).content[0]).name = "SubagentHandback";
+    l.zeilen.push(call(4, 7, "b1"), result(5, "b1"), hb, result(7, "hb"));
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0]).toMatchObject({ offen: false });
+  });
+  test("istOffen: Läufe, in denen nur Zeilen anderer Typen einen gültigen Zeitstempel tragen, sind beendet und stürzen nicht ab", () => {
+    const l: Lauf = { meta: { agentType: PLANER }, zeilen: [{ type: "user", timestamp: "kein-datum", message: { content: "Plane #12" } }, { type: "system", timestamp: t(1) }, { type: "system", timestamp: t(2) }] };
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0]).toMatchObject({ offen: false });
+  });
+  test("istOffen: eine null-Zeile im Transkript stürzt nicht ab und ändert das Ende nicht", () => {
+    const l = lauf("Plane #13", 0, 3, { tool: [1, 2] });
+    l.zeilen.splice(1, 0, null as unknown as Row);
+    l.zeilen.push(null as unknown as Row);
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0]).toMatchObject({ offen: false });
+    const mitErgebnis = lauf("Plane #14", 0, 3);
+    mitErgebnis.zeilen.push(call(4, 7, "n1"), result(5, "n1"), null as unknown as Row);
+    expect(S.laufzeiten({ laeufe: [mitErgebnis] }).laeufe[0]).toMatchObject({ offen: true });
+  });
+  test("istOffen: ein Tool-Aufruf ohne gültigen Zeitstempel und ohne Ergebnis stört die Prüfung des letzten Ergebnisses nicht", () => {
+    const l = lauf("Plane #15", 0, 3);
+    const ohneZeit = call(1, 7, "z1");
+    delete (ohneZeit as { timestamp?: string }).timestamp;
+    l.zeilen.push(ohneZeit, call(4, 7, "z2"), result(5, "z2"));
+    expect(S.laufzeiten({ laeufe: [l] }).laeufe[0]).toMatchObject({ offen: true });
+  });
   test("laufender Lauf (Tool ohne Ergebnis) ist offen und zählt nicht in die Mediane", () => {
     const l = lauf("Plane #5", 0, 3);
     l.zeilen.push(call(4, 7, "offen"));
@@ -168,7 +230,7 @@ describe("laufzeiten: Filter und Aggregat", () => {
   });
   test("s je Request: Median der Modellzeit je Request, Lauf ohne Request zählt nicht (kein Infinity/NaN)", () => {
     // 2 Requests über 10 min Modellzeit = 300 s; 3 Requests, 8 min Modellzeit = 160 s; Lauf ohne Request.
-    const ohneRequest: Lauf = { meta: { agentType: PLANER }, zeilen: [user(0, "Plane #3"), user(5, "weiter")] };
+    const ohneRequest: Lauf = { meta: { agentType: PLANER }, zeilen: [user(0, "Plane #3"), user(5, "weiter"), { type: "assistant", timestamp: t(6) }] };
     const r = S.laufzeiten({ laeufe: [lauf("Plane #1", 0, 10), lauf("Plane #2", 0, 10, { tool: [2, 4] }), ohneRequest] });
     const [a, b, c] = r.laeufe;
     expect(a.sProRequest).toBeCloseTo(300, 5);
@@ -390,7 +452,7 @@ describe("laufzeiten: Kosten (#1558)", () => {
     expect(a.neuOhneSammel?.kostenSumme).toBeCloseTo(7 * CALL_KOSTEN, 8);
   });
   test("Lauf ohne Call hat Kosten null (nie 0 $), zählt als ohnePreis und senkt den Median nicht", () => {
-    const ohneRequest: Lauf = { meta: { agentType: PLANER }, zeilen: [user(0, "Plane #3"), user(5, "weiter")] };
+    const ohneRequest: Lauf = { meta: { agentType: PLANER }, zeilen: [user(0, "Plane #3"), user(5, "weiter"), { type: "assistant", timestamp: t(6) }] };
     const r = S.laufzeiten({ laeufe: [ohneRequest, lauf("Plane #2", 0, 4)] });
     expect(r.laeufe[0].kosten).toBeNull();
     expect(r.aggregat.gesamt.ohnePreis).toBe(1);

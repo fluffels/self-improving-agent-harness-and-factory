@@ -17,7 +17,7 @@ Maschinenlesbar, genau eine Zeile je Werkzeug, die der Wochenabgleich (quellproj
 |---|---|---|
 | Claude Code | `@anthropic-ai/claude-code` | npm (hinkte am 2026-10-08 den Releases nach: 2.1.293 gegen 2.1.294) und [GitHub-Releases](https://github.com/anthropics/claude-code/releases) |
 | Langfuse | Plugin `langfuse-observability` (Stand laut [langfuse-hook-patch.md](langfuse-hook-patch.md)) | GitHub-Releases des Plugin-Repos |
-| Playwright | `@playwright/mcp` | npm, Lockfile |
+| Playwright | `@playwright/mcp` | gepinnter `npx`-Aufruf in `.mcp.json` |
 | GitHub | `gh` (und der GitHub-MCP-Server als Alternative) | Releases von `cli/cli` |
 
 ## Urteilsregeln

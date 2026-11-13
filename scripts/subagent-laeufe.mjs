@@ -41,6 +41,17 @@ function toolIntervalle(zeilen) {
   return { intervalle, offeneTools };
 }
 
+/** Rückgabe-Tools: ihr Ergebnis ist die letzte Zeile eines beendeten Subagent-Laufs (Beleg: Transkripte der Läufe, Tool `SubagentHandback`); geschlossene Liste. */
+export const ENDE_TOOLS = ["SubagentHandback"];
+
+/** Offen (kein Ende im Transkript): ein Tool-Aufruf ohne Ergebnis oder die letzte user-Zeile (Tool-Ergebnis oder Text; das Modell antwortet noch), außer sie ist das Ergebnis eines Rückgabe-Tools (`ENDE_TOOLS`); Zeilen anderer Typen und ohne gültigen Zeitstempel zählen nicht. Grenze: ein laufender Lauf, dessen letzte Zeile eine Assistant-Text-/Thinking-Zeile vor dem nächsten tool_use ist, gilt weiter als beendet. */
+function istOffen(zeilen, offeneTools) {
+  const letzte = zeilen.findLast((r) => (r?.type === "user" || r?.type === "assistant") && gueltig(r.timestamp));
+  if (offeneTools > 0) return true;
+  if (letzte?.type !== "user") return false;
+  return !toolPaare(zeilen).some((p) => p.ergebnis?.row === letzte && ENDE_TOOLS.includes(p.use.block.name));
+}
+
 /** Kosten eines Laufs in $ aus PRICES (nur aufgezeichnete Usage); `null`, sobald ein Call ohne Preis ist oder es keinen Call gibt, nie 0. */
 function kostenAus(calls) {
   if (!calls.length || calls.some((c) => c.cost === undefined || c.cost === null)) return null;
@@ -143,7 +154,7 @@ export function laufAus({ meta, zeilen, datei, session }, namen) {
     sProRequest: calls.length ? ((dauer - tool) / 1000) / calls.length : null,
     maxKontext: Math.max(0, ...calls.map((c) => (c.input ?? 0) + (c.cacheWrite ?? 0) + (c.cacheRead ?? 0))),
     parallel: 0,
-    offen: offeneTools > 0,
+    offen: istOffen(zeilen, offeneTools),
   };
 }
 
