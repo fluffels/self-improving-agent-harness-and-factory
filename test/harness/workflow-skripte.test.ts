@@ -9,7 +9,7 @@
  *     Schutzliste `.github/protected-paths.json` (`trifftLeitplanke`): sonst könnte ein PR den Gate-Lauf per Skript-Änderung still ändern.
  * L9b (factory#447): Jedes Einstiegsskript eines privilegierten Jobs steht ebenfalls in der Schutzliste. Privilegiert (geschlossene Liste):
  *     (a) `permissions` auf Workflow- oder Job-Ebene ist `write-all` oder enthält `write`; (b) Workflow oder Job verweist auf `secrets.<NAME>` mit
- *     NAME ungleich GITHUB_TOKEN. Grenzen wie bei L9 (nur Einstiegsskripte, keine npm-run-Ketten).
+ *     NAME ungleich GITHUB_TOKEN. Grenzen wie bei L9 (nur Einstiegsskripte, keine npm-run-Ketten); nicht erkannt: `secrets['X']`, `toJSON(secrets)` und `secrets: inherit`.
  * L10: Der Job `security-audit` in ci.yml ruft `node scripts/audit-verzeichnisse.mjs` auf (nicht nur ein nacktes `npm audit`).
  *
  * Geschlossene Muster-Liste (`SKRIPT_MUSTER`): `node scripts/<x>.mjs` und `node ./scripts/<x>.mjs`, auch hinter Env-Zuweisung, nach `&&`, `;`, `|`, `$(`,

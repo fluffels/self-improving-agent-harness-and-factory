@@ -105,6 +105,7 @@ describe("bereinige (#1572: Wurzel zur Laufzeit, kein lokaler Pfad im Quelltext)
       ['"/Users/Max"', '"~"'],
       ["(/home/Max)", "(~)"],
       ["-Users-Max-dev-repo/a.jsonl", "<projekt>/a.jsonl"],
+      ["c--Users-Max-dev/x", "<projekt>/x"],
       ["x -Users-Max-dev-repo a", "x <projekt> a"],
       ['a "-Users-Max-dev" b', 'a "<projekt>" b'],
       ["a '-Users-Max-dev' b", "a '<projekt>' b"],

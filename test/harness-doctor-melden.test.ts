@@ -25,6 +25,7 @@ interface Melden {
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string, eigen?: string | null): boolean;
   ohneSicherheitspruefung(luecken: Luecke[], punkte: string[] | null): Luecke[];
+  lesenOderNull(pfad: string): string | null;
   sollPunkte(text: string | null): string[] | null;
   plane(a: { luecken: Luecke[]; kommentare: Kommentar[]; owner: string; heute: string; eigen?: string | null }): string[];
   main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; sollText?: () => string | null; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
@@ -248,6 +249,18 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
   });
 });
 
+describe("harness-doctor-melden: lesenOderNull (fehlende Soll-Datei lässt nichts entfallen)", () => {
+  test("fehlende Datei liefert null, vorhandene ihren Text", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "soll-"));
+    try {
+      assert.equal(melden.lesenOderNull(join(wurzel, "gibt-es-nicht.json")), null);
+      writeFileSync(join(wurzel, "da.json"), "inhalt");
+      assert.equal(melden.lesenOderNull(join(wurzel, "da.json")), "inhalt");
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+});
 describe("harness-doctor-melden: ohneSicherheitspruefung (Sicherheitspunkte meldet das Monatsticket)", () => {
   const ruleset: Luecke = { punkt: "Ruleset", befund: "b", fix: "f" };
   const token: Luecke = { punkt: "Token", befund: "b", fix: "f" };

@@ -32,7 +32,8 @@ import { bereiteMeldung, eigenerLogin, keinSammelticketText, meldestelleZugang, 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const KENNUNG = "Harness-Doctor (Wochenlauf)";
 const SOLL_PFAD = ".github/sicherheitspruefung.json";
-const lesenOderNull = (pfad) => {
+/** Dateitext oder `null`, wenn die Datei fehlt oder unlesbar ist (Soll-Liste: dann entfällt nichts). */
+export const lesenOderNull = (pfad) => {
   try {
     return readFileSync(pfad, "utf8");
   } catch {
