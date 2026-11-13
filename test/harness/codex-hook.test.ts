@@ -1,7 +1,7 @@
 /* @harness-waechter: Codex-Hook-Adapter und Schreibziel-Route des Dispatchers (factory#364); K4/K5 je Muster Red-Green. */
 /* Herkunft der Fixtures (K1, docs/codex/einstieg.md § Codex-Hook-Schnittstelle): dokumentiert sind die Payload-Felder (`cwd`, `tool_name`, `tool_input.command`), `tool_name: "Bash"` und
  * `"apply_patch"` mit dem Patchtext in `tool_input.command` sowie die Deny-Form; `spawn_agent` folgt dem dokumentierten Aufrufbeispiel `collaboration.spawn_agent({ agent_type, message })` aus
- * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht). Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
+ * docs/codex/einstieg.md (die Hook-Seite nennt `tool_input` nicht); die Namensraum-Form (`collaboration__spawn_agent` u. a.) und das v2-`tool_input` sind ANNAHME bis factory#459. Ausdrücklich ANNAHMEN (undokumentiert, nur fail-closed abgesichert, Beleg factory#367): `workdir`, `tool_name: "exec_command"`,
  * der Alias `Agent` und die Patch-Direktiven. Tests, die nur eine Annahme prüfen, tragen den Zusatz „Annahme“; `exec_command` und `Agent` erscheinen zusätzlich in einzelnen Mischtests
  * (K4-Muster, sauberer Lens-Auftrag, Werkzeugtabelle), `workdir` im Test der Fehlerursachen, und jede `apply_patch`-Fixture nutzt die angenommene Patch-Grammatik (die Hook-Seite beschreibt sie nicht). */
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
@@ -23,6 +23,8 @@ const adapter = adapterRaw as unknown as {
   varianten: (seg: string, segmente: (c: string) => string[], tiefe?: number) => string[];
   CODEX_HOOK_WERKZEUGE: Record<string, string>;
   CODEX_HOOK_TIMEOUT_S: number;
+  werkzeugArt: (n: string) => string | null;
+  codexHookMuster: () => string;
 };
 // @ts-expect-error: Node-Tooling ohne Declaration-Datei.
 import { segmente as ghSegmente } from "../../scripts/gh-guard-hook.mjs";
@@ -304,8 +306,45 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
     ["mcp__playwright__browser_click", { ref: "x" }],
     ["Read", { file_path: "/etc/hosts", command: "git commit" }],
     ["write_stdin", { chars: "git commit" }],
+    ["spawn_agent_x", { task_name: "t", message: "Prüfe das mal." }],
+    ["xspawn_agent", { task_name: "t", message: "Prüfe das mal." }],
+    ["a.b.spawn_agent", { task_name: "t", message: "Prüfe das mal." }],
+    ["a__b__spawn_agent", { task_name: "t", message: "Prüfe das mal." }],
+    ["mcp__srv__spawn_agent", { task_name: "t", message: "Prüfe das mal." }],
+    ["collaboration__send_message", { target: "t", message: "Prüfe das mal." }],
   ])("fremdes Werkzeug %s → keine Ausgabe", async (name, eingabe) => {
     expect(await lauf(nutzlast(name, eingabe, haupt))).toBeNull();
+  });
+});
+
+describe("Namensraum von spawn_agent (Annahme bis factory#459)", () => {
+  // ANNAHME (factory#455/457): Codex meldet spawn_agent im Namensraum (collaboration); ob der Hook den Namen mit oder ohne Präfix sieht, belegt erst factory#459.
+  const v2 = { task_name: "pruefer", message: "Prüfe das mal.", agent_type: "sih-lens", fork_turns: "none" };
+  const positiv = ["collaboration__spawn_agent", "collaboration.spawn_agent", "collaboration/spawn_agent", "multi_agent_v1.spawn_agent", "spawn_agent"];
+  const negativ = ["spawn_agent_x", "xspawn_agent", "a.b.spawn_agent", "a__b__spawn_agent", "mcp__srv__spawn_agent", "collaboration__send_message", "collaboration__spawn_agent_x", ""];
+  test.each(positiv)("%s mit v2-tool_input: Art agent, Lens-Guard greift", async (name) => {
+    expect(adapter.werkzeugArt(name)).toBe("agent");
+    expect(grund(await lauf(nutzlast(name, v2)))).toContain("Brille");
+  });
+  test.each(positiv.slice(0, 4))("%s: Holdout-Guard greift", async (name) => {
+    expect(grund(await lauf(nutzlast(name, { task_name: "t", agent_type: "explore", message: "Szenario 1.1: Gegeben ein Zustand, wenn x, dann y." })))).toContain("Holdout");
+  });
+  test.each(negativ)("%s: keine Art, Matcher trifft nicht", (name) => {
+    expect(adapter.werkzeugArt(name)).toBeNull();
+    expect(new RegExp(adapter.codexHookMuster()).test(name)).toBe(false);
+  });
+  test("Konsistenz: Matcher trifft genau, was werkzeugArt erkennt", () => {
+    for (const n of [...positiv, ...negativ, "Bash", "exec_command", "apply_patch", "Agent", "write_stdin", "Bash2"]) expect(new RegExp(adapter.codexHookMuster()).test(n), n).toBe(adapter.werkzeugArt(n) !== null);
+  });
+  test("task_name kein nichtleerer String → Deny; fork_turns wird nicht ausgewertet", async () => {
+    expect(grund(await lauf(nutzlast("collaboration__spawn_agent", { task_name: 3, message: "x" })))).toContain("task_name");
+    expect(grund(await lauf(nutzlast("collaboration__spawn_agent", { task_name: "", message: "x" })))).toContain("task_name");
+    expect(await lauf(nutzlast("collaboration__spawn_agent", { task_name: "t", message: "Suche etwas im Repo.", fork_turns: 3 }))).toBeNull();
+  });
+  test("Tracing-Ausfallstopp greift auch für die Namensraum-Form", async () => {
+    const aus = { health: () => Promise.resolve({ ok: false, grund: "tot" }), lade: () => Promise.reject(new Error("nicht laden")) };
+    expect(grund(await lauf(nutzlast("collaboration__spawn_agent", v2), aus))).toContain("Tracing-Ausfallstopp");
+    expect(grund(await lauf(nutzlast("collaboration.spawn_agent", v2), aus))).toContain("Tracing-Ausfallstopp");
   });
 });
 

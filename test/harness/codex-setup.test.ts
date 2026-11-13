@@ -193,8 +193,8 @@ test("Hook-Registrierung (factory#364): feste Werkzeuge, Adapter-Befehl und Time
   const h = (JSON.parse(a) as { hooks: { PreToolUse: { matcher: string; hooks: { type: string; command: string; timeout: number }[] }[] } }).hooks.PreToolUse;
   expect(h).toHaveLength(1);
   expect(h[0].hooks).toEqual([{ type: "command", command: "node scripts/codex-hook.mjs", timeout: 30 }]);
-  for (const name of ["exec_command", "apply_patch", "spawn_agent"]) expect(new RegExp(h[0].matcher).test(name), name).toBe(true);
-  for (const name of ["write_stdin", "Bash2", "xapply_patch", "spawn_agent2", ""]) expect(new RegExp(h[0].matcher).test(name), name).toBe(false);
+  for (const name of ["exec_command", "apply_patch", "spawn_agent", "collaboration__spawn_agent", "collaboration.spawn_agent", "collaboration/spawn_agent"]) expect(new RegExp(h[0].matcher).test(name), name).toBe(true);
+  for (const name of ["write_stdin", "Bash2", "xapply_patch", "spawn_agent2", "", "spawn_agent_x", "xspawn_agent", "a.b.spawn_agent", "collaboration__send_message"]) expect(new RegExp(h[0].matcher).test(name), name).toBe(false);
 });
 
 test("Setup stoppt, wenn der Hook-Adapter als Quelle fehlt", () => {
