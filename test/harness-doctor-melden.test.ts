@@ -24,6 +24,8 @@ interface Melden {
   lauf(a: { io: Io; trocken?: boolean }): number;
   ermittleLuecken(a: { env: Record<string, string>; repo: string; pruefe: () => { ok: boolean; punkt: string; befund?: string; fix?: string }[] }): Luecke[];
   istBekannt(punkt: string, kommentare: Kommentar[], owner: string, art?: string, eigen?: string | null): boolean;
+  ohneSicherheitspruefung(luecken: Luecke[], punkte: string[] | null): Luecke[];
+  sollPunkte(text: string | null): string[] | null;
   plane(a: { luecken: Luecke[]; kommentare: Kommentar[]; owner: string; heute: string; eigen?: string | null }): string[];
   main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
@@ -243,6 +245,27 @@ describe("harness-doctor-melden: ermittleLuecken", () => {
     for (const env of umgebungen) {
       assert.deepEqual(melden.ermittleLuecken({ env, repo: "acme/demo", pruefe: () => ergebnis }).map((l) => l.punkt), ["Ruleset"]);
     }
+  });
+});
+
+describe("harness-doctor-melden: ohneSicherheitspruefung (Sicherheitspunkte meldet das Monatsticket)", () => {
+  const ruleset: Luecke = { punkt: "Ruleset", befund: "b", fix: "f" };
+  const token: Luecke = { punkt: "Token", befund: "b", fix: "f" };
+  const soll = JSON.stringify({ kern: { punkte: ["Ruleset"] } });
+  test("ein Sicherheitspunkt der Soll-Liste entfällt, ein anderer Punkt bleibt", () => {
+    assert.deepEqual(melden.ohneSicherheitspruefung([ruleset, token], ["Ruleset"]), [token]);
+  });
+  test("unlesbare oder fehlende Soll-Liste (null): nichts wird weggelassen", () => {
+    assert.deepEqual(melden.ohneSicherheitspruefung([ruleset, token], null), [ruleset, token]);
+    assert.equal(melden.sollPunkte(null), null);
+    assert.equal(melden.sollPunkte("kein json"), null);
+    assert.deepEqual(melden.sollPunkte(soll), ["Ruleset"]);
+  });
+  test("ermittleLuecken lässt Sicherheitspunkte mit sollPunkte weg, ohne sie nicht", () => {
+    const pruefe = () => [{ ok: false, punkt: "Ruleset", befund: "b", fix: "f" }, { ok: false, punkt: "Token", befund: "b", fix: "f" }];
+    const a = { env: {}, repo: "acme/demo", pruefe };
+    assert.deepEqual(melden.ermittleLuecken({ ...a, sollPunkte: ["Ruleset"] } as never).map((l) => l.punkt), ["Token"]);
+    assert.deepEqual(melden.ermittleLuecken(a).map((l) => l.punkt), ["Ruleset", "Token"]);
   });
 });
 
