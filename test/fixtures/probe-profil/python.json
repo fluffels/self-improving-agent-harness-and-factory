@@ -32,7 +32,7 @@
     "pyproject.toml": "[project]\nname = \"probe\"\nversion = \"0.0.0\"\n",
     "coverage/lcov.info": "TN:\nSF:src/probe/kern.py\nDA:2,1\nLF:1\nLH:1\nend_of_record\n",
     "docs/module/probe.md": "# Probe (Python)\n\n- `src/probe/__init__.py`: Paketmarke.\n- `src/probe/kern.py`: Rechenkern.\n",
-    "tools/pytest.mjs": "// Stellvertreter fuer pytest (Probe-Erstbezug, factory#224): der Stellvertreter ersetzt `pytest --cov`\nconsole.log(\"pytest laeuft im synthetischen Bezieher nicht, Stellvertreter beendet sich mit Exit 0\");\n"
+    "tools/pytest.mjs": "// Attrappe fuer pytest (Probe-Erstbezug, factory#224): die Attrappe ersetzt `pytest --cov`\nconsole.log(\"pytest laeuft im synthetischen Bezieher nicht, Attrappe beendet sich mit Exit 0\");\n"
   },
   "faelle": []
 }

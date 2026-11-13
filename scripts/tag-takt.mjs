@@ -241,14 +241,14 @@ export function ciCheckliste(ci, sha, profile = []) {
   const kurz = sha.slice(0, 7);
   const enthalten = profile.length > 0 ? `Probe-Erstbezug und die synthetischen Bezieher ${profile.join(", ")}` : "Probe-Erstbezug";
   if (ci?.zustand === "rot") return `- [ ] BLOCKER: CI des Commits ${kurz} rot (enthält den ${enthalten}), nicht taggen`;
-  if (ci?.zustand === "gruen") return `- [x] CI grün (${profile.length > 0 ? enthalten : "Probe-Erstbezug"} eingeschlossen)`;
+  if (ci?.zustand === "gruen") return `- [x] CI grün (${enthalten} eingeschlossen)`;
   return `- [ ] CI des Commits ${kurz} ausstehend, nicht taggen, bis grün (${enthalten} eingeschlossen)`;
 }
 
 /** Pur (factory#224): die Checklisten-Zeile je synthetischem Bezieher (Profil ohne Stellvertreter); der Job läuft in der CI, ein Rot sperrt über die CI-Zeile den Tag. */
 const profilZeile = (p, kurz) => `- [ ] Synthetischer Bezieher \`${p}\` (\`${PROFIL_ORDNER}/${p}.json\`, Profil ohne Stellvertreter, factory#224): CI-Job \`Synthetischer Bezieher ${p}\` (Sync mit lokalem Tag, mechanische Update-Schritte, \`verify\` des Profils); die grüne CI des Commits deckt ihn ab. Von Hand: \`node scripts/probe-erstbezug.mjs --profil ${p} --quelle <checkout auf ${kurz}> --scratch <leerer scratch-ordner>\``;
 
-const GATE_LUECKE_PROFIL = `; je Gate-Lücke-Zeile ein Fall im synthetischen Bezieher ihres Profils (\`faelle\` in \`${PROFIL_ORDNER}/<profil>.json\`) oder ein begründetes „nicht abbildbar“ dort`;
+const GATE_LUECKE_PROFIL = `; je Gate-Lücke-Zeile ein Fall im synthetischen Bezieher ihres Profils (\`faelle\` in \`${PROFIL_ORDNER}/<profil>.json\`) oder ein begründetes „nicht abbildbar“ dort; eine JS/TS-Lücke wird ein Test in „Negativfälle der Kette“ (\`test/probe-erstbezug.test.ts\`)`;
 
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 

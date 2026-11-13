@@ -3,14 +3,14 @@
 // (`UPDATE_SCHRITTE`) und dann `verifyKompakt`. Jeder Fund ist rot (Exit 1); eine leere Ergebnisliste ist nie grün. CI-Job und Checkliste des Tag-Takts rufen es gleich auf:
 // `node scripts/probe-erstbezug.mjs --quelle <checkout> --scratch <leerer ordner> [--profil <name>]`; Exit 0 grün, 1 Fund, 2 Aufruf.
 // `--profil <name>` (factory#224, synthetischer Bezieher): legt über das JS/TS-Fixture die Datei `test/fixtures/probe-profil/<name>.json` (Config-Overlay, Skripte, Dateien); Maven und pytest laufen dabei nicht, ein
-// Node-Stellvertreter steht an ihrer Stelle in der `verify`-Kette (Rot durch Factory-Besitz entsteht in den Node-Gates, die die Profil-Gestalt lesen).
+// Node-Attrappe steht an ihrer Stelle in der `verify`-Kette (Rot durch Factory-Besitz entsteht in den Node-Gates, die die Profil-Gestalt lesen).
 // Liegt nicht in `.factory/besitz.json`: es braucht die Fabrik-Fixture. Konvention #1398: kein Import aus einem Einstieg; Sync, Projektwerte und Gates laufen nur als Kindprozess.
-// Grenzen: geprüft wird der Commit `HEAD` der Quelle (nicht der Arbeitsbaum), ohne `--profil` nur das JS/TS-Profil (Java und Python: synthetische Bezieher, factory#224), ohne echte Projekt-Blöcke und Projekt-Eigenes;
+// Grenzen: geprüft wird der Commit `HEAD` der Quelle (nicht der Arbeitsbaum; nur die Profil-Datei `--profil` liest `profilLaden` aus dem Arbeitsbaum von `--quelle`, in der CI ist beides gleich), ohne `--profil` nur das JS/TS-Profil (Java und Python: synthetische Bezieher, factory#224), ohne echte Projekt-Blöcke und Projekt-Eigenes;
 // der Probe-Erstbezug ersetzt keinen echten Bezieher. Die Sync-Warnung `Kontextbudget knapp` (Projekt-Block über dem Projekt-Raum) ist kein Fund (factory#220, factory#237).
 import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText } from "./gh-cli.mjs";
@@ -18,7 +18,7 @@ import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from
 import { PROJEKTDATEIEN } from "./harness-doctor-dateien.mjs";
 import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { countChars, KERN_BLOCK_BUDGET, kernBlockZeichen, PROJEKT_BLOCK_RAUM } from "./kontext-budget-lib.mjs";
-import { mechanischeSchritte, PROFIL_ORDNER, profilNamen, UPDATE_SCHRITTE } from "./release-tag-lib.mjs";
+import { mechanischeSchritte, PROFIL_NAME, PROFIL_ORDNER, profilNamen, UPDATE_SCHRITTE } from "./release-tag-lib.mjs";
 
 /** Name des lokalen Tags, den der Probe-Erstbezug in seinem Quell-Klon setzt (nie in der echten Quelle). */
 export const PROBE_TAG = "probe-erstbezug";
@@ -87,19 +87,29 @@ function mitProfil(pkg, profil) {
 const PROFIL_SCHLUESSEL = /^[\w:.-]+$/u;
 const GESCHUETZT = new Set(["AGENTS.md", PROJEKT_CONFIG, "package.json"]);
 const FALL_QUELLE = /^factory#\d+ L\d+$/u;
+/** Schlüssel des Config-Overlays, die ein Profil setzen darf (Quellwurzel, Coverage); alles andere (etwa befehle) bliebe ein Weg, Kern-Gates zu umgehen. */
+const OVERLAY_SCHLUESSEL = ["struktur", "coverage"];
 
+const istObjekt = (x) => Boolean(x) && typeof x === "object" && !Array.isArray(x);
+const normal = (pfad) => posix.normalize(pfad.replaceAll("\\", "/"));
 const unsicher = (pfad) => typeof pfad !== "string" || pfad === "" || isAbsolute(pfad) || pfad.split(/[\\/]/u).includes("..");
 
 function dateienFehler(dateien) {
-  if (!dateien || typeof dateien !== "object" || Array.isArray(dateien)) return ["dateien muss ein Objekt {pfad: text} sein"];
-  return Object.entries(dateien).flatMap(([pfad, text]) => [
-    ...(unsicher(pfad) ? [`dateien: Pfad ${JSON.stringify(pfad)} ist absolut, leer oder enthält ..`] : []),
-    ...(GESCHUETZT.has(pfad.replaceAll("\\", "/")) ? [`dateien: ${pfad} gehört dem Aufbau (AGENTS.md, Projekt-Config, package.json) und ist nicht überschreibbar`] : []),
-    ...(typeof text === "string" ? [] : [`dateien: Inhalt von ${pfad} ist kein Text`]),
-  ]);
+  if (!istObjekt(dateien)) return ["dateien muss ein Objekt {pfad: text} sein"];
+  return Object.entries(dateien).flatMap(([pfad, text]) => {
+    if (unsicher(pfad)) return [`dateien: Pfad ${JSON.stringify(pfad)} ist absolut, leer oder enthält ..`];
+    const n = normal(pfad);
+    return [
+      ...(GESCHUETZT.has(n) ? [`dateien: ${pfad} gehört dem Aufbau (AGENTS.md, Projekt-Config, package.json) und ist nicht überschreibbar`] : []),
+      ...(n === ".git" || n.startsWith(".git/") ? [`dateien: ${pfad} liegt in .git und ist nicht überschreibbar`] : []),
+      ...(typeof text === "string" ? [] : [`dateien: Inhalt von ${pfad} ist kein Text`]),
+    ];
+  });
 }
 
 function skripteFehler({ skripte = {}, verifyZusatz = [] }) {
+  if (!istObjekt(skripte)) return ["skripte muss ein Objekt {name: befehl} sein"];
+  if (!Array.isArray(verifyZusatz)) return ["verifyZusatz muss eine Liste sein"];
   const namen = Object.keys(skripte);
   return [
     ...namen.filter((n) => !PROFIL_SCHLUESSEL.test(n)).map((n) => `skripte: Name ${JSON.stringify(n)} außerhalb von [\\w:.-]`),
@@ -109,21 +119,26 @@ function skripteFehler({ skripte = {}, verifyZusatz = [] }) {
 
 function fallFehler(fall, i, def) {
   const f = `faelle[${i}]`;
+  if (!istObjekt(fall)) return [`${f}: muss ein Objekt sein`];
   const pfade = Array.isArray(fall.dateien) ? fall.dateien : [];
   const hat = pfade.length > 0;
   const nein = typeof fall.nichtAbbildbar === "string" && fall.nichtAbbildbar.trim() !== "";
+  const imProfil = (x) => typeof x === "string" && (Object.hasOwn(def.dateien ?? {}, x) || (x.startsWith("config:") && x.length > 7));
   return [
     ...(FALL_QUELLE.test(fall.quelle ?? "") ? [] : [`${f}: quelle fehlt oder hat nicht die Form "factory#<nr> L<k>"`]),
     ...(hat === nein ? [`${f}: genau eines von dateien (Pfade des Profils) und nichtAbbildbar (Begründung) ist nötig`] : []),
-    ...pfade.filter((x) => !Object.hasOwn(def.dateien ?? {}, x) && !(x.startsWith("config:") && x.length > 7)).map((x) => `${f}: ${x} steht nicht in dateien (oder config:<schlüssel>)`),
+    ...pfade.filter((x) => !imProfil(x)).map((x) => `${f}: ${String(x)} steht nicht in dateien (oder config:<schlüssel>)`),
   ];
 }
 
+const overlayFehler = (config) => (config === undefined ? [] : istObjekt(config) ? Object.keys(config).filter((k) => !OVERLAY_SCHLUESSEL.includes(k)).map((k) => `config: Schlüssel ${k} ist nicht erlaubt (nur ${OVERLAY_SCHLUESSEL.join(", ")})`) : ["config muss ein Objekt sein"]);
+
 /** Pur: Fehlerliste einer Profil-Definition (`[]` = gültig); `name` ist der Dateiname ohne `.json`. Nichts davon wird geschrieben, bevor die Liste leer ist. */
 export function pruefeProfil(def, name) {
-  if (!def || typeof def !== "object" || Array.isArray(def)) return ["Profil ist kein Objekt"];
+  if (!istObjekt(def)) return ["Profil ist kein Objekt"];
   return [
     ...(def.profil === name ? [] : [`profil ${JSON.stringify(def.profil)} passt nicht zum Dateinamen ${name}`]),
+    ...overlayFehler(def.config),
     ...skripteFehler(def),
     ...dateienFehler(def.dateien ?? {}),
     ...(Array.isArray(def.faelle ?? []) ? (def.faelle ?? []).flatMap((fall, i) => fallFehler(fall, i, def)) : ["faelle muss eine Liste sein"]),
@@ -208,8 +223,6 @@ export const liegtIn = (ordner, pfad, p = { relative, isAbsolute, sep }) => {
   const rel = p.relative(ordner, pfad);
   return rel !== ".." && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel);
 };
-
-const PROFIL_NAME = /^[a-z][a-z0-9-]*$/u;
 
 /** Liest und prüft das Profil `name` aus dem Arbeitsbaum der Quelle: `{ profil }` oder `{ text }` (Aufruf-Fehler mit der Liste bekannter Profile). */
 function profilLaden(name, quelle, io) {

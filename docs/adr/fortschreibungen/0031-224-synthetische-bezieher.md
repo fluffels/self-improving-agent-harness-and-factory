@@ -18,16 +18,18 @@ Die Vor-Tag-Probe prüft nur JS/TS-Bezieher (Probe-Erstbezug und gelistete eigen
 Entscheidung: Option A, weil sie ohne Ruleset-Änderung und ohne Secret auskommt und die Profil-Liste aus den Dateien in `test/fixtures/probe-profil/` ableitet (`profilNamen` in `scripts/release-tag-lib.mjs`, einzige Quelle für Probe und Takt; ein Wächter koppelt die Matrix in `ci.yml` daran).
 
 - **Profil-Datei:** `{ profil, titel, config, skripte, verifyZusatz, dateien, faelle }`; `pruefeProfil` lehnt Pfad-Traversal, geschützte Dateien (`AGENTS.md`, Projekt-Config, `package.json`), unbekannte `verifyZusatz` und ungültige `faelle` mit Exit 2 ab, bevor etwas geschrieben wird.
-- **Stellvertreter:** Maven und pytest laufen nicht; die Skripte `test:java` bzw. `test:py` führen einen Node-Stellvertreter (Exit 0) und hängen an `verify`. Ein Rot durch Factory-Besitz entsteht in den Kern-Gates, die die Profil-Gestalt lesen (`check:docmap`, `check:size`, `check:docdrift`, Kontext-Budget); `test/probe-profil.test.ts` belegt in einem echten Klon, dass die Java- und Python-Quellen gemessen werden.
+- **Attrappe:** „Profil ohne Stellvertreter“ heißt, kein anderer Bezieher der Fabrik prüft das Profil; die Attrappe ist das Node-Skript, das Maven bzw. pytest ersetzt. Maven und pytest laufen nicht; die Skripte `test:java` bzw. `test:py` führen die Attrappe (Exit 0) und hängen an `verify`. Ein Rot durch Factory-Besitz entsteht in den Kern-Gates, die die Profil-Gestalt lesen (`check:docmap`, `check:size`, `check:docdrift`, Kontext-Budget); `test/probe-profil.test.ts` belegt in einem echten Klon, dass die Java- und Python-Quellen gemessen werden (`check:docmap`).
 - **Tag-Takt:** je Profil eine Checklistenzeile mit Job und Handaufruf; die BLOCKER-Zeile der CI nennt die synthetischen Bezieher; ohne Profil-Dateien bleibt die Checkliste zeichengleich.
 - **Gate-Lücke-Zeilen (factory#215):** jede erweitert den synthetischen Bezieher ihres Profils (ein Eintrag in `faelle` mit `quelle` der Form `factory#<nr> L<k>` und den betroffenen `dateien`) oder wird ein begründetes `nichtAbbildbar` dort. Ein JS/TS-Fall wird ein Test in „Negativfälle der Kette“ (`test/probe-erstbezug.test.ts`).
+- **Job-Name:** `Synthetischer Bezieher <profil>` statt `Probe-Erstbezug <profil>`, weil der Shadowing-Wächter (quellprojekt#1172) jeden Job-Namen mit dem Präfix des Required-Check-Kontexts `Probe-Erstbezug (…)` als zweite Quelle zählt. Entscheidung: umbenennen, weil eine Ruleset-Änderung nicht Teil dieses Tickets ist.
+- **Eingabeprüfung:** `config` darf nur `struktur` und `coverage` setzen (`befehle` o. Ä. bliebe ein Weg, Kern-Gates zu umgehen); Pfade in `dateien` werden normalisiert geprüft (auch `.git/` ist gesperrt). Bekannte Grenze: ein Profil kann über `skripte` ein vorhandenes Skript der Basis überschreiben; das fängt nur das Review der Fixture-Datei. Die Profil-Datei liest `--profil` aus dem Arbeitsbaum von `--quelle`, der Rest der Probe aus dem Commit `HEAD` (in der CI gleich).
 - **Kein Required Check:** ein PR, der ein Profil bricht, kann mergen; danach sperrt das Rot den Tag und alarmiert auf `main` (`alarm-red-main` hängt am Job).
 
 ## Konsequenzen
 
 Zwei parallele CI-Jobs à rund 10 bis 40 s ohne Agentenlauf und ohne Secret; Rot im Profil-Job ist immer ein Blocker (kein Projekt-Rest).
 
-**Bekannte Grenze:** Maven, pytest, ArchUnit und der echte Werkzeug-Aufruf werden nicht ausgeführt, nur die Gestalt (Quellwurzel, Endung, Docmap, Coverage-Bericht, Skripte) wird gelesen; der synthetische Bezieher ersetzt keinen echten Bezieher (keine Projekt-Blöcke, kein Projekt-Eigenes).
+**Bekannte Grenze:** Maven, pytest, ArchUnit und der echte Werkzeug-Aufruf werden nicht ausgeführt, nur die Gestalt (Quellwurzel, Endung, Docmap, Skripte) wird gelesen; die Coverage-Berichte der Fixtures sind Beispieldateien, kein Beleg, denn `check:diffcoverage` liegt nicht in `verify`; der synthetische Bezieher ersetzt keinen echten Bezieher (keine Projekt-Blöcke, kein Projekt-Eigenes).
 
 ## Re-Evaluierung
 

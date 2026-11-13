@@ -275,3 +275,69 @@ describe("CI-Job probe-profil (Wächter der Invarianten)", () => {
     expect(alarm).toMatch(/needs:[^\n]*probe-profil/);
   });
 });
+
+describe("pruefeProfil: Grenzen der Eingabeprüfung (Lens-Runde 1)", () => {
+  const fehler = (def: unknown): string[] => P.pruefeProfil(def, "x");
+  it.each([
+    ["Rückwärts-Schrägstrich-Schreibweise der Projekt-Config", { ".factory\\projekt.json": "{}" }, /nicht überschreibbar/],
+    ["Umweg über ./", { "./package.json": "{}" }, /nicht überschreibbar/],
+    ["Umweg über doppelten Schrägstrich", { ".factory//projekt.json": "{}" }, /nicht überschreibbar/],
+    ["leerer Pfad", { "": "t" }, /absolut, leer oder enthält/],
+    [".git/ gesperrt", { ".git/hooks/pre-commit": "t" }, /liegt in \.git/],
+    ["dateien als Liste", [], /dateien muss ein Objekt/],
+  ])("Negativfall: %s", (_n, dateien, muster) => {
+    const f = fehler({ profil: "x", dateien });
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatch(muster);
+  });
+  it("dateien als Text → eine Meldung", () => {
+    expect(fehler({ profil: "x", dateien: "x" })).toEqual(["dateien muss ein Objekt {pfad: text} sein"]);
+  });
+  it.each([
+    ["Anker ^ der Fall-Quelle", "x factory#1 L1"],
+    ["Anker $ der Fall-Quelle", "factory#1 L1 mehr"],
+  ])("Negativfall: %s", (_n, quelle) => {
+    expect(fehler({ profil: "x", faelle: [{ quelle, nichtAbbildbar: "g" }] })[0]).toMatch(/quelle fehlt oder hat nicht die Form/);
+  });
+  it("config: ohne Schlüssel ist kein gültiger Verweis, config:<schlüssel> schon", () => {
+    expect(fehler({ profil: "x", faelle: [{ quelle: "factory#1 L1", dateien: ["config:"] }] })[0]).toMatch(/config: steht nicht in dateien/);
+    expect(fehler({ profil: "x", faelle: [{ quelle: "factory#1 L1", dateien: ["config:k"] }] })).toEqual([]);
+  });
+  it("faelle als Objekt und Eintrag ohne Objekt → je eine Meldung, kein Absturz", () => {
+    expect(fehler({ profil: "x", faelle: {} })).toEqual(["faelle muss eine Liste sein"]);
+    expect(fehler({ profil: "x", faelle: [null] })).toEqual(["faelle[0]: muss ein Objekt sein"]);
+  });
+  it("verifyZusatz als Text, skripte als Liste → je eine Meldung, kein Absturz", () => {
+    expect(fehler({ profil: "x", skripte: { a: "b" }, verifyZusatz: "a" })).toEqual(["verifyZusatz muss eine Liste sein"]);
+    expect(fehler({ profil: "x", skripte: [] })).toEqual(["skripte muss ein Objekt {name: befehl} sein"]);
+  });
+  it("ein minimales Profil ohne skripte und verifyZusatz ist gültig und lässt verify unverändert", () => {
+    expect(fehler({ profil: "x" })).toEqual([]);
+    const pkg = JSON.stringify({ name: "p", scripts: { verify: "npm run a", test: "vitest run" } });
+    const aus = JSON.parse(P.projektdatei({ pfad: "package.json", text: pkg, raum: 1, profil: { profil: "x" } })) as { scripts: Record<string, string> };
+    expect(aus.scripts.verify).toBe("npm run a");
+  });
+  it("Skriptnamen mit Punkt, Bindestrich und Doppelpunkt sind gültig", () => {
+    expect(fehler({ profil: "x", skripte: { "test.x": "a", "test-y": "b", "t:z": "c" } })).toEqual([]);
+  });
+  it("config darf nur struktur und coverage setzen; anderes (befehle) → Meldung", () => {
+    expect(fehler({ profil: "x", config: { struktur: {}, coverage: {} } })).toEqual([]);
+    expect(fehler({ profil: "x", config: { befehle: { verifyKompakt: "true" } } })[0]).toMatch(/Schlüssel befehle ist nicht erlaubt/);
+    expect(fehler({ profil: "x", config: [] })).toEqual(["config muss ein Objekt sein"]);
+  });
+});
+
+describe("Aufruf mit --profil gegen eine Quelle ohne Profilordner", () => {
+  const io: Io = { istGitRepo: () => true, istLeer: () => true, liste: () => [], lies: () => null };
+  it("Fehler mit „bekannt: keine“ (Exit 2 in main)", () => {
+    expect(P.aufrufFehler(["--quelle", "/q", "--scratch", "/s", "--profil", "java"], io).text).toMatch(/fehlt in der Quelle \(bekannt: keine\)/);
+    expect(P.main(["--quelle", "/q", "--scratch", "/s", "--profil", "java"], { ...io, kopf: () => "abc" }).code).toBe(2);
+  });
+  it("die echten Nähte liefern für einen fehlenden Ordner eine leere Liste statt eines Absturzes", () => {
+    temp((dir) => {
+      const naehte = P.echteNaehte() as unknown as { liste: (p: string) => string[] };
+      expect(naehte.liste(join(dir, "gibt-es-nicht"))).toEqual([]);
+      expect(naehte.liste(ordner)).toContain("java.json");
+    });
+  });
+});

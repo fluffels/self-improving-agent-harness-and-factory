@@ -45,10 +45,13 @@ export const mechanischeSchritte = (quelle) => UPDATE_SCHRITTE.filter((s) => s.m
 /** Ordner der Profil-Fixtures der synthetischen Bezieher (factory#224, nur in der Fabrik): je Datei `<profil>.json` ein Profil ohne Stellvertreter. */
 export const PROFIL_ORDNER = "test/fixtures/probe-profil";
 
+/** Gültiger Profilname (einzige Quelle für `--profil` und `profilNamen`). */
+export const PROFIL_NAME = /^[a-z][a-z0-9-]*$/u;
+
 /** Pur: die Profilnamen aus einer Dateiliste: nur `<name>.json` mit `^[a-z][a-z0-9-]*$` als Name, sortiert ohne Endung; alles andere wird ignoriert. */
 export function profilNamen(dateinamen) {
   return dateinamen
-    .map((d) => /^([a-z][a-z0-9-]*)\.json$/u.exec(d)?.[1])
-    .filter((n) => n !== undefined)
+    .map((d) => /^(.+)\.json$/u.exec(d)?.[1])
+    .filter((n) => n !== undefined && PROFIL_NAME.test(n))
     .sort();
 }

@@ -136,7 +136,7 @@ jobs:
         run: node scripts/probe-erstbezug.mjs --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-erstbezug"
 
   # Synthetische Bezieher je Profil ohne Stellvertreter (factory#224): dieselbe Kette wie der Probe-Erstbezug, mit der Profil-Fixture aus test/fixtures/probe-profil/<profil>.json (Java, Python: Config-Overlay,
-  # Quelldateien, Node-Stellvertreter für Maven und pytest in der verify-Kette). Die Matrix ist die Liste der Profil-Dateien (Wächter in test/probe-profil.test.ts). Kein Required Check (das wäre eine Ruleset-Änderung):
+  # Quelldateien, Node-Attrappen für Maven und pytest in der verify-Kette). Die Matrix ist die Liste der Profil-Dateien (Wächter in test/probe-profil.test.ts). Kein Required Check (das wäre eine Ruleset-Änderung):
   # ein Rot sperrt den Tag über den CI-Zustand des Commits (ciZustand liest den Abschluss von ci.yml) und alarmiert auf main. Kein continue-on-error, kein || true. Der Matrixwert geht nur über env in die Shell.
   probe-profil:
     name: Synthetischer Bezieher ${{ matrix.profil }}
