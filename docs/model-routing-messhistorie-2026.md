@@ -41,7 +41,7 @@ Quelle: Langfuse, alle Calls der Woche nach Modell.
 
 In rund 22 Traces mit Tag `skill:<projekt>`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher (von quellprojekt#1065 bis quellprojekt#1280) der Projekt-Default in `settings.json`.
 
-**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Gemessen: [Nachmessung nach quellprojekt#1065/quellprojekt#1198](#nachmessung-nach-10651198-1206).
+**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Gemessen: [Nachmessung nach quellprojekt#1065/quellprojekt#1198](model-routing.md#nachmessung-nach-10651198-1206).
 
 #### Auswertung und Entscheidung (quellprojekt#1593)
 
