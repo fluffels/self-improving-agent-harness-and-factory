@@ -9,7 +9,8 @@
  *     importiert ein `scripts/codex-*.mjs` transitiv ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen. Eine Grenze nennt nie die gelöschten oder abgelösten Tickets factory#84/factory#86/factory#249.
  *  V5 Doku: der Abschnitt `## Tracing-Ausfallstopp und Sitzungs-Hooks` in docs/codex/einstieg.md nennt genau die Menge CODEX_HOOK_EREIGNISSE in Backticks und trägt ein Abrufdatum („abgerufen am JJJJ-MM-TT“).
  *  V4 AGENTS.md ≤ 32768 Bytes (Codex-Standard `project_doc_max_bytes`); `check:contextsize` deckelt strenger, hier nur der Bezug.
- * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Wirkungsbeleg: factory#367).
+ * Doku-Scan (factory#457): keine unbeobachtete Sperre in einstieg.md, Glossar und Hook-Tabelle (geschlossene Musterliste, Prüftermin factory#459).
+ * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Wirkungsbeleg: factory#367); der Doku-Scan kennt nur seine Musterliste, keine Umschreibungen.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165). */
 import { expect, test } from "vitest";
@@ -29,8 +30,8 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/langfuse-abgleich-hook.mjs", modul: ["scripts/langfuse-abgleich-hook.mjs"], codex: null, grenze: "SessionStart und SessionEnd (max. 3 s) gibt es in Codex, der Nachlieferer liest aber Claude-Transkripte (Codex exportiert über den externen Exporter); Ausfall des Exporters bei erreichbarem Langfuse erkennt nur die Belegdiagnose: factory#367" },
   { hook: "scripts/sandbox-doctor.mjs", modul: ["scripts/sandbox-doctor.mjs"], codex: null, grenze: "SessionStart gibt es in Codex, der Doktor prüft aber die Claude-Sandbox; die Rechteprobe von Codex ist Nachweis 3: factory#367" },
   { hook: "scripts/mcp-ausfall.mjs", modul: ["scripts/mcp-ausfall.mjs"], codex: null, grenze: "SessionStart gibt es in Codex, das Skript liest aber die MCP-Logs von Claude Code; Codex prüft die Verbindung beim Start über required = true, ein Ausfall mitten im Lauf bleibt ohne Meldung: factory#367" },
-  { hook: "scripts/langfuse-vorbedingung.mjs", modul: ["scripts/langfuse-health.mjs"], codex: "scripts/codex-vorpruefung.mjs", grenze: "Tracing-Ausfallstopp (factory#365): Vorprüfung vor dem Lauf, Health-Prüfung vor spawn_agent im Hook-Adapter" },
-  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook.mjs", grenze: "Adapter ohne Wirkungsbeleg im echten Codex-Lauf; write_stdin, direkte Dateiwerkzeuge, MCP und Nachrichtenwerkzeuge nicht abgedeckt: factory#367", modul: ["scripts/pretooluse-dispatch.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
+  { hook: "scripts/langfuse-vorbedingung.mjs", modul: ["scripts/langfuse-health.mjs"], codex: "scripts/codex-vorpruefung.mjs", grenze: "Tracing-Ausfallstopp (factory#365): Vorprüfung vor dem Lauf, Health-Prüfung vor spawn_agent im Hook-Adapter; der Deny vor dem Spawn war in factory#367 nicht wirksam, Ursache offen: factory#455" },
+  { hook: "scripts/pretooluse-hook.mjs", codex: "scripts/codex-hook.mjs", grenze: "Shell- und Patch-Deny in factory#367 beobachtet, spawn_agent-Deny dort nicht wirksam (Ursache offen: factory#455); write_stdin, direkte Dateiwerkzeuge, MCP und Nachrichtenwerkzeuge nicht abgedeckt: factory#367", modul: ["scripts/pretooluse-dispatch.mjs", "scripts/gh-guard-hook.mjs", "scripts/worktree-guard-hook.mjs", "scripts/worktree-guard-powershell.mjs", "scripts/holdout-auftrag-guard.mjs", "scripts/lens-auftrag-guard.mjs", "scripts/stdin-skript-guard.mjs", "scripts/umsetzer-abschluss.mjs"] },
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: "Stop und SubagentStop gibt es in Codex, unbelegt sind Rollenname in agent_type und Abschlussformat (last_assistant_message statt Handback); Waisen-Worktrees räumt man unter Codex von Hand (cleanup-worktrees.mjs --fix): factory#367, Übernahme factory#368" },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Die Codex-Statuszeile kennt nur eingebaute Elemente (tui.status_line), keinen Befehl: factory#368" },
 ];
@@ -177,4 +178,20 @@ test("V5 Negativfälle: Abschnitt fehlt, Ereignis fehlt oder ist zusätzlich, Ab
 test("V4 Negativfall: zu große AGENTS.md", () => {
   expect(v4(CODEX_AGENTS_MAX_BYTES)).toEqual([]);
   expect(v4(CODEX_AGENTS_MAX_BYTES + 1)).toHaveLength(1);
+});
+
+/* Doku-Scan factory#457: keine unbeobachtete Sperre behaupten. Geschlossene Musterliste, keine Umschreibungen (Grenze); Prüftermin: factory#459 (danach durch den beobachteten Stand ersetzen). */
+export const UNBEOBACHTETE_SPERREN = [/spawnt keine Rolle/, /\bkein Spawn\b/, /startet keine Rolle/, /Wirkung erst mit factory#367 belegt/, /Adapter ohne Wirkungsbeleg/];
+export const sperrenBehauptungen = (quellen: Record<string, string>): string[] =>
+  Object.entries(quellen).flatMap(([name, text]) => UNBEOBACHTETE_SPERREN.filter((m) => m.test(text)).map((m) => `${name}: ${m.source}`));
+test("Doku-Scan (factory#457): einstieg.md, Glossar und Hook-Tabelle behaupten keine unbeobachtete Sperre", () => {
+  const quellen: Record<string, string> = { "docs/codex/einstieg.md": lies("docs/codex/einstieg.md"), "docs/harness-glossar.md": lies("docs/harness-glossar.md") };
+  for (const z of HOOK_TABELLE) quellen[`HOOK_TABELLE ${z.hook}`] = z.grenze;
+  expect(sperrenBehauptungen(quellen)).toEqual([]);
+  const zeile = (hook: string) => HOOK_TABELLE.find((z) => z.hook === hook)!.grenze;
+  for (const h of ["scripts/langfuse-vorbedingung.mjs", "scripts/pretooluse-hook.mjs"]) expect(zeile(h), h).toContain("factory#455");
+});
+test("Doku-Scan Negativfall: jede Behauptung der Musterliste wird gefunden", () => {
+  for (const satz of ["Der Lauf spawnt keine Rolle.", "Es gibt kein Spawn.", "Das startet keine Rolle.", "Wirkung erst mit factory#367 belegt", "Adapter ohne Wirkungsbeleg im Lauf"]) expect(sperrenBehauptungen({ x: satz }), satz).toHaveLength(1);
+  expect(sperrenBehauptungen({ x: "Ein Codex-Lauf soll keine Rolle spawnen; nicht wirksam (factory#455)." })).toEqual([]);
 });

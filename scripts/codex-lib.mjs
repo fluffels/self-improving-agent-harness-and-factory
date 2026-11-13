@@ -6,7 +6,7 @@ import { PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
 import { LANGFUSE_LESE_TOOLS } from "./langfuse-zugang.mjs";
-import { CODEX_HOOK_TIMEOUT_S, CODEX_HOOK_WERKZEUGE } from "./codex-hook-lib.mjs";
+import { CODEX_HOOK_TIMEOUT_S, codexHookMuster } from "./codex-hook-lib.mjs";
 export { rollenFuer } from "./codex-rollen.mjs";
 export { bewerteBelege } from "./codex-belege.mjs";
 const q = JSON.stringify;
@@ -24,7 +24,7 @@ export const LANGFUSE_AUTH_MODI = ["env", "host"];
 
 /** Soll-Inhalt von `.codex/hooks.json` (factory#364): PreToolUse-Hook auf den Adapter, Matcher aus der Werkzeugtabelle des Adapters, fester Timeout; endpunktunabhängig. */
 export function hookRegistrierung() {
-  const matcher = `^(${Object.keys(CODEX_HOOK_WERKZEUGE).join("|")})$`;
+  const matcher = codexHookMuster();
   return `${JSON.stringify({ hooks: { PreToolUse: [{ matcher, hooks: [{ type: "command", command: "node scripts/codex-hook.mjs", timeout: CODEX_HOOK_TIMEOUT_S }] }] } }, null, 2)}\n`;
 }
 

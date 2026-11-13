@@ -69,10 +69,11 @@ function raeumen({ haupt, probe, git }) {
 function schreibeProbe({ haupt, probe, config, stand }) {
   const ordner = join(probe, PROBE_ORDNER);
   mkdirSync(ordner, { recursive: true });
-  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config, stand }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config), { version: stand.version, startweg: stand.startweg }), "stand.json": `${JSON.stringify(stand, null, 2)}\n` };
+  const soll = readFileSync(join(probe, ".codex", "hooks.json"), "utf8");
+  const variante = hookVariante(soll);
+  const dateien = { ".gitignore": "*\n", ...fixtureHooks(), "hooks-soll.json": soll, "hooks-variante.json": variante, "ticket.md": probeTicket({ haupt, probe, config }), "checkliste.md": checklisteText({ haupt, probe, config, stand }), "bericht-vorlage.json": berichtVorlage(checklistenPunkte(config), { version: stand.version, startweg: stand.startweg }), "stand.json": `${JSON.stringify(stand, null, 2)}\n` };
   for (const [name, inhalt] of Object.entries(dateien)) writeFileSync(join(ordner, name), inhalt, { flag: "wx" });
-  const hooks = join(probe, ".codex", "hooks.json");
-  writeFileSync(hooks, hookVariante(readFileSync(hooks, "utf8")));
+  writeFileSync(join(probe, ".codex", "hooks.json"), variante);
 }
 /** Legt Worktree, Setup und Probe-Dateien an und liefert den Stand `{ basis, version, startweg }`; wirft bei jedem Fehler (der Aufrufer baut zurück). */
 function anlegen(o, { git, setup, url, auth, version }) {
