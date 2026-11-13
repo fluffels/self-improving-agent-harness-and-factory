@@ -276,8 +276,8 @@ describe("messZeile und befehleErgaenzung", () => {
   it("Raum-Vertrag in der Messzeile (nur Info): Kern über Budget, falscher Raum und Summe über dem Gesamtbudget werden mit Grund als verletzt gemeldet (factory#237)", () => {
     const t = P.fuellAgentsMd({ raum: B.PROJEKT_BLOCK_RAUM });
     const kernPlus = t.replace(MARKER.ende, `${"x".repeat(B.KERN_BLOCK_BUDGET + 1 - (B.kernBlockZeichen(t, MARKER) as number))}${MARKER.ende}`);
-    const K = B.KERN_BLOCK_BUDGET as number;
-    const R = B.PROJEKT_BLOCK_RAUM as number;
+    const K = B.KERN_BLOCK_BUDGET;
+    const R = B.PROJEKT_BLOCK_RAUM;
     expect(P.messZeile(kernPlus)).toContain(`Raum-Vertrag: verletzt — Kern-Block ${K + 1} > Budget ${K}; Summe ${K + 1 + R} > Gesamtbudget ${K + R}`);
     expect(P.messZeile(P.fuellAgentsMd({ raum: R + 1 }))).toContain(`verletzt — Raum ${R + 1} ≠ Soll ${R}`);
     const kleiner = P.messZeile(P.fuellAgentsMd({ raum: R - 1 })) as string;

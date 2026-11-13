@@ -111,7 +111,7 @@ describe("Budget-Ratchet", () => {
 
   /** Beleg und Migration der Diff-Strecke aus den Commit-Messages; ein git-Fehler heißt „kein Beleg“ (fail-closed). */
   function freigaben(runner: (args: string[]) => string): { beleg: boolean; migration: boolean; ungueltig: string[] } {
-    let nachrichten = "";
+    let nachrichten: string;
     try {
       nachrichten = runner(["log", "--reverse", "--format=%B", `${basis}..HEAD`]);
     } catch {

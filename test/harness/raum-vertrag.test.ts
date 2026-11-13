@@ -21,7 +21,7 @@ const PROJEKT_BLOCK_RAUM = rawRaum as number;
 const kernRaumBefund = rawRaumBefund as (a: { kern: number; raum: number; gesamt: number }) => string | null;
 const kernBlockZeichen = rawZeichen as (text: string, marker: { start: string; ende: string }) => number | null;
 const kernBlockBefund = rawBefund as (a: { text: string; fabrik: boolean; budget?: number; marker: { start: string; ende: string } }) => string | null;
-const MARKER = { start: markerStart("kern") as string, ende: markerEnde("kern") as string };
+const MARKER = { start: (markerStart as (id: string) => string)("kern"), ende: (markerEnde as (id: string) => string)("kern") };
 const GESAMT = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
 const AGENTS = readFileSync(join(import.meta.dirname, "..", "..", "AGENTS.md"), "utf8");
 

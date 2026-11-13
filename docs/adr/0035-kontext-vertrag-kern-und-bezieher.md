@@ -127,13 +127,9 @@ Entscheidung: A, weil die A/B-Regel entschieden ist und nichts Besseres belegt.
 - Transkripte behalten den Typ `lens-kern-je-rolle`; die Messskripte filtern nur nach dem Typ-String, es gibt keine Datenmigration. Wer die Messung nachrechnet, nimmt den Typ als zweites `--agent`.
 - Lehre fürs Messdesign (übertragbar, auch in `docs/model-routing.md`): das Regel-Ende liegt mindestens 14 Tage nach dem 10. Ticket je Arm, sonst ist die Nacharbeit beim Entscheiden offen.
 
-## Fortschreibung #237 (2026-11-13): Raum-Vertrag und Budget-Ratchet
+## Weitere Fortschreibungen (als Dateien)
 
-Umsetzung der Entscheidung (Variante A, Kern-Block plus fester Projekt-Raum in `AGENTS.md`) als Gate; der Kontext-Vertrag bleibt (12.800 Raum, 15.200 Kern, 28.000 Gesamt), darum keine `Bezieher-Migration`-Zeile und `.factory/besitz.json` unverändert (die Gate-Dateien liegen schon im Ring `kern`, der neue Wächter ist fabrik-eigen).
-
-- **Raum-Vertrag als Wächter:** `test/harness/raum-vertrag.test.ts` prüft die Gleichung, den echten Kern gegen sein Budget und per Red-Green den Kern bei Budget plus 1; `check:contextsize` prüft in der Fabrik zusätzlich `kernRaumBefund` (jetzt auch eine Lücke). Der Kern kann damit nie über seine Grenze wachsen, ohne dass Pflicht-Checks (`build-test`, `Probe-Erstbezug`) rot sind; `tag-takt` sperrt den Tag bei roter CI.
-- **Knapp-Signal:** für `AGENTS.md` heißt „knapp“ im Sync-Hinweis: Projekt-Block über dem Projekt-Raum bei noch passendem Gesamtbudget; die 5-%-Regel überlappte damit (factory#220 L57) und bleibt für andere Dateien. `ueberBudget` und `knappeBudgets` teilen eine Schleife.
-- **Ratchet mit Beleg:** eine Mechanik (`kontext-budget-ratchet.test.ts`) für alle Budgets; Anheben braucht `SIH-Budget-Beleg: <Link zur Messung> <Begründung>`, der Projekt-Raum darf nur mit Beleg und `Bezieher-Migration` sinken. Pflicht-Literale und ein Scan stellen sicher, dass kein Ausdruck und kein Werkzeug ein Budget am Ratchet vorbei bewegt. Prüftermin: `regeln-verfall-2027-03` (ADR 0027).
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0035-237-raum-vertrag-ratchet.md) (Konvention: [README](README.md#format)); dort die erste: [factory#237](fortschreibungen/0035-237-raum-vertrag-ratchet.md) setzt die Entscheidung als Raum-Vertrag-Wächter und Budget-Ratchet um.
 
 ## Re-Evaluierung
 
