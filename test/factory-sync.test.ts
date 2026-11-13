@@ -1404,6 +1404,8 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     assert.deepEqual(knapp(text(60, 41)), [], "über dem Gesamtbudget meldet ueberBudget");
     assert.deepEqual(knapp(text(10, 30)), [], "12.309-Fall: kleiner Kern, Projekt-Block im Raum");
     assert.equal(knapp("x".repeat(96)).length, 1, "ohne Marker: Rückfall auf die Anteilsregel");
+    assert.equal(knapp(text(59, 41), { raum: { file: "B", zeichen: 40, marker } }).length, 1, "anderer Dateiname: Anteilsregel (Rest 0 < 5 %)");
+    assert.deepEqual(knapp(text(59, 41), { raum: { file: "B", zeichen: 40, marker } }).map((k) => k.raum), [undefined], "andere Datei: kein Raum-Treffer");
     assert.deepEqual(knapp("x".repeat(90)), []);
   });
   test("Sync-Hinweis bei Raum-Vertrag: Projekt-Block im Raum kein Hinweis, ein Zeichen mehr Raum-Hinweis, über Gesamtbudget Über-Budget-Hinweis; der Sync verkleinert den Projekt-Block nie", () => {
