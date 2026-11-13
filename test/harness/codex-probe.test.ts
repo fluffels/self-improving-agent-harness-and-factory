@@ -70,11 +70,11 @@ describe("vorbereiten und aufraeumen", () => {
     expect(git(haupt, "rev-parse", "codex-probe").trim()).toBe(git(haupt, "rev-parse", "origin/main").trim());
     expect(spawnSync("git", ["config", "branch.codex-probe.remote"], { cwd: haupt, encoding: "utf8" }).stdout).toBe("");
     expect(readdirSync(join(probe, ".codex", "probe")).sort()).toEqual([".gitignore", "bericht-vorlage.json", "checkliste.md", "hook-fehler.mjs", "hook-timeout.mjs", "ticket.md"]);
-    const hooks = JSON.parse(readFileSync(join(probe, ".codex", "hooks.json"), "utf8")).hooks.PreToolUse;
-    const soll = JSON.parse(hookRegistrierung()).hooks.PreToolUse;
+    type Hooks = { hooks: { PreToolUse: { hooks: { timeout: number }[] }[] } };
+    const hooks = (JSON.parse(readFileSync(join(probe, ".codex", "hooks.json"), "utf8")) as Hooks).hooks.PreToolUse;
+    const soll = (JSON.parse(hookRegistrierung()) as Hooks).hooks.PreToolUse;
     expect(hooks.slice(0, soll.length)).toEqual(soll);
-    expect(hooks).toHaveLength(soll.length + 2);
-    expect(hooks.slice(soll.length).map((h: { hooks: { timeout: number }[] }) => h.hooks[0].timeout)).toEqual([adapter.CODEX_HOOK_TIMEOUT_S, lib.PROBE_HOOK_TIMEOUT_S]);
+    expect(hooks.slice(soll.length).map((h) => h.hooks[0].timeout)).toEqual([adapter.CODEX_HOOK_TIMEOUT_S, lib.PROBE_HOOK_TIMEOUT_S]);
     for (const p of lib.checklistenPunkte(config)) expect(r.out).toContain(`\`${p.id}\``);
     expect(r.out).not.toMatch(/npm run/);
     expect(git(haupt, "status", "--porcelain")).toBe("");
@@ -183,7 +183,7 @@ describe("Fixture-Hooks (echter Node-Start)", () => {
   });
   test("hook-timeout überschreitet den Timeout nur bei seinem Marker, sonst Exit 0 ohne Ausgabe", () => {
     const t = start("hook-timeout.mjs", `{"command":"echo ${lib.MARKER_TIMEOUT}"}`, lib.PROBE_HOOK_TIMEOUT_S * 1000 + 500);
-    expect((t.error as NodeJS.ErrnoException | undefined)?.code).toBe("ETIMEDOUT");
+    expect((t.error as NodeJS.ErrnoException).code).toBe("ETIMEDOUT");
     const ohne = start("hook-timeout.mjs", `{"command":"echo ${lib.MARKER_FEHLER}"}`, 8000);
     expect([ohne.status, ohne.stdout, ohne.stderr]).toEqual([0, "", ""]);
   });
