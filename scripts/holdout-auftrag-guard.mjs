@@ -8,6 +8,7 @@
  * Bewusste Grenzen:
  *  - Ein Re-Spawn des Szenario-Agenten, dessen Prompt den erwarteten Kopf mit echter Nummer vorgibt, wird verweigert (den Kopf ohne Ziffern beschreiben).
  *  - Ein Ticket-Body, der wörtlich einen Szenario-Kopf mit Ticketnummer zitiert, blockiert den Planer-Spawn (dann das Zitat umformulieren).
+ *  - Ein Umsetzer-Prompt, der den Kopf nur als Probe-Wortlaut zitiert, wird ebenfalls verweigert; der Deny-Text nennt den Ausweg (ohne Ziffern oder im Test zusammensetzen).
  *  - Ein Hauptchat, der die Szenarien in eine Datei schreibt oder anders umschreibt, wird hier nicht gesehen.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen, keine I/O beim Import.
@@ -53,6 +54,7 @@ export function holdoutAuftragBlockade({ tool, subagentType, text } = {}) {
   return (
     "Holdout-Trennung (ADR 0022 F13): Szenarien (Kopf „SZENARIEN #<nr>“ oder Zeilen „Szenario <i>.<n>: Gegeben …“) gehen nur an " +
     `${ABNAHME_EMPFAENGER}, nie an Planer, Umsetzer, Nachfolger, Gruppen-Umsetzer oder Lens und nie per SendMessage. Nimm sie aus dem Auftrag; ` +
-    "der Hauptchat hält sie bis zur Abnahme zurück."
+    "der Hauptchat hält sie bis zur Abnahme zurück. Steht der Kopf nur als Zitat im Auftrag, schreibe ihn ohne Ziffern " +
+    "(`SZENARIEN #<nr>`) oder setze ihn im Test zusammen."
   );
 }
