@@ -341,11 +341,11 @@ export function pruefeE2e(e2e, befehle) {
 
 /** Pur: Formfehler der Liste `e2e.browser` (nicht leer, Namen nach `NAME_MUSTER`, ohne Doppelte). */
 function browserMaengel(liste) {
-  const fix = "\nFix: e2e.browser als nicht-leere Liste kleingeschriebener Namen angeben (z. B. [\"a\", \"b\"]).";
+  const fix = "\nFix: e2e.browser als nicht-leere Liste von Namen aus Kleinbuchstaben, Ziffern und - mit Buchstabe am Anfang angeben (z. B. [\"a\", \"b\"]).";
   if (!Array.isArray(liste) || liste.length === 0) return [`e2e.browser muss eine nicht-leere Liste von Browser-Namen sein.${fix}`];
   const gesehen = new Set();
   return liste.flatMap((n, i) => {
-    if (typeof n !== "string" || !NAME_MUSTER.test(n)) return [`e2e.browser[${i}] muss ein Name aus Kleinbuchstaben, Ziffern und - sein (${JSON.stringify(n)}).${fix}`];
+    if (typeof n !== "string" || !NAME_MUSTER.test(n)) return [`e2e.browser[${i}] muss ein Name aus Kleinbuchstaben, Ziffern und - mit Buchstabe am Anfang sein (${JSON.stringify(n)}).${fix}`];
     if (gesehen.has(n)) return [`e2e.browser enthält „${n}“ doppelt.${fix}`];
     gesehen.add(n);
     return [];
