@@ -159,3 +159,19 @@ export function ticketZaehlung(laeufe) {
 /** Warnzeile der Standardauswertungen (#1646): die Mediane gelten je Lauf, nicht je Ticket; leer ohne Ticket mit mehreren Läufen. */
 export const mehrlaufHinweis = (mehrlauf) =>
   mehrlauf > 0 ? `Mediane je Lauf, nicht je Ticket (${mehrlauf} Tickets mit mehreren Läufen); Ticket-Schnitt: kontext-treiber --je-ticket` : "";
+
+/**
+ * Ordnet Tickets ihrem Agententyp zu (A/B-Messungen, factory#236: die Zuordnung steht je Messung vorab fest, hier nur die Prüfseite). `typenJeTicket`: `Map` oder Objekt `{ ticket: [Typ…] }` mit den Typen, in denen das Ticket Läufe hat.
+ * Ein Ticket mit genau einem Typ kommt in `gruppen[typ]`, eines mit mehreren (`beide`) oder ohne (`keiner`) in `ungueltig`. Pur.
+ */
+export function armeZuordnen(typenJeTicket) {
+  const eintraege = typenJeTicket instanceof Map ? [...typenJeTicket] : Object.entries(typenJeTicket).map(([t, v]) => [Number(t), v]);
+  const gruppen = {};
+  const ungueltig = [];
+  for (const [ticket, rohTypen] of eintraege) {
+    const typen = [...new Set(rohTypen)].sort();
+    if (typen.length === 1) (gruppen[typen[0]] ??= []).push(ticket);
+    else ungueltig.push({ ticket, grund: typen.length === 0 ? "keiner" : "beide", typen });
+  }
+  return { gruppen, ungueltig };
+}

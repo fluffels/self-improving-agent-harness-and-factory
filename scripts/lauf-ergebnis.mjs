@@ -15,7 +15,7 @@
  * (aus den lokalen Transkripten, 48 h Vorlauf beim Laden). PRs ohne Ticket und Tickets mit früherem Start fallen heraus; `--ohne` bleibt kombinierbar,
  * `--ticket` nicht. `von`/`bis` gelten zugleich für den Merge-Zeitpunkt. Fehlen die Transkripte des Typs, bricht das Skript ab (Exit 2).
  *
- * `--je-agent <typ>` (wiederholbar, factory#235, A/B Kern je Rolle): die Kennzahlen zusätzlich je Subagent-Typ (`jeAgent: { <typ>: { zeilen, kennzahlen } }`). Ein Ticket gehört zu dem Typ, in dem es Läufe hat
+ * `--je-agent <typ>` (wiederholbar, factory#235, A/B-Messung): die Kennzahlen zusätzlich je Subagent-Typ (`jeAgent: { <typ>: { zeilen, kennzahlen } }`). Ein Ticket gehört zu dem Typ, in dem es Läufe hat
  * (aus den lokalen Transkripten, 48 h Vorlauf, Zuordnung wie `laufAus`); hat es Läufe in mehreren der Typen oder in keinem, ist es `ungueltig` (`{ticket, grund: beide|keiner, typen}`), zählt in keiner Gruppe und setzt Exit 3. PRs ohne Ticket zählen nicht.
  *
  * Exit 0 ok, 1 falscher Aufruf, 2 unvollständige Daten (nie still 0: abgeschnittene PR-Liste, lokal fehlender
@@ -28,11 +28,10 @@ import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
 import { hoechsterAbnahmeDurchgang, parseNachweis, URSACHEN } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
+import { armeZuordnen, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
-import { armeZuordnen } from "./lens-arm-lib.mjs";
 import { ticketNamen } from "./ticket-namen.mjs";
 import { projektOrdner } from "./transkript.mjs";
 
