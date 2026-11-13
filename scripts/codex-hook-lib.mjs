@@ -7,13 +7,16 @@
  *  - Shell:       Worktree-, gh- und Stdin-Skript-Guard über den Dispatcher (Werkzeug `Bash`), danach die `Bash(...)`-Regeln aus `permissions.deny`/`permissions.ask`
  *                 der `.claude/settings.json` je Befehlssegment (Claude wendet sie selbst an, Codex nicht: `gh issue delete`, `git push --force` …)
  *  - apply_patch: jedes Schreibziel des Patches als Claude-`Write` an den Schreibziel-Guard des Dispatchers (kein Schreiben in den Haupt-Checkout oder nach `.git`); Selbstschutz für `.codex`
- *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, kein Spawn, factory#365), dann Lens-Auftrag- und
+ *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, factory#365; Adapter-Logik, im echten Lauf nicht beobachtet, factory#455), dann Lens-Auftrag- und
  *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`)
  * Fail-closed für diese drei Werkzeuge: unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard ergibt ein Deny mit Grund; ein `ask` des Dispatchers wird ein Deny,
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
  * Bekannte Grenzen (Details und Quellen in docs/codex/einstieg.md): `write_stdin`, direkte Dateiwerkzeuge außer `apply_patch`, MCP und `send_message`/`followup_task` lösen keinen
- * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; die Wirkung im echten Codex-Lauf belegt factory#367.
+ * geprüften Pfad aus; ein `-c`-Argument aus gemischten Quotes (`bash -c "curl x"'y'`) zerlegt die `Bash(...)`-Regelprüfung nicht (nur ein vollständig gequotetes Argument wird entquotet); Hook-Fehler und Timeout sind beim Host fail-open; Shell- und Patch-Deny sind in factory#367 beobachtet, `spawn_agent`-Deny und Tracing-Ausfallstopp waren dort nicht wirksam (Ursache offen, factory#455).
+ *
+ * ANNAHME bis factory#459: `spawn_agent` heißt im Payload auch mit genau einem Namensraum-Präfix (`collaboration__spawn_agent`, `collaboration.spawn_agent`, `collaboration/spawn_agent`), das `tool_input`
+ * hat die v2-Form (`task_name`, `message`, optional `agent_type`, `fork_turns`). Ob der Host Hook und Matcher gegen den Namen mit oder ohne Präfix prüft, ist unbeobachtet; das Hook-Protokoll der Probe (factory#457) zeigt es.
  *
  * Reines Node-Skript (nur Builtins); der Dispatcher wird dynamisch geladen, damit ein Ladefehler ein Deny statt eines Prozessabbruchs (fail-open beim Host) ergibt.
  */
@@ -23,6 +26,23 @@ import { MAX_INTERPRETER, buildDenyOutput } from "./hook-io.mjs";
 
 /** Werkzeugname im Codex-Payload → Art der Übersetzung. `Bash` ist der dokumentierte `tool_name` der Shell (auch für `exec_command`); `spawn_agent` passt laut Doku auch auf den Matcher `Agent`. */
 export const CODEX_HOOK_WERKZEUGE = { Bash: "shell", exec_command: "shell", apply_patch: "patch", spawn_agent: "agent", Agent: "agent" };
+/** Werkzeuge, die zusätzlich mit genau einem Namensraum-Präfix vorkommen können (Annahme bis factory#459, Rust-Regex-tauglich: ohne Lookaround). */
+export const CODEX_HOOK_NAMENSRAUM = ["spawn_agent"];
+const NAMENSRAUM = "[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*(?:__|\\.|/)";
+
+/** Der Matcher der Registrierung (Regex-Text): Tabellennamen und Namensraum-Form der Werkzeuge aus `CODEX_HOOK_NAMENSRAUM`. */
+export function codexHookMuster() {
+  const namensraum = CODEX_HOOK_NAMENSRAUM.map((n) => `${NAMENSRAUM}${n}`);
+  return `^(${[...Object.keys(CODEX_HOOK_WERKZEUGE), ...namensraum].join("|")})$`;
+}
+
+/** Art der Übersetzung für einen Werkzeugnamen (Tabelle oder Namensraum-Form); `null` für fremde Werkzeuge. */
+export function werkzeugArt(name) {
+  if (Object.hasOwn(CODEX_HOOK_WERKZEUGE, name)) return CODEX_HOOK_WERKZEUGE[name];
+  for (const n of CODEX_HOOK_NAMENSRAUM) if (new RegExp(`^${NAMENSRAUM}${n}$`).test(name)) return CODEX_HOOK_WERKZEUGE[n];
+  return null;
+}
+
 /** Fester Timeout der Registrierung in Sekunden (der Host behandelt Timeout fail-open: knapp genug zum Messwert, weit unter dem Standard von 600). */
 export const CODEX_HOOK_TIMEOUT_S = 30;
 
@@ -155,6 +175,7 @@ function uebersetzePatch(eingabe, data) {
 
 function uebersetzeAgent(eingabe) {
   if (!istText(eingabe.message)) return { grund: "spawn_agent ohne Textauftrag (tool_input.message)" };
+  if (eingabe.task_name !== undefined && !istText(eingabe.task_name)) return { grund: "spawn_agent mit unlesbarem task_name" };
   if (eingabe.agent_type !== undefined && !istText(eingabe.agent_type)) return { grund: "spawn_agent mit unlesbarem agent_type" };
   return { payloads: [{ tool_name: "Agent", tool_input: { subagent_type: eingabe.agent_type, prompt: eingabe.message } }] };
 }
@@ -199,7 +220,7 @@ function lesePayload(text) {
     return { antwort: q("Payload ist kein lesbares JSON") };
   }
   if (!istObjekt(data) || typeof data.tool_name !== "string") return { antwort: q("Payload ohne tool_name") };
-  const art = Object.hasOwn(CODEX_HOOK_WERKZEUGE, data.tool_name) ? CODEX_HOOK_WERKZEUGE[data.tool_name] : null;
+  const art = werkzeugArt(data.tool_name);
   if (art === null) return { antwort: null }; // fremdes Werkzeug: unberührt
   if (!istObjekt(data.tool_input)) return { antwort: q(`tool_input von ${data.tool_name} fehlt oder ist kein Objekt`) };
   const { payloads, grund } = UEBERSETZER[art](data.tool_input, data);

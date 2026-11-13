@@ -90,9 +90,15 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     expect(offen(lauf(null))).toHaveLength(5);
   });
   test("Zuordnung der Punkte zu den Nachweisen und die ohneExport-Liste (abgeschrieben aus docs/codex/probe.md)", () => {
-    const soll = { "read-abbildung": 1, playwright: 2, langfuse: 2, "unbekannte-rolle": 2, "defekter-mcp": 2, "hook-deny:shell": 3, "hook-deny:patch": 3, "hook-deny:agent": 3, "hook-fehler": 3, "hook-timeout": 3, "write-stdin": 3, dateiwerkzeug: 3, fremdtext: 3, "tracing-ausfall": 4, abnahme: 5, ...Object.fromEntries(rollen.map((r) => [`rolle:${r}`, 1])) };
+    const soll = { "read-abbildung": 1, playwright: 2, langfuse: 2, "unbekannte-rolle": 2, "defekter-mcp": 2, "hook-deny:shell": 3, "hook-deny:patch": 3, "hook-deny:agent": 3, "hook-fehler": 3, "hook-timeout": 3, "write-stdin": 3, dateiwerkzeug: 3, fremdtext: 3, "hooks-geladen": 3, "hook-format:agent": 3, "subagent-start": 3, "tracing-ausfall": 4, abnahme: 5, ...Object.fromEntries(rollen.map((r) => [`rolle:${r}`, 1])) };
     expect(Object.fromEntries(punkte.map((p) => [p.id, p.nachweis]))).toEqual(soll);
-    expect(punkte.filter((p) => p.ohneExport).map((p) => p.id).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "tracing-ausfall"]);
+    expect(punkte.filter((p) => p.ohneExport).map((p) => p.id).sort()).toEqual(["dateiwerkzeug", "defekter-mcp", "hook-format:agent", "hooks-geladen", "subagent-start", "tracing-ausfall"]);
+  });
+  test.each([["hooks-geladen", "3"], ["hook-format:agent", "3"], ["subagent-start", "3"], ["tracing-ausfall", "4"]])("fehlt der Punkt %s im Bericht: Nachweis %s offen, der Rest nicht (factory#457)", (id, nachweis) => {
+    const r = lauf(mit((b) => { delete (b.punkte as Record<string, unknown>)[id]; }));
+    expect(offen(r)).toEqual([nachweis]);
+    expect(r.maengel.join()).toContain(id);
+    expect(a.auswertungExit(r)).toBe(1);
   });
   test("leere version/sessionId auf beiden Seiten und ein Export ohne observations-Liste: alle fünf offen, kein Wurf", () => {
     const e0 = export_();
