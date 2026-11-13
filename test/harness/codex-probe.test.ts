@@ -177,9 +177,7 @@ describe("vorbereiten und aufraeumen", () => {
   test("Quelltext-Wächter: kein process.env, kein homedir(, kein Prozessstart mit Literal codex (geschlossene Musterliste)", () => {
     for (const d of readdirSync("scripts").filter((n) => /^codex-probe.*\.mjs$/.test(n))) {
       const q = readFileSync(join("scripts", d), "utf8");
-      expect(q, d).not.toMatch(/process\.env/);
-      expect(q, d).not.toMatch(/homedir\(/);
-      expect(q, d).not.toMatch(/\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*["'`]codex/);
+      expect(q, d).not.toMatch(/process\.env|homedir\(|\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*["'`]codex/);
     }
   });
 });

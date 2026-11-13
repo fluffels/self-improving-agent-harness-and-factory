@@ -23,16 +23,13 @@ const BEFEHLE = {
 const NUMMER = String(PROBE_TICKET_NR);
 const gitStandard = (args, cwd) => { const r = spawnSync("git", args, { cwd, encoding: "utf8" }); return { status: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }; };
 const setupStandard = (probe, args) => { const r = spawnSync(process.execPath, [join(probe, "scripts", "codex-setup.mjs"), ...args], { cwd: probe, encoding: "utf8" }); return { status: r.status ?? 1, stderr: r.stderr ?? "" }; };
-
 const posix = (p) => String(p).replaceAll("\\", "/");
 const echt = (p) => { try { return posix(realpathSync(p)); } catch { return posix(p); } };
 const gleich = (a, b) => echt(a) === echt(b);
 const vorhanden = (p) => lstatSync(p, { throwIfNoEntry: false }) !== undefined;
-
 /** Registrierte Worktrees `[{ pfad, branch }]` (Parser: `parseWorktreeBloecke`; Branch leer bei losem HEAD). */
 const worktrees = (git, haupt) => parseWorktreeBloecke(git(["worktree", "list", "--porcelain"], haupt).stdout).map((b) => ({ pfad: b.pfad, branch: b.branch ?? "" }));
 const branches = (git, haupt, muster) => git(["branch", "--list", "--format=%(refname:short)", muster], haupt).stdout.split(/\r?\n/).filter(Boolean);
-
 /** Hauptcheckout und Projekt-Config oder Fehlertext (nie ein Wurf). */
 function ort(root, git, lade) {
   const r = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], root);
@@ -40,7 +37,6 @@ function ort(root, git, lade) {
   const haupt = dirname(r.stdout.trim());
   try { const config = lade({ rootDir: haupt }); const repo = probeRepo(config, haupt); return { haupt, config, probe: `${repo.worktreeOrdner}/${PROBE_NAME}`, basis: `origin/${standardzweigVon(repo)}` }; } catch (e) { return { fehler: `Projekt-Config nicht ladbar: ${e.message}` }; }
 }
-
 /** Alle Vorprüfungen von `vorbereiten`, vor der ersten Änderung; Liste der Fundstellen (leer = alles frei). */
 function vorbereitenMaengel({ haupt, probe, git }) {
   const m = [];
@@ -50,7 +46,6 @@ function vorbereitenMaengel({ haupt, probe, git }) {
   if (branches(git, haupt, PROBE_NAME).length > 0) m.push(`Branch ${PROBE_NAME} existiert schon (zuerst node scripts/codex-probe.mjs aufraeumen)`);
   return m;
 }
-
 /** Räumt Probe-Worktree, Probe-Branch und alles mit der Probe-Ticket-Nummer; `{ rest }` = Fundstellen, die nach dem Aufräumen bleiben. */
 function raeumen({ haupt, probe, git }) {
   const rest = [];
@@ -66,7 +61,6 @@ function raeumen({ haupt, probe, git }) {
   if (vorhanden(probe)) rest.push(`Ordner noch vorhanden: ${probe} (Fix: node scripts/cleanup-worktrees.mjs --fix)`);
   return { rest: [...new Set(rest)] };
 }
-
 /** Schreibt die Probe-Dateien (Flag `wx`, nichts wird überschrieben) und ersetzt `.codex/hooks.json` durch die Variante. */
 function schreibeProbe({ haupt, probe, config }) {
   const ordner = join(probe, PROBE_ORDNER);
@@ -76,7 +70,6 @@ function schreibeProbe({ haupt, probe, config }) {
   const hooks = join(probe, ".codex", "hooks.json");
   writeFileSync(hooks, hookVariante(readFileSync(hooks, "utf8")));
 }
-
 function vorbereiten(werte, { root, out, err, git, setup, lade }) {
   const url = werte["langfuse-url"] ?? STANDARD_LANGFUSE_URL;
   if (werte["langfuse-auth"] !== undefined && !LANGFUSE_AUTH_MODI.includes(werte["langfuse-auth"])) { err(`--langfuse-auth: ${LANGFUSE_AUTH_MODI.join(" oder ")} erforderlich`); return 2; }
@@ -100,7 +93,6 @@ function vorbereiten(werte, { root, out, err, git, setup, lade }) {
     return 1;
   }
 }
-
 function aufraeumen(_werte, { root, out, err, git, lade }) {
   const o = ort(root, git, lade);
   if (o.fehler) { err(`Codex-Probe gestoppt: ${o.fehler}`); return 1; }
@@ -109,9 +101,7 @@ function aufraeumen(_werte, { root, out, err, git, lade }) {
   out(`Codex-Probe aufgeräumt: kein Worktree, Ordner oder Branch mehr (${PROBE_NAME}).`);
   return 0;
 }
-
 const lesen = (pfad) => JSON.parse(readFileSync(pfad, "utf8"));
-
 function auswertenBefehl(werte, { out, err, lade, root }) {
   if (werte.belege === undefined || werte.bericht === undefined) { err("auswerten braucht --belege <JSON-Datei> und --bericht <JSON-Datei>"); return 2; }
   let belege, bericht, config;
@@ -120,9 +110,7 @@ function auswertenBefehl(werte, { out, err, lade, root }) {
   out(JSON.stringify(ergebnis));
   return auswertungExit(ergebnis);
 }
-
 const UNTERBEFEHL = { vorbereiten, auswerten: auswertenBefehl, aufraeumen };
-
 export function main(argv = process.argv.slice(2), root = process.cwd(), out = console.log, err = console.error, deps = {}) {
   const { befehl, werte, fehler } = befehlLesen(argv, BEFEHLE);
   if (fehler) { err(fehler.text); return 2; }

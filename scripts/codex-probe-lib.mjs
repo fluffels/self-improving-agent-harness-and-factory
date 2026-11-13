@@ -16,7 +16,6 @@ export const PROBE_ORDNER = ".codex/probe";
 export const STANDARD_LANGFUSE_URL = "http://localhost:3000/api/public/mcp";
 const NIRGENDWO = "codex-probe-nirgendwo";
 const q = JSON.stringify;
-
 /** Das Repo-Objekt (`arbeitsplatzAus`) zum Hauptcheckout `haupt`; ohne Treffer wirft es (fail-closed, kein Ersatz-Repo). */
 export function probeRepo(config, haupt) {
   const h = resolve(haupt).replaceAll("\\", "/");
@@ -24,9 +23,7 @@ export function probeRepo(config, haupt) {
   if (!repo) throw new Error(`Repo ${h} steht nicht in der Projekt-Config (arbeitsplatz.repos)`);
   return repo;
 }
-
 const punkt = (id, nachweis, text, ohneExport = false) => ({ id, nachweis, ohneExport, text });
-
 /** Geschlossene Liste der Checklistenpunkte `{ id, nachweis, ohneExport, text(kontext) }`; `ohneExport` = Punkt ohne Langfuse-Observation (Beleg per `ausgabe`). */
 export function checklistenPunkte(config) {
   const arten = [...new Set(Object.values(CODEX_HOOK_WERKZEUGE))];
@@ -49,7 +46,6 @@ export function checklistenPunkte(config) {
     punkt("abnahme", 5, () => "Das Probe-Ticket von der Rolle `holdout-abnahme` unabhängig abnehmen lassen (Aufgabe aus `ticket.md`), mit Negativfall (ohne Argument Exit 2)."),
   ];
 }
-
 /** Negativproben je Art `{ art, grund, codex: {…Hook-Payload}, claude: {…Hook-Payload} }`; jede bleibt auch bei durchgelassenem Hook folgenlos. */
 export function negativproben({ haupt, probe, config }) {
   const nutz = (cwd, tool_name, tool_input) => ({ session_id: PROBE_NAME, cwd, hook_event_name: "PreToolUse", tool_name, tool_input });
@@ -65,9 +61,7 @@ export function negativproben({ haupt, probe, config }) {
     { art: "agent", grund: `Die Rolle \`${rolle}\` hat keine Shell, das Ticket ${PROBE_TICKET_NR} existiert nicht und die Nachricht verlangt nur „OK“.`, codex: nutz(probe, "spawn_agent", { agent_type: rolle, message: nachricht }), claude: nutz(probe, "Agent", { subagent_type: rolle, prompt: nachricht }) },
   ];
 }
-
 const FIXTURE_KOPF = 'import { readFileSync } from "node:fs";\nlet text = "";\ntry { text = readFileSync(0, "utf8"); } catch { /* ohne Eingabe: kein Marker */ }\n';
-
 /** Die zwei Fixture-Hooks `{ dateiname: quelltext }`; beide greifen nur bei ihrem Marker in der Eingabe (sonst Exit 0, keine Ausgabe). */
 export function fixtureHooks() {
   return {
@@ -75,7 +69,6 @@ export function fixtureHooks() {
     "hook-timeout.mjs": `${FIXTURE_KOPF}if (text.includes(${q(MARKER_TIMEOUT)})) await new Promise((r) => setTimeout(r, ${(PROBE_HOOK_TIMEOUT_S + 8) * 1000}));\n`,
   };
 }
-
 /** Probe-Variante der Hook-Registrierung: Soll-Text plus zwei Fixture-Hooks auf die Shell-Werkzeuge (Timeouts: Fehler-Hook 30 s, Timeout-Hook `PROBE_HOOK_TIMEOUT_S`). */
 export function hookVariante(sollText) {
   const hooks = JSON.parse(sollText);
@@ -87,7 +80,6 @@ export function hookVariante(sollText) {
   );
   return `${JSON.stringify(hooks, null, 2)}\n`;
 }
-
 /** Lokales Probe-Ticket (Datei, kein GitHub-Issue) mit abgegrenzter Aufgabe und markiertem Fremdtext-Block. */
 export function probeTicket({ haupt, probe, config }) {
   const shell = negativproben({ haupt, probe, config })[0].codex.tool_input.command;
@@ -111,13 +103,11 @@ export function probeTicket({ haupt, probe, config }) {
     "",
   ].join("\n");
 }
-
 /** Bericht-Vorlage (JSON-Text) mit allen Punkt-IDs und leeren Feldern; `ohneExport`-Punkte tragen zusätzlich `ausgabe`. */
 export function berichtVorlage(punkte) {
   const eintraege = Object.fromEntries(punkte.map((p) => [p.id, { ergebnis: "offen", beobachtung: "", observations: [], ...(p.ohneExport ? { ausgabe: "" } : {}) }]));
   return `${JSON.stringify({ version: "", sessionId: "", frischeSession: false, punkte: eintraege }, null, 2)}\n`;
 }
-
 const VORSPANN = [
   "Vorspann (von Hand, ein Schritt nach dem anderen):",
   "1. `codex --version` ausführen und die Version notieren (sie muss zur Freigabetabelle passen, sonst gilt die Probe für die falsche Version).",
@@ -130,7 +120,6 @@ const SCHLUSS = [
   `- \`${PROBE_ORDNER}/bericht-vorlage.json\` füllen (Ergebnis je Punkt, Beobachtung, Observation-IDs).`,
   "- `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>` ausführen, danach `node scripts/codex-probe.mjs aufraeumen`.",
 ];
-
 /** Checklisten-Text (Markdown) für stdout und `checkliste.md`. */
 export function checklisteText({ haupt, probe, config }) {
   const kontext = { haupt, probe };
@@ -138,4 +127,3 @@ export function checklisteText({ haupt, probe, config }) {
   const neg = negativproben({ haupt, probe, config }).flatMap((n) => [`- \`${n.art}\`: ${n.grund}`, `  - Codex: \`${q(n.codex.tool_input)}\``]);
   return [`# Codex-Probe: Checkliste (Probe-Ticket #${PROBE_TICKET_NR})`, "", ...VORSPANN, "", "Punkte:", ...je, "", "Negativproben (je Art genau eine):", ...neg, "", ...SCHLUSS, ""].join("\n");
 }
-

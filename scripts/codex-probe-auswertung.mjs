@@ -9,7 +9,6 @@ const RANG = { belegt: 0, grenze: 1, offen: 2 };
 const istObjekt = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const text = (v) => typeof v === "string" && v !== "";
 const alle = () => [...NACHWEIS_NUMMERN];
-
 /** Welche Nachweise ein Mangel der Belegdiagnose (`bewerteBelege`) betrifft, nach dem Meldungspräfix; Unbekanntes betrifft alle (fail-closed). */
 export function nachweiseDerDiagnose(mangel) {
   const m = String(mangel);
@@ -19,7 +18,6 @@ export function nachweiseDerDiagnose(mangel) {
   if (m.startsWith("Langfuse: ")) return ["4"];
   return alle();
 }
-
 function eintragMaengel(id, e) {
   if (!istObjekt(e)) return [`Bericht: Punkt ${id} ist kein Objekt`];
   const m = [];
@@ -29,7 +27,6 @@ function eintragMaengel(id, e) {
   if (e.ausgabe !== undefined && typeof e.ausgabe !== "string") m.push(`Bericht: Punkt ${id}: ausgabe muss Text sein`);
   return m;
 }
-
 /** Schema-Mängel des Berichts gegen die Belege und die Punkt-Liste; leere Liste = Schema gültig. */
 export function berichtSchemaMaengel(bericht, belege, punkte) {
   if (!istObjekt(bericht)) return ["Bericht: kein JSON-Objekt"];
@@ -42,14 +39,12 @@ export function berichtSchemaMaengel(bericht, belege, punkte) {
   for (const [id, e] of Object.entries(bericht.punkte)) m.push(...(bekannt.has(id) ? eintragMaengel(id, e) : [`Bericht: unbekannter Punkt ${id}`]));
   return m;
 }
-
 /** Zeigt der Punkt auf einen Beleg: Observation-IDs im Export derselben Session, bei `ohneExport` ersatzweise eine nichtleere `ausgabe`. */
 function hatVerweis(p, e, belege) {
   const ids = new Set((Array.isArray(belege?.observations) ? belege.observations : []).filter((o) => o?.sessionId === belege.sessionId).map((o) => o.id));
   if (e.observations.length > 0 && e.observations.every((id) => ids.has(id))) return true;
   return p.ohneExport && text(e.ausgabe);
 }
-
 /** Zustand eines Punkts `{ zustand, mangel? }`. */
 function punktZustand(p, e, belege) {
   if (e === undefined) return { zustand: "offen", mangel: `Checklistenpunkt fehlt im Bericht: ${p.id}` };
@@ -57,9 +52,7 @@ function punktZustand(p, e, belege) {
   if (!hatVerweis(p, e, belege)) return { zustand: "offen", mangel: `Checklistenpunkt ${p.id} ohne Beleg-Verweis (Observation-IDs aus dem Export${p.ohneExport ? " oder ausgabe" : ""})` };
   return { zustand: e.ergebnis };
 }
-
 const schlechter = (a, b) => (RANG[b] > RANG[a] ? b : a);
-
 /** Wertet Belege-Export und Bericht aus: `{ version, sessionId, nachweise: { "1".."5" }, maengel, autonom: false }`. */
 export function auswerten({ belege, bericht, config }) {
   const punkte = checklistenPunkte(config);
@@ -83,6 +76,5 @@ export function auswerten({ belege, bericht, config }) {
   }
   return { version: belege?.version ?? null, sessionId: belege?.sessionId ?? null, nachweise, maengel, autonom: false };
 }
-
 /** Exit-Code der Auswertung: 1 bei mindestens einem offenen Nachweis, sonst 0. */
 export const auswertungExit = (ergebnis) => (Object.values(ergebnis.nachweise).includes("offen") ? 1 : 0);
