@@ -14,6 +14,8 @@
  *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch, `scripts/probe-erstbezug.mjs`) läuft als CI-Job und von Hand mit demselben Aufruf; ein roter CI-Zustand des Tag-Commits ist ein Blocker.
  *  - Vor-Tag-Probe (factory#188): die Projekt-Config listet die Bezieher (`bezieher`, `owner/name`); die Checkliste verlangt je Bezieher einen LESENDEN Lauf im Scratch-Klon (Entwurfs-Vorschau, Sync mit lokalem Tag,
  *    `verify` nach den mechanischen Update-Schritten; nie Push, PR, Issue oder Kommentar; Fortschreibung zu ADR 0031). Rot durch Factory-Besitz oder fehlend heißt: nicht taggen. Kein Cross-Repo-CI (das bräuchte ein Secret): die Ergebnisse trägt der Mensch oder Agent mit `--probe` ein.
+ *  - Synthetische Bezieher (factory#224): je Datei in `test/fixtures/probe-profil/` (Profil ohne Stellvertreter: Java, Python) läuft ein CI-Job `Synthetischer Bezieher <profil>`; die Checkliste führt je Profil eine Zeile,
+ *    ein Rot sperrt über die CI-Zeile den Tag. Ohne Profil-Dateien bleibt die Checkliste unverändert.
  *  - Milestones (factory#194): ein Milestone, der nach dem Erstellungsdatum des letzten Release-Tags geschlossen wurde, ist ein weiterer Auslöser („Milestone „<titel>“ geschlossen“), schon bei einem
  *    Besitz-PR (ohne ungetaggten Besitz-PR gibt es nichts zu taggen: `nichts` mit Grund). Gelesen über REST (`milestones?state=closed`) und `git for-each-ref` (`creatordate`); fail-open mit Warnung, ohne Milestones unverändert.
  *    Der Takt läuft dafür auch beim Ereignis `milestone: closed` (board-takt.yml).
@@ -25,7 +27,7 @@
  * Die Funktionen oben sind pur und getestet (test/tag-takt.test.ts); `main` läuft in test/tag-takt-main.test.ts über injizierte Nähte, die echten git-/gh-Aufrufe unten nicht.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MANIFEST_PFAD as MANIFEST, istVerteilteGanzdatei, manifestAusText, wirdVerteilt } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -35,7 +37,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { bestaetigeAnlegen, inboxStart, vertrauterOwner, zielAktionen, zielZugang } from "./inbox-start-lib.mjs";
 import { zeilenRe } from "./nachweis-lib.mjs";
 import { bezieherAus, labelAus, ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { UPDATE_SCHRITTE, WERKZEUG_HINWEIS, mechanischeSchritte, teile, vergleicheTags } from "./release-tag-lib.mjs";
+import { PROFIL_ORDNER, UPDATE_SCHRITTE, WERKZEUG_HINWEIS, mechanischeSchritte, profilNamen, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { HAKEN_ZEILE } from "./sammelticket-titel.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
@@ -235,12 +237,18 @@ export function ciZustand(laeufe) {
  * Pur (factory#234): die CI-Zeile der Checkliste. Der CI-Lauf des Commits enthält den Job `Probe-Erstbezug`; ein roter Zustand ist ein Blocker (nicht taggen), ein laufender oder unbekannter ausstehend
  * (fail-closed, auch das heißt nicht taggen). Ein geänderter Text verliert beim nächsten Takt-Lauf einen alten Haken (`uebernimmHaken`), ein Wechsel von grün auf rot also auch.
  */
-export function ciCheckliste(ci, sha) {
+export function ciCheckliste(ci, sha, profile = []) {
   const kurz = sha.slice(0, 7);
-  if (ci?.zustand === "rot") return `- [ ] BLOCKER: CI des Commits ${kurz} rot (enthält den Probe-Erstbezug), nicht taggen`;
-  if (ci?.zustand === "gruen") return "- [x] CI grün (Probe-Erstbezug eingeschlossen)";
-  return `- [ ] CI des Commits ${kurz} ausstehend, nicht taggen, bis grün (Probe-Erstbezug eingeschlossen)`;
+  const enthalten = profile.length > 0 ? `Probe-Erstbezug und die synthetischen Bezieher ${profile.join(", ")}` : "Probe-Erstbezug";
+  if (ci?.zustand === "rot") return `- [ ] BLOCKER: CI des Commits ${kurz} rot (enthält den ${enthalten}), nicht taggen`;
+  if (ci?.zustand === "gruen") return `- [x] CI grün (${enthalten} eingeschlossen)`;
+  return `- [ ] CI des Commits ${kurz} ausstehend, nicht taggen, bis grün (${enthalten} eingeschlossen)`;
 }
+
+/** Pur (factory#224): die Checklisten-Zeile je synthetischem Bezieher (Profil ohne Stellvertreter); der Job läuft in der CI, ein Rot sperrt über die CI-Zeile den Tag. */
+const profilZeile = (p, kurz) => `- [ ] Synthetischer Bezieher \`${p}\` (\`${PROFIL_ORDNER}/${p}.json\`, Profil ohne Stellvertreter, factory#224): CI-Job \`Synthetischer Bezieher ${p}\` (Sync mit lokalem Tag, mechanische Update-Schritte, \`verify\` des Profils); die grüne CI des Commits deckt ihn ab. Von Hand: \`node scripts/probe-erstbezug.mjs --profil ${p} --quelle <checkout auf ${kurz}> --scratch <leerer scratch-ordner>\``;
+
+const GATE_LUECKE_PROFIL = `; je Gate-Lücke-Zeile ein Fall im synthetischen Bezieher ihres Profils (\`faelle\` in \`${PROFIL_ORDNER}/<profil>.json\`) oder ein begründetes „nicht abbildbar“ dort; eine JS/TS-Lücke wird ein Test in „Negativfälle der Kette“ (\`test/probe-erstbezug.test.ts\`)`;
 
 const CI_TEXT = { gruen: "grün", rot: "ROT", laeuft: "läuft noch (Stand des Takts; nächster Push auf main oder Montagslauf aktualisiert)", unbekannt: "unbekannt" };
 
@@ -299,7 +307,7 @@ function probeAblauf({ tag, sha }) {
 }
 
 /** Pur: Body des Tag-Tickets. `prs` = `besitzCommits`, `aeltestes` = `{ datum, sha }`, `ci` = `ciZustand`. */
-export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [], ankerNeu = [], bezieher = [] }) {
+export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, entfernt = [], migrationen = [], ankerNeu = [], bezieher = [], profile = [] }) {
   const wt = `.claude/worktrees/tag-${tag}`;
   const zeilen = prs.slice(0, MAX_ZEILEN).map((c) => `- ${c.pr} ${zelle(c.betreff)} (${c.datum.slice(0, 10)})`);
   if (prs.length > MAX_ZEILEN) zeilen.push(`- … und ${prs.length - MAX_ZEILEN} weitere`);
@@ -336,15 +344,16 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "",
     ...(bezieher.length > 0 ? probeAblauf({ tag, sha }) : []),
     "Checkliste:",
-    ciCheckliste(ci, sha),
+    ciCheckliste(ci, sha, profile),
     `- [ ] Probe-Erstbezug (\`test/fixtures/projekt-probe.json\`, Export im Scratch, nie ein Bezieher-Repo): läuft auch als CI-Job \`Probe-Erstbezug\` und baut einen Fixture-Bezieher mit dem Sync aus einem lokalen Klon, den mechanischen Update-Schritten und vollem \`verifyKompakt\`; die grüne CI des Commits deckt ihn ab. Von Hand mit demselben Aufruf: \`node scripts/probe-erstbezug.mjs --quelle <checkout auf ${sha.slice(0, 7)}> --scratch <leerer scratch-ordner>\``,
+    ...profile.map((p) => profilZeile(p, sha.slice(0, 7))),
     ...(bezieher.length > 0 ? bezieherProbe({ bezieher }).zeilen : []),
     "- [ ] Pre-Flight „ja, taggen“ (Veröffentlichen) bei der Maintainerin einholen",
     ci.zustand === "gruen" ? `- [ ] Tag \`${tag}\` setzen (Befehl oben)` : `- [ ] Tag \`${tag}\` setzen: GESPERRT, solange die CI-Zeile nicht grün ist (Befehl oben nicht ausführen)`,
     `- [ ] Bezieher holen das Update selbst (\`factory-update.yml\`, wöchentlich, Issue „🔄 Factory-Update“; ihr Agent fährt \`factory-sync --tag ${tag}\`, die Gates des Beziehers melden tote Verweise und Modul-Kopien). Die Fabrik schreibt in kein Bezieher-Repo: kein Sync-PR, kein Trockenlauf im Bezieher-Checkout, kein Issue, kein Kommentar (${factorySeiteIn(WURZEL, "docs/adr/0031-fabrik-ohne-zugriff-auf-bezieher.md")}). ${WERKZEUG_HINWEIS}`,
     "- [ ] Melden Bezieher Rot durch Factory-Besitz (Kommentar im Sammelticket): Fix upstream per PR, dann Patch-Tag auf den Fix-Commit, ein gesetzter Tag wird nie verschoben",
     "- [ ] Rückmeldungen fremder Bezieher seit dem letzten Tag (Meldestelle) gesichtet: je Auffälligkeit eine Sammelticket-Zeile „Gate-Lücke: …“",
-    "- [ ] Auffälligkeit zu einem Bezieher: als Sammelticket-Zeile „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“, nie als Schreibzugriff auf den Bezieher",
+    `- [ ] Auffälligkeit zu einem Bezieher: als Sammelticket-Zeile „Gate-Lücke: welches Bezieher-Gate hätte es melden müssen“, nie als Schreibzugriff auf den Bezieher${profile.length > 0 ? GATE_LUECKE_PROFIL : ""}`,
     "- [ ] Ticket schließen, sobald der Tag gepusht ist (ein geclaimtes Ticket schließt der Takt nicht selbst; ohne Assignee schließt er es beim nächsten Lauf)",
     "",
     "Grenze: Die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); geprüft wird nur lesend im Scratch (Probe-Erstbezug, bei gelisteten Bezieherinnen deren Klon), den Rest melden die Gates der Bezieher beim Update. Vorschau dieses Takts: `node scripts/tag-takt.mjs --dry-run`. Mechanik: " + factorySeiteIn(WURZEL, "docs/agent-harness.md", "tag-takt-factory103") + ".",
@@ -412,7 +421,7 @@ function sammle(io, log) {
   } catch (err) {
     log(`CI-Status nicht lesbar (${fehlerText(err)}), im Ticket steht „unbekannt“.`);
   }
-  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], ankerNeu: ankerNeuAus(io, letzterTag, sha), bezieher: io.bezieher ?? [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
+  return { letzterTag, besitz, sha, ci, milestones: ladeMilestoneAusloeser(io, letzterTag, log), migrationen: io.migrationKey ? bezieherMigrationen(besitz, io.migrationKey) : [], ankerNeu: ankerNeuAus(io, letzterTag, sha), bezieher: io.bezieher ?? [], profile: io.profile ?? [], entfernt: entfernteJeDatei(io, { letzterTag, besitz, sha, manifest }) };
 }
 
 /** Führt die Aktion aus. Rückgabe: true bei Fehler. */
@@ -444,11 +453,11 @@ function fuehreAus(e, io, log) {
 }
 
 /** Pur: Soll-Titel und Soll-Body des Tickets. */
-function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, ankerNeu, bezieher }) {
+function sollTicket(e, { letzterTag, besitz, sha, ci, entfernt, migrationen, ankerNeu, bezieher, profile }) {
   const tag = naechsterTag(letzterTag, besitz, entfernt);
   const aeltestes = besitz.reduce((a, c) => (Date.parse(c.datum) < Date.parse(a.datum) ? c : a));
   const ausloeser = e.ausloeser ?? [`${besitz.length} Besitz-PRs seit ${letzterTag}`];
-  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, ankerNeu, bezieher }) };
+  return { titel: tagTitel(tag), body: tagBody({ tag, letzterTag, sha, prs: besitz, aeltestes, ausloeser, ci, entfernt, migrationen, ankerNeu, bezieher, profile }) };
 }
 
 /**
@@ -551,7 +560,7 @@ export function probeErgebnisse(angaben, bezieher) {
  * 1 bei einem Blocker oder einem ausstehenden Bezieher, 2 bei Aufruf- oder Config-Fehler (unbekanntes Repo, kein Exit-Wert, doppelt). Seit factory#234 zählt auch der CI-Zustand des
  * Commits (`ci` = `ciZustand`, `sha`): nur grün lässt Exit 0 zu, rot ist ein Blocker, laufend oder unbekannt ausstehend (fail-closed). `ci` und `sha` setzt `main` (eine gh-Abfrage).
  */
-export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), log = console.log, err = console.error, ci = { zustand: "unbekannt", url: null }, sha = "" } = {}) {
+export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), log = console.log, err = console.error, ci = { zustand: "unbekannt", url: null }, sha = "", profile = [] } = {}) {
   const { werte, fehler } = flagsLesen(argv, { probe: { type: "string", multiple: true } });
   if (fehler) {
     err(`${fehler.text}\n${PROBE_AUFRUF}`);
@@ -569,13 +578,13 @@ export function probeEinstieg(argv, { ladeConfig = () => ladeProjektConfig(), lo
     err(`--probe ${ungueltig}: erwartet wird je Bezieher einmal <owner/name>=<exit>|rest mit einem Repo aus bezieher (${bezieher.join(", ") || "Liste leer"})\n${PROBE_AUFRUF}`);
     return AUFRUF_EXIT;
   }
-  return probeAusgabe({ r: bezieherProbe({ bezieher, ergebnisse }), ci, sha, log });
+  return probeAusgabe({ r: bezieherProbe({ bezieher, ergebnisse }), ci, sha, log, profile });
 }
 
 /** Gibt Checkliste und Urteil der Vor-Tag-Probe aus; Exit 0 nur ohne Blocker, ohne ausstehenden Bezieher und mit grüner CI (`ci` kann `null` sein: dann ausstehend). */
-function probeAusgabe({ r, ci, sha, log }) {
+function probeAusgabe({ r, ci, sha, log, profile = [] }) {
   const ciGruen = ci?.zustand === "gruen";
-  log([ciCheckliste(ci, sha), ...r.zeilen].join("\n"));
+  log([ciCheckliste(ci, sha, profile), ...r.zeilen].join("\n"));
   if (!ciGruen) log("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
   if (r.blocker.length > 0) log(`Vor-Tag-Probe: BLOCKER ${r.blocker.join(", ")}: nicht taggen.`);
   if (r.rest.length > 0) log(`Vor-Tag-Probe: Projekt-Rest bei ${r.rest.join(", ")}: als Befund festhalten.`);
@@ -600,14 +609,23 @@ function probeCi({ gh, git, log }) {
   }
 }
 
+/** Die synthetischen Bezieher (factory#224): Namen der Profil-Dateien im Fabrik-Checkout; fehlt der Ordner (Bezieher, älterer Stand), gibt es keine. */
+function profileLesen(wurzel) {
+  try {
+    return profilNamen(readdirSync(join(wurzel, PROFIL_ORDNER)));
+  } catch {
+    return [];
+  }
+}
+
 /** Einstieg. `deps` (Tests): `start`, `ladeConfig` (nur `--probe`), `gh`, `log`, `err`, `git` (`args -> stdout`), `wurzel` (Ordner des Sync-Stands), `env` (Standard `process.env`; liefert `PROJECT_TOKEN`), `ladeManifest`. Rückgabe: Exit-Code. */
-export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel), ladeConfig } = {}) {
+export async function main(argv = process.argv.slice(2), { start = inboxStart, gh = { text: ghText, json: ghJson }, log = console.log, err = console.error, git = gitEcht, wurzel = process.cwd(), env = process.env, ladeManifest = () => manifestLaden(wurzel), ladeConfig, ladeProfile = () => profileLesen(wurzel) } = {}) {
   if (argv.some((a) => a === "--probe" || a.startsWith("--probe="))) {
     if (istBezieher(wurzel)) {
       log("Tag-Takt: Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun.");
       return 0;
     }
-    return probeEinstieg(argv, { ladeConfig, log, err, ...probeCi({ gh, git, log }) });
+    return probeEinstieg(argv, { ladeConfig, log, err, profile: ladeProfile(), ...probeCi({ gh, git, log }) });
   }
   const s = await start(argv, { skript: "tag-takt", praefix: "Tag-Takt: Projekt-Config nicht lesbar: ", log, err });
   if (s.code !== undefined) return s.code;
@@ -622,6 +640,7 @@ export async function main(argv = process.argv.slice(2), { start = inboxStart, g
     ladeLog: (tag) => git(["log", "--first-parent", "--format=%x1e%H%x1f%cI%x1f%B%x1f", "--name-only", "--no-renames", `${tag}..HEAD`, "--"]),
     ladeManifest,
     bezieher: bezieherAus(config),
+    profile: ladeProfile(),
     headSha: () => git(["rev-parse", "HEAD"]).trim(),
     zeigeDatei: (ref, pfad) => {
       try {
