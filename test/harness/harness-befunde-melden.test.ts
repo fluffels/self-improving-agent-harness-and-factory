@@ -29,7 +29,7 @@ const TRIGGER = /Harness-Befund|Kern-Befund|Harness-Sammelticket|Harness-Härtun
 const GH_CREATE = /gh issue create/;
 const SAMMELTICKET = /Sammelticket/;
 const WEG_ZEILE = "Sammeltickets nie per `gh issue create`; Zeilen per `node scripts/melden.mjs`";
-const ROLLE =/Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
+const ROLLE = /Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
 const TEXT_PFAD = /^(\.claude\/agents|\.agents\/skills)\/.*\.md$/;
 
 /** Pur: Meldungen `<pfad>:<zeile>: nennt für Harness-Befunde eine Rolle: …` (leer = grün); `ab` ist die Zeilennummer der ersten Zeile von `text`. */

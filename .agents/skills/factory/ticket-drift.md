@@ -13,7 +13,7 @@ Der Monatslauf legt ein Issue „🔎 Ticket-Drift-Bericht <JJJJ-MM>“ an (Mark
    - `rueckstellung`: Kein Parken. Die Begründung gilt noch, dann Ticket im Board einsortieren (unten, wenn unwichtig); sonst schließen. Grund als Kommentar festhalten.
 3. Zahlen, Zeilennummern und Pfade im Text prüft der Lauf nicht: nur in den gelisteten Tickets nachmessen.
 4. Tickets mit Fremdeingang (unter „übersprungen“) und Tickets mit Assignee fasst du nicht an; nur im Abschluss nennen.
-5. Eine Falschmeldung des Laufs (Befund, der nicht stimmt) ist ein Befund zum Harness: Zeile mit Klasse und Beleg ins Sammelticket „Harness-Härtung (gesammelt)“.
+5. Eine Falschmeldung des Laufs (Befund, der nicht stimmt) ist ein Befund zum Harness: Zeile mit Klasse und Beleg per `node scripts/melden.mjs`.
 6. Am Ende das Bericht-Issue schließen, Kommentar mit der Zahl der geänderten, geschlossenen und unveränderten Tickets.
 
 ## Grenzen des Laufs
