@@ -211,7 +211,7 @@ describe("vorbereiten und aufraeumen", () => {
   });
   test("CLI-Versionsmuster: nur x.y.z, auch mehrstellig, ohne Präfix und Zusatz", () => {
     for (const v of ["0.167.0", "10.20.30"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(true);
-    for (const v of ["0.167", "v1.2.3", "1.2.3-x", "1.2.3.4", "", "a.b.c", "9-9-9", "1a2b3"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(false);
+    for (const v of ["0.167", "v1.2.3", "1.2.3-x", "1.2.3.4", "", "a.b.c", "9-9-9", "1a2b3", "9-9.9", "9.9-9"]) expect(lib.CLI_VERSION_MUSTER.test(v), v).toBe(false);
   });
   test("vorbereiten: ein unsauberer Probe-Worktree nach dem Setup baut zurück (Exit 1)", () => {
     const r = lauf(["vorbereiten", ...VERSION], { setup: (p) => { setupStub(p); writeFileSync(join(p, "lose.txt"), "x"); return { status: 0, stderr: "" }; } });
@@ -272,7 +272,7 @@ describe("auftraege (factory#456): committeter Stand, erwarteter HEAD, fertige A
     writeFileSync(datei, "{kaputt");
     expect(auftraege().err).toContain("stand.json fehlt oder ist kein JSON");
   });
-  test.each(["{}", "null", '{"basis":5}', '{"basis":"nicht-hex"}'])("stand.json %s: Exit 1 \"ungültig\"", (inhalt) => {
+  test.each(["{}", "null", '{"basis":1234567}', '{"basis":["abcdef1"]}', '{"basis":"nicht-hex"}'])("stand.json %s: Exit 1 \"ungültig\"", (inhalt) => {
     lauf(["vorbereiten", ...VERSION]);
     writeFileSync(join(probe, ".codex", "probe", "stand.json"), inhalt);
     const r = auftraege();
