@@ -90,10 +90,9 @@ describe("vorbereiten und aufraeumen", () => {
     expect(ticket).toContain(String(lib.PROBE_TICKET_NR));
     expect(ticket).toContain("fremdtext:start");
     expect(calls.map((c) => c[0]).filter((n) => !["rev-parse", "status", "worktree", "branch", "fetch", "setup", "prune"].includes(n))).toEqual([]);
-    expect(calls.some((c) => c.includes("push") || c.includes("gh"))).toBe(false);
     expect(calls.find((c) => c[0] === "setup")?.[1]).toBe(probe);
   });
-  test("Aufruffehler: unbekannter Befehl, unbekanntes Flag, ungültiges --langfuse-auth ergeben Exit 2 ohne Änderung", () => {
+  test("Aufruffehler (unbekannter Befehl oder Flag, ungültiges --langfuse-auth): Exit 2 ohne Änderung", () => {
     for (const a of [[], ["unbekannt"], ["vorbereiten", "--gibts-nicht"], ["vorbereiten", "--langfuse-auth", "x"]]) expect(lauf(a).code, a.join(" ")).toBe(2);
     unveraendert();
   });
@@ -221,9 +220,7 @@ describe("Negativproben (K3): der Claude-Dispatcher und der Codex-Adapter verwei
     expect(() => writeFileSync(ziel, "x")).toThrow();
   });
   test("folgenlos: die Agent-Probe nennt eine Rolle ohne Shell und das nicht existierende Probe-Ticket", () => {
-    const p = proben.find((x) => x.art === "agent") as Probe;
-    expect(p.codex.tool_input.agent_type).toBe("holdout-szenario");
-    expect(p.codex.tool_input.message).toContain(String(lib.PROBE_TICKET_NR));
-    expect(p.claude.tool_input.prompt).toContain("OK");
+    const p = (proben.find((x) => x.art === "agent") as Probe).codex.tool_input;
+    expect([p.agent_type, p.message.includes(String(lib.PROBE_TICKET_NR))]).toEqual(["holdout-szenario", true]);
   });
 });

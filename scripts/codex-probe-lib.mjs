@@ -1,6 +1,6 @@
 // Codex-Probe (factory#366): reine Bausteine für scripts/codex-probe.mjs (Konstanten, Checkliste, Negativproben, Fixture-Hooks, Probe-Ticket, Bericht-Vorlage).
 // Rein: kein I/O, kein Prozessstart; Codex startet die Probe nie, das macht die Maintainerin von Hand (docs/codex/probe.md).
-import { posix, resolve } from "node:path";
+import { resolve } from "node:path";
 import { arbeitsplatzAus } from "./arbeitsplatz-lib.mjs";
 import { rollenFuer } from "./codex-rollen.mjs";
 import { CODEX_HOOK_TIMEOUT_S, CODEX_HOOK_WERKZEUGE } from "./codex-hook-lib.mjs";
@@ -140,6 +140,4 @@ export function checklisteText({ haupt, probe, config }) {
   const neg = negativproben({ haupt, probe, config }).flatMap((n) => [`- \`${n.art}\`: ${n.grund}`, `  - Codex: \`${q(n.codex.tool_input)}\``]);
   return [`# Codex-Probe: Checkliste (Probe-Ticket #${PROBE_TICKET_NR})`, "", ...VORSPANN, "", "Punkte:", ...je, "", "Negativproben (je Art genau eine):", ...neg, "", ...SCHLUSS, ""].join("\n");
 }
-
-export const posixPfad = (p) => posix.normalize(String(p).replaceAll("\\", "/"));
 

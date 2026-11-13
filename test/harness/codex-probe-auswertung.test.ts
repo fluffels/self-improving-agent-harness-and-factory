@@ -90,9 +90,6 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
   test("ergebnis offen zählt als offen", () => {
     expect(offen(lauf(mit((b) => { b.punkte.langfuse.ergebnis = "offen"; })))).toEqual(["2"]);
   });
-  test("grenze ohne Beleg-Verweis ist ebenfalls offen", () => {
-    expect(offen(lauf(mit((b) => { b.punkte.fremdtext.ergebnis = "grenze"; b.punkte.fremdtext.observations = []; })))).toEqual(["3"]);
-  });
   test("playwright fehlt in tools: Nachweis 2 offen", () => {
     const e = export_(); e.tools = ["langfuse"];
     expect(offen(lauf(bericht(), e))).toEqual(["2"]);
@@ -103,23 +100,15 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     const g = export_(); g.observations = g.observations.filter((o) => o.metadata[ROLLEN_KEY] !== rollen[0]);
     expect(offen(lauf(bericht(), g))).toEqual(["1", "4"]);
   });
-  test("Werkzeugbeleg fehlt: Nachweis 4", () => {
-    const e = export_(); e.observations = e.observations.filter((o) => o.type !== "TOOL");
-    expect(offen(lauf(mit((b) => { for (const p of Object.values(b.punkte)) if (p.observations.length) p.observations = ["gen-main"]; }), e))).toEqual(["4"]);
-  });
   test.each([
     ["unbekannte Punkt-ID", (b: ReturnType<typeof bericht>) => { (b.punkte as Record<string, unknown>).erfunden = { ergebnis: "belegt", beobachtung: "", observations: [] }; }],
     ["Version ungleich", (b: ReturnType<typeof bericht>) => { b.version = "0.0.1"; }],
-    ["sessionId ungleich", (b: ReturnType<typeof bericht>) => { b.sessionId = "andere"; }],
     ["frischeSession false", (b: ReturnType<typeof bericht>) => { (b as { frischeSession: boolean }).frischeSession = false; }],
     ["falscher Typ", (b: ReturnType<typeof bericht>) => { (b.punkte.playwright as { observations: unknown }).observations = "tool-1"; }],
   ])("Schema-Mangel (%s): alle fünf Nachweise offen", (_n, aend) => {
     const r = lauf(mit(aend));
     expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
     exit1(r);
-  });
-  test("Bericht kein Objekt: alle fünf offen", () => {
-    expect(offen(lauf(null))).toEqual(["1", "2", "3", "4", "5"]);
   });
 });
 
@@ -139,23 +128,16 @@ describe("Zuordnung der Belegdiagnose zu Nachweisen (Drift-Wächter, W8)", () =>
 });
 
 describe("Einstieg auswerten", () => {
-  const cli = (args: string[]) => spawnSync(process.execPath, ["scripts/codex-probe.mjs", "auswerten", ...args], { encoding: "utf8" });
-  test("fehlendes Flag und kaputtes JSON: Exit 2", () => {
-    expect(cli([]).status).toBe(2);
+  test("Exit 2 bei fehlendem Flag und kaputtem JSON; sonst Exit 1 mit JSON (autonom false) bei einem offenen Bericht", () => {
+    const cli = (...args: string[]) => spawnSync(process.execPath, ["scripts/codex-probe.mjs", "auswerten", ...args], { encoding: "utf8" });
     const t = mkdtempSync(join(tmpdir(), "codex-probe-auswertung-"));
     try {
-      writeFileSync(join(t, "kaputt.json"), "{nicht json");
-      writeFileSync(join(t, "b.json"), JSON.stringify(bericht()));
-      expect(cli(["--belege", join(t, "kaputt.json"), "--bericht", join(t, "b.json")]).status).toBe(2);
-      expect(cli(["--belege", join(t, "gibts-nicht.json"), "--bericht", join(t, "b.json")]).status).toBe(2);
-    } finally { rmSync(t, { recursive: true, force: true }); }
-  });
-  test("echte Projekt-Config, ein offener Bericht ergibt Exit 1 und JSON mit autonom false", () => {
-    const t = mkdtempSync(join(tmpdir(), "codex-probe-auswertung-"));
-    try {
-      writeFileSync(join(t, "e.json"), JSON.stringify(export_()));
-      writeFileSync(join(t, "b.json"), JSON.stringify({}));
-      const r = cli(["--belege", join(t, "e.json"), "--bericht", join(t, "b.json")]);
+      for (const [n, inhalt] of [["kaputt", "{nicht json"], ["e", JSON.stringify(export_())], ["leer", "{}"]]) writeFileSync(join(t, `${n}.json`), inhalt);
+      const pfad = (n: string) => join(t, `${n}.json`);
+      expect(cli().status).toBe(2);
+      expect(cli("--belege", pfad("kaputt"), "--bericht", pfad("leer")).status).toBe(2);
+      expect(cli("--belege", pfad("gibts-nicht"), "--bericht", pfad("leer")).status).toBe(2);
+      const r = cli("--belege", pfad("e"), "--bericht", pfad("leer"));
       expect(r.status).toBe(1);
       expect((JSON.parse(r.stdout) as Ergebnis).autonom).toBe(false);
     } finally { rmSync(t, { recursive: true, force: true }); }

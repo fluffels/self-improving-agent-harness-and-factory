@@ -18,13 +18,7 @@ Die Vorprüfung `node scripts/codex-vorpruefung.mjs` meldet im Probe-Worktree di
 
 Der Probe-Worktree liegt als `codex-probe` im Worktree-Ordner des Repos (nicht unter dem Ticket-Präfix) auf dem Branch `codex-probe` (von `origin/main`, ohne Tracking-Zweig). `vorbereiten` erzeugt darin `.codex/` per `codex-setup.mjs --write` und ersetzt `.codex/hooks.json` durch die Probe-Variante: das Soll plus zwei Fixture-Hooks auf die Shell-Werkzeuge. Unter `.codex/probe/` (mit eigener `.gitignore`, bleibt unversioniert) liegen:
 
-| Datei | Inhalt |
-| --- | --- |
-| `hook-fehler.mjs` | wirft (Exit 1) nur, wenn die Eingabe den Marker `codex-probe-hook-fehler` trägt |
-| `hook-timeout.mjs` | schläft über den Timeout (2 s) hinaus nur bei `codex-probe-hook-timeout`; ohne Marker Exit 0 und keine Ausgabe |
-| `ticket.md` | das lokale Probe-Ticket (Nummer 999999999; kein GitHub-Issue, kein Claim, kein PR, kein Push; ein Lens-Worktree ist erlaubt) mit abgegrenzter Aufgabe und einem markierten Fremdtext-Block |
-| `checkliste.md` | Vorspann, Punkte, Negativproben, Abschluss |
-| `bericht-vorlage.json` | alle Punkt-IDs mit leeren Feldern |
+`hook-fehler.mjs` wirft (Exit 1) nur bei dem Marker `codex-probe-hook-fehler` in der Eingabe, `hook-timeout.mjs` schläft über den Timeout (2 s) hinaus nur bei `codex-probe-hook-timeout`; ohne Marker Exit 0 und keine Ausgabe. `ticket.md` ist das lokale Probe-Ticket (Nummer 999999999; kein GitHub-Issue, kein Claim, kein PR, kein Push; ein Lens-Worktree ist erlaubt) mit abgegrenzter Aufgabe und einem markierten Fremdtext-Block. `checkliste.md` hält Vorspann, Punkte, Negativproben und Abschluss, `bericht-vorlage.json` alle Punkt-IDs mit leeren Feldern.
 
 ## Negativproben
 
@@ -40,21 +34,11 @@ Je Art eine Probe; jede verweigert der Hook (Claude-Dispatcher und Codex-Adapter
 
 Der Bericht: `{ version, sessionId, frischeSession: true, punkte: { <id>: { ergebnis, beobachtung, observations, ausgabe? } } }`. `version` und `sessionId` müssen zum Export passen, `ergebnis` ist `belegt`, `grenze` oder `offen`. Ein Punkt braucht einen Beleg-Verweis: nichtleere `observations` mit IDs aus dem Export derselben Session; nur die Punkte ohne Export (`defekter-mcp`, `tracing-ausfall`, `dateiwerkzeug`) dürfen stattdessen eine `ausgabe` tragen.
 
-| Punkt | Nachweis |
-| --- | --- |
-| `rolle:<name>`, `read-abbildung` | 1 |
-| `playwright`, `langfuse`, `unbekannte-rolle`, `defekter-mcp` | 2 |
-| `hook-deny:<art>`, `hook-fehler`, `hook-timeout`, `write-stdin`, `dateiwerkzeug`, `fremdtext` | 3 |
-| `tracing-ausfall` | 4 |
-| `abnahme` | 5 |
+Zuordnung der Punkte zu den Nachweisen: `rolle:<name>` und `read-abbildung` zu 1; `playwright`, `langfuse`, `unbekannte-rolle`, `defekter-mcp` zu 2; `hook-deny:<art>`, `hook-fehler`, `hook-timeout`, `write-stdin`, `dateiwerkzeug`, `fremdtext` zu 3; `tracing-ausfall` zu 4; `abnahme` zu 5.
 
 Die Ausgabe ist JSON mit `nachweise` (Schlüssel 1 bis 5, je `belegt`, `grenze` oder `offen`), `maengel` und `autonom: false`. Ein Nachweis ist `offen`, sobald ein Punkt fehlt, offen ist oder keinen Beleg-Verweis hat, ein Schema-Mangel vorliegt (dann alle fünf) oder die Belegdiagnose (`bewerteBelege`) einen Mangel meldet; sonst `grenze`, wenn ein Punkt als bekannte Grenze eingestuft ist (etwa Hook-Fehler und Timeout, die der Host fail-open behandelt), sonst `belegt`.
 
-| Exit | Bedeutung |
-| --- | --- |
-| 0 | `vorbereiten` und `aufraeumen` erfolgreich; `auswerten` ohne offenen Nachweis |
-| 1 | Vorprüfung oder Schritt gescheitert; Rest nach `aufraeumen`; mindestens ein Nachweis offen |
-| 2 | Aufruffehler (unbekannter Befehl oder Flag, fehlendes Flag, unlesbare Datei, kein JSON) |
+Exit 0: erfolgreich (`auswerten`: kein Nachweis offen); Exit 1: Vorprüfung oder Schritt gescheitert, Rest nach `aufraeumen` oder ein Nachweis offen; Exit 2: Aufruffehler (unbekannter Befehl oder Flag, fehlendes Flag, unlesbare Datei, kein JSON).
 
 ## Sicherheitsgrenzen
 

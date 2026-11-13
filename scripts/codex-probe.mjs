@@ -1,7 +1,7 @@
 // Einstieg: node scripts/codex-probe.mjs vorbereiten [--langfuse-url <MCP-URL>] [--langfuse-auth env|host]
 //           | auswerten --belege <Export.json> --bericht <Bericht.json> | aufraeumen   (Abnahmeweg: docs/codex/probe.md, factory#366).
-// Isolierter Probe-Lebenslauf für die Gesamtabnahme in Codex: eigener Worktree `codex-probe` von origin/main, Probe-Ticket als lokale Datei, Fixture-Hooks, Checkliste.
-// Das Skript startet Codex nie, liest keine Secrets und schreibt nie in eine globale Konfiguration; Befehle laufen nur über `deps.git` (git) und `deps.setup` (node + codex-setup.mjs im Probe-Worktree).
+// Isolierter Probe-Lebenslauf der Codex-Gesamtabnahme (Worktree `codex-probe` von origin/main). Startet Codex nie, liest keine Secrets, schreibt nie in eine globale Konfiguration;
+// Befehle laufen nur über `deps.git` (git) und `deps.setup` (node + codex-setup.mjs im Probe-Worktree).
 // Bekannte Grenze des Quelltext-Wächters (test/harness/codex-probe.test.ts): er prüft eine geschlossene Musterliste (Umgebung, Home-Ordner, Prozessstart mit Literal `codex`), keine Obfuskation.
 import { spawnSync } from "node:child_process";
 import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { befehlLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { LANGFUSE_AUTH_MODI, pruefeAusgabe } from "./codex-lib.mjs";
-import { PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, posixPfad, probePfad, probeTicket } from "./codex-probe-lib.mjs";
+import { PROBE_NAME, PROBE_TICKET_NR, PROBE_ORDNER, STANDARD_LANGFUSE_URL, berichtVorlage, checklisteText, checklistenPunkte, fixtureHooks, hookVariante, probePfad, probeTicket } from "./codex-probe-lib.mjs";
 import { auswerten, auswertungExit } from "./codex-probe-auswertung.mjs";
 
 const BEFEHLE = {
@@ -22,7 +22,8 @@ const NUMMER = String(PROBE_TICKET_NR);
 const gitStandard = (args, cwd) => { const r = spawnSync("git", args, { cwd, encoding: "utf8" }); return { status: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }; };
 const setupStandard = (probe, args) => { const r = spawnSync(process.execPath, [join(probe, "scripts", "codex-setup.mjs"), ...args], { cwd: probe, encoding: "utf8" }); return { status: r.status ?? 1, stderr: r.stderr ?? "" }; };
 
-const echt = (p) => { try { return posixPfad(realpathSync(p)); } catch { return posixPfad(p); } };
+const posix = (p) => String(p).replaceAll("\\", "/");
+const echt = (p) => { try { return posix(realpathSync(p)); } catch { return posix(p); } };
 const gleich = (a, b) => echt(a) === echt(b);
 const vorhanden = (p) => lstatSync(p, { throwIfNoEntry: false }) !== undefined;
 
