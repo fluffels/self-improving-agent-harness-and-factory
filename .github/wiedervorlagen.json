@@ -7,7 +7,7 @@
   },
   {
     "id": "planer-kosten-nach-112",
-    "faellig": "2026-11-13",
+    "faellig": "2026-11-18",
     "titel": "Planer-Kosten auf geschätzter Basis nachmessen (#112)",
     "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø gegen 1,38 $ vergleichen. Ø = Spalte ‚Kosten geschätzt ($, Ø)‘ (Σ/n), nicht der Median; auslösend ist die Gruppe ‚ab Schnitt, ohne Sammeltickets‘ gegen 1,38 $; alle Läufe und Sammeltickets nur berichten. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
   },
