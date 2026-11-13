@@ -17,7 +17,7 @@ const rawAusloeser = rawBlockformAusloeser as (text: string) => { ausloeser: str
 interface Workflow { pfad: string; text: string }
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 type Git = (args: string[], input?: string) => string;
-const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; lies?: (p: string) => string | null; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
+const pruefe = rawPruefe as (e: { rootDir: string; git?: Git; existiert?: (p: string) => boolean; lies?: (p: string) => string | null; liste?: (o: string) => string[] | null; config?: unknown; spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis[];
 const DATEI_PUNKTE = rawDateiPunkte as readonly string[];
 const quellenPunkt = rawQuellenPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; pflichtChecks?: string[]; vorAbbruch?: boolean }) => Ergebnis;
 const csPunkt = rawCsPunkt as (e: { spiegel?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
@@ -48,9 +48,12 @@ const gesund = [lf("AGENTS.md"), lf(".claude/agents/a.md"), lf(".agents/skills/x
 const GESUND = { spiegel: { requiredChecks: ["Beispiel Check"] }, workflows: [{ pfad: "ci.yml", text: "jobs:\n  a:\n    name: Beispiel Check\n" }], pflichtChecks: ["Beispiel Check"] };
 /** Die gesunde Quelle für `Leitplanken-Quelle`: Quelle und CODEOWNERS spiegeln sich, alle anderen Dateien sind leer. */
 const GESUNDE_QUELLE = JSON.stringify({ harness: ["AGENTS.md", "/.github/CODEOWNERS"] });
-const gesundesLies = (p: string): string | null => (p === ".github/protected-paths.json" ? GESUNDE_QUELLE : p === ".github/CODEOWNERS" ? "AGENTS.md @team\n/.github/CODEOWNERS @team\n" : "");
+const gesundesLies = (p: string): string | null => (p === ".github/protected-paths.json" ? GESUNDE_QUELLE : p === ".github/CODEOWNERS" ? "AGENTS.md @team\n/.github/CODEOWNERS @team\n" : p === ".claude/settings.json" ? GESUNDE_SETTINGS : p === ".factory/besitz.json" ? "{\"eintraege\":[]}" : "");
+/** Die gesunde Quelle für `Modell-Routing` (factory#150): `settings.json` mit `sonnet`, leeres Manifest, ein leerer Agenten-Ordner. */
+const GESUNDE_SETTINGS = "{\"model\":\"sonnet\"}";
+const gesundeListe = (o: string): string[] | null => (o === ".claude/agents" ? [] : null);
 const lauf = (dateien: Datei[], opt: { existiert?: (p: string) => boolean; beispielEol?: string } = {}) =>
-  pruefe({ rootDir: "/x", ...GESUND, lies: gesundesLies, git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
+  pruefe({ rootDir: "/x", ...GESUND, lies: gesundesLies, liste: gesundeListe, git: fakeGit(dateien, opt.beispielEol), existiert: (p) => (opt.existiert ?? (() => false))(p) || p.replaceAll("\\", "/") === "/x/AGENTS.md" || PROJEKTDATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d.pfad}`) || TAKT_DATEIEN.some((d) => p.replaceAll("\\", "/") === `/x/${d}`) });
 const punkt = (e: Ergebnis[], name: string) => e.find((p) => p.punkt === name)!;
 
 describe("Root-Kontextdatei", () => {
@@ -618,7 +621,15 @@ describe("Workflow-Auslöser", () => {
     }
   });
   test("steht in DATEI_PUNKTE vor CODEOWNERS-Spiegel", () => {
-    expect(DATEI_PUNKTE.at(-4)).toBe("Workflow-Auslöser");
+    expect(DATEI_PUNKTE.at(-5)).toBe("Workflow-Auslöser");
+  });
+});
+
+describe("Modell-Routing (factory#150): Standard-Lister", () => {
+  test("ohne injizierte Liste und ohne Ordner unter rootDir ist der Punkt nicht prüfbar, kein Wurf und kein stilles Grün", () => {
+    const e = pruefe({ rootDir: "/gibt-es-nicht-150", ...GESUND, lies: gesundesLies, git: fakeGit(gesund), existiert: () => false }).find((p) => p.punkt === "Modell-Routing")!;
+    expect(e.ok).toBe(false);
+    expect(e.nichtPruefbar).toBe(true);
   });
 });
 
@@ -633,14 +644,15 @@ describe("DATEI_PUNKTE (factory#148): die eine geordnete Liste", () => {
     expect(new Set(DATEI_PUNKTE).size).toBe(DATEI_PUNKTE.length);
   });
   test("die Reihenfolge ist unabhängig abgeschrieben (Orakel, nicht aus dem Code gerechnet)", () => {
-    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Sammel-Check"];
+    const erwartet = ["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Modell-Routing", "Sammel-Check"];
     expect([...DATEI_PUNKTE]).toEqual(erwartet);
     expect(lauf(gesund).map((p) => p.punkt)).toEqual(erwartet);
   });
   test("Required-Check-Quellen steht an fester Stelle vor Workflow-Auslöser, die Liste ist unveränderlich", () => {
-    expect(DATEI_PUNKTE.at(-6)).toBe("Required-Check-Quellen");
-    expect(DATEI_PUNKTE.at(-5)).toBe("Code-Scanning-Quellen");
-    expect(DATEI_PUNKTE.at(-2)).toBe("Leitplanken-Quelle");
+    expect(DATEI_PUNKTE.at(-7)).toBe("Required-Check-Quellen");
+    expect(DATEI_PUNKTE.at(-6)).toBe("Code-Scanning-Quellen");
+    expect(DATEI_PUNKTE.at(-3)).toBe("Leitplanken-Quelle");
+    expect(DATEI_PUNKTE.at(-2)).toBe("Modell-Routing");
     expect(DATEI_PUNKTE.at(-1)).toBe("Sammel-Check");
     expect(Object.isFrozen(DATEI_PUNKTE)).toBe(true);
   });

@@ -854,6 +854,17 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   /** Ein Git-Repo mit LF-Regel und einer LF-Datei im Index: die gesunde Welt der Dateipunkte; `extra` legt weitere Dateien an. */
   /** Inhalte der Projektdateien, die der Punkt `CODEOWNERS-Spiegel` liest (gespiegelt: eine Zeile, die sich selbst schützt). */
   const INHALT: Record<string, string> = { "AGENTS.md": "regeln\n", ".github/protected-paths.json": '{"a":["AGENTS.md","/.github/CODEOWNERS"]}\n', ".github/CODEOWNERS": "AGENTS.md @team\n/.github/CODEOWNERS @team\n" };
+  /** Die gesunde Welt für `Modell-Routing` (factory#150): Settings mit sonnet, ein Projekt-Agent, ein Besitz-Agent (im Manifest, `inherit` bleibt grün) und die Tabelle Projekt-Phase. */
+  const AGENT = (name: string, model: string, effort: string) => `---\nname: ${name}\nmodel: ${model}\neffort: ${effort}\n---\nText\n`;
+  const TABELLE = "| Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |\n|---|---|---|---|\n| Eigene | `sonnet` | `medium` | Subagent `projekt`, gespawnt |\n";
+  /** Das Besitz-Manifest schreibt `lauf` selbst (Option `besitz`), nach `vorbereiten`. */
+  const BESITZ_MODELL = '{"version":3,"eintraege":[{"pfad":".claude/agents/kern.md","ring":"kern"}]}\n';
+  const MODELL: Record<string, string> = {
+    ".claude/settings.json": '{"model":"sonnet"}\n',
+    ".claude/agents/projekt.md": AGENT("projekt", "sonnet", "medium"),
+    ".claude/agents/kern.md": AGENT("kern", "inherit", "inherit"),
+    "docs/model-routing.md": TABELLE,
+  };
   const repo = (extra: Record<string, string> = {}, regel = "* text=auto eol=lf\n", ausser: string[] = []) => (root: string) => {
     writeFileSync(join(root, ".gitattributes"), regel);
     for (const d of [...(rawProjektdateien as { pfad: string }[]), { pfad: ".github/workflows/board-takt.yml" }, { pfad: "scripts/langfuse-takt.mjs" }]) {
@@ -861,7 +872,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
       mkdirSync(dirname(join(root, d.pfad)), { recursive: true });
       writeFileSync(join(root, d.pfad), INHALT[d.pfad] ?? "");
     }
-    for (const [rel, text] of Object.entries(extra)) {
+    for (const [rel, text] of Object.entries({ ...MODELL, ...extra })) {
       mkdirSync(dirname(join(root, rel)), { recursive: true });
       writeFileSync(join(root, rel), text);
     }
@@ -875,7 +886,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
   };
 
   test("gesund: alle Punkte OK (auch CODEOWNERS-Spiegel), Exit 0", () => {
-    const r = lauf({}, { dateien, vorbereiten: repo() });
+    const r = lauf({}, { dateien, besitz: BESITZ_MODELL, vorbereiten: repo() });
     assert.ok(r.out.includes("OK Root-Kontextdatei"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Zeilenenden"));
     assert.ok(r.out.includes("OK Projektdateien"));
@@ -883,6 +894,7 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
     assert.ok(r.out.includes("OK Required-Check-Quellen"), r.out.join("\n"));
     assert.ok(r.out.includes("OK CODEOWNERS-Spiegel"), r.out.join("\n"));
     assert.ok(r.out.includes("OK Leitplanken-Quelle"), r.out.join("\n"));
+    assert.ok(r.out.includes("OK Modell-Routing"), r.out.join("\n"));
     assert.equal(r.code, 0);
   });
 
@@ -949,6 +961,30 @@ describe("Dateipunkte (factory#94): der Doctor prüft die Projektdateien des Bez
       test(titel, () => {
         const r = lauf({}, { dateien: "echt", vorbereiten: repo(extra) });
         assert.ok(r.out.some((z) => z.startsWith("LÜCKE Leitplanken-Quelle: ") && z.includes(teil) && z.includes("Fix: ")), r.out.join("\n"));
+        assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
+        assert.equal(r.code, 1);
+      });
+    }
+  });
+
+  describe("factory#150 Negativfall: je Teilregel macht genau Modell-Routing rot", () => {
+    const ohneZeile = (r: Lauf) => r.out.filter((z) => !z.includes("Modell-Routing") && !z.startsWith("Harness-Doctor: "));
+    const basis = () => lauf({}, { dateien: "echt", besitz: BESITZ_MODELL, vorbereiten: repo() });
+    const FAELLE: Record<string, [string, Record<string, string>]> = {
+      "(a) Projekt-Agent mit model: inherit": ["(a)", { ".claude/agents/projekt.md": AGENT("projekt", "inherit", "medium") }],
+      "(a) Projekt-Agent ohne effort:": ["(a)", { ".claude/agents/projekt.md": "---\nname: projekt\nmodel: sonnet\n---\n" }],
+      "(b) harter Pin in einem Skill": ["(b)", { ".agents/skills/x/SKILL.md": "---\nmodel: claude-" + "opus-5\n---\n" }],
+      "(c) Projekt-Agent mit dem Namen eines Besitz-Agenten": ["(c)", { ".claude/agents/projekt.md": AGENT("kern", "sonnet", "medium") }],
+      "(d) settings.json mit model opus": ["(d)", { ".claude/settings.json": '{"model":"opus"}\n' }],
+      "(e) Tabelle Projekt-Phase weicht vom Frontmatter ab": ["(e)", { "docs/model-routing.md": TABELLE.replace("`medium` |", "`high` |") }],
+    };
+    test("Basislauf: gesund", () => {
+      assert.ok(basis().out.includes("OK Modell-Routing"), basis().out.join("\n"));
+    });
+    for (const [titel, [teil, extra]] of Object.entries(FAELLE)) {
+      test(titel, () => {
+        const r = lauf({}, { dateien: "echt", besitz: BESITZ_MODELL, vorbereiten: repo(extra) });
+        assert.ok(r.out.some((z) => z.startsWith("LÜCKE Modell-Routing: ") && z.includes(teil) && z.includes("Fix: ")), r.out.join("\n"));
         assert.deepEqual(ohneZeile(r), ohneZeile(basis()));
         assert.equal(r.code, 1);
       });
