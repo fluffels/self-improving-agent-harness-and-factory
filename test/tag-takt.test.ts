@@ -786,3 +786,51 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
     expect(texte.join("\n")).toContain("Konfig neu");
   });
 });
+
+describe("synthetische Bezieher je Profil (factory#224)", () => {
+  const sha = "b".repeat(40);
+  const basis = { tag: "v1.3.0", letzterTag: "v1.2.3", sha, prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null } };
+  const ciMitProfilen = T.ciCheckliste as unknown as (ci: { zustand: string; url: string | null }, sha: string, profile?: string[]) => string;
+  const probeIndex = (zeilen: string[]) => zeilen.findIndex((z) => z.startsWith("- [ ] Probe-Erstbezug"));
+
+  it("Negativfall: ohne Profile (fehlend oder leer) ist die Checkliste zeichengleich", () => {
+    expect(T.tagBody({ ...basis, profile: [] })).toBe(T.tagBody(basis));
+    for (const zustand of ["gruen", "rot", "laeuft"]) expect(ciMitProfilen({ zustand, url: null }, sha, [])).toBe(T.ciCheckliste({ zustand, url: null }, sha));
+    expect(T.tagBody(basis)).not.toContain("Synthetischer Bezieher");
+    expect(T.tagBody(basis)).not.toContain("nicht abbildbar");
+  });
+  it("mit Profilen: genau eine Zeile je Profil direkt nach der Probe-Erstbezug-Zeile, mit Job und Handaufruf", () => {
+    const zeilen = T.tagBody({ ...basis, profile: ["java", "python"] }).split("\n");
+    const i = probeIndex(zeilen);
+    expect(i).toBeGreaterThan(-1);
+    expect(zeilen.filter((z) => z.includes("Synthetischer Bezieher"))).toHaveLength(2);
+    expect(zeilen[i + 1]).toContain("Synthetischer Bezieher `java`");
+    expect(zeilen[i + 1]).toContain("CI-Job `Probe-Erstbezug java`");
+    expect(zeilen[i + 1]).toContain("node scripts/probe-erstbezug.mjs --profil java --quelle <checkout auf bbbbbbb>");
+    expect(zeilen[i + 2]).toContain("Synthetischer Bezieher `python`");
+    expect(zeilen[i + 2]).toContain("--profil python");
+  });
+  it("mit Profilen: die Gate-Lücke-Zeile verlangt je Zeile einen Fall oder ein begründetes „nicht abbildbar“; ohne Profile fehlt der Zusatz", () => {
+    const mit = T.tagBody({ ...basis, profile: ["java"] }).split("\n").find((z) => z.includes("Auffälligkeit zu einem Bezieher"));
+    expect(mit).toContain("`faelle` in `test/fixtures/probe-profil/<profil>.json`");
+    expect(mit).toContain("begründetes „nicht abbildbar“");
+    expect(T.tagBody(basis).split("\n").find((z) => z.includes("Auffälligkeit zu einem Bezieher"))).not.toContain("faelle");
+  });
+  it("rote CI mit Profilen: die BLOCKER-Zeile nennt die synthetischen Bezieher, der Tag ist GESPERRT", () => {
+    const b = T.tagBody({ ...basis, ci: { zustand: "rot", url: null }, profile: ["java", "python"] });
+    expect(b).toContain("- [ ] BLOCKER: CI des Commits bbbbbbb rot (enthält den Probe-Erstbezug und die synthetischen Bezieher java, python), nicht taggen");
+    expect(b).toContain("GESPERRT");
+    expect(ciMitProfilen({ zustand: "gruen", url: null }, sha, ["java"])).toBe("- [x] CI grün (Probe-Erstbezug und die synthetischen Bezieher java eingeschlossen)");
+    expect(ciMitProfilen({ zustand: "laeuft", url: null }, sha, ["java"])).toContain("ausstehend, nicht taggen, bis grün (Probe-Erstbezug und die synthetischen Bezieher java eingeschlossen)");
+  });
+  it("sollTicket über lauf: die Profile aus io.profile stehen im Body des angelegten Tickets, ohne io.profile nicht", () => {
+    const eins = (n: number) => `\x1e${String(n).repeat(40)}\x1f${vor(n)}\x1ffeat: a (#${n})\n\n\x1f\n\nscripts/a.mjs\n`;
+    const lauf = (extra: Record<string, unknown>): string => {
+      const texte: string[] = [];
+      T.lauf({ io: { istBezieher: () => false, tags: () => ["v1.2.3"], ladeLog: () => eins(1) + eins(2) + eins(3), ladeManifest: () => MANIFEST, headSha: () => sha, ladeLaeufe: () => [], ladeOffene: () => [], frischeOffene: () => [], dringlichKey: KEY, migrationKey: MKEY, jetzt: () => JETZT, projectToken: "t", legeIssueAn: (_t: string, b: string) => { texte.push(b); return "5"; }, sortiereEin: () => true, zeigeDatei: () => null, log: () => undefined, ...extra }, trocken: false });
+      return texte.join("\n");
+    };
+    expect(lauf({ profile: ["java"] })).toContain("Synthetischer Bezieher `java`");
+    expect(lauf({})).not.toContain("Synthetischer Bezieher");
+  });
+});

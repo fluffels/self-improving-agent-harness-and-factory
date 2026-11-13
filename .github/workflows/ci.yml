@@ -135,6 +135,39 @@ jobs:
       - name: Probe-Erstbezug
         run: node scripts/probe-erstbezug.mjs --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-erstbezug"
 
+  # Synthetische Bezieher je Profil ohne Stellvertreter (factory#224): dieselbe Kette wie der Probe-Erstbezug, mit der Profil-Fixture aus test/fixtures/probe-profil/<profil>.json (Java, Python: Config-Overlay,
+  # Quelldateien, Node-Stellvertreter für Maven und pytest in der verify-Kette). Die Matrix ist die Liste der Profil-Dateien (Wächter in test/probe-profil.test.ts). Kein Required Check (das wäre eine Ruleset-Änderung):
+  # ein Rot sperrt den Tag über den CI-Zustand des Commits (ciZustand liest den Abschluss von ci.yml) und alarmiert auf main. Kein continue-on-error, kein || true. Der Matrixwert geht nur über env in die Shell.
+  probe-profil:
+    name: Probe-Erstbezug ${{ matrix.profil }} (synthetischer Bezieher)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        profil: [java, python]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: node scripts/gate-befehl.mjs install
+
+      - name: Synthetischer Bezieher
+        env:
+          PROFIL: ${{ matrix.profil }}
+        run: node scripts/probe-erstbezug.mjs --profil "$PROFIL" --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-profil-$PROFIL"
+
   # Doku-Aktualitäts-Wächter: gleicht die in der Doku als „offen“ markierten Roadmap-Tickets gegen den echten gh-issue-Status ab und
   # ALARMIERT, wenn ein längst geschlossenes Ticket noch als offen dokumentiert ist. Bewusst nicht in der hermetischen `verify`-Kette:
   # der Abgleich braucht Netz und Token. continue-on-error: nicht blockierend, der rote Schritt bleibt als Alarm sichtbar. Kein `npm ci`
@@ -163,10 +196,10 @@ jobs:
         run: node scripts/check-doc-tickets.mjs
 
   # Post-hoc-Netz auf main: ein roter `main` trotz grüner PR-Checks öffnet ein Alarm-Issue, nur auf push und ohne den Workflow zu blockieren. Die Mechanik
-  # (Dedup, Board-Position, PROJECT_TOKEN) wohnt im Kern-Workflow alarm-rot-main.yml; das Label (ein existierendes Label des Projekts) kommt als Input. Ein Workflow mit eigenem Sammel-Job trägt denselben Aufruf (der Sammel-Job hängt per needs an allen anderen Jobs außer denen, die selbst an ihm hängen, läuft mit `!cancelled()` und wird rot bei einem roten oder abgebrochenen Bedarfsjob); der Doctor-Punkt "Sammel-Check" prüft das für die Workflows aus `sammelChecks` (hier nicht gesetzt: dieser Job hängt an drei Jobs).
+  # (Dedup, Board-Position, PROJECT_TOKEN) wohnt im Kern-Workflow alarm-rot-main.yml; das Label (ein existierendes Label des Projekts) kommt als Input. Ein Workflow mit eigenem Sammel-Job trägt denselben Aufruf (der Sammel-Job hängt per needs an allen anderen Jobs außer denen, die selbst an ihm hängen, läuft mit `!cancelled()` und wird rot bei einem roten oder abgebrochenen Bedarfsjob); der Doctor-Punkt "Sammel-Check" prüft das für die Workflows aus `sammelChecks` (hier nicht gesetzt: dieser Job hängt an vier Jobs).
   alarm-red-main:
     name: Alarm bei rotem main
-    needs: [build-test, security-audit, probe-erstbezug]
+    needs: [build-test, security-audit, probe-erstbezug, probe-profil]
     if: failure() && github.event_name == 'push'
     permissions:
       contents: read

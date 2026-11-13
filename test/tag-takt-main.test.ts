@@ -420,3 +420,40 @@ describe("tag-takt main: Milestones (factory#194)", () => {
     expect(a.text).toEqual([]);
   });
 });
+
+describe("tag-takt main: synthetische Bezieher (factory#224)", () => {
+  const CI_LAUF = (conclusion: string | null) => [{ path: ".github/workflows/ci.yml", status: "completed", conclusion, html_url: "https://example.invalid/run/9" }];
+  it("probeEinstieg mit Profilen: rote CI → Exit 1 und die Zeile nennt die Profile; grün bei grünem Bezieher → Exit 0", () => {
+    const log: string[] = [];
+    const deps = { ladeConfig: () => ({ ...FREMD, bezieher: ["o/a"] }), log: (s: string) => log.push(s), err: () => undefined, profile: ["java", "python"], sha: SHA };
+    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "rot", url: null } })).toBe(1);
+    expect(log.join("\n")).toContain("(enthält den Probe-Erstbezug und die synthetischen Bezieher java, python)");
+    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "gruen", url: null } })).toBe(0);
+  });
+  it("main --probe reicht ladeProfile durch; ohne Dep liest es die Dateien im Ordner der Wurzel, fehlt der Ordner, gibt es keine Profile", async () => {
+    const a = aufbau({ ghJson: () => CI_LAUF("failure") });
+    a.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
+    a.deps.ladeProfile = () => ["java"];
+    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(1);
+    expect(a.log.join("\n")).toContain("synthetischen Bezieher java");
+    const b = aufbau({ ghJson: () => CI_LAUF("failure") });
+    b.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
+    expect(await T.main(["--probe", "o/a=0"], b.deps)).toBe(1);
+    expect(b.log.join("\n")).not.toContain("synthetischen Bezieher");
+    const w = mkdtempSync(join(tmpdir(), "takt-profil-"));
+    ordner.push(w);
+    mkdirSync(join(w, "test", "fixtures", "probe-profil"), { recursive: true });
+    for (const d of ["python.json", "java.json", "notiz.md"]) writeFileSync(join(w, "test", "fixtures", "probe-profil", d), "{}");
+    const c = aufbau({ ghJson: () => CI_LAUF("failure") });
+    c.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
+    c.deps.wurzel = w;
+    expect(await T.main(["--probe", "o/a=0"], c.deps)).toBe(1);
+    expect(c.log.join("\n")).toContain("synthetischen Bezieher java, python");
+  });
+  it("Ticket-Lauf: die Profile aus ladeProfile stehen im Body des angelegten Tickets", async () => {
+    const a = aufbau();
+    a.deps.ladeProfile = () => ["python"];
+    expect(await T.main([], a.deps)).toBe(0);
+    expect(JSON.stringify(a.text[0].args)).toContain("Synthetischer Bezieher");
+  });
+});
