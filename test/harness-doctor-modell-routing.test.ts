@@ -189,6 +189,10 @@ describe("Punkt Modell-Routing", () => {
     const fix = mit({ ".claude/agents/projekt.md": agent("projekt", "inherit") }).fix ?? "";
     for (const a of aliase) expect(fix).toContain(a);
   });
+  test("der Fix eines (b)-Funds nennt jeden Alias der geschlossenen Liste", () => {
+    const fix = mit({ ".agents/skills/x/SKILL.md": "---\nmodel: claude-" + "opus-5\n---\n" }).fix ?? "";
+    for (const a of aliase) expect(fix).toContain(a);
+  });
   test("(e) Tabelle nennt einen Subagenten ohne Agentendatei: der Fund sagt, dass die Datei fehlt", () => {
     const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagent `weg`") });
     expect(e.befund).toContain("Agentendatei .claude/agents/weg.md fehlt");
