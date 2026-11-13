@@ -189,6 +189,12 @@ describe("Punkt Modell-Routing", () => {
     const fix = mit({ ".claude/agents/projekt.md": agent("projekt", "inherit") }).fix ?? "";
     for (const a of aliase) expect(fix).toContain(a);
   });
+  test("(b) Grenze: nur Workflow-Skripte direkt im Ordner zählen, der Fix nennt genau diesen Umfang", () => {
+    const pin = "model: claude-" + "opus-5\n";
+    expect(mit({ ".claude/workflows/demo.js": pin }).befund).toContain("(b) .claude/workflows/demo.js");
+    for (const unsichtbar of [".claude/workflows/demo.md", ".claude/workflows/demo.yml", ".claude/workflows/sub/x.js"]) expect(mit({ [unsichtbar]: pin }).ok, unsichtbar).toBe(true);
+    expect(mit({ ".claude/workflows/demo.js": pin }).fix).toContain(".js, .mjs, .ts direkt in .claude/workflows");
+  });
   test("der Fix eines (b)-Funds nennt jeden Alias der geschlossenen Liste", () => {
     const fix = mit({ ".agents/skills/x/SKILL.md": "---\nmodel: claude-" + "opus-5\n---\n" }).fix ?? "";
     for (const a of aliase) expect(fix).toContain(a);

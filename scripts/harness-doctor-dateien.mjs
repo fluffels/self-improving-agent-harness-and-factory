@@ -29,7 +29,7 @@
  *
  *   `Modell-Routing` (factory#150): der Fitness-Anteil von model-routing gegen die Claude-Code-Konfiguration des Beziehers (Funktionen in modell-routing-lib.mjs, dieselben ruft der Kern-Test model-routing). Teilregeln, eine Lücke nennt alle Funde:
  *   (a) jeder Projekt-Agent (Datei unter `.claude/agents/`, Pfad nicht im Besitz-Manifest) trägt `model:` aus `MODELL_ALIASE` (opus, sonnet, haiku, fable) und ein `effort:`; `inherit` und fehlende Werte sind Lücken;
- *   (b) kein harter Pin (`claude-<stufe>-<nr>`) in Agenten, Skills (Quelle und Zeiger), `.claude/settings.json`, `.claude/workflows`; (c) jeder `name:` unter `.claude/agents` ist eindeutig, auch über die Besitz-Agenten hinweg, jede Datei hat einen;
+ *   (b) kein harter Pin (`claude-<stufe>-<nr>`) in Agenten, Skills (Quelle und Zeiger), `.claude/settings.json` und Workflow-Skripten (`.js`, `.mjs`, `.ts` direkt in `.claude/workflows`, eine Ebene; Markdown, YAML und Unterordner dort bleiben ungeprüft); (c) jeder `name:` unter `.claude/agents` ist eindeutig, auch über die Besitz-Agenten hinweg, jede Datei hat einen;
  *   (d) `hauptchatModellBefunde(settings)` ist leer (fehlt `settings.json`, ist das eine Lücke); (e) die Tabelle „Projekt-Phase“ in `docs/model-routing.md` gleicht den Frontmatter ihrer Subagenten (ohne die Seite: OK mit Hinweis).
  *   `settings.json` kein JSON-Objekt, `.claude/agents` fehlt oder eine Agentendatei nicht lesbar: nicht prüfbar mit Fix; ein unlesbares Besitz-Manifest macht nur (a) nicht prüfbar. Ein Fund in einer prüfbaren Teilregel ist eine Lücke und nennt die nicht prüfbaren Teile.
  *   Grenzen: die Listen kommen aus dem Dateisystem (lokal zählen ungetrackte Dateien mit, ein CI-Checkout nur getrackte); `parseFrontmatter` liest flach; (e) nimmt Dateiname = `name` an; (b) liest nur `SKILL.md` je Skill; Effort wird nur auf Anwesenheit geprüft;
@@ -520,7 +520,7 @@ const MR_DOKU = "docs/model-routing.md";
 const ALIAS_TEXT = MODELL_ALIASE.join(", ");
 const MR_FIXE = {
   a: "im Frontmatter jedes Projekt-Agenten unter .claude/agents/ (nicht im Besitz-Manifest) `model:` aus " + ALIAS_TEXT + " und ein `effort:` (nicht inherit) setzen; Liste auf der Seite docs/model-routing.md des Factory-Repos",
-  b: "feste Modell-IDs (claude-<stufe>-<nr>) in Agenten, Skills, .claude/settings.json und .claude/workflows durch den Alias (" + ALIAS_TEXT + ") ersetzen",
+  b: "feste Modell-IDs (claude-<stufe>-<nr>) in Agenten, Skills, .claude/settings.json und Workflow-Skripten (.js, .mjs, .ts direkt in .claude/workflows, eine Ebene) durch den Alias (" + ALIAS_TEXT + ") ersetzen",
   c: "jedem Agenten unter .claude/agents/ einen eigenen `name:` geben (auch gegenüber den mitgelieferten Agenten eindeutig)",
   d: ".claude/settings.json anlegen oder korrigieren: `model` genau `sonnet`, kein env-, Effort- oder Cache-TTL-Schlüssel, der es überstimmt",
   e: "Alias und Effort der Tabelle Projekt-Phase in docs/model-routing.md und das Frontmatter des Subagenten gleichziehen",

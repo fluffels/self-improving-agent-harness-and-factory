@@ -1,7 +1,7 @@
 // Prüffunktionen (importiert nur skill-pfade.mjs): die EINE Quelle der Prüffunktionen für den Fitness-Anteil von model-routing
 // (factory#150). Der Kern-Test test/harness/model-routing.test.ts und der Doctor-Punkt `Modell-Routing` (harness-doctor-dateien.mjs) lesen
 // dieselben Definitionen. Funde tragen das Präfix ihrer Teilregel (a) bis (e).
-// Grenzen: `routingPfade` liest je Ordner nur eine Ebene (kein Unterordner in .claude/workflows); `parseFrontmatter` liest flach (`model:` und `effort:` oberste Ebene); Effort wird nur auf Anwesenheit geprüft; ein neuer
+// Grenzen: `routingPfade` liest je Ordner nur eine Ebene (Workflow-Skripte `.js`/`.mjs`/`.ts` direkt in .claude/workflows; Markdown, YAML und Unterordner dort bleiben ungeprüft); `parseFrontmatter` liest flach (`model:` und `effort:` oberste Ebene); Effort wird nur auf Anwesenheit geprüft; ein neuer
 // Alias braucht einen Factory-Release (`MODELL_ALIASE`); geprüft wird die Claude-Code-Konfiguration, nicht die Modellwahl von Codex.
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 

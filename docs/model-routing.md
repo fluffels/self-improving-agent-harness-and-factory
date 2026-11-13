@@ -85,7 +85,7 @@ Die hohen Blocker-Zahlen der Test-Adäquanz und der Requirement-Treue stammen ü
 
 ## 3. Keine Pins mehr
 
-Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) in `model:`-Feldern. Es gibt deshalb keine Update-Checkliste. [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) verbietet harte IDs in `.claude/agents`, `.claude/skills`, `.claude/workflows` und `.claude/settings.json`; im Bezieher prüft das der Doctor-Punkt `Modell-Routing` (factory#150, dieselbe Funktion `hatHartenPin` aus `scripts/modell-routing-lib.mjs`). Wer eine bestimmte Generation braucht, muss den Wächter bewusst (per reviewtem Commit mit Begründung) anpassen, nicht still pinnen.
+Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) in `model:`-Feldern. Es gibt deshalb keine Update-Checkliste. [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) verbietet harte IDs in `.claude/agents`, `.claude/skills`, den Workflow-Skripten (`.js`, `.mjs`, `.ts` direkt in `.claude/workflows`) und `.claude/settings.json`; im Bezieher prüft das der Doctor-Punkt `Modell-Routing` (factory#150, dieselbe Funktion `hatHartenPin` aus `scripts/modell-routing-lib.mjs`). Wer eine bestimmte Generation braucht, muss den Wächter bewusst (per reviewtem Commit mit Begründung) anpassen, nicht still pinnen.
 
 ## 4. Konvention im Ticket-Workflow
 
