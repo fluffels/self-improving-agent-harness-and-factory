@@ -6,7 +6,6 @@
     { "einheit": "docs/codex/einstieg.md", "ausschnitt": "in der Fabrik nicht geprüft", "einordnung": "beide", "grund": "Stand der Evidenz: Beobachtung aus einem Bezieher-Pilot" },
     { "einheit": ".agents/skills/review-lenses/brille-architektur.md", "ausschnitt": "existierenden Fabrik/Abstraktion", "einordnung": "beide", "grund": "Entwurfsmuster, kein Rollenbezug" },
     { "einheit": ".agents/skills/factory/SKILL.md", "ausschnitt": "im Factory-Repo (dessen Issues das Factory-Board führt)", "einordnung": "beide", "grund": "Beschreibung des Skills, gilt für jeden Bezieher mit eigenem Factory-Board" },
-    { "einheit": ".agents/skills/factory/SKILL.md", "ausschnitt": "Factory-Board (im Repo, dessen Issues es führt: Factory-Repo)", "einordnung": "beide", "grund": "Erklärt das Factory-Board als Begriff, gilt in beiden Rollen" },
-    { "einheit": ".claude/skills/factory/SKILL.md", "ausschnitt": "im Factory-Repo (dessen Issues das Factory-Board führt)", "einordnung": "beide", "grund": "Generierter Zeiger-Text, wie die Quelle unter .agents/skills/factory/SKILL.md" }
+    { "einheit": ".agents/skills/factory/SKILL.md", "ausschnitt": "Factory-Board (im Repo, dessen Issues es führt: Factory-Repo)", "einordnung": "beide", "grund": "Erklärt das Factory-Board als Begriff, gilt in beiden Rollen" }
   ]
 }

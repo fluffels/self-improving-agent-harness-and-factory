@@ -2,7 +2,7 @@
  * Markdown-Einheiten, sondern im Projekt-Block der AGENTS.md oder auf einer Factory-Seite. Gilt ein Satz in beiden Rollen, trägt ihn
  * `test/harness/fabrik-regeltext-inventur.json` mit Ausschnitt und Grund ein.
  *
- * Scan-Umfang (geschlossen): jeder Manifest-Eintrag mit `wirdVerteilt(e)` und Pfad `*.md`, als Ganzdatei oder als Block (Zeilenversatz wie im Befunde-Wächter).
+ * Scan-Umfang (geschlossen): jeder Manifest-Eintrag mit `wirdVerteilt(e)` und Pfad `*.md` (ohne die generierten Zeiger unter `.claude/skills/`), als Ganzdatei oder als Block (Zeilenversatz wie im Befunde-Wächter).
  * Suchliste (geschlossen, ohne Groß-/Kleinschreibung): Factory-Repo, Fabrik, upstream, ohne Sync-Stand, sync-stand.json, Rolle `factory`. Gezählt wird je Treffer.
  * Einordnung: `verweis` (Fabrik-Verweis `<x>.md (Fabrik)`, factory#177), `beide` (Eintrag der Inventur umschließt den Treffer in derselben Zeile), sonst `offen` = Fehler.
  * Grenzen: Heuristik mit einer Wortliste; Wörter außerhalb der Liste („Bezieher“, „Factory-Board“) fallen durch, Laufzeittexte in `.mjs` und Workflows sind nicht gescannt,
@@ -27,6 +27,7 @@ const { blockSpanne, einheitId, wirdVerteilt } = rawBesitz as unknown as {
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const SUCHLISTE = /Factory-Repo|Fabrik|upstream|ohne Sync-Stand|sync-stand\.json|Rolle `factory`/gi;
 const VERWEIS = /\.md \(Fabrik\)$/i;
+const ZEIGER = /^\.claude\/skills\//; // generierte Zeiger auf die Quelle unter .agents/skills (skills:sync), die Quelle wird gescannt
 const INVENTUR = "test/harness/fabrik-regeltext-inventur.json";
 const WEG = "Regeltext nur für die Fabrik gehört in den Projekt-Block der AGENTS.md oder auf eine Factory-Seite (Form 4, Fortschreibung factory#154); gilt er in beiden Rollen: Eintrag mit Grund in test/harness/fabrik-regeltext-inventur.json";
 
@@ -74,7 +75,7 @@ const lies = (pfad: string) => readFileSync(`${WURZEL}${pfad}`, "utf8");
 /** Die verteilten Markdown-Einheiten (Ganzdatei oder Block) des Besitz-Manifests. */
 function umfang(eintraege: Eintrag[] = ladeBesitzManifest<Eintrag>().eintraege): Einheit[] {
   const gesehen = new Map<string, Einheit>();
-  for (const e of eintraege.filter((x) => wirdVerteilt(x) && x.pfad.endsWith(".md"))) {
+  for (const e of eintraege.filter((x) => wirdVerteilt(x) && x.pfad.endsWith(".md") && !ZEIGER.test(x.pfad))) {
     const id = einheitId(e);
     if (gesehen.has(id)) continue;
     const text = lies(e.pfad);
@@ -98,10 +99,10 @@ describe("Fabrik-Regeltext in verteilten Texten (factory#222)", () => {
     expect(meldungen(umfang(), ladeInventur())).toEqual([]);
   });
 
-  test("Beleg der Inventur: ohne Einträge ist jeder Treffer offen oder ein Verweis (7 Verweise, 8 Treffer „beide“)", () => {
+  test("Beleg der Inventur: ohne Einträge ist jeder Treffer offen oder ein Verweis (7 Verweise, 7 Treffer „beide“)", () => {
     const t = inventur(umfang(), []);
     expect(t.filter((x) => x.einordnung === "verweis")).toHaveLength(7);
-    expect(t.filter((x) => x.einordnung === "offen").length).toBe(8);
+    expect(t.filter((x) => x.einordnung === "offen").length).toBe(7);
   });
 
   test("ein Treffer ohne Eintrag ist offen und die Meldung nennt den Weg (AK1-Negativfall)", () => {
@@ -154,6 +155,7 @@ describe("Fabrik-Regeltext in verteilten Texten (factory#222)", () => {
     expect(ids).toContain("AGENTS.md#kern");
     expect(ids).toContain(".claude/agents/factory-umsetzer.md");
     expect(ids).toContain(".agents/skills/factory/SKILL.md");
+    expect(ids.filter((i) => ZEIGER.test(i))).toEqual([]);
     expect(u.find((x) => x.id === "AGENTS.md#kern")?.text.length).toBeGreaterThan(1000);
   });
 });

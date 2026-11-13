@@ -84,7 +84,7 @@ Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vol
 ## Projekt-Block (Kern je Rolle)
 
 <!-- factory-projekt:start -->
-> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält keinen Produktcode; Projekte beziehen den Besitz per Sync.
+> Dieses Repository ist der Harness selbst: Gates, Wächter-Tests, Hooks, Skills und Werkzeuge, mit denen Coding-Agenten Tickets bearbeiten. Es enthält keinen Produktcode; Projekte beziehen den Besitz per Sync. Ohne `.factory/sync-stand.json` ist es selbst upstream: Kern-Änderungen geschehen hier.
 
 ## Das Wichtigste zuerst
 

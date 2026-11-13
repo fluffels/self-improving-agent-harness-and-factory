@@ -24,7 +24,7 @@ Die Fabrik ist selbst ein Projekt des Harness: sie verteilt den Kern und nutzt i
 | 1, Datei nur in der Fabrik | Ring `oberflaeche` oder `kern-abdeckung.json` | Kern-Abdeckung (mit Negativfall), Ring-Regel, Import-Hülle in `test/harness/kern-reinheit.test.ts` |
 | 2, Verhalten im Kern-Code | Aufruf von `istBezieher(wurzel)` aus `scripts/sync-stand-lib.mjs` (Rollen-Schalter) | `test/harness/rollen-schalter.test.ts` (neu) |
 | 3, Wert | Projekt-Config und Projektwert-Blöcke | Kern-Reinheit (Literale), Drift-Gate (Projektwert-Stellen) |
-| 4, Regeltext nur für die Fabrik | Projekt-Block der AGENTS.md oder Factory-Seite | kein Wächter (bekannte Grenze), siehe factory#222 |
+| 4, Regeltext nur für die Fabrik | Projekt-Block der AGENTS.md oder Factory-Seite | `test/harness/fabrik-regeltext.test.ts` mit Inventur `test/harness/fabrik-regeltext-inventur.json` (factory#222) |
 | 5, zeitlich: `main` vor dem Tag | Release-Tag | Tag-Takt und Vor-Tag-Probe; im Bezieher das Drift-Gate mit Herkunft vom Tag |
 
 - **Rollen-Schalter.** `istBezieher(wurzel)` ist die Stelle für Rollen-Weichen im verteilten Code: Sync-Stand vorhanden heißt Bezieher, ein kaputter Inhalt zählt als Bezieher (fail-closed), eine nicht lesbare Datei wie eine fehlende. Daneben verzweigen Prüfer auf das Feld `zustand` von `liesSyncStand` bzw. `syncStandAusText` aus derselben Heimat (etwa `scripts/check-docdrift.mjs`, `scripts/check-factory-drift.mjs`, `scripts/factory-update-check.mjs`); sie gehen über den Format-Leser und sind erlaubt, jeder ordnet `kaputt` selbst fail-closed für seinen Zweck ein (das Doku-Drift-Gate prüft dann voll). Bei Rollen-Weichen gilt `istBezieher`. `test/harness/rollen-schalter.test.ts` wird rot, wenn eine verteilte Skript-Datei den Sync-Stand selbst probt (Datei-Aufruf mit `sync-stand` oder `STAND_PFAD` auf derselben Zeile, oder das nackte Pfad-Literal); die Meldung nennt den Weg. Das ist der benannte Check für das Negativkriterium: eine unmarkierte Abweichung der Form 2 macht ihn rot.
@@ -49,15 +49,35 @@ Nach der Korrektur ist der Scan über die verteilten Skript-Dateien leer. Sabota
 
 Harness-Befunde laufen in Fabrik und Bezieher über `node scripts/melden.mjs`; in der Fabrik (kein Sync-Stand, Meldestelle ist das eigene Repo) trägt es ins jüngste ungeclaimte Harness-Sammelticket ein (Test mit injizierter API, `test/meldung-lib.test.ts`), ohne Sammelticket Exit 1 mit der Fix-Zeile. Der Rollen-Text ist aus dem Kern-Block und den verteilten Agenten- und Skill-Texten abgebaut; die Fix-Zeile der Agentenvariante ist rollenneutral. Das Anlegen (`sammelticket-anlegen.mjs harness`, Position 4 des Factory-Boards) steht nur noch im Projekt-Block (Form 4, Regeltext nur für die Fabrik). `test/harness/harness-befunde-melden.test.ts` ist der benannte Check: er wird rot, wenn Kern-Block oder eine verteilte Datei unter `.claude/agents/` oder `.agents/skills/` für Harness-Befunde eine Rolle nennt (Heuristik mit zwei Wortlisten; Factory-Seiten, Projekt-Block und `.mjs`-Laufzeittexte sind nicht gescannt, der Rest bleibt factory#222).
 
+## Nachtrag factory#222
+
+Inventur (Stand 684f9b6) über die verteilten Markdown-Einheiten (35 Einheiten, 19 Treffer; der Wächter scannt 34, ohne den generierten Zeiger; geschlossene Suchliste: „Factory-Repo“, „Fabrik“, „upstream“, „ohne Sync-Stand“, „sync-stand.json“, „Rolle `factory`“, je Treffer gezählt):
+
+| Fundstelle | Einordnung |
+| --- | --- |
+| `AGENTS.md#kern` Zeile 9 „Änderungen nur upstream“ | beide (Bezieher-Regel) |
+| `AGENTS.md#kern` Zeile 9 „ohne `.factory/sync-stand.json` ist dieses Repo selbst upstream“ (2 Treffer) | nur Fabrik, umgezogen in den Projekt-Block (Blockquote „Dieses Repository ist der Harness selbst“) |
+| `.claude/agents/factory-umsetzer.md` Schritt 2, Satz über Kern-Einheiten samt „(nur im Factory-Repo)“ | nur Fabrik, umgezogen nach `docs/agent-harness.md` › Kern-Reinheits-Wächter (Bullet „Kern-Prosa“) |
+| 7 Fabrik-Verweise `<x>.md (Fabrik)` (Umsetzer 2, review-lenses 2, factory/ablauf 2, ticket-drift 1) | beide (Verweisform, factory#177), vom Wächter automatisch eingeordnet |
+| Planer 2, `docs/codex/einstieg.md`, `brille-architektur.md`, `factory/SKILL.md` 2 | beide, mit Grund in der Inventur-JSON; der generierte Zeiger `.claude/skills/factory/SKILL.md` (1 Treffer, gleicher Text wie die Quelle) ist vom Scan ausgenommen |
+
+Entscheidung zum Wächter: ja, `test/harness/fabrik-regeltext.test.ts`. Form 4 war die einzige Form ohne Prüfung, die Inventur fand zwei unbewachte Fundstellen „nur Fabrik“ (ADR 0027: Evidenz), die Kosten sind gering. Eine Fundstelle ohne Einordnung ist rot; „beide“ steht mit Ausschnitt und Grund in `fabrik-regeltext-inventur.json` (Ausschnitt statt Zeilennummer: bricht nur bei geänderter Formulierung, dann soll neu eingeordnet werden); „nur Fabrik“ wird nie eingetragen, sondern umgezogen. Negativfall: der verfälschte Satz „(nur im Factory-Repo)“ im Umsetzer macht den Scan rot.
+
+Messwerte Red-Green (je per Edit verfälscht, `git diff --stat` belegte die Änderung, danach zurück): Umsetzer-Satz zurück 2 Tests rot; Inventur-Eintrag gelöscht 1 rot; Phantom-Eintrag 1 rot (stale); `upstream` aus der Suchliste 3 rot; Verweisform gebrochen 3 rot.
+
+Gegenprobe Bezieher-Export (`node scripts/probe-erstbezug.mjs`, Exit 0, GRÜN 17 Schritte): im Export steht „Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg)“ (AGENTS.md Zeile 9) und „Prüfungen außerhalb von `verify` laut Projekt-Block“ (Umsetzer, 1 Treffer); „selbst upstream“ und „kern-literale-baseline“ fehlen (grep Exit 1). Budgets: Kern-Block 15.182 (Budget 15.300 auf 15.200 gesenkt), Projekt-Raum 12.700 auf 12.800, Summe 28.000.
+
+Re-Evaluierung: mehr als 15 Einträge „beide“ oder wiederholte Fehltreffer: Wächter enger fassen oder streichen (Prüftermin `regeln-verfall-2027-03`).
+
 ## Bekannte Grenzen
 
 - Der Wächter ist eine zeilenweise Heuristik: berechnete Pfade (Variable, Template mit `${…}`, auch ein Template-Literal ohne Interpolation), eine zweite Rollenregel wie `existsSync(MANIFEST_PFAD)` in `scripts/check-context-size.mjs`, Shell-Proben (`test -f`) in Workflows und Rollenerkennung über andere Signale sieht er nicht. Inhaltsleser über einen injizierten Leser (`syncStandAusText(lies(STAND_PFAD))`) sind bewusst erlaubt, weil sie über den einzigen Format-Leser gehen.
-- Form 4 (Regeltext) hat für Harness-Befunde einen Wächter (`test/harness/harness-befunde-melden.test.ts`, siehe Nachtrag factory#221); die Inventur der übrigen Fabrik-Regeln und die Entscheidung zu einem allgemeinen Wächter stehen in factory#222.
+- Form 4 (Regeltext) hat zwei Wächter: für Harness-Befunde `test/harness/harness-befunde-melden.test.ts` (Nachtrag factory#221) und allgemein `test/harness/fabrik-regeltext.test.ts` (Nachtrag factory#222). Beide sind Wortlisten-Heuristiken: eine Umschreibung ohne Listenwort (etwa „Bezieher“, „Factory-Board“) fällt durch, Laufzeittexte in `.mjs` und Workflows sind nicht gescannt.
 
 ## Folgetickets
 
 - factory#221: Harness-Befunde in Fabrik und Bezieher über `melden.mjs`, der Rollenfall verschwindet aus dem Kern-Text.
-- factory#222 (blockiert durch factory#221): Fabrik-Regeln in verteilten Texten, Inventur und Umzug, Entscheidung zu einem Wächter für Form 4.
+- factory#222 (erledigt, Nachtrag unten): Fabrik-Regeln in verteilten Texten, Inventur und Umzug, Wächter für Form 4.
 
 ## Re-Evaluierung
 
