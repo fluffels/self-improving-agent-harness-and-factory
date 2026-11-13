@@ -1413,9 +1413,10 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     const lauf = (kernGroesse: number, gesamt: number) => {
       const basis = `${kernMit(kernGroesse)}\n${ZIEL_AGENTS}`;
       const z = baueZiel();
-      schreibe(z, "AGENTS.md", `${basis}${"p".repeat(gesamt - basis.length - 1)}\n`);
+      const vorher = `${basis}${"p".repeat(gesamt - basis.length - 1)}\n`;
+      schreibe(z, "AGENTS.md", vorher);
       schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
-      return { z, r: vomTag(baueQuelle(), z, []), kern: kernMit(kernGroesse) };
+      return { z, r: vomTag(baueQuelle(), z, []), kern: kernMit(kernGroesse), vorher };
     };
     const voll = lauf(15_200, 28_000);
     assert.equal(voll.r.code, 0, voll.r.err);
@@ -1426,7 +1427,7 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     assert.match(ueber.r.out, /Hinweis: Kontextbudget: AGENTS\.md hätte 28001 Zeichen > Budget 28000/);
     assert.doesNotMatch(ueber.r.out, /Kontextbudget knapp/);
     const text = readFileSync(join(ueber.z, "AGENTS.md"), "utf8");
-    assert.ok(text.includes("p".repeat(1_000)), "der Projekt-Teil bleibt erhalten: nichts wird automatisch verkleinert");
+    assert.equal(text, ueber.vorher.replace("alter Stopp", "neuer Stopp"), "byteweise unverändert bis auf den Stopps-Block: nichts wird automatisch verkleinert");
     assert.ok(text.startsWith(ueber.kern), "der Kern-Block bleibt unverändert");
   });
   test("ueberBudget: Zählung ohne CR, fehlende Datei zählt nicht", () => {

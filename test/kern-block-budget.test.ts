@@ -120,11 +120,15 @@ describe("Kern-Block-Budget", () => {
     temp((dir) => {
       datei(dir, ".factory/besitz.json", "{}");
       datei(dir, "AGENTS.md", mitKern("x".repeat(100)));
-      const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[])[0].budget;
+      const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
       const mitKonstanten = (kern: number, raum: number) => kernBlockPruefung(dir, { kern, raum, gesamt });
       assert.equal(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET), null);
       assert.match(String(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET - 1)), /Lücke von 1 Zeichen/);
       assert.match(String(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET + 1)), /> Gesamtbudget/);
+      const beide = String(kernBlockPruefung(dir, { kern: 50, raum: gesamt - 51, gesamt })).split("\n");
+      assert.equal(beide.length, 2, "Kern- und Raum-Befund zugleich, beide gemeldet");
+      assert.match(beide[0], /> Kern-Block-Budget 50\b/, "das eingespritzte Kern-Budget gilt");
+      assert.match(beide[1], /Lücke von 1 Zeichen/);
       datei(dir, ".factory/sync-stand.json", JSON.stringify({ version: 2 }));
       assert.equal(mitKonstanten(KERN_BLOCK_BUDGET, 1), null, "im Bezieher gilt sein Gesamtbudget");
     });

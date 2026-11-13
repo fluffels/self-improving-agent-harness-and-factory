@@ -73,7 +73,7 @@ function fehlendeSkalare(werte: Werte): string[] {
 function belegZeilen(text: string, key: string): { gueltig: string[]; ungueltig: string[] } {
   const gueltig: string[] = [];
   const ungueltig: string[] = [];
-  for (const m of text.replace(/\r/g, "").matchAll(zeilenRe(key))) (/^https?:\/\/\S+\s+\S/.test(m[2].trim()) ? gueltig : ungueltig).push(m[2].trim());
+  for (const m of text.replace(/\r/g, "").matchAll(zeilenRe(key))) (/^https:\/\/\S+\s+\S/.test(m[2].trim()) ? gueltig : ungueltig).push(m[2].trim());
   return { gueltig, ungueltig };
 }
 
@@ -187,6 +187,7 @@ describe("Budget-Ratchet", () => {
     test("Projekt-Raum: Steigen frei, Senken nur mit Beleg UND Bezieher-Migration; Anheben von Kern und Senken des Raums melden zwei Verstöße", () => {
       const basisWerte = { [RAUM]: 12_800, KERN_BLOCK_BUDGET: 15_200 };
       assert.deepEqual(budgetVerstoesse({ [RAUM]: 12_801, KERN_BLOCK_BUDGET: 15_200 }, basisWerte, keinBeleg), []);
+      assert.deepEqual(budgetVerstoesse({ [RAUM]: 12_800, KERN_BLOCK_BUDGET: 15_200 }, basisWerte, keinBeleg), [], "Gleichstand ist kein Senken");
       assert.equal(budgetVerstoesse({ [RAUM]: 12_799, KERN_BLOCK_BUDGET: 15_200 }, basisWerte, keinBeleg).length, 1);
       assert.equal(budgetVerstoesse({ [RAUM]: 12_799, KERN_BLOCK_BUDGET: 15_200 }, basisWerte, { beleg: true, migration: false }).length, 1, "Beleg allein genügt für den Raum nicht");
       assert.equal(budgetVerstoesse({ [RAUM]: 12_799, KERN_BLOCK_BUDGET: 15_200 }, basisWerte, { beleg: false, migration: true }).length, 1, "Migration allein genügt nicht");
@@ -214,6 +215,9 @@ describe("Budget-Ratchet", () => {
       const r = belegZeilen(text, k);
       assert.deepEqual(r.gueltig, ["https://example.org/messung Kern wächst wegen X", "https://example.org/m2 Grund"]);
       assert.deepEqual(r.ungueltig, ["nur eine Begründung", "https://example.org/nur-link", ""]);
+      const streng = belegZeilen(["SIH-Budget-Beleg: http://example.org/m Grund", "SIH-Budget-Beleg: siehe https://example.org/m Grund", "SIH-Budget-Beleg: https:// Grund"].join("\n"), k);
+      assert.deepEqual(streng.gueltig, [], "nur https, der Link steht vorn und hat einen Host");
+      assert.equal(streng.ungueltig.length, 3);
       assert.deepEqual(belegZeilen("Text ohne Zeile", k), { gueltig: [], ungueltig: [] });
     });
 
@@ -235,12 +239,13 @@ describe("Budget-Ratchet", () => {
       assert.equal(werkzeugVerstoesse(new Map([[".github/workflows/x.yml", "run: echo Budget-Beleg"]])).length, 1);
       assert.equal(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'writeFileSync("scripts/kontext-budget-lib.mjs", t)']])).length, 1);
       assert.equal(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'renameSync(tmp, join(r, "check-context-size.mjs"))']])).length, 1);
+      for (const fn of ["appendFileSync", "writeFile", "copyFileSync"]) assert.equal(werkzeugVerstoesse(new Map([["scripts/a.mjs", `${fn}("scripts/kontext-budget-lib.mjs", t)`]])).length, 1, fn);
       assert.deepEqual(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'readFileSync("scripts/kontext-budget-lib.mjs")']])), [], "Lesen ist erlaubt");
     });
 
     test("Umfang des Scans: Skripte, Workflows und Hooks, nichts darüber hinaus", () => {
       for (const p of ["scripts/a.mjs", "scripts/x/b.cjs", ".github/workflows/ci.yml", ".claude/hooks/h.sh"]) assert.ok(UMFANG.test(p), p);
-      for (const p of ["test/a.test.ts", "scripts/a.json", "docs/x.md", ".github/workflows/sub/ci.yml"]) assert.ok(!UMFANG.test(p), p);
+      for (const p of ["test/a.test.ts", "scripts/a.json", "docs/x.md", ".github/workflows/sub/ci.yml", "scripts/a.mjs.bak", "test/scripts/a.mjs", "x.github/workflows/ci.yml"]) assert.ok(!UMFANG.test(p), p);
     });
   });
 });
