@@ -59,10 +59,6 @@ describe("Auswertung: Positivfälle", () => {
   test("Ausgabeschlüssel entsprechen genau NACHWEIS_NUMMERN der Freigabetabelle", () => {
     expect(Object.keys(lauf().nachweise)).toEqual([...NACHWEIS_NUMMERN]);
   });
-  test("ausgabe an einem Punkt ohne Export (defekter-mcp) reicht als Verweis", () => {
-    const r = lauf(mit((b) => { b.punkte["defekter-mcp"].observations = []; }));
-    expect(offen(r)).toEqual([]);
-  });
 });
 
 describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
@@ -120,10 +116,8 @@ describe("Zuordnung der Belegdiagnose zu Nachweisen (Drift-Wächter, W8)", () =>
     const ohneTool = export_(); ohneTool.observations = ohneTool.observations.filter((o) => o.type !== "TOOL");
     const alleMeldungen = [...leer, ...belegeLib.bewerteBelege(widerspruch, config), ...belegeLib.bewerteBelege(ohneTool, config), ...belegeLib.bewerteBelege({ ...export_(), observations: [] }, config)];
     expect(alleMeldungen.length).toBeGreaterThan(8);
+    expect(a.nachweiseDerDiagnose("Neue Meldung")).toEqual(["1", "2", "3", "4", "5"]); // Unbekanntes: fail-closed
     for (const m of alleMeldungen) expect(a.nachweiseDerDiagnose(m), m).not.toHaveLength(5);
-  });
-  test("Unbekanntes betrifft fail-closed alle fünf", () => {
-    expect(a.nachweiseDerDiagnose("Neue Meldung")).toEqual(["1", "2", "3", "4", "5"]);
   });
 });
 

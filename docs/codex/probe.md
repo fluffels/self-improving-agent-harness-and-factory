@@ -9,8 +9,7 @@ Der Abnahmeweg für die Gesamtabnahme in Codex (die fünf Nachweise stehen in [C
 1. `node scripts/codex-probe.mjs vorbereiten [--langfuse-url <MCP-URL>] [--langfuse-auth env|host]` aus dem Hauptcheckout. Die URL ist optional (Standard `http://localhost:3000/api/public/mcp`), das Skript liest weder Umgebung noch Claude-Einstellungen.
 2. Die Checkliste (stdout und `.codex/probe/checkliste.md` im Probe-Worktree) von oben nach unten in einer **neuen** CLI-Session im Probe-Worktree abarbeiten (keine Fortsetzung, nicht die App): `codex --version` notieren, `/hooks` prüfen und vertrauen, `codex --strict-config doctor --summary`, dann je Punkt den konkreten Auftrag.
 3. Langfuse-Export als JSON holen (Weboberfläche oder MCP; kein Skript mit Secret-Key) und `.codex/probe/bericht-vorlage.json` füllen.
-4. `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>`.
-5. `node scripts/codex-probe.mjs aufraeumen`.
+4. `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>`, danach `node scripts/codex-probe.mjs aufraeumen`.
 
 Die Vorprüfung `node scripts/codex-vorpruefung.mjs` meldet im Probe-Worktree die abweichende Hook-Registrierung („weicht vom Soll ab“): das ist erwartet, die Probe-Variante trägt zwei zusätzliche Fixture-Hooks.
 
