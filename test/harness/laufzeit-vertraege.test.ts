@@ -128,6 +128,8 @@ test("V3 Negativfälle: Hook ohne Zeile, Zeile ohne Hook, Grenze ohne Ticket, Ad
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#249" }], {})[0]).toContain("gelöschtes oder geschlossenes Ticket"); // abgelöst
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#2490" }], {})).toEqual([]); // längere Nummer
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#24" }], {})).toEqual([]); // kürzere Nummer
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile: factory#250" }], {})).toEqual([]); // Nachbarnummer
+  expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "Statuszeile 249 Zeichen: factory#368" }], {})).toEqual([]); // Zahl ohne #
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: quellprojekt#12" }], {})).toEqual([]); // beide Herkünfte
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "SessionStart: factory#" }], {})).toHaveLength(1); // Nummer fehlt
   expect(v3(["scripts/h.mjs"], [{ ...z, grenze: "xSessionStart factory#365" }], {})).toHaveLength(1); // Teilwort davor

@@ -83,6 +83,7 @@ describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
       "Kommentar per `gh issue comment` im Sammelticket.",
       "gh issue creat für das Sammelticket",
       "gh issue für das Sammelticket",
+      "Das Sammeln per `gh issue create` ist erlaubt.",
     ]) expect(rollenFunde("x.md", z), z).toEqual([]);
     expect(rollenFunde("x.md", "Sammelticket legen. Dann `gh issue create` für ein Projekt-Issue.")).toEqual([]);
     expect(rollenFunde("x.md", "nichts\nSammelticket per gh issue create", 5)[0]).toContain("x.md:6:");
