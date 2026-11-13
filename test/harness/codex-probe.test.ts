@@ -21,7 +21,7 @@ type Deps = { git?: (a: string[], cwd: string) => Res; setup?: (p: string, a: st
 type Probe = { art: string; grund: string; codex: { tool_name: string; tool_input: Record<string, string> }; claude: { tool_name: string; tool_input: Record<string, string> } };
 const cli = cliRaw as unknown as { main: (a: string[], r: string, o: (s: string) => void, e: (s: string) => void, d?: Deps) => number };
 const hookRegistrierung = (codexLibRaw as unknown as { hookRegistrierung: () => string }).hookRegistrierung;
-const lib = libRaw as unknown as { PROBE_TICKET_NR: number; PROBE_HOOK_TIMEOUT_S: number; MARKER_FEHLER: string; MARKER_TIMEOUT: string; MARKER_SUBAGENT_STOPP: string; MARKER_HOOK_FORMAT: string; MARKER_TRACING: string; checklisteText: (a: { haupt: string; probe: string; config: unknown }) => string; checklistenPunkte: (c: unknown) => { id: string; nachweis: number; ohneExport: boolean; text: (k: { haupt: string; probe: string }) => string }[]; fixtureHooks: () => Record<string, string>; negativproben: (a: { haupt: string; probe: string; config: unknown }) => Probe[] };
+const lib = libRaw as unknown as { PROBE_TICKET_NR: number; PROBE_HOOK_TIMEOUT_S: number; MARKER_FEHLER: string; MARKER_TIMEOUT: string; protokollZeile: (d: unknown, u?: unknown) => Record<string, unknown>; MARKER_SUBAGENT_STOPP: string; MARKER_HOOK_FORMAT: string; MARKER_TRACING: string; checklisteText: (a: { haupt: string; probe: string; config: unknown }) => string; checklistenPunkte: (c: unknown) => { id: string; nachweis: number; ohneExport: boolean; text: (k: { haupt: string; probe: string }) => string }[]; fixtureHooks: () => Record<string, string>; negativproben: (a: { haupt: string; probe: string; config: unknown }) => Probe[] };
 const adapter = adapterRaw as unknown as { entscheide: (t: string, root: string, d?: Record<string, unknown>) => Promise<{ hookSpecificOutput: { permissionDecision: string } } | null>; CODEX_HOOK_WERKZEUGE: Record<string, string>; CODEX_HOOK_TIMEOUT_S: number };
 const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: string) => { hookSpecificOutput: { permissionDecision: string } } | null };
 
@@ -225,6 +225,15 @@ describe("Hook-Protokoll (factory#457, echter Node-Start)", () => {
   const hook = (eingabe: string, env: Record<string, string> = {}) => spawnSync(process.execPath, [join(ordner, "hook-protokoll.mjs")], { input: eingabe, encoding: "utf8", env: { PATH: process.env.PATH ?? "", ...env } });
   const zeilen = () => readFileSync(join(ordner, "hook-protokoll.jsonl"), "utf8").trim().split("\n").map((z) => JSON.parse(z) as Zeile);
   const v2 = (extra: Record<string, unknown> = {}) => JSON.stringify({ session_id: "s", hook_event_name: "PreToolUse", tool_name: "collaboration__spawn_agent", tool_input: { task_name: "t", message: "Erste Zeile\nZweite Zeile", agent_type: "sih-lens", fork_turns: "none", ...extra } });
+  test("protokollZeile im Prozess (dieselbe Funktion, die der Hook einbettet): Ursprung, Schlüssel, Kürzung und unlesbare Eingaben", () => {
+    const z = lib.protokollZeile({ hook_event_name: "PreToolUse", tool_name: "x", tool_input: { message: `${"y".repeat(90)}\nz`, b: 1, a: 2 }, cwd: "/p" }, "https://u:pw@lf.example.test:8443/p?q=1");
+    expect(z).toEqual({ lesbar: true, hook_event_name: "PreToolUse", tool_name: "x", tool_input_schluessel: ["a", "b", "message"], payload_schluessel: ["cwd", "hook_event_name", "tool_input", "tool_name"], agent_type: null, task_name: null, message_zeile: "y".repeat(80), langfuse: { gesetzt: true, schema: "https", host: "lf.example.test", port: "8443" } });
+    expect(lib.protokollZeile(null, undefined)).toMatchObject({ lesbar: false, tool_input_schluessel: null, langfuse: { gesetzt: false } });
+    expect(lib.protokollZeile([], "")).toMatchObject({ lesbar: false, payload_schluessel: null, langfuse: { gesetzt: false } });
+    expect(lib.protokollZeile({}, "ftp://h")).toMatchObject({ langfuse: { port: null } });
+    expect(lib.protokollZeile({}, "foo:bar")).toMatchObject({ langfuse: { gesetzt: true, lesbar: false } });
+    expect(lib.protokollZeile({}, "http://[")).toMatchObject({ langfuse: { gesetzt: true, lesbar: false } });
+  });
   test("PreToolUse mit v2-tool_input: genau eine Zeile mit sortierten Schlüsseln, keine Ausgabe, Exit 0", () => {
     const r = hook(v2());
     expect([r.status, r.stdout, r.stderr]).toEqual([0, "", ""]);
