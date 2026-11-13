@@ -121,6 +121,7 @@ describe("Kern-Block-Budget", () => {
       datei(dir, ".factory/besitz.json", "{}");
       datei(dir, "AGENTS.md", mitKern("x".repeat(100)));
       const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
+      assert.ok(gesamt > 0, "AGENTS.md hat ein Budget in CONTEXT_BUDGETS");
       const mitKonstanten = (kern: number, raum: number) => kernBlockPruefung(dir, { kern, raum, gesamt });
       assert.equal(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET), null);
       assert.match(String(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET - 1)), /Lücke von 1 Zeichen/);

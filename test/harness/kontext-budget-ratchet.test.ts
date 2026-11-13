@@ -241,6 +241,7 @@ describe("Budget-Ratchet", () => {
       assert.equal(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'renameSync(tmp, join(r, "check-context-size.mjs"))']])).length, 1);
       for (const fn of ["appendFileSync", "writeFile", "copyFileSync"]) assert.equal(werkzeugVerstoesse(new Map([["scripts/a.mjs", `${fn}("scripts/kontext-budget-lib.mjs", t)`]])).length, 1, fn);
       assert.deepEqual(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'readFileSync("scripts/kontext-budget-lib.mjs")']])), [], "Lesen ist erlaubt");
+      assert.deepEqual(werkzeugVerstoesse(new Map([["scripts/a.mjs", 'writeFileSync(x, t);\nconst p = "check-context-size.mjs";']])), [], "Schreib-Funktion und Dateiname auf verschiedenen Zeilen: kein Fund");
     });
 
     test("Umfang des Scans: Skripte, Workflows und Hooks, nichts darüber hinaus", () => {
