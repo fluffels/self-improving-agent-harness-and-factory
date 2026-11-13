@@ -320,8 +320,8 @@ describe("K5: fail-closed für die registrierten Werkzeuge, fremde bleiben unber
 describe("Namensraum von spawn_agent (Annahme bis factory#459)", () => {
   // ANNAHME (factory#455/457): Codex meldet spawn_agent im Namensraum (collaboration); ob der Hook den Namen mit oder ohne Präfix sieht, belegt erst factory#459.
   const v2 = { task_name: "pruefer", message: "Prüfe das mal.", agent_type: "sih-lens", fork_turns: "none" };
-  const positiv = ["collaboration__spawn_agent", "collaboration.spawn_agent", "collaboration/spawn_agent", "multi_agent_v1.spawn_agent", "Multi-Agent.spawn_agent", "a-b__spawn_agent", "A1_b2.spawn_agent", "spawn_agent"];
-  const negativ = ["spawn_agent_x", "xspawn_agent", "a.b.spawn_agent", "a__b__spawn_agent", "mcp__srv__spawn_agent", "collaboration__send_message", "collaboration__spawn_agent_x", "collaboration_spawn_agent", "collaborationXspawn_agent", "collaboration.apply_patch", "functions.exec_command", "collaboration__Bash", "collaboration.Agent", ""];
+  const positiv = ["collaboration__spawn_agent", "collaboration.spawn_agent", "collaboration/spawn_agent", "multi_agent_v1.spawn_agent", "Multi-Agent.spawn_agent", "a-b__spawn_agent", "A1_b2.spawn_agent", "multi_agent-V2.spawn_agent", "spawn_agent"];
+  const negativ = ["spawn_agent_x", "xspawn_agent", "a.b.spawn_agent", "a__b__spawn_agent", "mcp__srv__spawn_agent", "collaboration__send_message", "collaboration__spawn_agent_x", "collaboration_spawn_agent", "collaborationXspawn_agent", "collaboration.apply_patch", "functions.exec_command", "collaboration__Bash", "collaboration.Agent", ".spawn_agent", "__spawn_agent", "/spawn_agent", ""];
   test.each(positiv)("%s mit v2-tool_input: Art agent, Lens-Guard greift", async (name) => {
     expect(adapter.werkzeugArt(name)).toBe("agent");
     expect(grund(await lauf(nutzlast(name, v2)))).toContain("Brille");
