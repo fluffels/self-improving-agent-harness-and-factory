@@ -139,7 +139,7 @@ jobs:
   # Quelldateien, Node-Stellvertreter für Maven und pytest in der verify-Kette). Die Matrix ist die Liste der Profil-Dateien (Wächter in test/probe-profil.test.ts). Kein Required Check (das wäre eine Ruleset-Änderung):
   # ein Rot sperrt den Tag über den CI-Zustand des Commits (ciZustand liest den Abschluss von ci.yml) und alarmiert auf main. Kein continue-on-error, kein || true. Der Matrixwert geht nur über env in die Shell.
   probe-profil:
-    name: Probe-Erstbezug ${{ matrix.profil }} (synthetischer Bezieher)
+    name: Synthetischer Bezieher ${{ matrix.profil }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

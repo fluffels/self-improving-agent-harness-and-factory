@@ -23,7 +23,7 @@ const T = raw as unknown as {
   entscheideTagTakt: (a: { letzterTag: string | null; besitz: Commit[]; jetzt: Date; offene: Offen[]; dringlichKey: string; milestones?: { nummer: number; titel: string; closedAt: string }[] }) => Entscheidung;
   bestaetigeTagAnlegen: (e: Entscheidung, a: { zweit: () => unknown }) => Entscheidung;
   ciZustand: (l: unknown) => { zustand: string; url: string | null };
-  ciCheckliste: (ci: { zustand: string; url: string | null }, sha: string) => string;
+  ciCheckliste: (ci: { zustand: string; url: string | null }, sha: string, profile?: string[]) => string;
   tagBody: (a: Record<string, unknown>) => string;
   bezieherProbe: (a: { bezieher: string[]; ergebnisse?: Record<string, number | string> }) => { zeilen: string[]; blocker: string[]; offen: string[]; rest: string[] };
   uebernimmHaken: (alt: string | undefined, neu: string) => string;
@@ -790,7 +790,7 @@ describe("Bezieher-Migration (Sammelticket-Zeilen)", () => {
 describe("synthetische Bezieher je Profil (factory#224)", () => {
   const sha = "b".repeat(40);
   const basis = { tag: "v1.3.0", letzterTag: "v1.2.3", sha, prs: reihe(3), aeltestes: { datum: vor(2), sha: "c".repeat(40) }, ausloeser: ["x"], ci: { zustand: "gruen", url: null } };
-  const ciMitProfilen = T.ciCheckliste as unknown as (ci: { zustand: string; url: string | null }, sha: string, profile?: string[]) => string;
+  const ciMitProfilen = T.ciCheckliste;
   const probeIndex = (zeilen: string[]) => zeilen.findIndex((z) => z.startsWith("- [ ] Probe-Erstbezug"));
 
   it("Negativfall: ohne Profile (fehlend oder leer) ist die Checkliste zeichengleich", () => {
@@ -805,7 +805,7 @@ describe("synthetische Bezieher je Profil (factory#224)", () => {
     expect(i).toBeGreaterThan(-1);
     expect(zeilen.filter((z) => z.includes("Synthetischer Bezieher"))).toHaveLength(2);
     expect(zeilen[i + 1]).toContain("Synthetischer Bezieher `java`");
-    expect(zeilen[i + 1]).toContain("CI-Job `Probe-Erstbezug java`");
+    expect(zeilen[i + 1]).toContain("CI-Job `Synthetischer Bezieher java`");
     expect(zeilen[i + 1]).toContain("node scripts/probe-erstbezug.mjs --profil java --quelle <checkout auf bbbbbbb>");
     expect(zeilen[i + 2]).toContain("Synthetischer Bezieher `python`");
     expect(zeilen[i + 2]).toContain("--profil python");

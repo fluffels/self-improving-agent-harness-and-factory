@@ -14,7 +14,7 @@
  *  - Grenze: die Fabrik schreibt in kein Bezieher-Repo (ADR 0031); der Probe-Erstbezug (`test/fixtures/projekt-probe.json`, Export im Scratch, `scripts/probe-erstbezug.mjs`) läuft als CI-Job und von Hand mit demselben Aufruf; ein roter CI-Zustand des Tag-Commits ist ein Blocker.
  *  - Vor-Tag-Probe (factory#188): die Projekt-Config listet die Bezieher (`bezieher`, `owner/name`); die Checkliste verlangt je Bezieher einen LESENDEN Lauf im Scratch-Klon (Entwurfs-Vorschau, Sync mit lokalem Tag,
  *    `verify` nach den mechanischen Update-Schritten; nie Push, PR, Issue oder Kommentar; Fortschreibung zu ADR 0031). Rot durch Factory-Besitz oder fehlend heißt: nicht taggen. Kein Cross-Repo-CI (das bräuchte ein Secret): die Ergebnisse trägt der Mensch oder Agent mit `--probe` ein.
- *  - Synthetische Bezieher (factory#224): je Datei in `test/fixtures/probe-profil/` (Profil ohne Stellvertreter: Java, Python) läuft ein CI-Job `Probe-Erstbezug <profil>`; die Checkliste führt je Profil eine Zeile,
+ *  - Synthetische Bezieher (factory#224): je Datei in `test/fixtures/probe-profil/` (Profil ohne Stellvertreter: Java, Python) läuft ein CI-Job `Synthetischer Bezieher <profil>`; die Checkliste führt je Profil eine Zeile,
  *    ein Rot sperrt über die CI-Zeile den Tag. Ohne Profil-Dateien bleibt die Checkliste unverändert.
  *  - Milestones (factory#194): ein Milestone, der nach dem Erstellungsdatum des letzten Release-Tags geschlossen wurde, ist ein weiterer Auslöser („Milestone „<titel>“ geschlossen“), schon bei einem
  *    Besitz-PR (ohne ungetaggten Besitz-PR gibt es nichts zu taggen: `nichts` mit Grund). Gelesen über REST (`milestones?state=closed`) und `git for-each-ref` (`creatordate`); fail-open mit Warnung, ohne Milestones unverändert.
@@ -246,7 +246,7 @@ export function ciCheckliste(ci, sha, profile = []) {
 }
 
 /** Pur (factory#224): die Checklisten-Zeile je synthetischem Bezieher (Profil ohne Stellvertreter); der Job läuft in der CI, ein Rot sperrt über die CI-Zeile den Tag. */
-const profilZeile = (p, kurz) => `- [ ] Synthetischer Bezieher \`${p}\` (\`${PROFIL_ORDNER}/${p}.json\`, Profil ohne Stellvertreter, factory#224): CI-Job \`Probe-Erstbezug ${p}\` (Sync mit lokalem Tag, mechanische Update-Schritte, \`verify\` des Profils); die grüne CI des Commits deckt ihn ab. Von Hand: \`node scripts/probe-erstbezug.mjs --profil ${p} --quelle <checkout auf ${kurz}> --scratch <leerer scratch-ordner>\``;
+const profilZeile = (p, kurz) => `- [ ] Synthetischer Bezieher \`${p}\` (\`${PROFIL_ORDNER}/${p}.json\`, Profil ohne Stellvertreter, factory#224): CI-Job \`Synthetischer Bezieher ${p}\` (Sync mit lokalem Tag, mechanische Update-Schritte, \`verify\` des Profils); die grüne CI des Commits deckt ihn ab. Von Hand: \`node scripts/probe-erstbezug.mjs --profil ${p} --quelle <checkout auf ${kurz}> --scratch <leerer scratch-ordner>\``;
 
 const GATE_LUECKE_PROFIL = `; je Gate-Lücke-Zeile ein Fall im synthetischen Bezieher ihres Profils (\`faelle\` in \`${PROFIL_ORDNER}/<profil>.json\`) oder ein begründetes „nicht abbildbar“ dort`;
 

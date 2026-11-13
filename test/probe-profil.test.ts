@@ -1,7 +1,7 @@
 /* Synthetische Bezieher je Profil ohne Stellvertreter (factory#224): Profil-Namen, Prüfung der Definition, Fixture-Bau, Aufruf mit --profil, die Profil-Gestalt in einem echten Klon und der CI-Job. */
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
