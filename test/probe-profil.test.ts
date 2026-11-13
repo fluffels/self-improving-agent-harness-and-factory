@@ -294,6 +294,9 @@ describe("pruefeProfil: Grenzen der Eingabeprüfung (Lens-Runde 1)", () => {
     expect(f).toHaveLength(1);
     expect(f[0]).toMatch(muster);
   });
+  it("Positivfall: Dateien, die nur mit .git beginnen (.gitignore, .github/…), sind nicht gesperrt", () => {
+    expect(fehler({ profil: "x", dateien: { ".gitignore": "t", ".github/workflows/x.yml": "t", ".GITIGNORE2": "t" } })).toEqual([]);
+  });
   it("dateien als Text → eine Meldung", () => {
     expect(fehler({ profil: "x", dateien: "x" })).toEqual(["dateien muss ein Objekt {pfad: text} sein"]);
   });
