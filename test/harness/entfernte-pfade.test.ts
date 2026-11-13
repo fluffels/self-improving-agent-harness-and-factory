@@ -17,6 +17,9 @@
  * Dazu (factory#399): der Phasen-Schnitt ist zurückgebaut (Befehl `uebergeben`, Token `uebergabe`, `SCHNITT:`/`UEBERGABE:`, Prompt-Zeilen `Schnitt:`/`Einstieg:`); `RESTE_SCHNITT` scannt
  * die Namen. Bewusste Grenze: der Name „Phasen-Schnitt“ und freie Umschreibungen werden nicht gescannt, er bleibt in Messberichten erlaubt (die Messskripte `kontext-treiber`/`subagent-laeufe` stehen in `AUSNAHMEN_SCHNITT`).
  *
+ * Dazu (factory#236): die A/B-Messung Kern je Rolle ist beendet, Arm A bleibt; der Arm-B-Typ, `lens-arm` samt Bibliothek, `LENS_B`, `lensArm`, `lensTypen` und die Wiedervorlage `kern-je-rolle-ab-235` sind eine geschlossene Namensliste (`RESTE`).
+ * Bewusste Grenze: freie Umschreibungen („Arm-B-Lens“, „A/B Kern je Rolle“) werden nicht gescannt, „Kern je Rolle“ bleibt als Variantenname erlaubt; der Typname selbst steht nur in ADR 0035.
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -105,6 +108,11 @@ export const RESTE: Rest[] = [
     fix: "den Kern-Begriff Produktquote nutzen: scripts/produktquote-lib.mjs, PRODUKT_QUOTE, zaehleProduktMerges (#1942)",
   },
   {
+    name: "A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)",
+    muster: /lens-kern-je-rolle|lens-arm\.mjs|lens-arm-lib|\bLENS_B\b|\blensArm\b|\blensTypen\b|kern-je-rolle-ab-235/,
+    fix: "die A/B-Messung ist beendet und Arm A bleibt (factory#236, ADR 0035): den Arm-B-Typ, lens-arm und die Wiedervorlage nicht mehr nennen; der Spawn-Typ ist agenten.lens",
+  },
+  {
     name: "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)",
     muster: /agents-refs/,
     fix: "Kern-Verweise auf AGENTS.md prüft test/harness/besitz-abschnittsverweise.test.ts (factory#245), den Wächter nicht mehr nennen",
@@ -119,6 +127,10 @@ export const ENTFERNTE_DATEIEN: { pfad: string; grund: string }[] = [
   { pfad: "test/harness/kern-test-literale-baseline.json", grund: "Null-Regel der Kern-Tests (#1903)" },
   { pfad: "test/harness/umsetzer-bedingte-dateien.test.ts", grund: "aufgegangen in test/harness/bedingte-dateien.test.ts (factory#405)" },
   { pfad: "test/harness/kern-links-baseline.json", grund: "Kern-Links: Deckung per Anker-Stub statt Baseline (factory#132)" },
+  { pfad: ".claude/agents/lens-kern-je-rolle.md", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
+  { pfad: "scripts/lens-arm.mjs", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
+  { pfad: "scripts/lens-arm-lib.mjs", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
+  { pfad: "test/harness/lens-arm.test.ts", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
 ];
 
 /** Meldungen für wieder angelegte entfernte Dateien; leer = sauber. */
@@ -171,6 +183,16 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     assert.deepEqual(reste([{ pfad: "docs/c.md", inhalt: name }]), ["docs/c.md:1: Spielquote-Bibliothek (heißt produktquote-lib)"]);
     assert.deepEqual(reste([{ pfad: "docs/c.md", inhalt: "scripts/produktquote-lib.mjs PRODUKT_QUOTE zaehleProduktMerges" }]), []);
   });
+
+  test.each(["lens-kern-je-rolle", "scripts/lens-arm.mjs", "lens-arm-lib", "LENS_B", "lensArm(nr)", "lensTypen(namen)", "kern-je-rolle-ab-235"])(
+    "Negativfall: der Name %s der beendeten A/B-Messung wird gefunden, der Lens-Typ der Config nicht (factory#236)",
+    (name) => {
+      assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: name }]), ["docs/ab.md:1: A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)"]);
+      assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: `subagent_type: "${C.agenten.lens}", Kern je Rolle` }]), []);
+      assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: "LENS_BUDGET lensArmee lensTypenListe" }]), [], "Wortgrenzen: ein Name, der ein Wort nur enthält, ist kein Fund");
+      assert.deepEqual(reste([{ pfad: "docs/ab.md", inhalt: "ALT_LENS_B getlensArm altlensTypen" }]), [], "Wortgrenzen: ein Wortzeichen davor ist kein Fund");
+    },
+  );
 
   // Je Alternative der Muster ein Literal: sonst bliebe ein gestrichener Name unbemerkt
   test.each(["altNameZuPraefix", "ladeAltPraefix", "standardAltPraefix"])("Negativfall: der Name %s wird gefunden", (name) => {
@@ -254,6 +276,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Baseline der Kern-Links": "gelesen aus test/harness/kern-links-baseline.json",
       "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)": "siehe test/harness/agents-refs.test.ts",
       "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
+      "A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)": "spawnt lens-kern-je-rolle für ungerade Tickets",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);

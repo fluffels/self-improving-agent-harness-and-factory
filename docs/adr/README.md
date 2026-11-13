@@ -31,6 +31,7 @@
 | [0032](/docs/adr/0032-git-host-bindung.md) | Fabrik bleibt an GitHub gebunden | akzeptiert | 12.11.2026 |
 | [0033](/docs/adr/0033-ticket-drift-lauf.md) | Ticket-Drift als deterministischer Monatslauf | akzeptiert | 12.11.2026 |
 | [0034](/docs/adr/0034-kein-ki-reviewer-in-ci.md) | Kein zusätzlicher KI-Reviewer in der CI | akzeptiert | 12.11.2026 |
+| [0035](/docs/adr/0035-kontext-vertrag-kern-und-bezieher.md) | Kontext-Vertrag Kern und Bezieher | akzeptiert | 13.11.2026 |
 
 <!-- GEN:adr-liste END -->
 
