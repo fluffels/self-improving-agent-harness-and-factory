@@ -38,4 +38,4 @@ Der Punkt `Required-Check-Quellen` liest die Workflows mit einem eigenen Blockfo
 
 ## Nachtrag factory#447: Format-Hinweis bei Subagent ohne Backticks
 
-- **Entscheidung:** Nennt die letzte Zelle der Projekt-Phase-Tabelle „Subagent name“ ohne Backticks, meldet `zielFehler` (`scripts/modell-routing-lib.mjs`) einen Format-Hinweis (`Subagent \`name\``); „nicht zuordenbar“ gibt es nur noch ohne erkennbaren Namen.
+- **Entscheidung:** Nennt die letzte Zelle der Projekt-Phase-Tabelle „Subagent name“ ohne Backticks, meldet `zielFehler` (`scripts/modell-routing-lib.mjs`) einen Format-Hinweis (``Subagent `name` ``); „nicht zuordenbar“ gibt es nur noch ohne erkennbaren Namen.
