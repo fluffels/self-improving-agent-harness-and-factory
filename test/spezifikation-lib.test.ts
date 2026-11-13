@@ -454,6 +454,13 @@ describe("Blocker-Zeile: Abhängigkeitssatz braucht eine Zeile (#1860)", () => {
     expect(V.blockerVerweise("```\nblockiert durch a/b#4\n```\nsiehe a/b#5", SPRACHE)).toEqual([]);
     expect(V.blockerVerweise(null, SPRACHE)).toEqual([]);
   });
+  test("blockerVerweise: die Erfassung endet am Satzende, Prosa dahinter zählt nicht (factory#459)", () => {
+    const V = raw as unknown as { blockerVerweise: (b: unknown, s: unknown) => { repo: string | null; nummer: number }[] };
+    expect(V.blockerVerweise("Blockiert durch 2/3. Die Wiederholung von #367 ist blockiert durch 3/3 (und #456).", SPRACHE)).toEqual([]);
+    expect(V.blockerVerweise("blockiert durch #12. Siehe #13", SPRACHE)).toEqual([{ repo: null, nummer: 12 }]);
+    expect(V.blockerVerweise("blockiert durch own.er/re-po#3.", SPRACHE)).toEqual([{ repo: "own.er/re-po", nummer: 3 }]);
+    expect(V.blockerVerweise("blockiert durch https://github.com/acme/demo/issues/7.", SPRACHE)).toEqual([{ repo: "acme/demo", nummer: 7 }]);
+  });
   test("L9e: blockerVerweise erkennt Issue-URLs, Roundtrip mit blockerZeile (Nummern und {repo, nummer})", () => {
     const V = raw as unknown as { blockerVerweise: (b: unknown, s: unknown) => { repo: string | null; nummer: number }[]; blockerZeile: (n: unknown[], s: unknown, z?: string) => string };
     expect(V.blockerVerweise("blockiert durch https://github.com/acme/demo/issues/7, #2", SPRACHE)).toEqual([{ repo: "acme/demo", nummer: 7 }, { repo: null, nummer: 2 }]);

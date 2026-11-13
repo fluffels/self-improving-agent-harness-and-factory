@@ -82,7 +82,7 @@ function wortschatz(sprache) {
   });
   return {
     blocker: s.blocker,
-    blockerRe: () => new RegExp(`${VOR}${textMuster(s.blocker)}${NACH}([^(\\n]*)`, "giu"),
+    blockerRe: () => new RegExp(`${VOR}${textMuster(s.blocker)}${NACH}((?:[^(.\\n]|\\.(?!\\s|$))*)`, "giu"),
     abhaengigkeit,
     ziel: s.ziel,
     akNamen: s.akzeptanzkriterien,
@@ -132,8 +132,9 @@ function abschnitt(body, namen) {
 const VERWEIS = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)|(?:([\w.-]+\/[\w.-]+))?#(\d+)/g;
 
 /**
- * Die Verweise hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, owner/name#13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer
- * oder dem Zeilenende, Groß-/Kleinschreibung egal. Je Verweis `{ repo, nummer }`; `repo` ist `owner/name` bei einem qualifizierten Verweis, sonst `null` (das eigene Repo);
+ * Die Verweise hinter der Blocker-Zeile (`sprache.blocker`, z.B. „blockiert durch #12, owner/name#13 (nur solange …)“): zeilenweise, bis zu einer öffnenden Klammer,
+ * einem Satzende (Punkt vor Leerraum oder Zeilenende) oder dem Zeilenende, Groß-/Kleinschreibung egal; bekannte Grenze: Prosa im selben Satz hinter der Liste
+ * (`blockiert durch #1, weil #2 …`) zählt weiter, `blockiert durch #1. #2` verliert die #2. Je Verweis `{ repo, nummer }`; `repo` ist `owner/name` bei einem qualifizierten Verweis, sonst `null` (das eigene Repo);
  * Verweise als Issue-URL zählen wie `owner/name#nr`; gleiche Verweise zählen einmal. SSOT für Lesen (Auswahl) und Schreiben (anlegen, Sammelticket) der Zeile; wirft ohne Sprache. Pur.
  */
 export function blockerVerweise(body, sprache) {
