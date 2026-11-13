@@ -278,6 +278,8 @@ describe("messZeile und befehleErgaenzung", () => {
     const kernPlus = t.replace(MARKER.ende, `${"x".repeat(B.KERN_BLOCK_BUDGET + 1 - (B.kernBlockZeichen(t, MARKER) as number))}${MARKER.ende}`);
     const K = B.KERN_BLOCK_BUDGET;
     const R = B.PROJEKT_BLOCK_RAUM;
+    const kernExakt = t.replace(MARKER.ende, `${"x".repeat(B.KERN_BLOCK_BUDGET - (B.kernBlockZeichen(t, MARKER) as number))}${MARKER.ende}`);
+    expect(P.messZeile(kernExakt)).toContain("Raum-Vertrag: eingehalten"); // Kern genau am Budget und Summe genau am Gesamtbudget: Grenze gilt noch
     expect(P.messZeile(kernPlus)).toContain(`Raum-Vertrag: verletzt — Kern-Block ${K + 1} > Budget ${K}; Summe ${K + 1 + R} > Gesamtbudget ${K + R}`);
     expect(P.messZeile(P.fuellAgentsMd({ raum: R + 1 }))).toContain(`verletzt — Raum ${R + 1} ≠ Soll ${R}`);
     const kleiner = P.messZeile(P.fuellAgentsMd({ raum: R - 1 })) as string;
