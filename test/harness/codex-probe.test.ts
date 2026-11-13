@@ -444,6 +444,8 @@ describe("Checkliste der Ladeprobe und der Hook-Beobachtung (factory#457)", () =
     const t = text();
     const lade = t.indexOf("Ladeprobe (zuerst");
     expect([lade > 0, lade < t.indexOf("Vorspann (von Hand"), lade < t.indexOf("Punkte:")]).toEqual([true, true, true]);
+    const ladeprobe = t.slice(lade, t.indexOf("Vorspann (von Hand"));
+    expect(ladeprobe).not.toContain(stand.startweg); // die Ladeprobe startet bewusst nicht über den Startweg
     for (const teil of ["hooks-soll.json','.codex/hooks.json'", "hooks-variante.json','.codex/hooks.json'", "ohne `-c`-Flags, ohne Wrapper", "/hooks", "Shell-Negativprobe", "Deny-Text wörtlich", "neu vertrauen", "ohne `--ephemeral`"]) expect(t, teil).toContain(teil);
   });
   test.each([
