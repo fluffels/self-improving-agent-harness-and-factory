@@ -191,7 +191,7 @@ test("Doku-Scan (factory#457): einstieg.md, Glossar und Hook-Tabelle behaupten k
   const zeile = (hook: string) => HOOK_TABELLE.find((z) => z.hook === hook)!.grenze;
   /* Belegte Grenze (factory#458): Codex 0.168.0 (CLI-TUI) lädt .codex/hooks.json nicht; Prüftermin: Wiederholung von factory#367. */
   for (const h of ["scripts/langfuse-vorbedingung.mjs", "scripts/pretooluse-hook.mjs"]) for (const m of ["factory#458", "0.168.0"]) expect(zeile(h), h).toContain(m);
-  for (const m of ["0.168.0", "CLI-TUI", "factory#458"]) expect(lies("docs/codex/einstieg.md"), m).toContain(m);
+  for (const m of ["### Beobachteter Stand Codex 0.168.0 (factory#458)", "Codex 0.168.0 (CLI-TUI) lädt diese Datei allein nicht"]) expect(lies("docs/codex/einstieg.md"), m).toContain(m);
 });
 test("Doku-Scan Negativfall: jede Behauptung der Musterliste wird gefunden", () => {
   for (const satz of ["Der Lauf spawnt keine Rolle.", "Es gibt kein Spawn.", "Das startet keine Rolle.", "Wirkung erst mit factory#367 belegt", "Adapter ohne Wirkungsbeleg im Lauf"]) expect(sperrenBehauptungen({ x: satz }), satz).toHaveLength(1);

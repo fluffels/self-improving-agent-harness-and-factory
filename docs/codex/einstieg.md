@@ -38,7 +38,7 @@ await collaboration.send_message({ target: planer.task_name, message: "Ergänzun
 await collaboration.followup_task({ target: planer.task_name, message: "Prüfe den Restauftrag am aktuellen Stand: ..." });
 ```
 
-Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Von den technischen Claude-Guards deckt der [Codex-Hook-Adapter](#codex-hook-schnittstelle-und-adapter-factory364) `lens-auftrag` und `holdout-auftrag` für `spawn_agent` ab (Adapter-Logik geprüft; das Deny vor dem Spawn war in factory#367 nicht wirksam, Ursache offen: factory#455); `lens-edit`, `holdout-guard` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) und die Nachrichtentrennung für `send_message`/`followup_task` sind nicht portiert.
+Fehlt der konfigurierte `agent_type`, ist das eine fehlende Rolle; `default` ist kein gleichwertiger Nachweis. Holdout-Szenarien bleiben beim Hauptagenten und gehen ausschließlich an den unabhängigen Abnahme-Agenten. Von den technischen Claude-Guards deckt der [Codex-Hook-Adapter](#codex-hook-schnittstelle-und-adapter-factory364) `lens-auftrag` und `holdout-auftrag` für `spawn_agent` ab (Adapter-Logik geprüft; das Deny vor dem Spawn war in factory#367 nicht wirksam, Ursache offen; in Codex 0.168.0 ohne `-c`-Flags unbeobachtet, factory#458); `lens-edit`, `holdout-guard` (Schreibgrenze der Abnahme, Lesegrenze des Szenario-Agenten) und die Nachrichtentrennung für `send_message`/`followup_task` sind nicht portiert.
 
 ## Reproduzierbares Setup
 
@@ -116,7 +116,7 @@ Quelle aller Angaben: [Hooks](https://learn.chatgpt.com/docs/hooks), abgerufen a
 
 ### Beobachteter Stand Codex 0.168.0 (factory#458)
 
-Beobachtung der Maintainerin vom 2026-11-13: `codex --version` = codex-cli 0.168.0, Oberfläche CLI-TUI, Probe-Worktree nach [Probe](probe.md#ladeprobe-und-hook-protokoll-factory457). Ergebnis: **`.codex/hooks.json` wird in dieser Version allein nicht geladen**; es entstand kein Hook-Protokoll, daher ist für `spawn_agent` weder Werkzeugname noch `tool_input` noch Deny noch Adresse beobachtet. Die Ursache ist offen. Sie erklärt nicht, warum der `spawn_agent`-Deny in factory#367 (Hook über `-c`-Flags geladen, Shell- und Patch-Deny griffen) versagte; das sind zwei getrennte Befunde. Die Nachweise 3 und 4 der Freigabetabelle bleiben für 0.168.0 `offen`.
+Beobachtung der Maintainerin vom 2026-11-13: `codex --version` = codex-cli 0.168.0, Oberfläche CLI-TUI, Probe-Worktree nach [Probe](probe.md#ladeprobe-und-hook-protokoll-factory457). Ergebnis: **`.codex/hooks.json` wird in dieser Version allein nicht geladen**; es entstand kein Hook-Protokoll, daher ist für `spawn_agent` weder Werkzeugname noch `tool_input` noch Deny noch Adresse beobachtet. Die Ursache ist offen. Sie erklärt nicht, warum der `spawn_agent`-Deny in factory#367 (Hook über `-c`-Flags geladen, Shell- und Patch-Deny griffen) versagte; das sind zwei getrennte Befunde. 0.168.0 hat keinen Eintrag in der Freigabetabelle, die Nachweise 3 und 4 sind dafür nicht belegt (`offen`).
 
 | Schritt | Befehl | Marker | erwartet bei geladenem Hook | beobachtet 0.168.0, 2026-11-13 |
 |---|---|---|---|---|
