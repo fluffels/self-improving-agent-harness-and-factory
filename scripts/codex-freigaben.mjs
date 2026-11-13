@@ -3,7 +3,7 @@
 // (docs/codex/einstieg.md § Vorprüfung), je `"offen"` oder `{ beleg: <Beleg-URL> }`.
 // Freigabe nur per reviewtem PR mit Beleg je Nachweis; Belege in API-Form per Repo-ID (Muster: BELEG_URL_QUELLE).
 const VERSION = /^\d+\.\d+\.\d+$/;
-const NUMMERN = ["1", "2", "3", "4", "5"];
+export const NACHWEIS_NUMMERN = ["1", "2", "3", "4", "5"];
 
 export const FREIGABEN = Object.freeze({
   "0.164.0": {
@@ -28,7 +28,7 @@ function eintragMaengel(version, e) {
   if (e === null || typeof e !== "object") return [...m, `Freigabetabelle ${version}: Eintrag fehlt`];
   if (!istBelegUrl(e.diagnose)) m.push(`Freigabetabelle ${version}: Diagnose-Beleg ist keine Beleg-URL in API-Form per Repo-ID (Muster: BELEG_URL_QUELLE)`);
   const n = e.nachweise !== null && typeof e.nachweise === "object" ? e.nachweise : {};
-  if (Object.keys(n).sort().join() !== NUMMERN.join()) m.push(`Freigabetabelle ${version}: Nachweise müssen genau 1-5 heißen`);
+  if (Object.keys(n).sort().join() !== NACHWEIS_NUMMERN.join()) m.push(`Freigabetabelle ${version}: Nachweise müssen genau 1-5 heißen`);
   for (const k of Object.keys(n)) if (!gueltigerNachweis(n[k])) m.push(`Freigabetabelle ${version}: Nachweis ${k} ist weder "offen" noch { beleg: Beleg-URL in API-Form }`);
   return m;
 }
@@ -40,7 +40,7 @@ export function tabellenMaengel(tabelle) {
 // Fail-closed: alles außer einem gültigen Beleg zählt als offen.
 export function offeneNachweise(eintrag) {
   const n = eintrag?.nachweise ?? {};
-  return NUMMERN.filter((k) => !belegt(n[k])).map(Number);
+  return NACHWEIS_NUMMERN.filter((k) => !belegt(n[k])).map(Number);
 }
 
 export function freigabeMaengel({ installiert, belegt: belegteVersion, tabelle }) {
