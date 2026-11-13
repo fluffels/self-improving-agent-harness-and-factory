@@ -169,8 +169,25 @@ describe("Punkt Modell-Routing", () => {
     expect(e.ok).toBe(false);
     expect(e.nichtPruefbar).toBeFalsy();
     expect(e.befund).toContain('(d) model="opus"');
-    expect(e.befund).toContain("nicht prüfbar: .claude/agents fehlt");
-    expect(e.fix).toContain("anlegen");
+    expect(e.befund).toContain(".claude/agents fehlt oder ist nicht lesbar: (a) und (c) nicht prüfbar");
+    expect(e.fix).toContain(".claude/agents anlegen");
+  });
+  test(".claude/agents fehlt: (b) und (e) laufen trotzdem", () => {
+    const pin = "---\nmodel: claude-" + "opus-5\n---\n";
+    const liesB: Lies = (p) => (p === ".agents/skills/x/SKILL.md" ? pin : p === ".claude/settings.json" ? '{"model":"sonnet"}' : null);
+    const b = punkt({ lies: liesB, liste: (o) => (o === ".agents/skills" ? ["x"] : null) });
+    expect(b.ok).toBe(false);
+    expect(b.nichtPruefbar).toBeFalsy();
+    expect(b.befund).toContain("(b) .agents/skills/x/SKILL.md");
+    const liesE: Lies = (p) => (p === "docs/model-routing.md" ? TABELLE : p === ".claude/settings.json" ? '{"model":"sonnet"}' : null);
+    const e = punkt({ lies: liesE, liste: () => null });
+    expect(e.ok).toBe(false);
+    expect(e.nichtPruefbar).toBeFalsy();
+    expect(e.befund).toContain("(e) Eigene: Agentendatei .claude/agents/projekt.md fehlt");
+  });
+  test("der Fix eines (a)-Funds nennt jeden Alias der geschlossenen Liste", () => {
+    const fix = mit({ ".claude/agents/projekt.md": agent("projekt", "inherit") }).fix ?? "";
+    for (const a of aliase) expect(fix).toContain(a);
   });
   test("(e) Tabelle nennt einen Subagenten ohne Agentendatei: der Fund sagt, dass die Datei fehlt", () => {
     const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagent `weg`") });
