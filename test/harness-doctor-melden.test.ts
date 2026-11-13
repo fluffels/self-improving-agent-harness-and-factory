@@ -407,16 +407,21 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     }
   });
   describe("Soll-Liste in main: Sicherheitspunkte meldet das Monatsticket, nicht der Wochenlauf", () => {
-    const dryRun = async (sollText: () => string | null) => {
+    const dryRun = async (sollText?: () => string | null) => {
       const log: string[] = [];
-      const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => assert.fail("Trockenlauf postet nicht") };
+      const libs = { REPO: "acme/proj", ...(sollText ? { sollText } : {}), ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => assert.fail("Trockenlauf postet nicht") };
       const pruefLauf = () => ({ ergebnis: [{ ok: false, punkt: "Ruleset", befund: "b", fix: "f" }, { ok: false, punkt: "Token", befund: "b", fix: "f" }] });
-      const code = await melden.main(["--dry-run"], { env: {}, sollText, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf });
+      const code = await melden.main(["--dry-run"], { env: {}, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf });
       assert.equal(code, 0);
       return log.join("\n");
     };
     test("lesbare Soll-Liste: der Sicherheitspunkt Ruleset entfällt, nur Token wird gemeldet", async () => {
       const log = await dryRun(() => JSON.stringify({ kern: { punkte: ["Ruleset"] } }));
+      assert.match(log, /LÜCKE Token: /);
+      assert.doesNotMatch(log, /LÜCKE Ruleset: /);
+    });
+    test("ohne Naht liest main die Soll-Datei des Repos: ein Sicherheitspunkt daraus entfällt, Token bleibt", async () => {
+      const log = await dryRun();
       assert.match(log, /LÜCKE Token: /);
       assert.doesNotMatch(log, /LÜCKE Ruleset: /);
     });
