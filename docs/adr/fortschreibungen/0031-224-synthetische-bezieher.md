@@ -22,7 +22,7 @@ Entscheidung: Option A, weil sie ohne Ruleset-Änderung und ohne Secret auskommt
 - **Tag-Takt:** je Profil eine Checklistenzeile mit Job und Handaufruf; die BLOCKER-Zeile der CI nennt die synthetischen Bezieher; ohne Profil-Dateien bleibt die Checkliste zeichengleich.
 - **Gate-Lücke-Zeilen (factory#215):** jede erweitert den synthetischen Bezieher ihres Profils (ein Eintrag in `faelle` mit `quelle` der Form `factory#<nr> L<k>` und den betroffenen `dateien`) oder wird ein begründetes `nichtAbbildbar` dort. Ein JS/TS-Fall wird ein Test in „Negativfälle der Kette“ (`test/probe-erstbezug.test.ts`).
 - **Job-Name:** `Synthetischer Bezieher <profil>` statt `Probe-Erstbezug <profil>`, weil der Shadowing-Wächter (quellprojekt#1172) jeden Job-Namen mit dem Präfix des Required-Check-Kontexts `Probe-Erstbezug (…)` als zweite Quelle zählt. Entscheidung: umbenennen, weil eine Ruleset-Änderung nicht Teil dieses Tickets ist.
-- **Eingabeprüfung:** `config` darf nur `struktur` und `coverage` setzen (`befehle` o. Ä. bliebe ein Weg, Kern-Gates zu umgehen); Pfade in `dateien` werden normalisiert geprüft (auch `.git/` ist gesperrt). Bekannte Grenze: ein Profil kann über `skripte` ein vorhandenes Skript der Basis überschreiben; das fängt nur das Review der Fixture-Datei. Die Profil-Datei liest `--profil` aus dem Arbeitsbaum von `--quelle`, der Rest der Probe aus dem Commit `HEAD` (in der CI gleich).
+- **Eingabeprüfung:** `config` darf nur `struktur` und `coverage` setzen (`befehle` o. Ä. bliebe ein Weg, Kern-Gates zu umgehen); Pfade in `dateien` werden normalisiert und ohne Beachtung der Groß-/Kleinschreibung geprüft (auch `.git/` ist gesperrt). Bekannte Grenze: ein Profil kann über `skripte` ein vorhandenes Skript der Basis überschreiben; das fängt nur das Review der Fixture-Datei. Die Profil-Datei liest `--profil` aus dem Arbeitsbaum von `--quelle`, der Rest der Probe aus dem Commit `HEAD` (in der CI gleich).
 - **Kein Required Check:** ein PR, der ein Profil bricht, kann mergen; danach sperrt das Rot den Tag und alarmiert auf `main` (`alarm-red-main` hängt am Job).
 
 ## Konsequenzen
@@ -33,4 +33,4 @@ Zwei parallele CI-Jobs à rund 10 bis 40 s ohne Agentenlauf und ohne Secret; Rot
 
 ## Re-Evaluierung
 
-Prüftermin (ADR 0027): 2027-05-13 oder der erste echte Java- bzw. Python-Bezieher, je nachdem, was früher kommt. Dann prüfen, ob die Fälle `faelle` einen Fund aus einem echten Bezieher abdecken oder ob der Stellvertreter durch einen echten Werkzeug-Aufruf ersetzt werden muss.
+Prüftermin (ADR 0027): 2027-05-13 oder der erste echte Java- bzw. Python-Bezieher, je nachdem, was früher kommt. Dann prüfen, ob die Fälle `faelle` einen Fund aus einem echten Bezieher abdecken oder ob die Attrappe durch einen echten Werkzeug-Aufruf ersetzt werden muss.

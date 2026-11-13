@@ -188,7 +188,7 @@ describe("Aufruf mit --profil", () => {
   });
 });
 
-/* Integration: echte Kette gegen einen Klon der Quelle bis `projektwerte` (ohne `install`), dann ein Kern-Gate im Fixture-Projekt. Belegt, dass die Profil-Gestalt gemessen wird (kein Grün durch Stellvertreter). */
+/* Integration: echte Kette gegen einen Klon der Quelle bis `projektwerte` (ohne `install`), dann ein Kern-Gate im Fixture-Projekt. Belegt, dass die Profil-Gestalt gemessen wird (kein Grün durch die Attrappe). */
 describe("Profil-Gestalt (echter Klon)", () => {
   const TIMEOUT = 180_000;
   const bezieher = (dir: string, name: string, aender: (profil: Profil) => Profil = (p) => p): string => {
@@ -284,6 +284,10 @@ describe("pruefeProfil: Grenzen der Eingabeprüfung (Lens-Runde 1)", () => {
     ["Umweg über doppelten Schrägstrich", { ".factory//projekt.json": "{}" }, /nicht überschreibbar/],
     ["leerer Pfad", { "": "t" }, /absolut, leer oder enthält/],
     [".git/ gesperrt", { ".git/hooks/pre-commit": "t" }, /liegt in \.git/],
+    [".git selbst gesperrt", { ".git": "t" }, /liegt in \.git/],
+    ["./.git normalisiert gesperrt", { "./.git": "t" }, /liegt in \.git/],
+    ["Groß-/Kleinschreibung der Aufbau-Datei", { "Package.json": "{}" }, /nicht überschreibbar/],
+    ["Groß-/Kleinschreibung von .git", { ".GIT/hooks/pre-commit": "t" }, /liegt in \.git/],
     ["dateien als Liste", [], /dateien muss ein Objekt/],
   ])("Negativfall: %s", (_n, dateien, muster) => {
     const f = fehler({ profil: "x", dateien });
@@ -306,6 +310,9 @@ describe("pruefeProfil: Grenzen der Eingabeprüfung (Lens-Runde 1)", () => {
   it("faelle als Objekt und Eintrag ohne Objekt → je eine Meldung, kein Absturz", () => {
     expect(fehler({ profil: "x", faelle: {} })).toEqual(["faelle muss eine Liste sein"]);
     expect(fehler({ profil: "x", faelle: [null] })).toEqual(["faelle[0]: muss ein Objekt sein"]);
+    expect(fehler({ profil: "x", faelle: ["x"] })).toEqual(["faelle[0]: muss ein Objekt sein"]);
+    expect(fehler({ profil: "x", faelle: [[]] })).toEqual(["faelle[0]: muss ein Objekt sein"]);
+    expect(fehler({ profil: "x", faelle: [{ quelle: "factory#1 L1", dateien: [1] }] })).toEqual(["faelle[0]: 1 steht nicht in dateien (oder config:<schlüssel>)"]);
   });
   it("verifyZusatz als Text, skripte als Liste → je eine Meldung, kein Absturz", () => {
     expect(fehler({ profil: "x", skripte: { a: "b" }, verifyZusatz: "a" })).toEqual(["verifyZusatz muss eine Liste sein"]);

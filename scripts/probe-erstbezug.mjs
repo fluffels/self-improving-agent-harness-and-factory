@@ -85,13 +85,13 @@ function mitProfil(pkg, profil) {
 }
 
 const PROFIL_SCHLUESSEL = /^[\w:.-]+$/u;
-const GESCHUETZT = new Set(["AGENTS.md", PROJEKT_CONFIG, "package.json"]);
+const GESCHUETZT = new Set(["AGENTS.md", PROJEKT_CONFIG, "package.json"].map((x) => x.toLowerCase()));
 const FALL_QUELLE = /^factory#\d+ L\d+$/u;
 /** Schlüssel des Config-Overlays, die ein Profil setzen darf (Quellwurzel, Coverage); alles andere (etwa befehle) bliebe ein Weg, Kern-Gates zu umgehen. */
 const OVERLAY_SCHLUESSEL = ["struktur", "coverage"];
 
 const istObjekt = (x) => Boolean(x) && typeof x === "object" && !Array.isArray(x);
-const normal = (pfad) => posix.normalize(pfad.replaceAll("\\", "/"));
+const normal = (pfad) => posix.normalize(pfad.replaceAll("\\", "/")).toLowerCase();
 const unsicher = (pfad) => typeof pfad !== "string" || pfad === "" || isAbsolute(pfad) || pfad.split(/[\\/]/u).includes("..");
 
 function dateienFehler(dateien) {
