@@ -39,7 +39,7 @@ Neue Punkte, alle mit `ausgabe` statt Langfuse-Export belegt; Spawn-Proben laufe
 | `hooks-geladen` (3) | `/hooks`, danach die Shell-Negativprobe | `codex-probe-kein-remote` | Eintrag unter PreToolUse und ein Deny-Text; durchgelassen oder fehlend heißt: die Datei lädt allein nicht |
 | `hook-format:agent` (3) | `grep codex-probe-hook-format .codex/probe/hook-protokoll.jsonl` | `codex-probe-hook-format` | eine `PreToolUse`-Zeile mit `tool_name` und `tool_input_schluessel`; keine Zeile: der Hook feuert für `spawn_agent` nicht |
 | `subagent-start` (3) | `grep SubagentStart .codex/probe/hook-protokoll.jsonl` | `codex-probe-subagent-stopp` | eine `SubagentStart`-Zeile (`payload_schluessel` notieren), der Spawn endet mit dem Grund (Exit 2); keine Zeile: das Ereignis erreicht den Hook nicht |
-| `tracing-ausfall` (4) | nach der Vorprüfung (Exit 1) die Sitzung über den Startweg mit `LANGFUSE_BASE_URL=http://127.0.0.1:9` davor starten, dann `spawn_agent`, dann `grep codex-probe-tracing-ausfall .codex/probe/hook-protokoll.jsonl` | `codex-probe-tracing-ausfall` | `langfuse.gesetzt: true` mit Schema `http`, Host `127.0.0.1`, Port `9` (die tote Adresse erreicht den Hook) und ein verweigerter Spawn |
+| `tracing-ausfall` (4) | die Sitzung über den Startweg mit `LANGFUSE_BASE_URL=http://127.0.0.1:9` davor starten, darin die Vorprüfung (Exit 1), dann `spawn_agent`, dann `grep codex-probe-tracing-ausfall .codex/probe/hook-protokoll.jsonl` | `codex-probe-tracing-ausfall` | `langfuse.gesetzt: true` mit Schema `http`, Host `127.0.0.1`, Port `9` (die tote Adresse erreicht den Hook) und ein verweigerter Spawn |
 
 Fehlt einer dieser Punkte im Bericht, ergibt `auswerten` für den zugeordneten Nachweis `offen`.
 
