@@ -459,6 +459,12 @@ describe("Checkliste der Ladeprobe und der Hook-Beobachtung (factory#457)", () =
     for (const teil of [befehl, marker, erwartet]) expect(punkt(id), teil).toContain(teil);
     expect(text()).toContain(`\`${id}\``);
   });
+  test("Punkt abnahme nennt Auftragsbefehl, formale Lens, Rolle holdout-abnahme, erwarteten HEAD und den Negativfall; Nachweis 5 (L5)", () => {
+    const p = lib.checklistenPunkte(config).find((x) => x.id === "abnahme")!;
+    expect(p.nachweis).toBe(5);
+    for (const teil of ["node scripts/codex-probe.mjs auftraege", "formale Lens", "holdout-abnahme", "erwarteten HEAD", "ohne Argument Exit 2"]) expect(punkt("abnahme"), teil).toContain(teil);
+    expect(text()).toContain("`abnahme`");
+  });
   test("die Spawn-Punkte nennen die Rolle ohne Shell (aus der Agent-Negativprobe) und ihren Marker in der message", () => {
     const rolle = lib.negativproben({ haupt, probe, config }).find((n) => n.art === "agent")!.codex.tool_input.agent_type;
     for (const [id, marker] of [["hook-format:agent", lib.MARKER_HOOK_FORMAT], ["subagent-start", lib.MARKER_SUBAGENT_STOPP]]) {

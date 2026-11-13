@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { flagsLesen, AUFRUF_EXIT } from "./flag-lib.mjs";
+import { flagsLesen, istIsoZeitpunkt, AUFRUF_EXIT } from "./flag-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { agentenNamen } from "./agenten-namen.mjs";
 import { bericht, leseExport, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
@@ -53,7 +53,7 @@ export function parseArgs(argv) {
 
 
 function rezeptAusgeben(args, deps) {
-  if (Number.isNaN(Date.parse(args.von)) || Number.isNaN(Date.parse(args.bis)) || Date.parse(args.von) >= Date.parse(args.bis)) {
+  if (!istIsoZeitpunkt(args.von) || !istIsoZeitpunkt(args.bis) || Date.parse(args.von) >= Date.parse(args.bis)) {
     return { exitCode: AUFRUF_EXIT, text: `--rezept braucht --von und --bis (ISO mit Zeitzone, von vor bis).\n${aufrufHilfe()}` };
   }
   try {

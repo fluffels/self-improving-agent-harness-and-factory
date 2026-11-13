@@ -96,6 +96,7 @@ Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu ve
 |---|---|
 | [lens-gegenprobe-2026-10-09.md](../lens-gegenprobe-2026-10-09.md) | Momentaufnahme: Rohwerte und Rezept der Lens-Gegenprobe (Opus gegen Sonnet gegen Haiku je Brille); die Entscheidung steht in model-routing.md |
 | [lens-gegenprobe-2026-10-15.md](../lens-gegenprobe-2026-10-15.md) | Momentaufnahme: Gegenprobe `omitClaudeMd: true` für die Lens (Kontextdateien mit und ohne), Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
+| [model-routing-messhistorie-2026.md](../model-routing-messhistorie-2026.md) | Momentaufnahme: Baseline, Langfuse-Nachmessung und Auswertungen des beendeten Phasen-Schnitts (quellprojekt#1593, factory#272); gültig steht es in model-routing.md |
 | [planer-gegenprobe-2026-10-16.md](../planer-gegenprobe-2026-10-16.md) | Momentaufnahme: Gegenprobe Opus `high` und Sonnet gegen Opus `xhigh` für den Planer, Regel, Rohwerte und Entscheidung; gültig steht sie in model-routing.md |
 | [planer-gegenprobe-2026-11-11.md](../planer-gegenprobe-2026-11-11.md) | Momentaufnahme: Gegenprobe Opus `high` gegen Opus `xhigh` für die Planer-Klasse `high`, Evidenz für die Frage der Umstellung (factory#311); gültig steht sie in model-routing.md |
 | [mutation-messung-2026-11.md](../mutation-messung-2026-11.md) | Momentaufnahme: Messung des berichtenden Mutationslaufs an drei PR-Diffs, vorab festgelegte Brauchbarkeitskriterien, Rohwerte und Urteil (factory#299) |

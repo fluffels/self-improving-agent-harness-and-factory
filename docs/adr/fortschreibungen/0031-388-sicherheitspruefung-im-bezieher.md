@@ -26,5 +26,9 @@ Entscheidung: ein monatlicher Workflow ohne Modell (`sicherheitspruefung.yml`, R
 ## Folgen
 
 - Fabrik und Bezieher bekommen denselben Takt; in der Fabrik laufen die Prüfpunkte gegen ihr eigenes Repo.
-- Die Sicherheitspunkte erscheinen im Bezieher doppelt: im Doctor-Wochenlauf (Meldestelle) und im Monatsticket. Ob der Wochenlauf sie im Bezieher auslassen sollte, ist offen.
+- Die Sicherheitspunkte erscheinen im Bezieher doppelt: im Doctor-Wochenlauf (Meldestelle) und im Monatsticket. Ob der Wochenlauf sie im Bezieher auslassen sollte, war offen (entschieden, Nachtrag factory#447).
 - **Re-Evaluierung:** bis 2027-05-12 prüfen, ob die Manifest-Heuristik (Workspaces, Maven-Aggregatoren) zu Fehlalarmen führt und ob die Punktliste ausreicht.
+
+## Nachtrag factory#447: Wochenlauf lässt Sicherheitspunkte aus
+
+- **Entscheidung:** Der Doctor-Wochenlauf lässt im Bezieher die Lücken weg, die die Sicherheitsprüfung (Monatsticket, `filtere` gegen die Soll-Liste) schon abdeckt (`ohneSicherheitspruefung` in `scripts/harness-doctor-melden.mjs`). Ist die Soll-Liste unlesbar, entfällt nichts.

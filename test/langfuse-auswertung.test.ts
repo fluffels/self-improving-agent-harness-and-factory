@@ -603,6 +603,9 @@ describe("CLI", () => {
     erwarte(["--rezept", "--von", "kaputt", "--bis", BIS], 2, "--rezept braucht");
     erwarte(["--rezept", "--von", VON, "--bis", "kaputt"], 2, "--rezept braucht");
     erwarte(["--rezept", "--von", VON, "--bis", VON], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", "2026", "--bis", "2026-03-01T00:00Z"], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", "2026-02-30T00:00Z", "--bis", "2026-04-01T00:00Z"], 2, "--rezept braucht");
+    erwarte(["--rezept", "--von", "2026-02-01T00:00Z", "--bis", "2026-02-30T00:00Z"], 2, "--rezept braucht");
     const r = lauf(["--rezept", "--von", VON, "--bis", BIS, "--agenten", join(tmpdir(), "gibt-es-nicht-289")]);
     expect(r.exitCode).toBe(1);
     expect(r.text).toContain("Fehler:");

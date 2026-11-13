@@ -1,6 +1,6 @@
 # Lessons Learned: Muster aus dem Bau des Harness
 
-> **Fachlich geprüft am: 2026-10-09.**
+> 🧭 **Fachlich geprüft am: 2026-10-09.**
 > Wiederkehrende Muster mit datierten Belegen, für Außenstehende. Der Ticketstatus steht in GitHub, nicht hier: ein Ticket nennt diese Seite nur mit „Stand 2026-10-09“. Zählbares steht generiert (Gate-Tabelle: [agent-harness.md](agent-harness.md#3-die-fitness-functions-im-detail), Inventar: [README › Die Bausteine](../README.md)), laufende Messwerte in der [Verdichtungstabelle](model-routing.md#langfuse-status-überprüfen-1293). Begriffe: [Harness-Glossar](harness-glossar.md).
 
 Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt später ein Gate) steht schon an anderer Stelle: [README › Wie das gewachsen ist](../README.md) und [Bitte und Mauer](agent-harness.md#leitplanken-schichten-bitte-und-mauer). Hier folgen die übrigen Muster.
@@ -57,7 +57,7 @@ Das Muster „Eine Bitte wird zur Mauer“ (was ein Text nur erbittet, erzwingt 
 
 **Geändert:** Das CI-Warten läuft unter der Cache-Lebensdauer ([scripts/pr-warten.mjs](../scripts/pr-warten.mjs)), eine Ausgabe-Diät steht in der Umsetzer-Definition. Das Ziel von #1559 wurde nicht erreicht, und das steht dort so.
 
-**Beleg:** [Baseline](model-routing.md#baseline-stand-2026-09-29-alle-vier-läufe-vor-10651067), [Umsetzer-Kontext](model-routing.md#umsetzer-kontext).
+**Beleg:** [Baseline](model-routing-messhistorie-2026.md#baseline-stand-2026-09-29-alle-vier-läufe-vor-quellprojekt1065quellprojekt1067), [Umsetzer-Kontext](model-routing.md#umsetzer-kontext).
 
 ## Autonomie und Verfahren
 
