@@ -51,7 +51,7 @@ export function projektPhasenAbweichungen(doku, fmVon) {
   for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
     const c = zellen(zeilen[i]);
     const phase = zelleOhneCode(c[0] ?? "");
-    const ziel = c[c.length - 1] ?? "";
+    const ziel = c[c.length - 1];
     const name = /Subagent `([\w-]+)`/.exec(ziel)?.[1];
     if (name === undefined) {
       fehler.push(`${phase}: ${zielFehler(ziel)}`);

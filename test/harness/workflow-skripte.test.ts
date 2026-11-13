@@ -87,10 +87,9 @@ const SECRET = /secrets\.(?!GITHUB_TOKEN\b)\w+/;
 /** Pur (L9b): Jobs mit Schreibrechten oder einem Secret ungleich GITHUB_TOKEN (Workflow-Ebene gilt für alle Jobs), samt ihren Skripten. */
 export function privilegierteJobs(workflowText: string): JobSkripte[] {
   const doc = parse(workflowText, { schema: "failsafe" }) as { jobs?: Record<string, { permissions?: unknown }>; permissions?: unknown } | null;
-  const { jobs, ...kopf } = doc ?? {};
-  if (jobs === null || typeof jobs !== "object") return [];
+  const { jobs = {}, ...kopf } = doc ?? {};
   const kopfPriv = schreibt(kopf.permissions) || SECRET.test(JSON.stringify(kopf));
-  const privat = (job: string): boolean => kopfPriv || schreibt(jobs[job]?.permissions) || SECRET.test(JSON.stringify(jobs[job]));
+  const privat = (job: string): boolean => kopfPriv || schreibt(jobs[job].permissions) || SECRET.test(JSON.stringify(jobs[job]));
   return jobSkripte(workflowText).filter((j) => privat(j.job));
 }
 
@@ -143,6 +142,19 @@ describe("jobSkripte (Parser)", () => {
     expect(w("", "    env:\n      T: ${{ secrets.PROJECT_TOKEN }}\n")).toEqual(["a"]);
     expect(w("env:\n  T: ${{ secrets.PROJECT_TOKEN }}\n", "")).toEqual(["a"]);
     expect(w("", "    permissions:\n      contents: read\n    env:\n      T: ${{ secrets.GITHUB_TOKEN }}\n")).toEqual([]);
+  });
+  test("privilegierteJobs: ein Recht auf write genügt in einer Mischliste, ein Secret nur mit exakter Form (secrets.<NAME>, GITHUB_TOKEN nur ganz)", () => {
+    const w = (kopf: string, job: string) => privilegierteJobs(`${kopf}jobs:\n  a:\n${job}    steps:\n      - run: node scripts/p.mjs\n`).map((j) => j.job);
+    expect(w("", "    permissions:\n      contents: read\n      issues: write\n")).toEqual(["a"]);
+    expect(w("permissions:\n  contents: read\n  issues: write\n", "")).toEqual(["a"]);
+    expect(w("", "    env:\n      T: ${{ secrets.GITHUB_TOKEN_X }}\n")).toEqual(["a"]);
+    expect(w("", "    env:\n      T: ${{ secretsXFOO }}\n")).toEqual([]);
+  });
+  test("privilegierteJobs: leerer Workflow, Workflow ohne jobs und Job ohne Definition sind kein Absturz und nicht privilegiert", () => {
+    expect(privilegierteJobs("")).toEqual([]);
+    expect(privilegierteJobs("name: x\npermissions: write-all\n")).toEqual([]);
+    expect(privilegierteJobs("jobs:\n  a:\n")).toEqual([]);
+    expect(privilegierteJobs("jobs:\n")).toEqual([]);
   });
   test("Hülle: Fixture mit Paket-Import ist ein Verstoß, mit node: keiner", () => {
     const quellen: Record<string, string> = { "scripts/ok.mjs": 'import fs from "node:fs";', "scripts/schlecht.mjs": 'import { parse } from "yaml";' };

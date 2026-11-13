@@ -145,8 +145,8 @@ export function lauf({ io, trocken = false }) {
 
 // ---- IO (ungetestet) ----
 
-/** Einstieg. `deps` (Tests): `env` (Standard `process.env`), `api` (Standard `ghJson`: Wahl des Sammeltickets und `gh api user` für das eigene Konto), `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `MELDESTELLE`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `bereite(zeilen, { herkunft })` (Standard `bereiteMeldung`), `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh`, `langfuse: null` und `dateien` (factory#94, dazu der Punkt `Meldestelle` an einer fremden Stelle, factory#208, und im Bezieher `Factory-Update`, factory#220: beides über `dateienStandard`), ohne `umgebung`). */
-export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf, env = process.env, api = ghJson, bereite = (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }) } = {}) {
+/** Einstieg. `deps` (Tests): `env` (Standard `process.env`), `api` (Standard `ghJson`: Wahl des Sammeltickets und `gh api user` für das eigene Konto), `ladeConfig()`, `ladeLibs()` (liefert `REPO`, `MELDESTELLE`, `ladeSammelKontext`, `postZeilen`, `waehleSammelticket`), `log`, `err`, `bereite(zeilen, { herkunft })` (Standard `bereiteMeldung`), `sollText()` (Text der Soll-Liste `.github/sicherheitspruefung.json`, Standard: Datei oder `null`), `pruefLauf` (Doctor-Lauf; der Wochenlauf ruft ihn mit `rootDir`, `gh`, `langfuse: null` und `dateien` (factory#94, dazu der Punkt `Meldestelle` an einer fremden Stelle, factory#208, und im Bezieher `Factory-Update`, factory#220: beides über `dateienStandard`), ohne `umgebung`). */
+export async function main(argv = process.argv.slice(2), { ladeConfig = () => ladeProjektConfig({ rootDir: WURZEL }), ladeLibs = ladeBoardLibs, log = console.log, err = console.error, pruefLauf: doctorLauf = pruefLauf, env = process.env, api = ghJson, sollText = () => lesenOderNull(join(WURZEL, SOLL_PFAD)), bereite = (zeilen, opt) => bereiteMeldung(zeilen, { wurzel: WURZEL, ...opt }) } = {}) {
   const start = await inboxStart(argv, { skript: "harness-doctor-melden", praefix: `${KENNUNG}: Projekt-Config nicht lesbar: `, ladeConfig, ladeLibs, log, err });
   if (start.code !== undefined) return start.code;
   const { trocken, libs } = start;
@@ -159,7 +159,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig = () => la
       ermittleLuecken({
         env,
         repo: REPO,
-        sollPunkte: sollPunkte(lesenOderNull(join(WURZEL, SOLL_PFAD))),
+        sollPunkte: sollPunkte(sollText()),
         pruefe: () => doctorLauf({ rootDir: WURZEL, gh: (a) => ghText(a, { token: projektToken, timeout: 30000 }), langfuse: null, dateien: dateienStandard({ env, lesen: (a, token) => api(a, { token, timeout: 30000 }) }) }).ergebnis,
       }),
     kontext: () => {

@@ -27,7 +27,7 @@ interface Melden {
   ohneSicherheitspruefung(luecken: Luecke[], punkte: string[] | null): Luecke[];
   sollPunkte(text: string | null): string[] | null;
   plane(a: { luecken: Luecke[]; kommentare: Kommentar[]; owner: string; heute: string; eigen?: string | null }): string[];
-  main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
+  main(argv: string[], deps: { env?: Record<string, string>; api?: (a: string[], o?: unknown) => unknown; bereite?: (zeilen: string[], o?: { herkunft?: string | null }) => { ok: boolean; text?: string; grund?: string }; ladeConfig: () => unknown; ladeLibs: () => Promise<unknown>; log: (s: string) => void; err: (s: string) => void; sollText?: () => string | null; pruefLauf?: (a: Record<string, unknown>) => { ergebnis: unknown[] } }): Promise<number>;
 }
 const melden = rawMelden as unknown as Melden;
 
@@ -405,6 +405,28 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
+  });
+  describe("Soll-Liste in main: Sicherheitspunkte meldet das Monatsticket, nicht der Wochenlauf", () => {
+    const dryRun = async (sollText: () => string | null) => {
+      const log: string[] = [];
+      const libs = { REPO: "acme/proj", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: () => assert.fail("Trockenlauf postet nicht") };
+      const pruefLauf = () => ({ ergebnis: [{ ok: false, punkt: "Ruleset", befund: "b", fix: "f" }, { ok: false, punkt: "Token", befund: "b", fix: "f" }] });
+      const code = await melden.main(["--dry-run"], { env: {}, sollText, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: (s) => log.push(s), err: () => undefined, pruefLauf });
+      assert.equal(code, 0);
+      return log.join("\n");
+    };
+    test("lesbare Soll-Liste: der Sicherheitspunkt Ruleset entfällt, nur Token wird gemeldet", async () => {
+      const log = await dryRun(() => JSON.stringify({ kern: { punkte: ["Ruleset"] } }));
+      assert.match(log, /LÜCKE Token: /);
+      assert.doesNotMatch(log, /LÜCKE Ruleset: /);
+    });
+    test("fehlende oder unlesbare Soll-Liste: beide Lücken bleiben", async () => {
+      for (const text of [null, "kein json"]) {
+        const log = await dryRun(() => text);
+        assert.match(log, /LÜCKE Token: /);
+        assert.match(log, /LÜCKE Ruleset: /);
+      }
+    });
   });
   describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
     const lauf = async (ziel: string, env: Record<string, string>) => {

@@ -73,7 +73,8 @@ export function normPfad(pfad, { wurzel = null, worktree = null } = {}) {
  * Pfade und Befehle ohne Benutzerordner, Worktree-Pfad und Repo-Wurzel (das Repo ist öffentlich). Geschlossene Ersetzungsliste
  * für den Benutzernamen: 1./2. Windows-Home (`C:/Users/<n>`, `/c/Users/<n>`) → `~`; 3. POSIX-Home (`/Users/<n>`, `/home/<n>`) am
  * Pfadanfang (Zeilenanfang, Leerraum, Anführungszeichen, `=`, `(`) → `~`; 4. Claude-Code-Projektordner-Slug (`-Users-…`,
- * `-home-…`, `<Laufwerk>--Users-…`) bis zum nächsten `/` oder Leerraum → `<projekt>`. Die Wurzel kommt von
+ * `-home-…`, `<Laufwerk>--Users-…`) bis zum nächsten `/`, Leerraum, `"`, `'` oder `)` → `<projekt>`. Bekannte Grenze (geschlossene Liste,
+ * keine Regression): nicht erkannt werden POSIX-Pfade und Slugs nach `file://`-Schema, Backtick, `,`, `;`, `|`, `<` und `[`. Die Wurzel kommt von
  * außen (`git rev-parse --git-common-dir`, ohne `.git`), nie fest verdrahtet; beide Schreibweisen (`C:/…`, `/c/…`), mit und
  * ohne abschließenden Schrägstrich. Das Worktree-Präfix (`worktree`) kommt aus der Projekt-Config. Ohne `wurzel` bleibt nur die
  * Wurzel-Ersetzung aus, ohne `worktree` nur die Worktree-Ersetzung.

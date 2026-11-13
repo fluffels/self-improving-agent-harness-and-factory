@@ -212,6 +212,15 @@ describe("Punkt Modell-Routing", () => {
     expect(nichts.befund).toContain("nicht zuordenbar");
     expect(nichts.befund).not.toContain("ohne Backticks");
   });
+  test("(e) „Subagent“ ohne Leerraum zum Namen ist nicht zuordenbar; beliebiger Leerraum (mehrere Leerzeichen, Tab) gibt den Format-Hinweis", () => {
+    const klebt = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", "Subagentfoo") });
+    expect(klebt.befund).toContain("nicht zuordenbar");
+    expect(klebt.befund).not.toContain("ohne Backticks");
+    for (const trenner of ["  ", "\t"]) {
+      const e = mit({ "docs/model-routing.md": TABELLE.replace("Subagent `projekt`", `Subagent${trenner}foo`) });
+      expect(e.befund, JSON.stringify(trenner)).toContain("Subagent „foo“ ohne Backticks; Format: Subagent `name`");
+    }
+  });
   test("docs/model-routing.md fehlt: OK mit Hinweis; ein Anker-Stub ohne Tabelle: OK ohne Hinweis", () => {
     const ohneSeite = mit({ "docs/model-routing.md": null });
     expect(ohneSeite.ok).toBe(true);

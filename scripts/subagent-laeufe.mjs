@@ -44,7 +44,7 @@ function toolIntervalle(zeilen) {
 /** Rückgabe-Tools: ihr Ergebnis ist die letzte Zeile eines beendeten Subagent-Laufs (Beleg: Transkripte der Läufe, Tool `SubagentHandback`); geschlossene Liste. */
 export const ENDE_TOOLS = ["SubagentHandback"];
 
-/** Offen (kein Ende im Transkript): ein Tool-Aufruf ohne Ergebnis oder ein Tool-Ergebnis als letzte user/assistant-Zeile (das Modell antwortet noch), außer es gehört zu einem Rückgabe-Tool (`ENDE_TOOLS`); Zeilen anderer Typen und ohne gültigen Zeitstempel zählen nicht. */
+/** Offen (kein Ende im Transkript): ein Tool-Aufruf ohne Ergebnis oder die letzte user-Zeile (Tool-Ergebnis oder Text; das Modell antwortet noch), außer sie ist das Ergebnis eines Rückgabe-Tools (`ENDE_TOOLS`); Zeilen anderer Typen und ohne gültigen Zeitstempel zählen nicht. Grenze: ein laufender Lauf, dessen letzte Zeile eine Assistant-Text-/Thinking-Zeile vor dem nächsten tool_use ist, gilt weiter als beendet. */
 function istOffen(zeilen, offeneTools) {
   const letzte = zeilen.findLast((r) => (r?.type === "user" || r?.type === "assistant") && gueltig(r.timestamp));
   if (offeneTools > 0) return true;
