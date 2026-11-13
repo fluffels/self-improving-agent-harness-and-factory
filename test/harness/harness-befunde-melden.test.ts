@@ -5,6 +5,7 @@
  * Scan-Umfang (geschlossen): (a) der Kern-Block der AGENTS.md, (b) jede verteilte Ganzdatei des Besitz-Manifests unter `.claude/agents/` und `.agents/skills/` (`.md`).
  * Einheit ist der Satzteil (Zeile, geteilt nach `.`, `;`, `!`, `?` und Leerraum). Ein Fund ist ein Satzteil mit einem TRIGGER-Wort (Harness-Befund, Sammelticket, `melden.mjs` …)
  * UND einem ROLLE-Wort (Bezieher, Fabrik, Factory-Repo, Factory-Board, upstream).
+ * Zweite Regel (Sammeltickets nie per `gh issue create`): ein Satzteil mit `gh issue create` UND einem TRIGGER-Wort oder „Sammelticket“ ist ein Fund.
  * Grenzen: eine Heuristik mit zwei Wortlisten; eine Umschreibung ohne Listenwort fällt durch (auch das blanke „Sammelticket“ und `sammelticket-anlegen.mjs` sind kein TRIGGER; die Position des Anlegens sichert `sammelticketPosition`), zwei getrennte Sätze zählen nicht als Fund. Nicht gescannt: Factory-Seiten (`docs/`),
  * der Projekt-Block (Form 4 erlaubt dort Fabrik-Text) und `.mjs`-Laufzeittexte (die Inventur der übrigen Rollen-Texte leistet `test/harness/fabrik-regeltext.test.ts`, factory#222).
  *
@@ -25,13 +26,19 @@ const { blockSpanne, istVerteilteGanzdatei } = rawBesitz as unknown as {
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const WEG = "Harness-Befunde nur per `node scripts/melden.mjs`; Regeltext nur für die Fabrik gehört in den Projekt-Block (Form 4, Fortschreibung factory#154)";
 const TRIGGER = /Harness-Befund|Kern-Befund|Harness-Sammelticket|Harness-Härtung \(gesammelt\)|Sammelticket-Zeile|melden\.mjs/;
-const ROLLE = /Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
+const GH_CREATE = /gh issue create/;
+const SAMMELTICKET = /Sammelticket/;
+const WEG_ZEILE = "Sammeltickets nie per `gh issue create`; Zeilen per `node scripts/melden.mjs`";
+const ROLLE =/Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
 const TEXT_PFAD = /^(\.claude\/agents|\.agents\/skills)\/.*\.md$/;
 
 /** Pur: Meldungen `<pfad>:<zeile>: nennt für Harness-Befunde eine Rolle: …` (leer = grün); `ab` ist die Zeilennummer der ersten Zeile von `text`. */
 export function rollenFunde(pfad: string, text: string, ab = 1): string[] {
   return text.split("\n").flatMap((zeile, i) =>
-    zeile.split(/(?<=[.;!?])\s+/).flatMap((teil) => (TRIGGER.test(teil) && ROLLE.test(teil) ? [`${pfad}:${ab + i}: nennt für Harness-Befunde eine Rolle („${teil.slice(0, 80)}“): ${WEG}`] : [])),
+    zeile.split(/(?<=[.;!?])\s+/).flatMap((teil) => [
+      ...(TRIGGER.test(teil) && ROLLE.test(teil) ? [`${pfad}:${ab + i}: nennt für Harness-Befunde eine Rolle („${teil.slice(0, 80)}“): ${WEG}`] : []),
+      ...(GH_CREATE.test(teil) && (TRIGGER.test(teil) || SAMMELTICKET.test(teil)) ? [`${pfad}:${ab + i}: nennt \`gh issue create\` für Sammeltickets („${teil.slice(0, 80)}“): ${WEG_ZEILE}`] : []),
+    ]),
   );
 }
 
@@ -57,6 +64,30 @@ function scanne(): string[] {
 }
 
 describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
+  test("ein Satzteil mit `gh issue create` und einem TRIGGER-Wort oder „Sammelticket“ ist ein Fund (Sammeltickets nie per gh issue create)", () => {
+    for (const z of [
+      "Fehlt das Harness-Sammelticket, lege es per `gh issue create` an.",
+      "Für das Sammelticket `gh issue create` nutzen.",
+      "`gh issue create` für Harness-Befunde",
+      "Zeile per `gh issue create` statt melden.mjs",
+    ]) {
+      const f = rollenFunde("x.md", z);
+      expect(f, z).toHaveLength(1);
+      expect(f[0]).toContain("x.md:1: nennt `gh issue create` für Sammeltickets");
+      expect(f[0]).toContain("node scripts/melden.mjs");
+    }
+    // je Teil zu kurz oder zu lang: kein Fund
+    for (const z of [
+      "Ein eigenes Issue per `gh issue create` anlegen.",
+      "Das Sammelticket bekommt Zeilen per `node scripts/melden.mjs`.",
+      "Kommentar per `gh issue comment` im Sammelticket.",
+      "gh issue creat für das Sammelticket",
+      "gh issue für das Sammelticket",
+    ]) expect(rollenFunde("x.md", z), z).toEqual([]);
+    expect(rollenFunde("x.md", "Sammelticket legen. Dann `gh issue create` für ein Projekt-Issue.")).toEqual([]);
+    expect(rollenFunde("x.md", "nichts\nSammelticket per gh issue create", 5)[0]).toContain("x.md:6:");
+  });
+
   test("der echte Scan (Kern-Block und verteilte Agenten-/Skill-Texte) ist leer", () => {
     expect(scanne()).toEqual([]);
   });
