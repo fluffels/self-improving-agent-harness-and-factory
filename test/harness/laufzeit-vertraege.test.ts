@@ -6,7 +6,7 @@
  *  V3 Hooks: jedes Hook-Skript aus `.claude/settings.json` hat genau eine Zeile in HOOK_TABELLE {hook, modul, codex, grenze};
  *     `codex: null` braucht eine Grenze mit Ticket in Herkunftsform (`factory#<nr>`/`quellprojekt#<nr>`) und einem Codex-Ereignis aus der geschlossenen Liste CODEX_HOOK_EREIGNISSE oder dem Wort „Statuszeile“ (der Wächter prüft den Ereignisbezug, nicht die Begründungsqualität); ein Adapter muss dieselben Auswertungsmodule importieren, auch
  *     über seine transitiven Importe (der Adapter lädt den Dispatcher dynamisch; `lokaleImporteTransitiv` aus hook-importe.ts);
- *     importiert ein `scripts/codex-*.mjs` transitiv ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen. Eine Grenze nennt nie die gelöschten Tickets factory#84/factory#86.
+ *     importiert ein `scripts/codex-*.mjs` transitiv ein Auswertungsmodul, während die Zeile `null` sagt, ist die Tabelle nachzuziehen. Eine Grenze nennt nie die gelöschten oder abgelösten Tickets factory#84/factory#86/factory#249.
  *  V5 Doku: der Abschnitt `## Tracing-Ausfallstopp und Sitzungs-Hooks` in docs/codex/einstieg.md nennt genau die Menge CODEX_HOOK_EREIGNISSE in Backticks und trägt ein Abrufdatum („abgerufen am JJJJ-MM-TT“).
  *  V4 AGENTS.md ≤ 32768 Bytes (Codex-Standard `project_doc_max_bytes`); `check:contextsize` deckelt strenger, hier nur der Bezug.
  * Grenzen: Frontmatter-Hooks der Agenten werden nicht gescannt; ein echter Codex-Lauf ist in CI nicht möglich (Wirkungsbeleg: factory#367).

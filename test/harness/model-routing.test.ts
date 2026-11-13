@@ -1057,6 +1057,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(t, /git diff --name-only HEAD origin\/main/);
     assert.match(t, /`git show origin\/main:<pfad>`/);
     assert.doesNotMatch(t, /MSYS_NO_PATHCONV/, "der Windows-Fall steht in plattform-windows.md");
+    assert.match(read(".agents/skills/factory/plattform-windows.md"), /MSYS_NO_PATHCONV=1/);
     assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills \.agents\/skills AGENTS\.md/);
   });
 

@@ -53,6 +53,7 @@
     "/scripts/ticket-drift.mjs",
     "/scripts/ticket-drift-lib.mjs",
     "/scripts/codescanning-inbox.mjs",
+    "/scripts/secret-inbox.mjs",
     "/scripts/ghsa-lib.mjs",
     "/scripts/sicherheitspruefung.mjs",
     "/scripts/sicherheitspruefung-lib.mjs",
