@@ -121,16 +121,14 @@ export function berichtVorlage(punkte) {
 const VORSPANN = [
   "Vorspann (von Hand, ein Schritt nach dem anderen):",
   "1. `codex --version` ausführen und die Version notieren (sie muss zur Freigabetabelle passen, sonst gilt die Probe für die falsche Version).",
-  "2. Im Probe-Worktree eine neue CLI-Session starten (keine Fortsetzung, nicht die App).",
-  "3. `/hooks` öffnen, die Registrierung prüfen und vertrauen.",
-  "4. `codex --strict-config doctor --summary` ausführen.",
+  "2. Im Probe-Worktree eine neue CLI-Session starten (keine Fortsetzung, nicht die App); `/hooks` öffnen, die Registrierung prüfen und vertrauen.",
+  "3. `codex --strict-config doctor --summary` ausführen.",
 ];
 const SCHLUSS = [
   "Abschluss:",
   "- Langfuse-Export als JSON über die Weboberfläche oder den MCP-Server holen (kein Skript mit Secret-Key).",
   `- \`${PROBE_ORDNER}/bericht-vorlage.json\` füllen (Ergebnis je Punkt, Beobachtung, Observation-IDs).`,
-  "- `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>` ausführen.",
-  "- `node scripts/codex-probe.mjs aufraeumen` ausführen.",
+  "- `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>` ausführen, danach `node scripts/codex-probe.mjs aufraeumen`.",
 ];
 
 /** Checklisten-Text (Markdown) für stdout und `checkliste.md`. */

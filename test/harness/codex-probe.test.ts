@@ -27,15 +27,11 @@ const dispatcher = dispatcherRaw as unknown as { dispatch: (t: string, root: str
 
 const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.test", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const echtGit = (a: string[], cwd: string): Res => { const r = spawnSync("git", a, { cwd, encoding: "utf8" }); return { status: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" }; };
-const temps: string[] = [];
-let tmp = "";
-let haupt = "";
-let probe = "";
+let [tmp, haupt, probe] = ["", "", ""];
 let calls: string[][] = [];
 
 beforeEach(() => {
   tmp = realpathSync(mkdtempSync(join(tmpdir(), "cpx-")));
-  temps.push(tmp);
   const origin = join(tmp, "origin.git");
   haupt = join(tmp, "haupt");
   git(tmp, "init", "-q", "--bare", "-b", "main", origin);
@@ -48,7 +44,7 @@ beforeEach(() => {
   probe = `${haupt}/.claude/worktrees/codex-probe`;
   calls = [];
 });
-afterEach(() => { vi.unstubAllEnvs(); for (const p of temps.splice(0)) rmSync(p, { recursive: true, force: true }); });
+afterEach(() => { vi.unstubAllEnvs(); rmSync(tmp, { recursive: true, force: true }); });
 
 const protokoll = (a: string[], cwd: string) => { calls.push(a); return echtGit(a, cwd); };
 const setupStub = (p: string) => { mkdirSync(join(p, ".codex"), { recursive: true }); writeFileSync(join(p, ".codex", "hooks.json"), hookRegistrierung()); return { status: 0, stderr: "" }; };
@@ -85,7 +81,7 @@ describe("vorbereiten und aufraeumen", () => {
     expect(branchListe()).not.toContain("codex-probe");
     expect(lauf(["aufraeumen"]).code).toBe(0);
   });
-  test("Probe-Ticket ist eine lokale Datei: kein GitHub, kein Push, nur git und codex-setup im Probe-Worktree laufen", () => {
+  test("Probe-Ticket ist eine lokale Datei; nur git und codex-setup im Probe-Worktree laufen", () => {
     lauf(["vorbereiten"]);
     const ticket = readFileSync(join(probe, ".codex", "probe", "ticket.md"), "utf8");
     expect(ticket).toContain(String(lib.PROBE_TICKET_NR));
@@ -195,16 +191,11 @@ describe("Fixture-Hooks (echter Node-Start)", () => {
     for (const [n, q] of Object.entries(lib.fixtureHooks())) writeFileSync(join(ordner, n), q);
     return spawnSync(process.execPath, [join(ordner, datei)], { input: eingabe, encoding: "utf8", timeout });
   };
-  test("hook-fehler wirft nur bei seinem Marker (Exit 1), sonst Exit 0 ohne Ausgabe", () => {
+  test("jeder Fixture-Hook greift nur bei seinem Marker (Fehler: Exit 1, Timeout: ETIMEDOUT), sonst Exit 0 ohne Ausgabe", () => {
+    const ohne = (datei: string, marker: string) => { const r = start(datei, `{"command":"echo ${marker}"}`, 8000); return [r.status, r.stdout, r.stderr]; };
     expect(start("hook-fehler.mjs", `{"command":"echo ${lib.MARKER_FEHLER}"}`).status).toBe(1);
-    const ohne = start("hook-fehler.mjs", `{"command":"echo hallo ${lib.MARKER_TIMEOUT}"}`);
-    expect([ohne.status, ohne.stdout, ohne.stderr]).toEqual([0, "", ""]);
-  });
-  test("hook-timeout überschreitet den Timeout nur bei seinem Marker, sonst Exit 0 ohne Ausgabe", () => {
-    const t = start("hook-timeout.mjs", `{"command":"echo ${lib.MARKER_TIMEOUT}"}`, lib.PROBE_HOOK_TIMEOUT_S * 1000 + 500);
-    expect((t.error as NodeJS.ErrnoException).code).toBe("ETIMEDOUT");
-    const ohne = start("hook-timeout.mjs", `{"command":"echo ${lib.MARKER_FEHLER}"}`, 8000);
-    expect([ohne.status, ohne.stdout, ohne.stderr]).toEqual([0, "", ""]);
+    expect((start("hook-timeout.mjs", `{"command":"echo ${lib.MARKER_TIMEOUT}"}`, lib.PROBE_HOOK_TIMEOUT_S * 1000 + 500).error as NodeJS.ErrnoException).code).toBe("ETIMEDOUT");
+    expect([ohne("hook-fehler.mjs", lib.MARKER_TIMEOUT), ohne("hook-timeout.mjs", lib.MARKER_FEHLER)]).toEqual([[0, "", ""], [0, "", ""]]);
   });
 });
 
