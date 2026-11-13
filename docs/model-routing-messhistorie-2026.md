@@ -20,7 +20,7 @@
 ¹ quellprojekt#1069 und quellprojekt#1072 liefen in derselben Session und sind ab dem jeweiligen Claim geschnitten (`--from`); ihre Auswahl ist deshalb nicht gemessen.
 
 **Was die Baseline zeigt:**
-- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** quellprojekt#1026 und quellprojekt#1064 hatten den Projekt-Skill geladen (`model: sonnet` im Frontmatter; der Hebel war ab quellprojekt#1065 `settings.json`, seit quellprojekt#1280 der Subagent `<agenten.umsetzer>`, §2), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in quellprojekt#1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für quellprojekt#1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
+- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** quellprojekt#1026 und quellprojekt#1064 hatten den Projekt-Skill (Ticket-Skill des Quellprojekts) geladen (`model: sonnet` im Frontmatter; der Hebel war ab quellprojekt#1065 `settings.json`, seit quellprojekt#1280 der Subagent `<agenten.umsetzer>`, §2), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in quellprojekt#1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für quellprojekt#1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
 - **95–98 % der Tokens sind Cache-Reads**, also der pro Call neu gelesene Kontext. Weniger Calls und ein kleinerer Grundkontext sparen mehr als kürzere Antworten.
 - **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur quellprojekt#1064 hat den `<agenten.planer>` gerufen; quellprojekt#1026 lief über den Skill und übersprang ihn trotzdem.
@@ -39,7 +39,7 @@ Quelle: Langfuse, alle Calls der Woche nach Modell.
 
 ¹ Langfuse hat für `claude-sonnet-5-5` keinen Preis hinterlegt (quellprojekt#1123).
 
-In rund 22 Traces mit Tag `skill:<projekt>`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher (von quellprojekt#1065 bis quellprojekt#1280) der Projekt-Default in `settings.json`.
+In rund 22 Traces mit Tag `skill:<projekt>` (Ticket-Skill des Quellprojekts): 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher (von quellprojekt#1065 bis quellprojekt#1280) der Projekt-Default in `settings.json`.
 
 **Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Gemessen: [Nachmessung nach quellprojekt#1065/quellprojekt#1198](model-routing.md#nachmessung-nach-10651198-1206).
 
