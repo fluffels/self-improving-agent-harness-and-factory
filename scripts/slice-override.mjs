@@ -37,6 +37,7 @@ export function commitZeilen(praefix, planer) {
     lockfileOverride: `${praefix}Lockfile-Override`,
     syncDringlich: `${praefix}Sync-Dringlich`,
     bezieherMigration: `${praefix}Bezieher-Migration`,
+    budgetBeleg: `${praefix}Budget-Beleg`,
   };
 }
 

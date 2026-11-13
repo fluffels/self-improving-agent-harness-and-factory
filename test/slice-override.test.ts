@@ -55,7 +55,7 @@ const ECHT = so.commitZeilenAus(projektConfig());
 const HEAD40 = "a".repeat(40);
 
 describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwert", () => {
-  it("leitet Plan, Review und die fünf Override-Schlüssel aus dem Präfix ab", () => {
+  it("leitet Plan, Review und die Override- und Beleg-Schlüssel aus dem Präfix ab", () => {
     expect(so.commitZeilen("AB-", "x-planer")).toEqual({
       praefix: "AB-",
       planer: "x-planer",
@@ -70,6 +70,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       lockfileOverride: "AB-Lockfile-Override",
       syncDringlich: "AB-Sync-Dringlich",
       bezieherMigration: "AB-Bezieher-Migration",
+      budgetBeleg: "AB-Budget-Beleg",
     });
     expect(Z.diffcovOverride).toBe(`${FREMD.praefixe.commitZeile}Diffcov-Override`);
   });

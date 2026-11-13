@@ -22,39 +22,47 @@ export function countChars(text) {
   return text.replace(/\r/g, "").length;
 }
 
-/**
- * Pur: die Kontextdateien aus `budgets`, die über ihrem Budget liegen, als `[{ file, chars, budget }]`. `lies(datei)` liefert den Text oder `null` (fehlt: zählt nicht);
- * `ausnahmen` = geduldete Dateien (`ausnahmen.kontext` der Projekt-Config, `[{ datei }]`), die nie gemeldet werden.
- */
-export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] }) {
+/** Pur: Stand je Kontextdatei aus `budgets` als `[{ file, chars, budget, rest }]` (eine Schleife für `ueberBudget` und `knappeBudgets`); fehlende Dateien und geduldete Ausnahmen fehlen. `lies(datei)` liefert den Text oder `null`. */
+function budgetStaende({ lies, budgets, ausnahmen }) {
   const geduldet = new Set(ausnahmen.map((a) => a.datei));
-  const treffer = [];
-  for (const { file, budget } of budgets) {
-    if (geduldet.has(file)) continue;
-    const text = lies(file);
-    const chars = text === null ? 0 : countChars(text);
-    if (chars > budget) treffer.push({ file, chars, budget });
-  }
-  return treffer;
-}
-
-/** Anteil des Budgets, unter dem der Rest als knapp gilt (factory#215 L12). */
-export const KNAPP_ANTEIL = 0.05;
-
-/**
- * Pur: die Kontextdateien, die noch im Budget liegen, deren Rest aber unter `anteil` des Budgets liegt, als `[{ file, chars, budget, rest }]`.
- * Über Budget zählt nicht (das meldet `ueberBudget`); `lies`/`ausnahmen` wie dort.
- */
-export function knappeBudgets({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [], anteil = KNAPP_ANTEIL }) {
-  const geduldet = new Set(ausnahmen.map((a) => a.datei));
-  const treffer = [];
+  const staende = [];
   for (const { file, budget } of budgets) {
     if (geduldet.has(file)) continue;
     const text = lies(file);
     if (text === null) continue;
     const chars = countChars(text);
-    const rest = budget - chars;
-    if (rest >= 0 && rest < budget * anteil) treffer.push({ file, chars, budget, rest });
+    staende.push({ file, chars, budget, rest: budget - chars });
+  }
+  return staende;
+}
+
+/**
+ * Pur: die Kontextdateien aus `budgets`, die über ihrem Budget liegen, als `[{ file, chars, budget }]`. `lies(datei)` liefert den Text oder `null` (fehlt: zählt nicht);
+ * `ausnahmen` = geduldete Dateien (`ausnahmen.kontext` der Projekt-Config, `[{ datei }]`), die nie gemeldet werden.
+ */
+export function ueberBudget({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [] }) {
+  return budgetStaende({ lies, budgets, ausnahmen }).filter((s) => s.rest < 0).map(({ file, chars, budget }) => ({ file, chars, budget }));
+}
+
+/** Anteil des Budgets, unter dem der Rest als knapp gilt (factory#215 L12); gilt für jede Datei ohne Raum-Vertrag. */
+export const KNAPP_ANTEIL = 0.05;
+
+/**
+ * Pur: die Kontextdateien, die noch im Budget liegen, aber knapp sind, als `[{ file, chars, budget, rest }]`; über Budget zählt nicht (das meldet `ueberBudget`).
+ * Knapp heißt: Rest unter `anteil` des Budgets. Für die Datei `raum.file` (AGENTS.md) gilt der Raum-Vertrag statt der Anteilsregel (factory#237, löst die Überlappung aus factory#220 L57):
+ * der Projekt-Block (Gesamt minus Kern-Block) über `raum.zeichen` ist knapp (Treffer mit `projekt` und `raum`), darunter nie; fehlen die Marker, greift der Anteil.
+ * `raum` = `{ file, zeichen, marker: { start, ende } }`, die Lib bleibt Blatt (Marker liefert der Aufrufer).
+ */
+export function knappeBudgets({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [], anteil = KNAPP_ANTEIL, raum = null }) {
+  const treffer = [];
+  for (const s of budgetStaende({ lies, budgets, ausnahmen })) {
+    if (s.rest < 0) continue;
+    const kern = raum !== null && s.file === raum.file ? kernBlockZeichen(lies(s.file), raum.marker) : null;
+    if (kern === null) {
+      if (s.rest < s.budget * anteil) treffer.push(s);
+    } else if (s.chars - kern > raum.zeichen) {
+      treffer.push({ ...s, projekt: s.chars - kern, raum: raum.zeichen });
+    }
   }
   return treffer;
 }
@@ -69,10 +77,12 @@ export const KERN_BLOCK_BUDGET = 15_200; // factory#222: -100 (Fabrik-Klausel in
  *  Grenze: gerechnet wird mit dem Kern der Fabrik; im Bezieher trägt der Kern zusätzlich die Projektwert-Tabelle (wenige Dutzend Zeichen mehr). */
 export const PROJEKT_BLOCK_RAUM = 12_800;
 
-/** Pur: Meldung, wenn Kern-Budget plus Projekt-Raum das Gesamtbudget von `AGENTS.md` übersteigt, sonst `null` (die Raum-Invariante, geprüft in `test/kern-block-budget.test.ts`). */
+/** Pur: Meldung, wenn Kern-Budget plus Projekt-Raum das Gesamtbudget von `AGENTS.md` übersteigt oder eine Lücke lässt, sonst `null` (die Raum-Invariante, Wächter `test/harness/raum-vertrag.test.ts`, in der Fabrik auch `check:contextsize`). */
 export function kernRaumBefund({ kern, raum, gesamt }) {
-  if (kern + raum <= gesamt) return null;
-  return `Kern-Budget ${kern} + Projekt-Raum ${raum} = ${kern + raum} > Gesamtbudget ${gesamt} von AGENTS.md: ein Bezieher mit Raum-großem Projekt-Block liefe nach dem Sync rot.`;
+  const summe = kern + raum;
+  if (summe > gesamt) return `Kern-Budget ${kern} + Projekt-Raum ${raum} = ${summe} > Gesamtbudget ${gesamt} von AGENTS.md: ein Bezieher mit Raum-großem Projekt-Block liefe nach dem Sync rot.`;
+  if (summe < gesamt) return `Kern-Budget ${kern} + Projekt-Raum ${raum} = ${summe} < Gesamtbudget ${gesamt} von AGENTS.md: Lücke von ${gesamt - summe} Zeichen, der Probe-Erstbezug (probe-erstbezug.mjs) würde sie nicht mehr belegen.`;
+  return null;
 }
 
 /** Zeichen des Blocks zwischen `marker.start` und `marker.ende` (zeilenenden-neutral) oder `null`, wenn ein Marker fehlt oder das Ende vor dem Start steht. Die Marker gibt der Aufrufer vor (`markerStart`/`markerEnde` aus `besitz-lib.mjs`), die Lib bleibt Blatt. */

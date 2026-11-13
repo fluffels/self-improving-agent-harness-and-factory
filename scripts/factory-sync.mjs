@@ -19,13 +19,13 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, markerEnde, markerStart, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
 import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
-import { knappeBudgets, ueberBudget } from "./kontext-budget-lib.mjs";
+import { knappeBudgets, PROJEKT_BLOCK_RAUM, ueberBudget } from "./kontext-budget-lib.mjs";
 import { gitIn, LEER, leserFuerCommit, leserVomCommit, liesErgaenzung, projektMarkerHinweis, pruefeErgebnis, wendeTeileAn } from "./factory-sync-lib.mjs";
 import { quelleRepoAusText, STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 
@@ -276,6 +276,12 @@ function setzeAusfuehrbitImIndex(ziel, pfade, git, out) {
   return `Ausführbit im Index von '${ziel}' fehlt (erwartet 100755): ${falsch.join(", ")}\nFix: git -C <ziel> update-index --add --chmod=+x -- ${falsch.join(" ")}`;
 }
 
+/** Hinweistext für eine Kontextdatei mit kleinem Rest (Anteilsregel). */
+const knappText = (k) => `Hinweis: Kontextbudget knapp: ${k.file} ${k.chars} von ${k.budget} Zeichen (Rest ${k.rest}); der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen`;
+
+/** Hinweistext für einen Projekt-Block über dem Projekt-Raum (Raum-Vertrag, factory#237): im Gesamtbudget, aber der Kern darf bis zu seinem Budget wachsen. Der Sync kürzt nie selbst. */
+const raumText = (k) => `Hinweis: Kontextbudget knapp: ${k.file} Projekt-Block ${k.projekt} Zeichen > Projekt-Raum ${k.raum}; der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen (der Sync kürzt nie selbst)`;
+
 /** Hinweiszeilen, wenn eine Kontextdatei nach dem Sync über dem Budget des ausführenden Werkzeugs läge; Text aus dem Plan, sonst aus dem Ziel; geduldete Ausnahmen des Ziels ohne Hinweis. */
 function kontextHinweise(plan, ziel) {
   const lies = (datei) => plan.dateien.get(datei)?.text ?? liesDatei(ziel)(datei);
@@ -286,7 +292,8 @@ function kontextHinweise(plan, ziel) {
     // Config des Ziels nicht lesbar: ohne Ausnahmen messen, die Warnung ist nur ein Hinweis.
   }
   const ueber = ueberBudget({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget: ${k.file} hätte ${k.chars} Zeichen > Budget ${k.budget}; im Ziel wird check:contextsize rot, Projekt-Block kürzen (nie Wächter-gebundene Sätze)`);
-  const knapp = knappeBudgets({ lies, ausnahmen }).map((k) => `Hinweis: Kontextbudget knapp: ${k.file} ${k.chars} von ${k.budget} Zeichen (Rest ${k.rest}); der nächste Kern-Zuwachs kann check:contextsize rot machen, Projekt-Block kürzen`);
+  const raum = { file: "AGENTS.md", zeichen: PROJEKT_BLOCK_RAUM, marker: { start: markerStart("kern"), ende: markerEnde("kern") } };
+  const knapp = knappeBudgets({ lies, ausnahmen, raum }).map((k) => (k.raum === undefined ? knappText(k) : raumText(k)));
   return [...ueber, ...knapp];
 }
 
