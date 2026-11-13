@@ -138,6 +138,29 @@ describe("Fabrik-Regeltext in verteilten Texten (factory#222)", () => {
     expect(inventur([einheit("Fabrik")], [eintrag("")]).map((x) => x.einordnung)).toEqual(["offen"]);
   });
 
+  test("Ausschnitt-Fenster: Anfang und Ende müssen den Treffer umschließen, jedes Vorkommen zählt", () => {
+    const o = (text: string, a: string) => inventur([einheit(text)], [eintrag(a)]).map((x) => x.einordnung);
+    expect(o("die Fab Fabrik", "die Fab")).toEqual(["offen"]); // Ausschnitt endet vor dem Treffer
+    expect(o("die Fabrik selbst", "Fabrik selbst")).toEqual(["beide"]); // beginnt genau am Treffer
+    expect(o("x Fabrik x Fabrik", "x Fabrik")).toEqual(["beide", "beide"]); // der Ausschnitt steht zweimal, jedes Vorkommen umschließt seinen Treffer
+    expect(o("Fabrik x Fabrik", "x Fabrik")).toEqual(["offen", "beide"]); // nur das zweite Vorkommen umschließt
+    expect(o("Fabrik", "Fab")).toEqual(["offen"]); // endet mitten im Treffer
+  });
+
+  test("Verweisform: Punkt-Escape und Groß-/Kleinschreibung", () => {
+    expect(inventur([einheit("xmd (Fabrik)")], [])[0]?.einordnung).toBe("offen");
+    expect(inventur([einheit("x.md (fabrik)")], [])[0]?.einordnung).toBe("verweis");
+    expect(inventur([einheit("a-sync-standXjson")], [])).toEqual([]);
+  });
+
+  test("umfang: nur verteilte Ringe, Blockversatz und fehlender Marker", () => {
+    expect(umfang([{ pfad: "docs/agent-harness.md", ring: "oberflaeche" }]).map((x) => x.id)).toEqual([]);
+    const e = umfang([{ pfad: "AGENTS.md", ring: "kern", block: "kern" }])[0];
+    const agents = lies("AGENTS.md");
+    expect(e?.ab).toBe(agents.slice(0, agents.indexOf("<!-- factory-besitz:start kern -->")).split("\n").length);
+    expect(() => umfang([{ pfad: "docs/agent-harness.md", ring: "kern", block: "gibt-es-nicht" }])).toThrow("Marker fehlen");
+  });
+
   test("rot bei stale Eintrag, leerem Grund und Einordnung „nur Fabrik“", () => {
     const e = [einheit("die Fabrik")];
     expect(meldungen(e, [eintrag("die Fabrik"), eintrag("Phantom")])).toEqual([expect.stringContaining("stale): x.md „Phantom“")]);

@@ -51,7 +51,7 @@ Harness-Befunde laufen in Fabrik und Bezieher über `node scripts/melden.mjs`; i
 
 ## Nachtrag factory#222
 
-Inventur (Stand 684f9b6) über die verteilten Markdown-Einheiten (35 Einheiten, 19 Treffer; der Wächter scannt 34, ohne den generierten Zeiger; geschlossene Suchliste: „Factory-Repo“, „Fabrik“, „upstream“, „ohne Sync-Stand“, „sync-stand.json“, „Rolle `factory`“, je Treffer gezählt):
+Inventur (Stand 684f9b6) über die verteilten Markdown-Einheiten (35 Einheiten, 19 Treffer; der Wächter scannt 33, ohne die zwei generierten Zeiger unter `.claude/skills/`; geschlossene Suchliste: „Factory-Repo“, „Fabrik“, „upstream“, „ohne Sync-Stand“, „sync-stand.json“, „Rolle `factory`“, je Treffer gezählt):
 
 | Fundstelle | Einordnung |
 | --- | --- |
@@ -59,7 +59,7 @@ Inventur (Stand 684f9b6) über die verteilten Markdown-Einheiten (35 Einheiten, 
 | `AGENTS.md#kern` Zeile 9 „ohne `.factory/sync-stand.json` ist dieses Repo selbst upstream“ (2 Treffer) | nur Fabrik, umgezogen in den Projekt-Block (Blockquote „Dieses Repository ist der Harness selbst“) |
 | `.claude/agents/factory-umsetzer.md` Schritt 2, Satz über Kern-Einheiten samt „(nur im Factory-Repo)“ | nur Fabrik, umgezogen nach `docs/agent-harness.md` › Kern-Reinheits-Wächter (Bullet „Kern-Prosa“) |
 | 7 Fabrik-Verweise `<x>.md (Fabrik)` (Umsetzer 2, review-lenses 2, factory/ablauf 2, ticket-drift 1) | beide (Verweisform, factory#177), vom Wächter automatisch eingeordnet |
-| Planer 2, `docs/codex/einstieg.md`, `brille-architektur.md`, `factory/SKILL.md` 2 | beide, mit Grund in der Inventur-JSON; der generierte Zeiger `.claude/skills/factory/SKILL.md` (1 Treffer, gleicher Text wie die Quelle) ist vom Scan ausgenommen |
+| Planer 2, `docs/codex/einstieg.md`, `brille-architektur.md`, `factory/SKILL.md` 2 | beide, mit Grund in der Inventur-JSON; die generierten Zeiger `.claude/skills/*/SKILL.md` (1 Treffer in `factory`, gleicher Text wie die Quelle) sind vom Scan ausgenommen |
 
 Entscheidung zum Wächter: ja, `test/harness/fabrik-regeltext.test.ts`. Form 4 war die einzige Form ohne Prüfung, die Inventur fand zwei unbewachte Fundstellen „nur Fabrik“ (ADR 0027: Evidenz), die Kosten sind gering. Eine Fundstelle ohne Einordnung ist rot; „beide“ steht mit Ausschnitt und Grund in `fabrik-regeltext-inventur.json` (Ausschnitt statt Zeilennummer: bricht nur bei geänderter Formulierung, dann soll neu eingeordnet werden); „nur Fabrik“ wird nie eingetragen, sondern umgezogen. Negativfall: der verfälschte Satz „(nur im Factory-Repo)“ im Umsetzer macht den Scan rot.
 
@@ -77,7 +77,7 @@ Re-Evaluierung: mehr als 15 Einträge „beide“ oder wiederholte Fehltreffer: 
 ## Folgetickets
 
 - factory#221: Harness-Befunde in Fabrik und Bezieher über `melden.mjs`, der Rollenfall verschwindet aus dem Kern-Text.
-- factory#222 (erledigt, Nachtrag unten): Fabrik-Regeln in verteilten Texten, Inventur und Umzug, Wächter für Form 4.
+- factory#222 (erledigt, Nachtrag oben): Fabrik-Regeln in verteilten Texten, Inventur und Umzug, Wächter für Form 4.
 
 ## Re-Evaluierung
 
