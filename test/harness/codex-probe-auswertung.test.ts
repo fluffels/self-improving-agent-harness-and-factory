@@ -18,7 +18,7 @@ import config from "../fixtures/projekt-probe.json";
 
 type Punkt = { id: string; nachweis: number; ohneExport: boolean };
 type Ergebnis = { nachweise: Record<string, string>; maengel: string[]; autonom: boolean; version: string | null };
-const a = auswRaw as unknown as { auswerten: (x: unknown) => Ergebnis; auswertungExit: (e: Ergebnis) => number; nachweiseDerDiagnose: (m: string) => string[]; berichtSchemaMaengel: (b: unknown, e: unknown, p: Punkt[]) => string[] };
+const a = auswRaw as unknown as { auswerten: (x: unknown) => Ergebnis; auswertungExit: (e: Ergebnis) => number; nachweiseDerDiagnose: (m: string) => string[]; berichtSchemaMaengel: (b: unknown, e: unknown, p: Punkt[]) => string[]; erwartungMaengel: (b: unknown, e: unknown) => string[] };
 const NACHWEIS_NUMMERN = (freigabenRaw as unknown as { NACHWEIS_NUMMERN: string[] }).NACHWEIS_NUMMERN;
 const lib = libRaw as unknown as { checklistenPunkte: (c: unknown) => Punkt[] };
 const belegeLib = belegeRaw as unknown as { bewerteBelege: (b: unknown, c: unknown) => string[] };
@@ -29,8 +29,9 @@ type Obs = { id: string; type: string; sessionId: string; tags: string[]; metada
 const gen = (id: string, parent: string, rolle?: string): Obs => ({ id: `gen-${id}`, type: "GENERATION", sessionId: "s1", tags: ["project:qx-demo"], metadata: { agent_role: parent ? "subagent" : "main", agent_id: id, parent_thread_id: parent, ...(rolle ? { [ROLLEN_KEY]: rolle } : {}) }, usageDetails: { input: 1, output: 2 } });
 const export_ = () => ({ version: "9.9.9", sessionId: "s1", rollen: [...rollen], tools: ["playwright", "langfuse"], observations: [gen("main", ""), ...rollen.map((r) => gen(r, "main", r)), { ...gen("tool", ""), id: "tool-1", type: "TOOL", metadata: { agent_id: "main" } }] as Obs[] });
 const punkte = lib.checklistenPunkte(config);
+const STARTWEG = "codex --cd \"/p\" --no-daemon -c check_for_update_on_startup=false";
 const bericht = () => ({
-  version: "9.9.9", sessionId: "s1", frischeSession: true,
+  version: "9.9.9", versionVorStart: "9.9.9", sessionId: "s1", frischeSession: true, startweg: STARTWEG, erwartet: { version: "9.9.9", startweg: STARTWEG } as Record<string, unknown> | undefined,
   punkte: Object.fromEntries(punkte.map((p) => [p.id, { ergebnis: "belegt", beobachtung: "ok", observations: p.ohneExport ? [] : ["tool-1"], ...(p.ohneExport ? { ausgabe: "Ausgabe der Probe" } : {}) }])),
 });
 const lauf = (b: unknown = bericht(), e: unknown = export_()) => a.auswerten({ belege: e, bericht: b, config });
@@ -129,6 +130,67 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
     const r = lauf(mit(aend));
     expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
     exit1(r);
+  });
+});
+
+describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
+  const alleOffen = (r: Ergebnis) => expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
+  test("Session lief auf anderer Version als vor dem Start (Autoupdate): alle offen, Meldung nennt erwartete und beobachtete Version", () => {
+    const e = export_(); e.version = "9.9.10";
+    const r = lauf(mit((b) => { b.version = "9.9.10"; }), e);
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toMatch(/CLI-Version weicht ab.*9\.9\.9.*9\.9\.10/);
+    expect(a.auswertungExit(r)).toBe(1);
+  });
+  test.each([["leer", ""], ["abweichend", "9.9.8"]])("versionVorStart %s: alle offen", (_n, v) => {
+    const r = lauf(mit((b) => { b.versionVorStart = v; }));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("CLI-Version weicht ab");
+  });
+  test("versionVorStart fehlt: alle offen", () => {
+    alleOffen(lauf(mit((b) => { delete (b as { versionVorStart?: string }).versionVorStart; })));
+  });
+  test.each([["leer", ""], ["fehlt", undefined]])("startweg %s: alle offen, Mangel \"Startweg nicht genannt\"", (_n, v) => {
+    const r = lauf(mit((b) => { (b as { startweg?: string }).startweg = v; }));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("Startweg nicht genannt");
+  });
+  test("abweichender Startweg (ad-hoc-Wrapper): alle offen, eigene Meldung", () => {
+    const r = lauf(mit((b) => { b.startweg = "sh .codex/probe/start-mit-hooks.sh"; }));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("Startweg weicht vom erzeugten ab");
+  });
+  test("nur Weißraum im Startweg anders: kein Mangel", () => {
+    const r = lauf(mit((b) => { b.startweg = `  ${STARTWEG.replace(/ /g, "   ")}\n`; }));
+    expect(r.maengel).toEqual([]);
+    expect(offen(r)).toEqual([]);
+  });
+  test.each([["erwartet fehlt", undefined], ["Version nicht x.y.z", { version: "neu", startweg: STARTWEG }], ["Startweg leer", { version: "9.9.9", startweg: "" }]])("%s: alle offen", (_n, erwartet) => {
+    alleOffen(lauf(mit((b) => { b.erwartet = erwartet; })));
+  });
+  test.each(["v9.9.9", "9.9.9-beta", "9.9", "9.9.9.9", "x.y.z", "9-9-9", "9-9.9", "9.9-9"])("erwartet.version %s ist keine Version x.y.z: eigene Meldung, alle offen", (v) => {
+    const r = lauf(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; b.version = v; b.versionVorStart = v; }), { ...export_(), version: v });
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("erwartet.version fehlt oder ist keine Version");
+    expect(a.erwartungMaengel(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; }), export_())).toHaveLength(1); // frühe Rückgabe: keine Folgemeldungen
+  });
+  test("erwartet.startweg leer: eigene Meldung, alle offen", () => {
+    const r = lauf(mit((b) => { b.erwartet = { version: "9.9.9", startweg: "  " }; }));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("erwartet.startweg fehlt");
+  });
+  test("mehrstellige Version 10.20.30 ist gültig; fehlende Angaben stehen als ? in der Meldung", () => {
+    const e = { ...export_(), version: "10.20.30" };
+    expect(a.erwartungMaengel(mit((b) => { b.erwartet = { version: "10.20.30", startweg: STARTWEG }; b.version = "10.20.30"; b.versionVorStart = "10.20.30"; }), e)).toEqual([]);
+    const m = a.erwartungMaengel(mit((b) => { b.versionVorStart = ""; }), {}).join("\n");
+    expect(m).toContain("vor dem Start ?");
+    expect(m).toContain("im Export ?");
+    expect(a.erwartungMaengel(mit((b) => { b.version = ""; }), export_()).join("\n")).toContain("in der Session ?");
+    expect(a.erwartungMaengel(bericht(), null).join("\n")).toContain("im Export ?");
+  });
+  test("erwartungMaengel ist rein: Nicht-Objekt liefert keine Meldung (das Schema meldet es)", () => {
+    expect(a.erwartungMaengel(null, {})).toEqual([]);
+    expect(a.erwartungMaengel(bericht(), export_())).toEqual([]);
   });
 });
 
