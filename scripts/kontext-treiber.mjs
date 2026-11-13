@@ -24,7 +24,7 @@
  * grep und andere Lesewege zählen nicht), Kosten ab Phase X (Σ der Calls ab X in `PHASEN`-Reihenfolge). Grenzen: der Startzustand verify zählt Edits vor
  * dem ersten Lens-Spawn zu verify (konservativ gegen den Schnitt); Mehrkosten des Hauptchats für den zweiten Prompt sind nicht gemessen.
  * `--ttl` (factory#312): statt der Kennzahlen die Gegenrechnung, ob die 1h-TTL für die Rolle netto spart (Mehrkosten des 1h-Schreibens gegen vermiedene Cache-Misse nach Pausen von 5 bis 60 min; Preise aus `preise.mjs`, Warmstart über Läufe derselben Session getrennt ausgewiesen). Grenzen: ein Treffer bis 60 min, Zeiten mit Nutzungsguthaben ignorieren 1h (Überschätzung); schließt `--je-ticket` und mehrere `--agent` aus.
- * Mehrfaches `--agent` (factory#235, A/B Kern je Rolle): Bericht je Typ (`{ agenten: { <typ>: <Bericht> }, ungueltig }`); ein Ticket mit Läufen in mehr als einem der Typen ist ungültig, fällt aus allen Typen heraus (wie `--ohne`) und setzt Exit 3. Mit einem `--agent` bleibt die Ausgabe unverändert.
+ * Mehrfaches `--agent` (factory#235, A/B-Messung): Bericht je Typ (`{ agenten: { <typ>: <Bericht> }, ungueltig }`); ein Ticket mit Läufen in mehr als einem der Typen ist ungültig, fällt aus allen Typen heraus (wie `--ohne`) und setzt Exit 3. Mit einem `--agent` bleibt die Ausgabe unverändert.
  * Offene Läufe (Tool-Aufruf ohne Ergebnis am Ende, #1646) zählen nur als `offen` und stehen in der Tabelle „Läufe"; in keinem Median, keiner Summe.
  * Ohne `--je-ticket` gelten die Mediane je Lauf: der Kopf jeder Gruppe nennt die Zahl der Tickets (`Tickets`), und hat ein Ticket mehrere Läufe, steht eine Warnzeile (`mehrlaufHinweis`, #1646).
  * Im `--je-ticket`-Modus lädt das CLI 48 h vor `--von` (`mitVorlauf`), damit der Vorgänger eines Nachfolgers im Fenster dabei ist.
@@ -36,10 +36,9 @@ import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { callsFromTranscript } from "./transkript-calls.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { PRICES, PRICES_STAND, priceFor, priceParts } from "./preise.mjs";
-import { bereinige, CACHE_TTL_MS, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
+import { armeZuordnen, bereinige, CACHE_TTL_MS, istNeuaufbau, kontextVon, median, normPfad, mehrlaufHinweis, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung, ticketZaehlung } from "./mess-lib.mjs";
 import { flagsLesen, istIsoZeitpunkt } from "./flag-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
-import { armeZuordnen, lensTypen } from "./lens-arm-lib.mjs";
 import { hauptrepoWurzel, projektOrdner } from "./transkript.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf } from "./subagent-laeufe.mjs";
 
@@ -56,7 +55,7 @@ const num = (x) => (Number.isFinite(x) ? x : 0);
 const summe = (liste) => liste.reduce((s, x) => s + x, 0);
 
 const befehlVon = (tool) => (SHELL_TOOLS.has(tool.tool) ? String(tool.input?.command ?? "") : "");
-const istLinse = (tool, namen) => tool.tool === "Agent" && lensTypen(namen).includes(String(tool.input?.subagent_type ?? ""));
+const istLinse = (tool, namen) => tool.tool === "Agent" && String(tool.input?.subagent_type ?? "") === namen.agenten.lens;
 
 /** Kurzbeschreibung eines Tool-Aufrufs für die Top-10 (Tool plus ~60 Zeichen Befehl, Pfad oder Muster). */
 function labelVon(tool, wurzel, namen) {

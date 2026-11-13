@@ -138,7 +138,7 @@ describe("K4: Muster, die der Claude-Dispatcher verweigert, verweigert der Adapt
 });
 
 describe("Positive Fälle: nichts ausgeben", () => {
-  test("git status, Patch im verlinkten Worktree, sauberer Lens-Auftrag (Arm A für ungerades Ticket)", async () => {
+  test("git status, Patch im verlinkten Worktree, sauberer Lens-Auftrag", async () => {
     expect(await lauf(nutzlast("Bash", { command: "git status" }))).toBeNull();
     expect(await lauf(nutzlast("apply_patch", { command: patch("*** Add File: neu.txt", "+x", "*** Delete File: a.txt") }))).toBeNull();
     const lens = await lauf(nutzlast("spawn_agent", { agent_type: "sih-lens", message: `${KOPF} · Ticket #365 · Patch: /tmp/x.patch` }));

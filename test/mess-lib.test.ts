@@ -8,7 +8,11 @@ import { FREMD, projektConfig, repoName } from "./support/fremd-config";
 import { escapeRegex } from "../scripts/regex-lib.mjs";
 
 const WT = FREMD.praefixe.worktree;
-const M = raw as unknown as { median: (w: number[]) => number | null; CACHE_TTL_MS: { fuenfMin: number; eineStunde: number } };
+const M = raw as unknown as {
+  median: (w: number[]) => number | null;
+  CACHE_TTL_MS: { fuenfMin: number; eineStunde: number };
+  armeZuordnen: (t: Map<number, string[]> | Record<number, string[]>) => { gruppen: Record<string, number[]>; ungueltig: { ticket: number; grund: string; typen: string[] }[] };
+};
 
 describe("median", () => {
   test("ungerade, gerade, leer, nicht endliche Werte ignoriert", () => {
@@ -250,5 +254,19 @@ describe("Ticketfilter aus flagsLesen-Werten (#1790)", () => {
     expect(T.ticketMeldung("ohne-wert", "--ohne")).toBe("--ohne erwartet eine Ticketnummer, nicht nichts");
     expect(T.ticketMeldung("ohne-wert", "--von")).toBeUndefined();
     expect(T.ticketMeldung("unbekannt", "--ticket")).toBeUndefined();
+  });
+});
+
+describe("armeZuordnen: Gültigkeit einer A/B-Messung (factory#236)", () => {
+  test("ein Typ je Ticket gruppiert, beide und keiner sind ungültig, Duplikate zählen einmal", () => {
+    const r = M.armeZuordnen(new Map([[1, ["b"]], [2, ["a"]], [3, ["a", "b"]], [4, []], [5, ["b", "b"]]]));
+    expect(r.gruppen).toEqual({ b: [1, 5], a: [2] });
+    expect(r.ungueltig).toEqual([
+      { ticket: 3, grund: "beide", typen: ["a", "b"] },
+      { ticket: 4, grund: "keiner", typen: [] },
+    ]);
+  });
+  test("auch ein Objekt mit Ticketnummern als Schlüssel", () => {
+    expect(M.armeZuordnen({ 7: ["x"] }).gruppen).toEqual({ x: [7] });
   });
 });

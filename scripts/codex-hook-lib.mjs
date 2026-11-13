@@ -8,7 +8,7 @@
  *                 der `.claude/settings.json` je Befehlssegment (Claude wendet sie selbst an, Codex nicht: `gh issue delete`, `git push --force` …)
  *  - apply_patch: jedes Schreibziel des Patches als Claude-`Write` an den Schreibziel-Guard des Dispatchers (kein Schreiben in den Haupt-Checkout oder nach `.git`); Selbstschutz für `.codex`
  *  - spawn_agent: zuerst der Tracing-Ausfallstopp (Langfuse-Health, `scripts/langfuse-health.mjs`; Ausfall ergibt Deny, kein Spawn, factory#365), dann Lens-Auftrag- und
- *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`); Codex bleibt immer bei Arm A der A/B-Messung
+ *                 Holdout-Guard über den Dispatcher (Werkzeug `Agent`)
  * Fail-closed für diese drei Werkzeuge: unlesbares Payload, unbekanntes Feldformat, werfender oder nicht ladbarer Guard ergibt ein Deny mit Grund; ein `ask` des Dispatchers wird ein Deny,
  * weil Codex keine Rückfrage kennt. Andere Werkzeugnamen bleiben unberührt (keine Ausgabe).
  *
@@ -164,7 +164,7 @@ const UEBERSETZER = { shell: uebersetzeShell, patch: uebersetzePatch, agent: ueb
 /** Der Dispatcher-Lauf für alle Teil-Payloads: erstes Deny gewinnt, ein `ask` wird ein Deny, ein geworfener Guard ebenso; sonst `null`. */
 function befrage(dispatch, payloads, repoRoot) {
   const fehler = [];
-  const deps = { beiFehler: (e) => fehler.push(e), bezieher: () => true };
+  const deps = { beiFehler: (e) => fehler.push(e) };
   for (const p of payloads) {
     const out = dispatch(JSON.stringify(p), repoRoot, undefined, undefined, deps)?.hookSpecificOutput;
     if (fehler.length > 0) return q(`Guard hat einen Fehler geworfen (${String(fehler[0]?.message ?? fehler[0])})`);
