@@ -19,7 +19,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 import * as rawKb from "../scripts/kontext-budget-lib.mjs";
 import { ganzesWortMuster } from "./support/regex";
 
-const kb = rawKb as unknown as { knappeBudgets(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[]; anteil?: number }): { file: string; chars: number; budget: number; rest: number }[]; ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
+const kb = rawKb as unknown as { knappeBudgets(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[]; anteil?: number; raum?: { file: string; zeichen: number; marker: { start: string; ende: string } } }): { file: string; chars: number; budget: number; rest: number; projekt?: number; raum?: number }[]; kernBlockZeichen(t: string, m: { start: string; ende: string }): number | null; ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
 
 interface Span {
   start: number;
@@ -1390,6 +1390,45 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
     assert.match(gross.out, /Hinweis: Kontextbudget: AGENTS/);
     const klein = vomTag(baueQuelle(), baueZiel(), ["--trocken"]);
     assert.doesNotMatch(klein.out, /Kontextbudget knapp/);
+  });
+  test("knappeBudgets mit Raum (factory#237): Projekt-Block genau im Raum nicht knapp, ein Zeichen mehr knapp; über Gesamtbudget und ohne Marker gilt die alte Regel", () => {
+    const marker = { start: "<S>", ende: "<E>" };
+    const budgets = [{ file: "A", budget: 100 }];
+    const text = (kern: number, projekt: number) => `<S>${"k".repeat(kern - 3)}<E>${"p".repeat(projekt - 3)}`; // Kern-Block: kern Zeichen, Projekt-Block (ab dem Ende-Marker): projekt Zeichen
+    const knapp = (s: string, extra: object = {}) => kb.knappeBudgets({ lies: () => s, budgets, raum: { file: "A", zeichen: 40, marker }, ...extra });
+    assert.equal(kb.kernBlockZeichen(text(60, 40), marker), 60);
+    assert.deepEqual(knapp(text(60, 40)), [], "Projekt-Block = Raum: nicht knapp, obwohl der Rest 0 ist");
+    const eins = knapp(text(59, 41));
+    assert.equal(eins.length, 1, "ein Zeichen über dem Raum, noch im Gesamtbudget");
+    assert.deepEqual([eins[0].projekt, eins[0].raum, eins[0].rest], [41, 40, 0]);
+    assert.deepEqual(knapp(text(60, 41)), [], "über dem Gesamtbudget meldet ueberBudget");
+    assert.deepEqual(knapp(text(10, 30)), [], "12.309-Fall: kleiner Kern, Projekt-Block im Raum");
+    assert.equal(knapp("x".repeat(96)).length, 1, "ohne Marker: Rückfall auf die Anteilsregel");
+    assert.equal(knapp(text(59, 41), { raum: { file: "B", zeichen: 40, marker } }).length, 1, "anderer Dateiname: Anteilsregel (Rest 0 < 5 %)");
+    assert.deepEqual(knapp(text(59, 41), { raum: { file: "B", zeichen: 40, marker } }).map((k) => k.raum), [undefined], "andere Datei: kein Raum-Treffer");
+    assert.deepEqual(knapp("x".repeat(90)), []);
+  });
+  test("Sync-Hinweis bei Raum-Vertrag: Projekt-Block im Raum kein Hinweis, ein Zeichen mehr Raum-Hinweis, über Gesamtbudget Über-Budget-Hinweis; der Sync verkleinert den Projekt-Block nie", () => {
+    const kernMit = (n: number) => `${lib.markerStart("kern")}\n${"k".repeat(n - lib.markerStart("kern").length - 2)}\n${lib.markerEnde("kern")}`;
+    const lauf = (kernGroesse: number, gesamt: number) => {
+      const basis = `${kernMit(kernGroesse)}\n${ZIEL_AGENTS}`;
+      const z = baueZiel();
+      const vorher = `${basis}${"p".repeat(gesamt - basis.length - 1)}\n`;
+      schreibe(z, "AGENTS.md", vorher);
+      schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
+      return { z, r: vomTag(baueQuelle(), z, []), kern: kernMit(kernGroesse), vorher };
+    };
+    const voll = lauf(15_200, 28_000);
+    assert.equal(voll.r.code, 0, voll.r.err);
+    assert.doesNotMatch(voll.r.out, /Kontextbudget/, "Raum exakt gefüllt: kein Hinweis");
+    const knapp = lauf(15_199, 28_000);
+    assert.match(knapp.r.out, /Hinweis: Kontextbudget knapp: AGENTS\.md Projekt-Block \d+ Zeichen > Projekt-Raum 12800; .*der Sync kürzt nie selbst/);
+    const ueber = lauf(15_200, 28_001);
+    assert.match(ueber.r.out, /Hinweis: Kontextbudget: AGENTS\.md hätte 28001 Zeichen > Budget 28000/);
+    assert.doesNotMatch(ueber.r.out, /Kontextbudget knapp/);
+    const text = readFileSync(join(ueber.z, "AGENTS.md"), "utf8");
+    assert.equal(text, ueber.vorher.replace("alter Stopp", "neuer Stopp"), "byteweise unverändert bis auf den Stopps-Block: nichts wird automatisch verkleinert");
+    assert.ok(text.startsWith(ueber.kern), "der Kern-Block bleibt unverändert");
   });
   test("ueberBudget: Zählung ohne CR, fehlende Datei zählt nicht", () => {
     const budgets = [{ file: "A", budget: 4 }];

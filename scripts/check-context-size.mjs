@@ -55,7 +55,7 @@ import { dirname, join } from "node:path";
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
-import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, countChars, kernBlockBefund } from "./kontext-budget-lib.mjs";
+import { AGENTEN_SKILL_BUDGETS, AGENTEN_SKILL_DEFAULT_BUDGET, CONTEXT_BUDGETS, KERN_BLOCK_BUDGET, PROJEKT_BLOCK_RAUM, countChars, kernBlockBefund, kernRaumBefund } from "./kontext-budget-lib.mjs";
 import { ohneProjektwerte } from "./projektwert-lib.mjs";
 import { QUELL_VERZEICHNIS } from "./skill-pfade.mjs";
 import { MANIFEST_PFAD, markerEnde, markerStart } from "./besitz-lib.mjs";
@@ -173,11 +173,21 @@ export function findStale(sizes, allowlist = ausnahmenAus(ladeProjektConfig()).k
   return allowlist.filter((a) => !oversized.has(a.datei));
 }
 
-/** Kern-Block-Budget der AGENTS.md in `rootDir`: Meldung oder `null`. Nur die Fabrik wird geprüft (Besitz-Manifest vorhanden, kein Sync-Stand); ein Bezieher oder ein Projekt ohne Manifest hat keinen Kern-Block zu hüten. Fehlt die Datei in der Fabrik, zählt das wie fehlende Marker (fail-closed). */
-export function kernBlockPruefung(rootDir = ROOT) {
+/** Gesamtbudget von AGENTS.md aus `CONTEXT_BUDGETS` (0, wenn der Eintrag fehlt: der Raum-Befund meldet dann die Lücke). */
+const GESAMT_AGENTS = CONTEXT_BUDGETS.find((b) => b.file === "AGENTS.md")?.budget ?? 0;
+
+/** Kern-Block-Budget und Raum-Vertrag der AGENTS.md in `rootDir`: Meldungen (mehrere mit Zeilenumbruch verbunden) oder `null`. Nur die Fabrik wird geprüft (Besitz-Manifest vorhanden, kein Sync-Stand); ein Bezieher oder ein Projekt ohne Manifest hat keinen Kern-Block zu hüten.
+ *  Fehlt die Datei in der Fabrik, zählt das wie fehlende Marker (fail-closed). Der Raum-Vertrag (Kern-Budget plus Projekt-Raum ist genau das Gesamtbudget, factory#237) wird hier gegen die Konstanten geprüft, damit die Fabrik-CI vor einem Tag rot ist;
+ *  `konstanten` ist eine Naht für Tests. */
+export function kernBlockPruefung(rootDir = ROOT, konstanten = { kern: KERN_BLOCK_BUDGET, raum: PROJEKT_BLOCK_RAUM, gesamt: GESAMT_AGENTS }) {
   const abs = join(rootDir, "AGENTS.md");
   const text = existsSync(abs) ? readFileSync(abs, "utf8") : "";
-  return kernBlockBefund({ text, fabrik: existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir), marker: { start: markerStart("kern"), ende: markerEnde("kern") } });
+  const fabrik = existsSync(join(rootDir, MANIFEST_PFAD)) && !istBezieher(rootDir);
+  const befunde = [
+    kernBlockBefund({ text, fabrik, budget: konstanten.kern, marker: { start: markerStart("kern"), ende: markerEnde("kern") } }),
+    fabrik ? kernRaumBefund(konstanten) : null,
+  ].filter((b) => b !== null);
+  return befunde.length === 0 ? null : befunde.join("\n");
 }
 
 /** Alle Messwerte; ein kaputter Projektwert-Marker ergibt eine Gate-Meldung mit Ort und Fix statt eines Stacktraces: `melde(text)` beendet den Lauf (CLI: Exit 1, fail-closed). */

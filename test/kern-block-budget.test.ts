@@ -9,16 +9,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { CONTEXT_BUDGETS, KERN_BLOCK_BUDGET as rawBudget, PROJEKT_BLOCK_RAUM as rawRaum, kernRaumBefund as rawRaumBefund, kernBlockBefund as rawBefund, kernBlockZeichen as rawZeichen } from "../scripts/kontext-budget-lib.mjs";
+import { CONTEXT_BUDGETS, KERN_BLOCK_BUDGET as rawBudget, kernBlockBefund as rawBefund, kernBlockZeichen as rawZeichen } from "../scripts/kontext-budget-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { kernBlockPruefung as rawPruefung } from "../scripts/check-context-size.mjs";
 
 const KERN_BLOCK_BUDGET = rawBudget as number;
-const PROJEKT_BLOCK_RAUM = rawRaum as number;
-const kernRaumBefund = rawRaumBefund as (a: { kern: number; raum: number; gesamt: number }) => string | null;
 const kernBlockZeichen = rawZeichen as (text: string, marker: { start: string; ende: string }) => number | null;
 const kernBlockBefund = rawBefund as (a: { text: string; fabrik: boolean; budget?: number; marker?: { start: string; ende: string } }) => string | null;
-const kernBlockPruefung = rawPruefung as (wurzel: string) => string | null;
+const kernBlockPruefung = rawPruefung as (wurzel: string, konstanten?: { kern: number; raum: number; gesamt: number }) => string | null;
 
 const START = "<!-- factory-besitz:start kern -->";
 const ENDE = "<!-- factory-besitz:ende kern -->";
@@ -118,17 +116,23 @@ describe("Kern-Block-Budget", () => {
     });
   });
 
-  test("Kern-Budget plus Projekt-Raum passt ins Gesamtbudget von AGENTS.md (factory#177)", () => {
-    const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
-    assert.ok(gesamt > 0, "AGENTS.md hat ein Budget in CONTEXT_BUDGETS");
-    assert.equal(kernRaumBefund({ kern: KERN_BLOCK_BUDGET, raum: PROJEKT_BLOCK_RAUM, gesamt }), null);
-    assert.equal(KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM, gesamt, "der Raum schließt lückenlos an das Kern-Budget an (factory#234: sonst reißt der Probe-Erstbezug bei vollem Raum nie das Gesamtbudget)");
-  });
-
-  test("Raum-Invariante, Grenzfall exakt: Summe == Gesamtbudget grün, ein Zeichen mehr rot; der Befund nennt die Zahlen", () => {
-    assert.equal(kernRaumBefund({ kern: 15_000, raum: 13_000, gesamt: 28_000 }), null);
-    assert.match(String(kernRaumBefund({ kern: 15_000, raum: 13_001, gesamt: 28_000 })), /28001.*28000/);
-    assert.match(String(kernRaumBefund({ kern: 15_001, raum: 13_000, gesamt: 28_000 })), /28001.*28000/);
+  test("Raum-Vertrag im Gate: Konstanten mit Lücke oder Überschreitung sind in der Fabrik rot, im Bezieher nie (Wächter: test/harness/raum-vertrag.test.ts)", () => {
+    temp((dir) => {
+      datei(dir, ".factory/besitz.json", "{}");
+      datei(dir, "AGENTS.md", mitKern("x".repeat(100)));
+      const gesamt = (CONTEXT_BUDGETS as { file: string; budget: number }[]).find((b) => b.file === "AGENTS.md")?.budget as number;
+      assert.ok(gesamt > 0, "AGENTS.md hat ein Budget in CONTEXT_BUDGETS");
+      const mitKonstanten = (kern: number, raum: number) => kernBlockPruefung(dir, { kern, raum, gesamt });
+      assert.equal(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET), null);
+      assert.match(String(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET - 1)), /Lücke von 1 Zeichen/);
+      assert.match(String(mitKonstanten(KERN_BLOCK_BUDGET, gesamt - KERN_BLOCK_BUDGET + 1)), /> Gesamtbudget/);
+      const beide = String(kernBlockPruefung(dir, { kern: 50, raum: gesamt - 51, gesamt })).split("\n");
+      assert.equal(beide.length, 2, "Kern- und Raum-Befund zugleich, beide gemeldet");
+      assert.match(beide[0], /> Kern-Block-Budget 50\b/, "das eingespritzte Kern-Budget gilt");
+      assert.match(beide[1], /Lücke von 1 Zeichen/);
+      datei(dir, ".factory/sync-stand.json", JSON.stringify({ version: 2 }));
+      assert.equal(mitKonstanten(KERN_BLOCK_BUDGET, 1), null, "im Bezieher gilt sein Gesamtbudget");
+    });
   });
 
   test("der echte Kern-Block liegt im Budget und das Budget ist ein Ratchet auf den Ist-Wert (Abstand < 100 Zeichen)", () => {

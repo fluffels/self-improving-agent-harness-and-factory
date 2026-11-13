@@ -76,7 +76,7 @@ Eine Datei steht in der Liste, wenn ein Gate in `verify`, ein Kern-Skript oder e
 
 | Pfad | Wer braucht sie | Was an der Vorlage anpassen |
 | --- | --- | --- |
-| `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage |
+| `AGENTS.md` | Claude Code und Codex laden sie; Sync und Drift-Gate ersetzen den Kern-Block | die Marker-Zeilen (Schritt 3); der Projekt-Block trägt die Projekt-Regeln und die Leitfrage und hat festen Platz (Projekt-Raum, 12.800 Zeichen außerhalb des Kern-Blocks; der Kern wächst nie darüber hinaus, ein größerer Projekt-Block meldet der Sync als Warnung `Kontextbudget knapp`) |
 | `.factory/projekt.json` | jedes Kern-Skript | alle Werte, auch `struktur`; Alt-Werte des Factory-Repos löschen |
 | `.agents/skills/factory-ticket/SKILL.md` | Ticket-Ablauf; Rolle `ticketSkill` | fester Pfad (`ROLLEN_PFADE.ticketSkill`), Inhalt für das Projekt; `npm run skills:sync` erzeugt den Zeiger |
 | `package.json` | `verify`, alle `npm run`-Befehle | `scripts` und `devDependencies` der Quelle; Name, Version, Projekt-Skripte; im Skript `test` das Flag `--passWithNoTests` (der Sync liefert keine Projekt-Tests, ohne eigene Tests wäre `test` sonst rot); das Skript `setup` gehört dem Projekt und braucht eine eigene, nicht verteilte `scripts/setup.mjs`; die Git-Hooks verdrahtet `git config core.hooksPath .githooks` (Schritt 6), nicht `setup` |

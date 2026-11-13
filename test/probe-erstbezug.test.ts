@@ -269,7 +269,22 @@ describe("messZeile und befehleErgaenzung", () => {
     expect(z).toContain(`Kern-Block ${B.kernBlockZeichen(t, MARKER)}`);
     expect(z).toContain(`Raum ${B.PROJEKT_BLOCK_RAUM} (Soll ${B.PROJEKT_BLOCK_RAUM})`);
     expect(z).toContain(`Budget ${B.KERN_BLOCK_BUDGET + B.PROJEKT_BLOCK_RAUM})`);
+    expect(z).toContain("Raum-Vertrag: eingehalten");
     expect(P.messZeile("ohne Marker")).toBeNull();
+  });
+
+  it("Raum-Vertrag in der Messzeile (nur Info): Kern über Budget, falscher Raum und Summe über dem Gesamtbudget werden mit Grund als verletzt gemeldet (factory#237)", () => {
+    const t = P.fuellAgentsMd({ raum: B.PROJEKT_BLOCK_RAUM });
+    const kernPlus = t.replace(MARKER.ende, `${"x".repeat(B.KERN_BLOCK_BUDGET + 1 - (B.kernBlockZeichen(t, MARKER) as number))}${MARKER.ende}`);
+    const K = B.KERN_BLOCK_BUDGET;
+    const R = B.PROJEKT_BLOCK_RAUM;
+    const kernExakt = t.replace(MARKER.ende, `${"x".repeat(B.KERN_BLOCK_BUDGET - (B.kernBlockZeichen(t, MARKER) as number))}${MARKER.ende}`);
+    expect(P.messZeile(kernExakt)).toContain("Raum-Vertrag: eingehalten"); // Kern genau am Budget und Summe genau am Gesamtbudget: Grenze gilt noch
+    expect(P.messZeile(kernPlus)).toContain(`Raum-Vertrag: verletzt — Kern-Block ${K + 1} > Budget ${K}; Summe ${K + 1 + R} > Gesamtbudget ${K + R}`);
+    expect(P.messZeile(P.fuellAgentsMd({ raum: R + 1 }))).toContain(`verletzt — Raum ${R + 1} ≠ Soll ${R}`);
+    const kleiner = P.messZeile(P.fuellAgentsMd({ raum: R - 1 })) as string;
+    expect(kleiner).toContain(`verletzt — Raum ${R - 1} ≠ Soll ${R}`);
+    expect(kleiner).not.toContain("Summe");
   });
 
   it("nennt jedes npm-Skript einmal, auch ohne scripts", () => {

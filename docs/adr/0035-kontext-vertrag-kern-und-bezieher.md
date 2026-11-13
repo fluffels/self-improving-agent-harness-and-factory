@@ -127,6 +127,10 @@ Entscheidung: A, weil die A/B-Regel entschieden ist und nichts Besseres belegt.
 - Transkripte behalten den Typ `lens-kern-je-rolle`; die Messskripte filtern nur nach dem Typ-String, es gibt keine Datenmigration. Wer die Messung nachrechnet, nimmt den Typ als zweites `--agent`.
 - Lehre fürs Messdesign (übertragbar, auch in `docs/model-routing.md`): das Regel-Ende liegt mindestens 14 Tage nach dem 10. Ticket je Arm, sonst ist die Nacharbeit beim Entscheiden offen.
 
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0035-237-raum-vertrag-ratchet.md) (Konvention: [README](README.md#format)); dort die erste: [factory#237](fortschreibungen/0035-237-raum-vertrag-ratchet.md) setzt die Entscheidung als Raum-Vertrag-Wächter und Budget-Ratchet um.
+
 ## Re-Evaluierung
 
 Neu bewerten bei einer neuen Version von Claude Code oder Codex, deren Release-Notes das Laden von Kontextdateien betreffen: Import-Auflösung in Codex, Standardwert von `project_doc_max_bytes`, Rollen in Codex nicht mehr als Fork, Semantik von `omitClaudeMd`. Dann die Probe aus Teil 1 wiederholen (Rezept in `docs/model-routing.md` › Kontext-Budget: Kern-Auslagerung). Variante D wird nur neu bewertet per A/B, das Lens, Planer und Umsetzer misst. Ohne solche Version kein Prüftermin und keine datierte Wiedervorlage; der Prüftermin der Wächter-Regel zum Raum für den Projekt-Block liegt bei factory#237.

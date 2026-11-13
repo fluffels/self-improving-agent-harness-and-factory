@@ -4,7 +4,7 @@
 // `node scripts/probe-erstbezug.mjs --quelle <checkout> --scratch <leerer ordner>`; Exit 0 grün, 1 Fund, 2 Aufruf.
 // Liegt nicht in `.factory/besitz.json`: es braucht die Fabrik-Fixture. Konvention #1398: kein Import aus einem Einstieg; Sync, Projektwerte und Gates laufen nur als Kindprozess.
 // Grenzen: geprüft wird der Commit `HEAD` der Quelle (nicht der Arbeitsbaum), nur das JS/TS-Profil (andere Profile: factory#224), ohne echte Projekt-Blöcke und Projekt-Eigenes;
-// der Probe-Erstbezug ersetzt keinen echten Bezieher. Die Sync-Warnung `Kontextbudget knapp` ist kein Fund (factory#220).
+// der Probe-Erstbezug ersetzt keinen echten Bezieher. Die Sync-Warnung `Kontextbudget knapp` (Projekt-Block über dem Projekt-Raum) ist kein Fund (factory#220, factory#237).
 import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -128,12 +128,23 @@ export function probeUrteil(ergebnisse) {
   return { code: 1, zeilen: rot.map((e) => `ROT ${e.id}: Exit ${e.status ?? "kein Exit (Abbruch oder Zeitüberschreitung)"}`) };
 }
 
-/** Pur: Messzeile der Fixture-`AGENTS.md` gegen die Budgets (Kern-Block, Raum, Gesamt), `null` wenn die Marker fehlen. */
+/** Pur: Gründe, aus denen der Raum-Vertrag bei den Messwerten verletzt ist (Kern über Budget, Raum ungleich Soll, Gesamt über dem Gesamtbudget); leer = eingehalten. */
+function vertragsGruende({ kern, raum, gesamt }) {
+  const gruende = [];
+  if (kern > KERN_BLOCK_BUDGET) gruende.push(`Kern-Block ${kern} > Budget ${KERN_BLOCK_BUDGET}`);
+  if (raum !== PROJEKT_BLOCK_RAUM) gruende.push(`Raum ${raum} ≠ Soll ${PROJEKT_BLOCK_RAUM}`);
+  if (gesamt > KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM) gruende.push(`Summe ${gesamt} > Gesamtbudget ${KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM}`);
+  return gruende;
+}
+
+/** Pur: Messzeile der Fixture-`AGENTS.md` gegen die Budgets (Kern-Block, Raum, Gesamt) samt Raum-Vertrag (nur Info, das Urteil bleibt unverändert; factory#237), `null` wenn die Marker fehlen. */
 export function messZeile(text) {
   const kern = kernBlockZeichen(text, { start: markerStart("kern"), ende: markerEnde("kern") });
   if (kern === null) return null;
   const gesamt = countChars(text);
-  return `Messung Fixture-AGENTS.md: Kern-Block ${kern} (Budget ${KERN_BLOCK_BUDGET}), Raum ${gesamt - kern} (Soll ${PROJEKT_BLOCK_RAUM}), gesamt ${gesamt} (Budget ${KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM})`;
+  const gruende = vertragsGruende({ kern, raum: gesamt - kern, gesamt });
+  const vertrag = gruende.length === 0 ? "eingehalten" : `verletzt — ${gruende.join("; ")}`;
+  return `Messung Fixture-AGENTS.md: Kern-Block ${kern} (Budget ${KERN_BLOCK_BUDGET}), Raum ${gesamt - kern} (Soll ${PROJEKT_BLOCK_RAUM}), gesamt ${gesamt} (Budget ${KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM}) · Raum-Vertrag: ${vertrag}`;
 }
 
 /** Pur: liegt `pfad` in `ordner` oder ist er es selbst (relativer Pfad leer)? `relative` liefert bei einem anderen Laufwerk einen absoluten Pfad: dann nein. */
