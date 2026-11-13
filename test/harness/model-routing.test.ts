@@ -73,6 +73,8 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as modellRoutingRoh from "../../scripts/modell-routing-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as brainMetrics from "../../scripts/brain-metrics.mjs";
 
 const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input: { command: string } }) => "start" | "ende" | null }).pflegeMarker;
@@ -123,20 +125,16 @@ const ROUTING_SSOT = "docs/model-routing.md";
 /** Das YAML-Frontmatter als flache Key→Value-Map: dieselbe Implementierung wie die Generatoren (#1392). */
 const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
 
-/**
- * Befunde zum Hauptchat-Modell in den Projekt-Settings (#1557): `model` muss genau `sonnet` sein (der Alias, nie eine feste ID),
- * und kein `env`-Schlüssel mit MODEL darf es überstimmen (`ANTHROPIC_MODEL` hat Vorrang vor dem Settings-`model`; generisch,
- * damit neue Variablennamen nicht durchrutschen); ebenso kein EFFORT-Schlüssel (`CLAUDE_CODE_EFFORT_LEVEL` überstimmt das
- * Agent-Frontmatter). Die 1h-TTL des Hauptchats bleibt Default: kein TTL-Schlüssel (docs/model-routing.md §5); `subagentPromptCacheTtl` überstimmt das Frontmatter jeder Rolle und ist ebenfalls verboten (die TTL je Rolle steht im Frontmatter, factory#312).
- */
-function hauptchatModellBefunde(settings: { model?: string; promptCacheTtl?: string; subagentPromptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }): string[] {
-  const out = settings.model === "sonnet" ? [] : [`model=${JSON.stringify(settings.model ?? null)}`];
-  for (const k of Object.keys(settings.env ?? {})) if (/MODEL|EFFORT|PROMPT_CACHE_TTL|PROMPT_CACHING/i.test(k)) out.push(`env.${k}`);
-  if (settings.promptCacheTtl !== undefined) out.push("promptCacheTtl");
-  if (settings.subagentPromptCacheTtl !== undefined) out.push("subagentPromptCacheTtl");
-  if (settings.experimental?.cacheTtl !== undefined) out.push("experimental.cacheTtl");
-  return out;
-}
+/** Die Prüffunktionen von model-routing: eine Quelle für diesen Wächter und den Doctor-Punkt Modell-Routing (factory#150). */
+const modellRouting = modellRoutingRoh as unknown as {
+  MODELL_ALIASE: readonly string[];
+  hatHartenPin: (text: string) => boolean;
+  hauptchatModellBefunde: (settings: { model?: string; promptCacheTtl?: string; subagentPromptCacheTtl?: string; experimental?: { cacheTtl?: string }; env?: Record<string, string> }) => string[];
+  projektPhasenAbweichungen: (doku: string, fmVon: (datei: string) => Record<string, string> | null) => string[];
+  doppelteNamen: (eintraege: { pfad: string; name?: string }[]) => string[];
+  routingPfade: (liste: (ordner: string) => string[] | null) => string[];
+};
+const { hatHartenPin, hauptchatModellBefunde, projektPhasenAbweichungen } = modellRouting;
 
 /** Überschrift des Doku-Abschnitts mit der Gegenrechnung je Rolle (factory#312). */
 const TTL_ABSCHNITT = "### Cache-TTL je Subagent-Rolle";
@@ -239,19 +237,11 @@ function agentAufrufe(text: string): string[] {
 const unvollstaendigeAufrufe = (text: string) =>
   agentAufrufe(text).filter((a) => !/\b(model|agentType)\s*:/.test(a) || !/\beffort\s*:/.test(a));
 
-/** Alle versionierten Routing-Dateien: Agents, Skills und die Projekt-Settings. */
+/** Alle Routing-Dateien (Agents, Skills in Quelle und Zeiger, Workflows, Projekt-Settings): derselbe Scan-Umfang wie der Doctor-Punkt Modell-Routing (factory#150), `modell-routing-lib.mjs`. */
 function routingFiles(): string[] {
-  const out = [".claude/settings.json"];
-  for (const d of readdirSync(`${REPO_ROOT}.claude/agents`)) out.push(`.claude/agents/${d}`);
-  for (const d of readdirSync(`${REPO_ROOT}.claude/skills`)) out.push(`.claude/skills/${d}/SKILL.md`);
-  // Skill-Quellen (#1848): Modell und Aufwand eines Skills stehen in der Quelle und im Zeiger.
-  if (existsSync(`${REPO_ROOT}.agents/skills`)) for (const d of readdirSync(`${REPO_ROOT}.agents/skills`)) out.push(`.agents/skills/${d}/SKILL.md`);
-  out.push(...workflowDateien());
-  return out.filter((f) => existsSync(`${REPO_ROOT}${f}`));
+  const liste = (ordner: string): string[] | null => (existsSync(REPO_ROOT + ordner) ? readdirSync(REPO_ROOT + ordner) : null);
+  return modellRouting.routingPfade(liste).filter((f) => existsSync(REPO_ROOT + f));
 }
-
-/** Trägt der Text eine feste Modell-ID (`model: claude-opus-5`, `"model": "claude-haiku-4-5-…"`)? */
-const hatHartenPin = (text: string) => /\bmodel["']?\s*:\s*["']?claude-(opus|sonnet|haiku|fable)-\d/i.test(text);
 
 /** Alle Agent-Definitionen unter .claude/agents, nach `name` (nicht Dateiname) mit ihrem Frontmatter. */
 function agentenNachName(): Record<string, Record<string, string>> {
@@ -438,14 +428,17 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
   });
 
   test("Agent-Namen unter .claude/agents sind eindeutig (sonst entscheidet die Lese-Reihenfolge)", () => {
-    const namen = readdirSync(`${REPO_ROOT}.claude/agents`)
+    const eintraege = readdirSync(`${REPO_ROOT}.claude/agents`)
       .filter((f) => f.endsWith(".md"))
-      .map((f) => frontmatter(read(`.claude/agents/${f}`)).name);
-    assert.deepEqual(
-      namen.filter((n, i) => namen.indexOf(n) !== i),
-      [],
-      "Doppelter `name:` in .claude/agents",
-    );
+      .map((f) => ({ pfad: `.claude/agents/${f}`, name: frontmatter(read(`.claude/agents/${f}`)).name }));
+    assert.deepEqual(modellRouting.doppelteNamen(eintraege), [], "Doppelter oder fehlender `name:` in .claude/agents");
+  });
+
+  test("docs/model-routing.md §2 nennt genau die Alias-Liste MODELL_ALIASE des Doctor-Punkts (factory#150)", () => {
+    const zeile = liesMitProjektwerten(ROUTING_SSOT).split("\n").find((z) => z.startsWith("- **Geschlossene Alias-Liste"));
+    assert.ok(zeile, "Listenpunkt „Geschlossene Alias-Liste“ in §2 fehlt");
+    const vorKlammer = zeile.split("(")[0];
+    assert.deepEqual([...vorKlammer.matchAll(/`([a-z]+)`/g)].map((m) => m[1]), [...modellRouting.MODELL_ALIASE]);
   });
 });
 
@@ -520,41 +513,6 @@ const matrixAbweichungen = (doku: string, fmVon: (datei: string) => Record<strin
   return fehler;
 };
 
-/**
- * Prüft die Tabelle „Projekt-Phase“ (Rollen außerhalb des Kerns) generisch gegen die Frontmatter ihrer Subagenten: je Zeile nennt die
- * letzte Zelle „Subagent `name`“, die Datei ist `.claude/agents/<name>.md`; Alias (Spalte „Alias“) und Effort (Spalte „Effort Skill-Pfad“)
- * müssen dem Frontmatter gleichen. Ohne die Tabelle oder ohne Zeilen gibt es nichts zu prüfen (ein Projekt ohne eigene Rollen). Liefert die Verstöße.
- */
-const projektPhasenAbweichungen = (doku: string, fmVon: (datei: string) => Record<string, string> | null): string[] => {
-  const zeilen = doku.split("\n");
-  const kopf = zeilen.findIndex((z) => z.startsWith("| Projekt-Phase |"));
-  if (kopf < 0) return [];
-  const zellen = (z: string) => z.split("|").slice(1, -1).map((c) => c.trim());
-  const spalten = zellen(zeilen[kopf]);
-  const [iAlias, iEffort] = [spalten.indexOf("Alias"), spalten.indexOf("Effort Skill-Pfad")];
-  if (iAlias < 0 || iEffort < 0) return [`Projekt-Phase: Spalte fehlt (Alias ${iAlias}, Effort Skill-Pfad ${iEffort})`];
-  const fehler: string[] = [];
-  for (let i = kopf + 2; i < zeilen.length && zeilen[i].startsWith("|"); i++) {
-    const c = zellen(zeilen[i]);
-    const phase = zelleOhneCode(c[0] ?? "");
-    const name = /Subagent `([\w-]+)`/.exec(c[c.length - 1] ?? "")?.[1];
-    if (name === undefined) {
-      fehler.push(`${phase}: Ziel „Subagent name“ in der letzten Zelle nicht zuordenbar`);
-      continue;
-    }
-    const fm = fmVon(`.claude/agents/${name}.md`);
-    if (fm === null) {
-      fehler.push(`${phase}: Agentendatei .claude/agents/${name}.md fehlt`);
-      continue;
-    }
-    const effort = zelleOhneCode(c[iEffort] ?? "");
-    if (fm.effort !== effort) fehler.push(`${phase}: Effort „${effort}“ ≠ Frontmatter ${name} „${fm.effort}“`);
-    const alias = zelleOhneCode(c[iAlias] ?? "");
-    if (fm.model !== alias) fehler.push(`${phase}: Alias „${alias}“ ≠ Frontmatter ${name} „${fm.model}“`);
-  }
-  return fehler;
-};
-
 describe("Projekt-Phasen der Matrix stimmen mit den Frontmatter ihrer Subagenten überein (#1921)", () => {
   const fmOpt = (datei: string) => (existsSync(REPO_ROOT + datei) ? frontmatter(read(datei)) : null);
   const KOPF = "| Projekt-Phase | Alias | Effort Skill-Pfad | Skill-Pfad |\n|---|---|---|---|\n";
@@ -570,6 +528,7 @@ describe("Projekt-Phasen der Matrix stimmen mit den Frontmatter ihrer Subagenten
     assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile, fm("opus", "medium")), ["Eigene Phase: Alias „sonnet“ ≠ Frontmatter x-agent „opus“"]);
     assert.deepEqual(projektPhasenAbweichungen(KOPF + zeile.replace("x-agent", "y-agent"), fm("sonnet", "medium")), ["Eigene Phase: Agentendatei .claude/agents/y-agent.md fehlt"]);
     assert.match(projektPhasenAbweichungen(KOPF + zeile.replace("Subagent `x-agent`", "irgendwer"), fm("sonnet", "medium")).join(), /Eigene Phase: Ziel .* nicht zuordenbar/);
+    assert.match(projektPhasenAbweichungen(KOPF + zeile.replace("Subagent `x-agent`", "Subagent x-agent"), fm("sonnet", "medium")).join(), /Eigene Phase: Ziel .* nicht zuordenbar/, "ohne Backticks nicht zuordenbar (dokumentierte Grenze)");
     assert.match(projektPhasenAbweichungen("| Projekt-Phase | Alias | Skill-Pfad |\n|---|---|---|\n" + zeile, fm("sonnet", "medium")).join(), /Spalte fehlt/);
   });
   test("ohne Tabelle oder ohne Zeilen gibt es nichts zu prüfen; nach der Tabelle endet die Prüfung", () => {

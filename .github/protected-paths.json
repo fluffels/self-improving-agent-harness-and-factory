@@ -70,6 +70,7 @@
     "/scripts/harness-doctor-dateien.mjs",
     "/scripts/harness-doctor-sammelcheck.mjs",
     "/scripts/leitplanken-muster.mjs",
+    "/scripts/modell-routing-lib.mjs",
     "/scripts/workflow-blockform.mjs",
     "/scripts/harness-doctor-meldestelle.mjs",
     "/scripts/harness-doctor-ergebnis.mjs",

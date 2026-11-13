@@ -232,6 +232,7 @@
     {"pfad":"scripts/harness-doctor-githooks.mjs","ring":"kern","quelle":"Plan factory#247 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/harness-doctor-dateien.mjs","ring":"kern","quelle":"Plan factory#94 (Regel ADR 0022 §1)"},
     {"pfad":"scripts/leitplanken-muster.mjs","ring":"kern","quelle":"Muster des Doctor-Punkts Leitplanken-Quelle (factory#149)"},
+    {"pfad":"scripts/modell-routing-lib.mjs","ring":"kern","quelle":"Prüffunktionen des Doctor-Punkts Modell-Routing (factory#150)"},
     {"pfad":"scripts/workflow-blockform.mjs","ring":"kern","quelle":"Blockform-Leser des Doctor-Punkts Required-Check-Quellen (factory#148)"},
     {"pfad":"scripts/harness-doctor-sammelcheck.mjs","ring":"kern","quelle":"Doctor-Punkt Sammel-Check (factory#401 L52, L53)"},
     {"pfad":"scripts/harness-doctor-meldestelle.mjs","ring":"kern","quelle":"Doctor-Punkt Meldestelle (factory#208 L8)"},

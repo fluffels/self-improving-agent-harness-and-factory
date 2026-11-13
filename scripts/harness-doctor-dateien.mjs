@@ -27,6 +27,14 @@
  *   Die Muster stehen in leitplanken-muster.mjs. Fehlt die Quelle oder ist sie kein JSON, ist Git nicht lesbar oder der Index leer, ist der Punkt nicht prüfbar; fehlt CODEOWNERS bei vorhandener Quelle, ist es eine Lücke.
  *   Grenzen: (c) liest den Agenten-Kontext mit Scan-Endung und die getrackten `*.test.ts` unter `test/`, (d) und (e) nur den Agenten-Kontext mit Scan-Endung; der Marker gilt als `/*`-, `*`- oder `//`-Kommentarzeile (auch ein Codeblock in einer Doku-Seite, der den Marker so zeigt, ist ein Fund); ein umformulierter Begriff und eine ungetrackte Datei bleiben unsichtbar.
  *
+ *   `Modell-Routing` (factory#150): der Fitness-Anteil von model-routing gegen die Claude-Code-Konfiguration des Beziehers (Funktionen in modell-routing-lib.mjs, dieselben ruft der Kern-Test model-routing). Teilregeln, eine Lücke nennt alle Funde:
+ *   (a) jeder Projekt-Agent (Datei unter `.claude/agents/`, Pfad nicht im Besitz-Manifest) trägt `model:` aus `MODELL_ALIASE` (opus, sonnet, haiku, fable) und ein `effort:`; `inherit` und fehlende Werte sind Lücken;
+ *   (b) kein harter Pin (`claude-<stufe>-<nr>`) in Agenten, Skills (Quelle und Zeiger), `.claude/settings.json` und Workflow-Skripten (`.js`, `.mjs`, `.ts` direkt in `.claude/workflows`, eine Ebene; Markdown, YAML und Unterordner dort bleiben ungeprüft); (c) jeder `name:` unter `.claude/agents` ist eindeutig, auch über die Besitz-Agenten hinweg, jede Datei hat einen;
+ *   (d) `hauptchatModellBefunde(settings)` ist leer (fehlt `settings.json`, ist das eine Lücke); (e) die Tabelle „Projekt-Phase“ in `docs/model-routing.md` gleicht den Frontmatter ihrer Subagenten (ohne die Seite: OK mit Hinweis).
+ *   `settings.json` kein JSON-Objekt, `.claude/agents` fehlt oder eine Agentendatei nicht lesbar: nicht prüfbar mit Fix; ein unlesbares Besitz-Manifest macht nur (a) nicht prüfbar. Ein Fund in einer prüfbaren Teilregel ist eine Lücke und nennt die nicht prüfbaren Teile.
+ *   Grenzen: die Listen kommen aus dem Dateisystem (lokal zählen ungetrackte Dateien mit, ein CI-Checkout nur getrackte); `parseFrontmatter` liest flach; (e) nimmt Dateiname = `name` an; (b) liest nur `SKILL.md` je Skill; Effort wird nur auf Anwesenheit geprüft;
+ *   ein neuer Alias braucht einen Factory-Release; der Punkt prüft die Claude-Code-Konfiguration, nicht die Modellwahl von Codex (docs/codex/einstieg.md).
+ *
  *   `Workflow-Auslöser`: jeder Name in `on.workflow_run.workflows` ist der `name:` eines vorhandenen Workflows (Leser `blockformAusloeser`); eine nicht lesbare Form (`on:` als Flow-Mapping, Anker, Alias, Tag) macht den Punkt nicht prüfbar mit `datei:zeile`.
  *
  *   `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job mit `needs` auf alle anderen Jobs (außer Jobs, die selbst am Sammel-Job hängen), der mit `!cancelled()` läuft und bei einem roten oder abgebrochenen Bedarfsjob selbst rot wird (factory#413), und einen Alarm-Aufruf bei rotem main (harness-doctor-sammelcheck.mjs); ohne `sammelChecks` OK mit Hinweis.
@@ -35,9 +43,11 @@
  * nicht prüfbar, `Root-Kontextdatei` wird trotzdem bewertet. Grenze: ein CI-Checkout sieht ungetrackte Dateien nicht, nur ein lokales `--pruefen`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
+import { MANIFEST_PFAD, manifestAusText, markerEnde, markerStart, PROJEKT_BLOCK_ENDE, PROJEKT_BLOCK_START } from "./besitz-lib.mjs";
+import { parseFrontmatter } from "./docs-gen/markdown.mjs";
+import { doppelteNamen, hatHartenPin, MODELL_ALIASE, hauptchatModellBefunde, projektAgentFunde, projektPhasenAbweichungen, routingPfade } from "./modell-routing-lib.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { labelAus, ladeProjektConfig, langfuseZiel, PROJEKT_CONFIG, ROLLEN_PFADE, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { pflichtReviewMuster, schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
@@ -337,13 +347,13 @@ export function codeScanningQuellenPunkt({ spiegel, workflows, vorAbbruch = fals
 }
 
 /** Die Dateipunkte des Doctors in fester Reihenfolge (die eine Quelle; `pruefeDateien` liefert genau diese Punkte, nie weniger). */
-export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Sammel-Check"]);
+export const DATEI_PUNKTE = Object.freeze(["Root-Kontextdatei", "Zeilenenden", "Projektdateien", "Langfuse-Takt", "Gezielter Test", "Required-Check-Quellen", "Code-Scanning-Quellen", "Workflow-Auslöser", "CODEOWNERS-Spiegel", "Leitplanken-Quelle", "Modell-Routing", "Sammel-Check"]);
 
 /**
  * Die Dateipunkte `DATEI_PUNKTE`. `spiegel` (Ruleset-Spiegel), `workflows` (`[{ pfad, text }]`) und `pflichtChecks` (Soll-Liste) liest der Aufrufer (`pruefLauf`) einmal und reicht sie herein;
  * ohne sie ist `Required-Check-Quellen` nicht prüfbar.
  */
-export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), lies = dateiOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
+export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert = existsSync, config = configOderNull(rootDir), lies = dateiOderNull(rootDir), liste = verzeichnisOderNull(rootDir), spiegel, workflows = [], pflichtChecks = [], vorAbbruch = false }) {
   const punkte = {
     "Root-Kontextdatei": () => kontextPunkt(rootDir, existiert),
     Zeilenenden: () => zeilenendenPunkt(git),
@@ -355,6 +365,7 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
     "Workflow-Auslöser": () => workflowAusloeserPunkt({ workflows }),
     "CODEOWNERS-Spiegel": () => codeownersSpiegelPunkt(lies),
     "Leitplanken-Quelle": () => leitplankenQuellePunkt({ git, lies }),
+    "Modell-Routing": () => modellRoutingPunkt({ lies, liste }),
     "Sammel-Check": () => sammelCheckPunkt({ config, workflows, vorAbbruch }),
   };
   return DATEI_PUNKTE.map((p) => punkte[p]());
@@ -364,6 +375,15 @@ export function pruefeDateien({ rootDir, git = gitStandard(rootDir), existiert =
 const dateiOderNull = (rootDir) => (rel) => {
   try {
     return readFileSync(join(rootDir, rel), "utf8");
+  } catch {
+    return null;
+  }
+};
+
+/** Der Standard-Lister: Namen im Ordner unter `rootDir` oder `null`, wenn er fehlt oder nicht lesbar ist (nie ein Wurf). */
+const verzeichnisOderNull = (rootDir) => (rel) => {
+  try {
+    return readdirSync(join(rootDir, rel));
   } catch {
     return null;
   }
@@ -489,6 +509,99 @@ export function leitplankenQuellePunkt({ git, lies }) {
   const tests = lesePfade(pfade.filter(istTestDatei), lies);
   const funde = [...ankerFunde(quelle, codeowners, roh), ...agentsFunde(roh), ...textFunde(scan, tests)];
   return funde.length === 0 ? gut(LQ_PUNKT) : luecke(LQ_PUNKT, funde.join("; "), lqFix(funde));
+}
+
+/* Punkt `Modell-Routing` (factory#150): der Fitness-Anteil von model-routing gegen die Claude-Code-Konfiguration des Beziehers. Teilregeln (a) bis (e) siehe Kopfkommentar;
+ * die Prüffunktionen stehen in modell-routing-lib.mjs (dieselben ruft der Kern-Test). Jede Teilregel liefert `{ funde, offen, hinweise }`; `offen` sind `{ grund, fix }` der nicht prüfbaren Teile. */
+const MR_PUNKT = "Modell-Routing";
+const MR_AGENTEN = ".claude/agents";
+const MR_SETTINGS = ".claude/settings.json";
+const MR_DOKU = "docs/model-routing.md";
+const ALIAS_TEXT = MODELL_ALIASE.join(", ");
+const MR_FIXE = {
+  a: "im Frontmatter jedes Projekt-Agenten unter .claude/agents/ (nicht im Besitz-Manifest) `model:` aus " + ALIAS_TEXT + " und ein `effort:` (nicht inherit) setzen; Liste auf der Seite docs/model-routing.md des Factory-Repos",
+  b: "feste Modell-IDs (claude-<stufe>-<nr>) in Agenten, Skills, .claude/settings.json und Workflow-Skripten (.js, .mjs, .ts direkt in .claude/workflows, eine Ebene) durch den Alias (" + ALIAS_TEXT + ") ersetzen",
+  c: "jedem Agenten unter .claude/agents/ einen eigenen `name:` geben (auch gegenüber den mitgelieferten Agenten eindeutig)",
+  d: ".claude/settings.json anlegen oder korrigieren: `model` genau `sonnet`, kein env-, Effort- oder Cache-TTL-Schlüssel, der es überstimmt",
+  e: "Alias und Effort der Tabelle Projekt-Phase in docs/model-routing.md und das Frontmatter des Subagenten gleichziehen",
+};
+const mrFix = (funde) => ["a", "b", "c", "d", "e"].filter((k) => funde.some((f) => f.startsWith(`(${k})`))).map((k) => MR_FIXE[k]).join("; ");
+const MR_LEER = { funde: [], offen: [], hinweise: [] };
+const MR_MANIFEST_FIX = `${MANIFEST_PFAD} aus Git oder per Sync von einem Factory-Tag wiederherstellen, dann erneut prüfen`;
+
+/** Alle `*.md` unter `.claude/agents` als `[{ pfad, text }]`; `null`, wenn der Ordner fehlt. Nicht lesbare Dateien landen in `unlesbar`. */
+function mrAgenten(lies, liste) {
+  const namen = liste(MR_AGENTEN);
+  if (namen === null) return null;
+  const agenten = [];
+  const unlesbar = [];
+  for (const n of namen.filter((f) => f.endsWith(".md"))) {
+    const pfad = `${MR_AGENTEN}/${n}`;
+    const text = lies(pfad);
+    if (text === null) unlesbar.push(pfad);
+    else agenten.push({ pfad, text });
+  }
+  return { agenten, unlesbar };
+}
+
+/** (a): jeder Projekt-Agent (Pfad nicht im Besitz-Manifest) hat `model:` aus der Alias-Liste und ein `effort:`. Ohne lesbares Manifest nicht prüfbar. */
+function mrTeilA(agenten, lies) {
+  const m = manifestAusText(lies(MANIFEST_PFAD));
+  if (m.fehler) return { ...MR_LEER, offen: [{ grund: `(a) ${m.text}: ob ein Agent zum Projekt gehört, ist unbekannt`, fix: MR_MANIFEST_FIX }] };
+  const besitz = new Set(m.manifest.eintraege.map((e) => e?.pfad));
+  const funde = agenten.filter((a) => !besitz.has(a.pfad)).flatMap((a) => projektAgentFunde(parseFrontmatter(a.text), a.pfad));
+  return { ...MR_LEER, funde };
+}
+
+/** (b): kein harter Pin in den Routing-Dateien (Agenten, Skills, settings.json, Workflows). */
+function mrTeilB(lies, liste) {
+  const funde = routingPfade(liste).filter((p) => hatHartenPin(lies(p) ?? "")).map((p) => `(b) ${p}`);
+  return { ...MR_LEER, funde };
+}
+
+/** (c): jeder `name:` unter `.claude/agents` ist eindeutig, auch über die Besitz-Agenten hinweg. */
+const mrTeilC = (agenten) => ({ ...MR_LEER, funde: doppelteNamen(agenten.map((a) => ({ pfad: a.pfad, name: parseFrontmatter(a.text).name }))) });
+
+/** (d): `hauptchatModellBefunde` der Settings; eine fehlende Datei ist ein Fund, ein Nicht-JSON-Objekt nicht prüfbar. */
+function mrTeilD(lies) {
+  const text = lies(MR_SETTINGS);
+  if (text === null) return { ...MR_LEER, funde: [`(d) ${MR_SETTINGS} fehlt`] };
+  let settings;
+  try {
+    settings = JSON.parse(text);
+  } catch {
+    settings = null;
+  }
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings)) return { ...MR_LEER, offen: [{ grund: `(d) ${MR_SETTINGS} ist kein JSON-Objekt`, fix: `${MR_SETTINGS} als JSON-Objekt reparieren, dann erneut prüfen` }] };
+  return { ...MR_LEER, funde: hauptchatModellBefunde(settings).map((f) => `(d) ${f}`) };
+}
+
+/** (e): die Tabelle „Projekt-Phase“ in `docs/model-routing.md` gleicht den Frontmatter ihrer Subagenten. Ohne die Seite gibt es nichts zu prüfen (Hinweis). */
+function mrTeilE(lies) {
+  const doku = lies(MR_DOKU);
+  if (doku === null) return { ...MR_LEER, hinweise: [`${MR_DOKU} fehlt: (e) ohne Prüfgegenstand`] };
+  const fmVon = (p) => {
+    const t = lies(p);
+    return t === null ? null : parseFrontmatter(t);
+  };
+  return { ...MR_LEER, funde: projektPhasenAbweichungen(doku, fmVon).map((f) => `(e) ${f}`) };
+}
+
+/** Punkt `Modell-Routing`: `lies(rel)` liefert Text oder `null`, `liste(ordner)` die Namen im Ordner oder `null`. Nie ein Wurf, nie still grün. */
+export function modellRoutingPunkt({ lies, liste }) {
+  const a = mrAgenten(lies, liste);
+  const ohneOrdner = { ...MR_LEER, offen: [{ grund: `${MR_AGENTEN} fehlt oder ist nicht lesbar: (a) und (c) nicht prüfbar`, fix: `${MR_AGENTEN} anlegen (die Agenten des Projekts und die mitgelieferten) oder den Doctor im Projekt-Root starten, dann erneut prüfen` }] };
+  const offenAgenten = (a?.unlesbar ?? []).map((p) => ({ grund: `${p} nicht lesbar`, fix: `${p} lesbar machen oder entfernen, dann erneut prüfen` }));
+  // Rangfolge: (b), (d) und (e) brauchen den Ordner nicht und laufen auch ohne ihn.
+  const teile = a === null ? [ohneOrdner, mrTeilB(lies, liste), mrTeilD(lies), mrTeilE(lies)] : [mrTeilA(a.agenten, lies), mrTeilB(lies, liste), mrTeilC(a.agenten), mrTeilD(lies), mrTeilE(lies), { ...MR_LEER, offen: offenAgenten }];
+  const funde = teile.flatMap((t) => t.funde);
+  const offen = teile.flatMap((t) => t.offen);
+  const hinweise = teile.flatMap((t) => t.hinweise);
+  const offenGrund = offen.map((o) => o.grund).join("; ");
+  const offenFix = offen.map((o) => o.fix).join("; ");
+  if (funde.length > 0) return luecke(MR_PUNKT, [...funde, ...(offen.length > 0 ? [`nicht prüfbar: ${offenGrund}`] : [])].join("; "), [mrFix(funde), offenFix].filter(Boolean).join("; "));
+  if (offen.length > 0) return nichtPruefbar(MR_PUNKT, offenGrund, offenFix);
+  return gut(MR_PUNKT, hinweise.length > 0 ? hinweise.join("; ") : undefined);
 }
 
 /* Punkt `Workflow-Auslöser`: gelesen vom Blockform-Leser `blockformAusloeser` (workflow-blockform.mjs, ohne `yaml`: der Wochenlauf hat kein `npm ci`); Flow-Liste `["CI"]` oder Blockliste `- CI` unter `workflows`.
