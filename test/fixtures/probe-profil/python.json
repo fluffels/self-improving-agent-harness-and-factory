@@ -1,0 +1,38 @@
+{
+  "profil": "python",
+  "titel": "Python-Profil: Paket unter src/ mit lcov aus coverage.py (docs/harness-transfer.md, Werkzeug-Mapping)",
+  "config": {
+    "struktur": {
+      "quelle": [
+        "src/probe"
+      ],
+      "endungen": [
+        ".py"
+      ],
+      "moduldoku": "docs/module"
+    },
+    "coverage": {
+      "berichte": [
+        {
+          "format": "lcov",
+          "pfad": "coverage/lcov.info"
+        }
+      ]
+    }
+  },
+  "skripte": {
+    "test:py": "node tools/pytest.mjs"
+  },
+  "verifyZusatz": [
+    "test:py"
+  ],
+  "dateien": {
+    "src/probe/__init__.py": "",
+    "src/probe/kern.py": "def addiere(a: int, b: int) -> int:\n    return a + b\n",
+    "pyproject.toml": "[project]\nname = \"probe\"\nversion = \"0.0.0\"\n",
+    "coverage/lcov.info": "TN:\nSF:src/probe/kern.py\nDA:2,1\nLF:1\nLH:1\nend_of_record\n",
+    "docs/module/probe.md": "# Probe (Python)\n\n- `src/probe/kern.py`: Rechenkern.\n",
+    "tools/pytest.mjs": "// Stellvertreter fuer pytest (Probe-Erstbezug, factory#224): der Stellvertreter ersetzt `pytest --cov`\nconsole.log(\"pytest laeuft im synthetischen Bezieher nicht, Stellvertreter beendet sich mit Exit 0\");\n"
+  },
+  "faelle": []
+}

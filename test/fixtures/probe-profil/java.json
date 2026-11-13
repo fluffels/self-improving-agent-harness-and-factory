@@ -1,0 +1,38 @@
+{
+  "profil": "java",
+  "titel": "Java-Profil: Maven-Multi-Modul ohne Frontend (docs/harness-transfer.md, Java-Profil)",
+  "config": {
+    "struktur": {
+      "quelle": [
+        "backend/*/src/main/java"
+      ],
+      "endungen": [
+        ".java"
+      ],
+      "docmapEinheit": "ordner",
+      "moduldoku": "docs/module"
+    },
+    "coverage": {
+      "berichte": [
+        {
+          "format": "jacoco",
+          "pfad": "backend/*/target/site/jacoco/jacoco.xml"
+        }
+      ]
+    }
+  },
+  "skripte": {
+    "test:java": "node tools/mvn.mjs -B verify"
+  },
+  "verifyZusatz": [
+    "test:java"
+  ],
+  "dateien": {
+    "backend/domain/src/main/java/de/beispiel/probe/domain/Rechner.java": "package de.beispiel.probe.domain;\n\npublic final class Rechner {\n  public int addiere(int a, int b) {\n    return a + b;\n  }\n}\n",
+    "backend/app/src/main/java/de/beispiel/probe/app/Haupt.java": "package de.beispiel.probe.app;\n\npublic final class Haupt {\n  public static void main(String[] args) {\n    System.out.println(\"probe\");\n  }\n}\n",
+    "backend/domain/target/site/jacoco/jacoco.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><!DOCTYPE report PUBLIC \"-//JACOCO//DTD Report 1.1//EN\" \"report.dtd\"><report name=\"probe\"><group name=\"alle\"><package name=\"de/beispiel/probe/domain\"><sourcefile name=\"Rechner.java\"><line nr=\"3\" mi=\"0\" ci=\"4\" mb=\"0\" cb=\"0\"/><counter type=\"LINE\" missed=\"0\" covered=\"1\"/></sourcefile><counter type=\"LINE\" missed=\"0\" covered=\"1\"/></package></group><counter type=\"LINE\" missed=\"0\" covered=\"1\"/></report>\n",
+    "docs/module/backend.md": "# Backend (Probe)\n\n- `backend/domain/src/main/java/de/beispiel/probe/domain`: Rechenkern.\n- `backend/app/src/main/java/de/beispiel/probe/app`: Einstiegspunkt.\n",
+    "tools/mvn.mjs": "// Stellvertreter fuer Maven (Probe-Erstbezug, factory#224): der Stellvertreter ersetzt `mvn -B verify`\nconsole.log(\"Maven laeuft im synthetischen Bezieher nicht, Stellvertreter beendet sich mit Exit 0\");\n"
+  },
+  "faelle": []
+}

@@ -1,4 +1,4 @@
-// Lib ohne Direktaufruf-Guard; `factory-update-check.mjs` und `tag-takt.mjs` importieren sie (Konvention #1398, Folge #103).
+// Lib ohne Direktaufruf-Guard; `factory-update-check.mjs`, `tag-takt.mjs` und `probe-erstbezug.mjs` importieren sie (Konvention #1398, Folge #103).
 /* Release-Tags lesen und vergleichen: nur Tags der Form `v1.2.3` oder `1.2.3` zählen (Pre-Release und Fremdtags nicht). Alles pur, keine Imports. */
 
 const RELEASE = /^v?(\d+)\.(\d+)\.(\d+)$/;
@@ -41,3 +41,14 @@ export const UPDATE_SCHRITTE = [
 
 /** Pur: die Befehle der mechanischen Schritte in Reihenfolge, `<pfad>` durch `quelle` ersetzt. */
 export const mechanischeSchritte = (quelle) => UPDATE_SCHRITTE.filter((s) => s.mechanisch).map((s) => s.befehl.replaceAll("<pfad>", quelle));
+
+/** Ordner der Profil-Fixtures der synthetischen Bezieher (factory#224, nur in der Fabrik): je Datei `<profil>.json` ein Profil ohne Stellvertreter. */
+export const PROFIL_ORDNER = "test/fixtures/probe-profil";
+
+/** Pur: die Profilnamen aus einer Dateiliste: nur `<name>.json` mit `^[a-z][a-z0-9-]*$` als Name, sortiert ohne Endung; alles andere wird ignoriert. */
+export function profilNamen(dateinamen) {
+  return dateinamen
+    .map((d) => /^([a-z][a-z0-9-]*)\.json$/u.exec(d)?.[1])
+    .filter((n) => n !== undefined)
+    .sort();
+}
