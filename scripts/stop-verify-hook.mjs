@@ -120,7 +120,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     // Eingebettet wie bisher: ein Repo, ein git-Fehler bleibt still (fail-open).
     const r = raeumeRepoAuf(d.repos[0], deps, d.repos[0].mainRoot);
     if (r === null) return { blocked: false };
-    return r.problems.length > 0 ? { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (#908/#952/#1051): ${r.problems.join(" | ")}` } : { blocked: false, removed: r.removed, ...(r.warnungen.length > 0 ? { warning: r.warnungen.join(" ") } : {}) };
+    return r.problems.length > 0 ? { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (quellprojekt#908/quellprojekt#952/quellprojekt#1051): ${r.problems.join(" | ")}` } : { blocked: false, removed: r.removed, ...(r.warnungen.length > 0 ? { warning: r.warnungen.join(" ") } : {}) };
   }
   // Arbeitsplatz (factory#89): scheitert git in einem Repo, wurde nirgends gelöscht; das ist eine Warnung, nie eine Blockade.
   if (!d.ok) return { blocked: false, warning: `Worktree-Aufräumen übersprungen: ${d.fehler}` };
@@ -129,7 +129,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   const warnungen = ergebnisse.flatMap(({ name, r }) => r.warnungen.map((w) => `Repo ${name}: ${w}`));
   const removed = ergebnisse.flatMap(({ r }) => r.removed);
   const warning = warnungen.length > 0 ? warnungen.join(" ") : undefined;
-  if (problems.length > 0) return { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (#908/#952/#1051): ${problems.join(" | ")}` };
+  if (problems.length > 0) return { blocked: true, reason: `Stop-Worktree-Cleanup-Hook (quellprojekt#908/quellprojekt#952/quellprojekt#1051): ${problems.join(" | ")}` };
   return ergebnisse.length === 0 ? { blocked: false } : { blocked: false, removed, ...(warning ? { warning } : {}) };
 }
 
@@ -172,7 +172,7 @@ function raeumeRepoAuf(befund, deps, verlustOrt) {
     removed = [...removed, ...lens.removed];
     if (lens.refused.length > 0) {
       problems.push(
-        `Der Schutzgurt (#1051) hat ${lens.refused.length} Lens-Worktree(s) abgelehnt und NICHTS entfernt: ` +
+        `Der Schutzgurt (quellprojekt#1051) hat ${lens.refused.length} Lens-Worktree(s) abgelehnt und NICHTS entfernt: ` +
           lens.refused.map(({ name, reason }) => `${name} (${reason})`).join("; ")
       );
     }
@@ -196,7 +196,7 @@ function raeumeRepoAuf(befund, deps, verlustOrt) {
 
     if (result.refused.length > 0) {
       problems.push(
-        `Der Schutzgurt (#1051) hat ${result.refused.length} Ziel(e) abgelehnt und NICHTS gelöscht: ` +
+        `Der Schutzgurt (quellprojekt#1051) hat ${result.refused.length} Ziel(e) abgelehnt und NICHTS gelöscht: ` +
           result.refused.map(({ name, reason }) => `${name} (${reason})`).join("; ")
       );
     }
@@ -226,7 +226,7 @@ function raeumeRepoAuf(befund, deps, verlustOrt) {
             `Datei(en) unter .claude/ als gelöscht gemeldet: ${newlyDeleted.join(", ")} — bitte ` +
             `prüfen und, falls das Aufräumen sie mitgerissen hat, wiederherstellen mit ` +
             `"git -C ${mainRoot} checkout -- ${cmd}" — ohne das -C no-oppt der ` +
-            `Befehl im Worktree lautlos. Vorfall an #1051 melden.`
+            `Befehl im Worktree lautlos. Vorfall an quellprojekt#1051 melden.`
         );
       }
     }

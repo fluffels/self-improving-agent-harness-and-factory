@@ -1,5 +1,5 @@
-/* Kontextdatei-Wächter (#719, jede AGENTS.md seit #1088) – Frühwarnung gegen eine unbegrenzt wachsende
- * AGENTS.md. Analog zu test/filesize.test.ts (#390), aber für die Datei(en), die JEDE
+/* Kontextdatei-Wächter (quellprojekt#719, jede AGENTS.md seit quellprojekt#1088) – Frühwarnung gegen eine unbegrenzt wachsende
+ * AGENTS.md. Analog zu test/filesize.test.ts (quellprojekt#390), aber für die Datei(en), die JEDE
  * Agenten-Session vollständig lädt statt für src/-Module.
  *
  * Die Mess-/Allowlist-Logik wird aus scripts/check-context-size.mjs importiert – EINE
@@ -32,7 +32,7 @@ const CONTEXT_BUDGETS: Budget[] = budgetLib.CONTEXT_BUDGETS;
 const ALLOWLIST: Allow[] = (pcl as unknown as { ausnahmenAus(c: unknown): { kontext: Allow[] }; ladeProjektConfig(): unknown }).ausnahmenAus((pcl as unknown as { ladeProjektConfig(): unknown }).ladeProjektConfig()).kontext;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
-// Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
+// Neu mit quellprojekt#1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
 // gleiches Muster wie test/harness/agents-md-native.test.ts.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const countChars: (text: string) => number = budgetLib.countChars;
@@ -62,7 +62,7 @@ const WURZEL = join(import.meta.dirname, "..");
 const sizes = collectContextSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.datei));
 
-describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
+describe("Root-Kontextdatei-Budget (quellprojekt#719, Zeichen seit quellprojekt#1064)", () => {
   test("kein Root-Kontextfile über seinem Zeichen-Budget (außer dokumentierten Ausnahmen)", () => {
     const violations = findOversized(sizes).filter((s) => !allowedFiles.has(s.file));
     assert.deepEqual(
@@ -105,7 +105,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
     assert.equal(huge, 0, "Ein riesiges Budget sollte nichts melden.");
   });
 
-  test("Zuwachs INNERHALB bestehender Zeilen schlägt an (#1061/#1064 – die Lücke der alten Zeilen-Metrik)", () => {
+  test("Zuwachs INNERHALB bestehender Zeilen schlägt an (quellprojekt#1061/quellprojekt#1064 – die Lücke der alten Zeilen-Metrik)", () => {
     // Genau der Fall, den das Zeilen-Budget nicht sah: gleiche Zeilenzahl, 5.000 Zeichen mehr.
     const dir = mkdtempSync(join(tmpdir(), "contextsize-"));
     try {
@@ -156,7 +156,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
   });
 });
 
-describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
+describe("Modul-lokale AGENTS.md im Budget (quellprojekt#1088)", () => {
   test("expliziter Eintrag gewinnt über das Default-Budget (Wurzel bleibt bei ihrem eigenen Budget)", () => {
     const root = sizes.find((x) => x.file === "AGENTS.md");
     const configured = CONTEXT_BUDGETS.find((b) => b.file === "AGENTS.md");

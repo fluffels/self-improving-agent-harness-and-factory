@@ -88,7 +88,7 @@ describe("Dateigröße-Budget (quellprojekt#390)", () => {
   test("Detektion greift wirklich (Red-Green): mehr Budget ergibt nie mehr Treffer", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos. Bei kleinem Budget
     // MÜSSEN Treffer kommen, bei unerreichbar großem KEINE – und monoton dazwischen.
-    // Läuft auf einer Fixture (#1933): die Treffer hängen nicht an der Größe des Projekts, das den Test fährt.
+    // Läuft auf einer Fixture (quellprojekt#1933): die Treffer hängen nicht an der Größe des Projekts, das den Test fährt.
     const wurzel = fixture({
       "lib/klein.ts": "x\n".repeat(10),
       "lib/mittel.ts": "x\n".repeat(60),
@@ -117,7 +117,7 @@ describe("Dateigröße-Budget (quellprojekt#390)", () => {
   });
 });
 
-describe("Deckel für Workflow-Skripte (#1349)", () => {
+describe("Deckel für Workflow-Skripte (quellprojekt#1349)", () => {
   const WF = ".claude/workflows/fixture.js";
   const deckel: Deckel[] = [{ file: WF, max: 1000, maxZeichen: 50000, reason: "Test" }];
 
@@ -130,16 +130,16 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
   test("Wachstum über den Deckel: rot", () => {
     const m = pruefeDeckel([{ file: WF, loc: 1001 }], deckel).join(" ");
     assert.match(m, /1001 Zeilen > Deckel 1000/);
-    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (#1390 Z8)");
+    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (quellprojekt#1390 Z8)");
   });
 
   test("Schrumpfen ohne den Deckel zu senken: rot mit Zielwert (Ratchet)", () => {
     const m = pruefeDeckel([{ file: WF, loc: 950 }], deckel).join(" ");
     assert.match(m, /Deckel auf 950 senken/);
-    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (#1390 Z8)");
+    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (quellprojekt#1390 Z8)");
   });
 
-  test("Meldungen ohne Deckel und stale tragen den Rebase-Hinweis nicht (#1390 Z8)", () => {
+  test("Meldungen ohne Deckel und stale tragen den Rebase-Hinweis nicht (quellprojekt#1390 Z8)", () => {
     assert.doesNotMatch(pruefeDeckel([{ file: ".claude/workflows/neu.js", loc: 801 }], []).join(" "), /Rebase/);
     assert.doesNotMatch(pruefeDeckel([], deckel).join(" "), /Rebase/);
   });
@@ -148,7 +148,7 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
     assert.deepEqual(pruefeDeckel([{ file: WF, loc: 1000, chars: 50000 }], deckel), []);
   });
 
-  test("Zeichen-Deckel (#1628): +1 über maxZeichen rot, genau am Deckel und bis 500 darunter ok, 501 darunter rot", () => {
+  test("Zeichen-Deckel (quellprojekt#1628): +1 über maxZeichen rot, genau am Deckel und bis 500 darunter ok, 501 darunter rot", () => {
     const m = (chars: number) => pruefeDeckel([{ file: WF, loc: 1000, chars }], deckel);
     assert.match(m(50001).join(" "), /50001 Zeichen > Deckel 50000/);
     assert.deepEqual(m(50000), []);
@@ -186,7 +186,7 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
   });
 });
 
-describe("collectWorkflowSizes: Randfälle (#1349)", () => {
+describe("collectWorkflowSizes: Randfälle (quellprojekt#1349)", () => {
   test("fehlender Ordner: leere Liste; Nicht-.js-Dateien zählen nicht", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -204,7 +204,7 @@ describe("collectWorkflowSizes: Randfälle (#1349)", () => {
   });
 });
 
-describe("Quellwurzel aus der Config (#1843)", () => {
+describe("Quellwurzel aus der Config (quellprojekt#1843)", () => {
   test("collectSizes misst alle Quelldateien der JS/TS-Familie (ts, mts, cts, js, mjs, cjs), aber keine Daten", () => {
     const wurzel = fixture({
       "lib/a.ts": "x\n",

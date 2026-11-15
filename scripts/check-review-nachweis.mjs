@@ -100,7 +100,7 @@ const teilbrillenFehlen = (review) => review?.lenses.includes(KOMBI_LENS) === tr
 /** Hinweis-Zeilen zu fehlenden optionalen Feldern der gültigen Review-Zeile (nie ein Fehler). Pur. */
 export function feldHinweise(r) {
   return [
-    r.blockerFehlt ? "• Hinweis: blocker= fehlt (Messung #1123)." : null,
+    r.blockerFehlt ? "• Hinweis: blocker= fehlt (Messung quellprojekt#1123)." : null,
     r.teilbrillenFehlt ? "• Hinweis: teilbrillen= fehlt (Kombi-Lens ohne Aufteilung je Teil-Brille, factory#402)." : null,
   ].filter((z) => z !== null);
 }
@@ -422,7 +422,7 @@ function main(argv = process.argv.slice(2)) {
     console.log("✔ Review-/Plan-Nachweis ok.");
     return;
   }
-  console.error("✖ Review-/Plan-Nachweis fehlt oder ist ungültig (#1270):");
+  console.error("✖ Review-/Plan-Nachweis fehlt oder ist ungültig (quellprojekt#1270):");
   for (const f of r.fehler) console.error(`  - ${f}`);
   console.error(
     `\nNach Konvergenz des Reviews einen leeren Nachweis-Commit setzen (Format: ${factorySeiteIn(WURZEL, "docs/agent-harness.md", "3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd")}), ` +

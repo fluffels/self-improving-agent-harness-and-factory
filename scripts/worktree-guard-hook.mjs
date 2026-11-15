@@ -194,16 +194,16 @@ export function neuerWorktreeHinweis(deps, w = {}) {
   if (grund) return grund;
   const worktreeName = namen.worktreeName("<nr>");
   const branchName = namen.branchName("<nr>", "<slug>");
-  if (!w.repo) return `\`${worktreeBefehl({ aufloesung: { betriebsart: "eingebettet" }, worktreeName, branchName })}\` (vom frischen origin/main, #772).`;
+  if (!w.repo) return `\`${worktreeBefehl({ aufloesung: { betriebsart: "eingebettet" }, worktreeName, branchName })}\` (vom frischen origin/main, quellprojekt#772).`;
   const befehl = worktreeBefehl({ aufloesung: w.aufloesung, repo: w.repo, worktreeName, branchName });
-  return `\`${befehl}\` (vom frischen origin/${standardzweigVon(w.repo)}, #772) bzw. \`node scripts/arbeitsplatz.mjs worktree <nr> <slug> --repo ${w.repo.name}\`.`;
+  return `\`${befehl}\` (vom frischen origin/${standardzweigVon(w.repo)}, quellprojekt#772) bzw. \`node scripts/arbeitsplatz.mjs worktree <nr> <slug> --repo ${w.repo.name}\`.`;
 }
 
 const BLOCK_REASON = (top, deps, w) =>
   `git commit/push würde im geteilten main-Checkout (${top}) laufen und ist blockiert. ` +
   `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
   `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Eigener Worktree): ` +
-  `${neuerWorktreeHinweis(deps, w)} (#735)`;
+  `${neuerWorktreeHinweis(deps, w)} (quellprojekt#735)`;
 
 /** Gesamtentscheidung: `block` nur, wenn (a) das Kommando commit/push ist, (b) cwd bekannt ist, (c) mindestens ein
  *  Ziel-Verzeichnis zu einem geschützten Repo gehört (Session-Repo, im Arbeitsplatz jedes Repo der Config, `schutzWurzeln`) UND (d) dort der Haupt-Checkout liegt (kein Linked Worktree). `ask`, wenn
@@ -299,7 +299,7 @@ function entscheideFuer({ cwd, command, w, deps, kontextCache }) {
   for (const [dir, a] of found.asks) {
     const ctx = resolveGitContext(dir, repoRoot, d);
     if (!ctx.relevant || (a.mainOnly && !ctx.isMainWorktree)) continue;
-    return { block: false, ask: true, reason: `Worktree-Guard: ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (#1311)` };
+    return { block: false, ask: true, reason: `Worktree-Guard: ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (quellprojekt#1311)` };
   }
   return { block: false };
 }

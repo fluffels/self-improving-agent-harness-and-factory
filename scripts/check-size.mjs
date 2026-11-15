@@ -91,7 +91,7 @@ const REBASE_HINWEIS = rebaseHinweis({ zusatz: ' (ein Konflikt in scripts/check-
 /** Zeichen-Deckel (#1628, jeder DECKEL-Eintrag): über `maxZeichen` rot, mehr als `ZEICHEN_TOLERANZ` darunter rot (Ratchet mit Toleranz). */
 export const ZEICHEN_TOLERANZ = 500
 function pruefeZeichen(file, chars, d) {
-  if (typeof d.maxZeichen !== 'number') return [`${file}: DECKEL-Eintrag ohne maxZeichen (Zeichen-Deckel, #1628) – gemessene Zeichenzahl eintragen.`]
+  if (typeof d.maxZeichen !== 'number') return [`${file}: DECKEL-Eintrag ohne maxZeichen (Zeichen-Deckel, quellprojekt#1628) – gemessene Zeichenzahl eintragen.`]
   if (typeof chars !== 'number') return [`${file}: Messung ohne Zeichenzahl.`]
   if (chars > d.maxZeichen) return [`${file}: ${chars} Zeichen > Deckel ${d.maxZeichen}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).${REBASE_HINWEIS}`]
   if (chars < d.maxZeichen - ZEICHEN_TOLERANZ) return [`${file}: ${chars} Zeichen < Deckel ${d.maxZeichen} − ${ZEICHEN_TOLERANZ}: Deckel auf ${chars} senken (Ratchet, in scripts/check-size.mjs).${REBASE_HINWEIS}`]
