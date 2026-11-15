@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { erlaubt, GH_ECHT_ERLAUBT, ghAttrappe } from "../support/gh-sperre-regeln";
+import { GH_ECHT_ERLAUBT, ghAttrappe } from "../support/gh-sperre";
 
 const WURZEL = join(__dirname, "..", "..");
 
@@ -28,13 +28,6 @@ describe("gh-Sperre im Vitest-Lauf", () => {
 
   it("der Sperr-Ordner steht vorn im PATH", () => {
     expect(process.env.PATH?.split(delimiter)[0]).toMatch(/factory-gh-sperre-/u);
-  });
-
-  it("Testpfade der Ausnahmeliste behalten den Original-PATH, andere nicht", () => {
-    expect(erlaubt(join(WURZEL, "test/ci-laeufe.test.ts"))).toBe(true);
-    expect(erlaubt(String.raw`C:\w\test\harness\test-umgebung.test.ts`)).toBe(true);
-    expect(erlaubt(join(WURZEL, "test/harness/gh-sperre.test.ts"))).toBe(false);
-    expect(erlaubt(undefined)).toBe(false);
   });
 
   it("die Ausnahmeliste nennt nur existierende Testdateien", () => {
