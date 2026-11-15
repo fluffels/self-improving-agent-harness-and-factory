@@ -1,7 +1,7 @@
 // Kein Shebang (Konvention der Skripte, die ein Test importiert).
 /**
  * Risikostufe des Diffs (factory#525): 0, 1 oder 2. Die Regel (Stufe-2-Basis, Leitplanken-Gruppe `gate`, Risikoklasse hoch, Stufe 0, Fail-closed) steht in
- * `risikostufe-lib.mjs`; dieses Skript ist der Einstieg. Es wirkt noch nicht auf Ablauf und CI.
+ * `risikostufe-lib.mjs`; dieses Skript ist der Einstieg. Die Stufe wirkt auf die Nachweis-Wächter (factory#526).
  *
  *   node scripts/risikostufe.mjs                  Diff gegen die Vergleichs-Basis (wie die Gates, `resolveBase`) bis HEAD
  *   node scripts/risikostufe.mjs --commit <sha>   ein einzelner Commit (`<sha>^..<sha>`)
