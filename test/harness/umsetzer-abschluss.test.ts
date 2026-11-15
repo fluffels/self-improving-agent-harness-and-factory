@@ -649,52 +649,6 @@ describe("Kernregeln der Umsetzer-Definition (#1460 Z10)", () => {
   });
 });
 
-describe("Selbstcheck vor jedem Commit (#1625)", () => {
-  const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");
-  const LENS = readFileSync(resolve(ROOT, ".claude/agents/factory-lens.md"), "utf8");
-  const SKILL = readFileSync(resolve(ROOT, ".agents/skills/review-lenses/SKILL.md"), "utf8");
-  /** Verlangt der Text den sichtbaren Block `Selbstcheck:` mit den Urteilen ok/gefixt/n.a. und der Lens-3-Quelle? */
-  const verlangtSelbstcheck = (s: string) => /Block `Selbstcheck:`/.test(s) && /`ok`, `gefixt` oder `n.a.`/.test(s) && /Lens 3/.test(s);
-
-  test("Umsetzer und Gruppen-Rolle verlangen den Block, der Umsetzer übernimmt ihn in den PR-Text", () => {
-    assert.ok(verlangtSelbstcheck(UMSETZER), "factory-umsetzer.md");
-    assert.ok(/Selbstcheck/.test(GRUPPE), "factory-gruppe.md");
-    assert.match(UMSETZER, /derselbe Block steht im PR-Text, kein neues Gate/);
-  });
-
-  test("darf NICHT passieren: die Lenses bekommen den Selbstcheck als Vorgabe (sie prüfen unvoreingenommen)", () => {
-    assert.doesNotMatch(LENS, /Selbstcheck/);
-    assert.doesNotMatch(SKILL, /Selbstcheck/);
-  });
-
-  test("Red-Green: ohne die Urteile oder ohne Block-Kopf greift das Prädikat nicht", () => {
-    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("`ok`, `gefixt` oder `n.a.`", "ein Urteil")));
-    assert.ok(!verlangtSelbstcheck(UMSETZER.replace("Block `Selbstcheck:`", "Hinweis")));
-    assert.ok(!verlangtSelbstcheck(""));
-  });
-
-  /** Kern und Gruppen-Datei: der `SELBSTCHECK`-Satz der Gruppen steht in der bedingten Datei (factory#310). */
-  const UMSETZER_GRUPPEN = `${UMSETZER}\n${GRUPPEN_DATEI}`;
-  /** Der Umsetzer holt die Blöcke aus den Commit-Bodies in den PR-Text und holt einen fehlenden vor `gh pr create` nach; die Gruppen-Berichte tragen ihn mit. */
-  const uebernimmtBloecke = (s: string) =>
-    s.includes("git log origin/main..HEAD --format=%B") && /fehlt der Block im letzten Commit, vor `gh pr create` nachholen/.test(s) && /`SELBSTCHECK`[^.]*PR-Text|PR-Text[^.]*`SELBSTCHECK`/.test(s);
-  const gruppeTraegtBlock = (s: string) => /Block `Selbstcheck:` im Commit-Body/.test(s) && /übernimmt ihn in den PR-Text/.test(s);
-
-  test("Umsetzer übernimmt die Selbstcheck-Blöcke aus den Commits in den PR-Text; Gruppe trägt den Block im Commit-Body", () => {
-    assert.ok(uebernimmtBloecke(UMSETZER_GRUPPEN), "factory-umsetzer.md samt Gruppen-Datei");
-    assert.ok(gruppeTraegtBlock(GRUPPE), "factory-gruppe.md");
-  });
-
-  test("Red-Green: ohne Befehl, Nachhol-Satz, Gruppen-Bezug oder Commit-Body greifen die Prädikate nicht", () => {
-    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("git log origin/main..HEAD --format=%B", "git log")));
-    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("vor `gh pr create` nachholen", "ignorieren")));
-    assert.ok(!uebernimmtBloecke(UMSETZER_GRUPPEN.replaceAll("`SELBSTCHECK`", "x")));
-    assert.ok(!gruppeTraegtBlock(GRUPPE.replace("im Commit-Body", "irgendwo")));
-    assert.ok(!gruppeTraegtBlock(GRUPPE.replace("übernimmt ihn in den PR-Text", "liest ihn")));
-    assert.ok(!uebernimmtBloecke("") && !gruppeTraegtBlock(""));
-  });
-});
-
 describe("Permission-Blockaden: kein rm -rf in den Agent-Definitionen mit Scratch", () => {
   const ABNAHME = readFileSync(resolve(ROOT, ".claude/agents/holdout-abnahme.md"), "utf8");
   const GRUPPE = readFileSync(resolve(ROOT, ".claude/agents/factory-gruppe.md"), "utf8");

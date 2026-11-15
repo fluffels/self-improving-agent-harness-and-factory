@@ -222,7 +222,7 @@ const KRITERIEN_ZEILE = PROBE_KRITERIEN.map((k, i) => `K${i + 1}: ${k}`).join(" 
 export function auftraegeText({ probe, basis, head, scratchpad }) {
   const kopf = ["Aufträge (nach dem lokalen Umsetzungs-Commit):", `- Probe-Basis (HEAD nach vorbereiten): \`${basis}\``];
   if (!head) return [...kopf, "- Erwarteter HEAD: noch nicht erzeugt, nach dem Umsetzungs-Commit `node scripts/codex-probe.mjs auftraege` ausführen."];
-  const lens = `Brille: kombiniert · Arbeitsverzeichnis: ${probe} · Patch: ${probe}/${PROBE_ORDNER}/review.patch · erwarteter HEAD: ${head} · Probe-Protokoll: keins · Plan-Prüfliste: Kriterien des Probe-Tickets ${KRITERIEN_ZEILE}`;
+  const lens = `Brille: kombiniert · Arbeitsverzeichnis: ${probe} · Patch: ${probe}/${PROBE_ORDNER}/review.patch · erwarteter HEAD: ${head} · Plan-Prüfliste: Kriterien des Probe-Tickets ${KRITERIEN_ZEILE}`;
   const abnahme = [
     `Ticket #${PROBE_TICKET_NR}: Gruß-Skript`, `Kopf: ABNAHME #${PROBE_TICKET_NR} · holdout-abnahme`, "PR: keiner (lokale Codex-Probe)",
     `Worktree: ${probe}`, `head: ${head}`, `Scratchpad: ${scratchpad}`, "--- Kriterien ---",

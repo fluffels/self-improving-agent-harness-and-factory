@@ -27,6 +27,10 @@
  * Dazu (factory#500): die Fabrik führt keine Namen ihrer Bezieher; der Schlüssel `bezieher` der Projekt-Config und `tag-takt --probe` sind entfernt (Fortschreibung zu ADR 0031), `RESTE_BEZIEHER_LISTE`
  * scannt `--probe`, `bezieherProbe`, `probeErgebnisse` und den Schlüssel. Bewusste Grenze: `bezieher` als Rollen-Option oder Gruppen-ID bleibt erlaubt, freie Umschreibungen („Liste der Bezieher“) werden nicht gescannt.
  *
+ * Dazu (factory#531): der Selbstcheck der Test-Adäquanz des Umsetzers ist gestrichen (Messung in `docs/model-routing.md`, Lockerung in ADR 0027): `RESTE_SELBSTCHECK` scannt die Namen (Block-Überschrift, Berichtszeile
+ * der Gruppen, Zeile mit der Ankerzahl, Probe-Protokoll-Feld, Warnungs-Funktionen) in allen Textdateien, das bloße Wort nur in den aktiven Anweisungstexten. Bewusste Grenze: freie Umschreibungen werden nicht gescannt,
+ * das bloße Wort in Messberichten (`docs/` außer Glossar) bleibt erlaubt.
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -512,5 +516,70 @@ describe("Keine Bezieher-Liste der Fabrik (factory#500)", () => {
 
   test("jede Regel hat einen Fix", () => {
     for (const r of RESTE_BEZIEHER_LISTE) assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
+  });
+});
+
+// ---- Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531) ----
+
+const FIX_SELBSTCHECK = "der Selbstcheck des Umsetzers ist gestrichen, die Test-Lens fährt den Vollsweep selbst (factory#531, `docs/model-routing.md` › Selbstcheck Test-Adäquanz)";
+
+/** Namen des gestrichenen Selbstchecks; geschlossen, je Regel ein Beispiel im Negativfall-Test. Grenze: freie Umschreibungen werden nicht gescannt. */
+export const RESTE_SELBSTCHECK: Rest[] = [
+  { name: "Selbstcheck-Block", muster: /Selbstcheck:|Block `Selbstcheck/, fix: FIX_SELBSTCHECK },
+  { name: "SELBSTCHECK-Zeile", muster: /\bSELBSTCHECK\b/, fix: "die Berichtszeile der Gruppen ist gestrichen (factory#531)" },
+  { name: "Guard-Liste-Zeile", muster: /Guard-Liste: (?:<n>|\d+) Anker/, fix: "die Zeile mit der Ankerzahl und die Warnung dazu sind gestrichen, `node scripts/anker-liste.mjs` bleibt die Grundlage der Test-Lens (factory#531)" },
+  { name: "Probe-Protokoll", muster: /Probe-Protokoll/, fix: "das Kopf-Feld des Lens-Auftrags ist gestrichen, die Test-Lens fährt den Vollsweep selbst (factory#531)" },
+  { name: "guardListeWarnung", muster: /guardListeWarnung|ankerZahlImDiff/, fix: "die Warnung zur Ankerzahl in `check-review-nachweis` ist entfernt (factory#531)" },
+];
+
+/** Das bloße Wort ist nur in den aktiven Anweisungstexten ein Rest (Messberichte in `docs/` dürfen den Begriff nennen). */
+export const RESTE_SELBSTCHECK_WORT: Rest[] = [{ name: "Selbstcheck (Wort)", muster: /Selbstcheck/i, fix: FIX_SELBSTCHECK }];
+const AKTIVER_TEXT = /^(?:AGENTS\.md|\.claude\/agents\/.+|\.agents\/skills\/.+|docs\/harness-glossar\.md)$/;
+
+describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => {
+  const namen = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_SELBSTCHECK);
+  const wort = (inhalt: string, pfad: string) => findeReste([{ pfad, inhalt }].filter((d) => AKTIVER_TEXT.test(d.pfad)), RESTE_SELBSTCHECK_WORT);
+
+  test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
+    const dateien = getrackteTextdateien();
+    const treffer = [...findeReste(dateien, RESTE_SELBSTCHECK), ...findeReste(dateien.filter((d) => AKTIVER_TEXT.test(d.pfad)), RESTE_SELBSTCHECK_WORT)];
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, [...RESTE_SELBSTCHECK, ...RESTE_SELBSTCHECK_WORT])}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test.each([
+    ["Selbstcheck-Block", "Selbstcheck:\n- ok"],
+    ["Selbstcheck-Block", "ein Block `Selbstcheck` im Commit"],
+    ["SELBSTCHECK-Zeile", "SELBSTCHECK: <Ergebnis in einer Zeile>"],
+    ["Guard-Liste-Zeile", "Zeile `Guard-Liste: <n> Anker, <m> belegt`"],
+    ["Guard-Liste-Zeile", "Guard-Liste: 12 Anker, 12 belegt"],
+    ["Probe-Protokoll", "· Probe-Protokoll: <Commit-SHAs mit Protokoll | keins>"],
+    ["guardListeWarnung", "export function guardListeWarnung({ messages, ist })"],
+    ["guardListeWarnung", "const n = ankerZahlImDiff();"],
+  ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
+    assert.deepEqual(namen(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
+  });
+
+  test("Negativfall: die Zeile `Guard-Liste: keine Anker im Diff.` der Anker-Liste und harmlose Nachbarn lösen nicht aus", () => {
+    const nachbarn = ["Guard-Liste: keine Anker im Diff.", "die Guard-Liste (anker-liste.mjs)", "guardListe({ diffText })", "ein Selbstcheck im Messbericht", "SELBSTCHECKS", "Probe-Erstbezug"];
+    assert.deepEqual(namen(nachbarn.join("\n")), []);
+  });
+
+  test("das bloße Wort ist nur in aktiven Anweisungstexten ein Fund", () => {
+    assert.equal(wort("der Selbstcheck des Umsetzers", ".claude/agents/x.md").length, 1);
+    assert.equal(wort("der Selbstcheck des Umsetzers", ".agents/skills/factory/x.md").length, 1);
+    assert.equal(wort("der Selbstcheck des Umsetzers", "AGENTS.md").length, 1);
+    assert.equal(wort("der Selbstcheck des Umsetzers", "docs/harness-glossar.md").length, 1);
+    assert.deepEqual(wort("der Selbstcheck des Umsetzers", "docs/x.md"), []);
+  });
+
+  test("Ausnahmen: Schnappschuss-Blöcke dürfen die Namen tragen, die Regeln außerhalb nicht", () => {
+    const block = `${SCHNAPPSCHUSS_START}\nStand 2026-11-15\nSelbstcheck: ok\n${SCHNAPPSCHUSS_ENDE}`;
+    assert.deepEqual(namen(block), []);
+    assert.equal(namen("Selbstcheck: ok").length, 1);
+    assert.deepEqual(namen("Selbstcheck: ok", "docs/adr/0027-regeln-lockern.md"), []);
+  });
+
+  test("jede Regel hat einen Fix", () => {
+    for (const r of [...RESTE_SELBSTCHECK, ...RESTE_SELBSTCHECK_WORT]) assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
   });
 });
