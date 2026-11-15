@@ -32,6 +32,7 @@ const P = rawPlace as unknown as {
     itemsUeberIssues: (b: unknown, n: number[], o: object, repo: string) => unknown[];
     loadItems: (b: unknown, o: { repo: string; token?: string }) => unknown[];
     ladeLabels: (nr: number, repo: string) => string[] | null;
+    ghJson: (args: string[]) => unknown;
     addToBoardTodo: (b: unknown, nodeId: string, o: object) => string;
     setPosition: (b: unknown, id: string, after: string | null) => void;
     entferneVomBoard: (b: unknown, id: string) => void;
