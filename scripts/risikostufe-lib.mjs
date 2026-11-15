@@ -18,7 +18,7 @@
  */
 import { readFileSync } from "node:fs";
 import { schutzlistenMuster, trifftLeitplanke } from "./besitz-extraktion.mjs";
-import { bestimmeGroessenstufe, bestimmeRisikoklasse, GRUNDSCHUTZ, istDokuDiff, ladeRisikoMuster, parseNumstatNoRenames, risikoDerBasis, TESTDATEI, vereinigeRisiko, WAECHTER_PFAD } from "./groessenstufe-lib.mjs";
+import { bestimmeGroessenstufe, bestimmeRisikoklasse, GRUNDSCHUTZ, istDokuDiff, ladeRisikoMuster, parseNumstatNoRenames, risikoDerBasis, TESTDATEI, vereinigeRisiko } from "./groessenstufe-lib.mjs";
 import { abschnitt } from "./spezifikation-lib.mjs";
 
 const BASIS_URL = new URL("../.github/risikostufe-basis.json", import.meta.url);
@@ -119,10 +119,10 @@ function stufe2Treffer(pfade, { basis, leitplanken, risiko, prognose }) {
 
 const ohneDubletten = (xs) => [...new Set(xs)];
 
-/** Der Pfad, der eine Stufe 1 auslöst (factory#526, für die Meldung der Nachweis-Wächter): erster Schutz-Treffer, sonst nach der Regel der Sweep-Tiefe (`bestimmeSweeptiefe`, gleiche Bausteine) der erste Pfad, der weder Doku noch Testdatei ist, sonst der erste Wächter-Test, sonst der erste Pfad. Pur. */
+/** Der Pfad, der eine Stufe 1 auslöst (factory#526, für die Meldung der Nachweis-Wächter): erster Schutz-Treffer, sonst nach der Regel der Sweep-Tiefe (`bestimmeSweeptiefe`, gleiche Bausteine) der erste Pfad, der weder Doku noch Testdatei ist, sonst der erste Pfad (Wächter-Tests unter `test/harness/` stehen im Grundschutz und sind schon ein Schutz-Treffer). Pur. */
 function ausloeserPfad(pfade, geschuetzt) {
   const code = pfade.find((p) => !istDokuDiff([p]) && !TESTDATEI.test(p));
-  return geschuetzt[0]?.pfad ?? code ?? pfade.find((p) => trifftLeitplanke(p, [WAECHTER_PFAD])) ?? pfade[0];
+  return geschuetzt[0]?.pfad ?? code ?? pfade[0];
 }
 
 /**
