@@ -575,7 +575,7 @@ Grenzen: Variante D ohne Kontextdateien widerspricht der Entscheidung zur Lens w
 
 <!-- schnappschuss:start -->
 
-**Zweite Gegenprobe (quellprojekt#1568, 2026-10-15): `omitClaudeMd` für die Lens, nicht umgeschaltet** (Regel vorab, Rohwerte und Grenzen: [Lens-Gegenprobe 2026-10-15](lens-gegenprobe-2026-10-15.md)). Ersparnis −16 %, aber in drei von vier Brillen verpasst die Lens ohne Kontextdateien einen echten Blocker (Frühstopp); `<agenten.lens>.md` bleibt unverändert, Wiedervorlage bei wachsenden Kontextdateien; Wiedervorlage bei einem neuen Opus-Release oder wachsenden Kontextdateien. Die Läufe vom 2026-10-15 stehen im Langfuse-Projekt: spätere Lens-Statistiken schließen sie über das Fenster 2026-10-15T16:45Z bis 17:40Z bzw. die Session-IDs der Tabelle dort aus; lokal liegen sie im Projektordner des Worktrees `kq-1568-exp` und sind ohne `--projekt <Slug>` nicht enthalten.
+**Zweite Gegenprobe (quellprojekt#1568, 2026-10-15): `omitClaudeMd` für die Lens, nicht umgeschaltet** (Regel vorab, Rohwerte und Grenzen: [Lens-Gegenprobe 2026-10-15](lens-gegenprobe-2026-10-15.md)). Ersparnis −16 %, aber in drei von vier Brillen verpasst die Lens ohne Kontextdateien einen echten Blocker (Frühstopp); `<agenten.lens>.md` bleibt unverändert, Wiedervorlage bei einem neuen Opus-Release oder wachsenden Kontextdateien. Die Läufe vom 2026-10-15 stehen im Langfuse-Projekt: spätere Lens-Statistiken schließen sie über das Fenster 2026-10-15T16:45Z bis 17:40Z bzw. die Session-IDs der Tabelle dort aus; lokal liegen sie im Projektordner des Worktrees `kq-1568-exp` und sind ohne `--projekt <Slug>` nicht enthalten.
 
 <!-- schnappschuss:ende -->
 

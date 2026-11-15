@@ -72,7 +72,7 @@ describe("board-status setze", () => {
   });
   test("Aufruf-Fehler: Exit 2 vor jedem I/O", () => {
     const sperre = { laden: () => { throw new Error("I/O"); }, setzeStatus: () => { throw new Error("I/O"); }, abgleichDaten: () => { throw new Error("I/O"); }, setzeStatusIn: () => { throw new Error("I/O"); } };
-    for (const argv of [[], ["x"], ["setze"], ["setze", "7"], ["setze", "x", "--status", "Todo"], ["setze", "0", "--status", "Todo"], ["setze", "7", "--status"], ["setze", "7", "--status", "Todo", "--x"], ["setze", "7", "--status", "Todo", "8"], ["abgleich", "--x"], ["abgleich", "5"], ["setze", "5x", "--status", "Todo"], ["setze", "05", "--status", "Todo"], ["setze", "12345678901", "--status", "Todo"], ["setze", "7", "--status", "Done"]]) {
+    for (const argv of [[], ["x"], ["setze"], ["setze", "7"], ["setze", "x", "--status", "Todo"], ["setze", "0", "--status", "Todo"], ["setze", "7", "--status"], ["setze", "7", "--status", "Todo", "--x"], ["setze", "7", "--status", "Todo", "8"], ["abgleich", "--x"], ["abgleich", "5"], ["setze", "5x", "--status", "Todo"], ["setze", "05", "--status", "Todo"], ["setze", "12345678901", "--status", "Todo"], ["setze", "7", "--status", "Done"], ["setze", "--status", "Todo"]]) {
       const r = lib.fuehreAus(argv, sperre);
       assert.equal(r.code, 2, argv.join(" "));
       assert.match(r.err, /Aufruf: node scripts\/board-status\.mjs/);
@@ -86,6 +86,7 @@ describe("board-status setze: Grenzen der Ticketnummer", () => {
       const w = mitIo(stand());
       assert.equal(lib.fuehreAus(["setze", nr, "--status", "In Progress"], w.io).code, 0, nr);
       assert.equal(w.mutationen.length, 1);
+      assert.match(lib.fuehreAus(["setze", nr, "--status", "Todo"], mitIo(stand({ status: "In Progress" })).io).out, new RegExp(`^#${nr}: `));
     }
   });
   test("ohne bisherigen Status steht „leer“ in der Ausgabe", () => {
@@ -155,6 +156,8 @@ describe("board-status macheIo über gh (exec-Naht)", () => {
   };
   test("Boards fremder Repos werden nicht gelesen (die Fabrik schreibt nie ins Bezieher-Board)", () => {
     const fremd = { ...config, boards: FREMD.boards.map((b, k) => (k === 0 ? { ...b, repo: "zz-org/anderes-repo" } : b)) };
+    const gross = { ...config, repo: "ZZ-Org/ZZ-Repo", boards: FREMD.boards.map((b) => ({ ...b, repo: "zz-org/zz-repo" })) };
+    assert.equal(lib.macheIo(gross, { exec: naht([]) }).abgleichDaten().boards.length, FREMD.boards.length, "Schreibweise des Repos egal");
     const d = lib.macheIo(fremd, { exec: naht([]) }).abgleichDaten();
     assert.equal(d.boards.length, FREMD.boards.length - 1);
     assert.ok(d.boards.every((b) => b.projectId !== FREMD.boards[0]?.projectId));

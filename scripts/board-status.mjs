@@ -3,7 +3,7 @@
  * Board-Status der Items (factory#541 L6): der Claim setzt „In Progress“, Freigabe, Abbruch und ein geschlossener PR setzen „Todo“.
  *
  *   node scripts/board-status.mjs setze <nr> --status "In Progress"|"Todo"   # idempotent; Exit 1 ohne Board-Item, Exit 2 ohne die Status-Option
- *   node scripts/board-status.mjs abgleich                                     # offene Items auf „In Progress“ ohne Assignee und ohne offenen PR gehen auf „Todo“
+ *   node scripts/board-status.mjs abgleich                                     # offene Items auf „In Progress“ ohne Assignee und ohne offenen PR gehen auf „Todo“ (nur Boards des eigenen Repos)
  *
  * Ausgabe von `abgleich` je Zeile `STATUS #<nr>: In Progress → Todo`. Geschrieben wird nur das Status-Feld des Board-Items (nie Issue,
  * Assignee oder Lock); das Board folgt der Trennregel (`boardRolleFuer`), das Repo ist `repo` der Config. `macheIo` liegt in `board-status-io.mjs` und teilt sich

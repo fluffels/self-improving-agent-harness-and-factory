@@ -1,9 +1,10 @@
 /**
- * Das echte Board-io über `gh` (factory#541): geteilt von `board-status.mjs` und `epic.mjs`; Einstiegsskripte importieren nie voneinander,
+ * Das echte Board-io über `gh` samt der gemeinsamen reinen Status-Logik `setzeStatusAuf` (factory#541): geteilt von `board-status.mjs` und `epic.mjs`; Einstiegsskripte importieren nie voneinander,
  * darum liegt es in dieser Lib ohne Direktaufruf-Guard.
  */
 import { ghJson, ghText } from "./gh-cli.mjs";
-import { zerlegeRepo } from "./repo-form.mjs";
+import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
+import { AUFRUF_EXIT } from "./flag-lib.mjs";
 import { boardDerRolle, boardRepo, boardRolleFuer } from "./projekt-config-lib.mjs";
 import { MUTATION_POSITION, MUTATION_STATUS, kopfEnde, loadItems, verschiebe } from "./board-lib.mjs";
 
@@ -19,7 +20,7 @@ const PR_LIMIT = "200";
 export function setzeStatusAuf(nr, s, io, ziel) {
   if (s.status === ziel) return { zeile: `#${nr}: Status ist schon „${ziel}“, nichts zu tun\n` };
   const option = s.optionen.find((o) => o.name === ziel);
-  if (!option) return { fehler: [2, `das Status-Feld des Boards hat keine Option „${ziel}“`, `im Board die Status-Option „${ziel}“ anlegen, dann erneut aufrufen`] };
+  if (!option) return { fehler: [AUFRUF_EXIT, `das Status-Feld des Boards hat keine Option „${ziel}“`, `im Board die Status-Option „${ziel}“ anlegen, dann erneut aufrufen`] };
   io.setzeStatus(s.itemId, option.id);
   return { zeile: `#${nr}: Status „${s.status ?? "leer"}“ → „${ziel}“\n` };
 }
@@ -66,7 +67,7 @@ export function macheIo(config, { exec } = {}) {
     },
     abgleichDaten() {
       // nur Boards des eigenen Repos: fremde Boards (Bezieher) schreibt die Fabrik nie, und PR-Nummern gelten nur je Repo
-      const boards = config.boards.filter((b) => boardRepo(b, config) === config.repo).map((b) => ({
+      const boards = config.boards.filter((b) => gleichesRepo(boardRepo(b, config), config.repo)).map((b) => ({
         projectId: b.projectId,
         feldId: b.statusFeldNodeId,
         optionen: optionenVon(b.statusFeldNodeId),
