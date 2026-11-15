@@ -20,6 +20,10 @@
  * Dazu (factory#236): die A/B-Messung Kern je Rolle ist beendet, Arm A bleibt; der Arm-B-Typ, `lens-arm` samt Bibliothek, `LENS_B`, `lensArm`, `lensTypen` und die Wiedervorlage `kern-je-rolle-ab-235` sind eine geschlossene Namensliste (`RESTE`).
  * Bewusste Grenze: freie Umschreibungen („Arm-B-Lens“, „A/B Kern je Rolle“) werden nicht gescannt, „Kern je Rolle“ bleibt als Variantenname erlaubt; der Typname selbst steht nur in ADR 0035.
  *
+ * Dazu (factory#492): die Prüfungen der Extraktionsliste (`pruefeExtraktion`, `bezugsTests`, `zuordnungsLuecken`, `huellenVerstoesse`, `testHuelle`) und ihre Helfer sind samt Doku gestrichen
+ * (Fortschreibung zu ADR 0022); `RESTE` scannt die Namen, der Export-Absenz-Test prüft `scripts/besitz-extraktion.mjs`. Bewusste Grenze: `huellenVerstoesse` heißt auch eine lokale Funktion in
+ * zwei Wächtern, darum wird der Name nur als Export geprüft, nicht als Text.
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -43,6 +47,8 @@ import * as lockRaw from "../../scripts/ticket-lock.mjs";
 import * as lockLibRaw from "../../scripts/ticket-lock-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as extraktionRaw from "../../scripts/besitz-extraktion.mjs";
 
 const C = projektConfig();
 const ROLLEN_AGENTEN = [C.agenten.planer, C.agenten.umsetzer, C.agenten.lens, C.agenten.gruppe];
@@ -116,6 +122,11 @@ export const RESTE: Rest[] = [
     name: "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)",
     muster: /agents-refs/,
     fix: "Kern-Verweise auf AGENTS.md prüft test/harness/besitz-abschnittsverweise.test.ts (factory#245), den Wächter nicht mehr nennen",
+  },
+  {
+    name: "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)",
+    muster: /\b(?:pruefeExtraktion|bezugsTests|zuordnungsLuecken|testHuelle|extraktionsArten|MITZIEHEND|zielDatei|lesebezuege)\b|ruft in diesem Repo kein Test auf/,
+    fix: "die Prüfungen der Extraktionsliste sind gestrichen (Fortschreibung factory#492 zu ADR 0022): besitz-extraktion.mjs hält artVon, musterRegex, importeAus, relativeImporte, testHilfeKopienAbweichend und die Schutzlisten-Auslegung; die Struktur der Liste prüft kein Wächter",
   },
 ];
 
@@ -277,6 +288,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)": "siehe test/harness/agents-refs.test.ts",
       "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
       "A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)": "spawnt lens-kern-je-rolle für ungerade Tickets",
+      "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)": "import { pruefeExtraktion } from besitz-extraktion",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
@@ -300,8 +312,24 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
     ["Härtungs-Takt nach Merge-Zahl", "nach fünf Ticket-Merges jeder Art"],
     ["Härtungs-Takt nach Merge-Zahl", "nach 10 Ticket-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf"],
     ["Platzhalter als Dateiname, die Datei heißt nach der Rolle", ".claude/skills/<agenten.ticketSkill>/SKILL.md"],
+    ...["pruefeExtraktion", "bezugsTests", "zuordnungsLuecken", "testHuelle", "extraktionsArten", "MITZIEHEND", "zielDatei", "lesebezuege", "ruft in diesem Repo kein Test auf"].map(
+      (text) => ["entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)", text] as [string, string],
+    ),
   ])("Negativfall: jede Alternative wird gefunden (%s: %s)", (name, text) => {
     assert.deepEqual(reste([{ pfad: "docs/b.md", inhalt: text }]), [`docs/b.md:1: ${name}`]);
+  });
+
+  test("Export-Absenz (factory#492): besitz-extraktion.mjs exportiert die gestrichenen Prüfungen und ihre Helfer nicht mehr", () => {
+    const exporte = Object.keys(extraktionRaw as Record<string, unknown>);
+    const gestrichen = ["pruefeExtraktion", "bezugsTests", "zuordnungsLuecken", "huellenVerstoesse", "testHuelle", "extraktionsArten", "MITZIEHEND", "zielDatei", "lesebezuege"];
+    assert.deepEqual(
+      gestrichen.filter((n) => exporte.includes(n)),
+      [],
+    );
+  });
+
+  test("Negativfall: harmlose Nachbarn der entfernten Extraktions-Prüfungen lösen nicht aus (Wortgrenze, factory#492)", () => {
+    assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: "zielDateien, MITZIEHENDE, xbezugsTestsy, lesebezuegeX, NICHT_MITZIEHEND, xzielDatei" }]), []);
   });
 
   test("Negativfall: harmlose Nachbarn des Altnamen-Musters lösen nicht aus (altEnvName, Wortgrenze)", () => {

@@ -40,7 +40,7 @@ function githubMenge(wurzel: string): Set<string> {
   const dateien = dateienUnter(wurzel, "scripts", /\.(mjs|cjs)$/);
   const text = new Map(dateien.map((f) => [f, readFileSync(join(wurzel, f), "utf8")]));
   const menge = new Set(dateien.filter((f) => f === "scripts/gh-cli.mjs" || MARKER.test(codeOhneKommentar(text.get(f) ?? "").replace(BELEG_LINK, ""))));
-  // Importe wie die Wächter und die Test-Hülle (hook-importe.ts, fail-closed: auch Importe in Kommentaren zählen).
+  // Importe wie die Wächter (hook-importe.ts, fail-closed: auch Importe in Kommentaren zählen).
   const ziele = (f: string) =>
     relativeImporte(text.get(f) ?? "").flatMap((spec) => kandidatenPfade(posix.join(posix.dirname(f), spec)).filter((k) => text.has(k)));
   for (let neu = true; neu; ) {
