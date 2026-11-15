@@ -128,6 +128,7 @@
     {"pfad":"scripts/risikostufe.mjs","ring":"kern","quelle":"Risikostufe 0/1/2 (factory#525)"},
     {"pfad":"scripts/risikostufe-lib.mjs","ring":"kern","quelle":"Risikostufe 0/1/2 (factory#525)"},
     {"pfad":".github/risikostufe-basis.json","ring":"kern","quelle":"Risikostufe 0/1/2 (factory#525)"},
+    {"pfad":"scripts/lens-filter.mjs","ring":"kern","quelle":"Filterdurchlauf und Stichprobenarm (factory#532)"},
     {"pfad":"scripts/check-review-nachweis.mjs","ring":"kern","quelle":"Inventar docs/harness-inventar.md (Regel ADR 0022 §1, Plan #1610)"},
     {"pfad":"scripts/check-basis-nachlauf.mjs","ring":"kern","quelle":"Basis-Nachlauf (factory#499 L7)"},
     {"pfad":"scripts/check-abnahme-nachweis.mjs","ring":"kern","quelle":"ADR 0022 F13 (#1755)"},
