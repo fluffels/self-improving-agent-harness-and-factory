@@ -202,6 +202,7 @@ export const STATUS_TITEL = "Langfuse-Status überprüfen";
  * Die Notfall-Arten (#1390): EINE Tabelle für `board-place --notfall <art>` (Art), die Titelprüfung (Marker) und den Kopf des Boards
  * (`KOPF_MARKER`). `quelle` ist die Datei, in der der Marker wörtlich steht (Inbox-Workflow bzw. die Doku, wenn ein Mensch oder Agent
  * das Ticket anlegt); test/board.test.ts bindet jeden Eintrag daran. Security hat keinen Workflow: der Marker steht in docs/ticket-reihenfolge.md.
+ * `nachStatus: true` ordnet die Art in `kopfRang` hinter das Status-Ticket (sonst davor).
  */
 export const NOTFAELLE = [
   { art: "rot-main", marker: "🚨 CI rot auf main", quelle: ".github/workflows/alarm-rot-main.yml" },
@@ -216,6 +217,8 @@ export const NOTFAELLE = [
   { art: "tag", marker: "🏷️ Tag ", quelle: "scripts/tag-takt.mjs" },
   // Der Titel entsteht im Wochenlauf .github/workflows/factory-update.yml (neuer Factory-Release für Bezieher).
   { art: "update", marker: "🔄 Factory-Update", quelle: ".github/workflows/factory-update.yml" },
+  // Der Titel entsteht in scripts/ticket-drift-lib.mjs (Wochenlauf ticket-drift.yml, factory#498); der Bericht steht hinter dem Status-Ticket.
+  { art: "ticket-drift", marker: "🔎 Ticket-Drift-Bericht", quelle: "scripts/ticket-drift-lib.mjs", nachStatus: true },
 ];
 
 /** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
@@ -247,11 +250,11 @@ export function istKopfItem(i) {
   return t === STATUS_TITEL || KOPF_MARKER.some((m) => t.startsWith(m));
 }
 
-/** Rang eines Kopf-Items: Index seiner Notfall-Art in `NOTFAELLE`, danach das Status-Ticket, sonst `Infinity`. Pur. */
+/** Rang eines Kopf-Items: Index seiner Notfall-Art in `NOTFAELLE`, danach das Status-Ticket, danach die Arten mit `nachStatus`, sonst `Infinity`. Pur. */
 export function kopfRang(i) {
   const t = String(i?.title ?? "");
   const k = NOTFAELLE.findIndex((n) => t.startsWith(n.marker));
-  if (k >= 0) return k;
+  if (k >= 0) return NOTFAELLE[k].nachStatus ? NOTFAELLE.length + 1 + k : k;
   return t === STATUS_TITEL ? NOTFAELLE.length : Infinity;
 }
 

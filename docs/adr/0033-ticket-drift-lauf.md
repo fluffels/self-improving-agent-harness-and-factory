@@ -32,3 +32,7 @@ Entscheidung: C, weil der Lauf deterministisch ist (kein Modell, keine Secrets a
 ## Re-Evaluierung
 
 Prüftermin 2027-02-10 (Wiedervorlage `ticket-drift-28`, nach drei Läufen): Befunde je Lauf und wie viele zu einer Ticket-Änderung führten. Bei weniger als einem verwertbaren Befund je Lauf wird der Takt ein Quartal oder der Workflow gestrichen (ADR 0027).
+
+## Weitere Fortschreibungen (als Dateien)
+
+Fortschreibungen dieses ADR stehen als Dateien unter [`fortschreibungen/`](fortschreibungen/0033-498-wochenlauf-und-kopf.md) (Konvention: [README](README.md#format)); dort die erste: [factory#498](fortschreibungen/0033-498-wochenlauf-und-kopf.md) stellt den Lauf auf wöchentlich um, macht den Bericht zum Kopf-Item und setzt Label und Platz auch beim Aktualisieren.

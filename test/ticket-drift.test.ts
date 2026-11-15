@@ -14,8 +14,11 @@ import * as libRaw from "../scripts/ticket-drift-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as skriptRaw from "../scripts/ticket-drift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as boardLibRaw from "../scripts/board-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as cfgRaw from "../scripts/projekt-config-lib.mjs";
 
+const imKopf = (boardLibRaw as unknown as { imKopf: (items: unknown[], nr: number) => boolean }).imKopf;
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const lies = (p: string) => readFileSync(`${WURZEL}${p}`, "utf8");
 
@@ -362,7 +365,7 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const out: string[] = [];
     r.code = await S.main(argv, {
       ladeConfig: () => config,
-      ladeLibs: () => Promise.resolve({ REPO, platziereAmEnde: (nr: number, token: string) => r.aufrufe.push(["board", String(nr), token]) }),
+      ladeLibs: () => Promise.resolve({ REPO, imKopf, platziereOben: (nr: number, art: string, token: string) => r.aufrufe.push(["board", String(nr), art, token]) }),
       ladeBoards,
       ghLesen: (args: string[]) => { r.lesen.push(args); return issues; },
       ghSchreiben: (args: string[], input: string) => { r.aufrufe.push(["gh", ...args]); r.bodies.push(input); return antwort; },
@@ -377,16 +380,44 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
   test("kein Bericht offen: genau create (mit Body) und Board-Aufruf mit Token", async () => {
     const r = await lauf(fixture());
     expect(r.code).toBe(0);
-    expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 t"]);
+    expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 ticket-drift"]);
+    expect(r.aufrufe[1]).toEqual(["board", "77", "ticket-drift", "t"]);
     expect(r.bodies[0].startsWith(MARKER)).toBe(true);
     expect(r.bodies[0]).toContain("#2: Blocker #99 ist geschlossen");
-    expect(r.aufrufe[0]).toEqual(["gh", "issue", "create", "--title", "🔎 Ticket-Drift-Bericht 2026-11", "--body-file", "-"]);
+    expect(r.aufrufe[0]).toEqual(["gh", "issue", "create", "--title", "🔎 Ticket-Drift-Bericht 2026-11-12", "--body-file", "-"]);
     expect(verboten(r.aufrufe)).toEqual([]);
   });
-  test("Bericht offen, ungeclaimt: genau edit mit Titel-Monat und Body auf die Bericht-Nummer", async () => {
+  test("Bericht offen, ungeclaimt, fremdes Ziel-Repo: edit mit Titel-Datum und Body, kein Label, Platzierung im Kopf (factory#498)", async () => {
     const r = await lauf(fixture(bericht(40)));
-    expect(r.aufrufe).toEqual([["gh", "issue", "edit", "40", "--title", "🔎 Ticket-Drift-Bericht 2026-11", "--body-file", "-"]]);
+    expect(r.aufrufe).toEqual([["gh", "issue", "edit", "40", "--title", "🔎 Ticket-Drift-Bericht 2026-11-12", "--body-file", "-"], ["board", "40", "ticket-drift", "t"]]);
     expect(r.bodies[0]).toContain("#2: Blocker #99 ist geschlossen");
+  });
+  describe("edit: Label und Kopf-Platz (factory#498 L1/L3)", () => {
+    const eigenes = C.zielRepoFuer([config.labels.harness], config);
+    const eigene = () => [issue(2, { body: `${sprache.blocker} #99`, author: { login: eigenes.split("/")[0], is_bot: false } }), bericht(40)];
+    const imBoard = (...nrs: number[]) => [nrs.map((nr) => ({ number: nr, state: "open", title: TITEL }))];
+    test("eigenes Ziel-Repo: --add-label im selben edit, danach die Platzierung", async () => {
+      const r = await lauf(eigene(), [], { PROJECT_TOKEN: "t" }, undefined, eigenes);
+      expect(r.aufrufe).toEqual([["gh", "issue", "edit", "40", "--title", "🔎 Ticket-Drift-Bericht 2026-11-12", "--body-file", "-", "--add-label", config.labels.harness], ["board", "40", "ticket-drift", "t"]]);
+    });
+    test("Bericht schon im Kopf des Boards: keine Platzierung (idempotent)", async () => {
+      const r = await lauf(fixture(bericht(40)), [], { PROJECT_TOKEN: "t" }, undefined, undefined, () => imBoard(40));
+      expect(r.aufrufe.map((a) => a[0])).toEqual(["gh"]);
+      expect(r.out).toContain("Bericht #40 steht schon im Kopf des Boards");
+    });
+    test("Bericht im Board, aber hinter einem normalen Item: Platzierung", async () => {
+      const r = await lauf(fixture(bericht(40)), [], { PROJECT_TOKEN: "t" }, undefined, undefined, () => [[{ number: 5, state: "open", title: "normal" }, { number: 40, state: "open", title: TITEL }]]);
+      expect(r.aufrufe[1]).toEqual(["board", "40", "ticket-drift", "t"]);
+    });
+    test("Board nicht lesbar, Token da: trotzdem platziert", async () => {
+      const r = await lauf(fixture(bericht(40)), [], { PROJECT_TOKEN: "t" }, undefined, undefined, () => { throw new Error("x"); });
+      expect(r.aufrufe[1]).toEqual(["board", "40", "ticket-drift", "t"]);
+    });
+    test("ohne PROJECT_TOKEN: nur Warnung, kein Board-Aufruf", async () => {
+      const r = await lauf(fixture(bericht(40)), [], {});
+      expect(r.aufrufe.map((a) => a[0])).toEqual(["gh"]);
+      expect(r.out).toContain("::warning::PROJECT_TOKEN fehlt: der Bericht steht nicht im Board.");
+    });
   });
   test("Bericht der Maintainerin (Owner aus REPO) ist Ziel", async () => {
     const r = await lauf(fixture(bericht(40, { author: { login: "o", is_bot: false } })));
@@ -405,7 +436,7 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     ["Fremder mit Forum-Label", issue(30, { title: TITEL, body: MARKER, labels: [{ name: config.labels.forum }] })],
   ])("kein Ziel: %s (Neuanlage statt edit)", async (_n, fremd) => {
     const r = await lauf(fixture(fremd));
-    expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 t"]);
+    expect(r.aufrufe.map((a) => a.slice(0, 3).join(" "))).toEqual(["gh issue create", "board 77 ticket-drift"]);
     expect(r.aufrufe.flat()).not.toContain("edit");
   });
   test("L1: Fehlerzeile trägt genau ein ::error::", async () => {
@@ -490,7 +521,7 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const eigenRepo = await lauf(eigeneIssues, [], { PROJECT_TOKEN: "t" }, "https://github.com/user1/r/issues/77\n", eigenes);
     expect(fremdRepo.aufrufe[0]).not.toContain("--label");
     expect(eigenRepo.aufrufe[0].slice(-2)).toEqual(["--label", config.labels.harness]);
-    expect([fremdRepo.aufrufe[1], eigenRepo.aufrufe[1]]).toEqual([["board", "77", "t"], ["board", "77", "t"]]);
+    expect([fremdRepo.aufrufe[1], eigenRepo.aufrufe[1]]).toEqual([["board", "77", "ticket-drift", "t"], ["board", "77", "ticket-drift", "t"]]);
   });
   test.each([["kaputt"], ["https://github.com/o/r/issues/0"], ["https://github.com/o/r/pull/12"]])("unlesbare Nummer %s: Exit 1, kein Board-Aufruf", async (antwort) => {
     const r = await lauf(fixture(), [], { PROJECT_TOKEN: "t" }, antwort);
@@ -510,7 +541,8 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
 describe("Wächter", () => {
   test("Quellen nennen keine Schreibverben auf fremde Tickets", () => {
     const quellen = ["scripts/ticket-drift.mjs", "scripts/ticket-drift-lib.mjs"].map(lies).join("\n").split("\n").filter((z) => !/^\s*(\/\/|\*)/.test(z)).join("\n");
-    const treffer = quellen.match(/["'`](close|comment|reopen|lock|unlock|delete|transfer|pin|unpin|--add-label|--remove-label|--add-assignee|--remove-assignee)["'`]/g);
+    // `--add-label` steht erlaubt im Pfad edit (nur der eigene Bericht, factory#498); das Verhalten sichert der Test „eigenes Ziel-Repo“ und `verboten` im create-Test.
+    const treffer = quellen.match(/["'`](close|comment|reopen|lock|unlock|delete|transfer|pin|unpin|--remove-label|--add-assignee|--remove-assignee)["'`]/g);
     expect(treffer).toBeNull();
   });
   const wf = lies(".github/workflows/ticket-drift.yml");

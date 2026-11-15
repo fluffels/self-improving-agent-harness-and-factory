@@ -8,8 +8,8 @@
   {
     "id": "ticket-drift-28",
     "faellig": "2027-02-10",
-    "titel": "Ticket-Drift-Lauf nach drei Läufen auswerten (factory#28, ADR 0027)",
-    "text": "Messen: Befunde je Lauf (Bericht-Issues \"🔎 Ticket-Drift-Bericht\" bzw. Step-Summary der drei Läufe) und wie viele davon zu einer Ticket-Änderung (Body nachgezogen, Duplikat oder Rückstellung entschieden) führten. Unter 1 verwertbarem Befund je Lauf: Takt auf Quartal stellen oder den Workflow ticket-drift.yml samt Skript streichen (ADR 0033 ergänzen); sonst Entscheidung „bleibt“ im ADR vermerken. Dann diesen Eintrag löschen."
+    "titel": "Ticket-Drift-Wochenlauf auswerten (factory#28, factory#498, ADR 0027)",
+    "text": "Messen: Befunde je vier Wochen (Summe der Wochenläufe, Step-Summaries bzw. Bericht-Issues \"🔎 Ticket-Drift-Bericht\") und neue Befunde je Lauf; wie viele davon zu einer Ticket-Änderung (Body nachgezogen, Duplikat oder Rückstellung entschieden) führten. Unter 1 verwertbarem Befund je vier Wochen: Quartalstakt oder den Workflow ticket-drift.yml samt Skript streichen (ADR 0033 ergänzen); keine neuen Befunde innerhalb eines Monats: zurück auf Monatstakt; sonst Entscheidung „bleibt“ im ADR vermerken. Dann diesen Eintrag löschen."
   },
   {
     "id": "planer-kosten-nach-112",

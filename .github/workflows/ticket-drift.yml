@@ -1,13 +1,13 @@
-name: Ticket-Drift (Monatslauf)
+name: Ticket-Drift (Wochenlauf)
 
-# Monatlicher Ticket-Drift-Lauf (factory#28, ADR 0033): `scripts/ticket-drift.mjs` prüft die offenen Tickets deterministisch gegen den Checkout und legt genau einen Bericht ab
-# (Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM>", Step-Summary). Er schließt, labelt und kommentiert kein anderes Ticket. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
+# Wöchentlicher Ticket-Drift-Lauf (montags) (factory#28, ADR 0033): `scripts/ticket-drift.mjs` prüft die offenen Tickets deterministisch gegen den Checkout und legt genau einen Bericht ab
+# (Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM-TT>" im Kopf des Boards (Art ticket-drift), Step-Summary). Er schließt, labelt und kommentiert kein anderes Ticket. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
 #
 # ⚠️ Das Board braucht wie wiedervorlage.yml das Secret PROJECT_TOKEN (PAT mit project-Scope); ohne es entsteht nur eine Warnung.
 
 on:
   schedule:
-    - cron: "41 5 3 * *"
+    - cron: "53 5 * * 1"
   workflow_dispatch:
     inputs:
       trocken:
