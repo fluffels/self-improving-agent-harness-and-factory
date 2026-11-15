@@ -96,7 +96,7 @@ export function vereinigeRisiko(basis, kopf) {
 }
 
 /** Die Risiko-Muster der Basis über `git show <base>:<PROJEKT_CONFIG>`; nicht lesbar (Datei fehlt, kein JSON): Standardliste als Basisanteil. Ein ungültiger `risiko`-Block bleibt `fehler`. */
-function risikoDerBasis(git, base) {
+export function risikoDerBasis(git, base) {
   try {
     return risikoMusterAus(JSON.parse(git(["show", `${base}:${PROJEKT_CONFIG}`])));
   } catch {
