@@ -24,6 +24,7 @@ export const ANZEIGE: Record<string, string> = {
   "security-tabs": "Prüf-Ticket",
   tag: "Tag-Ticket",
   update: "Update-Ticket",
+  "ticket-drift": "Ticket-Drift-Bericht",
 };
 /** Das Status-Ticket ist kein Eintrag von `NOTFAELLE` (kommt über `STATUS_TITEL` dazu). */
 const ZUSATZ = ["Status-Ticket"];

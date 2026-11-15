@@ -12,7 +12,7 @@ import { gleichesRepo } from "./repo-form.mjs";
 import { istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { enthaeltSammelticketTitel } from "./sammelticket-titel.mjs";
 
-/** Titelpräfix des Bericht-Issues (der Monat folgt). */
+/** Titelpräfix des Bericht-Issues (das Datum folgt). */
 export const BERICHT_TITEL_PRAEFIX = "🔎 Ticket-Drift-Bericht ";
 /** Marker im Bericht-Issue: Dedupe-Schlüssel, damit der Lauf das offene Issue aktualisiert statt zu verdoppeln. */
 export const BERICHT_MARKER = "<!-- ticket-drift-bericht -->";

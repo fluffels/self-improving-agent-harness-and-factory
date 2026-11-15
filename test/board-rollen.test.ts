@@ -25,6 +25,7 @@ type Lib = {
   itemAusIssueAntwort: (...a: unknown[]) => unknown;
   seitenListen: (p: Item[], f: Item[], c?: unknown) => { produkt: Item[]; factory: Item[]; doppelt: number[]; falsch: number[] };
   kopfRang: (i: { title?: string }) => number;
+  NOTFAELLE: { art: string; marker: string }[];
   nurRepo: (items: { number?: number; repo?: string }[], repo: string) => { number?: number; repo?: string }[];
 };
 type Item = { number: number; title?: string; labels?: string[] };
@@ -118,6 +119,14 @@ describe("kopfRang und aufnahmePlan.rolle (#1729)", () => {
     expect(Number.isFinite(status)).toBe(true);
     expect(L.kopfRang({ title: "normales Ticket" })).toBe(Infinity);
     expect(L.kopfRang({})).toBe(Infinity);
+  });
+  test("Ticket-Drift-Bericht steht hinter dem Status-Ticket und jeder Notfall-Art, vor normalen Tickets (factory#498)", () => {
+    const bericht = L.kopfRang({ title: "🔎 Ticket-Drift-Bericht 2026-11-15" });
+    const status = L.kopfRang({ title: "Langfuse-Status überprüfen" });
+    expect(status).toBeLessThan(bericht);
+    expect(Number.isFinite(bericht)).toBe(true);
+    expect(L.kopfRang({ title: "🚨 CI rot auf main: x" })).toBeLessThan(bericht);
+    for (const n of L.NOTFAELLE.filter((x) => x.art !== "ticket-drift")) expect(L.kopfRang({ title: n.marker + "x" }), n.art).toBeLessThan(bericht);
   });
   test("jeder aufzunehmende Eintrag trägt die Rolle laut Trennregel", () => {
     const issue = (n: number, labels: unknown[]) => ({ number: n, state: "open", node_id: `N${n}`, title: "t", labels });
