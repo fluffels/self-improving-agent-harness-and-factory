@@ -12,6 +12,12 @@
     "text": "Messen: `node scripts/lauf-ergebnis.mjs --von <Merge von factory#547> --bis 2026-11-29 --start-agent sih-planer --json` (nur abgelaufene 14-Tage-Fenster) und dieselbe Basis über die 28 Tage vor dem Merge neu messen (B = 1 minus ohneNacharbeit durch nachweisbareFenster, n = nachweisbare Fenster). Liegt die Zahl der PRs mit Nacharbeit über B mal n plus 1: Revert per PR zurück auf `xhigh` (Frontmatter von `.claude/agents/factory-planer.md`, Matrix §1 und Test), Ledger-Zeile in ADR 0027 mit „ausgelöst“ vermerken. Bleibt B nahe 1, kann der Trigger nicht auslösen: das ausdrücklich festhalten. Nur beobachten: `kennzahlen.schwere.blockierend` der Requirement-Treue je PR, Kosten je Planer-Lauf mit `node scripts/subagent-laufzeit.mjs --agent sih-planer --von <Merge> --json` (Sammeltickets getrennt), Bezieher über die Langfuse-Metadaten agent_type, effort und repo (factory#510). Unter 5 PRs mit nachweisbarem Fenster um 2 Wochen schieben. Dann Eintrag löschen."
   },
   {
+    "id": "proben-bewertung-541",
+    "faellig": "2027-01-15",
+    "titel": "Probe-Bewertung vorab und Modellwechsel nach Anbieter-Empfehlung prüfen (factory#541, ADR 0027)",
+    "text": "Messen: `git log --since 2026-11-15 --grep 'Folge #'` und `node scripts/lauf-ergebnis.mjs --von <Merge von factory#541> --bis <Termin> --json`: gab es seit dem Merge ein Probe-Ticket (synthetische Gegenprobe, Messlauf), das Wirkung je Ergebnis sowie Kosten gegen erwartete Ersparnis vorab nannte, und ein Modellwechsel nach Anbieter-Empfehlung, dessen Umbau Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) auslöste? Probe ohne Vorab-Bewertung oder Modellwechsel mit Nacharbeit durch die Empfehlung: die Regel nachschärfen (Evidenz nach ADR 0027 Punkt 2). Gab es keinen Fall, um 8 Wochen schieben und das festhalten. Dann Eintrag löschen."
+  },
+  {
     "id": "ticket-drift-28",
     "faellig": "2027-02-10",
     "titel": "Ticket-Drift-Wochenlauf auswerten (factory#28, factory#498, ADR 0027)",

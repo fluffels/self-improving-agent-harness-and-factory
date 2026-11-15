@@ -26,7 +26,7 @@ GitLab als Beispiel für einen anderen Host: Pipeline-Zeitpläne liegen dort in 
 
 | Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |
 |---|---|---|---|
-| Board und Ticket | `board-lib.mjs`, `board-place.mjs`, `naechstes-ticket.mjs`, `ticket-lock.mjs`, `claims-pruefen.mjs`, `spezifikation.mjs`, `risikostufe.mjs`, `design-schritt.mjs`, `sammelticket-anlegen.mjs`, `blocker-lib.mjs`, `blocker-migration.mjs`, `produktquote-lib.mjs`, `fremdtext.mjs` | GitHub | Issues, Projects v2, Assignee-Claim, Blocker-Kante, Kommentare |
+| Board und Ticket | `board-lib.mjs`, `board-place.mjs`, `board-status.mjs`, `board-status-io.mjs`, `naechstes-ticket.mjs`, `ticket-lock.mjs`, `claims-pruefen.mjs`, `spezifikation.mjs`, `risikostufe.mjs`, `design-schritt.mjs`, `sammelticket-anlegen.mjs`, `blocker-lib.mjs`, `blocker-migration.mjs`, `produktquote-lib.mjs`, `fremdtext.mjs` | GitHub | Issues, Projects v2, Assignee-Claim, Blocker-Kante, Kommentare |
 | Ticketlauf-Abschluss | `umsetzer-abschluss.mjs`, `pr-warten.mjs`, `abnahme.mjs`, `cleanup-worktrees.mjs` | GitHub | PR-Status, Checks, Auto-Merge, Branch-Update (`gh pr update-branch`), Issue-Zustand |
 | Hooks | `pretooluse-hook.mjs`, `pretooluse-dispatch.mjs`, `stop-verify-hook.mjs`, `gh-guard-hook.mjs` | GitHub | die ersten drei hängen über `umsetzer-abschluss.mjs` an `gh-cli.mjs`; `gh-guard-hook.mjs` schützt Projects-v2-Aufrufe (`ProjectV2`) |
 | Codex-Adapter | `codex-hook.mjs`, `codex-hook-lib.mjs`, `codex-lib.mjs`, `codex-setup.mjs`, `codex-vorpruefung.mjs`, `codex-probe.mjs`, `codex-probe-lib.mjs`, `codex-probe-auswertung.mjs` | GitHub | laden den Dispatcher (`pretooluse-dispatch.mjs`) und damit `umsetzer-abschluss.mjs`/`gh-cli.mjs` |
