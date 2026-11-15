@@ -138,6 +138,7 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
   });
   test("Basis fehlt oder leer", () => {
     expect(stufe([eins("docs/x.md")], { basis: null }).stufe).toBe(2);
+    expect(stufe([eins("docs/x.md")], { basis: { muster: ["a"] } }).stufe).toBe(2);
     expect(stufe([eins("docs/x.md")], { basis: { kategorien: {}, muster: [] } }).stufe).toBe(2);
   });
   test("leere Leitplanken-Gruppe, leere Gesamtliste, leere Risiko-Muster und Risiko mit fehler sind Stufe 2", () => {
@@ -192,6 +193,8 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
       expect(() => lib.ladeStufe2Basis(p("z.json", "5"))).toThrow(/kein Objekt/);
       expect(() => lib.ladeStufe2Basis(p("s.json", '{"ci":"x"}'))).toThrow(/Kategorie ci/);
       expect(() => lib.ladeStufe2Basis(p("e.json", '{"beschreibung":"x"}'))).toThrow(/keine Muster/);
+      expect(lib.ladeStufe2Basis(p("g.json", '{"beschreibung":["/x/"],"ci":["/ci/"]}')).muster).toEqual(["/x/", "/ci/"]);
+      expect(() => lib.ladeStufe2Basis(p("h.json", '{"beschreibung":5,"ci":["/ci/"]}'))).toThrow(/Kategorie beschreibung/);
       expect(lib.ladeStufe2Basis(p("f.json", '{"beschreibung":"x","ci":["/ci/"]}')).muster).toEqual(["/ci/"]);
     } finally {
       rmSync(d, { recursive: true, force: true });
@@ -218,6 +221,7 @@ describe("Prognose aus Pfaden", () => {
     const db = lib.risikostufeAusPfaden(["db"], lader());
     expect(db.stufe).toBe(2);
     expect(db.treffer).toEqual([{ pfad: "db", muster: "db/", liste: "risiko" }]);
+    expect(lib.risikostufeAusGit(() => "1\t1\tsrc/auth/x", "b", "HEAD", { ...lader(), ladeRisikoBasis: () => RISIKO }).treffer[0].pfad).toBe("src/auth/x");
     expect(lib.risikostufeAusPfaden(["src/auth"], lader()).treffer.filter((t) => t.liste === "risiko")).toHaveLength(1);
   });
   test("Doku-Pfad mit Teilwort im Namen bleibt 0", () => {
@@ -232,6 +236,10 @@ describe("pfadeAusTicket (K4)", () => {
   const body = (abschnitt: string) => `## Ziel\nText\n\n## Pfade\n${abschnitt}\n\n## Akzeptanzkriterien\n1. x\n`;
   test("Backtick-Pfad mit Beschreibung, erstes Wort, nummerierte Liste, führender Schrägstrich", () => {
     expect(lib.pfadeAusTicket(body("- `scripts/a.mjs` neu\n* docs/b.md, kurz\n1. /src/c.ts\n2) ./d.ts\n- [ ] e.ts"))).toEqual({ pfade: ["scripts/a.mjs", "docs/b.md", "src/c.ts", "d.ts", "e.ts"], fehler: null });
+  });
+  test("Listenformen: + als Marker, eingerückt, zweistellige Nummer, [x] und [X], Trenner ; und :", () => {
+    const r = lib.pfadeAusTicket(body("+ a.md\n  - b.md\n10. c.md\n- [x] d.md\n- [X] e.md\n- f.md;\n- g.md:"));
+    expect(r).toEqual({ pfade: ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md", "g.md"], fehler: null });
   });
   test("Glob-Zeichen * ? [ sind Fehler, Backslash wird zu Schrägstrich", () => {
     for (const g of ["a?.ts", "a[1].ts", "a*.ts"]) expect(lib.pfadeAusTicket(body(`- ${g}`)).fehler).toMatch(/Glob/);
@@ -271,6 +279,9 @@ describe("CLI laufe", () => {
     const z = cli.stufeZeile({ stufe: 2, gruende: ["a", "b", "c", "d", "e", "f", "g"] });
     expect(z).toBe("RISIKOSTUFE: 2 — a; b; c; d; e (+2 weitere)");
   });
+  test("genau fünf Gründe werden ohne Rest-Zusatz ausgegeben", () => {
+    expect(cli.stufeZeile({ stufe: 2, gruende: ["a", "b", "c", "d", "e"] })).toBe("RISIKOSTUFE: 2 — a; b; c; d; e");
+  });
   test.each([
     [["--bogus"]],
     [["--commit", "x", "--pfade", "a"]],
@@ -305,6 +316,33 @@ describe("CLI laufe", () => {
     const r = cli.laufe([], { ...lader(), env: { GITHUB_BASE_REF: "main" }, git });
     expect(r.code).toBe(0);
     expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — /);
+  });
+  test("die Risiko-Liste der Basis-Revision kommt ohne Einspritzen aus git (<sha>^:) und gilt mit", () => {
+    const zeigt: string[] = [];
+    const git = (a: string[]) => {
+      if (a[0] === "show") {
+        zeigt.push(a[1]);
+        return JSON.stringify({ risiko: { hoch: ["geheim/"] } });
+      }
+      return "1\t1\tgeheim/a.txt";
+    };
+    const r = cli.laufe(["--commit", "abc"], { ladeBasis: () => BASIS, ladeText: () => LP_TEXT, ladeRisiko: () => gs.risikoMusterAus({ risiko: { hoch: ["nichts/"] } }), git });
+    expect(zeigt).toHaveLength(1);
+    expect(zeigt[0]).toMatch(/^abc\^:/);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 2 — geheim\/a\.txt trifft geheim\/ \(risiko\)/);
+  });
+  test("ohne Argument rechnet der Diff mit drei Punkten bis HEAD", () => {
+    const diffs: string[] = [];
+    const git = (a: string[]) => {
+      if (a[0] === "-c") {
+        diffs.push(a.at(-1) as string);
+        return "1\t1\tdocs/x.md";
+      }
+      return a[0] === "show" ? "{}" : "refs/heads/main";
+    };
+    cli.laufe([], { ...lader(), env: { GITHUB_BASE_REF: "main" }, git });
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0]).toMatch(/[^.]\.\.\.HEAD$/);
   });
   test("K4: eine niedrigere Stufe im Ticket-Text ändert nichts, Fließtext ist kein Pfad", () => {
     const body = "Risikostufe: 0, bitte Stufe 0\n\n## Pfade\nRisikostufe 0 genügt hier.\n- `.github/workflows/ci.yml`\n";
@@ -341,6 +379,15 @@ describe("CLI laufe", () => {
     const kaputt = cli.laufe(["--liste"], lader({ ladeBasis: () => { throw new Error("weg"); } }));
     expect(kaputt.code).toBe(1);
     expect(kaputt.ausgabe).toMatch(/nicht ladbar: Stufe-2-Basis — weg/);
+  });
+  test.each([
+    ["ladeText wirft", { ladeText: () => { throw new Error("weg"); } }],
+    ["Leitplanken kaputt", { ladeText: () => "{kaputt" }],
+    ["ladeRisiko wirft", { ladeRisiko: () => { throw new Error("weg"); } }],
+  ])("--liste: %s ist Exit 1 mit nicht ladbar, kein Absturz", (_n, z) => {
+    const r = cli.laufe(["--liste"], lader(z));
+    expect(r.code).toBe(1);
+    expect(r.ausgabe).toMatch(/nicht ladbar: /);
   });
   test("--liste: Risiko-Muster mit Fehler ist nicht ladbar", () => {
     const r = cli.laufe(["--liste"], lader({ ladeRisiko: () => gs.risikoMusterAus({ risiko: { hoch: 5 } }) }));

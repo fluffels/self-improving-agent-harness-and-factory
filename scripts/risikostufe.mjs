@@ -19,7 +19,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { istFremdeingang } from "./fremdtext-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { pfadeAusTicket, risikostufeAusGit, risikostufeAusPfaden, wirksameListe } from "./risikostufe-lib.mjs";
+import { meldung, pfadeAusTicket, risikostufeAusGit, risikostufeAusPfaden, wirksameListe, zwei } from "./risikostufe-lib.mjs";
 
 const AUFRUF = "Aufruf: node scripts/risikostufe.mjs [--commit <sha> | --pfade <pfad…> | --ticket <nr> | --liste] [--json]";
 const FLAGS = { commit: { type: "string" }, ticket: { type: "string" }, pfade: { type: "boolean" }, liste: { type: "boolean" }, json: { type: "boolean" } };
@@ -31,7 +31,6 @@ export const stufeZeile = ({ stufe, gruende }) => {
   return `RISIKOSTUFE: ${stufe} — ${gruende.slice(0, MAX_GRUENDE_TEXT).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
 };
 
-const zwei = (grund) => ({ stufe: 2, gruende: [grund], treffer: [], pfade: [] });
 const aufrufFehler = (text) => ({ code: AUFRUF_EXIT, ausgabe: `${text}\n${AUFRUF}` });
 
 /** Prüft die Flag-Kombination: genau ein Modus, Positionale nur zu `--pfade`, `--ticket` nur als Zahl. Liefert den Fehlertext oder `null`. Pur. */
@@ -65,8 +64,6 @@ function ticketEingang(nr, { ghJson: gh, ladeConfig }) {
   const p = pfadeAusTicket(issue.body);
   return p.fehler === null ? { pfade: p.pfade } : { grund: `Ticket #${nr}: ${p.fehler}` };
 }
-
-const meldung = (e) => (e instanceof Error ? e.message : String(e));
 
 function listeAusgabe(io, json) {
   const l = wirksameListe(io);

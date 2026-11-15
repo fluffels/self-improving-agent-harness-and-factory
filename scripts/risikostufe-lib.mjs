@@ -11,6 +11,8 @@
  *  5. Stufe 0 nur bei (A) reinem `*.md`-Diff ohne Leitplanken- oder Grundschutz-Pfad oder (B) Größenstufe S mit Sweep `stichprobe` (nur Doku und Testdateien außerhalb von `test/harness/`).
  *  6. Sonst Stufe 1 (Produktionscode ist nie Stufe 0, Leitplanken-Markdown mindestens Stufe 1).
  *
+ * Bekannte Grenze: der Abschnittsname „Pfade“ ist fest deutsch (K4 nennt ihn wörtlich); ein Bezieher mit anderssprachigen Tickets bekommt bei `--ticket` Stufe 2 („Abschnitt fehlt“, fail-closed). Ein Schlüssel in `sprache.spezifikation`
+ * und die Vorlage des Abschnitts gehören zu factory#527 (Ablauf).
  * Eingang `--ticket`: nur die Listenzeilen im Abschnitt „Pfade“ (Formen: `-`, `*`, `+`, `1.` oder `1)`; der Pfad ist der erste Inline-Code-Span, sonst das erste Wort; Fließtext, Code-Fences und
  * der übrige Ticket-Text sind kein Eingang). Ein fehlender oder leerer Abschnitt, ein Glob (`*`, `?`, `[`) oder eine Zeile ohne Pfad ist Stufe 2. Die Prognose kennt keine Zeilen und prüft jeden Pfad zusätzlich als Verzeichnis.
  */
@@ -22,7 +24,7 @@ import { abschnitt } from "./spezifikation-lib.mjs";
 const BASIS_URL = new URL("../.github/risikostufe-basis.json", import.meta.url);
 const LEITPLANKEN_URL = new URL("../.github/protected-paths.json", import.meta.url);
 
-const meldung = (e) => (e instanceof Error ? e.message : String(e));
+export const meldung = (e) => (e instanceof Error ? e.message : String(e));
 const istText = (x) => typeof x === "string" && x.trim() !== "";
 
 /** Lädt die feste Stufe-2-Basis: `{kategorien: {name: muster[]}, muster}`; wirft bei fehlender Datei, kaputtem JSON, ungültiger oder leerer Kategorie und null Mustern. Die Text-Taste `beschreibung` wird ignoriert. */
@@ -66,7 +68,7 @@ const leer = (m) => !Array.isArray(m) || m.length === 0;
 
 /** Grund, warum die Listen nicht reichen (Basis, Leitplanken, Risiko-Muster), sonst `null`. Pur. */
 function listenGrund({ basis, leitplanken, risiko }) {
-  if (leer(basis?.muster)) return "Stufe-2-Basis nicht geladen oder leer";
+  if (leer(basis?.muster) || typeof basis.kategorien !== "object") return "Stufe-2-Basis nicht geladen oder leer";
   if (leer(leitplanken?.gate?.muster) || leer(leitplanken?.alle)) return "Leitplanken (protected-paths) nicht geladen oder leer";
   return risikoGrund(risiko);
 }
@@ -106,11 +108,12 @@ function treffer(pfade, muster, liste, { klein = false, prognose = false } = {})
 /** Alle Stufe-2-Treffer: Basis, Leitplanken-Gruppe, Risikoklasse hoch (ohne Dubletten). Pur. */
 function stufe2Treffer(pfade, { basis, leitplanken, risiko, prognose }) {
   const alle = [];
-  for (const [kat, muster] of Object.entries(basis.kategorien ?? { alle: basis.muster })) alle.push(...treffer(pfade, muster, `basis:${kat}`, { klein: true, prognose }));
+  for (const [kat, muster] of Object.entries(basis.kategorien)) alle.push(...treffer(pfade, muster, `basis:${kat}`, { klein: true, prognose }));
   alle.push(...treffer(pfade, leitplanken.gate.muster, `leitplanken:${leitplanken.gate.gruppe}`, { prognose }));
   const klasse = bestimmeRisikoklasse(pfade, risiko);
   const verz = prognose && klasse.klasse !== "doku" ? bestimmeRisikoklasse(pfade.map(alsVerzeichnis), risiko) : null;
-  for (const k of [klasse, verz]) if (k?.klasse === "hoch") alle.push(...k.treffer.map((t) => ({ pfad: t.pfad.replace(/\/x$/, ""), muster: t.muster, liste: "risiko" })));
+  if (klasse.klasse === "hoch") alle.push(...klasse.treffer.map((t) => ({ pfad: t.pfad, muster: t.muster, liste: "risiko" })));
+  if (verz?.klasse === "hoch") alle.push(...verz.treffer.map((t) => ({ pfad: t.pfad.replace(/\/x$/, ""), muster: t.muster, liste: "risiko" })));
   return alle.filter((t, i) => alle.findIndex((u) => u.pfad === t.pfad && u.muster === t.muster && u.liste === t.liste) === i);
 }
 
@@ -173,7 +176,7 @@ export function ladeEingaenge({ ladeBasis = () => ladeStufe2Basis(), ladeText = 
   return { fehler, basis, leitplanken, risiko };
 }
 
-const zwei = (grund) => ({ stufe: 2, gruende: [grund], treffer: [], pfade: [] });
+export const zwei = (grund) => ({ stufe: 2, gruende: [grund], treffer: [], pfade: [] });
 
 /** Die Risikostufe des Diffs `base...head` (mit `zweiPunkt`: `base..head`, für einen Commit `sha^..sha`) über die injizierte git-Funktion; jeder Fehler ist Stufe 2 mit Grund. `core.quotepath=off` hält Umlaut-Pfade unquotiert. */
 export function risikostufeAusGit(git, base, head = "HEAD", { ladeBasis, ladeText, ladeRisiko, ladeRisikoBasis = () => risikoDerBasis(git, base), zweiPunkt = false } = {}) {
