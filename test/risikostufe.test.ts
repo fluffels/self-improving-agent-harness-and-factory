@@ -143,8 +143,8 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
   test("leere Leitplanken-Gruppe, leere Gesamtliste, leere Risiko-Muster und Risiko mit fehler sind Stufe 2", () => {
     const eintraege = [eins("docs/x.md")];
     const basis = { basis: BASIS, risiko: RISIKO, eintraege };
-    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: [] }, alle: ["/a"] } }).gruende[0]).toMatch(/Leitplanken/);
-    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: ["/a"] }, alle: [] } }).gruende[0]).toMatch(/Leitplanken/);
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: [] }, alle: ["/a"] } }).gruende[0]).toMatch(/^Leitplanken \(protected-paths\) nicht geladen/);
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: ["/a"] }, alle: [] } }).gruende[0]).toMatch(/^Leitplanken \(protected-paths\) nicht geladen/);
     expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: leitplanken(), risiko: { muster: [], quelle: "x" } }).gruende[0]).toMatch(/Risiko-Muster/);
     expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: leitplanken(), risiko: { muster: ["x/"], quelle: "x", fehler: ["kaputt"] } }).gruende[0]).toMatch(/kaputt/);
   });
