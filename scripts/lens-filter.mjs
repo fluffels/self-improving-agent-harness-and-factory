@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { BEKANNTE_LENSES, armAusTicket, normalisiereLens } from "./nachweis-lib.mjs";
+import { BEKANNTE_LENSES, armAusTicket, istLeererWert, normalisiereLens } from "./nachweis-lib.mjs";
 
 export const SCHWEREN = Object.freeze(["blockierend", "sollte", "hinweis"]);
 
@@ -26,11 +26,19 @@ export const normalisiereOrt = (ort) => String(ort).trim().toLowerCase().replace
 
 const FUND_RE = /^\s*-\s*\[[^\]\w]*\s*(blockierend|sollte|hinweis)\s*\]\s*(.*)$/i;
 
+/** Fundstelle der Zeile: der Backtick-Abschnitt nach dem Trenner `—` (letzter solcher), sonst der letzte mit Pfad-Form (`/`, `.`, `:zeile`); Code im Befundtext zählt nicht als Ort. */
+function findeOrt(rest) {
+  const kandidaten = [...rest.matchAll(/`([^`]+)`/g)];
+  const nachTrenner = kandidaten.filter((m) => /[—–-]\s*$/.test(rest.slice(0, m.index)));
+  const pfadform = kandidaten.filter((m) => /[/.]|:\d/.test(m[1]));
+  return nachTrenner.at(-1) ?? pfadform.at(-1) ?? null;
+}
+
 function parseFund(zeile) {
   const m = FUND_RE.exec(zeile);
   if (!m) return null;
   const rest = m[2];
-  const ort = /`([^`]+)`/.exec(rest);
+  const ort = findeOrt(rest);
   const befund = (ort ? rest.slice(0, ort.index) : rest).replace(/\s*[—–-]+\s*$/, "").trim();
   const beleg = ort ? rest.slice(ort.index + ort[0].length).replace(/^\s*[—–-]+\s*/, "").trim() : "";
   return { schwere: m[1].toLowerCase(), befund, ort: ort ? ort[1].trim() : "", beleg };
@@ -85,7 +93,7 @@ export function bildeFixliste(lenses) {
 }
 
 /** Eine Begründung gilt als leer: leer, nur Leerraum oder Platzhalter (`…`, `...`, `-`, `<…>`). */
-export const istLeereBegruendung = (b) => /^(?:…|\.{3}|-|<[^>]*>)?$/.test(String(b ?? "").trim());
+export const istLeereBegruendung = istLeererWert;
 
 /** Wendet Verwerfen-Aufträge `[{id, begruendung}]` auf die Fixliste an. Alles oder nichts: bei einem Verstoß (Arm `vollablauf`, unbekannte ID, Schwere blockierend,
  *  leere Begründung, doppelte ID) wirft `FilterFehler`, die Eingabe bleibt unverändert. Sonst `{fixliste, verworfen}`. Pur. */

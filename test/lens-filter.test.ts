@@ -146,3 +146,55 @@ describe("CLI", () => {
     expect(lauf(["--runde", "1"], "leer").status).toBe(2);
   });
 });
+
+describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
+  const ortSicher = (zeile: string) => L.parseBerichte(B("Doku", zeile))[0].funde[0];
+  test("Code im Befundtext ist nicht die Fundstelle: zwei Funde mit Backticks im Text bleiben getrennt", () => {
+    const a = "- [🔶 sollte] Feld `arm=` fehlt — `scripts/a.mjs:74` — Beleg";
+    const b = "- [🔶 sollte] Feld `arm=` fehlt — `docs/b.md:28` — Beleg";
+    const e = L.filtere({ text: B("Architektur", a) + B("Doku", b), runde: 1 });
+    expect(e.fixliste.map((f) => f.ort)).toEqual(["docs/b.md:28", "scripts/a.mjs:74"]);
+    expect(e.fixliste[0].befunde[0]).toBe("Feld `arm=` fehlt");
+  });
+  test("ohne Trenner gilt der letzte Backtick-Abschnitt in Pfad-Form, ohne Pfad-Form kein Ort", () => {
+    expect(ortSicher("- [🔶 sollte] x `code` bei `a/b.ts:3`").ort).toBe("a/b.ts:3");
+    expect(ortSicher("- [🔶 sollte] nur `code` im Text").ort).toBe("");
+    expect(ortSicher("- [🔶 sollte] x — `` — y").ort).toBe("");
+    expect(ortSicher("- [🔶 sollte] x — ` a.ts:1 ` — y").ort).toBe("a.ts:1");
+  });
+  test("Sortierung: Schwere vor Fundstelle, gleich schwere nach Fundstelle unabhängig von der Eingabereihenfolge", () => {
+    const e = L.filtere({ text: B("Doku", SOLL("a.ts:1"), BLOCK("z.ts:1"), SOLL("c.ts:1"), SOLL("b.ts:1")), runde: 1 });
+    expect(e.fixliste.map((f) => f.ort)).toEqual(["z.ts:1", "a.ts:1", "b.ts:1", "c.ts:1"]);
+  });
+  test("Fundstellen werden normalisiert (Backslash, Leerraum, Groß-/Kleinschreibung), Brillen nur einmal gelistet", () => {
+    const e = L.filtere({ text: B("Doku", SOLL("a\\b.md: 1"), SOLL("A/B.md:1")) + B("Architektur", SOLL("a/b.md:1")), runde: 1 });
+    expect(e.fixliste).toHaveLength(1);
+    expect(e.fixliste[0].brillen).toEqual(["doku", "architektur"]);
+  });
+  test("Funde ohne Ort: gleicher Befundtext (ohne Groß-/Kleinschreibung) ein Eintrag, anderer getrennt, Ort (ohne Ort)", () => {
+    const o = (t: string) => `- [🔶 sollte] ${t}`;
+    const e = L.filtere({ text: B("Doku", o("Lücke A"), o("lücke a"), o("Lücke B")), runde: 1 });
+    expect(e.fixliste.map((f) => f.ort)).toEqual(["(ohne Ort)", "(ohne Ort)"]);
+  });
+  test("CRLF-Berichte werden gelesen", () => {
+    const e = L.filtere({ text: B("Doku", BLOCK("a.md:1")).replace(/\n/g, "\r\n"), runde: 1 });
+    expect(e.fixliste).toHaveLength(1);
+  });
+  test("Zeilenform: Klammerinhalt mit anderem Wort, Einrückung, fehlende Leerzeichen, Groß-/Kleinschreibung des Kopfs", () => {
+    expect(L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
+    expect(L.parseBerichte(B("Doku", "  - [❌blockierend]x — `a.md:1` — b"))[0].funde).toHaveLength(1);
+    expect(L.parseBerichte(B("Doku", "Text - [❌ blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
+    expect(L.parseBerichte("## lens: doku\n- [⚠️ Hinweis] x — `a.md:1` — b\n")[0].funde).toHaveLength(1);
+  });
+  test("Funde vor dem ersten Lens-Kopf zählen nicht; leere Fixliste steht als (leer)", () => {
+    const l = L.parseBerichte(`${BLOCK("v.md:1")}\n${B("Doku")}`);
+    expect(l[0].funde).toEqual([]);
+    expect(L.formatiere(L.filtere({ text: B("Doku", HIN("a.md:1")), runde: 1 }))).toMatch(/\(leer\)/);
+  });
+  test("Argumente: strenge Zahlen und F-IDs", () => {
+    for (const a of [["--ticket", "1e3"], ["--ticket", "5x"], ["--runde", "x1"], ["--verwerfen", "xF1=a"], ["--verwerfen", "F=a"], ["--verwerfen", "F1x=a"]]) {
+      expect(() => L.liesArgumente(a)).toThrow();
+    }
+    expect(L.liesArgumente(["--runde", "3"])).toMatchObject({ runde: 3, ticket: null });
+  });
+});

@@ -54,7 +54,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, armAusTicket, kleinGrund, parseNachweis, stufeZeile } from "./nachweis-lib.mjs";
+import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, armAusTicket, istLeererWert, kleinGrund, parseNachweis, stufeZeile } from "./nachweis-lib.mjs";
 import { ticketAusRef } from "./ticket-refs.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
@@ -76,8 +76,8 @@ export const vorlage = (zeilen) =>
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
   `lenses=architektur,requirement-treue,test-adaequanz ` +
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> ` +
-  `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
-  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
+  `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> arm=<vollablauf|schlank> verdikt=ok  ` +
+  `(arm= nur bei Ticket-Branches: Ticketnummer durch 4 teilbar ⇒ vollablauf, sonst schlank; bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
   `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
   `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> sollte=kombiniert:<n> hinweis=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
   `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> sollte=…,sicherheit:<n> hinweis=…,sicherheit:<n> und ` +
@@ -276,7 +276,7 @@ function bewerteLensSatz(review, dateien, stufe, zeilen) {
 }
 
 /** Ein Teil der Bedrohungs-Zeile gilt als leer: leer oder nur ein Platzhalter (der Parser hat den Wert getrimmt) (`…`, `...`, `-`, `<…>`). */
-const istLeer = (wert) => wert === undefined || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(wert);
+const istLeer = istLeererWert;
 
 /** Fehler der Bedrohungs-Zeile (Klasse hoch): fehlende Zeile, leere, fehlende, doppelte, unbekannte oder schlüssellose Teile. Pur. */
 function bedrohungsFehler(b, zeilen, hinweis) {
@@ -435,7 +435,7 @@ function main(argv = process.argv.slice(2)) {
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
   const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
-  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ladeRisiko: () => ladeRisikoMuster({ pfad: getrennt.pfad }) });
+  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ladeRisiko: () => ladeRisikoMuster({ pfad: getrennt.pfad }), ladeNamen: () => ladeTicketNamen({ pfad: getrennt.pfad }) });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");
     return;

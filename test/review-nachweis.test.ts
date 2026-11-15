@@ -1267,14 +1267,30 @@ describe("Stichprobenarm arm= (factory#532)", () => {
     assert.match(blocker1.join(), /kein Fix-Pass/);
   });
   test("checkReviewNachweis: Ticket aus GITHUB_HEAD_REF, falscher und fehlender arm= rot, richtiger grün; Branch ohne Ticket ohne arm= grün", () => {
-    const namen = () => ticketNamen(projektConfig());
+    const namen = () => ticketNamen(FREMD);
     const lauf = (arm: string | null, ref: string) =>
       checkReviewNachweis({ runGit: fakeGit({ messages: review(felder(arm)) }), env: { ...env, GITHUB_HEAD_REF: ref }, ladeNamen: namen });
-    const ref = `${ECHT.praefixe.branch}533-x`;
+    const ref = `${FREMD.praefixe.branch}533-x`;
     assert.equal(lauf("schlank", ref).ok, true);
     assert.equal(lauf("vollablauf", ref).ok, false);
     assert.equal(lauf(null, ref).ok, false);
     assert.equal(lauf(null, "dependabot/npm/x").ok, true);
     assert.equal(lauf("schlank", "dependabot/npm/x").ok, false);
+  });
+  test("checkReviewNachweis: ohne GITHUB_HEAD_REF gilt der aktuelle Branch (lokale Prüfung); git-Fehler dabei heißt kein Ticket", () => {
+    const namen = () => ticketNamen(FREMD);
+    const mitBranch = (arm: string | null, branch: string) => {
+      const basis = fakeGit({ messages: review(felder(arm)) });
+      const git = (a: string[]) => (a.join(" ") === "rev-parse --abbrev-ref HEAD" ? `${branch}\n` : basis(a));
+      return checkReviewNachweis({ runGit: git, env, ladeNamen: namen });
+    };
+    const ref = `${FREMD.praefixe.branch}533-x`;
+    assert.equal(mitBranch("schlank", ref).ok, true);
+    assert.equal(mitBranch(null, ref).ok, false);
+    assert.equal(mitBranch("schlank", "main").ok, false);
+    assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: review(felder(null)) }), env, ladeNamen: namen }).ok, true);
+  });
+  test("Vorlage und gemeinsame Leer-Regel: die Vorlage nennt arm=", () => {
+    assert.match((raw as unknown as { vorlage: (z: Zeilen) => string }).vorlage(Z), /arm=<vollablauf\|schlank>/);
   });
 });

@@ -38,6 +38,9 @@ export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
 /** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
+/** Ein Wert gilt als leer: leer, nur Leerraum oder ein Platzhalter (`…`, `...`, `-`, `<…>`); eine Quelle für Bedrohungs-Teile und Verwerfen-Begründungen. Pur. */
+export const istLeererWert = (wert) => wert === undefined || wert === null || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(String(wert).trim());
+
 /** Stichprobenarme der Review-Schleife (factory#532): `vollablauf` (Kontrollarm, blockierend und sollte lösen eine Fix-Runde aus) und `schlank` (nur blockierend löst den nächsten Pass aus). */
 export const ARME = Object.freeze(["vollablauf", "schlank"]);
 /** Arm aus der Ticketnummer, deterministisch: durch 4 teilbar ⇒ `vollablauf`, sonst `schlank`. Wirft bei Nummern, die keine positive Ganzzahl sind. Pur. */
