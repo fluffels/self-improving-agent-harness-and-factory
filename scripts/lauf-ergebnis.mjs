@@ -146,6 +146,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       blocker: review?.blocker ?? null,
       sollte: review?.sollte ?? null,
       hinweis: review?.hinweis ?? null,
+      teilbrillen: review?.teilbrillen ?? null,
       abnahme: abnahmeVon(body, abnahme, konfigZeilen),
       reviewOverride: aktiverOverride(body, konfigZeilen.reviewOverride) !== null,
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
@@ -172,12 +173,19 @@ export function jeBrille(eintraege, feld) {
   return brillen;
 }
 
+/** Blocker-Liste eines PRs samt Teil-Brillen der Kombi-Lens (`teilbrillen=`, factory#541); `null` ohne `blocker=`-Feld, der Eintrag `kombiniert` bleibt. Pure. */
+export function blockerMitTeilbrillen(z) {
+  if (z.blocker === null) return null;
+  return [...z.blocker, ...(z.teilbrillen ?? [])];
+}
+
 /** Kennzahlen aus bewerteten Zeilen (`bewertePrs`); auch je Typ-Gruppe bei `--je-agent`. Pure. */
 export function kennzahlenAus(eintraege, offenMitFix = 0) {
   const mitNachweis = eintraege.filter((z) => z.runden !== null);
   // Schwere-Felder (factory#530): nur PRs mit sollte= UND hinweis= fließen in die Schwere-Zahlen; alle anderen stehen in ohneSchwere, nie als 0.
   const mitSchwere = mitNachweis.filter((z) => z.sollte !== null && z.hinweis !== null);
-  const brillen = jeBrille(mitNachweis, "blocker");
+  const mitTeil = (liste) => liste.map((z) => ({ ...z, blocker: blockerMitTeilbrillen(z) }));
+  const brillen = jeBrille(mitTeil(mitNachweis), "blocker");
   const zaehle = (art) => eintraege.filter((z) => z.nacharbeit === art).length;
   const abgelaufen = eintraege.filter((z) => z.nacharbeit !== "offen");
   return {
@@ -190,9 +198,10 @@ export function kennzahlenAus(eintraege, offenMitFix = 0) {
     runde1MitBlockerProxy: mitNachweis.filter((z) => z.runden >= 2).length,
     mitNachweis: mitNachweis.length,
     brillen,
+    kombiMitTeilbrillen: mitNachweis.filter((z) => (z.teilbrillen ?? []).length > 0).length,
     mitSchwere: mitSchwere.length,
     ohneSchwere: mitNachweis.length - mitSchwere.length,
-    schwere: { blockierend: jeBrille(mitSchwere, "blocker"), sollte: jeBrille(mitSchwere, "sollte"), hinweis: jeBrille(mitSchwere, "hinweis") },
+    schwere: { blockierend: jeBrille(mitTeil(mitSchwere), "blocker"), sollte: jeBrille(mitSchwere, "sollte"), hinweis: jeBrille(mitSchwere, "hinweis") },
     ohneNacharbeit: zaehle("nein"),
     nachweisbareFenster: abgelaufen.length,
     nacharbeitOffen: zaehle("offen"),
@@ -248,6 +257,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Runde 1 mit Blocker (aus blocker= und sollte=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
   out.push(...schwereTabelle(k));
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
+  out.push(`davon aus Kombi-Teilbrillen: ${k.kombiMitTeilbrillen}`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
   out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
