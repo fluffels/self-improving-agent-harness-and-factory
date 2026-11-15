@@ -1069,6 +1069,25 @@ describe("factory-sync --tag: Hinweise nach dem Sync (Projektseiten, eslint-Supp
     assert.equal(lauf(["--quelle", q5, "--ziel", baueZiel(), "--tag", "v2"], { env: {} }).code, 0);
   });
 
+  test("factory#499 L2: ein Trockenlauf mit geplanter Datei unter scripts/ nennt, dass die Hinweise vom alten Werkzeug stammen können; ohne scripts/ und ohne --trocken kein Hinweis", () => {
+    const HINWEIS = /^Hinweis: Trockenlauf mit dem laufenden \(alten\) Werkzeug: Hinweise wie stub-anker können vom alten Stand stammen; der echte Lauf startet nach dem Schreiben mit dem neuen Stand neu$/m;
+    const q = skriptQuelle();
+    taggen(q, "v2");
+    const n: number[] = [];
+    const t = lauf(["--quelle", q, "--ziel", baueZiel(), "--tag", "v2", "--trocken"], { zweitlauf: () => (n.push(1), 0), env: {} });
+    assert.equal(t.code, 0, t.err);
+    assert.match(t.out, HINWEIS);
+    assert.deepEqual(n, [], "auch im Trockenlauf kein zweiter Lauf");
+    const q2 = baueQuelle();
+    taggen(q2, "v2");
+    assert.doesNotMatch(lauf(["--quelle", q2, "--ziel", baueZiel(), "--tag", "v2", "--trocken"], { env: {} }).out, HINWEIS);
+    const q3 = skriptQuelle();
+    taggen(q3, "v2");
+    const echt = lauf(["--quelle", q3, "--ziel", baueZiel(), "--tag", "v2"], { zweitlauf: () => 0, env: {} });
+    assert.doesNotMatch(echt.out, HINWEIS);
+    assert.match(echt.out, /^Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand$/m);
+  });
+
   test("L19 (echter Prozess): `node scripts/factory-sync.mjs` startet nach einem Skript-Update einen zweiten Prozess, der den neuen Stand nur bestätigt", () => {
     const q = skriptQuelle();
     const z = baueZiel();
