@@ -3,7 +3,10 @@
  * Blocker-Migration (factory#202 L1): setzt für offene Issues mit einer Blocker-Textzeile die fehlende native GitHub-Abhängigkeit „blocked by“
  * (Projekt-Board zeigt dann das Blocked-Icon). Die Textzeile bleibt maßgeblich; die Kante kommt zusätzlich. Je Repo fährt sie der Bezieher selbst.
  *
- *   node scripts/blocker-migration.mjs [--anwenden] [--repo <owner/name>]
+ *   node scripts/blocker-migration.mjs [--loesen] [--anwenden] [--repo <owner/name>]
+ *
+ * Mit `--loesen` (factory#499) läuft stattdessen die Gegenrichtung: gelöst werden native Kanten auf geschlossene Blocker im eigenen Repo (Mutation `removeBlockedBy`),
+ * nur an Tickets ohne Assignee (mit Assignee: übersprungen, Grund „Assignee“). Auch dort Trockenlauf als Standard, Schreiben nur mit `--anwenden`; die Blocker-Textzeile im Body streicht der Agent von Hand.
  *
  * Standard ist der Trockenlauf (nur Ausgabe); `--anwenden` schreibt je fehlender Kante eine Mutation. Übersprungen und gelistet: Blocker, die
  * nicht offen sind, und Blocker in fremden Repos (bewusst kein REST-Lookup über `echteVerknuepfung`: im Factory-Repo sind 29 von 31 übersprungenen
@@ -13,17 +16,17 @@
  */
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { addBlockedBy } from "./blocker-lib.mjs";
+import { addBlockedBy, removeBlockedBy } from "./blocker-lib.mjs";
 import { fehlerText, ghJson, tokenFuerZiel } from "./gh-cli.mjs";
 import { REPO } from "./board-lib.mjs";
 import { ladeProjektConfig, spracheAus } from "./projekt-config-lib.mjs";
 import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { blockerVerweise } from "./spezifikation-lib.mjs";
 
-const AUFRUF = "Aufruf: node scripts/blocker-migration.mjs [--anwenden] [--repo <owner/name>]";
-const OPTIONEN = { anwenden: { type: "boolean" }, repo: { type: "string" } };
+const AUFRUF = "Aufruf: node scripts/blocker-migration.mjs [--loesen] [--anwenden] [--repo <owner/name>]";
+const OPTIONEN = { anwenden: { type: "boolean" }, loesen: { type: "boolean" }, repo: { type: "string" } };
 const SEITE = 50;
-const FRAGE = `query($owner:String!,$name:String!,$after:String){ repository(owner:$owner,name:$name){ issues(states:OPEN, first:${SEITE}, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ id number body blockedBy(first:100){ nodes{ number repository{ nameWithOwner } } } } } } }`;
+const FRAGE = `query($owner:String!,$name:String!,$after:String){ repository(owner:$owner,name:$name){ issues(states:OPEN, first:${SEITE}, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ id number body assignees(first:1){ totalCount } blockedBy(first:100){ nodes{ id number state repository{ nameWithOwner } } } } } } }`;
 
 /**
  * Die fehlenden nativen Kanten. `issues`: offene Issues `{ nummer, id, body, nativ: [{ nummer, repo }] }` (alle offenen des Repos `repo`),
@@ -48,6 +51,22 @@ export function fehlendeKanten({ issues, repo, sprache }) {
   return { kanten, uebersprungen };
 }
 
+/**
+ * Die zu lösenden nativen Kanten (factory#499): Kante im eigenen Repo auf einen geschlossenen Blocker (`state` CLOSED). `issues`: `{ nummer, id, zugewiesen, nativ: [{ nummer, repo, state, id }] }`.
+ * Ein Ticket mit Assignee wird übersprungen (Grund „Assignee“, je Kante). Pur. Rückgabe wie `fehlendeKanten`; `blockerNodeId` ist die Blocker-Id der Kante.
+ */
+export function geschlosseneKanten({ issues, repo }) {
+  const kanten = [];
+  const uebersprungen = [];
+  for (const i of issues) {
+    for (const n of i.nativ.filter((k) => k.repo === repo && k.state === "CLOSED")) {
+      if (i.zugewiesen) uebersprungen.push({ nummer: i.nummer, ref: "#" + n.nummer, grund: "Assignee" });
+      else kanten.push({ nummer: i.nummer, blockerNummer: n.nummer, issueNodeId: i.id, blockerNodeId: n.id });
+    }
+  }
+  return { kanten, uebersprungen };
+}
+
 /** Lädt alle offenen Issues seitenweise (`ladeSeite(nach)` → `{ issues, weiter }`); Rückgabe `{ issues, abfragen }`. */
 function ladeAlle(ladeSeite) {
   const issues = [];
@@ -66,23 +85,24 @@ function ladeAlle(ladeSeite) {
  * Migration mit injizierter I/O (`repo`, `sprache`, `ladeSeite`, `setze(issueNodeId, blockerNodeId)`): Ergebnis `{ code, out, err }`.
  * Ein Fehler beim Laden endet mit Exit 1; ein Fehler beim Setzen einer Kante wird gemeldet, die übrigen Kanten laufen weiter (Exit 1).
  */
-export function migriere({ anwenden }, io) {
+export function migriere({ anwenden, loesen = false }, io) {
   let geladen;
   try {
     geladen = ladeAlle(io.ladeSeite);
   } catch (e) {
     return { code: 1, out: "", err: `✖ Issues nicht ladbar: ${fehlerText(e)}\n` };
   }
-  const { kanten, uebersprungen } = fehlendeKanten({ issues: geladen.issues, repo: io.repo, sprache: io.sprache });
-  const zeilen = [`${anwenden ? "Setze" : "Trockenlauf, würde setzen"} ${kanten.length} Kante(n) in ${io.repo}:`];
+  const { kanten, uebersprungen } = loesen ? geschlosseneKanten({ issues: geladen.issues, repo: io.repo }) : fehlendeKanten({ issues: geladen.issues, repo: io.repo, sprache: io.sprache });
+  const kopf = loesen ? (anwenden ? "Löse" : "Trockenlauf, würde lösen") : anwenden ? "Setze" : "Trockenlauf, würde setzen";
+  const zeilen = [`${kopf} ${kanten.length} Kante(n) in ${io.repo}:`];
   const fehler = [];
   let mutationen = 0;
   for (const k of kanten) {
-    zeilen.push(`  #${k.nummer} ← #${k.blockerNummer}`);
+    zeilen.push(loesen ? `${anwenden ? "löse" : "würde lösen"}: #${k.nummer} ← #${k.blockerNummer}` : `  #${k.nummer} ← #${k.blockerNummer}`);
     if (!anwenden) continue;
     mutationen++;
     try {
-      io.setze(k.issueNodeId, k.blockerNodeId);
+      (loesen ? io.loese : io.setze)(k.issueNodeId, k.blockerNodeId);
     } catch (e) {
       fehler.push(`✖ #${k.nummer} ← #${k.blockerNummer}: ${fehlerText(e)}`);
     }
@@ -99,7 +119,7 @@ export function fuehreAus(argv, io = {}) {
   const repo = io.repo ?? werte.repo ?? REPO;
   if (!istRepoForm(repo)) return { code: AUFRUF_EXIT, out: "", err: `✖ Repo „${repo}“ ist nicht von der Form owner/name\n${AUFRUF}\n` };
   const echt = Object.keys(io).length === 0 ? echteIo(repo) : io;
-  return migriere({ anwenden: werte.anwenden === true }, { ...echt, repo });
+  return migriere({ anwenden: werte.anwenden === true, loesen: werte.loesen === true }, { ...echt, repo });
 }
 
 /** Echte Anbindung über `gh` (GraphQL, Token des Ziel-Repos). */
@@ -112,11 +132,12 @@ export function echteIo(repo, { gh = ghJson, env = process.env } = {}) {
       const args = ["api", "graphql", "-f", `query=${FRAGE}`, "-f", `owner=${owner}`, "-f", `name=${name}`, ...(nach === null ? [] : ["-f", `after=${nach}`])];
       const s = gh(args, opts).data.repository.issues;
       return {
-        issues: s.nodes.map((n) => ({ nummer: n.number, id: n.id, body: n.body, nativ: n.blockedBy.nodes.map((b) => ({ nummer: b.number, repo: b.repository.nameWithOwner })) })),
+        issues: s.nodes.map((n) => ({ nummer: n.number, id: n.id, body: n.body, zugewiesen: n.assignees.totalCount > 0, nativ: n.blockedBy.nodes.map((b) => ({ nummer: b.number, repo: b.repository.nameWithOwner, state: b.state, id: b.id })) })),
         weiter: s.pageInfo.hasNextPage ? s.pageInfo.endCursor : null,
       };
     },
     setze: (issueNodeId, blockerNodeId) => addBlockedBy({ issueNodeId, blockerNodeId, opts }, gh),
+    loese: (issueNodeId, blockerNodeId) => removeBlockedBy({ issueNodeId, blockerNodeId, opts }, gh),
   };
 }
 
