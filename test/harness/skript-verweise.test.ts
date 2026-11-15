@@ -10,7 +10,7 @@
  *       `args` von `.claude/settings.json` (fehlt die Datei, wird sie übersprungen).
  * Grenzen (nicht erkannt): berechnete Spezifizierer, `tsx` und `npx`, `npm run`-Ketten, Skripte außerhalb von `scripts/`, Markdown (das prüft
  * `check:docdrift`); Text in Kommentaren zählt mit (fail-closed, dann den Kommentar umschreiben).
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (ADR 0027).
+ * Verfall: Prüftermin im Eintrag `regeln-verfall-2027-03` von `.github/wiedervorlagen.json` (ADR 0027).
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -78,6 +78,9 @@ describe("toteAufrufe (Fixtures im Speicher)", () => {
   const ex = (p: string) => p === "scripts/da.mjs" || p === "scripts/lib/da.cjs";
   test("Workflow-Text: toter Aufruf rot, vorhandener grün, mehrzeilig und hinter Trennern erkannt", () => {
     expect(toteAufrufe("run: node scripts/weg.mjs", ex)).toEqual(["scripts/weg.mjs"]);
+    expect(toteAufrufe("run: node scripts/weg.cjs", ex)).toEqual(["scripts/weg.cjs"]);
+    expect(toteAufrufe("run: xnode scripts/weg.mjs", ex)).toEqual([]);
+    expect(toteAufrufe("run: node scripts/weg.mjsx", ex)).toEqual([]);
     expect(toteAufrufe("run: node scripts/da.mjs", ex)).toEqual([]);
     expect(toteAufrufe("run: |\n  echo hi\n  X=1 node ./scripts/weg2.mjs --a && node scripts/lib/da.cjs", ex)).toEqual(["scripts/weg2.mjs"]);
   });
