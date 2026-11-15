@@ -1,5 +1,5 @@
-// Lib ohne Direktaufruf-Guard; `factory-update-check.mjs`, `tag-takt.mjs` und `probe-erstbezug.mjs` importieren sie (Konvention #1398, Folge #103).
-/* Release-Tags lesen und vergleichen: nur Tags der Form `v1.2.3` oder `1.2.3` zählen (Pre-Release und Fremdtags nicht). Alles pur, keine Imports. */
+// Lib ohne Direktaufruf-Guard; `factory-update-check.mjs`, `factory-sync.mjs`, `tag-takt.mjs` und `probe-erstbezug.mjs` importieren sie (Konvention #1398, Folge #103).
+/* Release-Tags lesen und vergleichen: nur Tags der Form `v1.2.3` oder `1.2.3` zählen (Pre-Release und Fremdtags nicht). Dazu die Update-Schritte samt Werkzeug-Hinweis und die Probe-Profil-Namen (factory#224). Alles pur, keine Imports. */
 
 const RELEASE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 

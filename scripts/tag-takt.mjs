@@ -326,7 +326,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     "Bezieher-Migration (Commit-Zeilen der Besitz-PRs, vom Bezieher beim Update zu erledigen):",
     ...(migrationen.length + ankerNeu.length > 0 ? [...migrationen.map((m) => `- ${m.pr} ${migrationsText(m.text)}`), ...ankerNeu.map((a) => `- Ankerliste: \`${a}\` neu (Bezieher mit eigener Seite braucht die Überschrift)`)] : ["- keine gemeldet"]),
     "",
-    "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout, darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
+    "Befehl (erst nach „ja, taggen“; CI des Commits vorher grün). Der Hook blockiert `git push <tag>` im geteilten Hauptcheckout (ein `git tag` dort bliebe lokal), darum aus einem eigenen Worktree auf dem Commit (das Entfernen nur mit cwd außerhalb des Worktrees):",
     "",
     "```",
     "git fetch origin --tags",

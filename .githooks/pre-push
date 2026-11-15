@@ -21,8 +21,8 @@
 #    Merge-Checkouts); ein Trim-Commit nach dem Push kann also nur die CI-Messung verbessern.
 #  - Der Diffsize-Check misst HEAD, nicht den gepushten Ref: wer aus einem anderen Checkout einen Feature-Branch pusht, misst den
 #    falschen Slice (Zusatznetz, die CI bleibt der Riegel).
-#  - OHNE Builds/Boot-Smoke (das ist `verify:full`), damit der Hook zügig bleibt;
-#    die schweren Artefakt-Schritte deckt die CI ab.
+#  - OHNE die Zusatzschritte von `verify:full` (laut `package.json`, etwa Coverage und Diff-Coverage), damit der Hook zügig bleibt;
+#    die deckt die CI ab.
 #  - Umgehung: `git push --no-verify` — greift aber NICHT an der Server-Protection
 #    vorbei; die Required-Checks auf dem PR bleiben verbindlich.
 #

@@ -3,7 +3,7 @@
  *
  *   node scripts/langfuse-vorbedingung.mjs                 prüft GET <Langfuse>/api/public/health; Exit 0 = erreichbar, 1 = aus, 2 = Aufruffehler
  *   node scripts/langfuse-vorbedingung.mjs --sessionstart  SessionStart-Hook: Exit immer 0, bei Ausfall steht die Warnung als JSON auf stdout (`systemMessage` für die Nutzerin, `additionalContext` für die Session)
- *   node scripts/langfuse-vorbedingung.mjs --json         maschinenlesbar für das Cockpit: stdout `{"erreichbar":bool,"grund":string|null}`, Exit-Codes wie ohne Flag; nicht mit --sessionstart kombinierbar (Exit 2)
+ *   node scripts/langfuse-vorbedingung.mjs --json         maschinenlesbar für das Cockpit: stdout `{"erreichbar":bool,"grund":string|null}`, bei erreichbarem Langfuse dazu `mcp`; Exit folgt nur der Health-Prüfung (0 erreichbar, 1 aus; ein getrennter MCP bleibt 0), 2 bei Aufruffehler; nicht mit --sessionstart kombinierbar (Exit 2)
  *
  * Aufrufer: der Ticket-Skill (Schritt 0); bewusst NICHT im Board-Takt.
  * MCP-Verbindung der Session (factory#323 L1/L7/L18): der Langfuse-MCP verbindet nur beim Session-Start, Health allein sagt darüber nichts. Nach grüner Health (Standard- und --json-Modus, nicht bei --sessionstart: Race beim Start) wertet das Skript
