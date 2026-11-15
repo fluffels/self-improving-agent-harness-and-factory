@@ -82,6 +82,9 @@ function mitAusschluss(text, ausschluss) {
   return e.text;
 }
 
+/** Nur für `.github/dependabot.yml`: die Pfade der verteilten Workflow-Einheiten samt Meldungsliste, sonst `null`. */
+const ausschlussFuer = (pfad, alle, meldungen) => (pfad === DEPENDABOT ? { pfade: alle.filter(istWorkflowEinheit).map((w) => w.pfad), meldungen } : null);
+
 /** Eine neu anzulegende Vorlage (wird nie überschrieben): Text mit den Projektwerten des Ziels. */
 function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar, ausschluss = null) {
   return { text: mitAusschluss(rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), ausschluss), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
@@ -210,7 +213,7 @@ export function planeSync({
     if (zielLies(e.pfad) !== null) {
       res.unveraendert++;
       res.unveraendertePfade.add(e.pfad);
-    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar, e.pfad === DEPENDABOT ? { pfade: alle.filter(istWorkflowEinheit).map((w) => w.pfad), meldungen: res.meldungen } : null));
+    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar, ausschlussFuer(e.pfad, alle, res.meldungen)));
   }
 
   const einheiten = {};
