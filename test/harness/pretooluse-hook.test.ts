@@ -506,7 +506,7 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
 
   test("R4 lässt die bekannten Endungen und Platzhalter durch (`-lens-r<runde>`, `-lens-a2`, `-lens-c1`, `-lens-m3`)", () => {
     const wt = FREMD.praefixe.worktree;
-    for (const ende of ["r<runde>", "r4", "m3", "a2", "c1"]) {
+    for (const ende of ["r<runde>", "r3", "m3", "a2", "c1"]) {
       assert.equal(deny(agent(`${gut()} · Sabotage-Worktree: /w/.claude/worktrees/${wt}7-lens-${ende}`)), null, ende);
     }
     // bekannte Grenze: ohne Zähler (`-lens-b` ohne Ziffer, Fließtext) bleibt unerkannt, kein Fehlalarm
