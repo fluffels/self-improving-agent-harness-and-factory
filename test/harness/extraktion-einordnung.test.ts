@@ -30,7 +30,7 @@ const { artVon, istTestDatei, musterRegex, EXTRAKTION_PFAD } = rawExtraktion as 
 
 /** Arten, in die eine Testdatei gehört. */
 const ERLAUBTE_ARTEN = ["kern-test", "projekt-test"];
-const WEG = "(Eintrag in .factory/extraktion.json: kern-test als Einzelpfad oder Familien-Muster, projekt-test nur als Einzelpfad mit Grund, wenn die Datei Projektinhalt prüft)";
+const WEG = "(Eintrag in .factory/extraktion.json: kern-test als Einzelpfad oder Familien-Muster, projekt-test nur als Einzelpfad mit Grund, wenn die Datei Projektinhalt prüft oder vorerst Projektliterale trägt)";
 
 /** Getrackte Testdateien, deren Art weder `kern-test` noch `projekt-test` ist (auch: nicht eingeordnet). */
 export const nichtEingeordnet = (liste: Liste, getrackt: string[]): string[] =>
@@ -58,6 +58,7 @@ describe("Einordnungs-Wächter der Extraktionsliste (factory#496), synthetisch",
     const m = nichtEingeordnet(liste, ["test/a.test.ts", "test/p/x.test.ts", "test/pt.test.ts", "test/neu.test.ts"]);
     assert.equal(m.length, 1);
     assert.match(m[0], /^test\/neu\.test\.ts: nicht eingeordnet \(Art: keine\)/);
+    assert.match(m[0], /Eintrag in \.factory\/extraktion\.json/);
   });
 
   test("eine andere Art (fixture, test-hilfe) ist rot", () => {
@@ -72,8 +73,15 @@ describe("Einordnungs-Wächter der Extraktionsliste (factory#496), synthetisch",
 
   test("mehrdeutig: Muster plus Einzeleintrag auf derselben Datei ist rot, sonst leer", () => {
     const l: Liste = { eintraege: [eintrag("test/p/*.test.ts", "kern-test"), eintrag("test/p/x.test.ts", "projekt-test")] };
-    assert.equal(mehrdeutig(l, ["test/p/x.test.ts", "test/p/y.test.ts"]).length, 1);
+    const m = mehrdeutig(l, ["test/p/x.test.ts", "test/p/y.test.ts"]);
+    assert.equal(m.length, 1);
+    assert.match(m[0], /^test\/p\/x\.test\.ts: /);
     assert.deepEqual(mehrdeutig(liste, ["test/a.test.ts", "test/p/x.test.ts"]), []);
+  });
+
+  test("mehrdeutig: eine doppelt getroffene Nicht-Testdatei und ein ring-Eintrag bleiben stumm", () => {
+    const l: Liste = { eintraege: [eintrag("test/support/*.ts", "test-hilfe"), eintrag("test/support/x.ts", "test-hilfe"), { ring: "oberflaeche", art: "ring" }] };
+    assert.deepEqual(mehrdeutig(l, ["test/support/x.ts"]), []);
   });
 
   test("projekt-test mit Muster ist rot, als Einzelpfad grün", () => {
