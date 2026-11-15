@@ -227,7 +227,7 @@ function bewerteRunden(review, zeilen, risikostufe) {
   const erlaubt = reviewErlaubt + (af ? 1 : 0);
   if (review.runden > erlaubt) {
     return [
-      `${R}: runden=${review.runden} überschreitet die Obergrenze (${risikostufe.stufe === 1 ? "Risikostufe 1: höchstens 2 Pässe" : `Cap ${MAX_FIX_RUNDEN} Fix-Runden`} = höchstens ${erlaubt} Pässe). ` +
+      `${R}: runden=${review.runden} überschreitet die Obergrenze (${risikostufe.stufe === 1 ? "Risikostufe 1: " : ""}Cap ${basisPaesse - 1} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
         `Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe nach dem Cap fährt der Umsetzer ohne Rückfrage (mehr nur mit Freigabe): zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile; ` +
         `die eine Delta-Runde nach einem Abnahme-Fix steht als abnahmefix=1.`,
     ];
@@ -250,9 +250,14 @@ function bewertePlan(plan, stufe, zeilen, risikostufe) {
   }
   const sg = plan.art === "ohne" ? stufeGrund(plan.grund) : null;
   if (sg) return stufenAusnahmeFehler(P, `ohne — ${plan.grund}`, sg.stufe, risikostufe);
-  if (risikostufe.stufe === 2 && plan.art !== "planer") {
-    return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (${plan.art === "skizze" ? "skizze" : `ohne — ${plan.grund}`} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
-  }
+  const groesse = bewerteGroessenForm(plan, stufe, zeilen);
+  if (groesse.length > 0 || risikostufe.stufe < 2 || plan.art === "planer") return groesse;
+  return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (${plan.art === "skizze" ? "skizze" : `ohne — ${plan.grund}`} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
+}
+
+/** Die S-Formen des Plans (`skizze`, `ohne — klein: …`) gegen die Größenstufe; jeder andere Grund bleibt wie bisher. Pure. */
+function bewerteGroessenForm(plan, stufe, zeilen) {
+  const P = zeilen.plan;
   const klein = plan.art === "ohne" ? kleinGrund(plan.grund) : null;
   if (klein?.art === "klein-ohne-begruendung") return [`${P}: "ohne — klein" braucht eine Begründung ("ohne — klein: <Begründung>").`];
   const art = plan.art === "skizze" ? "skizze" : klein ? "ohne — klein" : null;
@@ -314,6 +319,19 @@ function bewerteReviewOhne(review, zeilen, risikostufe) {
 export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
+  const fehler = bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits);
+  const { plan, review } = nachweis;
+  fehler.push(...bewertePlan(plan, stufe, zeilen, risikostufe), ...bewerteKlasseHoch(nachweis, risiko, zeilen, risikostufe));
+  if (!review) {
+    fehler.push(`${R}-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).`);
+    return fehler;
+  }
+  if (review.ohne !== null) return [...fehler, ...bewerteReviewOhne(review, zeilen, risikostufe)];
+  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe })];
+}
+
+/** Änderungs-Commits und Konflikt-Merges nach dem Review (je ein Fehler mit Fix-Weg). Pure. */
+function bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits) {
   const fehler = [];
   for (const { sha, dateien: geaendert } of aenderungsCommits) {
     const namen = geaendert.slice(0, 5).join(", ") + (geaendert.length > 5 ? ", …" : "");
@@ -330,13 +348,13 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
         `Schritte: Skill review-lenses › Nach jedem Merge von main.`,
     );
   }
-  const { plan, review } = nachweis;
-  fehler.push(...bewertePlan(plan, stufe, zeilen, risikostufe), ...bewerteKlasseHoch(nachweis, risiko, zeilen, risikostufe));
-  if (!review) {
-    fehler.push(`${R}-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).`);
-    return fehler;
-  }
-  if (review.ohne !== null) return [...fehler, ...bewerteReviewOhne(review, zeilen, risikostufe)];
+  return fehler;
+}
+
+/** Die Felder einer Review-Zeile mit Brillen (head, runden, lenses, optionale und Pflichtfelder, verdikt). Pure. */
+function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe }) {
+  const R = zeilen.review;
+  const fehler = [];
   if (review.head === null) fehler.push(`${R}: head fehlt oder ist kein SHA.`);
   else if (!headBekannt) fehler.push(`${R}: head=${review.head} ist kein bekannter Commit.`);
   else if (!headImSlice) {
@@ -355,6 +373,28 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   fehler.push(...bewerteOptionaleFelder(review, zeilen), ...bewerteSchwereFelder(review, zeilen), ...bewerteRunde1Summe(review, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
+}
+
+/** Größenstufe (`groesse`, mit Risikoklasse) und Risikostufe des Diffs `<basis>...HEAD`; beide sind fail-closed (Ladefehler und git-Fehler ergeben die strenge Stufe). */
+function stufen(git, base, { ladeRisiko, ladeBasis, ladeText }) {
+  const groesse = groessenstufeAusGit(git, base, "HEAD", { ladeRisiko });
+  return { groesse, stufe: groesse.stufe, risikostufe: risikostufeAusGit(git, base, "HEAD", { ladeRisiko, ladeBasis, ladeText }) };
+}
+
+/** Die Angaben zu optionalen Feldern der Review-Zeile für die CLI-Hinweise: `blockerFehlt`, `teilbrillenFehlt`, `zusatzpass` (nur ein gültiger). */
+const feldStatus = (review) => ({
+  blockerFehlt: review?.blocker === null,
+  teilbrillenFehlt: teilbrillenFehlen(review),
+  zusatzpass: review?.zusatzpass && "grund" in review.zusatzpass ? review.zusatzpass : null,
+});
+
+const nurStufen = ({ stufe, risikostufe }) => ({ stufe, risikostufe });
+
+/** Der Review-head im Slice (`commitImSlice`) und die Zahl der Commits danach; ohne head leere Angaben. */
+function headDaten(git, base, nachweis) {
+  const hd = nachweis.review?.head ? commitImSlice(git, base, nachweis.review.head) : { bekannt: false, imSlice: false, konfliktMerges: [], aenderungsCommits: [] };
+  const commitsNachReview = hd.imSlice ? Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim()) : null;
+  return { hd, commitsNachReview };
 }
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
@@ -378,20 +418,14 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
     // Die jüngste gültige Zeile entscheidet; ein Widerruf (`#<nr> entfällt`) ist kein Override (wie bei den übrigen Gates).
     const grund = aktiverOverride(messages, zeilen.reviewOverride);
     if (grund !== null) {
-      return { ok: true, override: grund, fehler: [], invalid: ov.invalid, stufe: groessenstufeAusGit(git, base, "HEAD", { ladeRisiko }).stufe, risikostufe: risikostufeAusGit(git, base, "HEAD", { ladeRisiko, ladeBasis, ladeText }) };
+      return { ok: true, override: grund, fehler: [], invalid: ov.invalid, ...nurStufen(stufen(git, base, { ladeRisiko, ladeBasis, ladeText })) };
     }
     const nachweis = parseNachweis(messages, zeilen);
     const dateien = git(["diff", "--name-only", `${base}...HEAD`])
       .split(/\r?\n/)
       .filter((l) => l.trim() !== "");
-    let hd = { bekannt: false, imSlice: false, konfliktMerges: [], aenderungsCommits: [] };
-    let commitsNachReview = null;
-    if (nachweis.review?.head) {
-      hd = commitImSlice(git, base, nachweis.review.head);
-      if (hd.imSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim());
-    }
-    const groesse = groessenstufeAusGit(git, base, "HEAD", { ladeRisiko });
-    const risikostufe = risikostufeAusGit(git, base, "HEAD", { ladeRisiko, ladeBasis, ladeText });
+    const { hd, commitsNachReview } = headDaten(git, base, nachweis);
+    const { groesse, risikostufe } = stufen(git, base, { ladeRisiko, ladeBasis, ladeText });
     const fehler = bewerteNachweis({
       nachweis,
       dateien,
@@ -411,9 +445,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       commitsNachReview,
       stufe: groesse.stufe,
       risikostufe,
-      blockerFehlt: nachweis.review?.blocker === null,
-      teilbrillenFehlt: teilbrillenFehlen(nachweis.review),
-      zusatzpass: nachweis.review?.zusatzpass && "grund" in nachweis.review.zusatzpass ? nachweis.review.zusatzpass : null,
+      ...feldStatus(nachweis.review),
     };
   } catch (e) {
     return { ok: false, fehler: [`git-Fehler beim Prüfen des Nachweises: ${e instanceof Error ? e.message : String(e)}`] };

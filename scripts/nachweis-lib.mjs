@@ -170,6 +170,30 @@ function bedrohungenAus(wert) {
   return r;
 }
 
+/** Die Felder der Review-Zeile (`ohne` für `ohne — <Grund>`, factory#526); fehlende oder kaputte Felder bleiben null bzw. NaN, bewertet wird erst im Gate. Pur. */
+function reviewAus(reviewWert) {
+  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(reviewWert);
+  const felder = {};
+  for (const tok of reviewWert.split(/\s+/)) {
+    const m = /^([a-z]+)=(.*)$/.exec(tok);
+    if (m) felder[m[1]] = m[2];
+  }
+  return {
+    zeile: reviewWert,
+    ohne: ohne ? ohne[1].trim() : null,
+    head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
+    runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
+    lenses: lensenAus(reviewWert),
+    blocker: brillenZahlenAus(reviewWert, "blocker"),
+    sollte: brillenZahlenAus(reviewWert, "sollte"),
+    hinweis: brillenZahlenAus(reviewWert, "hinweis"),
+    teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
+    zusatzpass: zusatzpassAus(reviewWert),
+    abnahmefix: abnahmefixAus(reviewWert),
+    verdikt: felder.verdikt ?? null,
+  };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -179,29 +203,7 @@ export function parseNachweis(text, zeilen) {
   }
   const plan = planAus(lastLine(text, zeilen.plan), zeilen.planer);
   const reviewWert = lastLine(text, zeilen.review);
-  let review = null;
-  if (reviewWert !== null) {
-    const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(reviewWert);
-    const felder = {};
-    for (const tok of reviewWert.split(/\s+/)) {
-      const m = /^([a-z]+)=(.*)$/.exec(tok);
-      if (m) felder[m[1]] = m[2];
-    }
-    review = {
-      zeile: reviewWert,
-      ohne: ohne ? ohne[1].trim() : null,
-      head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
-      runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
-      lenses: lensenAus(reviewWert),
-      blocker: brillenZahlenAus(reviewWert, "blocker"),
-      sollte: brillenZahlenAus(reviewWert, "sollte"),
-      hinweis: brillenZahlenAus(reviewWert, "hinweis"),
-      teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
-      zusatzpass: zusatzpassAus(reviewWert),
-      abnahmefix: abnahmefixAus(reviewWert),
-      verdikt: felder.verdikt ?? null,
-    };
-  }
+  const review = reviewWert === null ? null : reviewAus(reviewWert);
   return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)), bedrohungen: bedrohungenAus(lastLine(text, zeilen.bedrohungen)) };
 }
 

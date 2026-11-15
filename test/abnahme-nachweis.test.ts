@@ -20,6 +20,7 @@ interface Zeilen {
   abnahmeOverride: string;
   reviewOverride: string;
 }
+type RStufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string };
 type Urteil = { k: string; wert: string }[];
 type Marker = { durchgang: number; head: string; urteil: Urteil; ursache?: { k: string; klasse: string }[] } | null;
 type AbnahmeHead = { bekannt: boolean; imSlice: boolean; nachReviewHead: boolean; konfliktMerges: string[]; aenderungsCommits: { sha: string; dateien: string[] }[] };
@@ -28,7 +29,7 @@ interface Mod {
   verknuepfteTickets: (body: string) => number[];
   zaehleSzenarioDurchgaenge: (markers: NonNullable<Marker>[]) => number;
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number; stufe?: string; risikostufe?: RStufe }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
@@ -51,8 +52,10 @@ const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wer
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number; stufe?: string; risikostufe?: RStufe }) =>
   m.bewerteAbnahme({
+    stufe: o.stufe,
+    risikostufe: o.risikostufe ?? R1,
     reviewOverride: o.reviewOverride,
     szenarioDurchgaenge: o.szenarioDurchgaenge,
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
@@ -61,6 +64,9 @@ const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number;
     abnahmeHead: { ...GUT, ...o.abnahmeHead },
     zeilen: Z,
   });
+const R0: RStufe = { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade: ["docs/a.md"] };
+const R1: RStufe = { stufe: 1, gruende: ["Produktionscode"], treffer: [], pfade: ["src/x.ts"], ausloeser: "src/x.ts" };
+const R2: RStufe = { stufe: 2, gruende: ["package.json trifft /package.json (basis:manifeste)"], treffer: [{ pfad: "package.json", muster: "/package.json", liste: "basis:manifeste" }], pfade: ["package.json"] };
 const rot = (fehler: string[], muster: RegExp) => {
   expect(fehler.length, "muss rot sein").toBeGreaterThan(0);
   expect(fehler.join("\n")).toMatch(muster);
@@ -630,5 +636,32 @@ describe("Abnahme-Ursache (factory#260): check-abnahme-nachweis", () => {
     expect(bewerte({ abnahme: neu, runden: 2, marker: marker({ durchgang: 2 }) })).toEqual([]);
     expect((parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme as { art: string }).art).toBe("ungueltig");
     rot(bewerte({ abnahme: parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme }), /ungültig \(ursachen: Eintrag/);
+  });
+});
+
+describe("Risikostufe: entfaellt wird nachgerechnet (factory#526)", () => {
+  const entf = (grund: string) => ({ art: "entfaellt", grund });
+  test("K1/K2: `entfaellt — stufe 0` bei Stufe 0 und `stufe 1` bei Stufe 0 oder 1 sind grün, auch bei einem Ticket mit Kriterien", () => {
+    expect(bewerte({ abnahme: entf("stufe 0"), risikostufe: R0 })).toEqual([]);
+    expect(bewerte({ abnahme: entf("stufe 1"), risikostufe: R0 })).toEqual([]);
+    expect(bewerte({ abnahme: entf("stufe 1: nur Skript"), risikostufe: R1 })).toEqual([]);
+  });
+  test("K5: `stufe 0` bei Stufe 1 und `stufe 1` bei Stufe 2 sind rot mit berechneter Stufe und Pfad (auch ohne Kriterien)", () => {
+    rot(bewerte({ abnahme: entf("stufe 0"), risikostufe: R1 }), /Risikostufe berechnet 1, Pfad src\/x\.ts/);
+    rot(bewerte({ abnahme: entf("stufe 1"), risikostufe: R2 }), /Risikostufe berechnet 2, Pfad package\.json/);
+    rot(bewerte({ abnahme: entf("stufe 1"), risikostufe: R2, ticket: null }), /Risikostufe berechnet 2/);
+  });
+  test("K6: ohne übergebene Stufe gilt Stufe 2 (fail-closed)", () => {
+    const f = m.bewerteAbnahme({ nachweis: nachweis(entf("stufe 1")), ticket: { nr: 9, kriterien: kr(2) }, marker: null, abnahmeHead: GUT, zeilen: Z });
+    rot(f, /Risikostufe berechnet 2.*nicht übergeben/);
+  });
+  test("K3: Stufe 2 mit Kriterien verlangt wie bisher das Urteil; `entfaellt` ohne Stufenform bleibt rot", () => {
+    rot(bewerte({ abnahme: entf("Doku"), risikostufe: R2 }), /entfaellt ist bei Ticket #9 .* nicht erlaubt/);
+    expect(bewerte({ risikostufe: R2 })).toEqual([]);
+  });
+  test("K7: `entfaellt — klein:` gilt nur bei Größenstufe S und Risikostufe ≤ 1", () => {
+    expect(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R1 })).toEqual([]);
+    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R2 }), /Risikostufe 2/);
+    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "voll", risikostufe: R1 }), /nicht erlaubt/);
   });
 });

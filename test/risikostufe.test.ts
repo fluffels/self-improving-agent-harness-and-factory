@@ -440,3 +440,16 @@ describe("Ende-zu-Ende im Temp-git-Repo", () => {
     expect(commitMit("package.json")).toMatch(/^RISIKOSTUFE: 2/);
   });
 });
+
+describe("ausloeser bei Stufe 1 (factory#526)", () => {
+  test("Code-Pfad ist der Auslöser; Markdown und Testdateien außerhalb von test/harness/ nicht", () => {
+    const e = stufe([eins("docs/a.md"), eins("test/a.test.ts"), eins("src/x.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("src/x.ts");
+  });
+  test("Leitplanken-Markdown: der geschützte Pfad ist der Auslöser", () => {
+    const e = stufe([eins("docs/a.md"), eins("AGENTS.md")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("AGENTS.md");
+  });
+});
