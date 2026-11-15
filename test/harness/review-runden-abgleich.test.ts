@@ -72,6 +72,8 @@ describe("hoechsteRunde", () => {
     assert.equal(hoechsteRunde("* Runde 2: x"), 2);
     assert.equal(hoechsteRunde("  Runde 5: x\nsiehe in Runde 4: bla"), 0);
     assert.equal(hoechsteRunde("Runde 2: x\r\nRunde 10: y\r\n"), 10);
+    assert.equal(hoechsteRunde("Runde 3: a\nRunde 1: b"), 3); // höchste, nicht letzte
+    assert.equal(hoechsteRunde("Runde 4 offen\n- Runde 5: x"), 0); // ohne Doppelpunkt, mit anderem Listenpräfix
   });
 });
 
@@ -84,7 +86,7 @@ describe("zusatzpassZeilenAus", () => {
     assert.equal((zusatzpassZeilenAus(`* ${Zl.zusatzpass}: R4 Zusatzpass — Entscheidung: X, weil Y`, Zl.zusatzpass)[0] as { k: number }).k, 4);
   });
   test("ungültige Formen werden als ungültig markiert", () => {
-    for (const w of ["R4 Unbekannt — Entscheidung: X, weil Y", "R4 Zusatzpass — Entscheidung: X", "R4 Zusatzpass — Entscheidung: , weil Y", "R4 Zusatzpass — Entscheidung: X, weil <Grund>", "R0 Zusatzpass — Entscheidung: X, weil Y", "Rx Zusatzpass — Entscheidung: X, weil Y", "nur Text"]) {
+    for (const w of ["R4 Unbekannt — Entscheidung: X, weil Y", "R4 Zusatzpass — Entscheidung: X", "R4 Zusatzpass — Entscheidung: , weil Y", "R4 Zusatzpass — Entscheidung: X, weil <Grund>", "R0 Zusatzpass — Entscheidung: X, weil Y", "Rx Zusatzpass — Entscheidung: X, weil Y", "nur Text", "4 Zusatzpass — Entscheidung: X, weil Y", "xR4 Zusatzpass — Entscheidung: X, weil Y", "R4 Zusatzpass Entscheidung: X, weil Y"]) {
       assert.ok("ungueltig" in zusatzpassZeilenAus(`${Zl.zusatzpass}: ${w}`, Zl.zusatzpass)[0], w);
     }
   });
@@ -105,6 +107,7 @@ describe("bewerteNachweis: Runden-Abgleich (K2, K5)", () => {
     assert.deepEqual(bewerte({ runden: 4, zeilen: z(4), hoechste: 3 }), []);
     assert.ok(bewerte({ runden: 4, zeilen: z(4, 5) }).length > 0);
     assert.ok(bewerte({ runden: 5, zeilen: z(4, 4) }).length > 0);
+    assert.ok(bewerte({ runden: 4, zeilen: z(4, 4) }).length > 0); // reine Doppelung bei gleicher Anzahl
     assert.ok(bewerte({ runden: 5, zeilen: z(4) }).length > 0);
     assert.deepEqual(bewerte({ runden: 5, zeilen: z(5, 4) }), []);
   });

@@ -41,6 +41,7 @@ describe("R6: Zusatzpass-Feld ab Pass über dem Cap (K1, K5)", () => {
   test("das höchste k zählt, ein Platzhalter `r<runde>` und die Delta-Endungen m/a/c bleiben offen (bewusste Grenze)", () => {
     assert.equal(deny(kopf("r2-architektur") + ` · Zweiter: /w/.claude/worktrees/${WT}7-lens-r5-doku`)?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(deny(kopf("r<runde>-<brille>")), null);
+    assert.equal(deny(kopf("r12-architektur"))?.hookSpecificOutput.permissionDecision, "deny"); // mehrstellige Runde
     for (const e of ["m4-architektur", "a1-architektur", "c2-architektur", "m9-doku"]) assert.equal(deny(kopf(e)), null, e);
   });
   test("ein Nicht-Lens-Spawn bleibt unberührt, ein kaputtes Payload fail-open", () => {
@@ -51,9 +52,19 @@ describe("R6: Zusatzpass-Feld ab Pass über dem Cap (K1, K5)", () => {
 });
 
 describe("zusatzpassKopfAus", () => {
+  test("lange Leerzeichen-Läufe laufen linear (kein ReDoS)", () => {
+    const start = Date.now();
+    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:${" ".repeat(50000)}`), null);
+    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:P · Entscheidung: A, weil ${" ".repeat(50000)}`), null);
+    assert.ok(Date.now() - start < 1000);
+  });
   test("liest die vier Teile, der letzte Treffer zählt, Teile mit Platzhalter ergeben null", () => {
     assert.deepEqual(zusatzpassKopfAus("Zusatzpass: doku:P2 · Entscheidung: A, B, weil C"), { brille: "doku", pruefpunkt: "P2", entscheidung: "A, B", weil: "C" });
-    assert.equal(zusatzpassKopfAus("Zusatzpass: x:y · Entscheidung: A, weil B\nZusatzpass: doku:P · Entscheidung: A, weil <Y>"), null);
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P · Entscheidung: A, weil B\nZusatzpass: doku:P · Entscheidung: A, weil <Y>"), null); // gültig, dann ungültig: der letzte zählt
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P · Entscheidung: A, weil <Y>\nZusatzpass: doku:P · Entscheidung: A, weil B")?.weil, "B");
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P · Entscheidung: A, weil B\r\n · Plan: x")?.weil, "B"); // CRLF
+    assert.equal(zusatzpassKopfAus("Zusatzpass: Vorspann doku:P · Entscheidung: A, weil B"), null);
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:a·b · Entscheidung: A, weil B"), null);
     assert.equal(zusatzpassKopfAus("Delta-Zusatzpass: doku:P · Entscheidung: A, weil B"), null);
     assert.equal(zusatzpassKopfAus(undefined as unknown as string), null);
   });

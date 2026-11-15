@@ -24,7 +24,7 @@
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
  *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config am Wortanfang trägt (Lookbehind, hält die Suche linear); ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
- *  - R6 sperrt nur den Review-Worktree `-lens-r<k>-` (wie das Ticket es verlangt); die Delta-Worktrees `-lens-m/a/c<n>` (Merge-, Abnahme-, CI-Fix-Delta) und ein Platzhalter `r<runde>` bleiben offen. Den Rest fängt die CI: `check-review-nachweis` gleicht `runden` mit den Commit-Zeilen `Runde <n>:` und `Zusatzpass:` ab. Die Sperre prüft nur, dass eine Entscheidung dasteht, nicht ihren Inhalt; unter Codex läuft sie über denselben Adapter unbeobachtet (docs/codex/einstieg.md).
+ *  - R6 sperrt nur den Review-Worktree `-lens-r<k>-` (wie das Ticket es verlangt); die Delta-Worktrees `-lens-m/a/c<n>` (Merge-, Abnahme-, CI-Fix-Delta) und ein Platzhalter `r<runde>` bleiben offen. Der Guard kennt die Risikostufe nicht (bei Stufe 1 ist schon `-lens-r3-` ein Pass über dem Cap, R6 sperrt erst ab r4). Den Rest fängt die CI: `check-review-nachweis` gleicht `runden` mit den Commit-Zeilen `Runde <n>:` und `Zusatzpass:` ab. Die Sperre prüft nur, dass eine Entscheidung dasteht, nicht ihren Inhalt; unter Codex läuft sie über denselben Adapter unbeobachtet (docs/codex/einstieg.md).
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
