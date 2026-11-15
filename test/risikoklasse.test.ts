@@ -288,7 +288,7 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
     const { git, base } = repo(aenderungen, nachweis, basisConfig);
     return (reviewRaw as { checkReviewNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkReviewNachweis({ runGit: git, env: { FACTORY_DIFF_BASE: base }, ladeZeilen: () => Z, ladeRisiko });
   };
-  const nach = `${Z.plan}: ${PL} — skizze\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`;
+  const nach = `${Z.plan}: ${PL} — skizze\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`;
   test("Risiko-Pfad mit einer Zeile: kombiniert und skizze sind rot; ohne Treffer in der Config grün", () => {
     const f = review({ "src/auth/a.ts": "x\n" }, nach, () => STANDARD).fehler.join("\n");
     expect(f).toMatch(/gilt nur bei Größenstufe S/);
@@ -297,7 +297,7 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
   });
   const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
   const abnahme = (aenderungen: Record<string, string>, config: Record<string, unknown>, basisConfig?: object) => {
-    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert verdikt=ok\n${Z.abnahme}: entfaellt — klein: nichts zu beobachten`, basisConfig);
+    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok\n${Z.abnahme}: entfaellt — klein: nichts zu beobachten`, basisConfig);
     return (abnahmeRaw as { checkAbnahmeNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkAbnahmeNachweis({
       runGit: git,
       gh: () => ({ body: "## Akzeptanzkriterien\n1. eins\n2. zwei\n" }),

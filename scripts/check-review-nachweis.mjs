@@ -12,7 +12,9 @@
  *
  *   <praefixe.commitZeile>Plan: <Planer>               |  <praefixe.commitZeile>Plan: ohne — <Begründung>
  *   <praefixe.commitZeile>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
- *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
+ *                 blocker=<brille>:<n>,… sollte=<brille>:<n>,… hinweis=<brille>:<n>,… verdikt=ok
+ *                 (blocker optional, #1123: Runde-1-Blocker je Brille; sollte und hinweis Pflicht, factory#530: Funde der Schwere 🔶 sollte und ⚠️ Hinweis je Brille des vollen Passes, auch 0;
+ *                 bei runden=1 sind blocker und sollte zusammen 0)
  *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR, Review- und Abnahme-Zusatzpässe zählen gemeinsam); mehr ist rot, außer mit Review-Override samt Freigabe-Beleg (factory#162 L10); erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
@@ -56,7 +58,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SICHERHEITS_LENS, kleinGrund, parseNachweis, stufeZeile } from "./nachweis-lib.mjs";
+import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, kleinGrund, parseNachweis, stufeZeile } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -75,11 +77,12 @@ export const vorlage = (zeilen) =>
   `${zeilen.plan}: ${zeilen.planer}\n` +
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
   `lenses=architektur,requirement-treue,test-adaequanz ` +
-  `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
-  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)\n` +
+  `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> ` +
+  `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
+  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
   `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
-  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
-  `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> und ` +
+  `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> sollte=kombiniert:<n> hinweis=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
+  `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> sollte=…,sicherheit:<n> hinweis=…,sicherheit:<n> und ` +
   `${zeilen.bedrohungen}: daten=… | grenzen=… | missbrauch=… | datenschutz=… (wörtlich aus dem Plan)`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
@@ -127,27 +130,65 @@ function bewerteTeilbrillen(review, zeilen) {
   return fehler;
 }
 
-/** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
- *  Zeile gültig (alte Zeilen). Pure. */
-function bewerteBlocker(review, zeilen) {
-  const R = zeilen.review;
+/** Formprüfung eines Brillen-Zahlen-Felds (`blocker`, `sollte`, `hinweis`): unbekannte Brille, keine ganze Zahl ≥ 0, doppelte Brille. Pure. */
+function bewerteBrillenZahlen(eintraege, key, R) {
   const fehler = [];
-  const eintraege = review.blocker;
-  if (eintraege.length === 0) return [`${R}: blocker ist leer (erwartet: blocker=<brille>:<n>,… je Brille der Runde 1).`];
   const gesehen = new Set();
   for (const { lens, n } of eintraege) {
-    if (!BEKANNTE_LENSES.includes(lens)) fehler.push(`${R}: blocker nennt unbekannte Brille "${lens}" (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
-    if (!Number.isInteger(n) || n < 0) fehler.push(`${R}: blocker=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
-    if (gesehen.has(lens)) fehler.push(`${R}: blocker nennt die Brille ${lens} doppelt.`);
+    if (!BEKANNTE_LENSES.includes(lens)) fehler.push(`${R}: ${key} nennt unbekannte Brille "${lens}" (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
+    if (!Number.isInteger(n) || n < 0) fehler.push(`${R}: ${key}=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
+    if (gesehen.has(lens)) fehler.push(`${R}: ${key} nennt die Brille ${lens} doppelt.`);
     gesehen.add(lens);
   }
+  return { fehler, gesehen };
+}
+
+/** Brillenmenge eines Felds gleich `lenses`: fehlende Brille und Brille außerhalb von lenses sind rot (eine Meldung je Abweichung). Pure. */
+function bewerteBrillenMenge(gesehen, key, review, R) {
+  const fehlt = review.lenses.filter((l) => !gesehen.has(l));
+  const zuviel = [...gesehen].filter((l) => !review.lenses.includes(l));
+  if (fehlt.length === 0 && zuviel.length === 0) return [];
+  return [`${R}: ${key} nennt nicht genau die Brillen von lenses (${review.lenses.join(",")}): fehlt ${fehlt.join(",") || "-"}, zuviel ${zuviel.join(",") || "-"}.`];
+}
+
+/** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
+ *  Zeile gültig (alte Zeilen). Die Summenregel von Runde 1 prüft bewerteRunde1Summe. Pure. */
+function bewerteBlocker(review, zeilen) {
+  const R = zeilen.review;
+  const eintraege = review.blocker;
+  if (eintraege.length === 0) return [`${R}: blocker ist leer (erwartet: blocker=<brille>:<n>,… je Brille der Runde 1).`];
+  const { fehler, gesehen } = bewerteBrillenZahlen(eintraege, "blocker", R);
   if (review.runden === 1) {
-    const summe = eintraege.reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
-    if (summe > 0) fehler.push(`${R}: Runde 1 meldete Blocker, aber es gab kein Fix-Pass (runden=1).`);
     const gleich = eintraege.length === review.lenses.length && review.lenses.every((l) => gesehen.has(l));
     if (!gleich) fehler.push(`${R}: runden=1, aber die Brillen von blocker (${[...gesehen].join(",")}) weichen von lenses (${review.lenses.join(",")}) ab.`);
   }
   return fehler;
+}
+
+/** Summe der Zahlen eines Brillen-Zahlen-Felds; kaputte Einträge und ein fehlendes Feld zählen 0 (die Formprüfung meldet sie). Pur. */
+const summeVon = (eintraege) => (eintraege ?? []).reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
+
+/** Pflichtfelder `sollte=` und `hinweis=` (factory#530): je Brille des vollen Passes eine ganze Zahl ≥ 0 (auch 0); die Brillenmenge ist immer gleich lenses.
+ *  Fehlt ein Feld oder ist es leer, ist die Zeile rot; die Form wie bei blocker. Pure. */
+function bewerteSchwereFelder(review, zeilen) {
+  const R = zeilen.review;
+  const fehler = [];
+  for (const key of SCHWERE_PFLICHTFELDER) {
+    const eintraege = review[key];
+    if (eintraege === null) fehler.push(`${R}: ${key}= fehlt (Pflicht, factory#530): ${key}=<brille>:<n>,… je Brille von lenses, auch 0.`);
+    else if (eintraege.length === 0) fehler.push(`${R}: ${key} ist leer (erwartet: ${key}=<brille>:<n>,… je Brille von lenses).`);
+    else {
+      const form = bewerteBrillenZahlen(eintraege, key, R);
+      fehler.push(...form.fehler, ...bewerteBrillenMenge(form.gesehen, key, review, R));
+    }
+  }
+  return fehler;
+}
+
+/** Summenregel von Runde 1: ohne Fix-Pass (runden=1) sind blocker und sollte zusammen 0, denn beide lösen eine Fix-Runde aus. Pure. */
+function bewerteRunde1Summe(review, zeilen) {
+  if (review.runden !== 1 || summeVon(review.blocker) + summeVon(review.sollte) === 0) return [];
+  return [`${zeilen.review}: Runde 1 meldete Blocker (blocker oder sollte), aber es gab kein Fix-Pass (runden=1).`];
 }
 
 /** Das Feld `zusatzpass=<anzahl>:<ursache>`: ungültig oder über `MAX_ZUSATZPAESSE` (Review- und Abnahme-Zusatzpässe zählen gemeinsam) ist rot;
@@ -292,7 +333,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   if (unbekannt.length > 0) {
     fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
-  fehler.push(...bewerteOptionaleFelder(review, zeilen));
+  fehler.push(...bewerteOptionaleFelder(review, zeilen), ...bewerteSchwereFelder(review, zeilen), ...bewerteRunde1Summe(review, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
 }
