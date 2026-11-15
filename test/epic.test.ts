@@ -231,19 +231,19 @@ describe("epic.mjs aufgeteilt: fuehreAus", () => {
     assert.deepEqual(w.mutationen, []);
   });
   test("Position (L3): Epic kommt direkt hinter das letzte Kopf-Item, auch bei schon gesetztem Status", () => {
-    const w = epicIo(stand(), { noetig: true, afterId: "PVTI_kopf" });
+    const w = epicIo(stand(), { noetig: true, afterId: "ITEM_kopf" });
     assert.equal(epic.fuehreAus(["aufgeteilt", "20"], w.io).code, 0);
-    assert.deepEqual(w.positionen, [["item-1", "PVTI_kopf"]]);
-    const s = epicIo(stand({ status: "In Progress" }), { noetig: true, afterId: "PVTI_kopf" });
+    assert.deepEqual(w.positionen, [["item-1", "ITEM_kopf"]]);
+    const s = epicIo(stand({ status: "In Progress" }), { noetig: true, afterId: "ITEM_kopf" });
     const r = epic.fuehreAus(["aufgeteilt", "20"], s.io);
-    assert.deepEqual([s.mutationen, s.positionen], [[], [["item-1", "PVTI_kopf"]]]);
+    assert.deepEqual([s.mutationen, s.positionen], [[], [["item-1", "ITEM_kopf"]]]);
     assert.match(r.out, /Position/);
   });
   test("Position (L3): ohne Kopf-Items ganz oben (afterId null); steht es schon dort, keine Mutation", () => {
     const oben = epicIo(stand(), { noetig: true, afterId: null });
     epic.fuehreAus(["aufgeteilt", "20"], oben.io);
     assert.deepEqual(oben.positionen, [["item-1", null]]);
-    const dort = epicIo(stand(), { noetig: false, afterId: "PVTI_kopf" });
+    const dort = epicIo(stand(), { noetig: false, afterId: "ITEM_kopf" });
     epic.fuehreAus(["aufgeteilt", "20"], dort.io);
     assert.deepEqual(dort.positionen, []);
   });
@@ -328,28 +328,28 @@ describe("epic.mjs: macheIo über gh (exec-Naht)", () => {
     const reihenfolge = (...z: ReturnType<typeof zeile>[]) => (_g: string, args: string[]) => {
       aufrufe.push(args);
       const q = args.find((a) => a.startsWith("query=")) ?? "";
-      if (q.includes("issue(number:")) return JSON.stringify({ data: { repository: { issue: { labels: { nodes: [] }, subIssues: { totalCount: 2 }, projectItems: { nodes: [{ id: "PVTI_epic", project: { id: produkt?.projectId } }] } } } } });
+      if (q.includes("issue(number:")) return JSON.stringify({ data: { repository: { issue: { labels: { nodes: [] }, subIssues: { totalCount: 2 }, projectItems: { nodes: [{ id: "ITEM_epic", project: { id: produkt?.projectId } }] } } } } });
       if (q.includes("ProjectV2SingleSelectField")) return JSON.stringify({ data: { node: { options: OPT } } });
       if (args.some((a) => a.includes("/items?"))) return JSON.stringify([z]);
       return "";
     };
-    const kopf = zeile("PVTI_kopf", 1, "🚨 CI rot auf main");
-    const andere = zeile("PVTI_x", 5, "Irgendein Ticket");
-    const epicZeile = zeile("PVTI_epic", 20, "Epic");
+    const kopf = zeile("ITEM_kopf", 1, "🚨 CI rot auf main");
+    const andere = zeile("ITEM_x", 5, "Irgendein Ticket");
+    const epicZeile = zeile("ITEM_epic", 20, "Epic");
     const unten = epic.macheIo(config, { exec: reihenfolge(kopf, andere, epicZeile) });
     unten.laden(20);
-    assert.deepEqual(unten.positionPlan("PVTI_epic"), { noetig: true, afterId: "PVTI_kopf" });
+    assert.deepEqual(unten.positionPlan("ITEM_epic"), { noetig: true, afterId: "ITEM_kopf" });
     const dort = epic.macheIo(config, { exec: reihenfolge(kopf, epicZeile, andere) });
     dort.laden(20);
-    assert.deepEqual(dort.positionPlan("PVTI_epic"), { noetig: false, afterId: "PVTI_kopf" });
+    assert.deepEqual(dort.positionPlan("ITEM_epic"), { noetig: false, afterId: "ITEM_kopf" });
     const ohne = epic.macheIo(config, { exec: reihenfolge(andere, epicZeile) });
     ohne.laden(20);
-    assert.deepEqual(ohne.positionPlan("PVTI_epic"), { noetig: true, afterId: null });
-    ohne.setzePosition("PVTI_epic", null);
+    assert.deepEqual(ohne.positionPlan("ITEM_epic"), { noetig: true, afterId: null });
+    ohne.setzePosition("ITEM_epic", null);
     const m = aufrufe.at(-1) ?? [];
-    assert.ok(m.some((a) => a.includes("updateProjectV2ItemPosition")) && m.includes("i=PVTI_epic") && !m.some((a) => a.startsWith("a=")));
-    unten.setzePosition("PVTI_epic", "PVTI_kopf");
-    assert.ok(aufrufe.at(-1)?.includes("a=PVTI_kopf"));
+    assert.ok(m.some((a) => a.includes("updateProjectV2ItemPosition")) && m.includes("i=ITEM_epic") && !m.some((a) => a.startsWith("a=")));
+    unten.setzePosition("ITEM_epic", "ITEM_kopf");
+    assert.ok(aufrufe.at(-1)?.includes("a=ITEM_kopf"));
   });
   test("Issue fehlt: Fehler; Item in fremdem Projekt: itemId null", () => {
     const leer = () => JSON.stringify({ data: { repository: { issue: null } } });

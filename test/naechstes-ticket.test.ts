@@ -119,6 +119,15 @@ describe("waehleNaechstes: jedes Kriterium mit Negativfall", () => {
     expect(r.ticket?.nr).toBe(2);
     expect(r.uebersprungen).toEqual([{ nr: 1, grund: `Assignee @${OWNER}` }]);
   });
+  test("aufgeteiltes Epic direkt unter dem Kopf (zugewiesen, In Progress): wird übersprungen, das nächste freie gewählt (factory#541 L3)", () => {
+    const epic = item(1, { assignees: [{ login: OWNER }], title: "Epic" }, "In Progress");
+    const r = frei([epic, item(2), item(3)]);
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen).toEqual([]);
+    const todo = frei([item(1, { assignees: [{ login: OWNER }], title: "Epic" }), item(2)]);
+    expect(todo.ticket?.nr).toBe(2);
+    expect(todo.uebersprungen).toEqual([{ nr: 1, grund: `Assignee @${OWNER}` }]);
+  });
   test("Status nicht Todo oder geschlossen: nicht einmal als übersprungen gelistet", () => {
     const r = frei([item(1, {}, "In Progress"), item(2, { state: "closed" }), item(3)]);
     expect(r.ticket?.nr).toBe(3);

@@ -22,7 +22,7 @@ const lib = raw as unknown as {
 
 const OPT = [{ id: "o-todo", name: "Todo" }, { id: "o-ip", name: "In Progress" }];
 const stand = (extra: Partial<Stand> = {}): Stand => ({ kinder: 0, itemId: "item-1", status: "Todo", optionen: OPT, boardNummer: 2, besitzer: "b", ...extra });
-const item = (number: number, extra: Partial<Item> = {}): Item => ({ id: `PVTI_${number}`, number, status: "In Progress", state: "open", assignees: [], ...extra });
+const item = (number: number, extra: Partial<Item> = {}): Item => ({ id: `ITEM_${number}`, number, status: "In Progress", state: "open", assignees: [], ...extra });
 
 function mitIo(s: Stand | Error, daten: Daten = { boards: [], prIssues: [] }) {
   const mutationen: string[][] = [];
@@ -64,7 +64,7 @@ describe("board-status setze", () => {
     assert.deepEqual(w.mutationen, []);
   });
   test("fehlende Status-Option: Exit 2; Ladefehler: Exit 1", () => {
-    const w = mitIo(stand({ optionen: [OPT[0] as { id: string; name: string }] }));
+    const w = mitIo(stand({ optionen: OPT.slice(0, 1) }));
     const r = lib.fuehreAus(["setze", "7", "--status", "In Progress"], w.io);
     assert.equal(r.code, 2);
     assert.match(r.err, /keine Option „In Progress“\nFix:/);
@@ -91,13 +91,13 @@ describe("board-status abgleich", () => {
     const r = lib.fuehreAus(["abgleich"], w.io);
     assert.equal(r.code, 0);
     assert.equal(r.out, "STATUS #1: In Progress → Todo\nSTATUS #6: In Progress → Todo\n");
-    assert.deepEqual(w.mutationen, [["P", "F", "PVTI_1", "o-todo"], ["P", "F", "PVTI_6", "o-todo"]]);
+    assert.deepEqual(w.mutationen, [["P", "F", "ITEM_1", "o-todo"], ["P", "F", "ITEM_6", "o-todo"]]);
   });
   test("nichts zu tun: keine Ausgabe, keine Mutation; Board ohne Todo-Option: Exit 2", () => {
     const w = mitIo(stand(), { boards: [board([item(2, { assignees: ["x"] })])], prIssues: [] });
     const r = lib.fuehreAus(["abgleich"], w.io);
     assert.deepEqual([r.code, r.out, w.mutationen], [0, "", []]);
-    const ohne = mitIo(stand(), { boards: [{ ...board([item(1)]), optionen: [OPT[1] as { id: string; name: string }] }], prIssues: [] });
+    const ohne = mitIo(stand(), { boards: [{ ...board([item(1)]), optionen: OPT.slice(1) }], prIssues: [] });
     assert.equal(lib.fuehreAus(["abgleich"], ohne.io).code, 2);
   });
 });
@@ -112,7 +112,7 @@ describe("board-status macheIo über gh (exec-Naht)", () => {
       const q = args.find((a) => a.startsWith("query=")) ?? "";
       if (q.includes("ProjectV2SingleSelectField")) return JSON.stringify({ data: { node: { options: OPT } } });
       if (args.some((a) => a.includes("/items?"))) {
-        return JSON.stringify([[{ node_id: "PVTI_a", content_type: "Issue", content: { number: 9, state: "open", title: "t", repository_url: "https://api.github.com/repos/zz-org/zz-repo", assignees: [] }, fields: [] }]]);
+        return JSON.stringify([[{ node_id: "ITEM_a", content_type: "Issue", content: { number: 9, state: "open", title: "t", repository_url: "https://api.github.com/repos/zz-org/zz-repo", assignees: [] }, fields: [] }]]);
       }
       return "";
     };
@@ -124,8 +124,8 @@ describe("board-status macheIo über gh (exec-Naht)", () => {
     assert.deepEqual(d.boards[0]?.optionen, OPT);
     const pr = aufrufe.find((a) => a[0] === "pr") ?? [];
     assert.ok(pr.includes("--limit") && pr.includes("closingIssuesReferences") && pr.includes("zz-org/zz-repo"));
-    io.setzeStatusIn("P", "F", "PVTI_a", "o-todo");
+    io.setzeStatusIn("P", "F", "ITEM_a", "o-todo");
     const m = aufrufe.at(-1) ?? [];
-    assert.ok(m.includes("p=P") && m.includes("f=F") && m.includes("i=PVTI_a") && m.includes("o=o-todo"));
+    assert.ok(m.includes("p=P") && m.includes("f=F") && m.includes("i=ITEM_a") && m.includes("o=o-todo"));
   });
 });
