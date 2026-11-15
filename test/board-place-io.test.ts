@@ -26,6 +26,10 @@ function fake(listen: { produkt: Item[]; factory: Item[] }, extra: Record<string
     loadItems: (board: Board, opts: { repo: string }) => (proto.push({ was: "loadItems", args: [board.projectId, opts] }), board.projectId === PRODUKT.projectId ? listen.produkt : listen.factory),
     ladeLabels: (nr: number, repo: string) => (proto.push({ was: "ladeLabels", args: [nr, repo] }), []),
     itemsUeberIssues: (board: Board, nummern: number[], opts: object, repo: string) => (proto.push({ was: "itemsUeberIssues", args: [board.projectId, nummern, opts, repo] }), nummern.map(() => null)),
+    // Naht statt Netz (factory#541 L4): ohne sie liefe der Standard-ghJson gegen echtes gh; der Fehler entspricht dem Bestandsverhalten (Issue nicht ladbar).
+    ghJson: () => {
+      throw new Error("kein Netz im Test");
+    },
     addToBoardTodo: () => "NEU",
     setPosition: (board: Board, id: string, after: string | null) => void proto.push({ was: "setPosition", args: [board.projectId, id, after] }),
     entferneVomBoard: (board: Board, id: string) => void proto.push({ was: "entferne", args: [board.projectId, id] }),
