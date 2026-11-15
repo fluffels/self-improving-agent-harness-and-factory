@@ -1,0 +1,321 @@
+/* Risikostufe 0/1/2 (factory#525): Logik aus scripts/risikostufe-lib.mjs und scripts/risikostufe.mjs importiert; die Listen werden injiziert (nicht die echte protected-paths.json),
+ * nur die feste Basis-Datei wird real geladen (Selbstschutz). Ende-zu-Ende gegen ein echtes git-Repo im Temp-Ordner. */
+import { afterEach, describe, expect, test } from "vitest";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as libRaw from "../scripts/risikostufe-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as cliRaw from "../scripts/risikostufe.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as gsRaw from "../scripts/groessenstufe-lib.mjs";
+
+type Eintrag = { pfad: string | null; zeilen?: number | null };
+type Treffer = { pfad: string; muster: string; liste: string };
+type Ergebnis = { stufe: 0 | 1 | 2; gruende: string[]; treffer: Treffer[]; pfade: string[] };
+type Lader = { ladeBasis?: () => unknown; ladeText?: () => string; ladeRisiko?: () => unknown; ladeRisikoBasis?: () => unknown };
+const lib = libRaw as unknown as {
+  ladeStufe2Basis: (q?: string) => { kategorien: Record<string, string[]>; muster: string[] };
+  stufe2Leitplanken: (t: string) => { gruppe: string; muster: string[] } | null;
+  alleLeitplanken: (t: string) => string[] | null;
+  bestimmeRisikostufe: (o: { eintraege: Eintrag[] | null; basis: unknown; leitplanken: unknown; risiko: unknown; prognose?: boolean }) => Ergebnis;
+  pfadeAusTicket: (b: string) => { pfade: string[]; fehler: string | null };
+  risikostufeAusGit: (git: (a: string[]) => string, base: string, head?: string, o?: Lader & { zweiPunkt?: boolean }) => Ergebnis;
+  risikostufeAusPfaden: (p: string[], o?: Lader) => Ergebnis;
+  wirksameListe: (o?: Lader) => { zeilen: { muster: string; quelle: string }[]; fehler: string[] };
+};
+type Io = Lader & { git?: (a: string[]) => string; env?: Record<string, string>; ghJson?: (a: string[]) => unknown; ladeConfig?: () => unknown };
+const cli = cliRaw as unknown as { laufe: (argv: string[], io?: Io) => { code: number; ausgabe: string }; stufeZeile: (e: { stufe: number; gruende: string[] }) => string };
+const gs = gsRaw as unknown as { risikoMusterAus: (c: unknown) => unknown };
+
+const BASIS = lib.ladeStufe2Basis();
+const LP_TEXT = JSON.stringify({ gate: ["/scripts/check-*.mjs", "/eslint.config.js"], harness: ["AGENTS.md", "/.claude/", "/.agents/", "/docs/agent-harness.md"] });
+const leitplanken = (t = LP_TEXT) => ({ gate: lib.stufe2Leitplanken(t), alle: lib.alleLeitplanken(t) });
+const RISIKO = gs.risikoMusterAus({});
+const eins = (pfad: string, zeilen = 1): Eintrag => ({ pfad, zeilen });
+const stufe = (eintraege: Eintrag[] | null, o: { risiko?: unknown; lp?: string; prognose?: boolean; basis?: unknown } = {}) =>
+  lib.bestimmeRisikostufe({ eintraege, basis: "basis" in o ? o.basis : BASIS, leitplanken: leitplanken(o.lp), risiko: o.risiko ?? RISIKO, prognose: o.prognose });
+const lader = (zusatz: Lader = {}): Lader => ({ ladeBasis: () => BASIS, ladeText: () => LP_TEXT, ladeRisiko: () => RISIKO, ...zusatz });
+
+describe("Stufe 2 durch die feste Basis (K2)", () => {
+  test.each([
+    [".github/workflows/ci.yml", "ci"],
+    ["sub/pkg/package.json", "abhaengigkeiten"],
+    ["requirements-dev.txt", "abhaengigkeiten"],
+    [".mcp.json", "mcp"],
+    [".claude/settings.json", "agentEinstellungen"],
+    [".githooks/pre-commit", "hooks"],
+    ["Package.JSON", "abhaengigkeiten"],
+    [".github/risikostufe-basis.json", "selbstschutz"],
+  ])("%s ist Stufe 2 (basis:%s)", (pfad, kategorie) => {
+    const r = stufe([eins(pfad)]);
+    expect(r.stufe).toBe(2);
+    expect(r.treffer.map((t) => t.liste)).toContain(`basis:${kategorie}`);
+  });
+  test("die Projekt-Config ersetzt die Basis nicht: Risiko-Block mit anderem Muster, Workflow bleibt Stufe 2", () => {
+    const risiko = gs.risikoMusterAus({ risiko: { hoch: ["nichts/"] } });
+    expect(stufe([eins(".github/workflows/x.yml")], { risiko }).stufe).toBe(2);
+  });
+  test("die echte Basis-Datei lädt, hat sechs Kategorien und schützt sich selbst", () => {
+    expect(Object.keys(BASIS.kategorien).sort()).toEqual(["abhaengigkeiten", "agentEinstellungen", "ci", "hooks", "mcp", "selbstschutz"]);
+    expect(BASIS.kategorien.selbstschutz).toEqual(expect.arrayContaining(["/.github/risikostufe-basis.json", "/.github/protected-paths.json"]));
+  });
+});
+
+describe("Leitplanken-Gruppe gate und Risikoklasse hoch", () => {
+  test("mit Gruppe gate: ein gate-Pfad ist 2, ein reiner harness-Pfad (AGENTS.md) ist 1", () => {
+    expect(stufe([eins("eslint.config.js")]).stufe).toBe(2);
+    expect(stufe([eins("AGENTS.md")]).stufe).toBe(1);
+  });
+  test("ohne Gruppe gate gelten alle Leitplanken: derselbe harness-Pfad ist 2", () => {
+    const r = stufe([eins("AGENTS.md")], { lp: JSON.stringify({ harness: ["AGENTS.md"] }) });
+    expect(r.stufe).toBe(2);
+    expect(r.treffer[0].liste).toBe("leitplanken:alle");
+  });
+  test("kaputtes JSON und gate als Nicht-Array liefern null und damit Stufe 2", () => {
+    expect(lib.stufe2Leitplanken("{kaputt")).toBeNull();
+    expect(lib.stufe2Leitplanken('{"gate":"x"}')).toBeNull();
+    expect(lib.alleLeitplanken("{kaputt")).toBeNull();
+    expect(stufe([eins("docs/x.md")], { lp: "{kaputt" }).stufe).toBe(2);
+    expect(stufe([eins("docs/x.md")], { lp: '{"gate":"x"}' }).stufe).toBe(2);
+  });
+  test("Risikoklasse hoch ist Stufe 2 (liste risiko)", () => {
+    const r = stufe([eins("src/auth/login.ts")]);
+    expect(r.stufe).toBe(2);
+    expect(r.treffer.map((t) => t.liste)).toContain("risiko");
+  });
+});
+
+describe("Stufe 0 und 1 (K3)", () => {
+  test("Fall A: fünf Markdown-Dateien mit 500 Zeilen ohne Leitplanke sind 0", () => {
+    const r = stufe(["a", "b", "c", "d", "e"].map((n) => eins(`docs/${n}.md`, 100)));
+    expect(r).toMatchObject({ stufe: 0, gruende: [expect.stringMatching(/nur \*\.md/)] });
+  });
+  test.each(["docs/agent-harness.md", "AGENTS.md", ".agents/skills/x/SKILL.md", ".claude/agents/x.md"])("Fall A negativ: Leitplanken- oder Grundschutz-Markdown %s ist mindestens 1", (pfad) => {
+    expect(stufe([eins(pfad)]).stufe).toBe(1);
+  });
+  test("Fall B: Testdatei und Doku in den S-Grenzen sind 0", () => {
+    expect(stufe([eins("test/a.test.ts", 20), eins("docs/x.md")])).toMatchObject({ stufe: 0 });
+  });
+  test.each([
+    ["Wächter-Test", [eins("test/harness/a.test.ts")]],
+    ["vier Dateien", ["a", "b", "c", "d"].map((n) => eins(`test/${n}.test.ts`))],
+    ["61 Zeilen", [eins("test/a.test.ts", 61)]],
+    ["Produktionscode, eine Zeile", [eins("src/x.ts")]],
+    ["Testhelfer", [eins("test/support/h.ts")]],
+    ["Konfiguration", [eins("config/app.json")]],
+  ])("Fall B negativ: %s ist 1", (_n, eintraege) => {
+    const r = stufe(eintraege as Eintrag[]);
+    expect(r.stufe).toBe(1);
+    expect(r.gruende.length).toBeGreaterThan(0);
+  });
+});
+
+describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
+  test.each([
+    ["leere Liste", [] as Eintrag[]],
+    ["null", null],
+    ["Eintrag ohne Pfad", [{ pfad: null, zeilen: 1 }]],
+    ["quotierter Pfad", [eins('"d\\303\\266c.md"')]],
+    ["Binärdatei", [{ pfad: "docs/x.md", zeilen: null }]],
+  ])("%s", (_n, eintraege) => {
+    const r = stufe(eintraege);
+    expect(r.stufe).toBe(2);
+    expect(r.gruende[0]).toBeTruthy();
+  });
+  test("Basis fehlt oder leer", () => {
+    expect(stufe([eins("docs/x.md")], { basis: null }).stufe).toBe(2);
+    expect(stufe([eins("docs/x.md")], { basis: { kategorien: {}, muster: [] } }).stufe).toBe(2);
+  });
+  test("Risiko mit fehler ist auch bei reinem *.md-Diff 2", () => {
+    const risiko = gs.risikoMusterAus({ risiko: { hoch: "kein-array" } });
+    expect(stufe([eins("docs/x.md")], { risiko })).toMatchObject({ stufe: 2, gruende: [expect.stringMatching(/Risiko-Muster/)] });
+  });
+  test("Lader werfen: Basis fehlt, kaputt, leere Kategorie, Leitplanken, Config", () => {
+    const wirft = (m: string) => () => {
+      throw new Error(m);
+    };
+    for (const z of [{ ladeBasis: wirft("weg") }, { ladeText: wirft("weg") }, { ladeRisiko: wirft("weg") }, { ladeText: () => "{kaputt" }]) {
+      expect(lib.risikostufeAusPfaden(["docs/x.md"], lader(z)).stufe).toBe(2);
+      expect(lib.risikostufeAusGit(() => "1\t1\tdocs/x.md", "b", "HEAD", { ...lader(z), ladeRisikoBasis: () => RISIKO }).stufe).toBe(2);
+    }
+  });
+  test("echte Basis-Lader: Datei fehlt, kaputt, Nicht-Objekt, leere Kategorie", () => {
+    const d = mkdtempSync(join(tmpdir(), "rs-basis-"));
+    try {
+      const p = (n: string, inhalt: string) => {
+        writeFileSync(join(d, n), inhalt);
+        return join(d, n);
+      };
+      expect(() => lib.ladeStufe2Basis(join(d, "fehlt.json"))).toThrow();
+      expect(() => lib.ladeStufe2Basis(p("a.json", "{kaputt"))).toThrow();
+      expect(() => lib.ladeStufe2Basis(p("b.json", "[]"))).toThrow(/kein Objekt/);
+      expect(() => lib.ladeStufe2Basis(p("c.json", '{"ci":[]}'))).toThrow(/Kategorie ci/);
+      expect(() => lib.ladeStufe2Basis(p("d.json", '{"ci":["a",""]}'))).toThrow(/Kategorie ci/);
+      expect(() => lib.ladeStufe2Basis(p("e.json", '{"beschreibung":"x"}'))).toThrow(/keine Muster/);
+      expect(lib.ladeStufe2Basis(p("f.json", '{"beschreibung":"x","ci":["/ci/"]}')).muster).toEqual(["/ci/"]);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  test("git wirft, leerer Diff", () => {
+    const o = { ...lader(), ladeRisikoBasis: () => RISIKO };
+    expect(lib.risikostufeAusGit(() => { throw new Error("kaputt"); }, "b", "HEAD", o)).toMatchObject({ stufe: 2, gruende: [expect.stringMatching(/git-Fehler/)] });
+    expect(lib.risikostufeAusGit(() => "", "b", "HEAD", o).stufe).toBe(2);
+  });
+});
+
+describe("Prognose aus Pfaden", () => {
+  test("Verzeichnis ohne und mit Schrägstrich trifft das Verzeichnismuster", () => {
+    expect(lib.risikostufeAusPfaden([".github/workflows"], lader()).stufe).toBe(2);
+    expect(lib.risikostufeAusPfaden([".github/workflows/"], lader()).stufe).toBe(2);
+  });
+  test("Doku-Pfad mit Teilwort im Namen bleibt 0", () => {
+    expect(lib.risikostufeAusPfaden(["docs/auth.md"], lader()).stufe).toBe(0);
+  });
+  test("Risiko-Verzeichnis in der Prognose und Backslash-Pfad", () => {
+    expect(lib.risikostufeAusPfaden(["src\\auth"], lader()).stufe).toBe(2);
+  });
+});
+
+describe("pfadeAusTicket (K4)", () => {
+  const body = (abschnitt: string) => `## Ziel\nText\n\n## Pfade\n${abschnitt}\n\n## Akzeptanzkriterien\n1. x\n`;
+  test("Backtick-Pfad mit Beschreibung, erstes Wort, nummerierte Liste, führender Schrägstrich", () => {
+    expect(lib.pfadeAusTicket(body("- `scripts/a.mjs` neu\n* docs/b.md, kurz\n1. /src/c.ts\n2) ./d.ts\n- [ ] e.ts"))).toEqual({ pfade: ["scripts/a.mjs", "docs/b.md", "src/c.ts", "d.ts", "e.ts"], fehler: null });
+  });
+  test("Fließtext und Fence im Abschnitt sind kein Eingang, ### gehört dazu, zwei Abschnitte werden vereinigt", () => {
+    const b = `## Pfade\nHier steht Prosa mit scripts/x.mjs.\n- a.md\n\`\`\`\n- b.md\n\`\`\`\n### Mehr\n- c.md\n\n## Anderes\n- d.md\n\n## Pfade\n- e.md\n`;
+    expect(lib.pfadeAusTicket(b)).toEqual({ pfade: ["a.md", "c.md", "e.md"], fehler: null });
+  });
+  test.each([
+    ["Abschnitt fehlt", "## Ziel\nnur Text mit .github/workflows/x.yml\n", /fehlt/],
+    ["leer", body("nur Prosa ohne Liste"), /leer/],
+    ["Listenzeile ohne Pfad", body("- \n"), /ohne Pfad/],
+    ["Glob", body("- src/**/*.ts"), /Glob/],
+  ])("%s ist ein Fehler", (_n, b, muster) => {
+    const r = lib.pfadeAusTicket(b);
+    expect(r.pfade).toEqual([]);
+    expect(r.fehler).toMatch(muster);
+  });
+});
+
+describe("CLI laufe", () => {
+  const TICKET = (body: string, extra: Record<string, unknown> = {}) => (a: string[]) =>
+    a[1] === "repos/{owner}/{repo}" ? { owner: { login: "ich" } } : { user: { login: "ich" }, labels: [], body, ...extra };
+  const CONFIG = () => ({ labels: { forum: "forum" } });
+  const ticket = (body: string, extra?: Record<string, unknown>, io: Io = {}) => cli.laufe(["--ticket", "7"], { ...lader(), ghJson: TICKET(body, extra), ladeConfig: CONFIG, ...io });
+
+  test("Textformat und --json-Schlüssel", () => {
+    const r = cli.laufe(["--pfade", "docs/a.md"], lader());
+    expect(r).toMatchObject({ code: 0 });
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — .+$/);
+    const j = JSON.parse(cli.laufe(["--pfade", "package.json", "--json"], lader()).ausgabe);
+    expect(Object.keys(j)).toEqual(["stufe", "gruende", "treffer", "pfade"]);
+    expect(j.stufe).toBe(2);
+  });
+  test("lange Gründe werden im Text gekürzt", () => {
+    const z = cli.stufeZeile({ stufe: 2, gruende: ["a", "b", "c", "d", "e", "f", "g"] });
+    expect(z).toBe("RISIKOSTUFE: 2 — a; b; c; d; e (+2 weitere)");
+  });
+  test.each([
+    [["--bogus"]],
+    [["--commit", "x", "--pfade", "a"]],
+    [["--ticket", "abc"]],
+    [["docs/a.md"]],
+    [["--liste", "--commit", "x"]],
+    [["--ticket"]],
+  ])("Aufruffehler %j ist Exit 2", (argv) => {
+    expect(cli.laufe(argv as string[], lader())).toMatchObject({ code: 2, ausgabe: expect.stringContaining("Aufruf:") });
+  });
+  test("--pfade ohne Pfad ist Stufe 2 mit Exit 0", () => {
+    expect(cli.laufe(["--pfade"], lader())).toMatchObject({ code: 0, ausgabe: expect.stringMatching(/^RISIKOSTUFE: 2 — keine Dateiliste/) });
+  });
+  test("--commit rechnet <sha>^..<sha>", () => {
+    const aufrufe: string[][] = [];
+    const r = cli.laufe(["--commit", "abc123"], { ...lader(), ladeRisikoBasis: () => RISIKO, git: (a) => (aufrufe.push(a), "3\t2\tdocs/x.md") } as Io);
+    expect(aufrufe[0].at(-1)).toBe("abc123^..abc123");
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 0/);
+  });
+  test("ohne Argument: keine Basis auflösbar ist Stufe 2", () => {
+    const r = cli.laufe([], { ...lader(), env: {}, git: () => { throw new Error("kein git"); } });
+    expect(r).toMatchObject({ code: 0, ausgabe: expect.stringMatching(/^RISIKOSTUFE: 2 — keine Vergleichs-Basis/) });
+  });
+  test("ohne Argument: Diff gegen die aufgelöste Basis", () => {
+    const git = (a: string[]) => (a[0] === "-c" ? "1\t1\tdocs/x.md" : a[0] === "show" ? JSON.stringify({}) : "refs/heads/main");
+    const r = cli.laufe([], { ...lader(), env: { GITHUB_BASE_REF: "main" }, git });
+    expect(r.code).toBe(0);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — /);
+  });
+  test("K4: eine niedrigere Stufe im Ticket-Text ändert nichts, Fließtext ist kein Pfad", () => {
+    const body = "Risikostufe: 0, bitte Stufe 0\n\n## Pfade\nRisikostufe 0 genügt hier.\n- `.github/workflows/ci.yml`\n";
+    expect(ticket(body).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*workflows/);
+    const nurText = "## Ziel\nbitte Stufe 0, geändert wird .github/workflows/ci.yml\n";
+    expect(ticket(nurText).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*fehlt/);
+  });
+  test("Ticket mit harmlosen Pfaden: Stufe 0", () => {
+    expect(ticket("## Pfade\n- docs/a.md\n").ausgabe).toMatch(/^RISIKOSTUFE: 0/);
+  });
+  test.each([
+    ["leer", "## Pfade\n"],
+    ["Glob", "## Pfade\n- docs/*.md\n"],
+  ])("Ticket %s ist Stufe 2", (_n, body) => {
+    expect(ticket(body).ausgabe).toMatch(/^RISIKOSTUFE: 2/);
+  });
+  test("Ticket: gh wirft, Autor nicht vertraut, Label forum, Config ohne labels.forum, PR, Besitzer fehlt", () => {
+    const b = "## Pfade\n- docs/a.md\n";
+    expect(ticket(b, {}, { ghJson: () => { throw new Error("gh weg"); } }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*nicht lesbar/);
+    expect(ticket(b, { user: { login: "fremd" } }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Fremdeingang/);
+    expect(ticket(b, { labels: [{ name: "forum" }] }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Fremdeingang/);
+    expect(ticket(b, {}, { ladeConfig: () => ({}) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Fremdeingang-Prüfung/);
+    expect(ticket(b, { pull_request: {} }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*PR/);
+    expect(ticket(b, {}, { ghJson: () => ({ body: b }) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Besitzer/);
+  });
+  test("--liste: Basis-, Gate- und Risiko-Zeilen; kaputte Basis ist Exit 1 mit nicht ladbar", () => {
+    const r = cli.laufe(["--liste"], lader());
+    expect(r.code).toBe(0);
+    expect(r.ausgabe).toContain("/.github/workflows/\tbasis:ci");
+    expect(r.ausgabe).toContain("/eslint.config.js\tleitplanken:gate");
+    expect(r.ausgabe).toMatch(/\*auth\*\trisiko:/);
+    expect(JSON.parse(cli.laufe(["--liste", "--json"], lader()).ausgabe).fehler).toEqual([]);
+    const kaputt = cli.laufe(["--liste"], lader({ ladeBasis: () => { throw new Error("weg"); } }));
+    expect(kaputt.code).toBe(1);
+    expect(kaputt.ausgabe).toMatch(/nicht ladbar: Stufe-2-Basis — weg/);
+  });
+  test("--liste: Risiko-Muster mit Fehler ist nicht ladbar", () => {
+    const r = cli.laufe(["--liste"], lader({ ladeRisiko: () => gs.risikoMusterAus({ risiko: { hoch: 5 } }) }));
+    expect(r.code).toBe(1);
+  });
+});
+
+describe("Ende-zu-Ende im Temp-git-Repo", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const skript = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts", "risikostufe.mjs");
+  const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...a], { cwd, encoding: "utf8" });
+  function commitMit(datei: string): string {
+    const d = mkdtempSync(join(tmpdir(), "rs-e2e-"));
+    dirs.push(d);
+    git(d, "init", "-q");
+    writeFileSync(join(d, "start.txt"), "x\n");
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "start");
+    mkdirSync(join(d, dirname(datei)), { recursive: true });
+    writeFileSync(join(d, datei), "inhalt\n");
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "x");
+    const sha = git(d, "rev-parse", "HEAD").trim();
+    const r = spawnSync("node", [skript, "--commit", sha], { cwd: d, encoding: "utf8" });
+    expect(r.status).toBe(0);
+    return r.stdout;
+  }
+  test("nur .md ergibt 0, package.json ergibt 2", () => {
+    // Die Skript-Listen kommen aus dem Repo des Skripts (die echte Leitplanken-Datei), nicht aus dem Temp-Repo.
+    expect(commitMit("docs/neu.md")).toMatch(/^RISIKOSTUFE: 0/);
+    expect(commitMit("package.json")).toMatch(/^RISIKOSTUFE: 2/);
+  });
+});

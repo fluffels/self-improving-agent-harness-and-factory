@@ -111,7 +111,7 @@ function ohneFences(body) {
 }
 
 /** Zeilen je Abschnitt (Überschrift Ebene 2 mit einem der Namen aus `namen`, als Text verglichen, Groß-/Kleinschreibung egal); Code-Fences zählen nicht, `###` gehört zum Abschnitt. `null` = Abschnitt fehlt. */
-function abschnitt(body, namen) {
+export function abschnitt(body, namen) {
   const klein = namen.map((n) => n.toLowerCase());
   let drin = false;
   let gefunden = false;
