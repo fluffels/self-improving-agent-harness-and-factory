@@ -1032,6 +1032,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/gh-sperre.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/harness/skript-laufzeiten.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

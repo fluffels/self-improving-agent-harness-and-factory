@@ -1,4 +1,8 @@
-/** Wächter (factory#541 L4): ein Vitest-Lauf erreicht über `gh` im PATH nie das Netz. test/support/gh-sperre.ts (setupFiles) stellt eine Attrappe vor den PATH. */
+/* gh-Sperre-Wächter (factory#541 L4): ein Vitest-Lauf erreicht über `gh` im PATH nie das Netz.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
+ *
+ * Regel: test/support/gh-sperre.ts (setupFiles) stellt eine Attrappe vor den PATH. */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
