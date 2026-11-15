@@ -38,6 +38,14 @@ export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
 /** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
+/** Stichprobenarme der Review-Schleife (factory#532): `vollablauf` (Kontrollarm, blockierend und sollte lösen eine Fix-Runde aus) und `schlank` (nur blockierend löst den nächsten Pass aus). */
+export const ARME = Object.freeze(["vollablauf", "schlank"]);
+/** Arm aus der Ticketnummer, deterministisch: durch 4 teilbar ⇒ `vollablauf`, sonst `schlank`. Wirft bei Nummern, die keine positive Ganzzahl sind. Pur. */
+export function armAusTicket(nr) {
+  if (!Number.isInteger(nr) || nr < 1) throw new Error(`armAusTicket braucht eine Ticketnummer (ganze Zahl ≥ 1), bekam ${String(nr)}`);
+  return nr % 4 === 0 ? "vollablauf" : "schlank";
+}
+
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
  *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
@@ -181,6 +189,7 @@ export function parseNachweis(text, zeilen) {
       zusatzpass: zusatzpassAus(reviewWert),
       abnahmefix: abnahmefixAus(reviewWert),
       verdikt: felder.verdikt ?? null,
+      arm: felder.arm ?? null,
     };
   }
   return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)), bedrohungen: bedrohungenAus(lastLine(text, zeilen.bedrohungen)) };
