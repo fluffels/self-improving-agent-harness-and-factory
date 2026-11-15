@@ -12,7 +12,7 @@
  *  6. Sonst Stufe 1 (Produktionscode ist nie Stufe 0, Leitplanken-Markdown mindestens Stufe 1).
  *
  * Bekannte Grenze: der Abschnittsname „Pfade“ ist fest deutsch (K4 nennt ihn wörtlich); ein Bezieher mit anderssprachigen Tickets bekommt bei `--ticket` Stufe 2 („Abschnitt fehlt“, fail-closed). Ein Schlüssel in `sprache.spezifikation`
- * und die Vorlage des Abschnitts gehören zu factory#527 (Ablauf).
+ * fehlt noch (Befund in der Sammelzeile); die Vorlage des Abschnitts steht in der Epic-Aufteilung des Planers (factory#527).
  * Eingang `--ticket`: nur die Listenzeilen im Abschnitt „Pfade“ (Formen: `-`, `*`, `+`, `1.` oder `1)`; der Pfad ist der erste Inline-Code-Span, sonst das erste Wort; Fließtext, Code-Fences und
  * der übrige Ticket-Text sind kein Eingang). Ein fehlender oder leerer Abschnitt, ein Glob (`*`, `?`, `[`) oder eine Zeile ohne Pfad ist Stufe 2. Die Prognose kennt keine Zeilen und prüft jeden Pfad zusätzlich als Verzeichnis.
  */
