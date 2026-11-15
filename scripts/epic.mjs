@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
- * Aufgeteiltes Epic (factory#507 L4): ein Epic bleibt nach der Aufteilung offen, zugewiesen und im Board-Status „In Progress“;
- * es schließt erst mit dem letzten Kind (Workflow `epic-abschluss.yml`, Einstieg `epic-abschluss.mjs`).
+ * Aufgeteiltes Epic (factory#507 L4): bleibt offen, zugewiesen und im Board-Status „In Progress“ und schließt mit dem letzten Kind
+ * (Workflow `epic-abschluss.yml`).
  *
- *   node scripts/epic.mjs aufgeteilt <nr>   # prüft, dass das Epic Kinder hat, und setzt seinen Board-Status auf „In Progress“
+ *   node scripts/epic.mjs aufgeteilt <nr>   # prüft, dass das Epic Kinder hat, und setzt den Board-Status auf „In Progress“
  *
- * Ohne Kinder Exit 1, ohne die Status-Option „In Progress“ im Status-Feld des Boards Exit 2 (jeweils mit Fix-Zeile); steht der Status schon
- * richtig, gibt es keine Mutation. Das Skript schreibt nur das Status-Feld des Board-Items, nie das Issue, den Assignee oder den Lock.
- * Das Board folgt der Trennregel (Labels des Issues, `boardRolleFuer`); das Repo ist `repo` der Projekt-Config.
+ * Ohne Kinder Exit 1, ohne die Status-Option „In Progress“ Exit 2 (je mit Fix-Zeile); steht der Status schon richtig, keine Mutation. Geschrieben
+ * wird nur das Status-Feld des Board-Items (nie Issue, Assignee oder Lock); das Board folgt der Trennregel (`boardRolleFuer`), das Repo ist `repo` der Config.
  */
 import { AUFRUF_EXIT, direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";

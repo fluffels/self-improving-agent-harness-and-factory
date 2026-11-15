@@ -2,9 +2,8 @@
 import { gleichesRepo } from "./repo-form.mjs";
 
 /**
- * Epic-Abschluss, pure Logik: ein aufgeteiltes Epic bleibt offen (zugewiesen, Status In Progress) und schließt erst, wenn sein letztes
- * Kind geschlossen ist. Jedes `CLOSED` zählt als geschlossen (auch „not planned“). Eine unvollständig gelesene Kinderliste (mehr Kinder, als
- * die Abfrage liefert) schließt nie: fail-closed.
+ * Epic-Abschluss, pure Logik: ein aufgeteiltes Epic schließt erst mit seinem letzten Kind; jedes `CLOSED` zählt (auch „not planned“), eine
+ * unvollständig gelesene Kinderliste (mehr Kinder, als die Abfrage liefert) schließt nie (fail-closed).
  *
  * Bekannte Grenzen: Kinder nur im Body ohne native Unteraufgaben-Kante werden nicht erkannt; ein Kind, das nach dem Schließen des Epics wieder
  * geöffnet wird, öffnet das Epic nicht; ein Close durch `GITHUB_TOKEN` löst keinen `issues.closed`-Lauf aus (verschachtelte Epics
