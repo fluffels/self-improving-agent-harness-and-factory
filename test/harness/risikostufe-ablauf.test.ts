@@ -36,7 +36,7 @@ const fehlt = (t: string, muster: (string | RegExp)[], name: string): string[] =
   muster.filter((m) => (typeof m === "string" ? !t.includes(m) : !m.test(t))).map((m) => `${name}: fehlt ${String(m)}`);
 
 /** Alle Befunde über die Texte des Ablaufs (leer = konsistent). Pur. */
-export function befunde(t: Texte): string[] {
+function befunde(t: Texte): string[] {
   const f: string[] = [];
   const iRisiko = t.ablauf.indexOf("risikostufe.mjs --ticket <nr>");
   const iPlaner = t.ablauf.indexOf('subagent_type: "<agenten.planer>"');
@@ -67,26 +67,51 @@ describe("Risikostufen-Ablauf (factory#527)", () => {
     assert.equal(stufeGrund("stufe 1 — scripts/x.mjs"), null);
   });
 
-  const verfaelschungen: [string, keyof Texte, string, string][] = [
-    ["Prognose nach dem Planer", "ablauf", "risikostufe.mjs --ticket <nr>", "risikostufe.mjs --tick <nr>"],
-    ["Prompt-Form fehlt", "ablauf", "Plan ohne Planer: stufe <n> — <Pfade>", "Plan ohne Planer"],
-    ["Sammelticket nicht ausgenommen", "ablauf", "noch Epic noch Fortsetzung", "noch Epic"],
-    ["Überschreiten ohne Fortsetzung", "ablauf", "Risikostufe überschritten", "Stufe zu hoch"],
-    ["Umsetzer meldet nicht", "umsetzer", "abgebrochen — Risikostufe überschritten", "abgebrochen"],
-    ["Stufe 0 ohne Review-Zeile", "umsetzer", "Review: ohne — stufe 0", "Review: kombiniert"],
-    ["Abbildung mit Gedankenstrich", "umsetzer", "Plan: ohne — stufe <n>`", "Plan: ohne — stufe — <n>`"],
-    ["Stufe 0 mit Lens", "review", "kein Lens-Pass", "ein Lens-Pass"],
-    ["Stufe 1 ohne Cap", "review", "(Cap 1, also", "(also"],
-    ["Klasse hoch ohne Stufe", "klasseHoch", "RISIKOSTUFE: 2", "RISIKO: hoch"],
-    ["Planer ohne Auslöser", "planer", "risikostufe.mjs --pfade", "groessenstufe.mjs --pfade"],
-    ["AGENTS.md ohne Stufen", "agents", "0 ohne Planer, Lens, Abnahme", "0 ohne Lens"],
+  /** Je Eintrag: Name, Datei, Verfälschung (alt → neu, alle Treffer) und der Teilstring, den der Befund nennen muss. */
+  const verfaelschungen: [string, keyof Texte, string, string, string][] = [
+    ["Prognose-Aufruf kaputt", "ablauf", "risikostufe.mjs --ticket <nr>", "risikostufe.mjs --tick <nr>", "steht nicht vor dem Planer-Spawn"],
+    ["Prompt-Form fehlt", "ablauf", "Plan ohne Planer: stufe <n> — <Pfade>", "Plan ohne Planer", "ablauf.md: fehlt"],
+    ["Sammelticket nicht ausgenommen", "ablauf", "noch Epic noch Fortsetzung", "noch Epic", "Absatz Risikostufe"],
+    ["Überschreiten ohne Fortsetzung", "ablauf", "Risikostufe überschritten", "Stufe zu hoch", "ablauf.md: fehlt"],
+    ["Überschreiten ohne Fortsetzungsauftrag", "ablauf", "Fortsetzungsauftrag", "Auftrag", "Fortsetzungsauftrag"],
+    ["Umsetzer meldet nicht", "umsetzer", "abgebrochen — Risikostufe überschritten", "abgebrochen", "umsetzer-risikostufe.md: fehlt"],
+    ["Stufe 0 ohne Review-Zeile", "umsetzer", "Review: ohne — stufe 0", "Review: kombiniert", "ohne — stufe 0"],
+    ["Stufe 0 ohne Abnahme-Zeile", "umsetzer", "Abnahme: entfaellt — stufe 0", "Abnahme: voll", "entfaellt — stufe 0"],
+    ["Stufe 1 ohne Abnahme-Zeile", "umsetzer", "Abnahme: entfaellt — stufe 1", "Abnahme: voll", "entfaellt — stufe 1"],
+    ["Umsetzer ohne Stufenprüfung", "umsetzer", "risikostufe.mjs", "stufen.mjs", "risikostufe.mjs"],
+    ["Abbildung mit Gedankenstrich", "umsetzer", "Plan: ohne — stufe <n>`", "Plan: ohne — stufe — <n>`", "Abbildung"],
+    ["Stufe 0 mit Lens", "review", "kein Lens-Pass", "ein Lens-Pass", "ablauf-risikostufe.md: fehlt"],
+    ["Stufe 1 ohne Cap", "review", "(Cap 1, also", "(also", "ablauf-risikostufe.md: fehlt"],
+    ["Stufe 1 ohne Wächter-Konstante", "review", "MAX_REVIEW_PAESSE_STUFE1", "MAX_X", "MAX_REVIEW_PAESSE_STUFE1"],
+    ["Klasse hoch ohne Stufe", "klasseHoch", "RISIKOSTUFE: 2", "RISIKO: hoch", "ablauf-klasse-hoch.md: fehlt"],
+    ["Klasse hoch ohne Skript", "klasseHoch", "risikostufe.mjs", "groessenstufe.mjs", "ablauf-klasse-hoch.md: fehlt"],
+    ["Planer ohne Auslöser", "planer", "risikostufe.mjs --pfade", "groessenstufe.mjs --pfade", "factory-planer.md: fehlt"],
+    ["AGENTS.md ohne Stufe 0", "agents", "0 ohne Planer, Lens, Abnahme", "0 ohne Lens", "AGENTS.md: fehlt"],
+    ["AGENTS.md ohne Stufe 1", "agents", "1 ohne Planer, Abnahme, Cap 1", "1 voll", "AGENTS.md: fehlt"],
+    ["AGENTS.md ohne Stufe 2", "agents", "2 voll, Sicherheits-Lens", "2 voll", "AGENTS.md: fehlt"],
   ];
-  for (const [name, datei, alt, neu] of verfaelschungen) {
-    test(`Negativfall: ${name} liefert Befunde`, () => {
+  for (const [name, datei, alt, neu, erwartet] of verfaelschungen) {
+    test(`Negativfall: ${name} nennt den Befund`, () => {
       const t = lies();
       assert.ok(t[datei].includes(alt), `Ausgangstext fehlt: ${alt}`);
       t[datei] = t[datei].replaceAll(alt, neu);
-      assert.ok(befunde(t).length > 0);
+      const b = befunde(t);
+      assert.ok(b.some((z) => z.includes(erwartet)), `erwartet ${erwartet}, erhalten ${JSON.stringify(b)}`);
     });
   }
+
+  test("Negativfall: der Prognose-Aufruf hinter dem Planer-Spawn ist rot", () => {
+    const t = lies();
+    const satz = "risikostufe.mjs --ticket <nr>";
+    t.ablauf = t.ablauf.replace(satz, "risikostufe.mjs --ticket-alt <nr>") + "\n" + satz;
+    assert.ok(befunde(t).some((z) => z.includes("steht nicht vor dem Planer-Spawn")));
+  });
+
+  test("Negativfall: der Ausnahmesatz hinter dem Planer-Spawn ist rot", () => {
+    const t = lies();
+    const m = /weder Sammelticket[^.]*noch Epic noch Fortsetzung/.exec(t.ablauf);
+    assert.ok(m);
+    t.ablauf = t.ablauf.replace(m[0], "x") + "\n" + m[0];
+    assert.ok(befunde(t).some((z) => z.includes("Absatz Risikostufe")));
+  });
 });

@@ -1,6 +1,6 @@
 # Ablauf: Risikostufe 0 und 1 (factory#527)
 
-Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie, sobald `node scripts/risikostufe.mjs` für den Diff `RISIKOSTUFE: 0` oder `RISIKOSTUFE: 1` meldet. Werte für die Platzhalter `<gruppe.schlüssel>` stehen im Block darunter und werden wörtlich eingesetzt.
+Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie nach der berechneten Stufe (auch bei einem Lauf mit Planer), sobald `node scripts/risikostufe.mjs` für den Diff `RISIKOSTUFE: 0` oder `RISIKOSTUFE: 1` meldet. Werte für die Platzhalter `<gruppe.schlüssel>` stehen im Block darunter und werden wörtlich eingesetzt.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
@@ -25,5 +25,4 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 
 - **Stufe 0:** kein Lens-Pass. Stufe 0 der Staffel (`verifyKompakt`) bleibt; Nachweis `<praefixe.commitZeile>Review: ohne — stufe 0`.
 - **Stufe 1:** Runde 1 mit dem vollen Satz der Diff-Art (Staffel in `SKILL.md`), danach höchstens **ein** Delta-Pass der blockierten Brillen (Cap 1, also `runden=2` höchstens; `MAX_REVIEW_PAESSE_STUFE1` im Wächter). Bleiben Blocker, ist das der Hand-off an den Hauptchat bzw. `ablauf-zusatzpass.md` wie bisher.
-- **Stufe 2:** der Ablauf in `SKILL.md` samt `ablauf-klasse-hoch.md` (Bedrohungsabschnitt, Sicherheits-Lens).
-- Steigt die Stufe bei einem Fix, rechnet `risikostufe.mjs` vor jedem Pass neu; eine höhere Stufe als die Prognose bricht den Lauf ab (`abgebrochen — Risikostufe überschritten`, Umsetzer-Kern).
+- Steigt die Stufe bei einem Fix, rechnet `risikostufe.mjs` vor jedem Pass neu; eine höhere Stufe als die Prognose bricht den Lauf ab (`abgebrochen — Risikostufe überschritten`, `.agents/skills/factory/umsetzer-risikostufe.md`).
