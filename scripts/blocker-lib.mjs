@@ -7,6 +7,8 @@ import { fehlerText, ghJson, tokenFuerZiel } from "./gh-cli.mjs";
 
 export const ADD_BLOCKED_BY = "mutation($i:ID!,$b:ID!){ addBlockedBy(input:{issueId:$i, blockingIssueId:$b}) { issue { number } } }";
 
+export const REMOVE_BLOCKED_BY = "mutation($i:ID!,$b:ID!){ removeBlockedBy(input:{issueId:$i, blockingIssueId:$b}) { issue { number } } }";
+
 export const ADD_SUB_ISSUE = "mutation($i:ID!,$s:ID!){ addSubIssue(input:{issueId:$i, subIssueId:$s}) { issue { number } } }";
 
 const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
@@ -14,6 +16,11 @@ const einzeilig = (t) => String(t).replace(/\s*\n\s*/g, " ").trim();
 /** Setzt die native Kante `issueNodeId` ← `blockerNodeId` (GraphQL-Mutation); `opts` = Token-Optionen des Ziel-Repos. */
 export function addBlockedBy({ issueNodeId, blockerNodeId, opts }, gh = ghJson) {
   return gh(["api", "graphql", "-f", `query=${ADD_BLOCKED_BY}`, "-f", `i=${issueNodeId}`, "-f", `b=${blockerNodeId}`], opts);
+}
+
+/** Löst die native Kante `issueNodeId` ← `blockerNodeId` (GraphQL-Mutation `removeBlockedBy`); `opts` = Token-Optionen des Ziel-Repos. */
+export function removeBlockedBy({ issueNodeId, blockerNodeId, opts }, gh = ghJson) {
+  return gh(["api", "graphql", "-f", `query=${REMOVE_BLOCKED_BY}`, "-f", `i=${issueNodeId}`, "-f", `b=${blockerNodeId}`], opts);
 }
 
 /** Echte Naht: Blocker (`{ repo, nummer }`) per REST nach `node_id` auflösen und die Kante setzen. `eigenes` = Repo dieses Checkouts (Token-Wahl). */

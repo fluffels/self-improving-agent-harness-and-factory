@@ -19,7 +19,8 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, markerEnde, markerStart, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, istWorkflowEinheit, markerEnde, markerStart, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { mitWorkflowAusschluss } from "./harness-doctor-factory-update.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
@@ -71,9 +72,22 @@ function liesErgaenzungen(verteilt, quelleLies, zielLies) {
   return { erg, fehler };
 }
 
+const DEPENDABOT = ".github/dependabot.yml";
+
+/** Die Vorlage `.github/dependabot.yml` bekommt `exclude-paths` der verteilten Workflows (`ausschluss`: `{ pfade, meldungen }`), damit der Doctor-Punkt Dependabot-Ausschluss im Erstbezug nicht sofort eine Lücke meldet (factory#499 L6). */
+function mitAusschluss(text, ausschluss) {
+  if (ausschluss === null) return text;
+  const e = mitWorkflowAusschluss(text, ausschluss.pfade);
+  if (e.hinweis !== null) ausschluss.meldungen.push(`${DEPENDABOT}: ${e.hinweis}`);
+  return e.text;
+}
+
+/** Nur für `.github/dependabot.yml`: die Pfade der verteilten Workflow-Einheiten samt Meldungsliste, sonst `null`. */
+const ausschlussFuer = (pfad, alle, meldungen) => (pfad === DEPENDABOT ? { pfade: alle.filter(istWorkflowEinheit).map((w) => w.pfad), meldungen } : null);
+
 /** Eine neu anzulegende Vorlage (wird nie überschrieben): Text mit den Projektwerten des Ziels. */
-function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
-  return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
+function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar, ausschluss = null) {
+  return { text: mitAusschluss(rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), ausschluss), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
 }
 
 /** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (Modulkopie, factory#244; geschrieben wird nichts); `begruendet` sind die Pfade aus `modulKopien`. */
@@ -199,7 +213,7 @@ export function planeSync({
     if (zielLies(e.pfad) !== null) {
       res.unveraendert++;
       res.unveraendertePfade.add(e.pfad);
-    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar));
+    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar, ausschlussFuer(e.pfad, alle, res.meldungen)));
   }
 
   const einheiten = {};
@@ -413,9 +427,12 @@ function suppressionsHinweise(plan) {
 /**
  * Zweiter Lauf, wenn der Sync eine Datei unter `scripts/` geschrieben hat (das laufende Werkzeug ist dann veraltet): einmal, nie mit `--trocken`, nie mit gesetztem Riegel,
  * nur mit injiziertem `zweitlauf`. Rückgabe: dessen Exit-Code, sonst 0 (kein Neustart).
+ * Im Trockenlauf mit geplanter Datei unter `scripts/` nur ein Hinweis (factory#499 L2): Hinweise wie stub-anker stammen dann vom laufenden, alten Werkzeug.
  */
 function zweiterLauf({ plan, opt, argv, out, zweitlauf = null, env = process.env }) {
-  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || ![...plan.dateien.keys()].some((p) => p.startsWith("scripts/"))) return 0;
+  const skripte = [...plan.dateien.keys()].some((p) => p.startsWith("scripts/"));
+  if (opt.trocken && skripte) out("Hinweis: Trockenlauf mit dem laufenden (alten) Werkzeug: Hinweise wie stub-anker können vom alten Stand stammen; der echte Lauf startet nach dem Schreiben mit dem neuen Stand neu");
+  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || !skripte) return 0;
   out("Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand");
   return zweitlauf(argv);
 }
