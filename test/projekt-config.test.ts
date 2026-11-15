@@ -228,7 +228,7 @@ describe("pruefeProjektConfig", () => {
 
   test("bezieher entfallen (factory#500): jede Form des Schlüssels wird abgewiesen, die Config ohne ihn ist gültig", () => {
     assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
-    for (const wert of [["a/b"], [], "x"]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: wert }).join("\n"), /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen/);
+    for (const wert of [["a/b"], [], "x"]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: wert }).join("\n"), /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen \(bezieher aus \.factory\/projekt\.json\)/);
     assert.equal("bezieherAus" in pc, false);
   });
 

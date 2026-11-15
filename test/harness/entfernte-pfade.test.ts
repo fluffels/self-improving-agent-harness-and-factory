@@ -481,12 +481,20 @@ describe("Keine Bezieher-Liste der Fabrik (factory#500)", () => {
     ["Schlüssel bezieher", "bezieherAus(config)"],
     ["Schlüssel bezieher", "der Schlüssel `bezieher` der Config"],
     ["Schlüssel bezieher", "die `bezieher` der Projekt-Config"],
+    ["Schlüssel bezieher", "die Liste `bezieher` der Config"],
+    ["Schlüssel bezieher", "wert.bezieher"],
+    ["Schlüssel bezieher", "cfg.bezieher"],
+    ["Schlüssel bezieher", "cfg?.bezieher"],
+    ["Schlüssel bezieher", "config?.bezieher"],
+    ["Schlüssel bezieher", '"bezieher" : ["a/b"]'],
+    ["Schlüssel bezieher", "{ bezieher:[x] }"],
+    ["--probe", "tag-takt --probe"],
   ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
     assert.deepEqual(liste(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
   });
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
-    const nachbarn = ["{ bezieher: true }", "d.bezieher ?? x", 'gruppe("bezieher", {', 'join(scratch, "bezieher")', "--probe-erstbezug", "bezieherMigrationen", "istBezieher(w)", "probeErgebnisseX", "xbezieherProbe"];
+    const nachbarn = ["{ bezieher: true }", "d.bezieher ?? x", 'gruppe("bezieher", {', 'join(scratch, "bezieher")', "--probe-erstbezug", "bezieherMigrationen", "istBezieher(w)", "probeErgebnisseX", "xbezieherProbe", "--probeX", "bezieherProbeX", "xprobeErgebnisse", "xbezieher: [x]", "myconfig.bezieher", "config.bezieherX", "xbezieherAus", "bezieherAusX"];
     assert.deepEqual(liste(nachbarn.join("\n")), []);
   });
 
