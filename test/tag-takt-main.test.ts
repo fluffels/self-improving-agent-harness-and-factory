@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/tag-takt.mjs";
@@ -11,7 +12,7 @@ import { FREMD } from "./support/fremd-config";
 
 type Aufruf = { args: string[]; opt: unknown };
 type Deps = Record<string, unknown>;
-const T = raw as unknown as { main: (argv: string[], deps: Deps) => Promise<number>; tagTitel: (t: string) => string; probeEinstieg: (argv: string[], deps: Deps) => number };
+const T = raw as unknown as { main: (argv: string[], deps: Deps) => Promise<number>; tagTitel: (t: string) => string };
 
 const SHA = "a".repeat(40);
 const commitLog = (n: number) =>
@@ -176,180 +177,36 @@ describe("tag-takt main", () => {
   });
 });
 
-describe("tag-takt main: Vor-Tag-Probe (factory#188)", () => {
-  const mitBezieher = (bezieher: unknown) => ({ ...FREMD, bezieher });
-  const CI_LAUF = (conclusion: string | null, status = "completed") => [{ path: ".github/workflows/ci.yml", status, conclusion, html_url: "https://example.invalid/run/9" }];
-  const probe = (argv: string[], config: unknown = mitBezieher(["o/a", "o/b"]), laeufe: unknown = CI_LAUF("success")) => {
-    const a = aufbau({ ghJson: () => laeufe });
-    a.deps.ladeConfig = () => config;
-    return T.main(argv, a.deps).then((code) => ({ code, log: a.log, text: a.text }));
+describe("tag-takt main: --probe entfallen (factory#500)", () => {
+  const ROOT = process.cwd();
+  const mitProbe = async (argv: string[], opt: { wurzel?: string } = {}) => {
+    const a = aufbau({ ghJson: () => assert.fail("kein gh-Aufruf") });
+    a.deps.start = () => assert.fail("kein Start");
+    if (opt.wurzel !== undefined) a.deps.wurzel = opt.wurzel;
+    return { code: await T.main(argv, a.deps), log: a.log, text: a.text };
   };
-  it("Trockenlauf mit Bezieher-Liste: die Vorschau enthält den Probe-Abschnitt und je Bezieher eine offene Zeile", async () => {
-    const a = aufbau();
-    a.deps.start = () => Promise.resolve({ config: mitBezieher(["o/a", "o/b"]), libs: { OWNER: "o", REPO: "o/r", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [] }, trocken: true });
-    expect(await T.main(["--dry-run"], a.deps)).toBe(0);
-    const aus = a.log.join("\n");
-    expect(aus).toContain("[dry-run] Vor-Tag-Probe je Bezieher");
-    expect(aus).toContain("[dry-run] - [ ] `o/a`: Probe ausstehend");
-    expect(aus).toContain("[dry-run] - [ ] `o/b`: Probe ausstehend");
-  });
-  it("anlegen mit Bezieher-Liste: der Probe-Abschnitt steht im Body des angelegten Tickets", async () => {
-    const a = aufbau({ start: undefined });
-    a.deps.start = () => Promise.resolve({ config: mitBezieher(["o/a"]), libs: { OWNER: "o", REPO: "o/r", ZIEL: "o/ziel", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [], platziereOben: () => undefined }, trocken: false });
-    expect(await T.main([], a.deps)).toBe(0);
-    expect(JSON.stringify(a.text[0].args)).toContain("Probe ausstehend");
-  });
-  it("die Schreibweise --probe=<owner/name>=<exit> mit Gleichheitszeichen wird ebenfalls gelesen", async () => {
-    const r = await probe(["--probe=o/a=0", "--probe=o/b=1"]);
-    expect(r.code).toBe(1);
-    expect(r.log.join("\n")).toContain("BLOCKER `o/b`");
-  });
-  it("CI des Commits rot: Exit 1 trotz grüner Bezieher, BLOCKER-Zeile, nicht taggen (K3)", async () => {
-    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"], undefined, CI_LAUF("failure"));
-    expect(r.code).toBe(1);
-    expect(r.log.join("\n")).toContain("- [ ] BLOCKER: CI des Commits aaaaaaa rot (enthält den Probe-Erstbezug), nicht taggen");
-    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: CI des Commits nicht grün: nicht taggen.");
-  });
-  it.each([
-    ["läuft noch", CI_LAUF(null, "in_progress")],
-    ["kein Lauf", []],
-  ])("CI des Commits %s: Exit 1 (ausstehend, fail-closed)", async (_n, laeufe) => {
-    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"], undefined, laeufe);
-    expect(r.code).toBe(1);
-    expect(r.log.join("\n")).toContain("- [ ] CI des Commits aaaaaaa ausstehend, nicht taggen, bis grün");
-  });
-  it("probeEinstieg ohne ci (Standard) oder mit ci null ist ausstehend: Exit 1, auch bei grünen Bezieherinnen", () => {
-    const deps = { ladeConfig: () => mitBezieher(["o/a"]), log: () => undefined, err: () => undefined };
-    expect(T.probeEinstieg(["--probe", "o/a=0"], deps)).toBe(1);
-    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: null })).toBe(1);
-    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "gruen", url: null }, sha: SHA })).toBe(0);
-  });
-  it("CI-Abfrage wirft (gh-Fehler): ausstehend, Exit 1, kein Absturz", async () => {
-    const a = aufbau({ ghJson: () => { throw new Error("gh kaputt"); } });
-    a.deps.ladeConfig = () => mitBezieher(["o/a", "o/b"]);
-    expect(await T.main(["--probe", "o/a=0", "--probe", "o/b=0"], a.deps)).toBe(1);
-    expect(a.log.join("\n")).toContain("CI-Status nicht lesbar");
-  });
-  it("git rev-parse wirft: ausstehend, Exit 1, kein Absturz", async () => {
-    const a = aufbau({ git: () => { throw new Error("kein git"); } });
-    a.deps.ladeConfig = () => mitBezieher(["o/a", "o/b"]);
-    expect(await T.main(["--probe", "o/a=0", "--probe", "o/b=0"], a.deps)).toBe(1);
-    expect(a.log.join("\n")).toContain("Commit nicht lesbar");
-  });
-  it("die CI-Abfrage gilt dem HEAD-Commit des Checkouts (rev-parse) über den gh-Platzhalter, nicht einem festen Repo", async () => {
-    const aufrufe: string[][] = [];
-    const a = aufbau({ ghJson: (x) => { aufrufe.push(x); return CI_LAUF("success"); } });
-    a.deps.ladeConfig = () => mitBezieher(["o/a"]);
-    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(0);
-    expect(aufrufe).toEqual([["api", `repos/{owner}/{repo}/actions/runs?head_sha=${SHA}&event=push&per_page=30`, "--jq", ".workflow_runs"]]);
-  });
-  it("alle Bezieher grün, CI grün: Exit 0, beide abgehakt, CI-Zeile abgehakt, kein Ticket-Schreibzugriff", async () => {
-    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=0"]);
-    expect(r.code).toBe(0);
-    expect(r.log.join("\n")).toContain("- [x] CI grün (Probe-Erstbezug eingeschlossen)");
-    expect(r.log.join("\n")).toContain("- [x] `o/a`: Probe grün");
-    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
-    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");
-    expect(r.log.join("\n")).not.toContain("Vor-Tag-Probe: CI des Commits nicht grün");
+  it("--probe <owner/name>=<exit> endet mit Exit 2 und nennt den Probe-Erstbezug, ohne Start und gh-Aufruf", async () => {
+    const r = await mitProbe(["--probe", "a/b=0"]);
+    expect(r.code).toBe(2);
+    expect(r.log.join("\n")).toContain("Probe-Erstbezug");
+    expect(r.log.join("\n")).toContain("node scripts/probe-erstbezug.mjs");
     expect(r.text).toEqual([]);
   });
-  it("nur ausstehend, kein Blocker: keine BLOCKER-Zeile; nur Blocker, nichts ausstehend: keine ausstehend-Zeile", async () => {
-    const nurOffen = await probe(["--probe", "o/a=0"]);
-    expect(nurOffen.log.join("\n")).not.toContain("Vor-Tag-Probe: BLOCKER");
-    const nurRot = await probe(["--probe", "o/a=1", "--probe", "o/b=0"]);
-    expect(nurRot.log.join("\n")).toContain("Vor-Tag-Probe: BLOCKER o/a");
-    expect(nurRot.log.join("\n")).not.toContain("Vor-Tag-Probe: ausstehend");
+  it("auch die Form --probe=<wert> und --probe ohne Wert enden mit Exit 2", async () => {
+    expect((await mitProbe(["--probe=a/b=0"])).code).toBe(2);
+    expect((await mitProbe(["--probe"])).code).toBe(2);
   });
-  it("Bezieher-Repo (Sync-Stand vorhanden): --probe tut nichts, Exit 0, keine Checkliste", async () => {
-    const w = mkdtempSync(join(tmpdir(), "tt-"));
+  it("in einer Bezieher-Wurzel (Sync-Stand vorhanden) ebenfalls Exit 2, nicht 0", async () => {
+    const w = mkdtempSync(join(tmpdir(), "takt-bezieher-"));
     ordner.push(w);
-    mkdirSync(join(w, ".factory"));
-    writeFileSync(join(w, ".factory", "sync-stand.json"), JSON.stringify({ version: 1, quelle: "q", tag: "v1.0.0" }));
-    const a = aufbau();
-    a.deps.wurzel = w;
-    a.deps.ladeConfig = () => mitBezieher(["o/a"]);
-    expect(await T.main(["--probe", "o/a=1"], a.deps)).toBe(0);
-    expect(a.log.join("\n")).toContain("Bezieher-Repo (Sync-Stand vorhanden), nichts zu tun");
-    expect(a.log.join("\n")).not.toContain("Probe grün");
+    mkdirSync(join(w, ".factory"), { recursive: true });
+    writeFileSync(join(w, ".factory", "sync-stand.json"), "{}");
+    expect((await mitProbe(["--probe", "a/b=0"], { wurzel: w })).code).toBe(2);
   });
-  it("Standard-ladeConfig liest die echte Projekt-Config: ein unbekanntes Repo nennt deren Liste, nicht eine eingebaute", async () => {
-    const a = aufbau();
-    expect(await T.main(["--probe", "o/zz-unbekannt=0"], a.deps)).toBe(2);
-    const aus = a.log.join("\n");
-    expect(aus).toContain("erwartet wird je Bezieher");
-    expect(aus).not.toContain("Liste leer");
-    expect(aus).not.toContain("x/y");
-  });
-  it("Negativfall: ein roter Bezieher ist ein BLOCKER, Exit 1", async () => {
-    const r = await probe(["--probe", "o/a=0", "--probe", "o/b=2"]);
-    expect(r.code).toBe(1);
-    const aus = r.log.join("\n");
-    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 2)");
-    expect(aus).toContain("Vor-Tag-Probe: BLOCKER o/b");
-  });
-  it("ein mehrstelliger Exit-Wert (127, 255) wird angenommen und ist ein BLOCKER, kein Aufruf-Fehler", async () => {
-    const r = await probe(["--probe", "o/a=127", "--probe", "o/b=255"]);
-    expect(r.code).toBe(1);
-    const aus = r.log.join("\n");
-    expect(aus).toContain("BLOCKER `o/a`: Probe rot (Exit 127)");
-    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 255)");
-  });
-  it("fail-closed: ein Bezieher ohne Ergebnis bleibt ausstehend, Exit 1", async () => {
-    const r = await probe(["--probe", "o/a=0"]);
-    expect(r.code).toBe(1);
-    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: ausstehend o/b");
-  });
-  it("factory#215 L3: die Repo-Schreibweise ist egal (GitHub unterscheidet nicht), Ausgabe und Zuordnung unter dem Namen der Config", async () => {
-    const r = await probe(["--probe", "O/A=0", "--probe", "o/B=1"]);
-    expect(r.code).toBe(1);
-    const aus = r.log.join("\n");
-    expect(aus).toContain("- [x] `o/a`: Probe grün");
-    expect(aus).toContain("BLOCKER `o/b`: Probe rot (Exit 1)");
-    expect(aus).not.toContain("ausstehend");
-    expect((await probe(["--probe", "O/A=0", "--probe", "O/b=0"])).code).toBe(0);
-  }, 10_000);
-  it("factory#215 L3: dasselbe Repo in anderer Schreibweise doppelt ist ein Aufruf-Fehler (Exit 2)", async () => {
-    expect((await probe(["--probe", "o/a=0", "--probe", "O/A=1"])).code).toBe(2);
-  });
-  it("factory#215 L5: <owner/name>=rest ist grün mit Projekt-Rest (Exit 0, Befund-Hinweis), kein Blocker", async () => {
-    const r = await probe(["--probe", "o/a=rest", "--probe", "o/b=0"]);
-    expect(r.code).toBe(0);
-    const aus = r.log.join("\n");
-    expect(aus).toContain("- [x] `o/a`: Probe grün mit Projekt-Rest (Befund bzw. Bezieher-Migration festhalten, kein Blocker)");
-    expect(aus).toContain("Vor-Tag-Probe: Projekt-Rest bei o/a: als Befund festhalten.");
-    expect(aus).not.toContain("BLOCKER");
-  });
-  it("factory#215 L5: rest ersetzt kein fehlendes Ergebnis (Bezieher ohne Ergebnis bleibt ausstehend, Exit 1)", async () => {
-    const r = await probe(["--probe", "o/a=rest"]);
-    expect(r.code).toBe(1);
-    expect(r.log.join("\n")).toContain("Vor-Tag-Probe: ausstehend o/b");
-  });
-  it.each([
-    [["--probe", "o/fremd=0"]],
-    [["--probe", "o/a=REST"]],
-    [["--probe", "o/a=rest2"]],
-    [["--probe", "o/a=abc"]],
-    [["--probe", "o/a"]],
-    [["--probe", "o/a=0", "--probe", "o/a=1"]],
-    [["--probe"]],
-    [["--probe", "o/a=0", "--dry-run"]],
-    [["--probe", "o/a=1000"]],
-    [["--probe", "o/a=0x"]],
-    [["--probe", "o/a="]],
-    [["--probe", "x=o/a=0"]],
-  ])("Aufruf-Fehler %j: Exit 2", async (argv) => {
-    const r = await probe(argv);
-    expect(r.code).toBe(2);
-  });
-  it("unlesbare Projekt-Config: Exit 2 mit Meldung, kein Stacktrace", async () => {
-    const a = aufbau();
-    a.deps.ladeConfig = () => { throw new Error("kaputt"); };
-    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(2);
-    expect(a.log.join("\n")).toContain("Tag-Takt: Projekt-Config nicht lesbar");
-  });
-  it("ohne gelistete Bezieher ist jedes --probe ein unbekanntes Repo: Exit 2", async () => {
-    const r = await probe(["--probe", "o/a=0"], mitBezieher(undefined));
-    expect(r.code).toBe(2);
+  it("als Kommandozeile: Exit 2, der Hinweis auf stderr, kein Netz (der Wächter steht vor dem Start)", () => {
+    const r = spawnSync(process.execPath, ["scripts/tag-takt.mjs", "--probe", "a/b=0"], { cwd: ROOT, encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Probe-Erstbezug");
   });
 });
 
@@ -422,33 +279,23 @@ describe("tag-takt main: Milestones (factory#194)", () => {
 });
 
 describe("tag-takt main: synthetische Bezieher (factory#224)", () => {
-  const CI_LAUF = (conclusion: string | null) => [{ path: ".github/workflows/ci.yml", status: "completed", conclusion, html_url: "https://example.invalid/run/9" }];
-  it("probeEinstieg mit Profilen: rote CI → Exit 1 und die Zeile nennt die Profile; grün bei grünem Bezieher → Exit 0", () => {
-    const log: string[] = [];
-    const deps = { ladeConfig: () => ({ ...FREMD, bezieher: ["o/a"] }), log: (s: string) => log.push(s), err: () => undefined, profile: ["java", "python"], sha: SHA };
-    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "rot", url: null } })).toBe(1);
-    expect(log.join("\n")).toContain("(enthält den Probe-Erstbezug und die synthetischen Bezieher java, python)");
-    expect(T.probeEinstieg(["--probe", "o/a=0"], { ...deps, ci: { zustand: "gruen", url: null } })).toBe(0);
-  });
-  it("main --probe reicht ladeProfile durch; ohne Dep liest es die Dateien im Ordner der Wurzel, fehlt der Ordner, gibt es keine Profile", async () => {
-    const a = aufbau({ ghJson: () => CI_LAUF("failure") });
-    a.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
-    a.deps.ladeProfile = () => ["java"];
-    expect(await T.main(["--probe", "o/a=0"], a.deps)).toBe(1);
-    expect(a.log.join("\n")).toContain("synthetischen Bezieher java");
-    const b = aufbau({ ghJson: () => CI_LAUF("failure") });
-    b.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
-    expect(await T.main(["--probe", "o/a=0"], b.deps)).toBe(1);
-    expect(b.log.join("\n")).not.toContain("synthetischen Bezieher");
+  it("Trockenlauf: ohne ladeProfile liest es die Dateien im Ordner der Wurzel, fehlt der Ordner, gibt es keine Profile", async () => {
+    const trocken = async (wurzel?: string): Promise<string> => {
+      const a = aufbau();
+      a.deps.start = () => Promise.resolve({ config: FREMD, libs: { OWNER: "o", REPO: "o/r", ladeSammelKontext: () => ({ rohe: [] }), vertrauteIssues: () => [], frischeOffeneIssues: () => [] }, trocken: true });
+      if (wurzel !== undefined) a.deps.wurzel = wurzel;
+      expect(await T.main(["--dry-run"], a.deps)).toBe(0);
+      return a.log.join("\n");
+    };
+    expect(await trocken()).not.toContain("Synthetischer Bezieher");
     const w = mkdtempSync(join(tmpdir(), "takt-profil-"));
     ordner.push(w);
     mkdirSync(join(w, "test", "fixtures", "probe-profil"), { recursive: true });
     for (const d of ["python.json", "java.json", "notiz.md"]) writeFileSync(join(w, "test", "fixtures", "probe-profil", d), "{}");
-    const c = aufbau({ ghJson: () => CI_LAUF("failure") });
-    c.deps.ladeConfig = () => ({ ...FREMD, bezieher: ["o/a"] });
-    c.deps.wurzel = w;
-    expect(await T.main(["--probe", "o/a=0"], c.deps)).toBe(1);
-    expect(c.log.join("\n")).toContain("synthetischen Bezieher java, python");
+    const aus = await trocken(w);
+    expect(aus).toContain("Synthetischer Bezieher `java`");
+    expect(aus).toContain("Synthetischer Bezieher `python`");
+    expect(aus).not.toContain("notiz");
   });
   it("Ticket-Lauf: die Profile aus ladeProfile stehen im Body des angelegten Tickets", async () => {
     const a = aufbau();
