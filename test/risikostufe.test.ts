@@ -108,7 +108,7 @@ describe("Stufe 0 und 1 (K3)", () => {
     ["Testhelfer", [eins("test/support/h.ts")]],
     ["Konfiguration", [eins("config/app.json")]],
   ])("Fall B negativ: %s ist 1", (_n, eintraege) => {
-    const r = stufe(eintraege as Eintrag[]);
+    const r = stufe(eintraege);
     expect(r.stufe).toBe(1);
     expect(r.gruende.length).toBeGreaterThan(0);
   });
@@ -215,7 +215,7 @@ describe("CLI laufe", () => {
     const r = cli.laufe(["--pfade", "docs/a.md"], lader());
     expect(r).toMatchObject({ code: 0 });
     expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — .+$/);
-    const j = JSON.parse(cli.laufe(["--pfade", "package.json", "--json"], lader()).ausgabe);
+    const j = JSON.parse(cli.laufe(["--pfade", "package.json", "--json"], lader()).ausgabe) as { stufe: number };
     expect(Object.keys(j)).toEqual(["stufe", "gruende", "treffer", "pfade"]);
     expect(j.stufe).toBe(2);
   });
@@ -231,20 +231,25 @@ describe("CLI laufe", () => {
     [["--liste", "--commit", "x"]],
     [["--ticket"]],
   ])("Aufruffehler %j ist Exit 2", (argv) => {
-    expect(cli.laufe(argv as string[], lader())).toMatchObject({ code: 2, ausgabe: expect.stringContaining("Aufruf:") });
+    const r = cli.laufe(argv, lader());
+    expect(r.code).toBe(2);
+    expect(r.ausgabe).toContain("Aufruf:");
   });
   test("--pfade ohne Pfad ist Stufe 2 mit Exit 0", () => {
-    expect(cli.laufe(["--pfade"], lader())).toMatchObject({ code: 0, ausgabe: expect.stringMatching(/^RISIKOSTUFE: 2 — keine Dateiliste/) });
+    const r = cli.laufe(["--pfade"], lader());
+    expect(r.code).toBe(0);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 2 — keine Dateiliste/);
   });
   test("--commit rechnet <sha>^..<sha>", () => {
     const aufrufe: string[][] = [];
-    const r = cli.laufe(["--commit", "abc123"], { ...lader(), ladeRisikoBasis: () => RISIKO, git: (a) => (aufrufe.push(a), "3\t2\tdocs/x.md") } as Io);
+    const r = cli.laufe(["--commit", "abc123"], { ...lader(), ladeRisikoBasis: () => RISIKO, git: (a) => (aufrufe.push(a), "3\t2\tdocs/x.md") });
     expect(aufrufe[0].at(-1)).toBe("abc123^..abc123");
     expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 0/);
   });
   test("ohne Argument: keine Basis auflösbar ist Stufe 2", () => {
     const r = cli.laufe([], { ...lader(), env: {}, git: () => { throw new Error("kein git"); } });
-    expect(r).toMatchObject({ code: 0, ausgabe: expect.stringMatching(/^RISIKOSTUFE: 2 — keine Vergleichs-Basis/) });
+    expect(r.code).toBe(0);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 2 — keine Vergleichs-Basis/);
   });
   test("ohne Argument: Diff gegen die aufgelöste Basis", () => {
     const git = (a: string[]) => (a[0] === "-c" ? "1\t1\tdocs/x.md" : a[0] === "show" ? JSON.stringify({}) : "refs/heads/main");
@@ -282,7 +287,7 @@ describe("CLI laufe", () => {
     expect(r.ausgabe).toContain("/.github/workflows/\tbasis:ci");
     expect(r.ausgabe).toContain("/eslint.config.js\tleitplanken:gate");
     expect(r.ausgabe).toMatch(/\*auth\*\trisiko:/);
-    expect(JSON.parse(cli.laufe(["--liste", "--json"], lader()).ausgabe).fehler).toEqual([]);
+    expect((JSON.parse(cli.laufe(["--liste", "--json"], lader()).ausgabe) as { fehler: string[] }).fehler).toEqual([]);
     const kaputt = cli.laufe(["--liste"], lader({ ladeBasis: () => { throw new Error("weg"); } }));
     expect(kaputt.code).toBe(1);
     expect(kaputt.ausgabe).toMatch(/nicht ladbar: Stufe-2-Basis — weg/);

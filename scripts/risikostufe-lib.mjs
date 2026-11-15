@@ -64,11 +64,21 @@ export function stufe2Leitplanken(text) {
 
 const leer = (m) => !Array.isArray(m) || m.length === 0;
 
-/** Der Grund, warum nichts berechnet werden kann (fail-closed, Stufe 2), sonst `null`. Pur. */
-function failClosedGrund({ eintraege, basis, leitplanken, risiko, prognose }) {
+/** Grund, warum die Listen nicht reichen (Basis, Leitplanken, Risiko-Muster), sonst `null`. Pur. */
+function listenGrund({ basis, leitplanken, risiko }) {
   if (leer(basis?.muster)) return "Stufe-2-Basis nicht geladen oder leer";
   if (leer(leitplanken?.gate?.muster) || leer(leitplanken?.alle)) return "Leitplanken (protected-paths) nicht geladen oder leer";
-  if (leer(risiko?.muster) || risiko?.fehler?.length) return `Risiko-Muster nicht ladbar: ${risiko?.fehler?.join("; ") ?? "keine Muster geladen"}`;
+  return risikoGrund(risiko);
+}
+
+/** Grund, warum die Risiko-Muster nicht nutzbar sind (fehlen, leer, mit `fehler`), sonst `null`. Pur. */
+function risikoGrund(risiko) {
+  if (!leer(risiko?.muster) && !risiko?.fehler?.length) return null;
+  return `Risiko-Muster nicht ladbar: ${risiko?.fehler?.join("; ") ?? "keine Muster geladen"}`;
+}
+
+/** Grund, warum die Dateiliste nicht prüfbar ist (leer, Eintrag ohne Pfad, quotiert, binär), sonst `null`. Pur. */
+function listeGrund(eintraege, prognose) {
   if (leer(eintraege)) return "keine Dateiliste (leer oder nicht lesbar)";
   for (const e of eintraege) {
     if (!istText(e?.pfad)) return "Dateiliste nicht lesbar (Eintrag ohne Pfad)";
@@ -77,6 +87,9 @@ function failClosedGrund({ eintraege, basis, leitplanken, risiko, prognose }) {
   }
   return null;
 }
+
+/** Der Grund, warum nichts berechnet werden kann (fail-closed, Stufe 2), sonst `null`. Pur. */
+const failClosedGrund = ({ eintraege, prognose, ...listen }) => listenGrund(listen) ?? listeGrund(eintraege, prognose);
 
 const alsVerzeichnis = (p) => `${p.replace(/\/+$/, "")}/x`;
 

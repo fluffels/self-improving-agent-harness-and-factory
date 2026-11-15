@@ -73,6 +73,84 @@ Die hohen Blocker-Zahlen der Test-Adäquanz und der Requirement-Treue stammen ü
 
 **Risikoklasse (factory#333, ADR 0027):** die Härtung (hoch ist nie `S`) braucht Evidenz; Nachmessung der letzten 60 Commits Rohwerte im PR von factory#333. Prüftermin: Sammeleintrag `regeln-verfall-2027-03` in `.github/wiedervorlagen.json` (2027-03-01), Nachmessung wie im PR von factory#333 (Zahl der Commits je Klasse und der nur durch Risiko auf `voll` gehobenen); sind die Fehlalarme der Teilwort-Muster (`*auth*` in „author“) häufiger als echte Treffer, werden die Muster der Standardliste enger gefasst.
 
+### Risikostufe (factory#525)
+
+Die **Risikostufe** (0, 1, 2) ist die dritte Achse neben Größenstufe und Risikoklasse: `node scripts/risikostufe.mjs` berechnet sie deterministisch aus den Pfaden (und bei Fall B der Größe) eines Diffs, eines Commits (`--commit <sha>`), geplanter Pfade (`--pfade`) oder des Abschnitts „Pfade“ eines Tickets (`--ticket <nr>`, nur die Listenzeilen dort, kein sonstiger Text). Teil 1/5 des Epics factory#511: **sie wirkt noch nicht** auf Ablauf (factory#527) und CI (factory#526); die Größenstufe geht in factory#529 auf. Nicht zu verwechseln mit „Stufe 0“ der Review-Staffel.
+
+- **Stufe 2:** ein Pfad trifft die feste Basis [`.github/risikostufe-basis.json`](../.github/risikostufe-basis.json) (Hooks, CI-Workflows, Agent-Einstellungen, MCP-Config, Abhängigkeits-Manifeste und Lockfiles gängiger Ökosysteme, Selbstschutz der beiden Listen und der Skripte; ohne Beachtung der Groß-/Kleinschreibung; die Projekt-Config kann sie nicht ersetzen), oder die Leitplanken-Gruppe `gate` aus `.github/protected-paths.json` (fehlt die Gruppe, gelten alle Leitplanken), oder die Risikoklasse ist hoch.
+- **Stufe 0:** nur ein reiner `*.md`-Diff ohne Leitplanken- oder Grundschutz-Pfad, oder Größenstufe S mit Sweep `stichprobe` (nur Doku und Testdateien außerhalb von `test/harness/`). Produktionscode ist nie Stufe 0, Leitplanken-Markdown mindestens Stufe 1, alles andere Stufe 1.
+- **Fail-closed:** leere oder unlesbare Dateiliste, quotierter Pfad, Binärdatei, nicht ladbare Basis, Leitplanken oder Config, git-Fehler, fehlender oder leerer Abschnitt „Pfade“, Glob im Abschnitt und nicht lesbares Ticket (auch Fremdeingang) sind Stufe 2, nie niedriger. `--liste` druckt die wirksame Liste (`<muster>⇥<quelle>`), `--json` Treffer und Gründe.
+
+**Vorher-Verteilung (Rückrechnung, K6).** Rezept: `git log --first-parent -60 --format=%h origin/main` auf `origin/main` = `b43cf1e`, je Commit `node scripts/risikostufe.mjs --commit <sha> --json` (Listen-Stand dieses PRs; „erster Grund“ ist `gruende[0]`; ein Merge-Commit rechnet gegen seinen ersten Elternteil). Ergebnis: Stufe 0 in 10, Stufe 1 in 22, Stufe 2 in 28 von 60 Commits. Häufigste erste Gründe: Stufe 0: 10× nur *.md ohne Leitplanken- oder Grundschutz-Pfad. Stufe 1: 5× docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill); 3× scripts/codex-hook-lib.mjs ist Code oder Konfiguration; 3× .github/wiedervorlagen.json ist Code oder Konfiguration; 2× scripts/kontext-budget-lib.mjs ist Code oder Konfiguration. Stufe 2: 7× trifft /.github/workflows/ (basis:ci); 6× trifft /scripts/check-*.mjs (leitplanken:gate); 6× trifft /.github/protected-paths.json (basis:selbstschutz); 2× trifft /eslint-suppressions.json (leitplanken:gate). Die Fabrik schützt fast alle ihre Pfade; in einem Bezieher mit Produktcode liegt der Anteil der Stufen 0 und 1 höher.
+
+<details>
+<summary>Rohwerte der 60 Commits (Commit, Stufe, erster Grund)</summary>
+
+| Commit | Stufe | erster Grund |
+| --- | --- | --- |
+| `b43cf1e` | 2 | scripts/tag-takt.mjs trifft /scripts/tag-takt.mjs (leitplanken:gate) |
+| `b0d6189` | 2 | scripts/check-context-size.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `7c0909d` | 1 | .factory/extraktion.json ist Code oder Konfiguration |
+| `d3ccc6a` | 2 | .github/workflows/ci.yml trifft /.github/workflows/ (basis:ci) |
+| `e35b94d` | 1 | scripts/board-place.mjs ist Code oder Konfiguration |
+| `dca4ea7` | 2 | .github/workflows/ticket-drift.yml trifft /.github/workflows/ (basis:ci) |
+| `711d224` | 2 | eslint-suppressions.json trifft /eslint-suppressions.json (leitplanken:gate) |
+| `311eeb0` | 1 | docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `b6ca8b5` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `f439f7d` | 2 | .githooks/pre-push trifft /.githooks/ (basis:hooks) |
+| `98d68c3` | 1 | docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `6dc8a79` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `c787a1b` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `5a2d734` | 1 | docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `600ba33` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `a56836a` | 1 | scripts/langfuse-auswertung.mjs ist Code oder Konfiguration |
+| `1d5fe10` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `eb99efb` | 2 | .github/workflows/ci.yml trifft /.github/workflows/ (basis:ci) |
+| `2c4b320` | 1 | docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `044d5c4` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `f2a742f` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `4ac2757` | 1 | scripts/codex-hook-lib.mjs ist Code oder Konfiguration |
+| `9d6a391` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `5bc60aa` | 1 | scripts/codex-hook-lib.mjs ist Code oder Konfiguration |
+| `cc37799` | 1 | scripts/codex-probe-auswertung.mjs ist Code oder Konfiguration |
+| `62eed3a` | 1 | .github/wiedervorlagen.json ist Code oder Konfiguration |
+| `251df31` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `8388daa` | 2 | scripts/check-context-size.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `4bdd713` | 1 | .factory/besitz.json ist Code oder Konfiguration |
+| `bff7851` | 1 | docs/agent-harness-faq.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `60eb360` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `181f6da` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `dd9a7f3` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `84097e9` | 1 | .github/wiedervorlagen.json ist Code oder Konfiguration |
+| `684f9b6` | 2 | .github/workflows/sicherheitspruefung.yml trifft /.github/workflows/ (basis:ci) |
+| `4f88512` | 1 | scripts/codex-hook-lib.mjs ist Code oder Konfiguration |
+| `0cabff2` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `7f34848` | 2 | scripts/lens-auftrag-guard.mjs trifft *guard* (risiko) |
+| `7a4a728` | 2 | .github/workflows/alarm-rot-main.yml trifft /.github/workflows/ (basis:ci) |
+| `b10dc25` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `9378f3f` | 1 | scripts/kontext-budget-lib.mjs ist Code oder Konfiguration |
+| `14470d6` | 1 | scripts/kontext-budget-lib.mjs ist Code oder Konfiguration |
+| `739d115` | 1 | scripts/board-takt.mjs ist Code oder Konfiguration |
+| `6e23041` | 2 | scripts/check-context-size.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `2c33203` | 0 | nur *.md ohne Leitplanken- oder Grundschutz-Pfad |
+| `67aebfc` | 1 | docs/agent-harness.md liegt in einem geschützten Pfad (Leitplanke, Gate, Hook, Agent oder Skill) |
+| `28cb919` | 2 | scripts/check-context-size.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `cf33e7a` | 2 | package.json trifft package.json (basis:abhaengigkeiten) |
+| `661e04b` | 1 | scripts/codex-belege.mjs ist Code oder Konfiguration |
+| `9c87649` | 2 | scripts/check-abnahme-nachweis.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `1e0f158` | 2 | .github/workflows/alarm-rot-main.yml trifft /.github/workflows/ (basis:ci) |
+| `e0082fa` | 1 | test/harness/kern-link-anker.json ist Code oder Konfiguration |
+| `f36bfac` | 2 | scripts/check-docdrift.mjs trifft /scripts/check-*.mjs (leitplanken:gate) |
+| `9f45a77` | 2 | eslint-suppressions.json trifft /eslint-suppressions.json (leitplanken:gate) |
+| `ad9da86` | 2 | scripts/probe-erstbezug.mjs trifft /scripts/probe-erstbezug.mjs (leitplanken:gate) |
+| `398fd29` | 2 | scripts/anker-liste.mjs trifft /scripts/anker-liste.mjs (leitplanken:gate) |
+| `941d79b` | 2 | scripts/gh-guard-hook.mjs trifft *guard* (risiko) |
+| `1c23bf4` | 2 | .github/protected-paths.json trifft /.github/protected-paths.json (basis:selbstschutz) |
+| `f53815b` | 2 | .github/workflows/board-takt.yml trifft /.github/workflows/ (basis:ci) |
+| `3e332e8` | 1 | .github/wiedervorlagen.json ist Code oder Konfiguration |
+
+</details>
+
 ## 2. Wie das Routing in Claude Code wirkt
 
 - **Aliase gibt es.** `opus`, `sonnet`, `haiku` (dazu `opusplan`, `best`, `fable`) lösen auf das neueste Modell der Stufe auf. Es gibt keinen Modus, der nach Ticket-Phasen wechselt. `opusplan` wechselt nur zwischen dem Claude-Code-Plan-Modus (opus) und der Ausführung (sonnet) und passt nicht zum Ticket-Ablauf.
