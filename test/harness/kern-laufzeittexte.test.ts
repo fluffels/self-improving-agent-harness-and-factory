@@ -57,29 +57,43 @@ const AUSNAHMEN: Record<string, string[]> = {
   "scripts/release-tag-lib.mjs": ["lint:prune", "docs:gen", "check:factorylinks"],
 };
 
-/** Quelltext ohne Kommentare (Zeilen-, Block- und Zeilenende-Kommentare); die Zeilenzahl bleibt erhalten. */
+/**
+ * Quelltext ohne Kommentare (Zeilen-, Block- und Zeilenende-Kommentare); die Zeilenzahl bleibt erhalten. Je Zeile quote-bewusst: ein `//` oder `/*` in einem
+ * String (`"a/*.md"`, `http://x`) ist kein Kommentar. Ein `/*` zählt nur nach Zeilenanfang, Leerraum oder `;{}()` als Blockbeginn (nicht im Regex-Literal `[/*]`).
+ * Grenze: ein Quote-Zeichen in einem Regex-Literal verdeckt den Rest der Zeile als „String“ (fail-closed: der Rest bleibt im Scan, ein Kommentar dort wäre ein Fund).
+ */
 export function ohneKommentare(text: string): string {
   let imBlock = false;
   return text
     .split("\n")
     .map((zeile) => {
-      let z = zeile;
-      if (imBlock) {
-        const ende = z.indexOf("*/");
-        if (ende < 0) return "";
-        imBlock = false;
-        z = z.slice(ende + 2);
-      }
-      for (let start = z.indexOf("/*"); start >= 0; start = z.indexOf("/*")) {
-        const ende = z.indexOf("*/", start + 2);
-        if (ende < 0) {
-          imBlock = true;
-          z = z.slice(0, start);
-          break;
+      let aus = "";
+      let quote = "";
+      for (let i = 0; i < zeile.length; i++) {
+        const c = zeile[i];
+        if (imBlock) {
+          if (c === "*" && zeile[i + 1] === "/") {
+            imBlock = false;
+            i++;
+          }
+          continue;
         }
-        z = z.slice(0, start) + z.slice(ende + 2);
+        if (quote) {
+          aus += c;
+          if (c === "\\" && i + 1 < zeile.length) aus += zeile[++i];
+          else if (c === quote) quote = "";
+          continue;
+        }
+        if (c === "'" || c === '"' || c === "`") {
+          quote = c;
+          aus += c;
+        } else if (c === "/" && zeile[i + 1] === "/") break;
+        else if (c === "/" && zeile[i + 1] === "*" && (i === 0 || /[\s;{}()]/.test(zeile[i - 1]))) {
+          imBlock = true;
+          i++;
+        } else aus += c;
       }
-      return z.replace(/^\s*\/\/.*$/, "").replace(/(\s)\/\/\s.*$/, "$1");
+      return aus;
     })
     .join("\n");
 }
@@ -178,6 +192,7 @@ describe("Verteilte Skripte nennen Ticketnummern in Strings mit Herkunft (factor
   test("echtes Repo: keine nackte Ticketnummer in einem Stringliteral, der Scan ist nicht leer", () => {
     const dateien = lesen(verteilteSkripte(ROOT, SKRIPT));
     expect(dateien.length).toBeGreaterThan(100);
+    expect(dateien.map((d) => d.pfad)).toContain("scripts/schichten-kern.cjs"); // der Umfang schließt .cjs ein
     const mitHerkunft = dateien.flatMap(({ text }) => [...ohneKommentare(text).matchAll(/quellprojekt#\d/g)]);
     expect(mitHerkunft.length).toBeGreaterThanOrEqual(20);
     expect(nackteNummern(dateien)).toEqual([]);
@@ -202,5 +217,15 @@ describe("Verteilte Skripte nennen Ticketnummern in Strings mit Herkunft (factor
     expect(nr('const a = "quellprojekt#1311 owner/repo#12 x.md#1234 factory#95";')).toEqual([]);
     expect(nr(["// #1311", "/* #1311 */", 'const a = 1; // #1311', "/*", " #1311", "*/"].join("\n"))).toEqual([]);
     expect(nr("const a = `PR #${nr}`;")).toEqual([]);
+  });
+
+  test("ein /* in String, Regex-Literal oder // -Kommentar blendet die Folgezeilen nicht aus", () => {
+    expect(nr('const g = "a/*.md";\nconst b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('const g = `${x}/*.md`;\nconst b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('x(); // Glob .codex/*\nconst b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('const re = /(?![/*])/;\nconst b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('const u = "http://x"; const b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('x(); /* a */ const b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('/* a\n#1311 */ const b = "(#12)";')).toEqual(["#12"]);
   });
 });
