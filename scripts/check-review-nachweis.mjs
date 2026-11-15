@@ -261,7 +261,7 @@ function bewerteRunden(review, zeilen, risikostufe) {
 
 /** Runden-Abgleich (factory#534): `runden` darf nicht unter der höchsten `Runde <n>:`-Zeile der Branch-Commits plus 1 liegen; über dem Cap (MAX_REVIEW_PAESSE) trägt jeder Pass eine Commit-Zeile
  *  `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`, genau für k = MAX+1 … runden, je einmal. Bei runden ≤ MAX ist eine solche Zeile ein Fehler.
- *  Das Cap ist bewusst fest MAX_REVIEW_PAESSE (wörtlich K2): bei Risikostufe 1 deckt `zusatzpass=` Pass 3 ab, eine Zeile verlangt der Abgleich dort nicht (bekannte Grenze, Befund eingetragen).
+ *  Das Cap ist bewusst fest MAX_REVIEW_PAESSE (wörtlich K2): bei Risikostufe 1 deckt `zusatzpass=` Pass 3 ab, eine Zeile verlangt der Abgleich dort nicht (bekannte Grenze, Zeile in factory#566).
  *  `zusatzpassZeilen === null`: nicht übergeben, die Zeilenprüfung entfällt (nur direkte Aufrufer in Tests). Bewusste Grenze: lässt ein Fix-Commit die `Runde n:`-Zeile weg, bleibt die Runde unsichtbar. Pure. */
 function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }) {
   const R = zeilen.review;
