@@ -1369,6 +1369,37 @@ describe("CLI main: --branches und --fix (#1837)", () => {
     }
   });
 
+  test("--fix: wird eine verwaiste lose Datei zwischen Diagnose und Löschen zum Symlink, verweigert der Schutzgurt mit Herkunft quellprojekt#1051, löscht nichts und liefert Exit 1", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, utimesSync, lstatSync: echtLstat, existsSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = mkdtempSync(join(tmpdir(), "cw-gurt-"));
+    const wt = join(root, ".claude", "worktrees");
+    mkdirSync(wt, { recursive: true });
+    const datei = join(wt, `${WTP}9-x.bak`);
+    writeFileSync(datei, "x");
+    const alt = new Date(Date.now() - 3_600_000);
+    utimesSync(datei, alt, alt);
+    let beimLoeschen = false;
+    const fehler: string[] = [];
+    const e = vi.spyOn(console, "error").mockImplementation((...a) => void fehler.push(a.join(" ")));
+    const l = vi.spyOn(console, "log").mockImplementation((...a) => void (beimLoeschen ||= String(a[0]).includes("Pruning")));
+    try {
+      const lstatSync = (p: string): unknown => {
+        const s = echtLstat(p);
+        return beimLoeschen && p === datei ? Object.assign(Object.create(s), { isSymbolicLink: () => true, isFile: () => false }) : s;
+      };
+            assert.equal(main(["--fix"], { modus: () => 0, root, config: FREMD, diagnoseDeps: { execSync: () => `worktree ${root}\nHEAD abc\nbranch refs/heads/main\n`, lstatSync } } as never), 1);
+      assert.match(fehler.join("\n"), /VERWEIGERT: .*quellprojekt#1051, nichts gelöscht/);
+      assert.match(fehler.join("\n"), /Bitte von Hand prüfen \(quellprojekt#1051\)/);
+      assert.equal(existsSync(datei), true);
+    } finally {
+      e.mockRestore();
+      l.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("git worktree list scheitert (werfender execSync-Stub): Rückgabe 1 statt process.exit, kein echtes git", () => {
     const exit = vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("process.exit darf main nicht beenden");
