@@ -447,6 +447,12 @@ describe("ausloeser bei Stufe 1 (factory#526)", () => {
     expect(e.stufe).toBe(1);
     expect(e.ausloeser).toBe("src/x.ts");
   });
+  test("test/support ist Code (wie in der Sweep-Tiefe), *.test.ts nicht", () => {
+    const a = stufe([eins("docs/a.md"), eins("test/support/helfer.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(a.ausloeser).toBe("test/support/helfer.ts");
+    const b = stufe([eins("src/x.test.ts"), eins("src/y.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(b.ausloeser).toBe("src/y.ts");
+  });
   test("Leitplanken-Markdown: der geschützte Pfad ist der Auslöser", () => {
     const e = stufe([eins("docs/a.md"), eins("AGENTS.md")]) as Ergebnis & { ausloeser?: string };
     expect(e.stufe).toBe(1);

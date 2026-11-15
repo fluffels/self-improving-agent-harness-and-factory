@@ -35,6 +35,7 @@ interface Mod {
     gh: (a: string[]) => unknown;
     env: Record<string, string>;
     ladeConfig: () => unknown;
+    ladeBasis?: () => unknown;
   }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean; hinweise?: string[]; invalid?: string[] };
 }
 const m = raw as unknown as Mod;
@@ -223,11 +224,12 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean; ladeBasis?: () => unknown; numstat?: string } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
       if (o.diffFehler && a[0] === "diff") throw new Error("diff kaputt");
+      if (o.numstat !== undefined && a.includes("--numstat")) return o.numstat;
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
       if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
@@ -252,8 +254,25 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       return o.issue ?? { body: AK };
     };
     const env = { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42", ...o.env };
-    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG }), ghAufrufe };
+    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG, ladeBasis: o.ladeBasis }), ghAufrufe };
   }
+
+  test("K6 (factory#526): ist die Stufe-2-Basis nicht ladbar, gilt Stufe 2, `entfaellt — stufe 1` ist rot und die Meldung nennt den Ladegrund", () => {
+    const messages = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: entfaellt — stufe 1`;
+    const numstat = "1\t1\tsrc/x.ts\n";
+    const gut = lauf({ messages, numstat });
+    expect((gut.r as { risikostufe?: { stufe: number } }).risikostufe?.stufe).toBe(1);
+    expect(gut.r.ok).toBe(true);
+    const { r } = lauf({
+      messages,
+      numstat,
+      ladeBasis: () => {
+        throw new Error("Basis kaputt");
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.fehler.join("\n")).toMatch(/Risikostufe berechnet 2.*Basis kaputt/);
+  });
 
   describe("Szenario-Durchgang zählt nicht gegen das Cap (factory#358, Ende zu Ende)", () => {
     const marker2 = (d: number, urteil: string, ursache = "") => ({ user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=${urteil}${ursache} -->` });

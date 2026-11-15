@@ -341,13 +341,15 @@ describe("Risikostufe: Ausnahme-Formen (factory#526)", () => {
     expect(L.stufeGrund("stufe 0")).toEqual({ stufe: 0 });
     expect(L.stufeGrund("stufe 1")).toEqual({ stufe: 1 });
     expect(L.stufeGrund("stufe 1: Skript")).toEqual({ stufe: 1 });
-    for (const g of ["stufe", "stufe x", "stufe 2a", "stufe 1:", "klein: x", "", null]) expect(L.stufeGrund(g), String(g)).toBeNull();
+    for (const g of ["stufe", "stufe x", "stufe 2a", "stufe 1:", "stufe1", "Doku stufe 0", "klein: x", "", null]) expect(L.stufeGrund(g), String(g)).toBeNull();
   });
   it("parseNachweis: die Review-Zeile `ohne — stufe 0` trägt das Feld ohne, eine normale Zeile null", () => {
     const n = so.parseNachweis(`${Z.review}: ohne — stufe 0`, Z) as unknown as { review: { ohne: string | null } };
     expect(n.review.ohne).toBe("stufe 0");
     const m = so.parseNachweis(`${Z.review}: head=abc1234 runden=1 lenses=doku verdikt=ok`, Z) as unknown as { review: { ohne: string | null } };
     expect(m.review.ohne).toBeNull();
+    const f = so.parseNachweis(`${Z.review}: head=abc1234 runden=3 zusatzpass=1:ohne - Rückfrage lenses=doku verdikt=ok`, Z) as unknown as { review: { ohne: string | null } };
+    expect(f.review.ohne).toBeNull();
   });
   it("stufenAusnahmeFehler: grün nur bei 0 oder 1 und mindestens der berechneten Stufe; die Meldung nennt Stufe und Pfad", () => {
     expect(L.stufenAusnahmeFehler("P", "ohne — stufe 1", 1, r(1))).toEqual([]);

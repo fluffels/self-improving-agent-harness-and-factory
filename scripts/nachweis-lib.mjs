@@ -35,6 +35,8 @@ export const HEX_HEAD = new RegExp(`^${HEX}$`);
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+/** Obergrenze der Review-Pässe bei Risikostufe 1 (factory#526), unabhängig vom Cap der Fix-Runden. */
+export const MAX_REVIEW_PAESSE_STUFE1 = 2;
 /** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
@@ -142,13 +144,16 @@ export function stufenAusnahmeFehler(schluessel, form, behauptet, risikostufe) {
   return [`${schluessel}: "${form}" ist rot (${warum}): Risikostufe berechnet ${risikostufe.stufe}, Pfad ${risikoPfad(risikostufe)}${grund}.`];
 }
 
+/** Der Grund einer `ohne — <Grund>`-Form (Plan- und Review-Zeile) oder `null`. Pur. */
+const ohneGrund = (wert) => /^ohne\s*[—–-]+\s*(\S.*)$/.exec(wert)?.[1].trim() ?? null;
+
 /** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
 function planAus(planWert, planer) {
   if (planWert === null) return null;
   if (planWert === planer) return { art: "planer" };
   if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
-  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-  return ohne ? { art: "ohne", grund: ohne[1].trim() } : { art: "ungueltig", zeile: planWert };
+  const ohne = ohneGrund(planWert);
+  return ohne === null ? { art: "ungueltig", zeile: planWert } : { art: "ohne", grund: ohne };
 }
 
 /** Bedrohungs-Zeile `daten=… | grenzen=… | missbrauch=… | datenschutz=…` (factory#334): `null` ohne Zeile, sonst `{zeile, teile, doppelt, unbekannt, ohneSchluessel}`.
@@ -172,7 +177,6 @@ function bedrohungenAus(wert) {
 
 /** Die Felder der Review-Zeile (`ohne` für `ohne — <Grund>`, factory#526); fehlende oder kaputte Felder bleiben null bzw. NaN, bewertet wird erst im Gate. Pur. */
 function reviewAus(reviewWert) {
-  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(reviewWert);
   const felder = {};
   for (const tok of reviewWert.split(/\s+/)) {
     const m = /^([a-z]+)=(.*)$/.exec(tok);
@@ -180,7 +184,7 @@ function reviewAus(reviewWert) {
   }
   return {
     zeile: reviewWert,
-    ohne: ohne ? ohne[1].trim() : null,
+    ohne: ohneGrund(reviewWert),
     head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
     runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
     lenses: lensenAus(reviewWert),

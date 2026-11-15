@@ -58,7 +58,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler } from "./nachweis-lib.mjs";
+import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 import { risikostufeAusGit, zwei } from "./risikostufe-lib.mjs";
 
@@ -222,7 +222,7 @@ function bewerteRunden(review, zeilen, risikostufe) {
   if (af && typeof af === "object") {
     return [`${R}: abnahmefix=${af.ungueltig} ungültig (erwartet: abnahmefix=1, die eine Delta-Runde nach einem Abnahme-Fix).`];
   }
-  const basisPaesse = risikostufe.stufe === 1 ? MAX_FIX_RUNDEN : MAX_REVIEW_PAESSE; // Stufe 1: höchstens ein Fix-Pass (factory#526)
+  const basisPaesse = risikostufe.stufe === 1 ? MAX_REVIEW_PAESSE_STUFE1 : MAX_REVIEW_PAESSE; // Stufe 1: höchstens ein Fix-Pass (factory#526)
   const reviewErlaubt = basisPaesse + (zp ? zp.anzahl : 0);
   const erlaubt = reviewErlaubt + (af ? 1 : 0);
   if (review.runden > erlaubt) {
