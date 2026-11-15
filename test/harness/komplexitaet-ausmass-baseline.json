@@ -2,9 +2,6 @@
   "scripts/abnahme.mjs": {
     "complexity": 3
   },
-  "scripts/besitz-extraktion.mjs": {
-    "complexity": 18
-  },
   "scripts/besitz-lib.mjs": {
     "complexity": 18
   },

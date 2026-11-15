@@ -4,11 +4,6 @@
       "count": 2
     }
   },
-  "scripts/besitz-extraktion.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/besitz-lib.mjs": {
     "complexity": {
       "count": 3

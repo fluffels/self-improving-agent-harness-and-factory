@@ -35,7 +35,7 @@ export function mcpSkripte(mcpJsonText: string): string[] {
   return [...skripte];
 }
 
-/** Alle Importspezifizierer und die relativen darunter: die Auslegung steht einmal in `scripts/besitz-extraktion.mjs` (Bezug und Test-Hülle der Extraktion teilen sie). */
+/** Alle Importspezifizierer und die relativen darunter: die Auslegung steht einmal in `scripts/besitz-extraktion.mjs` (die Wächter teilen sie). */
 const lib = rawLib as unknown as { importeAus(text: string): string[]; relativeImporte(text: string): string[] };
 export const importeAus = (text: string): string[] => lib.importeAus(text);
 export const relativeImporte = (text: string): string[] => lib.relativeImporte(text);
