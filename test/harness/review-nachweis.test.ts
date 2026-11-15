@@ -55,10 +55,15 @@ const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.u
 const SHA = "c".repeat(40);
 
 const CODE = ["architektur", "requirement-treue", "test-adaequanz"];
+/** `sollte=` und `hinweis=` mit 0 je Brille (Pflichtfelder, factory#530). */
+const schwere = (lenses: string[]) => {
+  const je = lenses.map((l) => `${l}:0`).join(",");
+  return `sollte=${je} hinweis=${je}`;
+};
 /** Die zwei Commit-Zeilen im Format der SSOT (docs/agent-harness.md §3a), wie sie der Umsetzer nach der Konvergenz setzt. */
 function nachweisZeilen({ head, runden, lenses, plan }: { head: string; runden: number; lenses: string[]; plan: unknown }): string {
   const planZeile = plan ? `${Z.plan}: ${PL}` : `${Z.plan}: ohne — Planer lieferte keinen Plan`;
-  return `${planZeile}\n${Z.review}: head=${head} runden=${runden} lenses=${lenses.join(",")} verdikt=ok`;
+  return `${planZeile}\n${Z.review}: head=${head} runden=${runden} lenses=${lenses.join(",")} ${schwere(lenses)} verdikt=ok`;
 }
 
 describe("(a) Das Format der SSOT ist das, was das Skript liest", () => {
@@ -166,8 +171,24 @@ describe("(e) Texte verweisen auf das Skript", () => {
 describe("(e2) Das Feld blocker= ist an allen Stellen benannt (#1123)", () => {
   test("Format-SSOT und Skill nennen das Feld, die Vorlage des Prüfskripts auch", () => {
     assert.match(read("docs/agent-harness.md"), /blocker=architektur:<n>/);
-    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /`blocker`/);
+    assert.match(read(".agents/skills/review-lenses/SKILL.md"), /Runde <n>: lenses=<Brillen des Passes> blocker=<b>:<k>,… sollte=<b>:<k>,… hinweis=<b>:<k>,…/);
     assert.match(read("scripts/check-review-nachweis.mjs"), /blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
+  });
+});
+
+describe("(e2b) Die Pflichtfelder sollte= und hinweis= sind an allen Stellen benannt (factory#530)", () => {
+  test("Vorlage des Prüfskripts, Format-SSOT und Nachweis-Datei nennen beide Felder", () => {
+    const vorlage = (raw as unknown as { vorlage: (z: unknown) => string }).vorlage(Z);
+    assert.match(vorlage, /sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
+    assert.match(vorlage, /hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
+    for (const datei of ["docs/agent-harness.md", ".agents/skills/review-lenses/ablauf-nachweis.md"]) {
+      assert.match(read(datei), /`sollte`/, datei);
+      assert.match(read(datei), /`hinweis`/, datei);
+    }
+  });
+  test("das Format der Zeile `Runde <n>:` steht nur in SKILL.md, der Umsetzer trägt eine Verweisung statt Kopie", () => {
+    assert.doesNotMatch(read(".claude/agents/factory-umsetzer.md"), /Runde <n>: lenses=/);
+    assert.match(read(".claude/agents/factory-umsetzer.md"), /`Runde <n>:` \(Format: `review-lenses\/SKILL\.md`\)/);
   });
 });
 
@@ -239,7 +260,7 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
 });
 
 describe("Das Feld blocker= im Nachweis (#1123)", () => {
-  const DREI = "lenses=architektur,requirement-treue,test-adaequanz";
+  const DREI = "lenses=architektur,requirement-treue,test-adaequanz sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0";
   const bewerteB = (review: string, dateien: string[]) =>
     bewerteNachweis({ nachweis: parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${SHA} ${review}`), dateien, headBekannt: true, headImSlice: true });
 
@@ -247,7 +268,7 @@ describe("Das Feld blocker= im Nachweis (#1123)", () => {
     const text = `${Z.review}: head=${SHA} runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
     assert.deepEqual(parseNachweis(text).review?.lenses, ["architektur", "requirement-treue", "test-adaequanz"]);
     assert.deepEqual(bewerteB(`runden=2 ${DREI} blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok`, ["src/x.ts"]), []);
-    assert.deepEqual(bewerteB("runden=2 lenses=doku blocker=doku:1 verdikt=ok", ["docs/a.md"]), []);
+    assert.deepEqual(bewerteB("runden=2 lenses=doku blocker=doku:1 sollte=doku:0 hinweis=doku:0 verdikt=ok", ["docs/a.md"]), []);
   });
 
   test("darf NICHT passieren: blocker= nennt eine unbekannte Brille", () => {
@@ -260,10 +281,11 @@ describe("Das Feld blocker= im Nachweis (#1123)", () => {
 });
 
 describe("Tolerantes Lesen der Brillen (#1331)", () => {
+  const nullen = (wert: string) => wert.split(",").map((l) => `${l}:0`).join(",");
   const lenses = (wert: string) => parseNachweis(`${Z.review}: head=${SHA} runden=1 lenses=${wert} verdikt=ok`).review?.lenses;
   const bewerte = (wert: string, dateien = ["src/a.ts"]) =>
     bewerteNachweis({ nachweis: parseNachweis(`${Z.plan}: ${PL}
-${Z.review}: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
+${Z.review}: head=${SHA} runden=1 lenses=${wert} sollte=${nullen(wert)} hinweis=${nullen(wert)} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
 
   test("Großschreibung, Leerzeichen nach Kommas und Umlaute werden normalisiert", () => {
     assert.deepEqual(lenses("Architektur, Requirement-Treue, Test-Adäquanz"), ["architektur", "requirement-treue", "test-adaequanz"]);
@@ -325,7 +347,7 @@ describe("Zusatzpässe über das Cap, ohne Rückfrage (#1561 Z2, #1693)", () => 
       headBekannt: true,
       headImSlice: true,
     });
-  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0";
 
   test("runden=4 ohne Feld ist rot, die Meldung nennt zusatzpass= samt Ursache, ohne Freigabe der Maintainerin zu verlangen", () => {
     const m = bewerteZ(`runden=4 ${LENSES} verdikt=ok`).join(" ");
@@ -376,7 +398,7 @@ describe("Abnahme-Fix: eigenes Budget von einer Delta-Runde neben dem Review-Cap
       headBekannt: true,
       headImSlice: true,
     });
-  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0";
 
   test("runden=4 mit abnahmefix=1 ist ok (Review-Cap voll, Abnahme-Fix als eigene Runde)", () => {
     assert.deepEqual(bewerteA(`runden=4 abnahmefix=1 ${LENSES} verdikt=ok`), []);
@@ -431,7 +453,7 @@ describe("(e3) Das Feld zusatzpass= ist dokumentiert (#1561 Z2)", () => {
 
 describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   const BASE = "b".repeat(40);
-  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz";
+  const LENSES = "lenses=architektur,requirement-treue,test-adaequanz sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0";
   /** Gefälschtes git für `checkReviewNachweis`: ein Code-Slice (src/a.ts) und ein Nachweis-Commit mit der gegebenen Review-Zeile. */
   const fakeGit = (review: string, extra = "") => (a: string[]): string => {
     const j = a.join(" ");

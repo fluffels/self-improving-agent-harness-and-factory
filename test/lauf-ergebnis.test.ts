@@ -28,7 +28,7 @@ type Pr = {
 };
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
 type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; reviewOverride?: boolean };
-type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
+type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }>; schwere: Record<"blockierend" | "sollte" | "hinweis", Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }>>; ohneNachweis: number; ohneSchwere: number; mitSchwere: number; prs: number } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
 /** Zeilen der Fremd-Config; die Wrapper in `mod` reichen sie durch. */
@@ -220,6 +220,50 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(k.zeilen[0].runden, null);
     assert.equal(k.kennzahlen.ohneNachweis, 1);
     assert.equal(k.kennzahlen.brillen.architektur, undefined, "ohne Nachweis keine Brillen-Zählung");
+  });
+  describe("Schwere der Lens-Funde (factory#530)", () => {
+    const rechne = (zeilen: string[]) =>
+      mod.bewertePrs({
+        prs: zeilen.map((_, i) => pr({ number: 70 + i, mergeCommit: { oid: String(i + 1).repeat(40) } })),
+        commits: zeilen.map((r, i) => commit(review(r), MERGED, String(i + 1).repeat(40))),
+        ci: {},
+        festgefahren: {},
+        jetzt: SPAETER,
+      });
+    const MIT = "runden=2 lenses=architektur,doku blocker=architektur:1,doku:0 sollte=architektur:2,doku:0 hinweis=architektur:0,doku:3";
+    const OHNE = "runden=2 lenses=architektur,doku blocker=architektur:5,doku:0";
+    test("ein PR mit Feldern und einer ohne: ohneSchwere zählt, der PR ohne Felder geht nie als 0 in Σ und je PR ein", () => {
+      const k = rechne([MIT, OHNE]).kennzahlen;
+      assert.equal(k.mitSchwere, 1);
+      assert.equal(k.ohneSchwere, 1);
+      assert.deepEqual(k.schwere.sollte.architektur, { prs: 1, treffer: 1, summe: 2, jePr: 2 });
+      assert.deepEqual(k.schwere.hinweis.doku, { prs: 1, treffer: 1, summe: 3, jePr: 3 });
+      assert.deepEqual(k.schwere.blockierend.architektur, { prs: 1, treffer: 1, summe: 1, jePr: 1 });
+    });
+    test("ein PR mit blocker ohne Schwere-Felder zählt in brillen, nicht in schwere.blockierend", () => {
+      const k = rechne([OHNE]).kennzahlen;
+      assert.equal(k.brillen.architektur.summe, 5);
+      assert.deepEqual(k.schwere.blockierend, {});
+      assert.equal(k.ohneSchwere, 1);
+    });
+    test("nur eines der beiden Felder reicht nicht: der PR steht in ohneSchwere", () => {
+      assert.equal(rechne(["runden=2 lenses=doku sollte=doku:1"]).kennzahlen.ohneSchwere, 1);
+      assert.equal(rechne(["runden=2 lenses=doku hinweis=doku:1"]).kennzahlen.ohneSchwere, 1);
+    });
+    test("Identität prs = ohneNachweis + ohneSchwere + mitSchwere", () => {
+      const k = rechne([MIT, OHNE, "runden=x lenses=doku"]).kennzahlen;
+      assert.equal(k.prs, k.ohneNachweis + k.ohneSchwere + k.mitSchwere);
+      assert.equal(k.ohneNachweis, 1);
+    });
+    test("formatiere: Tabellenzeilen je Schwere und Brille; ohne Felder keine 0-Zeile", () => {
+      const text = mod.formatiere(rechne([MIT, OHNE]));
+      assert.match(text, /PRs mit Schwere-Feldern: 1, ohne Schwere-Felder: 1/);
+      assert.match(text, /\| sollte \| architektur \| 2 \| 2,00 \| 1\/1 \|/);
+      assert.match(text, /\| Schwere \| Brille \| Σ \| je PR \| PRs mit Treffer \|/);
+      const leer = mod.formatiere(rechne([OHNE]));
+      assert.match(leer, /keine PRs mit Schwere-Feldern/);
+      assert.doesNotMatch(leer, /\| Schwere \|/);
+    });
   });
   test("ohne Nachweis und ohne blocker-Feld bleiben aus der Trefferquote", () => {
     assert.equal(z(53).runden, null);

@@ -6,7 +6,7 @@
  * Squash-Message, Präfix aus der Projekt-Config), rote CI-Läufe (distinct Head-SHAs mit Fehlschlag zwischen PR-Erstellung und Merge), das
  * Label `labels.festgefahren` der Projekt-Config (aus den Label-Events, zählt auch bei später entferntem Label) und Nacharbeit: ein Revert
  * oder eine Folge-Fix-Commit-Zeile `Folge #<ticket-nr>` innerhalb von 14 Tagen nach dem Merge. Daraus die
- * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Dazu je PR die Abnahme (`{durchgaenge}` | "entfaellt" | "override" | null) und die Quote im ersten Durchgang. Definitionen und Grenzen: docs/model-routing.md
+ * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Seit factory#530 je Brille und Schwere (blockierend, sollte, Hinweis) Σ, Wert je PR und PRs mit Treffer (`kennzahlen.schwere`), nur über PRs mit `sollte=`/`hinweis=`-Feldern; die anderen stehen als `ohneSchwere`, nie als 0. Dazu je PR die Abnahme (`{durchgaenge}` | "entfaellt" | "override" | null) und die Quote im ersten Durchgang. Definitionen und Grenzen: docs/model-routing.md
  * › Ergebnis je Ticket-Lauf.
  *
  *   node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--je-agent <typ>…] [--json]
@@ -144,6 +144,8 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       gemergt: pr.mergedAt,
       runden: review && Number.isInteger(review.runden) ? review.runden : null,
       blocker: review?.blocker ?? null,
+      sollte: review?.sollte ?? null,
+      hinweis: review?.hinweis ?? null,
       abnahme: abnahmeVon(body, abnahme, konfigZeilen),
       reviewOverride: aktiverOverride(body, konfigZeilen.reviewOverride) !== null,
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
@@ -155,20 +157,27 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
   return { zeilen: eintraege, kennzahlen: kennzahlenAus(eintraege, offenMitFix) };
 }
 
-/** Kennzahlen aus bewerteten Zeilen (`bewertePrs`); auch je Typ-Gruppe bei `--je-agent`. Pure. */
-export function kennzahlenAus(eintraege, offenMitFix = 0) {
-  const mitNachweis = eintraege.filter((z) => z.runden !== null);
+/** Je Brille eines Brillen-Zahlen-Felds (`blocker`, `sollte`, `hinweis`): PRs mit der Brille, PRs mit Treffer (n > 0), Σ und Wert je PR (Σ / PRs, #1441: die Zahl, an der die Wirkung der Selbstprüfung vor dem Commit gemessen wird). Pure. */
+export function jeBrille(eintraege, feld) {
   const brillen = {};
-  for (const z of mitNachweis) {
-    for (const b of z.blocker ?? []) {
+  for (const z of eintraege) {
+    for (const b of z[feld] ?? []) {
       const e = (brillen[b.lens] ??= { prs: 0, treffer: 0, summe: 0 });
       e.prs += 1;
       if (b.n > 0) e.treffer += 1;
       e.summe += Number.isFinite(b.n) ? b.n : 0;
     }
   }
-  // Blocker je PR der Brille (Σ Blocker / PRs; #1441): die Zahl, an der die Wirkung der Selbstprüfung vor dem Commit gemessen wird.
   for (const e of Object.values(brillen)) e.jePr = e.prs > 0 ? e.summe / e.prs : null;
+  return brillen;
+}
+
+/** Kennzahlen aus bewerteten Zeilen (`bewertePrs`); auch je Typ-Gruppe bei `--je-agent`. Pure. */
+export function kennzahlenAus(eintraege, offenMitFix = 0) {
+  const mitNachweis = eintraege.filter((z) => z.runden !== null);
+  // Schwere-Felder (factory#530): nur PRs mit sollte= UND hinweis= fließen in die Schwere-Zahlen; alle anderen stehen in ohneSchwere, nie als 0.
+  const mitSchwere = mitNachweis.filter((z) => z.sollte !== null && z.hinweis !== null);
+  const brillen = jeBrille(mitNachweis, "blocker");
   const zaehle = (art) => eintraege.filter((z) => z.nacharbeit === art).length;
   const abgelaufen = eintraege.filter((z) => z.nacharbeit !== "offen");
   return {
@@ -181,6 +190,9 @@ export function kennzahlenAus(eintraege, offenMitFix = 0) {
     runde1MitBlockerProxy: mitNachweis.filter((z) => z.runden >= 2).length,
     mitNachweis: mitNachweis.length,
     brillen,
+    mitSchwere: mitSchwere.length,
+    ohneSchwere: mitNachweis.length - mitSchwere.length,
+    schwere: { blockierend: jeBrille(mitSchwere, "blocker"), sollte: jeBrille(mitSchwere, "sollte"), hinweis: jeBrille(mitSchwere, "hinweis") },
     ohneNacharbeit: zaehle("nein"),
     nachweisbareFenster: abgelaufen.length,
     nacharbeitOffen: zaehle("offen"),
@@ -211,6 +223,20 @@ export function kennzahlenAus(eintraege, offenMitFix = 0) {
 
 const prozent = (a, b) => (b === 0 ? "–" : `${Math.round((a / b) * 100)} % (${a}/${b})`);
 
+/** Tabelle der Funde je Schwere und Brille (factory#530); bei keinem PR mit Schwere-Feldern nur die Kopfzeile, nie eine 0-Zeile. Pure. */
+function schwereTabelle(k) {
+  const kopf = `PRs mit Schwere-Feldern: ${k.mitSchwere}, ohne Schwere-Felder: ${k.ohneSchwere}`;
+  if (k.mitSchwere === 0) return [kopf + " (keine PRs mit Schwere-Feldern)"];
+  const zeilen = ["", kopf, "", "| Schwere | Brille | Σ | je PR | PRs mit Treffer |", "|---|---|---|---|---|"];
+  for (const [name, brillen] of Object.entries(k.schwere)) {
+    for (const [lens, e] of Object.entries(brillen)) {
+      zeilen.push(`| ${name} | ${lens} | ${e.summe} | ${e.jePr.toFixed(2).replace(".", ",")} | ${e.treffer}/${e.prs} |`); // jePr ist hier nie null: jeBrille legt einen Eintrag nur mit prs ≥ 1 an
+    }
+  }
+  zeilen.push("");
+  return zeilen;
+}
+
 /** Markdown-Ausgabe: Tabelle je PR plus Aggregatzeilen. Pure. */
 export function formatiere({ zeilen, kennzahlen: k }) {
   const blocker = (z) => (z.blocker === null ? "–" : z.blocker.map((b) => `${b.lens}:${b.n}`).join(","));
@@ -220,6 +246,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   }
   out.push("", `PRs: ${k.prs} (ohne Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
   out.push(`Runde 1 mit Blocker (aus blocker=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
+  out.push(...schwereTabelle(k));
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);
   const a = k.abnahme;
