@@ -424,9 +424,12 @@ function suppressionsHinweise(plan) {
 /**
  * Zweiter Lauf, wenn der Sync eine Datei unter `scripts/` geschrieben hat (das laufende Werkzeug ist dann veraltet): einmal, nie mit `--trocken`, nie mit gesetztem Riegel,
  * nur mit injiziertem `zweitlauf`. Rückgabe: dessen Exit-Code, sonst 0 (kein Neustart).
+ * Im Trockenlauf mit geplanter Datei unter `scripts/` nur ein Hinweis (factory#499 L2): Hinweise wie stub-anker stammen dann vom laufenden, alten Werkzeug.
  */
 function zweiterLauf({ plan, opt, argv, out, zweitlauf = null, env = process.env }) {
-  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || ![...plan.dateien.keys()].some((p) => p.startsWith("scripts/"))) return 0;
+  const skripte = [...plan.dateien.keys()].some((p) => p.startsWith("scripts/"));
+  if (opt.trocken && skripte) out("Hinweis: Trockenlauf mit dem laufenden (alten) Werkzeug: Hinweise wie stub-anker können vom alten Stand stammen; der echte Lauf startet nach dem Schreiben mit dem neuen Stand neu");
+  if (!zweitlauf || opt.trocken || env[ZWEITLAUF_ENV] === "1" || !skripte) return 0;
   out("Sync-Werkzeug aktualisiert: zweiter Lauf mit dem neuen Stand");
   return zweitlauf(argv);
 }
