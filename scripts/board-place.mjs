@@ -249,7 +249,7 @@ export async function einsortieren(args, config, io = ECHTE_PLACE_IO) {
   // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
   const fehlend = fehlendeNummern(items, args);
   if (fehlend.length > 0) items = ergaenzeFehlende(items, io.itemsUeberIssues(board, fehlend, {}, repo));
-  items = nimmFehlendeAuf(items, args, { config, repo, ghJson: io.ghJson, addToBoardTodo: (nodeId, opts) => io.addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
+  items = nimmFehlendeAuf(items, args, { config, repo, addToBoardTodo: (nodeId, opts) => io.addToBoardTodo(board, nodeId, { pauseMs: PAUSE_MS, repo, ...opts }) });
   if (args.notfall) {
     const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
     if (fehler) throw abbruch(fehler, 2);
