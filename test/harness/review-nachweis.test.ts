@@ -133,7 +133,7 @@ describe("(d) CI-Schritt im Required-Job", () => {
     const abn = job.indexOf("check-abnahme-nachweis.mjs");
     const kopf = job.lastIndexOf("      - name:", abn);
     const text = job.slice(kopf, abn + "check-abnahme-nachweis.mjs".length);
-    test("im Required-Job build-test, nach dem Review-Schritt, als letzter Schritt, ohne eigenen Job", () => {
+    test("im Required-Job build-test, nach dem Review-Schritt, als vorletzter Schritt, ohne eigenen Job", () => {
       assert.ok(abn > schritt, "muss nach dem Review-Schritt stehen");
       const danach = job.slice(abn).split("\n      - name:").slice(1);
       assert.equal(danach.length, 1, "nach dem Abnahme-Schritt folgt nur der Basis-Nachlauf (factory#499)");

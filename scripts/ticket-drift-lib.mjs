@@ -4,7 +4,7 @@
 // Feldformen von `gh issue list --json …` (Probe 2026-11-12): `author {login, is_bot}` (Apps als `app/<name>`), `comments[] {author {login}, authorAssociation, body, createdAt}`,
 // `blockedBy {nodes[] {number, state, url}}`, `labels[] {name}`, `updatedAt` (ISO).
 //
-// Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie; ein Gegenmarker (`RUECKSTELLUNG_GEGENMARKER`: reaktiviert, wieder aufgenommen, nicht mehr zurückgestellt) im jüngsten vertrauten Kommentar hat Vorrang, auch in „zurückgestellt; reaktiviert, wenn …“), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos (auch native Kanten ohne `url` im eigenen Repo), weiche Bezüge ohne Nummer, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
+// Grenzen (bewusst nicht erfasst): Rückstellungs-Marker und Stoppwörter sind deutsch (nicht aus der Projekt-Config; ohne deutsche Marker feuert `rueckstellung` nie), Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos (auch native Kanten ohne `url` im eigenen Repo), weiche Bezüge ohne Nummer, Zahlen im Text (prüft der Agent nur in den gelisteten Tickets).
 // Reihenfolge (`blocker-dahinter`): ein Ticket steht im Board vor seinem offenen Blocker (Textzeile oder native Kante), verglichen nur innerhalb derselben Spalte eines Boards; ohne gelesene Boards (`boards: null`) ausgesetzt, mit Hinweis.
 // Der Bericht trägt nur Nummern, Pfade der Whitelist (`PFAD_FORM`, ohne `..`, `@`, Backtick, Leerraum), Daten und Zählungen: keine Logins, keine Zitate (er entsteht als vertrauter Bot-Text).
 import { blockerVerweise } from "./spezifikation-lib.mjs";
@@ -22,8 +22,6 @@ export const BERICHT_MAX = 60_000;
 export const KLASSEN = ["pfad-entfernt", "zeile-ausserhalb", "zeile-verschoben", "blocker-zu", "blocker-dahinter", "duplikat", "rueckstellung"];
 /** Marker einer Rückstellung im Kommentar (geschlossene Liste, ohne Groß-/Kleinschreibung). */
 export const RUECKSTELLUNG_MARKER = ["zurückgestellt", "zurückstellen", "⏸"];
-/** Gegenmarker (Reaktivierung, ohne Groß-/Kleinschreibung): hat Vorrang vor dem Marker, auch im selben Kommentar. */
-export const RUECKSTELLUNG_GEGENMARKER = ["reaktiviert", "wieder aufgenommen", "nicht mehr zurückgestellt"];
 
 const PFAD_FORM = /^[A-Za-z0-9._/-]+(?::(\d+)(?:-(\d+))?)?$/;
 const STOPPWOERTER = new Set(["und", "oder", "der", "die", "das", "den", "dem", "des", "ein", "eine", "für", "mit", "von", "zum", "zur", "bei", "auf", "aus", "nach", "als", "the", "and", "for", "with", "nicht", "statt", "wie", "ohne", "über"]);
@@ -138,7 +136,6 @@ export function rueckstellungBefund(issue, owner) {
   const vertraut = (issue.comments ?? []).filter((c) => kommentarVertraut(c, owner)).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   const letzter = vertraut.at(-1);
   const text = String(letzter?.body ?? "").toLowerCase();
-  if (RUECKSTELLUNG_GEGENMARKER.some((m) => text.includes(m))) return null;
   if (!RUECKSTELLUNG_MARKER.some((m) => text.includes(m))) return null;
   return { nr: issue.number, klasse: "rueckstellung", text: `zurückgestellt seit ${String(letzter.createdAt).slice(0, 10)}, Begründung prüfen (Kein Parken)` };
 }

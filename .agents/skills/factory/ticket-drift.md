@@ -18,4 +18,4 @@ Der Wochenlauf legt ein Issue „🔎 Ticket-Drift-Bericht <Datum>“ an (Marker
 
 ## Grenzen des Laufs
 
-Nicht erfasst: Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos. Marker und Stoppwörter sind deutsch, sonst meldet `rueckstellung` nie. Ein Gegenmarker (reaktiviert, wieder aufgenommen, nicht mehr zurückgestellt) hat Vorrang, auch in „zurückgestellt; reaktiviert, wenn …“. `blocker-dahinter` vergleicht nur in derselben Spalte eines Boards und nur Blocker mit Nummer im eigenen Repo; ohne `PROJECT_TOKEN` ausgesetzt. Ein Shallow-Klon setzt die Git-Prüfungen aus (im Bericht vermerkt).
+Nicht erfasst: Pfade in Kommentaren, Blob-URLs, Pfade ohne Backticks, Root-Dateien ohne `/`, Blocker in fremden Repos. Marker und Stoppwörter sind deutsch, sonst meldet `rueckstellung` nie. `blocker-dahinter` vergleicht nur in derselben Spalte eines Boards und nur Blocker mit Nummer im eigenen Repo; ohne `PROJECT_TOKEN` ausgesetzt. Ein Shallow-Klon setzt die Git-Prüfungen aus (im Bericht vermerkt).

@@ -74,7 +74,7 @@ jobs:
         run: node scripts/check-review-nachweis.mjs
 
       # Abnahme-Nachweis: Urteil je Akzeptanzkriterium des verknüpften Tickets plus Spur als PR-Kommentar (Format: docs/agent-harness.md §3a).
-      # Letzter Schritt, im Required-Job (kein neuer Required-Check). Ein Entwurf wird nur berichtet, maßgeblich ist der Lauf nach
+      # Vorletzter Schritt (danach nur der Basis-Nachlauf), im Required-Job (kein neuer Required-Check). Ein Entwurf wird nur berichtet, maßgeblich ist der Lauf nach
       # `ready_for_review`. Werte aus dem Ereignis nur über `env:`, nie per Ausdruck im `run:` (Script-Injection). GH_TOKEN liest Issue und
       # Kommentare (Rechte `pull-requests` und `issues` read oben).
       - name: Abnahme-Nachweis prüfen

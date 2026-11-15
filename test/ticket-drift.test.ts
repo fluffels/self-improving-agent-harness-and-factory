@@ -246,12 +246,6 @@ describe("pruefe: Rückstellung und Eingang", () => {
     ["Association OWNER", [k("andere", "zurückgestellt", "2026-10-05T00:00:00Z", "OWNER")], ["1:rueckstellung"]],
     ["App-Kommentar", [k("app/github-actions", "zurückgestellt", "2026-10-05T00:00:00Z")], ["1:rueckstellung"]],
     ["Bot-Login mit [bot]", [k("dependabot[bot]", "zurückgestellt", "2026-10-05T00:00:00Z")], ["1:rueckstellung"]],
-    ["Beleg-Form der Reaktivierung ist keine Rückstellung", [k("o", "⏸ Zurückgestellt bis 2026-12", "2026-10-05T00:00:00Z", "OWNER"), k("o", "🧹 Ticket-Review 2026-10-06: reaktiviert (Label `status:zurückgestellt` entfernt)", "2026-10-06T00:00:00Z", "OWNER")], []],
-    ["Gegenmarker REAKTIVIERT großgeschrieben", [k("o", "REAKTIVIERT", "2026-10-06T00:00:00Z", "OWNER")], []],
-    ["Gegenmarker wieder aufgenommen", [k("o", "Wieder aufgenommen am 2026-10-06 (war zurückgestellt)", "2026-10-06T00:00:00Z", "OWNER")], []],
-    ["Gegenmarker nicht mehr zurückgestellt", [k("o", "Ist nicht mehr zurückgestellt", "2026-10-06T00:00:00Z", "OWNER")], []],
-    ["Gegenmarker hat Vorrang vor dem Marker im selben Kommentar", [k("o", "zurückgestellt; reaktiviert, wenn Budget da", "2026-10-06T00:00:00Z", "OWNER")], []],
-    ["fremder Kommentar mit reaktiviert lässt die Rückstellung stehen", [k("o", "⏸ Zurückgestellt bis 2026-12", "2026-10-05T00:00:00Z", "OWNER"), k("fremd", "reaktiviert", "2026-10-06T00:00:00Z")], ["1:rueckstellung"]],
     ["ohne Kommentare", [], []],
   ])("%s", (_n, comments, erwartet) => {
     expect(klassen(L.pruefe([issue(1, { comments })], ctx(git())))).toEqual(erwartet);
