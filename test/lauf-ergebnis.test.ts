@@ -27,7 +27,7 @@ type Pr = {
   closingIssuesReferences: { number: number }[];
 };
 type Abnahme = { durchgaenge: number } | "entfaellt" | "override" | null;
-type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; reviewOverride?: boolean };
+type Zeile = { pr: number; abnahme: Abnahme; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; sollte: { lens: string; n: number }[] | null; hinweis: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string; fristAbgelaufen: boolean; reviewOverride?: boolean };
 type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }>; schwere: Record<"blockierend" | "sollte" | "hinweis", Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }>>; ohneNachweis: number; ohneSchwere: number; mitSchwere: number; prs: number } };
 type Zeilen = Record<string, string>;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
