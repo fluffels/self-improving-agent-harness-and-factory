@@ -2,9 +2,9 @@
 // (npm run check:contextsize) gestartet UND von test/context-size.test.ts (im Factory-Repo) importiert. Ein
 // `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
 /**
- * Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
+ * Kontextdatei-Wächter (quellprojekt#719) – Frühwarnung, dass AGENTS.md zu groß wird.
  *
- * Seit #1088 zählt JEDE AGENTS.md im Repo, nicht nur die Wurzel: Claude Code (und andere
+ * Seit quellprojekt#1088 zählt JEDE AGENTS.md im Repo, nicht nur die Wurzel: Claude Code (und andere
  * Tools) laden eine modul-lokale AGENTS.md automatisch, sobald dort eine Datei gelesen
  * wird. Ohne Messung wären sie eine neue, ungebremste On-Demand-Quelle – bei wachsendem Umfang
  * mit vielen Bereichen genau die Stelle, an die das Wurzel-Gate den Inhalt hindrängt.
@@ -19,7 +19,7 @@
  * MODULE_AGENTS_BUDGET) oder das Auslagern in tiefere Ebenen bestraft. Neu entscheiden, sobald eine Kette
  * Tiefe 2 erreicht oder ein Ablauf Codex in einem Unterordner startet (project_doc_max_bytes 32.768 Bytes).
  *
- * Hintergrund (#719): anders als src/-Module (check:size, #390) hatte die Wurzel-AGENTS.md,
+ * Hintergrund (quellprojekt#719): anders als src/-Module (check:size, quellprojekt#390) hatte die Wurzel-AGENTS.md,
  * die JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
  * Jede neue Regel bekommt Begründung + Präzedenzfall-Verweis in AGENTS.md – einzeln
  * sinnvoll, akkumuliert aber unbegrenzt in einer Datei, die pro Session mitläuft (reiner
@@ -27,7 +27,7 @@
  * (modul-lokale AGENTS.md; on-demand-Tiefendocs unter struktur.moduldoku der Projekt-Config) – nur erzwang bisher nichts, ihn auch zu benutzen, BEVOR die
  * Wurzel wächst.
  *
- * Gemessen werden ZEICHEN, nicht Zeilen (#1064, vorher #977/#1061): in Markdown-Fließtext
+ * Gemessen werden ZEICHEN, nicht Zeilen (quellprojekt#1064, vorher quellprojekt#977/quellprojekt#1061): in Markdown-Fließtext
  * ist eine „Zeile" ein Absatz – AGENTS.md stand bei 159/200 Zeilen schon bei 75k Zeichen,
  * das Zeilen-Gate war nie bindend, weil die Datei in die Breite wuchs. Zeichen sind der
  * beste Token-Proxy, der in die build-freie `verify`-Kette passt (echte Tokens bräuchten
@@ -51,7 +51,7 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-// Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
+// Derselbe Walk wie check:docdrift (quellprojekt#1091) – EINE Skip-Liste (node_modules, Builds,
 // unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
 import { collectMarkdown } from "./check-basis.mjs";
 import { collectMarkdown as collectMd } from "./docs-gen/markdown.mjs";
@@ -67,7 +67,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // CONTEXT_BUDGETS/countChars nicht weiterreichen: das Blatt gehört `kontext-budget-lib.mjs`, Abnehmer importieren dort (factory#114).
 
 /** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
- *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md
+ *  CONTEXT_BUDGETS (quellprojekt#1088). Kalibriert wie die Wurzel: größte modul-lokale AGENTS.md
  *  (~10.300 Zeichen) + ~15 % Kopffreiheit. Ratchet nur nach unten. */
 export const MODULE_AGENTS_BUDGET = 12_000;
 

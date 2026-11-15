@@ -288,7 +288,7 @@ function blockiert(k, dir, was) {
     reason:
       `git ${was} ist im geteilten main-Checkout (${ctx.toplevel ?? dir}) blockiert (PowerShell-Tool). ` +
       "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Eigener Worktree): z.B. `git -C <worktree-pfad> commit …` " +
-      "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)" +
+      "oder zuerst `Set-Location <worktree-pfad>`. (quellprojekt#735, quellprojekt#1311)" +
       (k.schutz?.repo ? ` Neuer Worktree: ${neuerWorktreeHinweis(k.deps, k.schutz)}` : ""),
   };
 }
@@ -297,7 +297,7 @@ const unklar = (was) => ({
   block: true,
   reason:
     `git ${was} mit einem Ziel, das der Guard nicht auswerten kann (Variable oder Ausdruck). Den Worktree-Pfad ` +
-    "literal schreiben (`git -C C:\\pfad\\zum\\worktree …`), damit der Haupt-Checkout-Schutz greift. (#1311)",
+    "literal schreiben (`git -C C:\\pfad\\zum\\worktree …`), damit der Haupt-Checkout-Schutz greift. (quellprojekt#1311)",
 });
 
 /** git-Statement: commit/push gegen das Ziel prüfen; unauswertbares Ziel ist fail-closed. */
@@ -332,7 +332,7 @@ function bashBruecke(k, skript, name) {
   }
   for (const [dir, a] of asks) {
     const ctx = k.kontext(dir);
-    if (ctx?.relevant && (!a.mainOnly || ctx.isMainWorktree)) return { block: false, ask: true, reason: `Worktree-Guard (PowerShell): ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (#1311)` };
+    if (ctx?.relevant && (!a.mainOnly || ctx.isMainWorktree)) return { block: false, ask: true, reason: `Worktree-Guard (PowerShell): ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (quellprojekt#1311)` };
   }
   return null;
 }

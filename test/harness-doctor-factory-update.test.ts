@@ -1,8 +1,9 @@
 /* Harness-Doctor, Punkt `Factory-Update` (factory#220 L39): nur im Bezieher; die Datei `.github/workflows/factory-update.yml` muss da sein und der Workflow `active`.
  * Jeder Zweig hat seinen Test; `lesen` ist die gh-Naht (kein Netz), `existiert` und `bezieher` sind injiziert. */
 import { readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/harness-doctor-factory-update.mjs";
 
@@ -319,39 +320,28 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
   });
 });
 
-/* Vertrag des Doctor-Wochenlaufs (harness-doctor.yml hat kein `npm ci`): der statische Importgraph von Doctor und Meldestellen-Lauf enthält nur `node:`-Builtins und lokale Module, nie ein npm-Paket wie `yaml`. */
-const IMPORT = /\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
-/** Alle Modulnamen, die der Importgraph ab `einstieg` anspricht, die kein `node:`-Builtin und kein lokales Modul sind. */
-function externeImporte(einstieg: string, lese: (pfad: string) => string): string[] {
-  const gesehen = new Set<string>();
-  const extern = new Set<string>();
-  const offen = [einstieg];
-  for (let pfad = offen.pop(); pfad !== undefined; pfad = offen.pop()) {
-    if (gesehen.has(pfad)) continue;
-    gesehen.add(pfad);
-    for (const m of lese(pfad).matchAll(IMPORT)) {
-      const name = m[1];
-      if (name.startsWith("./") || name.startsWith("../")) offen.push(join(dirname(pfad), name));
-      else if (!name.startsWith("node:")) extern.add(name);
-    }
-  }
-  return [...extern].sort();
-}
+/* Vertrag des Doctor-Wochenlaufs (harness-doctor.yml hat kein `npm ci`): die Import-Hülle (`importHuelle`) von Doctor und Meldestellen-Lauf enthält nur `node:`-Builtins und lokale Module, nie ein npm-Paket wie `yaml`; die Hülle wirft bei einem solchen Import. */
 describe("Importgraph des Doctor-Wochenlaufs", () => {
   test("harness-doctor.mjs und harness-doctor-melden.mjs importieren transitiv nur node:-Builtins und lokale Module", () => {
-    const skripte = join(import.meta.dirname, "..", "scripts");
-    for (const einstieg of ["harness-doctor.mjs", "harness-doctor-melden.mjs"]) {
-      expect(externeImporte(join(skripte, einstieg), (p) => readFileSync(p, "utf8")), einstieg).toEqual([]);
+    const wurzel = join(import.meta.dirname, "..");
+    for (const einstieg of ["scripts/harness-doctor.mjs", "scripts/harness-doctor-melden.mjs"]) {
+      expect(importHuelle(einstieg, (p) => readFileSync(join(wurzel, p), "utf8")), einstieg).toContain(einstieg);
     }
   });
-  test("der Graph-Leser folgt relativen Importen und findet ein npm-Paket (Prüfung des Prüfers)", () => {
-    const dateien: Record<string, string> = {
-      "/s/a.mjs": 'import { x } from "./b.mjs";\nimport fs from "node:fs";\nimport("./c.mjs");',
-      "/s/b.mjs": 'import "../t/d.mjs";',
-      "/s/c.mjs": 'import { parse } from "yaml";',
-      "/t/d.mjs": 'export { y } from "ajv";',
+  test("die Hülle folgt relativen Importen (auch dynamischen) und wirft bei einem npm-Paket (Prüfung des Prüfers)", () => {
+    const sauber: Record<string, string> = {
+      "s/a.mjs": 'import { x } from "./b.mjs";\nimport fs from "node:fs";\nimport("./c.mjs");',
+      "s/b.mjs": 'import "../t/d.mjs";',
+      "s/c.mjs": "export const c = 1;",
+      "t/d.mjs": "export const y = 1;",
     };
-    expect(externeImporte("/s/a.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv", "yaml"]);
-    expect(externeImporte("/s/b.mjs", (p) => dateien[p] ?? "")).toEqual(["ajv"]);
+    const lies = (dateien: Record<string, string>) => (p: string): string => {
+      const text = dateien[p];
+      if (text === undefined) throw new Error("nicht da: " + p);
+      return text;
+    };
+    expect(importHuelle("s/a.mjs", lies(sauber))).toEqual(["s/a.mjs", "s/b.mjs", "s/c.mjs", "t/d.mjs"]);
+    expect(() => importHuelle("s/a.mjs", lies({ ...sauber, "s/c.mjs": 'import { parse } from "yaml";' }))).toThrow(/yaml/);
+    expect(() => importHuelle("s/b.mjs", lies({ ...sauber, "t/d.mjs": 'export { y } from "ajv";' }))).toThrow(/ajv/);
   });
 });

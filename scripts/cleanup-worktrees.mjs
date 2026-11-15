@@ -267,7 +267,7 @@ function repoAufraeumen(befund, { FIX, namen, aufloesung, fs }) {
   for (const name of removed) console.log(`  ✓ ${name} entfernt`);
   for (const name of pending) console.log(`  … ${name} ist leer, aber gerade gesperrt: kein Fehler, der nächste Lauf versucht es erneut`);
   for (const { name, reason } of refused) {
-    console.error(`  VERWEIGERT: ${name} — ${reason} (Schutzgurt #1051, nichts gelöscht)`);
+    console.error(`  VERWEIGERT: ${name} — ${reason} (Schutzgurt quellprojekt#1051, nichts gelöscht)`);
   }
   for (const name of errors) {
     console.error(`  FEHLER: ${name} noch vorhanden und nicht leer — ${formatHalter(halter[name] ?? [])}`);
@@ -275,7 +275,7 @@ function repoAufraeumen(befund, { FIX, namen, aufloesung, fs }) {
 
   if (refused.length > 0) {
     console.error(
-      `\n${refused.length} Ziel(e) vom Schutzgurt abgelehnt — bewusst NICHT gelöscht. Bitte von Hand prüfen (#1051).`
+      `\n${refused.length} Ziel(e) vom Schutzgurt abgelehnt — bewusst NICHT gelöscht. Bitte von Hand prüfen (quellprojekt#1051).`
     );
     return 1;
   }

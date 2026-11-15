@@ -112,7 +112,7 @@ describe("Worktree-Guard (Bash) mit Fakes: Hinweistexte", () => {
       "git commit/push würde im geteilten main-Checkout (/proj) laufen und ist blockiert. " +
         "Aus einem worktree: `git -C <worktree> …` (ändert die Shell-cwd nicht) oder `cd <worktree> && git …`, " +
         "beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Eigener Worktree): " +
-        `\`git fetch origin && git worktree add .claude/worktrees/${WT}<nr> -b ${BR}<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`,
+        `\`git fetch origin && git worktree add .claude/worktrees/${WT}<nr> -b ${BR}<nr>-<slug> origin/main\` (vom frischen origin/main, quellprojekt#772). (quellprojekt#735)`,
     );
   });
 });
