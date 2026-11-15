@@ -162,6 +162,23 @@ export function worktreeBefehl({ aufloesung, repo, worktreeName, branchName }) {
   return `${c} fetch origin && ${c} worktree add ${anfuehren(`${repo.worktreeOrdner}/${worktreeName}`)} -b ${branchName} origin/${standardzweigVon(repo)}`;
 }
 
+/**
+ * Pur: dieselben Schritte wie `worktreeBefehl` als Argument-Listen ohne Shell (factory#515): `pfad` (absolut, mit Schrägstrichen), `branch` und `befehle`
+ * (je `{ args, cwd }` für git: erst `fetch origin`, dann `worktree add`).
+ */
+export function worktreeSchritte({ aufloesung, repo, worktreeName, branchName }) {
+  const zweig = aufloesung.betriebsart === "eingebettet" ? STANDARDZWEIG : standardzweigVon(repo);
+  const pfad = `${repo.worktreeOrdner}/${worktreeName}`;
+  return {
+    pfad,
+    branch: branchName,
+    befehle: [
+      { args: ["fetch", "origin"], cwd: repo.pfad },
+      { args: ["worktree", "add", pfad, "-b", branchName, `origin/${zweig}`], cwd: repo.pfad },
+    ],
+  };
+}
+
 const SPUR_SEGMENTE = new Set([".claude", ".agents", ".factory", ".codex"]);
 const SPUR_DATEIEN = new Set(["agents.md", "claude.md", "claude.local.md"]);
 
