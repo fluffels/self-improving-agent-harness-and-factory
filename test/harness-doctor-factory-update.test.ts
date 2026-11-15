@@ -332,7 +332,9 @@ describe("mitWorkflowAusschluss (Vorlage der dependabot.yml, factory#499 L6)", (
     expect(lib.mitWorkflowAusschluss(akt, [])).toEqual({ text: akt, hinweis: null });
     const eigen = "updates:\n  - package-ecosystem: github-actions\n    # k\n\n    exclude-paths:\n      - a.yml\n      - b.yml\n";
     expect(lib.mitWorkflowAusschluss(eigen, P)).toEqual({ text: eigen, hinweis: null });
-    const danach = "updates:\n  - package-ecosystem: github-actions\n  - package-ecosystem: npm\n    exclude-paths:\n      - x\n";
+    const teil = "updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n      - a.yml\n";
+    expect(lib.mitWorkflowAusschluss(teil, P), "eigene, unvollständige Liste: Sache des Projekts, kein Hinweis").toEqual({ text: teil, hinweis: null });
+    const danach ="updates:\n  - package-ecosystem: github-actions\n  - package-ecosystem: npm\n    exclude-paths:\n      - x\n";
     expect(lib.mitWorkflowAusschluss(danach, P).text).toContain('      - "a.yml"');
   });
   test("Gegenprüfung: unlesbares Ergebnis oder ein Eintrag ohne alle Pfade: Original und Hinweis", () => {
