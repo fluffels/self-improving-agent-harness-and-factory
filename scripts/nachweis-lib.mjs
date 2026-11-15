@@ -125,6 +125,23 @@ export function kleinGrund(grund) {
   return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
 }
 
+/** Liest den Grund einer Stufen-Ausnahme (factory#526): `stufe <n>` mit optionalem `: <Text>`. `{stufe}` (n als Zahl), sonst `null`; ob die Stufe stimmt, prüft der Wächter gegen den Diff. Pur. */
+export function stufeGrund(grund) {
+  const m = /^stufe\s+(\d+)\s*(?::\s*\S.*)?$/.exec(String(grund ?? "").trim());
+  return m ? { stufe: Number(m[1]) } : null;
+}
+
+/** Der Pfad, der die berechnete Risikostufe trägt: erster Treffer, sonst der Auslöser, sonst der erste Grund (fail-closed). Pur. */
+export const risikoPfad = (r) => r?.treffer?.[0]?.pfad ?? r?.ausloeser ?? r?.gruende?.[0] ?? "(kein Pfad)";
+
+/** Fehler einer Stufen-Ausnahme-Zeile (factory#526): `[]`, wenn `behauptet` 0 oder 1 ist und mindestens die berechnete Stufe; sonst eine Meldung mit der berechneten Stufe und dem Pfad. Pur. */
+export function stufenAusnahmeFehler(schluessel, form, behauptet, risikostufe) {
+  if ((behauptet === 0 || behauptet === 1) && behauptet >= risikostufe.stufe) return [];
+  const warum = behauptet === 0 || behauptet === 1 ? "die berechnete Stufe ist höher" : "nur stufe 0 und stufe 1 sind Ausnahmeformen";
+  const grund = risikostufe.gruende?.[0] ? `; Grund: ${risikostufe.gruende[0]}` : "";
+  return [`${schluessel}: "${form}" ist rot (${warum}): Risikostufe berechnet ${risikostufe.stufe}, Pfad ${risikoPfad(risikostufe)}${grund}.`];
+}
+
 /** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
 function planAus(planWert, planer) {
   if (planWert === null) return null;
@@ -164,6 +181,7 @@ export function parseNachweis(text, zeilen) {
   const reviewWert = lastLine(text, zeilen.review);
   let review = null;
   if (reviewWert !== null) {
+    const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(reviewWert);
     const felder = {};
     for (const tok of reviewWert.split(/\s+/)) {
       const m = /^([a-z]+)=(.*)$/.exec(tok);
@@ -171,6 +189,7 @@ export function parseNachweis(text, zeilen) {
     }
     review = {
       zeile: reviewWert,
+      ohne: ohne ? ohne[1].trim() : null,
       head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
@@ -229,6 +248,9 @@ export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
 /** CLI-Zeile zur Größenstufe (factory#402 L26): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der S-Läufe sie aus der CI-Ausgabe liest.
  *  `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
 export const stufeZeile = (stufe) => `• Größenstufe: ${stufe ?? "(nicht berechenbar)"}`;
+
+/** CLI-Zeile zur berechneten Risikostufe (factory#526); `null` (nicht berechnet) wird ausdrücklich genannt. Pur. */
+export const risikostufeZeile = (r) => `• Risikostufe: ${r?.stufe ?? "(nicht berechenbar)"}`;
 
 /** Ein Urteil `{wert, ursache?}` ist ein Szenario-Fall: nicht erfüllt, weil das Szenario über das Kriterium hinaus prüfte (kein Fix nötig). Pur. */
 export const istSzenarioFall = (u) => u.wert === "nicht-erfuellt" && u.ursache === "szenario";

@@ -1,6 +1,6 @@
 // Kein Shebang, kein Direktaufruf: Lib der Risikostufe (factory#525). Das Einstiegsskript `risikostufe.mjs` ruft sie auf (Konvention: Einstiegsskripte importieren nicht voneinander).
 /**
- * Risikostufe 0, 1 oder 2 eines Diffs (factory#525, Teil 1/5 des Epics factory#511): deterministisch aus Pfaden und Größe, nie behauptet. Die Stufe wirkt noch nicht auf Ablauf und CI.
+ * Risikostufe 0, 1 oder 2 eines Diffs (factory#525, Teil 1/5 des Epics factory#511): deterministisch aus Pfaden und Größe, nie behauptet. Die Stufe wirkt auf die Nachweis-Wächter (factory#526: `check-review-nachweis`, `check-abnahme-nachweis`).
  *
  * Reihenfolge (die erste zutreffende gilt, Treffer der Schritte 2 bis 4 werden gesammelt):
  *  1. Fail-closed ist Stufe 2: Basis, Leitplanken oder Risiko-Muster nicht ladbar oder leer, Dateiliste leer oder nicht lesbar, von git quotierter Pfad, Binärdatei (ohne Zeilenzahl), git-Fehler.
@@ -119,9 +119,15 @@ function stufe2Treffer(pfade, { basis, leitplanken, risiko, prognose }) {
 
 const ohneDubletten = (xs) => [...new Set(xs)];
 
+/** Der Pfad, der eine Stufe 1 auslöst (factory#526, für die Meldung der Nachweis-Wächter): erster Schutz-Treffer, sonst erster Pfad, der weder `*.md` noch eine Testdatei außerhalb von `test/harness/` ist, sonst der erste Pfad. Pur. */
+function ausloeserPfad(pfade, geschuetzt) {
+  const testdatei = (p) => p.startsWith("test/") && !p.startsWith("test/harness/");
+  return geschuetzt[0]?.pfad ?? pfade.find((p) => !/\.md$/i.test(p) && !testdatei(p)) ?? pfade[0];
+}
+
 /**
  * Bestimmt die Risikostufe. `eintraege`: `[{pfad, zeilen}]` (`zeilen` `null` = binär; bei `prognose` darf es fehlen); `basis`: `ladeStufe2Basis`; `leitplanken`: `{gate: stufe2Leitplanken, alle: alleLeitplanken}`;
- * `risiko`: `risikoMusterAus`. Liefert `{stufe, gruende, treffer: [{pfad, muster, liste}], pfade}`. Pur.
+ * `risiko`: `risikoMusterAus`. Liefert `{stufe, gruende, treffer: [{pfad, muster, liste}], pfade}`, bei Stufe 1 zusätzlich `ausloeser` (der auslösende Pfad). Pur.
  */
 export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, prognose = false }) {
   const grund = failClosedGrund({ eintraege, basis, leitplanken, risiko, prognose });
@@ -134,7 +140,7 @@ export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, pro
   const groesse = bestimmeGroessenstufe({ eintraege, muster: leitplanken.alle, prognose, risiko });
   if (groesse.stufe === "S" && groesse.sweep.tiefe === "stichprobe") return { stufe: 0, gruende: ["Größenstufe S, nur Doku und Testdateien außerhalb von test/harness/"], treffer: [], pfade };
   const gruende = ohneDubletten([...(groesse.sweep.tiefe === "voll" ? groesse.sweep.gruende : []), ...groesse.gruende]);
-  return { stufe: 1, gruende, treffer: [], pfade };
+  return { stufe: 1, gruende, treffer: [], pfade, ausloeser: ausloeserPfad(pfade, geschuetzt) };
 }
 
 const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
