@@ -28,7 +28,7 @@ const MAX_GRUENDE_TEXT = 5;
 /** Die Zeile für Menschen: `RISIKOSTUFE: <n> — <Gründe>`, höchstens `MAX_GRUENDE_TEXT` Gründe plus Zahl der weiteren (`--json` trägt alle). Pur. */
 export const stufeZeile = ({ stufe, gruende }) => {
   const rest = gruende.length - MAX_GRUENDE_TEXT;
-  return `RISIKOSTUFE: ${stufe} — ${gruende.slice(0, MAX_GRUENDE_TEXT).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
+  return `RISIKOSTUFE: ${stufe} — ${gruende.slice(0, MAX_GRUENDE_TEXT).map((g) => String(g).replace(/\s*[\r\n]+\s*/g, " ").trim()).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
 };
 
 const aufrufFehler = (text) => ({ code: AUFRUF_EXIT, ausgabe: `${text}\n${AUFRUF}` });

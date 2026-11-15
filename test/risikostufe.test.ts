@@ -282,6 +282,16 @@ describe("CLI laufe", () => {
   test("genau fünf Gründe werden ohne Rest-Zusatz ausgegeben", () => {
     expect(cli.stufeZeile({ stufe: 2, gruende: ["a", "b", "c", "d", "e"] })).toBe("RISIKOSTUFE: 2 — a; b; c; d; e");
   });
+  test("Zeilenumbrüche in Gründen werden im Text zu Leerzeichen, --json behält den Rohtext", () => {
+    expect(cli.stufeZeile({ stufe: 2, gruende: ["a \n  hint: b"] })).toBe("RISIKOSTUFE: 2 — a hint: b");
+    expect(cli.stufeZeile({ stufe: 2, gruende: ["git-Fehler: Command failed\nfatal: bad object x\n", "b\r\nc"] })).toBe("RISIKOSTUFE: 2 — git-Fehler: Command failed fatal: bad object x; b c");
+    const io = { ...lader(), git: () => { throw new Error("Command failed\nfatal: bad object deadbeef\n"); } };
+    const r = cli.laufe(["--commit", "deadbeef"], io);
+    expect(r.ausgabe.split("\n")).toHaveLength(1);
+    expect(r.ausgabe.startsWith("RISIKOSTUFE: 2 — ")).toBe(true);
+    const j = JSON.parse(cli.laufe(["--commit", "deadbeef", "--json"], io).ausgabe) as { gruende: string[] };
+    expect(j.gruende.join("")).toContain("\n");
+  });
   test.each([
     [["--bogus"]],
     [["--commit", "x", "--pfade", "a"]],
