@@ -48,7 +48,7 @@ function parseFund(zeile) {
  * Kaputte Fundzeile innerhalb des Fund-Bereichs eines Lens-Blocks (bekannte Muster: a, b, c; weitere Formen sind bewusste Grenze):
  * (a) "- [Marke] … — `ort`" mit unbekannter Marke (nicht "[ ]", "[x]" oder ein Markdown-Link), (b) "[Schwere] …" ohne führendes "- " (kein Link),
  * (c) Drei-Teil-Aufzählung "- Befund — `ort` — Beleg" ohne Marke. Nur wenn FUND_RE die Zeile nicht erkennt. Pur.
- * Bewusste Grenze: der Fund-Bereich endet an einer Überschrift oder einer Zeile "Außerhalb …" (Scope-Vorschläge, Protokolle); dort wird nichts geprüft.
+ * Bewusste Grenze: geprüft wird nur der Fund-Bereich, also der erste Absatz nach dem Verdikt (bis zur ersten Leerzeile) und nie hinter einer Überschrift oder einer Zeile "Außerhalb …"; Scope-Vorschläge und Protokolle gehören in einen eigenen Absatz.
  */
 export function istKaputteFundzeile(zeile) {
   if (FUND_RE.test(zeile)) return false;
@@ -65,7 +65,10 @@ const beendetFundBereich = (zeile) => /^\s*#{2,}\s/.test(zeile) || /^\s*(\*\*)?\
 export function parseBerichte(text) {
   const lenses = [];
   let aktuell = null;
-  let fundBereich = false;
+  let absatz = 0;
+  let inhalt = false;
+  let leer = false;
+  let beendet = false;
   for (const zeile of String(text).replace(/\r/g, "").split("\n")) {
     const kopf = /^##\s*Lens:\s*(.+?)\s*$/i.exec(zeile);
     if (kopf) {
@@ -74,11 +77,21 @@ export function parseBerichte(text) {
       if (lenses.some((l) => l.lens === name)) throw new FilterFehler(`Brille ${name} kommt doppelt vor`);
       aktuell = { lens: name, funde: [] };
       lenses.push(aktuell);
-      fundBereich = true;
+      absatz = 0;
+      inhalt = false;
+      leer = false;
+      beendet = false;
       continue;
     }
-    if (beendetFundBereich(zeile)) fundBereich = false;
-    if (aktuell && fundBereich && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
+    if (zeile.trim() === "") {
+      if (inhalt && !leer) absatz++;
+      leer = true;
+    } else {
+      inhalt = true;
+      leer = false;
+    }
+    if (beendetFundBereich(zeile)) beendet = true;
+    if (aktuell && absatz <= 1 && !beendet && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }

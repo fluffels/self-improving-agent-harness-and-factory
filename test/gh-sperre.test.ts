@@ -96,6 +96,34 @@ describe("ghSperrePfad: vorbelegter Ordner (Missbrauch im geteilten Temp)", () =
     expect(() => ghSperrePfad({ PATH: "/bin" }, tmp, "linux")).toThrow(/beschreibbar/);
   });
 
+  it("ein für die Gruppe beschreibbarer Ordner bricht ab", () => {
+    const tmp = frisch();
+    const dir = join(tmp, ordnerName());
+    mkdirSync(dir);
+    chmodSync(dir, 0o770);
+    expect(() => ghSperrePfad({ PATH: "/bin" }, tmp, "linux")).toThrow(/beschreibbar/);
+  });
+
+  it.skipIf(process.getuid === undefined)("ein Ordner eines anderen Nutzers bricht ab (uid injiziert)", () => {
+    const tmp = frisch();
+    const uid = process.getuid!() + 1;
+    mkdirSync(join(tmp, `factory-gh-attrappe-${uid}`), { mode: 0o700 });
+    expect(() => ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid)).toThrow(/anderen Nutzer/);
+  });
+
+  it("ein Symlink als gh-Datei mit gleichem Inhalt wird trotzdem durch eine echte Datei ersetzt", () => {
+    const tmp = frisch();
+    const dir = join(tmp, ordnerName());
+    ghSperrePfad({ PATH: "/bin" }, tmp, "linux");
+    const inhalt = readFileSync(join(dir, "gh"), "utf8");
+    const opfer = join(tmp, "opfer2.txt");
+    writeFileSync(opfer, inhalt);
+    rmSync(join(dir, "gh"));
+    symlinkSync(opfer, join(dir, "gh"));
+    ghSperrePfad({ PATH: "/bin" }, tmp, "linux");
+    expect(lstatSync(join(dir, "gh")).isSymbolicLink()).toBe(false);
+  });
+
   it("ein Symlink als gh-Datei wird ersetzt, das Ziel bleibt unberührt", () => {
     const tmp = frisch();
     const opfer = join(tmp, "opfer.txt");

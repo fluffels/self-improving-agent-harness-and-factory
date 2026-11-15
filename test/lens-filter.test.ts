@@ -51,7 +51,7 @@ describe("parseBerichte: kaputte Fundzeilen (factory#560 L7)", () => {
     expect(r.stderr).toMatch(/Abschnitt veraltet/);
   });
   test("Negativfälle: gewöhnliche Aufzählung, Verdikt, Leerzeilen, Text vor dem ersten Block", () => {
-    const text = "- [x] vorher — `a.ts:1` — b\n" + B("Doku", "- Hinweis ohne Trenner", "- Punkt — ohne Backtick", "", "Verdikt: ok");
+    const text = "- Abschnitt veraltet — `x.ts:1` — y\n" + B("Doku", "- Hinweis ohne Trenner", "- Punkt — ohne Backtick", "", "Verdikt: ok");
     expect(L.parseBerichte(text)[0].funde).toEqual([]);
   });
   test.each([
@@ -61,6 +61,9 @@ describe("parseBerichte: kaputte Fundzeilen (factory#560 L7)", () => {
     "[Hinweis zur FAQ](faq.md) steht im Text",
     "- Prüfung — `a.ts`",
     "- A — B — C",
+    "- [Schritt 1] erledigt",
+    "- [Fehler] ohne Ort",
+    "- [X] erledigt — `a.ts:1` — b",
     "Prosa mit - x — `o` — y mitten im Text",
   ])("kein Wurf bei gewöhnlicher Zeile: %s", (zeile) => {
     expect(() => L.parseBerichte(B("Doku", zeile))).not.toThrow();
@@ -80,6 +83,14 @@ describe("parseBerichte: kaputte Fundzeilen (factory#560 L7)", () => {
     expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", "### Probenprotokoll", vorschlag))).not.toThrow();
     expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), vorschlag))).toThrow(/Fundzeile/);
     expect(L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", "Außerhalb des Scopes:", vorschlag))[0].funde).toHaveLength(1);
+  });
+  test.each(["Scope-Vorschläge:", "Sabotage-Proben:", "**Sabotage-Proben**", "Vorschläge außerhalb des Ticket-Scopes:"])("ein eigener Absatz nach dem Fund-Absatz wird nicht geprüft: %s", (kopf) => {
+    const zeile = "- Muster a entfernt — `x.mjs:1` — 3 Tests rot";
+    expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", kopf, zeile))).not.toThrow();
+  });
+  test.each(["## Überschrift", "**Außerhalb des Scopes:**", "außerhalb des scopes:"])("ohne Leerzeile beendet auch %s den Fund-Bereich", (kopf) => {
+    const zeile = "- Harness → Zeile mit Klasse Defekt — `x.mjs:3` — Beleg";
+    expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), kopf, zeile))).not.toThrow();
   });
   test("der Fund-Bereich beginnt mit jedem neuen Lens-Block wieder", () => {
     const text = B("Doku", "Außerhalb des Scopes:") + B("Kombiniert", "- Abschnitt veraltet — `docs/x.md:3` — Beleg");

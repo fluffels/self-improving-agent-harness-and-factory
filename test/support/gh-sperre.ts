@@ -11,10 +11,9 @@ import { join, delimiter } from "node:path";
 export const GH_SPERRE_MELDUNG = "gh in Vitest gesperrt (Naht injizieren)";
 
 /** Prüft einen vorhandenen oder frisch angelegten Sperr-Ordner: echter Ordner, dem Nutzer gehörig, ohne Schreibrecht für Gruppe und andere. Wirft sonst. */
-function pruefeOrdner(dir: string): void {
+function pruefeOrdner(dir: string, uid: number | undefined): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const st = lstatSync(dir);
-  const uid = process.getuid?.();
   if (!st.isDirectory() || st.isSymbolicLink()) throw new Error(`gh-Sperre: ${dir} ist kein echter Ordner`);
   if (uid !== undefined && st.uid !== uid) throw new Error(`gh-Sperre: ${dir} gehört einem anderen Nutzer`);
   if (uid !== undefined && (st.mode & 0o022) !== 0) throw new Error(`gh-Sperre: ${dir} ist für andere beschreibbar`);
@@ -31,10 +30,10 @@ function schreibeWennNeu(datei: string, inhalt: string, mode?: number): void {
 
 export type GhSperre = { dir: string; path: string; originalPath: string };
 
-export function ghSperrePfad(env: Record<string, string | undefined>, tmp: string, plattform: string = process.platform): GhSperre | null {
+export function ghSperrePfad(env: Record<string, string | undefined>, tmp: string, plattform: string = process.platform, uid: number | undefined = process.getuid?.()): GhSperre | null {
   if (env.FACTORY_GH_ECHT === "1") return null;
-  const dir = join(tmp, `factory-gh-attrappe-${process.getuid?.() ?? "u"}`);
-  pruefeOrdner(dir);
+  const dir = join(tmp, `factory-gh-attrappe-${uid ?? "u"}`);
+  pruefeOrdner(dir, uid);
   schreibeWennNeu(join(dir, "gh"), `#!/bin/sh\necho "${GH_SPERRE_MELDUNG}" >&2\nexit 1\n`, 0o755);
   if (plattform === "win32") schreibeWennNeu(join(dir, "gh.cmd"), `@echo off\r\necho ${GH_SPERRE_MELDUNG} 1>&2\r\nexit /b 1\r\n`);
   const pfad = env.PATH ?? "";
