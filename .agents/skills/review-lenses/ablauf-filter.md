@@ -1,5 +1,7 @@
 # Filterdurchlauf und Stichprobenarm (factory#532)
 
+Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie nach jeder Review-Runde.
+
 Nach jeder Runde, wenn alle Berichte da sind: Berichte über stdin an `node scripts/lens-filter.mjs --runde <n> --ticket <nr>`. Ausgabe: Fixliste (`F1…Fn`, gleiche Fundstelle und Schwere über Brillen zusammengefasst, die Schwere ändert der Filter nie), die fertige `Runde <n>:`-Zeile für den Fix-Commit, die Zeile `arm=` und `pass: konvergiert|delta-noetig`.
 
 **Arm** aus der Ticketnummer (`armAusTicket`): durch 4 teilbar ⇒ `vollablauf`, sonst `schlank`. Das Feld `arm=<vollablauf|schlank>` gehört in die Review-Zeile des Nachweis-Commits (Pflicht bei Ticket-Branches, ohne Ticket verboten; ein unpassender Wert macht `check-review-nachweis` rot).
