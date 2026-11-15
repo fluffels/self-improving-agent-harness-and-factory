@@ -124,7 +124,7 @@ describe("liesArgumente", () => {
   test("Fehler: fehlender Wert, kaputtes Verwerfen, unbekanntes Argument", () => {
     expect(() => L.liesArgumente(["--runde"])).toThrow();
     expect(() => L.liesArgumente(["--verwerfen", "F1"])).toThrow(/F<k>=/);
-    expect(() => L.liesArgumente(["--foo"])).toThrow(/unbekannt/);
+    expect(() => L.liesArgumente(["--foo"])).toThrow(/unbekannt/i);
   });
 });
 

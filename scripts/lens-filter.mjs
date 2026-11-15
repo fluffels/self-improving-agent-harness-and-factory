@@ -12,6 +12,7 @@
  * Ohne `--ticket` gilt das Verhalten von `vollablauf`, ohne Arm-Zeile. Exit 0 = Ausgabe, 2 = Eingabefehler. Der Kern ist pur und exportiert.
  */
 import { readFileSync } from "node:fs";
+import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { BEKANNTE_LENSES, armAusTicket, normalisiereLens } from "./nachweis-lib.mjs";
 
@@ -131,24 +132,24 @@ export function formatiere(e) {
   return zeilen.join("\n");
 }
 
-/** Argumente → `{runde, ticket, verwerfen}`; wirft `FilterFehler`. Pur. */
+const OPTIONEN = { runde: { type: "string" }, ticket: { type: "string" }, verwerfen: { type: "string", multiple: true } };
+
+const ganzzahl = (name, wert) => {
+  if (wert === undefined) return null;
+  if (!/^\d+$/.test(wert)) throw new FilterFehler(`--${name} braucht eine ganze Zahl`);
+  return Number(wert);
+};
+
+/** Argumente → `{runde, ticket, verwerfen}` über `flagsLesen`; wirft `FilterFehler`. Pur. */
 export function liesArgumente(argv) {
-  const r = { runde: Number.NaN, ticket: null, verwerfen: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    const wert = argv[i + 1];
-    if (a === "--runde" || a === "--ticket") {
-      if (wert === undefined || !/^\d+$/.test(wert)) throw new FilterFehler(`${a} braucht eine ganze Zahl`);
-      r[a === "--runde" ? "runde" : "ticket"] = Number(wert);
-      i++;
-    } else if (a === "--verwerfen") {
-      const m = /^(F\d+)=([\s\S]*)$/.exec(wert ?? "");
-      if (!m) throw new FilterFehler("--verwerfen braucht F<k>=<Begründung>");
-      r.verwerfen.push({ id: m[1], begruendung: m[2] });
-      i++;
-    } else throw new FilterFehler(`unbekanntes Argument ${a}`);
-  }
-  return r;
+  const { werte, fehler } = flagsLesen(argv, OPTIONEN);
+  if (fehler) throw new FilterFehler(fehler.text);
+  const verwerfen = (werte.verwerfen ?? []).map((v) => {
+    const m = /^(F\d+)=([\s\S]*)$/.exec(v);
+    if (!m) throw new FilterFehler("--verwerfen braucht F<k>=<Begründung>");
+    return { id: m[1], begruendung: m[2] };
+  });
+  return { runde: ganzzahl("runde", werte.runde) ?? Number.NaN, ticket: ganzzahl("ticket", werte.ticket), verwerfen };
 }
 
 function main(argv = process.argv.slice(2)) {

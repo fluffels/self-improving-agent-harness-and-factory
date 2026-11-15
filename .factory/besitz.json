@@ -179,6 +179,7 @@
     {"pfad":".agents/skills/review-lenses/brille-sicherheit.md","ring":"kern-nach-entkopplung","quelle":"Risikoklasse 2/2 (factory#334), Sicherheits-Lens"},
     {"pfad":".agents/skills/review-lenses/ablauf-klasse-hoch.md","ring":"kern-nach-entkopplung","quelle":"Risikoklasse 2/2 (factory#334), Ablauf der Klasse hoch"},
     {"pfad":".agents/skills/review-lenses/ablauf-abnahme-fix.md","ring":"kern-nach-entkopplung","quelle":"Kontext-Diät 3/6 (factory#309), Ablauf aus SKILL.md"},
+    {"pfad":".agents/skills/review-lenses/ablauf-filter.md","ring":"kern-nach-entkopplung","quelle":"Filterdurchlauf und Stichprobenarm (factory#532)"},
     {"pfad":".agents/skills/review-lenses/ablauf-merge-main.md","ring":"kern-nach-entkopplung","quelle":"Kontext-Diät 3/6 (factory#309), Ablauf aus SKILL.md"},
     {"pfad":".agents/skills/review-lenses/ablauf-nachweis.md","ring":"kern-nach-entkopplung","quelle":"Kontext-Diät 3/6 (factory#309), Ablauf aus SKILL.md"},
     {"pfad":".agents/skills/review-lenses/ablauf-zusatzpass.md","ring":"kern-nach-entkopplung","quelle":"Kontext-Diät 3/6 (factory#309), Ablauf aus SKILL.md"},
