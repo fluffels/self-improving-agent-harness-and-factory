@@ -69,7 +69,7 @@ describe("einsortieren mit Fake-IO", () => {
     expect(proto.some((p) => p.was === "setPosition")).toBe(false);
   });
   test("ohne io gilt die echte I/O (Standardparameter), erkennbar an ECHTE_PLACE_IO mit allen Schlüsseln", () => {
-    expect(Object.keys(P.ECHTE_PLACE_IO).sort()).toEqual(["addToBoardTodo", "entferneVomBoard", "itemsUeberIssues", "ladeLabels", "loadItems", "log", "schlafe", "setPosition", "warn"]);
+    expect(Object.keys(P.ECHTE_PLACE_IO).sort()).toEqual(["addToBoardTodo", "entferneVomBoard", "ghJson", "itemsUeberIssues", "ladeLabels", "loadItems", "log", "schlafe", "setPosition", "warn"]);
   });
 });
 
