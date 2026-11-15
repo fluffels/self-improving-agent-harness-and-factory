@@ -667,6 +667,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/umsetzer-schritte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/projekt*.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

@@ -141,6 +141,7 @@
 
 | Begriff | Bedeutung | Mehr dazu |
 |---|---|---|
+| Start-Skript / Ende-Skript des Umsetzers | `scripts/umsetzer-start.mjs` und `scripts/umsetzer-ende.mjs` (factory#515): bündeln die deterministischen Teilschritte am Anfang (Claim-Prüfung, Lock, Fremdtext-Gate, Worktree, install, Lebenszeichen) und am Ende des Umsetzer-Laufs (Auto-Merge, CI-Warten, Aufräumen mit Worktree-Verifikation, Issue-Prüfung, Lock freigeben) zu je einem Aufruf; die Schutzwirkungen bleiben die der Teilskripte, ein Teilfehler bricht mit Exit ≠ 0 ab. | [Befehle](referenz/befehle.md) |
 | Design-Schritt | Der optionale Schritt vor der Umsetzung für Tickets mit sichtbarer Oberfläche: nur mit Block `design` in der Projekt-Config und dem Design-Label (`design.label`) am Ticket; das Freigabe-Label (`design.freigabe`) gibt den Entwurf frei. Ohne freigegebenen Design-Entwurf geht das Ticket nicht in die Umsetzung. | [Fortschreibung factory#172](adr/fortschreibungen/0028-172-design-schritt.md) |
 | Design-Entwurf | Je Screen statisches HTML aus den Tokens und Komponenten des Design-Systems plus ein per Playwright gerendertes PNG; er entsteht in einem eigenen Design-Ticket („Design-Ticket“, ohne Design-Label). Freigegeben ist er mit dem Freigabe-Label am UI-Ticket. | [Fortschreibung factory#172](adr/fortschreibungen/0028-172-design-schritt.md) |
 | Design-System | Die Seite (Pfad `design.system`) mit den Tokens und Komponenten eines Projekts; einmal je Projekt angelegt, Grundlage aller Design-Entwürfe. | [Fortschreibung factory#172](adr/fortschreibungen/0028-172-design-schritt.md) |

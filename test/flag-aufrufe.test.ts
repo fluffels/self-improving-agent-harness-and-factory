@@ -285,6 +285,8 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
     ["ticket-lock", ["__proto__", "1"], 2, "✖ ticket-lock: unbekannter Befehl __proto__"],
     ["ticket-lock", ["constructor", "1"], 2, "✖ ticket-lock: unbekannter Befehl constructor"],
     ["haupt-sync", ["x"], 2, "haupt-sync: Unbekanntes Argument: x"],
+    ["umsetzer-start", ["7"], 2, "--slug fehlt"],
+    ["umsetzer-ende", ["7", "--pr", "9"], 2, "--nonce fehlt"],
     ["projekt-config", ["repo", "zwei"], 2, "✖ Unbekanntes Argument: zwei"],
     ["projekt-config", [], 2, "✖ Schlüssel fehlt"],
     ["board-takt", ["--bogus"], 2, "board-takt: Unbekanntes Argument: --bogus"],
