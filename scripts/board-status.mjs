@@ -13,7 +13,7 @@ import { AUFRUF_EXIT, direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { macheIo } from "./board-status-io.mjs";
+import { macheIo, setzeStatusAuf } from "./board-status-io.mjs";
 
 export { macheIo };
 
@@ -33,17 +33,15 @@ export function pruefe(argv) {
   if (r.fehler) return { fehler: r.fehler.text };
   const [nr, ...mehr] = r.positionale;
   if (mehr.length || !/^[1-9]\d{0,9}$/.test(nr ?? "")) return { fehler: "<nr> fehlt oder ist keine positive Ganzzahl" };
+  if (![STATUS_IN_ARBEIT, STATUS_TODO].includes(r.werte.status)) return { fehler: `--status ist „${STATUS_IN_ARBEIT}“ oder „${STATUS_TODO}“` };
   return { befehl, nr: Number(nr), status: r.werte.status };
 }
 
 function setzeStatusFuer(p, io, fehl) {
   const s = io.laden(p.nr);
   if (!s.itemId) return fehl(1, `#${p.nr} steht nicht im Board`, `das Issue ins Board holen (gh project item-add ${s.boardNummer} --owner ${s.besitzer} --url <Issue-URL>), dann erneut aufrufen`);
-  if (s.status === p.status) return { code: 0, out: `#${p.nr}: Status ist schon „${p.status}“, nichts zu tun\n`, err: "" };
-  const option = s.optionen.find((o) => o.name === p.status);
-  if (!option) return fehl(AUFRUF_EXIT, `das Status-Feld des Boards hat keine Option „${p.status}“`, `im Board die Status-Option „${p.status}“ anlegen, dann erneut aufrufen`);
-  io.setzeStatus(s.itemId, option.id);
-  return { code: 0, out: `#${p.nr}: Status „${s.status ?? "leer"}“ → „${p.status}“\n`, err: "" };
+  const st = setzeStatusAuf(p.nr, s, io, p.status);
+  return st.fehler ? fehl(...st.fehler) : { code: 0, out: st.zeile, err: "" };
 }
 
 /** Pur: die Items, die der Abgleich auf Todo setzt: offen, „In Progress“, ohne Assignee, kein offener PR verweist darauf. */

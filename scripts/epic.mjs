@@ -13,7 +13,7 @@ import { AUFRUF_EXIT, direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { macheIo } from "./board-status-io.mjs";
+import { macheIo, setzeStatusAuf } from "./board-status-io.mjs";
 
 export { macheIo };
 export const ZIEL_STATUS = "In Progress";
@@ -29,15 +29,6 @@ export function pruefe(argv) {
   return { nr: Number(nr) };
 }
 
-/** Status auf `ZIEL_STATUS`: `{ fehler }` oder `{ zeile }` (Ausgabezeile, nur bei Mutation). */
-function setzeStatus(nr, s, io) {
-  if (s.status === ZIEL_STATUS) return { zeile: `#${nr}: Status ist schon „${ZIEL_STATUS}“, nichts zu tun\n` };
-  const option = s.optionen.find((o) => o.name === ZIEL_STATUS);
-  if (!option) return { fehler: [AUFRUF_EXIT, `das Status-Feld des Boards hat keine Option „${ZIEL_STATUS}“`, `im Board die Status-Option „${ZIEL_STATUS}“ anlegen, dann erneut aufrufen`] };
-  io.setzeStatus(s.itemId, option.id);
-  return { zeile: `#${nr}: Status „${s.status ?? "leer"}“ → „${ZIEL_STATUS}“\n` };
-}
-
 /** Ausführung mit eingespritztem `io` (`laden(nr)`, `setzeStatus(itemId, optionId)`, `positionPlan(itemId)`, `setzePosition(itemId, afterId)`); Ergebnis `{ code, out, err }`. */
 export function fuehreAus(argv, io) {
   const p = pruefe(argv);
@@ -47,7 +38,7 @@ export function fuehreAus(argv, io) {
     const s = io.laden(p.nr);
     if (!(s.kinder > 0)) return fehl(1, `#${p.nr} hat keine Kinder`, `erst Kinder per node scripts/spezifikation.mjs anlegen … --epic ${p.nr}, dann erneut aufrufen`);
     if (!s.itemId) return fehl(1, `#${p.nr} steht nicht im Board`, `das Issue ins Board holen (gh project item-add ${s.boardNummer} --owner ${s.besitzer} --url <Issue-URL>), dann erneut aufrufen`);
-    const st = setzeStatus(p.nr, s, io);
+    const st = setzeStatusAuf(p.nr, s, io, ZIEL_STATUS);
     if (st.fehler) return fehl(...st.fehler);
     const plan = io.positionPlan(s.itemId);
     if (!plan.noetig) return { code: 0, out: st.zeile, err: "" };

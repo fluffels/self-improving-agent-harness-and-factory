@@ -342,6 +342,9 @@ describe("epic.mjs: macheIo über gh (exec-Naht)", () => {
     const dort = epic.macheIo(config, { exec: reihenfolge(kopf, epicZeile, andere) });
     dort.laden(20);
     assert.deepEqual(dort.positionPlan("ITEM_epic"), { noetig: false, afterId: "ITEM_kopf" });
+    const darueber = epic.macheIo(config, { exec: reihenfolge(epicZeile, kopf, andere) });
+    darueber.laden(20);
+    assert.deepEqual(darueber.positionPlan("ITEM_epic"), { noetig: true, afterId: "ITEM_kopf" });
     const ohne = epic.macheIo(config, { exec: reihenfolge(andere, epicZeile) });
     ohne.laden(20);
     assert.deepEqual(ohne.positionPlan("ITEM_epic"), { noetig: true, afterId: null });

@@ -12,6 +12,18 @@ const FRAGE_ISSUE =
 const FRAGE_OPTIONEN = "query($f:ID!){ node(id:$f){ ... on ProjectV2SingleSelectField{ options{ id name } } } }";
 const PR_LIMIT = "200";
 
+/**
+ * Pur (geteilt von `board-status.mjs` und `epic.mjs`): setzt das Item `s` (Ergebnis von `io.laden`) auf den Status `ziel`;
+ * `{ fehler: [code, text, fix] }` oder `{ zeile }` (Ausgabezeile). Steht der Status schon richtig, keine Mutation.
+ */
+export function setzeStatusAuf(nr, s, io, ziel) {
+  if (s.status === ziel) return { zeile: `#${nr}: Status ist schon „${ziel}“, nichts zu tun\n` };
+  const option = s.optionen.find((o) => o.name === ziel);
+  if (!option) return { fehler: [2, `das Status-Feld des Boards hat keine Option „${ziel}“`, `im Board die Status-Option „${ziel}“ anlegen, dann erneut aufrufen`] };
+  io.setzeStatus(s.itemId, option.id);
+  return { zeile: `#${nr}: Status „${s.status ?? "leer"}“ → „${ziel}“\n` };
+}
+
 /** Das echte io über `gh` für eine Projekt-Config (`exec` ist die Test-Naht von gh-cli). */
 export function macheIo(config, { exec } = {}) {
   const { owner, name } = zerlegeRepo(config.repo);
@@ -53,13 +65,15 @@ export function macheIo(config, { exec } = {}) {
       ghText(afterId === null ? args : [...args, "-f", `a=${afterId}`], { exec });
     },
     abgleichDaten() {
-      const boards = config.boards.map((b) => ({
+      // nur Boards des eigenen Repos: fremde Boards (Bezieher) schreibt die Fabrik nie, und PR-Nummern gelten nur je Repo
+      const boards = config.boards.filter((b) => boardRepo(b, config) === config.repo).map((b) => ({
         projectId: b.projectId,
         feldId: b.statusFeldNodeId,
         optionen: optionenVon(b.statusFeldNodeId),
         items: loadItems(b, { repo: boardRepo(b, config), exec }),
       }));
       const prs = ghJson(["pr", "list", "--repo", config.repo, "--state", "open", "--limit", PR_LIMIT, "--json", "closingIssuesReferences"], { exec });
+      if (prs.length >= Number(PR_LIMIT)) throw new Error(`mindestens ${PR_LIMIT} offene PRs: die Liste ist abgeschnitten, ein Abgleich wäre unsicher`);
       return { boards, prIssues: prs.flatMap((p) => (p.closingIssuesReferences ?? []).map((r) => r.number)) };
     },
     setzeStatusIn: mutiere,

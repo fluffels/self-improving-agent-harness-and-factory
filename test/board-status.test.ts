@@ -72,11 +72,24 @@ describe("board-status setze", () => {
   });
   test("Aufruf-Fehler: Exit 2 vor jedem I/O", () => {
     const sperre = { laden: () => { throw new Error("I/O"); }, setzeStatus: () => { throw new Error("I/O"); }, abgleichDaten: () => { throw new Error("I/O"); }, setzeStatusIn: () => { throw new Error("I/O"); } };
-    for (const argv of [[], ["x"], ["setze"], ["setze", "7"], ["setze", "x", "--status", "Todo"], ["setze", "0", "--status", "Todo"], ["setze", "7", "--status"], ["setze", "7", "--status", "Todo", "--x"], ["setze", "7", "--status", "Todo", "8"], ["abgleich", "--x"], ["abgleich", "5"]]) {
+    for (const argv of [[], ["x"], ["setze"], ["setze", "7"], ["setze", "x", "--status", "Todo"], ["setze", "0", "--status", "Todo"], ["setze", "7", "--status"], ["setze", "7", "--status", "Todo", "--x"], ["setze", "7", "--status", "Todo", "8"], ["abgleich", "--x"], ["abgleich", "5"], ["setze", "5x", "--status", "Todo"], ["setze", "05", "--status", "Todo"], ["setze", "12345678901", "--status", "Todo"], ["setze", "7", "--status", "Done"]]) {
       const r = lib.fuehreAus(argv, sperre);
       assert.equal(r.code, 2, argv.join(" "));
       assert.match(r.err, /Aufruf: node scripts\/board-status\.mjs/);
     }
+  });
+});
+
+describe("board-status setze: Grenzen der Ticketnummer", () => {
+  test("zehnstellige Nummern gelten, auch zweistellige", () => {
+    for (const nr of ["10", "1234567890"]) {
+      const w = mitIo(stand());
+      assert.equal(lib.fuehreAus(["setze", nr, "--status", "In Progress"], w.io).code, 0, nr);
+      assert.equal(w.mutationen.length, 1);
+    }
+  });
+  test("ohne bisherigen Status steht „leer“ in der Ausgabe", () => {
+    assert.match(lib.fuehreAus(["setze", "7", "--status", "Todo"], mitIo(stand({ status: null })).io).out, /Status „leer“ → „Todo“/);
   });
 });
 
@@ -99,6 +112,12 @@ describe("board-status abgleich", () => {
     assert.deepEqual([r.code, r.out, w.mutationen], [0, "", []]);
     const ohne = mitIo(stand(), { boards: [{ ...board([item(1)]), optionen: OPT.slice(1) }], prIssues: [] });
     assert.equal(lib.fuehreAus(["abgleich"], ohne.io).code, 2);
+  });
+  test("ein Board ohne Treffer und ohne Todo-Option bricht den Abgleich der anderen nicht ab", () => {
+    const leer = { ...board([item(2, { assignees: ["x"] })]), optionen: OPT.slice(1) };
+    const w = mitIo(stand(), { boards: [leer, board([item(1)])], prIssues: [] });
+    const r = lib.fuehreAus(["abgleich"], w.io);
+    assert.deepEqual([r.code, r.out], [0, "STATUS #1: In Progress → Todo\n"]);
   });
 });
 
@@ -127,5 +146,22 @@ describe("board-status macheIo über gh (exec-Naht)", () => {
     io.setzeStatusIn("P", "F", "ITEM_a", "o-todo");
     const m = aufrufe.at(-1) ?? [];
     assert.ok(m.includes("p=P") && m.includes("f=F") && m.includes("i=ITEM_a") && m.includes("o=o-todo"));
+  });
+  const naht = (prs: unknown[]) => (_g: string, args: string[]) => {
+    if (args[0] === "pr") return JSON.stringify(prs);
+    const q = args.find((a) => a.startsWith("query=")) ?? "";
+    if (q.includes("ProjectV2SingleSelectField")) return JSON.stringify({ data: { node: { options: OPT } } });
+    return JSON.stringify([[]]);
+  };
+  test("Boards fremder Repos werden nicht gelesen (die Fabrik schreibt nie ins Bezieher-Board)", () => {
+    const fremd = { ...config, boards: FREMD.boards.map((b, k) => (k === 0 ? { ...b, repo: "zz-org/anderes-repo" } : b)) };
+    const d = lib.macheIo(fremd, { exec: naht([]) }).abgleichDaten();
+    assert.equal(d.boards.length, FREMD.boards.length - 1);
+    assert.ok(d.boards.every((b) => b.projectId !== FREMD.boards[0]?.projectId));
+  });
+  test("200 offene PRs: die Liste ist abgeschnitten, der Abgleich bricht ab", () => {
+    const prs = Array.from({ length: 200 }, () => ({ closingIssuesReferences: [] }));
+    assert.throws(() => lib.macheIo(config, { exec: naht(prs) }).abgleichDaten(), /abgeschnitten/);
+    assert.equal(lib.macheIo(config, { exec: naht(prs.slice(1)) }).abgleichDaten().prIssues.length, 0);
   });
 });
