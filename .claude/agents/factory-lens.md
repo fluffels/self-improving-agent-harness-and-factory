@@ -4,7 +4,7 @@ name: sih-lens
 description: Review-Kritiker für genau eine Brille (Architektur, Requirement-Treue, Test-Adäquanz, Sicherheit oder Doku) auf einem fertigen Ticket-Diff. Nur über den Skill review-lenses spawnen, nicht von sich aus delegieren.
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell, Edit
-effort: high
+effort: medium
 hooks:
   PreToolUse:
     - matcher: "Edit|Bash|PowerShell"
@@ -42,7 +42,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
-> Modell und Effort stehen nur hier im Frontmatter (`opus`, `high`), der Spawn setzt weder `model:` noch `effort:`, sonst überstimmte er das Frontmatter. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
+> Modell und Effort stehen nur hier im Frontmatter (`opus`, `medium`), der Spawn setzt weder `model:` noch `effort:`, sonst überstimmte er das Frontmatter. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
 
 ## Regeln
 
