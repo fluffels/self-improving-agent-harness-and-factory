@@ -247,6 +247,13 @@ describe("pruefe: Rückstellung und Eingang", () => {
     ["App-Kommentar", [k("app/github-actions", "zurückgestellt", "2026-10-05T00:00:00Z")], ["1:rueckstellung"]],
     ["Bot-Login mit [bot]", [k("dependabot[bot]", "zurückgestellt", "2026-10-05T00:00:00Z")], ["1:rueckstellung"]],
     ["ohne Kommentare", [], []],
+    ["Gegenmarker nicht mehr zurückgestellt", [k("o", "Nicht mehr zurückgestellt: geht weiter", "2026-10-05T00:00:00Z", "OWNER")], []],
+    ["Gegenmarker reaktiviert im selben Kommentar", [k("o", "Reaktiviert, war zurückgestellt", "2026-10-05T00:00:00Z", "OWNER")], []],
+    ["Gegenmarker wieder aufgenommen", [k("o", "wieder aufgenommen (zurückgestellt seit 10/05)", "2026-10-05T00:00:00Z", "OWNER")], []],
+    ["Gegenmarker in Großschreibung", [k("o", "REAKTIVIERT – zurückgestellt war gestern", "2026-10-05T00:00:00Z", "OWNER")], []],
+    ["Gegenmarker wiederaufgenommen", [k("o", "wiederaufgenommen, vorher zurückgestellt", "2026-10-05T00:00:00Z", "OWNER")], []],
+    ["jüngerer Marker nach älterem Gegenmarker gilt", [k("o", "Reaktiviert", "2026-10-05T00:00:00Z", "OWNER"), k("o", "zurückgestellt: Kosten", "2026-10-06T00:00:00Z", "OWNER")], ["1:rueckstellung"]],
+    ["fremder Gegenmarker zählt nicht", [k("o", "zurückgestellt", "2026-10-05T00:00:00Z", "OWNER"), k("fremd", "nicht mehr zurückgestellt", "2026-10-06T00:00:00Z")], ["1:rueckstellung"]],
   ])("%s", (_n, comments, erwartet) => {
     expect(klassen(L.pruefe([issue(1, { comments })], ctx(git())))).toEqual(erwartet);
   });
