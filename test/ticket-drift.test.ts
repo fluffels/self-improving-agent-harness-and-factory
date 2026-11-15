@@ -405,6 +405,10 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
       expect(r.aufrufe.map((a) => a[0])).toEqual(["gh"]);
       expect(r.out).toContain("Bericht #40 steht schon im Kopf des Boards");
     });
+    test("zwei Board-Listen (Produktion): steht der Bericht in der zweiten schon im Kopf, keine Platzierung", async () => {
+      const r = await lauf(fixture(bericht(40)), [], { PROJECT_TOKEN: "t" }, undefined, undefined, () => [[{ number: 5, state: "open", title: "normal" }], [{ number: 40, state: "open", title: TITEL }]]);
+      expect(r.aufrufe.map((a) => a[0])).toEqual(["gh"]);
+    });
     test("Bericht im Board, aber hinter einem normalen Item: Platzierung", async () => {
       const r = await lauf(fixture(bericht(40)), [], { PROJECT_TOKEN: "t" }, undefined, undefined, () => [[{ number: 5, state: "open", title: "normal" }, { number: 40, state: "open", title: TITEL }]]);
       expect(r.aufrufe[1]).toEqual(["board", "40", "ticket-drift", "t"]);
@@ -521,6 +525,7 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
     const eigenRepo = await lauf(eigeneIssues, [], { PROJECT_TOKEN: "t" }, "https://github.com/user1/r/issues/77\n", eigenes);
     expect(fremdRepo.aufrufe[0]).not.toContain("--label");
     expect(eigenRepo.aufrufe[0].slice(-2)).toEqual(["--label", config.labels.harness]);
+    expect(eigenRepo.aufrufe).toHaveLength(2);
     expect([fremdRepo.aufrufe[1], eigenRepo.aufrufe[1]]).toEqual([["board", "77", "ticket-drift", "t"], ["board", "77", "ticket-drift", "t"]]);
   });
   test.each([["kaputt"], ["https://github.com/o/r/issues/0"], ["https://github.com/o/r/pull/12"]])("unlesbare Nummer %s: Exit 1, kein Board-Aufruf", async (antwort) => {
@@ -541,13 +546,18 @@ describe("main: nur der Bericht entsteht (AK5)", () => {
 describe("Wächter", () => {
   test("Quellen nennen keine Schreibverben auf fremde Tickets", () => {
     const quellen = ["scripts/ticket-drift.mjs", "scripts/ticket-drift-lib.mjs"].map(lies).join("\n").split("\n").filter((z) => !/^\s*(\/\/|\*)/.test(z)).join("\n");
-    // `--add-label` steht erlaubt im Pfad edit (nur der eigene Bericht, factory#498); das Verhalten sichert der Test „eigenes Ziel-Repo“ und `verboten` im create-Test.
+    // `--add-label` ist nur im Pfad edit auf den eigenen Bericht erlaubt (factory#498): genau ein Vorkommen, in der Zeile des edit-Aufrufs (nächster Test).
     const treffer = quellen.match(/["'`](close|comment|reopen|lock|unlock|delete|transfer|pin|unpin|--remove-label|--add-assignee|--remove-assignee)["'`]/g);
     expect(treffer).toBeNull();
   });
+  test("`--add-label` steht genau einmal in den Quellen, im edit-Aufruf auf ziel.nr (factory#498)", () => {
+    const zeilen = ["scripts/ticket-drift.mjs", "scripts/ticket-drift-lib.mjs"].map(lies).join("\n").split("\n").filter((z) => !/^\s*(\/\/|\*)/.test(z) && z.includes("--add-label"));
+    expect(zeilen).toHaveLength(1);
+    expect(zeilen[0]).toContain(`"edit", String(ziel.nr)`);
+  });
   const wf = lies(".github/workflows/ticket-drift.yml");
   test("Workflow: Takt, Skript, Rechte genau, Eingaben nur per env", () => {
-    expect(wf).toMatch(/cron:/);
+    expect(wf).toContain(`cron: "53 5 * * 1"`); // montags (factory#498), nach dem Board-Takt
     expect(wf).toContain("workflow_dispatch");
     expect(wf).toContain("node scripts/ticket-drift.mjs");
     const rechte = /\npermissions:\n((?: {2}.+\n)+)/.exec(wf)?.[1].trim().split("\n").map((z) => z.trim());

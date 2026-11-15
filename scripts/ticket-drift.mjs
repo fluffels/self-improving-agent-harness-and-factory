@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Wöchentlicher Ticket-Drift-Lauf (factory#28, ADR 0033): prüft die offenen Tickets deterministisch gegen den Checkout (Pfade, Zeilen, Blocker, Board-Reihenfolge, Duplikate, Rückstellungen) und legt genau einen
-// Bericht ab: Stdout, Step-Summary und das eine Bericht-Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM-TT>" (Marker im Body). Er schließt, labelt und kommentiert kein Ticket; die Bewertung macht ein Agent nach
+// Bericht ab: Stdout, Step-Summary und das eine Bericht-Issue "🔎 Ticket-Drift-Bericht <JJJJ-MM-TT>" (Marker im Body). Er schließt, labelt und kommentiert kein Ticket außer dem eigenen Bericht; die Bewertung macht ein Agent nach
 // `.agents/skills/factory/ticket-drift.md`. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
 //   node scripts/ticket-drift.mjs [--dry-run]    # --dry-run schreibt nur Stdout/Step-Summary
 // Schreibaufrufe (nur im echten Lauf): `gh issue edit <bericht-nr> --body-file -` (offener, ungeclaimter Bericht; mit Titel-Datum und im eigenen Ziel-Repo mit dem Harness-Label), `gh issue create` (kein Bericht offen, aber Befunde)

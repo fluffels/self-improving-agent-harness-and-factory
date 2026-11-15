@@ -1,6 +1,6 @@
 # Ticket-Drift-Bericht abarbeiten (factory#28)
 
-Der Wochenlauf legt ein Issue „🔎 Ticket-Drift-Bericht <Datum>“ an (Marker `<!-- ticket-drift-bericht -->`). Es enthält Kandidaten, keine Urteile: der Lauf prüft nur Pfade, Zeilen, Blocker, Board-Reihenfolge, Titel-Ähnlichkeit und Rückstellungen und schließt, ändert, labelt und kommentiert nichts. Der Agent entscheidet ohne Rückfrage, sofern nicht irreversibel. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
+Der Wochenlauf legt ein Issue „🔎 Ticket-Drift-Bericht <Datum>“ an (Marker `<!-- ticket-drift-bericht -->`). Es enthält Kandidaten, keine Urteile: der Lauf prüft nur Pfade, Zeilen, Blocker, Board-Reihenfolge, Titel-Ähnlichkeit und Rückstellungen und schließt, ändert, labelt und kommentiert nichts außer dem eigenen Bericht. Der Agent entscheidet ohne Rückfrage, sofern nicht irreversibel. Mechanik: docs/agent-harness.md (Fabrik) § 2.2.
 
 ## Vorgehen
 
