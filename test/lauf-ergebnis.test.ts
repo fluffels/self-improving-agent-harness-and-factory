@@ -265,6 +265,33 @@ describe("bewertePrs und Aggregate", () => {
       assert.equal(k.mitSchwere, 1, "ein PR ohne Nachweis geht nie in mitSchwere ein (ohneSchwere bleibt Teilmenge der PRs mit Nachweis)");
       assert.equal(k.ohneSchwere, 1, "OHNE hat einen Nachweis, aber keine Schwere-Felder");
     });
+    describe("Teilbrillen der Kombi-Lens (factory#541)", () => {
+      const KOMBI = "runden=2 lenses=kombiniert blocker=kombiniert:1 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:1";
+      const KOMBI_OHNE = "runden=2 lenses=kombiniert blocker=kombiniert:1";
+      const VOLL = "runden=2 lenses=architektur,test-adaequanz blocker=architektur:0,test-adaequanz:2";
+      test("ein Kombi-PR mit teilbrillen= macht die Test-Adäquanz in brillen sichtbar, kombiniert bleibt", () => {
+        const k = rechne([KOMBI]).kennzahlen;
+        assert.deepEqual(k.brillen["test-adaequanz"], { prs: 1, treffer: 1, summe: 1, jePr: 1 });
+        assert.deepEqual(k.brillen.architektur, { prs: 1, treffer: 0, summe: 0, jePr: 0 });
+        assert.equal(k.brillen.kombiniert.summe, 1);
+        assert.equal(k.kombiMitTeilbrillen, 1);
+      });
+      test("Negativfall: ein Kombi-PR ohne teilbrillen= liefert nur kombiniert", () => {
+        const k = rechne([KOMBI_OHNE]).kennzahlen;
+        assert.deepEqual(Object.keys(k.brillen), ["kombiniert"]);
+        assert.equal(k.kombiMitTeilbrillen, 0);
+      });
+      test("Grenzfall: voller PR plus Kombi-PR ergeben prs 2 und Σ 3, nicht doppelt gezählt", () => {
+        const k = rechne([VOLL, KOMBI]).kennzahlen;
+        assert.deepEqual(k.brillen["test-adaequanz"], { prs: 2, treffer: 2, summe: 3, jePr: 1.5 });
+      });
+      test("mit Schwere-Feldern zählen die Teilbrillen auch in schwere.blockierend; formatiere nennt sie", () => {
+        const mit = `${KOMBI} sollte=kombiniert:0 hinweis=kombiniert:0`;
+        const e = rechne([mit]);
+        assert.deepEqual(e.kennzahlen.schwere.blockierend["test-adaequanz"], { prs: 1, treffer: 1, summe: 1, jePr: 1 });
+        assert.match(mod.formatiere(e), /davon aus Kombi-Teilbrillen: 1/);
+      });
+    });
     test("formatiere: Tabellenzeilen je Schwere und Brille; ohne Felder keine 0-Zeile", () => {
       const text = mod.formatiere(rechne([MIT, OHNE]));
       assert.match(text, /PRs mit Schwere-Feldern: 1, ohne Schwere-Felder: 1/);

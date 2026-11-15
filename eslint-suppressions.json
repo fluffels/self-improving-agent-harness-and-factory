@@ -54,11 +54,6 @@
       "count": 1
     }
   },
-  "scripts/check-review-nachweis.mjs": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "scripts/claims-pruefen.mjs": {
     "complexity": {
       "count": 1

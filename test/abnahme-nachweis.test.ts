@@ -20,6 +20,7 @@ interface Zeilen {
   abnahmeOverride: string;
   reviewOverride: string;
 }
+type RStufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string };
 type Urteil = { k: string; wert: string }[];
 type Marker = { durchgang: number; head: string; urteil: Urteil; ursache?: { k: string; klasse: string }[] } | null;
 type AbnahmeHead = { bekannt: boolean; imSlice: boolean; nachReviewHead: boolean; konfliktMerges: string[]; aenderungsCommits: { sha: string; dateien: string[] }[] };
@@ -28,12 +29,14 @@ interface Mod {
   verknuepfteTickets: (body: string) => number[];
   zaehleSzenarioDurchgaenge: (markers: NonNullable<Marker>[]) => number;
   vertrauterMarker: (k: unknown[], owner: string, z: Zeilen) => Marker;
-  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number }) => string[];
+  bewerteAbnahme: (o: { nachweis: Nachweis; ticket: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker: Marker; abnahmeHead: AbnahmeHead; zeilen: Zeilen; reviewOverride?: boolean; szenarioDurchgaenge?: number; stufe?: string; risikostufe?: RStufe }) => string[];
   checkAbnahmeNachweis: (o: {
     runGit: (a: string[]) => string;
     gh: (a: string[]) => unknown;
     env: Record<string, string>;
     ladeConfig: () => unknown;
+    ladeBasis?: () => unknown;
+    ladeText?: () => string;
   }) => { ok: boolean; fehler: string[]; override?: string; entwurf?: boolean; skipped?: boolean; hinweise?: string[]; invalid?: string[] };
 }
 const m = raw as unknown as Mod;
@@ -51,8 +54,10 @@ const ur = (...w: string[]): Urteil => w.map((wert, i) => ({ k: `K${i + 1}`, wer
 const marker = (o: Partial<NonNullable<Marker>> = {}): Marker => ({ durchgang: 1, head: H, urteil: ur("erfuellt", "erfuellt"), ...o });
 const nachweis = (abnahme: unknown, runden = 2): Nachweis => ({ review: { head: R, runden }, abnahme });
 const urteilZeile = (o: { urteil?: Urteil; durchgaenge?: number } = {}) => ({ art: "urteil", head: H, durchgaenge: o.durchgaenge ?? 1, urteil: o.urteil ?? ur("erfuellt", "erfuellt") });
-const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number }) =>
+const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number; kriterien: { k: string; text: string; nachMerge?: boolean }[] } | null; marker?: Marker; abnahmeHead?: Partial<AbnahmeHead>; review?: boolean; reviewOverride?: boolean; szenarioDurchgaenge?: number; stufe?: string; risikostufe?: RStufe }) =>
   m.bewerteAbnahme({
+    stufe: o.stufe,
+    risikostufe: o.risikostufe ?? R1,
     reviewOverride: o.reviewOverride,
     szenarioDurchgaenge: o.szenarioDurchgaenge,
     nachweis: o.review === false ? { review: null, abnahme: "abnahme" in o ? o.abnahme : urteilZeile() } : nachweis("abnahme" in o ? o.abnahme : urteilZeile(), o.runden),
@@ -61,6 +66,9 @@ const bewerte = (o: { abnahme?: unknown; runden?: number; ticket?: { nr: number;
     abnahmeHead: { ...GUT, ...o.abnahmeHead },
     zeilen: Z,
   });
+const R0: RStufe = { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade: ["docs/a.md"] };
+const R1: RStufe = { stufe: 1, gruende: ["Produktionscode"], treffer: [], pfade: ["src/x.ts"], ausloeser: "src/x.ts" };
+const R2: RStufe = { stufe: 2, gruende: ["package.json trifft /package.json (basis:manifeste)"], treffer: [{ pfad: "package.json", muster: "/package.json", liste: "basis:manifeste" }], pfade: ["package.json"] };
 const rot = (fehler: string[], muster: RegExp) => {
   expect(fehler.length, "muss rot sein").toBeGreaterThan(0);
   expect(fehler.join("\n")).toMatch(muster);
@@ -217,11 +225,12 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
   const ZEILE = `${Z.abnahme}: head=${H} durchgaenge=1 urteil=K1:erfuellt,K2:erfuellt`;
   const kommentar = { user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=1 head=${H} urteil=K1:erfuellt,K2:erfuellt -->` };
 
-  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean } = {}) {
+  function lauf(o: { messages?: string; issue?: unknown; kommentare?: unknown; env?: Record<string, string>; gitFehler?: boolean; ghFehler?: "issue" | "kommentare"; draftLive?: boolean | "fehler" | "ohne-feld"; config?: unknown; diffFehler?: boolean; ladeBasis?: () => unknown; ladeText?: () => string; numstat?: string } = {}) {
     const ghAufrufe: string[][] = [];
     const runGit = (a: string[]): string => {
       if (o.gitFehler && a[0] === "merge-base") throw new Error("git kaputt");
       if (o.diffFehler && a[0] === "diff") throw new Error("diff kaputt");
+      if (o.numstat !== undefined && a.includes("--numstat")) return o.numstat;
       if (a[0] === "rev-parse" && a[1] === "HEAD") return "f".repeat(40);
       if (a[0] === "rev-parse") return a[3].slice(0, 40);
       if (a[0] === "log") return o.messages ?? `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${ZEILE}`;
@@ -246,8 +255,34 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
       return o.issue ?? { body: AK };
     };
     const env = { FACTORY_DIFF_BASE: "1".repeat(40), FACTORY_PR_BODY: BODY(), FACTORY_PR_NUMBER: "42", ...o.env };
-    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG }), ghAufrufe };
+    return { r: m.checkAbnahmeNachweis({ runGit, gh, env, ladeConfig: () => o.config ?? CONFIG, ladeBasis: o.ladeBasis, ladeText: o.ladeText }), ghAufrufe };
   }
+
+  test("K6 (factory#526): ist die Stufe-2-Basis nicht ladbar, gilt Stufe 2, `entfaellt — stufe 1` ist rot und die Meldung nennt den Ladegrund", () => {
+    const messages = `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${R} runden=1 lenses=a verdikt=ok\n${Z.abnahme}: entfaellt — stufe 1`;
+    const numstat = "1\t1\tsrc/x.ts\n";
+    const gut = lauf({ messages, numstat });
+    expect((gut.r as { risikostufe?: { stufe: number } }).risikostufe?.stufe).toBe(1);
+    expect(gut.r.ok).toBe(true);
+    const { r } = lauf({
+      messages,
+      numstat,
+      ladeBasis: () => {
+        throw new Error("Basis kaputt");
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.fehler.join("\n")).toMatch(/Risikostufe berechnet 2.*Basis kaputt/);
+    const text = lauf({
+      messages,
+      numstat,
+      ladeText: () => {
+        throw new Error("Leitplanken kaputt");
+      },
+    });
+    expect(text.r.ok).toBe(false);
+    expect(text.r.fehler.join("\n")).toMatch(/Risikostufe berechnet 2.*Leitplanken kaputt/);
+  });
 
   describe("Szenario-Durchgang zählt nicht gegen das Cap (factory#358, Ende zu Ende)", () => {
     const marker2 = (d: number, urteil: string, ursache = "") => ({ user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=${urteil}${ursache} -->` });
@@ -630,5 +665,32 @@ describe("Abnahme-Ursache (factory#260): check-abnahme-nachweis", () => {
     expect(bewerte({ abnahme: neu, runden: 2, marker: marker({ durchgang: 2 }) })).toEqual([]);
     expect((parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme as { art: string }).art).toBe("ungueltig");
     rot(bewerte({ abnahme: parseNachweis(`${zeile} ursachen=foo:1`, Z).abnahme }), /ungültig \(ursachen: Eintrag/);
+  });
+});
+
+describe("Risikostufe: entfaellt wird nachgerechnet (factory#526)", () => {
+  const entf = (grund: string) => ({ art: "entfaellt", grund });
+  test("K1/K2: `entfaellt — stufe 0` bei Stufe 0 und `stufe 1` bei Stufe 0 oder 1 sind grün, auch bei einem Ticket mit Kriterien", () => {
+    expect(bewerte({ abnahme: entf("stufe 0"), risikostufe: R0 })).toEqual([]);
+    expect(bewerte({ abnahme: entf("stufe 1"), risikostufe: R0 })).toEqual([]);
+    expect(bewerte({ abnahme: entf("stufe 1: nur Skript"), risikostufe: R1 })).toEqual([]);
+  });
+  test("K5: `stufe 0` bei Stufe 1 und `stufe 1` bei Stufe 2 sind rot mit berechneter Stufe und Pfad (auch ohne Kriterien)", () => {
+    rot(bewerte({ abnahme: entf("stufe 0"), risikostufe: R1 }), /Risikostufe berechnet 1, Pfad src\/x\.ts/);
+    rot(bewerte({ abnahme: entf("stufe 1"), risikostufe: R2 }), /Risikostufe berechnet 2, Pfad package\.json/);
+    rot(bewerte({ abnahme: entf("stufe 1"), risikostufe: R2, ticket: null }), /Risikostufe berechnet 2/);
+  });
+  test("K6: ohne übergebene Stufe gilt Stufe 2 (fail-closed)", () => {
+    const f = m.bewerteAbnahme({ nachweis: nachweis(entf("stufe 1")), ticket: { nr: 9, kriterien: kr(2) }, marker: null, abnahmeHead: GUT, zeilen: Z });
+    rot(f, /Risikostufe berechnet 2.*nicht übergeben/);
+  });
+  test("K3: Stufe 2 mit Kriterien verlangt wie bisher das Urteil; `entfaellt` ohne Stufenform bleibt rot", () => {
+    rot(bewerte({ abnahme: entf("Doku"), risikostufe: R2 }), /entfaellt ist bei Ticket #9 .* nicht erlaubt/);
+    expect(bewerte({ risikostufe: R2 })).toEqual([]);
+  });
+  test("K7: `entfaellt — klein:` gilt nur bei Größenstufe S und Risikostufe ≤ 1", () => {
+    expect(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R1 })).toEqual([]);
+    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R2 }), /Risikostufe 2/);
+    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "voll", risikostufe: R1 }), /nicht erlaubt/);
   });
 });

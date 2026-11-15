@@ -32,9 +32,6 @@
   "scripts/check-lockfile.mjs": {
     "complexity": 7
   },
-  "scripts/check-review-nachweis.mjs": {
-    "complexity": 8
-  },
   "scripts/claims-pruefen.mjs": {
     "complexity": 10
   },

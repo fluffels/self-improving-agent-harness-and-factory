@@ -440,3 +440,27 @@ describe("Ende-zu-Ende im Temp-git-Repo", () => {
     expect(commitMit("package.json")).toMatch(/^RISIKOSTUFE: 2/);
   });
 });
+
+describe("ausloeser bei Stufe 1 (factory#526)", () => {
+  test("Code-Pfad ist der Auslöser; Markdown und Testdateien außerhalb von test/harness/ nicht", () => {
+    const e = stufe([eins("docs/a.md"), eins("test/a.test.ts"), eins("src/x.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("src/x.ts");
+  });
+  test("test/support ist Code (wie in der Sweep-Tiefe), *.test.ts nicht", () => {
+    const a = stufe([eins("docs/a.md"), eins("test/support/helfer.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(a.ausloeser).toBe("test/support/helfer.ts");
+    const b = stufe([eins("src/x.test.ts"), eins("src/y.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(b.ausloeser).toBe("src/y.ts");
+  });
+  test("nur Testdateien, davon eine unter test/harness/: der Wächter-Test ist der Auslöser", () => {
+    const e = stufe([eins("test/a.test.ts"), eins("test/harness/w.test.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("test/harness/w.test.ts");
+  });
+  test("Leitplanken-Markdown: der geschützte Pfad ist der Auslöser", () => {
+    const e = stufe([eins("docs/a.md"), eins("AGENTS.md")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("AGENTS.md");
+  });
+});

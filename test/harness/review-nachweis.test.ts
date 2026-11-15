@@ -25,7 +25,7 @@ type Mod = {
   MAX_FIX_RUNDEN: number;
   parseNachweis: (t: string, z: unknown) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown; risiko?: { klasse: string; gruende: string[] } }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; zeilen: unknown; risiko?: { klasse: string; gruende: string[] }; risikostufe?: { stufe: number; gruende: string[]; treffer: unknown[]; pfade: string[] } }) => string[];
 };
 import { besitzAnker } from "../support/besitz-anker";
 import { ohneKernEnv } from "../support/env-alt";
@@ -46,7 +46,8 @@ const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: 
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
-const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: { klasse: "normal", gruende: ["Test"] }, ...o });
+/** Stufe 0 ohne Staffel-Grenze: die Tests dieser Datei prüfen das Cap (3 Pässe, factory#526: bei Stufe 1 nur 2). */
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen">) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: { klasse: "normal", gruende: ["Test"] }, risikostufe: { stufe: 0, gruende: ["Test"], treffer: [], pfade: [] }, ...o });
 const zusatzpassZeile = (raw as unknown as { zusatzpassZeile: (r: { zusatzpass: { grund: string } | null }) => string | null }).zusatzpassZeile;
 const checkReviewNachweis = (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) =>
   (raw as unknown as { checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen: () => unknown }) => { ok: boolean; zusatzpass: { grund: string } | null } }).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
@@ -473,7 +474,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   };
 
   test("gültiger Zusatzpass: das Feld trägt den Grund (Rückgabe von checkReviewNachweis)", () => {
-    const r = checkReviewNachweis({ runGit: fakeGit(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), env: {} });
+    const r = checkReviewNachweis({ runGit: fakeGit(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), env: {} });
     assert.equal(r.ok, true);
     assert.equal(r.zusatzpass?.grund, "Maintainerin gab Pass frei");
   });
@@ -519,16 +520,16 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
 
   test("die CLI-Zeile nennt den Zusatzpass samt Grund, ohne Zusatzpass keine solche Zeile (im Prozess)", () => {
     const zeile = (review: string) => zusatzpassZeile(checkReviewNachweis({ runGit: fakeGit(review), env: {} }));
-    assert.match(zeile(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`) ?? "", /^• Zusatzpass: Maintainerin gab Pass frei$/);
+    assert.match(zeile(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`) ?? "", /^• Zusatzpass: Maintainerin gab Pass frei$/);
     assert.equal(zeile(`runden=1 ${LENSES} verdikt=ok`), null);
   });
 
   // Ein einziger echter Prozess-Smoke (Kaltstart von git und node unter Last braucht Luft).
   test("CLI-Smoke: der Prozess gibt die Zusatzpass-Zeile aus", { timeout: 30_000 }, () => {
-    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass: Maintainerin gab Pass frei/);
+    assert.match(cliAusgabe(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), /• Zusatzpass: Maintainerin gab Pass frei/);
   });
   test("CLI-Standardpfad ohne --config: der Prozess liest die echte Config", { timeout: 30_000 }, () => {
-    assert.match(cliAusgabe(`runden=4 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`, true), /• Zusatzpass: Maintainerin gab Pass frei/);
+    assert.match(cliAusgabe(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`, true), /• Zusatzpass: Maintainerin gab Pass frei/);
   });
 });
 

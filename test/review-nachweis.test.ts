@@ -23,6 +23,7 @@ type Nachweis = {
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; sollte: { lens: string; n: number }[] | null; hinweis: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
   bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
+type Stufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string };
 type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
 type Zeilen = { praefix: string; planer: string; plan: string; review: string; bedrohungen: string; reviewOverride: string; diffsizeOverride: string };
 type Mod = {
@@ -30,8 +31,8 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; ticket?: number | null }) => string[];
-  bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null }) => string[];
+  bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen, risikostufe?: Stufe) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;
   checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen; ladeNamen?: () => unknown }) => {
@@ -59,11 +60,15 @@ const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const ECHT = projektConfig();
 const parseNachweis = (text: string) => (raw as Mod).parseNachweis(text, Z);
-const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: NORMAL, ...o });
+const bewerteNachweis = (o: Omit<Parameters<Mod["bewerteNachweis"]>[0], "zeilen"> & { zeilen?: Zeilen }) => (raw as Mod).bewerteNachweis({ zeilen: Z, risiko: NORMAL, risikostufe: R1, ...o });
 const checkReviewNachweis = (o: Parameters<Mod["checkReviewNachweis"]>[0]) => (raw as Mod).checkReviewNachweis({ ladeZeilen: () => Z, ...o });
 
 /** Die Bestandstests prüfen Plan und Review; die Risikoklasse hoch (factory#334) hat einen eigenen Block unten. */
 const NORMAL: Risiko = { klasse: "normal", gruende: ["kein Pfad trifft ein Risiko-Muster"] };
+/** Berechnete Risikostufen für die Bewertung (factory#526); die Bestandstests laufen mit Stufe 1. */
+const R1: Stufe = { stufe: 1, gruende: ["Produktionscode"], treffer: [], pfade: ["src/x.ts"], ausloeser: "src/x.ts" };
+const R0: Stufe = { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade: ["docs/a.md"] };
+const R2: Stufe = { stufe: 2, gruende: ["package.json trifft /package.json (basis:manifeste)"], treffer: [{ pfad: "package.json", muster: "/package.json", liste: "basis:manifeste" }], pfade: ["package.json"] };
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
 const review = (felder = `head=${SHA} runden=2 lenses=${DREI} ${S0(DREI)} verdikt=ok`) => `${Z.plan}: ${PL}\n${Z.review}: ${felder}`;
@@ -133,12 +138,12 @@ describe("pflichtLenses", () => {
 });
 
 describe("bewerteNachweis", () => {
-  const ok = (text: string, o: Partial<{ dateien: string[]; headBekannt: boolean; headImSlice: boolean }> = {}) =>
+  const ok = (text: string, o: Partial<{ dateien: string[]; headBekannt: boolean; headImSlice: boolean; risikostufe: Stufe }> = {}) =>
     bewerteNachweis({ nachweis: parseNachweis(text), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, ...o });
 
   test("gültiger Code-Nachweis ist ok", () => assert.deepEqual(ok(review()), []));
-  test("runden 3 ist ok, 0, 4 und „zwei“ sind rot", () => {
-    assert.deepEqual(ok(review(`head=${SHA} runden=3 lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`)), []);
+  test("runden 3 ist ok (ohne Stufe-1-Grenze), 0, 4 und „zwei“ sind rot", () => {
+    assert.deepEqual(ok(review(`head=${SHA} runden=3 lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`), { risikostufe: R0 }), []);
     for (const r of ["0", "4", "zwei"]) {
       const f = ok(review(`head=${SHA} runden=${r} lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`));
       assert.equal(f.length, 1, r);
@@ -832,6 +837,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
       headImSlice: true,
       zeilen,
       risiko: NORMAL,
+      risikostufe: R0, // Stufe ohne Staffel-Obergrenze: runden=3 ist hier gültig (die Stufe-1-Grenze testet der Block „Risikostufe“)
     });
 
   test("AK3: die wörtliche Squash-Message eines gemergten Commits ist mit der Config ein gültiger Nachweis", () => {
@@ -1113,7 +1119,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   const ZEILE = "daten=Token vom Client zum Server | grenzen=Browser zu API | missbrauch=Token-Diebstahl | datenschutz=keine Personendaten gespeichert";
   const mitSicherheit = (extra = "") => `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI},sicherheit blocker=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 verdikt=ok${extra}`;
   const bewerte = (text: string, risiko: Risiko = HOCH, dateien = ["src/auth.ts"]) =>
-    (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(text), dateien, headBekannt: true, headImSlice: true, zeilen: Z, stufe: "voll", risiko });
+    (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(text), dateien, headBekannt: true, headImSlice: true, zeilen: Z, stufe: "voll", risiko, risikostufe: R1 });
   const mitZeile = (zeile: string) => `${mitSicherheit()}\n${Z.bedrohungen}: ${zeile}`;
 
   test("gültig: drei Code-Brillen, sicherheit und vier belegte Teile ergeben keinen Fehler", () => {
@@ -1318,5 +1324,89 @@ describe("Stichprobenarm arm= (factory#532)", () => {
   });
   test("Vorlage und gemeinsame Leer-Regel: die Vorlage nennt arm=", () => {
     assert.match((raw as unknown as { vorlage: (z: Zeilen) => string }).vorlage(Z), /arm=<vollablauf\|schlank>/);
+  });
+});
+
+describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
+  const BED = "daten=Pfade | grenzen=Skript zu git | missbrauch=falsche Stufe | datenschutz=keine Personendaten";
+  const voll = (runden = 2, lenses = DREI, extra = "") => `head=${SHA} runden=${runden} lenses=${lenses} ${S0(lenses)} verdikt=ok${extra}`;
+  const text = (plan: string, rev: string, bed = false) => `${Z.plan}: ${plan}\n${Z.review}: ${rev}${bed ? `\n${Z.bedrohungen}: ${BED}` : ""}`;
+  const bew = (t: string, risikostufe: Stufe | undefined, o: { dateien?: string[]; stufe?: string } = {}) =>
+    (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(t), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, zeilen: Z, risiko: NORMAL, risikostufe, ...o });
+  const rot = (f: string[], m: RegExp) => {
+    assert.ok(f.length > 0, "muss rot sein");
+    assert.match(f.join("\n"), m);
+  };
+
+  test("K1: Stufe 0, alle drei Formen sind grün (auch ohne Review-Felder)", () => {
+    assert.deepEqual(bew(text("ohne — stufe 0", "ohne — stufe 0"), R0, { dateien: ["docs/a.md"] }), []);
+    assert.deepEqual(bew(text("ohne — stufe 0: nur Doku", "ohne — stufe 0"), R0, { dateien: ["docs/a.md"] }), []);
+  });
+  test("K2: Stufe 1: Plan `stufe 1` und der Runde-1-Satz mit höchstens runden=2 sind grün", () => {
+    assert.deepEqual(bew(text("ohne — stufe 1", voll(2)), R1), []);
+    assert.deepEqual(bew(text("ohne — stufe 1", voll(1)), R1), []);
+    assert.deepEqual(bew(text("ohne — stufe 1", voll(1, "doku")), R1, { dateien: ["docs/a.md"] }), []);
+    rot(bew(text("ohne — stufe 1", voll(3)), R1), /runden=3.*Obergrenze.*Risikostufe 1/);
+    assert.deepEqual(bew(text("ohne — stufe 1", voll(3, DREI, " zusatzpass=1:Blocker aus Runde 2")), R1), []);
+    rot(bew(text("ohne — stufe 1", `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`), R1), /lenses fehlt/);
+  });
+  test("K3: Stufe 2: Planer-Plan, Bedrohungen und sicherheit sind Pflicht, `ohne — <Grund>` ist rot", () => {
+    const sicher = `${DREI},sicherheit`;
+    assert.deepEqual(bew(text(PL, voll(3, sicher), true), R2), []);
+    rot(bew(text(PL, voll(2, sicher)), R2), /Bedrohungen-Zeile fehlt.*Risikostufe 2.*package\.json/);
+    rot(bew(text(PL, voll(2), true), R2), /lenses fehlt sicherheit.*Risikostufe 2/);
+    rot(bew(text("ohne — Doku-Fix", voll(2, sicher), true), R2), /Risikostufe 2 ist nur der Planer-Plan gültig|nur der Planer-Plan/);
+    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
+  });
+  test("K4: ein vollerer Ablauf als nötig ist bei jeder Stufe grün", () => {
+    for (const r of [R0, R1]) assert.deepEqual(bew(text(PL, voll(2)), r), []);
+    assert.deepEqual(bew(text(PL, voll(2), false), R0, { dateien: ["docs/a.md"] }), []);
+  });
+  test("K5: `stufe 0` bei berechneter Stufe 1 und `stufe 1` bei Stufe 2 sind rot, die Meldung nennt Stufe und Pfad (Plan und Review)", () => {
+    const meld = /Risikostufe berechnet 1, Pfad src\/x\.ts/;
+    rot(bew(text("ohne — stufe 0", voll(2)), R1), meld);
+    rot(bew(text(PL, "ohne — stufe 0"), R1), meld);
+    rot(bew(text("ohne — stufe 1", voll(2, `${DREI},sicherheit`), true), R2), /Risikostufe berechnet 2, Pfad package\.json/);
+    rot(bew(text(PL, "ohne — stufe 1"), R1), /keine gültige Form/);
+  });
+  test("K6: ohne übergebene oder berechenbare Stufe gilt Stufe 2 (fail-closed)", () => {
+    rot(bew(text("ohne — stufe 1", voll(2)), undefined), /Risikostufe berechnet 2.*nicht übergeben/);
+    rot(bew(text(PL, voll(2)), undefined), /Bedrohungen-Zeile fehlt/);
+  });
+  test("K6: checkReviewNachweis ohne ladbare Basis rechnet Stufe 2 und nennt den Ladegrund", () => {
+    const messages = text("ohne — stufe 1", voll(2));
+    const r = checkReviewNachweis({
+      runGit: fakeGit({ messages }),
+      env: { FACTORY_DIFF_BASE: "base" },
+      ladeBasis: () => {
+        throw new Error("Basis kaputt");
+      },
+    } as never) as { ok: boolean; fehler: string[]; risikostufe: Stufe };
+    assert.equal(r.risikostufe.stufe, 2);
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join("\n"), /Basis kaputt/);
+    const t = checkReviewNachweis({
+      runGit: fakeGit({ messages }),
+      env: { FACTORY_DIFF_BASE: "base" },
+      ladeText: () => {
+        throw new Error("Leitplanken kaputt");
+      },
+    } as never) as { ok: boolean; fehler: string[]; risikostufe: Stufe };
+    assert.equal(t.risikostufe.stufe, 2);
+    assert.match(t.fehler.join("\n"), /Leitplanken kaputt/);
+  });
+  test("K7: die alten S-Formen gelten nur bei berechneter Stufe ≤ 1", () => {
+    const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    assert.deepEqual(bew(text(`${PL} — skizze`, kombi), R1, { stufe: "S" }), []);
+    assert.deepEqual(bew(text("ohne — klein: Tippfehler", kombi), R1, { stufe: "S" }), []);
+    const sicher = `${DREI},sicherheit`;
+    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
+    rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
+    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /lenses fehlt/);
+  });
+  test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {
+    const n = parseNachweis(text(PL, voll(2)));
+    assert.deepEqual((raw as Mod).bewerteKlasseHoch(n, NORMAL, Z, R1), []);
+    rot((raw as Mod).bewerteKlasseHoch(n, NORMAL, Z, R2), /Risikostufe 2/);
   });
 });

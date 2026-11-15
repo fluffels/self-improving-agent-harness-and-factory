@@ -255,6 +255,8 @@
     {"pfad":".github/workflows/epic-abschluss.yml","ring":"kern","quelle":"Epic bleibt offen und schließt mit dem letzten Kind (factory#507 L4)"},
     {"pfad":"scripts/epic-abschluss.mjs","ring":"kern","quelle":"Epic bleibt offen und schließt mit dem letzten Kind (factory#507 L4)"},
     {"pfad":"scripts/epic-lib.mjs","ring":"kern","quelle":"Epic bleibt offen und schließt mit dem letzten Kind (factory#507 L4)"},
+    {"pfad":"scripts/board-status.mjs","ring":"kern","quelle":"Board-Status folgt dem Stand: Claim, Abbruch, Abgleich (factory#541 L6)"},
+    {"pfad":"scripts/board-status-io.mjs","ring":"kern","quelle":"Board-io für Status und Position, geteilt von board-status und epic (factory#541)"},
     {"pfad":"scripts/epic.mjs","ring":"kern","quelle":"Epic bleibt offen und schließt mit dem letzten Kind (factory#507 L4)"},
     {"pfad":".github/sicherheitspruefung.json","schluessel":"kern","ring":"kern","quelle":"Sicherheitsprüfung im Bezieher (factory#388), Soll-Liste (Schlüssel projekt bleibt beim Bezieher)"},
     {"pfad":"scripts/kontext-budget-lib.mjs","ring":"kern","quelle":"Kontext-Budget, geteilt von check-context-size und Sync-Hinweis (factory#127 L2)"},

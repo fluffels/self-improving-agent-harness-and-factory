@@ -328,3 +328,42 @@ describe("stufeZeile (factory#402 L26)", () => {
     expect(stufeZeile(null)).toBe("• Größenstufe: (nicht berechenbar)");
   });
 });
+
+describe("Risikostufe: Ausnahme-Formen (factory#526)", () => {
+  const L = raw as unknown as {
+    stufeGrund: (g: unknown) => { stufe: number } | null;
+    stufenAusnahmeFehler: (k: string, f: string, b: number, r: unknown) => string[];
+    risikoPfad: (r: unknown) => string;
+    risikostufeZeile: (r: unknown) => string;
+  };
+  const r = (stufe: number, extra: object = {}) => ({ stufe, gruende: ["Grund A"], treffer: [], pfade: [], ...extra });
+  it("stufeGrund liest `stufe <n>` mit optionalem Text, alles andere ist null", () => {
+    expect(L.stufeGrund("stufe 0")).toEqual({ stufe: 0 });
+    expect(L.stufeGrund("stufe 1")).toEqual({ stufe: 1 });
+    expect(L.stufeGrund("stufe 1: Skript")).toEqual({ stufe: 1 });
+    for (const g of ["stufe", "stufe x", "stufe 2a", "stufe 1:", "stufe1", "Doku stufe 0", "klein: x", "", null]) expect(L.stufeGrund(g), String(g)).toBeNull();
+  });
+  it("parseNachweis: die Review-Zeile `ohne — stufe 0` trägt das Feld ohne, eine normale Zeile null", () => {
+    const n = so.parseNachweis(`${Z.review}: ohne — stufe 0`, Z) as unknown as { review: { ohne: string | null } };
+    expect(n.review.ohne).toBe("stufe 0");
+    const m = so.parseNachweis(`${Z.review}: head=abc1234 runden=1 lenses=doku verdikt=ok`, Z) as unknown as { review: { ohne: string | null } };
+    expect(m.review.ohne).toBeNull();
+    const f = so.parseNachweis(`${Z.review}: head=abc1234 runden=3 zusatzpass=1:ohne - Rückfrage lenses=doku verdikt=ok`, Z) as unknown as { review: { ohne: string | null } };
+    expect(f.review.ohne).toBeNull();
+  });
+  it("stufenAusnahmeFehler: grün nur bei 0 oder 1 und mindestens der berechneten Stufe; die Meldung nennt Stufe und Pfad", () => {
+    expect(L.stufenAusnahmeFehler("P", "ohne — stufe 1", 1, r(1))).toEqual([]);
+    expect(L.stufenAusnahmeFehler("P", "ohne — stufe 1", 1, r(0))).toEqual([]);
+    expect(L.stufenAusnahmeFehler("P", "ohne — stufe 0", 0, r(0))).toEqual([]);
+    const f = L.stufenAusnahmeFehler("P", "ohne — stufe 0", 0, r(1, { ausloeser: "src/a.ts" }));
+    expect(f.join()).toMatch(/Risikostufe berechnet 1, Pfad src\/a\.ts/);
+    expect(L.stufenAusnahmeFehler("P", "ohne — stufe 2", 2, r(2))[0]).toMatch(/nur stufe 0 und stufe 1/);
+  });
+  it("risikoPfad: erster Treffer, sonst Auslöser, sonst erster Grund", () => {
+    expect(L.risikoPfad(r(2, { treffer: [{ pfad: "a" }], ausloeser: "b" }))).toBe("a");
+    expect(L.risikoPfad(r(1, { ausloeser: "b" }))).toBe("b");
+    expect(L.risikoPfad(r(2))).toBe("Grund A");
+    expect(L.risikostufeZeile(null)).toMatch(/nicht berechenbar/);
+    expect(L.risikostufeZeile(r(1))).toBe("• Risikostufe: 1");
+  });
+});

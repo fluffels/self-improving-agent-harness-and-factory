@@ -35,6 +35,8 @@ export const HEX_HEAD = new RegExp(`^${HEX}$`);
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
+/** Obergrenze der Review-Pässe bei Risikostufe 1 (factory#526), unabhängig vom Cap der Fix-Runden. */
+export const MAX_REVIEW_PAESSE_STUFE1 = 2;
 /** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
@@ -136,13 +138,33 @@ export function kleinGrund(grund) {
   return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
 }
 
+/** Liest den Grund einer Stufen-Ausnahme (factory#526): `stufe <n>` mit optionalem `: <Text>`. `{stufe}` (n als Zahl), sonst `null`; ob die Stufe stimmt, prüft der Wächter gegen den Diff. Pur. */
+export function stufeGrund(grund) {
+  const m = /^stufe\s+(\d+)\s*(?::\s*\S.*)?$/.exec(String(grund ?? "").trim());
+  return m ? { stufe: Number(m[1]) } : null;
+}
+
+/** Der Pfad, der die berechnete Risikostufe trägt: erster Treffer, sonst der Auslöser, sonst der erste Grund (fail-closed). Pur. */
+export const risikoPfad = (r) => r?.treffer?.[0]?.pfad ?? r?.ausloeser ?? r?.gruende?.[0] ?? "(kein Pfad)";
+
+/** Fehler einer Stufen-Ausnahme-Zeile (factory#526): `[]`, wenn `behauptet` 0 oder 1 ist und mindestens die berechnete Stufe; sonst eine Meldung mit der berechneten Stufe und dem Pfad. Pur. */
+export function stufenAusnahmeFehler(schluessel, form, behauptet, risikostufe) {
+  if ((behauptet === 0 || behauptet === 1) && behauptet >= risikostufe.stufe) return [];
+  const warum = behauptet === 0 || behauptet === 1 ? "die berechnete Stufe ist höher" : "nur stufe 0 und stufe 1 sind Ausnahmeformen";
+  const grund = risikostufe.gruende?.[0] ? `; Grund: ${risikostufe.gruende[0]}` : "";
+  return [`${schluessel}: "${form}" ist rot (${warum}): Risikostufe berechnet ${risikostufe.stufe}, Pfad ${risikoPfad(risikostufe)}${grund}.`];
+}
+
+/** Der Grund einer `ohne — <Grund>`-Form (Plan- und Review-Zeile) oder `null`. Pur. */
+const ohneGrund = (wert) => /^ohne\s*[—–-]+\s*(\S.*)$/.exec(wert)?.[1].trim() ?? null;
+
 /** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
 function planAus(planWert, planer) {
   if (planWert === null) return null;
   if (planWert === planer) return { art: "planer" };
   if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
-  const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-  return ohne ? { art: "ohne", grund: ohne[1].trim() } : { art: "ungueltig", zeile: planWert };
+  const ohne = ohneGrund(planWert);
+  return ohne === null ? { art: "ungueltig", zeile: planWert } : { art: "ohne", grund: ohne };
 }
 
 /** Bedrohungs-Zeile `daten=… | grenzen=… | missbrauch=… | datenschutz=…` (factory#334): `null` ohne Zeile, sonst `{zeile, teile, doppelt, unbekannt, ohneSchluessel}`.
@@ -167,6 +189,30 @@ function bedrohungenAus(wert) {
 /** Feld `arm=` der Review-Zeile (factory#532); `null`, wenn es fehlt. */
 const armFeld = (felder) => ({ arm: felder.arm ?? null });
 
+/** Die Felder der Review-Zeile (`ohne` für `ohne — <Grund>`, factory#526); fehlende oder kaputte Felder bleiben null bzw. NaN, bewertet wird erst im Gate. Pur. */
+function reviewAus(reviewWert) {
+  const felder = {};
+  for (const tok of reviewWert.split(/\s+/)) {
+    const m = /^([a-z]+)=(.*)$/.exec(tok);
+    if (m) felder[m[1]] = m[2];
+  }
+  return {
+    zeile: reviewWert,
+    ohne: ohneGrund(reviewWert),
+    head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
+    runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
+    lenses: lensenAus(reviewWert),
+    blocker: brillenZahlenAus(reviewWert, "blocker"),
+    sollte: brillenZahlenAus(reviewWert, "sollte"),
+    hinweis: brillenZahlenAus(reviewWert, "hinweis"),
+    teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
+    zusatzpass: zusatzpassAus(reviewWert),
+    abnahmefix: abnahmefixAus(reviewWert),
+    verdikt: felder.verdikt ?? null,
+    ...armFeld(felder),
+  };
+}
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -176,28 +222,7 @@ export function parseNachweis(text, zeilen) {
   }
   const plan = planAus(lastLine(text, zeilen.plan), zeilen.planer);
   const reviewWert = lastLine(text, zeilen.review);
-  let review = null;
-  if (reviewWert !== null) {
-    const felder = {};
-    for (const tok of reviewWert.split(/\s+/)) {
-      const m = /^([a-z]+)=(.*)$/.exec(tok);
-      if (m) felder[m[1]] = m[2];
-    }
-    review = {
-      zeile: reviewWert,
-      head: HEX_HEAD.test((felder.head ?? "").toLowerCase()) ? felder.head.toLowerCase() : null,
-      runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
-      lenses: lensenAus(reviewWert),
-      blocker: brillenZahlenAus(reviewWert, "blocker"),
-      sollte: brillenZahlenAus(reviewWert, "sollte"),
-      hinweis: brillenZahlenAus(reviewWert, "hinweis"),
-      teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
-      zusatzpass: zusatzpassAus(reviewWert),
-      abnahmefix: abnahmefixAus(reviewWert),
-      verdikt: felder.verdikt ?? null,
-      ...armFeld(felder),
-    };
-  }
+  const review = reviewWert === null ? null : reviewAus(reviewWert);
   return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)), bedrohungen: bedrohungenAus(lastLine(text, zeilen.bedrohungen)) };
 }
 
@@ -244,6 +269,9 @@ export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
 /** CLI-Zeile zur Größenstufe (factory#402 L26): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der S-Läufe sie aus der CI-Ausgabe liest.
  *  `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
 export const stufeZeile = (stufe) => `• Größenstufe: ${stufe ?? "(nicht berechenbar)"}`;
+
+/** CLI-Zeile zur berechneten Risikostufe (factory#526); `null` (nicht berechnet) wird ausdrücklich genannt. Pur. */
+export const risikostufeZeile = (r) => `• Risikostufe: ${r?.stufe ?? "(nicht berechenbar)"}`;
 
 /** Ein Urteil `{wert, ursache?}` ist ein Szenario-Fall: nicht erfüllt, weil das Szenario über das Kriterium hinaus prüfte (kein Fix nötig). Pur. */
 export const istSzenarioFall = (u) => u.wert === "nicht-erfuellt" && u.ursache === "szenario";
