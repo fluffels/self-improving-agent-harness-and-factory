@@ -23,7 +23,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `skills.abschluss` | `brain-input` |
 <!-- factory:projektwerte:end -->
 
-**Runde 1:** zusätzlich zu den Code-Brillen läuft die Lens `sicherheit` (`brille-sicherheit.md`) auf demselben Patch und demselben Stand, als eigener Subagent. Ihre Plan-Prüfliste ist der Abschnitt „Bedrohungen und Datenflüsse“ des Plans **wörtlich**. Sie zählt als Brille der Runde 1 (`lenses=…,sicherheit`, `blocker=…,sicherheit:<n>`), nicht als eigene Runde oder Zusatzpass.
+**Runde 1:** zusätzlich zu den Code-Brillen läuft die Lens `sicherheit` (`brille-sicherheit.md`) auf demselben Patch und demselben Stand, als eigener Subagent. Ihre Plan-Prüfliste ist der Abschnitt „Bedrohungen und Datenflüsse“ des Plans **wörtlich**. Sie zählt als Brille der Runde 1 (`lenses=…,sicherheit`, `blocker=…,sicherheit:<n>`, ebenso `sollte=` und `hinweis=`), nicht als eigene Runde oder Zusatzpass.
 
 **Fehlt der Abschnitt** (die Prognose des Planers war nicht hoch, der Plan lautet `ohne`, etwa ein Factory-Sync im Bezieher): der Orchestrator spawnt vor dem Pass `<agenten.planer>` mit `Nur Bedrohungsabschnitt #<nr> · Arbeitsverzeichnis: <worktree> · Pfade: <git diff --name-only origin/main...HEAD>`. Der Umsetzer schreibt den Abschnitt nie selbst, auch nicht bei einem Sync-PR; einziges Ventil ist `<praefixe.commitZeile>Review-Override:` mit Begründung. Liegt `brille-sicherheit.md` noch nicht auf `origin/main` (erster Sync mit dieser Regel im Bezieher), kann die Lens ihre Brille nicht lesen: dieser eine Sync-PR mergt mit `<praefixe.commitZeile>Review-Override: #<nr> Bootstrap Sicherheits-Brille`; die Code-Brillen laufen trotzdem.
 

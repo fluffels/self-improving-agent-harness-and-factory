@@ -26,7 +26,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { hoechsterAbnahmeDurchgang, parseNachweis, URSACHEN } from "./nachweis-lib.mjs";
+import { hoechsterAbnahmeDurchgang, parseNachweis, runde1LoestFixAus, URSACHEN } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
 import { armeZuordnen, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
@@ -185,7 +185,7 @@ export function kennzahlenAus(eintraege, offenMitFix = 0) {
     ohneNachweis: eintraege.length - mitNachweis.length,
     ohneBlockerFeld: mitNachweis.filter((z) => z.blocker === null).length,
     // Echte Zählung (#1609): PRs mit `blocker=`-Feld, in denen eine Brille in Runde 1 mindestens einen Blocker hatte (seit factory#530 auch einen `sollte`-Fund: beide lösen die Fix-Runde aus); der Proxy (Runden ≥ 2) bleibt zum Vergleich.
-    runde1MitBlocker: mitNachweis.filter((z) => z.blocker !== null && (z.blocker.some((b) => b.n > 0) || z.sollte?.some((b) => b.n > 0))).length,
+    runde1MitBlocker: mitNachweis.filter(runde1LoestFixAus).length,
     mitBlockerFeld: mitNachweis.filter((z) => z.blocker !== null).length,
     runde1MitBlockerProxy: mitNachweis.filter((z) => z.runden >= 2).length,
     mitNachweis: mitNachweis.length,
@@ -245,7 +245,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
     out.push(`| #${z.pr} | ${z.ticket ? `#${z.ticket}` : "–"} | ${z.gemergt.slice(0, 10)} | ${z.runden ?? "ohne Nachweis"} | ${blocker(z)} | ${z.ciFix} | ${z.festgefahren} | ${z.nacharbeit} |`);
   }
   out.push("", `PRs: ${k.prs} (ohne Review-Nachweis: ${k.ohneNachweis}, ohne blocker-Feld: ${k.ohneBlockerFeld})`);
-  out.push(`Runde 1 mit Blocker (aus blocker=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
+  out.push(`Runde 1 mit Blocker (aus blocker= und sollte=): ${prozent(k.runde1MitBlocker, k.mitBlockerFeld)}; Proxy Runden ≥ 2: ${prozent(k.runde1MitBlockerProxy, k.mitNachweis)}`);
   out.push(...schwereTabelle(k));
   for (const [lens, e] of Object.entries(k.brillen)) out.push(`Lens-Trefferquote ${lens}: ${prozent(e.treffer, e.prs)}, Σ Blocker ${e.summe} (${e.jePr === null ? "–" : e.jePr.toFixed(2).replace(".", ",")} je PR)`);
   out.push(`Ohne Nacharbeit (${NACHARBEIT_TAGE} T): ${prozent(k.ohneNacharbeit, k.nachweisbareFenster)}, Fenster noch offen: ${k.nacharbeitOffen}`);

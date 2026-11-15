@@ -206,8 +206,8 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(rechne(["runden=1 lenses=doku blocker=doku:1"]).kennzahlen.runde1MitBlocker, 1, "Runde 1 mit Blocker > 0");
     const ohneFeld = rechne(["runden=3 lenses=doku"]);
     assert.equal(ohneFeld.kennzahlen.mitBlockerFeld, 0);
-    assert.ok(mod.formatiere(ohneFeld).includes("Runde 1 mit Blocker (aus blocker=): –; Proxy Runden ≥ 2: 100 %"), "Nenner 0 steht als Strich");
-    assert.ok(mod.formatiere(proxyOhneBlocker).includes("(aus blocker=): 0 % (0/1)"));
+    assert.ok(mod.formatiere(ohneFeld).includes("Runde 1 mit Blocker (aus blocker= und sollte=): –; Proxy Runden ≥ 2: 100 %"), "Nenner 0 steht als Strich");
+    assert.ok(mod.formatiere(proxyOhneBlocker).includes("(aus blocker= und sollte=): 0 % (0/1)"));
   });
   test("kaputtes runden in der Squash-Message zählt als ohne Nachweis, kein NaN in den Aggregaten", () => {
     const k = mod.bewertePrs({
@@ -263,7 +263,7 @@ describe("bewertePrs und Aggregate", () => {
       assert.equal(k.prs, k.ohneNachweis + k.ohneSchwere + k.mitSchwere);
       assert.equal(k.ohneNachweis, 1, "kaputtes runden zählt als ohne Nachweis, auch mit Schwere-Feldern");
       assert.equal(k.mitSchwere, 1, "ein PR ohne Nachweis geht nie in mitSchwere ein (ohneSchwere bleibt Teilmenge der PRs mit Nachweis)");
-      assert.ok(k.ohneSchwere >= 0);
+      assert.equal(k.ohneSchwere, 1, "OHNE hat einen Nachweis, aber keine Schwere-Felder");
     });
     test("formatiere: Tabellenzeilen je Schwere und Brille; ohne Felder keine 0-Zeile", () => {
       const text = mod.formatiere(rechne([MIT, OHNE]));
