@@ -3,10 +3,22 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-// @ts-expect-error JS-Modul ohne Typen
-import { MAX_RUNDEN, fuehreAus, naechsterSchritt } from "../scripts/check-basis-nachlauf.mjs";
+// Tooling-Skript ohne Declaration-File: Oberfläche einmal festlegen (kein no-unsafe-call).
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as raw from "../scripts/check-basis-nachlauf.mjs";
 
 type Env = Record<string, string | undefined>;
+interface Io {
+  git: (args: string[]) => string;
+  gate: (befehl: string, env: Env) => number;
+  out: (z: string) => void;
+  err: (z: string) => void;
+}
+const { MAX_RUNDEN, fuehreAus, naechsterSchritt } = raw as unknown as {
+  MAX_RUNDEN: number;
+  fuehreAus: (env: Env, io: Io) => number;
+  naechsterSchritt: (a: { getestet: string; aktuell: string; runde: number; max: number }) => string;
+};
 
 function aufbau(opts: { head1?: string; fetchTips?: string[]; mergeFehler?: boolean; gateExit?: number[]; head2Fehlt?: boolean; fetchWirft?: boolean; env?: Env }) {
   const gitAufrufe: string[][] = [];
@@ -87,7 +99,7 @@ describe("fuehreAus", () => {
       t.gateAufrufe.map((g) => g.befehl),
       ["install", "verifyKompakt"],
     );
-    const verify = t.gateAufrufe[1]!;
+    const verify = t.gateAufrufe[1];
     assert.equal(verify.env.FACTORY_DIFF_BASE, "ccc");
     assert.equal(verify.env.FACTORY_COVERAGE, undefined);
     const merge = t.gitAufrufe.find((a) => a.includes("merge") && !a.includes("--abort"))!;

@@ -126,7 +126,7 @@ describe("(d) CI-Schritt im Required-Job", () => {
   });
   test("der Review-Schritt ist vorletzt: danach folgt genau der Abnahme-Schritt", () => {
     const rest = job.slice(schritt);
-    assert.equal(rest.split("\n      - name:").length - 1, 1, "nach dem Review-Schritt darf nur der Abnahme-Schritt folgen");
+    assert.equal(rest.split("\n      - name:").length - 1, 2, "nach dem Review-Schritt folgen nur Abnahme und Basis-Nachlauf");
     assert.ok(rest.indexOf("check-abnahme-nachweis.mjs") > 0, "der folgende Schritt ist der Abnahme-Nachweis");
   });
   describe("Abnahme-Schritt (#1755, K7)", () => {
@@ -135,7 +135,9 @@ describe("(d) CI-Schritt im Required-Job", () => {
     const text = job.slice(kopf, abn + "check-abnahme-nachweis.mjs".length);
     test("im Required-Job build-test, nach dem Review-Schritt, als letzter Schritt, ohne eigenen Job", () => {
       assert.ok(abn > schritt, "muss nach dem Review-Schritt stehen");
-      assert.ok(!job.slice(abn).includes("\n      - name:"), "nach dem Abnahme-Schritt darf kein weiterer Schritt folgen");
+      const danach = job.slice(abn).split("\n      - name:").slice(1);
+      assert.equal(danach.length, 1, "nach dem Abnahme-Schritt folgt nur der Basis-Nachlauf (factory#499)");
+      assert.match(danach[0] ?? "", /check-basis-nachlauf\.mjs/);
       assert.ok(!/\n {2}[a-z-]*abnahme[a-z-]*:/.test(ci), "kein eigener Job für die Abnahme");
     });
     test("Bedingung: !cancelled(), nur pull_request, Dependabot ausgenommen", () => {
