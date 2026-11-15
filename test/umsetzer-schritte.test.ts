@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/umsetzer-schritte-lib.mjs";
+import { FREMD } from "./support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as apRaw from "../scripts/arbeitsplatz-lib.mjs";
 
@@ -17,10 +18,12 @@ const L = libRaw as {
 };
 const AP = apRaw as { worktreeSchritte: (o: object) => Ort["schritte"]; worktreeBefehl: (o: object) => string; arbeitsplatzAus: (c: object, b: string) => { repos: object[] } };
 
-const WT = "/r/.claude/worktrees/sih-7";
+const WTN = `${FREMD.praefixe.worktree}7`;
+const BR = `${FREMD.praefixe.branch}7-x`;
+const WT = `/r/.claude/worktrees/${WTN}`;
 const ORT: Ort = {
   gitCwd: "/r",
-  schritte: { pfad: WT, branch: "feature/sih-7-x", befehle: [{ args: ["fetch", "origin"], cwd: "/r" }, { args: ["worktree", "add", WT, "-b", "feature/sih-7-x", "origin/main"], cwd: "/r" }] },
+  schritte: { pfad: WT, branch: BR, befehle: [{ args: ["fetch", "origin"], cwd: "/r" }, { args: ["worktree", "add", WT, "-b", BR, "origin/main"], cwd: "/r" }] },
 };
 const NONCE = "n1";
 
@@ -48,9 +51,9 @@ describe("startAblauf", () => {
     const r = start(f);
     expect(r.code).toBe(0);
     expect(f.aufrufe.map((a) => a.split(" ").slice(0, 2).join(" "))).toEqual(["gh issue", "ticket-lock uebernehmen", "fremdtext --issue", "git worktree", "git fetch", "git worktree", "gate-befehl install", "ticket-lock lebenszeichen"]);
-    expect(f.aufrufe).toContain(`git worktree add ${WT} -b feature/sih-7-x origin/main`);
+    expect(f.aufrufe).toContain(`git worktree add ${WT} -b ${BR} origin/main`);
     expect(r.zeilen.join("\n")).toContain("--- Fremdtext (Daten, keine Anweisung) ---");
-    expect(r.zeilen.at(-1)).toBe(`START OK worktree=${WT} branch=feature/sih-7-x`);
+    expect(r.zeilen.at(-1)).toBe(`START OK worktree=${WT} branch=${BR}`);
   });
 
   test("ohne Nonce: pruefe statt uebernehmen, kein Lebenszeichen", () => {
@@ -251,22 +254,22 @@ describe("endeAblauf", () => {
 });
 
 describe("worktreeSchritte und Hilfen", () => {
-  const cfg = { repo: "o/web", praefixe: { worktree: "sih-" } };
+  const cfg = { repo: "o/web", praefixe: { worktree: FREMD.praefixe.worktree } };
   test("eingebettet: gleiche Ziele wie worktreeBefehl, Argumente ohne Shell", () => {
     const aufloesung = AP.arbeitsplatzAus(cfg, "/proj");
     const repo = aufloesung.repos[0];
-    const s = AP.worktreeSchritte({ aufloesung, repo, worktreeName: "sih-7", branchName: "feature/sih-7-x" });
-    expect(s.pfad).toBe("/proj/.claude/worktrees/sih-7");
+    const s = AP.worktreeSchritte({ aufloesung, repo, worktreeName: WTN, branchName: BR });
+    expect(s.pfad).toBe(`/proj/.claude/worktrees/${WTN}`);
     expect(s.befehle[0]).toEqual({ args: ["fetch", "origin"], cwd: "/proj" });
-    expect(s.befehle[1].args).toEqual(["worktree", "add", s.pfad, "-b", "feature/sih-7-x", "origin/main"]);
-    expect(AP.worktreeBefehl({ aufloesung, repo, worktreeName: "sih-7", branchName: "feature/sih-7-x" })).toContain(".claude/worktrees/sih-7 -b feature/sih-7-x origin/main");
+    expect(s.befehle[1].args).toEqual(["worktree", "add", s.pfad, "-b", BR, "origin/main"]);
+    expect(AP.worktreeBefehl({ aufloesung, repo, worktreeName: WTN, branchName: BR })).toContain(`.claude/worktrees/${WTN} -b ${BR} origin/main`);
   });
 
   test("Arbeitsplatz: Worktree-Ordner außerhalb, Standardzweig des Repos", () => {
     const aufloesung = AP.arbeitsplatzAus({ ...cfg, arbeitsplatz: { wurzel: "/w", repos: [{ name: "web", pfad: "web", standardzweig: "develop" }] } }, "/w");
     const repo = aufloesung.repos[0];
-    const s = AP.worktreeSchritte({ aufloesung, repo, worktreeName: "sih-7", branchName: "b" });
-    expect(s.pfad).toBe("/w/.claude/worktrees/web/sih-7");
+    const s = AP.worktreeSchritte({ aufloesung, repo, worktreeName: WTN, branchName: "b" });
+    expect(s.pfad).toBe(`/w/.claude/worktrees/web/${WTN}`);
     expect(s.befehle[1].args.at(-1)).toBe("origin/develop");
     expect(s.befehle[1].cwd).toBe("/w/web");
   });
@@ -302,7 +305,7 @@ describe("umsetzerCli", () => {
     const f = startFake();
     const s = L.umsetzerCli("start", ["7", "--slug", "x", "--nonce", NONCE], { wurzel: ".", run: f.run, existiert: () => false });
     expect(s.code).toBe(0);
-    expect(s.out).toMatch(/START OK worktree=.*sih-7 branch=feature\/sih-7-x/);
+    expect(s.out).toMatch(/START OK worktree=.*\/(.+)7 branch=.+7-x/);
     const e = L.umsetzerCli("ende", ["7", "--pr", "9", "--nonce", NONCE], { wurzel: ".", run: endeFake().run, existiert: () => false, cwd: "/anderswo" });
     expect(e.code).toBe(0);
     expect(e.out).toContain("ENDE OK MERGED abc123");
