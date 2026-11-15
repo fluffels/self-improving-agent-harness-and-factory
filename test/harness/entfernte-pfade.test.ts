@@ -126,7 +126,7 @@ export const RESTE: Rest[] = [
   {
     name: "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)",
     muster: /\b(?:pruefeExtraktion|bezugsTests|zuordnungsLuecken|testHuelle|extraktionsArten|MITZIEHEND|zielDatei|lesebezuege)\b|ruft in diesem Repo kein Test auf/,
-    fix: "die Prüfungen der Extraktionsliste sind gestrichen (Fortschreibung factory#492 zu ADR 0022): besitz-extraktion.mjs hält nur noch artVon, musterRegex, importeAus und die Schutzlisten-Auslegung; die Liste prüft kein Wächter",
+    fix: "die Prüfungen der Extraktionsliste sind gestrichen (Fortschreibung factory#492 zu ADR 0022): besitz-extraktion.mjs hält artVon, musterRegex, importeAus, relativeImporte, testHilfeKopienAbweichend und die Schutzlisten-Auslegung; die Struktur der Liste prüft kein Wächter",
   },
 ];
 
@@ -326,6 +326,10 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       gestrichen.filter((n) => exporte.includes(n)),
       [],
     );
+  });
+
+  test("Negativfall: harmlose Nachbarn der entfernten Extraktions-Prüfungen lösen nicht aus (Wortgrenze, factory#492)", () => {
+    assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: "zielDateien, MITZIEHENDE, xbezugsTestsy, lesebezuegeX" }]), []);
   });
 
   test("Negativfall: harmlose Nachbarn des Altnamen-Musters lösen nicht aus (altEnvName, Wortgrenze)", () => {

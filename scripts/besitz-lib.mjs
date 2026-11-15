@@ -1,6 +1,6 @@
 // Besitz-Manifest-Leser und Bearbeitungs-Primitive (ADR 0022 F9): Einheiten des Besitz-Manifests `.factory/besitz.json`
 // (ganze Datei, Markdown-Block zwischen Markern, JSON-Schlüssel der obersten Ebene) lesen, prüfen, hashen und setzen.
-// Hash und Wächter rechnen auf dem Text mit geleerten Projektwerten (`leereProjektwerte` aus `projektwert-lib.mjs`, ADR 0022 F3f). Importe: `node:crypto`, `projekt-config-lib`, `projektwert-lib`, `modul-wahl-lib`, `sync-abgleich-lib` und `ticket-namen`; Extraktionsliste und Test-Hülle stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
+// Hash und Wächter rechnen auf dem Text mit geleerten Projektwerten (`leereProjektwerte` aus `projektwert-lib.mjs`, ADR 0022 F3f). Importe: `node:crypto`, `projekt-config-lib`, `projektwert-lib`, `modul-wahl-lib`, `sync-abgleich-lib` und `ticket-namen`; Extraktionsliste und Import-Auslegung stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
 import { altEnvPraefix } from "./projekt-config-lib.mjs";
 import { leereProjektwerte } from "./projektwert-lib.mjs";
