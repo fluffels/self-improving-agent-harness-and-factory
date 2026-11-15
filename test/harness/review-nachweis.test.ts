@@ -510,6 +510,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
       git("commit", "-q", "--allow-empty", "-m", `nachweis\n\n${zeilen.plan}: ${e.agenten.planer}\n${zeilen.review}: head=${head} ${review}`);
       const env = { ...process.env };
       ohneKernEnv(env, "FACTORY_DIFF_BASE");
+      env.GITHUB_HEAD_REF = ""; // die Fixture-Branch feature/x ist ticketlos; ein geerbter PR-Branch (CI) würde arm= verlangen (factory#532)
       return execFileSync("node", [fileURLToPath(new URL("../../scripts/check-review-nachweis.mjs", import.meta.url)), ...(echt ? [] : ["--config", FREMD_CONFIG_PFAD])], { cwd: dir, env, encoding: "utf8" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
