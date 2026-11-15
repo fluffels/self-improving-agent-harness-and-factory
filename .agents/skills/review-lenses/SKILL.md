@@ -5,7 +5,7 @@ description: Gestaffelter Mehr-Perspektiven-Review des Ticket-Diffs: erst `gate-
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
 
-**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind für Codex nicht registriert oder nicht als wirksam nachgewiesen (Grenze bis zur Freigabe des Codex-Adapters). Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md). Der gesperrte Codex-Einstieg aus `AGENTS.md` gilt auch hier.
+**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind für Codex nicht registriert oder nicht als wirksam nachgewiesen (Grenze bis zur Freigabe des Codex-Adapters). Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md).
 
 Gestaffelter Review: **erst die deterministischen Gates, dann (nur bei Grün) die Lenses.** Kein Ersatz für die CI-Gates, sondern eine Schicht davor; **kein Auto-Merge** (das Mergen bleibt der [Ticket-Ablauf](../factory/ablauf.md)). Regeln: [AGENTS.md](../../../AGENTS.md), Begründungen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd).
 
@@ -75,7 +75,7 @@ node scripts/gate-befehl.mjs verifyKompakt   # Gate-Befehl der Projekt-Config, a
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/<praefixe.worktree><nr>-r<runde>-delta.patch"`), mit deren Blockern als Prüfliste. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit** (bei `kombiniert` ist der Test-Teil enthalten).
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art. Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird. Rote `verify`-Fixe davor zählen nicht als Fix-Runde.
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass, fiel eine Lens aus, wechselte die Diff-Art oder wurde rebased: der volle Satz auf dem vollen Patch.
-- Merge von `main` ist kein Fix-Pass (`git show --remerge-diff --format= <M>` ist das Delta einer Konfliktauflösung); Ablauf in `.agents/skills/review-lenses/ablauf-merge-main.md`.
+- Merge von `main` ist kein Fix-Pass; Ablauf in `.agents/skills/review-lenses/ablauf-merge-main.md`.
 
 **Jede Lens läuft als eigener Subagent auf dem starken Tier**, nie inline im Orchestrator:
 
