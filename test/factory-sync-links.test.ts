@@ -23,6 +23,8 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 import * as rawMd from "../scripts/docs-gen/markdown.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawDocdrift from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawDoctor from "../scripts/harness-doctor-factory-update.mjs";
 
 interface Leser { pfade: string[]; lies(p: string): string | null; vorladen(p: string[]): void }
 interface Plan { befunde: { art: string; datei?: string; zeile?: number; text: string }[]; dateien: Map<string, string>; geschrieben: number; ziele: number; tag: string }
@@ -31,6 +33,7 @@ const links = rawLinks as unknown as {
   indexText(k: { repo: string; tag: string; commit: string }, l: unknown[]): string;
   befundZeile(b: { art: string; datei?: string; zeile?: number; text: string }): string;
 };
+const doctor = rawDoctor as unknown as { dependabotAusschlussPunkt(a: { rootDir: string; bezieher?: (w: string) => boolean }): { punkt: string; ok: boolean }[] };
 const seite = rawSeite as unknown as { factoryRepoAus(stand: unknown, lade: () => unknown): string | undefined };
 const sync = rawSync as unknown as { cli(argv: string[], o: { cwd?: string; out: (s: string) => void; err: (s: string) => void }): number };
 const waechter = rawWaechter as unknown as { cli(argv: string[], o: { wurzel: string; out: (s: string) => void; err: (s: string) => void }): number };
@@ -315,6 +318,53 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
     assert.equal(r2.code, 1);
     assert.match(r2.err, /docs\/neu\.md:2: \[anker-tot\]/);
     assert.deepEqual(baum(z2), vorher);
+  });
+
+  describe("Vorlage .github/dependabot.yml: exclude-paths für die verteilten Workflows (factory#499 L6)", () => {
+    const WF = [".github/workflows/a.yml", ".github/workflows/b.yaml"];
+    const WFTEXT = Object.fromEntries(WF.map((p) => [p, "name: x\n"]));
+    const ACTIONS = `  - package-ecosystem: github-actions\n    directory: /\n`;
+    const VORLAGE = `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${ACTIONS}`;
+    const DEP = ".github/dependabot.yml";
+    const erstbezug = (vorlage: string, ziel: Record<string, string> = {}) => {
+      const q = baueQuelle({ vorlagen: { [DEP]: vorlage }, besitzDateien: WFTEXT });
+      const z = baueZiel(ziel);
+      return { z, r: syncVomTag(q, z, "v2") };
+    };
+    const SOLL = `  - package-ecosystem: github-actions\n    exclude-paths:\n${WF.map((p) => `      - "${p}"\n`).join("")}    directory: /\n`;
+
+    test("Erstbezug schreibt die Vorlage mit exclude-paths der verteilten Workflows, der Doctor-Punkt ist danach OK", () => {
+      const { z, r } = erstbezug(VORLAGE);
+      assert.equal(r.code, 0, r.err);
+      assert.equal(lies(z, DEP), `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${SOLL}`);
+      assert.deepEqual(doctor.dependabotAusschlussPunkt({ rootDir: z, bezieher: () => true }), [{ punkt: "Dependabot-Ausschluss", ok: true }]);
+      assert.equal(doctor.dependabotAusschlussPunkt({ rootDir: z, bezieher: () => true })[0]?.ok, true);
+    });
+    test("jeder github-actions-Eintrag bekommt die Liste, auch gequotet und mit Kommentar", () => {
+      const { z, r } = erstbezug(`updates:\n  - package-ecosystem: "github-actions" # a\n    directory: /\n  - package-ecosystem: 'github-actions'\n    directory: /x\n`);
+      assert.equal(r.code, 0, r.err);
+      const t = lies(z, DEP);
+      assert.equal(t.split("exclude-paths:").length - 1, 2);
+      assert.deepEqual(doctor.dependabotAusschlussPunkt({ rootDir: z, bezieher: () => true }), [{ punkt: "Dependabot-Ausschluss", ok: true }]);
+    });
+    test("Gegenfälle: vorhandene dependabot.yml, Vorlage ohne github-actions und Eintrag mit exclude-paths bleiben wörtlich", () => {
+      const eigen = "updates:\n  - package-ecosystem: github-actions\n    directory: /eigen\n";
+      const a = erstbezug(VORLAGE, { [DEP]: eigen });
+      assert.equal(lies(a.z, DEP), eigen);
+      assert.ok(!a.r.out.includes("Hinweis: .github/dependabot.yml"));
+      const ohne = "updates:\n  - package-ecosystem: npm\n    directory: /\n";
+      assert.equal(lies(erstbezug(ohne).z, DEP), ohne);
+      const mit = `updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n      - x\n    directory: /\n`;
+      const m = erstbezug(mit);
+      assert.equal(lies(m.z, DEP), mit);
+    });
+    test("unlesbare Vorlage: das Original bleibt, ein Hinweis nennt es", () => {
+      const kaputt = `${VORLAGE}# a\tb\n`;
+      const { z, r } = erstbezug(kaputt);
+      assert.equal(r.code, 0, r.err);
+      assert.equal(lies(z, DEP), kaputt);
+      assert.match(r.out, /^Hinweis: .github\/dependabot\.yml: .*exclude-paths/m);
+    });
   });
 
   test("eine vorhandene Vorlage mit altem Ref wird vom Link-Schritt geändert und nicht als unverändert gezählt", () => {
