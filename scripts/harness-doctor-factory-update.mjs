@@ -71,9 +71,14 @@ const SCHLUESSEL = /^([A-Za-z0-9_./-]+):(?: (.*))?$/;
 const SONDER = /^[&*!|>{%@`?["']/;
 const ohneKommentar = (s) => s.replace(/(^| )#.*$/, "").trim();
 
-/** Ein plain Skalar; Quotes, Anker, Alias, Tag, Block-Skalar und Flow am Wertanfang sind nicht lesbar. Leer bleibt leer. */
+const DOPPELT = /^"([^"\\]*)"$/;
+const EINFACH = /^'((?:[^']|'')*)'$/;
+
+/** Ein plain Skalar oder ein einfach gequoteter (`"…"` ohne `\` und inneres `"`, `'…'` mit `''` für den Apostroph); Anker, Alias, Tag, Block-Skalar, Flow und jede andere Quote-Form am Wertanfang sind nicht lesbar. Leer bleibt leer. */
 function skalar(roh) {
   const s = ohneKommentar(roh);
+  const q = s[0] === '"' ? DOPPELT.exec(s) : s[0] === "'" ? EINFACH.exec(s) : null;
+  if (q !== null) return s[0] === "'" ? q[1].replaceAll("''", "'") : q[1];
   if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
   return s;
 }
@@ -159,8 +164,8 @@ function eintraegeVon(zeilen) {
 
 /**
  * Die Einträge von `updates` als `{ eintraege: [{ oekosystem, ausschluss }] }` oder `{ fehler }` (Blockform ohne `yaml`-Bibliothek: der Doctor-Wochenlauf läuft ohne `npm ci`, nur Node-Builtins).
- * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als plain Skalar, `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen, `---` am Anfang.
- * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Quotes am Wertanfang, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
+ * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als plain oder gequoteter Skalar (`"…"` ohne `\` und ohne inneres `"`, `'…'` mit `''`), `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen (`feld()` kürzt " #" schon vor dem Quote-Lesen: ein Wert mit " #" innerhalb der Quotes ist NICHT PRÜFBAR), `---` am Anfang.
+ * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, andere Quote-Formen am Wertanfang (Backslash, inneres Quote, Rest hinter dem Quote), doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
  */
 export function dependabotEintraege(text) {
   try {
@@ -169,6 +174,44 @@ export function dependabotEintraege(text) {
     if (e instanceof NichtLesbar) return { fehler: e.message };
     throw e;
   }
+}
+
+const AKTION_KOPF = /^( *)- package-ecosystem: *(?:github-actions|"github-actions"|'github-actions') *(?:#.*)?$/;
+
+/** Ob der Eintrag, der in Zeile `i` (Bindestrich bei `einr`) beginnt, schon `exclude-paths` auf Feldhöhe hat. */
+function hatAusschluss(zeilen, i, einr) {
+  for (const z of zeilen.slice(i + 1)) {
+    if (/^ *(#.*)?\r?$/.test(z)) continue;
+    const e = /^ */.exec(z)[0].length;
+    if (e <= einr) return false;
+    if (e === einr + 2 && /^ *exclude-paths:/.test(z)) return true;
+  }
+  return false;
+}
+
+/**
+ * Die Vorlage `text` einer `dependabot.yml` mit `exclude-paths` (Pfade in Quotes, in Feldeinrückung) direkt hinter jedem Kopf `- package-ecosystem: github-actions` (plain oder gequotet), der noch keine `exclude-paths` führt;
+ * Rückgabe `{ text, hinweis }`. Ohne passenden Eintrag oder ohne Pfade bleibt der Text wörtlich (`hinweis: null`). Danach liest `dependabotEintraege` das Ergebnis gegen: ist es unlesbar oder fehlt ein Pfad
+ * in einem github-actions-Eintrag, kommt das Original zurück und ein `hinweis` (nichts Halbes wird geschrieben).
+ */
+export function mitWorkflowAusschluss(text, pfade) {
+  const zeilen = text.split("\n");
+  const eol = zeilen[0]?.endsWith("\r") ? "\r" : "";
+  const neu = [];
+  let geaendert = false;
+  zeilen.forEach((z, i) => {
+    neu.push(z);
+    const m = AKTION_KOPF.exec(z.replace(/\r$/, ""));
+    if (m === null || pfade.length === 0 || hatAusschluss(zeilen, i, m[1].length)) return;
+    const feld = " ".repeat(m[1].length + 2);
+    neu.push(`${feld}exclude-paths:${eol}`, ...pfade.map((p) => `${feld}  - "${p}"${eol}`));
+    geaendert = true;
+  });
+  if (!geaendert) return { text, hinweis: null };
+  const ergebnis = neu.join("\n");
+  const gelesen = dependabotEintraege(ergebnis);
+  const grund = gelesen.fehler !== undefined ? gelesen.fehler : gelesen.eintraege.some((e) => e.oekosystem === "github-actions" && pfade.some((p) => !e.ausschluss.includes(p))) ? "ein github-actions-Eintrag führt nicht alle Pfade" : null;
+  return grund === null ? { text: ergebnis, hinweis: null } : { text, hinweis: `exclude-paths für die Besitz-Workflows ließ sich nicht eintragen (${grund}); die Vorlage bleibt wörtlich, bitte die Pfade von Hand ergänzen (Doctor-Punkt Dependabot-Ausschluss)` };
 }
 
 /**
