@@ -11,10 +11,9 @@ import { FREMD } from "./support/fremd-config";
 
 type Ergebnis = { code: number; out: string; err: string };
 type Eltern = { number: number; state: string; repository: { nameWithOwner: string }; subIssues: { totalCount: number; nodes: { number?: number; state: string }[] } } | null | undefined;
-interface Aus { aktion: string; grund: string }
 const lib = rawLib as unknown as {
   kinderStand(a: { total?: number; zustaende?: string[] }): { total: number; offen: number; vollstaendig: boolean };
-  abschlussEntscheidung(a: { repo: string; parent: Eltern }): Aus;
+  abschlussEntscheidung(a: { repo: string; parent: Eltern }): { aktion: string; grund: string };
 };
 interface AbschlussIo { repo: string; elternteil(k: number): Eltern; offeneEpics(): Eltern[]; schliesse(nr: number, text: string): void }
 const abschluss = rawAbschluss as unknown as {
@@ -109,14 +108,11 @@ describe("epic-abschluss: fuehreAus", () => {
     assert.match(r.out, /EPIC #20: bleibt offen \(1 von 2 Kindern offen\)/);
     assert.deepEqual(w.geschlossen, []);
   });
-  test("zweiter Aufruf schließt nicht erneut (Elternteil schon zu)", () => {
+  test("zweiter Aufruf (Elternteil schon zu) und Kind ohne Elternteil: nichts wird geschlossen", () => {
     const w = io({ eltern: parent([], { state: "CLOSED", subIssues: kinder("CLOSED") }) });
     assert.match(abschluss.fuehreAus(["30"], w.io).out, /nichts zu tun \(Elternteil nicht offen\)/);
+    assert.match(abschluss.fuehreAus(["30"], io({}).io).out, /nichts zu tun \(kein Elternteil\)/);
     assert.deepEqual(w.geschlossen, []);
-  });
-  test("Kind ohne Elternteil: nichts", () => {
-    const w = io({});
-    assert.match(abschluss.fuehreAus(["30"], w.io).out, /nichts zu tun \(kein Elternteil\)/);
   });
   test("--alle: von zwei Epics schließt nur das fertige", () => {
     const fertig = parent([], { number: 20, subIssues: kinder("CLOSED") });
@@ -126,8 +122,6 @@ describe("epic-abschluss: fuehreAus", () => {
     assert.equal(r.code, 0);
     assert.deepEqual(w.geschlossen.map(([n]) => n), [20]);
     assert.match(r.out, /EPIC #21: bleibt offen/);
-  });
-  test("--alle ohne Epics: eigene Meldung", () => {
     assert.match(abschluss.fuehreAus(["--alle"], io({}).io).out, /Keine offenen Epics\./);
   });
   test("Aufruf-Fehler: Exit 2 vor jedem I/O (io wird nie berührt)", () => {

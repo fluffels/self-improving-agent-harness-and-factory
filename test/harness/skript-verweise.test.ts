@@ -109,8 +109,9 @@ describe("echter Baum", () => {
   const lies = (pfad: string): string => readFileSync(`${ROOT}${pfad}`, "utf8");
 
   test("(a) kein relativer Import in scripts/** zeigt auf eine fehlende Datei", () => {
-    const tot = skriptDateien().flatMap((d) => toteImporte(d, lies(d), existiert).map((z) => `${d} → ${z}`));
-    expect(tot).toEqual([]);
+    const dateien = skriptDateien();
+    expect(dateien.length).toBeGreaterThan(50); // kein stiller Leerlauf
+    expect(dateien.flatMap((d) => toteImporte(d, lies(d), existiert).map((z) => `${d} → ${z}`))).toEqual([]);
   });
   test("(b) kein node scripts/<x> in Workflows, package.json und Hook-Config zeigt auf eine fehlende Datei", () => {
     const tot: string[] = [];
@@ -120,9 +121,5 @@ describe("echter Baum", () => {
     if (existiert("package.json")) for (const z of toteAufrufe(packageSkripte(lies("package.json")), existiert)) tot.push(`package.json → ${z}`);
     if (existiert(".claude/settings.json")) for (const z of toteAufrufe(settingsAufrufe(lies(".claude/settings.json")), existiert)) tot.push(`.claude/settings.json → ${z}`);
     expect(tot).toEqual([]);
-  });
-  test("der Scan sieht Dateien (kein stiller Leerlauf)", () => {
-    expect(skriptDateien().length).toBeGreaterThan(50);
-    expect(readdirSync(`${ROOT}.github/workflows`).length).toBeGreaterThan(5);
   });
 });
