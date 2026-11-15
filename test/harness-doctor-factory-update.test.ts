@@ -346,7 +346,7 @@ describe("mitWorkflowAusschluss (Vorlage der dependabot.yml, factory#499 L6)", (
     ["Kommentar in Spalte 0 vor vorhandenem exclude-paths", `${AKT}\n# k\n    exclude-paths:\n      - a.yml\n`, null],
     ["CRLF mit Leerzeile vor vorhandenem exclude-paths", `${AKT}\r\n\r\n    exclude-paths:\r\n      - a.yml\r\n`, null],
     ["verschachteltes exclude-paths unter groups zählt nicht", `${AKT}\n    groups:\n      exclude-paths:\n        - x\n`, `${AKT}\n${EINF}    groups:\n      exclude-paths:\n        - x\n`],
-    ["exclude-paths nur als Wert, nicht als Schlüssel", `${AKT}\n    schedule: exclude-paths\n`, `${AKT}\n${EINF}    schedule: exclude-paths\n`],
+    ["exclude-paths nur als Schlüsselteil (exclude-pathsx:) oder Wert (\"/exclude-paths:\"), nicht als Schlüssel (^, :)", `${AKT}\n    exclude-pathsx: a\n    directory: "/exclude-paths:"\n`, `${AKT}\n${EINF}    exclude-pathsx: a\n    directory: "/exclude-paths:"\n`],
   ])("Wortlaut der Erkennung: %s", (_n, eintrag, soll) => {
     const text = `updates:\n${eintrag}`;
     const r = lib.mitWorkflowAusschluss(text, P);

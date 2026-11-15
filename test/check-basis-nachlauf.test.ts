@@ -198,7 +198,7 @@ describe("echteIo (injizierter spawn)", () => {
     assert.equal(echteIo(mit({ status: 0 }), "/w").gate("install", { A: "1" }), 0);
     const a = aufrufe.at(-1)!;
     assert.deepEqual(a.args, ["scripts/gate-befehl.mjs", "install"]);
-    assert.deepEqual([a.opts.cwd, a.opts.env, a.opts.stdio], ["/w", { A: "1" }, "inherit"]);
+    assert.deepEqual([a.cmd, a.opts.cwd, a.opts.env, a.opts.stdio], [process.execPath, "/w", { A: "1" }, "inherit"]);
     assert.deepEqual([3, null].map((status) => echteIo(mit({ status }), "/w").gate("verifyKompakt", {})), [3, 1]);
   });
 });
