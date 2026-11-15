@@ -26,12 +26,12 @@ export const normalisiereOrt = (ort) => String(ort).trim().toLowerCase().replace
 
 const FUND_RE = /^\s*-\s*\[[^\]\w]*\s*(blockierend|sollte|hinweis)\s*\]\s*(.*)$/i;
 
-/** Fundstelle der Zeile: der Backtick-Abschnitt nach dem Trenner `—` (letzter solcher), sonst der letzte mit Pfad-Form (`/`, `.`, `:zeile`); Code im Befundtext zählt nicht als Ort. */
+/** Fundstelle der Zeile: der ERSTE Backtick-Abschnitt nach dem Trenner `—` oder `–` (ein Beleg danach darf selbst Code tragen), sonst der letzte mit Pfad-Form (`/`, `.`, `:zeile`); Code im Befundtext zählt nicht als Ort. */
 function findeOrt(rest) {
   const kandidaten = [...rest.matchAll(/`([^`]+)`/g)];
-  const nachTrenner = kandidaten.filter((m) => /[—–-]\s*$/.test(rest.slice(0, m.index)));
+  const nachTrenner = kandidaten.filter((m) => /[—–]\s*$/.test(rest.slice(0, m.index)));
   const pfadform = kandidaten.filter((m) => /[/.]|:\d/.test(m[1]));
-  return nachTrenner.at(-1) ?? pfadform.at(-1) ?? null;
+  return nachTrenner[0] ?? pfadform.at(-1) ?? null;
 }
 
 function parseFund(zeile) {

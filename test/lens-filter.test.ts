@@ -162,6 +162,22 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(ortSicher("- [🔶 sollte] x — `` — y").ort).toBe("");
     expect(ortSicher("- [🔶 sollte] x — ` a.ts:1 ` — y").ort).toBe("a.ts:1");
   });
+  test("Fundstelle: erster Abschnitt nach dem Trenner, auch wenn der Beleg selbst Code in Backticks trägt", () => {
+    expect(ortSicher("- [🔶 sollte] x — `a/b.ts:1` — `c.ts` ist betroffen").ort).toBe("a/b.ts:1");
+    expect(ortSicher("- [🔶 sollte] x — `a.ts:1` — siehe `b.ts:2`").ort).toBe("a.ts:1");
+    expect(ortSicher("- [🔶 sollte] x — `README` — Beleg").ort).toBe("README");
+    expect(ortSicher("- [🔶 sollte] Datei `c.ts` falsch – `a.ts:1` – Beleg").ort).toBe("a.ts:1");
+    expect(ortSicher("- [🔶 sollte] x —`a.ts:1`").ort).toBe("a.ts:1");
+  });
+  test("Pfad-Form ohne Trenner: jede Alternative einzeln (/, ., :zeile), der letzte Treffer gilt", () => {
+    for (const ort of ["docs/README", "README.md", "Makefile:3"]) expect(ortSicher(`- [🔶 sollte] Code \`x\` bei \`${ort}\``).ort).toBe(ort);
+    expect(ortSicher("- [🔶 sollte] `a.ts:1` und `b.ts:2` kaputt").ort).toBe("b.ts:2");
+  });
+  test("FUND_RE: Quantoren der Klammer und des Striches", () => {
+    expect(ortSicher("-[sollte] x — `a.ts:1`").schwere).toBe("sollte");
+    expect(ortSicher("- [sollte] x — `a.ts:1`").schwere).toBe("sollte");
+    expect(ortSicher("- [❌  blockierend] x — `a.ts:1`").schwere).toBe("blockierend");
+  });
   test("Sortierung: Schwere vor Fundstelle, gleich schwere nach Fundstelle unabhängig von der Eingabereihenfolge", () => {
     const e = L.filtere({ text: B("Doku", SOLL("a.ts:1"), BLOCK("z.ts:1"), SOLL("c.ts:1"), SOLL("b.ts:1")), runde: 1 });
     expect(e.fixliste.map((f) => f.ort)).toEqual(["z.ts:1", "a.ts:1", "b.ts:1", "c.ts:1"]);

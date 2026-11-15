@@ -936,6 +936,32 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(r.stderr, /Fix:/);
   });
 
+  test("arm= prüft die Ticketnummer mit dem Branch-Präfix der --config (factory#532), nicht der Repo-Config", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "README.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    git("checkout", "-q", "-b", "feature/zd-533-x");
+    writeFileSync(join(d, "README.md"), "y\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "umsetzung");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const nachweis = (arm: string) =>
+      git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer\nZD-Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 arm=${arm} verdikt=ok`);
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    nachweis("schlank");
+    const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis, GITHUB_HEAD_REF: "" });
+    assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
+    nachweis("vollablauf");
+    const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis, GITHUB_HEAD_REF: "" });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /passt nicht zu Ticket 533/);
+  });
+
   test("Config ohne Label- oder Agentenschlüssel: Exit ≠ 0 mit Schlüssel und Fix:", () => {
     const d = mkdir();
     for (const [gruppe, schluessel] of [["labels", "forum"], ["agenten", "planer"]] as const) {
