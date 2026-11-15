@@ -130,6 +130,11 @@ export function abnahmeVon(body, abnahme, zeilen) {
   return null;
 }
 
+/** Die Brillen-Zahlen-Felder einer Review-Zeile; `null`, wo das Feld (oder der Nachweis) fehlt. Pure. */
+function brillenFelder(review) {
+  return { blocker: review?.blocker ?? null, sollte: review?.sollte ?? null, hinweis: review?.hinweis ?? null, teilbrillen: review?.teilbrillen ?? null };
+}
+
 /** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt, `konfigZeilen` sind die Commit-Zeilen der Projekt-Config (`commitZeilen`). Pure. Liefert Zeilen und Kennzahlen. */
 export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen, offenMitFix = 0 }) {
   const eintraege = prs.map((pr) => {
@@ -143,10 +148,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       ticket,
       gemergt: pr.mergedAt,
       runden: review && Number.isInteger(review.runden) ? review.runden : null,
-      blocker: review?.blocker ?? null,
-      sollte: review?.sollte ?? null,
-      hinweis: review?.hinweis ?? null,
-      teilbrillen: review?.teilbrillen ?? null,
+      ...brillenFelder(review),
       abnahme: abnahmeVon(body, abnahme, konfigZeilen),
       reviewOverride: aktiverOverride(body, konfigZeilen.reviewOverride) !== null,
       ciFix: ciFixRunden(ci[pr.number] ?? [], pr.createdAt, pr.mergedAt),
