@@ -169,6 +169,12 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(ortSicher("- [🔶 sollte] Datei `c.ts` falsch – `a.ts:1` – Beleg").ort).toBe("a.ts:1");
     expect(ortSicher("- [🔶 sollte] x —`a.ts:1`").ort).toBe("a.ts:1");
   });
+  test("Trenner-Regel: Halbgeviertstrich einzeln, kein Leerraum nach dem Trenner, Anker am Ende, einfacher Bindestrich ist kein Trenner", () => {
+    expect(ortSicher("- [🔶 sollte] x – `README` – siehe `b.ts:2`").ort).toBe("README");
+    expect(ortSicher("- [🔶 sollte] x —`README` siehe `b.ts:2`").ort).toBe("README");
+    expect(ortSicher("- [🔶 sollte] x — y `foo` z — `README`").ort).toBe("README");
+    expect(ortSicher("- [🔶 sollte] Flag - `--force` fehlt — `README`").ort).toBe("README");
+  });
   test("Pfad-Form ohne Trenner: jede Alternative einzeln (/, ., :zeile), der letzte Treffer gilt", () => {
     for (const ort of ["docs/README", "README.md", "Makefile:3"]) expect(ortSicher(`- [🔶 sollte] Code \`x\` bei \`${ort}\``).ort).toBe(ort);
     expect(ortSicher("- [🔶 sollte] `a.ts:1` und `b.ts:2` kaputt").ort).toBe("b.ts:2");
