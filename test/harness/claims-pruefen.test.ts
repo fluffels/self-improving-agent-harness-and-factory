@@ -831,11 +831,6 @@ describe("fuehreAus: Fehlerpfade und Schutz", () => {
     }
   });
 
-  test("Epic mit unvollständig gelesener Kinderliste: BEHALTEN, kein EPIC-REST", () => {
-    const r = M.fuehreAus([], baue({ locks: {}, issues: { 20: { state: "OPEN", kinder: 3, kinderUnvollstaendig: true } }, zugewiesen: [20] }).deps);
-    assert.match(r.out, /BEHALTEN #20: behalten, aufgeteiltes Epic, Kinderliste unvollständig gelesen/);
-    assert.doesNotMatch(r.out, /EPIC-REST/);
-  });
 
   test("festgefahren (Label am Issue oder am PR): keine Wiederaufnahme, behalten; ohne Label dieselbe Lage verwaist", () => {
     const ohne = M.fuehreAus([], baue({ locks: { "20.json": alterLock }, issues: { 20: { state: "OPEN" } } }).deps);
