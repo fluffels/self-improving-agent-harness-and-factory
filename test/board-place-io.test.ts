@@ -27,6 +27,7 @@ function fake(listen: { produkt: Item[]; factory: Item[] }, extra: Record<string
     ladeLabels: (nr: number, repo: string) => (proto.push({ was: "ladeLabels", args: [nr, repo] }), []),
     itemsUeberIssues: (board: Board, nummern: number[], opts: object, repo: string) => (proto.push({ was: "itemsUeberIssues", args: [board.projectId, nummern, opts, repo] }), nummern.map(() => null)),
     addToBoardTodo: () => "NEU",
+    ghJson: (a: string[]) => (proto.push({ was: "ghJson", args: [a] }), null),
     setPosition: (board: Board, id: string, after: string | null) => void proto.push({ was: "setPosition", args: [board.projectId, id, after] }),
     entferneVomBoard: (board: Board, id: string) => void proto.push({ was: "entferne", args: [board.projectId, id] }),
     schlafe: () => (proto.push({ was: "schlafe", args: [] }), Promise.resolve()),
@@ -56,6 +57,11 @@ describe("einsortieren mit Fake-IO", () => {
     await P.einsortieren({ anchor: 1, numbers: [5], dry: true, repo: FREMD.repo }, FREMD, io).catch(() => undefined);
     const q = proto.find((p) => p.was === "itemsUeberIssues");
     expect(q?.args.slice(1)).toEqual([[5], {}, FREMD.repo]);
+  });
+  test("ein Item ohne Board-Eintrag: das Issue wird über die injizierte Naht ghJson geladen (kein echtes gh, factory#560)", async () => {
+    const { io, proto } = fake({ produkt: [item(1)], factory: [] });
+    await P.einsortieren({ anchor: 1, numbers: [5], dry: true, repo: FREMD.repo }, FREMD, io).catch(() => undefined);
+    expect(proto.filter((p) => p.was === "ghJson").map((p) => p.args[0])).toEqual([["api", `repos/${FREMD.repo}/issues/5`]]);
   });
   test("ein Ziel-Repo, das das Board nicht führt, bricht vor jedem Schreiben ab", async () => {
     const { io, proto } = fake({ produkt: [item(1), item(5)], factory: [] });
