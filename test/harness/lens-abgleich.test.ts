@@ -185,7 +185,8 @@ describe("Schwere der Lens-Funde, keine Filteranweisung (factory#530)", () => {
     for (const d of dateien) assert.deepEqual(filterAnweisungen(lies(d)), [], d);
   });
   test("Red-Green: jedes Muster der geschlossenen Liste löst aus, die eigene Brille nicht", () => {
-    for (const m of FILTER_MUSTER) assert.deepEqual(filterAnweisungen(`Bitte ${m.toUpperCase()} das Wichtige.`), [m]);
+    // Die Muster stehen hier unabhängig abgeschrieben: ein aus FILTER_MUSTER gelöschtes Muster lässt diesen Test rot werden.
+    for (const m of ["melde nur", "nur schwere", "nicht melden", "ignoriere"]) assert.deepEqual(filterAnweisungen(`Bitte ${m.toUpperCase()} das Wichtige.`), [m], m);
     assert.deepEqual(filterAnweisungen("Nur die eigene Brille, jeden Fund melden."), []);
   });
 });

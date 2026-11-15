@@ -267,6 +267,8 @@ describe("bewertePrs und Aggregate", () => {
   });
   test("ohne Nachweis und ohne blocker-Feld bleiben aus der Trefferquote", () => {
     assert.equal(z(53).runden, null);
+    assert.equal(z(53).sollte, null, "ohne Nachweis steht die Schwere als null, nie als leere Liste");
+    assert.equal(z(53).hinweis, null);
     assert.equal(z(52).blocker, null);
     const k = e.kennzahlen;
     assert.equal(k.ohneNachweis, 1);

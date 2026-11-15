@@ -280,11 +280,11 @@ describe("sollte- und hinweis-Pflichtfelder (factory#530, Schwere der Lens-Funde
     assert.match(mit(beide(NULL3, `${NULL3},architektur:0`)).join(), /hinweis nennt die Brille architektur doppelt/);
   });
   test("rot: fehlende Brille des vollen Passes, auch bei runden=2", () => {
-    assert.match(mit(beide("architektur:0,requirement-treue:0", NULL3), 2).join(), /sollte nennt nicht genau die Brillen von lenses.*fehlt test-adaequanz/);
+    assert.match(mit(beide("architektur:0,requirement-treue:0", NULL3), 2).join(), /sollte nennt nicht genau die Brillen von lenses.*fehlt test-adaequanz, zuviel -\./);
     assert.match(mit(beide(NULL3, "architektur:0"), 2).join(), /hinweis nennt nicht genau die Brillen von lenses.*fehlt requirement-treue,test-adaequanz/);
   });
   test("rot: bekannte Brille, die nicht in lenses steht", () => {
-    assert.match(mit(beide(`${NULL3},doku:0`, NULL3)).join(), /sollte nennt nicht genau.*zuviel doku/);
+    assert.match(mit(beide(`${NULL3},doku:0`, NULL3)).join(), /sollte nennt nicht genau.*fehlt -, zuviel doku\./);
   });
   test("runden=1: nur sollte > 0 ist rot, alle 0 ist grün; runden=2 mit sollte > 0 ist grün", () => {
     assert.match(mit(beide("architektur:1,requirement-treue:0,test-adaequanz:0", NULL3), 1).join(), /Runde 1 meldete Blocker/);
