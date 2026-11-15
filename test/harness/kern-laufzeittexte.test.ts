@@ -230,6 +230,11 @@ describe("Verteilte Skripte nennen Ticketnummern in Strings mit Herkunft (factor
     expect(nr('x(); /* a */ const b = "(#1311)";')).toEqual(["#1311"]);
     expect(nr('const a = 1; /* #12 */')).toEqual([]);
     expect(nr('x();/* #12 */')).toEqual([]);
+    expect(nr('f(){/* #12 */}')).toEqual([]);
+    expect(nr('if (a)/* #12 */ x();')).toEqual([]);
+    expect(nr('f(/* #12 */)')).toEqual([]);
+    expect(ohneKommentare('const a = "x\\\nb";')).toBe('const a = "x\\\nb";');
+    expect(ohneKommentare('a \\')).toBe('a \\');
     expect(nr("const u = 'http://x'; const b = \"(#1311)\";")).toEqual(["#1311"]);
     expect(nr('const a = "x\\" // #12";')).toEqual(["#12"]);
     expect(nr('const r = /https?:\\/\\//; const b = "(#12)";')).toEqual(["#12"]);
