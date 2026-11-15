@@ -176,6 +176,44 @@ export function dependabotEintraege(text) {
   }
 }
 
+const AKTION_KOPF = /^( *)- package-ecosystem: *(?:github-actions|"github-actions"|'github-actions') *(?:#.*)?$/;
+
+/** Ob der Eintrag, der in Zeile `i` (Bindestrich bei `einr`) beginnt, schon `exclude-paths` auf Feldhöhe hat. */
+function hatAusschluss(zeilen, i, einr) {
+  for (const z of zeilen.slice(i + 1)) {
+    if (/^ *(#.*)?\r?$/.test(z)) continue;
+    const e = /^ */.exec(z)[0].length;
+    if (e <= einr) return false;
+    if (e === einr + 2 && /^ *exclude-paths:/.test(z)) return true;
+  }
+  return false;
+}
+
+/**
+ * Die Vorlage `text` einer `dependabot.yml` mit `exclude-paths` (Pfade in Quotes, in Feldeinrückung) direkt hinter jedem Kopf `- package-ecosystem: github-actions` (plain oder gequotet), der noch keine `exclude-paths` führt;
+ * Rückgabe `{ text, hinweis }`. Ohne passenden Eintrag oder ohne Pfade bleibt der Text wörtlich (`hinweis: null`). Danach liest `dependabotEintraege` das Ergebnis gegen: ist es unlesbar oder fehlt ein Pfad
+ * in einem github-actions-Eintrag, kommt das Original zurück und ein `hinweis` (nichts Halbes wird geschrieben).
+ */
+export function mitWorkflowAusschluss(text, pfade) {
+  const zeilen = text.split("\n");
+  const eol = zeilen[0]?.endsWith("\r") ? "\r" : "";
+  const neu = [];
+  let geaendert = false;
+  zeilen.forEach((z, i) => {
+    neu.push(z);
+    const m = AKTION_KOPF.exec(z.replace(/\r$/, ""));
+    if (m === null || pfade.length === 0 || hatAusschluss(zeilen, i, m[1].length)) return;
+    const feld = " ".repeat(m[1].length + 2);
+    neu.push(`${feld}exclude-paths:${eol}`, ...pfade.map((p) => `${feld}  - "${p}"${eol}`));
+    geaendert = true;
+  });
+  if (!geaendert) return { text, hinweis: null };
+  const ergebnis = neu.join("\n");
+  const gelesen = dependabotEintraege(ergebnis);
+  const grund = gelesen.fehler !== undefined ? gelesen.fehler : gelesen.eintraege.some((e) => e.oekosystem === "github-actions" && pfade.some((p) => !e.ausschluss.includes(p))) ? "ein github-actions-Eintrag führt nicht alle Pfade" : null;
+  return grund === null ? { text: ergebnis, hinweis: null } : { text, hinweis: `exclude-paths für die Besitz-Workflows ließ sich nicht eintragen (${grund}); die Vorlage bleibt wörtlich, bitte die Pfade von Hand ergänzen (Doctor-Punkt Dependabot-Ausschluss)` };
+}
+
 /**
  * Der Punkt `Dependabot-Ausschluss` (factory#375 L5) als Liste: nur im Bezieher. Ein Dependabot-PR auf einen Besitz-Workflow (etwa `codeql.yml`) scheitert strukturell an `check:factorydrift`:
  * der Bezieher kann ihn weder mergen noch lokal fixen, der Bump kommt per Factory-Update. Darum muss jeder `github-actions`-Eintrag in `.github/dependabot.yml` jeden vorhandenen Besitz-Workflow unter `exclude-paths` führen.

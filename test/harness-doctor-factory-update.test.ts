@@ -13,6 +13,7 @@ interface Lib {
   dependabotEintraege(text: string): { eintraege?: unknown[]; fehler?: string };
   dependabotAusschlussPunkt(a: { rootDir: string; existiert?: (p: string) => boolean; lies?: (p: string) => string | null; bezieher?: (w: string) => boolean }): Ergebnis[];
   mitDependabotAusschluss(dateien: (a: { rootDir: string; config: unknown }) => Ergebnis[], o: { existiert?: (p: string) => boolean; lies?: (p: string) => string | null; bezieher?: (w: string) => boolean }): (a: { rootDir: string; config: unknown; vorAbbruch?: boolean }) => Ergebnis[];
+  mitWorkflowAusschluss(text: string, pfade: string[]): { text: string; hinweis: string | null };
   mitFactoryUpdate(dateien: (a: { rootDir: string; config: unknown }) => Ergebnis[], o: { lesen: Lesen; existiert?: (p: string) => boolean; bezieher?: (w: string) => boolean }): (a: { rootDir: string; config: unknown; vorAbbruch?: boolean }) => Ergebnis[];
 }
 const lib = raw as unknown as Lib;
@@ -305,6 +306,44 @@ describe("dependabotAusschlussPunkt", () => {
     expect(mit?.nichtPruefbar).toBeUndefined();
     expect(mit?.befund).toContain("codeql.yml");
     expect(mit?.befund).not.toContain("zizmor.yml");
+  });
+});
+
+describe("mitWorkflowAusschluss (Vorlage der dependabot.yml, factory#499 L6)", () => {
+  const P = ["a.yml", "b.yml"];
+  const KOPF = "updates:\n  - package-ecosystem: npm\n    directory: /\n";
+  const SOLL = (q = "github-actions") => `  - package-ecosystem: ${q}\n    exclude-paths:\n      - "a.yml"\n      - "b.yml"\n    directory: /\n`;
+  test("fügt die Liste in Feldeinrückung direkt hinter dem Kopf ein, in jeder Quote-Form; das Ergebnis liest der Doctor-Leser", () => {
+    for (const q of ["github-actions", '"github-actions"', "'github-actions'", 'github-actions # k']) {
+      const r = lib.mitWorkflowAusschluss(`${KOPF}  - package-ecosystem: ${q}\n    directory: /\n`, P);
+      expect(r, q).toEqual({ text: `${KOPF}${SOLL(q)}`, hinweis: null });
+      expect(lib.dependabotEintraege(r.text).eintraege, q).toContainEqual({ oekosystem: "github-actions", ausschluss: P });
+    }
+  });
+  test("tiefere Einrückung und CRLF bleiben erhalten", () => {
+    const r = lib.mitWorkflowAusschluss("updates:\r\n    - package-ecosystem: github-actions\r\n      directory: /\r\n", P);
+    expect(r.text).toBe('updates:\r\n    - package-ecosystem: github-actions\r\n      exclude-paths:\r\n        - "a.yml"\r\n        - "b.yml"\r\n      directory: /\r\n');
+    expect(r.hinweis).toBeNull();
+  });
+  test("unverändert: ohne github-actions, ohne Pfade, mit vorhandenem exclude-paths (auch hinter Kommentar und Leerzeile)", () => {
+    const npm = `${KOPF}`;
+    expect(lib.mitWorkflowAusschluss(npm, P)).toEqual({ text: npm, hinweis: null });
+    const akt = "updates:\n  - package-ecosystem: github-actions\n    directory: /\n";
+    expect(lib.mitWorkflowAusschluss(akt, [])).toEqual({ text: akt, hinweis: null });
+    const eigen = "updates:\n  - package-ecosystem: github-actions\n    # k\n\n    exclude-paths:\n      - a.yml\n      - b.yml\n";
+    expect(lib.mitWorkflowAusschluss(eigen, P)).toEqual({ text: eigen, hinweis: null });
+    const danach = "updates:\n  - package-ecosystem: github-actions\n  - package-ecosystem: npm\n    exclude-paths:\n      - x\n";
+    expect(lib.mitWorkflowAusschluss(danach, P).text).toContain('      - "a.yml"');
+  });
+  test("Gegenprüfung: unlesbares Ergebnis oder ein Eintrag ohne alle Pfade: Original und Hinweis", () => {
+    const kaputt = "updates:\n  - package-ecosystem: github-actions\n  - &a\n";
+    const k = lib.mitWorkflowAusschluss(kaputt, P);
+    expect(k.text).toBe(kaputt);
+    expect(k.hinweis).toContain("ist kein `schlüssel: wert`");
+    const halb = "updates:\n  - package-ecosystem: github-actions\n    directory: /\n  - package-ecosystem: github-actions\n    exclude-paths:\n      - a.yml\n";
+    const h = lib.mitWorkflowAusschluss(halb, P);
+    expect(h.text).toBe(halb);
+    expect(h.hinweis).toContain("nicht alle Pfade");
   });
 });
 

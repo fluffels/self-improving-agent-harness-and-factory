@@ -19,7 +19,8 @@ import { collectMarkdown, istGelesenesMarkdown } from "./check-basis.mjs";
 import { befundZeile, INDEX_PFAD, istReinerStub, planeAnkerStubs, planeFactoryLinks, stubBefunde } from "./factory-links-lib.mjs";
 import { factoryRepoAus } from "./factory-seite.mjs";
 import { ausnahmenAus, factoryLinkAusnahmenAus, ladeProjektConfig, PROJEKT_CONFIG, PROJEKT_ROLLEN, ROLLEN_PFADE } from "./projekt-config-lib.mjs";
-import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, markerEnde, markerStart, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDatei, istVerteilteGanzdatei, MANIFEST_PFAD, manifestAusText, istWorkflowEinheit, markerEnde, markerStart, normalisiereEol, pruefeManifest, textHash, wirdVerteilt } from "./besitz-lib.mjs";
+import { mitWorkflowAusschluss } from "./harness-doctor-factory-update.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
@@ -71,9 +72,19 @@ function liesErgaenzungen(verteilt, quelleLies, zielLies) {
   return { erg, fehler };
 }
 
+const DEPENDABOT = ".github/dependabot.yml";
+
+/** Die Vorlage `.github/dependabot.yml` bekommt `exclude-paths` der verteilten Workflows (`ausschluss`: `{ pfade, meldungen }`), damit der Doctor-Punkt Dependabot-Ausschluss im Erstbezug nicht sofort eine Lücke meldet (factory#499 L6). */
+function mitAusschluss(text, ausschluss) {
+  if (ausschluss === null) return text;
+  const e = mitWorkflowAusschluss(text, [...new Set(ausschluss.pfade)]);
+  if (e.hinweis !== null) ausschluss.meldungen.push(`${DEPENDABOT}: ${e.hinweis}`);
+  return e.text;
+}
+
 /** Eine neu anzulegende Vorlage (wird nie überschrieben): Text mit den Projektwerten des Ziels. */
-function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar) {
-  return { text: rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
+function vorlagenDatei(pfad, quelleLies, zielConfig, quelleAusfuehrbar, ausschluss = null) {
+  return { text: mitAusschluss(rendereProjektwerte(normalisiereEol(quelleLies(pfad)), zielConfig, pfad), ausschluss), neu: true, vorlage: true, ausfuehrbar: quelleAusfuehrbar(pfad) };
 }
 
 /** Hinweise auf Dateien im Ziel am Pfad einer Moduleinheit, deren Modul nicht gewählt ist (Modulkopie, factory#244; geschrieben wird nichts); `begruendet` sind die Pfade aus `modulKopien`. */
@@ -199,7 +210,7 @@ export function planeSync({
     if (zielLies(e.pfad) !== null) {
       res.unveraendert++;
       res.unveraendertePfade.add(e.pfad);
-    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar));
+    } else res.dateien.set(e.pfad, vorlagenDatei(e.pfad, quelleLies, zielConfig, quelleAusfuehrbar, e.pfad === DEPENDABOT ? { pfade: alle.filter(istWorkflowEinheit).map((w) => w.pfad), meldungen: res.meldungen } : null));
   }
 
   const einheiten = {};
