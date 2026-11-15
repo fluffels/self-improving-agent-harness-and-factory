@@ -560,7 +560,7 @@ describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => 
   });
 
   test("Negativfall: die Zeile `Guard-Liste: keine Anker im Diff.` der Anker-Liste und harmlose Nachbarn lösen nicht aus", () => {
-    const nachbarn = ["Guard-Liste: keine Anker im Diff.", "die Guard-Liste (anker-liste.mjs)", "guardListe({ diffText })", "ein Selbstcheck im Messbericht", "SELBSTCHECKS", "Probe-Erstbezug"];
+    const nachbarn = ["Guard-Liste: keine Anker im Diff.", "die Guard-Liste (anker-liste.mjs)", "guardListe({ diffText })", "ein Selbstcheck im Messbericht", "SELBSTCHECKS", "KEIN_SELBSTCHECK", "XSELBSTCHECK", "Probe-Erstbezug"];
     assert.deepEqual(namen(nachbarn.join("\n")), []);
   });
 
@@ -570,6 +570,16 @@ describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => 
     assert.equal(wort("der Selbstcheck des Umsetzers", "AGENTS.md").length, 1);
     assert.equal(wort("der Selbstcheck des Umsetzers", "docs/harness-glossar.md").length, 1);
     assert.deepEqual(wort("der Selbstcheck des Umsetzers", "docs/x.md"), []);
+  });
+
+  test("das bloße Wort wird auch klein oder gemischt geschrieben gefunden (Flag i)", () => {
+    assert.equal(wort("der selbstcheck", ".claude/agents/x.md").length, 1);
+    assert.equal(wort("SelbstCheck", ".claude/agents/x.md").length, 1);
+  });
+
+  test.each(["docs/codex/AGENTS.md", "test/fixtures/.claude/agents/x.md", "test/fixtures/.agents/skills/x.md", "AGENTS.md.orig", "docs/harness-glossar.md.alt", "AGENTSxmd", "docs/x/harness-glossar.md"])("Negativfall: %s ist kein aktiver Anweisungstext", (pfad) => {
+    assert.equal(AKTIVER_TEXT.test(pfad), false);
+    assert.deepEqual(wort("der Selbstcheck des Umsetzers", pfad), []);
   });
 
   test("Ausnahmen: Schnappschuss-Blöcke dürfen die Namen tragen, die Regeln außerhalb nicht", () => {
