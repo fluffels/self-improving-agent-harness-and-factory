@@ -172,6 +172,9 @@ describe("Prognose aus Pfaden", () => {
   test("Verzeichnis ohne und mit Schrägstrich trifft das Verzeichnismuster", () => {
     expect(lib.risikostufeAusPfaden([".github/workflows"], lader()).stufe).toBe(2);
     expect(lib.risikostufeAusPfaden([".github/workflows/"], lader()).stufe).toBe(2);
+    // nur die Basis kennt dieses Verzeichnis (weder Leitplanken noch Risiko-Standardliste)
+    expect(lib.risikostufeAusPfaden([".github/actions"], lader()).stufe).toBe(2);
+    expect(lib.risikostufeAusPfaden([".husky/"], lader()).stufe).toBe(2);
   });
   test("Doku-Pfad mit Teilwort im Namen bleibt 0", () => {
     expect(lib.risikostufeAusPfaden(["docs/auth.md"], lader()).stufe).toBe(0);
