@@ -166,7 +166,7 @@ describe("Schwere der Lens-Funde, keine Filteranweisung (factory#530)", () => {
     const block = /```\n([\s\S]*?)```/.exec(abschnitt)?.[1] ?? "";
     return [...block.matchAll(/^- \[([^\]]+)\]/gm)].map((m) => m[1]);
   };
-  /** Geschlossene Liste bekannter Filtermuster (Kleinschreibung); ein weiteres denkbares Muster ist Bekannte Grenze. */
+  /** Geschlossene Liste bekannter Filtermuster (Kleinschreibung); ein weiteres denkbares Muster ist Bekannte Grenze, ebenso ein Fehlalarm durch ein Teilwort (etwa „ignoriere generierte Dateien“ als legitime Scope-Anweisung, dann das Muster enger fassen). */
   const FILTER_MUSTER = ["melde nur", "nur schwere", "nicht melden", "ignoriere"];
   const filterAnweisungen = (text: string): string[] => FILTER_MUSTER.filter((m) => text.toLowerCase().includes(m));
 

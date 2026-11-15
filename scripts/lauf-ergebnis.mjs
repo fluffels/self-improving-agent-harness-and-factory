@@ -184,8 +184,8 @@ export function kennzahlenAus(eintraege, offenMitFix = 0) {
     prs: eintraege.length,
     ohneNachweis: eintraege.length - mitNachweis.length,
     ohneBlockerFeld: mitNachweis.filter((z) => z.blocker === null).length,
-    // Echte Zählung (#1609): PRs mit `blocker=`-Feld, in denen eine Brille in Runde 1 mindestens einen Blocker hatte; der Proxy (Runden ≥ 2) bleibt zum Vergleich.
-    runde1MitBlocker: mitNachweis.filter((z) => z.blocker?.some((b) => b.n > 0)).length,
+    // Echte Zählung (#1609): PRs mit `blocker=`-Feld, in denen eine Brille in Runde 1 mindestens einen Blocker hatte (seit factory#530 auch einen `sollte`-Fund: beide lösen die Fix-Runde aus); der Proxy (Runden ≥ 2) bleibt zum Vergleich.
+    runde1MitBlocker: mitNachweis.filter((z) => z.blocker !== null && (z.blocker.some((b) => b.n > 0) || z.sollte?.some((b) => b.n > 0))).length,
     mitBlockerFeld: mitNachweis.filter((z) => z.blocker !== null).length,
     runde1MitBlockerProxy: mitNachweis.filter((z) => z.runden >= 2).length,
     mitNachweis: mitNachweis.length,

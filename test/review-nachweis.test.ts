@@ -311,7 +311,7 @@ describe("sollte- und hinweis-Pflichtfelder (factory#530, Schwere der Lens-Funde
     const f = bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true });
     assert.match(f.join(), /sollte=architektur:-1 ist keine ganze Zahl/);
   });
-  test("CLI-Lauf bei Rot gibt die Vorlage mit sollte= und hinweis= aus", () => {
+  test("Rückgabe bei Rot nennt sollte= fehlt, die Vorlage-Funktion trägt beide Felder (echter CLI-Lauf: siehe Block mit --config)", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) }), env: { FACTORY_DIFF_BASE: "base" } }) as { ok: boolean; fehler: string[] };
     assert.equal(r.ok, false);
     assert.match(r.fehler.join("\n"), /sollte= fehlt/);
@@ -1045,6 +1045,29 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
     assert.match(gruen.stdout, /Größenstufe: (S|voll)/);
+  });
+
+  test("CLI-Lauf bei Rot: Exit 1, Meldung nennt das fehlende Pflichtfeld, die Vorlage trägt sollte= und hinweis= (factory#530)", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "a.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(d, "a.ts"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "code");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
+    const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /sollte= fehlt \(Pflicht, factory#530\)/);
+    assert.match(rot.stderr, /hinweis= fehlt \(Pflicht, factory#530\)/);
+    assert.match(rot.stderr, /Vorlage:/);
+    assert.match(rot.stderr, /sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>/);
   });
 
   test("CLI-Ausgabe: Hinweis-Zeilen zu fehlendem blocker= und teilbrillen=, bei vollständiger Zeile keine (factory#402 L21)", () => {
