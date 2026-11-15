@@ -54,6 +54,37 @@ describe("parseBerichte: kaputte Fundzeilen (factory#560 L7)", () => {
     const text = "- [x] vorher — `a.ts:1` — b\n" + B("Doku", "- Hinweis ohne Trenner", "- Punkt — ohne Backtick", "", "Verdikt: ok");
     expect(L.parseBerichte(text)[0].funde).toEqual([]);
   });
+  test.each([
+    "- [ ] Defekt: x — `a.ts:1` — Beleg",
+    "- [x] erledigt — `a.ts:1` — Beleg",
+    "- [ablauf.md](x.md) nennt den Arm nicht — `a.md:1` — b",
+    "[Hinweis zur FAQ](faq.md) steht im Text",
+    "- Prüfung — `a.ts`",
+    "- A — B — C",
+    "Prosa mit - x — `o` — y mitten im Text",
+  ])("kein Wurf bei gewöhnlicher Zeile: %s", (zeile) => {
+    expect(() => L.parseBerichte(B("Doku", zeile))).not.toThrow();
+  });
+  test.each([
+    "-[Fehler] x — `a.ts:1` — b",
+    "  - [Fehler] x — `a.ts:1` — b",
+    "[🔶 sollte] x — `a.ts:1` — b",
+    "[⚠️ Hinweis] x — `a.ts:1` — b",
+    "- Abschnitt veraltet — `docs/x.md:3` — Beleg",
+  ])("Wurf bei kaputter Fundzeile: %s", (zeile) => {
+    expect(() => L.parseBerichte(B("Doku", zeile))).toThrow(/Fundzeile/);
+  });
+  test("Scope-Vorschläge und Protokolle nach einer Überschrift oder „Außerhalb“ werden nicht geprüft", () => {
+    const vorschlag = "- Harness → Zeile mit Klasse Defekt — `x.mjs:3` — Beleg";
+    expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", "Außerhalb des Scopes:", vorschlag))).not.toThrow();
+    expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", "### Probenprotokoll", vorschlag))).not.toThrow();
+    expect(() => L.parseBerichte(B("Doku", BLOCK("a.md:1"), vorschlag))).toThrow(/Fundzeile/);
+    expect(L.parseBerichte(B("Doku", BLOCK("a.md:1"), "", "Außerhalb des Scopes:", vorschlag))[0].funde).toHaveLength(1);
+  });
+  test("der Fund-Bereich beginnt mit jedem neuen Lens-Block wieder", () => {
+    const text = B("Doku", "Außerhalb des Scopes:") + B("Kombiniert", "- Abschnitt veraltet — `docs/x.md:3` — Beleg");
+    expect(() => L.parseBerichte(text)).toThrow(/Brille kombiniert/);
+  });
 });
 
 describe("parseBerichte", () => {

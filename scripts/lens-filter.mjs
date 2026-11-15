@@ -45,21 +45,27 @@ function parseFund(zeile) {
 }
 
 /**
- * Kaputte Fundzeile innerhalb eines Lens-Blocks (bekannte Muster: a, b, c; weitere Formen sind bewusste Grenze): (a) \`- [Marke] …\` mit unbekannter Marke,
- * (b) \`[Schwere] …\` ohne führendes \`- \`, (c) Drei-Teil-Aufzählung \`- Befund — \`ort\` — Beleg\` ohne Marke. Nur wenn FUND_RE die Zeile nicht erkennt. Pur.
+ * Kaputte Fundzeile innerhalb des Fund-Bereichs eines Lens-Blocks (bekannte Muster: a, b, c; weitere Formen sind bewusste Grenze):
+ * (a) "- [Marke] … — `ort`" mit unbekannter Marke (nicht "[ ]", "[x]" oder ein Markdown-Link), (b) "[Schwere] …" ohne führendes "- " (kein Link),
+ * (c) Drei-Teil-Aufzählung "- Befund — `ort` — Beleg" ohne Marke. Nur wenn FUND_RE die Zeile nicht erkennt. Pur.
+ * Bewusste Grenze: der Fund-Bereich endet an einer Überschrift oder einer Zeile "Außerhalb …" (Scope-Vorschläge, Protokolle); dort wird nichts geprüft.
  */
 export function istKaputteFundzeile(zeile) {
   if (FUND_RE.test(zeile)) return false;
-  const a = /^\s*-\s*\[/;
-  const b = /^\s*\[[^\]]*(blockierend|sollte|hinweis)/i;
-  const c = /^\s*-\s+.+\s[—–]\s*\x60[^\x60]+\x60\s*[—–]/;
+  const a = /^\s*-\s*\[(?!\s*[xX]?\s*\]|[^\]]*\]\()[^\]]+\][^—–]*[—–]\s*\x60/;
+  const b = /^\s*\[[^\]]*(blockierend|sollte|hinweis)[^\]]*\](?!\()/i;
+  const c = /^\s*-\s+(?!\[).+\s[—–]\s*\x60[^\x60]+\x60\s*[—–]/;
   return a.test(zeile) || b.test(zeile) || c.test(zeile);
 }
+
+/** Zeile, die den Fund-Bereich eines Lens-Blocks beendet: eine Überschrift (ab "##") oder ein Abschnitt "Außerhalb …". */
+const beendetFundBereich = (zeile) => /^\s*#{2,}\s/.test(zeile) || /^\s*(\*\*)?\s*Außerhalb\b/i.test(zeile);
 
 /** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille und bei kaputter Fundzeile (`istKaputteFundzeile`). Pur. */
 export function parseBerichte(text) {
   const lenses = [];
   let aktuell = null;
+  let fundBereich = false;
   for (const zeile of String(text).replace(/\r/g, "").split("\n")) {
     const kopf = /^##\s*Lens:\s*(.+?)\s*$/i.exec(zeile);
     if (kopf) {
@@ -68,9 +74,11 @@ export function parseBerichte(text) {
       if (lenses.some((l) => l.lens === name)) throw new FilterFehler(`Brille ${name} kommt doppelt vor`);
       aktuell = { lens: name, funde: [] };
       lenses.push(aktuell);
+      fundBereich = true;
       continue;
     }
-    if (aktuell && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
+    if (beendetFundBereich(zeile)) fundBereich = false;
+    if (aktuell && fundBereich && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }
