@@ -18,7 +18,7 @@ import config from "../fixtures/projekt-probe.json";
 
 type Punkt = { id: string; nachweis: number; ohneExport: boolean };
 type Ergebnis = { nachweise: Record<string, string>; maengel: string[]; autonom: boolean; version: string | null };
-const a = auswRaw as unknown as { auswerten: (x: unknown) => Ergebnis; auswertungExit: (e: Ergebnis) => number; nachweiseDerDiagnose: (m: string) => string[]; berichtSchemaMaengel: (b: unknown, e: unknown, p: Punkt[]) => string[]; erwartungMaengel: (b: unknown, e: unknown) => string[] };
+const a = auswRaw as unknown as { auswerten: (x: unknown) => Ergebnis; auswertungExit: (e: Ergebnis) => number; nachweiseDerDiagnose: (m: string) => string[]; berichtSchemaMaengel: (b: unknown, e: unknown, p: Punkt[]) => string[]; erwartungMaengel: (b: unknown, e: unknown) => string[]; exporterVersion: (e: unknown) => { wert: string | null; grund: string | null } };
 const NACHWEIS_NUMMERN = (freigabenRaw as unknown as { NACHWEIS_NUMMERN: string[] }).NACHWEIS_NUMMERN;
 const lib = libRaw as unknown as { checklistenPunkte: (c: unknown) => Punkt[] };
 const belegeLib = belegeRaw as unknown as { bewerteBelege: (b: unknown, c: unknown) => string[] };
@@ -27,7 +27,9 @@ const ROLLEN_KEY = "agent_source.subagent.thread_spawn.agent_role";
 const rollen = (rollenRaw as unknown as { rollenFuer: (c: unknown) => { name: string }[] }).rollenFuer(config).map((r) => r.name);
 type Obs = { id: string; type: string; sessionId: string; tags: string[]; metadata: Record<string, unknown>; usageDetails: unknown };
 const gen = (id: string, parent: string, rolle?: string): Obs => ({ id: `gen-${id}`, type: "GENERATION", sessionId: "s1", tags: ["project:qx-demo"], metadata: { agent_role: parent ? "subagent" : "main", agent_id: id, parent_thread_id: parent, ...(rolle ? { [ROLLEN_KEY]: rolle } : {}) }, usageDetails: { input: 1, output: 2 } });
-const export_ = () => ({ version: "9.9.9", sessionId: "s1", rollen: [...rollen], tools: ["playwright", "langfuse"], observations: [gen("main", ""), ...rollen.map((r) => gen(r, "main", r)), { ...gen("tool", ""), id: "tool-1", type: "TOOL", metadata: { agent_id: "main" } }] as Obs[] });
+const export_ = () => ({ version: "9.9.9", sessionId: "s1", rollen: [...rollen], tools: ["playwright", "langfuse"], observations: [gen("main", ""), ...rollen.map((r) => gen(r, "main", r)), { ...gen("tool", ""), id: "tool-1", type: "TOOL", metadata: { agent_id: "main" } }].map((o): Obs => (o.type === "GENERATION" ? { ...o, metadata: { ...o.metadata, cli_version: "9.9.9" } } : o)) });
+/** Setzt metadata.cli_version aller Observations der Session s1 (factory#479 L5: der Exporter belegt die Version, nicht das Top-Feld version). */
+const mitExporterVersion = (e: ReturnType<typeof export_>, v: string | undefined) => ({ ...e, observations: e.observations.map((o) => (o.sessionId === "s1" ? { ...o, metadata: { ...o.metadata, cli_version: v } } : o)) });
 const punkte = lib.checklistenPunkte(config);
 const STARTWEG = "codex --cd \"/p\" --no-daemon -c check_for_update_on_startup=false";
 const bericht = () => ({
@@ -139,10 +141,47 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
   });
 });
 
+describe("Exporter-Version (factory#479 L5): metadata.cli_version der Observations der Session", () => {
+  const alleOffen = (r: Ergebnis) => expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
+  test("(a) Exporter nennt 9.9.8, Bericht und Erwartung 9.9.9: alle offen, Meldung nennt den Exporter-Wert (das Top-Feld version des Exports bleibt nur Schema-Pflicht, es belegt die Version nicht)", () => {
+    const r = lauf(bericht(), mitExporterVersion(export_(), "9.9.8"));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toMatch(/CLI-Version weicht ab.*im Export 9\.9\.8/);
+    expect(r.maengel.join("\n")).not.toContain("(null)"); // ohne Grund keine Klammer
+  });
+  test("(b) keine Observation der Session trägt cli_version: Mangel mit Grund, alle offen", () => {
+    const r = lauf(bericht(), mitExporterVersion(export_(), undefined));
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toContain("im Export ? (keine Observation der Session trägt metadata.cli_version)");
+  });
+  test("(c) zwei verschiedene Werte in der Session: Mangel mit beiden Werten, alle offen", () => {
+    const e = export_();
+    const gemischt = { ...e, observations: e.observations.map((o, i) => (i === 0 ? { ...o, metadata: { ...o.metadata, cli_version: "9.9.8" } } : o)) };
+    const r = lauf(bericht(), gemischt);
+    alleOffen(r);
+    expect(r.maengel.join("\n")).toMatch(/uneinheitliche metadata\.cli_version: 9\.9\.\d, 9\.9\.\d/);
+  });
+  test("(d) Observation einer fremden Session mit abweichendem Wert wird ignoriert", () => {
+    const e = export_();
+    const mitFremder = { ...e, observations: [...e.observations, { ...gen("fremd", ""), id: "gen-fremd", sessionId: "s2", metadata: { cli_version: "0.0.1" } }] };
+    expect(a.exporterVersion(mitFremder)).toEqual({ wert: "9.9.9", grund: null });
+    expect(offen(lauf(bericht(), mitFremder))).toEqual([]);
+  });
+  test("(e) Positivfall und Randfälle der Hilfsfunktion", () => {
+    expect(a.exporterVersion(export_())).toEqual({ wert: "9.9.9", grund: null });
+    expect(a.exporterVersion(null).wert).toBeNull();
+    expect(a.exporterVersion({ observations: [null] })).toEqual({ wert: null, grund: "keine Observation der Session trägt metadata.cli_version" }); // kein sessionId: null-Eintrag darf nicht werfen
+    expect(() => lauf(bericht(), { observations: [null] })).not.toThrow();
+    expect(a.exporterVersion({ sessionId: "s1", observations: "x" }).wert).toBeNull();
+    expect(a.exporterVersion({ sessionId: "s1", observations: [null, { sessionId: "s1" }, { sessionId: "s1", metadata: { cli_version: "1.2.3" } }] })).toEqual({ wert: "1.2.3", grund: null });
+    expect(offen(lauf(bericht(), export_()))).toEqual([]);
+  });
+});
+
 describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
   const alleOffen = (r: Ergebnis) => expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
   test("Session lief auf anderer Version als vor dem Start (Autoupdate): alle offen, Meldung nennt erwartete und beobachtete Version", () => {
-    const e = export_(); e.version = "9.9.10";
+    const e = mitExporterVersion(export_(), "9.9.10");
     const r = lauf(mit((b) => { b.version = "9.9.10"; }), e);
     alleOffen(r);
     expect(r.maengel.join("\n")).toMatch(/CLI-Version weicht ab.*9\.9\.9.*9\.9\.10/);
@@ -175,7 +214,7 @@ describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
     alleOffen(lauf(mit((b) => { b.erwartet = erwartet; })));
   });
   test.each(["v9.9.9", "9.9.9-beta", "9.9", "9.9.9.9", "x.y.z", "9-9-9", "9-9.9", "9.9-9"])("erwartet.version %s ist keine Version x.y.z: eigene Meldung, alle offen", (v) => {
-    const r = lauf(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; b.version = v; b.versionVorStart = v; }), { ...export_(), version: v });
+    const r = lauf(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; b.version = v; b.versionVorStart = v; }), mitExporterVersion(export_(), v));
     alleOffen(r);
     expect(r.maengel.join("\n")).toContain("erwartet.version fehlt oder ist keine Version");
     expect(a.erwartungMaengel(mit((b) => { b.erwartet = { version: v, startweg: STARTWEG }; }), export_())).toHaveLength(1); // frühe Rückgabe: keine Folgemeldungen
@@ -186,7 +225,7 @@ describe("Erwartung (factory#456): CLI-Version und Startweg", () => {
     expect(r.maengel.join("\n")).toContain("erwartet.startweg fehlt");
   });
   test("mehrstellige Version 10.20.30 ist gültig; fehlende Angaben stehen als ? in der Meldung", () => {
-    const e = { ...export_(), version: "10.20.30" };
+    const e = mitExporterVersion(export_(), "10.20.30");
     expect(a.erwartungMaengel(mit((b) => { b.erwartet = { version: "10.20.30", startweg: STARTWEG }; b.version = "10.20.30"; b.versionVorStart = "10.20.30"; }), e)).toEqual([]);
     const m = a.erwartungMaengel(mit((b) => { b.versionVorStart = ""; }), {}).join("\n");
     expect(m).toContain("vor dem Start ?");

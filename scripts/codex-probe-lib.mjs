@@ -213,7 +213,7 @@ const LADEPROBE = [
 ];
 const SCHLUSS = [
   "Abschluss:",
-  "- Langfuse-Export als JSON über die Weboberfläche oder den MCP-Server holen (kein Skript mit Secret-Key).",
+  "- Langfuse-Export als JSON über die Weboberfläche oder den MCP-Server holen, die Observations mit `metadata` (`cli_version`); kein Skript mit Secret-Key.",
   `- \`${PROBE_ORDNER}/bericht-vorlage.json\` füllen (Ergebnis je Punkt, Beobachtung, Observation-IDs).`,
   "- `node scripts/codex-probe.mjs auswerten --belege <export.json> --bericht <bericht.json>` ausführen, danach `node scripts/codex-probe.mjs aufraeumen`.",
 ];

@@ -40,6 +40,14 @@ export function berichtSchemaMaengel(bericht, belege, punkte) {
   return m;
 }
 const ohneWeissraum = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
+/** Die vom Exporter gesetzte CLI-Version (factory#479 L5): der einheitliche Wert von `metadata.cli_version` der Observations der Session des Exports; sonst `wert: null` mit Grund (keine Observation trägt ihn, uneinheitliche Werte). Observationen fremder Sessions zählen nicht. */
+export function exporterVersion(belege) {
+  const obs = Array.isArray(belege?.observations) ? belege.observations : [];
+  const werte = [...new Set(obs.filter((o) => istObjekt(o) && o.sessionId === belege.sessionId).map((o) => o.metadata?.cli_version).filter(text))];
+  if (werte.length === 0) return { wert: null, grund: "keine Observation der Session trägt metadata.cli_version" };
+  if (werte.length > 1) return { wert: null, grund: `uneinheitliche metadata.cli_version: ${werte.join(", ")}` };
+  return { wert: werte[0], grund: null };
+}
 /** Mängel der Erwartung (factory#456): `erwartet.version`/`erwartet.startweg` gegen die berichtete Version vor dem Start, in der Session (`/status`), im Export und den genannten Startweg. Ein Nicht-Objekt meldet das Schema. */
 export function erwartungMaengel(bericht, belege) {
   if (!istObjekt(bericht)) return [];
@@ -48,8 +56,9 @@ export function erwartungMaengel(bericht, belege) {
   if (!text(e.version) || !CLI_VERSION_MUSTER.test(e.version)) m.push("Bericht: erwartet.version fehlt oder ist keine Version x.y.z");
   if (ohneWeissraum(e.startweg) === "") m.push("Bericht: erwartet.startweg fehlt (Vorlage von vorbereiten unverändert lassen)");
   if (m.length > 0) return m;
-  const beobachtet = { vorStart: bericht.versionVorStart, session: bericht.version, export: belege?.version };
-  if (Object.values(beobachtet).some((v) => v !== e.version)) m.push(`Bericht: CLI-Version weicht ab: erwartet ${e.version}, vor dem Start ${beobachtet.vorStart || "?"}, in der Session ${beobachtet.session || "?"}, im Export ${beobachtet.export ?? "?"}`);
+  const ex = exporterVersion(belege);
+  const beobachtet = { vorStart: bericht.versionVorStart, session: bericht.version, export: ex.wert };
+  if (Object.values(beobachtet).some((v) => v !== e.version)) m.push(`Bericht: CLI-Version weicht ab: erwartet ${e.version}, vor dem Start ${beobachtet.vorStart || "?"}, in der Session ${beobachtet.session || "?"}, im Export ${ex.wert ?? "?"}${ex.grund ? ` (${ex.grund})` : ""}`);
   if (ohneWeissraum(bericht.startweg) === "") m.push("Bericht: Startweg nicht genannt (startweg leer)");
   else if (ohneWeissraum(bericht.startweg) !== ohneWeissraum(e.startweg)) m.push("Bericht: Startweg weicht vom erzeugten ab (erwartet der von vorbereiten ausgegebene Startbefehl)");
   return m;

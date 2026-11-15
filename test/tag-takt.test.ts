@@ -233,7 +233,8 @@ describe("CI-Zustand und Body", () => {
     expect(block).toEqual(["git fetch origin --tags", `gh run list --commit ${sha} --workflow ci.yml`, `git worktree add --detach ${wt} ${sha}`]);
     expect(block2).toEqual([`git -C ${wt} tag -a v1.3.0 ${sha} -m "v1.3.0"`, `git -C ${wt} push origin v1.3.0`, `git worktree remove ${wt}`]);
     expect(body).toContain("worktree add und tag/push in getrennten Aufrufen, der Hook prüft den Worktree beim Auswerten");
-    expect(body).toContain("Der Hook blockiert `git tag` und `git push <tag>` im geteilten Hauptcheckout");
+    expect(body).toContain("Der Hook blockiert `git push <tag>` im geteilten Hauptcheckout (ein `git tag` dort bliebe lokal)");
+    expect(body).not.toContain("blockiert `git tag`");
     expect(body).not.toMatch(/^git tag -a/m);
   });
   it("factory#215 L6: die Checkliste verlangt die Sichtung der Rückmeldungen fremder Bezieher (Meldestelle) vor dem Schließen, mit und ohne Bezieher-Liste", () => {
