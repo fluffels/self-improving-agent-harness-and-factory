@@ -1,4 +1,4 @@
-// Blatt-Modul: importiert nur die Ergebnis-Form; die Lese-Naht `lesen(args)` reicht der Aufrufer (gh) herein.
+// Blatt-Modul: importiert nur die Ergebnis-Form und Node-Builtins; die Lese-Naht `lesen(args)` reicht der Aufrufer (gh) herein.
 /* Harness-Doctor, Punkt `Board-Ansicht` (factory#247 L7, L9): prüft je Board der Projekt-Config (`boards[]` mit `projectId`), ob die Ansicht zu den Abläufen passt, die `board-place` und die
  * Ticket-Auswahl voraussetzen:
  *   - die Standardansicht (kleinste `number`) filtert `-status:Done repo:<Repo des Boards>` (Repo: `board.repo`, sonst `repo` der Config): ohne den Filter zeigt das Board Fremd-Repos und Erledigtes;
@@ -11,7 +11,13 @@
  * Annahmen: die Abfrage liest `views(first: 20)` und `workflows(first: 30)` ohne Paginierung (mehr Ansichten oder Workflows liegen außerhalb des Blicks; die Standardansicht ist die mit der kleinsten `number` unter den gelesenen),
  * und der geforderte Filter ist fest `-status:Done` (ein Board mit anderem Statusnamen für „erledigt“ meldet eine Lücke).
  * Geprüft wird nur die Standardansicht; weitere Ansichten und deren Filter bleiben ungeprüft. Der Fix beschreibt den Handgriff in der Oberfläche (Ansichten ändert der Doctor nie selbst).
+ *
+ * Zweiter Punkt `Board-Vollständigkeit` (factory#490): offene Issues ohne Board-Item (`node scripts/board-place.mjs --missing --json`, `{"fehlend":[…]}`) sind eine Lücke. Ursache ist oft ein leeres oder
+ * zu schwaches `PROJECT_TOKEN` (Dependabot-Inbox und Factory-Update warnen dann nur). Grenze: ein leeres Secret ist lokal nicht sichtbar (die Secrets-API liefert nur Namen; der Wochenlauf meldet es als
+ * Lücke `Secret PROJECT_TOKEN`); geprüft wird, was fehlt, nicht warum. Bei einer `--config` außerhalb des Prüf-Roots liest der Subprozess die Config des Checkouts, nicht die übergebene (Randfall). Der Subprozess hat ein Zeitlimit (Überschreitung: NICHT PRÜFBAR). Wurf, Exit ≠ 0, unlesbares JSON oder eine Antwort ohne `fehlend`-Liste: NICHT PRÜFBAR (fail-closed).
  */
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 
 const PUNKT = "Board-Ansicht";
@@ -83,4 +89,42 @@ export function boardPunkte({ config, lesen }) {
     return [nichtPruefbar(PUNKT, offen.map((r) => `${r.name}: ${r.nicht}`).join(" | "), "mit einem Konto mit Projekt-Leserecht prüfen (gh auth status, Scope `read:project`), `projectId` der Boards in der Projekt-Config eintragen, dann erneut prüfen")];
   }
   return [gut(PUNKT)];
+}
+
+const PUNKT_VOLL = "Board-Vollständigkeit";
+const TIMEOUT_MS = 120000;
+
+/** Standard-Lauf: `board-place.mjs --missing --json` im Prüf-Root als Subprozess (das Skript lädt die Config beim Import); wirft bei Fehler, liefert das geparste JSON. */
+export function boardFehlendStandard({ rootDir, exec = spawnSync }) {
+  return () => {
+    const skript = join(rootDir, "scripts", "board-place.mjs");
+    const r = exec(process.execPath, [skript, "--missing", "--json"], { cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: TIMEOUT_MS }); // hängt `gh`: r.error, NICHT PRÜFBAR
+    if (r.error) throw r.error;
+    if (r.status !== 0) throw new Error(`board-place endete mit Exit ${r.status}: ${String(r.stderr ?? "").trim().split("\n")[0]}`);
+    return JSON.parse(String(r.stdout).trim().split("\n").pop());
+  };
+}
+
+/** Der Punkt `Board-Vollständigkeit`: `lauf()` liefert `{ fehlend: number[] }` und wirft bei einem Fehler. */
+export function boardVollstaendigPunkt({ lauf }) {
+  let antwort;
+  try {
+    antwort = lauf();
+  } catch (e) {
+    return nichtPruefbar(PUNKT_VOLL, `\`board-place --missing\` nicht lesbar (${String(e?.message ?? e).split("\n")[0]})`, "mit einem Konto mit Projekt-Leserecht prüfen (gh auth status), dann erneut prüfen");
+  }
+  const fehlend = antwort?.fehlend;
+  if (!Array.isArray(fehlend) || fehlend.some((n) => !Number.isInteger(n))) return nichtPruefbar(PUNKT_VOLL, "Antwort ohne Liste `fehlend`", "`node scripts/board-place.mjs --missing --json` von Hand fahren und die Ausgabe prüfen");
+  if (fehlend.length === 0) return gut(PUNKT_VOLL);
+  return luecke(
+    PUNKT_VOLL,
+    `offene Issues ohne Board-Item: ${fehlend.map((n) => `#${n}`).join(", ")}`,
+    `je Issue \`node scripts/board-place.mjs --after <ankernr> <nr>\` (Notfall: \`--notfall <art> --top <nr>\`); landen Inbox-Issues wiederholt daneben, \`PROJECT_TOKEN\` prüfen (leer oder ohne project-Scope; der Wochenlauf meldet ein leeres Token als Lücke)`,
+  );
+}
+
+/** Wie `boardVollstaendigPunkt`, aber leer ohne `boards[]` in der Config (wie `boardPunkte`: ohne Board gibt es nichts zu prüfen). */
+export function boardVollstaendigPunkte({ config, lauf }) {
+  const boards = Array.isArray(config?.boards) ? config.boards.filter((b) => b && typeof b === "object") : [];
+  return boards.length === 0 ? [] : [boardVollstaendigPunkt({ lauf })];
 }

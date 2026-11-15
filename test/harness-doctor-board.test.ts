@@ -1,7 +1,7 @@
-/* Harness-Doctor, Punkt `Board-Ansicht` (factory#247 L7, L9): reiner Punkt mit eingespeister Lese-Naht, kein Netz (der Punkt `Git-Hooks` steht in harness-doctor-githooks.test.ts). */
+/* Harness-Doctor, Punkte `Board-Ansicht` (factory#247 L7, L9) und `Board-Vollständigkeit` (factory#490, ein Fall mit echtem Subprozess ohne Netz): reine Punkte mit eingespeister Lese-Naht, kein Netz (der Punkt `Git-Hooks` steht in harness-doctor-githooks.test.ts). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { boardPunkte as rawBoardPunkte, BOARD_QUERY as rawQuery } from "../scripts/harness-doctor-board.mjs";
+import { boardPunkte as rawBoardPunkte, BOARD_QUERY as rawQuery, boardVollstaendigPunkt as rawVoll, boardVollstaendigPunkte as rawAlle, boardFehlendStandard as rawStandard } from "../scripts/harness-doctor-board.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string; hinweis?: string }
 type Antwort = unknown;
@@ -146,5 +146,54 @@ describe("Board-Ansicht", () => {
     expect(r[0].ok).toBe(false);
     expect(r[0].befund).toContain("factory");
     expect(r[0].befund).not.toContain("produkt");
+  });
+});
+
+describe("Board-Vollständigkeit (factory#490)", () => {
+  const voll = rawVoll as (a: { lauf: () => unknown }) => Ergebnis;
+  const alle = rawAlle as (a: { config: unknown; lauf: () => unknown }) => Ergebnis[];
+  const standard = rawStandard as (a: { rootDir: string; exec: (...a: unknown[]) => unknown }) => () => unknown;
+
+  test("keine fehlenden Issues: OK", () => {
+    expect(voll({ lauf: () => ({ fehlend: [] }) })).toEqual({ punkt: "Board-Vollständigkeit", ok: true });
+  });
+  test("fehlende Issues: Lücke mit Nummern, board-place-Fix und Token-Hinweis", () => {
+    const r = voll({ lauf: () => ({ fehlend: [4, 9] }) });
+    expect(r.ok).toBe(false);
+    expect(r.nichtPruefbar).toBeUndefined();
+    expect(r.befund).toBe("offene Issues ohne Board-Item: #4, #9");
+    expect(r.fix).toContain("node scripts/board-place.mjs --after");
+    expect(r.fix).toContain("PROJECT_TOKEN");
+  });
+  test("Wurf, fremde Antwort ohne fehlend-Liste oder mit Nicht-Zahlen: NICHT PRÜFBAR (fail-closed)", () => {
+    for (const lauf of [() => wirf(new Error("kaputt")), () => wirf("text"), () => ({}), () => null, () => ({ fehlend: "x" }), () => ({ fehlend: ["a"] })]) {
+      const r = voll({ lauf });
+      expect(r.ok).toBe(false);
+      expect(r.nichtPruefbar).toBe(true);
+    }
+  });
+  test("der Befund nennt den Wurf (Error mit Meldung, nicht-Error als Text)", () => {
+    expect(voll({ lauf: () => wirf(new Error("zeile eins\nzwei")) }).befund).toContain("(zeile eins)");
+    expect(voll({ lauf: () => wirf("rohtext") }).befund).toContain("(rohtext)");
+  });
+  test("ohne Boards in der Config: kein Ergebnis und kein Lauf", () => {
+    const lauf = () => wirf(new Error("nie"));
+    for (const config of [{ repo: REPO }, null, { boards: "x" }, { boards: [null] }, { boards: ["x"] }, { boards: [] }]) expect(alle({ config, lauf }), JSON.stringify(config)).toEqual([]);
+    expect(alle({ config: CONFIG, lauf: () => ({ fehlend: [] }) })).toHaveLength(1);
+  });
+  test("Standard-Lauf: Subprozess im Prüf-Root, JSON der letzten Zeile; Exit ≠ 0 und Fehler werfen", () => {
+    const aufrufe: unknown[][] = [];
+    const ok = standard({ rootDir: "/x/wurzel", exec: (...a) => { aufrufe.push(a); return { status: 0, stdout: "Hinweis\n{\"fehlend\":[2]}\n" }; } });
+    expect(ok()).toEqual({ fehlend: [2] });
+    expect((aufrufe[0][1] as string[]).slice(1)).toEqual(["--missing", "--json"]);
+    expect((aufrufe[0][1] as string[])[0]).toMatch(/wurzel[\\/]scripts[\\/]board-place\.mjs$/);
+    expect((aufrufe[0][2] as { cwd: string }).cwd).toBe("/x/wurzel");
+    expect((aufrufe[0][2] as { timeout: number }).timeout).toBe(120000);
+    expect(() => standard({ rootDir: "/x", exec: () => ({ status: 1, stdout: "", stderr: "Abbruch" }) })()).toThrow(/Exit 1: Abbruch/);
+    expect(() => standard({ rootDir: "/x", exec: () => ({ status: 2 }) })()).toThrow(/Exit 2: $/);
+    // Standard-exec (echter Subprozess): ein Prüf-Root ohne Skript wirft.
+    expect(() => (rawStandard as (a: { rootDir: string }) => () => unknown)({ rootDir: "/nicht/vorhanden/wurzel" })()).toThrow();
+    expect(() => standard({ rootDir: "/x", exec: () => ({ error: new Error("ENOENT") }) })()).toThrow(/ENOENT/);
+    expect(() => standard({ rootDir: "/x", exec: () => ({ status: 0, stdout: "kein json" }) })()).toThrow();
   });
 });

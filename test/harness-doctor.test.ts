@@ -119,7 +119,7 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
     gh,
     env: opt.env ?? {},
     ...(opt.dateien === "echt" ? {} : { dateien: opt.dateien ?? (() => []) }), // "echt": Default von main (pruefeDateien) bleibt; die Dateipunkte laufen im mkdtemp-Ordner ohne Git nicht mit; ihr Ende-zu-Ende-Fall steht unten
-    ...(opt.lokal === "echt" ? {} : { lokal: opt.lokal ?? (() => []) }), // "echt": Default von main (Git-Hooks, Board-Ansicht); sonst leer, damit kein Test das echte git liest
+    ...(opt.lokal === "echt" ? {} : { lokal: opt.lokal ?? (() => []) }), // "echt": Default von main (Git-Hooks, Board-Vollständigkeit als Subprozess `node <root>/scripts/board-place.mjs`, Board-Ansicht); sonst leer, damit kein Test das echte git liest
     ...(opt.kernEnv ? { kernEnv: opt.kernEnv } : {}),
     langfuse: () => ({ status: opt.langfuse ?? 0, stdout: JSON.stringify(opt.langfuseJson ?? { erreichbar: !opt.langfuse, grund: opt.langfuse ? "Langfuse aus." : null, mcp: null }), stderr: "" }),
     out: (s: string) => r.out.push(s),
@@ -1146,18 +1146,28 @@ describe("lokale Punkte Git-Hooks und Board-Ansicht (factory#247 L1, L7, L9): nu
     lauf({}, { lokal: () => (aufrufe++, []), argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
     assert.equal(aufrufe, 0);
   });
-  test("pruefLauf ohne `lokal` (Wochenlauf) hat weder Git-Hooks noch Board-Ansicht", () => {
+  test("Standard-`lokal`: Board-Vollständigkeit fährt das board-place des Prüf-Roots (Stub) und meldet dessen Nummern", () => {
+    const stub = (root: string) => {
+      mkdirSync(join(root, "scripts"), { recursive: true });
+      writeFileSync(join(root, "scripts", "board-place.mjs"), 'console.log(JSON.stringify({ fehlend: [7] }));\n');
+    };
+    const r = lauf({}, { lokal: "echt", vorbereiten: stub });
+    const zeile = r.out.find((z) => z.includes(" Board-Vollständigkeit")) ?? "";
+    assert.match(zeile, /offene Issues ohne Board-Item: #7/, r.out.join("\n"));
+  });
+  test("pruefLauf ohne `lokal` (Wochenlauf) hat weder Git-Hooks noch Board-Ansicht noch Board-Vollständigkeit", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);
     writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
     writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
     const { ergebnis } = (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null });
-    assert.deepEqual(ergebnis.filter((e) => e.punkt === "Git-Hooks" || e.punkt === "Board-Ansicht"), []);
+    assert.deepEqual(ergebnis.filter((e) => e.punkt === "Git-Hooks" || e.punkt === "Board-Ansicht" || e.punkt === "Board-Vollständigkeit"), []);
   });
   test("Standard-`lokal` von main: Zeile Git-Hooks und eine GraphQL-Abfrage je Board mit projectId", () => {
     const r = lauf({}, { lokal: "echt" });
     assert.ok(r.out.some((z) => z.includes(" Git-Hooks")), r.out.join("\n"));
     assert.ok(r.out.some((z) => z.includes(" Board-Ansicht")), r.out.join("\n"));
+    assert.ok(r.out.some((z) => z.includes(" Board-Vollständigkeit")), r.out.join("\n"));
     assert.ok(r.aufrufe.some((a) => a.startsWith("api graphql")), r.aufrufe.join("\n"));
   });
 });
