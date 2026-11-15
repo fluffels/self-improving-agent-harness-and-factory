@@ -14,7 +14,8 @@
  *   <praefixe.commitZeile>Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
  *                 blocker=<brille>:<n>,… sollte=<brille>:<n>,… hinweis=<brille>:<n>,… verdikt=ok
  *                 (blocker optional, #1123: Runde-1-Blocker je Brille; sollte und hinweis Pflicht, factory#530: Funde der Schwere 🔶 sollte und ⚠️ Hinweis je Brille des vollen Passes, auch 0;
- *                 bei runden=1 sind blocker und sollte zusammen 0)
+ *                 bei runden=1 sind blocker und sollte zusammen 0, im Arm schlank nur blocker)
+ *                 arm=<vollablauf|schlank> (factory#532): Pflicht bei Ticket-Branches, verboten ohne Ticket; muss zur Ticketnummer passen (durch 4 teilbar ⇒ vollablauf, sonst schlank; `armAusTicket`)
  *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR, Review- und Abnahme-Zusatzpässe zählen gemeinsam); mehr ist rot, außer mit Review-Override samt Freigabe-Beleg (factory#162 L10); erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
@@ -58,7 +59,9 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler } from "./nachweis-lib.mjs";
+import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, armAusTicket, istLeererWert, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler } from "./nachweis-lib.mjs";
+import { ticketAusRef } from "./ticket-refs.mjs";
+import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 import { risikostufeAusGit, zwei } from "./risikostufe-lib.mjs";
 
@@ -79,8 +82,8 @@ export const vorlage = (zeilen) =>
   `${zeilen.review}: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
   `lenses=architektur,requirement-treue,test-adaequanz ` +
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> ` +
-  `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
-  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
+  `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> arm=<vollablauf|schlank> verdikt=ok  ` +
+  `(arm= nur bei Ticket-Branches: Ticketnummer durch 4 teilbar ⇒ vollablauf, sonst schlank; bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
   `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
   `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> sollte=kombiniert:<n> hinweis=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
   `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> sollte=…,sicherheit:<n> hinweis=…,sicherheit:<n> und ` +
@@ -188,10 +191,22 @@ function bewerteSchwereFelder(review, zeilen) {
   return fehler;
 }
 
-/** Summenregel von Runde 1: ohne Fix-Pass (runden=1) sind blocker und sollte zusammen 0, denn beide lösen eine Fix-Runde aus. Pure. */
+/** Summenregel von Runde 1: ohne Fix-Pass (runden=1) sind blocker und sollte zusammen 0, denn beide lösen eine Fix-Runde aus.
+ *  Im Arm `schlank` (factory#532) löst nur blockierend den nächsten Pass aus: dort muss nur die blocker-Summe 0 sein (sollte ist begründet verworfen); `runde1LoestFixAus` (Messung) bleibt unverändert. Pure. */
 function bewerteRunde1Summe(review, zeilen) {
-  if (review.runden !== 1 || summeVon(review.blocker) + summeVon(review.sollte) === 0) return [];
-  return [`${zeilen.review}: Runde 1 meldete Blocker (blocker oder sollte), aber es gab kein Fix-Pass (runden=1).`];
+  const summe = summeVon(review.blocker) + (review.arm === "schlank" ? 0 : summeVon(review.sollte));
+  if (review.runden !== 1 || summe === 0) return [];
+  return [`${zeilen.review}: Runde 1 meldete Blocker (blocker${review.arm === "schlank" ? "" : " oder sollte"}), aber es gab kein Fix-Pass (runden=1).`];
+}
+
+/** Feld `arm=` (factory#532) gegen die Ticketnummer: mit Ticket Pflicht und gleich `armAusTicket(ticket)`, ohne Ticket verboten, unbekannter Wert rot. Pure. */
+function bewerteArm(review, ticket, zeilen) {
+  const R = zeilen.review;
+  if (ticket === null || ticket === undefined) return review.arm === null ? [] : [`${R}: arm=${review.arm} ohne Ticket (der Branch trägt keine Ticketnummer): PRs ohne Ticket tragen kein arm-Feld.`];
+  const soll = armAusTicket(ticket);
+  if (review.arm === null) return [`${R}: arm= fehlt (Pflicht bei Ticket-Branches, factory#532): arm=${soll} für Ticket ${ticket}.`];
+  if (!ARME.includes(review.arm)) return [`${R}: arm=${review.arm} ist unbekannt (erlaubt: ${ARME.join(", ")}; für Ticket ${ticket}: ${soll}).`];
+  return review.arm === soll ? [] : [`${R}: arm=${review.arm} passt nicht zu Ticket ${ticket} (Nummer durch 4 teilbar ⇒ vollablauf, sonst schlank): erwartet arm=${soll}.`];
 }
 
 /** Das Feld `zusatzpass=<anzahl>:<ursache>`: ungültig oder über `MAX_ZUSATZPAESSE` (Review- und Abnahme-Zusatzpässe zählen gemeinsam) ist rot;
@@ -280,7 +295,7 @@ function bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe) {
 }
 
 /** Ein Teil der Bedrohungs-Zeile gilt als leer: leer oder nur ein Platzhalter (der Parser hat den Wert getrimmt) (`…`, `...`, `-`, `<…>`). */
-const istLeer = (wert) => wert === undefined || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(wert);
+const istLeer = istLeererWert;
 
 /** Fehler der Bedrohungs-Zeile (Klasse hoch): fehlende Zeile, leere, fehlende, doppelte, unbekannte oder schlüssellose Teile. Pur. */
 function bedrohungsFehler(b, zeilen, hinweis) {
@@ -316,7 +331,7 @@ function bewerteReviewOhne(review, zeilen, risikostufe) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits);
@@ -327,7 +342,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     return fehler;
   }
   if (review.ohne !== null) return [...fehler, ...bewerteReviewOhne(review, zeilen, risikostufe)];
-  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe })];
+  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket })];
 }
 
 /** Änderungs-Commits und Konflikt-Merges nach dem Review (je ein Fehler mit Fix-Weg). Pure. */
@@ -352,7 +367,7 @@ function bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits) {
 }
 
 /** Die Felder einer Review-Zeile mit Brillen (head, runden, lenses, optionale und Pflichtfelder, verdikt). Pure. */
-function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe }) {
+function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket }) {
   const R = zeilen.review;
   const fehler = [];
   if (review.head === null) fehler.push(`${R}: head fehlt oder ist kein SHA.`);
@@ -370,9 +385,22 @@ function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, 
   if (unbekannt.length > 0) {
     fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
-  fehler.push(...bewerteOptionaleFelder(review, zeilen), ...bewerteSchwereFelder(review, zeilen), ...bewerteRunde1Summe(review, zeilen));
+  fehler.push(...bewerteOptionaleFelder(review, zeilen), ...bewerteSchwereFelder(review, zeilen), ...bewerteRunde1Summe(review, zeilen), ...bewerteArm(review, ticket, zeilen));
   if (review.verdikt !== "ok") fehler.push(`${R}: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
+}
+
+/** Ticketnummer des PR-Branches (factory#532): `GITHUB_HEAD_REF`, sonst der aktuelle Branch; `null` ohne Ticketpräfix oder bei git-Fehler (detached HEAD). */
+function ticketDesBranches(git, env, ladeNamen = ladeTicketNamen) {
+  let ref = env.GITHUB_HEAD_REF ?? "";
+  if (ref === "") {
+    try {
+      ref = git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    } catch {
+      ref = "";
+    }
+  }
+  return ticketAusRef(ref, ladeNamen());
 }
 
 /** Größenstufe (`groesse`, mit Risikoklasse) und Risikostufe des Diffs `<basis>...HEAD`; beide sind fail-closed (Ladefehler und git-Fehler ergeben die strenge Stufe). */
@@ -399,7 +427,7 @@ function headDaten(git, base, nachweis) {
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ladeBasis, ladeText } = {}) {
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ladeBasis, ladeText, ladeNamen } = {}) {
   let zeilen;
   try {
     zeilen = ladeZeilen();
@@ -426,6 +454,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       .filter((l) => l.trim() !== "");
     const { hd, commitsNachReview } = headDaten(git, base, nachweis);
     const { groesse, risikostufe } = stufen(git, base, { ladeRisiko, ladeBasis, ladeText });
+    const ticket = ticketDesBranches(git, env, ladeNamen);
     const fehler = bewerteNachweis({
       nachweis,
       dateien,
@@ -437,6 +466,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       stufe: groesse.stufe,
       risiko: groesse.risiko,
       risikostufe,
+      ticket,
     });
     return {
       ok: fehler.length === 0,
@@ -464,7 +494,7 @@ function main(argv = process.argv.slice(2)) {
   }
   // Die Config wird vor jedem git-Aufruf geladen: ein Ladefehler endet mit Exit 1 und der Meldung des Laders (Pfad, Schlüssel, Fix:).
   const zeilen = ladeCommitZeilenOderBeende({ laden: () => ladeCommitZeilen({ pfad: getrennt.pfad }) });
-  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ladeRisiko: () => ladeRisikoMuster({ pfad: getrennt.pfad }) });
+  const r = checkReviewNachweis({ ladeZeilen: () => zeilen, ladeRisiko: () => ladeRisikoMuster({ pfad: getrennt.pfad }), ladeNamen: () => ladeTicketNamen({ pfad: getrennt.pfad }) });
   if (r.skipped) {
     console.log("• check-review-nachweis: Basis == HEAD, nichts zu prüfen.");
     return;

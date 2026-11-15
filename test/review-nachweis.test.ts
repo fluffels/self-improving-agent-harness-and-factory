@@ -31,11 +31,11 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null }) => string[];
   bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen, risikostufe?: Stufe) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;
-  checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen }) => {
+  checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string>; ladeZeilen?: () => Zeilen; ladeNamen?: () => unknown }) => {
     ok: boolean;
     fehler: string[];
     override?: string;
@@ -49,6 +49,9 @@ import * as raw from "../scripts/check-review-nachweis.mjs";
 import * as sliceRaw from "../scripts/slice-override.mjs";
 import { FREMD, projektConfig } from "./support/fremd-config";
 const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses } = raw as Mod;
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as namenRaw from "../scripts/ticket-namen.mjs";
+const ticketNamen = (namenRaw as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 const { konfliktMergesNach } = sliceRaw as unknown as Pick<Mod, "konfliktMergesNach">;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
 
@@ -939,6 +942,32 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(r.stderr, /Fix:/);
   });
 
+  test("arm= prüft die Ticketnummer mit dem Branch-Präfix der --config (factory#532), nicht der Repo-Config", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "README.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    git("checkout", "-q", "-b", "feature/zd-533-x");
+    writeFileSync(join(d, "README.md"), "y\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "umsetzung");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const nachweis = (arm: string) =>
+      git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer\nZD-Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 arm=${arm} verdikt=ok`);
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    nachweis("schlank");
+    const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis, GITHUB_HEAD_REF: "" });
+    assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
+    nachweis("vollablauf");
+    const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis, GITHUB_HEAD_REF: "" });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /passt nicht zu Ticket 533/);
+  });
+
   test("Config ohne Label- oder Agentenschlüssel: Exit ≠ 0 mit Schlüssel und Fix:", () => {
     const d = mkdir();
     for (const [gruppe, schluessel] of [["labels", "forum"], ["agenten", "planer"]] as const) {
@@ -1228,6 +1257,73 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
       const r = pruefe(`${Z.reviewOverride}: #334 Revert-PR`);
       assert.equal(r.ok, true);
     });
+  });
+});
+
+describe("Stichprobenarm arm= (factory#532)", () => {
+  const felder = (arm: string | null, extra = "") => `head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 ${extra || S0(DREI)}${arm === null ? "" : ` arm=${arm}`} verdikt=ok`;
+  const mit = (arm: string | null, ticket: number | null, extra = "") =>
+    bewerteNachweis({ nachweis: parseNachweis(review(felder(arm, extra))), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, ticket });
+
+  test("K6: arm=, das nicht zur Ticketnummer passt, ist rot (beide Richtungen)", () => {
+    assert.match(mit("schlank", 532).join(), /passt nicht zu Ticket 532.*erwartet arm=vollablauf/);
+    assert.match(mit("vollablauf", 533).join(), /passt nicht zu Ticket 533.*erwartet arm=schlank/);
+  });
+  test("passender arm= ist grün", () => {
+    assert.deepEqual(mit("schlank", 533), []);
+    assert.deepEqual(mit("vollablauf", 532), []);
+    assert.deepEqual(mit("vollablauf", 1000), []);
+  });
+  test("Ticket ohne arm= ist rot und nennt die Vorlage", () => {
+    assert.match(mit(null, 533).join(), /arm= fehlt.*arm=schlank/);
+  });
+  test("arm= ohne Ticket ist rot, ohne beides grün", () => {
+    assert.match(mit("schlank", null).join(), /ohne Ticket/);
+    assert.deepEqual(mit(null, null), []);
+  });
+  test("unbekannter arm= ist rot", () => {
+    assert.match(mit("voll", 533).join(), /unbekannt/);
+  });
+  test("Parser: arm= wird gelesen, fehlt = null", () => {
+    assert.equal((parseNachweis(review(felder("schlank"))).review as unknown as { arm: string }).arm, "schlank");
+    assert.equal((parseNachweis(review(felder(null))).review as unknown as { arm: string | null }).arm, null);
+  });
+  test("schlank + runden=1: sollte > 0 mit blocker=0 ist grün, blocker > 0 rot; vollablauf bleibt bei sollte rot", () => {
+    const sollte1 = "sollte=architektur:1,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0";
+    assert.deepEqual(mit("schlank", 533, sollte1), []);
+    assert.match(mit("vollablauf", 532, sollte1).join(), /Runde 1 meldete Blocker/);
+    const blocker1 = bewerteNachweis({
+      nachweis: parseNachweis(review(`head=${SHA} runden=1 lenses=${DREI} blocker=architektur:1,requirement-treue:0,test-adaequanz:0 ${S0(DREI)} arm=schlank verdikt=ok`)),
+      dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, ticket: 533,
+    });
+    assert.match(blocker1.join(), /kein Fix-Pass/);
+  });
+  test("checkReviewNachweis: Ticket aus GITHUB_HEAD_REF, falscher und fehlender arm= rot, richtiger grün; Branch ohne Ticket ohne arm= grün", () => {
+    const namen = () => ticketNamen(FREMD);
+    const lauf = (arm: string | null, ref: string) =>
+      checkReviewNachweis({ runGit: fakeGit({ messages: review(felder(arm)) }), env: { ...env, GITHUB_HEAD_REF: ref }, ladeNamen: namen });
+    const ref = `${FREMD.praefixe.branch}533-x`;
+    assert.equal(lauf("schlank", ref).ok, true);
+    assert.equal(lauf("vollablauf", ref).ok, false);
+    assert.equal(lauf(null, ref).ok, false);
+    assert.equal(lauf(null, "dependabot/npm/x").ok, true);
+    assert.equal(lauf("schlank", "dependabot/npm/x").ok, false);
+  });
+  test("checkReviewNachweis: ohne GITHUB_HEAD_REF gilt der aktuelle Branch (lokale Prüfung); git-Fehler dabei heißt kein Ticket", () => {
+    const namen = () => ticketNamen(FREMD);
+    const mitBranch = (arm: string | null, branch: string) => {
+      const basis = fakeGit({ messages: review(felder(arm)) });
+      const git = (a: string[]) => (a.join(" ") === "rev-parse --abbrev-ref HEAD" ? `${branch}\n` : basis(a));
+      return checkReviewNachweis({ runGit: git, env, ladeNamen: namen });
+    };
+    const ref = `${FREMD.praefixe.branch}533-x`;
+    assert.equal(mitBranch("schlank", ref).ok, true);
+    assert.equal(mitBranch(null, ref).ok, false);
+    assert.equal(mitBranch("schlank", "main").ok, false);
+    assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: review(felder(null)) }), env, ladeNamen: namen }).ok, true);
+  });
+  test("Vorlage und gemeinsame Leer-Regel: die Vorlage nennt arm=", () => {
+    assert.match((raw as unknown as { vorlage: (z: Zeilen) => string }).vorlage(Z), /arm=<vollablauf\|schlank>/);
   });
 });
 

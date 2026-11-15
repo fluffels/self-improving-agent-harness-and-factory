@@ -40,6 +40,17 @@ export const MAX_REVIEW_PAESSE_STUFE1 = 2;
 /** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
+/** Ein Wert gilt als leer: leer, nur Leerraum oder ein Platzhalter (`…`, `...`, `-`, `<…>`); eine Quelle für Bedrohungs-Teile und Verwerfen-Begründungen. Pur. */
+export const istLeererWert = (wert) => wert === undefined || wert === null || /^(?:…|\.{3}|-|<[^>]*>)?$/.test(String(wert).trim());
+
+/** Stichprobenarme der Review-Schleife (factory#532): `vollablauf` (Kontrollarm, blockierend und sollte lösen eine Fix-Runde aus) und `schlank` (nur blockierend löst den nächsten Pass aus). */
+export const ARME = Object.freeze(["vollablauf", "schlank"]);
+/** Arm aus der Ticketnummer, deterministisch: durch 4 teilbar ⇒ `vollablauf`, sonst `schlank`. Wirft bei Nummern, die keine positive Ganzzahl sind. Pur. */
+export function armAusTicket(nr) {
+  if (!Number.isInteger(nr) || nr < 1) throw new Error(`armAusTicket braucht eine Ticketnummer (ganze Zahl ≥ 1), bekam ${String(nr)}`);
+  return nr % 4 === 0 ? "vollablauf" : "schlank";
+}
+
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
  *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
  *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
@@ -175,6 +186,9 @@ function bedrohungenAus(wert) {
   return r;
 }
 
+/** Feld `arm=` der Review-Zeile (factory#532); `null`, wenn es fehlt. */
+const armFeld = (felder) => ({ arm: felder.arm ?? null });
+
 /** Die Felder der Review-Zeile (`ohne` für `ohne — <Grund>`, factory#526); fehlende oder kaputte Felder bleiben null bzw. NaN, bewertet wird erst im Gate. Pur. */
 function reviewAus(reviewWert) {
   const felder = {};
@@ -195,6 +209,7 @@ function reviewAus(reviewWert) {
     zusatzpass: zusatzpassAus(reviewWert),
     abnahmefix: abnahmefixAus(reviewWert),
     verdikt: felder.verdikt ?? null,
+    ...armFeld(felder),
   };
 }
 
