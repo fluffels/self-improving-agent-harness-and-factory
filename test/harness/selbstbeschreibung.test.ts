@@ -78,6 +78,10 @@ describe('offeneQuelleBehauptungen', () => {
     expect(offeneQuelleBehauptungen('Die Note: Open Source.')).toHaveLength(1);
     expect(offeneQuelleBehauptungen('Er ist keinesfalls Open Source.')).toEqual([]);
   });
+  it('wertet nur ein ganzes Wort als Verneinung, kein Wort mit Verneinung am Ende', () => {
+    expect(offeneQuelleBehauptungen('Das Kasino ist Open Source.')).toHaveLength(1);
+    expect(offeneQuelleBehauptungen('Ein Piano ist Open Source.')).toHaveLength(1);
+  });
   it('erkennt die Satzgrenzen „! “ und „? “', () => {
     expect(offeneQuelleBehauptungen('Kein Wort! Open Source.')).toHaveLength(1);
     expect(offeneQuelleBehauptungen('Kein Wort? Open Source.')).toHaveLength(1);

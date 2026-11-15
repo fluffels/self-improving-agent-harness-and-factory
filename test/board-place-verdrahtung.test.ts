@@ -113,8 +113,8 @@ describe("--missing --json (factory#490)", () => {
     rm("acme/proj", false, io((z) => aus.push(z)));
     expect(aus).toHaveLength(2);
     expect(new Set(rollen.map((b) => JSON.stringify(b))).size).toBe(2); // beide Boards (Produkt und Fabrik) werden gelesen
-    expect((JSON.parse(aus[0]) as { fehlend: unknown }).fehlend).toEqual(expect.any(Array));
-    expect(aus[1]).toMatch(/^Offen, aber nicht im Board: |^Alle offenen/);
+    expect((JSON.parse(aus[0]) as { fehlend: unknown }).fehlend).toEqual([4]);
+    expect(aus[1]).toBe("Offen, aber nicht im Board: #4");
     expect(() => void JSON.parse(aus[1])).toThrow();
   });
   test("main reicht json an reportMissing; fehlendJson trägt die Nummern unter fehlend", async () => {
