@@ -266,7 +266,7 @@ function agentenNachName(): Record<string, Record<string, string>> {
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; ausser?: RegExp }[] = [
   {
     term: "Opus-Standard-Effort",
-    home: "die Lenses tragen `effort: high` im Frontmatter des Lens-Agenten und laufen damit (#1209)",
+    home: "die Lenses tragen `effort: medium` im Frontmatter des Lens-Agenten und laufen damit (#1209)",
   },
   {
     term: "Session-Default",
@@ -329,7 +329,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
   });
 
-  test(`${REVIEW_SKILL} spawnt die Lenses über den Lens-Agenten (opus/high), ohne model-Override`, () => {
+  test(`${REVIEW_SKILL} spawnt die Lenses über den Lens-Agenten (opus/medium), ohne model-Override`, () => {
     const md = liesMitProjektwerten(REVIEW_SKILL);
     // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
     // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
@@ -339,7 +339,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       spawn,
       new RegExp(String.raw`subagent_type:\s*"${escapeRegex(AG.lens)}"`),
       `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`${AG.lens}\` starten: ` +
-        "nur dessen Frontmatter trägt `effort: high`, ein `effort:` am Spawn überstimmte es (#1209). " +
+        "nur dessen Frontmatter trägt `effort: medium`, ein `effort:` am Spawn überstimmte es (#1209). " +
         "Laufen die Lenses inline im Hauptagenten, reviewt Sonnet, und der finale Blick wäre ein Self-Grading (#1012).",
     );
     assert.doesNotMatch(
@@ -350,7 +350,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     const lens = frontmatter(read(".claude/agents/factory-lens.md"));
     assert.equal(lens.name, AG.lens);
     assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
-    assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
+    assert.equal(lens.effort, "medium", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
   });
 
   test("Erkennung greift wirklich (Red-Green): Frontmatter-Parser + Tier-Erkennung", () => {
