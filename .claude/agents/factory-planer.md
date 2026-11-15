@@ -4,7 +4,7 @@ name: sih-planer
 description: Planungs-Agent für Tickets dieses Projekts: analysiert ein Ticket und liefert einen kompakten Umsetzungsplan vor dem Coden. Auslösen bei "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan".
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell, WebFetch, WebSearch, Agent
-effort: xhigh
+effort: medium
 ---
 
 # Planungs-Agent
