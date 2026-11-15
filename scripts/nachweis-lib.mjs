@@ -27,7 +27,7 @@ export const HEX_HEAD = new RegExp(`^${HEX}$`);
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
-/** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; das Gate erzwingt die Zahl nicht). */
+/** Höchstens so viele Zusatzpässe über das Cap hinaus (Regel im Skill `review-lenses`; `check-review-nachweis.mjs` macht eine größere Anzahl rot, außer mit Review-Override samt Freigabe-Beleg der Maintainerin). */
 export const MAX_ZUSATZPAESSE = 3;
 
 /** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):

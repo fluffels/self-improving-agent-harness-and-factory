@@ -11,6 +11,7 @@
  *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
  *   node scripts/board-place.mjs --umzug [--dry-run]         # Items auf dem falschen Board umziehen (Trennregel)
  *   node scripts/board-place.mjs --missing                  # offene Issues ohne Board-Item auf irgendeinem Board (nur Bericht)
+ *   node scripts/board-place.mjs --missing --json           # dasselbe als {"fehlend":[<nr>,…]} (Harness-Doctor, Punkt Board-Vollständigkeit)
  *
  * Zwei Boards (ADR 0022 F11, #1729): das Ziel-Board bestimmt die Trennregel (`boardRolleFuer` der Labels: Harness-Label der Config: Factory, sonst Produkt;
  * Labels aus dem Board-Item, für Nummern ohne Item aus der Issue-REST). Gemischte Nummern und ein `--after`-Anker nur auf dem anderen Board
@@ -77,13 +78,13 @@ const MODI = ["top", "after", "position", "missing", "umzug"];
  * oder doppelte Flags und ein Options-Terminator `--` (er steht nicht unter den Positionsargumenten) sind ungültig.
  */
 export function parseArgs(argv) {
-  const optionen = { "dry-run": { type: "boolean" }, notfall: { type: "string" }, repo: { type: "string" } };
+  const optionen = { "dry-run": { type: "boolean" }, json: { type: "boolean" }, notfall: { type: "string" }, repo: { type: "string" } };
   for (const m of MODI) optionen[m] = { type: "boolean" };
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, optionen, { positionale: true });
   if (fehler) return null;
   const dry = werte["dry-run"] === true;
   if (!repoFormOk(werte.repo)) return null;
-  const reihe = tokens.filter((t) => !(t.kind === "option" && (t.name === "dry-run" || t.name === "repo")));
+  const reihe = tokens.filter((t) => !(t.kind === "option" && ALLGEMEIN.has(t.name)));
   let i = 0;
   let notfall = null;
   if (reihe[0]?.kind === "option" && reihe[0].name === "notfall") {
@@ -94,12 +95,19 @@ export function parseArgs(argv) {
   const modus = reihe[i];
   if (modus?.kind !== "option") return null;
   if (!reihe.slice(i + 1).every((t) => t.kind === "positional")) return null;
+  if (!jsonOk(werte.json, modus.name)) return null;
   const geparst = parseModus(modus.name, positionale, dry);
-  return geparst && { ...geparst, ...zusatzOptionen(werte.repo, notfall) };
+  return geparst && { ...geparst, ...zusatzOptionen(werte.repo, notfall, werte.json) };
 }
 
 /** Die optionalen Felder `repo` und `notfall` des Parse-Ergebnisses (nur gesetzte). */
-const zusatzOptionen = (repo, notfall) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}) });
+const zusatzOptionen = (repo, notfall, json) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}), ...(json === true ? { json: true } : {}) });
+
+/** Flags, die neben jedem Modus stehen dürfen (`--json` prüft `jsonOk`). */
+const ALLGEMEIN = new Set(["dry-run", "repo", "json"]);
+
+/** `--json` gilt nur für `--missing`. */
+const jsonOk = (json, modus) => json !== true || modus === "missing";
 
 /** `--repo` fehlt oder hat die Form `owner/name`. */
 const repoFormOk = (repo) => repo === undefined || istRepoForm(repo);
@@ -168,13 +176,22 @@ export function zielRolle({ numbers, anchor = null, produkt, factory, labelsRest
   return { rolle, doppelt: numbers.filter((nr) => stehtAuf(produkt, nr) && stehtAuf(factory, nr)) };
 }
 
+/** Maschinenlesbare Ausgabe von `--missing --json` (factory#490, vom Harness-Doctor gelesen): `{"fehlend":[<nr>,…]}`. */
+export const fehlendJson = (missing) => JSON.stringify({ fehlend: missing });
+
+/** Die Ausgabe von `--missing`: JSON (`json`) oder der Satz für Menschen. */
+export const fehlendAusgabe = (missing, json) => {
+  if (json) return fehlendJson(missing);
+  return missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`;
+};
+
 /** Bericht: offene Issues, die auf keinem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
-function reportMissing(repo) {
+function reportMissing(repo, json) {
   try {
     const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle), { repo }) }));
     const rest = missingFromBoard(loadOpenIssueNumbers(repo), beide.flatMap((b) => b.items));
     const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest, {}, repo)));
-    console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
+    console.log(fehlendAusgabe(missing, json));
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
     process.exit(1);
@@ -338,12 +355,12 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const args = geparst && { ...geparst, repo: geparst.repo ?? REPO }; // Standard: das eigene Repo
   if (args) setzeZielToken(args.repo, env);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing | --umzug)");
+    console.error("Aufruf: board-place.mjs [--dry-run] [--repo <owner/name>] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing [--json] | --umzug)");
     return beende(2);
   }
   kontingent();
   const config = ladeConfig();
-  if (args.missing) return meldeFehlende(args.repo);
+  if (args.missing) return meldeFehlende(args.repo, args.json === true);
   if (args.umzug) {
     // Kein mitWiederholung um die Mutationen: ein zweites Löschen eines schon gelöschten Items scheitert; der Lauf ist stattdessen idempotent.
     try {
