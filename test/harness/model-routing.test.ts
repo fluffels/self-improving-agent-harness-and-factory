@@ -404,10 +404,10 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.deepEqual(hauptchatModellBefunde({ model: "sonnet", experimental: { cacheTtl: "5m" } }), ["experimental.cacheTtl"]);
   });
 
-  test("Planer opus/xhigh", () => {
+  test("Planer opus/medium (factory#547)", () => {
     const planer = frontmatter(read(".claude/agents/factory-planer.md"));
     assert.equal(planer.model, "opus");
-    assert.equal(planer.effort, "xhigh");
+    assert.equal(planer.effort, "medium");
   });
 
   test("Explore: Override des eingebauten Agenten auf haiku/low (#1209)", () => {
