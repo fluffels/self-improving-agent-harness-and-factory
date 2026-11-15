@@ -208,7 +208,7 @@ describe("dependabotAusschlussPunkt", () => {
       "updates: [\n  - x: {", "updates:\n  - {package-ecosystem: github-actions}\n", "updates:\n  - &a\n", "updates:\n  - package-ecosystem:\n", "updates:\n  -\n    package-ecosystem: github-actions\n",
       "updates:\n  - package-ecosystem: x\n  y\n", "updates: []\nupdates: []\n", "updates: []\n  - package-ecosystem: github-actions\n",
       ex(" *a"), ex(" [a,\n      b]"), ex(" [a, b]"), ex(" |\n      a"), ex(" []\n    exclude-paths: []"), ex(' [a,,b]'), ex(' "a'), ex(" x\n      y"),
-      ex('\n      - "a'), ex('\n      -'), ex('\n      - # leer'), ex('\n      - "'), ex('\n      - "a"b"'), ex('\n      - "a\\b"'), ex('\n      - "a\''), ex("\n      - 'a'b'"), ex('\n      - ".github/workflows/codeql.yml"'), ex("\n      - '.github/workflows/codeql.yml'"), ex("\n      - a\n        - b"), ex("\n      a: b"),
+      ex('\n      - "a'), ex('\n      -'), ex('\n      - # leer'), ex('\n      - "'), ex('\n      - "a"b"'), ex('\n      - "a\\b"'), ex('\n      - "a\''), ex("\n      - 'a'b'"), ex("\n      - a\n        - b"), ex("\n      a: b"),
       `updates:\n${aktion}   y: z\n`, `updates:\n${aktion}    package-ecosystem: npm\n`, `  updates:\n${aktion}`,
       `${np}    directory: /\n   y: z\n`, `${np}      y\n`, "updates:\n  - 3\n - 4\n", "updates:\n  - package-ecosystem: x\n - package-ecosystem: y\n",
     );
@@ -236,6 +236,31 @@ describe("dependabotAusschlussPunkt", () => {
     expect(yaml("42\n")?.befund).toMatch(/^\.github\/dependabot\.yaml ist in dieser Form nicht lesbar/);
     expect(yaml("42\n")?.fix).toContain(".github/dependabot.yaml in die übliche Blockform");
     expect(pruefe(dependabot(), { ...ALLE, ".github/dependabot.yaml": dependabot(actions()) })).toEqual(OK);
+  });
+  test("gequotete Werte (doppelt/einfach, Ökosystem und exclude-paths): vollständig OK, mit fehlendem Workflow Lücke statt NICHT PRÜFBAR", () => {
+    const form = (q: string, pfade: string[]) => `updates:\n  - package-ecosystem: ${q}github-actions${q}\n    exclude-paths:\n${pfade.map((x) => `      - ${q}${x}${q}\n`).join("")}`;
+    for (const q of ['"', "'"]) {
+      expect(pruefe(form(q, BESITZ)), q).toEqual(OK);
+      const [p] = pruefe(form(q, [BESITZ[0] as string]));
+      luecke(p, q);
+      expect(p?.befund, q).toContain(BESITZ[1]);
+    }
+    luecke(pruefe('updates:\n  - package-ecosystem: "github-actions"\n')[0], "ohne exclude-paths");
+  });
+  test("gequotet mit Kommentar dahinter lesbar; `''` im Einfach-Quote ist ein Apostroph", () => {
+    expect(pruefe(`updates:\n  - package-ecosystem: "github-actions" # Kommentar\n    exclude-paths:\n      - '${BESITZ[0]}' # a\n      - "${BESITZ[1]}"  # b\n`)).toEqual(OK);
+    expect(lib.dependabotEintraege("updates:\n  - package-ecosystem: 'it''s'\n")).toEqual({ eintraege: [{ oekosystem: "it's", ausschluss: [] }] });
+    expect(lib.dependabotEintraege('updates:\n  - package-ecosystem: ""x\n').fehler).toBeDefined();
+  });
+  test("Quote mit Backslash, innerem Quote, offen oder mit Rest dahinter bleibt NICHT PRÜFBAR (fail-closed)", () => {
+    const ex = (rest: string) => `updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n      - ${rest}\n`;
+    nichtPruefbar(ex('"a\\"b"'), ex('"a\\nb"'), ex('"a'), ex("'a"), ex('"a" b'), ex("'a' b"), ex("'a'b'"), ex('"a # b"'), 'updates:\n  - package-ecosystem: "x\\"y"\n');
+  });
+  test("die Vorlage der Fabrik (.github/dependabot.yml) ist lesbar, der github-actions-Eintrag wird erkannt", () => {
+    const text = readFileSync(join(dirname(new URL(import.meta.url).pathname), "..", ".github", "dependabot.yml"), "utf8");
+    const g = lib.dependabotEintraege(text);
+    expect(g.fehler).toBeUndefined();
+    expect(g.eintraege).toContainEqual({ oekosystem: "github-actions", ausschluss: [] });
   });
   test("Manifest fehlt, kein JSON oder ohne Liste: NICHT PRÜFBAR", () => {
     for (const m of [null, "{", "{}"]) {
