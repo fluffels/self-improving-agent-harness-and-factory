@@ -30,7 +30,6 @@ interface Pc {
   boardPfad(board: Record<string, unknown>): string;
   boardRepo(board: Record<string, unknown>, config: unknown): string;
   meldestelleAus(config: unknown): string;
-  bezieherAus(config: unknown): string[];
   cli(argv: string[], opt?: { rootDir?: string; env?: Record<string, string | undefined>; out?: (s: string) => void; err?: (s: string) => void }): number;
   altEnvPraefix(config: unknown): string | null;
   altEnvName(name: string, config: unknown): string | null;
@@ -227,19 +226,19 @@ describe("pruefeProjektConfig", () => {
     assert.equal(pc.meldestelleAus({ ...cfg, boards: cfg.boards.map((b) => (b.rolle === "factory" ? { ...b, repo: "fabrik/kern" } : b)) }), "fabrik/kern");
   });
 
-  test("bezieher (factory#188): optionale Liste owner/name, ohne Dublette und ohne das eigene Repo", () => {
-    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), bezieher: [] }), []);
-    assert.deepEqual(pc.pruefeProjektConfig({ ...gueltig(), bezieher: ["o/a", "o/b"] }), []);
-    for (const schlecht of ["o/a", [3], ["foo"], { a: 1 }]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: schlecht }).join("\n"), /bezieher muss eine Liste[\s\S]*Fix:/);
-    assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: ["o/a", "O/A"] }).join("\n"), /bezieher enthält ein Repo doppelt[\s\S]*Fix:/);
-    const cfg = gueltig() as { repo: string };
-    assert.match(pc.pruefeProjektConfig({ ...cfg, bezieher: [cfg.repo.toUpperCase()] }).join("\n"), /bezieher darf das eigene Repo nicht enthalten[\s\S]*Fix:/);
-    assert.match(pc.pruefeProjektConfig({ ...cfg, repo: "Acme/Demo", bezieher: ["acme/demo"] }).join("\n"), /bezieher darf das eigene Repo nicht enthalten/);
-    assert.deepEqual(pc.bezieherAus(cfg), []);
-    assert.deepEqual(pc.bezieherAus(undefined), []);
-    assert.deepEqual(pc.bezieherAus({ ...cfg, bezieher: "o/a" }), []);
-    assert.deepEqual(pc.bezieherAus({ ...cfg, bezieher: ["o/a", "foo", 3] }), ["o/a"]);
-    assert.deepEqual(pc.bezieherAus({ ...cfg, bezieher: ["o/a", "o/b"] }), ["o/a", "o/b"]);
+  test("bezieher entfallen (factory#500): jede Form des Schlüssels wird abgewiesen, die Config ohne ihn ist gültig", () => {
+    assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);
+    for (const wert of [["a/b"], [], "x"]) assert.match(pc.pruefeProjektConfig({ ...gueltig(), bezieher: wert }).join("\n"), /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen/);
+    assert.equal("bezieherAus" in pc, false);
+  });
+
+  test("bezieher entfallen (factory#500): die Kommandozeile endet mit Exit 1 und der Fix-Zeile", () => {
+    const d = tmp();
+    const datei = join(d, "projekt.json");
+    writeFileSync(datei, JSON.stringify({ ...(gueltig() as object), bezieher: ["a/b"] }));
+    const err: string[] = [];
+    assert.equal(pc.cli(["--config", datei, "repo"], { out: () => {}, err: (s) => err.push(s) }), 1);
+    assert.match(err.join("\n"), /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen/);
   });
 
   test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {

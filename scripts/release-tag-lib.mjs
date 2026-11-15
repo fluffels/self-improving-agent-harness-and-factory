@@ -27,7 +27,7 @@ const schritt = (id, befehl, erklaerung, mechanisch = false) => ({ id, befehl, t
 
 /**
  * Die Schritte nach einem Tag-Sync in fester Reihenfolge (factory#208: ein bloßer Sync macht keinen Bezieher grün), einzige Quelle für die Update-Meldung (`factory-update-check.mjs`)
- * und den Ablauf der Vor-Tag-Probe (`tag-takt.mjs`, factory#215). `{TAG}` setzt die Meldung ein, `<pfad>` steht für die Quelle. `mechanisch: true` = die Probe fährt den Befehl vor `verify`.
+ * und den Ablauf des Probe-Erstbezugs (`probe-erstbezug.mjs`, factory#215). `{TAG}` setzt die Meldung ein, `<pfad>` steht für die Quelle. `mechanisch: true` = die Probe fährt den Befehl vor `verify`.
  */
 export const UPDATE_SCHRITTE = [
   { id: "sync", text: `Sync: node scripts/factory-sync.mjs --quelle <pfad> --tag {TAG}. ${WERKZEUG_HINWEIS}` },
