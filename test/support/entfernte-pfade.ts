@@ -27,7 +27,17 @@ export const AUSNAHMEN: Ausnahme[] = [
 ];
 
 /** Ausnahmen für genau eine Regel in genau einer Datei (exakter Pfad); alle anderen Regeln prüfen die Datei weiter. */
-export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [];
+export const REGEL_AUSNAHMEN: { pfad: string; regel: string; grund: string }[] = [
+  { pfad: "test/harness/codex-setup.test.ts", regel: "--probe", grund: "Playwright-Argument im Fixture, kein Aufruf von tag-takt" },
+  { pfad: "test/harness/gate-befehle-texte.test.ts", regel: "--probe", grund: "Playwright-Argument im Fixture, kein Aufruf von tag-takt" },
+  { pfad: "scripts/tag-takt.mjs", regel: "--probe", grund: "weist den entfernten Aufruf ab und nennt den Probe-Erstbezug (factory#500)" },
+  { pfad: "test/tag-takt-main.test.ts", regel: "--probe", grund: "Negativfälle: der Aufruf endet mit Exit 2 (factory#500)" },
+  { pfad: "test/tag-takt.test.ts", regel: "--probe", grund: "Negativfall: der Tag-Body nennt den Aufruf nicht mehr (factory#500)" },
+  { pfad: "test/support/entfernte-pfade.ts", regel: "--probe", grund: "diese Liste nennt die Regel beim Namen (factory#500)" },
+  { pfad: "test/tag-takt.test.ts", regel: "Schlüssel bezieher", grund: "Negativfall: ein bezieher im Aufruf ändert den Body nicht (factory#500)" },
+  { pfad: "test/projekt-config.test.ts", regel: "Schlüssel bezieher", grund: "Negativfälle: die Config-Prüfung weist den Schlüssel ab (factory#500)" },
+  { pfad: "test/harness/kern-reinheit.test.ts", regel: "Schlüssel bezieher", grund: "Negativfall: begriffeAus liest den Schlüssel nicht mehr (factory#500)" },
+];
 
 /** Marker eines Schnappschuss-Blocks (Glossar „Schnappschuss-Block“): die Kern-Konstanten aus `docs-gen/markdown.mjs`, eine Quelle für beide Wächter. */
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.

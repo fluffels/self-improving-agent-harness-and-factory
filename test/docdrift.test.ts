@@ -1,13 +1,13 @@
-/* Harness-Drift-Wächter (#529) – hält die "Doku als Kontext-Selektor" ehrlich,
- * jenseits der Datei-Landkarte (die bewacht #482 / docmap.test.ts).
+/* Harness-Drift-Wächter (quellprojekt#529) – hält die "Doku als Kontext-Selektor" ehrlich,
+ * jenseits der Datei-Landkarte (die bewacht quellprojekt#482 / docmap.test.ts).
  *
  * AGENTS.md lädt JEDE KI-Session als Kontext; README und die Befehls-Referenz
- * docs/referenz/befehle.md (#1078) werden on-demand gelesen.
+ * docs/referenz/befehle.md (quellprojekt#1078) werden on-demand gelesen.
  * Sie nennen `npm run <x>`-Kommandos (die es geben muss) und verweisen mit vielen
  * internen Markdown-Links + `#ankern` quer auf andere Harness-Docs. Beides veraltet
  * leise – ein Agent tippt dann ein totes Kommando oder folgt einem toten Link.
  * Dieser Test macht genau diesen Drift ROT. Fitness-Function-Kategorie neben
- * layering/filesize/docmap (#390/#482), nicht mit Verhaltens-Tests vermischen.
+ * layering/filesize/docmap (quellprojekt#390/quellprojekt#482), nicht mit Verhaltens-Tests vermischen.
  *
  * Prüf-Logik importiert aus scripts/check-docdrift.mjs (EINE Quelle der Wahrheit
  * mit der CLI `npm run check:docdrift`).
@@ -60,7 +60,7 @@ const auditDocDrift: () => {
 } = checkDocDrift.auditDocDrift;
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
-// Neue Bindings (#1091) typisiert per Assertion statt per unsafe-Zugriff: der Alt-Bestand
+// Neue Bindings (quellprojekt#1091) typisiert per Assertion statt per unsafe-Zugriff: der Alt-Bestand
 // oben ist in eslint-suppressions.json eingefroren und soll nicht wachsen.
 const { collectMarkdown, VERSIONED_CLAUDE_DIRS, istGelesenesMarkdown } = checkBasis as unknown as {
   collectMarkdown: (rootDir?: string) => string[];
@@ -75,8 +75,8 @@ const CORE_DOCS: string[] = checkDocDrift.CORE_DOCS;
 
 const audit = auditDocDrift();
 
-describe("Harness-Doku-Drift (#529)", () => {
-  test("jedes CORE_DOCS-Dokument existiert (#1078) – sonst zählte der Rückwärts-Check es still nicht mit", () => {
+describe("Harness-Doku-Drift (quellprojekt#529)", () => {
+  test("jedes CORE_DOCS-Dokument existiert (quellprojekt#1078) – sonst zählte der Rückwärts-Check es still nicht mit", () => {
     // check-docdrift überspringt ein fehlendes Kern-Doc (`content.has(f)`); ohne diesen Test würde
     // ein Umbenennen von docs/referenz/befehle.md nur indirekt auffallen.
     const fehlend = CORE_DOCS.filter((f) => !existsSync(fileURLToPath(new URL(`../${f}`, import.meta.url))));
@@ -127,7 +127,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     );
   });
 
-  test("keine toten Test-Pfade in der Doku (#97)", () => {
+  test("keine toten Test-Pfade in der Doku (factory#97)", () => {
     assert.deepEqual(audit.testPfadFehler, []);
   });
 
@@ -267,7 +267,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     assert.deepEqual(violations[0]!.missing, ["check:size"]);
   });
 
-  test("auditVerifyChain meldet überzählige Gates der dokumentierten Kette (#1349, Red-Green)", () => {
+  test("auditVerifyChain meldet überzählige Gates der dokumentierten Kette (quellprojekt#1349, Red-Green)", () => {
     const pkgScripts = { verify: "npm run typecheck && npm run lint && npm test" };
     const audit = (checkDocDrift as unknown as {
       auditVerifyChain: (root: string, files: string[], content: Map<string, string>, scripts: Record<string, string>) => { extra: string[]; missing: string[] }[];
@@ -319,10 +319,10 @@ describe("Harness-Doku-Drift (#529)", () => {
   });
 });
 
-// #1091: .claude war pauschal ausgeklammert – damit blieben Links/Anker/verify-Ketten in
+// quellprojekt#1091: .claude war pauschal ausgeklammert – damit blieben Links/Anker/verify-Ketten in
 // den versionierten Skills/Agenten ungeprüft. Gescannt werden jetzt genau die
 // versionierten .claude-Unterordner; Worktrees und lokaler, untrackter Kram bleiben draußen.
-describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nein (#1091)", () => {
+describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nein (quellprojekt#1091)", () => {
   test("erfasst skills/agents/workflows, lässt worktrees, untrackte Ordner und node_modules aus", () => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-"));
     try {
@@ -363,12 +363,12 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
     assert.deepEqual([...VERSIONED_CLAUDE_DIRS].sort(), unignored);
   });
 
-  test("istGelesenesMarkdown (#1942): dasselbe Prädikat wie der Walker, abgeleitet aus IGNORED_DIRS und VERSIONED_CLAUDE_DIRS", () => {
+  test("istGelesenesMarkdown (quellprojekt#1942): dasselbe Prädikat wie der Walker, abgeleitet aus IGNORED_DIRS und VERSIONED_CLAUDE_DIRS", () => {
     for (const ja of ["README.md", "docs/a.md", ".claude/skills/x.md", ".claude/agents/a/b.md", ".claude/workflows/w.md", "src/x/node_module.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md"]) assert.equal(istGelesenesMarkdown(ja), true, ja);
     for (const nein of [".claude/commands/x.md", ".claude/x.md", ".claude/worktrees/w-1/README.md", "node_modules/p/README.md", "docs/node_modules/p/README.md", "dist/a.md", "dist-offline/a.md", "playwright-report/a.md", ".git/a.md", "docs/a.txt"]) assert.equal(istGelesenesMarkdown(nein), false, nein);
   });
 
-  test("istGelesenesMarkdown (#1942): jeder vom Walker gefundene Pfad ist gelesen", () => {
+  test("istGelesenesMarkdown (quellprojekt#1942): jeder vom Walker gefundene Pfad ist gelesen", () => {
     const dir = mkdtempSync(join(tmpdir(), "md-gelesen-"));
     try {
       for (const p of ["a.md", "docs/b.md", ".claude/skills/s.md", ".claude/commands/c.md", ".claude/lose.md", "docs/.claude/commands/x.md", "docs/.claude/lose.md", "node_modules/n.md", "dist/d.md"]) {
@@ -384,8 +384,8 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
   });
 });
 
-// Skill-Quellen (#1848): `.agents/skills/` trägt die Abläufe, ein toter Link oder Anker dort muss rot sein.
-describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
+// Skill-Quellen (quellprojekt#1848): `.agents/skills/` trägt die Abläufe, ein toter Link oder Anker dort muss rot sein.
+describe("check:docdrift prüft Markdown unter .agents/skills/ (quellprojekt#1848)", () => {
   const auditIn = (checkDocDrift as unknown as {
     auditDocDrift: (root: string) => {
       deadLinks: { file: string; target: string }[];
@@ -415,16 +415,16 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
     }
   });
 
-  test("im echten Repo liegt die Quelle review-lenses im Scan (#1849)", () => {
+  test("im echten Repo liegt die Quelle review-lenses im Scan (quellprojekt#1849)", () => {
     assert.ok(collectMarkdown().includes(".agents/skills/review-lenses/SKILL.md"));
   });
 
-  test("im echten Repo liegen die Ticket-Skills und der Ablauf im Scan (#1850)", () => {
+  test("im echten Repo liegen die Ticket-Skills und der Ablauf im Scan (quellprojekt#1850)", () => {
     const md = collectMarkdown();
     for (const f of [".agents/skills/factory/SKILL.md", (ROLLEN_PFADE as Record<string, string>).ticketSkill, ".agents/skills/factory/ablauf.md"]) assert.ok(md.includes(f), f);
   });
 
-  test("ein Link auf den Ticket-Ablauf am alten Ort ist rot, am neuen Ort grün (#1850)", () => {
+  test("ein Link auf den Ticket-Ablauf am alten Ort ist rot, am neuen Ort grün (quellprojekt#1850)", () => {
     const alt = [".claude", "skills", "factory", "ablauf.md"].join("/"); // zusammengesetzt: der Wächter für entfernte Pfade scannt diese Datei
     const dir = mkdtempSync(join(tmpdir(), "docdrift-ablauf-"));
     try {
@@ -444,7 +444,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
     }
   });
 
-  test("ein Verweis mit Anker auf den Zeiger ist rot, derselbe Anker auf die Quelle grün (#1849)", () => {
+  test("ein Verweis mit Anker auf den Zeiger ist rot, derselbe Anker auf die Quelle grün (quellprojekt#1849)", () => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-zeiger-"));
     try {
       const quelle = "# Skill\n\n## Nach jedem Merge von main\n\nText\n";
@@ -467,7 +467,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
     }
   });
 
-  test("ein toter Anker auf eine andere Seite unter docs/ ist rot, der Anker auf deren Überschrift grün (#77)", () => {
+  test("ein toter Anker auf eine andere Seite unter docs/ ist rot, der Anker auf deren Überschrift grün (factory#77)", () => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-seite-"));
     try {
       const dateien: Record<string, string> = {
@@ -489,7 +489,7 @@ describe("check:docdrift prüft Markdown unter .agents/skills/ (#1848)", () => {
   });
 });
 
-describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {
+describe("keine Handkopie der verify-Kette in Kommentaren (quellprojekt#1392)", () => {
   // Die Dokumentations-Prüfung (findDocumentedVerifyChains) sieht nur Markdown; Kommentare in CI und Hook
   // veralten sonst still (die Kette dort stand schon einmal mit 8 statt der echten Gates).
   test.each([".github/workflows/ci.yml", ".githooks/pre-push"])("%s verweist auf scripts.verify statt die Kette zu kopieren", (datei) => {
@@ -499,7 +499,7 @@ describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {
   });
 });
 
-describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator auf (#1392)", () => {
+describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator auf (quellprojekt#1392)", () => {
   const parse = (checkDocDrift as { parseVerifyChain: (s: Record<string, string>) => string[] }).parseVerifyChain;
   test("ein zusammengesetzter Schritt zählt mit seinen Teilen, in Reihenfolge", () => {
     assert.deepEqual(parse({ verify: "npm run a && npm run inner && npm test", inner: "npm run b && npm run c", a: "x", b: "x", c: "x", test: "x" }), ["a", "b", "c", "test"]);
@@ -518,8 +518,8 @@ describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator au
   });
 });
 
-// ADR-Zeiger als Kern-Check (#90): jede Fortschreibungs-Datei braucht Zeiger im ADR, auch beim Bezieher.
-describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
+// ADR-Zeiger als Kern-Check (factory#90): jede Fortschreibungs-Datei braucht Zeiger im ADR, auch beim Bezieher.
+describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (factory#90)", () => {
   const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { fortschreibungsFehler: string[] } }).auditDocDrift;
   const kopf = "# Fortschreibung #5 (2026-10-01): Thema\n";
   const fixture = (adrText: string, mitOrdner = true): string[] => {
@@ -552,8 +552,8 @@ describe("check:docdrift prüft ADR-Zeiger auf Fortschreibungen (#90)", () => {
   });
 });
 
-// adr.ordner aus der Config (#97 L2(c)): ein Projekt mit anderem ADR-Ordner bekommt dieselbe Prüfung.
-describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (#97)", () => {
+// adr.ordner aus der Config (factory#97 L2(c)): ein Projekt mit anderem ADR-Ordner bekommt dieselbe Prüfung.
+describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (factory#97)", () => {
   const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { fortschreibungsFehler: string[] } }).auditDocDrift;
   test("abweichender adr.ordner: fehlender Zeiger ist rot", () => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-adrordner-"));
@@ -578,8 +578,8 @@ describe("check:docdrift liest den ADR-Ordner aus scripts/docs-gen/config.json (
   });
 });
 
-// Tote Test-Pfade in der Doku (#97 L4): Backtick-Token `test/…` muss existieren.
-describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
+// Tote Test-Pfade in der Doku (factory#97 L4): Backtick-Token `test/…` muss existieren.
+describe("check:docdrift prüft Test-Pfade in der Doku (factory#97)", () => {
   const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { testPfadFehler: { file: string; pfad: string }[] } }).auditDocDrift;
   const fixture = (dateien: Record<string, string>): { file: string; pfad: string }[] => {
     const dir = mkdtempSync(join(tmpdir(), "docdrift-testpfade-"));
@@ -627,8 +627,8 @@ describe("check:docdrift prüft Test-Pfade in der Doku (#97)", () => {
   });
 });
 
-// Bezieher-Modus (#110): Factory-Besitz verweist auf Tests, die der Bezieher nicht erhält.
-describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz (#110)", () => {
+// Bezieher-Modus (factory#110): Factory-Besitz verweist auf Tests, die der Bezieher nicht erhält.
+describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz (factory#110)", () => {
   const auditIn = (checkDocDrift as unknown as { auditDocDrift: (root: string) => { testPfadFehler: { file: string; pfad: string }[] } }).auditDocDrift;
   const STAND = { ".factory/sync-stand.json": "{}" };
   const manifest = (eintraege: unknown[]): Record<string, string> => ({ ".factory/besitz.json": JSON.stringify({ version: 1, eintraege }) });
@@ -705,7 +705,7 @@ describe("check:docdrift prüft Test-Pfade im Bezieher nur für Ziele im Besitz 
     assert.equal(fixture({ ...STAND, ".factory/besitz.json": JSON.stringify({ eintraege: 5 }), "docs/a.md": verweis }).length, 1);
   });
 
-  test("T10 fail-closed: ein Eintrag ohne String-pfad gibt volle Prüfung statt TypeError (#101 L27)", () => {
+  test("T10 fail-closed: ein Eintrag ohne String-pfad gibt volle Prüfung statt TypeError (factory#101 L27)", () => {
     for (const kaputt of [{ ring: "kern" }, { pfad: 5, ring: "kern" }, null]) {
       assert.equal(fixture({ ...STAND, ...manifest([kern, kaputt]), "docs/a.md": verweis }).length, 1);
     }

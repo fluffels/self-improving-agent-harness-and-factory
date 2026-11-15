@@ -138,14 +138,14 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
     else if (BEFUNDE_ANGEBOT.test(befunde)) fehler.push("BEFUNDE bietet an statt einzutragen: Befunde trägst du vor dem Bericht selbst ein (AGENTS.md § Abschluss ohne offene Befunde)");
     if (fehler.length)
       return (
-        `Umsetzer-Abschluss (#1342): Handback abgelehnt (${fehler.join(", ")}). Format wörtlich: ${FORMAT}. ` +
+        `Umsetzer-Abschluss (quellprojekt#1342): Handback abgelehnt (${fehler.join(", ")}). Format wörtlich: ${FORMAT}. ` +
         `Laufen deine Lenses noch, beende den Turn mit einer kurzen Statuszeile ohne SubagentHandback; ihre Berichte setzen dich fort.`
       );
   }
   if (!token) return null;
   if (token === "abnahme") return abnahmeBlockade({ ablauf: parseAbnahme(lastMessage), pr }, deps);
   if (token === "festgefahren" && festgefahren !== null && !FESTGEFAHREN_ARTEN.includes(festgefahren)) {
-    return `Umsetzer-Abschluss (#1663): FESTGEFAHREN: ${festgefahren} ist ungültig (erlaubt: ${FESTGEFAHREN_ARTEN.join(" | ")}; ohne die Zeile gilt ci).`;
+    return `Umsetzer-Abschluss (quellprojekt#1663): FESTGEFAHREN: ${festgefahren} ist ungültig (erlaubt: ${FESTGEFAHREN_ARTEN.join(" | ")}; ohne die Zeile gilt ci).`;
   }
   const nr = prNummer(pr);
   if (!nr) return null;
@@ -159,10 +159,10 @@ export function abschlussBlockade({ hookEvent, agentType, toolName, lastMessage 
   const offen = status.state === "OPEN";
   if (token === "festgefahren" && festgefahren === "abnahme") return offen ? (entwurfBlockade(nr, status, "FESTGEFAHREN: abnahme") ?? labelBlockade(nr, status, stuckLabel, "FESTGEFAHREN: abnahme")) : null;
   if (offen && status.autoMergeRequest && (token === "gemergt" || token === "abgebrochen")) {
-    return `Umsetzer-Abschluss (#1331): PR #${nr} ist noch offen und hat Auto-Merge, die CI läuft noch. Das ist kein Ende (ERGEBNIS: ${token}). ${WARTEN(nr)} Danach Audit-Kommentar, Aufräumen und erst dann der Bericht.`;
+    return `Umsetzer-Abschluss (quellprojekt#1331): PR #${nr} ist noch offen und hat Auto-Merge, die CI läuft noch. Das ist kein Ende (ERGEBNIS: ${token}). ${WARTEN(nr)} Danach Audit-Kommentar, Aufräumen und erst dann der Bericht.`;
   }
   if (token === "gemergt" && status.state !== "MERGED") {
-    return `Umsetzer-Abschluss (#1331): ERGEBNIS: gemergt, aber PR #${nr} hat den Status ${status.state}. Erst nach dem Merge berichten.`;
+    return `Umsetzer-Abschluss (quellprojekt#1331): ERGEBNIS: gemergt, aber PR #${nr} hat den Status ${status.state}. Erst nach dem Merge berichten.`;
   }
   if (token === "festgefahren" && offen) {
     const fehlt = labelBlockade(nr, status, stuckLabel, "ERGEBNIS: festgefahren");
@@ -217,7 +217,7 @@ function auditBlockade(nr, deps, status) {
     const vorhanden = (info?.comments ?? []).some((c) => autor && c?.author?.login === autor && String(c?.body ?? "").trimStart().startsWith(AUDIT_KOPF));
     if (vorhanden) return null;
     return (
-      `Umsetzer-Abschluss (#1067): PR #${nr} ändert Leitplanken-Pfade (${treffer.slice(0, 5).join(", ")}${treffer.length > 5 ? ", …" : ""}), ` +
+      `Umsetzer-Abschluss (quellprojekt#1067): PR #${nr} ändert Leitplanken-Pfade (${treffer.slice(0, 5).join(", ")}${treffer.length > 5 ? ", …" : ""}), ` +
       `aber der Audit-Kommentar fehlt. Poste auf dem PR einen Kommentar, dessen erste Zeile „${AUDIT_KOPF}“ lautet, mit was, warum und wie reverten (\`git revert <squash-sha>\` per PR), dann berichte.`
     );
   } catch {
@@ -228,21 +228,21 @@ function auditBlockade(nr, deps, status) {
 /** Entwurf ohne Auto-Merge (R7/R8): `null` = frei. */
 function entwurfBlockade(nr, status, was) {
   if (status.state === "OPEN" && status.isDraft === true && !status.autoMergeRequest) return null;
-  return `Umsetzer-Abschluss (#1754): ${was}, aber PR #${nr} ist nicht OPEN als Entwurf ohne Auto-Merge (Status ${status.state}, Entwurf ${status.isDraft ? "ja" : "nein"}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). ` +
+  return `Umsetzer-Abschluss (quellprojekt#1754): ${was}, aber PR #${nr} ist nicht OPEN als Entwurf ohne Auto-Merge (Status ${status.state}, Entwurf ${status.isDraft ? "ja" : "nein"}, Auto-Merge ${status.autoMergeRequest ? "ja" : "nein"}). ` +
     `Vor der Abnahme: gh pr create --draft, ohne Auto-Merge; erst nach bestandener Abnahme gh pr ready und Auto-Merge.`;
 }
 
 /** Label-Prüfung für `festgefahren` (R3, R8): das Label `stuckLabel` muss am offenen PR stehen; `null` = vorhanden. */
 function labelBlockade(nr, status, stuckLabel, was) {
   if ((status.labels ?? []).some((l) => l?.name === stuckLabel)) return null;
-  return `Umsetzer-Abschluss (#1342): ${was} bei offenem PR #${nr}, aber das Label ${stuckLabel} fehlt. Setze es am PR: gh pr edit ${nr} --add-label ${stuckLabel}.`;
+  return `Umsetzer-Abschluss (quellprojekt#1342): ${was} bei offenem PR #${nr}, aber das Label ${stuckLabel} fehlt. Setze es am PR: gh pr edit ${nr} --add-label ${stuckLabel}.`;
 }
 
 /** R7 für `ERGEBNIS: abnahme` (#1754); `null` = frei. */
 function abnahmeBlockade({ ablauf, pr }, deps) {
-  if (!ablauf) return `Umsetzer-Abschluss (#1754): ERGEBNIS: abnahme abgelehnt (ABNAHME:-Zeile fehlt oder ist ungültig). Format wörtlich: ${FORMAT}.`;
+  if (!ablauf) return `Umsetzer-Abschluss (quellprojekt#1754): ERGEBNIS: abnahme abgelehnt (ABNAHME:-Zeile fehlt oder ist ungültig). Format wörtlich: ${FORMAT}.`;
   const nr = prNummer(pr);
-  if (!nr) return "Umsetzer-Abschluss (#1754): ERGEBNIS: abnahme braucht eine PR:-Zeile mit dem Entwurfs-PR.";
+  if (!nr) return "Umsetzer-Abschluss (quellprojekt#1754): ERGEBNIS: abnahme braucht eine PR:-Zeile mit dem Entwurfs-PR.";
   let status;
   try {
     status = (deps.prStatus ?? ghPrStatus)(nr);

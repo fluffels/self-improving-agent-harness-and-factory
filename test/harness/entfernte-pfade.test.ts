@@ -24,6 +24,9 @@
  * (Fortschreibung zu ADR 0022); `RESTE` scannt die Namen, der Export-Absenz-Test prüft `scripts/besitz-extraktion.mjs`. Bewusste Grenze: `huellenVerstoesse` heißt auch eine lokale Funktion in
  * zwei Wächtern, darum wird der Name nur als Export geprüft, nicht als Text.
  *
+ * Dazu (factory#500): die Fabrik führt keine Namen ihrer Bezieher; der Schlüssel `bezieher` der Projekt-Config und `tag-takt --probe` sind entfernt (Fortschreibung zu ADR 0031), `RESTE_BEZIEHER_LISTE`
+ * scannt `--probe`, `bezieherProbe`, `probeErgebnisse` und den Schlüssel. Bewusste Grenze: `bezieher` als Rollen-Option oder Gruppen-ID bleibt erlaubt, freie Umschreibungen („Liste der Bezieher“) werden nicht gescannt.
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -441,5 +444,73 @@ describe("Keine Reste des Phasen-Schnitts (factory#399)", () => {
     const alt = { erstellt: "2026-01-01T00:00:00Z", uebergabe: { gesetzt: "2026-06-01T00:00:00Z", verbraucht: null } };
     assert.ok(!("uebergabeStand" in lib.oeffentlicheSicht(alt)));
     assert.equal(lib.lebenszeichenMs(alt), Date.parse("2026-01-01T00:00:00Z"));
+  });
+});
+
+// ---- Keine Bezieher-Liste der Fabrik (factory#500) ----
+
+/** Namen der entfernten Bezieher-Liste und der Probe je Bezieher; die Liste ist geschlossen (je Regel ein Beispiel im Negativfall-Test).
+ * Bewusste Grenze: `bezieher` als Rollen-Option oder Gruppen-ID bleibt erlaubt, freie Umschreibungen („Liste der Bezieher“) werden nicht gescannt. */
+export const RESTE_BEZIEHER_LISTE: Rest[] = [
+  { name: "--probe", muster: /--probe(?![\w-])/, fix: "den Aufruf gibt es nicht mehr: vor dem Tag prüfen nur Probe-Erstbezug (`node scripts/probe-erstbezug.mjs`) und synthetische Bezieher je Profil, namenlos (factory#500)" },
+  { name: "bezieherProbe", muster: /\bbezieherProbe\b/, fix: "die Funktion ist entfernt, die Fabrik führt keine Namen ihrer Bezieher (factory#500)" },
+  { name: "probeErgebnisse", muster: /\bprobeErgebnisse\b/, fix: "die Funktion ist entfernt, das Tag-Ticket trägt keine Probe-Zeilen je Bezieher (factory#500)" },
+  {
+    name: "Schlüssel bezieher",
+    muster: /"bezieher"\s*:|\bbezieher:\s*\[|\b(?:config|wert|cfg)\??\.bezieher\b|\bbezieherAus\b|(?:Schlüssel|Liste) `bezieher`|`bezieher` der Projekt-Config/,
+    fix: "den Schlüssel `bezieher` der Projekt-Config gibt es nicht mehr, die Config-Prüfung weist ihn ab (factory#500)",
+  },
+];
+
+describe("Keine Bezieher-Liste der Fabrik (factory#500)", () => {
+  const liste = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_BEZIEHER_LISTE);
+
+  test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
+    const treffer = findeReste(getrackteTextdateien(), RESTE_BEZIEHER_LISTE);
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_BEZIEHER_LISTE)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test.each([
+    ["--probe", "node scripts/tag-takt.mjs --probe a/b=0"],
+    ["--probe", "--probe=a/b=0"],
+    ["bezieherProbe", "export function bezieherProbe(x)"],
+    ["probeErgebnisse", "probeErgebnisse(args)"],
+    ["Schlüssel bezieher", '"bezieher": ["a/b"]'],
+    ["Schlüssel bezieher", "{ bezieher: [x] }"],
+    ["Schlüssel bezieher", "config.bezieher"],
+    ["Schlüssel bezieher", "bezieherAus(config)"],
+    ["Schlüssel bezieher", "der Schlüssel `bezieher` der Config"],
+    ["Schlüssel bezieher", "die `bezieher` der Projekt-Config"],
+    ["Schlüssel bezieher", "die Liste `bezieher` der Config"],
+    ["Schlüssel bezieher", "wert.bezieher"],
+    ["Schlüssel bezieher", "cfg.bezieher"],
+    ["Schlüssel bezieher", "cfg?.bezieher"],
+    ["Schlüssel bezieher", "config?.bezieher"],
+    ["Schlüssel bezieher", '"bezieher" : ["a/b"]'],
+    ["Schlüssel bezieher", "{ bezieher:[x] }"],
+    ["--probe", "tag-takt --probe"],
+  ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
+    assert.deepEqual(liste(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
+  });
+
+  test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
+    const nachbarn = ["{ bezieher: true }", "d.bezieher ?? x", 'gruppe("bezieher", {', 'join(scratch, "bezieher")', "--probe-erstbezug", "bezieherMigrationen", "istBezieher(w)", "probeErgebnisseX", "xbezieherProbe", "--probeX", "bezieherProbeX", "xprobeErgebnisse", "xbezieher: [x]", "myconfig.bezieher", "config.bezieherX", "xbezieherAus", "bezieherAusX"];
+    assert.deepEqual(liste(nachbarn.join("\n")), []);
+  });
+
+  test("Ausnahmen: ADRs dürfen die Namen tragen, andere Pfade nicht", () => {
+    assert.deepEqual(liste("tag-takt --probe a/b=0", "docs/adr/fortschreibungen/0031-188-vor-tag-probe.md"), []);
+    assert.equal(liste("tag-takt --probe a/b=0", "docs/agent-harness.md").length, 1);
+  });
+
+  test("die vier Fortschreibungen zur Vor-Tag-Probe nennen weder Schlüssel noch --probe (K6)", () => {
+    const pfade = ["0031-224-synthetische-bezieher", "0031-234-probe-erstbezug-ci", "0022-154-fabrik-abweichungen", "0022-244-modulkopien"].map((n) => `docs/adr/fortschreibungen/${n}.md`);
+    const dateien = getrackteTextdateien().filter((d) => pfade.includes(d.pfad));
+    assert.equal(dateien.length, pfade.length);
+    assert.deepEqual(findeReste(dateien, RESTE_BEZIEHER_LISTE, []), []);
+  });
+
+  test("jede Regel hat einen Fix", () => {
+    for (const r of RESTE_BEZIEHER_LISTE) assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
   });
 });

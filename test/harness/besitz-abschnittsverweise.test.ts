@@ -25,7 +25,7 @@
  * (Teilmenge). Ein Eintrag, den kein Besitz-Text mehr setzt, ist rot (streichen).
  *
  * Grenzen (geschlossen): nur Muster 8 und die Formen oben (andere Verweisarten decken Anker-Stubs ab; Test-Pfade und `.yml` sind im Bezieher still). Der Ring oberflaeche reist
- * nie in einen Bezieher (ADR 0029): keine strenge Form, nur die Fabrik-Form-Prüfung. Ob die Bezieher-Seite die Überschrift wirklich trägt, sieht nur die Vor-Tag-Probe.
+ * nie in einen Bezieher (ADR 0029): keine strenge Form, nur die Fabrik-Form-Prüfung. Ob die Bezieher-Seite die Überschrift wirklich trägt, sehen erst die Gates des Beziehers bei dessen Update.
  * Zusätzliche Überschriften auf einer eigenen Bezieher-Seite zählen nicht.
  *
  * Abgrenzung zu den Repo-weiten Gates (factory#245 K2): dieser Wächter ist der einzige für die BEZIEHER-Sicht auf Kern-Verweise (Kern-Block statt ganze AGENTS.md, Ankerliste, strenge Form). Die Gates
@@ -38,7 +38,7 @@
  * Zweite Regel (factory#177): Besitz-Text nennt `npm run <x>` (und `npm test`) nur für die Grundausstattung jedes Beziehers
  * (`BEZIEHER_NPM_SKRIPTE` aus `test/support/bezieher-npm-skripte.ts`, geschlossen); alles andere steht als `node scripts/<x>.mjs`, denn ein Bezieher hat das npm-Skript nicht
  * (Fund „Totes Kommando“ von check:docdrift). Umfang: nur .md in verteilten Einheiten, nur Besitz-Spannen; die .mjs-Laufzeittexte
- * deckt `kern-laufzeittexte.test.ts` mit derselben Liste ab. Grenze: ob ein Bezieher ein Skript wirklich hat, sieht nur die Vor-Tag-Probe; die Liste wächst nur zusammen
+ * deckt `kern-laufzeittexte.test.ts` mit derselben Liste ab. Grenze: ob ein Bezieher ein Skript wirklich hat, sehen erst die Gates des Beziehers bei dessen Update; die Liste wächst nur zusammen
  * mit einer `SIH-Bezieher-Migration:`-Zeile.
  *
  * Ausführen mit:  npm test

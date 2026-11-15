@@ -528,14 +528,12 @@ const boardIdRegex = (config) => {
  * Repo-Name, generisches Board-ID-Muster, Commit-Zeilen-Präfix, Branch- und Worktree-Präfix, Labels (nur Werte mit `:`, ein Wort
  * wie `forum` zählt nie), Agentennamen, Skill-Namen (`skills`, ganze Wörter ohne Bindestrich-Anschluss) und die `projektliterale` der Config (als ganze Wörter, Unicode-Wortgrenzen; ein Wert, der auf `-` oder `_` endet, trifft darum nie: Präfixe decken `Praefix` und `Env` aus `praefixe.commitZeile` ab). Präfix, Branch, Worktree, Label und Agent zählen
  * groß/klein-genau; Branch und Worktree überlappen bewusst (ein Branch-Präfix enthält das Worktree-Präfix).
- * Dazu `Bezieher` (factory#215): der Namensteil jedes Eintrags aus `bezieher` als ganzes Wort (Unicode-Grenzen, groß/klein egal), der Owner fließt in `Owner`; ein Name, der dem Repo-Namen oder einem `projektliterale`-Wert gleicht, ist schon gedeckt und erzeugt keinen zweiten Begriff (Baselines bleiben gleich). Grenze: ein Bezieher-Name, der ein Alltagswort ist, trifft breit.
- * @param {{ repo: string, bezieher?: string[], boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
+ * @param {{ repo: string, boards: { besitzer: string, statusFeldId?: string | number }[], praefixe: { commitZeile: string, branch: string, worktree: string },
  *   labels: Record<string, string>, agenten: Record<string, string>, skills?: Record<string, string>, projektliterale?: Record<string, string> }} config
  * @returns {Record<string, RegExp>} */
 export function begriffeAus(config) {
   const [owner = "", name = ""] = config.repo.split("/");
-  const bezieher = (config.bezieher ?? []).map((r) => r.split("/"));
-  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer), ...bezieher.map(([o = ""]) => o).filter((o) => o !== "")])];
+  const owners = [...new Set([owner, ...config.boards.map((b) => b.besitzer)])];
   const { commitZeile, branch, worktree } = config.praefixe;
   /** @type {Record<string, RegExp>} */
   const out = {
@@ -558,8 +556,5 @@ export function begriffeAus(config) {
   const ganzesWort = (/** @type {string} */ muster) => new RegExp(`(?<![\\p{L}\\p{N}_])${muster}(?![\\p{L}\\p{N}_])`, "giu");
   const wörtlich = (/** @type {string[]} */ werte) => alternative(werte).replaceAll(String.raw`\-`, "-");
   for (const [begriff, literal] of Object.entries(config.projektliterale ?? {})) out[begriff] = ganzesWort(wörtlich([literal]));
-  const gedeckt = new Set([name, ...Object.values(config.projektliterale ?? {})].map((w) => w.toLowerCase()));
-  const bezieherNamen = bezieher.map(([, n = ""]) => n).filter((n) => n !== "" && !gedeckt.has(n.toLowerCase()));
-  if (bezieherNamen.length > 0) out.Bezieher = ganzesWort(`(?:${wörtlich(bezieherNamen)})`);
   return out;
 }

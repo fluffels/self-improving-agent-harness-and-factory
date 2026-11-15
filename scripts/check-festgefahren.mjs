@@ -60,7 +60,7 @@ export function isStuck(distinctFailedPushes) {
 export function buildStuckComment(failedCount, runUrl, label) {
   const fixAttempts = failedCount - 1;
   return [
-    `## ⚓ Festgefahren-Wächter hat angeschlagen (#904)`,
+    `## ⚓ Festgefahren-Wächter hat angeschlagen (quellprojekt#904)`,
     ``,
     `Dieser PR hat **${failedCount} distinct fehlgeschlagene CI-Läufe** auf diesem Branch — das entspricht **${fixAttempts} gescheiterten Fix-Versuchen** nach dem ersten Fehlschlag.`,
     ``,

@@ -343,13 +343,13 @@ function dynamischerGrund(segment, mutierend) {
 }
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
-const frage = (grund, nr = "#1311") => ({ ask: true, reason: `gh-Guard (${nr}): ${grund}. ${REGEL}` });
+const frage = (grund, nr = "quellprojekt#1311") => ({ ask: true, reason: `gh-Guard (${nr}): ${grund}. ${REGEL}` });
 const hatVariable = (text) => qf(text).some(({ c, q, masked }) => c === "$" && q !== "'" && !masked);
 
 /** Ein `gh api`-Aufruf ab seinem Startindex: Außenwirkung (#1204) oder nicht lesbarer Inhalt (#1311), sonst null. */
 function ghApiAufruf(aufruf) {
   const grund = segmentGrund(aufruf);
-  if (grund) return frage(grund, "#1204");
+  if (grund) return frage(grund, "quellprojekt#1204");
   const m = methode(aufruf);
   const dyn = dynamischerGrund(aufruf, m !== null ? m !== "GET" : hatFelder(aufruf));
   return dyn ? frage(dyn) : null;
@@ -427,7 +427,7 @@ function segmentUrteil(segment, command, tiefe) {
   const maske = ohneQuoteInhalt(segment);
   const destruktiv = GH_DESTRUKTIV_TREFFER.exec(maske);
   if (destruktiv) return frage(`\`gh ${destruktiv[2].replace(/\s+/g, " ")}\` ist unumkehrbar (Pre-Flight-Stopp Löschen)`, "factory#397");
-  if (ISSUE_ANLEGEN.test(maske)) return frage(`\`gh issue create\` legt ein Ticket an: ${ANLEGE_WEG}`, "#1693");
+  if (ISSUE_ANLEGEN.test(maske)) return frage(`\`gh issue create\` legt ein Ticket an: ${ANLEGE_WEG}`, "quellprojekt#1693");
   const stellen = ghStellen(segment, maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele gh-api-Aufrufe für die Textprüfung");
   for (const start of stellen) {

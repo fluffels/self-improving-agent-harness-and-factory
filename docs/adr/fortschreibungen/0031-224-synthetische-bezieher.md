@@ -4,12 +4,12 @@ Ergänzt [ADR 0031](../0031-fabrik-ohne-zugriff-auf-bezieher.md); die Fortschrei
 
 ## Kontext
 
-Die Vor-Tag-Probe prüft nur JS/TS-Bezieher (Probe-Erstbezug und gelistete eigene Bezieher). Ein Rot durch Factory-Besitz in einem Profil ohne Stellvertreter zeigte sich erst beim ersten echten Bezieher nach dem Tag, und ein gesetzter Tag wird nie verschoben (factory#215).
+Die Vor-Tag-Probe prüft nur JS/TS-Bezieher (Probe-Erstbezug und gelistete eigene Bezieher, Letzteres bis [factory#500](0031-500-namenlose-vor-tag-probe.md)). Ein Rot durch Factory-Besitz in einem Profil ohne Stellvertreter zeigte sich erst beim ersten echten Bezieher nach dem Tag, und ein gesetzter Tag wird nie verschoben (factory#215).
 
 ## Optionen
 
 - **A: Profil-Fixture im Probe-Erstbezug, als CI-Matrix** (gewählt): `node scripts/probe-erstbezug.mjs --profil <name>` legt über das JS/TS-Fixture die Datei `test/fixtures/probe-profil/<name>.json`; ein CI-Job je Profil, die Checkliste des Tag-Tickets führt je Profil eine Zeile.
-- **B: Handschritt mit `--probe`:** der Mensch trägt das Ergebnis ein. Verworfen: `ciZustand` liest nur `ci.yml`, ein Rot sperrt den Tag dort schon heute; ein Handschritt wird vergessen.
+- **B: Handschritt im Tag-Takt:** der Mensch trägt das Ergebnis von Hand ein. Verworfen: `ciZustand` liest nur `ci.yml`, ein Rot sperrt den Tag dort schon heute; ein Handschritt wird vergessen.
 - **C: Matrix-Umbau des Jobs `Probe-Erstbezug`:** verworfen, der Name des Required Checks würde sich ändern (Ruleset, Pre-Flight).
 - **D: echtes Maven und pytest im Job:** verworfen (Laufzeit, Werkzeug-Installation, kein Gewinn für Factory-Besitz-Rot, das in den Node-Gates entsteht).
 

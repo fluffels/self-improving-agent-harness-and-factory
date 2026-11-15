@@ -3,7 +3,7 @@
 // `#!`-Zeile bricht genau diesen Test-Import (Vitest/esbuild stolpert über das `#!`),
 // darum bewusst weggelassen — analog zu check-size.mjs / check-docdrift.mjs.
 /**
- * Diff-Größenbudget-Wächter (#533) — Frühwarnung gegen zu breite Änderungen.
+ * Diff-Größenbudget-Wächter (quellprojekt#533) — Frühwarnung gegen zu breite Änderungen.
  *
  * Hintergrund (Vorbild: produktiv eingesetzte KI-Entwicklungspipelines): so eine
  * Pipeline plant Code in **Commit-Slices mit hartem Größenbudget** und prüft das
@@ -16,7 +16,7 @@
  * Dieser Wächter misst den Diff des aktuellen Standes gegen `main` und wird ROT,
  * wenn er ein Budget an geänderten Dateien ODER Zeilen überschreitet.
  *
- * WO er beißt (seit #592 primär server-seitig, PR-gegated):
+ * WO er beißt (seit quellprojekt#592 primär server-seitig, PR-gegated):
  *  - Auf einem PR (CI-Checkout mit fetch-depth:0 + FACTORY_DIFF_BASE=PR-Basis, siehe
  *    ci.yml) ist die Vergleichs-Basis auflösbar → der Slice wird als **Required
  *    Check** gemessen und ein zu breiter PR am Merge gehindert. Das ist der
@@ -25,13 +25,13 @@
  *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
  *  - Auf dem push-auf-main-Event (nach dem Merge) setzt ci.yml die Basis auf den
  *    Vorgänger-Commit (FACTORY_DIFF_BASE=github.event.before) → der Check misst den
- *    gerade gemergten Slice AUCH auf main nach (#605, zweite Grenze hinter dem
- *    PR-Gate #592; ein roter main-Lauf blockiert nichts, löst aber den Alarm-Job aus).
+ *    gerade gemergten Slice AUCH auf main nach (quellprojekt#605, zweite Grenze hinter dem
+ *    PR-Gate quellprojekt#592; ein roter main-Lauf blockiert nichts, löst aber den Alarm-Job aus).
  *  - Nur wo keine sinnvolle Basis auflösbar ist (flacher Checkout, workflow_dispatch,
  *    origin/main == HEAD) degradiert der Check bewusst zu GRÜN (No-op), statt `main`
  *    rot zu machen — kein falsches Rot.
  *
- * Override mit Pflicht-Begründung (#1269, gleiches Muster wie die check-size-ALLOWLIST,
+ * Override mit Pflicht-Begründung (quellprojekt#1269, gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split) wird
  * über eine Zeile `<praefixe.commitZeile>Diffsize-Override: #<nr> <warum>` (Präfix `praefixe.commitZeile` der Projekt-Config) am Zeilenanfang einer Commit-
  * Message IM SLICE durchgelassen (am besten ein eigener leerer Commit). Gelesen wird
@@ -43,7 +43,7 @@
  * der Diff aber gar nicht über Budget, wird er als STALE gemeldet (rot) — genau wie ein
  * stale check-size-Eintrag.
  *
- * `GEN:`-Abschnitte (#1411): Zeilen ZWISCHEN den Markern eines generierten Abschnitts in den Dateien, die
+ * `GEN:`-Abschnitte (quellprojekt#1411): Zeilen ZWISCHEN den Markern eines generierten Abschnitts in den Dateien, die
  * `check:docgen` prüft (`markdown` in scripts/docs-gen/config.json), zählen nicht zum Slice. Sie entstehen
  * maschinell, und `check:docgen` prüft sie gegen das Repo; die Marker-Zeilen selbst und GEN-Blöcke in anderen
  * Dateien zählen weiter. Zeilengenau (`git diff -U0`, Maske der alten und der neuen Fassung); ist etwas nicht
@@ -77,9 +77,9 @@ import { dirname, join } from "node:path";
 import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
 
 /** Budget für EINE Änderung. Kalibriert an echten Tickets dieses Projekts: die letzten
- *  liegen bei ~5–8 Dateien und bis ~450 geänderten Zeilen (#529: 8 Dateien / 453).
+ *  liegen bei ~5–8 Dateien und bis ~450 geänderten Zeilen (quellprojekt#529: 8 Dateien / 453).
  *  Bewusst mit Kopffreiheit darüber, damit ein normales Ticket NICHT trippt (sonst
- *  Override-Inflation → der Wächter wird ignoriert, siehe #395-Antipattern), aber
+ *  Override-Inflation → der Wächter wird ignoriert, siehe quellprojekt#395-Antipattern), aber
  *  ein Epic-als-Riesen-Commit auffällt. 800 Zeilen spiegeln das LOC_BUDGET aus
  *  check-size.mjs: ein Slice soll nicht mehr Zeilen ändern, als eine ganze Datei
  *  groß sein darf. Über Env überschreibbar (FACTORY_DIFFSIZE_MAX_FILES/-MAX_LINES). */
@@ -87,12 +87,12 @@ export const MAX_FILES = 20;
 export const MAX_LINES = 800;
 
 /** Generierte, NICHT von Hand geschriebene Artefakte, die aus der Slice-Messung
- *  fallen (#612): Ein Paketmanager-Lockfile ist kein reviewbarer Slice — es wird
+ *  fallen (quellprojekt#612): Ein Paketmanager-Lockfile ist kein reviewbarer Slice — es wird
  *  MASCHINELL aus package.json erzeugt und Zeile-für-Zeile gar nicht gelesen. Es
- *  mitzuzählen bedeutet, dass JEDE Dependency-Ergänzung (z.B. jscpd/#612 zog ~1100
+ *  mitzuzählen bedeutet, dass JEDE Dependency-Ergänzung (z.B. jscpd/quellprojekt#612 zog ~1100
  *  Lockfile-Zeilen für 90 transitive Pakete) das Budget sprengt und einen Override
  *  erzwingt — genau die Override-Inflation, vor der der Wächter selbst warnt
- *  (#395-Antipattern). Der Budget-Zweck („ein unreviewbarer Epic-Riesen-Commit fällt
+ *  (quellprojekt#395-Antipattern). Der Budget-Zweck („ein unreviewbarer Epic-Riesen-Commit fällt
  *  auf") zielt auf von Hand geschriebenen Code; das Lockfile-Volumen ist dafür Rauschen.
  *  Der eigentliche Code-Slice einer Dep-Ergänzung bleibt klein und wird weiter gemessen. */
 export const GENERATED_ARTIFACTS = new Set([
@@ -103,7 +103,7 @@ export const GENERATED_ARTIFACTS = new Set([
 ]);
 
 /** True, wenn `path` ein generiertes Lockfile ist (Basename-Vergleich, damit es
- *  auch in Unterordnern greift). Aus der Slice-Messung ausgenommen (#612). */
+ *  auch in Unterordnern greift). Aus der Slice-Messung ausgenommen (quellprojekt#612). */
 export function isGeneratedArtifact(path) {
   const base = String(path).split(/[\\/]/).pop() ?? "";
   return GENERATED_ARTIFACTS.has(base);
@@ -342,7 +342,7 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen
   try {
     // Drei-Punkt wie check:diffcoverage: misst gegen die Merge-Base, nie gegen eine Basis, die
     // main inzwischen überholt hat. Die PR-CI setzt FACTORY_DIFF_BASE auf den ersten Elternteil des
-    // Merge-Checkouts (ci.yml „Diff-Basis bestimmen“), nicht auf die veraltete `base.sha` (#1240).
+    // Merge-Checkouts (ci.yml „Diff-Basis bestimmen“), nicht auf die veraltete `base.sha` (quellprojekt#1240).
     numstat = git(["diff", "--numstat", `${base}...HEAD`]);
   } catch {
     // Diff nicht messbar → nicht rot machen, degradieren.
@@ -350,10 +350,10 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen
   }
 
   const parsed = parseNumstat(numstat);
-  // Generierte Lockfiles zählen nicht zum reviewbaren Slice (#612).
+  // Generierte Lockfiles zählen nicht zum reviewbaren Slice (quellprojekt#612).
   const lockfileFrei = parsed.files.filter((f) => !isGeneratedArtifact(f.path));
   const excludedCount = parsed.fileCount - lockfileFrei.length;
-  // Zeilen in `GEN:`-Abschnitten zählen nicht (#1411): check:docgen prüft sie; nur Dateien, die er liest.
+  // Zeilen in `GEN:`-Abschnitten zählen nicht (quellprojekt#1411): check:docgen prüft sie; nur Dateien, die er liest.
   const { files, genLines } = ohneGenZeilen(git, base, lockfileFrei, docgenWurzeln ?? ladeDocgenWurzeln());
   const fileCount = files.length;
   const changedLines = files.reduce((s, f) => s + zaehlZeilen(f), 0);
@@ -407,7 +407,7 @@ function main() {
   const measured = `${r.fileCount} Dateien, ${r.changedLines} geänderte Zeilen`;
 
   if (r.excludedCount > 0) {
-    console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (#612).`));
+    console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (quellprojekt#612).`));
   }
   if (r.genLines > 0) {
     console.log(dim(`• ${r.genLines} Zeilen in GEN:-Abschnitten nicht mitgezählt (check:docgen prüft sie).`));

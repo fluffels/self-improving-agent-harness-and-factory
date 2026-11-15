@@ -1,8 +1,8 @@
 // Kein Shebang: das Skript wird gestartet UND von test/diffcoverage.test.ts importiert; eine `#!`-Zeile bricht den Test-Import (analog check-diffsize.mjs).
 /**
- * Diff-Coverage-Wächter (#1021) — die geänderten Zeilen eines Slices müssen getestet sein.
+ * Diff-Coverage-Wächter (quellprojekt#1021) — die geänderten Zeilen eines Slices müssen getestet sein.
  *
- * WARUM zusätzlich zum Coverage-Gate (#495): jenes misst ein Schicht-AGGREGAT. Neuer,
+ * WARUM zusätzlich zum Coverage-Gate (quellprojekt#495): jenes misst ein Schicht-AGGREGAT. Neuer,
  * komplett ungetesteter Code verschwindet im Nenner der ganzen Schicht und reißt keinen
  * Floor (bei ~4000 Domänen-Zeilen fallen 40 neue unter die Rundungsschwelle). Dieser
  * Wächter dreht den Nenner um: gemessen wird nur, was der aktuelle Slice ANFASST.
@@ -13,7 +13,7 @@
  * scripts/coverage-berichte.mjs) ergibt das je Zeile „getestet / nicht getestet". Jeder konfigurierte Bericht ist Pflicht. Bewertet
  * wird PRO SCHICHT über `layerOf()` der Schicht-Definition aus `schichten.layers` (scripts/docs-gen/config.json); die Floors je Schicht
  * stehen in LAYER_DIFF_FLOORS, die Aggregat-Floors in vite.config.ts gelten global. Die Basis-Semantik
- * teilt es sich mit check:diffsize (#533): `resolveBase` steht in check-basis.mjs.
+ * teilt es sich mit check:diffsize (quellprojekt#533): `resolveBase` steht in check-basis.mjs.
  *
  * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
  * Regel in docs/agent-harness.md (Testabdeckung wird gemessen). Die Parse-/Bewertungslogik ist als pure Funktionen exportiert (Test: test/diffcoverage.test.ts).
@@ -30,7 +30,7 @@ import { createRequire } from "node:module";
 import { isMeasured, parseDiffLines, resolveBase } from "./check-basis.mjs";
 import { AUFRUF_EXIT } from "./flag-lib.mjs";
 import { ladeAbdeckung, STANDARD_BERICHTE, berichteAus } from "./coverage-berichte.mjs";
-// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (#112, Konvention #1398), die lcov-Leser in coverage-berichte.mjs (factory#185, Blatt: nicht re-exportiert).
+// Die Diff-Zeilen-Helfer wohnen in der Gate-Lib (factory#112, Konvention quellprojekt#1398), die lcov-Leser in coverage-berichte.mjs (factory#185, Blatt: nicht re-exportiert).
 export { isMeasured, parseDiffLines };
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istGlob, quellenAus, quellenObjekt } from "./quellwurzeln-lib.mjs";
@@ -90,7 +90,7 @@ export const LCOV_PATH = join(WURZEL, ...STANDARD_BERICHTE[0].pfad.split("/"));
  *  berichten, aber nicht gaten (Präsentation/Einstieg hängen an Framework und Oberfläche, per Architektur
  *  unit-untestbar). Kalibriert an den letzten zehn `src`-Commits: Domäne/Anwendung lagen
  *  bei 100 %, Präsentation/Einstieg bei 0-47 %. Die 90/80 liegen bewusst unter dem Ist —
- *  Luft für defensive Guard-Zweige, sonst erzwingt jede Kleinigkeit ein Override (#395).
+ *  Luft für defensive Guard-Zweige, sonst erzwingt jede Kleinigkeit ein Override (quellprojekt#395).
  *  RATCHET: nur per reviewtem Commit ANHEBEN, nie senken, um Rot grün zu bekommen. */
 export const LAYER_DIFF_FLOORS = Object.fromEntries(Object.entries(FLOOR_JE_SCHLUESSEL).filter(([k]) => LAYERS[k] !== undefined).map(([k, floor]) => [LAYERS[k], floor]));
 
@@ -188,7 +188,7 @@ export function evaluateByLayer(changed, lcov, optionen = {}) {
   return { buckets, missing, below };
 }
 
-/** Override-Trailer (#1269, Schlüssel aus `zeilen.diffcovOverride`): eine Zeile `<praefixe.commitZeile>Diffcov-Override: #<nr> <warum>` (Präfix aus der Projekt-Config)
+/** Override-Trailer (quellprojekt#1269, Schlüssel aus `zeilen.diffcovOverride`): eine Zeile `<praefixe.commitZeile>Diffcov-Override: #<nr> <warum>` (Präfix aus der Projekt-Config)
  *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
  *  check:diffsize (scripts/slice-override.mjs), damit es lokal, im PR und auf main gleich wirkt. */
 
@@ -246,7 +246,7 @@ export function checkDiffCoverage({
   const changed = parseDiffLines(diff);
   const measuredFiles = [...changed.keys()].filter((p) => isMeasured(p, quelle));
   // Kein Quellcode angefasst (reiner Doku-/Tooling-Slice) → nichts zu messen, grün.
-  // Ein Override-Trailer ist dann überflüssig (stale, #1309): es gibt nichts durchzulassen.
+  // Ein Override-Trailer ist dann überflüssig (stale, quellprojekt#1309): es gibt nichts durchzulassen.
   if (measuredFiles.length === 0) {
     const { reason, invalid } = sliceOverride(git, base, zeilen.diffcovOverride);
     return { skipped: false, failed: reason !== null, base, nothingToMeasure: true, stale: reason !== null, reason, invalidOverrides: invalid };

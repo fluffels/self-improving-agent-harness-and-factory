@@ -2,6 +2,8 @@
 
 Ergänzt [ADR 0031](../0031-fabrik-ohne-zugriff-auf-bezieher.md): vor dem Tag läuft jeder gelistete Bezieher lesend gegen den Stand. Herkunft: das Epic Java-Profil (factory#171), Teil 8; die Akzeptanzkriterien verlangen, dass „rot“ eines Beziehers das Taggen verhindert.
 
+Überholt durch [Fortschreibung #500](0031-500-namenlose-vor-tag-probe.md): die Fabrik führt keine Namen ihrer Bezieher mehr, Schlüssel `bezieher` und die Probe je Bezieher entfallen; vor dem Tag prüfen nur Probe-Erstbezug und synthetische Bezieher.
+
 ## Kontext
 
 - **Lücke:** der Tag-Takt prüfte nur den Probe-Erstbezug (Fixture im Scratch). Ob ein echter Bezieher mit dem neuen Stand grün bleibt, zeigte erst sein Factory-Update nach dem Tag; ein gesetzter Tag wird nie verschoben, ein Fehler kostet also einen Patch-Tag.
