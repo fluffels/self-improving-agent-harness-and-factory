@@ -59,7 +59,7 @@ describe("Brillen-Dateien (factory#308)", () => {
     assert.deepEqual([...(nachweisRaw as { BEKANNTE_LENSES: string[] }).BEKANNTE_LENSES].sort(), erwartet);
   });
 
-  test("keine Brille trägt einen Selbstcheck-Block (den fährt der Umsetzer, nicht die Lens)", () => {
+  test("keine Brille trägt einen Selbstcheck-Block (gestrichen, factory#531)", () => {
     for (const b of BRILLEN) assert.doesNotMatch(brille(b.key), /Selbstcheck/, b.key);
   });
 

@@ -19,7 +19,7 @@ import * as rawPc from "../scripts/projekt-config-lib.mjs";
 import * as rawKb from "../scripts/kontext-budget-lib.mjs";
 import { ganzesWortMuster } from "./support/regex";
 
-const kb = rawKb as unknown as { knappeBudgets(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[]; anteil?: number; raum?: { file: string; zeichen: number; marker: { start: string; ende: string } } }): { file: string; chars: number; budget: number; rest: number; projekt?: number; raum?: number }[]; kernBlockZeichen(t: string, m: { start: string; ende: string }): number | null; ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
+const kb = rawKb as unknown as { KERN_BLOCK_BUDGET: number; PROJEKT_BLOCK_RAUM: number; knappeBudgets(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[]; anteil?: number; raum?: { file: string; zeichen: number; marker: { start: string; ende: string } } }): { file: string; chars: number; budget: number; rest: number; projekt?: number; raum?: number }[]; kernBlockZeichen(t: string, m: { start: string; ende: string }): number | null; ueberBudget(a: { lies: (d: string) => string | null; budgets?: { file: string; budget: number }[]; ausnahmen?: { datei: string }[] }): { file: string; chars: number; budget: number }[] };
 
 interface Span {
   start: number;
@@ -1418,12 +1418,12 @@ describe("Kontextbudget-Hinweis im Sync (factory#127 L2)", { timeout: 30_000 }, 
       schreibe(z, ".factory/projekt.json", pwConfig("wk-planer"));
       return { z, r: vomTag(baueQuelle(), z, []), kern: kernMit(kernGroesse), vorher };
     };
-    const voll = lauf(15_200, 28_000);
+    const voll = lauf(kb.KERN_BLOCK_BUDGET, 28_000);
     assert.equal(voll.r.code, 0, voll.r.err);
     assert.doesNotMatch(voll.r.out, /Kontextbudget/, "Raum exakt gefüllt: kein Hinweis");
-    const knapp = lauf(15_199, 28_000);
-    assert.match(knapp.r.out, /Hinweis: Kontextbudget knapp: AGENTS\.md Projekt-Block \d+ Zeichen > Projekt-Raum 12800; .*der Sync kürzt nie selbst/);
-    const ueber = lauf(15_200, 28_001);
+    const knapp = lauf(kb.KERN_BLOCK_BUDGET - 1, 28_000);
+    assert.match(knapp.r.out, new RegExp(`Hinweis: Kontextbudget knapp: AGENTS\\.md Projekt-Block \\d+ Zeichen > Projekt-Raum ${kb.PROJEKT_BLOCK_RAUM}; .*der Sync kürzt nie selbst`));
+    const ueber = lauf(kb.KERN_BLOCK_BUDGET, 28_001);
     assert.match(ueber.r.out, /Hinweis: Kontextbudget: AGENTS\.md hätte 28001 Zeichen > Budget 28000/);
     assert.doesNotMatch(ueber.r.out, /Kontextbudget knapp/);
     const text = readFileSync(join(ueber.z, "AGENTS.md"), "utf8");

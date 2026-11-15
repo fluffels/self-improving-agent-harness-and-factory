@@ -69,13 +69,13 @@ export function knappeBudgets({ lies, budgets = CONTEXT_BUDGETS, ausnahmen = [],
 
 /** Zeichen-Budget des Kern-Blocks von AGENTS.md (zwischen den Besitz-Markern `kern`, ohne den Projekt-Block): Ratchet auf den Ist-Wert, wächst nur bewusst per reviewtem Commit
  *  (factory#208 L19: der Kern wuchs zwischen zwei Tags um ~1,1k Zeichen und brachte einen Bezieher über sein Gesamtbudget). */
-export const KERN_BLOCK_BUDGET = 15_200; // factory#222: -100 (Fabrik-Klausel in den Projekt-Block, Raum wächst gleich); davor factory#221: -137 (Ratchet-Test test/kern-block-budget.test.ts: Abstand < 100) (Rollen-Text für Harness-Befunde abgebaut), Raum wächst gleich; davor factory#269: +450 für den Eingangsfilter der Harness-Zeilen
+export const KERN_BLOCK_BUDGET = 15_000; // factory#531: -200 (Selbstcheck-Satz gestrichen); davor factory#222: -100 (Fabrik-Klausel in den Projekt-Block, Raum wächst gleich); davor factory#221: -137 (Ratchet-Test test/kern-block-budget.test.ts: Abstand < 100) (Rollen-Text für Harness-Befunde abgebaut), Raum wächst gleich; davor factory#269: +450 für den Eingangsfilter der Harness-Zeilen
 
 /** Raum, den der Kern jedem Bezieher außerhalb des Kern-Blocks in AGENTS.md lässt (Projekt-Block samt Projektwerten): `KERN_BLOCK_BUDGET + PROJEKT_BLOCK_RAUM` ist genau das Gesamtbudget von AGENTS.md, ohne Lücke
  *  (factory#177: ein Bezieher mit 12.309 Zeichen Rest, Stand 2026-11-06, sprengte mit dem Kern von 16.572 sein Gesamtbudget). Der Raum sinkt nur zusammen mit einem bewusst erhöhten `KERN_BLOCK_BUDGET`; wächst ein Rest darüber, ist das ein Befund an den Bezieher.
  *  Lückenlos, damit der Probe-Erstbezug (`probe-erstbezug.mjs`, factory#234) mit vollem Raum und einem Kern ein Zeichen über dem Kern-Budget das Gesamtbudget reißt.
  *  Grenze: gerechnet wird mit dem Kern der Fabrik; im Bezieher trägt der Kern zusätzlich die Projektwert-Tabelle (wenige Dutzend Zeichen mehr). */
-export const PROJEKT_BLOCK_RAUM = 12_800;
+export const PROJEKT_BLOCK_RAUM = 13_000; // factory#531: +200 zusammen mit dem Kern-Budget -200 (Summe bleibt das Gesamtbudget)
 
 /** Pur: Meldung, wenn Kern-Budget plus Projekt-Raum das Gesamtbudget von `AGENTS.md` übersteigt oder eine Lücke lässt, sonst `null` (die Raum-Invariante, Wächter `test/harness/raum-vertrag.test.ts`, in der Fabrik auch `check:contextsize`). */
 export function kernRaumBefund({ kern, raum, gesamt }) {
@@ -113,7 +113,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/factory/umsetzer-browser.md", budget: 2_000 },
   { file: ".agents/skills/factory/umsetzer-fortsetzung.md", budget: 3_000 },
   { file: ".agents/skills/factory/umsetzer-gruppen.md", budget: 3_500 },
-  { file: ".agents/skills/factory/umsetzer-guard-proben.md", budget: 2_500 },
+  { file: ".agents/skills/factory/umsetzer-guard-proben.md", budget: 1_500 },
   { file: ".agents/skills/factory/umsetzer-pr-merge.md", budget: 4_000 },
   { file: ".agents/skills/review-lenses/SKILL.md", budget: 10_000 },
   { file: ".agents/skills/review-lenses/ablauf-abnahme-fix.md", budget: 1_500 },
@@ -128,7 +128,7 @@ export const AGENTEN_SKILL_BUDGETS = [
   { file: ".agents/skills/review-lenses/brille-sicherheit.md", budget: 2_500 },
   { file: ".agents/skills/review-lenses/brille-test-adaequanz.md", budget: 7_500 },
   { file: ".claude/agents/explore.md", budget: 1_500 },
-  { file: ".claude/agents/factory-gruppe.md", budget: 7_500 },
+  { file: ".claude/agents/factory-gruppe.md", budget: 7_000 },
   { file: ".claude/agents/factory-lens.md", budget: 12_000 },
   { file: ".claude/agents/factory-planer.md", budget: 17_500 },
   { file: ".claude/agents/factory-umsetzer.md", budget: 19_460 },

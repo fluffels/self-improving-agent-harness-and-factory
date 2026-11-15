@@ -383,7 +383,6 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
       .replace("<worktree>", `C:/dev/projekt/.claude/worktrees/${wt}1`)
       .replace("<TMP>/<praefixe.worktree><nr>-r<runde>.patch", `/tmp/x/${wt}1-r1.patch`)
       .replace("erwarteter HEAD: <sha>", "erwarteter HEAD: abc1234def")
-      .replace("Probe-Protokoll: <Commit-SHAs mit Protokoll | keins>", "Probe-Protokoll: keins")
       .replace(/Plan-Prüfliste: <[^>]*(?:\([^)]*\))?[^>]*>/, "Plan-Prüfliste: entfällt");
     assert.doesNotMatch(gefuellt, /[<>]/, "alle Platzhalter ersetzt");
     assert.equal(deny(agent(gefuellt)), null, gefuellt);
