@@ -7,13 +7,13 @@
  *
  * Ohne Kinder Exit 1, ohne die Status-Option „In Progress“ Exit 2 (je mit Fix-Zeile); steht Status oder Position schon richtig, keine Mutation.
  * Geschrieben wird nur Status und Position des Board-Items (nie Issue, Assignee oder Lock); das Board folgt der Trennregel (`boardRolleFuer`),
- * das Repo ist `repo` der Config. Das io teilt sich diese Datei mit `board-status.mjs` (dort `macheIo`).
+ * das Repo ist `repo` der Config. Das io teilt sich diese Datei mit `board-status.mjs` (dort `macheIo`, Lib `board-status-io.mjs`).
  */
 import { AUFRUF_EXIT, direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { macheIo } from "./board-status.mjs";
+import { macheIo } from "./board-status-io.mjs";
 
 export { macheIo };
 export const ZIEL_STATUS = "In Progress";
