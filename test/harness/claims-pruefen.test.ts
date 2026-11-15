@@ -113,6 +113,7 @@ describe("beurteileClaim: Epic-Rest (L1, offenes Issue mit Kindern ohne Worktree
   test("Kinderliste unvollständig gelesen oder Stand unbekannt: behalten, nie epic-rest", () => {
     assert.equal(urteil(epic({ kinderVollstaendig: false })).grund, "aufgeteiltes Epic, Kinderliste unvollständig gelesen");
     assert.equal(urteil(epic({ kinderOffen: undefined, kinderVollstaendig: undefined })).urteil, "behalten");
+    assert.equal(urteil(epic({ kinderOffen: undefined })).grund, "aufgeteiltes Epic, Kinderliste unvollständig gelesen");
   });
   test("Negativfälle: keine Kinder, Worktree, lokaler Branch, Remote-Branch, PR, geschlossen", () => {
     assert.equal(urteil(claim({ kinder: 0 })).urteil, "lebendig");
@@ -368,9 +369,8 @@ interface IssueWelt {
   labels?: string[];
   title?: string;
   kinder?: number;
-  /** Wie viele der `kinder` noch offen sind (Standard 0: alle geschlossen); `kinderUnvollstaendig`: totalCount größer als die gelesene Liste. */
+  /** Wie viele der `kinder` noch offen sind (Standard 0: alle geschlossen); */
   kinderOffen?: number;
-  kinderUnvollstaendig?: boolean;
   prs?: { number: number; state: string; headRefOid: string; labels?: string[] }[];
 }
 interface Welt {
@@ -443,7 +443,7 @@ function baue(welt: Welt) {
               ...(query.includes("subIssues(first:100){ totalCount nodes{ state } }")
                 ? {
                     subIssues: {
-                      totalCount: (i.kinder ?? 0) + (i.kinderUnvollstaendig ? 1 : 0),
+                      totalCount: i.kinder ?? 0,
                       nodes: Array.from({ length: i.kinder ?? 0 }, (_, k) => ({ state: k < (i.kinderOffen ?? 0) ? "OPEN" : "CLOSED" })),
                     },
                   }

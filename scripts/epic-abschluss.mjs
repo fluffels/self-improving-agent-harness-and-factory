@@ -81,8 +81,9 @@ export function macheIo(repo, { exec } = {}) {
   };
 }
 
-function io() {
-  const repo = process.env.GITHUB_REPOSITORY;
+/** Das io aus der Umgebung (`GITHUB_REPOSITORY`); ohne gültiges Repo meldet erst der Zugriff den Fehler. */
+export function ioAusUmgebung(env) {
+  const repo = env.GITHUB_REPOSITORY;
   if (istRepoForm(repo)) return macheIo(repo);
   // `direktaufruf` hat keinen Fehlerweg für `io`: der Fehler kommt erst beim Zugriff und wird von `fuehreAus` gemeldet.
   const wirf = () => {
@@ -95,7 +96,7 @@ if (istDirektaufruf(import.meta.url)) {
   direktaufruf(process.argv.slice(2), {
     pruefe,
     fehlerErgebnis: (_argv, vorab) => ({ code: AUFRUF_EXIT, out: "", err: `${vorab.fehler}\n${AUFRUF}\n` }),
-    io,
+    io: () => ioAusUmgebung(process.env),
     fuehreAus,
   });
 }

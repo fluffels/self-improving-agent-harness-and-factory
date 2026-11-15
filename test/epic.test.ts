@@ -19,6 +19,7 @@ interface AbschlussIo { repo: string; elternteil(k: number): Eltern; offeneEpics
 const abschluss = rawAbschluss as unknown as {
   fuehreAus(argv: string[], io: AbschlussIo): Ergebnis;
   macheIo(repo: string, o?: { exec: (g: string, a: string[]) => string }): AbschlussIo;
+  ioAusUmgebung(env: Record<string, string>): AbschlussIo;
 };
 interface EpicStand { kinder: number; itemId: string | null; status: string | null; optionen: { id: string; name: string }[]; boardNummer: number; besitzer: string }
 interface EpicIo { laden(nr: number): EpicStand; setzeStatus(item: string, option: string): void }
@@ -41,6 +42,7 @@ describe("kinderStand", () => {
     assert.deepEqual(lib.kinderStand({ total: 2, zustaende: ["CLOSED", "CLOSED"] }), { total: 2, offen: 0, vollstaendig: true });
     assert.deepEqual(lib.kinderStand({ total: 2, zustaende: ["CLOSED", "OPEN"] }), { total: 2, offen: 1, vollstaendig: true });
     assert.deepEqual(lib.kinderStand({}), { total: 0, offen: 0, vollstaendig: true });
+    assert.deepEqual(lib.kinderStand({ total: -1, zustaende: [] }), { total: 0, offen: 0, vollstaendig: true });
   });
   test("mehr Kinder als gelesene Knoten: nicht vollständig", () => {
     assert.equal(lib.kinderStand({ total: 101, zustaende: Array(100).fill("CLOSED") }).vollstaendig, false);
@@ -129,7 +131,7 @@ describe("epic-abschluss: fuehreAus", () => {
       throw new Error("I/O");
     };
     const sperre = { repo: REPO, elternteil: wirf, offeneEpics: wirf, schliesse: wirf };
-    for (const argv of [[], ["abc"], ["0"], ["1", "2"], ["--alle", "5"], ["--unbekannt"], ["-5"]]) {
+    for (const argv of [[], ["abc"], ["0"], ["1", "2"], ["--alle", "5"], ["--unbekannt"], ["-5"], ["5x"], ["12345678901"]]) {
       const r = abschluss.fuehreAus(argv, sperre);
       assert.equal(r.code, 2, argv.join(" "));
       assert.match(r.err, /Aufruf: node scripts\/epic-abschluss\.mjs/);
@@ -139,6 +141,17 @@ describe("epic-abschluss: fuehreAus", () => {
     const r = abschluss.fuehreAus(["30"], io({ wirf: true }).io);
     assert.equal(r.code, 1);
     assert.match(r.err, /✖ kein Netz[\s\S]*Fix:/);
+  });
+});
+
+describe("epic-abschluss: ioAusUmgebung", () => {
+  test("ohne gültiges GITHUB_REPOSITORY: Exit 1 mit Fix-Zeile statt Stacktrace", () => {
+    for (const env of [{}, { GITHUB_REPOSITORY: "kaputt" }]) {
+      const r = abschluss.fuehreAus(["30"], abschluss.ioAusUmgebung(env));
+      assert.equal(r.code, 1);
+      assert.match(r.err, /GITHUB_REPOSITORY fehlt[\s\S]*Fix:/);
+    }
+    assert.equal(abschluss.ioAusUmgebung({ GITHUB_REPOSITORY: REPO }).repo, REPO);
   });
 });
 
@@ -203,6 +216,9 @@ describe("epic.mjs aufgeteilt: fuehreAus", () => {
     assert.match(r.out, /#20: Status „Todo“ → „In Progress“/);
     assert.deepEqual(w.mutationen, [["item-1", "o-ip"]]);
   });
+  test("Item ohne Status-Wert: Ausgabe nennt „leer“", () => {
+    assert.match(epic.fuehreAus(["aufgeteilt", "20"], epicIo(stand({ status: null })).io).out, /Status „leer“ → „In Progress“/);
+  });
   test("steht der Status schon richtig: keine Mutation", () => {
     const w = epicIo(stand({ status: "In Progress" }));
     const r = epic.fuehreAus(["aufgeteilt", "20"], w.io);
@@ -235,7 +251,7 @@ describe("epic.mjs aufgeteilt: fuehreAus", () => {
   });
   test("Aufruf-Fehler: Exit 2 vor jedem I/O", () => {
     const sperre = { laden: () => { throw new Error("I/O"); }, setzeStatus: () => { throw new Error("I/O"); } };
-    for (const argv of [[], ["aufgeteilt"], ["aufgeteilt", "x"], ["aufgeteilt", "0"], ["aufgeteilt", "1", "2"], ["abschluss", "1"], ["aufgeteilt", "--x"]]) {
+    for (const argv of [[], ["aufgeteilt"], ["aufgeteilt", "x"], ["aufgeteilt", "0"], ["aufgeteilt", "1", "2"], ["abschluss", "1"], ["aufgeteilt", "--x"], ["aufgeteilt", "5x"], ["aufgeteilt", "12345678901"]]) {
       const r = epic.fuehreAus(argv, sperre);
       assert.equal(r.code, 2, argv.join(" "));
       assert.match(r.err, /Aufruf: node scripts\/epic\.mjs aufgeteilt <nr>/);
@@ -264,6 +280,24 @@ describe("epic.mjs: macheIo über gh (exec-Naht)", () => {
     h.setzeStatus("item-x", "o-ip");
     const m = aufrufe.at(-1) ?? [];
     assert.ok(m.includes(`p=${produkt?.projectId}`) && m.includes("i=item-x") && m.includes("o=o-ip") && m.includes(`f=${produkt?.statusFeldNodeId}`));
+  });
+  test("Harness-Label: Item und Status-Feld kommen vom factory-Board (Trennregel)", () => {
+    const fabrik = FREMD.boards.find((b) => b.rolle === "factory");
+    const aufrufe: string[][] = [];
+    const exec = (_g: string, args: string[]) => {
+      aufrufe.push(args);
+      const q = args.find((a) => a.startsWith("query=")) ?? "";
+      if (q.includes("issue(number:")) {
+        const nodes = [{ id: "item-p", project: { id: FREMD.boards[0]?.projectId } }, { id: "item-f", project: { id: fabrik?.projectId } }];
+        return JSON.stringify({ data: { repository: { issue: { labels: { nodes: [{ name: FREMD.labels.harness }] }, subIssues: { totalCount: 1 }, projectItems: { nodes } } } } });
+      }
+      return JSON.stringify({ data: { node: { options: OPT } } });
+    };
+    const h = epic.macheIo(config, { exec });
+    assert.equal(h.laden(20).itemId, "item-f");
+    assert.ok(aufrufe[1]?.includes(`f=${fabrik?.statusFeldNodeId}`));
+    h.setzeStatus("item-f", "o-ip");
+    assert.ok(aufrufe.at(-1)?.includes(`p=${fabrik?.projectId}`));
   });
   test("Issue fehlt: Fehler; Item in fremdem Projekt: itemId null", () => {
     const leer = () => JSON.stringify({ data: { repository: { issue: null } } });

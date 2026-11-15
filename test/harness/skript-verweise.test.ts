@@ -90,6 +90,16 @@ describe("toteAufrufe (Fixtures im Speicher)", () => {
     });
     expect(toteAufrufe(settingsAufrufe(settings), ex)).toEqual(["scripts/weg-hook.mjs", "scripts/weg-status.mjs"]);
   });
+  test("Grenzgruppe: jedes Trennerglied erkennt, ein angeklebtes Wort davor nicht", () => {
+    for (const t of ["x; node scripts/weg.mjs", "a && node scripts/weg.mjs", "a | node scripts/weg.mjs", "$(node scripts/weg.mjs)", "`node scripts/weg.mjs`", '"node scripts/weg.mjs"', "'node scripts/weg.mjs'", "node scripts/weg.mjs"]) {
+      expect(toteAufrufe(t, ex), t).toEqual(["scripts/weg.mjs"]);
+    }
+    expect(toteAufrufe("xnode scripts/weg.mjs", ex)).toEqual([]);
+  });
+  test("settings.json: command mit ${CLAUDE_PROJECT_DIR}-Präfix wird aufgelöst", () => {
+    const s = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "node ${CLAUDE_PROJECT_DIR}/scripts/weg.mjs" }] }] } });
+    expect(toteAufrufe(settingsAufrufe(s), ex)).toEqual(["scripts/weg.mjs"]);
+  });
   test("berechnete Pfade und andere Aufrufer werden nicht erkannt (bekannte Grenze)", () => {
     expect(toteAufrufe('node "$SKRIPT"\nnode scripts/${x}.mjs\ntsx scripts/weg.mjs\nnpm run weg', ex)).toEqual([]);
   });
