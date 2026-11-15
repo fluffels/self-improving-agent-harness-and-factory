@@ -1,4 +1,4 @@
-/* Wächter der Kern-Regel „Token-Budget je Lauf“ (factory#560 L11, Quelle factory#565): AGENTS.md trägt im Kern-Block genau einen Punkt mit den drei Verboten, der Erlaubnis für gezielte
+/* @harness-waechter – einziger Durchsetzer seiner Regel. Wächter der Kern-Regel „Token-Budget je Lauf“ (factory#560 L11, Quelle factory#565): AGENTS.md trägt im Kern-Block genau einen Punkt mit den drei Verboten, der Erlaubnis für gezielte
  * Prüfungen und den Review-Grenzen; kein anderes Markdown unter docs/ (außer docs/adr/**) wiederholt den Wortlaut (SSOT, Verweis auf AGENTS.md ist erlaubt).
  * Grenze: Heuristik über feste Schlüsselphrasen; eine umformulierte Kopie der Regel in docs/ findet nur das Muster nicht, ein Review muss sie sehen. */
 import { describe, expect, test } from "vitest";

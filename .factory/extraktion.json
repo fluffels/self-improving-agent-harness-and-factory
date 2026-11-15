@@ -1052,6 +1052,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/token-budget-regel.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/harness/verbleib.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
