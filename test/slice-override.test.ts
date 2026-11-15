@@ -111,7 +111,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
 });
 
 describe("Präfix aus der Config steuert, welche Zeilen zählen (#1741, Red-Green)", () => {
-  const text = `${Z.plan}: ${FREMD.agenten.planer}\n${Z.review}: head=${HEAD40} runden=1 lenses=doku blocker=doku:0 verdikt=ok\n${Z.diffsizeOverride}: #5 weil`;
+  const text = `${Z.plan}: ${FREMD.agenten.planer}\n${Z.review}: head=${HEAD40} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 verdikt=ok\n${Z.diffsizeOverride}: #5 weil`;
   it("mit AB- zählen die Zeilen der Fremd-Config nicht, AB-Zeilen schon", () => {
     const ab = so.commitZeilen("AB-", FREMD.agenten.planer);
     const n = nl.parseNachweis(text, ab);

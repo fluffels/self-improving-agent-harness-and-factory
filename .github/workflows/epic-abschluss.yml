@@ -1,0 +1,51 @@
+name: Epic-Abschluss
+
+# Ein aufgeteiltes Epic bleibt offen und schließt mit seinem letzten Kind (factory#507 L4): bei issues.closed prüft das Kind sein Elternteil,
+# täglich und von Hand alle offenen Epics (`--alle`; ein Close durch GITHUB_TOKEN löst keinen issues.closed-Lauf aus). Nur Nummern und Zustände,
+# kein Secret, kein Install. Mechanik: docs/harness-glossar.md › Epic-Abschluss.
+
+on:
+  issues:
+    types: [closed]
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: epic-abschluss
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  epic-abschluss:
+    name: Epic-Abschluss (factory#507)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Elternteil des geschlossenen Kindes prüfen
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          KIND: ${{ github.event.issue.number }}
+        run: node scripts/epic-abschluss.mjs "$KIND"
+
+      - name: Alle offenen Epics prüfen
+        if: github.event_name != 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/epic-abschluss.mjs --alle

@@ -8,7 +8,7 @@ import * as kennzahlenRaw from "../scripts/factory-kennzahlen.mjs";
 
 type Punkt = { stand: number; sevenDay?: { pct: number; resetsAt: number }; fiveHour?: { pct: number; resetsAt: number } };
 type Fenster = { luecke: string } | { delta: number };
-type Ticketzeile = { ticket: number; pr: number; gemergt: string; blocker: { lens: string; n: number }[] | null; nacharbeit: string; fristAbgelaufen: boolean };
+type Ticketzeile = { ticket: number; pr: number; gemergt: string; blocker: { lens: string; n: number }[] | null; sollte?: { lens: string; n: number }[] | null; nacharbeit: string; fristAbgelaufen: boolean };
 type Auswertung = {
   zeilen: { ticket: number; pr: number; pp?: number; luecke?: string }[];
   gemessen: number;
@@ -329,6 +329,15 @@ describe("aboKontingent und Abschnitt", () => {
     expect(a.gemessen).toBe(3);
     expect(a.blocker).toEqual({ n: 1, von: 2 });
     expect(a.folge).toEqual({ n: 2, von: 2, offen: 1, offenMitFolge: 0 });
+  });
+  test("Blocker-Quote zählt auch einen sollte-Fund (factory#530), einen Hinweis allein nicht, und ohne sollte-Feld (alte Zeile) nur blocker", () => {
+    const t = [
+      zeile(1, { blocker: [{ lens: "a", n: 0 }], sollte: [{ lens: "a", n: 1 }] }),
+      zeile(2, { blocker: [{ lens: "a", n: 0 }], sollte: [{ lens: "a", n: 0 }] }),
+      zeile(3, { blocker: [{ lens: "a", n: 1 }] }),
+      zeile(4, { blocker: [{ lens: "a", n: 0 }] }),
+    ];
+    expect(eins([punkt(claim, 10), punkt(merge, 11)], t).blocker).toEqual({ n: 2, von: 4 });
   });
   test("Folge-Quote: Folgen bei offener Frist zählen nicht in Zähler und Nenner, erscheinen aber als offen mit Folge", () => {
     const TAG = 24 * 60 * MIN;

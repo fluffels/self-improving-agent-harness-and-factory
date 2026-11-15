@@ -318,7 +318,7 @@ describe("check-review-nachweis rechnet die Stufe selbst (K3, K4, K5)", () => {
     const { git, base } = repo(aenderungen, nachweis);
     return (reviewRaw as { checkReviewNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkReviewNachweis({ runGit: git, env: { FACTORY_DIFF_BASE: base }, ladeZeilen: () => Z });
   };
-  const nach = (plan: string, lenses: string, blocker = lenses.split(",").map((l) => `${l}:0`).join(",")) => `${Z.plan}: ${plan}\n${Z.review}: head=<HEAD> runden=1 lenses=${lenses} blocker=${blocker} verdikt=ok`;
+  const nach = (plan: string, lenses: string, blocker = lenses.split(",").map((l) => `${l}:0`).join(",")) => `${Z.plan}: ${plan}\n${Z.review}: head=<HEAD> runden=1 lenses=${lenses} blocker=${blocker} sollte=${blocker.replace(/:\d+/g, ":0")} hinweis=${blocker.replace(/:\d+/g, ":0")} verdikt=ok`;
   const KLEIN = { "src/a.ts": "export const a = 1;\n" };
   const DREI = "architektur,requirement-treue,test-adaequanz";
 
@@ -370,7 +370,7 @@ describe("check-abnahme-nachweis: entfaellt — klein nur bei berechnetem S (K3)
   const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
   const AK = "## Akzeptanzkriterien\n1. eins\n2. zwei\n";
   const pruefe = (aenderungen: Record<string, string>, abnahme: string, body = AK) => {
-    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert verdikt=ok\n${Z.abnahme}: ${abnahme}`);
+    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok\n${Z.abnahme}: ${abnahme}`);
     return (abnahmeRaw as { checkAbnahmeNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkAbnahmeNachweis({
       runGit: git,
       gh: () => ({ body }),

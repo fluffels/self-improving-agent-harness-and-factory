@@ -7,6 +7,7 @@
  * Grenzen: docs/model-routing.md (Fabrik) › „Nach einer Optimierung vergleichen“ und §6.
  */
 import { median } from "./mess-lib.mjs";
+import { runde1LoestFixAus } from "./nachweis-lib.mjs";
 
 /** Höchster Abstand eines Messpunkts zu Claim bzw. Merge. */
 export const TOLERANZ_MS = 30 * 60_000;
@@ -166,7 +167,7 @@ export function claimsAusAntwort(antwort, mergeJeTicket) {
 }
 
 /**
- * Wertet den Zeitraum aus. `tickets` = Lauf-Zeilen `{ ticket, pr, gemergt, blocker, nacharbeit }`, `claims` = Map aus `claimsAusAntwort`,
+ * Wertet den Zeitraum aus. `tickets` = Lauf-Zeilen `{ ticket, pr, gemergt, blocker, sollte, nacharbeit }` (`sollte` seit factory#530: auch ein sollte-Fund löst die Fix-Runde aus, `runde1LoestFixAus`), `claims` = Map aus `claimsAusAntwort`,
  * `von`/`bis` in ms. Blocker-Quote über die gemessenen Tickets mit `blocker`-Feld, Folge-Quote über gemessene Tickets mit `fristAbgelaufen === true` (Feld aus `lauf-ergebnis.mjs`, dort die einzige Fristberechnung). Pur.
  */
 export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
@@ -189,7 +190,7 @@ export function aboKontingent({ tickets, punkte, kaputt, claims, von, bis }) {
     gesamt: tickets.length,
     median: median(zeilen.map((z) => z.pp).filter((x) => x !== undefined)),
     kontrolle: kontrollzahl(punkte, { von, bis, anzahlTickets: tickets.length }),
-    blocker: { n: mitBlocker.filter((t) => t.blocker.some((b) => b.n > 0)).length, von: mitBlocker.length },
+    blocker: { n: mitBlocker.filter(runde1LoestFixAus).length, von: mitBlocker.length },
     folge: { n: mitFrist.filter(istFolge).length, von: mitFrist.length, offen: gemessen.length - mitFrist.length, offenMitFolge: gemessen.filter((t) => !mitFrist.includes(t) && istFolge(t)).length },
     kaputt,
   };

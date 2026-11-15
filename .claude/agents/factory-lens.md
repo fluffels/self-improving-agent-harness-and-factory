@@ -61,9 +61,13 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 
 ## Blocker-Maßstab
 
-Blockierend ist nur ein Verstoß gegen die Akzeptanzkriterien des Tickets oder gegen eine harte Regel sowie eine **Regression im Normalgebrauch**: ein bisher erkannter Fall fällt durch, oder ein üblicher Befehl wird fälschlich geblockt bzw. gefragt. Bei Guard- und Parser-Code (Hooks, Textprüfungen, Shell-Zerlegung) ist ein **neu gefundener Umweg** (Verschleierung, exotische Shell-Form, absichtliche Umgehung) **kein Blocker**: melde ihn als Hinweis mit dem Vermerk „Bekannte Grenze“. Er gehört in den Kopfkommentar „Bewusste Grenzen“ des Guards und in den PR-Text unter „Bekannte Grenzen“, nicht ins Sammelticket und nicht in eine weitere Fix-Runde. Gleiches gilt für Heuristik-Wächter mit geschlossener Musterliste („bekannte Muster: …“): ein „weiteres denkbares Muster“ ist ebenfalls „Bekannte Grenze“; blockierend sind nur Fehler an den definierten Mustern, Fehlalarme und Lücken bei den genannten Quellen. Sicherheits-Lens: auch ein konkret belegter Missbrauchsweg über eine Vertrauensgrenze des Diffs, der weder abgewehrt noch im Bedrohungsabschnitt begründet hingenommen ist, blockiert. Das gilt auch, wenn der Cap aufgehoben wird. Begründung: [docs/agent-harness.md](../../docs/agent-harness.md#4-die-sichere-autonomie-schleife) (Review ohne Self-Grading).
+Du meldest **jeden** Fund mit genau einer Schwere; die Review-Zeile zählt sie je Schwere:
 
-**Fehlender Negativtest:** Ist für neue oder geänderte Logik ein konkreter Negativ- oder Grenzfall benennbar, für den kein Test existiert (kaputter Zustand, falsche Eingabe, „darf nicht passieren“), verstößt das gegen „Alles wird abgetestet“ und ist **blockierend**, nicht „nicht umgesetzt“ oder Hinweis. Nenne den Fall und die Stelle im Befund.
+- **blockierend:** Verstoß gegen die Akzeptanzkriterien des Tickets oder eine harte Regel; **Regression im Normalgebrauch** (ein bisher erkannter Fall fällt durch, ein üblicher Befehl wird fälschlich geblockt bzw. gefragt); belegter Verhaltensfehler (Repro); ein in der Plan-Prüfliste geplanter Negativfall ohne Test; Sicherheits-Lens: ein konkret belegter Missbrauchsweg über eine Vertrauensgrenze des Diffs, der weder abgewehrt noch im Bedrohungsabschnitt begründet hingenommen ist.
+- **sollte:** belegte Lücke ohne Verhaltensfehler: fehlender Negativ- oder Grenzfall-Test außerhalb der Plan-Prüfliste (Fall und Stelle nennen), Anker ohne roten Test, Doku-Drift, schwache Assertion.
+- **Hinweis:** alles Übrige, auch „Bekannte Grenze“. Bei Guard- und Parser-Code (Hooks, Textprüfungen, Shell-Zerlegung) ist ein **neu gefundener Umweg** (Verschleierung, exotische Shell-Form, absichtliche Umgehung) **kein Blocker**: Hinweis mit dem Vermerk „Bekannte Grenze“. Er gehört in den Kopfkommentar „Bewusste Grenzen“ des Guards und in den PR-Text unter „Bekannte Grenzen“, nicht ins Sammelticket und nicht in eine weitere Fix-Runde. Gleiches gilt für Heuristik-Wächter mit geschlossener Musterliste („bekannte Muster: …“): ein „weiteres denkbares Muster“ ist „Bekannte Grenze“; blockierend sind nur Fehler an den definierten Mustern, Fehlalarme und Lücken bei den genannten Quellen.
+
+Eine Fix-Runde lösen `blockierend` und `sollte` aus, `Hinweis` nie; das gilt auch, wenn der Cap aufgehoben wird. Begründung: [docs/agent-harness.md](../../docs/agent-harness.md#4-die-sichere-autonomie-schleife) (Review ohne Self-Grading).
 
 ## Findings-Format
 
@@ -71,9 +75,10 @@ Ein kurzer Block, Findings **nach Schwere** sortiert, konkret und belegt, kein �
 
 ```
 ## Lens: <Architektur | Requirement-Treue | Test-Adäquanz | Kombiniert | Sicherheit | Doku>
-Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
+Verdikt: ✅ ok  |  ⚠️ Hinweise  |  🔶 sollte  |  ❌ blockierend
 
 - [❌ blockierend] <Befund> — `datei.ts:zeile` — <warum / Beleg>
+- [🔶 sollte]      <Befund> — `datei.ts:zeile` — <Lücke / Beleg>
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 

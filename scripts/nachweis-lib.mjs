@@ -18,6 +18,14 @@ export const KOMBI_LENS = "kombiniert";
 /** Sicherheits-Lens der Risikoklasse hoch (factory#334): läuft zusätzlich zu den Code-Brillen, Prüffragen in `brille-sicherheit.md`. */
 export const SICHERHEITS_LENS = "sicherheit";
 export const BEKANNTE_LENSES = [...CODE_LENSES, KOMBI_LENS, SICHERHEITS_LENS, "doku"];
+/** Hat Runde 1 einer Lauf-Zeile `{blocker, sollte}` eine Fix-Runde ausgelöst (factory#530)? Nur mit `blocker=`-Feld (der Nenner der Quoten zählt nur solche PRs); beide Schweren `blockierend` und `sollte` lösen sie aus, `hinweis` nie.
+ *  Die eine Regel hinter „Runde 1 mit Blocker“ in lauf-ergebnis.mjs und abo-kontingent-lib.mjs. Ein fehlendes `sollte` (alte Zeile) zählt 0. Pur. */
+export function runde1LoestFixAus(z) {
+  if (!z.blocker) return false;
+  return z.blocker.some((b) => b.n > 0) || (z.sollte?.some((b) => b.n > 0) ?? false);
+}
+/** Pflichtfelder der Review-Zeile neben `blocker=` (factory#530): Zahl der `[🔶 sollte]`- und `[⚠️ Hinweis]`-Funde je Brille des vollen Passes (Runde 1). */
+export const SCHWERE_PFLICHTFELDER = Object.freeze(["sollte", "hinweis"]);
 /** Die vier Teile der Bedrohungs-Zeile (factory#334, Format: [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)); die Prüfregel steht nur in `bewerteKlasseHoch` (check-review-nachweis.mjs). */
 export const BEDROHUNGS_TEILE = Object.freeze(["daten", "grenzen", "missbrauch", "datenschutz"]);
 
@@ -73,7 +81,7 @@ function lensenAus(reviewWert) {
     .filter(Boolean);
 }
 
-/** Feld `<key>=name:n,…` der Review-Zeile (`blocker` #1123, `teilbrillen` factory#402) → `[{lens, n}]`; `null`, wenn das Feld fehlt (alte Zeilen).
+/** Feld `<key>=name:n,…` der Review-Zeile (`blocker` #1123, `sollte` und `hinweis` factory#530, `teilbrillen` factory#402) → `[{lens, n}]`; `null`, wenn das Feld fehlt (alte Zeilen).
  *  Eine kaputte Zahl wird NaN, bewertet erst bewerteNachweis. */
 function brillenZahlenAus(reviewWert, key) {
   const wert = feldWert(reviewWert, key);
@@ -167,6 +175,8 @@ export function parseNachweis(text, zeilen) {
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
       blocker: brillenZahlenAus(reviewWert, "blocker"),
+      sollte: brillenZahlenAus(reviewWert, "sollte"),
+      hinweis: brillenZahlenAus(reviewWert, "hinweis"),
       teilbrillen: brillenZahlenAus(reviewWert, "teilbrillen"),
       zusatzpass: zusatzpassAus(reviewWert),
       abnahmefix: abnahmefixAus(reviewWert),
