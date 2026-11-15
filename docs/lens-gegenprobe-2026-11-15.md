@@ -34,6 +34,7 @@ Ein Arm, der einen echten `❌`-Fund verpasst, den R findet, wird nicht übernom
 - **Effort-Beleg** je Lauf (auch R und S): Zählung des Feldes `effort` der Assistant-Zeilen des Transkripts (Einzeiler im Rezept); ein M-Lauf ohne reines `medium` zählt nicht.
 - **Deckel 40 $**: Σ aufgezeichneter Kosten aller Gegenprobe-Subagenten (Lenses, Richter, ungültige Läufe) ab dem Regel-Commit, nach jedem Batch geprüft; bei ≥ 40 $ endet die Gegenprobe als „Deckel“ ohne Wechsel.
 - R, M und S laufen am selben UTC-Tag (2026-11-15), die Arme je Patch im selben Batch.
+- **Kosten-Bremse** (nach dem Abbruch von Welle 1 durch das Nutzungslimit nachgetragen, ergebnisblind, nur aus Kosten): Ein Test-Adäquanz-Paar startet nur bei Σ aufgezeichnet ≤ 29 $; sonst fällt es für beide Arme heraus.
 
 ## Patches
 
