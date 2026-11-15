@@ -1289,6 +1289,15 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     assert.equal(r.risikostufe.stufe, 2);
     assert.equal(r.ok, false);
     assert.match(r.fehler.join("\n"), /Basis kaputt/);
+    const t = checkReviewNachweis({
+      runGit: fakeGit({ messages }),
+      env: { FACTORY_DIFF_BASE: "base" },
+      ladeText: () => {
+        throw new Error("Leitplanken kaputt");
+      },
+    } as never) as { ok: boolean; fehler: string[]; risikostufe: Stufe };
+    assert.equal(t.risikostufe.stufe, 2);
+    assert.match(t.fehler.join("\n"), /Leitplanken kaputt/);
   });
   test("K7: die alten S-Formen gelten nur bei berechneter Stufe ≤ 1", () => {
     const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;

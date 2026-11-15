@@ -453,6 +453,11 @@ describe("ausloeser bei Stufe 1 (factory#526)", () => {
     const b = stufe([eins("src/x.test.ts"), eins("src/y.ts")]) as Ergebnis & { ausloeser?: string };
     expect(b.ausloeser).toBe("src/y.ts");
   });
+  test("nur Testdateien, davon eine unter test/harness/: der Wächter-Test ist der Auslöser", () => {
+    const e = stufe([eins("test/a.test.ts"), eins("test/harness/w.test.ts")]) as Ergebnis & { ausloeser?: string };
+    expect(e.stufe).toBe(1);
+    expect(e.ausloeser).toBe("test/harness/w.test.ts");
+  });
   test("Leitplanken-Markdown: der geschützte Pfad ist der Auslöser", () => {
     const e = stufe([eins("docs/a.md"), eins("AGENTS.md")]) as Ergebnis & { ausloeser?: string };
     expect(e.stufe).toBe(1);
