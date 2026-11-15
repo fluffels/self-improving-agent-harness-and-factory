@@ -5,8 +5,8 @@
  * alles andere steht als `node scripts/<x>.mjs` bzw. `node scripts/gate-befehl.mjs <name>`. Ergänzt `besitz-abschnittsverweise.test.ts`
  * (Besitz-`.md`) um die Laufzeittexte.
  *
- * Muster (geschlossen): `npm run <name>` in `'…'`, `"…"` oder `` `…` ``, außerhalb von Kommentaren. Gelesen wird zeilenweise: Zeilenkommentare, Blockkommentare
- * und ein Zeilenende-Kommentar (` // …`) werden entfernt, was an `npm run` übrig bleibt, steht zwangsläufig in einem Stringliteral.
+ * Muster (geschlossen): `npm run <name>` in `'…'`, `"…"` oder `` `…` ``, außerhalb von Kommentaren. Gelesen wird zeilenweise und quote-bewusst (`ohneKommentare`): Zeilenkommentare, Blockkommentare
+ * und ein Zeilenende-Kommentar (`//` außerhalb eines Strings) werden entfernt, was an `npm run` übrig bleibt, steht zwangsläufig in einem Stringliteral.
  * Grenze: zur Laufzeit zusammengesetzte Strings (`"npm " + "run x"`, `["npm", "run", x]`) erkennt der Scan nicht.
  *
  * Zweite Regel (factory#403 L25): kein eingesetzter Wert der Projektwert-Gruppe `praefixe` (`commitZeile`, `branch`, `worktree`, etwa `<Präfix>Plan:`) in verteilten
@@ -60,7 +60,8 @@ const AUSNAHMEN: Record<string, string[]> = {
 /**
  * Quelltext ohne Kommentare (Zeilen-, Block- und Zeilenende-Kommentare); die Zeilenzahl bleibt erhalten. Je Zeile quote-bewusst: ein `//` oder `/*` in einem
  * String (`"a/*.md"`, `http://x`) ist kein Kommentar. Ein `/*` zählt nur nach Zeilenanfang, Leerraum oder `;{}()` als Blockbeginn (nicht im Regex-Literal `[/*]`).
- * Grenze: ein Quote-Zeichen in einem Regex-Literal verdeckt den Rest der Zeile als „String“ (fail-closed: der Rest bleibt im Scan, ein Kommentar dort wäre ein Fund).
+ * Grenzen: ein Quote-Zeichen in einem Regex-Literal verdeckt den Rest der Zeile als „String“ (fail-closed: der Rest bleibt im Scan, ein Kommentar dort wäre ein Fund);
+ * die Folgezeile eines mehrzeiligen Template-Literals beginnt ohne Quote-Zustand, ein `//` darin schneidet den Rest der Zeile ab (fail-open, im Repo ohne Fund, Probe alt/neu: 0 verlorene Zeilen).
  */
 export function ohneKommentare(text: string): string {
   let imBlock = false;
@@ -87,7 +88,8 @@ export function ohneKommentare(text: string): string {
         if (c === "'" || c === '"' || c === "`") {
           quote = c;
           aus += c;
-        } else if (c === "/" && zeile[i + 1] === "/") break;
+        } else if (c === "\\" && i + 1 < zeile.length) aus += c + zeile[++i];
+        else if (c === "/" && zeile[i + 1] === "/") break;
         else if (c === "/" && zeile[i + 1] === "*" && (i === 0 || /[\s;{}()]/.test(zeile[i - 1]))) {
           imBlock = true;
           i++;
@@ -226,6 +228,11 @@ describe("Verteilte Skripte nennen Ticketnummern in Strings mit Herkunft (factor
     expect(nr('const re = /(?![/*])/;\nconst b = "(#1311)";')).toEqual(["#1311"]);
     expect(nr('const u = "http://x"; const b = "(#1311)";')).toEqual(["#1311"]);
     expect(nr('x(); /* a */ const b = "(#1311)";')).toEqual(["#1311"]);
+    expect(nr('const a = 1; /* #12 */')).toEqual([]);
+    expect(nr('x();/* #12 */')).toEqual([]);
+    expect(nr("const u = 'http://x'; const b = \"(#1311)\";")).toEqual(["#1311"]);
+    expect(nr('const a = "x\\" // #12";')).toEqual(["#12"]);
+    expect(nr('const r = /https?:\\/\\//; const b = "(#12)";')).toEqual(["#12"]);
     expect(nr('/* a\n#1311 */ const b = "(#12)";')).toEqual(["#12"]);
   });
 });
