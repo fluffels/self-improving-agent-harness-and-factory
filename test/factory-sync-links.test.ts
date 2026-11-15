@@ -338,7 +338,6 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
       assert.equal(r.code, 0, r.err);
       assert.equal(lies(z, DEP), `version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n${SOLL}`);
       assert.deepEqual(doctor.dependabotAusschlussPunkt({ rootDir: z, bezieher: () => true }), [{ punkt: "Dependabot-Ausschluss", ok: true }]);
-      assert.equal(doctor.dependabotAusschlussPunkt({ rootDir: z, bezieher: () => true })[0]?.ok, true);
     });
     test("jeder github-actions-Eintrag bekommt die Liste, auch gequotet und mit Kommentar", () => {
       const { z, r } = erstbezug(`updates:\n  - package-ecosystem: "github-actions" # a\n    directory: /\n  - package-ecosystem: 'github-actions'\n    directory: /x\n`);
@@ -357,6 +356,14 @@ describe("factory-sync --tag: Link-Schritt", { timeout: 30_000 }, () => {
       const mit = `updates:\n  - package-ecosystem: github-actions\n    exclude-paths:\n      - x\n    directory: /\n`;
       const m = erstbezug(mit);
       assert.equal(lies(m.z, DEP), mit);
+    });
+    test("nur .github/dependabot.yml wird ergänzt: eine andere Vorlage mit eingebettetem Snippet bleibt wörtlich", () => {
+      const doku = `updates:\n${ACTIONS}`;
+      const q = baueQuelle({ vorlagen: { [DEP]: VORLAGE, "docs/snippet.md": doku }, besitzDateien: WFTEXT });
+      const z = baueZiel();
+      assert.equal(syncVomTag(q, z, "v2").code, 0);
+      assert.equal(lies(z, "docs/snippet.md"), doku);
+      assert.equal(lies(z, DEP).split("exclude-paths:").length - 1, 1);
     });
     test("unlesbare Vorlage: das Original bleibt, ein Hinweis nennt es", () => {
       const kaputt = `${VORLAGE}# a\tb\n`;

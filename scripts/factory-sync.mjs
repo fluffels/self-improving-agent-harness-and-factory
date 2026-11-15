@@ -77,7 +77,7 @@ const DEPENDABOT = ".github/dependabot.yml";
 /** Die Vorlage `.github/dependabot.yml` bekommt `exclude-paths` der verteilten Workflows (`ausschluss`: `{ pfade, meldungen }`), damit der Doctor-Punkt Dependabot-Ausschluss im Erstbezug nicht sofort eine Lücke meldet (factory#499 L6). */
 function mitAusschluss(text, ausschluss) {
   if (ausschluss === null) return text;
-  const e = mitWorkflowAusschluss(text, [...new Set(ausschluss.pfade)]);
+  const e = mitWorkflowAusschluss(text, ausschluss.pfade);
   if (e.hinweis !== null) ausschluss.meldungen.push(`${DEPENDABOT}: ${e.hinweis}`);
   return e.text;
 }

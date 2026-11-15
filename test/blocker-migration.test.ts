@@ -232,6 +232,8 @@ describe("echteIo (gefälschtes gh)", () => {
     const s1 = echt.ladeSeite(null);
     expect(s1).toEqual({ issues: [{ nummer: 1, id: "N1", body: "blockiert durch #2", zugewiesen: false, nativ: [{ nummer: 5, repo: "x/y", state: "CLOSED", id: "B5" }] }], weiter: "C1" });
     expect(aufrufe[0]?.args.find((a) => a.startsWith("query="))).toMatch(/assignees\(first:1\)\{ ?totalCount ?\}/);
+    const frage = aufrufe[0]?.args.find((a) => a.startsWith("query=")) ?? "";
+    expect(frage).toMatch(/nodes\{ id number body .*blockedBy\(first:100\)\{ nodes\{ id number state repository\{ nameWithOwner \} \}/);
     expect(aufrufe[0]?.args.some((a) => a.startsWith("after="))).toBe(false);
     const s2 = echt.ladeSeite("C1");
     expect(s2.weiter).toBeNull();

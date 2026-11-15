@@ -116,13 +116,14 @@ export const fuehreAus = (env, io) => {
   }
 };
 
-const echteIo = () => ({
+/** Echte Seiteneffekte; `spawn` und `cwd` sind für den Test injizierbar. */
+export const echteIo = (spawn = spawnSync, cwd = WURZEL) => ({
   git: (args) => {
-    const r = spawnSync("git", args, { cwd: WURZEL, encoding: "utf8" });
+    const r = spawn("git", args, { cwd, encoding: "utf8" });
     if (r.status !== 0) throw new Error(`git ${args.join(" ")} schlug fehl: ${(r.stderr || "").trim()}`);
     return r.stdout;
   },
-  gate: (befehl, env) => spawnSync(process.execPath, ["scripts/gate-befehl.mjs", befehl], { cwd: WURZEL, env, stdio: "inherit" }).status ?? 1,
+  gate: (befehl, env) => spawn(process.execPath, ["scripts/gate-befehl.mjs", befehl], { cwd, env, stdio: "inherit" }).status ?? 1,
   out: (z) => console.log(z),
   err: (z) => console.error(z),
 });

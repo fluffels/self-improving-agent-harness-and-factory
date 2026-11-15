@@ -338,6 +338,21 @@ describe("mitWorkflowAusschluss (Vorlage der dependabot.yml, factory#499 L6)", (
     const danach = "updates:\n  - package-ecosystem: github-actions\n  - package-ecosystem: npm\n    exclude-paths:\n      - x\n";
     expect(lib.mitWorkflowAusschluss(danach, P).text).toContain('      - "a.yml"');
   });
+  const AKT = "  - package-ecosystem: github-actions";
+  const EINF = "    exclude-paths:\n      - \"a.yml\"\n      - \"b.yml\"\n";
+  test.each([
+    ["Kopf mit Suffix bleibt wörtlich ($)", "  - package-ecosystem: github-actions-x\n    directory: /\n", null],
+    ["auskommentierter Kopf bleibt wörtlich (^)", "  # - package-ecosystem: github-actions\n    directory: /\n", null],
+    ["Kommentar in Spalte 0 vor vorhandenem exclude-paths", `${AKT}\n# k\n    exclude-paths:\n      - a.yml\n`, null],
+    ["CRLF mit Leerzeile vor vorhandenem exclude-paths", `${AKT}\r\n\r\n    exclude-paths:\r\n      - a.yml\r\n`, null],
+    ["verschachteltes exclude-paths unter groups zählt nicht", `${AKT}\n    groups:\n      exclude-paths:\n        - x\n`, `${AKT}\n${EINF}    groups:\n      exclude-paths:\n        - x\n`],
+    ["exclude-paths nur als Wert, nicht als Schlüssel", `${AKT}\n    schedule: exclude-paths\n`, `${AKT}\n${EINF}    schedule: exclude-paths\n`],
+  ])("Wortlaut der Erkennung: %s", (_n, eintrag, soll) => {
+    const text = `updates:\n${eintrag}`;
+    const r = lib.mitWorkflowAusschluss(text, P);
+    expect(r.hinweis).toBeNull();
+    expect(r.text).toBe(soll === null ? text : `updates:\n${soll}`);
+  });
   test("Gegenprüfung: unlesbares Ergebnis oder ein Eintrag ohne alle Pfade: Original und Hinweis", () => {
     const kaputt = "updates:\n  - package-ecosystem: github-actions\n  - &a\n";
     const k = lib.mitWorkflowAusschluss(kaputt, P);
