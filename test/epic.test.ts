@@ -146,7 +146,7 @@ describe("epic-abschluss: fuehreAus", () => {
 
 describe("epic-abschluss: ioAusUmgebung", () => {
   test("ohne gültiges GITHUB_REPOSITORY: Exit 1 mit Fix-Zeile statt Stacktrace", () => {
-    for (const env of [{}, { GITHUB_REPOSITORY: "kaputt" }]) {
+    for (const env of [{} as Record<string, string>, { GITHUB_REPOSITORY: "kaputt" }]) {
       const r = abschluss.fuehreAus(["30"], abschluss.ioAusUmgebung(env));
       assert.equal(r.code, 1);
       assert.match(r.err, /GITHUB_REPOSITORY fehlt[\s\S]*Fix:/);
