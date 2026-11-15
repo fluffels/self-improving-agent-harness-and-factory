@@ -1,6 +1,5 @@
 /**
  * Sicherheitsprüfung (factory#388): Einstieg mit eingespeisten Nähten, Schreibgrenze, Workflow-Wächter und Sync-Erhalt der Soll-Liste.
- * @probe-echte-dateien liest die echten Quellen `scripts/sicherheitspruefung*.mjs`, `.github/workflows/sicherheitspruefung.yml`, `.github/sicherheitspruefung.json` und `.factory/besitz.json`.
  */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";

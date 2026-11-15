@@ -110,6 +110,7 @@ jobs:
   # dieses Commits mit lokalem Tag, fährt die mechanischen Update-Schritte und das volle verifyKompakt. Jeder Fund ist rot (Kern-Budget, tote Kern-Verweise): die Fabrik findet sie selbst, auch ohne
   # bekannten Bezieher. Kein continue-on-error: sonst bliebe der Lauf grün und der Tag-Takt (ciZustand) sähe den Fund nicht. Required Check im Ruleset main-schutz (factory#263):
   # Rot sperrt den Merge und wirkt zusätzlich über den Blocker im Tag-Ticket und den Alarm auf main. Der Job schreibt nirgends (nur Lesen, nur ein lokaler Klon im Temp-Ordner). Grenze: ersetzt keinen echten Bezieher.
+  # Die Fremd-Config-Probe (factory#496) läuft als zweiter Schritt desselben Jobs: ein eigener Required Check wäre eine Ruleset-Änderung, und in build-test verlängerte sie die Wandzeit.
   # Entscheidung factory#270: kein Pfadfilter und kein Nur-main, weil der Job parallel in 27-38 s gegen 119-187 s von build-test läuft (Wandzeit-Ersparnis 0 s) und ein Filter auf einem Required Check eine kernrelevante Änderung übersehen könnte; Re-Evaluierung in docs/adr/fortschreibungen/0009-270-ci-ein-testlauf.md.
   probe-erstbezug:
     name: Probe-Erstbezug (Erstbezug mit verifyKompakt)
@@ -134,6 +135,9 @@ jobs:
 
       - name: Probe-Erstbezug
         run: node scripts/probe-erstbezug.mjs --quelle "$GITHUB_WORKSPACE" --scratch "$RUNNER_TEMP/probe-erstbezug"
+
+      - name: Fremd-Config-Probe (Kern-Tests gegen fremde Config)
+        run: node scripts/fremd-config-probe.mjs
 
   # Synthetische Bezieher je Profil ohne Stellvertreter (factory#224): dieselbe Kette wie der Probe-Erstbezug, mit der Profil-Fixture aus test/fixtures/probe-profil/<profil>.json (Java, Python: Config-Overlay,
   # Quelldateien, Node-Attrappen für Maven und pytest in der verify-Kette). Die Matrix ist die Liste der Profil-Dateien (Wächter in test/probe-profil.test.ts). Kein Required Check (das wäre eine Ruleset-Änderung):

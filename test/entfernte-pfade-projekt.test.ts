@@ -1,6 +1,6 @@
 /* Projekt-Wächter gegen Textreste des entfernten Mutations-Projektanteils (factory#317, ADR 0022-Fortschreibung zu factory#299).
  *
- * Projekt-Test: steht nicht in .factory/extraktion.json und zieht nicht in Bezieher-Repos. Der Mutationslauf-Kern
+ * Projekt-Test: steht als projekt-test in .factory/extraktion.json und zieht nicht in Bezieher-Repos. Der Mutationslauf-Kern
  * (`scripts/mutation-lauf.mjs`, Gate-Befehl `mutation`) bleibt opt-in; der Projektanteil (Adapter-Config, Werkzeug-Abhängigkeiten,
  * Aufruf) ist entfernt, weil die Messung „nicht brauchbar (Bedingung 3)“ ergab (`docs/mutation-messung-2026-11.md`).
  * Ausnahmen: `docs/adr/` (historisch, schon in AUSNAHMEN), die Messseite (datierter Befund) und dieser Test (trägt die Muster).

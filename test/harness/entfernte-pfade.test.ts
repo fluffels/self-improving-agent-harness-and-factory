@@ -126,7 +126,7 @@ export const RESTE: Rest[] = [
   {
     name: "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)",
     muster: /\b(?:pruefeExtraktion|bezugsTests|zuordnungsLuecken|testHuelle|extraktionsArten|MITZIEHEND|zielDatei|lesebezuege)\b|ruft in diesem Repo kein Test auf/,
-    fix: "die Prüfungen der Extraktionsliste sind gestrichen (Fortschreibung factory#492 zu ADR 0022): besitz-extraktion.mjs hält artVon, musterRegex, importeAus, relativeImporte, testHilfeKopienAbweichend und die Schutzlisten-Auslegung; die Struktur der Liste prüft kein Wächter",
+    fix: "die Prüfungen der Extraktionsliste sind gestrichen (Fortschreibung factory#492 zu ADR 0022): besitz-extraktion.mjs hält artVon, musterRegex, importeAus, relativeImporte, testHilfeKopienAbweichend und die Schutzlisten-Auslegung; die Einordnung der Testdateien prüft test/harness/extraktion-einordnung.test.ts (factory#496), die übrige Struktur der Liste kein Wächter",
   },
 ];
 
