@@ -30,7 +30,9 @@ const NONCE = "n1";
 /** Fake: `antworten` je Schlüssel `<skript|befehl> <arg0>`; Standard Exit 0. `aufrufe` hält die Reihenfolge. */
 function fake(antworten: Record<string, R | R[]> = {}) {
   const aufrufe: string[] = [];
-  const run: Run = (cmd, args) => {
+  const cwds: (string | undefined)[] = [];
+  const run: Run = (cmd, args, o) => {
+    cwds.push(o?.cwd);
     const name = cmd === "node" ? args[0].replace(/^.*[\\/]/, "").replace(".mjs", "") : cmd;
     const schluessel = [name, args[cmd === "node" ? 1 : 0]].join(" ");
     aufrufe.push([name, ...args.slice(cmd === "node" ? 1 : 0)].join(" "));
@@ -38,7 +40,7 @@ function fake(antworten: Record<string, R | R[]> = {}) {
     if (Array.isArray(a)) return a.shift() ?? { code: 0 };
     return a ?? { code: 0, stdout: "" };
   };
-  return { run, aufrufe };
+  return { run, aufrufe, cwds };
 }
 const OFFEN: R = { code: 0, stdout: JSON.stringify({ state: "OPEN", assignees: [{ login: "x" }] }) };
 const startFake = (extra: Record<string, R | R[]> = {}) => fake({ "gh issue": OFFEN, ...extra });
@@ -396,6 +398,26 @@ describe("Härtung nach Review R1", () => {
     expect(f.aufrufe.some((a) => a.split(" ").includes("-b"))).toBe(false);
   });
 
+  test("uebernehmbar, aber Branch fehlt: voller Weg mit fetch und add -b; cwd je Aufruf", () => {
+    const ort2: Ort = { gitCwd: "/g", schritte: { ...ORT.schritte, befehle: [{ args: ["fetch", "origin"], cwd: "/g" }, { args: ["worktree", "add", WT, "-b", BR, "origin/main"], cwd: "/g" }] } };
+    const f = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "uebernehmbar" }, "git rev-parse": { code: 1 } });
+    expect(L.startAblauf({ nr: "7", nonce: NONCE, ort: ort2, run: f.run, existiert: () => false }).code).toBe(0);
+    expect(f.aufrufe).toContain(`git rev-parse --verify --quiet refs/heads/${BR}`);
+    expect(f.aufrufe).toContain("git fetch origin");
+    expect(f.aufrufe).toContain(`git worktree add ${WT} -b ${BR} origin/main`);
+    const g = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "uebernehmbar" } });
+    L.startAblauf({ nr: "7", nonce: NONCE, ort: ort2, run: g.run, existiert: () => false });
+    const i = g.aufrufe.indexOf(`git worktree add ${WT} ${BR}`);
+    expect(i).toBeGreaterThan(0);
+    expect(g.cwds[i]).toBe("/g");
+    expect(g.cwds[i - 1]).toBe("/g");
+  });
+
+  test("stdout „nicht uebernehmbar“ ist kein uebernehmbar (exakte Zeile)", () => {
+    const f = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "nicht uebernehmbar" }, git: { code: 0, stdout: `worktree ${WT}\n` } });
+    expect(start(f).code).toBe(1);
+  });
+
   test("Meldungen: keine leeren Zeilen, keine undefined-Zeilen", () => {
     const r = start(startFake({ "ticket-lock uebernehmen": { code: 4 } }));
     expect(r.zeilen).toEqual([expect.stringMatching(/^ABBRUCH lock:/)]);
@@ -426,6 +448,7 @@ describe("Härtung nach Review R1", () => {
     };
     expect(L.standardRun("gh", ["issue", "view"], { cwd: "/ort", exec } as never).stdout).toBe("ok");
     expect(spy[0][0]).toBe("gh");
+    expect((spy[0][2] as { maxBuffer?: number }).maxBuffer).toBe(256 * 1024 * 1024); // GH_MAX_BUFFER nur über ghText, der Direktweg hat 64 MB
     expect(spy[0][2].cwd).toBe("/ort");
     L.standardRun("git", ["status"], { cwd: "/ort2", exec } as never);
     expect(spy[1][2].cwd).toBe("/ort2");

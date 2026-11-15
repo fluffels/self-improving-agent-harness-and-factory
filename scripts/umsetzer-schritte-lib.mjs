@@ -204,7 +204,7 @@ export function umsetzerCli(art, argv, { wurzel, run = standardRun, existiert = 
     const repos = werte.repo ? aufloesung.repos.filter((r) => r.name === werte.repo) : aufloesung.repos;
     if (repos.length !== 1) return fehler(`--repo <name> angeben (${aufloesung.repos.map((r) => r.name).join(", ")})`);
     const namen = ticketNamen(config);
-    ort = { gitCwd: repos[0].pfad, schritte: worktreeSchritte({ aufloesung, repo: repos[0], worktreeName: namen.worktreeName(nr), branchName: namen.branchName(nr, werte.slug ?? "ende") }) };
+    ort = { gitCwd: repos[0].pfad, schritte: worktreeSchritte({ repo: repos[0], worktreeName: namen.worktreeName(nr), branchName: namen.branchName(nr, werte.slug ?? "ende") }) };
   } catch (e) {
     return { code: 1, out: "", err: `umsetzer-${art}: ${e instanceof Error ? e.message : e}\n` };
   }
