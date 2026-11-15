@@ -249,7 +249,7 @@ describe("endeAblauf", () => {
 
   test("freigeben Exit 4 wird durchgereicht", () => {
     expect(ende(endeFake({ "ticket-lock freigeben": { code: 4, stdout: "offener PR" } })).code).toBe(4);
-    expect(ende(endeFake({ "ticket-lock freigeben": { code: 2 } })).code).toBe(2);
+    expect(ende(endeFake({ "ticket-lock freigeben": { code: 2 } })).code).toBe(1);
   });
 });
 
@@ -313,5 +313,122 @@ describe("umsetzerCli", () => {
     expect(fehl.code).toBe(1);
     expect(fehl.out).toBe("");
     expect(fehl.err).toContain("ROT c u");
+  });
+});
+
+describe("Härtung nach Review R1", () => {
+  const nurAnfang = (f: ReturnType<typeof fake>, n: number) => expect(f.aufrufe).toHaveLength(n);
+
+  test("Exit ≠ 0 mit gültigem JSON zählt nicht als Erfolg (Claim, PR, Issue)", () => {
+    const json = JSON.stringify({ state: "OPEN", assignees: [{ login: "x" }], isDraft: false });
+    const f = fake({ "gh issue": { code: 1, stdout: json } });
+    expect(start(f).code).toBe(4);
+    nurAnfang(f, 1);
+    const g = endeFake({ "gh pr": { code: 1, stdout: json } });
+    expect(ende(g).code).toBe(3);
+    nurAnfang(g, 1);
+    const h = endeFake({ "gh issue": { code: 1, stdout: JSON.stringify({ state: "CLOSED" }) } });
+    expect(ende(h).code).toBe(1);
+    expect(h.aufrufe.some((a) => a.startsWith("cleanup"))).toBe(false);
+  });
+
+  test("Issue ohne assignees-Feld: Claim fehlt", () => {
+    expect(start(fake({ "gh issue": { code: 0, stdout: JSON.stringify({ state: "OPEN" }) } })).code).toBe(4);
+  });
+
+  test("git worktree list scheitert: kein fetch, kein add (Start) und kein remove (Ende)", () => {
+    const f = startFake({ "git worktree": [{ code: 1 }] });
+    expect(start(f).code).toBe(1);
+    expect(f.aufrufe.some((a) => a.startsWith("git fetch") || a.startsWith("git worktree add"))).toBe(false);
+    const g = endeFake({ "git worktree": [{ code: 1 }] });
+    expect(ende(g).code).toBe(1);
+    expect(g.aufrufe.some((a) => a.startsWith("ticket-lock") || a.includes("remove"))).toBe(false);
+  });
+
+  test("Abbrüche ohne Folgeaufrufe: Lock Exit 2, Fremdtext Exit 2, gh pr view mit Müll, issue view Müll", () => {
+    const a = startFake({ "ticket-lock uebernehmen": { code: 2 } });
+    start(a);
+    nurAnfang(a, 2);
+    const b = startFake({ fremdtext: { code: 2 } });
+    start(b);
+    nurAnfang(b, 3);
+    const c = endeFake({ "gh pr": { code: 0, stdout: "kein json" } });
+    ende(c);
+    nurAnfang(c, 1);
+    const d = start(fake({ "gh issue": { code: 0, stdout: "x" } }));
+    expect(d.zeilen.at(-1)).toMatch(/^ABBRUCH claim:/);
+  });
+
+  test("Rerun nach pr-warten Exit 2: PR schon MERGED, kein zweites gh pr merge, Exit 0", () => {
+    const f = endeFake({ "gh pr": { code: 0, stdout: JSON.stringify({ state: "MERGED", isDraft: false, autoMergeRequest: null }) } });
+    expect(ende(f).code).toBe(0);
+    expect(f.aufrufe.some((a) => a.startsWith("gh pr merge"))).toBe(false);
+  });
+
+  test("pr-warten Exit 2 meldet „erneut aufrufen“, Exit 1 „braucht Handeln“", () => {
+    expect(ende(endeFake({ "pr-warten": { code: 2 } })).zeilen.at(-1)).toContain("erneut aufrufen");
+    expect(ende(endeFake({ "pr-warten": { code: 1 } })).zeilen.at(-1)).toContain("braucht Handeln");
+  });
+
+  test("Lens-Worktree-Rest nach remove (gelistet oder Ordner): WORKTREE-REST", () => {
+    const vorher = `worktree ${WT}\nworktree ${WT}-lens-a\n`;
+    const f = endeFake({ "git worktree": [{ code: 0, stdout: vorher }, { code: 0 }, { code: 0 }, { code: 0, stdout: `worktree ${WT}-lens-a\n` }] });
+    const r = ende(f);
+    expect(r.code).toBe(1);
+    expect(r.zeilen.at(-1)).toContain(`${WT}-lens-a`);
+    const g = endeFake({ "git worktree": [{ code: 0, stdout: vorher }, { code: 0 }, { code: 0 }, { code: 0, stdout: "" }] });
+    const r2 = L.endeAblauf({ nr: "7", pr: "9", nonce: NONCE, ort: ORT, run: g.run, existiert: (p) => p.endsWith("-lens-a"), cwd: "/r" });
+    expect(r2.code).toBe(1);
+    expect(r2.zeilen.at(-1)).toContain("-lens-a");
+  });
+
+  test("Lock nur frei (echte Ausgabe „frei“) bei vorhandenem Worktree: Abbruch; Wort nur auf stderr zählt nicht", () => {
+    const f = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "frei" }, git: { code: 0, stdout: `worktree ${WT}\n` } });
+    expect(start(f).code).toBe(1);
+    const g = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "frei", stderr: "nicht uebernehmbar" }, git: { code: 0, stdout: `worktree ${WT}\n` } });
+    expect(start(g).code).toBe(1);
+  });
+
+  test("uebernehmbar mit vorhandenem Branch ohne Worktree: add ohne -b, kein fetch", () => {
+    const f = startFake({ "ticket-lock uebernehmen": { code: 0, stdout: "uebernehmbar" } });
+    expect(start(f).code).toBe(0);
+    expect(f.aufrufe).toContain(`git worktree add ${WT} ${BR}`);
+    expect(f.aufrufe.some((a) => a.split(" ").includes("-b"))).toBe(false);
+  });
+
+  test("Meldungen: keine leeren Zeilen, keine undefined-Zeilen", () => {
+    const r = start(startFake({ "ticket-lock uebernehmen": { code: 4 } }));
+    expect(r.zeilen).toEqual([expect.stringMatching(/^ABBRUCH lock:/)]);
+    const s = start(startFake({ "ticket-lock uebernehmen": { code: 4, stdout: "a\n\nb\n" } }));
+    expect(s.zeilen.slice(0, 2)).toEqual(["a", "b"]);
+  });
+
+  test("Nummern: nur positive Ganzzahlen (nr und pr)", () => {
+    for (const nr of ["0", "a7", "7a", "07", "-1"]) {
+      expect(L.umsetzerCli("start", [nr, "--slug", "a"], { wurzel: "." }).code, nr).toBe(2);
+      expect(L.umsetzerCli("ende", ["7", "--pr", nr, "--nonce", "n"], { wurzel: "." }).code, nr).toBe(2);
+    }
+    const f = startFake();
+    expect(L.umsetzerCli("start", ["12", "--slug", "a"], { wurzel: ".", run: f.run, existiert: () => false }).code).toBe(0);
+  });
+
+  test("--wurzel schlägt die eingespritzte Wurzel", () => {
+    const f = startFake();
+    const r = L.umsetzerCli("start", ["7", "--slug", "a", "--wurzel", "."], { wurzel: "/gibt/es/nicht/515", run: f.run, existiert: () => false });
+    expect(r.code).toBe(0);
+  });
+
+  test("standardRun: gh läuft über die gh-Naht mit cwd, andere Befehle mit cwd; Fehlertext bei fehlendem Programm", () => {
+    const spy: [string, string[], { cwd?: string }][] = [];
+    const exec = (c: string, a: string[], o: { cwd?: string }) => {
+      spy.push([c, a, o]);
+      return "ok";
+    };
+    expect(L.standardRun("gh", ["issue", "view"], { cwd: "/ort", exec } as never).stdout).toBe("ok");
+    expect(spy[0][0]).toBe("gh");
+    expect(spy[0][2].cwd).toBe("/ort");
+    L.standardRun("git", ["status"], { cwd: "/ort2", exec } as never);
+    expect(spy[1][2].cwd).toBe("/ort2");
+    expect(L.standardRun("gibt-es-nicht-515", []).stderr).toContain("gibt-es-nicht-515");
   });
 });

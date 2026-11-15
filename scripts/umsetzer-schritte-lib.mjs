@@ -50,9 +50,9 @@ function fremdtext(nr, run, cwd) {
   return abbruch(r.code === 3 ? 3 : r.code || 1, "fremdtext", text, zeilenAus(r));
 }
 
-/** Worktree anlegen oder (nur nach `uebernehmbar`) weiterverwenden; ein Ordner, den git nicht kennt, ist ein Rest. */
+/** Worktree anlegen oder (nur nach `uebernehmbar`) weiterverwenden; ein vorhandener Branch wird dann ohne `-b` ausgecheckt; ein Ordner, den git nicht kennt, ist ein Rest. */
 function worktreeAnlegen({ nr, ort, run, existiert, uebernehmbar }) {
-  const pfad = ort.schritte.pfad;
+  const { pfad, branch, befehle } = ort.schritte;
   const liste = run("git", ["worktree", "list", "--porcelain"], { cwd: ort.gitCwd });
   if (liste.code !== 0) return abbruch(1, "worktree", "git worktree list scheiterte", zeilenAus(liste));
   if (gelistet(liste.stdout, pfad)) {
@@ -60,7 +60,10 @@ function worktreeAnlegen({ nr, ort, run, existiert, uebernehmbar }) {
     return abbruch(1, "worktree", `${pfad} existiert schon, der Lock meldet nicht uebernehmbar (Ticket #${nr})`);
   }
   if (existiert(pfad)) return abbruch(1, "worktree", `Worktree-Rest ${pfad} (git kennt ihn nicht): node scripts/cleanup-worktrees.mjs --fix`);
-  for (const s of ort.schritte.befehle) {
+  const vorhanden = uebernehmbar && run("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], { cwd: ort.gitCwd }).code === 0;
+  const add = befehle[1];
+  const schritte = vorhanden ? [{ args: ["worktree", "add", pfad, branch], cwd: add.cwd }] : befehle;
+  for (const s of schritte) {
     const r = run("git", s.args, { cwd: s.cwd });
     if (r.code !== 0) return abbruch(1, "worktree", `git ${s.args.join(" ")} scheiterte`, zeilenAus(r));
   }
@@ -90,7 +93,7 @@ export function startAblauf({ nr, nonce, ort, run, existiert }) {
   const ft = fremdtext(nr, run, cwd);
   if (ft.code !== 0) return ft;
 
-  const wt = worktreeAnlegen({ nr, ort, run, existiert, uebernehmbar: lockZeilen.some((z) => z.includes("uebernehmbar")) });
+  const wt = worktreeAnlegen({ nr, ort, run, existiert, uebernehmbar: zeilenAus({ stdout: lock.stdout }).includes("uebernehmbar") });
   if (wt.code !== 0) return { code: wt.code, zeilen: [...lockZeilen, ...ft.zeilen, ...wt.zeilen] };
 
   const pfad = ort.schritte.pfad;
@@ -152,14 +155,14 @@ export function endeAblauf({ nr, pr, nonce, ort, run, existiert, cwd }) {
   const cl = run("node", [skript("cleanup-worktrees"), "--branches", "--fix"], { cwd: c });
   if (cl.code !== 0) return abbruch(1, "cleanup", `cleanup-worktrees Exit ${cl.code}`, zeilenAus(cl));
   const fr = run("node", [skript("ticket-lock"), "freigeben", String(nr), "--nonce", nonce], { cwd: c });
-  if (fr.code !== 0) return abbruch(fr.code === 4 ? 4 : 2, "freigeben", `ticket-lock freigeben Exit ${fr.code}`, zeilenAus(fr));
+  if (fr.code !== 0) return abbruch(fr.code === 4 ? 4 : 1, "freigeben", `ticket-lock freigeben Exit ${fr.code}`, zeilenAus(fr));
   return { code: 0, zeilen: [...a.zeilen, `ENDE OK ${sha}`] };
 }
 
 /** Der echte `run`: `gh` über `gh-cli.mjs`, alles andere per `execFileSync` ohne Shell; ein Fehler ist `code ≠ 0`, nie ein Wurf. */
-export function standardRun(cmd, args, { cwd } = {}) {
+export function standardRun(cmd, args, { cwd, exec = execFileSync } = {}) {
   try {
-    const stdout = cmd === "gh" ? ghText(args) : execFileSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const stdout = cmd === "gh" ? ghText(args, { exec: (c, a, o) => exec(c, a, { ...o, cwd }) }) : exec(cmd, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     return { code: 0, stdout, stderr: "" };
   } catch (e) {
     return { code: typeof e?.status === "number" && e.status !== 0 ? e.status : 1, stdout: String(e?.stdout ?? ""), stderr: String(e?.stderr ?? e?.message ?? e) };

@@ -166,8 +166,8 @@ export function worktreeBefehl({ aufloesung, repo, worktreeName, branchName }) {
  * Pur: dieselben Schritte wie `worktreeBefehl` als Argument-Listen ohne Shell (factory#515): `pfad` (absolut, mit Schrägstrichen), `branch` und `befehle`
  * (je `{ args, cwd }` für git: erst `fetch origin`, dann `worktree add`).
  */
-export function worktreeSchritte({ aufloesung, repo, worktreeName, branchName }) {
-  const zweig = aufloesung.betriebsart === "eingebettet" ? STANDARDZWEIG : standardzweigVon(repo);
+export function worktreeSchritte({ repo, worktreeName, branchName }) {
+  const zweig = standardzweigVon(repo);
   const pfad = `${repo.worktreeOrdner}/${worktreeName}`;
   return {
     pfad,
