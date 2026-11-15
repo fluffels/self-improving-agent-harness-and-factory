@@ -5,9 +5,8 @@
  *   node scripts/epic-abschluss.mjs <kind-nr>   # Elternteil des geschlossenen Kindes prüfen, bei „alle Kinder zu“ kommentieren und schließen
  *   node scripts/epic-abschluss.mjs --alle      # alle offenen Epics des Repos so prüfen (täglicher Rückfall)
  *
- * Läuft im Workflow `epic-abschluss.yml` (Auslöser `issues.closed`, täglich, von Hand) mit `GITHUB_TOKEN` (`issues: write`) und ohne Install:
- * nur Node-Builtins und relative Importe. Gelesen werden nur Nummern und Zustände (nie Titel oder Text); der Kommentar hat festen Text mit Nummern.
- * Das Repo kommt aus `GITHUB_REPOSITORY`. Pure Entscheidung und Grenzen: `epic-lib.mjs`.
+ * Läuft im Workflow `epic-abschluss.yml` mit `GITHUB_TOKEN` (`issues: write`) ohne Install: nur Node-Builtins und relative Importe. Gelesen werden nur
+ * Nummern und Zustände (nie Titel oder Text), der Kommentar hat festen Text mit Nummern. Repo aus `GITHUB_REPOSITORY`; Entscheidung und Grenzen: `epic-lib.mjs`.
  */
 import { AUFRUF_EXIT, direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";

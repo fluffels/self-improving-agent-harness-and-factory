@@ -1,10 +1,8 @@
 name: Epic-Abschluss
 
-# Ein aufgeteiltes Epic bleibt offen (zugewiesen, Status In Progress) und schließt mit seinem letzten Kind (factory#507 L4).
-# - issues.closed: das geschlossene Kind nennt sein Elternteil; sind alle Kinder zu, kommentiert und schließt `scripts/epic-abschluss.mjs`.
-# - schedule/workflow_dispatch: derselbe Lauf über alle offenen Epics (`--alle`) als Rückfall, denn ein Close durch GITHUB_TOKEN löst keinen
-#   issues.closed-Lauf aus (verschachtelte Epics kaskadieren erst hier).
-# Gelesen werden nur Issue-Nummern und Zustände, nie Titel oder Text; kein Secret, kein Install. Mechanik: docs/harness-glossar.md › Epic-Abschluss.
+# Ein aufgeteiltes Epic bleibt offen und schließt mit seinem letzten Kind (factory#507 L4): bei issues.closed prüft das Kind sein Elternteil,
+# täglich und von Hand alle offenen Epics (`--alle`; ein Close durch GITHUB_TOKEN löst keinen issues.closed-Lauf aus). Nur Nummern und Zustände,
+# kein Secret, kein Install. Mechanik: docs/harness-glossar.md › Epic-Abschluss.
 
 on:
   issues:
@@ -24,13 +22,11 @@ jobs:
     name: Epic-Abschluss (factory#507)
     runs-on: ubuntu-latest
     permissions:
-      # issues: write → Kommentar und Close des Epics; contents: read → Checkout des Skripts.
       issues: write
       contents: read
     steps:
       - name: Repo auschecken
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # Kein `ref:` → Default-Branch: das Skript stammt nie aus einem fremden Branch.
         with:
           persist-credentials: false
 

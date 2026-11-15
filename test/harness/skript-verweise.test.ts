@@ -1,15 +1,12 @@
-/* Skript-Verweis-Wächter (factory#507 L3): kein toter Verweis auf ein Skript im Besitz.
+/* Skript-Verweis-Wächter (factory#507 L3): kein toter Verweis auf ein Skript. Ein Sync löscht abgelöste Kern-Dateien im Ziel nie
+ * (`factory-sync.mjs`: „im Ziel nicht gelöscht“), eine Referenz auf ein entferntes Skript bricht dort erst zur Laufzeit.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
  *
- * Ein Sync löscht abgelöste Kern-Dateien im Ziel nie (`factory-sync.mjs`: „im Ziel nicht gelöscht“); eine Referenz auf ein entferntes Skript bleibt
- * dort stehen und bricht erst zur Laufzeit. Der Wächter prüft, dass jedes Ziel existiert. Geschlossene Scan-Liste:
- *   (a) `scripts/**` (`.mjs`, `.cjs`): relative Spezifizierer in `import … from "<rel>"`, `import "<rel>"`, `import("<rel>")` und `require("<rel>")`
- *       mit Literal (Auslegung: `importeAus` in `scripts/besitz-extraktion.mjs`, endungslos über `.mjs`/`.cjs`/`.js`);
- *   (b) `node scripts/<pfad>.(mjs|cjs)` in `.github/workflows/*.yml`, in den Werten von `package.json` › `scripts` und in Hook-`command` und
- *       `args` von `.claude/settings.json` (fehlt die Datei, wird sie übersprungen).
- * Grenzen (nicht erkannt): berechnete Spezifizierer, `tsx` und `npx`, `npm run`-Ketten, Skripte außerhalb von `scripts/`, Markdown (das prüft
- * `check:docdrift`); Text in Kommentaren zählt mit (fail-closed, dann den Kommentar umschreiben).
+ * Geschlossene Scan-Liste: (a) `scripts/**` (`.mjs`, `.cjs`): relative Spezifizierer in `import … from`, `import "<rel>"`, `import("<rel>")`, `require("<rel>")`
+ * (Auslegung `importeAus`, endungslos über `.mjs`/`.cjs`/`.js`); (b) `node scripts/<pfad>.(mjs|cjs)` in `.github/workflows/*.yml`, den Werten von
+ * `package.json` › `scripts` und Hook-`command`/`args` von `.claude/settings.json` (fehlt die Datei: übersprungen). Grenzen: berechnete
+ * Spezifizierer, `tsx`/`npx`, `npm run`-Ketten, Skripte außerhalb `scripts/`, Markdown (`check:docdrift`); Text in Kommentaren zählt mit.
  * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (ADR 0027).
  */
 import { describe, expect, test } from "vitest";

@@ -38,17 +38,13 @@ const parent = (kinder: string[], extra: Record<string, unknown> = {}) => ({
 });
 
 describe("kinderStand", () => {
-  test("alle geschlossen: offen 0, vollständig", () => {
+  test("alle geschlossen: offen 0; ein offenes Kind: offen 1; fehlende Angaben: 0 Kinder", () => {
     assert.deepEqual(lib.kinderStand({ total: 2, zustaende: ["CLOSED", "CLOSED"] }), { total: 2, offen: 0, vollstaendig: true });
-  });
-  test("ein offenes Kind: offen 1", () => {
     assert.deepEqual(lib.kinderStand({ total: 2, zustaende: ["CLOSED", "OPEN"] }), { total: 2, offen: 1, vollstaendig: true });
+    assert.deepEqual(lib.kinderStand({}), { total: 0, offen: 0, vollstaendig: true });
   });
   test("mehr Kinder als gelesene Knoten: nicht vollständig", () => {
     assert.equal(lib.kinderStand({ total: 101, zustaende: Array(100).fill("CLOSED") }).vollstaendig, false);
-  });
-  test("fehlende Angaben ergeben 0 Kinder", () => {
-    assert.deepEqual(lib.kinderStand({}), { total: 0, offen: 0, vollstaendig: true });
   });
 });
 
@@ -60,10 +56,8 @@ describe("abschlussEntscheidung", () => {
   test("ein Kind noch offen: Epic bleibt offen (Negativfall)", () => {
     assert.deepEqual(e(parent(["CLOSED", "OPEN", "CLOSED"])), { aktion: "offen", grund: "1 von 3 Kindern offen" });
   });
-  test("Elternteil schon geschlossen: nichts", () => {
+  test("Elternteil schon geschlossen oder keins: nichts", () => {
     assert.equal(e(parent(["CLOSED"], { state: "CLOSED" })).aktion, "nichts");
-  });
-  test("kein Elternteil: nichts", () => {
     assert.equal(e(null).aktion, "nichts");
     assert.equal(e(undefined).aktion, "nichts");
   });
