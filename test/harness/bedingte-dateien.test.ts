@@ -41,7 +41,7 @@ const KATALOG: Kern[] = [
     muster: /^ablauf-.+\.md$/,
     codexQuelle: null,
     harmlos: ["alt-ablauf-x.md", "ablauf-x.md.orig", "brille-x.md"],
-    dateien: ["abnahme-fix", "filter", "klasse-hoch", "merge-main", "nachweis", "zusatzpass"].map((n) => ({ datei: `ablauf-${n}.md`, tokens: [] })),
+    dateien: ["abnahme-fix", "filter", "klasse-hoch", "merge-main", "nachweis", "risikostufe", "zusatzpass"].map((n) => ({ datei: `ablauf-${n}.md`, tokens: [] })),
   },
   {
     kern: ".claude/agents/factory-umsetzer.md",
@@ -56,6 +56,7 @@ const KATALOG: Kern[] = [
       { datei: "umsetzer-browser.md", tokens: ["Browser", "Langfuse-Status"] },
       { datei: "umsetzer-pr-merge.md", tokens: ["pr-warten", "Exit 1"] },
       { datei: "umsetzer-fortsetzung.md", tokens: ["bestanden", "fix", "handoff"] },
+      { datei: "umsetzer-risikostufe.md", tokens: ["Plan ohne Planer: stufe"] },
     ],
   },
 ];
