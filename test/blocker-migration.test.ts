@@ -109,6 +109,7 @@ describe("migriere --loesen", () => {
     const r = M.migriere({ anwenden: false, loesen: true }, lio(got, (i, b) => got.push([i, b])));
     expect(got).toEqual([]);
     expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^Trockenlauf, würde lösen 2 Kante\(n\) in o\/r:$/m);
     expect(r.out).toMatch(/^würde lösen: #1 ← #2$/m);
     expect(r.out).toMatch(/^würde lösen: #1 ← #3$/m);
     expect(r.out).toMatch(/1 Abfragen, 0 Mutationen/);
@@ -117,6 +118,7 @@ describe("migriere --loesen", () => {
     const got: unknown[][] = [];
     const r = M.migriere({ anwenden: true, loesen: true }, lio(got, (i, b) => got.push([i, b])));
     expect(got).toEqual([["I1", "B2"], ["I1", "B3"]]);
+    expect(r.out).toMatch(/^Löse 2 Kante\(n\) in o\/r:$/m);
     expect(r.out).toMatch(/^löse: #1 ← #2$/m);
     expect(r.out).toMatch(/1 Abfragen, 2 Mutationen/);
   });

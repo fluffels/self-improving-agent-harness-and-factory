@@ -81,6 +81,12 @@ function ladeAlle(ladeSeite) {
   return { issues, abfragen };
 }
 
+const kopfWort = (loesen, anwenden) => {
+  if (loesen) return anwenden ? "Löse" : "Trockenlauf, würde lösen";
+  return anwenden ? "Setze" : "Trockenlauf, würde setzen";
+};
+const kantenZeile = (loesen, anwenden, k) => (loesen ? `${anwenden ? "löse" : "würde lösen"}: #${k.nummer} ← #${k.blockerNummer}` : `  #${k.nummer} ← #${k.blockerNummer}`);
+
 /**
  * Migration mit injizierter I/O (`repo`, `sprache`, `ladeSeite`, `setze(issueNodeId, blockerNodeId)`): Ergebnis `{ code, out, err }`.
  * Ein Fehler beim Laden endet mit Exit 1; ein Fehler beim Setzen einer Kante wird gemeldet, die übrigen Kanten laufen weiter (Exit 1).
@@ -93,12 +99,11 @@ export function migriere({ anwenden, loesen = false }, io) {
     return { code: 1, out: "", err: `✖ Issues nicht ladbar: ${fehlerText(e)}\n` };
   }
   const { kanten, uebersprungen } = loesen ? geschlosseneKanten({ issues: geladen.issues, repo: io.repo }) : fehlendeKanten({ issues: geladen.issues, repo: io.repo, sprache: io.sprache });
-  const kopf = loesen ? (anwenden ? "Löse" : "Trockenlauf, würde lösen") : anwenden ? "Setze" : "Trockenlauf, würde setzen";
-  const zeilen = [`${kopf} ${kanten.length} Kante(n) in ${io.repo}:`];
+  const zeilen = [`${kopfWort(loesen, anwenden)} ${kanten.length} Kante(n) in ${io.repo}:`];
   const fehler = [];
   let mutationen = 0;
   for (const k of kanten) {
-    zeilen.push(loesen ? `${anwenden ? "löse" : "würde lösen"}: #${k.nummer} ← #${k.blockerNummer}` : `  #${k.nummer} ← #${k.blockerNummer}`);
+    zeilen.push(kantenZeile(loesen, anwenden, k));
     if (!anwenden) continue;
     mutationen++;
     try {
