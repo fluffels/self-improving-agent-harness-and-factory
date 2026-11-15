@@ -22,7 +22,8 @@ const abschluss = rawAbschluss as unknown as {
   ioAusUmgebung(env: Record<string, string>): AbschlussIo;
 };
 interface EpicStand { kinder: number; itemId: string | null; status: string | null; optionen: { id: string; name: string }[]; boardNummer: number; besitzer: string }
-interface EpicIo { laden(nr: number): EpicStand; setzeStatus(item: string, option: string): void }
+type PositionsPlan = { noetig: boolean; afterId: string | null };
+interface EpicIo { laden(nr: number): EpicStand; setzeStatus(item: string, option: string): void; positionPlan(item: string): PositionsPlan; setzePosition(item: string, after: string | null): void }
 const epic = rawEpic as unknown as {
   fuehreAus(argv: string[], io: EpicIo): Ergebnis;
   macheIo(config: unknown, o?: { exec: (g: string, a: string[]) => string }): EpicIo;
@@ -194,11 +195,15 @@ describe("epic-abschluss: macheIo über gh (exec-Naht)", () => {
 type Stand = EpicStand;
 const OPT = [{ id: "o-todo", name: "Todo" }, { id: "o-ip", name: "In Progress" }];
 const stand = (extra: Partial<Stand> = {}): Stand => ({ kinder: 2, itemId: "item-1", status: "Todo", optionen: OPT, boardNummer: 2, besitzer: "b", ...extra });
-function epicIo(s: Stand | Error) {
+function epicIo(s: Stand | Error, plan: PositionsPlan = { noetig: false, afterId: null }) {
   const mutationen: [string, string][] = [];
+  const positionen: [string, string | null][] = [];
   return {
     mutationen,
+    positionen,
     io: {
+      positionPlan: () => plan,
+      setzePosition: (item: string, after: string | null) => void positionen.push([item, after]),
       laden: () => {
         if (s instanceof Error) throw s;
         return s;
@@ -225,6 +230,23 @@ describe("epic.mjs aufgeteilt: fuehreAus", () => {
     assert.equal(r.code, 0);
     assert.deepEqual(w.mutationen, []);
   });
+  test("Position (L3): Epic kommt direkt hinter das letzte Kopf-Item, auch bei schon gesetztem Status", () => {
+    const w = epicIo(stand(), { noetig: true, afterId: "PVTI_kopf" });
+    assert.equal(epic.fuehreAus(["aufgeteilt", "20"], w.io).code, 0);
+    assert.deepEqual(w.positionen, [["item-1", "PVTI_kopf"]]);
+    const s = epicIo(stand({ status: "In Progress" }), { noetig: true, afterId: "PVTI_kopf" });
+    const r = epic.fuehreAus(["aufgeteilt", "20"], s.io);
+    assert.deepEqual([s.mutationen, s.positionen], [[], [["item-1", "PVTI_kopf"]]]);
+    assert.match(r.out, /Position/);
+  });
+  test("Position (L3): ohne Kopf-Items ganz oben (afterId null); steht es schon dort, keine Mutation", () => {
+    const oben = epicIo(stand(), { noetig: true, afterId: null });
+    epic.fuehreAus(["aufgeteilt", "20"], oben.io);
+    assert.deepEqual(oben.positionen, [["item-1", null]]);
+    const dort = epicIo(stand(), { noetig: false, afterId: "PVTI_kopf" });
+    epic.fuehreAus(["aufgeteilt", "20"], dort.io);
+    assert.deepEqual(dort.positionen, []);
+  });
   test("ohne Kinder: Exit 1 mit Fix-Zeile, keine Mutation", () => {
     const w = epicIo(stand({ kinder: 0 }));
     const r = epic.fuehreAus(["aufgeteilt", "20"], w.io);
@@ -250,7 +272,8 @@ describe("epic.mjs aufgeteilt: fuehreAus", () => {
     assert.match(r.err, /✖ kein Netz/);
   });
   test("Aufruf-Fehler: Exit 2 vor jedem I/O", () => {
-    const sperre = { laden: () => { throw new Error("I/O"); }, setzeStatus: () => { throw new Error("I/O"); } };
+    const aus = () => { throw new Error("I/O"); };
+    const sperre = { laden: aus, setzeStatus: aus, positionPlan: aus, setzePosition: aus };
     for (const argv of [[], ["aufgeteilt"], ["aufgeteilt", "x"], ["aufgeteilt", "0"], ["aufgeteilt", "1", "2"], ["abschluss", "1"], ["aufgeteilt", "--x"], ["aufgeteilt", "5x"], ["aufgeteilt", "12345678901"]]) {
       const r = epic.fuehreAus(argv, sperre);
       assert.equal(r.code, 2, argv.join(" "));
@@ -298,6 +321,35 @@ describe("epic.mjs: macheIo über gh (exec-Naht)", () => {
     assert.ok(aufrufe[1]?.includes(`f=${fabrik?.statusFeldNodeId}`));
     h.setzeStatus("item-f", "o-ip");
     assert.ok(aufrufe.at(-1)?.includes(`p=${fabrik?.projectId}`));
+  });
+  test("positionPlan (L3): Anker ist das letzte Kopf-Item; schon dort: nicht nötig; setzePosition lässt afterId bei null weg", () => {
+    const aufrufe: string[][] = [];
+    const zeile = (id: string, nr: number, title: string) => ({ node_id: id, content_type: "Issue", content: { number: nr, state: "open", title, repository_url: "https://api.github.com/repos/zz-org/zz-repo", assignees: [] }, fields: [] });
+    const reihenfolge = (...z: ReturnType<typeof zeile>[]) => (_g: string, args: string[]) => {
+      aufrufe.push(args);
+      const q = args.find((a) => a.startsWith("query=")) ?? "";
+      if (q.includes("issue(number:")) return JSON.stringify({ data: { repository: { issue: { labels: { nodes: [] }, subIssues: { totalCount: 2 }, projectItems: { nodes: [{ id: "PVTI_epic", project: { id: produkt?.projectId } }] } } } } });
+      if (q.includes("ProjectV2SingleSelectField")) return JSON.stringify({ data: { node: { options: OPT } } });
+      if (args.some((a) => a.includes("/items?"))) return JSON.stringify([z]);
+      return "";
+    };
+    const kopf = zeile("PVTI_kopf", 1, "🚨 CI rot auf main");
+    const andere = zeile("PVTI_x", 5, "Irgendein Ticket");
+    const epicZeile = zeile("PVTI_epic", 20, "Epic");
+    const unten = epic.macheIo(config, { exec: reihenfolge(kopf, andere, epicZeile) });
+    unten.laden(20);
+    assert.deepEqual(unten.positionPlan("PVTI_epic"), { noetig: true, afterId: "PVTI_kopf" });
+    const dort = epic.macheIo(config, { exec: reihenfolge(kopf, epicZeile, andere) });
+    dort.laden(20);
+    assert.deepEqual(dort.positionPlan("PVTI_epic"), { noetig: false, afterId: "PVTI_kopf" });
+    const ohne = epic.macheIo(config, { exec: reihenfolge(andere, epicZeile) });
+    ohne.laden(20);
+    assert.deepEqual(ohne.positionPlan("PVTI_epic"), { noetig: true, afterId: null });
+    ohne.setzePosition("PVTI_epic", null);
+    const m = aufrufe.at(-1) ?? [];
+    assert.ok(m.some((a) => a.includes("updateProjectV2ItemPosition")) && m.includes("i=PVTI_epic") && !m.some((a) => a.startsWith("a=")));
+    unten.setzePosition("PVTI_epic", "PVTI_kopf");
+    assert.ok(aufrufe.at(-1)?.includes("a=PVTI_kopf"));
   });
   test("Issue fehlt: Fehler; Item in fremdem Projekt: itemId null", () => {
     const leer = () => JSON.stringify({ data: { repository: { issue: null } } });
