@@ -777,6 +777,11 @@
       "grund": "Projektliterale (Präfix) im Test"
     },
     {
+      "muster": "test/harness/selbstbeschreibung.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektinhalt: Selbstbeschreibung der Fabrik (source-available in README und LICENSE), fabrik-eigen, kein Besitz"
+    },
+    {
       "muster": "test/harness/werkzeug-vorpruefung.test.ts",
       "art": "projekt-test",
       "grund": "Projektliterale (Worktree) im Test"
