@@ -43,7 +43,7 @@ const ohneWeissraum = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
 /** Die vom Exporter gesetzte CLI-Version (factory#479 L5): der einheitliche Wert von `metadata.cli_version` der Observations der Session des Exports; sonst `wert: null` mit Grund (keine Observation trägt ihn, uneinheitliche Werte). Observationen fremder Sessions zählen nicht. */
 export function exporterVersion(belege) {
   const obs = Array.isArray(belege?.observations) ? belege.observations : [];
-  const werte = [...new Set(obs.filter((o) => o?.sessionId === belege.sessionId).map((o) => o.metadata?.cli_version).filter(text))];
+  const werte = [...new Set(obs.filter((o) => istObjekt(o) && o.sessionId === belege.sessionId).map((o) => o.metadata?.cli_version).filter(text))];
   if (werte.length === 0) return { wert: null, grund: "keine Observation der Session trägt metadata.cli_version" };
   if (werte.length > 1) return { wert: null, grund: `uneinheitliche metadata.cli_version: ${werte.join(", ")}` };
   return { wert: werte[0], grund: null };

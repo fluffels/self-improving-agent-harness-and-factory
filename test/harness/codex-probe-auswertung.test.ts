@@ -143,7 +143,7 @@ describe("Auswertung: Negativfälle, je Nachweis offen und Exit 1", () => {
 
 describe("Exporter-Version (factory#479 L5): metadata.cli_version der Observations der Session", () => {
   const alleOffen = (r: Ergebnis) => expect(offen(r)).toEqual(["1", "2", "3", "4", "5"]);
-  test("(a) Exporter nennt 9.9.8, Bericht und Erwartung 9.9.9: alle offen, Meldung nennt den Exporter-Wert; das Top-Feld version des Exports zählt nicht", () => {
+  test("(a) Exporter nennt 9.9.8, Bericht und Erwartung 9.9.9: alle offen, Meldung nennt den Exporter-Wert (das Top-Feld version des Exports bleibt nur Schema-Pflicht, es belegt die Version nicht)", () => {
     const r = lauf(bericht(), mitExporterVersion(export_(), "9.9.8"));
     alleOffen(r);
     expect(r.maengel.join("\n")).toMatch(/CLI-Version weicht ab.*im Export 9\.9\.8/);
@@ -170,6 +170,8 @@ describe("Exporter-Version (factory#479 L5): metadata.cli_version der Observatio
   test("(e) Positivfall und Randfälle der Hilfsfunktion", () => {
     expect(a.exporterVersion(export_())).toEqual({ wert: "9.9.9", grund: null });
     expect(a.exporterVersion(null).wert).toBeNull();
+    expect(a.exporterVersion({ observations: [null] })).toEqual({ wert: null, grund: "keine Observation der Session trägt metadata.cli_version" }); // kein sessionId: null-Eintrag darf nicht werfen
+    expect(() => lauf(bericht(), { observations: [null] })).not.toThrow();
     expect(a.exporterVersion({ sessionId: "s1", observations: "x" }).wert).toBeNull();
     expect(a.exporterVersion({ sessionId: "s1", observations: [null, { sessionId: "s1" }, { sessionId: "s1", metadata: { cli_version: "1.2.3" } }] })).toEqual({ wert: "1.2.3", grund: null });
     expect(offen(lauf(bericht(), export_()))).toEqual([]);
