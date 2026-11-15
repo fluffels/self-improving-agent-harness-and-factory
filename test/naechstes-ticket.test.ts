@@ -671,7 +671,7 @@ describe("Spezifikations-Gate (#1615)", () => {
     expect(waehle([roh(99, { body: "" })], { hartAb: 100 }).ticket?.nr).toBe(99);
   });
   test("ausgenommen: Sammel-, Status-, Notfall-, Forum-, Epic-Titel ohne Format bleiben frei", () => {
-    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
+    for (const titel of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)", "🚨 CI rot auf main", "🔒 Security: x", "🤖 Dependabot-PRs auflösen", "Forum #7: Frage", "⏰ Wiedervorlage: x", "🔎 Ticket-Drift-Bericht 2026-11-15", "📦 Epic: Welt", "Phase 2: Bau", "Langfuse-Status überprüfen"]) {
       const r = waehle([roh(1, { title: titel, body: "" })], { fuellstand: () => 10 }); // das Sammelticket ist voll: nur das Spezifikations-Gate steht zur Prüfung
       expect(r.ticket?.nr, titel).toBe(1);
       expect(r.ticket?.spezifikation, titel).toBeUndefined();
@@ -842,6 +842,12 @@ describe("Zwei Boards (#1729)", () => {
     expect(json(lauf([item(1, sec)], [item(2, status)], { argv: AG })).ticket?.nr).toBe(1);
     expect(json(lauf([item(1, rot)], [item(2, { ...rot, ...H })])).ticket?.nr).toBe(1);
     expect(json(lauf([item(1, status)], [item(2, { ...rot, ...H })], { argv: AG })).ticket?.nr).toBe(2);
+  });
+  test("Kopf-Rang: der Ticket-Drift-Bericht (Factory-Board) kommt nach Status-Ticket und 🚨, vor einem freien normalen Item (factory#498)", () => {
+    const bericht = { title: "🔎 Ticket-Drift-Bericht 2026-11-15", ...H };
+    expect(json(lauf([item(1)], [item(2, bericht)], { argv: AG })).ticket?.nr).toBe(2);
+    expect(json(lauf([], [item(2, bericht), item(3, status)], { argv: AG })).ticket?.nr).toBe(3);
+    expect(json(lauf([], [item(2, bericht), item(3, { ...rot, ...H })], { argv: AG })).ticket?.nr).toBe(3);
   });
   test("ein geclaimtes Kopf-Item wird übersprungen, danach gilt die eigene Seite", () => {
     const j = json(lauf([item(1)], [item(10, { ...rot, ...H, ...vergeben }), item(11, H)]));

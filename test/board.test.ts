@@ -357,7 +357,7 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
       kopfEnde: (items: B[]) => number;
       imKopf: (items: B[], nr: number) => boolean;
     };
-    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag", "update"]);
+    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag", "update", "ticket-drift"]);
     expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
     // Die Art forum prüft der Projekt-Test forum-notfall-projekt.test.ts (der Forum-Workflow ist ein Projekt-Modul).
     for (const n of M.NOTFAELLE.filter((x) => x.art !== "forum")) {
@@ -367,6 +367,8 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
     }
     expect(M.istKopfItem({ title: "🔒 Security: Lücke in X" }), "Security zählt zum Kopf").toBe(true);
     expect(M.kopfEnde([b(1, { title: "🔒 Security: Lücke" }), b(2, { title: "Langfuse-Status überprüfen" }), b(3)])).toBe(2);
+    expect(M.istKopfItem({ title: "🔎 Ticket-Drift-Bericht 2026-11-15" }), "Ticket-Drift-Bericht zählt zum Kopf (factory#498)").toBe(true);
+    expect(M.kopfEnde([b(1, { title: "🔎 Ticket-Drift-Bericht 2026-11-15" }), b(2, { title: "Langfuse-Status überprüfen" }), b(3)])).toBe(2);
     expect(M.istKopfItem({ title: "Harness-Härtung (gesammelt)" })).toBe(false);
     expect(M.istKopfItem({ title: "Langfuse-Status überprüfen" })).toBe(true);
     expect(M.kopfEnde([b(1), b(2)])).toBe(0);
