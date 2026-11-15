@@ -447,7 +447,11 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
     });
   });
   describe("L13a (#97): der Token kommt aus der injizierten env, nie aus dem Prozess; fremdes und eigenes Ziel-Repo getrennt", () => {
+    // Naht api: ohne sie ginge eigenerLogin über die Standard-Naht ghJson ins Netz (Timeout in der CI).
+    let apiAufrufe: unknown[][] = [];
+    const api = (a: string[], o: unknown) => (apiAufrufe.push([a, o]), { login: "eigenkonto" });
     const lauf = async (ziel: string, env: Record<string, string>) => {
+      apiAufrufe = [];
       const gepostet: unknown[][] = [];
       const libs = {
         REPO: "acme/proj",
@@ -457,24 +461,28 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         postZeilen: (...a: unknown[]) => gepostet.push(a),
       };
       const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
-      const code = await melden.main([], { env, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe });
+      const code = await melden.main([], { env, api, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe });
       assert.equal(code, 0);
       return gepostet[0]?.slice(2, 4);
     };
     test("fremdes Ziel-Repo mit PROJECT_TOKEN: postZeilen bekommt Ziel-Repo und Token", async () => {
       assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/ziel", "pt"]);
+      assert.deepEqual(apiAufrufe, [[["api", "user"], { token: "pt" }]]);
     });
     test("Meldestelle (factory#153): MELDESTELLE schlägt ZIEL; MELDESTELLE_TOKEN schlägt PROJECT_TOKEN", async () => {
       const gepostet: unknown[][] = [];
       const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", MELDESTELLE: "eingang/privat", ladeSammelKontext: (io: { repo: string }) => ({ offene: [{ number: 55 }], kommentare: [], owner: io.repo.split("/")[0] }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
       const env = { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt", MELDESTELLE_TOKEN: "mt" };
       const pruefe = () => ({ ergebnis: [{ ok: false, punkt: "X", befund: "b", fix: "f" }] });
-      assert.equal(await melden.main([], { env, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
+      apiAufrufe = [];
+      assert.equal(await melden.main([], { env, api, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined, pruefLauf: pruefe }), 0);
       assert.deepEqual(gepostet[0]?.slice(2, 4), ["eingang/privat", "mt"]);
+      assert.deepEqual(apiAufrufe, [[["api", "user"], { token: "mt" }]]);
     });
     test("eigenes Ziel-Repo (auch anders geschrieben): kein Token, obwohl PROJECT_TOKEN gesetzt ist", async () => {
       assert.deepEqual(await lauf("acme/proj", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["acme/proj", undefined]);
       assert.deepEqual(await lauf("Acme/Proj", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "pt" }), ["Acme/Proj", undefined]);
+      assert.deepEqual(apiAufrufe, [], "eigenes Ziel-Repo: kein gh api user");
     });
     test("fremdes Ziel-Repo ohne PROJECT_TOKEN in der env: kein Token (die Prozess-Umgebung zählt nicht)", async () => {
       vi.stubEnv("PROJECT_TOKEN", "aus-dem-prozess");
@@ -482,9 +490,11 @@ describe("harness-doctor-melden: main (W15 Vorprüfung vor dem dynamischen Impor
         assert.deepEqual(await lauf("acme/ziel", { GITHUB_ACTIONS: "true", PROJECT_TOKEN: "x" }).then((r) => r?.[1]), "x");
         const gepostet: unknown[][] = [];
         const libs = { REPO: "acme/proj", ZIEL: "acme/ziel", ladeSammelKontext: () => ({ offene: [{ number: 55 }], kommentare: [], owner: "acme" }), waehleSammelticket: (o: { number: number }[]) => o[0], postZeilen: (...a: unknown[]) => gepostet.push(a) };
-        await melden.main([], { env: { GITHUB_ACTIONS: "true" }, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
+        apiAufrufe = [];
+        await melden.main([], { env: { GITHUB_ACTIONS: "true" }, api, bereite: bereiteStub, ladeConfig: () => ({}), ladeLibs: () => Promise.resolve(libs), log: () => undefined, err: () => undefined });
         assert.equal(gepostet.length, 1);
         assert.equal(gepostet[0]?.[3], undefined);
+        assert.deepEqual(apiAufrufe, [[["api", "user"], { token: undefined }]]);
       } finally {
         vi.unstubAllEnvs();
       }
