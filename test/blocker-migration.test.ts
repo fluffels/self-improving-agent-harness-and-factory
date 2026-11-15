@@ -8,13 +8,14 @@ const REPO = "o/r";
 type Kante = { nummer: number; blockerNummer: number; issueNodeId: string; blockerNodeId: string };
 type Seite = { issues: object[]; weiter: string | null };
 type Ergebnis = { code: number; out: string; err: string };
-type Io = { repo: string; sprache: unknown; ladeSeite: (nach: string | null) => Seite; setze: (i: string, b: string) => void };
+type Io = { repo: string; sprache: unknown; ladeSeite: (nach: string | null) => Seite; setze: (i: string, b: string) => void; loese?: (i: string, b: string) => void };
 const M = raw as unknown as {
   fehlendeKanten: (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
-  migriere: (a: { anwenden: boolean }, io: Io) => Ergebnis;
+  geschlosseneKanten: (a: object) => { kanten: Kante[]; uebersprungen: { nummer: number; ref: string; grund: string }[] };
+  migriere: (a: { anwenden: boolean; loesen?: boolean }, io: Io) => Ergebnis;
   fuehreAus: (argv: string[], io: object) => Ergebnis;
   direktLauf: (argv: string[], fuehre?: (argv: string[]) => Ergebnis) => Ergebnis;
-  echteIo: (repo: string, naht: { gh: (a: string[], o: unknown) => unknown; env: object }) => { ladeSeite: (n: string | null) => Seite; setze: (i: string, b: string) => void };
+  echteIo: (repo: string, naht: { gh: (a: string[], o: unknown) => unknown; env: object }) => { ladeSeite: (n: string | null) => Seite; setze: (i: string, b: string) => void; loese: (i: string, b: string) => void };
 };
 const fehlend = M.fehlendeKanten;
 const issue = (nummer: number, body = "", nativ: { nummer: number; repo?: string }[] = []) => ({
@@ -65,6 +66,82 @@ describe("fehlendeKanten", () => {
   });
   test("Issue ohne Blocker-Zeile und ein Selbstverweis erzeugen nichts", () => {
     expect(lauf([issue(1, "kein Blocker"), issue(2, "blockiert durch #2")]).kanten).toEqual([]);
+  });
+});
+
+describe("geschlosseneKanten", () => {
+  const kante = (nummer: number, state: string, repo = REPO) => ({ nummer, repo, state, id: `B${nummer}` });
+  const mit = (nummer: number, nativ: object[], zugewiesen = false) => ({ nummer, id: `I${nummer}`, body: "", zugewiesen, nativ });
+  const geschl = (issues: object[]) => M.geschlosseneKanten({ issues, repo: REPO });
+  test("native Kante auf einen geschlossenen Blocker im eigenen Repo ergibt eine Kante", () => {
+    expect(geschl([mit(1, [kante(2, "CLOSED")])])).toEqual({ kanten: [{ nummer: 1, blockerNummer: 2, issueNodeId: "I1", blockerNodeId: "B2" }], uebersprungen: [] });
+  });
+  test("offener Blocker: keine Kante", () => {
+    expect(geschl([mit(1, [kante(2, "OPEN")])]).kanten).toEqual([]);
+  });
+  test("Kante in ein fremdes Repo bleibt, auch wenn sie geschlossen ist", () => {
+    expect(geschl([mit(1, [kante(2, "CLOSED", "x/y")])]).kanten).toEqual([]);
+  });
+  test("Ticket mit Assignee wird übersprungen, Grund Assignee", () => {
+    expect(geschl([mit(1, [kante(2, "CLOSED")], true)])).toEqual({ kanten: [], uebersprungen: [{ nummer: 1, ref: "#2", grund: "Assignee" }] });
+  });
+  test("Assignee ohne geschlossene Kante ergibt keinen Skip-Eintrag", () => {
+    expect(geschl([mit(1, [kante(2, "OPEN")], true)]).uebersprungen).toEqual([]);
+  });
+  test("ohne Kanten leer; nur die geschlossenen von mehreren werden gelöst", () => {
+    expect(geschl([mit(1, [])])).toEqual({ kanten: [], uebersprungen: [] });
+    expect(geschl([mit(1, [kante(2, "OPEN"), kante(3, "CLOSED")])]).kanten.map((k) => k.blockerNummer)).toEqual([3]);
+  });
+});
+
+describe("migriere --loesen", () => {
+  const nativ = [{ nummer: 2, repo: REPO, state: "CLOSED", id: "B2" }, { nummer: 3, repo: REPO, state: "CLOSED", id: "B3" }];
+  const seite = { issues: [{ nummer: 1, id: "I1", body: "", zugewiesen: false, nativ }], weiter: null };
+  const lio = (gesetzt: unknown[][], loese: (i: string, b: string) => void) => ({
+    repo: REPO,
+    sprache: SPRACHE,
+    ladeSeite: () => seite,
+    setze: (i: string, b: string) => gesetzt.push(["setze", i, b]),
+    loese,
+  });
+  test("Trockenlauf: Zeilen „würde lösen“, keine Mutation", () => {
+    const got: unknown[][] = [];
+    const r = M.migriere({ anwenden: false, loesen: true }, lio(got, (i, b) => got.push([i, b])));
+    expect(got).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^würde lösen: #1 ← #2$/m);
+    expect(r.out).toMatch(/^würde lösen: #1 ← #3$/m);
+    expect(r.out).toMatch(/1 Abfragen, 0 Mutationen/);
+  });
+  test("--anwenden: io.loese je Kante, Kostenzeile, setze nie", () => {
+    const got: unknown[][] = [];
+    const r = M.migriere({ anwenden: true, loesen: true }, lio(got, (i, b) => got.push([i, b])));
+    expect(got).toEqual([["I1", "B2"], ["I1", "B3"]]);
+    expect(r.out).toMatch(/^löse: #1 ← #2$/m);
+    expect(r.out).toMatch(/1 Abfragen, 2 Mutationen/);
+  });
+  test("scheitert eine Mutation: Exit 1, die übrigen laufen weiter", () => {
+    const got: unknown[][] = [];
+    const r = M.migriere({ anwenden: true, loesen: true }, lio(got, (i, b) => { got.push([i, b]); if (b === "B2") throw new Error("403"); }));
+    expect(got).toHaveLength(2);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/#1 ← #2.*403/);
+  });
+  test("Übersprungene Tickets mit Assignee stehen mit Grund in der Ausgabe", () => {
+    const s = { issues: [{ nummer: 1, id: "I1", body: "", zugewiesen: true, nativ }], weiter: null };
+    const r = M.migriere({ anwenden: false, loesen: true }, { ...lio([], () => {}), ladeSeite: () => s });
+    expect(r.out).toMatch(/^Übersprungen \(2\):\n {2}#1 #2: Assignee/m);
+  });
+  test("Ladefehler: Exit 1", () => {
+    const r = M.migriere({ anwenden: true, loesen: true }, { ...lio([], () => {}), ladeSeite: () => { throw new Error("gh kaputt"); } });
+    expect(r.code).toBe(1);
+  });
+  test("fuehreAus erkennt --loesen", () => {
+    const got: unknown[][] = [];
+    const r = M.fuehreAus(["--loesen", "--anwenden"], lio(got, (i, b) => got.push([i, b])));
+    expect(got).toHaveLength(2);
+    expect(r.out).toMatch(/^löse: /m);
+    expect(M.fuehreAus(["--loesen"], lio(got, () => {})).out).toMatch(/^würde lösen: /m);
   });
 });
 
@@ -140,7 +217,7 @@ describe("migriere (injizierte I/O)", () => {
 });
 
 describe("echteIo (gefälschtes gh)", () => {
-  const knoten = (n: number, blocker: { number: number; repo: string }[] = []) => ({ id: `N${n}`, number: n, body: n === 1 ? "blockiert durch #2" : "", blockedBy: { nodes: blocker.map((b) => ({ number: b.number, repository: { nameWithOwner: b.repo } })) } });
+  const knoten = (n: number, blocker: { number: number; repo: string }[] = []) => ({ id: `N${n}`, number: n, body: n === 1 ? "blockiert durch #2" : "", assignees: { totalCount: n === 2 ? 1 : 0 }, blockedBy: { nodes: blocker.map((b) => ({ id: `B${b.number}`, number: b.number, state: "CLOSED", repository: { nameWithOwner: b.repo } })) } });
   test("bildet die GraphQL-Antwort ab und paginiert über den Cursor; setze nutzt addBlockedBy", () => {
     const aufrufe: { args: string[]; opts: unknown }[] = [];
     const gh = (args: string[], opts: unknown) => {
@@ -151,11 +228,13 @@ describe("echteIo (gefälschtes gh)", () => {
     };
     const echt = M.echteIo("o/r", { gh, env: { PROJECT_TOKEN: "pt" } });
     const s1 = echt.ladeSeite(null);
-    expect(s1).toEqual({ issues: [{ nummer: 1, id: "N1", body: "blockiert durch #2", nativ: [{ nummer: 5, repo: "x/y" }] }], weiter: "C1" });
+    expect(s1).toEqual({ issues: [{ nummer: 1, id: "N1", body: "blockiert durch #2", zugewiesen: false, nativ: [{ nummer: 5, repo: "x/y", state: "CLOSED", id: "B5" }] }], weiter: "C1" });
+    expect(aufrufe[0]?.args.find((a) => a.startsWith("query="))).toMatch(/assignees\(first:1\)\{ ?totalCount ?\}/);
     expect(aufrufe[0]?.args.some((a) => a.startsWith("after="))).toBe(false);
     const s2 = echt.ladeSeite("C1");
     expect(s2.weiter).toBeNull();
     expect(s2.issues.map((i) => (i as { nummer: number }).nummer)).toEqual([2]);
+    expect((s2.issues[0] as { zugewiesen: boolean }).zugewiesen).toBe(true);
     expect(aufrufe[1]?.args).toContain("after=C1");
     expect(aufrufe[1]?.args).toContain("owner=o");
     expect(aufrufe[1]?.args).toContain("name=r");
@@ -163,6 +242,15 @@ describe("echteIo (gefälschtes gh)", () => {
     const mutation = aufrufe[2]?.args ?? [];
     expect(mutation).toContain("i=I1");
     expect(mutation).toContain("b=I2");
+  });
+  test("loese ruft removeBlockedBy mit issueId und blockingIssueId", () => {
+    const aufrufe: { args: string[]; opts: unknown }[] = [];
+    const echt = M.echteIo("o/r", { gh: (args, opts) => (aufrufe.push({ args, opts }), {}), env: { PROJECT_TOKEN: "pt" } });
+    echt.loese("I1", "B2");
+    const args = aufrufe[0]?.args ?? [];
+    expect(args.find((a) => a.startsWith("query="))).toMatch(/mutation\(\$i:ID!,\$b:ID!\)\{ removeBlockedBy\(input:\{issueId:\$i, blockingIssueId:\$b\}\)/);
+    expect(args).toContain("i=I1");
+    expect(args).toContain("b=B2");
   });
 });
 
