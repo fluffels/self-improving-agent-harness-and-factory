@@ -71,9 +71,14 @@ const SCHLUESSEL = /^([A-Za-z0-9_./-]+):(?: (.*))?$/;
 const SONDER = /^[&*!|>{%@`?["']/;
 const ohneKommentar = (s) => s.replace(/(^| )#.*$/, "").trim();
 
-/** Ein plain Skalar; Quotes, Anker, Alias, Tag, Block-Skalar und Flow am Wertanfang sind nicht lesbar. Leer bleibt leer. */
+const DOPPELT = /^"([^"\\]*)"$/;
+const EINFACH = /^'((?:[^']|'')*)'$/;
+
+/** Ein plain Skalar oder ein einfach gequoteter (`"…"` ohne `\` und inneres `"`, `'…'` mit `''` für den Apostroph); Anker, Alias, Tag, Block-Skalar, Flow und jede andere Quote-Form am Wertanfang sind nicht lesbar. Leer bleibt leer. */
 function skalar(roh) {
   const s = ohneKommentar(roh);
+  const q = s[0] === '"' ? DOPPELT.exec(s) : s[0] === "'" ? EINFACH.exec(s) : null;
+  if (q !== null) return s[0] === "'" ? q[1].replaceAll("''", "'") : q[1];
   if (SONDER.test(s)) throw nl(`Konstrukt „${s[0]}“ in einem Wert`);
   return s;
 }
@@ -159,8 +164,8 @@ function eintraegeVon(zeilen) {
 
 /**
  * Die Einträge von `updates` als `{ eintraege: [{ oekosystem, ausschluss }] }` oder `{ fehler }` (Blockform ohne `yaml`-Bibliothek: der Doctor-Wochenlauf läuft ohne `npm ci`, nur Node-Builtins).
- * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als plain Skalar, `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen, `---` am Anfang.
- * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, Quotes am Wertanfang, doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
+ * Gelesen wird nur die übliche Blockform: Zeilen `schlüssel: wert` (Schlüssel ohne Quotes), `package-ecosystem` als plain oder gequoteter Skalar (`"…"` ohne `\` und ohne inneres `"`, `'…'` mit `''`), `exclude-paths` als Blockliste oder `[]`, Kommentare nach einem Leerzeichen (`feld()` kürzt " #" schon vor dem Quote-Lesen: ein Wert mit " #" innerhalb der Quotes ist NICHT PRÜFBAR), `---` am Anfang.
+ * Nicht lesbar (fehler, nie ein stilles OK): ein Tab, eine Zeile ohne `schlüssel: wert` (auch Skalar, Quotes um den Schlüssel, `updates`-Eintrag ohne Mapping), Flow-Einträge und nichtleere Flow-Listen, Anker `&`, Alias `*`, Tag `!`, Block-Skalar, mehrzeilige Werte, andere Quote-Formen am Wertanfang (Backslash, inneres Quote, Rest hinter dem Quote), doppelte Schlüssel. Ohne `updates` (auch leere Datei): keine Einträge.
  */
 export function dependabotEintraege(text) {
   try {
