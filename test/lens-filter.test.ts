@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/lens-filter.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { armAusTicket } from "../scripts/nachweis-lib.mjs";
+import * as libRaw from "../scripts/nachweis-lib.mjs";
 
 type Fix = { id: string; schwere: string; ort: string; brillen: string[]; befunde: string[] };
 type Erg = { arm: string | null; fixliste: Fix[]; verworfen: { id: string; begruendung: string }[]; rundenZeile: string; pass: string };
@@ -15,8 +15,9 @@ const L = raw as unknown as {
   verwerfe: (f: Fix[], a: { id: string; begruendung: string }[], arm: string | null) => { fixliste: Fix[]; verworfen: unknown[] };
   filtere: (o: { text: string; runde: number; ticket?: number | null; verwerfen?: { id: string; begruendung: string }[] }) => Erg;
   formatiere: (e: Erg) => string;
-  parseArgs: (a: string[]) => { runde: number; ticket: number | null; verwerfen: { id: string; begruendung: string }[] };
+  liesArgumente: (a: string[]) => { runde: number; ticket: number | null; verwerfen: { id: string; begruendung: string }[] };
 };
+const { armAusTicket } = libRaw as unknown as { armAusTicket: (n: unknown) => string };
 const SKRIPT = fileURLToPath(new URL("../scripts/lens-filter.mjs", import.meta.url));
 
 const B = (name: string, ...zeilen: string[]) => `## Lens: ${name}\nVerdikt: x\n\n${zeilen.join("\n")}\n`;
@@ -116,14 +117,14 @@ describe("Verwerfen: Negativfälle (K5)", () => {
   });
 });
 
-describe("parseArgs", () => {
+describe("liesArgumente", () => {
   test("Argumente, Begründung darf = enthalten", () => {
-    expect(L.parseArgs(["--runde", "2", "--ticket", "533", "--verwerfen", "F1=a=b"])).toEqual({ runde: 2, ticket: 533, verwerfen: [{ id: "F1", begruendung: "a=b" }] });
+    expect(L.liesArgumente(["--runde", "2", "--ticket", "533", "--verwerfen", "F1=a=b"])).toEqual({ runde: 2, ticket: 533, verwerfen: [{ id: "F1", begruendung: "a=b" }] });
   });
   test("Fehler: fehlender Wert, kaputtes Verwerfen, unbekanntes Argument", () => {
-    expect(() => L.parseArgs(["--runde"])).toThrow();
-    expect(() => L.parseArgs(["--verwerfen", "F1"])).toThrow(/F<k>=/);
-    expect(() => L.parseArgs(["--foo"])).toThrow(/unbekannt/);
+    expect(() => L.liesArgumente(["--runde"])).toThrow();
+    expect(() => L.liesArgumente(["--verwerfen", "F1"])).toThrow(/F<k>=/);
+    expect(() => L.liesArgumente(["--foo"])).toThrow(/unbekannt/);
   });
 });
 

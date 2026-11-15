@@ -49,7 +49,8 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 import { FREMD, projektConfig } from "./support/fremd-config";
 const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, pflichtLenses } = raw as Mod;
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { ticketNamen } from "../scripts/ticket-namen.mjs";
+import * as namenRaw from "../scripts/ticket-namen.mjs";
+const ticketNamen = (namenRaw as unknown as { ticketNamen: (c: unknown) => unknown }).ticketNamen;
 const { konfliktMergesNach } = sliceRaw as unknown as Pick<Mod, "konfliktMergesNach">;
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (praefix: string, planer: string) => Zeilen };
 

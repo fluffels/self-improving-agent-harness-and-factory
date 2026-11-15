@@ -161,6 +161,9 @@ function bedrohungenAus(wert) {
   return r;
 }
 
+/** Feld `arm=` der Review-Zeile (factory#532); `null`, wenn es fehlt. */
+const armFeld = (felder) => ({ arm: felder.arm ?? null });
+
 /** Parst die letzte Plan- und die letzte Review-Zeile (Schlüssel aus `zeilen`, am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. `zeilen` ist Pflicht (Ergebnis von `commitZeilen`). Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -189,7 +192,7 @@ export function parseNachweis(text, zeilen) {
       zusatzpass: zusatzpassAus(reviewWert),
       abnahmefix: abnahmefixAus(reviewWert),
       verdikt: felder.verdikt ?? null,
-      arm: felder.arm ?? null,
+      ...armFeld(felder),
     };
   }
   return { plan, review, abnahme: abnahmeAus(lastLine(text, zeilen.abnahme)), bedrohungen: bedrohungenAus(lastLine(text, zeilen.bedrohungen)) };

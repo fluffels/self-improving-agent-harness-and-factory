@@ -303,7 +303,7 @@ export function bewerteKlasseHoch(nachweis, risiko, zeilen) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket = null }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = [];
@@ -349,7 +349,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
 }
 
 /** Ticketnummer des PR-Branches (factory#532): `GITHUB_HEAD_REF`, sonst der aktuelle Branch; `null` ohne Ticketpräfix oder bei git-Fehler (detached HEAD). */
-function ticketDesBranches(git, env, namen) {
+function ticketDesBranches(git, env, ladeNamen = ladeTicketNamen) {
   let ref = env.GITHUB_HEAD_REF ?? "";
   if (ref === "") {
     try {
@@ -358,12 +358,12 @@ function ticketDesBranches(git, env, namen) {
       ref = "";
     }
   }
-  return ticketAusRef(ref, namen);
+  return ticketAusRef(ref, ladeNamen());
 }
 
 /** Führt die Prüfung gegen git aus. `runGit`/`env`/`ladeZeilen` injizierbar (Test; `ladeZeilen` liest standardmäßig die echte Projekt-Config).
  *  Fail-closed: ein Ladefehler der Config, eine nicht auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
-export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ladeNamen = ladeTicketNamen } = {}) {
+export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = ladeCommitZeilen, ladeRisiko, ladeNamen } = {}) {
   let zeilen;
   try {
     zeilen = ladeZeilen();
@@ -395,7 +395,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       if (hd.imSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${hd.sha}..HEAD`]).trim());
     }
     const groesse = groessenstufeAusGit(git, base, "HEAD", { ladeRisiko });
-    const ticket = ticketDesBranches(git, env, ladeNamen());
+    const ticket = ticketDesBranches(git, env, ladeNamen);
     const fehler = bewerteNachweis({
       nachweis,
       dateien,

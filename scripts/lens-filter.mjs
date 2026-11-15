@@ -132,7 +132,7 @@ export function formatiere(e) {
 }
 
 /** Argumente → `{runde, ticket, verwerfen}`; wirft `FilterFehler`. Pur. */
-export function parseArgs(argv) {
+export function liesArgumente(argv) {
   const r = { runde: Number.NaN, ticket: null, verwerfen: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -153,7 +153,7 @@ export function parseArgs(argv) {
 
 function main(argv = process.argv.slice(2)) {
   try {
-    const args = parseArgs(argv);
+    const args = liesArgumente(argv);
     console.log(formatiere(filtere({ text: readFileSync(0, "utf8"), ...args })));
   } catch (e) {
     if (!(e instanceof Error)) throw e;
