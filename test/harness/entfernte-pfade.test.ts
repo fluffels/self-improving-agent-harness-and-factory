@@ -329,7 +329,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
   });
 
   test("Negativfall: harmlose Nachbarn der entfernten Extraktions-Prüfungen lösen nicht aus (Wortgrenze, factory#492)", () => {
-    assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: "zielDateien, MITZIEHENDE, xbezugsTestsy, lesebezuegeX" }]), []);
+    assert.deepEqual(reste([{ pfad: "docs/x.md", inhalt: "zielDateien, MITZIEHENDE, xbezugsTestsy, lesebezuegeX, NICHT_MITZIEHEND, xzielDatei" }]), []);
   });
 
   test("Negativfall: harmlose Nachbarn des Altnamen-Musters lösen nicht aus (altEnvName, Wortgrenze)", () => {
