@@ -131,7 +131,7 @@ export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, pro
   const groesse = bestimmeGroessenstufe({ eintraege, muster: leitplanken.alle, prognose, risiko });
   if (groesse.stufe === "S" && groesse.sweep.tiefe === "stichprobe") return { stufe: 0, gruende: ["Größenstufe S, nur Doku und Testdateien außerhalb von test/harness/"], treffer: [], pfade };
   const gruende = ohneDubletten([...(groesse.sweep.tiefe === "voll" ? groesse.sweep.gruende : []), ...groesse.gruende]);
-  return { stufe: 1, gruende: gruende.length > 0 ? gruende : ["kein Stufe-2-Treffer, aber nicht nur Doku oder Testdateien"], treffer: [], pfade };
+  return { stufe: 1, gruende, treffer: [], pfade };
 }
 
 const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
@@ -168,7 +168,7 @@ export function ladeEingaenge({ ladeBasis = () => ladeStufe2Basis(), ladeText = 
   const basis = hole("Stufe-2-Basis", ladeBasis);
   const text = hole("Leitplanken", ladeText);
   const leitplanken = text === null ? null : { gate: stufe2Leitplanken(text), alle: alleLeitplanken(text) };
-  if (leitplanken !== null && (leitplanken.gate === null || leitplanken.alle === null)) fehler.push("Leitplanken nicht ladbar: .github/protected-paths.json ist kein gültiges JSON oder die Gruppe gate ist kein Array");
+  if (leitplanken !== null && leitplanken.gate === null) fehler.push("Leitplanken nicht ladbar: .github/protected-paths.json ist kein gültiges JSON oder die Gruppe gate ist kein Array");
   const risiko = hole("Projekt-Config", () => (ladeRisikoBasis === null ? ladeRisiko() : vereinigeRisiko(ladeRisikoBasis(), ladeRisiko())));
   return { fehler, basis, leitplanken, risiko };
 }

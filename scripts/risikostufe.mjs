@@ -85,7 +85,7 @@ export function laufe(argv, io = {}) {
   if (fehler !== null) return aufrufFehler(fehler);
   if (liste) return listeAusgabe(lader, json);
   const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify({ stufe: e.stufe, gruende: e.gruende, treffer: e.treffer, pfade: e.pfade }) : stufeZeile(e) });
-  if (pfade) return antwort(r.positionale.length === 0 ? zwei("keine Dateiliste (leer)") : risikostufeAusPfaden(r.positionale, lader));
+  if (pfade) return antwort(risikostufeAusPfaden(r.positionale, lader));
   if (ticket !== undefined) {
     const e = ticketEingang(ticket, { ghJson: gh, ladeConfig });
     return antwort(e.pfade ? risikostufeAusPfaden(e.pfade, lader) : zwei(e.grund));

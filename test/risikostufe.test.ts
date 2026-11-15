@@ -79,6 +79,9 @@ describe("Leitplanken-Gruppe gate und Risikoklasse hoch", () => {
     expect(lib.stufe2Leitplanken("{kaputt")).toBeNull();
     expect(lib.stufe2Leitplanken('{"gate":"x"}')).toBeNull();
     expect(lib.alleLeitplanken("{kaputt")).toBeNull();
+    expect(lib.stufe2Leitplanken("null")).toBeNull();
+    expect(lib.stufe2Leitplanken("5")).toBeNull();
+    expect(lib.stufe2Leitplanken('{"gate":["/a", 5, null]}')).toEqual({ gruppe: "gate", muster: ["/a"] });
     expect(stufe([eins("docs/x.md")], { lp: "{kaputt" }).stufe).toBe(2);
     expect(stufe([eins("docs/x.md")], { lp: '{"gate":"x"}' }).stufe).toBe(2);
   });
@@ -96,6 +99,13 @@ describe("Stufe 0 und 1 (K3)", () => {
   });
   test.each(["docs/agent-harness.md", "AGENTS.md", ".agents/skills/x/SKILL.md", ".claude/agents/x.md"])("Fall A negativ: Leitplanken- oder Grundschutz-Markdown %s ist mindestens 1", (pfad) => {
     expect(stufe([eins(pfad)]).stufe).toBe(1);
+  });
+  test("Grundschutz-Markdown ist auch ohne Eintrag in den Leitplanken mindestens 1", () => {
+    expect(stufe([eins("AGENTS.md")], { lp: JSON.stringify({ gate: ["/eslint.config.js"], harness: ["/foo/"] }) }).stufe).toBe(1);
+  });
+  test("Stufe 1 nennt den Grund: Produktionscode, Wächter-Test", () => {
+    expect(stufe([eins("src/x.ts")]).gruende).toEqual([expect.stringMatching(/src\/x\.ts ist Code oder Konfiguration/)]);
+    expect(stufe([eins("test/harness/a.test.ts")]).gruende.join(" ")).toMatch(/geschützten Pfad/);
   });
   test("Fall B: Testdatei und Doku in den S-Grenzen sind 0", () => {
     expect(stufe([eins("test/a.test.ts", 20), eins("docs/x.md")])).toMatchObject({ stufe: 0 });
@@ -130,6 +140,14 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
     expect(stufe([eins("docs/x.md")], { basis: null }).stufe).toBe(2);
     expect(stufe([eins("docs/x.md")], { basis: { kategorien: {}, muster: [] } }).stufe).toBe(2);
   });
+  test("leere Leitplanken-Gruppe, leere Gesamtliste, leere Risiko-Muster und Risiko mit fehler sind Stufe 2", () => {
+    const eintraege = [eins("docs/x.md")];
+    const basis = { basis: BASIS, risiko: RISIKO, eintraege };
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: [] }, alle: ["/a"] } }).gruende[0]).toMatch(/Leitplanken/);
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: { gate: { gruppe: "gate", muster: ["/a"] }, alle: [] } }).gruende[0]).toMatch(/Leitplanken/);
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: leitplanken(), risiko: { muster: [], quelle: "x" } }).gruende[0]).toMatch(/Risiko-Muster/);
+    expect(lib.bestimmeRisikostufe({ ...basis, leitplanken: leitplanken(), risiko: { muster: ["x/"], quelle: "x", fehler: ["kaputt"] } }).gruende[0]).toMatch(/kaputt/);
+  });
   test("Risiko mit fehler ist auch bei reinem *.md-Diff 2", () => {
     const risiko = gs.risikoMusterAus({ risiko: { hoch: "kein-array" } });
     expect(stufe([eins("docs/x.md")], { risiko })).toMatchObject({ stufe: 2, gruende: [expect.stringMatching(/Risiko-Muster/)] });
@@ -139,9 +157,24 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
       throw new Error(m);
     };
     for (const z of [{ ladeBasis: wirft("weg") }, { ladeText: wirft("weg") }, { ladeRisiko: wirft("weg") }, { ladeText: () => "{kaputt" }]) {
-      expect(lib.risikostufeAusPfaden(["docs/x.md"], lader(z)).stufe).toBe(2);
-      expect(lib.risikostufeAusGit(() => "1\t1\tdocs/x.md", "b", "HEAD", { ...lader(z), ladeRisikoBasis: () => RISIKO }).stufe).toBe(2);
+      const a = lib.risikostufeAusPfaden(["docs/x.md"], lader(z));
+      const b = lib.risikostufeAusGit(() => "1\t1\tdocs/x.md", "b", "HEAD", { ...lader(z), ladeRisikoBasis: () => RISIKO });
+      for (const r of [a, b]) {
+        expect(r.stufe).toBe(2);
+        expect(r.gruende[0]).toMatch(/nicht ladbar/);
+      }
     }
+  });
+  test("ein Ladefehler der Leitplanken-Datei steht allein im Grund, ein Nicht-Array gate ebenso", () => {
+    expect(lib.risikostufeAusPfaden(["docs/x.md"], lader({ ladeText: () => { throw new Error("weg"); } })).gruende).toEqual(["Leitplanken nicht ladbar: weg"]);
+    expect(lib.risikostufeAusPfaden(["docs/x.md"], lader({ ladeText: () => '{"gate":"x"}' })).gruende[0]).toMatch(/Gruppe gate ist kein Array/);
+  });
+  test("die Basis-Muster der Basis-Revision gelten mit: ein Diff macht die Risiko-Liste nicht schmaler", () => {
+    const risikoKopf = gs.risikoMusterAus({ risiko: { hoch: ["nichts/"] } });
+    const risikoBasis = gs.risikoMusterAus({ risiko: { hoch: ["geheim/"] } });
+    const r = lib.risikostufeAusGit(() => "1\t1\tgeheim/a.txt", "b", "HEAD", { ...lader({ ladeRisiko: () => risikoKopf }), ladeRisikoBasis: () => risikoBasis });
+    expect(r.stufe).toBe(2);
+    expect(r.treffer.map((t) => t.liste)).toEqual(["risiko"]);
   });
   test("echte Basis-Lader: Datei fehlt, kaputt, Nicht-Objekt, leere Kategorie", () => {
     const d = mkdtempSync(join(tmpdir(), "rs-basis-"));
@@ -155,6 +188,9 @@ describe("fail-closed (K5): immer Stufe 2 mit Grund", () => {
       expect(() => lib.ladeStufe2Basis(p("b.json", "[]"))).toThrow(/kein Objekt/);
       expect(() => lib.ladeStufe2Basis(p("c.json", '{"ci":[]}'))).toThrow(/Kategorie ci/);
       expect(() => lib.ladeStufe2Basis(p("d.json", '{"ci":["a",""]}'))).toThrow(/Kategorie ci/);
+      expect(() => lib.ladeStufe2Basis(p("n.json", "null"))).toThrow(/kein Objekt/);
+      expect(() => lib.ladeStufe2Basis(p("z.json", "5"))).toThrow(/kein Objekt/);
+      expect(() => lib.ladeStufe2Basis(p("s.json", '{"ci":"x"}'))).toThrow(/Kategorie ci/);
       expect(() => lib.ladeStufe2Basis(p("e.json", '{"beschreibung":"x"}'))).toThrow(/keine Muster/);
       expect(lib.ladeStufe2Basis(p("f.json", '{"beschreibung":"x","ci":["/ci/"]}')).muster).toEqual(["/ci/"]);
     } finally {
@@ -176,6 +212,14 @@ describe("Prognose aus Pfaden", () => {
     expect(lib.risikostufeAusPfaden([".github/actions"], lader()).stufe).toBe(2);
     expect(lib.risikostufeAusPfaden([".husky/"], lader()).stufe).toBe(2);
   });
+  test("Verzeichnis der Leitplanken-Gruppe und der Risiko-Liste, ohne doppelte Treffer", () => {
+    const gate = JSON.stringify({ gate: ["/gatedir/"] });
+    expect(lib.risikostufeAusPfaden(["gatedir"], lader({ ladeText: () => gate })).stufe).toBe(2);
+    const db = lib.risikostufeAusPfaden(["db"], lader());
+    expect(db.stufe).toBe(2);
+    expect(db.treffer).toEqual([{ pfad: "db", muster: "db/", liste: "risiko" }]);
+    expect(lib.risikostufeAusPfaden(["src/auth"], lader()).treffer.filter((t) => t.liste === "risiko")).toHaveLength(1);
+  });
   test("Doku-Pfad mit Teilwort im Namen bleibt 0", () => {
     expect(lib.risikostufeAusPfaden(["docs/auth.md"], lader()).stufe).toBe(0);
   });
@@ -188,6 +232,10 @@ describe("pfadeAusTicket (K4)", () => {
   const body = (abschnitt: string) => `## Ziel\nText\n\n## Pfade\n${abschnitt}\n\n## Akzeptanzkriterien\n1. x\n`;
   test("Backtick-Pfad mit Beschreibung, erstes Wort, nummerierte Liste, führender Schrägstrich", () => {
     expect(lib.pfadeAusTicket(body("- `scripts/a.mjs` neu\n* docs/b.md, kurz\n1. /src/c.ts\n2) ./d.ts\n- [ ] e.ts"))).toEqual({ pfade: ["scripts/a.mjs", "docs/b.md", "src/c.ts", "d.ts", "e.ts"], fehler: null });
+  });
+  test("Glob-Zeichen * ? [ sind Fehler, Backslash wird zu Schrägstrich", () => {
+    for (const g of ["a?.ts", "a[1].ts", "a*.ts"]) expect(lib.pfadeAusTicket(body(`- ${g}`)).fehler).toMatch(/Glob/);
+    expect(lib.pfadeAusTicket(body("- src\\a.ts")).pfade).toEqual(["src/a.ts"]);
   });
   test("Fließtext und Fence im Abschnitt sind kein Eingang, ### gehört dazu, zwei Abschnitte werden vereinigt", () => {
     const b = `## Pfade\nHier steht Prosa mit scripts/x.mjs.\n- a.md\n\`\`\`\n- b.md\n\`\`\`\n### Mehr\n- c.md\n\n## Anderes\n- d.md\n\n## Pfade\n- e.md\n`;
@@ -230,6 +278,7 @@ describe("CLI laufe", () => {
     [["docs/a.md"]],
     [["--liste", "--commit", "x"]],
     [["--ticket"]],
+    [["--ticket", "7x"]],
   ])("Aufruffehler %j ist Exit 2", (argv) => {
     const r = cli.laufe(argv, lader());
     expect(r.code).toBe(2);
@@ -238,7 +287,7 @@ describe("CLI laufe", () => {
   test("--pfade ohne Pfad ist Stufe 2 mit Exit 0", () => {
     const r = cli.laufe(["--pfade"], lader());
     expect(r.code).toBe(0);
-    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 2 — keine Dateiliste/);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: 2 — keine Dateiliste \(leer/);
   });
   test("--commit rechnet <sha>^..<sha>", () => {
     const aufrufe: string[][] = [];
@@ -279,6 +328,7 @@ describe("CLI laufe", () => {
     expect(ticket(b, { labels: [{ name: "forum" }] }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Fremdeingang/);
     expect(ticket(b, {}, { ladeConfig: () => ({}) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Fremdeingang-Prüfung/);
     expect(ticket(b, { pull_request: {} }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*PR/);
+    expect(ticket(b, {}, { ghJson: (a) => (a[1] === "repos/{owner}/{repo}" ? { owner: { login: "" } } : { user: { login: "ich" }, labels: [], body: b }) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Besitzer/);
     expect(ticket(b, {}, { ghJson: () => ({ body: b }) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Besitzer/);
   });
   test("--liste: Basis-, Gate- und Risiko-Zeilen; kaputte Basis ist Exit 1 mit nicht ladbar", () => {
@@ -321,6 +371,12 @@ describe("Ende-zu-Ende im Temp-git-Repo", () => {
     expect(r.status).toBe(0);
     return r.stdout;
   }
+  test("ein Aufruffehler endet mit Exit 2 und Text auf stderr", () => {
+    const r = spawnSync("node", [skript, "--bogus"], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("Aufruf:");
+    expect(r.stdout).toBe("");
+  });
   test("nur .md ergibt 0, package.json ergibt 2", () => {
     // Die Skript-Listen kommen aus dem Repo des Skripts (die echte Leitplanken-Datei), nicht aus dem Temp-Repo.
     expect(commitMit("docs/neu.md")).toMatch(/^RISIKOSTUFE: 0/);
