@@ -16,6 +16,7 @@
  *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` (Lauf ohne Ticket: `<worktree-präfix><slug>-lens-<x>`) mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
+ *  R6  ein Pfadsegment `<worktree-präfix><nr>-lens-r<k>` mit k über MAX_REVIEW_PAESSE (nachweis-lib.mjs) ohne das Kopf-Feld `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>` (factory#534; ein Pass über dem Cap braucht die dokumentierte Entscheidung; Format und Abhilfe: `review-lenses/ablauf-zusatzpass.md`).
  * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
@@ -23,11 +24,12 @@
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
  *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config am Wortanfang trägt (Lookbehind, hält die Suche linear); ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
+ *  - R6 sperrt nur den Review-Worktree `-lens-r<k>-` (wie das Ticket es verlangt); die Delta-Worktrees `-lens-m/a/c<n>` (Merge-, Abnahme-, CI-Fix-Delta) und ein Platzhalter `r<runde>` bleiben offen. Den Rest fängt die CI: `check-review-nachweis` gleicht `runden` mit den Commit-Zeilen `Runde <n>:` und `Zusatzpass:` ab. Die Sperre prüft nur, dass eine Entscheidung dasteht, nicht ihren Inhalt; unter Codex läuft sie über denselben Adapter unbeobachtet (docs/codex/einstieg.md).
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
 import { basename } from "node:path";
-import { BEKANNTE_LENSES, HEX_HEAD } from "./nachweis-lib.mjs";
+import { BEKANNTE_LENSES, HEX_HEAD, MAX_REVIEW_PAESSE, zusatzpassKopfAus } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -68,11 +70,16 @@ function istLensSpawn(subagentType, prompt, lens) {
 const HINWEIS =
   "Setze die Werte aus Stufe 0 ein (Brille als `Brille: <Schlüssel>` am Prompt-Anfang, Worktree, Patch-Pfad mit Runde, `git rev-parse HEAD`) laut Spawn-Vorlage im Skill `review-lenses`.";
 
+/** Alle Lens-Worktree-Segmente `<wt><nr|slug>-lens-<Buchstabe><Ziffer|Platzhalter>…` im Text (Match-Iterator; Gruppe 1 = Buchstabe). */
+function lensSegmente(text, namen) {
+  const wt = escapeRegex(namen.praefixe.worktree);
+  return text.matchAll(new RegExp(String.raw`(?<![a-z0-9-])${wt}(?:\d+|<[^<>\s]*>|[a-z][a-z0-9]*(?:-(?!lens-[a-z](?:\d|<))[a-z0-9]+)*)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
+}
+
 /** R4: Grund, wenn ein Pfadsegment `<wt><nr>-lens-<x>…` oder `<wt><slug>-lens-<x>…` (Lauf ohne Ticket, Slug ohne `-lens-<Buchstabe><Ziffer>`) eine Endung `<x>` trägt, die das Muster aus `ticket-namen.mjs` (`lensNameKern`) nicht kennt; sonst `null`.
  *  Ein Platzhalter nach dem Buchstaben (`-lens-r<runde>`) zählt wie eine Ziffer; die erlaubten Endungen stehen nur in `lensNameKern`. Pure. */
 function unbekannteLensEndung(text, namen) {
-  const wt = escapeRegex(namen.praefixe.worktree);
-  const segmente = text.matchAll(new RegExp(String.raw`(?<![a-z0-9-])${wt}(?:\d+|<[^<>\s]*>|[a-z][a-z0-9]*(?:-(?!lens-[a-z](?:\d|<))[a-z0-9]+)*)-lens-([a-z])(?=\d|<)[^\s/\\"'\x60]*`, "g"));
+  const segmente = lensSegmente(text, namen);
   const bekannt = new RegExp(namen.lensNameKern);
   for (const [segment] of segmente) {
     if (bekannt.test(segment.replace(/<[^<>\s]*>/g, "1"))) continue;
@@ -106,6 +113,14 @@ function platzhalterGrund(felder) {
   return null;
 }
 
+/** R6: Grund, wenn ein Review-Worktree `-lens-r<k>` mit k > MAX_REVIEW_PAESSE im Prompt steht und das Kopf-Feld `Zusatzpass:` fehlt oder unvollständig ist; sonst `null`. Das höchste k zählt, ein Platzhalter nicht. Pur. */
+function zusatzpassGrund(text, namen) {
+  const ks = [...lensSegmente(text, namen)].map(([segment]) => /-lens-r(\d+)(?!\d)/.exec(segment)?.[1]).filter((k) => k !== undefined).map(Number);
+  const k = Math.max(0, ...ks);
+  if (k <= MAX_REVIEW_PAESSE || zusatzpassKopfAus(text)) return null;
+  return `Lens-Auftrag ohne Zusatzpass-Entscheidung: der Lens-Worktree trägt Runde ${k}, das Cap liegt bei ${MAX_REVIEW_PAESSE} Pässen. Ein Pass darüber braucht im Kopf das Feld „Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>“ (alle Teile ausgefüllt, Brille aus ${BEKANNTE_LENSES.join(", ")}) und einen Vorpass-Fund der Schwere blockierend (Skill review-lenses, Datei ablauf-zusatzpass.md). ${HINWEIS}`;
+}
+
 /** Grund für ein Deny oder `null` (durchlassen). Pure. */
 export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
@@ -120,6 +135,8 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   if (offen) return offen;
   const endung = unbekannteLensEndung(text, namen);
   if (endung) return endung;
+  const zusatz = zusatzpassGrund(text, namen);
+  if (zusatz) return zusatz;
   const kopf = headGrund(felder["erwarteter HEAD"]);
   if (kopf) return kopf;
   // Kein Prompt-Feld (kaputte oder fremde Eingabe) bleibt fail-open wie bisher.

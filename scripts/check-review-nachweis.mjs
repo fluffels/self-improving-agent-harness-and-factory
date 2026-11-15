@@ -19,7 +19,10 @@
  *   Optional `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap hinaus ohne Rückfrage (Ursache im PR, Review- und Abnahme-Zusatzpässe zählen gemeinsam); mehr ist rot, außer mit Review-Override samt Freigabe-Beleg (factory#162 L10); erhöht die Obergrenze.
  *   Optional `abnahmefix=1` (#1808): die eine Delta-Runde nach einem Abnahme-Fix, eigenes Budget neben dem Cap (Obergrenze + 1, nur bei überschrittenem Review-Cap).
  *
- * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
+ *   Runden-Abgleich (factory#534): runden ≥ höchste Commit-Zeile "Runde <n>:" + 1; bei runden > MAX_REVIEW_PAESSE je Pass über dem Cap genau eine Zeile
+ *   <praefixe.commitZeile>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>  (Ursache: Zusatzpass, Abnahme-Fix, CI-Fix-Delta, Merge-Delta).
+ *
+ * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: ein Nachweis ohne Commit-Spur der Runden bleibt Selbstauskunft (lässt ein Fix-Commit die "Runde n:"-Zeile weg, sieht der Abgleich sie nicht).
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
  * ist ein CI-Reviewer (#1117). `head` muss im Slice liegen, die Lens-Brillen müssen zur
  * Diff-Art passen (reiner Markdown-Diff → doku, sonst die drei Code-Brillen).
@@ -59,7 +62,7 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, armAusTicket, istLeererWert, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler } from "./nachweis-lib.mjs";
+import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, ZUSATZPASS_URSACHEN, armAusTicket, istLeererWert, hoechsteRunde, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, zusatzpassZeilenAus } from "./nachweis-lib.mjs";
 import { ticketAusRef } from "./ticket-refs.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
@@ -226,7 +229,7 @@ function bewerteZusatzpass(zp, zeilen) {
 }
 
 /** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap
- *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; der Nachweis bleibt Selbstauskunft.
+ *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; die gemeldete Zahl gleicht `bewerteRundenAbgleich` mit den Commit-Zeilen ab (factory#534).
  *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
 function bewerteRunden(review, zeilen, risikostufe) {
   const R = zeilen.review;
@@ -254,6 +257,33 @@ function bewerteRunden(review, zeilen, risikostufe) {
     return [`${R}: abnahmefix ist nur bei runden > ${reviewErlaubt} zulässig (das Review-Cap ist nicht überschritten, runden=${review.runden}).`];
   }
   return [];
+}
+
+/** Runden-Abgleich (factory#534): \`runden\` darf nicht unter der höchsten \`Runde <n>:\`-Zeile der Branch-Commits plus 1 liegen; über dem Cap (MAX_REVIEW_PAESSE) trägt jeder Pass eine Commit-Zeile
+ *  \`<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>\`, genau für k = MAX+1 … runden, je einmal. Bei runden ≤ MAX ist eine solche Zeile ein Fehler.
+ *  \`zusatzpassZeilen === null\`: nicht übergeben, die Zeilenprüfung entfällt (nur direkte Aufrufer in Tests). Bewusste Grenze: lässt ein Fix-Commit die \`Runde n:\`-Zeile weg, bleibt die Runde unsichtbar. Pure. */
+function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }) {
+  const R = zeilen.review;
+  const Z = zeilen.zusatzpass;
+  const fehler = [];
+  if (review.runden < hoechste + 1) {
+    fehler.push(`${R}: runden=${review.runden} liegt unter der höchsten Commit-Zeile "Runde ${hoechste}:" plus 1 (mindestens runden=${hoechste + 1}). Eine Runde-Zeile gehört nur in den Fix-Commit, ein konvergierter Pass schreibt keine (ablauf-filter.md); sonst runden erhöhen.`);
+  }
+  if (zusatzpassZeilen === null) return fehler;
+  const vorlage = `${Z}: R<k> <Ursache> — Entscheidung: <X>, weil <Y> (Ursache: ${ZUSATZPASS_URSACHEN.join(", ")})`;
+  const ungueltig = zusatzpassZeilen.filter((z) => z.ungueltig !== undefined);
+  for (const z of ungueltig) fehler.push(`${Z}: "${z.ungueltig}" ist keine gültige Zeile (erwartet: ${vorlage}).`);
+  const ks = zusatzpassZeilen.filter((z) => z.ungueltig === undefined).map((z) => z.k);
+  const erwartet = [];
+  for (let k = MAX_REVIEW_PAESSE + 1; k <= review.runden; k++) erwartet.push(k);
+  if (ungueltig.length === 0 && (ks.length !== erwartet.length || erwartet.some((k) => !ks.includes(k)))) {
+    fehler.push(
+      erwartet.length === 0
+        ? `${Z}-Zeile ohne Überschreitung: nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}, Zeilen: ${ks.map((k) => "R" + k).join(", ")}).`
+        : `${R}: runden=${review.runden} braucht je Pass über dem Cap genau eine Commit-Zeile (${erwartet.map((k) => "R" + k).join(", ")}), gefunden: ${ks.length ? ks.map((k) => "R" + k).join(", ") : "keine"}. Format: ${vorlage}.`,
+    );
+  }
+  return fehler;
 }
 
 /** Plan-Zeile gegen die Größenstufe (factory#271): `skizze` und `ohne — klein: <Begründung>` nur bei `S`, `klein` ohne Begründung nie; jeder andere Grund bleibt wie bisher. Pure. */
@@ -331,7 +361,7 @@ function bewerteReviewOhne(review, zeilen, risikostufe) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)"), hoechsteRunde: hoechste = 0, zusatzpassZeilen = null }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits);
@@ -342,7 +372,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     return fehler;
   }
   if (review.ohne !== null) return [...fehler, ...bewerteReviewOhne(review, zeilen, risikostufe)];
-  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket })];
+  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen })];
 }
 
 /** Änderungs-Commits und Konflikt-Merges nach dem Review (je ein Fehler mit Fix-Weg). Pure. */
@@ -367,7 +397,7 @@ function bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits) {
 }
 
 /** Die Felder einer Review-Zeile mit Brillen (head, runden, lenses, optionale und Pflichtfelder, verdikt). Pure. */
-function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket }) {
+function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen }) {
   const R = zeilen.review;
   const fehler = [];
   if (review.head === null) fehler.push(`${R}: head fehlt oder ist kein SHA.`);
@@ -378,7 +408,7 @@ function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, 
   if (!Number.isInteger(review.runden) || review.runden < 1) {
     fehler.push(`${R}: runden fehlt oder ist keine Zahl ≥ 1.`);
   } else {
-    fehler.push(...bewerteRunden(review, zeilen, risikostufe));
+    fehler.push(...bewerteRunden(review, zeilen, risikostufe), ...bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }));
   }
   fehler.push(...bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe));
   const unbekannt = review.lenses.filter((l) => !BEKANNTE_LENSES.includes(l));
@@ -467,6 +497,8 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       risiko: groesse.risiko,
       risikostufe,
       ticket,
+      hoechsteRunde: hoechsteRunde(messages),
+      zusatzpassZeilen: zusatzpassZeilenAus(messages, zeilen.zusatzpass),
     });
     return {
       ok: fehler.length === 0,

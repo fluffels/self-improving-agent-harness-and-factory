@@ -38,6 +38,7 @@ export function commitZeilen(praefix, planer) {
     syncDringlich: `${praefix}Sync-Dringlich`,
     bezieherMigration: `${praefix}Bezieher-Migration`,
     budgetBeleg: `${praefix}Budget-Beleg`,
+    zusatzpass: `${praefix}Zusatzpass`,
   };
 }
 

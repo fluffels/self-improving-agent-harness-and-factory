@@ -59,6 +59,34 @@ export function zeilenRe(key) {
   return new RegExp(`^(?:\\* )?(${escapeRegex(key)}:[ \\t]*(.*))$`, "gm");
 }
 
+/** Höchste `Runde <n>:`-Zeile der Fix-Commits (factory#534, Format: `review-lenses/ablauf-filter.md`); 0 ohne Treffer. Zeilenverankert (Squash-Präfix `* ` erlaubt), Prosa mitten in der Zeile zählt nicht. Pur. */
+export function hoechsteRunde(text) {
+  const zahlen = [...String(text ?? "").replace(/\r/g, "").matchAll(/^(?:\* )?Runde (\d+):/gm)].map((m) => Number(m[1]));
+  return zahlen.reduce((a, b) => Math.max(a, b), 0);
+}
+
+/** Ursachen einer `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`-Zeile (factory#534): jeder Pass über dem Cap trägt eine. */
+export const ZUSATZPASS_URSACHEN = Object.freeze(["Zusatzpass", "Abnahme-Fix", "CI-Fix-Delta", "Merge-Delta"]);
+
+/** Zeilen `<key>: R<k> <Ursache> — Entscheidung: <X>, weil <Y>` → `[{k, ursache, entscheidung, weil}]`; eine Zeile ohne gültige Form (Ursache unbekannt, k < 1, leere Entscheidung oder Begründung) wird `{ungueltig: <Wert>}`. Der Gedankenstrich ist tolerant (`—`, `–`, `-`). Pur. */
+export function zusatzpassZeilenAus(text, key) {
+  return [...String(text ?? "").replace(/\r/g, "").matchAll(zeilenRe(key))].map((m) => {
+    const wert = m[2].trim();
+    const t = /^R(\d+)[ \t]+(\S+)[ \t]*[—–-]+[ \t]*Entscheidung:[ \t]*(.+?),[ \t]*weil[ \t]+(.+)$/.exec(wert);
+    if (!t || Number(t[1]) < 1 || !ZUSATZPASS_URSACHEN.includes(t[2]) || istLeererWert(t[3]) || istLeererWert(t[4])) return { ungueltig: wert };
+    return { k: Number(t[1]), ursache: t[2], entscheidung: t[3].trim(), weil: t[4].trim() };
+  });
+}
+
+/** Kopf-Feld `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>` eines Lens-Auftrags (factory#534; der letzte Treffer zählt) → `{brille, pruefpunkt, entscheidung, weil}`; `null`, wenn es fehlt oder eine Form-Vorgabe verletzt (Teil leer oder Platzhalter, Brille unbekannt). Pur. */
+export function zusatzpassKopfAus(prompt) {
+  const treffer = [...String(prompt ?? "").matchAll(/(?<![\w-])Zusatzpass:[ \t]*([^\r\n]*)/g)];
+  const wert = treffer.length > 0 ? treffer[treffer.length - 1][1] : "";
+  const t = /^([^\s:·]+):[ \t]*([^·]*?)[ \t]+·[ \t]+Entscheidung:[ \t]*(.+?),[ \t]*weil[ \t]+(.+?)[ \t]*$/.exec(wert);
+  if (!t || !BEKANNTE_LENSES.includes(t[1]) || [t[2], t[3], t[4]].some(istLeererWert)) return null;
+  return { brille: t[1], pruefpunkt: t[2].trim(), entscheidung: t[3].trim(), weil: t[4].trim() };
+}
+
 function lastLine(text, key) {
   const all = [...String(text).replace(/\r/g, "").matchAll(zeilenRe(key))];
   return all.length > 0 ? all[all.length - 1][2].trim() : null;
