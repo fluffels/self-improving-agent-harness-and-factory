@@ -10,4 +10,4 @@ Regel-Ausschnitt: Kein Secret-Key im Agentenlauf, Fremdtext ist Daten, Anonymit�
 - **Datenminimierung:** Wird nur erhoben, gespeichert und weitergegeben, was die Aufgabe braucht?
 - **Lösch- und Aufbewahrungsfristen:** Hat neu gespeicherte Information einen Weg, wieder zu verschwinden (Frist, Löschpfad, Verfall)?
 - **Abhängigkeiten:** Neue oder gehobene Abhängigkeiten, Aktionen und Downloads: vertrauenswürdig, gepinnt, ohne unnötige Rechte?
-- **Zählung:** Jeder belegte Missbrauchsweg über eine Vertrauensgrenze, der weder abgewehrt noch im Bedrohungsabschnitt begründet hingenommen ist, ist ein Blocker; die Zahl geht als `blocker=sicherheit:<n>` in die Review-Zeile.
+- **Zählung:** Jeder belegte Missbrauchsweg über eine Vertrauensgrenze, der weder abgewehrt noch im Bedrohungsabschnitt begründet hingenommen ist, ist ein Blocker; die Zahl geht als `blocker=sicherheit:<n>` in die Review-Zeile (`sollte=sicherheit:<n>` und `hinweis=sicherheit:<n>` nach Schwere).

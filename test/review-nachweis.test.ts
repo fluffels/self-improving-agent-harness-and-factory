@@ -20,7 +20,7 @@ afterEach(() => {
 
 type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
-  review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
+  review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; sollte: { lens: string; n: number }[] | null; hinweis: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
   bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
 type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
@@ -63,7 +63,12 @@ const checkReviewNachweis = (o: Parameters<Mod["checkReviewNachweis"]>[0]) => (r
 const NORMAL: Risiko = { klasse: "normal", gruende: ["kein Pfad trifft ein Risiko-Muster"] };
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
-const review = (felder = `head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) => `${Z.plan}: ${PL}\n${Z.review}: ${felder}`;
+const review = (felder = `head=${SHA} runden=2 lenses=${DREI} ${S0(DREI)} verdikt=ok`) => `${Z.plan}: ${PL}\n${Z.review}: ${felder}`;
+/** `sollte=` und `hinweis=` mit 0 je Brille (Pflichtfelder, factory#530); `lenses` kommagetrennt wie in der Review-Zeile. */
+const S0 = (lenses: string) => {
+  const je = lenses.split(",").map((l) => `${l.trim()}:0`).join(",");
+  return `sollte=${je} hinweis=${je}`;
+};
 
 describe("Cap-Semantik (W1)", () => {
   test("Cap 2 = höchstens 2 Fix-Runden = höchstens 3 Pässe", () => {
@@ -130,9 +135,9 @@ describe("bewerteNachweis", () => {
 
   test("gültiger Code-Nachweis ist ok", () => assert.deepEqual(ok(review()), []));
   test("runden 3 ist ok, 0, 4 und „zwei“ sind rot", () => {
-    assert.deepEqual(ok(review(`head=${SHA} runden=3 lenses=${DREI} verdikt=ok`)), []);
+    assert.deepEqual(ok(review(`head=${SHA} runden=3 lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`)), []);
     for (const r of ["0", "4", "zwei"]) {
-      const f = ok(review(`head=${SHA} runden=${r} lenses=${DREI} verdikt=ok`));
+      const f = ok(review(`head=${SHA} runden=${r} lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`));
       assert.equal(f.length, 1, r);
       assert.match(f[0], /runden/);
     }
@@ -143,12 +148,12 @@ describe("bewerteNachweis", () => {
     assert.match(ok(`${Z.plan}: ${PL}\n${Z.review}: runden=1 lenses=doku verdikt=ok`).join(), /head fehlt/);
   });
   test("Code-Diff nur mit doku ist rot, fehlende Code-Brille ist rot", () => {
-    assert.match(ok(review(`head=${SHA} runden=1 lenses=doku verdikt=ok`)).join(), /lenses fehlt/);
+    assert.match(ok(review(`head=${SHA} runden=1 lenses=doku sollte=doku:0 hinweis=doku:0 verdikt=ok`)).join(), /lenses fehlt/);
     assert.match(ok(review(`head=${SHA} runden=1 lenses=architektur,requirement-treue verdikt=ok`)).join(), /test-adaequanz/);
   });
   test("Markdown-Diff: doku genügt, der volle Code-Satz auch, eine Teilmenge nicht", () => {
     const md = { dateien: ["docs/a.md"] };
-    assert.deepEqual(ok(review(`head=${SHA} runden=1 lenses=doku verdikt=ok`), md), []);
+    assert.deepEqual(ok(review(`head=${SHA} runden=1 lenses=doku sollte=doku:0 hinweis=doku:0 verdikt=ok`), md), []);
     assert.deepEqual(ok(review(), md), []);
     assert.match(ok(review(`head=${SHA} runden=1 lenses=architektur verdikt=ok`), md).join(), /doku/);
   });
@@ -157,7 +162,7 @@ describe("bewerteNachweis", () => {
     assert.match(ok(review(`head=${SHA} runden=1 lenses=${DREI}`)).join(), /verdikt=\(fehlt\)/);
   });
   test("Plan-Zeile fehlt oder ist ungültig ist rot, mit Begründung ok", () => {
-    const rev = `${Z.review}: head=${SHA} runden=1 lenses=${DREI} verdikt=ok`;
+    const rev = `${Z.review}: head=${SHA} runden=1 lenses=${DREI} ${S0(DREI)} verdikt=ok`;
     assert.match(ok(rev).join(), new RegExp(`${Z.plan}-Zeile fehlt`));
     assert.match(ok(`${Z.plan}: ohne\n${rev}`).join(), new RegExp(`${Z.plan} ungültig`));
     assert.deepEqual(ok(`${Z.plan}: ohne — Spawn scheiterte\n${rev}`), []);
@@ -170,14 +175,14 @@ describe("bewerteNachweis", () => {
 describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   const mit = (blocker: string, runden = 2, lenses = DREI) =>
     bewerteNachweis({
-      nachweis: parseNachweis(review(`head=${SHA} runden=${runden} lenses=${lenses} blocker=${blocker} verdikt=ok`)),
+      nachweis: parseNachweis(review(`head=${SHA} runden=${runden} lenses=${lenses} blocker=${blocker} ${S0(lenses)} verdikt=ok`)),
       dateien: ["src/x.ts"],
       headBekannt: true,
       headImSlice: true,
     });
   test("Parser: fehlt das Feld, ist blocker null; sonst Liste, tolerant bei Leerzeichen und Umlauten", () => {
     assert.equal(parseNachweis(review()).review?.blocker, null);
-    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=${DREI} blocker=Architektur:1, Test-Adäquanz:0 verdikt=ok`));
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=${DREI} blocker=Architektur:1, Test-Adäquanz:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`));
     assert.deepEqual(n.review?.blocker, [
       { lens: "architektur", n: 1 },
       { lens: "test-adaequanz", n: 0 },
@@ -195,8 +200,8 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   test("checkReviewNachweis meldet blockerFehlt für alte Zeilen, nicht für neue", () => {
     const lauf = (felder: string) =>
       checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { FACTORY_DIFF_BASE: "base" } }) as { ok: boolean; blockerFehlt?: boolean };
-    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).blockerFehlt, true);
-    const neu = lauf(`head=${SHA} runden=2 lenses=${DREI} blocker=architektur:1,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} ${S0(DREI)} verdikt=ok`).blockerFehlt, true);
+    const neu = lauf(`head=${SHA} runden=2 lenses=${DREI} blocker=architektur:1,requirement-treue:0,test-adaequanz:0 ${S0(DREI)} verdikt=ok`);
     assert.equal(neu.ok, true);
     assert.equal(neu.blockerFehlt, false);
   });
@@ -222,11 +227,103 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   });
 });
 
+describe("sollte- und hinweis-Pflichtfelder (factory#530, Schwere der Lens-Funde)", () => {
+  const NULL3 = "architektur:0,requirement-treue:0,test-adaequanz:0";
+  const mit = (felder: string, runden = 2, lenses = DREI) =>
+    bewerteNachweis({
+      nachweis: parseNachweis(review(`head=${SHA} runden=${runden} lenses=${lenses} ${felder} verdikt=ok`)),
+      stufe: lenses === "kombiniert" ? "S" : "voll",
+      dateien: lenses === "doku" ? ["docs/x.md"] : ["src/x.ts"],
+      headBekannt: true,
+      headImSlice: true,
+    });
+  const beide = (sollte: string, hinweis: string) => `sollte=${sollte} hinweis=${hinweis}`;
+
+  test("Parser: Arrays, tolerant bei Leerzeichen; fehlt das Feld, ist es null", () => {
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=${DREI} sollte=Architektur:1, Test-Adäquanz:0 hinweis=doku:2 verdikt=ok`)).review;
+    assert.deepEqual(n?.sollte, [{ lens: "architektur", n: 1 }, { lens: "test-adaequanz", n: 0 }]);
+    assert.deepEqual(n?.hinweis, [{ lens: "doku", n: 2 }]);
+    const alt = parseNachweis(`${Z.review}: head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).review;
+    assert.equal(alt?.sollte, null);
+    assert.equal(alt?.hinweis, null);
+  });
+  test("grün: Code, Doku, Kombi und Sicherheit mit vollständigen Feldern", () => {
+    assert.deepEqual(mit(beide(NULL3, NULL3), 1), []);
+    assert.deepEqual(mit(beide("architektur:1, requirement-treue:0, test-adaequanz:2", NULL3)), []);
+    assert.deepEqual(mit(beide("doku:0", "doku:3"), 1, "doku"), []);
+    assert.deepEqual(mit(beide("kombiniert:0", "kombiniert:1"), 1, "kombiniert"), []);
+    assert.deepEqual(mit(beide(`${NULL3},sicherheit:0`, `${NULL3},sicherheit:1`), 1, `${DREI},sicherheit`), []);
+  });
+  test("rot: fehlt sollte, fehlt hinweis, fehlen beide (zwei Fehler, mit Vorlage-Hinweis)", () => {
+    assert.match(mit(`hinweis=${NULL3}`).join(), /sollte= fehlt \(Pflicht, factory#530\)/);
+    assert.match(mit(`sollte=${NULL3}`).join(), /hinweis= fehlt \(Pflicht, factory#530\)/);
+    const f = mit("");
+    assert.equal(f.filter((z) => /fehlt \(Pflicht, factory#530\)/.test(z)).length, 2);
+  });
+  test("rot: leeres Feld", () => {
+    assert.match(mit(`sollte= hinweis=${NULL3}`).join(), /sollte ist leer/);
+    assert.match(mit(`sollte=${NULL3} hinweis=`).join(), /hinweis ist leer/);
+  });
+  test("rot: unbekannte Brille, je Feld", () => {
+    assert.match(mit(beide(`${NULL3},foo:0`, NULL3)).join(), /sollte nennt unbekannte Brille "foo"/);
+    assert.match(mit(beide(NULL3, `${NULL3},foo:0`)).join(), /hinweis nennt unbekannte Brille "foo"/);
+  });
+  test("rot: negative oder nicht ganze Zahl, je Feld", () => {
+    for (const falsch of ["-1", "1.5", "x"]) {
+      const kaputt = `architektur:${falsch},requirement-treue:0,test-adaequanz:0`;
+      assert.match(mit(beide(kaputt, NULL3)).join(), /sollte=architektur:NaN ist keine ganze Zahl/, falsch);
+      assert.match(mit(beide(NULL3, kaputt)).join(), /hinweis=architektur:NaN ist keine ganze Zahl/, falsch);
+    }
+  });
+  test("rot: doppelte Brille, je Feld", () => {
+    assert.match(mit(beide(`${NULL3},architektur:0`, NULL3)).join(), /sollte nennt die Brille architektur doppelt/);
+    assert.match(mit(beide(NULL3, `${NULL3},architektur:0`)).join(), /hinweis nennt die Brille architektur doppelt/);
+  });
+  test("rot: fehlende Brille des vollen Passes, auch bei runden=2", () => {
+    assert.match(mit(beide("architektur:0,requirement-treue:0", NULL3), 2).join(), /sollte nennt nicht genau die Brillen von lenses.*fehlt test-adaequanz, zuviel -\./);
+    assert.match(mit(beide(NULL3, "architektur:0"), 2).join(), /hinweis nennt nicht genau die Brillen von lenses.*fehlt requirement-treue,test-adaequanz/);
+  });
+  test("rot: bekannte Brille, die nicht in lenses steht", () => {
+    assert.match(mit(beide(`${NULL3},doku:0`, NULL3)).join(), /sollte nennt nicht genau.*fehlt -, zuviel doku\./);
+  });
+  test("runden=1: nur sollte > 0 ist rot, alle 0 ist grün; runden=2 mit sollte > 0 ist grün", () => {
+    assert.match(mit(beide("architektur:1,requirement-treue:0,test-adaequanz:0", NULL3), 1).join(), /Runde 1 meldete Blocker/);
+    assert.deepEqual(mit(beide("architektur:1,requirement-treue:0,test-adaequanz:0", NULL3), 2), []);
+  });
+  test("runden=1: hinweis > 0 löst keine Fix-Runde aus und bleibt grün", () => {
+    assert.deepEqual(mit(beide(NULL3, "architektur:4,requirement-treue:0,test-adaequanz:1"), 1), []);
+  });
+  test("runden=1: ohne blocker= zählt nur die Summe von sollte", () => {
+    assert.match(mit(beide("architektur:2,requirement-treue:0,test-adaequanz:0", NULL3), 1).join(), /Runde 1 meldete Blocker/);
+  });
+  test("runden=1: fehlen beide Felder, gibt es genau die zwei Pflicht-Fehler und keinen Absturz", () => {
+    const f = mit("", 1);
+    assert.equal(f.length, 2, f.join("\n"));
+  });
+  test("runden=1: eine kaputte Zahl in sollte macht keine Blocker-Summe, nur den Formfehler", () => {
+    const f = mit(beide("architektur:x,requirement-treue:0,test-adaequanz:0", NULL3), 1).join("\n");
+    assert.match(f, /keine ganze Zahl/);
+    assert.doesNotMatch(f, /Runde 1 meldete Blocker/);
+  });
+  test("handgebauter Nachweis mit negativer Zahl ist rot (nicht nur über den Parser)", () => {
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=${DREI} ${beide(NULL3, NULL3)} verdikt=ok`));
+    if (n.review) n.review.sollte = [{ lens: "architektur", n: -1 }, { lens: "requirement-treue", n: 0 }, { lens: "test-adaequanz", n: 0 }];
+    const f = bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true });
+    assert.match(f.join(), /sollte=architektur:-1 ist keine ganze Zahl/);
+  });
+  test("Rückgabe bei Rot nennt sollte= fehlt, die Vorlage-Funktion trägt beide Felder (echter CLI-Lauf: siehe Block mit --config)", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`) }), env: { FACTORY_DIFF_BASE: "base" } }) as { ok: boolean; fehler: string[] };
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join("\n"), /sollte= fehlt/);
+    assert.match((raw as Mod).vorlage(Z), /sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>/);
+  });
+});
+
 describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => {
   const mit = (teil: string | null, o: { lenses?: string; blocker?: string } = {}) =>
     bewerteNachweis({
       nachweis: parseNachweis(
-        review(`head=${SHA} runden=2 lenses=${o.lenses ?? "kombiniert"} blocker=${o.blocker ?? "kombiniert:3"}${teil === null ? "" : ` teilbrillen=${teil}`} verdikt=ok`),
+        review(`head=${SHA} runden=2 lenses=${o.lenses ?? "kombiniert"} blocker=${o.blocker ?? "kombiniert:3"}${teil === null ? "" : ` teilbrillen=${teil}`} ${S0(o.lenses ?? "kombiniert")} verdikt=ok`),
       ),
       dateien: ["src/x.ts"],
       headBekannt: true,
@@ -235,8 +332,8 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
     });
   const GUT = "architektur:1,requirement-treue:1,test-adaequanz:1";
   test("Parser: Feld fehlt → null, sonst Liste wie blocker (Umlaute, Leerzeichen)", () => {
-    assert.equal(parseNachweis(review(`head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`)).review?.teilbrillen, null);
-    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:2 teilbrillen=Architektur:2, Test-Adäquanz:0 verdikt=ok`));
+    assert.equal(parseNachweis(review(`head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`)).review?.teilbrillen, null);
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:2 teilbrillen=Architektur:2, Test-Adäquanz:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`));
     assert.deepEqual(n.review?.teilbrillen, [
       { lens: "architektur", n: 2 },
       { lens: "test-adaequanz", n: 0 },
@@ -258,7 +355,7 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
     }
   });
   test("teilbrillen ohne blocker-Feld: Meldung statt Absturz", () => {
-    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert teilbrillen=${GUT} verdikt=ok`));
+    const n = parseNachweis(review(`head=${SHA} runden=2 lenses=kombiniert teilbrillen=${GUT} sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`));
     const f = bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true, stufe: "S" }).join();
     assert.match(f, /teilbrillen gilt nur mit/);
   });
@@ -294,9 +391,9 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
   });
   test("checkReviewNachweis: teilbrillenFehlt nur bei kombiniert ohne Feld", () => {
     const lauf = (felder: string) => checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { FACTORY_DIFF_BASE: "base" } }) as { teilbrillenFehlt?: boolean };
-    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 verdikt=ok`).teilbrillenFehlt, true);
-    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 teilbrillen=${GUT} verdikt=ok`).teilbrillenFehlt, false);
-    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).teilbrillenFehlt, false);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 ${S0("kombiniert")} verdikt=ok`).teilbrillenFehlt, true);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:3 teilbrillen=${GUT} ${S0("kombiniert")} verdikt=ok`).teilbrillenFehlt, false);
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} ${S0(DREI)} verdikt=ok`).teilbrillenFehlt, false);
   });
 });
 
@@ -407,7 +504,7 @@ describe("Guard-Liste: Zahl im Selbstcheck gegen die Ankerzahl des Diffs (L23)",
 
 describe("checkReviewNachweis (git injiziert)", () => {
   test("zwei Nachweis-Commits: der jüngste gilt, ein alter mit unbekanntem head stört nicht (Z8a)", () => {
-    const alt = review(`head=${"c".repeat(40)} runden=2 lenses=${DREI} verdikt=ok`);
+    const alt = review(`head=${"c".repeat(40)} runden=2 lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: "", commits: [alt, review()] }), env });
     assert.deepEqual(r.fehler, []);
     assert.equal(r.ok, true);
@@ -426,13 +523,13 @@ describe("checkReviewNachweis (git injiziert)", () => {
     assert.match(r.fehler.join(), /nicht im Slice/);
   });
   test("Markdown-Diff mit lenses=doku ist grün, Code-Diff mit lenses=doku rot (Dateiliste kommt an)", () => {
-    const doku = review(`head=${SHA} runden=1 lenses=doku verdikt=ok`);
+    const doku = review(`head=${SHA} runden=1 lenses=doku sollte=doku:0 hinweis=doku:0 verdikt=ok`);
     assert.deepEqual(checkReviewNachweis({ runGit: fakeGit({ messages: doku, files: "docs/a.md\n" }), env }).fehler, []);
     assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: doku, files: "src/x.ts\n" }), env }).ok, false);
   });
   test("abgekürzter SHA wird zum vollen aufgelöst und im Slice gefunden", () => {
     const kurz = SHA.slice(0, 8);
-    const git = fakeGit({ messages: review(`head=${kurz} runden=1 lenses=${DREI} verdikt=ok`) });
+    const git = fakeGit({ messages: review(`head=${kurz} runden=1 lenses=${DREI} sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`) });
     const runGit = (a: string[]) => (a[0] === "rev-parse" && a[3] === `${kurz}^{commit}` ? `${SHA}\n` : git(a));
     assert.deepEqual(checkReviewNachweis({ runGit, env }).fehler, []);
   });
@@ -558,7 +655,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
       git(dir, "add", "a.txt");
       git(dir, "commit", "-q", "--no-edit");
     }
-    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} ${S0(DREI)} verdikt=ok`);
     // Wie im Betrieb: nach dem Einmergen ist die Basis (merge-base mit main) die Spitze von main; deren Commits zählen nicht zum Slice.
     return { dir, basis: git(dir, "rev-parse", "main").trim() };
   }
@@ -588,7 +685,7 @@ describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", { timeout: 30_000 }, () =
     writeFileSync(join(dir, "a.txt"), "y\n");
     git(dir, "commit", "-q", "-am", "feature");
     const reviewt = git(dir, "rev-parse", "HEAD").trim();
-    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\n${Z.plan}: ${PL}\n${Z.review}: head=${reviewt} runden=1 lenses=${DREI} ${S0(DREI)} verdikt=ok`);
     assert.equal(pruefe({ dir, basis }).ok, true);
   });
 });
@@ -651,7 +748,7 @@ describe("Commit mit Baumänderung nach dem Review (#1740 L17)", () => {
     const git = (cwd: string, ...args: string[]) =>
       execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     const nachweis = (dir: string, head: string, extra = "") =>
-      git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\n${Z.plan}: ${PL}\n${Z.review}: head=${head} runden=1 lenses=${DREI} verdikt=ok`);
+      git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis${extra}\n\n${Z.plan}: ${PL}\n${Z.review}: head=${head} runden=1 lenses=${DREI} ${S0(DREI)} verdikt=ok`);
     const sha = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
     const pruefe = (dir: string, basis: string) =>
       checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }), env: { FACTORY_DIFF_BASE: basis } });
@@ -744,7 +841,7 @@ const squash = (z: Zeilen, planer: string): string => [ // die Zeilen der Config
   "* chore(harness): Review-Nachweis (#1723)",
   "",
   `${z.plan}: ${planer}`,
-  `${z.review}: head=7e145d331598bb4009a8a504b87a7347930416be runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
+  `${z.review}: head=7e145d331598bb4009a8a504b87a7347930416be runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`,
   "",
   "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
   "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
@@ -754,7 +851,7 @@ const squash = (z: Zeilen, planer: string): string => [ // die Zeilen der Config
   "* chore(harness): Review-Nachweis nach Merge (#1723)",
   "",
   `${z.plan}: ${planer}`,
-  `${z.review}: head=47da050d18478970b277ae0d9218482fdd79fd11 runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 verdikt=ok`,
+  `${z.review}: head=47da050d18478970b277ae0d9218482fdd79fd11 runden=3 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:2 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`,
   "",
   "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
   "Claude-Session: https://claude.ai/code/session_01LpXppXWFQtLt6rzgeapR9x",
@@ -798,7 +895,7 @@ describe("Präfix und Planer kommen aus der Config (#1741)", () => {
   });
 
   test("ein ungültiger Plan nennt den Planer der Config, nicht einen festen Namen", () => {
-    const f = bewerte(`${Z.plan}: egal\n${Z.review}: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`, commitZeilen(Z.praefix, "mein-planer")).join("\n");
+    const f = bewerte(`${Z.plan}: egal\n${Z.review}: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 ${S0(DREI)} verdikt=ok`, commitZeilen(Z.praefix, "mein-planer")).join("\n");
     assert.match(f, /"mein-planer"/);
     assert.doesNotMatch(f, new RegExp(`"${PL}"`));
   });
@@ -912,7 +1009,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     git("add", "-A");
     git("commit", "-q", "-m", "umsetzung");
     const reviewt = git("rev-parse", "HEAD").trim();
-    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`);
     const ohne = join(d, "ohne.json");
     writeFileSync(ohne, JSON.stringify(echteConfig()));
     const mit = join(d, "mit.json");
@@ -938,7 +1035,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const reviewt = git("rev-parse", "HEAD").trim();
     const pfad = join(d, "c.json");
     writeFileSync(pfad, JSON.stringify(echteConfig()));
-    const nachweis = (p: string) => `${p}Plan: demo-planer\n${p}Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
+    const nachweis = (p: string) => `${p}Plan: demo-planer\n${p}Review: head=${reviewt} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 verdikt=ok`;
     git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", nachweis(Z.praefix));
     const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(rot.status, 1, rot.stdout + rot.stderr);
@@ -948,6 +1045,29 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
     assert.match(gruen.stdout, /Größenstufe: (S|voll)/);
+  });
+
+  test("CLI-Lauf bei Rot: Exit 1, Meldung nennt das fehlende Pflichtfeld, die Vorlage trägt sollte= und hinweis= (factory#530)", () => {
+    const d = mkdir();
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(d, "a.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "basis");
+    const basis = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(d, "a.ts"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "code");
+    const reviewt = git("rev-parse", "HEAD").trim();
+    const pfad = join(d, "c.json");
+    writeFileSync(pfad, JSON.stringify(echteConfig()));
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
+    const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
+    assert.equal(rot.status, 1, rot.stdout + rot.stderr);
+    assert.match(rot.stderr, /sollte= fehlt \(Pflicht, factory#530\)/);
+    assert.match(rot.stderr, /hinweis= fehlt \(Pflicht, factory#530\)/);
+    assert.match(rot.stderr, /Vorlage:/);
+    assert.match(rot.stderr, /sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>/);
   });
 
   test("CLI-Ausgabe: Hinweis-Zeilen zu fehlendem blocker= und teilbrillen=, bei vollständiger Zeile keine (factory#402 L21)", () => {
@@ -964,7 +1084,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const reviewt = git("rev-parse", "HEAD").trim();
     const pfad = join(d, "c.json");
     writeFileSync(pfad, JSON.stringify(echteConfig()));
-    const nachweis = (review: string) => git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 ${review} verdikt=ok`);
+    const nachweis = (review: string) => git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 ${review} ${S0("kombiniert")} verdikt=ok`);
     nachweis("lenses=kombiniert");
     const ohneBeides = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(ohneBeides.status, 0, ohneBeides.stdout + ohneBeides.stderr);
@@ -1003,7 +1123,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   const HOCH: Risiko = { klasse: "hoch", gruende: ["src/auth.ts trifft **/auth* (Standardliste)"] };
   const DOKU: Risiko = { klasse: "doku", gruende: ["nur *.md"] };
   const ZEILE = "daten=Token vom Client zum Server | grenzen=Browser zu API | missbrauch=Token-Diebstahl | datenschutz=keine Personendaten gespeichert";
-  const mitSicherheit = (extra = "") => `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI},sicherheit blocker=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 verdikt=ok${extra}`;
+  const mitSicherheit = (extra = "") => `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI},sicherheit blocker=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0,sicherheit:0 verdikt=ok${extra}`;
   const bewerte = (text: string, risiko: Risiko = HOCH, dateien = ["src/auth.ts"]) =>
     (raw as Mod).bewerteNachweis({ nachweis: parseNachweis(text), dateien, headBekannt: true, headImSlice: true, zeilen: Z, stufe: "voll", risiko });
   const mitZeile = (zeile: string) => `${mitSicherheit()}\n${Z.bedrohungen}: ${zeile}`;
@@ -1013,7 +1133,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   });
 
   test("K4-Negativfall: ohne Zeile und ohne sicherheit genau zwei Fehler, je eine Hälfte nur ihren", () => {
-    const ohneBeides = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
+    const ohneBeides = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
     assert.equal(ohneBeides.length, 2, ohneBeides.join("\n"));
     assert.match(ohneBeides.join("\n"), /Bedrohungen-Zeile fehlt/);
     assert.match(ohneBeides.join("\n"), /lenses fehlt sicherheit/);
@@ -1021,7 +1141,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     const nurZeileFehlt = bewerte(mitSicherheit());
     assert.equal(nurZeileFehlt.length, 1);
     assert.match(nurZeileFehlt[0], /Bedrohungen-Zeile fehlt/);
-    const nurLensFehlt = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
+    const nurLensFehlt = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
     assert.equal(nurLensFehlt.length, 1);
     assert.match(nurLensFehlt[0], /lenses fehlt sicherheit/);
   });
@@ -1052,9 +1172,9 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   });
 
   test("normal ohne beides und Doku-Diff mit lenses=doku sind ohne Bedrohungs-Fehler (Doku-Diff wird nicht belastet)", () => {
-    const code = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    const code = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
     assert.deepEqual(bewerte(code, NORMAL, ["src/x.ts"]), []);
-    const doku = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 verdikt=ok`;
+    const doku = `${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 verdikt=ok`;
     assert.deepEqual(bewerte(doku, DOKU, ["docs/auth.md"]), []);
   });
 
@@ -1087,7 +1207,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   });
 
   test("die Lens-Meldung nennt Klasse-hoch-Grund und Weg", () => {
-    const f = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
+    const f = bewerte(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI} blocker=architektur:0,requirement-treue:0,test-adaequanz:0 sollte=architektur:0,requirement-treue:0,test-adaequanz:0 hinweis=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok\n${Z.bedrohungen}: ${ZEILE}`);
     assert.match(f[0], /lenses fehlt sicherheit \(Risikoklasse hoch: src\/auth\.ts trifft.*ablauf-klasse-hoch\.md\)/);
   });
 
@@ -1111,7 +1231,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
   });
 
   describe("Integration über checkReviewNachweis", () => {
-    const nachweis = (extra: string[]) => [`${Z.praefix}Plan: ${PL}`, `${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI}${extra[0] ?? ""} blocker=architektur:0,requirement-treue:0,test-adaequanz:0${extra[1] ?? ""} verdikt=ok`].join("\n");
+    const nachweis = (extra: string[]) => [`${Z.praefix}Plan: ${PL}`, `${Z.praefix}Review: head=${SHA} runden=1 lenses=${DREI}${extra[0] ?? ""} blocker=architektur:0,requirement-treue:0,test-adaequanz:0${extra[1] ?? ""} sollte=architektur:0,requirement-treue:0,test-adaequanz:0${extra[1] ?? ""} hinweis=architektur:0,requirement-treue:0,test-adaequanz:0${extra[1] ?? ""} verdikt=ok`].join("\n");
     const pruefe = (messages: string, o: { files?: string; numstat?: string; throws?: string } = {}) =>
       checkReviewNachweis({ runGit: fakeGit({ messages, files: o.files ?? "src/auth.ts\n", numstat: o.numstat, throws: o.throws }), env, ladeRisiko: () => ({ muster: ["**/auth*"], quelle: "Test" }) } as never);
 
@@ -1129,7 +1249,7 @@ describe("Risikoklasse hoch: Bedrohungs-Zeile und Sicherheits-Lens (factory#334)
     });
 
     test("ein Doku-Diff mit Risikowort im Namen bleibt frei", () => {
-      const r = pruefe(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 verdikt=ok`, { files: "docs/auth.md\n" });
+      const r = pruefe(`${Z.praefix}Plan: ${PL}\n${Z.praefix}Review: head=${SHA} runden=1 lenses=doku blocker=doku:0 sollte=doku:0 hinweis=doku:0 verdikt=ok`, { files: "docs/auth.md\n" });
       assert.equal(r.ok, true, r.fehler.join("\n"));
     });
 

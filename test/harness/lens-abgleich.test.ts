@@ -158,3 +158,35 @@ describe("Beide Laufzeiten erreichen die Brille (factory#308, AK4)", () => {
     assert.equal(rollen.find((r) => r.name === "holdout-szenario")?.ohneShell, true);
   });
 });
+
+describe("Schwere der Lens-Funde, keine Filteranweisung (factory#530)", () => {
+  /** Die Tags `[…]` der Fund-Zeilen im Codeblock unter „## Findings-Format“ der Lens-Definition. */
+  const schweren = (text: string): string[] => {
+    const abschnitt = text.split("## Findings-Format")[1] ?? "";
+    const block = /```\n([\s\S]*?)```/.exec(abschnitt)?.[1] ?? "";
+    return [...block.matchAll(/^- \[([^\]]+)\]/gm)].map((m) => m[1]);
+  };
+  /** Geschlossene Liste bekannter Filtermuster (Kleinschreibung); ein weiteres denkbares Muster ist Bekannte Grenze, ebenso ein Fehlalarm durch ein Teilwort (etwa „ignoriere generierte Dateien“ als legitime Scope-Anweisung, dann das Muster enger fassen). */
+  const FILTER_MUSTER = ["melde nur", "nur schwere", "nicht melden", "ignoriere"];
+  const filterAnweisungen = (text: string): string[] => FILTER_MUSTER.filter((m) => text.toLowerCase().includes(m));
+
+  test("das Findings-Format kennt genau drei Schweren", () => {
+    assert.deepEqual(schweren(LENS_DEF), ["❌ blockierend", "🔶 sollte", "⚠️ Hinweis"]);
+  });
+  test("Red-Green: die Tag-Extraktion unterscheidet eine vierte oder fehlende Schwere", () => {
+    const mit = (tags: string[]) => `## Findings-Format\n\n\`\`\`\n${tags.map((t) => `- [${t}] x`).join("\n")}\n\`\`\`\n`;
+    assert.deepEqual(schweren(mit(["a", "b"])), ["a", "b"]);
+    assert.notDeepEqual(schweren(mit(["❌ blockierend", "🔶 sollte"])), ["❌ blockierend", "🔶 sollte", "⚠️ Hinweis"]);
+    assert.deepEqual(schweren("kein Abschnitt"), []);
+  });
+  test("Lens-Definition und alle Brillen-Dateien tragen keine Filteranweisung an die Lens", () => {
+    const dateien = [".claude/agents/factory-lens.md", ...readdirSync(new URL(`${BRILLEN_ORDNER}/`, WURZEL)).filter((n) => /^brille-.+\.md$/.test(n)).map((n) => `${BRILLEN_ORDNER}/${n}`)];
+    assert.ok(dateien.length >= 7, "Lens-Definition und sechs Brillen");
+    for (const d of dateien) assert.deepEqual(filterAnweisungen(lies(d)), [], d);
+  });
+  test("Red-Green: jedes Muster der geschlossenen Liste löst aus, die eigene Brille nicht", () => {
+    // Die Muster stehen hier unabhängig abgeschrieben: ein aus FILTER_MUSTER gelöschtes Muster lässt diesen Test rot werden.
+    for (const m of ["melde nur", "nur schwere", "nicht melden", "ignoriere"]) assert.deepEqual(filterAnweisungen(`Bitte ${m.toUpperCase()} das Wichtige.`), [m], m);
+    assert.deepEqual(filterAnweisungen("Nur die eigene Brille, jeden Fund melden."), []);
+  });
+});
