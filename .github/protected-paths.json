@@ -14,6 +14,8 @@
     "/scripts/tag-takt.mjs",
     "/scripts/factory-update-check.mjs",
     "/scripts/wiedervorlage.mjs",
+    "/scripts/epic-abschluss.mjs",
+    "/scripts/epic-lib.mjs",
     "/scripts/dependency-review-vollstaendig.mjs",
     "/scripts/verify-lauf.mjs",
     "/scripts/docs-gen*",

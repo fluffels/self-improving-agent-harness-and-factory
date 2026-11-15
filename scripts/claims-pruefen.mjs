@@ -16,7 +16,8 @@
  * Je Nummer ein Urteil (`beurteileClaim`, pur):
  *   unbekannt        GitHub-Daten fehlen: keine Aktion (fail-closed).
  *   geloescht        GitHub meldet das Issue als NOT_FOUND (gelöscht oder übertragen): Zeile `GELÖSCHT` mit Worktree-Pfad und Weg von Hand, nichts wird entfernt, kein Exit 2.
- *   epic-rest        offen mit Unteraufgaben (GraphQL `subIssuesSummary`), aber ohne Worktree, Branch und PR: ein aufgeteiltes Epic, das offen blieb. Zeile `EPIC-REST` mit dem Weg (Übersichts-Kommentar, `gh issue close`, Lock freigeben); vor `lebendig` und `ohne-lokale-spur` geprüft.
+ *   epic-rest        offen mit Unteraufgaben (GraphQL `subIssuesSummary`), alle geschlossen, aber ohne Worktree, Branch und PR: ein Epic, das hätte schließen müssen (Workflow `epic-abschluss.yml`, factory#507). Zeile `EPIC-REST` mit dem Weg (Übersichts-Kommentar, `gh issue close`, Lock freigeben); vor `lebendig` und `ohne-lokale-spur` geprüft.
+ *                    Ein aufgeteiltes Epic mit offenen Kindern (oder unvollständig gelesener Kinderliste) ist `behalten` (`aufgeteiltes Epic, <o> von <n> Kindern offen`): offen, zugewiesen, kein Claim, keine Wiederaufnahme.
  *   lebendig         offen, Lebenszeichen (Lock `zuletzt`/`erstellt`/Übergabe/Stopp, Commit-Zeit der Branch-Köpfe) jünger als N Stunden (Standard 3).
  *   verwaist         offen, lokale Spur, Lebenszeichen älter als N Stunden oder keins feststellbar: Zeile `WIEDERAUFNAHME`; die Übernahme
  *                    geschieht atomar mit `node scripts/ticket-lock.mjs claim <nr> --wiederaufnahme`. Ein fremd zugewiesenes Ticket wird behalten.
@@ -45,6 +46,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { labelAus, ladeProjektConfig, optionalesLabel } from "./projekt-config-lib.mjs";
 import { NICHT_EINTRAGBAR_PRAEFIX } from "./sammelticket-titel.mjs";
 import { istRepoForm, zerlegeRepo } from "./repo-form.mjs";
+import { kinderStand } from "./epic-lib.mjs";
 import { INAKTIV_MS, lebenszeichenMs, lockVerzeichnisFuer, oeffentlicheSicht, parseLock } from "./ticket-lock-lib.mjs";
 import { ladeTicketNamen, ticketNamen, worktreePraefix } from "./ticket-namen.mjs";
 import { lensWorktreeName, ticketAusRef } from "./ticket-refs.mjs";
@@ -88,13 +90,15 @@ function ohneSpurUrteil(c, ergebnis) {
   return ergebnis("ohne-lokale-spur", c.issue.assignees.length ? "zugewiesen, aber ohne Lock, Worktree und lokalen Branch (evtl. andere Maschine)" : "offen, keine lokale Spur");
 }
 
-/** Pur: das Urteil `epic-rest` für ein offenes Issue mit Unteraufgaben, das keinen Worktree, keinen Branch (lokal wie remote) und keinen PR hat (aufgeteiltes Epic, das offen blieb); sonst null. */
+/** Pur: das Urteil für ein offenes Issue mit Unteraufgaben, das keinen Worktree, keinen Branch (lokal wie remote) und keinen PR hat (aufgeteiltes Epic): `epic-rest`, wenn alle Kinder geschlossen sind (Kinderliste vollständig gelesen), sonst `behalten`; ohne Kinder oder mit Spur null. */
 function epicRestUrteil(c, ergebnis) {
   if (!(c.kinder > 0) || c.worktree || c.branch || c.branchLokal || c.prs.length > 0) return null;
-  return ergebnis("epic-rest", `${c.kinder} Kinder, offen ohne Worktree, Branch und PR`);
+  if (c.kinderOffen === 0 && c.kinderVollstaendig === true) return ergebnis("epic-rest", `alle ${c.kinder} Kinder geschlossen, Epic offen ohne Worktree, Branch und PR`);
+  const stand = c.kinderVollstaendig === true && Number.isInteger(c.kinderOffen) ? `${c.kinderOffen} von ${c.kinder} Kindern offen` : "Kinderliste unvollständig gelesen";
+  return ergebnis("behalten", `aufgeteiltes Epic, ${stand}`);
 }
 
-/** Pur: das erste Urteil eines offenen Claims vor der Lebenszeichen-Prüfung: `epic-rest`, sonst ohne lokale Spur `ohneSpurUrteil`; sonst null. */
+/** Pur: das erste Urteil eines offenen Claims vor der Lebenszeichen-Prüfung: `epic-rest` oder `behalten` (aufgeteiltes Epic), sonst ohne lokale Spur `ohneSpurUrteil`; sonst null. */
 function fruehesOffenUrteil(c, spur, ergebnis) {
   const epicRest = epicRestUrteil(c, ergebnis);
   if (epicRest || spur) return epicRest;
@@ -156,7 +160,7 @@ export function aliasAbfragen(nummern, repo = REPO) {
   if (!istRepoForm(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (nummern.some((n) => !Number.isInteger(n) || n <= 0)) throw new Error("Nummern müssen positive Ganzzahlen sein");
   const { owner, name } = zerlegeRepo(repo);
-  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } subIssuesSummary{ total } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
+  const felder = "title state labels(first:30){ nodes{ name } } assignees(first:10){ nodes{ login } } subIssuesSummary{ total } subIssues(first:100){ totalCount nodes{ state } } closedByPullRequestsReferences(first:5, includeClosedPrs:true){ nodes{ number state headRefOid labels(first:30){ nodes{ name } } } }";
   const bloecke = [];
   for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
     const teil = nummern.slice(von, von + ALIAS_MAX);
@@ -164,6 +168,12 @@ export function aliasAbfragen(nummern, repo = REPO) {
     bloecke.push({ nummern: teil, query: `query{ viewer{ login } repository(owner:"${owner}",name:"${name}"){ ${aliase} } }` });
   }
   return bloecke;
+}
+
+/** Pur: `kinderOffen` und `kinderVollstaendig` aus der GraphQL-Antwort `subIssues` (`epic-lib`); ohne Feld unvollständig (fail-closed). */
+function kinderFelder(subIssues) {
+  const stand = kinderStand({ total: subIssues?.totalCount, zustaende: (subIssues?.nodes ?? []).map((k) => k?.state) });
+  return { kinderOffen: stand.offen, kinderVollstaendig: subIssues ? stand.vollstaendig : false };
 }
 
 /** Issue-Daten eines Alias (`null` bei unbekanntem Issue): `{ zustand, assignees, prs }`. Pur. */
@@ -175,6 +185,7 @@ export function issueAus(knoten) {
     assignees: (knoten.assignees?.nodes ?? []).map((a) => a.login),
     labels: (knoten.labels?.nodes ?? []).map((l) => l.name),
     kinder: Number.isInteger(knoten.subIssuesSummary?.total) ? knoten.subIssuesSummary.total : 0,
+    ...kinderFelder(knoten.subIssues),
     prs: (knoten.closedByPullRequestsReferences?.nodes ?? []).map((p) => ({ nummer: p.number, zustand: p.state, headRefOid: p.headRefOid ?? null, labels: (p.labels?.nodes ?? []).map((l) => l.name) })),
   };
 }
@@ -300,6 +311,8 @@ export function sammle(deps) {
       wartet: hatLabel(issue, deps.entscheidungLabel),
       nichtEintragbar: istNichtEintragbar(issue),
       kinder: issue?.kinder ?? 0,
+      kinderOffen: issue?.kinderOffen,
+      kinderVollstaendig: issue?.kinderVollstaendig,
       lock,
       worktree: w,
       weitereWorktrees: weitere,
