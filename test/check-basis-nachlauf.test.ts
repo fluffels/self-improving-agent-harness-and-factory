@@ -127,6 +127,26 @@ describe("fuehreAus", () => {
     assert.equal(t.gateAufrufe.filter((g) => g.befehl === "verifyKompakt").length, MAX_RUNDEN);
   });
 
+  test("install rot: Exit 1, kein verifyKompakt", () => {
+    const t = aufbau({ head1: "aaa", fetchTips: ["ccc"], gateExit: [1] });
+    assert.equal(fuehreAus(t.io.env, t.io), 1);
+    assert.deepEqual(
+      t.gateAufrufe.map((g) => g.befehl),
+      ["install"],
+    );
+    assert.match(t.fehler.join("\n"), /install/);
+  });
+
+  test("h) Fehler ohne Error-Objekt: Meldung nennt den Wert", () => {
+    const t = aufbau({ fetchTips: ["aaa"] });
+    t.io.git = () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "kaputt-als-text";
+    };
+    assert.equal(fuehreAus(t.io.env, t.io), 1);
+    assert.match(t.fehler.join("\n"), /kaputt-als-text/);
+  });
+
   test("h) fetch wirft: Exit 1, fail-closed", () => {
     const t = aufbau({ fetchWirft: true });
     assert.equal(fuehreAus(t.io.env, t.io), 1);
