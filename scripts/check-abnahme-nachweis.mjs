@@ -11,6 +11,8 @@
  *    hinter einer bestandenen Abnahme ist ein Pass);
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;
+ *  - Risikostufe (factory#526): `entfaellt — stufe 0` und `entfaellt — stufe 1` sind auch bei einem Ticket mit Kriterien grün, solange die aus dem Diff berechnete Risikostufe (`risikostufe-lib.mjs`, nicht berechenbar = 2)
+ *    nicht höher ist; sonst rot mit berechneter Stufe und Pfad (auch ohne Kriterien). `entfaellt — klein:` gilt nur bei berechneter Risikostufe ≤ 1. Stufe 2 bleibt wie bisher (Abnahme bei Kriterien).
  *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist; mit Kriterien genügt `entfaellt — klein: <Begründung>` bei berechneter
  *    Größenstufe S (factory#271, `groessenstufe-lib.mjs`: aus dem Diff gerechnet, nie behauptet; Risikoklasse hoch ist nie S), wenn sich nichts beobachten lässt; bei `voll` bleibt es rot.
  *
@@ -28,8 +30,9 @@ import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, stufeZeile, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
 import { groessenstufeAusGit, risikoMusterAus } from "./groessenstufe-lib.mjs";
+import { risikostufeAusGit, zwei } from "./risikostufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { commitImSlice, commitZeilenAus, loeseCommit, meldeUngueltigeOverrides, sliceOverride } from "./slice-override.mjs";
@@ -53,7 +56,7 @@ const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",")
 
 /** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)). */
 const vorlage = (zeilen) =>
-  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Größenstufe S: ${zeilen.abnahme}: entfaellt — klein: <Begründung>`;
+  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Größenstufe S: ${zeilen.abnahme}: entfaellt — klein: <Begründung>   |   Risikostufe 0 oder 1 (node scripts/risikostufe.mjs): ${zeilen.abnahme}: entfaellt — stufe <0|1>`;
 
 /** Urteil je Kriterium gegen die Kriterien des Tickets (`[{k, nachMerge}]`) und gegen `erfuellt`; `nach-merge` gilt nur an einem Nach-Merge-Kriterium. */
 function bewerteUrteil(urteil, liste, nachMerge) {
@@ -113,10 +116,10 @@ function bewerteSpur(a, marker) {
 }
 
 /** `entfaellt` bei einem Ticket mit Kriterien: nur `klein: <Begründung>` bei berechneter Größenstufe S (factory#271). Pure. */
-function bewerteEntfaellt(a, ticket, stufe, zeilen) {
+function bewerteEntfaellt(a, ticket, stufe, zeilen, risikostufe) {
   const klein = kleinGrund(a.grund);
-  if (klein?.art === "klein" && stufe === "S") return [];
-  const ausnahme = klein ? ` (die Ausnahme "entfaellt — klein: <Begründung>" gilt nur bei Größenstufe S mit Begründung; berechnet aus dem Diff: ${stufe})` : "";
+  if (klein?.art === "klein" && stufe === "S" && risikostufe.stufe <= 1) return [];
+  const ausnahme = klein ? ` (die Ausnahme "entfaellt — klein: <Begründung>" gilt nur bei Größenstufe S mit Begründung und Risikostufe ≤ 1; berechnet aus dem Diff: ${stufe}, Risikostufe ${risikostufe.stufe})` : "";
   return [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt${ausnahme}.`];
 }
 
@@ -125,14 +128,17 @@ function bewerteEntfaellt(a, ticket, stufe, zeilen) {
  * `reviewOverride` (bool): eine gültige Review-Override-Zeile steht im Slice, Cap- und Review-head-Vergleich entfallen.
  * `szenarioDurchgaenge` (Zahl, Standard 0): Durchgänge nur mit `ursache=szenario` (`zaehleSzenarioDurchgaenge`), sie zählen nicht gegen das Cap.
  * `stufe` (`"S"` | `"voll"`, Standard `voll`): die aus dem Diff berechnete Größenstufe, nur für `entfaellt — klein: …` relevant.
+ * `risikostufe` (`{stufe, gruende, treffer, pfade}`, Standard Stufe 2, fail-closed): die berechnete Risikostufe für `entfaellt — stufe <n>` und `klein` (factory#526).
  * `ticket` = `{nr, kriterien: <Liste aus kriterien()>, nachMerge: <Präfix aus sprache.spezifikation>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
-export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll", szenarioDurchgaenge = 0 }) {
+export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll", szenarioDurchgaenge = 0, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
-    return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, stufe, zeilen) : [];
+    const sg = stufeGrund(a.grund);
+    if (sg) return stufenAusnahmeFehler(zeilen.abnahme, `entfaellt — ${a.grund}`, sg.stufe, risikostufe);
+    return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, stufe, zeilen, risikostufe) : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
   return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead, reviewOverride, szenarioDurchgaenge), ...bewerteSpur(a, marker)];
@@ -162,7 +168,7 @@ function leseAbnahmeHead(git, base, abnahmeSha, reviewSha) {
  * Führt die Prüfung aus. `runGit`, `gh` (liefert geparstes JSON), `env`, `ladeConfig` injizierbar. Fail-closed: Config-, git- und gh-Fehler sind rot.
  * Liefert `{ok, fehler, override?, entwurf?, skipped?, invalid}`; ein Entwurf bleibt `ok` und trägt die Fehler nur als Bericht.
  */
-export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = process.env, ladeConfig = () => ladeProjektConfig() } = {}) {
+export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = process.env, ladeConfig = () => ladeProjektConfig(), ladeBasis, ladeText } = {}) {
   let config;
   let zeilen;
   try {
@@ -177,20 +183,22 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   let fehler;
   let rov = { reason: null, invalid: [] };
   let stufe = null; // einmal berechnet: Anzeige (factory#402 L26) und Bewertung von `entfaellt — klein` (factory#271, nur dort zählt sie)
+  let risikostufe = null; // einmal berechnet (factory#526): Anzeige und Bewertung von `entfaellt`
   let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
     if (git(["rev-parse", "HEAD"]).trim() === base) return { ok: true, skipped: true, fehler: [], invalid: [] };
     stufe = anzeigeStufe(git, base, config);
+    risikostufe = risikostufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config), ladeBasis, ladeText });
     const ov = sliceOverride(git, base, zeilen.abnahmeOverride);
-    if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe };
+    if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe, risikostufe };
     rov = sliceOverride(git, base, zeilen.reviewOverride);
     entwurf = entwurfLive({ gh, env, repo: repoVon(env, config) });
-    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null, stufe });
+    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null, stufe, risikostufe });
   } catch (e) {
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
   const hinweise = rov.reason === null ? [] : [REVIEW_OVERRIDE_HINWEIS];
-  return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, hinweise, invalid: rov.invalid, stufe };
+  return { ok: fehler.length === 0 || entwurf, entwurf: entwurf && fehler.length > 0, fehler, hinweise, invalid: rov.invalid, stufe, risikostufe };
 }
 
 const repoVon = (env, config) => env.GITHUB_REPOSITORY || config.repo;
@@ -216,7 +224,7 @@ export function entwurfLive({ gh, env, repo }) {
 const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
-function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe }) {
+function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe, risikostufe }) {
   const repo = repoVon(env, config);
   const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
@@ -239,7 +247,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe }) {
     marker = vertrauterMarker(kommentare, owner, zeilen);
     szenarioDurchgaenge = zaehleSzenarioDurchgaenge(vertrauteAbnahmeMarker(kommentare, owner, zeilen));
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe, risikostufe });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -257,12 +265,16 @@ function main(argv = process.argv.slice(2)) {
   if (r.override) {
     console.log(`• geduldet: ${r.overrideKey} — ${r.override}`);
     console.log(stufeZeile(r.stufe));
+    console.log(risikostufeZeile(r.risikostufe));
     console.log("✔ Abnahme-Nachweis ok (Override mit Begründung).");
     return;
   }
   meldeUngueltigeOverrides(r.invalid);
   for (const h of r.hinweise ?? []) console.log(`• ${h}`);
-  if (r.ok) console.log(stufeZeile(r.stufe));
+  if (r.ok) {
+    console.log(stufeZeile(r.stufe));
+    console.log(risikostufeZeile(r.risikostufe));
+  }
   if (r.entwurf) {
     console.log("• Entwurf, nur Bericht (maßgeblich ist der Lauf nach ready_for_review):");
     for (const f of r.fehler) console.log(`  - ${f}`);
