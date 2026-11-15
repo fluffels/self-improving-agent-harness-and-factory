@@ -241,6 +241,17 @@ describe("pruefeProjektConfig", () => {
     assert.match(err.join("\n"), /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen/);
   });
 
+  test("bezieher entfallen (factory#500): node scripts/projekt-config.mjs --config <Datei> repo endet als echter Prozess mit Exit 1 und der Fix-Zeile; ohne Schlüssel mit Exit 0", () => {
+    const d = tmp();
+    const datei = join(d, "projekt.json");
+    writeFileSync(datei, JSON.stringify({ ...(gueltig() as object), bezieher: ["a/b"] }));
+    const r = spawnSync(process.execPath, [join(WURZEL, "scripts/projekt-config.mjs"), "--config", datei, "repo"], { encoding: "utf8" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, /bezieher ist entfallen[\s\S]*Fix: Schlüssel entfernen \(bezieher aus \.factory\/projekt\.json\)/);
+    writeFileSync(datei, JSON.stringify(gueltig()));
+    assert.equal(spawnSync(process.execPath, [join(WURZEL, "scripts/projekt-config.mjs"), "--config", datei, "repo"], { encoding: "utf8" }).status, 0);
+  });
+
   test("praefixe, labels, agenten (#1741): je Pflichtschlüssel ein Negativfall (fest verdrahtete Liste, kein Export)", () => {
     const ohne = (pfad: string[]): string => {
       const c = gueltig() as Record<string, unknown>;
