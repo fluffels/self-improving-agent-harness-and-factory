@@ -14,7 +14,7 @@
  *
  * Zweiter Punkt `Board-Vollständigkeit` (factory#490): offene Issues ohne Board-Item (`node scripts/board-place.mjs --missing --json`, `{"fehlend":[…]}`) sind eine Lücke. Ursache ist oft ein leeres oder
  * zu schwaches `PROJECT_TOKEN` (Dependabot-Inbox und Factory-Update warnen dann nur). Grenze: ein leeres Secret ist lokal nicht sichtbar (die Secrets-API liefert nur Namen; der Wochenlauf meldet es als
- * Lücke `Secret PROJECT_TOKEN`); geprüft wird, was fehlt, nicht warum. Wurf, Exit ≠ 0, unlesbares JSON oder eine Antwort ohne `fehlend`-Liste: NICHT PRÜFBAR (fail-closed).
+ * Lücke `Secret PROJECT_TOKEN`); geprüft wird, was fehlt, nicht warum. Bei einer `--config` außerhalb des Prüf-Roots liest der Subprozess die Config des Checkouts, nicht die übergebene (Randfall). Der Subprozess hat ein Zeitlimit (Überschreitung: NICHT PRÜFBAR). Wurf, Exit ≠ 0, unlesbares JSON oder eine Antwort ohne `fehlend`-Liste: NICHT PRÜFBAR (fail-closed).
  */
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
@@ -92,12 +92,13 @@ export function boardPunkte({ config, lesen }) {
 }
 
 const PUNKT_VOLL = "Board-Vollständigkeit";
+const TIMEOUT_MS = 120000;
 
 /** Standard-Lauf: `board-place.mjs --missing --json` im Prüf-Root als Subprozess (das Skript lädt die Config beim Import); wirft bei Fehler, liefert das geparste JSON. */
 export function boardFehlendStandard({ rootDir, exec = spawnSync }) {
   return () => {
     const skript = join(rootDir, "scripts", "board-place.mjs");
-    const r = exec(process.execPath, [skript, "--missing", "--json"], { cwd: rootDir, encoding: "utf8", windowsHide: true });
+    const r = exec(process.execPath, [skript, "--missing", "--json"], { cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: TIMEOUT_MS }); // hängt `gh`: r.error, NICHT PRÜFBAR
     if (r.error) throw r.error;
     if (r.status !== 0) throw new Error(`board-place endete mit Exit ${r.status}: ${String(r.stderr ?? "").trim().split("\n")[0]}`);
     return JSON.parse(String(r.stdout).trim().split("\n").pop());

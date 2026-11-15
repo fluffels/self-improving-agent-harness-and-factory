@@ -1,4 +1,4 @@
-/* Harness-Doctor, Punkt `Board-Ansicht` (factory#247 L7, L9): reiner Punkt mit eingespeister Lese-Naht, kein Netz (der Punkt `Git-Hooks` steht in harness-doctor-githooks.test.ts). */
+/* Harness-Doctor, Punkte `Board-Ansicht` (factory#247 L7, L9) und `Board-Vollständigkeit` (factory#490, ein Fall mit echtem Subprozess ohne Netz): reine Punkte mit eingespeister Lese-Naht, kein Netz (der Punkt `Git-Hooks` steht in harness-doctor-githooks.test.ts). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { boardPunkte as rawBoardPunkte, BOARD_QUERY as rawQuery, boardVollstaendigPunkt as rawVoll, boardVollstaendigPunkte as rawAlle, boardFehlendStandard as rawStandard } from "../scripts/harness-doctor-board.mjs";
@@ -188,6 +188,7 @@ describe("Board-Vollständigkeit (factory#490)", () => {
     expect((aufrufe[0][1] as string[]).slice(1)).toEqual(["--missing", "--json"]);
     expect((aufrufe[0][1] as string[])[0]).toMatch(/wurzel[\\/]scripts[\\/]board-place\.mjs$/);
     expect((aufrufe[0][2] as { cwd: string }).cwd).toBe("/x/wurzel");
+    expect((aufrufe[0][2] as { timeout: number }).timeout).toBe(120000);
     expect(() => standard({ rootDir: "/x", exec: () => ({ status: 1, stdout: "", stderr: "Abbruch" }) })()).toThrow(/Exit 1: Abbruch/);
     expect(() => standard({ rootDir: "/x", exec: () => ({ status: 2 }) })()).toThrow(/Exit 2: $/);
     // Standard-exec (echter Subprozess): ein Prüf-Root ohne Skript wirft.

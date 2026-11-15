@@ -178,7 +178,7 @@ function dateipunkteVorAbbruch({ dateien, rootDir, out }) {
   }
 }
 
-/** Die lokalen Punkte von `--pruefen` (factory#247; `lokal` ersetzt sie in Tests): `Git-Hooks` (git config im Prüf-Root) und `Board-Ansicht` (GraphQL über `gh`); der Wochenlauf und `--einrichten` rufen sie nie. */
+/** Die lokalen Punkte von `--pruefen` (factory#247; `lokal` ersetzt sie in Tests): `Git-Hooks` (git config im Prüf-Root), `Board-Vollständigkeit` (factory#490, Subprozess `board-place --missing --json` im Prüf-Root; bei einer `--config` außerhalb des Prüf-Roots liest er die Config des Checkouts, nicht die übergebene) und `Board-Ansicht` (GraphQL über `gh`); der Wochenlauf und `--einrichten` rufen sie nie. */
 export const lokalStandard = ({ gh, lokal }) => lokal ?? (({ rootDir, config }) => [gitHooksPunkt({ lesen: gitHooksStandard({ rootDir }) }), ...boardPunkte({ config, lesen: (a) => JSON.parse(gh(a)) }), ...boardVollstaendigPunkte({ config, lauf: boardFehlendStandard({ rootDir }) })]);
 
 function pruefen({ werte, rootDir: aufruferRoot, gh, langfuse, env, out, err, kernEnv, dateien, lokal }) {

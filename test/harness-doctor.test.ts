@@ -1146,18 +1146,19 @@ describe("lokale Punkte Git-Hooks und Board-Ansicht (factory#247 L1, L7, L9): nu
     lauf({}, { lokal: () => (aufrufe++, []), argv: ["--einrichten", "--dry-run", "--config", "<config>"] });
     assert.equal(aufrufe, 0);
   });
-  test("pruefLauf ohne `lokal` (Wochenlauf) hat weder Git-Hooks noch Board-Ansicht", () => {
+  test("pruefLauf ohne `lokal` (Wochenlauf) hat weder Git-Hooks noch Board-Ansicht noch Board-Vollständigkeit", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);
     writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
     writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
     const { ergebnis } = (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null });
-    assert.deepEqual(ergebnis.filter((e) => e.punkt === "Git-Hooks" || e.punkt === "Board-Ansicht"), []);
+    assert.deepEqual(ergebnis.filter((e) => e.punkt === "Git-Hooks" || e.punkt === "Board-Ansicht" || e.punkt === "Board-Vollständigkeit"), []);
   });
   test("Standard-`lokal` von main: Zeile Git-Hooks und eine GraphQL-Abfrage je Board mit projectId", () => {
     const r = lauf({}, { lokal: "echt" });
     assert.ok(r.out.some((z) => z.includes(" Git-Hooks")), r.out.join("\n"));
     assert.ok(r.out.some((z) => z.includes(" Board-Ansicht")), r.out.join("\n"));
+    assert.ok(r.out.some((z) => z.includes(" Board-Vollständigkeit")), r.out.join("\n"));
     assert.ok(r.aufrufe.some((a) => a.startsWith("api graphql")), r.aufrufe.join("\n"));
   });
 });

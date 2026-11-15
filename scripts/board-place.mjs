@@ -100,7 +100,7 @@ export function parseArgs(argv) {
   return geparst && { ...geparst, ...zusatzOptionen(werte.repo, notfall, werte.json) };
 }
 
-/** Die optionalen Felder `repo` und `notfall` des Parse-Ergebnisses (nur gesetzte). */
+/** Die optionalen Felder `repo`, `notfall` und `json` des Parse-Ergebnisses (nur gesetzte). */
 const zusatzOptionen = (repo, notfall, json) => ({ ...(repo === undefined ? {} : { repo }), ...(notfall ? { notfall } : {}), ...(json === true ? { json: true } : {}) });
 
 /** Flags, die neben jedem Modus stehen dürfen (`--json` prüft `jsonOk`). */
@@ -186,12 +186,13 @@ export const fehlendAusgabe = (missing, json) => {
 };
 
 /** Bericht: offene Issues, die auf keinem Board stehen; REST-Treffer werden per GraphQL gegengeprüft (frische Items fehlen in der REST-Liste teils lange, #1628). */
-function reportMissing(repo, json) {
+export function reportMissing(repo, json, io = {}) {
+  const { ladeItems = (board, opt) => loadItems(board, opt), offene = loadOpenIssueNumbers, ueberIssues = (board, ...rest) => itemsUeberIssues(board, ...rest), log = console.log } = io; // Nähte für Tests
   try {
-    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: loadItems(boardFuerRolle(rolle), { repo }) }));
-    const rest = missingFromBoard(loadOpenIssueNumbers(repo), beide.flatMap((b) => b.items));
-    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => itemsUeberIssues(boardFuerRolle(b.rolle), rest, {}, repo)));
-    console.log(fehlendAusgabe(missing, json));
+    const beide = ["produkt", "factory"].map((rolle) => ({ rolle, items: ladeItems(boardFuerRolle(rolle), { repo }) }));
+    const rest = missingFromBoard(offene(repo), beide.flatMap((b) => b.items));
+    const missing = rest.length === 0 ? [] : wirklichFehlend(rest, beide.flatMap((b) => ueberIssues(boardFuerRolle(b.rolle), rest, {}, repo)));
+    log(fehlendAusgabe(missing, json));
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
     process.exit(1);

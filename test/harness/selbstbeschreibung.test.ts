@@ -73,6 +73,15 @@ describe('offeneQuelleBehauptungen', () => {
     expect(offeneQuelleBehauptungen('Das ist nicht gemeint. Der Harness ist Open Source.')).toHaveLength(1);
     expect(offeneQuelleBehauptungen('Nicht dass jemand glaubt: a b c d Open Source.')).toHaveLength(1);
   });
+  it('hält Wörter, die nur wie eine Verneinung beginnen, für keine Verneinung', () => {
+    expect(offeneQuelleBehauptungen('Er ist noch Open Source.')).toHaveLength(1);
+    expect(offeneQuelleBehauptungen('Die Note: Open Source.')).toHaveLength(1);
+    expect(offeneQuelleBehauptungen('Er ist keinesfalls Open Source.')).toEqual([]);
+  });
+  it('erkennt die Satzgrenzen „! “ und „? “', () => {
+    expect(offeneQuelleBehauptungen('Kein Wort! Open Source.')).toHaveLength(1);
+    expect(offeneQuelleBehauptungen('Kein Wort? Open Source.')).toHaveLength(1);
+  });
   it('ignoriert die beschreibende „offene Quelle“', () => {
     expect(offeneQuelleBehauptungen('Die offene Quelle wird beschrieben.')).toEqual([]);
   });
@@ -91,6 +100,10 @@ describe('Selbstbeschreibung der Fabrik', () => {
       offeneQuelleBehauptungen(readFileSync(resolve(WURZEL, p), 'utf8')).map((t) => `${p}: ${t}`),
     );
     expect(funde).toEqual([]);
+  });
+
+  it.each(FLAECHEN.map((re) => [String(re), re] as const))('Flächenmuster %s trifft mindestens eine Datei', (_name, re) => {
+    expect(dateien.some((p) => re.test(p))).toBe(true);
   });
 
   it.each(['README.md', 'LICENSE'])('%s nennt „source-available“', (datei) => {

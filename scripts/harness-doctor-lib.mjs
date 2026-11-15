@@ -393,7 +393,7 @@ export function konfigFehlerText(e, rootDir = "") {
   return text.includes("Fix:") ? text : `${text}\nFix: Ruleset-Spiegel laut rulesetSpiegel in der Projekt-Config reparieren (Vorlage der Quelle: ${factorySeiteIn(rootDir, RULESET_VORLAGE)}), dann erneut prüfen`;
 }
 
-/** Die lokalen Punkte (`Git-Hooks`, `Board-Ansicht`, factory#247): leer ohne `lokal` (Wochenlauf, `--einrichten`), sonst `lokal({ rootDir, config })` (der Aufrufer verdrahtet die Punkte). */
+/** Die lokalen Punkte (`Git-Hooks`, `Board-Vollständigkeit`, `Board-Ansicht`, factory#247/#490): leer ohne `lokal` (Wochenlauf, `--einrichten`), sonst `lokal({ rootDir, config })` (der Aufrufer verdrahtet die Punkte). */
 const lokalePunkte = ({ lokal, rootDir, config }) => (typeof lokal === "function" ? lokal({ rootDir, config }) : []);
 
 /**

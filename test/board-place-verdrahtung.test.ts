@@ -104,6 +104,19 @@ describe("--missing --json (factory#490)", () => {
     expect(aus([], false)).toBe("Alle offenen Issues stehen im Board.");
     expect(aus([5, 8], false)).toBe("Offen, aber nicht im Board: #5, #8");
   });
+  test("reportMissing: json=true gibt JSON aus, sonst den Satz; ein Ladefehler bricht mit Exit 1 ab", () => {
+    const rm = (raw as unknown as { reportMissing: (r: string, j: boolean, io: Record<string, unknown>) => void }).reportMissing;
+    const rollen: unknown[] = [];
+    const io = (log: (z: string) => void) => ({ ladeItems: (b: unknown) => (rollen.push(b), []), offene: () => [4, 6], ueberIssues: () => [{ number: 6 }], log });
+    const aus: string[] = [];
+    rm("acme/proj", true, io((z) => aus.push(z)));
+    rm("acme/proj", false, io((z) => aus.push(z)));
+    expect(aus).toHaveLength(2);
+    expect(new Set(rollen.map((b) => JSON.stringify(b))).size).toBe(2); // beide Boards (Produkt und Fabrik) werden gelesen
+    expect((JSON.parse(aus[0]) as { fehlend: unknown }).fehlend).toEqual(expect.any(Array));
+    expect(aus[1]).toMatch(/^Offen, aber nicht im Board: |^Alle offenen/);
+    expect(() => void JSON.parse(aus[1])).toThrow();
+  });
   test("main reicht json an reportMissing; fehlendJson trägt die Nummern unter fehlend", async () => {
     const gesehen: unknown[][] = [];
     const a = aufbau({ reportMissing: (...args: unknown[]) => void gesehen.push(args) });
