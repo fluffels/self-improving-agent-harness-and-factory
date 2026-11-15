@@ -490,8 +490,8 @@ const istFreiesTodo = (i, ohneNr = null) => i.status === "Todo" && i.number !== 
 
 /**
  * `afterId` für „Ticket landet auf Position N unter den freien Todo-Items“: das (N-1). freie Todo-Item ohne das
- * Ticket selbst (`ohneNr`). Frei heißt offen und ohne Assignee: ein geclaimtes Ticket ist in Arbeit (der Assignee ist der einzige
- * In-Arbeit-Marker, AGENTS.md), bleibt im Board aber auf „Todo“ und würde sonst jeden Rang verschieben. N=1 → null (Spitze). Ist das
+ * Ticket selbst (`ohneNr`). Frei heißt offen und ohne Assignee: ein geclaimtes Ticket ist in Arbeit (der Assignee ist das
+ * maßgebliche In-Arbeit-Signal, der Status „In Progress“ folgt ihm per `board-status.mjs`), bleibt im Board aber auf „Todo“ und würde sonst jeden Rang verschieben. N=1 → null (Spitze). Ist das
  * Board kürzer, das letzte freie Todo-Item; ganz ohne freies Todo-Item null. Pur.
  */
 export function afterIdForPosition(items, n, ohneNr = null) {
