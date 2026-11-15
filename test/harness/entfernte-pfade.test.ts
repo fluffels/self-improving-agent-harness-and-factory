@@ -536,13 +536,16 @@ export const RESTE_SELBSTCHECK: Rest[] = [
 export const RESTE_SELBSTCHECK_WORT: Rest[] = [{ name: "Selbstcheck (Wort)", muster: /Selbstcheck/i, fix: FIX_SELBSTCHECK }];
 const AKTIVER_TEXT = /^(?:AGENTS\.md|\.claude\/agents\/.+|\.agents\/skills\/.+|docs\/harness-glossar\.md)$/;
 
+/** Der ganze Scan (Namen überall, das Wort nur in aktiven Anweisungstexten); der Repo-Test und die Fixture-Tests rufen dieselbe Funktion. */
+const selbstcheckReste = (dateien: Datei[]): string[] => [...findeReste(dateien, RESTE_SELBSTCHECK), ...findeReste(dateien.filter((d) => AKTIVER_TEXT.test(d.pfad)), RESTE_SELBSTCHECK_WORT)];
+
 describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => {
-  const namen = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_SELBSTCHECK);
-  const wort = (inhalt: string, pfad: string) => findeReste([{ pfad, inhalt }].filter((d) => AKTIVER_TEXT.test(d.pfad)), RESTE_SELBSTCHECK_WORT);
+  const namen = (inhalt: string, pfad = "docs/x.md") => selbstcheckReste([{ pfad, inhalt }]).filter((t) => !t.endsWith("(Wort)"));
+  const wort = (inhalt: string, pfad: string) => selbstcheckReste([{ pfad, inhalt }]).filter((t) => t.endsWith("(Wort)"));
 
   test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
     const dateien = getrackteTextdateien();
-    const treffer = [...findeReste(dateien, RESTE_SELBSTCHECK), ...findeReste(dateien.filter((d) => AKTIVER_TEXT.test(d.pfad)), RESTE_SELBSTCHECK_WORT)];
+    const treffer = selbstcheckReste(dateien);
     assert.deepEqual(treffer, [], `${meldungMitFix(treffer, [...RESTE_SELBSTCHECK, ...RESTE_SELBSTCHECK_WORT])}\nTreffer: ${treffer.join(", ")}`);
   });
 
@@ -577,7 +580,7 @@ describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => 
     assert.equal(wort("SelbstCheck", ".claude/agents/x.md").length, 1);
   });
 
-  test.each(["docs/codex/AGENTS.md", "test/fixtures/.claude/agents/x.md", "test/fixtures/.agents/skills/x.md", "AGENTS.md.orig", "docs/harness-glossar.md.alt", "AGENTSxmd", "docs/x/harness-glossar.md"])("Negativfall: %s ist kein aktiver Anweisungstext", (pfad) => {
+  test.each(["docs/codex/AGENTS.md", "test/fixtures/.claude/agents/x.md", "test/fixtures/.agents/skills/x.md", "AGENTS.md.orig", "docs/harness-glossar.md.alt", "AGENTSxmd", "docs/x/harness-glossar.md", "xclaude/agents/x.md", "xagents/skills/x.md", "docs/harness-glossarxmd"])("Negativfall: %s ist kein aktiver Anweisungstext", (pfad) => {
     assert.equal(AKTIVER_TEXT.test(pfad), false);
     assert.deepEqual(wort("der Selbstcheck des Umsetzers", pfad), []);
   });
