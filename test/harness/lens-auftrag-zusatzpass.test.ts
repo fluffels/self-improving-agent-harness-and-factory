@@ -1,4 +1,6 @@
-/* Lens-Auftrag-Guard R6 (factory#534) – @harness-waechter: einziger Durchsetzer der Spawn-Sperre über dem Cap.
+/* Lens-Auftrag-Guard R6 (factory#534)
+ *
+ * @harness-waechter – einziger Durchsetzer der Spawn-Sperre über dem Cap.
  *
  * Ein Lens-Auftrag mit Worktree `-lens-r<k>-` und k über MAX_REVIEW_PAESSE braucht das Kopf-Feld
  * `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>`. Grenze: nur der Review-Worktree `r`, nicht `m/a/c`. */

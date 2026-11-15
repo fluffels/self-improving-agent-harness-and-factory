@@ -1,4 +1,6 @@
-/* Runden-Abgleich des Review-Nachweises (factory#534) – @harness-waechter: einziger Durchsetzer der Regel „runden stimmt mit den Commit-Zeilen überein“.
+/* Runden-Abgleich des Review-Nachweises (factory#534)
+ *
+ * @harness-waechter – einziger Durchsetzer der Regel „runden stimmt mit den Commit-Zeilen überein“.
  *
  * `runden` darf nicht unter der höchsten Commit-Zeile `Runde <n>:` plus 1 liegen; über dem Cap (MAX_REVIEW_PAESSE) braucht jeder Pass
  * eine Commit-Zeile `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`. Gilt für beide Laufzeiten, weil die CI prüft. */
