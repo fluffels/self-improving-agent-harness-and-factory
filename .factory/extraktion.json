@@ -735,6 +735,441 @@
       "muster": "test/wiedervorlage.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/entfernte-pfade-projekt.test.ts",
+      "art": "projekt-test",
+      "grund": "Projekt-Test: prüft Textreste entfernter Projektpfade"
+    },
+    {
+      "muster": "test/audit-einordnung.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Owner) im Test"
+    },
+    {
+      "muster": "test/codescanning-inbox.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Label, Owner) im Test"
+    },
+    {
+      "muster": "test/harness/besitz-abschnittsverweise.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Präfix) im Test"
+    },
+    {
+      "muster": "test/harness/codex-hook.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Agent, Worktree) im Test"
+    },
+    {
+      "muster": "test/harness/codex-probe.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Agent, Worktree) im Test"
+    },
+    {
+      "muster": "test/harness/factory-seiten.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Quellprojekt) im Test"
+    },
+    {
+      "muster": "test/harness/kontext-budget-ratchet.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Präfix) im Test"
+    },
+    {
+      "muster": "test/harness/werkzeug-vorpruefung.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Worktree) im Test"
+    },
+    {
+      "muster": "test/herkunftsform.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Quellprojekt) im Test"
+    },
+    {
+      "muster": "test/langfuse-auswertung.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Agent, Worktree) im Test"
+    },
+    {
+      "muster": "test/langfuse-bezieher.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Label) im Test"
+    },
+    {
+      "muster": "test/langfuse-wochenbericht.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Owner, Repo) im Test"
+    },
+    {
+      "muster": "test/sync-stand-bezieher.test.ts",
+      "art": "projekt-test",
+      "grund": "Projektliterale (Worktree) im Test"
+    },
+    {
+      "muster": "test/abo-kontingent-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/agenten-skill-budget.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/anker-liste.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/audit-verzeichnisse.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/besitz*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/blocker-migration.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/coverage-berichte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/dependency-review-vollstaendig.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/design-schritt.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/docdrift-cli.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/e2e-profil.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/erstbezug-seite.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/gate-befehl.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/agent-harness-gliederung.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/arbeitsplatz*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/harness/bedingte-dateien.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/befund-zeile.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/besitz-verweise.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/blatt-importe.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/codex-belege.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/codex-freigaben.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/codex-probe-auswertung.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/codex-setup.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/codex-vorpruefung.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/dependabot-oekosysteme.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/einstieg-importe.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/fabrik-regeltext.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/factory-links.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/factory-seite.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/factory-update-board-prio.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/gate-befehle-texte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/git-host-liste.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/gruppen-stopp.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/komplexitaet-ausmass.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/laufzeit-vertraege.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/lint-leerraum.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/mcp-log-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/raum-vertrag.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/regex-escape.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/sicherheits-workflows.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/skript-laufzeiten.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/test-umgebung.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/verbleib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/kern-block-budget.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/langfuse-bezieher-takt.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/langfuse-ohne-zugang.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/langfuse-takt-wochenbericht.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/langfuse-takt-wurzel.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/langfuse-wochenbericht-lauf.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/milestone-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/modul-wahl-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/notfall-doku.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/offene-punkte.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/pfadwurzeln-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/probe*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/quellwurzeln*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/release-tag-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/repo-form.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/risikoklasse.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/sammelticket-langfuse-bezieher.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/sammelticket-titel.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/schichten-kern.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/schrittname.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/secret-inbox.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/sicherheitspruefung*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/struktur-quelle-support.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/support/dateien.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/support/git*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/support/import-huelle.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/tag*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz (Familie)"
+    },
+    {
+      "muster": "test/tokens-je-prozentpunkt-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/ziel-repo-wege.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/harness/extraktion-einordnung.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
     }
   ]
 }

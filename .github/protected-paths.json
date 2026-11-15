@@ -9,6 +9,7 @@
     "/scripts/audit-verzeichnisse.mjs",
     "/scripts/audit-verzeichnisse-lib.mjs",
     "/scripts/probe-erstbezug.mjs",
+    "/scripts/fremd-config-probe.mjs",
     "/scripts/audit-einordnung.mjs",
     "/scripts/tag-takt.mjs",
     "/scripts/factory-update-check.mjs",

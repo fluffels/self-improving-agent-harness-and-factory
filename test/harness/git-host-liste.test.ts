@@ -1,7 +1,6 @@
 /* Git-Host-Liste-Wächter (factory#248, ADR 0032).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
- * @probe-echte-dateien liest die echte Seite `docs/git-host.md` und die echten Dateien unter scripts/ und .github/workflows/.
  * Die Seite nennt je Fabrik-Teil `hostneutral` oder `GitHub`. Gehalten werden:
  * R1 (Negativfall): eine hostneutral-Zeile nennt keine Datei der GitHub-Menge und keine Workflow-Datei,
  * R2: jede Datei der GitHub-Menge und jeder Workflow steht in einer GitHub-Zeile,

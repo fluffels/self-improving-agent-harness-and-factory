@@ -1,6 +1,5 @@
 /**
  * Ticket-Drift-Lauf (factory#28, ADR 0033): Prüfungen der Lib, Verhaltenstest der Schreibgrenze und Wächter.
- * @probe-echte-dateien liest die echten Quellen `scripts/ticket-drift*.mjs` und `.github/workflows/ticket-drift.yml`.
  * Bewusste Grenze des statischen Wächters: er sucht verbotene gh-Verben als Wort in den Quellen; ein zur Laufzeit zusammengesetztes Verb erkennt nur der Verhaltenstest (Recorder).
  */
 import { describe, expect, test } from "vitest";

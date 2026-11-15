@@ -635,4 +635,14 @@ describe("CI-Job probe-erstbezug (Wächter der Invarianten)", () => {
     expect(job).not.toMatch(/continue-on-error\s*:/);
     expect(job).not.toMatch(/\|\|\s*true/);
   });
+
+  it("die Fremd-Config-Probe läuft als Schritt ohne if: im Required-Job (factory#496)", () => {
+    const schritt = job.slice(job.indexOf("- name: Fremd-Config-Probe"));
+    expect(job).toContain("run: node scripts/fremd-config-probe.mjs\n");
+    expect(schritt).toMatch(/^- name: Fremd-Config-Probe[^\n]*\n {8}run: node scripts\/fremd-config-probe\.mjs\n/);
+    expect(schritt).not.toMatch(/^ {8}if:/m);
+    const name = /^ {4}name: (.+)$/m.exec(job)?.[1];
+    const ruleset = JSON.parse(readFileSync(join(WURZEL, ".github", "ruleset-main-schutz.json"), "utf8")) as { requiredChecks: string[] };
+    expect(ruleset.requiredChecks).toContain(name);
+  });
 });
