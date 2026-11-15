@@ -1,5 +1,7 @@
 # Modell-Routing im Harness (#910, #1065)
 
+> 🧭 **Fachlich geprüft am: 2026-11-15.**
+
 > **SSOT für Modell- und Effort-Routing.** Es gibt keine festen Modell-IDs mehr im Harness, nur die Tier-Aliase `opus`, `sonnet` und `haiku`. Sie lösen auf das jeweils neueste Modell der Stufe auf ([Claude-Code-Doku › Model configuration](https://code.claude.com/docs/en/model-config)). Ein neues Modell braucht deshalb keine Wartung.
 
 ## 1. Phasen-Matrix
@@ -93,7 +95,7 @@ Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) i
 - **Review** durch Lens-Subagenten `<agenten.lens>` (Zahl nach der [Staffel](#review-staffel-1265)) (`opus`, `high` im Frontmatter), nie inline ([`review-lenses`](../.agents/skills/review-lenses/SKILL.md)).
 - **Umsetzung** auf `sonnet` über den Subagenten `<agenten.umsetzer>`. Mehrere Tickets laufen nacheinander mit je einem frischen Umsetzer; einen eigenen Stapel-Skill gibt es nicht mehr.
 - **Explore** über den Repo-Agenten `Explore` (`haiku`, `low`), den jede Explore-Delegation automatisch nutzt (§2).
-- Der Wächter [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft, dass die Angaben da sind (`model: sonnet` in settings.json ohne `env`-Modell- und TTL-Schlüssel und ohne `subagentPromptCacheTtl` (quellprojekt#1557, factory#312), ein TTL-Schlüssel im Frontmatter eines Agenten nur mit belegtem Nettogewinn in der Tabelle des Abschnitts „Cache-TTL je Subagent-Rolle“ (beide Richtungen), Planer, Umsetzer `sonnet`/`medium` ohne `env`-Effort-Schlüssel (`CLAUDE_CODE_EFFORT_LEVEL` überstimmt das Frontmatter; eine Shell-Variable ist in der CI nicht prüfbar) mit `Agent`-Tool und vorgeladenem `review-lenses`, Umsetzer-Spawn ohne `model:`, Umsetzer mit Playwright- und Langfuse-MCP-Tools, Lens-Spawn über `<agenten.lens>` ohne `model:`, `Explore` mit `haiku`/`low`; die Matrix aus §1: Alias und Effort-Skill-Pfad-Spalte je Zeile gegen das Frontmatter des Ziels, eine nicht zuordenbare Zeile oder fehlende Spalte ist rot), nicht dass Claude Code sie zur Laufzeit anwendet.
+- Der Wächter [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft, dass die Angaben da sind (`model: sonnet` in settings.json ohne `env`-Modell- und TTL-Schlüssel und ohne `subagentPromptCacheTtl` (quellprojekt#1557, factory#312), ein TTL-Schlüssel im Frontmatter eines Agenten nur mit belegtem Nettogewinn in der Tabelle des Abschnitts „Cache-TTL je Subagent-Rolle“ (beide Richtungen), Planer `opus`/`xhigh`, Umsetzer `sonnet`/`medium` ohne `env`-Effort-Schlüssel (`CLAUDE_CODE_EFFORT_LEVEL` überstimmt das Frontmatter; eine Shell-Variable ist in der CI nicht prüfbar) mit `Agent`-Tool und vorgeladenem `review-lenses`, Umsetzer-Spawn ohne `model:`, Umsetzer mit Playwright- und Langfuse-MCP-Tools, Lens-Spawn über `<agenten.lens>` ohne `model:`, `Explore` mit `haiku`/`low`; die Matrix aus §1: Alias und Effort-Skill-Pfad-Spalte je Zeile gegen das Frontmatter des Ziels, eine nicht zuordenbare Zeile oder fehlende Spalte ist rot), nicht dass Claude Code sie zur Laufzeit anwendet.
 
 > Details zur Modellwahl-Philosophie (Planung stark, Umsetzung schnell): [docs/agent-harness.md § Skills + Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe) (quellprojekt#741, quellprojekt#745).
 
