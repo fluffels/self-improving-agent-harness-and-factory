@@ -35,6 +35,27 @@ describe("armAusTicket", () => {
   });
 });
 
+describe("parseBerichte: kaputte Fundzeilen (factory#560 L7)", () => {
+  const kaputt = [
+    "- [Fehler] x — `a.ts:1` — b",
+    "- [nicht blockierend] x — `a.md:1`",
+    "- Abschnitt veraltet — `docs/x.md:3` — Beleg",
+    "[❌ blockierend] x — `a.ts:1` — b",
+  ];
+  test.each(kaputt)("wirft FilterFehler mit Brille und Zeile: %s", (zeile) => {
+    expect(() => L.parseBerichte(B("Doku", zeile))).toThrow(/Brille doku.*Fundzeile/);
+  });
+  test("CLI: Exit 2 mit Meldung", () => {
+    const r = spawnSync(process.execPath, [SKRIPT, "--runde", "1"], { input: B("Doku", kaputt[2]), encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Abschnitt veraltet/);
+  });
+  test("Negativfälle: gewöhnliche Aufzählung, Verdikt, Leerzeilen, Text vor dem ersten Block", () => {
+    const text = "- [x] vorher — `a.ts:1` — b\n" + B("Doku", "- Hinweis ohne Trenner", "- Punkt — ohne Backtick", "", "Verdikt: ok");
+    expect(L.parseBerichte(text)[0].funde).toEqual([]);
+  });
+});
+
 describe("parseBerichte", () => {
   test("liest Brillen, Schweren, Ort und Befund; Kombi-Lens und Umlaute", () => {
     const l = L.parseBerichte(B("Test-Adäquanz", BLOCK("a/b.mjs:12-14"), SOLL("x.ts:1"), HIN("y.ts:2")) + B("Kombiniert"));
@@ -203,7 +224,6 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(e.fixliste).toHaveLength(1);
   });
   test("Zeilenform: Klammerinhalt mit anderem Wort, Einrückung, fehlende Leerzeichen, Groß-/Kleinschreibung des Kopfs", () => {
-    expect(L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
     expect(L.parseBerichte(B("Doku", "  - [❌blockierend]x — `a.md:1` — b"))[0].funde).toHaveLength(1);
     expect(L.parseBerichte(B("Doku", "Text - [❌ blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
     expect(L.parseBerichte("## lens: doku\n- [⚠️ Hinweis] x — `a.md:1` — b\n")[0].funde).toHaveLength(1);

@@ -44,7 +44,19 @@ function parseFund(zeile) {
   return { schwere: m[1].toLowerCase(), befund, ort: ort ? ort[1].trim() : "", beleg };
 }
 
-/** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille. Pur. */
+/**
+ * Kaputte Fundzeile innerhalb eines Lens-Blocks (bekannte Muster: a, b, c; weitere Formen sind bewusste Grenze): (a) \`- [Marke] …\` mit unbekannter Marke,
+ * (b) \`[Schwere] …\` ohne führendes \`- \`, (c) Drei-Teil-Aufzählung \`- Befund — \`ort\` — Beleg\` ohne Marke. Nur wenn FUND_RE die Zeile nicht erkennt. Pur.
+ */
+export function istKaputteFundzeile(zeile) {
+  if (FUND_RE.test(zeile)) return false;
+  const a = /^\s*-\s*\[/;
+  const b = /^\s*\[[^\]]*(blockierend|sollte|hinweis)/i;
+  const c = /^\s*-\s+.+\s[—–]\s*\x60[^\x60]+\x60\s*[—–]/;
+  return a.test(zeile) || b.test(zeile) || c.test(zeile);
+}
+
+/** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille und bei kaputter Fundzeile (`istKaputteFundzeile`). Pur. */
 export function parseBerichte(text) {
   const lenses = [];
   let aktuell = null;
@@ -58,6 +70,7 @@ export function parseBerichte(text) {
       lenses.push(aktuell);
       continue;
     }
+    if (aktuell && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }
