@@ -74,7 +74,7 @@ jobs:
         run: node scripts/check-review-nachweis.mjs
 
       # Abnahme-Nachweis: Urteil je Akzeptanzkriterium des verknüpften Tickets plus Spur als PR-Kommentar (Format: docs/agent-harness.md §3a).
-      # Letzter Schritt, im Required-Job (kein neuer Required-Check). Ein Entwurf wird nur berichtet, maßgeblich ist der Lauf nach
+      # Vorletzter Schritt (danach nur der Basis-Nachlauf), im Required-Job (kein neuer Required-Check). Ein Entwurf wird nur berichtet, maßgeblich ist der Lauf nach
       # `ready_for_review`. Werte aus dem Ereignis nur über `env:`, nie per Ausdruck im `run:` (Script-Injection). GH_TOKEN liest Issue und
       # Kommentare (Rechte `pull-requests` und `issues` read oben).
       - name: Abnahme-Nachweis prüfen
@@ -85,6 +85,16 @@ jobs:
           FACTORY_PR_DRAFT: ${{ github.event.pull_request.draft }}
           FACTORY_PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/check-abnahme-nachweis.mjs
+
+      # Basis-Nachlauf (factory#499 L7): letzter Schritt des Required-Jobs, weil `build-test` je nach PR 2 min, 34 s oder 2:17 min nach
+      # dem Probe-Check endet (PR 501 11:26:51 vs 11:24:52; PR 502 11:35:07 vs 11:34:33; PR 503 11:34:06 vs 11:31:49). Holt die aktuelle
+      # Basis, mergt sie runner-lokal ein und fährt verifyKompakt erneut (ohne `strict` und ohne Ruleset-Änderung). Werte nur über `env:`.
+      - name: Basis-Nachlauf (aktuelle Basis einmergen und prüfen)
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          FACTORY_BASIS_REF: ${{ github.base_ref }}
+          FACTORY_PR_DRAFT: ${{ github.event.pull_request.draft }}
+        run: node scripts/check-basis-nachlauf.mjs
 
   security-audit:
     name: Security-Audit (npm audit)
