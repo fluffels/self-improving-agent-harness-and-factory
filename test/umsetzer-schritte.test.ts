@@ -195,7 +195,7 @@ describe("endeAblauf", () => {
 
   test("gh pr view oder gh pr merge scheitern: Exit 3, kein Warten", () => {
     for (const extra of [{ "gh pr": { code: 1 } }, { "gh pr": [PR_OFFEN, { code: 1, stderr: "x" }] }]) {
-      const f = endeFake(extra as Record<string, R | R[]>);
+      const f = endeFake(extra);
       expect(ende(f).code).toBe(3);
       expect(f.aufrufe.some((a) => a.startsWith("pr-warten"))).toBe(false);
     }

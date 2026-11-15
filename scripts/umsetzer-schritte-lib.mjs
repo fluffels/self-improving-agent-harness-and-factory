@@ -25,6 +25,15 @@ export const skript = (name) => join(SKRIPTE, `${name}.mjs`);
 const posix = (p) => String(p).replace(/\\/g, "/");
 const zeilenAus = (r) => `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n").map((z) => z.trimEnd()).filter(Boolean);
 
+/** JSON-Text → Wert, bei Müll `undefined`. */
+function jsonOder(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 const abbruch = (code, schritt, text, zeilen = []) => ({ code, zeilen: [...zeilen, `ABBRUCH ${schritt}: ${text}`] });
 
 /** Pfade aller Worktrees aus `git worktree list --porcelain`. Pur. */
@@ -58,18 +67,20 @@ function worktreeAnlegen({ nr, ort, run, existiert, uebernehmbar }) {
   return { code: 0, zeilen: [`Worktree angelegt: ${pfad}`] };
 }
 
+/** Claim: das Issue ist offen und zugewiesen, sonst Exit 4. */
+function claimPruefen(nr, run, cwd) {
+  const issue = run("gh", ["issue", "view", String(nr), "--json", "state,assignees"], { cwd });
+  const daten = jsonOder(issue.stdout);
+  if (issue.code !== 0 || !daten) return abbruch(4, "claim", `gh issue view #${nr} scheiterte`, zeilenAus(issue));
+  if (daten.state !== "OPEN" || !(daten.assignees ?? []).length) return abbruch(4, "claim", `Issue #${nr} ist nicht offen und zugewiesen (Claim vergeben/fehlt)`);
+  return undefined;
+}
+
 /** Start-Ablauf. `slug` steckt schon in `ort.schritte` (Branchname). */
 export function startAblauf({ nr, nonce, ort, run, existiert }) {
   const cwd = ort.gitCwd;
-  const issue = run("gh", ["issue", "view", String(nr), "--json", "state,assignees"], { cwd });
-  let daten;
-  try {
-    daten = JSON.parse(issue.stdout);
-  } catch {
-    daten = undefined;
-  }
-  if (issue.code !== 0 || !daten) return abbruch(4, "claim", `gh issue view #${nr} scheiterte`, zeilenAus(issue));
-  if (daten.state !== "OPEN" || !(daten.assignees ?? []).length) return abbruch(4, "claim", `Issue #${nr} ist nicht offen und zugewiesen (Claim vergeben/fehlt)`);
+  const claim = claimPruefen(nr, run, cwd);
+  if (claim) return claim;
 
   const lockArgs = nonce ? ["uebernehmen", String(nr), "--nonce", nonce, "--nachfolger"] : ["pruefe", String(nr)];
   const lock = run("node", [skript("ticket-lock"), ...lockArgs], { cwd });
@@ -95,12 +106,7 @@ export function startAblauf({ nr, nonce, ort, run, existiert }) {
 /** Auto-Merge setzen, solange der PR offen und kein Entwurf ist. */
 function mergeSetzen(pr, run, cwd) {
   const v = run("gh", ["pr", "view", String(pr), "--json", "state,isDraft,autoMergeRequest"], { cwd });
-  let d;
-  try {
-    d = JSON.parse(v.stdout);
-  } catch {
-    d = undefined;
-  }
+  const d = jsonOder(v.stdout);
   if (v.code !== 0 || !d) return abbruch(3, "pr", `gh pr view #${pr} scheiterte`, zeilenAus(v));
   if (d.isDraft) return abbruch(3, "pr", `PR #${pr} ist ein ENTWURF: Abnahme-Weg, kein Auto-Merge`);
   if (d.state === "OPEN" && !d.autoMergeRequest) {
@@ -142,13 +148,7 @@ export function endeAblauf({ nr, pr, nonce, ort, run, existiert, cwd }) {
   const a = aufraeumen({ ort, run, existiert });
   if (a.code !== 0) return a;
   const iss = run("gh", ["issue", "view", String(nr), "--json", "state"], { cwd: c });
-  let zu = false;
-  try {
-    zu = JSON.parse(iss.stdout).state === "CLOSED";
-  } catch {
-    zu = false;
-  }
-  if (iss.code !== 0 || !zu) return abbruch(1, "issue", `Issue #${nr} ist nach dem Merge nicht geschlossen`, zeilenAus(iss));
+  if (iss.code !== 0 || jsonOder(iss.stdout)?.state !== "CLOSED") return abbruch(1, "issue", `Issue #${nr} ist nach dem Merge nicht geschlossen`, zeilenAus(iss));
   const cl = run("node", [skript("cleanup-worktrees"), "--branches", "--fix"], { cwd: c });
   if (cl.code !== 0) return abbruch(1, "cleanup", `cleanup-worktrees Exit ${cl.code}`, zeilenAus(cl));
   const fr = run("node", [skript("ticket-lock"), "freigeben", String(nr), "--nonce", nonce], { cwd: c });
