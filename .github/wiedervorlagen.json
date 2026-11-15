@@ -6,6 +6,12 @@
     "text": "Messen: die Blöcke der letzten mindestens 4 Bericht-Kommentare der Wochen-Status-Tickets „Langfuse-Status überprüfen“ auswerten (geschlossene Tickets seit 2026-10-16 zählen: `gh issue list --state all --search '\"Langfuse-Status überprüfen\" in:title' --json number,closedAt --limit 30`). Unter 4 Läufen um die fehlenden Wochen schieben, die Zahl der Läufe als Grund nennen. Ab 4 je Kennzahl (Lauf-Ergebnis, Nacharbeit, Kosten je Ticket, Abo-Kontingent, Abnahme-Quote) eine Schwelle mit Prüftermin (ADR 0027) oder „keine Schwelle, weil …“ festlegen; die Entscheidung gehört nach docs/model-routing.md (Factory-Kennzahlen › Grenzen) und als Fortschreibung zu ADR 0022. Dann diesen Eintrag löschen."
   },
   {
+    "id": "planer-medium-547",
+    "faellig": "2026-12-13",
+    "titel": "Planer-Effort medium prüfen, Rückfall auf xhigh bei Nacharbeit (factory#547, ADR 0027)",
+    "text": "Messen: `node scripts/lauf-ergebnis.mjs --von <Merge von factory#547> --bis 2026-11-29 --start-agent sih-planer --json` (nur abgelaufene 14-Tage-Fenster) und dieselbe Basis über die 28 Tage vor dem Merge neu messen (B = 1 minus ohneNacharbeit durch nachweisbareFenster, n = nachweisbare Fenster). Liegt die Zahl der PRs mit Nacharbeit über B mal n plus 1: Revert per PR zurück auf `xhigh` (Frontmatter von `.claude/agents/factory-planer.md`, Matrix §1 und Test), Ledger-Zeile in ADR 0027 mit „ausgelöst“ vermerken. Bleibt B nahe 1, kann der Trigger nicht auslösen: das ausdrücklich festhalten. Nur beobachten: `kennzahlen.schwere.blockierend` der Requirement-Treue je PR, Kosten je Planer-Lauf mit `node scripts/subagent-laufzeit.mjs --agent sih-planer --von <Merge> --json` (Sammeltickets getrennt), Bezieher über die Langfuse-Metadaten agent_type, effort und repo (factory#510). Unter 5 PRs mit nachweisbarem Fenster um 2 Wochen schieben. Dann Eintrag löschen."
+  },
+  {
     "id": "ticket-drift-28",
     "faellig": "2027-02-10",
     "titel": "Ticket-Drift-Wochenlauf auswerten (factory#28, factory#498, ADR 0027)",
@@ -15,7 +21,7 @@
     "id": "planer-kosten-nach-112",
     "faellig": "2026-11-18",
     "titel": "Planer-Kosten auf geschätzter Basis nachmessen (#112)",
-    "text": "Messen: `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø gegen 1,38 $ vergleichen. Ø = Spalte ‚Kosten geschätzt ($, Ø)‘ (Σ/n), nicht der Median; auslösend ist die Gruppe ‚ab Schnitt, ohne Sammeltickets‘ gegen 1,38 $; alle Läufe und Sammeltickets nur berichten. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
+    "text": "Messen (Schnitt vor factory#547, dem Merge von Planer `medium`, setzen; die Wirkung von `medium` misst `planer-medium-547`, hier nur berichten): `node scripts/subagent-laufzeit.mjs --von 2026-10-28T07:09:38Z --schnitt <Merge der letzten Änderung der Planer-Definition>`. Ab n >= 10 Läufen den geschätzten Ø gegen 1,38 $ vergleichen. Ø = Spalte ‚Kosten geschätzt ($, Ø)‘ (Σ/n), nicht der Median; auslösend ist die Gruppe ‚ab Schnitt, ohne Sammeltickets‘ gegen 1,38 $; alle Läufe und Sammeltickets nur berichten. Darüber: mit `node scripts/kontext-treiber.mjs --agent sih-planer` nach Read, Write und Output zerlegen und eine Zeile ins Langfuse-Sammelticket schreiben. Im Ziel: diesen Eintrag löschen und das Ticket schließen."
   },
   {
     "id": "lens-kosten-nach-272",

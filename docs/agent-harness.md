@@ -508,7 +508,7 @@ sequenceDiagram
   participant H as Hauptchat<br/>Skill sih-ticket oder factory · sonnet · medium
   participant S as holdout-szenario<br/>opus · medium
   participant A as holdout-abnahme<br/>opus · medium
-  participant P as sih-planer<br/>opus · xhigh
+  participant P as sih-planer<br/>opus · medium
   participant E as Explore<br/>haiku · low
   participant U as sih-umsetzer<br/>sonnet · medium
   participant G as sih-gruppe · sonnet · medium<br/>je Gruppe eines Sammeltickets
