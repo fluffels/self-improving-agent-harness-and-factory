@@ -31,7 +31,10 @@ const TRIGGER = /Harness-Befund|Kern-Befund|Harness-Sammelticket|Harness-Härtun
 const GH_CREATE = /gh issue create/;
 const SAMMELTICKET = /Sammelticket/;
 const WEG_ZEILE = "Sammeltickets nie per `gh issue create`; Zeilen per `node scripts/melden.mjs`";
-const ROLLE = /Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
+const REFACTORING = /Refactoring \(gesammelt\)|Refactoring-Sammelticket|Refactoring-Befund/;
+const GH_ISSUE_SCHREIBEN = /gh issue (comment|create)/;
+const REFACTORING_WEG = "Refactoring-Befunde nur per `node scripts/melden.mjs --ziel refactoring`";
+const ROLLE =/Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
 const TEXT_PFAD = /^(\.claude\/agents|\.agents\/skills)\/.*\.md$/;
 
 /** Pur: Meldungen `<pfad>:<zeile>: nennt für Harness-Befunde eine Rolle: …` (leer = grün); `ab` ist die Zeilennummer der ersten Zeile von `text`. */
@@ -40,6 +43,7 @@ export function rollenFunde(pfad: string, text: string, ab = 1): string[] {
     zeile.split(/(?<=[.;!?])\s+/).flatMap((teil) => [
       ...(TRIGGER.test(teil) && ROLLE.test(teil) ? [`${pfad}:${ab + i}: nennt für Harness-Befunde eine Rolle („${teil.slice(0, 80)}“): ${WEG}`] : []),
       ...(GH_CREATE.test(teil) && (TRIGGER.test(teil) || SAMMELTICKET.test(teil)) ? [`${pfad}:${ab + i}: nennt \`gh issue create\` für Sammeltickets („${teil.slice(0, 80)}“): ${WEG_ZEILE}`] : []),
+      ...(REFACTORING.test(teil) && GH_ISSUE_SCHREIBEN.test(teil) ? [`${pfad}:${ab + i}: nennt \`gh issue\` für Refactoring-Befunde („${teil.slice(0, 80)}“): ${REFACTORING_WEG}`] : []),
     ]),
   );
 }
