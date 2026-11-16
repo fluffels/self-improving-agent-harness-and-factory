@@ -1215,6 +1215,16 @@
       "muster": "test/harness/extraktion-einordnung.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/token-analyse-freigabe.test.ts",
+      "art": "projekt-test",
+      "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
+    },
+    {
+      "muster": "test/harness/fabrik-eigen-analyse.test.ts",
+      "art": "projekt-test",
+      "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
     }
   ]
 }
