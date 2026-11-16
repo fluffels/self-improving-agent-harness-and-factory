@@ -68,6 +68,8 @@
     "/scripts/sicherheitspruefung.mjs",
     "/scripts/sicherheitspruefung-lib.mjs",
     "/scripts/sicherheitspruefung-dependabot.mjs",
+    "/scripts/code-analyse.mjs",
+    "/scripts/code-analyse-lib.mjs",
     "/scripts/inbox-start-lib.mjs",
     "/scripts/internalrefs-lib.mjs",
     "/scripts/harness-doctor.mjs",

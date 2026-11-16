@@ -348,7 +348,7 @@ describe("sicherheitspruefung.mjs", () => {
       expect(a[a.indexOf("--repo") + 1]).toBe(REPO);
     }
     const quelle = lies("scripts/sicherheitspruefung.mjs");
-    expect([...quelle.matchAll(/"--repo", ([^,\]]+)/g)].map((m) => m[1])).toEqual(["repo", "repo"]);
+    expect([...quelle.matchAll(/"--repo", ([^,\]]+)/g)].map((m) => m[1])).toEqual([]);
     expect(quelle).not.toMatch(/MELDESTELLE|melden\.mjs|meldestelle/i);
     expect(quelle).not.toMatch(/"(close|comment|edit|delete|lock)"/);
   });
