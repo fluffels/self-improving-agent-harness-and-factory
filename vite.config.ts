@@ -1,19 +1,26 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { availableParallelism } from "node:os";
-import { readFileSync } from "node:fs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as einfrierModul from "./scripts/waechter-einfrieren-lib.mjs";
-const excludeListe = (einfrierModul as unknown as { excludeListe: (standard: string[], zeilen: Record<string, unknown>[], extraktion: unknown[]) => string[] }).excludeListe;
+import { existsSync, readFileSync } from "node:fs";
 
 // Eingefrorene Wächter (factory#611): einzige Quelle ist das Änderungsregister (Verfall-Zeile mit Feld `eingefroren`). Die Datei bleibt erhalten, läuft aber
 // nicht mehr in verify. `excludeListe` (scripts/waechter-einfrieren-lib.mjs) wirft, wenn eine Zeile eine Sicherheits-Ausnahme, einen Durch-Wächter, einen verteilten oder Selbstschutz-Wächter
-// trifft (fail-closed); Wächter: test/harness/waechter-einfrieren.test.ts.
+// trifft (fail-closed); Wächter: test/harness/waechter-einfrieren.test.ts. Diese Datei ist eine Projektdatei, die auch Bezieher tragen: ohne Register und Lib (nur die Fabrik hat beides)
+// bleibt es bei der Vitest-Standardliste, das schaltet nie einen Test ab.
+type ExcludeListe = (standard: string[], zeilen: Record<string, unknown>[], extraktion: unknown[]) => string[];
 const einlesen = (rel: string): unknown => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8"));
-const exclude = excludeListe(
-  configDefaults.exclude,
-  (einlesen(".github/aenderungsregister.json") as { zeilen: Record<string, unknown>[] }).zeilen,
-  (einlesen(".factory/extraktion.json") as { eintraege: unknown[] }).eintraege,
-);
+async function ausschluss(): Promise<string[]> {
+  const lib = "./scripts/waechter-einfrieren-lib.mjs";
+  const noetig = [".github/aenderungsregister.json", ".factory/extraktion.json", lib];
+  if (!noetig.every((p) => existsSync(new URL(p, import.meta.url)))) return [...configDefaults.exclude];
+  // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+  const modul = (await import("./scripts/waechter-einfrieren-lib.mjs")) as { excludeListe: ExcludeListe };
+  return modul.excludeListe(
+    configDefaults.exclude,
+    (einlesen(".github/aenderungsregister.json") as { zeilen: Record<string, unknown>[] }).zeilen,
+    (einlesen(".factory/extraktion.json") as { eintraege: unknown[] }).eintraege,
+  );
+}
+const exclude = await ausschluss();
 
 // Nur die Test-Konfiguration: das Factory-Repo hat keinen Build. Die Tests laufen auf Node, die Worker-Zahl ist lokal begrenzt,
 // damit parallele Läufe von Lenses und anderen Worktrees die Git-lastigen Tests nicht ins Zeitlimit treiben.
